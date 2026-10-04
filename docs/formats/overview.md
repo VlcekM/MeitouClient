@@ -62,7 +62,8 @@ Counts are files under `data/`.
 | `.mesh` | 3277 | Ogre 2.0 (v1 meshes) | **Verified**: all parse; versions 1.100 / 1.8 / 1.41. See [ogre-mesh.md](ogre-mesh.md) |
 | `.skeleton` | 365 | Ogre | **Verified**: 364 parse (v1.80 / v1.10), one is empty. See [ogre-skeleton.md](ogre-skeleton.md) |
 | `.hkt` | 3995 | Havok | Header **Verified**: binary tagfile, magic `1E0DB0CA CEFA11D0`, SDK `hk_2014.2.0-r1`, root `hkRootLevelContainer`. Animations and navmesh tiles (`newland/land/navtiles/tile*.hkt`) |
-| `.material`, `.program`, `.compositor`, `.hlsl`, `.vert`, `.frag` | ~270 | Ogre scripts / shaders | Not analyzed |
+| `.material`, `.program` | 181 | Ogre scripts | **Verified**: all 181 compile. See [ogre-material.md](ogre-material.md) |
+| `.compositor`, `.hlsl`, `.vert`, `.frag` | ~90 | Ogre compositors / shaders | Not analyzed |
 | `.dds`, `.png`, `.tga` | ~3900 | Textures | Standard formats |
 | `.zone` | 701 | World cells, `leveldata/zone.X.Y.zone` | Not analyzed; strings like `0-base-S23` near the start |
 | `.level` | 14 | Level data | Not analyzed |

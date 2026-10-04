@@ -9,6 +9,7 @@ return args switch
     ["load"] => WithInstall(Load),
     ["meshes"] => WithInstall(MeshSurvey.Run),
     ["skeletons"] => WithInstall(SkeletonSurvey.Run),
+    ["materials"] => WithInstall(MaterialSurvey.Run),
     ["fcs-types"] => WithInstall(FcsTypeMatcher.Run),
     ["fcs-records", var type] => WithInstall(i => FcsRecordDump.Run(i, int.Parse(type), 3)),
     _ => Usage(),
@@ -22,6 +23,7 @@ static int Usage()
         meitou-tools load          apply the load order and summarize the merged game data
         meitou-tools meshes        read every .mesh in data/ and report failures and contents
         meitou-tools skeletons     read every .skeleton in data/ and report failures and contents
+        meitou-tools materials     compile every material script and cross-check mesh materials and textures
         meitou-tools fcs-types     match record type numbers to fcs.def type names
         meitou-tools fcs-records N show the fields of the first records of type N in the base game
         """);

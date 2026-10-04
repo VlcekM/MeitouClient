@@ -6,7 +6,9 @@ from the following projects, whose licenses require these notices.
 ## OGRE
 
 `src/Meitou.Data/Ogre/` reads Ogre file formats following the structure of OGRE's serializers
-(`OgreMeshSerializerImpl.cpp` and related files, ogre-next branch `v2-0`).
+(`OgreMeshSerializerImpl.cpp`, `OgreSkeletonSerializer.cpp`) and scripts following its script
+lexer, parser and compiler (`OgreScriptLexer.cpp`, `OgreScriptParser.cpp`, `OgreScriptCompiler.cpp`),
+ogre-next branch `v2-0`.
 
 ```
 OGRE (www.ogre3d.org) is made available under the MIT License.
