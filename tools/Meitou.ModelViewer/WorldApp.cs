@@ -307,7 +307,10 @@ static class WorldApp
         gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
         float aspect = width / (float)Math.Max(height, 1);
         var view = camera.View;
-        gpu.Sky.Draw(view * camera.Projection(aspect, 1, 1000), colours);
+        // Rotation only: with the eye's world position in the matrix, the directions rebuilt from it lose float
+        // precision far from the origin and the sky blurs.
+        var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
+        gpu.Sky.Draw(rotation * camera.Projection(aspect, 1, 1000), colours);
         gl.Enable(EnableCap.DepthTest);
         gl.DepthFunc(DepthFunction.Lequal);
         gpu.Terrain.BeginFrame();
