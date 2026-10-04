@@ -12,4 +12,4 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | Doc | Topic |
 | --- | --- |
 | [formats/overview.md](formats/overview.md) | Install layout, load order, resource lookup, mod overrides, format inventory |
-| [formats/fcs-mod.md](formats/fcs-mod.md) | FCS game data: `.base` / `.mod` binary layout and `fcs.def` schema |
+| [formats/fcs-mod.md](formats/fcs-mod.md) | FCS game data: `.base` / `.mod` binary layout, record types, overrides, `fcs.def` schema |

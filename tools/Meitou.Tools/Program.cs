@@ -5,6 +5,8 @@ return args switch
 {
     ["formats"] => WithInstall(Formats),
     ["fcs", var path] => Fcs(path),
+    ["fcs-types"] => WithInstall(FcsTypeMatcher.Run),
+    ["fcs-records", var type] => WithInstall(i => FcsRecordDump.Run(i, int.Parse(type), 3)),
     _ => Usage(),
 };
 
@@ -13,6 +15,8 @@ static int Usage()
     Console.Error.WriteLine("""
         meitou-tools formats       count file types under the install's data/ folder
         meitou-tools fcs <file>    summarize a .mod/.base file (path, or a name inside data/)
+        meitou-tools fcs-types     match record type numbers to fcs.def type names
+        meitou-tools fcs-records N show the fields of the first records of type N in the base game
         """);
     return 2;
 }
@@ -52,7 +56,7 @@ static int Fcs(string path)
 
     Console.WriteLine("  records by type:");
     foreach (var g in file.Records.GroupBy(r => r.Type).OrderByDescending(g => g.Count()))
-        Console.WriteLine($"    {g.Key,4} {g.Count(),7}  e.g. {g.First().Name}");
+        Console.WriteLine($"    {g.Key,4} {(Enum.IsDefined((FcsRecordType)g.Key) ? (FcsRecordType)g.Key : "?"),-30} {g.Count(),7}  e.g. {g.First().Name}");
 
     Console.WriteLine("  flags:");
     foreach (var g in file.Records.GroupBy(r => r.Flags).OrderByDescending(g => g.Count()))
