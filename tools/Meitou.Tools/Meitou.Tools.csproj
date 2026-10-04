@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>meitou-tools</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Meitou.Core\Meitou.Core.csproj" />
+    <ProjectReference Include="..\..\src\Meitou.Data\Meitou.Data.csproj" />
+  </ItemGroup>
+
+</Project>
