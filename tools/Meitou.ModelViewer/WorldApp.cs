@@ -454,7 +454,7 @@ static class WorldApp
             if (titleTimer > 0.25 && gpu is not null)
             {
                 var t = camera.Target;
-                window.Title = $"Meitou world | {frames / titleTimer:0} fps | {t.X:0}, {t.Z:0} zone {WorldLayout.ZoneOf(t.X, t.Z)} | {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" +
+                window.Title = $"Meitou world | {frames / titleTimer:0} fps, {titleTimer * 1000 / Math.Max(frames, 1):0.00} ms | {t.X:0}, {t.Z:0} zone {WorldLayout.ZoneOf(t.X, t.Z)} | {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" +
                     (gpu.Objects is { } ob && render.Objects ? $" | {ob.DrawnInstances} objects" : "");
                 titleTimer = 0;
                 frames = 0;
