@@ -6,9 +6,6 @@ namespace Meitou.Data.Fcs;
 /// </summary>
 public sealed class FcsFile
 {
-    /// <summary>The value of <see cref="Marker"/> in every known file.</summary>
-    public const int KnownMarker = 0x4C67BE;
-
     public FcsFileType FileType { get; set; } = FcsFileType.V17;
     public int Version { get; set; } = 1;
     public string Author { get; set; } = "";
@@ -21,21 +18,42 @@ public sealed class FcsFile
     public List<string> References { get; } = [];
 
     /// <summary>
-    /// Unparsed end of a <see cref="FcsFileType.V17"/> header (meaning unknown), kept for byte-exact round-trips.
+    /// Editor bookkeeping from a <see cref="FcsFileType.V17"/> header (null if the header doesn't have it).
     /// </summary>
+    public FcsMergeInfo? Merge { get; set; }
+
+    /// <summary>
+    /// Editor bookkeeping from a <see cref="FcsFileType.V17"/> header: records other mods asked to revert.
+    /// Null when the header has no such section (older editor versions); empty when it has an empty one.
+    /// </summary>
+    public List<FcsDeleteRequest>? DeleteRequests { get; set; }
+
+    /// <summary>Header bytes after the known fields; empty in every known file. Kept for byte-exact round-trips.</summary>
     public byte[] HeaderTail { get; set; } = [];
 
-    /// <summary>Unknown int before the record count; <see cref="KnownMarker"/> in every known file.</summary>
-    public int Marker { get; set; } = KnownMarker;
+    /// <summary>
+    /// The editor's id counter: the number part of the next <c>"&lt;n&gt;-&lt;file&gt;"</c> string id it hands out.
+    /// </summary>
+    public int NextId { get; set; }
 
     public List<FcsRecord> Records { get; } = [];
 }
 
 public enum FcsFileType
 {
-    /// <summary>Older format without a length-prefixed header (<c>gamedata.base</c>, <c>Newwworld.mod</c>).</summary>
+    /// <summary>Header without a length prefix or editor bookkeeping (<c>gamedata.base</c>, <c>Newwworld.mod</c>).</summary>
     V16 = 16,
 
-    /// <summary>Current format; the header is prefixed with its length.</summary>
+    /// <summary>Current format; the header is prefixed with its length and carries editor bookkeeping.</summary>
     V17 = 17,
 }
+
+/// <param name="SaveCounter">Incremented on every save; record flags store the counter of their last change.</param>
+/// <param name="LastMergeResolve">Save counter at which merges into this mod were last resolved.</param>
+/// <param name="Merged">Mods merged into this one: (file, value1, value2).</param>
+public sealed record FcsMergeInfo(uint SaveCounter, uint LastMergeResolve, List<FcsMergedMod> Merged);
+
+public sealed record FcsMergedMod(string File, uint Value1, uint Value2);
+
+/// <param name="Items">String ids of the records to revert.</param>
+public sealed record FcsDeleteRequest(string File, uint Version, List<string> Items);

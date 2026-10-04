@@ -23,7 +23,7 @@ Examined 2026-10-04 on the Steam install of Kenshi.
    file name through Ogre's resource folders.
 3. **World data**: terrain maps, zones, navmesh, global pathing. Mostly not analyzed yet.
 
-## Load order (Verified, from file headers)
+## Load order
 
 | File | Format | Records | Dependencies |
 | --- | --- | ---: | --- |
@@ -32,9 +32,14 @@ Examined 2026-10-04 on the Steam install of Kenshi.
 | `Dialogue.mod` | 17 | 39,077 | `gamedata.base,Newwworld.mod` (references `rebirth.mod`) |
 | `rebirth.mod` | 17 | 8,571 | `gamedata.base,Newwworld.mod,Dialogue.mod` |
 
-Then the mods enabled in `data/mods.cfg` (empty on a fresh install; format **Unknown**, presumably
-one `name.mod` per line in load order). Base content and mods use the same format, so a mod is
-just another layer on top.
+The table is Verified from the file headers. The order itself comes from the editor (FCS
+`InheritFiles`): a fixed list `gamedata.base, Newwworld.mod, Dialogue.mod, coltontown.mod, Nizu.mod,
+Mohamad.mod, rebirth.mod` (only those present; the middle three are not in the current game), then
+the lines of `data/mods.cfg` in order: one mod file name per line (e.g. `MyMod.mod`), written by the
+editor's "export mods.cfg" without the fixed files. A mod in `mods.cfg` is looked up as
+`data/<name>` or `mods/<name without .mod>/<name>`. Base content and mods use the same format, so a
+mod is just another layer on top; how layers merge is in [fcs-mod.md](fcs-mod.md#merging-fcs). The
+game's own order (including Steam workshop folders) is **Unknown** until checked in `kenshi_x64.exe`.
 
 A mod lives in `mods/<name>/<name>.mod`. `.info` files are XML `ModData` (id, mod name, tags,
 visibility, lastUpdate), e.g. `data/_rebirth.info`, holding workshop metadata.

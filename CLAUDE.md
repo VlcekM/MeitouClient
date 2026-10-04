@@ -20,6 +20,17 @@ drop-in replacement that runs original content and mods unchanged. Plan in [ROAD
   Tests needing the game use `Assert.SkipWhen(GameInstall.Locate() is null, ...)`.
 - Clean-room readers for Havok, PhysX and Wwise formats; don't link their SDKs or ship their DLLs.
 
+## Reverse engineering
+
+- We may decompile/disassemble the original binaries (for interoperability) to learn **facts**: formats,
+  enum values, merge rules, formulas, constants. Write those facts into `docs/` in our own words,
+  citing the source (e.g. "FCS `GameData.load`").
+- Decompiled or disassembled output **never enters the repo**, and code is never copied or
+  line-by-line translated from it. Keep it in the scratchpad / outside the working tree. Implement
+  from the docs.
+- The mod editor is .NET: `ilspycmd -p -o <dir outside the repo> "<Kenshi>/forgotten construction set.exe"`
+  (`dotnet tool install -g ilspycmd`). Its `GameData` class is the reference for the `.mod` format.
+
 ## Build
 
 `dotnet build`, `dotnet test`, `dotnet run --project tools/Meitou.Tools`. Warnings are errors.

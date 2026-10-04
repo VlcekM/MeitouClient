@@ -1,10 +1,10 @@
 namespace Meitou.Data.Fcs;
 
 /// <summary>
-/// Record type numbers (<see cref="FcsRecord.Type"/>). Names are the fcs.def section names, matched by
-/// comparing the fields records use against each section (<c>meitou-tools fcs-types</c>); the evidence
-/// per type is in docs/formats/fcs-mod.md. Numbers not listed here aren't used by the base game, or
-/// (53, 56, 63, 92) have no matching fcs.def section.
+/// Record type numbers (<see cref="FcsRecord.Type"/>), as numbered by the Forgotten Construction Set
+/// (its <c>itemType</c> enum, consecutive from 0). Field evidence for the types the base game uses is in
+/// docs/formats/fcs-mod.md. Types the base game never uses (GAMESTATE_*, *_STATE, PLATOON, ...) are probably
+/// for save games.
 /// </summary>
 public enum FcsRecordType
 {
@@ -16,80 +16,107 @@ public enum FcsRecordType
     ANIMAL_ANIMATION = 5,
     ATTACHMENT = 6,
     RACE = 7,
+    LOCATION = 8,
+    WAR_SAVESTATE = 9,
     FACTION = 10,
+    NULL_ITEM = 11,
+    ZONE_MAP = 12,
     TOWN = 13,
+    WORLDMAP_CHARACTER = 14,
+    CHARACTER_APPEARANCE_OLD = 15,
     LOCATIONAL_DAMAGE = 16,
     COMBAT_TECHNIQUE = 17,
     DIALOGUE = 18,
     DIALOGUE_LINE = 19,
+    TECHTREE = 20,
     RESEARCH = 21,
     AI_TASK = 22,
+    AI_STATE = 23,
     ANIMATION = 24,
     STATS = 25,
     PERSONALITY = 26,
     CONSTANTS = 27,
     BIOMES = 28,
     BUILDING_PART = 29,
-
-    /// <summary>Dialogue conditions and effects; not an fcs.def section (named by the records themselves).</summary>
+    INSTANCE_COLLECTION = 30,
     DIALOG_ACTION = 31,
-
-    /// <summary>Tentative: matched on a single field.</summary>
+    TEMPORARY_INFO = 32,
+    MOD_FILENAME = 33,
+    PLATOON = 34,
+    GAMESTATE_BUILDING = 35,
+    GAMESTATE_CHARACTER = 36,
+    GAMESTATE_FACTION = 37,
+    GAMESTATE_TOWN_INSTANCE_LIST = 38,
+    STATE = 39,
+    SAVED_STATE = 40,
+    INVENTORY_STATE = 41,
+    INVENTORY_ITEM_STATE = 42,
     REPEATABLE_BUILDING_PART_SLOT = 43,
     MATERIAL_SPEC = 44,
-
-    /// <summary>Tentative: matched on a single field.</summary>
     MATERIAL_SPECS_COLLECTION = 45,
     CONTAINER = 46,
     MATERIAL_SPECS_CLOTHING = 47,
+    GAMESTATE_BUILDING_INTERIOR = 48,
     VENDOR_LIST = 49,
     MATERIAL_SPECS_WEAPON = 50,
     WEAPON_MANUFACTURER = 51,
     SQUAD_TEMPLATE = 52,
+    ROAD = 53,
+    LOCATION_NODE = 54,
     COLOR_DATA = 55,
-
-    /// <summary>Tentative: half the fields used are not in fcs.def.</summary>
+    CAMERA = 56,
+    MEDICAL_STATE = 57,
+    MEDICAL_PART_STATE = 58,
     FOLIAGE_LAYER = 59,
     FOLIAGE_MESH = 60,
     GRASS = 61,
     BUILDING_FUNCTIONALITY = 62,
+    DAY_SCHEDULE = 63,
     NEW_GAME_STARTOFF = 64,
+    GAMESTATE_CRAFTING = 65,
+    CHARACTER_APPEARANCE = 66,
+    GAMESTATE_AI = 67,
     WILDLIFE_BIRDS = 68,
     MAP_FEATURES = 69,
-
-    /// <summary>Tentative: matched on a single field.</summary>
     DIPLOMATIC_ASSAULTS = 70,
     SINGLE_DIPLOMATIC_ASSAULT = 71,
     AI_PACKAGE = 72,
     DIALOGUE_PACKAGE = 73,
     GUN_DATA = 74,
+    HUMAN_CHARACTER = 75,
     ANIMAL_CHARACTER = 76,
     UNIQUE_SQUAD_TEMPLATE = 77,
     FACTION_TEMPLATE = 78,
+    AI_SCHEDULE = 79,
     WEATHER = 80,
     SEASON = 81,
     EFFECT = 82,
     ITEM_PLACEMENT_GROUP = 83,
     WORD_SWAPS = 84,
+    NEST = 85,
     NEST_ITEM = 86,
     CHARACTER_PHYSICS_ATTACHMENT = 87,
     LIGHT = 88,
     HEAD = 89,
+    BLUEPRINT = 90,
+    SHOP_TRADER_CLASS = 91,
+    FOLIAGE_BUILDING = 92,
     FACTION_CAMPAIGN = 93,
+    GAMESTATE_TOWN = 94,
     BIOME_GROUP = 95,
     EFFECT_FOG_VOLUME = 96,
     FARM_DATA = 97,
     FARM_PART = 98,
     ENVIRONMENT_RESOURCES = 99,
-
-    /// <summary>Tentative: matched on 2 of 3 fields.</summary>
     RACE_GROUP = 100,
     ARTIFACTS = 101,
     MAP_ITEM = 102,
     BUILDINGS_SWAP = 103,
     ITEMS_CULTURE = 104,
     ANIMATION_EVENT = 105,
+    TUTORIAL = 106,
     CROSSBOW = 107,
+    TERRAIN_DECALS = 108,
     AMBIENT_SOUND = 109,
     WORLD_EVENT_STATE = 110,
     LIMB_REPLACEMENT = 111,

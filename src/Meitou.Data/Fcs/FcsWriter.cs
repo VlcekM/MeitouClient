@@ -28,7 +28,7 @@ public static class FcsWriter
             WriteHeaderBody(w, file);
         }
 
-        w.Write(file.Marker);
+        w.Write(file.NextId);
         w.Write(file.Records.Count);
         foreach (var record in file.Records)
             WriteRecord(w, record);
@@ -41,13 +41,48 @@ public static class FcsWriter
         WriteString(w, file.Description);
         WriteString(w, string.Join(',', file.Dependencies));
         WriteString(w, string.Join(',', file.References));
-        if (file.FileType == FcsFileType.V17)
-            w.Write(file.HeaderTail);
+        if (file.FileType != FcsFileType.V17) return;
+
+        if (file.Merge is { } merge)
+        {
+            w.Write(merge.SaveCounter);
+            w.Write(merge.LastMergeResolve);
+            w.Write(checked((byte)merge.Merged.Count));
+            foreach (var m in merge.Merged)
+            {
+                WriteString(w, m.File);
+                w.Write(m.Value1);
+                w.Write(m.Value2);
+            }
+        }
+        if (file.DeleteRequests is { } deletes)
+        {
+            if (file.Merge is null)
+                throw new InvalidOperationException("A header with delete requests must also have merge info.");
+            w.Write(checked((byte)deletes.Count));
+            foreach (var d in deletes)
+            {
+                WriteString(w, d.File);
+                w.Write(d.Version);
+                WriteString(w, string.Join(':', d.Items));
+            }
+        }
+        w.Write(file.HeaderTail);
     }
 
-    static void WriteRecord(BinaryWriter w, FcsRecord record)
+    static void WriteRecord(BinaryWriter output, FcsRecord record)
     {
-        w.Write(record.Unknown);
+        // Buffered so the leading size field can hold the record's real size.
+        var buffer = new MemoryStream();
+        using (var w = new BinaryWriter(buffer, FcsReader.Encoding, leaveOpen: true))
+            WriteRecordBody(w, record);
+        output.Write(record.ByteSize == 0 ? 0u : checked((uint)buffer.Length + 4));
+        output.Flush();
+        buffer.WriteTo(output.BaseStream);
+    }
+
+    static void WriteRecordBody(BinaryWriter w, FcsRecord record)
+    {
         w.Write(record.Type);
         w.Write(record.Id);
         WriteString(w, record.Name);
@@ -82,7 +117,7 @@ public static class FcsWriter
             WriteString(w, instance.Id);
             WriteString(w, instance.Target);
             WriteVector3(w, instance.Position);
-            WriteVector4(w, instance.Rotation);
+            WriteRotation(w, instance.Rotation);
             w.Write(instance.States.Count);
             foreach (var state in instance.States)
                 WriteString(w, state);
@@ -107,6 +142,11 @@ public static class FcsWriter
     static void WriteVector4(BinaryWriter w, Vector4 v)
     {
         w.Write(v.X); w.Write(v.Y); w.Write(v.Z); w.Write(v.W);
+    }
+
+    static void WriteRotation(BinaryWriter w, Quaternion q)
+    {
+        w.Write(q.W); w.Write(q.X); w.Write(q.Y); w.Write(q.Z);
     }
 
     static void WriteString(BinaryWriter w, string s)

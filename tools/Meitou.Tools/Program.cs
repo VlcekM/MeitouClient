@@ -51,6 +51,11 @@ static int Fcs(string path)
     Console.WriteLine($"{Path.GetFileName(path)}: format {(int)file.FileType}, version {file.Version}, {file.Records.Count} records");
     Console.WriteLine($"  dependencies: {string.Join(", ", file.Dependencies)}");
     Console.WriteLine($"  references:   {string.Join(", ", file.References)}");
+    if (file.Merge is { } merge)
+        Console.WriteLine($"  save counter: {merge.SaveCounter}, last merge resolve: {merge.LastMergeResolve}, merged mods: {merge.Merged.Count}");
+    if (file.DeleteRequests is { } deletes)
+        Console.WriteLine($"  delete requests: {deletes.Count}");
+    Console.WriteLine($"  records: {file.Records.Count(r => !r.IsModified)} new, {file.Records.Count(r => r.IsModified)} modifying ({file.Records.Count(r => r.IsRenamed)} renaming), {file.Records.Count(r => r.IsRemoved)} removing");
     if (file.HeaderTail.Length > 0)
         Console.WriteLine($"  header tail:  {Convert.ToHexString(file.HeaderTail)}");
 

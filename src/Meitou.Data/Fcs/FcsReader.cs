@@ -28,7 +28,7 @@ public static class FcsReader
         {
             var file = new FcsFile();
             ReadHeader(r, file);
-            file.Marker = r.ReadInt32();
+            file.NextId = r.ReadInt32();
             int count = ReadCount(r);
             file.Records.EnsureCapacity(count);
             for (int i = 0; i < count; i++)
@@ -58,20 +58,35 @@ public static class FcsReader
         file.Dependencies.AddRange(SplitList(ReadString(r)));
         file.References.AddRange(SplitList(ReadString(r)));
 
-        if (headerEnd >= 0)
+        if (headerEnd < 0) return;
+
+        // Editor bookkeeping; each section is present only if the declared header length leaves room for it.
+        if (r.BaseStream.Position < headerEnd)
         {
-            long tail = headerEnd - r.BaseStream.Position;
-            if (tail < 0)
-                throw new FcsFormatException("Header is longer than its declared length.", r.BaseStream.Position);
-            file.HeaderTail = r.ReadBytes((int)tail);
+            uint saveCounter = r.ReadUInt32(), lastMergeResolve = r.ReadUInt32();
+            var merged = new List<FcsMergedMod>();
+            for (int n = r.ReadByte(); n > 0; n--)
+                merged.Add(new FcsMergedMod(ReadString(r), r.ReadUInt32(), r.ReadUInt32()));
+            file.Merge = new FcsMergeInfo(saveCounter, lastMergeResolve, merged);
         }
+        if (r.BaseStream.Position < headerEnd)
+        {
+            file.DeleteRequests = [];
+            for (int n = r.ReadByte(); n > 0; n--)
+                file.DeleteRequests.Add(new FcsDeleteRequest(ReadString(r), r.ReadUInt32(), [.. ReadString(r).Split(':')]));
+        }
+
+        long tail = headerEnd - r.BaseStream.Position;
+        if (tail < 0)
+            throw new FcsFormatException("Header is longer than its declared length.", r.BaseStream.Position);
+        file.HeaderTail = r.ReadBytes((int)tail);
     }
 
     static FcsRecord ReadRecord(BinaryReader r)
     {
         var record = new FcsRecord
         {
-            Unknown = r.ReadInt32(),
+            ByteSize = r.ReadUInt32(),
             Type = r.ReadInt32(),
             Id = r.ReadInt32(),
             Name = ReadString(r),
@@ -110,7 +125,7 @@ public static class FcsReader
                 Id = ReadString(r),
                 Target = ReadString(r),
                 Position = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()),
-                Rotation = ReadVector4(r),
+                Rotation = ReadRotation(r),
             };
             for (int s = ReadCount(r); s > 0; s--)
                 instance.States.Add(ReadString(r));
@@ -132,6 +147,13 @@ public static class FcsReader
     }
 
     static Vector4 ReadVector4(BinaryReader r) => new(r.ReadSingle(), r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+
+    // Instance rotations are stored w, x, y, z.
+    static Quaternion ReadRotation(BinaryReader r)
+    {
+        float w = r.ReadSingle(), x = r.ReadSingle(), y = r.ReadSingle(), z = r.ReadSingle();
+        return new Quaternion(x, y, z, w);
+    }
 
     static string ReadString(BinaryReader r)
     {

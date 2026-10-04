@@ -69,10 +69,8 @@ public class FcsSchemaTests
         foreach (var type in Enum.GetValues<FcsRecordType>())
         {
             var name = type.ToString();
-            if (!schema.TypeNames.Contains(name)) continue;
-            Assert.True(keysByType.ContainsKey((int)type), $"{name} ({(int)type}) has no records in the base game.");
+            if (!schema.TypeNames.Contains(name) || !keysByType.TryGetValue((int)type, out var keys)) continue;
 
-            var keys = keysByType[(int)type];
             int Hits(string t) => keys.Count(k => schema.FindField(t, k) is not null);
             int best = schema.TypeNames.Max(Hits);
             Assert.True(Hits(name) == best, $"{name} ({(int)type}): {Hits(name)} fields found, best section has {best}.");
