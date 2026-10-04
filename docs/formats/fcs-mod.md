@@ -7,8 +7,10 @@ Sources:
 - **FCS**: the official editor, `forgotten construction set.exe`, is a .NET program. Its load/save code
   (class `GameData`: `load`, `readHeader`, `Item.load`, `Item.save`, `save`, `writeHeader`) was
   decompiled for interoperability and is the source of field meanings below. Caveat: that is the
-  *editor's* behaviour; the game (`kenshi_x64.exe`, native) has its own loader, which we assume
-  follows the same rules until shown otherwise.
+  *editor's* behaviour; the game (`kenshi_x64.exe`, native) has its own loader.
+- **Game**: `kenshi_x64.exe` was disassembled/decompiled (Ghidra, for interoperability). Its loader
+  is described in [Game loader](#game-loader); where it differs from FCS, **the game is what we
+  implement**. Function addresses refer to the current Steam build.
 
 All values little-endian. `string` = `int32 byteLength` + UTF-8 bytes (FCS reads and writes UTF-8;
 also Verified on base files: 92 non-ASCII strings, all valid UTF-8). The reader **rejects** invalid
@@ -36,16 +38,19 @@ Record  records[recordCount]
 ```
 
 - FCS also accepts file types 1–15 (old formats without this header, and with different record
-  layouts); it rejects anything else. Our reader supports 16 and 17 only. Old mods are rare: since
-  game version 0.92 mods are re-saved as 17.
+  layouts); it rejects anything else. The game accepts **8–17** (see [Game loader](#game-loader));
+  type 15 is the header-less layout used by the world `.level` files. Our reader supports 16 and 17
+  only. Old mods are rare: since game version 0.92 mods are re-saved as 17 (Observed: of 50 Steam
+  workshop mods, 25 are type 16 and 25 type 17).
 - FCS always writes type 17 with both bookkeeping sections. `Dialogue.mod` (9 bytes: save counter 1,
   no merges, no delete section) was presumably written by an older editor (Observed from the byte
   count); `rebirth.mod` (save counter 9) has both, empty.
 - FCS reads `mergedCount` entries but stops early if an entry's string length is > 256 (defensive
   quirk; not seen in data).
 - Merge / delete bookkeeping is used when one mod was merged into another in the editor: on load,
-  records named in a delete request are reverted unless changed since `version`. The game presumably
-  ignores it.
+  records named in a delete request are reverted unless changed since `version`. The game never
+  reads it (Verified: it skips the whole type-17 header by `headerLength`, see
+  [Game loader](#game-loader)).
 
 ## Record
 
@@ -87,42 +92,119 @@ Verified by the round-trip: bools are always 0/1, no record repeats a key within
 reference list name, and the `byteSize` values in rebirth.mod equal the real record sizes (the writer
 recomputes them and the output is identical).
 
-## Merging (FCS)
+## Merging
 
 Files load in order (see [overview.md](overview.md#load-order)) into one table keyed by `stringId`.
-`Meitou.Data.GameDatabase` implements these rules (`LoadOrder` builds the order, `meitou-tools load`
-summarizes the result).
+`Meitou.Data.GameDatabase` implements the game's rules (`LoadOrder` builds the order, `meitou-tools load`
+summarizes the result). Each rule says what FCS does and what the game does (**Game**, Verified by
+decompilation; details and addresses in [Game loader](#game-loader)). Where they differ, the game wins.
 
 **Verified on the base game** (`GameDatabaseTests`): the four base files merge into 54,951 records
 (3,841 of them changed by a later file) with **no issues**: no modifying record lacks its base, no id is
 defined twice, no type changes, and no reference in the result points at a missing record. Iron Rock
 (`14520-rebirth.mod`) ends up with rebirth.mod's 7 values, gamedata.base's other fields and its
-`building` reference.
+`building` reference. None of the game-vs-FCS differences below changes the base-game result (Observed
+by a one-off scan of the four files: no key in two property lists of one record, no key over 64 bytes,
+no string over 4096 bytes or containing NUL, no name or id over 512 bytes, no partial
+reference-removal values, no name change without the RENAMED flag, no instance re-listed with states).
 
-- **New vs. modifying** (`flags` bit 0). A record with bit 0 clear defines the record; with bit 0 set
-  it changes a record from an earlier file. FCS normalizes first: if bit 0 is clear it clears bit 1.
-  Base files store `0x80000002`/`0x80000001`/`0x80000003` (save counter 0x8000000, so bit 0 decides),
-  newer files `0x10` (new, counter 1), `0x11` (modified), `0x13` (modified + renamed), `0x90`, ...
+- **New vs. modifying** (`flags` bit 0). FCS: bit 0 clear defines the record, set changes a record from
+  an earlier file; it normalizes first (bit 0 clear clears bit 1). Base files store
+  `0x80000002`/`0x80000001`/`0x80000003` (save counter 0x8000000, so bit 0 decides), newer files `0x10`
+  (new, counter 1), `0x11` (modified), `0x13` (modified + renamed), `0x90`, ...
+  **Game**: bit 0 only decides whether a warning is logged when the record has no base. Otherwise
+  "new" and "modifying" records are applied the same way: if the id exists, the fields merge into it;
+  if not, a record is created.
 - **Fields merge one by one.** Loading a record writes each listed key into the existing record's
   values (a later file overrides earlier ones per key); keys not listed keep their values. When saving,
   FCS writes only the keys that differ from the base. Example: `14520-rebirth.mod` ("Iron Rock") is a
   full record in `gamedata.base`, and `rebirth.mod` re-lists it with flags `0x11` and only 7 fields.
   (Ids keep their origin: that record was created in rebirth.mod and later baked into gamedata.base.)
-- **Renaming** (`flags` bit 1, with bit 0): the record's name becomes `name`. Without it a modifying
-  record's `name` is ignored.
+  **Game**: same, per key and **per kind**: a record has seven separate tables (bool, float, int, vec3,
+  vec4, string, filename), so one key can exist once in each, and a value only replaces the same key
+  in the same table.
+- **Renaming** (`flags` bit 1). FCS: with bit 0, the record's name becomes `name`; without it a
+  modifying record's `name` is ignored. **Game**: an existing record is renamed when bit 1 is set
+  (bit 0 is not checked); a newly created record always takes `name`.
 - **A string property only overrides a string** (FCS skips a string value whose key already holds a
-  different type).
+  different type). **Game**: no such rule; the case can't arise because each kind has its own table.
 - **Removing a record**: bool property `REMOVED` = true. The record is dropped (FCS keeps it, flagged,
-  only while editing the mod that removes it). FCS writes REMOVED with bit 0 set.
+  only while editing the mod that removes it). FCS writes REMOVED with bit 0 set. **Game**: after
+  applying a record it looks up `REMOVED` in the record's merged bool table; if true, the record is
+  taken out of every index. A later file listing the same id creates a fresh record (no old fields).
+  `REMOVED = false` stays as an ordinary field.
 - **References** merge per (list, target): a later file adds the reference or overwrites its values.
-  `v0 = v1 = v2 = int.MaxValue` (FCS tests `v2`) removes the reference.
-- **Instances** merge per instance id: later files overwrite position/rotation/target and add states.
-  An empty `target` removes the instance.
-- A record changing **type** between files is an error in FCS (`ChangedItemType`).
+  FCS removes when `v2 == int.MaxValue`. **Game**: removes only when **all three** values are
+  0x7FFFFFFF. A new reference is appended at the end of its list (list order = file order); an
+  existing one keeps its position and gets the new values. References whose target doesn't exist stay
+  in the list (they resolve to nothing).
+- **Instances** merge per instance id: later files overwrite position, rotation and target. FCS adds
+  states. **Game**: states are **appended** to the instance's existing states, with no duplicate check.
+  An empty `target` does not delete the entry: the instance stays with an empty target and no states
+  (a later file can fill it again).
+- A record changing **type** between files is an error in FCS (`ChangedItemType`). **Game**: no check;
+  the type of the first definition is kept and the later record's fields are merged anyway.
 - A **new** record whose id an earlier file already defines is an error in FCS (`ItemAlreadyDefined`),
-  but its fields are still merged into the existing record. What the game does is Unknown.
+  but its fields are still merged into the existing record. **Game**: merged silently, exactly like a
+  modifying record.
 - A modifying record whose id no earlier file defines is "missing" in FCS (error `ModifiedItemNotFound`);
-  the editor can skip such records. What the game does with them is Unknown.
+  the editor can skip such records. **Game**: logs `[Mods] Item <name> (<id>) modified by <file> does
+  not exist` and then **creates** the record from it (its type, name and only the fields it lists).
+  Observed: 14 such records in 2 of 50 workshop mods (presumably records of other mods; ids not
+  checked); if the mod they depend on is missing or loads later, the game ends up with a partial record.
+
+## Game loader
+
+How `kenshi_x64.exe` reads and applies `.base` / `.mod` files. All **Verified by decompilation** unless
+marked otherwise; addresses are functions in the current Steam build. The order of files is in
+[overview.md](overview.md#load-order).
+
+- **Load sequence** `FUN_140870ae0` (runs once): the four core files, then the core translation file,
+  then the mods from `data/mods.cfg` in order, then each mod's translation, then two post-passes
+  (`FUN_1406c34f0`, `FUN_1406bde00`, below), then the core files' world `leveldata.level` files (same
+  format, into a separate table). Finally the `CONSTANTS` record (type 27) named `GLOBAL CONSTANTS` is
+  looked up **by name and type** (`FUN_1406bfda0`) and becomes the game's constants.
+- **One file** `FUN_1406c0b50` (`GameDataContainer::load`, named in its own log text). Opens the file
+  in binary mode; a file that can't be opened fails. Reads `fileType` and accepts **8–17**; anything
+  else logs `[GameDataContainer::load] Invalid data file '<path>' (Version: <n>)` and fails.
+  - Type 17: reads `headerLength` and skips that many bytes, so version, author, description,
+    dependencies, references, save counter, merge and delete bookkeeping are **never read**.
+  - Type 16: reads `version`, then skips the four strings.
+  - Types 8–15: no header. Then `nextId` and `recordCount` for every type; the game keeps the largest
+    `nextId` of all files (for records created in game, whose ids end in `-INGAME`).
+  - Per record: `byteSize` (ignored), type, numeric id, name, stringId, then `flags` only if the file
+    type is 15 or more. Only flag bits 0 and 1 are used (bit 31 is masked off, the save counter unused).
+  - Lookup by stringId is exact (case-sensitive). Found: renamed if bit 1 (`FUN_1406bfb70`), type left
+    alone. Not found: warning if bit 0, then a new record with this record's type and name is added
+    (`FUN_1406bf780`).
+  - Property lists in file order bool, float, int, vec3, vec4, string, filename (vec3/vec4 lists only
+    from file type 9), each into its own table (`FUN_1406c9320`, `FUN_1406ca320`, `FUN_1406c9990`,
+    `FUN_1406ca670`, `FUN_1406ca9e0`, `FUN_1406c9ce0` twice); a key overwrites the same key in that table.
+  - References (`FUN_1400b61b0` set or append, `FUN_1406cb110` remove), instances (`FUN_1406cae60`
+    set, `FUN_1406cafe0` clear), REMOVED (`FUN_1406bf680`): rules in [Merging](#merging).
+  - A record remembers the index of the file that **created** it; an instance remembers both the file
+    that created it and the last file that set or cleared it (core files 0–3; all mods share one
+    index, the number of core files; translations −1). What uses it is Unknown (probably saving).
+- **Truncation** (fixed buffers; values are cut silently, and also at the first NUL byte): property
+  keys **64 bytes**; name, stringId, reference list name, reference target, instance id and instance
+  target **512 bytes**; string and filename values **4096 bytes**. Observed: neither base-game nor
+  workshop data (50 mods) comes near these limits.
+- **Older file types** (Verified only this far): flags exist from type 15 (before that every found
+  record takes the new name); before 15, instance ids and states are ints that get turned into
+  string ids; before 11 a reference has one value; types 11, 13 and 14 carry an extra per-record
+  list (string + byte) that filters which keys and references are applied; a `CONSTANTS` record in a type ≤ 13 file triggers a "mod is out of date, re-save it in the
+  construction set" warning. The details are Unknown and not needed until such files turn up.
+- **Post-passes** after all files: `FUN_1406bde00` resolves every reference target to its record
+  (missing targets stay as empty links). `FUN_1406c34f0`: for every BUILDING (type 0) whose int
+  `link type` is not 3, each building in its `wall subsections` list gets a `wall master` reference
+  (values 0) back to it. That reference is derived; no file stores it.
+- **`.translation` files** use the same format and loader (`FUN_1406c29a0` calls `FUN_1406c0b50`), so a
+  translation is just another layer of record changes. The core one (chosen by the language setting)
+  is applied after the four core files; a mod's own is looked for under `<mod folder>/locale/`
+  (`FUN_14086f240`) and applied after all mods. How the language folder is chosen is not analyzed.
+- **Errors don't stop loading**: a failed core file shows "Failed to load the core '<file>' file";
+  failed mods are collected into one "Mod error(s) (Ignored files)" dialog. What happens with a
+  truncated or corrupt file mid-record is **Unknown** (no checks were seen; the stream just runs out).
 
 ## Record types
 
@@ -265,9 +347,13 @@ Leader AI Goals: AI_TASK (0, 24,0) "...val0 and val1 is start and finish time...
 
 ## Open questions
 
-- Does the game's own loader (`kenshi_x64.exe`) apply exactly the editor's merge rules? In particular:
-  what it does with modifying records whose base is missing, with a second "new" definition of an
-  existing id, and whether it honours delete requests.
-- Mod load order in the game itself (vs. the editor), including Steam workshop folders.
+- ~~Does the game apply the editor's merge rules?~~ Answered in [Game loader](#game-loader) and
+  [Merging](#merging): a modifying record without a base is created, a second "new" definition is
+  merged silently, and delete requests (the v17 bookkeeping) are never read.
+- ~~Mod load order in the game, including Steam workshop folders~~: see
+  [overview.md](overview.md#load-order).
+- The game's behaviour on a truncated or corrupt file, and the exact layouts of file types 8–14.
 - Save games: probably the same record format with the GAMESTATE_* / *_STATE types; not checked.
-- Non-UTF-8 strings in third-party mods: currently rejected; decide on lossless handling once samples exist.
+- Non-UTF-8 strings in third-party mods: currently rejected. The game doesn't care: it copies string
+  bytes as they are (Verified, `FUN_1406c0b50`, `FUN_1406bc480`), so lossless handling means keeping
+  the raw bytes.

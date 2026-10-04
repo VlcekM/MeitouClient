@@ -36,13 +36,13 @@ public sealed class FcsRecord
 
     /// <summary>
     /// True if this record changes a record defined by an earlier file (fields not listed keep their values);
-    /// false if it defines the record. (A second definition of an existing id is an error in the editor, which
-    /// still merges its fields into the existing record; what the game does is unknown.)
+    /// false if it defines the record. (A second definition of an existing id is an error in the editor; both the
+    /// editor and the game merge its fields into the existing record.)
     /// </summary>
     public bool IsModified => (Flags & 1) != 0;
 
-    /// <summary>True if a modifying record also renames the record to <see cref="Name"/>.</summary>
-    public bool IsRenamed => (Flags & 3) == 3;
+    /// <summary>True if the record renames an existing record to <see cref="Name"/> (the game checks only this bit).</summary>
+    public bool IsRenamed => (Flags & 2) != 0;
 
     /// <summary>The file's save counter when this record was last changed (bits 4 and up of <see cref="Flags"/>).</summary>
     public uint SaveCounter => Flags >> 4;
@@ -75,8 +75,8 @@ public readonly record struct FcsReference(string TargetStringId, int Value0, in
     /// <summary>Values written for a reference a mod removes.</summary>
     public const int RemovedValue = int.MaxValue;
 
-    /// <summary>True if this entry removes the reference from the record it modifies.</summary>
-    public bool IsRemoved => Value2 == RemovedValue;
+    /// <summary>True if this entry removes the reference from the record it modifies (the game requires all three values).</summary>
+    public bool IsRemoved => Value0 == RemovedValue && Value1 == RemovedValue && Value2 == RemovedValue;
 
     public static FcsReference Removed(string targetStringId) => new(targetStringId, RemovedValue, RemovedValue, RemovedValue);
 }

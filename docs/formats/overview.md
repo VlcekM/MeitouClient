@@ -32,17 +32,70 @@ Examined 2026-10-04 on the Steam install of Kenshi.
 | `Dialogue.mod` | 17 | 39,077 | `gamedata.base,Newwworld.mod` (references `rebirth.mod`) |
 | `rebirth.mod` | 17 | 8,571 | `gamedata.base,Newwworld.mod,Dialogue.mod` |
 
-The table is Verified from the file headers. The order itself comes from the editor (FCS
-`InheritFiles`): a fixed list `gamedata.base, Newwworld.mod, Dialogue.mod, coltontown.mod, Nizu.mod,
-Mohamad.mod, rebirth.mod` (only those present; the middle three are not in the current game), then
-the lines of `data/mods.cfg` in order: one mod file name per line (e.g. `MyMod.mod`), written by the
-editor's "export mods.cfg" without the fixed files. A mod in `mods.cfg` is looked up as
-`data/<name>` or `mods/<name without .mod>/<name>`. Base content and mods use the same format, so a
-mod is just another layer on top; how layers merge is in [fcs-mod.md](fcs-mod.md#merging-fcs). The
-game's own order (including Steam workshop folders) is **Unknown** until checked in `kenshi_x64.exe`.
+The table is Verified from the file headers. Base content and mods use the same format, so a mod is
+just another layer on top; how layers merge is in [fcs-mod.md](fcs-mod.md#merging). The order below
+is the **game's** (Verified by decompiling `kenshi_x64.exe`; addresses are functions in the current
+Steam build). The editor differs: FCS `InheritFiles` uses the fixed list `gamedata.base,
+Newwworld.mod, Dialogue.mod, coltontown.mod, Nizu.mod, Mohamad.mod, rebirth.mod` and also looks for a
+`mods.cfg` entry as `data/<name>`; the game does neither.
 
-A mod lives in `mods/<name>/<name>.mod`. `.info` files are XML `ModData` (id, mod name, tags,
-visibility, lastUpdate), e.g. `data/_rebirth.info`, holding workshop metadata.
+1. **Core files**, a fixed list (`FUN_14086ab20`): `data/gamedata.base`, `data/Newwworld.mod`,
+   `data/Dialogue.mod`, `data/rebirth.mod`, in that order. No directory scan, no `*.base` search.
+   A core file that fails to load shows "Failed to load the core '<file>' file" and loading goes on.
+   (Quirk: the list is only set up if `data/mods.cfg` exists or can be created; the game creates it
+   empty when missing.)
+2. **Core translation**: a `.translation` file for the chosen language (same format; see
+   [fcs-mod.md](fcs-mod.md#game-loader)).
+3. **Mods, in `data/mods.cfg` order** (read by `FUN_1408693a0`, applied by `FUN_140870ae0`):
+   - Text file, one entry per line (CRLF fine: opened in text mode; lines up to 999 chars; empty lines
+     skipped; **no trimming**, so trailing spaces break an entry).
+   - Lines starting with `#`, `/` or `;` are comments.
+   - The part after the last `.` must be exactly `mod` (case-sensitive), else the line is ignored.
+     The rest is the mod's name, e.g. `MyMod.mod` → `MyMod`.
+   - Names `Newwworld`, `Dialogue`, `rebirth` are ignored (already loaded as core files);
+     `gamedata.base` is ignored by the extension rule.
+   - The name is looked up, **case-sensitively**, among the mods found on disk (next list). Not found:
+     logs `[Mods] Mod '<name>' not found.` and skips it. A name listed twice loads once, at its first
+     position.
+   - Dependencies in the mod headers are **not** checked or used for ordering at load time.
+4. **Mod translations** (`<mod folder>/locale/...`), after all mods.
+
+**Where mods are found** (`FUN_14086f7a0`, run when the launcher window opens, `FUN_140127890`), into
+one table keyed by name:
+
+- **Steam workshop** first (only when Steam is running): for each subscribed item, Steam's install
+  folder for it (`ISteamUGC` subscribed items + install info; Observed in this install:
+  `steamapps/workshop/content/233860/<item id>/`). The mod is the first file with extension exactly
+  `.mod` in the folder listing (sorted; files like `X.mod.bak v1` don't count); its name is the file
+  name without `.mod`, so the folder name (the item id) doesn't matter.
+- **`mods/` folder** second: each subfolder `D` (sorted) that contains `mods/D/D.mod` is mod `D`. A
+  local mod **replaces** a workshop mod with the same name.
+- Nothing else: a `.mod` in `data/` other than the core files is never loaded.
+
+`Meitou.Data.LoadOrder` follows these rules, except that it can't ask Steam for the subscribed items:
+it takes every downloaded item in `steamapps/workshop/content/233860/` of the install's Steam library
+(`GameInstall.WorkshopDirectory`), in folder-name order.
+
+Each mod remembers its folder (used for its translation, its art and its `leveldata/`). A mod that
+can't be opened or has an invalid file type is skipped and listed in one "Mod error(s) (Ignored
+files)" dialog (workshop mods are marked `(*)`); the rest still load.
+
+**The launcher** (Mods tab, `FUN_140125df0`; saving in `FUN_140120bd0`) is what writes `mods.cfg`:
+- It shows all found mods: those active in `mods.cfg` first in that order, then the rest sorted so
+  that a mod comes after the mods it depends on (header dependencies whose names aren't found are
+  dropped from the sort; mods in a dependency cycle are left out of the list, so saving drops them
+  from `mods.cfg`). It reads the mod
+  headers for display (`FUN_1406be050`; only for type-17 files) and marks dependencies or references
+  that aren't found as "Missing mod!". That is a warning only.
+- `data/__mods.list` (launcher-only): every mod name the launcher has seen, one per line, no
+  extension. A found mod **not** in it is new and starts **enabled**. The launcher rewrites it with
+  the names it sees (without Steam it also keeps old names it no longer finds; Observed quirk: past
+  1000 entries it starts over).
+- On save, `mods.cfg` gets `<name>.mod` for each enabled mod, in the displayed order.
+
+`.info` files (XML `ModData`: id, mod name, tags, visibility, lastUpdate; e.g. `data/_rebirth.info`,
+`_<name>.info` next to workshop mods) hold workshop metadata. The game never opens them (Observed:
+no defined `.info` string in the executable); the resource scan skips files starting with `_`.
 
 ## Resource lookup and art overrides (Observed)
 
@@ -51,6 +104,13 @@ resources by **file name only** across all of them, so names must be unique. Per
 a mod replaces any art file by shipping a file with the same name under
 `mods/<name>/<same relative path>`. Exact precedence (relative path vs. bare name, several mods
 overriding the same file) is **Unknown** and needs testing.
+
+Verified (decompiled, `FUN_140816d90`, briefly; resources are covered in more depth elsewhere): after
+the `resources.cfg` folders, the game walks the folder of every mod active in `mods.cfg`, in
+`mods.cfg` order, and adds each subfolder that holds files as another `FileSystem` location, in the
+resource group of the matching base folder (default `General`). Skipped: `leveldata`,
+`newland/leveldata`, `locale` and translation folders. The mod's own folder is added only if it holds
+files other than the `.mod`, `.translation` and `_`-prefixed files (`_<name>.info`, `_<name>.img`).
 
 ## Format inventory
 
@@ -66,7 +126,7 @@ Counts are files under `data/`.
 | `.compositor`, `.hlsl`, `.vert`, `.frag` | ~90 | Ogre compositors / shaders | Not analyzed |
 | `.dds`, `.png`, `.tga` | ~3900 | Textures | Standard formats |
 | `.zone` | 701 | World cells, `leveldata/zone.X.Y.zone` | Not analyzed; strings like `0-base-S23` near the start |
-| `.level` | 14 | Level data | Not analyzed |
+| `.level` | 14 | Level data | FCS records, file type 15 (no header): first bytes Observed, and the game loads `newland/leveldata/[<core file>/]leveldata.level` with the same loader (Verified, `FUN_140870ae0`). Contents not analyzed |
 | `.path` | 1 | `globalPathing.path`, world pathfinding grid | Not analyzed |
 | `.raw` | 256 | Heightmaps | Not analyzed |
 | `.xml` | 1158 | GUI, foliage, config | Not analyzed |

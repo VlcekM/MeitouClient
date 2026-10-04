@@ -4,8 +4,7 @@ namespace Meitou.Data;
 
 /// <summary>
 /// All game records after applying the files of a load order, with the merge rules in
-/// docs/formats/fcs-mod.md ("Merging"). Those are the editor's rules; the game's own loader is assumed
-/// to match until shown otherwise.
+/// docs/formats/fcs-mod.md ("Merging"): the game's own loader rules, which differ from the editor's in places.
 /// </summary>
 public sealed class GameDatabase
 {
@@ -46,12 +45,9 @@ public sealed class GameDatabase
         var record = records.GetValueOrDefault(source.StringId);
         if (record is null)
         {
+            // The game creates the record anyway (FUN_1406c0b50); the editor would skip it.
             if (source.IsModified)
-            {
-                // The editor can load these as placeholders or skip them; without the base there's nothing to change.
-                Issue(GameDataIssueKind.ModifiedRecordNotFound, fileName, source.StringId, $"changes record '{source.Name}', which no earlier file defines");
-                return;
-            }
+                Issue(GameDataIssueKind.ModifiedRecordNotFound, fileName, source.StringId, $"changes record '{source.Name}', which no earlier file defines; created from the change");
             record = new GameRecord(source.StringId, source.RecordType, source.Name, fileName);
             records.Add(source.StringId, record);
         }
@@ -66,15 +62,13 @@ public sealed class GameDatabase
             record.ModifiedBy.Add(fileName);
         }
 
-        foreach (var (k, v) in source.Bools) record.SetField(k, v);
-        foreach (var (k, v) in source.Floats) record.SetField(k, v);
-        foreach (var (k, v) in source.Ints) record.SetField(k, v);
-        foreach (var (k, v) in source.Vector3s) record.SetField(k, v);
-        foreach (var (k, v) in source.Vector4s) record.SetField(k, v);
-        foreach (var (k, v) in source.Strings)
-            if (!record.Fields.TryGetValue(k, out var old) || old is string)
-                record.SetField(k, v);
-        foreach (var (k, v) in source.Filenames) record.SetField(k, new GamePath(v));
+        Merge(record.BoolTable, source.Bools);
+        Merge(record.FloatTable, source.Floats);
+        Merge(record.IntTable, source.Ints);
+        Merge(record.Vector3Table, source.Vector3s);
+        Merge(record.Vector4Table, source.Vector4s);
+        Merge(record.StringTable, source.Strings);
+        Merge(record.FilenameTable, source.Filenames);
 
         foreach (var (list, refs) in source.References)
         {
@@ -91,7 +85,12 @@ public sealed class GameDatabase
             var instances = record.MutableInstances;
             if (si.IsRemoved)
             {
-                instances.Remove(si.Id);
+                // The game clears the instance but keeps its entry.
+                if (instances.TryGetValue(si.Id, out var cleared))
+                {
+                    cleared.Target = "";
+                    cleared.States.Clear();
+                }
                 continue;
             }
             if (!instances.TryGetValue(si.Id, out var instance))
@@ -99,18 +98,18 @@ public sealed class GameDatabase
             instance.Target = si.Target;
             instance.Position = si.Position;
             instance.Rotation = si.Rotation;
-            foreach (var state in si.States)
-                if (!instance.States.Contains(state))
-                    instance.States.Add(state);
+            instance.States.AddRange(si.States);
         }
 
-        // REMOVED is a marker, not data: true deletes the record, and the key itself is never kept.
-        if (record.Fields.TryGetValue(FcsRecord.RemovedKey, out var removed))
-        {
-            record.RemoveField(FcsRecord.RemovedKey);
-            if (removed is true)
-                records.Remove(record.StringId);
-        }
+        // Checked on the merged record after each change: true takes the record out, so a later file that
+        // lists the id starts a fresh record.
+        if (record.GetBool(FcsRecord.RemovedKey))
+            records.Remove(record.StringId);
+    }
+
+    static void Merge<T>(Dictionary<string, T> into, OrderedDictionary<string, T> from)
+    {
+        foreach (var (k, v) in from) into[k] = v;
     }
 
     void Issue(GameDataIssueKind kind, string file, string stringId, string message) =>
@@ -121,7 +120,7 @@ public enum GameDataIssueKind
 {
     /// <summary>A file in the load order (e.g. from <c>mods.cfg</c>) doesn't exist.</summary>
     MissingFile,
-    /// <summary>A record changes a record no earlier file defines; it is skipped.</summary>
+    /// <summary>A record changes a record no earlier file defines; the game creates it from the change.</summary>
     ModifiedRecordNotFound,
     /// <summary>A record defines an id an earlier file already defined; its fields are merged.</summary>
     RecordAlreadyDefined,

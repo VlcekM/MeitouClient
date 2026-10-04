@@ -50,59 +50,97 @@ public class GameDatabaseTests
     }
 
     [Fact]
-    public void Removed_flag_deletes_record_and_is_not_kept_as_a_field()
+    public void Rename_bit_alone_renames()
+    {
+        var db = new GameDatabase();
+        db.Apply(File(Record("1-a.mod", New)), "a.mod");
+        db.Apply(File(Record("1-a.mod", 0x12, name: "better thing")), "b.mod");
+        Assert.Equal("better thing", db.Find("1-a.mod")!.Name);
+    }
+
+    [Fact]
+    public void Removed_flag_deletes_record_and_a_later_file_starts_it_fresh()
     {
         var keep = Record("2-a.mod", New);
         keep.Bools[FcsRecord.RemovedKey] = false;
+        var baseRecord = Record("1-a.mod", New);
+        baseRecord.Ints["value"] = 10;
         var remove = Record("1-a.mod", Modified);
         remove.Bools[FcsRecord.RemovedKey] = true;
 
         var db = new GameDatabase();
-        db.Apply(File(Record("1-a.mod", New), keep), "a.mod");
+        db.Apply(File(baseRecord, keep), "a.mod");
         db.Apply(File(remove), "b.mod");
-
         Assert.Null(db.Find("1-a.mod"));
-        Assert.False(db.Find("2-a.mod")!.Fields.ContainsKey(FcsRecord.RemovedKey));
+        Assert.False(db.Find("2-a.mod")!.Bools[FcsRecord.RemovedKey]);
+
+        db.Apply(File(Record("1-a.mod", Modified)), "c.mod");
+        var fresh = db.Find("1-a.mod")!;
+        Assert.Equal("c.mod", fresh.DefinedBy);
+        Assert.Empty(fresh.Ints);
+    }
+
+    [Fact]
+    public void Modified_record_without_base_is_created()
+    {
+        var change = Record("9-x.mod", Modified, name: "orphan");
+        change.Ints["value"] = 3;
+        var db = new GameDatabase();
+        db.Apply(File(change), "b.mod");
+
+        var r = db.Find("9-x.mod")!;
+        Assert.Equal("orphan", r.Name);
+        Assert.Equal(3, r.GetInt("value"));
+        Assert.Equal(GameDataIssueKind.ModifiedRecordNotFound, Assert.Single(db.Issues).Kind);
     }
 
     [Fact]
     public void References_are_added_overwritten_and_removed_per_target()
     {
         var baseRecord = Record("1-a.mod", New);
-        baseRecord.References["items"] = [new("10-a.mod", 1, 0, 0), new("11-a.mod", 2, 0, 0)];
+        baseRecord.References["items"] = [new("10-a.mod", 1, 0, 0), new("11-a.mod", 2, 0, 0), new("13-a.mod", 4, 0, 0)];
         var change = Record("1-a.mod", Modified);
-        change.References["items"] = [new("10-a.mod", 7, 0, 0), FcsReference.Removed("11-a.mod"), new("12-a.mod", 3, 0, 0)];
+        change.References["items"] =
+        [
+            new("10-a.mod", 7, 0, 0), FcsReference.Removed("11-a.mod"), new("12-a.mod", 3, 0, 0),
+            new("13-a.mod", 5, 0, int.MaxValue), // only all three values at int.MaxValue remove
+        ];
 
         var db = new GameDatabase();
         db.Apply(File(baseRecord), "a.mod");
         db.Apply(File(change), "b.mod");
 
         Assert.Equal(
-            [new GameReference("10-a.mod", new(7, 0, 0)), new GameReference("12-a.mod", new(3, 0, 0))],
+            [
+                new GameReference("10-a.mod", new(7, 0, 0)), new GameReference("13-a.mod", new(5, 0, int.MaxValue)),
+                new GameReference("12-a.mod", new(3, 0, 0)),
+            ],
             db.Find("1-a.mod")!.GetReferences("items"));
     }
 
     [Fact]
-    public void Instances_merge_by_id_and_empty_target_removes()
+    public void Instances_merge_by_id_and_empty_target_clears()
     {
         var baseRecord = Record("1-a.mod", New);
-        baseRecord.Instances.Add(new FcsInstance { Id = "door", Target = "5-a.mod", Position = new(1, 0, 0) });
-        baseRecord.Instances.Add(new FcsInstance { Id = "lamp", Target = "6-a.mod" });
+        baseRecord.Instances.Add(new FcsInstance { Id = "door", Target = "5-a.mod", Position = new(1, 0, 0), States = { "open" } });
+        baseRecord.Instances.Add(new FcsInstance { Id = "lamp", Target = "6-a.mod", States = { "lit" } });
         var change = Record("1-a.mod", Modified);
-        change.Instances.Add(new FcsInstance { Id = "door", Target = "5-a.mod", Position = new(2, 0, 0) });
+        change.Instances.Add(new FcsInstance { Id = "door", Target = "5-a.mod", Position = new(2, 0, 0), States = { "open" } });
         change.Instances.Add(new FcsInstance { Id = "lamp", Target = "" });
 
         var db = new GameDatabase();
         db.Apply(File(baseRecord), "a.mod");
         db.Apply(File(change), "b.mod");
 
-        var instance = Assert.Single(db.Find("1-a.mod")!.Instances.Values);
-        Assert.Equal("door", instance.Id);
-        Assert.Equal(2f, instance.Position.X);
+        var instances = db.Find("1-a.mod")!.Instances;
+        Assert.Equal(2f, instances["door"].Position.X);
+        Assert.Equal(["open", "open"], instances["door"].States);
+        Assert.True(instances["lamp"].IsCleared);
+        Assert.Empty(instances["lamp"].States);
     }
 
     [Fact]
-    public void String_does_not_override_a_path()
+    public void Each_value_kind_is_its_own_table()
     {
         var baseRecord = Record("1-a.mod", New);
         baseRecord.Filenames["mesh"] = "a.mesh";
@@ -113,7 +151,9 @@ public class GameDatabaseTests
         db.Apply(File(baseRecord), "a.mod");
         db.Apply(File(change), "b.mod");
 
-        Assert.Equal("a.mesh", db.Find("1-a.mod")!.GetPath("mesh"));
+        var r = db.Find("1-a.mod")!;
+        Assert.Equal("a.mesh", r.GetPath("mesh"));
+        Assert.Equal("b.mesh", r.GetString("mesh"));
     }
 
     [Fact]
@@ -126,14 +166,15 @@ public class GameDatabaseTests
         Assert.Equal(
             [GameDataIssueKind.ModifiedRecordNotFound, GameDataIssueKind.RecordAlreadyDefined, GameDataIssueKind.ChangedRecordType],
             db.Issues.Select(i => i.Kind));
-        Assert.Null(db.Find("9-x.mod"));
         Assert.Equal(FcsRecordType.ITEM, db.Find("1-a.mod")!.Type);
     }
 
     [Fact]
-    public void Mods_cfg_skips_blank_lines_and_base_files()
+    public void Mods_cfg_follows_the_game_rules()
     {
-        Assert.Equal(["A.mod", "B.mod"], LoadOrder.ParseModsCfg(["A.mod", "", "  B.mod ", "rebirth.mod"]));
+        Assert.Equal(
+            ["A", "B.x", "A"],
+            LoadOrder.ParseModsCfg(["A.mod", "", " B.mod ", "B.x.mod", "#C.mod", "/C.mod", ";C.mod", "C.MOD", "C", "rebirth.mod", "Dialogue.mod", "A.mod"]));
     }
 
     /// <summary>
@@ -183,7 +224,6 @@ public class GameDatabaseTests
         // Every surviving record was defined somewhere; every defined record either survives or was removed.
         Assert.All(db.Records.Keys, id => Assert.Contains(id, defined));
         Assert.All(defined.Where(id => !db.Records.ContainsKey(id)), id => Assert.Contains(id, everRemoved));
-        Assert.DoesNotContain(db.Records.Values, r => r.Fields.ContainsKey(FcsRecord.RemovedKey));
 
         // The base game is consistent under these rules: nothing to report, and no reference dangles.
         Assert.Empty(db.Issues);

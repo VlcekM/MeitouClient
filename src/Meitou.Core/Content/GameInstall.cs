@@ -18,6 +18,22 @@ public sealed class GameInstall
     public string ModsDirectory => Path.Combine(Root, "mods");
     public string SaveDirectory => Path.Combine(Root, "save");
 
+    /// <summary>
+    /// Steam workshop items of Kenshi (app 233860) in the same Steam library, if the install is a Steam one:
+    /// <c>steamapps/workshop/content/233860</c> next to <c>steamapps/common/&lt;install&gt;</c>.
+    /// </summary>
+    public string? WorkshopDirectory
+    {
+        get
+        {
+            var common = Path.GetDirectoryName(Path.GetFullPath(Root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var steamapps = common is null ? null : Path.GetDirectoryName(common);
+            if (steamapps is null || !string.Equals(Path.GetFileName(common), "common", StringComparison.OrdinalIgnoreCase)) return null;
+            var dir = Path.Combine(steamapps, "workshop", "content", "233860");
+            return Directory.Exists(dir) ? dir : null;
+        }
+    }
+
     /// <summary>True when <paramref name="root"/> looks like a Kenshi install.</summary>
     public static bool IsValid(string root) =>
         Directory.Exists(Path.Combine(root, "data")) &&

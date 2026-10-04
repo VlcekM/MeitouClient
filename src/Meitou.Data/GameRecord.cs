@@ -8,7 +8,6 @@ namespace Meitou.Data;
 /// </summary>
 public sealed class GameRecord
 {
-    readonly Dictionary<string, object> fields = new(StringComparer.Ordinal);
     readonly OrderedDictionary<string, OrderedDictionary<string, ReferenceValues>> references = new(StringComparer.Ordinal);
     readonly OrderedDictionary<string, GameInstance> instances = new(StringComparer.Ordinal);
 
@@ -30,11 +29,25 @@ public sealed class GameRecord
     /// <summary>Files that changed the record after <see cref="DefinedBy"/>, in load order.</summary>
     public List<string> ModifiedBy { get; } = [];
 
-    /// <summary>
-    /// Field values: <see cref="bool"/>, <see cref="float"/>, <see cref="int"/>, <see cref="Vector3"/>,
-    /// <see cref="Vector4"/>, <see cref="string"/> or <see cref="GamePath"/>.
-    /// </summary>
-    public IReadOnlyDictionary<string, object> Fields => fields;
+    // One table per value kind, as in the game: a value only replaces the same key of the same kind, so a
+    // record can hold e.g. a string and a filename under one key.
+    internal Dictionary<string, bool> BoolTable { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, float> FloatTable { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, int> IntTable { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, Vector3> Vector3Table { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, Vector4> Vector4Table { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, string> StringTable { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, string> FilenameTable { get; } = new(StringComparer.Ordinal);
+
+    public IReadOnlyDictionary<string, bool> Bools => BoolTable;
+    public IReadOnlyDictionary<string, float> Floats => FloatTable;
+    public IReadOnlyDictionary<string, int> Ints => IntTable;
+    public IReadOnlyDictionary<string, Vector3> Vector3s => Vector3Table;
+    public IReadOnlyDictionary<string, Vector4> Vector4s => Vector4Table;
+    public IReadOnlyDictionary<string, string> Strings => StringTable;
+
+    /// <summary>File path fields (a separate table from <see cref="Strings"/>).</summary>
+    public IReadOnlyDictionary<string, string> Filenames => FilenameTable;
 
     public IEnumerable<string> ReferenceLists => references.Keys;
 
@@ -43,14 +56,11 @@ public sealed class GameRecord
 
     public IReadOnlyDictionary<string, GameInstance> Instances => instances;
 
-    public bool GetBool(string key, bool fallback = false) => fields.TryGetValue(key, out var v) && v is bool b ? b : fallback;
-    public float GetFloat(string key, float fallback = 0) => fields.TryGetValue(key, out var v) && v is float f ? f : fallback;
-    public int GetInt(string key, int fallback = 0) => fields.TryGetValue(key, out var v) && v is int i ? i : fallback;
-    public string GetString(string key, string fallback = "") => fields.TryGetValue(key, out var v) && v is string s ? s : fallback;
-    public string GetPath(string key, string fallback = "") => fields.TryGetValue(key, out var v) && v is GamePath p ? p.Value : fallback;
-
-    internal void SetField(string key, object value) => fields[key] = value;
-    internal bool RemoveField(string key) => fields.Remove(key);
+    public bool GetBool(string key, bool fallback = false) => BoolTable.GetValueOrDefault(key, fallback);
+    public float GetFloat(string key, float fallback = 0) => FloatTable.GetValueOrDefault(key, fallback);
+    public int GetInt(string key, int fallback = 0) => IntTable.GetValueOrDefault(key, fallback);
+    public string GetString(string key, string fallback = "") => StringTable.GetValueOrDefault(key, fallback);
+    public string GetPath(string key, string fallback = "") => FilenameTable.GetValueOrDefault(key, fallback);
 
     internal OrderedDictionary<string, ReferenceValues> ReferenceList(string list)
     {
@@ -64,12 +74,6 @@ public sealed class GameRecord
     public override string ToString() => $"{StringId} {Name} ({Type})";
 }
 
-/// <summary>A file path field (kept apart from strings: a string value never overrides a path).</summary>
-public readonly record struct GamePath(string Value)
-{
-    public override string ToString() => Value;
-}
-
 public readonly record struct ReferenceValues(int Value0, int Value1, int Value2);
 
 public readonly record struct GameReference(string TargetStringId, ReferenceValues Values);
@@ -79,7 +83,11 @@ public sealed class GameInstance
     internal GameInstance(string id) => Id = id;
 
     public string Id { get; }
+
+    /// <summary>The placed record; empty if a later file cleared the instance (the game keeps the entry).</summary>
     public string Target { get; internal set; } = "";
+
+    public bool IsCleared => Target.Length == 0;
     public Vector3 Position { get; internal set; }
     public Quaternion Rotation { get; internal set; } = Quaternion.Identity;
     public List<string> States { get; } = [];
