@@ -381,6 +381,7 @@ static class WorldApp
         }
 
         double titleTimer = 0;
+        int frames = 0;
         window.Update += dt =>
         {
             if (keyboard is null || camera is null) return;
@@ -393,10 +394,11 @@ static class WorldApp
             titleTimer += dt;
             if (titleTimer > 0.25 && gpu is not null)
             {
-                titleTimer = 0;
                 var t = camera.Target;
-                window.Title = $"Meitou world | {t.X:0}, {t.Z:0} zone {WorldLayout.ZoneOf(t.X, t.Z)} | {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" +
+                window.Title = $"Meitou world | {frames / titleTimer:0} fps | {t.X:0}, {t.Z:0} zone {WorldLayout.ZoneOf(t.X, t.Z)} | {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" +
                     (gpu.Objects is { } ob && render.Objects ? $" | {ob.DrawnInstances} objects" : "");
+                titleTimer = 0;
+                frames = 0;
             }
         };
         window.Render += _ =>
@@ -404,6 +406,7 @@ static class WorldApp
             if (gpu is null || gl is null) return;
             var size = window.FramebufferSize;
             Draw(gl, gpu, scene, camera, render, size.X, size.Y);
+            frames++;
             if (screenshotRequested)
             {
                 screenshotRequested = false;

@@ -45,7 +45,7 @@ public sealed class WorldCamera
     {
         var eye = Eye;
         Yaw -= dx * 0.004f;
-        Pitch = Math.Clamp(Pitch - dy * 0.004f, -1.5f, 1.55f);
+        Pitch = Math.Clamp(Pitch + dy * 0.004f, -1.5f, 1.55f);
         Target = eye - Back * Distance;
     }
 
