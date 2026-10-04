@@ -8,7 +8,7 @@ namespace Meitou.ModelViewer;
 /// <summary>
 /// Draws the placed meshes of a <see cref="WorldObjects"/> with the model viewer's shaders and material resolution:
 /// one GPU copy per mesh file (loaded when an instance first comes within the object distance), one material set
-/// per (mesh, record) pair, instances beyond the distance or outside the frustum skipped. TERRAIN-mode map features
+/// per (mesh, chosen MATERIAL_SPEC) or (mesh, record) pair, instances beyond the distance or outside the frustum skipped. TERRAIN-mode map features
 /// are drawn with the terrain material instead (<see cref="TerrainRenderer.DrawMeshes"/>).
 /// </summary>
 public sealed unsafe class WorldObjectRenderer : IDisposable
@@ -195,7 +195,10 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         inst.Center = Vector3.Transform(mesh.Center, t);
         float scale = MathF.Sqrt(Math.Max(new Vector3(t.M11, t.M12, t.M13).LengthSquared(), Math.Max(new Vector3(t.M21, t.M22, t.M23).LengthSquared(), new Vector3(t.M31, t.M32, t.M33).LengthSquared())));
         inst.Radius = mesh.Radius * scale;
-        var mkey = (key.ToLowerInvariant(), inst.Placed.Source.StringId, inst.Placed.Owner.StringId);
+        // A part's look comes from the material the layout chose (which differs per town), else from the resolver's candidates.
+        var mkey = inst.Placed.Material is { } spec
+            ? (key.ToLowerInvariant(), "spec", spec.StringId)
+            : (key.ToLowerInvariant(), inst.Placed.Source.StringId, inst.Placed.Owner.StringId);
         if (!materials.TryGetValue(mkey, out var set)) materials[mkey] = set = Materials(inst, mesh);
         inst.Materials = set;
     }
@@ -247,10 +250,11 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     {
         var result = new PartMaterial[mesh.Parts.Count];
         string source = $"'{inst.Placed.Source.Name}'", owner = $"'{inst.Placed.Owner.Name}'";
+        var chosen = inst.Placed.Material is { } spec ? BuildingMaterial.FromSpec(spec) : null;
         for (int i = 0; i < mesh.Parts.Count; i++)
         {
-            var candidates = resolver.Candidates(inst.Placed.MeshPath, mesh.Parts[i].SubMesh);
-            var m = candidates.OrderByDescending(c => (c.Description.Contains(owner, StringComparison.Ordinal) ? 2 : 0) + (c.Description.Contains(source, StringComparison.Ordinal) ? 1 : 0))
+            var m = chosen ?? resolver.Candidates(inst.Placed.MeshPath, mesh.Parts[i].SubMesh)
+                .OrderByDescending(c => (c.Description.Contains(owner, StringComparison.Ordinal) ? 2 : 0) + (c.Description.Contains(source, StringComparison.Ordinal) ? 1 : 0))
                 .FirstOrDefault();
             bool border = m?.BorderAddressing ?? false;
             result[i] = new PartMaterial(m, textureCache.Get(m?.Diffuse, border), textureCache.Get(m?.Normal, border),

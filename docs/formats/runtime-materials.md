@@ -121,6 +121,12 @@ the extra integer) and in **every** technique's pass 0: vertex program gets `TEX
 | Farm plants | FUN_1400e70a0 | `FarmPlants` | 0, plus shared parameters `FarmParams<n>` (`plantData`) |
 | Inventory icons (render to texture) | FUN_140846060 | `RTTIcons_Base`, `RTTIcons_Coloured` (mesh with vertex colours) or `RTTIcons_DXT5N` (one item kind, 0x11) | 0x10 if ItemShader is DOUBLE_SIDED |
 
+Which record a building part passes in (FUN_14054cd30, **Verified (decompiled)**): the part's first `material`,
+else the building's base material (the BUILDING's first `material`, else its town's: TOWN `material`, default
+`742-gamedata.base`), else `360-gamedata.base`; a MATERIAL_SPEC with its own `material` list is a collection and
+one entry is picked by val0 weight. Details, and how the town is found, in
+[zones.md](zones.md#materials-the-local-town-material).
+
 The script materials `Building`, `Building_Alpha`, `Building_Dual`, `Building_Emissive`
 (`buildings.material`) are **not referenced** by the executable (no such strings, Verified by search); the
 engine gets those looks from `StaticObject` plus defines.

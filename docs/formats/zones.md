@@ -178,48 +178,174 @@ read it. Whether the game still reads it is **Unknown** (the exe contains the st
 
 ## From placements to meshes
 
-How `Meitou.Data.World.WorldObjectLayout` turns placements into meshes for `meitou-viewer --world`
-([../viewer.md](../viewer.md#world-mode)). Counts are over the 11,714 base-game building placements (252
-distinct BUILDING records) and 1,810 resolvable `features.dat` entries.
+How the game builds a placed building, and how `Meitou.Data.World.WorldObjectLayout` (with `BuildingRandom`,
+`BuildingTowns`) reproduces it for `meitou-viewer --world` ([../viewer.md](../viewer.md#world-mode)). Counts are
+over the 11,714 base-game building placements (252 distinct BUILDING records) and 1,810 resolvable
+`features.dat` entries. Sources: decompilation of `kenshi_x64.exe` (Steam build of 2026-10, Ghidra 12.1.4) with
+the labels of [runtime-materials.md](runtime-materials.md): **Verified (decompiled)** = read in the function
+named; functions are named by entry address. The game's own name for the builder is `Building::createPhysical`
+(FUN_1405609e0, from its log messages).
 
-- **Building = its parts** (fcs.def, Observed in the data): a BUILDING draws the BUILDING_PART records of its
-  `parts` list. Reference val0 is a group, val1 a chance: group 0 entries are each kept with val1 as an absolute
-  percentage, other groups contribute one entry chosen by val1 weight. 716 part references, 76 in groups other
-  than 0; 25 parts have `parts` of their own (drawn too). The game rolls these at random; the viewer seeds the
-  roll with the placement id so a building always looks the same. Whether the game stores the result in the
-  GAMESTATE_BUILDING is **Unknown**.
-- **Part mesh**: `phs or mesh`. Every part of a placed building names a `.mesh` (712) or nothing (4); no `.phs`
-  (Observed). Part meshes are modelled in building space: placed at the building's origin, The Hub's walls,
-  gates and towers line up (**Verified** by screenshot, 2026-10-04). `offset X/Y/Z` (37 parts) moves a part
-  unless `is for position marker` is set; whether the offset is applied before or after the building's
-  `scale` is **Unknown** (the viewer adds it before scaling).
-- **Placement transform**: mesh space → scale by BUILDING `scale` (117 placed types ≠ 1) → rotate by the instance
-  quaternion → move to the position. The quaternion (stored w, x, y, z) is used as an Ogre orientation with no
-  axis change: **Verified** by screenshot (walls and gates of The Hub join; a wrong convention tilts or
-  scatters them). Height: the state's `world Y pos` (all 130 placements around The Hub have one), else
-  terrain height + instance Y.
-- Not drawn: `is node` buildings (invisible markers), the `interior` part lists (loaded only when inside),
-  `destroyed mesh`, `distant mesh` (low-poly town batches), records with no parts (Iron Resource, Copper
-  Resource, Ramp: 1,336 placements), the INVENTORY_STATE entries at the origin.
-- **Map features**: the MAP_FEATURES `mesh` (all 1,810 are `.mesh`), scaled by the entry's per-axis scale
-  (non-uniform for some, e.g. 1.77 × 1.12 × 1.77), rotated, moved to its absolute position; `hidden` ones are
-  skipped. Texture modes (fcs.def `MapFeatureMode`): UV_MAPPED 475, TRIPLANAR 65, TERRAIN 820, DUAL_TEXTURE 409,
-  FOLIAGE 25, DUAL_TRIPLANAR 16. TERRAIN mode "uses textures from the current biome": Kenshi's `mapfeature_fs`
-  runs the terrain layer model without the road layer (Observed, terrainfp4.hlsl); the viewer draws them with
-  its terrain shader the same way.
-- Materials come from the model viewer's resolver ([../viewer.md](../viewer.md#how-mesh-textures-are-resolved));
-  parts without a `material` take their building's. "If blank will use the local town material" (fcs.def,
-  BUILDING `material`): which record that is, is **Unknown**, so such buildings fall back to the mesh's script
-  material or stay untextured.
+### Choosing the parts
+
+- **Not stored.** The parts are chosen again every time a building is created; nothing about the choice is
+  saved in the GAMESTATE_BUILDING or the zone instance (**Verified (decompiled)**: FUN_1405609e0 reseeds the
+  generator and rolls; the state fields listed above hold no part ids. The `exterior layout name` / `interior
+  layout name` strings of 3,341 states, e.g. `Robotics Sign` / `Robotics Shop`, are names, not record ids:
+  Observed, meaning Unknown, probably furniture layouts).
+- **Generator**: the C runtime's `rand()` of MSVCR100.DLL (imported; a linear congruential generator,
+  `x = x × 214013 + 2531011`, result `(x >> 16) & 0x7FFF`), so the result is reproducible (**Verified
+  (decompiled)** that it is the import; the sequence itself is the documented MSVC one, checked in
+  `WorldObjectLayoutTests.Random_is_the_msvc_rand_sequence`). Two helpers scale it (**Verified (decompiled)**,
+  FUN_1409b3b40 / FUN_1409b1c80): int in [min, max] = min + trunc(rand / 32768 × (max − min + 1)) in single
+  precision, clamped; float = rand / 32768 × (max − min) + min.
+- **Seed** (FUN_14056d030, **Verified (decompiled)**): the building's world X and Z, each truncated toward zero to
+  a 64-bit integer, XOR `0xDEADBEEF`, low 32 bits taken: a (from X), b (from Z); seed =
+  `((a >> 2) + 0x9E3779B9 + (a << 6) + b) XOR a` (boost's `hash_combine`). `srand(seed)` runs right before the
+  exterior parts are created and again before the `interior` parts. So the same building at the same spot always
+  looks the same, and two buildings at one spot (a door and its house) share the seed.
+- **Choice per `parts` list** (FUN_140559b80, **Verified (decompiled)**; fcs.def describes it loosely). Reference
+  val0 is the group, val1 the chance. Walking the list in order:
+  - group 0: chance 0 → always kept, no roll; otherwise one int roll 0..99 and the entry is kept if the roll is
+    below the chance. The roll is made even for chance ≥ 100 and for targets that do not exist.
+  - other groups: entries with chance > 0 and an existing target are collected per group in a `std::map<float, …>`
+    keyed by the running total (single precision; the key is the total after adding, passed in RDX: Verified,
+    disassembly at 0x140559d0e).
+  - then, per group in the iteration order of the game's `boost::unordered_map<int, …>` (17 buckets: the first
+    prime ≥ the default 11 in boost's table at 0x141680760, which starts 17, 29, 37...; key mod 17; a key in an
+    empty bucket is linked at the front of the list, a key whose bucket is in use just before that bucket's first
+    key: **Verified (decompiled)**, insert FUN_14057ab80): a group with one entry keeps it with no
+    roll; with more, one float roll in [0, total) and the first entry whose running total exceeds it is kept.
+    An empty group adds a null entry (not drawn).
+  - output: the group 0 entries in list order, then one per group. In the base data no group 0 entry has chance
+    0; 716 part references, 76 in groups other than 0; no record has more than 17 groups (rehashing is not
+    modelled).
+- **Recursion and roll order** (FUN_1405607f0, **Verified (decompiled)**): choose from the holder's list, then for
+  each chosen part create it (below) and recurse into the part's own `parts`; after the loop, the holder's
+  instances (`lights`, `nodes`) are created. Rolls drawn on the way, which shift later choices:
+  - a rotating part (its own or its holder's `rotation function` > 0, and no collision file): one roll for a
+    speed variation (×0.95..1.05 of `rotation speed max`) unless the function is ROTATION_WIND_SPEED, and one
+    float roll for a **start angle** in [0, 2π) about `rotation axis` (0 X, 1 Y, 2 Z) when it has an entity
+    (FUN_140556250, **Verified (decompiled)**). A part with function 0 under a rotating holder counts as 6.
+  - a LIGHT instance: one roll (brightness variance, FUN_140553be0, **Verified (decompiled)**).
+  - an instance targeting an `is node` BUILDING: the node object gets a handle with a random serial, one roll
+    (FUN_14057c860 → FUN_1400d1c20; **Observed**: the branch depends on the node's handle type, assumed to be 11).
+  - EFFECT instances: an effect can create lights (path FUN_14040a3a0 → … → FUN_140553be0); not modelled
+    (**Unknown**, counted as no roll).
+  - part materials that are collections may roll when the mesh finishes loading (a callback); whether that
+    happens inside the seeded sequence is **Unknown** (not modelled).
+
+  All rolls of the top-level `parts` list happen before any part is created, so **the building's own choice is
+  exact**; only choices inside parts (Fish Drying Rack, Robot_Parts_Shredder) can be shifted by the unmodelled
+  cases. No in-game comparison was made.
+
+### Placing a part
+
+- **Mesh** (FUN_14055f6e0, **Verified (decompiled)**): `phs or mesh`; a part whose file name is empty or does not
+  contain `.mesh` (case-sensitive) creates nothing. The mesh is looked up by bare file name (FUN_1409b4610). All
+  placed parts name a `.mesh` or nothing (Observed).
+- **Scene nodes** (FUN_14055e150, FUN_140449e60, **Verified (decompiled)**): the building has a node at its
+  position and rotation (no scale). Each part entity gets a child node of its parent: the building's node for a
+  top-level part, the parent part's node for a sub-part (the building's again when the parent made no entity).
+  The node's position is (`offset X`, `offset Y`, `offset Z`) × the BUILDING `scale` (no offset when `is for
+  position marker`), its scale the BUILDING `scale`, its orientation identity (then the start angle for rotating
+  parts). So **the offset is scaled with the building**: world = position + rotation × (scale × (vertex +
+  offset)) for a top-level part. A sub-part also inherits its parent node's scale (Ogre's default; no base-game
+  building has both `scale` ≠ 1 and sub-parts, so this compounding is untested).
+- **Orientation and height**: the instance quaternion (stored w, x, y, z) is an Ogre orientation with no axis
+  change: **Verified** by screenshot (walls and gates of The Hub join; a wrong convention tilts or scatters them).
+  Height: the state's `world Y pos` (all 130 placements around The Hub have one), else terrain height +
+  instance Y. Meshes are modelled in building space (**Verified** by screenshot, 2026-10-04).
+- The viewer applies the start angle for rotation functions 1–4 and 6 (windmills, fans, drills, spinners) but not
+  for ROTATION_TARGET (5, turrets), whose aiming code takes over in the game (not traced); the rolls are drawn
+  either way.
+
+### Doors
+
+Doors are not placed in the zone files (no DOORS-category placement exists). `createPhysical` creates one door
+building per `doors` entry of the BUILDING, at the building's position and with its rotation, parented to it
+(FUN_1405609e0 → FUN_14057cc70, **Verified (decompiled)**), only for an ordinary, unparented building that is not
+destroyed. The door's own parts follow the rules above (same seed, same spot). 1,261 placements list doors; 990 draw
+one (the other 271 are destroyed).
+**Verified** by screenshot: the door of a Small Shack in Stack fills its frame (2026-10-04). Doors are drawn
+closed; opening (`door move dist` along `door axis`) is a run-time state (not traced).
+
+### States that change what is drawn
+
+From the GAMESTATE_BUILDING (counts over the 11,824 zone states):
+
+- `destroyed` (276 true, e.g. 21 in The Hub): every part with a `destroyed mesh` uses it; a part without one keeps
+  its mesh on floor 0 (`building floor`) and loses its entity on upper floors; stairs (`is stairs`) without one
+  are removed (FUN_14055f6e0, **Verified (decompiled)**; fcs.def says the same). A destroyed building gets no
+  doors. A part without an entity still rolls (rotation speed) and its children hang under the building's node.
+- `is complete` is true for all 11,824 placed states, so no placed building shows the construction shader
+  (scaffolding, FUN_140557be0).
+- `interior` parts (chosen after the second `srand(seed)`) are loaded only when the player is inside; upper floors
+  are hidden by the roof logic only then. An exterior view draws the `parts` tree (Observed from fcs.def; the
+  hiding code was not traced).
+
+### Materials ("the local town material")
+
+The part material lookup (FUN_14054cd30, called when the part's mesh has loaded; **Verified (decompiled)**):
+
+1. The part's **first** `material` reference (MATERIAL_SPEC). Only the first reference of each list is ever used;
+   a `material match` list is read only by the building preview / icon code (FUN_140848950).
+2. Else the building's **base material**, set once in `createPhysical`: the BUILDING's first `material`, else the
+   material of the building's **town**.
+3. Else `360-gamedata.base` (severe10 - blue), with the log warning "building with no material collection
+   assigned".
+
+Every chosen record goes through the collection rule (FUN_140580310 / FUN_14057fd40): a MATERIAL_SPEC with a
+non-empty `material` list is replaced by one of its entries, weighted by val0 (0 counts as 100: **Verified
+(decompiled)**, a `CMOVZ` with 100), skipping entries whose `world state` does not hold. The roll uses the
+unseeded generator (the base material is picked before `srand`), so **the game's pick from a collection is not
+reproducible**; the viewer seeds its own pick by the town instance or placement id.
+
+- **Town material** (town setup FUN_1409353c0, **Verified (decompiled)**): the TOWN's first `material`, else
+  `742-gamedata.base` (moor1-main), through the collection rule. In the base game 10 of 346 TOWN records name a
+  material, all "moor mats COLLECTION" (moor1-main 100, moor1-squared 20, wall concrete dots 100); every other
+  town uses moor1-main. 207 of the 252 placed BUILDING types (9,837 placements) have no material of their own
+  and so take the town's; no placed building names a collection; 32 parts do.
+- **Which town** (FUN_140296940 → FUN_1409f9180, **Verified (decompiled)**): the building's town handle (state
+  `townTYPE` 13 = TOWN with `townC`, `townCS`, `townI`, `townS`), else the nearest town by X/Z of any type except
+  TOWN_NEST_MARKER (8), with no distance limit (FUN_140927f10). In the level files a state's (`townC`, `townCS`)
+  matches a GAMESTATE_TOWN's (`handC`, `handCS`) for 2,320 of 9,734 states with a handle; those towns lie a
+  median 707 units away, and the nearest town is the same one for 2,305 of them (**Observed**; matching on `C`
+  alone gives towns a median 75,000 units away, so `C` alone is not an id). The viewer uses the matched town,
+  else the nearest one. Which live town an unmatched handle resolves to in the game is **Unknown**.
+
+### Buildings with no parts
+
+- **Iron Resource** (1,241) and **Copper Resource** (94) are `is foliage` BUILDINGs (state `foliage` true,
+  `resource mult`), the production side of mineable rocks. The game draws nothing for the building: the visible
+  rock is a FOLIAGE_MESH whose `building type` names it (ResourceRock-IRON02..06, Pyrite, Motor parts, TechJunk...:
+  24 FOLIAGE_MESH records), placed by the foliage system, which creates or finds the building at the rock's
+  position (FUN_1406d2410, **Verified (decompiled)**: "Foliage object … with associated building …"). Which mesh,
+  rotation and scale stand at a stored placement depends on that placer (not traced); the stored rotation is
+  identity. The viewer draws nothing for them and counts them in its log.
+- **Ramp** (1 placement, zone 25.34): no parts, nothing drawn.
+- Also not drawn: `is node` buildings (invisible markers), `distant mesh` (low-poly town batches), the
+  INVENTORY_STATE entries at the origin.
+
+### Map features
+
+The MAP_FEATURES `mesh` (all 1,810 are `.mesh`), scaled by the entry's per-axis scale (non-uniform for some, e.g.
+1.77 × 1.12 × 1.77), rotated, moved to its absolute position; `hidden` ones are skipped. Texture modes (fcs.def
+`MapFeatureMode`): UV_MAPPED 475, TRIPLANAR 65, TERRAIN 820, DUAL_TEXTURE 409, FOLIAGE 25, DUAL_TRIPLANAR 16.
+TERRAIN mode "uses textures from the current biome": Kenshi's `mapfeature_fs` runs the terrain layer model
+without the road layer (Observed, terrainfp4.hlsl); the viewer draws them with its terrain shader the same way.
+Their materials come from the model viewer's resolver ([../viewer.md](../viewer.md#how-mesh-textures-are-resolved)).
 
 ## Open questions
 
 - Meaning of the trailer ints and of the stored record sizes.
 - The game's layer merge rules, and where mods put level data.
-- The five-part handle fields (`C`, `CS`, `I`, `S`, `TYPE`): probably serialized object references.
+- The five-part handle fields (`C`, `CS`, `I`, `S`, `TYPE`): serialized object references (Observed: a
+  building's `town*` handle matches a town state's `hand*` by `C` and `CS`, see "Materials" above; the game gives
+  a new handle a random serial from `rand()`, FUN_1400d1c20). Why most town handles match no town state.
 - What the INVENTORY_STATE entries in the building list are for; INVENTORY_* and ITEM_PLACEMENT_GROUP
   contents; `interiors.level` structure.
 - ROAD `start`/`end`, the road point x parameter, road foliage w.
 - `fogfeatures.dat`, `globalPathing.path` layouts (`blendinfo.dat`: see terrain.md).
-- How the game picks building parts (RNG, seed, stored or not), the order of part offset and building scale, and
-  the "local town material".
+- Building assembly leftovers: rolls drawn by EFFECT instances and by part-material collections inside the
+  seeded sequence; which foliage mesh stands at an Iron/Copper Resource placement; door open state; turret aiming.
