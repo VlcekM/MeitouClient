@@ -1,10 +1,12 @@
 using Meitou.Content;
+using Meitou.Data;
 using Meitou.Data.Fcs;
 
 return args switch
 {
     ["formats"] => WithInstall(Formats),
     ["fcs", var path] => Fcs(path),
+    ["load"] => WithInstall(Load),
     ["fcs-types"] => WithInstall(FcsTypeMatcher.Run),
     ["fcs-records", var type] => WithInstall(i => FcsRecordDump.Run(i, int.Parse(type), 3)),
     _ => Usage(),
@@ -15,6 +17,7 @@ static int Usage()
     Console.Error.WriteLine("""
         meitou-tools formats       count file types under the install's data/ folder
         meitou-tools fcs <file>    summarize a .mod/.base file (path, or a name inside data/)
+        meitou-tools load          apply the load order and summarize the merged game data
         meitou-tools fcs-types     match record type numbers to fcs.def type names
         meitou-tools fcs-records N show the fields of the first records of type N in the base game
         """);
@@ -70,5 +73,23 @@ static int Fcs(string path)
     // The reader rejects invalid UTF-8, so non-ASCII strings here are known-good samples.
     var strings = file.Records.SelectMany(r => r.Strings.Values.Prepend(r.Name)).ToList();
     Console.WriteLine($"  strings: {strings.Count}, non-ASCII: {strings.Count(s => s.Any(c => c >= 0x80))}");
+    return 0;
+}
+
+static int Load(GameInstall install)
+{
+    var order = LoadOrder.FromInstall(install);
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    var db = GameDatabase.Load(order);
+    Console.WriteLine($"Loaded {order.Entries.Count} files in {sw.ElapsedMilliseconds} ms: {string.Join(", ", order.Entries.Select(e => e.Name))}");
+    Console.WriteLine($"  {db.Records.Count} records, {db.Records.Values.Count(r => r.ModifiedBy.Count > 0)} changed by a later file");
+    foreach (var g in db.Records.Values.GroupBy(r => r.Type).OrderByDescending(g => g.Count()).Take(10))
+        Console.WriteLine($"    {g.Key,-30} {g.Count(),7}");
+    var dangling = db.Records.Values.SelectMany(r => r.ReferenceLists.SelectMany(l => r.GetReferences(l)))
+        .Count(x => db.Find(x.TargetStringId) is null);
+    Console.WriteLine($"  {dangling} references to records that don't exist");
+    Console.WriteLine($"  {db.Issues.Count} issues");
+    foreach (var g in db.Issues.GroupBy(i => (i.Kind, i.File)))
+        Console.WriteLine($"    {g.Key.File}: {g.Key.Kind} x{g.Count()}, e.g. {g.First()}");
     return 0;
 }

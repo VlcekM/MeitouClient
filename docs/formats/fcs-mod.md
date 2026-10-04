@@ -90,6 +90,14 @@ recomputes them and the output is identical).
 ## Merging (FCS)
 
 Files load in order (see [overview.md](overview.md#load-order)) into one table keyed by `stringId`.
+`Meitou.Data.GameDatabase` implements these rules (`LoadOrder` builds the order, `meitou-tools load`
+summarizes the result).
+
+**Verified on the base game** (`GameDatabaseTests`): the four base files merge into 54,951 records
+(3,841 of them changed by a later file) with **no issues**: no modifying record lacks its base, no id is
+defined twice, no type changes, and no reference in the result points at a missing record. Iron Rock
+(`14520-rebirth.mod`) ends up with rebirth.mod's 7 values, gamedata.base's other fields and its
+`building` reference.
 
 - **New vs. modifying** (`flags` bit 0). A record with bit 0 clear defines the record; with bit 0 set
   it changes a record from an earlier file. FCS normalizes first: if bit 0 is clear it clears bit 1.

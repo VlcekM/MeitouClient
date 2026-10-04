@@ -33,8 +33,8 @@ dotnet run --project tools/Meitou.Tools
 | Project | Purpose |
 | --- | --- |
 | `src/Meitou.Core` | Shared primitives, game install discovery |
-| `src/Meitou.Data` | Kenshi data formats: `Fcs/` reads and writes `.mod` / `.base` byte-exactly |
-| `tools/Meitou.Tools` | `meitou-tools`: `formats`, `fcs <file>`, `fcs-types`, `fcs-records <type>` to inspect game data |
+| `src/Meitou.Data` | Kenshi data: `Fcs/` reads and writes `.mod` / `.base` byte-exactly; `GameDatabase` merges the load order |
+| `tools/Meitou.Tools` | `meitou-tools`: `formats`, `fcs <file>`, `load`, `fcs-types`, `fcs-records <type>` to inspect game data |
 | `tests/Meitou.Tests` | Tests; ones needing the real game skip when no install is configured |
 
 See [ROADMAP.md](ROADMAP.md) for the plan and [docs/](docs/README.md) for research notes on the game formats.
