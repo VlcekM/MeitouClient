@@ -39,4 +39,8 @@ dotnet run --project tools/Meitou.Tools
 
 See [ROADMAP.md](ROADMAP.md) for the plan.
 
+## License
+
+MeitouClient is free software under the [GNU General Public License v3.0 or later](LICENSE).
+
 Kenshi is a trademark of Lo-Fi Games. MeitouClient is not affiliated with or endorsed by Lo-Fi Games.

@@ -70,6 +70,5 @@ inspected; everything else still needs analysis.
 
 ## Open questions
 
-- License (MIT vs GPL) — not chosen yet; no `LICENSE` file until it is.
 - How far to support script-extender mods (RE_Kenshi / KenshiLib plugins hook native code and
   can't work as-is in a managed engine).
