@@ -124,3 +124,11 @@ GGX and environment terms with the viewer's gloss), draws the sky with SkyX's ow
 the measured mean luminance. Not reproduced: shadows (every surface facing the sun is fully lit, so the viewer's scenes are
 somewhat brighter on average than the game's and its auto exposure sits lower), the temporal adaptation (screenshots use the
 steady state), point lights, translucency, and dust on objects.
+
+**Eye height.** Nothing in the lighting pass depends on the eye's height (only on the direction towards it), and the sky and
+`sunColour` come from SkyX's fixed camera, which suits the game's camera (at most 1840 above its pivot, [camera.md](camera.md)).
+The viewer keeps both as they are at any height (from high up the sky looks as it does from the ground: a viewer choice, the
+game has no such view). Two viewer terms do change above the game's camera heights, by the altitude weight of
+[sky.md](sky.md#in-the-viewer---haze-kenshi-default-and-physical): the haze moves to the physical model, and the water's
+widened sun glint takes the Fresnel factor the game's GGX sun specular has (`F0 + (1 − F0) 2^((−5.55473 c − 6.98316) c)`, F0 0.04),
+which keeps the sun's reflection from becoming a large blown-out disc on the sea.

@@ -108,6 +108,10 @@ to this frame's `[MIN_LUMINANCE, MAX_LUMINANCE]` from the CONSTANTS record, and 
 (`PostProcess.AutoExposure`). Screenshots adapt at once (`InstantAdaptation`) and print the mean, the adapted value and the
 scale. `--exposure` multiplies on top (default 1). With `--simple-sky` the old display-referred shaders are back and the
 exposure is the constant `--exposure` alone. Nothing is clamped before the composite (RGBA16F scene buffer).
+The band is the game's at every camera height; the viewer adds no guard of its own. The white overview shots from far above the
+game's camera heights were not the exposure's doing: the game's haze formula gave values in the thousands there (a mean luminance
+of 715, the band then holds the scale at its floor ×0.46), fixed at the source ([sky.md](sky.md#haze-distance-fog-how-vanilla-does-it));
+the same views now measure 0.65 to 0.88 by day and stay finite at dawn, sunset, dusk and night.
 Details, options and costs: [viewer.md](../viewer.md#post-processing).
 
 | Stage | `kenshi` preset (default) | Effect available on top | Basis |

@@ -169,6 +169,16 @@ checked 2026-10-04):
   current wind being the region's. `fogDensity = 1 / d` (1 when d is 0, where
   `fogColour.a` is 0 anyway). So the weather fog is complete at d. The "Default" weather has `fog enabled` false: no weather fog.
 - It does **not** differ per biome (**Observed**: no biome field is read by the shaders or the sky controller's fog code).
+- **Made for an eye near the ground.** The fog's ray always starts at SkyX's fixed camera, so the formula ignores the eye's
+  height; the game's camera never gets more than 1840 above its pivot on the ground ([camera.md](camera.md), **Verified**), and
+  there it behaves. From far higher up it breaks down (**Verified by computation**: `KenshiHaze.Colour`, the viewer's transcription
+  of the shader's maths, test `AtmosphereTests`): far points lie well below the eye, the lift no longer raises them, the ray dips
+  steeply (to the −0.3 clamp) and runs a whole dome radius below SkyX's ground, where O'Neil's polynomial fit of the optical depth
+  goes strongly negative (down to about −10 per sample) and the attenuation `exp(−optical · extinction)` grows instead of shrinking.
+  For an eye 2000 above the ground the colour's blue stays under 1.3 at every distance; for an eye 34000 up it reaches ~7800 at
+  60000 away, 50000 up already at 30000. In the game this never happens. (An earlier note said "fully hazed from ~34000 up";
+  the haze is complete past 30000 from any height, but above ~20000 the colour also runs away.) Within the game's range the
+  optical depth never goes below −0.26 per sample (eye up to 15000, every distance and hour), the skydome's never below 0.35.
 - **Not there**: no exponential or height-based haze in the main chain (`SkyX_Fog*.hlsl` and ground fog are separate features:
   ground fog is deprecated, fog planes/spheres/beams are the placed "fog volumes", `fogfeatures.dat`).
 
@@ -186,10 +196,24 @@ checked 2026-10-04):
   **stand-in** built the game's way from the viewer's sun colour and horizon colour (the game's `getColorAt` input for the cloud layer
   and its floor colour are Unknown, above). The weather's fog (`--weather`, when enabled): `fog color · sunColour.w`, the game's
   ease-in-out curve over `distance / fog distance max` (the viewer has no wind; the game uses the same distance for every base weather, see the WEATHER table above),
-  alphas added. Consequences that look odd but are the game's rule: from a camera high above the ground (the viewer allows much higher
-  than the game) everything is past 30000 and fully hazed, steep rays all take the one fixed ray's colour; at night distant terrain
-  goes black against the night sky. Not reproduced: the water being fogged by the depth of what is under it.
-- **physical** (a viewer alternative, not the game's): the closed-form optical depth of SkyX's own air (its Rayleigh and Mie depths
+  alphas added. A consequence that looks odd but is the game's rule: at night distant terrain goes black against the night sky.
+  Not reproduced: the water being fogged by the depth of what is under it.
+- **Above the game's camera heights** (a viewer choice; no game behaviour exists there): the viewer allows any height, and the
+  game's formula from far above is wrong (above: a dark brown band, a white arc in the thousands, cyan rims where it fades). So
+  with `kenshi` the haze blends towards `physical` as the eye climbs: weight `smoothstep(4000, 15000, clearance)`, clearance being
+  the eye's height above the highest ground or water at the eye and on rings out to 2000 round it ([camera.md](camera.md), in-game
+  under ~1840). Below 4000 it is exactly the game's haze (screenshots before and after the change pixel-identical:
+  `--town "The Hub" --distance 40000 --pitch 3` at 6, 13, 22.6, 23.3 and 1 o'clock, and `--at -51468,-14324 --yaw 95 --pitch 2
+  --distance 300` at 13 with `--no-foliage`; with foliage that view already differs from itself run to run by the same margin); from 15000 up it is the physical haze, which looks like a map seen from an aircraft (the haze thins as
+  the eye climbs out of the dense low air). In the band both are evaluated and mixed (the weight is per frame, so outside it only one
+  runs). The water's widened sun glint is weighed by the game's Fresnel term (F0 0.04) by the same weight (viewer choice; it
+  otherwise became a large blown-out disc on the sea from high up).
+- **A guard in the integral** (viewer): each sample's optical depth is floored at −1 (`SkyXModel.OpticalFloor`, also in the GLSL),
+  which bounds the runaway; it changes nothing within the game's range or for the sky (minimums above).
+- **Haze strength** (viewer option, not the game's: `--haze-strength <x>`, the Tab panel's "Haze strength (1 = game)", 0 to 3,
+  default 1 = the game's): multiplies how far the atmosphere haze is blended in (the game's ramp, or the physical haze's amount,
+  capped at 1), before the weather's fog, which it leaves alone.
+- **physical** (`--haze physical`, all heights; a viewer alternative, not the game's): the closed-form optical depth of SkyX's own air (its Rayleigh and Mie depths
   straight up, without the earlier turbidity factor) along the ray, with one density scale height = 40000 world units (a viewer
   choice; the game's world unit is Unknown), in-scattering of the sky's colour in the ray's direction, closing at `--fog`
   (default 250000).

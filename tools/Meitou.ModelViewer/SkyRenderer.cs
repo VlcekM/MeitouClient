@@ -182,6 +182,48 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// 0.6 D. Independent of the viewer's far clip: past it the game's own formula goes on.
     /// </summary>
     public float HazeDistance { get; set; } = Meitou.Data.World.KenshiHaze.FarDistance(Meitou.Data.World.KenshiHaze.ViewDistanceSetting);
+    /// <summary>
+    /// The viewer's haze strength (not the game's; 1 = the game's haze): scales how far the atmosphere haze is blended in (the game's ramp,
+    /// or the physical haze's amount), not the weather's fog.
+    /// </summary>
+    public float HazeStrength { get; set; } = 1;
+    /// <summary>
+    /// The eye's height above the highest ground or water within the game's longest camera boom (<see cref="KenshiCamera.MaxDistance"/>) around it,
+    /// set each frame by <see cref="SetEye"/>. The game's camera never gets more than <see cref="KenshiCamera.MaxHeightAbovePivot"/> above its
+    /// pivot, which sits on the ground within that distance, so in-game this stays under about 1840 (plus a roof the pivot may stand on).
+    /// </summary>
+    public float EyeClearance { get; private set; }
+    /// <summary>
+    /// The viewer's height band (its own choice; no game behaviour exists up there) over which the game's haze, which measures from SkyX's
+    /// fixed eye near the ground, gives way to the physical haze: none below <see cref="AltitudeBandStart"/>, all of it above <see cref="AltitudeBandEnd"/>.
+    /// </summary>
+    public const float AltitudeBandStart = 4000, AltitudeBandEnd = 15000;
+    /// <summary>0 within the game's camera heights, rising to 1 across the altitude band (smoothstep of <see cref="EyeClearance"/>).</summary>
+    public float AltitudeWeight
+    {
+        get
+        {
+            float t = Math.Clamp((EyeClearance - AltitudeBandStart) / (AltitudeBandEnd - AltitudeBandStart), 0, 1);
+            return t * t * (3 - 2 * t);
+        }
+    }
+
+    /// <summary>
+    /// Measures the eye's <see cref="EyeClearance"/>: its height above the highest of the ground (<paramref name="groundAt"/>) and
+    /// <paramref name="floor"/> (the water level, or −∞) at the eye and on two rings round it out to the game's longest boom.
+    /// </summary>
+    public void SetEye(Vector3 eye, Func<float, float, float> groundAt, float floor)
+    {
+        float top = MathF.Max(groundAt(eye.X, eye.Z), floor);
+        foreach (float r in (ReadOnlySpan<float>)[KenshiCamera.MaxDistance * 0.5f, KenshiCamera.MaxDistance])
+            for (int i = 0; i < 8; i++)
+            {
+                float a = i * MathF.PI / 4;
+                top = MathF.Max(top, groundAt(eye.X + r * MathF.Cos(a), eye.Z + r * MathF.Sin(a)));
+            }
+        EyeClearance = eye.Y - top;
+    }
+
     /// <summary>The physical haze only: world units in one density scale height of SkyX's air (the game's world unit is Unknown; a viewer choice).</summary>
     public float ScaleHeightUnits { get; set; } = 40000;
     public SkyWeather Weather { get; set; } = SkyWeather.Default;
@@ -401,6 +443,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         gl.Uniform4(U(program, "uAtmoHaze"), KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, w.FogEnabled && w.FogMax > 1 ? 1f / w.FogMax : 0f);
         var (cloud, pull, _) = HorizonClouds(s);
         gl.Uniform4(U(program, "uAtmoHazeCloud"), cloud.X, cloud.Y, cloud.Z, pull);
+        gl.Uniform4(U(program, "uAtmoAltitude"), KenshiHaze ? AltitudeWeight : 1f, MathF.Max(HazeStrength, 0), AltitudeWeight, 0);
         gl.Uniform4(U(program, "uAtmoMaps"), irradianceCube != 0 ? 1f : 0f, specularCube != 0 ? 1f : 0f, ambientMap != 0 ? 1f : 0f, AmbientMap.HalfWorld);
         if (irradianceUnit >= 0)
         {

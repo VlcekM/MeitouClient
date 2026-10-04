@@ -34,6 +34,7 @@ sealed class WorldOptions
     public bool NoWater, NoStream, NoReflections, SimpleSky, ShowKeys;
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
     public float? HazeDistance;
+    public float HazeStrength = 1; // a viewer option: 1 = the game's haze
     public string? Weather;
     public float? Clouds;
     public PostOptions Post = PostOptions.Create("kenshi");
@@ -66,6 +67,7 @@ sealed class WorldOptions
           --simple-sky             the old colour-model sky and squared-distance fog instead of the atmosphere (B toggles)
           --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral (F7 toggles)
           --haze-distance <u>      the game's far distance D (view distance x 10) for its haze, which ramps in from 0.06 D to 0.6 D (default 50000: view distance 5000)
+          --haze-strength <x>      the viewer's haze strength: scales how far the haze is blended in (default 1, the game's; also a Tab slider)
           --weather <name>         a WEATHER record's sky colour, fog and clouds (default "Default": clear, no fog, no clouds)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
@@ -133,6 +135,7 @@ sealed class WorldOptions
                 case "--simple-sky": o.SimpleSky = true; break;
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
                 case "--haze-distance": o.HazeDistance = F(); break;
+                case "--haze-strength": o.HazeStrength = F(); break;
                 case "--weather": o.Weather = Next(); break;
                 case "--clouds": o.Clouds = F(); break;
                 case "--no-stream": o.NoStream = true; break;
@@ -338,6 +341,7 @@ static partial class WorldApp
         }
         var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze }, Post = new PostProcess(gl, o.Post) };
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
+        gpu.Sky.HazeStrength = o.HazeStrength;
         if (scene.Database is { } skyDb)
         {
             gpu.Sky.LoadWorld(install, skyDb);   // the ambient map and the CONSTANTS exposure band (docs/formats/lighting.md)
@@ -385,6 +389,8 @@ static partial class WorldApp
             sliders.Add(new Slider("Grass density x", 0.1f, 2, () => foliage.GrassDensitySetting, v => foliage.GrassDensitySetting = v, "0.00"));
         }
         sliders.Add(new Slider("Terrain LOD distance", 2, 16, () => r.LodDistance, v => r.LodDistance = v, "0.0"));
+        // A viewer option, not the game's: 1 is the game's haze (docs/formats/sky.md).
+        sliders.Add(new Slider("Haze strength (1 = game)", 0, 3, () => g.Sky.HazeStrength, v => g.Sky.HazeStrength = v, "0.00"));
         return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders);
     }
 
@@ -402,6 +408,8 @@ static partial class WorldApp
         float floor = gpu.Terrain.HeightAt(eye.X, eye.Z);
         if (render.Water) floor = Math.Max(floor, WorldWater.Height);
         camera.EyeClearance = Math.Max(eye.Y - floor, 1);
+        // Above the game's camera heights the haze (and the water's glint) move to the viewer's own altitude-aware forms (SkyRenderer.AltitudeWeight).
+        gpu.Sky.SetEye(eye, gpu.Terrain.HeightAt, render.Water ? WorldWater.Height : float.NegativeInfinity);
         // The atmosphere (SkyRenderer): sky tables, sun and ambient light for this sun and eye height. Thinner air higher up: the
         // haze takes longer to close in the higher the eye.
         var (colours, light) = gpu.Sky.Prepare(scene.Clock.SunDirection(hour), eye.Y, fogDistance + 3 * Math.Max(eye.Y, 0));
@@ -575,6 +583,7 @@ static partial class WorldApp
         Console.WriteLine($"post cost gpu ms/frame: {gpu.Post.DescribeCosts()}");
         if (gpu.Post.AutoExposure is { } band && gpu.Post.ReadExposure() is var (adapted, mean) && float.IsFinite(adapted))
             Console.WriteLine($"exposure  mean luminance {mean:0.000}, band {band.Min:0.###}..{band.Max:0.###}, adapted {adapted:0.000}: x{KenshiLighting.ExposureKey / adapted:0.000}");
+        Console.WriteLine($"haze      {(gpu.Sky.KenshiHaze ? "kenshi" : "physical")}, eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {gpu.Sky.EyeClearance:0} above the ground within {KenshiCamera.MaxDistance:0}: altitude weight {gpu.Sky.AltitudeWeight:0.###}, strength {gpu.Sky.HazeStrength:0.##}");
         if (o.ShowKeys && DebugOverlay.TryCreate(gl) is { } keysOverlay)
         {
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);

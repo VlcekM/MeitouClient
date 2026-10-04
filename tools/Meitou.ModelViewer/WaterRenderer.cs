@@ -103,6 +103,10 @@ public sealed unsafe class WaterRenderer : IDisposable
             // The ripples are finer than a pixel far away, so the glint widens and dims with distance instead of staying a hot point.
             float power = max(exp2(gloss * 11.0 + 1.0) / (1.0 + dist / 6000.0), 12.0);
             float spec = pow(max(dot(n, h), 0.0), power) * (power + 8.0) / 25.0 * gloss;
+            // Above the game's camera heights (uAtmoAltitude.z, a viewer choice) every water pixel is far away and its widened glint covers
+            // a large patch of sea: weigh it by the Fresnel term the game's own sun specular has (F0 0.04), so it stays a soft sheen.
+            float lh = clamp(dot(l, h), 0.0, 1.0);
+            spec *= mix(1.0, 0.04 + 0.96 * exp2((-5.55473 * lh - 6.98316) * lh), uAtmoAltitude.z);
             float cosv = max(dot(view, n), 0.0);
             float schlick = 0.02 + 0.98 * pow(1.0 - cosv, 5.0);
             vec3 reflected = skyColour(reflect(-view, n), false);

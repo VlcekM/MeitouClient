@@ -100,6 +100,9 @@ public static class SkyAtmosphere
 /// </summary>
 public static class SkyXModel
 {
+    /// <summary>The lowest optical depth a sample may have (a viewer guard against the fit's runaway on steep downward rays, see <see cref="InScatter(Vector3, float, Vector3, out float)"/>).</summary>
+    public const float OpticalFloor = -1;
+
     /// <summary>O'Neil's scale function: the optical depth towards the top of the air at a zenith cosine, in units of the scale depth.</summary>
     public static float Scale(float cos)
     {
@@ -126,7 +129,10 @@ public static class SkyXModel
         {
             var p = new Vector3(0, camera, 0) + ray * (step * (i + 0.5f));
             float h = p.Length(), density = MathF.Exp(sosd * (SkyAtmosphere.InnerRadius - h));
-            float optical = MathF.Min(startOffset + density * (Scale(Vector3.Dot(sun, p) / h) - Scale(Vector3.Dot(ray, p) / h)), 1e4f);
+            // The floor at −1 is a viewer guard (docs/formats/sky.md "Haze"): on long steep rays down, which only an eye far above the
+            // game's camera heights produces, the fit's optical depth goes strongly negative and the light would grow without bound.
+            // The sky's never goes below 0.35, the haze's below −0.26 for an eye up to 15000 above the ground: the game's own results are untouched.
+            float optical = Math.Clamp(startOffset + density * (Scale(Vector3.Dot(sun, p) / h) - Scale(Vector3.Dot(ray, p) / h)), OpticalFloor, 1e4f);
             var t = new Vector3(MathF.Exp(-optical * ext.X), MathF.Exp(-optical * ext.Y), MathF.Exp(-optical * ext.Z));
             sum += t * (density * step * scale);
             thickness += density * step * scale;

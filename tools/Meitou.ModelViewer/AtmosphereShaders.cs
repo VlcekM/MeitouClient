@@ -29,6 +29,7 @@ static class AtmosphereShaders
         uniform vec4 uAtmoSimple;     // simple sky: fog colour, distance of complete fog
         uniform vec4 uAtmoHaze;       // Kenshi haze: x 1 when on, y start, z end of the atmosphere fog, w weather fog density (1 / distance)
         uniform vec4 uAtmoHazeCloud;  // Kenshi haze: horizonClouds, rgb the cloud colour (a stand-in), a how far the haze is pulled to it
+        uniform vec4 uAtmoAltitude;   // viewer: x the physical haze's share (0 the game's haze, 1 the physical), y haze strength (1 the game's), z how far the eye is above the game's camera heights (0 within them, 1 high above)
         uniform vec4 uAtmoMaps;       // x irradiance cube, y specular cube, z ambient map present; w half the world's width
         uniform samplerCube uAtmoIrradiance, uAtmoSpecular;
         uniform sampler2D uAtmoAmbientMap;
@@ -64,7 +65,8 @@ static class AtmosphereShaders
                 vec3 p = start + ray * (step * (float(i) + 0.5));
                 float h = length(p), density = exp(SKYX_SOSD * (SKYX_INNER - h));
                 float optical = startOffset + density * (skyxScale(dot(sun, p) / h) - skyxScale(dot(ray, p) / h));
-                sum += exp(-min(optical, 1e4) * SKYX_EXTINCTION) * (density * step * SKYX_SCALE);
+                // The floor is a viewer guard (SkyXModel.OpticalFloor): steep rays down from far above the game's camera heights.
+                sum += exp(-clamp(optical, {{F(SkyXModel.OpticalFloor)}}, 1e4) * SKYX_EXTINCTION) * (density * step * SKYX_SCALE);
                 thickness += density * step * SKYX_SCALE;
             }
             return sum;
@@ -167,7 +169,45 @@ static class AtmosphereShaders
             return SKYX_EXPOSURE * phase * SKYX_RAYLEIGH * skyxInScatter(r, min(len, 1.0), uAtmoSun.xyz, thickness);
         }
 
-        // The colour of a lit surface point seen from the eye through the air.
+        // The game's haze: AtmosphereFogMaterial (post/fog.hlsl), the in-scattered colour blended in by a linear ramp between 0.06 D
+        // and 0.6 D; the weather's fog (colour, density) by an ease-in-out curve over it. uAtmoAltitude.y (the viewer's haze strength,
+        // 1 = the game's) scales the ramp.
+        vec3 atmoKenshiHaze(vec3 colour, vec3 ray, float dist)
+        {
+            float level = clamp((dist - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
+            level = min(level * uAtmoAltitude.y, 1.0);
+            vec3 rgb = mix(hazeColour(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
+            float alpha = level;
+            if (uAtmoFog.z > 0.5)
+            {
+                float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
+                float curve = amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0);
+                rgb = mix(rgb, uAtmoFogColour, curve);
+                alpha = clamp(alpha + curve, 0.0, 1.0);
+            }
+            return mix(colour, rgb, alpha);
+        }
+        // The physical alternative (a viewer model): optical depth of SkyX's air (one density scale height for both) along the ray,
+        // in-scattering of the sky's colour in that direction (the horizon's for rays below it); scaled by the haze strength.
+        vec3 atmoPhysicalHaze(vec3 colour, vec3 eye, vec3 d, float dist)
+        {
+            float h = uAtmoParams.z;
+            float a0 = max(eye.y, 0.0) / h, len = dist / h;
+            if (d.y < 0.0) len = min(len, a0 / -d.y);          // the sea level ends the air below
+            float column = atmoColumn(a0, d.y, len, 1.0);
+            vec3 haze = 1.0 - exp(-(uAtmoTau.rgb + uAtmoTau.a) * column);
+            haze = min(haze * uAtmoAltitude.y, vec3(1.0));
+            float far = smoothstep(0.55, 1.0, dist / uAtmoParams.y);   // closes before the far plane and the end of the water
+            haze = 1.0 - (1.0 - haze) * (1.0 - far);
+            vec3 result = mix(colour, atmoSky(d), haze);
+            if (uAtmoFog.z > 0.5)
+                result = mix(result, uAtmoFogColour, clamp((dist - uAtmoFog.x) / max(uAtmoFog.y - uAtmoFog.x, 1.0), 0.0, 1.0));
+            return result;
+        }
+
+        // The colour of a lit surface point seen from the eye through the air. With the game's haze, an eye above the game's camera
+        // heights (uAtmoAltitude.x > 0, a viewer choice: the game's haze measures from a fixed eye near the ground) blends towards the
+        // physical haze; the weight is the same for the whole frame, so only the branch in use is evaluated.
         vec3 atmoApply(vec3 colour, vec3 eye, vec3 position)
         {
             vec3 ray = position - eye;
@@ -179,35 +219,13 @@ static class AtmosphereShaders
                 float f = clamp(dist / uAtmoSimple.w, 0.0, 1.0);
                 return mix(colour, uAtmoSimple.rgb, f * f * 0.9);
             }
-            if (uAtmoHaze.x > 0.5)
+            if (uAtmoHaze.x > 0.5 && uAtmoAltitude.x < 1.0)
             {
-                // AtmosphereFogMaterial (post/fog.hlsl): the in-scattered colour blended in by a linear ramp between 0.06 D and 0.6 D;
-                // the weather's fog (colour, density) by an ease-in-out curve over it.
-                float level = clamp((dist - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
-                vec3 rgb = mix(hazeColour(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
-                float alpha = level;
-                if (uAtmoFog.z > 0.5)
-                {
-                    float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
-                    float curve = amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0);
-                    rgb = mix(rgb, uAtmoFogColour, curve);
-                    alpha = clamp(alpha + curve, 0.0, 1.0);
-                }
-                return mix(colour, rgb, alpha);
+                vec3 kenshi = atmoKenshiHaze(colour, ray, dist);
+                if (uAtmoAltitude.x <= 0.0) return kenshi;
+                return mix(kenshi, atmoPhysicalHaze(colour, eye, d, dist), uAtmoAltitude.x);
             }
-            // The physical alternative: optical depth of SkyX's air (one density scale height for both) along the ray, in-scattering
-            // of the sky's colour in that direction (the horizon's for rays below it).
-            float h = uAtmoParams.z;
-            float a0 = max(eye.y, 0.0) / h, len = dist / h;
-            if (d.y < 0.0) len = min(len, a0 / -d.y);          // the sea level ends the air below
-            float column = atmoColumn(a0, d.y, len, 1.0);
-            vec3 haze = 1.0 - exp(-(uAtmoTau.rgb + uAtmoTau.a) * column);
-            float far = smoothstep(0.55, 1.0, dist / uAtmoParams.y);   // closes before the far plane and the end of the water
-            haze = 1.0 - (1.0 - haze) * (1.0 - far);
-            vec3 result = mix(colour, atmoSky(d), haze);
-            if (uAtmoFog.z > 0.5)
-                result = mix(result, uAtmoFogColour, clamp((dist - uAtmoFog.x) / max(uAtmoFog.y - uAtmoFog.x, 1.0), 0.0, 1.0));
-            return result;
+            return atmoPhysicalHaze(colour, eye, d, dist);
         }
         """;
 }

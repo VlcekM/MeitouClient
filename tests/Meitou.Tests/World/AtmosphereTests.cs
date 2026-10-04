@@ -141,6 +141,29 @@ public class AtmosphereTests
     }
 
     [Fact]
+    public void Kenshi_haze_stays_bounded_from_far_above_the_games_camera_heights()
+    {
+        // Within the game's camera heights (at most 1840 above the pivot) the haze colour stays near the sky's own (blue at most ~1.3).
+        // From far higher up, long steep rays drive the fit's optical depth strongly negative; without the viewer's floor the colour
+        // reached thousands (the white arc of an overview shot). With it the colour stays finite and modest.
+        float worstGame = 0, worstHigh = 0;
+        foreach (float hour in new[] { 6f, 9, 13, 18, 22.6f })
+        {
+            var sun = Clock.SunDirection(hour);
+            for (float d = 1000; d < 450000; d *= 1.3f)
+            {
+                worstGame = MathF.Max(worstGame, KenshiHaze.Colour(new Vector3(0, -KenshiCamera.MaxHeightAbovePivot, d), sun).Z);
+                var high = KenshiHaze.Colour(new Vector3(0, -50000, d), sun);
+                Assert.True(float.IsFinite(high.X) && float.IsFinite(high.Y) && float.IsFinite(high.Z));
+                worstHigh = MathF.Max(worstHigh, high.Z);
+            }
+        }
+        Assert.InRange(worstGame, 0.5f, 1.4f);
+        Assert.InRange(worstHigh, 0, 40);
+        Assert.Equal(1840, KenshiCamera.MaxHeightAbovePivot, 1);
+    }
+
+    [Fact]
     public void Ambient_map_built_from_the_biomes_matches_the_shipped_one()
     {
         var install = GameInstall.Locate();
