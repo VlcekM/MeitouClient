@@ -185,12 +185,95 @@ values (÷100) from the character's appearance drive the extra per-bone vectors 
   `Bip01 L/R Forearm`, `Bip01 L/R Hand`, `Bip01 Neck`, `Bip01 Head`, `Bip01 Jaw` (if present),
   `L Boob` / `R Boob` (if present).
 - **Positional size set on**: `Bip01 L/R Thigh`, `Bip01 L/R UpperArm`, `Bip01 L/R Toe0`, `L Boob` / `R Boob`.
-- The formulas mix several sliders per bone and use gender-specific constants; they are not transcribed
-  here (Observed only: e.g. Height maps to the Y size of the spine and leg bones; Head size to all three
-  axes of `Bip01 Head`).
-- Missing limbs and ARMOUR `hide stump` scale the matching limb bones to zero (Observed).
-- The skeleton's **movement scale** is set from the same height and leg-length values (`@ 14052bb10`;
-  1.0 in one case not traced), so walk translations match the body's size.
+- `Mid-section` is looked up but its value is never used (Verified, disassembly: the result register is
+  overwritten unread). The same function also stores (`Height` − 80) × 0.025 in the appearance object; what
+  reads it is Unknown.
+
+#### The formulas (Verified, decompilation and disassembly of `@ 14052e6c0`; implemented in `CharacterShape`)
+
+Notation: every slider value is × 0.01 (100 → 1), written by name (*Height*, *Arm bulk*...). `lerp(a, t)` means
+1 + (a − 1) × t. Vectors are (X, Y, Z) in the bone's own axes; "×" on a vector is per component.
+
+Two character values feed in besides the sliders (computed by `@ 14052bc70`, called before every shape update):
+
+- **Muscle** *M* = (max(strength, weapon smith, armour smith) × 0.01 − 0.2) / (0.99 − 0.2), **not clamped**
+  (strength 20 → 0, 99 → 1, 0 → −0.25). Strength is a virtual getter on the stats object; the two smithing
+  skills are read directly. Observed: the field names come from matching the stats object's offsets to the
+  stats save writer (`@ 14064a8f0`, which writes `strength` from +0x80, `weapon smith` +0xd0, `armour smith`
+  +0xd4...); that it is the same object is assumed.
+- **Starvation** *S* = clamp((1 − clamp(*N* − 1, 0, 1)) × 1.5, 0, 1), where *N* is a character float at
+  +0x4b8 (Unknown; presumably nutrition: *S* is 1 up to *N* = 4/3 and 0 from *N* = 2).
+
+Factors: *thin7* = lerp(0.7, S), *thin86* = lerp(0.86, S), *thin6* = lerp(0.6, S), *thin4* = lerp(0.4, S);
+*bulk* = lerp(1.27, M) for men, lerp(1.24, M) for women; *broad* = lerp(1.13, M) men, lerp(1.12, M) women.
+
+Derived values: *h* = *Height* × g, *Fr* = *Frame* × g, where g is a virtual on the character that is 1.0 for
+`Character` and `CharacterHuman` (vtable slot 0x390 returns the constant 1; animals may override it, not
+checked). *L* = *Leg length*, *H* = h + L − 1.
+
+| Bone | Bone size | Positional size |
+| --- | --- | --- |
+| `Bip01 L/R Thigh` | (t, H × 0.95, t) × n, with t = (*Legs shape* × LB + (*Hips* − 1) / 3) × Fr, LB = *Legs bulk* × thin7 × bulk | (1, Fr × (2 − h) × *Hips*, 1) |
+| `Bip01 L/R Calf` | ((2 − *Legs shape*) × LB × Fr, H, same) × leg factor × (1, k, 1) | – |
+| `Bip01 Pelvis` | (*Hips* × Fr, h, *Hips* × Fr) | – |
+| `Bip01 Spine` | (p × Fr, h, p × St × Fr), p = (*Hips* − 1) × 0.6 + 1, St = *Stomach* × thin6 | – |
+| `Bip01 Spine1` | (*Waist* × thin7 × Fr, h, St × Fr) | – |
+| `Bip01 Spine2` | (c45 × Fr, h, c9 × Fr), C = *Chest* × broad × thin86, c45 = (C − 1) × 0.45 + 1, c9 = (C − 1) × 0.9 + 1 | – |
+| `L Boob`, `R Boob` (if the skeleton has `L Boob`) | (bx × Fr, by × h, B × Fr), B = *Breast size* × thin4; below 1: bx = (B − 1) × 0.75 + 1, by = (B − 1) × 0.5 + 1, else bx = by = B | (Bh, Bs × c9 × Fr × ((1 − h) × 0.5 + 1), (2 − h) × c9 × Fr); Bh, Bs = *Breast height*, *Breast spacing* for women, 1 for men |
+| `Bip01 L/R UpperArm` | (A × Fr, h, ((A − 1) × 1.5 + 1) × Fr) × stump factor, A = *Arm bulk* × thin7 × bulk | (Sh × c45, 1, 1) |
+| `Bip01 L/R Forearm` | (A × Fr, h, A × Fr) × arm factor | – |
+| `Bip01 L/R Clavicle` | (Sh × Fr, ((Sh − 1) × 0.3 + 1) × Fr, Sh × Fr), Sh = *Shoulders* × broad | – |
+| `Bip01 L/R Hand` | (A × Fr, h, A × Fr) × *Hands* × arm factor | – |
+| `Bip01 L/R Foot` | (F, L, F) × leg factor, F = *Feet* × h | – |
+| `Bip01 L/R Toe0` | (F, F, F) × leg factor | (1, 1, F) × leg factor |
+| `Bip01 Neck` | (*Neck width* × thin6 × broad × Fr, *Neck length*, *Neck* × thin7 × Fr) | – |
+| `Bip01 Head` | (f × *Head size* × *Head shape*, *Head size*, f × *Head size*), f = (Fr − 1) × 0.25 + 1 | – |
+| `Bip01 Jaw` (if present) | (*Jaw* × head X, head Y, head Z) | – |
+
+At neutral sliders (all 100, M = S = 0) every vector is (1, 1, 1) except the thighs' Y, 0.95 (follows from the table;
+`CharacterShapeTests` checks the implementation against it). The positional sizes with (2 − h) roughly cancel the parent's Y scale, which multiplies
+child offsets in Kenshi's bone maths, so a taller body keeps its hip width.
+
+Limb factors (left/right per side):
+
+- **Arm / leg factor**: 0 when that limb is missing, else 1. The character's limb object answers per index
+  0 left arm, 1 right arm, 2 left leg, 3 right leg (order Observed: matches fcs.def `severed limbs`), "1" meaning
+  missing (`@ 1400cd450`, not traced further).
+- **Stump factor** (upper arms): 1, unless the item worn under the name `armour` has `hide stump` with that
+  arm's bit (HideStump: 1 left, 2 right, 3 both); then it is the arm factor, so a missing arm loses its stump
+  too. Without it, a missing arm keeps the upper arm (the stump). Matches fcs.def "Scale specified upper arms
+  to zero when wearing this with missing limbs".
+- **n** (thighs): 0.8 when a per-leg object of the character (+0x4e0 right, +0x4d8 left) reports state 1, else 1.
+  What it is (a robotic leg?) is Unknown.
+- **k** (calves): a calf length ratio set by the appearance's equipment pass (`@ 140538630`): from the boots'
+  ARMOUR `boot height` and the LIMB_REPLACEMENT `offset` of robotic legs (slots 52, 53), it stores
+  (a + c) / (b + c) for the two legs (c a constant, not read), negative when the right leg is the longer one.
+  The left calf's Y is × the ratio when it is positive, the right calf's Y × its negation when negative. 0 (no
+  robotic legs) leaves both at 1. Observed (formula details not traced).
+
+The skeleton's **movement scale** (`@ 14052bb10`) is H, except 1.0 when either of two character states holds
+(a field at +0x2f8 equal to 1, or a flag of another object; neither identified). It multiplies every track
+translation (ogre-skeleton.md), so walk cycles match the leg length.
+
+**Observed** (viewer, male Greenlander body): the bone sizes scale the legs about the hips while `Bip01` keeps
+its binding height (about 10 units; the idle's root track barely moves it), so the soles end about 1.8 units
+below the ground at Height 120 and as much above it at 80 (bind pose and `idle_stand_relax` alike). What keeps
+the feet on the ground in Kenshi (the character controller, the scene node height, a use of the
+(`Height` − 80) × 0.025 value) was not found; the viewer doesn't compensate.
+
+**Not Verified**: anything in game. The viewer (`--shape`, [viewer.md](viewer.md#characters)) applies the
+formulas with M from the CHARACTER's `stats` STATS record (strength and smithing; an approximation, the game
+uses the live stats), S = 0, all limbs present.
+
+#### Muscle definition and the body's normal maps (Verified, `@ 14052bc70`, `@ 140531820`)
+
+A third value, the **muscle definition** D = clamp(((swimming + athletics + 3 × max(dexterity × x, unarmed))
+− (cooking + science)) × 0.01 / 5, mapped so 0.2 → 0 and 0.99 (women) / 0.9 (men) → 1, to 0–1), with x an
+unidentified stats field (Unknown; stat names Observed as for M). It drives the body material
+(characters.md, "Body shading"): the normal map is RACE `nm <gender>` and the `bodyBlendNormal` map
+`nm <gender> strong`, blended by `muscleBlend` = D. If S > 0.25 or S > D, the blend map is
+`nm <gender> skinny` with `muscleBlend` = S, and the base is `nm <gender> strong` when D > 0.33. The viewer
+computes this (`CharacterShape.NormalBlend`) but doesn't render the blend.
 
 ### Heads
 
@@ -211,3 +294,6 @@ and the sliders above. Hair and beards are ATTACHMENT records worn with a shared
   Unknown.
 - How characters choose between candidate animations (idle chance, speed bands, injury ranges, combat
   state) beyond the definitions above. Not traced.
+- Body shape: the nutrition value behind starvation (+0x4b8), the thigh-narrowing leg state, the two
+  movement-scale exceptions, the stats field x in the muscle definition, what reads (`Height` − 80) × 0.025,
+  and what the game does when a body file lacks a slider (the viewer uses 100).

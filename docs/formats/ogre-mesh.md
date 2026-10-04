@@ -146,7 +146,10 @@ They are face (and horn) shape morphs, not expressions or animation. Verified by
   flag is set (Kenshi's "SLAVE" variant handling, `@ 14007c070`; Observed, not traced further).
 - The character editor instead clones the mesh as `<mesh>_CHAREDIT_<n>` and keeps its poses
   (`@ 140071dc0`) so sliders can change live.
-- How a slider value maps to the pose weight (scaling, clamping) was not traced. Unknown.
+- The weight is the stored appearance value itself, unscaled and unclamped (Verified, `@ 140071ac0` passes it
+  straight to `softwareVertexPoseBlend`); in the SLAVE variant `bone_horns_top_short` and
+  `bone_horns_bottom_short` are blended at 1 and `bone_horns_curved` is skipped (details in
+  [../characters.md](../characters.md#face-shapes-poses)).
 
 ### LOD
 
@@ -157,6 +160,20 @@ They are face (and horn) shape morphs, not expressions or animation. Verified by
 - **Distances** come from the files' LOD user values: 2,472 generated (reduced-index) levels and 50
   manual levels (separate `_LOD` meshes). Typical values are 4000 and 8000; others 400, 500, 1000, 1500.
   Level counts per mesh (including level 0): 1 ×324, 2 ×1,039, 3 ×17, 5 ×1, 8 ×8 (Verified, same survey).
+  In v1.100 files a later level reuses the index buffer of an earlier one: level 2's `bufferIndex` is 1 (the
+  first reduced level's buffer, read at its own start and count) in 1,198 submeshes; level 1 always has its
+  own buffer, sometimes longer than its count (Verified, scratch survey). Character meshes: see
+  [../characters.md](../characters.md#lod-of-character-meshes) (bodies and hair 200, armour 400).
+- **Selecting a level** (Verified, decompilation of Kenshi's `OgreMain_x64.dll`:
+  `DistanceLodStrategyBase::lodUpdateImpl @ 1800ac380`, `LodStrategy::lodSet @ 1800ac0c0`,
+  `transformUserValue @ 1800ac4c0`): per object, value = (distance from the LOD camera's position to the
+  centre of the object's world bounding box − the object's world bounding radius) × the camera's LOD bias ×
+  a per-call factor. The user value is used as it is (not squared; `transformUserValue` returns its
+  argument), and the level is a lower bound over the mesh's sorted values minus one, at least 0: level k is
+  drawn once the value is strictly above level k's distance. Kenshi's `distance_sphere` (`getSquaredDepth
+  @ 1800ac690`: squared distance minus squared radius) is only the per-object `getValue` path; the batch
+  update above is what the 2.0 scene manager runs (Observed, Ogre 2.0 source structure). Implemented in
+  `Meitou.Data.Characters.CharacterLod`; the viewer takes bias and factor as 1 and the mesh file's bounds.
 - No LOD is generated at run time. Nothing in `kenshi_x64.exe` imports `OgreMeshLodGenerator_x64.dll` or
   refers to `lod_generator.cfg` (Verified: import table and string search; no other DLL in the install
   names it either). The `.cfg` describes the developers' offline baking (e.g. `animal/meshes/noLOD`

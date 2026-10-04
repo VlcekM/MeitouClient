@@ -137,7 +137,9 @@ reference-removal values, no name change without the RENAMED flag, no instance r
   FCS removes when `v2 == int.MaxValue`. **Game**: removes only when **all three** values are
   0x7FFFFFFF. A new reference is appended at the end of its list (list order = file order); an
   existing one keeps its position and gets the new values. References whose target doesn't exist stay
-  in the list (they resolve to nothing).
+  in the list (they resolve to nothing). In memory a reference holds three ints at offsets 0, 4, 8, then the
+  target id (Verified, spawn code); that they are v0, v1, v2 in file order is Observed (the data patterns match
+  fcs.def, [characters.md](../characters.md#generating-a-character)).
 - **Instances** merge per instance id: later files overwrite position, rotation and target. FCS adds
   states. **Game**: states are **appended** to the instance's existing states, with no duplicate check.
   An empty `target` does not delete the entry: the instance stays with an empty target and no states

@@ -138,9 +138,9 @@ public class CharacterAppearanceTests
         Assert.NotNull(c.Head);
         var worn = c.Parts.Where(p => p.Mode == AttachMode.SharedSkeleton).ToList();
         Assert.Contains(worn, p => p.Slot == AttachSlot.Hat);
-        Assert.Contains(worn, p => p.Slot == AttachSlot.Boots && p.Record.Name == "Wooden Sandals"); // chance 400 beats 100
+        Assert.Contains(worn, p => p.Slot == AttachSlot.Boots && p.Record.Name == "Samurai Boots"); // Wooden Sandals (0, 400): quantity 0 never spawns
         var weapon = Assert.Single(c.Parts, p => p.Mode == AttachMode.Bone);
-        Assert.Equal("hip", weapon.Point);
+        Assert.Equal("back", weapon.Point); // Horse Chopper (1, 100, 0): val1 ≠ 0 is the back pool
         Assert.True(c.AttachmentPoints.ContainsKey("hip"));
         Assert.Equal("Bip01 Prop2", c.AttachmentPoints["hands"].Bone);
     }

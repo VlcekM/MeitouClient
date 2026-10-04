@@ -30,6 +30,8 @@ public sealed record CharacterPart
     public AttachSlot? Slot { get; init; }
     /// <summary>For <see cref="AttachMode.Bone"/>: the attachment point name (<c>hands</c>, <c>hip</c>, <c>back</c>, <c>back2</c>).</summary>
     public string? Point { get; init; }
+    /// <summary>The material the item was made with, if chosen (MATERIAL_SPECS_CLOTHING of clothing, MATERIAL_SPECS_WEAPON model of a weapon).</summary>
+    public GameRecord? Material { get; init; }
 }
 
 /// <summary>A clothing texture layered onto the body (ARMOUR <c>vest texture</c>; character.hlsl "vest").</summary>
@@ -49,8 +51,12 @@ public sealed record CharacterOptions
     public bool Naked { get; init; }
     /// <summary>Draw the first weapon: <c>bare sword</c> in the hand and <c>sheath</c> at the hip, instead of the sheathed <c>mesh</c>.</summary>
     public bool WeaponDrawn { get; init; }
-    /// <summary>Null: always the likeliest choice; otherwise weighted random choices with this seed.</summary>
+    /// <summary>Null: always the likeliest choice; otherwise <see cref="CharacterGenerator"/> rolls a <see cref="Loadout"/> with this seed.</summary>
     public int? Seed { get; init; }
+    /// <summary>A rolled character (race, gender, appearance, clothing, weapons); overrides <see cref="Seed"/>.</summary>
+    public Loadout? Loadout { get; init; }
+    /// <summary>With <see cref="Seed"/>: the FACTION (name or string id) the character spawns in; default its own <c>faction</c>.</summary>
+    public string? Faction { get; init; }
 }
 
 /// <summary>
@@ -64,6 +70,8 @@ public sealed class CharacterAppearance
     public bool Female { get; private init; }
     public AppearanceFile? Body { get; private init; }
     public string? BodyFile { get; private init; }
+    /// <summary>The rolled character this was built from (with <see cref="CharacterOptions.Seed"/> or <see cref="CharacterOptions.Loadout"/>).</summary>
+    public Loadout? Loadout { get; private init; }
 
     /// <summary>Race <c>male mesh</c> / <c>female mesh</c>, or CHARACTER <c>mesh</c>.</summary>
     public string BodyMesh { get; private init; } = "";
@@ -107,14 +115,22 @@ public sealed class CharacterAppearance
         options ??= new CharacterOptions();
         var record = Find(db, nameOrId, FcsRecordType.CHARACTER, FcsRecordType.RACE)
             ?? throw new KeyNotFoundException($"No CHARACTER or RACE record '{nameOrId}'.");
-        var random = options.Seed is { } seed ? new Random(seed) : null;
+        // With a seed the generator rolls everything (docs/characters.md, "Generating a character").
+        var faction = options.Faction is { } factionName ? Find(db, factionName, FcsRecordType.FACTION) : null;
+        var loadout = options.Loadout ?? (options.Seed is { } seed ? CharacterGenerator.Generate(db, installRoot, record, seed, options.Female, faction) : null);
+        Random? random = null;
         var notes = new List<string>();
         GameRecord? character = record.Type == FcsRecordType.CHARACTER ? record : null;
 
         // Body file (.bod2). CHARACTER "body": empty = random body.
-        AppearanceFile? body = null;
+        AppearanceFile? body = loadout?.Appearance;
         string? bodyFile = character?.GetPath("body") is { Length: > 0 } b ? b : null;
-        if (bodyFile is not null)
+        if (loadout is not null)
+        {
+            if (loadout.Generated) bodyFile = null;
+            notes.AddRange(loadout.Notes);
+        }
+        else if (bodyFile is not null)
         {
             var path = Path.Combine(installRoot, bodyFile.Replace('\\', Path.DirectorySeparatorChar).TrimStart('.', Path.DirectorySeparatorChar));
             try { body = AppearanceFile.Read(path); }
@@ -125,13 +141,13 @@ public sealed class CharacterAppearance
         }
 
         // Race: CHARACTER "race" overrides the body file's (fcs.def); RACE records are their own race.
-        GameRecord? race = record.Type == FcsRecordType.RACE ? record : null;
+        GameRecord? race = loadout?.Race ?? (record.Type == FcsRecordType.RACE ? record : null);
         race ??= Pick(db, character!.GetReferences("race"), random, r => r.Values.Value0);
         if (race is null && body?.RaceId is { } bodyRace) race = db.Find(bodyRace);
         race ??= Find(db, "Greenlander", FcsRecordType.RACE);
         if (race is null) throw new KeyNotFoundException($"'{record.Name}' has no race.");
 
-        bool female = options.Female ?? body?.Female ?? (character is not null && character.GetInt("female chance") >= 50);
+        bool female = options.Female ?? loadout?.Female ?? body?.Female ?? (character is not null && character.GetInt("female chance") >= 50);
         if (female && race.GetBool("single gender")) { female = false; notes.Add("race is single gender: male mesh used"); }
         string g = female ? "female" : "male";
 
@@ -141,7 +157,7 @@ public sealed class CharacterAppearance
 
         var result = new CharacterAppearance
         {
-            Character = character, Race = race, Female = female, Body = body, BodyFile = bodyFile,
+            Character = character, Race = race, Female = female, Body = body, BodyFile = bodyFile, Loadout = loadout,
             BodyMesh = bodyMesh,
             BodyTexture = FilePath(race, $"body texture {g}"), BodyNormal = FilePath(race, $"nm {g}"),
             BodyMask = FilePath(race, $"body mask {g}"), PartMap = FilePath(race, $"part map {g}"),
@@ -156,7 +172,17 @@ public sealed class CharacterAppearance
 
         // Equipment: CHARACTER lists (unless naked) plus --equip, then hair/beard unless a worn item hides them.
         var items = new List<GameRecord>();
-        if (character is not null && !options.Naked)
+        var materials = new Dictionary<GameRecord, GameRecord>();
+        if (loadout is not null && !options.Naked)
+        {
+            foreach (var c in loadout.Clothing)
+            {
+                items.Add(c.Record);
+                if (c.Material is { } m) materials[c.Record] = m;
+            }
+            if (loadout.Backpack is { } pack) items.Add(pack.Record);
+        }
+        else if (character is not null && !options.Naked)
         {
             items.AddRange(ChooseClothing(db, character, random));
             // backpack: (1, chance), val1 an absolute chance (fcs.def). Without a seed: worn if the chance is 50 or more.
@@ -197,26 +223,38 @@ public sealed class CharacterAppearance
 
         foreach (var attachment in new[] { result.Hair, result.Beard })
             if (attachment is not null) result.AddWorn(attachment, female, worn);
-        foreach (var item in worn) result.AddWorn(item, female, worn);
+        foreach (var item in worn) result.AddWorn(item, female, worn, materials.GetValueOrDefault(item));
         foreach (var item in items.Where(i => i.Type is FcsRecordType.ATTACHMENT or FcsRecordType.CONTAINER or FcsRecordType.LIMB_REPLACEMENT))
             result.AddWorn(item, female, worn);
 
-        // Weapons: the CHARACTER's first listed weapon (which one Kenshi picks is not traced), then --equip weapons.
-        var weapons = new List<GameRecord>();
-        if (character is not null && !options.Naked)
+        // Weapons: the loadout's, else the likeliest: the first entry with quantity > 0 of the hip pool (val1 = 0) and of
+        // the back pool (val1 ≠ 0), whose absolute chances make the first one win (docs/characters.md). Then --equip weapons.
+        var weapons = new List<(GameRecord Weapon, string Point, GameRecord? Model)>();
+        if (loadout is not null && !options.Naked)
         {
-            var listed = character.GetReferences("weapons").Select(r => db.Find(r.TargetStringId)).OfType<GameRecord>().ToList();
-            if (listed.Count > 0) weapons.Add(random is null ? listed[0] : listed[random.Next(listed.Count)]);
-            if (listed.Count > 1) result.Notes.Add($"weapons: {string.Join(", ", listed.Select(w => w.Name))} (showing {weapons[0].Name})");
+            weapons.AddRange(loadout.Weapons.Select(w => (w.Weapon, w.Point, w.Model)));
+            if (loadout.Crossbow is { } bow) weapons.Add((bow.Weapon, bow.Point, null));
         }
-        weapons.AddRange(items.Where(i => i.Type is FcsRecordType.WEAPON or FcsRecordType.CROSSBOW or FcsRecordType.ITEM));
+        else if (character is not null && !options.Naked)
+        {
+            var listed = character.GetReferences("weapons").Where(r => r.Values.Value0 > 0)
+                .Select(r => (Ref: r, Item: db.Find(r.TargetStringId))).Where(w => w.Item is not null).ToList();
+            foreach (var back in new[] { false, true })
+                if (listed.FirstOrDefault(w => (w.Ref.Values.Value1 != 0) == back).Item is { } weapon)
+                    weapons.Add((weapon, back ? "back" : "hip", null));
+        }
+        foreach (var extra in items.Where(i => i.Type is FcsRecordType.WEAPON or FcsRecordType.CROSSBOW or FcsRecordType.ITEM))
+        {
+            string point = weapons.All(w => w.Point != "hip") ? "hip" : weapons.All(w => w.Point != "back") ? "back" : "back2";
+            weapons.Add((extra, point, null));
+        }
         result.LoadAttachmentPoints(installRoot, race);
         for (int i = 0; i < weapons.Count; i++)
-            result.AddWeapon(weapons[i], female, i == 0 ? "hip" : "back", drawn: options.WeaponDrawn && i == 0, backCount: i > 1 ? 1 : 0);
+            result.AddWeapon(weapons[i].Weapon, female, weapons[i].Point, drawn: options.WeaponDrawn && i == 0, backCount: 0, weapons[i].Model);
         return result;
     }
 
-    void AddWorn(GameRecord item, bool female, List<GameRecord> worn)
+    void AddWorn(GameRecord item, bool female, List<GameRecord> worn, GameRecord? material = null)
     {
         AttachSlot? slot = item.Type == FcsRecordType.ATTACHMENT ? (AttachSlot)item.GetInt("attach slot", (int)AttachSlot.Hair)
             : item.Ints.ContainsKey("slot") ? (AttachSlot)item.GetInt("slot") : null;
@@ -241,16 +279,16 @@ public sealed class CharacterAppearance
             if (female && item.GetPath("mesh").Length > 0) Notes.Add($"[Appearance] No female mesh for '{item.Name}'");
             return;
         }
-        Parts.Add(new CharacterPart { Record = item, Mesh = mesh, Field = field, Mode = AttachMode.SharedSkeleton, Slot = slot });
+        Parts.Add(new CharacterPart { Record = item, Mesh = mesh, Field = field, Mode = AttachMode.SharedSkeleton, Slot = slot, Material = material });
     }
 
-    void AddWeapon(GameRecord weapon, bool female, string slot, bool drawn, int backCount)
+    void AddWeapon(GameRecord weapon, bool female, string slot, bool drawn, int backCount, GameRecord? model = null)
     {
         if (slot == "back" && backCount > 0) slot = "back2";
         string Field(string f) => f == "mesh" && female && weapon.GetPath("mesh female").Length > 0 ? "mesh female" : f;
         if (drawn && weapon.GetPath("bare sword").Length > 0)
         {
-            Parts.Add(new CharacterPart { Record = weapon, Mesh = weapon.GetPath("bare sword"), Field = "bare sword", Mode = AttachMode.Bone, Slot = AttachSlot.Weapon, Point = "hands" });
+            Parts.Add(new CharacterPart { Record = weapon, Mesh = weapon.GetPath("bare sword"), Field = "bare sword", Mode = AttachMode.Bone, Slot = AttachSlot.Weapon, Point = "hands", Material = model });
             if (weapon.GetPath("sheath") is { Length: > 0 } sheath)
                 Parts.Add(new CharacterPart { Record = weapon, Mesh = sheath, Field = "sheath", Mode = AttachMode.Bone, Slot = AttachSlot.Weapon, Point = slot });
             return;
@@ -258,7 +296,7 @@ public sealed class CharacterAppearance
         // Mode-0 items fall back from "mesh female" to "mesh" (ogre-skeleton.md).
         string field = Field("mesh");
         if (weapon.GetPath(field) is not { Length: > 0 } mesh) { Notes.Add($"'{weapon.Name}' has no mesh"); return; }
-        Parts.Add(new CharacterPart { Record = weapon, Mesh = mesh, Field = field, Mode = AttachMode.Bone, Slot = AttachSlot.Weapon, Point = slot });
+        Parts.Add(new CharacterPart { Record = weapon, Mesh = mesh, Field = field, Mode = AttachMode.Bone, Slot = AttachSlot.Weapon, Point = slot, Material = model });
     }
 
     void LoadAttachmentPoints(string installRoot, GameRecord race)
@@ -293,7 +331,7 @@ public sealed class CharacterAppearance
         foreach (var r in character.GetReferences("clothing"))
         {
             var item = db.Find(r.TargetStringId);
-            if (item is null) continue;
+            if (item is null || r.Values.Value0 == 0 || r.Values.Value1 <= 0) continue; // quantity 0 or no chance: never chosen
             int slot = item.GetInt("slot", 5);
             if (!bySlot.TryGetValue(slot, out var list)) bySlot[slot] = list = [];
             list.Add((r.Values.Value0 < 0 ? null : item, Math.Max(r.Values.Value1, 0)));

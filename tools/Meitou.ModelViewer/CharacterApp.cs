@@ -19,11 +19,17 @@ public sealed class CharacterViewOptions
     public List<string> Equip = [];
     public bool Naked, Drawn, NoMorphs, NoSkinTone, NoPostures, BindPose, Info, ShowSkeleton, NoGrid, Wireframe;
     public int? Seed;
+    /// <summary>--faction: the FACTION a generated character belongs to (its "hairstyles" limit hair and beards).</summary>
+    public string? Faction;
     public List<(string Name, float Weight)> Animations = [];
     public float Time;
     public string? Screenshot;
     public int Width = 1280, Height = 960;
     public float? Yaw, Pitch, Zoom;
+    /// <summary>--shape name=value overrides (CharacterShape.Override), --no-shape, --lod n.</summary>
+    public List<string> Shape = [];
+    public bool NoShape;
+    public int? Lod;
 
     public const string Usage = """
         meitou-viewer --character <CHARACTER or RACE record name or string id> [options]
@@ -31,7 +37,9 @@ public sealed class CharacterViewOptions
           --equip <record>       also wear / carry an item (ARMOUR, ATTACHMENT, WEAPON...; repeatable; replaces the same armour slot)
           --naked                leave out the CHARACTER's clothing and weapons
           --drawn                first weapon drawn: bare blade in the right hand, sheath left at the hip
-          --seed <n>             weighted random choices (clothing, hair, head, weapon) instead of the likeliest
+          --seed <n>             roll the character as the game spawns one (gender, random face/body/colours without a
+                                 body file, clothing, quality, weapons, manufacturer); same seed, same character
+          --faction <record>     FACTION of a --seed character (default its own "faction"; e.g. "Dust Bandits")
           --anim <name>[:weight] play an animation (ANIMATION record name or Ogre name, e.g. "walk lower" --anim "walk upper":0.8);
                                  repeatable, blended; default: the body file's idle stance
           --bind-pose            no default animation
@@ -39,10 +47,15 @@ public sealed class CharacterViewOptions
           --no-morphs            don't bake the body file's face poses into the body mesh
           --no-skin-tone         ignore the body file's skin tone
           --no-postures          don't hold the posture, neck and shoulder pose libraries at the body file's sliders
+          --shape <name=value>   override a body-shape slider (Kenshi units, 100 = neutral; values <= 3 are fractions:
+                                 height=0.8 = 80) or muscle=, starve=, legratio=, missing=larm,rarm,lleg,rleg, hidestump=0-3;
+                                 repeatable or ';'-separated
+          --no-shape             no body-shape sliders (bone sizes all 1)
+          --lod <n>              force mesh LOD level n (default: Kenshi's distance_sphere rule per mesh; L key cycles)
           --screenshot <png> --size WxH --yaw/--pitch/--zoom --skeleton-lines --no-grid --wireframe --info
         Keys: as the mesh viewer (orbit, pan, zoom, F, W, T, N, B, K, G, P, Space, Up/Down speed), plus
           Tab / 1-9 select an animation layer, Right / Left change its animation, + / - its weight, Delete remove it,
-          Insert add a layer (copy of the selected one), Home binding pose.
+          Insert add a layer (copy of the selected one), Home binding pose, L cycle the LOD level (auto, 0, 1...).
         """;
 
     public static CharacterViewOptions? Parse(string[] args)
@@ -62,6 +75,7 @@ public sealed class CharacterViewOptions
                 case "--naked": o.Naked = true; break;
                 case "--drawn": o.Drawn = true; break;
                 case "--seed": o.Seed = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--faction": o.Faction = Next(); break;
                 case "--anim":
                 {
                     var spec = Next();
@@ -76,6 +90,9 @@ public sealed class CharacterViewOptions
                 case "--no-morphs": o.NoMorphs = true; break;
                 case "--no-skin-tone": o.NoSkinTone = true; break;
                 case "--no-postures": o.NoPostures = true; break;
+                case "--shape": o.Shape.Add(Next()); break;
+                case "--no-shape": o.NoShape = true; break;
+                case "--lod": o.Lod = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--screenshot": o.Screenshot = Next(); break;
                 case "--size":
                     var parts = Next().Split('x');
@@ -223,7 +240,8 @@ static class CharacterApp
         {
             string layers = scene.Layers.Count == 0 ? "bind pose" : string.Join(" + ", scene.Layers.Select((l, i) =>
                 $"{(i == scene.Selected ? "[" : "")}{l.Label} {l.Weight:0.##}{(i == scene.Selected ? "]" : "")}"));
-            window.Title = $"{name} | {layers} | x{scene.Speed:0.##}{(scene.Paused ? " paused" : "")}";
+            window.Title = $"{name} | {layers} | x{scene.Speed:0.##}{(scene.Paused ? " paused" : "")}" +
+                $" | LOD {(scene.ForcedLod is { } lod ? lod.ToString(CultureInfo.InvariantCulture) : "auto")} [{string.Join(",", scene.Parts.Select(p => p.LodLevel))}]";
         }
 
         void ChangeAnimation(int step)
@@ -268,6 +286,10 @@ static class CharacterApp
                 case Key.Up: scene.Speed *= 1.5f; break;
                 case Key.Down: scene.Speed /= 1.5f; break;
                 case Key.Home: scene.Layers.Clear(); scene.Selected = 0; break;
+                case Key.L: // LOD: auto -> 0 -> 1 ... -> auto
+                    int maxLod = scene.Parts.Max(p => Math.Max(p.Lods.Count, 1)) - 1;
+                    scene.ForcedLod = scene.ForcedLod is null ? 0 : scene.ForcedLod < maxLod ? scene.ForcedLod + 1 : null;
+                    break;
                 case Key.Tab when count > 0: scene.Selected = (scene.Selected + 1) % count; break;
                 case >= Key.Number1 and <= Key.Number9 when key - Key.Number1 < count: scene.Selected = key - Key.Number1; break;
                 case Key.Right: ChangeAnimation(1); break;
@@ -322,6 +344,7 @@ static class CharacterApp
             scene.Pose();
             var size = window.FramebufferSize;
             renderer.Draw(camera, size.X, size.Y, render, scene);
+            if (scene.LodChanged) { scene.LodChanged = false; Title(); }
             if (screenshotRequested)
             {
                 screenshotRequested = false;

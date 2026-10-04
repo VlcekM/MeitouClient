@@ -23,6 +23,8 @@ public sealed unsafe class CharacterRenderer : IDisposable
         public uint Diffuse, Normal, ColourMap, HeadDiffuse, HeadNormal, HeadMask, BodyMask, HairOverlay, BeardOverlay;
         public uint[] VestDiffuse = new uint[3], VestNormal = new uint[3], VestColour = new uint[3];
         public bool Swizzled;
+        /// <summary>Per sub (parallel to <see cref="Subs"/>): index range of each LOD level in the sub's element buffer.</summary>
+        public List<(int Offset, int Count)[]> LodRanges = [];
     }
 
     public CharacterRenderer(GL gl, Renderer basis, CharacterScene scene)
@@ -48,6 +50,7 @@ public sealed unsafe class CharacterRenderer : IDisposable
     Gpu Upload(CharacterPartModel part)
     {
         var subs = new List<(ModelPart, uint, uint, uint)>();
+        var lodRanges = new List<(int, int)[]>();
         foreach (var sub in part.Model.Parts)
         {
             uint vao = gl.GenVertexArray(), vbo = gl.GenBuffer(), ebo = gl.GenBuffer();
@@ -55,7 +58,19 @@ public sealed unsafe class CharacterRenderer : IDisposable
             gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
             gl.BufferData<Vertex>(BufferTargetARB.ArrayBuffer, sub.Vertices.AsSpan(), BufferUsageARB.StaticDraw);
             gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, ebo);
-            gl.BufferData<uint>(BufferTargetARB.ElementArrayBuffer, sub.Indices.AsSpan(), BufferUsageARB.StaticDraw);
+            // Level 0 is the model's own (triangulated) list; reduced LOD lists follow it in the same buffer.
+            var all = new List<uint>(sub.Indices);
+            var ranges = new (int, int)[Math.Max(part.Lods.Count, 1)];
+            ranges[0] = (0, sub.Indices.Length);
+            for (int l = 1; l < part.Lods.Count; l++)
+            {
+                var lod = sub.SubMeshIndex < part.Lods[l].Indices.Count ? part.Lods[l].Indices[sub.SubMeshIndex] : null;
+                if (lod is null || lod.Any(i => i >= sub.Vertices.Length)) { ranges[l] = ranges[0]; continue; }
+                ranges[l] = (all.Count, lod.Length);
+                all.AddRange(lod);
+            }
+            lodRanges.Add(ranges);
+            gl.BufferData<uint>(BufferTargetARB.ElementArrayBuffer, all.ToArray().AsSpan(), BufferUsageARB.StaticDraw);
             uint stride = (uint)Vertex.Size;
             void Attrib(uint index, int size, int offset)
             {
@@ -73,7 +88,7 @@ public sealed unsafe class CharacterRenderer : IDisposable
         bool body = m.Shading == CharacterShading.Body; // Kenshi's character units clamp to a transparent border
         var gpu = new Gpu
         {
-            Part = part, Subs = subs,
+            Part = part, Subs = subs, LodRanges = lodRanges,
             Diffuse = basis.LoadTexture(m.Diffuse, body), Normal = basis.LoadTexture(m.Normal, body), ColourMap = basis.LoadTexture(m.ColourMap, false),
             HeadDiffuse = basis.LoadTexture(m.HeadDiffuse, true), HeadNormal = basis.LoadTexture(m.HeadNormal, true), HeadMask = basis.LoadTexture(m.HeadMask, true),
             BodyMask = basis.LoadTexture(m.BodyMask, true), HairOverlay = basis.LoadTexture(m.HairOverlay, true), BeardOverlay = basis.LoadTexture(m.BeardOverlay, true),
@@ -100,6 +115,9 @@ public sealed unsafe class CharacterRenderer : IDisposable
         Matrix("uViewProjection", viewProjection);
         var eye = camera.Eye;
         gl.Uniform3(U("uEye"), eye.X, eye.Y, eye.Z);
+        if (scene.UpdateLod(eye))
+            Console.WriteLine("lod       " + string.Join(", ", scene.Parts.Where(p => p.Lods.Count > 1).Select(p =>
+                $"{p.Label}: {p.LodLevel} (from {p.Lods[p.LodLevel].Distance:0.#})")));
         var light = Vector3.Normalize(new Vector3(0.45f, 0.8f, 0.35f));
         gl.Uniform3(U("uLightDir"), light.X, light.Y, light.Z);
         string[] samplers = ["uDiffuse", "uNormal", "uColourMap", "uHeadDiffuse", "uHeadNormal", "uHeadMask", "uBodyMask", "uHairOverlay", "uBeardOverlay",
@@ -162,11 +180,14 @@ public sealed unsafe class CharacterRenderer : IDisposable
             V4("uColour1", m.Colour1); V4("uColour2", m.Colour2);
             bool doubleSided = m.DoubleSided || m.Shading == CharacterShading.Hair;
             if (options.BackfaceCulling && !doubleSided && !wire) gl.Enable(EnableCap.CullFace); else gl.Disable(EnableCap.CullFace);
-            foreach (var (sub, vao, _, _) in gp.Subs)
+            for (int s = 0; s < gp.Subs.Count; s++)
             {
+                var (sub, vao, _, _) = gp.Subs[s];
+                var ranges = gp.LodRanges[s];
+                var (offset, count) = ranges[Math.Clamp(gp.Part.LodLevel, 0, ranges.Length - 1)];
                 gl.Uniform1(U("uSkinned"), sub.Skinned ? 1 : 0);
                 gl.BindVertexArray(vao);
-                gl.DrawElements(PrimitiveType.Triangles, (uint)sub.Indices.Length, DrawElementsType.UnsignedInt, (void*)0);
+                gl.DrawElements(PrimitiveType.Triangles, (uint)count, DrawElementsType.UnsignedInt, (void*)(offset * sizeof(uint)));
             }
         }
         gl.Disable(EnableCap.CullFace);

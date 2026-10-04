@@ -46,6 +46,7 @@ public sealed class Animator
     readonly Vector3[] dPos, dScale;
     readonly Quaternion[] dRot;
     readonly Dictionary<string, int> handles = new(StringComparer.Ordinal);
+    readonly Vector3[] boneSize, positionalSize;
 
     public Animator(OgreSkeleton skeleton)
     {
@@ -71,16 +72,39 @@ public sealed class Animator
         order = [.. sorted];
         pos = new Vector3[count]; scale = new Vector3[count]; rot = new Quaternion[count];
         dPos = new Vector3[count]; dScale = new Vector3[count]; dRot = new Quaternion[count];
+        boneSize = new Vector3[count]; positionalSize = new Vector3[count];
+        Array.Fill(boneSize, Vector3.One);
+        Array.Fill(positionalSize, Vector3.One);
         SkinMatrices = new Matrix4x4[count];
         inverseBind = new Matrix4x4[count];
         Pose(null, 0);
         BindDerived = new Matrix4x4[count];
+        bindPos = new Vector3[count]; bindScale = new Vector3[count]; bindRotInverse = new Quaternion[count];
         for (int h = 0; h < count; h++)
         {
             BindDerived[h] = Derived(h);
             Matrix4x4.Invert(BindDerived[h], out inverseBind[h]);
+            bindPos[h] = dPos[h]; bindScale[h] = dScale[h]; bindRotInverse[h] = Quaternion.Inverse(dRot[h]);
             SkinMatrices[h] = Matrix4x4.Identity;
         }
+    }
+
+    // Binding pose, split as Ogre keeps it for OldBone::_getOffsetTransform.
+    readonly Vector3[]? bindPos, bindScale;
+    readonly Quaternion[]? bindRotInverse;
+
+    /// <summary>
+    /// Ogre's (and Kenshi's, OgreMain <c>OldBone::_getOffsetTransform @ 1801e1dc0</c>) skinning transform: the vertex
+    /// relative to the bone's binding position is scaled by derived scale / binding scale <b>in the binding pose's model
+    /// axes</b>, rotated by derived × inverse binding orientation and moved to the derived position. Equal to
+    /// inverse-bind × derived only for uniform scales.
+    /// </summary>
+    Matrix4x4 Offset(int h)
+    {
+        var s = dScale[h] / bindScale![h];
+        var r = dRot[h] * bindRotInverse![h];
+        return Matrix4x4.CreateTranslation(-bindPos![h]) * Matrix4x4.CreateScale(s) * Matrix4x4.CreateFromQuaternion(r)
+            * Matrix4x4.CreateTranslation(dPos[h]);
     }
 
     public int BoneCount { get; }
@@ -99,6 +123,24 @@ public sealed class Animator
 
     /// <summary>Derived (model-space) transform of a bone in the current pose.</summary>
     public Matrix4x4 BoneTransform(int handle) => Derived(handle);
+
+    /// <summary>
+    /// Kenshi's skeleton movement scale (<c>OldSkeletonInstance::setMovementScale</c>): every track translation is
+    /// multiplied by it. Set from the body shape (docs/animation.md, "Body shape sliders").
+    /// </summary>
+    public float MovementScale { get; set; } = 1;
+
+    /// <summary>
+    /// Sets Kenshi's per-bone <c>setBoneSize</c> / <c>setBonePositionalSize</c> vectors (docs/formats/ogre-skeleton.md, "Bone
+    /// maths"); bones not named keep (1, 1, 1). The binding pose (inverse bind matrices) is not affected.
+    /// </summary>
+    public void SetShape(IReadOnlyDictionary<string, Vector3> sizes, IReadOnlyDictionary<string, Vector3> positionalSizes)
+    {
+        Array.Fill(boneSize, Vector3.One);
+        Array.Fill(positionalSize, Vector3.One);
+        foreach (var (name, v) in sizes) if (Handle(name) is { } h) boneSize[h] = v;
+        foreach (var (name, v) in positionalSizes) if (Handle(name) is { } h) positionalSize[h] = v;
+    }
 
     /// <summary>Handle of the bone called <paramref name="name"/>, or null.</summary>
     public int? Handle(string name) => handles.TryGetValue(name, out var h) ? h : null;
@@ -143,7 +185,7 @@ public sealed class Animator
                 {
                     if (track.Bone >= BoneCount || track.KeyFrames.Count == 0 || layer.Excluded.Contains(track.Bone)) continue;
                     var (t, r, s) = Sample(track.KeyFrames, layer.Time);
-                    pos[track.Bone] += t * w;
+                    pos[track.Bone] += t * (w * MovementScale);
                     rot[track.Bone] = Quaternion.Normalize(rot[track.Bone] * Nlerp(Quaternion.Identity, r, w)); // Node::rotate, local space
                     if (s != Vector3.One) scale[track.Bone] *= Vector3.One + (s - Vector3.One) * w;
                 }
@@ -154,20 +196,21 @@ public sealed class Animator
             var parent = byHandle[h]?.Parent is { } p && p < BoneCount && byHandle[p] is not null ? p : -1;
             if (parent < 0)
             {
-                dPos[h] = pos[h]; dRot[h] = rot[h]; dScale[h] = scale[h];
+                dPos[h] = pos[h]; dRot[h] = rot[h]; dScale[h] = boneSize[h] * scale[h];
             }
             else
             {
-                // Kenshi's modified Ogre (docs/formats/ogre-skeleton.md, "Bone maths"): scale is not inherited, and the
-                // child's offset is scaled by the Y component of the parent's derived scale on all axes.
+                // Kenshi's modified Ogre (docs/formats/ogre-skeleton.md, "Bone maths"): derived scale = bone size × own scale
+                // (not inherited); the child's offset × its positional size is scaled by the Y component of the parent's
+                // derived scale on all axes.
                 dRot[h] = dRot[parent] * rot[h];
-                dScale[h] = scale[h];
-                dPos[h] = Vector3.Transform(pos[h] * dScale[parent].Y, dRot[parent]) + dPos[parent];
+                dScale[h] = boneSize[h] * scale[h];
+                dPos[h] = Vector3.Transform(pos[h] * positionalSize[h] * dScale[parent].Y, dRot[parent]) + dPos[parent];
             }
         }
-        if (inverseBind is null) return;
+        if (bindPos is null) return; // still building the binding pose
         for (int h = 0; h < BoneCount; h++)
-            SkinMatrices[h] = inverseBind[h] * Derived(h);
+            SkinMatrices[h] = Offset(h);
     }
 
     Matrix4x4 Derived(int h) =>

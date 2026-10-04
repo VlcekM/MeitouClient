@@ -209,8 +209,15 @@ Bone size and positional size are two extra per-bone vectors, both (1, 1, 1) by 
 constructors `@ 1801e1a50`, `@ 1801e1b00`); Kenshi sets them from appearance sliders
 ([animation.md](../animation.md#body-shape-sliders)). Consequence for the file data: the 905 stored bone
 scales (local scale) scale their own bone's vertices and their children's *offsets* (through the Y
-component), but not the children's own scale. Skinning then uses the usual offset transform
-(`OldBone::_getOffsetTransform @ 1801e1dc0`: derived transform times the inverse binding pose).
+component), but not the children's own scale. Skinning then uses Ogre's usual offset transform
+(`OldBone::_getOffsetTransform @ 1801e1dc0`, Verified by decompilation, same as Ogre's source): scale =
+derived scale / binding derived scale, rotation = derived orientation × inverse binding orientation, and a
+vertex v goes to derived position + rotation × (scale ⊙ (v − binding derived position)). **The scale acts
+along the binding pose's model axes**, not the bone's own axes, so a bone size's Y is "up" for every bone of a
+character standing in its binding pose (Height → Y, widths → X/Z). This is not the same as "derived transform ×
+inverse binding transform" once scales are non-uniform; the viewer's `Animator` follows the Ogre form
+(Observed: with the bone-local form, a non-neutral Height opened gaps at elbows and shoulders; with this form the
+body stays closed).
 
 ### Blending in Kenshi's Ogre
 
