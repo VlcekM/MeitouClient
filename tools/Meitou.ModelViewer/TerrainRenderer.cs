@@ -55,6 +55,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
     readonly int coarseSize;
     float fineBand;
     TerrainQuadtree quadtree;
+    TerrainQuadtree? spare;   // the reflection's own tree (coarser), so the two passes do not rebuild each other's every frame
+    TerrainQuadtree current = null!;   // the tree the running Draw selects with
     TerrainTextures? textures;
     Frame frame;
 
@@ -205,14 +207,24 @@ public sealed unsafe class TerrainRenderer : IDisposable
         return v * (WorldLayout.MaxHeight / ushort.MaxValue);
     }
 
-    /// <summary>Draws the terrain; nodes whose highest point is under <paramref name="cullBelow"/> are skipped (the reflection pass clips everything below the water).</summary>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity)
+    /// <summary>Draws the terrain; nodes whose highest point is under <paramref name="cullBelow"/> are skipped (the reflection pass clips everything below the water). <paramref name="secondary"/>: the reflection's call, with its own quadtree for its own LOD distance.</summary>
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity, bool secondary = false)
     {
-        if (Math.Abs(options.LodDistance - LodDistanceInUse) > 1e-4f)
-            quadtree = new TerrainQuadtree((float)quadtree.Spacing(0), GridCells, Math.Max(options.LodDistance, 2f));
+        if (secondary)
+        {
+            if (spare is null || Math.Abs(options.LodDistance - (float)(spare.Ranges[0] / spare.NodeSize(0))) > 1e-4f)
+                spare = new TerrainQuadtree((float)quadtree.Spacing(0), GridCells, Math.Max(options.LodDistance, 2f));
+            current = spare;
+        }
+        else
+        {
+            if (Math.Abs(options.LodDistance - LodDistanceInUse) > 1e-4f)
+                quadtree = new TerrainQuadtree((float)quadtree.Spacing(0), GridCells, Math.Max(options.LodDistance, 2f));
+            current = quadtree;
+        }
         frame = new Frame(viewProjection, eye, options, light);
         Apply(patchProgram, heightNormals: true);
-        quadtree.Select(eye, bounds, (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max), nodes);
+        current.Select(eye, bounds, (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max), nodes);
 
         gl.Enable(EnableCap.DepthTest);
         gl.Enable(EnableCap.CullFace);
@@ -241,7 +253,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         foreach (var n in nodes)
         {
             gl.Uniform4(uNode, (float)n.X0, (float)n.Z0, (float)n.Size, GridCells);
-            float start = quadtree.MorphStart[n.Level], end = quadtree.MorphEnd[n.Level];
+            float start = current.MorphStart[n.Level], end = current.MorphEnd[n.Level];
             gl.Uniform2(uMorph, start == float.MaxValue ? 1e31f : start, end == float.MaxValue ? 2e31f : end);
             int part = n.Quadrant + 1;
             gl.DrawElements(PrimitiveType.Triangles, (uint)indexCounts[part], DrawElementsType.UnsignedInt, (void*)indexOffsets[part]);

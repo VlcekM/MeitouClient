@@ -715,8 +715,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
     }
 
     /// <summary>Draws the foliage seen from <paramref name="eye"/> through <paramref name="frustum"/>. Without <paramref name="grass"/> only the meshes (e.g. for a reflection).
-    /// <paramref name="continuation"/>: a further depth slice of the same frame, adding to the counts and the GPU time.</summary>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain, bool grass = true, bool continuation = false)
+    /// <paramref name="continuation"/>: a further depth slice of the same frame, adding to the counts and the GPU time. <paramref name="maxRange"/> caps every layer's range (the reflection).</summary>
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain, bool grass = true, bool continuation = false, float maxRange = float.PositiveInfinity)
     {
         if (!continuation) { DrawnInstances = 0; DrawnBlades = 0; DrawCalls = 0; }
         if (!Enabled) return;
@@ -737,17 +737,18 @@ public sealed unsafe class FoliageRenderer : IDisposable
             foreach (var g in state.Groups)
             {
                 var a = g.Asset;
-                if (zoneDistance > g.Range) continue;
+                float range = Math.Min(g.Range, maxRange), band = range < g.Range ? Math.Min(g.Band, range * 0.25f) : g.Band;   // maxRange: the reflection draws a shorter range
+                if (zoneDistance > range) continue;
                 if (!a.Resident) { Reload(a); continue; }
                 for (int i = 0; i < g.Positions.Length; i++)
                 {
                     var p = g.Positions[i];
                     float d = Vector2.Distance(new Vector2(p.X, p.Z), eyeXz);
-                    if (d >= g.Range) continue;
+                    if (d >= range) continue;
                     ref var t = ref g.Transforms[i];
                     var centre = Vector3.Transform(a.Centre, t);
                     if (!SphereVisible(frustum, centre, a.Radius * g.Scales[i])) continue;
-                    float w = Math.Clamp((g.Range - d) / g.Band, 0, 1);
+                    float w = Math.Clamp((range - d) / band, 0, 1);
                     DrawnInstances++;
                     if (a.Terrain && options.Textures)
                     {

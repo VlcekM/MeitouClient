@@ -413,15 +413,23 @@ static partial class WorldApp
         StageClock.Lap(3);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is not null;
+        if (gpu.Reflection is not null) gpu.Reflection.RestoreFramebuffer = gpu.Post?.SceneFramebuffer;
         if (reflecting)
             gpu.Reflection!.Render(camera, width, height, gpu.Sky, colours, light, gpu.Terrain, render, gpu.Objects is null ? null : (vp, e, frustum) =>
             {
+                var reflection = gpu.Reflection;
                 var objects = gpu.Objects;
                 float distance = objects.ObjectDistance;
+                float bias = objects.LodBias;
+                objects.LodBias = bias * reflection.ObjectLodBias;
                 objects.ObjectDistance = Math.Min(distance, gpu.Reflection.ObjectDistance);
                 objects.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+                reflection.Lap(2);
                 objects.ObjectDistance = distance;
-                gpu.Foliage?.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, grass: false);
+                objects.LodBias = bias;
+                gpu.Foliage?.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, grass: false, maxRange: reflection.FoliageDistance);
+                reflection.Lap(3);
+                reflection.SceneStats = $"{objects.DrawnInstances} objects ({objects.DrawnTriangles:N0} triangles, {objects.DrawCalls} calls), {gpu.Foliage?.DrawnInstances ?? 0} foliage meshes ({gpu.Foliage?.DrawCalls ?? 0} calls)";
             });
         StageClock.Lap(4);
         gl.Viewport(0, 0, (uint)width, (uint)height);
@@ -558,7 +566,7 @@ static partial class WorldApp
         if (gpu.Reflection is { Valid: true } reflection)
         {
             reflection.Poll(wait: true);
-            Console.WriteLine($"reflect   {reflection.Width}x{reflection.Height}: cpu {reflection.CpuMs:0.00} ms, gpu {reflection.GpuMs:0.00} ms, {reflection.DrawnChunks} chunks, {reflection.DrawnTriangles:N0} terrain triangles");
+            Console.WriteLine($"reflect   {reflection.Width}x{reflection.Height}: cpu {reflection.CpuMs:0.00} ms, gpu {reflection.GpuMs:0.00} ms, {reflection.DrawnChunks} chunks, {reflection.DrawnTriangles:N0} terrain triangles; {reflection.SceneStats}");
         }
 
         gpu.Sky.Poll(wait: true);

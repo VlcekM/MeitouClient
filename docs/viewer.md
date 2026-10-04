@@ -369,11 +369,11 @@ How it works (status as in [README.md](README.md)):
     maximum 270 ms to 2.3 s (those runs also had 5 GB more GPU memory in use); now 11.6 to 12.6 ms, 28 to 30 ms, 73 to 79 ms, maximum 125 ms
     (one run 694 ms, 635 ms of it waiting for the GPU). Render-thread time up to the end of the commands (no GPU wait): median 8.6 to 9.4 ms,
     95th 24 to 26 ms. With `--no-reflections` (the same flight): median 10.0 ms, 95th 16.8, 99th 23.1, maximum 37.0 ms, 28 frames over 20 ms and one over 33.
-  - *Left*: most of what remains in the worst frames with reflections is the reflection pass (30 to 100 ms in `reflection`: it re-culls and
-    draws the objects and foliage), not streaming; single steps of a texture or buffer slab still take 10 to 20 ms now and then (driver or
-    GPU contention, not size: they hit the first slab of a fresh buffer or texture), and one such step is the floor of a frame's overrun. Not done:
-    a persistent-mapped upload ring (GL 3.3 core has none; buffers are filled with `BufferSubData`), unloading
-    the terrain's overlay and colour windows (fixed size).
+  - *Left*: single steps of a texture or buffer slab still take 10 to 20 ms now and then (driver or GPU contention, not size: they hit the first
+    slab of a fresh buffer or texture), and one such step is the floor of a frame's overrun. The first foliage draw after a burst of streaming
+    can take 20 to 50 ms too (it was often the reflection's, which draws first). Not done: a persistent-mapped upload ring (GL 3.3 core has none;
+    buffers are filled with `BufferSubData`), unloading the terrain's overlay and colour windows (fixed size). The reflection pass itself is cheap now
+    (next bullet, "Reflections").
 - **Objects** (`WorldObjects`, `WorldObjectRenderer`): placements become meshes with `WorldObjectLayout`, built
   as the game builds them ([formats/zones.md](formats/zones.md#from-placements-to-meshes)): parts chosen with the
   game's `rand()` seeded from the position, doors added, destroyed states (`destroyed mesh`, upper floors
@@ -486,8 +486,32 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   (about 80 bytes each, up to ~0.5 GB), 2600 grass pages with 5.8M blades in the forest, 3400-5600 draw calls, draw
   CPU 25-70 ms, GPU 30-150 ms, layout 45-190 s: x16 is not usable (sliders stop at x8, not measured). x4 is within 3 ms GPU for
   foliage when the GPU is not shared.
-- **Reflections**: the water reflection draws the foliage meshes (no grass) with its own camera (`Draw(...,
-  grass: false)`).
+- **Reflections** (`ReflectionPass`; what the game does is in [formats/terrain.md](formats/terrain.md#shading-observed-waterhlsl)): the
+  mirrored scene is drawn into a half-resolution 4x multisampled texture, and what it draws is cut to what a half-resolution, ripple-distorted
+  image can show. Foliage meshes (no grass) and objects reach 3000 units from the eye (`FoliageDistance` through `FoliageRenderer.Draw(...,
+  maxRange)`, which also stops the pass walking the far zones; `ObjectDistance`; before, the foliage went as far as the picture's own layers, up to 32000
+  units), objects choose their LOD level at 3 times the distance (`ObjectLodBias`, through `WorldObjectRenderer.LodBias`), and the mirrored
+  terrain uses half the LOD distance (`TerrainLodScale`, its own quadtree: `TerrainRenderer.Draw(..., secondary: true)`, so the two passes do not rebuild
+  one tree each frame; 37 to 50% of the triangles in the two test views). The pass learns the framebuffer to return to from the caller (`RestoreFramebuffer`) instead of
+  three `glGet` calls: with the driver's threaded optimisation those waited for the driver thread and cost 2 to 4 ms of CPU a frame. A finished
+  image is reused for up to 3 frames (`MaxAge`) while the eye moves less than 3 units plus 0.4% of its height above the water and the view turns less than
+  about 0.1 degree, so a still camera redraws every 4th frame (the water samples the image with the matrix it was drawn with, so
+  the only error is that parallax). Knobs for experiments: `MEITOU_REFL_FOLIAGE`, `_OBJECTS`, `_LOD`,
+  `_TLOD`, `_AGE` (the defaults above are 3000, 3000, 3, 0.5, 3; `MEITOU_REFL_FOLIAGE=1e9 _LOD=1 _TLOD=1 _AGE=0` restores the old limits; the "before" numbers below used it, so they already include the glGet fix, which alone took the pass from about 5.6 to 1.9 ms of CPU in fly-speed-40 runs; the last A/B runs against a HEAD build were lost to other programs saturating the GPU).
+  `--fly-benchmark` prints `reflect`: passes drawn and reused, the pass's CPU and GPU time (timestamp queries, a few frames late; the first
+  pass is left out), and the CPU time by part; the worst frames name the part of a slow reflection.
+  **Numbers** (**Observed**, 2026-10-05, RTX 4070, 1280 x 720, 1500 frames, `--fly-benchmark` with the default 150 units a frame, three runs each, on a
+  machine that other programs share, so only the means of the pass are firm; frame percentiles moved by 2x between runs of the same build, and
+  the runs with `--no-reflections` were as noisy): Port North (mostly desert, little water): the pass 0.73 to 1.02 ms CPU and 0.90 to 1.23 ms GPU
+  per frame before, 0.58 to 1.02 and 0.66 to 1.24 now (p99 of the frame 17.6 to 36.6 ms before, 20.8 to 70 ms now, 17.0 to 42.2 without reflections: no
+  difference that the noise does not cover). Shark (swamp, forests; the pass dominated by foliage): 1.40 to 1.63 ms CPU and 2.40 to 2.48 ms GPU
+  before, 1.14 to 1.29 and 1.72 to 1.99 now (-20%, -25%); frame p99 27.6 to 55.7 ms before, 29.2 to 30.8 now (26.4 to 38 without reflections), the
+  slowest pass 101 ms of CPU in one run before (12 to 14 ms in the others), 12 to 28 ms now. A still camera (Shark, `--fly-speed 0`): 450 of 600 frames reuse the image, 0.20 ms CPU
+  and 0.38 ms GPU per frame. Looks: the same views with the old (HEAD) and the shipped settings differ by a mean of 0.002 to 0.08 of 255 over the picture
+  and 0.26 over a pond with mirrored stilt houses and trees (0.36% of its pixels by more than 12, shipped LOD 3 against HEAD; a view of the same scene run twice differs by 0.003);
+  pushing it further (foliage 1500, LOD 4, terrain 0.25, objects 2000) loses the trees' reflection in the pond (0.6, 1.2%). Not done: drawing
+  the reflection spread over frames (a rendered frame costs the same, so the 99th percentile does not move), fewer samples or a smaller texture
+  (the shoreline's stair steps came back).
 - **Cost** (RTX 4070, 1280 × 960, 4x MSAA, offscreen, 2026-10-04): a cypress grove in zone 14.30 (995 meshes,
   68k blades) 0.6–1.2 ms draw CPU, about 2 ms GPU (timestamp queries; the title bar shows both); the grassland
   at the zone's centre (128k blades) 0.2 ms CPU, 0.3 ms GPU; frame 2.8 ms against 2.3 ms with `--no-foliage`.

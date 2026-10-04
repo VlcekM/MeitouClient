@@ -32,11 +32,24 @@ public sealed unsafe class ReflectionPass : IDisposable
     uint fbo, colour, depth;
     uint msFbo, msColour, msDepth;   // multisampled twin the scene is drawn into, resolved into <colour>
     int samples;
-    int width, height, slot;
+    int width, height, slot, skipped, age;
+    bool hasImage;
+    Vector3 lastEye;
+    float lastFov;
+    Matrix4x4 lastView;
+    readonly List<double> gpuSamples = [];
+    readonly List<double> cpuSamples = [];
 
     public ReflectionPass(GL gl)
     {
         this.gl = gl;
+        // Tuning knobs for experiments (MEITOU_REFL_OBJECTS, _FOLIAGE, _LOD, _AGE); the defaults are what the viewer ships with.
+        static float Env(string n, float d) => float.TryParse(Environment.GetEnvironmentVariable("MEITOU_REFL_" + n), System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : d;
+        ObjectDistance = Env("OBJECTS", ObjectDistance);
+        FoliageDistance = Env("FOLIAGE", FoliageDistance);
+        ObjectLodBias = Env("LOD", ObjectLodBias);
+        MaxAge = (int)Env("AGE", MaxAge);
+        TerrainLodScale = Env("TLOD", TerrainLodScale);
         for (int i = 0; i < queries.Length; i++) queries[i] = gl.GenQuery();
     }
 
@@ -46,6 +59,16 @@ public sealed unsafe class ReflectionPass : IDisposable
     public float ObjectDistance { get; set; } = 3000;
     /// <summary>Beyond this distance the mirrored terrain takes the cheap ground colour instead of the biome textures.</summary>
     public float MaterialDistance { get; set; } = 6000;
+    /// <summary>Foliage (trees, bushes, rocks; no grass) further than this is left out of the reflection (the game's layers reach 4 times as far in the picture).</summary>
+    public float FoliageDistance { get; set; } = 3000;
+    /// <summary>Multiplies the distance the objects' LOD level is chosen by (above 1: coarser levels sooner; the half-resolution, rippled image cannot show the detail).</summary>
+    public float ObjectLodBias { get; set; } = 3;
+    /// <summary>Frames a finished reflection may be reused when the camera has hardly moved (0 = draw every frame).</summary>
+    public int MaxAge { get; set; } = 3;
+    /// <summary>The framebuffer (viewport: the whole picture) to go back to afterwards, when the caller knows it; otherwise it is queried.</summary>
+    public uint? RestoreFramebuffer { get; set; }
+    /// <summary>Multiplies the terrain's LOD distance setting for the mirrored terrain (below 1: coarser patches sooner).</summary>
+    public float TerrainLodScale { get; set; } = 0.5f;
 
     /// <summary>Whether this frame has a reflection to sample (not when the eye is under the water).</summary>
     public bool Valid { get; private set; }
@@ -58,6 +81,8 @@ public sealed unsafe class ReflectionPass : IDisposable
     public double CpuMs { get; private set; }
     public double GpuMs { get; private set; }
     public int DrawnChunks { get; private set; }
+    /// <summary>What the last scene callback drew (objects, foliage), for the log.</summary>
+    public string SceneStats { get; set; } = "";
     public long DrawnTriangles { get; private set; }
 
     void Resize(int w, int h)
@@ -120,6 +145,7 @@ public sealed unsafe class ReflectionPass : IDisposable
             gl.GetQueryObject(queries[s * 2], QueryObjectParameterName.Result, out ulong start);
             gl.GetQueryObject(queries[s * 2 + 1], QueryObjectParameterName.Result, out ulong end);
             GpuMs = (end - start) / 1e6;
+            gpuSamples.Add(GpuMs);
             pending[s] = false;
         }
     }
@@ -134,14 +160,27 @@ public sealed unsafe class ReflectionPass : IDisposable
         Valid = false;
         var eye = camera.Eye;
         float plane = WorldWater.Height;
-        if (eye.Y <= plane + 1 || fullWidth < 8 || fullHeight < 8) return;   // under the water there is nothing to reflect
+        if (eye.Y <= plane + 1 || fullWidth < 8 || fullHeight < 8) { hasImage = false; return; }   // under the water there is nothing to reflect
         var watch = Stopwatch.StartNew();
         Poll();
+        lapAt = Stopwatch.GetTimestamp();
+        Array.Clear(LastPhaseMs);
+        if (CanReuse(camera, fullWidth, fullHeight)) { Valid = true; skipped++; age++; return; }
+        age = 0;
+        lastEye = eye;
+        lastView = camera.View;
+        lastFov = camera.FieldOfView;
 
-        gl.GetInteger(GetPName.DrawFramebufferBinding, out int drawFbo);
-        gl.GetInteger(GetPName.ReadFramebufferBinding, out int readFbo);
+        // State queries make the driver wait for its own thread, so the caller that knows where the picture is drawn says so.
+        int drawFbo = 0, readFbo = 0;
         int* viewport = stackalloc int[4];
-        gl.GetInteger(GetPName.Viewport, viewport);
+        if (RestoreFramebuffer is { } known) { drawFbo = readFbo = (int)known; viewport[0] = viewport[1] = 0; viewport[2] = fullWidth; viewport[3] = fullHeight; }
+        else
+        {
+            gl.GetInteger(GetPName.DrawFramebufferBinding, out drawFbo);
+            gl.GetInteger(GetPName.ReadFramebufferBinding, out readFbo);
+            gl.GetInteger(GetPName.Viewport, viewport);
+        }
         Resize(Math.Max((int)(fullWidth * Scale), 64), Math.Max((int)(fullHeight * Scale), 64));
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, msFbo != 0 ? msFbo : fbo);
         gl.Viewport(0, 0, (uint)width, (uint)height);
@@ -163,8 +202,10 @@ public sealed unsafe class ReflectionPass : IDisposable
         gl.Disable(EnableCap.ScissorTest);
         gl.ClearColor(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1);
         gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        Lap(4);
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
         sky.Draw(rotation * Perspective(camera.FieldOfView, aspect, 1, 1000), colours);
+        Lap(0);
 
         options.Textures = render.Textures;
         options.NormalMaps = false;
@@ -172,7 +213,7 @@ public sealed unsafe class ReflectionPass : IDisposable
         options.Water = render.Water;
         options.Wireframe = 0;
         options.Debug = 0;
-        options.LodDistance = render.LodDistance;
+        options.LodDistance = Math.Max(render.LodDistance * TerrainLodScale, 2);
         options.MaterialDistance = Math.Min(render.MaterialDistance, MaterialDistance);
 
         gl.Enable(EnableCap.DepthTest);
@@ -190,12 +231,13 @@ public sealed unsafe class ReflectionPass : IDisposable
             var viewProjection = view * projection;
             mapped = view * Perspective(camera.FieldOfView, aspect, near, far);
             var frustum = Frustum(viewProjection);
-            terrain.Draw(viewProjection, mirroredEye, frustum, options, light, plane - 1);
+            terrain.Draw(viewProjection, mirroredEye, frustum, options, light, plane - 1, secondary: true);
+            Lap(1);
             if (near <= camera.Near && render.Objects) drawObjects?.Invoke(viewProjection, mirroredEye, frustum);
         }
         (DrawnChunks, DrawnTriangles) = (terrain.DrawnChunks, terrain.DrawnTriangles);
         ViewProjection = mapped;   // x and y do not depend on the near plane
-        Valid = !first;
+        Valid = hasImage = !first;
 
         if (msFbo != 0)
         {
@@ -213,6 +255,47 @@ public sealed unsafe class ReflectionPass : IDisposable
             slot = (slot + 1) % 2;
         }
         CpuMs = watch.Elapsed.TotalMilliseconds;
+        cpuSamples.Add(CpuMs);
+    }
+
+    /// <summary>
+    /// Whether last frame's image still serves: the water samples it with the matrix it was drawn with, so the only error is
+    /// the parallax of the eye having moved, and a turn that brings new sky or ground in at the picture's edge.
+    /// </summary>
+    bool CanReuse(WorldCamera camera, int fullWidth, int fullHeight)
+    {
+        if (age >= MaxAge || !hasImage || fbo == 0 || msFbo == 0 && samples != 0) return false;
+        if (width != Math.Max((int)(fullWidth * Scale), 64) || height != Math.Max((int)(fullHeight * Scale), 64)) return false;
+        var view = camera.View;
+        float shift = Vector3.Distance(camera.Eye, lastEye);
+        // About a texel of parallax for things 3000 units away, and no more than a tenth of a degree of turn.
+        float turn = Vector3.Dot(new Vector3(view.M13, view.M23, view.M33), new Vector3(lastView.M13, lastView.M23, lastView.M33));
+        float up = Vector3.Dot(new Vector3(view.M12, view.M22, view.M32), new Vector3(lastView.M12, lastView.M22, lastView.M32));
+        return camera.FieldOfView == lastFov && shift <= 3 + 0.004f * (camera.Eye.Y - WorldWater.Height) && turn > 0.999998f && up > 0.999998f;
+    }
+
+    /// <summary>CPU time of the parts of the pass (sky, terrain, objects, foliage), summed over the passes drawn; the scene callback adds its own.</summary>
+    public readonly double[] PhaseMs = new double[5];
+    long lapAt;
+    public void Lap(int phase) { long now = Stopwatch.GetTimestamp(); double ms = (now - lapAt) * 1000.0 / Stopwatch.Frequency; PhaseMs[phase] += ms; LastPhaseMs[phase] += ms; lapAt = now; }
+    /// <summary>The same for the last pass alone.</summary>
+    public readonly double[] LastPhaseMs = new double[5];
+    public string DescribeLast() => $"setup {LastPhaseMs[4]:0.0}, sky {LastPhaseMs[0]:0.0}, terrain {LastPhaseMs[1]:0.0}, objects {LastPhaseMs[2]:0.0}, foliage {LastPhaseMs[3]:0.0}";
+
+    /// <summary>Mean, 95th percentile and maximum of the reflection's GPU and CPU time over the passes drawn so far (for <c>--fly-benchmark</c>).</summary>
+    public string DescribeStats()
+    {
+        Poll(wait: true);
+        // The first pass compiles shaders and warms up; it is left out.
+        static string One(IEnumerable<double> values)
+        {
+            var s = values.Skip(1).OrderBy(x => x).ToList();
+            if (s.Count == 0) return "none";
+            return $"mean {s.Average():0.00}, p95 {s[Math.Min((int)(s.Count * 0.95), s.Count - 1)]:0.00}, max {s[^1]:0.00}";
+        }
+        int frames = cpuSamples.Count + skipped;
+        double perFrame(IEnumerable<double> v) => v.Skip(1).Sum() / Math.Max(frames - 1, 1);
+        return $"{cpuSamples.Count} passes drawn, {skipped} frames reused; per frame mean cpu {perFrame(cpuSamples):0.00} ms, gpu {perFrame(gpuSamples):0.00} ms; per pass: gpu {One(gpuSamples)}, cpu {One(cpuSamples)} ms (cpu mean by part: terrain {PhaseMs[1] / Math.Max(cpuSamples.Count, 1):0.00}, objects {PhaseMs[2] / Math.Max(cpuSamples.Count, 1):0.00}, foliage {PhaseMs[3] / Math.Max(cpuSamples.Count, 1):0.00})";
     }
 
     /// <summary>OpenGL perspective (depth −1..1) with clip X negated: the mirror's reversed winding turns back to counter-clockwise.</summary>
