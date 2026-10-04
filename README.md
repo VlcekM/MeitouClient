@@ -37,7 +37,7 @@ dotnet run --project tools/Meitou.Tools
 | `tools/Meitou.Tools` | `meitou-tools` CLI for inspecting game data |
 | `tests/Meitou.Tests` | Tests; ones needing the real game skip when no install is configured |
 
-See [ROADMAP.md](ROADMAP.md) for the plan.
+See [ROADMAP.md](ROADMAP.md) for the plan and [docs/](docs/README.md) for research notes on the game formats.
 
 ## License
 

@@ -1,0 +1,15 @@
+# MeitouClient docs
+
+Research notes on the original game. Every claim is marked with how sure we are:
+
+- **Verified**: checked against real files (say which, and how).
+- **Observed**: seen in some files, not yet confirmed everywhere.
+- **Unknown**: open question or guess.
+
+Update these whenever a reader or experiment teaches us something new. Never paste copyrighted
+game content (dialogue text, large dumps) here; identifiers, counts and byte layouts are fine.
+
+| Doc | Topic |
+| --- | --- |
+| [formats/overview.md](formats/overview.md) | Install layout, load order, resource lookup, mod overrides, format inventory |
+| [formats/fcs-mod.md](formats/fcs-mod.md) | FCS game data: `.base` / `.mod` binary layout and `fcs.def` schema |
