@@ -32,6 +32,8 @@ sealed class WorldOptions
     public float Hour = 13;
     public float ViewDistance = 450000, FogDistance = 250000, MaterialDistance = 30000;
     public bool NoWater, NoStream, NoReflections, SimpleSky, ShowKeys;
+    public bool PhysicalHaze;
+    public float? HazeDistance;
     public string? Weather;
     public float? Clouds;
     public PostOptions Post = PostOptions.Create("kenshi");
@@ -59,6 +61,8 @@ sealed class WorldOptions
           --no-water               leave out the water
           --no-reflections         the water reflects only the sky colour, not the mirrored scene (R toggles)
           --simple-sky             the old colour-model sky and squared-distance fog instead of the atmosphere (B toggles)
+          --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral (F7 toggles)
+          --haze-distance <u>      the game's far distance D for its haze, which ramps in from 0.8 D to 0.96 D (default 50000 = view distance 5000 x 10)
           --weather <name>         a WEATHER record's sky colour, fog and clouds (default "Default": clear, no fog, no clouds)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
@@ -74,7 +78,7 @@ sealed class WorldOptions
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
           G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, P save screenshot, ? key list, Tab settings sliders, Esc quit.
-          F1 post off, F2 kenshi; F4 SSAO, F5 bloom, F6 tone map, F8 vignette, F9 grading, M MSAA, - / = exposure.
+          F1 post off, F2 kenshi; F7 haze, F4 SSAO, F5 bloom, F6 tone map, F8 vignette, F9 grading, M MSAA, - / = exposure.
         """;
 
     public static WorldOptions? Parse(string[] args)
@@ -122,6 +126,8 @@ sealed class WorldOptions
                 case "--no-water": o.NoWater = true; break;
                 case "--no-reflections": o.NoReflections = true; break;
                 case "--simple-sky": o.SimpleSky = true; break;
+                case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
+                case "--haze-distance": o.HazeDistance = F(); break;
                 case "--weather": o.Weather = Next(); break;
                 case "--clouds": o.Clouds = F(); break;
                 case "--no-stream": o.NoStream = true; break;
@@ -260,6 +266,7 @@ static class WorldApp
             Size = new Vector2D<int>(o.Width, o.Height),
             Title = "Meitou world viewer",
             IsVisible = visible,
+            WindowState = visible ? WindowState.Maximized : WindowState.Normal, // the offscreen screenshot keeps its --size
             API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(3, 3)),
             Samples = 0, // the scene is multisampled in PostProcess's own framebuffer
             VSync = true,
@@ -321,7 +328,7 @@ static class WorldApp
             Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {o.LayerSize}² ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
-        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds }, Post = new PostProcess(gl, o.Post) };
+        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze, HazeDistance = o.HazeDistance ?? 50000 }, Post = new PostProcess(gl, o.Post) };
         if (scene.Database is { } skyDb)
         {
             gpu.Sky.NightDarkness = SkyWeather.NightDarkness(skyDb);
@@ -637,6 +644,7 @@ static class WorldApp
                 "F4" => OnOff(o.Post.Ssao),
                 "F5" => OnOff(o.Post.Bloom),
                 "F6" => o.Post.ToneMap.ToString().ToLowerInvariant(),
+                "F7" => gpu is null ? null : gpu.Sky.KenshiHaze ? "kenshi" : "physical",
                 "F8" => OnOff(o.Post.Vignette),
                 "F9" => OnOff(o.Post.Grade),
                 "M" => o.Post.Msaa <= 1 ? "off" : $"{o.Post.Msaa}x",
@@ -658,6 +666,7 @@ static class WorldApp
                 case Key.F5: o.Post.Bloom = !o.Post.Bloom; PostStatus(); break;
                 case Key.F6: o.Post.ToneMap = (ToneMapOperator)(((int)o.Post.ToneMap + 1) % 3); PostStatus(); break;
                 case Key.F8: o.Post.Vignette = !o.Post.Vignette; PostStatus(); break;
+                case Key.F7 when gpu is not null: gpu.Sky.KenshiHaze = !gpu.Sky.KenshiHaze; Console.WriteLine(gpu.Sky.KenshiHaze ? "haze     kenshi" : "haze     physical"); break;
                 case Key.F9: o.Post.Grade = !o.Post.Grade; PostStatus(); break;
                 case Key.M: o.Post.Msaa = o.Post.Msaa switch { 1 => 2, 2 => 4, 4 => 8, _ => 1 }; PostStatus(); break;
                 case Key.Minus: o.Post.Exposure = MathF.Max(o.Post.Exposure / 1.1f, 0.05f); PostStatus(); break;

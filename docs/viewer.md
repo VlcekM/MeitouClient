@@ -232,7 +232,8 @@ dotnet run --project tools/Meitou.ModelViewer -- --world --radius 32 --no-object
 `--world --help` lists the options: where (`--at x,z`, `--zone i,j`, `--town <name>`, default the world's
 centre), `--radius` in zones (default 1.5), `--step` (heightmap sample step; by default the smallest power of
 two keeping at most 2048 cells per side, so `--radius 32`, the whole world, uses step 8), camera
-(`--yaw`, `--pitch`, `--distance`), `--screenshot` / `--size`, `--no-textures`, `--no-objects`, `--no-foliage` (`F` toggles), `--distant-range <zones>`, `--no-distant`,
+(`--yaw`, `--pitch`, `--distance`), `--screenshot` / `--size` (the window opens maximized; `--size` is for
+screenshots), `--no-textures`, `--no-objects`, `--no-foliage` (`F` toggles), `--distant-range <zones>`, `--no-distant`,
 `--object-distance`, `--layer-size`, `--debug 1|2|3`, `--time <hour>` (default 13), `--no-water`,
 `--view-distance` (default 450000), `--fog` (distance where the haze is complete at ground level, default 250000), `--simple-sky` (the old colour-model sky and fog; `B` toggles), `--weather <name>` (a WEATHER record's sky colour, fog and clouds; default "Default": clear), `--clouds <0..1>` and
 `--material-distance` (where the full terrain material gives way to the ground colour, default 30000 as in the
@@ -458,6 +459,7 @@ only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. The viewer has no
   mostly noise; the whole chain is roughly 1 to 3 ms against a 14 to 18 ms scene.
 - **Contract for scene code**: shaders write the colours they always did, unclamped (colours above 1 are fine); code that draws into
   another framebuffer between `PostProcess.Begin` and `End` must rebind the one it found (`ReflectionPass` does).
+- **Haze**: `--haze kenshi|physical` (F7), `--haze-distance`; see [formats/sky.md](formats/sky.md#haze-distance-fog-how-vanilla-does-it). The `kenshi` haze fogs only the last 20% before 50000 units, so the default view is clear and ends at that distance (use `--haze physical` or `--haze-distance 250000` for the wide view).
 - **Limits**: the MSAA resolve averages HDR values, so a very bright sun-disc edge can still alias a little; SSAO sees only the near
   depth slice and has no normal buffer (curved surfaces show faint banding, thin objects can halo); no auto exposure (the game's
   is clamped to a nearly constant gain, see the doc); heat haze, colour LUTs and depth of field are not implemented.

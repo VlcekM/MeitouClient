@@ -128,6 +128,7 @@ static class AtmosphereShaders
         uniform vec4 uAtmoFog;        // the weather's fog: x start, y end, z enabled
         uniform vec3 uAtmoFogColour;
         uniform vec4 uAtmoSimple;     // simple sky: fog colour, distance of complete fog
+        uniform vec4 uAtmoHaze;       // Kenshi haze (docs/formats/sky.md "Haze"): x 1 when on, y start, z end of the atmosphere fog, w weather fog density (1 / distance)
         uniform vec3 uAtmoSunLight;   // sunlight at the eye: transmittance × sun scale (linear); a surface facing the sun gets albedo × this
         uniform vec3 uAtmoAmbient;    // light from the sky above, display-referred
         uniform vec3 uAtmoAmbientGround;   // light bounced up from the ground
@@ -186,6 +187,22 @@ static class AtmosphereShaders
             {
                 float f = clamp(dist / uAtmoSimple.w, 0.0, 1.0);
                 return mix(colour, uAtmoSimple.rgb, f * f * 0.9);
+            }
+            if (uAtmoHaze.x > 0.5)
+            {
+                // Kenshi's own haze (AtmosphereFogMaterial, post/fog.hlsl): the scatter colour towards the point is blended in by a
+                // linear ramp between two distances; the weather's fog (colour, density) by an ease-in-out curve over it.
+                float level = clamp((dist - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
+                vec3 rgb = atmoSkyEnc(d);
+                float alpha = level;
+                if (uAtmoFog.z > 0.5)
+                {
+                    float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
+                    float curve = amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0);
+                    rgb = mix(rgb, uAtmoFogColour, curve);
+                    alpha = clamp(alpha + curve, 0.0, 1.0);
+                }
+                return mix(colour, rgb, alpha);
             }
             float h = uAtmoParams.z;
             float a0 = max(eye.y, 0.0) / h, len = dist / h;

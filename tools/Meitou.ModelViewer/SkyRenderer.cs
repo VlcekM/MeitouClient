@@ -185,6 +185,12 @@ public sealed unsafe class SkyRenderer : IDisposable
 
     /// <summary>Physical atmosphere (default) or the old simple colour model.</summary>
     public bool Physical { get; set; } = true;
+    /// <summary>Aerial perspective: Kenshi's own haze (default, docs/formats/sky.md "Haze") or the physical integral.</summary>
+    public bool KenshiHaze { get; set; } = true;
+    /// <summary>Kenshi's far distance D (the game: "view distance" setting 5000 x 10); its haze ramps in between 0.8 D and 0.96 D.</summary>
+    public float HazeDistance { get; set; } = 50000;
+    /// <summary>Where the haze starts and ends, as fractions of D. Unknown in the game (pFogParams y, z); these are the fractions it gives Ogre's own linear fog.</summary>
+    public const float HazeStart = 0.8f, HazeEnd = 0.96f;
     /// <summary>The highest eye, in scale heights, the sky tables and the sun and sky light are computed for.</summary>
     public float MaxSkyAltitude { get; set; } = 0.9f;
     public AtmosphereSettings Settings { get; }
@@ -414,6 +420,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         gl.Uniform3(U(program, "uAtmoFogColour"), fog.X, fog.Y, fog.Z);
         var hc = s.Colours.Horizon;
         gl.Uniform4(U(program, "uAtmoSimple"), hc.X, hc.Y, hc.Z, MathF.Max(s.FogDistance, 1));
+        gl.Uniform4(U(program, "uAtmoHaze"), KenshiHaze ? 1f : 0f, HazeDistance * HazeStart, HazeDistance * HazeEnd, w.FogEnabled && w.FogMax > 1 ? 1f / w.FogMax : 0f);
         gl.Uniform3(U(program, "uAtmoSunLight"), s.SunLight.X, s.SunLight.Y, s.SunLight.Z);
         gl.Uniform3(U(program, "uAtmoAmbient"), s.Ambient.X, s.Ambient.Y, s.Ambient.Z);
         var ag = s.Light.AmbientGround;
