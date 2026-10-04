@@ -23,7 +23,7 @@ sealed class WorldOptions
     public string? Screenshot;
     public int Width = 1280, Height = 960;
     public bool NoTextures, NoObjects, Wireframe, Info;
-    public int LayerSize = 512;
+    public int LayerSize = 2048;
     public int Debug;
     public float ObjectDistance = 12000;
     public float DistantZones = ObjectRanges.MaxDistantTownRangeZones;
@@ -58,7 +58,7 @@ sealed class WorldOptions
           --object-distance <u>    draw placed objects at full detail up to this distance (default 12000)
           --distant-range <zones>  distant towns (and buildings' distant meshes) up to this many zones (default 10, the game's setting maximum; its default is 6)
           --no-distant             no distant towns: objects beyond --object-distance are simply not drawn
-          --layer-size <n>         terrain layer texture size (default 512)
+          --layer-size <n>         terrain layer texture size, a power of two up to 2048 (default 2048)
           --debug <n>              1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass)
           --time <hour>            time of day for the sun (default 13; sunrise and sunset from the CONSTANTS record)
           --no-water               leave out the water
@@ -333,7 +333,7 @@ static partial class WorldApp
         {
             textures = TerrainTextures.Create(gl, install, scene.Database, assets, o.LayerSize);
             foreach (var m in textures.Messages.Take(20)) Console.WriteLine($"warning   {m}");
-            Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {o.LayerSize}² ({watch.ElapsedMilliseconds} ms)");
+            Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {o.LayerSize}² BC3+BC1, {textures.ArrayBytes / 1048576} MB ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
         var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze }, Post = new PostProcess(gl, o.Post) };

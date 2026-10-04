@@ -190,7 +190,7 @@ public sealed unsafe class WorldTextureCache(GL gl, AssetLocator assets) : IDisp
 
     /// <summary>
     /// MEITOU_UNCOMPRESSED_TEXTURES=1 decodes every texture to RGBA8 on the CPU and uploads that (the way it was before; uses 4 to 8 times the GPU memory
-    /// of BC1/BC3 textures). Otherwise DDS textures in BC1, BC2 or BC3 with a full mip chain go to the GPU as they are stored (S3TC, universal on desktop GL).
+    /// of BC1/BC3 textures). Otherwise DDS textures in BC1, BC2, BC3, BC4 or BC5 with a full mip chain go to the GPU as they are stored (S3TC, universal on desktop GL; BC4 and BC5 are RGTC, core since GL 3.0, with a swizzle that shows BC4 as grey).
     /// </summary>
     static readonly bool Uncompressed = Environment.GetEnvironmentVariable("MEITOU_UNCOMPRESSED_TEXTURES") == "1";
 
@@ -212,7 +212,7 @@ public sealed unsafe class WorldTextureCache(GL gl, AssetLocator assets) : IDisp
     }
 
     static bool CanUploadCompressed(DdsFile dds) =>
-        dds.Format is DdsFormat.Bc1 or DdsFormat.Bc2 or DdsFormat.Bc3 && !dds.IsCubemap && !dds.IsVolume && dds.ImageCount == 1 && dds.Width > 0 && dds.Height > 0
+        dds.Format is DdsFormat.Bc1 or DdsFormat.Bc2 or DdsFormat.Bc3 or DdsFormat.Bc4 or DdsFormat.Bc5 && !dds.IsCubemap && !dds.IsVolume && dds.ImageCount == 1 && dds.Width > 0 && dds.Height > 0
         && dds.MipCount == 1 + (int)Math.Log2(Math.Max(dds.Width, dds.Height)) && dds.Surfaces.Count == dds.MipCount;
 
     static readonly Lazy<byte[]> zeros = new(() => new byte[16 << 20]);
@@ -225,8 +225,15 @@ public sealed unsafe class WorldTextureCache(GL gl, AssetLocator assets) : IDisp
     {
         var dds = data.Compressed!;
         t.Swizzled = LooksSwizzled(data.Rgba.Levels[0]);
-        var format = dds.Format switch { DdsFormat.Bc1 => InternalFormat.CompressedRgbaS3TCDxt1Ext, DdsFormat.Bc2 => InternalFormat.CompressedRgbaS3TCDxt3Ext, _ => InternalFormat.CompressedRgbaS3TCDxt5Ext };
-        int blockBytes = dds.Format == DdsFormat.Bc1 ? 8 : 16;
+        var format = dds.Format switch
+        {
+            DdsFormat.Bc1 => InternalFormat.CompressedRgbaS3TCDxt1Ext,
+            DdsFormat.Bc2 => InternalFormat.CompressedRgbaS3TCDxt3Ext,
+            DdsFormat.Bc4 => (InternalFormat)0x8DBB,   // COMPRESSED_RED_RGTC1 (core in GL 3.0)
+            DdsFormat.Bc5 => (InternalFormat)0x8DBD,   // COMPRESSED_RG_RGTC2
+            _ => InternalFormat.CompressedRgbaS3TCDxt5Ext,
+        };
+        int blockBytes = BlockCompression.BlockBytes(dds.Format);
         uint id = 0;
         steps.Enqueue(() =>
         {
@@ -269,6 +276,14 @@ public sealed unsafe class WorldTextureCache(GL gl, AssetLocator assets) : IDisp
         {
             gl.BindTexture(TextureTarget.Texture2D, id);
             gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, dds.MipCount - 1);
+            if (dds.Format == DdsFormat.Bc4)
+            {
+                // BC4 is one channel; the decoder (and so the RGBA8 path) shows it as grey with alpha 1.
+                gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x8E42, (int)GLEnum.Red);    // TEXTURE_SWIZZLE_R
+                gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x8E43, (int)GLEnum.Red);
+                gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x8E44, (int)GLEnum.Red);
+                gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x8E45, (int)GLEnum.One);
+            }
             SamplingState(t);
             long bytes = dds.Surfaces.Sum(s => (long)s.Length);
             Resident(t, id, bytes);

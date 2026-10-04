@@ -84,6 +84,10 @@ DDS codec, Observed (source)).
   (`TextureLoaderTests.Loads_base_game_png_tga_and_jpg` decodes all `.tga` / `.jpg` and every 20th `.png` with
   StbImageSharp).
 
+## Terrain layer textures (Verified 2026-10-05, `data/newland/land/textures` by header survey)
+
+The 193 files the biomes use: 188 diffuse BC3 + 2 BC1 at 2048² with 12 mips, 2 diffuse at 1024² BC3, 1 at 512² BC1; normal maps 153 BC1 + 12 BC3 at 2048² with 12 mips and 1 at 512². (`data/land/textures` has 16 older ones: 2048² and one 2048x1532, also one 1024² BC1 without mips.) Normal maps' alpha is unused by the terrain shader (**Observed**: only `.rgb` of the blended normal is read), so the viewer keeps them as BC1. BC1 to BC3 and back is a block rewrite: BC3 always has four colours, BC1 falls back to three colours plus transparent when the first endpoint is not above the second (Verified by `BlockCompressionTests`).
+
 ## Channel conventions in Kenshi's textures
 
 Not part of the DDS format, but needed to use the files (details in [../viewer.md](../viewer.md)):

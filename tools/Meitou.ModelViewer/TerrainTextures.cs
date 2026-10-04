@@ -19,7 +19,7 @@ namespace Meitou.ModelViewer;
 /// </summary>
 public sealed unsafe class TerrainTextures : IDisposable
 {
-    /// <summary>Most texture pairs resident at once (each costs 2 layers of <c>layerSize</c>² with mips, about 2.8 MB at 512).</summary>
+    /// <summary>Most texture pairs resident at once (each costs a BC3 and a BC1 layer of <c>layerSize</c>² with mips, 8.4 MB at 2048).</summary>
     public const int MaxLayers = 192;
 
     /// <summary>Cell table value of a biome slot that is used but not resident yet / of an unused slot.</summary>
@@ -180,8 +180,8 @@ public sealed unsafe class TerrainTextures : IDisposable
         UploadCells();
 
         // Layers are handed out as texture pairs become resident; the arrays are allocated whole, with every mip level.
-        diffuseArray = AllocateArray();
-        normalArray = AllocateArray();
+        diffuseArray = AllocateArray(true);
+        normalArray = AllocateArray(false);
 
         // One parameter row per biome; its layer indices are written when the biome becomes resident.
         paramTexture = gl.GenTexture();
@@ -195,15 +195,32 @@ public sealed unsafe class TerrainTextures : IDisposable
         HasBiomes = true;
     }
 
-    uint AllocateArray()
+    /// <summary>Diffuse layers are stored as BC3 (colour + gloss in alpha), normal layers as BC1 (their alpha is not used): see docs/viewer.md.</summary>
+    static InternalFormat FormatOf(bool diffuse) => diffuse ? InternalFormat.CompressedRgbaS3TCDxt5Ext : InternalFormat.CompressedRgbS3TCDxt1Ext;
+    static int BlockBytes(bool diffuse) => diffuse ? 16 : 8;
+
+    /// <summary>Bytes of one array slice at a mip level.</summary>
+    int SliceBytes(bool diffuse, int level)
+    {
+        int s = Math.Max(layerSize >> level, 1);
+        return (s + 3) / 4 * ((s + 3) / 4) * BlockBytes(diffuse);
+    }
+
+    /// <summary>GPU memory of both layer arrays (all slots, all mip levels).</summary>
+    public long ArrayBytes => Enumerable.Range(0, levelCount).Sum(l => (long)(SliceBytes(true, l) + SliceBytes(false, l))) * Math.Max(Capacity, 1);
+
+    uint AllocateArray(bool diffuse)
     {
         uint id = gl.GenTexture();
         gl.BindTexture(TextureTarget.Texture2DArray, id);
+        gl.GetError();
         for (int level = 0; level < levelCount; level++)
         {
             uint s = (uint)Math.Max(layerSize >> level, 1);
-            gl.TexImage3D(TextureTarget.Texture2DArray, level, InternalFormat.Rgba8, s, s, (uint)Math.Max(Capacity, 1), 0, PixelFormat.Rgba, PixelType.UnsignedByte, (void*)0);
+            gl.CompressedTexImage3D(TextureTarget.Texture2DArray, level, FormatOf(diffuse), s, s, (uint)Math.Max(Capacity, 1), 0, (uint)(SliceBytes(diffuse, level) * (long)Math.Max(Capacity, 1)), (void*)0);
         }
+        var error = gl.GetError();
+        if (error != GLEnum.NoError) Messages.Add($"terrain layer array allocation: GL error {error}; try a smaller --layer-size");
         gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
         gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
         gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
@@ -229,7 +246,7 @@ public sealed unsafe class TerrainTextures : IDisposable
             if (printed++ < 20) Console.WriteLine($"warning   {m}");
         if (HasBiomes)
         {
-            while (decoded.TryDequeue(out var d)) uploads.Add(() => Install(d), "pair install");
+            while (decoded.TryDequeue(out var d)) Install(d, uploads);
             UpdateBiomes(eye, materialDistance);
         }
         UpdateMaps(eye, uploads);
@@ -281,8 +298,8 @@ public sealed unsafe class TerrainTextures : IDisposable
             try
             {
                 var local = new List<string>();
-                var d = Mips(LoadLayer(assets, pair.Diffuse, layerSize, [128, 128, 128, 60], local), layerSize);
-                var n = Mips(LoadLayer(assets, pair.Normal, layerSize, [128, 128, 255, 255], local), layerSize);
+                var d = LoadLayer(assets, pair.Diffuse, layerSize, true, [128, 128, 128, 60], local);
+                var n = LoadLayer(assets, pair.Normal, layerSize, false, [128, 128, 255, 255], local);
                 foreach (var m in local) problems.Enqueue(m);
                 result = new Decoded(pair, d, n);
             }
@@ -295,16 +312,19 @@ public sealed unsafe class TerrainTextures : IDisposable
         });
     }
 
-    /// <summary>One upload step: puts a decoded pair into a free (or the least recently needed) slot of both arrays.</summary>
-    void Install(Decoded d)
+    /// <summary>
+    /// Upload steps of a decoded pair: the first takes a free (or the least recently needed) slot of both arrays, then each large
+    /// mip level of each array is one step, and the last makes the pair resident. (The pair stays "loading" until then.)
+    /// </summary>
+    void Install(Decoded d, UploadQueue uploads)
     {
-        inFlight--;
         var pair = d.Pair;
-        pair.Loading = false;
-        if (d.Diffuse is null || d.Normal is null) { pair.Failed = true; return; }
+        if (d.Diffuse is null || d.Normal is null) { pair.Loading = false; inFlight--; pair.Failed = true; return; }
         int slot = AllocateSlot();
         if (slot < 0)
         {
+            pair.Loading = false;
+            inFlight--;
             pair.Failed = true;
             if (!capacityWarned)
             {
@@ -313,19 +333,38 @@ public sealed unsafe class TerrainTextures : IDisposable
             }
             return;
         }
-        gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
-        foreach (var (array, levels) in new[] { (diffuseArray, d.Diffuse), (normalArray, d.Normal) })
+        foreach (var (diffuse, levels) in new[] { (true, d.Diffuse), (false, d.Normal) })
         {
-            gl.BindTexture(TextureTarget.Texture2DArray, array);
+            int from = 0;
             for (int level = 0; level < levels.Length; level++)
             {
-                uint s = (uint)Math.Max(layerSize >> level, 1);
-                gl.TexSubImage3D<byte>(TextureTarget.Texture2DArray, level, 0, 0, slot, s, s, 1, PixelFormat.Rgba, PixelType.UnsignedByte, levels[level].AsSpan());
+                // Small levels go together with the next large one; each step is at most about one level of 2 to 4 MB.
+                bool last = level == levels.Length - 1;
+                if (levels[level].Length < 256 << 10 && !last) continue;
+                int a = from, b = level;
+                from = level + 1;
+                uploads.Add(() => UploadLevels(diffuse, levels, slot, a, b), "layer upload");
             }
         }
-        pair.Slot = slot;
-        owner[slot] = pair;
-        foreach (int b in usedBy[pair]) Refresh(b);
+        uploads.Add(() =>
+        {
+            inFlight--;
+            pair.Loading = false;
+            pair.Slot = slot;
+            owner[slot] = pair;
+            foreach (int b in usedBy[pair]) Refresh(b);
+        }, "pair resident");
+    }
+
+    void UploadLevels(bool diffuse, byte[][] levels, int slot, int from, int to)
+    {
+        gl.BindTexture(TextureTarget.Texture2DArray, diffuse ? diffuseArray : normalArray);
+        for (int level = from; level <= to; level++)
+        {
+            uint s = (uint)Math.Max(layerSize >> level, 1);
+            fixed (byte* p = levels[level])
+                gl.CompressedTexSubImage3D(TextureTarget.Texture2DArray, level, 0, 0, slot, s, s, 1, FormatOf(diffuse), (uint)levels[level].Length, p);
+        }
     }
 
     int AllocateSlot()
@@ -390,9 +429,15 @@ public sealed unsafe class TerrainTextures : IDisposable
         gl.TexSubImage2D<byte>(TextureTarget.Texture2D, 0, 0, 0, (uint)CellsX * 2, (uint)CellsZ, PixelFormat.RgbaInteger, PixelType.UnsignedByte, cells.AsSpan());
     }
 
-    /// <summary>Decodes a texture at the mip level nearest <paramref name="size"/> and scales it to size × size.</summary>
-    static byte[] LoadLayer(AssetLocator assets, string? name, int size, byte[] fallback, List<string> problems)
+    /// <summary>
+    /// One layer texture as the blocks of its array slice: every mip level down to 1 × 1, BC3 (<paramref name="diffuse"/>) or BC1.
+    /// A square power-of-two DDS in BC1 or BC3 that is at least <paramref name="size"/> wide and has the mips is taken as stored
+    /// (levels from <paramref name="size"/> down; the other of BC1/BC3 by a block conversion); anything else is decoded, scaled to
+    /// size × size, given a mip chain and encoded again (<see cref="BlockCompression"/>). A missing texture is a constant colour.
+    /// </summary>
+    static byte[][] LoadLayer(AssetLocator assets, string? name, int size, bool diffuse, byte[] fallback, List<string> problems)
     {
+        int levelCount = (int)Math.Log2(size) + 1;
         RgbaImage? image = null;
         if (name is not null)
         {
@@ -405,6 +450,7 @@ public sealed unsafe class TerrainTextures : IDisposable
                     if (bytes.Length >= 4 && BitConverter.ToUInt32(bytes, 0) == DdsReader.Magic)
                     {
                         var dds = DdsReader.Read(bytes);
+                        if (AsStored(dds, size, levelCount, diffuse) is { } stored) return stored;
                         int level = 0;
                         while (level + 1 < dds.MipCount && Math.Max(dds.Width >> (level + 1), 1) >= size) level++;
                         image = DdsDecoder.Decode(dds, 0, level);
@@ -416,12 +462,21 @@ public sealed unsafe class TerrainTextures : IDisposable
                     problems.Add($"terrain texture {name}: {e.Message}");
                 }
         }
-        var result = new byte[size * size * 4];
         if (image is null)
         {
-            for (int i = 0; i < result.Length; i += 4) fallback.CopyTo(result, i);
-            return result;
+            var colour = new byte[64];
+            for (int i = 0; i < colour.Length; i += 4) fallback.CopyTo(colour, i);
+            var block = diffuse ? BlockCompression.EncodeBc3(colour, 4, 4) : BlockCompression.EncodeBc1(colour, 4, 4);
+            var constant = new byte[levelCount][];
+            for (int l = 0; l < levelCount; l++)
+            {
+                int s = Math.Max(size >> l, 1), blocks = (s + 3) / 4 * ((s + 3) / 4);
+                constant[l] = new byte[blocks * block.Length];
+                for (int b = 0; b < blocks; b++) block.CopyTo(constant[l], b * block.Length);
+            }
+            return constant;
         }
+        var result = new byte[size * size * 4];
         // Box filter when shrinking, nearest when growing.
         for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++)
@@ -438,7 +493,38 @@ public sealed unsafe class TerrainTextures : IDisposable
                 int d = (y * size + x) * 4;
                 (result[d], result[d + 1], result[d + 2], result[d + 3]) = ((byte)(r / n), (byte)(g / n), (byte)(b / n), (byte)(a / n));
             }
-        return result;
+        var mips = Mips(result, size, size);
+        var encoded = new byte[mips.Length][];
+        for (int l = 0; l < mips.Length; l++)
+        {
+            int s = Math.Max(size >> l, 1);
+            encoded[l] = diffuse ? BlockCompression.EncodeBc3(mips[l], s, s) : BlockCompression.EncodeBc1(mips[l], s, s);
+        }
+        return encoded;
+    }
+
+    /// <summary>The levels of a DDS that can go into the array as stored (see <see cref="LoadLayer"/>), or null.</summary>
+    static byte[][]? AsStored(DdsFile dds, int size, int levelCount, bool diffuse)
+    {
+        if (dds.Format is not (DdsFormat.Bc1 or DdsFormat.Bc3) || dds.IsCubemap || dds.IsVolume || dds.ImageCount != 1) return null;
+        if (dds.Width != dds.Height || dds.Width < size || !int.IsPow2(dds.Width)) return null;
+        int shift = (int)Math.Log2(dds.Width / size);
+        if (shift + levelCount > dds.MipCount || dds.Surfaces.Count < dds.MipCount) return null;
+        var levels = new byte[levelCount][];
+        for (int l = 0; l < levelCount; l++)
+        {
+            var surface = dds.Surface(0, shift + l);
+            int expected = (dds.Format == DdsFormat.Bc1 ? 8 : 16) * ((surface.Width + 3) / 4) * ((surface.Height + 3) / 4);
+            if (surface.Length < expected) return null;
+            var data = dds.Data.AsSpan(surface.Offset, expected);
+            levels[l] = (dds.Format, diffuse) switch
+            {
+                (DdsFormat.Bc3, true) or (DdsFormat.Bc1, false) => data.ToArray(),
+                (DdsFormat.Bc1, true) => BlockCompression.Bc1ToBc3(data),
+                _ => BlockCompression.Bc3ToBc1(data),
+            };
+        }
+        return levels;
     }
 
     /// <summary>The full mip chain of an RGBA8 image (power-of-two sides) by 2 Ã— 2 box filtering; level 0 is the image itself.</summary>

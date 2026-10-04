@@ -164,6 +164,7 @@ Per pixel, with `slope = 1 − normal.y` and world position `p`:
   ground colour with distance (`saturate(distance / fade distance − 0.3)`) → road by overlay A → cliff by its
   weight. Base and slope are multiplied by the colour map; cliff, grass, dirt and road by
   `lerp(1, colour, overlay mult)`. Normal maps blend the same way (fading to flat); the result's alpha is gloss.
+- The viewer stores the layer textures compressed (diffuse BC3, normal BC1, the files' own blocks at 2048²; **Verified** by a before/after screenshot: the cliff normal flips below still work and the ground only gets sharper), see [../viewer.md](../viewer.md).
 - Normal maps are in a frame with `binormal = normalize(n × (−1, 0, 0))`, `tangent = binormal × n`; the cliff
   samples are turned into that frame per projection: red becomes `1 − red` on both; green becomes `1 − green` on
   the (z, v) projection where `n.x ≤ 0` and on the (x, v) projection where `n.z ≥ 0` (reproduced in the viewer).

@@ -234,7 +234,7 @@ centre), `--radius` in zones (default 1.5), `--step` (heightmap sample step; by 
 two keeping at most 2048 cells per side, so `--radius 32`, the whole world, uses step 8), camera
 (`--yaw`, `--pitch`, `--distance`), `--screenshot` / `--size` (the window opens maximized; `--size` is for
 screenshots), `--no-textures`, `--no-objects`, `--no-foliage` (`F` toggles), `--distant-range <zones>`, `--no-distant`,
-`--object-distance`, `--layer-size`, `--debug 1|2|3`, `--time <hour>` (default 13), `--no-water`,
+`--object-distance`, `--layer-size` (terrain layer textures, default 2048), `--debug 1|2|3`, `--time <hour>` (default 13), `--no-water`,
 `--view-distance` (default 450000), `--fog` (distance where the haze is complete at ground level, default 250000), `--simple-sky` (the old colour-model sky and fog; `B` toggles), `--weather <name>` (a WEATHER record's sky colour, fog and clouds; default "Default": clear), `--clouds <0..1>` and
 `--material-distance` (where the full terrain material gives way to the ground colour, default 30000 as in the
 game). `--camera-at x,z` starts the camera somewhere
@@ -306,8 +306,7 @@ How it works (status as in [README.md](README.md)):
   frame was 9 to 35 ms in four runs and 407 ms in one (no streaming step was that long; a loaded machine).
   Before the maps were rewritten in place, every window move cost a frame of about 50 ms.
 - **Texturing** (`TerrainTextures`, `TerrainShaders`): the biomes of every `blendinfo.dat` cell within the material
-  distance of the eye are loaded into two texture arrays (one layer per distinct diffuse/normal pair, each brought to
-  512² with its mips by a worker thread); per-biome constants go into a float texture with one row per biome; the blend
+  distance of the eye are loaded into two texture arrays (one layer per distinct diffuse/normal pair) **compressed on the GPU as stored**: the diffuse array is BC3 (colour, gloss in alpha), the normal array BC1 (the shader reads only their RGB). A square power-of-two BC1/BC3 DDS at least `--layer-size` wide with its mips is uploaded block for block from the level of that size down to 1x1 (no decode, no resample); BC1 diffuse maps get an opaque alpha block and BC3 normal maps lose their alpha (`BlockCompression.Bc1ToBc3` / `Bc3ToBc1`, tests in `BlockCompressionTests`). Anything else (smaller or non-square files, no mip chain, PNG/TGA, a missing file as a constant colour) is decoded, scaled to size², given a box-filtered mip chain and encoded again with a small bounding-box BC1/BC3 encoder (visibly softer than a stored texture, but the base game has only three such files). The default layer size is **2048**, the game's own: 133 pairs take 1064 MB (66 MB at 512, 266 MB at 1024; the old RGBA8 arrays were 4 to 8 times as large: 1024 would have been 2.1 GB, 2048 8.4 GB), 1.5 GB at the 192-slot limit. Loading the 19 biomes around the rock view takes about 5.5 s at 2048 (disk and block conversion on worker threads) against 1.4-1.8 s at 512 or 1024. `--layer-size 512` / `1024` still work (they take a lower mip level of the stored file); per-biome constants go into a float texture with one row per biome; the blend
   map is sampled for the five slot weights; windows of the overlay and colour maps follow the eye (see Streaming). The layer model, slope scaling
   (FCS value × 0.01, **Verified** from the exe) and the overlay/colour channels follow terrain.md.
 - **Streaming** (`TerrainStreamer`, `TerrainTextures`, `UploadQueue`): detail follows the camera, nothing is tied to
@@ -346,7 +345,7 @@ How it works (status as in [README.md](README.md)):
     and slabs of 512 KB; foliage meshes and grass pages uploaded in 512 KB slabs (a page dropped meanwhile deletes what its steps made);
     `ObjectStreamer.FillZones` makes instances 1 ms a frame; every decode and layout job runs on `BackgroundWork`, a few dedicated
     below-normal-priority threads (`ProcessorCount - 3`); a replaced terrain height texture is deleted four frames after the swap.
-  - *Compressed textures*: BC1, BC2 and BC3 DDS textures with a full mip chain are uploaded as stored (`CompressedTexImage2D`, S3TC, in slabs
+  - *Compressed textures*: BC1, BC2, BC3, BC4 and BC5 DDS textures with a full mip chain are uploaded as stored (`CompressedTexImage2D`, S3TC; BC4/BC5 as RGTC (core since GL 3.0), BC4 with a swizzle so it still reads as grey with alpha 1 like the decoder's output; **Unverified on a real file**: the base game has no BC4/BC5, the path is only reviewed and compiles); in slabs
     of whole block rows) instead of decoded to RGBA8: 4 to 8 times less GPU memory and no CPU decode of the mips (only the level the swizzle
     test reads). Other formats, and files without a full chain (the viewer generates mips for those), take the RGBA8 path. The picture does not
     change visibly: two runs of The Hub differ by a mean of 0.05 per channel value (max 38 on a few edge pixels, run-to-run noise) and compressed
@@ -373,13 +372,16 @@ How it works (status as in [README.md](README.md)):
   - *Left*: most of what remains in the worst frames with reflections is the reflection pass (30 to 100 ms in `reflection`: it re-culls and
     draws the objects and foliage), not streaming; single steps of a texture or buffer slab still take 10 to 20 ms now and then (driver or
     GPU contention, not size: they hit the first slab of a fresh buffer or texture), and one such step is the floor of a frame's overrun. Not done:
-    BC4/BC5 textures stay RGBA8, a persistent-mapped upload ring (GL 3.3 core has none; buffers are filled with `BufferSubData`), unloading
+    a persistent-mapped upload ring (GL 3.3 core has none; buffers are filled with `BufferSubData`), unloading
     the terrain's overlay and colour windows (fixed size).
 - **Objects** (`WorldObjects`, `WorldObjectRenderer`): placements become meshes with `WorldObjectLayout`, built
   as the game builds them ([formats/zones.md](formats/zones.md#from-placements-to-meshes)): parts chosen with the
   game's `rand()` seeded from the position, doors added, destroyed states (`destroyed mesh`, upper floors
   removed), rotating parts at their rolled start angle, and each part's MATERIAL_SPEC from the part, the building
-  or the building's town (`BuildingTowns`; `BuildingMaterial` turns it into textures). Map features (and parts
+  or the building's town (`BuildingTowns`; `BuildingMaterial` turns it into textures). A building whose state names an
+  `exterior layout name` also gets that layout's signs and banners (`BuildingLayouts`, from `interiors.level`;
+  [formats/zones.md](formats/zones.md#building-layouts)), counted in the `objects` log line; interior layouts (furniture)
+  and nest debris are not drawn. Map features (and parts
   without a chosen material) are textured by the model viewer's `MaterialResolver` (candidate preferred: the one
   naming the placed record). Draw distance, LOD and streaming are described below ("Object streaming, LOD and distant towns"). The log
   line `objects` counts destroyed buildings and the foliage resource buildings, which the game draws as foliage rocks (drawn by the foliage below).
