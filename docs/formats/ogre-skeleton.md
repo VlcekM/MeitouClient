@@ -137,14 +137,103 @@ Links that don't hold (the test lists them explicitly, so a change shows up):
 | `items/armour/meshes/Iron Clad Jacket_F.mesh` | links `Iron Clad [feMale] Jacket.skeleton`, which doesn't ship (`Iron Clad Jacket_F.skeleton` sits beside it). Used by `Newwworld.mod`. |
 | `character/meshes/whistler/whistler.mesh` | links `female_skeleton.skeleton` (30 bones) but assigns bones up to 54. No data file references this mesh. |
 
-For the first two Ogre would log and leave the mesh unanimated if it relied on the mesh's own link.
-Whether Kenshi does, or attaches armour to the character's skeleton itself, is Unknown (not checked
-in game).
+For the first two Ogre logs and loads the mesh without a skeleton. Kenshi then still makes them
+share the character's skeleton instance (see [Binding](#binding-worn-meshes-to-the-character)); whether
+such a mesh actually deforms is Unknown (see Open questions).
+
+## How Kenshi uses it
+
+Sources: decompilation of `kenshi_x64.exe` and of Kenshi's own build of `OgreMain_x64.dll` (Ghidra 12.1.4,
+auto-analysed; addresses below are in the binary named). **Kenshi's OgreMain is modified**: it exports
+methods stock Ogre 2.0 doesn't have (`OldBone::setBoneSize`, `setBonePositionalSize`, `multiplyBoneSize`,
+`OldSkeletonInstance::setMovementScale`, `Animation::setOverrideBone`, `Animation::getTranslation`,
+`Entity::setSkipAnimationStateUpdate`) and changes the bone and animation maths. Animation selection and
+blending are in [animation.md](../animation.md).
+
+### Which skeleton files get loaded
+
+Verified.
+
+Only two paths load skeletons:
+
+1. A mesh's own skeleton link, through Ogre's normal mesh loading. Kenshi's mesh setup
+   (`kenshi_x64.exe @ 140447bf0`, logged as `ResourceLoader::SetMeshData`) can override the link with
+   `Mesh::setSkeletonName` when its load descriptor carries a name, but item meshes are loaded with a
+   shared static default descriptor (`@ 140537690`), so their own link is what Ogre uses (Observed: the
+   default descriptor's name is presumed empty, not read at run time).
+2. `ANIMATION_FILE` records (`male animation` / `female animation`), added to the body's skeleton as
+   linked animation sources (`@ 140539020`) and preprocessed once at startup (`@ 140871f00`,
+   `@ 14086dfe0`). See [animation.md](../animation.md#where-animations-come-from).
+
+The `OldSkeletonManager` import has no other caller. So the per-armour `.skeleton` files that no mesh
+links are never loaded (Observed: no other loading path found), and nothing loads
+`Drifter2_pants_Light Armour.skeleton` or its 118 links.
+
+### Binding worn meshes to the character
+
+Verified.
+
+Each worn or held item becomes an `AttachedEntity` (RTTI name) with one of three modes, picked from the
+item record's type when it's created (`kenshi_x64.exe @ 1405358a0`; hair and beards `@ 140532490`):
+
+| Mode | Used for | What happens (`@ 14052d480`, `@ 14052bfa0`) |
+| --- | --- | --- |
+| 1, shared skeleton | ARMOUR (3), CONTAINER (46, backpacks), ATTACHMENT (6, hair/beards), LIMB_REPLACEMENT (111) | The item entity goes on the body's scene node and calls `Entity::shareSkeletonInstanceWith(body)`, with its own animation-state update turned off. |
+| 0, attach to bone | everything else (weapons etc.) | `Entity::attachObjectToBone(body, boneName, entity, orientation, position)`; the node under it gets scale `1 / body node scale` so the item isn't scaled with the character. A bone name the skeleton lacks falls back to the root bone (`@ 1406466a0`). |
+| 2 | ARMOUR/CONTAINER/ATTACHMENT records with neither `mesh` nor `mesh female` | No visible entity; only a physics attachment (CHARACTER_PHYSICS_ATTACHMENT `bone name`, `file male`/`file female`, `@ 140535f20`). |
+
+The mesh is picked by gender: `mesh` or `mesh female` (ARMOUR also `overlap mesh` / `overlap mesh female`
+when an `overlap items` item is worn too, `@ 140537690`, `@ 14052dc90`). For a female character with an
+empty `mesh female`, a mode-0 item falls back to `mesh`; a mode-1 item doesn't, and logs
+"[Appearance] No female mesh for ..." instead of showing anything (`@ 140537690`).
+
+Kenshi's `Entity::shareSkeletonInstanceWith` (`OgreMain_x64.dll @ 1800c3a80`) doesn't compare the two
+meshes' skeletons (stock Ogre 1.x throws when they differ): it simply adopts the other entity's skeleton
+instance, bone matrices and animation-state set. So a worn mesh's bone assignments index straight into
+**the body's skeleton, by bone handle**, whatever its own link says. That works because armour is rigged
+to the shared character skeletons (`male_skeleton.skeleton` / `female_skeleton.skeleton`, 30 bones).
+
+### Bone maths in Kenshi's Ogre
+
+Verified by disassembly of `OgreMain_x64.dll @ 1801e20e0`.
+
+`OldBone::updateFromParentImpl` runs the normal node update and then overwrites two results:
+
+- **Derived scale** = the bone's *bone size* times its own local scale, per axis. The parent's derived
+  scale is **not** inherited (stock Ogre multiplies it in).
+- **Derived position** (bones with a parent) = parent derived orientation applied to
+  (local position × the bone's *positional size*, per axis, × the **Y component** of the parent's
+  derived scale, on all three axes), plus the parent's derived position.
+
+Bone size and positional size are two extra per-bone vectors, both (1, 1, 1) by default (bone
+constructors `@ 1801e1a50`, `@ 1801e1b00`); Kenshi sets them from appearance sliders
+([animation.md](../animation.md#body-shape-sliders)). Consequence for the file data: the 905 stored bone
+scales (local scale) scale their own bone's vertices and their children's *offsets* (through the Y
+component), but not the children's own scale. Skinning then uses the usual offset transform
+(`OldBone::_getOffsetTransform @ 1801e1dc0`: derived transform times the inverse binding pose).
+
+### Blending in Kenshi's Ogre
+
+Verified, `OgreMain_x64.dll @ 180343200`, `@ 180017ee0`, `@ 180031260`.
+
+- Blend mode average (every base-game skeleton): if the enabled animations' weights sum to more than 1,
+  every weight is divided by the sum; otherwise weights are used as they are. Cumulative: never scaled.
+- Animations are applied in two passes: first those without override bones, then those with any
+  (`Animation::setOverrideBone`). On an override bone, the animation first pulls the bone's accumulated
+  rotation back toward its binding orientation by its weight (fully reset at weight ≥ 0.99), then adds
+  its own rotation. Other bones blend as in stock Ogre (rotation from identity by weight, translation
+  times weight).
+- Every track's translation is also multiplied by the skeleton instance's **movement scale**
+  (`setMovementScale`, `kenshi_x64.exe @ 14052bb10`); the scale passed with a linked animation source is
+  ignored. A state with translation disabled keeps only the Y part of its translations.
+- Bones listed as disabled on the skeleton instance are skipped.
 
 ## Open questions
 
-- How Kenshi binds armour and clothing meshes to the character skeleton (shared skeleton instance?
-  by bone name or by index?). The cross-check above only shows indices fit the linked skeleton.
-- Where Kenshi's animation names come from (game data, or the 174/166 animations in the character
-  skeletons directly) and how it blends them (blend mode is always average).
-- What the per-armour `.skeleton` files are for, if anything.
+- Whether an entity whose own skeleton failed to load (`Human_Skin_Suit.mesh`, `Iron Clad Jacket_F.mesh`)
+  still deforms after sharing the body's instance: Kenshi's Ogre compiles bone assignments in
+  `Entity::_initialise` (`OgreMain_x64.dll @ 1800bfac0`), but whether that happens without a mesh
+  skeleton wasn't traced. Unknown.
+- `whistler.mesh` (bone indices up to 54): no data references it, so its behaviour is untested. Unknown.
+- Where the bone name for mode-0 attachments (weapons) comes from (RACE `attachment points` .phs or
+  fixed names). Unknown.

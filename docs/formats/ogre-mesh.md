@@ -99,7 +99,65 @@ store skinning as bone assignments (Ogre builds blend buffers from them at load)
 - 3,748 submeshes, 22.7 M vertices, 23.0 M indices; 167 skinned (have a skeleton link).
 - Skipped sections present: edge lists in 103 meshes, poses in 13. No vertex animations or extremes.
 
+## How Kenshi uses it
+
+Sources: decompilation of `kenshi_x64.exe` and Kenshi's own `OgreMain_x64.dll` (Ghidra 12.1.4); see also
+[ogre-skeleton.md](ogre-skeleton.md#how-kenshi-uses-it) for skinning and bone maths and
+[animation.md](../animation.md).
+
+### Poses: character morph targets
+
+The 13 meshes with poses are the race body meshes and their limb-stump variants (Observed, scratch survey
+reading pose names from the raw `0xC100` chunks, so names are best-effort):
+
+| Mesh (`character/meshes/...`) | Poses | Names (examples) |
+| --- | ---: | --- |
+| `human/human_male.mesh`, `human_female.mesh` | 23, 29 | `wide_cheekbones`, `long_nose`, `big_mouth`, `tiltup_eyes`, `overbite`, `wide_jaw` |
+| `bone/bone_male.mesh`, `bone_female.mesh` | 28, 36 | `bone_` + face names, plus `bone_horns_curved`, `bone_horns_top_short`, `bone_horns_bottom_short`, `bone_horns_thick`, ... |
+| `stick_person/Stick_person*.mesh` (3) | 9 each | `stick_big_eyes`, `stick_long_antenna`, ... |
+| `human/` limb-stump meshes (6) | 23 or 29 | `0` ... `22` / `0` ... `28` |
+
+They are face (and horn) shape morphs, not expressions or animation. Verified by decompilation:
+
+- Pose names are looked up as float keys in the character's appearance data
+  (`kenshi_x64.exe @ 14007c070`); a pose with a non-zero value is blended into the vertices.
+- When building a body, Kenshi clones the mesh, adds every non-zero pose to the clone's positions and
+  normals with `Mesh::softwareVertexPoseBlend`, then removes all poses from the clone (`@ 140071ac0`).
+  The result is cached as a mesh named `<mesh>_morph_<n>` (logged "Created Morph"), so a character's
+  face costs nothing at render time. The three `bone_horns_*` poses are skipped in this bake unless a
+  flag is set (Kenshi's "SLAVE" variant handling, `@ 14007c070`; Observed, not traced further).
+- The character editor instead clones the mesh as `<mesh>_CHAREDIT_<n>` and keeps its poses
+  (`@ 140071dc0`) so sliders can change live.
+- How a slider value maps to the pose weight (scaling, clamping) was not traced. Unknown.
+
+### LOD
+
+- **Strategy**: at startup Kenshi looks up the `distance_sphere` LOD strategy (falling back to the default
+  one) (`kenshi_x64.exe @ 1404483c0`), and its mesh setup (`@ 140447bf0`) sets it on every mesh it
+  creates an entity for, whatever the file says. Verified. In the files (Verified, scratch survey of all
+  base-game meshes with `OgreMeshReader`): `distance_sphere` 1,329 meshes, `Distance` 60.
+- **Distances** come from the files' LOD user values: 2,472 generated (reduced-index) levels and 50
+  manual levels (separate `_LOD` meshes). Typical values are 4000 and 8000; others 400, 500, 1000, 1500.
+  Level counts per mesh (including level 0): 1 ×324, 2 ×1,039, 3 ×17, 5 ×1, 8 ×8 (Verified, same survey).
+- No LOD is generated at run time. Nothing in `kenshi_x64.exe` imports `OgreMeshLodGenerator_x64.dll` or
+  refers to `lod_generator.cfg` (Verified: import table and string search; no other DLL in the install
+  names it either). The `.cfg` describes the developers' offline baking (e.g. `animal/meshes/noLOD`
+  with `lod1=8000,p,1.0`).
+- Kenshi doesn't set a mesh LOD bias (no import of the bias setters; Verified). Entity manual LOD levels
+  are only touched to give them the same material as the main entity (`@ 1400d1400`, `@ 1404273f0`).
+- Per-object visibility distance is separate: characters and attached items get
+  `MovableObject::setRenderingDistance` from a global view-distance setting (×7 for some races,
+  `@ 140539020`, `@ 140537020`). Observed (setting's source not traced).
+
+### Other mesh setup
+
+- If a mesh without a skeleton has more than one UV set, Kenshi logs "has multiple uv sets" and drops the
+  extra texture-coordinate elements (`@ 140447bf0`). Verified.
+- The body entity's local bounding box keeps its minimum corner, and its maximum corner becomes the
+  largest of the three maximum coordinates on every axis, presumably so animation doesn't push the mesh
+  out of it (`@ 140539020`); attached items get a box built from the same value (`@ 140537020`).
+  Verified (the purpose is a guess).
+
 ## Open questions
 
-- Poses (13 meshes) and their use (facial expressions?) once animation is implemented.
-- How Kenshi picks LOD levels (strategy names, distances).
+- How pose weights are derived from appearance slider values.
