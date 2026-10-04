@@ -13,7 +13,8 @@ Also Verified by that round-trip on the base files:
 All values little-endian. `string` = `int32 length` + `length` bytes, **UTF-8** (Verified on base
 files: 92 non-ASCII strings in Dialogue.mod and rebirth.mod, all valid UTF-8, round-trip exact;
 gamedata.base and Newwworld.mod are pure ASCII). Mods written by older tools could still contain
-other encodings; `meitou-tools fcs <file>` reports invalid UTF-8.
+other encodings: the reader currently **rejects** invalid UTF-8 with `FcsFormatException` rather than
+corrupting it. If real mods turn up with Windows-1252 text we need a lossless fallback.
 
 ## File
 
@@ -199,3 +200,4 @@ Leader AI Goals: AI_TASK (0, 24,0) "...val0 and val1 is start and finish time...
 - Merge rules when several files touch one `stringId` (per field? reference lists replaced or appended?).
 - Format-17 header tail bytes; the `0x4C67BE` constant.
 - Whether save games use this record format.
+- Non-UTF-8 strings in third-party mods: currently rejected; decide on lossless handling once samples exist.

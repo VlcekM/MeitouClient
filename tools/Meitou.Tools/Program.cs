@@ -58,10 +58,8 @@ static int Fcs(string path)
     foreach (var g in file.Records.GroupBy(r => r.Flags).OrderByDescending(g => g.Count()))
         Console.WriteLine($"    0x{g.Key:X8} {g.Count(),7}");
 
-    // U+FFFD means a string wasn't valid UTF-8 and won't survive a round-trip.
+    // The reader rejects invalid UTF-8, so non-ASCII strings here are known-good samples.
     var strings = file.Records.SelectMany(r => r.Strings.Values.Prepend(r.Name)).ToList();
-    int nonAscii = strings.Count(s => s.Any(c => c >= 0x80));
-    int invalid = strings.Count(s => s.Contains('�'));
-    Console.WriteLine($"  strings: {strings.Count}, non-ASCII: {nonAscii}, invalid UTF-8: {invalid}");
+    Console.WriteLine($"  strings: {strings.Count}, non-ASCII: {strings.Count(s => s.Any(c => c >= 0x80))}");
     return 0;
 }

@@ -6,8 +6,11 @@ namespace Meitou.Data.Fcs;
 /// <summary>Reads <see cref="FcsFile"/>s. Layout: docs/formats/fcs-mod.md.</summary>
 public static class FcsReader
 {
-    /// <summary>Text encoding of FCS strings. UTF-8: every non-ASCII string in the base game decodes as valid UTF-8.</summary>
-    public static readonly Encoding Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+    /// <summary>
+    /// Text encoding of FCS strings: UTF-8 (every non-ASCII string in the base game is valid UTF-8). Strict, so
+    /// invalid bytes fail loudly instead of decoding to U+FFFD and silently changing on write.
+    /// </summary>
+    public static readonly Encoding Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     // Sanity limit for counts and string lengths, so corrupt input fails fast instead of allocating gigabytes.
     const int MaxCount = 64 * 1024 * 1024;
@@ -136,7 +139,8 @@ public static class FcsReader
         if (length == 0) return "";
         var bytes = r.ReadBytes(length);
         if (bytes.Length != length) throw new EndOfStreamException();
-        return Encoding.GetString(bytes);
+        try { return Encoding.GetString(bytes); }
+        catch (DecoderFallbackException e) { throw new FcsFormatException("String is not valid UTF-8.", r.BaseStream.Position - length, e); }
     }
 
     static int ReadCount(BinaryReader r)

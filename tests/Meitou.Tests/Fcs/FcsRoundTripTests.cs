@@ -47,6 +47,15 @@ public class FcsRoundTripTests
         Assert.Throws<FcsFormatException>(() => FcsReader.Read(new MemoryStream(bytes[..^5])));
     }
 
+    [Fact]
+    public void Invalid_utf8_string_throws_format_exception()
+    {
+        var bytes = Write(new FcsFile { Records = { new FcsRecord { Name = "café", StringId = "1-x.mod" } } });
+        int at = Array.IndexOf(bytes, (byte)0xC3);
+        bytes[at] = 0xE9; // lone Windows-1252 'é', invalid as UTF-8
+        Assert.Throws<FcsFormatException>(() => FcsReader.Read(new MemoryStream(bytes)));
+    }
+
     public static TheoryData<string> BaseGameFiles => ["gamedata.base", "Newwworld.mod", "Dialogue.mod", "rebirth.mod"];
 
     [Theory]
