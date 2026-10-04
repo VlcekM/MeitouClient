@@ -32,7 +32,7 @@ sealed class WorldOptions
     public float Hour = 13;
     public float ViewDistance = 450000, FogDistance = 250000, MaterialDistance = 30000;
     public bool NoWater, NoStream, NoReflections, SimpleSky, ShowKeys;
-    public bool PhysicalHaze;
+    public bool PhysicalHaze = true; // the kenshi haze's distances are a guess so far (docs/formats/sky.md "Haze")
     public float? HazeDistance;
     public string? Weather;
     public float? Clouds;
@@ -61,8 +61,8 @@ sealed class WorldOptions
           --no-water               leave out the water
           --no-reflections         the water reflects only the sky colour, not the mirrored scene (R toggles)
           --simple-sky             the old colour-model sky and squared-distance fog instead of the atmosphere (B toggles)
-          --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral (F7 toggles)
-          --haze-distance <u>      the game's far distance D for its haze, which ramps in from 0.8 D to 0.96 D (default 50000 = view distance 5000 x 10)
+          --haze <kenshi|physical>  aerial perspective: the physical integral (default) or the game's own haze, distances still a guess (F7 toggles)
+          --haze-distance <u>      the game's far distance D for its haze, which ramps in from 0.8 D to 0.96 D (default: the viewer's far clip; the game's is 50000 = view distance 5000 x 10)
           --weather <name>         a WEATHER record's sky colour, fog and clouds (default "Default": clear, no fog, no clouds)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
@@ -328,7 +328,7 @@ static class WorldApp
             Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {o.LayerSize}² ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
-        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze, HazeDistance = o.HazeDistance ?? 50000 }, Post = new PostProcess(gl, o.Post) };
+        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze, FixedHazeDistance = o.HazeDistance }, Post = new PostProcess(gl, o.Post) };
         if (scene.Database is { } skyDb)
         {
             gpu.Sky.NightDarkness = SkyWeather.NightDarkness(skyDb);
@@ -396,6 +396,8 @@ static class WorldApp
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
+        // Kenshi closes its haze at its far clip (docs/formats/sky.md "Haze"); ours is further, so the haze follows it unless --haze-distance.
+        gpu.Sky.HazeDistance = gpu.Sky.FixedHazeDistance ?? camera.ViewDistance;
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is not null;
         if (reflecting)

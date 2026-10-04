@@ -185,10 +185,12 @@ public sealed unsafe class SkyRenderer : IDisposable
 
     /// <summary>Physical atmosphere (default) or the old simple colour model.</summary>
     public bool Physical { get; set; } = true;
-    /// <summary>Aerial perspective: Kenshi's own haze (default, docs/formats/sky.md "Haze") or the physical integral.</summary>
-    public bool KenshiHaze { get; set; } = true;
+    /// <summary>Aerial perspective: Kenshi's own haze (docs/formats/sky.md "Haze") or the physical integral (default).</summary>
+    public bool KenshiHaze { get; set; } = false;
     /// <summary>Kenshi's far distance D (the game: "view distance" setting 5000 x 10); its haze ramps in between 0.8 D and 0.96 D.</summary>
-    public float HazeDistance { get; set; } = 50000;
+    public float HazeDistance { get; set; } = 50000; // WorldApp sets it to the far clip each frame, or to this:
+    /// <summary>A fixed D (`--haze-distance`) instead of the far clip.</summary>
+    public float? FixedHazeDistance { get; set; }
     /// <summary>Where the haze starts and ends, as fractions of D. Unknown in the game (pFogParams y, z); these are the fractions it gives Ogre's own linear fog.</summary>
     public const float HazeStart = 0.8f, HazeEnd = 0.96f;
     /// <summary>The highest eye, in scale heights, the sky tables and the sun and sky light are computed for.</summary>

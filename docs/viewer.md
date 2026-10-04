@@ -459,7 +459,7 @@ only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. The viewer has no
   mostly noise; the whole chain is roughly 1 to 3 ms against a 14 to 18 ms scene.
 - **Contract for scene code**: shaders write the colours they always did, unclamped (colours above 1 are fine); code that draws into
   another framebuffer between `PostProcess.Begin` and `End` must rebind the one it found (`ReflectionPass` does).
-- **Haze**: `--haze kenshi|physical` (F7), `--haze-distance`; see [formats/sky.md](formats/sky.md#haze-distance-fog-how-vanilla-does-it). The `kenshi` haze fogs only the last 20% before 50000 units, so the default view is clear and ends at that distance (use `--haze physical` or `--haze-distance 250000` for the wide view).
+- **Haze**: `--haze kenshi|physical` (F7), `--haze-distance`; see [formats/sky.md](formats/sky.md#haze-distance-fog-how-vanilla-does-it). The default is `physical`; `kenshi` uses guessed distances (the last 20% before D, by default the viewer's far clip; `--haze-distance 50000` is the game's own D) and does not match the game yet.
 - **Limits**: the MSAA resolve averages HDR values, so a very bright sun-disc edge can still alias a little; SSAO sees only the near
   depth slice and has no normal buffer (curved surfaces show faint banding, thin objects can halo); no auto exposure (the game's
   is clamped to a nearly constant gain, see the doc); heat haze, colour LUTs and depth of field are not implemented.

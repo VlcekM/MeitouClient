@@ -134,12 +134,15 @@ What the game does, from the shipped shaders and the exe (decompiled output is n
 - **Not there**: no exponential or height-based haze in the main chain (`SkyX_Fog*.hlsl` and ground fog are separate features:
   ground fog is deprecated, fog planes/spheres/beams are the placed "fog volumes", `fogfeatures.dat`).
 
-### In the viewer: `--haze kenshi` (default) and `physical`
+### In the viewer: `--haze physical` (default) and `kenshi`
 
 `atmoApply` has two branches (key F7, `SkyRenderer.KenshiHaze`; the sky itself is the same in both):
 
-- **kenshi**: `alpha = linear ramp between 0.8 D and 0.96 D` (D = `--haze-distance`, default 50000, i.e. the game's default view
-  distance), colour = the viewer's sky colour towards the point (the horizon colour for rays below the horizon: the stand-in for
+- **kenshi** (`--haze kenshi`; not the default until `k1` / `k2` are known): `alpha = linear ramp between 0.8 D and 0.96 D`
+  (D = `--haze-distance`, default the viewer's far clip, as the game's D is its far clip; a fixed 50000 under the viewer's much
+  further far clip made everything past 48000 a flat sky-coloured silhouette the game never draws). Compared with the game's own
+  screenshots this is wrong either way (**Observed**): the game shows a pale, whitish veil that builds from mid distance and leaves
+  far ridges shaded, so `k1` / `k2` are likely not 0.8 / 0.96, and the missing integral and `horizonClouds` terms (below) matter. Colour = the viewer's sky colour towards the point (the horizon colour for rays below the horizon: the stand-in for
   the integral above, so the colour follows the sun, the weather's sky multiplier and the night glow). When the weather's fog is
   enabled its `fog color` (lit like the ground, as before) is blended by the game's ease-in-out curve of `distance / fog distance max`
   and the alphas add. Nothing is fogged before 0.8 D: that is what the game does (**Observed**, from the formula), so the mid distance
