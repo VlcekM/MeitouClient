@@ -371,8 +371,8 @@ static class WorldApp
         }
         if (g.Foliage is { } foliage)
         {
-            sliders.Add(new Slider("Foliage draw distance x", 0.25f, 4, () => foliage.RangeSetting, v => foliage.RangeSetting = v, "0.00", Logarithmic: true));
-            sliders.Add(new Slider("Grass draw distance x", 0.25f, 4, () => foliage.GrassRangeSetting, v => foliage.GrassRangeSetting = v, "0.00", Logarithmic: true));
+            sliders.Add(new Slider("Foliage draw distance x", 0.25f, 16, () => foliage.RangeSetting, v => foliage.RangeSetting = v, "0.00", Logarithmic: true));
+            sliders.Add(new Slider("Grass draw distance x", 0.25f, 16, () => foliage.GrassRangeSetting, v => foliage.GrassRangeSetting = v, "0.00", Logarithmic: true));
             sliders.Add(new Slider("Grass density x", 0.1f, 2, () => foliage.GrassDensitySetting, v => foliage.GrassDensitySetting = v, "0.00"));
         }
         sliders.Add(new Slider("Terrain LOD distance", 2, 16, () => r.LodDistance, v => r.LodDistance = v, "0.0"));

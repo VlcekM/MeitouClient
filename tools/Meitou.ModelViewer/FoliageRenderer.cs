@@ -75,9 +75,10 @@ public sealed unsafe class FoliageRenderer : IDisposable
 
     /// <summary>Foliage drawn at all (the F key).</summary>
     public bool Enabled { get; set; } = true;
-    /// <summary>settings.cfg <c>foliage range</c>, <c>grass range</c> and <c>grass density</c> (the game's defaults are 1).</summary>
-    public float RangeSetting { get; set; } = 1;
-    public float GrassRangeSetting { get; set; } = 1;
+    /// <summary>settings.cfg <c>foliage range</c>, <c>grass range</c> and <c>grass density</c> (the game's defaults are 1; the viewer draws
+    /// foliage and grass 4x as far by default).</summary>
+    public float RangeSetting { get; set; } = 4;
+    public float GrassRangeSetting { get; set; } = 4;
     public float GrassDensitySetting { get; set; } = 1;
 
     /// <summary>The longest mesh layer range in the catalog at setting 1 (zones are laid out up to it).</summary>
