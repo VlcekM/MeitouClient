@@ -15,8 +15,13 @@ public sealed class WorldRenderOptions
     public int Wireframe { get; set; }
     /// <summary>0 normal, 1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass), 3 plain shading.</summary>
     public int Debug { get; set; }
-    /// <summary>Range of a terrain LOD level in multiples of its node size (TerrainQuadtree; at least 2).</summary>
-    public float LodDistance { get; set; } = 3f;
+    /// <summary>
+    /// Range of a terrain LOD level in multiples of its node size (TerrainQuadtree; at least 2). Fixed at the useful
+    /// maximum: the finest level (64 cells of 18 units) then covers 8 × 1152 = 9216 units, about what the streamed
+    /// fine-height window (1536 cells, re-centred after 15% of its width) always holds around the eye; beyond it the
+    /// heights are the coarse 144-unit ones, so a larger value only adds triangles. A graphics option later.
+    /// </summary>
+    public float LodDistance { get; set; } = 8f;
     /// <summary>Beyond this distance the terrain takes the biomes' ground colour (the game's material distance is 30000).</summary>
     public float MaterialDistance { get; set; } = 30000;
 }

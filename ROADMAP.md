@@ -67,7 +67,8 @@ Status as of 2026-10-04. Details and open questions live in the linked docs.
 6. **Saves** — *not started.* Read and write original save games. Known so far: stat field names
    from the save writer.
 7. **Presentation** — *partly.* An OpenGL renderer exists in the viewer. To do: game renderer
-   (shadows, effects), MyGUI-compatible UI, audio, particles, physics/ragdolls.
+   (shadows, effects) with graphics options (terrain LOD distance, now fixed at its useful maximum, and
+   material distance), MyGUI-compatible UI, audio, particles, physics/ragdolls.
 8. **Parity** — *not started.* Side-by-side comparison against the original, mod compatibility
    test suite.
 

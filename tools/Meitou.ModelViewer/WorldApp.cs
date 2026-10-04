@@ -56,7 +56,7 @@ sealed class WorldOptions
           --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
           --wireframe --info
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
-          T textures, N normal maps, O objects, X wireframe, V debug view, [ / ] terrain LOD distance,
+          T textures, N normal maps, O objects, X wireframe, V debug view,
           G water, , / . time of day -/+ 1 hour, H print camera, P save screenshot, Esc quit.
         """;
 
@@ -483,8 +483,6 @@ static class WorldApp
                 case Key.G: render.Water = !render.Water; break;
                 case Key.Comma: hour = (hour + 23) % 24; Console.WriteLine($"time {hour:0}:00"); break;
                 case Key.Period: hour = (hour + 1) % 24; Console.WriteLine($"time {hour:0}:00"); break;
-                case Key.LeftBracket: render.LodDistance = Math.Max(render.LodDistance / 1.25f, 2f); Console.WriteLine($"LOD distance {render.LodDistance:0.##}"); break;
-                case Key.RightBracket: render.LodDistance = Math.Min(render.LodDistance * 1.25f, 16f); Console.WriteLine($"LOD distance {render.LodDistance:0.##}"); break;
                 case Key.H:
                     Console.WriteLine($"camera target {camera.Target.X:0}, {camera.Target.Y:0}, {camera.Target.Z:0} (zone {WorldLayout.ZoneOf(camera.Target.X, camera.Target.Z)}), " +
                         $"yaw {camera.Yaw * 180 / MathF.PI:0}, pitch {camera.Pitch * 180 / MathF.PI:0}, distance {camera.Distance:0}; " +

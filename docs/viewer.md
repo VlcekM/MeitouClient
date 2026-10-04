@@ -244,7 +244,7 @@ fast key speed and prints the frame times on the way (a streaming test). `MEITOU
 Keys: left drag orbits the target, right drag looks
 around, wheel zooms, `W A S D` free fly along the view direction, `Q`/`E` world down/up (speed follows the height above ground; Shift ×4, Ctrl ×0.25), `T` textures, `N` normal
 maps, `O` objects, `G` water, `,`/`.` time of day −/+ 1 hour, `X` wireframe, `V` debug view (blend weights,
-layer weights, untextured shading), `[`/`]` LOD distance (× 1.25), `H` prints the camera as command-line
+layer weights, untextured shading), `H` prints the camera as command-line
 options, `P` screenshot into the temp folder.
 
 ```
