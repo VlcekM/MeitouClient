@@ -7,6 +7,7 @@
     <Project Path="tests/Meitou.Tests/Meitou.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj" />
     <Project Path="tools/Meitou.Tools/Meitou.Tools.csproj" />
   </Folder>
 </Solution>

@@ -20,3 +20,5 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [animation.md](animation.md) | How the game uses skeletons and animations: attachments, animation sources, layers, blending, appearance sliders |
 | [formats/terrain.md](formats/terrain.md) | World coordinates, zone grid, `fullmap.tif` heightmap, legacy height tiles |
 | [formats/zones.md](formats/zones.md) | `.zone` / `.level` world-state files, building and town placements, roads, `features.dat` |
+| [formats/dds.md](formats/dds.md) | DDS textures: headers, block formats, base-game survey |
+| [viewer.md](viewer.md) | `meitou-viewer`: usage, how textures are resolved from FCS records, known gaps |
