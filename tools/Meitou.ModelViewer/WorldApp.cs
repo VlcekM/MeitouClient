@@ -746,6 +746,7 @@ static class WorldApp
         {
             if (gpu is null || gl is null) return;
             var size = window.FramebufferSize;
+            if (size.X <= 0 || size.Y <= 0) return; // minimized, or not yet shown at its maximized size
             if (queries.Length == 0)
             {
                 queries = new uint[4];
