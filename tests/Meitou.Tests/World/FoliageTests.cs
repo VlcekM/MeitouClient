@@ -62,10 +62,12 @@ public class FoliageTests
     }
 
     [Fact]
-    public void Noise_hash_matches_the_classic_integer_noise()
+    public void Noise_hash_uses_the_exe_multipliers()
     {
+        // kenshi_x64.exe FUN_1406cbba0 / FUN_1406d3740 / FUN_1406cc2e0: n (n² 60493 + 19990303) + 0xD208DD0D, masked to 31 bits
+        // (docs/formats/foliage.md, "Noise"). The textbook 15731 / 789221 hash would give 1316808037 for (1, 0).
         Assert.Equal(1376312589u, FoliageNoise.Hash(0, 0));
-        Assert.Equal(1316808037u, FoliageNoise.Hash(1, 0));
+        Assert.Equal(1757122681u, FoliageNoise.Hash(1, 0));
         Assert.Equal(FoliageNoise.Hash(57, 0), FoliageNoise.Hash(0, 1));   // n = x + 57 z
         Assert.Equal(1 - 1376312589.0 / 1073741824, FoliageNoise.Value(0, 0), 12);
         for (int i = -50; i < 50; i++)

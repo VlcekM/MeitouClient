@@ -98,22 +98,25 @@ public sealed class FoliageRandom
 }
 
 /// <summary>
-/// Kenshi's value noise for grass coverage and per-position randomness (docs/formats/foliage.md, "Noise"): the classic
-/// integer hash, smoothed over the 3 × 3 neighbourhood, cosine interpolated, summed over five octaves.
+/// Kenshi's value noise for grass coverage and per-position randomness (docs/formats/foliage.md, "Noise"): an integer
+/// hash (the classic value-noise hash with other multipliers), smoothed over the 3 × 3 neighbourhood, cosine interpolated, summed over five octaves.
 /// </summary>
 public static class FoliageNoise
 {
     /// <summary>The exe's π for the cosine interpolation (a double constant 3.1415927).</summary>
     const double Pi = 3.1415927;
 
-    /// <summary>The integer hash <c>n = x + 57 z; n ^= n &lt;&lt; 13; (n (n² 15731 + 789221) + 1376312589) &amp; 0x7FFFFFFF</c>.</summary>
+    /// <summary>
+    /// The exe's integer hash <c>n = x + 57 z; n ^= n &lt;&lt; 13; (n (n² 60493 + 19990303) + 1376312589) &amp; 0x7FFFFFFF</c>:
+    /// not the textbook 15731 / 789221 multipliers. The exe adds 0xD208DD0D, which is 1376312589 under the mask.
+    /// </summary>
     public static uint Hash(int x, int z)
     {
         unchecked
         {
             uint n = (uint)(z * 57 + x);
             n ^= n << 13;
-            return (n * (n * n * 15731u + 789221u) + 1376312589u) & 0x7FFFFFFFu;
+            return (n * (n * n * 60493u + 19990303u) + 1376312589u) & 0x7FFFFFFFu;
         }
     }
 

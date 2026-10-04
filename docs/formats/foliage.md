@@ -33,8 +33,13 @@ The code lives in `src/Meitou.Data/World/Foliage*.cs`, with tests in `tests/Meit
   - `grass` → GRASS, where value 0 is the coverage channel: 0 reads overlay R, anything else overlay G.
   - `visibility range`: FoliageVisibilityRange, 0 CLOSE, 1 MEDIUM, 2 FAR, 3 FEATURE.
   - `wind`: a wind page, see below.
-  - `lod range`: × 10, stored per mesh. The renderer use of this value is **Unknown**.
-  - Observed (viewer record dump, 2026-10-04): some layers also carry `uses foliage system`, `lod levels` and `page size` (e.g. SageBrush: lod range 150, page size 50, LandTrumpets: lod range 50). Their use by the game is **Unknown**; the viewer ignores them.
+  - `lod range`: × 10, stored per mesh (FUN_1406ce160). **Observed**: no instruction in the foliage system
+    (0x1406c0000–0x1406e8000) or the PagedGeometry code (0x140a28000–0x140a50000) reads that slot back, so it
+    probably has no effect; a reader elsewhere is not ruled out.
+  - `uses foliage system`, `lod levels`, `page size` (on some layers, e.g. SageBrush: lod range 150, page size 50;
+    LandTrumpets: lod range 50, page size 50, lod levels 1): **Verified (string search of kenshi_x64.exe)**: none
+    of the three names occurs in the exe, while every field it reads is there as a literal (`lod range` once).
+    The game never looks them up; they are editor-only. The viewer ignores them.
   - **Verified (decompiled)** for the record reads.
 - **FOLIAGE_MESH**: every field in `fcs.def`, read in FUN_1406ce160.
   - Scale range: `min height`/`max height` × 2, each clamped to [0.01, 10].
@@ -56,14 +61,28 @@ The code lives in `src/Meitou.Data/World/Foliage*.cs`, with tests in `tests/Meit
 - **Seed** per (layer, zone), reseeded before each mesh layer:
   - The leading integer of the layer's string id (its number, as a C++ stream reads it; 0 when there is none)
     minus `(int)(h / 2^30 × 16777215 − 16777215)`.
-  - `h` is the noise hash below of the zone's minimum corner, truncated to integers.
+  - `h` is the noise hash below (with the exe's multipliers) of the zone's minimum corner, truncated to integers.
+  - Each layer depends only on its own seed: its placements do not depend on the layers before it. A wrong hash
+    therefore moves every mesh layer of every zone (see "Noise").
   - **Verified (decompiled)**. That the sequence then reproduces the game's placements is **Unknown**: see
     "Not verifiable".
 
 ## Noise
 
-- **Verified (decompiled)**: the classic integer value noise.
-  - Hash of `n = x + 57 z`: `n ^= n << 13`, then `(n (n² 15731 + 789221) + 1376312589) & 0x7FFFFFFF`.
+- **Verified (disassembly of FUN_1406cbba0, and the same constants in FUN_1406d3740 and FUN_1406cc2e0)**: integer
+  value noise with Kenshi's own multipliers.
+  - Hash of `n = x + 57 z`: `n ^= n << 13`, then `(n (n² 60493 + 19990303) + 1376312589) & 0x7FFFFFFF`. The exe
+    multiplies by 0xEC4D, adds 0x131071F, multiplies by n, subtracts 0x2DF722F3 (adds 0xD208DD0D) and clears bit
+    31; 0xD208DD0D and 1376312589 (0x5208DD0D) differ only in that bit.
+  - These are **not** the textbook 15731 / 789221 multipliers. This doc and the code had those until 2026-10-05,
+    which gave every mesh layer a wrong seed and a wrong grass coverage and orientation noise. Found because the
+    viewer drew a LandTrumpets cluster in zone 21.29 (Skinner's Roam, near the Hub) where the user's in-game
+    screenshot shows none; whether the game's clusters now sit where the viewer puts them is **Unknown** (no
+    saved foliage to compare with, see "Not verifiable").
+  - **Observed** (10 base-game zones, regenerated overlay R against the shipped R, see "Overlay channels"): with
+    the exe's multipliers 25.7 % of the non-zero pixels match exactly, against 17.0 % with the textbook ones (zone
+    14.30: 73 % against 56 %; 22.32: 82 % against 61 %). That supports the constants but does not verify the
+    whole coverage rule.
   - Value `1 − h / 2^30`.
   - Smoothed over the 3 × 3 neighbourhood: sides / 8, corners / 16, centre / 4.
   - Cosine interpolated, with π stored as the double 3.1415927.
@@ -102,7 +121,9 @@ The code lives in `src/Meitou.Data/World/Foliage*.cs`, with tests in `tests/Meit
   - **Verified (decompiled)**.
 - **Observed** (base game, 25 sampled zones):
   - The regenerated R is non-zero on nearly the same pixels as the R the game ships (221,963 against 225,308).
-  - The values agree exactly on only 12–99 % of a zone's pixels (41.6 % overall).
+  - The values agree exactly on only 12–99 % of a zone's pixels (41.6 % overall). These figures, and the variants
+    below, were measured with the wrong (textbook) noise hash; with the exe's hash see "Noise" (a different set of
+    10 zones: 17.0 % → 25.7 %). The variants have not been retried with it.
   - Swapping axes, pixel-centre offsets, half or double scale, clamping instead of wrapping, and no altitude
     fade did not close the gap.
   - The shipped R is probably what the editor baked. The game overwrites it at run time anyway, so the viewer
@@ -262,6 +283,16 @@ FUN_140843920, its TERRAIN branch, and the functions it calls; decompiled output
   The stored placements therefore come from older data and cannot check the placement sequence; there are no
   saves to compare with.
 - Treat the mesh placement as the decompiled rules, **not** as compared against the game.
+- One in-game comparison point (Observed, user screenshot 2026-10-04, near world (-50882, -11613), zone 20.29, south of
+  The Hub): the game shows the crashed aircraft wreck JunkSat01 (`56738-Newwworld.mod`) with JunkBall01 (`46967-Newwworld.mod`)
+  a few hundred units behind it, both from the FOLIAGE_LAYER `JunkBalls` (one attempt each per zone, MEDIUM range 1000),
+  in front of a big rock arch (also foliage, the Canyonland big boulders). The viewer's placement puts the nearest JunkBall01
+  1,963 units and the nearest JunkSat01 2,561 units from that point, in opposite directions, so either the game's camera was
+  elsewhere or the sequence differs there. The camera position of the game shot is not known, so this is not a test yet.
+  Those distances were with the textbook noise hash. With the exe's hash ("Noise") the nearest JunkSat01 is in zone 21.29
+  at (-50283, -12040), 736 units away, with a JunkBall01 at (-49630, -11199) beyond it in the same direction (1,319
+  units), and a big boulder (FOLIAGE_Boulderbig08) at 975 units: a viewer shot from (-50583, -11613) now shows the
+  wreck in front of the arch as in the game shot (**Observed**, agreement in layout only, not measured).
 
 ## How the viewer draws it
 
