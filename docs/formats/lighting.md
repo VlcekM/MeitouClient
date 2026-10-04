@@ -65,7 +65,7 @@ Each frame the sky controller asks SkyX for its colour in a direction next to th
 
 `common.program`'s `AmbientParams` defaults: `ambientParams (0.89, 0.66, 0.16, 1)`, `envColour (1, 1, 1, 1)`. Neither name occurs
 in `kenshi_x64.exe` or any DLL of the install (byte search for the strings), and the exe's other writes to the `AmbientParams`
-block are `worldSize` (below), `zenithLight` and `nadirLight` (the sky update; read only by `SkyX_Clouds.hlsl`). So in the
+block are `worldSize` (below), `zenithLight` and `nadirLight` (the sky update; declared only by `SkyX_Clouds.hlsl`, which uses `zenithLight`, [clouds.md](clouds.md)). So in the
 lighting pass `ambientParams.w = 1` and `envColour.w = 1`; `envColour.rgb`, `groundLight` and `ambientParams.xyz` are not read
 by `main_fs`.
 

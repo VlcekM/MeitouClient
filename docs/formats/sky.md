@@ -17,15 +17,16 @@ HLSL and a GLSL file:
 | Skydome | `SkyX_Skydome.hlsl` | O'Neil's scattering evaluated per vertex (see below), phase functions per pixel, night glow, starfield |
 | Fog | `SkyX_Fog.hlsl`, `SkyX_Fog2.hlsl` | `skyXFog2`: the same integral per pixel for scene fog (see below) |
 | Moon | `SkyX_Moon.hlsl`, `SkyX_Moon.png`, `SkyX_MoonHalo.png` | a textured quad with a phase mask and a halo |
-| Clouds | `SkyX_Clouds.hlsl`, `Clouds.dds`, `CloudsNormal.dds`, `CloudsTile.dds` | a planar layer: the view ray hits a plane, the texture's red channel is the density |
-| Volumetric clouds, lightning, ground | `SkyX_VolClouds*.hlsl`, `SkyX_Lightning.hlsl`, `SkyX_Ground.hlsl`, `Noise.dds` | not used by the viewer |
+| Clouds | `SkyX_Clouds.hlsl`, `Clouds.dds`, `CloudsNormal.dds`, `CloudsTile.dds` | a planar layer: the view ray hits a plane, the texture's red channel is the density; all of it in [clouds.md](clouds.md) |
+| Volumetric clouds, lightning, ground | `SkyX_VolClouds*.hlsl`, `SkyX_Lightning.hlsl`, `SkyX_Ground.hlsl`, `Noise.dds` | not used by the game (**Verified**: the exe imports nothing of SkyX's `VCloudsManager`, [clouds.md](clouds.md)) nor by the viewer |
 
 The textures: `SkyX_Starfield.dds` is 4096² DXT1 with 13 mips (the Milky Way and stars on a black field; the shader scrolls it
 with time), `Clouds.dds` / `CloudsNormal.dds` / `CloudsTile.dds` / `Noise.dds` are 1024² DXT1 without mips, `SkyX_Moon.png`
 512² RGBA (a full moon disc on transparent), `SkyX_MoonHalo.png` 512 × 256 grey-alpha. `data/materials` also has `moon_HI.dds`
 (4096 × 2048) and `moon2_HI.dds`: despite the name an equirectangular **planet** map (brown deserts, dark seas, polar caps),
 with `planet01.mesh` and `moon_NML.dds`. So the game's sky has a large planet or moon as a mesh (**Observed**; its placement
-and phase are **Unknown**, the viewer does not draw it). `data/materials/caelum` is the older Caelum sky add-on's folder
+and phase are **Unknown**, the viewer does not draw it; lead: the sky creation FUN_14066e380 builds two objects from
+`planet01.mesh`, one named "Moon2", with constant vectors, not decoded). `data/materials/caelum` is the older Caelum sky add-on's folder
 (**Unknown** whether anything still uses it).
 
 ### The scattering model (Verified: SkyX shader source and the recorded exe constants)
@@ -91,15 +92,16 @@ Record type 80, found by name. Fields that concern the sky:
 
 | Field | Type | Meaning (Observed) |
 |---|---|---|
-| `sky color mult` | int, packed 0xRRGGBB | multiplier of the sky's colour: white in clear weather, `FCAC7C` (orange) in dust storms, `C6C6FF` (cool) in misty rain, `9F8777` in black rain |
-| `fog enabled`, `fog distance min` / `max`, `fog color` | bool, floats, int RRGGBB | the distance where the weather fog is complete, between min (calm) and max by the wind (Verified, see "Haze"; dust storms 7000 to 25000, "Desert Blaster" 700 to 4000); the colour is sand (`E9CB9E`) or white |
-| `clouds density` | float | 0 clear, 1 overcast; `SkyBeam` has 20 |
+| `sky color mult` | int, packed 0xRRGGBB | white in clear weather, `FCAC7C` (orange) in dust storms, `C6C6FF` (cool) in misty rain, `9F8777` in black rain. The sky controller fades to it over 30 s and multiplies only the two SkyX colours behind `zenithLight` (+Z) and `nadirLight` (+Y) with it, i.e. the cloud light and `horizonClouds` (**Verified (decompiled)**, the sky update; no other reader was searched, so whether anything tints the skydome itself is still open) |
+| `fog enabled`, `fog distance min` / `max`, `fog color` | bool, floats, int RRGGBB | the distance where the weather fog is complete; by the wind between min and max only when `fog wind min` ≠ `fog wind max`, else `max(min, max)` (**Verified (decompiled)**, the WEATHER loader). In the base game only "misty rain" has two wind values, so every weather's fog is complete at its `fog distance max` (dust storms 25000, "Sand stream" 20000; [weather.md](weather.md#fog-up-to-four-regions-verified-decompiled-fun_1409e8f70-fun_1409e8cc0-fun_1409dc350)); the colour is sand (`E9CB9E`) or white |
+| `clouds density` | float | 0 clear, 1 overcast, clamped to 0..1 by the sky controller (`SkyBeam` has 20); drives the cloud layer ([clouds.md](clouds.md)) |
 
 Others (`rain intensity`, `wetness`, `dust`, `dust inside`, `dust slope`, `heat haze`, `wind speed min/max`, `wind intensity`,
 `wind update time/limit`, `fog wind min/max`, `affect type/strength`, `effect strength min/max`, `start time`, `end time`)
 are for rain, dust and wind effects and the weather's own schedule; not read by the viewer. The "Default" weather
-(`5460-weather.mod`) is clear: fog off, clouds 0, both colours white. Which weather applies where (the game picks one per
-region and time) is **Unknown**; `SkyWeather` reads a record, the viewer uses "Default" unless `--weather` names another.
+(`5460-weather.mod`) is clear: fog off, clouds 0, both colours white. Which weather applies where and when (regions from
+`areasmap.tga`, seasons, weighted random weathers, wind) is in [weather.md](weather.md); `SkyWeather` reads a record, the viewer
+uses "Default" unless `--weather` names another.
 
 
 ### Haze (distance fog): how vanilla does it
@@ -151,15 +153,20 @@ checked 2026-10-04):
   `saturate(sun · (1 - 0.1 · (offset + 0.2) · densityMultiplier) + max(horizon, floor) · sun.g) · (1 - darkness) · sqrt(exposure)`,
   with `densityMultiplier` 3 (`uDensityMultiplier`, set at creation), `darkness` = `pow(saturate(c - 0.5), 0.3)` (`uDarkness`),
   `sun` = `sunColour.rgb` = SkyX's colour towards the sun nudged by (0, 0, 0.04), divided by `4 · exposure` (when the sun is above
-  -0.2; else black), `horizon` = SkyX's colour along +Z times the weather's sky multiplier, `floor` a colour in the sky controller
-  (offset 0xb8, its value **Unknown**). What `getColorAt` returns (tone-mapped or not) is **Unknown**, so the colour's brightness is.
+  -0.2; else black), `horizon` = SkyX's colour along +Z (Ogre's `UNIT_Z`, **Verified (decompiled)**) times the weather's sky
+  multiplier, `floor` = (0.001, 0.001, 0.0015), the sky controller's offset 0xb8, set when the sky is created (**Verified
+  (decompiled)**). `getColorAt` returns SkyX's HDR colour, `exposure · (…)` ([lighting.md](lighting.md#suncolour-verified-exe-sky-update-skyx_x64dll)),
+  so the colour is in the same HDR units as the cloud layer's ([clouds.md](clouds.md)).
 - **Global (weather) term** (`fogValue`, **Verified**): `amount = saturate(distance * fogDensity)`, alpha an ease-in-out curve of it (`2a²`
   below 0.5, `1 - 2(a-1)²` above) times `fogColour.a`, colour `fogColour.rgb * sunColour.w` (`sunColour.w` is a daylight scale: half of a
   controller value at sunrise, rising with the sun's height, and falling to 0 just below the horizon). Result `colour = lerp(atmosphere,
-  global, global.a)`, `alpha = saturate(atmosphere.a + global.a)`. **Verified** (the weather blender and `MainFog`'s setters): up to
-  four weathers are blended by weight; each gives `fogColour.a` = 1 if `fog enabled` else 0, `fogColour.rgb` = `fog color`, and a
+  global, global.a)`, `alpha = saturate(atmosphere.a + global.a)`. **Verified** (the weather blender and `MainFog`'s setters): the
+  current weathers of up to four weather regions are blended by weight (the zone cells at the camera ± 1300 in x and z, weight
+  `1 − min(1, d²/1300²)` with `d` the camera's distance to the cell; [weather.md](weather.md#fog-up-to-four-regions-verified-decompiled-fun_1409e8f70-fun_1409e8cc0-fun_1409dc350));
+  each gives `fogColour.a` = 1 if `fog enabled` else 0, `fogColour.rgb` = `fog color`, and a
   distance `d = lerp(fog distance min, fog distance max, saturate((wind - fog wind min) / (fog wind max - fog wind min)))` (`fog
-  distance min` when the two wind values are equal), the current wind being the weather's. `fogDensity = 1 / d` (1 when d is 0, where
+  distance min` when the two wind values are equal, which the WEATHER loader has already replaced by `max(min, max)`), the
+  current wind being the region's. `fogDensity = 1 / d` (1 when d is 0, where
   `fogColour.a` is 0 anyway). So the weather fog is complete at d. The "Default" weather has `fog enabled` false: no weather fog.
 - It does **not** differ per biome (**Observed**: no biome field is read by the shaders or the sky controller's fog code).
 - **Not there**: no exponential or height-based haze in the main chain (`SkyX_Fog*.hlsl` and ground fog are separate features:
@@ -178,7 +185,7 @@ checked 2026-10-04):
   vanishes and the haze is black, as in the game. Then `horizonClouds`: its pull is the game's (0 in clear weather); its colour is a
   **stand-in** built the game's way from the viewer's sun colour and horizon colour (the game's `getColorAt` input for the cloud layer
   and its floor colour are Unknown, above). The weather's fog (`--weather`, when enabled): `fog color · sunColour.w`, the game's
-  ease-in-out curve over `distance / fog distance max` (the viewer has no wind; the game would use a distance between min and max),
+  ease-in-out curve over `distance / fog distance max` (the viewer has no wind; the game uses the same distance for every base weather, see the WEATHER table above),
   alphas added. Consequences that look odd but are the game's rule: from a camera high above the ground (the viewer allows much higher
   than the game) everything is past 30000 and fully hazed, steep rays all take the one fixed ray's colour; at night distant terrain
   goes black against the night sky. Not reproduced: the water being fogged by the depth of what is under it.
@@ -209,10 +216,10 @@ and sky-view tables, the 0.36° sun disc) is gone, with `AtmosphereModel.cs`.
 - **Moon**: `SkyX_Moon.png`, always full, opposite the sun, saturated and alpha-blended as `SkyX_Moon.hlsl` does; its size (0.016
   rad) and placement are **stand-ins** (the game's moon position is Unknown).
 - **Clouds** (`--clouds` or the weather's density): a flat layer of `Clouds.dds`'s red channel; the colour follows the cloud shader's
-  form with a **stand-in** zenith light (the game's inputs are Unknown).
-- **Weather tint**: the sky is multiplied by the weather's `sky color mult`. Whether the game tints the skydome itself with it, or
-  only the `horizon` colour that feeds `horizonClouds`, is **Unknown**; white in the "Default" weather, so the default views do not
-  depend on it. With weather fog the sky near the horizon fades to the fog colour (a viewer choice).
+  form with a **stand-in** zenith light (the game's inputs are now known: [clouds.md](clouds.md)).
+- **Weather tint**: the sky is multiplied by the weather's `sky color mult`. In the game the sky update applies it only to the
+  `zenithLight` / `nadirLight` colours (clouds and `horizonClouds`), see the WEATHER table above; white in the "Default" weather,
+  so the default views do not depend on it. With weather fog the sky near the horizon fades to the fog colour (a viewer choice).
 - **Light**: the deferred lighting pass's model ([lighting.md](lighting.md)): `kenshiLight` in the mesh, terrain and grass shaders.
   The water still takes a sun colour and an ambient (`WorldLighting`): `π · 0.96 · sunColour.rgb · w` and the irradiance cube's up
   and down faces times the environment factor.

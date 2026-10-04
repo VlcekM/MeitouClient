@@ -390,8 +390,9 @@ Their materials come from the model viewer's resolver ([../viewer.md](../viewer.
 
 What is not drawn (Observed, base game, 2026-10-05):
 - 44 placements are `hidden` (fcs.def: "markers to attach effects"): Volk-Cloud Placer 24, Volc-small-steamers Placer 18,
-  Permanent-dust-storm Placer 1, Marker-Attractor 1. The placers carry an EFFECT instance (clouds, steam, a dust storm),
-  which the viewer does not draw (no effects).
+  Permanent-dust-storm Placer 1, Marker-Attractor 1. The placers carry an EFFECT as an instance of the feature record (volcano
+  plumes, steam, a dust storm; [weather.md](weather.md#effect-placers-on-the-map-verified-records-and-featuresdat)), which the
+  viewer does not draw (no effects).
 - 11 placements (7 ids, e.g. `2332-Newwworld.mod`, `2332-D-Newwworld.mod`) name records no base file defines.
 - 1 record names a mesh that is not in the install: Fractal_Distiller_Feature (`52165-Newwworld.mod`,
   `data/newland/Assets/Buildings/Fractal_Distiller01.mesh`).
