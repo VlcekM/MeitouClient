@@ -8,12 +8,12 @@ namespace Meitou.Tests.World;
 
 public class TerrainBiomeTests
 {
-    static byte[] BlendInfo(int cx, int cz, uint[] slots, byte[] trailer)
+    static byte[] BlendInfo(int cells, int resolution, uint[] slots, byte[] trailer)
     {
         var data = new byte[12 + slots.Length * 4 + trailer.Length];
         "KBI1"u8.CopyTo(data);
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(4), cx);
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(8), cz);
+        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(4), cells);
+        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(8), resolution);
         for (int i = 0; i < slots.Length; i++) BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(12 + 4 * i), slots[i]);
         trailer.CopyTo(data, 12 + slots.Length * 4);
         return data;
@@ -22,17 +22,76 @@ public class TerrainBiomeTests
     [Fact]
     public void Blend_info_reads_slot_colours_per_cell()
     {
-        uint[] slots = [0x00FF00, 0, 0, 0, 0, 0xB400FF, 0x0A1E78, 0, 0, 0];
-        var file = BlendInfoFile.Read(BlendInfo(2, 1, slots, [1, 2, 3]));
-        Assert.Equal((2, 1), (file.CellsX, file.CellsZ));
+        uint[] slots = new uint[4 * 5];
+        slots[0] = 0x00FF00;
+        slots[5] = 0xB400FF;
+        slots[6] = 0x0A1E78;
+        // Slot masks at resolution 2 (8 nodes): cells 0, 2, 3 one slot (a single byte); cell 1 a full tree: slot 0
+        // in the left leaves, slot 1 in the right ones (leaf index 4 | morton(x, z), x in the even bit).
+        byte[] full1 = [0x43, 0x43, 0, 0, 0x21, 0x22, 0x21, 0x22];
+        byte[] trailer = [8, 0, 0, 0, 0x21, .. full1, 0x21, 0x22]; // cells 2 and 3: one slot each
+        var file = BlendInfoFile.Read(BlendInfo(2, 2, slots, []));
+        Assert.Null(file.Nodes);
+        file = BlendInfoFile.Read(BlendInfo(2, 2, slots, trailer));
+        Assert.Equal((2, 2, 2), (file.CellsX, file.CellsZ, file.Resolution));
         Assert.Equal(0x00FF00u, file.Slot(0, 0, 0));
         Assert.Equal(0x0A1E78u, file.Slot(1, 0, 1));
-        Assert.Equal([1, 2, 3], file.Trailer);
-        Assert.Equal((0, 0), file.CellOf(-1, 0));
-        Assert.Equal((1, 0), file.CellOf(0, 0));
-        Assert.Equal((1, 0), file.CellOf(1e9, 1e9)); // clamped
+        Assert.Single(file.Nodes![0]);
+        Assert.Equal(8, file.Nodes[1].Length);
+        Assert.Equal(0x21, file.SlotMask(1, 0, 0.1, 0.1, 0.2, 0.2));   // one left leaf: slot 0
+        Assert.Equal(0x22, file.SlotMask(1, 0, 0.6, 0.6, 0.9, 0.9));   // one right leaf: slot 1
+        Assert.Equal(0x43, file.SlotMask(1, 0, 0.1, 0.1, 0.9, 0.2));   // spans two leaves: their common parent, the root
+        Assert.Equal(0x21, file.SlotMask(0, 0, 0, 0, 1, 1));          // single-byte cell
+        Assert.Equal((0, 0), file.CellOf(-1, -1));
+        Assert.Equal((1, 1), file.CellOf(0, 0));
+        Assert.Equal((1, 1), file.CellOf(1e9, 1e9)); // clamped
+        Assert.Equal(0b1001, BlendInfoFile.Morton(1, 2));
         Assert.Throws<InvalidDataException>(() => BlendInfoFile.Read("KBI2\0\0\0\0\0\0\0\0"u8.ToArray()));
         Assert.Throws<InvalidDataException>(() => BlendInfoFile.Read(BlendInfo(4, 4, [1, 2], [])));
+        Assert.Throws<InvalidDataException>(() => BlendInfoFile.Read(BlendInfo(2, 2, slots, [8, 0, 0, 0, 0x21])));
+    }
+
+    [Fact]
+    public void Base_game_slot_masks_describe_the_blend_map()
+    {
+        var install = GameInstall.Locate();
+        Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
+        var info = BlendInfoFile.Open(install!);
+        Assert.Equal((32, 32), (info.Cells, info.Resolution));
+        var nodes = info.Nodes!;
+        Assert.Equal(656, nodes.Count(n => n.Length == 2048)); // the rest (368) are single bytes
+        Assert.Equal(368, nodes.Count(n => n.Length == 1));
+        var blend = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install!.DataDirectory, TerrainMaps.BlendMap)));
+        int Used(int px, int pz)
+        {
+            int o = (Math.Clamp(pz, 0, 1023) * 1024 + Math.Clamp(px, 0, 1023)) * 4, m = 0;
+            for (int k = 0; k < 4; k++) if (blend.Pixels[o + k] > 0) m |= 1 << k;
+            if (255 - blend.Pixels[o] - blend.Pixels[o + 1] - blend.Pixels[o + 2] - blend.Pixels[o + 3] > 0) m |= 16;
+            return m;
+        }
+        for (int cz = 0; cz < 32; cz++)
+            for (int cx = 0; cx < 32; cx++)
+            {
+                var n = nodes[cz * 32 + cx];
+                for (int k = 0; k < 5; k++)
+                    if ((BlendInfoFile.MaskSlots(n[0]) & (1 << k)) != 0) Assert.NotEqual(0u, info.Slot(cx, cz, k));
+                if (n.Length == 1) continue;
+                Assert.Equal(n[0], n[1]);
+                for (int i = 1; i < n.Length; i++)
+                    Assert.Equal(System.Numerics.BitOperations.PopCount((uint)BlendInfoFile.MaskSlots(n[i])), BlendInfoFile.MaskCount(n[i]));
+                for (int i = 1; i < 1024 / 2; i++)
+                    Assert.Equal(BlendInfoFile.MaskSlots(n[i]), BlendInfoFile.MaskSlots((byte)(n[4 * i] | n[4 * i + 1] | n[4 * i + 2] | n[4 * i + 3])));
+                // A leaf is one blend-map pixel: it holds the slots weighted there, and none that are not weighted in its 3 x 3 neighbourhood.
+                for (int lz = 0; lz < 32; lz++)
+                    for (int lx = 0; lx < 32; lx++)
+                    {
+                        int px = cx * 32 + lx, pz = cz * 32 + lz, own = Used(px, pz), near = 0;
+                        for (int dz = -1; dz <= 1; dz++)
+                            for (int dx = -1; dx <= 1; dx++) near |= Used(px + dx, pz + dz);
+                        int leaf = BlendInfoFile.MaskSlots(n[1024 | BlendInfoFile.Morton(lx, lz)]);
+                        Assert.True((leaf & own) == own && (leaf & ~near) == 0, $"cell {cx},{cz} leaf {lx},{lz}: mask {leaf:X2}, weights {own:X2}, around {near:X2}");
+                    }
+            }
     }
 
     static uint Rgb(byte[] p, int i) => (uint)(p[i] << 16 | p[i + 1] << 8 | p[i + 2]);
@@ -43,7 +102,7 @@ public class TerrainBiomeTests
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
         var info = BlendInfoFile.Open(install!);
-        Assert.Equal((32, 32), (info.CellsX, info.CellsZ));
+        Assert.Equal(32, info.Cells);
         var blend = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install!.DataDirectory, TerrainMaps.BlendMap)));
         var biome = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install.DataDirectory, TerrainMaps.BiomeMap)));
         Assert.Equal((1024, 1024), (blend.Width, biome.Width));

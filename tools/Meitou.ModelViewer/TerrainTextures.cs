@@ -17,12 +17,14 @@ namespace Meitou.ModelViewer;
 public sealed unsafe class TerrainTextures : IDisposable
 {
     readonly GL gl;
-    uint diffuseArray, normalArray, paramTexture, cellTexture, blendTexture, overlayTexture, colourTexture;
+    uint diffuseArray, normalArray, paramTexture, cellTexture, blendTexture, overlayTexture, colourTexture, groundTexture, worldColourTexture;
 
     TerrainTextures(GL gl) => this.gl = gl;
 
     public bool HasBiomes { get; private set; }
     public bool HasMaps { get; private set; }
+    public bool HasGround { get; private set; }
+    public bool HasWorldColour { get; private set; }
     public int CellsX { get; private set; } = 1;
     public int CellsZ { get; private set; } = 1;
     /// <summary>x0, z0, 1/width, 1/depth of the overlay texture in world units.</summary>
@@ -34,7 +36,7 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     /// <param name="layerSize">Edge length every layer texture is brought to (the arrays need one size).</param>
     public static TerrainTextures Build(GL gl, GameInstall install, GameDatabase db, AssetLocator assets,
-        double x0, double z0, double x1, double z1, int layerSize = 512, int maxMapSize = 4096)
+        double x0, double z0, double x1, double z1, int layerSize = 512, int maxMapSize = 4096, int worldColourSize = 2048)
     {
         var t = new TerrainTextures(gl);
         try { t.BuildBiomes(install, db, assets, x0, z0, x1, z1, layerSize); }
@@ -46,6 +48,11 @@ public sealed unsafe class TerrainTextures : IDisposable
         catch (Exception e) when (e is IOException or InvalidDataException)
         {
             t.Messages.Add($"overlay maps: {e.Message}");
+        }
+        try { t.BuildWorld(install, db, worldColourSize); }
+        catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException)
+        {
+            t.Messages.Add($"world maps: {e.Message}");
         }
         return t;
     }
@@ -270,6 +277,57 @@ public sealed unsafe class TerrainTextures : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Whole-world maps for the far terrain: the biomes' ground colour × brightness fix blended by the blend map
+    /// (what the textured layers fade to, and finer than the game's 128² <c>distant.png</c>), and the colour map
+    /// shrunk to <paramref name="colourSize"/>² (0: none).
+    /// </summary>
+    void BuildWorld(GameInstall install, GameDatabase db, int colourSize)
+    {
+        var info = BlendInfoFile.Open(install);
+        var all = BiomeTerrain.ByIndex(db);
+        var blend = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install.DataDirectory, TerrainMaps.BlendMap)));
+        var field = BiomeField.Bake(info, blend.Width, blend.Height, blend.Pixels,
+            c => all.TryGetValue(c, out var b) ? new Vector4(b.GroundColour * b.BrightnessFix, 1) : null, new Vector4(0.6f, 0.55f, 0.45f, 1));
+        var rgba = new byte[field.Length * 4];
+        for (int i = 0; i < field.Length; i++)
+        {
+            var v = Vector4.Clamp(field[i], Vector4.Zero, Vector4.One) * 255;
+            (rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2], rgba[i * 4 + 3]) = ((byte)v.X, (byte)v.Y, (byte)v.Z, 255);
+        }
+        groundTexture = WorldGl.Texture2D(gl, blend.Width, blend.Height, rgba, repeat: false);
+        HasGround = true;
+        if (colourSize <= 0) return;
+
+        // 8 x 8 colour tiles, each box-filtered down to colourSize / 8.
+        int part = colourSize / TerrainMaps.OverlayTiles;
+        var colour = new byte[colourSize * colourSize * 4];
+        Parallel.For(0, TerrainMaps.OverlayTiles * TerrainMaps.OverlayTiles, t =>
+        {
+            int tx = t % TerrainMaps.OverlayTiles, tz = t / TerrainMaps.OverlayTiles;
+            var path = TerrainMaps.OverlayTile(install, "colour", tx, tz);
+            if (!File.Exists(path)) return;
+            var img = TextureLoader.LoadImage(File.ReadAllBytes(path));
+            int f = Math.Max(1, img.Width / part);
+            for (int y = 0; y < part; y++)
+                for (int x = 0; x < part; x++)
+                {
+                    int r = 0, g = 0, b = 0, n = 0;
+                    for (int sy = y * f; sy < Math.Min((y + 1) * f, img.Height); sy++)
+                        for (int sx = x * f; sx < Math.Min((x + 1) * f, img.Width); sx++)
+                        {
+                            int o = (sy * img.Width + sx) * 4;
+                            r += img.Pixels[o]; g += img.Pixels[o + 1]; b += img.Pixels[o + 2]; n++;
+                        }
+                    if (n == 0) continue;
+                    int d = ((tz * part + y) * colourSize + tx * part + x) * 4;
+                    (colour[d], colour[d + 1], colour[d + 2], colour[d + 3]) = ((byte)(r / n), (byte)(g / n), (byte)(b / n), 255);
+                }
+        });
+        worldColourTexture = WorldGl.Texture2D(gl, colourSize, colourSize, colour, repeat: false);
+        HasWorldColour = true;
+    }
+
     public void Bind()
     {
         uint[] units = [diffuseArray, normalArray, paramTexture, cellTexture, blendTexture, overlayTexture, colourTexture];
@@ -278,12 +336,16 @@ public sealed unsafe class TerrainTextures : IDisposable
             gl.ActiveTexture(TextureUnit.Texture0 + i);
             gl.BindTexture(i < 2 ? TextureTarget.Texture2DArray : TextureTarget.Texture2D, units[i]);
         }
+        gl.ActiveTexture(TextureUnit.Texture0 + TerrainShaders.GroundUnit);
+        gl.BindTexture(TextureTarget.Texture2D, groundTexture);
+        gl.ActiveTexture(TextureUnit.Texture0 + TerrainShaders.WorldColourUnit);
+        gl.BindTexture(TextureTarget.Texture2D, worldColourTexture);
         gl.ActiveTexture(TextureUnit.Texture0);
     }
 
     public void Dispose()
     {
-        foreach (var t in new[] { diffuseArray, normalArray, paramTexture, cellTexture, blendTexture, overlayTexture, colourTexture })
+        foreach (var t in new[] { diffuseArray, normalArray, paramTexture, cellTexture, blendTexture, overlayTexture, colourTexture, groundTexture, worldColourTexture })
             if (t != 0) gl.DeleteTexture(t);
     }
 }

@@ -4,19 +4,96 @@ namespace Meitou.ModelViewer;
 /// GLSL for the world view's terrain (OpenGL 3.3 core). The layer model follows the facts in
 /// docs/formats/terrain.md ("How the terrain is textured"): per biome six layers (base, slope, cliff, grass,
 /// dirt, road) chosen by slope and the overlay map, tinted by the colour map, up to four biomes per pixel
-/// weighted by the blend map.
+/// weighted by the blend map. Far away (beyond the game's material distance) and outside the loaded region the
+/// terrain takes the biomes' blended ground colour, like the game's distant terrain.
 /// </summary>
 static class TerrainShaders
 {
     /// <summary>Rows of the per-biome parameter texture (RGBA32F, one row per biome).</summary>
     public const int ParamTexels = 11;
 
-    public const string Vertex = """
+    /// <summary>Texture units of the world-wide maps (TerrainTextures binds units 0..6 for the region).</summary>
+    public const int HeightCoarseUnit = 7, HeightFineUnit = 8, GroundUnit = 9, WorldColourUnit = 10;
+
+    /// <summary>
+    /// Terrain height anywhere in the world: a coarse whole-world grid, replaced by the loaded region's finer grid
+    /// inside the region (blended over a band at its edge so the height stays continuous). Shared by the terrain and
+    /// water shaders.
+    /// </summary>
+    public const string HeightFunctions = """
+        uniform sampler2D uHeightCoarse;   // whole world, R16: raw / 65535
+        uniform vec4 uCoarseRect;          // world x0, z0, x1, z1 of the first and last samples
+        uniform vec2 uCoarseCells;         // samples - 1 along X and Z
+        uniform sampler2D uHeightFine;     // the loaded region
+        uniform vec4 uFineRect;
+        uniform vec2 uFineCells;
+        uniform float uFineBand;           // world units over which the region fades into the coarse grid
+        uniform bool uHasFine;
+
+        float gridHeight(sampler2D s, vec2 p, vec4 rect, vec2 cells)
+        {
+            vec2 t = (p - rect.xy) / (rect.zw - rect.xy);
+            return texture(s, (t * cells + 0.5) / (cells + 1.0)).r * 9800.0;
+        }
+        float fineWeight(vec2 p)
+        {
+            if (!uHasFine) return 0.0;
+            vec2 d = min(p - uFineRect.xy, uFineRect.zw - p);
+            return clamp(min(d.x, d.y) / uFineBand, 0.0, 1.0);
+        }
+        float terrainHeight(vec2 p)
+        {
+            float c = gridHeight(uHeightCoarse, p, uCoarseRect, uCoarseCells);
+            float w = fineWeight(p);
+            return w <= 0.0 ? c : mix(c, gridHeight(uHeightFine, p, uFineRect, uFineCells), w);
+        }
+        float terrainSpacing(vec2 p)
+        {
+            float coarse = (uCoarseRect.z - uCoarseRect.x) / uCoarseCells.x;
+            return uHasFine ? mix(coarse, (uFineRect.z - uFineRect.x) / uFineCells.x, fineWeight(p)) : coarse;
+        }
+        vec3 terrainNormal(vec2 p)
+        {
+            float e = terrainSpacing(p);
+            float hx = terrainHeight(p - vec2(e, 0.0)) - terrainHeight(p + vec2(e, 0.0));
+            float hz = terrainHeight(p - vec2(0.0, e)) - terrainHeight(p + vec2(0.0, e));
+            return normalize(vec3(hx, 2.0 * e, hz));
+        }
+        """;
+
+    /// <summary>
+    /// CDLOD patch: a grid of <c>cells</c>² quads placed over one quadtree node; vertices slide onto the next
+    /// coarser grid with distance (TerrainQuadtree), heights come from <see cref="HeightFunctions"/>.
+    /// </summary>
+    public const string PatchVertex = "#version 330 core\n" + HeightFunctions + """
+
+        layout(location = 0) in vec2 aGrid;   // integer grid coordinates 0..cells
+        uniform mat4 uViewProjection;
+        uniform vec3 uEye;
+        uniform vec4 uNode;                    // x0, z0, size, cells
+        uniform vec2 uMorph;                   // distance where morphing starts and ends (start >= 1e30: never)
+        out vec3 vWorld;
+        out vec3 vNormal;
+        void main()
+        {
+            vec2 p = uNode.xy + aGrid * (uNode.z / uNode.w);
+            float d = distance(vec3(p.x, terrainHeight(p), p.y), uEye);
+            float k = uMorph.x >= 1e30 ? 0.0 : clamp((d - uMorph.x) / (uMorph.y - uMorph.x), 0.0, 1.0);
+            vec2 g = aGrid - mod(aGrid, 2.0) * k;
+            p = uNode.xy + g * (uNode.z / uNode.w);
+            vWorld = vec3(p.x, terrainHeight(p), p.y);
+            vNormal = vec3(0.0, 1.0, 0.0);   // the fragment shader takes the normal from the height field
+            gl_Position = uViewProjection * vec4(vWorld, 1.0);
+        }
+        """;
+
+    /// <summary>Plain meshes drawn with the terrain material (TERRAIN-mode map features).</summary>
+    public const string MeshVertex = """
         #version 330 core
         layout(location = 0) in vec3 aPosition;
         layout(location = 1) in vec3 aNormal;
         uniform mat4 uViewProjection;
-        uniform mat4 uModel;           // identity for terrain chunks; the placement for TERRAIN-mode map features
+        uniform mat4 uModel;           // the placement of the map feature
         out vec3 vWorld;
         out vec3 vNormal;
         void main()
@@ -27,23 +104,32 @@ static class TerrainShaders
         }
         """;
 
-    public const string Fragment = """
-        #version 330 core
+    public const string Fragment = "#version 330 core\n" + HeightFunctions + """
+
         in vec3 vWorld;
         in vec3 vNormal;
         out vec4 fragColour;
 
         uniform vec3 uEye;
         uniform vec3 uLightDir;
+        uniform vec3 uSunColour;
+        uniform vec3 uAmbientSky;
+        uniform vec3 uAmbientGround;
         uniform vec3 uFogColour;
         uniform float uFogDistance;
         uniform bool uWireframe;
+        uniform bool uHeightNormals;   // terrain patches: normal from the height field; meshes: from the vertices
+        uniform float uWaterHeight;    // underwater ground is darkened (the game's wetness rule)
 
         uniform bool uTextured;        // biome layers available
         uniform bool uNormalMaps;
         uniform bool uHasMaps;         // overlay + colour region textures available
-        uniform int uDebug;            // 0 normal, 1 slot weights, 2 layer weights
+        uniform int uDebug;            // 0 normal, 1 slot weights, 2 layer weights, 3 LOD-free shading
         uniform bool uNoRoads;         // map features: no road layer
+        uniform float uFarStart;       // distance where the textured terrain gives way to the ground colour
+        uniform float uFarEnd;
+        uniform bool uHasGround;       // whole-world ground colour map available
+        uniform bool uHasWorldColour;  // whole-world colour map available
 
         uniform sampler2DArray uDiffuse;
         uniform sampler2DArray uNormal;
@@ -52,6 +138,8 @@ static class TerrainShaders
         uniform sampler2D uBlendMap;   // whole world: weights of slots 0..3; slot 4 takes the remainder
         uniform sampler2D uOverlay;    // region: R/G grass, B dirt, A road
         uniform sampler2D uColour;     // region: tint (×1.2), A gloss
+        uniform sampler2D uGround;     // whole world: blended biome ground colour × brightness fix
+        uniform sampler2D uWorldColour;// whole world: the colour map, downsampled
         uniform vec4 uRegion;          // x0, z0, 1/width, 1/depth of the overlay region texture
         uniform vec4 uColourRegion;    // the same for the colour region texture
         uniform vec2 uCellGrid;        // cells along X and Z
@@ -120,81 +208,101 @@ static class TerrainShaders
             return s;
         }
 
+        // Untextured: height tint (sand, olive, grey).
+        vec3 heightTint(float y)
+        {
+            float h = clamp(y / 3500.0, 0.0, 1.0);
+            vec3 low = vec3(0.76, 0.70, 0.50), mid = vec3(0.55, 0.50, 0.36), high = vec3(0.62, 0.60, 0.58);
+            return h < 0.5 ? mix(low, mid, h * 2.0) : mix(mid, high, h * 2.0 - 1.0);
+        }
+
         void main()
         {
             if (uWireframe) { fragColour = vec4(0.1, 0.1, 0.1, 1.0); return; }
-            vec3 n = normalize(vNormal);
+            vec3 n = uHeightNormals ? terrainNormal(vWorld.xz) : normalize(vNormal);
             float distance = length(vWorld - uEye);
             float slope = 1.0 - n.y;
+            vec2 world01 = (vWorld.xz + uHalfWorld) / (2.0 * uHalfWorld);
 
-            vec4 map = vec4(0.0);
-            vec4 colour = vec4(1.0);
-            if (uHasMaps)
-            {
-                map = texture(uOverlay, (vWorld.xz - uRegion.xy) * uRegion.zw);
-                map.r = max(map.r, map.g);
-                if (uNoRoads) map.a = 0.0;
-                colour = texture(uColour, (vWorld.xz - uColourRegion.xy) * uColourRegion.zw) * 1.2;
-            }
+            // How much of the textured (region) shading applies: inside the region, before the far distance.
+            float nearWeight = uHeightNormals ? fineWeight(vWorld.xz) : 1.0;
+            nearWeight *= 1.0 - smoothstep(uFarStart, uFarEnd, distance);
 
-            vec4 albedo;
+            vec4 albedo = vec4(0.0);
             vec3 shadingNormal = n;
-            if (uTextured)
+            if (nearWeight > 0.0)
             {
-                vec2 world01 = (vWorld.xz + uHalfWorld) / (2.0 * uHalfWorld);
-                ivec2 cell = clamp(ivec2(floor(world01 * uCellGrid)), ivec2(0), ivec2(uCellGrid) - 1);
-                uvec4 slots = texelFetch(uCells, ivec2(cell.x * 2, cell.y), 0);
-                uint slot4 = texelFetch(uCells, ivec2(cell.x * 2 + 1, cell.y), 0).r;
-                vec4 weights = texture(uBlendMap, world01);
-                float rest = max(0.0, 1.0 - dot(weights, vec4(1.0)));
-                vec4 sumA = vec4(0.0), sumN = vec4(0.0);
-                float total = 0.0;
-                for (int k = 0; k < 5; k++)
+                vec4 map = vec4(0.0);
+                vec4 colour = vec4(1.0);
+                if (uHasMaps)
                 {
-                    uint b = k < 4 ? slots[k] : slot4;
-                    float wk = k < 4 ? weights[k] : rest;
-                    if (b == 255u || wk < 0.004) continue;
-                    Surface s = biome(int(b), n, slope, map, colour, distance);
-                    sumA += s.albedo * wk;
-                    sumN += s.normal * wk;
-                    total += wk;
+                    map = texture(uOverlay, (vWorld.xz - uRegion.xy) * uRegion.zw);
+                    map.r = max(map.r, map.g);
+                    if (uNoRoads) map.a = 0.0;
+                    colour = texture(uColour, (vWorld.xz - uColourRegion.xy) * uColourRegion.zw) * 1.2;
                 }
-                uint fallback = slot4 != 255u ? slot4 : slots.x;
-                if (total <= 0.0 && fallback != 255u)
+                if (uTextured)
                 {
-                    Surface s = biome(int(fallback), n, slope, map, colour, distance);
-                    sumA = s.albedo; sumN = s.normal; total = 1.0;
+                    ivec2 cell = clamp(ivec2(floor(world01 * uCellGrid)), ivec2(0), ivec2(uCellGrid) - 1);
+                    uvec4 slots = texelFetch(uCells, ivec2(cell.x * 2, cell.y), 0);
+                    uint slot4 = texelFetch(uCells, ivec2(cell.x * 2 + 1, cell.y), 0).r;
+                    vec4 weights = texture(uBlendMap, world01);
+                    float rest = max(0.0, 1.0 - dot(weights, vec4(1.0)));
+                    vec4 sumA = vec4(0.0), sumN = vec4(0.0);
+                    float total = 0.0;
+                    for (int k = 0; k < 5; k++)
+                    {
+                        uint b = k < 4 ? slots[k] : slot4;
+                        float wk = k < 4 ? weights[k] : rest;
+                        if (b == 255u || wk < 0.004) continue;
+                        Surface s = biome(int(b), n, slope, map, colour, distance);
+                        sumA += s.albedo * wk;
+                        sumN += s.normal * wk;
+                        total += wk;
+                    }
+                    uint fallback = slot4 != 255u ? slot4 : slots.x;
+                    if (total <= 0.0 && fallback != 255u)
+                    {
+                        Surface s = biome(int(fallback), n, slope, map, colour, distance);
+                        sumA = s.albedo; sumN = s.normal; total = 1.0;
+                    }
+                    if (total > 0.0) { albedo = sumA / total; sumN /= total; }
+                    else { albedo = vec4(0.6, 0.55, 0.45, 0.2); sumN = vec4(0.5, 0.5, 1.0, 1.0); }
+                    if (uDebug == 1) albedo = vec4(weights.rgb + weights.a * vec3(1.0, 1.0, 0.0) + rest * vec3(1.0), 1.0);
+                    if (uNormalMaps)
+                    {
+                        // Tangent frame as the game builds it for terrain: binormal = n x (-1, 0, 0), tangent = binormal x n.
+                        vec3 bn = normalize(cross(n, vec3(-1.0, 0.0, 0.0)));
+                        vec3 t = normalize(cross(bn, n));
+                        vec3 tn = sumN.rgb * 2.0 - 1.0;
+                        shadingNormal = normalize(mix(n, normalize(t * tn.x + bn * tn.y + n * tn.z), nearWeight));
+                    }
                 }
-                if (total > 0.0) { albedo = sumA / total; sumN /= total; }
-                else { albedo = vec4(0.6, 0.55, 0.45, 0.2); sumN = vec4(0.5, 0.5, 1.0, 1.0); }
-                if (uDebug == 1) albedo = vec4(weights.rgb + weights.a * vec3(1.0, 1.0, 0.0) + rest * vec3(1.0), 1.0);
-                if (uNormalMaps)
-                {
-                    // Tangent frame as the game builds it for terrain: binormal = n x (-1, 0, 0), tangent = binormal x n.
-                    vec3 bn = normalize(cross(n, vec3(-1.0, 0.0, 0.0)));
-                    vec3 t = normalize(cross(bn, n));
-                    vec3 tn = sumN.rgb * 2.0 - 1.0;
-                    shadingNormal = normalize(t * tn.x + bn * tn.y + n * tn.z);
-                }
+                else albedo = vec4(uHasMaps ? colour.rgb / 1.2 : heightTint(vWorld.y), 0.2);
             }
-            else
+            if (nearWeight < 1.0)
             {
-                // Untextured: height tint (sand, olive, grey) times the colour map when present.
-                float h = clamp(vWorld.y / 3500.0, 0.0, 1.0);
-                vec3 low = vec3(0.76, 0.70, 0.50), mid = vec3(0.55, 0.50, 0.36), high = vec3(0.62, 0.60, 0.58);
-                vec3 c = h < 0.5 ? mix(low, mid, h * 2.0) : mix(mid, high, h * 2.0 - 1.0);
-                albedo = vec4(uHasMaps ? colour.rgb / 1.2 : c, 0.2);
+                // Far: the blended biome ground colour (what the textured layers fade to), tinted by the colour map.
+                vec3 far = uHasGround && uTextured ? texture(uGround, world01).rgb : heightTint(vWorld.y);
+                if (uHasWorldColour && uTextured) far *= texture(uWorldColour, world01).rgb * 1.2;
+                albedo = mix(vec4(far, 0.2), albedo, nearWeight);
             }
+
+            // Underwater ground looks wet and darker (the game's wetness rule with a 2-unit edge, absorbance 0.5).
+            float under = clamp((uWaterHeight + 2.0 - vWorld.y) / 2.0, 0.0, 1.0);
+            float darken = min((1.0 - 1.0 / (under + 0.7)) * 0.5 + under * 0.2, 0.4);
+            albedo.rgb *= 1.0 - max(darken, 0.0) * 0.5;
 
             vec3 l = normalize(uLightDir);
             float diff = max(dot(shadingNormal, l), 0.0);
-            vec3 ambient = mix(vec3(0.20, 0.19, 0.17), vec3(0.36, 0.40, 0.46), 0.5 + 0.5 * shadingNormal.y);
+            vec3 ambient = mix(uAmbientGround, uAmbientSky, 0.5 + 0.5 * shadingNormal.y);
             vec3 v = normalize(uEye - vWorld);
             float gloss = clamp(albedo.a, 0.0, 1.0);
             float spec = pow(max(dot(shadingNormal, normalize(l + v)), 0.0), 8.0 + 40.0 * gloss) * gloss * 0.25;
-            vec3 colourOut = albedo.rgb * (ambient + diff * vec3(1.0, 0.96, 0.88)) + spec * diff;
+            vec3 colourOut = albedo.rgb * (ambient + diff * uSunColour) + spec * diff * uSunColour;
+            if (uDebug == 3) colourOut = vec3(0.5) * (0.3 + 0.7 * diff);
             float fog = clamp(distance / uFogDistance, 0.0, 1.0);
-            colourOut = mix(colourOut, uFogColour, fog * fog * 0.85);
+            colourOut = mix(colourOut, uFogColour, fog * fog);
             fragColour = vec4(colourOut, 1.0);
         }
         """;

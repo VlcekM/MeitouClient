@@ -30,8 +30,23 @@ public sealed class WorldCamera
 
     public float Near => Math.Clamp(Math.Min(EyeClearance, Distance) * 0.25f, 0.5f, 200f);
 
-    public Matrix4x4 Projection(float aspect) =>
-        Matrix4x4.CreatePerspectiveFieldOfView(FieldOfView, aspect, Near, ViewDistance * 1.1f);
+    public Matrix4x4 Projection(float aspect, float near, float far) =>
+        Matrix4x4.CreatePerspectiveFieldOfView(FieldOfView, aspect, near, far);
+
+    /// <summary>
+    /// Where the near and far depth slices meet: the far slice (<see cref="SplitDistance"/> .. <see cref="ViewDistance"/>)
+    /// is drawn first, the depth buffer cleared, then the near slice (<see cref="Near"/> .. split), so a 24-bit depth
+    /// buffer keeps its precision from a few units out to the horizon.
+    /// </summary>
+    public float SplitDistance { get; set; } = 20000;
+
+    /// <summary>The depth slices to draw, far first: (near, far) planes.</summary>
+    public IEnumerable<(float Near, float Far)> Slices()
+    {
+        float split = Math.Max(SplitDistance, Near * 4);
+        if (ViewDistance > split) yield return (split, ViewDistance);
+        yield return (Near, Math.Min(split * 1.02f, ViewDistance));
+    }
 
     /// <summary>Rotates the eye around the target.</summary>
     public void Orbit(float dx, float dy)

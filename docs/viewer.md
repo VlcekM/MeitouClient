@@ -143,11 +143,15 @@ dotnet run --project tools/Meitou.ModelViewer -- --character "Dust Bandit"
 dotnet run --project tools/Meitou.ModelViewer -- --character Ruka --screenshot ruka.png --size 900x1000
 dotnet run --project tools/Meitou.ModelViewer -- --character Greenlander --female --equip "Samurai Boots" --equip Katana --drawn
 dotnet run --project tools/Meitou.ModelViewer -- --character "Dust Bandit" --anim "walk lower" --anim "walk upper":0.8
+dotnet run --project tools/Meitou.ModelViewer -- --character "Dust Bandit" --faction "Dust Bandits" --seed 3
+dotnet run --project tools/Meitou.ModelViewer -- --character Ruka --shape height=1.2 --shape "Arm bulk=145;muscle=1"
+dotnet run --project tools/Meitou.ModelViewer -- --character Greenlander --lod 1 --wireframe
 ```
 
 A record is found by string id, else by name (CHARACTER before RACE). `--help` lists the options (`--female` /
-`--male`, `--equip` repeatable, `--naked`, `--drawn`, `--seed`, `--anim name[:weight]` repeatable,
-`--bind-pose`, `--no-morphs`, `--no-skin-tone`, `--info`, screenshot and camera options).
+`--male`, `--equip` repeatable, `--naked`, `--drawn`, `--seed`, `--faction`, `--anim name[:weight]` repeatable,
+`--bind-pose`, `--no-morphs`, `--no-skin-tone`, `--shape name=value`, `--no-shape`, `--lod n`, `--info`,
+screenshot and camera options).
 
 What it does:
 
@@ -170,18 +174,46 @@ What it does:
   per-layer controller is not reproduced). Without `--anim` the body file's `idle stance` plays. With a body
   file, `postures`, `neck set` and `shoulder set` are added as layers held at length × `Posture` / `Neck
   position` / `Shoulder set` ÷ 100 (animation.md, "Posture sliders"; `--no-postures` leaves them out). With the idle the four layers sum to weight 4, so average mode scales each to 0.25; that is why `--no-postures` visibly changes the idle.
+- **Generated characters** (`--seed n`, `CharacterGenerator`): the character is rolled by the game's spawn rules
+  ([characters.md](characters.md#generating-a-character)): gender, and without a body file a random head, hair,
+  beard, hair colour, skin tone, sliders and one of the race's `morph num` faces from its editor limits; then
+  clothing per slot with quality and material, backpack, crossbow and weapons with manufacturer and model (the
+  model's texture is used). The roll is printed (`loadout` lines). `--faction` names the FACTION the character
+  spawns in (its `hairstyles` limit the hair); the same seed always gives the same character, not the one the
+  game would give.
+- **Body shape** (`CharacterShape`, formulas in [animation.md](animation.md#body-shape-sliders)): on the 30-bone
+  human skeletons the body file's (or rolled) sliders become Kenshi's per-bone sizes and positional sizes, with
+  the skeleton's movement scale; the `Animator` applies them as Kenshi's Ogre does (derived scale = bone size ×
+  own scale, child offset × positional size × the parent's Y scale; binding pose unchanged). Muscle comes from
+  the CHARACTER's `stats` STATS record (strength, weapon/armour smithing; an approximation), starvation is 0,
+  all limbs present, a missing slider counts as 100. `--shape name=value` overrides a slider (Kenshi units,
+  or a fraction when ≤ 3: `height=0.8` = 80; names case-insensitive, spaces optional: `legsbulk=130`) or
+  `muscle=`, `starve=`, `legratio=`, `missing=larm,rarm,lleg,rleg`, `hidestump=0..3`; `--no-shape` turns it off.
+  `shaved` Shek characters get the cut-horn pose rule. Weapons on bones inherit the hand's bone size (Kenshi's
+  behaviour there is Unknown).
+- **LOD** (`CharacterLod`, [formats/ogre-mesh.md](formats/ogre-mesh.md#lod)): every part keeps its mesh's
+  generated LOD levels and picks one per frame with Kenshi's distance_sphere rule (camera distance to the mesh
+  file's bounds centre minus its radius, against the level distances: 200 for bodies and hair, 400 for armour);
+  `--lod n` forces level n (clamped per mesh), `L` cycles auto / 0 / 1. Changes are printed (`lod` lines) and
+  the title shows each part's level.
 - **Keys** (besides the mesh viewer's camera and display keys): `Tab` / `1`–`9` select a layer, `Left` / `Right`
-  change its animation, `+` / `-` its weight, `Insert` adds a layer, `Delete` removes one, `Home` binding pose.
+  change its animation, `+` / `-` its weight, `Insert` adds a layer, `Delete` removes one, `Home` binding pose,
+  `L` LOD level.
 
-Verified with screenshots (2026-10-04): Dust Bandit (Greenlander, helmet hides the hair, sandals win the boots
+Verified with screenshots (2026-10-04): Dust Bandit with `--seed` 1–6 (Samurai Boots, Horse Chopper on the back in
+the Rusting Blade / Rusted Junk texture, or the Junkbow instead; varied skin tones; no beard), Hungry Bandit seeds
+1–4 (men and women, different heads, haircuts, beards, skin; iron club at the hip). Earlier, before the spawn rules
+were traced: Dust Bandit (Greenlander, helmet hides the hair, sandals win the boots
 slot with chance 400, horse chopper at the hip with the handle forward), the same with a katana drawn in the
 right hand, sheath at the hip and a second katana diagonally on the back while blending `walk lower` +
 `walk upper sword`, Ruka (Shek woman: horn and face poses, skin tone, leather shirt as a vest layer), Beep
-(Hive Worker Drone with a stick-people head texture and the rag loincloth).
+(Hive Worker Drone with a stick-people head texture and the rag loincloth). Body shape and LOD: Ruka with and without
+`--no-shape`, Greenlander at Height 80 and 120 (no seams at shoulders or elbows), with `muscle=1`, `starve=1` and
+missing limbs with and without `hidestump`, Dust Bandit at forced LOD 0 and 1 (wireframe) and switching by distance.
 
-Not done: body-shape sliders (formulas not transcribed), `hide parts` (part map), `muscleBlend`, blood,
-faction colours, LOD, the game's random appearance for characters without a body file (the viewer takes the
-likeliest choices, or weighted ones with `--seed`), which listed weapon a CHARACTER really carries.
+Not done: `hide parts` (part map, needs a per-vertex attribute; rules in characters.md), the `muscleBlend` normal
+map blend (rule known), stumps for missing limbs, blood, faction colours; without `--seed` the viewer takes the likeliest choice of each roll (first head, likeliest
+hair, neutral sliders).
 
 ## World mode
 
@@ -201,25 +233,54 @@ dotnet run --project tools/Meitou.ModelViewer -- --world --radius 32 --no-object
 centre), `--radius` in zones (default 1.5), `--step` (heightmap sample step; by default the smallest power of
 two keeping at most 2048 cells per side, so `--radius 32`, the whole world, uses step 8), camera
 (`--yaw`, `--pitch`, `--distance`), `--screenshot` / `--size`, `--no-textures`, `--no-objects`,
-`--object-distance`, `--layer-size`, `--debug 1|2`. Keys: left drag orbits the target, right drag looks
+`--object-distance`, `--layer-size`, `--debug 1|2|3`, `--time <hour>` (default 13), `--no-water`,
+`--view-distance` (default 450000), `--fog` (distance of full haze at ground level, default 250000) and
+`--material-distance` (where the full terrain material gives way to the ground colour, default 30000 as in the
+game). Keys: left drag orbits the target, right drag looks
 around, wheel zooms, `W A S D` fly over the ground, `Q`/`E` down/up (Shift faster), `T` textures, `N` normal
-maps, `O` objects, `X` wireframe, `V` debug view (blend weights, layer weights), `[`/`]` LOD distance, `H`
-prints the camera as command-line options, `P` screenshot into the temp folder.
+maps, `O` objects, `G` water, `,`/`.` time of day −/+ 1 hour, `X` wireframe, `V` debug view (blend weights,
+layer weights, untextured shading), `[`/`]` LOD distance (× 1.25), `H` prints the camera as command-line
+options, `P` screenshot into the temp folder.
+
+```
+dotnet run --project tools/Meitou.ModelViewer -- --world --town "Shark" --radius 1.5 --distance 3000 --pitch 20
+dotnet run --project tools/Meitou.ModelViewer -- --world --town "Port North" --radius 1.5 --distance 3500 --pitch 22 --yaw 200
+dotnet run --project tools/Meitou.ModelViewer -- --world --town "The Hub" --radius 2 --distance 9000 --pitch 10 --yaw 300
+```
 
 How it works (status as in [README.md](README.md)):
 
-- **Terrain**: `HeightWindow` reads the region's samples row by row; `TerrainMesh` makes chunks of 64 × 64
-  cells with skirts and per-LOD index buffers shared by all chunks; each frame picks a LOD per chunk from its
-  distance (halving detail per doubling beyond 1.5 chunk sizes) and skips chunks outside the view frustum. The
-  whole world at step 8 draws in under 30 ms. Near and far planes follow the eye's height above the ground.
+- **Terrain** (`TerrainQuadtree`, `TerrainRenderer`): CDLOD out to the horizon, as described in
+  [formats/terrain.md](formats/terrain.md#terrain-lod). The whole map (every 8th sample) and the region's
+  `HeightWindow` are height textures; one 64 × 64 grid patch is drawn per quadtree node, with the odd vertices
+  morphing onto the coarser level, so there are no cracks or pops. Nodes outside the frustum are skipped.
+  Two depth slices (far 20000 to `--view-distance`, then near), with the near plane following the eye's height.
+  Beyond `--material-distance` the terrain shows the biome ground colour × the colour map.
+- **Water** (`WaterRenderer`; [formats/terrain.md](formats/terrain.md#water)): one surface at Y = 100 over the
+  world, with colour from `watercolourmap.png`, flow from `flowmap.png`, the `water.png` normal map scrolled three
+  times, and per-pixel biome parameters (`BiomeField` over `blendinfo.dat` + `blendmap.png`). Shallow water is
+  see-through near the camera, and it is opaque beyond 4000 units, as in the game. It reflects the sky colour
+  (no reflection render target).
+- **Sky** (`SkyRenderer`, `SkyClock`): the sun follows the game's formula for the hour (latitude 54, sunrise 5,
+  sunset 23 from the CONSTANTS record). Sky, sun and ambient colours come from a simple model of our own, not
+  SkyX scattering. The horizon colour is also the fog colour, and the fog distance grows with the eye's height.
+- Frame times (2026-10-04, offscreen 1280 × 960, average of 10 frames after loading): Shark with water 1.6 ms,
+  Port North coast 1.6 ms, The Hub looking at the horizon 1.1 to 1.2 ms, whole world from above 0.6 ms
+  (12 ms at 1400 × 1400 with `--material-distance 1e7`, which puts the full material everywhere).
 - **Texturing** (`TerrainTextures`, `TerrainShaders`): the biomes of every `blendinfo.dat` cell touching the
   region go into two texture arrays (one layer per distinct diffuse/normal pair, each brought to 512² from its
   nearest mip); per-biome constants go into a float texture; the blend map is sampled for the five slot weights;
   the region's piece of the overlay and colour maps is cut from their tiles. The layer model, slope scaling
   (FCS value × 0.01, **Verified** from the exe) and the overlay/colour channels follow terrain.md.
-- **Objects** (`WorldObjects`, `WorldObjectRenderer`): placements become meshes with `WorldObjectLayout`, meshes
-  are loaded once per file and textured with the model viewer's `MaterialResolver` (candidate preferred: the one
-  naming the placed building or part), textures decode on worker threads (`WorldTextureCache`). Instances beyond
+- **Objects** (`WorldObjects`, `WorldObjectRenderer`): placements become meshes with `WorldObjectLayout`, built
+  as the game builds them ([formats/zones.md](formats/zones.md#from-placements-to-meshes)): parts chosen with the
+  game's `rand()` seeded from the position, doors added, destroyed states (`destroyed mesh`, upper floors
+  removed), rotating parts at their rolled start angle, and each part's MATERIAL_SPEC from the part, the building
+  or the building's town (`BuildingTowns`; `BuildingMaterial` turns it into textures). Map features (and parts
+  without a chosen material) are textured by the model viewer's `MaterialResolver` (candidate preferred: the one
+  naming the placed record). Meshes are loaded once per file; textures decode on worker threads
+  (`WorldTextureCache`). The log line `objects` counts destroyed buildings and the foliage resource buildings,
+  which the game draws as foliage rocks (not drawn here). Instances beyond
   `--object-distance` or outside the frustum are skipped; interactively at most 8 new meshes load per frame.
   TERRAIN-mode map features are drawn with the terrain shader (biome textures, no roads).
 - Back-face culling is off for objects (open building meshes); distance haze is the viewer's own.
@@ -227,14 +288,23 @@ How it works (status as in [README.md](README.md)):
 Verified with screenshots (2026-10-04, saved outside the repo): The Hub (`--town "The Hub"`: walls, gates and
 towers join up, buildings upright, roads in the ground texture), zone 44.23 (TERRAIN-mode cliff blocks take
 the biome textures), zone 54.44 (UV-mapped cliff features), zone 31.45 at radius 3, and the whole world from
-above (biome regions as in `biomemap.png`).
+above (biome regions as in `biomemap.png`). Building assembly, before/after (2026-10-04): The Hub (21 destroyed
+houses now in their ruined meshes), Brink (wind generators at rolled angles, destroyed shacks), Squin (houses in
+the town material instead of a stray candidate), Stack (`--at -55671,-12401 --radius 0.15 --distance 350 --pitch
+20 --yaw 90`: the Small Shack's door fills its frame).
 
-Approximations and gaps: no water, wetness, shadows, sky, foliage or grass, characters, interiors,
-construction states or lights; cliff normal-map channel flips are not reproduced; building parts are a seeded
-random pick (the game's choice is Unknown); buildings without their own material and no FCS candidate keep the
-mesh's script material or stay grey; the game's terrain LOD morphing and distant-terrain material are not
-reproduced; the cell table only holds biomes of cells touching the region, so far outside the region nothing
-is drawn anyway. Observed and unexplained: in the whole-world view a few 2 × 2-zone cells (north-east) show as
-rectangles of a slightly different tone; the cause is **Unknown** (possibly how the viewer weights slot 4 and
-normalises partial sums compared with the game's first-biome rule). Interactive mode was smoke-tested only
+Water and sky, verified with screenshots (2026-10-04, saved outside the repo): Shark (houses on stilts and
+walkways over swamp water), Port North (coast with sun glitter), the whole world (sea around the land), and The
+Hub towards the horizon (terrain to the edge of the map, fading into the haze).
+
+Approximations and gaps: no wetness, shadows, clouds, weather, scum or water reflections of the scene, foliage or grass, characters, interiors,
+construction states or lights; cliff normal-map channel flips are not reproduced; building part choice follows
+the game's rolls but was not compared in game, and nested choices can drift where effects or loading callbacks
+roll (zones.md); picks from material collections (towns with "moor mats", 32 parts) are the viewer's own seeded
+choice, as the game's are unseeded; Iron/Copper Resource rocks (foliage) are missing; doors are always closed and
+turrets unaimed; the full terrain material only has the biomes of cells touching the region (outside it, the
+ground colour is drawn). The straight-edged patches of other tones in the north-eastern sea of the whole-world
+view are in the game's own `biomemap.png`, not a viewer fault
+([formats/terrain.md](formats/terrain.md#why-some-sea-areas-in-the-north-east-have-other-tones-observed)).
+Interactive mode was smoke-tested only
 (starts, loads, renders; the controls were not exercised by hand).

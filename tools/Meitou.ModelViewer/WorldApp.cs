@@ -26,6 +26,9 @@ sealed class WorldOptions
     public int LayerSize = 512;
     public int Debug;
     public float ObjectDistance = 12000;
+    public float Hour = 13;
+    public float ViewDistance = 450000, FogDistance = 250000, MaterialDistance = 30000;
+    public bool NoWater;
 
     public const string Usage = """
         meitou-viewer --world [where] [options]
@@ -42,10 +45,15 @@ sealed class WorldOptions
           --object-distance <u>    draw placed objects up to this distance (default 12000)
           --layer-size <n>         terrain layer texture size (default 512)
           --debug <n>              1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass)
+          --time <hour>            time of day for the sun (default 13; sunrise and sunset from the CONSTANTS record)
+          --no-water               leave out the water
+          --view-distance <u>      furthest terrain drawn (default 450000: the whole world)
+          --fog <u>                distance where the haze is complete (default 250000)
+          --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
           --wireframe --info
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D fly, Q/E down/up (Shift: faster),
           T textures, N normal maps, O objects, X wireframe, V debug view, [ / ] terrain LOD distance,
-          H print camera, P save screenshot, Esc quit.
+          G water, , / . time of day -/+ 1 hour, H print camera, P save screenshot, Esc quit.
         """;
 
     public static WorldOptions? Parse(string[] args)
@@ -86,6 +94,11 @@ sealed class WorldOptions
                 case "--debug": o.Debug = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--wireframe": o.Wireframe = true; break;
                 case "--info": o.Info = true; break;
+                case "--time": o.Hour = F(); break;
+                case "--no-water": o.NoWater = true; break;
+                case "--view-distance": o.ViewDistance = F(); break;
+                case "--fog": o.FogDistance = F(); break;
+                case "--material-distance": o.MaterialDistance = F(); break;
                 case "-h" or "--help": return null;
                 default: throw new ArgumentException($"unknown option {a}");
             }
@@ -95,11 +108,15 @@ sealed class WorldOptions
     }
 }
 
-/// <summary>The loaded world region: heights, terrain mesh, and where the camera starts.</summary>
+/// <summary>The loaded world region: heights (the region fine, the whole world coarse), and where the camera starts.</summary>
 sealed class WorldScene : IDisposable
 {
     public required TerrainHeightmap Heightmap;
-    public required TerrainMesh Mesh;
+    public required HeightWindow Window;
+    /// <summary>Whole-world heights every <see cref="WorldApp.CoarseStep"/>-th sample, (CoarseSize)² raw values.</summary>
+    public required ushort[] Coarse;
+    public required int CoarseSize;
+    public SkyClock Clock = SkyClock.Fallback;
     public required Vector3 Focus;
     public required double X0, Z0, X1, Z1;
     public GameDatabase? Database;
@@ -112,8 +129,8 @@ sealed class WorldScene : IDisposable
 
 static class WorldApp
 {
-    static readonly Vector3 Sky = new(0.62f, 0.68f, 0.74f);
-    static readonly Vector3 Sun = Vector3.Normalize(new Vector3(0.45f, 0.75f, 0.3f));
+    /// <summary>Heightmap step of the whole-world height grid behind the loaded region (2049² samples, 144 units apart).</summary>
+    public const int CoarseStep = 8;
 
     public static int Run(string[] args)
     {
@@ -179,7 +196,7 @@ static class WorldApp
             (x, z, y) = (pick.X, pick.Z, pick.Y);
         }
 
-        // Window around the point, a whole number of chunks per side.
+        // Window around the point, a whole number of 64-cell blocks per side.
         const int chunkCells = 64;
         double half = o.Radius * WorldLayout.ZoneSize;
         int cellsWanted = (int)Math.Ceiling(2 * half / WorldLayout.SampleSpacing);
@@ -189,14 +206,15 @@ static class WorldApp
         var (sc, sr) = WorldLayout.ToSample(x - half, z - half);
         int c0 = (int)Math.Floor(sc / step) * step, r0 = (int)Math.Floor(sr / step) * step;
         var window = map.ReadWindow(c0, r0, cells + 1, cells + 1, step);
-        var mesh = new TerrainMesh(window, chunkCells, skirtDepth: 60 * step);
+        var coarse = map.Downsample(CoarseStep, out int coarseSize);
         var (x0, z0) = window.WorldOf(0, 0);
         var (x1, z1) = window.WorldOf(cells, cells);
         var focus = new Vector3((float)x, y ?? map.HeightAt(x, z), (float)z);
-        Console.WriteLine($"terrain   {cells}x{cells} cells, step {step} ({window.Spacing} units), {mesh.ChunksX * mesh.ChunksZ} chunks of {mesh.VerticesPerChunk} vertices; " +
+        Console.WriteLine($"terrain   {cells}x{cells} cells, step {step} ({window.Spacing} units), world grid {coarseSize}² every {CoarseStep * WorldLayout.SampleSpacing} units; " +
             $"X {x0:0}..{x1:0}, Z {z0:0}..{z1:0} (zones {WorldLayout.ZoneOf(x0, z0)} .. {WorldLayout.ZoneOf(x1 - 1, z1 - 1)}) ({watch.ElapsedMilliseconds} ms)");
         Console.WriteLine($"focus     {focus.X:0}, {focus.Y:0}, {focus.Z:0} in zone {WorldLayout.ZoneOf(focus.X, focus.Z)}");
-        var scene = new WorldScene { Heightmap = map, Mesh = mesh, Focus = focus, X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Database = db };
+        var scene = new WorldScene { Heightmap = map, Window = window, Coarse = coarse, CoarseSize = coarseSize, Focus = focus, X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Database = db };
+        if (db is not null) scene.Clock = SkyClock.FromDatabase(db);
         if (!o.NoObjects && db is not null)
             scene.Objects = WorldObjects.Load(install, db, map, x0, z0, x1, z1);
         Console.WriteLine($"loaded in {watch.ElapsedMilliseconds} ms");
@@ -224,19 +242,24 @@ static class WorldApp
             Yaw = (o.Yaw ?? 30) * MathF.PI / 180,
             Pitch = (o.Pitch ?? 35) * MathF.PI / 180,
             Distance = o.Distance ?? radius,
-            ViewDistance = Math.Max(radius * 3f, 20000),
+            ViewDistance = o.ViewDistance,
+            SplitDistance = Math.Max(20000, o.ObjectDistance * 1.1f),
         };
-        var render = new WorldRenderOptions { Textures = !o.NoTextures, Objects = !o.NoObjects, Wireframe = o.Wireframe ? 1 : 0, Debug = o.Debug };
+        var render = new WorldRenderOptions { Textures = !o.NoTextures, Objects = !o.NoObjects, Water = !o.NoWater, Wireframe = o.Wireframe ? 1 : 0, Debug = o.Debug, MaterialDistance = o.MaterialDistance };
         return (camera, render);
     }
 
     sealed class Gpu : IDisposable
     {
         public required TerrainRenderer Terrain;
+        public required SkyRenderer Sky;
+        public WaterRenderer? Water;
         public WorldObjectRenderer? Objects;
         public void Dispose()
         {
             Objects?.Dispose();
+            Water?.Dispose();
+            Sky.Dispose();
             Terrain.Dispose();
         }
     }
@@ -244,8 +267,8 @@ static class WorldApp
     static Gpu CreateGpu(GL gl, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive)
     {
         var watch = Stopwatch.StartNew();
-        var terrain = new TerrainRenderer(gl, scene.Mesh);
-        Console.WriteLine($"uploaded  {terrain.ChunkCount} terrain chunks ({watch.ElapsedMilliseconds} ms)");
+        var terrain = new TerrainRenderer(gl, scene.Coarse, scene.CoarseSize, scene.Window, new WorldRenderOptions().LodDistance);
+        Console.WriteLine($"uploaded  terrain heights: {terrain.LevelCount} LOD levels, finest {terrain.FinestSpacing:0.#} units ({watch.ElapsedMilliseconds} ms)");
         if (!o.NoTextures && scene.Database is not null)
         {
             var textures = TerrainTextures.Build(gl, install, scene.Database, assets, scene.X0, scene.Z0, scene.X1, scene.Z1, o.LayerSize);
@@ -253,7 +276,14 @@ static class WorldApp
             Console.WriteLine($"biomes    {textures.Biomes.Count}: {string.Join(", ", textures.Biomes.Select(b => b.Name.Trim()))} ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
-        var gpu = new Gpu { Terrain = terrain };
+        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl) };
+        if (!o.NoWater && scene.Database is not null)
+        {
+            var messages = new List<string>();
+            gpu.Water = WaterRenderer.Create(gl, install, scene.Database, assets, gpu.Sky, messages);
+            foreach (var m in messages) Console.WriteLine($"warning   {m}");
+            Console.WriteLine($"water     at height {WorldWater.Height} ({watch.ElapsedMilliseconds} ms)");
+        }
         if (scene.Objects is not null)
         {
             gpu.Objects = new WorldObjectRenderer(gl, assets, scene.Objects) { ObjectDistance = o.ObjectDistance, LoadBudget = interactive ? 8 : 0 };
@@ -262,19 +292,37 @@ static class WorldApp
         return gpu;
     }
 
-    static void Draw(GL gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height)
+    /// <summary>Draws a frame: the sky, then the far depth slice (terrain, water), then the near one (terrain, objects, water).</summary>
+    static void Draw(GL gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time, float fogDistance)
     {
         var eye = camera.Eye;
-        camera.EyeClearance = Math.Max(eye.Y - scene.GroundAt(eye.X, eye.Z), 1);
+        float floor = scene.GroundAt(eye.X, eye.Z);
+        if (render.Water) floor = Math.Max(floor, WorldWater.Height);
+        camera.EyeClearance = Math.Max(eye.Y - floor, 1);
+        var colours = SkyColours.For(scene.Clock.SunDirection(hour));
+        // Thinner air higher up: the haze takes longer to close in the higher the eye.
+        var light = colours.Lighting(fogDistance + 3 * Math.Max(eye.Y, 0));
         gl.Viewport(0, 0, (uint)width, (uint)height);
-        gl.ClearColor(Sky.X, Sky.Y, Sky.Z, 1);
+        gl.ClearColor(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1);
         gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        float aspect = width / (float)Math.Max(height, 1);
+        var view = camera.View;
+        gpu.Sky.Draw(view * camera.Projection(aspect, 1, 1000), colours);
         gl.Enable(EnableCap.DepthTest);
         gl.DepthFunc(DepthFunction.Lequal);
-        var viewProjection = camera.View * camera.Projection(width / (float)Math.Max(height, 1));
-        var frustum = WorldCamera.FrustumPlanes(viewProjection);
-        gpu.Terrain.Draw(viewProjection, eye, frustum, render, Sun, Sky, camera.ViewDistance);
-        if (render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, Sun, Sky, camera.ViewDistance, gpu.Terrain);
+        gpu.Terrain.BeginFrame();
+        bool first = true;
+        foreach (var (near, far) in camera.Slices())
+        {
+            if (!first) gl.Clear(ClearBufferMask.DepthBufferBit);
+            first = false;
+            bool nearSlice = near <= camera.Near;
+            var viewProjection = view * camera.Projection(aspect, near, far);
+            var frustum = WorldCamera.FrustumPlanes(viewProjection);
+            gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
+            if (nearSlice && render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+            if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, gpu.Terrain, time);
+        }
     }
 
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
@@ -301,10 +349,16 @@ static class WorldApp
             return 1;
         }
         var drawWatch = Stopwatch.StartNew();
-        Draw(gl, gpu, scene, camera, render, w, h);
+        Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
         gl.Finish();
         Console.WriteLine($"drawn in {drawWatch.ElapsedMilliseconds} ms: {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
             (gpu.Objects is { } ob ? $", {ob.DrawnInstances} objects ({ob.DrawnTriangles:N0} triangles)" : ""));
+        // Steady-state frame time (the first frame includes shader and texture warm-up).
+        drawWatch.Restart();
+        const int timedFrames = 10;
+        for (int i = 0; i < timedFrames; i++) Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
+        gl.Finish();
+        Console.WriteLine($"frame     {drawWatch.Elapsed.TotalMilliseconds / timedFrames:0.0} ms on average over {timedFrames} more frames");
 
         uint fbo = gl.GenFramebuffer(), colour = gl.GenRenderbuffer();
         gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, colour);
@@ -328,6 +382,8 @@ static class WorldApp
         WorldRenderOptions render = null!;
         IKeyboard? keyboard = null;
         bool screenshotRequested = false;
+        float hour = o.Hour;
+        var clock = Stopwatch.StartNew();
         Vector2? lastMouse = null;
         MouseButton? dragging = null;
 
@@ -368,9 +424,12 @@ static class WorldApp
                 case Key.N: render.NormalMaps = !render.NormalMaps; break;
                 case Key.O: render.Objects = !render.Objects; break;
                 case Key.X: render.Wireframe = (render.Wireframe + 1) % 3; break;
-                case Key.V: render.Debug = (render.Debug + 1) % 3; break;
-                case Key.LeftBracket: render.LodDistance = Math.Max(render.LodDistance / 1.5f, 0.25f); Console.WriteLine($"LOD distance {render.LodDistance:0.##}"); break;
-                case Key.RightBracket: render.LodDistance = Math.Min(render.LodDistance * 1.5f, 64f); Console.WriteLine($"LOD distance {render.LodDistance:0.##}"); break;
+                case Key.V: render.Debug = (render.Debug + 1) % 4; break;
+                case Key.G: render.Water = !render.Water; break;
+                case Key.Comma: hour = (hour + 23) % 24; Console.WriteLine($"time {hour:0}:00"); break;
+                case Key.Period: hour = (hour + 1) % 24; Console.WriteLine($"time {hour:0}:00"); break;
+                case Key.LeftBracket: render.LodDistance = Math.Max(render.LodDistance / 1.25f, 2f); Console.WriteLine($"LOD distance {render.LodDistance:0.##}"); break;
+                case Key.RightBracket: render.LodDistance = Math.Min(render.LodDistance * 1.25f, 16f); Console.WriteLine($"LOD distance {render.LodDistance:0.##}"); break;
                 case Key.H:
                     Console.WriteLine($"camera target {camera.Target.X:0}, {camera.Target.Y:0}, {camera.Target.Z:0} (zone {WorldLayout.ZoneOf(camera.Target.X, camera.Target.Z)}), " +
                         $"yaw {camera.Yaw * 180 / MathF.PI:0}, pitch {camera.Pitch * 180 / MathF.PI:0}, distance {camera.Distance:0}; " +
@@ -405,7 +464,7 @@ static class WorldApp
         {
             if (gpu is null || gl is null) return;
             var size = window.FramebufferSize;
-            Draw(gl, gpu, scene, camera, render, size.X, size.Y);
+            Draw(gl, gpu, scene, camera, render, size.X, size.Y, hour, (float)clock.Elapsed.TotalSeconds / 600f, o.FogDistance);
             frames++;
             if (screenshotRequested)
             {

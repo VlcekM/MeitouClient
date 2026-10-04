@@ -7,9 +7,10 @@ namespace Meitou.Data.World;
 
 /// <summary>
 /// <c>data/newland/land/blendinfo.dat</c> (magic <c>KBI1</c>): which biomes the terrain blends in each cell of a
-/// coarse grid. Cell (x, z) lists up to <see cref="SlotsPerCell"/> biome colours (the BIOMES <c>index</c>
+/// square grid. Cell (x, z) lists up to <see cref="SlotsPerCell"/> biome colours (the BIOMES <c>index</c>
 /// colours of <c>biomemap.png</c>); <c>blendmap.png</c>'s R, G, B, A are the weights of slots 0..3 at each pixel.
-/// Layout and evidence in docs/formats/terrain.md.
+/// After the table each cell has a quadtree of slot masks saying which slots are in use where, which the game
+/// queries to find the biomes a terrain page or water patch needs. Layout and evidence in docs/formats/terrain.md.
 /// </summary>
 public sealed class BlendInfoFile
 {
@@ -17,28 +18,65 @@ public sealed class BlendInfoFile
     public const int SlotsPerCell = 5;
     static readonly byte[] Magic = "KBI1"u8.ToArray();
 
-    BlendInfoFile(int cellsX, int cellsZ, uint[] slots, byte[] trailer) =>
-        (CellsX, CellsZ, Slots, Trailer) = (cellsX, cellsZ, slots, trailer);
+    BlendInfoFile(int cells, int resolution, uint[] slots, byte[][]? nodes) =>
+        (Cells, Resolution, Slots, Nodes) = (cells, resolution, slots, nodes);
 
-    /// <summary>Cells along world X and Z (32 × 32 in the base game: 2 × 2 zones per cell).</summary>
-    public int CellsX { get; }
-    public int CellsZ { get; }
+    /// <summary>Cells per side (32 in the base game: 2 × 2 zones per cell).</summary>
+    public int Cells { get; }
+    /// <summary>Same as <see cref="Cells"/>; the grid is square (kept for callers that think in X and Z).</summary>
+    public int CellsX => Cells;
+    public int CellsZ => Cells;
+    /// <summary>Leaves per cell side of the slot-mask quadtree (32 in the base game: one blend-map pixel per leaf).</summary>
+    public int Resolution { get; }
 
-    /// <summary>Stored slot values, <c>(z × CellsX + x) × SlotsPerCell + k</c>: RGB in the low 24 bits.</summary>
+    /// <summary>Stored slot values, <c>(z × Cells + x) × SlotsPerCell + k</c>: RGB in the low 24 bits.</summary>
     public uint[] Slots { get; }
 
-    /// <summary>The bytes after the slot table (Unknown meaning; docs/formats/terrain.md).</summary>
-    public byte[] Trailer { get; }
+    /// <summary>
+    /// Per cell (<c>z × Cells + x</c>) its slot-mask nodes: one byte when the cell uses a single slot, else
+    /// 2 × <see cref="Resolution"/>² bytes indexed like a heap (node 1 the whole cell, node i's children 4i..4i+3,
+    /// leaves from Resolution²; byte 0 repeats the root). Null when the file ends after the slot table.
+    /// </summary>
+    public byte[][]? Nodes { get; }
 
-    public double CellSize => (double)WorldLayout.WorldSize / CellsX;
+    public double CellSize => (double)WorldLayout.WorldSize / Cells;
 
     /// <summary>RGB colour of a slot (the high byte of the stored value is dropped), 0 = unused.</summary>
-    public uint Slot(int cellX, int cellZ, int slot) => Slots[(cellZ * CellsX + cellX) * SlotsPerCell + slot] & 0xFFFFFF;
+    public uint Slot(int cellX, int cellZ, int slot) => Slots[(cellZ * Cells + cellX) * SlotsPerCell + slot] & 0xFFFFFF;
 
     /// <summary>The cell containing world point (x, z), clamped to the grid.</summary>
     public (int X, int Z) CellOf(double x, double z) =>
-        (Math.Clamp((int)Math.Floor((x + WorldLayout.HalfWorldSize) / CellSize), 0, CellsX - 1),
-         Math.Clamp((int)Math.Floor((z + WorldLayout.HalfWorldSize) / ((double)WorldLayout.WorldSize / CellsZ)), 0, CellsZ - 1));
+        (Math.Clamp((int)Math.Floor((x + WorldLayout.HalfWorldSize) / CellSize), 0, Cells - 1),
+         Math.Clamp((int)Math.Floor((z + WorldLayout.HalfWorldSize) / CellSize), 0, Cells - 1));
+
+    /// <summary>Slot bits (bit k = slot k) of a node byte; the top three bits hold how many are set.</summary>
+    public static int MaskSlots(byte node) => node & 0x1F;
+    public static int MaskCount(byte node) => node >> 5;
+
+    /// <summary>Morton code of a leaf: x in the even bits, z in the odd bits.</summary>
+    public static int Morton(int x, int z)
+    {
+        int m = 0;
+        for (int b = 0; b < 15; b++) m |= ((x >> b) & 1) << (2 * b) | ((z >> b) & 1) << (2 * b + 1);
+        return m;
+    }
+
+    /// <summary>
+    /// The mask of the smallest quadtree node of a cell that contains the box from (<paramref name="u0"/>, <paramref name="v0"/>)
+    /// to (<paramref name="u1"/>, <paramref name="v1"/>), given as fractions 0..1 of the cell along X and Z: which of
+    /// the cell's slots have weight anywhere in the box (the game's rule, docs/formats/terrain.md).
+    /// </summary>
+    public byte SlotMask(int cellX, int cellZ, double u0, double v0, double u1, double v1)
+    {
+        if (Nodes is null) throw new InvalidOperationException("The file has no slot masks.");
+        var nodes = Nodes[cellZ * Cells + cellX];
+        if (nodes.Length == 1) return nodes[0];
+        int Leaf(double f) => Math.Clamp((int)Math.Floor(f * Resolution), 0, Resolution - 1);
+        int a = Resolution * Resolution | Morton(Leaf(u0), Leaf(v0));
+        int b = Resolution * Resolution | Morton(Leaf(u1), Leaf(v1));
+        while (a != b) { a >>= 2; b >>= 2; }
+        return nodes[a];
+    }
 
     public static BlendInfoFile Open(GameInstall install) => Read(File.ReadAllBytes(Path.Combine(install.DataDirectory, RelativePath)));
 
@@ -46,15 +84,38 @@ public sealed class BlendInfoFile
     {
         if (data.Length < 12 || !data.AsSpan(0, 4).SequenceEqual(Magic))
             throw new InvalidDataException("Not a blend info file (magic KBI1 missing).");
-        int cx = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(4));
-        int cz = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(8));
-        long table = (long)cx * cz * SlotsPerCell * 4;
-        if (cx <= 0 || cz <= 0 || 12 + table > data.Length)
-            throw new InvalidDataException($"Implausible grid {cx}x{cz} for {data.Length} bytes.");
-        var slots = new uint[cx * cz * SlotsPerCell];
+        int cells = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(4));
+        int resolution = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(8));
+        long table = (long)cells * cells * SlotsPerCell * 4;
+        if (cells <= 0 || cells > 4096 || resolution <= 0 || resolution > 4096 || (resolution & (resolution - 1)) != 0 || 12 + table > data.Length)
+            throw new InvalidDataException($"Implausible grid {cells}² / resolution {resolution} for {data.Length} bytes.");
+        var slots = new uint[cells * cells * SlotsPerCell];
         for (int i = 0; i < slots.Length; i++)
             slots[i] = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(12 + 4 * i));
-        return new BlendInfoFile(cx, cz, slots, data[(int)(12 + table)..]);
+        int p = (int)(12 + table);
+        if (p == data.Length) return new BlendInfoFile(cells, resolution, slots, null);
+
+        // Slot-mask quadtrees: int32 node count, then per cell its root byte and, unless the root says one slot, the rest.
+        if (p + 4 > data.Length) throw new InvalidDataException("Truncated slot-mask header.");
+        int count = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(p));
+        p += 4;
+        if (count < 2 * resolution * resolution || count > 1 << 24)
+            throw new InvalidDataException($"Slot-mask node count {count} does not fit resolution {resolution}.");
+        var nodes = new byte[cells * cells][];
+        for (int c = 0; c < nodes.Length; c++)
+        {
+            if (p >= data.Length) throw new InvalidDataException($"Truncated slot masks at cell {c}.");
+            byte root = data[p++];
+            if (MaskCount(root) == 1) { nodes[c] = [root]; continue; }
+            if (p + count - 1 > data.Length) throw new InvalidDataException($"Truncated slot masks at cell {c}.");
+            var n = new byte[count];
+            n[0] = root;
+            data.AsSpan(p, count - 1).CopyTo(n.AsSpan(1));
+            p += count - 1;
+            nodes[c] = n;
+        }
+        if (p != data.Length) throw new InvalidDataException($"{data.Length - p} bytes after the slot masks.");
+        return new BlendInfoFile(cells, resolution, slots, nodes);
     }
 }
 
@@ -150,4 +211,54 @@ public static class TerrainMaps
     /// <summary><c>new_overlay</c>: R and G grass (the shader takes the larger), B dirt, A road. <c>colour</c>: RGB tint, A multiplies gloss.</summary>
     public static string OverlayTile(GameInstall install, string kind, int x, int z) =>
         Path.Combine(install.DataDirectory, LandDirectory, "overlaymaps", $"{kind}.{x}.{z}.png");
+}
+
+/// <summary>
+/// Per-pixel blends of per-biome values over a blend-map-sized grid of the whole world: each pixel weights the
+/// values of its cell's slots by the blend map (slot 4 takes the remainder), the way the terrain shader blends biomes.
+/// Used for the far terrain's ground colour and the water parameters.
+/// </summary>
+public static class BiomeField
+{
+    /// <param name="blend">The blend map (RGBA, row = +Z), a whole number of pixels per blend-info cell.</param>
+    /// <param name="value">A biome's value by its index colour; null leaves the biome out of the blend.</param>
+    /// <param name="fallback">Value of pixels without any known biome.</param>
+    public static Vector4[] Bake(BlendInfoFile info, int width, int height, byte[] blend, Func<uint, Vector4?> value, Vector4 fallback)
+    {
+        if (blend.Length != width * height * 4 || width % info.Cells != 0 || height % info.Cells != 0)
+            throw new ArgumentException($"A {width}x{height} blend map does not fit {info.Cells}² cells.");
+        int ppx = width / info.Cells, ppz = height / info.Cells;
+        var cache = new Dictionary<uint, Vector4?>();
+        Vector4? Get(uint c)
+        {
+            if (c == 0) return null;
+            lock (cache)
+            {
+                if (!cache.TryGetValue(c, out var v)) cache[c] = v = value(c);
+                return v;
+            }
+        }
+        var result = new Vector4[width * height];
+        Parallel.For(0, height, y =>
+        {
+            Span<float> w = stackalloc float[BlendInfoFile.SlotsPerCell];
+            for (int x = 0; x < width; x++)
+            {
+                int o = (y * width + x) * 4, cx = x / ppx, cz = y / ppz;
+                int sum = blend[o] + blend[o + 1] + blend[o + 2] + blend[o + 3];
+                for (int k = 0; k < 4; k++) w[k] = blend[o + k];
+                w[4] = Math.Max(0, 255 - sum);
+                var acc = Vector4.Zero;
+                float total = 0;
+                for (int k = 0; k < BlendInfoFile.SlotsPerCell; k++)
+                {
+                    if (w[k] <= 0 || Get(info.Slot(cx, cz, k)) is not { } v) continue;
+                    acc += v * w[k];
+                    total += w[k];
+                }
+                result[y * width + x] = total > 0 ? acc / total : fallback;
+            }
+        });
+        return result;
+    }
 }
