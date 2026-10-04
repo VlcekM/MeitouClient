@@ -438,7 +438,8 @@ The world view draws the scene into an RGBA16F framebuffer with depth (4x multis
 chain into the window (or, with `--screenshot`, into the offscreen RGBA8 framebuffer that is saved, so pictures go through the
 same chain; `PostProcess`, `PostProcessShaders`, `PostProcessOptions`). The window itself is single-sample. What the game does
 and why the presets look the way they do: [formats/post-processing.md](formats/post-processing.md). In short, Kenshi has exposure
-only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA, so the `kenshi` preset is a clamp plus FXAA and no MSAA.
+only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. The viewer has no FXAA: edges are smoothed by 4x MSAA instead
+(the default), so the `kenshi` preset is a clamp with 4x MSAA.
 
 - **Presets**: `--post kenshi` (default, the game's chain) and `--post off` (the look before post-processing: 4x MSAA, nothing else). Keys F2 / F1. The single effects below can be added on top of either.
 - **Effects** (option, key): SSAO (`--ssao`, F4): 12 taps, half resolution, from the depth of the near depth slice only (the far
@@ -447,13 +448,13 @@ only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA, so the `kenshi` p
   brightness only (threshold 1, soft knee), 13-tap downsample / tent upsample mip chain from half resolution, intensity 0.3. Tone map
   (`--tonemap clamp|shoulder|aces`, F6): `shoulder` is the identity up to 0.8 on the brightest channel and then rolls off to 1 (the
   look of the scene is unchanged, the sun disc and speculars no longer clip); `aces` is Narkowicz's fit and visibly darker and
-  more contrasty. FXAA (`--fxaa`, F7): our own implementation of the public algorithm with Kenshi's constants. Vignette (F8) and
-  grading (F9: saturation 1.12, contrast 1.06) are ours, off by default (Kenshi has neither). MSAA (`--msaa 1|2|4|8`, M). Exposure
+  more contrasty. Vignette (F8) and
+  grading (F9: saturation 1.12, contrast 1.06) are ours, off by default (Kenshi has neither). MSAA (`--msaa 1|2|4|8`, M; default 4). Exposure
   (`--exposure`, keys - and =): 1 = the shaders' brightness (Kenshi's x0.6875 belongs to its own lighting and is not applied).
   `--post-debug ao|bloom` shows the occlusion or the bloom alone.
 - **Cost** (RTX 4070, 1920x1080, GPU timestamps, ms per frame; the title shows `post gpu ms` per stage next to the frame's cpu and gpu time,
-  and `--screenshot` prints the average over 10 frames): MSAA resolve 0.1 to 1, SSAO 0.1 to 0.3, bloom 0.3 to 1.2, composite 0.04,
-  FXAA 0.1 to 0.3 (the `kenshi` preset costs about 0.3 in all). Measured while other jobs shared the GPU, so the spread is
+  and `--screenshot` prints the average over 10 frames): MSAA resolve 0.1 to 1, SSAO 0.1 to 0.3, bloom 0.3 to 1.2, composite 0.04
+  (the `kenshi` preset costs the resolve and composite only). Measured while other jobs shared the GPU, so the spread is
   mostly noise; the whole chain is roughly 1 to 3 ms against a 14 to 18 ms scene.
 - **Contract for scene code**: shaders write the colours they always did, unclamped (colours above 1 are fine); code that draws into
   another framebuffer between `PostProcess.Begin` and `End` must rebind the one it found (`ReflectionPass` does).

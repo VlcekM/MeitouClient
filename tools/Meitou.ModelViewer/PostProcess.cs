@@ -6,7 +6,7 @@ namespace Meitou.ModelViewer;
 /// <summary>
 /// The world view's frame buffer and post-processing chain. The scene is drawn into a (multisampled) RGBA16F framebuffer
 /// with depth, resolved, then: SSAO at half resolution from the depth, bloom (quarter-ish resolution mip chain), a
-/// composite pass (exposure, occlusion, bloom, tone map, grade, vignette) and FXAA, ending in <see cref="Target"/>.
+/// composite pass (exposure, occlusion, bloom, tone map, grade, vignette), ending in <see cref="Target"/>.
 /// Usage per frame: <see cref="Begin"/>, draw the scene (calling <see cref="SetNearSlice"/> for the near depth slice), <see cref="End"/>.
 /// Anything that draws into another framebuffer in between must rebind the one it found (<see cref="SceneFramebuffer"/>).
 /// Facts about the game's own chain: docs/formats/post-processing.md.
@@ -29,10 +29,10 @@ public sealed unsafe class PostProcess : IDisposable
     int width, height, samples, requestedSamples;
     uint msFbo, msColour, msDepth;
     uint sceneFbo, sceneColour, sceneDepth;
-    Target2D? aoA, aoB, ldr;
+    Target2D? aoA, aoB;
     Target2D[] bloom = [];
     readonly uint vao;
-    readonly uint progSsao, progBlur, progPrefilter, progDown, progUp, progComposite, progFxaa;
+    readonly uint progSsao, progBlur, progPrefilter, progDown, progUp, progComposite;
     readonly Dictionary<(uint, string), int> uniforms = [];
 
     float nearPlane = 1, farPlane = 1000, fovY = 0.87f, aspect = 1;
@@ -58,7 +58,6 @@ public sealed unsafe class PostProcess : IDisposable
         progDown = Program(PostProcessShaders.BloomDown);
         progUp = Program(PostProcessShaders.BloomUp);
         progComposite = Program(PostProcessShaders.Composite);
-        progFxaa = Program(PostProcessShaders.Fxaa);
         for (int s = 0; s < Slots; s++)
             for (int i = 0; i < MaxStamps; i++) stamps[s, i] = gl.GenQuery();
     }
@@ -84,8 +83,8 @@ public sealed unsafe class PostProcess : IDisposable
     {
         if (msFbo != 0) { gl.DeleteFramebuffer(msFbo); gl.DeleteRenderbuffer(msColour); gl.DeleteRenderbuffer(msDepth); msFbo = 0; }
         if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneColour); gl.DeleteTexture(sceneDepth); sceneFbo = 0; }
-        foreach (var t in new[] { aoA, aoB, ldr }.Concat(bloom)) if (t is not null) Release(t);
-        aoA = aoB = ldr = null;
+        foreach (var t in new[] { aoA, aoB }.Concat(bloom)) if (t is not null) Release(t);
+        aoA = aoB = null;
         bloom = [];
     }
 
@@ -147,7 +146,6 @@ public sealed unsafe class PostProcess : IDisposable
         int hw = Math.Max((w + 1) / 2, 1), hh = Math.Max((h + 1) / 2, 1);
         aoA = MakeTarget(hw, hh, InternalFormat.RG16f, PixelFormat.RG, PixelType.HalfFloat);
         aoB = MakeTarget(hw, hh, InternalFormat.RG16f, PixelFormat.RG, PixelType.HalfFloat);
-        ldr = MakeTarget(w, h, InternalFormat.Rgba8, PixelFormat.Rgba, PixelType.UnsignedByte);
         var levels = new List<Target2D>();
         for (int bw = hw, bh = hh; levels.Count < 6 && bw >= 4 && bh >= 4; bw = Math.Max(bw / 2, 1), bh = Math.Max(bh / 2, 1))
             levels.Add(MakeTarget(bw, bh, InternalFormat.R11fG11fB10f, PixelFormat.Rgb, PixelType.HalfFloat));
@@ -263,9 +261,8 @@ public sealed unsafe class PostProcess : IDisposable
         if (glow) RunBloom();
         if (glow) Stamp("bloom");
 
-        // Composite: into the LDR texture when FXAA follows, else straight to the target.
-        bool fxaa = o.Fxaa;
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fxaa ? ldr!.Framebuffer : Target);
+        // Composite, straight to the target.
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, Target);
         gl.Viewport(0, 0, (uint)width, (uint)height);
         gl.UseProgram(progComposite);
         Bind(0, sceneColour); gl.Uniform1(U(progComposite, "uScene"), 0);
@@ -280,23 +277,11 @@ public sealed unsafe class PostProcess : IDisposable
         gl.Uniform1(U(progComposite, "uUseBloom"), glow ? 1 : 0);
         gl.Uniform1(U(progComposite, "uTone"), (int)o.ToneMap);
         gl.Uniform1(U(progComposite, "uGrade"), o.Grade ? 1 : 0);
-        gl.Uniform1(U(progComposite, "uDither"), o.Dither && !fxaa ? 1 : 0);
+        gl.Uniform1(U(progComposite, "uDither"), o.Dither ? 1 : 0);
         gl.Uniform1(U(progComposite, "uDebug"), o.Debug);
         gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
         Stamp("composite");
 
-        if (fxaa)
-        {
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, Target);
-            gl.Viewport(0, 0, (uint)width, (uint)height);
-            gl.UseProgram(progFxaa);
-            Bind(0, ldr!.Texture); gl.Uniform1(U(progFxaa, "uSrc"), 0);
-            gl.Uniform2(U(progFxaa, "uTexel"), 1f / width, 1f / height);
-            gl.Uniform1(U(progFxaa, "uSubpix"), o.FxaaSubpix);
-            gl.Uniform1(U(progFxaa, "uDither"), o.Dither ? 1 : 0);
-            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
-            Stamp("fxaa");
-        }
         pending[slot] = true;
 
         gl.BindVertexArray(0);
@@ -383,7 +368,7 @@ public sealed unsafe class PostProcess : IDisposable
     {
         Free();
         gl.DeleteVertexArray(vao);
-        foreach (var p in new[] { progSsao, progBlur, progPrefilter, progDown, progUp, progComposite, progFxaa }) gl.DeleteProgram(p);
+        foreach (var p in new[] { progSsao, progBlur, progPrefilter, progDown, progUp, progComposite }) gl.DeleteProgram(p);
         for (int s = 0; s < Slots; s++)
             for (int i = 0; i < MaxStamps; i++) gl.DeleteQuery(stamps[s, i]);
     }

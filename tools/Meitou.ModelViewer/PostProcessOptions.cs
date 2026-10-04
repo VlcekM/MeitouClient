@@ -19,7 +19,7 @@ public sealed class PostOptions
     public string Preset = "kenshi";
     /// <summary>Samples of the scene framebuffer (1, 2, 4 or 8).</summary>
     public int Msaa = 4;
-    public bool Ssao, Bloom, Fxaa, Vignette, Grade, Dither;
+    public bool Ssao, Bloom, Vignette, Grade, Dither;
     public ToneMapOperator ToneMap = ToneMapOperator.Clamp;
     /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness.</summary>
     public float Exposure = 1;
@@ -27,8 +27,6 @@ public sealed class PostOptions
     public float SsaoRadius = 12, SsaoStrength = 4;
     public float BloomThreshold = 1, BloomIntensity = 0.3f;
     public float Saturation = 1.12f, Contrast = 1.06f, VignetteStrength = 0.3f;
-    /// <summary>FXAA sub-pixel blending (Kenshi: 0.75).</summary>
-    public float FxaaSubpix = 0.5f;
     /// <summary>0 none, 1 shows the occlusion, 2 the bloom.</summary>
     public int Debug;
 
@@ -39,11 +37,8 @@ public sealed class PostOptions
         {
             case "off": break;
             case "kenshi":
-                // What Kenshi's compositor chain does with the shipped settings: no MSAA (FSAA=1), exposure only
-                // (no curve, bloom magnitude 0, SSAO commented out), FXAA 3.11 with subpixel 0.75.
-                o.Msaa = 1;
-                o.Fxaa = true;
-                o.FxaaSubpix = 0.75f;
+                // Kenshi's chain with the shipped settings: exposure only (no curve, bloom magnitude 0, SSAO commented
+                // out). The game smooths edges with FXAA and no MSAA; the viewer uses 4x MSAA instead (the default).
                 break;
             default: throw new ArgumentException($"unknown post preset '{preset}' (kenshi, off)");
         }
@@ -52,15 +47,15 @@ public sealed class PostOptions
 
     public void CopyFrom(PostOptions other)
     {
-        Preset = other.Preset; Msaa = other.Msaa; Debug = other.Debug; Ssao = other.Ssao; Bloom = other.Bloom; Fxaa = other.Fxaa; Vignette = other.Vignette;
+        Preset = other.Preset; Msaa = other.Msaa; Debug = other.Debug; Ssao = other.Ssao; Bloom = other.Bloom; Vignette = other.Vignette;
         Grade = other.Grade; Dither = other.Dither; ToneMap = other.ToneMap; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
         SsaoStrength = other.SsaoStrength; BloomThreshold = other.BloomThreshold; BloomIntensity = other.BloomIntensity;
-        Saturation = other.Saturation; Contrast = other.Contrast; VignetteStrength = other.VignetteStrength; FxaaSubpix = other.FxaaSubpix;
+        Saturation = other.Saturation; Contrast = other.Contrast; VignetteStrength = other.VignetteStrength;
     }
 
     public const string Usage = """
           --post <kenshi|off>   post-processing preset (default kenshi); give it before the options below
-          --ssao / --no-ssao, --bloom / --no-bloom, --fxaa / --no-fxaa, --vignette / --no-vignette, --grade / --no-grade, --dither / --no-dither
+          --ssao / --no-ssao, --bloom / --no-bloom, --vignette / --no-vignette, --grade / --no-grade, --dither / --no-dither
           --msaa <1|2|4|8>         samples of the HDR scene framebuffer
           --tonemap <clamp|shoulder|aces>   --exposure <x>   --bloom-intensity <x>   --bloom-threshold <x>   --ssao-radius <units>   --ssao-strength <x>
         """;
@@ -76,8 +71,6 @@ public sealed class PostOptions
             case "--no-ssao": Ssao = false; return true;
             case "--bloom": Bloom = true; return true;
             case "--no-bloom": Bloom = false; return true;
-            case "--fxaa": Fxaa = true; return true;
-            case "--no-fxaa": Fxaa = false; return true;
             case "--vignette": Vignette = true; return true;
             case "--no-vignette": Vignette = false; return true;
             case "--grade": Grade = true; return true;
@@ -103,5 +96,5 @@ public sealed class PostOptions
 
     public string Describe() =>
         $"{Preset}: msaa {Msaa}x, ssao {(Ssao ? "on" : "off")}, bloom {(Bloom ? "on" : "off")}, tonemap {ToneMap.ToString().ToLowerInvariant()} x{Exposure:0.##}, " +
-        $"fxaa {(Fxaa ? "on" : "off")}, grade {(Grade ? "on" : "off")}, vignette {(Vignette ? "on" : "off")}";
+        $"grade {(Grade ? "on" : "off")}, vignette {(Vignette ? "on" : "off")}";
 }

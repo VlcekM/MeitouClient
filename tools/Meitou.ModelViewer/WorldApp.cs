@@ -68,13 +68,13 @@ sealed class WorldOptions
           --fog <u>                distance where the haze is complete (default 250000)
           --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
           --wireframe --info
-          --post <kenshi|off>   post-processing preset (default kenshi), before the options below: HDR scene, SSAO, bloom, tone map, FXAA
-          --ssao / --no-ssao, --bloom / --no-bloom, --fxaa / --no-fxaa, --vignette, --grade, --dither (or --no-...)   --msaa <1|2|4|8>
+          --post <kenshi|off>   post-processing preset (default kenshi), before the options below: HDR scene (4x MSAA), SSAO, bloom, tone map
+          --ssao / --no-ssao, --bloom / --no-bloom, --vignette, --grade, --dither (or --no-...)   --msaa <1|2|4|8>
           --tonemap <clamp|shoulder|aces>  --exposure <x>  --bloom-intensity <x>  --bloom-threshold <x>  --ssao-radius <units>  --ssao-strength <x>
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
           G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, P save screenshot, ? key list, Esc quit.
-          F1 post off, F2 kenshi; F4 SSAO, F5 bloom, F6 tone map, F7 FXAA, F8 vignette, F9 grading, M MSAA, - / = exposure.
+          F1 post off, F2 kenshi; F4 SSAO, F5 bloom, F6 tone map, F8 vignette, F9 grading, M MSAA, - / = exposure.
         """;
 
     public static WorldOptions? Parse(string[] args)
@@ -406,7 +406,7 @@ static class WorldApp
             if (nearSlice) gpu.Foliage?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, gpu.Terrain, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
         }
-        gpu.Post?.End(); // resolve, SSAO, bloom, tone map, FXAA into gpu.Post.Target
+        gpu.Post?.End(); // resolve, SSAO, bloom, tone map into gpu.Post.Target
     }
 
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
@@ -604,7 +604,6 @@ static class WorldApp
                 "F4" => OnOff(o.Post.Ssao),
                 "F5" => OnOff(o.Post.Bloom),
                 "F6" => o.Post.ToneMap.ToString().ToLowerInvariant(),
-                "F7" => OnOff(o.Post.Fxaa),
                 "F8" => OnOff(o.Post.Vignette),
                 "F9" => OnOff(o.Post.Grade),
                 "M" => o.Post.Msaa <= 1 ? "off" : $"{o.Post.Msaa}x",
@@ -624,7 +623,6 @@ static class WorldApp
                 case Key.F4: o.Post.Ssao = !o.Post.Ssao; PostStatus(); break;
                 case Key.F5: o.Post.Bloom = !o.Post.Bloom; PostStatus(); break;
                 case Key.F6: o.Post.ToneMap = (ToneMapOperator)(((int)o.Post.ToneMap + 1) % 3); PostStatus(); break;
-                case Key.F7: o.Post.Fxaa = !o.Post.Fxaa; PostStatus(); break;
                 case Key.F8: o.Post.Vignette = !o.Post.Vignette; PostStatus(); break;
                 case Key.F9: o.Post.Grade = !o.Post.Grade; PostStatus(); break;
                 case Key.M: o.Post.Msaa = o.Post.Msaa switch { 1 => 2, 2 => 4, 4 => 8, _ => 1 }; PostStatus(); break;

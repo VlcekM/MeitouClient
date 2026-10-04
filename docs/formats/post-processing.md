@@ -103,11 +103,11 @@ framebuffer; nothing is clamped until the composite. Details, options and costs:
 
 | Stage | `kenshi` preset (default) | Effect available on top | Basis |
 | --- | --- | --- | --- |
-| Scene buffer | RGBA16F, 1 sample | RGBA16F, 4x MSAA | Kenshi: R11G11B10F, no FSAA |
+| Scene buffer | RGBA16F, 4x MSAA | 1, 2 or 8 samples | Kenshi: R11G11B10F, no FSAA |
 | Exposure | x1 (constant) | x1 | Kenshi: constant in practice, see above |
 | Curve | clamp at 1 | exponential shoulder above 0.8 (identity below) | Kenshi: none (clip) |
 | SSAO | off | on (12 taps, half resolution, from depth) | Kenshi: shipped, disabled |
 | Bloom | off | on (13-tap mip chain, threshold 1) | Kenshi: magnitude 0 |
 | Grading | off | off (optional saturation / contrast) | Kenshi: none |
-| FXAA | on, subpixel 0.75 | on, subpixel 0.5 | Kenshi: FXAA 3.11, 0.75 |
+| FXAA | not implemented: 4x MSAA smooths edges instead | none | Kenshi: FXAA 3.11, 0.75 |
 | Dither | off | on | not in Kenshi |
