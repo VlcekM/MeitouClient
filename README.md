@@ -42,7 +42,9 @@ See [ROADMAP.md](ROADMAP.md) for the plan and [docs/](docs/README.md) for resear
 
 ## License
 
-MeitouClient is free software under the [GNU General Public License v3.0 or later](LICENSE).
+MeitouClient is free software under the [GNU General Public License v3.0 or later](LICENSE), with an
+[additional permission](LICENSE-EXCEPTION.md) (GPLv3 section 7) to link with NVIDIA's proprietary DLSS runtime
+libraries. Contributions are accepted under the same terms.
 
 Third-party code notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
