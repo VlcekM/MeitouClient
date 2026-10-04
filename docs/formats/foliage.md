@@ -286,9 +286,9 @@ FUN_140843920, its TERRAIN branch, and the functions it calls; decompiled output
 - One in-game comparison point (Observed, user screenshot 2026-10-04, near world (-50882, -11613), zone 20.29, south of
   The Hub): the game shows the crashed aircraft wreck JunkSat01 (`56738-Newwworld.mod`) with JunkBall01 (`46967-Newwworld.mod`)
   a few hundred units behind it, both from the FOLIAGE_LAYER `JunkBalls` (one attempt each per zone, MEDIUM range 1000),
-  in front of a big rock arch (also foliage, the Canyonland big boulders). The viewer's placement puts the nearest JunkBall01
-  1,963 units and the nearest JunkSat01 2,561 units from that point, in opposite directions, so either the game's camera was
-  elsewhere or the sequence differs there. The camera position of the game shot is not known, so this is not a test yet.
+  in front of a big rock arch (also foliage, the Canyonland big boulders). The viewer's earlier placement put the nearest
+  JunkBall01 1,963 units and the nearest JunkSat01 2,561 units from that point, in opposite directions. The camera position of
+  the game shot is not known exactly, so this is not a test yet.
   Those distances were with the textbook noise hash. With the exe's hash ("Noise") the nearest JunkSat01 is in zone 21.29
   at (-50283, -12040), 736 units away, with a JunkBall01 at (-49630, -11199) beyond it in the same direction (1,319
   units), and a big boulder (FOLIAGE_Boulderbig08) at 975 units: a viewer shot from (-50583, -11613) now shows the

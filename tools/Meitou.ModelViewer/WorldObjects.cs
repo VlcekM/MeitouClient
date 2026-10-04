@@ -27,6 +27,8 @@ sealed class WorldObjects : IDisposable
     public required WorldLevelData Levels { get; init; }
     public required BuildingTowns Towns { get; init; }
     public required MapFeatureFile Features { get; init; }
+    /// <summary>Building layouts of <c>interiors.level</c>; the exterior ones (signs, banners) are drawn (docs/formats/zones.md, "Building layouts").</summary>
+    public required BuildingLayouts Layouts { get; init; }
     /// <summary>Towns with a baked distant mesh (docs/formats/zones.md, "Distant towns").</summary>
     public required List<DistantTown> DistantTowns { get; init; }
 
@@ -35,7 +37,7 @@ sealed class WorldObjects : IDisposable
     ThreadLocal<TerrainHeightmap>? heights;
 
     // Totals over the zones laid out so far (for the log line).
-    int buildings, missing, fromState, destroyed, foliage, empty, features, stand;
+    int buildings, missing, fromState, destroyed, foliage, empty, features, stand, layouts, layoutObjects, layoutsNotFound;
 
     /// <summary>Zones that have placed buildings or features.</summary>
     public IEnumerable<ZoneCoordinate> PopulatedZones => buildingsByZone.Keys.Concat(
@@ -48,7 +50,7 @@ sealed class WorldObjects : IDisposable
     public static WorldObjects Load(GameInstall install, GameDatabase db, TerrainHeightmap map, double x0, double z0, double x1, double z1)
     {
         var watch = Stopwatch.StartNew();
-        var levels = WorldLevelData.Load(install);
+        var levels = WorldLevelData.Load(install, includeInteriors: true);
         var objects = new WorldObjects
         {
             Database = db,
@@ -56,6 +58,7 @@ sealed class WorldObjects : IDisposable
             Levels = levels,
             Towns = new BuildingTowns(db, levels),
             Features = MapFeatureFile.Open(install),
+            Layouts = new BuildingLayouts(db, levels.Interiors),
             DistantTowns = Meitou.Data.World.DistantTowns.Find(install, db, levels),
         };
         foreach (var t in objects.DistantTowns) objects.bakedTowns.Add(t.InstanceId);
@@ -66,7 +69,7 @@ sealed class WorldObjects : IDisposable
         }
         objects.heights = new ThreadLocal<TerrainHeightmap>(() => TerrainHeightmap.Open(install), trackAllValues: true);
         Console.WriteLine($"objects   {objects.buildingsByZone.Values.Sum(l => l.Count)} placed buildings and {objects.Features.All().Count()} map features in {objects.PopulatedZones.Count()} zones, " +
-            $"{objects.DistantTowns.Count} towns with a distant mesh ({watch.ElapsedMilliseconds} ms)");
+            $"{objects.DistantTowns.Count} towns with a distant mesh, {objects.Layouts.Count} building layouts ({watch.ElapsedMilliseconds} ms)");
         return objects;
     }
 
@@ -97,6 +100,23 @@ sealed class WorldObjects : IDisposable
                 else if (parts.Count == 0) Interlocked.Increment(ref empty);
                 result.Items.AddRange(parts);
                 Interlocked.Increment(ref buildings);
+                // The state's exterior layout: signs and banners placed relative to the building. Skipped for a destroyed one (Unknown).
+                if (!isDestroyed && state?.GetString("exterior layout name") is { Length: > 0 } layoutName)
+                {
+                    if (Layouts.Find(record, layoutName) is not { } layout) Interlocked.Increment(ref layoutsNotFound);
+                    else
+                    {
+                        Interlocked.Increment(ref layouts);
+                        foreach (var item in Layouts.Items(layout))
+                        {
+                            var (at, rotation) = BuildingLayouts.Place(position, b.Rotation, item);
+                            var placed = WorldObjectLayout.Building(db, item.Building, $"{b.InstanceId}/{item.InstanceId}", at, rotation,
+                                new BuildingState(false, townMaterial));
+                            result.Items.AddRange(placed);
+                            if (placed.Count > 0) Interlocked.Increment(ref layoutObjects);
+                        }
+                    }
+                }
                 // Towns without a baked distant mesh: the building's own distant mesh stands in for it far away (what the game's
                 // "generate distant towns" would batch).
                 if (!isDestroyed && (town is null || !bakedTowns.Contains(town.InstanceId)) &&
@@ -120,7 +140,7 @@ sealed class WorldObjects : IDisposable
     /// <summary>A line for the log: what has been laid out so far.</summary>
     public string Describe() =>
         $"{buildings} buildings ({fromState} at their state's world Y, {destroyed} destroyed, {missing} without a record, {foliage} foliage resources and {empty} others without meshes), " +
-        $"{features} map features, {stand} distant stand-ins";
+        $"{layouts} exterior layouts ({layoutObjects} objects, {layoutsNotFound} layout names not found), {features} map features, {stand} distant stand-ins";
 
     public void Dispose()
     {

@@ -132,7 +132,9 @@ world +Z.
 
 Per layer, the furnished insides of buildings: GAMESTATE_BUILDING (28,857), ITEM_PLACEMENT_GROUP (8,692),
 INVENTORY_ITEM_STATE, INVENTORY_STATE, INSTANCE_COLLECTION (490), many with ids `"<n>-[basedata]-INGAME"`.
-Not analyzed beyond counts; `WorldLevelData.Load(..., includeInteriors: true)` merges them.
+`WorldLevelData.Load(..., includeInteriors: true)` merges them. After merging there are 410 INSTANCE_COLLECTION
+records: **building layouts**, described under ["Building layouts"](#building-layouts) below. ITEM_PLACEMENT_GROUP and the
+inventory records were not analyzed.
 
 ## Other placement files
 
@@ -191,8 +193,8 @@ named; functions are named by entry address. The game's own name for the builder
 - **Not stored.** The parts are chosen again every time a building is created; nothing about the choice is
   saved in the GAMESTATE_BUILDING or the zone instance (**Verified (decompiled)**: FUN_1405609e0 reseeds the
   generator and rolls; the state fields listed above hold no part ids. The `exterior layout name` / `interior
-  layout name` strings of 3,341 states, e.g. `Robotics Sign` / `Robotics Shop`, are names, not record ids:
-  Observed, meaning Unknown, probably furniture layouts).
+  layout name` strings, e.g. `Robotics Sign` / `Robotics Shop`, name building layouts of `interiors.level`, not
+  part choices: see ["Building layouts"](#building-layouts)).
 - **Generator**: the C runtime's `rand()` of MSVCR100.DLL (imported; a linear congruential generator,
   `x = x × 214013 + 2531011`, result `(x >> 16) & 0x7FFF`), so the result is reproducible (**Verified
   (decompiled)** that it is the import; the sequence itself is the documented MSVC one, checked in
@@ -283,6 +285,46 @@ From the GAMESTATE_BUILDING (counts over the 11,824 zone states):
 - `interior` parts (chosen after the second `srand(seed)`) are loaded only when the player is inside; upper floors
   are hidden by the roof logic only then. An exterior view draws the `parts` tree (Observed from fcs.def; the
   hiding code was not traced).
+- `exterior layout name` (325 placed buildings): the building also gets that exterior layout's objects (signs,
+  banners), see below. `interior layout name` (772): its furniture layout.
+
+### Building layouts
+
+A building layout is an INSTANCE_COLLECTION of `interiors.level` whose instances are BUILDINGs placed relative to
+another building: an **exterior layout** holds the signs and banners on the outside of a building (shop signs, bar signs,
+faction banners), an **interior layout** its furniture. Examined 2026-10-05 over the merged base-game layers.
+
+- **Records** (Verified: all 410 after merging carry `associated building`): fields `is exterior` (bool), `associated
+  building` (string, a BUILDING id); seen on exterior layouts (Observed) also `is shop`, `is bar`, `is recruitment`,
+  `flophouse`, `public` (ints) and on some `associated interior` (the name of the interior layout that goes with it, e.g.
+  `trade`). 165 are exterior. Ids are `EXT-<associated building>-<name>` for exterior layouts and `<associated building>-<name>` for
+  interior ones, where `<name>` is the record's name (Verified for all 245 interior and 163 of the 165 exterior ones; the
+  other two, `EXT-3793-TwoStorey.mod-Slave Sign` and `EXT-3384-TwoStorey.mod-Barracks`, are associated with 3384 and 3795,
+  so the `associated building` field, not the id, is what links a layout to its building).
+- **Instances**: target a BUILDING (all 471 exterior instances resolve; of 1,135 placed through layouts, 545 are `is node`
+  markers such as "Node Shopkeeper"), position and rotation in the frame of the building the layout is used on (local
+  offsets up to 500 units, Y the height above the building's origin), one GAMESTATE_BUILDING state each (in `interiors.level`,
+  with an absolute `world Y pos` of the building the layout was authored on, so not usable for another building).
+  Two exterior layouts are empty.
+- **Which layout** (Observed; the game's lookup was not traced): of the 325 exterior names, 262 match the id
+  `EXT-<building>-<name>` exactly. `BuildingLayouts.Find` looks among the layouts whose `associated building` is the building,
+  then among those of the buildings in its `shares interiors with` list (e.g. Old Storm House → Storm House), each with an exact
+  name before a case-insensitive one (`banners`, `Mechanical SIgn`): 278 resolve on the building itself, 34 through a shared
+  one, 22 of the 312 only ignoring case. 13 stay unresolved (Watchtower `Barracks` 4, Longhouse `Banners` 4 and `banners` 2,
+  Outpost s-IV `Banners` 2, L-House `Trade Sign` 1: no layout of that name for the building or a shared one); whether the game
+  then takes another building's layout of that name is **Unknown** (the viewer draws nothing, as the positions fit only the
+  building they were made for).
+- **Placement**: world = the building's node (position with the state's `world Y pos`, rotation, no scale) × the item's
+  rotation and position, i.e. the item's offset is rotated by the building's rotation and not scaled by the building's
+  `scale`; the item is then built like any BUILDING (parts, its own `scale`, seed from its own world X/Z). **Observed** by
+  screenshot (2026-10-05): the BAR sign of the Storm House in The Hub sits flat on the wall beside the door at lintel height,
+  and the travel sign of a Swamp Shack (`scale` 0.77) hangs from its bracket at the house's corner; with the offset scaled it
+  would sit inside the wall. That the game composes them this way, and the seed it uses for the item's parts, are not traced.
+- Destroyed buildings: the viewer adds no exterior layout (**Unknown** what the game does). A squad's `layout exterior` /
+  `layout interior` (SQUAD_TEMPLATE, fcs.def "Layout name to use for the specified building") can set the layout at run time;
+  not modelled.
+- Interior layouts are not drawn by the viewer (hidden by walls and roofs from outside; Unknown whether the game creates
+  their furniture before the player enters).
 
 ### Materials ("the local town material")
 
@@ -328,6 +370,15 @@ reproducible**; the viewer seeds its own pick by the town instance or placement 
 - Also not drawn: `is node` buildings (invisible markers), `distant mesh` (low-poly town batches), the
   INVENTORY_STATE entries at the origin.
 
+### Nest debris (not drawn)
+
+TOWN records can scatter objects at run time (fcs.def): `debris building` (BUILDING; val0 the count "+50% randomisation",
+val1/val2 the min/max cluster range around `num centrepoints` centre points, "for nests only" unless `spawn in town
+centre`), `debris` (NEST_ITEM) and `loot spawn`. Of the 304 placed towns, 12 list `debris building` (e.g. Deadhive Overrun:
+prisoner poles and torch posts; Dust King Tower and Cannibal Village: torch posts, camp beds, campfires, cooking pit) and none
+list `debris`; 6 placed towns set `spawn in town centre` (Observed, base game). Nothing of it is stored in the level files, and
+the scatter code was not traced, so whether it is seeded (reproducible) is **Unknown**; the viewer draws none of it.
+
 ### Map features
 
 The MAP_FEATURES `mesh` (all 1,810 are `.mesh`), scaled by the entry's per-axis scale (non-uniform for some, e.g.
@@ -336,6 +387,19 @@ The MAP_FEATURES `mesh` (all 1,810 are `.mesh`), scaled by the entry's per-axis 
 TERRAIN mode "uses textures from the current biome": Kenshi's `mapfeature_fs` runs the terrain layer model
 without the road layer (Observed, terrainfp4.hlsl); the viewer draws them with its terrain shader the same way.
 Their materials come from the model viewer's resolver ([../viewer.md](../viewer.md#how-mesh-textures-are-resolved)).
+
+What is not drawn (Observed, base game, 2026-10-05):
+- 44 placements are `hidden` (fcs.def: "markers to attach effects"): Volk-Cloud Placer 24, Volc-small-steamers Placer 18,
+  Permanent-dust-storm Placer 1, Marker-Attractor 1. The placers carry an EFFECT instance (clouds, steam, a dust storm),
+  which the viewer does not draw (no effects).
+- 11 placements (7 ids, e.g. `2332-Newwworld.mod`, `2332-D-Newwworld.mod`) name records no base file defines.
+- 1 record names a mesh that is not in the install: Fractal_Distiller_Feature (`52165-Newwworld.mod`,
+  `data/newland/Assets/Buildings/Fractal_Distiller01.mesh`).
+- Other MAP_FEATURES fields: `distance` (fcs.def "Visibility distance for feature", default 2000; 18 distinct values from 80 to
+  8000 in the base game) is not applied by the viewer, which draws features to its object distance; how the game uses it
+  (an Ogre rendering distance or a load radius) is **Unknown**. `local coordinates` (86 records) only changes triplanar and
+  terrain texture mapping ("Use local coordinates instead of global coordinates", fcs.def). `effects`, `sounds` and `bird
+  attractor` attach non-mesh things.
 
 ### Draw distance and distant towns
 
@@ -370,7 +434,7 @@ setup code, read in the decompiled `kenshi_x64.exe` for facts only.
   building's `town*` handle matches a town state's `hand*` by `C` and `CS`, see "Materials" above; the game gives
   a new handle a random serial from `rand()`, FUN_1400d1c20). Why most town handles match no town state.
 - What the INVENTORY_STATE entries in the building list are for; INVENTORY_* and ITEM_PLACEMENT_GROUP
-  contents; `interiors.level` structure.
+  contents; the game's building layout lookup (the 13 unresolved exterior names) and nest debris scatter.
 - ROAD `start`/`end`, the road point x parameter, road foliage w.
 - `fogfeatures.dat`, `globalPathing.path` layouts (`blendinfo.dat`: see terrain.md).
 - Building assembly leftovers: rolls drawn by EFFECT instances and by part-material collections inside the

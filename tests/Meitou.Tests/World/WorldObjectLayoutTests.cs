@@ -186,4 +186,48 @@ public class WorldObjectLayoutTests
         }
         Assert.True(checkedBuildings > 200);
     }
+
+    [Fact]
+    public void Layout_items_are_placed_in_the_buildings_frame()
+    {
+        // A quarter turn about +Y: the item's local +X offset ends up along world -Z, and its own rotation follows the building's.
+        var turn = Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI / 2);
+        var item = new LayoutItem("0", null!, new Vector3(10, 4, 0), turn);
+        var (at, rotation) = BuildingLayouts.Place(new Vector3(100, 50, 200), turn, item);
+        Assert.Equal(100, at.X, 3);
+        Assert.Equal(54, at.Y, 3);
+        Assert.Equal(190, at.Z, 3);
+        var half = Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI);
+        Assert.Equal(1, MathF.Abs(Quaternion.Dot(rotation, half)), 3);
+    }
+
+    [Fact]
+    public void Exterior_layout_names_resolve_to_interiors_level_layouts()
+    {
+        var install = GameInstall.Locate();
+        Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
+        var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
+        var world = WorldLevelData.Load(install!, includeInteriors: true);
+        var layouts = new BuildingLayouts(db, world.Interiors);
+        int named = 0, resolved = 0, items = 0;
+        foreach (var b in world.Buildings())
+        {
+            if (b.StateId is null || world.Zones[b.Zone].Find(b.StateId) is not { } state) continue;
+            var name = state.GetString("exterior layout name");
+            if (name.Length == 0 || db.Find(b.BuildingId) is not { } record) continue;
+            named++;
+            if (layouts.Find(record, name) is not { } layout) continue;
+            resolved++;
+            Assert.True(layout.GetBool("is exterior"));
+            var list = layouts.Items(layout).ToList();
+            if (list.Count == 0) { Assert.Empty(layout.Instances); continue; } // two layouts (EXT-727-...-Armor Sign, EXT-3384-...-No Entry) are empty
+            items += list.Count;
+            // Signs sit on the building: at most 500 units from its origin in the base game.
+            Assert.All(list, i => Assert.InRange(i.Position.Length(), 0, 600));
+        }
+        // Counts of 2026-10 (docs/formats/zones.md, "Building layouts"): 325 named, 312 found (262 by the exact EXT id).
+        Assert.Equal(325, named);
+        Assert.Equal(312, resolved);
+        Assert.True(items >= resolved);
+    }
 }
