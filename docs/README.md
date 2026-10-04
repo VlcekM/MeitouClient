@@ -14,3 +14,4 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [formats/overview.md](formats/overview.md) | Install layout, load order, resource lookup, mod overrides, format inventory |
 | [formats/fcs-mod.md](formats/fcs-mod.md) | FCS game data: `.base` / `.mod` binary layout, record types, overrides, `fcs.def` schema |
 | [formats/ogre-mesh.md](formats/ogre-mesh.md) | Ogre `.mesh` models: versions, chunk layout, vertex formats, LOD |
+| [formats/ogre-skeleton.md](formats/ogre-skeleton.md) | Ogre `.skeleton`: bones, animations, keyframes; mesh links |

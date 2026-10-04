@@ -303,6 +303,20 @@ sealed class OgreStream(byte[] data)
         return true;
     }
 
+    /// <inheritdoc cref="TryReadChunk(ReadOnlySpan{OgreMeshChunk}, out OgreMeshChunk, out int)"/>
+    public bool TryReadChunk(ReadOnlySpan<OgreSkeletonChunk> allowed, out OgreSkeletonChunk chunk, out int length)
+    {
+        chunk = default;
+        length = 0;
+        if (data.Length - Position < ChunkHeaderSize) return false;
+        var id = (OgreSkeletonChunk)BitConverter.ToUInt16(data, Position);
+        if (!allowed.Contains(id)) return false;
+        chunk = id;
+        Position += 2;
+        length = checked((int)ReadUInt32());
+        return true;
+    }
+
     public bool ReadBool() => data[Position++] != 0;
 
     public ushort ReadUInt16()
@@ -327,6 +341,9 @@ sealed class OgreStream(byte[] data)
     }
 
     public Vector3 ReadVector3() => new(ReadFloat(), ReadFloat(), ReadFloat());
+
+    /// <summary>Ogre writes quaternions as x, y, z, w (its in-memory order is w first; the serializer reorders).</summary>
+    public Quaternion ReadQuaternion() => new(ReadFloat(), ReadFloat(), ReadFloat(), ReadFloat());
 
     public byte[] ReadBytes(int count)
     {
