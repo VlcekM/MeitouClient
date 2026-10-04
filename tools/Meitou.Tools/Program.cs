@@ -7,6 +7,7 @@ return args switch
     ["formats"] => WithInstall(Formats),
     ["fcs", var path] => Fcs(path),
     ["load"] => WithInstall(Load),
+    ["meshes"] => WithInstall(MeshSurvey.Run),
     ["fcs-types"] => WithInstall(FcsTypeMatcher.Run),
     ["fcs-records", var type] => WithInstall(i => FcsRecordDump.Run(i, int.Parse(type), 3)),
     _ => Usage(),
@@ -18,6 +19,7 @@ static int Usage()
         meitou-tools formats       count file types under the install's data/ folder
         meitou-tools fcs <file>    summarize a .mod/.base file (path, or a name inside data/)
         meitou-tools load          apply the load order and summarize the merged game data
+        meitou-tools meshes        read every .mesh in data/ and report failures and contents
         meitou-tools fcs-types     match record type numbers to fcs.def type names
         meitou-tools fcs-records N show the fields of the first records of type N in the base game
         """);

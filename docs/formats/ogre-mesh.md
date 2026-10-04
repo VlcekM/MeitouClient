@@ -1,0 +1,105 @@
+# Ogre `.mesh`
+
+Sources:
+- **OGRE source** (MIT): Kenshi's `OgreMain_x64.dll` is Ogre 2.0 ("Tindalos" in its strings), which
+  still has the classic "v1" mesh system. The layout below follows ogre-next branch `v2-0`,
+  `OgreMeshSerializerImpl.cpp` / `OgreMeshFileFormat.h`. `Meitou.Data.Ogre.OgreMeshReader` follows the
+  same structure (notice in [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)).
+- **Verified 2026-10-04** (`OgreMeshReaderTests.Reads_every_base_game_mesh`, `meitou-tools meshes`):
+  all 3,277 base-game meshes parse to the last byte; every index is below its vertex count; every
+  vertex position lies inside the mesh's stored bounding box (which checks the vertex layout decoding).
+
+## Versions in the base game (Verified)
+
+| Header string | Files | Ogre serializer |
+| --- | ---: | --- |
+| `[MeshSerializer_v1.100]` | 1,740 | `MeshSerializerImpl` (current in Ogre 2.0) |
+| `[MeshSerializer_v1.8]` | 1,460 | `MeshSerializerImpl_v1_8` |
+| `[MeshSerializer_v1.41]` | 77 | `MeshSerializerImpl_v1_41` (same as 1.8 except pose/morph data) |
+
+The DLL also knows 1.40, 1.30, 1.20, 1.10 (no base-game files use them; the reader rejects them).
+The only differences between the three supported versions are in the LOD section.
+
+## Stream basics
+
+- Little-endian. (Ogre detects endianness from the header id; a byte-swapped id means big-endian. Not
+  seen; the reader rejects it.)
+- `bool` = 1 byte, `ushort` = 2, `uint` and `float` = 4.
+- `string` = bytes up to a `\n` (a trailing `\r` is dropped). No length prefix.
+- File starts with `ushort 0x1000` and the version string. No length after the header id.
+- Then chunks: `ushort id`, `uint length` (including the 6-byte chunk header), body. A chunk's
+  children follow its fields. Ogre reads children **by structure**, not by length: a parent keeps
+  reading child chunks while the next id is one it expects, and otherwise steps back 6 bytes and
+  returns (old exporters wrote wrong lengths, per a comment in Ogre's LOD reader). Only sections Ogre
+  itself skips are skipped by length.
+
+## Chunks
+
+```
+0x1000 HEADER            ushort id + version string (no length)
+0x3000 MESH              bool skeletallyAnimated
+  0x5000 GEOMETRY        shared vertices (none in Kenshi: Verified 0 meshes use shared vertices)
+  0x4000 SUBMESH         string material, bool useSharedVertices, uint indexCount, bool indexes32Bit,
+                         ushort/uint indices[indexCount]
+    0x5000 GEOMETRY      required if !useSharedVertices
+    0x4010 SUBMESH_OPERATION      ushort operation (1 points, 2 lines, 3 line strip, 4 triangle list (default), 5 strip, 6 fan)
+    0x4100 SUBMESH_BONE_ASSIGNMENT uint vertex, ushort bone, float weight   (repeats)
+    0x4200 SUBMESH_TEXTURE_ALIAS   string alias, string texture              (repeats)
+  0x6000 MESH_SKELETON_LINK       string skeleton file name
+  0x7000 MESH_BONE_ASSIGNMENT     as 0x4100, for shared vertices
+  0x8000 MESH_LOD_LEVEL           see LOD below
+  0x9000 MESH_BOUNDS              float min x,y,z, max x,y,z, radius
+  0xA000 SUBMESH_NAME_TABLE
+    0xA100 ..._ELEMENT            ushort submesh index, string name          (repeats)
+  0xB000 EDGE_LISTS               stencil-shadow edges (walked, not kept)
+  0xC000 POSES, 0xD000 ANIMATIONS, 0xE000 TABLE_EXTREMES   skipped by length
+
+GEOMETRY (0x5000): uint vertexCount, then
+  0x5100 VERTEX_DECLARATION
+    0x5110 VERTEX_ELEMENT         ushort source, type, semantic, offset, index   (repeats)
+  0x5200 VERTEX_BUFFER            ushort bindIndex, ushort vertexSize            (repeats)
+    0x5210 VERTEX_BUFFER_DATA     vertexCount * vertexSize bytes (interleaved elements of that source)
+```
+
+`vertexSize` must equal the sum of the sizes of the elements with that `source` (Ogre checks; so do we).
+
+Edge list (0xB000): repeated `0xB100` chunks: `ushort lodIndex`, `bool isManual`; unless manual:
+`bool isClosed`, `uint triangles`, `uint edgeGroups`, `triangles × 48 bytes` (index set, vertex set,
+3 vertex indices, 3 shared indices, 4-float normal), then `edgeGroups` × `0xB110` chunk
+(`uint vertexSet, triStart, triCount, edgeCount`, `edgeCount × 25 bytes`).
+
+### Vertex elements
+
+Semantics: 1 position, 2 blend weights, 3 blend indices, 4 normal, 5 diffuse, 6 specular,
+7 texture coordinates, 8 binormal, 9 tangent.
+Types: 0–3 float1–4, 4 colour (deprecated, assume ARGB), 5–8 short1–4, 9 ubyte4, 10 colour ARGB,
+11 colour ABGR, 12–15 double1–4, 16–19 ushort1–4, 20–23 int1–4, 24–27 uint1–4.
+
+Used in the base game (Verified, element count over 3,748 submeshes): position float3 (all), normal
+float3 (all), UV float2 (3,541), binormal float3 (2,431), tangent float3 (1,777) or float4 (1,462),
+diffuse colour ARGB (1,628) or ABGR (89). **No blend weights/indices elements**: the 167 skinned meshes
+store skinning as bone assignments (Ogre builds blend buffers from them at load).
+
+### LOD (0x8000)
+
+- **1.100**: `string strategy`, `ushort levels`; then for each level after 0, a chunk 0x8110 (manual)
+  or 0x8120 (generated), body starting with `float userValue`:
+  - manual: `string meshName`
+  - generated, per submesh: `uint indexCount`, `uint indexStart`, `uint bufferIndex`; if `bufferIndex`
+    is `0xFFFFFFFF`: `bool 32bit`, `uint bufferIndexCount`, indices; else it reuses the buffer of
+    LOD level `bufferIndex` (1-based).
+- **1.8 / 1.41**: `string strategy`, `ushort levels`, `bool manual`; for each level after 0, a 0x8100
+  USAGE chunk: `float userValue`, then a 0x8110 chunk (`string meshName`) if manual, else one 0x8120
+  chunk per submesh: `uint indexCount`, `bool 32bit`, indices.
+
+1,389 base-game meshes have LOD data.
+
+## Other base-game facts (Verified)
+
+- 3,748 submeshes, 22.7 M vertices, 23.0 M indices; 167 skinned (have a skeleton link).
+- Skipped sections present: edge lists in 103 meshes, poses in 13. No vertex animations or extremes.
+
+## Open questions
+
+- Poses (13 meshes) and their use (facial expressions?) once animation is implemented.
+- How Kenshi picks LOD levels (strategy names, distances).

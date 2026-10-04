@@ -17,7 +17,7 @@ the data inward and rendering comes late.
 
 ## Original engine (from the install)
 
-Ogre 3D (Direct3D 11 render system, Octree scene manager, Terrain plugin, MeshLodGenerator,
+Ogre 2.0 "Tindalos" (Direct3D 11 render system, Octree scene manager, Terrain plugin, MeshLodGenerator,
 Overlay), MyGUI, ParticleUniverse, SkyX, PhysX 2.x (`PhysXLoader64`, `NxCharacter`), Havok
 (animation / navmesh), Wwise (`.bnk`), OIS input, Steamworks.
 

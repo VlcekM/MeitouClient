@@ -59,7 +59,7 @@ Counts are files under `data/`.
 | Format | Count | Origin | Status |
 | --- | ---: | --- | --- |
 | `.base`, `.mod` | 4 | FCS game data | **Verified** layout, see [fcs-mod.md](fcs-mod.md) |
-| `.mesh` | 3277 | Ogre | Header **Verified**: `[MeshSerializer_v1.100]` |
+| `.mesh` | 3277 | Ogre 2.0 (v1 meshes) | **Verified**: all parse; versions 1.100 / 1.8 / 1.41. See [ogre-mesh.md](ogre-mesh.md) |
 | `.skeleton` | 365 | Ogre | Header **Verified**: `[Serializer_v1.80]` |
 | `.hkt` | 3995 | Havok | Header **Verified**: binary tagfile, magic `1E0DB0CA CEFA11D0`, SDK `hk_2014.2.0-r1`, root `hkRootLevelContainer`. Animations and navmesh tiles (`newland/land/navtiles/tile*.hkt`) |
 | `.material`, `.program`, `.compositor`, `.hlsl`, `.vert`, `.frag` | ~270 | Ogre scripts / shaders | Not analyzed |
