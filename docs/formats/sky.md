@@ -82,8 +82,8 @@ shader's own default numbers in `SkyX.material`, KrESun 0.323 and so on, are Sky
 `gamedata.base` record alone says 45 / 5 / 24; `Newwworld.mod` overrides). The sun's path is in
 [terrain.md](terrain.md#sun-path-verified-kenshi_x64exe-sky-controller-and-the-constants-record). `night darkness` is the
 exposure floor's night factor: `MIN_LUMINANCE = exposure min · lerp(night darkness, 1, saturate(5 sunY))` (**Verified**, exe sky
-update, 2026-10-05; [lighting.md](lighting.md)). `exposure min` 0.8 and `exposure max` 1.2 are in `gamedata.base` and no shipped mod
-changes them (**Verified** by loading the base and the merged databases).
+update, 2026-10-05; [lighting.md](lighting.md)). `exposure min` 0.8 and `exposure max` 1.2 after all mods, the same in the base game's own load order
+(**Verified** by loading both; which of `gamedata.base`, `Newwworld.mod`, `rebirth.mod` sets them was not checked).
 
 ### WEATHER records (Observed: the base game's and the loaded mods' records, 2026-10-04)
 
@@ -198,7 +198,7 @@ and sky-view tables, the 0.36° sun disc) is gone, with `AtmosphereModel.cs`.
 - **Sky pass**: a full-screen pass evaluates SkyX's skydome per pixel (`atmoSky`): the O'Neil integral with 4 samples from SkyX's
   fixed camera, the game's options (table above), the Rayleigh and Cornette-Shanks phases with the cosine towards the eye, the HDR
   output `exposure · (…)`, the night glow in its HDR form `pow(glow, 2.2)` where SkyX's night factor is on. SkyX evaluates the
-  integral per dome vertex and interpolates; per pixel is smoother and otherwise the same (**Observed** visually). Directions below
+  integral per dome vertex and interpolates; the viewer evaluates it per pixel (a viewer choice: smoother, same formula). Directions below
   the horizon take the horizon's colour (the ground covers them; SkyX's dome has a lower half the viewer does not need). Values are
   HDR; the post-processing's exposure brings them to the screen. Predicted at noon in clear weather (`SkyXModel`, scratch
   computation) with the exposure of ×0.69 that a typical day scene gets, a sky about (61, 105, 131) at 20° and (130, 176,

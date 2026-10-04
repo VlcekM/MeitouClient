@@ -111,7 +111,7 @@ cube convention against Ogre's right-handed world) is **Unknown**; the faces dif
 
 The composite scales the HDR image by `0.55 / adapted`, `adapted` the scene's mean Rec. 601 luminance (linear) smoothed
 over about 2 s and clamped to `[MIN_LUMINANCE, MAX_LUMINANCE]` ([post-processing.md](post-processing.md#exposure-and-tone-mapping-verified)).
-The exe sets both: `MAX_LUMINANCE` = CONSTANTS `exposure max` (1.2 in `gamedata.base`, unchanged by the shipped mods; Verified by loading the base and merged databases) once at creation, and every frame
+The exe sets both: `MAX_LUMINANCE` = CONSTANTS `exposure max` (1.2 in GLOBAL CONSTANTS after all mods, the same in the base game's own load order; Verified by loading both) once at creation, and every frame
 `MIN_LUMINANCE = exposure min · lerp(night darkness, 1, saturate(5 · sunY))` with `exposure min` 0.8 and `night darkness` 0.35
 (sunY: the sun's real height). By day the band is 0.8..1.2, a scale of ×0.69 to ×0.46; at night it opens down to 0.28, up to
 ×1.96, which is what keeps the night readable. So **`night darkness` is the night's exposure floor** (resolves an Unknown in

@@ -509,7 +509,7 @@ and why the presets look the way they do: [formats/post-processing.md](formats/p
 only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. The viewer has no FXAA: edges are smoothed by 4x MSAA instead
 (the default), so the `kenshi` preset is a clamp with 4x MSAA.
 
-- **Presets**: `--post kenshi` (default, the game's chain) and `--post off` (the look before post-processing: 4x MSAA, nothing else). Keys F2 / F1. The single effects below can be added on top of either.
+- **Presets**: `--post kenshi` (default, the game's chain) and `--post off` (4x MSAA, nothing else; in game-sky mode the game's auto exposure still applies, since the scene is in the game's HDR units). Keys F2 / F1. The single effects below can be added on top of either.
 - **Effects** (option, key): SSAO (`--ssao`, F4): 12 taps, half resolution, from the depth of the near depth slice only (the far
   slice's depth is cleared before the near one is drawn, so nothing beyond about 20000 units is occluded; it also fades out from
   3000 to 10000 units), normals from depth differences, depth-aware blur, multiplies the HDR colour. Bloom (`--bloom`, F5): over-1

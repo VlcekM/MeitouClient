@@ -43,8 +43,8 @@ to sliders"):
   not a log average, although the value is stored as `log` in the 1x1 target).
 - **The band at run time** (**Verified**, `kenshi_x64.exe` sky creation and sky update, 2026-10-05): the exe overwrites the
   script defaults. `MAX_LUMINANCE` = CONSTANTS `exposure max`, set once; `MIN_LUMINANCE` = `exposure min · lerp(night darkness, 1,
-  saturate(5 · sunY))`, set every frame (sunY the sun's height). With `gamedata.base`'s 0.8 / 1.2 / 0.35 (no shipped mod changes
-  them) the day band is **[0.8, 1.2]** and the night's floor drops to 0.28. Details: [lighting.md](lighting.md).
+  saturate(5 · sunY))`, set every frame (sunY the sun's height). With GLOBAL CONSTANTS' 0.8 / 1.2 / 0.35 (after all mods; the same in the base game's
+  own load order) the day band is **[0.8, 1.2]** and the night's floor drops to 0.28. Details: [lighting.md](lighting.md).
 - **Adaptation**: `adapted = last + (current - last) * (1 - exp(-frameTime * rate))` with rate 0.5 (a time constant of about 2 s),
   then **clamped to [MIN_LUMINANCE, MAX_LUMINANCE]**.
 - **Exposure**: `scale = max(EXPOSURE_KEY / adapted, 0.001)`: by day 0.55 / 0.8 to 0.55 / 1.2 = **x0.69 down to x0.46**, at
