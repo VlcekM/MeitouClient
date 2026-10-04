@@ -22,7 +22,7 @@ public sealed record AtmosphereSettings
     /// <summary>Sun irradiance as a multiple of π: the sunlit side of a white diffuse surface has radiance <c>SunScale · transmittance · cos</c>.</summary>
     public float SunScale { get; init; } = 1.2f;
     /// <summary>Multiplier on the Rayleigh scattered radiance, standing in for the multiple scattering a single-scattering model lacks (aerosol light is left alone).</summary>
-    public float SkyGain { get; init; } = 3.2f;
+    public float SkyGain { get; init; } = 3.4f;
 
     /// <summary>
     /// Ozone absorption (peak coefficient per scale height; a tent-shaped layer centred 2 scale heights up, 1.4 wide each side).
@@ -61,9 +61,22 @@ public sealed class AtmosphereModel(AtmosphereSettings settings)
         var perChannel = new Vector3(MathF.Pow(l.X, 1 / DisplayGamma), MathF.Pow(l.Y, 1 / DisplayGamma), MathF.Pow(l.Z, 1 / DisplayGamma));
         float lum = 0.2126f * l.X + 0.7152f * l.Y + 0.0722f * l.Z;
         if (lum < 1e-9f) return perChannel;
-        return Vector3.Lerp(perChannel, l * (MathF.Pow(lum, 1 / DisplayGamma) / lum), HuePreserved);
+        var c = Vector3.Lerp(perChannel, l * (MathF.Pow(lum, 1 / DisplayGamma) / lum), HuePreserved);
+        // Only blue-dominated colours are graded, so orange sunsets keep their colour.
+        float cool = Math.Clamp(((c.Z - c.X) / MathF.Max(c.Z, 1e-3f) - 0.05f) / 0.25f, 0, 1);
+        c *= Vector3.Lerp(Vector3.One, WhiteBalance, cool);
+        return Vector3.Lerp(c, new Vector3(Vector3.Dot(c, new Vector3(0.2126f, 0.7152f, 0.0722f))), Desaturation * cool);
     }
     public const float HuePreserved = 0.5f;
+
+    /// <summary>
+    /// The viewer's grading of the sky and haze, not game data: with the game's Rayleigh wavelengths (0.57, 0.54, 0.44) red
+    /// scatters almost as much as green, so single scattering alone gives a violet sky. A slight shift towards green and a
+    /// partial desaturation, both scaled by how blue-dominated the colour is (so sunsets keep their orange), give the pale,
+    /// hazy blue Kenshi shows.
+    /// </summary>
+    public static readonly Vector3 WhiteBalance = new(0.92f, 1.04f, 0.97f);
+    public const float Desaturation = 0.45f;
 
     /// <summary>Distance along a ray from radius r with cosine mu (to the local vertical) to the top of the atmosphere.</summary>
     public static float DistanceToTop(float r, float mu) => MathF.Max(-r * mu + MathF.Sqrt(MathF.Max(r * r * (mu * mu - 1) + TopRadius * TopRadius, 0)), 0);

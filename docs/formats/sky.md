@@ -102,7 +102,7 @@ region and time) is **Unknown**; `SkyWeather` reads a record, the viewer uses "D
   choices, not game data):
   - *Mie*: 15 × the game's coefficient (its air is very clear; Kenshi's look is hazy), a scale height 0.3 of the air's, a
     forward-scattering aerosol phase function with `g = 0.75` (the game's 0.991 lobe is far too narrow for haze).
-  - *Sky gain* 3.2 on the Rayleigh light, standing in for the multiple scattering that a single-scattering model lacks.
+  - *Sky gain* 3.4 on the Rayleigh light, standing in for the multiple scattering that a single-scattering model lacks.
   - *Sun scale* 1.2: the sunlit side of a white diffuse surface gets `1.2 × transmittance × cos`.
   - *Ozone* (not in SkyX): a tent-shaped absorbing layer (peak coefficients (0.010, 0.030, 0.0013) per scale height, centred 2
     scale heights up, 1.4 wide each side). The game's planet is small (71.9 scale heights), so a setting sun's light passes only
@@ -114,6 +114,10 @@ region and time) is **Unknown**; `SkyWeather` reads a record, the viewer uses "D
     half a per-channel gamma 2.2 (what SkyX's HDR path does for its night glow, and what greys and pales the sky) and half the
     same curve on luminance only (keeps the hue, so sunsets stay warm). Calibrated by eye; the game's own absolute brightness
     is **Unknown** (above).
+  - *Grading* (2026-10-04, after a user report that the sky and haze looked too purple and blue): with the game's Rayleigh
+    wavelengths (0.57, 0.54, 0.44) red scatters 0.8 as much as green, so the single-scattering sky comes out violet. Colours
+    are graded by how blue-dominated they are (`(b − r) / b`, ramping from 0.05 to 0.3): up to a white balance of
+    (0.92, 1.04, 0.97) and a 45% desaturation. Warm colours (sunsets, the sun's glow) are left alone. Viewer's choice, by eye.
 - **Tables**: a 256 × 64 transmittance table to the top of the air (built once) and a 128 × 96 sky-view table, azimuth from the
   sun × elevation above the eye's horizon (square-root spaced), rebuilt only when the sun or the eye's height moves.
 - **Sky pass**: a full-screen pass reads the sky-view table, adds the night glow and stars (`SkyX_Starfield.dds`, a 1024²

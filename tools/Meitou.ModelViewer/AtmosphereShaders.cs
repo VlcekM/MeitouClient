@@ -139,7 +139,10 @@ static class AtmosphereShaders
             vec3 perChannel = pow(l, vec3(1.0 / ATMO_GAMMA));
             float lum = dot(l, vec3(0.2126, 0.7152, 0.0722));
             if (lum < 1e-9) return perChannel;
-            return mix(perChannel, l * (pow(lum, 1.0 / ATMO_GAMMA) / lum), {{F(AtmosphereModel.HuePreserved)}});
+            vec3 c = mix(perChannel, l * (pow(lum, 1.0 / ATMO_GAMMA) / lum), {{F(AtmosphereModel.HuePreserved)}});
+            float cool = clamp(((c.b - c.r) / max(c.b, 1e-3) - 0.05) / 0.25, 0.0, 1.0);
+            c *= mix(vec3(1.0), vec3({{F(AtmosphereModel.WhiteBalance.X)}}, {{F(AtmosphereModel.WhiteBalance.Y)}}, {{F(AtmosphereModel.WhiteBalance.Z)}}), cool);
+            return mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), {{F(AtmosphereModel.Desaturation)}} * cool);
         }
 
         vec3 atmoSkyLinear(vec3 dir)
