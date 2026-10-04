@@ -32,7 +32,7 @@ public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool F
 
     public static IEnumerable<string> Names(GameDatabase db) => db.OfType(FcsRecordType.WEATHER).Select(w => w.Name);
 
-    /// <summary>CONSTANTS <c>night darkness</c> (0.35 in the merged data; its exact use is Unknown).</summary>
+    /// <summary>CONSTANTS <c>night darkness</c> (0.35 in the merged data): the night's floor of the exposure band, as a fraction of <c>exposure min</c> (docs/formats/lighting.md).</summary>
     public static float NightDarkness(GameDatabase db) =>
         (db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault(r => r.Name == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault())?.GetFloat("night darkness", 0.5f) ?? 0.5f;
 }

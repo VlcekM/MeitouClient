@@ -341,6 +341,8 @@ static class TerrainShaders
             float gloss = clamp(albedo.a, 0.0, 1.0);
             float spec = pow(max(dot(shadingNormal, normalize(l + v)), 0.0), 8.0 + 40.0 * gloss) * gloss * 0.25;
             vec3 colourOut = albedo.rgb * (ambient + diff * uSunColour) + spec * diff * uSunColour;
+            // Game sky: the game's deferred lighting (docs/formats/lighting.md); terrainfp4.hlsl writes the biome albedo's alpha as the gloss.
+            if (uAtmoParams.x > 0.5) colourOut = kenshiLight(albedo.rgb, shadingNormal, v, gloss, vWorld);
             if (uDebug == 3) colourOut = vec3(0.5) * (0.3 + 0.7 * diff);
             colourOut = atmoApply(colourOut, uEye, vWorld);   // aerial perspective (AtmosphereShaders)
             fragColour = vec4(colourOut, 1.0);

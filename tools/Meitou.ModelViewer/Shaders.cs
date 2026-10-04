@@ -145,8 +145,9 @@ static class Shaders
             vec3 h = normalize(l + v);
             float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * uSpecular * 0.5;
             vec3 sunLight = vec3(1.0, 0.97, 0.92);
-            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) { ambient = mix(uAtmoAmbientGround, uAtmoAmbient, hemi); sunLight = uAtmoSunLight; }   // world view: the sky's light
             vec3 colour = albedo * (ambient + diff * sunLight) + spec * diff * sunLight;
+            // World view, game sky: the game's deferred lighting (docs/formats/lighting.md); its gloss is diffuse alpha times `specular mult`.
+            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, gloss * uSpecular, vWorld);
             if (uEmissive) colour += albedo * nm.a;
             if (uFogDistance > 0.0) colour = atmoApply(colour, uEye, vWorld);   // aerial perspective (AtmosphereShaders)
             fragColour = vec4(colour, 1.0);

@@ -40,9 +40,8 @@ Derived from the game's options (inner 9.77501, outer 10.2963, Rayleigh 0.0022, 
 **Verified** 2026-10-04 (`kenshi_x64.exe` sky setup, the function that creates the SkyX sky and cloud layer, with
 `SkyX_x64.dll`'s `AtmosphereManager::_update`): the game builds the wavelength vector (0.57, 0.54, 0.44) in the options struct, then stores 0.48 over the green wavelength (offset 0x1c, which `_update` reads as
 `WaveLength.y` for `uInvWaveLength`) and 1.4 into the exposure (0x28, `uExposure`). Earlier notes read the 0.48 as the exposure
-and kept the green 0.54; that was wrong. The viewer's sky model still uses 0.54 (`SkyAtmosphere.WaveLength`) until its grading
-is redone; `SkyAtmosphere.GameWaveLength` / `GameExposure` hold the game's values, and the haze uses them. The table below is
-for the viewer's 0.54 except where it says otherwise:
+and kept the green 0.54; that was wrong. The viewer now uses the game's values throughout (`SkyAtmosphere.WaveLength` = (0.57, 0.48,
+0.44), `SkyAtmosphere.Exposure` = 1.4; a test pins them). The table:
 
 | Quantity | Value |
 |---|---|
@@ -50,8 +49,8 @@ for the viewer's 0.54 except where it says otherwise:
 | `uScale = 1 / thickness` | 1.918 |
 | `uScaleDepth = thickness / 2` | 0.2607 |
 | `uScaleOverScaleDepth` | 7.359, so the density scale height is 0.1359 (the planet is 71.9 scale heights across its radius, the air 3.84 deep) |
-| `invλ⁴` per channel | (9.473, 11.760, 26.680); the game's green 0.48 gives 18.84 |
-| Rayleigh depth straight up from sea level, `Kr · 4π · invλ⁴ · scaleDepth` | (0.0683, 0.0847, 0.1924); the game's green 0.1358 |
+| `invλ⁴` per channel | (9.473, 18.84, 26.68) |
+| Rayleigh depth straight up from sea level, `Kr · 4π · invλ⁴ · scaleDepth` | (0.0683, 0.1358, 0.1924) |
 | Mie depth straight up, `Km · 4π · scaleDepth` | 0.0022 |
 | camera height | `inner + heightPosition · thickness`, heightPosition 0.01: an eye near sea level |
 
@@ -68,19 +67,23 @@ shader's own default numbers in `SkyX.material`, KrESun 0.323 and so on, are Sky
 - Fog (Observed, `SkyX_Fog2.hlsl`): the same integral per pixel with 4 samples, the ray's length saturated to the dome
   radius, `1 − exp(−exposure · colour)` out. The game's main haze does not use it but `post/atmospherefog.hlsl` (see "Haze"
   below: world → dome scale 70000, distances 0.06 D to 0.6 D, both Verified).
-- What the game's final brightness is: its HDR chain has no gamma step and no tone curve, only the constant exposure of 0.55 / 0.8
-  to 0.55 / 0.96 (see [post-processing.md](post-processing.md); the CONSTANTS `exposure min` / `exposure max` are 0.8 / 0.95). The
-  exact relation between the sky's radiance (exposure 1.4 on sun intensity 30) and the lit terrain's brightness is
-  **Unknown**; the viewer calibrates by eye (below).
-- The sun's light colour is taken from SkyX's colour at the sun's direction (Observed, terrain.md); the game draws no sun disc in
-  the skydome shader (the Mie lobe is the glow). Whether the game adds a sun billboard is **Unknown**.
+- The game's final brightness (**Verified**, see [lighting.md](lighting.md#exposure-verified-exe-sky-update-and-sky-creation-posthdrfp4hlsl)):
+  the skydome is drawn in SkyX's HDR mode (the game calls `setLightingMode(1)`; the `1 − exp` form is mode 0) into the same HDR
+  target as the lit scene, and the composite multiplies everything by `0.55 / adapted`, the mean scene luminance clamped to
+  `[exposure min · lerp(night darkness, 1, saturate(5 sunY)), exposure max]` = `[0.8 …, 1.2]` by day. No gamma step, no tone curve.
+  So the sky's radiance and the terrain's light are in one unit: the terrain's sun is SkyX's own colour towards the sun (below).
+- The sun's light colour is SkyX's colour towards the sun, nudged by (0, 0, 0.04), divided by `4 · exposure`, black below sunY
+  −0.2 (**Verified**, exe sky update; details in [lighting.md](lighting.md)). The game draws no sun disc in the skydome shader (the Mie
+  lobe is the glow). Whether the game adds a sun billboard is **Unknown**; the viewer draws none.
 
 ### Time and the CONSTANTS record (Verified: the merged load order, 2026-10-04)
 
 `GLOBAL CONSTANTS` after all mods: `latitude` 54, `sunrise` 5, `sunset` 23, `night darkness` 0.35, `days per year` 100 (the base
 `gamedata.base` record alone says 45 / 5 / 24; `Newwworld.mod` overrides). The sun's path is in
-[terrain.md](terrain.md#sun-path-verified-kenshi_x64exe-sky-controller-and-the-constants-record). What `night darkness` does is
-**Unknown** (the viewer uses it to set the night's ambient floor).
+[terrain.md](terrain.md#sun-path-verified-kenshi_x64exe-sky-controller-and-the-constants-record). `night darkness` is the
+exposure floor's night factor: `MIN_LUMINANCE = exposure min · lerp(night darkness, 1, saturate(5 sunY))` (**Verified**, exe sky
+update, 2026-10-05; [lighting.md](lighting.md)). `exposure min` 0.8 and `exposure max` 1.2 are in `gamedata.base` and no shipped mod
+changes them (**Verified** by loading the base and the merged databases).
 
 ### WEATHER records (Observed: the base game's and the loaded mods' records, 2026-10-04)
 
@@ -137,7 +140,8 @@ checked 2026-10-04):
   (wavelengths (0.57, 0.48, 0.44), exposure 1.4, see above).
 - **Finite path against the sky**: the skydome evaluates the same integral from the same eye over a path of length ~1 (the dome is
   the unit sphere round the eye in SkyX units), so the haze colour at a distance of 70000 is the sky's own Rayleigh colour in that
-  direction, and nearer it is a fraction of it (**Verified** from the two shaders; computed, `KenshiHaze.SkyFraction`): at noon,
+  direction, and nearer it is a fraction of it (**Verified** from the two shaders; computed with `KenshiHaze.Colour` against
+  `SkyXModel.Colour`, test `AtmosphereTests`): at noon,
   horizontal, about (0.07, 0.13, 0.18) of the sky at 3000, (0.56, 0.65, 0.72) at 30000 (red, green, blue) and (0.81, 0.87, 0.91)
   at 50000. So the veil is darker than the sky behind it and slightly bluer (the short path loses less blue); nearer ridges
   are darker layers, farther ones lighter, up to the sky's colour. At night both integrals vanish: the haze is black.
@@ -165,84 +169,68 @@ checked 2026-10-04):
 
 `atmoApply` has two branches (key F7, `SkyRenderer.KenshiHaze`; the sky itself is the same in both):
 
-- **kenshi** (the default): alpha the game's ramp from `0.06 D` to `min(D, 0.6 D)`, D = 50000 (`--haze-distance` sets D: view distance
-  × 10). D is not the viewer's far clip (about 357000): the viewer draws far beyond the game's D and simply goes on with the game's
-  formula there, which is defined for any distance. Colour: the viewer's sky colour along the fog's ray (the horizon colour for rays
-  below it) times `KenshiHaze.SkyFraction`, the game's integral to the point divided by the same integral to the dome (Rayleigh, 4
-  samples, the game's wavelengths 0.57 / 0.48 / 0.44, the game's lift and -0.3 clamp, 70000 world units per SkyX unit): the colour
-  and phase factors cancel, so this is the game's own fraction of its sky. Applied to the display-referred sky colour, as the game's
-  chain has no gamma step (a viewer choice). The fraction is clamped to 0..1, and 0 when both integrals underflow (the sun far below the
-  horizon: black, as in the game); that guard is the viewer's. From 70000 on the haze is the sky's colour, so the far terrain fades into
-  the sky and the far plane is hidden. Then `horizonClouds`: its pull is the game's (0 in clear weather); its colour is a stand-in built
-  the game's way from the viewer's sun light and horizon colour (the game's inputs are Unknown, above). The weather's fog
-  (`--weather`, when enabled): its colour lit like the ground, the game's ease-in-out curve over `distance / fog distance max`
-  (the viewer has no wind; the game would use a distance between min and max), alphas added.
-  Consequences that look odd but are the game's rule: from a camera high above the ground (the viewer allows much higher than the game)
-  everything is past 30000 and fully hazed, steep rays all take the one fixed ray's colour; at night distant terrain goes black against
-  the night sky. Not reproduced: the game's sky hue (the viewer's sky still uses green 0.54, see above), the Mie glow of the viewer's sky
-  (carried into the haze near the sun; the game's haze has no Mie colour), and the water being fogged by the depth of what is under it.
-- **physical** (the earlier model): closed-form optical depth along the ray with height-dependent density, in-scattering of the
-  sky colour, closing at `--fog` (default 250000).
+- **kenshi** (the default): the game's formula, evaluated per pixel in the object, terrain, foliage and water shaders instead of in a
+  separate pass over the G-buffer (same result for opaque surfaces). Alpha: the ramp from `0.06 D` to `min(D, 0.6 D)`, D = 50000
+  (`--haze-distance` sets D: view distance × 10). D is not the viewer's far clip (about 357000): past D the game's formula simply goes
+  on. Colour: `KenshiHaze.Colour` / GLSL `hazeColour`, SkyX's exposure × Rayleigh phase × `invλ⁴ · Kr · sun` × the 4-sample
+  in-scattering from SkyX's camera to the point mapped by the dome radius 70000, with the game's lift and -0.3 clamp: the game's
+  own expression, in the same HDR units as the sky and the lit scene, so the exposure treats them alike. At night the integral
+  vanishes and the haze is black, as in the game. Then `horizonClouds`: its pull is the game's (0 in clear weather); its colour is a
+  **stand-in** built the game's way from the viewer's sun colour and horizon colour (the game's `getColorAt` input for the cloud layer
+  and its floor colour are Unknown, above). The weather's fog (`--weather`, when enabled): `fog color · sunColour.w`, the game's
+  ease-in-out curve over `distance / fog distance max` (the viewer has no wind; the game would use a distance between min and max),
+  alphas added. Consequences that look odd but are the game's rule: from a camera high above the ground (the viewer allows much higher
+  than the game) everything is past 30000 and fully hazed, steep rays all take the one fixed ray's colour; at night distant terrain
+  goes black against the night sky. Not reproduced: the water being fogged by the depth of what is under it.
+- **physical** (a viewer alternative, not the game's): the closed-form optical depth of SkyX's own air (its Rayleigh and Mie depths
+  straight up, without the earlier turbidity factor) along the ray, with one density scale height = 40000 world units (a viewer
+  choice; the game's world unit is Unknown), in-scattering of the sky's colour in the ray's direction, closing at `--fog`
+  (default 250000).
 
 ## In the viewer
 
-`SkyRenderer` (with `AtmosphereShaders` and `AtmosphereModel`/`SkyWeather` in `Meitou.Data.World`), all in the world view:
+`SkyRenderer` (with `AtmosphereShaders`, and `SkyAtmosphere` / `SkyXModel` / `KenshiHaze` in `Sky.cs`, `KenshiLighting` /
+`AmbientMap` / `ExposureConstants` in `KenshiLighting.cs`, `SkyWeather`, all in `Meitou.Data.World`), in the world view. Rewritten
+2026-10-05 to the game's own numbers; the earlier eye-tuned model (15 × Mie with g 0.75 and a lower scale height, a sky gain of
+3.4, a sun scale of 1.2, an ozone layer, a half-gamma display mapping, a blue-dependent grading, the precomputed transmittance
+and sky-view tables, the 0.36° sun disc) is gone, with `AtmosphereModel.cs`.
 
-- **Model**: O'Neil's single scattering with the game's constants, as above, but with the exact planet/atmosphere geometry
-  (the planet occludes the sun, so dusk and night come out right) and our own settings (`AtmosphereSettings`; these are
-  choices, not game data):
-  - *Mie*: 15 × the game's coefficient (its air is very clear; Kenshi's look is hazy), a scale height 0.3 of the air's, a
-    forward-scattering aerosol phase function with `g = 0.75` (the game's 0.991 lobe is far too narrow for haze).
-  - *Sky gain* 3.4 on the Rayleigh light, standing in for the multiple scattering that a single-scattering model lacks.
-  - *Sun scale* 1.2: the sunlit side of a white diffuse surface gets `1.2 × transmittance × cos`.
-  - *Ozone* (not in SkyX): a tent-shaped absorbing layer (peak coefficients (0.010, 0.030, 0.0013) per scale height, centred 2
-    scale heights up, 1.4 wide each side). The game's planet is small (71.9 scale heights), so a setting sun's light passes only
-    about 10 airmasses and, with Rayleigh alone, the twilight comes out yellow-olive; the ozone takes out green, which gives
-    the orange horizon and violet sky of a real dusk. Our addition, the numbers are tuned by eye.
-  - *Scale height in world units*: 40000 (the unit of the game's world is **Unknown**, decimetres most likely, so about 4 km).
-    Only the world-to-atmosphere length mapping; it makes the haze twice as dense as the 8 km of the Earth's air would.
-  - *Display mapping*: the viewer's lighting is display-referred (like the game's: no gamma step), so radiance goes through
-    half a per-channel gamma 2.2 (what SkyX's HDR path does for its night glow, and what greys and pales the sky) and half the
-    same curve on luminance only (keeps the hue, so sunsets stay warm). Calibrated by eye; the game's own absolute brightness
-    is **Unknown** (above).
-  - *Grading* (2026-10-04, after a user report that the sky and haze looked too purple and blue): with the
-    wavelengths (0.57, 0.54, 0.44) the viewer uses, red scatters 0.8 as much as green, so the single-scattering sky comes out violet.
-    The game itself sets the green wavelength to 0.48 (above), which scatters green 1.6 times more; that, not a grading, is likely why
-    its sky is a teal blue. The grading predates that finding and stays until the sky is redone with 0.48. Colours
-    are graded by how blue-dominated they are (`(b − r) / b`, ramping from 0.05 to 0.3): up to a white balance of
-    (0.92, 1.04, 0.97) and a 45% desaturation. Warm colours (sunsets, the sun's glow) are left alone. Viewer's choice, by eye.
-- **Tables**: a 256 × 64 transmittance table to the top of the air (built once) and a 128 × 96 sky-view table, azimuth from the
-  sun × elevation above the eye's horizon (square-root spaced), rebuilt only when the sun or the eye's height moves.
-- **Sky pass**: a full-screen pass reads the sky-view table, adds the night glow and stars (`SkyX_Starfield.dds`, a 1024²
-  level, laid over the sky stereographically and turning with the sun's half-turn), a full moon (`SkyX_Moon.png`) opposite the
-  sun, optional clouds (`Clouds.dds`'s red channel on a flat layer, `--clouds` or the weather's density) and the sun disc
-  (radius 0.36 degrees, limb darkening `1 − 0.6 (1 − μ)`, dimmed by the air, tinted two thirds of the way to white so a
-  tone-mapped disc does not read as an orange dot; peak radiance 8, above the bloom threshold of 1). The sky is also tinted by the weather's
-  sky colour multiplier, and with weather fog the sky near the horizon fades to the fog colour.
-- **Aerial perspective** (`--haze physical`; the default is the game's own haze, see "Haze" above) (`atmoApply` in `AtmosphereShaders.Functions`, called by the terrain, water and object shaders): for
-  the ray from the eye to the shaded point, the optical depth is the closed-form integral of the exponential air density
-  along the ray (heights above sea level), per channel; the point's colour is `colour · T + sky(direction) · (1 − T)`, the sky
-  colour looked up from the table at the ray's direction (clamped to the horizon, so ground rays take the horizon's colour).
-  So the haze is bluer, redder at sunset, and thinner higher up, with the same numbers as the sky. It closes completely at the
-  haze distance (`--fog`, plus a growth with the eye's height) so the far plane and the water quad's end are hidden. The
-  weather's fog (when enabled) is blended in linearly between its two distances, as `atmospherefog.hlsl` does.
-- **Light**: the sun colour is `SunScale × transmittance` along the sun's direction from the eye's height (zero below the
-  horizon); the ambient light is the display-referred sky averaged over the upper hemisphere (halved), plus a bluish floor at
-  night, `(0.18, 0.22, 0.36) × (1 − night darkness)`, standing in for moonlight (the moon casts no light of its own); the
-  ground's bounce is a fraction of that and of the sun. The eye height used for the sky and light is capped at 0.9 scale
-  heights (36000 units), so a map seen from far above still has a daytime sky instead of the black of space; the aerial
-  perspective integrates the true heights. Terrain, water and objects use
-  these, so a sunset lights the ground with the colour of the sun in the sky.
-- `--simple-sky` (key `B`) switches back to the old colour model and squared-distance fog for comparison.
+- **Sky pass**: a full-screen pass evaluates SkyX's skydome per pixel (`atmoSky`): the O'Neil integral with 4 samples from SkyX's
+  fixed camera, the game's options (table above), the Rayleigh and Cornette-Shanks phases with the cosine towards the eye, the HDR
+  output `exposure · (…)`, the night glow in its HDR form `pow(glow, 2.2)` where SkyX's night factor is on. SkyX evaluates the
+  integral per dome vertex and interpolates; per pixel is smoother and otherwise the same (**Observed** visually). Directions below
+  the horizon take the horizon's colour (the ground covers them; SkyX's dome has a lower half the viewer does not need). Values are
+  HDR; the post-processing's exposure brings them to the screen. Predicted at noon in clear weather (`SkyXModel`, scratch
+  computation) with the exposure of ×0.69 that a typical day scene gets, a sky about (61, 105, 131) at 20° and (130, 176,
+  184) at the horizon on screen (sRGB 0..255 without a gamma step, like the game), the teal blue of the game's screenshots.
+- **Stars**: `SkyX_Starfield.dds` (a 1024² level) times SkyX's night factor, `(0.35 + saturate(−sunY · 0.45))` and the HDR ×2, laid
+  over the upper hemisphere stereographically and turning with the sun's half-turn. SkyX's own mapping is the dome's UV layout,
+  which the viewer does not reproduce (a **stand-in** placement; the brightness formula is the shader's).
+- **Moon**: `SkyX_Moon.png`, always full, opposite the sun, saturated and alpha-blended as `SkyX_Moon.hlsl` does; its size (0.016
+  rad) and placement are **stand-ins** (the game's moon position is Unknown).
+- **Clouds** (`--clouds` or the weather's density): a flat layer of `Clouds.dds`'s red channel; the colour follows the cloud shader's
+  form with a **stand-in** zenith light (the game's inputs are Unknown).
+- **Weather tint**: the sky is multiplied by the weather's `sky color mult`. Whether the game tints the skydome itself with it, or
+  only the `horizon` colour that feeds `horizonClouds`, is **Unknown**; white in the "Default" weather, so the default views do not
+  depend on it. With weather fog the sky near the horizon fades to the fog colour (a viewer choice).
+- **Light**: the deferred lighting pass's model ([lighting.md](lighting.md)): `kenshiLight` in the mesh, terrain and grass shaders.
+  The water still takes a sun colour and an ambient (`WorldLighting`): `π · 0.96 · sunColour.rgb · w` and the irradiance cube's up
+  and down faces times the environment factor.
+- **Exposure**: in game-sky mode the post-processing measures the frame's mean luminance and scales by `0.55 / clamp(mean,
+  MIN_LUMINANCE, MAX_LUMINANCE)` with the game's band ([post-processing.md](post-processing.md)).
+- `--simple-sky` (key `B`) switches back to the old colour model, the old light and squared-distance fog, with a fixed exposure,
+  for comparison.
 
 ### Using the atmosphere in a new shader
 
-Include `AtmosphereShaders.Functions` in the fragment shader (after `#version`), end the shader with
-`colour = atmoApply(colour, eyePosition, worldPosition)`, and call `SkyRenderer.Active?.Apply(program)` each frame before
-drawing (it sets the uniforms and binds the table to a high texture unit). `SkyRenderer.SkyFunctions` additionally has
-`skyColour(direction, disc)` for reflections. Colours are display-referred: sun light and ambient multiply albedo as before.
+Include `AtmosphereShaders.Functions` in the fragment shader (after `#version`), light the surface with
+`kenshiLight(albedo, normal, towardsEye, gloss, worldPosition)` in game-sky mode (`uAtmoParams.x > 0.5`), end with
+`colour = atmoApply(colour, eyePosition, worldPosition)`, call `SkyRenderer.AssignSamplerUnits(gl, program)` once after linking
+(the cube and ambient-map samplers go on the top three texture units) and `SkyRenderer.Active?.Apply(program)` each frame before
+drawing. `SkyRenderer.SkyFunctions` additionally has `skyColour(direction, disc)` for reflections. In game-sky mode colours are
+HDR in the game's units; the post-processing's exposure brings them to the screen.
 
 ### Not reproduced
 
-Volumetric clouds, lightning, cloud lighting from the sun's direction and drifting, the moon's phase and halo, the planet mesh, the
-game's sun glow shape, SkyX's ground fog, the weather schedule, and multiple scattering beyond the gain above.
+Volumetric clouds, lightning, cloud lighting from the sun's direction and drifting, the moon's phase and halo, the planet mesh,
+SkyX's ground fog, the weather schedule, the starfield's dome mapping, and SkyX's per-vertex evaluation (the viewer's is per pixel).

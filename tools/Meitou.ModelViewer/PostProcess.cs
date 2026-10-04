@@ -31,8 +31,11 @@ public sealed unsafe class PostProcess : IDisposable
     uint sceneFbo, sceneColour, sceneDepth;
     Target2D? aoA, aoB;
     Target2D[] bloom = [];
+    Target2D? luminance, adaptA, adaptB;   // Kenshi's exposure: the luminance measure (mipmapped) and the adapted value (1 × 1, ping-pong)
+    bool adaptedValid;
+    readonly System.Diagnostics.Stopwatch adaptClock = new();
     readonly uint vao;
-    readonly uint progSsao, progBlur, progPrefilter, progDown, progUp, progComposite;
+    readonly uint progSsao, progBlur, progPrefilter, progDown, progUp, progComposite, progLuminance, progAdapt;
     readonly Dictionary<(uint, string), int> uniforms = [];
 
     float nearPlane = 1, farPlane = 1000, fovY = 0.87f, aspect = 1;
@@ -58,6 +61,8 @@ public sealed unsafe class PostProcess : IDisposable
         progDown = Program(PostProcessShaders.BloomDown);
         progUp = Program(PostProcessShaders.BloomUp);
         progComposite = Program(PostProcessShaders.Composite);
+        progLuminance = Program(PostProcessShaders.Luminance);
+        progAdapt = Program(PostProcessShaders.Adapt);
         for (int s = 0; s < Slots; s++)
             for (int i = 0; i < MaxStamps; i++) stamps[s, i] = gl.GenQuery();
     }
@@ -83,8 +88,9 @@ public sealed unsafe class PostProcess : IDisposable
     {
         if (msFbo != 0) { gl.DeleteFramebuffer(msFbo); gl.DeleteRenderbuffer(msColour); gl.DeleteRenderbuffer(msDepth); msFbo = 0; }
         if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneColour); gl.DeleteTexture(sceneDepth); sceneFbo = 0; }
-        foreach (var t in new[] { aoA, aoB }.Concat(bloom)) if (t is not null) Release(t);
-        aoA = aoB = null;
+        foreach (var t in new[] { aoA, aoB, luminance, adaptA, adaptB }.Concat(bloom)) if (t is not null) Release(t);
+        aoA = aoB = luminance = adaptA = adaptB = null;
+        adaptedValid = false;
         bloom = [];
     }
 
@@ -150,6 +156,12 @@ public sealed unsafe class PostProcess : IDisposable
         for (int bw = hw, bh = hh; levels.Count < 6 && bw >= 4 && bh >= 4; bw = Math.Max(bw / 2, 1), bh = Math.Max(bh / 2, 1))
             levels.Add(MakeTarget(bw, bh, InternalFormat.R11fG11fB10f, PixelFormat.Rgb, PixelType.HalfFloat));
         bloom = [.. levels];
+        luminance = MakeTarget(LuminanceSize, LuminanceSize, InternalFormat.R32f, PixelFormat.Red, PixelType.Float);
+        gl.BindTexture(TextureTarget.Texture2D, luminance.Texture);
+        gl.GenerateMipmap(TextureTarget.Texture2D);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapNearest);
+        adaptA = MakeTarget(1, 1, InternalFormat.RG32f, PixelFormat.RG, PixelType.Float);
+        adaptB = MakeTarget(1, 1, InternalFormat.RG32f, PixelFormat.RG, PixelType.Float);
         gl.BindTexture(TextureTarget.Texture2D, 0);
     }
 
@@ -260,6 +272,9 @@ public sealed unsafe class PostProcess : IDisposable
         if (ao) Stamp("ssao");
         if (glow) RunBloom();
         if (glow) Stamp("bloom");
+        bool auto = AutoExposure is not null && luminance is not null;
+        if (auto) RunExposure();
+        if (auto) Stamp("exposure");
 
         // Composite, straight to the target.
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, Target);
@@ -268,6 +283,8 @@ public sealed unsafe class PostProcess : IDisposable
         Bind(0, sceneColour); gl.Uniform1(U(progComposite, "uScene"), 0);
         Bind(1, aoB?.Texture ?? 0); gl.Uniform1(U(progComposite, "uAo"), 1);
         Bind(2, bloom.Length > 0 ? bloom[0].Texture : 0); gl.Uniform1(U(progComposite, "uBloom"), 2);
+        Bind(3, auto ? adaptB!.Texture : 0); gl.Uniform1(U(progComposite, "uAdapted"), 3);
+        gl.Uniform1(U(progComposite, "uAuto"), auto ? 1 : 0);
         gl.Uniform1(U(progComposite, "uExposure"), o.Exposure);
         gl.Uniform1(U(progComposite, "uBloomIntensity"), o.BloomIntensity);
         gl.Uniform1(U(progComposite, "uSaturation"), o.Saturation);
@@ -334,6 +351,54 @@ public sealed unsafe class PostProcess : IDisposable
         (aoA, aoB) = (aoB, aoA);
     }
 
+    const int LuminanceSize = 256;
+    /// <summary>The game's adaptation rate (`AUTOEXP_ADAPTATION_RATE`, 1 / s).</summary>
+    const float AdaptationRate = 0.5f;
+
+    /// <summary>
+    /// The game's exposure: when set, the composite scales by 0.55 over the scene's mean luminance, smoothed over time and clamped to the band
+    /// (`MIN_LUMINANCE`, `MAX_LUMINANCE`; docs/formats/lighting.md); null keeps the plain <see cref="PostOptions.Exposure"/>, which multiplies either way.
+    /// </summary>
+    public (float Min, float Max)? AutoExposure { get; set; }
+    /// <summary>Skip the smoothing: the exposure settles at once (screenshots, benchmarks).</summary>
+    public bool InstantAdaptation { get; set; }
+
+    /// <summary>The last frame's adapted luminance and measured mean (the composite's scale is 0.55 / adapted); reads the GPU back, so for reports only.</summary>
+    public (float Adapted, float Mean) ReadExposure()
+    {
+        if (adaptB is null || !adaptedValid) return (float.NaN, float.NaN);
+        float* v = stackalloc float[4];
+        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, adaptB.Framebuffer);
+        gl.ReadPixels(0, 0, 1, 1, PixelFormat.Rgba, PixelType.Float, v);
+        return (v[0], v[1]);
+    }
+
+    void RunExposure()
+    {
+        var lum = luminance!;
+        Pass(lum);
+        gl.UseProgram(progLuminance);
+        Bind(0, sceneColour); gl.Uniform1(U(progLuminance, "uScene"), 0);
+        gl.Uniform2(U(progLuminance, "uCell"), 1f / LuminanceSize, 1f / LuminanceSize);
+        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        gl.BindTexture(TextureTarget.Texture2D, lum.Texture);
+        gl.GenerateMipmap(TextureTarget.Texture2D);
+        float dt = (float)adaptClock.Elapsed.TotalSeconds;
+        adaptClock.Restart();
+        float blend = InstantAdaptation || !adaptedValid ? 1 : 1 - MathF.Exp(-dt * AdaptationRate);
+        (adaptA, adaptB) = (adaptB, adaptA);
+        Pass(adaptB!);
+        gl.UseProgram(progAdapt);
+        Bind(0, lum.Texture); gl.Uniform1(U(progAdapt, "uLuminance"), 0);
+        Bind(1, adaptA!.Texture); gl.Uniform1(U(progAdapt, "uLast"), 1);
+        gl.Uniform1(U(progAdapt, "uLevel"), MathF.Log2(LuminanceSize));
+        gl.Uniform1(U(progAdapt, "uBlend"), blend);
+        var band = AutoExposure!.Value;
+        gl.Uniform2(U(progAdapt, "uBand"), band.Min, band.Max);
+        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        adaptedValid = true;
+    }
+
     void RunBloom()
     {
         var first = bloom[0];
@@ -368,7 +433,7 @@ public sealed unsafe class PostProcess : IDisposable
     {
         Free();
         gl.DeleteVertexArray(vao);
-        foreach (var p in new[] { progSsao, progBlur, progPrefilter, progDown, progUp, progComposite }) gl.DeleteProgram(p);
+        foreach (var p in new[] { progSsao, progBlur, progPrefilter, progDown, progUp, progComposite, progLuminance, progAdapt }) gl.DeleteProgram(p);
         for (int s = 0; s < Slots; s++)
             for (int i = 0; i < MaxStamps; i++) gl.DeleteQuery(stamps[s, i]);
     }

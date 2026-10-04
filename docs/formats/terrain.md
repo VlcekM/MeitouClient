@@ -284,12 +284,12 @@ and sunset). `SkyClock` implements this; `WaterTests` checks the record values a
 
 The SkyX atmosphere options the game sets: inner radius 9.77501, outer radius 10.2963, height position 0.01,
 Rayleigh 0.0022, Mie 0.000675, sun intensity 30, wavelengths (0.57, 0.48, 0.44), phase function g −0.991,
-exposure 1.4, 4 samples (`SkyAtmosphere.GameWaveLength` / `GameExposure`; earlier notes had green 0.54 and exposure 0.48, a
-misreading, see [sky.md](sky.md#the-scattering-model-verified-skyx-shader-source-and-the-recorded-exe-constants)). The sun's light colour comes from SkyX's colour at the sun's
-direction. Fog: `pFogParams = (D, 0.06 D, min(D, 0.6 D), 0)` with D = view distance × 10 (Verified,
+exposure 1.4, 4 samples (`SkyAtmosphere.WaveLength` / `Exposure`; earlier notes had green 0.54 and exposure 0.48, a
+misreading, see [sky.md](sky.md#the-scattering-model-verified-skyx-shader-source-and-the-recorded-exe-constants)). The sun's light colour comes from SkyX's colour towards the sun, nudged by (0, 0, 0.04)
+([lighting.md](lighting.md)). Fog: `pFogParams = (D, 0.06 D, min(D, 0.6 D), 0)` with D = view distance × 10 (Verified,
 see [sky.md](sky.md#haze-distance-fog-how-vanilla-does-it)). `atmospherefog.hlsl` blends to an O'Neil scattering colour, linearly between
-`pFogParams.y` and `.z` (Verified). The viewer reproduces the scattering (O'Neil, single scattering, with these constants except the green wavelength, still
-0.54 in its sky model) and uses it for the sky, the sun and ambient light and the fog: see [sky.md](sky.md), which also has the SkyX shaders'
+`pFogParams.y` and `.z` (Verified). The viewer reproduces the scattering (SkyX's O'Neil integral with exactly these constants)
+and uses it for the sky, the sun colour and the haze: see [sky.md](sky.md), which also has the SkyX shaders'
 derived parameters, the night glow, the textures and the WEATHER records.
 
 Observed: `areasmap.tga` (256², 71 colours) is described in `fcs.def` as holding BIOME_GROUP colour indices;

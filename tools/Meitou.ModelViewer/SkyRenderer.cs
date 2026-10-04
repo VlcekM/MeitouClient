@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Numerics;
+using Meitou.Content;
+using Meitou.Data;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
 using Silk.NET.OpenGL;
@@ -9,7 +11,7 @@ namespace Meitou.ModelViewer;
 /// <summary>
 /// The simple colour model the world view's sky had before the atmosphere (<c>--simple-sky</c>, key B): zenith and horizon colours
 /// from the sun's height, a warm band at sunrise and sunset, the sun disc. Also the record that carries the sky's colours to
-/// the water shader. The physical sky (<see cref="SkyRenderer"/>, docs/formats/sky.md) fills it from its own numbers.
+/// the water shader. The game's sky (<see cref="SkyRenderer"/>, docs/formats/sky.md) fills it from its own numbers.
 /// </summary>
 public readonly record struct SkyColours(Vector3 Sun, Vector3 Zenith, Vector3 Horizon, Vector3 SunColour, float Twilight)
 {
@@ -39,12 +41,11 @@ public readonly record struct SkyColours(Vector3 Sun, Vector3 Zenith, Vector3 Ho
 }
 
 /// <summary>
-/// The world view's sky and atmosphere (docs/formats/sky.md). Physical mode: O'Neil's single scattering with SkyX's constants
-/// (<see cref="AtmosphereModel"/>), kept as a transmittance table (built once) and a sky-view table (per frame, only when the sun or
-/// the eye's height moved), drawn as a full-screen pass with the sun disc, stars, moon and optional clouds. The same tables give the
-/// aerial perspective every world shader applies (<see cref="AtmosphereShaders.Functions"/>) and, through
-/// <see cref="AtmosphereModel"/>, the sun and ambient light. Simple mode (<see cref="Physical"/> false) is the old colour model.
-/// A shader that wants the atmosphere includes <see cref="AtmosphereShaders.Functions"/> and gets its uniforms from <see cref="Apply"/>.
+/// The world view's sky, light and haze (docs/formats/sky.md, docs/formats/lighting.md). Game mode (<see cref="Physical"/>): SkyX's
+/// sky drawn per pixel with the game's options, the sun's colour taken from SkyX the way the game's sky controller takes it, the
+/// deferred lighting pass's image-based light (<c>mp_irradiance.dds</c>, <c>mp_specularity.dds</c>) and per-biome ambient map, and the
+/// exposure band of the game's HDR composite (<see cref="MinLuminance"/>, <see cref="MaxLuminance"/>). Simple mode is the old colour
+/// model. A shader that wants any of it includes <see cref="AtmosphereShaders.Functions"/> and gets its uniforms from <see cref="Apply"/>.
 /// </summary>
 public sealed unsafe class SkyRenderer : IDisposable
 {
@@ -70,7 +71,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             if (disc) c += uSkySunColour * smoothstep(0.99955, 0.9998, toward) * 3.0;
             return c;
         }
-        vec3 skyColour(vec3 dir, bool disc) { return uAtmoParams.x > 0.5 ? atmoSkyEnc(dir) : skySimple(dir, disc); }
+        vec3 skyColour(vec3 dir, bool disc) { return uAtmoParams.x > 0.5 ? atmoSky(dir) : skySimple(dir, disc); }
         """;
 
     const string Vertex = """
@@ -110,13 +111,15 @@ public sealed unsafe class SkyRenderer : IDisposable
         }
         """;
 
+    // SkyX's skydome per pixel (HDR): the scattered light, its night glow and starfield; no sun disc (the game's sun is the Mie lobe).
     static readonly string SkyFragment = "#version 330 core\n" + AtmosphereShaders.Functions + """
 
         in vec2 vNdc;
         out vec4 fragColour;
         uniform mat4 uInverseViewProjection;
-        uniform vec4 uSkyExtra;        // x: sun disc radiance, y: cloud coverage, z: stars' turn (radians), w: moon radius (radians)
+        uniform vec4 uSkyExtra;        // x: unused, y: cloud coverage, z: stars' turn (radians), w: moon radius (radians)
         uniform vec3 uMoonDir, uMoonRight, uMoonUp;
+        uniform vec4 uCloudLight;      // rgb: the clouds' zenith light (a stand-in), a: the layer's darkness
         uniform sampler2D uStars, uMoon, uClouds;
         uniform vec3 uHas;             // stars, moon, clouds textures present
         void main()
@@ -125,41 +128,31 @@ public sealed unsafe class SkyRenderer : IDisposable
             vec4 b = uInverseViewProjection * vec4(vNdc, 1.0, 1.0);
             vec3 dir = normalize(b.xyz / b.w - a.xyz / a.w);
             float night;
-            vec3 col = atmoSkyEnc(dir, night);
+            vec3 col = atmoSky(dir, night);
             float aboveHorizon = smoothstep(-0.02, 0.06, dir.y);
             // Weather fog hides the sky near the horizon too (the terrain beyond its far distance is plain fog colour).
             if (uAtmoFog.z > 0.5) col = mix(col, uAtmoFogColour, 1.0 - smoothstep(0.0, 0.45, dir.y));
 
-            // Stars: SkyX_Starfield.dds laid over the upper hemisphere (stereographic from the zenith), turning with the night.
+            // Stars: SkyX_Starfield.dds (SkyX's HDR form: nightmult · texture · (0.35 + saturate(−sunY · 0.45)) · 2), laid over the upper
+            // hemisphere stereographically and turning with the night (the dome's own UV layout is not reproduced).
             if (uHas.x > 0.5 && night > 0.0 && dir.y > 0.0)
             {
                 float cs = cos(uSkyExtra.z), sn = sin(uSkyExtra.z);
                 vec2 r = vec2(cs * dir.x - sn * dir.z, sn * dir.x + cs * dir.z);
                 vec3 stars = texture(uStars, r / (1.0 + dir.y) * 0.5 + 0.5).rgb;
-                col += night * aboveHorizon * min(stars, vec3(1.0)) * (0.35 + clamp(-uAtmoSun.y * 0.45, 0.0, 1.0)) * 2.2;
+                col += night * aboveHorizon * stars * (0.35 + clamp(-uAtmoSun.y * 0.45, 0.0, 1.0)) * 2.0;
             }
-            // Moon: SkyX_Moon.png on a disc opposite the sun (always full).
+            // Moon: SkyX_Moon.png on a disc opposite the sun (always full; SkyX_Moon.hlsl saturates its colour and blends by alpha).
             float md = dot(dir, uMoonDir);
             if (uHas.y > 0.5 && md > 0.0)
             {
                 vec2 p = vec2(dot(dir, uMoonRight), dot(dir, uMoonUp)) / md / uSkyExtra.w;
                 vec4 m = texture(uMoon, vec2(p.x, -p.y) * 0.195 + 0.5);
                 if (abs(p.x) < 2.6 && abs(p.y) < 2.6)
-                    col = mix(col, m.rgb * vec3(1.0, 0.98, 0.92) * 1.15, m.a * night * aboveHorizon * smoothstep(0.0, 0.1, uMoonDir.y));
+                    col = mix(col, clamp(m.rgb, 0.0, 1.0), m.a * night * aboveHorizon * smoothstep(0.0, 0.1, uMoonDir.y));
             }
-            // Sun disc with limb darkening, dimmed by the air the light crosses.
-            float ang = acos(clamp(dot(dir, uAtmoSun.xyz), -1.0, 1.0));
-            const float SUN_RADIUS = 0.0062;
-            if (ang < SUN_RADIUS * 1.2)
-            {
-                float mu = sqrt(max(1.0 - (ang / SUN_RADIUS) * (ang / SUN_RADIUS), 0.0));
-                float limb = 1.0 - 0.6 * (1.0 - mu);
-                float edge = 1.0 - smoothstep(SUN_RADIUS * 0.92, SUN_RADIUS, ang);
-                // The disc clips towards white whatever the sunlight's colour: a tinted tone-mapped disc would read as a dull orange dot.
-                vec3 tint = uAtmoSunLight / max(max(uAtmoSunLight.r, uAtmoSunLight.g), max(uAtmoSunLight.b, 1e-4));
-                col += mix(tint, vec3(1.0), 0.65) * max(max(uAtmoSunLight.r, uAtmoSunLight.g), uAtmoSunLight.b) * uSkyExtra.x * limb * edge * aboveHorizon;
-            }
-            // Clouds: a flat layer of SkyX's cloud texture (SkyX_Clouds.hlsl projects the view ray on a plane the same way).
+            // Clouds: a flat layer of SkyX's cloud texture (SkyX_Clouds.hlsl projects the view ray on a plane the same way); its colour
+            // follows the shader's form saturate(zenith + sun (1 − 0.1 density)) (1 − density · darkness) · √exposure with a stand-in zenith light.
             if (uHas.z > 0.5 && uSkyExtra.y > 0.0 && dir.y > 0.01)
             {
                 vec2 uv = dir.xz / dir.y * 0.3 + 0.37;
@@ -167,8 +160,7 @@ public sealed unsafe class SkyRenderer : IDisposable
                 float thr = mix(0.85, 0.15, clamp(uSkyExtra.y, 0.0, 1.0));
                 float density = smoothstep(thr, thr + 0.3, t);
                 float fade = smoothstep(0.01, 0.2, dir.y);
-                float lit = 0.5 + 0.5 * clamp(dot(vec3(0.0, 1.0, 0.0), uAtmoSun.xyz) * 1.5 + 0.5, 0.0, 1.0);
-                vec3 cloud = (uAtmoAmbient * 1.5 + uAtmoSunLight * 0.5) * mix(1.0, 0.55, density) * lit;
+                vec3 cloud = clamp(uCloudLight.rgb + uAtmoSunLight * (1.0 - 0.1 * density), 0.0, 1.0) * (1.0 - density * uCloudLight.a) * sqrt(SKYX_EXPOSURE);
                 col = mix(col, cloud, density * fade * 0.9);
             }
             fragColour = vec4(col, 1.0);
@@ -176,70 +168,54 @@ public sealed unsafe class SkyRenderer : IDisposable
         """;
 
     readonly GL gl;
-    readonly uint simpleProgram, skyProgram, transmittanceProgram, skyViewProgram, vao;
-    readonly uint transmittanceTexture, skyViewTexture, lutFbo;
+    readonly uint simpleProgram, skyProgram, vao;
     readonly Dictionary<(uint, string), int> uniforms = [];
-    readonly int lutUnit;
-    uint starsTexture, moonTexture, cloudsTexture;
-    readonly GpuSpan lutTimer, skyTimer;
+    uint starsTexture, moonTexture, cloudsTexture, irradianceCube, specularCube, ambientMap;
+    readonly GpuSpan skyTimer;
 
-    /// <summary>Physical atmosphere (default) or the old simple colour model.</summary>
+    /// <summary>The game's sky and light (default) or the old simple colour model.</summary>
     public bool Physical { get; set; } = true;
-    /// <summary>Aerial perspective: Kenshi's own haze (default, docs/formats/sky.md "Haze") or the physical integral.</summary>
+    /// <summary>Haze: Kenshi's own (default, docs/formats/sky.md "Haze") or the physical integral over SkyX's air.</summary>
     public bool KenshiHaze { get; set; } = true;
     /// <summary>
     /// Kenshi's far distance D (<c>view distance × 10</c>, 50000 with the install's setting); its haze ramps in between 0.06 D and
-    /// 0.6 D. Independent of the viewer's far clip: past it the game's own formula goes on (the colour reaches the sky's at
-    /// <see cref="Meitou.Data.World.KenshiHaze.DomeRadius"/>).
+    /// 0.6 D. Independent of the viewer's far clip: past it the game's own formula goes on.
     /// </summary>
     public float HazeDistance { get; set; } = Meitou.Data.World.KenshiHaze.FarDistance(Meitou.Data.World.KenshiHaze.ViewDistanceSetting);
-    /// <summary>The highest eye, in scale heights, the sky tables and the sun and sky light are computed for.</summary>
-    public float MaxSkyAltitude { get; set; } = 0.9f;
-    public AtmosphereSettings Settings { get; }
-    public AtmosphereModel Model { get; }
+    /// <summary>The physical haze only: world units in one density scale height of SkyX's air (the game's world unit is Unknown; a viewer choice).</summary>
+    public float ScaleHeightUnits { get; set; } = 40000;
     public SkyWeather Weather { get; set; } = SkyWeather.Default;
     /// <summary>Overrides the weather's cloud density when set.</summary>
     public float? CloudCoverage { get; set; }
-    /// <summary>CONSTANTS <c>night darkness</c>; its exact meaning is Unknown, the viewer uses it to set the night's ambient floor.</summary>
-    public float NightDarkness { get; set; } = 0.35f;
-    /// <summary>Sun disc radiance (display-referred; the disc is a few times brighter than the sky so a bloom can pick it up).</summary>
-    public float SunDiscRadiance { get; set; } = 8;
-    /// <summary>CPU time of the last <see cref="Prepare"/> in ms, and whether it rebuilt the sky-view table.</summary>
+    /// <summary>CONSTANTS <c>exposure min</c> / <c>exposure max</c> / <c>night darkness</c>: the composite's luminance band.</summary>
+    public ExposureConstants Exposure { get; set; } = ExposureConstants.Default;
+    /// <summary>This frame's <c>MIN_LUMINANCE</c> / <c>MAX_LUMINANCE</c> (game mode); the composite scales by 0.55 over the scene's mean luminance clamped to them.</summary>
+    public float MinLuminance => state.MinLuminance;
+    public float MaxLuminance => Exposure.Max;
+    /// <summary>CPU time of the last <see cref="Prepare"/> in ms.</summary>
     public double PrepareMs { get; private set; }
-    public bool Rebuilt { get; private set; }
-    public float EyeAltitudeScaleHeights => state.Altitude;
+    /// <summary>Which of the game's lighting textures were found (irradiance cube, specular cube, ambient map).</summary>
+    public string LightingTextures => $"irradiance {(irradianceCube != 0 ? "yes" : "no")}, specularity {(specularCube != 0 ? "yes" : "no")}, ambient map {(ambientMap != 0 ? "yes" : "no")}";
 
     struct State
     {
-        public Vector3 Sun, SunLight, Ambient, UpperSky;
-        public float Altitude, Horizon, FogDistance;
+        public Vector3 Sun, SunLight, LightDirection;
+        public float Environment, MinLuminance, FogDistance;
         public SkyColours Colours;
         public WorldLighting Light;
         public bool Valid;
     }
     State state;
-    Vector3 builtSun;
-    float builtAltitude = -1;
-    bool tablesBuilt, physicalState;
+    Vector3 builtSun = new(float.NaN);
     SkyWeather? builtWeather;
+    bool builtPhysical;
 
-    public SkyRenderer(GL gl, AssetLocator? assets = null, AtmosphereSettings? settings = null)
+    public SkyRenderer(GL gl, AssetLocator? assets = null)
     {
         this.gl = gl;
-        Settings = settings ?? new AtmosphereSettings();
-        Model = new AtmosphereModel(Settings);
         simpleProgram = WorldGl.Program(gl, Vertex, SimpleFragment);
         skyProgram = WorldGl.Program(gl, Vertex, SkyFragment);
-        transmittanceProgram = WorldGl.Program(gl, Vertex, AtmosphereShaders.TransmittanceFragment);
-        skyViewProgram = WorldGl.Program(gl, Vertex, AtmosphereShaders.SkyViewFragment);
         vao = gl.GenVertexArray();
-        gl.GetInteger(GetPName.MaxTextureImageUnits, out int maxUnits);
-        // The scene shaders already use units up to 16 (terrain, water, reflection): the table takes a high one.
-        lutUnit = Math.Min(maxUnits - 1, 24);
-        transmittanceTexture = Target(AtmosphereShaders.TransmittanceWidth, AtmosphereShaders.TransmittanceHeight);
-        skyViewTexture = Target(AtmosphereShaders.SkyViewWidth, AtmosphereShaders.SkyViewHeight);
-        lutFbo = gl.GenFramebuffer();
-        lutTimer = new GpuSpan(gl);
         skyTimer = new GpuSpan(gl);
         if (assets is not null)
         {
@@ -247,18 +223,6 @@ public sealed unsafe class SkyRenderer : IDisposable
             Console.WriteLine($"sky       textures: starfield {(starsTexture != 0 ? "yes" : "no")}, moon {(moonTexture != 0 ? "yes" : "no")}, clouds {(cloudsTexture != 0 ? "yes" : "no")}");
         }
         Active = this;
-    }
-
-    uint Target(int width, int height)
-    {
-        uint t = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, t);
-        gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba16f, (uint)width, (uint)height, 0, PixelFormat.Rgba, PixelType.HalfFloat, null);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-        return t;
     }
 
     void LoadTextures(AssetLocator assets)
@@ -281,6 +245,8 @@ public sealed unsafe class SkyRenderer : IDisposable
                 var img = TextureLoader.LoadFile(clouds, allMips: false).Levels[0];
                 cloudsTexture = WorldGl.Texture2D(gl, img.Width, img.Height, img.Pixels, repeat: true);
             }
+            if (assets.Find("mp_irradiance.dds") is { } irradiance) irradianceCube = Cube(DdsReader.ReadFile(irradiance));
+            if (assets.Find("mp_specularity.dds") is { } specularity) specularCube = Cube(DdsReader.ReadFile(specularity));
         }
         catch (Exception e) when (e is DdsFormatException or IOException or InvalidOperationException)
         {
@@ -288,63 +254,97 @@ public sealed unsafe class SkyRenderer : IDisposable
         }
     }
 
+    /// <summary>A cube map with all its mips, faces in the DDS order (+X, −X, +Y, −Y, +Z, −Z) on GL's faces of the same names.</summary>
+    uint Cube(DdsFile dds)
+    {
+        if (!dds.IsCubemap || dds.ImageCount < 6) throw new InvalidOperationException($"not a cube map: {dds}");
+        uint t = gl.GenTexture();
+        gl.BindTexture(TextureTarget.TextureCubeMap, t);
+        for (int face = 0; face < 6; face++)
+            for (int level = 0; level < dds.MipCount; level++)
+            {
+                var img = DdsDecoder.Decode(dds, face, level);
+                fixed (byte* p = img.Pixels)
+                    gl.TexImage2D(TextureTarget.TextureCubeMapPositiveX + face, level, InternalFormat.Rgba8, (uint)img.Width, (uint)img.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, p);
+            }
+        gl.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
+        gl.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        gl.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureMaxLevel, dds.MipCount - 1);
+        foreach (var w in new[] { TextureParameterName.TextureWrapS, TextureParameterName.TextureWrapT, TextureParameterName.TextureWrapR })
+            gl.TexParameter(TextureTarget.TextureCubeMap, w, (int)TextureWrapMode.ClampToEdge);
+        gl.Enable(EnableCap.TextureCubeMapSeamless);
+        gl.BindTexture(TextureTarget.TextureCubeMap, 0);
+        return t;
+    }
+
+    /// <summary>
+    /// The ambient map, built the game's way from <c>biomemap.png</c> and the BIOMES records (<see cref="AmbientMap"/>), and the CONSTANTS
+    /// exposure values.
+    /// </summary>
+    public void LoadWorld(GameInstall install, GameDatabase db)
+    {
+        Exposure = ExposureConstants.FromDatabase(db);
+        try
+        {
+            var biomes = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install.DataDirectory, TerrainMaps.BiomeMap)));
+            var map = AmbientMap.Build(db, biomes);
+            ambientMap = WorldGl.Texture2D(gl, map.Width, map.Height, map.Pixels, repeat: false, mipmaps: false);
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or InvalidDataException)
+        {
+            Console.WriteLine($"warning   ambient map: {e.Message}");
+        }
+        Console.WriteLine($"lighting  {LightingTextures}; exposure band {Exposure.Min:0.##}..{Exposure.Max:0.##}, night darkness {Exposure.NightDarkness:0.##}");
+    }
+
     // ---- per frame -------------------------------------------------------------------------------------
 
     /// <summary>
-    /// Brings the atmosphere up to date for this frame (sun direction, the eye's height in world units) and returns the colours and
-    /// light the world shaders use. <paramref name="fogDistance"/> is where the haze is complete.
+    /// Brings the sky up to date for this frame's sun and returns the colours and light the world shaders use.
+    /// <paramref name="fogDistance"/> is where the physical haze is complete.
     /// </summary>
     public (SkyColours Colours, WorldLighting Light) Prepare(Vector3 sun, float eyeHeight, float fogDistance)
     {
         var watch = Stopwatch.StartNew();
-        Rebuilt = false;
         if (!Physical)
         {
             var simple = SkyColours.For(sun);
             var light = simple.Lighting(fogDistance);
-            state = new State { Sun = sun, Colours = simple, Light = light, FogDistance = fogDistance, Valid = true };
-            physicalState = false;
+            state = new State { Sun = sun, Colours = simple, Light = light, FogDistance = fogDistance, Valid = true, MinLuminance = Exposure.Min };
+            builtPhysical = false;
             PrepareMs = watch.Elapsed.TotalMilliseconds;
             return (simple, light);
         }
-        // The sky itself is that of an eye inside the lower air: higher up the real thing goes dark towards space, which the world
-        // view (a map seen from far above) does not want. The aerial perspective still integrates the true heights.
-        float altitude = Math.Clamp(eyeHeight / Settings.ScaleHeightUnits, 0.0004f, MaxSkyAltitude);
-        float r = SkyAtmosphere.PlanetRadius + altitude;
-        // The table and the light only change with the sun and the eye's height.
-        bool changed = !physicalState || !ReferenceEquals(builtWeather, Weather) || (sun - builtSun).LengthSquared() > 1e-8f || MathF.Abs(altitude - builtAltitude) > 0.005f + 0.05f * builtAltitude || !tablesBuilt;
-        if (changed)
+        // SkyX's sky does not depend on the eye's height (its camera is fixed); the light only changes with the sun and the weather.
+        if (!builtPhysical || !ReferenceEquals(builtWeather, Weather) || (sun - builtSun).LengthSquared() > 1e-10f)
         {
             builtSun = sun;
             builtWeather = Weather;
-            physicalState = true;
-            builtAltitude = altitude;
-            var sunLight = Model.SunLight(altitude, sun);
-            var (upper, horizon, zenith) = Model.SkyAverages(altitude, sun);
-            var weather = Weather;
-            upper *= weather.SkyColourMultiplier;
-            horizon *= weather.SkyColourMultiplier;
-            zenith *= weather.SkyColourMultiplier;
-            var night = new Vector3(0.18f, 0.22f, 0.36f) * (1 - NightDarkness);   // moonlight, standing in for a lit moon
-            var ambientSky = upper * 0.5f + new Vector3(0.01f) + night;
-            var ambientGround = upper * 0.22f + sunLight * (MathF.Max(sun.Y, 0) * 0.12f) + new Vector3(0.01f) + night * 0.6f;
-            float e = sun.Y;
-            float twilight = 1 - Math.Clamp((MathF.Abs(e + 0.02f)) / 0.35f, 0, 1);
-            var colours = new SkyColours(sun, zenith, horizon, sunLight, twilight);
-            var dir = sun.Y > 0.02f ? sun : Vector3.Normalize(new Vector3(sun.X, 0.02f, sun.Z));
-            // Weather fog is lit like the ground: dim at night.
+            builtPhysical = true;
+            var sunLight = KenshiLighting.SunLight(sun);
+            var lightDir = KenshiLighting.LightDirection(sun);
+            float env = KenshiLighting.EnvironmentFactor(lightDir);
+            var tint = Weather.SkyColourMultiplier;
+            var zenith = SkyXModel.Colour(Vector3.UnitY, sun) * tint;
+            var flat = new Vector2(sun.X, sun.Z);
+            flat = flat.LengthSquared() > 1e-8f ? Vector2.Normalize(flat) : Vector2.UnitX;
+            var horizon = (SkyXModel.Colour(new Vector3(flat.X, 0.05f, flat.Y), sun) + SkyXModel.Colour(new Vector3(-flat.X, 0.05f, -flat.Y), sun)) * 0.5f * tint;
+            float twilight = 1 - Math.Clamp(MathF.Abs(sun.Y + 0.02f) / 0.35f, 0, 1);
+            // For the code that still takes a sun colour and an ambient (the water): a white surface facing the sun reflects π · 0.96 · light;
+            // the ambient is the irradiance cube's up and down faces (docs/formats/lighting.md) times the environment factor.
+            var sunRadiance = sunLight * (MathF.PI * (1 - KenshiLighting.DielectricSpecular));
+            var ambientSky = new Vector3(1.09f, 1.20f, 1.51f) * (env * 0.96f);
+            var ambientGround = new Vector3(1.11f, 1.05f, 0.96f) * (env * 0.96f);
             state = new State
             {
-                Sun = sun, SunLight = sunLight, Ambient = ambientSky, UpperSky = upper, Altitude = altitude,
-                Horizon = -MathF.Acos(SkyAtmosphere.PlanetRadius / r), FogDistance = fogDistance, Colours = colours,
-                Light = new WorldLighting(dir, sunLight, ambientSky, ambientGround, horizon, fogDistance), Valid = true,
+                Sun = sun, SunLight = sunLight, LightDirection = lightDir, Environment = env, FogDistance = fogDistance,
+                MinLuminance = KenshiLighting.MinLuminance(sun.Y, Exposure.Min, Exposure.NightDarkness),
+                Colours = new SkyColours(sun, zenith, horizon, sunRadiance, twilight),
+                Light = new WorldLighting(lightDir, sunRadiance, ambientSky, ambientGround, horizon, fogDistance), Valid = true,
             };
-            BuildSkyView();
-            Rebuilt = true;
         }
         else
         {
-            // Same lighting; only the fog distance (it follows the eye's height) and the exact sun may differ.
             state.Light = state.Light with { FogDistance = fogDistance };
             state.FogDistance = fogDistance;
         }
@@ -352,73 +352,46 @@ public sealed unsafe class SkyRenderer : IDisposable
         return (state.Colours, state.Light);
     }
 
-    void BuildSkyView()
+    /// <summary>Texture units of the atmosphere's samplers: the top three of the combined units, out of the way of every scene shader.</summary>
+    static int irradianceUnit = -1, specularUnit, ambientUnit;
+
+    /// <summary>
+    /// Points the atmosphere's sampler uniforms of a freshly linked program at their own units (a cube sampler left on unit 0 would clash with
+    /// the 2D samplers there). Called by every program builder that may include <see cref="AtmosphereShaders.Functions"/>.
+    /// </summary>
+    public static void AssignSamplerUnits(GL gl, uint program)
     {
-        lutTimer.Begin();
-        gl.GetInteger(GLEnum.DrawFramebufferBinding, out int previousFbo);
-        int* viewport = stackalloc int[4];
-        gl.GetInteger(GLEnum.Viewport, viewport);
-        gl.Disable(EnableCap.DepthTest);
-        gl.Disable(EnableCap.Blend);
-        gl.BindVertexArray(vao);
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, lutFbo);
-        if (!tablesBuilt)
+        if (irradianceUnit < 0)
         {
-            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, transmittanceTexture, 0);
-            gl.Viewport(0, 0, AtmosphereShaders.TransmittanceWidth, AtmosphereShaders.TransmittanceHeight);
-            gl.UseProgram(transmittanceProgram);
-            SetTau(transmittanceProgram);
-            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
-            tablesBuilt = true;
+            gl.GetInteger(GetPName.MaxCombinedTextureImageUnits, out int combined);
+            irradianceUnit = combined - 1; specularUnit = combined - 2; ambientUnit = combined - 3;
         }
-        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, skyViewTexture, 0);
-        gl.Viewport(0, 0, AtmosphereShaders.SkyViewWidth, AtmosphereShaders.SkyViewHeight);
-        gl.UseProgram(skyViewProgram);
-        SetTau(skyViewProgram);
-        gl.ActiveTexture(TextureUnit.Texture0);
-        gl.BindTexture(TextureTarget.Texture2D, transmittanceTexture);
-        gl.Uniform1(U(skyViewProgram, "uAtmoTransmittance"), 0);
-        gl.Uniform1(U(skyViewProgram, "uEyeRadius"), SkyAtmosphere.PlanetRadius + state.Altitude);
-        gl.Uniform1(U(skyViewProgram, "uSunElevation"), MathF.Asin(Math.Clamp(state.Sun.Y, -1, 1)));
-        gl.Uniform1(U(skyViewProgram, "uHorizon"), state.Horizon);
-        gl.Uniform2(U(skyViewProgram, "uGain"), Settings.SunScale * Settings.SkyGain / 4, Settings.SunScale / 4);
-        gl.Uniform1(U(skyViewProgram, "uMieG"), Settings.MieG);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
-        gl.BindVertexArray(0);
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)previousFbo);
-        gl.Viewport(viewport[0], viewport[1], (uint)viewport[2], (uint)viewport[3]);
-        lutTimer.End();
+        gl.UseProgram(program);
+        int a = gl.GetUniformLocation(program, "uAtmoIrradiance"), b = gl.GetUniformLocation(program, "uAtmoSpecular"), c = gl.GetUniformLocation(program, "uAtmoAmbientMap");
+        if (a >= 0) gl.Uniform1(a, irradianceUnit);
+        if (b >= 0) gl.Uniform1(b, specularUnit);
+        if (c >= 0) gl.Uniform1(c, ambientUnit);
+        gl.UseProgram(0);
     }
 
-    void SetTau(uint program)
-    {
-        var t = Settings.RayleighDepth;
-        gl.Uniform4(U(program, "uAtmoTau"), t.X, t.Y, t.Z, Settings.MieDepth);
-        gl.Uniform4(U(program, "uAtmoParams"), 1f, 1f, Settings.ScaleHeightUnits, Settings.MieScaleHeight);
-        var oz = Settings.OzoneAbsorption;
-        gl.Uniform3(U(program, "uAtmoOzone"), oz.X, oz.Y, oz.Z);
-    }
-
-    /// <summary>Sets the atmosphere's uniforms (and binds its table) on a program that includes <see cref="AtmosphereShaders.Functions"/>.</summary>
+    /// <summary>Sets the atmosphere's uniforms (and binds its textures) on a program that includes <see cref="AtmosphereShaders.Functions"/>.</summary>
     public void Apply(uint program)
     {
         if (!state.Valid) return;
         var s = state;
-        var t = Settings.RayleighDepth;
         gl.UseProgram(program);
-        gl.Uniform4(U(program, "uAtmoTau"), t.X, t.Y, t.Z, Settings.MieDepth);
-        gl.Uniform4(U(program, "uAtmoParams"), Physical ? 1f : 0f, MathF.Max(s.FogDistance, 1), Settings.ScaleHeightUnits, Settings.MieScaleHeight);
-        gl.Uniform4(U(program, "uAtmoSun"), s.Sun.X, s.Sun.Y, s.Sun.Z, s.Horizon);
-        var h = new Vector2(s.Sun.X, s.Sun.Z);
-        h = h.LengthSquared() > 1e-8f ? Vector2.Normalize(h) : new Vector2(1, 0);
-        gl.Uniform3(U(program, "uAtmoSunH"), h.X, h.Y, 0);
+        var tau = SkyAtmosphere.RayleighZenithDepth;
+        gl.Uniform4(U(program, "uAtmoTau"), tau.X, tau.Y, tau.Z, SkyAtmosphere.MieZenithDepth);
+        gl.Uniform4(U(program, "uAtmoParams"), Physical ? 1f : 0f, MathF.Max(s.FogDistance, 1), ScaleHeightUnits, 0);
+        gl.Uniform4(U(program, "uAtmoSun"), s.Sun.X, s.Sun.Y, s.Sun.Z, 0);
+        gl.Uniform4(U(program, "uAtmoLight"), s.LightDirection.X, s.LightDirection.Y, s.LightDirection.Z, s.Environment);
+        gl.Uniform3(U(program, "uAtmoSunLight"), s.SunLight.X, s.SunLight.Y, s.SunLight.Z);
         var tint = Weather.SkyColourMultiplier;
         gl.Uniform3(U(program, "uAtmoTint"), tint.X, tint.Y, tint.Z);
         var w = Weather;
         gl.Uniform4(U(program, "uAtmoFog"), w.FogMin, w.FogMax, w.FogEnabled ? 1f : 0f, 0);
-        // Fog is lit like the ground: its colour scaled by how much light there is.
-        float day = Math.Clamp((s.Sun.Y + 0.1f) / 0.3f, 0, 1);
-        var fog = w.FogColour * (0.12f + 0.88f * day) * (Physical ? 0.85f : 1f);
+        // The weather fog's colour times sunColour.w, the daylight scale (the game's global fog term).
+        var fog = w.FogColour * (Physical ? KenshiLighting.Daylight(s.Sun.Y) : 1f);
         gl.Uniform3(U(program, "uAtmoFogColour"), fog.X, fog.Y, fog.Z);
         var hc = s.Colours.Horizon;
         gl.Uniform4(U(program, "uAtmoSimple"), hc.X, hc.Y, hc.Z, MathF.Max(s.FogDistance, 1));
@@ -426,20 +399,33 @@ public sealed unsafe class SkyRenderer : IDisposable
         float hazeEnd = MathF.Min(HazeDistance, HazeDistance * Meitou.Data.World.KenshiHaze.EndFraction);
         // The weather fog is complete at a distance between `fog distance min` and `max` by the wind; the viewer has no wind and takes max.
         gl.Uniform4(U(program, "uAtmoHaze"), KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, w.FogEnabled && w.FogMax > 1 ? 1f / w.FogMax : 0f);
-        // horizonClouds: the pull is the game's (cloud cover); its colour's inputs are Unknown, so a stand-in built the game's way
-        // from the viewer's sun light and horizon sky: saturate(sun · (1 − 0.3 (offset + 0.2)) + horizon · sun.g) · (1 − darkness).
-        float clouds = Math.Clamp(CloudCoverage ?? w.CloudDensity, 0, 1);
-        float offset = 1.4f * clouds - 0.8f, darkness = MathF.Pow(Math.Clamp(clouds - 0.5f, 0, 1), 0.3f);
-        var cloud = Vector3.Clamp(s.SunLight * (1 - 0.3f * (offset + 0.2f)) + s.Colours.Horizon * Math.Clamp(s.SunLight.Y, 0, 1), Vector3.Zero, Vector3.One) * (1 - darkness);
-        gl.Uniform4(U(program, "uAtmoHazeCloud"), cloud.X, cloud.Y, cloud.Z, Meitou.Data.World.KenshiHaze.CloudPull(clouds));
-        gl.Uniform3(U(program, "uAtmoSunLight"), s.SunLight.X, s.SunLight.Y, s.SunLight.Z);
-        gl.Uniform3(U(program, "uAtmoAmbient"), s.Ambient.X, s.Ambient.Y, s.Ambient.Z);
-        var ag = s.Light.AmbientGround;
-        gl.Uniform3(U(program, "uAtmoAmbientGround"), ag.X, ag.Y, ag.Z);
-        gl.ActiveTexture(TextureUnit.Texture0 + lutUnit);
-        gl.BindTexture(TextureTarget.Texture2D, skyViewTexture);
-        gl.Uniform1(U(program, "uAtmoSkyView"), lutUnit);
+        var (cloud, pull, _) = HorizonClouds(s);
+        gl.Uniform4(U(program, "uAtmoHazeCloud"), cloud.X, cloud.Y, cloud.Z, pull);
+        gl.Uniform4(U(program, "uAtmoMaps"), irradianceCube != 0 ? 1f : 0f, specularCube != 0 ? 1f : 0f, ambientMap != 0 ? 1f : 0f, AmbientMap.HalfWorld);
+        if (irradianceUnit >= 0)
+        {
+            gl.ActiveTexture(TextureUnit.Texture0 + irradianceUnit);
+            gl.BindTexture(TextureTarget.TextureCubeMap, irradianceCube);
+            gl.ActiveTexture(TextureUnit.Texture0 + specularUnit);
+            gl.BindTexture(TextureTarget.TextureCubeMap, specularCube);
+            gl.ActiveTexture(TextureUnit.Texture0 + ambientUnit);
+            gl.BindTexture(TextureTarget.Texture2D, ambientMap);
+        }
         gl.ActiveTexture(TextureUnit.Texture0);
+    }
+
+    /// <summary>
+    /// <c>horizonClouds</c>: the pull is the game's (cloud cover); the colour is built the game's way,
+    /// <c>saturate(sun (1 − 0.1 (offset + 0.2) · 3) + horizon · sun.g) (1 − darkness) √exposure</c>, from the viewer's sun colour and horizon sky
+    /// (the game's own inputs, getColorAt's result for the cloud layer and a floor colour, are partly Unknown). Also the clouds' darkness.
+    /// </summary>
+    (Vector3 Colour, float Pull, float Darkness) HorizonClouds(State s)
+    {
+        float clouds = Math.Clamp(CloudCoverage ?? Weather.CloudDensity, 0, 1);
+        float offset = 1.4f * clouds - 0.8f, darkness = MathF.Pow(Math.Clamp(clouds - 0.5f, 0, 1), 0.3f);
+        var sunColour = KenshiLighting.SunColour(s.Sun);
+        var colour = Vector3.Clamp(sunColour * (1 - 0.3f * (offset + 0.2f)) + s.Colours.Horizon * sunColour.Y, Vector3.Zero, Vector3.One) * ((1 - darkness) * MathF.Sqrt(SkyAtmosphere.Exposure));
+        return (colour, Meitou.Data.World.KenshiHaze.CloudPull(clouds), darkness);
     }
 
     // ---- drawing ---------------------------------------------------------------------------------------
@@ -474,10 +460,13 @@ public sealed unsafe class SkyRenderer : IDisposable
         var right = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, moon));
         var up = Vector3.Cross(moon, right);
         const float moonRadius = 0.016f;
-        gl.Uniform4(U(skyProgram, "uSkyExtra"), SunDiscRadiance, coverage, turn, moonRadius);
+        gl.Uniform4(U(skyProgram, "uSkyExtra"), 0, coverage, turn, moonRadius);
         gl.Uniform3(U(skyProgram, "uMoonDir"), moon.X, moon.Y, moon.Z);
         gl.Uniform3(U(skyProgram, "uMoonRight"), right.X, right.Y, right.Z);
         gl.Uniform3(U(skyProgram, "uMoonUp"), up.X, up.Y, up.Z);
+        var (_, _, darkness) = HorizonClouds(s);
+        var zenith = s.Colours.Zenith;
+        gl.Uniform4(U(skyProgram, "uCloudLight"), zenith.X, zenith.Y, zenith.Z, MathF.Max(darkness, 0.35f));
         gl.Uniform3(U(skyProgram, "uHas"), starsTexture != 0 ? 1f : 0f, moonTexture != 0 ? 1f : 0f, cloudsTexture != 0 ? 1f : 0f);
         (string, uint)[] textures = [("uStars", starsTexture), ("uMoon", moonTexture), ("uClouds", cloudsTexture)];
         for (int i = 0; i < textures.Length; i++)
@@ -502,7 +491,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         Apply(target);
     }
 
-    /// <summary>Times <paramref name="count"/> sky passes and sky-view table rebuilds back to back (ms each); for the screenshot mode's cost report.</summary>
+    /// <summary>Times <paramref name="count"/> sky passes back to back (ms each; no table any more); for the screenshot mode's cost report.</summary>
     public (double SkyPassMs, double TableMs) Benchmark(Matrix4x4 viewProjection, int count = 100)
     {
         var colours = state.Colours;
@@ -510,23 +499,14 @@ public sealed unsafe class SkyRenderer : IDisposable
         var watch = Stopwatch.StartNew();
         for (int i = 0; i < count; i++) Draw(viewProjection, colours);
         gl.Finish();
-        double pass = watch.Elapsed.TotalMilliseconds / count;
-        double table = 0;
-        if (Physical)
-        {
-            watch.Restart();
-            for (int i = 0; i < count; i++) BuildSkyView();
-            gl.Finish();
-            table = watch.Elapsed.TotalMilliseconds / count;
-        }
-        return (pass, table);
+        return (watch.Elapsed.TotalMilliseconds / count, 0);
     }
 
     /// <summary>Collects finished GPU timings (without waiting unless asked).</summary>
-    public void Poll(bool wait = false) { lutTimer.Poll(wait); skyTimer.Poll(wait); }
+    public void Poll(bool wait = false) => skyTimer.Poll(wait);
 
     public string DescribeCost() =>
-        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare{(Rebuilt ? ", rebuilt table" : "")}); GPU sky pass {skyTimer.AverageMs:0.00} ms/frame, sky-view table {lutTimer.AverageMs:0.00} ms per rebuild"
+        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {skyTimer.AverageMs:0.00} ms/frame (SkyX per pixel)"
                  : $"simple sky: GPU {skyTimer.AverageMs:0.00} ms/frame";
 
     public double GpuMs => skyTimer.AverageMs;
@@ -540,14 +520,10 @@ public sealed unsafe class SkyRenderer : IDisposable
     public void Dispose()
     {
         if (Active == this) Active = null;
-        lutTimer.Dispose();
         skyTimer.Dispose();
         gl.DeleteVertexArray(vao);
-        gl.DeleteFramebuffer(lutFbo);
-        gl.DeleteTexture(transmittanceTexture);
-        gl.DeleteTexture(skyViewTexture);
-        foreach (var t in new[] { starsTexture, moonTexture, cloudsTexture }) if (t != 0) gl.DeleteTexture(t);
-        foreach (var p in new[] { simpleProgram, skyProgram, transmittanceProgram, skyViewProgram }) gl.DeleteProgram(p);
+        foreach (var t in new[] { starsTexture, moonTexture, cloudsTexture, irradianceCube, specularCube, ambientMap }) if (t != 0) gl.DeleteTexture(t);
+        foreach (var p in new[] { simpleProgram, skyProgram }) gl.DeleteProgram(p);
     }
 
     /// <summary>GPU time of a span of commands, by timestamp queries (ring of a few, read without stalling).</summary>

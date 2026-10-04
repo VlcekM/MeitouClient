@@ -22,6 +22,7 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [formats/phs.md](formats/phs.md) | Scythe physics `.phs` files: layout, attachment points |
 | [formats/terrain.md](formats/terrain.md) | World coordinates, zone grid, `fullmap.tif` heightmap, how biomes texture the terrain (`blendinfo.dat` and its slot-mask quadtrees, blend/overlay/colour maps), terrain LOD, water (level 100, planes, biome parameters), sun path, legacy height tiles |
 | [formats/sky.md](formats/sky.md) | SkyX (the sky): scattering model and derived constants, night glow, starfield, moon, clouds, WEATHER records, the CONSTANTS sky values; how the viewer reproduces them (atmosphere, aerial perspective) |
+| [formats/lighting.md](formats/lighting.md) | How the deferred scene is lit: sun colour and daylight factor, irradiance and specularity cubes, the biome ambient map, the BRDF terms, exposure from CONSTANTS; how the viewer reproduces them |
 | [formats/foliage.md](formats/foliage.md) | Foliage: FOLIAGE_LAYER / FOLIAGE_MESH / GRASS records, the per-zone placer (random numbers, noise, grass coverage, clusters, rules), distances, materials, grass blades and shader |
 | [formats/zones.md](formats/zones.md) | `.zone` / `.level` world-state files, building and town placements, roads, `features.dat`, placements to meshes |
 | [formats/dds.md](formats/dds.md) | DDS textures: headers, block formats, base-game survey |

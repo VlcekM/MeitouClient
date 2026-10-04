@@ -340,7 +340,7 @@ static partial class WorldApp
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         if (scene.Database is { } skyDb)
         {
-            gpu.Sky.NightDarkness = SkyWeather.NightDarkness(skyDb);
+            gpu.Sky.LoadWorld(install, skyDb);   // the ambient map and the CONSTANTS exposure band (docs/formats/lighting.md)
             gpu.Sky.Weather = SkyWeather.Find(skyDb, o.Weather) ?? throw new ArgumentException($"no weather named '{o.Weather}'; known: {string.Join(", ", SkyWeather.Names(skyDb).Distinct().Take(12))} ...");
         }
         gpu.Streamer = new TerrainStreamer(install, terrain, textures, scene.Window.Step) { MaterialDistance = o.MaterialDistance };
@@ -405,6 +405,8 @@ static partial class WorldApp
         // The atmosphere (SkyRenderer): sky tables, sun and ambient light for this sun and eye height. Thinner air higher up: the
         // haze takes longer to close in the higher the eye.
         var (colours, light) = gpu.Sky.Prepare(scene.Clock.SunDirection(hour), eye.Y, fogDistance + 3 * Math.Max(eye.Y, 0));
+        // The game's exposure (0.55 over the mean luminance, clamped to its band) goes with the game's sky and light; the simple sky keeps a plain scale.
+        if (gpu.Post is { } post) post.AutoExposure = gpu.Sky.Physical ? (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance) : null;
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
@@ -498,6 +500,7 @@ static partial class WorldApp
             return 1;
         }
         gpu.Post!.Target = fbo;
+        gpu.Post.InstantAdaptation = true;   // a still picture: the exposure settles at once
         Console.WriteLine($"post      {o.Post.Describe()}");
         if (o.FlyBenchmark > 0)
         {
@@ -562,6 +565,8 @@ static partial class WorldApp
         Console.WriteLine($"sky       {gpu.Sky.DescribeCost()}");
         gpu.Post!.Flush();
         Console.WriteLine($"post cost gpu ms/frame: {gpu.Post.DescribeCosts()}");
+        if (gpu.Post.AutoExposure is { } band && gpu.Post.ReadExposure() is var (adapted, mean) && float.IsFinite(adapted))
+            Console.WriteLine($"exposure  mean luminance {mean:0.000}, band {band.Min:0.###}..{band.Max:0.###}, adapted {adapted:0.000}: x{KenshiLighting.ExposureKey / adapted:0.000}");
         if (o.ShowKeys && DebugOverlay.TryCreate(gl) is { } keysOverlay)
         {
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);

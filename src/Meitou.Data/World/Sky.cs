@@ -45,11 +45,13 @@ public sealed record SkyClock(float LatitudeDegrees, float Sunrise, float Sunset
 }
 
 /// <summary>
-/// The SkyX atmosphere settings the game creates its sky with (Verified, kenshi_x64.exe sky setup), and the numbers
-/// SkyX's shaders derive from them (Verified against <c>data/materials/SkyX</c>: <c>uScale = 1 / (outer - inner)</c>,
-/// <c>uScaleDepth = (outer - inner) / 2</c>, <c>uScaleOverScaleDepth = uScale / uScaleDepth</c>, the camera at
-/// <c>inner + heightPosition · (outer - inner)</c>). The model itself is O'Neil's single scattering
-/// (<see cref="AtmosphereModel"/>).
+/// The SkyX atmosphere options the game creates its sky with and the shader parameters SkyX derives from them (docs/formats/sky.md,
+/// "The scattering model"). Verified 2026-10-04 against <c>kenshi_x64.exe</c> (the sky creation passes the options struct to
+/// <c>AtmosphereManager::_update</c>) and <c>SkyX_x64.dll</c> (which option feeds which uniform): inner radius 9.77501, outer 10.2963,
+/// height position 0.01, Rayleigh 0.0022, Mie 0.000675, sun intensity 30, wavelengths (0.57, 0.48, 0.44), g −0.991, exposure 1.4,
+/// 4 samples. <c>uScale = 1 / (outer − inner)</c>, <c>uScaleDepth = (outer − inner) / 2</c>, <c>uScaleOverScaleDepth = uScale / uScaleDepth</c>,
+/// <c>uKr4PI = Kr · 4π</c>, <c>uKrESun = Kr · sun</c> (likewise Mie), <c>uInvWaveLength = 1 / λ⁴</c>, the camera at
+/// <c>(0, inner + heightPosition · (outer − inner), 0)</c> whatever the real eye height.
 /// </summary>
 public static class SkyAtmosphere
 {
@@ -60,21 +62,14 @@ public static class SkyAtmosphere
     public const float MieMultiplier = 0.000675f;
     public const float SunIntensity = 30f;
     /// <summary>
-    /// The wavelengths the viewer's sky model uses: the vector the game's setup first builds. Not what the game sets (<see cref="GameWaveLength"/>);
-    /// kept until the viewer's sky grading (<see cref="AtmosphereModel"/>) is redone for the game's green wavelength.
+    /// The wavelengths the game gives SkyX: its setup builds (0.57, 0.54, 0.44), then stores 0.48 over the green component, which
+    /// <c>AtmosphereManager::_update</c> reads as the green wavelength.
     /// </summary>
-    public static readonly Vector3 WaveLength = new(0.57f, 0.54f, 0.44f);
-    /// <summary>
-    /// The wavelengths the game gives SkyX (Verified, kenshi_x64.exe sky setup: it builds (0.57, 0.54, 0.44), then stores 0.48 over its
-    /// green component; SkyX_x64.dll's <c>AtmosphereManager::_update</c> reads that slot as the green wavelength).
-    /// </summary>
-    public static readonly Vector3 GameWaveLength = new(0.57f, 0.48f, 0.44f);
+    public static readonly Vector3 WaveLength = new(0.57f, 0.48f, 0.44f);
+    /// <summary>Mie anisotropy as SkyX's shaders use it (the cosine is taken towards the eye, so the negative value gives a lobe round the sun).</summary>
     public const float PhaseG = -0.991f;
-    /// <summary>
-    /// The exposure the game gives SkyX (Verified, the same sky setup). Earlier notes said 0.48,
-    /// a misreading of the green wavelength's store. The viewer's sky has its own brightness calibration and does not use it.
-    /// </summary>
-    public const float GameExposure = 1.4f;
+    /// <summary>SkyX's <c>uExposure</c>, the factor on the scattered light in HDR mode.</summary>
+    public const float Exposure = 1.4f;
     public const int Samples = 4;
 
     /// <summary>Atmosphere thickness in SkyX units.</summary>
@@ -83,23 +78,101 @@ public static class SkyAtmosphere
     public const float ScaleDepth = Thickness / 2;
     /// <summary>Density scale height in SkyX units: <c>1 / uScaleOverScaleDepth = thickness² / 2</c>.</summary>
     public const float ScaleHeight = Thickness * Thickness / 2;
-    /// <summary>Planet radius in scale heights.</summary>
-    public const float PlanetRadius = InnerRadius / ScaleHeight;
-    /// <summary>Atmosphere top radius in scale heights.</summary>
-    public const float TopRadius = OuterRadius / ScaleHeight;
+    /// <summary>The height of SkyX's camera (its <c>uCameraPos.y</c>), above the planet's centre.</summary>
+    public const float CameraY = InnerRadius + HeightPosition * Thickness;
+    public const float KrESun = RayleighMultiplier * SunIntensity, KmESun = MieMultiplier * SunIntensity;
+    public const float Kr4Pi = RayleighMultiplier * 4 * MathF.PI, Km4Pi = MieMultiplier * 4 * MathF.PI;
     /// <summary><c>1 / wavelength⁴</c> per channel (SkyX's <c>uInvWaveLength</c>).</summary>
     public static Vector3 InverseWaveLength4 => new(1 / MathF.Pow(WaveLength.X, 4), 1 / MathF.Pow(WaveLength.Y, 4), 1 / MathF.Pow(WaveLength.Z, 4));
+    /// <summary>Extinction per unit of density-weighted path, per channel: <c>invλ⁴ · Kr · 4π + Km · 4π</c>.</summary>
+    public static Vector3 Extinction => InverseWaveLength4 * Kr4Pi + new Vector3(Km4Pi);
     /// <summary>Rayleigh optical depth of a vertical ray from sea level to space, per channel (<c>Kr · 4π · invλ⁴ · scaleDepth</c>).</summary>
-    public static Vector3 RayleighZenithDepth => InverseWaveLength4 * (RayleighMultiplier * 4 * MathF.PI * ScaleDepth);
-    /// <summary>Mie optical depth of a vertical ray (<c>Km · 4π · scaleDepth</c>), before our turbidity factor.</summary>
-    public const float MieZenithDepth = MieMultiplier * 4 * MathF.PI * ScaleDepth;
+    public static Vector3 RayleighZenithDepth => InverseWaveLength4 * (Kr4Pi * ScaleDepth);
+    /// <summary>Mie optical depth of a vertical ray (<c>Km · 4π · scaleDepth</c>).</summary>
+    public const float MieZenithDepth = Km4Pi * ScaleDepth;
+}
+
+/// <summary>
+/// SkyX's scattering as the game runs it (docs/formats/sky.md): O'Neil's single scattering with SkyX's polynomial fit of the optical
+/// depth, sampled 4 times along the ray from SkyX's fixed camera. The skydome shader, the CPU <c>AtmosphereManager::getColorAt</c>
+/// (in HDR mode, which the game selects) and the atmosphere haze all evaluate this integral; this class is the viewer's
+/// implementation of it, written from the docs.
+/// </summary>
+public static class SkyXModel
+{
+    /// <summary>O'Neil's scale function: the optical depth towards the top of the air at a zenith cosine, in units of the scale depth.</summary>
+    public static float Scale(float cos)
+    {
+        float x = 1 - cos;
+        return SkyAtmosphere.ScaleDepth * MathF.Exp(-0.00287f + x * (0.459f + x * (3.83f + x * (-6.80f + x * 5.25f))));
+    }
+
+    /// <summary>
+    /// The sum, over the samples along <paramref name="ray"/> (unit, from SkyX's camera) for <paramref name="length"/> SkyX units, of the
+    /// air's density times the sample's scaled length times the light's attenuation sun → sample → eye, per channel. Times
+    /// <c>invλ⁴ · KrESun</c> it is the Rayleigh colour, times <c>KmESun</c> the Mie colour. <paramref name="thickness"/>: the same sum
+    /// without the attenuation (the skydome's opacity term). <paramref name="sun"/>: unit direction towards the sun.
+    /// </summary>
+    public static Vector3 InScatter(Vector3 ray, float length, Vector3 sun, out float thickness)
+    {
+        const float camera = SkyAtmosphere.CameraY;
+        const float sosd = 1 / SkyAtmosphere.ScaleHeight, scale = 1 / SkyAtmosphere.Thickness;
+        float startOffset = MathF.Exp(sosd * (SkyAtmosphere.InnerRadius - camera)) * Scale(ray.Y);
+        float step = length / SkyAtmosphere.Samples;
+        var ext = SkyAtmosphere.Extinction;
+        var sum = Vector3.Zero;
+        thickness = 0;
+        for (int i = 0; i < SkyAtmosphere.Samples; i++)
+        {
+            var p = new Vector3(0, camera, 0) + ray * (step * (i + 0.5f));
+            float h = p.Length(), density = MathF.Exp(sosd * (SkyAtmosphere.InnerRadius - h));
+            float optical = MathF.Min(startOffset + density * (Scale(Vector3.Dot(sun, p) / h) - Scale(Vector3.Dot(ray, p) / h)), 1e4f);
+            var t = new Vector3(MathF.Exp(-optical * ext.X), MathF.Exp(-optical * ext.Y), MathF.Exp(-optical * ext.Z));
+            sum += t * (density * step * scale);
+            thickness += density * step * scale;
+        }
+        return sum;
+    }
+
+    public static Vector3 InScatter(Vector3 ray, float length, Vector3 sun) => InScatter(ray, length, sun, out _);
+
+    /// <summary>SkyX's Rayleigh phase function, <c>0.75 (1 + 0.5 cos²)</c>.</summary>
+    public static float RayleighPhase(float cos) => 0.75f * (1 + 0.5f * cos * cos);
+
+    /// <summary>SkyX's Mie phase function (Cornette-Shanks form) with the game's g; <paramref name="cos"/> as SkyX takes it, towards the eye.</summary>
+    public static float MiePhase(float cos)
+    {
+        const float g = SkyAtmosphere.PhaseG, g2 = g * g;
+        return 1.5f * ((1 - g2) / (2 + g2)) * (1 + cos * cos) / MathF.Pow(1 + g2 - 2 * g * cos, 1.5f);
+    }
+
+    /// <summary>
+    /// The sky's HDR colour towards <paramref name="direction"/>: <c>exposure · (rayleighPhase · Rayleigh + miePhase · Mie)</c> to the dome
+    /// point <c>direction + (0, inner, 0)</c>, plus SkyX's night glow <c>nightmult · ((0.05, 0.05, 0.1) (2 − 0.75 saturate(−sunY)) (1 − y)³)^2.2</c>
+    /// where the scattered light's brightest channel is under 0.1. <paramref name="skydome"/>: the shader's form, whose night factor also
+    /// fades with the opacity term; false gives <c>getColorAt</c>'s.
+    /// </summary>
+    public static Vector3 Colour(Vector3 direction, Vector3 sun, bool skydome = true)
+    {
+        var d = Vector3.Normalize(direction);
+        var ray = d + new Vector3(0, SkyAtmosphere.InnerRadius - SkyAtmosphere.CameraY, 0);
+        float far = ray.Length();
+        ray /= far;
+        var sum = InScatter(ray, far, sun, out float thickness);
+        // SkyX takes the cosine with the vector from the dome point towards the eye.
+        float cos = -Vector3.Dot(sun, ray);
+        var c = (sum * SkyAtmosphere.InverseWaveLength4 * (SkyAtmosphere.KrESun * RayleighPhase(cos)) + sum * (SkyAtmosphere.KmESun * MiePhase(cos))) * SkyAtmosphere.Exposure;
+        float night = Math.Clamp(1 - MathF.Max(c.X, MathF.Max(c.Y, c.Z)) * 10, 0, 1);
+        if (skydome) night *= 1 - Math.Clamp(thickness * SkyAtmosphere.Kr4Pi, 0, 1);
+        float glow = (2 - 0.75f * Math.Clamp(-sun.Y, 0, 1)) * MathF.Pow(1 - d.Y, 3);
+        return c + night * new Vector3(MathF.Pow(0.05f * glow, 2.2f), MathF.Pow(0.05f * glow, 2.2f), MathF.Pow(0.1f * glow, 2.2f));
+    }
 }
 
 /// <summary>
 /// The game's distance haze, its full-screen atmosphere fog pass (docs/formats/sky.md "Haze"). The ramp and the scales are
-/// Verified (kenshi_x64.exe sky controller and CONSTANTS loader, <c>data/materials/common/common.program</c>); the colour is
-/// O'Neil's in-scattering from the eye to the point, which the viewer uses as a fraction of the sky's colour
-/// (<see cref="SkyFraction"/>).
+/// Verified (kenshi_x64.exe sky controller and CONSTANTS loader, <c>data/materials/common/common.program</c>); the colour is SkyX's
+/// Rayleigh in-scattering from the eye to the point (<see cref="Colour"/>).
 /// </summary>
 public static class KenshiHaze
 {
@@ -111,25 +184,15 @@ public static class KenshiHaze
     public const float StartFraction = 0.06f, EndFraction = 0.6f;
     /// <summary>World units per SkyX unit for the fog's ray (<c>uSkydomeRadius</c> of <c>SkyXFogParams</c>, never set at run time).</summary>
     public const float DomeRadius = 70000;
-    /// <summary>The fog's eye height in SkyX units: SkyX's camera, <c>inner + heightPosition · thickness</c>.</summary>
-    public const float CameraY = SkyAtmosphere.InnerRadius + SkyAtmosphere.HeightPosition * SkyAtmosphere.Thickness;
-    /// <summary>Extinction per unit of density-weighted path, per channel: <c>invλ⁴ · Kr · 4π + Km · 4π</c> with the game's wavelengths.</summary>
-    public static Vector3 Extinction
-    {
-        get
-        {
-            var w = SkyAtmosphere.GameWaveLength;
-            var inv = new Vector3(1 / MathF.Pow(w.X, 4), 1 / MathF.Pow(w.Y, 4), 1 / MathF.Pow(w.Z, 4));
-            return inv * (SkyAtmosphere.RayleighMultiplier * 4 * MathF.PI) + new Vector3(SkyAtmosphere.MieMultiplier * 4 * MathF.PI);
-        }
-    }
+    /// <summary>The fog's eye height in SkyX units: SkyX's camera.</summary>
+    public const float CameraY = SkyAtmosphere.CameraY;
 
     /// <summary>
-    /// The direction and length (SkyX units, at most 1) of the fog's ray to a point at <paramref name="offset"/> (world units,
-    /// point − eye). Close points below the eye are lifted towards its level (fully at the eye, not at all one dome radius
-    /// away), and a ray steeper than −0.3 is replaced by a fixed one.
+    /// The fog's ray to a point at <paramref name="offset"/> (world units, point − eye): its direction (a ray steeper than −0.3 is replaced by
+    /// a fixed one), its length in SkyX units (at most 1), and the unclamped direction (the phase function's). Close points below the
+    /// eye are lifted towards its level (fully at the eye, not at all one dome radius away).
     /// </summary>
-    public static (Vector3 Ray, float Length) Ray(Vector3 offset)
+    public static (Vector3 Ray, float Length, Vector3 Direction) Ray(Vector3 offset)
     {
         var p = offset / DomeRadius;
         float y = p.Y + SkyAtmosphere.InnerRadius;
@@ -137,55 +200,22 @@ public static class KenshiHaze
         y = MathF.Max(y, SkyAtmosphere.InnerRadius) + (y - MathF.Max(y, SkyAtmosphere.InnerRadius)) * lift;
         var ray = new Vector3(p.X, y - CameraY, p.Z);
         float len = ray.Length();
-        if (len < 1e-9f) return (Vector3.UnitZ, 0);
+        if (len < 1e-9f) return (Vector3.UnitZ, 0, Vector3.UnitZ);
         ray /= len;
+        var direction = ray;
         if (ray.Y < -0.3f) ray = new Vector3(0, -0.3f, 0.953f);
-        return (ray, MathF.Min(len, 1));
-    }
-
-    /// <summary>O'Neil's scale function (SkyX's fit of the optical depth towards the top of the air at a zenith cosine).</summary>
-    static float Scale(float cos)
-    {
-        float x = 1 - cos;
-        return SkyAtmosphere.ScaleDepth * MathF.Exp(-0.00287f + x * (0.459f + x * (3.83f + x * (-6.80f + x * 5.25f))));
+        return (ray, MathF.Min(len, 1), direction);
     }
 
     /// <summary>
-    /// Rayleigh in-scattering along <paramref name="ray"/> from the fog's eye for <paramref name="length"/> SkyX units, 4 samples,
-    /// before the per-channel colour, phase and exposure factors (they are the same for the haze and the sky, so they cancel
-    /// in <see cref="SkyFraction"/>). <paramref name="sun"/>: unit direction towards the sun.
+    /// The haze's colour (HDR, before the clouds' pull): <c>exposure · rayleighPhase · invλ⁴ · KrESun ·</c> the in-scattering to the point.
+    /// Mie light attenuates but adds no colour. <paramref name="sun"/>: unit direction towards the sun (its real height).
     /// </summary>
-    public static Vector3 InScatter(Vector3 ray, float length, Vector3 sun)
+    public static Vector3 Colour(Vector3 offset, Vector3 sun)
     {
-        float sosd = 1 / SkyAtmosphere.ScaleHeight, scale = 1 / SkyAtmosphere.Thickness;
-        var start = new Vector3(0, CameraY, 0);
-        float startOffset = MathF.Exp(sosd * (SkyAtmosphere.InnerRadius - CameraY)) * Scale(Vector3.Dot(ray, start) / CameraY);
-        float step = length / SkyAtmosphere.Samples;
-        var ext = Extinction;
-        var sum = Vector3.Zero;
-        for (int i = 0; i < SkyAtmosphere.Samples; i++)
-        {
-            var p = start + ray * (step * (i + 0.5f));
-            float h = p.Length(), density = MathF.Exp(sosd * (SkyAtmosphere.InnerRadius - h));
-            float optical = startOffset + density * (Scale(Vector3.Dot(sun, p) / h) - Scale(Vector3.Dot(ray, p) / h));
-            var t = new Vector3(MathF.Exp(-optical * ext.X), MathF.Exp(-optical * ext.Y), MathF.Exp(-optical * ext.Z));
-            sum += t * (density * step * scale);
-        }
-        return sum;
-    }
-
-    /// <summary>
-    /// The haze's colour as a fraction of the sky's along the same ray (the sky is the same integral to the dome, length 1):
-    /// 1 at and past <see cref="DomeRadius"/>, less nearer. Clamped to 0..1; 0 when both vanish (the sun far below the
-    /// horizon: the game's fog colour is then black too). The guard is the viewer's.
-    /// </summary>
-    public static Vector3 SkyFraction(Vector3 offset, Vector3 sun)
-    {
-        var (ray, len) = Ray(offset);
-        var part = InScatter(ray, len, sun);
-        var full = InScatter(ray, 1, sun);
-        static float F(float a, float b) => b > 1e-20f && float.IsFinite(a / b) ? Math.Clamp(a / b, 0, 1) : 0;
-        return new Vector3(F(part.X, full.X), F(part.Y, full.Y), F(part.Z, full.Z));
+        var (ray, len, direction) = Ray(offset);
+        float phase = SkyXModel.RayleighPhase(Vector3.Dot(sun, direction));
+        return SkyXModel.InScatter(ray, len, sun) * SkyAtmosphere.InverseWaveLength4 * (SkyAtmosphere.KrESun * phase * SkyAtmosphere.Exposure);
     }
 
     /// <summary>

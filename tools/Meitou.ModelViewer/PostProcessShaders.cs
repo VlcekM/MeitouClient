@@ -177,13 +177,55 @@ static class PostProcessShaders
         """;
 
     /// <summary>Exposure, occlusion, bloom, tone map, grade, vignette and dither: HDR scene in, display colour out.</summary>
+    /// <summary>
+    /// Kenshi's luminance measure (docs/formats/post-processing.md): Rec. 601 luminance, floored at 0.0001, averaged linearly. One texel of the
+    /// small luminance target is the mean of a 4 × 4 grid of bilinear taps over its share of the scene; its mipmaps average the rest.
+    /// </summary>
+    public const string Luminance = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uScene;
+        uniform vec2 uCell;   // one texel of this target in the scene's 0..1 coordinates
+        void main()
+        {
+            float sum = 0.0;
+            for (int y = 0; y < 4; y++)
+                for (int x = 0; x < 4; x++)
+                {
+                    vec2 uv = vUv + (vec2(x, y) - 1.5) * 0.25 * uCell;
+                    sum += max(dot(texture(uScene, uv).rgb, vec3(0.299, 0.587, 0.114)), 0.0001);
+                }
+            fragColour = vec4(sum / 16.0, 0.0, 0.0, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// Kenshi's adaptation: <c>adapted = last + (mean − last) (1 − exp(−dt · rate))</c>, clamped to <c>[MIN_LUMINANCE, MAX_LUMINANCE]</c>; a 1 × 1 target.
+    /// </summary>
+    public const string Adapt = """
+        #version 330 core
+        out vec4 fragColour;
+        uniform sampler2D uLuminance, uLast;
+        uniform float uLevel, uBlend;   // the luminance target's 1 × 1 level; the share of the new mean (1: no smoothing)
+        uniform vec2 uBand;             // MIN_LUMINANCE, MAX_LUMINANCE
+        void main()
+        {
+            float mean = textureLod(uLuminance, vec2(0.5), uLevel).r;
+            float last = texture(uLast, vec2(0.5)).r;
+            float adapted = mix(last, mean, uBlend);
+            fragColour = vec4(clamp(adapted, uBand.x, max(uBand.x, uBand.y)), mean, 0.0, 1.0);
+        }
+        """;
+
     public const string Composite = "#version 330 core\n" + Noise + """
 
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uScene, uAo, uBloom;
+        uniform sampler2D uScene, uAo, uBloom, uAdapted;
         uniform float uExposure, uBloomIntensity, uSaturation, uContrast, uVignette;
-        uniform int uUseAo, uUseBloom, uTone, uGrade, uDither, uDebug;
+        uniform int uUseAo, uUseBloom, uTone, uGrade, uDither, uDebug, uAuto;
+        const float EXPOSURE_KEY = 0.55;   // hdr.material's EXPOSURE_KEY
 
         vec3 shoulder(vec3 c)
         {
@@ -197,7 +239,9 @@ static class PostProcessShaders
 
         void main()
         {
-            vec3 c = max(texture(uScene, vUv).rgb, 0.0) * uExposure;
+            float exposure = uExposure;
+            if (uAuto != 0) exposure *= max(EXPOSURE_KEY / texture(uAdapted, vec2(0.5)).r, 0.001);   // Kenshi's exposure: key over the adapted luminance
+            vec3 c = max(texture(uScene, vUv).rgb, 0.0) * exposure;
             if (uUseAo != 0) c *= texture(uAo, vUv).r;
             if (uUseBloom != 0)
             {

@@ -275,23 +275,23 @@ How it works (status as in [README.md](README.md)):
   It has colour from `watercolourmap.png`, flow from `flowmap.png`, the `water.png` normal map scrolled three
   times, and per-pixel biome parameters (`BiomeField` over `blendinfo.dat` + `blendmap.png`). Shallow water is
   see-through near the camera, and it is opaque beyond 4000 units, as in the game. With reflections (default; `R` or `--no-reflections` toggles) it reflects the mirrored scene (`ReflectionPass`: sky, terrain, objects at 3000 units or nearer drawn about Y = 100 into a half-resolution RGBA16F texture, drawn 4x multisampled and resolved (without it the mirrored shoreline showed stair steps, magnified by the normal-map distortion), with oblique near-plane clipping at the water; the Fresnel and normal-map distortion are the old shader's); without, it reflects the sky colour. The glint widens and dims with distance and is capped, so a far sea shows no blown-out disc.
-- **Sky and atmosphere** (`SkyRenderer`, `AtmosphereShaders`, `AtmosphereModel`, `SkyClock`; facts and settings in
-  [formats/sky.md](formats/sky.md)): the sun follows the game's formula for the hour (latitude 54, sunrise 5, sunset 23). The
-  sky is O'Neil's single scattering with SkyX's constants (Rayleigh, Mie, planet shadow, a little ozone), kept as a transmittance
-  table (built once) and a sky-view table (rebuilt only when the sun or the eye's height moves), drawn with the night glow, the
-  game's starfield and moon texture, a sun disc with limb darkening and, with `--clouds` or a weather that has them, a cloud
-  layer. **Aerial perspective** replaces the old per-shader fog: terrain, water and objects end with
-  `colour = atmoApply(colour, eye, position)` (transmittance by distance and height, the sky's colour in-scattered, the
-  weather's fog), and the sun colour and ambient light come from the same tables, so a sunset lights the ground with the colour of
-  the sun in the sky. New shaders (foliage) include `AtmosphereShaders.Functions`, call `atmoApply` last and
-  `SkyRenderer.Active?.Apply(program)` per frame (sky.md, "Using the atmosphere in a new shader"). All of it is display-referred like
-  the rest of the scene lighting (the game has no gamma step either); the post-processing chain exposes and tone-maps it. The
-  sun disc is only 8 (a few times the sky) so the bloom threshold of 1 catches it. `--simple-sky` / `B` give the old model.
-  Cost (2026-10-04, 1280 × 720, with other processes sharing the GPU, so only the orders of magnitude are firm): the sky pass 0.06 to
-  0.09 ms GPU (100 passes back to back, `MEITOU_SKY_BENCH=1` with `--screenshot`), a sky-view table rebuild 0.08 to 0.11 ms GPU
-  plus 0.5 ms CPU for the sun and ambient light (only when the sun or the eye's height moves; the title shows sky cpu and gpu), and
-  the aerial perspective per pixel (one table lookup, three exponentials) is close to the old squared-distance fog: the
-  scene's GPU time was 6.2 to 11.1 ms with the atmosphere and 6.1 to 12.1 ms with `--simple-sky` across four runs of The Hub view (in the quietest runs the atmosphere cost 0.1 to 0.6 ms more).
+- **Sky, light and atmosphere** (`SkyRenderer`, `AtmosphereShaders`, `SkyClock`, `SkyXModel`, `KenshiHaze`, `KenshiLighting`,
+  `AmbientMap`; facts in [formats/sky.md](formats/sky.md) and [formats/lighting.md](formats/lighting.md)): the sun follows the
+  game's formula for the hour (latitude 54, sunrise 5, sunset 23). In game-sky mode (default) everything is in the game's own HDR
+  units and numbers. The sky is SkyX's skydome evaluated per pixel with the game's options (wavelengths 0.57 / 0.48 / 0.44,
+  exposure 1.4, 4 samples, HDR mode), the night glow and the game's starfield and moon texture; no sun disc (the game has none in
+  the dome; its sun is the Mie glow), with `--clouds` or a cloudy weather a cloud layer (a stand-in). Terrain, objects and grass
+  are lit by `kenshiLight`, the game's deferred lighting model: the sun colour taken from SkyX towards the sun the way the game's
+  sky controller takes it, times the daylight factor and the per-biome ambient map's sun brightness; the image-based ambient
+  from `mp_irradiance.dds` times the ambient map's colour; GGX sun specular and the `mp_specularity.dds` environment specular with
+  the game's environment BRDF. No shadows (every face towards the sun is fully lit). Every world shader ends with
+  `colour = atmoApply(colour, eye, position)`, the game's haze (sky.md, "Haze"). The post-processing applies the game's auto
+  exposure from the measured mean luminance, so the screen brightness follows the game's `0.55 / adapted` with the CONSTANTS band.
+  New shaders include `AtmosphereShaders.Functions` (sky.md, "Using the atmosphere in a new shader"). `--simple-sky` / `B` give
+  the old colour model, light and fog, with a fixed exposure.
+  Cost: not re-measured after the 2026-10-05 rewrite (the sky's integral now runs per pixel, about 4 × 5 exponentials, instead of
+  a table lookup; the haze runs the same 4-sample integral per pixel). Earlier figures (2026-10-04, table version): the sky pass
+  0.06 to 0.09 ms GPU at 1280 × 720 (`MEITOU_SKY_BENCH=1` with `--screenshot` times 100 passes).
 - Frame times (2026-10-04, offscreen 1280 × 960, average of 10 frames after loading): Shark with water 1.6 ms,
   Port North coast 1.6 ms, The Hub looking at the horizon 1.1 to 1.2 ms, whole world from above 0.6 ms
   (12 ms at 1400 × 1400 with `--material-distance 1e7`, which puts the full material everywhere).
@@ -411,7 +411,7 @@ How it works (status as in [README.md](README.md)):
     magenta manual level, blue distant stand-in). `MEITOU_STREAM_LOG=1` prints slow steps. `--distant-range <zones>`, `--no-distant`.
   - Not done: eviction of meshes, fading of TERRAIN-mode features, cross-fade of manual levels' own materials; the title bar shows
     objects, draw calls, draw CPU ms and what is still loading.
-- Back-face culling is off for objects (open building meshes); the sun, ambient light and aerial perspective are the atmosphere's (below).
+- Back-face culling is off for objects (open building meshes); the light (`kenshiLight`) and the haze are the atmosphere's (above).
 
 Verified with screenshots (2026-10-04, saved outside the repo): The Hub (`--town "The Hub"`: walls, gates and
 towers join up, buildings upright, roads in the ground texture), zone 44.23 (TERRAIN-mode cliff blocks take
@@ -518,7 +518,7 @@ only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. The viewer has no
   look of the scene is unchanged, the sun disc and speculars no longer clip); `aces` is Narkowicz's fit and visibly darker and
   more contrasty. Vignette (F8) and
   grading (F9: saturation 1.12, contrast 1.06) are ours, off by default (Kenshi has neither). MSAA (`--msaa 1|2|4|8`, M; default 4). Exposure
-  (`--exposure`, keys - and =): 1 = the shaders' brightness (Kenshi's x0.6875 belongs to its own lighting and is not applied).
+  (`--exposure`, keys - and =): a multiplier on top of the game's auto exposure (game sky), or the whole exposure with `--simple-sky`; default 1.
   `--post-debug ao|bloom` shows the occlusion or the bloom alone.
 - **Cost** (RTX 4070, 1920x1080, GPU timestamps, ms per frame; the title shows `post gpu ms` per stage next to the frame's cpu and gpu time,
   and `--screenshot` prints the average over 10 frames): MSAA resolve 0.1 to 1, SSAO 0.1 to 0.3, bloom 0.3 to 1.2, composite 0.04
@@ -526,7 +526,7 @@ only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. The viewer has no
   mostly noise; the whole chain is roughly 1 to 3 ms against a 14 to 18 ms scene.
 - **Contract for scene code**: shaders write the colours they always did, unclamped (colours above 1 are fine); code that draws into
   another framebuffer between `PostProcess.Begin` and `End` must rebind the one it found (`ReflectionPass` does).
-- **Haze**: `--haze kenshi|physical` (F7), `--haze-distance`; see [formats/sky.md](formats/sky.md#haze-distance-fog-how-vanilla-does-it). The default is `kenshi`, the game's own haze: a linear ramp from 3000 to 30000 (0.06 D to 0.6 D, D = 50000 = view distance 5000 × 10; `--haze-distance` sets D) towards the sky's colour times the game's fraction of it for that path, which reaches the sky's colour at 70000. Far ranges come out as pale layered silhouettes, as in the game; from very high up everything is hazed, and at night the far terrain goes black (both the game's rule). `physical` is the earlier height-dependent integral.
-- **Limits**: the MSAA resolve averages HDR values, so a very bright sun-disc edge can still alias a little; SSAO sees only the near
-  depth slice and has no normal buffer (curved surfaces show faint banding, thin objects can halo); no auto exposure (the game's
-  is clamped to a nearly constant gain, see the doc); heat haze, colour LUTs and depth of field are not implemented.
+- **Haze**: `--haze kenshi|physical` (F7), `--haze-distance`; see [formats/sky.md](formats/sky.md#haze-distance-fog-how-vanilla-does-it). The default is `kenshi`, the game's own haze: a linear ramp from 3000 to 30000 (0.06 D to 0.6 D, D = 50000 = view distance 5000 × 10; `--haze-distance` sets D) towards the game's own haze colour (SkyX's Rayleigh in-scattering to the point, in the same HDR units as the sky), which equals the sky's colour at 70000. Far ranges come out as pale layered silhouettes, as in the game; from very high up everything is hazed, and at night the far terrain goes black (both the game's rule). `physical` is a height-dependent integral over SkyX's air (a viewer alternative).
+- **Limits**: the MSAA resolve averages HDR values, so very bright specular edges can still alias a little; SSAO sees only the near
+  depth slice and has no normal buffer (curved surfaces show faint banding, thin objects can halo); the auto exposure measures a
+  scene without shadows, so its mean runs higher and its exposure lower than the game's in sunlit views; heat haze, colour LUTs and depth of field are not implemented.

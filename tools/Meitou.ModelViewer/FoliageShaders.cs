@@ -154,8 +154,10 @@ static class FoliageShaders
             float diff = max(l.y, 0.0);
             vec3 ambient = vec3(0.42, 0.45, 0.50);
             vec3 sunLight = vec3(1.0, 0.97, 0.92);
-            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) { ambient = uAtmoAmbient; sunLight = uAtmoSunLight; }
             vec3 colour = albedo * (ambient + diff * sunLight);
+            // World view, game sky: the game's deferred lighting of what foliage.hlsl writes for grass: normal straight up, gloss 0 (grass_fs zeroes the
+            // diffuse alpha before writing it × 0.6; only rain would raise it).
+            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, vec3(0.0, 1.0, 0.0), normalize(uEye - vWorld), 0.0, vWorld);
             colour = colour * vHazeMul + vHazeAdd;
             fragColour = vec4(colour, coverage);
         }

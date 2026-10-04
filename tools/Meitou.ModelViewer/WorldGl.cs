@@ -17,6 +17,7 @@ static unsafe class WorldGl
         if (ok == 0) throw new InvalidOperationException("Shader link failed: " + gl.GetProgramInfoLog(program));
         gl.DeleteShader(vs);
         gl.DeleteShader(fs);
+        SkyRenderer.AssignSamplerUnits(gl, program);   // the atmosphere's cube samplers off unit 0
         return program;
     }
 

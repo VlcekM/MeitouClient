@@ -32,7 +32,7 @@ to sliders"):
 | Parameter | Default |
 | --- | --- |
 | `EXPOSURE_KEY` | 0.55 |
-| `MIN_LUMINANCE` / `MAX_LUMINANCE` | 0.8 / 0.96 |
+| `MIN_LUMINANCE` / `MAX_LUMINANCE` | 0.8 / 0.96 (script defaults; the exe overrides both, below) |
 | `AUTOEXP_ADAPTATION_RATE` | 0.5 |
 | `BLOOM_THRESHOLD` | 6.0 |
 | `BLOOM_MAGNITUDE` | **0.0** |
@@ -41,11 +41,16 @@ to sliders"):
 - **Average luminance**: Rec. 601 weights (0.299, 0.587, 0.114), floored at 0.0001; the HDR image is reduced by a 2x2
   luminance downsample to 128x128 and 3x3 box downsamples through 64, 16, 4 down to 1x1, **in linear space** (a plain average,
   not a log average, although the value is stored as `log` in the 1x1 target).
+- **The band at run time** (**Verified**, `kenshi_x64.exe` sky creation and sky update, 2026-10-05): the exe overwrites the
+  script defaults. `MAX_LUMINANCE` = CONSTANTS `exposure max`, set once; `MIN_LUMINANCE` = `exposure min · lerp(night darkness, 1,
+  saturate(5 · sunY))`, set every frame (sunY the sun's height). With `gamedata.base`'s 0.8 / 1.2 / 0.35 (no shipped mod changes
+  them) the day band is **[0.8, 1.2]** and the night's floor drops to 0.28. Details: [lighting.md](lighting.md).
 - **Adaptation**: `adapted = last + (current - last) * (1 - exp(-frameTime * rate))` with rate 0.5 (a time constant of about 2 s),
-  then **clamped to [0.8, 0.96]**. Because of that clamp the "auto" exposure only ever moves inside a narrow band.
-- **Exposure**: `scale = max(EXPOSURE_KEY / adapted, 0.001)`, i.e. 0.55 / 0.8 to 0.55 / 0.96 = **x0.69 down to x0.57**. A
-  scene whose average luminance is below 0.8 (most of them) sits at the bright end of the clamp, x0.6875. In effect a constant
-  darkening of the HDR lighting, tuned by the lighting constants.
+  then **clamped to [MIN_LUMINANCE, MAX_LUMINANCE]**.
+- **Exposure**: `scale = max(EXPOSURE_KEY / adapted, 0.001)`: by day 0.55 / 0.8 to 0.55 / 1.2 = **x0.69 down to x0.46**, at
+  night up to 0.55 / 0.28 = x1.96. A day scene of mean luminance under 0.8 sits at x0.6875; a bright one (a sunlit desert
+  floor) darkens towards x0.46. The earlier reading of this section (a band fixed at [0.8, 0.96], a nearly constant gain) took the
+  script defaults for the run-time values.
 - **Tone-mapping curve: none.** `ToneMap()` is exposure only. A Hable-style filmic function (`ToneMapFilmicALU`, constants
   `a`, `b`) is present in the file but its call is commented out. Values over 1 are clipped by the LDR target.
 - **Gamma**: `hdr_to_gamma = false` and `hdr_disable = false` (constants in `common/constants.hlsl`); `kenshi.cfg` has
@@ -61,8 +66,8 @@ to sliders"):
   HDR values. It is blurred with a 12-tap Gaussian (separable, sigma 0.8, `BloomBlurV` then `H`, at quarter size) and
   **added** after exposure, scaled by `BLOOM_MAGNITUDE`.
 - **`BLOOM_MAGNITUDE` defaults to 0.0**, and `settings.cfg` / `kenshi.cfg` have no key for it, so bloom is off in a stock install
-  (**Observed**: the strings "Bloom", "exposure min" and "exposure max" exist in `kenshi_x64.exe`, which suggests developer or
-  mod sliders; their UI is **Unknown**).
+  (**Observed**: the string "Bloom" exists in `kenshi_x64.exe`, which suggests a developer or mod slider; its UI is **Unknown**.
+  "exposure min" / "exposure max" are the CONSTANTS fields that set the luminance band, above).
 
 ## FXAA (Verified)
 
@@ -96,15 +101,19 @@ effects (see [terrain.md](terrain.md#atmosphere-verified-constants-observed-shad
 
 ## What the viewer does
 
-The viewer's own shaders are not Kenshi's lighting, so their output is already a display-referred colour that looks right
-unscaled; Kenshi's x0.6875 exposure is part of its lighting and is **not** applied (exposure defaults to 1, `--exposure` changes
-it). All scene shaders are unchanged: they write colours that may exceed 1 (the sun disc is 3, speculars) into an RGBA16F
-framebuffer; nothing is clamped until the composite. Details, options and costs: [viewer.md](../viewer.md#post-processing).
+In game-sky mode (the default) the viewer's scene shaders light in the game's HDR units ([lighting.md](lighting.md)), so the
+composite applies Kenshi's exposure: the scene's mean Rec. 601 luminance (a 4×4-tap reduction into a 256² R32F target, then its
+mip chain to 1×1: a plain linear mean like the game's, by a different reduction), adapted at rate 0.5 per second, clamped
+to this frame's `[MIN_LUMINANCE, MAX_LUMINANCE]` from the CONSTANTS record, and `0.55 / adapted` multiplies the image
+(`PostProcess.AutoExposure`). Screenshots adapt at once (`InstantAdaptation`) and print the mean, the adapted value and the
+scale. `--exposure` multiplies on top (default 1). With `--simple-sky` the old display-referred shaders are back and the
+exposure is the constant `--exposure` alone. Nothing is clamped before the composite (RGBA16F scene buffer).
+Details, options and costs: [viewer.md](../viewer.md#post-processing).
 
 | Stage | `kenshi` preset (default) | Effect available on top | Basis |
 | --- | --- | --- | --- |
 | Scene buffer | RGBA16F, 4x MSAA | 1, 2 or 8 samples | Kenshi: R11G11B10F, no FSAA |
-| Exposure | x1 (constant) | x1 | Kenshi: constant in practice, see above |
+| Exposure | Kenshi's auto exposure (game sky); x1 with `--simple-sky` | `--exposure` multiplier | Kenshi: 0.55 / adapted, band from CONSTANTS |
 | Curve | clamp at 1 | exponential shoulder above 0.8 (identity below) | Kenshi: none (clip) |
 | SSAO | off | on (12 taps, half resolution, from depth) | Kenshi: shipped, disabled |
 | Bloom | off | on (13-tap mip chain, threshold 1) | Kenshi: magnitude 0 |
