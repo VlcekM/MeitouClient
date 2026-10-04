@@ -36,7 +36,8 @@ public sealed class FcsRecord
 
     /// <summary>
     /// True if this record changes a record defined by an earlier file (fields not listed keep their values);
-    /// false if it defines the record (replacing any earlier definition).
+    /// false if it defines the record. (A second definition of an existing id is an error in the editor, which
+    /// still merges its fields into the existing record; what the game does is unknown.)
     /// </summary>
     public bool IsModified => (Flags & 1) != 0;
 

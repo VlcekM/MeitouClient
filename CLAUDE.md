@@ -28,6 +28,9 @@ drop-in replacement that runs original content and mods unchanged. Plan in [ROAD
 - Decompiled or disassembled output **never enters the repo**, and code is never copied or
   line-by-line translated from it. Keep it in the scratchpad / outside the working tree. Implement
   from the docs.
+- Exception: identifiers that are part of a file format (enum names and their numbers, field names,
+  magic values) are facts and may be transcribed, e.g. `FcsRecordType` from the editor's `itemType`.
+  Logic may not.
 - The mod editor is .NET: `ilspycmd -p -o <dir outside the repo> "<Kenshi>/forgotten construction set.exe"`
   (`dotnet tool install -g ilspycmd`). Its `GameData` class is the reference for the `.mod` format.
 

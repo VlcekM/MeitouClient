@@ -39,7 +39,8 @@ Record  records[recordCount]
   layouts); it rejects anything else. Our reader supports 16 and 17 only. Old mods are rare: since
   game version 0.92 mods are re-saved as 17.
 - FCS always writes type 17 with both bookkeeping sections. `Dialogue.mod` (9 bytes: save counter 1,
-  no merges) predates the delete section; `rebirth.mod` (save counter 9) has both, empty.
+  no merges, no delete section) was presumably written by an older editor (Observed from the byte
+  count); `rebirth.mod` (save counter 9) has both, empty.
 - FCS reads `mergedCount` entries but stops early if an entry's string length is > 256 (defensive
   quirk; not seen in data).
 - Merge / delete bookkeeping is used when one mod was merged into another in the editor: on load,
@@ -110,6 +111,8 @@ Files load in order (see [overview.md](overview.md#load-order)) into one table k
 - **Instances** merge per instance id: later files overwrite position/rotation/target and add states.
   An empty `target` removes the instance.
 - A record changing **type** between files is an error in FCS (`ChangedItemType`).
+- A **new** record whose id an earlier file already defines is an error in FCS (`ItemAlreadyDefined`),
+  but its fields are still merged into the existing record. What the game does is Unknown.
 - A modifying record whose id no earlier file defines is "missing" in FCS (error `ModifiedItemNotFound`);
   the editor can skip such records. What the game does with them is Unknown.
 
@@ -255,7 +258,8 @@ Leader AI Goals: AI_TASK (0, 24,0) "...val0 and val1 is start and finish time...
 ## Open questions
 
 - Does the game's own loader (`kenshi_x64.exe`) apply exactly the editor's merge rules? In particular:
-  what it does with modifying records whose base is missing, and whether it honours delete requests.
+  what it does with modifying records whose base is missing, with a second "new" definition of an
+  existing id, and whether it honours delete requests.
 - Mod load order in the game itself (vs. the editor), including Steam workshop folders.
 - Save games: probably the same record format with the GAMESTATE_* / *_STATE types; not checked.
 - Non-UTF-8 strings in third-party mods: currently rejected; decide on lossless handling once samples exist.
