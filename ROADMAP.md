@@ -2,7 +2,7 @@
 
 Goal: a drop-in replacement for `kenshi_x64.exe` that loads the original `data/`, `mods/` and
 saves unchanged. Compatibility is the constraint everything else bends around, so work goes from
-the data inward and rendering comes late.
+the data inward. The viewers came early because they are the quickest check that a reader is right.
 
 ## Ground rules
 
@@ -12,14 +12,17 @@ the data inward and rendering comes late.
 - **Clean-room readers for proprietary formats.** Ogre, MyGUI and ParticleUniverse are MIT, so
   porting their code/format logic is fine. Havok, PhysX and Wwise are proprietary: we write our
   own readers from observed file structure, never link their SDKs or redistribute their DLLs.
-- **Behaviour from observation.** Game logic is reimplemented from the FCS schema, the data, and
-  observed in-game behaviour; we don't copy code out of `kenshi_x64.exe`.
+- **Behaviour from facts.** Game logic is reimplemented from the FCS schema, the data, observed
+  in-game behaviour, and facts learned by decompiling the original binaries for interoperability
+  (formats, merge rules, formulas, constants). Decompiled output never enters the repo and code is
+  never copied or translated from it; the facts go into `docs/` in our own words (see CLAUDE.md).
 
 ## Original engine (from the install)
 
 Ogre 2.0 "Tindalos" (Direct3D 11 render system, Octree scene manager, Terrain plugin, MeshLodGenerator,
 Overlay), MyGUI, ParticleUniverse, SkyX, PhysX 2.x (`PhysXLoader64`, `NxCharacter`), Havok
-(animation / navmesh), Wwise (`.bnk`), OIS input, Steamworks.
+(navmesh; Behavior/Animation is linked but characters animate through Ogre, see
+[docs/animation.md](docs/animation.md)), Wwise (`.bnk`), OIS input, Steamworks.
 
 ## Format inventory
 
@@ -28,7 +31,8 @@ and how far each is analyzed. Detailed layouts live next to it in `docs/formats/
 
 ## Technology choices (defaults, open to change)
 
-- **Rendering:** Silk.NET (D3D11 first, matching the original HLSL; Vulkan/OpenGL later for Linux).
+- **Rendering:** Silk.NET. The viewers use OpenGL 3.3 with our own GLSL (Kenshi's HLSL is read for
+  facts only); D3D11 or Vulkan later if needed.
 - **Physics:** BepuPhysics2 (pure C#), tuned to match PhysX character/ragdoll behaviour.
 - **Audio:** own Wwise bank/WEM decoder → OpenAL Soft (Silk.NET).
 - **UI:** own renderer for MyGUI `.layout` / skins, so GUI mods keep working.
@@ -36,19 +40,36 @@ and how far each is analyzed. Detailed layouts live next to it in `docs/formats/
 
 ## Phases
 
-1. **Data layer** — FCS `.mod`/`.base` reader *and writer*, `fcs.def` schema, mod load order
-   (`mods.cfg`, `data/*.mod`, Steam workshop), record merging/overrides exactly as the original.
-   Round-trip tests against every base-game file. Evaluate OpenConstructionSet (existing C# FCS
-   library) as reference or dependency.
-2. **Ogre assets** — mesh/skeleton/material/shader readers, texture loading; a model viewer tool.
-3. **World** — terrain (`.raw`), zones, levels, buildings, foliage; a free-camera world viewer.
-4. **Havok** — tagfile reader, animation decompression, skeletal animation playback; navmesh tiles.
-5. **Simulation core** — game clock, characters, stats, inventory, factions, squads, AI packages /
-   tasks, dialogue (`Dialogue.mod`), combat, economy. Headless and deterministic, independent of
-   rendering.
-6. **Saves** — read and write original save games.
-7. **Presentation** — full renderer, MyGUI-compatible UI, audio, particles, physics/ragdolls.
-8. **Parity** — side-by-side comparison against the original, mod compatibility test suite.
+Status as of 2026-10-04. Details and open questions live in the linked docs.
+
+1. **Data layer** — *done.* FCS `.mod`/`.base` reader and writer (byte-identical round trip of every
+   base-game file), `fcs.def` types, load order (`mods.cfg`, `mods/`, Steam workshop) and record
+   merging as `kenshi_x64.exe` does it, which differs from the mod editor in places
+   ([fcs-mod.md](docs/formats/fcs-mod.md)). Open: derived `wall master` references; workshop
+   subscriptions are approximated by every downloaded item.
+2. **Ogre assets** — *done.* Mesh, skeleton, material/shader script and DDS/image readers;
+   resource lookup as Kenshi registers it; runtime materials from FCS records; `meitou-viewer`.
+   Characters ([characters.md](docs/characters.md)): body, head, hair, armour, weapons, `.phs`
+   attach points, `.bod2` appearance, body-shape bone scales, face poses, mesh LOD, blended
+   animation layers, and a seeded generator for loadout and random appearance. Open: clipping of
+   hidden body parts, muscle normal blend, stump meshes, the game's exact random sequence.
+3. **World** — *mostly done.* `fullmap.tif` heights, zone/level files, `features.dat`
+   ([terrain.md](docs/formats/terrain.md), [zones.md](docs/formats/zones.md)); `meitou-viewer --world`
+   with CDLOD terrain to the horizon textured by biome, water, sky and sun path, and buildings
+   assembled like the game (seeded part choice, town materials, doors, destroyed states). In
+   progress: detail streaming around the camera, infinite sea. To do: foliage (including the
+   visible mineable rocks), building LOD, scene reflections, global pathing data.
+4. **Havok** — *not started.* Tagfile (`.hkt`) reader; navmesh tiles
+   (`newland/land/navtiles`). Character animation does not need it (Ogre skeleton animations).
+5. **Simulation core** — *not started.* Game clock, characters, stats, inventory, factions, squads,
+   AI packages / tasks, dialogue (`Dialogue.mod`), combat, economy. Headless and deterministic,
+   independent of rendering. The character generator is its first piece.
+6. **Saves** — *not started.* Read and write original save games. Known so far: stat field names
+   from the save writer.
+7. **Presentation** — *partly.* An OpenGL renderer exists in the viewer. To do: game renderer
+   (shadows, effects), MyGUI-compatible UI, audio, particles, physics/ragdolls.
+8. **Parity** — *not started.* Side-by-side comparison against the original, mod compatibility
+   test suite.
 
 ## Open questions
 
