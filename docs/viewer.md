@@ -269,7 +269,7 @@ How it works (status as in [README.md](README.md)):
   parameters among the outer ring of the maps), so the last pixels do not stretch outwards, and the water counts as deep.
   It has colour from `watercolourmap.png`, flow from `flowmap.png`, the `water.png` normal map scrolled three
   times, and per-pixel biome parameters (`BiomeField` over `blendinfo.dat` + `blendmap.png`). Shallow water is
-  see-through near the camera, and it is opaque beyond 4000 units, as in the game. With reflections (default; `R` or `--no-reflections` toggles) it reflects the mirrored scene (`ReflectionPass`: sky, terrain, objects at 3000 units or nearer drawn about Y = 100 into a half-resolution RGBA16F texture with oblique near-plane clipping at the water; the Fresnel and normal-map distortion are the old shader's); without, it reflects the sky colour. The glint widens and dims with distance and is capped, so a far sea shows no blown-out disc.
+  see-through near the camera, and it is opaque beyond 4000 units, as in the game. With reflections (default; `R` or `--no-reflections` toggles) it reflects the mirrored scene (`ReflectionPass`: sky, terrain, objects at 3000 units or nearer drawn about Y = 100 into a half-resolution RGBA16F texture, drawn 4x multisampled and resolved (without it the mirrored shoreline showed stair steps, magnified by the normal-map distortion), with oblique near-plane clipping at the water; the Fresnel and normal-map distortion are the old shader's); without, it reflects the sky colour. The glint widens and dims with distance and is capped, so a far sea shows no blown-out disc.
 - **Sky and atmosphere** (`SkyRenderer`, `AtmosphereShaders`, `AtmosphereModel`, `SkyClock`; facts and settings in
   [formats/sky.md](formats/sky.md)): the sun follows the game's formula for the hour (latitude 54, sunrise 5, sunset 23). The
   sky is O'Neil's single scattering with SkyX's constants (Rayleigh, Mie, planet shadow, a little ozone), kept as a transmittance
@@ -446,7 +446,7 @@ only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. The viewer has no
 - **Effects** (option, key): SSAO (`--ssao`, F4): 12 taps, half resolution, from the depth of the near depth slice only (the far
   slice's depth is cleared before the near one is drawn, so nothing beyond about 20000 units is occluded; it also fades out from
   3000 to 10000 units), normals from depth differences, depth-aware blur, multiplies the HDR colour. Bloom (`--bloom`, F5): over-1
-  brightness only (threshold 1, soft knee), 13-tap downsample / tent upsample mip chain from half resolution, intensity 0.3. Tone map
+  brightness only (threshold 1, soft knee), 13-tap downsample / tent upsample mip chain from half resolution, intensity 0.3, added with a soft cap (b / (1 + 2b)) rather than a per-channel min, which had saturated the channels at different radii and drawn a tinted ring round the sun disc. Tone map
   (`--tonemap clamp|shoulder|aces`, F6): `shoulder` is the identity up to 0.8 on the brightest channel and then rolls off to 1 (the
   look of the scene is unchanged, the sun disc and speculars no longer clip); `aces` is Narkowicz's fit and visibly darker and
   more contrasty. Vignette (F8) and

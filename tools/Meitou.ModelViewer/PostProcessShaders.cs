@@ -199,7 +199,12 @@ static class PostProcessShaders
         {
             vec3 c = max(texture(uScene, vUv).rgb, 0.0) * uExposure;
             if (uUseAo != 0) c *= texture(uAo, vUv).r;
-            if (uUseBloom != 0) c += min(texture(uBloom, vUv).rgb * uBloomIntensity, vec3(0.5));
+            if (uUseBloom != 0)
+            {
+                // Soft cap instead of a per-channel min(): a hard cap saturates the channels at different radii, which shows as a tinted ring round the sun.
+                vec3 b = texture(uBloom, vUv).rgb * uBloomIntensity;
+                c += b / (1.0 + 2.0 * b);
+            }
             if (uTone == 1) c = shoulder(c);
             else if (uTone == 2) c = aces(c);
             c = clamp(c, 0.0, 1.0);

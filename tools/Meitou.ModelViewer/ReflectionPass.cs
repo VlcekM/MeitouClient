@@ -22,12 +22,16 @@ public sealed unsafe class ReflectionPass : IDisposable
     public const float Scale = 0.5f;
     /// <summary>The reflection covers this much more than the picture in each direction (as a factor of the field of view tangent).</summary>
     public const float Margin = 1.12f;
+    /// <summary>Samples per texel of the reflection (1 = off). Resolved into the plain texture the water samples.</summary>
+    public const int Samples = 4;
 
     readonly GL gl;
     readonly uint[] queries = new uint[4];   // two slots of (start, end) timestamps
     readonly bool[] pending = new bool[2];
     readonly WorldRenderOptions options = new();
     uint fbo, colour, depth;
+    uint msFbo, msColour, msDepth;   // multisampled twin the scene is drawn into, resolved into <colour>
+    int samples;
     int width, height, slot;
 
     public ReflectionPass(GL gl)
@@ -59,7 +63,7 @@ public sealed unsafe class ReflectionPass : IDisposable
     void Resize(int w, int h)
     {
         if (w == width && h == height && fbo != 0) return;
-        if (fbo != 0) { gl.DeleteFramebuffer(fbo); gl.DeleteTexture(colour); gl.DeleteRenderbuffer(depth); }
+        Free();
         (width, height) = (w, h);
         colour = gl.GenTexture();
         gl.BindTexture(TextureTarget.Texture2D, colour);
@@ -77,6 +81,30 @@ public sealed unsafe class ReflectionPass : IDisposable
         gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, RenderbufferTarget.Renderbuffer, depth);
         if (gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
             throw new InvalidOperationException("Reflection framebuffer incomplete.");
+
+        // The picture is drawn multisampled and resolved: the mirrored shoreline, fences and rooflines are hard edges, and
+        // without it each texel of the half-resolution image is a visible stair step that the wave distortion then smears.
+        gl.GetInteger(GLEnum.MaxSamples, out int maxSamples);
+        samples = Math.Min(Samples, maxSamples);
+        if (samples <= 1) { samples = 0; return; }
+        msColour = gl.GenRenderbuffer();
+        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, msColour);
+        gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, (uint)samples, InternalFormat.Rgba16f, (uint)w, (uint)h);
+        msDepth = gl.GenRenderbuffer();
+        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, msDepth);
+        gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, (uint)samples, InternalFormat.DepthComponent24, (uint)w, (uint)h);
+        msFbo = gl.GenFramebuffer();
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, msFbo);
+        gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, msColour);
+        gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, RenderbufferTarget.Renderbuffer, msDepth);
+        if (gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
+            throw new InvalidOperationException("Reflection multisampled framebuffer incomplete.");
+    }
+
+    void Free()
+    {
+        if (fbo != 0) { gl.DeleteFramebuffer(fbo); gl.DeleteTexture(colour); gl.DeleteRenderbuffer(depth); fbo = 0; }
+        if (msFbo != 0) { gl.DeleteFramebuffer(msFbo); gl.DeleteRenderbuffer(msColour); gl.DeleteRenderbuffer(msDepth); msFbo = 0; }
     }
 
     /// <summary>Collects finished GPU timings (<paramref name="wait"/>: block for them, for one-off measurements).</summary>
@@ -115,7 +143,7 @@ public sealed unsafe class ReflectionPass : IDisposable
         int* viewport = stackalloc int[4];
         gl.GetInteger(GetPName.Viewport, viewport);
         Resize(Math.Max((int)(fullWidth * Scale), 64), Math.Max((int)(fullHeight * Scale), 64));
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, msFbo != 0 ? msFbo : fbo);
         gl.Viewport(0, 0, (uint)width, (uint)height);
         int timed = -1;
         if (!pending[slot]) { timed = slot; gl.QueryCounter(queries[timed * 2], QueryCounterTarget.Timestamp); }
@@ -169,6 +197,12 @@ public sealed unsafe class ReflectionPass : IDisposable
         ViewProjection = mapped;   // x and y do not depend on the near plane
         Valid = !first;
 
+        if (msFbo != 0)
+        {
+            gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, msFbo);
+            gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, fbo);
+            gl.BlitFramebuffer(0, 0, width, height, 0, 0, width, height, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+        }
         gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, (uint)drawFbo);
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, (uint)readFbo);
         gl.Viewport(viewport[0], viewport[1], (uint)viewport[2], (uint)viewport[3]);
@@ -224,7 +258,7 @@ public sealed unsafe class ReflectionPass : IDisposable
 
     public void Dispose()
     {
-        if (fbo != 0) { gl.DeleteFramebuffer(fbo); gl.DeleteTexture(colour); gl.DeleteRenderbuffer(depth); }
+        Free();
         foreach (var q in queries) gl.DeleteQuery(q);
     }
 }
