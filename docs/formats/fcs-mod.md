@@ -1,11 +1,19 @@
 # FCS game data: `.base` / `.mod`
 
-**Verified 2026-10-04**: a probe parser following exactly this layout reads all four base-game files
-(`gamedata.base`, `Newwworld.mod`, `Dialogue.mod`, `rebirth.mod`) and stops exactly at the end of
-each file. The *meaning* of fields marked Unknown is still a guess.
+**Verified 2026-10-04**: `Meitou.Data.Fcs.FcsReader` follows exactly this layout, and `FcsWriter`
+writes all four base-game files (`gamedata.base`, `Newwworld.mod`, `Dialogue.mod`, `rebirth.mod`)
+back **byte-for-byte identical** (test `FcsRoundTripTests.Base_game_file_round_trips_byte_for_byte`).
+The *meaning* of fields marked Unknown is still a guess.
 
-All values little-endian. `string` = `int32 length` + `length` bytes (encoding **Unknown**; assume
-Windows-1252 until a non-ASCII sample says otherwise).
+Also Verified by that round-trip on the base files:
+- Bool values are always the byte 0 or 1.
+- No record repeats a property key within one list, or a reference category.
+- Dependency / reference lists are plain comma-joined names (no empty entries or spaces).
+
+All values little-endian. `string` = `int32 length` + `length` bytes, **UTF-8** (Verified on base
+files: 92 non-ASCII strings in Dialogue.mod and rebirth.mod, all valid UTF-8, round-trip exact;
+gamedata.base and Newwworld.mod are pure ASCII). Mods written by older tools could still contain
+other encodings; `meitou-tools fcs <file>` reports invalid UTF-8.
 
 ## File
 
@@ -81,10 +89,92 @@ The numeric `type` to name mapping isn't in `fcs.def` / `fcs_enums.def` (probabl
 exe). `fcs.def` has 114 `[SECTION]` schemas named after the types (`AI_PACKAGE`, `AI_TASK`,
 `DIALOGUE`, ...).
 
-- **Verified**: `19` = `DIALOGUE_LINE` (record names are `DIALOGUE_LINE<n>`).
-- Most common types: gamedata.base `19, 31, 29, 0, 18, 60, 84, 44, 1, 52`; Dialogue.mod `19, 31, 18`.
-- To do: derive the mapping from sample records and their field names; cross-check with
-  OpenConstructionSet (an existing C# FCS library).
+Every type number used in the four base files, with the total record count and the first record's
+name (from `meitou-tools fcs`). The **guess** column comes only from names and needs confirming
+against the field names in `fcs.def` (and against OpenConstructionSet, an existing C# FCS library).
+Only `19` = `DIALOGUE_LINE` is Verified (record names are `DIALOGUE_LINE<n>`); `31` = `DIALOG_ACTION`
+is very likely for the same reason.
+
+| Type | Records | Example name | Guess |
+| ---: | ---: | --- | --- |
+| 0 | 1148 | sign2- -clothes | BUILDING |
+| 1 | 988 | Mercenary heavy | CHARACTER |
+| 2 | 68 | Katana | WEAPON |
+| 3 | 257 | Mask 2 | ARMOUR |
+| 4 | 416 | Steel bars | ITEM |
+| 5 | 68 | bull walk | ANIMAL_ANIMATION |
+| 6 | 103 | Haircut10-oldman | ATTACHMENT / hair |
+| 7 | 99 | Garru | RACE |
+| 10 | 161 | Medics Guild | FACTION |
+| 13 | 436 | Bark | town / location? |
+| 16 | 11 | Head | body part? |
+| 17 | 60 | Cut left static | ANIMATION |
+| 18 | 2203 | Law enforcement defeats squad (arrest them) | DIALOGUE |
+| 19 | 23889 | DIALOGUE_LINE6071 | DIALOGUE_LINE (Verified) |
+| 21 | 275 | Heavy Building Foundations | RESEARCH |
+| 22 | 143 | get out of cage - escape | AI_TASK? |
+| 24 | 197 | idle_stand_relax | ANIMATION_EVENT? |
+| 25 | 62 | hire medic | STATS / service? |
+| 26 | 34 | bandit types | PERSONALITY? |
+| 27 | 3 | GLOBAL CONSTANTS | CONSTANTS |
+| 28 | 137 | desert | BIOMES |
+| 29 | 1464 | basic wall gate A | BUILDING_PART |
+| 31 | 21225 | DIALOG_ACTION4205 | DIALOG_ACTION |
+| 43 | 4 | hatches | |
+| 44 | 259 | signs3_material | MATERIAL_SPEC |
+| 45 | 11 | base buildings tiled | |
+| 46 | 28 | Small Backpack | CONTAINER |
+| 47 | 170 | mask3 | MATERIAL_SPECS_CLOTHING |
+| 49 | 187 | weapon vendor Outposts | VENDOR_LIST |
+| 50 | 49 | Edge Type 1 | MATERIAL_SPECS_WEAPON |
+| 51 | 18 | Truth Two | WEAPON_MANUFACTURER |
+| 52 | 1166 | Cannibal home guards | SQUAD_TEMPLATE |
+| 53 | 3 | Northern desert | ROAD? |
+| 55 | 70 | super black | COLOR_DATA |
+| 56 | 1 | grass1 | |
+| 59 | 330 | Grass Spikey | GRASS |
+| 60 | 945 | FOLIAGE_DUNE-Bouldersmall21 | FOLIAGE_MESH |
+| 61 | 42 | Basic Grass | |
+| 62 | 136 | armour chain | |
+| 63 | 3 | bar | |
+| 64 | 23 | Rock Bottom | |
+| 68 | 8 | BowlBirdsTEST | |
+| 69 | 329 | UpthrustRocks01 | |
+| 70 | 5 | Dust bandits | |
+| 71 | 11 | raid filler | |
+| 72 | 275 | Diplomat Mission (running) | AI_PACKAGE |
+| 73 | 385 | Npc Basic TOUGH | STATS? |
+| 74 | 11 | Turret double | |
+| 76 | 62 | Beak Thing | ANIMAL_CHARACTER |
+| 77 | 2 | UNIQUE bandit test | |
+| 78 | 4 | Ninja TEMPLATE | |
+| 80 | 77 | WEATHER | WEATHER |
+| 81 | 59 | SEASON | SEASON |
+| 82 | 126 | weather_volcano_smoke1 | EFFECT |
+| 83 | 30 | Food Ingridients | |
+| 84 | 317 | DANG | WORD_SWAPS? |
+| 86 | 20 | Beak Thing Egg | |
+| 87 | 4 | Packbeast lantern | |
+| 88 | 76 | white light | LIGHT |
+| 89 | 41 | HumanMale03 | HEAD |
+| 92 | 2 | Iron Rock | |
+| 93 | 295 | BASE- standard cannibal raid | |
+| 95 | 92 | The Desert | |
+| 96 | 10 | EFFECT_FOG_VOLUME | EFFECT_FOG_VOLUME |
+| 97 | 39 | Wheat Farm Type | FARM_DATA |
+| 98 | 18 | Crop_Base_part | FARM_PART |
+| 99 | 26 | None | |
+| 100 | 11 | Fishman | |
+| 101 | 1 | ARTIFACTS | |
+| 102 | 18 | Map of the Border Zone | MAP_ITEM |
+| 103 | 40 | no carpets | |
+| 104 | 12 | swamper | |
+| 105 | 18 | Attack | |
+| 107 | 11 | Ranger | |
+| 109 | 27 | Auto Mine | |
+| 110 | 155 | Player killed Phoenix | |
+| 111 | 48 | Human Left Arm Stump | LIMB_REPLACEMENT? |
+| 112 | 1 | base animations | |
 
 ## Schema: `fcs.def` (Observed)
 
@@ -108,5 +198,4 @@ Leader AI Goals: AI_TASK (0, 24,0) "...val0 and val1 is start and finish time...
 - `flags` semantics; how deleted records, fields and references are encoded.
 - Merge rules when several files touch one `stringId` (per field? reference lists replaced or appended?).
 - Format-17 header tail bytes; the `0x4C67BE` constant.
-- String encoding.
 - Whether save games use this record format.
