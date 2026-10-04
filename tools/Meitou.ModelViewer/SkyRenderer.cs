@@ -185,14 +185,14 @@ public sealed unsafe class SkyRenderer : IDisposable
 
     /// <summary>Physical atmosphere (default) or the old simple colour model.</summary>
     public bool Physical { get; set; } = true;
-    /// <summary>Aerial perspective: Kenshi's own haze (docs/formats/sky.md "Haze") or the physical integral (default).</summary>
-    public bool KenshiHaze { get; set; } = false;
-    /// <summary>Kenshi's far distance D (the game: "view distance" setting 5000 x 10); its haze ramps in between 0.8 D and 0.96 D.</summary>
-    public float HazeDistance { get; set; } = 50000; // WorldApp sets it to the far clip each frame, or to this:
-    /// <summary>A fixed D (`--haze-distance`) instead of the far clip.</summary>
-    public float? FixedHazeDistance { get; set; }
-    /// <summary>Where the haze starts and ends, as fractions of D. Unknown in the game (pFogParams y, z); these are the fractions it gives Ogre's own linear fog.</summary>
-    public const float HazeStart = 0.8f, HazeEnd = 0.96f;
+    /// <summary>Aerial perspective: Kenshi's own haze (default, docs/formats/sky.md "Haze") or the physical integral.</summary>
+    public bool KenshiHaze { get; set; } = true;
+    /// <summary>
+    /// Kenshi's far distance D (<c>view distance × 10</c>, 50000 with the install's setting); its haze ramps in between 0.06 D and
+    /// 0.6 D. Independent of the viewer's far clip: past it the game's own formula goes on (the colour reaches the sky's at
+    /// <see cref="Meitou.Data.World.KenshiHaze.DomeRadius"/>).
+    /// </summary>
+    public float HazeDistance { get; set; } = Meitou.Data.World.KenshiHaze.FarDistance(Meitou.Data.World.KenshiHaze.ViewDistanceSetting);
     /// <summary>The highest eye, in scale heights, the sky tables and the sun and sky light are computed for.</summary>
     public float MaxSkyAltitude { get; set; } = 0.9f;
     public AtmosphereSettings Settings { get; }
@@ -422,7 +422,16 @@ public sealed unsafe class SkyRenderer : IDisposable
         gl.Uniform3(U(program, "uAtmoFogColour"), fog.X, fog.Y, fog.Z);
         var hc = s.Colours.Horizon;
         gl.Uniform4(U(program, "uAtmoSimple"), hc.X, hc.Y, hc.Z, MathF.Max(s.FogDistance, 1));
-        gl.Uniform4(U(program, "uAtmoHaze"), KenshiHaze ? 1f : 0f, HazeDistance * HazeStart, HazeDistance * HazeEnd, w.FogEnabled && w.FogMax > 1 ? 1f / w.FogMax : 0f);
+        float hazeStart = HazeDistance * Meitou.Data.World.KenshiHaze.StartFraction;
+        float hazeEnd = MathF.Min(HazeDistance, HazeDistance * Meitou.Data.World.KenshiHaze.EndFraction);
+        // The weather fog is complete at a distance between `fog distance min` and `max` by the wind; the viewer has no wind and takes max.
+        gl.Uniform4(U(program, "uAtmoHaze"), KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, w.FogEnabled && w.FogMax > 1 ? 1f / w.FogMax : 0f);
+        // horizonClouds: the pull is the game's (cloud cover); its colour's inputs are Unknown, so a stand-in built the game's way
+        // from the viewer's sun light and horizon sky: saturate(sun · (1 − 0.3 (offset + 0.2)) + horizon · sun.g) · (1 − darkness).
+        float clouds = Math.Clamp(CloudCoverage ?? w.CloudDensity, 0, 1);
+        float offset = 1.4f * clouds - 0.8f, darkness = MathF.Pow(Math.Clamp(clouds - 0.5f, 0, 1), 0.3f);
+        var cloud = Vector3.Clamp(s.SunLight * (1 - 0.3f * (offset + 0.2f)) + s.Colours.Horizon * Math.Clamp(s.SunLight.Y, 0, 1), Vector3.Zero, Vector3.One) * (1 - darkness);
+        gl.Uniform4(U(program, "uAtmoHazeCloud"), cloud.X, cloud.Y, cloud.Z, Meitou.Data.World.KenshiHaze.CloudPull(clouds));
         gl.Uniform3(U(program, "uAtmoSunLight"), s.SunLight.X, s.SunLight.Y, s.SunLight.Z);
         gl.Uniform3(U(program, "uAtmoAmbient"), s.Ambient.X, s.Ambient.Y, s.Ambient.Z);
         var ag = s.Light.AmbientGround;

@@ -129,6 +129,7 @@ static class AtmosphereShaders
         uniform vec3 uAtmoFogColour;
         uniform vec4 uAtmoSimple;     // simple sky: fog colour, distance of complete fog
         uniform vec4 uAtmoHaze;       // Kenshi haze (docs/formats/sky.md "Haze"): x 1 when on, y start, z end of the atmosphere fog, w weather fog density (1 / distance)
+        uniform vec4 uAtmoHazeCloud;  // Kenshi haze: horizonClouds, rgb the cloud colour (a stand-in), a how far the haze is pulled to it
         uniform vec3 uAtmoSunLight;   // sunlight at the eye: transmittance × sun scale (linear); a surface facing the sun gets albedo × this
         uniform vec3 uAtmoAmbient;    // light from the sky above, display-referred
         uniform vec3 uAtmoAmbientGround;   // light bounced up from the ground
@@ -176,6 +177,49 @@ static class AtmosphereShaders
             return exp(-a0 / scale) * g;
         }
 
+        // Kenshi's haze colour (KenshiHaze in Meitou.Data, docs/formats/sky.md "Haze"): O'Neil's Rayleigh in-scattering from the
+        // fog's eye along its ray, 4 samples, with the game's SkyX settings; the point is mapped to SkyX units by the dome radius.
+        const float HAZE_INNER = {{F(SkyAtmosphere.InnerRadius)}};
+        const float HAZE_CAM_Y = {{F(KenshiHaze.CameraY)}};
+        const float HAZE_DOME = {{F(KenshiHaze.DomeRadius)}};
+        const float HAZE_SCALE = {{F(1 / SkyAtmosphere.Thickness)}};
+        const float HAZE_SCALE_DEPTH = {{F(SkyAtmosphere.ScaleDepth)}};
+        const float HAZE_SOSD = {{F(1 / SkyAtmosphere.ScaleHeight)}};
+        const vec3 HAZE_EXTINCTION = vec3({{F(KenshiHaze.Extinction.X)}}, {{F(KenshiHaze.Extinction.Y)}}, {{F(KenshiHaze.Extinction.Z)}});
+        float hazeScale(float c)
+        {
+            float x = 1.0 - c;
+            return HAZE_SCALE_DEPTH * exp(-0.00287 + x * (0.459 + x * (3.83 + x * (-6.80 + x * 5.25))));
+        }
+        vec3 hazeInScatter(vec3 ray, float len, vec3 sun)
+        {
+            vec3 start = vec3(0.0, HAZE_CAM_Y, 0.0);
+            float startOffset = exp(HAZE_SOSD * (HAZE_INNER - HAZE_CAM_Y)) * hazeScale(dot(ray, start) / HAZE_CAM_Y);
+            float step = len * 0.25;
+            vec3 sum = vec3(0.0);
+            for (int i = 0; i < 4; i++)
+            {
+                vec3 p = start + ray * (step * (float(i) + 0.5));
+                float h = length(p), density = exp(HAZE_SOSD * (HAZE_INNER - h));
+                float optical = startOffset + density * (hazeScale(dot(sun, p) / h) - hazeScale(dot(ray, p) / h));
+                sum += exp(-min(optical, 1e4) * HAZE_EXTINCTION) * (density * step * HAZE_SCALE);
+            }
+            return sum;
+        }
+        // The fog's ray to the point (offset = point - eye, world units): xyz direction, w length in SkyX units (at most 1).
+        vec4 hazeRay(vec3 offset)
+        {
+            vec3 p = offset / HAZE_DOME;
+            float y = p.y + HAZE_INNER;
+            y = mix(max(y, HAZE_INNER), y, clamp(dot(p.xz, p.xz), 0.0, 1.0));   // close points below the eye are lifted to its level
+            vec3 r = vec3(p.x, y - HAZE_CAM_Y, p.z);
+            float len = length(r);
+            if (len < 1e-9) return vec4(0.0, 0.0, 1.0, 0.0);
+            r /= len;
+            if (r.y < -0.3) r = vec3(0.0, -0.3, 0.953);
+            return vec4(r, min(len, 1.0));
+        }
+
         // Aerial perspective: the colour of a lit surface point seen from the eye through the air.
         vec3 atmoApply(vec3 colour, vec3 eye, vec3 position)
         {
@@ -190,10 +234,19 @@ static class AtmosphereShaders
             }
             if (uAtmoHaze.x > 0.5)
             {
-                // Kenshi's own haze (AtmosphereFogMaterial, post/fog.hlsl): the scatter colour towards the point is blended in by a
-                // linear ramp between two distances; the weather's fog (colour, density) by an ease-in-out curve over it.
+                // Kenshi's own haze (AtmosphereFogMaterial, post/fog.hlsl): the in-scattered colour from the eye to the point is
+                // blended in by a linear ramp between 0.06 D and 0.6 D; the weather's fog (colour, density) by an ease-in-out
+                // curve over it. The colour is the viewer's sky along the fog's ray times the game's ratio of the two integrals
+                // (to the point, to the dome), so it is the sky's own colour from the dome radius on.
                 float level = clamp((dist - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
-                vec3 rgb = atmoSkyEnc(d);
+                vec4 hr = hazeRay(ray);
+                vec3 sunDir = uAtmoSun.xyz;
+                vec3 part = hazeInScatter(hr.xyz, hr.w, sunDir), full = hazeInScatter(hr.xyz, 1.0, sunDir);
+                vec3 fraction = vec3(0.0);
+                for (int c = 0; c < 3; c++)
+                    if (full[c] > 1e-20) fraction[c] = clamp(part[c] / full[c], 0.0, 1.0);
+                vec3 rgb = atmoSkyEnc(hr.xyz) * fraction;
+                rgb = mix(rgb, uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
                 float alpha = level;
                 if (uAtmoFog.z > 0.5)
                 {

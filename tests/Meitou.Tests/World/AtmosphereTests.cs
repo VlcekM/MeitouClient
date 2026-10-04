@@ -57,6 +57,51 @@ public class AtmosphereTests
     }
 
     [Fact]
+    public void Kenshi_haze_ramps_between_the_games_fractions_of_its_far_distance()
+    {
+        // kenshi_x64.exe: D = view distance x 10, pFogParams = (D, 0.06 D, min(D, 0.6 D)); settings.cfg view distance 5000.
+        float d = KenshiHaze.FarDistance(KenshiHaze.ViewDistanceSetting);
+        Assert.Equal(50000, d);
+        Assert.Equal(3000, d * KenshiHaze.StartFraction, 1);
+        Assert.Equal(30000, d * KenshiHaze.EndFraction, 1);
+    }
+
+    [Fact]
+    public void Kenshi_haze_colour_grows_with_distance_to_the_skys_at_the_dome_radius()
+    {
+        var sun = Clock.SunDirection(13);
+        var dir = Vector3.Normalize(new Vector3(-sun.X, 0, -sun.Z));
+        var near = KenshiHaze.SkyFraction(dir * 5000, sun);
+        var mid = KenshiHaze.SkyFraction(dir * 30000, sun);
+        var dome = KenshiHaze.SkyFraction(dir * KenshiHaze.DomeRadius, sun);
+        var beyond = KenshiHaze.SkyFraction(dir * 300000, sun);
+        Assert.True(near.Y < mid.Y && mid.Y < dome.Y, "more in-scattered light the longer the path");
+        Assert.Equal(1, dome.Y, 3);
+        Assert.Equal(dome, beyond);   // the path is capped at one dome radius
+        Assert.True(mid.Y > 0.3f && mid.Y < 0.9f);
+        // Less extinction on the short path: relatively bluer than the full sky.
+        Assert.True(mid.Z > mid.X);
+        // Night: both integrals vanish; the fraction stays finite (0, a black haze like the game's).
+        var night = KenshiHaze.SkyFraction(dir * 30000, Clock.SunDirection(1));
+        Assert.True(float.IsFinite(night.X) && night.X >= 0 && night.X <= 1);
+    }
+
+    [Fact]
+    public void Kenshi_haze_lifts_close_points_below_the_eye_and_clamps_steep_rays()
+    {
+        // A point straight below: the ray is replaced by the fixed (0, -0.3, 0.953).
+        var (steep, _) = KenshiHaze.Ray(new Vector3(0, -20000, 1));
+        Assert.Equal(new Vector3(0, -0.3f, 0.953f), steep);
+        // A close point below the eye is lifted to the eye's level: the ray only dips by the fog eye's own height.
+        var (low, len) = KenshiHaze.Ray(new Vector3(7000, -2000, 0));
+        Assert.True(low.Y < 0 && low.Y > -0.06f);
+        Assert.Equal(0.1f, len, 2);
+        // No geometry clouds pull under a clear sky; full pull from cloud density ~0.93.
+        Assert.Equal(0, KenshiHaze.CloudPull(0));
+        Assert.Equal(1, KenshiHaze.CloudPull(1));
+    }
+
+    [Fact]
     public void Base_game_default_weather_is_clear()
     {
         var install = GameInstall.Locate();

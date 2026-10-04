@@ -70,8 +70,9 @@ public sealed class AtmosphereModel(AtmosphereSettings settings)
     public const float HuePreserved = 0.5f;
 
     /// <summary>
-    /// The viewer's grading of the sky and haze, not game data: with the game's Rayleigh wavelengths (0.57, 0.54, 0.44) red
-    /// scatters almost as much as green, so single scattering alone gives a violet sky. A slight shift towards green and a
+    /// The viewer's grading of the sky and haze, not game data: with the wavelengths (0.57, 0.54, 0.44) red scatters
+    /// almost as much as green, so single scattering alone gives a violet sky (the game itself sets the green wavelength to 0.48,
+    /// <see cref="SkyAtmosphere.GameWaveLength"/>, which this grading predates). A slight shift towards green and a
     /// partial desaturation, both scaled by how blue-dominated the colour is (so sunsets keep their orange), give the pale,
     /// hazy blue Kenshi shows.
     /// </summary>
