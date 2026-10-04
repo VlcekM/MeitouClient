@@ -1,3 +1,4 @@
+using System.Numerics;
 using Silk.NET.OpenGL;
 using StbTrueTypeSharp;
 
@@ -20,15 +21,19 @@ public sealed unsafe class DebugOverlay : IDisposable
         "/System/Library/Fonts/Menlo.ttc",
     ];
 
+    // Vertex: position (pixels), uv (u < 0: solid), colour.
     const string Vertex = """
         #version 330 core
         layout(location = 0) in vec2 aPos;
         layout(location = 1) in vec2 aUv;
+        layout(location = 2) in vec4 aColour;
         uniform vec2 uScreen;
         out vec2 vUv;
+        out vec4 vColour;
         void main()
         {
             vUv = aUv;
+            vColour = aColour;
             gl_Position = vec4(aPos / uScreen * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);
         }
         """;
@@ -36,22 +41,24 @@ public sealed unsafe class DebugOverlay : IDisposable
     const string Fragment = """
         #version 330 core
         in vec2 vUv;
+        in vec4 vColour;
         out vec4 fragColour;
         uniform sampler2D uAtlas;
-        uniform vec4 uColour;
-        uniform int uSolid;
         void main()
         {
-            float a = uSolid == 1 ? 1.0 : texture(uAtlas, vUv).r;
-            fragColour = vec4(uColour.rgb, uColour.a * a);
+            float a = vUv.x < 0.0 ? 1.0 : texture(uAtlas, vUv).r;
+            fragColour = vec4(vColour.rgb, vColour.a * a);
         }
         """;
 
     readonly GL gl;
     readonly uint program, vao, vbo, atlas;
     readonly StbTrueType.stbtt_bakedchar[] glyphs = new StbTrueType.stbtt_bakedchar[CharCount];
-    readonly List<float> text = [];
-    readonly float lineHeight, charWidth;
+    readonly List<float> batch = [];
+    const int Stride = 8;
+
+    public float LineHeight { get; }
+    public float CharWidth { get; }
 
     public bool Visible { get; set; }
 
@@ -63,8 +70,8 @@ public sealed unsafe class DebugOverlay : IDisposable
         fixed (byte* p = pixels)
         fixed (StbTrueType.stbtt_bakedchar* g = glyphs)
             StbTrueType.stbtt_BakeFontBitmap(f, 0, PixelHeight, p, AtlasSize, AtlasSize, FirstChar, CharCount, g);
-        lineHeight = PixelHeight * 1.25f;
-        charWidth = glyphs['M' - FirstChar].xadvance;
+        LineHeight = PixelHeight * 1.25f;
+        CharWidth = glyphs['M' - FirstChar].xadvance;
 
         atlas = gl.GenTexture();
         gl.BindTexture(TextureTarget.Texture2D, atlas);
@@ -82,9 +89,11 @@ public sealed unsafe class DebugOverlay : IDisposable
         gl.BindVertexArray(vao);
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
         gl.EnableVertexAttribArray(0);
-        gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 16, (void*)0);
+        gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, Stride * 4, (void*)0);
         gl.EnableVertexAttribArray(1);
-        gl.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, 16, (void*)8);
+        gl.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, Stride * 4, (void*)8);
+        gl.EnableVertexAttribArray(2);
+        gl.VertexAttribPointer(2, 4, VertexAttribPointerType.Float, false, Stride * 4, (void*)16);
         gl.BindVertexArray(0);
     }
 
@@ -125,23 +134,51 @@ public sealed unsafe class DebugOverlay : IDisposable
         return items;
     }
 
+    public static readonly Vector4 PanelColour = new(0.05f, 0.05f, 0.06f, 0.78f), TextColour = new(0.92f, 0.92f, 0.88f, 1f);
+
     /// <summary>Draws a titled panel listing <paramref name="lines"/> in as many columns as the height needs.</summary>
     public void Draw(int width, int height, string title, IReadOnlyList<string> lines)
     {
         if (!Visible || width <= 0 || height <= 0) return;
         const float margin = 16, pad = 12, gap = 28;
-        int rowsFit = Math.Max((int)((height - 2 * margin - 2 * pad - lineHeight * 1.5f) / lineHeight), 1);
+        int rowsFit = Math.Max((int)((height - 2 * margin - 2 * pad - LineHeight * 1.5f) / LineHeight), 1);
         int columns = (lines.Count + rowsFit - 1) / rowsFit;
         int rows = (lines.Count + columns - 1) / Math.Max(columns, 1);
-        float columnWidth = (lines.Count == 0 ? 0 : lines.Max(l => l.Length)) * charWidth;
-        float panelW = Math.Max(columns * columnWidth + (columns - 1) * gap, title.Length * charWidth) + 2 * pad;
-        float panelH = (rows + 1.5f) * lineHeight + 2 * pad;
+        float columnWidth = (lines.Count == 0 ? 0 : lines.Max(l => l.Length)) * CharWidth;
+        float panelW = Math.Max(columns * columnWidth + (columns - 1) * gap, title.Length * CharWidth) + 2 * pad;
+        float panelH = (rows + 1.5f) * LineHeight + 2 * pad;
 
-        text.Clear();
-        AddText(title, margin + pad, margin + pad);
+        Rect(margin, margin, margin + panelW, margin + panelH, PanelColour);
+        Text(title, margin + pad, margin + pad, TextColour);
         for (int i = 0; i < lines.Count; i++)
-            AddText(lines[i], margin + pad + i / rows * (columnWidth + gap), margin + pad + (i % rows + 1.5f) * lineHeight);
+            Text(lines[i], margin + pad + i / rows * (columnWidth + gap), margin + pad + (i % rows + 1.5f) * LineHeight, TextColour);
+        Flush(width, height);
+    }
 
+    /// <summary>Queues a solid rectangle (pixels, top-left origin) for the next <see cref="Flush"/>.</summary>
+    public void Rect(float x0, float y0, float x1, float y1, Vector4 colour) => Quad(x0, y0, x1, y1, -1, 0, -1, 0, colour);
+
+    /// <summary>Queues a line of text whose top is at <paramref name="top"/>; returns its width in pixels.</summary>
+    public float Text(string s, float x, float top, Vector4 colour)
+    {
+        float start = x, baseline = top + PixelHeight;
+        foreach (char c in s)
+        {
+            int index = c - FirstChar;
+            if (index < 0 || index >= CharCount) index = '?' - FirstChar;
+            var g = glyphs[index];
+            float x0 = MathF.Round(x + g.xoff), y0 = MathF.Round(baseline + g.yoff);
+            Quad(x0, y0, x0 + (g.x1 - g.x0), y0 + (g.y1 - g.y0),
+                g.x0 / (float)AtlasSize, g.y0 / (float)AtlasSize, g.x1 / (float)AtlasSize, g.y1 / (float)AtlasSize, colour);
+            x += g.xadvance;
+        }
+        return x - start;
+    }
+
+    /// <summary>Draws everything queued since the last flush over the bound framebuffer.</summary>
+    public void Flush(int width, int height)
+    {
+        if (batch.Count == 0 || width <= 0 || height <= 0) { batch.Clear(); return; }
         gl.Disable(EnableCap.DepthTest);
         gl.Disable(EnableCap.CullFace);
         gl.Enable(EnableCap.Blend);
@@ -154,48 +191,20 @@ public sealed unsafe class DebugOverlay : IDisposable
         gl.Uniform1(gl.GetUniformLocation(program, "uAtlas"), 0);
         gl.BindVertexArray(vao);
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-
-        // Panel background.
-        Span<float> panel = stackalloc float[24];
-        Quad(panel, margin, margin, margin + panelW, margin + panelH, 0, 0, 0, 0);
-        fixed (float* p = panel) gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)(panel.Length * 4), p, BufferUsageARB.StreamDraw);
-        gl.Uniform1(gl.GetUniformLocation(program, "uSolid"), 1);
-        gl.Uniform4(gl.GetUniformLocation(program, "uColour"), 0.05f, 0.05f, 0.06f, 0.78f);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 6);
-
-        // Text.
-        var data = text.ToArray();
+        var data = batch.ToArray();
         fixed (float* p = data) gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)(data.Length * 4), p, BufferUsageARB.StreamDraw);
-        gl.Uniform1(gl.GetUniformLocation(program, "uSolid"), 0);
-        gl.Uniform4(gl.GetUniformLocation(program, "uColour"), 0.92f, 0.92f, 0.88f, 1f);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, (uint)(data.Length / 4));
-
+        gl.DrawArrays(PrimitiveType.Triangles, 0, (uint)(data.Length / Stride));
         gl.BindVertexArray(0);
         gl.Disable(EnableCap.Blend);
         gl.Enable(EnableCap.DepthTest);
+        batch.Clear();
     }
 
-    void AddText(string s, float x, float top)
+    void Quad(float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1, Vector4 c)
     {
-        float baseline = top + PixelHeight;
-        Span<float> quad = stackalloc float[24];
-        foreach (char c in s)
-        {
-            int index = c - FirstChar;
-            if (index < 0 || index >= CharCount) index = '?' - FirstChar;
-            var g = glyphs[index];
-            float x0 = MathF.Round(x + g.xoff), y0 = MathF.Round(baseline + g.yoff);
-            Quad(quad, x0, y0, x0 + (g.x1 - g.x0), y0 + (g.y1 - g.y0),
-                g.x0 / (float)AtlasSize, g.y0 / (float)AtlasSize, g.x1 / (float)AtlasSize, g.y1 / (float)AtlasSize);
-            foreach (var v in quad) text.Add(v);
-            x += g.xadvance;
-        }
-    }
-
-    static void Quad(Span<float> o, float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1)
-    {
-        ReadOnlySpan<float> v = [x0, y0, u0, v0, x1, y0, u1, v0, x1, y1, u1, v1, x0, y0, u0, v0, x1, y1, u1, v1, x0, y1, u0, v1];
-        v.CopyTo(o);
+        void V(float x, float y, float u, float v) { batch.Add(x); batch.Add(y); batch.Add(u); batch.Add(v); batch.Add(c.X); batch.Add(c.Y); batch.Add(c.Z); batch.Add(c.W); }
+        V(x0, y0, u0, v0); V(x1, y0, u1, v0); V(x1, y1, u1, v1);
+        V(x0, y0, u0, v0); V(x1, y1, u1, v1); V(x0, y1, u0, v1);
     }
 
     public void Dispose()

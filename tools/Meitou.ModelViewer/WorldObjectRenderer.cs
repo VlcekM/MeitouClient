@@ -103,6 +103,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// </summary>
     public float ObjectDistance { get; set; } = 12000;
 
+    /// <summary>Ogre's camera LOD bias as a distance factor: the LOD value is multiplied by it, so above 1 coarser levels come sooner, below 1 later.</summary>
+    public float LodBias { get; set; } = 1;
+
     /// <summary>Distant towns and buildings' distant meshes are drawn up to this distance (the game: its <c>distant town range</c> in zones).</summary>
     public float DistantRange { get; set; } = ObjectRanges.MaxDistantTownRangeZones * WorldLayout.ZoneSize;
 
@@ -269,7 +272,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                     if (inst.TerrainMode && options.Textures)
                     {
                         // The terrain shader's path: one draw each, no fading, the level the game would pick.
-                        int level = MeshLod.Select(gpu.Distances, value);
+                        int level = MeshLod.Select(gpu.Distances, value * LodBias);
                         var g = gpu.Manual[level] ?? gpu;
                         int lv = gpu.Manual[level] is null ? level : 0;
                         foreach (var gp in g.Parts)
@@ -348,7 +351,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>Adds an instance at its LOD level: two batches while blending levels, the upper level taking [0, t·w) of the dither range and the lower [t·w, w).</summary>
     void Emit(ObjectStreamer.Instance inst, GpuObjectMesh gpu, float value, float weight)
     {
-        var blend = MeshLod.Blend(gpu.Distances, value);
+        var blend = MeshLod.Blend(gpu.Distances, value * LodBias);
         var m = inst.Transform;
         if (!blend.IsBlending)
         {

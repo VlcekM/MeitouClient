@@ -73,7 +73,7 @@ sealed class WorldOptions
           --tonemap <clamp|shoulder|aces>  --exposure <x>  --bloom-intensity <x>  --bloom-threshold <x>  --ssao-radius <units>  --ssao-strength <x>
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
-          G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, P save screenshot, ? key list, Esc quit.
+          G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, P save screenshot, ? key list, Tab settings sliders, Esc quit.
           F1 post off, F2 kenshi; F4 SSAO, F5 bloom, F6 tone map, F8 vignette, F9 grading, M MSAA, - / = exposure.
         """;
 
@@ -351,6 +351,27 @@ static class WorldApp
     }
 
     /// <summary>Draws a frame: the sky, then the far depth slice (terrain, water), then the near one (terrain, objects, water).</summary>
+    // The Tab panel: draw distances and LOD.
+    static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r)
+    {
+        var sliders = new List<Slider>();
+        if (g.Objects is { } objects)
+        {
+            sliders.Add(new Slider("Object draw distance", 1000, 40000, () => objects.ObjectDistance, v => objects.ObjectDistance = v, "0", Logarithmic: true));
+            sliders.Add(new Slider("Distant towns (zones)", 0, ObjectRanges.MaxDistantTownRangeZones,
+                () => objects.DistantRange / WorldLayout.ZoneSize, v => objects.DistantRange = MathF.Round(v) * WorldLayout.ZoneSize, "0"));
+            sliders.Add(new Slider("Object LOD distance x", 0.25f, 4, () => 1 / objects.LodBias, v => objects.LodBias = 1 / v, "0.00", Logarithmic: true));
+        }
+        if (g.Foliage is { } foliage)
+        {
+            sliders.Add(new Slider("Foliage draw distance x", 0.25f, 4, () => foliage.RangeSetting, v => foliage.RangeSetting = v, "0.00", Logarithmic: true));
+            sliders.Add(new Slider("Grass draw distance x", 0.25f, 4, () => foliage.GrassRangeSetting, v => foliage.GrassRangeSetting = v, "0.00", Logarithmic: true));
+            sliders.Add(new Slider("Grass density x", 0.1f, 2, () => foliage.GrassDensitySetting, v => foliage.GrassDensitySetting = v, "0.00"));
+        }
+        sliders.Add(new Slider("Terrain LOD distance", 2, 16, () => r.LodDistance, v => r.LodDistance = v, "0.0"));
+        return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders);
+    }
+
     static void Draw(GL gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time, float fogDistance)
     {
         // Everything is drawn into the post-processing chain's HDR framebuffer (before the reflection pass, which restores whatever is bound).
@@ -512,6 +533,9 @@ static class WorldApp
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
             keysOverlay.Visible = true;
             keysOverlay.Draw(w, h, "Keys   (? hides this)", DebugOverlay.KeyItems(WorldOptions.Usage));
+            var settings = CreateSettingsPanel(keysOverlay, gpu, render);
+            settings.Visible = true;
+            settings.Draw(w, h);
             keysOverlay.Dispose();
         }
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, fbo);
@@ -541,6 +565,7 @@ static class WorldApp
         Vector2? lastMouse = null;
         MouseButton? dragging = null;
         DebugOverlay? overlay = null;
+        SettingsPanel? panel = null;
         bool keysToggleRequested = false;
         var keyItems = DebugOverlay.KeyItems(WorldOptions.Usage);
 
@@ -552,20 +577,28 @@ static class WorldApp
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the ? key list is unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
+            if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render);
             gl.Enable(EnableCap.Multisample);
             var input = window.CreateInput();
             keyboard = input.Keyboards.FirstOrDefault();
             foreach (var kb in input.Keyboards) kb.KeyDown += (_, key, _) => OnKey(key);
-            // '?' by character, so it works on any keyboard layout.
             // "?" by character (any keyboard layout) or as Shift+/ (US position); both can arrive for one press, so
             // they only request the toggle and the next update applies it once.
             foreach (var kb in input.Keyboards) kb.KeyChar += (_, c) => { if (c == '?') keysToggleRequested = true; };
             foreach (var mouse in input.Mice)
             {
-                mouse.MouseDown += (_, b) => { dragging = b; lastMouse = null; };
-                mouse.MouseUp += (_, _) => dragging = null;
+                // Window to framebuffer pixels (they differ with display scaling); the panel is laid out in the latter.
+                Vector2 Pixels(Vector2 p) => p * new Vector2(window.FramebufferSize.X / (float)Math.Max(window.Size.X, 1), window.FramebufferSize.Y / (float)Math.Max(window.Size.Y, 1));
+                mouse.MouseDown += (m, b) =>
+                {
+                    if (b == MouseButton.Left && panel?.MouseDown(Pixels(m.Position)) == true) return;
+                    if (panel?.Contains(Pixels(m.Position)) == true) return;
+                    dragging = b; lastMouse = null;
+                };
+                mouse.MouseUp += (_, _) => { panel?.MouseUp(); dragging = null; };
                 mouse.MouseMove += (_, p) =>
                 {
+                    if (panel?.MouseMove(Pixels(p)) == true) return;
                     if (dragging is { } b && lastMouse is { } last)
                     {
                         var d = p - last;
@@ -609,6 +642,7 @@ static class WorldApp
                 "M" => o.Post.Msaa <= 1 ? "off" : $"{o.Post.Msaa}x",
                 "-" => $"{o.Post.Exposure:0.00}",
                 "?" => "on",
+                "Tab" => panel is { Visible: true } ? "on" : "off",
                 _ => null,
             };
         }
@@ -645,6 +679,7 @@ static class WorldApp
                         $"--at {camera.Target.X:0},{camera.Target.Z:0} --yaw {camera.Yaw * 180 / MathF.PI:0} --pitch {camera.Pitch * 180 / MathF.PI:0} --distance {camera.Distance:0}");
                     break;
                 case Key.P: screenshotRequested = true; break;
+                case Key.Tab when panel is not null: panel.Visible = !panel.Visible; break;
                 case Key.Slash when keyboard is not null && (keyboard.IsKeyPressed(Key.ShiftLeft) || keyboard.IsKeyPressed(Key.ShiftRight)): keysToggleRequested = true; break;
             }
         }
@@ -749,6 +784,7 @@ static class WorldApp
                 var lines = keyItems.Select(item => KeyState(item.Split(' ')[0]) is { } state ? item.PadRight(width) + state : item).ToList();
                 overlay.Draw(size.X, size.Y, "Keys   (? hides this)", lines);
             }
+            panel?.Draw(size.X, size.Y);
         };
         window.Closing += () => { overlay?.Dispose(); gpu?.Dispose(); };
         window.Run();
