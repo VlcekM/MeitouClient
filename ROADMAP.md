@@ -23,26 +23,8 @@ Overlay), MyGUI, ParticleUniverse, SkyX, PhysX 2.x (`PhysXLoader64`, `NxCharacte
 
 ## Format inventory
 
-Counts are files under `data/` in the base game. "Verified" means the header was actually
-inspected; everything else still needs analysis.
-
-| Format | Count | Origin | Status |
-| --- | ---: | --- | --- |
-| `.mod`, `.base` | 4 | Kenshi FCS game data | Header seen (version int, dependencies list). Schema in `fcs.def` / `fcs_enums.def` |
-| `.mesh` | 3277 | Ogre | Verified `MeshSerializer_v1.100` |
-| `.skeleton` | 365 | Ogre | Verified `Serializer_v1.80` |
-| `.material`, `.program`, `.compositor`, `.hlsl`, `.vert`, `.frag` | ~270 | Ogre scripts / shaders | Text, not analyzed |
-| `.hkt` | 3995 | Havok | Verified binary tagfile, `hk_2014.2.0-r1` (animations, navmesh tiles) |
-| `.dds`, `.png`, `.tga` | ~3900 | Textures | Standard |
-| `.zone` | 701 | Kenshi world zones | Binary, not analyzed |
-| `.level`, `.path` | — | Kenshi level / global pathing | Binary, not analyzed |
-| `.raw` | 256 | Terrain heightmaps | Not analyzed |
-| `.xml` | 1158 | Mixed (GUI, foliage, config) | Not analyzed |
-| `.bin` | 857 | Unknown | Not analyzed |
-| `.layout` | 53 | MyGUI | XML, not analyzed |
-| `.pu` | 93 | ParticleUniverse | Text scripts, not analyzed |
-| `.bnk` | 24 | Wwise sound banks | Not analyzed |
-| `.phs`, `.bod2`, `.body`, `.PxProj` | ~200 | Physics / ragdoll | Not analyzed |
+See [docs/formats/overview.md](docs/formats/overview.md) for every format found in the install
+and how far each is analyzed. Detailed layouts live next to it in `docs/formats/`.
 
 ## Technology choices (defaults, open to change)
 
