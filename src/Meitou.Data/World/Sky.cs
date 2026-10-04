@@ -45,8 +45,11 @@ public sealed record SkyClock(float LatitudeDegrees, float Sunrise, float Sunset
 }
 
 /// <summary>
-/// The SkyX atmosphere settings the game creates its sky with (Verified, kenshi_x64.exe sky setup). Kept as facts;
-/// the viewer's sky is a simpler model of its own.
+/// The SkyX atmosphere settings the game creates its sky with (Verified, kenshi_x64.exe sky setup), and the numbers
+/// SkyX's shaders derive from them (Verified against <c>data/materials/SkyX</c>: <c>uScale = 1 / (outer - inner)</c>,
+/// <c>uScaleDepth = (outer - inner) / 2</c>, <c>uScaleOverScaleDepth = uScale / uScaleDepth</c>, the camera at
+/// <c>inner + heightPosition · (outer - inner)</c>). The model itself is O'Neil's single scattering
+/// (<see cref="AtmosphereModel"/>).
 /// </summary>
 public static class SkyAtmosphere
 {
@@ -60,4 +63,21 @@ public static class SkyAtmosphere
     public const float PhaseG = -0.991f;
     public const float Exposure = 0.48f;
     public const int Samples = 4;
+
+    /// <summary>Atmosphere thickness in SkyX units.</summary>
+    public const float Thickness = OuterRadius - InnerRadius;
+    /// <summary>SkyX's <c>uScaleDepth</c>: half the thickness.</summary>
+    public const float ScaleDepth = Thickness / 2;
+    /// <summary>Density scale height in SkyX units: <c>1 / uScaleOverScaleDepth = thickness² / 2</c>.</summary>
+    public const float ScaleHeight = Thickness * Thickness / 2;
+    /// <summary>Planet radius in scale heights.</summary>
+    public const float PlanetRadius = InnerRadius / ScaleHeight;
+    /// <summary>Atmosphere top radius in scale heights.</summary>
+    public const float TopRadius = OuterRadius / ScaleHeight;
+    /// <summary><c>1 / wavelength⁴</c> per channel (SkyX's <c>uInvWaveLength</c>).</summary>
+    public static Vector3 InverseWaveLength4 => new(1 / MathF.Pow(WaveLength.X, 4), 1 / MathF.Pow(WaveLength.Y, 4), 1 / MathF.Pow(WaveLength.Z, 4));
+    /// <summary>Rayleigh optical depth of a vertical ray from sea level to space, per channel (<c>Kr · 4π · invλ⁴ · scaleDepth</c>).</summary>
+    public static Vector3 RayleighZenithDepth => InverseWaveLength4 * (RayleighMultiplier * 4 * MathF.PI * ScaleDepth);
+    /// <summary>Mie optical depth of a vertical ray (<c>Km · 4π · scaleDepth</c>), before our turbidity factor.</summary>
+    public const float MieZenithDepth = MieMultiplier * 4 * MathF.PI * ScaleDepth;
 }

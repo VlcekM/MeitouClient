@@ -43,6 +43,7 @@ Used as packages (not copied into this repository); each is distributed under it
 | StbImageSharp 2.30.16 | `Meitou.Data` (PNG/TGA/JPG/BMP textures) | Unlicense OR MIT |
 | Silk.NET.Windowing, .OpenGL, .Input 2.23.0 (and their Silk.NET dependencies: Core, Maths, GLFW, Input/Windowing Common and Glfw) | `tools/Meitou.ModelViewer` | MIT |
 | Ultz.Native.GLFW 3.4.0 (ships `glfw3.dll`) | `tools/Meitou.ModelViewer`, via Silk.NET | Zlib |
+| StbTrueTypeSharp 1.26.12 | `tools/Meitou.ModelViewer` (key-list overlay text, from a system monospace font; no font is shipped) | Public domain |
 
 The DDS reader and decoder (`src/Meitou.Data/Textures/`) are written from Microsoft's public DDS and
 block-compression documentation; no code is taken from other implementations.

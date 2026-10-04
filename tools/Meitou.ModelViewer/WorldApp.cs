@@ -26,9 +26,15 @@ sealed class WorldOptions
     public int LayerSize = 512;
     public int Debug;
     public float ObjectDistance = 12000;
+    public float DistantZones = ObjectRanges.MaxDistantTownRangeZones;
+    public bool NoDistant;
+    public bool NoFoliage;
     public float Hour = 13;
     public float ViewDistance = 450000, FogDistance = 250000, MaterialDistance = 30000;
-    public bool NoWater, NoStream;
+    public bool NoWater, NoStream, NoReflections, SimpleSky, ShowKeys;
+    public string? Weather;
+    public float? Clouds;
+    public PostOptions Post = PostOptions.Create("kenshi");
     public double? CameraX, CameraZ, FlyToX, FlyToZ;
 
     public const string Usage = """
@@ -43,21 +49,32 @@ sealed class WorldOptions
           --screenshot <out.png> --size <W>x<H>          render offscreen to a PNG and exit
           --no-textures            height-tinted terrain without biome textures (faster start)
           --no-objects             skip buildings and map features
-          --object-distance <u>    draw placed objects up to this distance (default 12000)
+          --no-foliage             no trees, bushes, rocks or grass (F toggles)
+          --object-distance <u>    draw placed objects at full detail up to this distance (default 12000)
+          --distant-range <zones>  distant towns (and buildings' distant meshes) up to this many zones (default 10, the game's setting maximum; its default is 6)
+          --no-distant             no distant towns: objects beyond --object-distance are simply not drawn
           --layer-size <n>         terrain layer texture size (default 512)
           --debug <n>              1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass)
           --time <hour>            time of day for the sun (default 13; sunrise and sunset from the CONSTANTS record)
           --no-water               leave out the water
+          --no-reflections         the water reflects only the sky colour, not the mirrored scene (R toggles)
+          --simple-sky             the old colour-model sky and squared-distance fog instead of the atmosphere (B toggles)
+          --weather <name>         a WEATHER record's sky colour, fog and clouds (default "Default": clear, no fog, no clouds)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
+          --show-keys              start with the key list overlay open (toggle with ?)
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --view-distance <u>      furthest terrain drawn (default 450000: the whole world)
           --fog <u>                distance where the haze is complete (default 250000)
           --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
           --wireframe --info
+          --post <kenshi|off>   post-processing preset (default kenshi), before the options below: HDR scene, SSAO, bloom, tone map, FXAA
+          --ssao / --no-ssao, --bloom / --no-bloom, --fxaa / --no-fxaa, --vignette, --grade, --dither (or --no-...)   --msaa <1|2|4|8>
+          --tonemap <clamp|shoulder|aces>  --exposure <x>  --bloom-intensity <x>  --bloom-threshold <x>  --ssao-radius <units>  --ssao-strength <x>
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
-          T textures, N normal maps, O objects, X wireframe, V debug view,
-          G water, , / . time of day -/+ 1 hour, H print camera, P save screenshot, Esc quit.
+          T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
+          G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, P save screenshot, ? key list, Esc quit.
+          F1 post off, F2 kenshi; F4 SSAO, F5 bloom, F6 tone map, F7 FXAA, F8 vignette, F9 grading, M MSAA, - / = exposure.
         """;
 
     public static WorldOptions? Parse(string[] args)
@@ -93,14 +110,23 @@ sealed class WorldOptions
                     break;
                 case "--no-textures": o.NoTextures = true; break;
                 case "--no-objects": o.NoObjects = true; break;
+                case "--no-foliage": o.NoFoliage = true; break;
                 case "--object-distance": o.ObjectDistance = F(); break;
+                case "--distant-range": o.DistantZones = F(); break;
+                case "--no-distant": o.NoDistant = true; break;
                 case "--layer-size": o.LayerSize = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--debug": o.Debug = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--wireframe": o.Wireframe = true; break;
                 case "--info": o.Info = true; break;
                 case "--time": o.Hour = F(); break;
                 case "--no-water": o.NoWater = true; break;
+                case "--no-reflections": o.NoReflections = true; break;
+                case "--simple-sky": o.SimpleSky = true; break;
+                case "--weather": o.Weather = Next(); break;
+                case "--clouds": o.Clouds = F(); break;
                 case "--no-stream": o.NoStream = true; break;
+                case "--show-keys": o.ShowKeys = true; break;
+                case var post when o.Post.TryParse(post, Next): break;
                 case "--camera-at": (o.CameraX, o.CameraZ) = Pair(); break;
                 case "--fly-to": (o.FlyToX, o.FlyToZ) = Pair(); break;
                 case "--view-distance": o.ViewDistance = F(); break;
@@ -235,7 +261,7 @@ static class WorldApp
             Title = "Meitou world viewer",
             IsVisible = visible,
             API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(3, 3)),
-            Samples = visible ? 4 : 0,
+            Samples = 0, // the scene is multisampled in PostProcess's own framebuffer
             VSync = true,
             PreferredDepthBufferBits = 24,
         });
@@ -253,7 +279,7 @@ static class WorldApp
             MinViewDistance = o.ViewDistance,
             SplitDistance = Math.Max(20000, o.ObjectDistance * 1.1f),
         };
-        var render = new WorldRenderOptions { Textures = !o.NoTextures, Objects = !o.NoObjects, Water = !o.NoWater, Wireframe = o.Wireframe ? 1 : 0, Debug = o.Debug, MaterialDistance = o.MaterialDistance };
+        var render = new WorldRenderOptions { Textures = !o.NoTextures, Objects = !o.NoObjects, Water = !o.NoWater, Reflections = !o.NoReflections, Wireframe = o.Wireframe ? 1 : 0, Debug = o.Debug, MaterialDistance = o.MaterialDistance };
         return (camera, render);
     }
 
@@ -262,15 +288,21 @@ static class WorldApp
         public required TerrainRenderer Terrain;
         public required SkyRenderer Sky;
         public WaterRenderer? Water;
+        public ReflectionPass? Reflection;
+        public PostProcess? Post;
         public WorldObjectRenderer? Objects;
+        public FoliageRenderer? Foliage;
         public TerrainStreamer? Streamer;
         /// <summary>With <c>--no-stream</c>: where the streamer is kept, instead of at the eye.</summary>
         public Vector3? Anchor;
         public void Dispose()
         {
             Streamer?.Dispose();
+            Foliage?.Dispose();
             Objects?.Dispose();
             Water?.Dispose();
+            Reflection?.Dispose();
+            Post?.Dispose();
             Sky.Dispose();
             Terrain.Dispose();
         }
@@ -289,20 +321,31 @@ static class WorldApp
             Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {o.LayerSize}² ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
-        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl) };
+        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds }, Post = new PostProcess(gl, o.Post) };
+        if (scene.Database is { } skyDb)
+        {
+            gpu.Sky.NightDarkness = SkyWeather.NightDarkness(skyDb);
+            gpu.Sky.Weather = SkyWeather.Find(skyDb, o.Weather) ?? throw new ArgumentException($"no weather named '{o.Weather}'; known: {string.Join(", ", SkyWeather.Names(skyDb).Distinct().Take(12))} ...");
+        }
         gpu.Streamer = new TerrainStreamer(install, terrain, textures, scene.Window.Step) { MaterialDistance = o.MaterialDistance };
         if (o.NoStream) gpu.Anchor = scene.Focus;
         if (!o.NoWater && scene.Database is not null)
         {
             var messages = new List<string>();
             gpu.Water = WaterRenderer.Create(gl, install, scene.Database, assets, gpu.Sky, messages);
+            gpu.Reflection = new ReflectionPass(gl);
             foreach (var m in messages) Console.WriteLine($"warning   {m}");
             Console.WriteLine($"water     at height {WorldWater.Height} ({watch.ElapsedMilliseconds} ms)");
         }
         if (scene.Objects is not null)
         {
-            gpu.Objects = new WorldObjectRenderer(gl, assets, scene.Objects) { ObjectDistance = o.ObjectDistance, LoadBudget = interactive ? 8 : 0 };
+            gpu.Objects = new WorldObjectRenderer(gl, assets, scene.Objects) { ObjectDistance = o.ObjectDistance, DistantRange = o.DistantZones * WorldLayout.ZoneSize, NoDistant = o.NoDistant, LoadBudget = interactive ? 8 : 0 };
             Console.WriteLine($"objects   GPU ready ({watch.ElapsedMilliseconds} ms)");
+        }
+        if (!o.NoFoliage && scene.Database is not null)
+        {
+            gpu.Foliage = new FoliageRenderer(gl, install, scene.Database, scene.Objects?.Levels ?? WorldLevelData.Load(install), assets);
+            Console.WriteLine($"foliage   catalog and shaders ready ({gpu.Foliage.LoadMs:0} ms)");
         }
         return gpu;
     }
@@ -310,17 +353,33 @@ static class WorldApp
     /// <summary>Draws a frame: the sky, then the far depth slice (terrain, water), then the near one (terrain, objects, water).</summary>
     static void Draw(GL gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time, float fogDistance)
     {
+        // Everything is drawn into the post-processing chain's HDR framebuffer (before the reflection pass, which restores whatever is bound).
+        gpu.Post?.Begin(width, height);
         var eye = camera.Eye;
         gpu.Streamer?.Update(gpu.Anchor ?? eye);
+        gpu.Objects?.Update(gpu.Anchor ?? eye);
+        gpu.Foliage?.Update(gpu.Anchor ?? eye);
         float floor = gpu.Terrain.HeightAt(eye.X, eye.Z);
         if (render.Water) floor = Math.Max(floor, WorldWater.Height);
         camera.EyeClearance = Math.Max(eye.Y - floor, 1);
-        var colours = SkyColours.For(scene.Clock.SunDirection(hour));
-        // Thinner air higher up: the haze takes longer to close in the higher the eye.
-        var light = colours.Lighting(fogDistance + 3 * Math.Max(eye.Y, 0));
+        // The atmosphere (SkyRenderer): sky tables, sun and ambient light for this sun and eye height. Thinner air higher up: the
+        // haze takes longer to close in the higher the eye.
+        var (colours, light) = gpu.Sky.Prepare(scene.Clock.SunDirection(hour), eye.Y, fogDistance + 3 * Math.Max(eye.Y, 0));
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
+        // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
+        bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is not null;
+        if (reflecting)
+            gpu.Reflection!.Render(camera, width, height, gpu.Sky, colours, light, gpu.Terrain, render, gpu.Objects is null ? null : (vp, e, frustum) =>
+            {
+                var objects = gpu.Objects;
+                float distance = objects.ObjectDistance;
+                objects.ObjectDistance = Math.Min(distance, gpu.Reflection.ObjectDistance);
+                objects.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+                objects.ObjectDistance = distance;
+                gpu.Foliage?.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, grass: false);
+            });
         gl.Viewport(0, 0, (uint)width, (uint)height);
         gl.ClearColor(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1);
         gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
@@ -339,12 +398,15 @@ static class WorldApp
             if (!first) gl.Clear(ClearBufferMask.DepthBufferBit);
             first = false;
             bool nearSlice = near <= camera.Near;
+            if (nearSlice) gpu.Post?.SetNearSlice(near, far, camera.FieldOfView, aspect);
             var viewProjection = view * camera.Projection(aspect, near, far);
             var frustum = WorldCamera.FrustumPlanes(viewProjection);
             gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
-            if (nearSlice && render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
-            if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, gpu.Terrain, time, camera.ViewDistance * 1.5f);
+            if (render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+            if (nearSlice) gpu.Foliage?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+            if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, gpu.Terrain, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
         }
+        gpu.Post?.End(); // resolve, SSAO, bloom, tone map, FXAA into gpu.Post.Target
     }
 
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
@@ -360,22 +422,33 @@ static class WorldApp
             streamer.Settle(gpu.Anchor ?? camera.Eye);
             Console.WriteLine($"streamed  {streamer.Describe()} ({streamWatch.ElapsedMilliseconds} ms)");
         }
+        if (gpu.Objects is { } objectRenderer)
+        {
+            var objectWatch = Stopwatch.StartNew();
+            objectRenderer.Settle(gpu.Anchor ?? camera.Eye);
+            Console.WriteLine($"objects   {objectRenderer.Describe()} ({objectWatch.ElapsedMilliseconds} ms)");
+        }
+        if (gpu.Foliage is { } foliageRenderer)
+        {
+            var foliageWatch = Stopwatch.StartNew();
+            foliageRenderer.Settle(gpu.Anchor ?? camera.Eye);
+            Console.WriteLine($"foliage   {foliageRenderer.Describe()} ({foliageWatch.ElapsedMilliseconds} ms)");
+        }
 
-        // Offscreen: 4x multisampled framebuffer, resolved into a plain one and read back.
+        // Offscreen: the post-processing chain (HDR scene, resolve, effects) ends in a plain RGBA8 framebuffer that is read back.
         int w = o.Width, h = o.Height;
-        uint msFbo = gl.GenFramebuffer(), msColour = gl.GenRenderbuffer(), msDepth = gl.GenRenderbuffer();
-        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, msColour);
-        gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, 4, InternalFormat.Rgba8, (uint)w, (uint)h);
-        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, msDepth);
-        gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, 4, InternalFormat.DepthComponent24, (uint)w, (uint)h);
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, msFbo);
-        gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, msColour);
-        gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, RenderbufferTarget.Renderbuffer, msDepth);
+        uint fbo = gl.GenFramebuffer(), colour = gl.GenRenderbuffer();
+        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, colour);
+        gl.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.Rgba8, (uint)w, (uint)h);
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
+        gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, colour);
         if (gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
         {
             Console.Error.WriteLine("Offscreen framebuffer incomplete.");
             return 1;
         }
+        gpu.Post!.Target = fbo;
+        Console.WriteLine($"post      {o.Post.Describe()}");
         if (o.FlyToX is { } flyX && o.FlyToZ is { } flyZ)
         {
             // Streaming test: fly the camera to the point at 3x the interactive fast speed, 60 frames per second of
@@ -405,6 +478,8 @@ static class WorldApp
             times.Sort();
             Console.WriteLine($"flight    {frames} frames over {length:0} units: median {times[times.Count / 2]:0.0} ms, 99th {times[(int)(times.Count * 0.99)]:0.0} ms, worst {times[^1]:0.0} ms (first frame {first:0.0} ms, worst after it {worstAfterFirst:0.0} ms), " +
                 $"{times.Count(x => x > 10)} frames over 10 ms; streaming {(gpu.Streamer?.Idle == true ? "idle" : $"{gpu.Streamer?.Pending} pending")}");
+            gpu.Objects?.Settle(camera.Eye);
+            gpu.Foliage?.Settle(camera.Eye);
         }
 
         var drawWatch = Stopwatch.StartNew();
@@ -415,20 +490,40 @@ static class WorldApp
         // Steady-state frame time (the first frame includes shader and texture warm-up).
         drawWatch.Restart();
         const int timedFrames = 10;
+        gpu.Post?.Flush();
+        gpu.Post?.TakeCosts(); // drop the warm-up frames
         for (int i = 0; i < timedFrames; i++) Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
         gl.Finish();
         Console.WriteLine($"frame     {drawWatch.Elapsed.TotalMilliseconds / timedFrames:0.0} ms on average over {timedFrames} more frames");
+        if (gpu.Objects is { } objectStats) Console.WriteLine($"objects   draw cpu {objectStats.LastDrawCpuMs:0.00} ms, {objectStats.DrawCalls} draw calls, {objectStats.DrawnInstances} instances, {objectStats.DrawnTriangles:N0} triangles");
+        if (gpu.Foliage is { } foliageStats) { foliageStats.PollTimers(wait: true); Console.WriteLine($"foliage   update {foliageStats.LastUpdateMs:0.00} ms, draw cpu {foliageStats.LastDrawCpuMs:0.00} ms, gpu {foliageStats.GpuMs:0.00} ms, {foliageStats.DrawCalls} draw calls, {foliageStats.DrawnInstances} meshes, {foliageStats.DrawnBlades:N0} grass blades"); }
+        if (gpu.Reflection is { Valid: true } reflection)
+        {
+            reflection.Poll(wait: true);
+            Console.WriteLine($"reflect   {reflection.Width}x{reflection.Height}: cpu {reflection.CpuMs:0.00} ms, gpu {reflection.GpuMs:0.00} ms, {reflection.DrawnChunks} chunks, {reflection.DrawnTriangles:N0} terrain triangles");
+        }
 
-        uint fbo = gl.GenFramebuffer(), colour = gl.GenRenderbuffer();
-        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, colour);
-        gl.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.Rgba8, (uint)w, (uint)h);
-        gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, fbo);
-        gl.FramebufferRenderbuffer(FramebufferTarget.DrawFramebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, colour);
-        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, msFbo);
-        gl.BlitFramebuffer(0, 0, w, h, 0, 0, w, h, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+        gpu.Sky.Poll(wait: true);
+        Console.WriteLine($"sky       {gpu.Sky.DescribeCost()}");
+        gpu.Post!.Flush();
+        Console.WriteLine($"post cost gpu ms/frame: {gpu.Post.DescribeCosts()}");
+        if (o.ShowKeys && DebugOverlay.TryCreate(gl) is { } keysOverlay)
+        {
+            gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
+            keysOverlay.Visible = true;
+            keysOverlay.Draw(w, h, "Keys   (? hides this)", DebugOverlay.KeyItems(WorldOptions.Usage));
+            keysOverlay.Dispose();
+        }
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, fbo);
         ViewerApp.SavePng(gl, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
+        if (Environment.GetEnvironmentVariable("MEITOU_SKY_BENCH") == "1")
+        {
+            // Sky cost, back to back after the picture is saved (the passes draw over the framebuffer): MEITOU_SKY_BENCH=1.
+            var rotation = camera.View with { M41 = 0, M42 = 0, M43 = 0 };
+            var (pass, table) = gpu.Sky.Benchmark(rotation * camera.Projection(w / (float)Math.Max(h, 1), 1, 1000));
+            Console.WriteLine($"skybench  sky pass {pass:0.000} ms, sky-view table rebuild {table:0.000} ms ({w}x{h})");
+        }
         return 0;
     }
 
@@ -445,16 +540,26 @@ static class WorldApp
         var clock = Stopwatch.StartNew();
         Vector2? lastMouse = null;
         MouseButton? dragging = null;
+        DebugOverlay? overlay = null;
+        bool keysToggleRequested = false;
+        var keyItems = DebugOverlay.KeyItems(WorldOptions.Usage);
 
         window.Load += () =>
         {
             gl = window.CreateOpenGL();
             gpu = CreateGpu(gl, install, scene, assets, o, interactive: true);
+            overlay = DebugOverlay.TryCreate(gl);
+            if (overlay is null) Console.WriteLine("keys      no monospace system font found: the ? key list is unavailable");
+            if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
             gl.Enable(EnableCap.Multisample);
             var input = window.CreateInput();
             keyboard = input.Keyboards.FirstOrDefault();
             foreach (var kb in input.Keyboards) kb.KeyDown += (_, key, _) => OnKey(key);
+            // '?' by character, so it works on any keyboard layout.
+            // "?" by character (any keyboard layout) or as Shift+/ (US position); both can arrive for one press, so
+            // they only request the toggle and the next update applies it once.
+            foreach (var kb in input.Keyboards) kb.KeyChar += (_, c) => { if (c == '?') keysToggleRequested = true; };
             foreach (var mouse in input.Mice)
             {
                 mouse.MouseDown += (_, b) => { dragging = b; lastMouse = null; };
@@ -474,17 +579,66 @@ static class WorldApp
             Console.WriteLine(WorldOptions.Usage[WorldOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
         };
 
+        void Preset(string name) { o.Post.CopyFrom(PostOptions.Create(name)); PostStatus(); }
+        void PostStatus() => Console.WriteLine($"post      {o.Post.Describe()}");
+
+        // The state a key controls, for the key list ("on", "off", a mode or a value); null for actions.
+        string? KeyState(string key)
+        {
+            static string OnOff(bool on) => on ? "on" : "off";
+            string Active(string preset) => o.Post.Preset == preset ? "active" : "";
+            return key switch
+            {
+                "T" => OnOff(render.Textures),
+                "N" => OnOff(render.NormalMaps),
+                "O" => OnOff(render.Objects),
+                "F" => gpu?.Foliage is { } foliage ? OnOff(foliage.Enabled) : "n/a",
+                "X" => render.Wireframe switch { 0 => "solid", 1 => "solid + lines", _ => "lines" },
+                "V" => render.Debug switch { 0 => "off", 1 => "blend weights", 2 => "layer weights", _ => "plain shading" },
+                "G" => OnOff(render.Water),
+                "R" => OnOff(render.Reflections),
+                "B" => gpu is null ? null : gpu.Sky.Physical ? "atmosphere" : "simple",
+                "," => $"{hour:00}:00",
+                "F1" => Active("off"),
+                "F2" => Active("kenshi"),
+                "F4" => OnOff(o.Post.Ssao),
+                "F5" => OnOff(o.Post.Bloom),
+                "F6" => o.Post.ToneMap.ToString().ToLowerInvariant(),
+                "F7" => OnOff(o.Post.Fxaa),
+                "F8" => OnOff(o.Post.Vignette),
+                "F9" => OnOff(o.Post.Grade),
+                "M" => o.Post.Msaa <= 1 ? "off" : $"{o.Post.Msaa}x",
+                "-" => $"{o.Post.Exposure:0.00}",
+                "?" => "on",
+                _ => null,
+            };
+        }
+
         void OnKey(Key key)
         {
             switch (key)
             {
                 case Key.Escape: window.Close(); break;
+                case Key.F1: Preset("off"); break;
+                case Key.F2: Preset("kenshi"); break;
+                case Key.F4: o.Post.Ssao = !o.Post.Ssao; PostStatus(); break;
+                case Key.F5: o.Post.Bloom = !o.Post.Bloom; PostStatus(); break;
+                case Key.F6: o.Post.ToneMap = (ToneMapOperator)(((int)o.Post.ToneMap + 1) % 3); PostStatus(); break;
+                case Key.F7: o.Post.Fxaa = !o.Post.Fxaa; PostStatus(); break;
+                case Key.F8: o.Post.Vignette = !o.Post.Vignette; PostStatus(); break;
+                case Key.F9: o.Post.Grade = !o.Post.Grade; PostStatus(); break;
+                case Key.M: o.Post.Msaa = o.Post.Msaa switch { 1 => 2, 2 => 4, 4 => 8, _ => 1 }; PostStatus(); break;
+                case Key.Minus: o.Post.Exposure = MathF.Max(o.Post.Exposure / 1.1f, 0.05f); PostStatus(); break;
+                case Key.Equal: o.Post.Exposure = MathF.Min(o.Post.Exposure * 1.1f, 20f); PostStatus(); break;
                 case Key.T: render.Textures = !render.Textures; break;
                 case Key.N: render.NormalMaps = !render.NormalMaps; break;
                 case Key.O: render.Objects = !render.Objects; break;
+                case Key.F when gpu?.Foliage is { } foliage: foliage.Enabled = !foliage.Enabled; Console.WriteLine(foliage.Enabled ? "foliage   on" : "foliage   off"); break;
                 case Key.X: render.Wireframe = (render.Wireframe + 1) % 3; break;
                 case Key.V: render.Debug = (render.Debug + 1) % 4; break;
                 case Key.G: render.Water = !render.Water; break;
+                case Key.R: render.Reflections = !render.Reflections; break;
+                case Key.B when gpu is not null: gpu.Sky.Physical = !gpu.Sky.Physical; Console.WriteLine(gpu.Sky.Physical ? "sky      atmosphere" : "sky      simple colour model"); break;
                 case Key.Comma: hour = (hour + 23) % 24; Console.WriteLine($"time {hour:0}:00"); break;
                 case Key.Period: hour = (hour + 1) % 24; Console.WriteLine($"time {hour:0}:00"); break;
                 case Key.H:
@@ -493,6 +647,7 @@ static class WorldApp
                         $"--at {camera.Target.X:0},{camera.Target.Z:0} --yaw {camera.Yaw * 180 / MathF.PI:0} --pitch {camera.Pitch * 180 / MathF.PI:0} --distance {camera.Distance:0}");
                     break;
                 case Key.P: screenshotRequested = true; break;
+                case Key.Slash when keyboard is not null && (keyboard.IsKeyPressed(Key.ShiftLeft) || keyboard.IsKeyPressed(Key.ShiftRight)): keysToggleRequested = true; break;
             }
         }
 
@@ -501,6 +656,14 @@ static class WorldApp
         uint[] queries = [];
         bool[] queryPending = [];
         var frameWatch = new Stopwatch();
+        window.Update += dt =>
+        {
+            if (keysToggleRequested)
+            {
+                keysToggleRequested = false;
+                if (overlay is not null) { overlay.Visible = !overlay.Visible; Console.WriteLine($"keys      list {(overlay.Visible ? "shown" : "hidden")}"); }
+            }
+        };
         window.Update += dt =>
         {
             if (keyboard is null || camera is null) return;
@@ -520,10 +683,15 @@ static class WorldApp
                 // fps is capped by vsync; cpu is the time to record a frame, gpu the time the GPU spent on it (timer
                 // queries), so they show the real cost under the cap.
                 string gpuText = gpuSamples > 0 ? $"{gpuMs / gpuSamples:0.00}" : "-";
-                window.Title = $"Meitou world | {frames / titleTimer:0} fps (vsync) | cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms | " +
+                window.Title = $"Meitou world | {frames / titleTimer:0} fps (vsync) | cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms" +
+                    (gpu.Reflection is { Valid: true } refl && render.Reflections ? $" (reflection cpu {refl.CpuMs:0.00}, gpu {refl.GpuMs:0.00})" : "") + " | " +
                     $"{t.X:0}, {t.Z:0} zone {WorldLayout.ZoneOf(t.X, t.Z)} | {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" +
-                    (gpu.Objects is { } ob && render.Objects ? $" | {ob.DrawnInstances} objects" : "") +
+                    (gpu.Objects is { } ob && render.Objects ? $" | {ob.DrawnInstances} objects, {ob.DrawCalls} calls, draw cpu {ob.LastDrawCpuMs:0.00} ms" + (ob.Pending > 0 ? $", loading {ob.Pending}" : "") : "") +
+                    (gpu.Foliage is { Enabled: true } fo ? $" | foliage {fo.DrawnInstances} + {fo.DrawnBlades / 1000}k grass, {fo.DrawCalls} calls, cpu {fo.LastDrawCpuMs:0.00} gpu {fo.GpuMs:0.00} ms" + (fo.Pending > 0 ? $", loading {fo.Pending}" : "") : "") +
                     (gpu.Streamer is { Pending: > 0 } st ? $" | loading {st.Pending}" : "");
+                if (gpu.Post is { } post) window.Title += $" | post gpu ms: {post.DescribeCosts()}";
+                gpu.Sky.Poll();
+                window.Title += gpu.Sky.Physical ? $" | sky cpu {gpu.Sky.PrepareMs:0.00} ms, gpu {gpu.Sky.GpuMs:0.00} ms" : " | simple sky";
                 titleTimer = 0;
                 frames = 0;
                 cpuMs = gpuMs = 0;
@@ -574,8 +742,17 @@ static class WorldApp
                 ViewerApp.SavePng(gl, file, size.X, size.Y);
                 Console.WriteLine($"saved {Path.GetFullPath(file)}");
             }
+            // After the screenshot, so saved pictures never show it.
+            gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            if (overlay is { Visible: true })
+            {
+                // Each item with its current state, aligned in a column.
+                int width = keyItems.Max(i => i.Length) + 2;
+                var lines = keyItems.Select(item => KeyState(item.Split(' ')[0]) is { } state ? item.PadRight(width) + state : item).ToList();
+                overlay.Draw(size.X, size.Y, "Keys   (? hides this)", lines);
+            }
         };
-        window.Closing += () => gpu?.Dispose();
+        window.Closing += () => { overlay?.Dispose(); gpu?.Dispose(); };
         window.Run();
         return 0;
     }

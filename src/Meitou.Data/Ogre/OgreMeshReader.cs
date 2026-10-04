@@ -47,7 +47,7 @@ public static class OgreMeshReader
     static void ReadMesh(OgreStream s, OgreMesh mesh)
     {
         mesh.SkeletallyAnimated = s.ReadBool();
-        while (s.TryReadChunk([Geometry, SubMesh, MeshSkeletonLink, MeshBoneAssignment, MeshLodLevel, MeshBounds,
+        while (s.TryReadChunk([Geometry, SubMesh, MeshSkeletonLink, MeshBoneAssignment, OgreMeshChunk.MeshLodLevel, MeshBounds,
                    SubMeshNameTable, EdgeLists, Poses, Animations, TableExtremes], out var chunk, out int length))
         {
             switch (chunk)
@@ -64,7 +64,7 @@ public static class OgreMeshReader
                 case MeshBoneAssignment:
                     mesh.BoneAssignments.Add(ReadBoneAssignment(s));
                     break;
-                case MeshLodLevel:
+                case OgreMeshChunk.MeshLodLevel:
                     mesh.Lod = mesh.Version == Version1_100 ? ReadLod(s, mesh) : ReadLodV1_8(s, mesh);
                     break;
                 case MeshBounds:

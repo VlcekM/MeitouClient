@@ -11,6 +11,8 @@ public sealed class WorldRenderOptions
     public bool NormalMaps { get; set; } = true;
     public bool Objects { get; set; } = true;
     public bool Water { get; set; } = true;
+    /// <summary>The water reflects the mirrored scene (<see cref="ReflectionPass"/>) instead of just the sky colour.</summary>
+    public bool Reflections { get; set; } = true;
     /// <summary>0 solid, 1 solid + wireframe, 2 wireframe only.</summary>
     public int Wireframe { get; set; }
     /// <summary>0 normal, 1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass), 3 plain shading.</summary>
@@ -193,13 +195,14 @@ public sealed unsafe class TerrainRenderer : IDisposable
         return v * (WorldLayout.MaxHeight / ushort.MaxValue);
     }
 
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light)
+    /// <summary>Draws the terrain; nodes whose highest point is under <paramref name="cullBelow"/> are skipped (the reflection pass clips everything below the water).</summary>
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity)
     {
         if (Math.Abs(options.LodDistance - LodDistanceInUse) > 1e-4f)
             quadtree = new TerrainQuadtree((float)quadtree.Spacing(0), GridCells, Math.Max(options.LodDistance, 2f));
         frame = new Frame(viewProjection, eye, options, light);
         Apply(patchProgram, heightNormals: true);
-        quadtree.Select(eye, bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), nodes);
+        quadtree.Select(eye, bounds, (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max), nodes);
 
         gl.Enable(EnableCap.DepthTest);
         gl.Enable(EnableCap.CullFace);
@@ -257,6 +260,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         gl.Uniform3(U(program, "uAmbientGround"), light.AmbientGround.X, light.AmbientGround.Y, light.AmbientGround.Z);
         gl.Uniform3(U(program, "uFogColour"), light.FogColour.X, light.FogColour.Y, light.FogColour.Z);
         gl.Uniform1(U(program, "uFogDistance"), light.FogDistance);
+        SkyRenderer.Active?.Apply(program);   // the atmosphere's uniforms (aerial perspective)
         gl.Uniform1(U(program, "uWaterHeight"), options.Water ? WorldWater.Height : -1e6f);
         gl.Uniform1(U(program, "uHalfWorld"), (float)WorldLayout.HalfWorldSize);
         gl.Uniform1(U(program, "uDebug"), options.Debug);

@@ -260,10 +260,10 @@ Three samples of the normal map, scrolled along the flow with shifted phases, bl
 (the up component divided by `invStrength`). Reflection uses a render target of the scene mirrored at the water
 plane. Alpha: opaque beyond 4000 units (where the distant plane takes over, with a 400-unit blend); nearer, it
 grows with the water depth under the pixel, scaled by `invOpacity` and a Fresnel term. The unit of the time
-parameter (`gameTime`) is **Unknown**. The viewer reflects the sky colour instead of a render target, and does
+parameter (`gameTime`) is **Unknown**. The reflection target is a fixed 512x512 A8R8G8B8 drawn by a mirrored `ReflectionCamera` (render queues 1-60, everything); the fragment shader reads only its red channel and multiplies the environment-cube specular by it, so the game reflects brightness, not colour; the lookup is offset by `normal.xz * 60` before the perspective divide (60 / depth in texture units) plus a small y bias against seams. The shader has no refraction and no foam: the G-buffer depth only drives alpha (**Observed**, water.hlsl and main.compositor). The viewer mirrors sky, terrain and objects into a half-resolution texture instead (ReflectionPass), and does
 not draw scum, turbulence, rain ripples or the per-biome normal maps. The viewer draws the sea past the world's
 edge too (the game's distant plane is cut at the map bounds, see Placement): a plane centred on the camera, with the
-water parameters fading to the open sea's (the most common among the maps' outer ring) over 30000 units past the edge.
+water parameters fading to the open sea's (the most common among the maps' outer ring) from 30000 units inside the edge to 12000 past it (the data is shallow-coast colour up to its edge, which showed as a straight seam).
 
 ## Sky and sun
 
@@ -283,9 +283,9 @@ Rayleigh 0.0022, Mie 0.000675, sun intensity 30, wavelengths (0.57, 0.54, 0.44),
 exposure 0.48, 4 samples (`SkyAtmosphere`). The sun's light colour comes from SkyX's colour at the sun's
 direction. Fog: `pFogParams = (D, D·k1, max(D·k2, D), 0)`, where D and the factors come from runtime settings
 (values **Unknown**). `atmospherefog.hlsl` blends to an O'Neil scattering colour, linearly between
-`pFogParams.y` and `.z` (Observed). The viewer does not reproduce the scattering. It uses a simple colour model
-of its own (`SkyColours`), with the game's sun direction, a horizon colour that is also the fog colour, and fog
-that grows with the camera's height.
+`pFogParams.y` and `.z` (Observed). The viewer reproduces the scattering (O'Neil, single scattering, with these constants) and
+uses it for the sky, the sun and ambient light and the fog: see [sky.md](sky.md), which also has the SkyX shaders'
+derived parameters, the night glow, the textures and the WEATHER records.
 
 Observed: `areasmap.tga` (256², 71 colours) is described in `fcs.def` as holding BIOME_GROUP colour indices;
 not yet matched to records.

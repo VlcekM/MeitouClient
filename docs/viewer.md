@@ -91,8 +91,8 @@ decompiled). The viewer approximates that, best first (`MaterialResolver`):
   TRANSPARENCY flag) always cuts where the normal map's alpha is below 0.6, whatever its ItemShader
   ([characters.md](characters.md#worn-clothing-observed-hlsl-skinhlsl-parameters-in-runtime-materialsmd)). The
   mesh viewer still clips on normal alpha like ground items; `--character` uses the 0.6 rule.
-- **Unknown**: `leaves alpha threshold` scale. With `/255`, `ThinTree01_Leaves` with `TreesAtlas01.dds` would be
-  invisible (its normal map is often empty in the records; the viewer then draws it opaque).
+- **Verified (decompiled)**: `leaves alpha threshold` is / 255, cut on the leaves normal map's alpha (formats/foliage.md, "Materials"). Leaves whose
+  record names no normal map are drawn opaque by the model viewer.
 - Not followed: ARMOUR shown on the ground uses a temporary record built from `vest texture` / `vest normalmap` (runtime-materials.md); the viewer only follows ARMOUR's `material` references.
 - Not reproduced: TERRAIN-mode features (biome textures), dust, construction scaffold, colour masks / dyes,
   metalness, the character's hair/beard overlays, skin tone, blood.
@@ -232,9 +232,9 @@ dotnet run --project tools/Meitou.ModelViewer -- --world --radius 32 --no-object
 `--world --help` lists the options: where (`--at x,z`, `--zone i,j`, `--town <name>`, default the world's
 centre), `--radius` in zones (default 1.5), `--step` (heightmap sample step; by default the smallest power of
 two keeping at most 2048 cells per side, so `--radius 32`, the whole world, uses step 8), camera
-(`--yaw`, `--pitch`, `--distance`), `--screenshot` / `--size`, `--no-textures`, `--no-objects`,
+(`--yaw`, `--pitch`, `--distance`), `--screenshot` / `--size`, `--no-textures`, `--no-objects`, `--no-foliage` (`F` toggles), `--distant-range <zones>`, `--no-distant`,
 `--object-distance`, `--layer-size`, `--debug 1|2|3`, `--time <hour>` (default 13), `--no-water`,
-`--view-distance` (default 450000), `--fog` (distance of full haze at ground level, default 250000) and
+`--view-distance` (default 450000), `--fog` (distance where the haze is complete at ground level, default 250000), `--simple-sky` (the old colour-model sky and fog; `B` toggles), `--weather <name>` (a WEATHER record's sky colour, fog and clouds; default "Default": clear), `--clouds <0..1>` and
 `--material-distance` (where the full terrain material gives way to the ground colour, default 30000 as in the
 game). `--camera-at x,z` starts the camera somewhere
 else than the loaded point (as if flown there), `--no-stream` keeps the detail around the start point instead of following
@@ -243,9 +243,9 @@ fast key speed and prints the frame times on the way (a streaming test). `MEITOU
 
 Keys: left drag orbits the target, right drag looks
 around, wheel zooms, `W A S D` free fly along the view direction, `Q`/`E` world down/up (speed follows the height above ground; Shift ×4, Ctrl ×0.25), `T` textures, `N` normal
-maps, `O` objects, `G` water, `,`/`.` time of day −/+ 1 hour, `X` wireframe, `V` debug view (blend weights,
+maps, `O` objects, `G` water, `B` simple sky, `,`/`.` time of day −/+ 1 hour, `X` wireframe, `V` debug view (blend weights,
 layer weights, untextured shading), `H` prints the camera as command-line
-options, `P` screenshot into the temp folder.
+options, `P` screenshot into the temp folder, `?` toggles a panel listing these keys (built from the usage text; drawn after the screenshot readback, so saved pictures never show it; `--show-keys` opens it at start and, with `--screenshot`, draws it into the picture). Its text comes from a system monospace font (Consolas, Cascadia Mono, Courier New, DejaVu Sans Mono or Menlo) rasterised with stb_truetype; with none of them the panel is unavailable.
 
 ```
 dotnet run --project tools/Meitou.ModelViewer -- --world --town "Shark" --radius 1.5 --distance 3000 --pitch 20
@@ -268,11 +268,24 @@ How it works (status as in [README.md](README.md)):
   parameters among the outer ring of the maps), so the last pixels do not stretch outwards, and the water counts as deep.
   It has colour from `watercolourmap.png`, flow from `flowmap.png`, the `water.png` normal map scrolled three
   times, and per-pixel biome parameters (`BiomeField` over `blendinfo.dat` + `blendmap.png`). Shallow water is
-  see-through near the camera, and it is opaque beyond 4000 units, as in the game. It reflects the sky colour
-  (no reflection render target).
-- **Sky** (`SkyRenderer`, `SkyClock`): the sun follows the game's formula for the hour (latitude 54, sunrise 5,
-  sunset 23 from the CONSTANTS record). Sky, sun and ambient colours come from a simple model of our own, not
-  SkyX scattering. The horizon colour is also the fog colour, and the fog distance grows with the eye's height.
+  see-through near the camera, and it is opaque beyond 4000 units, as in the game. With reflections (default; `R` or `--no-reflections` toggles) it reflects the mirrored scene (`ReflectionPass`: sky, terrain, objects at 3000 units or nearer drawn about Y = 100 into a half-resolution RGBA16F texture with oblique near-plane clipping at the water; the Fresnel and normal-map distortion are the old shader's); without, it reflects the sky colour. The glint widens and dims with distance and is capped, so a far sea shows no blown-out disc.
+- **Sky and atmosphere** (`SkyRenderer`, `AtmosphereShaders`, `AtmosphereModel`, `SkyClock`; facts and settings in
+  [formats/sky.md](formats/sky.md)): the sun follows the game's formula for the hour (latitude 54, sunrise 5, sunset 23). The
+  sky is O'Neil's single scattering with SkyX's constants (Rayleigh, Mie, planet shadow, a little ozone), kept as a transmittance
+  table (built once) and a sky-view table (rebuilt only when the sun or the eye's height moves), drawn with the night glow, the
+  game's starfield and moon texture, a sun disc with limb darkening and, with `--clouds` or a weather that has them, a cloud
+  layer. **Aerial perspective** replaces the old per-shader fog: terrain, water and objects end with
+  `colour = atmoApply(colour, eye, position)` (transmittance by distance and height, the sky's colour in-scattered, the
+  weather's fog), and the sun colour and ambient light come from the same tables, so a sunset lights the ground with the colour of
+  the sun in the sky. New shaders (foliage) include `AtmosphereShaders.Functions`, call `atmoApply` last and
+  `SkyRenderer.Active?.Apply(program)` per frame (sky.md, "Using the atmosphere in a new shader"). All of it is display-referred like
+  the rest of the scene lighting (the game has no gamma step either); the post-processing chain exposes and tone-maps it. The
+  sun disc is only 8 (a few times the sky) so the bloom threshold of 1 catches it. `--simple-sky` / `B` give the old model.
+  Cost (2026-10-04, 1280 × 720, with other processes sharing the GPU, so only the orders of magnitude are firm): the sky pass 0.06 to
+  0.09 ms GPU (100 passes back to back, `MEITOU_SKY_BENCH=1` with `--screenshot`), a sky-view table rebuild 0.08 to 0.11 ms GPU
+  plus 0.5 ms CPU for the sun and ambient light (only when the sun or the eye's height moves; the title shows sky cpu and gpu), and
+  the aerial perspective per pixel (one table lookup, three exponentials) is close to the old squared-distance fog: the
+  scene's GPU time was 6.2 to 11.1 ms with the atmosphere and 6.1 to 12.1 ms with `--simple-sky` across four runs of The Hub view (in the quietest runs the atmosphere cost 0.1 to 0.6 ms more).
 - Frame times (2026-10-04, offscreen 1280 × 960, average of 10 frames after loading): Shark with water 1.6 ms,
   Port North coast 1.6 ms, The Hub looking at the horizon 1.1 to 1.2 ms, whole world from above 0.6 ms
   (12 ms at 1400 × 1400 with `--material-distance 1e7`, which puts the full material everywhere).
@@ -322,12 +335,35 @@ How it works (status as in [README.md](README.md)):
   removed), rotating parts at their rolled start angle, and each part's MATERIAL_SPEC from the part, the building
   or the building's town (`BuildingTowns`; `BuildingMaterial` turns it into textures). Map features (and parts
   without a chosen material) are textured by the model viewer's `MaterialResolver` (candidate preferred: the one
-  naming the placed record). Meshes are loaded once per file; textures decode on worker threads
-  (`WorldTextureCache`). The log line `objects` counts destroyed buildings and the foliage resource buildings,
-  which the game draws as foliage rocks (not drawn here). Instances beyond
-  `--object-distance` or outside the frustum are skipped; interactively at most 8 new meshes load per frame.
-  TERRAIN-mode map features are drawn with the terrain shader (biome textures, no roads).
-- Back-face culling is off for objects (open building meshes); distance haze is the viewer's own.
+  naming the placed record). Draw distance, LOD and streaming are described below ("Object streaming, LOD and distant towns"). The log
+  line `objects` counts destroyed buildings and the foliage resource buildings, which the game draws as foliage rocks (drawn by the foliage below).
+  TERRAIN-mode map features are drawn with the terrain shader (biome textures, no roads), through plain per-level vertex arrays (`TerrainRenderer.DrawMeshes`); they pick a mesh LOD level but do not fade.
+- **Object streaming, LOD and distant towns** (`ObjectStreamer`, `ObjectMeshCache`, `BuildingLodShaders`, `ObjectRanges`; data side
+  `MeshLod`, `DistantTowns`):
+  - Zones are laid out on worker threads (`WorldObjects.BuildZone`, 3 at a time, nearest first) within the distant range of the eye
+    and dropped one zone width beyond it. A mesh is requested once an instance is within its range, decoded on a worker (including the
+    index buffer with every LOD level back to back), then uploaded in steps of about 1 MB through the shared `UploadQueue`
+    (`WorldTextureCache` slices textures the same way), so a frame is rarely held up more than a few ms (interactive run with
+    `MEITOU_STREAM_LOG=1`: slow-update lines went from 30 to 220 ms down to mostly under 10, rare spikes to 50 ms from driver syncs and
+    scans). Meshes are never evicted (about 60 MB per town area; roughly 180 MB with 475 meshes resident).
+  - **Mesh LOD**: per submesh, from the mesh file's levels (`MeshLod`, the rule in [formats/ogre-mesh.md](formats/ogre-mesh.md#lod)),
+    with the world bounding sphere of the mesh. Level changes are a dithered cross-fade (interleaved gradient noise, per-instance
+    `lo`/`hi` range carried in the instance matrix; the upper level takes the pixels below the threshold and the lower one the rest, so
+    they never both cover a pixel), a smoothstep band of 6% of the level's distance. Manual levels draw another mesh file.
+  - **Draw distance**: a real object is dropped by `PartRenderingDistance` (zones.md) and fades out over a band near
+    `--object-distance` (default 12000, the game itself shows real objects only in loaded zones, about 3000).
+  - **Distant towns**: for a town with a baked mesh (`data/meshes/distant/distant_<handle>.mesh`, `DistantTowns.Find`) the baked mesh
+    rises in as the real buildings fade out, with per-vertex fade from the eye distance (no dither cost); it falls off at
+    `--distant-range` zones (default 10, the game's setting maximum; the game's default is 6; `--no-distant` disables). A town without one
+    shows each building's own `distant mesh` as an instance ("stand-in").
+  - **Batching**: one instanced draw per (mesh, material set, level, town): instance matrix rows are vertex attributes 7 to 10 (divisor 1,
+    re-pointed per batch), uniforms and texture binds are cached. A view of The Hub from 3500 units: 61 draw calls, 155 instances, 0.3 ms
+    CPU (offscreen run, 2026-10-04). Objects are drawn in every depth slice (far first).
+  - Debug: `MEITOU_LOD_DEBUG=1` colours surfaces by LOD level, `=2` draws only wireframe by level (green 0, yellow 1, orange 2, red 3,
+    magenta manual level, blue distant stand-in). `MEITOU_STREAM_LOG=1` prints slow steps. `--distant-range <zones>`, `--no-distant`.
+  - Not done: eviction of meshes, fading of TERRAIN-mode features, cross-fade of manual levels' own materials; the title bar shows
+    objects, draw calls, draw CPU ms and what is still loading.
+- Back-face culling is off for objects (open building meshes); the sun, ambient light and aerial perspective are the atmosphere's (below).
 
 Verified with screenshots (2026-10-04, saved outside the repo): The Hub (`--town "The Hub"`: walls, gates and
 towers join up, buildings upright, roads in the ground texture), zone 44.23 (TERRAIN-mode cliff blocks take
@@ -341,14 +377,14 @@ Water and sky, verified with screenshots (2026-10-04, saved outside the repo): S
 walkways over swamp water), Port North (coast with sun glitter), the whole world (sea around the land), and The
 Hub towards the horizon (terrain to the edge of the map, fading into the haze).
 
-Approximations and gaps: no wetness, shadows, clouds, weather, scum or water reflections of the scene, foliage or grass, characters, interiors,
+Approximations and gaps: no wetness, shadows, volumetric clouds, weather schedule, characters, interiors,
 construction states or lights; cliff normal-map channel flips are not reproduced; building part choice follows
 the game's rolls but was not compared in game, and nested choices can drift where effects or loading callbacks
 roll (zones.md); picks from material collections (towns with "moor mats", 32 parts) are the viewer's own seeded
-choice, as the game's are unseeded; Iron/Copper Resource rocks (foliage) are missing; doors are always closed and
+choice, as the game's are unseeded; foliage as listed under "Foliage" below; doors are always closed and
 turrets unaimed; the full terrain material is drawn within the material distance of the eye
-(30000), the ground colour beyond it; buildings and map features are still loaded only for the start region
-(`--radius`), not streamed with the camera; the overlay and colour windows hold 73728 units around the eye, so
+(30000), the ground colour beyond it; buildings and map features stream with the camera (above)
+(zones around the eye); the overlay and colour windows hold 73728 units around the eye, so
 `--material-distance` above about 36000 shows no more material than that. Known gaps of the streaming: a texture
 pair that finds no free slot (more than 192 pairs needed at once; the base game has 133, so only modded installs) is
 marked failed for good and stays in ground colour, instead of being retried when a slot frees; the height-window blend
@@ -357,3 +393,70 @@ view are in the game's own `biomemap.png`, not a viewer fault
 ([formats/terrain.md](formats/terrain.md#why-some-sea-areas-in-the-north-east-have-other-tones-observed)).
 Interactive mode was smoke-tested only
 (starts, loads, renders; the controls were not exercised by hand).
+
+### Foliage
+
+Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as Kenshi does
+([formats/foliage.md](formats/foliage.md)); `--no-foliage` leaves them out and `F` toggles them.
+
+- **Placement** (`FoliageWorld`, `FoliageLayout`): zones within the longest mesh layer range of the eye (8000; the
+  catalog's FAR layers) are laid out on up to three worker threads, nearest first, each worker with its own heightmap
+  handle, overlay tile cache and biome map; zones beyond that range + one zone are dropped. A zone takes 0.2–1.6 s.
+- **Meshes** (`FoliageRenderer`, `FoliageShaders`): each instance is drawn up to its layer's range (MEDIUM 1000, FAR
+  8000, × `RangeSetting`, the game's `foliage range`), measured along the ground, and fades out with a dither over
+  the last tenth of it (the game's 10-unit transition is too short to see). Instances of one mesh are one instanced
+  draw per part of the mesh and of its leaves mesh, with the shared mesh shader (so the atmosphere's light and haze
+  apply). FOLIAGE-mode meshes and leaves cut out on the normal map's alpha (`alpha threshold` / 255, `leaves alpha
+  threshold` / 255), double-sided, with alpha to coverage when the scene is multisampled; other modes are back-face
+  culled. TRIPLANAR uses the object shader's triplanar path, DUAL modes the vertex-alpha blend. TERRAIN-mode meshes
+  (most rocks) go through the terrain shader (`TerrainRenderer.DrawMeshes`), one draw each, and pop at the middle of
+  the fade band instead of dithering. DUST tinting is not reproduced. Trees do not sway (Kenshi's object shader
+  has no wind).
+- **Grass**: blades are generated per 576-unit page (8 × 8 a zone) on worker threads when the page comes within
+  the grass range (`FoliageGrassField`, the game's candidate rule; seeded per page, so deterministic but not the
+  game's exact blades), uploaded as one instance buffer per (page, grass type), and drawn nearest page first with
+  quads built in the vertex shader: sway along X on the top edge for wind layers, sinking into the ground over
+  the last fifth of the range, sprite alpha cut at 0.6 (alpha to coverage when multisampled), colour map over the
+  zone, lit with an up normal; the aerial perspective is evaluated per vertex.
+- **Reflections**: the water reflection draws the foliage meshes (no grass) with its own camera (`Draw(...,
+  grass: false)`).
+- **Cost** (RTX 4070, 1280 × 960, 4x MSAA, offscreen, 2026-10-04): a cypress grove in zone 14.30 (995 meshes,
+  68k blades) 0.6–1.2 ms draw CPU, about 2 ms GPU (timestamp queries; the title bar shows both); the grassland
+  at the zone's centre (128k blades) 0.2 ms CPU, 0.3 ms GPU; frame 2.8 ms against 2.3 ms with `--no-foliage`.
+  A 20640-unit `--fly-to` from zone 14.30 eastward: median 3.9 ms against 2.8 ms, 99th percentile 46 ms against
+  30 ms (uploads are held to 2 ms a frame and one texture a frame). The log line `foliage` gives the totals;
+  `MEITOU_FOLIAGE_DEBUG=nograss` or `nomeshes` leaves one part out.
+- Verified with screenshots (2026-10-04, saved outside the repo): zone 14.30 (cypress grove with cut-out canopies,
+  scattered rocks, grassland with four grass types), swamp zone 24.38 (swamp plants and ferns), an Iron Resource
+  rock in zone 30.30 (`--at -8777,-9105`), each against `--no-foliage`.
+- Not reproduced: the game's exact grass blades, DUST tint, translucency, wetness, shadows, sub grass, ambient
+  sounds, collision; mesh LOD levels (pages use the full mesh, as PagedGeometry's batches do).
+
+### Post-processing
+
+The world view draws the scene into an RGBA16F framebuffer with depth (4x multisampled by default), resolves it, and runs a
+chain into the window (or, with `--screenshot`, into the offscreen RGBA8 framebuffer that is saved, so pictures go through the
+same chain; `PostProcess`, `PostProcessShaders`, `PostProcessOptions`). The window itself is single-sample. What the game does
+and why the presets look the way they do: [formats/post-processing.md](formats/post-processing.md). In short, Kenshi has exposure
+only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA, so the `kenshi` preset is a clamp plus FXAA and no MSAA.
+
+- **Presets**: `--post kenshi` (default, the game's chain) and `--post off` (the look before post-processing: 4x MSAA, nothing else). Keys F2 / F1. The single effects below can be added on top of either.
+- **Effects** (option, key): SSAO (`--ssao`, F4): 12 taps, half resolution, from the depth of the near depth slice only (the far
+  slice's depth is cleared before the near one is drawn, so nothing beyond about 20000 units is occluded; it also fades out from
+  3000 to 10000 units), normals from depth differences, depth-aware blur, multiplies the HDR colour. Bloom (`--bloom`, F5): over-1
+  brightness only (threshold 1, soft knee), 13-tap downsample / tent upsample mip chain from half resolution, intensity 0.3. Tone map
+  (`--tonemap clamp|shoulder|aces`, F6): `shoulder` is the identity up to 0.8 on the brightest channel and then rolls off to 1 (the
+  look of the scene is unchanged, the sun disc and speculars no longer clip); `aces` is Narkowicz's fit and visibly darker and
+  more contrasty. FXAA (`--fxaa`, F7): our own implementation of the public algorithm with Kenshi's constants. Vignette (F8) and
+  grading (F9: saturation 1.12, contrast 1.06) are ours, off by default (Kenshi has neither). MSAA (`--msaa 1|2|4|8`, M). Exposure
+  (`--exposure`, keys - and =): 1 = the shaders' brightness (Kenshi's x0.6875 belongs to its own lighting and is not applied).
+  `--post-debug ao|bloom` shows the occlusion or the bloom alone.
+- **Cost** (RTX 4070, 1920x1080, GPU timestamps, ms per frame; the title shows `post gpu ms` per stage next to the frame's cpu and gpu time,
+  and `--screenshot` prints the average over 10 frames): MSAA resolve 0.1 to 1, SSAO 0.1 to 0.3, bloom 0.3 to 1.2, composite 0.04,
+  FXAA 0.1 to 0.3 (the `kenshi` preset costs about 0.3 in all). Measured while other jobs shared the GPU, so the spread is
+  mostly noise; the whole chain is roughly 1 to 3 ms against a 14 to 18 ms scene.
+- **Contract for scene code**: shaders write the colours they always did, unclamped (colours above 1 are fine); code that draws into
+  another framebuffer between `PostProcess.Begin` and `End` must rebind the one it found (`ReflectionPass` does).
+- **Limits**: the MSAA resolve averages HDR values, so a very bright sun-disc edge can still alias a little; SSAO sees only the near
+  depth slice and has no normal buffer (curved surfaces show faint banding, thin objects can halo); no auto exposure (the game's
+  is clamped to a nearly constant gain, see the doc); heat haze, colour LUTs and depth of field are not implemented.

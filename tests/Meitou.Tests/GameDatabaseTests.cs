@@ -188,7 +188,7 @@ public class GameDatabaseTests
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
 
         const string id = "14520-rebirth.mod";
-        var order = LoadOrder.FromInstall(install!);
+        var order = LoadOrder.BaseGame(install!);
         var db = GameDatabase.Load(order);
         var baseRecord = FcsReader.ReadFile(Path.Combine(install!.DataDirectory, "gamedata.base")).Records.Single(r => r.StringId == id);
         var change = FcsReader.ReadFile(Path.Combine(install.DataDirectory, "rebirth.mod")).Records.Single(r => r.StringId == id);
@@ -214,7 +214,7 @@ public class GameDatabaseTests
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
 
-        var order = LoadOrder.FromInstall(install!);
+        var order = LoadOrder.BaseGame(install!);
         var db = GameDatabase.Load(order);
 
         var files = order.Entries.Select(e => FcsReader.ReadFile(e.Path)).ToList();

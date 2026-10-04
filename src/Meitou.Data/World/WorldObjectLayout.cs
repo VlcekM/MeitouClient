@@ -4,7 +4,13 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.World;
 
 /// <summary>What placed a <see cref="PlacedMesh"/>.</summary>
-public enum PlacedKind { BuildingPart, MapFeature }
+public enum PlacedKind
+{
+    BuildingPart,
+    MapFeature,
+    /// <summary>A building's <c>distant mesh</c> (see <see cref="WorldObjectLayout.DistantMesh"/>): the low-poly stand-in for a whole building, not a part.</summary>
+    BuildingDistant,
+}
 
 /// <param name="MeshPath">The mesh file as stored in the record (an install-relative <c>.\data\...</c> path).</param>
 /// <param name="Transform">Mesh space to world (System.Numerics row-vector convention: <c>world = local × Transform</c>).</param>
@@ -256,6 +262,19 @@ public static class WorldObjectLayout
         ulong bucket = (ulong)(long)key % buckets;
         int at = order.FindIndex(k => (ulong)(long)k % buckets == bucket);
         order.Insert(at < 0 ? 0 : at, key);
+    }
+
+    /// <summary>
+    /// A building's <c>distant mesh</c> at the building's position, rotation and <c>scale</c> (the transform the game's
+    /// town batching gives it, docs/formats/zones.md, "Distant towns"), or null when the building has none.
+    /// </summary>
+    public static PlacedMesh? DistantMesh(GameRecord building, string placementId, Vector3 worldPosition, Quaternion rotation)
+    {
+        var mesh = building.GetPath("distant mesh");
+        if (!mesh.EndsWith(".mesh", StringComparison.OrdinalIgnoreCase) || building.GetBool("is node")) return null;
+        float scale = building.GetFloat("scale", 1);
+        var transform = InstanceTransform(worldPosition, rotation, new Vector3(scale > 0 ? scale : 1));
+        return new PlacedMesh(mesh, transform, building, building, placementId, PlacedKind.BuildingDistant);
     }
 
     /// <summary>The mesh of a <c>features.dat</c> entry, or null when its record is missing, hidden or meshless.</summary>

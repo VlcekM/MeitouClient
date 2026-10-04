@@ -24,7 +24,7 @@ public sealed unsafe class WorldTextureCache(GL gl, AssetLocator assets) : IDisp
     readonly List<WorldTexture> pending = [];
 
     public List<string> Messages { get; } = [];
-    public int PendingCount => pending.Count;
+    public int PendingCount => pending.Count + (steps.Count > 0 ? 1 : 0);
 
     public WorldTexture? Get(string? name, bool border)
     {
@@ -52,34 +52,78 @@ public sealed unsafe class WorldTextureCache(GL gl, AssetLocator assets) : IDisp
         return t;
     }
 
-    /// <summary>Uploads finished decodes (all of them, waiting, when <paramref name="wait"/>; else at most <paramref name="max"/>).</summary>
-    public void Pump(bool wait, int max = 16)
+    /// <summary>Uploads finished decodes (all of them, waiting, when <paramref name="wait"/>; else steps until <paramref name="budgetMs"/> passes, at most <paramref name="max"/> textures started).</summary>
+    public void Pump(bool wait, int max = 16, double budgetMs = double.MaxValue)
     {
-        int uploaded = 0;
-        for (int i = 0; i < pending.Count; i++)
+        int started = 0;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
         {
-            var t = pending[i];
-            if (!wait && (uploaded >= max || !t.Pending!.IsCompleted)) continue;
+            if (steps.Count > 0)
+            {
+                if (!wait && watch.Elapsed.TotalMilliseconds >= budgetMs) return;
+                steps.Dequeue()();
+                continue;
+            }
+            int found = -1;
+            for (int i = 0; i < pending.Count && found < 0; i++)
+                if (wait || pending[i].Pending!.IsCompleted) found = i;
+            if (found < 0 || (!wait && (started >= max || watch.Elapsed.TotalMilliseconds >= budgetMs))) return;
+            var t = pending[found];
             var tex = t.Pending!.Result;
-            if (tex is not null) Upload(t, tex);
+            if (tex is not null) QueueUpload(t, tex);
             t.Pending = null;
-            pending.RemoveAt(i--);
-            uploaded++;
+            pending.RemoveAt(found);
+            started++;
         }
     }
 
-    void Upload(WorldTexture t, LoadedTexture tex)
+    readonly Queue<Action> steps = new();
+    const int SlabBytes = 1 << 20;
+
+    /// <summary>A texture's upload as steps of about 1 MB: allocate every level, fill them in slabs of rows, then mipmaps and sampling state.</summary>
+    void QueueUpload(WorldTexture t, LoadedTexture tex)
     {
         t.Swizzled = LooksSwizzled(tex.Levels.FirstOrDefault(l => l.Width <= 256 && l.Height <= 256) ?? tex.Levels[0]);
-        uint id = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, id);
-        gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+        uint id = 0;
+        steps.Enqueue(() =>
+        {
+            id = gl.GenTexture();
+            gl.BindTexture(TextureTarget.Texture2D, id);
+            gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+            for (int level = 0; level < tex.Levels.Count; level++)
+            {
+                var img = tex.Levels[level];
+                gl.TexImage2D(TextureTarget.Texture2D, level, InternalFormat.Rgba8, (uint)img.Width, (uint)img.Height, 0,
+                    PixelFormat.Rgba, PixelType.UnsignedByte, null);
+            }
+        });
         for (int level = 0; level < tex.Levels.Count; level++)
         {
             var img = tex.Levels[level];
-            gl.TexImage2D<byte>(TextureTarget.Texture2D, level, InternalFormat.Rgba8, (uint)img.Width, (uint)img.Height, 0,
-                PixelFormat.Rgba, PixelType.UnsignedByte, img.Pixels.AsSpan());
+            int lv = level, rowBytes = img.Width * 4;
+            int rows = Math.Max(1, SlabBytes / rowBytes);
+            for (int y = 0; y < img.Height; y += rows)
+            {
+                int y0 = y, h = Math.Min(rows, img.Height - y);
+                steps.Enqueue(() =>
+                {
+                    gl.BindTexture(TextureTarget.Texture2D, id);
+                    gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+                    fixed (byte* p = &img.Pixels[y0 * rowBytes])
+                        gl.TexSubImage2D(TextureTarget.Texture2D, lv, 0, y0, (uint)img.Width, (uint)h, PixelFormat.Rgba, PixelType.UnsignedByte, p);
+                });
+            }
         }
+        steps.Enqueue(() =>
+        {
+            gl.BindTexture(TextureTarget.Texture2D, id);
+            Finish(t, tex, id);
+        });
+    }
+
+    void Finish(WorldTexture t, LoadedTexture tex, uint id)
+    {
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, tex.Levels.Count - 1);
         if (tex.Levels.Count == 1 || tex.Levels[^1].Width > 1 || tex.Levels[^1].Height > 1)
         {

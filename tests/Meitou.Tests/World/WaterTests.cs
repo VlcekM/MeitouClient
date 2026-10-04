@@ -32,7 +32,7 @@ public class WaterTests
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install!));
+        var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var clock = SkyClock.FromDatabase(db);
         Assert.Equal(new SkyClock(54, 5, 23), clock);
 
@@ -72,7 +72,7 @@ public class WaterTests
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install!));
+        var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         using var map = TerrainHeightmap.Open(install!);
         var low = WorldLevelData.Load(install!).Buildings().Where(b => map.HeightAt(b.Position.X, b.Position.Z) < WorldWater.Height).ToList();
         // Observed: only about 5% of the 11,714 placed buildings stand on ground below the water level, and the most

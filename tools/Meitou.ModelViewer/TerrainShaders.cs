@@ -104,7 +104,7 @@ static class TerrainShaders
         }
         """;
 
-    public const string Fragment = "#version 330 core\n" + HeightFunctions + """
+    public static readonly string Fragment = "#version 330 core\n" + HeightFunctions + AtmosphereShaders.Functions + """
 
         in vec3 vWorld;
         in vec3 vNormal;
@@ -312,8 +312,7 @@ static class TerrainShaders
             float spec = pow(max(dot(shadingNormal, normalize(l + v)), 0.0), 8.0 + 40.0 * gloss) * gloss * 0.25;
             vec3 colourOut = albedo.rgb * (ambient + diff * uSunColour) + spec * diff * uSunColour;
             if (uDebug == 3) colourOut = vec3(0.5) * (0.3 + 0.7 * diff);
-            float fog = clamp(distance / uFogDistance, 0.0, 1.0);
-            colourOut = mix(colourOut, uFogColour, fog * fog);
+            colourOut = atmoApply(colourOut, uEye, vWorld);   // aerial perspective (AtmosphereShaders)
             fragColour = vec4(colourOut, 1.0);
         }
         """;

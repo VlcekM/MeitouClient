@@ -126,7 +126,7 @@ public class TerrainBiomeTests
         Assert.InRange(remainderOnly, 1, 1024 * 1024 / 10);
 
         // Every colour used resolves to a BIOMES record.
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install));
+        var db = GameDatabase.Load(LoadOrder.BaseGame(install));
         var biomes = BiomeTerrain.ByIndex(db);
         for (int cz = 0; cz < 32; cz++)
             for (int cx = 0; cx < 32; cx++)

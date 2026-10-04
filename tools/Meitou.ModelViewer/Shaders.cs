@@ -44,8 +44,7 @@ static class Shaders
         }
         """;
 
-    public const string MeshFragment = """
-        #version 330 core
+    public static readonly string MeshFragment = "#version 330 core\n" + AtmosphereShaders.Functions + """
         in vec3 vWorld;
         in vec3 vNormal;
         in vec4 vTangent;
@@ -145,9 +144,11 @@ static class Shaders
             vec3 ambient = mix(vec3(0.22, 0.20, 0.18), vec3(0.42, 0.45, 0.50), hemi);
             vec3 h = normalize(l + v);
             float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * uSpecular * 0.5;
-            vec3 colour = albedo * (ambient + diff * vec3(1.0, 0.97, 0.92)) + spec * diff;
+            vec3 sunLight = vec3(1.0, 0.97, 0.92);
+            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) { ambient = mix(uAtmoAmbientGround, uAtmoAmbient, hemi); sunLight = uAtmoSunLight; }   // world view: the sky's light
+            vec3 colour = albedo * (ambient + diff * sunLight) + spec * diff * sunLight;
             if (uEmissive) colour += albedo * nm.a;
-            if (uFogDistance > 0.0) { float fog = clamp(length(uEye - vWorld) / uFogDistance, 0.0, 1.0); colour = mix(colour, uFogColour, fog * fog * 0.85); }
+            if (uFogDistance > 0.0) colour = atmoApply(colour, uEye, vWorld);   // aerial perspective (AtmosphereShaders)
             fragColour = vec4(colour, 1.0);
         }
         """;

@@ -94,7 +94,7 @@ public class WorldObjectLayoutTests
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install!));
+        var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var world = WorldLevelData.Load(install!);
         var towns = new BuildingTowns(db, world);
         int placed = 0, empty = 0, foliage = 0, withDoors = 0, noMaterial = 0;
@@ -133,7 +133,7 @@ public class WorldObjectLayoutTests
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install!));
+        var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var world = WorldLevelData.Load(install!);
         var towns = new BuildingTowns(db, world);
         // Buildings whose town handle matches a town state lie close to that town (Observed: median 707 units over 2,320).
@@ -165,7 +165,7 @@ public class WorldObjectLayoutTests
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install!));
+        var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var world = WorldLevelData.Load(install!);
         int checkedBuildings = 0;
         foreach (var b in world.Buildings())

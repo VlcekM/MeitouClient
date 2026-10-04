@@ -325,7 +325,7 @@ submesh 0 and store no normals, so only positions move.
 ## LOD of character meshes
 
 Bodies, hair and armour use their meshes' own generated LOD levels (no separate LOD meshes); each entity picks
-its level on its own with the `distance_sphere` rule ([formats/ogre-mesh.md](formats/ogre-mesh.md#lod)).
+its level on its own with the `distance_sphere` rule ([formats/ogre-mesh.md](formats/ogre-mesh.md#lod)). The rule now lives in `Meitou.Data.Ogre.MeshLod`; `CharacterLod` forwards to it.
 **Verified** (scratch survey with `OgreMeshReader` of the meshes the base game's records name; `CharacterLodTests`
 checks `human_male.mesh`):
 

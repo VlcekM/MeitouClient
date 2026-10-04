@@ -14,7 +14,7 @@ public class CharacterAppearanceTests
 
     static GameDatabase Database(GameInstall install)
     {
-        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.FromInstall(install));
+        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.BaseGame(install));
     }
 
     static string DataFile(GameInstall install, params string[] parts) => Path.Combine([install.DataDirectory, .. parts]);

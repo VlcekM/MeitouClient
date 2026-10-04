@@ -18,6 +18,15 @@ public sealed class LoadOrder
 
     public List<GameDataIssue> Issues { get; } = [];
 
+    /// <summary>Only the core files, without the mods in <c>mods.cfg</c>: the unmodded base game.</summary>
+    public static LoadOrder BaseGame(GameInstall install)
+    {
+        var order = FromInstall(install);
+        order.Entries.RemoveAll(e => !BaseFiles.Contains(e.Name));
+        order.Issues.Clear();
+        return order;
+    }
+
     public static LoadOrder FromInstall(GameInstall install)
     {
         var order = new LoadOrder();

@@ -70,7 +70,7 @@ public class MapFeatureFileTests
         Assert.True(all.Count(a => Math.Abs(a.Feature.Rotation.Length() - 1) < 1e-3) >= all.Count - 1);
         Assert.True(all.Count(a => a.Feature.Rotation.X == 0 && a.Feature.Rotation.Z == 0) > all.Count / 2);
 
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install!));
+        var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var found = all.Where(a => db.Find(a.Feature.StringId) is not null).ToList();
         Assert.Equal(1810, found.Count);
         Assert.All(found, a => Assert.Equal(FcsRecordType.MAP_FEATURES, db.Find(a.Feature.StringId)!.Type));

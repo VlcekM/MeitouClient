@@ -12,7 +12,7 @@ namespace Meitou.ModelViewer;
 /// over the whole world, hidden wherever the terrain is higher. Shading follows the facts of Kenshi's water material:
 /// colour from <c>watercolourmap.png</c>, flow from <c>flowmap.png</c>, three phase-shifted scrolling samples of the
 /// normal map, the biomes' water parameters, alpha from the water depth near the camera and opaque beyond 4000
-/// units. Not reproduced: the reflection render target (the sky colour is reflected instead), scum, turbulence,
+/// units. With a <see cref="ReflectionPass"/> the water reflects the mirrored scene, else the sky colour. Not reproduced: scum, turbulence,
 /// rain ripples and per-biome normal maps (all use <c>water.png</c>).
 /// </summary>
 public sealed unsafe class WaterRenderer : IDisposable
@@ -52,6 +52,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform vec4 uSeaA;             // the open sea past the world's edge: parameters as in the two maps above, and colour
         uniform vec4 uSeaB;
         uniform vec3 uSeaColour;
+        uniform sampler2D uReflection;  // the scene mirrored about the water (ReflectionPass), looked up with uReflectionViewProjection
+        uniform mat4 uReflectionViewProjection;
+        uniform float uReflect;         // 1 with a reflection this frame, else the sky colour is reflected
 
         vec3 sampleNormal(vec2 coord, vec2 direction, float speed, float time)
         {
@@ -69,7 +72,8 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Past the world's edge the data's last pixels would stretch outwards: fade to the open sea instead.
             vec2 beyond = abs(vWorld.xz) - uHalfWorld;
             float outside = max(max(beyond.x, beyond.y), 0.0);
-            float sea = smoothstep(0.0, 30000.0, outside);
+            // The data is shallow-coast colours right up to its edge: fade into the open sea across the edge, from inside it, so there is no straight seam.
+            float sea = smoothstep(-30000.0, 12000.0, max(beyond.x, beyond.y));
             pa = mix(pa, uSeaA, sea);
             pb = mix(pb, uSeaB, sea);
             waterColour = mix(waterColour, uSeaColour, sea);
@@ -96,13 +100,25 @@ public sealed unsafe class WaterRenderer : IDisposable
             float gloss = clamp(pb.x, 0.0, 1.0);
             vec3 l = normalize(uSunDir);
             vec3 h = normalize(l + view);
-            float power = exp2(gloss * 11.0 + 1.0);
+            // The ripples are finer than a pixel far away, so the glint widens and dims with distance instead of staying a hot point.
+            float power = max(exp2(gloss * 11.0 + 1.0) / (1.0 + dist / 6000.0), 12.0);
             float spec = pow(max(dot(n, h), 0.0), power) * (power + 8.0) / 25.0 * gloss;
             float cosv = max(dot(view, n), 0.0);
             float schlick = 0.02 + 0.98 * pow(1.0 - cosv, 5.0);
             vec3 reflected = skyColour(reflect(-view, n), false);
+            if (uReflect > 0.5)
+            {
+                // As the game's water: the normal pushes the lookup sideways by 60 / depth, less the further away.
+                vec4 rc = uReflectionViewProjection * vec4(vWorld, 1.0);
+                vec2 offset = n.xz * (60.0 / rc.w);
+                offset *= min(1.0, 0.04 / max(length(offset), 1e-5));
+                vec2 uv = rc.xy / rc.w * 0.5 + 0.5 + offset;
+                // Past the picture's border there is nothing to reflect: fade to the sky colour.
+                vec2 inside = smoothstep(vec2(0.0), vec2(0.04), uv) * smoothstep(vec2(0.0), vec2(0.04), 1.0 - uv);
+                reflected = mix(reflected, min(texture(uReflection, uv).rgb, vec3(3.0)), inside.x * inside.y);
+            }
             vec3 diffuse = waterColour * (max(dot(n, l), 0.0) * uSunColour * 0.6 + uSkyZenith * 0.5 + 0.03);
-            vec3 colour = mix(diffuse, reflected, schlick * gloss) + spec * uSunColour * 0.25 + pb.y * waterColour;
+            vec3 colour = mix(diffuse, reflected, schlick * gloss) + min(spec, 4.0) * uSunColour * 0.25 + pb.y * waterColour;
 
             // Alpha as the game's water: see-through near the camera where shallow, opaque beyond 4000 units.
             float depth = max(0.0, uWaterHeight - terrainHeight(vWorld.xz)) / max(view.y, 0.05);
@@ -113,10 +129,11 @@ public sealed unsafe class WaterRenderer : IDisposable
             a *= clamp(depth / 2.0, 0.0, 1.0);
             a = mix(1.0, a, clamp((4000.0 - dist) / 400.0, 0.0, 1.0));
 
-            float fog = clamp(dist / uFogDistance, 0.0, 1.0);
-            fragColour = vec4(mix(colour, uFogColour, fog * fog), a);
+            fragColour = vec4(atmoApply(colour, uEye, vWorld), a);   // aerial perspective (AtmosphereShaders)
         }
         """;
+
+    const int ReflectionUnit = 16;
 
     readonly GL gl;
     readonly SkyRenderer sky;
@@ -216,7 +233,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     }
 
     /// <param name="time">Animation time; the game's unit for it is Unknown (the viewer uses real hours).</param>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, TerrainRenderer terrain, float time, float extent)
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, TerrainRenderer terrain, float time, float extent, ReflectionPass? reflection = null)
     {
         gl.UseProgram(program);
         WorldGl.Matrix(gl, U("uViewProjection"), viewProjection);
@@ -242,6 +259,15 @@ public sealed unsafe class WaterRenderer : IDisposable
             gl.ActiveTexture(TextureUnit.Texture0 + 11 + i);
             gl.BindTexture(TextureTarget.Texture2D, textures[i]);
             gl.Uniform1(U(names[i]), 11 + i);
+        }
+        bool reflect = reflection is { Valid: true };
+        gl.Uniform1(U("uReflect"), reflect ? 1f : 0f);
+        gl.Uniform1(U("uReflection"), ReflectionUnit);
+        if (reflect)
+        {
+            gl.ActiveTexture(TextureUnit.Texture0 + ReflectionUnit);
+            gl.BindTexture(TextureTarget.Texture2D, reflection!.Texture);
+            WorldGl.Matrix(gl, U("uReflectionViewProjection"), reflection.ViewProjection);
         }
         gl.ActiveTexture(TextureUnit.Texture0);
 

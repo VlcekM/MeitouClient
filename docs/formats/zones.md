@@ -320,9 +320,10 @@ reproducible**; the viewer seeds its own pick by the town instance or placement 
   `resource mult`), the production side of mineable rocks. The game draws nothing for the building: the visible
   rock is a FOLIAGE_MESH whose `building type` names it (ResourceRock-IRON02..06, Pyrite, Motor parts, TechJunk...:
   24 FOLIAGE_MESH records), placed by the foliage system, which creates or finds the building at the rock's
-  position (FUN_1406d2410, **Verified (decompiled)**: "Foliage object … with associated building …"). Which mesh,
-  rotation and scale stand at a stored placement depends on that placer (not traced); the stored rotation is
-  identity. The viewer draws nothing for them and counts them in its log.
+  position (FUN_1406d2410, **Verified (decompiled)**: "Foliage object … with associated building …"). The placer
+  is in foliage.md; the stored placements do not match the current records (foliage.md, "Not verifiable"), and
+  the stored rotation is identity. The viewer draws nothing for the buildings (counted in its log); the rocks
+  come from its foliage placement.
 - **Ramp** (1 placement, zone 25.34): no parts, nothing drawn.
 - Also not drawn: `is node` buildings (invisible markers), `distant mesh` (low-poly town batches), the
   INVENTORY_STATE entries at the origin.
@@ -335,6 +336,31 @@ The MAP_FEATURES `mesh` (all 1,810 are `.mesh`), scaled by the entry's per-axis 
 TERRAIN mode "uses textures from the current biome": Kenshi's `mapfeature_fs` runs the terrain layer model
 without the road layer (Observed, terrainfp4.hlsl); the viewer draws them with its terrain shader the same way.
 Their materials come from the model viewer's resolver ([../viewer.md](../viewer.md#how-mesh-textures-are-resolved)).
+
+### Draw distance and distant towns
+
+How far placed objects are drawn. Constants are in `ObjectRanges`; the sources are the game's settings and its object/building
+setup code, read in the decompiled `kenshi_x64.exe` for facts only.
+
+- **Settings** (Verified, settings.cfg readers): `objects view range` (default 3000; a value of 1000 or less is replaced by 3000),
+  `feature range` (default 2, 0 to 6; zones around the camera map features are loaded for) and `distant town range` (default 6,
+  0 to 10; zones around the camera distant towns are shown for).
+- **Rendering distance of a part** (Verified for the 3000 and the radius test, Observed for the function numbers): every building part gets
+  the objects view range as its Ogre rendering distance, except that a part whose mesh's local bounding radius is above 100 is
+  left unlimited, a generator building (`BuildingFunction` 5) gets none, and a turret (12) gets half of the range. Which virtual of
+  the building returns the function is not traced, hence Observed. The distance Ogre compares against is not decompiled
+  (Unknown; the viewer uses camera to bounds centre minus radius).
+- **Distant towns** (Verified: file survey and the game's town code): a TOWN record with the `distant mesh` flag has one mesh
+  `data/meshes/distant/distant_<n>.mesh`, where `n` is the `handC` of the town's GAMESTATE_TOWN. Its vertices are relative to the town's
+  placement position (Y included). The mesh is the merge of the `distant mesh` fields of the town's buildings: for The Hub it matches
+  the building distants exactly (same triangles), for towns 75 and 88 the triangle counts are equal (`ObjectLodTests`, install-gated).
+  A building's `distant mesh` is a path in the install (`.\data\...`); some have vertex colours that the `DistantTown` material
+  (`data/buildings/distant/distant_diffuse.dds`) multiplies by 1.5 with the texture (Observed in the shader's text).
+- The files exist in the install for 88 towns (Verified: directory listing). The game can also generate them (a setting, "generate
+  distant towns"); the viewer does not generate, but draws a town without a baked mesh as one instance of each building's
+  own `distant mesh` (equivalent to what generation batches; the game with generation off shows nothing there).
+- **Unknown**: the exact zone load radius for real objects, the hash function used to pick the file number from the town state
+  (`FUN_1400d6260` in the project's analysis, not decoded), and the real BuildingFunction mapping.
 
 ## Open questions
 

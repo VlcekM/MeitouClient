@@ -13,7 +13,7 @@ public class CharacterGeneratorTests
 
     static GameDatabase Database(GameInstall install)
     {
-        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.FromInstall(install));
+        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.BaseGame(install));
     }
 
     static string Limits(GameInstall install, string file) => Path.Combine(install.DataDirectory, "editor", file);

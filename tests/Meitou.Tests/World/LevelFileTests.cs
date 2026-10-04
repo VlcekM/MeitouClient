@@ -178,7 +178,7 @@ public class LevelFileTests
         Assert.All(local, e => Assert.Equal(FcsRecordType.INVENTORY_STATE, world.Zones[e.Zone].Find(e.BuildingId)!.Type));
 
         // Targets resolve against the merged game data, except three buildings that no base file defines.
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install!));
+        var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var missing = buildings.Select(b => b.BuildingId).Where(id => db.Find(id) is null).Distinct().Order().ToList();
         Assert.Equal(["97576-Newwworld.mod", "97577-Newwworld.mod", "97578-Newwworld.mod"], missing);
         Assert.All(buildings.Where(b => db.Find(b.BuildingId) is not null), b => Assert.Equal(FcsRecordType.BUILDING, db.Find(b.BuildingId)!.Type));
