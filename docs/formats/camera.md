@@ -39,5 +39,5 @@ facts in `Meitou.Data.World.KenshiCamera`.
 draws the game's haze unchanged; above them it is the viewer's own choice what to show, since the game has no behaviour there
 (sky.md "In the viewer"). The measure it uses, `SkyRenderer.EyeClearance`, is the eye's height above the highest ground or water
 at the eye and on two rings round it out to 2000 (the longest boom): in-game that stays under ~1840 (plus a roof under the
-pivot). The viewer's altitude band starts at 4000 above that and ends at 15000 (a viewer choice; the user's reference view
+pivot). The viewer's altitude band starts at 8000 above that and ends at 30000 (a viewer choice; the user's reference view
 `--town "The Hub" --distance 40000 --pitch 3` is 3302 above it and stays exactly the game's).

@@ -186,7 +186,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// The viewer's haze strength (not the game's; 1 = the game's haze): scales how far the atmosphere haze is blended in (the game's ramp,
     /// or the physical haze's amount), not the weather's fog.
     /// </summary>
-    public float HazeStrength { get; set; } = 1;
+    public float HazeStrength { get; set; } = 0.85f;
     /// <summary>
     /// The eye's height above the highest ground or water within the game's longest camera boom (<see cref="KenshiCamera.MaxDistance"/>) around it,
     /// set each frame by <see cref="SetEye"/>. The game's camera never gets more than <see cref="KenshiCamera.MaxHeightAbovePivot"/> above its
@@ -197,7 +197,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// The viewer's height band (its own choice; no game behaviour exists up there) over which the game's haze, which measures from SkyX's
     /// fixed eye near the ground, gives way to the physical haze: none below <see cref="AltitudeBandStart"/>, all of it above <see cref="AltitudeBandEnd"/>.
     /// </summary>
-    public const float AltitudeBandStart = 4000, AltitudeBandEnd = 15000;
+    public const float AltitudeBandStart = 8000, AltitudeBandEnd = 30000;
     /// <summary>0 within the game's camera heights, rising to 1 across the altitude band (smoothstep of <see cref="EyeClearance"/>).</summary>
     public float AltitudeWeight
     {
