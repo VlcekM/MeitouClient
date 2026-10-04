@@ -38,14 +38,15 @@ public sealed unsafe class TerrainRenderer : IDisposable
     readonly GL gl;
     readonly uint patchProgram, meshProgram;
     readonly Dictionary<(uint, string), int> uniforms = [];
-    readonly uint gridVao, gridVbo, gridEbo, coarseTexture, fineTexture;
+    readonly uint gridVao, gridVbo, gridEbo, coarseTexture;
+    uint fineTexture;
     readonly int[] indexOffsets = new int[5], indexCounts = new int[5];
     readonly TerrainHeightBounds bounds;
     readonly List<TerrainNode> nodes = [];
-    readonly HeightWindow fine;
+    HeightWindow fine;
     readonly ushort[] coarse;
     readonly int coarseSize;
-    readonly float fineBand;
+    float fineBand;
     TerrainQuadtree quadtree;
     TerrainTextures? textures;
     Frame frame;
@@ -64,8 +65,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         this.coarseSize = coarseSize;
         bounds = new TerrainHeightBounds(coarse, coarseSize, fine);
         quadtree = new TerrainQuadtree(fine.Spacing, GridCells, lodDistance);
-        float regionSize = (fine.Columns - 1) * fine.Spacing;
-        fineBand = Math.Clamp(regionSize * 0.1f, fine.Spacing * 4, 3000);
+        fineBand = BandOf(fine);
         patchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, TerrainShaders.Fragment);
         meshProgram = WorldGl.Program(gl, TerrainShaders.MeshVertex, TerrainShaders.Fragment);
 
@@ -98,12 +98,18 @@ public sealed unsafe class TerrainRenderer : IDisposable
         gl.BindVertexArray(0);
     }
 
-    uint HeightTexture(ushort[] raw, int width, int height)
+    /// <summary>Width of the band at the fine window's border where it fades into the coarse grid.</summary>
+    static float BandOf(HeightWindow w) => Math.Clamp((w.Columns - 1) * w.Spacing * 0.1f, w.Spacing * 4, 3000);
+
+    uint HeightTexture(ushort[] raw, int width, int height) => HeightTexture(raw, width, height, upload: true);
+
+    uint HeightTexture(ushort[]? raw, int width, int height, bool upload)
     {
         uint id = gl.GenTexture();
         gl.BindTexture(TextureTarget.Texture2D, id);
         gl.PixelStore(PixelStoreParameter.UnpackAlignment, 2);
-        gl.TexImage2D<ushort>(TextureTarget.Texture2D, 0, InternalFormat.R16, (uint)width, (uint)height, 0, PixelFormat.Red, PixelType.UnsignedShort, raw.AsSpan());
+        if (upload) gl.TexImage2D<ushort>(TextureTarget.Texture2D, 0, InternalFormat.R16, (uint)width, (uint)height, 0, PixelFormat.Red, PixelType.UnsignedShort, raw!.AsSpan());
+        else gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.R16, (uint)width, (uint)height, 0, PixelFormat.Red, PixelType.UnsignedShort, (void*)0);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
@@ -122,6 +128,43 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     /// <summary>Uses biome textures and land maps from now on (null: untextured).</summary>
     public void SetTextures(TerrainTextures? t) => textures = t;
+
+    /// <summary>The window the fine height texture currently holds.</summary>
+    public HeightWindow Fine => fine;
+
+    /// <summary>Bounds of a window against the quadtree's cell grid; safe on another thread.</summary>
+    public TerrainHeightBounds.Patch MeasureBounds(HeightWindow w) => bounds.Measure(w);
+
+    /// <summary>
+    /// Replaces the fine window: a new texture is filled in slabs through <paramref name="uploads"/> while the old
+    /// one stays in use, then swapped in (so no frame waits for the whole upload).
+    /// </summary>
+    public void BeginFineUpload(HeightWindow window, TerrainHeightBounds.Patch patch, UploadQueue uploads, Action? done = null)
+    {
+        const int slabRows = 192;
+        uint texture = 0;
+        uploads.Add(() => texture = HeightTexture(null, window.Columns, window.Rows, upload: false), "height texture");
+        for (int row = 0; row < window.Rows; row += slabRows)
+        {
+            int r0 = row, n = Math.Min(slabRows, window.Rows - row);
+            uploads.Add(() =>
+            {
+                gl.BindTexture(TextureTarget.Texture2D, texture);
+                gl.PixelStore(PixelStoreParameter.UnpackAlignment, 2);
+                gl.TexSubImage2D<ushort>(TextureTarget.Texture2D, 0, 0, r0, (uint)window.Columns, (uint)n, PixelFormat.Red, PixelType.UnsignedShort, window.Raw.AsSpan(r0 * window.Columns, n * window.Columns));
+                gl.PixelStore(PixelStoreParameter.UnpackAlignment, 4);
+            }, "height slab");
+        }
+        uploads.Add(() =>
+        {
+            gl.DeleteTexture(fineTexture);
+            fineTexture = texture;
+            fine = window;
+            fineBand = BandOf(window);
+            bounds.Apply(patch);
+            done?.Invoke();
+        }, "height swap");
+    }
 
     /// <summary>Height at a world point from the same grids the shaders read (bilinear, blended at the region's edge).</summary>
     public float HeightAt(float x, float z)
@@ -219,7 +262,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
         bool textured = options.Textures && t is { HasBiomes: true };
         gl.Uniform1(U(program, "uTextured"), textured ? 1 : 0);
         gl.Uniform1(U(program, "uNormalMaps"), textured && options.NormalMaps ? 1 : 0);
-        gl.Uniform1(U(program, "uHasMaps"), options.Textures && t is { HasMaps: true } ? 1 : 0);
+        gl.Uniform1(U(program, "uHasMaps"), options.Textures && t is { MapState: 2 } ? 1 : 0);
+        gl.Uniform1(U(program, "uMapState"), t?.MapState ?? 0);
         gl.Uniform1(U(program, "uHasGround"), t is { HasGround: true } ? 1 : 0);
         gl.Uniform1(U(program, "uHasWorldColour"), t is { HasWorldColour: true } ? 1 : 0);
         string[] samplers = ["uDiffuse", "uNormal", "uParams", "uCells", "uBlendMap", "uOverlay", "uColour"];
@@ -230,7 +274,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         {
             t.Bind();
             gl.Uniform4(U(program, "uRegion"), t.Region.X, t.Region.Y, t.Region.Z, t.Region.W);
-            gl.Uniform4(U(program, "uColourRegion"), t.ColourRegion.X, t.ColourRegion.Y, t.ColourRegion.Z, t.ColourRegion.W);
             gl.Uniform2(U(program, "uCellGrid"), (float)t.CellsX, t.CellsZ);
         }
     }

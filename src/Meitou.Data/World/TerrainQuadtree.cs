@@ -32,38 +32,96 @@ public sealed class TerrainHeightBounds
                 mn[z * cells + x] = WorldLayout.RawToHeight(Math.Min(Math.Min(a, b), Math.Min(c, d)));
                 mx[z * cells + x] = WorldLayout.RawToHeight(Math.Max(Math.Max(a, b), Math.Max(c, d)));
             }
-        if (fine is not null)
-            for (int j = 0; j < fine.Rows; j++)
-                for (int i = 0; i < fine.Columns; i++)
-                {
-                    var (x, z) = fine.WorldOf(i, j);
-                    float h = fine.Height(i, j);
-                    // A sample on a cell edge bounds the cells on both sides.
-                    double fx = (x + WorldLayout.HalfWorldSize) / CellSize, fz = (z + WorldLayout.HalfWorldSize) / CellSize;
-                    for (int cz = (int)Math.Ceiling(fz) - 1; cz <= (int)Math.Floor(fz); cz++)
-                        for (int cx = (int)Math.Ceiling(fx) - 1; cx <= (int)Math.Floor(fx); cx++)
-                        {
-                            if ((uint)cx >= cells || (uint)cz >= cells) continue;
-                            int k = cz * cells + cx;
-                            mn[k] = Math.Min(mn[k], h);
-                            mx[k] = Math.Max(mx[k], h);
-                        }
-                }
         min[0] = mn;
         max[0] = mx;
         for (int l = 1; l < levels; l++)
         {
-            int n = cells >> l, p = n * 2;
-            min[l] = new float[n * n];
-            max[l] = new float[n * n];
-            for (int z = 0; z < n; z++)
-                for (int x = 0; x < n; x++)
+            min[l] = new float[(cells >> l) * (cells >> l)];
+            max[l] = new float[(cells >> l) * (cells >> l)];
+        }
+        if (fine is not null) Apply(Measure(fine), rebuildAll: false);
+        Rebuild(0, 0, cells - 1, cells - 1);
+    }
+
+    /// <summary>Recomputes the levels above 0 over the level-0 cell rectangle (inclusive) and what depends on it.</summary>
+    void Rebuild(int cx0, int cz0, int cx1, int cz1)
+    {
+        for (int l = 1; l < min.Length; l++)
+        {
+            cx0 >>= 1; cz0 >>= 1; cx1 >>= 1; cz1 >>= 1;
+            int n = Cells >> l, p = n * 2;
+            for (int z = cz0; z <= cz1; z++)
+                for (int x = cx0; x <= cx1; x++)
                 {
                     int a = 2 * z * p + 2 * x, b = a + 1, c = a + p, d = c + 1;
                     min[l][z * n + x] = Math.Min(Math.Min(min[l - 1][a], min[l - 1][b]), Math.Min(min[l - 1][c], min[l - 1][d]));
                     max[l][z * n + x] = Math.Max(Math.Max(max[l - 1][a], max[l - 1][b]), Math.Max(max[l - 1][c], max[l - 1][d]));
                 }
         }
+    }
+
+    /// <summary>The height range of a fine window's samples per level-0 cell, ready for <see cref="Apply"/>.</summary>
+    /// <param name="Cx0">First level-0 cell column of the patch.</param>
+    public sealed record Patch(int Cx0, int Cz0, int Width, int Height, float[] Min, float[] Max);
+
+    /// <summary>
+    /// Measures a window against the cell grid without touching the pyramid, so it can run on another thread while
+    /// the pyramid is in use; <see cref="Apply"/> then merges the result.
+    /// </summary>
+    public Patch Measure(HeightWindow fine)
+    {
+        var (xa, za) = fine.WorldOf(0, 0);
+        var (xb, zb) = fine.WorldOf(fine.Columns - 1, fine.Rows - 1);
+        int cx0 = Math.Clamp((int)Math.Ceiling((xa + WorldLayout.HalfWorldSize) / CellSize) - 1, 0, Cells - 1);
+        int cz0 = Math.Clamp((int)Math.Ceiling((za + WorldLayout.HalfWorldSize) / CellSize) - 1, 0, Cells - 1);
+        int cx1 = Math.Clamp((int)Math.Floor((xb + WorldLayout.HalfWorldSize) / CellSize), cx0, Cells - 1);
+        int cz1 = Math.Clamp((int)Math.Floor((zb + WorldLayout.HalfWorldSize) / CellSize), cz0, Cells - 1);
+        int w = cx1 - cx0 + 1, h = cz1 - cz0 + 1;
+        var mn = new float[w * h];
+        var mx = new float[w * h];
+        Array.Fill(mn, float.MaxValue);
+        Array.Fill(mx, float.MinValue);
+        var fxs = new double[fine.Columns];
+        for (int i = 0; i < fxs.Length; i++) fxs[i] = (fine.WorldOf(i, 0).X + WorldLayout.HalfWorldSize) / CellSize;
+        for (int j = 0; j < fine.Rows; j++)
+        {
+            double fz = (fine.WorldOf(0, j).Z + WorldLayout.HalfWorldSize) / CellSize;
+            int zlo = Math.Max((int)Math.Ceiling(fz) - 1, cz0), zhi = Math.Min((int)Math.Floor(fz), cz1);
+            for (int i = 0; i < fine.Columns; i++)
+            {
+                float v = WorldLayout.RawToHeight(fine.Raw[j * fine.Columns + i]);
+                double fx = fxs[i];
+                // A sample on a cell edge bounds the cells on both sides.
+                int xlo = Math.Max((int)Math.Ceiling(fx) - 1, cx0), xhi = Math.Min((int)Math.Floor(fx), cx1);
+                for (int cz = zlo; cz <= zhi; cz++)
+                    for (int cx = xlo; cx <= xhi; cx++)
+                    {
+                        int k = (cz - cz0) * w + cx - cx0;
+                        if (v < mn[k]) mn[k] = v;
+                        if (v > mx[k]) mx[k] = v;
+                    }
+            }
+        }
+        return new Patch(cx0, cz0, w, h, mn, mx);
+    }
+
+    /// <summary>
+    /// Widens the cells of a <see cref="Measure"/>d patch (never narrows them, so bounds stay valid for windows
+    /// applied earlier) and refreshes the levels above.
+    /// </summary>
+    public void Apply(Patch patch) => Apply(patch, rebuildAll: true);
+
+    void Apply(Patch patch, bool rebuildAll)
+    {
+        for (int z = 0; z < patch.Height; z++)
+            for (int x = 0; x < patch.Width; x++)
+            {
+                int k = (patch.Cz0 + z) * Cells + patch.Cx0 + x, p = z * patch.Width + x;
+                if (patch.Min[p] == float.MaxValue) continue;
+                min[0][k] = Math.Min(min[0][k], patch.Min[p]);
+                max[0][k] = Math.Max(max[0][k], patch.Max[p]);
+            }
+        if (rebuildAll) Rebuild(patch.Cx0, patch.Cz0, patch.Cx0 + patch.Width - 1, patch.Cz0 + patch.Height - 1);
     }
 
     /// <summary>Level-0 cells per side and their edge length in world units.</summary>

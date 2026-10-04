@@ -72,6 +72,25 @@ public class TerrainQuadtreeTests
     }
 
     [Fact]
+    public void Height_bounds_take_a_window_later_the_same_as_at_construction()
+    {
+        var coarse = new ushort[5 * 5];
+        coarse[1 * 5 + 1] = 65535;
+        var fine = new HeightWindow(16000, 16000, 1, 3, 3, [100, 100, 100, 100, 32768, 100, 100, 100, 100]);
+        var early = new TerrainHeightBounds(coarse, 5, fine);
+        var late = new TerrainHeightBounds(coarse, 5);
+        late.Apply(late.Measure(fine));
+        double cell = WorldLayout.WorldSize / 4.0, x0 = -WorldLayout.HalfWorldSize;
+        foreach (double size in new[] { cell, 2 * cell, 4 * cell })
+            for (int cz = 0; cz < 4; cz++)
+                for (int cx = 0; cx < 4; cx++)
+                    Assert.Equal(early.Range(x0 + cx * cell, x0 + cz * cell, size), late.Range(x0 + cx * cell, x0 + cz * cell, size));
+        // The window only widens: a second window elsewhere keeps the first one's samples in the bounds.
+        late.Apply(late.Measure(new HeightWindow(0, 0, 1, 1, 1, [65535])));
+        Assert.Equal(WorldLayout.RawToHeight(32768), late.Range(x0 + 3 * cell, x0 + 3 * cell, cell).Max);
+    }
+
+    [Fact]
     public void Quadtree_levels_follow_the_finest_spacing()
     {
         var q = new TerrainQuadtree(18, gridCells: 32);

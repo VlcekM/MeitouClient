@@ -123,7 +123,8 @@ static class TerrainShaders
 
         uniform bool uTextured;        // biome layers available
         uniform bool uNormalMaps;
-        uniform bool uHasMaps;         // overlay + colour region textures available
+        uniform bool uHasMaps;         // overlay + colour window textures available
+        uniform int uMapState;         // 0 no maps, 1 maps still loading (ground colour only), 2 ready
         uniform int uDebug;            // 0 normal, 1 slot weights, 2 layer weights, 3 LOD-free shading
         uniform bool uNoRoads;         // map features: no road layer
         uniform float uFarStart;       // distance where the textured terrain gives way to the ground colour
@@ -134,14 +135,13 @@ static class TerrainShaders
         uniform sampler2DArray uDiffuse;
         uniform sampler2DArray uNormal;
         uniform sampler2D uParams;     // row = biome, ParamTexels texels
-        uniform usampler2D uCells;     // blend cells, two texels each: slots 0..3, slot 4; region biome index (255 = none)
+        uniform usampler2D uCells;     // blend cells, two texels each: slots 0..3, slot 4; biome row, 254 = not loaded yet, 255 = unused
         uniform sampler2D uBlendMap;   // whole world: weights of slots 0..3; slot 4 takes the remainder
-        uniform sampler2D uOverlay;    // region: R/G grass, B dirt, A road
-        uniform sampler2D uColour;     // region: tint (×1.2), A gloss
+        uniform sampler2D uOverlay;    // window: R/G grass, B dirt, A road
+        uniform sampler2D uColour;     // window: tint (×1.2), A gloss
         uniform sampler2D uGround;     // whole world: blended biome ground colour × brightness fix
         uniform sampler2D uWorldColour;// whole world: the colour map, downsampled
-        uniform vec4 uRegion;          // x0, z0, 1/width, 1/depth of the overlay region texture
-        uniform vec4 uColourRegion;    // the same for the colour region texture
+        uniform vec4 uRegion;          // x0, z0, 1/width, 1/depth of the overlay and colour windows (the same square); they wrap: texel = world mod width
         uniform vec2 uCellGrid;        // cells along X and Z
         uniform float uHalfWorld;
 
@@ -224,8 +224,15 @@ static class TerrainShaders
             float slope = 1.0 - n.y;
             vec2 world01 = (vWorld.xz + uHalfWorld) / (2.0 * uHalfWorld);
 
-            // How much of the textured (region) shading applies: inside the region, before the far distance.
-            float nearWeight = uHeightNormals ? fineWeight(vWorld.xz) : 1.0;
+            // How much of the textured shading applies: before the far distance, and inside the overlay window once the
+            // maps are loaded (the window follows the eye, so its edge lies beyond the material distance).
+            float nearWeight = 1.0;
+            if (uMapState == 1) nearWeight = 0.0;
+            else if (uMapState == 2)
+            {
+                vec2 wuv = (vWorld.xz - uRegion.xy) * uRegion.zw;
+                nearWeight = clamp(min(min(wuv.x, 1.0 - wuv.x), min(wuv.y, 1.0 - wuv.y)) / (3000.0 * uRegion.z), 0.0, 1.0);
+            }
             nearWeight *= 1.0 - smoothstep(uFarStart, uFarEnd, distance);
 
             vec4 albedo = vec4(0.0);
@@ -236,10 +243,10 @@ static class TerrainShaders
                 vec4 colour = vec4(1.0);
                 if (uHasMaps)
                 {
-                    map = texture(uOverlay, (vWorld.xz - uRegion.xy) * uRegion.zw);
+                    map = texture(uOverlay, fract((vWorld.xz + uHalfWorld) * uRegion.zw));
                     map.r = max(map.r, map.g);
                     if (uNoRoads) map.a = 0.0;
-                    colour = texture(uColour, (vWorld.xz - uColourRegion.xy) * uColourRegion.zw) * 1.2;
+                    colour = texture(uColour, fract((vWorld.xz + uHalfWorld) * uRegion.zw)) * 1.2;
                 }
                 if (uTextured)
                 {
@@ -249,25 +256,29 @@ static class TerrainShaders
                     vec4 weights = texture(uBlendMap, world01);
                     float rest = max(0.0, 1.0 - dot(weights, vec4(1.0)));
                     vec4 sumA = vec4(0.0), sumN = vec4(0.0);
-                    float total = 0.0;
+                    float total = 0.0, pending = 0.0;
                     for (int k = 0; k < 5; k++)
                     {
                         uint b = k < 4 ? slots[k] : slot4;
                         float wk = k < 4 ? weights[k] : rest;
-                        if (b == 255u || wk < 0.004) continue;
+                        if (b == 254u && wk >= 0.004) pending += wk;   // biome still loading: its share shows the ground colour
+                        if (b >= 254u || wk < 0.004) continue;
                         Surface s = biome(int(b), n, slope, map, colour, distance);
                         sumA += s.albedo * wk;
                         sumN += s.normal * wk;
                         total += wk;
                     }
-                    uint fallback = slot4 != 255u ? slot4 : slots.x;
-                    if (total <= 0.0 && fallback != 255u)
+                    uint fallback = slot4 < 254u ? slot4 : slots.x;
+                    if (total <= 0.0 && pending <= 0.0 && fallback < 254u)
                     {
                         Surface s = biome(int(fallback), n, slope, map, colour, distance);
                         sumA = s.albedo; sumN = s.normal; total = 1.0;
                     }
                     if (total > 0.0) { albedo = sumA / total; sumN /= total; }
                     else { albedo = vec4(0.6, 0.55, 0.45, 0.2); sumN = vec4(0.5, 0.5, 1.0, 1.0); }
+                    // Biomes still loading show the ground colour in their share.
+                    if (total > 0.0) nearWeight *= total / (total + pending);
+                    else if (pending > 0.0) nearWeight = 0.0;
                     if (uDebug == 1) albedo = vec4(weights.rgb + weights.a * vec3(1.0, 1.0, 0.0) + rest * vec3(1.0), 1.0);
                     if (uNormalMaps)
                     {

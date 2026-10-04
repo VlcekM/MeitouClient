@@ -28,7 +28,8 @@ sealed class WorldOptions
     public float ObjectDistance = 12000;
     public float Hour = 13;
     public float ViewDistance = 450000, FogDistance = 250000, MaterialDistance = 30000;
-    public bool NoWater;
+    public bool NoWater, NoStream;
+    public double? CameraX, CameraZ, FlyToX, FlyToZ;
 
     public const string Usage = """
         meitou-viewer --world [where] [options]
@@ -47,6 +48,9 @@ sealed class WorldOptions
           --debug <n>              1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass)
           --time <hour>            time of day for the sun (default 13; sunrise and sunset from the CONSTANTS record)
           --no-water               leave out the water
+          --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
+          --no-stream              keep the terrain detail around the start point instead of following the camera
+          --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --view-distance <u>      furthest terrain drawn (default 450000: the whole world)
           --fog <u>                distance where the haze is complete (default 250000)
           --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
@@ -96,6 +100,9 @@ sealed class WorldOptions
                 case "--info": o.Info = true; break;
                 case "--time": o.Hour = F(); break;
                 case "--no-water": o.NoWater = true; break;
+                case "--no-stream": o.NoStream = true; break;
+                case "--camera-at": (o.CameraX, o.CameraZ) = Pair(); break;
+                case "--fly-to": (o.FlyToX, o.FlyToZ) = Pair(); break;
                 case "--view-distance": o.ViewDistance = F(); break;
                 case "--fog": o.FogDistance = F(); break;
                 case "--material-distance": o.MaterialDistance = F(); break;
@@ -238,7 +245,7 @@ static class WorldApp
         float radius = o.Radius * WorldLayout.ZoneSize;
         var camera = new WorldCamera
         {
-            Target = scene.Focus,
+            Target = o.CameraX is { } cx && o.CameraZ is { } cz ? new Vector3((float)cx, scene.GroundAt((float)cx, (float)cz), (float)cz) : scene.Focus,
             Yaw = (o.Yaw ?? 30) * MathF.PI / 180,
             Pitch = (o.Pitch ?? 35) * MathF.PI / 180,
             Distance = o.Distance ?? radius,
@@ -255,8 +262,12 @@ static class WorldApp
         public required SkyRenderer Sky;
         public WaterRenderer? Water;
         public WorldObjectRenderer? Objects;
+        public TerrainStreamer? Streamer;
+        /// <summary>With <c>--no-stream</c>: where the streamer is kept, instead of at the eye.</summary>
+        public Vector3? Anchor;
         public void Dispose()
         {
+            Streamer?.Dispose();
             Objects?.Dispose();
             Water?.Dispose();
             Sky.Dispose();
@@ -269,14 +280,17 @@ static class WorldApp
         var watch = Stopwatch.StartNew();
         var terrain = new TerrainRenderer(gl, scene.Coarse, scene.CoarseSize, scene.Window, new WorldRenderOptions().LodDistance);
         Console.WriteLine($"uploaded  terrain heights: {terrain.LevelCount} LOD levels, finest {terrain.FinestSpacing:0.#} units ({watch.ElapsedMilliseconds} ms)");
+        TerrainTextures? textures = null;
         if (!o.NoTextures && scene.Database is not null)
         {
-            var textures = TerrainTextures.Build(gl, install, scene.Database, assets, scene.X0, scene.Z0, scene.X1, scene.Z1, o.LayerSize);
+            textures = TerrainTextures.Create(gl, install, scene.Database, assets, o.LayerSize);
             foreach (var m in textures.Messages.Take(20)) Console.WriteLine($"warning   {m}");
-            Console.WriteLine($"biomes    {textures.Biomes.Count}: {string.Join(", ", textures.Biomes.Select(b => b.Name.Trim()))} ({watch.ElapsedMilliseconds} ms)");
+            Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {o.LayerSize}² ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
         var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl) };
+        gpu.Streamer = new TerrainStreamer(install, terrain, textures, scene.Window.Step) { MaterialDistance = o.MaterialDistance };
+        if (o.NoStream) gpu.Anchor = scene.Focus;
         if (!o.NoWater && scene.Database is not null)
         {
             var messages = new List<string>();
@@ -296,7 +310,8 @@ static class WorldApp
     static void Draw(GL gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time, float fogDistance)
     {
         var eye = camera.Eye;
-        float floor = scene.GroundAt(eye.X, eye.Z);
+        gpu.Streamer?.Update(gpu.Anchor ?? eye);
+        float floor = gpu.Terrain.HeightAt(eye.X, eye.Z);
         if (render.Water) floor = Math.Max(floor, WorldWater.Height);
         camera.EyeClearance = Math.Max(eye.Y - floor, 1);
         var colours = SkyColours.For(scene.Clock.SunDirection(hour));
@@ -324,7 +339,7 @@ static class WorldApp
             var frustum = WorldCamera.FrustumPlanes(viewProjection);
             gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
             if (nearSlice && render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
-            if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, gpu.Terrain, time);
+            if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, gpu.Terrain, time, camera.ViewDistance * 1.5f);
         }
     }
 
@@ -335,6 +350,12 @@ static class WorldApp
         using var gl = window.CreateOpenGL();
         using var gpu = CreateGpu(gl, install, scene, assets, o, interactive: false);
         var (camera, render) = Setup(scene, o);
+        if (gpu.Streamer is { } streamer)
+        {
+            var streamWatch = Stopwatch.StartNew();
+            streamer.Settle(gpu.Anchor ?? camera.Eye);
+            Console.WriteLine($"streamed  {streamer.Describe()} ({streamWatch.ElapsedMilliseconds} ms)");
+        }
 
         // Offscreen: 4x multisampled framebuffer, resolved into a plain one and read back.
         int w = o.Width, h = o.Height;
@@ -351,6 +372,37 @@ static class WorldApp
             Console.Error.WriteLine("Offscreen framebuffer incomplete.");
             return 1;
         }
+        if (o.FlyToX is { } flyX && o.FlyToZ is { } flyZ)
+        {
+            // Streaming test: fly the camera to the point at 3x the interactive fast speed, 60 frames per second of
+            // wall time, and report the render thread's cost per frame (draw + uploads) while data streams in.
+            var start = camera.Target;
+            var end = new Vector3((float)flyX, 0, (float)flyZ);
+            float length = Vector2.Distance(new Vector2(start.X, start.Z), new Vector2(end.X, end.Z));
+            float perFrame = 3f * 0.8f * Math.Max(camera.Distance, 50) / 60f;
+            int frames = Math.Max((int)(length / perFrame), 1);
+            var times = new List<double>();
+            var frameWatch = new Stopwatch();
+            for (int i = 1; i <= frames; i++)
+            {
+                float t = i / (float)frames;
+                var p = Vector3.Lerp(start, end, t);
+                camera.Target = new Vector3(p.X, gpu.Terrain.HeightAt(p.X, p.Z), p.Z);
+                frameWatch.Restart();
+                Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
+                gl.Finish();
+                times.Add(frameWatch.Elapsed.TotalMilliseconds);
+                if (frameWatch.Elapsed.TotalMilliseconds > 15 && Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1")
+                    Console.WriteLine($"slow frame {i}: {frameWatch.Elapsed.TotalMilliseconds:0.0} ms, streamer update {gpu.Streamer?.LastUpdateMs:0.0} ms [{gpu.Streamer?.LastSteps}], gen2 GCs {GC.CollectionCount(2)}, gen0 {GC.CollectionCount(0)}");
+                int sleep = 16 - (int)frameWatch.ElapsedMilliseconds;
+                if (sleep > 0) Thread.Sleep(sleep);
+            }
+            double first = times[0], worstAfterFirst = times.Count > 1 ? times.Skip(1).Max() : 0;
+            times.Sort();
+            Console.WriteLine($"flight    {frames} frames over {length:0} units: median {times[times.Count / 2]:0.0} ms, 99th {times[(int)(times.Count * 0.99)]:0.0} ms, worst {times[^1]:0.0} ms (first frame {first:0.0} ms, worst after it {worstAfterFirst:0.0} ms), " +
+                $"{times.Count(x => x > 10)} frames over 10 ms; streaming {(gpu.Streamer?.Idle == true ? "idle" : $"{gpu.Streamer?.Pending} pending")}");
+        }
+
         var drawWatch = Stopwatch.StartNew();
         Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
         gl.Finish();
@@ -458,7 +510,8 @@ static class WorldApp
             {
                 var t = camera.Target;
                 window.Title = $"Meitou world | {frames / titleTimer:0} fps, {titleTimer * 1000 / Math.Max(frames, 1):0.00} ms | {t.X:0}, {t.Z:0} zone {WorldLayout.ZoneOf(t.X, t.Z)} | {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" +
-                    (gpu.Objects is { } ob && render.Objects ? $" | {ob.DrawnInstances} objects" : "");
+                    (gpu.Objects is { } ob && render.Objects ? $" | {ob.DrawnInstances} objects" : "") +
+                    (gpu.Streamer is { Pending: > 0 } st ? $" | loading {st.Pending}" : "");
                 titleTimer = 0;
                 frames = 0;
             }

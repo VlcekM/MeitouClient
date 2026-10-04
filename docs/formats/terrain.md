@@ -202,8 +202,9 @@ mostly hidden below it. Checked with a probe outside the repo, plus top-down scr
 ### In the viewer (`TerrainQuadtree`, `TerrainRenderer`, `TerrainShaders`)
 
 CDLOD in our own implementation. Heights live in two R16 textures that the vertex shader samples: the whole map
-every 8th sample (2049², 144 units), and a `HeightWindow` around the start point (every `--step`-th sample).
-The fine one fades in over a band at its border. A 64 × 64 grid patch is drawn per selected node. Node ranges are
+every 8th sample (2049², 144 units), and a `HeightWindow` of the finest samples (every `--step`-th) around the
+camera, re-read from the file when the camera leaves its middle (docs/viewer.md, Streaming). The fine one fades in over
+a band at its border. A 64 × 64 grid patch is drawn per selected node. Node ranges are
 `leaf size × 2^level × K` (K = 3, `[` / `]` change it). A node morphs over the last 30% of its range: its odd
 vertices slide onto the coarser grid, so touching nodes differ by at most one level and their edges match
 (`TerrainQuadtreeTests`). Bounds come from a min/max pyramid of the heights. Normals are computed per pixel from
@@ -260,7 +261,9 @@ Three samples of the normal map, scrolled along the flow with shifted phases, bl
 plane. Alpha: opaque beyond 4000 units (where the distant plane takes over, with a 400-unit blend); nearer, it
 grows with the water depth under the pixel, scaled by `invOpacity` and a Fresnel term. The unit of the time
 parameter (`gameTime`) is **Unknown**. The viewer reflects the sky colour instead of a render target, and does
-not draw scum, turbulence, rain ripples or the per-biome normal maps.
+not draw scum, turbulence, rain ripples or the per-biome normal maps. The viewer draws the sea past the world's
+edge too (the game's distant plane is cut at the map bounds, see Placement): a plane centred on the camera, with the
+water parameters fading to the open sea's (the most common among the maps' outer ring) over 30000 units past the edge.
 
 ## Sky and sun
 

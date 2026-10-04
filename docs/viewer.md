@@ -236,7 +236,12 @@ two keeping at most 2048 cells per side, so `--radius 32`, the whole world, uses
 `--object-distance`, `--layer-size`, `--debug 1|2|3`, `--time <hour>` (default 13), `--no-water`,
 `--view-distance` (default 450000), `--fog` (distance of full haze at ground level, default 250000) and
 `--material-distance` (where the full terrain material gives way to the ground colour, default 30000 as in the
-game). Keys: left drag orbits the target, right drag looks
+game). `--camera-at x,z` starts the camera somewhere
+else than the loaded point (as if flown there), `--no-stream` keeps the detail around the start point instead of following
+the camera (the behaviour before streaming), and `--fly-to x,z` with `--screenshot` flies there first at 3 times the
+fast key speed and prints the frame times on the way (a streaming test). `MEITOU_STREAM_LOG=1` prints upload steps over 3 ms.
+
+Keys: left drag orbits the target, right drag looks
 around, wheel zooms, `W A S D` fly over the ground, `Q`/`E` down/up (Shift faster), `T` textures, `N` normal
 maps, `O` objects, `G` water, `,`/`.` time of day −/+ 1 hour, `X` wireframe, `V` debug view (blend weights,
 layer weights, untextured shading), `[`/`]` LOD distance (× 1.25), `H` prints the camera as command-line
@@ -251,13 +256,17 @@ dotnet run --project tools/Meitou.ModelViewer -- --world --town "The Hub" --radi
 How it works (status as in [README.md](README.md)):
 
 - **Terrain** (`TerrainQuadtree`, `TerrainRenderer`): CDLOD out to the horizon, as described in
-  [formats/terrain.md](formats/terrain.md#terrain-lod). The whole map (every 8th sample) and the region's
-  `HeightWindow` are height textures; one 64 × 64 grid patch is drawn per quadtree node, with the odd vertices
+  [formats/terrain.md](formats/terrain.md#terrain-lod). The whole map (every 8th sample) and a `HeightWindow` of the
+  finest samples around the eye are height textures (the window follows the camera, see Streaming); one 64 × 64 grid patch is drawn per quadtree node, with the odd vertices
   morphing onto the coarser level, so there are no cracks or pops. Nodes outside the frustum are skipped.
   Two depth slices (far 20000 to `--view-distance`, then near), with the near plane following the eye's height.
   Beyond `--material-distance` the terrain shows the biome ground colour × the colour map.
-- **Water** (`WaterRenderer`; [formats/terrain.md](formats/terrain.md#water)): one surface at Y = 100 over the
-  world, with colour from `watercolourmap.png`, flow from `flowmap.png`, the `water.png` normal map scrolled three
+- **Water** (`WaterRenderer`; [formats/terrain.md](formats/terrain.md#water)): one surface at Y = 100, a
+  quad centred on the eye and 1.5 times the view distance wide, so the sea reaches the horizon in every direction, past
+  the world's edge too (the game's own distant plane stops at the edge; the infinite sea is the viewer's choice). Beyond
+  the edge the water colour and parameters fade over 30000 units from the edge pixels to the open sea (the most common
+  parameters among the outer ring of the maps), so the last pixels do not stretch outwards, and the water counts as deep.
+  It has colour from `watercolourmap.png`, flow from `flowmap.png`, the `water.png` normal map scrolled three
   times, and per-pixel biome parameters (`BiomeField` over `blendinfo.dat` + `blendmap.png`). Shallow water is
   see-through near the camera, and it is opaque beyond 4000 units, as in the game. It reflects the sky colour
   (no reflection render target).
@@ -267,11 +276,46 @@ How it works (status as in [README.md](README.md)):
 - Frame times (2026-10-04, offscreen 1280 × 960, average of 10 frames after loading): Shark with water 1.6 ms,
   Port North coast 1.6 ms, The Hub looking at the horizon 1.1 to 1.2 ms, whole world from above 0.6 ms
   (12 ms at 1400 × 1400 with `--material-distance 1e7`, which puts the full material everywhere).
-- **Texturing** (`TerrainTextures`, `TerrainShaders`): the biomes of every `blendinfo.dat` cell touching the
-  region go into two texture arrays (one layer per distinct diffuse/normal pair, each brought to 512² from its
-  nearest mip); per-biome constants go into a float texture; the blend map is sampled for the five slot weights;
-  the region's piece of the overlay and colour maps is cut from their tiles. The layer model, slope scaling
+  With streaming (same machine and method, 2026-10-04): Port North 1.2 to 1.3 ms (1.4 before); the same view after
+  `--camera-at -2304,62208` 2.9 to 4.2 ms with the material all over the screen (0.5 to 1.1 ms with `--no-stream`,
+  where the far terrain is only ground colour); sea past the map edge 1.5 to 3.4 ms; whole world from above 1.8 ms and
+  2.6 ms at 1400 × 1400 with `--material-distance 1e7` (the material now reaches as far as the maps' window, 36864
+  units around the eye). Flight with `--fly-to` (Port North to -2304,62208 at 8400 units per second, 60 frames per second of wall time,
+  1364 frames, 191000 units, no objects), five runs: median 1.9 to 7.1 ms, 99th percentile 6.7 to 25 ms (`--no-stream`:
+  3.2 and 16.0 ms; the runs differ a lot with what else the machine does, and the streamed view shades far more
+  material). The first frame costs 200 to 250 ms in every run (shader compile, as with `--no-stream`). After it the worst
+  frame was 9 to 35 ms in four runs and 407 ms in one (no streaming step was that long; a loaded machine).
+  Before the maps were rewritten in place, every window move cost a frame of about 50 ms.
+- **Texturing** (`TerrainTextures`, `TerrainShaders`): the biomes of every `blendinfo.dat` cell within the material
+  distance of the eye are loaded into two texture arrays (one layer per distinct diffuse/normal pair, each brought to
+  512² with its mips by a worker thread); per-biome constants go into a float texture with one row per biome; the blend
+  map is sampled for the five slot weights; windows of the overlay and colour maps follow the eye (see Streaming). The layer model, slope scaling
   (FCS value × 0.01, **Verified** from the exe) and the overlay/colour channels follow terrain.md.
+- **Streaming** (`TerrainStreamer`, `TerrainTextures`, `UploadQueue`): detail follows the camera, nothing is tied to
+  the start point. All decoding is on worker threads; every GL call stays on the render thread, in steps of about 2 MB
+  that run until 2 ms of a frame is spent, so no frame waits for a whole upload.
+  - *Fine heights*: when the eye is further than 15% of the window's width from its centre, a worker re-reads a
+    `HeightWindow` (1536 cells, 27648 units, at the start window's step) centred on it from a second handle on
+    `fullmap.tif`, measures it against the quadtree's min/max cells, and the render thread uploads it in slabs into a new
+    texture and swaps. The old window is used until then; in the interior both hold the same samples (origins are
+    multiples of 64 samples), so nothing moves there. The blend band at the window's border (about 2800 units wide,
+    coarse to fine) does move with every swap, so terrain 7000 to 14000 units ahead of the eye can change a little. The bounds only ever widen. Not done with `--step` 8 or more (as coarse
+    as the whole-world grid).
+  - *Biome layers*: each frame, the cells within the material distance + half a cell of the eye give the biomes needed,
+    nearest first. Their texture pairs decode (at most 2 to 6 at a time) and are installed in free slots of the arrays
+    (133 pairs in the base game, all fit; the limit is 192 slots, then the least recently needed unused pair is
+    evicted). A biome is resident when all its pairs are. The cell table says per biome slot: the biome's row,
+    "loading" (254) or unused (255); a slot still loading shows its share in the ground colour, so material fades in
+    biome by biome, never as flat or wrong colour.
+  - *Overlay and colour maps*: windows of 2048² overlay pixels (36 units) and 4096² colour pixels (18 units), the same
+    73728-unit square, in two textures addressed toroidally (texel = world pixel mod window). Moving the window by
+    4608 units or more rewrites only the strips that came into view, in place, with mips up to level 6 cut on the
+    worker (the origin is aligned to 64 overlay pixels). Decoded tiles are cached (24 overlay, 12 colour). A fresh
+    texture per window stalled the GPU for about 50 ms at its first use (Observed on this machine: a re-centre frame of 50 ms, against
+    under 16 ms in place), which is why the strips are rewritten in place. The textured shading fades out over the last
+    3000 units of the window, far beyond the material distance.
+  - Screenshots wait for everything the camera view needs (`TerrainStreamer.Settle`); interactively the far ground
+    colour shows first and the material appears around the camera within a second or two (the title shows `loading N`).
 - **Objects** (`WorldObjects`, `WorldObjectRenderer`): placements become meshes with `WorldObjectLayout`, built
   as the game builds them ([formats/zones.md](formats/zones.md#from-placements-to-meshes)): parts chosen with the
   game's `rand()` seeded from the position, doors added, destroyed states (`destroyed mesh`, upper floors
@@ -302,8 +346,13 @@ construction states or lights; cliff normal-map channel flips are not reproduced
 the game's rolls but was not compared in game, and nested choices can drift where effects or loading callbacks
 roll (zones.md); picks from material collections (towns with "moor mats", 32 parts) are the viewer's own seeded
 choice, as the game's are unseeded; Iron/Copper Resource rocks (foliage) are missing; doors are always closed and
-turrets unaimed; the full terrain material only has the biomes of cells touching the region (outside it, the
-ground colour is drawn). The straight-edged patches of other tones in the north-eastern sea of the whole-world
+turrets unaimed; the full terrain material is drawn within the material distance of the eye
+(30000), the ground colour beyond it; buildings and map features are still loaded only for the start region
+(`--radius`), not streamed with the camera; the overlay and colour windows hold 73728 units around the eye, so
+`--material-distance` above about 36000 shows no more material than that. Known gaps of the streaming: a texture
+pair that finds no free slot (more than 192 pairs needed at once; the base game has 133, so only modded installs) is
+marked failed for good and stays in ground colour, instead of being retried when a slot frees; the height-window blend
+band shifts at a swap (above). The straight-edged patches of other tones in the north-eastern sea of the whole-world
 view are in the game's own `biomemap.png`, not a viewer fault
 ([formats/terrain.md](formats/terrain.md#why-some-sea-areas-in-the-north-east-have-other-tones-observed)).
 Interactive mode was smoke-tested only

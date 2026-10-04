@@ -22,10 +22,12 @@ public sealed unsafe class WaterRenderer : IDisposable
         layout(location = 0) in vec2 aXZ;
         uniform mat4 uViewProjection;
         uniform float uWaterHeight;
+        uniform vec2 uCentre;          // the plane follows the eye, so the sea has no edge
+        uniform float uExtent;         // half its side, past the far plane
         out vec3 vWorld;
         void main()
         {
-            vWorld = vec3(aXZ.x, uWaterHeight, aXZ.y);
+            vWorld = vec3(uCentre.x + aXZ.x * uExtent, uWaterHeight, uCentre.y + aXZ.y * uExtent);
             gl_Position = uViewProjection * vec4(vWorld, 1.0);
         }
         """;
@@ -47,6 +49,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform sampler2D uNormalMap;   // water.png
         uniform sampler2D uParamsA;     // per pixel, blended over biomes: scale X, scale Y (repeats per unit), invStrength, invOpacity
         uniform sampler2D uParamsB;     // gloss, glow, distortion, -
+        uniform vec4 uSeaA;             // the open sea past the world's edge: parameters as in the two maps above, and colour
+        uniform vec4 uSeaB;
+        uniform vec3 uSeaColour;
 
         vec3 sampleNormal(vec2 coord, vec2 direction, float speed, float time)
         {
@@ -61,6 +66,13 @@ public sealed unsafe class WaterRenderer : IDisposable
             vec4 pa = texture(uParamsA, map);
             vec4 pb = texture(uParamsB, map);
             vec3 waterColour = texture(uColourMap, map).rgb;
+            // Past the world's edge the data's last pixels would stretch outwards: fade to the open sea instead.
+            vec2 beyond = abs(vWorld.xz) - uHalfWorld;
+            float outside = max(max(beyond.x, beyond.y), 0.0);
+            float sea = smoothstep(0.0, 30000.0, outside);
+            pa = mix(pa, uSeaA, sea);
+            pb = mix(pb, uSeaB, sea);
+            waterColour = mix(waterColour, uSeaColour, sea);
             vec3 toEye = uEye - vWorld;
             float dist = length(toEye);
             vec3 view = toEye / dist;
@@ -94,6 +106,7 @@ public sealed unsafe class WaterRenderer : IDisposable
 
             // Alpha as the game's water: see-through near the camera where shallow, opaque beyond 4000 units.
             float depth = max(0.0, uWaterHeight - terrainHeight(vWorld.xz)) / max(view.y, 0.05);
+            if (outside > 0.0) depth = 1e4;   // past the edge of the world there is only open sea
             float fresnel = 1.0 - pow(1.0 - cosv, 2.0);
             float a = clamp(1.0 - (dist - 4000.0) / 1000.0, 0.0, 1.0);
             a *= mix(1.0, clamp(depth * pa.w, 0.0, 1.0), fresnel);
@@ -108,16 +121,18 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly GL gl;
     readonly SkyRenderer sky;
     readonly uint program, vao, vbo, colourMap, flowMap, normalMap, paramsA, paramsB;
+    readonly Vector4 seaA, seaB;
+    readonly Vector3 seaColour;
     readonly Dictionary<string, int> uniforms = [];
 
-    WaterRenderer(GL gl, SkyRenderer sky, uint colourMap, uint flowMap, uint normalMap, uint paramsA, uint paramsB)
+    WaterRenderer(GL gl, SkyRenderer sky, uint colourMap, uint flowMap, uint normalMap, uint paramsA, uint paramsB, Vector4 seaA, Vector4 seaB, Vector3 seaColour)
     {
+        (this.seaA, this.seaB, this.seaColour) = (seaA, seaB, seaColour);
         this.gl = gl;
         this.sky = sky;
         (this.colourMap, this.flowMap, this.normalMap, this.paramsA, this.paramsB) = (colourMap, flowMap, normalMap, paramsA, paramsB);
         program = WorldGl.Program(gl, Vertex, Fragment);
-        float h = WorldLayout.HalfWorldSize;
-        float[] quad = [-h, -h, -h, h, h, -h, h, h]; // triangle strip, counter-clockwise from above
+        float[] quad = [-1, -1, -1, 1, 1, -1, 1, 1]; // triangle strip, counter-clockwise from above
         vao = gl.GenVertexArray();
         gl.BindVertexArray(vao);
         vbo = gl.GenBuffer();
@@ -146,11 +161,40 @@ public sealed unsafe class WaterRenderer : IDisposable
         var a = BiomeField.Bake(info, blend.Width, blend.Height, blend.Pixels, c => water.TryGetValue(c, out var w) ? A(w) : null, A(fallback));
         var b = BiomeField.Bake(info, blend.Width, blend.Height, blend.Pixels, c => water.TryGetValue(c, out var w) ? B(w) : null, B(fallback));
 
+        var sea = OpenSea(a, b, blend.Width, blend.Height, colour);
+        Console.WriteLine($"sea       open-sea water: scale {sea.A.X * 5000:0.#}, {sea.A.Y * 5000:0.#}, gloss {sea.B.X:0.##}, colour {sea.Colour.X:0.##} {sea.Colour.Y:0.##} {sea.Colour.Z:0.##}");
         uint Rgba(RgbaImage? img, bool repeat, byte[] flat) =>
             img is null ? WorldGl.Texture2D(gl, 1, 1, flat, repeat) : WorldGl.Texture2D(gl, img.Width, img.Height, img.Pixels, repeat, mipmaps: repeat);
         return new WaterRenderer(gl, sky,
             Rgba(colour, false, [0, 32, 64, 255]), Rgba(flow, false, [128, 128, 0, 255]), Rgba(normal, true, [128, 255, 128, 255]),
-            FloatTexture(gl, a, blend.Width, blend.Height), FloatTexture(gl, b, blend.Width, blend.Height));
+            FloatTexture(gl, a, blend.Width, blend.Height), FloatTexture(gl, b, blend.Width, blend.Height), sea.A, sea.B, sea.Colour);
+    }
+
+    /// <summary>
+    /// The water of the open sea: the most common parameters among the pixels of the maps' outer ring (the world's edge is
+    /// sea nearly all round), with the watercolourmap colour at one such pixel. The water plane uses it beyond the world.
+    /// </summary>
+    static (Vector4 A, Vector4 B, Vector3 Colour) OpenSea(Vector4[] a, Vector4[] b, int width, int height, RgbaImage? colour)
+    {
+        const int ring = 8;
+        var counts = new Dictionary<(Vector4, Vector4), (int Count, int Pixel)>();
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                if (x >= ring && x < width - ring && y >= ring && y < height - ring) { x = width - ring - 1; continue; }
+                int i = y * width + x;
+                var key = (a[i], b[i]);
+                counts[key] = counts.TryGetValue(key, out var c) ? (c.Count + 1, c.Pixel) : (1, i);
+            }
+        var best = counts.MaxBy(p => p.Value.Count);
+        var rgb = new Vector3(0, 32, 64) / 255;
+        if (colour is not null)
+        {
+            int px = best.Value.Pixel % width * colour.Width / width, py = best.Value.Pixel / width * colour.Height / height;
+            int o = (py * colour.Width + px) * 4;
+            rgb = new Vector3(colour.Pixels[o], colour.Pixels[o + 1], colour.Pixels[o + 2]) / 255;
+        }
+        return (best.Key.Item1, best.Key.Item2, rgb);
     }
 
     static RgbaImage? Load(GameInstall install, string relative)
@@ -172,13 +216,18 @@ public sealed unsafe class WaterRenderer : IDisposable
     }
 
     /// <param name="time">Animation time; the game's unit for it is Unknown (the viewer uses real hours).</param>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, TerrainRenderer terrain, float time)
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, TerrainRenderer terrain, float time, float extent)
     {
         gl.UseProgram(program);
         WorldGl.Matrix(gl, U("uViewProjection"), viewProjection);
         gl.Uniform1(U("uWaterHeight"), WorldWater.Height);
+        gl.Uniform2(U("uCentre"), eye.X, eye.Z);
+        gl.Uniform1(U("uExtent"), extent);
         gl.Uniform3(U("uEye"), eye.X, eye.Y, eye.Z);
         gl.Uniform1(U("uHalfWorld"), (float)WorldLayout.HalfWorldSize);
+        gl.Uniform4(U("uSeaA"), seaA.X, seaA.Y, seaA.Z, seaA.W);
+        gl.Uniform4(U("uSeaB"), seaB.X, seaB.Y, seaB.Z, seaB.W);
+        gl.Uniform3(U("uSeaColour"), seaColour.X, seaColour.Y, seaColour.Z);
         gl.Uniform1(U("uTime"), time);
         gl.Uniform3(U("uSunDir"), light.SunDirection.X, light.SunDirection.Y, light.SunDirection.Z);
         gl.Uniform3(U("uSunColour"), light.SunColour.X, light.SunColour.Y, light.SunColour.Z);
