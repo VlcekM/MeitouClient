@@ -336,8 +336,9 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// As the game's <c>Feature_Terrain_DX11</c> (docs/formats/foliage.md, "TERRAIN-mode meshes"): one biome per mesh,
     /// the one of <c>biomemap.png</c> at the mesh's origin, back faces culled.
     /// </summary>
-    public void DrawMeshes(IEnumerable<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes)
+    public void DrawMeshes(IEnumerable<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth = false)
     {
+        if (depth) { DrawMeshesDepth(meshes); return; }
         Apply(meshProgram, heightNormals: false);
         gl.Uniform1(U(meshProgram, "uFeature"), 1);
         gl.Enable(EnableCap.CullFace);
@@ -358,6 +359,71 @@ public sealed unsafe class TerrainRenderer : IDisposable
         gl.BindVertexArray(0);
     }
 
+    // ---- depth only (the sun's shadow map, ShadowPass) ----
+    uint depthPatchProgram, depthMeshProgram;
+
+    /// <summary>
+    /// Draws the terrain's depth for a shadow cascade (<see cref="ShadowShaders.DepthFragment"/>, the caster bias): the main tree's
+    /// patches chosen by the camera's <paramref name="eye"/> (so the casters' detail matches what the picture shows), culled by
+    /// <paramref name="frustum"/>. Sets the frame's matrix for <see cref="DrawMeshes"/> with <c>depth</c>.
+    /// </summary>
+    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options)
+    {
+        if (depthPatchProgram == 0)
+        {
+            depthPatchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, ShadowShaders.DepthFragment);
+            depthMeshProgram = WorldGl.Program(gl, TerrainShaders.MeshVertex, ShadowShaders.DepthFragment);
+        }
+        if (Math.Abs(options.LodDistance - LodDistanceInUse) > 1e-4f)
+            quadtree = new TerrainQuadtree((float)quadtree.Spacing(0), GridCells, Math.Max(options.LodDistance, 2f));
+        frame = new Frame(viewProjection, eye, options, frame.Light);
+        quadtree.Select(eye, bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), nodes);
+        uint program = depthPatchProgram;
+        gl.UseProgram(program);
+        WorldGl.Matrix(gl, U(program, "uViewProjection"), viewProjection);
+        gl.Uniform3(U(program, "uEye"), eye.X, eye.Y, eye.Z);
+        BindHeights(program);
+        gl.Enable(EnableCap.CullFace);
+        gl.CullFace(TriangleFace.Back);
+        gl.FrontFace(FrontFaceDirection.Ccw);
+        gl.BindVertexArray(gridVao);
+        int uNode = U(program, "uNode"), uMorph = U(program, "uMorph");
+        foreach (var n in nodes)
+        {
+            gl.Uniform4(uNode, (float)n.X0, (float)n.Z0, (float)n.Size, GridCells);
+            float start = quadtree.MorphStart[n.Level], end = quadtree.MorphEnd[n.Level];
+            gl.Uniform2(uMorph, start == float.MaxValue ? 1e31f : start, end == float.MaxValue ? 2e31f : end);
+            int part = n.Quadrant + 1;
+            gl.DrawElements(PrimitiveType.Triangles, (uint)indexCounts[part], DrawElementsType.UnsignedInt, (void*)indexOffsets[part]);
+            DepthTriangles += indexCounts[part] / 3;
+        }
+        gl.BindVertexArray(0);
+    }
+
+    /// <summary>Terrain triangles the depth draws have drawn since the counter was last reset (by the caller).</summary>
+    public long DepthTriangles { get; set; }
+
+    void DrawMeshesDepth(IEnumerable<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes)
+    {
+        if (depthMeshProgram == 0) return;
+        uint program = depthMeshProgram;
+        gl.UseProgram(program);
+        WorldGl.Matrix(gl, U(program, "uViewProjection"), frame.ViewProjection);
+        gl.Enable(EnableCap.CullFace);
+        gl.CullFace(TriangleFace.Back);
+        int model = U(program, "uModel");
+        foreach (var (vao, count, m) in meshes)
+        {
+            WorldGl.Matrix(gl, model, m);
+            gl.FrontFace(m.GetDeterminant() < 0 ? FrontFaceDirection.CW : FrontFaceDirection.Ccw);
+            gl.BindVertexArray(vao);
+            gl.DrawElements(PrimitiveType.Triangles, (uint)count, DrawElementsType.UnsignedInt, (void*)0);
+        }
+        gl.FrontFace(FrontFaceDirection.Ccw);
+        gl.Disable(EnableCap.CullFace);
+        gl.BindVertexArray(0);
+    }
+
     int U(uint program, string name)
     {
         if (!uniforms.TryGetValue((program, name), out int location)) uniforms[(program, name)] = location = gl.GetUniformLocation(program, name);
@@ -366,6 +432,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     public void Dispose()
     {
+        if (depthPatchProgram != 0) { gl.DeleteProgram(depthPatchProgram); gl.DeleteProgram(depthMeshProgram); }
         gl.DeleteVertexArray(gridVao);
         gl.DeleteBuffer(gridVbo);
         gl.DeleteBuffer(gridEbo);

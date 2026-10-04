@@ -524,6 +524,13 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
 - Not reproduced: the game's exact grass blades, DUST tint, translucency, wetness, shadows, sub grass, ambient
   sounds, collision; mesh LOD levels (pages use the full mesh, as PagedGeometry's batches do).
 
+### Shadows
+
+The sun's shadow map as the game's CSM mode draws it ([formats/shadows.md](formats/shadows.md)): four cascades in one atlas
+(`--shadow-quality <0|1|2>`, 1024² / 2048² / 4096², default 2048²; `--shadow-range <u>`, default 5000; `--no-shadows`), drawn
+before the reflection and the main pass from the terrain, objects and foliage meshes. `--debug-shadows 1|2|3` shows the cascade
+maps, the term per cascade, or the term over the picture.
+
 ### Post-processing
 
 The world view draws the scene into an RGBA16F framebuffer with depth (4x multisampled by default), resolves it, and runs a

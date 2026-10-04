@@ -22,8 +22,8 @@ namespace Meitou.ModelViewer;
 public sealed unsafe class WorldObjectRenderer : IDisposable
 {
     readonly GL gl;
-    readonly uint program;
-    readonly Dictionary<string, int> uniforms = [];
+    uint program;   // the main program; the depth program while DrawDepth runs
+    readonly Dictionary<(uint, string), int> uniforms = [];
     readonly WorldTextureCache textureCache;
     readonly MaterialResolver resolver;
     readonly UploadQueue uploads = new();
@@ -409,7 +409,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         if (wireMode != 2 && active.Count > 0) DrawBatches(options, wire: false);
         if (wireMode != 0 && active.Count > 0) DrawBatches(options, wire: true);
         gl.BindVertexArray(0);
-        if (terrainMeshes.Count > 0) terrain.DrawMeshes(terrainMeshes);
+        if (terrainMeshes.Count > 0) terrain.DrawMeshes(terrainMeshes, depthPass);
         gl.Disable(EnableCap.CullFace);
         gl.BindVertexArray(0);
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
@@ -553,12 +553,32 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
     int U(string name)
     {
-        if (!uniforms.TryGetValue(name, out int location)) uniforms[name] = location = gl.GetUniformLocation(program, name);
+        if (!uniforms.TryGetValue((program, name), out int location)) uniforms[(program, name)] = location = gl.GetUniformLocation(program, name);
         return location;
+    }
+
+    // ---- depth only (the sun's shadow map, ShadowPass) ----
+    uint depthProgram;
+    bool depthPass;
+
+    /// <summary>
+    /// Draws the objects' depth for a shadow cascade: <see cref="Draw"/>'s culling, levels and batches (chosen by the camera's
+    /// <paramref name="eye"/>) with <see cref="ShadowShaders.MeshDepthFragment"/> (the materials' cut-outs and the caster bias), and the
+    /// TERRAIN-mode meshes through the terrain's depth path. Leaves the draw counters describing this call.
+    /// </summary>
+    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain)
+    {
+        if (depthProgram == 0) depthProgram = WorldGl.Program(gl, BuildingLodShaders.Vertex(), ShadowShaders.MeshDepthFragment);
+        uint main = program;
+        program = depthProgram;
+        depthPass = true;
+        try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain); }
+        finally { program = main; depthPass = false; }
     }
 
     public void Dispose()
     {
+        if (depthProgram != 0) gl.DeleteProgram(depthProgram);
         streamer.Dispose();
         meshes.Dispose();
         textureCache.Dispose();

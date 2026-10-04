@@ -121,9 +121,9 @@ The exe sets both: `MAX_LUMINANCE` = CONSTANTS `exposure max` (1.2 in GLOBAL CON
 
 See [viewer.md](../viewer.md#atmosphere): the world view lights in these units (sun, irradiance cube, ambient map, the same
 GGX and environment terms with the viewer's gloss), draws the sky with SkyX's own formula, and applies the game's exposure from
-the measured mean luminance. Not reproduced: shadows (every surface facing the sun is fully lit, so the viewer's scenes are
-somewhat brighter on average than the game's and its auto exposure sits lower), the temporal adaptation (screenshots use the
-steady state), point lights, translucency, and dust on objects.
+the measured mean luminance. The sun term (diffuse and specular, not the ambient or environment light) is multiplied by the
+shadow term of the game's CSM mode ([shadows.md](shadows.md)), on by default (`--no-shadows`). Not reproduced: the temporal
+adaptation (screenshots use the steady state), point lights, translucency, and dust on objects.
 
 **Eye height.** Nothing in the lighting pass depends on the eye's height (only on the direction towards it), and the sky and
 `sunColour` come from SkyX's fixed camera, which suits the game's camera (at most 1840 above its pivot, [camera.md](camera.md)).

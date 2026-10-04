@@ -94,6 +94,7 @@ static class AtmosphereShaders
         }
         vec3 atmoSky(vec3 dir) { float n; return atmoSky(dir, n); }
 
+        {{ShadowShaders.Functions}}
         // ---- the deferred lighting pass (deferred.hlsl main_fs, lightingFunctions.hlsl; docs/formats/lighting.md) ----
         vec4 atmoAmbientMapAt(vec3 world)
         {
@@ -113,12 +114,12 @@ static class AtmosphereShaders
             float a0 = t.x * min(t.y, exp2(-9.28 * nv)) + t.z;
             return clamp(a0 + 0.04 * (t.w - a0), 0.0, 1.0);
         }
-        // A dielectric surface lit as Kenshi's main lighting pass lights it (no shadow): HDR colour. v: towards the eye.
+        // A dielectric surface lit as Kenshi's main lighting pass lights it: HDR colour. v: towards the eye.
         vec3 kenshiLight(vec3 albedo, vec3 n, vec3 v, float gloss, vec3 world)
         {
             vec4 am = atmoAmbientMapAt(world);
             vec3 l = uAtmoLight.xyz;
-            vec3 sun = uAtmoSunLight * am.a * 2.0;
+            vec3 sun = uAtmoSunLight * am.a * 2.0 * kenshiShadow(world, n);   // the sun shadow term (deferred.hlsl: lightColor * shadow)
             gloss = clamp(gloss, 0.0, 1.0);
             float roughness = 1.0 - gloss * 0.99, a = roughness * roughness, a2 = a * a;
             float nl = clamp(dot(n, l), 0.0, 1.0);

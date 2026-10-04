@@ -32,6 +32,10 @@ sealed class WorldOptions
     public float Hour = 13;
     public float ViewDistance = 450000, FogDistance = 250000, MaterialDistance = 30000;
     public bool NoWater, NoStream, NoReflections, SimpleSky, ShowKeys;
+    /// <summary>Sun shadows (docs/formats/shadows.md): off, the game's <c>shadow quality</c> index, <c>Shadow Range</c>, the debug view.</summary>
+    public bool NoShadows;
+    public int ShadowQuality = 1, DebugShadows;
+    public float ShadowRange = KenshiShadows.DefaultRange;
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
     public float? HazeDistance;
     public float HazeStrength = 1; // a viewer option: 1 = the game's haze
@@ -64,6 +68,8 @@ sealed class WorldOptions
           --time <hour>            time of day for the sun (default 13; sunrise and sunset from the CONSTANTS record)
           --no-water               leave out the water
           --no-reflections         the water reflects only the sky colour, not the mirrored scene (R toggles)
+          --no-shadows             no sun shadow map   --shadow-quality <0|1|2> map side 1024/2048/4096 (default 1)   --shadow-range <u> (1000..9000, default 5000)
+          --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture
           --simple-sky             the old colour-model sky and squared-distance fog instead of the atmosphere (B toggles)
           --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral (F7 toggles)
           --haze-distance <u>      the game's far distance D (view distance x 10) for its haze, which ramps in from 0.06 D to 0.6 D (default 50000: view distance 5000)
@@ -132,6 +138,10 @@ sealed class WorldOptions
                 case "--time": o.Hour = F(); break;
                 case "--no-water": o.NoWater = true; break;
                 case "--no-reflections": o.NoReflections = true; break;
+                case "--no-shadows": o.NoShadows = true; break;
+                case "--shadow-quality": o.ShadowQuality = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--shadow-range": o.ShadowRange = Math.Clamp(F(), KenshiShadows.MinRange, KenshiShadows.MaxRange); break;
+                case "--debug-shadows": o.DebugShadows = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--simple-sky": o.SimpleSky = true; break;
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
                 case "--haze-distance": o.HazeDistance = F(); break;
@@ -307,6 +317,8 @@ static partial class WorldApp
         public required SkyRenderer Sky;
         public WaterRenderer? Water;
         public ReflectionPass? Reflection;
+        public ShadowPass? Shadow;
+        public int DebugShadows;
         public PostProcess? Post;
         public WorldObjectRenderer? Objects;
         public FoliageRenderer? Foliage;
@@ -320,6 +332,7 @@ static partial class WorldApp
             Objects?.Dispose();
             Water?.Dispose();
             Reflection?.Dispose();
+            Shadow?.Dispose();
             Post?.Dispose();
             Sky.Dispose();
             Terrain.Dispose();
@@ -367,6 +380,13 @@ static partial class WorldApp
             gpu.Foliage = new FoliageRenderer(gl, install, scene.Database, scene.Objects?.Levels ?? WorldLevelData.Load(install), assets);
             Console.WriteLine($"foliage   catalog and shaders ready ({gpu.Foliage.LoadMs:0} ms)");
         }
+        if (!o.NoShadows)
+        {
+            // The game's CSM mode (docs/formats/shadows.md): four cascades in one atlas of the `shadow quality` side, out to `Shadow Range`.
+            gpu.Shadow = new ShadowPass(gl) { Settings = new ShadowSettings(KenshiShadows.MapSize(o.ShadowQuality), o.ShadowRange) };
+            Console.WriteLine($"shadows   {gpu.Shadow.Settings.MapSize}² atlas, {gpu.Shadow.Settings.Cascades} cascades of {gpu.Shadow.Settings.TileSize}², range {o.ShadowRange:0}");
+        }
+        gpu.DebugShadows = o.DebugShadows;
         return gpu;
     }
 
@@ -419,6 +439,7 @@ static partial class WorldApp
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
         StageClock.Lap(3);
+        if (gpu.Shadow is not null) DrawShadows(gpu, camera, render, light, width, height);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is not null;
         if (gpu.Reflection is not null) gpu.Reflection.RestoreFramebuffer = gpu.Post?.SceneFramebuffer;
@@ -473,8 +494,42 @@ static partial class WorldApp
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, gpu.Terrain, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
             StageClock.Lap(9);
         }
+        if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneFramebuffer, width, height);
         gpu.Post?.End(); // resolve, SSAO, bloom, tone map into gpu.Post.Target
+        if (gpu.DebugShadows > 0 && gpu.Shadow is not null)
+        {
+            var (nearestNear, nearestFar) = camera.Slices().Last();
+            gpu.Shadow.DrawDebug(gpu.DebugShadows, gpu.Post?.Target ?? 0, width, height, view, camera.Projection(aspect, nearestNear, nearestFar), eye);
+        }
         StageClock.Lap(10);
+    }
+
+    /// <summary>
+    /// The sun's shadow cascades (ShadowPass, docs/formats/shadows.md): fitted to this camera, their casters drawn by the renderers'
+    /// depth-only paths (terrain, objects, foliage meshes; detail chosen from the camera's eye), before the reflection and the main pass.
+    /// </summary>
+    static void DrawShadows(Gpu gpu, WorldCamera camera, WorldRenderOptions render, WorldLighting light, int width, int height)
+    {
+        var shadow = gpu.Shadow!;
+        var v = camera.View;
+        var view = new ShadowView(camera.Eye, camera.Forward, Vector3.Normalize(new Vector3(v.M12, v.M22, v.M32)), camera.FieldOfView, width / (float)Math.Max(height, 1), camera.Near);
+        int objects = 0, foliage = 0;
+        gpu.Terrain.DepthTriangles = 0;
+        shadow.Render(view, light.SunDirection, gpu.Post?.SceneFramebuffer ?? 0, width, height, (cascade, worldToClip, planes, lodEye) =>
+        {
+            long t0 = Stopwatch.GetTimestamp();
+            gpu.Terrain.DrawDepth(worldToClip, lodEye, planes, render);
+            long t1 = Stopwatch.GetTimestamp();
+            if (render.Objects && gpu.Objects is { } o) { o.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain); objects += o.DrawnInstances; }
+            long t2 = Stopwatch.GetTimestamp();
+            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.Settings.Range * 1.2f); foliage += f.DrawnInstances; }
+            long t3 = Stopwatch.GetTimestamp();
+            double ms = 1000.0 / Stopwatch.Frequency;
+            shadow.PhaseMs[0] += (t1 - t0) * ms;
+            shadow.PhaseMs[1] += (t2 - t1) * ms;
+            shadow.PhaseMs[2] += (t3 - t2) * ms;
+        });
+        shadow.CasterStats = $"{gpu.Terrain.DepthTriangles:N0} terrain triangles, {objects} objects, {foliage} foliage meshes (over the cascades); cpu terrain {shadow.PhaseMs[0]:0.00}, objects {shadow.PhaseMs[1]:0.00}, foliage {shadow.PhaseMs[2]:0.00} ms";
     }
 
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
@@ -575,6 +630,13 @@ static partial class WorldApp
         {
             reflection.Poll(wait: true);
             Console.WriteLine($"reflect   {reflection.Width}x{reflection.Height}: cpu {reflection.CpuMs:0.00} ms, gpu {reflection.GpuMs:0.00} ms, {reflection.DrawnChunks} chunks, {reflection.DrawnTriangles:N0} terrain triangles; {reflection.SceneStats}");
+        }
+        if (gpu.Shadow is { } shadowStats)
+        {
+            shadowStats.Poll(wait: true);
+            Console.WriteLine(shadowStats.Cascades is { } cs
+                ? $"shadows   last frame cpu {shadowStats.CpuMs:0.00} ms, gpu {shadowStats.GpuMs:0.00} ms; {shadowStats.DescribeStats()}; {shadowStats.CasterStats}; cascades to {string.Join(", ", cs.Select(c => c.FarDepth.ToString("0", CultureInfo.InvariantCulture)))} (sizes {string.Join(", ", cs.Select(c => c.Size.X.ToString("0", CultureInfo.InvariantCulture)))}, texels {string.Join(", ", cs.Select(c => c.Texel.ToString("0.00", CultureInfo.InvariantCulture)))})"
+                : "shadows   off this frame (sun below the horizon)");
         }
 
         gpu.Sky.Poll(wait: true);

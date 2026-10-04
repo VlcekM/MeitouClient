@@ -34,7 +34,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
     readonly WorldLevelData levels;
     readonly AssetLocator assets;
     readonly FoliageCatalog catalog;
-    readonly uint meshProgram, grassProgram;
+    uint meshProgram;   // the depth program while DrawDepth runs
+    readonly uint grassProgram;
     readonly Dictionary<(uint, string), int> uniforms = [];
     readonly WorldTextureCache textures;
     readonly uint instanceBuffer;
@@ -821,12 +822,31 @@ public sealed unsafe class FoliageRenderer : IDisposable
         // 5. TERRAIN-mode rocks through the terrain's own mesh path.
         if (terrainDraws.Count > 0)
         {
-            terrain.DrawMeshes(terrainDraws);
+            terrain.DrawMeshes(terrainDraws, depthPass);
             DrawCalls += terrainDraws.Count;
         }
         gl.Disable(EnableCap.CullFace);
         EndTimer(timer);
         LastDrawCpuMs = (continuation ? LastDrawCpuMs : 0) + cpu.Elapsed.TotalMilliseconds;
+    }
+
+    // ---- depth only (the sun's shadow map, ShadowPass) ----
+    uint depthProgram;
+    bool depthPass;
+
+    /// <summary>
+    /// Draws the foliage meshes' depth for a shadow cascade: <see cref="Draw"/>'s culling and ranges (measured from the camera's
+    /// <paramref name="eye"/>) with <see cref="ShadowShaders.MeshDepthFragment"/>, so the leaves' cut-out holds; no grass. Leaves the draw
+    /// counters describing this call.
+    /// </summary>
+    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float maxRange = float.PositiveInfinity)
+    {
+        if (depthProgram == 0) depthProgram = WorldGl.Program(gl, FoliageShaders.MeshVertex(), ShadowShaders.MeshDepthFragment);
+        uint main = meshProgram;
+        meshProgram = depthProgram;
+        depthPass = true;
+        try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain, grass: false, maxRange: maxRange); }
+        finally { meshProgram = main; depthPass = false; }
     }
 
     void DrawMesh(GpuMesh mesh, FoliageMaterial m, Batch b, WorldRenderOptions options)
@@ -1027,6 +1047,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         textures.Dispose();
         gl.DeleteBuffer(instanceBuffer);
         gl.DeleteProgram(meshProgram);
+        if (depthProgram != 0) gl.DeleteProgram(depthProgram);
         gl.DeleteProgram(grassProgram);
         foreach (var q in timers) { gl.DeleteQuery(q.Start); gl.DeleteQuery(q.End); }
     }

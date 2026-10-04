@@ -18,6 +18,7 @@ static unsafe class WorldGl
         gl.DeleteShader(vs);
         gl.DeleteShader(fs);
         SkyRenderer.AssignSamplerUnits(gl, program);   // the atmosphere's cube samplers off unit 0
+        ShadowShaders.Bind(gl, program);               // the shadow blocks' binding points and the shadow map's unit, when it has them
         return program;
     }
 
