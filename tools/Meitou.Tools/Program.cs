@@ -12,6 +12,9 @@ return args switch
     ["materials"] => WithInstall(MaterialSurvey.Run),
     ["fcs-types"] => WithInstall(FcsTypeMatcher.Run),
     ["fcs-records", var type] => WithInstall(i => FcsRecordDump.Run(i, int.Parse(type), 3)),
+    ["world"] => WithInstall(WorldSurvey.Run),
+    ["world-map", var png] => WithInstall(i => WorldSurvey.RenderMap(i, png)),
+    ["world-map", var png, var step] => WithInstall(i => WorldSurvey.RenderMap(i, png, int.Parse(step))),
     _ => Usage(),
 };
 
@@ -26,6 +29,8 @@ static int Usage()
         meitou-tools materials     compile every material script and cross-check mesh materials and textures
         meitou-tools fcs-types     match record type numbers to fcs.def type names
         meitou-tools fcs-records N show the fields of the first records of type N in the base game
+        meitou-tools world         read the heightmap, zone/level files and features.dat and cross-check them
+        meitou-tools world-map <png> [step]  render a top-down world map (every step-th height sample, default 16)
         """);
     return 2;
 }

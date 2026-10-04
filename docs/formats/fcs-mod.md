@@ -39,7 +39,7 @@ Record  records[recordCount]
 
 - FCS also accepts file types 1–15 (old formats without this header, and with different record
   layouts); it rejects anything else. The game accepts **8–17** (see [Game loader](#game-loader));
-  type 15 is the header-less layout used by the world `.level` files. Our reader supports 16 and 17
+  type 15 is the header-less layout used by the world `.zone`/`.level` files. Our reader supports 15, 16 and 17
   only. Old mods are rare: since game version 0.92 mods are re-saved as 17 (Observed: of 50 Steam
   workshop mods, 25 are type 16 and 25 type 17).
 - FCS always writes type 17 with both bookkeeping sections. `Dialogue.mod` (9 bytes: save counter 1,

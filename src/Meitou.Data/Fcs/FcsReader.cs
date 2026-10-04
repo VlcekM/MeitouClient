@@ -44,9 +44,10 @@ public static class FcsReader
     static void ReadHeader(BinaryReader r, FcsFile file)
     {
         int type = r.ReadInt32();
-        if (type is not ((int)FcsFileType.V16 or (int)FcsFileType.V17))
+        if (type is not ((int)FcsFileType.V15 or (int)FcsFileType.V16 or (int)FcsFileType.V17))
             throw new FcsFormatException($"Unknown file type {type}.", r.BaseStream.Position - 4);
         file.FileType = (FcsFileType)type;
+        if (file.FileType == FcsFileType.V15) return;
 
         long headerEnd = -1;
         if (file.FileType == FcsFileType.V17)

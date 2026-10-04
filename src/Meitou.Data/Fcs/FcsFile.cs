@@ -41,6 +41,9 @@ public sealed class FcsFile
 
 public enum FcsFileType
 {
+    /// <summary>No header at all: the next id and the records follow the type. Used by world state files (<c>.zone</c>, <c>.level</c>).</summary>
+    V15 = 15,
+
     /// <summary>Header without a length prefix or editor bookkeeping (<c>gamedata.base</c>, <c>Newwworld.mod</c>).</summary>
     V16 = 16,
 

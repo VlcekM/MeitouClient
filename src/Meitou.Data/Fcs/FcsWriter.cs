@@ -11,7 +11,11 @@ public static class FcsWriter
         Write(file, stream);
     }
 
-    public static void Write(FcsFile file, Stream stream)
+    /// <param name="keepByteSizes">
+    /// Write each record's <see cref="FcsRecord.ByteSize"/> as stored instead of its real size. World-state files
+    /// (<c>.zone</c>, <c>.level</c>) contain sizes that don't match their records; this keeps them byte-exact.
+    /// </param>
+    public static void Write(FcsFile file, Stream stream, bool keepByteSizes = false)
     {
         using var w = new BinaryWriter(stream, FcsReader.Encoding, leaveOpen: true);
         w.Write((int)file.FileType);
@@ -23,7 +27,7 @@ public static class FcsWriter
             w.Write(checked((int)header.Length));
             header.WriteTo(stream);
         }
-        else
+        else if (file.FileType != FcsFileType.V15)
         {
             WriteHeaderBody(w, file);
         }
@@ -31,7 +35,7 @@ public static class FcsWriter
         w.Write(file.NextId);
         w.Write(file.Records.Count);
         foreach (var record in file.Records)
-            WriteRecord(w, record);
+            WriteRecord(w, record, keepByteSizes);
     }
 
     static void WriteHeaderBody(BinaryWriter w, FcsFile file)
@@ -70,13 +74,13 @@ public static class FcsWriter
         w.Write(file.HeaderTail);
     }
 
-    static void WriteRecord(BinaryWriter output, FcsRecord record)
+    static void WriteRecord(BinaryWriter output, FcsRecord record, bool keepByteSize)
     {
         // Buffered so the leading size field can hold the record's real size.
         var buffer = new MemoryStream();
         using (var w = new BinaryWriter(buffer, FcsReader.Encoding, leaveOpen: true))
             WriteRecordBody(w, record);
-        output.Write(record.ByteSize == 0 ? 0u : checked((uint)buffer.Length + 4));
+        output.Write(keepByteSize || record.ByteSize == 0 ? record.ByteSize : checked((uint)buffer.Length + 4));
         output.Flush();
         buffer.WriteTo(output.BaseStream);
     }

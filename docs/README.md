@@ -18,3 +18,5 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [formats/ogre-material.md](formats/ogre-material.md) | Ogre scripts (`.material`, `.program`): syntax, inheritance, material model, lookup |
 | [formats/runtime-materials.md](formats/runtime-materials.md) | How the game builds materials from FCS records: templates, flags, texture units, shader parameters |
 | [animation.md](animation.md) | How the game uses skeletons and animations: attachments, animation sources, layers, blending, appearance sliders |
+| [formats/terrain.md](formats/terrain.md) | World coordinates, zone grid, `fullmap.tif` heightmap, legacy height tiles |
+| [formats/zones.md](formats/zones.md) | `.zone` / `.level` world-state files, building and town placements, roads, `features.dat` |

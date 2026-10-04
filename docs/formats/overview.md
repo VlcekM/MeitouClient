@@ -125,10 +125,12 @@ Counts are files under `data/`.
 | `.material`, `.program` | 181 | Ogre scripts | **Verified**: all 181 compile. See [ogre-material.md](ogre-material.md) |
 | `.compositor`, `.hlsl`, `.vert`, `.frag` | ~90 | Ogre compositors / shaders | Not analyzed |
 | `.dds`, `.png`, `.tga` | ~3900 | Textures | Standard formats |
-| `.zone` | 701 | World cells, `leveldata/zone.X.Y.zone` | Not analyzed; strings like `0-base-S23` near the start |
-| `.level` | 14 | Level data | FCS records, file type 15 (no header): first bytes Observed, and the game loads `newland/leveldata/[<core file>/]leveldata.level` with the same loader (Verified, `FUN_140870ae0`). Contents not analyzed |
+| `.zone` | 701 | World cells, `leveldata/zone.X.Y.zone` | **Verified**: FCS records, file types 15/16 (legacy 10/13 in `data/leveldata/`) plus an optional trailer. See [zones.md](zones.md) |
+| `.level` | 14 | Level data | FCS records, file type 15 (no header): first bytes Observed, and the game loads `newland/leveldata/[<core file>/]leveldata.level` with the same loader (Verified, `FUN_140870ae0`). Towns, roads: see [zones.md](zones.md) |
 | `.path` | 1 | `globalPathing.path`, world pathfinding grid | Not analyzed |
-| `.raw` | 256 | Heightmaps | Not analyzed |
+| `.raw` | 256 | Legacy heightmap tiles (`land/grasssplits`) | **Verified**: 257² uint16 tiles of an older 4097² world, not the current one. See [terrain.md](terrain.md) |
+| `.tif` | 1 | `newland/land/fullmap.tif`, the heightmap | **Verified**: 16385² uint16, height = raw × 9800 / 65535. See [terrain.md](terrain.md) |
+| `.dat` | 3 | `features.dat` (map-feature placements), `fogfeatures.dat`, `blendinfo.dat` | `features.dat` **Verified**, see [zones.md](zones.md); others not decoded |
 | `.xml` | 1158 | GUI, foliage, config | Not analyzed |
 | `.bin` | 857 | Unknown | Not analyzed |
 | `.layout` | 53 | MyGUI | Not analyzed |
