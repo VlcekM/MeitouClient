@@ -1,7 +1,8 @@
 # Zones and level files: `.zone`, `.level`, `features.dat`
 
 Examined 2026-10-04 on the Steam install. Readers: `Meitou.Data.World.LevelFile` (one file),
-`WorldLevelData` (all layers merged, placements), `MapFeatureFile` (`features.dat`). Checks:
+`WorldLevelData` (all layers merged, placements), `MapFeatureFile` (`features.dat`), `WorldObjectLayout`
+(placements to meshes). Checks:
 `meitou-tools world` and `tests/Meitou.Tests/World/LevelFileTests.cs`, `MapFeatureFileTests.cs`. World
 size and the zone grid are in [terrain.md](terrain.md#world-coordinates).
 
@@ -175,6 +176,42 @@ global pathfinding graph. **Unknown**.
 INVENTORY_STATE). Presumably the pre-Newland world that goes with `data/land/`; `WorldLevelData` does not
 read it. Whether the game still reads it is **Unknown** (the exe contains the string `./data/leveldata/`).
 
+## From placements to meshes
+
+How `Meitou.Data.World.WorldObjectLayout` turns placements into meshes for `meitou-viewer --world`
+([../viewer.md](../viewer.md#world-mode)). Counts are over the 11,714 base-game building placements (252
+distinct BUILDING records) and 1,810 resolvable `features.dat` entries.
+
+- **Building = its parts** (fcs.def, Observed in the data): a BUILDING draws the BUILDING_PART records of its
+  `parts` list. Reference val0 is a group, val1 a chance: group 0 entries are each kept with val1 as an absolute
+  percentage, other groups contribute one entry chosen by val1 weight. 716 part references, 76 in groups other
+  than 0; 25 parts have `parts` of their own (drawn too). The game rolls these at random; the viewer seeds the
+  roll with the placement id so a building always looks the same. Whether the game stores the result in the
+  GAMESTATE_BUILDING is **Unknown**.
+- **Part mesh**: `phs or mesh`. Every part of a placed building names a `.mesh` (712) or nothing (4); no `.phs`
+  (Observed). Part meshes are modelled in building space: placed at the building's origin, The Hub's walls,
+  gates and towers line up (**Verified** by screenshot, 2026-10-04). `offset X/Y/Z` (37 parts) moves a part
+  unless `is for position marker` is set; whether the offset is applied before or after the building's
+  `scale` is **Unknown** (the viewer adds it before scaling).
+- **Placement transform**: mesh space → scale by BUILDING `scale` (117 placed types ≠ 1) → rotate by the instance
+  quaternion → move to the position. The quaternion (stored w, x, y, z) is used as an Ogre orientation with no
+  axis change: **Verified** by screenshot (walls and gates of The Hub join; a wrong convention tilts or
+  scatters them). Height: the state's `world Y pos` (all 130 placements around The Hub have one), else
+  terrain height + instance Y.
+- Not drawn: `is node` buildings (invisible markers), the `interior` part lists (loaded only when inside),
+  `destroyed mesh`, `distant mesh` (low-poly town batches), records with no parts (Iron Resource, Copper
+  Resource, Ramp: 1,336 placements), the INVENTORY_STATE entries at the origin.
+- **Map features**: the MAP_FEATURES `mesh` (all 1,810 are `.mesh`), scaled by the entry's per-axis scale
+  (non-uniform for some, e.g. 1.77 × 1.12 × 1.77), rotated, moved to its absolute position; `hidden` ones are
+  skipped. Texture modes (fcs.def `MapFeatureMode`): UV_MAPPED 475, TRIPLANAR 65, TERRAIN 820, DUAL_TEXTURE 409,
+  FOLIAGE 25, DUAL_TRIPLANAR 16. TERRAIN mode "uses textures from the current biome": Kenshi's `mapfeature_fs`
+  runs the terrain layer model without the road layer (Observed, terrainfp4.hlsl); the viewer draws them with
+  its terrain shader the same way.
+- Materials come from the model viewer's resolver ([../viewer.md](../viewer.md#how-mesh-textures-are-resolved));
+  parts without a `material` take their building's. "If blank will use the local town material" (fcs.def,
+  BUILDING `material`): which record that is, is **Unknown**, so such buildings fall back to the mesh's script
+  material or stay untextured.
+
 ## Open questions
 
 - Meaning of the trailer ints and of the stored record sizes.
@@ -183,4 +220,6 @@ read it. Whether the game still reads it is **Unknown** (the exe contains the st
 - What the INVENTORY_STATE entries in the building list are for; INVENTORY_* and ITEM_PLACEMENT_GROUP
   contents; `interiors.level` structure.
 - ROAD `start`/`end`, the road point x parameter, road foliage w.
-- `fogfeatures.dat`, `globalPathing.path`, `blendinfo.dat` layouts.
+- `fogfeatures.dat`, `globalPathing.path` layouts (`blendinfo.dat`: see terrain.md).
+- How the game picks building parts (RNG, seed, stored or not), the order of part offset and building scale, and
+  the "local town material".

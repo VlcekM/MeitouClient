@@ -74,6 +74,35 @@ public sealed class TerrainHeightmap : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Reads a window of <paramref name="columns"/> × <paramref name="rows"/> points, every <paramref name="step"/>-th
+    /// sample from (<paramref name="column0"/>, <paramref name="row0"/>), reading each needed row once. Points past the
+    /// heightmap's edge take the nearest edge sample.
+    /// </summary>
+    public HeightWindow ReadWindow(int column0, int row0, int columns, int rows, int step = 1)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(step, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(columns, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(rows, 1);
+        var raw = new ushort[columns * rows];
+        var bytes = new byte[Image.BytesPerRow];
+        var row = new ushort[Size];
+        int lastRow = -1;
+        for (int j = 0; j < rows; j++)
+        {
+            int r = Math.Clamp(row0 + j * step, 0, Size - 1);
+            if (r != lastRow)
+            {
+                Image.ReadRowBytes(r, bytes);
+                Image.DecodeRow(bytes, row);
+                lastRow = r;
+            }
+            for (int i = 0; i < columns; i++)
+                raw[j * columns + i] = row[Math.Clamp(column0 + i * step, 0, Size - 1)];
+        }
+        return new HeightWindow(column0, row0, step, columns, rows, raw);
+    }
+
     /// <summary>Calls <paramref name="visit"/> with every row in order (the span is reused between calls).</summary>
     public void ForEachRow(Action<int, ReadOnlySpan<ushort>> visit)
     {

@@ -78,6 +78,8 @@ static class Shaders
         uniform vec3 uEye;
         uniform bool uWireframe;
         uniform vec3 uFlatColour;
+        uniform vec3 uFogColour;       // world view: distance haze (off while uFogDistance is 0)
+        uniform float uFogDistance;
 
         out vec4 fragColour;
 
@@ -145,6 +147,7 @@ static class Shaders
             float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * uSpecular * 0.5;
             vec3 colour = albedo * (ambient + diff * vec3(1.0, 0.97, 0.92)) + spec * diff;
             if (uEmissive) colour += albedo * nm.a;
+            if (uFogDistance > 0.0) { float fog = clamp(length(uEye - vWorld) / uFogDistance, 0.0, 1.0); colour = mix(colour, uFogColour, fog * fog * 0.85); }
             fragColour = vec4(colour, 1.0);
         }
         """;

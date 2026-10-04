@@ -1,7 +1,8 @@
 # Terrain: world size, heightmap, land maps
 
 Examined 2026-10-04 on the Steam install (Kenshi 1.0.68, "Newland" world). Readers:
-`Meitou.Data.World.WorldLayout`, `TiffImage`, `TerrainHeightmap`, `RawHeightTile`. Checks:
+`Meitou.Data.World.WorldLayout`, `TiffImage`, `TerrainHeightmap`, `RawHeightTile`; texturing: `BlendInfoFile`,
+`BiomeTerrain`, `TerrainMaps`; meshes: `HeightWindow`, `TerrainMesh` (drawn by `meitou-viewer --world`, [../viewer.md](../viewer.md#world-mode)). Checks:
 `meitou-tools world` (survey) and `tests/Meitou.Tests/World/`. Zone files and placements are in
 [zones.md](zones.md).
 
@@ -60,25 +61,112 @@ water level is **Unknown** (the exe has a shader parameter `waterHeightRel`).
 Streaming: the reader never loads the whole 537 MB; `Downsample(step)` streams rows,
 `HeightAt` / `Sample` seek per sample.
 
-## Other maps in `data/newland/land/` (Observed, not decoded)
+## Other maps in `data/newland/land/`
+
+The texturing ones are explained in [How the terrain is textured](#how-the-terrain-is-textured).
 
 | File | Size | What it is |
 | --- | --- | --- |
-| `biomemap.png` | 1024², RGBA | Biome regions as flat colours. Same orientation as the heightmap (Observed: rendered side by side, coastlines and regions line up) |
-| `blendmap.png` | 1024², RGBA | Terrain texture blending; not analyzed |
+| `biomemap.png` | 1024², RGBA | Biome regions as flat colours, one BIOMES `index` colour per pixel (288 units). Same orientation as the heightmap (**Verified**, below) |
+| `blendmap.png` | 1024², RGBA | Per-pixel weights of the biomes listed in `blendinfo.dat` (**Verified**, below) |
 | `areasmap.tga` | 256², 24-bit uncompressed (18-byte header + 196,608) | Not analyzed; if it covers the world, 4 × 4 pixels per zone. Same size as `data/land/areasmap.tga` |
-| `blendinfo.dat` | 1,364,352 | Magic `KBI1`, then int32 32, int32 32; data looks like 20-byte entries. **Unknown** |
+| `blendinfo.dat` | 1,364,352 | Magic `KBI1`: the biomes of each 2 × 2-zone cell (**Verified**, below), then bytes of Unknown meaning |
 | `fogfeatures.dat`, `features.dat` | | See [zones.md](zones.md#other-placement-files) |
-| `overlaymaps/colour.X.Y.png` | 64 files, 2048² each, X, Y = 0..7 | 8 × 8 tiles = 16384² colour map, one pixel per heightmap cell (Observed from names and sizes) |
-| `overlaymaps/new_overlay.X.Y.png` | 64 files | Second overlay set, same tiling (Observed from names) |
+| `overlaymaps/colour.X.Y.png` | 64 files, 2048² each, X, Y = 0..7 | 8 × 8 tiles = 16384² ground tint, 18 units per pixel (below) |
+| `overlaymaps/new_overlay.X.Y.png` | 64 files, 1024² each | 8 × 8 tiles = 8192² layer map (grass, dirt, road), 36 units per pixel (below) |
 | `overlaymaps/` others | | `biomemap.png`, `ambientmap.png`, `flowmap.png`, `watercolourmap.png`, `distant.png`, `debug.png`, `prosp.tga`, and tool leftovers `DevIL.dll`, `joiner.exe` |
-| `textures/` | 364 `.dds` | Terrain textures (`*_DIF`, `*_NML`) |
+| `textures/` | 364 `.dds` | Terrain layer textures (`*_DIF`, `*_NML`), named by BIOMES records |
 | `navtiles/` | 3,995 `tileX.Y.hkt` + `seeds.def` | Havok navmesh tiles (see overview) |
 
 Exe strings (Observed, simple string search of `kenshi_x64.exe`): `fullmap`, `data\newland/land\`,
 `Failed to open terrain map`, `ZoneMap::createTextureArray`, `Failed to load blend map`,
 `Failed to load index map`, `BiomeMap`, shader parameters `worldSize`, `worldOffset`, `waterHeightRel`,
 `blendinfo.dat`, `features.dat`, `fogfeatures.dat`.
+
+## How the terrain is textured
+
+Sources: the land maps above, the BIOMES records, Kenshi's terrain shaders `data/materials/deferred/terrain.hlsl`
+and `terrainfp4.hlsl` with `terrain.material` (shipped HLSL, read for facts), and the material setup in
+`kenshi_x64.exe` (Ghidra: the biome field reader at `0x140a0d9c0`, the terrain material builder at
+`0x140a14c90`; decompiled output kept outside the repo). Implemented from this description in
+`tools/Meitou.ModelViewer/TerrainShaders.cs`.
+
+### Which biomes apply where (Verified)
+
+- **`biomemap.png`**: each of its 57 colours is the `index` colour of exactly one BIOMES record (all 57 match).
+- **`blendinfo.dat`**: `char[4] "KBI1"`, `int32 cellsX` (32), `int32 cellsZ` (32), then `cellsX × cellsZ × 5`
+  `uint32` slot values, row-major with the row along +Z (cell `(x, z)` at index `z × 32 + x`). A cell is
+  294912 / 32 = 9216 units, 2 × 2 zones, 32 × 32 pixels of the 1024² maps. A slot value holds a biome colour in
+  its low 24 bits (0 = unused); cells use 1 to 4 of the 5 slots (355, 386, 227, 56 cells). After the table
+  (byte 20,492) come 1,343,860 more bytes: an `int32` 2048, then bytes such as `0x21 0x22 0x24 0x28 0x30 0x43 0x45`
+  that look like a slot count in bits 5–6 plus a 5-bit slot mask (Observed); probably which shader
+  permutation each terrain tile needs. Meaning **Unknown**; `BlendInfoFile.Trailer` keeps them raw.
+- **`blendmap.png`** (same 1024² grid): R, G, B, A are the weights (0–255) of slots 0–3 of the pixel's cell and
+  the remainder `255 − (R + G + B + A)` is the weight of slot 4. The largest weight names the biome
+  `biomemap.png` shows at that pixel on all 1,048,576 pixels; the channel sums are 240–255, or 0 where slot 4
+  alone applies (67,292 pixels). Tested in `TerrainBiomeTests.Base_game_blend_map_channels_weight_the_cell_slots`.
+  Weights are mostly 0 or 255: biome borders are hard, 288 units wide (Observed, debug view).
+
+### Overlay and colour maps
+
+- **`overlaymaps/new_overlay.X.Y.png`**: 8 × 8 tiles of 1024², tile X along world +X, Y along +Z, 36 units per
+  pixel. **Verified**: alpha is the road layer (mean 70.6 at road points of `leveldata.level`, 5.9 at points 300
+  units off, `TerrainBiomeTests.Base_game_overlay_alpha_marks_roads`; with the tile indices swapped the contrast is 15.2 vs 3.4,
+  with Z flipped none). From the shader (Observed): `max(R, G)` is the grass layer weight, B the dirt layer weight.
+- **`overlaymaps/colour.X.Y.png`**: 8 × 8 tiles of 2048², 18 units per pixel, same tiling (Observed: names and
+  sizes; the result looks right in the viewer). The shader multiplies RGBA by 1.2 and tints the layers with it;
+  its alpha thereby scales the gloss.
+- The shader maps both by a bounding box per terrain page (`overlayData`, `biomeData` uniforms: min corner and
+  min + size from the page's map object; Observed in the material builder).
+
+### BIOMES fields and shader parameters (Verified, kenshi_x64.exe)
+
+Each biome has six layers, in this order in its texture arrays (`diffuseMaps`, `normalMaps`, resource group
+`Landscape`): 0 base, 1 slope, 2 cliff ("vertical"), 3 grass, 4 dirt, 5 road. Texture fields `texture base`,
+`texture slope`, `texture vertical`, `texture grass`, `texture dirt`, `texture road`, each with `... normal`.
+How the material builder turns fields into shader constants:
+
+| Shader constant | From | Notes |
+| --- | --- | --- |
+| `scalesA` | `tiling X/Y 1`, `tiling X/Y 2` | slope, cliff |
+| `scalesB` | `tiling X/Y 0`, `tiling X/Y grass` | base, grass |
+| `scalesC` | `tiling X/Y dirt`, `tiling X/Y road` | dirt, road |
+| `slopeMin`, `slopeMax`, `slopeBlend` | `slope min/max/fade` `1`, `2`, `3`, `grass`, each **× 0.01** | compared with `1 − normal.y`, so `19` means 0.19 (about 36°), not 19° as fcs.def says; `... 3` is not in fcs.def |
+| `overlayMult` | `overlay mult vertical`, `grass`, `dirt`, `road` | |
+| `textureFade` | `ground colour` (RGB), `1 / fade distance` | |
+| `absorbance[2]` | `absorbance 0`, `1`, `2`, `grass`, then `dirt`, `road` | rain wetness |
+| `brightnessFix` | `brightness fix` per blended biome | 0 becomes 1 |
+| `distortion0`, `distortion1` | per biome `1 / distort wavelength` (0 if ≤ 0), `distort amplitude × 0.01` | two biomes per vector |
+
+### Layer model (Observed, terrainfp4.hlsl)
+
+Per pixel, with `slope = 1 − normal.y` and world position `p`:
+
+- Horizontal layers use `uv = p.xz / 5000 × tiling`; the cliff layer is projected on the two vertical planes,
+  `(p.z, v)` and `(p.x, v)` with `v = 1 − p.y / 5000` plus a cosine distortion, weighted by how much the surface
+  faces X or Z (`(|n.xz| − 0.2) × 7` squared, normalised).
+- Layer weights: `smoothstep(min − blend, min, slope) × smoothstep(max + blend, max, slope)`; component X weights
+  the slope layer, Y the cliff layer (Z and W are not used for colour).
+- Blend order: base → grass by the overlay's `max(R, G)` → slope by its weight → dirt by overlay B → fade to the
+  ground colour with distance (`saturate(distance / fade distance − 0.3)`) → road by overlay A → cliff by its
+  weight. Base and slope are multiplied by the colour map; cliff, grass, dirt and road by
+  `lerp(1, colour, overlay mult)`. Normal maps blend the same way (fading to flat); the result's alpha is gloss.
+- Normal maps are in a frame with `binormal = normalize(n × (−1, 0, 0))`, `tangent = binormal × n`; the cliff
+  samples flip channels per projection (not reproduced in the viewer).
+- Up to four biomes per terrain page (defines `BLEND1..3` name blend-map channels); the first gets
+  `1 − (sum of the others)`. Which slot the game treats as the first is **Unknown**; the viewer weights all five
+  slots as above, which is equivalent when the weights sum to 1.
+- Not reproduced in the viewer: wetness and water (`waterHeightRel`, absorbance), the interior clip mask, the
+  distant-terrain material (`DistantTerrain`, `distant.png`), LOD morphing (the vertex shader blends height
+  and normal towards a coarser level stored in `position.w` and `BINORMAL`).
+
+### Terrain mesh in the viewer
+
+`TerrainMesh` cuts a `HeightWindow` (every n-th heightmap sample of a rectangle, read row by row) into chunks of
+64 × 64 cells; each chunk has one vertex buffer and shares per-LOD index buffers (every 2^l-th vertex) plus
+skirts that hang below its edges to hide LOD cracks. Normals are central differences of the window's heights.
+Triangles `(i, j), (i, j+1), (i+1, j)` face +Y (`TerrainMeshTests`). The game's own terrain LOD scheme is
+**Unknown** beyond the morph described above.
 
 ## Legacy terrain: `data/land/` (Observed)
 
@@ -100,5 +188,6 @@ An older world, kept in the install. Probably unused by the Newland game, but `r
 - World unit in metres (decimetres most likely).
 - How the game interpolates heights between samples, and what the terrain LOD/paging does (exe mentions
   `PLSM2`, `TerrainNode`, `DistantTerrain`).
-- Meaning of `blendinfo.dat`, `blendmap.png`, `areasmap.tga`, and how biome colours map to `BIOMES` records.
+- Meaning of the bytes after the `blendinfo.dat` table, of `areasmap.tga`, and which blend slot the game treats as a page's first biome.
+- The water level and how water, wetness and the distant terrain are drawn.
 - Whether anything still reads `data/land/grasssplits`.

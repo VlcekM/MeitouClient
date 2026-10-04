@@ -7,7 +7,7 @@ namespace Meitou.Tests.World;
 public class TerrainTests
 {
     /// <summary>Builds a baseline greyscale TIFF: 16-bit samples in strips of <paramref name="rowsPerStrip"/> rows.</summary>
-    static byte[] Tiff(int width, int height, Func<int, int, ushort> sample, bool littleEndian = true, int rowsPerStrip = 0, bool longSizes = false, int compression = 1)
+    internal static byte[] Tiff(int width, int height, Func<int, int, ushort> sample, bool littleEndian = true, int rowsPerStrip = 0, bool longSizes = false, int compression = 1)
     {
         if (rowsPerStrip <= 0) rowsPerStrip = height;
         int strips = (height + rowsPerStrip - 1) / rowsPerStrip;
