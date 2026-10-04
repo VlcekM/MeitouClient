@@ -16,7 +16,7 @@ public sealed class OgreMaterialLibrary
     public Dictionary<string, OgreMaterial> Materials { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, OgreGpuProgram> Programs { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>Later definitions of a name already in <see cref="Materials"/> (which one Kenshi keeps is Unknown; the first is kept here).</summary>
+    /// <summary>Later definitions of a name already in <see cref="Materials"/> (Kenshi keeps the first parsed: its resource collision listener refuses the rest, docs/formats/ogre-material.md).</summary>
     public List<OgreMaterial> DuplicateMaterials { get; } = [];
 
     public List<OgreScriptFile> Files { get; } = [];
