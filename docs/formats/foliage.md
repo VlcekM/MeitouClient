@@ -34,6 +34,7 @@ The code lives in `src/Meitou.Data/World/Foliage*.cs`, with tests in `tests/Meit
   - `visibility range`: FoliageVisibilityRange, 0 CLOSE, 1 MEDIUM, 2 FAR, 3 FEATURE.
   - `wind`: a wind page, see below.
   - `lod range`: × 10, stored per mesh. The renderer use of this value is **Unknown**.
+  - Observed (viewer record dump, 2026-10-04): some layers also carry `uses foliage system`, `lod levels` and `page size` (e.g. SageBrush: lod range 150, page size 50, LandTrumpets: lod range 50). Their use by the game is **Unknown**; the viewer ignores them.
   - **Verified (decompiled)** for the record reads.
 - **FOLIAGE_MESH**: every field in `fcs.def`, read in FUN_1406ce160.
   - Scale range: `min height`/`max height` × 2, each clamped to [0.01, 10].
@@ -180,11 +181,58 @@ The order of work in a zone:
   - **FOLIAGE (4)**: TRANSPARENCY | DOUBLESIDED, cut where the **normal map's alpha** < `alpha threshold` / 255.
   - **Leaves mesh**: `leaves texture` and `leaves normal`, transparent and double-sided, cut at
     `leaves alpha threshold` / 255. This settles the scale left Unknown in viewer.md.
-  - **TERRAIN**: the biome textures.
+  - **TERRAIN**: the biome textures of one biome, see [TERRAIN-mode meshes](#terrain-mode-meshes).
   - Other modes get DUST, tinted with the biome's `ground colour`.
 - Wind layers give their meshes `windFactorX/Z = wind factor × 0.25`. PagedGeometry's wind vertex program text
   is in the exe, but Kenshi's deferred `objects.hlsl` has no wind input. Whether trees sway in game is
   **Unknown**; the viewer does not sway them.
+
+### TERRAIN-mode meshes
+
+Most big rocks and rock formations (and `features.dat` map features with `texture mode` TERRAIN) are textured
+like the terrain, not with their own textures. Sources: the shipped `data/materials/deferred/mapfeature.material`,
+`mapfeature.hlsl` and `terrainfp4.hlsl` (read for facts), and `kenshi_x64.exe` (Ghidra: the map-feature builder
+FUN_140843920, its TERRAIN branch, and the functions it calls; decompiled output kept outside the repo).
+
+- **Material** (**Verified**, material script): `Feature_Terrain_DX11`. Vertex program `feature_vs`
+  (`mapfeature.hlsl`), fragment program `mapfeature_fs` from `terrainfp4.hlsl` with the defines `NO_ROADS` and
+  `DX11`. The pass culls back faces (`cull_hardware clockwise`, Ogre's default) and has the units `diffuseMaps`,
+  `normalMaps`, `overlayMap`, `colourMap` and the interior clip mask.
+- **One biome per material** (**Verified (decompiled)**). The TERRAIN branch makes a one-entry biome list and
+  hands it, with the template name `Feature_Terrain_DX11`, to the terrain material builder FUN_140a14c90 (the
+  one whose parameters terrain.md lists). The biome comes from FUN_140a0ac00 → FUN_140a09630: the world point's
+  X and Z are mapped to a pixel of the biome map (`biomemap.png`; nearest pixel, clamped at the edges), its RGB is
+  looked up among the BIOMES `index` colours, and a record named `EMPTY` is used when none matches. The branch
+  reads none of the mesh record's own texture fields (`texture map`, `normal map`, tiling): in TERRAIN mode they
+  are ignored. No blend map is used, so a rock on a biome border is textured entirely with the biome of that
+  one point.
+- **Which point**: the builder takes a position argument. For a foliage instance or a map feature it is
+  presumably the object's own position, but the callers were not examined: **Unknown** (could also be per page).
+  The viewer uses each instance's origin.
+- **Overlay and colour maps** (**Observed (decompiled)**): the builder also gets the overlay-map object of the
+  point's zone (FUN_140a16c20: the zone indices times a constant, floored, then a lookup); the constant was not
+  read, presumably 1/8, which makes it the zone's 8 × 8-zone `overlaymaps` tile. The material name is the template
+  name plus the biome names plus that map's name, so materials are shared per biome and tile.
+- **Shader** (**Verified**, reading `mapfeature.hlsl` / `terrainfp4.hlsl`; the layer model is terrain.md's):
+  - The normal is the mesh's vertex normal through the world matrix, normalised. No normal map of the mesh's own.
+  - `slope = min(1, 1 − normal.y)`. The terrain's own shader does not clamp; for meshes it matters, because
+    faces that overhang (normal pointing down) would otherwise fall out of the cliff layer's range (its
+    `slope max` is usually 1) and show the base layer.
+  - The cliff projection weights are computed per vertex like the terrain's, except that a vertex whose normal has
+    y > 0.9 takes the (z, height) projection alone (weights (1, 0)); the terrain uses y > 0.995 → (0.5, 0.5).
+  - Roads are off (overlay alpha treated as 0). Wetness, the distance fade to the ground colour and the brightness
+    fix are as on the terrain.
+- **Meshes** (**Observed**, a probe over the meshes of the foliage layers of Skinner's Roam, `FF6400`): the
+  TERRAIN-mode rock meshes have no LOD levels, and all but the small `Boulder01` (hard edges on half its corners)
+  have smooth normals (no position carries two normals more than 20° apart; the stored normals are within 3–13° on
+  average of area-weighted face normals). The big formations are
+  low-poly: `Barkworm_Pillar01`–`03` have about 3000 triangles for a bounding radius of about 4700 units, so their
+  detail is all in the biome textures, which are 2048² (e.g. `Mesa2ROCKLoop_DIF.dds`, the Skinner's Roam cliff
+  layer at tiling 7, one repeat per 714 units).
+- Example (**Observed**, viewer against the user's game screenshots in zone 20.28 / 20.29): Skinner's Roam's cliff
+  layer has `slope min/fade/max` 0.16 / 0.11 / 1.0 and its base layer is a white gravel (`WadiGravel-WHITE`).
+  Without the clamp, every overhanging face of the formations showed that gravel as large pale patches, cut
+  along the low-poly facets; with it the rocks are cliff texture throughout, as in the game.
 
 ## Grass blades
 

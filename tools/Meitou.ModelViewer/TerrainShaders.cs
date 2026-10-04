@@ -74,8 +74,10 @@ static class TerrainShaders
         uniform vec2 uMorph;                   // distance where morphing starts and ends (start >= 1e30: never)
         out vec3 vWorld;
         out vec3 vNormal;
+        out vec2 vCliffBlend;                  // unused: the terrain's cliff projection weights come from the per-pixel normal
         void main()
         {
+            vCliffBlend = vec2(0.5);
             vec2 p = uNode.xy + aGrid * (uNode.z / uNode.w);
             float d = distance(vec3(p.x, terrainHeight(p), p.y), uEye);
             float k = uMorph.x >= 1e30 ? 0.0 : clamp((d - uMorph.x) / (uMorph.y - uMorph.x), 0.0, 1.0);
@@ -87,7 +89,12 @@ static class TerrainShaders
         }
         """;
 
-    /// <summary>Plain meshes drawn with the terrain material (TERRAIN-mode map features).</summary>
+    /// <summary>
+    /// Plain meshes drawn with the terrain material (TERRAIN-mode map features, the game's <c>Feature_Terrain_DX11</c>;
+    /// docs/formats/foliage.md, "TERRAIN-mode meshes"). The cliff projection weights are made per vertex from the mesh
+    /// normal, and a surface facing up (normal.y above 0.9) takes the (z, height) projection alone, as the game's feature
+    /// vertex program does.
+    /// </summary>
     public const string MeshVertex = """
         #version 330 core
         layout(location = 0) in vec3 aPosition;
@@ -96,10 +103,17 @@ static class TerrainShaders
         uniform mat4 uModel;           // the placement of the map feature
         out vec3 vWorld;
         out vec3 vNormal;
+        out vec2 vCliffBlend;
         void main()
         {
             vWorld = (uModel * vec4(aPosition, 1.0)).xyz;
             vNormal = transpose(inverse(mat3(uModel))) * aNormal;
+            vec3 n = normalize(vNormal);
+            vec2 cb = max(abs(normalize(n.xz + vec2(1e-6))) - 0.2, vec2(0.0)) * 7.0;
+            cb *= cb;
+            cb /= max(cb.x + cb.y, 1e-6);
+            if (n.y > 0.9) cb = vec2(1.0, 0.0);
+            vCliffBlend = cb;
             gl_Position = uViewProjection * vec4(vWorld, 1.0);
         }
         """;
@@ -108,6 +122,7 @@ static class TerrainShaders
 
         in vec3 vWorld;
         in vec3 vNormal;
+        in vec2 vCliffBlend;           // meshes: the per-vertex cliff projection weights (MeshVertex)
         out vec4 fragColour;
 
         uniform vec3 uEye;
@@ -126,7 +141,8 @@ static class TerrainShaders
         uniform bool uHasMaps;         // overlay + colour window textures available
         uniform int uMapState;         // 0 no maps, 1 maps still loading (ground colour only), 2 ready
         uniform int uDebug;            // 0 normal, 1 slot weights, 2 layer weights, 3 LOD-free shading
-        uniform bool uNoRoads;         // map features: no road layer
+        uniform bool uFeature;         // map features (Feature_Terrain): no road layer, slope clamped to 1, cliff weights per vertex
+        uniform int uFeatureBiome;     // map features: the one biome (parameter row) of the feature's origin; -1 = blend as the terrain
         uniform float uFarStart;       // distance where the textured terrain gives way to the ground colour
         uniform float uFarEnd;
         uniform bool uHasGround;       // whole-world ground colour map available
@@ -162,10 +178,12 @@ static class TerrainShaders
             vec2 uv = vWorld.xz / 5000.0;
             float vert = 1.0 - vWorld.y / 5000.0
                 + (cos(vWorld.x * distort.x) + cos(vWorld.z * distort.x)) * distort.y;
-            // Cliff: two vertical projections, weighted by how much the surface faces X or Z.
-            vec2 cb = max(vec2(0.0), pow((abs(normalize(n.xz + vec2(1e-5))) - 0.2) * 7.0, vec2(2.0)));
+            // Cliff: two vertical projections, weighted by how much the surface faces X or Z (meshes: per vertex).
+            vec2 cb = max(abs(normalize(n.xz + vec2(1e-5))) - 0.2, vec2(0.0)) * 7.0;
+            cb *= cb;
             cb /= max(cb.x + cb.y, 1e-5);
             if (n.y > 0.995) cb = vec2(0.5);
+            if (uFeature) cb = vCliffBlend;
 
             vec4 w = smoothstep(smin - sblend, smin, vec4(slope)) * smoothstep(smax + sblend, smax, vec4(slope));
             vec4 white = vec4(1.0);
@@ -192,7 +210,12 @@ static class TerrainShaders
             {
                 vec4 nBase = tex(uNormal, uv * sB.xy, layersA.x);
                 vec4 nSlope = tex(uNormal, uv * sA.xy, layersA.y);
-                vec4 nCliff = tex(uNormal, vec2(uv.y, vert) * sA.zw, layersA.z) * cb.x + tex(uNormal, vec2(uv.x, vert) * sA.zw, layersA.z) * cb.y;
+                // The cliff projections' normals are turned into the surface frame: red flipped on both, green flipped on
+                // the (z, height) one where the surface faces -X and on the (x, height) one where it faces +Z (terrain.md).
+                vec4 nCliffX = tex(uNormal, vec2(uv.y, vert) * sA.zw, layersA.z), nCliffZ = tex(uNormal, vec2(uv.x, vert) * sA.zw, layersA.z);
+                nCliffX.rg = vec2(1.0 - nCliffX.r, n.x > 0.0 ? nCliffX.g : 1.0 - nCliffX.g);
+                nCliffZ.rg = vec2(1.0 - nCliffZ.r, n.z < 0.0 ? nCliffZ.g : 1.0 - nCliffZ.g);
+                vec4 nCliff = nCliffX * cb.x + nCliffZ * cb.y;
                 vec4 nGrass = tex(uNormal, uv * sB.zw, layersA.w);
                 vec4 nDirt = tex(uNormal, uv * sC.xy, layersB.x);
                 vec4 nRoad = tex(uNormal, uv * sC.zw, layersB.y);
@@ -221,7 +244,8 @@ static class TerrainShaders
             if (uWireframe) { fragColour = vec4(0.1, 0.1, 0.1, 1.0); return; }
             vec3 n = uHeightNormals ? terrainNormal(vWorld.xz) : normalize(vNormal);
             float distance = length(vWorld - uEye);
-            float slope = 1.0 - n.y;
+            // Map features clamp the slope at 1, so overhangs (normal pointing down) keep the cliff layer.
+            float slope = uFeature ? min(1.0, 1.0 - n.y) : 1.0 - n.y;
             vec2 world01 = (vWorld.xz + uHalfWorld) / (2.0 * uHalfWorld);
 
             // How much of the textured shading applies: before the far distance, and inside the overlay window once the
@@ -245,7 +269,7 @@ static class TerrainShaders
                 {
                     map = texture(uOverlay, fract((vWorld.xz + uHalfWorld) * uRegion.zw));
                     map.r = max(map.r, map.g);
-                    if (uNoRoads) map.a = 0.0;
+                    if (uFeature) map.a = 0.0;
                     colour = texture(uColour, fract((vWorld.xz + uHalfWorld) * uRegion.zw)) * 1.2;
                 }
                 if (uTextured)
@@ -257,7 +281,13 @@ static class TerrainShaders
                     float rest = max(0.0, 1.0 - dot(weights, vec4(1.0)));
                     vec4 sumA = vec4(0.0), sumN = vec4(0.0);
                     float total = 0.0, pending = 0.0;
-                    for (int k = 0; k < 5; k++)
+                    if (uFeatureBiome >= 0)
+                    {
+                        // A map feature has one biome for its whole surface (the game builds its material for the biome at its origin).
+                        Surface s = biome(uFeatureBiome, n, slope, map, colour, distance);
+                        sumA = s.albedo; sumN = s.normal; total = 1.0;
+                    }
+                    else for (int k = 0; k < 5; k++)
                     {
                         uint b = k < 4 ? slots[k] : slot4;
                         float wk = k < 4 ? weights[k] : rest;

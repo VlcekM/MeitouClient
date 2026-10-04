@@ -80,6 +80,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         resolver = new MaterialResolver(objects.Database, library, assets);
         instanceBuffer = gl.GenBuffer();
         meshes = new ObjectMeshCache(gl, assets, uploads, instanceBuffer);
+        meshes.Unloaded = gpu => { unloadedMeshes.Add(gpu); RemoveBatches(gpu); };
         streamer = new ObjectStreamer(objects, meshes);
         var distant = new SurfaceMaterial { Description = "DistantTown (vertex colour x texture x 1.5)", Diffuse = DistantTowns.DiffuseTexture, VertexColours = true, SpecularMult = 0 };
         distantMaterial = new ObjectMaterialSet([new ObjectPartMaterial(distant, textureCache.Get(distant.Diffuse, false), null, null, null)]);
@@ -119,8 +120,11 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     public List<string> Messages { get; } = [];
 
     /// <summary>A line about what is loaded, for the log.</summary>
+    /// <summary>GPU memory held by streamed meshes and textures, for the stats line and the window title.</summary>
+    public long ResidentBytes => meshes.Bytes + textureCache.ResidentBytes;
+    public string ResidentDescription => $"{meshes.Bytes / 1048576.0:0} MB in {meshes.Resident} meshes ({meshes.Unloads} unloaded, {meshes.Reloads} reloaded), {textureCache.Describe()}";
     public string Describe() =>
-        $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved), {meshes.Resident}/{meshes.Total} meshes requested or resident ({meshes.Bytes / 1048576.0:0} MB), " +
+        $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved), {meshes.Resident}/{meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
         $"{towns.Count(t => t.Mesh.Status == ObjectMesh.State.Resident)}/{towns.Count} distant towns; {objects.Describe()}";
 
     // ------------------------------------------------------------------ streaming
@@ -144,6 +148,16 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         unresolvedInRange = streamer.Scan(eye, ObjectDistance, DistantRange, NoDistant, Resolve, unlimited ? int.MaxValue : 40);
         double tScan = watch.Elapsed.TotalMilliseconds;
         meshes.Pump();
+        MarkInRange(eye, force: unlimited);
+        meshes.Trim();
+        if (unloadedMeshes.Count > 0)
+        {
+            // Instances that resolved to a mesh just unloaded wait for it again (Scan asks for it once they are in range).
+            foreach (var zone in streamer.AllZones)
+                foreach (var inst in zone.Real.Concat(zone.Stand))
+                    if (inst.Gpu is { } resolved && unloadedMeshes.Contains(resolved)) Unresolve(zone, inst);
+            unloadedMeshes.Clear();
+        }
         textureCache.Pump(wait: unlimited, max: unlimited ? 16 : 8, budgetMs: Math.Max(budgetMs * 0.5, 0.5));
         lock (textureCache.Messages)
         {
@@ -156,6 +170,53 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         LastUpdateMs = watch.Elapsed.TotalMilliseconds;
         if (Log && !unlimited && LastUpdateMs > 6)
             Console.WriteLine($"slow objects update {LastUpdateMs:0.0} ms: zones {tZones:0.0}, scan {tScan - tZones:0.0}, uploads [{uploads.LastRun}]");
+    }
+
+    readonly HashSet<GpuObjectMesh> unloadedMeshes = [];
+    long lastMark;
+    int markStamp;
+
+    /// <summary>
+    /// Once a second, before <see cref="ObjectMeshCache.Trim"/>: everything within its draw range counts as in use, whether or not the camera looks at
+    /// it (instances reading the mesh, materials the textures), so only what is out of range gets unloaded, after the idle time.
+    /// </summary>
+    void MarkInRange(Vector3 eye, bool force)
+    {
+        long now = Environment.TickCount64;
+        if (!force && now - lastMark < 1000) return;
+        lastMark = now;
+        markStamp++;
+        void Mark(ObjectStreamer.Instance inst, float range)
+        {
+            if (inst.Gpu is null || Vector3.Distance(eye, inst.Centre) - inst.Radius >= Math.Min(range, inst.Limit)) return;
+            inst.Mesh.LastUsed = now;
+            if (inst.Materials is { } set && set.Stamp != markStamp) { set.Stamp = markStamp; set.Touch(); }
+        }
+        foreach (var zone in streamer.AllZones)
+        {
+            foreach (var inst in zone.Real) Mark(inst, ObjectDistance);
+            if (!NoDistant) foreach (var inst in zone.Stand) Mark(inst, DistantRange);
+        }
+        if (NoDistant) return;
+        foreach (var t in towns)
+            if (Vector3.Distance(eye, t.Centre) - t.Radius < DistantRange) t.Mesh.LastUsed = now;
+        _ = distantMaterial.Parts[0].Diffuse;
+    }
+
+    /// <summary>A mesh was unloaded under an instance that had resolved to it: the instance waits for it again (<see cref="ObjectStreamer.Scan"/> asks for it once in range).</summary>
+    static void Unresolve(ObjectStreamer.Zone zone, ObjectStreamer.Instance inst)
+    {
+        inst.Gpu = null;
+        zone.Unresolved.Add(inst);
+    }
+
+    /// <summary>Forgets the batches of an unloaded mesh (their key would keep the deleted buffers' wrapper alive).</summary>
+    void RemoveBatches(GpuObjectMesh gpu)
+    {
+        List<(GpuObjectMesh, ObjectMaterialSet, int, bool)>? keys = null;
+        foreach (var key in batchMap.Keys)
+            if (ReferenceEquals(key.Item1, gpu)) (keys ??= []).Add(key);
+        if (keys is not null) foreach (var key in keys) batchMap.Remove(key);
     }
 
     void ResolveTowns(Vector3 eye)
@@ -246,6 +307,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain)
     {
         var cpu = Stopwatch.StartNew();
+        long now = Environment.TickCount64;
         float real = ObjectDistance;
         DrawnInstances = 0;
         DrawnTriangles = 0;
@@ -263,11 +325,13 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 foreach (var inst in zone.Real)
                 {
                     if (inst.Gpu is not { } gpu) continue;
+                    if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); continue; }
                     float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
                     float limit = Math.Min(real, inst.Limit);
                     if (value >= limit || !SphereVisible(frustum, inst.Centre, inst.Radius)) continue;
                     float w = ObjectRanges.EdgeWeight(value, limit, Math.Clamp(limit * 0.1f, 50, 1500));
                     if (w <= 0) continue;
+                    inst.Mesh.LastUsed = now;
                     DrawnInstances++;
                     if (inst.TerrainMode && options.Textures)
                     {
@@ -289,10 +353,12 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             foreach (var inst in zone.Stand)
             {
                 if (inst.Gpu is not { } gpu) continue;
+                if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); continue; }
                 float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
                 if (value >= DistantRange || !SphereVisible(frustum, inst.Centre, inst.Radius)) continue;
                 float w = ObjectRanges.RiseWeight(value, real - realBand, realBand) * ObjectRanges.EdgeWeight(value, DistantRange, distantBand);
                 if (w <= 0) continue;
+                inst.Mesh.LastUsed = now;
                 DrawnInstances++;
                 Emit(inst, gpu, value, w);
             }
@@ -303,6 +369,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 if (t.Mesh.Gpu is not { } gpu) continue;
                 float value = Vector3.Distance(t.Centre, eye) - t.Radius;
                 if (value >= DistantRange || !SphereVisible(frustum, t.Centre, t.Radius)) continue;
+                t.Mesh.LastUsed = now;
                 var batch = BatchFor(gpu, distantMaterial, 0, town: true);
                 if (batch.Count == 0) active.Add(batch);
                 batch.Add(Matrix4x4.CreateTranslation(t.Town.Position));

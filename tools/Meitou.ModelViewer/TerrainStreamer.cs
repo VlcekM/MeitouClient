@@ -118,7 +118,7 @@ public sealed class TerrainStreamer : IDisposable
         if (job is null && !swapping && NeedsWindow(eye, out int column0, out int row0))
         {
             var watch = Stopwatch.StartNew();
-            job = Task.Run(() =>
+            job = BackgroundWork.Run(() =>
             {
                 var window = map.ReadWindow(column0, row0, cells + 1, cells + 1, step);
                 var bounds = terrain.MeasureBounds(window);

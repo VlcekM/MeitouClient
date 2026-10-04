@@ -114,7 +114,7 @@ the extra integer) and in **every** technique's pass 0: vertex program gets `TEX
 | Building parts in the world | FUN_14057a920 | `StaticObject` | COLOURING if vertex colours; `material type` (BuildingShader): ALPHA (1) -> 0x8, FOLIAGE (2) -> 0x18, DUAL (3) -> 0x2 only with vertex colours, EMISSIVE (4) -> 0x20; always DUST (0x40); INSTANCED (0x80) and INTERIOR (0x100) from caller arguments |
 | Buildings under construction | FUN_140557be0 | `StaticObject` | 0xC (CONSTRUCTION, TRANSPARENCY), 0xF if DUAL; INTERIOR unless the building is of one particular kind (type 0xb) or a flag on the object is set; also sets `upperPos` and `scaffoldTiling` (from `building height`, `scaffolding tex scale`) on the pass and shadow caster |
 | Building preview / icon | FUN_140848950 | `StaticObject` | as building parts without DUST/INSTANCED/INTERIOR; part material chosen from `material match` / `material` / the base building's material, falling back to a record in `742-gamedata.base` |
-| Map features | FUN_140843920 | by `texture mode` (MapFeatureMode): UV_MAPPED, DUAL_TEXTURE, FOLIAGE, EMISSIVE -> `StaticObject`; TRIPLANAR, DUAL_TRIPLANAR -> `Triplanar`; TERRAIN -> `Feature_Terrain_DX11` through a different builder (FUN_140a14c90, biome textures, `diffuseMaps`/`normalMaps`; not analysed) | COLOURING if vertex colours; DUAL_TEXTURE / DUAL_TRIPLANAR -> 0x2 only with vertex colours (else a warning "is dual texture but the mesh does not have vertex colours"); FOLIAGE -> 0x18; EMISSIVE -> exactly 0x20 (then `brightness` set to the constant 1.0 instead of the auto constant); always CLIP_INTERIOR (0x200) |
+| Map features | FUN_140843920 | by `texture mode` (MapFeatureMode): UV_MAPPED, DUAL_TEXTURE, FOLIAGE, EMISSIVE -> `StaticObject`; TRIPLANAR, DUAL_TRIPLANAR -> `Triplanar`; TERRAIN -> `Feature_Terrain_DX11` through the terrain material builder (FUN_140a14c90) with the one biome of `biomemap.png` at a given point; see [foliage.md](foliage.md#terrain-mode-meshes) | COLOURING if vertex colours; DUAL_TEXTURE / DUAL_TRIPLANAR -> 0x2 only with vertex colours (else a warning "is dual texture but the mesh does not have vertex colours"); FOLIAGE -> 0x18; EMISSIVE -> exactly 0x20 (then `brightness` set to the constant 1.0 instead of the auto constant); always CLIP_INTERIOR (0x200) |
 | Items on the ground, weapons | FUN_140844030 (via FUN_140446e60) | `StaticObject` | `MATERIAL_SPECS_CLOTHING`: 0x18 if `material type` (ItemShader) > 0, plus 0x1 from a caller flag; `MATERIAL_SPECS_WEAPON`: 0; `ARMOUR`: a temporary record whose `texture map` / `normal map` are the armour's `vest texture` / `vest normalmap`, flags 0 |
 | Items worn on a character | FUN_140536210 (`AppearanceBase::setupItemMaterial`) | `Skinned` | 0x10 if ItemShader is DOUBLE_SIDED (2), else 0 (ALPHA gives no flag here) |
 | Clothing attachments with their own mesh | FUN_140535f20 | `StaticObject` | 0, record from the item's `material` reference |
@@ -145,7 +145,7 @@ factors), unless the item says `dont colorise`.
 
 ## Unknown
 
-- The `TERRAIN` map-feature builder (FUN_140a14c90) and terrain/biome materials.
+- Terrain/biome materials beyond what terrain.md and foliage.md ("TERRAIN-mode meshes") describe.
 - Characters' bodies, heads and hair (`Character`, `Hair`... scripts): the parameters Kenshi sets (skin tone, hair
   channels and colour) and the shader layering are in [../characters.md](../characters.md); the material
   cloning for them was not traced.

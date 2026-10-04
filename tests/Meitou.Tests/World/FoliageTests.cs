@@ -141,6 +141,22 @@ public class FoliageTests
     }
 
     [Fact]
+    public void Lower_grass_density_is_a_prefix_of_a_higher_one()
+    {
+        var flat = Plane((_, _) => 500);
+        var patch = Patch(200);
+        var high = FoliageGrassField.BladesWithPrefixes(patch, flat, 1000, 2000, 576, out var prefixes, 2);
+        var one = FoliageGrassField.Blades(patch, flat, 1000, 2000, 576, 1);
+        Assert.Equal(high.Length / FoliageGrassField.Stride, prefixes[^1]);
+        // Setting 1 of a page generated at 2 is the first half of its candidates: the same blades, up to the checkpoint's rounding.
+        int shown = FoliageGrassField.PrefixCount(prefixes, 0.5f);
+        Assert.InRange(shown, one.Length / FoliageGrassField.Stride - 2, one.Length / FoliageGrassField.Stride + 2);
+        Assert.Equal(one.AsSpan(0, (shown - 2) * FoliageGrassField.Stride).ToArray(), high.AsSpan(0, (shown - 2) * FoliageGrassField.Stride).ToArray());
+        Assert.Equal(0, FoliageGrassField.PrefixCount(prefixes, 0));
+        Assert.Equal(prefixes[^1], FoliageGrassField.PrefixCount(prefixes, 1));
+    }
+
+    [Fact]
     public void Visibility_ranges_are_ten_times_the_page_table()
     {
         Assert.Equal(500, FoliageLayout.VisibilityRange(FoliageVisibility.Close));

@@ -70,6 +70,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         workers = Math.Clamp(Environment.ProcessorCount / 4, 1, 3);
         var used = catalog.ByBiome.Values.SelectMany(l => l).Distinct().ToList();
         MeshRange = used.Where(l => !l.IsGrass).Select(l => l.Range).DefaultIfEmpty(0).Max();
+        GrassMaxRange = used.Where(l => l.IsGrass).Select(l => l.Range).DefaultIfEmpty(0).Max();
         LoadMs = watch.Elapsed.TotalMilliseconds;
     }
 
@@ -77,12 +78,16 @@ public sealed unsafe class FoliageRenderer : IDisposable
     public bool Enabled { get; set; } = true;
     /// <summary>settings.cfg <c>foliage range</c>, <c>grass range</c> and <c>grass density</c> (the game's defaults are 1; the viewer draws
     /// foliage and grass 4x as far by default).</summary>
-    public float RangeSetting { get; set; } = 4;
-    public float GrassRangeSetting { get; set; } = 4;
-    public float GrassDensitySetting { get; set; } = 1;
+    public float RangeSetting { get; set; } = Env("MEITOU_FOLIAGE_RANGE", 4);
+    public float GrassRangeSetting { get; set; } = Env("MEITOU_GRASS_RANGE", 4);
+    public float GrassDensitySetting { get; set; } = Env("MEITOU_GRASS_DENSITY", 1);
+    /// <summary>MEITOU_FOLIAGE_RANGE, MEITOU_GRASS_RANGE and MEITOU_GRASS_DENSITY start the three settings at other values (offscreen measurements).</summary>
+    static float Env(string name, float fallback) => float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : fallback;
 
     /// <summary>The longest mesh layer range in the catalog at setting 1 (zones are laid out up to it).</summary>
     public float MeshRange { get; }
+    /// <summary>The longest grass layer range in the catalog at setting 1.</summary>
+    public float GrassMaxRange { get; }
     public double LoadMs { get; }
     public int DrawnInstances { get; private set; }
     public int DrawnBlades { get; private set; }
@@ -94,8 +99,12 @@ public sealed unsafe class FoliageRenderer : IDisposable
     public List<string> Messages { get; } = [];
 
     /// <summary>Work in flight: zones being laid out, grass pages, meshes decoding or uploading, textures decoding.</summary>
-    public int Pending => running + decoding.Count + uploads.Count + textures.PendingCount + zones.Values.Sum(z => z.GrassRunning);
+    public int Pending => running + zonesWaiting + grassWaiting + decoding.Count + uploads.Count + textures.PendingCount + zones.Values.Sum(z => z.GrassRunning);
 
+    /// <summary>GPU memory held by foliage meshes, textures and grass pages.</summary>
+    public long ResidentBytes => residentMeshBytes + textures.ResidentBytes + GrassBytes();
+    public string ResidentDescription =>
+        $"{residentMeshBytes / 1048576.0:0} MB in {assetsByMesh.Values.Count(a => a.Resident)} meshes ({meshUnloads} unloaded, {meshReloads} reloaded), {textures.Describe()}, {GrassBytes() / 1048576.0:0} MB of grass pages";
     public string Describe() =>
         $"{zones.Values.Count(z => z.Ready)} zones laid out ({zones.Values.Where(z => z.Ready).Sum(z => z.Instances):N0} meshes, " +
         $"{zones.Values.Sum(z => z.Pages.Count):N0} grass pages), {assetsByMesh.Count} foliage meshes ({assetsByMesh.Values.Count(a => a.Resident)} resident), catalog of {catalog.Layers.Count} layers";
@@ -114,6 +123,24 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public readonly Dictionary<int, GrassPage> Pages = [];
         public int GrassRunning;
         public int Instances;
+        public PreparedZone? Prepared;
+        /// <summary>Lowest and highest placed instance (for culling the zone as a box).</summary>
+        public float MinY, MaxY;
+    }
+
+    /// <summary>A zone's instances grouped per (mesh, layer) with their arrays built, made on a worker.</summary>
+    sealed record PreparedGroup(FoliageMesh Mesh, FoliageLayer Layer, Matrix4x4[] Transforms, Vector3[] Positions, float[] Scales);
+    sealed record PreparedZone(List<PreparedGroup> Groups, float MinY, float MaxY);
+
+    static PreparedZone Prepare(FoliageZone zone)
+    {
+        var groups = new List<PreparedGroup>();
+        foreach (var g in zone.Instances.GroupBy(i => (i.Mesh, i.Layer)))
+        {
+            var list = g.ToList();
+            groups.Add(new PreparedGroup(g.Key.Mesh, g.Key.Layer, [.. list.Select(i => i.Transform)], [.. list.Select(i => i.Position)], [.. list.Select(i => i.Scale)]));
+        }
+        return new PreparedZone(groups, zone.Instances.Count == 0 ? 0 : zone.Instances.Min(i => i.Position.Y), zone.Instances.Count == 0 ? 0 : zone.Instances.Max(i => i.Position.Y));
     }
 
     /// <summary>The instances of one mesh in one zone, with the range of the layer that placed them.</summary>
@@ -128,14 +155,17 @@ public sealed unsafe class FoliageRenderer : IDisposable
 
     sealed class GrassPage
     {
-        public Task<float[][]>? Job;
+        public Task<(float[][] Blades, int[][] Prefixes)>? Job;
         public GrassBuffer[]? Buffers;
+        public bool Dropped;
     }
 
     sealed class GrassBuffer
     {
         public uint Vao, Vbo;
         public int Count;
+        /// <summary>Blades after each 1/64 of the candidates (<see cref="FoliageGrassField.BladesWithPrefixes"/>): the density setting draws a prefix.</summary>
+        public int[] Prefixes = [];
     }
 
     /// <summary>Follows the eye: lays out zones, decodes meshes, makes grass pages and uploads, within a frame budget.</summary>
@@ -146,7 +176,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
         var watch = Stopwatch.StartNew();
         // Uploads get 2 ms a frame (texture decodes are never waited for) except while settling for a screenshot.
         double budget = settling ? 1e9 : 2.0;
-        float meshRange = MeshRange * RangeSetting;
+        // Zones are laid out as far as either the meshes or the grass reach; a zone only needs to exist for the longer of the two.
+        float meshRange = Math.Max(MeshRange * RangeSetting, GrassMaxRange * GrassRangeSetting);
 
         // Zones in range: start the nearest missing ones, drop far ones.
         var wanted = new List<(ZoneCoordinate Zone, float Distance)>();
@@ -168,18 +199,24 @@ public sealed unsafe class FoliageRenderer : IDisposable
             var (x0, z0) = WorldLayout.ZoneOrigin(zone);
             (state.X0, state.Z0) = ((float)x0, (float)z0);
             running++;
-            state.Job = Task.Run(() =>
+            state.Job = BackgroundWork.Run(() =>
             {
                 if (!worlds.TryTake(out var world))
                 {
                     world = new FoliageWorld(install, db, levels, catalog);
                     lock (allWorlds) allWorlds.Add(world);
                 }
-                try { return world.Load(zone); }
+                try
+                {
+                    var loaded = world.Load(zone);
+                    state.Prepared = Prepare(loaded.Item1);
+                    return loaded;
+                }
                 finally { worlds.Add(world); }
             });
             zones[zone] = state;
         }
+        zonesWaiting = wanted.Count(w => !zones.ContainsKey(w.Zone));   // in range but not started yet (the workers are busy)
         foreach (var state in zones.Values.ToList())
         {
             if (state.Job is { IsCompleted: true } job)
@@ -192,17 +229,30 @@ public sealed unsafe class FoliageRenderer : IDisposable
             if (state.Job is null && ZoneDistance(state.Zone, eye) > meshRange + WorldLayout.ZoneSize) Drop(state);
         }
 
+        double t0 = watch.Elapsed.TotalMilliseconds;
         UpdateGrass(eye);
+        double t1 = watch.Elapsed.TotalMilliseconds;
         PumpMeshes();
+        TrimResident(eye, force: settling);
+        double t2 = watch.Elapsed.TotalMilliseconds;
         textures.Pump(wait: settling, max: settling ? 64 : 1);
-        while (uploads.Count > 0 && watch.Elapsed.TotalMilliseconds < budget) uploads.Dequeue()();
+        double t3 = watch.Elapsed.TotalMilliseconds;
+        while (uploads.Count > 0 && watch.Elapsed.TotalMilliseconds < budget)
+        {
+            var step = uploads.Dequeue();
+            var one = Stopwatch.StartNew();
+            step();
+            if (StreamLog && one.Elapsed.TotalMilliseconds > 3) Console.WriteLine($"slow foliage step {step.Method.Name}: {one.Elapsed.TotalMilliseconds:0.0} ms");
+        }
         lock (textures.Messages)
         {
             foreach (var m in Messages.Concat(textures.Messages).Distinct().Take(20)) Console.WriteLine($"warning   {m}");
             Messages.Clear();
             textures.Messages.Clear();
         }
+        double t4 = watch.Elapsed.TotalMilliseconds;
         PollTimers(wait: false);
+        if (!settling && watch.Elapsed.TotalMilliseconds > 8 && Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1") Console.WriteLine($"slow foliage update {watch.Elapsed.TotalMilliseconds:0.0}: zones {t0:0.0}, grass {t1 - t0:0.0}, meshes {t2 - t1:0.0}, textures {t3 - t2:0.0}, uploads {t4 - t3:0.0}");
         LastUpdateMs = watch.Elapsed.TotalMilliseconds;
     }
 
@@ -236,23 +286,25 @@ public sealed unsafe class FoliageRenderer : IDisposable
     void Accept(ZoneState state, (FoliageZone Zone, FoliageGround? Ground) result)
     {
         var (zone, ground) = result;
-        foreach (var g in zone.Instances.GroupBy(i => (i.Mesh, i.Layer)))
+        var prepared = state.Prepared ?? Prepare(zone);   // grouped on the worker: thousands of instances cost 15 to 20 ms here
+        foreach (var g in prepared.Groups)
         {
-            var asset = AssetFor(g.Key.Mesh);
-            var list = g.ToList();
-            float range = g.Key.Layer.Range * RangeSetting;
+            var asset = AssetFor(g.Mesh);
+            float range = g.Layer.Range * RangeSetting;
             state.Groups.Add(new Group
             {
                 Asset = asset,
                 Range = range,
                 // The game's transition is 10 units (100 for wind layers): too short to see; a tenth of the range instead.
-                Band = Math.Max(g.Key.Layer.Transition, range * 0.1f),
-                Transforms = [.. list.Select(i => i.Transform)],
-                Positions = [.. list.Select(i => i.Position)],
-                Scales = [.. list.Select(i => i.Scale)],
+                Band = Math.Max(g.Layer.Transition, range * 0.1f),
+                Transforms = g.Transforms,
+                Positions = g.Positions,
+                Scales = g.Scales,
             });
         }
         state.Instances = zone.Instances.Count;
+        state.MinY = prepared.MinY;
+        state.MaxY = prepared.MaxY;
         state.Ground = ground;
         state.Patches = zone.Grass.Where(p => p.Grass.Sprite is not null && p.Density.Any(d => d != 0)).ToList();
         foreach (var p in state.Patches)
@@ -272,6 +324,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
 
     void FreePage(GrassPage page)
     {
+        page.Dropped = true;   // an upload still queued for it deletes what it made instead of attaching it
         if (page.Buffers is null) return;
         foreach (var b in page.Buffers)
         {
@@ -283,12 +336,23 @@ public sealed unsafe class FoliageRenderer : IDisposable
 
     float GrassRange(FoliageGrassPatch patch) => patch.Layer.Range * GrassRangeSetting;
 
+    /// <summary>The highest "Grass density x" the pages are generated for (the settings slider's top): lower settings draw a prefix of the blades.</summary>
+    public const float MaxGrassDensity = 2f;
+    /// <summary>Grass pages generating at once, over all zones.</summary>
+    const int MaxGrassJobs = 12;
+    readonly List<(float Distance, ZoneState State, int Key)> grassWanted = [];
+    int zonesWaiting, grassWaiting;
+
     void UpdateGrass(Vector3 eye)
     {
+        grassWanted.Clear();
+        int inFlight = 0;
+        foreach (var state in zones.Values) inFlight += state.GrassRunning;
         foreach (var state in zones.Values)
         {
             if (!state.Ready || state.Ground is null || state.Patches.Count == 0) continue;
             float range = state.Patches.Max(GrassRange);
+            if (state.Pages.Count == 0 && ZoneDistance(state.Zone, eye) > range + PageSize) continue;
             for (int pz = 0; pz < PagesPerZone; pz++)
                 for (int px = 0; px < PagesPerZone; px++)
                 {
@@ -296,55 +360,98 @@ public sealed unsafe class FoliageRenderer : IDisposable
                     float x0 = state.X0 + px * PageSize, z0 = state.Z0 + pz * PageSize;
                     float d = BoxDistance(x0, z0, PageSize, eye);
                     state.Pages.TryGetValue(key, out var page);
-                    if (page is null && d < range + PageSize * 0.5f && state.GrassRunning < 4)
+                    if (page is null)
                     {
-                        page = state.Pages[key] = new GrassPage();
-                        var patches = state.Patches;
-                        var ground = state.Ground;
-                        float density = GrassDensitySetting;
-                        state.GrassRunning++;
-                        page.Job = Task.Run(() => patches.Select(p => FoliageGrassField.Blades(p, ground, x0, z0, PageSize, density)).ToArray());
+                        if (d < range + PageSize * 0.5f) grassWanted.Add((d, state, key));
+                        continue;
                     }
-                    else if (page is not null && page.Job is null && d > range + PageSize * 2)
+                    if (page.Job is null && d > range + PageSize * 2)
                     {
                         FreePage(page);
                         state.Pages.Remove(key);
                     }
-                    if (page?.Job is { IsCompleted: true } job)
+                    else if (page.Job is { IsCompleted: true } job)
                     {
                         state.GrassRunning--;
                         page.Job = null;
-                        var blades = job.Result;
+                        var result = job.Result;
                         var p = page;
-                        uploads.Enqueue(() => UploadPage(p, blades));
+                        QueuePage(p, result.Blades, result.Prefixes);
                     }
                 }
         }
+        // Missing pages nearest first, a bounded number at a time. Pages hold the blades of the highest density setting,
+        // so changing the setting never regenerates them (Draw shows a prefix).
+        grassWanted.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+        grassWaiting = grassWanted.Count;
+        foreach (var (_, state, key) in grassWanted)
+        {
+            if (inFlight >= MaxGrassJobs) break;
+            float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
+            var page = state.Pages[key] = new GrassPage();
+            var patches = state.Patches;
+            var ground = state.Ground!;
+            state.GrassRunning++;
+            inFlight++;
+            grassWaiting--;
+            page.Job = BackgroundWork.Run(() =>
+            {
+                var blades = new float[patches.Count][];
+                var prefixes = new int[patches.Count][];
+                for (int i = 0; i < blades.Length; i++)
+                    blades[i] = FoliageGrassField.BladesWithPrefixes(patches[i], ground, x0, z0, PageSize, out prefixes[i], MaxGrassDensity);
+                return (blades, prefixes);
+            });
+        }
     }
 
-    void UploadPage(GrassPage page, float[][] blades)
+    const int SlabBytes = 512 << 10;
+
+    /// <summary>A grass page's upload as steps of about 512 KB (allocate, slabs, then the page takes the buffers), so no frame holds a whole page.</summary>
+    void QueuePage(GrassPage page, float[][] blades, int[][] prefixes)
     {
         var buffers = new GrassBuffer[blades.Length];
         for (int i = 0; i < blades.Length; i++)
         {
-            var b = buffers[i] = new GrassBuffer { Count = blades[i].Length / FoliageGrassField.Stride };
+            var b = buffers[i] = new GrassBuffer { Count = blades[i].Length / FoliageGrassField.Stride, Prefixes = prefixes[i] };
             if (b.Count == 0) continue;
-            b.Vao = gl.GenVertexArray();
-            b.Vbo = gl.GenBuffer();
-            gl.BindVertexArray(b.Vao);
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, b.Vbo);
-            gl.BufferData<float>(BufferTargetARB.ArrayBuffer, blades[i].AsSpan(), BufferUsageARB.StaticDraw);
-            uint stride = FoliageGrassField.Stride * 4;
-            gl.EnableVertexAttribArray(0);
-            gl.VertexAttribPointer(0, 4, VertexAttribPointerType.Float, false, stride, (void*)0);
-            gl.VertexAttribDivisor(0, 1);
-            gl.EnableVertexAttribArray(1);
-            gl.VertexAttribPointer(1, 1, VertexAttribPointerType.Float, false, stride, (void*)16);
-            gl.VertexAttribDivisor(1, 1);
+            var data = blades[i];
+            int bytes = data.Length * sizeof(float);
+            uploads.Enqueue(() =>
+            {
+                b.Vao = gl.GenVertexArray();
+                b.Vbo = gl.GenBuffer();
+                gl.BindVertexArray(b.Vao);
+                gl.BindBuffer(BufferTargetARB.ArrayBuffer, b.Vbo);
+                gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)bytes, null, BufferUsageARB.StaticDraw);
+                uint stride = FoliageGrassField.Stride * 4;
+                gl.EnableVertexAttribArray(0);
+                gl.VertexAttribPointer(0, 4, VertexAttribPointerType.Float, false, stride, (void*)0);
+                gl.VertexAttribDivisor(0, 1);
+                gl.EnableVertexAttribArray(1);
+                gl.VertexAttribPointer(1, 1, VertexAttribPointerType.Float, false, stride, (void*)16);
+                gl.VertexAttribDivisor(1, 1);
+                gl.BindVertexArray(0);
+            });
+            for (int at = 0; at < bytes; at += SlabBytes)
+            {
+                int start = at, length = Math.Min(SlabBytes, bytes - at);
+                uploads.Enqueue(() =>
+                {
+                    gl.BindBuffer(BufferTargetARB.ArrayBuffer, b.Vbo);
+                    fixed (float* p = data) gl.BufferSubData(BufferTargetARB.ArrayBuffer, start, (nuint)length, (byte*)p + start);
+                });
+            }
         }
-        gl.BindVertexArray(0);
-        page.Buffers = buffers;
+        uploads.Enqueue(() =>
+        {
+            page.Buffers = buffers;
+            if (page.Dropped) FreePage(page);   // the page went out of range while its buffers were being filled
+        });
     }
+
+    /// <summary>GPU bytes of the grass pages (blades and the instance data).</summary>
+    long GrassBytes() => zones.Values.Sum(z => z.Pages.Values.Sum(p => p.Buffers?.Sum(b => (long)b.Count * FoliageGrassField.Stride * 4) ?? 0));
 
     // ------------------------------------------------------------------ meshes and materials
 
@@ -353,7 +460,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public required FoliageMesh Mesh;
         public Task<(Model? Main, Model? Leaves)>? Job;
         public GpuMesh? Main, Leaves;
-        public bool Resident, Failed;
+        public bool Resident, Failed, Uploading;
+        public long LastUsed, Bytes;
         public FoliageMaterial? MainMaterial, LeavesMaterial;
         public bool Terrain => Mesh.MaterialType == 2;
         public Vector3 Centre;
@@ -369,6 +477,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
     {
         public uint Vao, PlainVao, Vbo, Ebo;
         public int Count;
+        /// <summary>Blades after each 1/64 of the candidates (<see cref="FoliageGrassField.BladesWithPrefixes"/>): the density setting draws a prefix.</summary>
+        public int[] Prefixes = [];
         public bool HasTangents, HasColours;
     }
 
@@ -391,7 +501,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
             a.LeavesMaterial = new FoliageMaterial(textures.Get(mesh.LeavesTexture, false), textures.Get(mesh.LeavesNormal, false), null, null,
                 mesh.LeavesAlphaThreshold / 255f, true, false, Vector2.One, false, 0);
         string main = mesh.MeshPath, leaves = mesh.LeavesMesh ?? "";
-        a.Job = Task.Run(() => (Decode(main), leaves.Length > 0 ? Decode(leaves) : null));
+        a.Job = BackgroundWork.Run(() => (Decode(main), leaves.Length > 0 ? Decode(leaves) : null));
         decoding.Add(a);
         return a;
     }
@@ -425,32 +535,137 @@ public sealed unsafe class FoliageRenderer : IDisposable
             if (leaves is not null) { min = Vector3.Min(min, leaves.Min); max = Vector3.Max(max, leaves.Max); }
             a.Centre = (min + max) / 2;
             a.Radius = Math.Max((max - min).Length() / 2, 1);
-            uploads.Enqueue(() =>
-            {
-                a.Main = Upload(main);
-                if (leaves is not null) a.Leaves = Upload(leaves);
-                a.Resident = true;
-            });
+            QueueMesh(a, main, leaves);
         }
     }
 
-    GpuMesh Upload(Model model)
+    /// <summary>A mesh's upload as steps of about 512 KB (per part: allocate and set up the vertex arrays, fill the buffers in slabs); the mesh becomes resident with the last step.</summary>
+    void QueueMesh(MeshAsset a, Model main, Model? leaves)
     {
-        var mesh = new GpuMesh();
+        a.Uploading = true;
+        var gpuMain = new GpuMesh();
+        var gpuLeaves = leaves is null ? null : new GpuMesh();
+        var bytesTotal = new long[1];
+        QueueModel(gpuMain, main, bytesTotal);
+        if (leaves is not null) QueueModel(gpuLeaves!, leaves, bytesTotal);
+        uploads.Enqueue(() =>
+        {
+            a.Main = gpuMain;
+            a.Leaves = gpuLeaves;
+            a.Bytes = bytesTotal[0];
+            a.LastUsed = Environment.TickCount64;
+            a.Resident = true;
+            a.Uploading = false;
+            residentMeshBytes += a.Bytes;
+        });
+    }
+
+    void QueueModel(GpuMesh mesh, Model model, long[] tally)
+    {
         foreach (var part in model.Parts)
         {
             if (part.Indices.Length == 0) continue;
-            var gp = new GpuPart { Vbo = gl.GenBuffer(), Ebo = gl.GenBuffer(), Count = part.Indices.Length, HasTangents = part.HasTangents, HasColours = part.HasColours };
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, gp.Vbo);
-            gl.BufferData<Vertex>(BufferTargetARB.ArrayBuffer, part.Vertices.AsSpan(), BufferUsageARB.StaticDraw);
-            gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, gp.Ebo);
-            gl.BufferData<uint>(BufferTargetARB.ElementArrayBuffer, part.Indices.AsSpan(), BufferUsageARB.StaticDraw);
-            gp.Vao = Vao(gp, instanced: true);
-            gp.PlainVao = Vao(gp, instanced: false);
-            mesh.Parts.Add(gp);
+            var p = part;
+            GpuPart? gp = null;
+            int vertexBytes = p.Vertices.Length * Vertex.Size, indexBytes = p.Indices.Length * sizeof(uint);
+            tally[0] += vertexBytes + indexBytes;
+            uploads.Enqueue(() =>
+            {
+                gp = new GpuPart { Vbo = gl.GenBuffer(), Ebo = gl.GenBuffer(), Count = p.Indices.Length, HasTangents = p.HasTangents, HasColours = p.HasColours };
+                gp.Vao = Vao(gp, instanced: true);
+                gp.PlainVao = Vao(gp, instanced: false);
+                gl.BindBuffer(BufferTargetARB.ArrayBuffer, gp.Vbo);
+                gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)vertexBytes, null, BufferUsageARB.StaticDraw);
+                gl.BindVertexArray(gp.PlainVao);   // the element buffer binding belongs to the vertex array
+                gl.BufferData(BufferTargetARB.ElementArrayBuffer, (nuint)indexBytes, null, BufferUsageARB.StaticDraw);
+                gl.BindVertexArray(0);
+                mesh.Parts.Add(gp);
+            });
+            for (int at = 0; at < vertexBytes; at += SlabBytes)
+            {
+                int start = at, length = Math.Min(SlabBytes, vertexBytes - at);
+                uploads.Enqueue(() =>
+                {
+                    gl.BindBuffer(BufferTargetARB.ArrayBuffer, gp!.Vbo);
+                    fixed (Vertex* v = p.Vertices) gl.BufferSubData(BufferTargetARB.ArrayBuffer, start, (nuint)length, (byte*)v + start);
+                });
+            }
+            for (int at = 0; at < indexBytes; at += SlabBytes)
+            {
+                int start = at, length = Math.Min(SlabBytes, indexBytes - at);
+                uploads.Enqueue(() =>
+                {
+                    gl.BindVertexArray(gp!.PlainVao);
+                    fixed (uint* v = p.Indices) gl.BufferSubData(BufferTargetARB.ElementArrayBuffer, start, (nuint)length, (byte*)v + start);
+                    gl.BindVertexArray(0);
+                });
+            }
         }
-        gl.BindVertexArray(0);
-        return mesh;
+    }
+
+    static readonly bool StreamLog = Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1";
+    long residentMeshBytes, lastTrim;
+    int meshUnloads, meshReloads;
+
+    /// <summary>Meshes not needed (no loaded zone has a group of them within its range) for this long are unloaded.</summary>
+    public double IdleSeconds { get; set; } = StreamingTuning.IdleSeconds;
+
+    /// <summary>
+    /// Once a second: marks the meshes (and their textures) of every zone group within its range as in use, whatever the camera looks at, and
+    /// unloads the GPU meshes unused for <see cref="IdleSeconds"/>. A mesh needed again is decoded and uploaded afresh (<see cref="Reload"/>).
+    /// </summary>
+    void TrimResident(Vector3 eye, bool force)
+    {
+        long now = Environment.TickCount64;
+        if (!force && now - lastTrim < 1000) return;
+        lastTrim = now;
+        foreach (var state in zones.Values)
+        {
+            if (!state.Ready) continue;
+            float zoneDistance = ZoneDistance(state.Zone, eye);
+            foreach (var g in state.Groups)
+            {
+                if (zoneDistance > g.Range + WorldLayout.ZoneSize * 0.5f) continue;
+                var a = g.Asset;
+                a.LastUsed = now;
+                if (!a.Resident) Reload(a);   // in range but unloaded (or never loaded after an unload): decode it again, wherever the camera looks
+                foreach (var m in (ReadOnlySpan<FoliageMaterial?>)[a.MainMaterial, a.LeavesMaterial])
+                    if (m is not null) _ = (m.Diffuse?.Id, m.Normal?.Id, m.Diffuse2?.Id, m.Normal2?.Id);   // reading an id counts as use (WorldTexture.Id)
+            }
+        }
+        foreach (var a in assetsByMesh.Values)
+        {
+            if (!a.Resident || (now - a.LastUsed) / 1000.0 <= IdleSeconds) continue;
+            foreach (var m in new[] { a.Main, a.Leaves })
+                if (m is not null) DeleteMesh(m);
+            a.Main = a.Leaves = null;
+            a.Resident = false;
+            residentMeshBytes -= a.Bytes;
+            a.Bytes = 0;
+            meshUnloads++;
+        }
+    }
+
+    void DeleteMesh(GpuMesh m)
+    {
+        foreach (var gp in m.Parts)
+        {
+            gl.DeleteVertexArray(gp.Vao);
+            gl.DeleteVertexArray(gp.PlainVao);
+            gl.DeleteBuffer(gp.Vbo);
+            gl.DeleteBuffer(gp.Ebo);
+        }
+    }
+
+    /// <summary>Decodes an unloaded mesh again (from <see cref="Draw"/>, when something in range needs it).</summary>
+    void Reload(MeshAsset a)
+    {
+        if (a.Resident || a.Failed || a.Job is not null || a.Uploading) return;
+        string main = a.Mesh.MeshPath, leaves = a.Mesh.LeavesMesh ?? "";
+        a.LastUsed = Environment.TickCount64;
+        a.Job = BackgroundWork.Run(() => (Decode(main), leaves.Length > 0 ? Decode(leaves) : null));
+        decoding.Add(a);
+        meshReloads++;
     }
 
     uint Vao(GpuPart gp, bool instanced)
@@ -499,14 +714,13 @@ public sealed unsafe class FoliageRenderer : IDisposable
         }
     }
 
-    /// <summary>Draws the foliage seen from <paramref name="eye"/> through <paramref name="frustum"/>. Without <paramref name="grass"/> only the meshes (e.g. for a reflection).</summary>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain, bool grass = true)
+    /// <summary>Draws the foliage seen from <paramref name="eye"/> through <paramref name="frustum"/>. Without <paramref name="grass"/> only the meshes (e.g. for a reflection).
+    /// <paramref name="continuation"/>: a further depth slice of the same frame, adding to the counts and the GPU time.</summary>
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain, bool grass = true, bool continuation = false)
     {
-        DrawnInstances = 0;
-        DrawnBlades = 0;
-        DrawCalls = 0;
+        if (!continuation) { DrawnInstances = 0; DrawnBlades = 0; DrawCalls = 0; }
         if (!Enabled) return;
-        int timer = grass ? BeginTimer() : -1;
+        int timer = grass ? BeginTimer(continuation) : -1;
         var cpu = Stopwatch.StartNew();
         foreach (var b in batches.Values) b.Count = 0;
         active.Clear();
@@ -518,10 +732,13 @@ public sealed unsafe class FoliageRenderer : IDisposable
         {
             if (!state.Ready) continue;
             float zoneDistance = ZoneDistance(state.Zone, eye);
+            // The zone's box (with a margin for big meshes) against the frustum first: most of a far, wide ring is behind the camera.
+            if (!WorldCamera.Intersects(frustum, new Vector3(state.X0 - 300, state.MinY - 600, state.Z0 - 300), new Vector3(state.X0 + WorldLayout.ZoneSize + 300, state.MaxY + 600, state.Z0 + WorldLayout.ZoneSize + 300))) continue;
             foreach (var g in state.Groups)
             {
                 var a = g.Asset;
-                if (!a.Resident || zoneDistance > g.Range) continue;
+                if (zoneDistance > g.Range) continue;
+                if (!a.Resident) { Reload(a); continue; }
                 for (int i = 0; i < g.Positions.Length; i++)
                 {
                     var p = g.Positions[i];
@@ -608,7 +825,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         }
         gl.Disable(EnableCap.CullFace);
         EndTimer(timer);
-        LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
+        LastDrawCpuMs = (continuation ? LastDrawCpuMs : 0) + cpu.Elapsed.TotalMilliseconds;
     }
 
     void DrawMesh(GpuMesh mesh, FoliageMaterial m, Batch b, WorldRenderOptions options)
@@ -677,7 +894,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
                     var b = page.Buffers[i];
                     var patch = state.Patches[i];
                     float range = GrassRange(patch);
-                    if (b.Count == 0 || d >= range) continue;
+                    int shown = b.Count == 0 ? 0 : FoliageGrassField.PrefixCount(b.Prefixes, Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);   // the density setting: the first blades of the page
+                    if (shown == 0 || d >= range) continue;
                     var sprite = textures.Get(patch.Grass.Sprite, false);
                     if (sprite is not { Id: not 0 }) continue;
                     if (!set)
@@ -711,9 +929,9 @@ public sealed unsafe class FoliageRenderer : IDisposable
                     gl.Uniform1(U(prog, "uSway"), patch.Layer.Wind ? g.SwayLength : 0f);
                     gl.Uniform1(U(prog, "uRange"), range);
                     gl.BindVertexArray(b.Vao);
-                    gl.DrawArraysInstanced(PrimitiveType.Triangles, 0, g.CrossQuads ? 12u : 6u, (uint)b.Count);
+                    gl.DrawArraysInstanced(PrimitiveType.Triangles, 0, g.CrossQuads ? 12u : 6u, (uint)shown);
                     DrawCalls++;
-                    DrawnBlades += b.Count;
+                    DrawnBlades += shown;
                 }
             }
         }
@@ -737,14 +955,14 @@ public sealed unsafe class FoliageRenderer : IDisposable
     sealed class Timer
     {
         public uint Start, End;
-        public bool Pending;
+        public bool Pending, Continuation;
     }
 
     readonly List<Timer> timers = [];
     double gpuSum;
     int gpuCount;
 
-    int BeginTimer()
+    int BeginTimer(bool continuation)
     {
         int index = timers.FindIndex(t => !t.Pending);
         if (index < 0)
@@ -753,6 +971,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
             timers.Add(new Timer { Start = gl.GenQuery(), End = gl.GenQuery() });
             index = timers.Count - 1;
         }
+        timers[index].Continuation = continuation;
         gl.QueryCounter(timers[index].Start, QueryCounterTarget.Timestamp);
         return index;
     }
@@ -775,7 +994,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
             gl.GetQueryObject(t.Start, QueryObjectParameterName.Result, out ulong start);
             gl.GetQueryObject(t.End, QueryObjectParameterName.Result, out ulong end);
             gpuSum += (end - start) / 1e6;
-            gpuCount++;
+            if (!t.Continuation) gpuCount++;
             t.Pending = false;
         }
         if (gpuCount > 0) { GpuMs = gpuSum / gpuCount; gpuSum = 0; gpuCount = 0; }

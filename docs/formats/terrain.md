@@ -155,7 +155,9 @@ Per pixel, with `slope = 1 − normal.y` and world position `p`:
 
 - Horizontal layers use `uv = p.xz / 5000 × tiling`; the cliff layer is projected on the two vertical planes,
   `(p.z, v)` and `(p.x, v)` with `v = 1 − p.y / 5000` plus a cosine distortion, weighted by how much the surface
-  faces X or Z (`(|n.xz| − 0.2) × 7` squared, normalised).
+  faces X or Z (`(|n.xz| − 0.2) × 7` squared, normalised; terrain.hlsl computes it per vertex and uses (0.5, 0.5)
+  where `n.y > 0.995`). TERRAIN-mode meshes use the same model with a few differences, see
+  [foliage.md](foliage.md#terrain-mode-meshes).
 - Layer weights: `smoothstep(min − blend, min, slope) × smoothstep(max + blend, max, slope)`; component X weights
   the slope layer, Y the cliff layer (Z and W are not used for colour).
 - Blend order: base → grass by the overlay's `max(R, G)` → slope by its weight → dirt by overlay B → fade to the
@@ -163,7 +165,8 @@ Per pixel, with `slope = 1 − normal.y` and world position `p`:
   weight. Base and slope are multiplied by the colour map; cliff, grass, dirt and road by
   `lerp(1, colour, overlay mult)`. Normal maps blend the same way (fading to flat); the result's alpha is gloss.
 - Normal maps are in a frame with `binormal = normalize(n × (−1, 0, 0))`, `tangent = binormal × n`; the cliff
-  samples flip channels per projection (not reproduced in the viewer).
+  samples are turned into that frame per projection: red becomes `1 − red` on both; green becomes `1 − green` on
+  the (z, v) projection where `n.x ≤ 0` and on the (x, v) projection where `n.z ≥ 0` (reproduced in the viewer).
 - Up to four biomes per terrain page (defines `BLEND1..3` name blend-map channels); the first gets
   `1 − (sum of the others)`. Which slot the game treats as the first is **Unknown**; the viewer weights all five
   slots as above, which is equivalent when the weights sum to 1.

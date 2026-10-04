@@ -152,8 +152,22 @@ public sealed unsafe class TerrainTextures : IDisposable
         {
             t.Messages.Add($"world maps: {e.Message}");
         }
+        try { t.biomeMap = FoliageBiomeMap.Open(install); }
+        catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException)
+        {
+            t.Messages.Add($"biome map: {e.Message}");
+        }
         return t;
     }
+
+    FoliageBiomeMap? biomeMap;
+
+    /// <summary>
+    /// Parameter row of the biome a TERRAIN-mode map feature at (x, z) is textured with: the one of <c>biomemap.png</c>
+    /// at that point (docs/formats/foliage.md, "TERRAIN-mode meshes"), or -1 when it is not resident.
+    /// </summary>
+    public int FeatureBiomeRow(float x, float z) =>
+        biomeMap is not null && rowOf.TryGetValue(biomeMap.At(x, z), out int row) && state[row].Resident ? row : -1;
 
     void BuildBiomes()
     {
@@ -261,7 +275,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     {
         pair.Loading = true;
         inFlight++;
-        Task.Run(() =>
+        BackgroundWork.Run(() =>
         {
             Decoded result;
             try
@@ -496,7 +510,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         bool far = Math.Abs(px - validPx) > mapWindows.RecentreOverlayPixels || Math.Abs(pz - validPz) > mapWindows.RecentreOverlayPixels;
         if (MapState == 2 && !far) return;
         (int, int)? old = MapState == 2 ? (validPx, validPz) : null;
-        mapJob = Task.Run(() => mapWindows.Compose(px, pz, old));
+        mapJob = BackgroundWork.Run(() => mapWindows.Compose(px, pz, old));
     }
 
     void BeginMapUpload(MapWindows.Update update, UploadQueue uploads)

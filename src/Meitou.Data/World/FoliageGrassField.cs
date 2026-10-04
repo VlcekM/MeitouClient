@@ -13,13 +13,26 @@ public static class FoliageGrassField
     /// <summary>Floats per blade: x, y, z, scale (0..1), yaw (radians).</summary>
     public const int Stride = 5;
 
+    /// <summary>Checkpoints in <see cref="BladesWithPrefixes"/>: the blade count after each 1/<see cref="PrefixSteps"/> of the candidates.</summary>
+    public const int PrefixSteps = 64;
+
     /// <summary>
     /// The blades in the page from (<paramref name="x0"/>, <paramref name="z0"/>) of side <paramref name="size"/>, as
     /// <see cref="Stride"/> floats each.
     /// </summary>
-    public static float[] Blades(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, float densitySetting = 1)
+    public static float[] Blades(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, float densitySetting = 1) =>
+        BladesWithPrefixes(patch, ground, x0, z0, size, out _, densitySetting);
+
+    /// <summary>
+    /// <see cref="Blades"/> plus <paramref name="prefixes"/> (<see cref="PrefixSteps"/> + 1 entries): how many blades the first
+    /// i/<see cref="PrefixSteps"/> of the candidates gave. The candidates come from one random sequence in order, so the blades
+    /// for a lower density setting are exactly the first ones of a higher setting's, and a page generated at the highest
+    /// setting can show any lower one by drawing a prefix (<see cref="PrefixCount"/>).
+    /// </summary>
+    public static float[] BladesWithPrefixes(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, out int[] prefixes, float densitySetting = 1)
     {
         var grass = patch.Grass;
+        prefixes = new int[PrefixSteps + 1];
         int candidates = (int)(grass.PerSquareUnit * densitySetting * size * size);
         if (candidates <= 0) return [];
         uint seed = FoliageNoise.Hash((int)MathF.Floor(x0), (int)MathF.Floor(z0)) ^ (uint)FoliageRandom.LeadingInteger(grass.StringId) * 2654435761u ^ (uint)patch.Channel;
@@ -28,8 +41,10 @@ public static class FoliageGrassField
         float lo = grass.MinAltitude == 0 ? float.NegativeInfinity : grass.MinAltitude;
         float hi = grass.MaxAltitude == 0 ? float.PositiveInfinity : grass.MaxAltitude;
         var result = new List<float>(Math.Min(candidates, 1 << 16) * Stride);
+        int step = 1;
         for (int n = 0; n < candidates; n++)
         {
+            while (step <= PrefixSteps && (long)n * PrefixSteps >= (long)step * candidates) prefixes[step++] = result.Count / Stride;
             float x = x0 + size * rng.Float(0, 1);
             float z = z0 + size * rng.Float(0, 1);
             if (ground.Slope(x, z) > grass.MaxSlope) continue;
@@ -43,7 +58,16 @@ public static class FoliageGrassField
             result.Add(rng.Float(0, 1));
             result.Add(rng.Float(0, MathF.Tau));
         }
+        while (step <= PrefixSteps) prefixes[step++] = result.Count / Stride;
         return [.. result];
+    }
+
+    /// <summary>The number of leading blades that a density setting of <paramref name="fraction"/> (0..1) of the generated one shows.</summary>
+    public static int PrefixCount(int[] prefixes, float fraction)
+    {
+        float at = Math.Clamp(fraction, 0, 1) * PrefixSteps;
+        int i = Math.Min((int)at, PrefixSteps - 1);
+        return prefixes[i] + (int)((prefixes[i + 1] - prefixes[i]) * (at - i));
     }
 
     /// <summary>The patch's density (0..1) at a world point, bilinear over its 129² map; 0 outside the zone.</summary>

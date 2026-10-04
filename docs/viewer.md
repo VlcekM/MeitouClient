@@ -241,12 +241,17 @@ game). `--camera-at x,z` starts the camera somewhere
 else than the loaded point (as if flown there), `--no-stream` keeps the detail around the start point instead of following
 the camera (the behaviour before streaming), and `--fly-to x,z` with `--screenshot` flies there first at 3 times the
 fast key speed and prints the frame times on the way (a streaming test). `MEITOU_STREAM_LOG=1` prints upload steps over 3 ms.
+`--fly-benchmark <frames>` is the streaming benchmark (offscreen, no window; see "Streaming cost and unloading" below):
+it flies the camera round a circle (`--fly-radius`, default 12000 units, round the loaded point; `--fly-speed`, default 150 units per
+frame, 9000 per second at the 60 frames per second of wall time it paces itself to) and prints frame-time percentiles, the worst
+frames with the render-thread time of each stage, and the resident memory. With `--screenshot` the picture is taken afterwards,
+back at the start.
 
 Keys: left drag orbits the target, right drag looks
 around, wheel zooms, `W A S D` free fly along the view direction, `Q`/`E` world down/up (speed follows the height above ground; Shift ×4, Ctrl ×0.25), `T` textures, `N` normal
 maps, `O` objects, `G` water, `B` simple sky, `,`/`.` time of day −/+ 1 hour, `X` wireframe, `V` debug view (blend weights,
 layer weights, untextured shading), `H` prints the camera as command-line
-options, `P` screenshot into the temp folder, `?` toggles a panel listing these keys (built from the usage text; drawn after the screenshot readback, so saved pictures never show it; `--show-keys` opens it at start and, with `--screenshot`, draws it into the picture). `Tab` toggles a settings panel (top right) with sliders, dragged with the left mouse button: object draw distance (1000 to 40000, log scale), distant-town range (0 to 10 zones), object LOD distance (x0.25 to x4: the mesh LOD value is divided by it, Ogre's LOD bias inverted), foliage and grass draw distance (x0.25 to x16, default x4: four times the game's `foliage range` / `grass range` of 1) and grass density (x0.1 to x2; applies to grass pages generated after the change), terrain LOD distance (2 to 16). While the pointer is on a panel the camera ignores the mouse. `--show-keys` with `--screenshot` draws both panels. Its text comes from a system monospace font (Consolas, Cascadia Mono, Courier New, DejaVu Sans Mono or Menlo) rasterised with stb_truetype; with none of them the panel is unavailable.
+options, `P` screenshot into the temp folder, `?` toggles a panel listing these keys (built from the usage text; drawn after the screenshot readback, so saved pictures never show it; `--show-keys` opens it at start and, with `--screenshot`, draws it into the picture). `Tab` toggles a settings panel (top right) with sliders, dragged with the left mouse button: object draw distance (1000 to 40000, log scale), distant-town range (0 to 10 zones), object LOD distance (x0.25 to x4: the mesh LOD value is divided by it, Ogre's LOD bias inverted), foliage and grass draw distance (x0.25 to x8, default x4: four times the game's `foliage range` / `grass range` of 1) and grass density (x0.1 to x2; applies at once to all loaded grass: pages hold the blades of density x2 and a lower setting draws a prefix of them), terrain LOD distance (2 to 16). While the pointer is on a panel the camera ignores the mouse. `--show-keys` with `--screenshot` draws both panels. Its text comes from a system monospace font (Consolas, Cascadia Mono, Courier New, DejaVu Sans Mono or Menlo) rasterised with stb_truetype; with none of them the panel is unavailable.
 
 ```
 dotnet run --project tools/Meitou.ModelViewer -- --world --town "Shark" --radius 1.5 --distance 3000 --pitch 20
@@ -330,6 +335,46 @@ How it works (status as in [README.md](README.md)):
     3000 units of the window, far beyond the material distance.
   - Screenshots wait for everything the camera view needs (`TerrainStreamer.Settle`); interactively the far ground
     colour shows first and the material appears around the camera within a second or two (the title shows `loading N`).
+- **Streaming cost and unloading** (`BackgroundWork`, `UploadQueue`, `WorldTextureCache`, `ObjectMeshCache`, `FoliageRenderer`; **Observed**
+  with `--fly-benchmark`, 2026-10-04, 1280 × 720, RTX 4070, `--world --town "The Hub" --radius 1.5 --distance 3000 --pitch 20`, 1500 frames at
+  150 units per frame round a circle of 12000 units; the machine was shared with the game and other viewers, so run-to-run spread is large):
+  - *What ran on the render thread* (found with the benchmark's stage clock, `StageClock`, laps in `WorldApp.Draw`; the worst frames list
+    the stages that took 1 ms or more): foliage `Accept` grouping thousands of instances (15 to 20 ms), the foliage texture pump, which had no
+    time budget (one texture's slabs, 10 to 35 ms), grass-page and foliage-mesh uploads in one `BufferData` each (10 to 20 ms), the object
+    streamer making a big zone's instances in one frame (up to 30 ms), and, on a loaded machine, worker threads at normal priority taking time
+    slices from the render thread. Fixed by: grouping on the zone's worker (`PreparedZone`); `WorldTextureCache.Pump` always bounded (default 1.5 ms)
+    and slabs of 512 KB; foliage meshes and grass pages uploaded in 512 KB slabs (a page dropped meanwhile deletes what its steps made);
+    `ObjectStreamer.FillZones` makes instances 1 ms a frame; every decode and layout job runs on `BackgroundWork`, a few dedicated
+    below-normal-priority threads (`ProcessorCount - 3`); a replaced terrain height texture is deleted four frames after the swap.
+  - *Compressed textures*: BC1, BC2 and BC3 DDS textures with a full mip chain are uploaded as stored (`CompressedTexImage2D`, S3TC, in slabs
+    of whole block rows) instead of decoded to RGBA8: 4 to 8 times less GPU memory and no CPU decode of the mips (only the level the swizzle
+    test reads). Other formats, and files without a full chain (the viewer generates mips for those), take the RGBA8 path. The picture does not
+    change visibly: two runs of The Hub differ by a mean of 0.05 per channel value (max 38 on a few edge pixels, run-to-run noise) and compressed
+    against RGBA8 by 0.065. `MEITOU_UNCOMPRESSED_TEXTURES=1` brings the old path back for comparison.
+  - *Unloading*: nothing is unloaded while within a draw range, whatever the camera looks at; once a second the objects mark instances within
+    their range (`WorldObjectRenderer.MarkInRange`: the mesh as used, the material's textures read) and the foliage the groups of zones
+    within their layer range (`FoliageRenderer.TrimResident`). Then a GPU mesh not marked for `IdleSeconds` (60) is deleted (buffers, vertex
+    arrays; the instances that had resolved to it go back to waiting, `ObjectStreamer.Scan` asks for it when they come in range again), and a
+    `WorldTexture` whose id nobody read for 60 s is deleted (`WorldTextureCache.Trim`; reading `WorldTexture.Id` is what counts as use and
+    also starts the reload of an unloaded texture, so materials never need rebuilding). Hysteresis is that idle time. Memory pressure:
+    above 768 MB of object meshes or 1024 MB of textures (per cache) the least recently used ones idle for 8 s go too, down to three quarters
+    of the mark. At most 24 meshes and 40 textures are deleted per second. Grass pages and terrain biome layers already had their own eviction.
+    `MEITOU_UNLOAD_IDLE=<seconds>` changes the idle time (a huge value turns unloading off, for comparison).
+  - *Numbers*: resident GPU memory of meshes, textures and grass (the window title shows `resident` MB; `Describe()` and the benchmark list meshes,
+    textures, unload and reload counts) over a 3000-frame flight round a 20000-unit circle: before, with nothing unloaded and RGBA8 textures,
+    it grew to 6.4 GB (3.5 GB of foliage textures, 2.7 GB of object textures) and stayed there, process working set 5.7 GB (the first
+    benchmark runs: 3.0 to 4.4 GB resident, working set 5.6 to 6.2 GB after a 1500-frame flight); now 1.3 to 1.4 GB (compression alone) and, with
+    `MEITOU_UNLOAD_IDLE=10`, a 0.7 to 1.3 GB band that follows the camera (about 850 object meshes and 400 foliage meshes unloaded and
+    reloaded, 160 + 420 textures); after such a flight the same view looks the same as without unloading (mean difference 0.045, as run-to-run).
+    Frame times with water reflections on, 1500 frames: before, 12.9 to 21 ms median, 61 to 83 ms 95th percentile, 122 to 305 ms 99th,
+    maximum 270 ms to 2.3 s (those runs also had 5 GB more GPU memory in use); now 11.6 to 12.6 ms, 28 to 30 ms, 73 to 79 ms, maximum 125 ms
+    (one run 694 ms, 635 ms of it waiting for the GPU). Render-thread time up to the end of the commands (no GPU wait): median 8.6 to 9.4 ms,
+    95th 24 to 26 ms. With `--no-reflections` (the same flight): median 10.0 ms, 95th 16.8, 99th 23.1, maximum 37.0 ms, 28 frames over 20 ms and one over 33.
+  - *Left*: most of what remains in the worst frames with reflections is the reflection pass (30 to 100 ms in `reflection`: it re-culls and
+    draws the objects and foliage), not streaming; single steps of a texture or buffer slab still take 10 to 20 ms now and then (driver or
+    GPU contention, not size: they hit the first slab of a fresh buffer or texture), and one such step is the floor of a frame's overrun. Not done:
+    BC4/BC5 textures stay RGBA8, a persistent-mapped upload ring (GL 3.3 core has none; buffers are filled with `BufferSubData`), unloading
+    the terrain's overlay and colour windows (fixed size).
 - **Objects** (`WorldObjects`, `WorldObjectRenderer`): placements become meshes with `WorldObjectLayout`, built
   as the game builds them ([formats/zones.md](formats/zones.md#from-placements-to-meshes)): parts chosen with the
   game's `rand()` seeded from the position, doors added, destroyed states (`destroyed mesh`, upper floors
@@ -338,7 +383,7 @@ How it works (status as in [README.md](README.md)):
   without a chosen material) are textured by the model viewer's `MaterialResolver` (candidate preferred: the one
   naming the placed record). Draw distance, LOD and streaming are described below ("Object streaming, LOD and distant towns"). The log
   line `objects` counts destroyed buildings and the foliage resource buildings, which the game draws as foliage rocks (drawn by the foliage below).
-  TERRAIN-mode map features are drawn with the terrain shader (biome textures, no roads), through plain per-level vertex arrays (`TerrainRenderer.DrawMeshes`); they pick a mesh LOD level but do not fade.
+  TERRAIN-mode map features are drawn with the terrain shader through plain per-level vertex arrays (`TerrainRenderer.DrawMeshes`), with the game's `Feature_Terrain` rules ([formats/foliage.md](formats/foliage.md#terrain-mode-meshes)): the one biome of `biomemap.png` at the mesh's origin (the terrain's blend-map mix while that biome's textures are not resident), slope clamped at 1, per-vertex cliff projection weights, no roads, back faces culled; they pick a mesh LOD level but do not fade.
 - **Object streaming, LOD and distant towns** (`ObjectStreamer`, `ObjectMeshCache`, `BuildingLodShaders`, `ObjectRanges`; data side
   `MeshLod`, `DistantTowns`):
   - Zones are laid out on worker threads (`WorldObjects.BuildZone`, 3 at a time, nearest first) within the distant range of the eye
@@ -346,7 +391,7 @@ How it works (status as in [README.md](README.md)):
     index buffer with every LOD level back to back), then uploaded in steps of about 1 MB through the shared `UploadQueue`
     (`WorldTextureCache` slices textures the same way), so a frame is rarely held up more than a few ms (interactive run with
     `MEITOU_STREAM_LOG=1`: slow-update lines went from 30 to 220 ms down to mostly under 10, rare spikes to 50 ms from driver syncs and
-    scans). Meshes are never evicted (about 60 MB per town area; roughly 180 MB with 475 meshes resident).
+    scans). Meshes and textures are unloaded again when out of every draw range for a while (next bullet, "Streaming cost and unloading").
   - **Mesh LOD**: per submesh, from the mesh file's levels (`MeshLod`, the rule in [formats/ogre-mesh.md](formats/ogre-mesh.md#lod)),
     with the world bounding sphere of the mesh. Level changes are a dithered cross-fade (interleaved gradient noise, per-instance
     `lo`/`hi` range carried in the instance matrix; the upper level takes the pixels below the threshold and the lower one the rest, so
@@ -400,8 +445,7 @@ Interactive mode was smoke-tested only
 Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as Kenshi does
 ([formats/foliage.md](formats/foliage.md)); `--no-foliage` leaves them out and `F` toggles them.
 
-- **Placement** (`FoliageWorld`, `FoliageLayout`): zones within the longest mesh layer range of the eye (8000; the
-  catalog's FAR layers) are laid out on up to three worker threads, nearest first, each worker with its own heightmap
+- **Placement** (`FoliageWorld`, `FoliageLayout`): zones within the longer of the mesh reach (the longest mesh layer range, 8000, x `RangeSetting`) and the grass reach (grass layers: 1000 x `GrassRangeSetting`) of the eye are laid out on up to three worker threads, nearest first, each worker with its own heightmap
   handle, overlay tile cache and biome map; zones beyond that range + one zone are dropped. A zone takes 0.2–1.6 s.
 - **Meshes** (`FoliageRenderer`, `FoliageShaders`): each instance is drawn up to its layer's range (MEDIUM 1000, FAR
   8000, × `RangeSetting`, the game's `foliage range`), measured along the ground, and fades out with a dither over
@@ -410,7 +454,7 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   apply). FOLIAGE-mode meshes and leaves cut out on the normal map's alpha (`alpha threshold` / 255, `leaves alpha
   threshold` / 255), double-sided, with alpha to coverage when the scene is multisampled; other modes are back-face
   culled. TRIPLANAR uses the object shader's triplanar path, DUAL modes the vertex-alpha blend. TERRAIN-mode meshes
-  (most rocks) go through the terrain shader (`TerrainRenderer.DrawMeshes`), one draw each, and pop at the middle of
+  (most rocks) go through the terrain shader (`TerrainRenderer.DrawMeshes`, the map-feature rules above), one draw each, and pop at the middle of
   the fade band instead of dithering. DUST tinting is not reproduced. Trees do not sway (Kenshi's object shader
   has no wind).
 - **Grass**: blades are generated per 576-unit page (8 × 8 a zone) on worker threads when the page comes within
@@ -419,6 +463,27 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   quads built in the vertex shader: sway along X on the top edge for wind layers, sinking into the ground over
   the last fifth of the range, sprite alpha cut at 0.6 (alpha to coverage when multisampled), colour map over the
   zone, lit with an up normal; the aerial perspective is evaluated per vertex.
+  Pages are generated nearest first, at most 12 at a time over all zones. **Density**: a page is generated for the
+  highest density setting (`MaxGrassDensity`, 2) and records, per 1/64 of its candidates, how many blades they gave
+  (`FoliageGrassField.BladesWithPrefixes`). The candidates come from one random sequence in order, so the blades of a
+  lower setting are exactly the first ones of a higher setting's (test `Lower_grass_density_is_a_prefix_of_a_higher_one`):
+  the "Grass density x" slider draws that prefix of every loaded page at once, no page is regenerated, and the
+  game's rule (`density x 0.005 x area x setting` uniform candidates) is unchanged. Memory is that of density 2.
+- **Range** (what limited it, fixed 2026-10-04): foliage was drawn only in the near depth slice, i.e. up to about
+  20400 units (`SplitDistance` 20000 x 1.02), so the FAR layers (8000 x range setting) were cut short at x4 (32000):
+  it is drawn in every slice now (`Draw(..., continuation: true)` for the second, counts and GPU time summed). Zones
+  were laid out only to the mesh reach, so a grass range above the foliage range loaded no grass: the reach is the
+  longer of both now. The cull skips a whole zone outside the frustum before its instances. Checked with
+  `MEITOU_FOLIAGE_RANGE`, `MEITOU_GRASS_RANGE`, `MEITOU_GRASS_DENSITY` (start values of the sliders): at x4 trees,
+  rocks and grass appear out to 32000 / 4000 units (screenshots forest zone 14.30 at x1 and x4).
+- **Range cost** (RTX 4070, 1600 x 900, 4x MSAA, offscreen, 2026-10-04; GPU times vary 2-5x between runs while other
+  viewers run, so the quietest of several runs is given first): zone 14.30 from 5000 units out at x4: 180 zones laid
+  out in 9 s (518k meshes, 205 grass pages, 628k blades), 1091 meshes drawn, 313 draw calls, draw CPU 1.5-1.9 ms,
+  GPU 1.0 ms (up to 4.5 ms contended), frame 4.6 ms; The Hub and Squin from outside their walls at x4: 0.6-1.2 ms
+  GPU, 1.1-1.7 ms CPU. At x16 (measured before the sliders were capped at x8): 700-2100 zones (the whole world is in reach), 2-7M mesh instances
+  (about 80 bytes each, up to ~0.5 GB), 2600 grass pages with 5.8M blades in the forest, 3400-5600 draw calls, draw
+  CPU 25-70 ms, GPU 30-150 ms, layout 45-190 s: x16 is not usable (sliders stop at x8, not measured). x4 is within 3 ms GPU for
+  foliage when the GPU is not shared.
 - **Reflections**: the water reflection draws the foliage meshes (no grass) with its own camera (`Draw(...,
   grass: false)`).
 - **Cost** (RTX 4070, 1280 × 960, 4x MSAA, offscreen, 2026-10-04): a cypress grove in zone 14.30 (995 meshes,

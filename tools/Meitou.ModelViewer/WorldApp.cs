@@ -32,12 +32,15 @@ sealed class WorldOptions
     public float Hour = 13;
     public float ViewDistance = 450000, FogDistance = 250000, MaterialDistance = 30000;
     public bool NoWater, NoStream, NoReflections, SimpleSky, ShowKeys;
-    public bool PhysicalHaze = true; // the kenshi haze's distances are a guess so far (docs/formats/sky.md "Haze")
+    public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
     public float? HazeDistance;
     public string? Weather;
     public float? Clouds;
     public PostOptions Post = PostOptions.Create("kenshi");
     public double? CameraX, CameraZ, FlyToX, FlyToZ;
+    /// <summary>Frames of the offscreen benchmark flight (0: none), the circle's radius and the speed per frame.</summary>
+    public int FlyBenchmark;
+    public float FlyRadius = 12000, FlySpeed = 150;
 
     public const string Usage = """
         meitou-viewer --world [where] [options]
@@ -61,13 +64,15 @@ sealed class WorldOptions
           --no-water               leave out the water
           --no-reflections         the water reflects only the sky colour, not the mirrored scene (R toggles)
           --simple-sky             the old colour-model sky and squared-distance fog instead of the atmosphere (B toggles)
-          --haze <kenshi|physical>  aerial perspective: the physical integral (default) or the game's own haze, distances still a guess (F7 toggles)
-          --haze-distance <u>      the game's far distance D for its haze, which ramps in from 0.8 D to 0.96 D (default: the viewer's far clip; the game's is 50000 = view distance 5000 x 10)
+          --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral (F7 toggles)
+          --haze-distance <u>      the game's far distance D (view distance x 10) for its haze, which ramps in from 0.06 D to 0.6 D (default 50000: view distance 5000)
           --weather <name>         a WEATHER record's sky colour, fog and clouds (default "Default": clear, no fog, no clouds)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --show-keys              start with the key list overlay open (toggle with ?)
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
+          --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
+                                   percentiles, the worst frames with their stage times and resident memory   --fly-radius <u> (12000)   --fly-speed <u per frame> (150)
           --view-distance <u>      furthest terrain drawn (default 450000: the whole world)
           --fog <u>                distance where the haze is complete (default 250000)
           --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
@@ -135,6 +140,9 @@ sealed class WorldOptions
                 case var post when o.Post.TryParse(post, Next): break;
                 case "--camera-at": (o.CameraX, o.CameraZ) = Pair(); break;
                 case "--fly-to": (o.FlyToX, o.FlyToZ) = Pair(); break;
+                case "--fly-benchmark": o.FlyBenchmark = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--fly-radius": o.FlyRadius = F(); break;
+                case "--fly-speed": o.FlySpeed = F(); break;
                 case "--view-distance": o.ViewDistance = F(); break;
                 case "--fog": o.FogDistance = F(); break;
                 case "--material-distance": o.MaterialDistance = F(); break;
@@ -166,7 +174,7 @@ sealed class WorldScene : IDisposable
     public void Dispose() => Heightmap.Dispose();
 }
 
-static class WorldApp
+static partial class WorldApp
 {
     /// <summary>Heightmap step of the whole-world height grid behind the loaded region (2049² samples, 144 units apart).</summary>
     public const int CoarseStep = 8;
@@ -195,7 +203,7 @@ static class WorldApp
         if (scene is null) return 1;
         if (options.Info) return 0;
         var assets = new AssetLocator(install);
-        return options.Screenshot is not null ? Screenshot(install, scene, assets, options) : Interactive(install, scene, assets, options);
+        return options.Screenshot is not null || options.FlyBenchmark > 0 ? Screenshot(install, scene, assets, options) : Interactive(install, scene, assets, options);
     }
 
     static WorldScene? Load(GameInstall install, WorldOptions o)
@@ -328,7 +336,8 @@ static class WorldApp
             Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {o.LayerSize}² ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
-        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze, FixedHazeDistance = o.HazeDistance }, Post = new PostProcess(gl, o.Post) };
+        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze }, Post = new PostProcess(gl, o.Post) };
+        if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         if (scene.Database is { } skyDb)
         {
             gpu.Sky.NightDarkness = SkyWeather.NightDarkness(skyDb);
@@ -371,8 +380,8 @@ static class WorldApp
         }
         if (g.Foliage is { } foliage)
         {
-            sliders.Add(new Slider("Foliage draw distance x", 0.25f, 16, () => foliage.RangeSetting, v => foliage.RangeSetting = v, "0.00", Logarithmic: true));
-            sliders.Add(new Slider("Grass draw distance x", 0.25f, 16, () => foliage.GrassRangeSetting, v => foliage.GrassRangeSetting = v, "0.00", Logarithmic: true));
+            sliders.Add(new Slider("Foliage draw distance x", 0.25f, 8, () => foliage.RangeSetting, v => foliage.RangeSetting = v, "0.00", Logarithmic: true));
+            sliders.Add(new Slider("Grass draw distance x", 0.25f, 8, () => foliage.GrassRangeSetting, v => foliage.GrassRangeSetting = v, "0.00", Logarithmic: true));
             sliders.Add(new Slider("Grass density x", 0.1f, 2, () => foliage.GrassDensitySetting, v => foliage.GrassDensitySetting = v, "0.00"));
         }
         sliders.Add(new Slider("Terrain LOD distance", 2, 16, () => r.LodDistance, v => r.LodDistance = v, "0.0"));
@@ -385,8 +394,11 @@ static class WorldApp
         gpu.Post?.Begin(width, height);
         var eye = camera.Eye;
         gpu.Streamer?.Update(gpu.Anchor ?? eye);
+        StageClock.Lap(0);
         gpu.Objects?.Update(gpu.Anchor ?? eye);
+        StageClock.Lap(1);
         gpu.Foliage?.Update(gpu.Anchor ?? eye);
+        StageClock.Lap(2);
         float floor = gpu.Terrain.HeightAt(eye.X, eye.Z);
         if (render.Water) floor = Math.Max(floor, WorldWater.Height);
         camera.EyeClearance = Math.Max(eye.Y - floor, 1);
@@ -396,8 +408,7 @@ static class WorldApp
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
-        // Kenshi closes its haze at its far clip (docs/formats/sky.md "Haze"); ours is further, so the haze follows it unless --haze-distance.
-        gpu.Sky.HazeDistance = gpu.Sky.FixedHazeDistance ?? camera.ViewDistance;
+        StageClock.Lap(3);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is not null;
         if (reflecting)
@@ -410,6 +421,7 @@ static class WorldApp
                 objects.ObjectDistance = distance;
                 gpu.Foliage?.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, grass: false);
             });
+        StageClock.Lap(4);
         gl.Viewport(0, 0, (uint)width, (uint)height);
         gl.ClearColor(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1);
         gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
@@ -421,8 +433,9 @@ static class WorldApp
         gpu.Sky.Draw(rotation * camera.Projection(aspect, 1, 1000), colours);
         gl.Enable(EnableCap.DepthTest);
         gl.DepthFunc(DepthFunction.Lequal);
+        StageClock.Lap(5);
         gpu.Terrain.BeginFrame();
-        bool first = true;
+        bool first = true, foliageDrawn = false;
         foreach (var (near, far) in camera.Slices())
         {
             if (!first) gl.Clear(ClearBufferMask.DepthBufferBit);
@@ -432,11 +445,18 @@ static class WorldApp
             var viewProjection = view * camera.Projection(aspect, near, far);
             var frustum = WorldCamera.FrustumPlanes(viewProjection);
             gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
+            StageClock.Lap(6);
             if (render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
-            if (nearSlice) gpu.Foliage?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+            StageClock.Lap(7);
+            // Foliage in every depth slice (it reaches 32000+ units at the default x4), counted as one draw.
+            gpu.Foliage?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, continuation: foliageDrawn);
+            foliageDrawn = true;
+            StageClock.Lap(8);
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, gpu.Terrain, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
+            StageClock.Lap(9);
         }
         gpu.Post?.End(); // resolve, SSAO, bloom, tone map into gpu.Post.Target
+        StageClock.Lap(10);
     }
 
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
@@ -479,6 +499,11 @@ static class WorldApp
         }
         gpu.Post!.Target = fbo;
         Console.WriteLine($"post      {o.Post.Describe()}");
+        if (o.FlyBenchmark > 0)
+        {
+            int flown = FlyBenchmark(gl, gpu, scene, camera, render, o, w, h);
+            if (o.Screenshot is null) return flown;   // with --screenshot the picture is taken afterwards, back at the start (a check that unloaded data comes back right)
+        }
         if (o.FlyToX is { } flyX && o.FlyToZ is { } flyZ)
         {
             // Streaming test: fly the camera to the point at 3x the interactive fast speed, 60 frames per second of
@@ -732,7 +757,8 @@ static class WorldApp
                     $"{t.X:0}, {t.Z:0} zone {WorldLayout.ZoneOf(t.X, t.Z)} | {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" +
                     (gpu.Objects is { } ob && render.Objects ? $" | {ob.DrawnInstances} objects, {ob.DrawCalls} calls, draw cpu {ob.LastDrawCpuMs:0.00} ms" + (ob.Pending > 0 ? $", loading {ob.Pending}" : "") : "") +
                     (gpu.Foliage is { Enabled: true } fo ? $" | foliage {fo.DrawnInstances} + {fo.DrawnBlades / 1000}k grass, {fo.DrawCalls} calls, cpu {fo.LastDrawCpuMs:0.00} gpu {fo.GpuMs:0.00} ms" + (fo.Pending > 0 ? $", loading {fo.Pending}" : "") : "") +
-                    (gpu.Streamer is { Pending: > 0 } st ? $" | loading {st.Pending}" : "");
+                    (gpu.Streamer is { Pending: > 0 } st ? $" | loading {st.Pending}" : "") +
+                    $" | resident {((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576} MB";
                 if (gpu.Post is { } post) window.Title += $" | post gpu ms: {post.DescribeCosts()}";
                 gpu.Sky.Poll();
                 window.Title += gpu.Sky.Physical ? $" | sky cpu {gpu.Sky.PrepareMs:0.00} ms, gpu {gpu.Sky.GpuMs:0.00} ms" : " | simple sky";

@@ -63,6 +63,10 @@ sealed class ObjectMesh
     public State Status;
     public Task<DecodedObjectMesh?>? Job;
     public GpuObjectMesh? Gpu;
+    /// <summary>When the mesh was last drawn (or became resident), <see cref="Environment.TickCount64"/>; what <see cref="ObjectMeshCache.Trim"/> unloads by.</summary>
+    public long LastUsed;
+    public long Bytes;
+    public bool EverLoaded;
 
     public enum State { None, Loading, Uploading, Resident, Failed }
 }
@@ -129,7 +133,7 @@ sealed unsafe class ObjectMeshCache(GL gl, AssetLocator assets, UploadQueue uplo
             string key = m.Key;
             bool distant = m.Distant;
             bool keep = m.KeepLevelIndices;
-            m.Job = Task.Run(() => Decode(key, distant, 0, keep));
+            m.Job = BackgroundWork.Run(() => Decode(key, distant, 0, keep));
             running.Add(m);
         }
     }
@@ -181,7 +185,11 @@ sealed unsafe class ObjectMeshCache(GL gl, AssetLocator assets, UploadQueue uplo
         {
             mesh.Gpu = gpu;
             mesh.Status = ObjectMesh.State.Resident;
-            Bytes += gpu.Bytes + gpu.Manual.Sum(m => m?.Bytes ?? 0);
+            mesh.Bytes = gpu.Bytes + gpu.Manual.Sum(m => m?.Bytes ?? 0);
+            mesh.LastUsed = Environment.TickCount64;
+            if (mesh.EverLoaded) Reloads++;
+            mesh.EverLoaded = true;
+            Bytes += mesh.Bytes;
         }, $"mesh {mesh.Key} ready");
     }
 
@@ -223,9 +231,9 @@ sealed unsafe class ObjectMeshCache(GL gl, AssetLocator assets, UploadQueue uplo
         return new PreparedPart { Part = part, All = all, Offset = offset, Count = count, Levels = keepLevels ? arrays : null };
     }
 
-    const int SlabBytes = 1 << 20;
+    const int SlabBytes = 512 << 10;
 
-    /// <summary>A part's upload as steps of at most about 1 MB: allocate the buffers, fill them in slabs, set up the vertex array.</summary>
+    /// <summary>A part's upload as steps of at most about 512 KB: allocate the buffers, fill them in slabs, set up the vertex array.</summary>
     void QueuePart(GpuObjectMesh gpu, PreparedPart prepared, string label)
     {
         var part = prepared.Part;
@@ -331,6 +339,51 @@ sealed unsafe class ObjectMeshCache(GL gl, AssetLocator assets, UploadQueue uplo
         return vao;
     }
 
+    public int Unloads { get; private set; }
+    public int Reloads { get; private set; }
+    /// <summary>Unused for this long: unloaded.</summary>
+    public double IdleSeconds { get; set; } = StreamingTuning.IdleSeconds;
+    /// <summary>Above this the least recently used meshes unused for <see cref="PressureIdleSeconds"/> go too, down to three quarters of it.</summary>
+    public double HighWaterMb { get; set; } = StreamingTuning.IdleSeconds > 1e8 ? double.MaxValue : 768;
+    public double PressureIdleSeconds { get; set; } = 8;
+    /// <summary>Called with every GPU mesh (manual levels included) that was deleted, so users of it can forget it.</summary>
+    public Action<GpuObjectMesh>? Unloaded { get; set; }
+    long lastTrim;
+
+    /// <summary>
+    /// Deletes the GPU buffers of meshes not drawn for <see cref="IdleSeconds"/> (earlier, least recently used first, while over the high-water
+    /// mark). The mesh goes back to <see cref="ObjectMesh.State.None"/>: whoever wants it again <see cref="Request"/>s it and it is decoded and
+    /// uploaded afresh. At most once a second, at most 24 meshes a call.
+    /// </summary>
+    public void Trim()
+    {
+        long now = Environment.TickCount64;
+        if (now - lastTrim < 1000) return;
+        lastTrim = now;
+        bool pressure = Bytes > HighWaterMb * 1048576;
+        List<ObjectMesh>? victims = null;
+        foreach (var m in meshes.Values)
+        {
+            if (m.Status != ObjectMesh.State.Resident) continue;
+            double idle = (now - m.LastUsed) / 1000.0;
+            if (idle > IdleSeconds || pressure && idle > PressureIdleSeconds) (victims ??= []).Add(m);
+        }
+        if (victims is null) return;
+        victims.Sort((a, b) => a.LastUsed.CompareTo(b.LastUsed));
+        long lowWater = (long)(HighWaterMb * 1048576 * 0.75);
+        foreach (var m in victims.Take(24))
+        {
+            if ((now - m.LastUsed) / 1000.0 <= IdleSeconds && Bytes <= lowWater) break;
+            var gpu = m.Gpu!;
+            Delete(gpu);
+            Bytes -= m.Bytes;
+            m.Bytes = 0;
+            m.Gpu = null;
+            m.Status = ObjectMesh.State.None;
+            Unloads++;
+        }
+    }
+
     /// <summary>Waits for every running decode (offscreen rendering).</summary>
     public void WaitForJobs()
     {
@@ -346,6 +399,7 @@ sealed unsafe class ObjectMeshCache(GL gl, AssetLocator assets, UploadQueue uplo
 
     void Delete(GpuObjectMesh gpu)
     {
+        Unloaded?.Invoke(gpu);
         foreach (var gp in gpu.Parts)
         {
             gl.DeleteVertexArray(gp.Vao);
@@ -373,4 +427,11 @@ sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse
 sealed class ObjectMaterialSet(ObjectPartMaterial[] parts)
 {
     public ObjectPartMaterial[] Parts => parts;
+    public int Stamp;
+
+    /// <summary>Reading a texture id counts as using the texture (<see cref="WorldTexture.Id"/>); this keeps all of them from being unloaded.</summary>
+    public void Touch()
+    {
+        foreach (var p in parts) _ = (p.Diffuse, p.Normal, p.Diffuse2, p.Normal2);
+    }
 }

@@ -49,8 +49,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     readonly List<Zone> near = [];
 
     public int Loaded => zones.Count;
+    public IEnumerable<Zone> AllZones => zones.Values;
     /// <summary>Zones in range not laid out yet, and those being laid out.</summary>
-    public int Pending => jobs.Count + Wanted;
+    public int Pending => jobs.Count + Wanted + fills.Count;
     public int Wanted { get; private set; }
     public int Instances => zones.Values.Sum(z => z.Real.Count + z.Stand.Count);
     public int Resolved => zones.Values.Sum(z => z.Real.Count(i => i.Gpu is not null) + z.Stand.Count(i => i.Gpu is not null));
@@ -85,20 +86,49 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         foreach (var (coordinate, _) in wanted.OrderBy(w => w.Distance))
         {
             if (jobs.Count >= MaxJobs) break;
-            jobs[coordinate] = Task.Run(() => objects.BuildZone(coordinate));
+            jobs[coordinate] = BackgroundWork.Run(() => objects.BuildZone(coordinate));
         }
         Wanted = wanted.Count(w => !jobs.ContainsKey(w.Coordinate));
         foreach (var zone in zones.Values.ToArray())
             if (ZoneDistance(zone.X0, zone.Z0, eye) > range + WorldLayout.ZoneSize) zones.Remove(zone.Coordinate);
+        FillZones(maxNew > 8 ? double.MaxValue : 1.0);
     }
+
+    /// <summary>A zone laid out by a worker whose instances are being made, a few at a time (<see cref="FillZones"/>).</summary>
+    sealed class Fill
+    {
+        public required Zone Zone;
+        public required ZoneObjects Laid;
+        public int Index;
+    }
+
+    readonly Queue<Fill> fills = [];
 
     void Add(ZoneObjects laid)
     {
         var (x0, z0) = WorldLayout.ZoneOrigin(laid.Zone);
         var zone = new Zone { Coordinate = laid.Zone, X0 = x0, Z0 = z0 };
-        foreach (var p in laid.Items) zone.Real.Add(Make(p, stand: false, zone));
-        foreach (var p in laid.Stand) zone.Stand.Add(Make(p, stand: true, zone));
         zones[laid.Zone] = zone;
+        fills.Enqueue(new Fill { Zone = zone, Laid = laid });
+    }
+
+    /// <summary>Makes the instances of laid-out zones until <paramref name="budgetMs"/> has passed (a big zone has thousands; making them all in one frame cost up to 30 ms).</summary>
+    void FillZones(double budgetMs)
+    {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        while (fills.TryPeek(out var f))
+        {
+            if (!zones.TryGetValue(f.Zone.Coordinate, out var current) || !ReferenceEquals(current, f.Zone)) { fills.Dequeue(); continue; }   // dropped meanwhile
+            int real = f.Laid.Items.Count, total = real + f.Laid.Stand.Count;
+            while (f.Index < total)
+            {
+                int i = f.Index++;
+                if (i < real) f.Zone.Real.Add(Make(f.Laid.Items[i], stand: false, f.Zone));
+                else f.Zone.Stand.Add(Make(f.Laid.Stand[i - real], stand: true, f.Zone));
+                if ((f.Index & 63) == 0 && watch.Elapsed.TotalMilliseconds >= budgetMs) return;
+            }
+            fills.Dequeue();
+        }
     }
 
     Instance Make(PlacedMesh p, bool stand, Zone zone)

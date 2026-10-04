@@ -131,7 +131,17 @@ public sealed unsafe class TerrainRenderer : IDisposable
     public long DrawnTriangles { get; private set; }
 
     /// <summary>Starts counting drawn nodes and triangles for a new frame (several depth slices add up).</summary>
-    public void BeginFrame() => (DrawnChunks, DrawnTriangles) = (0, 0);
+    public void BeginFrame()
+    {
+        (DrawnChunks, DrawnTriangles) = (0, 0);
+        frameNumber++;
+        // A replaced window is deleted a few frames after the swap: deleting a texture the GPU still has queued draws for makes the driver wait for them.
+        for (int i = retired.Count - 1; i >= 0; i--)
+            if (frameNumber - retired[i].Frame >= 4) { gl.DeleteTexture(retired[i].Texture); retired.RemoveAt(i); }
+    }
+
+    int frameNumber;
+    readonly List<(uint Texture, int Frame)> retired = [];
 
     /// <summary>Uses biome textures and land maps from now on (null: untextured).</summary>
     public void SetTextures(TerrainTextures? t) => textures = t;
@@ -164,7 +174,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         }
         uploads.Add(() =>
         {
-            gl.DeleteTexture(fineTexture);
+            retired.Add((fineTexture, frameNumber));
             fineTexture = texture;
             fine = window;
             fineBand = BandOf(window);
@@ -250,7 +260,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
         var (vp, eye, options, light) = (frame.ViewProjection, frame.Eye, frame.Options, frame.Light);
         WorldGl.Matrix(gl, U(program, "uViewProjection"), vp);
         gl.Uniform1(U(program, "uHeightNormals"), heightNormals ? 1 : 0);
-        gl.Uniform1(U(program, "uNoRoads"), 0);
+        gl.Uniform1(U(program, "uFeature"), 0);
+        gl.Uniform1(U(program, "uFeatureBiome"), -1);
         gl.Uniform1(U(program, "uWireframe"), 0);
         gl.Uniform3(U(program, "uEye"), eye.X, eye.Y, eye.Z);
         var s = light.SunDirection;
@@ -310,19 +321,28 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// <summary>
     /// Draws other meshes with the terrain material (TERRAIN-mode map features), after <see cref="Draw"/> set the
     /// frame. Each item: a vertex array with position at attribute 0 and normal at 1, its index count, its transform.
+    /// As the game's <c>Feature_Terrain_DX11</c> (docs/formats/foliage.md, "TERRAIN-mode meshes"): one biome per mesh,
+    /// the one of <c>biomemap.png</c> at the mesh's origin, back faces culled.
     /// </summary>
     public void DrawMeshes(IEnumerable<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes)
     {
         Apply(meshProgram, heightNormals: false);
-        gl.Uniform1(U(meshProgram, "uNoRoads"), 1);
-        gl.Disable(EnableCap.CullFace);
-        int model = U(meshProgram, "uModel");
+        gl.Uniform1(U(meshProgram, "uFeature"), 1);
+        gl.Enable(EnableCap.CullFace);
+        gl.CullFace(TriangleFace.Back);
+        int model = U(meshProgram, "uModel"), biome = U(meshProgram, "uFeatureBiome");
         foreach (var (vao, count, m) in meshes)
         {
             WorldGl.Matrix(gl, model, m);
+            // Not resident yet (or no textures): blend the biomes as the terrain does.
+            gl.Uniform1(biome, textures?.FeatureBiomeRow(m.Translation.X, m.Translation.Z) ?? -1);
+            // A mirroring placement turns the winding round.
+            gl.FrontFace(m.GetDeterminant() < 0 ? FrontFaceDirection.CW : FrontFaceDirection.Ccw);
             gl.BindVertexArray(vao);
             gl.DrawElements(PrimitiveType.Triangles, (uint)count, DrawElementsType.UnsignedInt, (void*)0);
         }
+        gl.FrontFace(FrontFaceDirection.Ccw);
+        gl.Disable(EnableCap.CullFace);
         gl.BindVertexArray(0);
     }
 
@@ -339,6 +359,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         gl.DeleteBuffer(gridEbo);
         gl.DeleteTexture(coarseTexture);
         gl.DeleteTexture(fineTexture);
+        foreach (var r in retired) gl.DeleteTexture(r.Texture);
         gl.DeleteProgram(patchProgram);
         gl.DeleteProgram(meshProgram);
         textures?.Dispose();
