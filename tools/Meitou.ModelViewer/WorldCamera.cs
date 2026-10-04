@@ -16,6 +16,8 @@ public sealed class WorldCamera
     public float Pitch { get; set; } = 0.5f;
     public float Distance { get; set; } = 2000;
     public float FieldOfView { get; set; } = 50 * MathF.PI / 180;
+    /// <summary>The view distance asked for; the app raises <see cref="ViewDistance"/> above it when the haze reaches further (high eye).</summary>
+    public float MinViewDistance { get; set; } = 60000;
     /// <summary>Furthest distance anything is drawn at.</summary>
     public float ViewDistance { get; set; } = 60000;
     /// <summary>Height of the eye above the terrain (set by the app each frame), for the near plane.</summary>

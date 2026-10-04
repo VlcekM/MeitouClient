@@ -250,6 +250,7 @@ static class WorldApp
             Pitch = (o.Pitch ?? 35) * MathF.PI / 180,
             Distance = o.Distance ?? radius,
             ViewDistance = o.ViewDistance,
+            MinViewDistance = o.ViewDistance,
             SplitDistance = Math.Max(20000, o.ObjectDistance * 1.1f),
         };
         var render = new WorldRenderOptions { Textures = !o.NoTextures, Objects = !o.NoObjects, Water = !o.NoWater, Wireframe = o.Wireframe ? 1 : 0, Debug = o.Debug, MaterialDistance = o.MaterialDistance };
@@ -317,6 +318,9 @@ static class WorldApp
         var colours = SkyColours.For(scene.Clock.SunDirection(hour));
         // Thinner air higher up: the haze takes longer to close in the higher the eye.
         var light = colours.Lighting(fogDistance + 3 * Math.Max(eye.Y, 0));
+        // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
+        // so a high eye sees the sea fade into the sky instead of a cut-off edge.
+        camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
         gl.Viewport(0, 0, (uint)width, (uint)height);
         gl.ClearColor(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1);
         gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
