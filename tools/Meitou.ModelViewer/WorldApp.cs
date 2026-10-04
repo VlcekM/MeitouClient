@@ -55,7 +55,7 @@ sealed class WorldOptions
           --fog <u>                distance where the haze is complete (default 250000)
           --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
           --wireframe --info
-        Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D fly, Q/E down/up (Shift: faster),
+        Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, X wireframe, V debug view, [ / ] terrain LOD distance,
           G water, , / . time of day -/+ 1 hour, H print camera, P save screenshot, Esc quit.
         """;
@@ -494,33 +494,73 @@ static class WorldApp
             }
         }
 
-        double titleTimer = 0;
-        int frames = 0;
+        double titleTimer = 0, cpuMs = 0, gpuMs = 0;
+        int frames = 0, gpuSamples = 0, queryIndex = 0;
+        uint[] queries = [];
+        bool[] queryPending = [];
+        var frameWatch = new Stopwatch();
         window.Update += dt =>
         {
             if (keyboard is null || camera is null) return;
             bool Down(Key k) => keyboard.IsKeyPressed(k);
-            float speed = (float)dt * Math.Max(camera.Distance, 50) * (Down(Key.ShiftLeft) || Down(Key.ShiftRight) ? 3f : 0.8f);
+            // Free camera: W/S along the view direction, A/D sideways, Q/E world down/up; speed grows with the height
+            // above the ground (Shift ×4, Ctrl ×0.25).
+            float speed = (float)dt * Math.Max(camera.EyeClearance, 30) * 1.5f *
+                (Down(Key.ShiftLeft) || Down(Key.ShiftRight) ? 4f : 1f) * (Down(Key.ControlLeft) || Down(Key.ControlRight) ? 0.25f : 1f);
             float f = (Down(Key.W) ? 1 : 0) - (Down(Key.S) ? 1 : 0);
             float r = (Down(Key.D) ? 1 : 0) - (Down(Key.A) ? 1 : 0);
             float u = (Down(Key.E) ? 1 : 0) - (Down(Key.Q) ? 1 : 0);
-            if (f != 0 || r != 0 || u != 0) camera.Fly(f * speed, r * speed, u * speed);
+            if (f != 0 || r != 0 || u != 0) camera.FlyFree(f * speed, r * speed, u * speed);
             titleTimer += dt;
             if (titleTimer > 0.25 && gpu is not null)
             {
-                var t = camera.Target;
-                window.Title = $"Meitou world | {frames / titleTimer:0} fps, {titleTimer * 1000 / Math.Max(frames, 1):0.00} ms | {t.X:0}, {t.Z:0} zone {WorldLayout.ZoneOf(t.X, t.Z)} | {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" +
+                var t = camera.Eye;
+                // fps is capped by vsync; cpu is the time to record a frame, gpu the time the GPU spent on it (timer
+                // queries), so they show the real cost under the cap.
+                string gpuText = gpuSamples > 0 ? $"{gpuMs / gpuSamples:0.00}" : "-";
+                window.Title = $"Meitou world | {frames / titleTimer:0} fps (vsync) | cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms | " +
+                    $"{t.X:0}, {t.Z:0} zone {WorldLayout.ZoneOf(t.X, t.Z)} | {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" +
                     (gpu.Objects is { } ob && render.Objects ? $" | {ob.DrawnInstances} objects" : "") +
                     (gpu.Streamer is { Pending: > 0 } st ? $" | loading {st.Pending}" : "");
                 titleTimer = 0;
                 frames = 0;
+                cpuMs = gpuMs = 0;
+                gpuSamples = 0;
             }
         };
         window.Render += _ =>
         {
             if (gpu is null || gl is null) return;
             var size = window.FramebufferSize;
+            if (queries.Length == 0)
+            {
+                queries = new uint[4];
+                queryPending = new bool[4];
+                for (int i = 0; i < queries.Length; i++) queries[i] = gl.GenQuery();
+            }
+            // Collect finished GPU timings from earlier frames without waiting for them.
+            for (int i = 0; i < queries.Length; i++)
+            {
+                if (!queryPending[i]) continue;
+                gl.GetQueryObject(queries[i], QueryObjectParameterName.ResultAvailable, out int available);
+                if (available == 0) continue;
+                gl.GetQueryObject(queries[i], QueryObjectParameterName.Result, out ulong nanoseconds);
+                gpuMs += nanoseconds / 1e6;
+                gpuSamples++;
+                queryPending[i] = false;
+            }
+            uint query = queries[queryIndex];
+            bool timing = !queryPending[queryIndex];
+            if (timing) gl.BeginQuery(QueryTarget.TimeElapsed, query);
+            frameWatch.Restart();
             Draw(gl, gpu, scene, camera, render, size.X, size.Y, hour, (float)clock.Elapsed.TotalSeconds / 600f, o.FogDistance);
+            cpuMs += frameWatch.Elapsed.TotalMilliseconds;
+            if (timing)
+            {
+                gl.EndQuery(QueryTarget.TimeElapsed);
+                queryPending[queryIndex] = true;
+            }
+            queryIndex = (queryIndex + 1) % queries.Length;
             frames++;
             if (screenshotRequested)
             {

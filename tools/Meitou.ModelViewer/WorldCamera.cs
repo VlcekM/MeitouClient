@@ -76,6 +76,16 @@ public sealed class WorldCamera
         Target += ground * forward + side * right + Vector3.UnitY * up;
     }
 
+    /// <summary>Free flight: moves eye and target <paramref name="forward"/> along the view direction (pitch included), <paramref name="right"/> sideways, <paramref name="up"/> along world Y.</summary>
+    public void FlyFree(float forward, float right, float up)
+    {
+        var f = Forward;
+        var flat = new Vector3(f.X, 0, f.Z);
+        flat = flat.LengthSquared() < 1e-6f ? new Vector3(-MathF.Sin(Yaw), 0, -MathF.Cos(Yaw)) : Vector3.Normalize(flat);
+        var side = Vector3.Normalize(Vector3.Cross(flat, Vector3.UnitY));
+        Target += f * forward + side * right + Vector3.UnitY * up;
+    }
+
     /// <summary>The six frustum planes (normal pointing inwards, d) of a view-projection matrix.</summary>
     public static Vector4[] FrustumPlanes(Matrix4x4 m)
     {

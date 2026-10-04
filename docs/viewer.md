@@ -242,7 +242,7 @@ the camera (the behaviour before streaming), and `--fly-to x,z` with `--screensh
 fast key speed and prints the frame times on the way (a streaming test). `MEITOU_STREAM_LOG=1` prints upload steps over 3 ms.
 
 Keys: left drag orbits the target, right drag looks
-around, wheel zooms, `W A S D` fly over the ground, `Q`/`E` down/up (Shift faster), `T` textures, `N` normal
+around, wheel zooms, `W A S D` free fly along the view direction, `Q`/`E` world down/up (speed follows the height above ground; Shift ×4, Ctrl ×0.25), `T` textures, `N` normal
 maps, `O` objects, `G` water, `,`/`.` time of day −/+ 1 hour, `X` wireframe, `V` debug view (blend weights,
 layer weights, untextured shading), `[`/`]` LOD distance (× 1.25), `H` prints the camera as command-line
 options, `P` screenshot into the temp folder.
