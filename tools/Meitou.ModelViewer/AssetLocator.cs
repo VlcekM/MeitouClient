@@ -1,11 +1,12 @@
 using Meitou.Content;
+using Meitou.Data;
 using Meitou.Data.Ogre;
 
 namespace Meitou.ModelViewer;
 
 /// <summary>
 /// Finds art files the way the viewer needs them: an existing path, a path relative to the install (FCS stores
-/// <c>.\data\...</c>), then the bare file name through the <c>resources.cfg</c> folders (Ogre's lookup, not
+/// <c>.\data\...</c>), then the bare file name through the <c>resources.cfg</c> and enabled mod folders (Ogre's lookup, not
 /// recursive), then the bare name anywhere under data/ (for files outside those folders).
 /// </summary>
 public sealed class AssetLocator
@@ -16,7 +17,7 @@ public sealed class AssetLocator
     public AssetLocator(GameInstall install)
     {
         this.install = install;
-        Configured = OgreScriptResources.ReadConfig(Path.Combine(install.Root, "resources.cfg"), install.Root);
+        Configured = OgreScriptResources.ForInstall(install, LoadOrder.FromInstall(install));
         everything = new(() => OgreScriptResources.FromDirectory(install.DataDirectory));
     }
 

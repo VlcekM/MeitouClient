@@ -235,5 +235,6 @@ Verified, `OgreMain_x64.dll @ 180343200`, `@ 180017ee0`, `@ 180031260`.
   `Entity::_initialise` (`OgreMain_x64.dll @ 1800bfac0`), but whether that happens without a mesh
   skeleton wasn't traced. Unknown.
 - `whistler.mesh` (bone indices up to 54): no data references it, so its behaviour is untested. Unknown.
-- Where the bone name for mode-0 attachments (weapons) comes from (RACE `attachment points` .phs or
-  fixed names). Unknown.
+- ~~Where the bone name for mode-0 attachments (weapons) comes from~~: answered in
+  [../characters.md](../characters.md#weapons-and-other-bone-attached-items): `hands` is `Bip01 Prop2`, the rest
+  come from the RACE `attachment points` file ([phs.md](phs.md)).

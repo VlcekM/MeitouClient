@@ -30,12 +30,30 @@ public sealed class OgreMesh
 
     public OgreLod? Lod { get; set; }
 
+    /// <summary>Poses (morph targets) in file order (chunk 0xC000; docs/formats/ogre-mesh.md).</summary>
+    public List<OgrePose> Poses { get; } = [];
+
     /// <summary>
-    /// Chunks the reader steps over without decoding: edge lists (for stencil shadows), poses, vertex
+    /// Chunks the reader steps over without decoding: edge lists (for stencil shadows), vertex
     /// animations and per-submesh extremes. Id and count.
     /// </summary>
     public Dictionary<OgreMeshChunk, int> SkippedChunks { get; } = [];
 }
+
+/// <summary>
+/// A pose: per-vertex position (and optionally normal) offsets for one vertex set. <see cref="Target"/> is 0 for the
+/// shared vertices, otherwise submesh index + 1 (Ogre's convention).
+/// </summary>
+public sealed class OgrePose
+{
+    public string Name { get; set; } = "";
+    public ushort Target { get; set; }
+    public bool IncludesNormals { get; set; }
+    public List<OgrePoseVertex> Vertices { get; } = [];
+}
+
+/// <summary>One vertex of a pose: index into the target's vertices, position offset, normal offset (zero if none).</summary>
+public readonly record struct OgrePoseVertex(uint Index, Vector3 Offset, Vector3 Normal);
 
 public sealed class OgreSubMesh
 {
@@ -231,6 +249,8 @@ public enum OgreMeshChunk : ushort
     EdgeListLod = 0xB100,
     EdgeGroup = 0xB110,
     Poses = 0xC000,
+    Pose = 0xC100,
+    PoseVertex = 0xC111,
     Animations = 0xD000,
     TableExtremes = 0xE000,
 }

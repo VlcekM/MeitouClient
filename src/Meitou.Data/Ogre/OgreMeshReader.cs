@@ -81,12 +81,34 @@ public static class OgreMeshReader
                     SkipEdgeLists(s);
                     Count(mesh, chunk);
                     break;
+                case Poses:
+                    ReadPoses(s, mesh);
+                    break;
                 default:
-                    // Poses, animations, extremes: not needed yet, skipped by length.
+                    // Animations, extremes: not needed yet, skipped by length.
                     s.Skip(length - OgreStream.ChunkHeaderSize);
                     Count(mesh, chunk);
                     break;
             }
+        }
+    }
+
+    // Ogre's readPoses / readPose (ogre-next v2-0): POSE chunks with name, target and (from 1.8) an includes-normals
+    // flag, each followed by POSE_VERTEX chunks (vertex index, offset, normal if flagged). 1.41 has no normals.
+    static void ReadPoses(OgreStream s, OgreMesh mesh)
+    {
+        while (s.TryReadChunk([Pose], out _, out _))
+        {
+            var pose = new OgrePose { Name = s.ReadString(), Target = s.ReadUInt16() };
+            pose.IncludesNormals = mesh.Version != Version1_41 && s.ReadBool();
+            while (s.TryReadChunk([PoseVertex], out _, out _))
+            {
+                uint index = s.ReadUInt32();
+                var offset = s.ReadVector3();
+                var normal = pose.IncludesNormals ? s.ReadVector3() : Vector3.Zero;
+                pose.Vertices.Add(new OgrePoseVertex(index, offset, normal));
+            }
+            mesh.Poses.Add(pose);
         }
     }
 

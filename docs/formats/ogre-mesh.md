@@ -52,7 +52,8 @@ The only differences between the three supported versions are in the LOD section
   0xA000 SUBMESH_NAME_TABLE
     0xA100 ..._ELEMENT            ushort submesh index, string name          (repeats)
   0xB000 EDGE_LISTS               stencil-shadow edges (walked, not kept)
-  0xC000 POSES, 0xD000 ANIMATIONS, 0xE000 TABLE_EXTREMES   skipped by length
+  0xC000 POSES                     see Pose chunks below
+  0xD000 ANIMATIONS, 0xE000 TABLE_EXTREMES   skipped by length
 
 GEOMETRY (0x5000): uint vertexCount, then
   0x5100 VERTEX_DECLARATION
@@ -80,6 +81,22 @@ float3 (all), UV float2 (3,541), binormal float3 (2,431), tangent float3 (1,777)
 diffuse colour ARGB (1,628) or ABGR (89). **No blend weights/indices elements**: the 167 skinned meshes
 store skinning as bone assignments (Ogre builds blend buffers from them at load).
 
+### Pose chunks (Verified)
+
+Per ogre-next `v2-0` `MeshSerializerImpl::readPoses` / `readPose`; 1.8 shares the current reader, 1.41 has no
+normals flag:
+
+```
+0xC000 POSES
+  0xC100 POSE          string name, ushort target (0 = shared vertices, else submesh index + 1),
+                       [1.100 / 1.8] bool includesNormals                     (repeats)
+    0xC111 POSE_VERTEX uint vertex index, Vector3 offset, [Vector3 normal if includesNormals]   (repeats)
+```
+
+Verified: all 13 base-game meshes with poses read to the end with this (the mesh reader test parses every
+mesh to its last byte). Observed (same survey): every pose targets submesh 0, none includes normals, and the
+poses of one mesh touch 5,772 (`Stick_person.mesh`) to 26,703 (`bone_male.mesh`) vertices in total.
+
 ### LOD (0x8000)
 
 - **1.100**: `string strategy`, `ushort levels`; then for each level after 0, a chunk 0x8110 (manual)
@@ -97,7 +114,7 @@ store skinning as bone assignments (Ogre builds blend buffers from them at load)
 ## Other base-game facts (Verified)
 
 - 3,748 submeshes, 22.7 M vertices, 23.0 M indices; 167 skinned (have a skeleton link).
-- Skipped sections present: edge lists in 103 meshes, poses in 13. No vertex animations or extremes.
+- Edge lists in 103 meshes (walked), poses in 13 (read). No vertex animations or extremes.
 
 ## How Kenshi uses it
 
@@ -107,13 +124,14 @@ Sources: decompilation of `kenshi_x64.exe` and Kenshi's own `OgreMain_x64.dll` (
 
 ### Poses: character morph targets
 
-The 13 meshes with poses are the race body meshes and their limb-stump variants (Observed, scratch survey
-reading pose names from the raw `0xC100` chunks, so names are best-effort):
+The 13 meshes with poses are the race body meshes and their limb-stump variants (Verified: `OgreMeshReader`
+parses the pose chunks, see [Pose chunks](#pose-chunks-verified); counts from a scratch survey over every base-game
+mesh):
 
 | Mesh (`character/meshes/...`) | Poses | Names (examples) |
 | --- | ---: | --- |
 | `human/human_male.mesh`, `human_female.mesh` | 23, 29 | `wide_cheekbones`, `long_nose`, `big_mouth`, `tiltup_eyes`, `overbite`, `wide_jaw` |
-| `bone/bone_male.mesh`, `bone_female.mesh` | 28, 36 | `bone_` + face names, plus `bone_horns_curved`, `bone_horns_top_short`, `bone_horns_bottom_short`, `bone_horns_thick`, ... |
+| `bone/bone_male.mesh`, `bone_female.mesh` | 28, 35 | `bone_` + face names, plus `bone_horns_curved`, `bone_horns_top_short`, `bone_horns_bottom_short`, `bone_horns_thick`, ... |
 | `stick_person/Stick_person*.mesh` (3) | 9 each | `stick_big_eyes`, `stick_long_antenna`, ... |
 | `human/` limb-stump meshes (6) | 23 or 29 | `0` ... `22` / `0` ... `28` |
 
@@ -160,4 +178,5 @@ They are face (and horn) shape morphs, not expressions or animation. Verified by
 
 ## Open questions
 
-- How pose weights are derived from appearance slider values.
+- How pose weights are derived from appearance values. Observed: body files store values under the pose
+  names themselves ([../characters.md](../characters.md#face-shapes-poses)); whether Kenshi scales them is Unknown.

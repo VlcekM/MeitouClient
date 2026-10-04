@@ -140,5 +140,7 @@ factors), unless the item says `dont colorise`.
 ## Unknown
 
 - The `TERRAIN` map-feature builder (FUN_140a14c90) and terrain/biome materials.
-- Characters' bodies, heads and hair (`Character`, `Hair`... scripts) were not traced.
+- Characters' bodies, heads and hair (`Character`, `Hair`... scripts): the parameters Kenshi sets (skin tone, hair
+  channels and colour) and the shader layering are in [../characters.md](../characters.md); the material
+  cloning for them was not traced.
 - Which call sites pass the INSTANCED / INTERIOR arguments, and the exact clone-name format.

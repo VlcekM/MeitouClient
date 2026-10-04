@@ -13,6 +13,8 @@ using Silk.NET.Windowing;
 
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+if (args.Contains("--world")) return WorldApp.Run(args);
+if (args.Contains("--character")) return CharacterApp.Run(args);
 return ViewerApp.Run(args);
 
 sealed class ViewerOptions
@@ -26,7 +28,7 @@ sealed class ViewerOptions
     public bool Info, NoFcs, Wireframe, ShowSkeleton, NoGrid, VertexColours;
 
     public const string Usage = """
-        meitou-viewer <mesh> [options]
+        meitou-viewer <mesh> [options]     (or: meitou-viewer --world --help, meitou-viewer --character <record> --help)
           <mesh>                 bare file name (looked up via resources.cfg, then data/) or a path
           --texture <file>       diffuse texture to use instead of the resolved one
           --normal <file>        normal map to use with --texture
@@ -315,7 +317,7 @@ static class ViewerApp
         return 0;
     }
 
-    static void SavePng(GL gl, string path, int w, int h)
+    internal static void SavePng(GL gl, string path, int w, int h)
     {
         var pixels = new byte[w * h * 4];
         gl.PixelStore(PixelStoreParameter.PackAlignment, 1);

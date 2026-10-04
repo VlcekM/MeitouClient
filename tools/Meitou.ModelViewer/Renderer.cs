@@ -105,6 +105,9 @@ public sealed unsafe class Renderer : IDisposable
         gp.NormalSwizzled = material?.Normal is { } n && swizzled.Contains(n);
     }
 
+    /// <summary>A texture from the cache (loaded on first use; 0 if missing), for other renderers sharing it (CharacterRenderer).</summary>
+    public uint LoadTexture(string? name, bool border) => Texture(name, border);
+
     /// <summary>
     /// Loads a texture (cached per name and addressing). Also notes "swizzled" normal maps: Kenshi stores some normal maps
     /// with X in alpha and Y in green (R = G = B), which shows as a mean blue far below the ~250 of an ordinary normal map.

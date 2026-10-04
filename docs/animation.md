@@ -133,6 +133,24 @@ definition's `loop`, `synchs` and `synch offset`.
 The Ogre side then sums the enabled states (average mode: weights scaled down only if they sum above 1;
 override bones applied in a second pass). See [ogre-skeleton.md](formats/ogre-skeleton.md#blending-in-kenshis-ogre).
 
+### In Meitou (`Meitou.Data.Characters.AnimationMask`, viewer `Animator`)
+
+The viewer implements the Ogre side of this and the startup preprocessing per layer, without Kenshi's
+per-layer controller (no fades, synching or normalising):
+
+- A layer's deleted tracks and override bones come from its ANIMATION record (tables above; `delete tail`
+  defaults to true). A name that is an Ogre animation rather than a record name uses the first ANIMATION record
+  with that `anim name`, first in load order (viewer choice; Kenshi's gathering order was not traced). Instead of cloning the
+  animation per record (as the preprocessing does), the viewer keeps the source animation and skips the deleted
+  tracks when it samples.
+- Per track, as stock Ogre's v1 node track (MIT source): translation × weight is added, rotation
+  nlerp(identity, key, weight) is applied in local space, scale 1 + (key − 1) × weight multiplies.
+- **Observed** (data, scratch survey): every animation of `male_skeleton.skeleton` has a track for all 30 bones,
+  so without the deletions an upper-body animation would also drive the legs. `walk lower` deletes 15 tracks
+  (both arms, spine, neck, head, props) and `walk upper sword` 10 (`delete below waist`); together they move the
+  whole body. Several records share one Ogre animation with different masks (`run upper stealth` and
+  `run lower stealth` both play `ninjarun`).
+
 ## Appearance hooks on the skeleton
 
 ### Posture sliders
