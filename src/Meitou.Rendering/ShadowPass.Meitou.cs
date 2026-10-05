@@ -21,12 +21,12 @@ public sealed unsafe partial class ShadowPass
     public bool Temporal { get; set; }
     /// <summary>Contact-hardening penumbrae (the blocker search); off: a fixed small filter.</summary>
     public bool ContactHardening { get; set; } = true;
-    /// <summary>The sun's angular diameter the penumbrae are made for (radians): about twice the real sun's 0.53°, which reads better at the game's scale.</summary>
-    public float SunAngle { get; set; } = 1.2f * MathF.PI / 180;
+    /// <summary>The sun's angular diameter the penumbrae are made for (radians): a little more than the real sun's 0.53°.</summary>
+    public float SunAngle { get; set; } = 0.7f * MathF.PI / 180;
     /// <summary>Filter radius without a blocker search, and the least with one, in texels of the cascade.</summary>
-    public float FilterTexels { get; set; } = 1.5f;
-    /// <summary>The widest penumbra radius, in texels of the cascade.</summary>
-    public float MaxFilterTexels { get; set; } = 10;
+    public float FilterTexels { get; set; } = 1.0f;
+    /// <summary>The widest penumbra radius in world units (a tall caster far above the ground); never less than <see cref="FilterTexels"/>.</summary>
+    public float MaxPenumbra { get; set; } = 3;
     /// <summary>A sudden turn of the sun larger than this (radians) redraws every cascade at once.</summary>
     public float SunJump { get; set; } = 2 * MathF.PI / 180;
 
@@ -72,7 +72,7 @@ public sealed unsafe partial class ShadowPass
             // The first cascade every frame, the second every other, the third and fourth every fourth frame on alternate frames.
             bool due = i == 0 || (i == 1 ? frame % 2 == 0 : frame % 4 == (i == 2 ? 1 : 3));
             drawNow[i] = all || stored[i] is null || due
-                || !MeitouShadowFit.Covers(stored[i]!, view, splits, (MaxFilterTexels + 2) * stored[i]!.Texel);
+                || !MeitouShadowFit.Covers(stored[i]!, view, splits, SearchRadius(stored[i]!) + 2 * stored[i]!.Texel);
             if (drawNow[i]) drawing++;
         }
 
@@ -194,6 +194,9 @@ public sealed unsafe partial class ShadowPass
         return true;
     }
 
+    /// <summary>The blocker search's and the filter's widest radius in a cascade (world units).</summary>
+    double SearchRadius(ShadowCascade c) => Math.Max(MaxPenumbra, FilterTexels * 1.5 * c.Texel);
+
     void PublishMeitou(ShadowView view, ShadowCascade[] cascades, Vector3 toSun, bool blockers)
     {
         var data = new float[ReceiverBytes / 4];
@@ -211,7 +214,7 @@ public sealed unsafe partial class ShadowPass
             Put(data, 80 + i * 4, new Vector4(c.FarDepth, c.FilterRadius, c.Size.X, c.Size.Y));
             Put(data, 96 + i * 4, new Vector4(c.Size.Z, 1f / tile, 0, 0));
             Put(ms, i * 4, new Vector4(c.NearDepth, c.FarDepth, FilterTexels / tile, (float)c.Texel));
-            Put(ms, 16 + i * 4, new Vector4(world, c.Size.Z, MaxFilterTexels / tile, sunTan / world));
+            Put(ms, 16 + i * 4, new Vector4(world, c.Size.Z, (float)(SearchRadius(c) / world), sunTan / world));
         }
         Put(data, 112, cascades[0].Rotation);
         Put(data, 128, new Vector4(origin, 1));

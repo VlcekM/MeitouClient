@@ -80,6 +80,7 @@ sealed class WorldOptions
           --no-reflections         the water reflects only the sky colour, not the mirrored scene (R toggles)
           --no-shadows             no sun shadow map   --shadow-quality <0|1|2> map side 1024/2048/4096 (default 1)   --shadow-range <u> (1000..9000, default 5000)
           --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture
+          (the shadows switch, F5: Meitou by default, view-fitted cascades with soft contact-hardening penumbrae and the terrain's shadow out to the horizon; --faithful shadows the game's CSM)
           --simple-sky             the old colour-model sky and squared-distance fog instead of the atmosphere (B toggles)
           --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral (F7 toggles)
           --haze-distance <u>      the game's far distance D (view distance x 10) for its haze, which ramps in from 0.06 D to 0.6 D (default 50000: view distance 5000)
@@ -87,7 +88,7 @@ sealed class WorldOptions
           --weather <name>         a WEATHER record's sky colour, fog and clouds (default "Default": clear, no fog, no clouds)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
-          --faithful <all|ao,dither,haze,aa>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
+          --faithful <all|ao,dither,haze,aa,shadows>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
           --show-keys              start with the key list overlay open (toggle with F10)
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
@@ -107,7 +108,7 @@ sealed class WorldOptions
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
           G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, Ctrl+C copy camera code, Ctrl+V go to camera code, P save screenshot, Tab settings sliders, Esc quit.
-          F1 ambient occlusion, F2 dithering, F3 haze, F4 anti-aliasing;
+          F1 ambient occlusion, F2 dithering, F3 haze, F4 anti-aliasing, F5 shadows;
           - / = exposure; F10 key list, F11 frame statistics, F12 profiler (gpu, cpu, off).
         """;
 

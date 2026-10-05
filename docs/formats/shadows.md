@@ -188,3 +188,36 @@ the table, default 1 = 2048², `--shadow-range <u>`). It follows the facts above
   normal; `3` multiplies the term over the finished picture.
 - The lighting itself (`kenshiLight`) applies the term once `AtmosphereShaders` includes `ShadowShaders.Functions` and
   multiplies the sun by `kenshiShadow(world, n)`; the program builder already binds the blocks and the map's unit.
+
+### Meitou shadows (the `shadows` switch)
+
+Not the game's: the remaster's choice, on by default (F5 / `--faithful shadows` gives the CSM above, pixel-identical). Same atlas,
+`shadow quality` and `Shadow Range`; `ShadowPass.Meitou.cs`, `MeitouShadowFit` (Meitou.Data), `MeitouShadowShaders`,
+`TerrainShadowMap`. The receiver is `kenshiShadowMeitou`, chosen by `uShadowAtlas.z = 1` in the receiver block; the game's body is
+`kenshiShadowFaithful`, `kenshiShadow` dispatches.
+
+- **Fit.** Splits by the practical scheme (λ 0.8, no halving) from the camera's near plane, rounded down to a power of 1.25 so the
+  splits change only in steps while zooming, to the range: all four cascades cover something visible (with the game's splits the
+  first two lie in front of a near plane of 100-200 in most views). Each cascade is a light-space square around the bounding sphere of
+  its own slice (the textbook sphere, smaller than the game's), its centre snapped to whole texels (no shimmering), 2-8 % larger than
+  the sphere as slack for the schedule, its depth reaching two radii further towards the sun so casters there keep their depth.
+  Example (The Hub from 300 units): texels 0.64 / 1.58 / 3.71 / 10.0 units against the game's 0.09 / 0.24 / 0.94 / 12.4 of which
+  only the last two are on screen.
+- **Schedule.** Cascade 0 every frame, 1 every other frame, 2 and 3 every fourth frame on alternating frames (at most two a frame),
+  each kept with the matrices it was drawn with (the receiver uses each cascade's own), only its tile cleared. A cascade is redrawn at
+  once when the current slice's sphere (plus the filter's reach) no longer fits its box, when the splits or the map size change, or
+  when the sun jumps by more than 2°. A point outside a stale box falls through to the next cascade. Newly streamed casters reach the
+  far cascades up to three frames late.
+- **Receiver.** The point is moved off its triangle by a normal offset of 0.5-2 texels (more at grazing light; the triangle's normal
+  from screen derivatives, not the shading normal), then a blocker search (8 taps in a half-resolution map of the nearest depths,
+  rebuilt for the tiles drawn) gives the penumbra: the blocker's distance × tan(0.35°) (a sun of 0.7°), at least 1 texel, at most 3
+  world units; 16 bilinear comparisons on a Vogel disk of that radius, rotated per pixel by interleaved gradient noise (changing every
+  frame when a temporal anti-aliasing pass runs, fixed otherwise), their depths following the receiver's plane. The last 15 % of each
+  slice blends into the next cascade (whose fit covers it); the last 15 % of the range fades to lit.
+- **Terrain beyond the range.** For the sun's direction, per sample of the whole-world height grid (2049², 144 units), the height of
+  the top of the shadow the land towards the sun casts there and the distance to that land: 13 passes of a doubling sweep (each looks
+  2^k samples further towards the sun, lowered by the sun's slope) into RG32F, rebuilt when the sun turns by more than 0.1°. A point
+  is shadowed below that height (bias 20 units, softness 6 units plus the occluder's distance × the sun's angular radius); one fetch.
+  It fades in from 55 % to 90 % of the range and combines with the cascades by the minimum, so it agrees with them where both apply
+  (Observed: the same picture at range 5000 and 9000 at 07:00).
+- **Costs:** see the viewer's measurements in [../viewer.md](../viewer.md#shadows).
