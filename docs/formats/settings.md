@@ -28,20 +28,25 @@ Related docs that go deeper on some keys: [shadows.md](shadows.md#settings-verif
   consumers read those globals directly. (**Verified** that this is the block's base: `Blood` lands at +0xE4 = `0x142133574`,
   `view distance` at +0x18 = `0x1421334A8`, and the options sliders, the writer and the consumers all use these addresses.)
 - Parsers: integers with `atoi`, floats with `atof` (so `1.5` in an integer key reads as 1). **Booleans are false only when the
-  value is exactly `0`** (or empty); anything else, including `false` or `No`, reads as true (FUN_140404250 and the hand-written
-  scans compare the first character with `0` and the length with 1).
+  value is exactly `0`** (or empty); anything else, including `false`, `No` or `0.0`, reads as true (FUN_140404250 and the
+  hand-written scans compare the first character with `0` and the length with 1).
 - A key that is missing gets the default in the tables below; that default is **not** written back until the options window
   closes. **Clamps** the loader applies are listed per key (e.g. `view distance` below 500 becomes 6000).
 - The writer FUN_1403eca90 rewrites all keys it knows (everything in the main loader plus `skip stencil tricks` and one line per
   compositor node). It loads the file, sets each key and saves it, so lines it does not know presumably survive (**Observed**: the
-load / set / save calls, not tested with a foreign line). It runs when the options window
+  load / set / save calls, not tested with a foreign line). It runs when the options window
   closes after the options were shown (FUN_1403ee820). On that close it also applies: audio volumes and music frequency
   (FUN_1403e7290), the main camera's far clip from `view distance` (FUN_1406ae960), the shadow mode and map size
   (`setShadowMode`, [shadows.md](shadows.md)), the decal textures' size (FUN_1408de890, when decals exist), and the window settings
   into Ogre's config, saved to `kenshi.cfg` (`Full Screen`, `Border`, `Video Mode`; see [kenshi.cfg](#kenshicfg-ogres-config)).
 - Other writers: the language set-up writes `language` / `steam_language`; every save writes `continue`; the autosave writes
   `autosaveindex`; the startup set-up appends three defaults (`mouse speed vertical/horizontal`, `terrain hi-res distance`) when
-  `mouse speed vertical` is missing.
+  `mouse speed vertical` is missing; the level editor writes `editor`.
+- Every function that names `settings.cfg` (Verified: the exe's string references) is covered here: the loader, the writer, the
+  start-up set-up, the two language functions (FUN_140175a90, FUN_1401753e0), the compositor set-up, the save code
+  (FUN_14047be70, FUN_14047c310), the level editor (FUN_140777ce0, FUN_14077be90), the crash-dump packer (FUN_140744900, which
+  only adds the file to the dump), and the CONSTANTS loader FUN_14086b2b0, which opens `settings.cfg` but reads nothing from it
+  (its `production speed` and `build speed` come from the CONSTANTS record; **Verified**).
 
 **Options-screen controls** (Verified, FUN_1403f0260 and the combo helpers): sliders are given a min and max and bound to the
 global; combo boxes store each item's **data value** (FUN_1406f6f10 attaches an `int` to the item, FUN_1406fc2a0 selects the
@@ -87,8 +92,10 @@ T_far, D_t)`; the plugin's code read in full):
   freed (**Observed**, the frame counter test).
 
 **Chunk size** (**Verified**: FUN_140874930 calls `setPatchSize(value ? 64 : 16)`; the plugin's `setPatchSize`): each patch is
-`size + 1` vertices per side and the quadtree's maximum depth is `15 − (bits of size)`: **10 for Small, 8 for Large**. With the
-terrain scale 294912 the leaf is 288 units (Small) or 1152 units (Large), and in both cases the finest grid step is 18 units: Large
+`size + 1` vertices per side and the quadtree's maximum depth is `15 − (bits of size)`: **10 for Small, 8 for Large**
+(Verified). Taking the depth as counted from 0 at the root (**Observed**: the depth field's origin was not traced, but the result
+matches the heightmap's full sample spacing in [terrain.md](terrain.md)), with the terrain scale 294912 the leaf is 288 units
+(Small) or 1152 units (Large), and in both cases the finest grid step is 18 units: Large
 draws 16 × fewer, 16 × bigger patches over two fewer quadtree levels, which matches the tooltip (faster at long range, more video
 memory per patch). Other plugin parameters are fixed: `setTerrainScale(294912, 9800)`, `setMaterialDistance(30000)` (stored
 squared), `setOgreBuildLimits(250, 100)` ([terrain.md](terrain.md#terrain-lod)).
@@ -111,9 +118,10 @@ from the exe):
 - The DDS is rewritten in memory: only block-compressed files whose FourCC is `DXT*` (so DXT1 to DXT5; `DX10` headers and
   uncompressed formats are left alone), not cube maps (caps2 bit 0x200) and not volumes (bit 0x200000). Per dropped level the top
   mip's bytes are skipped (w × h bytes, half for DXT1), width and height halve and the mip count drops by one; it stops early
-  when fewer than 2 mips remain or a side would go below 5.
+  when, before a drop, fewer than 2 mips remain or a side is already below 5.
 - The decal system compensates when it reads texture sizes back (FUN_1408dfaf0 shifts the reported size of `.dds` decal sources
-  by the same N, with the same `_LO.` / `_HI.` rule), so decal atlases keep their layout (**Observed**: the purpose is inferred).
+  left by N after the `_LO.` / `_HI.` adjustments, without the `Landscape` group test), so decal atlases keep their layout
+  (**Observed**: the purpose is inferred).
 - **Memory budget** (**Verified**, FUN_140816d90; slot checked against OgreMain's RTTI): every resource manager gets
   `setMemoryBudget(1 GiB)`, then the TextureManager gets **2 GiB at 0** and **1.5 GiB at 1**; 2 to 4 keep 1 GiB.
 - Label note (**Observed**): `main.pot` lists "Mega-high (danger!)" at `options.cpp:521`, but the exe's first item is
@@ -285,6 +293,7 @@ All floats, sliders 0 … 1, **missing → 0.5**, applied when the options close
 | `User save location` | bool | 1 (see save.md) | User Save Location | Saves in `%LOCALAPPDATA%\kenshi\save` (1) or the install (0); [save.md](save.md) |
 | `continue` | string | — | none | Save the "Continue" button loads; written after every save ([save.md](save.md)) |
 | `autosaveindex` | int | 0 | none | Rotating autosave slot ([save.md](save.md#autosave-and-quicksave)) |
+| `editor` | string, a mod name | none | none (level editor) | Written when the in-game level editor saves a mod ("Save Mod", FUN_140777ce0); read when the editor opens to preselect that mod in its mod list (FUN_14077be90; an unknown name selects the first). Absent from the install's file (the editor was never used) |
 
 **`attacks`** (**Observed**, FUN_140286a70): sets a countdown drawn uniformly from a range per level: Bombardment 0, High 6 … 48,
 Normal 32 … 96, Fewer 72 … 144, Rare 130 … 188; Never leaves it unset. The unit (presumably in-game hours) is **Unknown**. The
@@ -292,8 +301,9 @@ tooltip says the old default was High.
 
 ## kenshi.cfg (Ogre's config)
 
-`kenshi.cfg` is Ogre's own configuration file: FUN_140818970 creates `Ogre::Root` with `Plugins_x64.cfg` and `kenshi.cfg`, and
-the game calls `Root::restoreConfig` / `saveConfig` on it (**Verified**). Format: `Render System=<name>` then a
+`kenshi.cfg` is Ogre's own configuration file: the renderer set-up FUN_140818970 references `Plugins_x64.cfg` and `kenshi.cfg`
+(**Observed**: the strings, presumably the `Ogre::Root` constructor's plugin and config file names; the call was not traced), and
+the game calls `Root::restoreConfig` / `saveConfig` (**Verified**), which use that config file. Format: `Render System=<name>` then a
 `[<render system>]` section of that system's options. If `restoreConfig` fails the game picks `Direct3D11 Rendering Subsystem`
 (or the first available renderer) and saves (FUN_1408149a0).
 
