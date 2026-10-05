@@ -370,6 +370,31 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// </summary>
     public int DrawMeshes(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth = false)
     {
+        long t0 = MeshTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        int draws = DrawMeshesCore(meshes, depth);
+        if (MeshTiming)
+        {
+            long dt = System.Diagnostics.Stopwatch.GetTimestamp() - t0;
+            if (depth) { meshDepthTicks += dt; meshDepthCalls++; } else { meshColourTicks += dt; meshColourCalls++; }
+            meshDraws += draws;
+        }
+        return draws;
+    }
+
+    /// <summary><c>MEITOU_MESH_TIMING=1</c>: the CPU time of <see cref="DrawMeshes"/> (colour and depth), printed when the renderer is disposed.</summary>
+    static readonly bool MeshTiming = Environment.GetEnvironmentVariable("MEITOU_MESH_TIMING") == "1";
+    long meshColourTicks, meshDepthTicks, meshColourCalls, meshDepthCalls, meshDraws;
+
+    void ReportMeshTiming()
+    {
+        if (!MeshTiming) return;
+        double ms(long t) => t * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"terrain meshes  colour {meshColourCalls} calls {ms(meshColourTicks):F2} ms ({(meshColourCalls > 0 ? ms(meshColourTicks) * 1000 / meshColourCalls : 0):F1} us/call), depth {meshDepthCalls} calls {ms(meshDepthTicks):F2} ms ({(meshDepthCalls > 0 ? ms(meshDepthTicks) * 1000 / meshDepthCalls : 0):F1} us/call), {meshDraws} draws"));
+    }
+
+    int DrawMeshesCore(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth)
+    {
         if (depth) return DrawMeshesDepth(meshes);
         if (!GroupMeshes(meshes, biomes: true)) return 0;
         Apply(meshProgram, heightNormals: false);
@@ -517,6 +542,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     public void Dispose()
     {
+        ReportMeshTiming();
         if (depthPatchProgram != 0) { gl.DeleteProgram(depthPatchProgram); gl.DeleteProgram(depthMeshProgram); }
         if (meshInstanceBuffer != 0) gl.DeleteBuffer(meshInstanceBuffer);
         gl.DeleteVertexArray(gridVao);

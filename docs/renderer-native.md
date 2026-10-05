@@ -906,6 +906,17 @@ the base build (master `27be7c2`, itself identical in two runs), and validation 
   with the invalidation removed (checked).
 - Step 5: done. `MEITOU_VK_VALIDATION=sync|gpu` through `VK_EXT_layer_settings`, debug utils without validation, the pipeline cache
   in `%LOCALAPPDATA%\Meitou\pipeline-cache.bin`.
+- Master `cec04c8` (VkGl counters and phase timers) merged; native segments add their draws, pipeline binds and pushes to `VkGlStats`
+  at `EndNative`, so the pass meter keeps counting ported draws.
+- Step 6: done. VkGl logs each draw (`VkGl.DrawLog.cs`) in `CommandList`'s format; VkGl's per-frame rings are registered as host
+  memory, so per-frame bytes are logged by hash on both sides. `meitou-tools draw-log-diff a b [--keep-handles]` renames handles by
+  first use, ignores labels and comment lines, prints the first differing draws field by field and counts differing draws per program
+  and target format. A test draws one triangle through VkGl and the same through `LegacyProgram` with exported objects and checks
+  the two lines are equal. **Run-to-run noise:** two runs of the same build differ in 30 of 873 draws at the rock view (13:00): 15
+  shadow-depth and 15 colour draws of one instanced mesh program (84-byte vertices, placements at locations 7 to 10), whose batch
+  contents and order follow streaming; the pictures are identical. Compare a port's logs per program (its own lines are stable).
+- Additive exports for ports: `CurrentState()` (GL's fixed-function state as VkGl would apply it, with `DrawState.Pipeline` and
+  `DrawState.Record`) and `VertexArray(vao)` (a VAO's attributes and element buffer).
 
 After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the

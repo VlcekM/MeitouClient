@@ -14,6 +14,35 @@ public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, Attach
 }
 
 /// <summary>
+/// GL's fixed-function state as VkGl would turn it into a pipeline and dynamic state for a draw into <see cref="IGlInterop.CurrentTargets"/>
+/// now (<see cref="IGlInterop.CurrentState"/>): depth test and write only with a depth attachment (write only while testing), blend only
+/// with a colour attachment, alpha-to-coverage only with more than one sample, depth clamp only where the device has it.
+/// </summary>
+public sealed record DrawState(CullModeFlags Cull, FrontFace Front, bool DepthTest, bool DepthWrite, CompareOp Compare,
+    bool BiasEnable, float BiasConstant, float BiasSlope, BlendState Blend, ColorComponentFlags ColourMask, Silk.NET.Vulkan.PolygonMode Polygon,
+    bool AlphaToCoverage, bool DepthClamp)
+{
+    /// <summary>The pipeline VkGl would make for <paramref name="program"/> with this state.</summary>
+    public GraphicsPipelineDesc Pipeline(ShaderProgram program, VertexLayout vertex, PrimitiveTopology topology, AttachmentFormats targets, string name = "") =>
+        new(program, vertex, topology, targets, Blend, ColourMask, Polygon, AlphaToCoverage, DepthClamp, name);
+
+    /// <summary>Records the dynamic state: <paramref name="t"/>'s viewport and scissor, and this cull, front face, depth and bias
+    /// (<paramref name="front"/> overrides the front face, for a draw that turns the winding round).</summary>
+    public void Record(CommandList cmd, PassTargets t, FrontFace? front = null)
+    {
+        cmd.SetViewport(t.Viewport);
+        cmd.SetScissor(t.Scissor);
+        cmd.SetRaster(Cull, front ?? Front);
+        cmd.SetDepth(DepthTest, DepthWrite, Compare);
+        cmd.SetDepthBias(BiasEnable, BiasConstant, BiasSlope);
+    }
+}
+
+/// <summary>A GL vertex array as VkGl would feed it (<see cref="IGlInterop.VertexArray"/>): per location the attribute (null when disabled)
+/// and the element buffer (null binding when none).</summary>
+public sealed record VertexArrayBindings(LegacyProgram.Attribute?[] Attributes, BufferBinding Elements);
+
+/// <summary>
 /// The coexistence seam (docs/renderer-native.md 4.2). Implemented by VkGl; renderers reach it as <see cref="GpuContext.Interop"/> while VkGl
 /// exists (null afterwards). Native segments record into VkGl's command buffer of the same frame, in call order.
 /// </summary>
@@ -35,6 +64,12 @@ public interface IGlInterop
 
     /// <summary>The bound draw framebuffer's attachments and GL's viewport and scissor (the GL binding is the truth while VkGl code remains).</summary>
     PassTargets CurrentTargets();
+
+    /// <summary>GL's fixed-function state as VkGl would apply it to a draw into <see cref="CurrentTargets"/> now.</summary>
+    DrawState CurrentState();
+
+    /// <summary>A GL vertex array's attributes and element buffer, marked used by this frame (as a VkGl draw with it would).</summary>
+    VertexArrayBindings VertexArray(uint glVertexArray);
 
     /// <summary>The image behind a GL texture (non-owning; valid while the GL texture keeps its storage).</summary>
     Texture Texture(uint glTexture);

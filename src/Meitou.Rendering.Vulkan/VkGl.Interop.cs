@@ -10,6 +10,7 @@ public sealed unsafe partial class VkGl : IGlInterop
     // Between BeginNative and EndNative: IGl calls that record or flush throw (GuardNative).
     bool nativeOpen;
     CommandList? nativeList;
+    (long Draws, long Pipelines, long Pushes) nativeStart;
 
     void GuardNative()
     {
@@ -30,6 +31,8 @@ public sealed unsafe partial class VkGl : IGlInterop
         list.Log?.Note($"native {label}");
         nativeOpen = true;
         nativeList = list;
+        var s = list.Stats;
+        nativeStart = (s.Draws, s.PipelinesBound, s.DescriptorPushes);
         return list;
     }
 
@@ -37,6 +40,11 @@ public sealed unsafe partial class VkGl : IGlInterop
     {
         if (!nativeOpen || !ReferenceEquals(cmd, nativeList)) throw new InvalidOperationException("EndNative without a matching BeginNative");
         cmd.EndLabel();
+        // The segment's draws count in VkGl's totals too, so the pass meter and the stats line see them (the native side's own are in GpuStats).
+        var s = cmd.Stats;
+        Stats.Draws += s.Draws - nativeStart.Draws;
+        Stats.PipelineBinds += s.PipelinesBound - nativeStart.Pipelines;
+        Stats.DescriptorPushes += s.DescriptorPushes - nativeStart.Pushes;
         nativeOpen = false;
         nativeList = null;
         FullBarrier(Cmd);
@@ -73,6 +81,50 @@ public sealed unsafe partial class VkGl : IGlInterop
         int x1 = Math.Min(sc.X + sc.W, w), y1 = Math.Min(sc.Y + sc.H, h);
         return new PassTargets(Target(colour), Target(depth), formats, w, h, new Viewport(vp.X, vp.Y, vp.W, vp.H, 0, 1),
             new Rect2D(new Offset2D(x0, y0), new Extent2D((uint)Math.Max(x1 - x0, 0), (uint)Math.Max(y1 - y0, 0))));
+    }
+
+    public DrawState CurrentState()
+    {
+        var (colour, depth) = DrawTargets();
+        int samples = (colour ?? depth)?.Texture.Samples ?? 1;
+        // As PrepareDraw's pipeline key and SetDynamicState.
+        var cull = !cullFace ? CullModeFlags.None : cullMode switch
+        {
+            TriangleFace.Front => CullModeFlags.FrontBit,
+            TriangleFace.FrontAndBack => CullModeFlags.FrontAndBack,
+            _ => CullModeFlags.BackBit,
+        };
+        bool test = depthTest && depth is not null;
+        bool on = blend && colour is not null;
+        var blendState = new BlendState(on, Factor(on ? blendSrc : BlendingFactor.One), Factor(on ? blendDst : BlendingFactor.Zero));
+        var mask = (ColorComponentFlags)((colourMask.R ? 1 : 0) | (colourMask.G ? 2 : 0) | (colourMask.B ? 4 : 0) | (colourMask.A ? 8 : 0));
+        bool line = polygonMode == Meitou.Rendering.Gpu.PolygonMode.Line;
+        return new DrawState(cull, GlConventions.FrontFace(frontFace), test, test && depthWrite, Compare(depthFunc),
+            line ? offsetLine : offsetFill, offsetUnits, offsetFactor, blendState, mask,
+            line ? Silk.NET.Vulkan.PolygonMode.Line : Silk.NET.Vulkan.PolygonMode.Fill, alphaToCoverage && samples > 1, depthClamp && device.DepthClamp);
+    }
+
+    public VertexArrayBindings VertexArray(uint glVertexArray)
+    {
+        var vao = glVertexArray != 0 && vertexArrays.TryGetValue(glVertexArray, out var v) ? v : defaultVao;
+        var attributes = new LegacyProgram.Attribute?[vao.Attribs.Length];
+        for (int loc = 0; loc < attributes.Length; loc++)
+        {
+            ref var a = ref vao.Attribs[loc];
+            if (!a.Enabled) continue;
+            // As PrepareDraw: an enabled attribute without storage keeps its format and stride but reads the stand-in.
+            BufferBinding binding = buffers.TryGetValue(a.Buffer, out var vb) && vb.Defined
+                ? Use(vb) is var (bb, bo) ? new BufferBinding(bb, bo + (ulong)a.Offset) : default
+                : new BufferBinding(defaults.DummyVertex.Buffer, 0);
+            attributes[loc] = new LegacyProgram.Attribute(binding, AttribFormat(in a), a.Stride == 0 ? AttribBytes(in a) : a.Stride, a.Divisor != 0);
+        }
+        BufferBinding elements = default;
+        if (buffers.TryGetValue(vao.ElementBuffer, out var eb) && eb.Defined)
+        {
+            var (buffer, offset) = Use(eb);
+            elements = new BufferBinding(buffer, offset, (ulong)eb.Size);
+        }
+        return new VertexArrayBindings(attributes, elements);
     }
 
     // ---- export ----

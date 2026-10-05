@@ -80,6 +80,7 @@ public sealed unsafe partial class VkGl
         if (count == 0 || instancecount == 0 || !PrepareDraw(mode)) return;
         Stats.DrawTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
         long nt = NatStart(); vk.CmdDraw(cmd, count, instancecount, (uint)first, 0); NatEnd(8, nt);
+        if (Context.Log is { } log) LogDraw(log, false, count, instancecount, (uint)first);
         Stats.Draws++;
         Lap(8);
     }
@@ -121,6 +122,7 @@ public sealed unsafe partial class VkGl
         var (buffer, offset) = Use(eb);
         long nt = NatStart(); vk.CmdBindIndexBuffer(cmd, buffer, offset + (ulong)(nint)indices, indexType);
         vk.CmdDrawIndexed(cmd, count, instancecount, 0, 0, 0); NatEnd(8, nt);
+        if (Context.Log is { } log) LogDraw(log, true, count, instancecount, 0, buffer, offset + (ulong)(nint)indices, indexType);
         Stats.Draws++;
         Stats.IndexBufferBinds++;
         Lap(8);
@@ -178,6 +180,7 @@ public sealed unsafe partial class VkGl
         SetDynamicState(cb);
         Lap(3);
         BindResources(cb, p);
+        if (Context.Log is not null) LogPrepare(p, in key);
 
         // Vertex buffers: one binding per input location.
         for (int i = 0; i < locs.Length; i++)
@@ -194,6 +197,7 @@ public sealed unsafe partial class VkGl
             else (buffer, offset) = (defaults.DummyVertex.Buffer, GlConventions.DummyVertexOffset(p.InputKinds[i]));
             long nt = NatStart(); vk.CmdBindVertexBuffers(cb, (uint)loc, 1, &buffer, &offset); NatEnd(7, nt);
             Stats.VertexBufferBinds++;
+            if (Context.Log is not null) LogVertexBuffer((uint)loc, buffer, offset);
         }
         Lap(7);
         return true;
@@ -303,6 +307,7 @@ public sealed unsafe partial class VkGl
         var blocks = p.BlockList;
         var samplerList = p.SamplerList;
         int count = blocks.Length + samplerList.Length;
+        if (Context.Log is not null) logRecord.Set0.Clear();
         if (count == 0) { Lap(5); return; }
         var writes = stackalloc WriteDescriptorSet[count];
         var bufferInfos = stackalloc DescriptorBufferInfo[blocks.Length + 1];
@@ -341,6 +346,7 @@ public sealed unsafe partial class VkGl
                 DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &imageInfos[i],
             };
         }
+        if (Context.Log is { } log0) LogSet0(log0, new ReadOnlySpan<WriteDescriptorSet>(writes, w));
         if (same) { Stats.PushSkips++; Lap(5); return; }
         Lap(5);
         p.LastPushEpoch = pushEpoch;

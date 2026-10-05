@@ -209,6 +209,78 @@ public class SeamTests
         ExpectClean(d!);
     }
 
+    const string Triangle = """
+        #version 330 core
+        layout(location = 0) in vec2 aPos;
+        uniform vec2 uOffset;
+        void main() { gl_Position = vec4(aPos + uOffset, 0.5, 1.0); }
+        """;
+
+    [Fact]
+    public unsafe void A_port_logs_the_same_draw_as_VkGl()
+    {
+        using var d = TryCreate(sync: false);
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        using (var gl = new VkGl(d!))
+        {
+            IGlInterop interop = gl;
+            var ctx = gl.Context;
+            uint blue = WorldGl.Texture2D(gl, 2, 2, new byte[16], repeat: false, mipmaps: false);
+            uint glProgram = WorldGl.Program(gl, Triangle, Sampled);
+            using var lp = LegacyProgram.Create(ctx, Triangle, Sampled, "log port");
+            float[] vertices = [-1, -1, 1, -1, -1, 1];
+            uint vao = gl.GenVertexArray(), vbo = gl.GenBuffer();
+            gl.BindVertexArray(vao);
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+            gl.BufferData<float>(BufferTargetARB.ArrayBuffer, vertices, BufferUsageARB.StaticDraw);
+            gl.EnableVertexAttribArray(0);
+            gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 8, (void*)0);
+            Target(gl);
+            gl.ActiveTexture(TextureUnit.Texture0);
+            gl.BindTexture(TextureTarget.Texture2D, blue);
+            gl.Clear(ClearBufferMask.ColorBufferBit);
+
+            var writer = new StringWriter();
+            ctx.Log = new DrawLog(writer, ctx.HostMemory);
+            ctx.Frame.Commands.Log = ctx.Log;
+
+            // The GL draw.
+            gl.UseProgram(glProgram);
+            gl.Uniform2(gl.GetUniformLocation(glProgram, "uOffset"), 0.25f, 0f);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+
+            // The same draw ported: VkGl's buffer, texture and targets through the interop, GL's state set explicitly.
+            lp.Set(lp.Uniform("uOffset"), 0.25f, 0f);
+            var cmd = interop.BeginNative("port");
+            var t = interop.CurrentTargets();
+            cmd.BeginRendering(t.Rendering);
+            LegacyProgram.Attribute?[] attributes = [new LegacyProgram.Attribute(interop.Buffer(vbo), Format.R32G32Sfloat, 8, false)];
+            cmd.BindPipeline(ctx.Pipelines.Get(new GraphicsPipelineDesc(lp.Program, lp.VertexLayout(attributes), PrimitiveTopology.TriangleList, t.Formats,
+                BlendState.Off, ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit,
+                Silk.NET.Vulkan.PolygonMode.Fill, false, false)));
+            cmd.SetViewport(t.Viewport);
+            cmd.SetScissor(t.Scissor);
+            cmd.SetRaster(CullModeFlags.None, FrontFace.Clockwise);
+            cmd.SetDepth(false, false, CompareOp.Less);
+            cmd.SetDepthBias(false, 0, 0);
+            lp.Bind(lp.Sampler("uTex"), interop.SampledUnit(0, lp.SamplerInfo(lp.Sampler("uTex"))));
+            lp.BindVertices(cmd, attributes);
+            lp.Flush(cmd);
+            cmd.Draw(3);
+            cmd.EndRendering();
+            interop.EndNative(cmd);
+
+            ctx.Log.Dispose();
+            ctx.Log = null;
+            ctx.Frame.Commands.Log = null;
+            var lines = writer.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(l => l.StartsWith('#')).ToArray();
+            Assert.Equal(2, lines.Length);
+            static string Body(string line) => line[(line.IndexOf("] ", StringComparison.Ordinal) + 2)..];
+            Assert.Equal(Body(lines[0]), Body(lines[1]));
+        }
+        ExpectClean(d!);
+    }
+
     [Fact]
     public void Exports_are_VkGl_own_objects()
     {
