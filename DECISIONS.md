@@ -109,7 +109,11 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     S3TC upload no longer copies a level of zeros before filling it in slabs (a GL-era way to allocate), and the "DXT5 normal" test runs
     on the worker. Result at 1600x900 (four interleaved runs each, medians): p50 4.15 -> 3.7 ms, p95 6.85 -> 5.4, p99 9.15 -> 7.0,
     max ~23 -> ~16.
-20. **Meitou shadows** (the `shadows` switch, F5; docs/formats/shadows.md "Meitou shadows"): cascades fitted from the camera's near
+20. **Shader bindings shifted after compiling; bundled shaderc pinned.** A Vulkan SDK on PATH supplied a newer `shaderc_shared`
+    whose glslang puts combined image samplers in a resource kind shaderc's binding-base API cannot reach, so fragment samplers
+    landed at 0.. (docs/engine.md "Vulkan backend"). Bindings are now offset per stage by patching the SPIR-V, which holds for any
+    shaderc, and the compiler loads the one it ships. Shader cache version 3 (2 had been written by experiments with other output).
+21. **Meitou shadows** (the `shadows` switch, F5; docs/formats/shadows.md "Meitou shadows"): cascades fitted from the camera's near
     plane to the range (the game's halved splits leave two of four cascades in front of the near plane in most views), drawn on a
     staggered schedule (CPU is the bottleneck: the far cascades' foliage casters cost 20+ ms a frame in wide views), a soft receiver
     with a blocker search, and the terrain's own shadow beyond the range from a per-sun-direction sweep of the world height grid

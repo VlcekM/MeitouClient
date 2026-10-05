@@ -96,7 +96,15 @@ count on exit.
   validation layer on (the Vulkan SDK's layer must be installed).
 - **Shaders** (`Shaders/`): the renderers' GLSL 3.30 compiled to SPIR-V by shaderc (relaxed Vulkan rules: loose uniforms in
   `gl_DefaultUniformBlock`, automatic bindings, vertex 0.., fragment 32..), varyings given locations by name, reflected from
-  the SPIR-V (blocks, members, samplers, inputs). Compiled programs are cached on disk (`%LOCALAPPDATA%\Meitou\shader-cache`).
+  the SPIR-V (blocks, members, samplers, inputs). Compiled programs are cached on disk (`%LOCALAPPDATA%\Meitou\shader-cache`;
+  `GlslProgramCompiler.CacheVersion` is in the key, bump it when the output for the same source can change).
+  The stage offset is **not** set through shaderc's per-kind binding bases: every stage compiles with all bases 0 (the
+  auto-binder gives each resource of a set its own slot) and the compiler then adds the stage base to each `Binding`
+  decoration. Reason (2026-10-05): with the Vulkan SDK 1.4.363 `Bin` on PATH, its `shaderc_shared.dll` was loaded instead of
+  the NuGet one; its glslang has a resource kind for combined image samplers (`EResCombinedSampler`) that
+  `shaderc_uniform_kind` cannot address, so fragment `sampler2D`s got 0.. and clashed with the vertex stage (terrain drew
+  flat, rocks floated; 21 tests failed; old cached SPIR-V hid it). The compiler also loads the shaderc it ships
+  (`NativeLibrary.TryLoad` against the Silk assembly, which resolves `runtimes/<rid>/native`, not PATH).
   At link the default blocks are moved to descriptor set 1 (a decoration patch) as dynamic uniform buffers.
 - **Coordinates: nothing is flipped while drawing.** Vulkan's framebuffer row 0 is where GL's row 0 is (NDC y = −1), so render
   targets, `gl_FragCoord` and texture coordinates mean the same; GL's counter-clockwise front faces are clockwise in Vulkan

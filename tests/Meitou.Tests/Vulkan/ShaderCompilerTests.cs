@@ -37,6 +37,8 @@ public class ShaderCompilerTests
         yield return ("building lod depth", BuildingLodShaders.Vertex(), ShadowShaders.MeshDepthFragment);
         yield return ("shadow debug", ShadowShaders.FullscreenVertex, ShadowShaders.DebugFragment);
         yield return ("shadow atlas", ShadowShaders.FullscreenVertex, ShadowShaders.AtlasFragment);
+        yield return ("meitou shadow terrain sweep", ShadowShaders.FullscreenVertex, MeitouShadowShaders.SweepFragment);
+        yield return ("meitou shadow blockers", ShadowShaders.FullscreenVertex, MeitouShadowShaders.BlockerFragment);
     }
 
     public static TheoryData<string> PairNames()
