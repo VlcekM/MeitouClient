@@ -19,6 +19,8 @@ public sealed class FoliageZone
     public List<FoliageGrassPatch> Grass { get; } = [];
     /// <summary>Instances of meshes with a <c>building type</c> (mineable rocks), also in <see cref="Instances"/>.</summary>
     public int Resources { get; set; }
+    /// <summary>False when only the far layers were placed (<see cref="FoliageLayout.Place"/> with <c>farOnly</c>): no grass, no MEDIUM or CLOSE meshes.</summary>
+    public bool Complete { get; set; } = true;
 }
 
 /// <summary>What the placer needs to know about a zone besides its records.</summary>
@@ -58,24 +60,44 @@ public static class FoliageLayout
     /// <summary>Overlay R + G above which a point counts as a grass area (<c>limit to grass areas</c>).</summary>
     public const int GrassAreaThreshold = 149;
 
-    public static FoliageZone Place(FoliageZoneInput input, FoliageCatalog catalog)
+    /// <summary>A mesh layer drawn beyond the MEDIUM range: visibility FAR or FEATURE (the far tier of the viewer's zone layout).</summary>
+    public static bool IsFarLayer(FoliageLayer layer) => !layer.IsGrass && layer.Visibility >= FoliageVisibility.Far;
+
+    /// <summary>
+    /// Whether a mesh layer's placements depend only on its own records, the ground, the roads, the biome map and the towns: none of its meshes
+    /// is <c>limit to grass areas</c>, the only rule that reads what other layers wrote (grass coverage, grass spots; children never test it).
+    /// The layer reseeds its own generator, so such a layer places the same instances whether or not the other layers are placed.
+    /// </summary>
+    public static bool StandsAlone(FoliageLayer layer) => !layer.IsGrass && layer.Meshes.All(m => !m.Mesh.LimitToGrassAreas);
+
+    /// <summary>
+    /// Places a zone's foliage. With <paramref name="farOnly"/> only the far layers (<see cref="IsFarLayer"/>) are placed, without the grass
+    /// coverage (the expensive part): exactly the far instances of the full layout, as long as every far layer of the zone
+    /// <see cref="StandsAlone"/>; otherwise the whole zone is placed. <see cref="FoliageZone.Complete"/> says which it was.
+    /// </summary>
+    public static FoliageZone Place(FoliageZoneInput input, FoliageCatalog catalog, bool farOnly = false)
     {
         var zone = new FoliageZone { Zone = input.Zone };
         var overlay = input.Overlay;
         float x0 = input.Ground.X0, z0 = input.Ground.Z0, x1 = x0 + WorldLayout.ZoneSize, z1 = z0 + WorldLayout.ZoneSize;
         bool several = input.Biomes.Count >= 2;
 
-        // Grass coverage: R is regenerated from every grass type of every biome in the zone (the larger value wins).
-        overlay.ClearGrass();
-        foreach (uint biome in input.Biomes)
-            foreach (var layer in catalog.LayersOf(biome))
-                foreach (var (grass, _) in layer.Grass)
-                    Coverage(input, grass, several ? biome : null);
-
         // Layers in biome order, grass layers first (each picks the first remaining grass layer, then the first remaining).
         var work = new List<(uint Biome, FoliageLayer Layer)>();
         foreach (uint biome in input.Biomes)
             foreach (var layer in catalog.LayersOf(biome)) work.Add((biome, layer));
+        if (farOnly && work.Any(w => IsFarLayer(w.Layer) && !StandsAlone(w.Layer))) farOnly = false;
+        zone.Complete = !farOnly;
+        if (farOnly) work = [.. work.Where(w => IsFarLayer(w.Layer))];
+        else
+        {
+            // Grass coverage: R is regenerated from every grass type of every biome in the zone (the larger value wins).
+            overlay.ClearGrass();
+            foreach (uint biome in input.Biomes)
+                foreach (var layer in catalog.LayersOf(biome))
+                    foreach (var (grass, _) in layer.Grass)
+                        Coverage(input, grass, several ? biome : null);
+        }
         work = [.. work.Where(w => w.Layer.IsGrass), .. work.Where(w => !w.Layer.IsGrass)];
 
         var rng = new FoliageRandom(0);

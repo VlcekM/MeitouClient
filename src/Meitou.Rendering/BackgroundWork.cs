@@ -12,28 +12,48 @@ public static class BackgroundWork
 {
     sealed class Scheduler : TaskScheduler
     {
-        readonly BlockingCollection<Task> queue = [];
+        readonly BlockingCollection<Task> queue = [], urgent = [];
 
         public Scheduler(int threads)
         {
+            // A free thread takes the oldest urgent job first (TakeFromAny tries the collections in order), then the oldest other one.
+            var both = new[] { urgent, queue };
             for (int i = 0; i < threads; i++)
                 new Thread(() =>
                 {
-                    foreach (var task in queue.GetConsumingEnumerable()) TryExecuteTask(task);
+                    while (true)
+                    {
+                        BlockingCollection<Task>.TakeFromAny(both, out var task);
+                        TryExecuteTask(task!);
+                    }
                 })
                 { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = $"meitou-stream-{i}" }.Start();
         }
 
-        protected override void QueueTask(Task task) => queue.Add(task);
+        protected override void QueueTask(Task task) => (task.AsyncState is UrgentMark ? urgent : queue).Add(task);
         protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => false;
-        protected override IEnumerable<Task> GetScheduledTasks() => queue.ToArray();
+        protected override IEnumerable<Task> GetScheduledTasks() => [.. urgent.ToArray(), .. queue.ToArray()];
         public override int MaximumConcurrencyLevel => Math.Max(2, Environment.ProcessorCount - 3);
     }
+
+    /// <summary>The state object that marks a job as urgent (<see cref="RunUrgent"/>).</summary>
+    sealed class UrgentMark;
+    static readonly UrgentMark Urgent = new();
 
     static readonly Scheduler scheduler = new(Math.Max(2, Environment.ProcessorCount - 3));
 
     public static Task<T> Run<T>(Func<T> work, [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) =>
         Task.Factory.StartNew(Measure ? Measured(work, file, line) : work, CancellationToken.None, TaskCreationOptions.None, scheduler);
+
+    /// <summary>
+    /// Like <see cref="Run{T}(Func{T}, string, int)"/>, but ahead of every job that is not urgent: for work whose lateness shows near the camera
+    /// (the foliage's whole zone layouts), which otherwise waited behind a burst of grass pages and texture decodes.
+    /// </summary>
+    public static Task<T> RunUrgent<T>(Func<T> work, [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+    {
+        var body = Measure ? Measured(work, file, line) : work;
+        return Task.Factory.StartNew(_ => body(), Urgent, CancellationToken.None, TaskCreationOptions.None, scheduler);
+    }
     public static Task Run(Action work, [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) =>
         Task.Factory.StartNew(Measure ? () => { Measured(() => { work(); return 0; }, file, line)(); } : work, CancellationToken.None, TaskCreationOptions.None, scheduler);
 

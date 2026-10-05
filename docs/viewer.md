@@ -455,8 +455,38 @@ Interactive mode was smoke-tested only
 Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as Kenshi does
 ([formats/foliage.md](formats/foliage.md)); `--no-foliage` leaves them out and `F` toggles them.
 
-- **Placement** (`FoliageWorld`, `FoliageLayout`): zones within the longer of the mesh reach (the longest mesh layer range, 8000, x `RangeSetting`) and the grass reach (grass layers: 1000 x `GrassRangeSetting`) of the eye are laid out on up to three worker threads, nearest first, each worker with its own heightmap
-  handle, overlay tile cache and biome map; zones beyond that range + one zone are dropped. A zone takes 0.2–1.6 s.
+- **Placement** (`FoliageWorld`, `FoliageLayout`), in two tiers around the eye, each worker with its own heightmap handle, overlay
+  tile cache and biome map:
+  - *Whole* within the near reach (`NearReach`: the longest MEDIUM / CLOSE mesh layer range, 1000, x `RangeSetting`, or the grass
+    reach, 1000 x `GrassRangeSetting`, whichever is longer) plus half a zone of prefetch: every layer and the grass.
+  - *Far only* from there out to the far reach (`FarReach`: the longest mesh layer range, FAR 8000, x `RangeSetting`): only the FAR
+    layers, without the grass coverage, which is nine tenths of a zone's layout (`FoliageLayout.Place(..., farOnly: true)`; exact, see
+    [formats/foliage.md](formats/foliage.md#distances): the far instances are the same as the whole layout's). When such a zone comes
+    within the near reach it is laid out whole and its groups are replaced.
+  - Order: whole layouts first, then far ones, each nearest first, measured from the eye or from where the eye will be in 1.5 s
+    (its smoothed velocity; capped at two zones, and a jump such as a camera code is not a motion), so streaming keeps ahead of a
+    flying camera. The prediction adds whole layouts ahead; it never adds zones beyond the far reach. Up to three whole and three
+    far layouts at a time; whole layouts go to the front of the worker queue (`BackgroundWork.RunUrgent`), ahead of grass pages and
+    texture decodes. Zones beyond the far reach + one zone are dropped.
+  - Cost per zone (zone 18.22's 7 x 7 neighbourhood, one thread, **Observed** 2026-10-05): whole 70–100 ms, of which the grass coverage
+    65–77 ms; far only 8 ms (reading the ground). `Meitou.Data` is built optimised in Debug too (`-p:MeitouDebugData=true` to debug
+    it): unoptimised, a whole zone took 0.6 s and a far one 78 ms, too slow for any flying camera.
+  - Settling the view at zone 18.22 at x4 (183 zones in reach): 2.9 s and 48,849 placed meshes, against 44 s and 1,004,250 before the
+    tiers; the picture is identical (image-diff mean 0, max 0).
+- **Pop-in while flying** (fixed 2026-10-05; the user's report: junk, ruins and plants appearing right in front of the camera around
+  zone 18.22, whatever the sliders). Those are foliage (the layers TechRustyJunk, Tech_Wreckage01, Motor_WHOLE, Vast_Cluster_Pieces,
+  all MEDIUM: 4000 units at x4), not placed objects (none within 2500 units). The cause was zone layout falling behind the camera:
+  every zone out to 32000 units was laid out whole (0.6 s each in the Debug build, three at a time), so at Shift speed (about 8400
+  units a second at 1400 units above the ground) the zones under the camera were not laid out yet. `--fly-benchmark 1500
+  --fly-speed 140 --fly-radius 60000` from `--at -60564,-45142 --distance 1400 --pitch 25` prints a `pop-in` line (the nearest zone
+  within the near reach without its whole layout, per frame): before, 608 of 1500 frames had such a zone, nearest at distance 0 (the
+  camera's own zone; frames 200 to 900 nearly all); after, none (and within the far reach, only zones within 1 km of its edge are
+  missing at times, against zones at distance 0 before). At 2100 units a second neither had any. `MEITOU_FLY_SHOT=<frame>,...` saves
+  those frames of the flight as pictures (with `--screenshot`); frame 500 showed bare rock before and the plants, trees and rock
+  stacks after. Two draw-side faults were fixed with it: a zone's groups kept the range of the "Foliage draw distance" slider at the
+  time they were laid out (the slider only affected zones loaded afterwards; ranges are now taken at draw time), and a zone was
+  culled as a box with a fixed margin of 300 units, so a big mesh (the ruins reach 650+ units from their origin, FAR rock pillars
+  thousands) whose zone was out of view vanished while still on screen (the margin is now the zone's largest mesh reach).
 - **Meshes** (`FoliageRenderer`, `FoliageShaders`): each instance is drawn up to its layer's range (MEDIUM 1000, FAR
   8000, × `RangeSetting`, the game's `foliage range`), measured along the ground, and fades out with a dither over
   the last tenth of it (the game's 10-unit transition is too short to see). Instances of one mesh are one instanced

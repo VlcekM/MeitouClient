@@ -193,6 +193,17 @@ The order of work in a zone:
   range above, and the only `data/impostors/` reference is a temp-directory call on the grass page manager.
 - Distance is measured along the ground for grass: `foliage.hlsl` uses the eye's and vertex's X/Z (**Verified**).
   For mesh pages it is **Unknown**; the viewer uses X/Z too.
+- At the game's settings a MEDIUM layer (the junk, ruins, bushes and most rocks) ends 1000 units from the eye with a 10-unit
+  transition: the game itself shows them appearing that close (by design of its pages, **Verified** from the ranges above). The
+  viewer's "Foliage draw distance x" slider at x1 is that setting; its default is x4.
+- **Layers are independent of each other** except through `limit to grass areas` (**Verified**: the placement rules above, and
+  test `Far_only_layout_places_exactly_the_far_instances_of_the_whole_layout`, which compares the far layers placed alone with the
+  whole layout over 10 zones of the base game, instance for instance). Each mesh layer reseeds the generator from its own id and
+  the zone's corner; the only thing a layer reads that other layers write is overlay R + G (the grass coverage and the grass
+  spots), and only the top-level meshes of a `limit to grass areas` layer read it (children never test it). The roads (A), the
+  ground, the biome map and the towns are read-only. So a layer none of whose meshes limits to grass areas places the same
+  instances whether or not any other layer is placed. Of the 257 layers the BIOMES use, 5 have such a mesh; all 13 FAR layers
+  stand alone (base game, Observed by listing). The viewer uses this to lay out only the FAR layers of distant zones.
 
 ## Materials
 

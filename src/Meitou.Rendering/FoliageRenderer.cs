@@ -57,7 +57,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
     /// <summary>MEITOU_FOLIAGE_DEBUG: "nograss" or "nomeshes" leaves that part out (to measure the other).</summary>
     readonly bool debugNoGrass = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_DEBUG") == "nograss", debugNoMeshes = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_DEBUG") == "nomeshes";
     long instanceBufferSize;
-    int running;
+    /// <summary>Zone layouts in flight: whole ones and far-only ones, each limited to <see cref="workers"/> at a time.</summary>
+    int runningWhole, runningFar;
 
     public FoliageRenderer(IGl gl, GameInstall install, GameDatabase db, WorldLevelData levels, AssetLocator assets)
     {
@@ -76,6 +77,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         workers = Math.Clamp(Environment.ProcessorCount / 4, 1, 3);
         var used = catalog.ByBiome.Values.SelectMany(l => l).Distinct().ToList();
         MeshRange = used.Where(l => !l.IsGrass).Select(l => l.Range).DefaultIfEmpty(0).Max();
+        NearMeshRange = used.Where(l => !l.IsGrass && !FoliageLayout.IsFarLayer(l)).Select(l => l.Range).DefaultIfEmpty(0).Max();
         GrassMaxRange = used.Where(l => l.IsGrass).Select(l => l.Range).DefaultIfEmpty(0).Max();
         LoadMs = watch.Elapsed.TotalMilliseconds;
     }
@@ -104,10 +106,33 @@ public sealed unsafe class FoliageRenderer : IDisposable
     /// <summary>GPU time of the foliage draws of one frame (the main camera's draw, grass included), from timestamp queries a frame or two old.</summary>
     public double GpuMs { get; private set; }
     public double LastUpdateMs { get; private set; }
+    /// <summary>Streaming diagnostics (the fly benchmark), ground distances from the eye, infinity when none: the nearest zone within the
+    /// <see cref="NearReach"/> not laid out whole yet, the nearest within the <see cref="FarReach"/> not laid out at all, and the nearest zone
+    /// with a group in range whose mesh is not resident (since the last <see cref="Update"/>).</summary>
+    public float NearestIncompleteZone { get; private set; } = float.PositiveInfinity;
+    public float NearestUnlaidZone { get; private set; } = float.PositiveInfinity;
+    public float NearestMissingMesh { get; private set; } = float.PositiveInfinity;
+
+    /// <summary>Zones within this ground distance of the eye are laid out whole: the longest MEDIUM / CLOSE mesh layer range or grass range at the current settings.</summary>
+    public float NearReach => Math.Max(NearMeshRange * RangeSetting, GrassMaxRange * GrassRangeSetting);
+    /// <summary>Zones within this distance are laid out at least for their far layers (FAR, 8000 x the setting).</summary>
+    public float FarReach => Math.Max(MeshRange * RangeSetting, NearReach);
+    /// <summary>The longest range of a mesh layer that is not a far layer (<see cref="FoliageLayout.IsFarLayer"/>), at setting 1.</summary>
+    public float NearMeshRange { get; }
+    /// <summary>How far ahead (seconds of the eye's current motion) the layout looks; <see cref="MaxLookahead"/> caps the distance.</summary>
+    public float LookaheadSeconds { get; set; } = 1.5f;
+    const float MaxLookahead = 2 * WorldLayout.ZoneSize;
+    /// <summary>Whole layouts reach this much beyond the near reach even at rest, so a start at full speed (or a turn) finds the next ring ready.</summary>
+    const float PrefetchMargin = WorldLayout.ZoneSize / 2;
+    Vector3? lastEye;
+    double lastEyeTime;
+    Vector2 velocity;
+    readonly List<(ZoneCoordinate Zone, bool Whole, float Urgency)> wanted = [];
+    readonly List<ZoneState> dropping = [];
     public List<string> Messages { get; } = [];
 
     /// <summary>Work in flight: zones being laid out, grass pages, meshes decoding or uploading, textures decoding.</summary>
-    public int Pending => running + zonesWaiting + grassWaiting + decoding.Count + uploads.Count + textures.PendingCount + zones.Values.Sum(z => z.GrassRunning);
+    public int Pending => runningWhole + runningFar + zonesWaiting + grassWaiting + decoding.Count + uploads.Count + textures.PendingCount + zones.Values.Sum(z => z.GrassRunning);
 
     /// <summary>GPU memory held by foliage meshes, textures and grass pages.</summary>
     public long ResidentBytes => residentMeshBytes + textures.ResidentBytes + GrassBytes();
@@ -123,21 +148,25 @@ public sealed unsafe class FoliageRenderer : IDisposable
     {
         public required ZoneCoordinate Zone;
         public float X0, Z0;
-        public Task<(FoliageZone, FoliageGround?)>? Job;
-        public bool Ready;
+        public Task<(FoliageZone Zone, FoliageGround? Ground, PreparedZone Prepared)>? Job;
+        /// <summary>Laid out (at least the far layers); <see cref="Complete"/>: every layer, grass included. <see cref="JobWhole"/>: the job in flight is a whole layout.</summary>
+        public bool Ready, Complete, JobWhole;
         public List<Group> Groups = [];
         public FoliageGround? Ground;
         public List<FoliageGrassPatch> Patches = [];
         public readonly Dictionary<int, GrassPage> Pages = [];
         public int GrassRunning;
         public int Instances;
-        public PreparedZone? Prepared;
+        /// <summary>The cull box's margin (<see cref="ZoneMargin"/>) and what it was computed for.</summary>
+        public float Margin;
+        public int MarginStamp = -1;
+        public List<Group>? MarginGroups;
         /// <summary>Lowest and highest placed instance (for culling the zone as a box).</summary>
         public float MinY, MaxY;
     }
 
     /// <summary>A zone's instances grouped per (mesh, layer) with their arrays built, made on a worker.</summary>
-    sealed record PreparedGroup(FoliageMesh Mesh, FoliageLayer Layer, Matrix4x4[] Transforms, Vector3[] Positions, float[] Scales);
+    sealed record PreparedGroup(FoliageMesh Mesh, FoliageLayer Layer, Matrix4x4[] Transforms, Vector3[] Positions, float[] Scales, float MaxScale);
     sealed record PreparedZone(List<PreparedGroup> Groups, float MinY, float MaxY);
 
     static PreparedZone Prepare(FoliageZone zone)
@@ -146,7 +175,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         foreach (var g in zone.Instances.GroupBy(i => (i.Mesh, i.Layer)))
         {
             var list = g.ToList();
-            groups.Add(new PreparedGroup(g.Key.Mesh, g.Key.Layer, [.. list.Select(i => i.Transform)], [.. list.Select(i => i.Position)], [.. list.Select(i => i.Scale)]));
+            groups.Add(new PreparedGroup(g.Key.Mesh, g.Key.Layer, [.. list.Select(i => i.Transform)], [.. list.Select(i => i.Position)], [.. list.Select(i => i.Scale)], list.Max(i => i.Scale)));
         }
         return new PreparedZone(groups, zone.Instances.Count == 0 ? 0 : zone.Instances.Min(i => i.Position.Y), zone.Instances.Count == 0 ? 0 : zone.Instances.Max(i => i.Position.Y));
     }
@@ -155,7 +184,10 @@ public sealed unsafe class FoliageRenderer : IDisposable
     sealed class Group
     {
         public required MeshAsset Asset;
-        public required float Range, Band;
+        /// <summary>The layer's range at setting 1 and its transition: the drawn range follows the current <see cref="RangeSetting"/> (<see cref="RangeOf"/>).</summary>
+        public required float BaseRange, Transition;
+        /// <summary>The largest instance scale: how far a mesh's bounds can reach from its instance's position (the zone's cull box).</summary>
+        public required float MaxScale;
         public required Matrix4x4[] Transforms;
         public required Vector3[] Positions;
         public required float[] Scales;
@@ -185,30 +217,76 @@ public sealed unsafe class FoliageRenderer : IDisposable
         var watch = Stopwatch.StartNew();
         // Uploads get 2 ms a frame (texture decodes are never waited for) except while settling for a screenshot.
         double budget = settling ? 1e9 : 2.0;
-        // Zones are laid out as far as either the meshes or the grass reach; a zone only needs to exist for the longer of the two.
-        float meshRange = Math.Max(MeshRange * RangeSetting, GrassMaxRange * GrassRangeSetting);
+        // Two tiers (docs/viewer.md, "Foliage"): within the near reach (the MEDIUM layers and the grass) a zone is laid out whole; beyond it, out
+        // to the far reach, only its FAR layers, which skips the grass coverage, nine tenths of a zone's layout. A far zone is laid out whole once
+        // it comes within the near reach (its far instances are the same either way, FoliageLayout.Place).
+        float nearReach = NearReach, farReach = FarReach;
+        foreach (var state in zones.Values)
+        {
+            if (state.Job is not { IsCompleted: true } job) continue;
+            if (state.JobWhole) runningWhole--; else runningFar--;
+            state.Job = null;
+            try { Accept(state, job.Result); }
+            catch (AggregateException e) { Messages.Add($"foliage zone {state.Zone}: {e.InnerException?.Message ?? e.Message}"); state.Ready = state.Complete = true; }
+        }
+        dropping.Clear();
+        foreach (var state in zones.Values)
+            if (state.Job is null && ZoneDistance(state.Zone, eye) > farReach + WorldLayout.ZoneSize) dropping.Add(state);
+        foreach (var state in dropping) Drop(state);
 
-        // Zones in range: start the nearest missing ones, drop far ones.
-        var wanted = new List<(ZoneCoordinate Zone, float Distance)>();
+        // Look ahead along the motion: the work is ordered by how soon a zone becomes needed from where the eye will be in a second
+        // (LookaheadSeconds), and whole layouts are started for zones that will be within the near reach by then. A jump (a camera code,
+        // a teleport) is not a motion: the step is capped.
+        double now = clock.Elapsed.TotalSeconds;
+        if (lastEye is { } previous && now > lastEyeTime)
+        {
+            var step = new Vector2(eye.X - previous.X, eye.Z - previous.Z);
+            float dt = (float)(now - lastEyeTime);
+            var v = step.Length() > MaxLookahead ? Vector2.Zero : step / dt;
+            float k = Math.Clamp(dt / 0.25f, 0, 1);   // smoothed over about a quarter second
+            velocity = Vector2.Lerp(velocity, v, k);
+        }
+        (lastEye, lastEyeTime) = (eye, now);
+        var ahead = velocity * LookaheadSeconds;
+        if (ahead.Length() > MaxLookahead) ahead = Vector2.Normalize(ahead) * MaxLookahead;
+        var predicted = settling ? eye : eye + new Vector3(ahead.X, 0, ahead.Y);
+
+        wanted.Clear();
         var centre = WorldLayout.ZoneOf(eye.X, eye.Z);
-        int reach = (int)Math.Ceiling(meshRange / WorldLayout.ZoneSize) + 1;
+        int reach = (int)Math.Ceiling((farReach + ahead.Length()) / WorldLayout.ZoneSize) + 1;
+        NearestIncompleteZone = NearestUnlaidZone = float.PositiveInfinity;
         for (int dz = -reach; dz <= reach; dz++)
             for (int dx = -reach; dx <= reach; dx++)
             {
                 var z = new ZoneCoordinate(centre.X + dx, centre.Y + dz);
                 if (!z.IsInsideGrid) continue;
-                float d = ZoneDistance(z, eye);
-                if (d <= meshRange) wanted.Add((z, d));
+                float d = ZoneDistance(z, eye), dp = ZoneDistance(z, predicted), soon = Math.Min(d, dp);
+                if (d > farReach) continue;   // the prediction orders and adds whole layouts, it never adds zones
+                bool whole = soon <= nearReach + PrefetchMargin;
+                zones.TryGetValue(z, out var state);
+                if (state is not null && (state.Complete || !whole && state.Ready)) continue;   // has what it needs
+                if (d <= nearReach) NearestIncompleteZone = Math.Min(NearestIncompleteZone, d);
+                if (state is not { Ready: true }) NearestUnlaidZone = Math.Min(NearestUnlaidZone, d);
+                if (state?.Job is not null) continue;   // on its way
+                // Whole layouts first (what is missing there is in view near the eye), then the far ones, each nearest first (from the eye
+                // or where it will be, whichever is nearer).
+                wanted.Add((z, whole, whole ? soon : farReach + soon));
             }
-        foreach (var (zone, _) in wanted.OrderBy(w => w.Distance))
+        wanted.Sort((a, b) => a.Urgency.CompareTo(b.Urgency));
+        int started = 0;
+        foreach (var (zone, whole, _) in wanted)
         {
-            if (zones.ContainsKey(zone)) continue;
-            if (running >= workers) break;
-            var state = new ZoneState { Zone = zone };
-            var (x0, z0) = WorldLayout.ZoneOrigin(zone);
-            (state.X0, state.Z0) = ((float)x0, (float)z0);
-            running++;
-            state.Job = BackgroundWork.Run(() =>
+            if (whole ? runningWhole >= workers : runningFar >= workers) continue;
+            if (!zones.TryGetValue(zone, out var state))
+            {
+                var (x0, z0) = WorldLayout.ZoneOrigin(zone);
+                zones[zone] = state = new ZoneState { Zone = zone, X0 = (float)x0, Z0 = (float)z0 };
+            }
+            if (whole) runningWhole++; else runningFar++;
+            state.JobWhole = whole;
+            started++;
+            bool farOnly = !whole;
+            Func<(FoliageZone, FoliageGround?, PreparedZone)> job = () =>
             {
                 if (!worlds.TryTake(out var world))
                 {
@@ -217,26 +295,16 @@ public sealed unsafe class FoliageRenderer : IDisposable
                 }
                 try
                 {
-                    var loaded = world.Load(zone);
-                    state.Prepared = Prepare(loaded.Item1);
-                    return loaded;
+                    var (laid, ground) = world.Load(zone, farOnly);
+                    return (laid, ground, Prepare(laid));   // grouped on the worker: thousands of instances cost 15 to 20 ms on the render thread
                 }
                 finally { worlds.Add(world); }
-            });
-            zones[zone] = state;
+            };
+            // Whole layouts go ahead of the grass pages and texture decodes queued meanwhile (a dozen grass pages could hold every worker).
+            state.Job = whole ? BackgroundWork.RunUrgent(job) : BackgroundWork.Run(job);
         }
-        zonesWaiting = wanted.Count(w => !zones.ContainsKey(w.Zone));   // in range but not started yet (the workers are busy)
-        foreach (var state in zones.Values.ToList())
-        {
-            if (state.Job is { IsCompleted: true } job)
-            {
-                running--;
-                state.Job = null;
-                try { Accept(state, job.Result); }
-                catch (AggregateException e) { Messages.Add($"foliage zone {state.Zone}: {e.InnerException?.Message ?? e.Message}"); state.Ready = true; }
-            }
-            if (state.Job is null && ZoneDistance(state.Zone, eye) > meshRange + WorldLayout.ZoneSize) Drop(state);
-        }
+        zonesWaiting = wanted.Count - started;   // needed but not started yet (the workers are busy)
+        NearestMissingMesh = float.PositiveInfinity;
 
         double t0 = watch.Elapsed.TotalMilliseconds;
         UpdateGrass(eye);
@@ -292,25 +360,23 @@ public sealed unsafe class FoliageRenderer : IDisposable
         return MathF.Sqrt(dx * dx + dz * dz);
     }
 
-    void Accept(ZoneState state, (FoliageZone Zone, FoliageGround? Ground) result)
+    /// <summary>A finished layout: its groups replace the zone's (a whole layout after a far one brings the same far instances back with the rest).</summary>
+    void Accept(ZoneState state, (FoliageZone Zone, FoliageGround? Ground, PreparedZone Prepared) result)
     {
-        var (zone, ground) = result;
-        var prepared = state.Prepared ?? Prepare(zone);   // grouped on the worker: thousands of instances cost 15 to 20 ms here
+        var (zone, ground, prepared) = result;
+        var groups = new List<Group>(prepared.Groups.Count);
         foreach (var g in prepared.Groups)
-        {
-            var asset = AssetFor(g.Mesh);
-            float range = g.Layer.Range * RangeSetting;
-            state.Groups.Add(new Group
+            groups.Add(new Group
             {
-                Asset = asset,
-                Range = range,
-                // The game's transition is 10 units (100 for wind layers): too short to see; a tenth of the range instead.
-                Band = Math.Max(g.Layer.Transition, range * 0.1f),
+                Asset = AssetFor(g.Mesh),
+                BaseRange = g.Layer.Range,
+                Transition = g.Layer.Transition,
+                MaxScale = g.MaxScale,
                 Transforms = g.Transforms,
                 Positions = g.Positions,
                 Scales = g.Scales,
             });
-        }
+        state.Groups = groups;
         state.Instances = zone.Instances.Count;
         state.MinY = prepared.MinY;
         state.MaxY = prepared.MaxY;
@@ -322,6 +388,15 @@ public sealed unsafe class FoliageRenderer : IDisposable
             textures.Get(p.Grass.ColourMap, false);
         }
         state.Ready = true;
+        state.Complete = zone.Complete;
+    }
+
+    /// <summary>The range a group is drawn to at the current <see cref="RangeSetting"/>, and its fade band: the game's transition is 10 units
+    /// (100 for wind layers), too short to see, so a tenth of the range instead.</summary>
+    (float Range, float Band) RangeOf(Group g)
+    {
+        float range = g.BaseRange * RangeSetting;
+        return (range, Math.Max(g.Transition, range * 0.1f));
     }
 
     void Drop(ZoneState state)
@@ -565,6 +640,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
             a.LastUsed = Environment.TickCount64;
             a.Resident = true;
             a.Uploading = false;
+            residentStamp++;
             residentMeshBytes += a.Bytes;
         });
     }
@@ -614,6 +690,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
 
     static readonly bool StreamLog = Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1";
     long residentMeshBytes, lastTrim;
+    /// <summary>Counts meshes becoming resident (the zones' cull margins are recomputed after it changes).</summary>
+    int residentStamp;
     int meshUnloads, meshReloads;
 
     /// <summary>Meshes not needed (no loaded zone has a group of them within its range) for this long are unloaded.</summary>
@@ -634,7 +712,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
             float zoneDistance = ZoneDistance(state.Zone, eye);
             foreach (var g in state.Groups)
             {
-                if (zoneDistance > g.Range + WorldLayout.ZoneSize * 0.5f) continue;
+                if (zoneDistance > RangeOf(g).Range + WorldLayout.ZoneSize * 0.5f) continue;
                 var a = g.Asset;
                 a.LastUsed = now;
                 if (!a.Resident) Reload(a);   // in range but unloaded (or never loaded after an unload): decode it again, wherever the camera looks
@@ -861,6 +939,20 @@ public sealed unsafe class FoliageRenderer : IDisposable
     /// <summary>The fade packed into a batch matrix: row 0 w, 2 = fully visible (see <see cref="FoliageShaders.MeshVertex"/>).</summary>
     static Matrix4x4 Packed(in Matrix4x4 t, float w) { var m = t; m.M14 = w >= 0.999f ? 2 : w; return m; }
 
+    /// <summary>
+    /// How far beyond its instances' positions a zone's meshes can reach: the largest (bounds radius + bounds centre offset) x the largest scale
+    /// over its groups with decoded meshes (only those are drawn), at least 10 units. Cached until another mesh becomes resident.
+    /// </summary>
+    float ZoneMargin(ZoneState state)
+    {
+        if (state.MarginStamp == residentStamp && ReferenceEquals(state.MarginGroups, state.Groups)) return state.Margin;
+        float margin = 10;
+        foreach (var g in state.Groups)
+            if (g.Asset.Resident) margin = Math.Max(margin, (g.Asset.Radius + g.Asset.Centre.Length()) * g.MaxScale);
+        (state.Margin, state.MarginStamp, state.MarginGroups) = (margin, residentStamp, state.Groups);
+        return margin;
+    }
+
     void CullZones(Vector3 eye, Vector4[] frustum, WorldRenderOptions options, float maxRange, bool record)
     {
         if (record) { shadowCandidates.Clear(); (shadowCandidatesFrame, shadowCandidatesEye, shadowCandidatesRange) = (updates, eye, maxRange); }
@@ -870,14 +962,26 @@ public sealed unsafe class FoliageRenderer : IDisposable
         {
             if (!state.Ready) continue;
             float zoneDistance = ZoneDistance(state.Zone, eye);
-            // The zone's box (with a margin for big meshes) against the frustum first: most of a far, wide ring is behind the camera.
-            // Not while recording for the cascades: each has its own frustum.
-            if (!record && !WorldCamera.Intersects(frustum, new Vector3(state.X0 - 300, state.MinY - 600, state.Z0 - 300), new Vector3(state.X0 + WorldLayout.ZoneSize + 300, state.MaxY + 600, state.Z0 + WorldLayout.ZoneSize + 300))) continue;
+            // The zone's box against the frustum first: most of a far, wide ring is behind the camera. Its margin is how far the bounds of
+            // the zone's meshes reach from their instances' positions (ruins and rock pillars reach hundreds to thousands of units; a fixed
+            // margin of 300 culled such a mesh whose zone was out of view while the mesh itself was in it). Not while recording for the
+            // cascades: each has its own frustum.
+            if (!record)
+            {
+                float m = ZoneMargin(state);
+                if (!WorldCamera.Intersects(frustum, new Vector3(state.X0 - m, state.MinY - m, state.Z0 - m), new Vector3(state.X0 + WorldLayout.ZoneSize + m, state.MaxY + m, state.Z0 + WorldLayout.ZoneSize + m))) continue;
+            }
             foreach (var g in state.Groups)
             {
-                float range = Math.Min(g.Range, maxRange), band = range < g.Range ? Math.Min(g.Band, range * 0.25f) : g.Band;   // maxRange: the reflection draws a shorter range
+                var (full, fullBand) = RangeOf(g);
+                float range = Math.Min(full, maxRange), band = range < full ? Math.Min(fullBand, range * 0.25f) : fullBand;   // maxRange: the reflection draws a shorter range
                 if (zoneDistance > range) continue;
-                if (!g.Asset.Resident) { Reload(g.Asset); continue; }
+                if (!g.Asset.Resident)
+                {
+                    Reload(g.Asset);
+                    if (!g.Asset.Failed) NearestMissingMesh = Math.Min(NearestMissingMesh, zoneDistance);
+                    continue;
+                }
                 cullWork.Add((g, range, band));
             }
         }

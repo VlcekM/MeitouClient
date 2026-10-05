@@ -200,6 +200,36 @@ public class FoliageTests
     }
 
     [Fact]
+    public void Far_only_layout_places_exactly_the_far_instances_of_the_whole_layout()
+    {
+        // docs/formats/foliage.md, "Distances": a layer reseeds its own generator and, without "limit to grass areas", reads nothing the
+        // other layers write, so placing the far layers alone (the viewer's far tier) must give the same instances as the whole layout.
+        var install = GameInstall.Locate();
+        Assert.SkipWhen(install is null, "Kenshi install not found");
+        var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
+        var catalog = FoliageCatalog.Load(db);
+        using var whole = new FoliageWorld(install!, db, WorldLevelData.Load(install!), catalog);
+        using var far = new FoliageWorld(install!, db, WorldLevelData.Load(install!), catalog);
+        int farZones = 0, farInstances = 0;
+        // Desert and canyon zones around (-60564, -45142) with CinderBall01 and canyon blocks, the forest of 14.30, the Hub's south.
+        foreach (var zone in new ZoneCoordinate[] { new(17, 21), new(18, 21), new(18, 22), new(19, 22), new(17, 23), new(14, 30), new(20, 29), new(21, 29), new(44, 23), new(31, 45) })
+        {
+            var full = whole.Load(zone).Zone;
+            var part = far.Load(zone, farOnly: true).Zone;
+            Assert.True(full.Complete);
+            var expected = full.Instances.Where(i => FoliageLayout.IsFarLayer(i.Layer)).ToList();
+            if (part.Complete) { Assert.Equal(full.Instances, part.Instances); continue; }   // a far layer that limits to grass areas: laid out whole
+            farZones++;
+            farInstances += part.Instances.Count;
+            Assert.Empty(part.Grass);
+            Assert.Equal(expected.Count, part.Instances.Count);
+            Assert.Equal(expected, part.Instances);   // mesh, layer, position, scale, yaw and orientation
+        }
+        Assert.True(farZones >= 5, $"only {farZones} zones laid out far-only");
+        Assert.True(farInstances > 0, "no far instances in the sampled zones");
+    }
+
+    [Fact]
     public void Generated_grass_coverage_has_the_shipped_overlay_footprint()
     {
         // Observed (docs/formats/foliage.md, "Grass coverage"): the regenerated R channel is non-zero on about the same pixels as
