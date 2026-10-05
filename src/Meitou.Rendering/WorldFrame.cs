@@ -457,6 +457,7 @@ static class WorldFrame
     static readonly bool GrassMotion = Environment.GetEnvironmentVariable("MEITOU_GRASS_MOTION") != "0";
     /// <summary>Per-cascade and per-step CPU times in the stats strings (ShadowPass.CasterStats, FoliageRenderer's details); the viewer's screenshots and benchmarks turn it on.</summary>
     public static bool DetailedStats;
+    static readonly string[] CascadeLabels = ["shadow c0", "shadow c1", "shadow c2", "shadow c3"];
 
     public static void Draw(IGl gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time, float fogDistance)
     {
@@ -505,10 +506,12 @@ static class WorldFrame
                 objects.ObjectDistance = Math.Min(distance, gpu.Reflection.ObjectDistance);
                 objects.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
                 reflection.Lap(2);
+                StageClock.Sub("refl up to objects");
                 objects.ObjectDistance = distance;
                 objects.LodBias = bias;
                 gpu.Foliage?.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, grass: false, maxRange: reflection.FoliageDistance);
                 reflection.Lap(3);
+                StageClock.Sub("refl foliage");
                 reflection.SceneStats = $"{objects.DrawnInstances} objects ({objects.DrawnTriangles:N0} triangles, {objects.DrawCalls} calls), {gpu.Foliage?.DrawnInstances ?? 0} foliage meshes ({gpu.Foliage?.DrawCalls ?? 0} calls)";
             });
         StageClock.Lap(4);
@@ -599,11 +602,14 @@ static class WorldFrame
             long t0 = Stopwatch.GetTimestamp();
             long tri = gpu.Terrain.DepthTriangles;
             gpu.Terrain.DrawDepth(worldToClip, lodEye, planes, render);
+            StageClock.Sub("terrain");
             long t1 = Stopwatch.GetTimestamp();
             int oi = 0, oc = 0, fi = 0, fc = 0;
             if (render.Objects && gpu.Objects is { } o) { o.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain); objects += o.DrawnInstances; (oi, oc) = (o.DrawnInstances, o.DrawCalls); }
+            StageClock.Sub("objects");
             long t2 = Stopwatch.GetTimestamp();
             if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.Settings.Range * 1.2f); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
+            StageClock.Phase(CascadeLabels[cascade.Index & 3]);
             long t3 = Stopwatch.GetTimestamp();
             double ms = 1000.0 / Stopwatch.Frequency;
             shadow.PhaseMs[0] += (t1 - t0) * ms;

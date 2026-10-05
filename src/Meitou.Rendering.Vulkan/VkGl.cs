@@ -101,7 +101,9 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
             EndFrame();
         }
         EnsureBackbuffer(width, height);
+        long beginTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         cmd = device.Frames.BeginFrame();
+        Stats.FenceWaitTicks += System.Diagnostics.Stopwatch.GetTimestamp() - beginTicks;
         int slot = device.Frames.Slot;
         Check(vk.ResetCommandPool(dev, uploadPools[slot], 0));
         uploadCmd = uploadBuffers[slot];
@@ -127,7 +129,9 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
         TimeFrame(start: false);
         FullBarrier(uploadCmd);
         Check(vk.EndCommandBuffer(uploadCmd));
+        long submitTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         device.Frames.EndFrame(wait, waitStages, signal, before: uploadCmd);
+        Stats.SubmitTicks += System.Diagnostics.Stopwatch.GetTimestamp() - submitTicks;
         frameOpen = false;
         PollQueries();
     }
@@ -195,6 +199,7 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
         };
         var info = new DependencyInfo { SType = StructureType.DependencyInfo, MemoryBarrierCount = 1, PMemoryBarriers = &barrier };
         vk.CmdPipelineBarrier2(cb, &info);
+        Stats.Barriers++;
     }
 
     void EnsureBackbuffer(int width, int height)
@@ -229,16 +234,3 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
     }
 }
 
-/// <summary>Per-frame counters of the translation.</summary>
-public sealed class VkGlStats
-{
-    public int Draws, RenderPasses, PipelinesCreated, BuffersRenamed, Uploads, Flushes;
-    public long UploadBytes;
-    public int DescriptorPushes;
-    /// <summary>The last completed frame's GPU time, start of its uploads to the end of its last pass (not reset per frame).</summary>
-    public double GpuFrameMs;
-    public long DrawTicks;   // Stopwatch ticks spent preparing draws (pipelines, state, descriptors, vertex buffers)
-    public long UniformBytes;
-    internal void BeginFrame() { Draws = RenderPasses = PipelinesCreated = BuffersRenamed = Uploads = Flushes = DescriptorPushes = 0; UploadBytes = UniformBytes = DrawTicks = 0; }
-    public override string ToString() => $"{Draws} draws, {RenderPasses} passes, {PipelinesCreated} new pipelines, {Uploads} uploads ({UploadBytes / 1024} KB), {BuffersRenamed} renames, {UniformBytes / 1024} KB uniforms, {Flushes} flushes, {DescriptorPushes} pushes, draw prep {DrawTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0.00} ms, gpu frame {GpuFrameMs:0.00} ms";
-}

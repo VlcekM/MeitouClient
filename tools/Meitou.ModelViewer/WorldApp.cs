@@ -240,6 +240,7 @@ static partial class WorldApp
         DebugOverlay? overlay = null;
         SettingsPanel? panel = null;
         FrameProfiler? profiler = null;
+        PassMeter? meter = null;
         bool statsVisible = false;
         var stats = new List<string>();
         var keyItems = DebugOverlay.KeyItems(WorldOptions.Usage);
@@ -256,6 +257,7 @@ static partial class WorldApp
             (camera, render) = Setup(scene, o);
             if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render);
             profiler = new FrameProfiler(gl, gl is VkGl statsGl ? () => statsGl.Stats.GpuFrameMs : null);
+            meter = PassMeter.TryCreate(gl);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             var input = window.CreateInput();
             keyboard = input.Keyboards.FirstOrDefault();
             foreach (var kb in input.Keyboards) kb.KeyDown += (_, key, _) => OnKey(key);
@@ -467,6 +469,7 @@ static partial class WorldApp
             }
             if (!shot) panel?.Draw(size.X, size.Y);
             if (!shot && overlay is not null) profiler?.Draw(overlay, size.X, size.Y);
+            StageClock.Phase("overlays");
             display.Present();
             profiler?.EndFrame();
             SmokeTest.Frame();
@@ -480,7 +483,7 @@ static partial class WorldApp
                 Console.WriteLine($"saved {Path.GetFullPath(file)}");
             }
         };
-        window.Closing += () => { profiler?.Dispose(); overlay?.Dispose(); gpu?.Dispose(); };
+        window.Closing += () => { if (meter is not null && gl is VkGl vkStats) { meter.Report(Console.Out); meter.ReportPhases(Console.Out, vkStats.Stats.Draws); meter.Dispose(); } profiler?.Dispose(); overlay?.Dispose(); gpu?.Dispose(); };
         window.Run();
         return 0;
     }
