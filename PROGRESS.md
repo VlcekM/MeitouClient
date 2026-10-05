@@ -36,7 +36,16 @@ implementation, all renderers ported onto it (parity must stay 0.0000), then a G
 - [x] Parity, Vulkan vs GL reference (`shots/vk3`): hub 0.0010/0.0000, portnorth 0.0003/0.0000, rock 0.0426/0.0001,
       zone14_30 0.0789/0.0001 (13:00/02:00). Validation clean. Found: NVIDIA GL vs Vulkan anisotropic filtering differ by a
       quarter mip level (DECISIONS 9).
-- [ ] Performance: Vulkan frame times are ~3-4x GL right now (hub 38 ms vs 12.5 ms) — the CPU-side translation needs work.
+- [~] Performance (1600x900 flight, 1500 frames, this machine with other sessions running; logs in `engine-work/bench`):
+      | measurement | GL (master-equivalent) | Vulkan |
+      |---|---|---|
+      | serialized (Finish each frame, 60 fps pacing), p50 / p99 / max | 10.2-11.9 / 21.7-24.4 / 34-49 | 9.1 / 20.0 / 30.7 |
+      | `--fly-pipelined` (2 frames in flight), p50 / p95 / p99 / max | 3.6 / 9.1 / 15.5 / 23.7 | 4.0 / 6.5-6.9 / 8.7-10.4 / 16-29 |
+      GPU frame (Vulkan timestamps) 3.5-3.8 ms; VkGl draw prep 0.55 ms for ~670 draws; 56 descriptor pushes a frame.
+      Fixed on the way: tiered PGO stalls (DECISIONS 11), the post-load gen2 GC and upload backlog (DECISIONS 12), foliage
+      culled once for all shadow cascades (hub shadow CPU 12.3 -> 1.9 ms), descriptor templates, dynamic uniform offsets.
+      **Target p99 < 6.9 ms not reached** (p99 ~9-10 ms, max 16-29): the tail is render-thread streaming work shared with GL
+      (foliage/terrain/object updates up to 25 ms, reflection terrain up to 10 ms).
 - [ ] Game `--renderer`, swapchain present (flip once), interactive viewer.
 - [ ] Foliage shadow-cascade culling once for all cascades; p99 < 6.9 ms target.
 
@@ -44,4 +53,4 @@ implementation, all renderers ported onto it (parity must stay 0.0000), then a G
 
 ## Next step
 
-Phase 2: profile and speed up VkGl (CPU cost per draw), then the swapchain and the game.
+Phase 2: swapchain present + game/viewer interactive `--renderer vulkan`, 2560x1440 benchmark; then Phase 3 (upscalers). Return to the render-thread streaming spikes if time remains.
