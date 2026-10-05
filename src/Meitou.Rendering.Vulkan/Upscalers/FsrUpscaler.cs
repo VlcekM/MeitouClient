@@ -146,6 +146,7 @@ public sealed unsafe class FsrUpscaler : IUpscaler
         Format.R16G16Sfloat => 18,
         Format.R32Sfloat => 28,
         Format.R8G8B8A8Unorm => 10,
+        Format.R8Unorm => 25,
         Format.B10G11R11UfloatPack32 => 16,
         _ => 0,
     };
@@ -175,6 +176,7 @@ public sealed unsafe class FsrUpscaler : IUpscaler
             Color = Resource(i.Colour, false),
             Depth = Resource(i.Depth, false),
             MotionVectors = Resource(i.Motion, false),
+            Reactive = i.Reactive != 0 ? Resource(i.Reactive, false) : default,
             Output = Resource(i.Output, true),
             // Both move the picture by +jitter along +column and +row of the image (ours is bottom-up GL, FSR's top-down D3D with
             // the y offset negated in the projection: the same direction in image rows).

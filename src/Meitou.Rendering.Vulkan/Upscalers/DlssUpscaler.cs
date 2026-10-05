@@ -70,6 +70,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         if (sl is null) { reason = "DLSS needs Streamline loaded before the device (start with --upscaler dlss and the Streamline DLLs)"; return null; }
         if (!sl.DlssSupported) { reason = "DLSS is not supported on this device (see the streamline lines above)"; return null; }
         reason = null;
+        Console.WriteLine($"upscaler  DLSS through Streamline from {sl.Directory}");
         return new DlssUpscaler(sl, gl);
     }
 

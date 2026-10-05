@@ -8,7 +8,8 @@ static class UpscaleShaders
     /// empty), is carried back into the previous frame by one matrix per slice (this frame's jittered clip space to the previous frame's
     /// unjittered one, built relative to the eye on the CPU). Writes RG = motion in UV (previous UV = UV − motion, jitter removed),
     /// B = the depth of one D3D-style projection with fixed planes (PostProcess.UpscaleNear .. UpscaleFar), for the upscalers and TAA's
-    /// closest-sample pick. With <c>uDepthOnly</c> it writes that depth alone (R32F for FSR / DLSS).
+    /// closest-sample pick. A = reactivity: how much the upscalers should trust this frame over the history, set on water (moving, see-through, no motion vectors).
+    /// <c>uMode</c> 1 writes the depth alone (R32F for FSR / DLSS), 2 the reactivity alone (R8 for FSR).
     /// </summary>
     public const string Velocity = """
         #version 330 core
@@ -18,7 +19,10 @@ static class UpscaleShaders
         uniform mat4 uNearToPrev, uFarToPrev;
         uniform vec2 uNearPlanes, uFarPlanes, uFullPlanes;
         uniform vec2 uJitterNdc;
-        uniform int uHasFar, uDepthOnly;
+        uniform int uHasFar, uMode;            // 0: motion, depth, reactive; 1: depth alone; 2: reactive alone
+        uniform vec2 uTan;                     // tan(fov / 2) * aspect, tan(fov / 2)
+        uniform vec3 uRight, uUp, uBack;       // the view axes in the world
+        uniform float uEyeY, uWaterY, uWaterReactive;
 
         // Distance along the view axis from a depth-buffer value: System.Numerics' projection gives clip depth 0..1 (D3D style), which GL's
         // depth range stores as 0.5..1.
@@ -37,11 +41,16 @@ static class UpscaleShaders
             }
             float z = viewZ(d, planes);
             float depth = clamp(uFullPlanes.y * (z - uFullPlanes.x) / (z * (uFullPlanes.y - uFullPlanes.x)), 0.0, 1.0);
-            if (uDepthOnly != 0) { fragColour = vec4(depth, 0.0, 0.0, 1.0); return; }
+            if (uMode == 1) { fragColour = vec4(depth, 0.0, 0.0, 1.0); return; }
             vec2 ndc = vUv * 2.0 - 1.0;
+            // Water is blended over the seabed without writing depth: a pixel shows water where the eye is above the plane and the
+            // surface behind it below (the water quad reaches past the far plane, so the sky below the horizon counts too).
+            vec3 offset = (uRight * ndc.x * uTan.x + uUp * ndc.y * uTan.y - uBack) * z;
+            float reactive = uEyeY > uWaterY && uEyeY + offset.y < uWaterY ? uWaterReactive : 0.0;
+            if (uMode == 2) { fragColour = vec4(reactive, 0.0, 0.0, 1.0); return; }
             vec4 prev = toPrev * vec4(ndc, 2.0 * d - 1.0, 1.0);
             vec2 motion = ((ndc - uJitterNdc) - prev.xy / prev.w) * 0.5;
-            fragColour = vec4(motion, depth, 1.0);
+            fragColour = vec4(motion, depth, reactive);
         }
         """;
 
@@ -128,7 +137,9 @@ static class UpscaleShaders
             float over = max(a.x, max(a.y, a.z));
             if (over > 1.0) h /= over;
             vec3 hist = rgb(h + mean);
-            float alpha = clamp(uBlend * wmax, 0.0, 1.0);
+            // Reactive pixels (water) lean on the current frame.
+            float reactive = texelFetch(uMotion, clamp(base, ivec2(0), last), 0).a;
+            float alpha = clamp(max(uBlend * wmax, 0.5 * reactive), 0.0, 1.0);
             fragColour = vec4(itm(mix(hist, current, alpha)), 1.0);
         }
         """;

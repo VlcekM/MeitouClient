@@ -37,7 +37,7 @@ public sealed unsafe class PostProcess : IDisposable
     uint sceneFbo, sceneColour, sceneDepth;
     // Temporal upscaling: the far slice's own depth (instead of clearing), the motion and depth targets, the display-size history (ping-pong).
     uint farFbo, farDepth;
-    Target2D? motion, upscaleDepth, historyA, historyB;
+    Target2D? motion, upscaleDepth, reactive, historyA, historyB;
     bool historyValid, farSliceDrawn, warnedFallback;
     long frameIndex;
     readonly uint progVelocity, progTaa;
@@ -103,8 +103,8 @@ public sealed unsafe class PostProcess : IDisposable
         if (msFbo != 0) { gl.DeleteFramebuffer(msFbo); gl.DeleteRenderbuffer(msColour); gl.DeleteRenderbuffer(msDepth); msFbo = 0; }
         if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneColour); gl.DeleteTexture(sceneDepth); sceneFbo = 0; }
         if (farFbo != 0) { gl.DeleteFramebuffer(farFbo); gl.DeleteTexture(farDepth); farFbo = 0; }
-        foreach (var t in new[] { aoA, aoB, luminance, adaptA, adaptB, motion, upscaleDepth, historyA, historyB }.Concat(bloom)) if (t is not null) Release(t);
-        aoA = aoB = luminance = adaptA = adaptB = motion = upscaleDepth = historyA = historyB = null;
+        foreach (var t in new[] { aoA, aoB, luminance, adaptA, adaptB, motion, upscaleDepth, reactive, historyA, historyB }.Concat(bloom)) if (t is not null) Release(t);
+        aoA = aoB = luminance = adaptA = adaptB = motion = upscaleDepth = reactive = historyA = historyB = null;
         adaptedValid = historyValid = false;
         bloom = [];
     }
@@ -185,6 +185,8 @@ public sealed unsafe class PostProcess : IDisposable
             Nearest(motion);
             upscaleDepth = MakeTarget(w, h, InternalFormat.R32f, PixelFormat.Red, PixelType.Float);
             Nearest(upscaleDepth);
+            reactive = MakeTarget(w, h, InternalFormat.R8, PixelFormat.Red, PixelType.UnsignedByte);
+            Nearest(reactive);
             historyA = MakeTarget(displayW, displayH, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
             historyB = MakeTarget(displayW, displayH, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
         }
@@ -465,16 +467,17 @@ public sealed unsafe class PostProcess : IDisposable
         bool reset = !historyValid || !previousValid || Vector3.Distance(eyeNow, previousEye) > 5000;
         float dt = (float)frameClock.Elapsed.TotalSeconds;
         frameClock.Restart();
-        Velocity(motion!, depthOnly: false);
+        Velocity(motion!, 0);
         (historyA, historyB) = (historyB, historyA);
         var output = historyB!;
         bool done = false;
         if (ExternalFor(Options.Upscale.Kind) is { } external)
         {
-            Velocity(upscaleDepth!, depthOnly: true);
+            Velocity(upscaleDepth!, 1);
+            if (WaterHeight is not null) Velocity(reactive!, 2);
             done = external.Dispatch(new UpscaleInputs
             {
-                Colour = sceneColour, Depth = upscaleDepth!.Texture, Motion = motion!.Texture, Output = output.Texture,
+                Colour = sceneColour, Depth = upscaleDepth!.Texture, Motion = motion!.Texture, Output = output.Texture, Reactive = WaterHeight is null ? 0 : reactive!.Texture,
                 RenderWidth = width, RenderHeight = height, DisplayWidth = displayWidth, DisplayHeight = displayHeight,
                 JitterPixels = JitterPixels, Near = UpscaleNear, Far = UpscaleFar, FieldOfView = fovNow,
                 DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f), Sharpness = Options.Upscale.Sharpness, Reset = reset,
@@ -516,7 +519,12 @@ public sealed unsafe class PostProcess : IDisposable
         return output.Texture;
     }
 
-    void Velocity(Target2D target, bool depthOnly)
+    /// <summary>The water plane's height when water is drawn (for the upscalers' reactive mask), else null.</summary>
+    public float? WaterHeight { get; set; }
+    /// <summary>How much the upscalers trust the current frame on water (FSR's reactive mask; TAA takes half).</summary>
+    public const float WaterReactive = 0.5f;
+
+    void Velocity(Target2D target, int mode)
     {
         Pass(target);
         gl.UseProgram(progVelocity);
@@ -530,7 +538,16 @@ public sealed unsafe class PostProcess : IDisposable
         gl.Uniform2(U(progVelocity, "uFullPlanes"), UpscaleNear, UpscaleFar);
         gl.Uniform2(U(progVelocity, "uJitterNdc"), 2 * JitterPixels.X / width, 2 * JitterPixels.Y / height);
         gl.Uniform1(U(progVelocity, "uHasFar"), farSliceDrawn ? 1 : 0);
-        gl.Uniform1(U(progVelocity, "uDepthOnly"), depthOnly ? 1 : 0);
+        gl.Uniform1(U(progVelocity, "uMode"), mode);
+        float tanY = MathF.Tan(fovNow * 0.5f);
+        gl.Uniform2(U(progVelocity, "uTan"), tanY * aspectNow, tanY);
+        var r = viewRotation;
+        gl.Uniform3(U(progVelocity, "uRight"), r.M11, r.M21, r.M31);
+        gl.Uniform3(U(progVelocity, "uUp"), r.M12, r.M22, r.M32);
+        gl.Uniform3(U(progVelocity, "uBack"), r.M13, r.M23, r.M33);
+        gl.Uniform1(U(progVelocity, "uEyeY"), eyeNow.Y);
+        gl.Uniform1(U(progVelocity, "uWaterY"), WaterHeight ?? float.MinValue);
+        gl.Uniform1(U(progVelocity, "uWaterReactive"), WaterReactive);
         gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
     }
 

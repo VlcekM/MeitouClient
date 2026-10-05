@@ -143,9 +143,14 @@ command-line values win). Off draws the scene at the display size with MSAA, as 
   `NvLowLatencyVk.dll`, else one error line) in `MEITOU_STREAMLINE_PATH` or next to the executable; Streamline loads before the device
   when DLSS is asked for, so switching to DLSS in the game's panel works only if the game started with it. Per frame: a frame token,
   the constants (the fixed-plane projection and the clip-to-previous-clip matrix with y flipped, jitter as is, motion scale (−1, −1),
-  camera vectors), four tags (depth, motion, colour in and out, all in GENERAL) and the evaluation. `MEITOU_STREAMLINE_LOG=1` shows
+  camera vectors), four tags (depth, motion, colour in and out, all in GENERAL) and the evaluation (no reactive hint yet). `MEITOU_STREAMLINE_LOG=1` shows
   Streamline's info lines. Checked on an RTX 4070 (driver 596.49, DLSS 310.9.1): validation clean; rock view at quality: still picture
   vs the native reference 4.7 mean (FSR 5.2), orbiting vs still 3.9 (FSR 4.8).
+- **Reactive mask (water).** Water is blended over the seabed without writing depth, so its moving surface has no motion vectors of
+  its own. The velocity pass marks a pixel as water where the eye is above the water plane and the depth point below it (the water quad
+  reaches past the far plane, so the sea under the horizon counts too) and writes `PostProcess.WaterReactive` (0.5) into A of the motion
+  texture (TAA leans on the current frame by half of it) and, for FSR, into an R8 reactive mask. Checked by eye on Port North: the
+  mask covers the water exactly.
 - **Texture detail.** On Vulkan every mipmapped fetch is biased by `log2(scale) − 0.5` (TAA) or `− 1` (FSR/DLSS) (`ITextureLodBias`;
   DECISIONS 15); OpenGL has no global bias.
 - **Offscreen pictures** draw `WarmupFrames` frames first so the history converges; `--orbit-step <degrees>` turns the camera every
