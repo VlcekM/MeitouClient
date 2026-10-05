@@ -1,6 +1,8 @@
 using System.Numerics;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering;
+
 namespace Meitou.ModelViewer;
 
 /// <summary>

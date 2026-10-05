@@ -1,5 +1,7 @@
 using System.Numerics;
 
+using Meitou.Rendering;
+
 namespace Meitou.ModelViewer;
 
 /// <summary>Orbit camera around a target, Y up (Ogre's convention).</summary>

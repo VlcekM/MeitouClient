@@ -9,6 +9,8 @@ using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 
+using Meitou.Rendering;
+
 namespace Meitou.ModelViewer;
 
 /// <summary>Command line of <c>meitou-viewer --character</c>.</summary>

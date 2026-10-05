@@ -2,6 +2,9 @@ using System.Diagnostics;
 using System.Numerics;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering;
+using static Meitou.Rendering.WorldFrame;
+
 namespace Meitou.ModelViewer;
 
 static partial class WorldApp
@@ -71,23 +74,4 @@ static partial class WorldApp
     static string Resident(Gpu gpu) =>
         (gpu.Objects is { } objects ? $"objects {objects.ResidentDescription}" : "objects off") +
         (gpu.Foliage is { } foliage ? $"; foliage {foliage.ResidentDescription}" : "");
-}
-
-/// <summary>Per-stage render-thread time of one frame (for <c>--fly-benchmark</c>); <see cref="Lap"/> costs a timestamp read and does nothing unless started.</summary>
-static class StageClock
-{
-    public static readonly string[] Names = ["upd-terrain", "upd-objects", "upd-foliage", "sky-prepare", "reflection", "sky-draw", "terrain", "objects", "foliage", "water", "post", "gpu-wait"];
-    public static readonly double[] Ms = new double[Names.Length];
-    public static bool Active;
-    static long last;
-
-    public static void Start() { Active = true; Array.Clear(Ms); last = Stopwatch.GetTimestamp(); }
-
-    public static void Lap(int stage)
-    {
-        if (!Active) return;
-        long now = Stopwatch.GetTimestamp();
-        Ms[stage] += (now - last) * 1000.0 / Stopwatch.Frequency;
-        last = now;
-    }
 }

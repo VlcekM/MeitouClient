@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The world renderers (terrain, objects, foliage, water, sky, shadows, post, overlay), their streaming and the
+       backend interface with its OpenGL backend; shared by the game (src/Meitou.Game) and the viewer. -->
+
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
+    <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Meitou.Core\Meitou.Core.csproj" />
+    <ProjectReference Include="..\Meitou.Data\Meitou.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="meitou-viewer" />
+    <InternalsVisibleTo Include="meitou" />
+    <InternalsVisibleTo Include="Meitou.Tests" />
+  </ItemGroup>
+
+</Project>

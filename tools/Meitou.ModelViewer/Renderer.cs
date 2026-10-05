@@ -2,6 +2,8 @@ using System.Numerics;
 using Meitou.Data.Textures;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering;
+
 namespace Meitou.ModelViewer;
 
 public sealed class RenderOptions

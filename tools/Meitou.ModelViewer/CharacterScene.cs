@@ -5,6 +5,8 @@ using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.Ogre;
 
+using Meitou.Rendering;
+
 namespace Meitou.ModelViewer;
 
 /// <summary>How a character part is shaded (CharacterRenderer). Facts behind each mode: docs/characters.md.</summary>

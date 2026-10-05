@@ -1,6 +1,8 @@
 using System.Numerics;
 using Meitou.Data.Ogre;
 
+using Meitou.Rendering;
+
 namespace Meitou.ModelViewer;
 
 /// <summary>One animation playing on a skeleton: time, weight, and Kenshi's per-animation track deletions and override bones.</summary>
