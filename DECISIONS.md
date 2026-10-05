@@ -109,3 +109,7 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     S3TC upload no longer copies a level of zeros before filling it in slabs (a GL-era way to allocate), and the "DXT5 normal" test runs
     on the worker. Result at 1600x900 (four interleaved runs each, medians): p50 4.15 -> 3.7 ms, p95 6.85 -> 5.4, p99 9.15 -> 7.0,
     max ~23 -> ~16.
+20. **Shader bindings shifted after compiling; bundled shaderc pinned.** A Vulkan SDK on PATH supplied a newer `shaderc_shared`
+    whose glslang puts combined image samplers in a resource kind shaderc's binding-base API cannot reach, so fragment samplers
+    landed at 0.. (docs/engine.md "Vulkan backend"). Bindings are now offset per stage by patching the SPIR-V, which holds for any
+    shaderc, and the compiler loads the one it ships. Shader cache version 3 (2 had been written by experiments with other output).
