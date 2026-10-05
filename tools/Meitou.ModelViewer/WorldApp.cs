@@ -366,6 +366,7 @@ static partial class WorldApp
             }
         }
 
+        string rendererName = o.Post.Upscale.Kind == UpscalerKind.Off ? "Vulkan" : $"Vulkan + {o.Post.Upscale.Kind.ToString().ToUpperInvariant()}";
         double titleTimer = 0, cpuMs = 0, gpuMs = 0;
         int frames = 0, gpuSamples = 0, queryIndex = 0;
         uint[] queries = [];
@@ -399,7 +400,7 @@ static partial class WorldApp
                 // fps is capped by vsync; cpu is the time to record a frame, gpu the time the GPU spent on it (timer
                 // queries), so they show the real cost under the cap.
                 string gpuText = gpuSamples > 0 ? $"{gpuMs / gpuSamples:0.00}" : "-";
-                window.Title = $"Meitou world | {frames / titleTimer:0} fps (vsync) | cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms" +
+                window.Title = $"Meitou world ({rendererName}) | {frames / titleTimer:0} fps (vsync) | cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms" +
                     (gpu.Reflection is { Valid: true } refl && render.Reflections ? $" (reflection cpu {refl.CpuMs:0.00}, gpu {refl.GpuMs:0.00})" : "") + " | " +
                     $"{t.X:0}, {t.Z:0} zone {WorldLayout.ZoneOf(t.X, t.Z)} | {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" +
                     (gpu.Objects is { } ob && render.Objects ? $" | {ob.DrawnInstances} objects, {ob.DrawCalls} calls, draw cpu {ob.LastDrawCpuMs:0.00} ms" + (ob.Pending > 0 ? $", loading {ob.Pending}" : "") : "") +
