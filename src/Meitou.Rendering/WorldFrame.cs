@@ -424,6 +424,10 @@ static class WorldFrame
             sliders.Add(new Slider("Grass density x", 0.1f, 2, () => foliage.GrassDensitySetting, v => foliage.GrassDensitySetting = v, "0.00"));
         }
         sliders.Add(new Slider("Terrain LOD distance", 2, 16, () => r.LodDistance, v => r.LodDistance = v, "0.0"));
+        // The game's `Shadow Range` slider goes 1000 to 9000; the viewer allows more (the cascades stretch over it).
+        if (g.Shadow is { } shadow)
+            sliders.Add(new Slider("Shadow distance (game 1k-9k)", KenshiShadows.MinRange, 20000, () => shadow.Settings.Range,
+                v => shadow.Settings = shadow.Settings with { Range = MathF.Round(v / 100) * 100 }, "0", Logarithmic: true));
         // A viewer option, not the game's: 1 is the game's haze (docs/formats/sky.md).
         sliders.Add(new Slider("Haze strength (1 = game)", 0, 3, () => g.Sky.HazeStrength, v => g.Sky.HazeStrength = v, "0.00"));
         if (g.Post is { } post)
