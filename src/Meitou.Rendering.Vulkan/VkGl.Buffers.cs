@@ -55,6 +55,7 @@ public sealed unsafe partial class VkGl
 
     public void BindBuffer(BufferTargetARB target, uint buffer)
     {
+        Stats.BindCalls++;
         switch (target)
         {
             case BufferTargetARB.ArrayBuffer: boundArrayBuffer = buffer; break;
@@ -67,6 +68,7 @@ public sealed unsafe partial class VkGl
     public void BindBufferBase(BufferTargetARB target, uint index, uint buffer)
     {
         if (target != BufferTargetARB.UniformBuffer) throw new NotSupportedException($"BindBufferBase {target}");
+        Stats.BindCalls++;
         uniformBindings[index] = buffer;
         uniformRanges[index] = (0, -1);
         boundUniformBuffer = buffer;
@@ -249,12 +251,13 @@ public sealed unsafe partial class VkGl
         if (boundVao == array) boundVao = 0;
     }
 
-    public void BindVertexArray(uint array) => boundVao = array;
+    public void BindVertexArray(uint array) { Stats.BindCalls++; boundVao = array; }
 
-    public void EnableVertexAttribArray(uint index) => CurrentVao.Attribs[index].Enabled = true;
+    public void EnableVertexAttribArray(uint index) { Stats.AttribCalls++; CurrentVao.Attribs[index].Enabled = true; }
 
     public void VertexAttribPointer(uint index, int size, VertexAttribPointerType type, bool normalized, uint stride, void* pointer)
     {
+        Stats.AttribCalls++;
         ref var a = ref CurrentVao.Attribs[index];
         a.Buffer = boundArrayBuffer;
         a.Size = size;
@@ -267,6 +270,7 @@ public sealed unsafe partial class VkGl
 
     public void VertexAttribIPointer(uint index, int size, VertexAttribIType type, uint stride, void* pointer)
     {
+        Stats.AttribCalls++;
         ref var a = ref CurrentVao.Attribs[index];
         a.Buffer = boundArrayBuffer;
         a.Size = size;
@@ -279,6 +283,7 @@ public sealed unsafe partial class VkGl
 
     public void VertexAttribDivisor(uint index, uint divisor)
     {
+        Stats.AttribCalls++;
         if (divisor > 1) throw new NotSupportedException("vertex attribute divisors above 1");
         CurrentVao.Attribs[index].Divisor = divisor;
     }

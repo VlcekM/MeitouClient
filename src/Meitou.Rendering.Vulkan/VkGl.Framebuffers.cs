@@ -37,6 +37,7 @@ public sealed unsafe partial class VkGl
 
     public void BindFramebuffer(FramebufferTarget target, uint framebuffer)
     {
+        Stats.BindCalls++;
         if (target is FramebufferTarget.Framebuffer or FramebufferTarget.DrawFramebuffer) drawFramebuffer = framebuffer;
         if (target is FramebufferTarget.Framebuffer or FramebufferTarget.ReadFramebuffer) readFramebuffer = framebuffer;
     }

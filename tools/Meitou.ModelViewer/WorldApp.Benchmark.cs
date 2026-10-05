@@ -38,6 +38,7 @@ static partial class WorldApp
         bool pipelined = o.FlyPipelined;
         uint[] fences = pipelined && gl is not VkGl ? [gl.GenQuery(), gl.GenQuery(), gl.GenQuery()] : [];
         var interval = Stopwatch.StartNew();
+        var meter = PassMeter.TryCreate(gl);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
         Console.WriteLine($"fly       {(pipelined ? "pipelined, " : "")}{o.FlyBenchmark} frames, circle radius {radius:0} units round {centre.X:0}, {centre.Z:0}, {o.FlySpeed:0} units per frame ({o.FlySpeed * 60:0} per second)");
         for (int i = 1; i <= o.FlyBenchmark; i++)
         {
@@ -104,6 +105,7 @@ static partial class WorldApp
         }
         Console.WriteLine($"resident  every 150 frames (objects + foliage, MB): {string.Join(" ", resident)}");
         Console.WriteLine($"resident  {Resident(gpu)}; working set {Environment.WorkingSet / 1048576} MB, managed heap {GC.GetTotalMemory(false) / 1048576} MB");
+        if (meter is not null) ReportPasses(meter, gl, gpu, scene, camera, render, o, w, h);
         if (o.Screenshot is not null)
         {
             // Back at the start: everything wanted there is loaded again (what was unloaded meanwhile comes back) before the picture.
@@ -113,6 +115,27 @@ static partial class WorldApp
             gpu.Foliage?.Settle(camera.Eye);
         }
         return 0;
+    }
+
+    /// <summary>
+    /// MEITOU_PASS_STATS=1: the pass meter's table and CSV lines, then one more frame with <see cref="WorldFrame.DetailedStats"/> on for what each
+    /// pass drew (instances, calls, per cascade and per foliage step: the same lines the screenshot path prints).
+    /// </summary>
+    static void ReportPasses(PassMeter meter, IGl gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
+    {
+        meter.Report(Console.Out);
+        if (gl is VkGl vkGl) meter.ReportPhases(Console.Out, vkGl.Stats.Draws);
+        meter.Dispose();
+        if (Environment.GetEnvironmentVariable("MEITOU_VK_MICRO") == "1" && gl is VkGl microGl) PassMeter.VkCallMicro(microGl, Console.Out);
+        WorldFrame.DetailedStats = true;
+        { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
+        gl.Finish();
+        Console.WriteLine($"detail    {gpu.Terrain.DrawnChunks} terrain chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
+            (gpu.Objects is { } ob ? $"; objects {ob.DrawnInstances} instances, {ob.DrawCalls} draw calls, {ob.DrawnTriangles:N0} triangles" : ""));
+        if (gpu.Foliage is { } fol) { fol.PollTimers(wait: true); Console.WriteLine($"detail    foliage draw cpu {fol.LastDrawCpuMs:0.00} ms, gpu {fol.GpuMs:0.00} ms, {fol.DrawCalls} draw calls, {fol.DrawnInstances} meshes, {fol.DrawnBlades:N0} grass blades;{fol.MainDetail}"); }
+        if (gpu.Reflection is { Valid: true } refl) { refl.Poll(wait: true); Console.WriteLine($"detail    reflect cpu {refl.CpuMs:0.00} ms, gpu {refl.GpuMs:0.00} ms; {refl.SceneStats}"); }
+        if (gpu.Shadow is { } shadow) { shadow.Poll(wait: true); Console.WriteLine($"detail    shadows cpu {shadow.CpuMs:0.00} ms, gpu {shadow.GpuMs:0.00} ms; {shadow.CasterStats}"); }
+        WorldFrame.DetailedStats = false;
     }
 
     /// <summary>MEITOU_FLY_SHOT: frames of the fly benchmark saved as pictures (with <c>--screenshot</c>, next to it).</summary>

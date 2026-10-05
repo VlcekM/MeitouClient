@@ -87,7 +87,9 @@ public sealed unsafe partial class VkGl
 
     public void ActiveTexture(TextureUnit texture) => activeUnit = texture - TextureUnit.Texture0;
 
-    public void BindTexture(TextureTarget target, uint texture) =>
+    public void BindTexture(TextureTarget target, uint texture) { Stats.TextureBinds++; BindTextureCore(target, texture); }
+
+    void BindTextureCore(TextureTarget target, uint texture) =>
         units[activeUnit, TargetSlot(target)] = texture != 0 && textures.TryGetValue(texture, out var t) ? Retarget(t, target) : null;
 
     static GlTextureObj Retarget(GlTextureObj t, TextureTarget target)

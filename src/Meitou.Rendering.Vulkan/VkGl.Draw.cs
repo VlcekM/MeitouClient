@@ -80,8 +80,29 @@ public sealed unsafe partial class VkGl
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         if (count == 0 || instancecount == 0 || !PrepareDraw(mode)) return;
         Stats.DrawTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
-        vk.CmdDraw(cmd, count, instancecount, (uint)first, 0);
+        long nt = NatStart(); vk.CmdDraw(cmd, count, instancecount, (uint)first, 0); NatEnd(8, nt);
         Stats.Draws++;
+        Lap(8);
+    }
+
+    /// <summary><c>MEITOU_VKGL_PHASES=1</c>: times the parts of a draw's preparation into <see cref="VkGlStats.PhaseTicks"/> (a few stopwatch reads per draw: for
+    /// measuring, off otherwise; static readonly, so the JIT drops the calls when off).</summary>
+    public static readonly bool Phases = Environment.GetEnvironmentVariable("MEITOU_VKGL_PHASES") == "1";
+    long phaseStart;
+
+    /// <summary>With <see cref="Phases"/>: the time spent inside the <c>vkCmd*</c> calls themselves (Silk.NET's dispatch and the driver), by phase, in <see cref="VkGlStats.NativeTicks"/>.</summary>
+    static long NatStart() => Phases ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+    void NatEnd(int phase, long start)
+    {
+        if (Phases) Stats.NativeTicks[phase] += System.Diagnostics.Stopwatch.GetTimestamp() - start;
+    }
+
+    void Lap(int phase)
+    {
+        if (!Phases) return;
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        Stats.PhaseTicks[phase] += now - phaseStart;
+        phaseStart = now;
     }
 
     public void DrawElements(PrimitiveType mode, uint count, DrawElementsType type, void* indices) => DrawElementsInstanced(mode, count, type, indices, 1);
@@ -99,9 +120,11 @@ public sealed unsafe partial class VkGl
         };
         var eb = buffers.TryGetValue(CurrentVao.ElementBuffer, out var b) ? b : throw new InvalidOperationException("no element buffer bound");
         var (buffer, offset) = Use(eb);
-        vk.CmdBindIndexBuffer(cmd, buffer, offset + (ulong)(nint)indices, indexType);
-        vk.CmdDrawIndexed(cmd, count, instancecount, 0, 0, 0);
+        long nt = NatStart(); vk.CmdBindIndexBuffer(cmd, buffer, offset + (ulong)(nint)indices, indexType);
+        vk.CmdDrawIndexed(cmd, count, instancecount, 0, 0, 0); NatEnd(8, nt);
         Stats.Draws++;
+        Stats.IndexBufferBinds++;
+        Lap(8);
     }
 
     /// <summary>Records everything a draw needs: the pass, the pipeline, dynamic state, descriptors and vertex buffers. False when
@@ -112,6 +135,7 @@ public sealed unsafe partial class VkGl
         EnsurePass();
         var cb = cmd;
         var vao = CurrentVao;
+        if (Phases) phaseStart = System.Diagnostics.Stopwatch.GetTimestamp();
 
         // Vertex layout of the inputs the program reads.
         Span<ulong> packed = stackalloc ulong[8];
@@ -142,19 +166,26 @@ public sealed unsafe partial class VkGl
             blend && passColour is not null, blend ? blendSrc : BlendingFactor.One, blend ? blendDst : BlendingFactor.Zero,
             (byte)((colourMask.R ? 1 : 0) | (colourMask.G ? 2 : 0) | (colourMask.B ? 4 : 0) | (colourMask.A ? 8 : 0)),
             polygonMode, alphaToCoverage && ((passColour ?? passDepth)?.Texture.Samples ?? 1) > 1, depthClamp && device.DepthClamp);
+        Lap(0);
         if (!pipelines.TryGetValue(key, out var pipeline))
         {
+            long created = System.Diagnostics.Stopwatch.GetTimestamp();
             pipeline = CreatePipeline(p, in key, vao);
             pipelines[key] = pipeline;
             Stats.PipelinesCreated++;
+            Stats.PipelineCreateTicks += System.Diagnostics.Stopwatch.GetTimestamp() - created;
         }
+        Lap(1);
         if (pipeline.Handle != lastPipeline.Handle)
         {
-            vk.CmdBindPipeline(cb, PipelineBindPoint.Graphics, pipeline);
+            long nt = NatStart(); vk.CmdBindPipeline(cb, PipelineBindPoint.Graphics, pipeline); NatEnd(2, nt);
             lastPipeline = pipeline;
+            Stats.PipelineBinds++;
         }
+        Lap(2);
 
         SetDynamicState(cb);
+        Lap(3);
         BindResources(cb, p);
 
         // Vertex buffers: one binding per input location.
@@ -170,8 +201,10 @@ public sealed unsafe partial class VkGl
                 (buffer, offset) = (bb, bo + (ulong)a.Offset);
             }
             else (buffer, offset) = (dummyVertex!.Buffer, p.InputKinds[i] == ScalarKind.Float ? 0ul : 16ul);
-            vk.CmdBindVertexBuffers(cb, (uint)loc, 1, &buffer, &offset);
+            long nt = NatStart(); vk.CmdBindVertexBuffers(cb, (uint)loc, 1, &buffer, &offset); NatEnd(7, nt);
+            Stats.VertexBufferBinds++;
         }
+        Lap(7);
         return true;
     }
 
@@ -309,7 +342,7 @@ public sealed unsafe partial class VkGl
         if (all || vp != sentViewport)
         {
             var v = new Viewport(vp.X, vp.Y, vp.W, vp.H, 0, 1);
-            vk.CmdSetViewport(cb, 0, 1, &v);
+            Stats.DynamicStateCalls++; long nt = NatStart(); vk.CmdSetViewport(cb, 0, 1, &v); NatEnd(3, nt);
             sentViewport = vp;
         }
         (int X, int Y, int W, int H) sc = scissorTest ? scissor : (0, 0, passWidth, passHeight);
@@ -320,7 +353,7 @@ public sealed unsafe partial class VkGl
         if (all || clipped != sentScissor)
         {
             var r = new Rect2D(new Offset2D(clipped.x0, clipped.y0), new Extent2D((uint)clipped.Item3, (uint)clipped.Item4));
-            vk.CmdSetScissor(cb, 0, 1, &r);
+            Stats.DynamicStateCalls++; long nt = NatStart(); vk.CmdSetScissor(cb, 0, 1, &r); NatEnd(3, nt);
             sentScissor = clipped;
         }
         var cull = !cullFace ? CullModeFlags.None : cullMode switch
@@ -329,20 +362,20 @@ public sealed unsafe partial class VkGl
             TriangleFace.FrontAndBack => CullModeFlags.FrontAndBack,
             _ => CullModeFlags.BackBit,
         };
-        if (all || cull != sentCull) { vk.CmdSetCullMode(cb, cull); sentCull = cull; }
+        if (all || cull != sentCull) { Stats.DynamicStateCalls++; long nt = NatStart(); vk.CmdSetCullMode(cb, cull); NatEnd(3, nt); sentCull = cull; }
         // GL's counter-clockwise is Vulkan's clockwise: same pixel rows, opposite sign convention for the area.
         var front = frontFace == FrontFaceDirection.Ccw ? Silk.NET.Vulkan.FrontFace.Clockwise : Silk.NET.Vulkan.FrontFace.CounterClockwise;
-        if (all || front != sentFront) { vk.CmdSetFrontFace(cb, front); sentFront = front; }
+        if (all || front != sentFront) { Stats.DynamicStateCalls++; long nt = NatStart(); vk.CmdSetFrontFace(cb, front); NatEnd(3, nt); sentFront = front; }
         bool test = depthTest && passDepth is not null;
         // GL writes depth only while the depth test is on.
         bool write = test && depthWrite;
-        if (all || test != sentDepthTest) { vk.CmdSetDepthTestEnable(cb, test); sentDepthTest = test; }
-        if (all || write != sentDepthWrite) { vk.CmdSetDepthWriteEnable(cb, write); sentDepthWrite = write; }
+        if (all || test != sentDepthTest) { Stats.DynamicStateCalls++; long nt = NatStart(); vk.CmdSetDepthTestEnable(cb, test); NatEnd(3, nt); sentDepthTest = test; }
+        if (all || write != sentDepthWrite) { Stats.DynamicStateCalls++; long nt = NatStart(); vk.CmdSetDepthWriteEnable(cb, write); NatEnd(3, nt); sentDepthWrite = write; }
         var cmp = Compare(depthFunc);
-        if (all || cmp != sentCompare) { vk.CmdSetDepthCompareOp(cb, cmp); sentCompare = cmp; }
+        if (all || cmp != sentCompare) { Stats.DynamicStateCalls++; long nt = NatStart(); vk.CmdSetDepthCompareOp(cb, cmp); NatEnd(3, nt); sentCompare = cmp; }
         bool bias = polygonMode == GlPolygonMode.Line ? offsetLine : offsetFill;
-        if (all || bias != sentBiasEnable) { vk.CmdSetDepthBiasEnable(cb, bias); sentBiasEnable = bias; }
-        if (all || (offsetUnits, offsetFactor) != sentBias) { vk.CmdSetDepthBias(cb, offsetUnits, 0, offsetFactor); sentBias = (offsetUnits, offsetFactor); }
+        if (all || bias != sentBiasEnable) { Stats.DynamicStateCalls++; long nt = NatStart(); vk.CmdSetDepthBiasEnable(cb, bias); NatEnd(3, nt); sentBiasEnable = bias; }
+        if (all || (offsetUnits, offsetFactor) != sentBias) { Stats.DynamicStateCalls++; long nt = NatStart(); vk.CmdSetDepthBias(cb, offsetUnits, 0, offsetFactor); NatEnd(3, nt); sentBias = (offsetUnits, offsetFactor); }
     }
 
     // ----- Descriptors -----
@@ -367,15 +400,17 @@ public sealed unsafe partial class VkGl
                 uint n = 0;
                 if (p.VertexDefaultBlock is not null) offsets[n++] = (uint)p.VertexSlice.Offset;
                 if (p.FragmentDefaultBlock is not null) offsets[n++] = (uint)p.FragmentSlice.Offset;
-                vk.CmdBindDescriptorSets(cb, PipelineBindPoint.Graphics, p.Layout, 1, 1, &set, n, offsets);
+                long nt = NatStart(); vk.CmdBindDescriptorSets(cb, PipelineBindPoint.Graphics, p.Layout, 1, 1, &set, n, offsets); NatEnd(4, nt);
+                Stats.Set1Binds++;
             }
         }
 
+        Lap(4);
         // Set 0: named blocks and samplers, pushed when they differ from what this program last pushed in this command buffer.
         var blocks = p.BlockList;
         var samplerList = p.SamplerList;
         int count = blocks.Length + samplerList.Length;
-        if (count == 0) return;
+        if (count == 0) { Lap(5); return; }
         var writes = stackalloc WriteDescriptorSet[count];
         var bufferInfos = stackalloc DescriptorBufferInfo[blocks.Length + 1];
         var imageInfos = stackalloc DescriptorImageInfo[samplerList.Length + 1];
@@ -413,7 +448,8 @@ public sealed unsafe partial class VkGl
                 DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &imageInfos[i],
             };
         }
-        if (same) return;
+        if (same) { Stats.PushSkips++; Lap(5); return; }
+        Lap(5);
         p.LastPushEpoch = pushEpoch;
 
         if (p.PushDescriptors)
@@ -421,8 +457,11 @@ public sealed unsafe partial class VkGl
             // The extension entry point: vkCmdPushDescriptorSet is only core from Vulkan 1.4.
             if (pushDescriptor is null && !vk.TryGetDeviceExtension(device.Instance, dev, out pushDescriptor))
                 throw new InvalidOperationException("VK_KHR_push_descriptor entry points missing");
-            pushDescriptor!.CmdPushDescriptorSet(cb, PipelineBindPoint.Graphics, p.Layout, 0, (uint)w, writes);
+            long nt = NatStart(); pushDescriptor!.CmdPushDescriptorSet(cb, PipelineBindPoint.Graphics, p.Layout, 0, (uint)w, writes); NatEnd(6, nt);
             Stats.DescriptorPushes++;
+            Stats.DescriptorWrites += w;
+            Stats.PushedTextures += samplerList.Length;
+            Lap(6);
             return;
         }
         var set0 = AllocateSet(p.SetLayout);
@@ -501,6 +540,7 @@ public sealed unsafe partial class VkGl
         var slice = uniformRings[device.Frames.Slot].Allocate((ulong)data.Length, uniformAlign);
         fixed (byte* src = data) System.Buffer.MemoryCopy(src, slice.Pointer, data.Length, data.Length);
         Stats.UniformBytes += data.Length;
+        Stats.UniformCopies++;
         return slice;
     }
 

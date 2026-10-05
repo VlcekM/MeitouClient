@@ -61,7 +61,9 @@ public sealed unsafe class VulkanPresenter : IDisposable
         gl.BeginFrame(width, height);
         // The semaphore of this frame slot: its previous use was waited on by the slot's previous submission, whose fence BeginFrame waited for.
         var semaphore = acquired[device.Frames.Slot];
+        long acquireStart = System.Diagnostics.Stopwatch.GetTimestamp();
         var r = khr.AcquireNextImage(device.Device, swapchain, ulong.MaxValue, semaphore, default, ref imageIndex);
+        gl.Stats.AcquireTicks += System.Diagnostics.Stopwatch.GetTimestamp() - acquireStart;
         if (r is Result.ErrorOutOfDateKhr) { stale = true; acquiredImage = false; return true; }   // draw anyway; nothing is shown
         if (r is not (Result.Success or Result.SuboptimalKhr)) VkGl.Check(r);
         if (r == Result.SuboptimalKhr) stale = true;
@@ -106,7 +108,9 @@ public sealed unsafe class VulkanPresenter : IDisposable
             SwapchainCount = 1, PSwapchains = &sc, PImageIndices = &index,
         };
         Result r;
+        long presentStart = System.Diagnostics.Stopwatch.GetTimestamp();
         lock (device.QueueLock) r = PresentFunction != null ? PresentFunction(device.GraphicsQueue, &info) : khr.QueuePresent(device.GraphicsQueue, &info);
+        gl.Stats.QueuePresentTicks += System.Diagnostics.Stopwatch.GetTimestamp() - presentStart;
         if (r is Result.ErrorOutOfDateKhr or Result.SuboptimalKhr) stale = true;
         else VkGl.Check(r);
         acquiredImage = false;
