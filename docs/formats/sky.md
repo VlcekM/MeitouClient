@@ -200,11 +200,11 @@ checked 2026-10-04):
   Not reproduced: the water being fogged by the depth of what is under it.
 - **Above the game's camera heights** (a viewer choice; no game behaviour exists there): the viewer allows any height, and the
   game's formula from far above is wrong (above: a dark brown band, a white arc in the thousands, cyan rims where it fades). So
-  with `kenshi` the haze blends towards `physical` as the eye climbs: weight `smoothstep(8000, 30000, clearance)`, clearance being
+  with `kenshi` the haze blends towards `physical` as the eye climbs: weight `smoothstep(6000, 22000, clearance)`, clearance being
   the eye's height above the highest ground or water at the eye and on rings out to 2000 round it ([camera.md](camera.md), in-game
-  under ~1840). Below 8000 it is exactly the game's haze (with the strength at 1; the viewer's default is 0.85, see below) (screenshots before and after the change pixel-identical:
+  under ~1840). Below 6000 it is exactly the game's haze (with the strength at 1; the viewer's default is 0.85, see below) (screenshots before and after the change pixel-identical:
   `--town "The Hub" --distance 40000 --pitch 3` at 6, 13, 22.6, 23.3 and 1 o'clock, and `--at -51468,-14324 --yaw 95 --pitch 2
-  --distance 300` at 13 with `--no-foliage`; with foliage that view already differs from itself run to run by the same margin); from 30000 up it is the physical haze, which looks like a map seen from an aircraft (the haze thins as
+  --distance 300` at 13 with `--no-foliage`; with foliage that view already differs from itself run to run by the same margin); from 22000 up it is the physical haze, which looks like a map seen from an aircraft (the haze thins as
   the eye climbs out of the dense low air). In the band both are evaluated and mixed (the weight is per frame, so outside it only one
   runs). The water's widened sun glint is weighed by the game's Fresnel term (F0 0.04) by the same weight (viewer choice; it
   otherwise became a large blown-out disc on the sea from high up).
