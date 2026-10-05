@@ -35,6 +35,9 @@ sealed class WorldOptions
     public int ShadowQuality = 1, DebugShadows;
     public float ShadowRange = KenshiShadows.DefaultRange;
     public bool MeitouShadows = true;   // the shadows switch (Enhancements): Meitou by default, false the game's CSM
+    /// <summary>The range switch (Enhancements): foliage meshes drawn to their size class's range (Meitou, default) or their layer's (the game); the class ranges (null: the defaults).</summary>
+    public bool MeitouRange = true;
+    public float? SmallRange, MediumRange, LargeRange;
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
     public float? HazeDistance;
     public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze switch (default); 1 = the game's haze
@@ -70,6 +73,7 @@ sealed class WorldOptions
           --no-textures            height-tinted terrain without biome textures (faster start)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
+          --range-large <u> --range-medium <u> --range-small <u>   foliage draw range by mesh size (the range switch, F6; defaults 5000, 2500, 800; Tab sliders)
           --object-distance <u>    draw placed objects at full detail up to this distance (default 12000)
           --distant-range <zones>  distant towns (and buildings' distant meshes) up to this many zones (default 10, the game's setting maximum; its default is 6)
           --no-distant             no distant towns: objects beyond --object-distance are simply not drawn
@@ -88,7 +92,7 @@ sealed class WorldOptions
           --weather <name>         a WEATHER record's sky colour, fog, clouds and heat haze (default "Default": clear, no fog, no clouds, no heat haze)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
-          --faithful <all|ao,dither,haze,aa,shadows>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
+          --faithful <all|ao,dither,haze,aa,shadows,range>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
           --show-keys              start with the key list overlay open (toggle with F10)
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
@@ -109,7 +113,7 @@ sealed class WorldOptions
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
           G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, Ctrl+C copy camera code, Ctrl+V go to camera code, P save screenshot, Tab settings sliders, Esc quit.
-          F1 ambient occlusion, F2 dithering, F3 haze, F4 anti-aliasing, F5 shadows;
+          F1 ambient occlusion, F2 dithering, F3 haze, F4 anti-aliasing, F5 shadows, F6 foliage ranges;
           - / = exposure; F10 key list, F11 frame statistics, F12 profiler (gpu, cpu, off).
         """;
 
@@ -118,6 +122,10 @@ sealed class WorldOptions
     {
         if (value != "vulkan") Console.Error.WriteLine($"renderer  --renderer {value}: OpenGL was removed, Vulkan is the only backend (the option is ignored)");
     }
+
+    /// <summary>The Faithful / Meitou switches over the options (for <c>--meitou</c> / <c>--faithful</c>).</summary>
+    static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
+        () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -153,6 +161,9 @@ sealed class WorldOptions
                 case "--no-textures": o.NoTextures = true; break;
                 case "--no-objects": o.NoObjects = true; break;
                 case "--no-foliage": o.NoFoliage = true; break;
+                case "--range-large": o.LargeRange = F(); break;
+                case "--range-medium": o.MediumRange = F(); break;
+                case "--range-small": o.SmallRange = F(); break;
                 case "--object-distance": o.ObjectDistance = F(); break;
                 case "--distant-range": o.DistantZones = F(); break;
                 case "--no-distant": o.NoDistant = true; break;
@@ -171,8 +182,8 @@ sealed class WorldOptions
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
                 case "--haze-distance": o.HazeDistance = F(); break;
                 case "--haze-strength": o.HazeStrength = F(); break;
-                case "--meitou": Enhancements.Apply(Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v, () => o.MeitouShadows, v => o.MeitouShadows = v), Next(), meitou: true); break;
-                case "--faithful": Enhancements.Apply(Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v, () => o.MeitouShadows, v => o.MeitouShadows = v), Next(), meitou: false); break;
+                case "--meitou": Enhancements.Apply(Switches(o), Next(), meitou: true); break;
+                case "--faithful": Enhancements.Apply(Switches(o), Next(), meitou: false); break;
                 case "--weather": o.Weather = Next(); break;
                 case "--clouds": o.Clouds = F(); break;
                 case "--no-stream": o.NoStream = true; break;
@@ -396,6 +407,8 @@ static class WorldFrame
         {
             gpu.Foliage = new FoliageRenderer(gl, install, scene.Database, scene.Objects?.Levels ?? WorldLevelData.Load(install), assets);
             if (!interactive) gpu.Foliage.SwaySeconds = o.SwayStart;   // offscreen pictures and benchmarks: the grass holds still, so a picture repeats exactly
+            var f = gpu.Foliage;
+            (f.MeitouRange, f.SmallRange, f.MediumRange, f.LargeRange) = (o.MeitouRange, o.SmallRange ?? f.SmallRange, o.MediumRange ?? f.MediumRange, o.LargeRange ?? f.LargeRange);
             Console.WriteLine($"foliage   catalog and shaders ready ({gpu.Foliage.LoadMs:0} ms)");
         }
         if (!o.NoShadows)
@@ -428,6 +441,10 @@ static class WorldFrame
         if (g.Foliage is { } foliage)
         {
             sliders.Add(new Slider("Foliage draw distance x", 0.25f, 8, () => foliage.RangeSetting, v => foliage.RangeSetting = v, "0.00", Logarithmic: true));
+            // The range switch's class ranges (Meitou; the slider above then only moves the FAR layers' large meshes).
+            sliders.Add(new Slider("Large foliage range (F6 Meitou)", 1000, 12000, () => foliage.LargeRange, v => foliage.LargeRange = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
+            sliders.Add(new Slider("Medium foliage range", 400, 8000, () => foliage.MediumRange, v => foliage.MediumRange = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
+            sliders.Add(new Slider("Small foliage range", 200, 4000, () => foliage.SmallRange, v => foliage.SmallRange = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
             sliders.Add(new Slider("Grass draw distance x", 0.25f, 8, () => foliage.GrassRangeSetting, v => foliage.GrassRangeSetting = v, "0.00", Logarithmic: true));
             sliders.Add(new Slider("Grass density x", 0.1f, 2, () => foliage.GrassDensitySetting, v => foliage.GrassDensitySetting = v, "0.00"));
         }

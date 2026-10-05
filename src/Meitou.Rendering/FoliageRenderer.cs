@@ -115,8 +115,23 @@ public sealed unsafe class FoliageRenderer : IDisposable
     /// <summary>The nearest grass page of a laid-out zone within four fifths of its range (before the blades sink) that is not uploaded yet.</summary>
     public float NearestMissingGrass { get; private set; } = float.PositiveInfinity;
 
-    /// <summary>Zones within this ground distance of the eye are laid out whole: the longest MEDIUM / CLOSE mesh layer range or grass range at the current settings.</summary>
-    public float NearReach => Math.Max(NearMeshRange * RangeSetting, GrassMaxRange * GrassRangeSetting);
+    /// <summary>
+    /// The <c>range</c> switch (Enhancements): Meitou (true, the default) draws each mesh to the range of its size class
+    /// (<see cref="SmallRange"/>, <see cref="MediumRange"/>, <see cref="LargeRange"/>; <see cref="FoliageSizes"/>) instead of its layer's
+    /// range × <see cref="RangeSetting"/>. Large meshes of FAR layers keep the longer of the two, so the landmark formations still reach
+    /// 8000 × the setting. False: the game's per-layer ranges.
+    /// </summary>
+    public bool MeitouRange { get; set; } = true;
+    /// <summary>How far small, medium and large meshes are drawn with <see cref="MeitouRange"/> (units along the ground; the Tab sliders).</summary>
+    public float SmallRange { get; set; } = FoliageSizes.DefaultSmallRange;
+    public float MediumRange { get; set; } = FoliageSizes.DefaultMediumRange;
+    public float LargeRange { get; set; } = FoliageSizes.DefaultLargeRange;
+    float LongestClassRange => Math.Max(Math.Max(SmallRange, MediumRange), LargeRange);
+    float ClassRange(FoliageSizeClass c) => c switch { FoliageSizeClass.Small => SmallRange, FoliageSizeClass.Medium => MediumRange, _ => LargeRange };
+
+    /// <summary>Zones within this ground distance of the eye are laid out whole: the longest MEDIUM / CLOSE mesh layer range (with
+    /// <see cref="MeitouRange"/>: the longest class range, as any class can be in a MEDIUM layer) or grass range at the current settings.</summary>
+    public float NearReach => Math.Max(MeitouRange ? LongestClassRange : NearMeshRange * RangeSetting, GrassMaxRange * GrassRangeSetting);
     /// <summary>Zones within this distance are laid out at least for their far layers (FAR, 8000 x the setting).</summary>
     public float FarReach => Math.Max(MeshRange * RangeSetting, NearReach);
     /// <summary>The longest range of a mesh layer that is not a far layer (<see cref="FoliageLayout.IsFarLayer"/>), at setting 1.</summary>
@@ -192,6 +207,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public required MeshAsset Asset;
         /// <summary>The layer's range at setting 1 and its transition: the drawn range follows the current <see cref="RangeSetting"/> (<see cref="RangeOf"/>).</summary>
         public required float BaseRange, Transition;
+        /// <summary>Placed by a FAR layer (<see cref="FoliageLayout.IsFarLayer"/>).</summary>
+        public required bool Far;
         /// <summary>The largest instance scale: how far a mesh's bounds can reach from its instance's position (the zone's cull box).</summary>
         public required float MaxScale;
         /// <summary>The instances (<see cref="FoliageCull"/>'s records), their bounding spheres filled once the mesh's bounds are known (<see cref="SpheresReady"/>).</summary>
@@ -377,6 +394,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
                 Asset = AssetFor(g.Mesh),
                 BaseRange = g.Layer.Range,
                 Transition = g.Layer.Transition,
+                Far = FoliageLayout.IsFarLayer(g.Layer),
                 MaxScale = g.MaxScale,
                 Instances = g.Instances,
             });
@@ -396,10 +414,18 @@ public sealed unsafe class FoliageRenderer : IDisposable
     }
 
     /// <summary>The range a group is drawn to at the current <see cref="RangeSetting"/>, and its fade band: the game's transition is 10 units
-    /// (100 for wind layers), too short to see, so a tenth of the range instead.</summary>
+    /// (100 for wind layers), too short to see, so a tenth of the range instead.
+    /// With <see cref="MeitouRange"/> the range is the mesh's size class's (the longest class range until the mesh is decoded and its size known),
+    /// or for a large mesh of a FAR layer the longer of that and the layer's; the band is the same rule.</summary>
     (float Range, float Band) RangeOf(Group g)
     {
         float range = g.BaseRange * RangeSetting;
+        if (MeitouRange)
+        {
+            var a = g.Asset;
+            float size = a.HasBounds ? ClassRange(a.SizeClass) : LongestClassRange;
+            range = g.Far && (!a.HasBounds || a.SizeClass == FoliageSizeClass.Large) ? Math.Max(range, size) : size;
+        }
         return (range, Math.Max(g.Transition, range * 0.1f));
     }
 
@@ -556,6 +582,9 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public bool Terrain => Mesh.MaterialType == 2;
         public Vector3 Centre;
         public float Radius = 1;
+        /// <summary><see cref="Centre"/>, <see cref="Radius"/> and <see cref="SizeClass"/> are known (the mesh was decoded once; they never change).</summary>
+        public bool HasBounds;
+        public FoliageSizeClass SizeClass;
     }
 
     sealed class GpuMesh
@@ -625,6 +654,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
             if (leaves is not null) { min = Vector3.Min(min, leaves.Min); max = Vector3.Max(max, leaves.Max); }
             a.Centre = (min + max) / 2;
             a.Radius = Math.Max((max - min).Length() / 2, 1);
+            a.SizeClass = FoliageSizes.Classify(FoliageSizes.Size(a.Radius, a.Mesh));
+            a.HasBounds = true;
             QueueMesh(a, main, leaves);
         }
     }
