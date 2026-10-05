@@ -31,6 +31,13 @@ public sealed unsafe partial class VkGl
         public bool TransparentBorder;
         public float Anisotropy = 1;
         public ComponentSwizzle SwizzleR = ComponentSwizzle.Identity, SwizzleG = ComponentSwizzle.Identity, SwizzleB = ComponentSwizzle.Identity, SwizzleA = ComponentSwizzle.Identity;
+        // Sampler and view as last used (VkGl.SamplerAndView), valid while Version, DefinedLevels and Image are unchanged.
+        public int Version, CachedVersion = -1;
+        public bool CachedShadow;
+        public uint CachedLevels;
+        public GpuImage? CachedImage;
+        public Silk.NET.Vulkan.Sampler CachedSampler;
+        public ImageView CachedView;
         public bool IsDepth => Format is Format.D32Sfloat or Format.D24UnormS8Uint or Format.X8D24UnormPack32 or Format.D16Unorm;
         public bool IsInteger => Format is Format.R8G8B8A8Uint or Format.R32Uint or Format.R16Uint;
         public bool IsCube => Target == TextureTarget.TextureCubeMap;
@@ -97,6 +104,7 @@ public sealed unsafe partial class VkGl
     public void TexParameter(TextureTarget target, TextureParameterName pname, int param)
     {
         var t = BoundTexture(target);
+        t.Version++;
         switch (pname)
         {
             case TextureParameterName.TextureMinFilter: t.MinFilter = (TextureMinFilter)param; break;
@@ -119,14 +127,18 @@ public sealed unsafe partial class VkGl
 
     public void TexParameter(TextureTarget target, TextureParameterName pname, float param)
     {
-        if (pname == (TextureParameterName)0x84FE) BoundTexture(target).Anisotropy = param;
+        if (pname == (TextureParameterName)0x84FE) { var t = BoundTexture(target); t.Anisotropy = param; t.Version++; }
         else TexParameter(target, pname, (int)param);
     }
 
     public void TexParameter(TextureTarget target, TextureParameterName pname, ReadOnlySpan<float> @params)
     {
         if (pname == TextureParameterName.TextureBorderColor)
-            BoundTexture(target).TransparentBorder = @params.Length >= 4 && @params[3] == 0;
+        {
+            var t = BoundTexture(target);
+            t.TransparentBorder = @params.Length >= 4 && @params[3] == 0;
+            t.Version++;
+        }
     }
 
     static ComponentSwizzle Swizzle(int gl) => (GLEnum)gl switch

@@ -77,7 +77,9 @@ public sealed unsafe partial class VkGl
 
     public void DrawArraysInstanced(PrimitiveType mode, int first, uint count, uint instancecount)
     {
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         if (count == 0 || instancecount == 0 || !PrepareDraw(mode)) return;
+        Stats.DrawTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
         vk.CmdDraw(cmd, count, instancecount, (uint)first, 0);
         Stats.Draws++;
     }
@@ -86,7 +88,9 @@ public sealed unsafe partial class VkGl
 
     public void DrawElementsInstanced(PrimitiveType mode, uint count, DrawElementsType type, void* indices, uint instancecount)
     {
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         if (count == 0 || instancecount == 0 || !PrepareDraw(mode)) return;
+        Stats.DrawTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
         var indexType = type switch
         {
             DrawElementsType.UnsignedInt => IndexType.Uint32,
@@ -345,64 +349,55 @@ public sealed unsafe partial class VkGl
 
     void BindResources(CommandBuffer cb, GlProgramObj p)
     {
-        var c = p.Compiled!;
-        int count = c.Vertex.Blocks.Count + c.Fragment.Blocks.Count + c.Vertex.Samplers.Count + c.Fragment.Samplers.Count;
+        var blocks = p.BlockList;
+        var samplerList = p.SamplerList;
+        int count = blocks.Length + samplerList.Length;
         if (count == 0) return;
         var writes = stackalloc WriteDescriptorSet[count];
-        var bufferInfos = stackalloc DescriptorBufferInfo[c.Vertex.Blocks.Count + c.Fragment.Blocks.Count + 1];
-        var imageInfos = stackalloc DescriptorImageInfo[c.Vertex.Samplers.Count + c.Fragment.Samplers.Count + 1];
-        int w = 0, bi = 0, ii = 0;
+        var bufferInfos = stackalloc DescriptorBufferInfo[blocks.Length + 1];
+        var imageInfos = stackalloc DescriptorImageInfo[samplerList.Length + 1];
+        int w = 0;
 
         // Loose uniforms: copied into the frame ring when they changed (or the frame moved on).
-        ulong align = Math.Max(device.Limits.MinUniformBufferOffsetAlignment, 16);
         long frame = device.Frames.FrameNumber;
         if (p.SliceFrame != frame) { p.VertexDirty = p.FragmentDirty = true; p.SliceFrame = frame; }
-        if (p.VertexDirty && p.VertexDefault.Length > 0) { p.VertexSlice = CopyToRing(p.VertexDefault, align); p.VertexDirty = false; }
-        if (p.FragmentDirty && p.FragmentDefault.Length > 0) { p.FragmentSlice = CopyToRing(p.FragmentDefault, align); p.FragmentDirty = false; }
+        if (p.VertexDirty && p.VertexDefault.Length > 0) { p.VertexSlice = CopyToRing(p.VertexDefault, uniformAlign); p.VertexDirty = false; }
+        if (p.FragmentDirty && p.FragmentDefault.Length > 0) { p.FragmentSlice = CopyToRing(p.FragmentDefault, uniformAlign); p.FragmentDirty = false; }
 
-        void Blocks(ShaderReflection r, RingSlice defaultSlice)
+        for (int i = 0; i < blocks.Length; i++)
         {
-            foreach (var b in r.Blocks)
+            ref readonly var b = ref blocks[i];
+            if (b.Default)
             {
-                if (b.Kind != BlockKind.Uniform) continue;
-                if (b.IsDefault) bufferInfos[bi] = new DescriptorBufferInfo(defaultSlice.Buffer, defaultSlice.Offset, (ulong)b.Size);
-                else
-                {
-                    uint point = p.BlockBindings.TryGetValue(b.Name, out var pt) ? pt : 0;
-                    if (!buffers.TryGetValue(uniformBindings[point], out var ub) || !ub.Defined)
-                        throw new InvalidOperationException($"program {p.Id}: no buffer bound for uniform block {b.Name} (binding {point})");
-                    var (buf, off) = Use(ub);
-                    bufferInfos[bi] = new DescriptorBufferInfo(buf, off, (ulong)Math.Min(b.Size, ub.Size));
-                }
-                writes[w++] = new WriteDescriptorSet
-                {
-                    SType = StructureType.WriteDescriptorSet, DstBinding = (uint)b.Binding, DescriptorCount = 1,
-                    DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &bufferInfos[bi++],
-                };
+                var slice = b.Vertex ? p.VertexSlice : p.FragmentSlice;
+                bufferInfos[i] = new DescriptorBufferInfo(slice.Buffer, slice.Offset, (ulong)b.Size);
             }
+            else
+            {
+                uint point = p.BlockBindings.TryGetValue(b.Name, out var pt) ? pt : 0;
+                if (!buffers.TryGetValue(uniformBindings[point], out var ub) || !ub.Defined)
+                    throw new InvalidOperationException($"program {p.Id}: no buffer bound for uniform block {b.Name} (binding {point})");
+                var (buf, off) = Use(ub);
+                bufferInfos[i] = new DescriptorBufferInfo(buf, off, (ulong)Math.Min(b.Size, ub.Size));
+            }
+            writes[w++] = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet, DstBinding = b.Binding, DescriptorCount = 1,
+                DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &bufferInfos[i],
+            };
         }
-
-        void Samplers(ShaderReflection r, bool vertex)
+        for (int i = 0; i < samplerList.Length; i++)
         {
-            foreach (var s in r.Samplers)
+            ref readonly var s = ref samplerList[i];
+            var t = SamplerTexture(s.Info, s.Slot.Unit);
+            var (sampler, view) = SamplerAndView(t, s.Info.Depth);
+            imageInfos[i] = new DescriptorImageInfo(sampler, view, ImageLayout.General);
+            writes[w++] = new WriteDescriptorSet
             {
-                int unit = 0;
-                foreach (var u in p.Uniforms)
-                    if ((vertex ? u.VertexSampler : u.FragmentSampler) == s) { unit = u.Unit; break; }
-                var t = SamplerTexture(s, unit);
-                imageInfos[ii] = new DescriptorImageInfo(SamplerFor(t, s.Depth), SampleView(t), ImageLayout.General);
-                writes[w++] = new WriteDescriptorSet
-                {
-                    SType = StructureType.WriteDescriptorSet, DstBinding = (uint)s.Binding, DescriptorCount = 1,
-                    DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &imageInfos[ii++],
-                };
-            }
+                SType = StructureType.WriteDescriptorSet, DstBinding = s.Binding, DescriptorCount = 1,
+                DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &imageInfos[i],
+            };
         }
-
-        Blocks(c.Vertex, p.VertexSlice);
-        Blocks(c.Fragment, p.FragmentSlice);
-        Samplers(c.Vertex, true);
-        Samplers(c.Fragment, false);
 
         if (p.PushDescriptors)
         {
@@ -416,6 +411,19 @@ public sealed unsafe partial class VkGl
         for (int i = 0; i < w; i++) writes[i].DstSet = set;
         vk.UpdateDescriptorSets(dev, (uint)w, writes, 0, null);
         vk.CmdBindDescriptorSets(cb, PipelineBindPoint.Graphics, p.Layout, 0, 1, &set, 0, null);
+    }
+
+    ulong uniformAlign => Math.Max(device.Limits.MinUniformBufferOffsetAlignment, 16);
+
+    /// <summary>The sampler and view a texture samples with, cached on the texture until its state changes.</summary>
+    (Sampler, ImageView) SamplerAndView(GlTextureObj t, bool shadow)
+    {
+        if (t.CachedVersion == t.Version && t.CachedShadow == shadow && t.CachedLevels == t.DefinedLevels && t.CachedImage == t.Image)
+            return (t.CachedSampler, t.CachedView);
+        t.CachedSampler = SamplerFor(t, shadow);
+        t.CachedView = SampleView(t);
+        (t.CachedVersion, t.CachedShadow, t.CachedLevels, t.CachedImage) = (t.Version, shadow, t.DefinedLevels, t.Image);
+        return (t.CachedSampler, t.CachedView);
     }
 
     RingSlice CopyToRing(byte[] data, ulong align)

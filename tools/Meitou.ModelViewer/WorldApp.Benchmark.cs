@@ -37,6 +37,7 @@ static partial class WorldApp
             frameWatch.Restart();
             { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
             double cpuMs = frameWatch.Elapsed.TotalMilliseconds;
+            if (gl is Meitou.Rendering.Vulkan.VkGl vkStats && i % 500 == 0) Console.WriteLine($"vkgl      frame {i}: {vkStats.Stats}");
             cpu.Add(cpuMs);
             gl.Finish();
             StageClock.Lap(11);

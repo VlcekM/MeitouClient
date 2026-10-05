@@ -49,7 +49,7 @@ public sealed unsafe partial class VkGl
         if (queryPools is null) return;
         var list = issuedQueries![slot];
         foreach (var q in list)
-            if (q.Result is null && q.Slot == slot) Read(q, wait: false);
+            if (q.Result is null && q.Slot == slot && Read(q, wait: false) is null) q.Result = 0;   // never completed (unpaired): expires as 0
         list.Clear();
         vk.ResetQueryPool(dev, queryPools[slot], 0, PairsPerSlot * 2);
     }

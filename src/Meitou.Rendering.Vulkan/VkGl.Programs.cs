@@ -50,7 +50,13 @@ public sealed unsafe partial class VkGl
         public int DescriptorCount;
         public int[] InputLocations = [];
         public ScalarKind[] InputKinds = [];
+        public BlockBinding[] BlockList = [];       // every uniform block of both stages, in descriptor order
+        public SamplerBinding[] SamplerList = [];   // every sampler of both stages, with the uniform slot holding its unit
+        public readonly Dictionary<string, UniformSlot> SamplerSlots = [];
     }
+
+    internal readonly record struct BlockBinding(uint Binding, int Size, bool Default, bool Vertex, string Name);
+    internal readonly record struct SamplerBinding(uint Binding, SamplerInfo Info, UniformSlot Slot);
 
     static GlslProgramCompiler? sharedCompiler;
     GlslProgramCompiler Compiler => sharedCompiler ??= new GlslProgramCompiler(new ShaderCompileOptions { RemapClipDepth = !device.HasDepthClipControl });
@@ -111,6 +117,13 @@ public sealed unsafe partial class VkGl
             if (!b.IsDefault && b.Kind == BlockKind.Uniform && !p.BlockNames.Contains(b.Name)) p.BlockNames.Add(b.Name);
         p.InputLocations = [.. c.Vertex.Inputs.SelectMany(i => Enumerable.Range(i.Location, i.Slots))];
         p.InputKinds = [.. c.Vertex.Inputs.SelectMany(i => Enumerable.Repeat(i.Kind, i.Slots))];
+        foreach (var s in c.Vertex.Samplers.Concat(c.Fragment.Samplers))
+            if (!p.SamplerSlots.ContainsKey(s.Name))
+                p.SamplerSlots[s.Name] = new UniformSlot { VertexSampler = c.Vertex.FindSampler(s.Name), FragmentSampler = c.Fragment.FindSampler(s.Name) };
+        p.BlockList = [
+            .. c.Vertex.Blocks.Where(b => b.Kind == BlockKind.Uniform).Select(b => new BlockBinding((uint)b.Binding, b.Size, b.IsDefault, true, b.Name)),
+            .. c.Fragment.Blocks.Where(b => b.Kind == BlockKind.Uniform).Select(b => new BlockBinding((uint)b.Binding, b.Size, b.IsDefault, false, b.Name))];
+        p.SamplerList = [.. c.Vertex.Samplers.Concat(c.Fragment.Samplers).Select(s => new SamplerBinding((uint)s.Binding, s, p.SamplerSlots[s.Name]))];
         CreateLayouts(p);
         p.Linked = true;
     }
@@ -194,12 +207,10 @@ public sealed unsafe partial class VkGl
         if (!p.Linked) return -1;
         if (p.Locations.TryGetValue(name, out int loc)) return loc;
         var c = p.Compiled!;
-        var slot = new UniformSlot
+        var slot = p.SamplerSlots.TryGetValue(name, out var samplerSlot) ? samplerSlot : new UniformSlot
         {
             Vertex = Loose(c.Vertex.FindUniform(name)),
             Fragment = Loose(c.Fragment.FindUniform(name)),
-            VertexSampler = c.Vertex.FindSampler(name),
-            FragmentSampler = c.Fragment.FindSampler(name),
         };
         if (slot.Vertex is null && slot.Fragment is null && !slot.IsSampler) loc = -1;
         else

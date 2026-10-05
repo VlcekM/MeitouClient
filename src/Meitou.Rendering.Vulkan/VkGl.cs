@@ -199,7 +199,8 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
 public sealed class VkGlStats
 {
     public int Draws, RenderPasses, PipelinesCreated, BuffersRenamed, Uploads, UploadBytes, Flushes;
+    public long DrawTicks;   // Stopwatch ticks spent preparing draws (pipelines, state, descriptors, vertex buffers)
     public long UniformBytes;
-    internal void BeginFrame() { Draws = RenderPasses = PipelinesCreated = BuffersRenamed = Uploads = UploadBytes = Flushes = 0; UniformBytes = 0; }
-    public override string ToString() => $"{Draws} draws, {RenderPasses} passes, {PipelinesCreated} new pipelines, {Uploads} uploads ({UploadBytes / 1024} KB), {BuffersRenamed} renames, {UniformBytes / 1024} KB uniforms, {Flushes} flushes";
+    internal void BeginFrame() { Draws = RenderPasses = PipelinesCreated = BuffersRenamed = Uploads = UploadBytes = Flushes = 0; UniformBytes = DrawTicks = 0; }
+    public override string ToString() => $"{Draws} draws, {RenderPasses} passes, {PipelinesCreated} new pipelines, {Uploads} uploads ({UploadBytes / 1024} KB), {BuffersRenamed} renames, {UniformBytes / 1024} KB uniforms, {Flushes} flushes, draw prep {DrawTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0.00} ms";
 }
