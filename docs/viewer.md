@@ -539,6 +539,36 @@ The sun's shadow map as the game's CSM mode draws it ([formats/shadows.md](forma
 before the reflection and the main pass from the terrain, objects and foliage meshes. `--debug-shadows 1|2|3` shows the cascade
 maps, the term per cascade, or the term over the picture.
 
+**Shadow pass cost** (**Observed**, 2026-10-05, RTX 4070, Debug build, 1600 x 900, `--faithful all --time 13`; the machine shared with
+other agents' viewers, so spread is large). `--screenshot` logs print the pass per cascade (`WorldFrame.DetailedStats`: terrain
+triangles, objects and foliage instances, draw calls and CPU ms, and the foliage's steps: culling, upload, meshes, TERRAIN-mode rocks)
+and the foliage main pass per depth slice.
+- *Where the time went*: at the forest camera (`--at -37582,-80684 --yaw -70.5 --pitch 6.1 --distance 10588`) the shadow pass cost
+  ~17-27 ms of CPU against ~1.5 ms of GPU. Cascades 0 and 1 are unused there (the camera's near plane is beyond their split), cascade 2
+  draws nothing, and cascade 3 drew 11,214 foliage instances in 6,051 draw calls: 64 instanced batches of trees and bushes and 5,978
+  single draws of TERRAIN-mode rocks (`TerrainRenderer.DrawMeshes`, one draw per placement and part with its matrix as a uniform),
+  which alone took ~23 ms. The foliage candidate cache shared by the cascades was working (`cull (cached)` in the log, ~1.2-1.4 ms a
+  cascade); the cost was VkGl's per-draw work (~4 µs: pipeline lookup, the loose-uniform block copied to the ring for the new matrix,
+  descriptor offsets, vertex and index buffer binds) times thousands of draws. The main pass had the same pattern on a smaller scale:
+  574 rocks, ~2.8 ms.
+- *Fix*: the TERRAIN-mode meshes (foliage rocks and TERRAIN-mode objects) are drawn instanced, one draw per (vertex array, index count,
+  mirrored or not), the placement as four per-instance rows at locations 7 to 10 (`TerrainShaders.MeshInstanceLocation`) and, in the
+  main pass, the feature's biome row in row 0's w (it only reaches the position's unused w) read as a flat varying
+  (`TerrainShaders.MeshFragment`). Exactness: the shaders compute the position with the uniform form's arithmetic; the shadow map is
+  depth only with a Less test, so the order of the draws cannot change a texel; in colour only two different placements at exactly
+  the same depth could show the order. Measured: 0 differing pixels on all ten parity views (`tools/scripts/parity.sh`, `--faithful
+  all`) and on `--debug-shadows 1` (the atlas itself) at the forest, The Hub and the rock view.
+- *Numbers* (`--fly-benchmark 300 --fly-speed 0`, a still camera, three interleaved runs each, medians): forest, draws per frame
+  7,485 -> 977, shadow stage 25.3 -> 5.7 ms (its foliage part 23.9 -> 4.2), foliage main pass 7.5 -> 4.1 ms, render-thread CPU per
+  frame (p50, commands recorded) 36.9 -> 13.3 ms; The Hub (`--town "The Hub" --distance 40000 --pitch 3`, few rocks in range), draws
+  777 -> 746, shadow stage 3.2 -> 3.1 ms, CPU per frame 6.7 -> 6.6 ms (within noise).
+- *Not done*: reusing last frame's map when the sun, every cascade's snapped box and the LOD eye are unchanged. It would be exact
+  only if every change to the casters (streamed meshes and textures arriving or unloading, foliage pages, terrain height windows, LOD
+  and range settings) invalidated it, and there is no single version counter for that yet; a missed case would show stale shadows in
+  motion that the still-picture gate cannot catch. Left: the foliage candidate pass (~1.3 ms for the first drawn cascade, which records
+  every instance within 1.2 x the shadow range, and ~1.2 ms to test them against each further cascade) and the terrain patches
+  (~0.9 ms for cascade 3).
+
 ### Post-processing
 
 The world view draws the scene into a single-sample RGBA16F framebuffer with depth and runs a
