@@ -178,6 +178,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
 
     void Update(Vector3 eye, bool settling)
     {
+        updates++;
         var watch = Stopwatch.StartNew();
         // Uploads get 2 ms a frame (texture decodes are never waited for) except while settling for a screenshot.
         double budget = settling ? 1e9 : 2.0;
@@ -719,6 +720,30 @@ public sealed unsafe class FoliageRenderer : IDisposable
         }
     }
 
+
+    /// <summary>An instance in range of the shadow cascades' eye, kept for the frame's further cascades (see <see cref="Draw"/>).</summary>
+    readonly record struct ShadowCandidate(MeshAsset Asset, Matrix4x4 Transform, Vector3 Centre, float Radius, float Weight);
+    readonly List<ShadowCandidate> shadowCandidates = [];
+    long shadowCandidatesFrame = -1, updates;
+    Vector3 shadowCandidatesEye;
+    float shadowCandidatesRange;
+
+    /// <summary>One visible instance: into its mesh's batch, or the terrain's mesh path for TERRAIN-mode rocks.</summary>
+    void Emit(MeshAsset a, in Matrix4x4 t, float w, WorldRenderOptions options)
+    {
+        DrawnInstances++;
+        if (a.Terrain && options.Textures)
+        {
+            if (w < 0.5f) return;   // the terrain shader has no dither: the instance goes at the middle of the fade
+            foreach (var gp in a.Main!.Parts) terrainDraws.Add((gp.PlainVao, gp.Count, t));
+            return;
+        }
+        if (!batches.TryGetValue(a, out var batch)) batches[a] = batch = new Batch { Asset = a };
+        if (batch.Count == 0) active.Add(batch);
+        var m = t;
+        m.M14 = w >= 0.999f ? 2 : w;
+        batch.Add(m);
+    }
     /// <summary>Draws the foliage seen from <paramref name="eye"/> through <paramref name="frustum"/>. Without <paramref name="grass"/> only the meshes (e.g. for a reflection).
     /// <paramref name="continuation"/>: a further depth slice of the same frame, adding to the counts and the GPU time. <paramref name="maxRange"/> caps every layer's range (the reflection).</summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain, bool grass = true, bool continuation = false, float maxRange = float.PositiveInfinity)
@@ -731,41 +756,46 @@ public sealed unsafe class FoliageRenderer : IDisposable
         active.Clear();
         terrainDraws.Clear();
 
-        // 1. Cull: each instance by its distance along the ground (the game's pages) and its bounding sphere.
-        var eyeXz = new Vector2(eye.X, eye.Z);
-        foreach (var state in zones.Values)
+        // 1. Cull: each instance by its distance along the ground (the game's pages) and its bounding sphere. The shadow
+        // cascades of a frame share one pass over the zones (DrawDepth with the same eye and range): it keeps every instance in
+        // range, and each cascade then only tests those spheres against its own frustum.
+        bool cachedDepth = depthPass && shadowCandidatesFrame == updates && shadowCandidatesEye == eye && shadowCandidatesRange == maxRange;
+        if (cachedDepth)
         {
-            if (!state.Ready) continue;
-            float zoneDistance = ZoneDistance(state.Zone, eye);
-            // The zone's box (with a margin for big meshes) against the frustum first: most of a far, wide ring is behind the camera.
-            if (!WorldCamera.Intersects(frustum, new Vector3(state.X0 - 300, state.MinY - 600, state.Z0 - 300), new Vector3(state.X0 + WorldLayout.ZoneSize + 300, state.MaxY + 600, state.Z0 + WorldLayout.ZoneSize + 300))) continue;
-            foreach (var g in state.Groups)
+            foreach (ref readonly var c in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(shadowCandidates))
+                if (SphereVisible(frustum, c.Centre, c.Radius)) Emit(c.Asset, c.Transform, c.Weight, options);
+        }
+        else
+        {
+            bool record = depthPass;
+            if (record) { shadowCandidates.Clear(); (shadowCandidatesFrame, shadowCandidatesEye, shadowCandidatesRange) = (updates, eye, maxRange); }
+            var eyeXz = new Vector2(eye.X, eye.Z);
+            foreach (var state in zones.Values)
             {
-                var a = g.Asset;
-                float range = Math.Min(g.Range, maxRange), band = range < g.Range ? Math.Min(g.Band, range * 0.25f) : g.Band;   // maxRange: the reflection draws a shorter range
-                if (zoneDistance > range) continue;
-                if (!a.Resident) { Reload(a); continue; }
-                for (int i = 0; i < g.Positions.Length; i++)
+                if (!state.Ready) continue;
+                float zoneDistance = ZoneDistance(state.Zone, eye);
+                // The zone's box (with a margin for big meshes) against the frustum first: most of a far, wide ring is behind the camera.
+                // Not while recording for the cascades: each has its own frustum.
+                if (!record && !WorldCamera.Intersects(frustum, new Vector3(state.X0 - 300, state.MinY - 600, state.Z0 - 300), new Vector3(state.X0 + WorldLayout.ZoneSize + 300, state.MaxY + 600, state.Z0 + WorldLayout.ZoneSize + 300))) continue;
+                foreach (var g in state.Groups)
                 {
-                    var p = g.Positions[i];
-                    float d = Vector2.Distance(new Vector2(p.X, p.Z), eyeXz);
-                    if (d >= range) continue;
-                    ref var t = ref g.Transforms[i];
-                    var centre = Vector3.Transform(a.Centre, t);
-                    if (!SphereVisible(frustum, centre, a.Radius * g.Scales[i])) continue;
-                    float w = Math.Clamp((range - d) / band, 0, 1);
-                    DrawnInstances++;
-                    if (a.Terrain && options.Textures)
+                    var a = g.Asset;
+                    float range = Math.Min(g.Range, maxRange), band = range < g.Range ? Math.Min(g.Band, range * 0.25f) : g.Band;   // maxRange: the reflection draws a shorter range
+                    if (zoneDistance > range) continue;
+                    if (!a.Resident) { Reload(a); continue; }
+                    for (int i = 0; i < g.Positions.Length; i++)
                     {
-                        if (w < 0.5f) continue;   // the terrain shader has no dither: the instance goes at the middle of the fade
-                        foreach (var gp in a.Main!.Parts) terrainDraws.Add((gp.PlainVao, gp.Count, t));
-                        continue;
+                        var p = g.Positions[i];
+                        float d = Vector2.Distance(new Vector2(p.X, p.Z), eyeXz);
+                        if (d >= range) continue;
+                        ref var t = ref g.Transforms[i];
+                        var centre = Vector3.Transform(a.Centre, t);
+                        float radius = a.Radius * g.Scales[i];
+                        float w = Math.Clamp((range - d) / band, 0, 1);
+                        if (record) shadowCandidates.Add(new ShadowCandidate(a, t, centre, radius, w));
+                        if (!SphereVisible(frustum, centre, radius)) continue;
+                        Emit(a, t, w, options);
                     }
-                    if (!batches.TryGetValue(a, out var batch)) batches[a] = batch = new Batch { Asset = a };
-                    if (batch.Count == 0) active.Add(batch);
-                    var m = t;
-                    m.M14 = w >= 0.999f ? 2 : w;
-                    batch.Add(m);
                 }
             }
         }

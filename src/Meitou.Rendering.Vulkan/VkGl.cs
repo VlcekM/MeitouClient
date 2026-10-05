@@ -104,6 +104,7 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
         CarryDynamicBuffers(slot, rings[slot].Reset);
         ResetFramePools(slot);
         RecycleQueries(slot);
+        TimeFrame(start: true);
         frameOpen = true;
         Stats.BeginFrame();
         ResetFrameState();
@@ -114,6 +115,7 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
     {
         if (!frameOpen) return;
         EndPass();
+        TimeFrame(start: false);
         FullBarrier(uploadCmd);
         Check(vk.EndCommandBuffer(uploadCmd));
         device.Frames.EndFrame(wait, waitStages, signal, before: uploadCmd);
@@ -200,8 +202,10 @@ public sealed class VkGlStats
 {
     public int Draws, RenderPasses, PipelinesCreated, BuffersRenamed, Uploads, Flushes;
     public long UploadBytes;
+    /// <summary>The last completed frame's GPU time, start of its uploads to the end of its last pass (not reset per frame).</summary>
+    public double GpuFrameMs;
     public long DrawTicks;   // Stopwatch ticks spent preparing draws (pipelines, state, descriptors, vertex buffers)
     public long UniformBytes;
     internal void BeginFrame() { Draws = RenderPasses = PipelinesCreated = BuffersRenamed = Uploads = Flushes = 0; UploadBytes = UniformBytes = DrawTicks = 0; }
-    public override string ToString() => $"{Draws} draws, {RenderPasses} passes, {PipelinesCreated} new pipelines, {Uploads} uploads ({UploadBytes / 1024} KB), {BuffersRenamed} renames, {UniformBytes / 1024} KB uniforms, {Flushes} flushes, draw prep {DrawTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0.00} ms";
+    public override string ToString() => $"{Draws} draws, {RenderPasses} passes, {PipelinesCreated} new pipelines, {Uploads} uploads ({UploadBytes / 1024} KB), {BuffersRenamed} renames, {UniformBytes / 1024} KB uniforms, {Flushes} flushes, draw prep {DrawTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0.00} ms, gpu frame {GpuFrameMs:0.00} ms";
 }
