@@ -25,6 +25,8 @@ sealed class GameOptions
     /// <summary>With <c>--screenshot</c>: simulation ticks run before the picture (with no input).</summary>
     public int Ticks;
     public bool FreeCamera;
+    /// <summary>Interactive run that closes itself after this many seconds and prints the frame rate (an unattended smoke test).</summary>
+    public double? QuitAfter;
 
     public const string Usage = """
         meitou [where] [options]     boots into the world with the Kenshi camera (default --town "The Hub")
@@ -33,6 +35,7 @@ sealed class GameOptions
           --tick-rate <hz>           simulation ticks per second (default 30)
           --free-camera              start in the free camera (; toggles)
           --ticks <n>                with --screenshot: run n simulation ticks before the picture
+          --quit-after <s>           close after s seconds and print the frame rate (smoke test)
           --yaw/--pitch/--distance   start view: heading, pitch above the horizon and boom (Kenshi: 30 degrees, boom 150; clamped to 10..2000)
           world options as meitou-viewer --world: --at, --zone, --town, --radius, --time, --screenshot, --size, --no-foliage, ...
         Keys: W/A/S/D move, Q/E or Left/Right rotate, Up/Down pitch, wheel or PageUp/PageDown zoom, right or middle drag orbit,
@@ -57,6 +60,7 @@ sealed class GameOptions
                 case "--no-vsync": g.VSync = false; break;
                 case "--ticks": g.Ticks = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--free-camera": g.FreeCamera = true; break;
+                case "--quit-after": g.QuitAfter = double.Parse(Next(), CultureInfo.InvariantCulture); break;
                 default: rest.Add(a); break;
             }
         }
@@ -274,7 +278,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
 
         var frame = Stopwatch.StartNew();
         double last = 0, titleTimer = 0, cpuSum = 0;
-        int frames = 0;
+        int frames = 0, totalFrames = 0;
         bool quit = false;
         while (!window.IsClosing && !quit)
         {
@@ -321,6 +325,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
                 titleTimer = cpuSum = 0;
                 frames = 0;
             }
+            totalFrames++;
+            if (g.QuitAfter is { } quitAfter && now >= quitAfter) { Console.WriteLine($"smoke     {totalFrames} frames in {now:0.0} s: {totalFrames / now:0} fps on average, {ticks.TotalTicks} ticks"); quit = true; }
             if (!vsync && fpsLimit > 0) Limit(frame, now, 1.0 / fpsLimit);
         }
         if (panel is not null)
