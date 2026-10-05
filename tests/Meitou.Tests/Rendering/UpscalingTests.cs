@@ -53,7 +53,7 @@ public class UpscalingTests
         var o = new UpscaleOptions();
         Assert.Equal((1600, 900), o.RenderSize(1600, 900));   // off: always full size
         o.Kind = UpscalerKind.Fsr;
-        Assert.Equal((1067, 600), o.RenderSize(1600, 900));   // quality by default
+        Assert.Equal((1600, 900), o.RenderSize(1600, 900));   // native by default
         o.Scale = UpscaleOptions.ParseScale("performance");
         Assert.Equal((1280, 720), o.RenderSize(2560, 1440));
         o.Kind = UpscalerKind.Taa;

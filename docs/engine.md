@@ -123,7 +123,7 @@ count on exit.
 ## Upscaling
 
 `--upscaler off|taa|fsr|dlss`, `--render-scale <0.25..1|native|quality|balanced|performance|ultra>` (1, 1/1.5, 1/1.7, 1/2, 1/3 per
-axis; default 1 for TAA, quality for FSR/DLSS), `--sharpness <0..1>`; in the game also the Tab panel (kept in `meitou.user.json`,
+axis; default 1 for all three, i.e. DLAA / FSR native AA; quality was the FSR/DLSS default until 2026-10-05), `--sharpness <0..1>`; in the game also the Tab panel (kept in `meitou.user.json`,
 command-line values win). Off draws the scene at the display size with MSAA, as before. With an upscaler (`PostProcess`, DECISIONS 14):
 
 - **Render size and jitter.** The scene is drawn at the display size × scale, single-sampled, its projection moved each frame by a

@@ -11,7 +11,7 @@ public enum UpscalerKind { Off, Taa, Fsr, Dlss }
 public sealed class UpscaleOptions
 {
     public UpscalerKind Kind = UpscalerKind.Off;
-    /// <summary>Render size over display size per axis; null picks the default for the upscaler (1 for TAA, "quality" for FSR/DLSS).</summary>
+    /// <summary>Render size over display size per axis; null is 1 (native: DLAA for DLSS, FSR native AA).</summary>
     public float? Scale;
     /// <summary>0..1: the external upscalers' sharpening (FSR's RCAS, DLSS's own); TAA ignores it.</summary>
     public float Sharpness = 0.3f;
@@ -23,7 +23,7 @@ public sealed class UpscaleOptions
         [("native", 1f), ("quality", 1 / 1.5f), ("balanced", 1 / 1.7f), ("performance", 0.5f), ("ultra", 1 / 3f)];
 
     public bool Temporal => Kind != UpscalerKind.Off;
-    public float EffectiveScale => Kind == UpscalerKind.Off ? 1 : Scale ?? (Kind == UpscalerKind.Taa ? 1 : Modes[1].Scale);
+    public float EffectiveScale => Kind == UpscalerKind.Off ? 1 : Scale ?? 1;
 
     public static float ParseScale(string s)
     {
