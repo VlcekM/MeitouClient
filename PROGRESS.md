@@ -35,8 +35,8 @@ git merge engine
 - 1600x900 is CPU/streaming-bound, so upscaling helps at 1440p and above. Any upscaler turns MSAA off, which is part of the GPU saving.
 - Vulkan vs GL (Phase 2, 1600x900): pipelined p95 6.5-6.9 vs 9.1, p99 8.7-10.4 vs 15.5. GL master-equivalent serialized p99 was 21.7-24.4.
 - Upscaler GPU cost at 1600x900: TAA 0.1 ms, FSR 0.38 ms, DLSS 0.73 ms.
-- Image quality on the rock view, as the mean difference from the native-resolution still reference (lower is closer; TAA native 3.41): DLSS quality 4.68 and FSR quality
-  5.16 still, 3.92 and 4.79 after an orbit. TAA at quality scale on GL is 6.43.
+- Image quality on the rock view, as the mean difference from the native-resolution still reference (lower is closer; TAA native 3.41): DLSS quality 4.68, FSR quality 5.16.
+  Temporal stability, orbit end frame vs a still at the same yaw: TAA 3.7, DLSS 3.92, FSR 4.79. TAA at quality scale on GL vs the reference: 6.43.
 - Game, windowed, 12 s: off 109 fps, TAA 110, FSR 103, DLSS 105. Validation clean in every mode.
 - Gates: build 0 warnings; tests 308/308 (with `KENSHI_PATH`). Parity with upscalers off is unchanged: GL 0.0000 on all 8 views. Vulkan:
   hub 0.0010, portnorth 0.0003, rock 0.0426, zone14_30 0.0789 (13:00); night views 0.0000-0.0001 (all within the 0.08 gate).
