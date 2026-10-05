@@ -216,16 +216,15 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
         dds.Format is DdsFormat.Bc1 or DdsFormat.Bc2 or DdsFormat.Bc3 or DdsFormat.Bc4 or DdsFormat.Bc5 && !dds.IsCubemap && !dds.IsVolume && dds.ImageCount == 1 && dds.Width > 0 && dds.Height > 0
         && dds.MipCount == 1 + (int)Math.Log2(Math.Max(dds.Width, dds.Height)) && dds.Surfaces.Count == dds.MipCount;
 
-    static readonly Lazy<byte[]> zeros = new(() => new byte[16 << 20]);
 
     /// <summary>
-    /// A stored (S3TC) texture's upload: each level is allocated (from a block of zeros when it is big) and filled in slabs of whole block rows of about
+    /// A stored (S3TC) texture's upload: each level is allocated (big ones without data: the slabs fill them, nothing is copied twice) and filled in slabs of whole block rows of about
     /// 512 KB. Same sampling state as the RGBA8 path; the mip chain is the file's own.
     /// </summary>
     void QueueCompressedUpload(WorldTexture t, TextureData data)
     {
         var dds = data.Compressed!;
-        t.Swizzled = LooksSwizzled(data.Rgba.Levels[0]);
+        t.Swizzled = data.Swizzled;
         var format = dds.Format switch
         {
             DdsFormat.Bc1 => InternalFormat.CompressedRgbaS3TCDxt1Ext,
@@ -246,7 +245,7 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
             var s = surface;
             int blocksPerRow = (s.Width + 3) / 4, blockRows = (s.Height + 3) / 4, rowBytes = blocksPerRow * blockBytes;
             int length = Math.Min(s.Length, rowBytes * blockRows);
-            if (length <= SlabBytes || length > zeros.Value.Length)
+            if (length <= SlabBytes)
             {
                 steps.Enqueue(() =>
                 {
@@ -258,7 +257,7 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
             steps.Enqueue(() =>
             {
                 gl.BindTexture(TextureTarget.Texture2D, id);
-                fixed (byte* z = zeros.Value) gl.CompressedTexImage2D(TextureTarget.Texture2D, s.Level, format, (uint)s.Width, (uint)s.Height, 0, (uint)length, z);
+                gl.CompressedTexImage2D(TextureTarget.Texture2D, s.Level, format, (uint)s.Width, (uint)s.Height, 0, (uint)length, null);
             });
             int rowsPerSlab = Math.Max(1, SlabBytes / rowBytes);
             for (int row = 0; row < blockRows; row += rowsPerSlab)
@@ -292,9 +291,9 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
     }
 
     /// <summary>A texture's upload as steps of about 512 KB: allocate every level, fill them in slabs of rows, then mipmaps and sampling state.</summary>
-    void QueueUpload(WorldTexture t, LoadedTexture tex)
+    void QueueUpload(WorldTexture t, LoadedTexture tex, bool swizzled)
     {
-        t.Swizzled = LooksSwizzled(tex.Levels.FirstOrDefault(l => l.Width <= 256 && l.Height <= 256) ?? tex.Levels[0]);
+        t.Swizzled = swizzled;
         uint id = 0;
         steps.Enqueue(() =>
         {
@@ -372,10 +371,10 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
     void QueueUpload(WorldTexture t, TextureData data)
     {
         if (data.Compressed is not null) QueueCompressedUpload(t, data);
-        else QueueUpload(t, data.Rgba);
+        else QueueUpload(t, data.Rgba, data.Swizzled);
     }
 
-    static bool LooksSwizzled(RgbaImage image)
+    internal static bool LooksSwizzled(RgbaImage image)
     {
         long r = 0, g = 0, b = 0;
         var p = image.Pixels;
@@ -392,4 +391,8 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
 }
 
 /// <summary>A decoded texture file: the RGBA8 levels (all of them, or for a stored S3TC texture only the one the swizzle test needs), and the DDS when its blocks are uploaded as they are.</summary>
-sealed record TextureData(LoadedTexture Rgba, DdsFile? Compressed);
+sealed record TextureData(LoadedTexture Rgba, DdsFile? Compressed)
+{
+    /// <summary>Whether it looks like a "DXT5 normal" (X in alpha), tested on the worker: the full image can be megabytes.</summary>
+    public bool Swizzled { get; } = WorldTextureCache.LooksSwizzled(Rgba.Levels.FirstOrDefault(l => l.Width <= 256 && l.Height <= 256) ?? Rgba.Levels[0]);
+}

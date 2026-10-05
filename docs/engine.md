@@ -133,6 +133,12 @@ command-line values win). Off draws the scene at the display size with MSAA, as 
   It writes RG = motion in UV (previous UV = UV − motion, jitter excluded) and B = depth of one D3D-style projection over the whole
   view (fixed planes 1 .. 10⁶: FSR decodes last frame's depth with this frame's planes, so they must not follow the camera), which is also
   what FSR/DLSS get as depth (R32F).
+- **Grass motion.** The swaying grass moves on its own, which camera motion misses (trails under every upscaler). After the velocity
+  pass, `FoliageRenderer.DrawGrassMotion` (through `PostProcess.ObjectMotion`) redraws the near slice's blades of layers with wind
+  into the motion texture (red and green only), placing each now and with last frame's sway phase and camera, where its depth matches
+  the depth buffer's (read in the shader, so the scene's depth is untouched). Only with an upscaler on; `MEITOU_GRASS_MOTION=0` turns it
+  off for comparisons. Checked (rock view, sway at real speed, `--sway-step 0.016667` against a still picture at the same sway time,
+  `--sway-start`): mean difference without / with: TAA 0.173 / 0.129, FSR 0.589 / 0.519, DLSS 0.438 / 0.349.
 - **TAA** (`UpscaleShaders.Taa`, both backends): each display pixel takes a Gaussian of the 3 × 3 jittered render samples around
   it, the history reprojected with Catmull-Rom and clipped to the neighbourhood's colour spread (YCoCg variance clipping), blended
   in a tone-mapped space; the result (display size, HDR) is the history and the input of bloom, exposure and the composite.
@@ -151,18 +157,30 @@ command-line values win). Off draws the scene at the display size with MSAA, as 
   `NvLowLatencyVk.dll`, else one error line) in `MEITOU_STREAMLINE_PATH` or next to the executable; Streamline loads before the device
   when DLSS is asked for, so switching to DLSS in the game's panel works only if the game started with it. Per frame: a frame token,
   the constants (the fixed-plane projection and the clip-to-previous-clip matrix with y flipped, jitter as is, motion scale (−1, −1),
-  camera vectors), four tags (depth, motion, colour in and out, all in GENERAL) and the evaluation (no reactive hint yet). `MEITOU_STREAMLINE_LOG=1` shows
+  camera vectors), four tags (depth, motion, colour in and out, all in GENERAL) and the evaluation; the water mask as a fifth tag (`kBufferTypeBiasCurrentColorHint`, NGX's "Bias.Current.Color.Mask"). Observed: with
+  DLSS 310's default (transformer) preset the hint changes nothing; with a CNN preset (`MEITOU_DLSS_PRESET=5`, E) it changes the water
+  edges. `MEITOU_DLSS_PRESET=<n>` sets Streamline's preset for every mode (0 default, 1..15 = A..O). `MEITOU_STREAMLINE_LOG=1` shows
   Streamline's info lines. Checked on an RTX 4070 (driver 596.49, DLSS 310.9.1): validation clean; rock view at quality: still picture
   vs the native reference 4.7 mean (FSR 5.2), orbiting vs still 3.9 (FSR 4.8).
 - **Reactive mask (water).** Water is blended over the seabed without writing depth, so its moving surface has no motion vectors of
   its own. The velocity pass marks a pixel as water where the eye is above the water plane and the depth point below it (the water quad
   reaches past the far plane, so the sea under the horizon counts too) and writes `PostProcess.WaterReactive` (0.5) into A of the motion
-  texture (TAA leans on the current frame by half of it) and, for FSR, into an R8 reactive mask. Checked by eye on Port North: the
+  texture (TAA leans on the current frame by half of it) and, for FSR and DLSS, into a reactive mask. The mask is R32F: Streamline has no
+  size for `R8_UNORM` ("format 0 native 9") and drops such a resource, FSR takes either. Checked by eye on Port North: the
   mask covers the water exactly.
 - **Texture detail.** On Vulkan every mipmapped fetch is biased by `log2(scale) − 0.5` (TAA) or `− 1` (FSR/DLSS) (`ITextureLodBias`;
   DECISIONS 15).
 - **Offscreen pictures** draw `WarmupFrames` frames first so the history converges; `--orbit-step <degrees>` turns the camera every
   frame of them (a check of the motion vectors: the picture should match a still one at the end angle but for edge differences).
+  `--sway-step <seconds>` advances the grass sway every frame of them and `--sway-start <seconds>` sets where it starts (a check of the
+  grass motion).
+
+## Frame time
+
+The render thread is above normal priority, the streaming threads below normal (`BackgroundWork`), and its parallel loops (foliage culling)
+run on a few above-normal job threads (`RenderJobs`). The game and the viewer run server GC on four heaps without tiered compilation
+(DECISIONS 19). The flight benchmark (`--fly-benchmark`) prints the stage means, the shadow casters' means, GC totals and the worst frames
+with their stages and GC pauses; `MEITOU_JOB_STATS=1` adds what each streaming call site allocated and cost.
 
 ## Checking a change
 

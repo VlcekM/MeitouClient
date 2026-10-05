@@ -24,8 +24,12 @@ static partial class WorldApp
         var times = new List<double>(o.FlyBenchmark);
         var cpu = new List<double>(o.FlyBenchmark);   // up to the end of the commands, before waiting for the GPU: the render thread's own work
         var worst = new List<(double Ms, int Frame, string Stages)>();
+        var stageSums = new double[StageClock.Names.Length];
+        var shadowSums = new double[3];
         var frameWatch = new Stopwatch();
-        long gc2 = GC.CollectionCount(2), gcPrev = gc2;
+        long gc2 = GC.CollectionCount(2), gcPrev = gc2, gc0 = GC.CollectionCount(0), gc1 = GC.CollectionCount(1), allocated = GC.GetTotalAllocatedBytes(), renderAllocated = GC.GetAllocatedBytesForCurrentThread();
+        TimeSpan pause0 = GC.GetTotalPauseDuration(), pausePrev = pause0;
+        BackgroundWork.Measure = BackgroundWork.ReportJobs;
         var resident = new List<string>();
         // Pipelined: GL gets the same two frames in flight as the Vulkan frame ring, through a timestamp query per frame waited on two frames later.
         bool pipelined = o.FlyPipelined;
@@ -54,9 +58,12 @@ static partial class WorldApp
             interval.Restart();
             times.Add(ms);
             if (i % 150 == 0) resident.Add($"{(((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576)}");
+            for (int k = 0; k < stageSums.Length; k++) stageSums[k] += StageClock.Ms[k];
+            if (gpu.Shadow is { } shadowStats) for (int k = 0; k < 3; k++) shadowSums[k] += shadowStats.PhaseMs[k];
             long gcNow = GC.CollectionCount(2);
-            worst.Add((ms, i, ((gpu.Reflection is { Valid: true } rr && rr.CpuMs >= 5 ? $"reflection[{rr.DescribeLast()}], " : "") + (gcNow != gcPrev ? "gen2 GC, " : "")) + string.Join(", ", StageClock.Names.Select((n, k) => (n, v: StageClock.Ms[k])).Where(s => s.v >= 1).Select(s => $"{s.n} {s.v:0.0}"))));
+            worst.Add((ms, i, ((gpu.Reflection is { Valid: true } rr && rr.CpuMs >= 5 ? $"reflection[{rr.DescribeLast()}], " : "") + (gcNow != gcPrev ? "gen2 GC, " : "") + (GC.GetTotalPauseDuration() - pausePrev is { TotalMilliseconds: >= 0.5 } pause ? $"GC pause {pause.TotalMilliseconds:0.0}, " : "")) + string.Join(", ", StageClock.Names.Select((n, k) => (n, v: StageClock.Ms[k])).Where(s => s.v >= 1).Select(s => $"{s.n} {s.v:0.0}"))));
             gcPrev = gcNow;
+            pausePrev = GC.GetTotalPauseDuration();
             int sleep = 16 - (int)ms;
             if (sleep > 0 && !pipelined) Thread.Sleep(sleep);
         }
@@ -65,6 +72,10 @@ static partial class WorldApp
         double P(double q) => sorted[Math.Min((int)(sorted.Count * q), sorted.Count - 1)];
         double C(double q) => cpuSorted[Math.Min((int)(cpuSorted.Count * q), cpuSorted.Count - 1)];
         Console.WriteLine($"flight    p50 {P(0.5):0.0} ms, p95 {P(0.95):0.0} ms, p99 {P(0.99):0.0} ms, max {sorted[^1]:0.0} ms; {sorted.Count(t => t > 20)} frames over 20 ms, {sorted.Count(t => t > 33)} over 33 ms; gen2 GCs {GC.CollectionCount(2) - gc2}");
+        Console.WriteLine($"gc        gen0 {GC.CollectionCount(0) - gc0}, gen1 {GC.CollectionCount(1) - gc1}, pauses {(GC.GetTotalPauseDuration() - pause0).TotalMilliseconds:0} ms; allocated {(GC.GetTotalAllocatedBytes() - allocated) / 1048576} MB (render thread {(GC.GetAllocatedBytesForCurrentThread() - renderAllocated) / 1048576} MB)");
+        Console.WriteLine($"stages    mean ms: {string.Join(", ", StageClock.Names.Select((n, k) => $"{n} {stageSums[k] / o.FlyBenchmark:0.00}"))}");
+        Console.WriteLine($"stages    shadow casters mean ms: terrain {shadowSums[0] / o.FlyBenchmark:0.00}, objects {shadowSums[1] / o.FlyBenchmark:0.00}, foliage {shadowSums[2] / o.FlyBenchmark:0.00}");
+        if (BackgroundWork.ReportJobs) { BackgroundWork.Measure = false; BackgroundWork.Report(); }
         Console.WriteLine($"cpu only  p50 {C(0.5):0.0} ms, p95 {C(0.95):0.0} ms, p99 {C(0.99):0.0} ms, max {cpuSorted[^1]:0.0} ms (commands recorded, GPU not waited for)");
         if (gpu.Reflection is { } reflectionStats && render.Reflections) Console.WriteLine($"reflect   {reflectionStats.DescribeStats()}");
         foreach (var f in worst.Skip(1).OrderByDescending(f => f.Ms).Take(8))

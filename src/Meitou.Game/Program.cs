@@ -73,6 +73,7 @@ static class Program
 {
     static int Main(string[] args)
     {
+        RenderJobs.RaiseRenderThread();
         GameOptions game;
         WorldOptions? world;
         try

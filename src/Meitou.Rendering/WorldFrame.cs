@@ -458,6 +458,7 @@ static class WorldFrame
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
         StageClock.Lap(3);
         if (gpu.Shadow is not null) DrawShadows(gpu, camera, render, light, rw, rh);
+        StageClock.Lap(12);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is not null;
         if (gpu.Reflection is not null) gpu.Reflection.RestoreFramebuffer = gpu.Post?.SceneFramebuffer;

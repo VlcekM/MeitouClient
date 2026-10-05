@@ -8,6 +8,10 @@
     <RootNamespace>Meitou.Game</RootNamespace>
     <!-- Tiered PGO re-JITs hot render code for minutes; each install suspends the runtime and stalled frames 10-20 ms (DECISIONS 11). -->
     <TieredPGO>false</TieredPGO>
+    <!-- No tiering at all: methods are compiled once, fully optimised. Tier-up recompiles of the render and streaming code kept landing in frames as 2-11 ms stalls; loading is no slower (DECISIONS 19). -->
+    <TieredCompilation>false</TieredCompilation>
+    <!-- Server GC on four heaps: the streaming threads allocate ~2 MB a frame, and single-threaded gen0 GCs over the ~0.5 GB gen2 paused every thread 3-15 ms (DECISIONS 19). -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +26,10 @@
     <ProjectReference Include="..\Meitou.Rendering\Meitou.Rendering.csproj" />
     <ProjectReference Include="..\Meitou.Rendering.Vulkan\Meitou.Rendering.Vulkan.csproj" />
     <ProjectReference Include="..\Meitou.Rendering.Display\Meitou.Rendering.Display.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.HeapCount" Value="4" />
   </ItemGroup>
 
 </Project>

@@ -44,6 +44,7 @@ static partial class WorldApp
         using var scene = Load(install, options);
         if (scene is null) return 1;
         if (options.Info) return 0;
+        RenderJobs.RaiseRenderThread();
         var assets = new AssetLocator(install);
         return options.Screenshot is not null || options.FlyBenchmark > 0 ? Screenshot(install, scene, assets, options) : Interactive(install, scene, assets, options);
     }

@@ -5,7 +5,7 @@ namespace Meitou.Rendering;
 /// <summary>Per-stage render-thread time of one frame (for <c>--fly-benchmark</c>); <see cref="Lap"/> costs a timestamp read and does nothing unless started.</summary>
 static class StageClock
 {
-    public static readonly string[] Names = ["upd-terrain", "upd-objects", "upd-foliage", "sky-prepare", "reflection", "sky-draw", "terrain", "objects", "foliage", "water", "post", "gpu-wait"];
+    public static readonly string[] Names = ["upd-terrain", "upd-objects", "upd-foliage", "sky-prepare", "reflection", "sky-draw", "terrain", "objects", "foliage", "water", "post", "gpu-wait", "shadows"];
     public static readonly double[] Ms = new double[Names.Length];
     public static bool Active;
     static long last;

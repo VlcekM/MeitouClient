@@ -97,3 +97,15 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     Vulkan check: mean difference 0.08 or less in the eight views (measured at removal: 0.0000 to 0.0789; mesh, animated mesh and
     character screenshots 0.0000). The interactive mesh and character windows are no longer multisampled (the swapchain image is
     single-sampled; the offscreen pictures still resolve a 4x target).
+19. **The frame-time tail: GC, JIT, priorities, culling.** Attributed with the flight benchmark's new lines (stage means, GC pauses on
+    the worst frames, `gc` totals, `MEITOU_JOB_STATS=1` per call-site allocation) and GC events: the streaming threads allocated ~3.4 MB
+    a frame, and each single-threaded gen0 GC (2 MB promoted) spent 3-15 ms scanning the ~0.5 GB gen2, suspending every thread. Changes,
+    each measured in interleaved runs: (1) less garbage: grass pages built in a per-thread buffer instead of a list sized for every
+    candidate (2.4 GB a flight to 0.25), map-window levels from the shared array pool (5.1 GB a flight in all to 2.6); (2) server GC on
+    four heaps (`System.GC.HeapCount`): 6 collections a flight instead of 43, 1.3-2.4 ms each, +0.5 GB working set; (3) no tiered
+    compilation (methods compiled once, optimised; tier-up stalls of 2-11 ms gone, loading no slower); (4) the render thread above normal
+    priority and the foliage culling (by zone group, and the shadow cascades' candidates by chunk) on dedicated above-normal job threads
+    (`RenderJobs`; the thread pool's preempted workers made the tail worse), merged in the old order so pictures are identical; (5) the
+    S3TC upload no longer copies a level of zeros before filling it in slabs (a GL-era way to allocate), and the "DXT5 normal" test runs
+    on the worker. Result at 1600x900 (four interleaved runs each, medians): p50 4.15 -> 3.7 ms, p95 6.85 -> 5.4, p99 9.15 -> 7.0,
+    max ~23 -> ~16.

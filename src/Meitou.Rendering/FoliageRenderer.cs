@@ -757,49 +757,13 @@ public sealed unsafe class FoliageRenderer : IDisposable
         active.Clear();
         terrainDraws.Clear();
 
-        // 1. Cull: each instance by its distance along the ground (the game's pages) and its bounding sphere. The shadow
-        // cascades of a frame share one pass over the zones (DrawDepth with the same eye and range): it keeps every instance in
-        // range, and each cascade then only tests those spheres against its own frustum.
+        // 1. Cull: each instance by its distance along the ground (the game's pages) and its bounding sphere, the groups (a mesh in a zone)
+        // in parallel, each into its own list, merged into the batches in order (the same instance order as one pass would give). The shadow
+        // cascades of a frame share one pass over the zones (DrawDepth with the same eye and range): it keeps every instance in range, and
+        // each cascade then only tests those spheres against its own frustum.
         bool cachedDepth = depthPass && shadowCandidatesFrame == updates && shadowCandidatesEye == eye && shadowCandidatesRange == maxRange;
-        if (cachedDepth)
-        {
-            foreach (ref readonly var c in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(shadowCandidates))
-                if (SphereVisible(frustum, c.Centre, c.Radius)) Emit(c.Asset, c.Transform, c.Weight, options);
-        }
-        else
-        {
-            bool record = depthPass;
-            if (record) { shadowCandidates.Clear(); (shadowCandidatesFrame, shadowCandidatesEye, shadowCandidatesRange) = (updates, eye, maxRange); }
-            var eyeXz = new Vector2(eye.X, eye.Z);
-            foreach (var state in zones.Values)
-            {
-                if (!state.Ready) continue;
-                float zoneDistance = ZoneDistance(state.Zone, eye);
-                // The zone's box (with a margin for big meshes) against the frustum first: most of a far, wide ring is behind the camera.
-                // Not while recording for the cascades: each has its own frustum.
-                if (!record && !WorldCamera.Intersects(frustum, new Vector3(state.X0 - 300, state.MinY - 600, state.Z0 - 300), new Vector3(state.X0 + WorldLayout.ZoneSize + 300, state.MaxY + 600, state.Z0 + WorldLayout.ZoneSize + 300))) continue;
-                foreach (var g in state.Groups)
-                {
-                    var a = g.Asset;
-                    float range = Math.Min(g.Range, maxRange), band = range < g.Range ? Math.Min(g.Band, range * 0.25f) : g.Band;   // maxRange: the reflection draws a shorter range
-                    if (zoneDistance > range) continue;
-                    if (!a.Resident) { Reload(a); continue; }
-                    for (int i = 0; i < g.Positions.Length; i++)
-                    {
-                        var p = g.Positions[i];
-                        float d = Vector2.Distance(new Vector2(p.X, p.Z), eyeXz);
-                        if (d >= range) continue;
-                        ref var t = ref g.Transforms[i];
-                        var centre = Vector3.Transform(a.Centre, t);
-                        float radius = a.Radius * g.Scales[i];
-                        float w = Math.Clamp((range - d) / band, 0, 1);
-                        if (record) shadowCandidates.Add(new ShadowCandidate(a, t, centre, radius, w));
-                        if (!SphereVisible(frustum, centre, radius)) continue;
-                        Emit(a, t, w, options);
-                    }
-                }
-            }
-        }
+        if (cachedDepth) CullCandidates(frustum, options);
+        else CullZones(eye, frustum, options, maxRange, record: depthPass);
 
         // 2. Upload the instances: one buffer, each batch's matrices contiguous.
         int total = 0;
@@ -863,6 +827,143 @@ public sealed unsafe class FoliageRenderer : IDisposable
         gl.Disable(EnableCap.CullFace);
         EndTimer(timer);
         LastDrawCpuMs = (continuation ? LastDrawCpuMs : 0) + cpu.Elapsed.TotalMilliseconds;
+    }
+
+    // ---- culling (Draw step 1) ----
+
+    /// <summary>One group's share of a culling pass: the instances it keeps, as batch matrices (row 0 w = the fade), and the shadow candidates when recording.</summary>
+    sealed class CullOutput
+    {
+        public Matrix4x4[] Visible = new Matrix4x4[64];
+        public int Count;
+        public ShadowCandidate[] Candidates = new ShadowCandidate[64];
+        public int CandidateCount;
+        /// <summary>Runs of <see cref="Visible"/> that share a mesh (the shadow candidates' chunks).</summary>
+        public readonly List<(MeshAsset Asset, int Start, int Count)> Runs = [];
+    }
+
+    readonly List<(Group Group, float Range, float Band)> cullWork = [];
+    readonly List<CullOutput> cullOutputs = [];
+
+    /// <summary>The fade packed into a batch matrix: row 0 w, 2 = fully visible (see <see cref="FoliageShaders.MeshVertex"/>).</summary>
+    static Matrix4x4 Packed(in Matrix4x4 t, float w) { var m = t; m.M14 = w >= 0.999f ? 2 : w; return m; }
+
+    void CullZones(Vector3 eye, Vector4[] frustum, WorldRenderOptions options, float maxRange, bool record)
+    {
+        if (record) { shadowCandidates.Clear(); (shadowCandidatesFrame, shadowCandidatesEye, shadowCandidatesRange) = (updates, eye, maxRange); }
+        // The zones and groups in range, on this thread (reloads start here).
+        cullWork.Clear();
+        foreach (var state in zones.Values)
+        {
+            if (!state.Ready) continue;
+            float zoneDistance = ZoneDistance(state.Zone, eye);
+            // The zone's box (with a margin for big meshes) against the frustum first: most of a far, wide ring is behind the camera.
+            // Not while recording for the cascades: each has its own frustum.
+            if (!record && !WorldCamera.Intersects(frustum, new Vector3(state.X0 - 300, state.MinY - 600, state.Z0 - 300), new Vector3(state.X0 + WorldLayout.ZoneSize + 300, state.MaxY + 600, state.Z0 + WorldLayout.ZoneSize + 300))) continue;
+            foreach (var g in state.Groups)
+            {
+                float range = Math.Min(g.Range, maxRange), band = range < g.Range ? Math.Min(g.Band, range * 0.25f) : g.Band;   // maxRange: the reflection draws a shorter range
+                if (zoneDistance > range) continue;
+                if (!g.Asset.Resident) { Reload(g.Asset); continue; }
+                cullWork.Add((g, range, band));
+            }
+        }
+        while (cullOutputs.Count < cullWork.Count) cullOutputs.Add(new CullOutput());
+        var eyeXz = new Vector2(eye.X, eye.Z);
+        RenderJobs.For(cullWork.Count, k =>
+        {
+            var (g, range, band) = cullWork[k];
+            var output = cullOutputs[k];
+            output.Count = output.CandidateCount = 0;
+            var a = g.Asset;
+            for (int i = 0; i < g.Positions.Length; i++)
+            {
+                var p = g.Positions[i];
+                float d = Vector2.Distance(new Vector2(p.X, p.Z), eyeXz);
+                if (d >= range) continue;
+                ref var t = ref g.Transforms[i];
+                var centre = Vector3.Transform(a.Centre, t);
+                float radius = a.Radius * g.Scales[i];
+                float w = Math.Clamp((range - d) / band, 0, 1);
+                if (record)
+                {
+                    if (output.CandidateCount == output.Candidates.Length) Array.Resize(ref output.Candidates, output.CandidateCount * 2);
+                    output.Candidates[output.CandidateCount++] = new ShadowCandidate(a, t, centre, radius, w);
+                }
+                if (!SphereVisible(frustum, centre, radius)) continue;
+                if (output.Count == output.Visible.Length) Array.Resize(ref output.Visible, output.Count * 2);
+                output.Visible[output.Count++] = Packed(t, w);
+            }
+        });
+        for (int k = 0; k < cullWork.Count; k++)
+        {
+            var output = cullOutputs[k];
+            if (record) shadowCandidates.AddRange(output.Candidates.AsSpan(0, output.CandidateCount));
+            EmitAll(cullWork[k].Group.Asset, output.Visible.AsSpan(0, output.Count), options);
+        }
+    }
+
+    /// <summary>A further shadow cascade: the frame's recorded candidates against this cascade's frustum (tested in parallel, emitted in order).</summary>
+    void CullCandidates(Vector4[] frustum, WorldRenderOptions options)
+    {
+        int count = shadowCandidates.Count, chunks = (count + CandidateChunk - 1) / CandidateChunk;
+        while (candidateOutputs.Count < chunks) candidateOutputs.Add(new CullOutput());
+        var list = shadowCandidates;
+        // Each chunk keeps its visible candidates as batch matrices, in runs of one mesh (the candidates were recorded group by group).
+        RenderJobs.For(chunks, k =>
+        {
+            var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(list);
+            var output = candidateOutputs[k];
+            output.Count = 0;
+            output.Runs.Clear();
+            for (int i = k * CandidateChunk, end = Math.Min(i + CandidateChunk, count); i < end; i++)
+            {
+                ref readonly var c = ref span[i];
+                if (!SphereVisible(frustum, c.Centre, c.Radius)) continue;
+                if (output.Runs.Count == 0 || output.Runs[^1].Asset != c.Asset) output.Runs.Add((c.Asset, output.Count, 0));
+                if (output.Count == output.Visible.Length) Array.Resize(ref output.Visible, output.Count * 2);
+                output.Visible[output.Count++] = Packed(c.Transform, c.Weight);
+                var run = output.Runs[^1];
+                output.Runs[^1] = run with { Count = run.Count + 1 };
+            }
+        });
+        for (int k = 0; k < chunks; k++)
+        {
+            var output = candidateOutputs[k];
+            foreach (var (asset, start, n) in output.Runs) EmitAll(asset, output.Visible.AsSpan(start, n), options);
+        }
+    }
+
+    const int CandidateChunk = 2048;
+    readonly List<CullOutput> candidateOutputs = [];
+
+    Batch BatchOf(MeshAsset a)
+    {
+        if (!batches.TryGetValue(a, out var batch)) batches[a] = batch = new Batch { Asset = a };
+        if (batch.Count == 0) active.Add(batch);
+        return batch;
+    }
+
+    /// <summary>A group's visible instances (batch matrices) into its mesh's batch, or the terrain's mesh path for TERRAIN-mode rocks.</summary>
+    void EmitAll(MeshAsset a, ReadOnlySpan<Matrix4x4> visible, WorldRenderOptions options)
+    {
+        if (visible.Length == 0) return;
+        if (a.Terrain && options.Textures)
+        {
+            foreach (var m in visible)
+            {
+                var t = m;
+                float w = t.M14 >= 2 ? 1 : t.M14;
+                t.M14 = 0;
+                Emit(a, t, w, options);
+            }
+            return;
+        }
+        DrawnInstances += visible.Length;
+        var batch = BatchOf(a);
+        if (batch.Count + visible.Length > batch.Data.Length) Array.Resize(ref batch.Data, Math.Max(batch.Data.Length * 2, batch.Count + visible.Length));
+        visible.CopyTo(batch.Data.AsSpan(batch.Count));
+        batch.Count += visible.Length;
     }
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
