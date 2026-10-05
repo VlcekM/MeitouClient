@@ -96,7 +96,7 @@ Record type 80, found by name. Fields that concern the sky:
 | `fog enabled`, `fog distance min` / `max`, `fog color` | bool, floats, int RRGGBB | the distance where the weather fog is complete; by the wind between min and max only when `fog wind min` ≠ `fog wind max`, else `max(min, max)` (**Verified (decompiled)**, the WEATHER loader). In the base game only "misty rain" has two wind values, so every weather's fog is complete at its `fog distance max` (dust storms 25000, "Sand stream" 20000; [weather.md](weather.md#fog-up-to-four-regions-verified-decompiled-fun_1409e8f70-fun_1409e8cc0-fun_1409dc350)); the colour is sand (`E9CB9E`) or white |
 | `clouds density` | float | 0 clear, 1 overcast, clamped to 0..1 by the sky controller (`SkyBeam` has 20); drives the cloud layer ([clouds.md](clouds.md)) |
 
-Others (`rain intensity`, `wetness`, `dust`, `dust inside`, `dust slope`, `heat haze`, `wind speed min/max`, `wind intensity`,
+Others (`rain intensity`, `wetness`, `dust`, `dust inside`, `dust slope`, `heat haze` (read for the heat-haze pass, [post-processing.md](post-processing.md#heat-haze-verified)), `wind speed min/max`, `wind intensity`,
 `wind update time/limit`, `fog wind min/max`, `affect type/strength`, `effect strength min/max`, `start time`, `end time`)
 are for rain, dust and wind effects and the weather's own schedule; not read by the viewer. The "Default" weather
 (`5460-weather.mod`) is clear: fog off, clouds 0, both colours white. Which weather applies where and when (regions from

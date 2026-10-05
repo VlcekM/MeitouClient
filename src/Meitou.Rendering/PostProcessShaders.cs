@@ -249,4 +249,58 @@ static class PostProcessShaders
             fragColour = vec4(textureLod(uImage, p, 0.0).rgb, 1.0);
         }
         """;
+
+    /// <summary>
+    /// The game's heat haze on the final LDR picture (docs/formats/post-processing.md "Heat haze"), written from the facts there: a
+    /// flow map (at 3.341 × the screen) gives a scroll direction; three layers of a normal map (at 7.341 × the screen, offset by
+    /// (0.1, 0.3) and (0.4, 0.7)) scroll along it over phases <c>fract(gameTime · 100 + 0, 0.33, 0.66)</c>, each weighted by a
+    /// triangle that is 0 at the ends of its cycle; their summed red and green make a direction only (normalised), moved by
+    /// 0.002 · heatHaze · saturate(6 · distance / farClip) in screen units. The picture is the mean of the taps at 1 and 0.7 of
+    /// that offset. Texture lookups run in the game's screen coordinates (v from the top), the offset is turned back into ours.
+    /// </summary>
+    public const string HeatHaze = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uFlow, uPerturbation, uDepth, uImage;
+        uniform float uPhase;     // gameTime (game hours since the load) × 100
+        uniform float uAmount;    // heatHaze
+        uniform vec2 uTan;        // tan(fov/2) * aspect, tan(fov/2)
+        uniform vec2 uNearFar;    // of the near depth slice
+        uniform float uFarClip;   // the game's far clip D: its G-buffer depth is distance / D
+        uniform int uHasDepth;    // 0: no near slice was drawn, everything counts as far
+
+        vec2 layer(vec2 uv, vec2 direction, float phase)
+        {
+            float t = fract(phase);
+            vec2 n = texture(uPerturbation, uv + direction * t).rg * 2.0 - 1.0;
+            return n * (1.0 - abs(t * 2.0 - 1.0));
+        }
+
+        void main()
+        {
+            vec2 g = vec2(vUv.x, 1.0 - vUv.y);
+            vec2 direction = texture(uFlow, g * 3.341).rg * 2.0 - 1.0;
+            vec2 p = g * 7.341;
+            vec2 s = layer(p, direction, uPhase) + layer(p + vec2(0.1, 0.3), direction, uPhase + 0.33)
+                   + layer(p + vec2(0.4, 0.7), direction, uPhase + 0.66);
+            float len = length(s);
+            vec2 dir = len > 1e-6 ? s / len : vec2(0.0);   // the game normalises a possibly zero vector; here it stays still
+
+            // The game's depth is the distance from the eye over its far clip, and "nothing" counts as 1.
+            float d = textureLod(uDepth, vUv, 0.0).r;
+            float amplitude = 1.0;
+            if (uHasDepth != 0 && d < 0.99999)
+            {
+                float n = 2.0 * d - 1.0;
+                float z = 2.0 * uNearFar.x * uNearFar.y / (uNearFar.y + uNearFar.x - n * (uNearFar.y - uNearFar.x));
+                float distance = z * length(vec3((vUv * 2.0 - 1.0) * uTan, 1.0));
+                amplitude = clamp(6.0 * distance / uFarClip, 0.0, 1.0);
+            }
+            vec2 offset = dir * (amplitude * 0.002 * uAmount);
+            offset.y = -offset.y;
+            vec3 c = mix(texture(uImage, vUv + offset).rgb, texture(uImage, vUv + offset * 0.7).rgb, 0.5);
+            fragColour = vec4(c, 1.0);
+        }
+        """;
 }

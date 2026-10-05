@@ -24,7 +24,7 @@ public class ShaderCompilerTests
         yield return ("mesh", Shaders.MeshVertex, Shaders.MeshFragment);
         yield return ("line", Shaders.LineVertex, Shaders.LineFragment);
         foreach (var f in new[] { nameof(PostProcessShaders.Ssao), nameof(PostProcessShaders.SsaoBlur), nameof(PostProcessShaders.Composite),
-                     nameof(PostProcessShaders.Luminance), nameof(PostProcessShaders.Adapt), nameof(PostProcessShaders.Fxaa) })
+                     nameof(PostProcessShaders.Luminance), nameof(PostProcessShaders.Adapt), nameof(PostProcessShaders.Fxaa), nameof(PostProcessShaders.HeatHaze) })
             yield return ("post " + f, PostProcessShaders.Vertex, Private(typeof(PostProcessShaders), f));
         yield return ("sky simple", Private(typeof(SkyRenderer), "Vertex"), Private(typeof(SkyRenderer), "SimpleFragment"));
         yield return ("sky", Private(typeof(SkyRenderer), "Vertex"), Private(typeof(SkyRenderer), "SkyFragment"));

@@ -85,7 +85,7 @@ sealed class WorldOptions
           --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral (F7 toggles)
           --haze-distance <u>      the game's far distance D (view distance x 10) for its haze, which ramps in from 0.06 D to 0.6 D (default 50000: view distance 5000)
           --haze-strength <x>      the viewer's haze strength: scales how far the haze is blended in (default 0.87: far mountains stay visible; 1 is the game's; also a Tab slider)
-          --weather <name>         a WEATHER record's sky colour, fog and clouds (default "Default": clear, no fog, no clouds)   --clouds <0..1> cloud coverage
+          --weather <name>         a WEATHER record's sky colour, fog, clouds and heat haze (default "Default": clear, no fog, no clouds, no heat haze)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --faithful <all|ao,dither,haze,aa,shadows>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
@@ -104,6 +104,7 @@ sealed class WorldOptions
           --wireframe --info
           --post <meitou|kenshi|off>   post-processing preset (default meitou), before the options below: HDR scene, SSAO
           --ssao / --no-ssao, --dither / --no-dither   --no-fxaa
+          --no-heat-haze           no heat haze (the game's HeatHaze setting, default on: strength from the weather's `heat haze`)   --heat-haze <x> replaces that field (testing)
           --exposure <x>  --ssao-radius <units>  --ssao-strength <x>
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
@@ -320,6 +321,12 @@ static class WorldFrame
         public TerrainStreamer? Streamer;
         /// <summary>With <c>--no-stream</c>: where the streamer is kept, instead of at the eye.</summary>
         public Vector3? Anchor;
+        /// <summary>The heat haze's target this frame (the weather's <c>heat haze</c> × strength 1 × the sun factor), for the statistics.</summary>
+        public float HeatHazeTarget;
+        /// <summary>Game hours since the load for the heat haze's animation, when the caller runs a game clock; null: real time at game speed 1.</summary>
+        public double? GameHours;
+        internal readonly Stopwatch HeatHazeClock = new();
+        internal double HeatHazeHours;
         public void Dispose()
         {
             Streamer?.Dispose();
@@ -362,6 +369,7 @@ static class WorldFrame
             terrain.SetTextures(textures);
         }
         var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze }, Post = new PostProcess(gl, o.Post) };
+        gpu.Post.LoadHeatHaze(assets);
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
         if (scene.Database is { } skyDb)
@@ -472,6 +480,7 @@ static class WorldFrame
         // The game's exposure (0.55 over the mean luminance, clamped to its band) goes with the game's sky and light; the simple sky keeps a plain scale.
         if (gpu.Post is { } post) post.AutoExposure = gpu.Sky.Physical ? (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance) : null;
         if (gpu.Post is { } upscaling) upscaling.WaterHeight = render.Water && gpu.Water is not null ? WorldWater.Height : null;
+        if (gpu.Post is { } hazy) UpdateHeatHaze(gpu, hazy, sun.Y);
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
@@ -547,6 +556,25 @@ static class WorldFrame
             gpu.Shadow.DrawDebug(gpu.DebugShadows, gpu.Post?.Target ?? 0, width, height, view, camera.Projection(aspect, nearestNear, nearestFar), eye);
         }
         StageClock.Lap(10);
+    }
+
+    /// <summary>
+    /// The game's <c>heatHaze</c> (docs/formats/weather.md "Heat haze"): the target is the weather's <c>heat haze</c> (or
+    /// <c>--heat-haze</c>) × strength × saturate(6 · sunY), with strength 1 (a forced weather has no scheduler's roll); the value
+    /// moves towards it at 1/3 per second of real time (game speed 1), and jumps there for still pictures. The animation's
+    /// <c>gameTime</c> is the caller's game clock when it has one, else real time at game speed 1 (held still for pictures).
+    /// </summary>
+    static void UpdateHeatHaze(Gpu gpu, PostProcess post, float sunY)
+    {
+        float dt = (float)Math.Min(gpu.HeatHazeClock.Elapsed.TotalSeconds, 0.25);
+        bool first = !gpu.HeatHazeClock.IsRunning;
+        gpu.HeatHazeClock.Restart();
+        float field = post.Options.HeatHazeOverride ?? gpu.Sky.Weather.HeatHaze;
+        gpu.HeatHazeTarget = HeatHaze.Target(field, 1, sunY);
+        post.HeatHazeAmount = first || post.InstantAdaptation ? gpu.HeatHazeTarget : HeatHaze.Step(post.HeatHazeAmount, gpu.HeatHazeTarget, dt);
+        if (!post.InstantAdaptation) gpu.HeatHazeHours += dt * HeatHaze.HoursPerSecond;
+        post.HeatHazeHours = gpu.GameHours ?? gpu.HeatHazeHours;
+        post.HeatHazeFarClip = gpu.Sky.HazeDistance;
     }
 
     /// <summary>

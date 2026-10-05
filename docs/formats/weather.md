@@ -210,7 +210,47 @@ direction × speed. The cloud density drives the layer's coverage and darkness (
 ### Heat haze (Verified (decompiled), FUN_1409e8f70, FUN_1409ea410)
 
 The shared `heatHaze` moves towards `heat haze × s × saturate(6 · sunY)` (none at night, full from about 10° of sun height) at
-`1/3` per second; `post/heathaze.hlsl` uses it ([post-processing.md](post-processing.md)).
+`1/3` per second; `post/heathaze.hlsl` uses it ([post-processing.md](post-processing.md#heat-haze-verified)).
+
+- Which weather: the camera region's current weather (the same `region` object whose rain and dust are used); `heat haze` is
+  the WEATHER field at offset 0xa4 of the loaded weather, `s` the region's strength, `sunY` the height of the sky controller's
+  sun direction (FUN_14066cad0). Re-checked 2026-10-05 in FUN_1409e8f70.
+- Step: by at most `dt / 3` per frame, landing on the target when closer; `dt` is the game-speed-scaled frame time with 0.01 while
+  paused (see "Time bases"), so it still settles, slowly, while paused. A teleport (the same flag that snaps wetness and dust)
+  sets it to the target at once.
+- FUN_1409ea410 writes it every frame into `SharedSkyParams` `heatHaze`; the character editor's workspace sets 0 (FUN_1405f4dd0).
+  The shader's animation runs on `gameTime` (game hours since the load, FUN_14066f190), which stops while paused: the shimmer
+  freezes in place, its strength still settling.
+
+**Which weathers and regions** (**Verified**, merged base records, 2026-10-05; region → season lists in "Base-game data"): 19 of
+53 weathers have a `heat haze` (the table's column). Reachable through a BIOME_GROUP's seasons, with the season's strength limits:
+
+| Region (BIOME_GROUP) | Season (s range) | Weathers with heat haze (weight / sum of the season's weights) |
+| --- | --- | --- |
+| Venge | venge (0.5–1) | venge beams 1 (100/109, only 5–23 h), Desert Calm hot 0.6 (6/109), Desert-dust-swirls 0.25 (3/109) |
+| Ashlands | Ashland_Basic (0.7–1) | Kenshi_Ash-Flakes 1 (the only weather) |
+| The Great Desert | great desert (1) | Desert Calm hot 0.6 (5/42, 7–22 h), Desert-dust-Light Detritus01 0.5 (4/42), GD ground sand orange 0.4 (10/42), great desert streamers 0.25 (20/42), Desert-dust-swirls 0.25 (1/42), Desert Wisps 0.2 (2/42) |
+| Heng, Skimsands, Spine Canyon | great desert small (1) | Desert Calm hot 0.6 (5/45), Desert-dust-Light Detritus01 0.5 (5/45), GD ground sand orange SMALL 0.4 (10/45), great desert streamers SMALL 0.25 (20/45), Desert-dust-swirls 0.25 (5/45) |
+| Stenn Desert | stenn desert (0.7–1) | Desert Calm hot 0.6 (10/60), Desert-dust-swirls 0.25 (20/60) |
+| Grey Desert, The Eye | grey desert (0.5–1) | Clear Times SHORT hot 0.5 (11/33) |
+| Okran's Gulf, Okran's Valley, Shem, Sinkuun, Stobe's Garden | Desert mild (1) | Clear Times SHORT hot 0.5 (4/34), Desert-dust-swirls 0.25 (11/34), ground sand 0.2 (4/34), Desert Calm 0.1 (4/34) |
+| Skinner's Roam | Clear AND Storm Mix SHORTSEASON (1; 17 of 100 days) | Clear Times SHORT hot 0.5 (7/10), Dust Storm Approach SHORT 0.5 (3/10) |
+| Desert | Desert Blasts (1; 75 days) / Desert Summer (0.5–1; 25 days) | Desert Blaster 0.25 / Desert-dust-Light Detritus01 0.5 |
+| The Shrieking Forest, Burning Forest | Drifting-foliage (1) | Drifting-foliage 0.5 (300/400), Desert Blaster 0.25 (100/400) |
+| Border Zone, Bast, Bonefields | border zone (0.5–1) | Desert-dust-swirls 0.25 (20/45), Desert Calm 0.1 (5/45) |
+| Shun, The Hook, Spider Plains (south coast season) | south coast (1) | Desert-dust-swirls 0.25 (20/100), Desert Calm 0.1 (30/100) |
+| Cannibal Plains (half the year), Gut | nothing, bit of rain, wind (0.5–1) | Desert Calm 0.1 (1/3) |
+| The Pits, The Pits East, The Crags | the pits (0–1) | Desert-dust-swirls 0.25 (10/70), Desert Calm 0.1 (10/70) |
+
+Not reachable: SkyBeam 1, Desert Calm MEGAHOT 1.0 1, Local-swirl-devil 0.2 (their seasons have no region), and the seasons arid
+canyons and Desert-dust-swirl SEASON. "Default" has none, so a region without seasons never shimmers. The strongest common
+case is Venge by day (`heatHaze` 0.5–1) and the Ashlands (0.7–1); the Great Desert reaches 0.6 in "Desert Calm hot 0.6".
+
+**The viewer** has no weather scheduler yet: `--weather <name>` forces one record, taken at strength `s = 1`, so its `heat haze` ×
+saturate(6 · sunY) is the target; the value moves towards it at 1/3 per real second (game speed 1, never paused) and jumps to it
+for screenshots. `gameTime` is real time × 11/1200 hours per second from the viewer's start, held still for screenshots; the game
+build (`meitou`) passes its own clock's hours instead. `--heat-haze <x>` replaces the weather's field (testing),
+`--no-heat-haze` turns the pass off (the game's `HeatHaze=0`).
 
 ### Sounds (Verified (decompiled), FUN_1409e8f70; names only)
 
@@ -398,8 +438,9 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
    `dyn_curved_*` attributes) and a CPU billboard renderer; then the effect groups by `type`: camera box with wrapping for rain
    and ash first (most visible), then the map-feature placers (volcano plumes, steamers, the permanent dust storm: static
    positions, always on), then wandering storms and twisters with their fog-volume spheres, lightning last.
-6. **Not planned here**: heat haze (belongs to the post-processing work; the `heatHaze` value comes from step 2), sounds,
-   gameplay effects.
+6. **Heat haze**: done in the post-processing (`PostProcess.RunHeatHaze`, `Meitou.Data.World.HeatHaze`); it takes the forced
+   weather at strength 1 until step 2 gives the camera region's weather and strength. **Not planned here**: sounds, gameplay
+   effects.
 
 ## Unknowns
 

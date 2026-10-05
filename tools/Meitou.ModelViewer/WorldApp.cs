@@ -399,6 +399,8 @@ static partial class WorldApp
                 gpu.Sky.Poll();
                 stats.Add(gpu.Sky.Physical ? $"sky         cpu {gpu.Sky.PrepareMs:0.00} ms, gpu {gpu.Sky.GpuMs:0.00} ms" : "sky         simple");
                 if (gpu.Post is { } post) stats.Add($"post gpu    {post.DescribeCosts()}");
+                if (gpu.Post is { } hazy && (hazy.HeatHazeAmount > 0 || gpu.HeatHazeTarget > 0))
+                    stats.Add($"heat haze   {hazy.HeatHazeAmount:0.00} (target {gpu.HeatHazeTarget:0.00}, weather {gpu.Sky.Weather.Name})" + (hazy.HeatHazeRuns ? "" : hazy.HasHeatHaze ? ", off" : ", no textures"));
                 stats.Add($"camera      {t.X:0}, {t.Y:0}, {t.Z:0}, zone {WorldLayout.ZoneOf(t.X, t.Z)}");
                 stats.Add($"terrain     {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" + (gpu.Streamer is { Pending: > 0 } st ? $", loading {st.Pending}" : ""));
                 if (gpu.Objects is { } ob && render.Objects)
