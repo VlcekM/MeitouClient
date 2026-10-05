@@ -18,9 +18,9 @@ public class ShaderCompilerTests
     public static IEnumerable<(string Name, string Vertex, string Fragment)> Pairs()
     {
         yield return ("terrain patch", TerrainShaders.PatchVertex, TerrainShaders.Fragment);
-        yield return ("terrain mesh", TerrainShaders.MeshVertex, TerrainShaders.Fragment);
+        yield return ("terrain mesh", TerrainShaders.MeshVertex, TerrainShaders.MeshFragment);
         yield return ("terrain patch depth", TerrainShaders.PatchVertex, ShadowShaders.DepthFragment);
-        yield return ("terrain mesh depth", TerrainShaders.MeshVertex, ShadowShaders.DepthFragment);
+        yield return ("terrain mesh depth", TerrainShaders.MeshInstancedDepthVertex, ShadowShaders.DepthFragment);
         yield return ("mesh", Shaders.MeshVertex, Shaders.MeshFragment);
         yield return ("line", Shaders.LineVertex, Shaders.LineFragment);
         foreach (var f in new[] { nameof(PostProcessShaders.Ssao), nameof(PostProcessShaders.SsaoBlur), nameof(PostProcessShaders.Composite),

@@ -77,7 +77,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         quadtree = new TerrainQuadtree(fine.Spacing, GridCells, lodDistance);
         fineBand = BandOf(fine);
         patchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, TerrainShaders.Fragment);
-        meshProgram = WorldGl.Program(gl, TerrainShaders.MeshVertex, TerrainShaders.Fragment);
+        meshProgram = WorldGl.Program(gl, TerrainShaders.MeshVertex, TerrainShaders.MeshFragment);
 
         coarseTexture = HeightTexture(coarse, coarseSize, coarseSize);
         fineTexture = HeightTexture(fine.Raw, fine.Columns, fine.Rows);
@@ -335,29 +335,16 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// Draws other meshes with the terrain material (TERRAIN-mode map features), after <see cref="Draw"/> set the
     /// frame. Each item: a vertex array with position at attribute 0 and normal at 1, its index count, its transform.
     /// As the game's <c>Feature_Terrain_DX11</c> (docs/formats/foliage.md, "TERRAIN-mode meshes"): one biome per mesh,
-    /// the one of <c>biomemap.png</c> at the mesh's origin, back faces culled.
+    /// the one of <c>biomemap.png</c> at the mesh's origin, back faces culled. Drawn instanced (<see cref="GroupMeshes"/>); returns
+    /// the number of draw calls.
     /// </summary>
-    public void DrawMeshes(IEnumerable<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth = false)
+    public int DrawMeshes(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth = false)
     {
-        if (depth) { DrawMeshesDepth(meshes); return; }
+        if (depth) return DrawMeshesDepth(meshes);
+        if (!GroupMeshes(meshes, biomes: true)) return 0;
         Apply(meshProgram, heightNormals: false);
         gl.Uniform1(U(meshProgram, "uFeature"), 1);
-        gl.Enable(EnableCap.CullFace);
-        gl.CullFace(TriangleFace.Back);
-        int model = U(meshProgram, "uModel"), biome = U(meshProgram, "uFeatureBiome");
-        foreach (var (vao, count, m) in meshes)
-        {
-            WorldGl.Matrix(gl, model, m);
-            // Not resident yet (or no textures): blend the biomes as the terrain does.
-            gl.Uniform1(biome, textures?.FeatureBiomeRow(m.Translation.X, m.Translation.Z) ?? -1);
-            // A mirroring placement turns the winding round.
-            gl.FrontFace(m.GetDeterminant() < 0 ? FrontFaceDirection.CW : FrontFaceDirection.Ccw);
-            gl.BindVertexArray(vao);
-            gl.DrawElements(PrimitiveType.Triangles, (uint)count, DrawElementsType.UnsignedInt, (void*)0);
-        }
-        gl.FrontFace(FrontFaceDirection.Ccw);
-        gl.Disable(EnableCap.CullFace);
-        gl.BindVertexArray(0);
+        return DrawGroups();
     }
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
@@ -373,7 +360,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         if (depthPatchProgram == 0)
         {
             depthPatchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, ShadowShaders.DepthFragment);
-            depthMeshProgram = WorldGl.Program(gl, TerrainShaders.MeshVertex, ShadowShaders.DepthFragment);
+            depthMeshProgram = WorldGl.Program(gl, TerrainShaders.MeshInstancedDepthVertex, ShadowShaders.DepthFragment);
         }
         if (Math.Abs(options.LodDistance - LodDistanceInUse) > 1e-4f)
             quadtree = new TerrainQuadtree((float)quadtree.Spacing(0), GridCells, Math.Max(options.LodDistance, 2f));
@@ -404,25 +391,92 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// <summary>Terrain triangles the depth draws have drawn since the counter was last reset (by the caller).</summary>
     public long DepthTriangles { get; set; }
 
-    void DrawMeshesDepth(IEnumerable<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes)
+    int DrawMeshesDepth(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes)
     {
-        if (depthMeshProgram == 0) return;
+        if (depthMeshProgram == 0 || !GroupMeshes(meshes, biomes: false)) return 0;
         uint program = depthMeshProgram;
         gl.UseProgram(program);
         WorldGl.Matrix(gl, U(program, "uViewProjection"), frame.ViewProjection);
-        gl.Enable(EnableCap.CullFace);
-        gl.CullFace(TriangleFace.Back);
-        int model = U(program, "uModel");
+        return DrawGroups();
+    }
+
+    // ---- the TERRAIN-mode meshes, instanced ----
+    // One instanced draw per (vertex array, index count, winding) instead of one draw per placement (a draw costs ~4 µs of CPU
+    // through VkGl, and a forest has hundreds of TERRAIN-mode rocks on screen and thousands in a shadow cascade). The placements keep
+    // their order within a group; the groups follow the first placement of each. The pictures are the same as with one draw each
+    // (docs/viewer.md, "Shadow pass cost"): the shaders do the uniform form's arithmetic, a depth-only pass keeps the nearest fragment
+    // whatever the order, and in colour only exactly equal depths of two different placements could tell the order apart.
+
+    sealed class MeshGroup
+    {
+        public uint Vao;
+        public int IndexCount, Count, Offset;
+        public bool Mirrored;
+        public Matrix4x4[] Models = new Matrix4x4[16];
+    }
+
+    readonly Dictionary<(uint, int, bool), MeshGroup> meshGroups = [];
+    readonly List<MeshGroup> meshGroupList = [];
+    uint meshInstanceBuffer;
+    long meshInstanceBytes;
+
+    /// <summary>
+    /// Sorts the placements into <see cref="meshGroupList"/> and uploads them (each one's matrix as its four rows; with
+    /// <paramref name="biomes"/> row 0's w, which only feeds the position's unused w, carries the biome row). False when there is none.
+    /// </summary>
+    bool GroupMeshes(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool biomes)
+    {
+        foreach (var g in meshGroupList) g.Count = 0;
+        meshGroupList.Clear();
+        if (meshGroups.Count > 4096) meshGroups.Clear();   // vertex arrays come and go with streaming
         foreach (var (vao, count, m) in meshes)
         {
-            WorldGl.Matrix(gl, model, m);
-            gl.FrontFace(m.GetDeterminant() < 0 ? FrontFaceDirection.CW : FrontFaceDirection.Ccw);
-            gl.BindVertexArray(vao);
-            gl.DrawElements(PrimitiveType.Triangles, (uint)count, DrawElementsType.UnsignedInt, (void*)0);
+            var key = (vao, count, m.GetDeterminant() < 0);
+            if (!meshGroups.TryGetValue(key, out var g)) meshGroups[key] = g = new MeshGroup { Vao = vao, IndexCount = count, Mirrored = key.Item3 };
+            if (g.Count == 0) meshGroupList.Add(g);
+            if (g.Count == g.Models.Length) Array.Resize(ref g.Models, g.Count * 2);
+            var placed = m;
+            // Not resident yet (or no textures): -1, blend the biomes as the terrain does.
+            if (biomes) placed.M14 = textures?.FeatureBiomeRow(m.Translation.X, m.Translation.Z) ?? -1;
+            g.Models[g.Count++] = placed;
+        }
+        if (meshGroupList.Count == 0) return false;
+        int total = 0;
+        foreach (var g in meshGroupList) { g.Offset = total; total += g.Count; }
+        if (meshInstanceBuffer == 0) meshInstanceBuffer = gl.GenBuffer();
+        gl.BindBuffer(BufferTargetARB.ArrayBuffer, meshInstanceBuffer);
+        meshInstanceBytes = Math.Max(meshInstanceBytes, total * 64L);
+        gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)meshInstanceBytes, null, BufferUsageARB.StreamDraw);
+        foreach (var g in meshGroupList)
+            fixed (Matrix4x4* p = g.Models)
+                gl.BufferSubData(BufferTargetARB.ArrayBuffer, (nint)(g.Offset * 64L), (nuint)(g.Count * 64L), p);
+        return true;
+    }
+
+    /// <summary>Draws <see cref="meshGroupList"/> with the program in use, back faces culled (a mirroring placement turns the winding round).</summary>
+    int DrawGroups()
+    {
+        gl.Enable(EnableCap.CullFace);
+        gl.CullFace(TriangleFace.Back);
+        foreach (var g in meshGroupList)
+        {
+            gl.FrontFace(g.Mirrored ? FrontFaceDirection.CW : FrontFaceDirection.Ccw);
+            gl.BindVertexArray(g.Vao);
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, meshInstanceBuffer);
+            for (uint a = 0; a < 4; a++)
+            {
+                // The placement's rows at locations the meshes' vertex arrays leave free (their other programs do not read them).
+                uint location = TerrainShaders.MeshInstanceLocation + a;
+                gl.EnableVertexAttribArray(location);
+                gl.VertexAttribPointer(location, 4, VertexAttribPointerType.Float, false, 64, (void*)(g.Offset * 64L + 16 * a));
+                gl.VertexAttribDivisor(location, 1);
+            }
+            gl.DrawElementsInstanced(PrimitiveType.Triangles, (uint)g.IndexCount, DrawElementsType.UnsignedInt, (void*)0, (uint)g.Count);
         }
         gl.FrontFace(FrontFaceDirection.Ccw);
         gl.Disable(EnableCap.CullFace);
         gl.BindVertexArray(0);
+        return meshGroupList.Count;
     }
 
     int U(uint program, string name)
@@ -434,6 +488,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
     public void Dispose()
     {
         if (depthPatchProgram != 0) { gl.DeleteProgram(depthPatchProgram); gl.DeleteProgram(depthMeshProgram); }
+        if (meshInstanceBuffer != 0) gl.DeleteBuffer(meshInstanceBuffer);
         gl.DeleteVertexArray(gridVao);
         gl.DeleteBuffer(gridVbo);
         gl.DeleteBuffer(gridEbo);

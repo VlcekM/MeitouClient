@@ -37,6 +37,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     readonly ObjectMaterialSet distantMaterial;
     readonly Dictionary<(GpuObjectMesh, ObjectMaterialSet, int, bool), Batch> batchMap = [];
     readonly List<Batch> active = [];
+    readonly List<(uint, int, Matrix4x4)> terrainMeshes = [];   // the TERRAIN-mode instances of a draw (TerrainRenderer.DrawMeshes)
     readonly Vector4[] uniformCache = new Vector4[256];
     readonly bool[] uniformKnown = new bool[256];
     readonly uint[] boundTextures = new uint[4];
@@ -315,7 +316,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         DrawCalls = 0;
         foreach (var b in batchMap.Values) b.Count = 0;
         active.Clear();
-        var terrainMeshes = new List<(uint, int, Matrix4x4)>();
+        terrainMeshes.Clear();
 
         // 1. Cull and choose levels: every instance into the batch of its (mesh, materials, level) with its dither range.
         float realBand = Math.Clamp(real * 0.1f, 50, 1500);
@@ -410,7 +411,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         if (wireMode != 2 && active.Count > 0) DrawBatches(options, wire: false);
         if (wireMode != 0 && active.Count > 0) DrawBatches(options, wire: true);
         gl.BindVertexArray(0);
-        if (terrainMeshes.Count > 0) terrain.DrawMeshes(terrainMeshes, depthPass);
+        if (terrainMeshes.Count > 0) DrawCalls += terrain.DrawMeshes(terrainMeshes, depthPass);
         gl.Disable(EnableCap.CullFace);
         gl.BindVertexArray(0);
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;

@@ -99,6 +99,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
     public int DrawnBlades { get; private set; }
     public int DrawCalls { get; private set; }
     public double LastDrawCpuMs { get; private set; }
+    /// <summary>With <see cref="WorldFrame.DetailedStats"/>: the last depth draw's and the frame's main draws' CPU time by step (culling, upload, meshes, grass, TERRAIN-mode rocks).</summary>
+    internal string DepthDetail = "", MainDetail = "";
     /// <summary>GPU time of the foliage draws of one frame (the main camera's draw, grass included), from timestamp queries a frame or two old.</summary>
     public double GpuMs { get; private set; }
     public double LastUpdateMs { get; private set; }
@@ -749,7 +751,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
     /// <paramref name="continuation"/>: a further depth slice of the same frame, adding to the counts and the GPU time. <paramref name="maxRange"/> caps every layer's range (the reflection).</summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain, bool grass = true, bool continuation = false, float maxRange = float.PositiveInfinity)
     {
-        if (!continuation) { DrawnInstances = 0; DrawnBlades = 0; DrawCalls = 0; }
+        if (!continuation) { DrawnInstances = 0; DrawnBlades = 0; DrawCalls = 0; if (!depthPass) MainDetail = ""; }
         if (!Enabled) return;
         int timer = grass ? BeginTimer(continuation) : -1;
         var cpu = Stopwatch.StartNew();
@@ -764,6 +766,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         bool cachedDepth = depthPass && shadowCandidatesFrame == updates && shadowCandidatesEye == eye && shadowCandidatesRange == maxRange;
         if (cachedDepth) CullCandidates(frustum, options);
         else CullZones(eye, frustum, options, maxRange, record: depthPass);
+        double tCull = cpu.Elapsed.TotalMilliseconds;
 
         // 2. Upload the instances: one buffer, each batch's matrices contiguous.
         int total = 0;
@@ -779,6 +782,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
                     gl.BufferSubData(BufferTargetARB.ArrayBuffer, (nint)(b.Offset * (long)InstanceStride), (nuint)(b.Count * (long)InstanceStride), p);
         }
 
+        double tUpload = cpu.Elapsed.TotalMilliseconds;
         gl.GetInteger(GLEnum.Samples, out int samples);
         bool coverage = samples > 1;
         if (coverage) gl.Enable(EnableCap.SampleAlphaToCoverage);
@@ -812,8 +816,10 @@ public sealed unsafe class FoliageRenderer : IDisposable
             gl.BindVertexArray(0);
         }
 
+        double tMeshes = cpu.Elapsed.TotalMilliseconds;
         // 4. Grass.
         if (grass && !debugNoGrass) DrawGrass(viewProjection, eye, frustum, options, light, fogColour, fogDistance, coverage);
+        double tGrass = cpu.Elapsed.TotalMilliseconds;
         if (coverage) gl.Disable(EnableCap.SampleAlphaToCoverage);
         gl.Disable(EnableCap.CullFace);
         gl.ActiveTexture(TextureUnit.Texture0);
@@ -821,10 +827,17 @@ public sealed unsafe class FoliageRenderer : IDisposable
         // 5. TERRAIN-mode rocks through the terrain's own mesh path.
         if (terrainDraws.Count > 0)
         {
-            terrain.DrawMeshes(terrainDraws, depthPass);
-            DrawCalls += terrainDraws.Count;
+            DrawCalls += terrain.DrawMeshes(terrainDraws, depthPass);
         }
         gl.Disable(EnableCap.CullFace);
+        if (WorldFrame.DetailedStats)
+        {
+            double tEnd = cpu.Elapsed.TotalMilliseconds;
+            string steps = $"cull{(cachedDepth ? " (cached)" : "")} {tCull:0.00}, upload {tUpload - tCull:0.00}, meshes {tMeshes - tUpload:0.00} in {active.Count} batches, " +
+                $"grass {tGrass - tMeshes:0.00}, TERRAIN-mode rocks {terrainDraws.Count} {tEnd - tGrass:0.00}";
+            if (depthPass) DepthDetail = steps;
+            else MainDetail += $" [{steps}]";
+        }
         EndTimer(timer);
         LastDrawCpuMs = (continuation ? LastDrawCpuMs : 0) + cpu.Elapsed.TotalMilliseconds;
     }
