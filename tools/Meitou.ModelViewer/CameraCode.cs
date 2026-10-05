@@ -7,9 +7,9 @@ using Silk.NET.Windowing;
 namespace Meitou.ModelViewer;
 
 /// <summary>
-/// The world camera as a hex string, for putting two viewers (this one and master's) at the same spot: Ctrl+C copies it, Ctrl+V
+/// The world camera as a hex string, for putting two viewers (e.g. two builds being compared) at the same spot: Ctrl+C copies it, Ctrl+V
 /// moves the camera to the code in the clipboard. Layout: byte 1 (the version), then the target X, Y, Z, yaw, pitch (radians) and distance
-/// as little-endian floats (25 bytes, 50 hex digits). The same code is in master's viewer on the `compare` branch, so a code from either works in both.
+/// as little-endian floats (25 bytes, 50 hex digits). The format is fixed, so a code from any build with these keys works in the others.
 /// </summary>
 static class CameraCode
 {
