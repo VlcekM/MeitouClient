@@ -40,3 +40,10 @@ Choices made while working unattended on the `engine` branch, with the reason. N
    disk and frames in flight do fit and are part of the layer.
 8. **`WorldSession`** (in `Meitou.Engine`): the loaded region and focus, the tick clock, the game clock, input, bindings and
    the camera rig; the game host drives it. Rendering state (`WorldScene`, `WorldFrame.Gpu`) stays in `Meitou.Rendering`.
+9. **Anisotropic LOD bias on NVIDIA.** With anisotropic filtering on, NVIDIA's OpenGL driver samples a quarter mip level
+   finer than its Vulkan driver for the same texture and sampler state (rock view: mean difference 1.21 at bias 0, 0.0009 at
+   −0.25, 1.08 at −0.5; with anisotropy off both match to 0.0008). `VkGl` gives anisotropic samplers `mipLodBias = −0.25` on
+   NVIDIA (vendor 0x10DE) only; other vendors are untested and get 0.
+10. **Alpha-to-coverage and depth formats.** GL `DEPTH_COMPONENT24` is created as `D32_SFLOAT` (finer, universally
+    supported); textures written mid-frame keep before-frame semantics only for uploads (rendered targets and
+    `glGenerateMipmap` are recorded in order in the frame).
