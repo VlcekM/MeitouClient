@@ -93,7 +93,12 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
     /// <summary>Starts a frame whose framebuffer 0 is <paramref name="width"/> × <paramref name="height"/> (RGBA8 + depth).</summary>
     public void BeginFrame(int width, int height)
     {
-        if (frameOpen) return;
+        if (frameOpen)
+        {
+            // Opened lazily (uploads before the host began the frame): keep it if the size matches, else submit it and start afresh.
+            if (backbuffer is { } bb && bb.Width == Math.Max(width, 1) && bb.Height == Math.Max(height, 1)) return;
+            EndFrame();
+        }
         EnsureBackbuffer(width, height);
         cmd = device.Frames.BeginFrame();
         int slot = device.Frames.Slot;
@@ -124,6 +129,17 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
         device.Frames.EndFrame(wait, waitStages, signal, before: uploadCmd);
         frameOpen = false;
         PollQueries();
+    }
+
+    /// <summary>Records <paramref name="record"/> into the frame's command buffer outside any render pass, after everything recorded so far
+    /// (presenting, upscalers). Images are in GENERAL layout.</summary>
+    public void RecordInFrame(Action<CommandBuffer> record)
+    {
+        EndPass();
+        var cb = Cmd;
+        FullBarrier(cb);
+        record(cb);
+        FullBarrier(cb);
     }
 
     /// <summary>Submits what is recorded and waits for it (readbacks, <c>glFinish</c>, waiting query results); the frame goes on after.</summary>

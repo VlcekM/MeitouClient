@@ -55,3 +55,6 @@ Choices made while working unattended on the `engine` branch, with the reason. N
 12. **A full collection at the end of loading, then `SustainedLowLatency`.** A blocking gen2 GC a few frames after the load
     cost 270-400 ms in the flight benchmark (frame 3). `WorldFrame.FinishLoading()` (viewer after settling, game after
     booting) runs one compacting collection as part of the load and leaves gen2 collections to the background GC.
+13. **Where `--renderer vulkan` applies.** The game (`meitou`) runs windowed and offscreen on either backend (`Display`:
+    swapchain through `VulkanPresenter`, MAILBOX without vsync, FIFO with). The viewer uses Vulkan for `--screenshot` and
+    `--fly-benchmark` (headless); its interactive window stays OpenGL (a developer tool; the game is the Vulkan window).

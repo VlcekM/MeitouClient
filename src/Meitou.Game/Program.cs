@@ -33,6 +33,7 @@ sealed class GameOptions
         meitou [where] [options]     boots into the world with the Kenshi camera (default --town "The Hub")
           --fps-limit <n>            frame limit when vsync is off (default 240 from meitou.user.json; 0 = unlimited)
           --vsync / --no-vsync       vsync (default off)
+          --renderer gl|vulkan       GPU backend (default gl; vulkan: the GL calls translated, docs/engine.md)
           --tick-rate <hz>           simulation ticks per second (default 30)
           --free-camera              start in the free camera (; toggles)
           --ticks <n>                with --screenshot: run n simulation ticks before the picture
@@ -160,17 +161,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
 
     unsafe int Screenshot()
     {
-        using var window = Window.Create(WindowOptions.Default with
-        {
-            Size = new Vector2D<int>(o.Width, o.Height),
-            IsVisible = false,
-            API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(3, 3)),
-            Samples = 0,
-            PreferredDepthBufferBits = 24,
-        });
-        window.Initialize();
-        using var rawGl = window.CreateOpenGL();
-        IGl gl = new GlPassthrough(rawGl);
+        using var display = new Display(o.Renderer, WindowOptions.Default with { Size = new Vector2D<int>(o.Width, o.Height) }, visible: false, vsync: false);
+        var gl = display.Gl;
         Boot(gl, interactive: false);
         for (int i = 0; i < g.Ticks; i++) session.Tick();
         ApplyCamera(session.Camera.Current);
@@ -187,7 +179,9 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         gpu.Post!.Target = fbo;
         gpu.Post.InstantAdaptation = true;
         DrawWorld(gl, w, h);
+        display.EndFrame();
         DrawWorld(gl, w, h);
+        display.EndFrame();
         gl.Finish();
         var s = session.Camera.Current;
         Console.WriteLine($"camera    {(session.Camera.IsFree ? "free" : "strategy")}: pivot {s.Target.X:0}, {s.Target.Y:0}, {s.Target.Z:0}, eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, " +
@@ -203,21 +197,16 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
     {
         bool vsync = g.VSync ?? config.VSync;
         int fpsLimit = g.FpsLimit ?? config.FpsLimit;
-        using var window = Window.Create(WindowOptions.Default with
+        using var display = new Display(o.Renderer, WindowOptions.Default with
         {
             Size = new Vector2D<int>(o.Width, o.Height),
             Title = "Meitou",
             WindowState = WindowState.Maximized,
-            API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(3, 3)),
-            Samples = 0,
-            VSync = vsync,
-            PreferredDepthBufferBits = 24,
             FramesPerSecond = 0,
             UpdatesPerSecond = 0,
-        });
-        window.Initialize();
-        var rawGl = window.CreateOpenGL();
-        IGl gl = new GlPassthrough(rawGl);
+        }, visible: true, vsync);
+        var window = display.Window!;
+        var gl = display.Gl;
         Boot(gl, interactive: true);
         var overlay = DebugOverlay.TryCreate(gl);
         var panel = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render);
@@ -281,23 +270,18 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             }
             ApplyCamera(session.CameraAt());
             var size = window.FramebufferSize;
-            if (size.X > 0 && size.Y > 0)
+            if (display.BeginFrame(size.X, size.Y))
             {
                 long t0 = Stopwatch.GetTimestamp();
                 DrawWorld(gl, size.X, size.Y);
                 cpuSum += Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
-                if (screenshotRequested)
-                {
-                    screenshotRequested = false;
-                    var file = Path.Combine(Path.GetTempPath(), $"meitou-{DateTime.Now:yyyyMMdd-HHmmss}.png");
-                    gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
-                    gl.ReadBuffer(ReadBufferMode.Back);
-                    GlCapture.SavePng(gl, file, size.X, size.Y);
-                    Console.WriteLine($"saved     {file}");
-                }
+                bool shot = screenshotRequested;
+                screenshotRequested = false;
+                if (shot && !display.ReadsAfterPresent) SaveScreenshot(gl, size.X, size.Y);
                 gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
                 panel?.Draw(size.X, size.Y);
-                window.SwapBuffers();
+                display.Present();
+                if (shot && display.ReadsAfterPresent) SaveScreenshot(gl, size.X, size.Y);
                 frames++;
             }
             titleTimer += dt;
@@ -321,11 +305,19 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         overlay?.Dispose();
         gpu.Dispose();
         silkInput.Dispose();
-        rawGl.Dispose();
         return 0;
     }
 
     bool screenshotRequested;
+
+    static void SaveScreenshot(IGl gl, int width, int height)
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"meitou-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
+        gl.ReadBuffer(ReadBufferMode.Back);
+        GlCapture.SavePng(gl, file, width, height);
+        Console.WriteLine($"saved     {file}");
+    }
 
     /// <summary>Waits until <paramref name="period"/> has passed since <paramref name="start"/>: sleeps most of it, spins the last 1.5 ms.</summary>
     static void Limit(Stopwatch clock, double start, double period)

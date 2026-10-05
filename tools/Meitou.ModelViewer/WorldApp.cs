@@ -240,6 +240,7 @@ static partial class WorldApp
 
     static int Interactive(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
+        if (o.Renderer == "vulkan") Console.WriteLine("renderer  the interactive viewer runs on OpenGL; Vulkan windows: meitou --renderer vulkan (offscreen viewer runs use Vulkan)");
         using var window = CreateWindow(o, visible: true);
         IGl? gl = null;
         GL? rawGl = null;
