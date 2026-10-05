@@ -240,7 +240,7 @@ Debug costs 2.4-3.3 times Release in every view; Meitou shadows are 5-20 % cheap
 from the first to the last timestamp of a frame and include the other agents' load: only the order of magnitude (5-11 ms) is meaningful. Windowed
 (`meitou-viewer.exe --world <view> --time 13 --quit-after 20`, vsync on, 2 runs, first 120 frames skipped; same draws per frame) the render-thread CPU was
 **higher**: Release forest 6.3 / 6.5 ms (132 fps), junk 5.6 / 4.1, trees 6.4 / 5.8; Debug forest 13.9 / 13.6 (72-74 fps), junk 12.3 / 12.7, trees 12.4 / 11.4;
-every stage row was about 1.5-2 times its offscreen value. The cause is **Unknown** (CPU and GPU overlap here, there is no per-frame GPU wait). In windowed mode
+every stage row was about 1.5-2 times its offscreen value. Explained by the owner (2026-10-06): the window was unfocused while another game (League of Legends) ran, so the windowed runs shared the CPU and GPU with it; treated as solved, not re-measured. In windowed mode
 the acquire cost 0.01 ms, the wait for a free frame (fence) 0.2-1.0 ms of the "between frames" time, the submit 0.09-0.10 ms, `vkQueuePresentKHR` 0.07-0.08 ms
 and the (closed) overlays 0.01 ms: acquire/present are not a CPU cost.
 
@@ -435,7 +435,7 @@ instance record, matrices instanced); the GL-call traffic (5 000 uniform + 2 400
 indirect/instanced calls (298 draws for 62 000 blades, and again for the motion pass), the cascade casters multi-drawn. The 16-21 ns per state command and 2-6 ns of Silk.NET dispatch say the function-call layer is not the cost; the layer above it is.
 A Debug build of the renderers' own code (the user's build) costs 2.4-3.3 times Release for the same work, so cutting calls and per-draw bookkeeping helps Debug most.
 
-**Not measured / Unknown**: the CPU cost of the streaming threads (not the render thread); why windowed frames cost 1.5-2 times offscreen frames; GPU times per pass are approximate (timestamp gaps, shared GPU);
+**Not measured / Unknown**: the CPU cost of the streaming threads (not the render thread); GPU times per pass are approximate (timestamp gaps, shared GPU);
 the `detail` lines at the end of a benchmark log give the instances and calls of the last frame only (Meitou shadows draw some cascades on alternate frames).
 
 ## Checking a change
