@@ -40,7 +40,7 @@ shipped shaders and scripts `data/materials/common/shadowFunctions.hlsl`, `shado
 - **One** square texture of the quality's side, format code 33 (Ogre `PF_FLOAT32_R`, one 32-bit float channel; **Observed**:
   the enum value read against Ogre's `PixelFormat` list), a render target with its own depth buffer. The cascades are
   **viewports in a ceil(√n) × ceil(√n) grid** of it: 2 × 2 tiles of half the side each (512² per cascade at 1024, 1024² at
-  2048). Tile `i` is at column `i / 2`, row `i % 2` of the grid (the viewer's order is row-major; only the bookkeeping differs).
+  2048). Tile `i` is at column `i / 2`, row `i % 2` of the grid (row 0 at the top, Direct3D; the viewer places its tiles the same way).
 - Each viewport draws only the shadow-caster visibility layer, render queues **10 to 80**, with the scene manager in its
   shadow-texture stage (so every material's `shadow_caster_material` is used); cleared to white (depth 1) per frame.
 - The value stored is the caster's depth (below), not a hardware depth buffer: the receiver reads it with point sampling
@@ -105,9 +105,14 @@ For cascade `i` (serving view depths `split[i] .. split[i + 1]`), every frame:
     `FarmShadowCaster`. At run time the foliage builder clones `<material>_shadow` from the technique's caster and puts the
     mesh's texture into its first unit (**Verified**: exe foliage material builder); the object material builder also sets
     casters (not traced further).
-  - **Unknown**: the alpha-test `threshold` of these casters (`shadows.program` gives no default; the foliage colour
-    materials use 0.4, grass 0.6), and whether the grass is drawn into the map at all (its material names a caster, but its
-    render queue and caster flag were not traced).
+  - **Unknown**: the alpha-test `threshold` of these casters. `ShadowCaster_ALPHA_FP` (`shadowcaster.hlsl`:
+    `clip(alpha − threshold)`) declares it as a plain uniform and neither `shadows.program`, `shadows.material` nor
+    `foliage.material`'s `FoliageShadowCaster` / `FarmShadowCaster` gives it a value (**Verified** by reading them; the foliage
+    colour materials use 0.4, grass 0.6; `shadowFunctions.hlsl`'s own caster has `ALPHA_REJECT` 0.5 but its alpha test is off).
+    An unset Ogre constant reads 0, which would cut nothing, unless the exe sets it (not traced). Also Unknown: whether the grass
+    is drawn into the map at all (its material names a caster, but its render queue and caster flag were not traced).
+  - The caster vertex program clamps **per vertex** (`pos.z = max(pos.z, 0)`, then interpolated), and the map is a colour target
+    (R32F) whose hardware depth test uses the **unbiased** depth while the colour stores the biased one.
 - Objects that do **not** cast (`setCastShadows(false)` callers, identified by the strings they use): editor gizmos, effect
   objects (emission and light effects), interior masks, the water planes and the reflection camera's helpers, debug lines,
   some instanced-node helpers (**Observed**: the callers were not all traced to their objects). Characters' bodies and the
@@ -117,16 +122,33 @@ For cascade `i` (serving view depths `split[i] .. split[i + 1]`), every frame:
 
 Every G-buffer pixel receives (the lighting pass is full screen); forward-drawn things (water, sky, particles) do not.
 
-1. **Cascade by view depth**: the pixel's clip-space z (≈ view depth − near) against `csmParams[i].x`; the first cascade whose
-   split is beyond it. **Beyond the last split the term is 1**: no fade-out at the far end (a fade is commented out in the RTW
-   branch only).
-2. Light-space position `shadowViewMat · worldPos`, then `csmTrans[c] + csmScale[c] · that` → atlas UV and depth.
-3. **PCF, 12 taps** ("HEX12"): offsets on a hexagonal lattice around the point (radii 1 to about 2.65, one of the listed offsets
-   is a duplicate of another), shifted by `noise · 0.25` along x, turned by the angle `noise · 2π` and scaled by
-   `csmParams[c].y · 0.3`. `noise` is the red channel of a white-noise texture (`white-noise.png`, bound in the `WarpMap` slot)
-   read at **atlas UV × 1024**, so the pattern is fixed to the ground, not to the screen. The offsets are first **projected onto
-   the plane of the pixel's normal** in light space, so the taps follow the surface (their depth changes with it).
-   `lit = mean(stored ≥ tap depth)`; no receiver bias (`csmParams[c].z = 0`).
+1. **Cascade by clip-space z**: `deferred.hlsl` passes `(proj · viewPos).z`, not divided by w, with `proj` the auto parameter
+   `projection_matrix` (`deferred.material`), i.e. the camera's Direct3D projection: `f (d − n) / (f − n)` for view depth `d`,
+   about `d − n`. It is compared with `csmParams[i].x = split[i + 1] − split[0]`; the first cascade whose value is not exceeded
+   is used. With the camera's near `n` = 5 and far `f` = 50000 (**Observed**: camera.md "a virtual call on the camera with
+   5.0", sky.md for the far clip) the boundaries lie at view depth `5 + (split − 1) · 49995 / 50000`, about **split + 4**.
+   **Beyond the last split the term is 1**: no fade-out at the far end (a fade is commented out in the RTW branch only).
+2. Light-space position `shadowViewMat · worldPos` (the camera-relative position, the rotation of cascade 0's light view), then
+   `csmTrans[c] + csmScale[c] · that` → atlas UV (Direct3D: v grows downwards) and 0..1 depth. There is **no check that the point
+   is inside its tile**: a tap that leaves the tile reads the neighbouring tile (another cascade); only outside the whole atlas
+   does the `border` colour (1, lit unless the tap's depth exceeds 1) apply.
+3. **PCF, 12 taps** ("HEX12"), each `tex2Dlod` of the point-sampled map (`filtering none`: the one texel holding the position)
+   compared as `stored − tapDepth ≥ 0`, `lit = mean`. The offsets (in the order listed, units of the scaled radius) are
+   (1, 0), (−0.5, 0.866), (−0.5, 0.866), (2.5, 0.866), (1, 1.732), (−0.5, 2.598), (−2, 1.732), (−2, 0), (−2, −1.732),
+   (−0.5, −2.598), (1, −1.732), (2.5, −0.866): points of a hexagonal lattice at radius 1 and √7 ≈ 2.65 (and 2), with
+   (−0.5, 0.866) **listed twice** where the ring's (−0.5, −0.866) belongs, so that point weighs 2/12 and the kernel's mean is
+   (0, 0.144) off the centre. For each tap (**Verified** by reading `computeShadowMultiplier` / `pcfSample`):
+   - `noise` = the **red channel of `white-noise.png`** (`data/materials`, 64 × 64 RGB 8-bit) bound to the `WarpMap` unit of
+     `Main_Lighting_CSM` with `filtering none` and Ogre's default wrap addressing, read at **atlas UV × 1024** (UV in the
+     Direct3D frame), so the pattern is fixed to the ground, not to the screen;
+   - the offset is shifted by `(noise · 0.25, 0)`, then turned by `(c·x + s·y, −s·x + c·y)` with the angle **`noise · 2 · 3.1415`**
+     (not 2π) and scaled by `csmParams[c].y · 0.6 · 0.5` (the radius in atlas UV);
+   - the result `r` (atlas UV, Direct3D frame) becomes `(r, 0) − nₗ (nₗ · (r, 0))` with `nₗ` the normalised **light-space**
+     normal: its u and v are added to the atlas UV and its third component to the 0..1 depth. So the taps are "projected onto the
+     surface's plane", but in mixed units: the normal is in light space (y up) while the offsets are atlas UV (v down) and the
+     depth step is in UV units, not depth units (**Observed**: follows from the shader and the receiver matrix's flip; a plane
+     tilted along light y gets its depth step with the wrong sign, and the step is `nz` times, not `1 / nz` times, the true one).
+   No receiver bias (`csmParams[c].z = 0`).
 4. `shadow = ambient + lit · (1 − ambient)` with the ambient level forced to **0** by the lighting shader.
 
 Other kernels exist behind defines (7-tap hexagon, 3 taps, 8-tap Poisson disk, 4-tap square, a single tap, VSM with a
@@ -174,15 +196,31 @@ the table, default 1 = 2048², `--shadow-range <u>`). It follows the facts above
 - **Casters** are the renderers' own geometry through depth-only entry points: the terrain's patches (levels chosen from the
   camera's eye, as in the picture), objects (including TERRAIN-mode meshes), foliage meshes with their cut-out mask. The
   renderers' culling stays as it is (the terrain culls back faces as the game's caster does; objects are drawn two-sided).
-  Grass does not cast. Foliage casts out to 1.2 × the range (a saving; the game's limit is Unknown).
-- **Receiver**: 12 taps on the viewer's own hexagonal ring (six at radius 1, six at 2.4 between them) with the game's radius,
-  0.25 shift and per-texel random turn (a hash of the atlas texel × 1024 instead of the noise texture), the taps kept on the
-  surface plane (computed in light-space units), and **hardware comparison with bilinear weights** for each tap (the game
-  point-samples), which smooths the penumbra.
-- Below a sun height of 0.02 the viewer draws no map (the term is 1). The game keeps drawing it with the light on the horizon
-  (its lighting direction has y clamped to 0) while the sun still has colour down to −0.2; there the viewer shows no shadows.
+  Grass does not cast. Foliage casts out to 1.2 × the range (a saving; the game's limit is Unknown). Differences that remain:
+  the atlas is a depth texture, so the depth test runs on the **biased** depth (the game tests the unbiased one and stores the
+  biased one in R32F; only where two casters nearly touch can the kept one differ), and casters nearer the sun than the box are
+  flattened **per fragment** (depth clamp) instead of per vertex (where a triangle crosses the box's near face the game's
+  interpolated depths are larger). Both would need the renderers' caster shaders changed.
+- **Tiles** sit where the game puts them (cascade i in column i / 2, row i % 2 from the top), so the atlas is the game's picture
+  and taps that leave a tile read the same neighbour as the game's.
+- **Cascade selection** follows the game's clip-z test with the game camera's near 5 and far 50000 (`ShadowCascade.SelectDepth`),
+  not the viewer's own near plane; the boxes start at the game's near plane too (or at the viewer's when that is nearer).
+- **Receiver** (`kenshiShadowFaithful` in `ShadowShaders`, called by `kenshiShadow`, which the lighting uses): the game's HEX12
+  offsets (with the repeated tap), shift, turn (same sense, angle `noise · 2 · 3.1415`), radius `csmParams.y · 0.3` and
+  mixed-unit plane projection, all computed in the Direct3D atlas frame and turned into GL's (v up) only for the final read.
+  `noise` is the red channel of the install's `white-noise.png`, loaded at run time (never shipped) and read with `texelFetch`
+  at the Direct3D atlas UV × 1024 × 64, wrapped (the game's point sampling and wrap); without the file a hash of the same
+  coordinate stands in (the log says so). Each tap is **point sampled**: the atlas keeps linear filtering with hardware compare
+  (for other receivers), and the faithful receiver reads the **texel's centre**, `(floor(uv · size) + 0.5) / size`, where the
+  bilinear weights are exactly 1, 0, 0, 0 for a power-of-two side, so the compare returns 0 or 1 like the game's (D3D picks row
+  `floor(v · size)` from the top, GL `floor((1 − v) · size)` from the bottom: the same texel except exactly on a texel edge).
+  Outside the atlas the tap is lit unless its depth exceeds 1 (the `border` colour 1). No tile clamp, no receiver bias.
+- **Low sun**: the map is drawn along the lighting direction (y clamped to 0 under the horizon, `KenshiLighting.LightDirection`)
+  while the **real sun** is at or above −0.2 (`ShadowPass.MinSunHeight` = `KenshiLighting.SunColourCutoff`), as the game; the
+  light view keeps world +Y as its up for a horizontal light. (The simple sky, not the game's, keeps its own light at y ≥ 0.02.)
 - The camera's near plane can lie beyond the first split (the viewer's near plane grows with the eye's height, up to 200): such
-  a cascade covers nothing on screen and is not drawn.
+  a cascade covers nothing on screen and is not drawn, so its tile stays cleared to 1 where the game has the cascade's casters;
+  only taps that stray into that tile from a neighbour can see the difference.
 - `--debug-shadows 1` shows the four cascade tiles; `2` the term over the scene's surfaces tinted by cascade (red, orange,
   yellow, green: the game's own debug colours), reconstructed from the near depth slice with the depth's own slope as the
   normal; `3` multiplies the term over the finished picture.

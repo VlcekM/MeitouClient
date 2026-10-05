@@ -18,12 +18,18 @@ static class ShadowShaders
     /// <summary>The shadow map's texture unit: below the atmosphere's three (<see cref="SkyRenderer.AssignSamplerUnits"/>), out of every scene shader's way.</summary>
     public static int MapUnit { get; private set; } = -1;
 
+    /// <summary>The noise texture's unit (the game's <c>white-noise.png</c>), next below <see cref="MapUnit"/>.</summary>
+    public static int NoiseUnit { get; private set; } = -1;
+
     static string F(float v) => v.ToString("0.#########", CultureInfo.InvariantCulture) + (v == MathF.Floor(v) ? ".0" : "");
 
+    static string Taps() => string.Join(", ", KenshiShadows.PcfOffsets.Select(o => $"vec2({F(o.X)}, {F(o.Y)})"));
+
     /// <summary>
-    /// The receiver: <c>float kenshiShadow(vec3 world, vec3 n)</c> is 1 where the sun reaches the point and 0 where a caster hides it. As
-    /// the game's CSM (shadowFunctions.hlsl <c>computeShadowMultiplier</c>): the cascade by view depth, nothing beyond the last split, 12
-    /// taps on a hexagonal ring turned by a random angle per shadow texel, the taps kept on the surface's plane. Include it before use.
+    /// The receiver: <c>float kenshiShadow(vec3 world, vec3 n)</c> is 1 where the sun reaches the point and 0 where a caster hides it; the
+    /// lighting calls it, and it calls <c>kenshiShadowFaithful</c>, the game's CSM (shadowFunctions.hlsl <c>computeShadowMultiplier</c>):
+    /// the cascade by the game's clip-z test, nothing beyond the last split, the twelve HEX12 taps shifted and turned by the game's noise
+    /// texture, projected onto the surface's plane, each a point-sampled compare. Include it before use.
     /// </summary>
     public static readonly string Functions = $$"""
 
@@ -31,16 +37,18 @@ static class ShadowShaders
         {
             mat4 uShadowTile[4];       // (world - origin) -> (u, v, depth) in the cascade's tile, each 0..1
             vec4 uShadowRect[4];       // the tile in the atlas: x0, y0, width, height
-            vec4 uShadowCascade[4];    // x: the far view depth it serves, y: PCF radius (tile UV), zw: extent x, y (world)
+            vec4 uShadowCascade[4];    // x: the view depth up to which it is used (the game's clip-z test), y: PCF radius (tile UV), zw: extent x, y (world)
             vec4 uShadowExtent[4];     // x: extent z (world), y: 1 / tile texels
             mat4 uShadowLight;         // world -> light axes (rotation)
             vec4 uShadowOrigin;        // xyz: the origin of uShadowTile, w: 1 when shadows are on
             vec4 uShadowForward;       // xyz: the camera's view direction (cascades go by depth along it), w: cascades
-            vec4 uShadowAtlas;         // x: atlas side in texels, y: debug cascade tint (0/1)
+            vec4 uShadowAtlas;         // x: atlas side in texels, y: debug cascade tint (0/1), z: 1 when uShadowNoise holds the game's noise
         };
         uniform sampler2DShadow uShadowMap;
+        uniform sampler2D uShadowNoise;
 
-        // The cascade a point falls in: 0..3, or -1 beyond the shadow range (and when shadows are off).
+        // The cascade a point falls in: 0..3, or -1 beyond the shadow range (and when shadows are off). The game compares its pixel's
+        // clip-space z with split - split[0]; uShadowCascade[i].x is that test turned into a view depth.
         int shadowCascade(vec3 world)
         {
             if (uShadowOrigin.w < 0.5) return -1;
@@ -53,36 +61,59 @@ static class ShadowShaders
 
         float shadowHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 
-        float kenshiShadow(vec3 world, vec3 n)
+        // The game's jitter: the red channel of white-noise.png, point sampled and wrapped, at the Direct3D atlas UV × 1024 (fixed to the
+        // ground, not the screen). Without the file (uShadowAtlas.z = 0) a hash of the same coordinate stands in.
+        float shadowNoise(vec2 uvD3d)
+        {
+            if (uShadowAtlas.z < 0.5) return shadowHash(floor(uvD3d * {{F(KenshiShadows.NoiseScale * 64)}}));
+            vec2 size = vec2(textureSize(uShadowNoise, 0));
+            vec2 texel = mod(floor(uvD3d * {{F(KenshiShadows.NoiseScale)}} * size), size);
+            return texelFetch(uShadowNoise, ivec2(texel), 0).r;
+        }
+
+        // One point-sampled compare: the texel holding uv (the game's `filtering none`) read at its centre, where the linear compare's
+        // weights are exactly 1, 0, 0, 0; outside the atlas the border is 1 (white, the far end): lit unless the point is beyond it.
+        float shadowPointCompare(vec2 uv, float z)
+        {
+            float size = uShadowAtlas.x;
+            vec2 texel = floor(uv * size);
+            if (any(lessThan(texel, vec2(0.0))) || any(greaterThanEqual(texel, vec2(size)))) return z <= 1.0 ? 1.0 : 0.0;
+            return textureLod(uShadowMap, vec3((texel + 0.5) / size, z), 0.0);
+        }
+
+        const vec2 kenshiShadowTaps[{{KenshiShadows.PcfTaps}}] = vec2[]({{Taps()}});
+
+        // The game's CSM receiver (shadowFunctions.hlsl computeShadowMultiplier with PCF, HEX12 and jitter; docs/formats/shadows.md).
+        // It works in the game's frame, the Direct3D atlas UV (v down) and 0..1 depth, and turns only the final position into GL's (v up).
+        float kenshiShadowFaithful(vec3 world, vec3 n)
         {
             int c = shadowCascade(world);
             if (c < 0) return 1.0;
             vec3 tile = (uShadowTile[c] * vec4(world - uShadowOrigin.xyz, 1.0)).xyz;
-            if (any(lessThan(tile, vec3(0.0))) || any(greaterThan(tile, vec3(1.0)))) return 1.0;   // the map's border is lit
             vec4 rect = uShadowRect[c];
-            // The surface's plane in the tile's units: a tap moved by (du, dv) moves this much in depth.
-            vec3 nl = mat3(uShadowLight) * n;
-            vec3 ext = vec3(uShadowCascade[c].zw, uShadowExtent[c].x);
-            float nz = abs(nl.z) < 0.2 ? (nl.z < 0.0 ? -0.2 : 0.2) : nl.z;
-            vec2 slope = -vec2(nl.x * ext.x, nl.y * ext.y) / (nz * ext.z);
-            // A random turn per shadow texel (the game reads a noise texture at the atlas UV × 1024).
-            vec2 atlasUv = rect.xy + tile.xy * rect.zw;
-            float noise = shadowHash(floor(atlasUv * 1024.0));
-            float angle = noise * 6.2831853;
-            mat2 turn = mat2(cos(angle), sin(angle), -sin(angle), cos(angle)) * (uShadowCascade[c].y * {{F(KenshiShadows.PcfOffsetScale)}});
-            vec2 lo = vec2(uShadowExtent[c].y), hi = vec2(1.0 - uShadowExtent[c].y);
+            vec2 atlas = rect.xy + tile.xy * rect.zw;
+            float noise = shadowNoise(vec2(atlas.x, 1.0 - atlas.y));
+            float angle = noise * {{F(KenshiShadows.PcfJitterAngle)}};
+            float cs = cos(angle), sn = sin(angle);
+            // The radius in the atlas's UV (the game's csmParams.y), times its 0.6 · 0.5.
+            float radius = uShadowCascade[c].y * rect.z * {{F(KenshiShadows.PcfOffsetScale)}};
+            // The light-space normal (y up) used as is against the v-down offsets, as the game does.
+            vec3 nl = normalize(mat3(uShadowLight) * n);
             float lit = 0.0;
             for (int k = 0; k < {{KenshiShadows.PcfTaps}}; k++)
             {
-                // Six taps at radius 1 and six at 2.4 between them: a hexagonal ring like the game's (which reaches 2.65).
-                float a = float(k % 6) * 1.0471976 + (k < 6 ? 0.0 : 0.5235988);
-                vec2 o = vec2(cos(a), sin(a)) * (k < 6 ? 1.0 : 2.4) + vec2(noise * 0.25, 0.0);
-                vec2 d = turn * o;
-                vec2 uv = clamp(tile.xy + d, lo, hi);
-                float z = tile.z + dot(uv - tile.xy, slope);
-                lit += textureLod(uShadowMap, vec3(rect.xy + uv * rect.zw, z), 0.0);
+                vec2 o = kenshiShadowTaps[k] + vec2(noise * {{F(KenshiShadows.PcfJitterShift)}}, 0.0);
+                vec2 r = vec2(cs * o.x + sn * o.y, cs * o.y - sn * o.x) * radius;
+                // The offset (r, 0) with its component along the normal removed: u, v (Direct3D) and depth (in UV units, as the game adds it).
+                vec3 d = vec3(r, 0.0) - nl * dot(nl.xy, r);
+                lit += shadowPointCompare(atlas + vec2(d.x, -d.y), tile.z + d.z);
             }
             return lit / {{F(KenshiShadows.PcfTaps)}};
+        }
+
+        float kenshiShadow(vec3 world, vec3 n)
+        {
+            return kenshiShadowFaithful(world, n);
         }
 
         // The debug views' cascade colours (the game's own debug colours: red, orange, yellow, green).
@@ -210,6 +241,7 @@ static class ShadowShaders
         {
             gl.GetInteger(GetPName.MaxCombinedTextureImageUnits, out int combined);
             MapUnit = combined - 4;
+            NoiseUnit = combined - 5;
             // Zero-filled blocks (shadows off) at both binding points, so a program reading them is defined without a ShadowPass
             // (--no-shadows, the character viewer); a live pass binds its own buffers over them.
             foreach (var (binding, bytes) in new[] { (ReceiverBinding, ShadowPass.ReceiverBytes), (CasterBinding, 16) })
@@ -226,11 +258,12 @@ static class ShadowShaders
         if (receiver != uint.MaxValue) gl.UniformBlockBinding(program, receiver, ReceiverBinding);
         uint caster = gl.GetUniformBlockIndex(program, CasterBlock);
         if (caster != uint.MaxValue) gl.UniformBlockBinding(program, caster, CasterBinding);
-        int map = gl.GetUniformLocation(program, "uShadowMap");
-        if (map >= 0)
+        int map = gl.GetUniformLocation(program, "uShadowMap"), noise = gl.GetUniformLocation(program, "uShadowNoise");
+        if (map >= 0 || noise >= 0)
         {
             gl.UseProgram(program);
-            gl.Uniform1(map, MapUnit);
+            if (map >= 0) gl.Uniform1(map, MapUnit);
+            if (noise >= 0) gl.Uniform1(noise, NoiseUnit);
             gl.UseProgram(0);
         }
     }

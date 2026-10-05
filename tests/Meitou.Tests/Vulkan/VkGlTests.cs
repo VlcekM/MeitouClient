@@ -225,4 +225,89 @@ public unsafe class VkGlTests
         }
         ExpectClean(d!);
     }
-}
+
+    /// <summary>
+    /// The faithful shadow receiver's point sampling (docs/formats/shadows.md): a linear, comparing depth sampler read at a texel's centre,
+    /// <c>(floor(uv · size) + 0.5) / size</c>, gives exactly that texel's compare (weights 1, 0, 0, 0), never a blend with its neighbours.
+    /// </summary>
+    [Fact]
+    public void Linear_compare_at_texel_centres_is_point_sampling()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        const int S = 64;
+        using (var gl = new VkGl(d!))
+        {
+            uint map = gl.GenTexture();
+            gl.BindTexture(TextureTarget.Texture2D, map);
+            gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.DepthComponent32f, S, S, 0, PixelFormat.DepthComponent, PixelType.Float, null);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)TextureCompareMode.CompareRefToTexture);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareFunc, (int)DepthFunction.Lequal);
+            uint mapFbo = gl.GenFramebuffer();
+            gl.BindFramebuffer(FramebufferTarget.Framebuffer, mapFbo);
+            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, map, 0);
+            gl.DrawBuffer(DrawBufferMode.None);
+            gl.Viewport(0, 0, S, S);
+            gl.ClearDepth(1.0);
+            gl.Clear(ClearBufferMask.DepthBufferBit);
+            gl.Enable(EnableCap.DepthTest);
+            gl.DepthFunc(DepthFunction.Less);   // the map is cleared to 1
+            gl.DepthMask(true);
+            const string fullscreen = """
+                #version 330 core
+                void main() { vec2 p = vec2((gl_VertexID & 1) * 4.0 - 1.0, (gl_VertexID & 2) * 2.0 - 1.0); gl_Position = vec4(p, 0.0, 1.0); }
+                """;
+            // A per-texel checkerboard of depths 0.3 and 0.7: any weight on a neighbour would show as a value between 0 and 1.
+            uint writer = Program(gl, fullscreen, """
+                #version 330 core
+                void main() { ivec2 i = ivec2(gl_FragCoord.xy); gl_FragDepth = ((i.x + i.y) & 1) == 0 ? 0.3 : 0.7; }
+                """);
+            gl.UseProgram(writer);
+            uint vao = gl.GenVertexArray();
+            gl.BindVertexArray(vao);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            gl.Disable(EnableCap.DepthTest);
+
+            Target(gl);
+            uint reader = Program(gl, fullscreen, """
+                #version 330 core
+                uniform sampler2DShadow uMap;
+                out vec4 fragColour;
+                void main()
+                {
+                    // An off-centre position inside texel (x, y) of the map, snapped to the texel's centre as the receiver does.
+                    vec2 uv = (floor(gl_FragCoord.xy) + vec2(0.9, 0.13)) / 64.0;
+                    vec2 centre = (floor(uv * 64.0) + 0.5) / 64.0;
+                    fragColour = vec4(texture(uMap, vec3(centre, 0.5)), 0.0, 0.0, 1.0);
+                }
+                """);
+            gl.UseProgram(reader);
+            gl.ActiveTexture(TextureUnit.Texture0);
+            gl.BindTexture(TextureTarget.Texture2D, map);
+            gl.Uniform1(gl.GetUniformLocation(reader, "uMap"), 0);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            var p = Read(gl);
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                    Assert.Equal(((x + y) & 1) == 0 ? 0 : 255, (int)At(p, x, y).R);   // 0.5 ≤ 0.3 fails, 0.5 ≤ 0.7 holds
+        }
+        ExpectClean(d!);
+    }
+
+    static uint Program(IGl gl, string vertex, string fragment)
+    {
+        uint vs = gl.CreateShader(ShaderType.VertexShader), fs = gl.CreateShader(ShaderType.FragmentShader);
+        gl.ShaderSource(vs, vertex);
+        gl.ShaderSource(fs, fragment);
+        gl.CompileShader(vs);
+        gl.CompileShader(fs);
+        uint program = gl.CreateProgram();
+        gl.AttachShader(program, vs);
+        gl.AttachShader(program, fs);
+        gl.LinkProgram(program);
+        return program;
+    }}
