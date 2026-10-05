@@ -6,6 +6,8 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>meitou</AssemblyName>
     <RootNamespace>Meitou.Game</RootNamespace>
+    <!-- Tiered PGO re-JITs hot render code for minutes; each install suspends the runtime and stalled frames 10-20 ms (DECISIONS 11). -->
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
 
   <ItemGroup>

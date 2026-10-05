@@ -176,7 +176,7 @@ public sealed unsafe partial class VkGl
         var copy = new BufferCopy(staging.Offset, (ulong)offset, (ulong)size);
         vk.CmdCopyBuffer(UploadCmd, staging.Buffer, target.Buffer, 1, &copy);
         Stats.Uploads++;
-        Stats.UploadBytes += (int)Math.Min(size, int.MaxValue);
+        Stats.UploadBytes += size;
     }
 
     /// <summary>The memory a draw reads for <paramref name="b"/>, marking it used by this frame.</summary>

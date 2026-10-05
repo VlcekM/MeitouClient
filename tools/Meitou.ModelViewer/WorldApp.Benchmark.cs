@@ -4,6 +4,7 @@ using Silk.NET.OpenGL;
 
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
+using Meitou.Rendering.Vulkan;
 using static Meitou.Rendering.WorldFrame;
 
 namespace Meitou.ModelViewer;
@@ -27,7 +28,11 @@ static partial class WorldApp
         var frameWatch = new Stopwatch();
         long gc2 = GC.CollectionCount(2), gcPrev = gc2;
         var resident = new List<string>();
-        Console.WriteLine($"fly       {o.FlyBenchmark} frames, circle radius {radius:0} units round {centre.X:0}, {centre.Z:0}, {o.FlySpeed:0} units per frame ({o.FlySpeed * 60:0} per second)");
+        // Pipelined: GL gets the same two frames in flight as the Vulkan frame ring, through a timestamp query per frame waited on two frames later.
+        bool pipelined = o.FlyPipelined;
+        uint[] fences = pipelined && gl is not VkGl ? [gl.GenQuery(), gl.GenQuery(), gl.GenQuery()] : [];
+        var interval = Stopwatch.StartNew();
+        Console.WriteLine($"fly       {(pipelined ? "pipelined, " : "")}{o.FlyBenchmark} frames, circle radius {radius:0} units round {centre.X:0}, {centre.Z:0}, {o.FlySpeed:0} units per frame ({o.FlySpeed * 60:0} per second)");
         for (int i = 1; i <= o.FlyBenchmark; i++)
         {
             float a = i * angleStep;
@@ -37,18 +42,24 @@ static partial class WorldApp
             frameWatch.Restart();
             { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
             double cpuMs = frameWatch.Elapsed.TotalMilliseconds;
-            if (gl is Meitou.Rendering.Vulkan.VkGl vkStats && i % 500 == 0) Console.WriteLine($"vkgl      frame {i}: {vkStats.Stats}");
+            if (gl is Meitou.Rendering.Vulkan.VkGl vkStats && (i % 500 == 0 || i <= 4)) Console.WriteLine($"vkgl      frame {i}: {vkStats.Stats}");
             cpu.Add(cpuMs);
-            gl.Finish();
+            if (!pipelined) gl.Finish();
+            else if (fences.Length > 0)
+            {
+                gl.QueryCounter(fences[i % 3], QueryCounterTarget.Timestamp);
+                if (i >= 3) gl.GetQueryObject(fences[(i - 2) % 3], QueryObjectParameterName.Result, out ulong _);
+            }
             StageClock.Lap(11);
-            double ms = frameWatch.Elapsed.TotalMilliseconds;
+            double ms = pipelined ? interval.Elapsed.TotalMilliseconds : frameWatch.Elapsed.TotalMilliseconds;
+            interval.Restart();
             times.Add(ms);
             if (i % 150 == 0) resident.Add($"{(((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576)}");
             long gcNow = GC.CollectionCount(2);
             worst.Add((ms, i, ((gpu.Reflection is { Valid: true } rr && rr.CpuMs >= 5 ? $"reflection[{rr.DescribeLast()}], " : "") + (gcNow != gcPrev ? "gen2 GC, " : "")) + string.Join(", ", StageClock.Names.Select((n, k) => (n, v: StageClock.Ms[k])).Where(s => s.v >= 1).Select(s => $"{s.n} {s.v:0.0}"))));
             gcPrev = gcNow;
             int sleep = 16 - (int)ms;
-            if (sleep > 0) Thread.Sleep(sleep);
+            if (sleep > 0 && !pipelined) Thread.Sleep(sleep);
         }
         var sorted = times.Skip(1).OrderBy(t => t).ToList();   // the first frame is shader compilation
         var cpuSorted = cpu.Skip(1).OrderBy(t => t).ToList();

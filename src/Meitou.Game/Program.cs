@@ -139,6 +139,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             session.Input.SetKey(FirstKey(InputAction.ToggleFreeCamera), false);
         }
         ApplyCamera(session.Camera.Current);
+        if (interactive) WorldFrame.FinishLoading(gl);
     }
 
     EngineKey FirstKey(InputAction action) => session.Bindings.Get(action).First(b => !b.IsMouse).Key;
@@ -176,6 +177,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         gpu.Streamer?.Settle(gpu.Anchor ?? camera.Eye);
         gpu.Objects?.Settle(gpu.Anchor ?? camera.Eye);
         gpu.Foliage?.Settle(gpu.Anchor ?? camera.Eye);
+        WorldFrame.FinishLoading(gl);
         int w = o.Width, h = o.Height;
         uint fbo = gl.GenFramebuffer(), colour = gl.GenRenderbuffer();
         gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, colour);

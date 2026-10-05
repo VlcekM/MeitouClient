@@ -44,6 +44,14 @@ Choices made while working unattended on the `engine` branch, with the reason. N
    finer than its Vulkan driver for the same texture and sampler state (rock view: mean difference 1.21 at bias 0, 0.0009 at
    −0.25, 1.08 at −0.5; with anisotropy off both match to 0.0008). `VkGl` gives anisotropic samplers `mipLodBias = −0.25` on
    NVIDIA (vendor 0x10DE) only; other vendors are untested and get 0.
-10. **Alpha-to-coverage and depth formats.** GL `DEPTH_COMPONENT24` is created as `D32_SFLOAT` (finer, universally
+10. **Alpha-to-coverage and depth formats.** Observed: the remaining parity differences are grass edges drawn with
+    alpha-to-coverage (rock and zone views), where the two drivers turn alpha into samples differently. GL `DEPTH_COMPONENT24` is created as `D32_SFLOAT` (finer, universally
     supported); textures written mid-frame keep before-frame semantics only for uploads (rendered targets and
     `glGenerateMipmap` are recorded in order in the frame).
+11. **Tiered PGO off in the game and the viewer.** Profiling the flight benchmark showed the render thread parked in
+    `PollGCWorker` (a runtime suspension) during 10-25 ms frame spikes with no GC pause counted: tiered PGO keeps
+    instrumenting and re-JITting hot render code, and each code install suspends the runtime. Pipelined Vulkan flight p99:
+    16.1 ms with it, 9.4 ms with `TieredPGO=false` (9.7 ms with tiered compilation off entirely). Set in both csproj files.
+12. **A full collection at the end of loading, then `SustainedLowLatency`.** A blocking gen2 GC a few frames after the load
+    cost 270-400 ms in the flight benchmark (frame 3). `WorldFrame.FinishLoading()` (viewer after settling, game after
+    booting) runs one compacting collection as part of the load and leaves gen2 collections to the background GC.

@@ -125,6 +125,7 @@ static partial class WorldApp
             foliageRenderer.Settle(gpu.Anchor ?? camera.Eye);
             Console.WriteLine($"foliage   {foliageRenderer.Describe()} ({foliageWatch.ElapsedMilliseconds} ms)");
         }
+        FinishLoading(gl);
 
         // Offscreen: the post-processing chain (HDR scene, resolve, effects) ends in a plain RGBA8 framebuffer that is read back.
         int w = o.Width, h = o.Height;

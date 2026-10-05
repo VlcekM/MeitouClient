@@ -413,7 +413,7 @@ public sealed unsafe partial class VkGl
         }
         vk.CmdCopyBufferToImage(UploadCmd, staging.Buffer, t.Image!.Image, ImageLayout.General, 1, &region);
         Stats.Uploads++;
-        Stats.UploadBytes += (int)staging.Size;
+        Stats.UploadBytes += (long)staging.Size;
     }
 
     public void GenerateMipmap(TextureTarget target)

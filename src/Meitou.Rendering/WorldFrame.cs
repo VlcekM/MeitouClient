@@ -45,6 +45,8 @@ sealed class WorldOptions
     /// <summary>Frames of the offscreen benchmark flight (0: none), the circle's radius and the speed per frame.</summary>
     public int FlyBenchmark;
     public float FlyRadius = 12000, FlySpeed = 150;
+    /// <summary>The benchmark without a wait for the GPU each frame and without the 60 fps pacing: up to two frames in flight (both backends), frame time = the interval between frames.</summary>
+    public bool FlyPipelined;
     /// <summary>The GPU backend for offscreen pictures and benchmarks: <c>gl</c> or <c>vulkan</c> (the GL calls translated, docs/engine.md).</summary>
     public string Renderer = "gl";
 
@@ -82,6 +84,7 @@ sealed class WorldOptions
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
                                    percentiles, the worst frames with their stage times and resident memory   --fly-radius <u> (12000)   --fly-speed <u per frame> (150)
+                                   --fly-pipelined: no GPU wait per frame and no pacing, two frames in flight; reports the interval between frames
           --renderer gl|vulkan     backend for --screenshot and --fly-benchmark (default gl)
           --view-distance <u>      furthest terrain drawn (default 450000: the whole world)
           --fog <u>                distance where the haze is complete (default 250000)
@@ -159,6 +162,7 @@ sealed class WorldOptions
                 case "--renderer": o.Renderer = Next(); if (o.Renderer is not ("gl" or "vulkan")) throw new ArgumentException("--renderer: gl or vulkan"); break;
                 case "--fly-radius": o.FlyRadius = F(); break;
                 case "--fly-speed": o.FlySpeed = F(); break;
+                case "--fly-pipelined": o.FlyPipelined = true; break;
                 case "--view-distance": o.ViewDistance = F(); break;
                 case "--fog": o.FogDistance = F(); break;
                 case "--material-distance": o.MaterialDistance = F(); break;
@@ -303,6 +307,20 @@ static class WorldFrame
             Sky.Dispose();
             Terrain.Dispose();
         }
+    }
+
+    /// <summary>
+    /// The end of loading: the GPU finishes the uploads queued so far (Vulkan records them all into the next frame: 1.7 GB at the
+    /// benchmark start, a 300 ms stall two frames later), and one full, compacting collection runs now instead of a blocking gen2 collection a few
+    /// frames into play (300+ ms measured), then gen2 collections only in the background while the world runs (DECISIONS 12).
+    /// </summary>
+    public static void FinishLoading(IGl gl)
+    {
+        gl.Finish();
+        System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        GC.WaitForPendingFinalizers();
+        System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency;
     }
 
     public static Gpu CreateGpu(IGl gl, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive)
