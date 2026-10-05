@@ -96,9 +96,10 @@ public sealed unsafe class FrameRing : IDisposable
         return s.Cmd;
     }
 
-    /// <summary>Ends the command buffer and submits it (graphics queue) with this slot's fence.</summary>
+    /// <summary>Ends the command buffer and submits it (graphics queue) with this slot's fence. <paramref name="before"/>, when given, is an
+    /// already ended command buffer submitted ahead of the frame's own in the same submission (uploads).</summary>
     public void EndFrame(ReadOnlySpan<Silk.NET.Vulkan.Semaphore> wait = default, ReadOnlySpan<PipelineStageFlags> waitStages = default,
-        ReadOnlySpan<Silk.NET.Vulkan.Semaphore> signal = default)
+        ReadOnlySpan<Silk.NET.Vulkan.Semaphore> signal = default, CommandBuffer before = default)
     {
         if (!inFrame)
         {
@@ -112,7 +113,10 @@ public sealed unsafe class FrameRing : IDisposable
         VulkanException.Check(vk.EndCommandBuffer(s.Cmd), "vkEndCommandBuffer");
         var fence = s.Fence;
         VulkanException.Check(vk.ResetFences(dev.Device, 1, in fence), "vkResetFences");
-        var cmd = s.Cmd;
+        var cmds = stackalloc CommandBuffer[2];
+        uint cmdCount = 0;
+        if (before.Handle != 0) cmds[cmdCount++] = before;
+        cmds[cmdCount++] = s.Cmd;
         fixed (Silk.NET.Vulkan.Semaphore* pw = wait)
         fixed (PipelineStageFlags* pws = waitStages)
         fixed (Silk.NET.Vulkan.Semaphore* ps = signal)
@@ -123,8 +127,8 @@ public sealed unsafe class FrameRing : IDisposable
                 WaitSemaphoreCount = (uint)wait.Length,
                 PWaitSemaphores = pw,
                 PWaitDstStageMask = pws,
-                CommandBufferCount = 1,
-                PCommandBuffers = &cmd,
+                CommandBufferCount = cmdCount,
+                PCommandBuffers = cmds,
                 SignalSemaphoreCount = (uint)signal.Length,
                 PSignalSemaphores = ps,
             };

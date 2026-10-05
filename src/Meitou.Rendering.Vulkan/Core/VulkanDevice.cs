@@ -538,6 +538,10 @@ public sealed unsafe class VulkanDevice : IDisposable
             SType = StructureType.PhysicalDeviceVulkan12Features,
             PNext = v12.PNext,
             TimelineSemaphore = true,
+            // For the GL translation: host query reset (GL queries) and tightly laid out uniform blocks (glslang's loose uniforms).
+            HostQueryReset = v12.HostQueryReset,
+            ScalarBlockLayout = v12.ScalarBlockLayout,
+            UniformBufferStandardLayout = v12.UniformBufferStandardLayout,
         };
         // The Link() calls stored pointers to the old locations, which are the same variables: still valid.
         eds2 = new PhysicalDeviceExtendedDynamicState2FeaturesEXT
