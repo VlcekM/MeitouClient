@@ -21,6 +21,26 @@ public static class KenshiCamera
     /// <summary>Highest view: a pitch step upwards is refused once the view direction's y is at or above this (about 11.5 degrees up).</summary>
     public const float MaxViewY = 0.2f;
 
+    /// <summary>The zoom step scales by <c>min(boom / ZoomLengthDivisor, ZoomScaleCap)</c>.</summary>
+    public const float ZoomLengthDivisor = 600;
+    /// <summary>Largest factor of the zoom step's length scaling.</summary>
+    public const float ZoomScaleCap = 0.75f;
+    /// <summary><c>settings.cfg</c> <c>camera zoom</c> in the install (the zoom speed the step multiplies).</summary>
+    public const float DefaultZoomSpeed = 125;
+    /// <summary><c>settings.cfg</c> <c>camera speed</c> in the install (units not traced).</summary>
+    public const float DefaultMoveSpeed = 500;
+    /// <summary>The eye is kept above the ground under it by <c>min(ClearanceBoomFraction · boom, ClearanceCap) + ClearanceBase</c>.</summary>
+    public const float ClearanceBoomFraction = 0.2f;
+    public const float ClearanceCap = 20;
+    public const float ClearanceBase = 10;
+
+    /// <summary>How far the eye is kept above the ground under it for a boom of <paramref name="boom"/>.</summary>
+    public static float EyeClearance(float boom) => MathF.Min(ClearanceBoomFraction * boom, ClearanceCap) + ClearanceBase;
+
+    /// <summary>The boom after one zoom step of <paramref name="input"/> (positive zooms in), clamped to the limits.</summary>
+    public static float ZoomedDistance(float boom, float zoomSpeed, float input) =>
+        Math.Clamp(boom - zoomSpeed * input * MathF.Min(boom / ZoomLengthDivisor, ZoomScaleCap), MinDistance, MaxDistance);
+
     /// <summary>The highest the camera gets above its pivot: the longest boom at the steepest view (1840).</summary>
     public const float MaxHeightAbovePivot = MaxDistance * -MinViewY;
 }
