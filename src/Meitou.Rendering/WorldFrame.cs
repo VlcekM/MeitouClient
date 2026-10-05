@@ -441,6 +441,8 @@ static class WorldFrame
         if (g.Post is { } post)
         {
             // Upscaling (docs/engine.md "Upscaling"): FSR and DLSS fall back to TAA where their library or backend is missing.
+            // The game's HeatHaze checkbox (on by default; the strength comes from the weather).
+            sliders.Add(new Slider("Heat haze: 0 off 1 on", 0, 1, () => post.Options.HeatHaze ? 1 : 0, v => post.Options.HeatHaze = v >= 0.5f, "0"));
             var up = post.Options.Upscale;
             sliders.Add(new Slider(UpscalerSliders[0], 0, 3, () => (int)up.Kind, v =>
             {
