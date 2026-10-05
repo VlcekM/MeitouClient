@@ -48,6 +48,8 @@ sealed class WorldOptions
     public bool FlyPipelined;
     /// <summary>Offscreen pictures: radians the camera orbits by every frame (tests the motion vectors under a temporal upscaler).</summary>
     public float OrbitStep;
+    /// <summary>Interactive window: the monitor it opens on (1-based; <c>--monitor</c>).</summary>
+    public int? Monitor;
     /// <summary>Offscreen pictures: seconds the grass sway advances every frame (tests the grass motion under a temporal upscaler; 0 holds it still).</summary>
     public float SwayStep;
     /// <summary>Offscreen pictures: the grass sway's starting time in seconds (0 by default).</summary>
@@ -63,6 +65,7 @@ sealed class WorldOptions
           --step <n>               heightmap sample step (default: smallest power of two keeping <= 2048 cells per side)
           --yaw <deg> --pitch <deg> --distance <units>   camera around the point (defaults 30, 35, radius)
           --screenshot <out.png> --size <W>x<H>          render offscreen to a PNG and exit
+          --monitor <n>                                  open the window on monitor n (1-based)
           --no-textures            height-tinted terrain without biome textures (faster start)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
@@ -101,7 +104,7 @@ sealed class WorldOptions
           --tonemap <clamp|shoulder|aces>  --exposure <x>  --bloom-intensity <x>  --bloom-threshold <x>  --ssao-radius <units>  --ssao-strength <x>
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
-          G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, P save screenshot, ? key list, Tab settings sliders, Esc quit.
+          G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, Ctrl+C copy camera code, Ctrl+V go to camera code, P save screenshot, ? key list, Tab settings sliders, Esc quit.
           F1 post off, F2 kenshi; F7 haze, F4 SSAO, F5 bloom, F6 tone map, F8 vignette, F9 grading, M MSAA, - / = exposure.
         """;
 
@@ -176,6 +179,7 @@ sealed class WorldOptions
                 case "--fly-speed": o.FlySpeed = F(); break;
                 case "--fly-pipelined": o.FlyPipelined = true; break;
                 case "--orbit-step": o.OrbitStep = F() * MathF.PI / 180; break;
+                case "--monitor": o.Monitor = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--sway-step": o.SwayStep = F(); break;
                 case "--sway-start": o.SwayStart = F(); break;
                 case "--view-distance": o.ViewDistance = F(); break;

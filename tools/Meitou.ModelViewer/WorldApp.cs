@@ -53,12 +53,12 @@ static partial class WorldApp
     static Streamline? streamline;
 
     static WindowOptions WindowFor(WorldOptions o) =>
-        WindowOptions.Default with
+        CameraCode.OnMonitor(WindowOptions.Default with
         {
             Size = new Vector2D<int>(o.Width, o.Height),
-            Title = "Meitou world viewer",
+            Title = "Meitou world viewer (Vulkan)",
             WindowState = WindowState.Maximized,
-        };
+        }, o.Monitor);
 
     // Vulkan headless (no window at all).
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
@@ -318,6 +318,18 @@ static partial class WorldApp
 
         void OnKey(Key key)
         {
+            if (keyboard is not null && (keyboard.IsKeyPressed(Key.ControlLeft) || keyboard.IsKeyPressed(Key.ControlRight)) && key is Key.C or Key.V)
+            {
+                if (key == Key.C)
+                {
+                    string code = CameraCode.Encode(camera);
+                    keyboard.ClipboardText = code;
+                    Console.WriteLine($"camera    copied {code} ({CameraCode.Describe(camera)})");
+                }
+                else if (CameraCode.TryApply(keyboard.ClipboardText, camera)) Console.WriteLine($"camera    moved to {CameraCode.Describe(camera)}");
+                else Console.WriteLine("camera    the clipboard holds no camera code (Ctrl+C in a viewer copies one)");
+                return;
+            }
             switch (key)
             {
                 case Key.Escape: window.Close(); break;
