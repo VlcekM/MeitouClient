@@ -31,6 +31,9 @@ static partial class WorldApp
         TimeSpan pause0 = GC.GetTotalPauseDuration(), pausePrev = pause0;
         BackgroundWork.Measure = BackgroundWork.ReportJobs;
         var resident = new List<string>();
+        // Pop-in: per frame, how near the nearest foliage zone without its whole layout (within the near reach) and without any layout (within
+        // the far reach) are, and the nearest group in range whose mesh is not resident.
+        var gaps = new List<(float Zone, float Unlaid, float Mesh, float Grass)>(o.FlyBenchmark);
         // Pipelined: GL gets the same two frames in flight as the Vulkan frame ring, through a timestamp query per frame waited on two frames later.
         bool pipelined = o.FlyPipelined;
         uint[] fences = pipelined && gl is not VkGl ? [gl.GenQuery(), gl.GenQuery(), gl.GenQuery()] : [];
@@ -47,6 +50,16 @@ static partial class WorldApp
             double cpuMs = frameWatch.Elapsed.TotalMilliseconds;
             if (gl is Meitou.Rendering.Vulkan.VkGl vkStats && (i % 500 == 0 || i <= 4)) Console.WriteLine($"vkgl      frame {i}: {vkStats.Stats}");
             cpu.Add(cpuMs);
+            if (gpu.Foliage is { } fol) gaps.Add((fol.NearestIncompleteZone, fol.NearestUnlaidZone, fol.NearestMissingMesh, fol.NearestMissingGrass));
+            if (o.Screenshot is not null && FlyShots.Contains(i) && gpu.Post is { Target: var shotFbo and not 0 })
+            {
+                // MEITOU_FLY_SHOT=<frame>[,<frame>...]: the picture as drawn at that frame of the flight, nothing waited for (what a flying user sees).
+                gl.Finish();
+                gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, shotFbo);
+                string shot = Path.ChangeExtension(o.Screenshot, null) + $"-fly{i}.png";
+                FramebufferCapture.SavePng(gl, shot, w, h);
+                Console.WriteLine($"fly shot  frame {i}: eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {shot}");
+            }
             if (!pipelined) gl.Finish();
             else if (fences.Length > 0)
             {
@@ -80,6 +93,15 @@ static partial class WorldApp
         if (gpu.Reflection is { } reflectionStats && render.Reflections) Console.WriteLine($"reflect   {reflectionStats.DescribeStats()}");
         foreach (var f in worst.Skip(1).OrderByDescending(f => f.Ms).Take(8))
             Console.WriteLine($"  worst   frame {f.Frame}: {f.Ms:0.0} ms ({f.Stages})");
+        if (gpu.Foliage is { } foliageGaps && gaps.Count > 0)
+        {
+            float near = foliageGaps.NearReach, far = foliageGaps.FarReach;
+            Console.WriteLine($"pop-in    foliage zones without their whole layout within the near reach ({near:0}) in {gaps.Count(g => g.Zone < near)} of {gaps.Count} frames " +
+                $"(within 1500: {gaps.Count(g => g.Zone < 1500)}), nearest {gaps.Min(g => g.Zone):0}; not laid out within the far reach ({far:0}) in {gaps.Count(g => g.Unlaid < far)} frames, " +
+                $"nearest {gaps.Min(g => g.Unlaid):0}; meshes in range not resident in {gaps.Count(g => g.Mesh < near)} frames, nearest {gaps.Min(g => g.Mesh):0}; " +
+                $"grass pages missing in {gaps.Count(g => g.Grass < float.PositiveInfinity)} frames (within 1500: {gaps.Count(g => g.Grass < 1500)}), nearest {gaps.Min(g => g.Grass):0}");
+            Console.WriteLine($"pop-in    frames without the whole layout within the near reach, per 100 frames: {string.Join(" ", gaps.Chunk(100).Select(c => c.Count(g => g.Zone < near)))}");
+        }
         Console.WriteLine($"resident  every 150 frames (objects + foliage, MB): {string.Join(" ", resident)}");
         Console.WriteLine($"resident  {Resident(gpu)}; working set {Environment.WorkingSet / 1048576} MB, managed heap {GC.GetTotalMemory(false) / 1048576} MB");
         if (o.Screenshot is not null)
@@ -92,6 +114,9 @@ static partial class WorldApp
         }
         return 0;
     }
+
+    /// <summary>MEITOU_FLY_SHOT: frames of the fly benchmark saved as pictures (with <c>--screenshot</c>, next to it).</summary>
+    static readonly HashSet<int> FlyShots = [.. (Environment.GetEnvironmentVariable("MEITOU_FLY_SHOT") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => int.TryParse(s, out int f) ? f : -1)];
 
     /// <summary>One line on the GPU memory the streamed meshes and textures hold.</summary>
     static string Resident(Gpu gpu) =>

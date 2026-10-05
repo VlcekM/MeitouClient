@@ -64,8 +64,9 @@ public sealed class FoliageWorld : IDisposable
     /// <summary>The foliage of one zone: placed meshes and grass patches. Zones outside the grid are empty.</summary>
     public FoliageZone Zone(ZoneCoordinate zone) => Load(zone).Zone;
 
-    /// <summary>The foliage of one zone and the ground it was placed on (for grass blades); null ground outside the grid.</summary>
-    public (FoliageZone Zone, FoliageGround? Ground) Load(ZoneCoordinate zone)
+    /// <summary>The foliage of one zone and the ground it was placed on (for grass blades); null ground outside the grid.
+    /// <paramref name="farOnly"/>: only the far layers when that is exact (<see cref="FoliageLayout.Place"/>).</summary>
+    public (FoliageZone Zone, FoliageGround? Ground) Load(ZoneCoordinate zone, bool farOnly = false)
     {
         if (!zone.IsInsideGrid) return (new FoliageZone { Zone = zone }, null);
         int zonesPerTile = WorldLayout.ZoneCount / TerrainMaps.OverlayTiles;
@@ -85,7 +86,7 @@ public sealed class FoliageWorld : IDisposable
             BiomeAt = biomes.At,
             NearestTown = NearestTown,
         };
-        return (FoliageLayout.Place(input, Catalog), ground);
+        return (FoliageLayout.Place(input, Catalog, farOnly), ground);
     }
 
     public void Dispose() => map.Dispose();
