@@ -275,11 +275,13 @@ catalog row and an earlier version of [save.md](../formats/save.md) (now correct
   (default 125.0), `invert X`, `invert Y`, `swap mouse buttons`, `hardware_mouse`, `Edge scrolling`. The loader
   fills a settings struct with pan, tilt, camera speed and zoom as its first four floats (fields 1, 2, 0, 3);
   the options sliders "Camera Move Speed" (min 150, max 1000), "Camera Rotate Speed X" and "Y" (2..50) and
-  "Camera Zoom Speed" (10..200) are bound to 142133490, 142133494, 142133498 and 14213349c. If the struct lives at
-  142133490, pan = Rotate Speed X and tilt = Rotate Speed Y (**Observed**: the loader's struct address is not
-  visible in the decompile; the name pairing and the order are consistent). The strings
-  `mouse speed horizontal/vertical=1.5` appear only in the default-settings writer FUN_1408149a0; the loader does
-  not read them (**Verified**: strings.tsv lists them only there; `settings.cfg` still carries both lines).
+  "Camera Zoom Speed" (10..200) are bound to 142133490, 142133494, 142133498 and 14213349c. The struct lives at
+  142133490, so pan = Rotate Speed X and tilt = Rotate Speed Y (**Verified** 2026-10-06: `Blood`, the loader's field +0xE4,
+  is the global 142133574 that the options and the combat code use, and `view distance` +0x18 is 1421334a8). The main
+  loader does not read `mouse speed horizontal/vertical`, but the start-up set-up FUN_1408149a0 does (correction: an
+  earlier version said nothing read them): it reads both into two floats that scale the raw mouse x / y movement in the
+  input listener, and when `vertical` is missing it sets both to 1.5 and appends the default lines (**Verified**). All
+  settings keys: [settings.md](../formats/settings.md).
 - Option labels: mouse_select "Selection", mouse_command "Issue command", pause "Pause Game", screenshot "Take
   screenshot", speed_1/2/3 "Normal/Faster/Fastest game speed", floor_up "Up one floor", highlight "Highlight
   Items", mouse_rotate "Rotate camera".

@@ -18,18 +18,23 @@ shipped shaders and scripts `data/materials/common/shadowFunctions.hlsl`, `shado
 | `settings.cfg` key | Values | Meaning |
 | --- | --- | --- |
 | `shadow mode` | 0, 1, 2 | 0 "Disabled", 1 "CSM", 2 "RTWSM" (the options list's labels). A missing key reads as **0**. |
-| `shadow quality` | 0, 1, 2 | The map side, from the table **{1024, 2048, 4096}** indexed by the value. A missing key leaves the previous value. |
-| `Shadow Range` | 1000 … 9000 | How far shadows reach (world units; options slider 1000 to 9000). A missing key reads as **5000**. |
+| `shadow quality` | 0, 1, 2 | The map side, from the table **{1024, 2048, 4096}** indexed by the value. A missing key reads as **0** (corrected: an earlier version said it left the previous value; the loader's fallback local is 0 and nothing else writes it before). |
+| `Shadow Range` | 1000 … 9000 | How far shadows reach (world units; options slider 1000 to 9000). A missing key reads as **5000**; a value of 10 or less becomes **10000**. |
+
+All settings keys, including these: [settings.md](settings.md).
 
 - The renderer switches modes in `DeferredLightRenderer::setShadowMode(mode, size)` (the exe names it in its exception text):
   mode 0 sets the lighting material `Main_Lighting_NoShadow`; mode 1 `Main_Lighting_CSM` and creates the CSM object with
   **4 cascades** and the map side; mode 2 `Main_Lighting_RTW` and creates the RTW object with the map side and a **512**
   importance size. Any other mode throws "Invalid light mode". Applying the options calls it with
   `table[shadow quality]`; when the renderer creates its shadows lazily before that, it passes **2048** (**Verified**).
-- **Unknown**: which label belongs to which size. The options list adds "2048 (nice)", "1024 (poor)" and "4096 (some video
-  cards may freak out)" with the tags 0, 1 and 2, while the size table maps 0, 1, 2 to 1024, 2048, 4096; the two disagree for
-  0 and 1, and it is not settled whether the tag is the item's data or its position.
-- **Observed**: this install's `settings.cfg` has `shadow mode=0`, `shadow quality=0`, `Shadow Range=5000`, i.e. shadows off.
+- **The labels are swapped** (**Verified**, settled 2026-10-06): the tag is the item's **data**, not its position. The combo
+  helper (FUN_1406f6f10) stores the tag as an `int` attached to the item, and FUN_1406fc2a0 selects the item whose data equals
+  the setting and writes that data back (the `Decal Resolution` list, whose tags are 512 / 1024 / 2048, works the same way). The
+  items are "1024 (poor)" with data 1, "2048 (nice)" with data 0 and "4096 (some video cards may freak out)" with data 2, so
+  "1024 (poor)" gives a **2048²** map and "2048 (nice)" a **1024²** map; 4096 is right.
+- **Observed**: this install's `settings.cfg` had `shadow mode=0`, `shadow quality=0`, `Shadow Range=5000` (shadows off) when
+  this doc was first written; on 2026-10-06 it has `shadow mode=2` (RTWSM).
 - The tooltips: "Turn off shadows if you have problems with performance"; for the range, a longer range "reduces the shadows
   resolution/quality" (one map, or one set of cascades, is stretched over it).
 
