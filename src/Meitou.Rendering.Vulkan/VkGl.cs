@@ -67,6 +67,8 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
             Check(vk.AllocateCommandBuffers(dev, &alloc, &cb));
             uploadBuffers[i] = cb;
         }
+        uniformRings = new FrameRings[n];
+        for (int i = 0; i < n; i++) uniformRings[i] = new FrameRings(this);
         rings = new FrameRings[n];
         for (int i = 0; i < n; i++) rings[i] = new FrameRings(this);
         InitState();
@@ -102,6 +104,7 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
         // Uploads may overwrite what earlier frames still read (in-place texture strips): wait for everything before.
         FullBarrier(uploadCmd);
         CarryDynamicBuffers(slot, rings[slot].Reset);
+        uniformRings[slot].Reset();
         ResetFramePools(slot);
         RecycleQueries(slot);
         TimeFrame(start: true);
@@ -192,6 +195,7 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
         DestroyPipelines();
         DestroySamplers();
         foreach (var r in rings) r.Dispose();
+        foreach (var r in uniformRings) r.Dispose();
         for (int i = 0; i < uploadPools.Length; i++) vk.DestroyCommandPool(dev, uploadPools[i], null);
         device.Frames.WaitAll();
     }
@@ -202,10 +206,11 @@ public sealed class VkGlStats
 {
     public int Draws, RenderPasses, PipelinesCreated, BuffersRenamed, Uploads, Flushes;
     public long UploadBytes;
+    public int DescriptorPushes;
     /// <summary>The last completed frame's GPU time, start of its uploads to the end of its last pass (not reset per frame).</summary>
     public double GpuFrameMs;
     public long DrawTicks;   // Stopwatch ticks spent preparing draws (pipelines, state, descriptors, vertex buffers)
     public long UniformBytes;
-    internal void BeginFrame() { Draws = RenderPasses = PipelinesCreated = BuffersRenamed = Uploads = Flushes = 0; UploadBytes = UniformBytes = DrawTicks = 0; }
-    public override string ToString() => $"{Draws} draws, {RenderPasses} passes, {PipelinesCreated} new pipelines, {Uploads} uploads ({UploadBytes / 1024} KB), {BuffersRenamed} renames, {UniformBytes / 1024} KB uniforms, {Flushes} flushes, draw prep {DrawTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0.00} ms, gpu frame {GpuFrameMs:0.00} ms";
+    internal void BeginFrame() { Draws = RenderPasses = PipelinesCreated = BuffersRenamed = Uploads = Flushes = DescriptorPushes = 0; UploadBytes = UniformBytes = DrawTicks = 0; }
+    public override string ToString() => $"{Draws} draws, {RenderPasses} passes, {PipelinesCreated} new pipelines, {Uploads} uploads ({UploadBytes / 1024} KB), {BuffersRenamed} renames, {UniformBytes / 1024} KB uniforms, {Flushes} flushes, {DescriptorPushes} pushes, draw prep {DrawTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0.00} ms, gpu frame {GpuFrameMs:0.00} ms";
 }

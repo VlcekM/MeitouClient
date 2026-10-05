@@ -7,6 +7,7 @@ namespace Meitou.Rendering.Vulkan;
 public sealed unsafe partial class VkGl
 {
     readonly FrameRings[] rings;
+    readonly FrameRings[] uniformRings;   // loose uniforms only: few, long-lived chunks that set 1 descriptors point at
 
     FrameRings Ring => rings[device.Frames.Slot];
 

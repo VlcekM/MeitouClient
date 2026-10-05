@@ -349,6 +349,29 @@ public sealed unsafe partial class VkGl
 
     void BindResources(CommandBuffer cb, GlProgramObj p)
     {
+        bool programChanged = boundProgram != p;
+        boundProgram = p;
+
+        // Set 1: the loose uniforms, copied into the uniform ring when they changed (or the frame moved on), bound by offset.
+        if (p.VertexDefaultBlock is not null || p.FragmentDefaultBlock is not null)
+        {
+            long frame = device.Frames.FrameNumber;
+            if (p.SliceFrame != frame) { p.VertexDirty = p.FragmentDirty = true; p.SliceFrame = frame; }
+            bool moved = false;
+            if (p.VertexDirty && p.VertexDefault.Length > 0) { p.VertexSlice = CopyToRing(p.VertexDefault); p.VertexDirty = false; moved = true; }
+            if (p.FragmentDirty && p.FragmentDefault.Length > 0) { p.FragmentSlice = CopyToRing(p.FragmentDefault); p.FragmentDirty = false; moved = true; }
+            if (moved || programChanged)
+            {
+                var set = DynamicSet(p);
+                var offsets = stackalloc uint[2];
+                uint n = 0;
+                if (p.VertexDefaultBlock is not null) offsets[n++] = (uint)p.VertexSlice.Offset;
+                if (p.FragmentDefaultBlock is not null) offsets[n++] = (uint)p.FragmentSlice.Offset;
+                vk.CmdBindDescriptorSets(cb, PipelineBindPoint.Graphics, p.Layout, 1, 1, &set, n, offsets);
+            }
+        }
+
+        // Set 0: named blocks and samplers, pushed when they differ from what this program last pushed in this command buffer.
         var blocks = p.BlockList;
         var samplerList = p.SamplerList;
         int count = blocks.Length + samplerList.Length;
@@ -356,30 +379,20 @@ public sealed unsafe partial class VkGl
         var writes = stackalloc WriteDescriptorSet[count];
         var bufferInfos = stackalloc DescriptorBufferInfo[blocks.Length + 1];
         var imageInfos = stackalloc DescriptorImageInfo[samplerList.Length + 1];
+        var last = p.LastPush;
+        bool same = !programChanged && p.LastPushEpoch == pushEpoch;
         int w = 0;
-
-        // Loose uniforms: copied into the frame ring when they changed (or the frame moved on).
-        long frame = device.Frames.FrameNumber;
-        if (p.SliceFrame != frame) { p.VertexDirty = p.FragmentDirty = true; p.SliceFrame = frame; }
-        if (p.VertexDirty && p.VertexDefault.Length > 0) { p.VertexSlice = CopyToRing(p.VertexDefault, uniformAlign); p.VertexDirty = false; }
-        if (p.FragmentDirty && p.FragmentDefault.Length > 0) { p.FragmentSlice = CopyToRing(p.FragmentDefault, uniformAlign); p.FragmentDirty = false; }
-
         for (int i = 0; i < blocks.Length; i++)
         {
             ref readonly var b = ref blocks[i];
-            if (b.Default)
-            {
-                var slice = b.Vertex ? p.VertexSlice : p.FragmentSlice;
-                bufferInfos[i] = new DescriptorBufferInfo(slice.Buffer, slice.Offset, (ulong)b.Size);
-            }
-            else
-            {
-                uint point = p.BlockBindings.TryGetValue(b.Name, out var pt) ? pt : 0;
-                if (!buffers.TryGetValue(uniformBindings[point], out var ub) || !ub.Defined)
-                    throw new InvalidOperationException($"program {p.Id}: no buffer bound for uniform block {b.Name} (binding {point})");
-                var (buf, off) = Use(ub);
-                bufferInfos[i] = new DescriptorBufferInfo(buf, off, (ulong)Math.Min(b.Size, ub.Size));
-            }
+            uint point = p.BlockBindings.TryGetValue(b.Name, out var pt) ? pt : 0;
+            if (!buffers.TryGetValue(uniformBindings[point], out var ub) || !ub.Defined)
+                throw new InvalidOperationException($"program {p.Id}: no buffer bound for uniform block {b.Name} (binding {point})");
+            var (buf, off) = Use(ub);
+            ulong range = (ulong)Math.Min(b.Size, ub.Size);
+            bufferInfos[i] = new DescriptorBufferInfo(buf, off, range);
+            same &= last[w * 3] == buf.Handle && last[w * 3 + 1] == off && last[w * 3 + 2] == range;
+            (last[w * 3], last[w * 3 + 1], last[w * 3 + 2]) = (buf.Handle, off, range);
             writes[w++] = new WriteDescriptorSet
             {
                 SType = StructureType.WriteDescriptorSet, DstBinding = b.Binding, DescriptorCount = 1,
@@ -392,12 +405,16 @@ public sealed unsafe partial class VkGl
             var t = SamplerTexture(s.Info, s.Slot.Unit);
             var (sampler, view) = SamplerAndView(t, s.Info.Depth);
             imageInfos[i] = new DescriptorImageInfo(sampler, view, ImageLayout.General);
+            same &= last[w * 3] == sampler.Handle && last[w * 3 + 1] == view.Handle;
+            (last[w * 3], last[w * 3 + 1]) = (sampler.Handle, view.Handle);
             writes[w++] = new WriteDescriptorSet
             {
                 SType = StructureType.WriteDescriptorSet, DstBinding = s.Binding, DescriptorCount = 1,
                 DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &imageInfos[i],
             };
         }
+        if (same) return;
+        p.LastPushEpoch = pushEpoch;
 
         if (p.PushDescriptors)
         {
@@ -405,12 +422,65 @@ public sealed unsafe partial class VkGl
             if (pushDescriptor is null && !vk.TryGetDeviceExtension(device.Instance, dev, out pushDescriptor))
                 throw new InvalidOperationException("VK_KHR_push_descriptor entry points missing");
             pushDescriptor!.CmdPushDescriptorSet(cb, PipelineBindPoint.Graphics, p.Layout, 0, (uint)w, writes);
+            Stats.DescriptorPushes++;
             return;
         }
-        var set = AllocateSet(p.SetLayout);
-        for (int i = 0; i < w; i++) writes[i].DstSet = set;
+        var set0 = AllocateSet(p.SetLayout);
+        for (int i = 0; i < w; i++) writes[i].DstSet = set0;
         vk.UpdateDescriptorSets(dev, (uint)w, writes, 0, null);
-        vk.CmdBindDescriptorSets(cb, PipelineBindPoint.Graphics, p.Layout, 0, 1, &set, 0, null);
+        vk.CmdBindDescriptorSets(cb, PipelineBindPoint.Graphics, p.Layout, 0, 1, &set0, 0, null);
+    }
+
+    // The program whose layout the command buffer's descriptors were last bound with, and a counter that invalidates every
+    // program's LastPush when a new command buffer starts (ResetFrameState).
+    GlProgramObj? boundProgram;
+    long pushEpoch;
+
+    /// <summary>Set 1 for the chunks the program's current uniform slices live in (made once per pair of chunks; the uniform
+    /// ring's chunks live as long as the translation).</summary>
+    DescriptorSet DynamicSet(GlProgramObj p)
+    {
+        var key = (p.VertexDefaultBlock is null ? 0 : p.VertexSlice.Buffer.Handle, p.FragmentDefaultBlock is null ? 0 : p.FragmentSlice.Buffer.Handle);
+        if (p.DynamicSets.TryGetValue(key, out var set)) return set;
+        set = AllocatePersistentSet(p.DynamicSetLayout);
+        var infos = stackalloc DescriptorBufferInfo[2];
+        var writes = stackalloc WriteDescriptorSet[2];
+        uint n = 0;
+        if (p.VertexDefaultBlock is { } vb)
+        {
+            infos[n] = new DescriptorBufferInfo(p.VertexSlice.Buffer, 0, (ulong)vb.Size);
+            writes[n] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstSet = set, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBufferDynamic, PBufferInfo = &infos[n] };
+            n++;
+        }
+        if (p.FragmentDefaultBlock is { } fb)
+        {
+            infos[n] = new DescriptorBufferInfo(p.FragmentSlice.Buffer, 0, (ulong)fb.Size);
+            writes[n] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstSet = set, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBufferDynamic, PBufferInfo = &infos[n] };
+            n++;
+        }
+        vk.UpdateDescriptorSets(dev, n, writes, 0, null);
+        p.DynamicSets[key] = set;
+        return set;
+    }
+
+    readonly List<DescriptorPool> persistentPools = [];
+
+    DescriptorSet AllocatePersistentSet(DescriptorSetLayout layout)
+    {
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            if (persistentPools.Count > 0)
+            {
+                var ai = new DescriptorSetAllocateInfo { SType = StructureType.DescriptorSetAllocateInfo, DescriptorPool = persistentPools[^1], DescriptorSetCount = 1, PSetLayouts = &layout };
+                DescriptorSet set;
+                if (vk.AllocateDescriptorSets(dev, &ai, &set) == Result.Success) return set;
+            }
+            var size = new DescriptorPoolSize(DescriptorType.UniformBufferDynamic, 2048);
+            var pi = new DescriptorPoolCreateInfo { SType = StructureType.DescriptorPoolCreateInfo, MaxSets = 1024, PoolSizeCount = 1, PPoolSizes = &size };
+            Check(vk.CreateDescriptorPool(dev, &pi, null, out var fresh));
+            persistentPools.Add(fresh);
+        }
+        throw new InvalidOperationException("descriptor set allocation failed");
     }
 
     ulong uniformAlign => Math.Max(device.Limits.MinUniformBufferOffsetAlignment, 16);
@@ -426,9 +496,9 @@ public sealed unsafe partial class VkGl
         return (t.CachedSampler, t.CachedView);
     }
 
-    RingSlice CopyToRing(byte[] data, ulong align)
+    RingSlice CopyToRing(byte[] data)
     {
-        var slice = Ring.Allocate((ulong)data.Length, align);
+        var slice = uniformRings[device.Frames.Slot].Allocate((ulong)data.Length, uniformAlign);
         fixed (byte* src = data) System.Buffer.MemoryCopy(src, slice.Pointer, data.Length, data.Length);
         Stats.UniformBytes += data.Length;
         return slice;
@@ -541,6 +611,8 @@ public sealed unsafe partial class VkGl
         foreach (var s in samplers.Values) vk.DestroySampler(dev, s, null);
         samplers.Clear();
         foreach (var pool in descriptorPools) vk.DestroyDescriptorPool(dev, pool, null);
+        foreach (var pool in persistentPools) vk.DestroyDescriptorPool(dev, pool, null);
+        persistentPools.Clear();
         descriptorPools.Clear();
         DestroyQueries();
     }

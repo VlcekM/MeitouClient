@@ -35,7 +35,10 @@ public sealed unsafe partial class VkGl
         public string Log = "";
         public CompiledProgram? Compiled;
         public ShaderModule VertexModule, FragmentModule;
-        public DescriptorSetLayout SetLayout;
+        public DescriptorSetLayout SetLayout, DynamicSetLayout;
+        public readonly Dictionary<(ulong Vertex, ulong Fragment), DescriptorSet> DynamicSets = [];   // set 1 per pair of uniform ring chunks
+        public long LastPushEpoch = -1;
+        public ulong[] LastPush = [];   // set 0 as last pushed in this command buffer (handles and offsets), to skip identical pushes
         public PipelineLayout Layout;
         public bool PushDescriptors;
         public readonly List<UniformSlot> Uniforms = [];
@@ -107,10 +110,12 @@ public sealed unsafe partial class VkGl
             return;
         }
         var c = p.Compiled;
-        p.VertexModule = CreateModule(c.VertexSpirv);
-        p.FragmentModule = CreateModule(c.FragmentSpirv);
         p.VertexDefaultBlock = c.Vertex.DefaultBlock;
         p.FragmentDefaultBlock = c.Fragment.DefaultBlock;
+        // Loose uniforms go to set 1 as dynamic uniform buffers (vertex binding 0, fragment binding 1): a draw that only
+        // changes uniforms binds new offsets instead of pushing descriptors again.
+        p.VertexModule = CreateModule(p.VertexDefaultBlock is null ? c.VertexSpirv : MoveDefaultBlock(c.VertexSpirv, 0));
+        p.FragmentModule = CreateModule(p.FragmentDefaultBlock is null ? c.FragmentSpirv : MoveDefaultBlock(c.FragmentSpirv, 1));
         p.VertexDefault = new byte[p.VertexDefaultBlock?.Size ?? 0];
         p.FragmentDefault = new byte[p.FragmentDefaultBlock?.Size ?? 0];
         foreach (var b in c.Vertex.Blocks.Concat(c.Fragment.Blocks))
@@ -121,11 +126,41 @@ public sealed unsafe partial class VkGl
             if (!p.SamplerSlots.ContainsKey(s.Name))
                 p.SamplerSlots[s.Name] = new UniformSlot { VertexSampler = c.Vertex.FindSampler(s.Name), FragmentSampler = c.Fragment.FindSampler(s.Name) };
         p.BlockList = [
-            .. c.Vertex.Blocks.Where(b => b.Kind == BlockKind.Uniform).Select(b => new BlockBinding((uint)b.Binding, b.Size, b.IsDefault, true, b.Name)),
-            .. c.Fragment.Blocks.Where(b => b.Kind == BlockKind.Uniform).Select(b => new BlockBinding((uint)b.Binding, b.Size, b.IsDefault, false, b.Name))];
+            .. c.Vertex.Blocks.Where(b => b.Kind == BlockKind.Uniform && !b.IsDefault).Select(b => new BlockBinding((uint)b.Binding, b.Size, false, true, b.Name)),
+            .. c.Fragment.Blocks.Where(b => b.Kind == BlockKind.Uniform && !b.IsDefault).Select(b => new BlockBinding((uint)b.Binding, b.Size, false, false, b.Name))];
         p.SamplerList = [.. c.Vertex.Samplers.Concat(c.Fragment.Samplers).Select(s => new SamplerBinding((uint)s.Binding, s, p.SamplerSlots[s.Name]))];
+        p.LastPush = new ulong[(p.BlockList.Length + p.SamplerList.Length) * 3];
         CreateLayouts(p);
         p.Linked = true;
+    }
+
+    /// <summary>A copy of <paramref name="spirv"/> with <c>gl_DefaultUniformBlock</c>'s variable decorated for set 1 at
+    /// <paramref name="binding"/> (the words are patched in place: same size).</summary>
+    static byte[] MoveDefaultBlock(byte[] spirv, uint binding)
+    {
+        var copy = (byte[])spirv.Clone();
+        var w = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(copy.AsSpan());
+        uint structId = 0;
+        var pointers = new HashSet<uint>();
+        var variables = new HashSet<uint>();
+        for (int pass = 0; pass < 3; pass++)
+            for (int i = 5; i < w.Length;)
+            {
+                uint op = w[i] & 0xFFFF, count = w[i] >> 16;
+                if (count == 0) break;
+                var a = w.Slice(i + 1, (int)count - 1);
+                if (pass == 0 && op == 5 && System.Text.Encoding.ASCII.GetString(System.Runtime.InteropServices.MemoryMarshal.AsBytes(a[1..])).TrimEnd('\0') == "gl_DefaultUniformBlock") structId = a[0];
+                else if (pass == 1 && op == 32 && a[2] == structId) pointers.Add(a[0]);
+                else if (pass == 1 && op == 59 && pointers.Contains(a[0])) variables.Add(a[1]);
+                else if (pass == 2 && op == 71 && variables.Contains(a[0]))
+                {
+                    if (a[1] == 34) a[2] = 1;              // DescriptorSet
+                    else if (a[1] == 33) a[2] = binding;   // Binding
+                }
+                i += (int)count;
+            }
+        if (structId == 0 || variables.Count == 0) throw new InvalidOperationException("SPIR-V: gl_DefaultUniformBlock not found");
+        return copy;
     }
 
     ShaderModule CreateModule(byte[] spirv)
@@ -140,11 +175,12 @@ public sealed unsafe partial class VkGl
 
     void CreateLayouts(GlProgramObj p)
     {
+        // Set 0: named uniform blocks and samplers (pushed); set 1: the stages' loose uniforms (dynamic offsets).
         var bindings = new List<DescriptorSetLayoutBinding>();
         void Add(ShaderReflection r, ShaderStageFlags stage)
         {
             foreach (var b in r.Blocks)
-                if (b.Kind == BlockKind.Uniform)
+                if (b.Kind == BlockKind.Uniform && !b.IsDefault)
                     bindings.Add(new DescriptorSetLayoutBinding((uint)b.Binding, DescriptorType.UniformBuffer, 1, stage));
             foreach (var s in r.Samplers)
                 bindings.Add(new DescriptorSetLayoutBinding((uint)s.Binding, DescriptorType.CombinedImageSampler, (uint)Math.Max(1, s.ArrayLength), stage));
@@ -153,21 +189,30 @@ public sealed unsafe partial class VkGl
         Add(p.Compiled.Fragment, ShaderStageFlags.FragmentBit);
         p.DescriptorCount = bindings.Sum(b => (int)b.DescriptorCount);
         p.PushDescriptors = device.HasPushDescriptor && p.DescriptorCount <= device.MaxPushDescriptors;
-        var arr = bindings.ToArray();
-        fixed (DescriptorSetLayoutBinding* pb = arr)
+        p.SetLayout = CreateSetLayout([.. bindings], p.PushDescriptors);
+        var dynamic = new List<DescriptorSetLayoutBinding>();
+        if (p.VertexDefaultBlock is not null) dynamic.Add(new DescriptorSetLayoutBinding(0, DescriptorType.UniformBufferDynamic, 1, ShaderStageFlags.VertexBit));
+        if (p.FragmentDefaultBlock is not null) dynamic.Add(new DescriptorSetLayoutBinding(1, DescriptorType.UniformBufferDynamic, 1, ShaderStageFlags.FragmentBit));
+        p.DynamicSetLayout = CreateSetLayout([.. dynamic], push: false);
+        var layouts = stackalloc DescriptorSetLayout[2] { p.SetLayout, p.DynamicSetLayout };
+        var li = new PipelineLayoutCreateInfo { SType = StructureType.PipelineLayoutCreateInfo, SetLayoutCount = 2, PSetLayouts = layouts };
+        Check(vk.CreatePipelineLayout(dev, &li, null, out p.Layout));
+    }
+
+    DescriptorSetLayout CreateSetLayout(DescriptorSetLayoutBinding[] bindings, bool push)
+    {
+        fixed (DescriptorSetLayoutBinding* pb = bindings)
         {
             var info = new DescriptorSetLayoutCreateInfo
             {
                 SType = StructureType.DescriptorSetLayoutCreateInfo,
-                Flags = p.PushDescriptors ? DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr : 0,
-                BindingCount = (uint)arr.Length,
+                Flags = push ? DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr : 0,
+                BindingCount = (uint)bindings.Length,
                 PBindings = pb,
             };
-            Check(vk.CreateDescriptorSetLayout(dev, &info, null, out p.SetLayout));
+            Check(vk.CreateDescriptorSetLayout(dev, &info, null, out var layout));
+            return layout;
         }
-        var layout = p.SetLayout;
-        var li = new PipelineLayoutCreateInfo { SType = StructureType.PipelineLayoutCreateInfo, SetLayoutCount = 1, PSetLayouts = &layout };
-        Check(vk.CreatePipelineLayout(dev, &li, null, out p.Layout));
     }
 
     public void GetProgram(uint program, ProgramPropertyARB pname, out int @params) =>
@@ -184,7 +229,7 @@ public sealed unsafe partial class VkGl
 
     void DestroyProgram(GlProgramObj p)
     {
-        var (vm, fm, sl, pl) = (p.VertexModule, p.FragmentModule, p.SetLayout, p.Layout);
+        var (vm, fm, sl, dl, pl) = (p.VertexModule, p.FragmentModule, p.SetLayout, p.DynamicSetLayout, p.Layout);
         ForgetPipelines(p);
         device.Frames.DeferDelete(() =>
         {
@@ -192,6 +237,7 @@ public sealed unsafe partial class VkGl
             if (fm.Handle != 0) vk.DestroyShaderModule(dev, fm, null);
             if (pl.Handle != 0) vk.DestroyPipelineLayout(dev, pl, null);
             if (sl.Handle != 0) vk.DestroyDescriptorSetLayout(dev, sl, null);
+            if (dl.Handle != 0) vk.DestroyDescriptorSetLayout(dev, dl, null);
         });
     }
 

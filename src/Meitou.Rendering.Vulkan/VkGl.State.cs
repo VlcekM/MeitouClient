@@ -28,6 +28,8 @@ public sealed unsafe partial class VkGl
         passColour = passDepth = null;
         dynamicStateDirty = true;
         lastPipeline = default;
+        boundProgram = null;
+        pushEpoch++;
     }
 
     public void Enable(EnableCap cap) => SetCap(cap, true);
