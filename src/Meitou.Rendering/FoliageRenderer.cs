@@ -112,6 +112,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
     public float NearestIncompleteZone { get; private set; } = float.PositiveInfinity;
     public float NearestUnlaidZone { get; private set; } = float.PositiveInfinity;
     public float NearestMissingMesh { get; private set; } = float.PositiveInfinity;
+    /// <summary>The nearest grass page of a laid-out zone within four fifths of its range (before the blades sink) that is not uploaded yet.</summary>
+    public float NearestMissingGrass { get; private set; } = float.PositiveInfinity;
 
     /// <summary>Zones within this ground distance of the eye are laid out whole: the longest MEDIUM / CLOSE mesh layer range or grass range at the current settings.</summary>
     public float NearReach => Math.Max(NearMeshRange * RangeSetting, GrassMaxRange * GrassRangeSetting);
@@ -430,6 +432,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
     void UpdateGrass(Vector3 eye)
     {
         grassWanted.Clear();
+        NearestMissingGrass = float.PositiveInfinity;
         int inFlight = 0;
         foreach (var state in zones.Values) inFlight += state.GrassRunning;
         foreach (var state in zones.Values)
@@ -444,6 +447,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
                     float x0 = state.X0 + px * PageSize, z0 = state.Z0 + pz * PageSize;
                     float d = BoxDistance(x0, z0, PageSize, eye);
                     state.Pages.TryGetValue(key, out var page);
+                    if (page?.Buffers is null && d < range * 0.8f) NearestMissingGrass = Math.Min(NearestMissingGrass, d);   // not sinking yet: would be seen
                     if (page is null)
                     {
                         if (d < range + PageSize * 0.5f) grassWanted.Add((d, state, key));

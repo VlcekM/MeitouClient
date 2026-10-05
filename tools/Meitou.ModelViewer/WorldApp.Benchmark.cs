@@ -33,7 +33,7 @@ static partial class WorldApp
         var resident = new List<string>();
         // Pop-in: per frame, how near the nearest foliage zone without its whole layout (within the near reach) and without any layout (within
         // the far reach) are, and the nearest group in range whose mesh is not resident.
-        var gaps = new List<(float Zone, float Unlaid, float Mesh)>(o.FlyBenchmark);
+        var gaps = new List<(float Zone, float Unlaid, float Mesh, float Grass)>(o.FlyBenchmark);
         // Pipelined: GL gets the same two frames in flight as the Vulkan frame ring, through a timestamp query per frame waited on two frames later.
         bool pipelined = o.FlyPipelined;
         uint[] fences = pipelined && gl is not VkGl ? [gl.GenQuery(), gl.GenQuery(), gl.GenQuery()] : [];
@@ -50,7 +50,7 @@ static partial class WorldApp
             double cpuMs = frameWatch.Elapsed.TotalMilliseconds;
             if (gl is Meitou.Rendering.Vulkan.VkGl vkStats && (i % 500 == 0 || i <= 4)) Console.WriteLine($"vkgl      frame {i}: {vkStats.Stats}");
             cpu.Add(cpuMs);
-            if (gpu.Foliage is { } fol) gaps.Add((fol.NearestIncompleteZone, fol.NearestUnlaidZone, fol.NearestMissingMesh));
+            if (gpu.Foliage is { } fol) gaps.Add((fol.NearestIncompleteZone, fol.NearestUnlaidZone, fol.NearestMissingMesh, fol.NearestMissingGrass));
             if (o.Screenshot is not null && FlyShots.Contains(i) && gpu.Post is { Target: var shotFbo and not 0 })
             {
                 // MEITOU_FLY_SHOT=<frame>[,<frame>...]: the picture as drawn at that frame of the flight, nothing waited for (what a flying user sees).
@@ -98,7 +98,8 @@ static partial class WorldApp
             float near = foliageGaps.NearReach, far = foliageGaps.FarReach;
             Console.WriteLine($"pop-in    foliage zones without their whole layout within the near reach ({near:0}) in {gaps.Count(g => g.Zone < near)} of {gaps.Count} frames " +
                 $"(within 1500: {gaps.Count(g => g.Zone < 1500)}), nearest {gaps.Min(g => g.Zone):0}; not laid out within the far reach ({far:0}) in {gaps.Count(g => g.Unlaid < far)} frames, " +
-                $"nearest {gaps.Min(g => g.Unlaid):0}; meshes in range not resident in {gaps.Count(g => g.Mesh < near)} frames, nearest {gaps.Min(g => g.Mesh):0}");
+                $"nearest {gaps.Min(g => g.Unlaid):0}; meshes in range not resident in {gaps.Count(g => g.Mesh < near)} frames, nearest {gaps.Min(g => g.Mesh):0}; " +
+                $"grass pages missing in {gaps.Count(g => g.Grass < float.PositiveInfinity)} frames (within 1500: {gaps.Count(g => g.Grass < 1500)}), nearest {gaps.Min(g => g.Grass):0}");
             Console.WriteLine($"pop-in    frames without the whole layout within the near reach, per 100 frames: {string.Join(" ", gaps.Chunk(100).Select(c => c.Count(g => g.Zone < near)))}");
         }
         Console.WriteLine($"resident  every 150 frames (objects + foliage, MB): {string.Join(" ", resident)}");
