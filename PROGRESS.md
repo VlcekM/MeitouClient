@@ -1,5 +1,32 @@
 # Progress (engine branch)
 
+## After the overnight job (2026-10-05)
+
+- **OpenGL removed:** Vulkan is the only backend (DECISIONS 18). `VulkanDisplay` serves the game and the viewer, and the viewer's world,
+  mesh and character windows run on Vulkan.
+- **Swaying-grass motion vectors** for the upscalers: at real sway speed, error against a still reference fell by 25% (TAA), 12% (FSR)
+  and 20% (DLSS). The DLSS water hint now works: the mask is R32F, because Streamline drops an R8 mask. DLSS 310's default preset ignores
+  the hint and the CNN presets use it.
+- **Frame-time tail** (DECISIONS 19): server GC on 4 heaps, no tiered JIT, an above-normal render thread, parallel foliage culling on
+  dedicated job threads, about half the streaming garbage, and no zero uploads.
+- **Final benchmark:** 1500-frame flight over The Hub, three interleaved runs each, medians in ms (logs in
+  `MeitouClient-engine-work/bench/fin-*`):
+
+  | | p50 | p95 | p99 | max |
+  |---|---|---|---|---|
+  | 1600x900, master (OpenGL, start) | 9.7 | 16.3 | 21.6 | 29.7 |
+  | 1600x900, engine, same pacing | 8.8 | 11.8 | 13.8 | 25.4 |
+  | 1600x900, engine, pipelined | 3.8 | 5.7 | 8.3 | 14.2 |
+  | 1600x900, engine, pipelined + DLSS quality | 3.5 | 5.5 | 7.6 | 15.0 |
+  | 2560x1440, master (OpenGL, start) | 11.0 | 15.6 | 22.7 | 31.9 |
+  | 2560x1440, engine, same pacing | 9.6 | 12.6 | 15.0 | 23.6 |
+  | 2560x1440, engine, pipelined | 6.1 | 7.7 | 9.4 | 15.5 |
+  | 2560x1440, engine, pipelined + DLSS quality | 4.9 | 6.5 | 8.2 | 15.1 |
+
+  The p99 target (< 6.9 ms at 1600x900 pipelined) is reached only in the best runs, at 6.6 to 7.0. The medians are 7.0 to 8.3,
+  depending on how busy the machine is.
+- Gates: build 0 warnings, tests 308/308, parity unchanged (Vulkan ≤ 0.0789), game smoke test 206 fps average (240 cap).
+
 ## Summary (overnight job, read this first)
 
 All three phases are done on branch `engine` (worktree `R:\VlcekM\MeitouClient-engine`). Nothing was pushed and master was not touched.
