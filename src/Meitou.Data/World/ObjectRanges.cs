@@ -6,7 +6,7 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class ObjectRanges
 {
-    /// <summary><c>objects view range</c> (settings.cfg, default 3000; a value of 1000 or less is replaced by 3000).</summary>
+    /// <summary><c>objects view range</c> (settings.cfg, default 3000; a value below 1000 is raised to 1000, docs/formats/settings.md).</summary>
     public const float ObjectsViewRange = 3000;
 
     /// <summary>A part whose mesh's local bounding radius is above this and still has the plain range is drawn at any distance.</summary>

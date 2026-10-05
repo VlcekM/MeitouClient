@@ -223,6 +223,7 @@ public sealed unsafe partial class VkGl
 
     public void UseProgram(uint id)
     {
+        Stats.BindCalls++;
         currentProgram = id;
         program = id != 0 ? programs[id] : null;
     }
@@ -263,7 +264,9 @@ public sealed unsafe partial class VkGl
         p.BlockBindings[p.BlockNames[(int)uniformBlockIndex]] = uniformBlockBinding;
     }
 
-    UniformSlot? Slot(int location) =>
+    UniformSlot? Slot(int location) { Stats.UniformCalls++; return SlotCore(location); }
+
+    UniformSlot? SlotCore(int location) =>
         location >= 0 && program is { } p && location < p.Uniforms.Count ? p.Uniforms[location] : null;
 
     public void Uniform1(int location, int v0)

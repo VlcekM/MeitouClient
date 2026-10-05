@@ -215,6 +215,7 @@ public sealed unsafe class PostProcess : IDisposable
         if (n >= MaxStamps) return;
         gl.QueryCounter(stamps[slot, n], QueryCounterTarget.Timestamp);
         stampNames[slot, n] = name;
+        if (StageClock.OnClose is not null) StageClock.Sub("post " + name);
         stampCount[slot] = n + 1;
     }
 

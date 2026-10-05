@@ -407,7 +407,8 @@ What is not drawn (Observed, base game, 2026-10-05):
 How far placed objects are drawn. Constants are in `ObjectRanges`; the sources are the game's settings and its object/building
 setup code, read in the decompiled `kenshi_x64.exe` for facts only.
 
-- **Settings** (Verified, settings.cfg readers): `objects view range` (default 3000; a value of 1000 or less is replaced by 3000),
+- **Settings** (Verified, settings.cfg readers): `objects view range` (default 3000; a value below 1000 is raised to 1000: corrected 2026-10-06, an earlier version said
+  "1000 or less is replaced by 3000", which is the `npc range` rule; see [settings.md](settings.md#foliage-and-distances)),
   `feature range` (default 2, 0 to 6; zones around the camera map features are loaded for) and `distant town range` (default 6,
   0 to 10; zones around the camera distant towns are shown for).
 - **Rendering distance of a part** (Verified for the 3000 and the radius test, Observed for the function numbers): every building part gets

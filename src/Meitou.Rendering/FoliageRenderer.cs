@@ -849,6 +849,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         if (cachedDepth) CullCandidates(frustum, options);
         else CullZones(eye, frustum, options, maxRange, record: depthPass);
         double tCull = cpu.Elapsed.TotalMilliseconds;
+        StageClock.Sub("fol cull");
 
         // 2. Upload the instances: one buffer, each batch's matrices contiguous.
         int total = 0;
@@ -865,6 +866,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         }
 
         double tUpload = cpu.Elapsed.TotalMilliseconds;
+        StageClock.Sub("fol upload");
         gl.GetInteger(GLEnum.Samples, out int samples);
         bool coverage = samples > 1;
         if (coverage) gl.Enable(EnableCap.SampleAlphaToCoverage);
@@ -899,9 +901,11 @@ public sealed unsafe class FoliageRenderer : IDisposable
         }
 
         double tMeshes = cpu.Elapsed.TotalMilliseconds;
+        StageClock.Sub("fol meshes");
         // 4. Grass.
         if (grass && !debugNoGrass) DrawGrass(viewProjection, eye, frustum, options, light, fogColour, fogDistance, coverage);
         double tGrass = cpu.Elapsed.TotalMilliseconds;
+        StageClock.Sub("fol grass");
         if (coverage) gl.Disable(EnableCap.SampleAlphaToCoverage);
         gl.Disable(EnableCap.CullFace);
         gl.ActiveTexture(TextureUnit.Texture0);
@@ -912,6 +916,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
             DrawCalls += terrain.DrawMeshes(terrainDraws, depthPass);
         }
         gl.Disable(EnableCap.CullFace);
+        StageClock.Sub("fol rocks");
         if (WorldFrame.DetailedStats)
         {
             double tEnd = cpu.Elapsed.TotalMilliseconds;

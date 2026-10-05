@@ -209,8 +209,252 @@ The render thread is above normal priority, the streaming threads below normal (
 run on a few above-normal job threads (`RenderJobs`). The game and the viewer run server GC on four heaps without tiered compilation
 (DECISIONS 19). The flight benchmark (`--fly-benchmark`) prints the stage means, the shadow casters' means, GC totals and the worst frames
 with their stages and GC pauses; `MEITOU_JOB_STATS=1` adds what each streaming call site allocated and cost.
-A draw through `VkGl` costs ~4 µs of CPU, so draw counts matter more than triangles: meshes that repeat are drawn instanced (the
+A draw through `VkGl` costs 1.5-2.3 µs of CPU in Release and 3.9-5.3 µs in Debug (measured, "Frame cost breakdown" below), so draw counts matter more than triangles: meshes that repeat are drawn instanced (the
 TERRAIN-mode rocks were one draw each and cost ~23 ms of shadow pass in a forest; docs/viewer.md, "Shadow pass cost").
+
+## Frame cost breakdown (2026-10-06)
+
+Phase 1 of the native-Vulkan migration: where the render thread's CPU time goes today (measurement only, no optimisation; no pixel
+changes). Everything below is **Observed** (RTX 4070, driver 596.49, 1600 x 900, `--time 13`, still camera; **the machine was shared with
+other agents' viewers and builds, GPU utilisation before a run was 0-45 %, so absolute milliseconds drift: the same Release trees view measured 3.5 ms
+in the first batch and 5.9-7.1 ms an hour later; compare rows within a table, not tables with each other**). Medians of 3 runs unless a table
+says otherwise. "Release" and "Debug" are `dotnet build -c Release` / `dotnet build` of our assemblies (Silk.NET and the driver are the same
+in both; Debug-built assemblies carry `DisableOptimizations`, so the JIT compiles our code without optimising it; the game runs without tiered
+compilation in both, see the runtimeconfig). The user runs Debug.
+
+**How it was measured** (all off by default):
+- `StageClock.OnClose/OnStart` (hook, null = one compare) plus `StageClock.Sub/Phase` marks at the shadow cascades, the foliage steps, the reflection
+  pass and the post stages. The viewer's `PassMeter` (`MEITOU_PASS_STATS=1`, `MEITOU_PASS_STATS_SKIP=<frames>`, `MEITOU_PASS_TAG=<label>`) takes at
+  every mark the Stopwatch time, the difference of the `VkGlStats` counters (now cumulative; new: pipeline binds, dynamic-state commands, set-1 binds,
+  uniform-ring copies, descriptor writes, pushed textures, skipped pushes, vertex/index buffer binds, barriers, the GL state / uniform / texture-bind /
+  bind / attrib calls the renderers made, pipeline-creation, fence-wait, submit, acquire and present ticks) and a GPU timestamp. A stage is a row;
+  its parts are rows under it (part times are inside the stage's). Rows are means per frame; `PASSCSV` lines are for scripts.
+- `MEITOU_VKGL_PHASES=1`: Stopwatch around the nine parts of `PrepareDraw` and, separately, around the `vkCmd*` calls themselves
+  (`VkGlStats.PhaseTicks/NativeTicks`; ~0.05 Âµs per read, so the sums read a little high). `MEITOU_VK_MICRO=1`: 100 000 `vkCmdSetScissor` / `vkCmdSetCullMode`
+  recorded through Silk.NET and through the raw function pointer.
+- Benchmark runs: `set KENSHI_PATH=E:\SteamLibrary\steamapps\common\Kenshi`, `set MEITOU_PASS_STATS=1`, `set MEITOU_PASS_STATS_SKIP=80`, then
+  `meitou-viewer.exe --world <view> [--faithful shadows] --time 13 --size 1600x900 --fly-benchmark 300 --fly-speed 0` (serialised: the GPU is waited
+  for after each frame; 220 measured frames). Views: `hub` = `--town "The Hub" --distance 40000 --pitch 3`; `rock` = `--at -51468,-14324 --yaw 95 --pitch 2 --distance 300`;
+  `portnorth` = `--town "Port North"`; `zone14_30` = `--zone 14,30`; `forest` = `--at -37582,-80684 --yaw -70.5 --pitch 6.1 --distance 10588`;
+  `junk` = `--at -60564,-45142 --distance 1400 --pitch 25`; `trees` (dense tree view, found by trying camera spots around the forest: 5033 foliage meshes
+  and 61 757 grass blades in the main pass, against 1908 and 63 588 in `forest`) = `--at -39000,-82000 --yaw 45 --pitch 5 --distance 800`.
+  Default shadows are Meitou's; "faithful" is `--faithful shadows`.
+
+### Frame totals per view
+
+Render-thread CPU per frame (mean over frames of the sum of all stages but the final GPU wait, plus the submit; 3 runs, median):
+
+| view | Release, Meitou shadows | Release, faithful | Debug, Meitou | Debug, faithful | draws/frame Meitou (faithful) | GPU frame ms, Release Meitou |
+|---|---|---|---|---|---|---|
+| hub | 2.07 | 2.47 | 5.68 | 6.86 | 655 (915) | 6.6 |
+| rock | 2.87 | 3.61 | 8.10 | 10.30 | 741 (1024) | 6.9 |
+| portnorth | 1.46 | 1.68 | 3.57 | 4.44 | 343 (553) | 7.6 |
+| zone14_30 | 2.61 | 2.82 | 7.24 | 8.05 | 1037 (1174) | 8.4 |
+| forest | 3.35 | 3.87 | 9.54 | 10.94 | 1135 (1332) | 8.1 |
+| junk | 2.62 | 3.13 | 7.62 | 8.16 | 889 (1113) | 10.9 |
+| trees | 3.52 | 4.36 | 9.74 | 11.79 | 1040 (1283) | 5.5 |
+
+Debug costs 2.4-3.3 times Release in every view; Meitou shadows are 5-20 % cheaper than the faithful ones (fewer cascade draws). GPU frame times are
+from the first to the last timestamp of a frame and include the other agents' load: only the order of magnitude (5-11 ms) is meaningful. Windowed
+(`meitou-viewer.exe --world <view> --time 13 --quit-after 20`, vsync on, 2 runs, first 120 frames skipped; same draws per frame) the render-thread CPU was
+**higher**: Release forest 6.3 / 6.5 ms (132 fps), junk 5.6 / 4.1, trees 6.4 / 5.8; Debug forest 13.9 / 13.6 (72-74 fps), junk 12.3 / 12.7, trees 12.4 / 11.4;
+every stage row was about 1.5-2 times its offscreen value. The cause is **Unknown** (CPU and GPU overlap here, there is no per-frame GPU wait). In windowed mode
+the acquire cost 0.01 ms, the wait for a free frame (fence) 0.2-1.0 ms of the "between frames" time, the submit 0.09-0.10 ms, `vkQueuePresentKHR` 0.07-0.08 ms
+and the (closed) overlays 0.01 ms: acquire/present are not a CPU cost.
+
+Counters per frame (Release, Meitou shadows and faithful, one run each; the counts do not depend on the build):
+
+| view | shadows | draws | pipeline binds | uniform KB | uniform ring copies | descriptor pushes | descriptor writes | textures pushed | pushes skipped | vertex-buffer binds | dynamic-state cmds | set-1 binds | render passes | GL state calls | GL uniform calls | GL texture binds | GL bind calls | GL attrib calls |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| hub | meitou | 655 | 27 | 215 | 767 | 281 | 1836 | 1554 | 374 | 1767 | 148 | 637 | 13 | 182 | 3208 | 711 | 555 | 449 |
+| hub | faithful | 915 | 27 | 244 | 1010 | 326 | 1973 | 1645 | 589 | 3508 | 157 | 879 | 12 | 263 | 4641 | 1021 | 859 | 1176 |
+| rock | meitou | 741 | 27 | 237 | 764 | 273 | 2251 | 1918 | 468 | 2627 | 153 | 658 | 13 | 195 | 3158 | 894 | 678 | 896 |
+| rock | faithful | 1024 | 30 | 287 | 977 | 328 | 2417 | 2028 | 697 | 3851 | 154 | 869 | 12 | 256 | 3986 | 1142 | 907 | 1466 |
+| portnorth | meitou | 343 | 18 | 103 | 323 | 57 | 592 | 513 | 286 | 1461 | 124 | 314 | 13 | 160 | 1808 | 440 | 332 | 457 |
+| portnorth | faithful | 553 | 19 | 144 | 506 | 79 | 648 | 547 | 474 | 2283 | 120 | 495 | 12 | 184 | 2493 | 603 | 451 | 706 |
+| zone14_30 | meitou | 1037 | 21 | 394 | 1402 | 765 | 5035 | 4269 | 272 | 2148 | 127 | 1027 | 13 | 130 | 4728 | 1334 | 919 | 165 |
+| zone14_30 | faithful | 1174 | 22 | 423 | 1539 | 772 | 5058 | 4283 | 402 | 2438 | 125 | 1163 | 12 | 138 | 5130 | 1378 | 947 | 238 |
+| forest | meitou | 1135 | 23 | 381 | 1377 | 675 | 4600 | 3899 | 460 | 3073 | 148 | 1068 | 13 | 216 | 5069 | 1366 | 1024 | 909 |
+| forest | faithful | 1332 | 23 | 414 | 1574 | 681 | 4621 | 3912 | 652 | 3572 | 143 | 1264 | 12 | 248 | 5814 | 1471 | 1086 | 1112 |
+| junk | meitou | 889 | 29 | 281 | 973 | 291 | 2359 | 1990 | 597 | 3641 | 165 | 827 | 13 | 313 | 4782 | 1233 | 934 | 1477 |
+| junk | faithful | 1113 | 32 | 324 | 1173 | 332 | 2479 | 2068 | 782 | 4486 | 165 | 1025 | 12 | 360 | 5609 | 1451 | 1077 | 1787 |
+| trees | meitou | 1040 | 27 | 374 | 1253 | 621 | 4208 | 3561 | 420 | 2890 | 157 | 972 | 13 | 226 | 4779 | 1286 | 974 | 928 |
+| trees | faithful | 1283 | 33 | 426 | 1468 | 651 | 4296 | 3618 | 632 | 3739 | 161 | 1184 | 12 | 298 | 5722 | 1459 | 1144 | 1357 |
+
+### Per pass
+
+Means per frame, medians of 3 runs (median of the three runs' means for every cell). CPU Rel / Dbg: the render thread's time in that pass (a stage that
+runs once per depth slice, such as terrain and foliage, is summed; reflection and shadow cascades are drawn only on some frames with Meitou shadows, so their
+rows are averages). GPU: the time between the timestamps at the pass's ends, which also holds barriers and overlap with neighbours; read a few frames late.
+Rows with a "/" are parts of the stage above them. "GL calls" = state + uniform + texture-bind + bind + attribute calls the renderer made in the pass. "dyn state" =
+`vkCmdSet*` commands, "set 1" = `vkCmdBindDescriptorSets` of the loose-uniform block, "tex pushed" = combined image samplers written by descriptor pushes.
+Not shown (nothing measurable): uploads at frame start, `upd-*` stages (0.1-0.2 ms Release), sky-prepare, the shadow cascades c0-c2 parts
+(drawn with the same code as c3 at smaller counts), and "new pipelines" (zero in every measured frame: the pipeline cache never misses after the 80 skipped frames).
+A fully idle `fol cull` / `fol upload` row is the foliage renderer's own culling and instance upload (CPU, no draws): `fol cull` is 0.15-0.34 ms Release / 0.7-0.9 ms Debug (the cascades share one culling, charged to the first cascade drawn).
+
+**forest, Meitou shadows** (`--at -37582,-80684 --yaw -70.5 --pitch 6.1 --distance 10588`):
+
+| pass | CPU Rel ms | CPU Dbg ms | GPU ms | draws | pipe binds | uniform KB | uniform copies | pushes | tex pushed | vbuf binds | dyn state | set 1 binds | GL calls |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| shadow c0 | 0.40 | 1.04 | 0.04 | 1 | 1 | 0.2 | 1 | 1 | 2 | 1 | 9 | 1 | 74 |
+| shadow c1 | 0.09 | 0.21 | 0.13 | 14.5 | 1 | 4.8 | 10 | 5.5 | 10 | 91.5 | 3 | 9.5 | 281 |
+| shadow c2 | 0.16 | 0.44 | 1.45 | 33 | 0.8 | 6 | 26.8 | 8.5 | 16.5 | 245 | 4.5 | 26.3 | 584 |
+| shadow c3 | 0.24 | 0.66 | 1.86 | 68 | 0.8 | 11 | 56.8 | 11.8 | 23 | 337.5 | 5 | 56.3 | 693 |
+| &nbsp;&nbsp;shadow c3/objects | 0.03 | 0.05 | 0.44 | 6 | 0.3 | 2.1 | 1 | 3 | 6 | 66 | 0.3 | 0.8 | 60 |
+| &nbsp;&nbsp;shadow c3/fol meshes | 0.05 | 0.12 | 1.01 | 18.3 | 0.3 | 2.6 | 18.5 | 8.3 | 16.5 | 200.8 | 4 | 18.3 | 450 |
+| &nbsp;&nbsp;shadow c3/fol rocks | 0.05 | 0.17 | 0.23 | 6.8 | 0.3 | 0 | 0.3 | 0.3 | 0 | 33.8 | 0.3 | 0.3 | 104 |
+| shadows | 0.04 | 0.05 | 0.03 | 2 | 1 | 0 | 0 | 1 | 1 | 0 | 10 | 0 | 32 |
+| reflection | 0.12 | 0.40 | 0.16 | 51.3 | 0.8 | 12.5 | 48.5 | 0.8 | 9 | 91 | 3.3 | 47.8 | 191 |
+| sky-draw | 0.02 | 0.04 | 0.20 | 1 | 1 | 0.4 | 1 | 1 | 3 | 0 | 9 | 1 | 63 |
+| terrain | 0.34 | 1.47 | 2.00 | 274 | 2 | 48 | 276 | 2 | 40 | 274 | 18 | 274 | 706 |
+| objects | 0.18 | 0.42 | 0.13 | 40 | 2 | 30.5 | 20 | 18 | 234 | 440 | 2 | 18 | 442 |
+| foliage | 1.01 | 3.13 | 0.76 | 342 | 3 | 209.6 | 626 | 317 | 2934 | 995 | 9 | 326 | 3765 |
+| &nbsp;&nbsp;foliage/fol meshes | 0.10 | 0.28 | 0.61 | 27 | 1 | 18.2 | 28 | 18 | 234 | 297 | 7 | 27 | 712 |
+| &nbsp;&nbsp;foliage/fol grass | 0.68 | 1.87 | 0.11 | 298 | 1 | 190.9 | 596 | 298 | 2682 | 596 | 1 | 298 | 2715 |
+| &nbsp;&nbsp;foliage/fol rocks | 0.07 | 0.25 | 0.05 | 17 | 1 | 0.5 | 2 | 1 | 18 | 102 | 1 | 1 | 337 |
+| water | 0.03 | 0.06 | 0.05 | 2 | 2 | 1.3 | 4 | 2 | 16 | 2 | 3 | 2 | 142 |
+| post | 0.44 | 1.14 | 0.92 | 306 | 8 | 56.3 | 307 | 306 | 610 | 596 | 72 | 306 | 1609 |
+| &nbsp;&nbsp;post/post ssao | 0.02 | 0.04 | 0.19 | 3 | 2 | 0.1 | 3 | 3 | 3 | 0 | 27 | 3 | 27 |
+| &nbsp;&nbsp;post/post upscale | 0.37 | 1.04 | 0.52 | 300 | 3 | 56.2 | 301 | 300 | 601 | 596 | 18 | 300 | 1547 |
+| &nbsp;&nbsp;post/post exposure | 0.03 | 0.04 | 0.16 | 2 | 2 | 0 | 2 | 2 | 3 | 0 | 18 | 2 | 17 |
+| &nbsp;&nbsp;post/post composite | 0.01 | 0.01 | 0.05 | 1 | 1 | 0 | 1 | 1 | 3 | 0 | 9 | 1 | 14 |
+
+Release gap to Debug in the forest: foliage 1.01 -> 3.13 ms, terrain 0.34 -> 1.47, shadow cascades 0.93 -> 2.4, post 0.44 -> 1.14. The shadow rows of the faithful
+shadows (forest, below) put 316 draws and 2.4 ms of GPU into cascade 3 alone against 65 draws with Meitou's.
+
+**forest, faithful shadows** (`--faithful shadows`; only the rows that differ in kind):
+
+| pass | CPU Rel ms | CPU Dbg ms | GPU ms | draws | pipe binds | uniform KB | uniform copies | pushes | tex pushed | vbuf binds | dyn state | set 1 binds | GL calls |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| shadow c3 | 0.99 | 2.93 | 2.44 | 316 | 4 | 55.4 | 291 | 34 | 66 | 1174 | 27 | 289 | 2725 |
+| shadow c3/fol meshes | 0.21 | 0.46 | 1.39 | 73 | 1 | 10.4 | 74 | 31 | 62 | 803 | 16 | 73 | 1798 |
+| shadow c3/fol rocks (TERRAIN-mode) | 0.24 | 0.80 | 0.39 | 27 | 1 | 0.1 | 1 | 1 | 0 | 135 | 1 | 1 | 415 |
+
+(the rest of c3, about 210 draws, is its terrain; cascades 0 and 1 are unused in this view.)
+
+**trees (dense tree view), Meitou shadows**:
+
+| pass | CPU Rel ms | CPU Dbg ms | GPU ms | draws | pipe binds | uniform KB | uniform copies | pushes | tex pushed | vbuf binds | dyn state | set 1 binds | GL calls |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| shadow c0 | 0.45 | 1.14 | 0.15 | 15 | 3 | 9 | 12 | 7 | 12 | 95 | 11 | 11 | 351 |
+| shadow c1 | 0.08 | 0.20 | 0.18 | 16.5 | 1.5 | 5.2 | 14 | 7.5 | 14 | 110.5 | 5 | 13.5 | 317 |
+| shadow c2 | 0.16 | 0.42 | 0.45 | 27 | 1 | 5.6 | 17.3 | 9.8 | 19 | 192.5 | 4 | 16.8 | 378 |
+| shadow c3 | 0.26 | 0.73 | 0.82 | 65.3 | 1 | 11.1 | 53.3 | 11.8 | 23 | 303.3 | 4.5 | 52.8 | 572 |
+| &nbsp;&nbsp;shadow c3/objects | 0.04 | 0.07 | 0.16 | 9.3 | 0.3 | 2.1 | 2.5 | 5 | 10 | 101.8 | 0.3 | 2.3 | 87 |
+| &nbsp;&nbsp;shadow c3/fol meshes | 0.03 | 0.08 | 0.52 | 12.3 | 0.3 | 2.4 | 12.5 | 6.3 | 12.5 | 134.8 | 3.5 | 12.3 | 316 |
+| &nbsp;&nbsp;shadow c3/fol rocks | 0.07 | 0.24 | 0.12 | 5.8 | 0.3 | 0 | 0.3 | 0.3 | 0 | 28.8 | 0.3 | 0.3 | 89 |
+| shadows | 0.04 | 0.06 | 0.02 | 2 | 1 | 0 | 0 | 1 | 1 | 0 | 10 | 0 | 32 |
+| reflection | 0.10 | 0.34 | 0.08 | 46.5 | 0.8 | 12 | 45.5 | 0.8 | 9 | 68.8 | 3.3 | 44.8 | 175 |
+| sky-draw | 0.02 | 0.04 | 0.12 | 1 | 1 | 0.4 | 1 | 1 | 3 | 0 | 9 | 1 | 63 |
+| terrain | 0.30 | 1.19 | 1.26 | 239 | 2 | 42 | 241 | 2 | 40 | 239 | 18 | 239 | 636 |
+| objects | 0.15 | 0.33 | 0.04 | 30 | 2 | 36.5 | 15 | 13 | 169 | 330 | 2 | 13 | 353 |
+| foliage | 1.20 | 3.78 | 0.77 | 320 | 4 | 200.7 | 573 | 290 | 2707 | 1013 | 14 | 302 | 3713 |
+| &nbsp;&nbsp;foliage/fol meshes | 0.13 | 0.34 | 0.54 | 33 | 2 | 28.5 | 35 | 22 | 286 | 363 | 12 | 33 | 899 |
+| &nbsp;&nbsp;foliage/fol grass | 0.63 | 1.65 | 0.10 | 268 | 1 | 171.7 | 536 | 267 | 2403 | 536 | 1 | 268 | 2445 |
+| &nbsp;&nbsp;foliage/fol rocks | 0.20 | 0.85 | 0.13 | 19 | 1 | 0.5 | 2 | 1 | 18 | 114 | 1 | 1 | 367 |
+| water | 0.03 | 0.06 | 0.01 | 2 | 2 | 1.3 | 4 | 2 | 16 | 2 | 4 | 2 | 142 |
+| post | 0.39 | 0.98 | 0.59 | 276 | 8 | 50.7 | 277 | 275 | 548 | 536 | 72 | 276 | 1459 |
+| &nbsp;&nbsp;post/post ssao | 0.02 | 0.03 | 0.13 | 3 | 2 | 0.1 | 3 | 3 | 3 | 0 | 27 | 3 | 27 |
+| &nbsp;&nbsp;post/post upscale | 0.32 | 0.89 | 0.31 | 270 | 3 | 50.5 | 271 | 269 | 539 | 536 | 18 | 270 | 1397 |
+| &nbsp;&nbsp;post/post exposure | 0.03 | 0.04 | 0.11 | 2 | 2 | 0 | 2 | 2 | 3 | 0 | 18 | 2 | 17 |
+| &nbsp;&nbsp;post/post composite | 0.01 | 0.01 | 0.03 | 1 | 1 | 0 | 1 | 1 | 3 | 0 | 9 | 1 | 14 |
+
+**junk field, Meitou shadows** (`--at -60564,-45142 --distance 1400 --pitch 25`; mesh draws and grass are fewer, objects and the reflection more):
+
+| pass | CPU Rel ms | CPU Dbg ms | GPU ms | draws | pipe binds | uniform KB | uniform copies | pushes | tex pushed | vbuf binds | dyn state | set 1 binds | GL calls |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| shadow c0 | 0.28 | 0.69 | 0.21 | 21 | 3 | 9.4 | 21 | 12 | 22 | 169 | 15 | 20 | 508 |
+| shadow c1 | 0.13 | 0.32 | 0.39 | 44.5 | 1.5 | 6 | 36.5 | 10 | 19 | 380.5 | 6 | 36 | 798 |
+| shadow c2 | 0.10 | 0.27 | 0.99 | 37.8 | 0.8 | 4.5 | 33.8 | 8 | 15.5 | 288.3 | 4 | 33.5 | 620 |
+| shadow c3 | 0.19 | 0.51 | 2.54 | 85.3 | 1.3 | 12.3 | 72.8 | 18.8 | 36.5 | 479.8 | 5.5 | 72.3 | 902 |
+| &nbsp;&nbsp;shadow c3/objects | 0.04 | 0.08 | 0.66 | 10 | 0.5 | 2.1 | 2.3 | 9 | 17.5 | 108.5 | 0.5 | 2 | 110 |
+| &nbsp;&nbsp;shadow c3/fol meshes | 0.07 | 0.16 | 1.63 | 27.5 | 0.3 | 2.9 | 27.8 | 9.3 | 18.5 | 302.5 | 4.5 | 27.5 | 621 |
+| &nbsp;&nbsp;shadow c3/fol rocks | 0.01 | 0.02 | 0.05 | 5.3 | 0.3 | 0 | 0.3 | 0.3 | 0 | 26.3 | 0 | 0.3 | 81 |
+| shadows | 0.04 | 0.05 | 0.03 | 2 | 1 | 0 | 0 | 1 | 1 | 0 | 10 | 0 | 32 |
+| reflection | 0.15 | 0.55 | 0.35 | 72 | 1.3 | 20.9 | 69.5 | 4.5 | 59 | 234.3 | 5 | 68.3 | 520 |
+| sky-draw | 0.02 | 0.04 | 0.20 | 1 | 1 | 0.4 | 1 | 1 | 3 | 0 | 9 | 1 | 63 |
+| terrain | 0.30 | 1.37 | 2.70 | 239 | 2 | 42 | 241 | 2 | 40 | 239 | 18 | 239 | 636 |
+| objects | 0.15 | 0.41 | 0.18 | 36 | 2 | 34.1 | 30 | 30 | 390 | 396 | 2 | 27 | 472 |
+| foliage | 0.75 | 2.27 | 1.08 | 228 | 5 | 129 | 342 | 124 | 1234 | 1228 | 14 | 208 | 3365 |
+| &nbsp;&nbsp;foliage/fol meshes | 0.22 | 0.68 | 0.64 | 76 | 2 | 44.7 | 78 | 25 | 325 | 836 | 11 | 76 | 1670 |
+| &nbsp;&nbsp;foliage/fol grass | 0.35 | 0.99 | 0.18 | 130 | 1 | 83.3 | 260 | 97 | 873 | 260 | 1 | 130 | 1203 |
+| &nbsp;&nbsp;foliage/fol rocks | 0.07 | 0.23 | 0.26 | 22 | 2 | 1 | 4 | 2 | 36 | 132 | 2 | 2 | 490 |
+| water | 0.03 | 0.06 | 0.01 | 2 | 2 | 1.3 | 4 | 2 | 16 | 2 | 4 | 2 | 142 |
+| post | 0.22 | 0.58 | 1.06 | 120 | 8 | 21.4 | 121 | 78 | 154 | 224 | 72 | 120 | 679 |
+| &nbsp;&nbsp;post/post ssao | 0.02 | 0.04 | 0.21 | 3 | 2 | 0.1 | 3 | 3 | 3 | 0 | 27 | 3 | 27 |
+| &nbsp;&nbsp;post/post upscale | 0.16 | 0.48 | 0.65 | 114 | 3 | 21.3 | 115 | 72 | 145 | 224 | 18 | 114 | 617 |
+| &nbsp;&nbsp;post/post exposure | 0.03 | 0.04 | 0.14 | 2 | 2 | 0 | 2 | 2 | 3 | 0 | 18 | 2 | 17 |
+| &nbsp;&nbsp;post/post composite | 0.01 | 0.01 | 0.07 | 1 | 1 | 0 | 1 | 1 | 3 | 0 | 9 | 1 | 14 |
+
+### Inside VkGl: one draw
+
+`MEITOU_VKGL_PHASES=1`, 3 runs each, Meitou shadows, medians. Microseconds **per draw**, averaged over all draws of the run (the mix of
+terrain, foliage, grass and post draws; first number = the part's whole time, second = the part of it spent inside the `vkCmd*` call(s), i.e. Silk.NET's dispatch plus
+the driver's recording). Stopwatch reads add ~0.05 µs each, so the sums read a little high. These are `PrepareDraw` and the draw call only: the renderer's own GL calls (see "GL calls" above)
+are not in them.
+
+| part of a draw | Release forest | Release trees | Release hub | Debug forest | Debug trees | Debug hub |
+|---|---|---|---|---|---|---|
+| vertex layout + pipeline key | 0.07 | 0.11 | 0.12 | 0.33 | 0.40 | 0.42 |
+| pipeline lookup (dictionary on a 20-field key) | 0.06 | 0.07 | 0.08 | 0.32 | 0.38 | 0.45 |
+| bind pipeline (when it changed) | 0.05 / 0.03 | 0.08 / 0.06 | 0.13 / 0.10 | 0.07 / 0.04 | 0.11 / 0.07 | 0.15 / 0.11 |
+| dynamic state compare + sets | 0.07 / 0.02 | 0.10 / 0.03 | 0.14 / 0.05 | 0.17 / 0.03 | 0.20 / 0.04 | 0.25 / 0.07 |
+| set 1: loose uniforms copied to the ring + bind by offset | 0.24 / 0.07 | 0.31 / 0.10 | 0.38 / 0.12 | 0.57 / 0.11 | 0.65 / 0.13 | 0.77 / 0.17 |
+| set 0: build the writes, compare with the last push | 0.32 | 0.38 | 0.53 | 1.42 | 1.58 | 2.00 |
+| push descriptors (when different) | 0.18 / 0.12 | 0.25 / 0.16 | 0.25 / 0.16 | 0.22 / 0.14 | 0.30 / 0.20 | 0.30 / 0.19 |
+| vertex buffers (one `vkCmdBindVertexBuffers` per input) | 0.31 / 0.13 | 0.41 / 0.18 | 0.45 / 0.19 | 0.51 / 0.20 | 0.66 / 0.27 | 0.63 / 0.27 |
+| index bind + `vkCmdDraw*` | 0.18 / 0.10 | 0.22 / 0.13 | 0.26 / 0.15 | 0.26 / 0.14 | 0.33 / 0.18 | 0.38 / 0.22 |
+| **total** | **1.47 / 0.46** | **1.92 / 0.65** | **2.34 / 0.79** | **3.85 / 0.66** | **4.60 / 0.91** | **5.34 / 1.03** |
+
+So a draw's preparation is 1.5-2.3 µs in Release and 3.9-5.3 µs in Debug (the "~4 µs" the docs gave is the Debug figure), of which only 0.5-0.8 µs (Release) /
+0.7-1.0 µs (Debug) is inside the `vkCmd*` calls; the rest is C# in VkGl. Debug adds 2.5-3 µs per draw and nearly all of it in the dictionary key
+(0.3 + 0.3 µs), the sampler/buffer compare loop of set 0 (1.4-2.0 µs against 0.3-0.5) and the loose-uniform copy. The calls themselves are cheap:
+`MEITOU_VK_MICRO=1` (Release, 100 000 calls each, recorded outside a render pass): `vkCmdSetScissor` 23.4 ns through Silk.NET, 20.9 ns through the raw function pointer;
+`vkCmdSetCullMode` 22.2 / 16.1 ns; an empty loop 0.5 ns. Silk.NET's dispatch costs 2-6 ns a call (the same in Debug, it is a NuGet assembly); the driver's recording
+is ~16-21 ns for a state command; per draw the pipeline-bind, push, vertex-buffer and draw calls together are 0.03-0.2 µs each in the table (averages over all draws, including draws that skip them).
+Whole-draw all-in cost, for scale: the forest's grass (298 draws a frame, 9 GL calls each) is 0.68 ms Release / 1.87 ms Debug = 2.3 / 6.3 µs per draw.
+
+### Foliage draw distance (dense tree view)
+
+Foliage and grass draw distance both set to x1, x2, x4 (the default) and x8 (`MEITOU_FOLIAGE_RANGE=<x>`, `MEITOU_GRASS_RANGE=<x>`, the command-line
+equivalent of the Tab sliders), `trees` view, Meitou shadows, `--fly-benchmark 300 --fly-speed 0`, the four settings interleaved in one batch (2 runs each, median of
+the two; this batch ran when the machine was slower: its x4 is 7.1 ms Release where the first batch gave 3.5, compare down the column only):
+
+| setting | foliage meshes drawn | grass blades | foliage draws (main pass, per frame) | frame CPU Rel ms | foliage stage Rel ms (meshes, grass) | frame CPU Dbg ms | foliage stage Dbg ms (meshes, grass) |
+|---|---|---|---|---|---|---|---|
+| x1 | 65 | 2 474 | 37 | 3.38 | 0.45 (0.07, 0.15) | 7.36 | 1.04 (0.16, 0.32) |
+| x2 | 260 | 10 313 | 91 | 3.95 | 0.73 (0.13, 0.35) | 8.56 | 1.85 (0.31, 0.82) |
+| x4 | 5 034 | 61 757 | 320 | 7.09 | 2.39 (0.26, 1.21) | 17.30 | 6.30 (0.59, 2.81) |
+| x8 | 36 171 | 276 964 | 1 022 | 15.58 | 7.73 (0.45, 3.69) | 43.86 | 24.66 (1.22, 9.36) |
+
+The draw count grows with the area (x8: 3.2 times x4's); mesh instances are batched (36 171 meshes need few draws) but grass is drawn one page per draw
+(about 270 blades per page: 0.9-1.0 draw per 1000 blades), so grass pages are what the draw count follows. The foliage stage is about half of the growth at x8 (Release 0.36 -> 7.7 ms);
+the rest is the shadow cascade 0 (the foliage culling it pays for: 0.46 -> 2.2 ms), the cascade-3 casters (0.14 -> 0.9) and the post stage's grass-motion redraw (33 -> 936 draws,
+0.21 -> 2.2 ms). The GPU frame time grew 8.2 -> 15.4 ms (Release) at x8 as well.
+
+### Reading
+
+**What dominates** (Release, forest, Meitou shadows, 3.35 ms; Debug 9.5 ms): (1) the foliage stage, 1.0 ms (Debug 3.1): 298 grass-page draws take 0.68 ms of it, the instanced meshes 0.10, the
+TERRAIN-mode rocks 0.07, plus 0.15 for the foliage culling; (2) the shadow cascades together, 0.9 ms (Debug 2.4), of which 0.34 (Debug 0.94) is the foliage culling that cascade 0 pays for all of them and the rest 6-30 instanced mesh draws a cascade; (3) terrain, 0.34 ms
+(Debug 1.5) for 274 chunk draws; (4) the post stage, 0.44 ms (Debug 1.1), of which 0.37 / 1.04 is the **second** grass draw for the upscaler's motion vectors (300 draws that repeat the grass pages, only
+active with TAA/FSR/DLSS); (5) objects 0.18 (0.42), reflection 0.12 (0.40), water, sky, SSAO, exposure and composite 0.1 together. GPU, by contrast, is spread differently (terrain 2.0 ms and the
+cascade-3 casters 1.9 ms lead): the CPU follows the **number of draws and of descriptor/uniform work per draw**, the GPU the pixels and triangles. The render thread never waited for the GPU or
+for the swapchain in the measured frames beyond the deliberate per-frame wait of the benchmark, and acquire, submit and present together are 0.2 ms.
+
+**Where the per-draw CPU goes**: about 1.5-2.3 µs of VkGl work per draw (Release), a third of it in the driver; the larger part is C# that rebuilds, per draw, state the renderer
+could have kept: a descriptor set 0 compare/build (the grass pushes 9 images to the same set 298 times a frame: 2 682 texture descriptors, 3 278 descriptor writes, each grass draw copies the whole vertex and fragment default blocks, 640 bytes in two ring copies, 190 KB of ring copies a frame for grass alone, 381 KB for the forest frame), a pipeline key of 20 fields hashed per draw (the cache never missed: 0 new pipelines), one
+`vkCmdBindVertexBuffers` per input location (about 3 per draw: 3 073 a frame), and ~5 000 GL uniform calls, ~1 400 texture binds and ~1 000 other bind calls a frame (about 4.5, 1.2 and 0.9 per draw) that the
+translation layer has to absorb before the draw. Debug triples all of it. In the same breath the vkCmd calls are only 0.5-0.8 µs per draw, so even a perfect native layer would still pay ~0.7 µs per draw for the calls
+that remain; what it can remove is the other 1-1.5 µs (Release) / 3-4 µs (Debug).
+
+**What a native API would remove** (interpretation of the numbers above): the per-draw pipeline key and lookup (0.13 / 0.7 µs: pipelines known up front, selected by an id); the set-0 build and compare (0.3-0.5 / 1.4-2 µs: persistent descriptor sets per material, or a bindless table, so a draw
+binds nothing it already bound: textures pushed per frame drop from ~3 900 to the few hundred materials); the whole-block loose-uniform copies (0.25-0.4 / 0.6-0.8 µs and 381 KB a frame: per-draw data as a small push-constant or one
+instance record, matrices instanced); the GL-call traffic (5 000 uniform + 2 400 bind calls a frame become the data written once into that record); vertex-buffer binds batched into one call; and most of all **fewer draws**: grass pages merged or drawn with
+indirect/instanced calls (298 draws for 62 000 blades, and again for the motion pass), the cascade casters multi-drawn. The 16-21 ns per state command and 2-6 ns of Silk.NET dispatch say the function-call layer is not the cost; the layer above it is.
+A Debug build of the renderers' own code (the user's build) costs 2.4-3.3 times Release for the same work, so cutting calls and per-draw bookkeeping helps Debug most.
+
+**Not measured / Unknown**: the CPU cost of the streaming threads (not the render thread); why windowed frames cost 1.5-2 times offscreen frames; GPU times per pass are approximate (timestamp gaps, shared GPU);
+the `detail` lines at the end of a benchmark log give the instances and calls of the last frame only (Meitou shadows draw some cascades on alternate frames).
 
 ## Checking a change
 

@@ -37,6 +37,7 @@ public sealed unsafe partial class VkGl
 
     void SetCap(EnableCap cap, bool on)
     {
+        Stats.StateCalls++;
         switch (cap)
         {
             case EnableCap.DepthTest: depthTest = on; break;
@@ -52,16 +53,16 @@ public sealed unsafe partial class VkGl
         }
     }
 
-    public void Viewport(int x, int y, uint width, uint height) => viewport = (x, y, (int)width, (int)height);
-    public void Scissor(int x, int y, uint width, uint height) => scissor = (x, y, (int)width, (int)height);
-    public void DepthMask(bool flag) => depthWrite = flag;
-    public void DepthFunc(DepthFunction func) => depthFunc = func;
-    public void ColorMask(bool red, bool green, bool blue, bool alpha) => colourMask = (red, green, blue, alpha);
-    public void BlendFunc(BlendingFactor sfactor, BlendingFactor dfactor) => (blendSrc, blendDst) = (sfactor, dfactor);
-    public void CullFace(TriangleFace mode) => cullMode = mode;
-    public void FrontFace(FrontFaceDirection mode) => frontFace = mode;
-    public void PolygonMode(TriangleFace face, PolygonMode mode) => polygonMode = mode;
-    public void PolygonOffset(float factor, float units) => (offsetFactor, offsetUnits) = (factor, units);
+    public void Viewport(int x, int y, uint width, uint height) { Stats.StateCalls++; viewport = (x, y, (int)width, (int)height); }
+    public void Scissor(int x, int y, uint width, uint height) { Stats.StateCalls++; scissor = (x, y, (int)width, (int)height); }
+    public void DepthMask(bool flag) { Stats.StateCalls++; depthWrite = flag; }
+    public void DepthFunc(DepthFunction func) { Stats.StateCalls++; depthFunc = func; }
+    public void ColorMask(bool red, bool green, bool blue, bool alpha) { Stats.StateCalls++; colourMask = (red, green, blue, alpha); }
+    public void BlendFunc(BlendingFactor sfactor, BlendingFactor dfactor) { Stats.StateCalls++; (blendSrc, blendDst) = (sfactor, dfactor); }
+    public void CullFace(TriangleFace mode) { Stats.StateCalls++; cullMode = mode; }
+    public void FrontFace(FrontFaceDirection mode) { Stats.StateCalls++; frontFace = mode; }
+    public void PolygonMode(TriangleFace face, PolygonMode mode) { Stats.StateCalls++; polygonMode = mode; }
+    public void PolygonOffset(float factor, float units) { Stats.StateCalls++; (offsetFactor, offsetUnits) = (factor, units); }
     public void ClearColor(float red, float green, float blue, float alpha) => clearColourValue = new Vector4(red, green, blue, alpha);
     public void ClearDepth(double depth) => clearDepthValue = depth;
     public GLEnum GetError() => GLEnum.NoError;
