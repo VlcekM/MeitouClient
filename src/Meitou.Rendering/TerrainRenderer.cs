@@ -81,6 +81,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
         coarseTexture = HeightTexture(coarse, coarseSize, coarseSize);
         fineTexture = HeightTexture(fine.Raw, fine.Columns, fine.Rows);
+        PublishGlobals();
 
         // The patch grid and its index ranges: the whole grid, then the four quarters.
         var grid = new float[(GridCells + 1) * (GridCells + 1) * 2];
@@ -321,14 +322,43 @@ public sealed unsafe class TerrainRenderer : IDisposable
         gl.ActiveTexture(TextureUnit.Texture0);
         gl.Uniform1(U(program, "uHeightCoarse"), TerrainShaders.HeightCoarseUnit);
         gl.Uniform1(U(program, "uHeightFine"), TerrainShaders.HeightFineUnit);
-        float h = WorldLayout.HalfWorldSize;
-        gl.Uniform4(U(program, "uCoarseRect"), -h, -h, h, h);
+        var coarseRect = CoarseRect;
+        gl.Uniform4(U(program, "uCoarseRect"), coarseRect.X, coarseRect.Y, coarseRect.Z, coarseRect.W);
         gl.Uniform2(U(program, "uCoarseCells"), coarseSize - 1f, coarseSize - 1f);
-        var (x0, z0) = fine.WorldOf(0, 0);
-        gl.Uniform4(U(program, "uFineRect"), (float)x0, (float)z0, (float)x0 + (fine.Columns - 1) * fine.Spacing, (float)z0 + (fine.Rows - 1) * fine.Spacing);
+        var fineRect = FineRect;
+        gl.Uniform4(U(program, "uFineRect"), fineRect.X, fineRect.Y, fineRect.Z, fineRect.W);
         gl.Uniform2(U(program, "uFineCells"), fine.Columns - 1f, fine.Rows - 1f);
         gl.Uniform1(U(program, "uFineBand"), fineBand);
         gl.Uniform1(U(program, "uHasFine"), 1);
+    }
+
+    static Vector4 CoarseRect => new(-WorldLayout.HalfWorldSize, -WorldLayout.HalfWorldSize, WorldLayout.HalfWorldSize, WorldLayout.HalfWorldSize);
+
+    Vector4 FineRect
+    {
+        get
+        {
+            var (x0, z0) = fine.WorldOf(0, 0);
+            return new((float)x0, (float)z0, (float)x0 + (fine.Columns - 1) * fine.Spacing, (float)z0 + (fine.Rows - 1) * fine.Spacing);
+        }
+    }
+
+    /// <summary>
+    /// The heights as frame globals (docs/renderer-native.md 4.3): the two textures and the <see cref="TerrainShaders.HeightFunctions"/>
+    /// uniforms <see cref="BindHeights"/> sets, read when a consumer draws or applies its globals. No GL call.
+    /// </summary>
+    void PublishGlobals()
+    {
+        if (GpuContext.Of(gl) is not { Interop: { } interop } ctx) return;
+        var g = ctx.Globals;
+        g.Publish("uHeightCoarse", () => interop.Sampled(coarseTexture, shadowSampler: false));
+        g.Publish("uHeightFine", () => interop.Sampled(fineTexture, shadowSampler: false));
+        g.PublishUniform("uCoarseRect", () => CoarseRect);
+        g.PublishUniform("uCoarseCells", () => new Vector2(coarseSize - 1f, coarseSize - 1f));
+        g.PublishUniform("uFineRect", () => FineRect);
+        g.PublishUniform("uFineCells", () => new Vector2(fine.Columns - 1f, fine.Rows - 1f));
+        g.PublishUniform("uFineBand", () => fineBand);
+        g.PublishUniform("uHasFine", () => 1);
     }
 
     /// <summary>

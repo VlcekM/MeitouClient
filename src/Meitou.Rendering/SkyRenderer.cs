@@ -266,6 +266,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             Console.WriteLine($"sky       textures: starfield {(starsTexture != 0 ? "yes" : "no")}, moon {(moonTexture != 0 ? "yes" : "no")}, clouds {(cloudsTexture != 0 ? "yes" : "no")}");
         }
         Active = this;
+        PublishGlobals();
     }
 
     void LoadTextures(AssetLocator assets)
@@ -415,37 +416,99 @@ public sealed unsafe class SkyRenderer : IDisposable
         if (b >= 0) gl.Uniform1(b, specularUnit);
         if (c >= 0) gl.Uniform1(c, ambientUnit);
         gl.UseProgram(0);
+        PublishUnits(gl);
+    }
+
+    /// <summary>The values of <see cref="AtmosphereShaders.Functions"/>' loose uniforms (what <see cref="Apply"/> sets), by GLSL name minus <c>uAtmo</c>.</summary>
+    public readonly record struct AtmosphereUniforms(Vector4 Tau, Vector4 Params, Vector4 Sun, Vector4 Light, Vector3 SunLight, Vector3 Tint, Vector4 Fog,
+        Vector3 FogColour, Vector4 Simple, Vector4 Haze, Vector4 HazeCloud, Vector4 Altitude, Vector4 Maps);
+
+    /// <summary>The atmosphere uniforms for the current state (valid only while <c>state.Valid</c>).</summary>
+    AtmosphereUniforms Uniforms()
+    {
+        var s = state;
+        var tau = SkyAtmosphere.RayleighZenithDepth;
+        var tint = Weather.SkyColourMultiplier;
+        var w = Weather;
+        // The weather fog's colour times sunColour.w, the daylight scale (the game's global fog term).
+        var fog = w.FogColour * (Physical ? KenshiLighting.Daylight(s.Sun.Y) : 1f);
+        var hc = s.Colours.Horizon;
+        float hazeStart = HazeDistance * Meitou.Data.World.KenshiHaze.StartFraction;
+        float hazeEnd = MathF.Min(HazeDistance, HazeDistance * Meitou.Data.World.KenshiHaze.EndFraction);
+        var (cloud, pull, _) = HorizonClouds(s);
+        return new AtmosphereUniforms(
+            new Vector4(tau.X, tau.Y, tau.Z, SkyAtmosphere.MieZenithDepth),
+            new Vector4(Physical ? 1f : 0f, MathF.Max(s.FogDistance, 1), ScaleHeightUnits, 0),
+            new Vector4(s.Sun.X, s.Sun.Y, s.Sun.Z, 0),
+            new Vector4(s.LightDirection.X, s.LightDirection.Y, s.LightDirection.Z, s.Environment),
+            new Vector3(s.SunLight.X, s.SunLight.Y, s.SunLight.Z),
+            new Vector3(tint.X, tint.Y, tint.Z),
+            new Vector4(w.FogMin, w.FogMax, w.FogEnabled ? 1f : 0f, 0),
+            new Vector3(fog.X, fog.Y, fog.Z),
+            new Vector4(hc.X, hc.Y, hc.Z, MathF.Max(s.FogDistance, 1)),
+            // The weather fog is complete at a distance between `fog distance min` and `max` by the wind; the viewer has no wind and takes max.
+            new Vector4(KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, w.FogEnabled && w.FogMax > 1 ? 1f / w.FogMax : 0f),
+            new Vector4(cloud.X, cloud.Y, cloud.Z, pull),
+            new Vector4(KenshiHaze ? AltitudeWeight : 1f, MathF.Max(HazeStrength, 0), AltitudeWeight, 0),
+            new Vector4(irradianceCube != 0 ? 1f : 0f, specularCube != 0 ? 1f : 0f, ambientMap != 0 ? 1f : 0f, AmbientMap.HalfWorld));
+    }
+
+    /// <summary>
+    /// Publishes the atmosphere to the frame globals (docs/renderer-native.md 4.3): the uniform values <see cref="Apply"/> sets, and the three
+    /// textures as VkGl samples them on their units. Changes no GL call.
+    /// </summary>
+    void PublishGlobals()
+    {
+        if (GpuContext.Of(gl) is not { Interop: { } interop } ctx) return;
+        var g = ctx.Globals;
+        bool Valid() => state.Valid;
+        g.PublishUniform("uAtmoTau", () => Uniforms().Tau, Valid);
+        g.PublishUniform("uAtmoParams", () => Uniforms().Params, Valid);
+        g.PublishUniform("uAtmoSun", () => Uniforms().Sun, Valid);
+        g.PublishUniform("uAtmoLight", () => Uniforms().Light, Valid);
+        g.PublishUniform("uAtmoSunLight", () => Uniforms().SunLight, Valid);
+        g.PublishUniform("uAtmoTint", () => Uniforms().Tint, Valid);
+        g.PublishUniform("uAtmoFog", () => Uniforms().Fog, Valid);
+        g.PublishUniform("uAtmoFogColour", () => Uniforms().FogColour, Valid);
+        g.PublishUniform("uAtmoSimple", () => Uniforms().Simple, Valid);
+        g.PublishUniform("uAtmoHaze", () => Uniforms().Haze, Valid);
+        g.PublishUniform("uAtmoHazeCloud", () => Uniforms().HazeCloud, Valid);
+        g.PublishUniform("uAtmoAltitude", () => Uniforms().Altitude, Valid);
+        g.PublishUniform("uAtmoMaps", () => Uniforms().Maps, Valid);
+        PublishUnits(gl);
+    }
+
+    /// <summary>The atmosphere's textures as frame globals: whatever is bound on their units when a consumer draws (as a GL program samples them).</summary>
+    static void PublishUnits(IGl gl)
+    {
+        if (irradianceUnit < 0 || GpuContext.Of(gl) is not { Interop: { } interop } ctx || ctx.Globals.Texture("uAtmoIrradiance") is not null) return;
+        var cube = FrameGlobals.Sampler2D("", cube: true);
+        var plain = FrameGlobals.Sampler2D("");
+        int irradiance = irradianceUnit, specular = specularUnit, ambient = ambientUnit;
+        ctx.Globals.Publish("uAtmoIrradiance", () => interop.SampledUnit(irradiance, cube));
+        ctx.Globals.Publish("uAtmoSpecular", () => interop.SampledUnit(specular, cube));
+        ctx.Globals.Publish("uAtmoAmbientMap", () => interop.SampledUnit(ambient, plain));
     }
 
     /// <summary>Sets the atmosphere's uniforms (and binds its textures) on a program that includes <see cref="AtmosphereShaders.Functions"/>.</summary>
     public void Apply(uint program)
     {
         if (!state.Valid) return;
-        var s = state;
+        var a = Uniforms();
         gl.UseProgram(program);
-        var tau = SkyAtmosphere.RayleighZenithDepth;
-        gl.Uniform4(U(program, "uAtmoTau"), tau.X, tau.Y, tau.Z, SkyAtmosphere.MieZenithDepth);
-        gl.Uniform4(U(program, "uAtmoParams"), Physical ? 1f : 0f, MathF.Max(s.FogDistance, 1), ScaleHeightUnits, 0);
-        gl.Uniform4(U(program, "uAtmoSun"), s.Sun.X, s.Sun.Y, s.Sun.Z, 0);
-        gl.Uniform4(U(program, "uAtmoLight"), s.LightDirection.X, s.LightDirection.Y, s.LightDirection.Z, s.Environment);
-        gl.Uniform3(U(program, "uAtmoSunLight"), s.SunLight.X, s.SunLight.Y, s.SunLight.Z);
-        var tint = Weather.SkyColourMultiplier;
-        gl.Uniform3(U(program, "uAtmoTint"), tint.X, tint.Y, tint.Z);
-        var w = Weather;
-        gl.Uniform4(U(program, "uAtmoFog"), w.FogMin, w.FogMax, w.FogEnabled ? 1f : 0f, 0);
-        // The weather fog's colour times sunColour.w, the daylight scale (the game's global fog term).
-        var fog = w.FogColour * (Physical ? KenshiLighting.Daylight(s.Sun.Y) : 1f);
-        gl.Uniform3(U(program, "uAtmoFogColour"), fog.X, fog.Y, fog.Z);
-        var hc = s.Colours.Horizon;
-        gl.Uniform4(U(program, "uAtmoSimple"), hc.X, hc.Y, hc.Z, MathF.Max(s.FogDistance, 1));
-        float hazeStart = HazeDistance * Meitou.Data.World.KenshiHaze.StartFraction;
-        float hazeEnd = MathF.Min(HazeDistance, HazeDistance * Meitou.Data.World.KenshiHaze.EndFraction);
-        // The weather fog is complete at a distance between `fog distance min` and `max` by the wind; the viewer has no wind and takes max.
-        gl.Uniform4(U(program, "uAtmoHaze"), KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, w.FogEnabled && w.FogMax > 1 ? 1f / w.FogMax : 0f);
-        var (cloud, pull, _) = HorizonClouds(s);
-        gl.Uniform4(U(program, "uAtmoHazeCloud"), cloud.X, cloud.Y, cloud.Z, pull);
-        gl.Uniform4(U(program, "uAtmoAltitude"), KenshiHaze ? AltitudeWeight : 1f, MathF.Max(HazeStrength, 0), AltitudeWeight, 0);
-        gl.Uniform4(U(program, "uAtmoMaps"), irradianceCube != 0 ? 1f : 0f, specularCube != 0 ? 1f : 0f, ambientMap != 0 ? 1f : 0f, AmbientMap.HalfWorld);
+        gl.Uniform4(U(program, "uAtmoTau"), a.Tau.X, a.Tau.Y, a.Tau.Z, a.Tau.W);
+        gl.Uniform4(U(program, "uAtmoParams"), a.Params.X, a.Params.Y, a.Params.Z, a.Params.W);
+        gl.Uniform4(U(program, "uAtmoSun"), a.Sun.X, a.Sun.Y, a.Sun.Z, a.Sun.W);
+        gl.Uniform4(U(program, "uAtmoLight"), a.Light.X, a.Light.Y, a.Light.Z, a.Light.W);
+        gl.Uniform3(U(program, "uAtmoSunLight"), a.SunLight.X, a.SunLight.Y, a.SunLight.Z);
+        gl.Uniform3(U(program, "uAtmoTint"), a.Tint.X, a.Tint.Y, a.Tint.Z);
+        gl.Uniform4(U(program, "uAtmoFog"), a.Fog.X, a.Fog.Y, a.Fog.Z, a.Fog.W);
+        gl.Uniform3(U(program, "uAtmoFogColour"), a.FogColour.X, a.FogColour.Y, a.FogColour.Z);
+        gl.Uniform4(U(program, "uAtmoSimple"), a.Simple.X, a.Simple.Y, a.Simple.Z, a.Simple.W);
+        gl.Uniform4(U(program, "uAtmoHaze"), a.Haze.X, a.Haze.Y, a.Haze.Z, a.Haze.W);
+        gl.Uniform4(U(program, "uAtmoHazeCloud"), a.HazeCloud.X, a.HazeCloud.Y, a.HazeCloud.Z, a.HazeCloud.W);
+        gl.Uniform4(U(program, "uAtmoAltitude"), a.Altitude.X, a.Altitude.Y, a.Altitude.Z, a.Altitude.W);
+        gl.Uniform4(U(program, "uAtmoMaps"), a.Maps.X, a.Maps.Y, a.Maps.Z, a.Maps.W);
         if (irradianceUnit >= 0)
         {
             gl.ActiveTexture(TextureUnit.Texture0 + irradianceUnit);

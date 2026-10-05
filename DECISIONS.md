@@ -8,7 +8,7 @@ Choices made while working unattended on the `engine` branch, with the reason. N
    merged master commit and the reference screenshots are taken again.
 2. **Parity tooling.** `meitou-tools image-diff a.png b.png [diff.png]` (mean absolute RGB difference in 0..255, share of
    pixels whose largest channel difference is over 12, maximum) and `tools/scripts/parity.sh` /
-   `parity-compare.sh` (the eight gate views: four places at 13:00 and 02:00, offscreen 1600x900). No Python on the machine,
+   `parity-compare.sh` (the gate views: four places at 13:00 and 02:00, offscreen 1600x900; ten pictures since the forest view was added). No Python on the machine,
    so the comparison is a C# tool. `PngWriter` moved from the viewer to `Meitou.Data.Textures` so the tool can write diff
    images.
 3. **Phase 1 is a move, not a rewrite.** The gate is pixel identity (mean < 0.05), so the renderers move into
@@ -28,7 +28,7 @@ Choices made while working unattended on the `engine` branch, with the reason. N
 6. **`Meitou.Engine` built by a subagent** (fixed tick, game clock, input bindings, Kenshi and free cameras, 42 tests), reviewed
    and merged. Engine choices it made are listed in docs/engine.md (pivot speed units, 150 game seconds per hour, key speeds,
    default keys). The settings panel key was changed from F1 to Tab to match the viewer.
-7. **Phase 2 backend: GL-shaped, not Vulkan-shaped (reverses the Phase 1 interface).** Evidence: all 30 world shaders compile
+7. **Phase 2 backend: GL-shaped, not Vulkan-shaped (reverses the Phase 1 interface).** *Superseded by 22.* Evidence: all 30 world shaders compile
    unchanged to SPIR-V with shaderc's relaxed Vulkan rules plus automatic binding and location mapping (`Silk.NET.Shaderc`
    with its native binary from NuGet); the renderers use 88 distinct GL functions over 957 call sites. So the interface is the
    exact GL subset the renderers use (same signatures and Silk enums): the OpenGL backend is a pass-through (pictures stay
@@ -118,7 +118,7 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     staggered schedule (CPU is the bottleneck: the far cascades' foliage casters are most of the pass's CPU in wide views), a soft receiver
     with a blocker search, and the terrain's own shadow beyond the range from a per-sun-direction sweep of the world height grid
     (one fetch per pixel instead of a ray march in forward shaders with overdraw). The faithful path is untouched (pixel-identical).
-22. **Proposed: a native Vulkan-shaped renderer API replaces the GL-shaped `IGl` (would supersede 7 and the "IGl stays" sentence of
+22. **Adopted 2026-10-06 (supersedes 7, amends 18): a native Vulkan-shaped renderer API replaces the GL-shaped `IGl` (the "IGl stays" sentence of
     18).** Design in docs/renderer-native.md. Evidence: the frame is CPU-bound (forest: foliage 8.7 ms and shadows 6.1 ms of CPU against
     7 ms of GPU), and a scratchpad spike on the RTX 4070 measured a foliage mesh draw at 2.0 µs through VkGl as `FoliageRenderer.DrawMesh`
     issues it, against 0.18-0.30 µs recorded directly with the same SPIR-V and 0.06-0.10 µs for a push-constant or indirect draw. Plan: the
@@ -129,4 +129,4 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     byte-identical SPIR-V and VkGl's descriptor layout, the native model (bindless textures, frame and view constants, push constants)
     as a second gated step; GPU-driven culling for foliage after a CPU reference-alignment step; secondary command buffers in wave 4;
     `IGl` and `VkGl` (1,452 calls in 27 files) deleted in phase 8. Gate: 0 differing pixels in the ten `parity.sh` views with
-    `--faithful all`, the baseline run twice first. Open questions for the owner are listed at the end of the doc.
+    `--faithful all`, the baseline run twice first. The owner's answers to the open questions are in the doc's "Owner decisions".

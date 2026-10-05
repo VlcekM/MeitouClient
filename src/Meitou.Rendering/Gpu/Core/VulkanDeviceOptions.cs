@@ -8,6 +8,29 @@ public sealed class VulkanDeviceOptions
     /// <summary>Validation layer + debug messenger: null = on when the layer is installed.</summary>
     public bool? Validation { get; set; }
 
+    /// <summary>With validation: synchronisation validation too (<c>validate_sync</c> through VK_EXT_layer_settings).</summary>
+    public bool SyncValidation { get; set; }
+
+    /// <summary>With validation: GPU-assisted validation (<c>gpuav_enable</c>: bindless indices, buffer bounds in shaders).</summary>
+    public bool GpuValidation { get; set; }
+
+    /// <summary>
+    /// <c>MEITOU_VK_VALIDATION</c>: "1" validation, "sync" plus synchronisation validation, "gpu" plus GPU-assisted validation, "0" off; null
+    /// when unset (the caller's default applies).
+    /// </summary>
+    public static (bool? Validation, bool Sync, bool Gpu) FromEnvironment()
+    {
+        var v = Environment.GetEnvironmentVariable("MEITOU_VK_VALIDATION")?.Trim().ToLowerInvariant();
+        return v switch
+        {
+            null or "" => (null, false, false),
+            "0" or "off" or "false" => (false, false, false),
+            "sync" => (true, true, false),
+            "gpu" => (true, false, true),
+            _ => (true, false, false),
+        };
+    }
+
     /// <summary>Prefer a discrete GPU over an integrated one.</summary>
     public bool PreferDiscrete { get; set; } = true;
 

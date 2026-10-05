@@ -600,7 +600,10 @@ and the foliage main pass per depth slice.
   all ten parity views (`tools/scripts/parity.sh`, `--faithful all`) and on `--debug-shadows 1` (the atlas drawn into the picture) at
   the forest and The Hub. The rock view with `--debug-shadows 1` (90 rocks on screen) was identical in 8 of 9 runs; one run differed
   in 20 pixels (largest 14/255) at a distant building, not a rock, with the same streaming and residency counts in its log; the
-  build before was identical in 9 of 9. Unexplained, and not reproduced.
+  build before was identical in 9 of 9. Unexplained at the time. Most likely explained 2026-10-06: two texture uploads into the same
+  image in one upload command buffer raced (synchronisation validation: 10 WRITE_AFTER_WRITE hazards per view); a build with step-2
+  timing changes showed few-pixel rock-view differences in 2 of 9 runs, and with the uploads ordered by a barrier 0 of 9 and sync
+  validation clean (docs/engine.md "Vulkan backend", "Memory and order").
 - *Numbers* (`--fly-benchmark 300 --fly-speed 0`, a still camera, three interleaved runs each, medians): forest, draws per frame
   7,485 -> 977, shadow stage 25.3 -> 5.7 ms (its foliage part 23.9 -> 4.2), foliage main pass 7.5 -> 4.1 ms, render-thread CPU per
   frame (p50, commands recorded) 36.9 -> 13.3 ms; The Hub (`--town "The Hub" --distance 40000 --pitch 3`; 46 rocks in the main pass, 3 in the shadow map), draws

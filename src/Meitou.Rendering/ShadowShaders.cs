@@ -255,6 +255,7 @@ static class ShadowShaders
                 gl.BindBufferBase(BufferTargetARB.UniformBuffer, binding, buffer);
             }
         }
+        PublishGlobals(gl);
         uint receiver = gl.GetUniformBlockIndex(program, ReceiverBlock);
         if (receiver != uint.MaxValue) gl.UniformBlockBinding(program, receiver, ReceiverBinding);
         uint caster = gl.GetUniformBlockIndex(program, CasterBlock);
@@ -268,5 +269,23 @@ static class ShadowShaders
             gl.UseProgram(0);
         }
         MeitouShadowShaders.Bind(gl, program);
+    }
+
+    /// <summary>
+    /// The shadow blocks and maps as frame globals (docs/renderer-native.md 4.3), once per context: whatever is on their binding points and
+    /// units when a consumer draws, as VkGl would push it for a GL program (ShadowPass binds its buffers and atlas there). No GL call.
+    /// </summary>
+    static void PublishGlobals(IGl gl)
+    {
+        if (GpuContext.Of(gl) is not { Interop: { } interop } ctx || ctx.Globals.Block(ReceiverBlock) is not null) return;
+        var g = ctx.Globals;
+        int map = MapUnit, noise = NoiseUnit;
+        var shadow = FrameGlobals.Sampler2D("uShadowMap", shadow: true);
+        var plain = FrameGlobals.Sampler2D("uShadowNoise");
+        g.Publish(ReceiverBlock, () => interop.UniformBinding(ReceiverBinding));
+        g.Publish(CasterBlock, () => interop.UniformBinding(CasterBinding));
+        g.Publish("uShadowMap", () => interop.SampledUnit(map, shadow));
+        g.Publish("uShadowNoise", () => interop.SampledUnit(noise, plain));
+        MeitouShadowShaders.PublishGlobals(g, interop);
     }
 }

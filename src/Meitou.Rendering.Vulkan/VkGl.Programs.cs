@@ -35,6 +35,7 @@ public sealed unsafe partial class VkGl
         public string Log = "";
         public CompiledProgram? Compiled;
         public ShaderModule VertexModule, FragmentModule;
+        public byte[] VertexCode = [], FragmentCode = [];   // what the modules were made from
         public DescriptorSetLayout SetLayout, DynamicSetLayout;
         public readonly Dictionary<(ulong Vertex, ulong Fragment), DescriptorSet> DynamicSets = [];   // set 1 per pair of uniform ring chunks
         public long LastPushEpoch = -1;
@@ -61,8 +62,7 @@ public sealed unsafe partial class VkGl
     internal readonly record struct BlockBinding(uint Binding, int Size, bool Default, bool Vertex, string Name);
     internal readonly record struct SamplerBinding(uint Binding, SamplerInfo Info, UniformSlot Slot);
 
-    static GlslProgramCompiler? sharedCompiler;
-    GlslProgramCompiler Compiler => sharedCompiler ??= new GlslProgramCompiler(new ShaderCompileOptions { RemapClipDepth = !device.HasDepthClipControl });
+    GlslProgramCompiler Compiler => Context.Shaders.Compiler;   // the native API's compiler: same options, same caches
     uint currentProgram;
     GlProgramObj? program;
 
@@ -114,8 +114,10 @@ public sealed unsafe partial class VkGl
         p.FragmentDefaultBlock = c.Fragment.DefaultBlock;
         // Loose uniforms go to set 1 as dynamic uniform buffers (vertex binding 0, fragment binding 1): a draw that only
         // changes uniforms binds new offsets instead of pushing descriptors again.
-        p.VertexModule = CreateModule(p.VertexDefaultBlock is null ? c.VertexSpirv : MoveDefaultBlock(c.VertexSpirv, 0));
-        p.FragmentModule = CreateModule(p.FragmentDefaultBlock is null ? c.FragmentSpirv : MoveDefaultBlock(c.FragmentSpirv, 1));
+        p.VertexCode = p.VertexDefaultBlock is null ? c.VertexSpirv : MoveDefaultBlock(c.VertexSpirv, 0);
+        p.FragmentCode = p.FragmentDefaultBlock is null ? c.FragmentSpirv : MoveDefaultBlock(c.FragmentSpirv, 1);
+        p.VertexModule = CreateModule(p.VertexCode);
+        p.FragmentModule = CreateModule(p.FragmentCode);
         p.VertexDefault = new byte[p.VertexDefaultBlock?.Size ?? 0];
         p.FragmentDefault = new byte[p.FragmentDefaultBlock?.Size ?? 0];
         foreach (var b in c.Vertex.Blocks.Concat(c.Fragment.Blocks))
@@ -136,32 +138,10 @@ public sealed unsafe partial class VkGl
 
     /// <summary>A copy of <paramref name="spirv"/> with <c>gl_DefaultUniformBlock</c>'s variable decorated for set 1 at
     /// <paramref name="binding"/> (the words are patched in place: same size).</summary>
-    static byte[] MoveDefaultBlock(byte[] spirv, uint binding)
-    {
-        var copy = (byte[])spirv.Clone();
-        var w = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(copy.AsSpan());
-        uint structId = 0;
-        var pointers = new HashSet<uint>();
-        var variables = new HashSet<uint>();
-        for (int pass = 0; pass < 3; pass++)
-            for (int i = 5; i < w.Length;)
-            {
-                uint op = w[i] & 0xFFFF, count = w[i] >> 16;
-                if (count == 0) break;
-                var a = w.Slice(i + 1, (int)count - 1);
-                if (pass == 0 && op == 5 && System.Text.Encoding.ASCII.GetString(System.Runtime.InteropServices.MemoryMarshal.AsBytes(a[1..])).TrimEnd('\0') == "gl_DefaultUniformBlock") structId = a[0];
-                else if (pass == 1 && op == 32 && a[2] == structId) pointers.Add(a[0]);
-                else if (pass == 1 && op == 59 && pointers.Contains(a[0])) variables.Add(a[1]);
-                else if (pass == 2 && op == 71 && variables.Contains(a[0]))
-                {
-                    if (a[1] == 34) a[2] = 1;              // DescriptorSet
-                    else if (a[1] == 33) a[2] = binding;   // Binding
-                }
-                i += (int)count;
-            }
-        if (structId == 0 || variables.Count == 0) throw new InvalidOperationException("SPIR-V: gl_DefaultUniformBlock not found");
-        return copy;
-    }
+    static byte[] MoveDefaultBlock(byte[] spirv, uint binding) => SpirvPatch.MoveDefaultBlock(spirv, binding);
+
+    /// <summary>The SPIR-V a linked program handed to <c>vkCreateShaderModule</c> (tests: the native legacy path must produce the same bytes).</summary>
+    internal (byte[] Vertex, byte[] Fragment) ModuleCode(uint program) => (programs[program].VertexCode, programs[program].FragmentCode);
 
     ShaderModule CreateModule(byte[] spirv)
     {
@@ -338,26 +318,5 @@ public sealed unsafe partial class VkGl
         if (s.Fragment is { } f) { Scatter(p.FragmentDefault, f, src, rows, columns, count, isInt); p.FragmentDirty = true; }
     }
 
-    static void Scatter(byte[] block, UniformLookup at, byte* src, int rows, int columns, int count, bool isInt)
-    {
-        var m = at.Member;
-        int elements = m.ArrayLength > 0 ? Math.Min(count, m.ArrayLength - at.Element) : Math.Min(count, 1);
-        int colStride = m.IsMatrix ? m.MatrixStride : 16;
-        int elemStride = m.ArrayLength > 0 ? m.ArrayStride : 0;
-        rows = Math.Min(rows, m.Rows);
-        columns = Math.Min(columns, m.Columns);
-        fixed (byte* dst = block)
-            for (int e = 0; e < elements; e++)
-                for (int c = 0; c < columns; c++)
-                    for (int r = 0; r < rows; r++)
-                    {
-                        int srcIndex = (e * columns + c) * rows + r;
-                        uint bits = ((uint*)src)[srcIndex];
-                        // A float written to an int/bool member (glUniform1f on a bool) and an int to a float member convert as GL does.
-                        if (m.Kind == ScalarKind.Float && isInt) { float fv = (int)bits; bits = *(uint*)&fv; }
-                        else if (m.Kind != ScalarKind.Float && !isInt) bits = (uint)(int)*(float*)&bits;
-                        if (m.Kind == ScalarKind.Bool || (m.Kind == ScalarKind.UInt && !isInt)) bits = bits != 0 ? 1u : 0u;
-                        *(uint*)(dst + at.Offset + e * elemStride + c * colStride + r * 4) = bits;
-                    }
-    }
+    static void Scatter(byte[] block, UniformLookup at, byte* src, int rows, int columns, int count, bool isInt) => GlUniforms.Scatter(block, at, src, rows, columns, count, isInt);
 }

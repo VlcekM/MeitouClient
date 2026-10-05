@@ -23,6 +23,7 @@ public sealed unsafe partial class VkGl
         public long VersionFrame = -1;
         public int VersionSlot = -1;
         public bool UsedSinceWrite;           // dynamic: a draw of this frame read the current version
+        public bool Borrowed;                 // imported native buffer (ImportBuffer): never freed or written here
         public bool Defined => Dynamic ? VersionFrame >= 0 : Device is not null;
     }
 
@@ -49,8 +50,14 @@ public sealed unsafe partial class VkGl
 
     void DestroyBuffer(GlBufferObj b)
     {
-        if (b.Device is { } d) { b.Device = null; device.Frames.DeferDelete(() => device.Allocator.Free(d)); }
+        if (b.Device is { } d && !b.Borrowed) device.Frames.DeferDelete(() => device.Allocator.Free(d));
+        b.Device = null;
         dynamicBuffers.Remove(b);
+    }
+
+    static void NotImported(GlBufferObj b)
+    {
+        if (b.Borrowed) throw new InvalidOperationException($"buffer {b.Id} is an imported native buffer: write it through the native API");
     }
 
     public void BindBuffer(BufferTargetARB target, uint buffer)
@@ -95,6 +102,7 @@ public sealed unsafe partial class VkGl
 
     void Specify(GlBufferObj b, long size, void* data, BufferUsageARB usage)
     {
+        NotImported(b);
         bool dynamic = usage is not (BufferUsageARB.StaticDraw or BufferUsageARB.StaticRead or BufferUsageARB.StaticCopy);
         if (b.Device is { } old) { b.Device = null; device.Frames.DeferDelete(() => device.Allocator.Free(old)); }
         b.Size = Math.Max(size, 4);
@@ -125,6 +133,7 @@ public sealed unsafe partial class VkGl
     void Write(GlBufferObj b, long offset, long size, void* data)
     {
         if (size <= 0) return;
+        NotImported(b);
         if (offset + size > b.Size) throw new ArgumentOutOfRangeException(nameof(size), $"buffer {b.Id}: {offset}+{size} > {b.Size}");
         if (b.Dynamic)
         {
@@ -283,27 +292,7 @@ public sealed unsafe partial class VkGl
         CurrentVao.Attribs[index].Divisor = divisor;
     }
 
-    static Format AttribFormat(in VertexAttrib a) => (a.Type, a.Size, a.Normalized, a.Integer) switch
-    {
-        (GLEnum.Float, 1, _, _) => Format.R32Sfloat,
-        (GLEnum.Float, 2, _, _) => Format.R32G32Sfloat,
-        (GLEnum.Float, 3, _, _) => Format.R32G32B32Sfloat,
-        (GLEnum.Float, 4, _, _) => Format.R32G32B32A32Sfloat,
-        (GLEnum.UnsignedByte, 4, true, false) => Format.R8G8B8A8Unorm,
-        (GLEnum.UnsignedByte, 4, false, true) => Format.R8G8B8A8Uint,
-        (GLEnum.UnsignedByte, 4, false, false) => Format.R8G8B8A8Uscaled,
-        (GLEnum.UnsignedShort, 2, true, false) => Format.R16G16Unorm,
-        (GLEnum.UnsignedShort, 4, true, false) => Format.R16G16B16A16Unorm,
-        (GLEnum.UnsignedShort, 4, false, true) => Format.R16G16B16A16Uint,
-        (GLEnum.Int, 1, _, true) => Format.R32Sint,
-        (GLEnum.UnsignedInt, 1, _, true) => Format.R32Uint,
-        _ => throw new NotSupportedException($"vertex attribute {a.Type} x{a.Size} normalized {a.Normalized} integer {a.Integer}"),
-    };
+    static Format AttribFormat(in VertexAttrib a) => GlConventions.VertexFormat(a.Type, a.Size, a.Normalized, a.Integer);
 
-    static uint AttribBytes(in VertexAttrib a) => (uint)a.Size * a.Type switch
-    {
-        GLEnum.UnsignedByte or GLEnum.Byte => 1u,
-        GLEnum.UnsignedShort or GLEnum.Short or GLEnum.HalfFloat => 2u,
-        _ => 4u,
-    };
+    static uint AttribBytes(in VertexAttrib a) => GlConventions.VertexBytes(a.Type, a.Size);
 }

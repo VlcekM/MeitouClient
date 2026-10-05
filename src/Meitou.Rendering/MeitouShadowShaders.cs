@@ -207,6 +207,16 @@ static class MeitouShadowShaders
         }
         """;
 
+    /// <summary>The Meitou shadow block and maps as frame globals (from <c>ShadowShaders.PublishGlobals</c>): their binding point and units.</summary>
+    internal static void PublishGlobals(FrameGlobals g, IGlInterop interop)
+    {
+        int terrain = TerrainUnit, blocker = BlockerUnit;
+        var plain = FrameGlobals.Sampler2D("");
+        g.Publish(Block, () => interop.UniformBinding(Binding));
+        g.Publish("uShadowTerrain", () => interop.SampledUnit(terrain, plain));
+        g.Publish("uShadowBlocker", () => interop.SampledUnit(blocker, plain));
+    }
+
     /// <summary>Points a program's Meitou block and samplers at their binding and units (called from <see cref="ShadowShaders.Bind"/>).</summary>
     public static void Bind(IGl gl, uint program)
     {

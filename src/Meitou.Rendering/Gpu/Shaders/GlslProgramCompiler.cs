@@ -57,6 +57,45 @@ public sealed partial class GlslProgramCompiler
         return program;
     }
 
+    /// <summary>Cache version of the native model and compute shaders (docs/renderer-native.md 3.4); the legacy version stays 3.</summary>
+    public const int NativeCacheVersion = 4;
+
+    readonly ConcurrentDictionary<string, byte[]> nativeMemory = new();
+
+    /// <summary>
+    /// A GLSL 450 compute shader for Vulkan (strict rules: explicit sets and bindings, no loose uniforms; no interface location injection,
+    /// no binding shift). Cached under <see cref="NativeCacheVersion"/>, so legacy entries are untouched.
+    /// </summary>
+    public byte[] CompileCompute(string glsl, ShaderCompileOptions? options = null) => CompileNativeStage(glsl, ShaderKind.ComputeShader, "compute", options);
+
+    /// <summary>A GLSL 450 vertex or fragment shader of the native model (strict rules, explicit layout; the clip depth remap still applies
+    /// when the options ask for it). Cached under <see cref="NativeCacheVersion"/>.</summary>
+    public byte[] CompileNative(string glsl, bool fragment, ShaderCompileOptions? options = null)
+    {
+        options ??= DefaultOptions;
+        if (!fragment && options.RemapClipDepth) glsl = AppendDepthRemap(glsl);
+        return CompileNativeStage(glsl, fragment ? ShaderKind.FragmentShader : ShaderKind.VertexShader, fragment ? "fragment" : "vertex", options);
+    }
+
+    byte[] CompileNativeStage(string glsl, ShaderKind kind, string stage, ShaderCompileOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(glsl);
+        options ??= DefaultOptions;
+        string key = ShaderCache.Key(stage + ":native", glsl, options, NativeCacheVersion);
+        if (options.UseMemoryCache && nativeMemory.TryGetValue(key, out var hit)) return hit;
+        string dir = options.CacheDirectory ?? ShaderCache.DefaultDirectory;
+        byte[] spirv;
+        if (options.UseDiskCache && ShaderCache.TryRead(dir, key, NativeCacheVersion, out var cached, out _)) spirv = cached;
+        else
+        {
+            spirv = CompileStage(glsl, kind, stage, 0, legacy: false);
+            // The cache file holds a pair; a single stage is stored twice.
+            if (options.UseDiskCache) ShaderCache.Write(dir, key, NativeCacheVersion, spirv, spirv);
+        }
+        if (options.UseMemoryCache) nativeMemory[key] = spirv;
+        return spirv;
+    }
+
     /// <summary>The GLSL that is compiled: locations injected, and the depth remap appended to the vertex stage when asked for.</summary>
     public static (string Vertex, string Fragment) Preprocess(string vertexGlsl, string fragmentGlsl, ShaderCompileOptions? options = null)
     {
@@ -98,7 +137,7 @@ public sealed partial class GlslProgramCompiler
         return Shaderc.GetApi();
     }
 
-    static unsafe byte[] CompileStage(string source, ShaderKind kind, string stage, uint bindingBase)
+    static unsafe byte[] CompileStage(string source, ShaderKind kind, string stage, uint bindingBase, bool legacy = true)
     {
         var api = Api.Value;
         Compiler* compiler = api.CompilerInitialize();
@@ -107,10 +146,10 @@ public sealed partial class GlslProgramCompiler
         {
             api.CompileOptionsSetSourceLanguage(opts, SourceLanguage.Glsl);
             api.CompileOptionsSetTargetEnv(opts, TargetEnv.Vulkan, (uint)EnvVersion.Vulkan13);
-            api.CompileOptionsSetVulkanRulesRelaxed(opts, true);
-            api.CompileOptionsSetAutoBindUniforms(opts, true);
+            if (legacy) api.CompileOptionsSetVulkanRulesRelaxed(opts, true);
+            if (legacy) api.CompileOptionsSetAutoBindUniforms(opts, true);
             api.CompileOptionsSetAutoMapLocations(opts, true);
-            api.CompileOptionsSetForcedVersionProfile(opts, 450, Profile.Core);
+            if (legacy) api.CompileOptionsSetForcedVersionProfile(opts, 450, Profile.Core);
             api.CompileOptionsSetOptimizationLevel(opts, OptimizationLevel.Zero); // keeps OpName / OpMemberName
             // No per-kind binding bases: newer glslang has a resource kind for combined image samplers (EResCombinedSampler) that
             // shaderc's uniform kinds cannot reach, so sampler2D & co. stayed at 0 in the fragment stage. Every kind starts at 0 (the

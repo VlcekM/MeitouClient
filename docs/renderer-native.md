@@ -874,12 +874,38 @@ Deliverables, in order. Each step lands only after the gate (7.7) has passed:
 5. Device features of section 1, the disk pipeline cache path, `VK_EXT_debug_utils` without validation, and `MEITOU_VK_VALIDATION=sync`
    (synchronisation validation through `VK_EXT_layer_settings`; `=gpu` for GPU-assisted validation of bindless indices).
 6. The draw log (7.6) on both sides, and `meitou-tools draw-log-diff`.
-7. **Pilot port**: `TerrainRenderer.DrawMeshes` (the TERRAIN-mode mesh path, instanced in depth, one draw each in colour), step P. It is
+7. **Pilot port**: `TerrainRenderer.DrawMeshes` (the TERRAIN-mode mesh path, instanced in depth and in colour: `GroupMeshes` batches
+   both), step P. It is
    the coupling that foliage and objects both call, so porting it before A and C start removes their only dependency on B. It also runs
    one full gate on a real renderer before six agents rely on the API.
 8. Constructor plumbing: every renderer's constructor gets a `GpuContext` parameter, and `WorldFrame.CreateGpu`, the game and the viewer pass
    it. This is mechanical, and after it no port agent needs to edit `CreateGpu`.
 9. `FrameProfiler` timestamps on `QueryArena` through `Interleave` (StageClock keeps working while the stages move).
+
+**Progress (wave 2, 2026-10-06).** Gate for every step: the build, the tests, the ten pictures (`--faithful all`) at maximum 0 against
+the base build (master `27be7c2`, itself identical in two runs), and validation (`=1` and `=sync`) on the ten views.
+
+- Step 1 (`3a4021f`): done; 0 px, validation 0.
+- Step 2: done. `GlConventions` (formats, blend and compare, address modes, swizzles, front face, topology, vertex formats, the
+  dummy-vertex convention, `Scatter`), `SamplerDesc.FromGl` / `SamplerCache`, `GpuDefaults` (dummy vertex buffer and textures),
+  `PipelineFactory` (VkGl's pipeline creation, now shared). The sampler key gained the integer-format flag (it decides the border
+  colour; VkGl's old key could hand an integer texture the float sampler of an equal key). The gate found a few-pixel rock-view
+  difference in 2 of 9 runs; it was the pre-existing race of two uploads into one image (sync validation's 10 WRITE_AFTER_WRITE
+  per view), fixed in VkGl (`OrderUpload`): 0 of 9 runs differ since, sync validation 0.
+- Step 3: done. The section 2 API and `LegacyProgram`; device features required by `GpuContext` (pulled forward from step 5:
+  bindless needs them). Tests (`GpuApiTests`): native triangle against VkGl byte-identical, SPIR-V identity for all 27 world source
+  pairs, pipeline preparation and `LatePipelines`, `ResourceStates` table, `QueryArena` read-back, the upload assert, `BufferArena`,
+  compute writing indirect arguments for a bindless draw.
+- Step 4: done. `IGlInterop` on VkGl (`VkGl.Interop.cs`), the guard (on the chokepoints that record or flush: the command-buffer and
+  upload-buffer getters, `Flush`, `BeginFrame` / `EndFrame`; calls that only change GL state do not throw), export (`Texture`,
+  `Sampled`, plus `SampledUnit` and `UniformBinding`: what is on a unit or binding point, as a GL program would read it), import.
+  `FrameGlobals` publishes by unit and binding point (so a consumer reads what the GL state holds at its draw) from `SkyRenderer`
+  (and its uniform values), `ShadowShaders` / `MeitouShadowShaders` (the unit and block owners; `ShadowPass` binds into them) and
+  `TerrainRenderer` (heights). `LegacyProgram` reads a published sampler or block it was not given, and `ApplyGlobals()` writes the
+  published uniforms. Seam tests (`SeamTests`): the 4.6 cases with synchronisation validation on; the stale-pipeline case fails
+  with the invalidation removed (checked).
+- Step 5: done. `MEITOU_VK_VALIDATION=sync|gpu` through `VK_EXT_layer_settings`, debug utils without validation, the pipeline cache
+  in `%LOCALAPPDATA%\Meitou\pipeline-cache.bin`.
 
 After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the

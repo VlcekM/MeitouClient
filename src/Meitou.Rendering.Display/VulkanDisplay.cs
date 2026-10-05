@@ -28,7 +28,13 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// <summary>A window created from <paramref name="options"/> (its Vulkan surface; shown), or headless when <paramref name="options"/> is null.</summary>
     public VulkanDisplay(WindowOptions? options, bool vsync, bool streamline = false)
     {
-        var deviceOptions = new VulkanDeviceOptions { Validation = Environment.GetEnvironmentVariable("MEITOU_VK_VALIDATION") == "1" };
+        var (validation, sync, gpu) = VulkanDeviceOptions.FromEnvironment();
+        validationRequested = validation == true;
+        var deviceOptions = new VulkanDeviceOptions
+        {
+            Validation = validation == true, SyncValidation = sync, GpuValidation = gpu,
+            PipelineCachePath = PipelineCacheFile(),
+        };
         if (streamline)
         {
             // Streamline goes in before the instance and adds what it needs to the device.
@@ -73,8 +79,31 @@ public sealed unsafe class VulkanDisplay : IDisposable
         VkGl.Dispose();
         Streamline?.Dispose();
         if (Device.ValidationErrors > 0) Console.WriteLine($"vulkan validation: {Device.ValidationErrors} errors\n{string.Join("\n", Device.ValidationLog.Take(20))}");
-        else if (Environment.GetEnvironmentVariable("MEITOU_VK_VALIDATION") == "1") Console.WriteLine("vulkan validation: 0 errors");
+        else if (validationRequested) Console.WriteLine("vulkan validation: 0 errors");
         Device.Dispose();
         Window?.Dispose();
+    }
+
+    readonly bool validationRequested;
+
+    /// <summary>
+    /// <c>%LOCALAPPDATA%\Meitou\pipeline-cache.bin</c> (the driver checks the header and ignores a cache from another device or driver);
+    /// <c>MEITOU_PIPELINE_CACHE</c> overrides the path, <c>MEITOU_PIPELINE_CACHE=0</c> turns it off. Null when there is no place for it.
+    /// </summary>
+    static string? PipelineCacheFile()
+    {
+        var env = Environment.GetEnvironmentVariable("MEITOU_PIPELINE_CACHE");
+        if (env == "0") return null;
+        if (!string.IsNullOrEmpty(env)) return env;
+        var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrEmpty(root)) return null;
+        try
+        {
+            var dir = Path.Combine(root, "Meitou");
+            Directory.CreateDirectory(dir);
+            return Path.Combine(dir, "pipeline-cache.bin");
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
     }
 }
