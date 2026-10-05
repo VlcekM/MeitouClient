@@ -23,7 +23,7 @@ viewer, screenshots, benchmark logs) in `R:\VlcekM\MeitouClient-engine-work` (ou
   - game smoke test: 20 s maximized, 103 fps average while other renders shared the GPU, 600 ticks.
 - [x] Docs: docs/engine.md, docs/viewer.md, docs/README.md, README.md, ROADMAP.md.
 
-## Phase 2: Vulkan backend — in progress
+## Phase 2: Vulkan backend — done (performance target not reached, see below)
 
 Plan (DECISIONS 7): a GL-shaped interface (`IGl`, the exact subset of GL the renderers use), a pass-through OpenGL
 implementation, all renderers ported onto it (parity must stay 0.0000), then a GL-on-Vulkan translation layer (`VkGl`).
@@ -46,11 +46,16 @@ implementation, all renderers ported onto it (parity must stay 0.0000), then a G
       culled once for all shadow cascades (hub shadow CPU 12.3 -> 1.9 ms), descriptor templates, dynamic uniform offsets.
       **Target p99 < 6.9 ms not reached** (p99 ~9-10 ms, max 16-29): the tail is render-thread streaming work shared with GL
       (foliage/terrain/object updates up to 25 ms, reflection terrain up to 10 ms).
-- [ ] Game `--renderer`, swapchain present (flip once), interactive viewer.
-- [ ] Foliage shadow-cascade culling once for all cascades; p99 < 6.9 ms target.
+- [x] Game `--renderer gl|vulkan`: windowed (swapchain via `VulkanPresenter`, flip at present, MAILBOX/FIFO) and offscreen;
+      game screenshot GL vs Vulkan mean 0.044; validation clean; interactive smoke test Vulkan 221 fps vs GL 204 (240 cap).
+      The viewer's interactive window stays GL (DECISIONS 13).
+- [x] 2560x1440 (`bench/1440-*`): Vulkan serialized p50/p99 9.8/15.6, pipelined 6.0/11.6 (GPU frame 5.8 ms: GPU-bound);
+      GL serialized 12.2/25.2, pipelined 5.6/19.3. Upscaling (Phase 3) is the lever at this size.
+- [x] docs/engine.md "Vulkan backend". Master unchanged at f127922 (nothing to merge at phase end).
+- [x] Foliage shadow-cascade culling once for all cascades.
 
 ## Phase 3: upscalers — not started
 
 ## Next step
 
-Phase 2: swapchain present + game/viewer interactive `--renderer vulkan`, 2560x1440 benchmark; then Phase 3 (upscalers). Return to the render-thread streaming spikes if time remains.
+Phase 3: render scale + jitter + camera motion vectors + TAA (both backends); FSR 3.1 through the FidelityFX SDK DLL (Vulkan, runtime-loaded); DLSS through Streamline (runtime-loaded, integration point); graphics options. Then the streaming spikes if time remains.
