@@ -103,7 +103,7 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
         FullBarrier(uploadCmd);
         CarryDynamicBuffers(slot, rings[slot].Reset);
         ResetFramePools(slot);
-        ResetFramePools(slot);
+        RecycleQueries(slot);
         frameOpen = true;
         Stats.BeginFrame();
         ResetFrameState();

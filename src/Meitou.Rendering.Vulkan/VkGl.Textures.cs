@@ -408,7 +408,10 @@ public sealed unsafe partial class VkGl
     {
         var t = BoundTexture(target);
         if (t.Image is null || t.Levels < 2) return;
-        var cb = UploadCmd;
+        // In the frame (after its uploads): the levels follow whatever was uploaded or rendered into level 0 so far.
+        EndPass();
+        var cb = Cmd;
+        FullBarrier(cb);
         for (int level = 1; level < t.Levels; level++)
         {
             BufferWriteBarrierAll(cb);
@@ -421,6 +424,7 @@ public sealed unsafe partial class VkGl
             blit.DstOffsets[1] = new Offset3D(Math.Max(t.Width >> level, 1), Math.Max(t.Height >> level, 1), 1);
             vk.CmdBlitImage(cb, t.Image.Image, ImageLayout.General, t.Image.Image, ImageLayout.General, 1, &blit, Filter.Linear);
         }
+        FullBarrier(cb);
         t.DefinedLevels = (1u << t.Levels) - 1;
     }
 

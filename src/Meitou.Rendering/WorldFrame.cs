@@ -45,6 +45,8 @@ sealed class WorldOptions
     /// <summary>Frames of the offscreen benchmark flight (0: none), the circle's radius and the speed per frame.</summary>
     public int FlyBenchmark;
     public float FlyRadius = 12000, FlySpeed = 150;
+    /// <summary>The GPU backend for offscreen pictures and benchmarks: <c>gl</c> or <c>vulkan</c> (the GL calls translated, docs/engine.md).</summary>
+    public string Renderer = "gl";
 
     public const string Usage = """
         meitou-viewer --world [where] [options]
@@ -80,6 +82,7 @@ sealed class WorldOptions
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
                                    percentiles, the worst frames with their stage times and resident memory   --fly-radius <u> (12000)   --fly-speed <u per frame> (150)
+          --renderer gl|vulkan     backend for --screenshot and --fly-benchmark (default gl)
           --view-distance <u>      furthest terrain drawn (default 450000: the whole world)
           --fog <u>                distance where the haze is complete (default 250000)
           --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
@@ -153,6 +156,7 @@ sealed class WorldOptions
                 case "--camera-at": (o.CameraX, o.CameraZ) = Pair(); break;
                 case "--fly-to": (o.FlyToX, o.FlyToZ) = Pair(); break;
                 case "--fly-benchmark": o.FlyBenchmark = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--renderer": o.Renderer = Next(); if (o.Renderer is not ("gl" or "vulkan")) throw new ArgumentException("--renderer: gl or vulkan"); break;
                 case "--fly-radius": o.FlyRadius = F(); break;
                 case "--fly-speed": o.FlySpeed = F(); break;
                 case "--view-distance": o.ViewDistance = F(); break;

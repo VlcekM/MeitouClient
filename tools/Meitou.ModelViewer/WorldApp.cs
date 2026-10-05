@@ -12,6 +12,8 @@ using Silk.NET.Windowing;
 
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
+using Meitou.Rendering.Vulkan;
+using Meitou.Rendering.Vulkan.Core;
 using static Meitou.Rendering.WorldFrame;
 
 namespace Meitou.ModelViewer;
@@ -60,10 +62,49 @@ static partial class WorldApp
 
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
-        using var window = CreateWindow(o, visible: false);
-        window.Initialize();
-        using var rawGl = window.CreateOpenGL();
-        IGl gl = new GlPassthrough(rawGl);
+        // OpenGL through a hidden window, or Vulkan headless (no window at all).
+        IWindow? window = null;
+        GL? rawGl = null;
+        VulkanDevice? vulkan = null;
+        IGl gl;
+        if (o.Renderer == "vulkan")
+        {
+            vulkan = VulkanDevice.Create(new VulkanDeviceOptions { Validation = Environment.GetEnvironmentVariable("MEITOU_VK_VALIDATION") == "1" });
+            Console.WriteLine($"vulkan    {vulkan.DeviceName}");
+            gl = new VkGl(vulkan);
+        }
+        else
+        {
+            window = CreateWindow(o, visible: false);
+            window.Initialize();
+            rawGl = window.CreateOpenGL();
+            gl = new GlPassthrough(rawGl);
+        }
+        try
+        {
+            return Screenshot(gl, install, scene, assets, o);
+        }
+        finally
+        {
+            if (gl is VkGl vkGl) vkGl.Dispose();
+            if (vulkan is not null)
+            {
+                if (vulkan.ValidationErrors > 0) Console.WriteLine($"vulkan validation: {vulkan.ValidationErrors} errors\n{string.Join("\n", vulkan.ValidationLog.Take(20))}");
+                vulkan.Dispose();
+            }
+            rawGl?.Dispose();
+            window?.Dispose();
+        }
+    }
+
+    /// <summary>Ends the frame on backends that batch a frame's work (Vulkan); GL needs nothing.</summary>
+    static void EndFrame(IGl gl)
+    {
+        if (gl is VkGl vkGl) vkGl.EndFrame();
+    }
+
+    static unsafe int Screenshot(IGl gl, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
+    {
         using var gpu = CreateGpu(gl, install, scene, assets, o, interactive: false);
         var (camera, render) = Setup(scene, o);
         if (gpu.Streamer is { } streamer)
@@ -122,7 +163,7 @@ static partial class WorldApp
                 var p = Vector3.Lerp(start, end, t);
                 camera.Target = new Vector3(p.X, gpu.Terrain.HeightAt(p.X, p.Z), p.Z);
                 frameWatch.Restart();
-                Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
+                { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
                 gl.Finish();
                 times.Add(frameWatch.Elapsed.TotalMilliseconds);
                 if (frameWatch.Elapsed.TotalMilliseconds > 15 && Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1")
@@ -139,7 +180,7 @@ static partial class WorldApp
         }
 
         var drawWatch = Stopwatch.StartNew();
-        Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
+        { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
         gl.Finish();
         Console.WriteLine($"drawn in {drawWatch.ElapsedMilliseconds} ms: {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
             (gpu.Objects is { } ob ? $", {ob.DrawnInstances} objects ({ob.DrawnTriangles:N0} triangles)" : ""));
@@ -148,7 +189,7 @@ static partial class WorldApp
         const int timedFrames = 10;
         gpu.Post?.Flush();
         gpu.Post?.TakeCosts(); // drop the warm-up frames
-        for (int i = 0; i < timedFrames; i++) Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
+        for (int i = 0; i < timedFrames; i++) { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
         gl.Finish();
         Console.WriteLine($"frame     {drawWatch.Elapsed.TotalMilliseconds / timedFrames:0.0} ms on average over {timedFrames} more frames");
         if (gpu.Objects is { } objectStats) Console.WriteLine($"objects   draw cpu {objectStats.LastDrawCpuMs:0.00} ms, {objectStats.DrawCalls} draw calls, {objectStats.DrawnInstances} instances, {objectStats.DrawnTriangles:N0} triangles");

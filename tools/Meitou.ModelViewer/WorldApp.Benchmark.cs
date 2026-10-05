@@ -35,7 +35,7 @@ static partial class WorldApp
             camera.Target = new Vector3(x, gpu.Terrain.HeightAt(x, z), z);
             StageClock.Start();
             frameWatch.Restart();
-            Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
+            { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
             double cpuMs = frameWatch.Elapsed.TotalMilliseconds;
             cpu.Add(cpuMs);
             gl.Finish();

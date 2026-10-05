@@ -7,51 +7,68 @@ public sealed unsafe partial class VkGl
 {
     /// <summary>
     /// A GL query: a timestamp (<c>glQueryCounter</c>) or an elapsed time (<c>glBeginQuery(TIME_ELAPSED)</c>, two timestamps).
-    /// Each query has its own two slots in a shared pool, reset from the host (Vulkan 1.2 host query reset) when it is issued; the
-    /// renderers re-issue a query only after reading its previous result, as GL code must.
+    /// Every issue takes a fresh pair of entries from its frame slot's pool (a query may be issued several times a frame).
+    /// When a slot comes round again its fence has passed: the results still unread are collected, then the pool is reset from
+    /// the host (Vulkan 1.2 host query reset) and handed out again. A pool per slot, as the validation layer treats a pool that
+    /// any frame in flight uses as busy as a whole.
     /// </summary>
-    internal sealed class GlQueryObj(int slot)
+    internal sealed class GlQueryObj
     {
-        public readonly int Slot = slot;   // slots 2*Slot and 2*Slot+1 in the pool
+        public QueryPool Pool;  // the issuing frame slot's pool
+        public int Slot = -1, Base = -1;   // that slot, and the first of the two entries of the last issue
         public bool Elapsed, Issued;
         public long IssuedFrame = -1;
         public ulong? Result;
         public void Dispose(VkGl gl) { }
     }
 
-    QueryPool queryPool;
-    const int MaxQueries = 4096;
-    int nextQuerySlot;
-    readonly Stack<int> freeQuerySlots = new();
+    QueryPool[]? queryPools;
+    const int PairsPerSlot = 4096;
+    int queryCursor;
+    List<GlQueryObj>[]? issuedQueries;
 
     void EnsureQueryPool()
     {
-        if (queryPool.Handle != 0) return;
-        var info = new QueryPoolCreateInfo { SType = StructureType.QueryPoolCreateInfo, QueryType = QueryType.Timestamp, QueryCount = MaxQueries * 2 };
-        Check(vk.CreateQueryPool(dev, &info, null, out queryPool));
-        vk.ResetQueryPool(dev, queryPool, 0, MaxQueries * 2);
+        if (queryPools is not null) return;
+        int n = device.Frames.Count;
+        var info = new QueryPoolCreateInfo { SType = StructureType.QueryPoolCreateInfo, QueryType = QueryType.Timestamp, QueryCount = PairsPerSlot * 2 };
+        queryPools = new QueryPool[n];
+        for (int i = 0; i < n; i++)
+        {
+            Check(vk.CreateQueryPool(dev, &info, null, out queryPools[i]));
+            vk.ResetQueryPool(dev, queryPools[i], 0, PairsPerSlot * 2);
+        }
+        issuedQueries = new List<GlQueryObj>[n];
+        for (int i = 0; i < n; i++) issuedQueries[i] = [];
+    }
+
+    /// <summary>At the start of a frame (its slot's fence has passed): results of the slot's queries kept, its range reset.</summary>
+    void RecycleQueries(int slot)
+    {
+        queryCursor = 0;
+        if (queryPools is null) return;
+        var list = issuedQueries![slot];
+        foreach (var q in list)
+            if (q.Result is null && q.Slot == slot) Read(q, wait: false);
+        list.Clear();
+        vk.ResetQueryPool(dev, queryPools[slot], 0, PairsPerSlot * 2);
     }
 
     public uint GenQuery()
     {
         EnsureQueryPool();
-        int slot = freeQuerySlots.Count > 0 ? freeQuerySlots.Pop() : nextQuerySlot++;
-        if (slot >= MaxQueries) throw new InvalidOperationException("too many GL queries");
         uint id = NewId();
-        queries[id] = new GlQueryObj(slot);
+        queries[id] = new GlQueryObj();
         return id;
     }
 
-    public void DeleteQuery(uint id)
-    {
-        if (queries.Remove(id, out var q)) freeQuerySlots.Push(q.Slot);
-    }
+    public void DeleteQuery(uint id) => queries.Remove(id);
 
     public void QueryCounter(uint id, QueryCounterTarget target)
     {
         var q = queries[id];
         Issue(q, elapsed: false);
-        vk.CmdWriteTimestamp2(Cmd, PipelineStageFlags2.AllCommandsBit, queryPool, (uint)(q.Slot * 2 + 1));
+        vk.CmdWriteTimestamp2(cmd, PipelineStageFlags2.AllCommandsBit, q.Pool, (uint)(q.Base + 1));
     }
 
     GlQueryObj? activeElapsed;
@@ -60,20 +77,26 @@ public sealed unsafe partial class VkGl
     {
         var q = queries[id];
         Issue(q, elapsed: true);
-        vk.CmdWriteTimestamp2(Cmd, PipelineStageFlags2.AllCommandsBit, queryPool, (uint)(q.Slot * 2));
+        vk.CmdWriteTimestamp2(cmd, PipelineStageFlags2.AllCommandsBit, q.Pool, (uint)q.Base);
         activeElapsed = q;
     }
 
     public void EndQuery(QueryTarget target)
     {
         if (activeElapsed is not { } q) return;
-        vk.CmdWriteTimestamp2(Cmd, PipelineStageFlags2.AllCommandsBit, queryPool, (uint)(q.Slot * 2 + 1));
+        vk.CmdWriteTimestamp2(Cmd, PipelineStageFlags2.AllCommandsBit, q.Pool, (uint)(q.Base + 1));
         activeElapsed = null;
     }
 
     void Issue(GlQueryObj q, bool elapsed)
     {
-        vk.ResetQueryPool(dev, queryPool, (uint)(q.Slot * 2), 2);
+        _ = Cmd;   // opens the frame, so Frames.Slot is the slot the timestamps go into
+        if (queryCursor >= PairsPerSlot) throw new InvalidOperationException($"more than {PairsPerSlot} GL queries in one frame");
+        int slot = device.Frames.Slot;
+        q.Pool = queryPools![slot];
+        q.Slot = slot;
+        q.Base = queryCursor++ * 2;
+        issuedQueries![slot].Add(q);
         q.Elapsed = elapsed;
         q.Issued = true;
         q.IssuedFrame = device.Frames.FrameNumber;
@@ -91,29 +114,25 @@ public sealed unsafe partial class VkGl
     {
         var q = queries[id];
         if (pname == QueryObjectParameterName.ResultAvailable) { @params = Available(q) ? 1u : 0u; return; }
-        if (!Available(q))
-        {
-            if (q.IssuedFrame == device.Frames.FrameNumber && frameOpen) { Flush(); Stats.Flushes++; }
-            else device.Frames.WaitAll();
-        }
-        @params = Read(q, wait: true) ?? 0;
+        if (q.Result is null && q.IssuedFrame == device.Frames.FrameNumber && frameOpen) Flush();   // not submitted yet
+        @params = q.Result ?? Read(q, wait: true) ?? 0;
     }
 
     bool Available(GlQueryObj q)
     {
-        if (!q.Issued) return true;
-        if (q.Result is not null) return true;
-        if (q.IssuedFrame >= device.Frames.FrameNumber && frameOpen) return false;   // not even submitted yet
+        if (!q.Issued || q.Result is not null) return true;
+        if (q.IssuedFrame == device.Frames.FrameNumber && frameOpen) return false;   // not submitted yet
         return Read(q, wait: false) is not null;
     }
 
     ulong? Read(GlQueryObj q, bool wait)
     {
         if (q.Result is { } r) return r;
+        if (q.Base < 0) return null;
         var values = stackalloc ulong[4];
         var flags = QueryResultFlags.Result64Bit | QueryResultFlags.ResultWithAvailabilityBit | (wait ? QueryResultFlags.ResultWaitBit : 0);
-        uint first = (uint)(q.Slot * 2 + (q.Elapsed ? 0 : 1)), count = q.Elapsed ? 2u : 1u;
-        var result = vk.GetQueryPoolResults(dev, queryPool, first, count, (nuint)(count * 16), values, 16, flags);
+        uint first = (uint)(q.Base + (q.Elapsed ? 0 : 1)), count = q.Elapsed ? 2u : 1u;
+        var result = vk.GetQueryPoolResults(dev, q.Pool, first, count, (nuint)(count * 16), values, 16, flags);
         if (result != Result.Success && result != Result.NotReady) return null;
         if (q.Elapsed ? values[1] == 0 || values[3] == 0 : values[1] == 0) return null;
         double period = device.Limits.TimestampPeriod;
@@ -125,6 +144,6 @@ public sealed unsafe partial class VkGl
 
     void DestroyQueries()
     {
-        if (queryPool.Handle != 0) vk.DestroyQueryPool(dev, queryPool, null);
+        if (queryPools is not null) foreach (var pool in queryPools) vk.DestroyQueryPool(dev, pool, null);
     }
 }

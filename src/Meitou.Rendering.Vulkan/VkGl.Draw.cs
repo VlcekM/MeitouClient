@@ -509,6 +509,9 @@ public sealed unsafe partial class VkGl
             AnisotropyEnable = key.Anisotropy > 1, MaxAnisotropy = key.Anisotropy,
             CompareEnable = key.Compare, CompareOp = key.Op,
             MinLod = 0, MaxLod = key.Mipmapped ? Vk.LodClampNone : 0.25f,
+            // NVIDIA's OpenGL picks mips a quarter level finer than its Vulkan driver with anisotropic filtering on: matched here
+            // (docs/engine.md "Vulkan backend"; measured 1.2 -> 0.001 mean difference on the rock view).
+            MipLodBias = key.Anisotropy > 1 && device.Properties.VendorID == 0x10DE ? -0.25f : 0,
             BorderColor = integer ? (key.TransparentBorder ? BorderColor.IntTransparentBlack : BorderColor.IntOpaqueBlack)
                 : key.TransparentBorder ? BorderColor.FloatTransparentBlack : BorderColor.FloatOpaqueWhite,
         };
