@@ -181,6 +181,8 @@ The render thread is above normal priority, the streaming threads below normal (
 run on a few above-normal job threads (`RenderJobs`). The game and the viewer run server GC on four heaps without tiered compilation
 (DECISIONS 19). The flight benchmark (`--fly-benchmark`) prints the stage means, the shadow casters' means, GC totals and the worst frames
 with their stages and GC pauses; `MEITOU_JOB_STATS=1` adds what each streaming call site allocated and cost.
+A draw through `VkGl` costs ~4 µs of CPU, so draw counts matter more than triangles: meshes that repeat are drawn instanced (the
+TERRAIN-mode rocks were one draw each and cost ~23 ms of shadow pass in a forest; docs/viewer.md, "Shadow pass cost").
 
 ## Checking a change
 

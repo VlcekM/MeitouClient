@@ -19,9 +19,9 @@ static class MeitouShadowShaders
     /// <summary>Taps of the filter and of the blocker search.</summary>
     public const int FilterTaps = 16, BlockerTaps = 8;
 
-    /// <summary>Texture units of the terrain shadow map and the blocker map: just below the shadow map's (<see cref="ShadowShaders.MapUnit"/>).</summary>
-    public static int TerrainUnit => ShadowShaders.MapUnit - 1;
-    public static int BlockerUnit => ShadowShaders.MapUnit - 2;
+    /// <summary>Texture units of the terrain shadow map and the blocker map: below the shadow map's and the noise's (<see cref="ShadowShaders.MapUnit"/>, <see cref="ShadowShaders.NoiseUnit"/>).</summary>
+    public static int TerrainUnit => ShadowShaders.MapUnit - 2;
+    public static int BlockerUnit => ShadowShaders.MapUnit - 3;
 
     static string F(float v) => v.ToString("0.#########", CultureInfo.InvariantCulture) + (v == MathF.Floor(v) ? ".0" : "");
 

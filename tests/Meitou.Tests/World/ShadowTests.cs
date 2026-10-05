@@ -80,8 +80,11 @@ public class ShadowTests
             Assert.False(c.Unused);
             Assert.Equal(c.Size.X / new ShadowSettings().TileSize, c.Texel, 3);
         }
-        // Tiles: a 2 × 2 grid, left to right then bottom to top.
-        Assert.Equal(new Vector4(0.5f, 0.5f, 0.5f, 0.5f), cascades[3].Tile);
+        // Tiles: the game's 2 × 2 grid, cascade i in column i / 2 and row i % 2 from the top (GL's y counts from the bottom).
+        Assert.Equal(new Vector4(0, 0.5f, 0.5f, 0.5f), cascades[0].Tile);
+        Assert.Equal(new Vector4(0, 0, 0.5f, 0.5f), cascades[1].Tile);
+        Assert.Equal(new Vector4(0.5f, 0.5f, 0.5f, 0.5f), cascades[2].Tile);
+        Assert.Equal(new Vector4(0.5f, 0, 0.5f, 0.5f), cascades[3].Tile);
     }
 
     [Fact]
@@ -143,6 +146,51 @@ public class ShadowTests
         var clip = Vector4.Transform(new Vector4(p, 1), c.WorldToClip());
         Assert.Equal(direct.X * 2 - 1, clip.X, 2);
         Assert.Equal(direct.Z, clip.Z, 2);
+    }
+
+    [Fact]
+    public void Cascades_are_picked_by_the_games_clip_z_test()
+    {
+        var cascades = ShadowCascades.Fit(Camera, Sun, new ShadowSettings());
+        var splits = KenshiShadows.Splits(KenshiShadows.SplitNear, KenshiShadows.DefaultRange, 4);
+        const double n = KenshiShadows.CameraNear, f = KenshiShadows.CameraFar;
+        for (int i = 0; i < 4; i++)
+        {
+            // At the selection depth the game's Direct3D clip z, f (d − n) / (f − n), equals csmParams[i].x = split[i + 1] − split[0].
+            double d = cascades[i].SelectDepth;
+            Assert.Equal(splits[i + 1] - splits[0], f * (d - n) / (f - n), 2);
+        }
+        // About the split plus the near clip less the first split (5 − 1).
+        Assert.Equal(splits[1] + 4, cascades[0].SelectDepth, 1);
+    }
+
+    [Fact]
+    public void A_horizontal_light_keeps_world_up()
+    {
+        // Under the horizon the game's lighting direction has its height clamped to 0; the map is still fitted along it.
+        var flat = Vector3.Normalize(new Vector3(0.8f, 0, -0.6f));
+        var r = ShadowCascades.LightRotation(flat);
+        Assert.Equal(1f, Vector3.Transform(Vector3.UnitY, r).Y, 5);
+        Assert.Equal(-1f, Vector3.Transform(flat, r).Z, 5);
+        foreach (var c in ShadowCascades.Fit(Camera, flat, new ShadowSettings()))
+        {
+            Assert.True(double.IsFinite(c.Translation.X) && double.IsFinite(c.Translation.Z));
+            Assert.InRange(c.Project(Camera.Eye + Camera.Forward * c.FarDepth * 0.9f).Z, 0f, 1f);
+        }
+    }
+
+    [Fact]
+    public void Hex12_offsets_are_the_games_with_its_repeated_tap()
+    {
+        var o = KenshiShadows.PcfOffsets;
+        Assert.Equal(KenshiShadows.PcfTaps, o.Length);
+        Assert.Equal(o[1], o[2]);   // the game lists (−0.5, 0.866) twice
+        Assert.DoesNotContain(new Vector2(-0.5f, -0.866025f), o);
+        foreach (var p in o) Assert.InRange(p.Length(), 0.99f, MathF.Sqrt(7) + 1e-4f);
+        // The repeat (in place of its opposite) pulls the mean off the centre: (0, 2 · 0.866) / 12 kernel units.
+        var mean = o.Aggregate(Vector2.Zero, (a, b) => a + b) / o.Length;
+        Assert.Equal(0f, mean.X, 4);
+        Assert.Equal(2 * 0.866025f / 12, mean.Y, 4);
     }
 
     [Fact]

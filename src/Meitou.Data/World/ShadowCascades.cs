@@ -49,6 +49,31 @@ public static class KenshiShadows
     /// <summary>PCF taps of the CSM receiver, and the factor the radius is scaled by before the taps' hexagonal offsets.</summary>
     public const int PcfTaps = 12;
     public const float PcfOffsetScale = 0.3f;
+    /// <summary>
+    /// The receiver's twelve tap offsets ("HEX12", <c>shadowFunctions.hlsl</c>), in units of the scaled radius, in the D3D atlas frame
+    /// (v down). Points of a hexagonal lattice out to √7 ≈ 2.65; the second and third entries are the same point (the game's list repeats
+    /// it), so that point weighs twice in the mean and the point opposite it, (−0.5, −0.866), is missing.
+    /// </summary>
+    public static readonly Vector2[] PcfOffsets =
+    [
+        new(1, 0), new(-0.5f, 0.866025f), new(-0.5f, 0.866025f),
+        new(2.5f, 0.866025f), new(1, 2 * 0.866025f), new(-0.5f, 3 * 0.866025f),
+        new(-2, 2 * 0.866025f), new(-2, 0), new(-2, -2 * 0.866025f),
+        new(-0.5f, -3 * 0.866025f), new(1, -2 * 0.866025f), new(2.5f, -0.866025f),
+    ];
+    /// <summary>The noise shifts every tap by noise × this along the atlas's u before the turn.</summary>
+    public const float PcfJitterShift = 0.25f;
+    /// <summary>The turn is noise × this (the game's 2 · 3.1415, not 2π).</summary>
+    public const float PcfJitterAngle = 2 * 3.1415f;
+    /// <summary>The noise texture is read at the atlas UV times this (point sampled, wrapped).</summary>
+    public const float NoiseScale = 1024;
+    /// <summary>The noise texture's file (<c>data/materials</c>), bound to the CSM lighting material's <c>WarpMap</c> unit.</summary>
+    public const string NoiseTexture = "white-noise.png";
+    /// <summary>
+    /// The game camera's near and far clip (Observed: camera.md, sky.md). The receiver picks the cascade by its pixel's clip-space z,
+    /// <c>f (d − n) / (f − n)</c>, and the cascades are boxed from the camera's own near plane.
+    /// </summary>
+    public const float CameraNear = 5, CameraFar = 50000;
 
     // ---- RTW (facts for a later reproduction) ----
     /// <summary>Side of the importance map; the warp maps are this × 2 (and this + 1 for the built one).</summary>
@@ -85,7 +110,10 @@ public static class KenshiShadows
 public readonly record struct ShadowView(Vector3 Eye, Vector3 Forward, Vector3 Up, float FieldOfViewY, float Aspect, float Near);
 
 /// <summary>What the viewer draws: the map's side, how far shadows reach (view depth), the number of cascades.</summary>
-public sealed record ShadowSettings(int MapSize = KenshiShadows.LazyMapSize, float Range = KenshiShadows.DefaultRange, int Cascades = KenshiShadows.CascadeCount)
+/// <param name="CameraNear">The game camera's near clip: the cascades' boxes start there, and with <paramref name="CameraFar"/> it turns the
+/// game's clip-z cascade test into view depths (<see cref="ShadowCascade.SelectDepth"/>).</param>
+public sealed record ShadowSettings(int MapSize = KenshiShadows.LazyMapSize, float Range = KenshiShadows.DefaultRange, int Cascades = KenshiShadows.CascadeCount,
+    float CameraNear = KenshiShadows.CameraNear, float CameraFar = KenshiShadows.CameraFar)
 {
     /// <summary>Tiles per row of the atlas.</summary>
     public int Grid => (int)Math.Ceiling(Math.Sqrt(Cascades));
@@ -104,6 +132,11 @@ public sealed class ShadowCascade
     /// <summary>View depths this cascade serves (the previous split up to its own).</summary>
     public float NearDepth { get; init; }
     public float FarDepth { get; init; }
+    /// <summary>
+    /// The view depth up to which the receiver uses this cascade: the game compares the pixel's clip-space z (Direct3D,
+    /// <c>f (d − n) / (f − n)</c> with its camera's near and far) against <c>split[i + 1] − split[0]</c>, which is this depth.
+    /// </summary>
+    public float SelectDepth { get; init; }
     /// <summary>Whether the whole cascade lies in front of the camera's near plane, so no visible point uses it (the viewer then skips drawing it).</summary>
     public bool Unused { get; init; }
     /// <summary>World → light axes (rows x, y, z as the matrix's columns: System.Numerics row-vector form).</summary>
@@ -120,7 +153,11 @@ public sealed class ShadowCascade
     public float FixedBias { get; init; }
     /// <summary>The PCF radius in the tile's UV units (0..1 across the tile).</summary>
     public float FilterRadius { get; init; }
-    /// <summary>The tile's rectangle in the atlas: x0, y0, width, height in 0..1.</summary>
+    /// <summary>
+    /// The tile's rectangle in the atlas: x0, y0, width, height in 0..1 (GL texture space, y up). As the game's: cascade i in column
+    /// i / grid and Direct3D row i % grid counted from the top, so the whole atlas is the game's picture (taps that leave a tile read the
+    /// same neighbour).
+    /// </summary>
     public Vector4 Tile { get; init; }
 
     /// <summary>World → clip: x, y in −1..1 across the tile, z = depth 0..1 (w = 1). For drawing the casters (absolute world positions).</summary>
@@ -242,7 +279,9 @@ public static class ShadowCascades
             // The light-space box of the camera frustum from its own near plane to this cascade's split.
             double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue;
             double maxX = double.MinValue, maxY = double.MinValue, maxZ = double.MinValue;
-            foreach (double depth in (ReadOnlySpan<double>)[Math.Min(view.Near, splits[i]), far])
+            // The game boxes from its camera's near plane; below that the viewer's own (nearer) plane, so every visible point is inside.
+            double near = Math.Min(view.Near, settings.CameraNear);
+            foreach (double depth in (ReadOnlySpan<double>)[near, far])
                 for (int c = 0; c < 4; c++)
                 {
                     double h = depth * t, w = h * view.Aspect;
@@ -272,17 +311,21 @@ public static class ShadowCascades
                 NearDepth = splits[i],
                 Unused = far <= view.Near,
                 FarDepth = (float)far,
+                SelectDepth = SelectDepth(far - splits[0], settings.CameraNear, settings.CameraFar),
                 Rotation = rotation,
                 Translation = translation,
                 Extent = box,
                 Texel = texel,
                 FixedBias = (float)fixedBias,
                 FilterRadius = (float)(atlasRadius * grid),
-                Tile = new Vector4(i % grid / (float)grid, i / grid / (float)grid, 1f / grid, 1f / grid),
+                Tile = new Vector4(i / grid / (float)grid, (grid - 1 - i % grid) / (float)grid, 1f / grid, 1f / grid),
             };
         }
         return result;
     }
+
+    /// <summary>The view depth at which the game's clip-space z, <c>f (d − n) / (f − n)</c>, reaches <paramref name="clipZ"/>.</summary>
+    public static float SelectDepth(double clipZ, double near, double far) => (float)(near + clipZ * (far - near) / far);
 
     static double Component(this Vector3 v, int i) => i == 0 ? v.X : i == 1 ? v.Y : v.Z;
 }

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using Meitou.Data.Textures;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
@@ -22,16 +23,18 @@ public sealed unsafe partial class ShadowPass : IDisposable
     readonly uint[] queries = new uint[4];
     readonly bool[] pending = new bool[2];
     readonly List<double> gpuSamples = [], cpuSamples = [];
-    uint atlas, fbo;
+    uint atlas, fbo, noise;
     int atlasSize, slot;
     uint debugProgram, atlasProgram, emptyVao;
     uint sceneDepth, sceneFbo;
     int sceneWidth, sceneHeight;
     readonly Dictionary<(uint, string), int> uniforms = [];
 
-    public ShadowPass(IGl gl)
+    /// <param name="assets">Where to find the game's <c>white-noise.png</c> (the receiver's jitter); without it a hash stands in.</param>
+    public ShadowPass(IGl gl, AssetLocator? assets = null)
     {
         this.gl = gl;
+        LoadNoise(assets);
         receiverUbo = gl.GenBuffer();
         gl.BindBuffer(BufferTargetARB.UniformBuffer, receiverUbo);
         gl.BufferData(BufferTargetARB.UniformBuffer, ReceiverBytes, null, BufferUsageARB.DynamicDraw);
@@ -46,8 +49,13 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// <summary>The atlas side, the range and the number of cascades (the game's <c>shadow quality</c> and <c>Shadow Range</c>).</summary>
     public ShadowSettings Settings { get; set; } = new();
     public bool Enabled { get; set; } = true;
-    /// <summary>Below this sun height there is no shadow map: the lighting direction lies on the horizon there and the sun is black anyway.</summary>
-    public float MinSunHeight { get; set; } = 0.02f;
+    /// <summary>
+    /// Below this height of the real sun there is no shadow map. As the game: it keeps drawing the map along the lighting direction (whose
+    /// height is clamped to 0 under the horizon) while the sun still has a colour, down to −0.2.
+    /// </summary>
+    public float MinSunHeight { get; set; } = KenshiLighting.SunColourCutoff;
+    /// <summary>Whether the game's noise texture was found (else the receiver's jitter is a hash).</summary>
+    public bool HasNoise => noise != 0;
     /// <summary>The cascades of the last frame (null when nothing was drawn).</summary>
     public ShadowCascade[]? Cascades { get; private set; }
     public uint Atlas => atlas;
@@ -61,12 +69,16 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// <summary>Size of the receiver block (std140) the shaders declare in <see cref="ShadowShaders.Functions"/>.</summary>
     public const int ReceiverBytes = 560;
 
-    /// <summary>Draws the cascades for this camera and sun, then publishes them to the receivers. Restores the framebuffer and viewport given.</summary>
-    public void Render(ShadowView view, Vector3 toSun, uint restoreFramebuffer, int restoreWidth, int restoreHeight, CasterDraw draw)
+    /// <summary>
+    /// Draws the cascades for this camera and light, then publishes them to the receivers. Restores the framebuffer and viewport given.
+    /// <paramref name="toSun"/> is the lighting direction (towards the sun, height clamped to 0 under the horizon), <paramref name="sunHeight"/>
+    /// the real sun's height (the map is drawn while it is at least <see cref="MinSunHeight"/>; by default the lighting direction's).
+    /// </summary>
+    public void Render(ShadowView view, Vector3 toSun, uint restoreFramebuffer, int restoreWidth, int restoreHeight, CasterDraw draw, float? sunHeight = null)
     {
         Poll();
         Cascades = null;
-        if (!Enabled || toSun.Y < MinSunHeight || toSun.LengthSquared() < 1e-8f) { Disable(); return; }
+        if (!Enabled || (sunHeight ?? toSun.Y) < MinSunHeight || toSun.LengthSquared() < 1e-8f) { Disable(); return; }
         if (Meitou) { RenderMeitou(view, Vector3.Normalize(toSun), restoreFramebuffer, restoreWidth, restoreHeight, draw); return; }
         meitouValid = false;
         var watch = Stopwatch.StartNew();
@@ -136,13 +148,13 @@ public sealed unsafe partial class ShadowPass : IDisposable
             var c = cascades[i];
             Put(data, i * 16, c.OriginToTile(origin));
             Put(data, 64 + i * 4, c.Tile);
-            Put(data, 80 + i * 4, new Vector4(c.FarDepth, c.FilterRadius, c.Size.X, c.Size.Y));
+            Put(data, 80 + i * 4, new Vector4(c.SelectDepth, c.FilterRadius, c.Size.X, c.Size.Y));
             Put(data, 96 + i * 4, new Vector4(c.Size.Z, 1f / Settings.TileSize, 0, 0));
         }
         Put(data, 112, cascades[0].Rotation);
         Put(data, 128, new Vector4(origin, 1));
         Put(data, 132, new Vector4(Vector3.Normalize(view.Forward), Math.Min(cascades.Length, 4)));
-        Put(data, 136, new Vector4(atlasSize, 0, 0, 0));
+        Put(data, 136, new Vector4(atlasSize, 0, noise != 0 ? 1 : 0, 0));
         Upload(data);
     }
 
@@ -157,6 +169,32 @@ public sealed unsafe partial class ShadowPass : IDisposable
             gl.ActiveTexture(TextureUnit.Texture0 + ShadowShaders.MapUnit);
             gl.BindTexture(TextureTarget.Texture2D, atlas);
             gl.ActiveTexture(TextureUnit.Texture0);
+        }
+        if (ShadowShaders.NoiseUnit >= 0 && noise != 0)
+        {
+            gl.ActiveTexture(TextureUnit.Texture0 + ShadowShaders.NoiseUnit);
+            gl.BindTexture(TextureTarget.Texture2D, noise);
+            gl.ActiveTexture(TextureUnit.Texture0);
+        }
+    }
+
+    /// <summary>
+    /// The game's jitter texture, <c>data/materials/white-noise.png</c> (64² RGB), which <c>Main_Lighting_CSM</c> binds with
+    /// <c>filtering none</c> and the default wrap. The receiver reads it with texelFetch (its own point sampling and wrap), so the
+    /// texture's sampler state does not matter. Read from the install at run time, never shipped.
+    /// </summary>
+    void LoadNoise(AssetLocator? assets)
+    {
+        if (assets?.Find(KenshiShadows.NoiseTexture) is not { } path) return;
+        try
+        {
+            var image = TextureLoader.LoadFile(path, allMips: false).Levels[0];
+            noise = WorldGl.Texture2D(gl, image.Width, image.Height, image.Pixels, repeat: true, mipmaps: false);
+            gl.BindTexture(TextureTarget.Texture2D, 0);
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or ArgumentException)
+        {
+            Console.WriteLine($"warning   shadow noise: {e.Message}");
         }
     }
 
@@ -179,7 +217,8 @@ public sealed unsafe partial class ShadowPass : IDisposable
         atlas = gl.GenTexture();
         gl.BindTexture(TextureTarget.Texture2D, atlas);
         gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.DepthComponent32f, (uint)size, (uint)size, 0, PixelFormat.DepthComponent, PixelType.Float, null);
-        // Hardware comparison with bilinear weights: each of the receiver's taps is a 2 × 2 PCF (the game point-samples; a viewer choice).
+        // Linear comparison: the faithful receiver reads texel centres, where the weights are 1, 0, 0, 0 (the game's point sampling);
+        // other receivers may use the bilinear weights.
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
@@ -329,6 +368,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
     {
         DisposeMeitou();
         FreeAtlas();
+        if (noise != 0) gl.DeleteTexture(noise);
         if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneDepth); }
         if (debugProgram != 0) { gl.DeleteProgram(debugProgram); gl.DeleteProgram(atlasProgram); gl.DeleteVertexArray(emptyVao); }
         gl.DeleteBuffer(receiverUbo);
