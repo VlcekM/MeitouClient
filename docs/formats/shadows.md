@@ -222,8 +222,19 @@ the table, default 1 = 2048², `--shadow-range <u>`). It follows the facts above
   a cascade covers nothing on screen and is not drawn, so its tile stays cleared to 1 where the game has the cascade's casters;
   only taps that stray into that tile from a neighbour can see the difference.
 - `--debug-shadows 1` shows the four cascade tiles; `2` the term over the scene's surfaces tinted by cascade (red, orange,
-  yellow, green: the game's own debug colours), reconstructed from the near depth slice with the depth's own slope as the
-  normal; `3` multiplies the term over the finished picture.
+  yellow, green: the game's own debug colours; grey where no cascade applies), reconstructed from the near depth slice with the
+  depth's own slope as the normal; `3` multiplies the term over the finished picture. Modes 2 and 3 call `kenshiShadow`, so they
+  show **whichever receiver is active**: the Meitou one by default, the game's only with `--faithful shadows`. Comparing a
+  Faithful picture with a debug view taken without that switch compares two different receivers.
+- **Beyond the range is lit, also at a low sun** (**Observed**, 2026-10-05, the forest view `--at -37582,-80684 --yaw -70.5
+  --pitch 6.1 --distance 10588 --time 7`): with `--faithful shadows` the near hillside (view depth up to about 5004) lies in the
+  cliffs' shadow and everything further away, most of the valley, is fully lit, because the game's receiver returns 1 past the last
+  split (**Verified**: `shadowFunctions.hlsl`, the `posSs.z > csmParams[last]` early return; see Receiver step 1). The lit pass and
+  `--debug-shadows 2 --faithful shadows` agree pixel for pixel there (checked by writing the lighting's term out as the colour:
+  the same black/white boundary at the range, the same few lit taps at its edge), so the gap between the shadowed foreground and
+  the lit valley is the game's own, not a receiver error. The Meitou receiver shadows that valley (terrain beyond the range, below).
+  The view is a viewer view: the game's camera boom stops at 2000 ([camera.md](camera.md)), but from there a low camera still sees
+  terrain beyond 5000, which the game leaves unshadowed the same way.
 - The lighting itself (`kenshiLight`) applies the term once `AtmosphereShaders` includes `ShadowShaders.Functions` and
   multiplies the sun by `kenshiShadow(world, n)`; the program builder already binds the blocks and the map's unit.
 
@@ -257,7 +268,8 @@ Not the game's: the remaster's choice, on by default (F5 / `--faithful shadows` 
   2^k samples further towards the sun, lowered by the sun's slope) into RG32F, rebuilt when the sun turns by more than 0.1°. A point
   is shadowed below that height (bias 20 units, softness 6 units plus the occluder's distance × the sun's angular radius); one fetch.
   It fades in from 55 % to 90 % of the range and combines with the cascades by the minimum, so it agrees with them where both apply
-  (Observed: the same picture at range 5000 and 9000 at 07:00).
+  (Observed: the same picture at range 5000 and 9000 at 07:00). This is where the two modes differ most at a low sun: at the
+  forest view at 07:00 the valley beyond the range is shadowed by the cliffs here and lit with `--faithful shadows`, as in the game.
 - **Costs** (**Observed**, 2026-10-05, the same machine and caveats as the measurements in [../viewer.md](../viewer.md#shadows),
   Meitou against `--faithful shadows` on the same build): The Hub `--fly-benchmark 1000`, three interleaved pairs, shadow stage CPU
   mean 2.43 ms against 3.31 ms (casters: terrain 0.36 / 0.80, objects 0.29 / 0.44, foliage 1.66 / 2.00), flight p50 21.6-22.0 ms
