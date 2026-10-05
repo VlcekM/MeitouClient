@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text;
 using Silk.NET.OpenGL;
 
@@ -28,9 +29,18 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>The framebuffer the scene is drawn into (valid after <see cref="Begin"/>).</summary>
     public uint SceneFramebuffer { get; private set; }
 
-    int width, height, samples, requestedSamples;
+    // width × height is the render size (the scene, SSAO); displayWidth × displayHeight the chain after the upscaler (bloom, exposure, composite).
+    int width, height, samples, requestedSamples, displayWidth, displayHeight;
+    float allocatedScale;
+    UpscalerKind allocatedKind;
     uint msFbo, msColour, msDepth;
     uint sceneFbo, sceneColour, sceneDepth;
+    // Temporal upscaling: the far slice's own depth (instead of clearing), the motion and depth targets, the display-size history (ping-pong).
+    uint farFbo, farDepth;
+    Target2D? motion, upscaleDepth, historyA, historyB;
+    bool historyValid, farSliceDrawn, warnedFallback;
+    long frameIndex;
+    readonly uint progVelocity, progTaa;
     Target2D? aoA, aoB;
     Target2D[] bloom = [];
     Target2D? luminance, adaptA, adaptB;   // Kenshi's exposure: the luminance measure (mipmapped) and the adapted value (1 × 1, ping-pong)
@@ -65,6 +75,8 @@ public sealed unsafe class PostProcess : IDisposable
         progComposite = Program(PostProcessShaders.Composite);
         progLuminance = Program(PostProcessShaders.Luminance);
         progAdapt = Program(PostProcessShaders.Adapt);
+        progVelocity = Program(UpscaleShaders.Velocity);
+        progTaa = Program(UpscaleShaders.Taa);
         for (int s = 0; s < Slots; s++)
             for (int i = 0; i < MaxStamps; i++) stamps[s, i] = gl.GenQuery();
     }
@@ -90,9 +102,10 @@ public sealed unsafe class PostProcess : IDisposable
     {
         if (msFbo != 0) { gl.DeleteFramebuffer(msFbo); gl.DeleteRenderbuffer(msColour); gl.DeleteRenderbuffer(msDepth); msFbo = 0; }
         if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneColour); gl.DeleteTexture(sceneDepth); sceneFbo = 0; }
-        foreach (var t in new[] { aoA, aoB, luminance, adaptA, adaptB }.Concat(bloom)) if (t is not null) Release(t);
-        aoA = aoB = luminance = adaptA = adaptB = null;
-        adaptedValid = false;
+        if (farFbo != 0) { gl.DeleteFramebuffer(farFbo); gl.DeleteTexture(farDepth); farFbo = 0; }
+        foreach (var t in new[] { aoA, aoB, luminance, adaptA, adaptB, motion, upscaleDepth, historyA, historyB }.Concat(bloom)) if (t is not null) Release(t);
+        aoA = aoB = luminance = adaptA = adaptB = motion = upscaleDepth = historyA = historyB = null;
+        adaptedValid = historyValid = false;
         bloom = [];
     }
 
@@ -114,10 +127,16 @@ public sealed unsafe class PostProcess : IDisposable
         return t;
     }
 
-    void Allocate(int w, int h, int msaa)
+    void Allocate(int displayW, int displayH, int msaa)
     {
         Free();
+        var up = Options.Upscale;
+        (allocatedKind, allocatedScale) = (up.Kind, up.EffectiveScale);
+        (displayWidth, displayHeight) = (displayW, displayH);
+        var (w, h) = up.RenderSize(displayW, displayH);
         width = w; height = h; samples = requestedSamples = msaa;
+        // Temporal upscalers reconstruct edges from the jittered frames and take single-sample inputs (DECISIONS 14).
+        if (up.Temporal) samples = 1;
         gl.GetInteger((GLEnum)0x8D57, out int maxSamples); // GL_MAX_SAMPLES
         if (samples > maxSamples) samples = Math.Max(maxSamples, 1);
 
@@ -151,9 +170,30 @@ public sealed unsafe class PostProcess : IDisposable
             Check("multisampled scene");
         }
 
+        if (up.Temporal)
+        {
+            farDepth = gl.GenTexture();
+            gl.BindTexture(TextureTarget.Texture2D, farDepth);
+            gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.DepthComponent24, (uint)w, (uint)h, 0, PixelFormat.DepthComponent, PixelType.UnsignedInt, null);
+            SamplerState(TextureMinFilter.Nearest);
+            farFbo = gl.GenFramebuffer();
+            gl.BindFramebuffer(FramebufferTarget.Framebuffer, farFbo);
+            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, sceneColour, 0);
+            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, farDepth, 0);
+            Check("far slice");
+            motion = MakeTarget(w, h, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
+            Nearest(motion);
+            upscaleDepth = MakeTarget(w, h, InternalFormat.R32f, PixelFormat.Red, PixelType.Float);
+            Nearest(upscaleDepth);
+            historyA = MakeTarget(displayW, displayH, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
+            historyB = MakeTarget(displayW, displayH, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
+        }
+
         int hw = Math.Max((w + 1) / 2, 1), hh = Math.Max((h + 1) / 2, 1);
         aoA = MakeTarget(hw, hh, InternalFormat.RG16f, PixelFormat.RG, PixelType.HalfFloat);
         aoB = MakeTarget(hw, hh, InternalFormat.RG16f, PixelFormat.RG, PixelType.HalfFloat);
+        // Bloom and exposure run after the upscaler, at the display size.
+        hw = Math.Max((displayW + 1) / 2, 1); hh = Math.Max((displayH + 1) / 2, 1);
         var levels = new List<Target2D>();
         for (int bw = hw, bh = hh; levels.Count < 6 && bw >= 4 && bh >= 4; bw = Math.Max(bw / 2, 1), bh = Math.Max(bh / 2, 1))
             levels.Add(MakeTarget(bw, bh, InternalFormat.R11fG11fB10f, PixelFormat.Rgb, PixelType.HalfFloat));
@@ -173,6 +213,12 @@ public sealed unsafe class PostProcess : IDisposable
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)(filter == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear));
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+    }
+
+    void Nearest(Target2D t)
+    {
+        gl.BindTexture(TextureTarget.Texture2D, t.Texture);
+        SamplerState(TextureMinFilter.Nearest);
     }
 
     void Check(string what)
@@ -236,16 +282,102 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>Binds the scene framebuffer (recreating it when the size or the sample count changed) and clears nothing: the caller does.</summary>
     public void Begin(int w, int h)
     {
-        if (w != width || h != height || requestedSamples != Options.Msaa) Allocate(w, h, Options.Msaa);
+        var up = Options.Upscale;
+        if (w != displayWidth || h != displayHeight || requestedSamples != Options.Msaa || up.Kind != allocatedKind || up.EffectiveScale != allocatedScale)
+            Allocate(w, h, Options.Msaa);
         slot = (slot + 1) % Slots;
         Collect(slot, false);
         pending[slot] = false;
         stampCount[slot] = 0;
-        haveNearSlice = false;
+        haveNearSlice = farSliceDrawn = false;
         Stamp("start");
+        frameIndex++;
+        JitterPixels = Temporal ? Jitter.Offset(frameIndex, JitterPhases) : Vector2.Zero;
+        // Textures at the display size's detail: log2 of the scale, and further for the vendor upscalers as they recommend (DECISIONS 15).
+        if (gl is ITextureLodBias lod) lod.TextureLodBias = Temporal ? MathF.Log2(width / (float)displayWidth) - (allocatedKind == UpscalerKind.Taa ? 0.5f : 1f) : 0;
         SceneFramebuffer = samples > 1 ? msFbo : sceneFbo;
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, SceneFramebuffer);
-        gl.Viewport(0, 0, (uint)w, (uint)h);
+        gl.Viewport(0, 0, (uint)width, (uint)height);
+    }
+
+    // ---- temporal upscaling ----
+
+    /// <summary>The size the scene is drawn at this frame (valid after <see cref="Begin"/>): the display size, or less with an upscaler.</summary>
+    public int RenderWidth => width;
+    public int RenderHeight => height;
+    /// <summary>Whether frames are jittered and reconstructed over time (an upscaler is on).</summary>
+    public bool Temporal => allocatedKind != UpscalerKind.Off;
+    /// <summary>The offset to move this frame's projection by, in render pixels (<see cref="Jitter.Apply"/>); zero without an upscaler.</summary>
+    public Vector2 JitterPixels { get; private set; }
+    public int JitterPhases => Jitter.PhaseCount(width, displayWidth);
+    /// <summary>Frames a still picture needs before the history has converged (screenshots).</summary>
+    public int WarmupFrames => Options.Upscale.Temporal ? Math.Max(32, 2 * Jitter.PhaseCount(Options.Upscale.RenderSize(1000, 1000).Width, 1000)) : 0;
+    /// <summary>The vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/>; without one (or on failure) TAA runs.</summary>
+    public IUpscaler? External { get; set; }
+    /// <summary>Makes the vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/> when it is first asked for (null: not available).</summary>
+    public Func<UpscalerKind, IUpscaler?>? UpscalerFactory { get; set; }
+    readonly HashSet<UpscalerKind> unavailable = [];
+
+    IUpscaler? ExternalFor(UpscalerKind kind)
+    {
+        if (kind is not (UpscalerKind.Fsr or UpscalerKind.Dlss)) return null;
+        if (External?.Kind == kind) return External;
+        if (unavailable.Contains(kind) || UpscalerFactory is null) return null;
+        External?.Dispose();
+        External = UpscalerFactory(kind);
+        if (External is null) unavailable.Add(kind);
+        else historyValid = false;
+        return External;
+    }
+    /// <summary>The upscaler that ran last frame (for the overlay).</summary>
+    public string ActiveUpscaler { get; private set; } = "off";
+
+    // The camera this frame and last (eye-relative views), and the per-slice reprojection.
+    Matrix4x4 viewRotation, previousRotation;
+    Vector3 eyeNow, previousEye;
+    float fovNow, aspectNow, previousFov, previousAspect;
+    bool previousValid;
+    Matrix4x4 nearToPrevious, farToPrevious;
+    Vector2 nearPlanes, farPlanes;
+    readonly System.Diagnostics.Stopwatch frameClock = new();
+
+    /// <summary>The main camera of this frame, before the slices: for the motion vectors (reprojection into the previous frame).</summary>
+    public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspectRatio)
+    {
+        eyeNow = eye;
+        viewRotation = view with { M41 = 0, M42 = 0, M43 = 0 };
+        (fovNow, aspectNow) = (fieldOfView, aspectRatio);
+    }
+
+    /// <summary>
+    /// The matrix from this frame's jittered clip space of a slice to the previous frame's unjittered clip space. Both views are taken
+    /// relative to this frame's eye (the previous one shifted by the eye's step), so no 10⁵-unit translations meet in float.
+    /// </summary>
+    Matrix4x4 ToPrevious(float near, float far)
+    {
+        if (!previousValid) return Matrix4x4.Identity;
+        var projection = Jitter.Apply(Matrix4x4.CreatePerspectiveFieldOfView(fovNow, aspectNow, near, far), JitterPixels, width, height);
+        return Reprojection.ClipToPrevious(viewRotation, eyeNow, projection, previousRotation, previousEye, Matrix4x4.CreatePerspectiveFieldOfView(previousFov, previousAspect, near, far));
+    }
+
+    /// <summary>Before drawing the far depth slice: with an upscaler it gets its own depth buffer (cleared here) so its depth survives for the motion vectors.</summary>
+    public void BeginFarSlice(float near, float far)
+    {
+        if (!Temporal) return;
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, farFbo);
+        gl.Clear(ClearBufferMask.DepthBufferBit);
+        farToPrevious = ToPrevious(near, far);
+        farPlanes = new Vector2(near, far);
+        farSliceDrawn = true;
+    }
+
+    /// <summary>Before drawing the near depth slice (the caller clears the depth after this).</summary>
+    public void BeginNearSlice(float near, float far)
+    {
+        if (!Temporal) return;
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, sceneFbo);
+        nearToPrevious = ToPrevious(near, far);
+        nearPlanes = new Vector2(near, far);
     }
 
     /// <summary>Resolves the scene and runs the chain into <see cref="Target"/>.</summary>
@@ -272,6 +404,10 @@ public sealed unsafe class PostProcess : IDisposable
         bool ao = needDepth, glow = o.Bloom && bloom.Length > 0;
         if (ao) RunSsao();
         if (ao) Stamp("ssao");
+        // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
+        postColour = sceneColour;
+        if (Temporal) { postColour = RunUpscale(); Stamp("upscale"); }
+        else ActiveUpscaler = "off";
         if (glow) RunBloom();
         if (glow) Stamp("bloom");
         bool auto = AutoExposure is not null && luminance is not null;
@@ -280,9 +416,9 @@ public sealed unsafe class PostProcess : IDisposable
 
         // Composite, straight to the target.
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, Target);
-        gl.Viewport(0, 0, (uint)width, (uint)height);
+        gl.Viewport(0, 0, (uint)displayWidth, (uint)displayHeight);
         gl.UseProgram(progComposite);
-        Bind(0, sceneColour); gl.Uniform1(U(progComposite, "uScene"), 0);
+        Bind(0, postColour); gl.Uniform1(U(progComposite, "uScene"), 0);
         Bind(1, aoB?.Texture ?? 0); gl.Uniform1(U(progComposite, "uAo"), 1);
         Bind(2, bloom.Length > 0 ? bloom[0].Texture : 0); gl.Uniform1(U(progComposite, "uBloom"), 2);
         Bind(3, auto ? adaptB!.Texture : 0); gl.Uniform1(U(progComposite, "uAdapted"), 3);
@@ -302,6 +438,7 @@ public sealed unsafe class PostProcess : IDisposable
         Stamp("composite");
 
         pending[slot] = true;
+        (previousRotation, previousEye, previousFov, previousAspect, previousValid) = (viewRotation, eyeNow, fovNow, aspectNow, Temporal);
 
         gl.BindVertexArray(0);
         gl.BindTexture(TextureTarget.Texture2D, 0);
@@ -309,6 +446,92 @@ public sealed unsafe class PostProcess : IDisposable
         gl.DepthMask(true);
         gl.Enable(EnableCap.DepthTest);
         gl.Enable(EnableCap.Multisample);
+    }
+
+    uint postColour;
+
+    /// <summary>The one projection the upscalers' depth is written for (camera near .. view distance, unjittered).</summary>
+    Matrix4x4 FullProjection(float fov, float aspectRatio) => Matrix4x4.CreatePerspectiveFieldOfView(fov, aspectRatio, UpscaleNear, UpscaleFar);
+
+    /// <summary>
+    /// The planes of the upscalers' depth: fixed, not the camera's (its near plane follows the eye's height above the ground and the far one the
+    /// haze), because FSR decodes last frame's depth with this frame's planes: changing planes read as a disocclusion everywhere.
+    /// </summary>
+    public const float UpscaleNear = 1, UpscaleFar = 1_000_000;
+
+    /// <summary>Motion vectors, then the vendor upscaler or TAA into the history; returns the display-size picture.</summary>
+    uint RunUpscale()
+    {
+        bool reset = !historyValid || !previousValid || Vector3.Distance(eyeNow, previousEye) > 5000;
+        float dt = (float)frameClock.Elapsed.TotalSeconds;
+        frameClock.Restart();
+        Velocity(motion!, depthOnly: false);
+        (historyA, historyB) = (historyB, historyA);
+        var output = historyB!;
+        bool done = false;
+        if (ExternalFor(Options.Upscale.Kind) is { } external)
+        {
+            Velocity(upscaleDepth!, depthOnly: true);
+            done = external.Dispatch(new UpscaleInputs
+            {
+                Colour = sceneColour, Depth = upscaleDepth!.Texture, Motion = motion!.Texture, Output = output.Texture,
+                RenderWidth = width, RenderHeight = height, DisplayWidth = displayWidth, DisplayHeight = displayHeight,
+                JitterPixels = JitterPixels, Near = UpscaleNear, Far = UpscaleFar, FieldOfView = fovNow,
+                DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f), Sharpness = Options.Upscale.Sharpness, Reset = reset,
+                ViewToClip = FullProjection(fovNow, aspectNow), ClipToPreviousClip = previousValid ? Reprojection.ClipToPrevious(viewRotation, eyeNow, FullProjection(fovNow, aspectNow), previousRotation, previousEye, FullProjection(previousFov, previousAspect)) : Matrix4x4.Identity,
+                Eye = eyeNow, Right = new Vector3(viewRotation.M11, viewRotation.M21, viewRotation.M31), Up = new Vector3(viewRotation.M12, viewRotation.M22, viewRotation.M32),
+                Forward = -new Vector3(viewRotation.M13, viewRotation.M23, viewRotation.M33), Aspect = aspectNow,
+            });
+            if (done) ActiveUpscaler = external.Name;
+            else
+            {
+                Console.WriteLine($"upscaler  {external.Name} failed; using TAA from now on");
+                unavailable.Add(external.Kind);
+                external.Dispose();
+                External = null;
+                warnedFallback = true;
+            }
+        }
+        if (!done)
+        {
+            if (Options.Upscale.Kind is UpscalerKind.Fsr or UpscalerKind.Dlss && !warnedFallback)
+            {
+                Console.WriteLine($"upscaler  {Options.Upscale.Kind.ToString().ToUpperInvariant()} is not available here; using TAA");
+                warnedFallback = true;
+            }
+            Pass(output);
+            gl.UseProgram(progTaa);
+            Bind(0, sceneColour); gl.Uniform1(U(progTaa, "uColour"), 0);
+            Bind(1, motion!.Texture); gl.Uniform1(U(progTaa, "uMotion"), 1);
+            Bind(2, historyA!.Texture); gl.Uniform1(U(progTaa, "uHistory"), 2);
+            gl.Uniform2(U(progTaa, "uRenderSize"), (float)width, (float)height);
+            gl.Uniform2(U(progTaa, "uDisplaySize"), (float)displayWidth, (float)displayHeight);
+            gl.Uniform2(U(progTaa, "uJitter"), JitterPixels.X, JitterPixels.Y);
+            gl.Uniform1(U(progTaa, "uBlend"), 0.1f);
+            gl.Uniform1(U(progTaa, "uReset"), reset ? 1 : 0);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            ActiveUpscaler = width == displayWidth && height == displayHeight ? "taa" : $"taa {width}x{height}";
+        }
+        historyValid = true;
+        return output.Texture;
+    }
+
+    void Velocity(Target2D target, bool depthOnly)
+    {
+        Pass(target);
+        gl.UseProgram(progVelocity);
+        Bind(0, sceneDepth); gl.Uniform1(U(progVelocity, "uNearDepth"), 0);
+        Bind(1, farDepth); gl.Uniform1(U(progVelocity, "uFarDepth"), 1);
+        var toNear = nearToPrevious; var toFar = farToPrevious;
+        gl.UniformMatrix4(U(progVelocity, "uNearToPrev"), 1, false, (float*)&toNear);
+        gl.UniformMatrix4(U(progVelocity, "uFarToPrev"), 1, false, (float*)&toFar);
+        gl.Uniform2(U(progVelocity, "uNearPlanes"), nearPlanes.X, nearPlanes.Y);
+        gl.Uniform2(U(progVelocity, "uFarPlanes"), farPlanes.X, farPlanes.Y);
+        gl.Uniform2(U(progVelocity, "uFullPlanes"), UpscaleNear, UpscaleFar);
+        gl.Uniform2(U(progVelocity, "uJitterNdc"), 2 * JitterPixels.X / width, 2 * JitterPixels.Y / height);
+        gl.Uniform1(U(progVelocity, "uHasFar"), farSliceDrawn ? 1 : 0);
+        gl.Uniform1(U(progVelocity, "uDepthOnly"), depthOnly ? 1 : 0);
+        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
     }
 
     void Bind(int unit, uint texture)
@@ -380,7 +603,7 @@ public sealed unsafe class PostProcess : IDisposable
         var lum = luminance!;
         Pass(lum);
         gl.UseProgram(progLuminance);
-        Bind(0, sceneColour); gl.Uniform1(U(progLuminance, "uScene"), 0);
+        Bind(0, postColour); gl.Uniform1(U(progLuminance, "uScene"), 0);
         gl.Uniform2(U(progLuminance, "uCell"), 1f / LuminanceSize, 1f / LuminanceSize);
         gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
         gl.BindTexture(TextureTarget.Texture2D, lum.Texture);
@@ -406,8 +629,8 @@ public sealed unsafe class PostProcess : IDisposable
         var first = bloom[0];
         Pass(first);
         gl.UseProgram(progPrefilter);
-        Bind(0, sceneColour); gl.Uniform1(U(progPrefilter, "uSrc"), 0);
-        gl.Uniform2(U(progPrefilter, "uTexel"), 1f / width, 1f / height);
+        Bind(0, postColour); gl.Uniform1(U(progPrefilter, "uSrc"), 0);
+        gl.Uniform2(U(progPrefilter, "uTexel"), 1f / displayWidth, 1f / displayHeight);
         gl.Uniform1(U(progPrefilter, "uThreshold"), Math.Max(Options.BloomThreshold, 0.01f));
         gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
         gl.UseProgram(progDown);
@@ -433,9 +656,10 @@ public sealed unsafe class PostProcess : IDisposable
 
     public void Dispose()
     {
+        External?.Dispose();
         Free();
         gl.DeleteVertexArray(vao);
-        foreach (var p in new[] { progSsao, progBlur, progPrefilter, progDown, progUp, progComposite, progLuminance, progAdapt }) gl.DeleteProgram(p);
+        foreach (var p in new[] { progSsao, progBlur, progPrefilter, progDown, progUp, progComposite, progLuminance, progAdapt, progVelocity, progTaa }) gl.DeleteProgram(p);
         for (int s = 0; s < Slots; s++)
             for (int i = 0; i < MaxStamps; i++) gl.DeleteQuery(stamps[s, i]);
     }

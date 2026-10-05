@@ -58,3 +58,29 @@ Choices made while working unattended on the `engine` branch, with the reason. N
 13. **Where `--renderer vulkan` applies.** The game (`meitou`) runs windowed and offscreen on either backend (`Display`:
     swapchain through `VulkanPresenter`, MAILBOX without vsync, FIFO with). The viewer uses Vulkan for `--screenshot` and
     `--fly-benchmark` (headless); its interactive window stays OpenGL (a developer tool; the game is the Vulkan window).
+14. **Upscaling: where it sits, MSAA off, motion from depth.** The scene is drawn at the render size (display × scale, rounded)
+    with a jittered projection (Halton 2,3; `8 × ratio²` phases, FSR's rule), the sky and both depth slices jittered, the shadow
+    maps and the water reflection not (the reflection is reused across frames; a jittered copy would shimmer). The upscaler
+    runs right after the scene and SSAO; bloom, exposure and the composite run at the display size on its output, so the HDR
+    picture is what gets reconstructed (the vendors' recommended place). With any upscaler on the scene is single-sampled:
+    TAA, FSR and DLSS reconstruct edges from the jittered frames and want single-sample inputs. Motion vectors come from depth
+    alone (camera reprojection): the world is static apart from foliage sway, which therefore ghosts slightly under TAA (sway
+    is off in offscreen pictures). To keep the far slice's depth for the reprojection, it gets its own depth buffer while an
+    upscaler is on instead of being cleared; with the upscaler off nothing changes (parity unchanged).
+15. **Texture LOD bias with an upscaler** (Vulkan only): every mipmapped fetch gets `log2(scale) − 1` for FSR and DLSS (the vendors'
+    guidance) and `log2(scale) − 0.5` for the built-in TAA (−1 shimmers at native scale with its gentler accumulation).
+    OpenGL 3.3 has no global bias (only per texture or sampler object), so GL with a render scale below 1 looks softer.
+16. **FSR through the FidelityFX API DLL of SDK 1.1.4.** AMD's SDK 2.x releases ship DX12-only DLLs; the newest prebuilt Vulkan
+    `amd_fidelityfx_vk.dll` (FSR 3.1.4, MIT) is in SDK v1.1.4, so that is what `FsrUpscaler` loads at run time (`MEITOU_FFX_PATH`
+    or next to the executable; never committed). FSR's `viewSpaceToMetersFactor` gets 0.1: Kenshi's unit is unknown, decimetres
+    fit the world's quoted size best (docs/formats/terrain.md). The device turns on FP16, 16-bit storage, formatless storage
+    images and subgroup size control where supported, because the DLL chooses its FP16 shaders from what the GPU supports.
+17. **DLSS through Streamline 2.14.1 in manual-hooking mode.** Streamline's interposer is loaded at run time (only when DLSS is asked
+    for, on the command line or in the saved settings, because `slInit` must run before the Vulkan instance), its reported instance
+    and device extensions and 1.2 features are added to our own device (the EXT/KHR buffer-device-address extensions are left out:
+    core 1.2 with the feature on; `privateData` is enabled for NGX), and the device is handed over with `slSetVulkanInfo`. Only
+    `vkQueuePresentKHR` goes through the interposer's proxy (Streamline needs to see presents); the swapchain calls stay native, which
+    DLSS Super Resolution does not need. Offscreen runs present nothing, so Streamline's per-present bookkeeping does not run there
+    (fine for pictures and benchmarks). The render size stays ours; the DLSS mode follows the render scale (DLAA at 1). Our images are
+    bottom-up, so the matrices DLSS gets have clip y flipped to describe the picture as stored. None of the NVIDIA DLLs are in the
+    repository (`MEITOU_STREAMLINE_PATH` or next to the executable: `sl.interposer.dll`, `sl.common.dll`, `sl.dlss.dll`, `nvngx_dlss.dll`).

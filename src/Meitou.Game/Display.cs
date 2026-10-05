@@ -1,6 +1,7 @@
 using Meitou.Rendering.Gpu;
 using Meitou.Rendering.Vulkan;
 using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Vulkan.Upscalers;
 using Silk.NET.Core.Native;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
@@ -24,10 +25,20 @@ sealed unsafe class Display : IDisposable
     readonly VkGl? vkGl;
     readonly VulkanPresenter? presenter;
 
-    public Display(string renderer, WindowOptions options, bool visible, bool vsync)
+    /// <summary>Streamline (DLSS), when <paramref name="streamline"/> asked for it and it loaded; shut down before the device.</summary>
+    public Streamline? Streamline { get; }
+
+    public Display(string renderer, WindowOptions options, bool visible, bool vsync, bool streamline = false)
     {
         if (renderer == "vulkan")
         {
+            var deviceOptions = new VulkanDeviceOptions { Validation = Environment.GetEnvironmentVariable("MEITOU_VK_VALIDATION") == "1" };
+            if (streamline)
+            {
+                Streamline = Streamline.TryInit(out var why);
+                if (Streamline is null) Console.WriteLine($"upscaler  {why}");
+                else Streamline.Apply(deviceOptions);
+            }
             if (visible)
             {
                 Window = Silk.NET.Windowing.Window.Create(options with { API = GraphicsAPI.DefaultVulkan, VSync = false });
@@ -36,18 +47,15 @@ sealed unsafe class Display : IDisposable
                 var names = surface.GetRequiredExtensions(out uint count);
                 var extensions = new string[count];
                 for (int i = 0; i < count; i++) extensions[i] = SilkMarshal.PtrToString((nint)names[i])!;
-                vulkan = VulkanDevice.Create(new VulkanDeviceOptions
-                {
-                    Validation = Environment.GetEnvironmentVariable("MEITOU_VK_VALIDATION") == "1",
-                    InstanceExtensions = extensions,
-                    CreateSurface = instance => surface.Create<AllocationCallbacks>(instance.ToHandle(), null).ToSurface(),
-                });
+                deviceOptions.InstanceExtensions = [.. extensions, .. deviceOptions.InstanceExtensions ?? []];
+                deviceOptions.CreateSurface = instance => surface.Create<AllocationCallbacks>(instance.ToHandle(), null).ToSurface();
+                vulkan = VulkanDevice.Create(deviceOptions);
             }
-            else vulkan = VulkanDevice.Create(new VulkanDeviceOptions { Validation = Environment.GetEnvironmentVariable("MEITOU_VK_VALIDATION") == "1" });
+            else vulkan = VulkanDevice.Create(deviceOptions);
             Console.WriteLine($"vulkan    {vulkan.DeviceName}");
             vkGl = new VkGl(vulkan);
             Gl = vkGl;
-            if (visible) presenter = new VulkanPresenter(vulkan, vkGl, vsync);
+            if (visible) presenter = new VulkanPresenter(vulkan, vkGl, vsync) { PresentFunction = Streamline is { DlssSupported: true } s ? s.PresentProxy : null };
         }
         else
         {
@@ -87,6 +95,7 @@ sealed unsafe class Display : IDisposable
     {
         presenter?.Dispose();
         vkGl?.Dispose();
+        Streamline?.Dispose();
         if (vulkan is not null)
         {
             if (vulkan.ValidationErrors > 0) Console.WriteLine($"vulkan validation: {vulkan.ValidationErrors} errors\n{string.Join("\n", vulkan.ValidationLog.Take(20))}");

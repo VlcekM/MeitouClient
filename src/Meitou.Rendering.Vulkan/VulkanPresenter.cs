@@ -28,6 +28,9 @@ public sealed unsafe class VulkanPresenter : IDisposable
 
     /// <summary>Vsync (FIFO); changing it recreates the swapchain at the next frame.</summary>
     public bool VSync { get => vsync; set { if (vsync != value) { vsync = value; stale = true; } } }
+
+    /// <summary>Presents through this function instead of the driver's <c>vkQueuePresentKHR</c> (Streamline's proxy, which it must see every frame).</summary>
+    public delegate* unmanaged<Queue, PresentInfoKHR*, Result> PresentFunction { get; set; }
     bool vsync, stale = true;
 
     public VulkanPresenter(VulkanDevice device, VkGl gl, bool vsync)
@@ -103,7 +106,7 @@ public sealed unsafe class VulkanPresenter : IDisposable
             SwapchainCount = 1, PSwapchains = &sc, PImageIndices = &index,
         };
         Result r;
-        lock (device.QueueLock) r = khr.QueuePresent(device.GraphicsQueue, &info);
+        lock (device.QueueLock) r = PresentFunction != null ? PresentFunction(device.GraphicsQueue, &info) : khr.QueuePresent(device.GraphicsQueue, &info);
         if (r is Result.ErrorOutOfDateKhr or Result.SuboptimalKhr) stale = true;
         else VkGl.Check(r);
         acquiredImage = false;

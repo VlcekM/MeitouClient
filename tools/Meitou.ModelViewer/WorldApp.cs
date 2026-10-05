@@ -14,6 +14,7 @@ using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
 using Meitou.Rendering.Vulkan;
 using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Vulkan.Upscalers;
 using static Meitou.Rendering.WorldFrame;
 
 namespace Meitou.ModelViewer;
@@ -60,6 +61,9 @@ static partial class WorldApp
             PreferredDepthBufferBits = 24,
         });
 
+    /// <summary>Streamline for DLSS, loaded before the Vulkan device of an offscreen run when <c>--upscaler dlss</c> asks for it.</summary>
+    static Streamline? streamline;
+
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
         // OpenGL through a hidden window, or Vulkan headless (no window at all).
@@ -69,7 +73,15 @@ static partial class WorldApp
         IGl gl;
         if (o.Renderer == "vulkan")
         {
-            vulkan = VulkanDevice.Create(new VulkanDeviceOptions { Validation = Environment.GetEnvironmentVariable("MEITOU_VK_VALIDATION") == "1" });
+            var deviceOptions = new VulkanDeviceOptions { Validation = Environment.GetEnvironmentVariable("MEITOU_VK_VALIDATION") == "1" };
+            // DLSS: Streamline goes in before the instance and adds what it needs to the device.
+            if (o.Post.Upscale.Kind == UpscalerKind.Dlss)
+            {
+                streamline = Streamline.TryInit(out var why);
+                if (streamline is null) Console.WriteLine($"upscaler  {why}");
+                else streamline.Apply(deviceOptions);
+            }
+            vulkan = VulkanDevice.Create(deviceOptions);
             Console.WriteLine($"vulkan    {vulkan.DeviceName}");
             gl = new VkGl(vulkan);
         }
@@ -87,6 +99,8 @@ static partial class WorldApp
         finally
         {
             if (gl is VkGl vkGl) vkGl.Dispose();
+            streamline?.Dispose();
+            streamline = null;
             if (vulkan is not null)
             {
                 if (vulkan.ValidationErrors > 0) Console.WriteLine($"vulkan validation: {vulkan.ValidationErrors} errors\n{string.Join("\n", vulkan.ValidationLog.Take(20))}");
@@ -106,6 +120,7 @@ static partial class WorldApp
     static unsafe int Screenshot(IGl gl, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
         using var gpu = CreateGpu(gl, install, scene, assets, o, interactive: false);
+        if (gl is VkGl vkGl && gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(vkGl, streamline);
         var (camera, render) = Setup(scene, o);
         if (gpu.Streamer is { } streamer)
         {
@@ -180,8 +195,10 @@ static partial class WorldApp
             gpu.Foliage?.Settle(camera.Eye);
         }
 
+        // A temporal upscaler converges over its jitter sequence first (a still camera: the history only sharpens).
+        for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { camera.Yaw += o.OrbitStep; Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
         var drawWatch = Stopwatch.StartNew();
-        { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
+        { camera.Yaw += o.OrbitStep; Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
         gl.Finish();
         Console.WriteLine($"drawn in {drawWatch.ElapsedMilliseconds} ms: {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
             (gpu.Objects is { } ob ? $", {ob.DrawnInstances} objects ({ob.DrawnTriangles:N0} triangles)" : ""));
@@ -190,7 +207,7 @@ static partial class WorldApp
         const int timedFrames = 10;
         gpu.Post?.Flush();
         gpu.Post?.TakeCosts(); // drop the warm-up frames
-        for (int i = 0; i < timedFrames; i++) { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
+        for (int i = 0; i < timedFrames; i++) { camera.Yaw += o.OrbitStep; Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
         gl.Finish();
         Console.WriteLine($"frame     {drawWatch.Elapsed.TotalMilliseconds / timedFrames:0.0} ms on average over {timedFrames} more frames");
         if (gpu.Objects is { } objectStats) Console.WriteLine($"objects   draw cpu {objectStats.LastDrawCpuMs:0.00} ms, {objectStats.DrawCalls} draw calls, {objectStats.DrawnInstances} instances, {objectStats.DrawnTriangles:N0} triangles");

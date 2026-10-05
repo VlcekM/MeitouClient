@@ -26,4 +26,13 @@ public sealed class VulkanDeviceOptions
 
     /// <summary>Extra instance extensions to enable (e.g. the ones the windowing library needs for a surface).</summary>
     public string[]? InstanceExtensions { get; set; }
+
+    /// <summary>Extra device extensions, enabled when the device has them (e.g. what Streamline asks for DLSS).</summary>
+    public string[]? DeviceExtensions { get; set; }
+
+    /// <summary>Vulkan 1.2 features to enable when supported, by their C name (Streamline's list: <c>descriptorIndexing</c>, <c>bufferDeviceAddress</c>, <c>timelineSemaphore</c>).</summary>
+    public string[]? Features12 { get; set; }
+
+    /// <summary>Called right after the device is created (Streamline's <c>slSetVulkanInfo</c>).</summary>
+    public Action<VulkanDevice>? DeviceCreated { get; set; }
 }

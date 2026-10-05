@@ -26,7 +26,7 @@ namespace Meitou.Rendering.Vulkan;
 /// </list>
 /// Not in this model: bindless descriptors and multithreaded command recording (DECISIONS.md 7).
 /// </summary>
-public sealed unsafe partial class VkGl : IGl, IDisposable
+public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
 {
     readonly VulkanDevice device;
     readonly Vk vk;
@@ -80,6 +80,8 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
 
     /// <summary>Counters for the frame (draws, pipelines created, render passes, renamed buffers), reset by <see cref="BeginFrame"/>.</summary>
     public VkGlStats Stats { get; } = new();
+    /// <summary>Added to the mip level of every mipmapped fetch (ITextureLodBias; set by the post-processing chain for an upscaler).</summary>
+    public float TextureLodBias { get; set; }
 
     internal static void Check(Result r)
     {
@@ -133,6 +135,17 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
 
     /// <summary>Records <paramref name="record"/> into the frame's command buffer outside any render pass, after everything recorded so far
     /// (presenting, upscalers). Images are in GENERAL layout.</summary>
+    /// <summary>Starts recording outside the GL calls in the frame (the open render pass ended, a full barrier); <see cref="EndExternal"/> follows. For callers that hand the command buffer to native code.</summary>
+    public CommandBuffer BeginExternal()
+    {
+        EndPass();
+        FullBarrier(Cmd);
+        return Cmd;
+    }
+
+    /// <summary>Ends what <see cref="BeginExternal"/> started (a full barrier).</summary>
+    public void EndExternal() => FullBarrier(Cmd);
+
     public void RecordInFrame(Action<CommandBuffer> record)
     {
         EndPass();

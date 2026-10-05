@@ -164,6 +164,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         Allocator = new GpuAllocator(this);
         CreatePipelineCache();
         Frames = new FrameRing(this, options.FramesInFlight);
+        options.DeviceCreated?.Invoke(this);
     }
 
     bool LayerAvailable()
@@ -456,6 +457,8 @@ public sealed unsafe class VulkanDevice : IDisposable
         return -1;
     }
 
+    bool Wants12(string feature) => options.Features12?.Contains(feature) == true;
+
     void CreateLogicalDevice()
     {
         var pd = PhysicalDevice;
@@ -464,6 +467,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         // Query everything that might exist, in one chain (only structs of extensions the device has).
         var v13 = new PhysicalDeviceVulkan13Features { SType = StructureType.PhysicalDeviceVulkan13Features };
         var v12 = new PhysicalDeviceVulkan12Features { SType = StructureType.PhysicalDeviceVulkan12Features };
+        var v11 = new PhysicalDeviceVulkan11Features { SType = StructureType.PhysicalDeviceVulkan11Features };
         var eds2 = new PhysicalDeviceExtendedDynamicState2FeaturesEXT { SType = StructureType.PhysicalDeviceExtendedDynamicState2FeaturesExt };
         var eds3 = new PhysicalDeviceExtendedDynamicState3FeaturesEXT { SType = StructureType.PhysicalDeviceExtendedDynamicState3FeaturesExt };
         var clip = new PhysicalDeviceDepthClipControlFeaturesEXT { SType = StructureType.PhysicalDeviceDepthClipControlFeaturesExt };
@@ -492,6 +496,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         // The structs are locals of this method and never move (no GC relocation of stack locals).
         Link(ref v13, true);
         Link(ref v12, true);
+        Link(ref v11, true);
         Link(ref eds2, extEds2);
         Link(ref eds3, extEds3);
         Link(ref clip, extClip);
@@ -532,6 +537,9 @@ public sealed unsafe class VulkanDevice : IDisposable
             PNext = v13.PNext,
             DynamicRendering = true,
             Synchronization2 = true,
+            SubgroupSizeControl = v13.SubgroupSizeControl,
+            ComputeFullSubgroups = v13.ComputeFullSubgroups,
+            PrivateData = v13.PrivateData,   // NVIDIA's NGX (DLSS) creates private data slots
         };
         v12 = new PhysicalDeviceVulkan12Features
         {
@@ -542,6 +550,18 @@ public sealed unsafe class VulkanDevice : IDisposable
             HostQueryReset = v12.HostQueryReset,
             ScalarBlockLayout = v12.ScalarBlockLayout,
             UniformBufferStandardLayout = v12.UniformBufferStandardLayout,
+            // What the vendor upscalers' compute shaders may use: AMD's FSR picks its FP16 shaders from what the GPU supports, not
+            // from what is enabled (docs/engine.md "Upscaling"), so everything it can probe is turned on where supported.
+            ShaderFloat16 = v12.ShaderFloat16,
+            DescriptorIndexing = v12.DescriptorIndexing && Wants12("descriptorIndexing"),
+            BufferDeviceAddress = v12.BufferDeviceAddress && Wants12("bufferDeviceAddress"),
+        };
+        v11 = new PhysicalDeviceVulkan11Features
+        {
+            SType = StructureType.PhysicalDeviceVulkan11Features,
+            PNext = v11.PNext,
+            StorageBuffer16BitAccess = v11.StorageBuffer16BitAccess,
+            UniformAndStorageBuffer16BitAccess = v11.UniformAndStorageBuffer16BitAccess,
         };
         // The Link() calls stored pointers to the old locations, which are the same variables: still valid.
         eds2 = new PhysicalDeviceExtendedDynamicState2FeaturesEXT
@@ -582,6 +602,9 @@ public sealed unsafe class VulkanDevice : IDisposable
             TextureCompressionBC = TextureCompressionBC,
             IndependentBlend = IndependentBlend,
             ImageCubeArray = ImageCubeArray,
+            ShaderStorageImageReadWithoutFormat = core.ShaderStorageImageReadWithoutFormat,
+            ShaderStorageImageWriteWithoutFormat = core.ShaderStorageImageWriteWithoutFormat,
+            ShaderInt16 = core.ShaderInt16,
         };
 
         var names = new List<string>();
@@ -591,6 +614,13 @@ public sealed unsafe class VulkanDevice : IDisposable
         if (extClip) names.Add("VK_EXT_depth_clip_control");
         if (extVid) names.Add("VK_EXT_vertex_input_dynamic_state");
         if (extPush) names.Add("VK_KHR_push_descriptor");
+        // Core since 1.1, but AMD's FidelityFX DLL calls the KHR-named entry points when the GPU lists the extensions, and those are
+        // null unless the extensions are enabled (DECISIONS 16).
+        foreach (var e in (string[])["VK_KHR_get_memory_requirements2", "VK_KHR_dedicated_allocation"])
+            if (have.Contains(e)) names.Add(e);
+        foreach (var e in options.DeviceExtensions ?? [])
+            // Buffer device address is core in 1.2 (enabled as a feature): its extensions may not be enabled with it.
+            if (have.Contains(e) && !names.Contains(e) && e is not ("VK_EXT_buffer_device_address" or "VK_KHR_buffer_device_address")) names.Add(e);
 
         // Queues
         var fams = QueueFamilies(pd);

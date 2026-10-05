@@ -33,6 +33,7 @@ public sealed unsafe partial class VkGl
         public ComponentSwizzle SwizzleR = ComponentSwizzle.Identity, SwizzleG = ComponentSwizzle.Identity, SwizzleB = ComponentSwizzle.Identity, SwizzleA = ComponentSwizzle.Identity;
         // Sampler and view as last used (VkGl.SamplerAndView), valid while Version, DefinedLevels and Image are unchanged.
         public int Version, CachedVersion = -1;
+        public float CachedBias;
         public bool CachedShadow;
         public uint CachedLevels;
         public GpuImage? CachedImage;
@@ -215,6 +216,8 @@ public sealed unsafe partial class VkGl
         t.DefinedLevels = 0;
         var usage = ImageUsageFlags.SampledBit | ImageUsageFlags.TransferDstBit | ImageUsageFlags.TransferSrcBit;
         if (!IsCompressed(t.Format)) usage |= t.IsDepth ? ImageUsageFlags.DepthStencilAttachmentBit : ImageUsageFlags.ColorAttachmentBit;
+        // Float colour targets can also be storage images: the vendor upscalers write their output with compute (ImageOf).
+        if (samples == 1 && t.Format is Format.R16G16B16A16Sfloat or Format.R32Sfloat or Format.R16G16Sfloat && SupportsStorage(t.Format)) usage |= ImageUsageFlags.StorageBit;
         var info = new ImageCreateInfo
         {
             SType = StructureType.ImageCreateInfo,
@@ -493,3 +496,33 @@ public sealed unsafe partial class VkGl
         return view;
     }
 }
+
+public sealed unsafe partial class VkGl
+{
+    readonly Dictionary<Format, bool> storageSupport = [];
+
+    bool SupportsStorage(Format format)
+    {
+        if (!storageSupport.TryGetValue(format, out bool ok))
+        {
+            vk.GetPhysicalDeviceFormatProperties(device.PhysicalDevice, format, out var props);
+            storageSupport[format] = ok = (props.OptimalTilingFeatures & FormatFeatureFlags.StorageImageBit) != 0;
+        }
+        return ok;
+    }
+
+    /// <summary>
+    /// The Vulkan image behind a GL texture name, with a view of its first level, for work recorded outside the GL calls
+    /// (<see cref="RecordInFrame"/>: the vendor upscalers). The image stays in <see cref="ImageLayout.General"/>; whoever transitions
+    /// it must return it there. Float colour textures (RGBA16F, RG16F, R32F) are created with storage usage where the device allows.
+    /// </summary>
+    public VkGlImage ImageOf(uint texture)
+    {
+        var t = textures[texture];
+        if (t.Image is null) throw new InvalidOperationException($"texture {texture} has no storage");
+        return new VkGlImage(t.Image.Image, AttachmentView(t, 0, 0), t.Format, t.Width, t.Height, t.Levels, t.IsDepth, t.Image.Usage);
+    }
+}
+
+/// <summary>A GL texture's Vulkan image (<see cref="VkGl.ImageOf"/>): the image, a view of level 0, its format and size.</summary>
+public readonly record struct VkGlImage(Image Image, ImageView View, Format Format, int Width, int Height, int Levels, bool IsDepth, ImageUsageFlags Usage);

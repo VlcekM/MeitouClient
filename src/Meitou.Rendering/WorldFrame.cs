@@ -47,6 +47,8 @@ sealed class WorldOptions
     public float FlyRadius = 12000, FlySpeed = 150;
     /// <summary>The benchmark without a wait for the GPU each frame and without the 60 fps pacing: up to two frames in flight (both backends), frame time = the interval between frames.</summary>
     public bool FlyPipelined;
+    /// <summary>Offscreen pictures: radians the camera orbits by every frame (tests the motion vectors under a temporal upscaler).</summary>
+    public float OrbitStep;
     /// <summary>The GPU backend for offscreen pictures and benchmarks: <c>gl</c> or <c>vulkan</c> (the GL calls translated, docs/engine.md).</summary>
     public string Renderer = "gl";
 
@@ -85,6 +87,7 @@ sealed class WorldOptions
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
                                    percentiles, the worst frames with their stage times and resident memory   --fly-radius <u> (12000)   --fly-speed <u per frame> (150)
                                    --fly-pipelined: no GPU wait per frame and no pacing, two frames in flight; reports the interval between frames
+          --orbit-step <degrees>   with --screenshot: the camera orbits this much every frame (checks the upscaler's motion vectors)
           --renderer gl|vulkan     backend for --screenshot and --fly-benchmark (default gl)
           --view-distance <u>      furthest terrain drawn (default 450000: the whole world)
           --fog <u>                distance where the haze is complete (default 250000)
@@ -163,6 +166,7 @@ sealed class WorldOptions
                 case "--fly-radius": o.FlyRadius = F(); break;
                 case "--fly-speed": o.FlySpeed = F(); break;
                 case "--fly-pipelined": o.FlyPipelined = true; break;
+                case "--orbit-step": o.OrbitStep = F() * MathF.PI / 180; break;
                 case "--view-distance": o.ViewDistance = F(); break;
                 case "--fog": o.FogDistance = F(); break;
                 case "--material-distance": o.MaterialDistance = F(); break;
@@ -377,6 +381,9 @@ static class WorldFrame
 
     /// <summary>Draws a frame: the sky, then the far depth slice (terrain, water), then the near one (terrain, objects, water).</summary>
     // The Tab panel: draw distances and LOD.
+    /// <summary>The upscaler sliders' labels (the game keeps command-line upscaler options over the saved ones).</summary>
+    public static readonly string[] UpscalerSliders = ["Upscaler: 0 off 1 TAA 2 FSR 3 DLSS", "Render scale (upscaler)", "Upscaler sharpness"];
+
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r)
     {
         var sliders = new List<Slider>();
@@ -396,6 +403,14 @@ static class WorldFrame
         sliders.Add(new Slider("Terrain LOD distance", 2, 16, () => r.LodDistance, v => r.LodDistance = v, "0.0"));
         // A viewer option, not the game's: 1 is the game's haze (docs/formats/sky.md).
         sliders.Add(new Slider("Haze strength (1 = game)", 0, 3, () => g.Sky.HazeStrength, v => g.Sky.HazeStrength = v, "0.00"));
+        if (g.Post is { } post)
+        {
+            // Upscaling (docs/engine.md "Upscaling"): FSR and DLSS fall back to TAA where their library or backend is missing.
+            var up = post.Options.Upscale;
+            sliders.Add(new Slider(UpscalerSliders[0], 0, 3, () => (int)up.Kind, v => up.Kind = (UpscalerKind)(int)MathF.Round(v), "0"));
+            sliders.Add(new Slider(UpscalerSliders[1], 0.33f, 1, () => up.EffectiveScale, v => up.Scale = MathF.Round(v * 100) / 100, "0.00"));
+            sliders.Add(new Slider(UpscalerSliders[2], 0, 1, () => up.Sharpness, v => up.Sharpness = v, "0.00"));
+        }
         return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders);
     }
 
@@ -403,6 +418,9 @@ static class WorldFrame
     {
         // Everything is drawn into the post-processing chain's HDR framebuffer (before the reflection pass, which restores whatever is bound).
         gpu.Post?.Begin(width, height);
+        // The scene is drawn at the render size (smaller than the display with an upscaler), its projection jittered by the upscaler.
+        int rw = gpu.Post?.RenderWidth ?? width, rh = gpu.Post?.RenderHeight ?? height;
+        var jitter = gpu.Post?.JitterPixels ?? Vector2.Zero;
         var eye = camera.Eye;
         gpu.Streamer?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(0);
@@ -424,12 +442,12 @@ static class WorldFrame
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
         StageClock.Lap(3);
-        if (gpu.Shadow is not null) DrawShadows(gpu, camera, render, light, width, height);
+        if (gpu.Shadow is not null) DrawShadows(gpu, camera, render, light, rw, rh);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is not null;
         if (gpu.Reflection is not null) gpu.Reflection.RestoreFramebuffer = gpu.Post?.SceneFramebuffer;
         if (reflecting)
-            gpu.Reflection!.Render(camera, width, height, gpu.Sky, colours, light, gpu.Terrain, render, gpu.Objects is null ? null : (vp, e, frustum) =>
+            gpu.Reflection!.Render(camera, rw, rh, gpu.Sky, colours, light, gpu.Terrain, render, gpu.Objects is null ? null : (vp, e, frustum) =>
             {
                 var reflection = gpu.Reflection;
                 var objects = gpu.Objects;
@@ -446,7 +464,7 @@ static class WorldFrame
                 reflection.SceneStats = $"{objects.DrawnInstances} objects ({objects.DrawnTriangles:N0} triangles, {objects.DrawCalls} calls), {gpu.Foliage?.DrawnInstances ?? 0} foliage meshes ({gpu.Foliage?.DrawCalls ?? 0} calls)";
             });
         StageClock.Lap(4);
-        gl.Viewport(0, 0, (uint)width, (uint)height);
+        gl.Viewport(0, 0, (uint)rw, (uint)rh);
         gl.ClearColor(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1);
         gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
         float aspect = width / (float)Math.Max(height, 1);
@@ -454,19 +472,21 @@ static class WorldFrame
         // Rotation only: with the eye's world position in the matrix, the directions rebuilt from it lose float
         // precision far from the origin and the sky blurs.
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
-        gpu.Sky.Draw(rotation * camera.Projection(aspect, 1, 1000), colours);
+        gpu.Sky.Draw(rotation * Jitter.Apply(camera.Projection(aspect, 1, 1000), jitter, rw, rh), colours);
         gl.Enable(EnableCap.DepthTest);
         gl.DepthFunc(DepthFunction.Lequal);
         StageClock.Lap(5);
+        gpu.Post?.SetCamera(eye, view, camera.FieldOfView, aspect);
         gpu.Terrain.BeginFrame();
         bool first = true, foliageDrawn = false;
         foreach (var (near, far) in camera.Slices())
         {
+            bool nearSlice = near <= camera.Near;
+            if (!first || nearSlice) gpu.Post?.BeginNearSlice(near, far); else gpu.Post?.BeginFarSlice(near, far);
             if (!first) gl.Clear(ClearBufferMask.DepthBufferBit);
             first = false;
-            bool nearSlice = near <= camera.Near;
             if (nearSlice) gpu.Post?.SetNearSlice(near, far, camera.FieldOfView, aspect);
-            var viewProjection = view * camera.Projection(aspect, near, far);
+            var viewProjection = view * Jitter.Apply(camera.Projection(aspect, near, far), jitter, rw, rh);
             var frustum = WorldCamera.FrustumPlanes(viewProjection);
             gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
             StageClock.Lap(6);
@@ -479,7 +499,7 @@ static class WorldFrame
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, gpu.Terrain, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
             StageClock.Lap(9);
         }
-        if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneFramebuffer, width, height);
+        if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneFramebuffer, rw, rh);
         gpu.Post?.End(); // resolve, SSAO, bloom, tone map into gpu.Post.Target
         if (gpu.DebugShadows > 0 && gpu.Shadow is not null)
         {

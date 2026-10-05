@@ -488,11 +488,11 @@ public sealed unsafe partial class VkGl
     /// <summary>The sampler and view a texture samples with, cached on the texture until its state changes.</summary>
     (Sampler, ImageView) SamplerAndView(GlTextureObj t, bool shadow)
     {
-        if (t.CachedVersion == t.Version && t.CachedShadow == shadow && t.CachedLevels == t.DefinedLevels && t.CachedImage == t.Image)
+        if (t.CachedVersion == t.Version && t.CachedShadow == shadow && t.CachedLevels == t.DefinedLevels && t.CachedImage == t.Image && t.CachedBias == TextureLodBias)
             return (t.CachedSampler, t.CachedView);
         t.CachedSampler = SamplerFor(t, shadow);
         t.CachedView = SampleView(t);
-        (t.CachedVersion, t.CachedShadow, t.CachedLevels, t.CachedImage) = (t.Version, shadow, t.DefinedLevels, t.Image);
+        (t.CachedVersion, t.CachedShadow, t.CachedLevels, t.CachedImage, t.CachedBias) = (t.Version, shadow, t.DefinedLevels, t.Image, TextureLodBias);
         return (t.CachedSampler, t.CachedView);
     }
 
@@ -509,7 +509,8 @@ public sealed unsafe partial class VkGl
     GlTextureObj SamplerTexture(SamplerInfo s, int unit)
     {
         int slot = s.Dimension == SamplerDimension.Cube ? 2 : s.Arrayed ? 1 : 0;
-        if (unit >= 0 && unit < units.GetLength(0) && units[unit, slot] is { Image: not null } t && t.IsDepth == s.Depth) return t;
+        // A shadow sampler needs a depth texture; a plain sampler reads a depth texture's value (SSAO, the motion vectors).
+        if (unit >= 0 && unit < units.GetLength(0) && units[unit, slot] is { Image: not null } t && (t.IsDepth || !s.Depth)) return t;
         int kind = slot * 4 + (int)s.SampledKind;
         if (!dummyTextures.TryGetValue((kind, s.Depth), out var d))
         {
@@ -560,7 +561,7 @@ public sealed unsafe partial class VkGl
     }
 
     internal record struct SamplerKey(Filter Min, Filter Mag, SamplerMipmapMode Mip, bool Mipmapped, SamplerAddressMode U, SamplerAddressMode V, SamplerAddressMode W,
-        bool Compare, CompareOp Op, bool TransparentBorder, float Anisotropy);
+        bool Compare, CompareOp Op, bool TransparentBorder, float Anisotropy, float Bias);
 
     Sampler SamplerFor(GlTextureObj t, bool shadow)
     {
@@ -577,7 +578,7 @@ public sealed unsafe partial class VkGl
         var mag = t.MagFilter == TextureMagFilter.Nearest ? Filter.Nearest : Filter.Linear;
         if (integer) (min, mag, mip) = (Filter.Nearest, Filter.Nearest, SamplerMipmapMode.Nearest);
         var key = new SamplerKey(min, mag, mip, mipmapped, Wrap(t.WrapS), Wrap(t.WrapT), Wrap(t.WrapR),
-            shadow && t.Compare, Compare(t.CompareFunc), t.TransparentBorder, device.SamplerAnisotropy ? Math.Clamp(t.Anisotropy, 1, 16) : 1);
+            shadow && t.Compare, Compare(t.CompareFunc), t.TransparentBorder, device.SamplerAnisotropy ? Math.Clamp(t.Anisotropy, 1, 16) : 1, mipmapped ? TextureLodBias : 0);
         if (samplers.TryGetValue(key, out var sampler)) return sampler;
         var info = new SamplerCreateInfo
         {
@@ -589,7 +590,8 @@ public sealed unsafe partial class VkGl
             MinLod = 0, MaxLod = key.Mipmapped ? Vk.LodClampNone : 0.25f,
             // NVIDIA's OpenGL picks mips a quarter level finer than its Vulkan driver with anisotropic filtering on: matched here
             // (docs/engine.md "Vulkan backend"; measured 1.2 -> 0.001 mean difference on the rock view).
-            MipLodBias = key.Anisotropy > 1 && device.Properties.VendorID == 0x10DE ? -0.25f : 0,
+            // Plus the upscaler's bias (ITextureLodBias).
+            MipLodBias = (key.Anisotropy > 1 && device.Properties.VendorID == 0x10DE ? -0.25f : 0) + key.Bias,
             BorderColor = integer ? (key.TransparentBorder ? BorderColor.IntTransparentBlack : BorderColor.IntOpaqueBlack)
                 : key.TransparentBorder ? BorderColor.FloatTransparentBlack : BorderColor.FloatOpaqueWhite,
         };

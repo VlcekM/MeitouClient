@@ -126,6 +126,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
     void Boot(IGl gl, bool interactive)
     {
         gpu = WorldFrame.CreateGpu(gl, install, scene, assets, o, interactive);
+        if (gl is Meitou.Rendering.Vulkan.VkGl vkGl && gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Vulkan.Upscalers.VendorUpscalers.Factory(vkGl, streamline);
         (camera, render) = WorldFrame.Setup(scene, o);
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate);
         foreach (var problem in session.Bindings.Apply(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
@@ -142,6 +143,11 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         ApplyCamera(session.Camera.Current);
         if (interactive) WorldFrame.FinishLoading(gl);
     }
+
+    Meitou.Rendering.Vulkan.Upscalers.Streamline? streamline;
+
+    /// <summary>DLSS asked for, on the command line or in the saved settings: Streamline must be loaded before the Vulkan device.</summary>
+    bool WantsDlss() => o.Post.Upscale.Kind == UpscalerKind.Dlss || !o.Post.Upscale.Explicit && config.Graphics.TryGetValue(WorldFrame.UpscalerSliders[0], out float k) && MathF.Round(k) == (int)UpscalerKind.Dlss;
 
     EngineKey FirstKey(InputAction action) => session.Bindings.Get(action).First(b => !b.IsMouse).Key;
 
@@ -161,7 +167,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
 
     unsafe int Screenshot()
     {
-        using var display = new Display(o.Renderer, WindowOptions.Default with { Size = new Vector2D<int>(o.Width, o.Height) }, visible: false, vsync: false);
+        using var display = new Display(o.Renderer, WindowOptions.Default with { Size = new Vector2D<int>(o.Width, o.Height) }, visible: false, vsync: false, streamline: WantsDlss());
+        streamline = display.Streamline;
         var gl = display.Gl;
         Boot(gl, interactive: false);
         for (int i = 0; i < g.Ticks; i++) session.Tick();
@@ -178,6 +185,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, colour);
         gpu.Post!.Target = fbo;
         gpu.Post.InstantAdaptation = true;
+        for (int i = 0; i < gpu.Post.WarmupFrames; i++) { DrawWorld(gl, w, h); display.EndFrame(); }   // a temporal upscaler converges first
         DrawWorld(gl, w, h);
         display.EndFrame();
         DrawWorld(gl, w, h);
@@ -204,7 +212,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             WindowState = WindowState.Maximized,
             FramesPerSecond = 0,
             UpdatesPerSecond = 0,
-        }, visible: true, vsync);
+        }, visible: true, vsync, streamline: WantsDlss());
+        streamline = display.Streamline;
         var window = display.Window!;
         var gl = display.Gl;
         Boot(gl, interactive: true);
@@ -212,7 +221,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         var panel = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render);
         if (panel is not null)
             foreach (var slider in panel.Sliders)
-                if (config.Graphics.TryGetValue(slider.Label, out float v)) slider.Set(Math.Clamp(v, slider.Min, slider.Max));
+                if (config.Graphics.TryGetValue(slider.Label, out float v) && !(o.Post.Upscale.Explicit && WorldFrame.UpscalerSliders.Contains(slider.Label)))
+                    slider.Set(Math.Clamp(v, slider.Min, slider.Max));
         gl.Enable(EnableCap.Multisample);
 
         var silkInput = Silk.NET.Input.InputWindowExtensions.CreateInput(window);
@@ -290,7 +300,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
                 var s = session.Camera.Current;
                 int minutes = (int)(session.Clock.HourOfDay * 60);
                 window.Title = $"Meitou | {frames / titleTimer:0} fps, cpu {cpuSum / Math.Max(frames, 1):0.00} ms | {(session.Camera.IsFree ? "free camera" : $"boom {s.Distance:0}")} | " +
-                    $"{minutes / 60:00}:{minutes % 60:00} x{session.TimeScale:0}{(session.Clock.Paused ? " paused" : "")} | {s.Target.X:0}, {s.Target.Z:0}";
+                    $"{minutes / 60:00}:{minutes % 60:00} x{session.TimeScale:0}{(session.Clock.Paused ? " paused" : "")} | {s.Target.X:0}, {s.Target.Z:0}{(gpu.Post is { Temporal: true } p ? $" | {p.ActiveUpscaler}" : "")}";
                 titleTimer = cpuSum = 0;
                 frames = 0;
             }

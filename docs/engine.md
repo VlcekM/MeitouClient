@@ -112,6 +112,45 @@ signatures and enums. It has two implementations, chosen with `--renderer gl|vul
   finer, matched with a −0.25 LOD bias on NVIDIA (DECISIONS 9); alpha-to-coverage edges differ slightly (DECISIONS 10);
   `DEPTH_COMPONENT24` is a 32-bit float depth buffer.
 
+## Upscaling
+
+`--upscaler off|taa|fsr|dlss`, `--render-scale <0.25..1|native|quality|balanced|performance|ultra>` (1, 1/1.5, 1/1.7, 1/2, 1/3 per
+axis; default 1 for TAA, quality for FSR/DLSS), `--sharpness <0..1>`; in the game also the Tab panel (kept in `meitou.user.json`,
+command-line values win). Off draws the scene at the display size with MSAA, as before. With an upscaler (`PostProcess`, DECISIONS 14):
+
+- **Render size and jitter.** The scene is drawn at the display size × scale, single-sampled, its projection moved each frame by a
+  Halton(2,3) offset of up to half a render pixel (`Jitter`; `8 × ratio²` phases). Shadows and the water reflection are not jittered.
+- **Motion vectors** come from depth (the world is static): the far depth slice gets its own depth buffer, and a full-screen pass
+  carries each pixel's surface into the previous frame with one matrix per slice, built relative to the eye (`Reprojection`).
+  It writes RG = motion in UV (previous UV = UV − motion, jitter excluded) and B = depth of one D3D-style projection over the whole
+  view (fixed planes 1 .. 10⁶: FSR decodes last frame's depth with this frame's planes, so they must not follow the camera), which is also
+  what FSR/DLSS get as depth (R32F).
+- **TAA** (`UpscaleShaders.Taa`, both backends): each display pixel takes a Gaussian of the 3 × 3 jittered render samples around
+  it, the history reprojected with Catmull-Rom and clipped to the neighbourhood's colour spread (YCoCg variance clipping), blended
+  in a tone-mapped space; the result (display size, HDR) is the history and the input of bloom, exposure and the composite.
+- **FSR** (`--upscaler fsr`, Vulkan; `Meitou.Rendering.Vulkan/Upscalers/FsrUpscaler`): AMD FSR 3.1.4 through the FidelityFX API
+  (`amd_fidelityfx_vk.dll` from FidelityFX SDK v1.1.4, MIT, the newest SDK with a Vulkan DLL; DECISIONS 16), loaded at run time from
+  `MEITOU_FFX_PATH` (the DLL or its folder) or next to the executable; never in the repository. Without it, or on OpenGL, TAA runs
+  (one line says so). Inputs: the scene colour (HDR, FSR's auto exposure), the R32F depth, the motion texture with motion-vector scale
+  (−render width, −render height) (FSR wants render pixels towards the previous position), the jitter as is (both conventions move the
+  picture by +jitter along image columns and rows), sharpening = `--sharpness`. Images stay in GENERAL (declared COMMON /
+  UNORDERED_ACCESS, which the backend maps to GENERAL and restores). `MEITOU_FFX_DEBUG=1` turns on FSR's input checks and messages,
+  `MEITOU_FFX_DEBUGVIEW=1` its debug overlay (its rows appear upside down in our bottom-up picture). Checked: the jitter and motion
+  conventions by flipping each (rock view, quality: still picture vs the native reference 5.2 mean, flipped jitter 6.4-8.5; orbiting
+  camera vs a still picture at the end angle 4.8, flipped motion 7.9).
+- **DLSS** (`--upscaler dlss`, Vulkan, NVIDIA; `Upscalers/Streamline` + `DlssUpscaler`; DECISIONS 17): NVIDIA DLSS Super Resolution
+  through Streamline 2.14.1 (manual hooking). Needs `sl.interposer.dll`, `sl.common.dll`, `sl.dlss.dll` and `nvngx_dlss.dll` (optionally
+  `NvLowLatencyVk.dll`, else one error line) in `MEITOU_STREAMLINE_PATH` or next to the executable; Streamline loads before the device
+  when DLSS is asked for, so switching to DLSS in the game's panel works only if the game started with it. Per frame: a frame token,
+  the constants (the fixed-plane projection and the clip-to-previous-clip matrix with y flipped, jitter as is, motion scale (−1, −1),
+  camera vectors), four tags (depth, motion, colour in and out, all in GENERAL) and the evaluation. `MEITOU_STREAMLINE_LOG=1` shows
+  Streamline's info lines. Checked on an RTX 4070 (driver 596.49, DLSS 310.9.1): validation clean; rock view at quality: still picture
+  vs the native reference 4.7 mean (FSR 5.2), orbiting vs still 3.9 (FSR 4.8).
+- **Texture detail.** On Vulkan every mipmapped fetch is biased by `log2(scale) − 0.5` (TAA) or `− 1` (FSR/DLSS) (`ITextureLodBias`;
+  DECISIONS 15); OpenGL has no global bias.
+- **Offscreen pictures** draw `WarmupFrames` frames first so the history converges; `--orbit-step <degrees>` turns the camera every
+  frame of them (a check of the motion vectors: the picture should match a still one at the end angle but for edge differences).
+
 ## Checking a change
 
 - `tools/scripts/parity.sh <viewer exe> <out dir>` renders the eight reference views (The Hub from 40000, the rock at

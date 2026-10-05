@@ -177,4 +177,53 @@ public unsafe class VkGlTests
         }
         ExpectClean(d!);
     }
+
+    /// <summary>A depth texture bound to a plain (non-shadow) sampler reads its depth value, as in GL (SSAO and the motion vectors do).</summary>
+    [Fact]
+    public void Depth_texture_reads_through_a_plain_sampler()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        using (var gl = new VkGl(d!))
+        {
+            uint depth = gl.GenTexture();
+            gl.BindTexture(TextureTarget.Texture2D, depth);
+            gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.DepthComponent24, W, H, 0, PixelFormat.DepthComponent, PixelType.UnsignedInt, null);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+            uint depthFbo = gl.GenFramebuffer();
+            gl.BindFramebuffer(FramebufferTarget.Framebuffer, depthFbo);
+            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, depth, 0);
+            gl.Viewport(0, 0, W, H);
+            gl.ClearDepth(0.25);
+            gl.Clear(ClearBufferMask.DepthBufferBit);
+
+            Target(gl);
+            uint vs = gl.CreateShader(ShaderType.VertexShader), fs = gl.CreateShader(ShaderType.FragmentShader);
+            gl.ShaderSource(vs, """
+                #version 330 core
+                void main() { vec2 p = vec2((gl_VertexID & 1) * 4.0 - 1.0, (gl_VertexID & 2) * 2.0 - 1.0); gl_Position = vec4(p, 0.0, 1.0); }
+                """);
+            gl.ShaderSource(fs, """
+                #version 330 core
+                uniform sampler2D uDepth;
+                out vec4 fragColour;
+                void main() { fragColour = vec4(texelFetch(uDepth, ivec2(gl_FragCoord.xy), 0).r, 0.0, 0.0, 1.0); }
+                """);
+            gl.CompileShader(vs);
+            gl.CompileShader(fs);
+            uint program = gl.CreateProgram();
+            gl.AttachShader(program, vs);
+            gl.AttachShader(program, fs);
+            gl.LinkProgram(program);
+            gl.UseProgram(program);
+            gl.ActiveTexture(TextureUnit.Texture0);
+            gl.BindTexture(TextureTarget.Texture2D, depth);
+            gl.Uniform1(gl.GetUniformLocation(program, "uDepth"), 0);
+            gl.BindVertexArray(gl.GenVertexArray());
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            Assert.InRange(At(Read(gl), W / 2, H / 2).R, 63, 65);
+        }
+        ExpectClean(d!);
+    }
 }

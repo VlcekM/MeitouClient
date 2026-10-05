@@ -27,6 +27,8 @@ public sealed class PostOptions
     public float SsaoRadius = 12, SsaoStrength = 4;
     public float BloomThreshold = 1, BloomIntensity = 0.3f;
     public float Saturation = 1.12f, Contrast = 1.06f, VignetteStrength = 0.3f;
+    /// <summary>The upscaler (render scale, TAA / FSR / DLSS); not part of the presets.</summary>
+    public readonly UpscaleOptions Upscale = new();
     /// <summary>0 none, 1 shows the occlusion, 2 the bloom.</summary>
     public int Debug;
 
@@ -57,6 +59,10 @@ public sealed class PostOptions
           --post <kenshi|off>   post-processing preset (default kenshi); give it before the options below
           --ssao / --no-ssao, --bloom / --no-bloom, --vignette / --no-vignette, --grade / --no-grade, --dither / --no-dither
           --msaa <1|2|4|8>         samples of the HDR scene framebuffer
+          --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with MSAA; FSR and DLSS need --renderer vulkan and the vendor library, else TAA)
+          --render-scale <0.25..1|native|quality|balanced|performance|ultra>   render size per axis with an upscaler   --sharpness <0..1>
+          --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with MSAA; FSR and DLSS need --renderer vulkan and the vendor library, else TAA)
+          --render-scale <0.25..1|native|quality|balanced|performance|ultra>   render size per axis with an upscaler   --sharpness <0..1>
           --tonemap <clamp|shoulder|aces>   --exposure <x>   --bloom-intensity <x>   --bloom-threshold <x>   --ssao-radius <units>   --ssao-strength <x>
         """;
 
@@ -85,6 +91,12 @@ public sealed class PostOptions
                 ToneMap = Enum.TryParse<ToneMapOperator>(next(), true, out var t) ? t : throw new ArgumentException("--tonemap must be clamp, shoulder or aces");
                 return true;
             case "--post-debug": Debug = next() switch { "ao" => 1, "bloom" => 2, _ => 0 }; return true;
+            case "--upscaler":
+                Upscale.Explicit = true;
+                Upscale.Kind = Enum.TryParse<UpscalerKind>(next(), true, out var k) ? k : throw new ArgumentException("--upscaler must be off, taa, fsr or dlss");
+                return true;
+            case "--render-scale": Upscale.Scale = UpscaleOptions.ParseScale(next()); Upscale.Explicit = true; return true;
+            case "--sharpness": Upscale.Sharpness = Math.Clamp(F(), 0, 1); return true;
             case "--exposure": Exposure = F(); return true;
             case "--bloom-intensity": BloomIntensity = F(); return true;
             case "--bloom-threshold": BloomThreshold = F(); return true;
@@ -96,5 +108,5 @@ public sealed class PostOptions
 
     public string Describe() =>
         $"{Preset}: msaa {Msaa}x, ssao {(Ssao ? "on" : "off")}, bloom {(Bloom ? "on" : "off")}, tonemap {ToneMap.ToString().ToLowerInvariant()} x{Exposure:0.##}, " +
-        $"grade {(Grade ? "on" : "off")}, vignette {(Vignette ? "on" : "off")}";
+        $"grade {(Grade ? "on" : "off")}, vignette {(Vignette ? "on" : "off")}, upscaler {Upscale.Describe()}";
 }
