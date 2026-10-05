@@ -5,7 +5,6 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
-using Silk.NET.OpenGL;
 
 using Meitou.Rendering.Gpu;
 
@@ -49,8 +48,10 @@ sealed class WorldOptions
     public bool FlyPipelined;
     /// <summary>Offscreen pictures: radians the camera orbits by every frame (tests the motion vectors under a temporal upscaler).</summary>
     public float OrbitStep;
-    /// <summary>The GPU backend for offscreen pictures and benchmarks: <c>gl</c> or <c>vulkan</c> (the GL calls translated, docs/engine.md).</summary>
-    public string Renderer = "gl";
+    /// <summary>Offscreen pictures: seconds the grass sway advances every frame (tests the grass motion under a temporal upscaler; 0 holds it still).</summary>
+    public float SwayStep;
+    /// <summary>Offscreen pictures: the grass sway's starting time in seconds (0 by default).</summary>
+    public float SwayStart;
 
     public const string Usage = """
         meitou-viewer --world [where] [options]
@@ -88,7 +89,9 @@ sealed class WorldOptions
                                    percentiles, the worst frames with their stage times and resident memory   --fly-radius <u> (12000)   --fly-speed <u per frame> (150)
                                    --fly-pipelined: no GPU wait per frame and no pacing, two frames in flight; reports the interval between frames
           --orbit-step <degrees>   with --screenshot: the camera orbits this much every frame (checks the upscaler's motion vectors)
-          --renderer gl|vulkan     backend for --screenshot and --fly-benchmark (default gl)
+          --sway-step <seconds>    with --screenshot: the grass sway advances this much every frame (checks the grass motion)
+          --sway-start <seconds>   with --screenshot: the grass sway's time at the start (default 0)
+          --renderer vulkan        accepted and ignored (Vulkan is the only backend)
           --view-distance <u>      furthest terrain drawn (default 450000: the whole world)
           --fog <u>                distance where the haze is complete (default 250000)
           --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
@@ -101,6 +104,12 @@ sealed class WorldOptions
           G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, P save screenshot, ? key list, Tab settings sliders, Esc quit.
           F1 post off, F2 kenshi; F7 haze, F4 SSAO, F5 bloom, F6 tone map, F8 vignette, F9 grading, M MSAA, - / = exposure.
         """;
+
+    /// <summary><c>--renderer</c> is kept so old command lines work: <c>vulkan</c> is accepted, anything else says OpenGL is gone; either way it changes nothing.</summary>
+    public static void IgnoreRenderer(string value)
+    {
+        if (value != "vulkan") Console.Error.WriteLine($"renderer  --renderer {value}: OpenGL was removed, Vulkan is the only backend (the option is ignored)");
+    }
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -162,11 +171,13 @@ sealed class WorldOptions
                 case "--camera-at": (o.CameraX, o.CameraZ) = Pair(); break;
                 case "--fly-to": (o.FlyToX, o.FlyToZ) = Pair(); break;
                 case "--fly-benchmark": o.FlyBenchmark = int.Parse(Next(), CultureInfo.InvariantCulture); break;
-                case "--renderer": o.Renderer = Next(); if (o.Renderer is not ("gl" or "vulkan")) throw new ArgumentException("--renderer: gl or vulkan"); break;
+                case "--renderer": IgnoreRenderer(Next()); break;
                 case "--fly-radius": o.FlyRadius = F(); break;
                 case "--fly-speed": o.FlySpeed = F(); break;
                 case "--fly-pipelined": o.FlyPipelined = true; break;
                 case "--orbit-step": o.OrbitStep = F() * MathF.PI / 180; break;
+                case "--sway-step": o.SwayStep = F(); break;
+                case "--sway-start": o.SwayStart = F(); break;
                 case "--view-distance": o.ViewDistance = F(); break;
                 case "--fog": o.FogDistance = F(); break;
                 case "--material-distance": o.MaterialDistance = F(); break;
@@ -366,7 +377,7 @@ static class WorldFrame
         if (!o.NoFoliage && scene.Database is not null)
         {
             gpu.Foliage = new FoliageRenderer(gl, install, scene.Database, scene.Objects?.Levels ?? WorldLevelData.Load(install), assets);
-            if (!interactive) gpu.Foliage.SwaySeconds = 0;   // offscreen pictures and benchmarks: the grass holds still, so a picture repeats exactly
+            if (!interactive) gpu.Foliage.SwaySeconds = o.SwayStart;   // offscreen pictures and benchmarks: the grass holds still, so a picture repeats exactly
             Console.WriteLine($"foliage   catalog and shaders ready ({gpu.Foliage.LoadMs:0} ms)");
         }
         if (!o.NoShadows)
@@ -413,6 +424,9 @@ static class WorldFrame
         }
         return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders);
     }
+
+    /// <summary>The swaying grass's own motion for the upscalers (MEITOU_GRASS_MOTION=0 turns it off, for comparisons).</summary>
+    static readonly bool GrassMotion = Environment.GetEnvironmentVariable("MEITOU_GRASS_MOTION") != "0";
 
     public static void Draw(IGl gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time, float fogDistance)
     {
@@ -489,6 +503,11 @@ static class WorldFrame
             if (nearSlice) gpu.Post?.SetNearSlice(near, far, camera.FieldOfView, aspect);
             var viewProjection = view * Jitter.Apply(camera.Projection(aspect, near, far), jitter, rw, rh);
             var frustum = WorldCamera.FrustumPlanes(viewProjection);
+            if (nearSlice && GrassMotion && gpu.Post is { Temporal: true } && gpu.Foliage is { } swaying)
+            {
+                gpu.Post.ObjectMotion ??= swaying.DrawGrassMotion;
+                swaying.SetMotionCamera(viewProjection, view * camera.Projection(aspect, near, far), eye, frustum);
+            }
             gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
             StageClock.Lap(6);
             if (render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);

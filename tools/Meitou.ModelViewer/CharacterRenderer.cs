@@ -1,5 +1,5 @@
 using System.Numerics;
-using Silk.NET.OpenGL;
+using Meitou.Rendering.Gpu;
 
 using Meitou.Rendering;
 
@@ -12,7 +12,7 @@ namespace Meitou.ModelViewer;
 /// </summary>
 public sealed unsafe class CharacterRenderer : IDisposable
 {
-    readonly GL gl;
+    readonly IGl gl;
     readonly Renderer basis;
     readonly uint program, lineProgram, lineVao, lineVbo;
     readonly Dictionary<string, int> uniforms = [], lineUniforms = [];
@@ -29,7 +29,7 @@ public sealed unsafe class CharacterRenderer : IDisposable
         public List<(int Offset, int Count)[]> LodRanges = [];
     }
 
-    public CharacterRenderer(GL gl, Renderer basis, CharacterScene scene)
+    public CharacterRenderer(IGl gl, Renderer basis, CharacterScene scene)
     {
         this.gl = gl;
         this.basis = basis;

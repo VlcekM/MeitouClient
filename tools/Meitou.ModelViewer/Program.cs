@@ -8,14 +8,15 @@ using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.ModelViewer;
 using Meitou.Rendering;
+using Meitou.Rendering.Display;
 using Meitou.Rendering.Gpu;
 using Silk.NET.Input;
 using Silk.NET.Maths;
-using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+args = SmokeTest.Strip(args);
 if (args.Contains("--world")) return WorldApp.Run(args);
 if (args.Contains("--character")) return CharacterApp.Run(args);
 return ViewerApp.Run(args);
@@ -80,6 +81,7 @@ sealed class ViewerOptions
                 case "--skeleton-lines": o.ShowSkeleton = true; break;
                 case "--no-grid": o.NoGrid = true; break;
                 case "--vertex-colours": o.VertexColours = true; break;
+                case "--renderer": WorldOptions.IgnoreRenderer(Next()); break;
                 case "--no-fcs": o.NoFcs = true; break;
                 case "--info": o.Info = true; break;
                 case "-h" or "--help": return null;
@@ -252,16 +254,8 @@ static class ViewerApp
         return scene;
     }
 
-    static IWindow CreateWindow(ViewerOptions o, bool visible) =>
-        Window.Create(WindowOptions.Default with
-        {
-            Size = new Vector2D<int>(o.Width, o.Height),
-            Title = "Meitou model viewer",
-            IsVisible = visible,
-            API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(3, 3)),
-            Samples = visible ? 4 : 0,
-            VSync = true,
-        });
+    static WindowOptions WindowFor(ViewerOptions o) =>
+        WindowOptions.Default with { Size = new Vector2D<int>(o.Width, o.Height), Title = "Meitou model viewer" };
 
     static (Camera, RenderOptions) Setup(Scene scene, ViewerOptions o)
     {
@@ -282,9 +276,8 @@ static class ViewerApp
 
     static unsafe int Screenshot(Scene scene, AssetLocator assets, ViewerOptions o)
     {
-        using var window = CreateWindow(o, visible: false);
-        window.Initialize();
-        using var gl = window.CreateOpenGL();
+        using var display = new VulkanDisplay(null, vsync: false);
+        var gl = display.Gl;
         using var renderer = new Renderer(gl, assets);
         renderer.Upload(scene.Model);
         ApplyMaterials(scene, renderer);
@@ -320,12 +313,13 @@ static class ViewerApp
         return 0;
     }
 
-    internal static void SavePng(GL gl, string path, int w, int h) => GlCapture.SavePng(new GlPassthrough(gl), path, w, h);
+    internal static void SavePng(IGl gl, string path, int w, int h) => FramebufferCapture.SavePng(gl, path, w, h);
 
     static int Interactive(Scene scene, AssetLocator assets, ViewerOptions o)
     {
-        using var window = CreateWindow(o, visible: true);
-        GL? gl = null;
+        using var display = new VulkanDisplay(WindowFor(o), vsync: true);
+        var window = display.Window!;
+        var gl = display.Gl;
         Renderer? renderer = null;
         Camera camera = null!;
         RenderOptions render = null!;
@@ -342,9 +336,7 @@ static class ViewerApp
             window.Title = $"{Path.GetFileName(scene.MeshPath)}{animText}{mat}";
         }
 
-        window.Load += () =>
         {
-            gl = window.CreateOpenGL();
             renderer = new Renderer(gl, assets);
             renderer.Upload(scene.Model);
             ApplyMaterials(scene, renderer);
@@ -370,7 +362,7 @@ static class ViewerApp
             }
             Console.WriteLine(ViewerOptions.Usage[ViewerOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
             Title();
-        };
+        }
 
         void OnKey(IKeyboard keyboard, Key key)
         {
@@ -412,16 +404,20 @@ static class ViewerApp
         double titleTimer = 0;
         window.Update += dt =>
         {
+            SmokeTest.Check(window);
             scene.Advance((float)dt);
             titleTimer += dt;
             if (titleTimer > 0.1 && scene.CurrentAnimation is not null) { Title(); titleTimer = 0; }
         };
         window.Render += _ =>
         {
-            if (renderer is null || gl is null) return;
+            if (renderer is null) return;
             scene.Animator?.Pose(scene.CurrentAnimation, scene.Time);
             var size = window.FramebufferSize;
+            if (!display.BeginFrame(size.X, size.Y)) return;
             renderer.Draw(camera, size.X, size.Y, render, scene.Animator?.SkinMatrices, scene.Animator);
+            display.Present();
+            SmokeTest.Frame();
             if (screenshotRequested)
             {
                 screenshotRequested = false;
@@ -436,5 +432,41 @@ static class ViewerApp
         window.Closing += () => renderer?.Dispose();
         window.Run();
         return 0;
+    }
+}
+
+/// <summary><c>--quit-after &lt;s&gt;</c> (any interactive mode): the window closes itself after that many seconds and the frames drawn are printed (an unattended smoke test).</summary>
+static class SmokeTest
+{
+    static double? seconds;
+    static long frames;
+    static readonly Stopwatch clock = new();
+
+    /// <summary>Takes <c>--quit-after</c> out of <paramref name="args"/>.</summary>
+    public static string[] Strip(string[] args)
+    {
+        var rest = new List<string>();
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--quit-after" && i + 1 < args.Length) seconds = double.Parse(args[++i], CultureInfo.InvariantCulture);
+            else rest.Add(args[i]);
+        }
+        return rest.ToArray();
+    }
+
+    /// <summary>Counts a drawn frame.</summary>
+    public static void Frame()
+    {
+        if (frames++ == 0) clock.Start();   // the time starts at the first frame, after loading
+    }
+
+    /// <summary>Closes <paramref name="window"/> once the time is up (call from the update).</summary>
+    public static void Check(IWindow window)
+    {
+        if (seconds is not { } s || frames == 0 || clock.Elapsed.TotalSeconds < s) return;
+        double t = clock.Elapsed.TotalSeconds;
+        Console.WriteLine($"smoke     {frames} frames in {t:0.0} s: {frames / t:0} fps on average");
+        seconds = null;
+        window.Close();
     }
 }

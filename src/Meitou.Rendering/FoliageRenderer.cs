@@ -5,7 +5,6 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
-using Silk.NET.OpenGL;
 
 using Meitou.Rendering.Gpu;
 
@@ -38,6 +37,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
     readonly FoliageCatalog catalog;
     uint meshProgram;   // the depth program while DrawDepth runs
     readonly uint grassProgram;
+    readonly uint grassMotionProgram;
     readonly Dictionary<(uint, string), int> uniforms = [];
     readonly WorldTextureCache textures;
     readonly uint instanceBuffer;
@@ -70,6 +70,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         catalog = FoliageCatalog.Load(db);
         meshProgram = WorldGl.Program(gl, FoliageShaders.MeshVertex(), FoliageShaders.MeshFragment());
         grassProgram = WorldGl.Program(gl, FoliageShaders.GrassVertex, FoliageShaders.GrassFragment);
+        grassMotionProgram = WorldGl.Program(gl, FoliageShaders.GrassMotionVertex, FoliageShaders.GrassMotionFragment);
         textures = new WorldTextureCache(gl, assets);
         instanceBuffer = gl.GenBuffer();
         workers = Math.Clamp(Environment.ProcessorCount / 4, 1, 3);
@@ -928,7 +929,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
     {
         uint prog = grassProgram;
         bool set = false;
-        float time = (float)((SwaySeconds ?? clock.Elapsed.TotalSeconds) * 0.3 * Math.PI % (2 * Math.PI));
+        float time = SwayPhase();
         // Nearest pages first, so the depth test rejects most of the hidden blades before they are shaded.
         grassOrder.Clear();
         foreach (var st in zones.Values)
@@ -991,6 +992,86 @@ public sealed unsafe class FoliageRenderer : IDisposable
             }
         }
         gl.BindVertexArray(0);
+    }
+
+    float SwayPhase() => (float)((SwaySeconds ?? clock.Elapsed.TotalSeconds) * 0.3 * Math.PI % (2 * Math.PI));
+
+    // ---- grass motion (upscalers) ----
+
+    Matrix4x4 motionViewProjection, motionUnjittered, previousUnjittered;
+    Vector3 motionEye;
+    Vector4[] motionFrustum = [];
+    float? previousSwayPhase;
+    bool motionCamera, havePrevious;
+
+    /// <summary>The near depth slice's camera for <see cref="DrawGrassMotion"/>: this frame's view-projection as drawn (jittered) and unjittered.</summary>
+    public void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum)
+    {
+        (motionViewProjection, motionUnjittered, motionEye, motionFrustum) = (viewProjection, unjittered, eye, frustum);
+        motionCamera = true;
+    }
+
+    /// <summary>
+    /// The swaying grass's own motion over the camera motion, for the upscalers (<see cref="PostProcess.ObjectMotion"/> binds the motion target,
+    /// red and green only, without depth test or blending): the near slice's blades of layers with wind, now and with last frame's sway phase
+    /// and camera, written where they are what the depth buffer shows. Blades without sway move with the camera and need nothing.
+    /// </summary>
+    public void DrawGrassMotion(PostProcess.MotionTargets targets)
+    {
+        if (!motionCamera) return;
+        motionCamera = false;
+        if (!Enabled || debugNoGrass) { havePrevious = false; return; }
+        float time = SwayPhase(), previousTime = previousSwayPhase ?? time;
+        var previous = havePrevious ? previousUnjittered : motionUnjittered;
+        (previousSwayPhase, previousUnjittered, havePrevious) = (time, motionUnjittered, true);
+        var eye = motionEye;
+        uint prog = grassMotionProgram;
+        bool set = false;
+        foreach (var state in zones.Values)
+            foreach (var (key, page) in state.Pages)
+            {
+                if (page.Buffers is null) continue;
+                float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
+                float d = BoxDistance(x0, z0, PageSize, eye);
+                float y = state.Ground is { } ground ? ground.Height(x0 + PageSize / 2, z0 + PageSize / 2) : eye.Y;
+                if (!WorldCamera.Intersects(motionFrustum, new Vector3(x0, y - 2000, z0), new Vector3(x0 + PageSize, y + 2000, z0 + PageSize))) continue;
+                for (int i = 0; i < page.Buffers.Length && i < state.Patches.Count; i++)
+                {
+                    var b = page.Buffers[i];
+                    var patch = state.Patches[i];
+                    var g = patch.Grass;
+                    if (!patch.Layer.Wind || g.SwayLength == 0) continue;
+                    float range = GrassRange(patch);
+                    int shown = b.Count == 0 ? 0 : FoliageGrassField.PrefixCount(b.Prefixes, Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
+                    if (shown == 0 || d >= range) continue;
+                    var sprite = textures.Get(g.Sprite, false);
+                    if (sprite is not { Id: not 0 }) continue;
+                    if (!set)
+                    {
+                        set = true;
+                        gl.UseProgram(prog);
+                        WorldGl.Matrix(gl, U(prog, "uViewProjection"), motionViewProjection);
+                        WorldGl.Matrix(gl, U(prog, "uPreviousViewProjection"), previous);
+                        gl.Uniform3(U(prog, "uEye"), eye.X, eye.Y, eye.Z);
+                        gl.Uniform1(U(prog, "uTime"), time);
+                        gl.Uniform1(U(prog, "uPreviousTime"), previousTime);
+                        gl.Uniform1(U(prog, "uFrequency"), 2f);
+                        gl.Uniform2(U(prog, "uNearPlanes"), targets.NearPlanes.X, targets.NearPlanes.Y);
+                        gl.Uniform2(U(prog, "uJitterNdc"), targets.JitterNdc.X, targets.JitterNdc.Y);
+                        gl.Uniform1(U(prog, "uSprite"), 0);
+                        gl.Uniform1(U(prog, "uNearDepth"), 1);
+                        Bind(1, targets.NearDepth);
+                        gl.Disable(EnableCap.CullFace);
+                    }
+                    Bind(0, sprite.Id);
+                    gl.Uniform4(U(prog, "uSize"), g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight);
+                    gl.Uniform1(U(prog, "uSway"), g.SwayLength);
+                    gl.Uniform1(U(prog, "uRange"), range);
+                    gl.BindVertexArray(b.Vao);
+                    gl.DrawArraysInstanced(PrimitiveType.Triangles, 0, g.CrossQuads ? 12u : 6u, (uint)shown);
+                }
+            }
+        if (set) { gl.BindVertexArray(0); Bind(1, 0); gl.ActiveTexture(TextureUnit.Texture0); }
     }
 
     void Bind(int unit, uint texture)
@@ -1083,6 +1164,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         gl.DeleteProgram(meshProgram);
         if (depthProgram != 0) gl.DeleteProgram(depthProgram);
         gl.DeleteProgram(grassProgram);
+        gl.DeleteProgram(grassMotionProgram);
         foreach (var q in timers) { gl.DeleteQuery(q.Start); gl.DeleteQuery(q.End); }
     }
 }

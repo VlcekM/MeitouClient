@@ -8,8 +8,8 @@ using Meitou.Engine.Input;
 using Meitou.Engine.Time;
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
+using Meitou.Rendering.Display;
 using Silk.NET.Maths;
-using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using EngineKey = Meitou.Engine.Input.Key;
 using EngineButton = Meitou.Engine.Input.MouseButton;
@@ -33,7 +33,6 @@ sealed class GameOptions
         meitou [where] [options]     boots into the world with the Kenshi camera (default --town "The Hub")
           --fps-limit <n>            frame limit when vsync is off (default 240 from meitou.user.json; 0 = unlimited)
           --vsync / --no-vsync       vsync (default off)
-          --renderer gl|vulkan       GPU backend (default gl; vulkan: the GL calls translated, docs/engine.md)
           --tick-rate <hz>           simulation ticks per second (default 30)
           --free-camera              start in the free camera (; toggles)
           --ticks <n>                with --screenshot: run n simulation ticks before the picture
@@ -167,7 +166,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
 
     unsafe int Screenshot()
     {
-        using var display = new Display(o.Renderer, WindowOptions.Default with { Size = new Vector2D<int>(o.Width, o.Height) }, visible: false, vsync: false, streamline: WantsDlss());
+        using var display = new VulkanDisplay(null, vsync: false, streamline: WantsDlss());
         streamline = display.Streamline;
         var gl = display.Gl;
         Boot(gl, interactive: false);
@@ -195,7 +194,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         Console.WriteLine($"camera    {(session.Camera.IsFree ? "free" : "strategy")}: pivot {s.Target.X:0}, {s.Target.Y:0}, {s.Target.Z:0}, eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, " +
             $"yaw {s.Yaw * 180 / MathF.PI:0.#}, pitch {s.Pitch * 180 / MathF.PI:0.#}, boom {s.Distance:0.#}; {session.Ticks.TotalTicks} ticks, game time {session.Clock.HourOfDay:0.00} h");
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, fbo);
-        GlCapture.SavePng(gl, o.Screenshot!, w, h);
+        FramebufferCapture.SavePng(gl, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
         gpu.Dispose();
         return 0;
@@ -205,14 +204,14 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
     {
         bool vsync = g.VSync ?? config.VSync;
         int fpsLimit = g.FpsLimit ?? config.FpsLimit;
-        using var display = new Display(o.Renderer, WindowOptions.Default with
+        using var display = new VulkanDisplay(WindowOptions.Default with
         {
             Size = new Vector2D<int>(o.Width, o.Height),
             Title = "Meitou",
             WindowState = WindowState.Maximized,
             FramesPerSecond = 0,
             UpdatesPerSecond = 0,
-        }, visible: true, vsync, streamline: WantsDlss());
+        }, vsync, streamline: WantsDlss());
         streamline = display.Streamline;
         var window = display.Window!;
         var gl = display.Gl;
@@ -287,11 +286,10 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
                 cpuSum += Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
                 bool shot = screenshotRequested;
                 screenshotRequested = false;
-                if (shot && !display.ReadsAfterPresent) SaveScreenshot(gl, size.X, size.Y);
                 gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
                 panel?.Draw(size.X, size.Y);
                 display.Present();
-                if (shot && display.ReadsAfterPresent) SaveScreenshot(gl, size.X, size.Y);
+                if (shot) SaveScreenshot(gl, size.X, size.Y);
                 frames++;
             }
             titleTimer += dt;
@@ -325,7 +323,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         var file = Path.Combine(Path.GetTempPath(), $"meitou-{DateTime.Now:yyyyMMdd-HHmmss}.png");
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
         gl.ReadBuffer(ReadBufferMode.Back);
-        GlCapture.SavePng(gl, file, width, height);
+        FramebufferCapture.SavePng(gl, file, width, height);
         Console.WriteLine($"saved     {file}");
     }
 

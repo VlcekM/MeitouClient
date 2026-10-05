@@ -4,7 +4,6 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
-using Silk.NET.OpenGL;
 
 using Meitou.Rendering.Gpu;
 

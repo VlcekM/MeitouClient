@@ -1,6 +1,5 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Silk.NET.OpenGL;
 
 using Meitou.Rendering.Gpu;
 

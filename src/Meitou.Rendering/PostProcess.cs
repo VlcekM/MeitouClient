@@ -1,6 +1,5 @@
 using System.Numerics;
 using System.Text;
-using Silk.NET.OpenGL;
 
 using Meitou.Rendering.Gpu;
 
@@ -185,7 +184,8 @@ public sealed unsafe class PostProcess : IDisposable
             Nearest(motion);
             upscaleDepth = MakeTarget(w, h, InternalFormat.R32f, PixelFormat.Red, PixelType.Float);
             Nearest(upscaleDepth);
-            reactive = MakeTarget(w, h, InternalFormat.R8, PixelFormat.Red, PixelType.UnsignedByte);
+            // R32F, not R8: Streamline cannot size an R8_UNORM resource and drops it (DLSS's hint), FSR takes either.
+            reactive = MakeTarget(w, h, InternalFormat.R32f, PixelFormat.Red, PixelType.Float);
             Nearest(reactive);
             historyA = MakeTarget(displayW, displayH, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
             historyB = MakeTarget(displayW, displayH, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
@@ -316,6 +316,15 @@ public sealed unsafe class PostProcess : IDisposable
     public int WarmupFrames => Options.Upscale.Temporal ? Math.Max(32, 2 * Jitter.PhaseCount(Options.Upscale.RenderSize(1000, 1000).Width, 1000)) : 0;
     /// <summary>The vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/>; without one (or on failure) TAA runs.</summary>
     public IUpscaler? External { get; set; }
+
+    /// <summary>What <see cref="ObjectMotion"/> gets: the near slice's depth texture and planes, and the jitter in NDC.</summary>
+    public readonly record struct MotionTargets(uint NearDepth, Vector2 NearPlanes, Vector2 JitterNdc);
+
+    /// <summary>
+    /// Draws motion of moving geometry over the camera motion (the swaying grass), called after the velocity pass with the motion target bound,
+    /// only red and green written (B and A, depth and reactivity, stay), no depth test, culling or blending.
+    /// </summary>
+    public Action<MotionTargets>? ObjectMotion { get; set; }
     /// <summary>Makes the vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/> when it is first asked for (null: not available).</summary>
     public Func<UpscalerKind, IUpscaler?>? UpscalerFactory { get; set; }
     readonly HashSet<UpscalerKind> unavailable = [];
@@ -468,6 +477,15 @@ public sealed unsafe class PostProcess : IDisposable
         float dt = (float)frameClock.Elapsed.TotalSeconds;
         frameClock.Restart();
         Velocity(motion!, 0);
+        if (ObjectMotion is { } objectMotion)
+        {
+            Pass(motion!);
+            gl.Disable(EnableCap.DepthTest);
+            gl.Disable(EnableCap.Blend);
+            gl.ColorMask(true, true, false, false);
+            objectMotion(new MotionTargets(sceneDepth, nearPlanes, new Vector2(2 * JitterPixels.X / width, 2 * JitterPixels.Y / height)));
+            gl.ColorMask(true, true, true, true);
+        }
         (historyA, historyB) = (historyB, historyA);
         var output = historyB!;
         bool done = false;

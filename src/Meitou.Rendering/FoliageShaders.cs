@@ -163,6 +163,76 @@ static class FoliageShaders
         }
         """;
 
+    /// <summary>
+    /// The swaying grass's own motion for the upscalers: the blades placed as <see cref="GrassVertex"/> places them, now and with last frame's
+    /// sway phase and camera; the clip positions go to <see cref="GrassMotionFragment"/>.
+    /// </summary>
+    public const string GrassMotionVertex = """
+        #version 330 core
+        layout(location = 0) in vec4 aBlade;
+        layout(location = 1) in float aYaw;
+        uniform mat4 uViewProjection;            // this frame's, jittered (as the grass was drawn)
+        uniform mat4 uPreviousViewProjection;    // last frame's, unjittered
+        uniform vec4 uSize;
+        uniform float uTime, uPreviousTime, uFrequency, uSway, uRange;
+        uniform vec3 uEye;
+        out vec2 vUv;
+        out vec4 vNow;
+        out vec4 vPrevious;
+        void main()
+        {
+            int quad = gl_VertexID / 6, corner = gl_VertexID % 6;
+            int cu[6] = int[6](0, 1, 1, 0, 1, 0);
+            int cv[6] = int[6](1, 1, 0, 1, 0, 0);
+            float s = aBlade.w;
+            float width = mix(uSize.x, uSize.y, s), height = mix(uSize.z, uSize.w, s);
+            float yaw = aYaw + (quad == 1 ? 1.5707963 : 0.0);
+            vec3 side = vec3(cos(yaw), 0.0, sin(yaw));
+            float u = float(cu[corner]), v = float(cv[corner]);
+            vec3 p = aBlade.xyz + side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
+            vec3 q = p;
+            if (v == 0.0)
+            {
+                p.x += uSway * sin(uTime + aBlade.x * uFrequency);
+                q.x += uSway * sin(uPreviousTime + aBlade.x * uFrequency);
+            }
+            float sink = height * clamp(5.0 * distance(uEye.xz, aBlade.xz) / uRange - 4.0, 0.0, 1.0);
+            p.y -= sink;
+            q.y -= sink;
+            vUv = vec2(u, v);
+            gl_Position = uViewProjection * vec4(p, 1.0);
+            vNow = gl_Position;
+            vPrevious = uPreviousViewProjection * vec4(q, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// Writes the blade's motion (UV, current minus previous, jitter removed, as the velocity pass) where the blade is what the near depth slice
+    /// shows: its depth matches the depth buffer's within a small tolerance (the buffer is read, not tested, so the scene's depth stays untouched).
+    /// </summary>
+    public const string GrassMotionFragment = """
+        #version 330 core
+        in vec2 vUv;
+        in vec4 vNow;
+        in vec4 vPrevious;
+        uniform sampler2D uSprite;
+        uniform sampler2D uNearDepth;
+        uniform vec2 uNearPlanes;
+        uniform vec2 uJitterNdc;
+        out vec4 fragColour;
+        float viewZ(float d) { float zd = 2.0 * d - 1.0; return uNearPlanes.x * uNearPlanes.y / (uNearPlanes.y - zd * (uNearPlanes.y - uNearPlanes.x)); }
+        void main()
+        {
+            if (texture(uSprite, vUv).a < 0.6) discard;
+            float stored = texelFetch(uNearDepth, ivec2(gl_FragCoord.xy), 0).r;
+            if (stored >= 1.0) discard;
+            float zs = viewZ(stored), zf = viewZ(gl_FragCoord.z);
+            if (abs(zs - zf) > 0.002 * zs + 0.05) discard;
+            vec2 now = vNow.xy / vNow.w - uJitterNdc, previous = vPrevious.xy / vPrevious.w;
+            fragColour = vec4((now - previous) * 0.5, 0.0, 0.0);
+        }
+        """;
+
     static string Replace(string source, string pattern, string replacement, bool required)
     {
         var regex = new Regex(pattern);

@@ -3,7 +3,6 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
-using Silk.NET.OpenGL;
 
 using Meitou.Rendering.Gpu;
 

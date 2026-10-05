@@ -1,5 +1,5 @@
 using Meitou.Rendering.Vulkan.Shaders;
-using Silk.NET.OpenGL;
+using Meitou.Rendering.Gpu;
 using Silk.NET.Vulkan;
 
 namespace Meitou.Rendering.Vulkan;

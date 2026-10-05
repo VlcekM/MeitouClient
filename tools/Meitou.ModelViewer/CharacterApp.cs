@@ -6,7 +6,8 @@ using Meitou.Data;
 using Meitou.Data.Ogre;
 using Silk.NET.Input;
 using Silk.NET.Maths;
-using Silk.NET.OpenGL;
+using Meitou.Rendering.Display;
+using Meitou.Rendering.Gpu;
 using Silk.NET.Windowing;
 
 using Meitou.Rendering;
@@ -76,6 +77,7 @@ public sealed class CharacterViewOptions
                 case "--equip": o.Equip.Add(Next()); break;
                 case "--naked": o.Naked = true; break;
                 case "--drawn": o.Drawn = true; break;
+                case "--renderer": WorldOptions.IgnoreRenderer(Next()); break;
                 case "--seed": o.Seed = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--faction": o.Faction = Next(); break;
                 case "--anim":
@@ -150,16 +152,8 @@ static class CharacterApp
         return o.Screenshot is not null ? Screenshot(scene, assets, o) : Interactive(scene, assets, o);
     }
 
-    static IWindow CreateWindow(CharacterViewOptions o, bool visible) =>
-        Window.Create(WindowOptions.Default with
-        {
-            Size = new Vector2D<int>(o.Width, o.Height),
-            Title = "Meitou character viewer",
-            IsVisible = visible,
-            API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(3, 3)),
-            Samples = visible ? 4 : 0,
-            VSync = true,
-        });
+    static WindowOptions WindowFor(CharacterViewOptions o) =>
+        WindowOptions.Default with { Size = new Vector2D<int>(o.Width, o.Height), Title = "Meitou character viewer" };
 
     static (Vector3 Min, Vector3 Max) Bounds(CharacterScene scene)
     {
@@ -191,9 +185,8 @@ static class CharacterApp
 
     static int Screenshot(CharacterScene scene, AssetLocator assets, CharacterViewOptions o)
     {
-        using var window = CreateWindow(o, visible: false);
-        window.Initialize();
-        using var gl = window.CreateOpenGL();
+        using var display = new VulkanDisplay(null, vsync: false);
+        var gl = display.Gl;
         using var basis = new Renderer(gl, assets);
         using var renderer = new CharacterRenderer(gl, basis, scene);
         var (camera, render) = Setup(scene, o);
@@ -227,8 +220,9 @@ static class CharacterApp
 
     static int Interactive(CharacterScene scene, AssetLocator assets, CharacterViewOptions o)
     {
-        using var window = CreateWindow(o, visible: true);
-        GL? gl = null;
+        using var display = new VulkanDisplay(WindowFor(o), vsync: true);
+        var window = display.Window!;
+        var gl = display.Gl;
         Renderer? basis = null;
         CharacterRenderer? renderer = null;
         Camera camera = null!;
@@ -311,9 +305,7 @@ static class CharacterApp
             Title();
         }
 
-        window.Load += () =>
         {
-            gl = window.CreateOpenGL();
             basis = new Renderer(gl, assets);
             renderer = new CharacterRenderer(gl, basis, scene);
             (camera, render) = Setup(scene, o);
@@ -338,14 +330,17 @@ static class CharacterApp
             }
             Console.WriteLine(CharacterViewOptions.Usage[CharacterViewOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
             Title();
-        };
-        window.Update += dt => scene.Advance((float)dt);
+        }
+        window.Update += dt => { SmokeTest.Check(window); scene.Advance((float)dt); };
         window.Render += _ =>
         {
-            if (renderer is null || gl is null) return;
+            if (renderer is null) return;
             scene.Pose();
             var size = window.FramebufferSize;
+            if (!display.BeginFrame(size.X, size.Y)) return;
             renderer.Draw(camera, size.X, size.Y, render, scene);
+            display.Present();
+            SmokeTest.Frame();
             if (scene.LodChanged) { scene.LodChanged = false; Title(); }
             if (screenshotRequested)
             {

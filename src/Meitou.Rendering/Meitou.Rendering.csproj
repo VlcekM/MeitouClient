@@ -4,7 +4,6 @@
        backend interface with its OpenGL backend; shared by the game (src/Meitou.Game) and the viewer. -->
 
   <ItemGroup>
-    <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
     <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
   </ItemGroup>
 

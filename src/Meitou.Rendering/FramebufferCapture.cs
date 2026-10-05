@@ -1,12 +1,11 @@
 using Meitou.Data.Textures;
-using Silk.NET.OpenGL;
 
 using Meitou.Rendering.Gpu;
 
 namespace Meitou.Rendering;
 
-/// <summary>Reads the bound read framebuffer back into a PNG (screenshots).</summary>
-static class GlCapture
+/// <summary>Reads the bound read framebuffer back into a PNG (screenshots), through IGl (VkGl: a readback of the image).</summary>
+static class FramebufferCapture
 {
     public static void SavePng(IGl gl, string path, int w, int h)
     {

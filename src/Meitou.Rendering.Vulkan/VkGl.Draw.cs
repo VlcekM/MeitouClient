@@ -1,10 +1,10 @@
 using System.Runtime.InteropServices;
 using Meitou.Rendering.Vulkan.Core;
 using Meitou.Rendering.Vulkan.Shaders;
-using Silk.NET.OpenGL;
+using Meitou.Rendering.Gpu;
 using Silk.NET.Vulkan;
 using VkBuffer = Silk.NET.Vulkan.Buffer;
-using GlPolygonMode = Silk.NET.OpenGL.PolygonMode;
+using GlPolygonMode = Meitou.Rendering.Gpu.PolygonMode;
 using Sampler = Silk.NET.Vulkan.Sampler;
 
 namespace Meitou.Rendering.Vulkan;

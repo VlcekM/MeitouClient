@@ -1,6 +1,5 @@
 using System.Numerics;
 using Meitou.Data.Textures;
-using Silk.NET.OpenGL;
 
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
@@ -27,7 +26,7 @@ public sealed class RenderOptions
 /// <summary>Uploads a <see cref="Model"/> and draws it with <see cref="Shaders"/>.</summary>
 public sealed unsafe class Renderer : IDisposable
 {
-    readonly GL gl;
+    readonly IGl gl;
     readonly uint meshProgram, lineProgram;
     readonly Dictionary<string, int> meshUniforms = [], lineUniforms = [];
     readonly List<GpuPart> parts = [];
@@ -44,7 +43,7 @@ public sealed unsafe class Renderer : IDisposable
         public bool NormalSwizzled;
     }
 
-    public Renderer(GL gl, AssetLocator assets)
+    public Renderer(IGl gl, AssetLocator assets)
     {
         this.gl = gl;
         this.assets = assets;
@@ -344,7 +343,8 @@ public sealed unsafe class Renderer : IDisposable
         if (ok == 0) throw new InvalidOperationException("Shader link failed: " + gl.GetProgramInfoLog(program));
         gl.DeleteShader(vs);
         gl.DeleteShader(fs);
-        SkyRenderer.AssignSamplerUnits(new GlPassthrough(gl), program);   // the atmosphere's cube samplers off unit 0
+        SkyRenderer.AssignSamplerUnits(gl, program);   // the atmosphere's cube samplers off unit 0
+        ShadowShaders.Bind(gl, program);               // the shadow blocks, zero-filled (shadows off) without a ShadowPass
         return program;
     }
 

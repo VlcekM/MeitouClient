@@ -1,5 +1,4 @@
 using Meitou.Data.Textures;
-using Silk.NET.OpenGL;
 
 using Meitou.Rendering.Gpu;
 

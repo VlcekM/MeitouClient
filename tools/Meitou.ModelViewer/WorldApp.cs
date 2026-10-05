@@ -7,10 +7,10 @@ using Meitou.Data.Fcs;
 using Meitou.Data.World;
 using Silk.NET.Input;
 using Silk.NET.Maths;
-using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 
 using Meitou.Rendering;
+using Meitou.Rendering.Display;
 using Meitou.Rendering.Gpu;
 using Meitou.Rendering.Vulkan;
 using Meitou.Rendering.Vulkan.Core;
@@ -48,70 +48,27 @@ static partial class WorldApp
         return options.Screenshot is not null || options.FlyBenchmark > 0 ? Screenshot(install, scene, assets, options) : Interactive(install, scene, assets, options);
     }
 
-    static IWindow CreateWindow(WorldOptions o, bool visible) =>
-        Window.Create(WindowOptions.Default with
+    /// <summary>Streamline for DLSS, loaded before the Vulkan device when <c>--upscaler dlss</c> asks for it.</summary>
+    static Streamline? streamline;
+
+    static WindowOptions WindowFor(WorldOptions o) =>
+        WindowOptions.Default with
         {
             Size = new Vector2D<int>(o.Width, o.Height),
             Title = "Meitou world viewer",
-            IsVisible = visible,
-            WindowState = visible ? WindowState.Maximized : WindowState.Normal, // the offscreen screenshot keeps its --size
-            API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(3, 3)),
-            Samples = 0, // the scene is multisampled in PostProcess's own framebuffer
-            VSync = true,
-            PreferredDepthBufferBits = 24,
-        });
+            WindowState = WindowState.Maximized,
+        };
 
-    /// <summary>Streamline for DLSS, loaded before the Vulkan device of an offscreen run when <c>--upscaler dlss</c> asks for it.</summary>
-    static Streamline? streamline;
-
+    // Vulkan headless (no window at all).
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
-        // OpenGL through a hidden window, or Vulkan headless (no window at all).
-        IWindow? window = null;
-        GL? rawGl = null;
-        VulkanDevice? vulkan = null;
-        IGl gl;
-        if (o.Renderer == "vulkan")
-        {
-            var deviceOptions = new VulkanDeviceOptions { Validation = Environment.GetEnvironmentVariable("MEITOU_VK_VALIDATION") == "1" };
-            // DLSS: Streamline goes in before the instance and adds what it needs to the device.
-            if (o.Post.Upscale.Kind == UpscalerKind.Dlss)
-            {
-                streamline = Streamline.TryInit(out var why);
-                if (streamline is null) Console.WriteLine($"upscaler  {why}");
-                else streamline.Apply(deviceOptions);
-            }
-            vulkan = VulkanDevice.Create(deviceOptions);
-            Console.WriteLine($"vulkan    {vulkan.DeviceName}");
-            gl = new VkGl(vulkan);
-        }
-        else
-        {
-            window = CreateWindow(o, visible: false);
-            window.Initialize();
-            rawGl = window.CreateOpenGL();
-            gl = new GlPassthrough(rawGl);
-        }
-        try
-        {
-            return Screenshot(gl, install, scene, assets, o);
-        }
-        finally
-        {
-            if (gl is VkGl vkGl) vkGl.Dispose();
-            streamline?.Dispose();
-            streamline = null;
-            if (vulkan is not null)
-            {
-                if (vulkan.ValidationErrors > 0) Console.WriteLine($"vulkan validation: {vulkan.ValidationErrors} errors\n{string.Join("\n", vulkan.ValidationLog.Take(20))}");
-                vulkan.Dispose();
-            }
-            rawGl?.Dispose();
-            window?.Dispose();
-        }
+        using var display = new VulkanDisplay(null, vsync: false, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
+        streamline = display.Streamline;
+        try { return Screenshot(display.Gl, install, scene, assets, o); }
+        finally { streamline = null; }
     }
 
-    /// <summary>Ends the frame on backends that batch a frame's work (Vulkan); GL needs nothing.</summary>
+    /// <summary>Ends the frame (submits it).</summary>
     static void EndFrame(IGl gl)
     {
         if (gl is VkGl vkGl) vkGl.EndFrame();
@@ -195,10 +152,15 @@ static partial class WorldApp
             gpu.Foliage?.Settle(camera.Eye);
         }
 
+        void Step()
+        {
+            camera.Yaw += o.OrbitStep;
+            if (o.SwayStep > 0 && gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep;
+        }
         // A temporal upscaler converges over its jitter sequence first (a still camera: the history only sharpens).
-        for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { camera.Yaw += o.OrbitStep; Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
+        for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { Step(); Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
         var drawWatch = Stopwatch.StartNew();
-        { camera.Yaw += o.OrbitStep; Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
+        { Step(); Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
         gl.Finish();
         Console.WriteLine($"drawn in {drawWatch.ElapsedMilliseconds} ms: {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
             (gpu.Objects is { } ob ? $", {ob.DrawnInstances} objects ({ob.DrawnTriangles:N0} triangles)" : ""));
@@ -207,7 +169,7 @@ static partial class WorldApp
         const int timedFrames = 10;
         gpu.Post?.Flush();
         gpu.Post?.TakeCosts(); // drop the warm-up frames
-        for (int i = 0; i < timedFrames; i++) { camera.Yaw += o.OrbitStep; Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
+        for (int i = 0; i < timedFrames; i++) { Step(); Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
         gl.Finish();
         Console.WriteLine($"frame     {drawWatch.Elapsed.TotalMilliseconds / timedFrames:0.0} ms on average over {timedFrames} more frames");
         if (gpu.Objects is { } objectStats) Console.WriteLine($"objects   draw cpu {objectStats.LastDrawCpuMs:0.00} ms, {objectStats.DrawCalls} draw calls, {objectStats.DrawnInstances} instances, {objectStats.DrawnTriangles:N0} triangles");
@@ -243,7 +205,7 @@ static partial class WorldApp
             keysOverlay.Dispose();
         }
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, fbo);
-        GlCapture.SavePng(gl, o.Screenshot!, w, h);
+        FramebufferCapture.SavePng(gl, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
         if (Environment.GetEnvironmentVariable("MEITOU_SKY_BENCH") == "1")
         {
@@ -257,10 +219,10 @@ static partial class WorldApp
 
     static int Interactive(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
-        if (o.Renderer == "vulkan") Console.WriteLine("renderer  the interactive viewer runs on OpenGL; Vulkan windows: meitou --renderer vulkan (offscreen viewer runs use Vulkan)");
-        using var window = CreateWindow(o, visible: true);
-        IGl? gl = null;
-        GL? rawGl = null;
+        using var display = new VulkanDisplay(WindowFor(o), vsync: true, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
+        streamline = display.Streamline;
+        var window = display.Window!;
+        var gl = display.Gl;
         Gpu? gpu = null;
         WorldCamera camera = null!;
         WorldRenderOptions render = null!;
@@ -275,11 +237,9 @@ static partial class WorldApp
         bool keysToggleRequested = false;
         var keyItems = DebugOverlay.KeyItems(WorldOptions.Usage);
 
-        window.Load += () =>
         {
-            rawGl = window.CreateOpenGL();
-            gl = new GlPassthrough(rawGl);
             gpu = CreateGpu(gl, install, scene, assets, o, interactive: true);
+            if (gl is VkGl vkGl && gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(vkGl, streamline);
             overlay = DebugOverlay.TryCreate(gl);
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the ? key list is unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
@@ -317,7 +277,7 @@ static partial class WorldApp
                 mouse.Scroll += (_, wheel) => camera.Zoom(wheel.Y);
             }
             Console.WriteLine(WorldOptions.Usage[WorldOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
-        };
+        }
 
         void Preset(string name) { o.Post.CopyFrom(PostOptions.Create(name)); PostStatus(); }
         void PostStatus() => Console.WriteLine($"post      {o.Post.Describe()}");
@@ -400,6 +360,7 @@ static partial class WorldApp
         var frameWatch = new Stopwatch();
         window.Update += dt =>
         {
+            SmokeTest.Check(window);
             if (keysToggleRequested)
             {
                 keysToggleRequested = false;
@@ -443,9 +404,9 @@ static partial class WorldApp
         };
         window.Render += _ =>
         {
-            if (gpu is null || gl is null) return;
+            if (gpu is null) return;
             var size = window.FramebufferSize;
-            if (size.X <= 0 || size.Y <= 0) return; // minimized, or not yet shown at its maximized size
+            if (!display.BeginFrame(size.X, size.Y)) return; // minimized, or not yet shown at its maximized size
             if (queries.Length == 0)
             {
                 queries = new uint[4];
@@ -476,26 +437,30 @@ static partial class WorldApp
             }
             queryIndex = (queryIndex + 1) % queries.Length;
             frames++;
-            if (screenshotRequested)
-            {
-                screenshotRequested = false;
-                // Into the temp folder, never the working directory (which may be the repo).
-                var file = Path.Combine(Path.GetTempPath(), $"meitou-world-{DateTime.Now:yyyyMMdd-HHmmss}.png");
-                gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
-                gl.ReadBuffer(ReadBufferMode.Back);
-                GlCapture.SavePng(gl, file, size.X, size.Y);
-                Console.WriteLine($"saved {Path.GetFullPath(file)}");
-            }
-            // After the screenshot, so saved pictures never show it.
+            // The picture is read after the present (framebuffer 0 stays intact until the next frame); the frame that is saved is drawn
+            // without the overlay and the panel, so saved pictures never show them.
+            bool shot = screenshotRequested;
+            screenshotRequested = false;
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-            if (overlay is { Visible: true })
+            if (!shot && overlay is { Visible: true })
             {
                 // Each item with its current state, aligned in a column.
                 int width = keyItems.Max(i => i.Length) + 2;
                 var lines = keyItems.Select(item => KeyState(item.Split(' ')[0]) is { } state ? item.PadRight(width) + state : item).ToList();
                 overlay.Draw(size.X, size.Y, "Keys   (? hides this)", lines);
             }
-            panel?.Draw(size.X, size.Y);
+            if (!shot) panel?.Draw(size.X, size.Y);
+            display.Present();
+            SmokeTest.Frame();
+            if (shot)
+            {
+                // Into the temp folder, never the working directory (which may be the repo).
+                var file = Path.Combine(Path.GetTempPath(), $"meitou-world-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+                gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
+                gl.ReadBuffer(ReadBufferMode.Back);
+                FramebufferCapture.SavePng(gl, file, size.X, size.Y);
+                Console.WriteLine($"saved {Path.GetFullPath(file)}");
+            }
         };
         window.Closing += () => { overlay?.Dispose(); gpu?.Dispose(); };
         window.Run();

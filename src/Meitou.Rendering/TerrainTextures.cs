@@ -1,10 +1,10 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
-using Silk.NET.OpenGL;
 
 using Meitou.Rendering.Gpu;
 
@@ -530,7 +530,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>The full mip chain of an RGBA8 image (power-of-two sides) by 2 Ã— 2 box filtering; level 0 is the image itself.</summary>
-    internal static byte[][] Mips(byte[] baseLevel, int width, int height, int maxLevels = int.MaxValue)
+    internal static byte[][] Mips(byte[] baseLevel, int width, int height, int maxLevels = int.MaxValue, bool pooled = false)
     {
         int count = Math.Min((int)Math.Log2(Math.Max(width, height)) + 1, maxLevels);
         var levels = new byte[count][];
@@ -539,7 +539,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         {
             int w = Math.Max(width >> l, 1), h = Math.Max(height >> l, 1), pw = Math.Max(width >> (l - 1), 1), ph = Math.Max(height >> (l - 1), 1);
             var src = levels[l - 1];
-            var dst = new byte[w * h * 4];
+            var dst = pooled ? ArrayPool<byte>.Shared.Rent(w * h * 4) : new byte[w * h * 4];
             Parallel.For(0, h, y =>
             {
                 int y1 = Math.Min(2 * y + 1, ph - 1);
@@ -628,6 +628,7 @@ public sealed unsafe class TerrainTextures : IDisposable
             (validPx, validPz) = (update.Px0, update.Pz0);
             MapState = 2;
             mapUploading = false;
+            update.Release();
         }, "map swap");
     }
 
@@ -782,7 +783,11 @@ sealed class MapWindows
     public sealed record Piece(bool Colour, int X, int Z, int Width, int Height, byte[][] Levels);
 
     /// <summary>What to write to the textures to show the window at (<see cref="Px0"/>, <see cref="Pz0"/>).</summary>
-    public sealed record Update(int Px0, int Pz0, List<Piece> Pieces);
+    public sealed record Update(int Px0, int Pz0, List<Piece> Pieces)
+    {
+        /// <summary>Returns the levels (rented from the shared pool, sized at least as needed) once they are uploaded.</summary>
+        public void Release() { foreach (var p in Pieces) foreach (var l in p.Levels) ArrayPool<byte>.Shared.Return(l); }
+    }
 
     /// <summary>
     /// The pixels of the window at (<paramref name="px0"/>, <paramref name="pz0"/>) that the window at
@@ -809,9 +814,9 @@ sealed class MapWindows
                 foreach (var (sz, sh) in Wrap(rz, rh, size))
                 {
                     var data = Cut(overlay, overlayTile, sx, sz, sw, sh);
-                    pieces.Add(new Piece(false, sx % size, sz % size, sw, sh, TerrainTextures.Mips(data, sw, sh, 7)));
+                    pieces.Add(new Piece(false, sx % size, sz % size, sw, sh, TerrainTextures.Mips(data, sw, sh, 7, pooled: true)));
                     var cdata = Cut(colour, colourTile, sx * ratio, sz * ratio, sw * ratio, sh * ratio);
-                    pieces.Add(new Piece(true, sx * ratio % cs, sz * ratio % cs, sw * ratio, sh * ratio, TerrainTextures.Mips(cdata, sw * ratio, sh * ratio, 7)));
+                    pieces.Add(new Piece(true, sx * ratio % cs, sz * ratio % cs, sw * ratio, sh * ratio, TerrainTextures.Mips(cdata, sw * ratio, sh * ratio, 7, pooled: true)));
                 }
         return new Update(px0, pz0, pieces);
     }
@@ -830,7 +835,8 @@ sealed class MapWindows
 
     static byte[] Cut(TileCache cache, int tile, int x0, int z0, int w, int h)
     {
-        var result = new byte[w * h * 4];
+        var result = ArrayPool<byte>.Shared.Rent(w * h * 4);   // returned with the update's other levels once uploaded
+        Array.Clear(result, 0, w * h * 4);
         int tx0 = x0 / tile, tx1 = (x0 + w - 1) / tile, tz0 = z0 / tile, tz1 = (z0 + h - 1) / tile;
         var keys = new List<(int, int)>();
         for (int tz = tz0; tz <= tz1; tz++)

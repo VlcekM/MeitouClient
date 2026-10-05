@@ -44,7 +44,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         public byte UseAutoExposure, AlphaUpscalingEnabled;
     }
 
-    const uint FeatureDlss = 0, BufferDepth = 0, BufferMotionVectors = 1, BufferScalingInputColor = 3, BufferScalingOutputColor = 4;
+    const uint FeatureDlss = 0, BufferDepth = 0, BufferMotionVectors = 1, BufferScalingInputColor = 3, BufferScalingOutputColor = 4, BufferBiasCurrentColorHint = 29;
     const int ValidUntilEvaluate = 2;
 
     readonly Streamline sl;
@@ -75,6 +75,8 @@ public sealed unsafe class DlssUpscaler : IUpscaler
     }
 
     /// <summary>DLSS's mode for a render scale (its presets: DLAA 1, quality 1/1.5, balanced 1/1.72, performance 1/2, ultra performance 1/3).</summary>
+    static readonly uint Preset = uint.TryParse(Environment.GetEnvironmentVariable("MEITOU_DLSS_PRESET"), out var p) ? p : 0;
+
     static uint Mode(float scale) => scale switch
     {
         >= 0.99f => 6,   // eDLAA
@@ -111,6 +113,8 @@ public sealed unsafe class DlssUpscaler : IUpscaler
                 StructType = Streamline.DlssOptionsType, StructVersion = 3,
                 Mode = mode, OutputWidth = (uint)i.DisplayWidth, OutputHeight = (uint)i.DisplayHeight,
                 PreExposure = 1, ExposureScale = 1, ColorBuffersHdr = 1, UseAutoExposure = 1,
+                // MEITOU_DLSS_PRESET: Streamline's preset number for every mode (0 default, 1..15 = A..O), e.g. 5 (E, CNN) for the water hint.
+                DlaaPreset = Preset, QualityPreset = Preset, BalancedPreset = Preset, PerformancePreset = Preset, UltraPerformancePreset = Preset,
             };
             int rc = sl.DlssSetOptions(viewport, &o);
             if (rc != 0) return Fail($"slDLSSSetOptions failed ({rc})");
@@ -151,12 +155,17 @@ public sealed unsafe class DlssUpscaler : IUpscaler
             var motion = Resource(i.Motion, (uint)ImageLayout.General);
             var colour = Resource(i.Colour, (uint)ImageLayout.General);
             var output = Resource(i.Output, (uint)ImageLayout.General);
-            var tags = stackalloc ResourceTag[4];
+            bool hint = i.Reactive != 0;
+            var reactive = hint ? Resource(i.Reactive, (uint)ImageLayout.General) : default;
+            var tags = stackalloc ResourceTag[5];
             tags[0] = Tag(&depth, BufferDepth);
             tags[1] = Tag(&motion, BufferMotionVectors);
             tags[2] = Tag(&colour, BufferScalingInputColor);
             tags[3] = Tag(&output, BufferScalingOutputColor);
-            r = sl.SetTagForFrame(token, viewport, tags, 4, cb.Handle);
+            // The water mask as DLSS's bias towards the current frame (lerp(history, current, bias); NGX's "Bias.Current.Color.Mask"), as FSR's
+            // reactive mask. Observed: the CNN presets (e.g. E) use it, DLSS 310's default transformer preset ignores it.
+            if (hint) tags[4] = Tag(&reactive, BufferBiasCurrentColorHint);
+            r = sl.SetTagForFrame(token, viewport, tags, hint ? 5u : 4u, cb.Handle);
             if (r != 0) return Fail($"slSetTagForFrame failed ({r})");
             void* input = viewport;
             r = sl.EvaluateFeature(FeatureDlss, token, &input, 1, cb.Handle);

@@ -59,9 +59,9 @@ public sealed class PostOptions
           --post <kenshi|off>   post-processing preset (default kenshi); give it before the options below
           --ssao / --no-ssao, --bloom / --no-bloom, --vignette / --no-vignette, --grade / --no-grade, --dither / --no-dither
           --msaa <1|2|4|8>         samples of the HDR scene framebuffer
-          --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with MSAA; FSR and DLSS need --renderer vulkan and the vendor library, else TAA)
+          --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with MSAA; FSR and DLSS need the vendor library, else TAA)
           --render-scale <0.25..1|native|quality|balanced|performance|ultra>   render size per axis with an upscaler   --sharpness <0..1>
-          --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with MSAA; FSR and DLSS need --renderer vulkan and the vendor library, else TAA)
+          --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with MSAA; FSR and DLSS need the vendor library, else TAA)
           --render-scale <0.25..1|native|quality|balanced|performance|ultra>   render size per axis with an upscaler   --sharpness <0..1>
           --tonemap <clamp|shoulder|aces>   --exposure <x>   --bloom-intensity <x>   --bloom-threshold <x>   --ssao-radius <units>   --ssao-strength <x>
         """;

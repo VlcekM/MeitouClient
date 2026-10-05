@@ -1,5 +1,5 @@
 using System.Numerics;
-using Silk.NET.OpenGL;
+using Meitou.Rendering.Gpu;
 
 namespace Meitou.Rendering.Vulkan;
 
@@ -10,7 +10,7 @@ public sealed unsafe partial class VkGl
     DepthFunction depthFunc = DepthFunction.Less;
     TriangleFace cullMode = TriangleFace.Back;
     FrontFaceDirection frontFace = FrontFaceDirection.Ccw;
-    Silk.NET.OpenGL.PolygonMode polygonMode = Silk.NET.OpenGL.PolygonMode.Fill;
+    Meitou.Rendering.Gpu.PolygonMode polygonMode = Meitou.Rendering.Gpu.PolygonMode.Fill;
     BlendingFactor blendSrc = BlendingFactor.One, blendDst = BlendingFactor.Zero;
     (bool R, bool G, bool B, bool A) colourMask = (true, true, true, true);
     float offsetFactor, offsetUnits;

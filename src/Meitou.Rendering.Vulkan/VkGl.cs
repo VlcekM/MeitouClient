@@ -1,6 +1,5 @@
 using Meitou.Rendering.Gpu;
 using Meitou.Rendering.Vulkan.Core;
-using Silk.NET.OpenGL;
 using Silk.NET.Vulkan;
 using VkBuffer = Silk.NET.Vulkan.Buffer;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;

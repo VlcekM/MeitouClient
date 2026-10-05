@@ -13,6 +13,9 @@ public static class FoliageGrassField
     /// <summary>Floats per blade: x, y, z, scale (0..1), yaw (radians).</summary>
     public const int Stride = 5;
 
+    /// <summary>Each worker thread's blade buffer: a page's blades are collected here and copied out at their exact size (a list sized for the candidates was mostly empty and on the large object heap).</summary>
+    [ThreadStatic] static List<float>? scratch;
+
     /// <summary>Checkpoints in <see cref="BladesWithPrefixes"/>: the blade count after each 1/<see cref="PrefixSteps"/> of the candidates.</summary>
     public const int PrefixSteps = 64;
 
@@ -40,7 +43,8 @@ public static class FoliageGrassField
         bool limits = grass.MinAltitude != 0 || grass.MaxAltitude != 0;
         float lo = grass.MinAltitude == 0 ? float.NegativeInfinity : grass.MinAltitude;
         float hi = grass.MaxAltitude == 0 ? float.PositiveInfinity : grass.MaxAltitude;
-        var result = new List<float>(Math.Min(candidates, 1 << 16) * Stride);
+        var result = scratch ??= new List<float>(1 << 16);
+        result.Clear();
         int step = 1;
         for (int n = 0; n < candidates; n++)
         {

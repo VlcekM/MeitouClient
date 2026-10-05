@@ -1,12 +1,9 @@
-using Silk.NET.OpenGL;
-
 namespace Meitou.Rendering.Gpu;
 
 /// <summary>
-/// The subset of OpenGL 3.3 the world renderers use, with Silk.NET's signatures and enums, so a renderer is ported by its type
-/// alone. Implemented by <see cref="GlPassthrough"/> (forwards to OpenGL, so the pictures are OpenGL's) and by the Vulkan
-/// backend (a translation of these calls; see docs/engine.md "Backend interface"). Add a member here only together with its
-/// Vulkan translation.
+/// The subset of OpenGL 3.3 the world renderers use, with the enumerations of <c>GlEnums.cs</c>. The renderers are written against it and the Vulkan
+/// backend (<c>VkGl</c>, the only one: OpenGL was removed, DECISIONS 18) translates these calls; see docs/engine.md "Backend interface".
+/// Add a member here only together with its Vulkan translation.
 /// </summary>
 public unsafe interface IGl
 {

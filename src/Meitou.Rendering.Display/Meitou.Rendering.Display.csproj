@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The window and the Vulkan device behind IGl, shared by the game and the viewer: a Silk.NET window with a surface, the device,
+       VkGl, the presenter and (optionally) Streamline. Kept apart so Meitou.Rendering.Vulkan does not depend on windowing. -->
+
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Meitou.Rendering\Meitou.Rendering.csproj" />
+    <ProjectReference Include="..\Meitou.Rendering.Vulkan\Meitou.Rendering.Vulkan.csproj" />
+  </ItemGroup>
+
+</Project>

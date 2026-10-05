@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Renderer parity views: parity.sh <viewer exe> <out dir> [extra viewer options...]
-# Writes <out>/<view>.png for the five reference views at 13:00 and 02:00 (offscreen, 1600x900).
+# Writes <out>/<view>.png for the four reference views at 13:00 and 02:00 (offscreen, 1600x900, on Vulkan, the only backend).
+# Compare with parity-compare.sh against the stored folder of master's OpenGL pictures (DECISIONS 1, 4, 18): mean 0.08 or less per view.
 set -u
 exe="$1"; out="$2"; shift 2
 mkdir -p "$out"

@@ -1,7 +1,6 @@
 using Meitou.Rendering.Gpu;
 using Meitou.Rendering.Vulkan;
 using Meitou.Rendering.Vulkan.Core;
-using Silk.NET.OpenGL;
 
 namespace Meitou.Tests.Vulkan;
 

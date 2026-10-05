@@ -84,3 +84,16 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     (fine for pictures and benchmarks). The render size stays ours; the DLSS mode follows the render scale (DLAA at 1). Our images are
     bottom-up, so the matrices DLSS gets have clip y flipped to describe the picture as stored. None of the NVIDIA DLLs are in the
     repository (`MEITOU_STREAMLINE_PATH` or next to the executable: `sl.interposer.dll`, `sl.common.dll`, `sl.dlss.dll`, `nvngx_dlss.dll`).
+18. **OpenGL removed.** `GlPassthrough`, the OpenGL window and context in the game's `Display`, the viewer's GL windows and raw
+    `Silk.NET.OpenGL` drawing (mesh, character, world), and the `Silk.NET.OpenGL` package are gone; `--renderer gl|vulkan` no longer
+    chooses anything (`vulkan` is accepted and ignored, `gl` prints that OpenGL is gone and is ignored; so is an old `renderer` key in
+    `meitou.user.json`). Vulkan is the only backend, windowed (the game, and the viewer's `--world`, mesh and character modes through
+    `Meitou.Rendering.Display.VulkanDisplay`, which also holds the Streamline setup) and headless (`--screenshot`, `--fly-benchmark`).
+    The GL-shaped `IGl` over `VkGl` stays as the renderer API (DECISIONS 7 still holds): the renderers, their 957 call sites and the
+    GLSL do not change, the shaders are compiled to SPIR-V as before, and a Vulkan-shaped interface remains an option for later
+    without a second backend to keep in step. The enumerations `IGl` takes were Silk's; they are now ours (`Gpu/GlEnums.cs`), the
+    GL specification's names and token values for the members the code uses, so a renderer's change was its `using`. The parity
+    reference stays master `f127922`'s OpenGL pictures (DECISIONS 1, 4; folders kept outside the repo), and the gate is the one
+    Vulkan check: mean difference 0.08 or less in the eight views (measured at removal: 0.0000 to 0.0789; mesh, animated mesh and
+    character screenshots 0.0000). The interactive mesh and character windows are no longer multisampled (the swapchain image is
+    single-sampled; the offscreen pictures still resolve a 4x target).

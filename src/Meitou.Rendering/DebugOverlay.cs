@@ -1,5 +1,4 @@
 using System.Numerics;
-using Silk.NET.OpenGL;
 using StbTrueTypeSharp;
 
 using Meitou.Rendering.Gpu;

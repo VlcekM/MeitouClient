@@ -31,8 +31,8 @@ and how far each is analyzed. Detailed layouts live next to it in `docs/formats/
 
 ## Technology choices (defaults, open to change)
 
-- **Rendering:** Silk.NET. The viewers use OpenGL 3.3 with our own GLSL (Kenshi's HLSL is read for
-  facts only); D3D11 or Vulkan later if needed.
+- **Rendering:** Silk.NET, Vulkan only (OpenGL was removed, DECISIONS 18). The renderers write GL-shaped calls (`IGl`) with our own
+  GLSL (Kenshi's HLSL is read for facts only); `VkGl` translates them onto Vulkan 1.3.
 - **Physics:** BepuPhysics2 (pure C#), tuned to match PhysX character/ragdoll behaviour.
 - **Audio:** own Wwise bank/WEM decoder → OpenAL Soft (Silk.NET).
 - **UI:** own renderer for MyGUI `.layout` / skins, so GUI mods keep working.
@@ -68,7 +68,7 @@ Status as of 2026-10-05. Details and open questions live in the linked docs.
    from the save writer.
 7. **Presentation** — *partly.* `meitou` boots into the world with the Kenshi camera on a fixed 30 Hz tick with interpolated
    drawing (`src/Meitou.Engine`, `src/Meitou.Game`, [docs/engine.md](docs/engine.md)); the world renderers are a library
-   (`src/Meitou.Rendering`, OpenGL 3.3), shared with the viewer. To do: game renderer
+   (`src/Meitou.Rendering`, on Vulkan), shared with the viewer. To do: game renderer
    (shadows, effects) with graphics options (terrain LOD distance, now fixed at its useful maximum, and
    material distance), MyGUI-compatible UI, audio, particles, physics/ragdolls.
 8. **Parity** — *not started.* Side-by-side comparison against the original, mod compatibility

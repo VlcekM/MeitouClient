@@ -1,6 +1,6 @@
 # Model viewer (`tools/Meitou.ModelViewer`)
 
-A standalone viewer for the meshes of the install (FCS lookups follow the full load order, including enabled and workshop mods): OpenGL 3.3 core through Silk.NET, its own GLSL shaders
+A standalone viewer for the meshes of the install (FCS lookups follow the full load order, including enabled and workshop mods): Vulkan 1.3 through `VkGl` (the GL-shaped `IGl`; OpenGL was removed, DECISIONS 18), its own GLSL shaders
 (`Shaders.cs`; Kenshi's HLSL is only read for facts), CPU-decoded textures
 ([formats/dds.md](formats/dds.md)), GPU skinning and skeletal animation. Status labels as in
 [README.md](README.md).
@@ -17,8 +17,11 @@ dotnet run --project tools/Meitou.ModelViewer -- mask2 --info
 `<mesh>` is a bare file name (`.mesh` optional) or a path (absolute, relative to the install, or relative to the
 working directory). The install comes from `KENSHI_PATH` / `meitou.local.json`. `--help` lists the options and
 keys (orbit / pan / zoom with the mouse, `W` wireframe, `M` next material candidate, `Left`/`Right`
-animations, `Space` pause, `P` screenshot into the temp folder...). `--screenshot` renders into a hidden window's 4× multisampled
-framebuffer and writes a PNG; with `--anim` the camera frames the posed mesh.
+animations, `Space` pause, `P` screenshot into the temp folder...). `--screenshot` renders headless (no window) into a 4× multisampled
+framebuffer and writes a PNG; with `--anim` the camera frames the posed mesh. `--quit-after <s>` (any interactive mode) closes the
+window after s seconds and prints the frames drawn (a smoke test); `MEITOU_VK_VALIDATION=1` runs the Vulkan validation layer.
+The interactive mesh and character windows draw straight into the swapchain image, so they are not multisampled (the offscreen
+pictures are). `--renderer vulkan` is accepted and ignored in every mode (`gl` prints a message that OpenGL is gone and is ignored).
 
 ## Finding files
 
@@ -233,8 +236,8 @@ dotnet run --project tools/Meitou.ModelViewer -- --world --radius 32 --no-object
 `--world --help` lists the options: where (`--at x,z`, `--zone i,j`, `--town <name>`, default the world's
 centre), `--radius` in zones (default 1.5), `--step` (heightmap sample step; by default the smallest power of
 two keeping at most 2048 cells per side, so `--radius 32`, the whole world, uses step 8), camera
-(`--yaw`, `--pitch`, `--distance`), `--screenshot` / `--size` (the window opens maximized; `--size` is for
-screenshots), `--no-textures`, `--no-objects`, `--no-foliage` (`F` toggles), `--distant-range <zones>`, `--no-distant`,
+(`--yaw`, `--pitch`, `--distance`), `--screenshot` / `--size` (the window opens maximized on Vulkan, vsync on; `--size` is for
+screenshots, which are headless), `--no-textures`, `--no-objects`, `--no-foliage` (`F` toggles), `--distant-range <zones>`, `--no-distant`,
 `--object-distance`, `--layer-size` (terrain layer textures, default 2048), `--debug 1|2|3`, `--time <hour>` (default 13), `--no-water`,
 `--view-distance` (default 450000), `--fog` (distance where the haze is complete at ground level, default 250000), `--simple-sky` (the old colour-model sky and fog; `B` toggles), `--weather <name>` (a WEATHER record's sky colour, fog and clouds; default "Default": clear), `--clouds <0..1>` and
 `--material-distance` (where the full terrain material gives way to the ground colour, default 30000 as in the
