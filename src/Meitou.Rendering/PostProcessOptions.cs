@@ -8,6 +8,10 @@ public sealed class PostOptions
     public string Preset = "meitou";
     /// <summary>Kenshi's FXAA on the final image (its <c>FXAA=1</c> setting; docs/formats/post-processing.md) when no temporal upscaler runs.</summary>
     public bool Fxaa = true;
+    /// <summary>Kenshi's heat haze after FXAA (its <c>HeatHaze=1</c> setting, on when the key is absent; docs/formats/post-processing.md).</summary>
+    public bool HeatHaze = true;
+    /// <summary>Replaces the weather's <c>heat haze</c> field (the sun factor still applies), for testing in a weather without it; null: the weather's.</summary>
+    public float? HeatHazeOverride;
     /// <summary>Meitou switches (Enhancements), on by default; the <c>kenshi</c> preset turns them off.</summary>
     public bool Ssao = true, Dither = true;
     /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness.</summary>
@@ -25,11 +29,11 @@ public sealed class PostOptions
         switch (preset)
         {
             case "meitou": break;
-            case "off": o.Fxaa = false; o.Ssao = o.Dither = false; break;
+            case "off": o.Fxaa = o.HeatHaze = false; o.Ssao = o.Dither = false; break;
             case "kenshi":
                 o.Ssao = o.Dither = false;
                 // Kenshi's chain with the shipped settings: exposure only (no curve, bloom magnitude 0, SSAO commented
-                // out), and FXAA on the final image.
+                // out), and FXAA then the heat haze on the final image.
                 break;
             default: throw new ArgumentException($"unknown post preset '{preset}' (meitou, kenshi, off)");
         }
@@ -38,7 +42,7 @@ public sealed class PostOptions
 
     public void CopyFrom(PostOptions other)
     {
-        Preset = other.Preset; Fxaa = other.Fxaa; Debug = other.Debug; Ssao = other.Ssao;
+        Preset = other.Preset; Fxaa = other.Fxaa; HeatHaze = other.HeatHaze; Debug = other.Debug; Ssao = other.Ssao;
         Dither = other.Dither; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
         SsaoStrength = other.SsaoStrength;
     }
@@ -47,6 +51,7 @@ public sealed class PostOptions
           --post <meitou|kenshi|off>   post-processing preset (default meitou; kenshi = the game's chain); give it before the options below
           --ssao / --no-ssao, --dither / --no-dither
           --fxaa / --no-fxaa       the game's FXAA when no upscaler runs (default on)
+          --heat-haze <x> / --no-heat-haze   the game's heat haze (default on; strength from the weather's `heat haze`); x replaces that field
           --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with FXAA; FSR and DLSS need the vendor library, else TAA)
           --render-scale <0.25..1|native|quality|balanced|performance|ultra>   render size per axis with an upscaler (default 1)  --sharpness <0..1>
           --exposure <x>   --ssao-radius <units>   --ssao-strength <x>
@@ -65,6 +70,8 @@ public sealed class PostOptions
             case "--no-dither": Dither = false; return true;
             case "--fxaa": Fxaa = true; return true;
             case "--no-fxaa": Fxaa = false; return true;
+            case "--heat-haze": HeatHaze = true; HeatHazeOverride = Math.Max(F(), 0); return true;
+            case "--no-heat-haze": HeatHaze = false; return true;
             case "--post-debug": Debug = next() switch { "ao" => 1, _ => 0 }; return true;
             case "--upscaler":
                 Upscale.Explicit = true;
@@ -81,6 +88,6 @@ public sealed class PostOptions
     }
 
     public string Describe() =>
-        $"{Preset}: fxaa {(Fxaa && !Upscale.Temporal ? "on" : "off")}, ssao {(Ssao ? "on" : "off")}, exposure x{Exposure:0.##}, " +
+        $"{Preset}: fxaa {(Fxaa && !Upscale.Temporal ? "on" : "off")}, heat haze {(HeatHaze ? HeatHazeOverride is { } h ? $"x{h:0.##}" : "weather" : "off")}, ssao {(Ssao ? "on" : "off")}, exposure x{Exposure:0.##}, " +
         $"upscaler {Upscale.Describe()}";
 }

@@ -9,7 +9,7 @@ namespace Meitou.Rendering;
 /// The world view's frame buffer and post-processing chain. The scene is drawn into an RGBA16F framebuffer
 /// with depth, then: SSAO at half resolution from the depth, a
 /// composite pass (exposure, occlusion, clip, dither), then the game's FXAA on the final image when no
-/// temporal upscaler runs, ending in <see cref="Target"/>.
+/// temporal upscaler runs, then the game's heat haze when the weather has some, ending in <see cref="Target"/>.
 /// Usage per frame: <see cref="Begin"/>, draw the scene (calling <see cref="SetNearSlice"/> for the near depth slice), <see cref="End"/>.
 /// Anything that draws into another framebuffer in between must rebind the one it found (<see cref="SceneFramebuffer"/>).
 /// Facts about the game's own chain: docs/formats/post-processing.md.
@@ -41,19 +41,20 @@ public sealed unsafe class PostProcess : IDisposable
     long frameIndex;
     readonly uint progVelocity, progTaa;
     Target2D? aoA, aoB;
-    Target2D? ldr;   // the composite's LDR picture that FXAA reads (when it runs)
+    Target2D? ldr, ldrFxaa;   // the composite's LDR picture that FXAA or the heat haze reads, and FXAA's when the heat haze follows it
+    uint flowTexture, perturbationTexture;   // the heat haze's FlowHAZE.dds and Perturber.dds (0: not found, no heat haze)
     Target2D? luminance, adaptA, adaptB;   // Kenshi's exposure: the luminance measure (mipmapped) and the adapted value (1 × 1, ping-pong)
     bool adaptedValid;
     readonly System.Diagnostics.Stopwatch adaptClock = new();
     readonly uint vao;
-    readonly uint progSsao, progBlur, progComposite, progLuminance, progAdapt, progFxaa;
+    readonly uint progSsao, progBlur, progComposite, progLuminance, progAdapt, progFxaa, progHeatHaze;
     readonly Dictionary<(uint, string), int> uniforms = [];
 
     float nearPlane = 1, farPlane = 1000, fovY = 0.87f, aspect = 1;
     bool haveNearSlice;
 
     // GPU timestamps: one set per frame in flight, section k lasts from stamp k-1 to stamp k.
-    const int Slots = 4, MaxStamps = 8;
+    const int Slots = 4, MaxStamps = 10;
     readonly uint[,] stamps = new uint[Slots, MaxStamps];
     readonly string[,] stampNames = new string[Slots, MaxStamps];
     readonly int[] stampCount = new int[Slots];
@@ -70,6 +71,7 @@ public sealed unsafe class PostProcess : IDisposable
         progBlur = Program(PostProcessShaders.SsaoBlur);
         progComposite = Program(PostProcessShaders.Composite);
         progFxaa = Program(PostProcessShaders.Fxaa);
+        progHeatHaze = Program(PostProcessShaders.HeatHaze);
         progLuminance = Program(PostProcessShaders.Luminance);
         progAdapt = Program(PostProcessShaders.Adapt);
         progVelocity = Program(UpscaleShaders.Velocity);
@@ -99,8 +101,8 @@ public sealed unsafe class PostProcess : IDisposable
     {
         if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneColour); gl.DeleteTexture(sceneDepth); sceneFbo = 0; }
         if (farFbo != 0) { gl.DeleteFramebuffer(farFbo); gl.DeleteTexture(farDepth); farFbo = 0; }
-        foreach (var t in new[] { aoA, aoB, ldr, luminance, adaptA, adaptB, motion, upscaleDepth, reactive, historyA, historyB }) if (t is not null) Release(t);
-        aoA = aoB = ldr = luminance = adaptA = adaptB = motion = upscaleDepth = reactive = historyA = historyB = null;
+        foreach (var t in new[] { aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB, motion, upscaleDepth, reactive, historyA, historyB }) if (t is not null) Release(t);
+        aoA = aoB = ldr = ldrFxaa = luminance = adaptA = adaptB = motion = upscaleDepth = reactive = historyA = historyB = null;
         adaptedValid = historyValid = false;
     }
 
@@ -168,8 +170,10 @@ public sealed unsafe class PostProcess : IDisposable
             historyB = MakeTarget(displayW, displayH, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
         }
 
-        // FXAA reads the composite's LDR picture, as the game's runs on its A8R8G8B8 buffer after the HDR composite.
-        if (!up.Temporal) ldr = MakeTarget(displayW, displayH, InternalFormat.Rgba8, PixelFormat.Rgba, PixelType.UnsignedByte);
+        // FXAA and the heat haze read the composite's LDR picture, as the game's run on its A8R8G8B8 buffers after the HDR composite
+        // (both always made, so switching either at run time needs no new targets).
+        ldr = MakeTarget(displayW, displayH, InternalFormat.Rgba8, PixelFormat.Rgba, PixelType.UnsignedByte);
+        ldrFxaa = MakeTarget(displayW, displayH, InternalFormat.Rgba8, PixelFormat.Rgba, PixelType.UnsignedByte);
         int hw = Math.Max((w + 1) / 2, 1), hh = Math.Max((h + 1) / 2, 1);
         aoA = MakeTarget(hw, hh, InternalFormat.RG16f, PixelFormat.RG, PixelType.HalfFloat);
         aoB = MakeTarget(hw, hh, InternalFormat.RG16f, PixelFormat.RG, PixelType.HalfFloat);
@@ -388,9 +392,10 @@ public sealed unsafe class PostProcess : IDisposable
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
 
-        // Composite: to the target, or to the LDR picture FXAA then reads.
+        // Composite: to the target, or to the LDR picture FXAA and / or the heat haze then read (the game's order: FXAA, HeatHaze).
         bool fxaa = o.Fxaa && !Temporal && ldr is not null;
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fxaa ? ldr!.Framebuffer : Target);
+        bool haze = HeatHazeRuns;
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fxaa || haze ? ldr!.Framebuffer : Target);
         gl.Viewport(0, 0, (uint)displayWidth, (uint)displayHeight);
         gl.UseProgram(progComposite);
         Bind(0, postColour); gl.Uniform1(U(progComposite, "uScene"), 0);
@@ -403,15 +408,18 @@ public sealed unsafe class PostProcess : IDisposable
         gl.Uniform1(U(progComposite, "uDebug"), o.Debug);
         gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
         Stamp("composite");
+        var picture = ldr;
         if (fxaa)
         {
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, Target);
+            gl.BindFramebuffer(FramebufferTarget.Framebuffer, haze ? ldrFxaa!.Framebuffer : Target);
             gl.UseProgram(progFxaa);
             Bind(0, ldr!.Texture); gl.Uniform1(U(progFxaa, "uImage"), 0);
             gl.Uniform2(U(progFxaa, "uTexel"), 1f / displayWidth, 1f / displayHeight);
             gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
             Stamp("fxaa");
+            picture = ldrFxaa;
         }
+        if (haze) RunHeatHaze(picture!);
 
         pending[slot] = true;
         (previousRotation, previousEye, previousFov, previousAspect, previousValid) = (viewRotation, eyeNow, fovNow, aspectNow, Temporal);
@@ -575,6 +583,98 @@ public sealed unsafe class PostProcess : IDisposable
         (aoA, aoB) = (aoB, aoA);
     }
 
+    // ---- heat haze ----
+
+    /// <summary>The game's shared <c>heatHaze</c> this frame (the caller moves it towards the weather's target, <see cref="Meitou.Data.World.HeatHaze"/>); 0 skips the pass.</summary>
+    public float HeatHazeAmount { get; set; }
+    /// <summary>The game's <c>gameTime</c>: game hours since the load, which the haze's layers cycle on (× 100).</summary>
+    public double HeatHazeHours { get; set; }
+    /// <summary>The game's far clip D, which its G-buffer depth is divided by (view distance × 10 = 50000; docs/formats/sky.md).</summary>
+    public float HeatHazeFarClip { get; set; } = 50000;
+    /// <summary>Whether the heat-haze textures were found (else the pass never runs).</summary>
+    public bool HasHeatHaze => flowTexture != 0 && perturbationTexture != 0;
+    /// <summary>Whether this frame ends with the heat haze: it is on, has its textures and an amount.</summary>
+    public bool HeatHazeRuns => Options.HeatHaze && HasHeatHaze && HeatHazeAmount > 0 && ldr is not null;
+
+    /// <summary>
+    /// Loads the heat haze's two textures from the install (<c>materials/FlowHAZE.dds</c> and <c>Perturber.dds</c>, BC1 2048² with
+    /// their 12 mips), sampled as the game's default filtering: trilinear, anisotropy 16, repeating.
+    /// </summary>
+    public void LoadHeatHaze(AssetLocator assets)
+    {
+        try
+        {
+            if (assets.Find("FlowHAZE.dds") is not { } flow || assets.Find("Perturber.dds") is not { } perturbation)
+            {
+                Console.WriteLine("warning   heat haze: FlowHAZE.dds or Perturber.dds not found, no heat haze");
+                return;
+            }
+            flowTexture = HazeTexture(Meitou.Data.Textures.DdsReader.ReadFile(flow));
+            perturbationTexture = HazeTexture(Meitou.Data.Textures.DdsReader.ReadFile(perturbation));
+        }
+        catch (Exception e) when (e is Meitou.Data.Textures.DdsFormatException or IOException)
+        {
+            Console.WriteLine($"warning   heat haze textures: {e.Message}");
+        }
+    }
+
+    uint HazeTexture(Meitou.Data.Textures.DdsFile dds)
+    {
+        uint t = gl.GenTexture();
+        gl.BindTexture(TextureTarget.Texture2D, t);
+        if (dds.Format == Meitou.Data.Textures.DdsFormat.Bc1)
+        {
+            for (int level = 0; level < dds.MipCount; level++)
+            {
+                var s = dds.Surface(0, level);
+                fixed (byte* p = &dds.Data[s.Offset])
+                    gl.CompressedTexImage2D(TextureTarget.Texture2D, level, InternalFormat.CompressedRgbaS3TCDxt1Ext, (uint)s.Width, (uint)s.Height, 0, (uint)s.Length, p);
+            }
+        }
+        else
+        {
+            gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+            for (int level = 0; level < dds.MipCount; level++)
+            {
+                var img = Meitou.Data.Textures.DdsDecoder.Decode(dds, 0, level);
+                gl.TexImage2D<byte>(TextureTarget.Texture2D, level, InternalFormat.Rgba8, (uint)img.Width, (uint)img.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, img.Pixels.AsSpan());
+            }
+        }
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, dds.MipCount - 1);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x84FE, 16f);   // TEXTURE_MAX_ANISOTROPY: Ogre's default 16 in the game
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
+        gl.BindTexture(TextureTarget.Texture2D, 0);
+        return t;
+    }
+
+    /// <summary>The game's heat haze from <paramref name="source"/> (the finished LDR picture) into <see cref="Target"/>.</summary>
+    void RunHeatHaze(Target2D source)
+    {
+        // The upscaler's mip bias is for the scene's textures; the haze's maps are sampled as the game does.
+        if (gl is ITextureLodBias lod) lod.TextureLodBias = 0;
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, Target);
+        gl.Viewport(0, 0, (uint)displayWidth, (uint)displayHeight);
+        gl.UseProgram(progHeatHaze);
+        Bind(0, flowTexture); gl.Uniform1(U(progHeatHaze, "uFlow"), 0);
+        Bind(1, perturbationTexture); gl.Uniform1(U(progHeatHaze, "uPerturbation"), 1);
+        Bind(2, sceneDepth); gl.Uniform1(U(progHeatHaze, "uDepth"), 2);
+        Bind(3, source.Texture); gl.Uniform1(U(progHeatHaze, "uImage"), 3);
+        // The phase in double first: game hours × 100 loses its fraction in float after long sessions.
+        double phase = HeatHazeHours * 100;
+        gl.Uniform1(U(progHeatHaze, "uPhase"), (float)(phase - Math.Floor(phase)));
+        gl.Uniform1(U(progHeatHaze, "uAmount"), HeatHazeAmount);
+        float tanY = MathF.Tan(fovY * 0.5f);
+        gl.Uniform2(U(progHeatHaze, "uTan"), tanY * aspect, tanY);
+        gl.Uniform2(U(progHeatHaze, "uNearFar"), nearPlane, farPlane);
+        gl.Uniform1(U(progHeatHaze, "uFarClip"), HeatHazeFarClip);
+        gl.Uniform1(U(progHeatHaze, "uHasDepth"), haveNearSlice ? 1 : 0);
+        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        Stamp("heathaze");
+    }
+
     const int LuminanceSize = 256;
     /// <summary>The game's adaptation rate (`AUTOEXP_ADAPTATION_RATE`, 1 / s).</summary>
     const float AdaptationRate = 0.5f;
@@ -628,7 +728,8 @@ public sealed unsafe class PostProcess : IDisposable
         External?.Dispose();
         Free();
         gl.DeleteVertexArray(vao);
-        foreach (var p in new[] { progSsao, progBlur, progComposite, progLuminance, progAdapt, progFxaa, progVelocity, progTaa }) gl.DeleteProgram(p);
+        foreach (var p in new[] { progSsao, progBlur, progComposite, progLuminance, progAdapt, progFxaa, progHeatHaze, progVelocity, progTaa }) gl.DeleteProgram(p);
+        foreach (var t in new[] { flowTexture, perturbationTexture }) if (t != 0) gl.DeleteTexture(t);
         for (int s = 0; s < Slots; s++)
             for (int i = 0; i < MaxStamps; i++) gl.DeleteQuery(stamps[s, i]);
     }

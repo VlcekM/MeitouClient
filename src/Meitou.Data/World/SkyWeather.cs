@@ -5,10 +5,11 @@ namespace Meitou.Data.World;
 
 /// <summary>
 /// The sky-related fields of a WEATHER record (docs/formats/sky.md, Observed from the base game's records): colour
-/// multiplier of the sky, fog (colour and a start/end distance) and the cloud density. Rain, wetness, dust and wind
-/// fields are not read here.
+/// multiplier of the sky, fog (colour and a start/end distance), the cloud density and the heat haze (0..1, the post effect's
+/// strength before the weather strength and the sun factor: <see cref="World.HeatHaze"/>, docs/formats/weather.md). Rain,
+/// wetness, dust and wind fields are not read here.
 /// </summary>
-public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool FogEnabled, Vector3 FogColour, float FogMin, float FogMax, float CloudDensity)
+public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool FogEnabled, Vector3 FogColour, float FogMin, float FogMax, float CloudDensity, float HeatHaze = 0)
 {
     /// <summary>The base game's "Default" weather: clear, no fog, no clouds, white multipliers.</summary>
     public static readonly SkyWeather Default = new("Default", Vector3.One, false, Vector3.One, 0, 0, 0);
@@ -18,7 +19,7 @@ public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool F
 
     public static SkyWeather FromRecord(GameRecord r) => new(r.Name,
         Unpack(r.GetInt("sky color mult", 0xFFFFFF)), r.GetBool("fog enabled"), Unpack(r.GetInt("fog color", 0xFFFFFF)),
-        r.GetFloat("fog distance min"), r.GetFloat("fog distance max"), r.GetFloat("clouds density"));
+        r.GetFloat("fog distance min"), r.GetFloat("fog distance max"), r.GetFloat("clouds density"), r.GetFloat("heat haze"));
 
     /// <summary>The weather whose name matches (exactly, else by substring); null name picks "Default".</summary>
     public static SkyWeather? Find(GameDatabase db, string? name)

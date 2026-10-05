@@ -85,12 +85,73 @@ stored world normal rotated into view space. Occlusion = mean of `max(dot(n, dir
 the result **multiplies the finished (LDR) scene**. The node is **commented out in `compositors.cfg`**, and there is no
 settings key for it: not part of the shipped look (the material is called `SSAO_Test`).
 
-## Heat haze (Verified, not reproduced)
+## Heat haze (Verified)
 
-`post/heathaze.hlsl`, node `HeatHaze` (settings key `HeatHaze=1`): a screen-space refraction. It perturbs the screen UV by
-a flow-map-driven, animated normal-map offset (three layers, scaled 0.002 x `heatHaze` x saturate(6 x depth)), blends two
-taps (0.5 and 0.7 of the offset) and reads the finished LDR image. `heatHaze` is a per-biome or weather parameter whose source
-is **Unknown**. Our viewer does not implement it.
+A screen-space shimmer over the finished LDR picture. Sources: `post/heathaze.hlsl` and `post/heathaze.compositor` (the
+material), `compositors/post.compositor` (the node), `compositors/compositors.cfg` (the order), `common/common.program`
+(`SharedSkyParams`), the `deferred/*.hlsl` G-buffer writers, and in `kenshi_x64.exe` the compositor setup FUN_1403ea7b0 /
+FUN_140814500 / FUN_140813870, the options screen FUN_1403f0260, the settings writer FUN_1403eca90, the default texture
+filtering FUN_140815b40, the sky update FUN_14066f190 (`gameTime`) and the weather manager FUN_1409e8f70 / FUN_1409ea410
+(`heatHaze`, [weather.md](weather.md#heat-haze-verified-decompiled-fun_1409e8f70-fun_1409ea410)).
+
+**Place in the chain** (**Verified**, the scripts): node `HeatHaze` in `post.compositor` draws one full-screen quad with material
+`HeatHaze`, image input = the previous node's output (`rt_input`), and input 2 = `global_gbuffer` target 2 (the `FLOAT32_R` depth).
+`compositors.cfg` lists `FXAA` then `HeatHaze`, so the haze reads FXAA's result and is the last post effect before the GUI. (A
+`compositor HeatHaze` block at the end of `heathaze.compositor` with an R11G11B10 `rt_full` is commented out: dead.)
+
+**Setting** (**Verified (decompiled)**): every node named in `compositors.cfg` (lines starting `#` or `;` are skipped; a mod's
+copy is merged with the base list) is switched on or off by a `settings.cfg` line `<node name>=<bool>` read in FUN_1403ea7b0;
+**without such a line the node is on**. The flag is stored on the node definition (FUN_140813870 copies it, FUN_140814500 checks
+the node exists and has two outputs and logs "Post processing compositior ... is invalid" otherwise). The options screen
+(FUN_1403f0260) adds one checkbox per listed node, so `FXAA` and `HeatHaze` appear there by their node names, and FUN_1403eca90
+writes them back. The shipped `settings.cfg` has `HeatHaze=1`. The character editor's workspace sets `heatHaze` to 0
+(FUN_1405f4dd0).
+
+**Inputs** (**Verified**, `heathaze.compositor`):
+
+| Unit | Texture | Sampling |
+| --- | --- | --- |
+| 0 `flow` | `materials/FlowHAZE.dds` (2048², BC1, 12 mips) | not set in the material: Ogre's default, which the game sets to **anisotropic, anisotropy 16** (FUN_140815b40: `MaterialManager::setDefaultTextureFiltering(TFO_ANISOTROPIC)` through its vtable slot 37, then `setDefaultAnisotropy(16)`; **Verified (decompiled)**, slot checked against OgreMain's RTTI table), wrap addressing (Ogre's default; **Observed**) |
+| 1 `perturbation` | `materials/Perturber.dds` (2048², BC1, 12 mips; a tangent-space normal map) | the same default |
+| 2 `depth` | G-buffer target 2 | `filtering none`, clamp |
+| 3 `base` | the previous node's picture | `filtering bilinear`, clamp |
+
+Uniforms: `gameTime` and `heatHaze`, both from `SharedSkyParams`. `gameTime` is the sky controller's total game hours minus
+the value at load (FUN_14066f190; [game-loop.md](../game/game-loop.md)), so it stops when the game is paused.
+
+**The shader** (**Verified**, read for facts; screen coordinates are the D3D quad's, v from the top):
+
+- Flow: `direction = flow(uv · 3.341).rg · 2 − 1` (not normalised; the flow map tiles 3.341 times across the screen).
+- Three layers of the normal map at `uv · 7.341`, the second and third offset by (0.1, 0.3) and (0.4, 0.7) in texture units. Layer
+  *k* has the phase `t = frac(gameTime · 100 + {0, 0.33, 0.66})`, samples at `+ direction · t` (speed 1) and is weighted by the
+  triangle `1 − |2t − 1|` (0 at the jump, 1 half way), so the scroll resets unseen. One cycle is 0.01 game hours = 36 game
+  seconds = **1.09 real seconds at game speed 1** (0.22 s at speed 5; [game-loop.md](../game/game-loop.md) for the clock rate).
+- The layers' `rgb · 2 − 1` are swizzled `xzy` and added to (0, 1, 0); then the middle component is zeroed, so only the sum of the
+  maps' **red** and **green** remains, and it is normalised. **The offset is a unit direction**: its length does not depend on the
+  maps, only its direction does. (A zero sum would normalise a zero vector, undefined; the maps make that practically impossible.)
+- Length: `0.002 · heatHaze · saturate(6 · depth)` in screen units (0.2 % of the width and of the height, so 3.2 × 1.8 pixels at
+  1600 × 900 with `heatHaze` 1), where `depth` is the G-buffer's: **distance from the eye / `farClip`** (`writeDepth(length(worldPos
+  − cameraPos) / farClip)` in every deferred shader; `farClip` = 50000 by default, the camera's far plane, [sky.md](sky.md)), with 0
+  (nothing drawn: the sky, the clear value) replaced by 1. So the shimmer grows linearly up to full at **8333 units** and is full on
+  the sky. Water and particles are forward-drawn and not in the G-buffer, so over water the amplitude is that of the ground beneath
+  (or full where none was drawn) (**Observed**, from the pass order).
+- Output: `mix(image(uv + o), image(uv + 0.7 · o), 0.5)`: the mean of the taps at **1 and 0.7** of the offset (the earlier reading
+  here, "0.5 and 0.7", took the blend weight for a tap), bilinear and clamped to the edge.
+
+`heatHaze` itself: [weather.md](weather.md#heat-haze-verified-decompiled-fun_1409e8f70-fun_1409ea410) (the camera region's
+weather's `heat haze` × its strength × the sun factor, moving at 1/3 per second); which weathers and regions have it is listed
+there.
+
+**The viewer** (`PostProcess.RunHeatHaze`, `PostProcessShaders.HeatHaze`, written from the facts above): the same pass with the
+two maps loaded from the install at start (BC1 uploaded with the files' own 12 mips; trilinear, anisotropy 16, repeat), run last,
+after FXAA (when no temporal upscaler runs) or after the composite (with TAA / FSR / DLSS: on the upscaled, exposed LDR picture,
+the game's input; before the upscaler its history would reject or smear the shimmer, and the game has no such stage). Depth: the
+near depth slice's depth buffer, linearised and turned into the distance along the view ray, over D (`--haze-distance`, 50000);
+beyond the near slice (20000+) and on the sky the amplitude is 1, as in the game (8333 < 20000, so the clear hides no ramp). The
+lookups use the game's screen orientation (v from the top), the offset is flipped back. Differences: a zero direction sum leaves
+the pixel in place, and the viewer's water writes depth, so over water the amplitude follows the water surface's distance, not the
+sea floor's. When `heatHaze` is 0 (or `--no-heat-haze`) the pass is skipped, which equals the game's
+pass at 0 (both taps then land on texel centres). Options and costs: [viewer.md](../viewer.md#post-processing).
 
 ## Absent (Verified against everything in `data/materials/post` and `compositors`)
 
@@ -124,3 +185,4 @@ Details, options and costs: [viewer.md](../viewer.md#post-processing).
 | Grading, vignette | none | none (removed) | Kenshi: none |
 | FXAA | FXAA 3.11 quality, green as luma, subpix 0.75, thresholds 0.166 / 0.0833, preset-12 search steps, on the LDR composite (Faithful anti-aliasing; `--no-fxaa`) | TAA, FSR or DLSS instead (Meitou anti-aliasing) | Kenshi: FXAA 3.11, 0.75 |
 | Dither | off | on | not in Kenshi |
+| Heat haze | the game's, after FXAA (`--no-heat-haze`; `--heat-haze <x>` replaces the weather's field) | the same, after the composite when a temporal upscaler runs | Kenshi: `HeatHaze` node, on by default |

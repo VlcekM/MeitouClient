@@ -162,6 +162,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
     void DrawWorld(IGl gl, int width, int height)
     {
         if (gpu.Foliage is { } foliage && o.Screenshot is null) foliage.SwaySeconds = realTime.Elapsed.TotalSeconds;
+        // The heat haze's gameTime: game hours since the start (it stops while paused, as in the game).
+        gpu.GameHours = session.Clock.TotalHours - session.Clock.StartHour;
         WorldFrame.Draw(gl, gpu, scene, camera, render, width, height, (float)session.Clock.HourOfDay, (float)realTime.Elapsed.TotalSeconds / 600f, o.FogDistance);
     }
 
