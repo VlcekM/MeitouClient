@@ -355,7 +355,7 @@ Leader AI Goals: AI_TASK (0, 24,0) "...val0 and val1 is start and finish time...
 - ~~Mod load order in the game, including Steam workshop folders~~: see
   [overview.md](overview.md#load-order).
 - The game's behaviour on a truncated or corrupt file, and the exact layouts of file types 8–14.
-- Save games: probably the same record format with the GAMESTATE_* / *_STATE types; not checked.
+- Save games: the same record format, file type 15, with GAMESTATE_* / *_STATE types; see [save.md](save.md).
 - Non-UTF-8 strings in third-party mods: currently rejected. The game doesn't care: it copies string
   bytes as they are (Verified, `FUN_1406c0b50`, `FUN_1406bc480`), so lossless handling means keeping
   the raw bytes.

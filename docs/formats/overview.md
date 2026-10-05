@@ -13,7 +13,7 @@ Examined 2026-10-04 on the Steam install of Kenshi.
 | `Plugins_x64.cfg` | Ogre plugins: D3D11 render system, ParticleUniverse, Terrain |
 | `data/` | All base-game content |
 | `mods/` | Mods, one folder per mod |
-| `save/` | Save games (not analyzed) |
+| `save/` | Legacy save location (`settings.cfg` `User save location=0`); by default saves live in `%LOCALAPPDATA%\kenshi\save\` ([save.md](save.md)) |
 
 ## Three layers of content
 

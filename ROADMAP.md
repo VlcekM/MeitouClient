@@ -61,16 +61,23 @@ Status as of 2026-10-05. Details and open questions live in the linked docs.
    visible mineable rocks), building LOD, scene reflections, global pathing data.
 4. **Havok** — *not started.* Tagfile (`.hkt`) reader; navmesh tiles
    (`newland/land/navtiles`). Character animation does not need it (Ogre skeleton animations).
+   Research: navmesh manager, tile files, path queries and movement in
+   [pathfinding.md](docs/game/pathfinding.md).
 5. **Simulation core** — *not started.* Game clock, characters, stats, inventory, factions, squads,
    AI packages / tasks, dialogue (`Dialogue.mod`), combat, economy. Headless and deterministic,
-   independent of rendering. The character generator is its first piece.
-6. **Saves** — *not started.* Read and write original save games. Known so far: stat field names
-   from the save writer.
+   independent of rendering. The character generator is its first piece. Research (2026-10-05, from
+   the full decompile): [game-loop.md](docs/game/game-loop.md), [character-stats.md](docs/game/character-stats.md),
+   [combat.md](docs/game/combat.md), [ai.md](docs/game/ai.md), [factions-squads-towns.md](docs/game/factions-squads-towns.md),
+   [economy.md](docs/game/economy.md), [buildings-production.md](docs/game/buildings-production.md); each ends
+   with its open questions and an implementation outline.
+6. **Saves** — *not started.* Read and write original save games. Format researched and checked
+   against real saves: [save.md](docs/formats/save.md) (FCS type-15 files, handles, what is saved).
 7. **Presentation** — *partly.* `meitou` boots into the world with the Kenshi camera on a fixed 30 Hz tick with interpolated
    drawing (`src/Meitou.Engine`, `src/Meitou.Game`, [docs/engine.md](docs/engine.md)); the world renderers are a library
    (`src/Meitou.Rendering`, on Vulkan), shared with the viewer. To do: game renderer
    (shadows, effects) with graphics options (terrain LOD distance, now fixed at its useful maximum, and
-   material distance), MyGUI-compatible UI, audio, particles, physics/ragdolls.
+   material distance), MyGUI-compatible UI ([ui-screens.md](docs/game/ui-screens.md),
+   [ui-input.md](docs/game/ui-input.md)), audio, particles, physics/ragdolls.
 8. **Parity** — *not started.* Side-by-side comparison against the original, mod compatibility
    test suite.
 
