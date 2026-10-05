@@ -439,6 +439,8 @@ static class WorldFrame
 
     /// <summary>The swaying grass's own motion for the upscalers (MEITOU_GRASS_MOTION=0 turns it off, for comparisons).</summary>
     static readonly bool GrassMotion = Environment.GetEnvironmentVariable("MEITOU_GRASS_MOTION") != "0";
+    /// <summary>Per-cascade and per-step CPU times in the stats strings (ShadowPass.CasterStats, FoliageRenderer's details); the viewer's screenshots and benchmarks turn it on.</summary>
+    public static bool DetailedStats;
 
     public static void Draw(IGl gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time, float fogDistance)
     {
@@ -553,20 +555,24 @@ static class WorldFrame
         var view = new ShadowView(camera.Eye, camera.Forward, Vector3.Normalize(new Vector3(v.M12, v.M22, v.M32)), camera.FieldOfView, width / (float)Math.Max(height, 1), camera.Near);
         int objects = 0, foliage = 0;
         gpu.Terrain.DepthTriangles = 0;
+        var cascades = DetailedStats ? new System.Text.StringBuilder() : null;
         shadow.Render(view, light.SunDirection, gpu.Post?.SceneFramebuffer ?? 0, width, height, (cascade, worldToClip, planes, lodEye) =>
         {
             long t0 = Stopwatch.GetTimestamp();
+            long tri = gpu.Terrain.DepthTriangles;
             gpu.Terrain.DrawDepth(worldToClip, lodEye, planes, render);
             long t1 = Stopwatch.GetTimestamp();
-            if (render.Objects && gpu.Objects is { } o) { o.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain); objects += o.DrawnInstances; }
+            int oi = 0, oc = 0, fi = 0, fc = 0;
+            if (render.Objects && gpu.Objects is { } o) { o.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain); objects += o.DrawnInstances; (oi, oc) = (o.DrawnInstances, o.DrawCalls); }
             long t2 = Stopwatch.GetTimestamp();
-            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.Settings.Range * 1.2f); foliage += f.DrawnInstances; }
+            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.Settings.Range * 1.2f); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
             long t3 = Stopwatch.GetTimestamp();
             double ms = 1000.0 / Stopwatch.Frequency;
             shadow.PhaseMs[0] += (t1 - t0) * ms;
             shadow.PhaseMs[1] += (t2 - t1) * ms;
             shadow.PhaseMs[2] += (t3 - t2) * ms;
+            cascades?.Append($" [c{cascade.Index}: terrain {(gpu.Terrain.DepthTriangles - tri) / 1000}k tri {(t1 - t0) * ms:0.00} ms, objects {oi} in {oc} calls {(t2 - t1) * ms:0.00} ms, foliage {fi} in {fc} calls {(t3 - t2) * ms:0.00} ms ({gpu.Foliage?.DepthDetail})]");
         });
-        shadow.CasterStats = $"{gpu.Terrain.DepthTriangles:N0} terrain triangles, {objects} objects, {foliage} foliage meshes (over the cascades); cpu terrain {shadow.PhaseMs[0]:0.00}, objects {shadow.PhaseMs[1]:0.00}, foliage {shadow.PhaseMs[2]:0.00} ms";
+        shadow.CasterStats = $"{gpu.Terrain.DepthTriangles:N0} terrain triangles, {objects} objects, {foliage} foliage meshes (over the cascades); cpu terrain {shadow.PhaseMs[0]:0.00}, objects {shadow.PhaseMs[1]:0.00}, foliage {shadow.PhaseMs[2]:0.00} ms;{cascades}";
     }
 }

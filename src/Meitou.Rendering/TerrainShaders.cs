@@ -93,21 +93,28 @@ static class TerrainShaders
     /// Plain meshes drawn with the terrain material (TERRAIN-mode map features, the game's <c>Feature_Terrain_DX11</c>;
     /// docs/formats/foliage.md, "TERRAIN-mode meshes"). The cliff projection weights are made per vertex from the mesh
     /// normal, and a surface facing up (normal.y above 0.9) takes the (z, height) projection alone, as the game's feature
-    /// vertex program does.
+    /// vertex program does. Instanced: the placement's rows at <see cref="MeshInstanceLocation"/>, row 0's w the feature's biome row
+    /// (read by <see cref="MeshFragment"/>; the w row of a placement only reaches the position's unused w).
     /// </summary>
     public const string MeshVertex = """
         #version 330 core
         layout(location = 0) in vec3 aPosition;
         layout(location = 1) in vec3 aNormal;
+        layout(location = 7) in vec4 aModel0;
+        layout(location = 8) in vec4 aModel1;
+        layout(location = 9) in vec4 aModel2;
+        layout(location = 10) in vec4 aModel3;
         uniform mat4 uViewProjection;
-        uniform mat4 uModel;           // the placement of the map feature
         out vec3 vWorld;
         out vec3 vNormal;
         out vec2 vCliffBlend;
+        flat out int vFeatureBiome;
         void main()
         {
-            vWorld = (uModel * vec4(aPosition, 1.0)).xyz;
-            vNormal = transpose(inverse(mat3(uModel))) * aNormal;
+            mat4 model = mat4(vec4(aModel0.xyz, 0.0), aModel1, aModel2, aModel3);   // the placement of the map feature
+            vFeatureBiome = int(aModel0.w);
+            vWorld = (model * vec4(aPosition, 1.0)).xyz;
+            vNormal = transpose(inverse(mat3(model))) * aNormal;
             vec3 n = normalize(vNormal);
             vec2 cb = max(abs(normalize(n.xz + vec2(1e-6))) - 0.2, vec2(0.0)) * 7.0;
             cb *= cb;
@@ -115,6 +122,29 @@ static class TerrainShaders
             if (n.y > 0.9) cb = vec2(1.0, 0.0);
             vCliffBlend = cb;
             gl_Position = uViewProjection * vec4(vWorld, 1.0);
+        }
+        """;
+
+    /// <summary>First of the four locations the instanced depth path reads a placement's rows from (the meshes use 0 to 6).</summary>
+    public const int MeshInstanceLocation = 7;
+
+    /// <summary>
+    /// <see cref="MeshVertex"/>'s position for the shadow map, the placement per instance instead of <c>uModel</c> (the
+    /// TERRAIN-mode meshes' casters drawn instanced; the arithmetic is the uniform form's, so the map is the same).
+    /// </summary>
+    public const string MeshInstancedDepthVertex = """
+        #version 330 core
+        layout(location = 0) in vec3 aPosition;
+        layout(location = 7) in vec4 aModel0;
+        layout(location = 8) in vec4 aModel1;
+        layout(location = 9) in vec4 aModel2;
+        layout(location = 10) in vec4 aModel3;
+        uniform mat4 uViewProjection;
+        void main()
+        {
+            mat4 model = mat4(aModel0, aModel1, aModel2, aModel3);
+            vec3 world = (model * vec4(aPosition, 1.0)).xyz;
+            gl_Position = uViewProjection * vec4(world, 1.0);
         }
         """;
 
@@ -348,4 +378,14 @@ static class TerrainShaders
             fragColour = vec4(colourOut, 1.0);
         }
         """;
+
+    /// <summary><see cref="Fragment"/> for the instanced <see cref="MeshVertex"/>: the feature's biome per instance instead of the uniform.</summary>
+    public static readonly string MeshFragment = PerInstanceBiome(Fragment);
+
+    static string PerInstanceBiome(string fragment)
+    {
+        const string uniform = "uniform int uFeatureBiome;";
+        if (!fragment.Contains(uniform)) throw new InvalidOperationException("TerrainShaders.Fragment no longer declares uFeatureBiome.");
+        return fragment.Replace(uniform, "flat in int vFeatureBiome;\n#define uFeatureBiome vFeatureBiome\n");
+    }
 }

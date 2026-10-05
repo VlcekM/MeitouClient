@@ -161,6 +161,7 @@ static partial class WorldApp
             camera.Yaw += o.OrbitStep;
             if (o.SwayStep > 0 && gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep;
         }
+        WorldFrame.DetailedStats = true;   // per-cascade and per-step times in the statistics below
         // A temporal upscaler converges over its jitter sequence first (a still camera: the history only sharpens).
         for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { Step(); Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
         var drawWatch = Stopwatch.StartNew();
@@ -177,7 +178,7 @@ static partial class WorldApp
         gl.Finish();
         Console.WriteLine($"frame     {drawWatch.Elapsed.TotalMilliseconds / timedFrames:0.0} ms on average over {timedFrames} more frames");
         if (gpu.Objects is { } objectStats) Console.WriteLine($"objects   draw cpu {objectStats.LastDrawCpuMs:0.00} ms, {objectStats.DrawCalls} draw calls, {objectStats.DrawnInstances} instances, {objectStats.DrawnTriangles:N0} triangles");
-        if (gpu.Foliage is { } foliageStats) { foliageStats.PollTimers(wait: true); Console.WriteLine($"foliage   update {foliageStats.LastUpdateMs:0.00} ms, draw cpu {foliageStats.LastDrawCpuMs:0.00} ms, gpu {foliageStats.GpuMs:0.00} ms, {foliageStats.DrawCalls} draw calls, {foliageStats.DrawnInstances} meshes, {foliageStats.DrawnBlades:N0} grass blades"); }
+        if (gpu.Foliage is { } foliageStats) { foliageStats.PollTimers(wait: true); Console.WriteLine($"foliage   update {foliageStats.LastUpdateMs:0.00} ms, draw cpu {foliageStats.LastDrawCpuMs:0.00} ms, gpu {foliageStats.GpuMs:0.00} ms, {foliageStats.DrawCalls} draw calls, {foliageStats.DrawnInstances} meshes, {foliageStats.DrawnBlades:N0} grass blades;{foliageStats.MainDetail}"); }
         if (gpu.Reflection is { Valid: true } reflection)
         {
             reflection.Poll(wait: true);
