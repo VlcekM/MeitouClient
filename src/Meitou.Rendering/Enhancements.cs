@@ -25,7 +25,7 @@ public sealed class Enhancement(string id, string name, string faithful, string 
 
 public static class Enhancements
 {
-    public const float MeitouHazeStrength = 0.85f;
+    public const float MeitouHazeStrength = 0.87f;
 
     /// <summary>
     /// The switches, in key order (F1 upwards in the viewer), over the post-processing options and the haze strength

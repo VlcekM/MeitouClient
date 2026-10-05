@@ -84,7 +84,7 @@ sealed class WorldOptions
           --simple-sky             the old colour-model sky and squared-distance fog instead of the atmosphere (B toggles)
           --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral (F7 toggles)
           --haze-distance <u>      the game's far distance D (view distance x 10) for its haze, which ramps in from 0.06 D to 0.6 D (default 50000: view distance 5000)
-          --haze-strength <x>      the viewer's haze strength: scales how far the haze is blended in (default 0.85: far mountains stay visible; 1 is the game's; also a Tab slider)
+          --haze-strength <x>      the viewer's haze strength: scales how far the haze is blended in (default 0.87: far mountains stay visible; 1 is the game's; also a Tab slider)
           --weather <name>         a WEATHER record's sky colour, fog and clouds (default "Default": clear, no fog, no clouds)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
