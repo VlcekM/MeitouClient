@@ -545,7 +545,9 @@ fitted from the camera's near plane to the range (all four in use), drawn on a s
 others every second or fourth frame, each kept with the matrices it was drawn with), a soft receiver (16-tap rotated disk,
 contact-hardening penumbrae from a blocker search, cascades blended, a fade instead of the cut-off at the range's end) and the
 terrain's own shadow out to the horizon, so mountains shadow valleys at low sun. The debug view 2 still tints by the game's
-cascade selection.
+cascade selection. It is also the cheaper one (**Observed**, same caveats as below, against `--faithful shadows`): Hub
+fly-benchmark shadow stage 2.43 against 3.31 ms CPU; forest camera 2.1-2.3 against 3.6 ms CPU and 0.29 against 0.77 ms GPU
+(details in the format doc).
 
 **Shadow pass cost** (**Observed**, 2026-10-05, RTX 4070, Debug build, 1600 x 900, `--faithful all --time 13`; the machine shared with
 other agents' viewers, so spread is large). `--screenshot` logs print the pass per cascade (`WorldFrame.DetailedStats`: terrain

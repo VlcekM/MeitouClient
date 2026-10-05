@@ -258,4 +258,10 @@ Not the game's: the remaster's choice, on by default (F5 / `--faithful shadows` 
   is shadowed below that height (bias 20 units, softness 6 units plus the occluder's distance × the sun's angular radius); one fetch.
   It fades in from 55 % to 90 % of the range and combines with the cascades by the minimum, so it agrees with them where both apply
   (Observed: the same picture at range 5000 and 9000 at 07:00).
-- **Costs:** see the viewer's measurements in [../viewer.md](../viewer.md#shadows).
+- **Costs** (**Observed**, 2026-10-05, the same machine and caveats as the measurements in [../viewer.md](../viewer.md#shadows),
+  Meitou against `--faithful shadows` on the same build): The Hub `--fly-benchmark 1000`, three interleaved pairs, shadow stage CPU
+  mean 2.43 ms against 3.31 ms (casters: terrain 0.36 / 0.80, objects 0.29 / 0.44, foliage 1.66 / 2.00), flight p50 21.6-22.0 ms
+  against 23.2-24.3 ms. Forest camera, 13:00: shadow CPU mean 2.1-2.3 ms (p95 3.3-3.8, on the frames that draw cascade 3) against
+  3.6 ms, shadow GPU 0.29 / 0.77 ms. The Hub from 300 units, 09:00: CPU 2.0 / 3.5 ms, GPU 0.62 / 1.44 ms, scene pass (with the
+  receiver) 2.45 / 3.17 ms. Terrain sweep 1.0-1.5 ms CPU per rebuild (once per 0.1° of sun). Memory: 64 MB RG32F terrain shadow,
+  8 MB heights, 4 MB blocker map on top of the atlas.

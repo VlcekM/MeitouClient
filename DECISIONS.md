@@ -115,6 +115,6 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     shaderc, and the compiler loads the one it ships. Shader cache version 3 (2 had been written by experiments with other output).
 21. **Meitou shadows** (the `shadows` switch, F5; docs/formats/shadows.md "Meitou shadows"): cascades fitted from the camera's near
     plane to the range (the game's halved splits leave two of four cascades in front of the near plane in most views), drawn on a
-    staggered schedule (CPU is the bottleneck: the far cascades' foliage casters cost 20+ ms a frame in wide views), a soft receiver
+    staggered schedule (CPU is the bottleneck: the far cascades' foliage casters are most of the pass's CPU in wide views), a soft receiver
     with a blocker search, and the terrain's own shadow beyond the range from a per-sun-direction sweep of the world height grid
     (one fetch per pixel instead of a ray march in forward shaders with overdraw). The faithful path is untouched (pixel-identical).
