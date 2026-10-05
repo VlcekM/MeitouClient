@@ -32,3 +32,4 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [formats/dds.md](formats/dds.md) | DDS textures: headers, block formats, base-game survey |
 | [formats/post-processing.md](formats/post-processing.md) | Kenshi's render chain: HDR lighting, exposure (no tone curve), bloom (off), FXAA (the viewer uses MSAA instead), SSAO (disabled), heat haze, what is absent; how the viewer maps them |
 | [viewer.md](viewer.md) | `meitou-viewer`: usage, how textures are resolved from FCS records, world mode (terrain + placed objects), known gaps |
+| [engine.md](engine.md) | Engine architecture: projects, the game loop (fixed tick, interpolation, game time, input bindings), the Kenshi and free cameras, the renderers and the backend interface, how to check renderer changes |

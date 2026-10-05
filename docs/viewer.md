@@ -217,7 +217,8 @@ hair, neutral sliders).
 
 ## World mode
 
-`meitou-viewer --world` draws a square region of the Newland world: the terrain from `fullmap.tif`, textured
+The world renderers live in `src/Meitou.Rendering` (shared with the game, `meitou`; see [engine.md](engine.md)); the viewer adds
+its options, the interactive keys, `--screenshot` and `--fly-benchmark`. `meitou-viewer --world` draws a square region of the Newland world: the terrain from `fullmap.tif`, textured
 the way Kenshi's terrain shader layers its biomes, plus the buildings of the zone files and the map features of
 `features.dat`. Facts used: [formats/terrain.md](formats/terrain.md#how-the-terrain-is-textured) and
 [formats/zones.md](formats/zones.md#from-placements-to-meshes).
@@ -462,7 +463,7 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
 - **Grass**: blades are generated per 576-unit page (8 × 8 a zone) on worker threads when the page comes within
   the grass range (`FoliageGrassField`, the game's candidate rule; seeded per page, so deterministic but not the
   game's exact blades), uploaded as one instance buffer per (page, grass type), and drawn nearest page first with
-  quads built in the vertex shader: sway along X on the top edge for wind layers, sinking into the ground over
+  quads built in the vertex shader: sway along X on the top edge for wind layers, (held still in offscreen renders, so pictures repeat exactly; interactively it follows real time), sinking into the ground over
   the last fifth of the range, sprite alpha cut at 0.6 (alpha to coverage when multisampled), colour map over the
   zone, lit with an up normal; the aerial perspective is evaluated per vertex.
   Pages are generated nearest first, at most 12 at a time over all zones. **Density**: a page is generated for the
