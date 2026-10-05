@@ -31,4 +31,16 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [formats/zones.md](formats/zones.md) | `.zone` / `.level` world-state files, building and town placements, roads, `features.dat`, placements to meshes |
 | [formats/dds.md](formats/dds.md) | DDS textures: headers, block formats, base-game survey |
 | [formats/post-processing.md](formats/post-processing.md) | Kenshi's render chain: HDR lighting, exposure (no tone curve), bloom (off), FXAA (the viewer uses MSAA instead), SSAO (disabled), heat haze, what is absent; how the viewer maps them |
+| [formats/save.md](formats/save.md) | Save games: where they live, folder layout, the FCS type-15 files (`quick.save`, `.platoon`, `.zone`), handles and slot lists, what is saved vs derived vs regenerated, the save/load chain |
+| [game/game-loop.md](game/game-loop.md) | Frame structure, frame time, game speed and pause, the in-game clock, one world update in order, threads (AI back thread), the character update budget, zones near and far |
+| [game/character-stats.md](game/character-stats.md) | Stats and skills (numbering, XP gain and levelling), hunger, blood and bleeding, body parts and injuries, first aid, limb replacements, races and their modifiers, encumbrance |
+| [game/combat.md](game/combat.md) | Combat: the CONSTANTS tuning, weapons, technique choice, block and dodge, armour, the hit pipeline, KO, bleeding and death, ranged weapons and turrets, combat XP |
+| [game/ai.md](game/ai.md) | AI: AI_PACKAGE / AI_TASK records, the squad Blackboard, the per-character decision loop, the GOAP planner, jobs and player orders, unloaded squads, senses, dialogue triggers |
+| [game/ai-tasks.md](game/ai-tasks.md) | AI tables: `taskType` to task class, the TaskData registry, state type ids |
+| [game/factions-squads-towns.md](game/factions-squads-towns.md) | Factions and relations, squad templates and how squads are created and spawned, towns, debris, loot and building contents |
+| [game/pathfinding.md](game/pathfinding.md) | Pathfinding: the Havok navmesh manager, `navtiles` tiles, runtime generation, path queries, movement speeds, off-screen movement |
+| [game/economy.md](game/economy.md) | Economy: money, item value and unit price, trader and town market factors, buying, selling and fencing, shop stock and restock, blueprints and research cost, bounties, slaves and prisoners, loot |
+| [game/buildings-production.md](game/buildings-production.md) | Buildings: construction, production and crafting, power, storage, farming, research and tech |
+| [game/ui-input.md](game/ui-input.md) | Input: the binding encoding, `controls.cfg`, the action table, key and mouse handling, selection, pointer modes, camera input, `settings.cfg` and the options window |
+| [game/ui-screens.md](game/ui-screens.md) | UI screens: MyGUI stack and resources, the screen catalog, main menu and new game flow, HUD, overview, inventory, trade, dialogue, build, tutorials |
 | [viewer.md](viewer.md) | `meitou-viewer`: usage, how textures are resolved from FCS records, world mode (terrain + placed objects), known gaps |
