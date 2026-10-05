@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using Silk.NET.Core.Contexts;
 using Silk.NET.Shaderc;
 
 namespace Meitou.Rendering.Vulkan.Shaders;
@@ -13,7 +15,7 @@ namespace Meitou.Rendering.Vulkan.Shaders;
 public sealed partial class GlslProgramCompiler
 {
     /// <summary>Part of the cache key; bump when the output for the same source and options can change.</summary>
-    public const int CacheVersion = 1;
+    public const int CacheVersion = 3;   // 3: bindings shifted after compiling, bundled shaderc pinned (2 was used by experiments)
 
     readonly ConcurrentDictionary<string, CompiledProgram> memory = new();
 
@@ -82,9 +84,23 @@ public sealed partial class GlslProgramCompiler
     [GeneratedRegex(@"\bvoid\s+main\s*\(\s*(?:void)?\s*\)")]
     private static partial Regex MainRegex();
 
+    /// <summary>
+    /// The shaderc this assembly ships (NuGet <c>Silk.NET.Shaderc.Native</c>), not whichever <c>shaderc_shared</c> comes first on the
+    /// library search path: a Vulkan SDK's <c>Bin</c> on PATH carries a newer one, and a different glslang can change the output.
+    /// </summary>
+    static readonly Lazy<Shaderc> Api = new(LoadApi);
+
+    static Shaderc LoadApi()
+    {
+        // With the assembly given, .NET resolves the name through deps.json (runtimes/<rid>/native) or beside the assembly; PATH is not searched.
+        if (NativeLibrary.TryLoad("shaderc_shared", typeof(Shaderc).Assembly, DllImportSearchPath.AssemblyDirectory, out nint lib))
+            return new Shaderc(new LamdaNativeContext(name => NativeLibrary.TryGetExport(lib, name, out nint p) ? p : 0));
+        return Shaderc.GetApi();
+    }
+
     static unsafe byte[] CompileStage(string source, ShaderKind kind, string stage, uint bindingBase)
     {
-        var api = Shaderc.GetApi();
+        var api = Api.Value;
         Compiler* compiler = api.CompilerInitialize();
         CompileOptions* opts = api.CompileOptionsInitialize();
         try
@@ -96,8 +112,9 @@ public sealed partial class GlslProgramCompiler
             api.CompileOptionsSetAutoMapLocations(opts, true);
             api.CompileOptionsSetForcedVersionProfile(opts, 450, Profile.Core);
             api.CompileOptionsSetOptimizationLevel(opts, OptimizationLevel.Zero); // keeps OpName / OpMemberName
-            foreach (UniformKind uk in Enum.GetValues<UniformKind>())
-                api.CompileOptionsSetBindingBaseForStage(opts, kind, uk, bindingBase);
+            // No per-kind binding bases: newer glslang has a resource kind for combined image samplers (EResCombinedSampler) that
+            // shaderc's uniform kinds cannot reach, so sampler2D & co. stayed at 0 in the fragment stage. Every kind starts at 0 (the
+            // auto-binder hands out distinct slots per set across kinds) and ShiftBindings moves the whole stage afterwards.
 
             byte[] bytes = Encoding.UTF8.GetBytes(source);
             CompilationResult* result;
@@ -113,6 +130,7 @@ public sealed partial class GlslProgramCompiler
                 int length = (int)api.ResultGetLength(result);
                 var spirv = new byte[length];
                 System.Runtime.InteropServices.Marshal.Copy((nint)api.ResultGetBytes(result), spirv, 0, length);
+                ShiftBindings(spirv, bindingBase);
                 return spirv;
             }
             finally { api.ResultRelease(result); }
@@ -121,6 +139,22 @@ public sealed partial class GlslProgramCompiler
         {
             api.CompileOptionsRelease(opts);
             api.CompilerRelease(compiler);
+        }
+    }
+
+    /// <summary>Adds <paramref name="offset"/> to every <c>OpDecorate … Binding</c> in the module, in place.</summary>
+    internal static void ShiftBindings(byte[] spirv, uint offset)
+    {
+        if (offset == 0) return;
+        var w = MemoryMarshal.Cast<byte, uint>(spirv.AsSpan());
+        if (w.Length < 5 || w[0] != 0x07230203) throw new ArgumentException("Not a SPIR-V module.", nameof(spirv));
+        const uint OpDecorate = 71, DecorationBinding = 33;
+        for (int i = 5; i < w.Length;)
+        {
+            int count = (int)(w[i] >> 16);
+            if (count == 0 || i + count > w.Length) throw new ArgumentException("Truncated SPIR-V instruction.", nameof(spirv));
+            if ((w[i] & 0xFFFF) == OpDecorate && count == 4 && w[i + 2] == DecorationBinding) w[i + 3] += offset;
+            i += count;
         }
     }
 
