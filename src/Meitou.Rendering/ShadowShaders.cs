@@ -36,7 +36,7 @@ static class ShadowShaders
             mat4 uShadowLight;         // world -> light axes (rotation)
             vec4 uShadowOrigin;        // xyz: the origin of uShadowTile, w: 1 when shadows are on
             vec4 uShadowForward;       // xyz: the camera's view direction (cascades go by depth along it), w: cascades
-            vec4 uShadowAtlas;         // x: atlas side in texels, y: debug cascade tint (0/1)
+            vec4 uShadowAtlas;         // x: atlas side in texels, y: debug cascade tint (0/1), z: 1 for the Meitou receiver
         };
         uniform sampler2DShadow uShadowMap;
 
@@ -53,7 +53,7 @@ static class ShadowShaders
 
         float shadowHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 
-        float kenshiShadow(vec3 world, vec3 n)
+        float kenshiShadowFaithful(vec3 world, vec3 n)
         {
             int c = shadowCascade(world);
             if (c < 0) return 1.0;
@@ -83,6 +83,12 @@ static class ShadowShaders
                 lit += textureLod(uShadowMap, vec3(rect.xy + uv * rect.zw, z), 0.0);
             }
             return lit / {{F(KenshiShadows.PcfTaps)}};
+        }
+        {{MeitouShadowShaders.Functions}}
+        // The receiver the lighting calls: the game's CSM, or the Meitou shadows (uShadowAtlas.z = 1; the shadows enhancement).
+        float kenshiShadow(vec3 world, vec3 n)
+        {
+            return uShadowAtlas.z > 0.5 ? kenshiShadowMeitou(world, n) : kenshiShadowFaithful(world, n);
         }
 
         // The debug views' cascade colours (the game's own debug colours: red, orange, yellow, green).
@@ -212,7 +218,7 @@ static class ShadowShaders
             MapUnit = combined - 4;
             // Zero-filled blocks (shadows off) at both binding points, so a program reading them is defined without a ShadowPass
             // (--no-shadows, the character viewer); a live pass binds its own buffers over them.
-            foreach (var (binding, bytes) in new[] { (ReceiverBinding, ShadowPass.ReceiverBytes), (CasterBinding, 16) })
+            foreach (var (binding, bytes) in new[] { (ReceiverBinding, ShadowPass.ReceiverBytes), (CasterBinding, 16), (MeitouShadowShaders.Binding, MeitouShadowShaders.BlockBytes) })
             {
                 uint buffer = gl.GenBuffer();
                 gl.BindBuffer(BufferTargetARB.UniformBuffer, buffer);
@@ -233,5 +239,6 @@ static class ShadowShaders
             gl.Uniform1(map, MapUnit);
             gl.UseProgram(0);
         }
+        MeitouShadowShaders.Bind(gl, program);
     }
 }

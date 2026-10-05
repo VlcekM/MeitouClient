@@ -12,7 +12,7 @@ namespace Meitou.Rendering;
 /// through <see cref="CasterDraw"/>. This class is the thin GL part: the atlas, the caster state, the uniform blocks the receivers read
 /// (<see cref="ShadowShaders.Functions"/>), timing and the debug views.
 /// </summary>
-public sealed unsafe class ShadowPass : IDisposable
+public sealed unsafe partial class ShadowPass : IDisposable
 {
     /// <summary>Draws the casters of one cascade: the matrix maps absolute world positions to the tile's clip space (depth 0..1), the planes cull (no near plane), the eye picks levels of detail.</summary>
     public delegate void CasterDraw(ShadowCascade cascade, Matrix4x4 worldToClip, Vector4[] planes, Vector3 lodEye);
@@ -67,6 +67,8 @@ public sealed unsafe class ShadowPass : IDisposable
         Poll();
         Cascades = null;
         if (!Enabled || toSun.Y < MinSunHeight || toSun.LengthSquared() < 1e-8f) { Disable(); return; }
+        if (Meitou) { RenderMeitou(view, Vector3.Normalize(toSun), restoreFramebuffer, restoreWidth, restoreHeight, draw); return; }
+        meitouValid = false;
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
         Resize(Settings.MapSize);
@@ -120,6 +122,7 @@ public sealed unsafe class ShadowPass : IDisposable
     /// <summary>Marks the shadows off for the receivers (the term is 1 everywhere).</summary>
     public void Disable()
     {
+        meitouValid = false;
         var data = new float[ReceiverBytes / 4];
         Upload(data);
     }
@@ -324,6 +327,7 @@ public sealed unsafe class ShadowPass : IDisposable
 
     public void Dispose()
     {
+        DisposeMeitou();
         FreeAtlas();
         if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneDepth); }
         if (debugProgram != 0) { gl.DeleteProgram(debugProgram); gl.DeleteProgram(atlasProgram); gl.DeleteVertexArray(emptyVao); }

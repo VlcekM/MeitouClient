@@ -13,7 +13,7 @@ namespace Meitou.Rendering.Vulkan.Shaders;
 public sealed partial class GlslProgramCompiler
 {
     /// <summary>Part of the cache key; bump when the output for the same source and options can change.</summary>
-    public const int CacheVersion = 1;
+    public const int CacheVersion = 3;   // 3: entries compiled by the Vulkan SDK's shaderc (wrong bindings) are not reused
 
     readonly ConcurrentDictionary<string, CompiledProgram> memory = new();
 
@@ -82,8 +82,30 @@ public sealed partial class GlslProgramCompiler
     [GeneratedRegex(@"\bvoid\s+main\s*\(\s*(?:void)?\s*\)")]
     private static partial Regex MainRegex();
 
+    /// <summary>
+    /// Loads the shaderc that ships with the package (runtimes/&lt;rid&gt;/native) before Silk looks for one by name: a Vulkan SDK on the
+    /// PATH brings its own <c>shaderc_shared.dll</c>, which Windows would otherwise load, and that build ignores the per-stage binding
+    /// bases (the vertex and fragment stages' samplers then share binding numbers: Verified 2026-10-05 with SDK 1.4.363, the terrain's
+    /// height samplers read the sky's cube map and the terrain vanished). Once loaded by path, a load by name returns the same module.
+    /// </summary>
+    static readonly bool BundledShaderc = LoadBundledShaderc();
+
+    static bool LoadBundledShaderc()
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        string arch = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture switch
+        {
+            System.Runtime.InteropServices.Architecture.Arm64 => "win-arm64",
+            System.Runtime.InteropServices.Architecture.X86 => "win-x86",
+            _ => "win-x64",
+        };
+        string path = Path.Combine(AppContext.BaseDirectory, "runtimes", arch, "native", "shaderc_shared.dll");
+        return File.Exists(path) && System.Runtime.InteropServices.NativeLibrary.TryLoad(path, out _);
+    }
+
     static unsafe byte[] CompileStage(string source, ShaderKind kind, string stage, uint bindingBase)
     {
+        _ = BundledShaderc;
         var api = Shaderc.GetApi();
         Compiler* compiler = api.CompilerInitialize();
         CompileOptions* opts = api.CompileOptionsInitialize();
@@ -98,6 +120,8 @@ public sealed partial class GlslProgramCompiler
             api.CompileOptionsSetOptimizationLevel(opts, OptimizationLevel.Zero); // keeps OpName / OpMemberName
             foreach (UniformKind uk in Enum.GetValues<UniformKind>())
                 api.CompileOptionsSetBindingBaseForStage(opts, kind, uk, bindingBase);
+            // GLSL has no stage macro; code shared by both stages (the shadow receiver) needs one for gl_FragCoord and derivatives.
+            if (kind == ShaderKind.FragmentShader) api.CompileOptionsAddMacroDefinition(opts, "MEITOU_FRAGMENT", 15, "1", 1);
 
             byte[] bytes = Encoding.UTF8.GetBytes(source);
             CompilationResult* result;

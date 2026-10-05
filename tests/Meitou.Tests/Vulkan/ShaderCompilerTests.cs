@@ -37,6 +37,8 @@ public class ShaderCompilerTests
         yield return ("building lod depth", BuildingLodShaders.Vertex(), ShadowShaders.MeshDepthFragment);
         yield return ("shadow debug", ShadowShaders.FullscreenVertex, ShadowShaders.DebugFragment);
         yield return ("shadow atlas", ShadowShaders.FullscreenVertex, ShadowShaders.AtlasFragment);
+        yield return ("meitou shadow terrain sweep", ShadowShaders.FullscreenVertex, MeitouShadowShaders.SweepFragment);
+        yield return ("meitou shadow blockers", ShadowShaders.FullscreenVertex, MeitouShadowShaders.BlockerFragment);
     }
 
     public static TheoryData<string> PairNames()
@@ -93,6 +95,30 @@ public class ShaderCompilerTests
 
         // fragment outputs numbered from 0
         Assert.All(program.Fragment.Outputs, o => Assert.True(o.Location >= 0));
+    }
+
+    /// <summary>
+    /// The Meitou shadows' own passes compile, and so do the programs that include the receiver in a vertex stage (the grass: the
+    /// receiver's fragment-only parts sit behind MEITOU_FRAGMENT) and in a plain fragment stage (the debug view).
+    /// </summary>
+    [Fact]
+    public void MeitouShadowProgramsCompile()
+    {
+        foreach (var (v, f) in new[] {
+                     (ShadowShaders.FullscreenVertex, MeitouShadowShaders.SweepFragment),
+                     (ShadowShaders.FullscreenVertex, MeitouShadowShaders.BlockerFragment),
+                     (FoliageShaders.GrassVertex, FoliageShaders.GrassFragment),
+                     (ShadowShaders.FullscreenVertex, ShadowShaders.DebugFragment) })
+        {
+            var program = Compiler.Compile(v, f);
+            Assert.NotEmpty(program.Fragment.Outputs);
+        }
+        var mesh = Compiler.Compile(Shaders.MeshVertex, Shaders.MeshFragment);
+        Assert.Contains(mesh.Fragment.Blocks, b => b.Name == MeitouShadowShaders.Block);
+        Assert.Contains(mesh.Fragment.Samplers, s => s.Name == "uShadowTerrain");
+        // The receiver (included before the stage's own outputs) must not add any: the terrain writes its colour at location 0.
+        var (_, terrainFragment) = GlslProgramCompiler.Preprocess(TerrainShaders.PatchVertex, TerrainShaders.Fragment);
+        Assert.Contains("layout(location = 0) out vec4 fragColour", terrainFragment);
     }
 
     [Fact]

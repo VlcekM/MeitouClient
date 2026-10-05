@@ -34,6 +34,7 @@ sealed class WorldOptions
     public bool NoShadows;
     public int ShadowQuality = 1, DebugShadows;
     public float ShadowRange = KenshiShadows.DefaultRange;
+    public bool MeitouShadows = true;   // the shadows switch (Enhancements): Meitou by default, false the game's CSM
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
     public float? HazeDistance;
     public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze switch (default); 1 = the game's haze
@@ -168,8 +169,8 @@ sealed class WorldOptions
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
                 case "--haze-distance": o.HazeDistance = F(); break;
                 case "--haze-strength": o.HazeStrength = F(); break;
-                case "--meitou": Enhancements.Apply(Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v), Next(), meitou: true); break;
-                case "--faithful": Enhancements.Apply(Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v), Next(), meitou: false); break;
+                case "--meitou": Enhancements.Apply(Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v, () => o.MeitouShadows, v => o.MeitouShadows = v), Next(), meitou: true); break;
+                case "--faithful": Enhancements.Apply(Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v, () => o.MeitouShadows, v => o.MeitouShadows = v), Next(), meitou: false); break;
                 case "--weather": o.Weather = Next(); break;
                 case "--clouds": o.Clouds = F(); break;
                 case "--no-stream": o.NoStream = true; break;
@@ -391,7 +392,8 @@ static class WorldFrame
         if (!o.NoShadows)
         {
             // The game's CSM mode (docs/formats/shadows.md): four cascades in one atlas of the `shadow quality` side, out to `Shadow Range`.
-            gpu.Shadow = new ShadowPass(gl) { Settings = new ShadowSettings(KenshiShadows.MapSize(o.ShadowQuality), o.ShadowRange) };
+            gpu.Shadow = new ShadowPass(gl) { Settings = new ShadowSettings(KenshiShadows.MapSize(o.ShadowQuality), o.ShadowRange), Meitou = o.MeitouShadows };
+            gpu.Shadow.SetTerrain(scene.Coarse, scene.CoarseSize);   // the Meitou shadows' terrain shadow beyond the range
             Console.WriteLine($"shadows   {gpu.Shadow.Settings.MapSize}² atlas, {gpu.Shadow.Settings.Cascades} cascades of {gpu.Shadow.Settings.TileSize}², range {o.ShadowRange:0}");
         }
         gpu.DebugShadows = o.DebugShadows;
@@ -469,7 +471,7 @@ static class WorldFrame
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
         StageClock.Lap(3);
-        if (gpu.Shadow is not null) DrawShadows(gpu, camera, render, light, rw, rh);
+        if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh); }
         StageClock.Lap(12);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is not null;
@@ -567,6 +569,7 @@ static class WorldFrame
             shadow.PhaseMs[1] += (t2 - t1) * ms;
             shadow.PhaseMs[2] += (t3 - t2) * ms;
         });
-        shadow.CasterStats = $"{gpu.Terrain.DepthTriangles:N0} terrain triangles, {objects} objects, {foliage} foliage meshes (over the cascades); cpu terrain {shadow.PhaseMs[0]:0.00}, objects {shadow.PhaseMs[1]:0.00}, foliage {shadow.PhaseMs[2]:0.00} ms";
+        shadow.CasterStats = $"{gpu.Terrain.DepthTriangles:N0} terrain triangles, {objects} objects, {foliage} foliage meshes (over the cascades); cpu terrain {shadow.PhaseMs[0]:0.00}, objects {shadow.PhaseMs[1]:0.00}, foliage {shadow.PhaseMs[2]:0.00} ms"
+            + (shadow.Meitou ? $"; meitou: {shadow.DescribeMeitou()}" : "");
     }
 }

@@ -31,7 +31,7 @@ public static class Enhancements
     /// The switches, in key order (F1 upwards in the viewer), over the post-processing options and the haze strength
     /// (docs/formats/post-processing.md and sky.md for what the game does).
     /// </summary>
-    public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<float> hazeStrength, Action<float> setHazeStrength) =>
+    public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<float> hazeStrength, Action<float> setHazeStrength, Func<bool> meitouShadows, Action<bool> setMeitouShadows) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -43,6 +43,9 @@ public static class Enhancements
             () => post.Upscale.Kind != UpscalerKind.Off, v => post.Upscale.Kind = v ? post.Upscale.Preferred : UpscalerKind.Off,
             "the game uses FXAA; Meitou uses a temporal method (TAA, FSR or DLSS: the Tab panel chooses, FSR and DLSS need their libraries)",
             () => post.Upscale.Preferred.ToString().ToUpperInvariant()),
+        new("shadows", "Shadows", "CSM", "soft, far terrain",
+            meitouShadows, setMeitouShadows,
+            "the game draws hard-edged cascades that end abruptly at the shadow range; Meitou fits them to the view, filters them softly with contact-hardening penumbrae, blends the cascades, and lets mountains shadow the land out to the horizon"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>
