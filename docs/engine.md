@@ -55,7 +55,7 @@ view meets the ground.
 
 Default keys: `W A S D` move, `Q`/`E` or `Left`/`Right` rotate, `Up`/`Down` pitch, wheel or `PageUp`/`PageDown` zoom, right or
 middle drag orbit, `;` free camera (`R`/`F` up/down in it), `Space` pause, `.`/`,` time scale, `Tab` settings panel, `F12`
-screenshot (temp folder), `Esc` quit.
+screenshot (C:\Temp), `Esc` quit.
 
 ## Rendering (`Meitou.Rendering`)
 
@@ -124,7 +124,7 @@ count on exit.
 
 `--upscaler off|taa|fsr|dlss`, `--render-scale <0.25..1|native|quality|balanced|performance|ultra>` (1, 1/1.5, 1/1.7, 1/2, 1/3 per
 axis; default 1 for all three, i.e. DLAA / FSR native AA; quality was the FSR/DLSS default until 2026-10-05), `--sharpness <0..1>`; in the game also the Tab panel (kept in `meitou.user.json`,
-command-line values win). Off draws the scene at the display size with MSAA, as before. With an upscaler (`PostProcess`, DECISIONS 14):
+command-line values win). Off draws the scene at the display size and smooths the edges with the game's FXAA (the Faithful anti-aliasing; the scene is never multisampled). With an upscaler (`PostProcess`, DECISIONS 14):
 
 - **Render size and jitter.** The scene is drawn at the display size × scale, single-sampled, its projection moved each frame by a
   Halton(2,3) offset of up to half a render pixel (`Jitter`; `8 × ratio²` phases). Shadows and the water reflection are not jittered.
@@ -141,7 +141,7 @@ command-line values win). Off draws the scene at the display size with MSAA, as 
   `--sway-start`): mean difference without / with: TAA 0.173 / 0.129, FSR 0.589 / 0.519, DLSS 0.438 / 0.349.
 - **TAA** (`UpscaleShaders.Taa`, both backends): each display pixel takes a Gaussian of the 3 × 3 jittered render samples around
   it, the history reprojected with Catmull-Rom and clipped to the neighbourhood's colour spread (YCoCg variance clipping), blended
-  in a tone-mapped space; the result (display size, HDR) is the history and the input of bloom, exposure and the composite.
+  in a tone-mapped space; the result (display size, HDR) is the history and the input of the exposure and the composite.
 - **FSR** (`--upscaler fsr`, Vulkan; `Meitou.Rendering.Vulkan/Upscalers/FsrUpscaler`): AMD FSR 3.1.4 through the FidelityFX API
   (`amd_fidelityfx_vk.dll` from FidelityFX SDK v1.1.4, MIT, the newest SDK with a Vulkan DLL; DECISIONS 16), loaded at run time from
   `MEITOU_FFX_PATH` (the DLL or its folder) or next to the executable; never in the repository. Without it, TAA runs

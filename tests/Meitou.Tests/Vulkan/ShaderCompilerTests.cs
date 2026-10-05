@@ -23,9 +23,8 @@ public class ShaderCompilerTests
         yield return ("terrain mesh depth", TerrainShaders.MeshVertex, ShadowShaders.DepthFragment);
         yield return ("mesh", Shaders.MeshVertex, Shaders.MeshFragment);
         yield return ("line", Shaders.LineVertex, Shaders.LineFragment);
-        foreach (var f in new[] { nameof(PostProcessShaders.Ssao), nameof(PostProcessShaders.SsaoBlur), nameof(PostProcessShaders.BloomPrefilter),
-                     nameof(PostProcessShaders.BloomDown), nameof(PostProcessShaders.BloomUp), nameof(PostProcessShaders.Composite),
-                     nameof(PostProcessShaders.Luminance), nameof(PostProcessShaders.Adapt) })
+        foreach (var f in new[] { nameof(PostProcessShaders.Ssao), nameof(PostProcessShaders.SsaoBlur), nameof(PostProcessShaders.Composite),
+                     nameof(PostProcessShaders.Luminance), nameof(PostProcessShaders.Adapt), nameof(PostProcessShaders.Fxaa) })
             yield return ("post " + f, PostProcessShaders.Vertex, Private(typeof(PostProcessShaders), f));
         yield return ("sky simple", Private(typeof(SkyRenderer), "Vertex"), Private(typeof(SkyRenderer), "SimpleFragment"));
         yield return ("sky", Private(typeof(SkyRenderer), "Vertex"), Private(typeof(SkyRenderer), "SkyFragment"));
@@ -57,7 +56,7 @@ public class ShaderCompilerTests
     public void AllRendererPairsAreCovered()
     {
         Assert.Equal(Pairs().Count(), Pairs().Select(p => p.Name).Distinct().Count());
-        Assert.True(Pairs().Count() >= 25);
+        Assert.True(Pairs().Count() >= 23);   // every pair the renderers compile (bloom's three removed)
     }
 
     [Theory]

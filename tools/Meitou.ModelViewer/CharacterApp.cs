@@ -345,7 +345,7 @@ static class CharacterApp
             if (screenshotRequested)
             {
                 screenshotRequested = false;
-                var file = Path.Combine(Path.GetTempPath(), $"meitou-viewer-{name}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+                var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-viewer-{name}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
                 gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
                 gl.ReadBuffer(ReadBufferMode.Back);
                 ViewerApp.SavePng(gl, file, size.X, size.Y);

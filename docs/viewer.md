@@ -17,7 +17,7 @@ dotnet run --project tools/Meitou.ModelViewer -- mask2 --info
 `<mesh>` is a bare file name (`.mesh` optional) or a path (absolute, relative to the install, or relative to the
 working directory). The install comes from `KENSHI_PATH` / `meitou.local.json`. `--help` lists the options and
 keys (orbit / pan / zoom with the mouse, `W` wireframe, `M` next material candidate, `Left`/`Right`
-animations, `Space` pause, `P` screenshot into the temp folder...). `--screenshot` renders headless (no window) into a 4× multisampled
+animations, `Space` pause, `P` screenshot into C:\Temp...). `--screenshot` renders headless (no window) into a 4× multisampled
 framebuffer and writes a PNG; with `--anim` the camera frames the posed mesh. `--quit-after <s>` (any interactive mode) closes the
 window after s seconds and prints the frames drawn (a smoke test); `MEITOU_VK_VALIDATION=1` runs the Vulkan validation layer.
 The interactive mesh and character windows draw straight into the swapchain image, so they are not multisampled (the offscreen
@@ -255,9 +255,11 @@ Keys: left drag orbits the target, right drag looks
 around, wheel zooms, `W A S D` free fly along the view direction, `Q`/`E` world down/up (speed follows the height above ground; Shift ×4, Ctrl ×0.25), `T` textures, `N` normal
 maps, `O` objects, `G` water, `B` simple sky, `,`/`.` time of day −/+ 1 hour, `X` wireframe, `V` debug view (blend weights,
 layer weights, untextured shading), `H` prints the camera as command-line
-options, `P` screenshot into the temp folder, `?` toggles a panel listing these keys (built from the usage text; drawn after the screenshot readback, so saved pictures never show it; `--show-keys` opens it at start and, with `--screenshot`, draws it into the picture). `Tab` toggles a settings panel (top right) with sliders, dragged with the left mouse button: object draw distance (1000 to 40000, log scale), distant-town range (0 to 10 zones), object LOD distance (x0.25 to x4: the mesh LOD value is divided by it, Ogre's LOD bias inverted), foliage and grass draw distance (x0.25 to x8, default x4: four times the game's `foliage range` / `grass range` of 1) and grass density (x0.1 to x2; applies at once to all loaded grass: pages hold the blades of density x2 and a lower setting draws a prefix of them), terrain LOD distance (2 to 16), haze strength (0 to 3, default 0.85 so far mountains stay visible, 1 = the game's haze; a viewer option, also `--haze-strength`). While the pointer is on a panel the camera ignores the mouse. `--show-keys` with `--screenshot` draws both panels. Its text comes from a system monospace font (Consolas, Cascadia Mono, Courier New, DejaVu Sans Mono or Menlo) rasterised with stb_truetype; with none of them the panel is unavailable.
+options, `P` screenshot into C:\Temp, `F1` to `F4` the Faithful / Meitou switches (see "Post-processing" below), `F11` toggles the frame statistics at the top left (fps, CPU and GPU frame time, reflection, sky and post-processing costs, camera position and zone, drawn terrain, objects and foliage, loading counts, resident memory; the window title only names the renderer), `F12` cycles a profiler chart along the bottom (GPU, render thread, off; see "Profiler" below), `F10` a panel listing these keys below them (built from the usage text; drawn after the screenshot readback, so saved pictures never show it; `--show-keys` opens it at start and, with `--screenshot`, draws it into the picture). `Tab` toggles a settings panel (top right) with sliders, dragged with the left mouse button: object draw distance (1000 to 40000, log scale), distant-town range (0 to 10 zones), object LOD distance (x0.25 to x4: the mesh LOD value is divided by it, Ogre's LOD bias inverted), foliage and grass draw distance (x0.25 to x8, default x4: four times the game's `foliage range` / `grass range` of 1) and grass density (x0.1 to x2; applies at once to all loaded grass: pages hold the blades of density x2 and a lower setting draws a prefix of them), terrain LOD distance (2 to 16), haze strength (0 to 3, default 0.85 so far mountains stay visible, 1 = the game's haze; a viewer option, also `--haze-strength`). While the pointer is on a panel the camera ignores the mouse. `--show-keys` with `--screenshot` draws both panels. Its text comes from a system monospace font (Consolas, Cascadia Mono, Courier New, DejaVu Sans Mono or Menlo) rasterised with stb_truetype; with none of them the panel is unavailable.
 
 Camera codes: `Ctrl+C` copies the world camera to the clipboard as 50 hex digits: byte 1, then the target X, Y and Z, the yaw, the pitch (radians) and the distance, as little-endian floats. `Ctrl+V` moves the camera to the code in the clipboard. The format is fixed, so two viewers (e.g. two builds side by side) can be put at the same spot. `--monitor <n>` opens the window on monitor n (1-based) and maximizes it there.
+
+Profiler (`F12`; `FrameProfiler`): a chart along the bottom of the last 300 frames, one line per `StageClock` stage, first the GPU, then the render thread, then off. Every stage lap writes a GPU timestamp, and a stage's GPU time is the gap since the stamp before it, summed when the stage runs once per depth slice (terrain, objects, foliage, water). The results are read a few frames late, without waiting. `other` is the frame's whole GPU time (`VkGlStats.GpuFrameMs`, uploads included) minus the stamped stages, and `present` (render thread only) is the overlay, submit and present after the scene. The wait for a free frame (vsync) is not counted. The legend shows the mean of the last 30 frames for both sides. The y axis scales to a round number above the largest value shown. GPU stages `sky-draw` to `post` should add up to about the post `scene` cost in the F11 statistics.
 
 ```
 dotnet run --project tools/Meitou.ModelViewer -- --world --town "Shark" --radius 1.5 --distance 3000 --pitch 20
@@ -339,7 +341,7 @@ How it works (status as in [README.md](README.md)):
     under 16 ms in place), which is why the strips are rewritten in place. The textured shading fades out over the last
     3000 units of the window, far beyond the material distance.
   - Screenshots wait for everything the camera view needs (`TerrainStreamer.Settle`); interactively the far ground
-    colour shows first and the material appears around the camera within a second or two (the title shows `loading N`).
+    colour shows first and the material appears around the camera within a second or two (the F11 statistics show `loading N`).
 - **Streaming cost and unloading** (`BackgroundWork`, `UploadQueue`, `WorldTextureCache`, `ObjectMeshCache`, `FoliageRenderer`; **Observed**
   with `--fly-benchmark`, 2026-10-04, 1280 × 720, RTX 4070, `--world --town "The Hub" --radius 1.5 --distance 3000 --pitch 20`, 1500 frames at
   150 units per frame round a circle of 12000 units; the machine was shared with the game and other viewers, so run-to-run spread is large):
@@ -365,7 +367,7 @@ How it works (status as in [README.md](README.md)):
     above 768 MB of object meshes or 1024 MB of textures (per cache) the least recently used ones idle for 8 s go too, down to three quarters
     of the mark. At most 24 meshes and 40 textures are deleted per second. Grass pages and terrain biome layers already had their own eviction.
     `MEITOU_UNLOAD_IDLE=<seconds>` changes the idle time (a huge value turns unloading off, for comparison).
-  - *Numbers*: resident GPU memory of meshes, textures and grass (the window title shows `resident` MB; `Describe()` and the benchmark list meshes,
+  - *Numbers*: resident GPU memory of meshes, textures and grass (the F11 statistics show `resident` MB; `Describe()` and the benchmark list meshes,
     textures, unload and reload counts) over a 3000-frame flight round a 20000-unit circle: before, with nothing unloaded and RGBA8 textures,
     it grew to 6.4 GB (3.5 GB of foliage textures, 2.7 GB of object textures) and stayed there, process working set 5.7 GB (the first
     benchmark runs: 3.0 to 4.4 GB resident, working set 5.6 to 6.2 GB after a 1500-frame flight); now 1.3 to 1.4 GB (compression alone) and, with
@@ -415,7 +417,7 @@ How it works (status as in [README.md](README.md)):
     CPU (offscreen run, 2026-10-04). Objects are drawn in every depth slice (far first).
   - Debug: `MEITOU_LOD_DEBUG=1` colours surfaces by LOD level, `=2` draws only wireframe by level (green 0, yellow 1, orange 2, red 3,
     magenta manual level, blue distant stand-in). `MEITOU_STREAM_LOG=1` prints slow steps. `--distant-range <zones>`, `--no-distant`.
-  - Not done: eviction of meshes, fading of TERRAIN-mode features, cross-fade of manual levels' own materials; the title bar shows
+  - Not done: eviction of meshes, fading of TERRAIN-mode features, cross-fade of manual levels' own materials; the F11 statistics show
     objects, draw calls, draw CPU ms and what is still loading.
 - Back-face culling is off for objects (open building meshes); the light (`kenshiLight`) and the haze are the atmosphere's (above).
 
@@ -519,7 +521,7 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   the reflection spread over frames (a rendered frame costs the same, so the 99th percentile does not move), fewer samples or a smaller texture
   (the shoreline's stair steps came back).
 - **Cost** (RTX 4070, 1280 × 960, 4x MSAA, offscreen, 2026-10-04): a cypress grove in zone 14.30 (995 meshes,
-  68k blades) 0.6–1.2 ms draw CPU, about 2 ms GPU (timestamp queries; the title bar shows both); the grassland
+  68k blades) 0.6–1.2 ms draw CPU, about 2 ms GPU (timestamp queries; the F11 statistics show both); the grassland
   at the zone's centre (128k blades) 0.2 ms CPU, 0.3 ms GPU; frame 2.8 ms against 2.3 ms with `--no-foliage`.
   A 20640-unit `--fly-to` from zone 14.30 eastward: median 3.9 ms against 2.8 ms, 99th percentile 46 ms against
   30 ms (uploads are held to 2 ms a frame and one texture a frame). The log line `foliage` gives the totals;
@@ -539,31 +541,27 @@ maps, the term per cascade, or the term over the picture.
 
 ### Post-processing
 
-The world view draws the scene into an RGBA16F framebuffer with depth (4x multisampled by default), resolves it, and runs a
+The world view draws the scene into a single-sample RGBA16F framebuffer with depth and runs a
 chain into the window (or, with `--screenshot`, into the offscreen RGBA8 framebuffer that is saved, so pictures go through the
 same chain; `PostProcess`, `PostProcessShaders`, `PostProcessOptions`). The window itself is single-sample. What the game does
 and why the presets look the way they do: [formats/post-processing.md](formats/post-processing.md). In short, Kenshi has exposure
-only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. The viewer has no FXAA: edges are smoothed by 4x MSAA instead
-(the default), so the `kenshi` preset is a clamp with 4x MSAA.
+only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. MSAA was removed: anti-aliasing is the game's FXAA (Faithful) or a temporal method (Meitou).
 
-- **Presets**: `--post kenshi` (default, the game's chain) and `--post off` (4x MSAA, nothing else; in game-sky mode the game's auto exposure still applies, since the scene is in the game's HDR units). Keys F2 / F1. The single effects below can be added on top of either.
-- **Effects** (option, key): SSAO (`--ssao`, F4): 12 taps, half resolution, from the depth of the near depth slice only (the far
+- **Faithful and Meitou** (`Enhancements`): every feature where Meitou improves on the game is a switch, Faithful (the game as it ships) or Meitou (the default), chosen one by one; the game's own graphics settings (draw distances, shadow quality) are separate and mean the same in both. Keys F1 to F4 until there is a settings menu (the key list shows each one's state with its detail, e.g. "Faithful (off)" or "Meitou (SSAO)"; toggling prints a note on the difference to the console), `--faithful all` or `--faithful ao,haze,...` on the command line (`--meitou` turns them back on): F1 `ao` ambient occlusion (none / SSAO), F2 `dither`, F3 `haze` (strength 1 / 0.85, far mountains stay visible), F4 `aa` anti-aliasing (the game's FXAA / a temporal method: TAA, FSR or DLSS, chosen on the Tab panel's "Anti-aliasing" slider, which F4 turns back on; FSR and DLSS need their libraries, else TAA).
+- **Presets**: `--post meitou` (default: the game's chain plus SSAO and dither), `--post kenshi` (the game's chain) and `--post off` (nothing, not even FXAA; in game-sky mode the game's auto exposure still applies, since the scene is in the game's HDR units). The upscaler is not part of the presets. The single effects below can be added on top.
+- **Effects** (option, key): SSAO (`--ssao`, F1): 12 taps, half resolution, from the depth of the near depth slice only (the far
   slice's depth is cleared before the near one is drawn, so nothing beyond about 20000 units is occluded; it also fades out from
-  3000 to 10000 units), normals from depth differences, depth-aware blur, multiplies the HDR colour. Bloom (`--bloom`, F5): over-1
-  brightness only (threshold 1, soft knee), 13-tap downsample / tent upsample mip chain from half resolution, intensity 0.3, added with a soft cap (b / (1 + 2b)) rather than a per-channel min, which had saturated the channels at different radii and drawn a tinted ring round the sun disc. Tone map
-  (`--tonemap clamp|shoulder|aces`, F6): `shoulder` is the identity up to 0.8 on the brightest channel and then rolls off to 1 (the
-  look of the scene is unchanged, the sun disc and speculars no longer clip); `aces` is Narkowicz's fit and visibly darker and
-  more contrasty. Vignette (F8) and
-  grading (F9: saturation 1.12, contrast 1.06) are ours, off by default (Kenshi has neither). MSAA (`--msaa 1|2|4|8`, M; default 4). Exposure
+  3000 to 10000 units), normals from depth differences, depth-aware blur, multiplies the HDR colour. Bloom was removed (2026-10-05): the game has it at magnitude 0, and Meitou does not add one. The tone curve (shoulder, ACES), grading and vignette were removed too: the game has none of them and clips at 1, so the composite does exactly that.
+  FXAA (`--no-fxaa` turns it off; runs only without an upscaler): the composite writes an RGBA8 picture and FXAA 3.11's quality algorithm with the game's settings reads it into the target (`PostProcessShaders.Fxaa`, written from the published algorithm). Exposure
   (`--exposure`, keys - and =): a multiplier on top of the game's auto exposure (game sky), or the whole exposure with `--simple-sky`; default 1.
-  `--post-debug ao|bloom` shows the occlusion or the bloom alone.
-- **Cost** (RTX 4070, 1920x1080, GPU timestamps, ms per frame; the title shows `post gpu ms` per stage next to the frame's cpu and gpu time,
-  and `--screenshot` prints the average over 10 frames): MSAA resolve 0.1 to 1, SSAO 0.1 to 0.3, bloom 0.3 to 1.2, composite 0.04
+  `--post-debug ao` shows the occlusion alone.
+- **Cost** (RTX 4070, 1920x1080, GPU timestamps, ms per frame; the F11 statistics show `post gpu` per stage next to the frame's cpu and gpu time,
+  and `--screenshot` prints the average over 10 frames): SSAO 0.1 to 0.3, composite 0.04
   (the `kenshi` preset costs the resolve and composite only). Measured while other jobs shared the GPU, so the spread is
   mostly noise; the whole chain is roughly 1 to 3 ms against a 14 to 18 ms scene.
 - **Contract for scene code**: shaders write the colours they always did, unclamped (colours above 1 are fine); code that draws into
   another framebuffer between `PostProcess.Begin` and `End` must rebind the one it found (`ReflectionPass` does).
-- **Haze**: `--haze kenshi|physical` (F7), `--haze-distance`; see [formats/sky.md](formats/sky.md#haze-distance-fog-how-vanilla-does-it). The default is `kenshi`, the game's own haze: a linear ramp from 3000 to 30000 (0.06 D to 0.6 D, D = 50000 = view distance 5000 × 10; `--haze-distance` sets D) towards the game's own haze colour (SkyX's Rayleigh in-scattering to the point, in the same HDR units as the sky), which equals the sky's colour at 70000. Far ranges come out as pale layered silhouettes, as in the game, and at night the far terrain goes black (the game's rule). Above the game's camera heights (it never gets more than 1840 above its pivot, [formats/camera.md](formats/camera.md)) the game's formula runs away (from far up it gave a white arc and cyan rims); the viewer's own choice there: from 6000 to 22000 above the highest ground within 2000 of the eye the haze blends into `physical`, and the water's sun glint takes the game's Fresnel factor (no blown-out disc on the sea). Below 4000 the picture is exactly the game's haze. Screenshots print the eye, this clearance and the weight (`haze` line). `physical` is a height-dependent integral over SkyX's air (a viewer alternative, all heights). `--haze-strength <x>` (and the Tab slider, viewer options) scales how far the haze is blended in; 1 is the game's.
-- **Limits**: the MSAA resolve averages HDR values, so very bright specular edges can still alias a little; SSAO sees only the near
+- **Haze**: `--haze kenshi|physical`, `--haze-distance`; see [formats/sky.md](formats/sky.md#haze-distance-fog-how-vanilla-does-it). The default is `kenshi`, the game's own haze: a linear ramp from 3000 to 30000 (0.06 D to 0.6 D, D = 50000 = view distance 5000 × 10; `--haze-distance` sets D) towards the game's own haze colour (SkyX's Rayleigh in-scattering to the point, in the same HDR units as the sky), which equals the sky's colour at 70000. Far ranges come out as pale layered silhouettes, as in the game, and at night the far terrain goes black (the game's rule). Above the game's camera heights (it never gets more than 1840 above its pivot, [formats/camera.md](formats/camera.md)) the game's formula runs away (from far up it gave a white arc and cyan rims); the viewer's own choice there: from 5100 to 18700 above the highest ground within 2000 of the eye the haze blends into `physical`, and the water's sun glint takes the game's Fresnel factor (no blown-out disc on the sea). Below 4000 the picture is exactly the game's haze. Screenshots print the eye, this clearance and the weight (`haze` line). `physical` is a height-dependent integral over SkyX's air (a viewer alternative, all heights). `--haze-strength <x>` (and the Tab slider, viewer options) scales how far the haze is blended in; 1 is the game's.
+- **Limits**: SSAO sees only the near
   depth slice and has no normal buffer (curved surfaces show faint banding, thin objects can halo); the auto exposure measures a
   scene without shadows, so its mean runs higher and its exposure lower than the game's in sunlit views; heat haze, colour LUTs and depth of field are not implemented.

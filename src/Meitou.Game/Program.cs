@@ -223,7 +223,6 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             foreach (var slider in panel.Sliders)
                 if (config.Graphics.TryGetValue(slider.Label, out float v) && !(o.Post.Upscale.Explicit && WorldFrame.UpscalerSliders.Contains(slider.Label)))
                     slider.Set(Math.Clamp(v, slider.Min, slider.Max));
-        gl.Enable(EnableCap.Multisample);
 
         var silkInput = Silk.NET.Input.InputWindowExtensions.CreateInput(window);
         Vector2? lastMouse = null;
@@ -321,7 +320,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
 
     static void SaveScreenshot(IGl gl, int width, int height)
     {
-        var file = Path.Combine(Path.GetTempPath(), $"meitou-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+        var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-{DateTime.Now:yyyyMMdd-HHmmss}.png");
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
         gl.ReadBuffer(ReadBufferMode.Back);
         FramebufferCapture.SavePng(gl, file, width, height);

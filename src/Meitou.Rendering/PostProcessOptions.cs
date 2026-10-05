@@ -2,34 +2,21 @@ using System.Globalization;
 
 namespace Meitou.Rendering;
 
-/// <summary>Curve that maps the HDR scene colour to the display.</summary>
-public enum ToneMapOperator
-{
-    /// <summary>Clamp at 1: what Kenshi does (its tone-map function is exposure only; docs/formats/post-processing.md).</summary>
-    Clamp,
-    /// <summary>Identity up to a knee, then an exponential shoulder towards 1 on the brightest channel: same look, no hard clip.</summary>
-    Shoulder,
-    /// <summary>Narkowicz's ACES fit: filmic, but darker mid-tones and more contrast than Kenshi.</summary>
-    Aces,
-}
-
-/// <summary>Which post-processing the world view runs, and its parameters. Presets: <c>kenshi</c> (default, the game's chain) and <c>off</c>; single effects go on top with their options and keys.</summary>
+/// <summary>Which post-processing the world view runs, and its parameters. Presets: <c>meitou</c> (default: the game's chain plus Meitou's switches), <c>kenshi</c> (the game's chain) and <c>off</c>; single effects go on top with their options and keys.</summary>
 public sealed class PostOptions
 {
-    public string Preset = "kenshi";
-    /// <summary>Samples of the scene framebuffer (1, 2, 4 or 8).</summary>
-    public int Msaa = 4;
-    public bool Ssao, Bloom, Vignette, Grade, Dither;
-    public ToneMapOperator ToneMap = ToneMapOperator.Clamp;
+    public string Preset = "meitou";
+    /// <summary>Kenshi's FXAA on the final image (its <c>FXAA=1</c> setting; docs/formats/post-processing.md) when no temporal upscaler runs.</summary>
+    public bool Fxaa = true;
+    /// <summary>Meitou switches (Enhancements), on by default; the <c>kenshi</c> preset turns them off.</summary>
+    public bool Ssao = true, Dither = true;
     /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness.</summary>
     public float Exposure = 1;
     /// <summary>World units: how far from a point occluders count.</summary>
     public float SsaoRadius = 12, SsaoStrength = 4;
-    public float BloomThreshold = 1, BloomIntensity = 0.3f;
-    public float Saturation = 1.12f, Contrast = 1.06f, VignetteStrength = 0.3f;
     /// <summary>The upscaler (render scale, TAA / FSR / DLSS); not part of the presets.</summary>
     public readonly UpscaleOptions Upscale = new();
-    /// <summary>0 none, 1 shows the occlusion, 2 the bloom.</summary>
+    /// <summary>0 none, 1 shows the occlusion.</summary>
     public int Debug;
 
     public static PostOptions Create(string preset)
@@ -37,33 +24,32 @@ public sealed class PostOptions
         var o = new PostOptions { Preset = preset };
         switch (preset)
         {
-            case "off": break;
+            case "meitou": break;
+            case "off": o.Fxaa = false; o.Ssao = o.Dither = false; break;
             case "kenshi":
+                o.Ssao = o.Dither = false;
                 // Kenshi's chain with the shipped settings: exposure only (no curve, bloom magnitude 0, SSAO commented
-                // out). The game smooths edges with FXAA and no MSAA; the viewer uses 4x MSAA instead (the default).
+                // out), and FXAA on the final image.
                 break;
-            default: throw new ArgumentException($"unknown post preset '{preset}' (kenshi, off)");
+            default: throw new ArgumentException($"unknown post preset '{preset}' (meitou, kenshi, off)");
         }
         return o;
     }
 
     public void CopyFrom(PostOptions other)
     {
-        Preset = other.Preset; Msaa = other.Msaa; Debug = other.Debug; Ssao = other.Ssao; Bloom = other.Bloom; Vignette = other.Vignette;
-        Grade = other.Grade; Dither = other.Dither; ToneMap = other.ToneMap; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
-        SsaoStrength = other.SsaoStrength; BloomThreshold = other.BloomThreshold; BloomIntensity = other.BloomIntensity;
-        Saturation = other.Saturation; Contrast = other.Contrast; VignetteStrength = other.VignetteStrength;
+        Preset = other.Preset; Fxaa = other.Fxaa; Debug = other.Debug; Ssao = other.Ssao;
+        Dither = other.Dither; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
+        SsaoStrength = other.SsaoStrength;
     }
 
     public const string Usage = """
-          --post <kenshi|off>   post-processing preset (default kenshi); give it before the options below
-          --ssao / --no-ssao, --bloom / --no-bloom, --vignette / --no-vignette, --grade / --no-grade, --dither / --no-dither
-          --msaa <1|2|4|8>         samples of the HDR scene framebuffer
-          --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with MSAA; FSR and DLSS need the vendor library, else TAA)
+          --post <meitou|kenshi|off>   post-processing preset (default meitou; kenshi = the game's chain); give it before the options below
+          --ssao / --no-ssao, --dither / --no-dither
+          --fxaa / --no-fxaa       the game's FXAA when no upscaler runs (default on)
+          --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with FXAA; FSR and DLSS need the vendor library, else TAA)
           --render-scale <0.25..1|native|quality|balanced|performance|ultra>   render size per axis with an upscaler (default 1)  --sharpness <0..1>
-          --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with MSAA; FSR and DLSS need the vendor library, else TAA)
-          --render-scale <0.25..1|native|quality|balanced|performance|ultra>   render size per axis with an upscaler (default 1)  --sharpness <0..1>
-          --tonemap <clamp|shoulder|aces>   --exposure <x>   --bloom-intensity <x>   --bloom-threshold <x>   --ssao-radius <units>   --ssao-strength <x>
+          --exposure <x>   --ssao-radius <units>   --ssao-strength <x>
         """;
 
     /// <summary>Handles one command-line option; false when it is not a post-processing one.</summary>
@@ -75,31 +61,19 @@ public sealed class PostOptions
             case "--post": CopyFrom(Create(next())); return true;
             case "--ssao": Ssao = true; return true;
             case "--no-ssao": Ssao = false; return true;
-            case "--bloom": Bloom = true; return true;
-            case "--no-bloom": Bloom = false; return true;
-            case "--vignette": Vignette = true; return true;
-            case "--no-vignette": Vignette = false; return true;
-            case "--grade": Grade = true; return true;
-            case "--no-grade": Grade = false; return true;
             case "--dither": Dither = true; return true;
             case "--no-dither": Dither = false; return true;
-            case "--msaa":
-                Msaa = int.Parse(next(), CultureInfo.InvariantCulture);
-                if (Msaa is not (1 or 2 or 4 or 8)) throw new ArgumentException("--msaa must be 1, 2, 4 or 8");
-                return true;
-            case "--tonemap":
-                ToneMap = Enum.TryParse<ToneMapOperator>(next(), true, out var t) ? t : throw new ArgumentException("--tonemap must be clamp, shoulder or aces");
-                return true;
-            case "--post-debug": Debug = next() switch { "ao" => 1, "bloom" => 2, _ => 0 }; return true;
+            case "--fxaa": Fxaa = true; return true;
+            case "--no-fxaa": Fxaa = false; return true;
+            case "--post-debug": Debug = next() switch { "ao" => 1, _ => 0 }; return true;
             case "--upscaler":
                 Upscale.Explicit = true;
                 Upscale.Kind = Enum.TryParse<UpscalerKind>(next(), true, out var k) ? k : throw new ArgumentException("--upscaler must be off, taa, fsr or dlss");
+                if (Upscale.Kind != UpscalerKind.Off) Upscale.Preferred = Upscale.Kind;
                 return true;
             case "--render-scale": Upscale.Scale = UpscaleOptions.ParseScale(next()); Upscale.Explicit = true; return true;
             case "--sharpness": Upscale.Sharpness = Math.Clamp(F(), 0, 1); return true;
             case "--exposure": Exposure = F(); return true;
-            case "--bloom-intensity": BloomIntensity = F(); return true;
-            case "--bloom-threshold": BloomThreshold = F(); return true;
             case "--ssao-radius": SsaoRadius = F(); return true;
             case "--ssao-strength": SsaoStrength = F(); return true;
             default: return false;
@@ -107,6 +81,6 @@ public sealed class PostOptions
     }
 
     public string Describe() =>
-        $"{Preset}: msaa {Msaa}x, ssao {(Ssao ? "on" : "off")}, bloom {(Bloom ? "on" : "off")}, tonemap {ToneMap.ToString().ToLowerInvariant()} x{Exposure:0.##}, " +
-        $"grade {(Grade ? "on" : "off")}, vignette {(Vignette ? "on" : "off")}, upscaler {Upscale.Describe()}";
+        $"{Preset}: fxaa {(Fxaa && !Upscale.Temporal ? "on" : "off")}, ssao {(Ssao ? "on" : "off")}, exposure x{Exposure:0.##}, " +
+        $"upscaler {Upscale.Describe()}";
 }

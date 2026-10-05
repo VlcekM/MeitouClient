@@ -114,13 +114,13 @@ of 715, the band then holds the scale at its floor ×0.46), fixed at the source 
 the same views now measure 0.65 to 0.88 by day and stay finite at dawn, sunset, dusk and night.
 Details, options and costs: [viewer.md](../viewer.md#post-processing).
 
-| Stage | `kenshi` preset (default) | Effect available on top | Basis |
+| Stage | Faithful (`--post kenshi`, `--faithful all`) | Meitou (the default) | Basis |
 | --- | --- | --- | --- |
-| Scene buffer | RGBA16F, 4x MSAA | 1, 2 or 8 samples | Kenshi: R11G11B10F, no FSAA |
+| Scene buffer | RGBA16F, single-sample | none | Kenshi: R11G11B10F, no FSAA |
 | Exposure | Kenshi's auto exposure (game sky); x1 with `--simple-sky` | `--exposure` multiplier | Kenshi: 0.55 / adapted, band from CONSTANTS |
-| Curve | clamp at 1 | exponential shoulder above 0.8 (identity below) | Kenshi: none (clip) |
+| Curve | clamp at 1 | none (removed) | Kenshi: none (clip) |
 | SSAO | off | on (12 taps, half resolution, from depth) | Kenshi: shipped, disabled |
-| Bloom | off | on (13-tap mip chain, threshold 1) | Kenshi: magnitude 0 |
-| Grading | off | off (optional saturation / contrast) | Kenshi: none |
-| FXAA | not implemented: 4x MSAA smooths edges instead | none | Kenshi: FXAA 3.11, 0.75 |
+| Bloom | off | none (removed) | Kenshi: magnitude 0 |
+| Grading, vignette | none | none (removed) | Kenshi: none |
+| FXAA | FXAA 3.11 quality, green as luma, subpix 0.75, thresholds 0.166 / 0.0833, preset-12 search steps, on the LDR composite (Faithful anti-aliasing; `--no-fxaa`) | TAA, FSR or DLSS instead (Meitou anti-aliasing) | Kenshi: FXAA 3.11, 0.75 |
 | Dither | off | on | not in Kenshi |

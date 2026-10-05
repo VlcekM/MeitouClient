@@ -421,8 +421,8 @@ static class ViewerApp
             if (screenshotRequested)
             {
                 screenshotRequested = false;
-                // Into the temp folder, never the working directory (which may be the repo).
-                var file = Path.Combine(Path.GetTempPath(), $"meitou-viewer-{Path.GetFileNameWithoutExtension(scene.MeshPath)}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+                // Into C:\Temp (the user's screenshot folder), never the working directory (which may be the repo).
+                var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-viewer-{Path.GetFileNameWithoutExtension(scene.MeshPath)}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
                 gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
                 gl.ReadBuffer(ReadBufferMode.Back);
                 SavePng(gl, file, size.X, size.Y);

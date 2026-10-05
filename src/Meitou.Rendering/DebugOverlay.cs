@@ -6,7 +6,7 @@ using Meitou.Rendering.Gpu;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// A text panel drawn over the frame (the key list, toggled with <c>?</c>). Text is rasterised from a monospace
+/// Text panels drawn over the frame (the viewer's frame statistics and key list). Text is rasterised from a monospace
 /// system font with stb_truetype; without one the overlay stays off. Draws into the bound framebuffer after
 /// everything else, so screenshots taken before it don't include it.
 /// </summary>
@@ -137,23 +137,32 @@ public sealed unsafe class DebugOverlay : IDisposable
 
     public static readonly Vector4 PanelColour = new(0.05f, 0.05f, 0.06f, 0.78f), TextColour = new(0.92f, 0.92f, 0.88f, 1f);
 
-    /// <summary>Draws a titled panel listing <paramref name="lines"/> in as many columns as the height needs.</summary>
-    public void Draw(int width, int height, string title, IReadOnlyList<string> lines)
+    /// <summary>Draws a titled panel listing <paramref name="lines"/> when <see cref="Visible"/>; see <see cref="Panel"/>.</summary>
+    public float Draw(int width, int height, string title, IReadOnlyList<string> lines, float top = 0) =>
+        Visible ? Panel(width, height, title, lines, top) : top;
+
+    /// <summary>
+    /// Draws a titled panel at the left edge, below <paramref name="top"/>, listing <paramref name="lines"/> in as many
+    /// columns as the height left needs; returns the panel's bottom (where a next panel can start).
+    /// </summary>
+    public float Panel(int width, int height, string title, IReadOnlyList<string> lines, float top = 0)
     {
-        if (!Visible || width <= 0 || height <= 0) return;
+        if (width <= 0 || height <= 0) return top;
         const float margin = 16, pad = 12, gap = 28;
-        int rowsFit = Math.Max((int)((height - 2 * margin - 2 * pad - LineHeight * 1.5f) / LineHeight), 1);
+        float y = top + margin;
+        int rowsFit = Math.Max((int)((height - y - margin - 2 * pad - LineHeight * 1.5f) / LineHeight), 1);
         int columns = (lines.Count + rowsFit - 1) / rowsFit;
         int rows = (lines.Count + columns - 1) / Math.Max(columns, 1);
         float columnWidth = (lines.Count == 0 ? 0 : lines.Max(l => l.Length)) * CharWidth;
         float panelW = Math.Max(columns * columnWidth + (columns - 1) * gap, title.Length * CharWidth) + 2 * pad;
         float panelH = (rows + 1.5f) * LineHeight + 2 * pad;
 
-        Rect(margin, margin, margin + panelW, margin + panelH, PanelColour);
-        Text(title, margin + pad, margin + pad, TextColour);
+        Rect(margin, y, margin + panelW, y + panelH, PanelColour);
+        Text(title, margin + pad, y + pad, TextColour);
         for (int i = 0; i < lines.Count; i++)
-            Text(lines[i], margin + pad + i / rows * (columnWidth + gap), margin + pad + (i % rows + 1.5f) * LineHeight, TextColour);
+            Text(lines[i], margin + pad + i / rows * (columnWidth + gap), y + pad + (i % rows + 1.5f) * LineHeight, TextColour);
         Flush(width, height);
+        return y + panelH;
     }
 
     /// <summary>Queues a solid rectangle (pixels, top-left origin) for the next <see cref="Flush"/>.</summary>
@@ -201,11 +210,26 @@ public sealed unsafe class DebugOverlay : IDisposable
         batch.Clear();
     }
 
+    /// <summary>Queues a solid line segment <paramref name="thickness"/> pixels wide.</summary>
+    public void Line(float x0, float y0, float x1, float y1, float thickness, Vector4 colour)
+    {
+        var d = new Vector2(x1 - x0, y1 - y0);
+        float length = d.Length();
+        if (length < 1e-3f) return;
+        var n = new Vector2(-d.Y, d.X) / length * (thickness * 0.5f);
+        Emit(x0 + n.X, y0 + n.Y, -1, 0, colour); Emit(x1 + n.X, y1 + n.Y, -1, 0, colour); Emit(x1 - n.X, y1 - n.Y, -1, 0, colour);
+        Emit(x0 + n.X, y0 + n.Y, -1, 0, colour); Emit(x1 - n.X, y1 - n.Y, -1, 0, colour); Emit(x0 - n.X, y0 - n.Y, -1, 0, colour);
+    }
+
     void Quad(float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1, Vector4 c)
     {
-        void V(float x, float y, float u, float v) { batch.Add(x); batch.Add(y); batch.Add(u); batch.Add(v); batch.Add(c.X); batch.Add(c.Y); batch.Add(c.Z); batch.Add(c.W); }
-        V(x0, y0, u0, v0); V(x1, y0, u1, v0); V(x1, y1, u1, v1);
-        V(x0, y0, u0, v0); V(x1, y1, u1, v1); V(x0, y1, u0, v1);
+        Emit(x0, y0, u0, v0, c); Emit(x1, y0, u1, v0, c); Emit(x1, y1, u1, v1, c);
+        Emit(x0, y0, u0, v0, c); Emit(x1, y1, u1, v1, c); Emit(x0, y1, u0, v1, c);
+    }
+
+    void Emit(float x, float y, float u, float v, Vector4 c)
+    {
+        batch.Add(x); batch.Add(y); batch.Add(u); batch.Add(v); batch.Add(c.X); batch.Add(c.Y); batch.Add(c.Z); batch.Add(c.W);
     }
 
     public void Dispose()

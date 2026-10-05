@@ -107,77 +107,6 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// First bloom level: 13-tap downsample of the scene, each sample reduced to what is over the threshold (soft
-    /// knee), with Karis' brightness weighting so a single hot pixel cannot flicker.
-    /// </summary>
-    public const string BloomPrefilter = """
-        #version 330 core
-        in vec2 vUv;
-        out vec4 fragColour;
-        uniform sampler2D uSrc;
-        uniform vec2 uTexel;
-        uniform float uThreshold;
-        vec3 over(vec3 c)
-        {
-            c = clamp(c, 0.0, 4.0); // a blown-out glint must not feed the blur with unbounded energy
-            float br = max(c.r, max(c.g, c.b));
-            float knee = 0.5 * uThreshold + 1e-4;
-            float rq = clamp(br - uThreshold + knee, 0.0, 2.0 * knee);
-            rq = rq * rq / (4.0 * knee);
-            return c * max(rq, br - uThreshold) / max(br, 1e-4);
-        }
-        vec3 tap(vec2 o) { return over(texture(uSrc, vUv + o * uTexel).rgb); }
-        float karis(vec3 c) { return 1.0 / (1.0 + dot(c, vec3(0.2126, 0.7152, 0.0722))); }
-        void main()
-        {
-            vec3 a = tap(vec2(-2, 2)), b = tap(vec2(0, 2)), c = tap(vec2(2, 2));
-            vec3 d = tap(vec2(-2, 0)), e = tap(vec2(0, 0)), f = tap(vec2(2, 0));
-            vec3 g = tap(vec2(-2, -2)), h = tap(vec2(0, -2)), i = tap(vec2(2, -2));
-            vec3 j = tap(vec2(-1, 1)), k = tap(vec2(1, 1)), l = tap(vec2(-1, -1)), m = tap(vec2(1, -1));
-            vec3 g0 = (a + b + d + e) * 0.25, g1 = (b + c + e + f) * 0.25, g2 = (d + e + g + h) * 0.25, g3 = (e + f + h + i) * 0.25, g4 = (j + k + l + m) * 0.25;
-            float w0 = 0.125 * karis(g0), w1 = 0.125 * karis(g1), w2 = 0.125 * karis(g2), w3 = 0.125 * karis(g3), w4 = 0.5 * karis(g4);
-            fragColour = vec4((g0 * w0 + g1 * w1 + g2 * w2 + g3 * w3 + g4 * w4) / (w0 + w1 + w2 + w3 + w4), 1.0);
-        }
-        """;
-
-    /// <summary>13-tap downsample (the Call of Duty: Advanced Warfare filter).</summary>
-    public const string BloomDown = """
-        #version 330 core
-        in vec2 vUv;
-        out vec4 fragColour;
-        uniform sampler2D uSrc;
-        uniform vec2 uTexel;
-        vec3 tap(vec2 o) { return texture(uSrc, vUv + o * uTexel).rgb; }
-        void main()
-        {
-            vec3 a = tap(vec2(-2, 2)), b = tap(vec2(0, 2)), c = tap(vec2(2, 2));
-            vec3 d = tap(vec2(-2, 0)), e = tap(vec2(0, 0)), f = tap(vec2(2, 0));
-            vec3 g = tap(vec2(-2, -2)), h = tap(vec2(0, -2)), i = tap(vec2(2, -2));
-            vec3 j = tap(vec2(-1, 1)), k = tap(vec2(1, 1)), l = tap(vec2(-1, -1)), m = tap(vec2(1, -1));
-            fragColour = vec4(e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625 + (j + k + l + m) * 0.125, 1.0);
-        }
-        """;
-
-    /// <summary>3x3 tent upsample, added onto the level above by blending.</summary>
-    public const string BloomUp = """
-        #version 330 core
-        in vec2 vUv;
-        out vec4 fragColour;
-        uniform sampler2D uSrc;
-        uniform vec2 uTexel;
-        void main()
-        {
-            vec3 s = texture(uSrc, vUv + vec2(-1, 1) * uTexel).rgb + texture(uSrc, vUv + vec2(1, 1) * uTexel).rgb
-                   + texture(uSrc, vUv + vec2(-1, -1) * uTexel).rgb + texture(uSrc, vUv + vec2(1, -1) * uTexel).rgb;
-            s += 2.0 * (texture(uSrc, vUv + vec2(0, 1) * uTexel).rgb + texture(uSrc, vUv + vec2(0, -1) * uTexel).rgb
-                      + texture(uSrc, vUv + vec2(-1, 0) * uTexel).rgb + texture(uSrc, vUv + vec2(1, 0) * uTexel).rgb);
-            s += 4.0 * texture(uSrc, vUv).rgb;
-            fragColour = vec4(s / 16.0, 1.0);
-        }
-        """;
-
-    /// <summary>Exposure, occlusion, bloom, tone map, grade, vignette and dither: HDR scene in, display colour out.</summary>
-    /// <summary>
     /// Kenshi's luminance measure (docs/formats/post-processing.md): Rec. 601 luminance, floored at 0.0001, averaged linearly. One texel of the
     /// small luminance target is the mean of a 4 × 4 grid of bilinear taps over its share of the scene; its mipmaps average the rest.
     /// </summary>
@@ -218,24 +147,15 @@ static class PostProcessShaders
         }
         """;
 
+    /// <summary>Exposure, occlusion, the game's clip at 1 (no tone curve) and dither: HDR scene in, display colour out.</summary>
     public const string Composite = "#version 330 core\n" + Noise + """
 
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uScene, uAo, uBloom, uAdapted;
-        uniform float uExposure, uBloomIntensity, uSaturation, uContrast, uVignette;
-        uniform int uUseAo, uUseBloom, uTone, uGrade, uDither, uDebug, uAuto;
+        uniform sampler2D uScene, uAo, uAdapted;
+        uniform float uExposure;
+        uniform int uUseAo, uDither, uDebug, uAuto;
         const float EXPOSURE_KEY = 0.55;   // hdr.material's EXPOSURE_KEY
-
-        vec3 shoulder(vec3 c)
-        {
-            const float k = 0.8;
-            float m = max(c.r, max(c.g, c.b));
-            if (m <= k) return c;
-            float f = k + (1.0 - k) * (1.0 - exp(-(m - k) / (1.0 - k)));
-            return c * (f / m);
-        }
-        vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 
         void main()
         {
@@ -243,30 +163,90 @@ static class PostProcessShaders
             if (uAuto != 0) exposure *= max(EXPOSURE_KEY / texture(uAdapted, vec2(0.5)).r, 0.001);   // Kenshi's exposure: key over the adapted luminance
             vec3 c = max(texture(uScene, vUv).rgb, 0.0) * exposure;
             if (uUseAo != 0) c *= texture(uAo, vUv).r;
-            if (uUseBloom != 0)
-            {
-                // Soft cap instead of a per-channel min(): a hard cap saturates the channels at different radii, which shows as a tinted ring round the sun.
-                vec3 b = texture(uBloom, vUv).rgb * uBloomIntensity;
-                c += b / (1.0 + 2.0 * b);
-            }
-            if (uTone == 1) c = shoulder(c);
-            else if (uTone == 2) c = aces(c);
-            c = clamp(c, 0.0, 1.0);
-            if (uGrade != 0)
-            {
-                float l = dot(c, vec3(0.299, 0.587, 0.114));
-                c = mix(vec3(l), c, uSaturation);
-                c = clamp((c - 0.5) * uContrast + 0.5, 0.0, 1.0);
-            }
-            if (uVignette > 0.0)
-            {
-                vec2 q = vUv - 0.5;
-                c *= 1.0 - uVignette * smoothstep(0.25, 0.9, dot(q, q) * 2.0);
-            }
+            c = clamp(c, 0.0, 1.0);   // Kenshi has no tone curve: values over 1 clip (docs/formats/post-processing.md)
             if (uDebug == 1) c = vec3(texture(uAo, vUv).r);
-            else if (uDebug == 2) c = texture(uBloom, vUv).rgb * uBloomIntensity;
             if (uDither != 0) c += (ign(gl_FragCoord.xy) + ign(gl_FragCoord.xy + 17.0) - 1.0) / 255.0;
             fragColour = vec4(c, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// FXAA on the final LDR picture, with the game's settings (docs/formats/post-processing.md "FXAA"): Lottes' FXAA 3.11 quality
+    /// algorithm, green as luma, sub-pixel amount 0.75, edge threshold 0.166, minimum 0.0833, the end-of-edge search in the steps of
+    /// quality preset 12 (1, 1.5, 2, 4, 12 pixels). Finds the local contrast, the edge's direction and which side it runs along,
+    /// searches both ways for the edge's ends, and moves the lookup across the edge by how far the pixel is from the nearer end,
+    /// or by the sub-pixel blend for lone pixels, whichever is larger.
+    /// </summary>
+    public const string Fxaa = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uImage;
+        uniform vec2 uTexel;
+        const float SUBPIX = 0.75, EDGE_THRESHOLD = 0.166, EDGE_THRESHOLD_MIN = 0.0833;
+        const int STEPS = 5;
+        const float STEP_SIZE[STEPS] = float[](1.0, 1.5, 2.0, 4.0, 12.0);
+
+        float luma(vec2 p) { return textureLod(uImage, p, 0.0).g; }
+        float lumaAt(vec2 p, vec2 o) { return luma(p + o * uTexel); }
+
+        void main()
+        {
+            vec2 pos = vUv;
+            vec4 centre = textureLod(uImage, pos, 0.0);
+            float m = centre.g;
+            float n = lumaAt(pos, vec2(0.0, -1.0)), s = lumaAt(pos, vec2(0.0, 1.0));
+            float w = lumaAt(pos, vec2(-1.0, 0.0)), e = lumaAt(pos, vec2(1.0, 0.0));
+            float hi = max(max(max(n, s), max(w, e)), m), lo = min(min(min(n, s), min(w, e)), m);
+            float range = hi - lo;
+            if (range < max(EDGE_THRESHOLD_MIN, hi * EDGE_THRESHOLD)) { fragColour = centre; return; }
+
+            float nw = lumaAt(pos, vec2(-1.0, -1.0)), ne = lumaAt(pos, vec2(1.0, -1.0));
+            float sw = lumaAt(pos, vec2(-1.0, 1.0)), se = lumaAt(pos, vec2(1.0, 1.0));
+
+            // Direction: second differences across rows (a horizontal edge) against across columns (a vertical one).
+            float horizontal = abs(nw - 2.0 * w + sw) + 2.0 * abs(n - 2.0 * m + s) + abs(ne - 2.0 * e + se);
+            float vertical = abs(nw - 2.0 * n + ne) + 2.0 * abs(w - 2.0 * m + e) + abs(sw - 2.0 * s + se);
+            bool horizontalSpan = horizontal >= vertical;
+
+            // The neighbour across the edge with the larger gradient decides which side the edge lies on.
+            float a = horizontalSpan ? n : w, b = horizontalSpan ? s : e;
+            float gradientA = abs(a - m), gradientB = abs(b - m);
+            float stepAcross = horizontalSpan ? uTexel.y : uTexel.x;
+            bool sideA = gradientA >= gradientB;
+            if (sideA) stepAcross = -stepAcross;
+            float edgeLuma = 0.5 * ((sideA ? a : b) + m);
+            float gradient = 0.25 * max(gradientA, gradientB);
+
+            // Walk along the edge, half a pixel over onto it, until the luma leaves the edge's average on either end.
+            vec2 along = horizontalSpan ? vec2(uTexel.x, 0.0) : vec2(0.0, uTexel.y);
+            vec2 onEdge = pos + (horizontalSpan ? vec2(0.0, 0.5 * stepAcross) : vec2(0.5 * stepAcross, 0.0));
+            vec2 posN = onEdge - along * STEP_SIZE[0], posP = onEdge + along * STEP_SIZE[0];
+            float endN = luma(posN) - edgeLuma, endP = luma(posP) - edgeLuma;
+            bool doneN = abs(endN) >= gradient, doneP = abs(endP) >= gradient;
+            for (int i = 1; i < STEPS && !(doneN && doneP); i++)
+            {
+                if (!doneN) { posN -= along * STEP_SIZE[i]; endN = luma(posN) - edgeLuma; doneN = abs(endN) >= gradient; }
+                if (!doneP) { posP += along * STEP_SIZE[i]; endP = luma(posP) - edgeLuma; doneP = abs(endP) >= gradient; }
+            }
+            float distN = horizontalSpan ? pos.x - posN.x : pos.y - posN.y;
+            float distP = horizontalSpan ? posP.x - pos.x : posP.y - pos.y;
+            bool nearerN = distN < distP;
+            float nearest = min(distN, distP);
+            // Only blend when the nearer end turns the other way from the centre (the pixel lies on the edge's stair).
+            bool centreBelow = m - edgeLuma < 0.0;
+            bool goodSpan = ((nearerN ? endN : endP) < 0.0) != centreBelow;
+            float edgeOffset = goodSpan ? 0.5 - nearest / (distN + distP) : 0.0;
+
+            // Sub-pixel aliasing: how far the centre is from its 3 × 3 neighbourhood's weighted mean, relative to the range.
+            float mean = (2.0 * (n + s + w + e) + (nw + ne + sw + se)) / 12.0;
+            float t = clamp(abs(mean - m) / range, 0.0, 1.0);
+            float subpix = (-2.0 * t + 3.0) * t * t;
+            float subpixOffset = subpix * subpix * SUBPIX;
+
+            float offset = max(edgeOffset, subpixOffset);
+            vec2 p = pos + (horizontalSpan ? vec2(0.0, offset * stepAcross) : vec2(offset * stepAcross, 0.0));
+            fragColour = vec4(textureLod(uImage, p, 0.0).rgb, 1.0);
         }
         """;
 }

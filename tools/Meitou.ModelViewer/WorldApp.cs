@@ -52,11 +52,14 @@ static partial class WorldApp
     /// <summary>Streamline for DLSS, loaded before the Vulkan device when <c>--upscaler dlss</c> asks for it.</summary>
     static Streamline? streamline;
 
+    static string RendererName(WorldOptions o) =>
+        o.Post.Upscale.Kind == UpscalerKind.Off ? "Vulkan" : $"Vulkan + {o.Post.Upscale.Kind.ToString().ToUpperInvariant()}";
+
     static WindowOptions WindowFor(WorldOptions o) =>
         CameraCode.OnMonitor(WindowOptions.Default with
         {
             Size = new Vector2D<int>(o.Width, o.Height),
-            Title = "Meitou world viewer (Vulkan)",
+            Title = $"Meitou world ({RendererName(o)})",
             WindowState = WindowState.Maximized,
         }, o.Monitor);
 
@@ -199,7 +202,7 @@ static partial class WorldApp
         {
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
             keysOverlay.Visible = true;
-            keysOverlay.Draw(w, h, "Keys   (? hides this)", DebugOverlay.KeyItems(WorldOptions.Usage));
+            keysOverlay.Draw(w, h, "Keys   (F10 hides this)", DebugOverlay.KeyItems(WorldOptions.Usage));
             var settings = CreateSettingsPanel(keysOverlay, gpu, render);
             settings.Visible = true;
             settings.Draw(w, h);
@@ -235,24 +238,25 @@ static partial class WorldApp
         MouseButton? dragging = null;
         DebugOverlay? overlay = null;
         SettingsPanel? panel = null;
-        bool keysToggleRequested = false;
+        FrameProfiler? profiler = null;
+        bool statsVisible = false;
+        var stats = new List<string>();
         var keyItems = DebugOverlay.KeyItems(WorldOptions.Usage);
+        // F1 upwards: the Faithful / Meitou switches (Enhancements), in order.
+        var switches = Enhancements.Create(o.Post, () => gpu?.Sky.HazeStrength ?? o.HazeStrength, v => { if (gpu is not null) gpu.Sky.HazeStrength = v; });
 
         {
             gpu = CreateGpu(gl, install, scene, assets, o, interactive: true);
             if (gl is VkGl vkGl && gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(vkGl, streamline);
             overlay = DebugOverlay.TryCreate(gl);
-            if (overlay is null) Console.WriteLine("keys      no monospace system font found: the ? key list is unavailable");
+            if (overlay is null) Console.WriteLine("keys      no monospace system font found: the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
             if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render);
-            gl.Enable(EnableCap.Multisample);
+            profiler = new FrameProfiler(gl, gl is VkGl statsGl ? () => statsGl.Stats.GpuFrameMs : null);
             var input = window.CreateInput();
             keyboard = input.Keyboards.FirstOrDefault();
             foreach (var kb in input.Keyboards) kb.KeyDown += (_, key, _) => OnKey(key);
-            // "?" by character (any keyboard layout) or as Shift+/ (US position); both can arrive for one press, so
-            // they only request the toggle and the next update applies it once.
-            foreach (var kb in input.Keyboards) kb.KeyChar += (_, c) => { if (c == '?') keysToggleRequested = true; };
             foreach (var mouse in input.Mice)
             {
                 // Window to framebuffer pixels (they differ with display scaling); the panel is laid out in the latter.
@@ -280,14 +284,19 @@ static partial class WorldApp
             Console.WriteLine(WorldOptions.Usage[WorldOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
         }
 
-        void Preset(string name) { o.Post.CopyFrom(PostOptions.Create(name)); PostStatus(); }
+        void Toggle(int index)
+        {
+            if (index >= switches.Count) return;
+            var e = switches[index];
+            e.IsMeitou = !e.IsMeitou;
+            Console.WriteLine($"{e.Name,-18}{e.State}: {e.Note}");
+        }
         void PostStatus() => Console.WriteLine($"post      {o.Post.Describe()}");
 
         // The state a key controls, for the key list ("on", "off", a mode or a value); null for actions.
         string? KeyState(string key)
         {
             static string OnOff(bool on) => on ? "on" : "off";
-            string Active(string preset) => o.Post.Preset == preset ? "active" : "";
             return key switch
             {
                 "T" => OnOff(render.Textures),
@@ -300,17 +309,11 @@ static partial class WorldApp
                 "R" => OnOff(render.Reflections),
                 "B" => gpu is null ? null : gpu.Sky.Physical ? "atmosphere" : "simple",
                 "," => $"{hour:00}:00",
-                "F1" => Active("off"),
-                "F2" => Active("kenshi"),
-                "F4" => OnOff(o.Post.Ssao),
-                "F5" => OnOff(o.Post.Bloom),
-                "F6" => o.Post.ToneMap.ToString().ToLowerInvariant(),
-                "F7" => gpu is null ? null : gpu.Sky.KenshiHaze ? "kenshi" : "physical",
-                "F8" => OnOff(o.Post.Vignette),
-                "F9" => OnOff(o.Post.Grade),
-                "M" => o.Post.Msaa <= 1 ? "off" : $"{o.Post.Msaa}x",
+                ['F', >= '1' and <= '9'] when key[1] - '1' < switches.Count => switches[key[1] - '1'].State,
                 "-" => $"{o.Post.Exposure:0.00}",
-                "?" => "on",
+                "F10" => "on",
+                "F11" => OnOff(statsVisible),
+                "F12" => profiler?.Showing.ToString().ToLowerInvariant(),
                 "Tab" => panel is { Visible: true } ? "on" : "off",
                 _ => null,
             };
@@ -333,15 +336,7 @@ static partial class WorldApp
             switch (key)
             {
                 case Key.Escape: window.Close(); break;
-                case Key.F1: Preset("off"); break;
-                case Key.F2: Preset("kenshi"); break;
-                case Key.F4: o.Post.Ssao = !o.Post.Ssao; PostStatus(); break;
-                case Key.F5: o.Post.Bloom = !o.Post.Bloom; PostStatus(); break;
-                case Key.F6: o.Post.ToneMap = (ToneMapOperator)(((int)o.Post.ToneMap + 1) % 3); PostStatus(); break;
-                case Key.F8: o.Post.Vignette = !o.Post.Vignette; PostStatus(); break;
-                case Key.F7 when gpu is not null: gpu.Sky.KenshiHaze = !gpu.Sky.KenshiHaze; Console.WriteLine(gpu.Sky.KenshiHaze ? "haze     kenshi" : "haze     physical"); break;
-                case Key.F9: o.Post.Grade = !o.Post.Grade; PostStatus(); break;
-                case Key.M: o.Post.Msaa = o.Post.Msaa switch { 1 => 2, 2 => 4, 4 => 8, _ => 1 }; PostStatus(); break;
+                case >= Key.F1 and <= Key.F9: Toggle(key - Key.F1); break;
                 case Key.Minus: o.Post.Exposure = MathF.Max(o.Post.Exposure / 1.1f, 0.05f); PostStatus(); break;
                 case Key.Equal: o.Post.Exposure = MathF.Min(o.Post.Exposure * 1.1f, 20f); PostStatus(); break;
                 case Key.T: render.Textures = !render.Textures; break;
@@ -362,11 +357,12 @@ static partial class WorldApp
                     break;
                 case Key.P: screenshotRequested = true; break;
                 case Key.Tab when panel is not null: panel.Visible = !panel.Visible; break;
-                case Key.Slash when keyboard is not null && (keyboard.IsKeyPressed(Key.ShiftLeft) || keyboard.IsKeyPressed(Key.ShiftRight)): keysToggleRequested = true; break;
+                case Key.F10 when overlay is not null: overlay.Visible = !overlay.Visible; break;
+                case Key.F11 when overlay is not null: statsVisible = !statsVisible; break;
+                case Key.F12 when profiler is not null && overlay is not null: profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3); break;
             }
         }
 
-        string rendererName = o.Post.Upscale.Kind == UpscalerKind.Off ? "Vulkan" : $"Vulkan + {o.Post.Upscale.Kind.ToString().ToUpperInvariant()}";
         double titleTimer = 0, cpuMs = 0, gpuMs = 0;
         int frames = 0, gpuSamples = 0, queryIndex = 0;
         uint[] queries = [];
@@ -375,11 +371,6 @@ static partial class WorldApp
         window.Update += dt =>
         {
             SmokeTest.Check(window);
-            if (keysToggleRequested)
-            {
-                keysToggleRequested = false;
-                if (overlay is not null) { overlay.Visible = !overlay.Visible; Console.WriteLine($"keys      list {(overlay.Visible ? "shown" : "hidden")}"); }
-            }
         };
         window.Update += dt =>
         {
@@ -400,16 +391,19 @@ static partial class WorldApp
                 // fps is capped by vsync; cpu is the time to record a frame, gpu the time the GPU spent on it (timer
                 // queries), so they show the real cost under the cap.
                 string gpuText = gpuSamples > 0 ? $"{gpuMs / gpuSamples:0.00}" : "-";
-                window.Title = $"Meitou world ({rendererName}) | {frames / titleTimer:0} fps (vsync) | cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms" +
-                    (gpu.Reflection is { Valid: true } refl && render.Reflections ? $" (reflection cpu {refl.CpuMs:0.00}, gpu {refl.GpuMs:0.00})" : "") + " | " +
-                    $"{t.X:0}, {t.Z:0} zone {WorldLayout.ZoneOf(t.X, t.Z)} | {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" +
-                    (gpu.Objects is { } ob && render.Objects ? $" | {ob.DrawnInstances} objects, {ob.DrawCalls} calls, draw cpu {ob.LastDrawCpuMs:0.00} ms" + (ob.Pending > 0 ? $", loading {ob.Pending}" : "") : "") +
-                    (gpu.Foliage is { Enabled: true } fo ? $" | foliage {fo.DrawnInstances} + {fo.DrawnBlades / 1000}k grass, {fo.DrawCalls} calls, cpu {fo.LastDrawCpuMs:0.00} gpu {fo.GpuMs:0.00} ms" + (fo.Pending > 0 ? $", loading {fo.Pending}" : "") : "") +
-                    (gpu.Streamer is { Pending: > 0 } st ? $" | loading {st.Pending}" : "") +
-                    $" | resident {((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576} MB";
-                if (gpu.Post is { } post) window.Title += $" | post gpu ms: {post.DescribeCosts()}";
+                stats.Clear();
+                stats.Add($"{frames / titleTimer:0} fps (vsync), cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms");
+                if (gpu.Reflection is { Valid: true } refl && render.Reflections) stats.Add($"reflection  cpu {refl.CpuMs:0.00} ms, gpu {refl.GpuMs:0.00} ms");
                 gpu.Sky.Poll();
-                window.Title += gpu.Sky.Physical ? $" | sky cpu {gpu.Sky.PrepareMs:0.00} ms, gpu {gpu.Sky.GpuMs:0.00} ms" : " | simple sky";
+                stats.Add(gpu.Sky.Physical ? $"sky         cpu {gpu.Sky.PrepareMs:0.00} ms, gpu {gpu.Sky.GpuMs:0.00} ms" : "sky         simple");
+                if (gpu.Post is { } post) stats.Add($"post gpu    {post.DescribeCosts()}");
+                stats.Add($"camera      {t.X:0}, {t.Y:0}, {t.Z:0}, zone {WorldLayout.ZoneOf(t.X, t.Z)}");
+                stats.Add($"terrain     {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" + (gpu.Streamer is { Pending: > 0 } st ? $", loading {st.Pending}" : ""));
+                if (gpu.Objects is { } ob && render.Objects)
+                    stats.Add($"objects     {ob.DrawnInstances}, {ob.DrawCalls} calls, draw cpu {ob.LastDrawCpuMs:0.00} ms" + (ob.Pending > 0 ? $", loading {ob.Pending}" : ""));
+                if (gpu.Foliage is { Enabled: true } fo)
+                    stats.Add($"foliage     {fo.DrawnInstances} + {fo.DrawnBlades / 1000}k grass, {fo.DrawCalls} calls, cpu {fo.LastDrawCpuMs:0.00} ms, gpu {fo.GpuMs:0.00} ms" + (fo.Pending > 0 ? $", loading {fo.Pending}" : ""));
+                stats.Add($"resident    {((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576} MB");
                 titleTimer = 0;
                 frames = 0;
                 cpuMs = gpuMs = 0;
@@ -442,6 +436,7 @@ static partial class WorldApp
             bool timing = !queryPending[queryIndex];
             if (timing) gl.BeginQuery(QueryTarget.TimeElapsed, query);
             frameWatch.Restart();
+            profiler?.BeginFrame();
             Draw(gl, gpu, scene, camera, render, size.X, size.Y, hour, (float)clock.Elapsed.TotalSeconds / 600f, o.FogDistance);
             cpuMs += frameWatch.Elapsed.TotalMilliseconds;
             if (timing)
@@ -456,27 +451,32 @@ static partial class WorldApp
             bool shot = screenshotRequested;
             screenshotRequested = false;
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            // The statistics at the top left, the key list below them.
+            float panelsBottom = !shot && statsVisible && overlay is not null && stats.Count > 0
+                ? overlay.Panel(size.X, size.Y, $"Meitou world ({RendererName(o)})   (F11 hides this)", stats) : 0;
             if (!shot && overlay is { Visible: true })
             {
                 // Each item with its current state, aligned in a column.
                 int width = keyItems.Max(i => i.Length) + 2;
                 var lines = keyItems.Select(item => KeyState(item.Split(' ')[0]) is { } state ? item.PadRight(width) + state : item).ToList();
-                overlay.Draw(size.X, size.Y, "Keys   (? hides this)", lines);
+                overlay.Draw(size.X, size.Y, "Keys   (F10 hides this)", lines, panelsBottom);
             }
             if (!shot) panel?.Draw(size.X, size.Y);
+            if (!shot && overlay is not null) profiler?.Draw(overlay, size.X, size.Y);
             display.Present();
+            profiler?.EndFrame();
             SmokeTest.Frame();
             if (shot)
             {
-                // Into the temp folder, never the working directory (which may be the repo).
-                var file = Path.Combine(Path.GetTempPath(), $"meitou-world-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+                // Into C:\Temp (the user's screenshot folder), never the working directory (which may be the repo).
+                var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-world-{DateTime.Now:yyyyMMdd-HHmmss}.png");
                 gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
                 gl.ReadBuffer(ReadBufferMode.Back);
                 FramebufferCapture.SavePng(gl, file, size.X, size.Y);
                 Console.WriteLine($"saved {Path.GetFullPath(file)}");
             }
         };
-        window.Closing += () => { overlay?.Dispose(); gpu?.Dispose(); };
+        window.Closing += () => { profiler?.Dispose(); overlay?.Dispose(); gpu?.Dispose(); };
         window.Run();
         return 0;
     }

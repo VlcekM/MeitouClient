@@ -30,7 +30,7 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [formats/foliage.md](formats/foliage.md) | Foliage: FOLIAGE_LAYER / FOLIAGE_MESH / GRASS records, the per-zone placer (random numbers, noise, grass coverage, clusters, rules), distances, materials, grass blades and shader |
 | [formats/zones.md](formats/zones.md) | `.zone` / `.level` world-state files, building and town placements, roads, `features.dat`, placements to meshes |
 | [formats/dds.md](formats/dds.md) | DDS textures: headers, block formats, base-game survey |
-| [formats/post-processing.md](formats/post-processing.md) | Kenshi's render chain: HDR lighting, exposure (no tone curve), bloom (off), FXAA (the viewer uses MSAA instead), SSAO (disabled), heat haze, what is absent; how the viewer maps them |
+| [formats/post-processing.md](formats/post-processing.md) | Kenshi's render chain: HDR lighting, exposure (no tone curve), bloom (off, and none in Meitou), FXAA (the viewer's Faithful anti-aliasing), SSAO (disabled), heat haze, what is absent; how the viewer maps them |
 | [formats/save.md](formats/save.md) | Save games: where they live, folder layout, the FCS type-15 files (`quick.save`, `.platoon`, `.zone`), handles and slot lists, what is saved vs derived vs regenerated, the save/load chain |
 | [game/game-loop.md](game/game-loop.md) | Frame structure, frame time, game speed and pause, the in-game clock, one world update in order, threads (AI back thread), the character update budget, zones near and far |
 | [game/character-stats.md](game/character-stats.md) | Stats and skills (numbering, XP gain and levelling), hunger, blood and bleeding, body parts and injuries, first aid, limb replacements, races and their modifiers, encumbrance |

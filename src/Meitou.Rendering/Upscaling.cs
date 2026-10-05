@@ -3,14 +3,17 @@ using System.Numerics;
 
 namespace Meitou.Rendering;
 
-/// <summary>How the scene gets from its render size to the display: drawn at full size with MSAA (off), or temporally reconstructed from
+/// <summary>How the scene gets from its render size to the display: drawn at full size, edges smoothed by FXAA (off), or temporally reconstructed from
 /// jittered frames at a render scale (the built-in TAA, AMD FSR, NVIDIA DLSS). docs/engine.md "Upscaling".</summary>
 public enum UpscalerKind { Off, Taa, Fsr, Dlss }
 
 /// <summary>The upscaler options of <see cref="PostOptions"/>: which one, the render scale (per axis) and the sharpening.</summary>
 public sealed class UpscaleOptions
 {
-    public UpscalerKind Kind = UpscalerKind.Off;
+    /// <summary>TAA by default: the Meitou anti-aliasing (Off is the game's FXAA).</summary>
+    public UpscalerKind Kind = UpscalerKind.Taa;
+    /// <summary>The temporal method the Meitou anti-aliasing switch turns on (the last one chosen; TAA until then).</summary>
+    public UpscalerKind Preferred = UpscalerKind.Taa;
     /// <summary>Render size over display size per axis; null is 1 (native: DLAA for DLSS, FSR native AA).</summary>
     public float? Scale;
     /// <summary>0..1: the external upscalers' sharpening (FSR's RCAS, DLSS's own); TAA ignores it.</summary>
@@ -40,7 +43,7 @@ public sealed class UpscaleOptions
         return (Math.Max((int)MathF.Round(width * s), 1), Math.Max((int)MathF.Round(height * s), 1));
     }
 
-    public void CopyFrom(UpscaleOptions other) { Kind = other.Kind; Scale = other.Scale; Sharpness = other.Sharpness; }
+    public void CopyFrom(UpscaleOptions other) { Kind = other.Kind; Preferred = other.Preferred; Scale = other.Scale; Sharpness = other.Sharpness; }
 
     public string Describe() => Kind == UpscalerKind.Off ? "off" : $"{Kind.ToString().ToLowerInvariant()} at {EffectiveScale:0.###}";
 }

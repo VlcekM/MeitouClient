@@ -36,10 +36,10 @@ sealed class WorldOptions
     public float ShadowRange = KenshiShadows.DefaultRange;
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
     public float? HazeDistance;
-    public float HazeStrength = 0.85f; // a viewer option: 1 = the game's haze; 0.85 keeps far mountains visible
+    public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze switch (default); 1 = the game's haze
     public string? Weather;
     public float? Clouds;
-    public PostOptions Post = PostOptions.Create("kenshi");
+    public PostOptions Post = PostOptions.Create("meitou");
     public double? CameraX, CameraZ, FlyToX, FlyToZ;
     /// <summary>Frames of the offscreen benchmark flight (0: none), the circle's radius and the speed per frame.</summary>
     public int FlyBenchmark;
@@ -86,7 +86,8 @@ sealed class WorldOptions
           --weather <name>         a WEATHER record's sky colour, fog and clouds (default "Default": clear, no fog, no clouds)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
-          --show-keys              start with the key list overlay open (toggle with ?)
+          --faithful <all|ao,dither,haze,aa>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
+          --show-keys              start with the key list overlay open (toggle with F10)
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
                                    percentiles, the worst frames with their stage times and resident memory   --fly-radius <u> (12000)   --fly-speed <u per frame> (150)
@@ -99,13 +100,14 @@ sealed class WorldOptions
           --fog <u>                distance where the haze is complete (default 250000)
           --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
           --wireframe --info
-          --post <kenshi|off>   post-processing preset (default kenshi), before the options below: HDR scene (4x MSAA), SSAO, bloom, tone map
-          --ssao / --no-ssao, --bloom / --no-bloom, --vignette, --grade, --dither (or --no-...)   --msaa <1|2|4|8>
-          --tonemap <clamp|shoulder|aces>  --exposure <x>  --bloom-intensity <x>  --bloom-threshold <x>  --ssao-radius <units>  --ssao-strength <x>
+          --post <meitou|kenshi|off>   post-processing preset (default meitou), before the options below: HDR scene, SSAO
+          --ssao / --no-ssao, --dither / --no-dither   --no-fxaa
+          --exposure <x>  --ssao-radius <units>  --ssao-strength <x>
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
-          G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, Ctrl+C copy camera code, Ctrl+V go to camera code, P save screenshot, ? key list, Tab settings sliders, Esc quit.
-          F1 post off, F2 kenshi; F7 haze, F4 SSAO, F5 bloom, F6 tone map, F8 vignette, F9 grading, M MSAA, - / = exposure.
+          G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, Ctrl+C copy camera code, Ctrl+V go to camera code, P save screenshot, Tab settings sliders, Esc quit.
+          F1 ambient occlusion, F2 dithering, F3 haze, F4 anti-aliasing;
+          - / = exposure; F10 key list, F11 frame statistics, F12 profiler (gpu, cpu, off).
         """;
 
     /// <summary><c>--renderer</c> is kept so old command lines work: <c>vulkan</c> is accepted, anything else says OpenGL is gone; either way it changes nothing.</summary>
@@ -166,6 +168,8 @@ sealed class WorldOptions
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
                 case "--haze-distance": o.HazeDistance = F(); break;
                 case "--haze-strength": o.HazeStrength = F(); break;
+                case "--meitou": Enhancements.Apply(Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v), Next(), meitou: true); break;
+                case "--faithful": Enhancements.Apply(Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v), Next(), meitou: false); break;
                 case "--weather": o.Weather = Next(); break;
                 case "--clouds": o.Clouds = F(); break;
                 case "--no-stream": o.NoStream = true; break;
@@ -397,7 +401,7 @@ static class WorldFrame
     /// <summary>Draws a frame: the sky, then the far depth slice (terrain, water), then the near one (terrain, objects, water).</summary>
     // The Tab panel: draw distances and LOD.
     /// <summary>The upscaler sliders' labels (the game keeps command-line upscaler options over the saved ones).</summary>
-    public static readonly string[] UpscalerSliders = ["Upscaler: 0 off 1 TAA 2 FSR 3 DLSS", "Render scale (upscaler)", "Upscaler sharpness"];
+    public static readonly string[] UpscalerSliders = ["Anti-aliasing: 0 FXAA 1 TAA 2 FSR 3 DLSS", "Render scale (upscaler)", "Upscaler sharpness"];
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r)
     {
@@ -422,7 +426,11 @@ static class WorldFrame
         {
             // Upscaling (docs/engine.md "Upscaling"): FSR and DLSS fall back to TAA where their library or backend is missing.
             var up = post.Options.Upscale;
-            sliders.Add(new Slider(UpscalerSliders[0], 0, 3, () => (int)up.Kind, v => up.Kind = (UpscalerKind)(int)MathF.Round(v), "0"));
+            sliders.Add(new Slider(UpscalerSliders[0], 0, 3, () => (int)up.Kind, v =>
+            {
+                up.Kind = (UpscalerKind)(int)MathF.Round(v);
+                if (up.Kind != UpscalerKind.Off) up.Preferred = up.Kind;   // what the Meitou anti-aliasing switch turns back on
+            }, "0"));
             sliders.Add(new Slider(UpscalerSliders[1], 0.33f, 1, () => up.EffectiveScale, v => up.Scale = MathF.Round(v * 100) / 100, "0.00"));
             sliders.Add(new Slider(UpscalerSliders[2], 0, 1, () => up.Sharpness, v => up.Sharpness = v, "0.00"));
         }
@@ -525,7 +533,7 @@ static class WorldFrame
             StageClock.Lap(9);
         }
         if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneFramebuffer, rw, rh);
-        gpu.Post?.End(); // resolve, SSAO, bloom, tone map into gpu.Post.Target
+        gpu.Post?.End(); // SSAO, upscaler, exposure, tone map, FXAA into gpu.Post.Target
         if (gpu.DebugShadows > 0 && gpu.Shadow is not null)
         {
             var (nearestNear, nearestFar) = camera.Slices().Last();

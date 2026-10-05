@@ -6,9 +6,10 @@ using Meitou.Rendering.Gpu;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// The world view's frame buffer and post-processing chain. The scene is drawn into a (multisampled) RGBA16F framebuffer
-/// with depth, resolved, then: SSAO at half resolution from the depth, bloom (quarter-ish resolution mip chain), a
-/// composite pass (exposure, occlusion, bloom, tone map, grade, vignette), ending in <see cref="Target"/>.
+/// The world view's frame buffer and post-processing chain. The scene is drawn into an RGBA16F framebuffer
+/// with depth, then: SSAO at half resolution from the depth, a
+/// composite pass (exposure, occlusion, clip, dither), then the game's FXAA on the final image when no
+/// temporal upscaler runs, ending in <see cref="Target"/>.
 /// Usage per frame: <see cref="Begin"/>, draw the scene (calling <see cref="SetNearSlice"/> for the near depth slice), <see cref="End"/>.
 /// Anything that draws into another framebuffer in between must rebind the one it found (<see cref="SceneFramebuffer"/>).
 /// Facts about the game's own chain: docs/formats/post-processing.md.
@@ -28,11 +29,10 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>The framebuffer the scene is drawn into (valid after <see cref="Begin"/>).</summary>
     public uint SceneFramebuffer { get; private set; }
 
-    // width × height is the render size (the scene, SSAO); displayWidth × displayHeight the chain after the upscaler (bloom, exposure, composite).
-    int width, height, samples, requestedSamples, displayWidth, displayHeight;
+    // width × height is the render size (the scene, SSAO); displayWidth × displayHeight the chain after the upscaler (exposure, composite).
+    int width, height, displayWidth, displayHeight;
     float allocatedScale;
     UpscalerKind allocatedKind;
-    uint msFbo, msColour, msDepth;
     uint sceneFbo, sceneColour, sceneDepth;
     // Temporal upscaling: the far slice's own depth (instead of clearing), the motion and depth targets, the display-size history (ping-pong).
     uint farFbo, farDepth;
@@ -41,12 +41,12 @@ public sealed unsafe class PostProcess : IDisposable
     long frameIndex;
     readonly uint progVelocity, progTaa;
     Target2D? aoA, aoB;
-    Target2D[] bloom = [];
+    Target2D? ldr;   // the composite's LDR picture that FXAA reads (when it runs)
     Target2D? luminance, adaptA, adaptB;   // Kenshi's exposure: the luminance measure (mipmapped) and the adapted value (1 × 1, ping-pong)
     bool adaptedValid;
     readonly System.Diagnostics.Stopwatch adaptClock = new();
     readonly uint vao;
-    readonly uint progSsao, progBlur, progPrefilter, progDown, progUp, progComposite, progLuminance, progAdapt;
+    readonly uint progSsao, progBlur, progComposite, progLuminance, progAdapt, progFxaa;
     readonly Dictionary<(uint, string), int> uniforms = [];
 
     float nearPlane = 1, farPlane = 1000, fovY = 0.87f, aspect = 1;
@@ -68,10 +68,8 @@ public sealed unsafe class PostProcess : IDisposable
         vao = gl.GenVertexArray();
         progSsao = Program(PostProcessShaders.Ssao);
         progBlur = Program(PostProcessShaders.SsaoBlur);
-        progPrefilter = Program(PostProcessShaders.BloomPrefilter);
-        progDown = Program(PostProcessShaders.BloomDown);
-        progUp = Program(PostProcessShaders.BloomUp);
         progComposite = Program(PostProcessShaders.Composite);
+        progFxaa = Program(PostProcessShaders.Fxaa);
         progLuminance = Program(PostProcessShaders.Luminance);
         progAdapt = Program(PostProcessShaders.Adapt);
         progVelocity = Program(UpscaleShaders.Velocity);
@@ -99,13 +97,11 @@ public sealed unsafe class PostProcess : IDisposable
 
     void Free()
     {
-        if (msFbo != 0) { gl.DeleteFramebuffer(msFbo); gl.DeleteRenderbuffer(msColour); gl.DeleteRenderbuffer(msDepth); msFbo = 0; }
         if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneColour); gl.DeleteTexture(sceneDepth); sceneFbo = 0; }
         if (farFbo != 0) { gl.DeleteFramebuffer(farFbo); gl.DeleteTexture(farDepth); farFbo = 0; }
-        foreach (var t in new[] { aoA, aoB, luminance, adaptA, adaptB, motion, upscaleDepth, reactive, historyA, historyB }.Concat(bloom)) if (t is not null) Release(t);
-        aoA = aoB = luminance = adaptA = adaptB = motion = upscaleDepth = reactive = historyA = historyB = null;
+        foreach (var t in new[] { aoA, aoB, ldr, luminance, adaptA, adaptB, motion, upscaleDepth, reactive, historyA, historyB }) if (t is not null) Release(t);
+        aoA = aoB = ldr = luminance = adaptA = adaptB = motion = upscaleDepth = reactive = historyA = historyB = null;
         adaptedValid = historyValid = false;
-        bloom = [];
     }
 
     void Release(Target2D t) { gl.DeleteFramebuffer(t.Framebuffer); gl.DeleteTexture(t.Texture); }
@@ -126,20 +122,16 @@ public sealed unsafe class PostProcess : IDisposable
         return t;
     }
 
-    void Allocate(int displayW, int displayH, int msaa)
+    void Allocate(int displayW, int displayH)
     {
         Free();
         var up = Options.Upscale;
         (allocatedKind, allocatedScale) = (up.Kind, up.EffectiveScale);
         (displayWidth, displayHeight) = (displayW, displayH);
         var (w, h) = up.RenderSize(displayW, displayH);
-        width = w; height = h; samples = requestedSamples = msaa;
-        // Temporal upscalers reconstruct edges from the jittered frames and take single-sample inputs (DECISIONS 14).
-        if (up.Temporal) samples = 1;
-        gl.GetInteger((GLEnum)0x8D57, out int maxSamples); // GL_MAX_SAMPLES
-        if (samples > maxSamples) samples = Math.Max(maxSamples, 1);
+        width = w; height = h;
 
-        // Resolved colour (RGBA16F) and depth (24 bit) textures; with one sample the scene is drawn straight into them.
+        // Colour (RGBA16F) and depth (24 bit) textures the scene is drawn into.
         sceneColour = gl.GenTexture();
         gl.BindTexture(TextureTarget.Texture2D, sceneColour);
         gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba16f, (uint)w, (uint)h, 0, PixelFormat.Rgba, PixelType.HalfFloat, null);
@@ -153,21 +145,6 @@ public sealed unsafe class PostProcess : IDisposable
         gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, sceneColour, 0);
         gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, sceneDepth, 0);
         Check("scene");
-
-        if (samples > 1)
-        {
-            msColour = gl.GenRenderbuffer();
-            gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, msColour);
-            gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, (uint)samples, InternalFormat.Rgba16f, (uint)w, (uint)h);
-            msDepth = gl.GenRenderbuffer();
-            gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, msDepth);
-            gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, (uint)samples, InternalFormat.DepthComponent24, (uint)w, (uint)h);
-            msFbo = gl.GenFramebuffer();
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, msFbo);
-            gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, msColour);
-            gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, RenderbufferTarget.Renderbuffer, msDepth);
-            Check("multisampled scene");
-        }
 
         if (up.Temporal)
         {
@@ -191,15 +168,12 @@ public sealed unsafe class PostProcess : IDisposable
             historyB = MakeTarget(displayW, displayH, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
         }
 
+        // FXAA reads the composite's LDR picture, as the game's runs on its A8R8G8B8 buffer after the HDR composite.
+        if (!up.Temporal) ldr = MakeTarget(displayW, displayH, InternalFormat.Rgba8, PixelFormat.Rgba, PixelType.UnsignedByte);
         int hw = Math.Max((w + 1) / 2, 1), hh = Math.Max((h + 1) / 2, 1);
         aoA = MakeTarget(hw, hh, InternalFormat.RG16f, PixelFormat.RG, PixelType.HalfFloat);
         aoB = MakeTarget(hw, hh, InternalFormat.RG16f, PixelFormat.RG, PixelType.HalfFloat);
-        // Bloom and exposure run after the upscaler, at the display size.
-        hw = Math.Max((displayW + 1) / 2, 1); hh = Math.Max((displayH + 1) / 2, 1);
-        var levels = new List<Target2D>();
-        for (int bw = hw, bh = hh; levels.Count < 6 && bw >= 4 && bh >= 4; bw = Math.Max(bw / 2, 1), bh = Math.Max(bh / 2, 1))
-            levels.Add(MakeTarget(bw, bh, InternalFormat.R11fG11fB10f, PixelFormat.Rgb, PixelType.HalfFloat));
-        bloom = [.. levels];
+        // Exposure runs after the upscaler, at the display size.
         luminance = MakeTarget(LuminanceSize, LuminanceSize, InternalFormat.R32f, PixelFormat.Red, PixelType.Float);
         gl.BindTexture(TextureTarget.Texture2D, luminance.Texture);
         gl.GenerateMipmap(TextureTarget.Texture2D);
@@ -281,12 +255,12 @@ public sealed unsafe class PostProcess : IDisposable
 
     // ---- frame ----
 
-    /// <summary>Binds the scene framebuffer (recreating it when the size or the sample count changed) and clears nothing: the caller does.</summary>
+    /// <summary>Binds the scene framebuffer (recreating it when the size or the upscaler changed) and clears nothing: the caller does.</summary>
     public void Begin(int w, int h)
     {
         var up = Options.Upscale;
-        if (w != displayWidth || h != displayHeight || requestedSamples != Options.Msaa || up.Kind != allocatedKind || up.EffectiveScale != allocatedScale)
-            Allocate(w, h, Options.Msaa);
+        if (w != displayWidth || h != displayHeight || up.Kind != allocatedKind || up.EffectiveScale != allocatedScale)
+            Allocate(w, h);
         slot = (slot + 1) % Slots;
         Collect(slot, false);
         pending[slot] = false;
@@ -297,7 +271,7 @@ public sealed unsafe class PostProcess : IDisposable
         JitterPixels = Temporal ? Jitter.Offset(frameIndex, JitterPhases) : Vector2.Zero;
         // Textures at the display size's detail: log2 of the scale, and further for the vendor upscalers as they recommend (DECISIONS 15).
         if (gl is ITextureLodBias lod) lod.TextureLodBias = Temporal ? MathF.Log2(width / (float)displayWidth) - (allocatedKind == UpscalerKind.Taa ? 0.5f : 1f) : 0;
-        SceneFramebuffer = samples > 1 ? msFbo : sceneFbo;
+        SceneFramebuffer = sceneFbo;
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, SceneFramebuffer);
         gl.Viewport(0, 0, (uint)width, (uint)height);
     }
@@ -399,54 +373,45 @@ public sealed unsafe class PostProcess : IDisposable
         gl.Disable(EnableCap.DepthTest);
         gl.Disable(EnableCap.CullFace);
         gl.Disable(EnableCap.Blend);
-        gl.Disable(EnableCap.Multisample);
         gl.DepthMask(false);
         bool needDepth = o.Ssao && haveNearSlice;
-        if (samples > 1)
-        {
-            gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, msFbo);
-            gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, sceneFbo);
-            var mask = ClearBufferMask.ColorBufferBit | (needDepth ? ClearBufferMask.DepthBufferBit : 0);
-            gl.BlitFramebuffer(0, 0, width, height, 0, 0, width, height, mask, BlitFramebufferFilter.Nearest);
-            Stamp("resolve");
-        }
         gl.BindVertexArray(vao);
 
-        bool ao = needDepth, glow = o.Bloom && bloom.Length > 0;
+        bool ao = needDepth;
         if (ao) RunSsao();
         if (ao) Stamp("ssao");
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
         postColour = sceneColour;
         if (Temporal) { postColour = RunUpscale(); Stamp("upscale"); }
         else ActiveUpscaler = "off";
-        if (glow) RunBloom();
-        if (glow) Stamp("bloom");
         bool auto = AutoExposure is not null && luminance is not null;
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
 
-        // Composite, straight to the target.
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, Target);
+        // Composite: to the target, or to the LDR picture FXAA then reads.
+        bool fxaa = o.Fxaa && !Temporal && ldr is not null;
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fxaa ? ldr!.Framebuffer : Target);
         gl.Viewport(0, 0, (uint)displayWidth, (uint)displayHeight);
         gl.UseProgram(progComposite);
         Bind(0, postColour); gl.Uniform1(U(progComposite, "uScene"), 0);
         Bind(1, aoB?.Texture ?? 0); gl.Uniform1(U(progComposite, "uAo"), 1);
-        Bind(2, bloom.Length > 0 ? bloom[0].Texture : 0); gl.Uniform1(U(progComposite, "uBloom"), 2);
         Bind(3, auto ? adaptB!.Texture : 0); gl.Uniform1(U(progComposite, "uAdapted"), 3);
         gl.Uniform1(U(progComposite, "uAuto"), auto ? 1 : 0);
         gl.Uniform1(U(progComposite, "uExposure"), o.Exposure);
-        gl.Uniform1(U(progComposite, "uBloomIntensity"), o.BloomIntensity);
-        gl.Uniform1(U(progComposite, "uSaturation"), o.Saturation);
-        gl.Uniform1(U(progComposite, "uContrast"), o.Contrast);
-        gl.Uniform1(U(progComposite, "uVignette"), o.Vignette ? o.VignetteStrength : 0f);
         gl.Uniform1(U(progComposite, "uUseAo"), ao ? 1 : 0);
-        gl.Uniform1(U(progComposite, "uUseBloom"), glow ? 1 : 0);
-        gl.Uniform1(U(progComposite, "uTone"), (int)o.ToneMap);
-        gl.Uniform1(U(progComposite, "uGrade"), o.Grade ? 1 : 0);
         gl.Uniform1(U(progComposite, "uDither"), o.Dither ? 1 : 0);
         gl.Uniform1(U(progComposite, "uDebug"), o.Debug);
         gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
         Stamp("composite");
+        if (fxaa)
+        {
+            gl.BindFramebuffer(FramebufferTarget.Framebuffer, Target);
+            gl.UseProgram(progFxaa);
+            Bind(0, ldr!.Texture); gl.Uniform1(U(progFxaa, "uImage"), 0);
+            gl.Uniform2(U(progFxaa, "uTexel"), 1f / displayWidth, 1f / displayHeight);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            Stamp("fxaa");
+        }
 
         pending[slot] = true;
         (previousRotation, previousEye, previousFov, previousAspect, previousValid) = (viewRotation, eyeNow, fovNow, aspectNow, Temporal);
@@ -456,7 +421,6 @@ public sealed unsafe class PostProcess : IDisposable
         gl.ActiveTexture(TextureUnit.Texture0);
         gl.DepthMask(true);
         gl.Enable(EnableCap.DepthTest);
-        gl.Enable(EnableCap.Multisample);
     }
 
     uint postColour;
@@ -659,42 +623,12 @@ public sealed unsafe class PostProcess : IDisposable
         adaptedValid = true;
     }
 
-    void RunBloom()
-    {
-        var first = bloom[0];
-        Pass(first);
-        gl.UseProgram(progPrefilter);
-        Bind(0, postColour); gl.Uniform1(U(progPrefilter, "uSrc"), 0);
-        gl.Uniform2(U(progPrefilter, "uTexel"), 1f / displayWidth, 1f / displayHeight);
-        gl.Uniform1(U(progPrefilter, "uThreshold"), Math.Max(Options.BloomThreshold, 0.01f));
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
-        gl.UseProgram(progDown);
-        for (int i = 1; i < bloom.Length; i++)
-        {
-            Pass(bloom[i]);
-            Bind(0, bloom[i - 1].Texture); gl.Uniform1(U(progDown, "uSrc"), 0);
-            gl.Uniform2(U(progDown, "uTexel"), 1f / bloom[i - 1].Width, 1f / bloom[i - 1].Height);
-            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
-        }
-        gl.UseProgram(progUp);
-        gl.Enable(EnableCap.Blend);
-        gl.BlendFunc(BlendingFactor.One, BlendingFactor.One);
-        for (int i = bloom.Length - 2; i >= 0; i--)
-        {
-            Pass(bloom[i]);
-            Bind(0, bloom[i + 1].Texture); gl.Uniform1(U(progUp, "uSrc"), 0);
-            gl.Uniform2(U(progUp, "uTexel"), 1f / bloom[i + 1].Width, 1f / bloom[i + 1].Height);
-            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
-        }
-        gl.Disable(EnableCap.Blend);
-    }
-
     public void Dispose()
     {
         External?.Dispose();
         Free();
         gl.DeleteVertexArray(vao);
-        foreach (var p in new[] { progSsao, progBlur, progPrefilter, progDown, progUp, progComposite, progLuminance, progAdapt, progVelocity, progTaa }) gl.DeleteProgram(p);
+        foreach (var p in new[] { progSsao, progBlur, progComposite, progLuminance, progAdapt, progFxaa, progVelocity, progTaa }) gl.DeleteProgram(p);
         for (int s = 0; s < Slots; s++)
             for (int i = 0; i < MaxStamps; i++) gl.DeleteQuery(stamps[s, i]);
     }

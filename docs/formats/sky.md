@@ -184,7 +184,7 @@ checked 2026-10-04):
 
 ### In the viewer: `--haze kenshi` (default) and `physical`
 
-`atmoApply` has two branches (key F7, `SkyRenderer.KenshiHaze`; the sky itself is the same in both):
+`atmoApply` has two branches (`--haze kenshi|physical`, `SkyRenderer.KenshiHaze`; the sky itself is the same in both):
 
 - **kenshi** (the default): the game's formula, evaluated per pixel in the object, terrain, foliage and water shaders instead of in a
   separate pass over the G-buffer (same result for opaque surfaces). Alpha: the ramp from `0.06 D` to `min(D, 0.6 D)`, D = 50000
@@ -200,18 +200,18 @@ checked 2026-10-04):
   Not reproduced: the water being fogged by the depth of what is under it.
 - **Above the game's camera heights** (a viewer choice; no game behaviour exists there): the viewer allows any height, and the
   game's formula from far above is wrong (above: a dark brown band, a white arc in the thousands, cyan rims where it fades). So
-  with `kenshi` the haze blends towards `physical` as the eye climbs: weight `smoothstep(6000, 22000, clearance)`, clearance being
+  with `kenshi` the haze blends towards `physical` as the eye climbs: weight `smoothstep(5100, 18700, clearance)`, clearance being
   the eye's height above the highest ground or water at the eye and on rings out to 2000 round it ([camera.md](camera.md), in-game
-  under ~1840). Below 6000 it is exactly the game's haze (with the strength at 1; the viewer's default is 0.85, see below) (screenshots before and after the change pixel-identical:
+  under ~1840). Below 5100 it is exactly the game's haze (with the strength at 1, the Faithful haze; the Meitou default is 0.85, see below) (screenshots before and after the change pixel-identical:
   `--town "The Hub" --distance 40000 --pitch 3` at 6, 13, 22.6, 23.3 and 1 o'clock, and `--at -51468,-14324 --yaw 95 --pitch 2
-  --distance 300` at 13 with `--no-foliage`; with foliage that view already differs from itself run to run by the same margin); from 22000 up it is the physical haze, which looks like a map seen from an aircraft (the haze thins as
+  --distance 300` at 13 with `--no-foliage`; with foliage that view already differs from itself run to run by the same margin); from 18700 up it is the physical haze, which looks like a map seen from an aircraft (the haze thins as
   the eye climbs out of the dense low air). In the band both are evaluated and mixed (the weight is per frame, so outside it only one
   runs). The water's widened sun glint is weighed by the game's Fresnel term (F0 0.04) by the same weight (viewer choice; it
   otherwise became a large blown-out disc on the sea from high up).
 - **A guard in the integral** (viewer): each sample's optical depth is floored at −1 (`SkyXModel.OpticalFloor`, also in the GLSL),
   which bounds the runaway; it changes nothing within the game's range or for the sky (minimums above).
 - **Haze strength** (viewer option, not the game's: `--haze-strength <x>`, the Tab panel's "Haze strength (1 = game)", 0 to 3,
-  default 1 = the game's): multiplies how far the atmosphere haze is blended in (the game's ramp, or the physical haze's amount,
+  default 0.85, the Meitou haze switch, so far mountains stay visible; 1 = the game's, the Faithful side, F3 in the viewer): multiplies how far the atmosphere haze is blended in (the game's ramp, or the physical haze's amount,
   capped at 1), before the weather's fog, which it leaves alone.
 - **physical** (`--haze physical`, all heights; a viewer alternative, not the game's): the closed-form optical depth of SkyX's own air (its Rayleigh and Mie depths
   straight up, without the earlier turbidity factor) along the ray, with one density scale height = 40000 world units (a viewer
