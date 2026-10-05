@@ -219,7 +219,7 @@ public sealed unsafe partial class ShadowPass
         Put(data, 112, cascades[0].Rotation);
         Put(data, 128, new Vector4(origin, 1));
         Put(data, 132, new Vector4(Vector3.Normalize(view.Forward), cascades.Length));
-        Put(data, 136, new Vector4(atlasSize, 0, 1, 0));   // z: the Meitou receiver
+        Put(data, 136, new Vector4(atlasSize, 0, 0, 1));   // w: the Meitou receiver
         float noise = Temporal ? meitouFrame % 64 * 5.588238f : 0;
         Put(ms, 32, new Vector4(noise, range, range * 0.85f, range * 0.55f));
         bool terrain = terrainMap?.Texture is > 0;

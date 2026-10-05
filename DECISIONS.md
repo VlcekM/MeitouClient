@@ -109,13 +109,7 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     S3TC upload no longer copies a level of zeros before filling it in slabs (a GL-era way to allocate), and the "DXT5 normal" test runs
     on the worker. Result at 1600x900 (four interleaved runs each, medians): p50 4.15 -> 3.7 ms, p95 6.85 -> 5.4, p99 9.15 -> 7.0,
     max ~23 -> ~16.
-20. **The bundled shaderc, not the Vulkan SDK's.** With the Vulkan SDK (1.4.363) on the PATH, Windows loaded its `shaderc_shared.dll`
-    instead of the NuGet package's, and that build ignores the per-stage binding bases: every freshly compiled program had its vertex
-    and fragment samplers on the same binding numbers (the 21 failing shader tests; the terrain's height samplers read the sky's cube map
-    and the terrain vanished once its shader changed). Old pictures were right only because the shared disk cache still held SPIR-V from
-    before the SDK was installed. `GlslProgramCompiler` now loads `runtimes/<rid>/native/shaderc_shared.dll` by path before Silk asks
-    for it by name, and the cache version is 3 so no entry compiled by the SDK's build is reused.
-21. **Meitou shadows** (the `shadows` switch, F5; docs/formats/shadows.md "Meitou shadows"): cascades fitted from the camera's near
+20. **Meitou shadows** (the `shadows` switch, F5; docs/formats/shadows.md "Meitou shadows"): cascades fitted from the camera's near
     plane to the range (the game's halved splits leave two of four cascades in front of the near plane in most views), drawn on a
     staggered schedule (CPU is the bottleneck: the far cascades' foliage casters cost 20+ ms a frame in wide views), a soft receiver
     with a blocker search, and the terrain's own shadow beyond the range from a per-sun-direction sweep of the world height grid

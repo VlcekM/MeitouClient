@@ -193,7 +193,7 @@ the table, default 1 = 2048², `--shadow-range <u>`). It follows the facts above
 
 Not the game's: the remaster's choice, on by default (F5 / `--faithful shadows` gives the CSM above, pixel-identical). Same atlas,
 `shadow quality` and `Shadow Range`; `ShadowPass.Meitou.cs`, `MeitouShadowFit` (Meitou.Data), `MeitouShadowShaders`,
-`TerrainShadowMap`. The receiver is `kenshiShadowMeitou`, chosen by `uShadowAtlas.z = 1` in the receiver block; the game's body is
+`TerrainShadowMap`. The receiver is `kenshiShadowMeitou`, chosen by `uShadowAtlas.w = 1` in the receiver block; the game's body is
 `kenshiShadowFaithful`, `kenshiShadow` dispatches.
 
 - **Fit.** Splits by the practical scheme (λ 0.8, no halving) from the camera's near plane, rounded down to a power of 1.25 so the

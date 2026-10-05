@@ -36,7 +36,7 @@ static class ShadowShaders
             mat4 uShadowLight;         // world -> light axes (rotation)
             vec4 uShadowOrigin;        // xyz: the origin of uShadowTile, w: 1 when shadows are on
             vec4 uShadowForward;       // xyz: the camera's view direction (cascades go by depth along it), w: cascades
-            vec4 uShadowAtlas;         // x: atlas side in texels, y: debug cascade tint (0/1), z: 1 for the Meitou receiver
+            vec4 uShadowAtlas;         // x: atlas side in texels, y: debug cascade tint (0/1), w: 1 for the Meitou receiver
         };
         uniform sampler2DShadow uShadowMap;
 
@@ -85,10 +85,10 @@ static class ShadowShaders
             return lit / {{F(KenshiShadows.PcfTaps)}};
         }
         {{MeitouShadowShaders.Functions}}
-        // The receiver the lighting calls: the game's CSM, or the Meitou shadows (uShadowAtlas.z = 1; the shadows enhancement).
+        // The receiver the lighting calls: the game's CSM, or the Meitou shadows (uShadowAtlas.w = 1; the shadows enhancement).
         float kenshiShadow(vec3 world, vec3 n)
         {
-            return uShadowAtlas.z > 0.5 ? kenshiShadowMeitou(world, n) : kenshiShadowFaithful(world, n);
+            return uShadowAtlas.w > 0.5 ? kenshiShadowMeitou(world, n) : kenshiShadowFaithful(world, n);
         }
 
         // The debug views' cascade colours (the game's own debug colours: red, orange, yellow, green).
