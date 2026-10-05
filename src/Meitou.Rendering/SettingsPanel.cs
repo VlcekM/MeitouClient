@@ -30,6 +30,8 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     const float Margin = 16, Pad = 12, TrackWidth = 220, TrackHeight = 6, RowGap = 10;
 
     public bool Visible { get; set; }
+    /// <summary>The sliders (the game saves their values in its user config, by label).</summary>
+    public IReadOnlyList<Slider> Sliders => sliders;
 
     int dragging = -1;
     float panelX0, panelY0, panelX1, panelY1, trackX0;

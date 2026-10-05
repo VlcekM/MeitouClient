@@ -484,6 +484,8 @@ $RECYCLE.BIN/
 # --- MeitouClient ---
 # Local machine config (game install path etc.)
 meitou.local.json
+# The game's user settings (graphics sliders, key bindings, frame limit)
+meitou.user.json
 
 # Never commit original Kenshi assets. Point at the user's install instead.
 *.mod

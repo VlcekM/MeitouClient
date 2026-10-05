@@ -84,7 +84,7 @@ public sealed class InputBindings
         Set(InputAction.TimeFaster, Key.Period);
         Set(InputAction.TimeSlower, Key.Comma);
         Set(InputAction.Screenshot, Key.F12);
-        Set(InputAction.ToggleSettings, Key.F1);
+        Set(InputAction.ToggleSettings, Key.Tab);
         Set(InputAction.Quit, Key.Escape);
     }
 

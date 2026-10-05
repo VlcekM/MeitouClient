@@ -3,6 +3,7 @@
     <Project Path="src/Meitou.Core/Meitou.Core.csproj" />
     <Project Path="src/Meitou.Data/Meitou.Data.csproj" />
     <Project Path="src/Meitou.Engine/Meitou.Engine.csproj" />
+    <Project Path="src/Meitou.Game/Meitou.Game.csproj" />
     <Project Path="src/Meitou.Rendering/Meitou.Rendering.csproj" />
   </Folder>
   <Folder Name="/tests/">
