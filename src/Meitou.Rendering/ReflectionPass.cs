@@ -3,6 +3,8 @@ using System.Numerics;
 using Meitou.Data.World;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>
@@ -25,7 +27,7 @@ public sealed unsafe class ReflectionPass : IDisposable
     /// <summary>Samples per texel of the reflection (1 = off). Resolved into the plain texture the water samples.</summary>
     public const int Samples = 4;
 
-    readonly GL gl;
+    readonly IGl gl;
     readonly uint[] queries = new uint[4];   // two slots of (start, end) timestamps
     readonly bool[] pending = new bool[2];
     readonly WorldRenderOptions options = new();
@@ -40,7 +42,7 @@ public sealed unsafe class ReflectionPass : IDisposable
     readonly List<double> gpuSamples = [];
     readonly List<double> cpuSamples = [];
 
-    public ReflectionPass(GL gl)
+    public ReflectionPass(IGl gl)
     {
         this.gl = gl;
         // Tuning knobs for experiments (MEITOU_REFL_OBJECTS, _FOLIAGE, _LOD, _AGE); the defaults are what the viewer ships with.

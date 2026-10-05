@@ -20,6 +20,8 @@
     <ProjectReference Include="..\..\src\Meitou.Core\Meitou.Core.csproj" />
     <ProjectReference Include="..\..\src\Meitou.Data\Meitou.Data.csproj" />
     <ProjectReference Include="..\..\src\Meitou.Engine\Meitou.Engine.csproj" />
+    <ProjectReference Include="..\..\src\Meitou.Rendering\Meitou.Rendering.csproj" />
+    <ProjectReference Include="..\..\src\Meitou.Rendering.Vulkan\Meitou.Rendering.Vulkan.csproj" />
   </ItemGroup>
 
 </Project>

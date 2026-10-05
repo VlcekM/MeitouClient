@@ -1,12 +1,14 @@
 using System.Numerics;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>Small OpenGL helpers for the world view.</summary>
 static unsafe class WorldGl
 {
-    public static uint Program(GL gl, string vertex, string fragment)
+    public static uint Program(IGl gl, string vertex, string fragment)
     {
         uint vs = Compile(gl, ShaderType.VertexShader, vertex), fs = Compile(gl, ShaderType.FragmentShader, fragment);
         uint program = gl.CreateProgram();
@@ -22,7 +24,7 @@ static unsafe class WorldGl
         return program;
     }
 
-    static uint Compile(GL gl, ShaderType type, string source)
+    static uint Compile(IGl gl, ShaderType type, string source)
     {
         uint shader = gl.CreateShader(type);
         gl.ShaderSource(shader, source);
@@ -33,10 +35,10 @@ static unsafe class WorldGl
     }
 
     /// <summary>System.Numerics matrices are row-major with row vectors; GL reads them column-major, the column-vector form.</summary>
-    public static void Matrix(GL gl, int location, Matrix4x4 m) => gl.UniformMatrix4(location, 1, false, (float*)&m);
+    public static void Matrix(IGl gl, int location, Matrix4x4 m) => gl.UniformMatrix4(location, 1, false, (float*)&m);
 
     /// <summary>A 2D RGBA8 texture from top-first rows, with mipmaps.</summary>
-    public static uint Texture2D(GL gl, int width, int height, byte[] rgba, bool repeat, bool mipmaps = true)
+    public static uint Texture2D(IGl gl, int width, int height, byte[] rgba, bool repeat, bool mipmaps = true)
     {
         uint id = gl.GenTexture();
         gl.BindTexture(TextureTarget.Texture2D, id);

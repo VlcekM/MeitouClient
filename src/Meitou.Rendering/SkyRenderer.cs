@@ -6,6 +6,8 @@ using Meitou.Data.Textures;
 using Meitou.Data.World;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>
@@ -167,7 +169,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         }
         """;
 
-    readonly GL gl;
+    readonly IGl gl;
     readonly uint simpleProgram, skyProgram, vao;
     readonly Dictionary<(uint, string), int> uniforms = [];
     uint starsTexture, moonTexture, cloudsTexture, irradianceCube, specularCube, ambientMap;
@@ -252,7 +254,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     SkyWeather? builtWeather;
     bool builtPhysical;
 
-    public SkyRenderer(GL gl, AssetLocator? assets = null)
+    public SkyRenderer(IGl gl, AssetLocator? assets = null)
     {
         this.gl = gl;
         simpleProgram = WorldGl.Program(gl, Vertex, SimpleFragment);
@@ -401,7 +403,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// Points the atmosphere's sampler uniforms of a freshly linked program at their own units (a cube sampler left on unit 0 would clash with
     /// the 2D samplers there). Called by every program builder that may include <see cref="AtmosphereShaders.Functions"/>.
     /// </summary>
-    public static void AssignSamplerUnits(GL gl, uint program)
+    public static void AssignSamplerUnits(IGl gl, uint program)
     {
         if (irradianceUnit < 0)
         {
@@ -572,13 +574,13 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// <summary>GPU time of a span of commands, by timestamp queries (ring of a few, read without stalling).</summary>
     sealed class GpuSpan : IDisposable
     {
-        readonly GL gl;
+        readonly IGl gl;
         readonly uint[] begin = new uint[4], end = new uint[4];
         readonly bool[] pending = new bool[4];
         int index;
         double total;
         int samples;
-        public GpuSpan(GL gl)
+        public GpuSpan(IGl gl)
         {
             this.gl = gl;
             for (int i = 0; i < 4; i++) { begin[i] = gl.GenQuery(); end[i] = gl.GenQuery(); }

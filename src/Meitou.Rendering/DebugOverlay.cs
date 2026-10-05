@@ -2,6 +2,8 @@ using System.Numerics;
 using Silk.NET.OpenGL;
 using StbTrueTypeSharp;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>
@@ -51,7 +53,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         }
         """;
 
-    readonly GL gl;
+    readonly IGl gl;
     readonly uint program, vao, vbo, atlas;
     readonly StbTrueType.stbtt_bakedchar[] glyphs = new StbTrueType.stbtt_bakedchar[CharCount];
     readonly List<float> batch = [];
@@ -62,7 +64,7 @@ public sealed unsafe class DebugOverlay : IDisposable
 
     public bool Visible { get; set; }
 
-    DebugOverlay(GL gl, byte[] font)
+    DebugOverlay(IGl gl, byte[] font)
     {
         this.gl = gl;
         var pixels = new byte[AtlasSize * AtlasSize];
@@ -98,7 +100,7 @@ public sealed unsafe class DebugOverlay : IDisposable
     }
 
     /// <summary>The overlay, or null when no monospace font is found.</summary>
-    public static DebugOverlay? TryCreate(GL gl)
+    public static DebugOverlay? TryCreate(IGl gl)
     {
         var path = FontCandidates.FirstOrDefault(File.Exists);
         return path is null ? null : new DebugOverlay(gl, File.ReadAllBytes(path));

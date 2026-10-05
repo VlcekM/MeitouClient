@@ -5,6 +5,7 @@
     <Project Path="src/Meitou.Engine/Meitou.Engine.csproj" />
     <Project Path="src/Meitou.Game/Meitou.Game.csproj" />
     <Project Path="src/Meitou.Rendering/Meitou.Rendering.csproj" />
+    <Project Path="src/Meitou.Rendering.Vulkan/Meitou.Rendering.Vulkan.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Meitou.Tests/Meitou.Tests.csproj" />

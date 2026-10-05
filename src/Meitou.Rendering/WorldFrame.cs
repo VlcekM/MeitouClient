@@ -7,6 +7,8 @@ using Meitou.Data.Fcs;
 using Meitou.Data.World;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 sealed class WorldOptions
@@ -299,7 +301,7 @@ static class WorldFrame
         }
     }
 
-    public static Gpu CreateGpu(GL gl, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive)
+    public static Gpu CreateGpu(IGl gl, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive)
     {
         var watch = Stopwatch.StartNew();
         var terrain = new TerrainRenderer(gl, scene.Coarse, scene.CoarseSize, scene.Window, new WorldRenderOptions().LodDistance);
@@ -375,7 +377,7 @@ static class WorldFrame
         return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders);
     }
 
-    public static void Draw(GL gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time, float fogDistance)
+    public static void Draw(IGl gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time, float fogDistance)
     {
         // Everything is drawn into the post-processing chain's HDR framebuffer (before the reflection pass, which restores whatever is bound).
         gpu.Post?.Begin(width, height);

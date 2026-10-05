@@ -2,6 +2,8 @@ using System.Numerics;
 using Meitou.Data.World;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>Switches for drawing the world (keys in <see cref="WorldApp"/>).</summary>
@@ -42,7 +44,7 @@ public readonly record struct WorldLighting(Vector3 SunDirection, Vector3 SunCol
 /// </summary>
 public sealed unsafe class TerrainRenderer : IDisposable
 {
-    readonly GL gl;
+    readonly IGl gl;
     readonly uint patchProgram, meshProgram;
     readonly Dictionary<(uint, string), int> uniforms = [];
     readonly uint gridVao, gridVbo, gridEbo, coarseTexture;
@@ -66,7 +68,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     /// <param name="coarse">Whole-world raw heights, (<paramref name="coarseSize"/>)² samples (2^n + 1 per side).</param>
     /// <param name="fine">The loaded region at its own step.</param>
-    public TerrainRenderer(GL gl, ushort[] coarse, int coarseSize, HeightWindow fine, float lodDistance)
+    public TerrainRenderer(IGl gl, ushort[] coarse, int coarseSize, HeightWindow fine, float lodDistance)
     {
         this.gl = gl;
         this.fine = fine;

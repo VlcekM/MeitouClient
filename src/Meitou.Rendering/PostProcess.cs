@@ -1,6 +1,8 @@
 using System.Text;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>
@@ -19,7 +21,7 @@ public sealed unsafe class PostProcess : IDisposable
         public int Width, Height;
     }
 
-    readonly GL gl;
+    readonly IGl gl;
     public PostOptions Options { get; }
     /// <summary>Framebuffer the final image goes to: 0 for the window, or an RGBA8 framebuffer of the same size.</summary>
     public uint Target;
@@ -50,7 +52,7 @@ public sealed unsafe class PostProcess : IDisposable
     int slot;
     readonly Dictionary<string, (double Sum, int Count)> costs = [];
 
-    public PostProcess(GL gl, PostOptions options)
+    public PostProcess(IGl gl, PostOptions options)
     {
         this.gl = gl;
         Options = options;

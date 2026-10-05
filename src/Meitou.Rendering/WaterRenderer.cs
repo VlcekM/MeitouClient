@@ -5,6 +5,8 @@ using Meitou.Data.Textures;
 using Meitou.Data.World;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>
@@ -139,14 +141,14 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     const int ReflectionUnit = 16;
 
-    readonly GL gl;
+    readonly IGl gl;
     readonly SkyRenderer sky;
     readonly uint program, vao, vbo, colourMap, flowMap, normalMap, paramsA, paramsB;
     readonly Vector4 seaA, seaB;
     readonly Vector3 seaColour;
     readonly Dictionary<string, int> uniforms = [];
 
-    WaterRenderer(GL gl, SkyRenderer sky, uint colourMap, uint flowMap, uint normalMap, uint paramsA, uint paramsB, Vector4 seaA, Vector4 seaB, Vector3 seaColour)
+    WaterRenderer(IGl gl, SkyRenderer sky, uint colourMap, uint flowMap, uint normalMap, uint paramsA, uint paramsB, Vector4 seaA, Vector4 seaB, Vector3 seaColour)
     {
         (this.seaA, this.seaB, this.seaColour) = (seaA, seaB, seaColour);
         this.gl = gl;
@@ -164,7 +166,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         gl.BindVertexArray(0);
     }
 
-    public static WaterRenderer Create(GL gl, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer sky, List<string> messages)
+    public static WaterRenderer Create(IGl gl, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer sky, List<string> messages)
     {
         var colour = Load(install, WorldWater.ColourMap);
         var flow = Load(install, WorldWater.FlowMap);
@@ -224,7 +226,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         return File.Exists(path) ? TextureLoader.LoadImage(File.ReadAllBytes(path)) : null;
     }
 
-    static uint FloatTexture(GL gl, Vector4[] data, int width, int height)
+    static uint FloatTexture(IGl gl, Vector4[] data, int width, int height)
     {
         uint id = gl.GenTexture();
         gl.BindTexture(TextureTarget.Texture2D, id);

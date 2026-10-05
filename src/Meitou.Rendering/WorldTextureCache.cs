@@ -1,6 +1,8 @@
 using Meitou.Data.Textures;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>
@@ -43,7 +45,7 @@ public sealed class WorldTexture
 /// <see cref="HighWaterMb"/>: the least recently used go first, down to three quarters of it. A deleted texture comes back by itself
 /// (decode and upload again) the next time something asks for its id.
 /// </summary>
-public sealed unsafe class WorldTextureCache(GL gl, AssetLocator assets) : IDisposable
+public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDisposable
 {
     readonly Dictionary<string, WorldTexture> cache = new(StringComparer.OrdinalIgnoreCase);
     readonly List<WorldTexture> pending = [];
@@ -354,7 +356,7 @@ public sealed unsafe class WorldTextureCache(GL gl, AssetLocator assets) : IDisp
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)wrap);
         float[] transparent = [0, 0, 0, 0];
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureBorderColor, transparent.AsSpan());
-        gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x84FE, 8f); // max anisotropy (GL 4.6 / EXT)
+        gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x84FE, 8f); // max anisotropy (IGl 4.6 / EXT)
         gl.GetError();
     }
 

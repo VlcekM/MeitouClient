@@ -7,6 +7,8 @@ using Meitou.Data.Ogre;
 using Meitou.Data.World;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>
@@ -28,7 +30,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
     const float PageSize = WorldLayout.ZoneSize / (float)PagesPerZone;
     const int InstanceStride = 64;
 
-    readonly GL gl;
+    readonly IGl gl;
     readonly GameInstall install;
     readonly GameDatabase db;
     readonly WorldLevelData levels;
@@ -57,7 +59,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
     long instanceBufferSize;
     int running;
 
-    public FoliageRenderer(GL gl, GameInstall install, GameDatabase db, WorldLevelData levels, AssetLocator assets)
+    public FoliageRenderer(IGl gl, GameInstall install, GameDatabase db, WorldLevelData levels, AssetLocator assets)
     {
         this.gl = gl;
         this.install = install;

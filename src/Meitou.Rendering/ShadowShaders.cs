@@ -2,6 +2,8 @@ using System.Globalization;
 using Meitou.Data.World;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>
@@ -203,7 +205,7 @@ static class ShadowShaders
     /// Points a freshly linked program's shadow blocks and sampler at their binding points and unit (nothing when it has none). Called by
     /// <see cref="WorldGl.Program"/> for every world program.
     /// </summary>
-    public static void Bind(GL gl, uint program)
+    public static void Bind(IGl gl, uint program)
     {
         if (MapUnit < 0)
         {

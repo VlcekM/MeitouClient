@@ -8,6 +8,7 @@ using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.ModelViewer;
 using Meitou.Rendering;
+using Meitou.Rendering.Gpu;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
@@ -319,7 +320,7 @@ static class ViewerApp
         return 0;
     }
 
-    internal static void SavePng(GL gl, string path, int w, int h) => GlCapture.SavePng(gl, path, w, h);
+    internal static void SavePng(GL gl, string path, int w, int h) => GlCapture.SavePng(new GlPassthrough(gl), path, w, h);
 
     static int Interactive(Scene scene, AssetLocator assets, ViewerOptions o)
     {

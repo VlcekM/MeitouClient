@@ -11,6 +11,7 @@ using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 
 using Meitou.Rendering;
+using Meitou.Rendering.Gpu;
 using static Meitou.Rendering.WorldFrame;
 
 namespace Meitou.ModelViewer;
@@ -61,7 +62,8 @@ static partial class WorldApp
     {
         using var window = CreateWindow(o, visible: false);
         window.Initialize();
-        using var gl = window.CreateOpenGL();
+        using var rawGl = window.CreateOpenGL();
+        IGl gl = new GlPassthrough(rawGl);
         using var gpu = CreateGpu(gl, install, scene, assets, o, interactive: false);
         var (camera, render) = Setup(scene, o);
         if (gpu.Streamer is { } streamer)
@@ -182,7 +184,7 @@ static partial class WorldApp
             keysOverlay.Dispose();
         }
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, fbo);
-        ViewerApp.SavePng(gl, o.Screenshot!, w, h);
+        GlCapture.SavePng(gl, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
         if (Environment.GetEnvironmentVariable("MEITOU_SKY_BENCH") == "1")
         {
@@ -197,7 +199,8 @@ static partial class WorldApp
     static int Interactive(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
         using var window = CreateWindow(o, visible: true);
-        GL? gl = null;
+        IGl? gl = null;
+        GL? rawGl = null;
         Gpu? gpu = null;
         WorldCamera camera = null!;
         WorldRenderOptions render = null!;
@@ -214,7 +217,8 @@ static partial class WorldApp
 
         window.Load += () =>
         {
-            gl = window.CreateOpenGL();
+            rawGl = window.CreateOpenGL();
+            gl = new GlPassthrough(rawGl);
             gpu = CreateGpu(gl, install, scene, assets, o, interactive: true);
             overlay = DebugOverlay.TryCreate(gl);
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the ? key list is unavailable");
@@ -419,7 +423,7 @@ static partial class WorldApp
                 var file = Path.Combine(Path.GetTempPath(), $"meitou-world-{DateTime.Now:yyyyMMdd-HHmmss}.png");
                 gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
                 gl.ReadBuffer(ReadBufferMode.Back);
-                ViewerApp.SavePng(gl, file, size.X, size.Y);
+                GlCapture.SavePng(gl, file, size.X, size.Y);
                 Console.WriteLine($"saved {Path.GetFullPath(file)}");
             }
             // After the screenshot, so saved pictures never show it.

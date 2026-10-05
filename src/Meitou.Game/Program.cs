@@ -7,6 +7,7 @@ using Meitou.Engine.Cameras;
 using Meitou.Engine.Input;
 using Meitou.Engine.Time;
 using Meitou.Rendering;
+using Meitou.Rendering.Gpu;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
@@ -121,7 +122,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         return o.Screenshot is not null ? Screenshot() : Interactive();
     }
 
-    void Boot(GL gl, bool interactive)
+    void Boot(IGl gl, bool interactive)
     {
         gpu = WorldFrame.CreateGpu(gl, install, scene, assets, o, interactive);
         (camera, render) = WorldFrame.Setup(scene, o);
@@ -150,7 +151,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         camera.Distance = s.Distance;
     }
 
-    void DrawWorld(GL gl, int width, int height)
+    void DrawWorld(IGl gl, int width, int height)
     {
         if (gpu.Foliage is { } foliage && o.Screenshot is null) foliage.SwaySeconds = realTime.Elapsed.TotalSeconds;
         WorldFrame.Draw(gl, gpu, scene, camera, render, width, height, (float)session.Clock.HourOfDay, (float)realTime.Elapsed.TotalSeconds / 600f, o.FogDistance);
@@ -167,7 +168,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             PreferredDepthBufferBits = 24,
         });
         window.Initialize();
-        using var gl = window.CreateOpenGL();
+        using var rawGl = window.CreateOpenGL();
+        IGl gl = new GlPassthrough(rawGl);
         Boot(gl, interactive: false);
         for (int i = 0; i < g.Ticks; i++) session.Tick();
         ApplyCamera(session.Camera.Current);
@@ -212,7 +214,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             UpdatesPerSecond = 0,
         });
         window.Initialize();
-        var gl = window.CreateOpenGL();
+        var rawGl = window.CreateOpenGL();
+        IGl gl = new GlPassthrough(rawGl);
         Boot(gl, interactive: true);
         var overlay = DebugOverlay.TryCreate(gl);
         var panel = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render);
@@ -316,7 +319,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         overlay?.Dispose();
         gpu.Dispose();
         silkInput.Dispose();
-        gl.Dispose();
+        rawGl.Dispose();
         return 0;
     }
 

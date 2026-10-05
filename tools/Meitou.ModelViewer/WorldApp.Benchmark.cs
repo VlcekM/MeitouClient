@@ -3,6 +3,7 @@ using System.Numerics;
 using Silk.NET.OpenGL;
 
 using Meitou.Rendering;
+using Meitou.Rendering.Gpu;
 using static Meitou.Rendering.WorldFrame;
 
 namespace Meitou.ModelViewer;
@@ -14,7 +15,7 @@ static partial class WorldApp
     /// loaded point at 60 frames per second of wall time, as the interactive viewer would, and prints frame-time percentiles, the worst frames with the
     /// time each streaming stage took on the render thread, and the resident memory.
     /// </summary>
-    static int FlyBenchmark(GL gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
+    static int FlyBenchmark(IGl gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
     {
         var centre = camera.Target;
         float radius = Math.Max(o.FlyRadius, 1);

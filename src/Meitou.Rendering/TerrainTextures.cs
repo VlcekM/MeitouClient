@@ -6,6 +6,8 @@ using Meitou.Data.Textures;
 using Meitou.Data.World;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>
@@ -25,7 +27,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// <summary>Cell table value of a biome slot that is used but not resident yet / of an unused slot.</summary>
     const byte Pending = 254, Unused = 255;
 
-    readonly GL gl;
+    readonly IGl gl;
     readonly GameInstall install;
     readonly AssetLocator assets;
     readonly int layerSize, levelCount;
@@ -65,7 +67,7 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     sealed record Decoded(Pair Pair, byte[][]? Diffuse, byte[][]? Normal);
 
-    TerrainTextures(GL gl, GameInstall install, AssetLocator assets, BlendInfoFile info, BiomeTerrain[] all, int layerSize, MapWindows? maps)
+    TerrainTextures(IGl gl, GameInstall install, AssetLocator assets, BlendInfoFile info, BiomeTerrain[] all, int layerSize, MapWindows? maps)
     {
         this.gl = gl;
         this.install = install;
@@ -123,7 +125,7 @@ public sealed unsafe class TerrainTextures : IDisposable
                         !pairs.Values.Any(p => p.Loading) && (MapState != 1 || mapWindows is null);
 
     /// <param name="layerSize">Edge length every layer texture is brought to (the arrays need one size).</param>
-    public static TerrainTextures Create(GL gl, GameInstall install, GameDatabase db, AssetLocator assets, int layerSize = 512, int worldColourSize = 2048)
+    public static TerrainTextures Create(IGl gl, GameInstall install, GameDatabase db, AssetLocator assets, int layerSize = 512, int worldColourSize = 2048)
     {
         var info = BlendInfoFile.Open(install);
         var all = BiomeTerrain.ByIndex(db);
@@ -227,7 +229,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
         gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureBaseLevel, 0);
         gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureMaxLevel, levelCount - 1);
-        gl.TexParameter(TextureTarget.Texture2DArray, (TextureParameterName)0x84FE, 8f); // max anisotropy (GL 4.6 / EXT)
+        gl.TexParameter(TextureTarget.Texture2DArray, (TextureParameterName)0x84FE, 8f); // max anisotropy (IGl 4.6 / EXT)
         gl.GetError();
         return id;
     }

@@ -5,6 +5,8 @@ using Meitou.Data.Ogre;
 using Meitou.Data.World;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>
@@ -21,7 +23,7 @@ namespace Meitou.Rendering;
 /// </summary>
 public sealed unsafe class WorldObjectRenderer : IDisposable
 {
-    readonly GL gl;
+    readonly IGl gl;
     uint program;   // the main program; the depth program while DrawDepth runs
     readonly Dictionary<(uint, string), int> uniforms = [];
     readonly WorldTextureCache textureCache;
@@ -70,7 +72,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         public bool Resolved;
     }
 
-    internal WorldObjectRenderer(GL gl, AssetLocator assets, WorldObjects objects)
+    internal WorldObjectRenderer(IGl gl, AssetLocator assets, WorldObjects objects)
     {
         this.gl = gl;
         this.objects = objects;

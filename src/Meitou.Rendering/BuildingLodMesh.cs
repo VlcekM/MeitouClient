@@ -2,6 +2,8 @@ using System.Numerics;
 using Meitou.Data.Ogre;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>A mesh as a worker thread decoded it: level 0's vertices and indices, the LOD levels, and the meshes of manual levels.</summary>
@@ -75,7 +77,7 @@ sealed class ObjectMesh
 /// Loads the world's meshes: <see cref="Request"/> from anywhere on the render thread, <see cref="Pump"/> once per frame starts
 /// the nearest wanted decodes on worker threads and queues the uploads of finished ones.
 /// </summary>
-sealed unsafe class ObjectMeshCache(GL gl, AssetLocator assets, UploadQueue uploads, uint instanceBuffer) : IDisposable
+sealed unsafe class ObjectMeshCache(IGl gl, AssetLocator assets, UploadQueue uploads, uint instanceBuffer) : IDisposable
 {
     readonly Dictionary<string, ObjectMesh> meshes = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<ObjectMesh, float> wanted = [];

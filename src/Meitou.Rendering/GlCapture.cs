@@ -1,12 +1,14 @@
 using Meitou.Data.Textures;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>Reads the bound read framebuffer back into a PNG (screenshots).</summary>
 static class GlCapture
 {
-    public static void SavePng(GL gl, string path, int w, int h)
+    public static void SavePng(IGl gl, string path, int w, int h)
     {
         var pixels = new byte[w * h * 4];
         gl.PixelStore(PixelStoreParameter.PackAlignment, 1);

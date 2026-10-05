@@ -3,6 +3,8 @@ using System.Numerics;
 using Meitou.Data.World;
 using Silk.NET.OpenGL;
 
+using Meitou.Rendering.Gpu;
+
 namespace Meitou.Rendering;
 
 /// <summary>
@@ -16,7 +18,7 @@ public sealed unsafe class ShadowPass : IDisposable
     /// <summary>Draws the casters of one cascade: the matrix maps absolute world positions to the tile's clip space (depth 0..1), the planes cull (no near plane), the eye picks levels of detail.</summary>
     public delegate void CasterDraw(ShadowCascade cascade, Matrix4x4 worldToClip, Vector4[] planes, Vector3 lodEye);
 
-    readonly GL gl;
+    readonly IGl gl;
     readonly uint receiverUbo, casterUbo;
     readonly uint[] queries = new uint[4];
     readonly bool[] pending = new bool[2];
@@ -28,7 +30,7 @@ public sealed unsafe class ShadowPass : IDisposable
     int sceneWidth, sceneHeight;
     readonly Dictionary<(uint, string), int> uniforms = [];
 
-    public ShadowPass(GL gl)
+    public ShadowPass(IGl gl)
     {
         this.gl = gl;
         receiverUbo = gl.GenBuffer();
