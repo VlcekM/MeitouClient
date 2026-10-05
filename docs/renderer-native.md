@@ -28,7 +28,7 @@ The plan, which the owner approved in waves:
 
 | Wave | Who | What |
 | --- | --- | --- |
-| 2 | one foundation agent | the native API (`src/Meitou.Gpu`), the seam that lets old and new code share a frame, the TERRAIN-mode mesh path as a pilot, tests and tools |
+| 2 | one foundation agent | the native API (`src/Meitou.Rendering/Gpu/`), the seam that lets old and new code share a frame, the TERRAIN-mode mesh path as a pilot, tests and tools |
 | 3a | six agents in parallel (A to F) | **parity ports**: each renderer records Vulkan directly with the *same* SPIR-V; 0 differing pixels |
 | 3b | the same agents | **native model** (frame/view constant buffers, push constants, bindless materials) and GPU-driven foliage (A) and objects (C, optional) |
 | 4 | one agent | multithreaded command recording |
@@ -112,7 +112,7 @@ Keeping a push-descriptor fallback for such devices is possible, at the price of
 
 *In short: a thin, Vulkan-shaped C# layer. Renderers create their GPU objects once at load (buffers, textures, pipelines) and record each
 frame with a command list that does exactly what it is told. No hidden state tracking, no lookups by name while drawing, no lazy pipeline
-creation. It lives in a new project so the renderers can use it without a dependency cycle.*
+creation. It lives in `Meitou.Rendering` itself (folder `Gpu/`), which takes the Vulkan reference, so the renderers can use it without a dependency cycle and without a new project.*
 
 ### 2.1 Project layout
 
@@ -120,20 +120,20 @@ Today `Meitou.Rendering` has no Vulkan reference, and `Meitou.Rendering.Vulkan` 
 and the upscaler interface `IUpscaler` (`Upscaling.cs`). Renderers cannot reference the Vulkan project without a cycle. The proposal:
 
 ```
-Meitou.Gpu (new, Silk.NET only) ← Meitou.Rendering (also Meitou.Core, Meitou.Data) ← Meitou.Rendering.Vulkan (VkGl, presenter, upscalers) ← Display / Game / viewer
+Meitou.Rendering (renderers + Gpu/: native API, Core, Shaders; Silk.NET; also Meitou.Core, Meitou.Data) ← Meitou.Rendering.Vulkan (VkGl, presenter, upscalers) ← Display / Game / viewer
 ```
 
-- **`src/Meitou.Gpu`** (new; Silk.NET.Vulkan, .Extensions.EXT/KHR, .Shaderc): `Core/` and `Shaders/` **move** here from
+- **`src/Meitou.Rendering/Gpu/`** (the folder that holds `IGl` today; the project gains Silk.NET.Vulkan, .Extensions.EXT/KHR, .Shaderc): `Core/` and `Shaders/` **move** here from
   `Meitou.Rendering.Vulkan` with their namespaces unchanged for now (`Meitou.Rendering.Vulkan.Core`, `...Shaders`), so `VkGl` and the tests
-  compile untouched. The native API is added under the namespace `Meitou.Gpu`. The namespaces are renamed in phase 8.
-- **`Meitou.Rendering`** gains a reference to `Meitou.Gpu`. Renderers use Silk.NET's enums (`Format`, `CompareOp`, `CullModeFlags`,
+  compile untouched. The native API is added under the namespace `Meitou.Rendering.Gpu`. The namespaces are renamed in phase 8. Owner decision (2026-10-06): no new project; a folder rule replaces the project boundary (renderers use the public native API, not `Core/` internals).
+- **`Meitou.Rendering`** gains the Silk.NET Vulkan references. Renderers use Silk.NET's enums (`Format`, `CompareOp`, `CullModeFlags`,
   `PipelineStageFlags2`...) directly. There is one backend, so duplicating them would only add a translation step.
 - **`Meitou.Rendering.Vulkan`** keeps `VkGl`, `VulkanPresenter` and the upscalers until phase 8 (section 8).
 
 ### 2.2 Device, queues, frame
 
 ```csharp
-namespace Meitou.Gpu;
+namespace Meitou.Rendering.Gpu;
 
 /// One per device. Owns what every renderer shares. Created by VulkanDisplay next to VkGl, from the same VulkanDevice.
 public sealed class GpuContext : IDisposable
@@ -214,7 +214,7 @@ public sealed class Texture : IDisposable
     public ImageView Attachment(int level = 0, int layer = 0);
 }
 
-/// GL's sampler state as a value. FromGl replicates VkGl.SamplerFor exactly: the code moves to Meitou.Gpu and VkGl calls it,
+/// GL's sampler state as a value. FromGl replicates VkGl.SamplerFor exactly: the code moves to Meitou.Rendering/Gpu and VkGl calls it,
 /// so both paths share one function.
 public readonly record struct SamplerDesc(Filter Min, Filter Mag, SamplerMipmapMode Mip, bool Mipmapped,
     SamplerAddressMode U, SamplerAddressMode V, SamplerAddressMode W, bool Compare, CompareOp Op, bool TransparentBorder,
@@ -229,7 +229,7 @@ public sealed class SamplerCache { public Sampler Get(in SamplerDesc desc); }   
 The format and sampler rules that decide pixels are moved, not rewritten. `VkGl.VkFormat` maps `DEPTH_COMPONENT24` to `D32_SFLOAT` and
 `RGB8` to `RGBA8`, and has no sRGB formats. `VkGl.SamplerFor` covers the NVIDIA anisotropic bias, the upscaler bias on mipmapped samplers
 only, nearest filtering for integer formats, `MaxLod 0.25` without mips, and the border colours. `VkGl.Factor` and `VkGl.Compare` map the
-blend factors and compare functions. All of these move into `Meitou.Gpu` as shared static functions, which `VkGl` then calls. Native and
+blend factors and compare functions. All of these move into `Meitou.Rendering/Gpu` as shared static functions, which `VkGl` then calls. Native and
 translated draws then cannot disagree on a sampler or a format (risks 2 and 3).
 
 ### 2.5 Pipelines
@@ -466,10 +466,10 @@ Rules the `LegacyProgram` must keep (all from VkGl, risk 7):
 - **The CPU copy of each default block persists across frames**, like a GL program's uniform state (VkGl keeps `VertexDefault` /
   `FragmentDefault` per program for its lifetime). Values set once at load, such as sampler units, `uWireframe` 0 or `uSkinned` 0, stay set.
 - **Conversions** follow `VkGl.Scatter`: a float into an int or bool member converts, an int into a float member converts, bools are stored
-  as 0/1. The function moves to `Meitou.Gpu` and both paths call it.
+  as 0/1. The function moves to `Meitou.Rendering/Gpu` and both paths call it.
 - **Missing textures** read as the GL default: a 1×1 (0, 0, 0, 1) texture, and a depth dummy cleared to 1 for shadow samplers
   (`VkGl.SamplerTexture`). The renderers rely on this: `Bind(0, 0)` in the foliage, objects and post code means "no texture". The dummies
-  move to `Meitou.Gpu`.
+  move to `Meitou.Rendering/Gpu`.
 - **Disabled vertex attributes** read (0, 0, 0, 1) as float or (0, 0, 0, 1) as int (`VkGl.InitDummies`), with a stride-0 binding. Here
   `aBones` and `aWeights` of `Shaders.MeshVertex` are disabled for foliage and objects.
 - **Frame-global uniforms and textures** (atmosphere, shadow blocks and maps, terrain heights) are set by name through `FrameGlobals`
@@ -861,7 +861,7 @@ prepared by the foundation beforehand or left untouched.*
 
 Deliverables, in order. Each step lands only after the gate (7.7) has passed:
 
-1. `src/Meitou.Gpu` with `Core/` and `Shaders/` moved there, the reference changes, nothing else. Gate: the build, the tests, and the 10 views
+1. `src/Meitou.Rendering/Gpu/` with `Core/` and `Shaders/` moved there, the Silk.NET references added to `Meitou.Rendering`, nothing else. Gate: the build, the tests, and the 10 views
    identical.
 2. The shared pixel-deciding functions moved out of VkGl (formats, samplers, blend factors, compare ops, `Scatter`, the dummy textures and
    vertex buffer), with VkGl calling them.
@@ -881,7 +881,7 @@ Deliverables, in order. Each step lands only after the gate (7.7) has passed:
    it. This is mechanical, and after it no port agent needs to edit `CreateGpu`.
 9. `FrameProfiler` timestamps on `QueryArena` through `Interleave` (StageClock keeps working while the stages move).
 
-After wave 2 the foundation agent stays on as **API steward** for wave 3 (open question 6). Agents request additions to `Meitou.Gpu`.
+After wave 2 the foundation agent stays on as **API steward** for wave 3 (open question 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the
 native shader prelude and the shared native shader variants (3.3), each proven on one consumer.
 
@@ -899,7 +899,7 @@ Each agent owns its files completely: it may edit them, and nobody else may. Cal
 | **F overlays, settings, debug** | `DebugOverlay.cs`, `SettingsPanel.cs`, `FrameProfiler.cs`, `FramebufferCapture.cs`, `ShadowPass.DrawDebug` / `CaptureDepth` and their shader text, the viewer's `Program.cs`, `CharacterApp.cs`, `WorldApp.cs`, `WorldApp.Benchmark.cs`, the game's `Program.cs` (its IGl calls: the screenshot target and readback) | 42 + 6 + 2 + debug views + 74 + 11 | (optional, open question 10) overlay text and panels, profiler chart, screenshots and readback, the debug views | native model |
 
 **Frozen after wave 2** (only the steward edits them, additively):
-- `src/Meitou.Gpu/**`, `src/Meitou.Rendering.Vulkan/VkGl*.cs`, `Gpu/IGl.cs`, `Gpu/GlEnums.cs`, `Gpu/IGlInterop.cs`, `FrameGlobals`.
+- `src/Meitou.Rendering/Gpu/**` (native API, Core, Shaders), `src/Meitou.Rendering.Vulkan/VkGl*.cs`, `Gpu/IGl.cs`, `Gpu/GlEnums.cs`, `Gpu/IGlInterop.cs`, `FrameGlobals`.
 - Shared shader text: `Shaders.cs`, `ShadowShaders.cs` (its `Functions`, `DepthFragment`, `MeshDepthFragment` text), `MeitouShadowShaders.cs`
   text, `AtmosphereShaders.cs` (D owns its *meaning* but changes it only through the steward, since every renderer includes it), and the
   native prelude.
@@ -1062,9 +1062,9 @@ Deleted:
   with the seam.
 
 Moved:
-- `VulkanPresenter` and the upscalers into `Meitou.Rendering` (or a `Meitou.Rendering.Vendor` project, if the vendor code should stay
-  apart), on native `Texture`s. `Meitou.Rendering.Vulkan` is then empty and removed.
-- `Meitou.Gpu`'s `Core/` and `Shaders/` namespaces renamed to `Meitou.Gpu.*`.
+- `VulkanPresenter` and the upscalers into `Meitou.Rendering`, on native `Texture`s. `Meitou.Rendering.Vulkan` is then empty and removed:
+  one project fewer than before the migration.
+- The moved `Core/` and `Shaders/` namespaces renamed to `Meitou.Rendering.Gpu.*`.
 
 Updated: docs/engine.md "Backend interface" and "Vulkan backend" rewritten for the native API. DECISIONS 7 marked superseded by 22 (if
 adopted), and 18's "the GL-shaped IGl over VkGl stays" sentence amended. The memory note on `IGl` staying is updated by the owner.
