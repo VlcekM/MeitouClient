@@ -10,8 +10,8 @@ interface. Everything here is an **engine choice** unless it cites a fact about 
 | --- | --- | --- |
 | `src/Meitou.Core` | library | The install (`GameInstall`: `KENSHI_PATH` / `meitou.local.json`). |
 | `src/Meitou.Data` | library | Readers for the game's files (FCS, Ogre, DDS, world data) and the facts about the game as code (`KenshiCamera`, `KenshiLighting`, `ShadowCascades`, `TerrainQuadtree`...). No GPU, no windowing. |
-| `src/Meitou.Engine` | library | The simulation frame: fixed tick, game clock, input actions, the camera rig. No GPU, no windowing (tested headless). |
-| `src/Meitou.Rendering` | library | The world renderers, their streaming, the frame (`WorldFrame`) and the backend interface (`Backend/`) with its OpenGL backend. |
+| `src/Meitou.Engine` | library | The simulation frame: `WorldSession` (what is loaded, tick, clock, input, camera), fixed tick, game clock, input actions, the camera rig. No GPU, no windowing (tested headless). |
+| `src/Meitou.Rendering` | library | The world renderers, their streaming and the frame (`WorldFrame`). |
 | `src/Meitou.Game` | exe `meitou` | The game: window, input, the loop; boots into the world. |
 | `tools/Meitou.ModelViewer` | exe `meitou-viewer` | The debug viewer (meshes, characters, `--world`) on the same libraries. |
 | `tools/Meitou.Tools` | exe `meitou-tools` | Surveys of the install; `image-diff` for renderer parity checks. |
@@ -71,24 +71,12 @@ screenshot (temp folder), `Esc` quit.
 - **Determinism of pictures**: offscreen renders (`--screenshot`, `--fly-benchmark`) hold the grass sway still
   (`FoliageRenderer.SwaySeconds = 0`), so the same command gives the same picture; interactively the sway follows real time.
 
-## Backend interface (`Meitou.Rendering.Backend`)
+## Backend interface
 
-A small API shaped after Vulkan so that a Vulkan backend can implement it without emulation:
-
-- `IGpuDevice`: capabilities, frames in flight, resource creation (buffers, textures and arrays, samplers, pipelines, GPU
-  timers), deferred `Release` (destroys a resource once the frames in flight that may use it have finished), the frame protocol
-  (`BeginFrame`, record, `EndFrame`), `WaitIdle`, `ReadPixels`.
-- `IGpuCommandList`: render passes (attachments with load/store and resolve), pipeline, vertex/index buffers, uniform data and
-  buffers by binding, textures by binding, draws (instanced, indexed), buffer and texture updates (BCn blocks as stored), mip
-  generation, timers.
-- Pipelines carry their fixed state (cull, depth, blend, alpha to coverage, depth bias) and the target formats, as Vulkan's do.
-  Shaders are GLSL; the binding numbers are shared between backends (OpenGL uses `GL_ARB_shading_language_420pack`'s
-  `layout(binding = n)`, Vulkan set 0).
-- `Backend/OpenGL/GlDevice`: the OpenGL 3.3 implementation (immediate: commands run as recorded; `Release` frees at once).
-
-**Status (Phase 1)**: the renderers still issue their own GL calls through the `GL` object; the device exists and is created at
-boot, but no renderer draws through it yet. Moving each renderer onto the interface happens as its Vulkan version is written
-(Phase 2, [../DECISIONS.md](../DECISIONS.md)), checked against the GL pictures with `tools/scripts/parity.sh`.
+Phase 1 keeps the renderers on OpenGL 3.3 through Silk.NET's `GL` object, unchanged (the parity check below reads 0.0000
+against master). Phase 2 puts them behind a GL-shaped interface (the subset of GL calls the renderers use, with the same
+signatures and enums) implemented twice: a pass-through to OpenGL and a translation onto Vulkan; see
+[../DECISIONS.md](../DECISIONS.md) for why it is GL-shaped rather than Vulkan-shaped.
 
 ## Checking a change
 

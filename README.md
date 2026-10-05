@@ -36,7 +36,7 @@ dotnet run --project src/Meitou.Game            # the game: boots into The Hub w
 | `src/Meitou.Core` | Shared primitives, game install discovery |
 | `src/Meitou.Data` | Kenshi data: `Fcs/` reads and writes `.mod` / `.base` byte-exactly; `GameDatabase` merges the load order; `Ogre/` reads `.mesh`, `.skeleton` and material scripts; `Textures/` decodes DDS and other images; `World/` reads the heightmap and zone files |
 | `src/Meitou.Engine` | The simulation frame: fixed tick, game clock, input bindings, the Kenshi and free cameras ([docs/engine.md](docs/engine.md)) |
-| `src/Meitou.Rendering` | The world renderers (terrain, objects, foliage, water, sky, shadows, post), streaming, and the GPU backend interface with its OpenGL backend |
+| `src/Meitou.Rendering` | The world renderers (terrain, objects, foliage, water, sky, shadows, post), and streaming (OpenGL 3.3) |
 | `src/Meitou.Game` | `meitou`: the game executable |
 | `tools/Meitou.ModelViewer` | `meitou-viewer`: renders a `.mesh` with textures and animations (OpenGL via Silk.NET); see [docs/viewer.md](docs/viewer.md) |
 | `tools/Meitou.Tools` | `meitou-tools`: `formats`, `fcs <file>`, `load`, `meshes`, `skeletons`, `materials`, `fcs-types`, `fcs-records <type>`, `world`, `world-map <png>` to inspect game data; `image-diff` to compare screenshots |

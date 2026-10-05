@@ -68,7 +68,7 @@ Status as of 2026-10-05. Details and open questions live in the linked docs.
    from the save writer.
 7. **Presentation** — *partly.* `meitou` boots into the world with the Kenshi camera on a fixed 30 Hz tick with interpolated
    drawing (`src/Meitou.Engine`, `src/Meitou.Game`, [docs/engine.md](docs/engine.md)); the world renderers are a library
-   (`src/Meitou.Rendering`, OpenGL 3.3) behind a backend interface shaped for Vulkan, shared with the viewer. To do: game renderer
+   (`src/Meitou.Rendering`, OpenGL 3.3), shared with the viewer. To do: game renderer
    (shadows, effects) with graphics options (terrain LOD distance, now fixed at its useful maximum, and
    material distance), MyGUI-compatible UI, audio, particles, physics/ragdolls.
 8. **Parity** — *not started.* Side-by-side comparison against the original, mod compatibility

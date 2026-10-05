@@ -2,11 +2,11 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
+using Meitou.Engine;
 using Meitou.Engine.Cameras;
 using Meitou.Engine.Input;
 using Meitou.Engine.Time;
 using Meitou.Rendering;
-using Meitou.Rendering.Backend.OpenGL;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
@@ -110,44 +110,37 @@ static class Program
 /// </summary>
 sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config)
 {
-    readonly InputState input = new();
-    readonly InputBindings bindings = new();
-    FixedStepClock ticks = null!;
-    readonly GameClock clock = new(o.Hour);
-    CameraRig rig = null!;
+    WorldSession session = null!;
     WorldFrame.Gpu gpu = null!;
     WorldCamera camera = null!;
     WorldRenderOptions render = null!;
     readonly Stopwatch realTime = Stopwatch.StartNew();
-    static readonly float[] TimeScales = [1, 2, 3, 5];   // Kenshi's speed buttons are 1x, 2x, 3x; 5x as a common mod option (engine choice)
-    int timeScale;
 
     public int Run()
     {
-        foreach (var problem in bindings.Apply(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
-        ticks = new FixedStepClock(g.TickRate ?? config.TickRate);
         return o.Screenshot is not null ? Screenshot() : Interactive();
     }
 
     void Boot(GL gl, bool interactive)
     {
-        new GlDevice(gl);   // capabilities check of the backend; the renderers still use GL directly (docs/engine.md)
         gpu = WorldFrame.CreateGpu(gl, install, scene, assets, o, interactive);
         (camera, render) = WorldFrame.Setup(scene, o);
-        rig = new CameraRig(gpu.Terrain.HeightAt);
+        session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate);
+        foreach (var problem in session.Bindings.Apply(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
+        var rig = session.Camera;
         var target = camera.Target;
         rig.Place(new Vector2(target.X, target.Z), (o.Yaw ?? 30) * MathF.PI / 180,
             (o.Pitch ?? Meitou.Data.World.KenshiCamera.InitialPitchDegrees) * MathF.PI / 180, o.Distance ?? Meitou.Data.World.KenshiCamera.InitialDistance);
         if (g.FreeCamera)
         {
-            input.SetKey(FirstKey(InputAction.ToggleFreeCamera), true);
-            Tick();
-            input.SetKey(FirstKey(InputAction.ToggleFreeCamera), false);
+            session.Input.SetKey(FirstKey(InputAction.ToggleFreeCamera), true);
+            session.Tick();
+            session.Input.SetKey(FirstKey(InputAction.ToggleFreeCamera), false);
         }
-        ApplyCamera(rig.Current);
+        ApplyCamera(session.Camera.Current);
     }
 
-    EngineKey FirstKey(InputAction action) => bindings.Get(action).First(b => !b.IsMouse).Key;
+    EngineKey FirstKey(InputAction action) => session.Bindings.Get(action).First(b => !b.IsMouse).Key;
 
     void ApplyCamera(CameraState s)
     {
@@ -157,23 +150,10 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         camera.Distance = s.Distance;
     }
 
-    /// <summary>One simulation tick: actions from the input, then the camera and the clock.</summary>
-    ActionState Tick()
-    {
-        var actions = bindings.Resolve(input.Consume());
-        if (actions.Pressed(InputAction.Pause)) clock.Paused = !clock.Paused;
-        if (actions.Pressed(InputAction.TimeFaster)) timeScale = Math.Min(timeScale + 1, TimeScales.Length - 1);
-        if (actions.Pressed(InputAction.TimeSlower)) timeScale = Math.Max(timeScale - 1, 0);
-        clock.TimeScale = TimeScales[timeScale];
-        rig.Update((float)ticks.TickSeconds, actions);
-        clock.Tick(ticks.TickSeconds);
-        return actions;
-    }
-
     void DrawWorld(GL gl, int width, int height)
     {
         if (gpu.Foliage is { } foliage && o.Screenshot is null) foliage.SwaySeconds = realTime.Elapsed.TotalSeconds;
-        WorldFrame.Draw(gl, gpu, scene, camera, render, width, height, (float)clock.HourOfDay, (float)realTime.Elapsed.TotalSeconds / 600f, o.FogDistance);
+        WorldFrame.Draw(gl, gpu, scene, camera, render, width, height, (float)session.Clock.HourOfDay, (float)realTime.Elapsed.TotalSeconds / 600f, o.FogDistance);
     }
 
     unsafe int Screenshot()
@@ -189,8 +169,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         window.Initialize();
         using var gl = window.CreateOpenGL();
         Boot(gl, interactive: false);
-        for (int i = 0; i < g.Ticks; i++) Tick();
-        ApplyCamera(rig.Current);
+        for (int i = 0; i < g.Ticks; i++) session.Tick();
+        ApplyCamera(session.Camera.Current);
         gpu.Streamer?.Settle(gpu.Anchor ?? camera.Eye);
         gpu.Objects?.Settle(gpu.Anchor ?? camera.Eye);
         gpu.Foliage?.Settle(gpu.Anchor ?? camera.Eye);
@@ -205,9 +185,9 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         DrawWorld(gl, w, h);
         DrawWorld(gl, w, h);
         gl.Finish();
-        var s = rig.Current;
-        Console.WriteLine($"camera    {(rig.IsFree ? "free" : "strategy")}: pivot {s.Target.X:0}, {s.Target.Y:0}, {s.Target.Z:0}, eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, " +
-            $"yaw {s.Yaw * 180 / MathF.PI:0.#}, pitch {s.Pitch * 180 / MathF.PI:0.#}, boom {s.Distance:0.#}; {ticks.TotalTicks} ticks, game time {clock.HourOfDay:0.00} h");
+        var s = session.Camera.Current;
+        Console.WriteLine($"camera    {(session.Camera.IsFree ? "free" : "strategy")}: pivot {s.Target.X:0}, {s.Target.Y:0}, {s.Target.Z:0}, eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, " +
+            $"yaw {s.Yaw * 180 / MathF.PI:0.#}, pitch {s.Pitch * 180 / MathF.PI:0.#}, boom {s.Distance:0.#}; {session.Ticks.TotalTicks} ticks, game time {session.Clock.HourOfDay:0.00} h");
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, fbo);
         GlCapture.SavePng(gl, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
@@ -247,8 +227,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         Vector2 Pixels(Vector2 p) => p * new Vector2(window.FramebufferSize.X / (float)Math.Max(window.Size.X, 1), window.FramebufferSize.Y / (float)Math.Max(window.Size.Y, 1));
         foreach (var kb in silkInput.Keyboards)
         {
-            kb.KeyDown += (_, k, _) => { if (Map(k) is { } key) input.SetKey(key, true); };
-            kb.KeyUp += (_, k, _) => { if (Map(k) is { } key) input.SetKey(key, false); };
+            kb.KeyDown += (_, k, _) => { if (Map(k) is { } key) session.Input.SetKey(key, true); };
+            kb.KeyUp += (_, k, _) => { if (Map(k) is { } key) session.Input.SetKey(key, false); };
         }
         foreach (var mouse in silkInput.Mice)
         {
@@ -256,25 +236,25 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             {
                 if (b == SilkButton.Left && panel?.MouseDown(Pixels(m.Position)) == true) { panelDrag = true; return; }
                 if (panel?.Contains(Pixels(m.Position)) == true) return;
-                if (Map(b) is { } button) input.SetMouseButton(button, true);
+                if (Map(b) is { } button) session.Input.SetMouseButton(button, true);
             };
             mouse.MouseUp += (_, b) =>
             {
                 panel?.MouseUp();
                 panelDrag = false;
-                if (Map(b) is { } button) input.SetMouseButton(button, false);
+                if (Map(b) is { } button) session.Input.SetMouseButton(button, false);
             };
             mouse.MouseMove += (_, p) =>
             {
-                input.SetMousePosition(p.X, p.Y);
+                session.Input.SetMousePosition(p.X, p.Y);
                 if (panel?.MouseMove(Pixels(p)) == true || panelDrag) { lastMouse = p; return; }
-                if (lastMouse is { } last) input.AddMouseDelta(p.X - last.X, p.Y - last.Y);
+                if (lastMouse is { } last) session.Input.AddMouseDelta(p.X - last.X, p.Y - last.Y);
                 lastMouse = p;
             };
-            mouse.Scroll += (m, wheel) => { if (panel?.Contains(Pixels(m.Position)) != true) input.AddWheel(wheel.Y); };
+            mouse.Scroll += (m, wheel) => { if (panel?.Contains(Pixels(m.Position)) != true) session.Input.AddWheel(wheel.Y); };
         }
         Console.WriteLine(GameOptions.Usage[GameOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
-        Console.WriteLine($"display   vsync {(vsync ? "on" : "off")}, frame limit {(vsync || fpsLimit <= 0 ? "none" : fpsLimit + " fps")}, simulation {ticks.TickRate:0} Hz; settings in {config.Path}");
+        Console.WriteLine($"display   vsync {(vsync ? "on" : "off")}, frame limit {(vsync || fpsLimit <= 0 ? "none" : fpsLimit + " fps")}, simulation {session.Ticks.TickRate:0} Hz; settings in {config.Path}");
 
         var frame = Stopwatch.StartNew();
         double last = 0, titleTimer = 0, cpuSum = 0;
@@ -286,15 +266,15 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             if (window.IsClosing) break;
             double now = frame.Elapsed.TotalSeconds, dt = now - last;
             last = now;
-            int n = ticks.Advance(dt);
+            int n = session.Ticks.Advance(dt);
             for (int i = 0; i < n; i++)
             {
-                var actions = Tick();
+                var actions = session.Tick();
                 if (actions.Pressed(InputAction.Quit)) quit = true;
                 if (actions.Pressed(InputAction.ToggleSettings) && panel is not null) panel.Visible = !panel.Visible;
                 if (actions.Pressed(InputAction.Screenshot)) screenshotRequested = true;
             }
-            ApplyCamera(rig.At((float)ticks.Alpha));
+            ApplyCamera(session.CameraAt());
             var size = window.FramebufferSize;
             if (size.X > 0 && size.Y > 0)
             {
@@ -318,20 +298,20 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             titleTimer += dt;
             if (titleTimer >= 0.5)
             {
-                var s = rig.Current;
-                int minutes = (int)(clock.HourOfDay * 60);
-                window.Title = $"Meitou | {frames / titleTimer:0} fps, cpu {cpuSum / Math.Max(frames, 1):0.00} ms | {(rig.IsFree ? "free camera" : $"boom {s.Distance:0}")} | " +
-                    $"{minutes / 60:00}:{minutes % 60:00} x{TimeScales[timeScale]:0}{(clock.Paused ? " paused" : "")} | {s.Target.X:0}, {s.Target.Z:0}";
+                var s = session.Camera.Current;
+                int minutes = (int)(session.Clock.HourOfDay * 60);
+                window.Title = $"Meitou | {frames / titleTimer:0} fps, cpu {cpuSum / Math.Max(frames, 1):0.00} ms | {(session.Camera.IsFree ? "free camera" : $"boom {s.Distance:0}")} | " +
+                    $"{minutes / 60:00}:{minutes % 60:00} x{session.TimeScale:0}{(session.Clock.Paused ? " paused" : "")} | {s.Target.X:0}, {s.Target.Z:0}";
                 titleTimer = cpuSum = 0;
                 frames = 0;
             }
             totalFrames++;
-            if (g.QuitAfter is { } quitAfter && now >= quitAfter) { Console.WriteLine($"smoke     {totalFrames} frames in {now:0.0} s: {totalFrames / now:0} fps on average, {ticks.TotalTicks} ticks"); quit = true; }
+            if (g.QuitAfter is { } quitAfter && now >= quitAfter) { Console.WriteLine($"smoke     {totalFrames} frames in {now:0.0} s: {totalFrames / now:0} fps on average, {session.Ticks.TotalTicks} ticks"); quit = true; }
             if (!vsync && fpsLimit > 0) Limit(frame, now, 1.0 / fpsLimit);
         }
         if (panel is not null)
             foreach (var slider in panel.Sliders) config.Graphics[slider.Label] = slider.Get();
-        config.Bindings = bindings.ToDictionary();
+        config.Bindings = session.Bindings.ToDictionary();
         config.Save();
         overlay?.Dispose();
         gpu.Dispose();
