@@ -118,3 +118,14 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     staggered schedule (CPU is the bottleneck: the far cascades' foliage casters are most of the pass's CPU in wide views), a soft receiver
     with a blocker search, and the terrain's own shadow beyond the range from a per-sun-direction sweep of the world height grid
     (one fetch per pixel instead of a ray march in forward shaders with overdraw). The faithful path is untouched (pixel-identical).
+22. **Proposed: a native Vulkan-shaped renderer API replaces the GL-shaped `IGl` (would supersede 7 and the "IGl stays" sentence of
+    18).** Design in docs/renderer-native.md. Evidence: the frame is CPU-bound (forest: foliage 8.7 ms and shadows 6.1 ms of CPU against
+    7 ms of GPU), and a scratchpad spike on the RTX 4070 measured a foliage mesh draw at 2.0 µs through VkGl as `FoliageRenderer.DrawMesh`
+    issues it, against 0.18-0.30 µs recorded directly with the same SPIR-V and 0.06-0.10 µs for a push-constant or indirect draw. Plan: a
+    new `Meitou.Gpu` project (Core and Shaders move there); a seam (`IGlInterop`) that lets native and VkGl code share a frame with full
+    barriers, all images in GENERAL, and VkGl's pipeline and descriptor caches invalidated after each native segment (without that,
+    VkGl silently draws with the native pipeline: reproduced, and invisible to the validation layer); parity ports first with
+    byte-identical SPIR-V and VkGl's descriptor layout, the native model (bindless textures, frame and view constants, push constants)
+    as a second gated step; GPU-driven culling for foliage after a CPU reference-alignment step; secondary command buffers in wave 4;
+    `IGl` and `VkGl` (1,452 calls in 27 files) deleted in phase 8. Gate: 0 differing pixels in the ten `parity.sh` views with
+    `--faithful all`, the baseline run twice first. Open questions for the owner are listed at the end of the doc.

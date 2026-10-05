@@ -75,6 +75,8 @@ screenshot (C:\Temp), `Esc` quit.
 
 ## Backend interface
 
+A native Vulkan-shaped API to replace `IGl` is proposed in [renderer-native.md](renderer-native.md) (DECISIONS 22, not adopted yet).
+
 The renderers call `IGl` (`src/Meitou.Rendering/Gpu/IGl.cs`): the exact subset of OpenGL 3.3 they use, with Silk.NET's former
 signatures. The enumerations it takes (`GLEnum`, `TextureTarget`, `InternalFormat`, ...) are ours, in `Gpu/GlEnums.cs`: the GL
 specification's names and token values, only the members the code uses. There is one implementation, `VkGl`

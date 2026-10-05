@@ -45,3 +45,4 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [game/ui-screens.md](game/ui-screens.md) | UI screens: MyGUI stack and resources, the screen catalog, main menu and new game flow, HUD, overview, inventory, trade, dialogue, build, tutorials |
 | [viewer.md](viewer.md) | `meitou-viewer`: usage, how textures are resolved from FCS records, world mode (terrain + placed objects), known gaps |
 | [engine.md](engine.md) | Engine architecture: projects, the game loop (fixed tick, interpolation, game time, input bindings), the Kenshi and free cameras, the renderers and the backend interface, how to check renderer changes |
+| [renderer-native.md](renderer-native.md) | **Proposed** native Vulkan renderer API replacing `IGl`/`VkGl`: API surface, shaders, the coexistence seam, GPU-driven foliage and objects, threading, the parallel port plan and parity gate, phase 8 |
