@@ -214,11 +214,20 @@ public sealed unsafe class ShaderLibrary
     public ShaderProgram Native(string vertexGlsl, string fragmentGlsl, string name, DescriptorSetLayout[] setLayouts, uint pushConstantBytes)
     {
         if (pushConstantBytes > 128) throw new ArgumentOutOfRangeException(nameof(pushConstantBytes), "push constants are limited to 128 bytes (the guaranteed minimum)");
-        var v = Compiler.CompileNative(vertexGlsl, fragment: false);
-        var f = Compiler.CompileNative(fragmentGlsl, fragment: true);
+        // The stages are linked by name as GL does (docs/renderer-native.md 3.4: InterfaceLocations stays for both models): varyings without
+        // an explicit location get the same one in both stages, fragment outputs 0, 1, ... (explicit locations are kept).
+        var (vs, fs) = InterfaceLocations.Apply(vertexGlsl, fragmentGlsl);
+        var v = Compiler.CompileNative(vs, fragment: false);
+        var f = Compiler.CompileNative(fs, fragment: true);
         var stages = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit;
         var layout = CreateLayout(setLayouts, pushConstantBytes, stages);
         var program = new ShaderProgram(device, name, ShaderModel.Native, v, f, null, null, setLayouts, [], layout, false, pushConstantBytes, pushConstantBytes > 0 ? stages : 0);
+        foreach (var block in program.VertexReflection!.Blocks.Concat(program.FragmentReflection!.Blocks))
+            if (block.Kind == BlockKind.PushConstant && block.Size > pushConstantBytes)
+            {
+                program.Dispose();
+                throw new InvalidOperationException($"{name}: push-constant block '{block.Name}' is {block.Size} bytes, the layout's range {pushConstantBytes}");
+            }
         // The samplers declared in the bindless set must be the table's arrays (a float view read through a usampler is undefined).
         int bindless = Array.FindIndex(setLayouts, l => l.Handle != 0 && l.Handle == BindlessLayout.Handle);
         if (bindless >= 0)

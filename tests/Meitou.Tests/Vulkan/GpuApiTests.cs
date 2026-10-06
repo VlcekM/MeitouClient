@@ -141,7 +141,7 @@ public class GpuApiTests
             ?? throw new MissingFieldException(t.Name, name));
 
     /// <summary>Every source pair the world renderers link (WorldGl.Program call sites).</summary>
-    static IEnumerable<(string Name, string Vertex, string Fragment)> WorldPrograms()
+    internal static IEnumerable<(string Name, string Vertex, string Fragment)> WorldPrograms()
     {
         string sky = Field(typeof(SkyRenderer), "Vertex");
         yield return ("sky simple", sky, Field(typeof(SkyRenderer), "SimpleFragment"));
