@@ -400,7 +400,11 @@ static partial class WorldApp
                 stats.Clear();
                 stats.Add($"{frames / titleTimer:0} fps (vsync), cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms");
                 var (vramUsed, vramBudget) = display.VkGl.Context.Device.VideoMemory();
-                stats.Add($"vram        {vramUsed / 1073741824.0:0.00} of {vramBudget / 1073741824.0:0.0} GB");
+                var alloc = display.VkGl.Context.Device.Allocator;
+                stats.Add($"vram        {vramUsed / 1073741824.0:0.00} of {vramBudget / 1073741824.0:0.0} GB; our blocks {alloc.TotalAllocatedBytes / 1073741824.0:0.00} GB, {alloc.TotalUsedBytes / 1073741824.0:0.00} used");
+                // The largest owners (GpuAllocator.Breakdown: names without their numbers), to see what fills the VRAM.
+                foreach (var (name, count, bytes, _) in alloc.Breakdown().Take(8))
+                    stats.Add($"  {name,-26} {bytes / 1048576.0,7:0} MB  x{count}");
                 if (gpu.Reflection is { Valid: true } refl && render.Reflections) stats.Add($"reflection  cpu {refl.CpuMs:0.00} ms, gpu {refl.GpuMs:0.00} ms");
                 gpu.Sky.Poll();
                 stats.Add(gpu.Sky.Physical ? $"sky         cpu {gpu.Sky.PrepareMs:0.00} ms, gpu {gpu.Sky.GpuMs:0.00} ms" : "sky         simple");
@@ -414,6 +418,8 @@ static partial class WorldApp
                 if (gpu.Foliage is { Enabled: true } fo)
                     stats.Add($"foliage     {fo.DrawnInstances} + {fo.DrawnBlades / 1000}k grass, {fo.DrawCalls} calls, cpu {fo.LastDrawCpuMs:0.00} ms, gpu {fo.GpuMs:0.00} ms" + (fo.Pending > 0 ? $", loading {fo.Pending}" : ""));
                 stats.Add($"resident    {((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576} MB");
+                if (gpu.Foliage is { } fr) stats.Add($"  foliage   {fr.ResidentDescription}; {fr.Describe()}");
+                if (gpu.Objects is { } orr) stats.Add($"  objects   {orr.ResidentDescription}");
                 titleTimer = 0;
                 frames = 0;
                 cpuMs = gpuMs = 0;

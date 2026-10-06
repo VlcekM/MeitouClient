@@ -50,6 +50,9 @@ public sealed class GpuBuffer
     public Allocation Allocation { get; internal set; } = null!;
     public ulong Size { get; internal set; }
     public BufferUsageFlags Usage { get; internal set; }
+    /// <summary>The name given at creation (diagnostics: <see cref="GpuAllocator.Breakdown"/>).</summary>
+    public string Name { get; internal set; } = "";
+    public MemoryKind Kind { get; internal set; }
     /// <summary>Host pointer to the start of the buffer (null for device-local memory).</summary>
     public unsafe void* Mapped => (void*)Allocation.MappedPointer;
 }
@@ -65,6 +68,8 @@ public sealed class GpuImage
     public uint ArrayLayers { get; internal set; }
     public SampleCountFlags Samples { get; internal set; }
     public ImageUsageFlags Usage { get; internal set; }
+    public string Name { get; internal set; } = "";
+    public MemoryKind Kind { get; internal set; }
 }
 
 /// <summary>
@@ -109,6 +114,29 @@ public sealed unsafe class GpuAllocator : IDisposable
     public int AllocationCount { get { lock (gate) return allocationCount; } }
     /// <summary>Buffers and images still alive (destroyed on dispose).</summary>
     public int LiveResourceCount { get { lock (gate) return liveBuffers.Count + liveImages.Count; } }
+
+    /// <summary>
+    /// The live resources by owner, largest first: buffers and images grouped by their name with digits and what follows a digit removed
+    /// ("gl texture 12" is "gl texture"), with the count, the bytes of their allocations and how many of those bytes are device-local.
+    /// </summary>
+    public List<(string Name, int Count, ulong Bytes, ulong DeviceLocal)> Breakdown()
+    {
+        var groups = new Dictionary<string, (int Count, ulong Bytes, ulong DeviceLocal)>();
+        void Add(string name, ulong bytes, MemoryKind kind)
+        {
+            int digit = name.AsSpan().IndexOfAnyInRange('0', '9');
+            string key = (digit >= 0 ? name[..digit] : name).TrimEnd(' ', '#', ':', '(');
+            if (key.Length == 0) key = "(unnamed)";
+            var g = groups.GetValueOrDefault(key);
+            groups[key] = (g.Count + 1, g.Bytes + bytes, g.DeviceLocal + (kind == MemoryKind.DeviceLocal ? bytes : 0));
+        }
+        lock (gate)
+        {
+            foreach (var b in liveBuffers) Add(b.Name, b.Allocation.Size, b.Kind);
+            foreach (var i in liveImages) Add(i.Name, i.Allocation.Size, i.Kind);
+        }
+        return groups.Select(g => (g.Key, g.Value.Count, g.Value.Bytes, g.Value.DeviceLocal)).OrderByDescending(g => g.Bytes).ToList();
+    }
 
     public List<BlockInfo> GetBlocks()
     {
@@ -461,7 +489,7 @@ public sealed unsafe class GpuAllocator : IDisposable
             Free(alloc);
             throw new VulkanException($"vkBindBufferMemory failed: {r}", r);
         }
-        var gb = new GpuBuffer { Buffer = buffer, Allocation = alloc, Size = size, Usage = usage };
+        var gb = new GpuBuffer { Buffer = buffer, Allocation = alloc, Size = size, Usage = usage, Name = name ?? "", Kind = kind };
         lock (gate)
         {
             liveBuffers.Add(gb);
@@ -504,6 +532,8 @@ public sealed unsafe class GpuAllocator : IDisposable
             ArrayLayers = info.ArrayLayers,
             Samples = info.Samples,
             Usage = info.Usage,
+            Name = name ?? "",
+            Kind = kind,
         };
         lock (gate)
         {
