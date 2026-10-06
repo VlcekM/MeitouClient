@@ -43,8 +43,11 @@ public sealed unsafe partial class ShadowPass
     ushort[]? coarse;
     int coarseSize;
     TerrainShadowMap? terrainMap;
-    uint blockerTexture, blockerFbo, blockerProgram, blockerVao;
-    int blockerSize, blockerAtlasU = -1, blockerSizeU = -1;
+    uint blockerTexture, blockerFbo;
+    LegacyProgram? blockerNative;
+    SamplerSlot blockerAtlasSlot;
+    UniformHandle blockerSizeHandle;
+    int blockerSize;
 
     /// <summary>The whole-world height grid (WorldScene.Coarse) for the terrain shadow beyond the range; uploaded when first needed.</summary>
     public void SetTerrain(ushort[] heights, int size) => (coarse, coarseSize) = (heights, size);
@@ -162,39 +165,55 @@ public sealed unsafe partial class ShadowPass
                 throw new InvalidOperationException("Shadow blocker framebuffer incomplete.");
             fresh = true;
         }
-        if (blockerProgram == 0)
+        if (blockerNative is null)
         {
-            blockerProgram = WorldGl.Program(gl, ShadowShaders.FullscreenVertex, MeitouShadowShaders.BlockerFragment);
-            blockerVao = gl.GenVertexArray();
-            blockerAtlasU = gl.GetUniformLocation(blockerProgram, "uAtlas");
-            blockerSizeU = gl.GetUniformLocation(blockerProgram, "uAtlasSize");
+            // Native (docs/renderer-native.md 7.1, wave 3 agent B, step P): VkGl's SPIR-V and layout, made here once, never inside a draw.
+            var p = blockerNative = LegacyProgram.Create(Gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.BlockerFragment, "shadow blockers");
+            (blockerAtlasSlot, blockerSizeHandle) = (p.Sampler("uAtlas"), p.Uniform("uAtlasSize"));
         }
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, blockerFbo);
         gl.Disable(EnableCap.DepthTest);
         gl.DepthMask(false);
         gl.Disable(EnableCap.CullFace);
-        gl.UseProgram(blockerProgram);
-        gl.BindVertexArray(blockerVao);
         gl.ActiveTexture(TextureUnit.Texture0);
         gl.BindTexture(TextureTarget.Texture2D, atlas);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)TextureCompareMode.None);
-        gl.Uniform1(blockerAtlasU, 0);
-        gl.Uniform1(blockerSizeU, (float)atlasSize);
-        int tile = Settings.TileSize / 2, grid = Settings.Grid, tiles = 0;
-        for (int i = 0; i < count; i++)
-        {
-            if (!drawn[i] && !fresh) continue;
-            gl.Viewport(i % grid * tile, i / grid * tile, (uint)tile, (uint)tile);
-            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
-            tiles++;
-        }
+        int tile = Settings.TileSize / 2, grid = Settings.Grid;
+        RecordBlockers(drawn, count, fresh, tile, grid, out int tiles);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)TextureCompareMode.CompareRefToTexture);
         gl.BindTexture(TextureTarget.Texture2D, 0);
-        gl.BindVertexArray(0);
         gl.DepthMask(true);
         gl.Enable(EnableCap.DepthTest);
         StepTiming.Add(StepTiming.Blocker, timing, tiles);
         return true;
+    }
+
+    /// <summary>
+    /// The blocker map's draws as one native segment in the pass VkGl has open on the blocker framebuffer: the atlas as GL has it bound on unit 0
+    /// (comparison off), <c>uAtlasSize</c>, then per tile its viewport and the fullscreen triangle.
+    /// </summary>
+    void RecordBlockers(ReadOnlySpan<bool> drawn, int count, bool fresh, int tile, int grid, out int tiles)
+    {
+        tiles = 0;
+        var p = blockerNative!;
+        var interop = Gpu.Interop!;
+        p.Set(blockerSizeHandle, (float)atlasSize);
+        p.Bind(blockerAtlasSlot, interop.SampledUnit(0, p.SamplerInfo(blockerAtlasSlot)));
+        var cmd = interop.BeginNativeInPass("shadow blockers");
+        var targets = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        var pipeline = Gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout([]), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, targets.Formats, "shadow blockers"));
+        state.Record(cmd, targets);
+        cmd.BindPipeline(pipeline);
+        p.Flush(cmd);
+        for (int i = 0; i < count; i++)
+        {
+            if (!drawn[i] && !fresh) continue;
+            cmd.SetViewport(new Silk.NET.Vulkan.Viewport(i % grid * tile, i / grid * tile, tile, tile, 0, 1));
+            cmd.Draw(3);
+            tiles++;
+        }
+        interop.EndNative(cmd);
     }
 
     /// <summary>The blocker search's and the filter's widest radius in a cascade (world units).</summary>
@@ -264,7 +283,7 @@ public sealed unsafe partial class ShadowPass
     {
         terrainMap?.Dispose();
         if (blockerTexture != 0) { gl.DeleteFramebuffer(blockerFbo); gl.DeleteTexture(blockerTexture); }
-        if (blockerProgram != 0) { gl.DeleteProgram(blockerProgram); gl.DeleteVertexArray(blockerVao); }
+        blockerNative?.Dispose();
         if (meitouUbo != 0) gl.DeleteBuffer(meitouUbo);
     }
 }

@@ -20,9 +20,12 @@ sealed unsafe class TerrainShadowMap : IDisposable
     public GpuContext Gpu { get; }
     readonly int size;
     readonly float spacing;
-    readonly uint heights, program, vao;
+    readonly uint heights;
+    readonly LegacyProgram sweep;
+    readonly SamplerSlot sourceSlot;
+    readonly UniformHandle uSize, uFirst, uStep, uDrop, uDistance;
     readonly uint[] targets = new uint[2], fbos = new uint[2];
-    readonly Dictionary<string, int> uniforms = [];
+
     Vector3 builtFor;
     int result = -1;
 
@@ -55,8 +58,10 @@ sealed unsafe class TerrainShadowMap : IDisposable
                 throw new InvalidOperationException("Terrain shadow framebuffer incomplete.");
         }
         gl.BindTexture(TextureTarget.Texture2D, 0);
-        program = WorldGl.Program(gl, ShadowShaders.FullscreenVertex, MeitouShadowShaders.SweepFragment);
-        vao = gl.GenVertexArray();
+        // Native (docs/renderer-native.md 7.1, wave 3 agent B, step P): VkGl's SPIR-V and layout, made once, never inside a draw.
+        sweep = LegacyProgram.Create(gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.SweepFragment, "terrain shadow sweep");
+        (sourceSlot, uSize, uFirst, uStep, uDrop, uDistance) = (sweep.Sampler("uSource"), sweep.Uniform("uSize"), sweep.Uniform("uFirst"),
+            sweep.Uniform("uStep"), sweep.Uniform("uDrop"), sweep.Uniform("uDistance"));
     }
 
     void Sampling()
@@ -96,30 +101,36 @@ sealed unsafe class TerrainShadowMap : IDisposable
         gl.Disable(EnableCap.ScissorTest);
         gl.DepthMask(false);
         gl.ColorMask(true, true, true, true);
-        gl.UseProgram(program);
-        gl.BindVertexArray(vao);
-        gl.Uniform1(U("uSource"), 0);
-        gl.Uniform1(U("uSize"), (float)size);
         gl.Viewport(0, 0, (uint)size, (uint)size);
         gl.ActiveTexture(TextureUnit.Texture0);
         int passes = 1;
         while ((1 << (passes - 1)) < size) passes++;
         int write = 0;
+        var interop = Gpu.Interop!;
+        sweep.Set(uSize, (float)size);
         for (int pass = 0; pass < passes; pass++)
         {
             float step = pass == 0 ? 1 : 1 << (pass - 1);   // the first pass reaches one sample, the k-th 2^(k-1) more
+            // GL side: this pass's target and source (a new pass for VkGl each time, which orders the ping-pong); then one native segment.
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbos[write]);
             gl.BindTexture(TextureTarget.Texture2D, pass == 0 ? heights : targets[1 - write]);
-            gl.Uniform1(U("uFirst"), pass == 0 ? 1 : 0);
-            gl.Uniform2(U("uStep"), direction.X * step, direction.Y * step);
-            gl.Uniform1(U("uDrop"), step * spacing * tangent);
-            gl.Uniform1(U("uDistance"), step * spacing);
-            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            sweep.Set(uFirst, pass == 0 ? 1 : 0);
+            sweep.Set(uStep, direction.X * step, direction.Y * step);
+            sweep.Set(uDrop, step * spacing * tangent);
+            sweep.Set(uDistance, step * spacing);
+            sweep.Bind(sourceSlot, interop.SampledUnit(0, sweep.SamplerInfo(sourceSlot)));
+            var cmd = interop.BeginNativeInPass("terrain shadow sweep");
+            var t = interop.CurrentTargets();
+            var state = interop.CurrentState();
+            state.Record(cmd, t);
+            cmd.BindPipeline(Gpu.Pipelines.Get(state.Pipeline(sweep.Program, sweep.VertexLayout([]), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, t.Formats, "terrain shadow sweep")));
+            sweep.Flush(cmd);
+            cmd.Draw(3);
+            interop.EndNative(cmd);
             write = 1 - write;
         }
         result = 1 - write;
         gl.BindTexture(TextureTarget.Texture2D, 0);
-        gl.BindVertexArray(0);
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         gl.DepthMask(true);
         gl.Enable(EnableCap.DepthTest);
@@ -130,17 +141,10 @@ sealed unsafe class TerrainShadowMap : IDisposable
         return true;
     }
 
-    int U(string name)
-    {
-        if (!uniforms.TryGetValue(name, out int location)) uniforms[name] = location = gl.GetUniformLocation(program, name);
-        return location;
-    }
-
     public void Dispose()
     {
         gl.DeleteTexture(heights);
         for (int i = 0; i < 2; i++) { gl.DeleteFramebuffer(fbos[i]); gl.DeleteTexture(targets[i]); }
-        gl.DeleteProgram(program);
-        gl.DeleteVertexArray(vao);
+        sweep.Dispose();
     }
 }
