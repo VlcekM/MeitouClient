@@ -395,4 +395,168 @@ static class TerrainShaders
         if (!fragment.Contains(uniform)) throw new InvalidOperationException("TerrainShaders.Fragment no longer declares uFeatureBiome.");
         return fragment.Replace(uniform, "flat in int vFeatureBiome;\n#define uFeatureBiome vFeatureBiome\n");
     }
+
+    // ---- the native model (docs/renderer-native.md 3.3, step O): the texts above through NativeShaders.Port, bodies unchanged ----
+
+    /// <summary>Set of <see cref="ConstantsBlock"/> (after the native model's frame set 0 and bindless set 1).</summary>
+    public const int ConstantsSet = 2;
+
+    /// <summary>
+    /// The terrain's own per-segment values (set 2, binding 0, a dynamic uniform buffer in the frame's constants; <see cref="TerrainConstants"/>
+    /// is the C# side): what <c>TerrainRenderer.Apply</c> and <c>BindHeights</c> set as loose uniforms, and the bindless indices of the
+    /// terrain's textures. Too big for the 128-byte push range, and the same for every draw of a segment.
+    /// </summary>
+    public const string ConstantsBlock = """
+        layout(std140, set = 2, binding = 0) uniform TerrainConstants
+        {
+            vec4 coarseRect;
+            vec4 fineRect;
+            vec4 region;
+            vec3 sunColour;
+            float waterHeight;
+            vec3 ambientSky;
+            float halfWorld;
+            vec3 ambientGround;
+            float farStart;
+            vec2 coarseCells;
+            vec2 fineCells;
+            vec2 cellGrid;
+            float fineBand;
+            float farEnd;
+            bool hasFine;
+            bool wireframe;
+            bool heightNormals;
+            bool textured;
+            bool normalMaps;
+            bool hasMaps;
+            int mapState;
+            int debug;
+            bool feature;
+            int featureBiome;
+            bool hasGround;
+            bool hasWorldColour;
+            uint heightCoarse;
+            uint heightFine;
+            uint diffuse;
+            uint normal;
+            uint params;
+            uint cells;
+            uint blendMap;
+            uint overlay;
+            uint colour;
+            uint ground;
+            uint worldColour;
+            uint spare;
+        } terrain;
+
+        """;
+
+    /// <summary>The per-draw values of a patch (<see cref="TerrainPush"/> is the C# side; std430): <c>uNode</c> and <c>uMorph</c>.</summary>
+    public const string PushMembers = """
+            vec4 node;
+            vec2 morph;
+        """;
+
+    /// <summary>The terrain's uniforms: <see cref="ConstantsBlock"/> members, the textures by bindless index (the array each one's format
+    /// selects: the layer arrays in <c>textures2DArray</c>, the integer blend cells in <c>utextures2D</c>), the patch's node in the push block.
+    /// The camera, light and fog are <see cref="ViewConstants"/> (<see cref="NativeShaders.ViewMap"/>).</summary>
+    static readonly Dictionary<string, string> NativeMap = new()
+    {
+        ["uHeightCoarse"] = "textures2D[terrain.heightCoarse]", ["uHeightFine"] = "textures2D[terrain.heightFine]",
+        ["uCoarseRect"] = "terrain.coarseRect", ["uCoarseCells"] = "terrain.coarseCells", ["uFineRect"] = "terrain.fineRect",
+        ["uFineCells"] = "terrain.fineCells", ["uFineBand"] = "terrain.fineBand", ["uHasFine"] = "terrain.hasFine",
+        ["uNode"] = "pc.node", ["uMorph"] = "pc.morph",
+        ["uSunColour"] = "terrain.sunColour", ["uAmbientSky"] = "terrain.ambientSky", ["uAmbientGround"] = "terrain.ambientGround",
+        ["uWireframe"] = "terrain.wireframe", ["uHeightNormals"] = "terrain.heightNormals", ["uWaterHeight"] = "terrain.waterHeight",
+        ["uTextured"] = "terrain.textured", ["uNormalMaps"] = "terrain.normalMaps", ["uHasMaps"] = "terrain.hasMaps",
+        ["uMapState"] = "terrain.mapState", ["uDebug"] = "terrain.debug", ["uFeature"] = "terrain.feature",
+        ["uFeatureBiome"] = "terrain.featureBiome", ["uFarStart"] = "terrain.farStart", ["uFarEnd"] = "terrain.farEnd",
+        ["uHasGround"] = "terrain.hasGround", ["uHasWorldColour"] = "terrain.hasWorldColour",
+        ["uDiffuse"] = "textures2DArray[terrain.diffuse]", ["uNormal"] = "textures2DArray[terrain.normal]",
+        ["uParams"] = "textures2D[terrain.params]", ["uCells"] = "utextures2D[terrain.cells]", ["uBlendMap"] = "textures2D[terrain.blendMap]",
+        ["uOverlay"] = "textures2D[terrain.overlay]", ["uColour"] = "textures2D[terrain.colour]", ["uGround"] = "textures2D[terrain.ground]",
+        ["uWorldColour"] = "textures2D[terrain.worldColour]", ["uRegion"] = "terrain.region", ["uCellGrid"] = "terrain.cellGrid",
+        ["uHalfWorld"] = "terrain.halfWorld",
+    };
+
+    const string DerivativeControl = "#extension GL_ARB_derivative_control : require\n";
+
+    /// <summary>
+    /// The native variant of a terrain text: <see cref="NativeShaders.Port"/> with <see cref="NativeMap"/> and <see cref="PushMembers"/>, and
+    /// <see cref="ConstantsBlock"/> after the prelude. Only declarations move: <see cref="Fragment"/>'s <c>#extension</c> line goes up to
+    /// right after <c>#version</c> (an extension directive must come before the prelude's declarations).
+    /// </summary>
+    static string Native(string legacy)
+    {
+        const string preludeEnd = "#define gl_VertexID gl_VertexIndex\n";
+        string text = NativeShaders.Port(legacy, NativeShaders.Map(NativeMap), PushMembers);
+        int at = text.IndexOf(preludeEnd, StringComparison.Ordinal);
+        if (at < 0) throw new InvalidOperationException("TerrainShaders.Native: the native prelude no longer ends with the gl_VertexID define.");
+        text = text.Insert(at + preludeEnd.Length, ConstantsBlock);
+        if (text.Contains(DerivativeControl, StringComparison.Ordinal))
+            text = text.Replace(DerivativeControl, "", StringComparison.Ordinal).Replace("#version 450\n", "#version 450\n" + DerivativeControl, StringComparison.Ordinal);
+        return text;
+    }
+
+    public static string PatchVertexNative() => Native(PatchVertex);
+    public static string FragmentNative() => Native(Fragment);
+    public static string MeshVertexNative() => Native(MeshVertex);
+    public static string MeshFragmentNative() => Native(MeshFragment);
+    public static string MeshInstancedDepthVertexNative() => Native(MeshInstancedDepthVertex);
+    /// <summary><see cref="ShadowShaders.DepthFragment"/> (the caster block at set 0, binding 2) with the terrain's push block, so both
+    /// stages of a depth program declare the same one.</summary>
+    public static string DepthFragmentNative() => Native(ShadowShaders.DepthFragment);
+}
+
+/// <summary>The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools
+/// are 32-bit (0 / 1).</summary>
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 224)]
+struct TerrainConstants
+{
+    [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 CoarseRect;
+    [System.Runtime.InteropServices.FieldOffset(16)] public System.Numerics.Vector4 FineRect;
+    [System.Runtime.InteropServices.FieldOffset(32)] public System.Numerics.Vector4 Region;
+    [System.Runtime.InteropServices.FieldOffset(48)] public System.Numerics.Vector3 SunColour;
+    [System.Runtime.InteropServices.FieldOffset(60)] public float WaterHeight;
+    [System.Runtime.InteropServices.FieldOffset(64)] public System.Numerics.Vector3 AmbientSky;
+    [System.Runtime.InteropServices.FieldOffset(76)] public float HalfWorld;
+    [System.Runtime.InteropServices.FieldOffset(80)] public System.Numerics.Vector3 AmbientGround;
+    [System.Runtime.InteropServices.FieldOffset(92)] public float FarStart;
+    [System.Runtime.InteropServices.FieldOffset(96)] public System.Numerics.Vector2 CoarseCells;
+    [System.Runtime.InteropServices.FieldOffset(104)] public System.Numerics.Vector2 FineCells;
+    [System.Runtime.InteropServices.FieldOffset(112)] public System.Numerics.Vector2 CellGrid;
+    [System.Runtime.InteropServices.FieldOffset(120)] public float FineBand;
+    [System.Runtime.InteropServices.FieldOffset(124)] public float FarEnd;
+    [System.Runtime.InteropServices.FieldOffset(128)] public uint HasFine;
+    [System.Runtime.InteropServices.FieldOffset(132)] public uint Wireframe;
+    [System.Runtime.InteropServices.FieldOffset(136)] public uint HeightNormals;
+    [System.Runtime.InteropServices.FieldOffset(140)] public uint Textured;
+    [System.Runtime.InteropServices.FieldOffset(144)] public uint NormalMaps;
+    [System.Runtime.InteropServices.FieldOffset(148)] public uint HasMaps;
+    [System.Runtime.InteropServices.FieldOffset(152)] public int MapState;
+    [System.Runtime.InteropServices.FieldOffset(156)] public int Debug;
+    [System.Runtime.InteropServices.FieldOffset(160)] public uint Feature;
+    [System.Runtime.InteropServices.FieldOffset(164)] public int FeatureBiome;
+    [System.Runtime.InteropServices.FieldOffset(168)] public uint HasGround;
+    [System.Runtime.InteropServices.FieldOffset(172)] public uint HasWorldColour;
+    [System.Runtime.InteropServices.FieldOffset(176)] public uint HeightCoarse;
+    [System.Runtime.InteropServices.FieldOffset(180)] public uint HeightFine;
+    [System.Runtime.InteropServices.FieldOffset(184)] public uint Diffuse;
+    [System.Runtime.InteropServices.FieldOffset(188)] public uint Normal;
+    [System.Runtime.InteropServices.FieldOffset(192)] public uint Params;
+    [System.Runtime.InteropServices.FieldOffset(196)] public uint Cells;
+    [System.Runtime.InteropServices.FieldOffset(200)] public uint BlendMap;
+    [System.Runtime.InteropServices.FieldOffset(204)] public uint Overlay;
+    [System.Runtime.InteropServices.FieldOffset(208)] public uint Colour;
+    [System.Runtime.InteropServices.FieldOffset(212)] public uint Ground;
+    [System.Runtime.InteropServices.FieldOffset(216)] public uint WorldColour;
+    [System.Runtime.InteropServices.FieldOffset(220)] public uint Spare;
+}
+
+/// <summary>The C# side of <see cref="TerrainShaders.PushMembers"/> (std430 push constants): a patch's <c>uNode</c> and <c>uMorph</c>.</summary>
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 24)]
+struct TerrainPush
+{
+    [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 Node;
+    [System.Runtime.InteropServices.FieldOffset(16)] public System.Numerics.Vector2 Morph;
 }

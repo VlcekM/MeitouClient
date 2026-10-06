@@ -42,6 +42,11 @@ public class NativeShaderTests
         // Objects (step O): the buildings' dithered cross-fade on the shared mesh text, with their own push block.
         yield return ("objects", BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(), typeof(ObjectPush));
         yield return ("objects depth", BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), typeof(ObjectPush));
+        // The terrain (step O): the patches, the TERRAIN-mode meshes, and their shadow depth.
+        yield return ("terrain patch", TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(), typeof(TerrainPush));
+        yield return ("terrain patch depth", TerrainShaders.PatchVertexNative(), TerrainShaders.DepthFragmentNative(), typeof(TerrainPush));
+        yield return ("terrain mesh", TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentNative(), typeof(TerrainPush));
+        yield return ("terrain mesh depth", TerrainShaders.MeshInstancedDepthVertexNative(), TerrainShaders.DepthFragmentNative(), typeof(TerrainPush));
     }
 
     [Fact]
@@ -80,10 +85,12 @@ public class NativeShaderTests
                     {
                         Type? type = b.Name switch
                         {
-                            "FrameConstants" => typeof(FrameConstants), "ViewConstants" => typeof(ViewConstants), "Push" => pushType, _ => null,
+                            "FrameConstants" => typeof(FrameConstants), "ViewConstants" => typeof(ViewConstants), "Push" => pushType,
+                            "TerrainConstants" => typeof(TerrainConstants), _ => null,
                         };
                         if (b.Name is "FrameConstants" or "ViewConstants" or "MeshBones" or "KenshiShadowReceiver" or "KenshiShadowCaster" or "MeitouShadowReceiver")
                             Assert.Equal(NativeShaders.FrameSet, b.Set);
+                        if (b.Name is "TerrainConstants") Assert.Equal(TerrainShaders.ConstantsSet, b.Set);
                         if (type is null) continue;
                         foreach (var m in b.Members)
                         {
