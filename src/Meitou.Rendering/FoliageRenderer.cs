@@ -877,6 +877,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         int timer = grass ? BeginTimer(continuation) : -1;
         var cpu = Stopwatch.StartNew();
         drawStamp++;
+        int callsBefore = DrawCalls;
         active.Clear();
         terrainDraws.Clear();
 
@@ -943,10 +944,12 @@ public sealed unsafe class FoliageRenderer : IDisposable
         }
 
         double tMeshes = cpu.Elapsed.TotalMilliseconds;
+        int callsMeshes = DrawCalls;
         StageClock.Sub("fol meshes");
         // 4. Grass.
         if (grass && !debugNoGrass) DrawGrass(viewProjection, eye, frustum, options, light, fogColour, fogDistance, coverage);
         double tGrass = cpu.Elapsed.TotalMilliseconds;
+        int callsGrass = DrawCalls;
         StageClock.Sub("fol grass");
         if (coverage) gl.Disable(EnableCap.SampleAlphaToCoverage);
         gl.Disable(EnableCap.CullFace);
@@ -959,6 +962,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         }
         gl.Disable(EnableCap.CullFace);
         StageClock.Sub("fol rocks");
+        if (FolTiming) FolAccount(depthPass ? 1 : 0, tCull, tUpload, tMeshes, tGrass, cpu.Elapsed.TotalMilliseconds, callsMeshes - callsBefore, callsGrass - callsMeshes, terrainDraws.Count);
         if (WorldFrame.DetailedStats)
         {
             double tEnd = cpu.Elapsed.TotalMilliseconds;
@@ -969,6 +973,37 @@ public sealed unsafe class FoliageRenderer : IDisposable
         }
         EndTimer(timer);
         LastDrawCpuMs = (continuation ? LastDrawCpuMs : 0) + cpu.Elapsed.TotalMilliseconds;
+    }
+
+    /// <summary><c>MEITOU_FOLIAGE_TIMING=1</c>: the CPU time of <see cref="Draw"/>'s steps summed over the run by kind (colour or depth), with the
+    /// draws each step issued, printed when the renderer is disposed (docs/renderer-native.md 7.1, wave 3 foliage probe).</summary>
+    static readonly bool FolTiming = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_TIMING") == "1";
+    readonly double[,] folMs = new double[2, 5];
+    readonly long[] folSeen = new long[2];
+    static readonly int FolSkip = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_TIMING_SKIP"), out int skip) ? skip : 160;
+    readonly long[] folCalls = new long[2], folMeshDraws = new long[2], folGrassDraws = new long[2], folRocks = new long[2];
+
+    void FolAccount(int k, double tCull, double tUpload, double tMeshes, double tGrass, double tEnd, int meshDraws, int grassDraws, int rocks)
+    {
+        if (folSeen[k]++ < FolSkip) return;   // the first calls are cold (pipelines, streaming)
+        folCalls[k]++;
+        folMs[k, 0] += tCull; folMs[k, 1] += tUpload - tCull; folMs[k, 2] += tMeshes - tUpload; folMs[k, 3] += tGrass - tMeshes; folMs[k, 4] += tEnd - tGrass;
+        folMeshDraws[k] += meshDraws; folGrassDraws[k] += grassDraws; folRocks[k] += rocks;
+    }
+
+    void ReportFoliageTiming()
+    {
+        if (!FolTiming) return;
+        string[] names = ["colour", "depth"];
+        for (int k = 0; k < 2; k++)
+        {
+            if (folCalls[k] == 0) continue;
+            double perDraw(int step, long n) => n > 0 ? folMs[k, step] * 1000 / n : 0;
+            Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"" +
+                $"foliage timing {names[k]}: {folCalls[k]} calls, per call us: cull {folMs[k, 0] * 1000 / folCalls[k]:F1}, upload {folMs[k, 1] * 1000 / folCalls[k]:F1}, meshes {folMs[k, 2] * 1000 / folCalls[k]:F1}, grass {folMs[k, 3] * 1000 / folCalls[k]:F1}, rocks {folMs[k, 4] * 1000 / folCalls[k]:F1}; " +
+                $"draws per call: meshes {(double)folMeshDraws[k] / folCalls[k]:F1}, grass {(double)folGrassDraws[k] / folCalls[k]:F1}, rock groups {(double)folRocks[k] / folCalls[k]:F1}; " +
+                $"us per draw: meshes {perDraw(2, folMeshDraws[k]):F2}, grass {perDraw(3, folGrassDraws[k]):F2}"));
+        }
     }
 
     // ---- culling (Draw step 1) ----
@@ -1408,6 +1443,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
 
     public void Dispose()
     {
+        ReportFoliageTiming();
         foreach (var z in zones.Values) { try { z.Job?.Wait(); } catch (AggregateException) { } foreach (var p in z.Pages.Values) { try { p.Job?.Wait(); } catch (AggregateException) { } FreePage(p); } }
         foreach (var a in assetsByMesh.Values)
         {
