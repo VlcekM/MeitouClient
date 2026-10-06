@@ -1,73 +1,105 @@
 using Meitou.Rendering.Gpu;
+using Silk.NET.Vulkan;
+using Texture = Meitou.Rendering.Gpu.Texture;
 
 namespace Meitou.Rendering.Impostors;
 
 /// <summary>
-/// An atlas on the GPU through <see cref="IGl"/>: one 2D texture per map with the baked levels (trilinear, clamped; the chain stops at
-/// 4 × 4 pixels a frame, so <c>TEXTURE_MAX_LEVEL</c> is set). The textures the preview and, until bindless materials exist, any impostor
-/// draw binds to <c>uImpostorAlbedo</c>, <c>uImpostorNormal</c> and <c>uImpostorDepth</c>.
+/// An atlas on the GPU (phase 8 stage 2, docs/impostors.md "Runtime"): one native texture per map with the baked levels (the chain stops at
+/// 4 × 4 pixels a frame), named "impostor atlas albedo / normal / depth" (the F12 VRAM pie groups them), sampled trilinear and clamped through
+/// one bindless entry per map (<see cref="Index"/>). Made empty by the constructor; the levels are written by <see cref="Upload"/> (all at once)
+/// or step by step (<see cref="UploadStep"/>, <see cref="StepCount"/>), so a large atlas can be spread over frames. Render thread only.
 /// </summary>
-public sealed unsafe class ImpostorTextures : IDisposable
+public sealed class ImpostorTextures : IDisposable
 {
-    readonly IGl gl;
-    public uint Albedo { get; }
-    public uint Normal { get; }
-    public uint Depth { get; }
+    readonly GpuContext gpu;
+    readonly Texture[] maps = new Texture[3];
+    readonly ImpostorTexture[] sources = new ImpostorTexture[3];
+    readonly uint[] indices = new uint[3];
+    float indexBias;
+    bool registered;
+
     public ImpostorAtlas Atlas { get; }
     public long Bytes => Atlas.Bytes;
+    public Texture Albedo => maps[0];
+    public Texture Normal => maps[1];
+    public Texture Depth => maps[2];
+    /// <summary>Every level written (<see cref="UploadStep"/> ran <see cref="StepCount"/> times).</summary>
+    public bool Complete => written >= StepCount;
+    int written;
 
-    public ImpostorTextures(IGl gl, ImpostorAtlas atlas)
+    public static string AllocationName(ImpostorMap map) => map switch
     {
-        this.gl = gl;
+        ImpostorMap.Albedo => "impostor atlas albedo",
+        ImpostorMap.Normal => "impostor atlas normal",
+        _ => "impostor atlas depth",
+    };
+
+    /// <param name="batch">Where the textures' layout transitions are recorded (<see cref="Uploader.Begin"/>).</param>
+    public ImpostorTextures(GpuContext gpu, ImpostorAtlas atlas, UploadBatch batch)
+    {
+        this.gpu = gpu;
         Atlas = atlas;
-        Albedo = Upload(atlas[ImpostorMap.Albedo]!);
-        Normal = Upload(atlas[ImpostorMap.Normal]!);
-        Depth = Upload(atlas[ImpostorMap.Depth]!);
+        ImpostorMap[] order = [ImpostorMap.Albedo, ImpostorMap.Normal, ImpostorMap.Depth];
+        for (int i = 0; i < 3; i++)
+        {
+            var texture = atlas[order[i]] ?? throw new InvalidDataException($"impostor atlas {atlas.Name} has no {order[i]} map");
+            sources[i] = texture;
+            var format = texture.Encoding switch
+            {
+                ImpostorEncoding.Bc3 => Format.BC3UnormBlock,
+                ImpostorEncoding.Bc5 => Format.BC5UnormBlock,
+                _ => Format.R8G8B8A8Unorm,
+            };
+            maps[i] = batch.Create(new TextureDesc(format, atlas.AtlasPixels, atlas.AtlasPixels, texture.Levels.Length, Name: AllocationName(order[i])));
+        }
     }
 
-    uint Upload(ImpostorTexture texture)
+    /// <summary>The levels to write: one step per (map, level).</summary>
+    public int StepCount => 3 * Atlas.Levels;
+
+    /// <summary>Writes the next (map, level) through <paramref name="batch"/>; false when everything is written.</summary>
+    public bool UploadStep(UploadBatch batch)
     {
-        uint id = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, id);
-        gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
-        for (int level = 0; level < texture.Levels.Length; level++)
+        if (Complete) return false;
+        int map = written / Atlas.Levels, level = written % Atlas.Levels;
+        var texture = sources[map];
+        uint size = (uint)(Atlas.AtlasPixels >> level);
+        batch.Write(maps[map], level, 0, new Rect2D(default, new Extent2D(size, size)), texture.Levels[level]);
+        written++;
+        return true;
+    }
+
+    /// <summary>Writes every level through <paramref name="batch"/>.</summary>
+    public void Upload(UploadBatch batch)
+    {
+        while (UploadStep(batch)) { }
+    }
+
+    /// <summary>
+    /// The bindless index of a map (0 albedo, 1 normal, 2 depth) in the 2D float array: trilinear, clamped to the edge, the baked levels, with
+    /// the LOD bias <paramref name="bias"/> in the sampler. Registered when first asked for and again when the bias changes (the old entries
+    /// are freed after the frames in flight). Render thread, outside recording jobs.
+    /// </summary>
+    public uint Index(int map, float bias)
+    {
+        if (!registered || bias != indexBias)
         {
-            uint size = (uint)(Atlas.AtlasPixels >> level);
-            var data = texture.Levels[level];
-            fixed (byte* p = data)
-            {
-                if (texture.Encoding == ImpostorEncoding.Rgba8)
-                {
-                    // Uncompressed (ImpostorBaker.Compress = false; tests only). Open: through VkGl a 3072² RGBA8 atlas samples wrong coverage
-                    // (the CPU data is right; docs/impostors.md), so the viewer no longer offers it. Each level declared without data, then
-                    // filled in strips of at most 4 MB.
-                    gl.TexImage2D(TextureTarget.Texture2D, level, InternalFormat.Rgba8, size, size, 0, PixelFormat.Rgba, PixelType.UnsignedByte, null);
-                    int strip = (int)Math.Max(1, (4 << 20) / (size * 4));
-                    for (int y = 0; y < size; y += strip)
-                    {
-                        uint rows = (uint)Math.Min(strip, (int)size - y);
-                        gl.TexSubImage2D(TextureTarget.Texture2D, level, 0, y, size, rows, PixelFormat.Rgba, PixelType.UnsignedByte, p + (long)y * size * 4);
-                    }
-                }
-                else
-                    gl.CompressedTexImage2D(TextureTarget.Texture2D, level,
-                        texture.Encoding == ImpostorEncoding.Bc3 ? InternalFormat.CompressedRgbaS3TCDxt5Ext : (InternalFormat)GLEnum.CompressedRGRgtc2,
-                        size, size, 0, (uint)data.Length, p);
-            }
+            RenderJobs.AssertNotInJob();
+            if (registered) foreach (var i in indices) gpu.Bindless.Free(BindlessKind.Texture2D, i);
+            var sampler = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
+                TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, transparentBorder: false, anisotropy: 1, integerFormat: false, bias));
+            for (int i = 0; i < 3; i++)
+                indices[i] = gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, maps[i].View(0, Atlas.Levels), maps[i].Image));
+            (registered, indexBias) = (true, bias);
         }
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureBaseLevel, 0);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, texture.Levels.Length - 1);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-        return id;
+        return indices[map];
     }
 
     public void Dispose()
     {
-        gl.DeleteTexture(Albedo);
-        gl.DeleteTexture(Normal);
-        gl.DeleteTexture(Depth);
+        if (registered) foreach (var i in indices) gpu.Bindless.Free(BindlessKind.Texture2D, i);
+        registered = false;
+        foreach (var t in maps) t?.Dispose();
     }
 }

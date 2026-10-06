@@ -2,7 +2,7 @@ namespace Meitou.Rendering.Gpu;
 
 /// <summary>
 /// (Phase 8 stage 1, docs/renderer-native.md 8.) GL names over native resources, for code that still takes a GL texture or vertex array from
-/// a renderer whose resources are now native: the impostor baker and preview bind <see cref="WorldTexture.Id"/> through IGl, and
+/// a renderer whose resources are now native (the impostor baker's texture names went with its native port, stage 2):
 /// <see cref="TerrainRenderer.DrawMeshes"/> / <see cref="TerrainRenderer.DrawMeshesIndirect"/> take the TERRAIN-mode meshes as GL vertex
 /// arrays. The native object stays the owner (<see cref="IGlInterop.Import"/>, <see cref="IGlInterop.ImportBuffer"/>: borrowed names).
 /// Stage 2 added the GL mirror of <see cref="PostProcess"/>'s targets (framebuffers over imported names, their binding, the fixed-function state

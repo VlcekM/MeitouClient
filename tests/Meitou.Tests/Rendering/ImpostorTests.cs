@@ -315,7 +315,14 @@ public class ImpostorTests
         var red = new Vector4(1, 0, 0, 1);
         var blue = new Vector4(0, 0, 1, 1);
         using var gl = new VkGl(device!);
-        using var baker = new ImpostorBaker(gl, null);
+        gl.BeginFrame(4, 4);
+        using var baker = new ImpostorBaker(gl.Context, (AssetLocator?)null);
+        void NextFrame()
+        {
+            gl.EndFrame();
+            device!.Frames.WaitAll();
+            gl.BeginFrame(4, 4);
+        }
         foreach (bool redFirst in new[] { true, false })
         {
             var model = new Model();
@@ -328,8 +335,8 @@ public class ImpostorTests
                 Main = new ImpostorMaterial(null, null, null, null, 0, true, false, Vector2.One, 0),
             };
             baker.Compress = false;
-            var atlas = baker.Bake(source, meshes, new ImpostorClass("test", 32, 4));
-            gl.EndFrame();
+            var atlas = baker.Bake(source, meshes, new ImpostorClass("test", 32, 4), NextFrame);
+            NextFrame();
             Assert.True(device!.ValidationErrors == 0, string.Join("\n", device.ValidationLog));
 
             // Frame (3, 3) looks from +X; its pixels are 96..127 in both directions of the 128-pixel level 0.

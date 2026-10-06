@@ -2855,6 +2855,16 @@ the upscaler is deterministic.*
   and render-thread allocations (20-21 MB) are within the noise of this machine. The extra likely comes from the GL mirror (the `Target` bind and
   `CurrentTargets` at the start of `End`, the state calls) and a segment of its own for the far slice's clear. **Unknown**: not profiled further.
 
+
+### 8.8 Phase 8 stage 2 (impostor baker, textures, preview) as built
+
+*2026-10-07, commit `b91980d` of the billboard work, merged on its own.* `Impostors/ImpostorBaker.cs` (96 `gl.` calls at `5fcc3e1`),
+`ImpostorPreview.cs` (84), `ImpostorTextures.cs` (15) and `tools/Meitou.ModelViewer/ImpostorApp.cs` (31) make 0 IGl calls now: the baker
+renders its frames natively and the atlases are native textures ("impostor atlas ..."). **Verified** by the agent: the baked atlases are
+byte-identical to the GL baker's. The GL texture names the baker read from `WorldTextureCache` through `GlBridge` are gone. Gate on the merge:
+the ten views in both modes 0 px against `C:\Temp\base-6f4af19`, tests 472 passed, 0 skipped. The drawing of impostors in the foliage path
+(the rest of that work) is kept on the branch `billboards-wip`, not merged (owner, 2026-10-07): it cost 1.1-2.4 GB of VRAM for little frame
+time (forest, measured on that branch), and its VRAM cut was not finished.
 ---
 
 ## 9. Expected CPU cost, and how the profiler keeps working

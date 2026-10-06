@@ -1,6 +1,30 @@
+using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
 namespace Meitou.Rendering.Impostors;
+
+/// <summary>The C# side of <see cref="ImpostorShaders.PushMembers"/> (std430 push constants, 80 bytes). GLSL bools are 32-bit (0 / 1).</summary>
+[StructLayout(LayoutKind.Explicit, Size = 80)]
+public struct ImpostorPush
+{
+    /// <summary>The baked bounding sphere (object space): centre, radius.</summary>
+    [FieldOffset(0)] public Vector4 Sphere;
+    /// <summary>The camera's up axis (world): the billboards' roll.</summary>
+    [FieldOffset(16)] public Vector3 CameraUp;
+    [FieldOffset(28)] public float Grid;
+    /// <summary>The atlas maps' bindless indices (2D float array).</summary>
+    [FieldOffset(32)] public uint Albedo;
+    [FieldOffset(36)] public uint Normal;
+    [FieldOffset(40)] public uint Depth;
+    [FieldOffset(44)] public uint Parallax;
+    [FieldOffset(48)] public uint Blend;
+    [FieldOffset(52)] public int Debug;
+    [FieldOffset(56)] public uint Coverage;
+    [FieldOffset(60)] public uint Spare;
+    /// <summary>A directional view (w 1, a shadow cascade): the direction towards its viewer; w 0 uses the view's eye.</summary>
+    [FieldOffset(64)] public Vector4 View;
+}
 
 /// <summary>
 /// GLSL of the impostors (docs/impostors.md):
@@ -163,6 +187,7 @@ public static class ImpostorShaders
         uniform vec3 uCameraUp;          // the camera's up axis (world): the billboard's roll
         uniform vec4 uImpostor;          // xyz: the baked sphere's centre (object space), w: its radius (object units)
         uniform float uImpostorGrid;
+        uniform vec4 uImpostorView;      // w 1: a directional view (a shadow cascade), xyz towards its viewer (world); w 0: uEye
         out vec3 vObjectPoint;
         flat out vec3 vObjectEye;
         flat out vec2 vCellA;
@@ -184,7 +209,9 @@ public static class ImpostorShaders
             vec3 translation = model[3].xyz;
             vec3 centre = (model * vec4(uImpostor.xyz, 1.0)).xyz;
             float radius = uImpostor.w * scale;
-            vec3 toEye = uEye - centre;
+            // A directional view looks along one direction: its eye stands far out along it (the rays are nearly parallel).
+            vec3 eye = uImpostorView.w > 0.5 ? centre + normalize(uImpostorView.xyz) * (1000.0 * radius) : uEye;
+            vec3 toEye = eye - centre;
             float dist = max(length(toEye), radius * 1.05);
             vec3 v = normalize(toEye);
             // object space = transpose(basis) / scale² (rotation and uniform scale)
@@ -199,7 +226,7 @@ public static class ImpostorShaders
             float extent = radius * dist / sqrt(dist * dist - radius * radius);   // the sphere's silhouette at the centre's plane
             vec3 p = centre + (right * c.x + up * c.y) * extent;
             vObjectPoint = inverse * (p - translation);
-            vObjectEye = inverse * (uEye - translation);
+            vObjectEye = inverse * (eye - translation);
             vModel0 = model[0]; vModel1 = model[1]; vModel2 = model[2]; vModel3 = model[3];
             gl_Position = uViewProjection * vec4(p, 1.0);
         }
@@ -285,20 +312,69 @@ public static class ImpostorShaders
         """;
 
     /// <summary>
-    /// The bake: <see cref="Shaders.MeshFragment"/> with an output switch inserted after the normal mapping and before the lighting, so the
-    /// albedo, normal and gloss are exactly what the mesh shader would light. Pass 0 writes the albedo, 1 the normal in the frame's basis
-    /// (× 0.5 + 0.5), 2 the depth along the frame direction and the gloss × specular; alpha 1 wherever the cut-out keeps the pixel.
+    /// The impostor as a shadow caster (a cascade's depth-only pass, <see cref="Vertex"/> with a directional <c>uImpostorView</c>): one frame per
+    /// texel (the ordered pick, no fade: casters ignore the distance fade as the meshes' depth pass does), cut at coverage 0.5, and the depth of
+    /// the reconstructed surface with the game's caster bias (<see cref="ShadowShaders"/>' <c>shadowWriteDepth</c>, on that depth).
     /// </summary>
-    public static string BakeFragment()
+    public static readonly string DepthFragment = "#version 330 core\n" + Functions + FragmentFunctions + $$"""
+        in vec3 vObjectPoint;
+        flat in vec3 vObjectEye;
+        flat in vec2 vCellA;
+        flat in vec2 vCellB;
+        flat in vec2 vCellC;
+        flat in vec3 vWeights;
+        flat in float vFade;
+        flat in vec4 vModel0;
+        flat in vec4 vModel1;
+        flat in vec4 vModel2;
+        flat in vec4 vModel3;
+        uniform sampler2D uImpostorAlbedo;
+        uniform sampler2D uImpostorNormal;
+        uniform sampler2D uImpostorDepth;
+        uniform vec4 uImpostor;
+        uniform float uImpostorGrid;
+        uniform mat4 uViewProjection;
+        layout(std140) uniform {{ShadowShaders.CasterBlock}}
+        {
+            vec4 uShadowBias;   // x fixed, y slope, z max slope (depth units)
+        };
+        void main()
+        {
+            ivec2 q = ivec2(gl_FragCoord.xy) & 3;
+            int bayer[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
+            float pick = (float(bayer[q.y * 4 + q.x]) + 0.5) / 16.0;
+            ImpostorSurface s = impostorSample(uImpostorAlbedo, uImpostorNormal, uImpostorDepth, uImpostorGrid, uImpostor.xyz, uImpostor.w,
+                vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, pick, false);
+            if (s.coverage < 0.5) discard;
+            mat4 model = mat4(vModel0, vModel1, vModel2, vModel3);
+            vec4 clip = uViewProjection * vec4((model * vec4(s.position, 1.0)).xyz, 1.0);
+            float z = clip.z / clip.w;
+            float g = length(vec2(dFdx(z), dFdy(z)));
+            gl_FragDepth = clamp(z + min(uShadowBias.z, uShadowBias.y * g) + uShadowBias.x, 0.0, 1.0);
+        }
+        """;
+
+    /// <summary><see cref="DepthFragment"/> in the native model.</summary>
+    public static string DepthFragmentNative() => NativeShaders.Port(DepthFragment, NativeShaders.Map(NativeMap), PushMembers);
+
+    /// <summary>
+    /// The bake (native model, docs/renderer-native.md 3.3): <see cref="Shaders.MeshFragment"/> with an output switch inserted after the normal
+    /// mapping and before the lighting, so the albedo, normal and gloss are exactly what the mesh shader would light. Pass 0 writes the albedo,
+    /// 1 the normal in the frame's basis (× 0.5 + 0.5), 2 the depth along the frame direction and the gloss × specular; alpha 1 wherever the
+    /// cut-out keeps the pixel. The frame's values come from a storage block at set 0, binding 6 (<see cref="BakeBlock"/>, the baker's
+    /// <c>NativeFrame</c> extra binding), since the mesh shader's push block is full.
+    /// </summary>
+    public static string BakeFragmentNative()
     {
         string f = Shaders.MeshFragment;
         f = Replace(f, @"#version\s+330\s+core", """
             #version 330 core
-            uniform int uImpostorPass;
-            uniform vec4 uImpostorSphere;     // centre, radius (object space = world space while baking)
-            uniform vec3 uImpostorDir;
-            uniform vec3 uImpostorRight;
-            uniform vec3 uImpostorUp;
+            layout(std430, set = 0, binding = 6) readonly buffer ImpostorBake { vec4 sphere; vec4 dir; vec4 right; vec4 up; ivec4 pass; } impostorBake;
+            #define uImpostorPass impostorBake.pass.x
+            #define uImpostorSphere impostorBake.sphere
+            #define uImpostorDir impostorBake.dir.xyz
+            #define uImpostorRight impostorBake.right.xyz
+            #define uImpostorUp impostorBake.up.xyz
             """);
         f = Replace(f, @"vec3\s+l\s*=\s*normalize\s*\(\s*uLightDir\s*\)\s*;", """
             if (uImpostorPass == 0) { fragColour = vec4(albedo, 1.0); return; }
@@ -311,8 +387,53 @@ public static class ImpostorShaders
             }
             vec3 l = normalize(uLightDir);
             """);
-        return f;
+        return NativeShaders.Port(f);
     }
+
+    /// <summary>The bake's vertex shader: <see cref="Shaders.MeshVertex"/> in the native model with the identity model matrix (object space is
+    /// world space while baking).</summary>
+    public static string BakeVertexNative() => NativeShaders.MeshVertex(new Dictionary<string, string> { ["uModel"] = "mat4(1.0)" });
+
+    /// <summary>The C# side of the bake's storage block (<see cref="BakeFragmentNative"/>, std430, 80 bytes).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct BakeBlock
+    {
+        public Vector4 Sphere, Dir, Right, Up;
+        public int Pass, Pad1, Pad2, Pad3;
+    }
+
+    // ---- the impostor program in the native model (docs/renderer-native.md 3.3): Vertex and Fragment through NativeShaders.Port ----
+
+    /// <summary>The impostor program's push constants (<see cref="ImpostorPush"/> is the C# side; std430, 80 bytes).</summary>
+    public const string PushMembers = """
+            vec4 sphere;
+            vec3 cameraUp;
+            float grid;
+            uint albedo;
+            uint normal;
+            uint depth;
+            bool parallax;
+            bool blend;
+            int debug;
+            bool coverage;
+            uint spare;
+            vec4 view;
+        """;
+
+    /// <summary>The impostor program's own uniforms: <see cref="ImpostorPush"/> members, the atlas maps by their bindless index.</summary>
+    static readonly Dictionary<string, string> NativeMap = new()
+    {
+        ["uImpostor"] = "pc.sphere", ["uCameraUp"] = "pc.cameraUp", ["uImpostorGrid"] = "pc.grid",
+        ["uImpostorAlbedo"] = "textures2D[pc.albedo]", ["uImpostorNormal"] = "textures2D[pc.normal]", ["uImpostorDepth"] = "textures2D[pc.depth]",
+        ["uImpostorParallax"] = "pc.parallax", ["uImpostorBlend"] = "pc.blend", ["uImpostorDebug"] = "pc.debug", ["uCoverage"] = "pc.coverage",
+        ["uImpostorView"] = "pc.view",
+    };
+
+    /// <summary><see cref="Vertex"/> in the native model.</summary>
+    public static string VertexNative() => NativeShaders.Port(Vertex, NativeShaders.Map(NativeMap), PushMembers);
+
+    /// <summary><see cref="Fragment"/> (with <paramref name="depthWrite"/>: <see cref="FragmentWithDepth"/>) in the native model.</summary>
+    public static string FragmentNative(bool depthWrite) => NativeShaders.Port(depthWrite ? FragmentWithDepth : Fragment, NativeShaders.Map(NativeMap), PushMembers);
 
     static string Replace(string source, string pattern, string replacement)
     {

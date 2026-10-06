@@ -8,7 +8,7 @@ namespace Meitou.Rendering;
 
 /// <summary>
 /// A texture of the world view's objects and foliage: not resident until its file is decoded (in the background) and uploaded. Reading
-/// <see cref="Key"/> or <see cref="Id"/> counts as using it (the draw code reads it every frame it draws with the texture), and reading it after
+/// <see cref="Key"/> counts as using it (the draw code reads it every frame it draws with the texture), and reading it after
 /// the cache unloaded the texture starts loading it again.
 /// </summary>
 public sealed class WorldTexture
@@ -24,19 +24,6 @@ public sealed class WorldTexture
         {
             Touch();
             return Native is null ? 0 : Number;
-        }
-    }
-
-    /// <summary>A GL texture name for code that still samples through IGl (the impostor baker and preview, <see cref="GlBridge"/>): 0 until
-    /// resident. Counts as use.</summary>
-    public uint Id
-    {
-        get
-        {
-            Touch();
-            if (Native is null) return 0;
-            if (GlName == 0) GlName = Owner!.GlName(this);
-            return GlName;
         }
     }
 
@@ -60,7 +47,6 @@ public sealed class WorldTexture
     internal Texture? Native;
     internal int ViewLevels;
     internal ComponentMapping ViewSwizzle;
-    internal uint GlName;
     /// <summary>The bindless entries for the last two LOD biases (the upscaler's, and 0 where a pass runs without it).</summary>
     internal float BiasA, BiasB;
     internal uint IndexA, IndexB;
@@ -96,13 +82,6 @@ public sealed unsafe class WorldTextureCache : IDisposable
         this.gpu = gpu;
         this.assets = assets;
         allocationName = name;
-    }
-
-    /// <summary>For code still on IGl (the impostor baker and preview): the native context behind <paramref name="gl"/>; the textures reach
-    /// GL through <see cref="WorldTexture.Id"/>.</summary>
-    public WorldTextureCache(IGl gl, AssetLocator assets)
-        : this(GpuContext.Of(gl) ?? throw new ArgumentException("the world texture cache needs the native API (VkGl)", nameof(gl)), assets, "impostor textures")
-    {
     }
 
     public List<string> Messages { get; } = [];
@@ -174,15 +153,6 @@ public sealed unsafe class WorldTextureCache : IDisposable
         t.IndexA = gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, view, t.Native.Image));
         (t.BiasA, t.HasA) = (bias, true);
         return t.IndexA;
-    }
-
-    /// <summary>The GL name of a resident texture (<see cref="WorldTexture.Id"/>), with the sampler state and swizzle the GL texture had.</summary>
-    internal uint GlName(WorldTexture t)
-    {
-        ReadOnlySpan<int> grey = [(int)GLEnum.Red, (int)GLEnum.Red, (int)GLEnum.Red, (int)GLEnum.One];
-        bool bc4 = t.ViewSwizzle.R == ComponentSwizzle.R;
-        return GlBridge.Texture(gpu, t.Native!, t.Border ? TextureWrapMode.ClampToBorder : TextureWrapMode.Repeat, transparentBorder: true, anisotropy: 8,
-            bc4 ? grey : default);
     }
 
     void Start(WorldTexture t)
@@ -280,14 +250,12 @@ public sealed unsafe class WorldTextureCache : IDisposable
         t.State = WorldTexture.Residency.Unloaded;
     }
 
-    /// <summary>Frees the texture's bindless entries (after the frames in flight), its GL name and its image.</summary>
+    /// <summary>Frees the texture's bindless entries (after the frames in flight) and its image.</summary>
     void Release(WorldTexture t)
     {
         if (t.HasA) gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexA);
         if (t.HasB) gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexB);
         t.HasA = t.HasB = false;
-        GlBridge.DeleteTexture(gpu, t.GlName);
-        t.GlName = 0;
         t.Native?.Dispose();
         t.Native = null;
     }
