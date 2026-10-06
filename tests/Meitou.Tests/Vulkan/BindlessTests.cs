@@ -104,6 +104,7 @@ public class BindlessTests
         Assert.Equal(BindlessKind.ITexture2D, BindlessTable.KindFor(Format.R16Sint));
         Assert.Equal(BindlessKind.Texture2D, BindlessTable.KindFor(Format.R8G8B8A8Unorm));
         Assert.Equal(BindlessKind.Texture2D, BindlessTable.KindFor(Format.D24UnormS8Uint));      // depth reads as float
+        Assert.Equal(BindlessKind.Texture2D, BindlessTable.KindFor(Format.D32SfloatS8Uint));
         Assert.Equal(BindlessKind.Shadow2D, BindlessTable.KindFor(Format.D32Sfloat, shadow: true));
         Assert.Equal(BindlessKind.Texture2DArray, BindlessTable.KindFor(Format.R8G8B8A8Srgb, TextureKind.Texture2DArray));
         Assert.Equal(BindlessKind.Cube, BindlessTable.KindFor(Format.R16G16B16A16Sfloat, TextureKind.Cube));

@@ -170,8 +170,8 @@ public sealed unsafe class BindlessTable : IDisposable
     /// (UNORM, SNORM, SFLOAT, SRGB, and depth: a depth-stencil format's stencil part is not sampled).</summary>
     public static ScalarKind ScalarOf(Format format)
     {
-        if (GlConventions.IsDepthFormat(format)) return ScalarKind.Float;
         var name = format.ToString();
+        if (GlConventions.IsDepthFormat(format) || name.EndsWith("S8Uint", StringComparison.Ordinal)) return ScalarKind.Float;   // depth(-stencil)
         return name.Contains("Uint", StringComparison.Ordinal) ? ScalarKind.UInt
             : name.Contains("Sint", StringComparison.Ordinal) ? ScalarKind.Int
             : ScalarKind.Float;

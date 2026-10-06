@@ -330,7 +330,10 @@ batched `vkUpdateDescriptorSets` per frame, no per-registration write, no extra 
 *Export of a GL texture's index.* `IGlInterop.Bindless(glTexture, shadowSampler = false)` returns a `BindlessHandle` for the sampler and
 view VkGl would bind now (`Sampled`), in the array `KindFor` selects. While neither the view, the sampler nor the LOD bias changed it
 returns the same handle (a dictionary-free compare on the texture object); after a change it registers a new index and frees the old one,
-so earlier draws of the frame keep theirs, as in GL. 0, or a texture without storage, gives the stand-in's entry (as `Sampled`). The entries
+so earlier draws of the frame keep theirs, as in GL. 0, or a texture without storage, gives the stand-in's entry (as `Sampled`); that is
+the *float* 2D stand-in (`Kind = Texture2D`), so a port reading an integer array must check `handle.Kind` (or the steward adds a
+`Bindless(uint, SamplerInfo)` overload when one needs it). Like `Register` and `Free`, it is render-thread only (`Free` now journals a
+tombstone; it is no longer just a deferred push, which matters for wave 4, 6.3). The entries
 are freed with the texture's storage (`DeleteTexture`, re-specification). Cost per call: one `SamplerAndView` (cached in VkGl) and one
 compare. **Verified** (`BindlessTests`): an RGBA8UI GL texture made as `TerrainTextures` makes `uCells` reads back exact values through its
 exported index; the handle is stable while nothing changes and new after `TEXTURE_WRAP_S` changes; both indices are handed out again after
