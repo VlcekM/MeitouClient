@@ -130,3 +130,10 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     as a second gated step; GPU-driven culling for foliage after a CPU reference-alignment step; secondary command buffers in wave 4;
     `IGl` and `VkGl` (1,452 calls in 27 files) deleted in phase 8. Gate: 0 differing pixels in the ten `parity.sh` views with
     `--faithful all`, the baseline run twice first. The owner's answers to the open questions are in the doc's "Owner decisions".
+
+23. **Adopted 2026-10-06: phase 8 drops the standalone model and character viewer** (`tools/Meitou.ModelViewer`: `Program.cs`'s mesh mode,
+    `Renderer.cs`, `CharacterRenderer.cs`, `CharacterApp.cs`, `CharacterScene.cs`, `Animator.cs`; about 180 `IGl` calls) instead of porting
+    it. The world viewer stays. Its knowledge is kept for the later native character renderer: before deleting, stage 3 writes what it
+    does and how (mesh and skeleton loading, skinning, animation playback, the character appearance and shader inputs, its verified
+    findings) into docs (a new `docs/character-viewer.md`, linked from docs/README.md), and the last commit that has it is tagged
+    `model-viewer-last`. Readers and data code it uses (`Meitou.Data`, `Meitou.Core`, the character tests) stay.
