@@ -175,7 +175,7 @@ public sealed unsafe partial class FoliageRenderer
                 var g = patch.Grass;
                 var (sprite, colour) = state.PatchTextures[i];
                 // As Patch does on each call: counts as use, and brings an unloaded texture back.
-                uint spriteId = sprite?.Id ?? 0, colourId = colour?.Id ?? 0;
+                uint spriteId = sprite?.Key ?? 0, colourId = colour?.Key ?? 0;
                 bool wind = patch.Layer.Wind;
                 bool isActive = spriteId != 0 && (!motion || (wind && g.SwayLength != 0));
                 bool hasColour = !motion && options.Textures && colourId != 0;
@@ -195,15 +195,15 @@ public sealed unsafe partial class FoliageRenderer
         return active;
     }
 
-    /// <summary>The rows' GL texture ids as bindless indices (inside the segment, as the CPU path's <see cref="Texture"/> calls are), and the tables into the frame's constants.</summary>
-    GrassTables BindRows(IGlInterop interop, uint nearDepth)
+    /// <summary>The rows' texture keys as bindless indices (inside the segment, as the CPU path's <see cref="Texture"/> calls are), and the tables into the frame's constants.</summary>
+    GrassTables BindRows(uint nearDepth)
     {
         var rows = CollectionsMarshal.AsSpan(grassPatchRows);
         for (int i = 0; i < rows.Length; i++)
         {
             ref var r = ref rows[i];
-            r.Sprite = Texture(interop, r.Sprite);
-            r.ColourMap = Texture(interop, r.ColourMap);
+            r.Sprite = Texture(r.Sprite);
+            r.ColourMap = Texture(r.ColourMap);
             r.NearDepth = nearDepth;
         }
         return grassStore.Prepare(grassZoneRows.AsSpan(0, Math.Max(grassZoneHigh, 1)), rows);
@@ -217,14 +217,13 @@ public sealed unsafe partial class FoliageRenderer
         if (BuildGrassRows(false, options, coverage) == 0) return false;
         var gp = grassGpuProgram!;
         var p = gp.P;
-        gl.Disable(EnableCap.CullFace);
         var interop = Gpu.Interop!;
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the cull (into PreFrame), the sets and the draw, into a job.
         var targets = interop.CurrentTargets();
-        var state = interop.CurrentState();
+        var state = GrassState(interop, coverage);
         int segment = SegmentId(GrassKind, p, targets, state);
-        NewTextureSegment();
-        var tables = BindRows(interop, 0);
+        NewTextureSegment(interop);
+        var tables = BindRows(0);
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
         var result = grassStore.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
         if (GpuCullVerify && !result.IsEmpty) QueueGrassVerify("colour", result);
@@ -235,7 +234,6 @@ public sealed unsafe partial class FoliageRenderer
         job.Pipeline = result.IsEmpty ? null : PipelineFor(ref grassMeshGpu, gp, segment, state, targets.Formats, "foliage grass gpu");
         (job.Vertices, job.Result) = (grassMeshGpu.Vertices, result);
         Gpu.Record("foliage grass", job);
-        gl.BindVertexArray(0);
         DrawCalls += grassStore.LateDraws;
         DrawnBlades += (int)grassStore.LateBlades;
         return true;
@@ -288,11 +286,10 @@ public sealed unsafe partial class FoliageRenderer
         if (BuildGrassRows(true, default!, false) == 0) return;
         var gp = grassMotionGpuProgram!;
         var p = gp.P;
-        gl.Disable(EnableCap.CullFace);
         var interop = Gpu.Interop!;
         var cmd = interop.BeginNativeInPass("foliage grass motion");
         var pass = interop.CurrentTargets();
-        var drawState = interop.CurrentState();   // the host's colour mask (red and green), no depth test, no blending
+        var drawState = MotionState(interop);
         int segment = SegmentId(MotionKind, p, pass, drawState);
         cmd.SetViewport(pass.Viewport);
         cmd.SetScissor(pass.Scissor);
@@ -304,8 +301,8 @@ public sealed unsafe partial class FoliageRenderer
             ViewProjection = motionViewProjection, PreviousViewProjection = previous, Eye = eye, Time = time, PreviousTime = previousTime,
             NearPlanes = targets.NearPlanes, JitterNdc = targets.JitterNdc,
         };
-        NewTextureSegment();
-        var tables = BindRows(interop, Index2D(interop, targets.NearDepth));
+        NewTextureSegment(interop);
+        var tables = BindRows(Index2D(interop, targets.NearDepth));
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
         var result = grassStore.Dispatch(motionFrustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
         if (GpuCullVerify && !result.IsEmpty) QueueGrassVerify("motion", result);
@@ -317,8 +314,5 @@ public sealed unsafe partial class FoliageRenderer
             cmd.DrawIndirectCount(result.Draws, result.DrawsOffset, result.Counters, result.CountersOffset, (uint)result.MaxDraws);
         }
         interop.EndNative(cmd);
-        gl.BindVertexArray(0);
-        Bind(1, 0);
-        gl.ActiveTexture(TextureUnit.Texture0);
     }
 }

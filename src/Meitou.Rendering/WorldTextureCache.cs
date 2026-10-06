@@ -1,26 +1,51 @@
 using Meitou.Data.Textures;
 
 using Meitou.Rendering.Gpu;
+using Silk.NET.Vulkan;
+using Texture = Meitou.Rendering.Gpu.Texture;
 
 namespace Meitou.Rendering;
 
 /// <summary>
-/// A texture of the world view's objects: 0 until its file is decoded (in the background) and uploaded. Reading <see cref="Id"/> counts as using it
-/// (the draw code reads it every frame it draws with the texture), and reading it after the cache unloaded the texture starts loading it again.
+/// A texture of the world view's objects and foliage: not resident until its file is decoded (in the background) and uploaded. Reading
+/// <see cref="Key"/> or <see cref="Id"/> counts as using it (the draw code reads it every frame it draws with the texture), and reading it after
+/// the cache unloaded the texture starts loading it again.
 /// </summary>
 public sealed class WorldTexture
 {
-    uint id;
+    /// <summary>The texture's number in its cache (1-based, never reused): what <see cref="Key"/> returns while resident.</summary>
+    internal uint Number;
+
+    /// <summary>0 until resident, then the texture's number in its cache, which <see cref="WorldTextureCache.Index"/> turns into a bindless
+    /// index. Counts as use.</summary>
+    public uint Key
+    {
+        get
+        {
+            Touch();
+            return Native is null ? 0 : Number;
+        }
+    }
+
+    /// <summary>A GL texture name for code that still samples through IGl (the impostor baker and preview, <see cref="GlBridge"/>): 0 until
+    /// resident. Counts as use.</summary>
     public uint Id
     {
         get
         {
-            LastUsed = Environment.TickCount64;
-            if (State == Residency.Unloaded) Owner?.Reload(this);
-            return id;
+            Touch();
+            if (Native is null) return 0;
+            if (GlName == 0) GlName = Owner!.GlName(this);
+            return GlName;
         }
-        internal set => id = value;
     }
+
+    void Touch()
+    {
+        LastUsed = Environment.TickCount64;
+        if (State == Residency.Unloaded) Owner?.Reload(this);
+    }
+
     /// <summary>Normal map stored with X in alpha and Y in green (the model viewer's heuristic, docs/viewer.md).</summary>
     public bool Swizzled;
     internal Task<TextureData?>? Pending;
@@ -31,25 +56,54 @@ public sealed class WorldTexture
     internal long LastUsed;
     internal long Bytes;
     internal Residency State;
-    internal uint RawId => id;
+    /// <summary>The image (null until resident), the levels and the swizzle it is sampled with.</summary>
+    internal Texture? Native;
+    internal int ViewLevels;
+    internal ComponentMapping ViewSwizzle;
+    internal uint GlName;
+    /// <summary>The bindless entries for the last two LOD biases (the upscaler's, and 0 where a pass runs without it).</summary>
+    internal float BiasA, BiasB;
+    internal uint IndexA, IndexB;
+    internal bool HasA, HasB;
 
     internal enum Residency { Loading, Resident, Unloaded, Missing }
 }
 
 /// <summary>
-/// Texture cache for the world view: files are decoded on worker threads and uploaded on the GL thread by
-/// <see cref="Pump"/>, so loading a town's few hundred textures uses every core and never stalls a frame for long.
-/// Same lookup, sampling and swizzle detection as <see cref="Renderer"/>.
-/// Textures nobody has read the id of for <see cref="IdleSeconds"/> are deleted (<see cref="Trim"/>), earlier when the cache holds more than
+/// Texture cache for the world view: files are decoded on worker threads and uploaded on the render thread by <see cref="Pump"/> into native
+/// textures (through the <see cref="Uploader"/>), so loading a town's few hundred textures uses every core and never stalls a frame for long.
+/// Same lookup, sampling and swizzle detection as <see cref="Renderer"/>, and the images, levels, views and samplers the GL textures had
+/// through VkGl (docs/renderer-native.md 8, phase 8 stage 1).
+/// Textures nobody has read the key of for <see cref="IdleSeconds"/> are deleted (<see cref="Trim"/>), earlier when the cache holds more than
 /// <see cref="HighWaterMb"/>: the least recently used go first, down to three quarters of it. A deleted texture comes back by itself
-/// (decode and upload again) the next time something asks for its id.
+/// (decode and upload again) the next time something asks for its key.
 /// </summary>
-public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDisposable
+public sealed unsafe class WorldTextureCache : IDisposable
 {
     readonly Dictionary<string, WorldTexture> cache = new(StringComparer.OrdinalIgnoreCase);
+    readonly List<WorldTexture> byNumber = [];
     readonly List<WorldTexture> pending = [];
+    readonly GpuContext gpu;
+    readonly AssetLocator assets;
+    /// <summary>The images' allocation name (the F12 VRAM pie groups by it).</summary>
+    readonly string allocationName;
     long lastTrim;
     static readonly bool StreamLog = Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1";
+
+    /// <param name="name">The images' allocation name, by owner ("object textures", "foliage textures").</param>
+    public WorldTextureCache(GpuContext gpu, AssetLocator assets, string name)
+    {
+        this.gpu = gpu;
+        this.assets = assets;
+        allocationName = name;
+    }
+
+    /// <summary>For code still on IGl (the impostor baker and preview): the native context behind <paramref name="gl"/>; the textures reach
+    /// GL through <see cref="WorldTexture.Id"/>.</summary>
+    public WorldTextureCache(IGl gl, AssetLocator assets)
+        : this(GpuContext.Of(gl) ?? throw new ArgumentException("the world texture cache needs the native API (VkGl)", nameof(gl)), assets, "impostor textures")
+    {
+    }
 
     public List<string> Messages { get; } = [];
     public int PendingCount => pending.Count + (steps.Count > 0 ? 1 : 0);
@@ -79,6 +133,8 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
             return t;
         }
         cache[key] = t = new WorldTexture { Border = border, Owner = this, Name = name, LastUsed = Environment.TickCount64 };
+        byNumber.Add(t);
+        t.Number = (uint)byNumber.Count;
         // The game reduces texture fields to the bare file name (runtime-materials.md); a path still works.
         t.Path = assets.Find(System.IO.Path.GetFileName(name.Replace('\\', '/'))) ?? assets.Find(name);
         if (t.Path is null)
@@ -89,6 +145,44 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
         }
         Start(t);
         return t;
+    }
+
+    /// <summary>
+    /// The bindless index (in the 2D float array) of the texture whose <see cref="WorldTexture.Key"/> is <paramref name="key"/>, sampled as the
+    /// GL texture was (trilinear, 8x anisotropic, repeat or a transparent border) with the upscaler's LOD bias <paramref name="bias"/>
+    /// (<see cref="GpuContext.LodBias"/>, read where the GL code bound the texture); <paramref name="standIn"/> when it is not resident.
+    /// Render thread, in Prepare (it may register an entry).
+    /// </summary>
+    public uint Index(uint key, float bias, uint standIn)
+    {
+        if (key == 0 || key > byNumber.Count) return standIn;
+        var t = byNumber[(int)key - 1];
+        if (t.Native is null) return standIn;
+        if (t.HasA && t.BiasA == bias) return t.IndexA;
+        if (t.HasB && t.BiasB == bias)
+        {
+            (t.BiasA, t.IndexA, t.BiasB, t.IndexB) = (t.BiasB, t.IndexB, t.BiasA, t.IndexA);
+            return t.IndexA;
+        }
+        // A bias not seen yet: a new entry (the older of the two goes after the frames in flight; draws recorded earlier keep theirs).
+        if (t.HasB) gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexB);
+        (t.BiasB, t.IndexB, t.HasB) = (t.BiasA, t.IndexA, t.HasA);
+        var wrap = t.Border ? TextureWrapMode.ClampToBorder : TextureWrapMode.Repeat;
+        var sampler = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, wrap, wrap, TextureWrapMode.Repeat,
+            false, DepthFunction.Lequal, transparentBorder: true, anisotropy: 8, integerFormat: false, bias));
+        var view = t.Native.View(0, t.ViewLevels, 0, 1, t.ViewSwizzle);
+        t.IndexA = gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, view, t.Native.Image));
+        (t.BiasA, t.HasA) = (bias, true);
+        return t.IndexA;
+    }
+
+    /// <summary>The GL name of a resident texture (<see cref="WorldTexture.Id"/>), with the sampler state and swizzle the GL texture had.</summary>
+    internal uint GlName(WorldTexture t)
+    {
+        ReadOnlySpan<int> grey = [(int)GLEnum.Red, (int)GLEnum.Red, (int)GLEnum.Red, (int)GLEnum.One];
+        bool bc4 = t.ViewSwizzle.R == ComponentSwizzle.R;
+        return GlBridge.Texture(gpu, t.Native!, t.Border ? TextureWrapMode.ClampToBorder : TextureWrapMode.Repeat, transparentBorder: true, anisotropy: 8,
+            bc4 ? grey : default);
     }
 
     void Start(WorldTexture t)
@@ -126,6 +220,7 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
                 if (!wait && watch.Elapsed.TotalMilliseconds >= budgetMs) break;
                 var step = steps.Dequeue();
                 var one = System.Diagnostics.Stopwatch.StartNew();
+                GlBridge.EnsureFrame(gpu);
                 step();
                 if (StreamLog && one.Elapsed.TotalMilliseconds > 3) Console.WriteLine($"slow texture step {step.Method.Name}: {one.Elapsed.TotalMilliseconds:0.0} ms");
                 continue;
@@ -177,8 +272,7 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
 
     void Unload(WorldTexture t)
     {
-        gl.DeleteTexture(t.RawId);
-        t.Id = 0;
+        Release(t);
         ResidentBytes -= t.Bytes;
         ResidentCount--;
         Unloads++;
@@ -186,12 +280,24 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
         t.State = WorldTexture.Residency.Unloaded;
     }
 
+    /// <summary>Frees the texture's bindless entries (after the frames in flight), its GL name and its image.</summary>
+    void Release(WorldTexture t)
+    {
+        if (t.HasA) gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexA);
+        if (t.HasB) gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexB);
+        t.HasA = t.HasB = false;
+        GlBridge.DeleteTexture(gpu, t.GlName);
+        t.GlName = 0;
+        t.Native?.Dispose();
+        t.Native = null;
+    }
+
     readonly Queue<Action> steps = new();
     const int SlabBytes = 512 << 10;
 
     /// <summary>
     /// MEITOU_UNCOMPRESSED_TEXTURES=1 decodes every texture to RGBA8 on the CPU and uploads that (the way it was before; uses 4 to 8 times the GPU memory
-    /// of BC1/BC3 textures). Otherwise DDS textures in BC1, BC2, BC3, BC4 or BC5 with a full mip chain go to the GPU as they are stored (S3TC, universal on desktop GL; BC4 and BC5 are RGTC, core since GL 3.0, with a swizzle that shows BC4 as grey).
+    /// of BC1/BC3 textures). Otherwise DDS textures in BC1, BC2, BC3, BC4 or BC5 with a full mip chain go to the GPU as they are stored (BC4 through a swizzle that shows it as grey).
     /// </summary>
     static readonly bool Uncompressed = Environment.GetEnvironmentVariable("MEITOU_UNCOMPRESSED_TEXTURES") == "1";
 
@@ -216,98 +322,77 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
         dds.Format is DdsFormat.Bc1 or DdsFormat.Bc2 or DdsFormat.Bc3 or DdsFormat.Bc4 or DdsFormat.Bc5 && !dds.IsCubemap && !dds.IsVolume && dds.ImageCount == 1 && dds.Width > 0 && dds.Height > 0
         && dds.MipCount == 1 + (int)Math.Log2(Math.Max(dds.Width, dds.Height)) && dds.Surfaces.Count == dds.MipCount;
 
+    /// <summary>The number of levels down to 1 × 1 (the chain VkGl allocated for a texture's level 0).</summary>
+    static int FullChain(int w, int h) => 1 + (int)Math.Floor(Math.Log2(Math.Max(Math.Max(w, h), 1)));
+
+    /// <summary>A new image with <paramref name="levels"/> levels in GENERAL layout (the transition in the frame's upload commands, before the copies).</summary>
+    Texture Create(Format format, int width, int height, int levels, bool mipmaps) =>
+        Texture.Create(gpu, new TextureDesc(format, width, height, levels,
+            Use: TextureUse.Sampled | TextureUse.TransferDst | (mipmaps ? TextureUse.TransferSrc : 0), Name: allocationName), gpu.Frame.PreFrame.Handle);
 
     /// <summary>
-    /// A stored (S3TC) texture's upload: each level is allocated (big ones without data: the slabs fill them, nothing is copied twice) and filled in slabs of whole block rows of about
-    /// 512 KB. Same sampling state as the RGBA8 path; the mip chain is the file's own.
+    /// A stored (S3TC) texture's upload: the image is made with its full chain, each level is filled whole (up to about 512 KB) or in slabs of
+    /// whole block rows of about 512 KB, nothing copied twice. Same sampling state as the RGBA8 path; the mip chain is the file's own.
     /// </summary>
     void QueueCompressedUpload(WorldTexture t, TextureData data)
     {
         var dds = data.Compressed!;
         t.Swizzled = data.Swizzled;
-        var format = dds.Format switch
+        var format = GlConventions.VkFormat(dds.Format switch
         {
             DdsFormat.Bc1 => InternalFormat.CompressedRgbaS3TCDxt1Ext,
             DdsFormat.Bc2 => InternalFormat.CompressedRgbaS3TCDxt3Ext,
-            DdsFormat.Bc4 => (InternalFormat)0x8DBB,   // COMPRESSED_RED_RGTC1 (core in GL 3.0)
+            DdsFormat.Bc4 => (InternalFormat)0x8DBB,   // COMPRESSED_RED_RGTC1
             DdsFormat.Bc5 => (InternalFormat)0x8DBD,   // COMPRESSED_RG_RGTC2
             _ => InternalFormat.CompressedRgbaS3TCDxt5Ext,
-        };
-        int blockBytes = BlockCompression.BlockBytes(dds.Format);
-        uint id = 0;
-        steps.Enqueue(() =>
-        {
-            id = gl.GenTexture();
-            gl.BindTexture(TextureTarget.Texture2D, id);
         });
+        int blockBytes = BlockCompression.BlockBytes(dds.Format);
+        Texture? texture = null;
+        steps.Enqueue(() => texture = Create(format, dds.Width, dds.Height, FullChain(dds.Width, dds.Height), mipmaps: false));
         foreach (var surface in dds.Surfaces)
         {
             var s = surface;
             int blocksPerRow = (s.Width + 3) / 4, blockRows = (s.Height + 3) / 4, rowBytes = blocksPerRow * blockBytes;
             int length = Math.Min(s.Length, rowBytes * blockRows);
-            if (length <= SlabBytes)
-            {
-                steps.Enqueue(() =>
-                {
-                    gl.BindTexture(TextureTarget.Texture2D, id);
-                    fixed (byte* p = &dds.Data[s.Offset]) gl.CompressedTexImage2D(TextureTarget.Texture2D, s.Level, format, (uint)s.Width, (uint)s.Height, 0, (uint)length, p);
-                });
-                continue;
-            }
-            steps.Enqueue(() =>
-            {
-                gl.BindTexture(TextureTarget.Texture2D, id);
-                gl.CompressedTexImage2D(TextureTarget.Texture2D, s.Level, format, (uint)s.Width, (uint)s.Height, 0, (uint)length, null);
-            });
-            int rowsPerSlab = Math.Max(1, SlabBytes / rowBytes);
+            int rowsPerSlab = length <= SlabBytes ? blockRows : Math.Max(1, SlabBytes / rowBytes);
             for (int row = 0; row < blockRows; row += rowsPerSlab)
             {
                 int r0 = row, n = Math.Min(rowsPerSlab, blockRows - row);
                 steps.Enqueue(() =>
                 {
-                    gl.BindTexture(TextureTarget.Texture2D, id);
                     uint height = (uint)Math.Min(n * 4, s.Height - r0 * 4);
-                    fixed (byte* p = &dds.Data[s.Offset + r0 * rowBytes])
-                        gl.CompressedTexSubImage2D(TextureTarget.Texture2D, s.Level, 0, r0 * 4, (uint)s.Width, height, format, (uint)(n * rowBytes), p);
+                    int bytes = Math.Min(n * rowBytes, length - r0 * rowBytes);
+                    gpu.Uploads.Write(texture!, s.Level, 0, new Rect2D(new Offset2D(0, r0 * 4), new Extent2D((uint)s.Width, height)),
+                        dds.Data.AsSpan(s.Offset + r0 * rowBytes, bytes));
                 });
             }
         }
         steps.Enqueue(() =>
         {
-            gl.BindTexture(TextureTarget.Texture2D, id);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, dds.MipCount - 1);
-            if (dds.Format == DdsFormat.Bc4)
-            {
-                // BC4 is one channel; the decoder (and so the RGBA8 path) shows it as grey with alpha 1.
-                gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x8E42, (int)GLEnum.Red);    // TEXTURE_SWIZZLE_R
-                gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x8E43, (int)GLEnum.Red);
-                gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x8E44, (int)GLEnum.Red);
-                gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x8E45, (int)GLEnum.One);
-            }
-            SamplingState(t);
+            t.Native = texture;
+            t.ViewLevels = Math.Min(dds.MipCount, texture!.Desc.Levels);
+            // BC4 is one channel; the decoder (and so the RGBA8 path) shows it as grey with alpha 1.
+            t.ViewSwizzle = dds.Format == DdsFormat.Bc4 ? new ComponentMapping(ComponentSwizzle.R, ComponentSwizzle.R, ComponentSwizzle.R, ComponentSwizzle.One) : default;
             long bytes = dds.Surfaces.Sum(s => (long)s.Length);
-            Resident(t, id, bytes);
+            Resident(t, bytes);
         });
     }
 
-    /// <summary>A texture's upload as steps of about 512 KB: allocate every level, fill them in slabs of rows, then mipmaps and sampling state.</summary>
+    /// <summary>
+    /// A texture's upload as steps of about 512 KB: the image with its full chain, the levels filled in slabs of rows, then the mipmaps. Without
+    /// a chain down to 1 × 1 the levels are made from level 0 by linear blits, as VkGl's <c>GenerateMipmap</c> made them (so only level 0 is
+    /// uploaded: the blits overwrite the others).
+    /// </summary>
     void QueueUpload(WorldTexture t, LoadedTexture tex, bool swizzled)
     {
         t.Swizzled = swizzled;
-        uint id = 0;
-        steps.Enqueue(() =>
-        {
-            id = gl.GenTexture();
-            gl.BindTexture(TextureTarget.Texture2D, id);
-            gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
-            for (int level = 0; level < tex.Levels.Count; level++)
-            {
-                var img = tex.Levels[level];
-                gl.TexImage2D(TextureTarget.Texture2D, level, InternalFormat.Rgba8, (uint)img.Width, (uint)img.Height, 0,
-                    PixelFormat.Rgba, PixelType.UnsignedByte, null);
-            }
-        });
-        for (int level = 0; level < tex.Levels.Count; level++)
+        var top = tex.Levels[0];
+        int chain = FullChain(top.Width, top.Height);
+        bool generate = tex.Levels.Count == 1 || tex.Levels[^1].Width > 1 || tex.Levels[^1].Height > 1;
+        int uploaded = generate ? 1 : Math.Min(tex.Levels.Count, chain);
+        Texture? texture = null;
+        steps.Enqueue(() => texture = Create(Format.R8G8B8A8Unorm, top.Width, top.Height, chain, mipmaps: generate));
+        for (int level = 0; level < uploaded; level++)
         {
             var img = tex.Levels[level];
             int lv = level, rowBytes = img.Width * 4;
@@ -315,52 +400,42 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
             for (int y = 0; y < img.Height; y += rows)
             {
                 int y0 = y, h = Math.Min(rows, img.Height - y);
-                steps.Enqueue(() =>
-                {
-                    gl.BindTexture(TextureTarget.Texture2D, id);
-                    gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
-                    fixed (byte* p = &img.Pixels[y0 * rowBytes])
-                        gl.TexSubImage2D(TextureTarget.Texture2D, lv, 0, y0, (uint)img.Width, (uint)h, PixelFormat.Rgba, PixelType.UnsignedByte, p);
-                });
+                steps.Enqueue(() => gpu.Uploads.Write(texture!, lv, 0, new Rect2D(new Offset2D(0, y0), new Extent2D((uint)img.Width, (uint)h)),
+                    img.Pixels.AsSpan(y0 * rowBytes, h * rowBytes)));
             }
         }
         steps.Enqueue(() =>
         {
-            gl.BindTexture(TextureTarget.Texture2D, id);
-            Finish(t, tex, id);
+            long bytes = tex.Levels.Sum(l => (long)l.Width * l.Height * 4);
+            if (generate)
+            {
+                GenerateMipmaps(gpu, texture!);
+                bytes = bytes * 4 / 3;   // the full chain the blits made
+            }
+            t.Native = texture;
+            t.ViewLevels = generate ? chain : uploaded;
+            t.ViewSwizzle = default;
+            Resident(t, bytes);
         });
     }
 
-    void Finish(WorldTexture t, LoadedTexture tex, uint id)
+    /// <summary>Each level from the one above by a linear blit, in the frame's upload commands after the uploads (VkGl's <c>GenerateMipmap</c>).</summary>
+    internal static void GenerateMipmaps(GpuContext gpu, Texture texture)
     {
-        long bytes = tex.Levels.Sum(l => (long)l.Width * l.Height * 4);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, tex.Levels.Count - 1);
-        if (tex.Levels.Count == 1 || tex.Levels[^1].Width > 1 || tex.Levels[^1].Height > 1)
+        var cmd = gpu.Frame.PreFrame;
+        cmd.Barrier(BarrierBatch.Full);
+        for (int level = 1; level < texture.Desc.Levels; level++)
         {
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, 1000);
-            gl.GenerateMipmap(TextureTarget.Texture2D);
-            bytes = bytes * 4 / 3;   // the full chain the driver made
+            var between = new BarrierBatch();
+            between.Add(PipelineStageFlags2.TransferBit, AccessFlags2.TransferWriteBit, PipelineStageFlags2.TransferBit, AccessFlags2.TransferReadBit);
+            cmd.Barrier(in between);
+            cmd.BlitLevel(texture, level - 1, level, Filter.Linear);
         }
-        SamplingState(t);
-        Resident(t, id, bytes);
+        cmd.Barrier(BarrierBatch.Full);
     }
 
-    void SamplingState(WorldTexture t)
+    void Resident(WorldTexture t, long bytes)
     {
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        var wrap = t.Border ? TextureWrapMode.ClampToBorder : TextureWrapMode.Repeat;
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)wrap);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)wrap);
-        float[] transparent = [0, 0, 0, 0];
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureBorderColor, transparent.AsSpan());
-        gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x84FE, 8f); // max anisotropy (IGl 4.6 / EXT)
-        gl.GetError();
-    }
-
-    void Resident(WorldTexture t, uint id, long bytes)
-    {
-        t.Id = id;
         t.Bytes = bytes;
         t.State = WorldTexture.Residency.Resident;
         t.LastUsed = Environment.TickCount64;
@@ -386,7 +461,7 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
     public void Dispose()
     {
         foreach (var t in pending) t.Pending?.Wait();
-        foreach (var t in cache.Values) if (t.RawId != 0) gl.DeleteTexture(t.RawId);
+        foreach (var t in cache.Values) Release(t);
     }
 }
 

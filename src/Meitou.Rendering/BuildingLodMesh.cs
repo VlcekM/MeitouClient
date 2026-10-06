@@ -26,29 +26,30 @@ sealed class PreparedPart
     public uint[][]? Levels;
 }
 
-/// <summary>One submesh on the GPU: one vertex buffer, one index buffer holding every LOD level back to back.</summary>
+/// <summary>One submesh on the GPU: one vertex buffer, one index buffer holding every LOD level back to back (native buffers, "object meshes").</summary>
 sealed class GpuObjectPart
 {
     public required int SubMeshIndex;
     public required string MaterialName;
     public required bool HasTangents, HasColours;
-    public uint Vao, Vbo, Ebo;
-    /// <summary>First index and index count of each level in <see cref="Ebo"/> (a manual level has none: count 0).</summary>
+    public required DeviceBuffer Vertices, Indices;
+    /// <summary>The vertex attributes at locations 0 to 6 as the GL vertex array had them (all null for a part without vertices).</summary>
+    public LegacyProgram.Attribute?[] Attributes = [];
+    /// <summary>First index and index count of each level in <see cref="Indices"/> (a manual level has none: count 0).</summary>
     public required int[] Offset, Count;
-    /// <summary>For the terrain shader's mesh path (which draws from index 0): a vertex array per level, made when first asked for.</summary>
-    public uint[]? PlainVao;
-    public uint[]? PlainEbo;
+    /// <summary>For the terrain shader's mesh path (which draws from index 0, and takes GL vertex arrays): a vertex array per level, made when
+    /// first asked for (<see cref="GlBridge"/>), and the index buffers of the reduced levels.</summary>
+    public GlBridge.VertexArrayNames[]? PlainVao;
+    public DeviceBuffer?[]? PlainEbo;
     public uint[][]? LevelIndices;
     /// <summary>What a native draw needs, per program (<see cref="WorldObjectRenderer"/>).</summary>
     public ObjectNativeMesh ColourNative, DepthNative;
 }
 
-/// <summary>A part's native state for one program: the vertex-array export it came from, its vertex layout and own vertex buffers, its
-/// element buffer, and the pipelines for the last two segment states (the reflection's multisampled target alternates with the scene's).</summary>
+/// <summary>A part's native state for one program: its vertex layout and own vertex buffers, its element buffer, and the pipelines for the
+/// last two segment states (the reflection's multisampled target alternates with the scene's).</summary>
 struct ObjectNativeMesh
 {
-    public VertexArrayBindings? Source;
-    public long Stamp;
     public VertexLayout? Layout;
     public BufferBinding[] Vertices;
     public BufferBinding Elements;
@@ -91,8 +92,11 @@ sealed class ObjectMesh
 /// Loads the world's meshes: <see cref="Request"/> from anywhere on the render thread, <see cref="Pump"/> once per frame starts
 /// the nearest wanted decodes on worker threads and queues the uploads of finished ones.
 /// </summary>
-sealed unsafe class ObjectMeshCache(IGl gl, AssetLocator assets, UploadQueue uploads, uint instanceBuffer) : IDisposable
+sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, UploadQueue uploads) : IDisposable
 {
+    /// <summary>The buffers' allocation name (the F12 VRAM pie groups by it).</summary>
+    const string AllocationName = "object meshes";
+
     readonly Dictionary<string, ObjectMesh> meshes = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<ObjectMesh, float> wanted = [];
     readonly List<ObjectMesh> running = [];
@@ -260,22 +264,18 @@ sealed unsafe class ObjectMeshCache(IGl gl, AssetLocator assets, UploadQueue upl
             gp = new GpuObjectPart
             {
                 SubMeshIndex = part.SubMeshIndex, MaterialName = part.MaterialName, HasTangents = part.HasTangents, HasColours = part.HasColours,
-                Vao = gl.GenVertexArray(), Vbo = gl.GenBuffer(), Ebo = gl.GenBuffer(), Offset = prepared.Offset, Count = prepared.Count, LevelIndices = prepared.Levels,
+                Vertices = DeviceBuffer.Create(gpuContext, (ulong)vertexBytes, BufferUse.Vertex, AllocationName),
+                Indices = DeviceBuffer.Create(gpuContext, (ulong)indexBytes, BufferUse.Index, AllocationName),
+                Offset = prepared.Offset, Count = prepared.Count, LevelIndices = prepared.Levels,
             };
-            gl.BindVertexArray(gp.Vao);
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, gp.Vbo);
-            gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)vertexBytes, null, BufferUsageARB.StaticDraw);
-            gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, gp.Ebo);
-            gl.BufferData(BufferTargetARB.ElementArrayBuffer, (nuint)indexBytes, null, BufferUsageARB.StaticDraw);
-            gl.BindVertexArray(0);
         }, label + " (allocate)");
         for (int at = 0; at < vertexBytes; at += SlabBytes)
         {
             int start = at, length = Math.Min(SlabBytes, vertexBytes - at);
             uploads.Add(() =>
             {
-                gl.BindBuffer(BufferTargetARB.ArrayBuffer, gp!.Vbo);
-                fixed (Vertex* p = part.Vertices) gl.BufferSubData(BufferTargetARB.ArrayBuffer, start, (nuint)length, (byte*)p + start);
+                GlBridge.EnsureFrame(gpuContext);
+                gpuContext.Uploads.Write(gp!.Vertices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(part.Vertices.AsSpan()).Slice(start, length));
             }, label + " (vertices)");
         }
         for (int at = 0; at < indexBytes; at += SlabBytes)
@@ -283,76 +283,60 @@ sealed unsafe class ObjectMeshCache(IGl gl, AssetLocator assets, UploadQueue upl
             int start = at, length = Math.Min(SlabBytes, indexBytes - at);
             uploads.Add(() =>
             {
-                gl.BindVertexArray(gp!.Vao);   // the element buffer binding belongs to the vertex array
-                fixed (uint* p = prepared.All) gl.BufferSubData(BufferTargetARB.ElementArrayBuffer, start, (nuint)length, (byte*)p + start);
-                gl.BindVertexArray(0);
+                GlBridge.EnsureFrame(gpuContext);
+                gpuContext.Uploads.Write(gp!.Indices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(prepared.All.AsSpan()).Slice(start, length));
             }, label + " (indices)");
         }
         uploads.Add(() =>
         {
-            gl.BindVertexArray(gp!.Vao);
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, gp.Vbo);
-            VertexAttributes(part.Vertices.Length > 0);
-            // Per-instance matrix rows (attributes 7 to 10), re-pointed at the batch's offset before each draw.
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, instanceBuffer);
-            for (uint a = 0; a < 4; a++)
-            {
-                gl.EnableVertexAttribArray(BuildingLodShaders.InstanceLocation + a);
-                gl.VertexAttribPointer(BuildingLodShaders.InstanceLocation + a, 4, VertexAttribPointerType.Float, false, 64, (void*)(16 * a));
-                gl.VertexAttribDivisor(BuildingLodShaders.InstanceLocation + a, 1);
-            }
-            gl.BindVertexArray(0);
+            // The per-instance matrix rows (attributes 7 to 10) are bound per segment, from the frame's constants.
+            gp!.Attributes = part.Vertices.Length > 0 ? VertexAttributes(gp.Vertices) : [];
             gpu.Parts.Add(gp);
             gpu.Bytes += vertexBytes + indexBytes;
         }, label + " (vertex array)");
     }
 
-    void VertexAttributes(bool any)
+    /// <summary>The vertex layout of <see cref="Vertex"/> (as <c>Renderer.Upload</c>; bones and weights stay zero: no skinning in the world view).</summary>
+    internal static readonly GlBridge.Attribute[] Layout =
+    [
+        new(0, 3, 0), new(1, 3, 12), new(2, 2, 24), new(3, 4, 32), new(4, 4, 48), new(5, 4, 64, Integer: true), new(6, 4, 68),
+    ];
+
+    /// <summary>The attributes at locations 0 to 6 as VkGl exported the GL vertex array (one binding per attribute, at its offset).</summary>
+    internal static LegacyProgram.Attribute?[] VertexAttributes(DeviceBuffer vertices)
     {
-        if (!any) return;
-        uint stride = (uint)Vertex.Size;
-        void Attrib(uint index, int size, int offset)
+        var result = new LegacyProgram.Attribute?[Layout.Length];
+        foreach (var a in Layout)
         {
-            gl.EnableVertexAttribArray(index);
-            gl.VertexAttribPointer(index, size, VertexAttribPointerType.Float, false, stride, (void*)offset);
+            var format = a.Integer ? GlConventions.VertexFormat(GLEnum.UnsignedByte, a.Size, false, true) : GlConventions.VertexFormat(GLEnum.Float, a.Size, false, false);
+            result[a.Location] = new LegacyProgram.Attribute(new BufferBinding(vertices.Handle, (ulong)a.Offset), format, (uint)Vertex.Size, false);
         }
-        // Same layout as Renderer.Upload; bones and weights stay zero (no skinning in the world view).
-        Attrib(0, 3, 0);
-        Attrib(1, 3, 12);
-        Attrib(2, 2, 24);
-        Attrib(3, 4, 32);
-        Attrib(4, 4, 48);
-        gl.EnableVertexAttribArray(5);
-        gl.VertexAttribIPointer(5, 4, VertexAttribIType.UnsignedByte, stride, (void*)64);
-        Attrib(6, 4, 68);
+        return result;
     }
 
     /// <summary>
-    /// A vertex array for the terrain shader's mesh path, which draws from the first index: level 0 shares the part's buffers,
-    /// a reduced level gets an index buffer of its own (made on first use, from the indices kept for this).
+    /// A GL vertex array for the terrain shader's mesh path, which draws from the first index and takes GL vertex arrays
+    /// (<see cref="GlBridge.VertexArray"/>): level 0 shares the part's buffers, a reduced level gets an index buffer of its own (made on first
+    /// use, from the indices kept for this).
     /// </summary>
     public uint PlainVao(GpuObjectPart part, int level)
     {
-        part.PlainVao ??= new uint[part.Count.Length];
-        part.PlainEbo ??= new uint[part.Count.Length];
-        if (part.PlainVao[level] != 0) return part.PlainVao[level];
+        part.PlainVao ??= new GlBridge.VertexArrayNames[part.Count.Length];
+        part.PlainEbo ??= new DeviceBuffer?[part.Count.Length];
+        if (part.PlainVao[level].Vao != 0) return part.PlainVao[level].Vao;
         if (level > 0 && part.LevelIndices is null) level = 0;
-        if (part.PlainVao[level] != 0) return part.PlainVao[level];
-        uint vao = gl.GenVertexArray();
-        gl.BindVertexArray(vao);
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, part.Vbo);
-        VertexAttributes(true);
-        if (level == 0) gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, part.Ebo);
-        else
+        if (part.PlainVao[level].Vao != 0) return part.PlainVao[level].Vao;
+        var elements = part.Indices;
+        if (level > 0)
         {
-            uint ebo = gl.GenBuffer();
-            gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, ebo);
-            gl.BufferData<uint>(BufferTargetARB.ElementArrayBuffer, part.LevelIndices![level].AsSpan(), BufferUsageARB.StaticDraw);
-            part.PlainEbo[level] = ebo;
+            var indices = part.LevelIndices![level];
+            elements = DeviceBuffer.Create(gpuContext, (ulong)indices.Length * 4, BufferUse.Index, AllocationName);
+            GlBridge.EnsureFrame(gpuContext);
+            gpuContext.Uploads.Write(elements, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(indices.AsSpan()));
+            part.PlainEbo[level] = elements;
         }
-        gl.BindVertexArray(0);
-        part.PlainVao[level] = vao;
-        return vao;
+        part.PlainVao[level] = GlBridge.VertexArray(gpuContext, part.Vertices, (uint)Vertex.Size, Layout, elements);
+        return part.PlainVao[level].Vao;
     }
 
     public int Unloads { get; private set; }
@@ -418,24 +402,24 @@ sealed unsafe class ObjectMeshCache(IGl gl, AssetLocator assets, UploadQueue upl
         Unloaded?.Invoke(gpu);
         foreach (var gp in gpu.Parts)
         {
-            gl.DeleteVertexArray(gp.Vao);
-            gl.DeleteBuffer(gp.Vbo);
-            gl.DeleteBuffer(gp.Ebo);
-            if (gp.PlainVao is not null) foreach (var v in gp.PlainVao) if (v != 0) gl.DeleteVertexArray(v);
-            if (gp.PlainEbo is not null) foreach (var b in gp.PlainEbo) if (b != 0) gl.DeleteBuffer(b);
+            // The GL names first (they borrow the buffers), then the buffers (freed after the frames in flight).
+            if (gp.PlainVao is not null) foreach (var v in gp.PlainVao) GlBridge.DeleteVertexArray(gpuContext, v);
+            if (gp.PlainEbo is not null) foreach (var b in gp.PlainEbo) b?.Dispose();
+            gp.Vertices.Dispose();
+            gp.Indices.Dispose();
         }
         foreach (var m in gpu.Manual) if (m is not null) Delete(m);
     }
 }
 
-/// <summary>A part's look: the resolved material and its textures (ids are 0 until decoded and uploaded).</summary>
+/// <summary>A part's look: the resolved material and its textures (keys are 0 until decoded and uploaded: <see cref="WorldTexture.Key"/>).</summary>
 sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse, WorldTexture? normal, WorldTexture? diffuse2, WorldTexture? normal2)
 {
     public SurfaceMaterial? Material => material;
-    public uint Diffuse => diffuse?.Id ?? 0;
-    public uint Normal => normal?.Id ?? 0;
-    public uint Diffuse2 => diffuse2?.Id ?? 0;
-    public uint Normal2 => normal2?.Id ?? 0;
+    public uint Diffuse => diffuse?.Key ?? 0;
+    public uint Normal => normal?.Key ?? 0;
+    public uint Diffuse2 => diffuse2?.Key ?? 0;
+    public uint Normal2 => normal2?.Key ?? 0;
     public bool Swizzled => normal?.Swizzled ?? false;
 }
 
@@ -445,7 +429,7 @@ sealed class ObjectMaterialSet(ObjectPartMaterial[] parts)
     public ObjectPartMaterial[] Parts => parts;
     public int Stamp;
 
-    /// <summary>Reading a texture id counts as using the texture (<see cref="WorldTexture.Id"/>); this keeps all of them from being unloaded.</summary>
+    /// <summary>Reading a texture key counts as using the texture (<see cref="WorldTexture.Key"/>); this keeps all of them from being unloaded.</summary>
     public void Touch()
     {
         foreach (var p in parts) _ = (p.Diffuse, p.Normal, p.Diffuse2, p.Normal2);

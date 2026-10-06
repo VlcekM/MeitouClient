@@ -2403,9 +2403,9 @@ here: calls on an `IGl` (`gl.` or `Gl.` followed by an `IGl` member name), exclu
 | File | IGl calls | Owner (7.2) |
 | --- | ---: | --- |
 | `src/Meitou.Rendering/PostProcess.cs` | 181 | E |
-| `src/Meitou.Rendering/FoliageRenderer.cs` | 147 | A |
 | `src/Meitou.Rendering/ShadowPass.cs` | 123 (101 after F's debug views; 97 at `6f4af19`, **24** after phase 8 stage 1, 8.3) | B (debug views F) |
 | `src/Meitou.Rendering/TerrainRenderer.cs` | 122 (98 at `6f4af19`; **1** after phase 8 stage 1: the globals program, 8.4) | B (`DrawMeshes`: foundation pilot) |
+| `src/Meitou.Rendering/FoliageRenderer.cs` | 147 (0 after phase 8 stage 1, `.Grass.cs` too) | A |
 | `tools/Meitou.ModelViewer/Renderer.cs` | 116 | C |
 | `tools/Meitou.ModelViewer/CharacterRenderer.cs` | 93 | C |
 | `src/Meitou.Rendering/SkyRenderer.cs` | 80 | D |
@@ -2415,9 +2415,9 @@ here: calls on an `IGl` (`gl.` or `Gl.` followed by an `IGl` member name), exclu
 | `src/Meitou.Rendering/TerrainTextures.cs` | 52 (**0** after phase 8 stage 1) | B |
 | `src/Meitou.Rendering/TerrainShadowMap.cs` | 48 (33 at `6f4af19`; **4** after phase 8 stage 1: the imported name's sampler state, 8.4) | B |
 | `src/Meitou.Rendering/DebugOverlay.cs` | 42 (16 after step P: the atlas texture, the GL state around the draw) | F |
-| `src/Meitou.Rendering/WorldObjectRenderer.cs` | 39 | C |
-| `src/Meitou.Rendering/BuildingLodMesh.cs` | 38 | C |
-| `src/Meitou.Rendering/WorldTextureCache.cs` | 34 | C |
+| `src/Meitou.Rendering/WorldObjectRenderer.cs` | 39 (0 after phase 8 stage 1) | C |
+| `src/Meitou.Rendering/BuildingLodMesh.cs` | 38 (0 after phase 8 stage 1) | C |
+| `src/Meitou.Rendering/WorldTextureCache.cs` | 34 (0 after phase 8 stage 1) | C |
 | `src/Meitou.Rendering/WorldGl.cs` | 23 | foundation |
 | `tools/Meitou.ModelViewer/Program.cs` | 23 (22) | F |
 | `tools/Meitou.ModelViewer/CharacterApp.cs` | 23 (22) | F |
@@ -2441,6 +2441,7 @@ tests in all (`CoreTests`, `ShaderCompilerTests`, `ShaderInterfaceTests`, `Shade
 Beyond the draw calls, resource creation also goes through `IGl` in `TerrainTextures`, `WorldTextureCache`, `BuildingLodMesh`, `TerrainShadowMap`,
 the foliage meshes and grass pages, `PostProcess` targets and `SkyRenderer` textures. Phase 8 includes moving those to native `Texture` /
 `DeviceBuffer` creation through the `Uploader`. That is owner work by the same agents (7.2), since step P may leave resource creation on IGl.
+`WorldTextureCache`, `BuildingLodMesh` and the foliage meshes are done (phase 8 stage 1, 8.5).
 
 ### 8.2 End state
 
@@ -2625,6 +2626,49 @@ barrier, per level a transfer barrier and a linear blit from the level above, a 
 and Port North 13:00 with `--water-reflection 4` 0 errors; a 150-frame forest fly under sync validation (six fine-height swaps, layer and map
 streaming) 0 errors. `--fly-benchmark` 300, `--faithful all`, two interleaved runs each (noisy machine): the `terrain` stage 0.13-0.14 ms
 before and after, `upd-terrain` 0.46-0.49 → 0.49-0.52 ms, render-thread allocation 14-20 → 17-18 MB: no change beyond the noise.
+
+### 8.5 Phase 8 stage 1 (objects and foliage) as built
+
+*2026-10-06, off master `6f4af19`.* `FoliageRenderer.cs` (55 `gl.` calls at `6f4af19`; the table's 147 is the older count, before step P), `FoliageRenderer.Grass.cs` (5), `BuildingLodMesh.cs` (36),
+`WorldTextureCache.cs` (34) and `WorldObjectRenderer.cs` (12) make 0 IGl calls now:
+
+- **Meshes** are native `DeviceBuffer`s (vertices, indices), uploaded through the `Uploader`, with their vertex attributes built directly
+  (`ObjectMeshCache.VertexAttributes`, `FoliageRenderer.VertexAttributes`), no GL vertex array. Allocation names "object meshes" and
+  "foliage meshes".
+- **Textures** (`WorldTextureCache`) are native `Texture`s, GENERAL layout, full mip chain. Compressed files upload every level; RGBA files
+  that need mips upload level 0 and blit the rest in the frame's pre-frame list (`WorldTextureCache.GenerateMipmaps`, linear blits as VkGl's
+  `GenerateMipmap` did). Bindless entries carry the sampler state GL set (`SamplerDesc.FromGl`, anisotropy 8, the LOD bias in the sampler):
+  each texture keeps two bias slots, so a bias change registers a new entry rather than rewriting a live one. BC4 views swizzle R,R,R,1.
+  Caches are named "object textures", "foliage textures" and "impostor textures" (the impostors' own cache).
+- **GL state** the renderers set by hand (cull face, alpha to coverage, polygon mode and depth bias for the wireframe, active texture, vertex
+  array 0) is now the `DrawState` of each draw (`CurrentState() with { ... }`). Alpha to coverage follows the target's sample count.
+- **Foliage GPU timers** are `QueryArena` timestamps recorded through `Interleave`, read without waiting (stale ones dropped after two
+  rounds of frames).
+- **Still-GL users** (the impostor baker and preview, reserved, read `WorldTexture.Id`; `TerrainRenderer.DrawMeshes` takes GL vertex arrays
+  for rocks and terrain-placed foliage) get GL names over the native resources through the additive `Gpu/GlBridge.cs` (seam `Import` /
+  `ImportBuffer`, no raw handle sharing). That file is the only GL left on these paths; it goes when the impostors and `DrawMeshes` take
+  native textures and mesh bindings. `FoliageRenderer` and `WorldObjectRenderer` keep an unused `IGl` constructor parameter (`WorldFrame`
+  is reserved), as does the `WorldTextureCache(IGl, AssetLocator)` overload the impostors call. Also added: `CommandList.BlitLevel`.
+
+Facts:
+- **Verified** (`WorldResourceTests`, sync validation): the native vertex attributes equal what VkGl exported for the GL vertex arrays
+  (format, stride, offset, rate, buffer) for both mesh layouts, and `GlBridge`'s vertex arrays export the native buffers with the same
+  attributes. The native blit mip chain of a 64x24 RGBA image is byte-equal at every level to VkGl's `GenerateMipmap`.
+- **Verified** (gate): no later draw depended on the GL state these renderers used to reset (the sky reads the inherited cull; its
+  triangle is unaffected): 0 px.
+- **Observed** (forest 13, F11 breakdown): "gl texture" 2,327.9 MB (193 allocations) before, 1,584.8 MB (46) after, with "object textures"
+  367.8 MB (51) and "foliage textures" 375.4 MB (96); "gl buffer" 82.6 MB (520) left the top owners, "object meshes" 47.9 MB (220) and
+  "foliage meshes" 34.6 MB (294) took it. Host staging stays about 1.6 GB but moves from VkGl's frame ring (1,576 MB before, 736 after) to
+  the native frame constants / staging chunks (24 MB before, 864 after).
+- **Observed**: the foliage "gpu" statistic reads 1.15 ms against 1.97 ms before on the same view (same timestamp stage); frame times did
+  not move by that much, so the old number likely included VkGl work between the stamps. **Unknown** beyond that.
+
+Gate: Release build 0 warnings; quick and full tests (`KENSHI_PATH` set) pass, 0 skipped. Ten views Meitou and `--faithful all`: 0 px
+max against the `6f4af19` baseline. Extras 0 px against the base viewer: `--debug-shadows 1` forest 13 (both modes), `--water-reflection 4`
+Port North 13, `--upscaler taa` forest 13, `MEITOU_GPU_CULL=0`, `MEITOU_GPU_GRASS=0`, `MEITOU_RECORD_THREADS=0` and `=1` forest.
+`MEITOU_VK_VALIDATION=sync` forest 13 and Port North 13 (`--water-reflection 4`): 0 errors. `MEITOU_GPU_CULL_VERIFY=1` forest: 142 views,
+0 differences (grass 129 views, 0). Benchmark forest `--faithful all --fly-benchmark 300` (base / this): foliage 0.41-0.43 / 0.33 ms,
+objects 0.10-0.11 / 0.09 ms, CPU-only p50 3.5-3.9 / 3.1 ms, render-thread allocations 18 / 17 MB: no regression.
 
 ---
 
