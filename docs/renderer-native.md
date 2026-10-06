@@ -2441,6 +2441,7 @@ tests in all (`CoreTests`, `ShaderCompilerTests`, `ShaderInterfaceTests`, `Shade
 Beyond the draw calls, resource creation also goes through `IGl` in `TerrainTextures`, `WorldTextureCache`, `BuildingLodMesh`, `TerrainShadowMap`,
 the foliage meshes and grass pages, `PostProcess` targets and `SkyRenderer` textures. Phase 8 includes moving those to native `Texture` /
 `DeviceBuffer` creation through the `Uploader`. That is owner work by the same agents (7.2), since step P may leave resource creation on IGl.
+`WorldTextureCache`, `BuildingLodMesh` and the foliage meshes are done (phase 8 stage 1, 8.3).
 
 ### 8.2 End state
 
@@ -2466,7 +2467,7 @@ The phase-8 gate is the usual one: 0 differing pixels against the last build wit
 
 ### 8.3 Phase 8 stage 1 (objects and foliage) as built
 
-*2026-10-06, off master `6f4af19`.* `FoliageRenderer.cs` (55 `gl.` calls before), `FoliageRenderer.Grass.cs` (5), `BuildingLodMesh.cs` (36),
+*2026-10-06, off master `6f4af19`.* `FoliageRenderer.cs` (55 `gl.` calls at `6f4af19`; the table's 147 is the older count, before step P), `FoliageRenderer.Grass.cs` (5), `BuildingLodMesh.cs` (36),
 `WorldTextureCache.cs` (34) and `WorldObjectRenderer.cs` (12) make 0 IGl calls now:
 
 - **Meshes** are native `DeviceBuffer`s (vertices, indices), uploaded through the `Uploader`, with their vertex attributes built directly
