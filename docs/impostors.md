@@ -386,8 +386,8 @@ The crossfade band is [T − B, T) with B = 0.1 T. Per instance, with the transi
 - Offscreen settling (`FoliageRenderer.Settle`) ends the frame while a bake waits for its rows (`IGl.Finish`, the constructor's
   formerly unused `gl`): the bake reads rows back after the frame they were recorded in completes. This is `FoliageRenderer`'s one `IGl`
   call; stage 3 replaces it with the native frame loop.
-- **Observed**: the forest view, first run, empty cache: 47 atlases baked (255 MB on disk), the view settled in 23 s (with impostors
-  off it settles in about the same time as before; the bakes are most of the difference).
+- **Observed**: the forest view, first run, empty cache: 47 atlases baked (255 MB on disk), foliage settled in 23 s (RTX 4070,
+  beside another application's GPU load); how much of it the bakes take was not measured.
 
 ### Shadows (from the code; costs below)
 
@@ -397,8 +397,8 @@ The crossfade band is [T − B, T) with B = 0.1 T. Per instance, with the transi
   out along it (the cascade's eye is not a point). `MEITOU_IMPOSTOR_CASTERS=0` keeps the meshes as casters.
 - Why: a far cascade covering 10,000 to 15,000 units of shadow distance holds thousands of trees; an impostor caster is two triangles
   against the mesh's hundreds to thousands, and its atlas is already resident for the colour pass.
-- **Observed** (forest 13:00): about half the picture difference against impostors off is in the shadows (mean 2.55 with casters,
-  1.17 without, base `6f4af19` Meitou picture): the impostor casters cast fuller crown shadows, as their crowns are fuller (below).
+- **Observed** (forest 13:00): more than half the picture difference against impostors off is in the shadows (mean 2.45 with casters,
+  1.10 without, base `6f4af19` Meitou picture): the impostor casters cast fuller crown shadows, as their crowns are fuller (below).
 
 ### Pictures (Observed, 2026-10-07, RTX 4070, 1600 × 900, against the base Meitou pictures)
 
