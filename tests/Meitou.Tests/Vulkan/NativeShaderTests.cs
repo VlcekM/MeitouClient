@@ -34,6 +34,11 @@ public class NativeShaderTests
             """;
         yield return ("post vertex + atmosphere", NativeShaders.PostProcessVertex,
             "#version 450\n" + NativeShaders.Prelude(NativeShaders.MeshPushMembers) + NativeShaders.AtmosphereFunctions + fragment, typeof(MeshPush));
+        // The first consumer, the foliage (step O).
+        yield return ("foliage mesh", FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(), typeof(MeshPush));
+        yield return ("foliage mesh depth", FoliageShaders.MeshVertexNative(), FoliageShaders.MeshDepthNative(), typeof(MeshPush));
+        yield return ("foliage grass", FoliageShaders.GrassVertexNative(), FoliageShaders.GrassFragmentNative(), typeof(GrassPush));
+        yield return ("foliage grass motion", FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(), typeof(GrassPush));
     }
 
     [Fact]
