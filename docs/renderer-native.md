@@ -676,10 +676,12 @@ the stamp per mesh skips the per-draw `VertexArray` call (0.35 us a draw measure
 export names do not move it. **Verified** by `SeamTests.The_vertex_array_stamp_moves_exactly_when_an_export_may_be_stale`.
 *Changed by the step-O hot-path work (7.1, `3152deb`):* it no longer moves at every frame's begin. Before, an export marked its buffers used
 per frame, so the stamp moved per frame and every mesh fetched its export again in the frame's first segment; foliage draws each mesh once
-per segment kind, so that was one `VertexArray` call per draw (0.3-0.4 us). Now VkGl keeps the set of buffers an export has named and marks
-all of them used by each new frame (`MarkExportsUsed`, after the dynamic buffers are carried): a write later in the frame takes new memory
-and moves the stamp, exactly as after a draw. Conservative (a named buffer no draw of the frame reads is renamed too when written); measured
-cost: the forest still run renames 600 buffers in 301 frames before and after, so nothing writes such buffers in steady state.
+per segment kind, so that was one `VertexArray` call per draw (0.3-0.4 us). Now a buffer an export has named counts as read by every frame
+until it gets fresh storage in that frame (`VkGl.ReadByFrame`, `8ec1d22`): its first write of a frame takes new memory and moves the stamp,
+exactly as after a draw, and later writes of the frame go in place. Conservative (a named buffer no draw of the frame reads is renamed too
+when written). Measured: the forest still run renames 600 buffers in 301 frames before and after, so nothing writes such buffers in steady
+state. The first version (`3152deb`) marked the named buffers at each frame's begin instead; that loop cost 43-49 us a frame for 585 buffers
+(cold objects), so it was replaced by the check at the write, which costs nothing per frame.
 
 ### 4.3 Frame-global resources: `FrameGlobals`
 
@@ -1583,14 +1585,14 @@ functions. The shaders are untouched.
   other renderer draws into them), so they need no host; `DrawDebug` and `CaptureDepth` stay (agent F's). The state the guests read is still the GL mirror: see the limits in 4.5.
 
 **Wave 3b, the step-O hot path (agent P, as steward; 2026-10-06, written on master `9d25305`, rebased onto `3af1880` and gated there).** Why foliage
-step O still cost 2-3 us a draw, and the fixes. Six commits: `3152deb` VkGl (exported buffers count as used by each frame; the stamp no longer moves per
-frame), `b0badb7` `CommandList` (cached device entry points, one-pass vertex-buffer filter), `0ebcc7e` and `e1161d3` foliage Record (bindless indices
+step O still cost 2-3 us a draw, and the fixes. Seven commits: `3152deb` and `8ec1d22` VkGl (exported buffers count as read by each frame; the stamp no
+longer moves per frame), `b0badb7` `CommandList` (cached device entry points, one-pass vertex-buffer filter), `0ebcc7e` and `e1161d3` foliage Record (bindless indices
 cached per segment by texture id), `3068dfc` `BindlessTable.ScalarOf` (no enum name per call), `5bcb8d1` `SampledTexture`/`BufferBinding` equality by
 handle. Steward changes are internal or additive; the one contract change is `VertexArrayStamp` (4.2, its test updated).
 
 - *How it was measured.* Release, the forest still camera (`--fly-benchmark 300 --fly-speed 0 --faithful all`). A stopwatch breakdown inside each
-  Record loop (not committed: a lap per step; `Stopwatch.GetTimestamp` costs 0.019 us, so every fine figure below carries about 0.02 us of its own
-  lap; the before/after totals come from a coarse mode with two stamps per loop), counters of Vulkan calls, `VertexArray` fetches and `Bindless`
+  Record loop (not committed: a lap per step; `Stopwatch.GetTimestamp` costs 0.019 us, so every fine "after" figure below carries about 0.02 us of its own
+  lap and every fine "before" figure about 0.04 us (two stamps a lap then); the before/after totals come from a coarse mode with two stamps per loop), counters of Vulkan calls, `VertexArray` fetches and `Bindless`
   calls per draw, and a micro-benchmark of the floor (9.1). `dotnet-trace` (EventPipe, `dotnet-sampled-thread-time`) was tried and is of no use at
   this scale: its samples are milliseconds apart and taken at safe points, so a 30 us loop gets a handful of samples on the wrong lines.
 - **Observed: where a step-O foliage draw's time went (before; master `9d25305`, the machine shared; us per draw, the first 200 segments skipped).**
@@ -1622,32 +1624,35 @@ handle. Steward changes are internal or additive; the one contract change is `Ve
   vertex buffer, a contiguous draw list, and a 32-byte uniform change; the objects pay for a per-draw export, a default-block copy and per-mesh heap objects.
 - *Gate (Release; lighter gate, against master `3af1880` built unchanged, scratch in `C:\Temp\agent-P`).* Build 0 warnings; `dotnet test -c Release` 397
   passed, 0 skipped; `--faithful all` ten views 0 px (mean 0.0000); `--upscaler taa` and `--water-reflection 4`, forest and Hub at 13:00: 0 px;
-  `MEITOU_VK_VALIDATION=sync` forest 13:00 and Hub 2:00: 0 errors. Renames over a 300-frame run: 600 before and after (the conservative marking renamed nothing more).
+  `MEITOU_VK_VALIDATION=sync` forest 13:00 and Hub 2:00: 0 errors. Renames over a 300-frame run: 600 before and after (the conservative rule renamed nothing more).
+  The whole gate was run on `e1161d3` and again on `8ec1d22`, all passing both times.
 - **Measured: forest still camera (`--fly-benchmark 300 --fly-speed 0 --faithful all`, `MEITOU_FOLIAGE_TIMING=1`), before = master `3af1880`, after =
-  `e1161d3`, five interleaved runs per build, Release.** The machine was shared and two of the five pairs ran while something else loaded it (per-draw
-  figures doubled in those), so the medians are of the first three pairs as the procedure asks, and the minimum of all five is given as the least
-  disturbed run. Per draw includes the segment's share (12.0 colour, 132.5 grass, 36.5 depth draws per call, empty calls included).
+  `8ec1d22`, three interleaved runs per build, medians and minima, Release.** The machine was busy (another agent's viewer and builds): every figure is about
+  twice what a quiet run gives, and runs of one build differ by 30 percent, but within each interleaved pair the after build was faster on every per-draw row.
+  Per draw includes the segment's share (12.0 colour, 132.5 grass, 36.5 depth draws per call, empty calls included).
 
   | | before, median | after, median | before, min | after, min |
   | --- | ---: | ---: | ---: | ---: |
-  | colour meshes, us per draw (Prepare + Record) | 1.21 | 0.85 | 1.17 | 0.84 |
-  | colour meshes, record only | 1.10 | 0.73 | 1.06 | 0.72 |
-  | grass, us per draw (Prepare + Record) | 1.05 | 0.72 | 1.02 | 0.69 |
-  | grass, record only | 0.70 | 0.32 | 0.67 | 0.30 |
-  | depth meshes, us per draw | 1.09 | 0.83 | 1.02 | 0.81 |
-  | depth meshes, record only | 1.00 | 0.73 | 0.94 | 0.70 |
-  | stage `foliage`, ms | 0.58 | 0.49 | 0.55 | 0.44 |
-  | shadow casters `foliage`, ms | 1.20 | 1.28 | 1.16 | 1.22 |
-  | render thread p50 / p95, ms | 9.6 / 12.0 | 9.8 / 12.1 | 7.4 / 11.4 | 7.5 / 11.8 |
-  | CPU only p50 / p95, ms | 2.2 / 3.0 | 2.2 / 3.6 | 2.1 / 2.8 | 2.0 / 3.4 |
-  | render thread allocations, MB per run | 39 | 12 | | |
+  | colour meshes, us per draw (Prepare + Record) | 2.36 | 1.64 | 1.95 | 1.21 |
+  | colour meshes, record only | 2.15 | 1.38 | 1.79 | 1.03 |
+  | grass, us per draw (Prepare + Record) | 1.85 | 1.16 | 1.52 | 0.96 |
+  | grass, record only | 1.17 | 0.46 | 0.99 | 0.41 |
+  | depth meshes, us per draw | 2.34 | 1.54 | 1.70 | 1.20 |
+  | depth meshes, record only | 2.07 | 1.31 | 1.55 | 1.04 |
+  | stage `foliage`, ms | 1.02 | 0.89 | 0.85 | 0.62 |
+  | shadow casters `foliage`, ms | 1.91 | 1.97 | 1.62 | 1.57 |
+  | render thread p50 / p95, ms | 8.4 / 10.5 | 8.2 / 10.8 | 7.3 / 9.0 | 7.3 / 8.8 |
+  | CPU only p50 / p95, ms | 3.9 / 5.3 | 3.8 / 5.7 | 3.1 / 4.2 | 2.9 / 3.6 |
+  | render thread allocations, MB per run | 39 | 12 | 39 | 12 |
 
-  Observed: record time per draw down by a third (meshes) to a half (grass); the foliage stage by about 0.1 ms. The shadow casters' foliage time did not
-  move: there the cull (460-640 us a cascade call) and the TERRAIN-mode rocks (130-160 us) are most of it, and the meshes' record is 50-80 us. The frame
-  is GPU-bound in this view (gpu-wait 6-7 ms), so the percentiles do not move; the CPU-only p95 is 0.4-0.6 ms higher in the three quiet pairs, which no
-  counter explains (renames and uploads are the same; the allocations fell), so it is treated as noise until a quieter run says otherwise. Note: the "before"
-  here is about half of agent A's figures above (1.1 against 2.75 us record a colour mesh draw) on nearly the same code: that is the machine, which was
-  busier then; compare figures only within one table.
+  An earlier set on a quieter machine (three pairs, after = `e1161d3`, the same per-draw code with the per-frame marking loop) gave, as medians, colour
+  record 1.10 -> 0.73, grass record 0.70 -> 0.32, depth record 1.00 -> 0.73 us a draw, stage `foliage` 0.58 -> 0.49 ms, shadow casters 1.20 -> 1.28 ms.
+  Observed: record time per draw down by a third (meshes) to more than half (grass); the foliage stage by 0.1-0.2 ms. The shadow casters' foliage time did
+  not move beyond the scatter: there the cull (460-640 us a cascade call) and the TERRAIN-mode rocks (130-160 us) are most of it, and the meshes' record is
+  50-80 us. The frame is GPU-bound in this view (gpu-wait 6-7 ms), so the render-thread percentiles do not move. In the quiet set the CPU-only p95 read
+  0.4-0.6 ms higher after; the marking loop (45 us a frame, now gone) explains a little of that, and in this set the p95 is lower in two of the three pairs,
+  so it is scatter. Note: the "before" figures differ from agent A's table above (1.1 or 2.2 against 2.75 us record a colour mesh draw) on nearly the same
+  code because of the machine's load; compare figures only within one table.
 
 ### 7.2 Wave 3: ownership
 
