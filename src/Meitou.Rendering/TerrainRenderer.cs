@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
+using Meitou.Rendering.Vulkan.Shaders;
 
 namespace Meitou.Rendering;
 
@@ -53,11 +54,11 @@ public readonly record struct WorldLighting(Vector3 SunDirection, Vector3 SunCol
 public sealed unsafe class TerrainRenderer : IDisposable
 {
     readonly IGl gl;
-    readonly uint patchProgram, meshProgram;
+    readonly uint patchProgram;
     readonly Dictionary<(uint, string), int> uniforms = [];
     readonly uint gridVao, gridVbo, gridEbo, coarseTexture;
     uint fineTexture;
-    readonly int[] indexOffsets = new int[5], indexCounts = new int[5];
+    readonly int[] indexOffsets = new int[5], indexCounts = new int[5], firstIndices = new int[5];
     readonly TerrainHeightBounds bounds;
     readonly List<TerrainNode> nodes = [];
     HeightWindow fine;
@@ -90,10 +91,24 @@ public sealed unsafe class TerrainRenderer : IDisposable
         quadtree = new TerrainQuadtree(fine.Spacing, GridCells, new WorldRenderOptions().TerrainLod);
         spare = new TerrainQuadtree(fine.Spacing, GridCells, new WorldRenderOptions().TerrainLod);
         fineBand = BandOf(fine);
+        // The GL patch program draws only the debug outline now; making it also assigns the atmosphere's sampler units and publishes the
+        // shadow globals (WorldGl.Program), which the native frame set reads.
         patchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, TerrainShaders.Fragment);
-        meshProgram = WorldGl.Program(gl, TerrainShaders.MeshVertex, TerrainShaders.MeshFragment);
-        nativeMesh = NativeMeshProgram();   // with the GL program it replaces, so a draw never compiles
-        nativePatch = NativePatchProgram();
+        // The native programs (docs/renderer-native.md 7.1, step O), all made here so a draw never compiles.
+        nativeFrame = new NativeFrame(gpu);
+        uniformAlign = Math.Max(gpu.Device.Limits.MinUniformBufferOffsetAlignment, 16);
+        constantsLayout = gpu.Shaders.CreateSetLayout(
+            [new Silk.NET.Vulkan.DescriptorSetLayoutBinding(0, Silk.NET.Vulkan.DescriptorType.UniformBufferDynamic, 1,
+                Silk.NET.Vulkan.ShaderStageFlags.VertexBit | Silk.NET.Vulkan.ShaderStageFlags.FragmentBit)], 0);
+        Silk.NET.Vulkan.DescriptorSetLayout[] sets = [nativeFrame.SetLayout, gpu.Bindless.Layout, constantsLayout];
+        patchColour = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(), "terrain");
+        patchDepth = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.DepthFragmentNative(), "terrain depth");
+        meshColour = new TerrainProgram(gpu, sets, TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentNative(), "terrain meshes");
+        meshDepth = new TerrainProgram(gpu, sets, TerrainShaders.MeshInstancedDepthVertexNative(), TerrainShaders.DepthFragmentNative(), "terrain mesh depth");
+        // GL's stand-ins for an absent texture, in the array each sampler indexes (IGlInterop.Bindless(0) gives the float 2D one only).
+        standIn2D = gpu.Bindless.Register(BindlessKind.Texture2D, gpu.Dummy(StandInInfo(false, ScalarKind.Float)));
+        standInArray = gpu.Bindless.Register(BindlessKind.Texture2DArray, gpu.Dummy(StandInInfo(true, ScalarKind.Float)));
+        standInUInt = gpu.Bindless.Register(BindlessKind.UTexture2D, gpu.Dummy(StandInInfo(false, ScalarKind.UInt)));
 
         coarseTexture = HeightTexture(coarse, coarseSize, coarseSize);
         fineTexture = HeightTexture(fine.Raw, fine.Columns, fine.Rows);
@@ -109,6 +124,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         {
             var part = TerrainQuadtree.GridIndices(GridCells, q);
             indexOffsets[q + 1] = indices.Count * sizeof(uint);
+            firstIndices[q + 1] = indices.Count;
             indexCounts[q + 1] = part.Length;
             indices.AddRange(part);
         }
@@ -274,30 +290,229 @@ public sealed unsafe class TerrainRenderer : IDisposable
         }
     }
 
-    // ---- the terrain patches, native (docs/renderer-native.md 7.1, wave 3 agent B: step P, VkGl's SPIR-V and layout) ----
+    // ---- the native model (docs/renderer-native.md 7.1, wave 3b agent B: step O) ----
+    // Native programs (TerrainShaders' native variants: the same maths; the camera in ViewConstants, the terrain's values and the bindless
+    // indices of its textures in TerrainConstants at set 2, a patch's node in push constants), recorded into the pass VkGl has open. Per
+    // segment: the frame set (NativeFrame), the terrain set, the dynamic state; per draw only commands (a patch: a push and a draw; a mesh
+    // group: its pipeline, buffers and draw, kept per mesh while the vertex-array stamp holds).
 
-    /// <summary>One selected node as its draw needs it (Prepare fills the list, Record walks it): the <c>uNode</c> and <c>uMorph</c> values
-    /// and the index range (<c>Quadrant + 1</c>).</summary>
-    readonly record struct PatchDraw(float X, float Z, float Size, float MorphStart, float MorphEnd, int Part);
+    readonly NativeFrame nativeFrame;
+    readonly Silk.NET.Vulkan.DescriptorSetLayout constantsLayout;
+    readonly TerrainProgram patchColour, patchDepth, meshColour, meshDepth;
+    readonly ulong uniformAlign;
+    readonly uint standIn2D, standInArray, standInUInt;
+
+    static SamplerInfo StandInInfo(bool arrayed, ScalarKind kind) => new("", 0, 0, SamplerDimension.Dim2D, arrayed, false, false, kind, 0);
+
+    /// <summary>
+    /// A native program of the terrain with its vertex inputs from the reflection: the layout and buffers a GL vertex array feeds it, as VkGl
+    /// feeds a GL program (<see cref="LegacyProgram.VertexLayout"/>: a disabled attribute reads GL's constant through a stride-0 binding).
+    /// </summary>
+    sealed class TerrainProgram : IDisposable
+    {
+        readonly GpuContext ctx;
+        public readonly ShaderProgram P;
+        readonly int[] locations;
+        readonly ScalarKind[] kinds;
+        /// <summary>The program's own input locations (below the placements' rows): 0 .. Own − 1.</summary>
+        public readonly int Own;
+        VertexLayout? last;
+
+        public TerrainProgram(GpuContext ctx, Silk.NET.Vulkan.DescriptorSetLayout[] sets, string vertex, string fragment, string name)
+        {
+            this.ctx = ctx;
+            P = ctx.Shaders.Native(vertex, fragment, name, sets, NativeShaders.PushBytes);
+            var inputs = P.VertexReflection!.Inputs;
+            locations = [.. inputs.SelectMany(i => Enumerable.Range(i.Location, i.Slots))];
+            kinds = [.. inputs.SelectMany(i => Enumerable.Repeat(i.Kind, i.Slots))];
+            Own = locations.Where(l => l < TerrainShaders.MeshInstanceLocation).DefaultIfEmpty(-1).Max() + 1;
+            if (Own > 2) throw new NotSupportedException($"{name}: more than two own vertex inputs");
+        }
+
+        public Silk.NET.Vulkan.PipelineLayout Layout => P.Layout;
+
+        public VertexLayout VertexLayout(ReadOnlySpan<LegacyProgram.Attribute?> byLocation)
+        {
+            Span<VertexInput> inputs = stackalloc VertexInput[locations.Length];
+            for (int i = 0; i < inputs.Length; i++)
+            {
+                int loc = locations[i];
+                inputs[i] = loc < byLocation.Length && byLocation[loc] is { } a
+                    ? new VertexInput((uint)loc, a.Format, a.Stride, a.PerInstance)
+                    : new VertexInput((uint)loc, GlConventions.DummyVertexFormat(kinds[i]), 0, false);
+            }
+            if (last is { } l && inputs.SequenceEqual(l.Inputs)) return l;
+            return last = new VertexLayout(inputs.ToArray());
+        }
+
+        /// <summary>Locations 0 .. <see cref="Own"/> − 1 into <paramref name="result"/>: each attribute's buffer, GL's constant where none.</summary>
+        public void Buffers(ReadOnlySpan<LegacyProgram.Attribute?> byLocation, Span<BufferBinding> result)
+        {
+            for (int loc = 0; loc < Own; loc++)
+            {
+                int input = Array.IndexOf(locations, loc);
+                result[loc] = loc < byLocation.Length && byLocation[loc] is { } a
+                    ? a.Buffer
+                    : new BufferBinding(ctx.Defaults.DummyVertex.Buffer, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : ScalarKind.Float));
+            }
+        }
+
+        public void Dispose()
+        {
+            ctx.Pipelines.Forget(P);
+            P.Dispose();
+        }
+    }
+
+    // The terrain set (set 2): this segment's TerrainConstants in the frame's constants, bound with a dynamic offset into a set made once per
+    // constants chunk (LegacyProgram's pattern for its default blocks).
+    TerrainConstants constants, written;
+    long writtenFrame = -1;
+    Transient constantsSlice;
+    readonly Dictionary<ulong, Silk.NET.Vulkan.DescriptorSet> constantSets = [];
+    ulong lastSetKey;
+    Silk.NET.Vulkan.DescriptorSet lastSet;
+    Vector4 lastRegion;
+    Vector2 lastCellGrid;
+
+    /// <summary>The bindless index of a GL texture of the terrain's (<see cref="IGlInterop.Bindless"/>: what VkGl would sample now), or the
+    /// stand-in of <paramref name="kind"/>'s array when there is none or it is not of that kind (no storage yet: VkGl's float 2D stand-in).</summary>
+    uint Index(IGlInterop interop, uint glTexture, BindlessKind kind, uint standIn)
+    {
+        if (glTexture == 0) return standIn;
+        var h = interop.Bindless(glTexture);
+        return h.Kind == kind ? h.Index : standIn;
+    }
+
+    /// <summary>
+    /// <see cref="constants"/> for the next segment: <see cref="BindHeights"/>' values and the height textures; with <paramref name="material"/>
+    /// also <see cref="Apply"/>'s (<paramref name="patches"/>: the height field's normals, no feature; else <c>uFeature</c> 1) and the material
+    /// textures. A value <see cref="Apply"/> sets only with textures (<c>uRegion</c>, <c>uCellGrid</c>) keeps its last one without, as a GL
+    /// program's uniform does. Before the segment (the bindless exports are IGl-side calls).
+    /// </summary>
+    void PrepareConstants(bool material, bool patches)
+    {
+        var interop = gpu.Interop!;
+        var c = new TerrainConstants
+        {
+            CoarseRect = CoarseRect, CoarseCells = new Vector2(coarseSize - 1f, coarseSize - 1f), FineRect = FineRect,
+            FineCells = new Vector2(fine.Columns - 1f, fine.Rows - 1f), FineBand = fineBand, HasFine = 1,
+            HeightCoarse = Index(interop, coarseTexture, BindlessKind.Texture2D, standIn2D),
+            HeightFine = Index(interop, fineTexture, BindlessKind.Texture2D, standIn2D),
+            Diffuse = standInArray, Normal = standInArray, Params = standIn2D, Cells = standInUInt, BlendMap = standIn2D, Overlay = standIn2D,
+            Colour = standIn2D, Ground = standIn2D, WorldColour = standIn2D, Region = lastRegion, CellGrid = lastCellGrid,
+        };
+        if (material)
+        {
+            var (options, light) = (frame.Options, frame.Light);
+            c.HeightNormals = patches ? 1u : 0u;
+            c.Feature = patches ? 0u : 1u;
+            c.FeatureBiome = -1;
+            c.SunColour = light.SunColour;
+            c.AmbientSky = light.AmbientSky;
+            c.AmbientGround = light.AmbientGround;
+            c.WaterHeight = options.Water ? WorldWater.Height : -1e6f;
+            c.HalfWorld = (float)WorldLayout.HalfWorldSize;
+            c.Debug = options.Debug;
+            c.FarStart = options.MaterialDistance * 0.8f;
+            c.FarEnd = options.MaterialDistance;
+            var t = textures;
+            bool textured = options.Textures && t is { HasBiomes: true };
+            c.Textured = textured ? 1u : 0u;
+            c.NormalMaps = textured && options.NormalMaps ? 1u : 0u;
+            c.HasMaps = options.Textures && t is { MapState: 2 } ? 1u : 0u;
+            c.MapState = t?.MapState ?? 0;
+            c.HasGround = t is { HasGround: true } ? 1u : 0u;
+            c.HasWorldColour = t is { HasWorldColour: true } ? 1u : 0u;
+            if (t is not null)
+            {
+                c.Region = lastRegion = t.Region;
+                c.CellGrid = lastCellGrid = new Vector2(t.CellsX, t.CellsZ);
+                var ids = t.Ids;
+                c.Diffuse = Index(interop, ids.Diffuse, BindlessKind.Texture2DArray, standInArray);
+                c.Normal = Index(interop, ids.Normal, BindlessKind.Texture2DArray, standInArray);
+                c.Params = Index(interop, ids.Params, BindlessKind.Texture2D, standIn2D);
+                c.Cells = Index(interop, ids.Cells, BindlessKind.UTexture2D, standInUInt);
+                c.BlendMap = Index(interop, ids.BlendMap, BindlessKind.Texture2D, standIn2D);
+                c.Overlay = Index(interop, ids.Overlay, BindlessKind.Texture2D, standIn2D);
+                c.Colour = Index(interop, ids.Colour, BindlessKind.Texture2D, standIn2D);
+                c.Ground = Index(interop, ids.Ground, BindlessKind.Texture2D, standIn2D);
+                c.WorldColour = Index(interop, ids.WorldColour, BindlessKind.Texture2D, standIn2D);
+            }
+        }
+        constants = c;
+    }
+
+    /// <summary>The camera of the frame (<see cref="Draw"/>'s or <see cref="DrawDepth"/>'s) as <see cref="ViewConstants"/>.</summary>
+    ViewConstants View()
+    {
+        var light = frame.Light;
+        return new ViewConstants
+        {
+            ViewProjection = frame.ViewProjection, Eye = frame.Eye, LightDir = light.SunDirection, FogColour = light.FogColour, FogDistance = light.FogDistance,
+        };
+    }
+
+    /// <summary>Once per segment, after <see cref="NativeFrame.Bind"/>: <see cref="constants"/> into the frame's constants (again only when it
+    /// changed within the frame) and set 2 bound at its offset.</summary>
+    void BindConstants(CommandList cmd, Silk.NET.Vulkan.PipelineLayout layout)
+    {
+        var f = gpu.Frame;
+        if (writtenFrame != f.Number || !System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>(in constants))
+                .SequenceEqual(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>(in written))))
+        {
+            constantsSlice = f.Constants.Write<TerrainConstants>(new ReadOnlySpan<TerrainConstants>(in constants), uniformAlign);
+            (written, writtenFrame) = (constants, f.Number);
+            f.Stats.ConstantBytes += sizeof(TerrainConstants);
+        }
+        ulong key = constantsSlice.Handle.Handle;
+        if (key != lastSetKey || lastSet.Handle == 0)
+        {
+            if (!constantSets.TryGetValue(key, out var made)) constantSets[key] = made = ConstantSet(constantsSlice.Handle);
+            (lastSetKey, lastSet) = (key, made);
+        }
+        uint offset = (uint)constantsSlice.Offset;
+        cmd.BindSets(layout, TerrainShaders.ConstantsSet, new ReadOnlySpan<Silk.NET.Vulkan.DescriptorSet>(in lastSet), new ReadOnlySpan<uint>(in offset));
+    }
+
+    Silk.NET.Vulkan.DescriptorSet ConstantSet(Silk.NET.Vulkan.Buffer buffer)
+    {
+        var set = gpu.AllocatePersistentSet(constantsLayout);
+        var info = new Silk.NET.Vulkan.DescriptorBufferInfo(buffer, 0, (ulong)sizeof(TerrainConstants));
+        var write = new Silk.NET.Vulkan.WriteDescriptorSet
+        {
+            SType = Silk.NET.Vulkan.StructureType.WriteDescriptorSet, DstSet = set, DstBinding = 0, DescriptorCount = 1,
+            DescriptorType = Silk.NET.Vulkan.DescriptorType.UniformBufferDynamic, PBufferInfo = &info,
+        };
+        gpu.Device.Vk.UpdateDescriptorSets(gpu.Device.Device, 1, &write, 0, null);
+        return set;
+    }
+
+    // ---- the terrain patches ----
+
+    /// <summary>One selected node as its draw needs it (Prepare fills the list, Record walks it): the push constants (<c>uNode</c>,
+    /// <c>uMorph</c>) and the index range (<c>Quadrant + 1</c>).</summary>
+    struct PatchDraw
+    {
+        public TerrainPush Push;
+        public int Part;
+    }
 
     PatchDraw[] patchDraws = new PatchDraw[512];
-    LegacyProgram? nativePatch, nativePatchDepth;
-    MeshUniforms patchMu;
-    UniformHandle patchNode, patchMorph, depthPatchViewProjection, depthPatchEye, depthPatchNode, depthPatchMorph;
-    UnitSamplers? patchUnitSamplers;
 
-
-    /// <summary>A patch program resolved for one pass state: the pipeline, the grid's vertex buffer, and the five index ranges as bindings.</summary>
+    /// <summary>A patch program resolved for one pass state: the pipeline, the grid's vertex buffer and its index buffer.</summary>
     sealed class PatchPipeline
     {
         public SegmentPipeline Segment;
         public VertexArrayBindings Source = null!;
         public GraphicsPipeline Pipeline = null!;
         public BufferBinding Vertex;
-        public readonly BufferBinding[] Indices = new BufferBinding[5];
+        public BufferBinding Elements;
     }
 
     readonly List<PatchPipeline> patchPipelines = [];
+    VertexArrayBindings? gridExport;
+    long gridStamp = -1;
 
     /// <summary>
     /// Fills <see cref="patchDraws"/> from <see cref="nodes"/> (the tree's morph ranges, the index range per node) and counts them.
@@ -312,8 +527,15 @@ public sealed unsafe class TerrainRenderer : IDisposable
             var node = nodes[i];
             float start = tree.MorphStart[node.Level], end = tree.MorphEnd[node.Level];
             int part = node.Quadrant + 1;
-            patchDraws[i] = new PatchDraw((float)node.X0, (float)node.Z0, (float)node.Size,
-                start == float.MaxValue ? 1e31f : start, end == float.MaxValue ? 2e31f : end, part);
+            patchDraws[i] = new PatchDraw
+            {
+                Push = new TerrainPush
+                {
+                    Node = new Vector4((float)node.X0, (float)node.Z0, (float)node.Size, GridCells),
+                    Morph = new Vector2(start == float.MaxValue ? 1e31f : start, end == float.MaxValue ? 2e31f : end),
+                },
+                Part = part,
+            };
             triangles += indexCounts[part] / 3;
         }
         patchTriangles = triangles;
@@ -321,73 +543,82 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     long patchTriangles;
 
-    /// <summary>The solid patches of <see cref="Draw"/>: <see cref="Apply"/>'s uniforms on the native program, the GL state the GL version
-    /// left, then one native segment in the pass VkGl has open.</summary>
+    /// <summary>The solid patches of <see cref="Draw"/>: the GL state the GL version left (the program, the units bound: the frame set reads the
+    /// atmosphere's there), the constants, then one native segment in the pass VkGl has open.</summary>
     void DrawPatches()
     {
-        var p = nativePatch!;
         PreparePatches(current);
-        ApplyNative(p, in patchMu, patches: true);
-        // GL state as Apply left it for the GL code that follows (the program in use, the units bound); no uniforms.
         gl.UseProgram(patchProgram);
         SkyRenderer.Active?.BindUnits();
         BindHeightUnits();
         textures?.Bind();
-        BindUnitSamplers(p, ref patchUnitSamplers);
         if (nodes.Count == 0) return;
-        RecordPatches(p, "terrain", patchNode, patchMorph);
+        PrepareConstants(material: true, patches: true);
+        RecordPatches(patchColour, "terrain", StepTiming.PatchColour);
         DrawnChunks += nodes.Count;
         DrawnTriangles += patchTriangles;
     }
 
     /// <summary>
     /// Records <see cref="patchDraws"/> into one native segment of the pass VkGl is drawing into (back faces culled as GL has it set): the
-    /// pipeline, the grid's vertex buffer and the dynamic state once; per node its two uniforms, <see cref="LegacyProgram.Flush"/>, the index range
-    /// (bound at its offset, as VkGl binds it) and the draw.
+    /// dynamic state, the sets, the pipeline, the grid's vertex and index buffers once; per node its push constants and the draw of its index
+    /// range.
     /// </summary>
-    void RecordPatches(LegacyProgram p, string label, UniformHandle uNode, UniformHandle uMorph)
+    void RecordPatches(TerrainProgram p, string label, int timingKind)
     {
+        long t0 = StepTiming.Now();
         var interop = gpu.Interop!;
         var cmd = interop.BeginNativeInPass(label);
         var targets = interop.CurrentTargets();
         var state = interop.CurrentState();
         var r = ResolvePatches(p, interop, state, targets, label);
         state.Record(cmd, targets);
+        var view = View();
+        nativeFrame.Bind(cmd, p.Layout, in view);
+        BindConstants(cmd, p.Layout);
         cmd.BindPipeline(r.Pipeline);
         cmd.BindVertexBuffers(0, new ReadOnlySpan<BufferBinding>(in r.Vertex));
-        var indices = r.Indices;
+        cmd.BindIndexBuffer(r.Elements, Silk.NET.Vulkan.IndexType.Uint32);
+        var layout = p.Layout;
+        const Silk.NET.Vulkan.ShaderStageFlags stages = Silk.NET.Vulkan.ShaderStageFlags.VertexBit | Silk.NET.Vulkan.ShaderStageFlags.FragmentBit;
+        long t1 = StepTiming.Now();
         int count = nodes.Count;
         for (int i = 0; i < count; i++)
         {
             ref readonly var d = ref patchDraws[i];
-            p.Set(uNode, d.X, d.Z, d.Size, GridCells);
-            p.Set(uMorph, d.MorphStart, d.MorphEnd);
-            p.Flush(cmd);
-            cmd.BindIndexBuffer(indices[d.Part], Silk.NET.Vulkan.IndexType.Uint32);
-            cmd.DrawIndexed((uint)indexCounts[d.Part]);
+            cmd.PushConstants(layout, stages, in d.Push);
+            cmd.DrawIndexed((uint)indexCounts[d.Part], 1, (uint)firstIndices[d.Part]);
         }
+        StepTiming.Loop(timingKind, t1);
         interop.EndNative(cmd);
+        StepTiming.Segment(timingKind, t0);
     }
 
     /// <summary>The pipeline and bindings for <paramref name="p"/> in this pass state, kept while the grid's vertex-array export and the state
-    /// stay the same (the reflection's multisampled target alternates with the scene's: a few entries).</summary>
-    PatchPipeline ResolvePatches(LegacyProgram p, IGlInterop interop, DrawState state, PassTargets targets, string label)
+    /// stay the same (the reflection's multisampled target alternates with the scene's: a few entries). The export is fetched again only when
+    /// <see cref="IGlInterop.VertexArrayStamp"/> moved.</summary>
+    PatchPipeline ResolvePatches(TerrainProgram p, IGlInterop interop, DrawState state, PassTargets targets, string label)
     {
-        var va = interop.VertexArray(gridVao);
-        var segment = new SegmentPipeline(p, targets.Formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp);
+        if (gridExport is null || gridStamp != interop.VertexArrayStamp)
+        {
+            gridExport = interop.VertexArray(gridVao);
+            gridStamp = interop.VertexArrayStamp;
+        }
+        var va = gridExport;
+        var segment = new SegmentPipeline(p.P, targets.Formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp);
         foreach (var e in patchPipelines)
             if (ReferenceEquals(e.Source, va) && e.Segment == segment) return e;
         if (patchPipelines.Count >= 16) patchPipelines.Clear();
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
         va.Attributes.AsSpan().CopyTo(attributes);
+        Span<BufferBinding> vertex = stackalloc BufferBinding[1];
+        p.Buffers(attributes, vertex);
         var entry = new PatchPipeline
         {
             Segment = segment, Source = va,
-            Pipeline = gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout(attributes), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, targets.Formats, label)),
-            Vertex = p.VertexBuffers(attributes, 0, 1)[0],
+            Pipeline = gpu.Pipelines.Get(state.Pipeline(p.P, p.VertexLayout(attributes), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, targets.Formats, label)),
+            Vertex = vertex[0], Elements = va.Elements,
         };
-        for (int part = 0; part < 5; part++)
-            entry.Indices[part] = new BufferBinding(va.Elements.Buffer, va.Elements.Offset + (ulong)indexOffsets[part]);
         patchPipelines.Add(entry);
         return entry;
     }
@@ -507,6 +738,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         {
             long dt = System.Diagnostics.Stopwatch.GetTimestamp() - t0;
             int k = depth ? 1 : 0;
+            if (meshSeen[k]++ < StepTiming.WarmCalls) return draws;   // the first calls: pipelines, registrations, cold caches
             meshTicks[k] += dt; meshCalls[k]++; meshDraws[k] += draws;
             if (MeshTiming == 2)
             {
@@ -525,7 +757,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// <c>=2</c> also records each call a second time and reports that one as "warm" (docs/renderer-native.md 7.1, cold and warm cost).
     /// </summary>
     static readonly int MeshTiming = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_MESH_TIMING"), out int mode) ? mode : 0;
-    readonly long[] meshTicks = new long[2], meshWarmTicks = new long[2], meshCalls = new long[2], meshDraws = new long[2];
+    readonly long[] meshTicks = new long[2], meshWarmTicks = new long[2], meshCalls = new long[2], meshDraws = new long[2], meshSeen = new long[2];
 
     void ReportMeshTiming()
     {
@@ -541,122 +773,26 @@ public sealed unsafe class TerrainRenderer : IDisposable
     int DrawMeshesCore(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth)
     {
         if (depth) return DrawMeshesDepth(meshes);
+        long t0 = StepTiming.Now();
         if (!GroupMeshes(meshes, biomes: true)) return 0;
-        var p = nativeMesh!;
-        ApplyNative(p, in mu);
-        // GL state as Apply left it for the GL code that follows (the program in use, the units bound); no uniforms.
-        gl.UseProgram(meshProgram);
+        StepTiming.Group(StepTiming.MeshColour, t0);
+        // GL state as Apply left it for the GL code that follows (the units bound: the frame set reads the atmosphere's there).
         SkyRenderer.Active?.BindUnits();
         BindHeightUnits();
         textures?.Bind();
-        BindUnitSamplers(p, ref meshUnitSamplers);
-        return DrawGroups(p, Colour, "terrain meshes");
+        PrepareConstants(material: true, patches: false);
+        int draws = DrawGroups(meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
+        StepTiming.Add(StepTiming.MeshColour, t0, draws);
+        return draws;
     }
 
-    // ---- the native port of the TERRAIN-mode meshes (docs/renderer-native.md 7.1, step 7: step P, VkGl's SPIR-V and layout) ----
-
-    readonly GpuContext gpu;
-    LegacyProgram? nativeMesh, nativeDepth;
-    MeshUniforms mu;
-    UniformHandle depthViewProjection;
     /// <summary>This call's placements (each group's contiguous, <see cref="MeshGroup.Offset"/> instances in), in the frame's constants.</summary>
     Transient placements;
     const int Colour = 0, Depth = 1;
-
-    /// <summary>The handles of what <see cref="Apply"/> sets, resolved once.</summary>
-    readonly record struct MeshUniforms(UniformHandle ViewProjection, UniformHandle HeightNormals, UniformHandle Feature, UniformHandle FeatureBiome,
-        UniformHandle Wireframe, UniformHandle Eye, UniformHandle LightDir, UniformHandle SunColour, UniformHandle AmbientSky, UniformHandle AmbientGround,
-        UniformHandle FogColour, UniformHandle FogDistance, UniformHandle WaterHeight, UniformHandle HalfWorld, UniformHandle Debug, UniformHandle FarStart,
-        UniformHandle FarEnd, UniformHandle Textured, UniformHandle NormalMaps, UniformHandle HasMaps, UniformHandle MapState, UniformHandle HasGround,
-        UniformHandle HasWorldColour, UniformHandle Region, UniformHandle CellGrid);
-
-    static MeshUniforms ResolveUniforms(LegacyProgram p) =>
-        new(p.Uniform("uViewProjection"), p.Uniform("uHeightNormals"), p.Uniform("uFeature"), p.Uniform("uFeatureBiome"),
-            p.Uniform("uWireframe"), p.Uniform("uEye"), p.Uniform("uLightDir"), p.Uniform("uSunColour"), p.Uniform("uAmbientSky"), p.Uniform("uAmbientGround"),
-            p.Uniform("uFogColour"), p.Uniform("uFogDistance"), p.Uniform("uWaterHeight"), p.Uniform("uHalfWorld"), p.Uniform("uDebug"), p.Uniform("uFarStart"),
-            p.Uniform("uFarEnd"), p.Uniform("uTextured"), p.Uniform("uNormalMaps"), p.Uniform("uHasMaps"), p.Uniform("uMapState"), p.Uniform("uHasGround"),
-            p.Uniform("uHasWorldColour"), p.Uniform("uRegion"), p.Uniform("uCellGrid"));
-
-    LegacyProgram NativeMeshProgram()
-    {
-        var p = LegacyProgram.Create(gpu, TerrainShaders.MeshVertex, TerrainShaders.MeshFragment, "terrain meshes");
-        mu = ResolveUniforms(p);
-        return p;
-    }
-
-    /// <summary>The patch program (<see cref="TerrainShaders.PatchVertex"/>, the colour fragment), made with the GL program it replaces (the
-    /// outline still uses that one), so a draw never compiles.</summary>
-    LegacyProgram NativePatchProgram()
-    {
-        var p = LegacyProgram.Create(gpu, TerrainShaders.PatchVertex, TerrainShaders.Fragment, "terrain");
-        patchMu = ResolveUniforms(p);
-        (patchNode, patchMorph) = (p.Uniform("uNode"), p.Uniform("uMorph"));
-        return p;
-    }
-
-    /// <summary><see cref="Apply"/>'s uniforms for the meshes (then <c>uFeature</c> 1) or the patches (<paramref name="patches"/>: the height
-    /// field's normals), with the same int and float forms; the atmosphere and height uniforms from the frame globals (published by their
-    /// owners, the values their GL calls set).</summary>
-    void ApplyNative(LegacyProgram p, in MeshUniforms mu, bool patches = false)
-    {
-        var (vp, eye, options, light) = (frame.ViewProjection, frame.Eye, frame.Options, frame.Light);
-        p.Set(mu.ViewProjection, in vp);
-        p.Set(mu.HeightNormals, patches ? 1 : 0);
-        p.Set(mu.Feature, patches ? 0 : 1);
-        p.Set(mu.FeatureBiome, -1);
-        p.Set(mu.Wireframe, 0);
-        p.Set(mu.Eye, eye.X, eye.Y, eye.Z);
-        var s = light.SunDirection;
-        p.Set(mu.LightDir, s.X, s.Y, s.Z);
-        p.Set(mu.SunColour, light.SunColour.X, light.SunColour.Y, light.SunColour.Z);
-        p.Set(mu.AmbientSky, light.AmbientSky.X, light.AmbientSky.Y, light.AmbientSky.Z);
-        p.Set(mu.AmbientGround, light.AmbientGround.X, light.AmbientGround.Y, light.AmbientGround.Z);
-        p.Set(mu.FogColour, light.FogColour.X, light.FogColour.Y, light.FogColour.Z);
-        p.Set(mu.FogDistance, light.FogDistance);
-        p.ApplyGlobals();   // SkyRenderer.Apply's and BindHeights' uniforms
-        p.Set(mu.WaterHeight, options.Water ? WorldWater.Height : -1e6f);
-        p.Set(mu.HalfWorld, (float)WorldLayout.HalfWorldSize);
-        p.Set(mu.Debug, options.Debug);
-        p.Set(mu.FarStart, options.MaterialDistance * 0.8f);
-        p.Set(mu.FarEnd, options.MaterialDistance);
-        var t = textures;
-        bool textured = options.Textures && t is { HasBiomes: true };
-        p.Set(mu.Textured, textured ? 1 : 0);
-        p.Set(mu.NormalMaps, textured && options.NormalMaps ? 1 : 0);
-        p.Set(mu.HasMaps, options.Textures && t is { MapState: 2 } ? 1 : 0);
-        p.Set(mu.MapState, t?.MapState ?? 0);
-        p.Set(mu.HasGround, t is { HasGround: true } ? 1 : 0);
-        p.Set(mu.HasWorldColour, t is { HasWorldColour: true } ? 1 : 0);
-        if (t is not null)
-        {
-            p.Set(mu.Region, t.Region.X, t.Region.Y, t.Region.Z, t.Region.W);
-            p.Set(mu.CellGrid, (float)t.CellsX, t.CellsZ);
-        }
-    }
-
-    /// <summary>The units <see cref="Apply"/> points the material's samplers at (the rest come from the frame globals, or unit 0 as in GL).</summary>
-    static readonly Dictionary<string, int> SamplerUnits = new()
-    {
-        ["uDiffuse"] = 0, ["uNormal"] = 1, ["uParams"] = 2, ["uCells"] = 3, ["uBlendMap"] = 4, ["uOverlay"] = 5, ["uColour"] = 6,
-        ["uGround"] = TerrainShaders.GroundUnit, ["uWorldColour"] = TerrainShaders.WorldColourUnit,
-    };
-
-    /// <summary>The samplers a program reads from GL units (not published as frame globals), resolved once per <see cref="FrameGlobals.Version"/>.</summary>
-    sealed record UnitSamplers(int GlobalsVersion, (SamplerSlot Slot, int Unit, Meitou.Rendering.Vulkan.Shaders.SamplerInfo Info)[] Samplers);
-    UnitSamplers? meshUnitSamplers, depthUnitSamplers;
-
-    /// <summary>Each sampler reads what VkGl would sample for the GL program: the texture on its unit now (after the GL binds above).</summary>
-    void BindUnitSamplers(LegacyProgram p, ref UnitSamplers? resolved)
-    {
-        var interop = gpu.Interop!;
-        if (resolved is null || resolved.GlobalsVersion != gpu.Globals.Version)
-            resolved = new UnitSamplers(gpu.Globals.Version, [.. p.SamplerNames.Where(n => gpu.Globals.Texture(n) is null)
-                .Select(n => (p.Sampler(n), SamplerUnits.GetValueOrDefault(n, 0), p.SamplerInfo(p.Sampler(n))))]);
-        foreach (var (slot, unit, info) in resolved.Samplers) p.Bind(slot, interop.SampledUnit(unit, info));
-    }
+    readonly GpuContext gpu;
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
-    uint depthMeshProgram;
+    bool depthReady;
 
     /// <summary>
     /// Draws the terrain's depth for a shadow cascade (<see cref="ShadowShaders.DepthFragment"/>, the caster bias): the main tree's
@@ -666,30 +802,19 @@ public sealed unsafe class TerrainRenderer : IDisposable
     public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options)
     {
         long timing = StepTiming.Now();
-        if (nativePatchDepth is null)
-        {
-            depthMeshProgram = WorldGl.Program(gl, TerrainShaders.MeshInstancedDepthVertex, ShadowShaders.DepthFragment);
-            nativeDepth = LegacyProgram.Create(gpu, TerrainShaders.MeshInstancedDepthVertex, ShadowShaders.DepthFragment, "terrain mesh depth");
-            depthViewProjection = nativeDepth.Uniform("uViewProjection");
-            var d = nativePatchDepth = LegacyProgram.Create(gpu, TerrainShaders.PatchVertex, ShadowShaders.DepthFragment, "terrain depth");
-            (depthPatchViewProjection, depthPatchEye, depthPatchNode, depthPatchMorph) =
-                (d.Uniform("uViewProjection"), d.Uniform("uEye"), d.Uniform("uNode"), d.Uniform("uMorph"));
-        }
+        depthReady = true;
         if (quadtree.SetRanges(options.TerrainLod) && LodLog) Console.WriteLine($"terrain   lod main {options.TerrainLod}: ranges {string.Join(" ", quadtree.Ranges.SkipLast(1).Select(r => r.ToString("0")))}");
         frame = new Frame(viewProjection, eye, options, frame.Light);
         quadtree.Select(eye, bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), nodes);
         PreparePatches(quadtree);
-        var p = nativePatchDepth;
-        p.Set(depthPatchViewProjection, in viewProjection);
-        p.Set(depthPatchEye, eye.X, eye.Y, eye.Z);
-        p.ApplyGlobals();   // BindHeights' uniforms
         BindHeightUnits();
         gl.Enable(EnableCap.CullFace);
         gl.CullFace(TriangleFace.Back);
         gl.FrontFace(FrontFaceDirection.Ccw);
         if (nodes.Count > 0)
         {
-            RecordPatches(p, "terrain depth", depthPatchNode, depthPatchMorph);
+            PrepareConstants(material: false, patches: true);
+            RecordPatches(patchDepth, "terrain depth", StepTiming.PatchDepth);
             DepthTriangles += patchTriangles;
         }
         StepTiming.Add(StepTiming.PatchDepth, timing, nodes.Count);
@@ -700,13 +825,13 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     int DrawMeshesDepth(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes)
     {
-        if (depthMeshProgram == 0 || !GroupMeshes(meshes, biomes: false)) return 0;
-        var nativeDepth = this.nativeDepth!;   // made with depthMeshProgram (DrawDepth)
-        var vp = frame.ViewProjection;
-        nativeDepth.Set(depthViewProjection, in vp);
-        gl.UseProgram(depthMeshProgram);   // GL state as before: the program in use
-        BindUnitSamplers(nativeDepth, ref depthUnitSamplers);
-        return DrawGroups(nativeDepth, Depth, "terrain mesh depth");
+        long t0 = StepTiming.Now();
+        if (!depthReady || !GroupMeshes(meshes, biomes: false)) return 0;   // the frame's matrix is the cascade's once DrawDepth has run
+        StepTiming.Group(StepTiming.MeshDepth, t0);
+        PrepareConstants(material: false, patches: false);
+        int draws = DrawGroups(meshDepth, Depth, "terrain mesh depth", StepTiming.MeshDepth);
+        StepTiming.Add(StepTiming.MeshDepth, t0, draws);
+        return draws;
     }
 
     // ---- the TERRAIN-mode meshes, instanced ----
@@ -719,39 +844,51 @@ public sealed unsafe class TerrainRenderer : IDisposable
     sealed class MeshGroup
     {
         public uint Vao;
-        public int IndexCount, Count, Offset;
+        public int IndexCount, Count, Offset, Index;
         public bool Mirrored;
-        public Matrix4x4[] Models = new Matrix4x4[16];
-        /// <summary>What a native draw of this mesh needs, per program: kept while the interop hands out the same vertex-array export and the
-        /// segment's pipeline state is the same. Inline (no object of its own), so a draw reads what grouping has just touched.</summary>
+        /// <summary>What a native draw of this mesh needs, per program: kept while the vertex-array stamp holds and the export is the same.
+        /// Inline (no object of its own), so a draw reads what grouping has just touched.</summary>
         public NativeMesh ColourNative, DepthNative;
         public ref NativeMesh Native(int kind) => ref kind == Colour ? ref ColourNative : ref DepthNative;
     }
 
     /// <summary>The pipeline state a segment's draws share (everything of <see cref="GraphicsPipelineDesc"/> but the vertex layout).</summary>
-    readonly record struct SegmentPipeline(LegacyProgram Program, AttachmentFormats Formats, BlendState Blend, Silk.NET.Vulkan.ColorComponentFlags Mask,
+    readonly record struct SegmentPipeline(ShaderProgram Program, AttachmentFormats Formats, BlendState Blend, Silk.NET.Vulkan.ColorComponentFlags Mask,
         Silk.NET.Vulkan.PolygonMode Polygon, bool AlphaToCoverage, bool DepthClamp);
 
     /// <summary>A mesh's own vertex buffers (locations 0 and 1: position, normal), bound with one call.</summary>
     [System.Runtime.CompilerServices.InlineArray(2)]
     struct OwnVertices { BufferBinding first; }
 
-    /// <summary>A mesh resolved for one program: the export it came from, its pipeline, its own vertex buffers (locations 0 up to the
-    /// placements) and its indices.</summary>
+    /// <summary>A mesh resolved for one program: the export it came from and the <see cref="IGlInterop.VertexArrayStamp"/> it was current at,
+    /// its vertex layout and own vertex buffers (locations 0 up to the placements), its indices, and its pipelines for the last two segment
+    /// states (the reflection's multisampled target alternates with the scene's).</summary>
     struct NativeMesh
     {
         public VertexArrayBindings? Source;
-        public int Segment;                       // the SegmentPipeline it was resolved with, by number (segmentIds)
+        public long Stamp;
+        public VertexLayout? Layout;
         public int VertexCount;
-        public GraphicsPipeline Pipeline;
         public OwnVertices Vertices;
         public BufferBinding Elements;
+        public int SegA, SegB;
+        public GraphicsPipeline? PipeA, PipeB;
     }
 
-    // Per program kind: the last segment state and its number (a new number when it changes, so a mesh compares one int per draw).
+    // Per program kind: the last segment state and its number; numbers are stable per state (a mesh compares one int per draw).
+    readonly Dictionary<(int Kind, SegmentPipeline State), int> segmentByState = [];
     readonly SegmentPipeline[] lastSegment = new SegmentPipeline[2];
     readonly int[] segmentIds = new int[2];
     int segmentCount;
+
+    int SegmentId(int kind, ShaderProgram p, PassTargets t, DrawState s)
+    {
+        var segment = new SegmentPipeline(p, t.Formats, s.Blend, s.ColourMask, s.Polygon, s.AlphaToCoverage, s.DepthClamp);
+        if (segmentIds[kind] != 0 && segment == lastSegment[kind]) return segmentIds[kind];
+        if (!segmentByState.TryGetValue((kind, segment), out int id)) segmentByState[(kind, segment)] = id = ++segmentCount;
+        lastSegment[kind] = segment;
+        return segmentIds[kind] = id;
+    }
 
     readonly Dictionary<(uint, int, bool), MeshGroup> meshGroups = [];
     readonly List<MeshGroup> meshGroupList = [];
@@ -766,47 +903,64 @@ public sealed unsafe class TerrainRenderer : IDisposable
         foreach (var g in meshGroupList) g.Count = 0;
         meshGroupList.Clear();
         if (meshGroups.Count > 4096) meshGroups.Clear();   // vertex arrays come and go with streaming
-        foreach (var (vao, count, m) in meshes)
+        var items = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(meshes);
+        if (groupOf.Length < items.Length) groupOf = new int[Math.Max(items.Length, groupOf.Length * 2)];
+        // Pass 1: each placement's group (the callers list a mesh's placements in runs, so the last group usually answers without a lookup).
+        MeshGroup? last = null;
+        for (int i = 0; i < items.Length; i++)
         {
-            var key = (vao, count, m.GetDeterminant() < 0);
-            if (!meshGroups.TryGetValue(key, out var g)) meshGroups[key] = g = new MeshGroup { Vao = vao, IndexCount = count, Mirrored = key.Item3 };
-            if (g.Count == 0) meshGroupList.Add(g);
-            if (g.Count == g.Models.Length) Array.Resize(ref g.Models, g.Count * 2);
-            var placed = m;
-            // Not resident yet (or no textures): -1, blend the biomes as the terrain does.
-            if (biomes) placed.M14 = textures?.FeatureBiomeRow(m.Translation.X, m.Translation.Z) ?? -1;
-            g.Models[g.Count++] = placed;
+            ref readonly var item = ref items[i];
+            bool mirrored = item.Model.GetDeterminant() < 0;
+            var g = last;
+            if (g is null || g.Vao != item.Vao || g.IndexCount != item.IndexCount || g.Mirrored != mirrored)
+            {
+                var key = (item.Vao, item.IndexCount, mirrored);
+                if (!meshGroups.TryGetValue(key, out g)) meshGroups[key] = g = new MeshGroup { Vao = item.Vao, IndexCount = item.IndexCount, Mirrored = mirrored };
+                if (g.Count == 0) { g.Index = meshGroupList.Count; meshGroupList.Add(g); }
+                last = g;
+            }
+            g.Count++;
+            groupOf[i] = g.Index;
         }
         if (meshGroupList.Count == 0) return false;
         int total = 0;
-        foreach (var g in meshGroupList) { g.Offset = total; total += g.Count; }
-        // One copy: each group's placements straight into the frame's (write-combined) constants, in order.
-        placements = gpu.Frame.Constants.Allocate((ulong)total * 64, 16);
-        var target = new Span<Matrix4x4>(placements.Pointer, total);
-        foreach (var g in meshGroupList) g.Models.AsSpan(0, g.Count).CopyTo(target[g.Offset..]);
+        if (cursors.Length < meshGroupList.Count) cursors = new int[Math.Max(meshGroupList.Count, cursors.Length * 2)];
+        for (int k = 0; k < meshGroupList.Count; k++) { var g = meshGroupList[k]; cursors[k] = g.Offset = total; total += g.Count; }
+        // Pass 2: each placement straight into its group's place in the frame's (write-combined) constants, one 64-byte line each.
+        placements = gpu.Frame.Constants.Allocate((ulong)total * 64, 64);
+        var target = (Matrix4x4*)placements.Pointer;
+        var t = biomes ? textures : null;
+        for (int i = 0; i < items.Length; i++)
+        {
+            var placed = items[i].Model;
+            // Not resident yet (or no textures): -1, blend the biomes as the terrain does.
+            if (biomes) placed.M14 = t?.FeatureBiomeRow(placed.M41, placed.M43) ?? -1;
+            target[cursors[groupOf[i]]++] = placed;
+        }
         return true;
     }
 
+    int[] groupOf = new int[1024], cursors = new int[64];
     /// <summary>
     /// Draws <see cref="meshGroupList"/> natively with <paramref name="p"/> inside the pass VkGl is drawing (its targets and GL's state at this
     /// point), back faces culled, a mirroring placement turning the winding round; the placements from this frame's constants. Leaves GL's
     /// state as the GL version did (culling off with back faces selected, counter-clockwise, no vertex array).
     /// <para>
-    /// The hot-path pattern (docs/renderer-native.md 7.5): one segment inside VkGl's pass; what all draws share once (dynamic state, sets 0
-    /// and 1, the placements at locations 7 to 10); per draw only what differs, resolved once per mesh (<see cref="NativeMesh"/>): the
-    /// pipeline, the mesh's own vertex buffers, the front face when it flips, the indices, and the draw, whose firstInstance reaches the
-    /// group's placements.
+    /// The step-O hot path (docs/renderer-native.md 7.5): one segment inside VkGl's pass; what all draws share once (dynamic state, the frame
+    /// and terrain sets, the placements at locations 7 to 10); per draw only commands, from what each mesh keeps (<see cref="NativeMesh"/>):
+    /// the pipeline, the mesh's own vertex buffers, the front face when it flips, the indices, and the draw, whose firstInstance reaches the
+    /// group's placements. The vertex array is exported again only when the stamp moved.
     /// </para>
     /// </summary>
-    int DrawGroups(LegacyProgram p, int kind, string label)
+    int DrawGroups(TerrainProgram p, int kind, string label, int timingKind)
     {
+        long t0 = StepTiming.Now();
         var interop = gpu.Interop!;
         var cmd = interop.BeginNativeInPass(label);
         var targets = interop.CurrentTargets();
         var state = interop.CurrentState();
-        var segment = new SegmentPipeline(p, targets.Formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp);
-        if (segmentIds[kind] == 0 || segment != lastSegment[kind]) (lastSegment[kind], segmentIds[kind]) = (segment, ++segmentCount);
-        int segmentId = segmentIds[kind];
+        int segment = SegmentId(kind, p.P, targets, state);
+        long stamp = interop.VertexArrayStamp;
         var ccw = GlConventions.FrontFace(FrontFaceDirection.Ccw);
         var cw = GlConventions.FrontFace(FrontFaceDirection.CW);
         cmd.SetViewport(targets.Viewport);
@@ -815,24 +969,28 @@ public sealed unsafe class TerrainRenderer : IDisposable
         var front = ccw;
         cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
         cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
-        p.Flush(cmd);
+        var view = View();
+        nativeFrame.Bind(cmd, p.Layout, in view);
+        BindConstants(cmd, p.Layout);
         // The placement's rows at locations the meshes' vertex arrays leave free (their other programs do not read them).
         Span<BufferBinding> rows = stackalloc BufferBinding[4];
         for (int a = 0; a < 4; a++) rows[a] = new BufferBinding(placements.Handle, placements.Offset + (ulong)(16 * a));
         cmd.BindVertexBuffers(TerrainShaders.MeshInstanceLocation, rows);
+        long t1 = StepTiming.Now();
         foreach (var g in meshGroupList)
         {
-            var va = interop.VertexArray(g.Vao);
             ref var n = ref g.Native(kind);
-            if (!ReferenceEquals(n.Source, va) || n.Segment != segmentId) Resolve(ref n, p, va, segmentId, state, targets.Formats, label);
-            cmd.BindPipeline(n.Pipeline);
+            if (n.Stamp != stamp) Current(ref n, interop, g.Vao, p, stamp);
+            cmd.BindPipeline(n.SegA == segment ? n.PipeA! : PipelineFor(ref n, p, segment, state, targets.Formats, label));
             var f = g.Mirrored ? cw : ccw;
             if (f != front) { cmd.SetFrontFace(f); front = f; }
             cmd.BindVertexBuffers(0, ((ReadOnlySpan<BufferBinding>)n.Vertices)[..n.VertexCount]);
             cmd.BindIndexBuffer(n.Elements, Silk.NET.Vulkan.IndexType.Uint32);
             cmd.DrawIndexed((uint)g.IndexCount, (uint)g.Count, 0, 0, (uint)g.Offset);
         }
+        StepTiming.Loop(timingKind, t1);
         interop.EndNative(cmd);
+        StepTiming.Segment(timingKind, t0);
         gl.CullFace(TriangleFace.Back);
         gl.FrontFace(FrontFaceDirection.Ccw);
         gl.Disable(EnableCap.CullFace);
@@ -840,18 +998,35 @@ public sealed unsafe class TerrainRenderer : IDisposable
         return meshGroupList.Count;
     }
 
-    /// <summary>A mesh's pipeline and own vertex buffers for <paramref name="p"/>, the placements as per-instance rows of 64 bytes at locations 7 to 10.</summary>
-    void Resolve(ref NativeMesh n, LegacyProgram p, VertexArrayBindings va, int segment, DrawState state, AttachmentFormats formats, string label)
+    /// <summary>A mesh's state for <paramref name="p"/>, current at <paramref name="stamp"/>: the export fetched again (the stamp moved), the
+    /// layout and own vertex buffers rebuilt only when the export is another object; the placements as per-instance rows of 64 bytes at
+    /// locations 7 to 10.</summary>
+    static void Current(ref NativeMesh n, IGlInterop interop, uint vao, TerrainProgram p, long stamp)
     {
+        var va = interop.VertexArray(vao);
+        n.Stamp = stamp;
+        if (ReferenceEquals(n.Source, va)) return;
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
         va.Attributes.AsSpan().CopyTo(attributes);
         for (int a = 0; a < 4; a++)
             attributes[TerrainShaders.MeshInstanceLocation + a] = new LegacyProgram.Attribute(default, Silk.NET.Vulkan.Format.R32G32B32A32Sfloat, 64, true);
-        var pipeline = gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout(attributes), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, formats, label));
-        int own = p.InputLocations.Where(l => l < TerrainShaders.MeshInstanceLocation).DefaultIfEmpty(-1).Max() + 1;
-        if (own > 2) throw new NotSupportedException($"{p.Name}: more than two own vertex inputs");
-        n = new NativeMesh { Source = va, Segment = segment, Pipeline = pipeline, VertexCount = own, Elements = va.Elements };
-        p.VertexBuffers(attributes, 0, own).CopyTo(n.Vertices);
+        n.Layout = p.VertexLayout(attributes);
+        n.VertexCount = p.Own;
+        p.Buffers(attributes, n.Vertices);
+        n.Elements = va.Elements;
+        n.Source = va;
+        n.SegA = n.SegB = 0;
+        n.PipeA = n.PipeB = null;
+    }
+
+    GraphicsPipeline PipelineFor(ref NativeMesh n, TerrainProgram p, int segment, DrawState state, AttachmentFormats formats, string label)
+    {
+        if (n.SegA == segment) return n.PipeA!;
+        if (n.SegB == segment) { (n.SegA, n.PipeA, n.SegB, n.PipeB) = (n.SegB, n.PipeB, n.SegA, n.PipeA); return n.PipeA!; }
+        var pipeline = gpu.Pipelines.Get(state.Pipeline(p.P, n.Layout!, Silk.NET.Vulkan.PrimitiveTopology.TriangleList, formats, label));
+        (n.SegB, n.PipeB) = (n.SegA, n.PipeA);
+        (n.SegA, n.PipeA) = (segment, pipeline);
+        return pipeline;
     }
 
     int U(uint program, string name)
@@ -863,9 +1038,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
     public void Dispose()
     {
         ReportMeshTiming();
-        if (depthMeshProgram != 0) gl.DeleteProgram(depthMeshProgram);
-        nativePatch?.Dispose();
-        nativePatchDepth?.Dispose();
         gl.DeleteVertexArray(gridVao);
         gl.DeleteBuffer(gridVbo);
         gl.DeleteBuffer(gridEbo);
@@ -873,44 +1045,64 @@ public sealed unsafe class TerrainRenderer : IDisposable
         gl.DeleteTexture(fineTexture);
         foreach (var r in retired) gl.DeleteTexture(r.Texture);
         gl.DeleteProgram(patchProgram);
-        gl.DeleteProgram(meshProgram);
         textures?.Dispose();
-        nativeMesh?.Dispose();
-        nativeDepth?.Dispose();
+        foreach (var p in new[] { patchColour, patchDepth, meshColour, meshDepth }) p.Dispose();
+        gpu.Bindless.Free(BindlessKind.Texture2D, standIn2D);
+        gpu.Bindless.Free(BindlessKind.Texture2DArray, standInArray);
+        gpu.Bindless.Free(BindlessKind.UTexture2D, standInUInt);
+        nativeFrame.Dispose();
+        var (vk, device, layout) = (gpu.Device.Vk, gpu.Device.Device, constantsLayout);
+        gpu.Device.Frames.DeferDelete(() => vk.DestroyDescriptorSetLayout(device, layout, null));
     }
 }
 
 /// <summary>
-/// <c>MEITOU_TERRAIN_TIMING=1</c>: CPU time of the terrain patches (colour, shadow depth), the Meitou blocker map and the terrain shadow
-/// sweep, per call and per draw, printed when the terrain renderer is disposed (docs/renderer-native.md 7.1, wave 3 agent B).
+/// <c>MEITOU_TERRAIN_TIMING=1</c>: CPU time of the terrain patches (colour, shadow depth), the TERRAIN-mode meshes (colour, depth), the Meitou
+/// blocker map and the terrain shadow sweep, per call and per draw, printed when the terrain renderer is disposed (docs/renderer-native.md
+/// 7.1, wave 3 agent B and wave 3b step O). For the native segments also the segment alone (<c>BeginNativeInPass</c> to <c>EndNative</c>)
+/// and its draw loop alone, two stamps each; for the meshes the grouping of the placements. The first <see cref="WarmCalls"/> calls of the
+/// patches and the meshes are left out.
 /// </summary>
 internal static class StepTiming
 {
     public static readonly bool On = Environment.GetEnvironmentVariable("MEITOU_TERRAIN_TIMING") == "1";
-    public const int PatchColour = 0, PatchDepth = 1, Blocker = 2, Sweep = 3;
-    static readonly string[] Names = ["patches colour", "patches depth", "blocker map", "terrain sweep"];
-    static readonly long[] ticks = new long[4], calls = new long[4], draws = new long[4];
+    public const int PatchColour = 0, PatchDepth = 1, Blocker = 2, Sweep = 3, MeshColour = 4, MeshDepth = 5;
+    const int Kinds = 6;
+    static readonly string[] Names = ["patches colour", "patches depth", "blocker map", "terrain sweep", "meshes colour", "meshes depth"];
+    static readonly long[] ticks = new long[Kinds], calls = new long[Kinds], draws = new long[Kinds], segment = new long[Kinds], loop = new long[Kinds], group = new long[Kinds], seen = new long[Kinds];
+    /// <summary>Calls left out at the start per kind (pipeline creation, first registrations, cold caches of the first frames); none for the
+    /// blocker map and the sweep (the sweep runs once).</summary>
+    static readonly int[] warm = [WarmCalls, WarmCalls, 0, 0, WarmCalls, WarmCalls];
+    public const int WarmCalls = 100;
+    static bool Counted(int kind) => seen[kind] >= warm[kind];
 
     public static long Now() => On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
 
     public static void Add(int kind, long start, int count)
     {
-        if (!On) return;
+        if (!On || seen[kind]++ < warm[kind]) return;
         ticks[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start;
         calls[kind]++;
         draws[kind] += count;
     }
 
+    public static void Segment(int kind, long start) { if (On && Counted(kind)) segment[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start; }
+    public static void Loop(int kind, long start) { if (On && Counted(kind)) loop[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start; }
+    public static void Group(int kind, long start) { if (On && Counted(kind)) group[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start; }
+
     public static void Report()
     {
         if (!On) return;
-        for (int k = 0; k < 4; k++)
+        for (int k = 0; k < Kinds; k++)
         {
             if (calls[k] == 0) continue;
-            double us = ticks[k] * 1e6 / System.Diagnostics.Stopwatch.Frequency;
+            double f = 1e6 / System.Diagnostics.Stopwatch.Frequency, us = ticks[k] * f;
+            double perDraw(long t) => draws[k] > 0 ? t * f / draws[k] : 0;
             Console.WriteLine(FormattableString.Invariant(
-                $"terrain timing  {Names[k],-15} {calls[k]} calls, {draws[k]} draws, {us / calls[k]:F1} us/call, {(draws[k] > 0 ? us / draws[k] : 0):F2} us/draw"));
-            ticks[k] = calls[k] = draws[k] = 0;
+                $"terrain timing  {Names[k],-15} {calls[k]} calls, {draws[k]} draws, {us / calls[k]:F1} us/call, {perDraw(ticks[k]):F2} us/draw") +
+                (segment[k] > 0 ? FormattableString.Invariant($", segment {segment[k] * f / calls[k]:F1} us/call {perDraw(segment[k]):F3} us/draw, loop {perDraw(loop[k]):F3} us/draw") : "") +
+                (group[k] > 0 ? FormattableString.Invariant($", grouping {group[k] * f / calls[k]:F1} us/call") : ""));
+            ticks[k] = calls[k] = draws[k] = segment[k] = loop[k] = group[k] = seen[k] = 0;
         }
     }
 }

@@ -702,6 +702,13 @@ public sealed unsafe class TerrainTextures : IDisposable
         HasWorldColour = true;
     }
 
+    /// <summary>The GL textures <see cref="Bind"/> puts on units 0 to 6 and the two world-wide maps (0 where one does not exist yet), for the
+    /// native draws that read them by bindless index.</summary>
+    public readonly record struct TextureIds(uint Diffuse, uint Normal, uint Params, uint Cells, uint BlendMap, uint Overlay, uint Colour,
+        uint Ground, uint WorldColour);
+
+    public TextureIds Ids => new(diffuseArray, normalArray, paramTexture, cellTexture, blendTexture, overlayTexture, colourTexture, groundTexture, worldColourTexture);
+
     public void Bind()
     {
         uint[] units = [diffuseArray, normalArray, paramTexture, cellTexture, blendTexture, overlayTexture, colourTexture];

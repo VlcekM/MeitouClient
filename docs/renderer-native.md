@@ -1706,6 +1706,75 @@ which share the code) records with native-model programs: `BuildingLodShaders.Ve
 - *Follow-ups.* The TERRAIN-mode map features still go through `TerrainRenderer.DrawMeshes` (legacy program, step P); a per-material push template cached across
   frames would take Prepare's 0.2-0.3 us a draw; once meshes are native buffers one interleaved vertex binding per mesh would replace the 4 to 7 binds.
 
+**Wave 3b, agent B (terrain), step O (2026-10-06, written on master `fe3253f`, rebased onto `a6d1a36` and gated there).** The terrain patches (colour, shadow
+depth, and the reflection's colour, which is the same path) and the TERRAIN-mode meshes (`DrawMeshes` / `DrawGroups`: colour and depth, called by foliage and
+objects with unchanged signatures) record with native-model programs. This closes "Step O not done" of the pilot (above) and the foliage and objects follow-ups
+about the TERRAIN-mode meshes. Commits: `25d3ef0` the port, `7e421eb` the grouping and the timing. Files: `TerrainRenderer.cs`, `TerrainShaders.cs`,
+`TerrainTextures.cs` (`Ids`: the GL names `Bind` puts on its units), and four variants added to `NativeShaderTests.Variants()`. Nothing shared changed.
+
+- *Shaders.* `TerrainShaders.*Native()` are `NativeShaders.Port` of the legacy texts (patch vertex, colour fragment, mesh vertex and fragment, instanced mesh depth
+  vertex, `ShadowShaders.DepthFragment`), bodies unchanged; the legacy texts are untouched, so the SPIR-V golden test is unchanged. The terrain has about 250 bytes
+  of its own uniforms (the light colours, the material switches, the height grids' rects, the cell grid and region, and 11 texture indices), more than the
+  128-byte push range, and set 0 is `NativeFrame`'s. So the terrain programs have a **third set** (`TerrainShaders.ConstantsBlock`, set 2, binding 0, a dynamic
+  uniform buffer, `TerrainConstants`, 224 bytes), written into the frame's constants once per segment (again only when its bytes changed within the frame) and bound
+  with a dynamic offset into a persistent set made once per constants chunk (`LegacyProgram`'s pattern for its default blocks). Sets 0 and 1 are the model's, so
+  `NativeFrame.Bind` works on these layouts unchanged; set 2 is never pushed (2.6: only set 0 is). The camera, sun direction and fog are `ViewConstants`; a patch's
+  `uNode` and `uMorph` are the push block (`TerrainPush`, 24 bytes). Textures by bindless index: the layer arrays in `textures2DArray`, `uCells` (RGBA8UI) in
+  `utextures2D`, the rest in `textures2D`. The fragment text's `#extension GL_ARB_derivative_control` line is moved up to just after `#version` (an extension
+  directive must come before the prelude's declarations); nothing else moves.
+- *Recording.* Per segment: `BeginNativeInPass`, targets and state, dynamic state, `NativeFrame.Bind`, the terrain set; the 11 `interop.Bindless` exports are taken
+  once per segment before it opens, with the terrain's own stand-ins (registered once, one per array kind) for a texture that does not exist yet or is of
+  another kind (`Bindless(0)` gives the float 2D stand-in only). Patches: the pipeline, the grid's vertex buffer and its index buffer once; per node a 24-byte push
+  and `DrawIndexed` with the range's `firstIndex` (the index buffer is bound once, not per range as VkGl did: the draw log differs there, the indices drawn do
+  not). Meshes: per group the mesh's pipeline (two segment states kept, stable segment numbers), its own vertex buffers and index buffer from the inline
+  `NativeMesh` (kept while `VertexArrayStamp` holds: no `VertexArray` call in steady state), the front face when the winding flips, `DrawIndexed` reaching the
+  group's placements by `firstInstance`. The GL state the GL version left is kept (atmosphere units, height and material units, culling and winding after the
+  meshes); the GL mesh programs and the GL depth program are no longer made (the GL patch program stays for the debug outline and is what assigns the
+  atmosphere's units and publishes the shadow globals).
+- *Grouping (`GroupMeshes`).* Was the most expensive part of a depth call: about 6,000 placements a forest cascade call, each looked up in a dictionary, copied
+  into its group's array, and copied again into the frame's constants. Now two passes over the caller's list: a placement's group (the previous placement's
+  group answers without a lookup: 97 lookups for 5,985 placements), then each placement written once, straight into its group's place in the constants (one
+  64-byte line each, the allocation 64-aligned). Group order (by first placement), order within a group and the mirroring test (`GetDeterminant() < 0`) are as before.
+  **Observed** (temporary stopwatch inside the passes, forest, not committed): of the remaining ~150 us of a depth call's grouping, ~70 us is writing 383 KB of
+  placements into the write-combined constants (11.5 ns per placement, about 5.5 GB/s), ~30 us the determinants (5 ns each) and ~40 us reading the caller's 72-byte
+  entries. GPU-driven placements (5.3) would remove all of it; a CPU path cannot go much below the write.
+- **Gate (Release; lighter gate; base = master `a6d1a36` built unchanged, scratch in `C:\Temp\agent-BO`).** Build 0 warnings; `dotnet test -c Release` 459 passed,
+  0 skipped (`KENSHI_PATH` set; legacy SPIR-V golden unchanged, the four terrain variants added to `NativeShaderTests` with the `TerrainConstants` offsets checked);
+  `--faithful all` ten views **0 px** (mean 0.0000, the rock view included); Meitou default ten views **0 px** (the Meitou cascades and blocker map read the terrain);
+  `--debug-shadows 1` forest 13:00 and `--water-reflection 4` Port North 13:00: 0 px; `MEITOU_VK_VALIDATION=sync` forest 13:00 (Faithful) and Port North 13:00
+  (Meitou, reflection 4): 0 errors. The 1/255 allowance of owner decision 2 was not used; no `precise` / `invariant`.
+- **Measured: still cameras (`--fly-benchmark 300 --fly-speed 0 --faithful all --time 13`, `MEITOU_TERRAIN_TIMING=1 MEITOU_MESH_TIMING=1`), forest (as 7.1) and The
+  Hub (`--town "The Hub" --distance 3000 --pitch 10`), three interleaved base/new pairs per view, medians (minima in brackets), Release; the machine was shared.**
+  Before = master `a6d1a36` with only the timing's warm-up skip added. Both timings now leave out the first 100 calls of each kind: in a first probe without it
+  the depth patches' segment read 124 us a call, of which ~100 us were pipeline creation and first registrations spread over 600 calls (with the skip: 22 us).
+  "Per draw" is the whole call (patches: node selection included; meshes: grouping included) over its draws; "segment" `BeginNativeInPass` to `EndNative`; "loop" the
+  per-draw loop alone. Draws per call: patches 89 colour / 91 depth (forest), 91 / 92 (Hub); meshes 17 colour / 27 depth (forest, 574 and 5,985 placements),
+  6.5 / 13.7 (Hub).
+
+  | | forest before | forest after | Hub before | Hub after |
+  | --- | ---: | ---: | ---: | ---: |
+  | patches colour, us per draw | 0.63 (0.54) | 0.44 (0.36) | 0.52 (0.52) | 0.37 (0.35) |
+  | patches colour, segment / loop, us per draw | n/a | 0.18 / 0.091 (0.14 / 0.076) | n/a | 0.15 / 0.080 (0.14 / 0.072) |
+  | patches depth, us per draw | 0.62 (0.50) | 0.51 (0.39) | 0.53 (0.53) | 0.45 (0.43) |
+  | patches depth, segment / loop, us per draw | n/a | 0.25 / 0.093 (0.17 / 0.080) | n/a | 0.20 / 0.087 (0.20 / 0.079) |
+  | meshes colour, us per call | 69.9 (55.3) | 37.8 (30.5) | 20.3 (19.4) | 13.7 (12.9) |
+  | meshes colour, us per draw | 4.11 (3.25) | 2.22 (1.79) | 3.10 (2.96) | 2.09 (1.97) |
+  | meshes colour: grouping us per call, segment us per call, loop us per draw | n/a | 21.9, 13.2, 0.39 (18.4, 10.0, 0.26) | n/a | 4.3, 7.7, 0.42 (3.9, 7.4, 0.41) |
+  | meshes depth, us per call | 282.8 (246.1) | 171.3 (139.3) | 30.8 (30.4) | 21.4 (20.5) |
+  | meshes depth, us per draw | 10.47 (9.11) | 6.34 (5.16) | 2.25 (2.22) | 1.56 (1.50) |
+  | meshes depth: grouping us per call, segment us per call, loop us per draw | n/a | 149.9, 18.1, 0.36 (124.6, 13.5, 0.26) | n/a | 11.6, 9.1, 0.33 (10.9, 8.9, 0.32) |
+  | stage `terrain`, ms | 0.22 (0.18) | 0.21 (0.18) | 0.20 (0.20) | 0.20 (0.17) |
+  | shadow casters `terrain`, ms | 0.34 (0.31) | 0.32 (0.29) | 0.35 (0.34) | 0.34 (0.30) |
+  | shadow casters `foliage` / `objects`, ms (they call `DrawMeshes`) | 1.63 / 0.27 (1.20 / 0.23) | 1.47 / 0.17 (1.15 / 0.15) | 0.78 / 0.42 (0.76 / 0.42) | 0.83 / 0.30 (0.79 / 0.30) |
+  | stage `shadows`, ms | 2.42 (1.86) | 2.13 (1.73) | 1.70 (1.67) | 1.63 (1.54) |
+  | render thread allocations, MB per run | 12 | 10 | 10 | 9 |
+
+  Observed: the patch loop is 0.08-0.09 us a draw (step P, the hot-path entry above: 0.17), near the floor; a patch call is now mostly its segment's fixed part
+  (13-16 us colour, 18-22 us depth) and the node selection. The TERRAIN-mode meshes are 30-45 percent cheaper a call; in the forest's depth call the grouping
+  (placements into the constants) is 87 percent of what is left, the segment 18 us. The terrain stages themselves hardly move (the patches were already cheap in
+  step P, and both stages also hold the node selection); the saving shows in the callers' caster stages (objects' 0.27 -> 0.17 ms in the forest, 0.42 -> 0.30 at the
+  Hub; foliage's moved inside its scatter, down in the forest and up at the Hub) and in the `shadows` stage. GPU time not measured (same SPIR-V maths, same targets).
+
 ### 7.2 Wave 3: ownership
 
 Each agent owns its files completely: it may edit them, and nobody else may. Call-site counts are `IGl` calls from section 8.
@@ -1853,6 +1922,13 @@ terrain's step O should do from the start, in order of what it cost foliage:
    (only the texture indices are patched per segment); a shader whose consumer never varies a mapped uniform (head textures, skinning) can map it to a
    constant in its `own` map and give the push block's bytes to what it does vary (the fade range) without leaving the 128 bytes; the segment's fixed part
    (setup, `NativeFrame.Bind` 3.5-8 us) is what keeps a two-draw cascade expensive per draw, which only a depth-only bind or fewer segments would change.
+8. *Terrain, done this way (7.1, agent B step O).* A renderer whose own per-segment values do not fit the 128-byte push range gets a third set of its own: a
+   dynamic uniform buffer in the frame's constants, bound at an offset into a persistent set per constants chunk (`TerrainRenderer.BindConstants`); sets 0 and 1
+   stay the model's, so `NativeFrame.Bind` needs no change, and the extra set is never pushed. Register your own stand-in per bindless array you read
+   (`Bindless(0)` is the float 2D one only: wrong for `textures2DArray` and `utextures2D`). When `Port` moves a text with an `#extension` line, put that line
+   right after `#version`. Time a once-a-frame segment without its first calls: averaged over 300 frames, pipeline creation and first registrations made the
+   terrain depth segment read 124 us instead of 22. After the commands, the next cost of an instanced path is often the per-instance upload: 64-byte
+   placements into write-combined memory run at about 11.5 ns each (5.5 GB/s), so write each one once, in its final place.
 
 ### 7.6 The draw log
 
