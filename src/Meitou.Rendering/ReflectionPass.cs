@@ -4,6 +4,7 @@ using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
 using Silk.NET.Vulkan;
+using GpuTexture = Meitou.Rendering.Gpu.Texture;
 
 namespace Meitou.Rendering;
 
@@ -27,16 +28,22 @@ public sealed unsafe class ReflectionPass : IDisposable
     /// <summary>Samples per texel of the reflection (1 = off). Resolved into the plain texture the water samples.</summary>
     public const int Samples = 4;
 
+    /// <summary>
+    /// GL is left only for what the guests (sky, terrain, objects, foliage: native) read through the seam's GL mirror, the framebuffer binding,
+    /// viewport and fixed-function state (<c>CurrentTargets</c>, <c>CurrentState</c>; docs/renderer-native.md 4.5, 8.1), and for the colour's GL
+    /// name the water samples through VkGl (<see cref="Texture"/>, with its GL sampler parameters). The targets, the resolve and the timing are native.
+    /// </summary>
     readonly IGl gl;
     /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
     public GpuContext Gpu { get; }
-    readonly uint[] queries = new uint[4];   // two slots of (start, end) timestamps
-    readonly bool[] pending = new bool[2];
+    readonly PassTimer timer;
     readonly WorldRenderOptions options = new();
-    uint fbo, colour, depth;
-    uint msFbo, msColour, msDepth;   // multisampled twin the scene is drawn into, resolved into <colour>
+    // The texture the water samples, and the depth beside it when the scene is drawn without multisampling; else the multisampled twins the
+    // scene is drawn into, resolved into the colour. Each is imported into GL for the framebuffer the guests' CurrentTargets reads.
+    GpuTexture? colour, depth, msColour, msDepth;
+    uint colourGl, depthGl, msColourGl, msDepthGl, fbo;
     int samples;
-    int width, height, slot, skipped, age;
+    int width, height, skipped, age;
     bool hasImage;
     Vector3 lastEye;
     float lastFov;
@@ -55,7 +62,7 @@ public sealed unsafe class ReflectionPass : IDisposable
         ObjectLodBias = Env("LOD", ObjectLodBias);
         MaxAge = (int)Env("AGE", MaxAge);
         TerrainLodScale = Env("TLOD", TerrainLodScale);
-        for (int i = 0; i < queries.Length; i++) queries[i] = gl.GenQuery();
+        timer = new PassTimer(gpu);
     }
 
     /// <summary>The game's <c>water reflection</c> when the key is missing, and <c>reflection range</c> (docs/formats/settings.md).</summary>
@@ -90,7 +97,8 @@ public sealed unsafe class ReflectionPass : IDisposable
     public bool Valid { get; private set; }
     /// <summary>Maps a point on the water to the texture: clip.xy / clip.w * 0.5 + 0.5.</summary>
     public Matrix4x4 ViewProjection { get; private set; }
-    public uint Texture => colour;
+    /// <summary>The reflection as a GL name (an imported native texture, with GL sampler parameters), for the water.</summary>
+    public uint Texture => colourGl;
     public int Width => width;
     public int Height => height;
     /// <summary>Time the CPU spent recording the last reflection pass, and what the GPU spent on it (a few frames late).</summary>
@@ -103,67 +111,73 @@ public sealed unsafe class ReflectionPass : IDisposable
 
     void Resize(int w, int h)
     {
-        if (w == width && h == height && fbo != 0) return;
+        if (w == width && h == height && colour is not null) return;
         Free();
         (width, height) = (w, h);
-        colour = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, colour);
-        gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba16f, (uint)w, (uint)h, 0, PixelFormat.Rgba, PixelType.HalfFloat, (void*)0);
+        var interop = Gpu.Interop!;
+        colour = GpuTexture.Create(Gpu, new TextureDesc(Format.R16G16B16A16Sfloat, w, h, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferDst, Name: "reflection colour"));
+        // The water samples the colour through VkGl (interop.Sampled of this GL name), with the GL sampler parameters it always had.
+        colourGl = interop.Import(colour);
+        gl.BindTexture(TextureTarget.Texture2D, colourGl);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-        depth = gl.GenRenderbuffer();
-        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, depth);
-        gl.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.DepthComponent24, (uint)w, (uint)h);
-        fbo = gl.GenFramebuffer();
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, colour, 0);
-        gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, RenderbufferTarget.Renderbuffer, depth);
-        if (gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
-            throw new InvalidOperationException("Reflection framebuffer incomplete.");
 
         // The picture is drawn multisampled and resolved: the mirrored shoreline, fences and rooflines are hard edges, and
         // without it each texel of the half-resolution image is a visible stair step that the wave distortion then smears.
-        gl.GetInteger(GLEnum.MaxSamples, out int maxSamples);
-        samples = Math.Min(Samples, maxSamples);
-        if (samples <= 1) { samples = 0; return; }
-        msColour = gl.GenRenderbuffer();
-        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, msColour);
-        gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, (uint)samples, InternalFormat.Rgba16f, (uint)w, (uint)h);
-        msDepth = gl.GenRenderbuffer();
-        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, msDepth);
-        gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, (uint)samples, InternalFormat.DepthComponent24, (uint)w, (uint)h);
-        msFbo = gl.GenFramebuffer();
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, msFbo);
-        gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, msColour);
-        gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, RenderbufferTarget.Renderbuffer, msDepth);
-        if (gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
-            throw new InvalidOperationException("Reflection multisampled framebuffer incomplete.");
+        samples = Math.Min(Samples, MaxSamples());
+        if (samples <= 1) samples = 0;
+        GpuTexture Target(Format format, TextureUse use, int count, string name) =>
+            GpuTexture.Create(Gpu, new TextureDesc(format, w, h, Samples: Math.Max(count, 1), Use: use, Name: name));
+        // The guests find the target through GL's framebuffer binding (docs/renderer-native.md 4.5): the native targets imported and attached.
+        fbo = gl.GenFramebuffer();
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
+        if (samples == 0)
+        {
+            depth = Target(Format.D32Sfloat, TextureUse.DepthTarget, 1, "reflection depth");
+            depthGl = interop.Import(depth);
+            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, colourGl, 0);
+            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, depthGl, 0);
+            return;
+        }
+        msColour = Target(Format.R16G16B16A16Sfloat, TextureUse.ColourTarget | TextureUse.TransferSrc, samples, "reflection colour msaa");
+        msDepth = Target(Format.D32Sfloat, TextureUse.DepthTarget, samples, "reflection depth msaa");
+        (msColourGl, msDepthGl) = (interop.Import(msColour), interop.Import(msDepth));
+        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, msColourGl, 0);
+        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, msDepthGl, 0);
+    }
+
+    /// <summary>The most samples a colour and depth target may have on this device (VkGl answered GL's MAX_SAMPLES with 8).</summary>
+    int MaxSamples()
+    {
+        var l = Gpu.Device.Limits;
+        uint both = (uint)(l.FramebufferColorSampleCounts & l.FramebufferDepthSampleCounts);
+        int max = 1;
+        while (max < 64 && (both & (uint)(max * 2)) != 0) max *= 2;
+        return max;
     }
 
     void Free()
     {
-        if (fbo != 0) { gl.DeleteFramebuffer(fbo); gl.DeleteTexture(colour); gl.DeleteRenderbuffer(depth); fbo = 0; }
-        if (msFbo != 0) { gl.DeleteFramebuffer(msFbo); gl.DeleteRenderbuffer(msColour); gl.DeleteRenderbuffer(msDepth); msFbo = 0; }
+        if (colour is null) return;
+        gl.DeleteFramebuffer(fbo);
+        // Imported names: GL forgets them, the images are ours (released after the frames in flight).
+        foreach (var name in (ReadOnlySpan<uint>)[colourGl, depthGl, msColourGl, msDepthGl]) if (name != 0) gl.DeleteTexture(name);
+        colour.Dispose();
+        depth?.Dispose();
+        msColour?.Dispose();
+        msDepth?.Dispose();
+        (colour, depth, msColour, msDepth) = (null, null, null, null);
+        (colourGl, depthGl, msColourGl, msDepthGl, fbo) = (0, 0, 0, 0, 0);
     }
 
-    /// <summary>Collects finished GPU timings (<paramref name="wait"/>: block for them, for one-off measurements).</summary>
+    /// <summary>Collects finished GPU timings: native timestamps, read once their frame's slot comes round. Nothing waits, also with
+    /// <paramref name="wait"/> (kept for callers; the GL queries could block): a pass only a frame old has no time yet.</summary>
     public void Poll(bool wait = false)
     {
-        for (int s = 0; s < 2; s++)
-        {
-            if (!pending[s]) continue;
-            int available = 0;
-            if (wait) available = 1;
-            else gl.GetQueryObject(queries[s * 2 + 1], QueryObjectParameterName.ResultAvailable, out available);
-            if (available == 0) continue;
-            gl.GetQueryObject(queries[s * 2], QueryObjectParameterName.Result, out ulong start);
-            gl.GetQueryObject(queries[s * 2 + 1], QueryObjectParameterName.Result, out ulong end);
-            GpuMs = (end - start) / 1e6;
-            gpuSamples.Add(GpuMs);
-            pending[s] = false;
-        }
+        _ = wait;
+        if (timer.Poll(gpuSamples) is { } ms) GpuMs = ms;
     }
 
     /// <summary>
@@ -198,10 +212,9 @@ public sealed unsafe class ReflectionPass : IDisposable
             gl.GetInteger(GetPName.Viewport, viewport);
         }
         Resize(Math.Max((int)(fullWidth * Scale), 64), Math.Max((int)(fullHeight * Scale), 64));
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, msFbo != 0 ? msFbo : fbo);
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
         gl.Viewport(0, 0, (uint)width, (uint)height);
-        int timed = -1;
-        if (!pending[slot]) { timed = slot; gl.QueryCounter(queries[timed * 2], QueryCounterTarget.Timestamp); }
+        timer.Begin();
 
         // The world mirrored about the water, seen from the real eye: the same as the unmirrored world seen from the
         // mirrored eye (which is also where distances for LOD, objects and haze are measured from).
@@ -270,23 +283,18 @@ public sealed unsafe class ReflectionPass : IDisposable
 
         if (Gpu.Frame.Parallel.Open) Gpu.Frame.Parallel.End();
         cmd.EndRendering();
-        if (msFbo != 0)
+        if (msColour is not null)
         {
             // The multisampled colour into the texture the water samples (a resolve, as the framebuffer blit was), between full barriers.
             cmd.Barrier(BarrierBatch.Full);
-            cmd.Resolve(target.Colour.Image, interop.Texture(colour).Image, width, height);
+            cmd.Resolve(msColour, colour!);
         }
         interop.EndHostPass(cmd);
         interop.EndNative(cmd);
         gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, (uint)drawFbo);
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, (uint)readFbo);
         gl.Viewport(viewport[0], viewport[1], (uint)viewport[2], (uint)viewport[3]);
-        if (timed >= 0)
-        {
-            gl.QueryCounter(queries[timed * 2 + 1], QueryCounterTarget.Timestamp);
-            pending[timed] = true;
-            slot = (slot + 1) % 2;
-        }
+        timer.End();
         CpuMs = watch.Elapsed.TotalMilliseconds;
         cpuSamples.Add(CpuMs);
     }
@@ -297,7 +305,7 @@ public sealed unsafe class ReflectionPass : IDisposable
     /// </summary>
     bool CanReuse(WorldCamera camera, int fullWidth, int fullHeight)
     {
-        if (age >= MaxAge || !hasImage || fbo == 0 || msFbo == 0 && samples != 0) return false;
+        if (age >= MaxAge || !hasImage || colour is null || msColour is null && samples != 0) return false;
         if (width != Math.Max((int)(fullWidth * Scale), 64) || height != Math.Max((int)(fullHeight * Scale), 64)) return false;
         var view = camera.View;
         float shift = Vector3.Distance(camera.Eye, lastEye);
@@ -321,7 +329,7 @@ public sealed unsafe class ReflectionPass : IDisposable
     /// <summary>Mean, 95th percentile and maximum of the reflection's GPU and CPU time over the passes drawn so far (for <c>--fly-benchmark</c>).</summary>
     public string DescribeStats()
     {
-        Poll(wait: true);
+        Poll();
         // The first pass compiles shaders and warms up; it is left out.
         static string One(IEnumerable<double> values)
         {
@@ -378,6 +386,5 @@ public sealed unsafe class ReflectionPass : IDisposable
     public void Dispose()
     {
         Free();
-        foreach (var q in queries) gl.DeleteQuery(q);
     }
 }
