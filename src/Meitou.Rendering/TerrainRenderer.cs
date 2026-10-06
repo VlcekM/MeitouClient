@@ -54,10 +54,13 @@ public readonly record struct WorldLighting(Vector3 SunDirection, Vector3 SunCol
 public sealed unsafe class TerrainRenderer : IDisposable
 {
     readonly IGl gl;
-    readonly uint patchProgram;
-    readonly Dictionary<(uint, string), int> uniforms = [];
-    readonly uint gridVao, gridVbo, gridEbo, coarseTexture;
-    uint fineTexture;
+    /// <summary>A GL program nothing draws with: linking it is what assigns the atmosphere's sampler units and publishes the shadow globals
+    /// (<c>WorldGl.Program</c>: <c>SkyRenderer.AssignSamplerUnits</c>, <c>ShadowShaders.Bind</c>), which the native frame set reads. The terrain's
+    /// renderer is the first one made, and the last world renderer that links a GL program; phase 8 moves that start-up elsewhere.</summary>
+    readonly uint globalsProgram;
+    readonly DeviceBuffer gridVertices, gridIndices;
+    readonly TerrainTexture coarseTexture;
+    TerrainTexture fineTexture;
     readonly int[] indexOffsets = new int[5], indexCounts = new int[5], firstIndices = new int[5];
     readonly TerrainHeightBounds bounds;
     readonly List<TerrainNode> nodes = [];
@@ -91,9 +94,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         quadtree = new TerrainQuadtree(fine.Spacing, GridCells, new WorldRenderOptions().TerrainLod);
         spare = new TerrainQuadtree(fine.Spacing, GridCells, new WorldRenderOptions().TerrainLod);
         fineBand = BandOf(fine);
-        // The GL patch program draws only the debug outline now; making it also assigns the atmosphere's sampler units and publishes the
-        // shadow globals (WorldGl.Program), which the native frame set reads.
-        patchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, TerrainShaders.Fragment);
+        globalsProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, TerrainShaders.Fragment);
         // The native programs (docs/renderer-native.md 7.1, step O), all made here so a draw never compiles.
         nativeFrame = new NativeFrame(gpu);
         uniformAlign = Math.Max(gpu.Device.Limits.MinUniformBufferOffsetAlignment, 16);
@@ -110,8 +111,11 @@ public sealed unsafe class TerrainRenderer : IDisposable
         standInArray = gpu.Bindless.Register(BindlessKind.Texture2DArray, gpu.Dummy(StandInInfo(true, ScalarKind.Float)));
         standInUInt = gpu.Bindless.Register(BindlessKind.UTexture2D, gpu.Dummy(StandInInfo(false, ScalarKind.UInt)));
 
-        coarseTexture = HeightTexture(coarse, coarseSize, coarseSize);
-        fineTexture = HeightTexture(fine.Raw, fine.Columns, fine.Rows);
+        using (var batch = gpu.Uploads.Begin())
+        {
+            coarseTexture = HeightTexture(batch, coarse, coarseSize, coarseSize);
+            fineTexture = HeightTexture(batch, fine.Raw, fine.Columns, fine.Rows);
+        }
         PublishGlobals();
 
         // The patch grid and its index ranges: the whole grid, then the four quarters.
@@ -128,38 +132,35 @@ public sealed unsafe class TerrainRenderer : IDisposable
             indexCounts[q + 1] = part.Length;
             indices.AddRange(part);
         }
-        gridVao = gl.GenVertexArray();
-        gl.BindVertexArray(gridVao);
-        gridVbo = gl.GenBuffer();
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, gridVbo);
-        gl.BufferData<float>(BufferTargetARB.ArrayBuffer, grid.AsSpan(), BufferUsageARB.StaticDraw);
-        gl.EnableVertexAttribArray(0);
-        gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 8, (void*)0);
-        gridEbo = gl.GenBuffer();
-        gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, gridEbo);
-        gl.BufferData<uint>(BufferTargetARB.ElementArrayBuffer, indices.ToArray().AsSpan(), BufferUsageARB.StaticDraw);
-        gl.BindVertexArray(0);
+        // The patch grid as one vertex buffer (location 0: the grid point, two floats) and one index buffer (GL's vertex array, made native).
+        var gridIndexData = indices.ToArray();
+        gridVertices = DeviceBuffer.Create(gpu, (ulong)grid.Length * sizeof(float), BufferUse.Vertex, "terrain patches vertices");
+        gridIndices = DeviceBuffer.Create(gpu, (ulong)gridIndexData.Length * sizeof(uint), BufferUse.Index, "terrain patches indices");
+        using (var batch = gpu.Uploads.Begin())
+        {
+            batch.Write(gridVertices, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(grid.AsSpan()));
+            batch.Write(gridIndices, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(gridIndexData.AsSpan()));
+        }
+        gridVertex = new LegacyProgram.Attribute(new BufferBinding(gridVertices.Handle, 0, gridVertices.Size), Silk.NET.Vulkan.Format.R32G32Sfloat, 8, false);
+        gridElements = new BufferBinding(gridIndices.Handle, 0, gridIndices.Size);
     }
+
+    /// <summary>The grid's vertex attribute at location 0 and its index buffer, as VkGl fed them from the GL vertex array.</summary>
+    readonly LegacyProgram.Attribute gridVertex;
+    readonly BufferBinding gridElements;
 
     /// <summary>Width of the band at the fine window's border where it fades into the coarse grid.</summary>
     static float BandOf(HeightWindow w) => Math.Clamp((w.Columns - 1) * w.Spacing * 0.1f, w.Spacing * 4, 3000);
 
-    uint HeightTexture(ushort[] raw, int width, int height) => HeightTexture(raw, width, height, upload: true);
-
-    uint HeightTexture(ushort[]? raw, int width, int height, bool upload)
+    /// <summary>A height texture (GL's R16, one level, linear, clamped) through <paramref name="batch"/>, with <paramref name="raw"/> written when given.</summary>
+    TerrainTexture HeightTexture(UploadBatch batch, ushort[]? raw, int width, int height)
     {
-        uint id = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, id);
-        gl.PixelStore(PixelStoreParameter.UnpackAlignment, 2);
-        if (upload) gl.TexImage2D<ushort>(TextureTarget.Texture2D, 0, InternalFormat.R16, (uint)width, (uint)height, 0, PixelFormat.Red, PixelType.UnsignedShort, raw!.AsSpan());
-        else gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.R16, (uint)width, (uint)height, 0, PixelFormat.Red, PixelType.UnsignedShort, (void*)0);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-        gl.PixelStore(PixelStoreParameter.UnpackAlignment, 4);
-        return id;
+        var t = batch.Create(new TextureDesc(GlConventions.VkFormat(InternalFormat.R16), width, height, Name: "terrain heights"));
+        if (raw is not null) batch.Write(t, 0, 0, Rect(0, 0, width, height), System.Runtime.InteropServices.MemoryMarshal.AsBytes(raw.AsSpan(0, width * height)));
+        return new TerrainTexture(gpu, t, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge);
     }
+
+    static Silk.NET.Vulkan.Rect2D Rect(int x, int y, int width, int height) => new(new(x, y), new((uint)width, (uint)height));
 
     public int LevelCount => quadtree.LevelCount;
     public double FinestSpacing => quadtree.Spacing(0);
@@ -171,13 +172,13 @@ public sealed unsafe class TerrainRenderer : IDisposable
     {
         (DrawnChunks, DrawnTriangles) = (0, 0);
         frameNumber++;
-        // A replaced window is deleted a few frames after the swap: deleting a texture the GPU still has queued draws for makes the driver wait for them.
+        // A replaced window is let go a few frames after the swap (its image and bindless entry are freed after the frames in flight).
         for (int i = retired.Count - 1; i >= 0; i--)
-            if (frameNumber - retired[i].Frame >= 4) { gl.DeleteTexture(retired[i].Texture); retired.RemoveAt(i); }
+            if (frameNumber - retired[i].Frame >= 4) { retired[i].Texture.Dispose(); retired.RemoveAt(i); }
     }
 
     int frameNumber;
-    readonly List<(uint Texture, int Frame)> retired = [];
+    readonly List<(TerrainTexture Texture, int Frame)> retired = [];
 
     /// <summary>Uses biome textures and land maps from now on (null: untextured).</summary>
     public void SetTextures(TerrainTextures? t) => textures = t;
@@ -212,23 +213,26 @@ public sealed unsafe class TerrainRenderer : IDisposable
     public void BeginFineUpload(HeightWindow window, TerrainHeightBounds.Patch patch, UploadQueue uploads, Action? done = null)
     {
         const int slabRows = 192;
-        uint texture = 0;
-        uploads.Add(() => texture = HeightTexture(null, window.Columns, window.Rows, upload: false), "height texture");
+        TerrainTexture? texture = null;
+        uploads.Add(() =>
+        {
+            using var batch = gpu.Uploads.Begin();
+            texture = HeightTexture(batch, null, window.Columns, window.Rows);
+        }, "height texture");
         for (int row = 0; row < window.Rows; row += slabRows)
         {
             int r0 = row, n = Math.Min(slabRows, window.Rows - row);
             uploads.Add(() =>
             {
-                gl.BindTexture(TextureTarget.Texture2D, texture);
-                gl.PixelStore(PixelStoreParameter.UnpackAlignment, 2);
-                gl.TexSubImage2D<ushort>(TextureTarget.Texture2D, 0, 0, r0, (uint)window.Columns, (uint)n, PixelFormat.Red, PixelType.UnsignedShort, window.Raw.AsSpan(r0 * window.Columns, n * window.Columns));
-                gl.PixelStore(PixelStoreParameter.UnpackAlignment, 4);
+                using var batch = gpu.Uploads.Begin();
+                batch.Write(texture!.Texture, 0, 0, Rect(0, r0, window.Columns, n),
+                    System.Runtime.InteropServices.MemoryMarshal.AsBytes(window.Raw.AsSpan(r0 * window.Columns, n * window.Columns)));
             }, "height slab");
         }
         uploads.Add(() =>
         {
             retired.Add((fineTexture, frameNumber));
-            fineTexture = texture;
+            fineTexture = texture!;
             fine = window;
             fineBand = BandOf(window);
             bounds.Apply(patch);
@@ -270,41 +274,48 @@ public sealed unsafe class TerrainRenderer : IDisposable
         if (LodLog && !secondary && (frameNumber < 4 || frameNumber % 60 == 1))
             Console.WriteLine($"terrain   frame {frameNumber} nodes per level (whole + quarters): {string.Join(" ", Enumerable.Range(0, current.LevelCount).Select(l => $"{nodes.Count(n => n.Level == l && n.Quadrant < 0)}+{nodes.Count(n => n.Level == l && n.Quadrant >= 0)}"))}");
 
-        gl.Enable(EnableCap.DepthTest);
-        gl.Enable(EnableCap.CullFace);
-        gl.CullFace(TriangleFace.Back);
-        gl.FrontFace(FrontFaceDirection.Ccw);
-        if (options.Wireframe != 2) DrawPatches();
-        if (options.Wireframe != 0)
+        PreparePatches(current);
+        // The atmosphere's textures on their units: the frame set reads them there (SkyRenderer's GL state, not the terrain's).
+        SkyRenderer.Active?.BindUnits();
+        if (nodes.Count > 0)
         {
-            // The debug outline stays on the GL path (its own program and GL's line state).
-            Apply(patchProgram, heightNormals: true);
-            gl.BindVertexArray(gridVao);
-            gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Line);
-            gl.Enable(EnableCap.PolygonOffsetLine);
-            gl.PolygonOffset(-1, -1);
-            DrawNodes(wire: true);
-            gl.Disable(EnableCap.PolygonOffsetLine);
-            gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Fill);
-            gl.BindVertexArray(0);
+            if (options.Wireframe != 2)
+            {
+                PrepareConstants(material: true, patches: true);
+                RecordPatches(patchColour, "terrain", StepTiming.PatchColour, PatchMode.Solid);
+                DrawnChunks += nodes.Count;
+                DrawnTriangles += patchTriangles;
+            }
+            if (options.Wireframe != 0)
+            {
+                // The debug outline (Wireframe 1 and 2): the same patches as lines in a dark grey, pulled towards the eye as GL's polygon offset (-1, -1) did.
+                PrepareConstants(material: true, patches: true);
+                constants.Wireframe = 1;
+                RecordPatches(patchColour, "terrain wireframe", StepTiming.PatchColour, PatchMode.Wireframe);
+            }
         }
         StepTiming.Add(StepTiming.PatchColour, timing, nodes.Count);
     }
 
+    /// <summary>How <see cref="RecordPatches"/> draws: filled (colour or depth), or the debug outline.</summary>
+    enum PatchMode { Solid, Wireframe }
 
-    /// <summary>The debug outline (<c>Wireframe</c> 1 and 2): the GL path, as before the port.</summary>
-    void DrawNodes(bool wire)
+    DrawState? lastGlState, lastPatchState, lastWireState;
+
+    /// <summary>
+    /// The state the patches draw with: the pass's (its targets' depth test, write and compare, blending, colour mask, depth clamp, bias, as GL
+    /// has them for the host) with the terrain's own culling: back faces, counter-clockwise front (what the GL version set before every draw).
+    /// The outline draws lines with a depth bias of (-1, -1). Kept per input state (records compare by value: no allocation in the steady state).
+    /// </summary>
+    DrawState PatchState(DrawState pass, PatchMode mode)
     {
-        gl.Uniform1(U(patchProgram, "uWireframe"), wire ? 1 : 0);
-        int uNode = U(patchProgram, "uNode"), uMorph = U(patchProgram, "uMorph");
-        foreach (var n in nodes)
+        if (lastGlState is null || pass != lastGlState)
         {
-            gl.Uniform4(uNode, (float)n.X0, (float)n.Z0, (float)n.Size, GridCells);
-            float start = current.MorphStart[n.Level], end = current.MorphEnd[n.Level];
-            gl.Uniform2(uMorph, start == float.MaxValue ? 1e31f : start, end == float.MaxValue ? 2e31f : end);
-            int part = n.Quadrant + 1;
-            gl.DrawElements(PrimitiveType.Triangles, (uint)indexCounts[part], DrawElementsType.UnsignedInt, (void*)indexOffsets[part]);
+            lastGlState = pass;
+            lastPatchState = pass with { Cull = Silk.NET.Vulkan.CullModeFlags.BackBit, Front = GlConventions.FrontFace(FrontFaceDirection.Ccw) };
+            lastWireState = lastPatchState with { Polygon = Silk.NET.Vulkan.PolygonMode.Line, BiasEnable = true, BiasConstant = -1, BiasSlope = -1 };
         }
+        return mode == PatchMode.Wireframe ? lastWireState! : lastPatchState!;
     }
 
     // ---- the native model (docs/renderer-native.md 7.1, wave 3b agent B: step O) ----
@@ -392,30 +403,29 @@ public sealed unsafe class TerrainRenderer : IDisposable
     Vector4 lastRegion;
     Vector2 lastCellGrid;
 
-    /// <summary>The bindless index of a GL texture of the terrain's (<see cref="IGlInterop.Bindless"/>: what VkGl would sample now), or the
-    /// stand-in of <paramref name="kind"/>'s array when there is none or it is not of that kind (no storage yet: VkGl's float 2D stand-in).</summary>
-    uint Index(IGlInterop interop, uint glTexture, BindlessKind kind, uint standIn)
+    /// <summary>The bindless index of a native texture of the terrain's (<see cref="TerrainTexture.Bindless"/>: a new index when its sampler
+    /// changed), or the stand-in of <paramref name="kind"/>'s array when there is none.</summary>
+    static uint Index(TerrainTexture? texture, BindlessKind kind, uint standIn)
     {
-        if (glTexture == 0) return standIn;
-        var h = interop.Bindless(glTexture);
+        if (texture is null) return standIn;
+        var h = texture.Bindless();
         return h.Kind == kind ? h.Index : standIn;
     }
 
     /// <summary>
-    /// <see cref="constants"/> for the next segment: <see cref="BindHeights"/>' values and the height textures; with <paramref name="material"/>
-    /// also <see cref="Apply"/>'s (<paramref name="patches"/>: the height field's normals, no feature; else <c>uFeature</c> 1) and the material
-    /// textures. A value <see cref="Apply"/> sets only with textures (<c>uRegion</c>, <c>uCellGrid</c>) keeps its last one without, as a GL
-    /// program's uniform does. Before the segment (the bindless exports are IGl-side calls).
+    /// <see cref="constants"/> for the next segment: the height functions' values and the height textures; with <paramref name="material"/>
+    /// also the material's (<paramref name="patches"/>: the height field's normals, no feature; else <c>uFeature</c> 1) and the material
+    /// textures. A value the GL version set only with textures (<c>uRegion</c>, <c>uCellGrid</c>) keeps its last one without, as a GL
+    /// program's uniform did. In Prepare, on the render thread (bindless registrations).
     /// </summary>
     void PrepareConstants(bool material, bool patches)
     {
-        var interop = gpu.Interop!;
         var c = new TerrainConstants
         {
             CoarseRect = CoarseRect, CoarseCells = new Vector2(coarseSize - 1f, coarseSize - 1f), FineRect = FineRect,
             FineCells = new Vector2(fine.Columns - 1f, fine.Rows - 1f), FineBand = fineBand, HasFine = 1,
-            HeightCoarse = Index(interop, coarseTexture, BindlessKind.Texture2D, standIn2D),
-            HeightFine = Index(interop, fineTexture, BindlessKind.Texture2D, standIn2D),
+            HeightCoarse = Index(coarseTexture, BindlessKind.Texture2D, standIn2D),
+            HeightFine = Index(fineTexture, BindlessKind.Texture2D, standIn2D),
             Diffuse = standInArray, Normal = standInArray, Params = standIn2D, Cells = standInUInt, BlendMap = standIn2D, Overlay = standIn2D,
             Colour = standIn2D, Ground = standIn2D, WorldColour = standIn2D, Region = lastRegion, CellGrid = lastCellGrid,
         };
@@ -445,16 +455,16 @@ public sealed unsafe class TerrainRenderer : IDisposable
             {
                 c.Region = lastRegion = t.Region;
                 c.CellGrid = lastCellGrid = new Vector2(t.CellsX, t.CellsZ);
-                var ids = t.Ids;
-                c.Diffuse = Index(interop, ids.Diffuse, BindlessKind.Texture2DArray, standInArray);
-                c.Normal = Index(interop, ids.Normal, BindlessKind.Texture2DArray, standInArray);
-                c.Params = Index(interop, ids.Params, BindlessKind.Texture2D, standIn2D);
-                c.Cells = Index(interop, ids.Cells, BindlessKind.UTexture2D, standInUInt);
-                c.BlendMap = Index(interop, ids.BlendMap, BindlessKind.Texture2D, standIn2D);
-                c.Overlay = Index(interop, ids.Overlay, BindlessKind.Texture2D, standIn2D);
-                c.Colour = Index(interop, ids.Colour, BindlessKind.Texture2D, standIn2D);
-                c.Ground = Index(interop, ids.Ground, BindlessKind.Texture2D, standIn2D);
-                c.WorldColour = Index(interop, ids.WorldColour, BindlessKind.Texture2D, standIn2D);
+                var set = t.Textures;
+                c.Diffuse = Index(set.Diffuse, BindlessKind.Texture2DArray, standInArray);
+                c.Normal = Index(set.Normal, BindlessKind.Texture2DArray, standInArray);
+                c.Params = Index(set.Params, BindlessKind.Texture2D, standIn2D);
+                c.Cells = Index(set.Cells, BindlessKind.UTexture2D, standInUInt);
+                c.BlendMap = Index(set.BlendMap, BindlessKind.Texture2D, standIn2D);
+                c.Overlay = Index(set.Overlay, BindlessKind.Texture2D, standIn2D);
+                c.Colour = Index(set.Colour, BindlessKind.Texture2D, standIn2D);
+                c.Ground = Index(set.Ground, BindlessKind.Texture2D, standIn2D);
+                c.WorldColour = Index(set.WorldColour, BindlessKind.Texture2D, standIn2D);
             }
         }
         constants = c;
@@ -520,15 +530,12 @@ public sealed unsafe class TerrainRenderer : IDisposable
     sealed class PatchPipeline
     {
         public SegmentPipeline Segment;
-        public VertexArrayBindings Source = null!;
         public GraphicsPipeline Pipeline = null!;
         public BufferBinding Vertex;
         public BufferBinding Elements;
     }
 
     readonly List<PatchPipeline> patchPipelines = [];
-    VertexArrayBindings? gridExport;
-    long gridStamp = -1;
 
     /// <summary>
     /// Fills <see cref="patchDraws"/> from <see cref="nodes"/> (the tree's morph ranges, the index range per node) and counts them.
@@ -559,35 +566,19 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     long patchTriangles;
 
-    /// <summary>The solid patches of <see cref="Draw"/>: the GL state the GL version left (the program, the units bound: the frame set reads the
-    /// atmosphere's there), the constants, then one native segment in the pass VkGl has open.</summary>
-    void DrawPatches()
-    {
-        PreparePatches(current);
-        gl.UseProgram(patchProgram);
-        SkyRenderer.Active?.BindUnits();
-        BindHeightUnits();
-        textures?.Bind();
-        if (nodes.Count == 0) return;
-        PrepareConstants(material: true, patches: true);
-        RecordPatches(patchColour, "terrain", StepTiming.PatchColour);
-        DrawnChunks += nodes.Count;
-        DrawnTriangles += patchTriangles;
-    }
-
     /// <summary>
-    /// Records <see cref="patchDraws"/> into one native segment of the pass VkGl is drawing into (back faces culled as GL has it set): the
+    /// Records <see cref="patchDraws"/> into one native segment of the pass being drawn into (<see cref="PatchState"/>: back faces culled): the
     /// dynamic state, the sets, the pipeline, the grid's vertex and index buffers once; per node its push constants and the draw of its index
     /// range.
     /// </summary>
-    void RecordPatches(TerrainProgram p, string label, int timingKind)
+    void RecordPatches(TerrainProgram p, string label, int timingKind, PatchMode mode = PatchMode.Solid)
     {
         long t0 = StepTiming.Now();
-        // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state as GL has it now, the pipeline, the sets, the draws, into a job.
+        // Prepare (wave 4, docs/renderer-native.md 6.2): the pass's targets and state now, the pipeline, the sets, the draws, into a job.
         var interop = gpu.Interop!;
         var targets = interop.CurrentTargets();
-        var state = interop.CurrentState();
-        var r = ResolvePatches(p, interop, state, targets, label);
+        var state = PatchState(interop.CurrentState(), mode);
+        var r = ResolvePatches(p, state, targets, label);
         var job = patchJobs.Rent();
         job.Owner = this;
         (job.Targets, job.State, job.Layout, job.Pipeline, job.Vertex, job.Elements) = (targets, state, p.Layout, r.Pipeline, r.Vertex, r.Elements);
@@ -643,104 +634,26 @@ public sealed unsafe class TerrainRenderer : IDisposable
         public override void Release() => Owner.patchJobs.Return(this);
     }
 
-    /// <summary>The pipeline and bindings for <paramref name="p"/> in this pass state, kept while the grid's vertex-array export and the state
-    /// stay the same (the reflection's multisampled target alternates with the scene's: a few entries). The export is fetched again only when
-    /// <see cref="IGlInterop.VertexArrayStamp"/> moved.</summary>
-    PatchPipeline ResolvePatches(TerrainProgram p, IGlInterop interop, DrawState state, PassTargets targets, string label)
+    /// <summary>The pipeline and bindings for <paramref name="p"/> in this pass state, kept while the state stays the same (the reflection's
+    /// multisampled target alternates with the scene's: a few entries). The grid is the terrain's own vertex and index buffer.</summary>
+    PatchPipeline ResolvePatches(TerrainProgram p, DrawState state, PassTargets targets, string label)
     {
-        if (gridExport is null || gridStamp != interop.VertexArrayStamp)
-        {
-            gridExport = interop.VertexArray(gridVao);
-            gridStamp = interop.VertexArrayStamp;
-        }
-        var va = gridExport;
         var segment = new SegmentPipeline(p.P, targets.Formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp);
         foreach (var e in patchPipelines)
-            if (ReferenceEquals(e.Source, va) && e.Segment == segment) return e;
+            if (e.Segment == segment) return e;
         if (patchPipelines.Count >= 16) patchPipelines.Clear();
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
-        va.Attributes.AsSpan().CopyTo(attributes);
+        attributes[0] = gridVertex;
         Span<BufferBinding> vertex = stackalloc BufferBinding[1];
         p.Buffers(attributes, vertex);
         var entry = new PatchPipeline
         {
-            Segment = segment, Source = va,
+            Segment = segment,
             Pipeline = gpu.Pipelines.Get(state.Pipeline(p.P, p.VertexLayout(attributes), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, targets.Formats, label)),
-            Vertex = vertex[0], Elements = va.Elements,
+            Vertex = vertex[0], Elements = gridElements,
         };
         patchPipelines.Add(entry);
         return entry;
-    }
-
-    /// <summary>Sets the frame's uniforms and textures on one of the two programs.</summary>
-    void Apply(uint program, bool heightNormals)
-    {
-        gl.UseProgram(program);
-        var (vp, eye, options, light) = (frame.ViewProjection, frame.Eye, frame.Options, frame.Light);
-        WorldGl.Matrix(gl, U(program, "uViewProjection"), vp);
-        gl.Uniform1(U(program, "uHeightNormals"), heightNormals ? 1 : 0);
-        gl.Uniform1(U(program, "uFeature"), 0);
-        gl.Uniform1(U(program, "uFeatureBiome"), -1);
-        gl.Uniform1(U(program, "uWireframe"), 0);
-        gl.Uniform3(U(program, "uEye"), eye.X, eye.Y, eye.Z);
-        var s = light.SunDirection;
-        gl.Uniform3(U(program, "uLightDir"), s.X, s.Y, s.Z);
-        gl.Uniform3(U(program, "uSunColour"), light.SunColour.X, light.SunColour.Y, light.SunColour.Z);
-        gl.Uniform3(U(program, "uAmbientSky"), light.AmbientSky.X, light.AmbientSky.Y, light.AmbientSky.Z);
-        gl.Uniform3(U(program, "uAmbientGround"), light.AmbientGround.X, light.AmbientGround.Y, light.AmbientGround.Z);
-        gl.Uniform3(U(program, "uFogColour"), light.FogColour.X, light.FogColour.Y, light.FogColour.Z);
-        gl.Uniform1(U(program, "uFogDistance"), light.FogDistance);
-        SkyRenderer.Active?.Apply(program);   // the atmosphere's uniforms (aerial perspective)
-        gl.Uniform1(U(program, "uWaterHeight"), options.Water ? WorldWater.Height : -1e6f);
-        gl.Uniform1(U(program, "uHalfWorld"), (float)WorldLayout.HalfWorldSize);
-        gl.Uniform1(U(program, "uDebug"), options.Debug);
-        gl.Uniform1(U(program, "uFarStart"), options.MaterialDistance * 0.8f);
-        gl.Uniform1(U(program, "uFarEnd"), options.MaterialDistance);
-        BindHeights(program);
-        var t = textures;
-        bool textured = options.Textures && t is { HasBiomes: true };
-        gl.Uniform1(U(program, "uTextured"), textured ? 1 : 0);
-        gl.Uniform1(U(program, "uNormalMaps"), textured && options.NormalMaps ? 1 : 0);
-        gl.Uniform1(U(program, "uHasMaps"), options.Textures && t is { MapState: 2 } ? 1 : 0);
-        gl.Uniform1(U(program, "uMapState"), t?.MapState ?? 0);
-        gl.Uniform1(U(program, "uHasGround"), t is { HasGround: true } ? 1 : 0);
-        gl.Uniform1(U(program, "uHasWorldColour"), t is { HasWorldColour: true } ? 1 : 0);
-        string[] samplers = ["uDiffuse", "uNormal", "uParams", "uCells", "uBlendMap", "uOverlay", "uColour"];
-        for (int i = 0; i < samplers.Length; i++) gl.Uniform1(U(program, samplers[i]), i);
-        gl.Uniform1(U(program, "uGround"), TerrainShaders.GroundUnit);
-        gl.Uniform1(U(program, "uWorldColour"), TerrainShaders.WorldColourUnit);
-        if (t is not null)
-        {
-            t.Bind();
-            gl.Uniform4(U(program, "uRegion"), t.Region.X, t.Region.Y, t.Region.Z, t.Region.W);
-            gl.Uniform2(U(program, "uCellGrid"), (float)t.CellsX, t.CellsZ);
-        }
-    }
-
-    /// <summary>Binds the height textures and sets the <see cref="TerrainShaders.HeightFunctions"/> uniforms of a program.</summary>
-    public void BindHeights(uint program)
-    {
-        BindHeightUnits();
-        gl.Uniform1(U(program, "uHeightCoarse"), TerrainShaders.HeightCoarseUnit);
-        gl.Uniform1(U(program, "uHeightFine"), TerrainShaders.HeightFineUnit);
-        var coarseRect = CoarseRect;
-        gl.Uniform4(U(program, "uCoarseRect"), coarseRect.X, coarseRect.Y, coarseRect.Z, coarseRect.W);
-        gl.Uniform2(U(program, "uCoarseCells"), coarseSize - 1f, coarseSize - 1f);
-        var fineRect = FineRect;
-        gl.Uniform4(U(program, "uFineRect"), fineRect.X, fineRect.Y, fineRect.Z, fineRect.W);
-        gl.Uniform2(U(program, "uFineCells"), fine.Columns - 1f, fine.Rows - 1f);
-        gl.Uniform1(U(program, "uFineBand"), fineBand);
-        gl.Uniform1(U(program, "uHasFine"), 1);
-    }
-
-    /// <summary>The height textures on their units (GL state; <see cref="BindHeights"/> without its uniforms).</summary>
-    void BindHeightUnits()
-    {
-        gl.ActiveTexture(TextureUnit.Texture0 + TerrainShaders.HeightCoarseUnit);
-        gl.BindTexture(TextureTarget.Texture2D, coarseTexture);
-        gl.ActiveTexture(TextureUnit.Texture0 + TerrainShaders.HeightFineUnit);
-        gl.BindTexture(TextureTarget.Texture2D, fineTexture);
-        gl.ActiveTexture(TextureUnit.Texture0);
     }
 
     static Vector4 CoarseRect => new(-WorldLayout.HalfWorldSize, -WorldLayout.HalfWorldSize, WorldLayout.HalfWorldSize, WorldLayout.HalfWorldSize);
@@ -755,15 +668,14 @@ public sealed unsafe class TerrainRenderer : IDisposable
     }
 
     /// <summary>
-    /// The heights as frame globals (docs/renderer-native.md 4.3): the two textures and the <see cref="TerrainShaders.HeightFunctions"/>
-    /// uniforms <see cref="BindHeights"/> sets, read when a consumer draws or applies its globals. No GL call.
+    /// The heights as frame globals (docs/renderer-native.md 4.3): the two textures (native, with the linear, clamped sampler their GL versions
+    /// had) and the <see cref="TerrainShaders.HeightFunctions"/> uniforms, read when a consumer draws or applies its globals.
     /// </summary>
     void PublishGlobals()
     {
-        if (gpu is not { Interop: { } interop } ctx) return;
-        var g = ctx.Globals;
-        g.Publish("uHeightCoarse", () => interop.Sampled(coarseTexture, shadowSampler: false));
-        g.Publish("uHeightFine", () => interop.Sampled(fineTexture, shadowSampler: false));
+        var g = gpu.Globals;
+        g.Publish("uHeightCoarse", () => coarseTexture.Sampled());
+        g.Publish("uHeightFine", () => fineTexture.Sampled());
         g.PublishUniform("uCoarseRect", () => CoarseRect);
         g.PublishUniform("uCoarseCells", () => new Vector2(coarseSize - 1f, coarseSize - 1f));
         g.PublishUniform("uFineRect", () => FineRect);
@@ -825,10 +737,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
         long t0 = StepTiming.Now();
         if (!GroupMeshes(meshes, biomes: true)) return 0;
         StepTiming.Group(StepTiming.MeshColour, t0);
-        // GL state as Apply left it for the GL code that follows (the units bound: the frame set reads the atmosphere's there).
+        // The atmosphere's textures on their units: the frame set reads them there (SkyRenderer's GL state, not the terrain's).
         SkyRenderer.Active?.BindUnits();
-        BindHeightUnits();
-        textures?.Bind();
         PrepareConstants(material: true, patches: false);
         int draws = DrawGroups(meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
         StepTiming.Add(StepTiming.MeshColour, t0, draws);
@@ -856,10 +766,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         frame = new Frame(viewProjection, eye, options, frame.Light);
         quadtree.Select(eye, bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), nodes);
         PreparePatches(quadtree);
-        BindHeightUnits();
-        gl.Enable(EnableCap.CullFace);
-        gl.CullFace(TriangleFace.Back);
-        gl.FrontFace(FrontFaceDirection.Ccw);
         if (nodes.Count > 0)
         {
             PrepareConstants(material: false, patches: true);
@@ -1128,15 +1034,11 @@ public sealed unsafe class TerrainRenderer : IDisposable
         }
     }
 
-    /// <summary>Records a mesh segment and leaves GL's state as the GL version did (culling off with back faces selected, counter-clockwise, no vertex array).</summary>
+    /// <summary>Records a mesh segment (GL's state is left as it was: phase 8, every successor sets the state it draws with).</summary>
     void CloseMeshSegment(MeshJob job, string label, int timingKind, long t0)
     {
         gpu.Record(label, job);
         StepTiming.Segment(timingKind, t0);
-        gl.CullFace(TriangleFace.Back);
-        gl.FrontFace(FrontFaceDirection.Ccw);
-        gl.Disable(EnableCap.CullFace);
-        gl.BindVertexArray(0);
     }
 
     /// <summary>A TERRAIN-mode mesh drawn indirect (<see cref="DrawMeshesIndirect"/>): the vertex array (position at 0, normal at 1), its index
@@ -1165,10 +1067,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
         }
         else
         {
-            // GL state as Apply left it for the GL code that follows (the units bound: the frame set reads the atmosphere's there).
+            // The atmosphere's textures on their units: the frame set reads them there (SkyRenderer's GL state, not the terrain's).
             SkyRenderer.Active?.BindUnits();
-            BindHeightUnits();
-            textures?.Bind();
             PrepareConstants(material: true, patches: false);
             draws = DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
             StepTiming.Add(StepTiming.MeshColour, timing, draws);
@@ -1237,22 +1137,15 @@ public sealed unsafe class TerrainRenderer : IDisposable
         return pipeline;
     }
 
-    int U(uint program, string name)
-    {
-        if (!uniforms.TryGetValue((program, name), out int location)) uniforms[(program, name)] = location = gl.GetUniformLocation(program, name);
-        return location;
-    }
-
     public void Dispose()
     {
         ReportMeshTiming();
-        gl.DeleteVertexArray(gridVao);
-        gl.DeleteBuffer(gridVbo);
-        gl.DeleteBuffer(gridEbo);
-        gl.DeleteTexture(coarseTexture);
-        gl.DeleteTexture(fineTexture);
-        foreach (var r in retired) gl.DeleteTexture(r.Texture);
-        gl.DeleteProgram(patchProgram);
+        gridVertices.Dispose();
+        gridIndices.Dispose();
+        coarseTexture.Dispose();
+        fineTexture.Dispose();
+        foreach (var r in retired) r.Texture.Dispose();
+        gl.DeleteProgram(globalsProgram);
         textures?.Dispose();
         foreach (var p in new[] { patchColour, patchDepth, meshColour, meshDepth }) p.Dispose();
         gpu.Bindless.Free(BindlessKind.Texture2D, standIn2D);
