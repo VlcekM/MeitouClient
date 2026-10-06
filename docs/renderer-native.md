@@ -2405,15 +2405,15 @@ here: calls on an `IGl` (`gl.` or `Gl.` followed by an `IGl` member name), exclu
 | `src/Meitou.Rendering/PostProcess.cs` | 181 | E |
 | `src/Meitou.Rendering/FoliageRenderer.cs` | 147 | A |
 | `src/Meitou.Rendering/ShadowPass.cs` | 123 (101 after F's debug views) | B (debug views F) |
-| `src/Meitou.Rendering/TerrainRenderer.cs` | 122 | B (`DrawMeshes`: foundation pilot) |
+| `src/Meitou.Rendering/TerrainRenderer.cs` | 122 (98 at `6f4af19`; **1** after phase 8 stage 1: the globals program, 8.3) | B (`DrawMeshes`: foundation pilot) |
 | `tools/Meitou.ModelViewer/Renderer.cs` | 116 | C |
 | `tools/Meitou.ModelViewer/CharacterRenderer.cs` | 93 | C |
 | `src/Meitou.Rendering/SkyRenderer.cs` | 80 | D |
 | `src/Meitou.Rendering/ShadowPass.Meitou.cs` | 78 | B |
 | `src/Meitou.Rendering/ReflectionPass.cs` | 60 | D |
 | `src/Meitou.Rendering/WaterRenderer.cs` | 52 | D |
-| `src/Meitou.Rendering/TerrainTextures.cs` | 52 | B |
-| `src/Meitou.Rendering/TerrainShadowMap.cs` | 48 | B |
+| `src/Meitou.Rendering/TerrainTextures.cs` | 52 (**0** after phase 8 stage 1) | B |
+| `src/Meitou.Rendering/TerrainShadowMap.cs` | 48 (33 at `6f4af19`; **4** after phase 8 stage 1: the imported name's sampler state, 8.3) | B |
 | `src/Meitou.Rendering/DebugOverlay.cs` | 42 (16 after step P: the atlas texture, the GL state around the draw) | F |
 | `src/Meitou.Rendering/WorldObjectRenderer.cs` | 39 | C |
 | `src/Meitou.Rendering/BuildingLodMesh.cs` | 38 | C |
@@ -2463,6 +2463,78 @@ Updated: docs/engine.md "Backend interface" and "Vulkan backend" rewritten for t
 adopted), and 18's "the GL-shaped IGl over VkGl stays" sentence amended. The memory note on `IGl` staying is updated by the owner.
 
 The phase-8 gate is the usual one: 0 differing pixels against the last build with VkGl present.
+
+### 8.3 Stage 1 as built: terrain (2026-10-06)
+
+*In short: the terrain's textures, buffers and its shadow map's targets are native, its draws no longer set GL state, and the debug outline
+draws natively. Five `IGl` calls are left in the three files (183 at `6f4af19`), all for other code's sake: one GL program whose linking starts
+up the sky's and the shadows' globals, and the shadow map's GL name for `ShadowPass.Meitou`. 0 px everywhere.*
+
+**Calls** (`gl.` / `Gl.`, comments excluded): `TerrainRenderer.cs` 98 → 1, `TerrainTextures.cs` 52 → 0, `TerrainShadowMap.cs` 33 → 4.
+Commits `b5fa777` (textures), `8ecf886` (shadow map), `63a541c` (renderer).
+
+**What moved.**
+- `TerrainTextures`: the two layer arrays (BC3, BC1), the biome parameters (RGBA32F), the cell table (RGBA8UI), the blend map, the overlay and
+  colour windows and the two world-wide maps are native `Texture`s, written through the `Uploader` (the streaming steps as before, one
+  `UploadBatch` each). `Bind()` and `Ids` are gone (only the terrain used them); `Textures` hands the renderer the native set.
+- `TerrainRenderer`: the coarse and fine heights (R16) are native; the fine-window swap retires the old one after 4 frames as before
+  (`Dispose`: image and bindless entry freed after the frames in flight). The patch grid is a vertex and an index `DeviceBuffer`; the patch
+  pipelines no longer fetch a vertex-array export. `uHeightCoarse` / `uHeightFine` are published as the native textures. The GL state calls
+  around the draws (`Enable(DepthTest)`, `Enable/Disable(CullFace)`, `CullFace`, `FrontFace`, `BindVertexArray(0)`, the height and material
+  unit binds) are gone; the patches take the pass's state from `CurrentState()` with the terrain's own culling put in (`PatchState`: back
+  faces, counter-clockwise), as the meshes already did. The debug outline (`--wireframe`) is the native patch program with
+  `TerrainConstants.Wireframe = 1`, a line-mode pipeline and a depth bias of (-1, -1), where GL had `PolygonOffset(-1, -1)` on lines.
+  `Apply`, `BindHeights`, `BindHeightUnits` and the uniform-location cache are gone (`BindHeights` was public but had no caller).
+- `TerrainShadowMap`: the heights (R16) and the two RG32F targets are native; the sweep is one `BeginNative` segment, each doubling pass a
+  rendering of its own into one target with a full barrier after it, the source bound as a native `SampledTexture` (no GL unit).
+- `TerrainTexture` (in `TerrainTextures.cs`, used by all three): a native texture with the GL sampler state its GL version had
+  (`SamplerDesc.FromGl`, the upscaler's LOD bias from `GpuContext.LodBias` on mipmapped filters, as `VkGl.SamplerFor`) and its bindless entry,
+  re-registered (the old index freed) when the sampler changes, as `IGlInterop.Bindless` does.
+
+**Helpers added in `Gpu/`** (additive): `Uploader.Begin()` → `UploadBatch` (create a texture, write texels or buffer bytes, and record what
+goes with the uploads into `Commands`): into the frame's upload command buffer while a frame is open (`PreFrame`), else into a one-shot command
+buffer with staging of its own that `Dispose` submits and waits for. `CommandList.GenerateMips(Texture)`: VkGl's `GenerateMipmap` (a full
+barrier, per level a transfer barrier and a linear blit from the level above, a full barrier).
+
+**Left on GL, and why** (both need a change outside these files; stage 3 or the owners):
+1. `TerrainRenderer` links one GL program (`WorldGl.Program`) and deletes it at `Dispose`. Nothing draws with it: linking it is what runs
+   `SkyRenderer.AssignSamplerUnits` (the atmosphere's units, without which `PublishUnits` and `BindUnits` do nothing) and `ShadowShaders.Bind`
+   (the zero-filled default shadow blocks on their binding points, and the shadow globals' publication). The terrain renderer is built first and
+   is the last world renderer that links a GL program. **Verified**: without it the viewer throws `IndexOutOfRangeException` in the first frame.
+   Needed: the sky and the shadows publish their globals without a GL program (`SkyRenderer`, `ShadowShaders`), then this goes.
+2. `TerrainShadowMap` imports each target into a GL name (`IGlInterop.Import`) because `ShadowPass.Meitou` binds the finished map to a GL unit
+   (`Texture`). An import starts with GL's default sampler state (`NEAREST_MIPMAP_LINEAR`, `REPEAT`, so mipmapped: the upscaler's bias would
+   apply), so the name is given the linear, clamped state the GL texture had: `BindTexture`, `TexParameter` (four parameters), `BindTexture(0)`,
+   and `DeleteTexture` at `Dispose`. Needed: either `Import` taking a sampler state (seam), or the consumer reading the new
+   `TerrainShadowMap.Sampled` (the native texture with its sampler) instead of the GL name.
+3. The constructors keep their `IGl` parameter (`WorldFrame`, `ShadowPass.Meitou` call them); `TerrainTextures.Create` has an `IGl`-free
+   overload. `DrawMeshes` / `DrawMeshesIndirect` still take GL vertex-array names (the foliage's and the objects' meshes) and read them through
+   `IGlInterop.VertexArray`, until those meshes are native.
+
+**Learned.**
+- **Verified** (the gate below): a native texture matches the GL one to the pixel when it has exactly the levels VkGl's view covered (one
+  level for a non-mipmapped filter, `MAX_LEVEL + 1` for the overlay and colour windows, whose GL images had the whole chain allocated) and its
+  sampler comes from `SamplerDesc.FromGl` with the GL parameters and the current LOD bias (`--upscaler taa`, a non-zero bias, 0 px).
+- **Verified**: a GPU mip chain made with `CommandList.GenerateMips` gives the pictures of VkGl's `GenerateMipmap` (the ground and world colour
+  maps, 0 px). A CPU box filter was not tried (**Unknown** whether it would match; the blit's filter is the driver's).
+- **Verified**: no successor reads the GL state the terrain used to leave (cull face on or off, counter-clockwise, depth test on, no vertex
+  array): with those calls gone the ten views in both modes and the extras are 0 px. The objects, foliage, grass, water, sky and shadow pass
+  all set the culling they draw with before `CurrentState()`. A check during the port found the depth test on whenever the patches draw.
+- **Observed**: the native outline (`--wireframe`, forest 13:00) is 0 px against the GL one of the base build.
+- **Observed**: VkGl opened a frame for an upload made outside one (its `UploadCmd`); the native `Uploader` throws instead, so start-up uploads
+  go through `UploadBatch`. The terrain's are made before the first frame in the viewer (`WorldFrame` builds the terrain first).
+- **Observed**: VRAM by owner (`GpuAllocator.Breakdown`, forest 13:00 at exit): `terrain textures diffuse` 710 MB, `terrain textures normal`
+  355, `terrain colour map` 85, `terrain shadow map` 68 (two targets), `terrain overlay map` 21, `terrain world colour` 21, `terrain heights` 14,
+  `terrain shadow map heights` 9, `terrain ground colour` 5, `terrain blend map` 4, `terrain patches` vertices and indices, cells and biome
+  parameters under 1: about 1.3 GB out of `gl texture` (1,005 MB and 179 textures left there). The single-level textures and the 7-level windows
+  are smaller than their GL versions, which allocated every image's whole mip chain.
+
+**Gate** (Release, RTX 4070): `dotnet build -c Release` 0 warnings; `dotnet test -c Release` 465 passed, 0 skipped; the ten views `--faithful all` and Meitou 0 px max against
+`C:\Temp\base-6f4af19`; extras against the base viewer, 0 px: `--debug-shadows 1` forest 13:00, `--water-reflection 4` Port North 13:00,
+`--upscaler taa` forest 13:00, `MEITOU_RECORD_THREADS=0` forest 13:00, `--wireframe` forest 13:00. `MEITOU_VK_VALIDATION=sync`: forest 13:00
+and Port North 13:00 with `--water-reflection 4` 0 errors; a 150-frame forest fly under sync validation (six fine-height swaps, layer and map
+streaming) 0 errors. `--fly-benchmark` 300, `--faithful all`, two interleaved runs each (noisy machine): the `terrain` stage 0.13-0.14 ms
+before and after, `upd-terrain` 0.46-0.49 → 0.49-0.52 ms, render-thread allocation 14-20 → 17-18 MB: no change beyond the noise.
 
 ---
 
