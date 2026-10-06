@@ -271,7 +271,7 @@ only for parity ports (wave 3a).**
 
 | Set / range | Frequency | Contents | Bound |
 | --- | --- | --- | --- |
-| set 0 `Bindless` | per command buffer | `sampler2D textures2D[]`, `sampler2DArray textures2DArray[]`, `samplerCube texturesCube[]`, `sampler2DShadow shadowTextures[]`: combined image samplers, partially bound, variable count, update-after-bind | once per command buffer (secondaries too) |
+| set 0 `Bindless` | per command buffer | `sampler2D textures2D[]`, `sampler2DArray textures2DArray[]`, `samplerCube texturesCube[]`, `sampler2DShadow shadowTextures[]`, `usampler2D utextures2D[]`, `isampler2D itextures2D[]` (bindings 0 to 5, `BindlessTable.GlslDeclarations`): combined image samplers, partially bound, update-after-bind | once per command buffer (secondaries too) |
 | set 1 `Frame` | per frame | `FrameConstants` UBO: atmosphere (everything `SkyRenderer.Apply` sets today), lighting, fog, water height, shadow receiver block (`KenshiShadowReceiver`, 560 B), Meitou shadow block, time; plus the bindless indices of the frame's shared textures (shadow atlas, noise, terrain shadow, blocker map, irradiance and specular cubes, ambient map, terrain heights) | once per frame |
 | set 2 `View` | per view / pass | `ViewConstants` UBO at a dynamic offset into the frame's `LinearAllocator`: view-projection (jittered as drawn), eye, frustum planes, jitter, depth-slice planes, clip plane, LOD eye | once per view |
 | set 3 `Pass` (optional, per renderer) | per pass | storage buffers the pass reads: material table, instance stores, per-view compacted instances | once per pass |
@@ -292,9 +292,51 @@ Why this choice:
   `Shaders.MeshVertex` sits in it (measured, section 9).
 
 **The bindless table.** One set per frame slot, so a slot is never written while a frame in flight reads it. Registrations go into a
-journal that is replayed into a slot when that slot's frame begins. Registration and freeing happen on the render thread outside recording,
+journal that is replayed into a slot when that slot's frame begins. Registration and freeing happen on the render thread,
 and frees are deferred to the frame fence. The sampler is part of the slot, since combined image samplers reproduce GL's per-texture
-sampler state exactly. When the upscaler's LOD bias changes (`ITextureLodBias`, set by `PostProcess.Begin`, reset to 0 for the heat
+sampler state exactly.
+
+*Integer arrays (wave 3b steward addition).* A UINT or SINT texture cannot be read through a float sampler (the view's numeric format must
+match the shader's sampled type), so the table has `utextures2D[]` (binding 4) and `itextures2D[]` (binding 5), 2D only (no shader in the
+tree samples an integer array or cube; the one integer sampler today is the terrain's `usampler2D uCells`, GL `RGBA8UI` =
+`R8G8B8A8Uint`). 256 entries each. `BindlessTable.KindFor(format, kind, shadow)` picks the array (UINT → `UTexture2D`, SINT → `ITexture2D`,
+depth read with comparison → `Shadow2D`, the rest by kind; integer arrays or cubes and shadow on a non-depth format throw), and
+`Register(Texture, Sampler, shadow)` uses it and returns a `BindlessHandle(Kind, Index)`. `BindlessTable.GlslDeclarations` (or
+`Declarations(set)`) is the GLSL for the six arrays with `GL_EXT_nonuniform_qualifier`; the native prelude includes it. Reflection reports
+runtime-sized sampler arrays (`SamplerInfo.ArrayLength` = -1), and `ShaderLibrary.Native` checks every sampler a program declares in the
+table's set against `BindlessTable.Check` (binding, element type, runtime-sized) and refuses a mismatch at load; `ShaderLibrary.Compute`
+refuses a runtime array in its own set 0 (bind the table as an extra set: `Declarations(1)`). **Verified** by `BindlessTests`: RGBA8UI,
+R16UI and R16I textures read back exact values (`texelFetch`, written to an RGBA32UI target), the reflection of `utextures2D` /
+`itextures2D`, a `usampler2D` declared at binding 0 refused.
+
+*Same-frame registration (wave 3b steward addition).* An index registered or updated while a frame is open is usable in that frame. Design:
+the journal is also replayed into the open frame's own set at `GpuFrame.End`, before VkGl submits. This is valid Vulkan because every binding
+has `UPDATE_AFTER_BIND` (the descriptors are consumed when the command buffer executes, so writing a set that is already bound in the command
+buffer being recorded is allowed until submit) and the open frame's set is not pending (its slot's fence was waited on at `BeginFrame`). One
+batched `vkUpdateDescriptorSets` per frame, no per-registration write, no extra set copies, nothing new for synchronisation validation
+(descriptor writes are host operations on a set no submitted work uses). Rejected alternatives: writing the current set at once on every
+`Register` (same validity, more calls); per-frame copies of the whole table (`vkCopyDescriptorSets` of up to ~18,000 entries per frame);
+`UPDATE_UNUSED_WHILE_PENDING` alone on a shared set (an in-place update of an index in use would race frames in flight). Consequences:
+
+- **An in-place `Update` during a frame is seen by every draw of that frame that reads the index, including draws recorded before the call**
+  (descriptors are read at execution, not at record time). That is not GL's per-draw snapshot. To change what a draw sees part-way through
+  a frame (a GL texture whose view or sampler VkGl recreates between two draws), register a new index and free the old one: the export
+  below does exactly that. `Update` in place is for an entry not used yet in the frame, or between frames. **Verified** (`BindlessTests`).
+- Replay writes each (array, index) once, newest entry first, and `Free` journals a tombstone: at a frame's begin an index freed later is
+  not written (its view may already be destroyed: with no frame in flight `DeferDelete` destroys at once), at the end of the open frame it
+  still is (the frame's draws may have used it before the free; its view lives until the frame finishes). **Verified**: without the
+  tombstone the export test below produced `vkUpdateDescriptorSets` invalid-view errors.
+
+*Export of a GL texture's index.* `IGlInterop.Bindless(glTexture, shadowSampler = false)` returns a `BindlessHandle` for the sampler and
+view VkGl would bind now (`Sampled`), in the array `KindFor` selects. While neither the view, the sampler nor the LOD bias changed it
+returns the same handle (a dictionary-free compare on the texture object); after a change it registers a new index and frees the old one,
+so earlier draws of the frame keep theirs, as in GL. 0, or a texture without storage, gives the stand-in's entry (as `Sampled`). The entries
+are freed with the texture's storage (`DeleteTexture`, re-specification). Cost per call: one `SamplerAndView` (cached in VkGl) and one
+compare. **Verified** (`BindlessTests`): an RGBA8UI GL texture made as `TerrainTextures` makes `uCells` reads back exact values through its
+exported index; the handle is stable while nothing changes and new after `TEXTURE_WRAP_S` changes; both indices are handed out again after
+`DeleteTexture` and the frames in flight. Note: the heat haze's mid-frame LOD bias of 0 (below) makes a texture looked up both inside and
+outside it alternate between two indices each frame (one register and one deferred free per change); harmless, but a renderer that knows
+it should register its own bias-0 entry instead. When the upscaler's LOD bias changes (`ITextureLodBias`, set by `PostProcess.Begin`, reset to 0 for the heat
 haze), the affected slots are rewritten. The bias changes when the upscaler or render scale changes, not every frame. **One catch**:
 `PostProcess` sets the bias to 0 in the middle of the frame for the heat-haze pass only. In the native model the heat haze's two textures
 are registered with a bias-0 sampler of their own, which is what the pass does today.
@@ -567,6 +609,9 @@ public interface IGlInterop
     /// The view and sampler VkGl itself would bind for this texture now (its SamplerAndView cache: GL parameters, defined levels, base and
     /// max level, swizzle, the current LOD bias). Identical by construction.
     SampledTexture Sampled(uint glTexture, bool shadowSampler);
+    /// (Added for wave 3b.) The bindless entry of what Sampled returns now, usable in the current frame; a new index whenever the view,
+    /// sampler or LOD bias changed (the old one freed after the frames in flight), freed with the texture's storage (2.6).
+    BindlessHandle Bindless(uint glTexture, bool shadowSampler = false);
     /// The buffer's current version (dynamic buffers move every frame; a static one renamed after a write), marked as used by this frame.
     BufferBinding Buffer(uint glBuffer);
 
@@ -1022,6 +1067,18 @@ the base build (master `27be7c2`, itself identical in two runs), and validation 
   call share one material, so bindless indices and push constants carry nothing per draw here; set 0 is already pushed once per
   segment (~7 µs colour, ~3 µs depth warm). Step O would add risk for no saving on this renderer. Steward additions for wave 3b: an
   integer-sampler bindless array, and a same-frame registration (an index usable in the frame it is registered in).
+- **Bindless gaps closed (steward, 2026-10-06; `5436d51`, `d0e0fd9`, `9797b63`).** Reasons (1) and (2) above are resolved (2.6): integer
+  arrays `utextures2D` / `itextures2D` with `KindFor` and `Register(Texture, Sampler)`, `BindlessTable.GlslDeclarations`, reflection of
+  runtime sampler arrays and the load-time check of a native program's bindless declarations; registration and update usable in the frame
+  they happen in (journal replayed into the open frame's set at `GpuFrame.End`, before submit); tombstoned frees so a slot never replays a
+  destroyed view; `IGlInterop.Bindless` exporting a GL texture's current index (copy-on-write on a view, sampler or bias change). Reason (3)
+  stands for the terrain meshes. All additive (new enum members appended, new overloads, one new interface member implemented by VkGl).
+  Tests (`BindlessTests`, synchronisation validation on): kind by format; integer textures read back exact; a wrong declaration refused;
+  register and update in a frame with two frames in flight (seven frames, no waits between them, each frame's target read back); the GL
+  texture export. Each same-frame test fails without the `GpuFrame.End` replay (checked: the targets read back 0). Gate (Release, against
+  master `ffd2a23`, itself identical in two `--faithful all` runs): tests 389 passed, 0 skipped (with `KENSHI_PATH`); `--faithful all` ten
+  views 0 px, the rock view included; Meitou default ten views 0 px; validation `=1` and `=sync` 0 errors on the ten views. No renderer
+  uses the table yet, so the pictures prove only that `VkGl` (the new `DestroyTexture` frees, `GpuFrame.End`) is unchanged.
 - Step 8: done. Every renderer constructor (and factory) takes the `GpuContext` after the `IGl`: `TerrainRenderer`, `TerrainTextures`,
   `TerrainShadowMap`, `SkyRenderer`, `PostProcess`, `ReflectionPass`, `WaterRenderer`, `WorldObjectRenderer`, `FoliageRenderer`,
   `ShadowPass`, `DebugOverlay`, `FrameProfiler`, the viewer's `Renderer` and `CharacterRenderer`; each keeps it as `Gpu` (the
@@ -1037,6 +1094,20 @@ the base build (master `27be7c2`, itself identical in two runs), and validation 
 After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the
 native shader prelude and the shared native shader variants (3.3), each proven on one consumer.
+
+**Bindless in a step-O port (wave 3b guidance).**
+- Textures the renderer owns natively: `ctx.Bindless.Register(texture, sampler)` once, keep the `BindlessHandle`, `Free` it when the texture
+  goes (before or together with the texture's `Dispose`; both are deferred to the frames in flight). A sampler change between frames:
+  `Update(handle, ...)`. A change inside a frame that earlier draws must not see: register a new index, free the old.
+- Textures VkGl still owns (step P resources, `WorldTextureCache`, the terrain's `uCells`, the shadow maps): `interop.Bindless(glName)` (or
+  `(glName, shadowSampler: true)`) at the point where the GL version would bind the texture, at least once per native segment, and push the
+  returned index. Do not cache the index across frames or across GL calls that may change the texture (uploads, parameters, the bias):
+  the handle is cheap to fetch and changes exactly when GL's view or sampler would.
+- Shader side: include `BindlessTable.GlslDeclarations` (the prelude will) and keep the maths textual: `#define uCells
+  utextures2D[nonuniformEXT(pc.cells)]`, `#define uDiffuse textures2D[nonuniformEXT(pc.diffuse)]`. `nonuniformEXT` is needed only when the
+  index can differ within a draw (per-instance materials); a push-constant index is uniform.
+- The array follows the texture's format (`KindFor`): an RGBA8UI texture must be read through `utextures2D`, never `textures2D`, and
+  `ShaderLibrary.Native` refuses a declaration that disagrees with the table.
 
 ### 7.2 Wave 3: ownership
 
