@@ -148,7 +148,7 @@ static class TerrainShaders
         }
         """;
 
-    public static readonly string Fragment = "#version 330 core\n" + HeightFunctions + AtmosphereShaders.Functions + """
+    public static readonly string Fragment = "#version 330 core\n#extension GL_ARB_derivative_control : require\n" + HeightFunctions + AtmosphereShaders.Functions + """
 
         in vec3 vWorld;
         in vec3 vNormal;
@@ -197,6 +197,12 @@ static class TerrainShaders
 
         vec4 tex(sampler2DArray s, vec2 uv, float layer) { return texture(s, vec3(uv, layer)); }
 
+        // A layer's coordinate with its screen derivatives, taken before the layer branches below (derivatives inside a branch
+        // that only some pixels of a 2 x 2 quad take are undefined), so a skipped neighbour cannot change a sampled pixel's mip.
+        struct Coord { vec2 p, dx, dy; };
+        Coord coord(vec2 p) { Coord c; c.p = p; c.dx = dFdxCoarse(p); c.dy = dFdyCoarse(p); return c; }
+        vec4 tex(sampler2DArray s, Coord c, float layer) { return textureGrad(s, vec3(c.p, layer), c.dx, c.dy); }
+
         // One biome's surface (the layer model of docs/formats/terrain.md).
         Surface biome(int b, vec3 n, float slope, vec4 map, vec4 colour, float distance)
         {
@@ -218,43 +224,44 @@ static class TerrainShaders
             vec4 w = smoothstep(smin - sblend, smin, vec4(slope)) * smoothstep(smax + sblend, smax, vec4(slope));
             vec4 white = vec4(1.0);
 
-            vec4 cBase = tex(uDiffuse, uv * sB.xy, layersA.x) * colour;
-            vec4 cSlope = tex(uDiffuse, uv * sA.xy, layersA.y) * colour;
-            vec4 cCliff = (tex(uDiffuse, vec2(uv.y, vert) * sA.zw, layersA.z) * cb.x + tex(uDiffuse, vec2(uv.x, vert) * sA.zw, layersA.z) * cb.y)
-                * mix(white, colour, omult.x);
-            vec4 cGrass = tex(uDiffuse, uv * sB.zw, layersA.w) * mix(white, colour, omult.y);
-            vec4 cDirt = tex(uDiffuse, uv * sC.xy, layersB.x) * mix(white, colour, omult.z);
-            vec4 cRoad = tex(uDiffuse, uv * sC.zw, layersB.y) * mix(white, colour, omult.w);
+            // A layer whose weight is exactly 0 at this pixel is not sampled: mixing in a weight of 0 leaves the value as it was
+            // (x + 0 * (y - x) and x * 1 + y * 0 are both x). Most ground has no road, dirt, slope or cliff, so this skips most of
+            // the 14 layer samples per biome (docs/viewer.md, "Terrain shading cost").
+            Coord base = coord(uv * sB.xy), grass = coord(uv * sB.zw), slopeUv = coord(uv * sA.xy), dirt = coord(uv * sC.xy), road = coord(uv * sC.zw);
+            Coord cliffX = coord(vec2(uv.y, vert) * sA.zw), cliffZ = coord(vec2(uv.x, vert) * sA.zw);
             float far = clamp(distance * fade.a - 0.3, 0.0, 1.0);
 
             Surface s;
-            s.albedo = mix(cBase, cGrass, map.r);
-            s.albedo = mix(s.albedo, cSlope, w.x);
-            s.albedo = mix(s.albedo, cDirt, map.b);
+            s.albedo = tex(uDiffuse, base.p, layersA.x) * colour;
+            if (map.r != 0.0) s.albedo = mix(s.albedo, tex(uDiffuse, grass, layersA.w) * mix(white, colour, omult.y), map.r);
+            if (w.x != 0.0) s.albedo = mix(s.albedo, tex(uDiffuse, slopeUv, layersA.y) * colour, w.x);
+            if (map.b != 0.0) s.albedo = mix(s.albedo, tex(uDiffuse, dirt, layersB.x) * mix(white, colour, omult.z), map.b);
             s.albedo.rgb = mix(s.albedo.rgb, fade.rgb * colour.rgb, far);
-            s.albedo.rgb = mix(s.albedo.rgb, cRoad.rgb, map.a);
-            s.albedo = mix(s.albedo, cCliff, w.y);
+            if (map.a != 0.0) s.albedo.rgb = mix(s.albedo.rgb, (tex(uDiffuse, road, layersB.y) * mix(white, colour, omult.w)).rgb, map.a);
+            if (w.y != 0.0)
+            {
+                vec4 cCliff = (tex(uDiffuse, cliffX, layersA.z) * cb.x + tex(uDiffuse, cliffZ, layersA.z) * cb.y) * mix(white, colour, omult.x);
+                s.albedo = mix(s.albedo, cCliff, w.y);
+            }
             s.albedo.rgb *= layersB.z;
 
             if (uNormalMaps)
             {
-                vec4 nBase = tex(uNormal, uv * sB.xy, layersA.x);
-                vec4 nSlope = tex(uNormal, uv * sA.xy, layersA.y);
-                // The cliff projections' normals are turned into the surface frame: red flipped on both, green flipped on
-                // the (z, height) one where the surface faces -X and on the (x, height) one where it faces +Z (terrain.md).
-                vec4 nCliffX = tex(uNormal, vec2(uv.y, vert) * sA.zw, layersA.z), nCliffZ = tex(uNormal, vec2(uv.x, vert) * sA.zw, layersA.z);
-                nCliffX.rg = vec2(1.0 - nCliffX.r, n.x > 0.0 ? nCliffX.g : 1.0 - nCliffX.g);
-                nCliffZ.rg = vec2(1.0 - nCliffZ.r, n.z < 0.0 ? nCliffZ.g : 1.0 - nCliffZ.g);
-                vec4 nCliff = nCliffX * cb.x + nCliffZ * cb.y;
-                vec4 nGrass = tex(uNormal, uv * sB.zw, layersA.w);
-                vec4 nDirt = tex(uNormal, uv * sC.xy, layersB.x);
-                vec4 nRoad = tex(uNormal, uv * sC.zw, layersB.y);
-                s.normal = mix(nBase, nGrass, map.r);
-                s.normal = mix(s.normal, nSlope, w.x);
-                s.normal = mix(s.normal, nDirt, map.b);
+                s.normal = tex(uNormal, base.p, layersA.x);
+                if (map.r != 0.0) s.normal = mix(s.normal, tex(uNormal, grass, layersA.w), map.r);
+                if (w.x != 0.0) s.normal = mix(s.normal, tex(uNormal, slopeUv, layersA.y), w.x);
+                if (map.b != 0.0) s.normal = mix(s.normal, tex(uNormal, dirt, layersB.x), map.b);
                 s.normal = mix(s.normal, vec4(0.5, 0.5, 1.0, 1.0), far);
-                s.normal = mix(s.normal, nRoad, map.a);
-                s.normal = mix(s.normal, nCliff, w.y);
+                if (map.a != 0.0) s.normal = mix(s.normal, tex(uNormal, road, layersB.y), map.a);
+                if (w.y != 0.0)
+                {
+                    // The cliff projections' normals are turned into the surface frame: red flipped on both, green flipped on
+                    // the (z, height) one where the surface faces -X and on the (x, height) one where it faces +Z (terrain.md).
+                    vec4 nCliffX = tex(uNormal, cliffX, layersA.z), nCliffZ = tex(uNormal, cliffZ, layersA.z);
+                    nCliffX.rg = vec2(1.0 - nCliffX.r, n.x > 0.0 ? nCliffX.g : 1.0 - nCliffX.g);
+                    nCliffZ.rg = vec2(1.0 - nCliffZ.r, n.z < 0.0 ? nCliffZ.g : 1.0 - nCliffZ.g);
+                    s.normal = mix(s.normal, nCliffX * cb.x + nCliffZ * cb.y, w.y);
+                }
             }
             else s.normal = vec4(0.5, 0.5, 1.0, 1.0);
             if (uDebug == 2) { s.albedo = vec4(w.y, w.x, map.r, 1.0); }
