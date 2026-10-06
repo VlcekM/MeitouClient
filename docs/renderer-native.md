@@ -1033,6 +1033,22 @@ Where it differs from 5.2 to 5.5, and why:
 - **Measured** (forest, `--fly-benchmark 200 --fly-speed 0 --faithful all`, grass range 8, density 2, two runs each, the grass agent's build): the
   grass step 0.47 / 0.43 ms CPU on the CPU path, 0.07 / 0.05 ms on the GPU path; draws 1,042 to 2; the grass's GPU time 0.50 to 0.50-0.53 ms
   (the kernels are within the noise). The foliage pass as a whole: 0.63 / 0.58 ms CPU to 0.27 / 0.22 ms.
+
+### 5.6.3 Objects C1/C2: built, not merged (2026-10-06)
+
+Steps C1 (the objects' cull per zone group in a form the GPU can reproduce) and C2 (that cull in compute kernels per view, indirect draws,
+verify mode) were built and passed the gate (0 px, verify 0 differences over 2,290 views, sync validation 0 errors), but neither is on master.
+They are kept on the branch `objects-gpu-cull` (`136e1b9`, `f86c18d`), whose docs carry the design and the full measurements.
+
+- **Why (Measured).** The objects' CPU cost is in the work items (each zone's (mesh, materials) groups), not in the instances: the game has
+  about two instances per item, and the densest view found (Stack, object distance 40,000, distant towns 10) has 231 instances per view. The
+  GPU path saves about 0.1 µs per instance but recording a view's dispatch costs 10-46 µs, so C2 was slower than C1 in every view
+  (Hub colour 70 → 78 µs per view, a shadow cascade 41 → 54, Stack 158 → 172; the kernels add 24-54 µs of GPU time per view). C1 on its own
+  is no faster than master (Hub, 300 still frames, three interleaved runs: the objects pass 0.044 ms on master `a23a0ac`, 0.047-0.054 with C1).
+- **Lesson.** Count instances per CPU work item on real content before building a per-instance GPU path. Foliage has thousands per
+  item; objects have two.
+- **Found on the way (Verified on the RTX 4070, by test on the branch).** The driver's float division is not correctly rounded (28% of
+  quotients differ from the CPU's), so a bit-exact kernel needs a corrected division, as `CrSqrt` for the square root (5.6.1).
 ### 5.7 Size-based ranges, LOD, impostors, occlusion: Meitou-mode, behind switches
 
 These change the picture on purpose, so they are not part of any parity step. They come after A2 and C2, each behind an `Enhancement`
