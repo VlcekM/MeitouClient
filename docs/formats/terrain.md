@@ -245,9 +245,10 @@ resolution-aware screen-space error (`TerrainLod`), one rule for all of its Fait
   keep at least **2.5** (`TerrainLod.MinimumGap`, covers h up to 1). The same bound makes a square changing level in time a no-op:
   the finer square's vertices are fully slid (k = 1) exactly when the coarser quarter replaces it, whose own vertices have not started
   sliding (k = 0). **Verified** by `TerrainLodTests`: touching squares differ by one level and their edge vertices meet on flat
-  ground and on 45° hills; the old rule's floor (2 node sizes, the flat-ground bound) cracks on the hills; a moving eye changes the
-  drawn surface by less than 2 units per 8-unit step, while a gap of 1.4 jumps by 3+ units; ranges grow with the level
-  and the drawn level never gets finer with distance.
+  ground and on 45° hills; a moving eye changes the drawn surface by less than 2 units per 8-unit step; ranges grow with the level
+  and the drawn level never gets finer with distance. **Observed** (the same tests run by hand with the constant lowered, not kept
+  as tests): with a gap of 2 (the old rule's floor, the flat-ground bound) one hills view cracks, and with 1.4 the moving eye's
+  surface jumps by 3.1 units in one step.
 - **Other passes**: the reflection uses its own tree with `P × 0.5` (`ReflectionPass.TerrainLodScale`: its target is half the size,
   so the error is measured in its pixels). The shadow casters use the main tree with the camera's eye, so the shadows' terrain matches
   the picture's.
