@@ -15,7 +15,7 @@ interface. Everything here is an **engine choice** unless it cites a fact about 
 | `src/Meitou.Rendering.Vulkan` | library | `VkGl` (`IGl` on Vulkan 1.3), the presenter, the FSR and DLSS upscalers. No windowing. |
 | `src/Meitou.Rendering.Display` | library | `VulkanDisplay`: the Silk.NET window with a Vulkan surface, the device, `VkGl`, the presenter and optional Streamline; shared by the game and the viewer. |
 | `src/Meitou.Game` | exe `meitou` | The game: input, the loop; boots into the world. |
-| `tools/Meitou.ModelViewer` | exe `meitou-viewer` | The debug viewer (meshes, characters, `--world`) on the same libraries. |
+| `tools/Meitou.ModelViewer` | exe `meitou-viewer` | The debug viewer (`--world`, `--impostor-preview`) on the same libraries; its mesh and character modes were removed in phase 8 ([character-viewer.md](character-viewer.md)). |
 | `tools/Meitou.Tools` | exe `meitou-tools` | Surveys of the install; `image-diff` for renderer parity checks. |
 
 Dependencies point one way: Core ← Data ← Engine / Rendering ← Game / viewer. The renderers know nothing of the engine

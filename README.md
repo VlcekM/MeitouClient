@@ -68,7 +68,7 @@ Other entry points:
 
 ```
 dotnet run -c Release --project src/Meitou.Game                  # the game executable: boots into The Hub with the Kenshi camera
-dotnet run -c Release --project tools/Meitou.ModelViewer -- human_male --anim ninjarun   # one mesh, textured and animated
+dotnet run -c Release --project tools/Meitou.ModelViewer -- --impostor-preview <FOLIAGE_MESH>   # bake one impostor and render preview pictures (docs/impostors.md)
 dotnet run -c Release --project tools/Meitou.Tools                # data inspection commands
 ```
 
@@ -87,7 +87,7 @@ Without them the viewer uses its own TAA. See [docs/engine.md](docs/engine.md) (
 | `src/Meitou.Rendering.Vulkan` | Device set-up, the presenter, the FSR and DLSS integrations, and `VkGl`, an older GL-shaped layer being retired ([docs/renderer-native.md](docs/renderer-native.md)) |
 | `src/Meitou.Rendering.Display` | The window and Vulkan device set up together, shared by the game and the viewer |
 | `src/Meitou.Game` | `meitou`, the game executable |
-| `tools/Meitou.ModelViewer` | `meitou-viewer`: the world, mesh and character viewer |
+| `tools/Meitou.ModelViewer` | `meitou-viewer`: the world viewer and the impostor preview |
 | `tools/Meitou.Tools` | `meitou-tools`: inspect game data, render a top-down world map, compare screenshots and draw logs |
 | `tests/Meitou.Tests` | Tests; the ones that need game files skip when no install is configured |
 

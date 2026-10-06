@@ -5,7 +5,7 @@ and face shapes. Skeleton binding and bone maths are in [formats/ogre-skeleton.m
 animation in [animation.md](animation.md), material building in
 [formats/runtime-materials.md](formats/runtime-materials.md). Implemented in `Meitou.Data.Characters`
 (`CharacterAppearance`, `AppearanceFile`, `PhysicsAttachmentFile`, `AnimationMask`, `CharacterGenerator`) and shown by
-`meitou-viewer --character` ([viewer.md](viewer.md#characters)). Status labels as in [README.md](README.md).
+`meitou-viewer --character` until phase 8 removed it ([character-viewer.md](character-viewer.md)). Status labels as in [README.md](README.md).
 
 Sources: decompilation of `kenshi_x64.exe` (Ghidra 12.1.4; addresses are function entry points), Kenshi's
 HLSL under `data/materials/deferred/` (read for facts only, marked "HLSL"), `fcs.def` descriptions, and the
@@ -85,7 +85,7 @@ beard (fcs.def; the viewer applies both).
 What Kenshi does when it spawns an NPC from a CHARACTER record. Sources: `RootObjectFactory::process`
 (`@ 140581770`), `CharacterHuman::setupInventorySections` (`@ 14062c4e0`) and the functions named below
 (decompiled, read for facts only). Implemented by `CharacterGenerator` (+ `Loadout`, `AppearanceLimits`) and used
-by `meitou-viewer --character ... --seed n` ([viewer.md](viewer.md#characters)). The generator follows these
+by the removed `meitou-viewer --character ... --seed n` ([character-viewer.md](character-viewer.md)). The generator follows these
 rules with its own random numbers (`System.Random` per seed), not the game's sequence.
 
 **Reference values**: the code reads a reference's three ints at offsets 0, 4, 8 (Verified); below they are
