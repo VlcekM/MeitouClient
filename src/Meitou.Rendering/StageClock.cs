@@ -22,7 +22,19 @@ static class StageClock
     public static Action<string, bool>? OnClose;
     public static Action? OnStart;
 
-    public static void Start() { Active = true; Array.Clear(Ms); last = Stopwatch.GetTimestamp(); OnStart?.Invoke(); }
+    /// <summary>
+    /// The recording jobs' CPU time per stage this frame (docs/renderer-native.md 9.3, wave 4): each job's own time, summed whatever thread ran it,
+    /// so it does not add up to the frame's wall time; the render thread's wall time (which includes waiting for the jobs) stays in <see cref="Ms"/>.
+    /// </summary>
+    public static readonly double[] JobMs = new double[Names.Length];
+
+    /// <summary>Adds a recording job's <paramref name="ticks"/> (Stopwatch) to <paramref name="stage"/> (render thread, after the jobs).</summary>
+    public static void AddJob(int stage, long ticks)
+    {
+        if (Active && (uint)stage < (uint)JobMs.Length) JobMs[stage] += ticks * 1000.0 / Stopwatch.Frequency;
+    }
+
+    public static void Start() { Active = true; Array.Clear(Ms); Array.Clear(JobMs); last = Stopwatch.GetTimestamp(); OnStart?.Invoke(); }
 
     public static void Lap(int stage)
     {

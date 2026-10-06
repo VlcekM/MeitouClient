@@ -470,9 +470,9 @@ public sealed unsafe class TerrainRenderer : IDisposable
         };
     }
 
-    /// <summary>Once per segment, after <see cref="NativeFrame.Bind"/>: <see cref="constants"/> into the frame's constants (again only when it
-    /// changed within the frame) and set 2 bound at its offset.</summary>
-    void BindConstants(CommandList cmd, Silk.NET.Vulkan.PipelineLayout layout)
+    /// <summary>Once per segment, in Prepare (wave 4): <see cref="constants"/> into the frame's constants (again only when it changed within the
+    /// frame), and the set and dynamic offset the segment's job binds as set 2.</summary>
+    (Silk.NET.Vulkan.DescriptorSet Set, uint Offset) PrepareConstantsBinding()
     {
         var f = gpu.Frame;
         if (writtenFrame != f.Number || !System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>(in constants))
@@ -488,8 +488,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
             if (!constantSets.TryGetValue(key, out var made)) constantSets[key] = made = ConstantSet(constantsSlice.Handle);
             (lastSetKey, lastSet) = (key, made);
         }
-        uint offset = (uint)constantsSlice.Offset;
-        cmd.BindSets(layout, TerrainShaders.ConstantsSet, new ReadOnlySpan<Silk.NET.Vulkan.DescriptorSet>(in lastSet), new ReadOnlySpan<uint>(in offset));
+        return (lastSet, (uint)constantsSlice.Offset);
     }
 
     Silk.NET.Vulkan.DescriptorSet ConstantSet(Silk.NET.Vulkan.Buffer buffer)
@@ -584,31 +583,63 @@ public sealed unsafe class TerrainRenderer : IDisposable
     void RecordPatches(TerrainProgram p, string label, int timingKind)
     {
         long t0 = StepTiming.Now();
+        // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state as GL has it now, the pipeline, the sets, the draws, into a job.
         var interop = gpu.Interop!;
-        var cmd = interop.BeginNativeInPass(label);
         var targets = interop.CurrentTargets();
         var state = interop.CurrentState();
         var r = ResolvePatches(p, interop, state, targets, label);
-        state.Record(cmd, targets);
+        var job = patchJobs.Rent();
+        job.Owner = this;
+        (job.Targets, job.State, job.Layout, job.Pipeline, job.Vertex, job.Elements) = (targets, state, p.Layout, r.Pipeline, r.Vertex, r.Elements);
         var view = View();
-        nativeFrame.Bind(cmd, p.Layout, in view);
-        BindConstants(cmd, p.Layout);
-        cmd.BindPipeline(r.Pipeline);
-        cmd.BindVertexBuffers(0, new ReadOnlySpan<BufferBinding>(in r.Vertex));
-        cmd.BindIndexBuffer(r.Elements, Silk.NET.Vulkan.IndexType.Uint32);
-        var layout = p.Layout;
-        const Silk.NET.Vulkan.ShaderStageFlags stages = Silk.NET.Vulkan.ShaderStageFlags.VertexBit | Silk.NET.Vulkan.ShaderStageFlags.FragmentBit;
-        long t1 = StepTiming.Now();
+        job.Frame = nativeFrame.Prepare(in view);
+        (job.ConstantSet, job.ConstantOffset) = PrepareConstantsBinding();
         int count = nodes.Count;
-        for (int i = 0; i < count; i++)
-        {
-            ref readonly var d = ref patchDraws[i];
-            cmd.PushConstants(layout, stages, in d.Push);
-            cmd.DrawIndexed((uint)indexCounts[d.Part], 1, (uint)firstIndices[d.Part]);
-        }
-        StepTiming.Loop(timingKind, t1);
-        interop.EndNative(cmd);
+        if (job.Draws.Length < count) job.Draws = new PatchDraw[Math.Max(count, job.Draws.Length * 2)];
+        patchDraws.AsSpan(0, count).CopyTo(job.Draws);
+        job.Count = count;
+        gpu.Record(label, job);
         StepTiming.Segment(timingKind, t0);
+    }
+
+    readonly JobPool<PatchJob> patchJobs = new();
+
+    /// <summary>The patches of one view as prepared (<see cref="RecordPatches"/>): recorded on any thread, the same commands as before wave 4.</summary>
+    sealed class PatchJob : RecordJob
+    {
+        public TerrainRenderer Owner = null!;
+        public PassTargets Targets = null!;
+        public DrawState State = null!;
+        public Silk.NET.Vulkan.PipelineLayout Layout;
+        public GraphicsPipeline Pipeline = null!;
+        public BufferBinding Vertex, Elements;
+        public FrameBinding Frame;
+        public Silk.NET.Vulkan.DescriptorSet ConstantSet;
+        public uint ConstantOffset;
+        public PatchDraw[] Draws = new PatchDraw[256];
+        public int Count;
+
+        public override void Record(CommandList cmd)
+        {
+            State.Record(cmd, Targets);
+            NativeFrame.Record(cmd, Layout, in Frame);
+            uint offset = ConstantOffset;
+            cmd.BindSets(Layout, TerrainShaders.ConstantsSet, new ReadOnlySpan<Silk.NET.Vulkan.DescriptorSet>(in ConstantSet), new ReadOnlySpan<uint>(in offset));
+            cmd.BindPipeline(Pipeline);
+            cmd.BindVertexBuffers(0, new ReadOnlySpan<BufferBinding>(in Vertex));
+            cmd.BindIndexBuffer(Elements, Silk.NET.Vulkan.IndexType.Uint32);
+            var layout = Layout;
+            const Silk.NET.Vulkan.ShaderStageFlags stages = Silk.NET.Vulkan.ShaderStageFlags.VertexBit | Silk.NET.Vulkan.ShaderStageFlags.FragmentBit;
+            var (counts, firsts) = (Owner.indexCounts, Owner.firstIndices);
+            for (int i = 0; i < Count; i++)
+            {
+                ref readonly var d = ref Draws[i];
+                cmd.PushConstants(layout, stages, in d.Push);
+                cmd.DrawIndexed((uint)counts[d.Part], 1, (uint)firsts[d.Part]);
+            }
+        }
+
+        public override void Release() => Owner.patchJobs.Return(this);
     }
 
     /// <summary>The pipeline and bindings for <paramref name="p"/> in this pass state, kept while the grid's vertex-array export and the state
@@ -972,22 +1003,19 @@ public sealed unsafe class TerrainRenderer : IDisposable
     int DrawGroups(TerrainProgram p, int kind, string label, int timingKind)
     {
         long t0 = StepTiming.Now();
-        var cmd = OpenMeshSegment(p, kind, label, placements.Handle, placements.Offset, out var s);
-        var front = s.Ccw;
-        long t1 = StepTiming.Now();
+        var job = OpenMeshSegment(p, kind, label, placements.Handle, placements.Offset, out var s);
         foreach (var g in meshGroupList)
         {
             ref var n = ref g.Native(kind);
             if (n.Stamp != s.Stamp) Current(ref n, s.Interop, g.Vao, p, s.Stamp);
-            cmd.BindPipeline(n.SegA == s.Segment ? n.PipeA! : PipelineFor(ref n, p, s.Segment, s.State, s.Targets.Formats, label));
-            var f = g.Mirrored ? s.Cw : s.Ccw;
-            if (f != front) { cmd.SetFrontFace(f); front = f; }
-            cmd.BindVertexBuffers(0, ((ReadOnlySpan<BufferBinding>)n.Vertices)[..n.VertexCount]);
-            cmd.BindIndexBuffer(n.Elements, Silk.NET.Vulkan.IndexType.Uint32);
-            cmd.DrawIndexed((uint)g.IndexCount, (uint)g.Count, 0, 0, (uint)g.Offset);
+            var pipeline = n.SegA == s.Segment ? n.PipeA! : PipelineFor(ref n, p, s.Segment, s.State, s.Targets.Formats, label);
+            job.Add(new MeshJob.Draw
+            {
+                Pipeline = pipeline, Front = g.Mirrored ? s.Cw : s.Ccw, Vertices = n.Vertices, VertexCount = n.VertexCount, Elements = n.Elements,
+                IndexCount = (uint)g.IndexCount, Instances = (uint)g.Count, FirstInstance = (uint)g.Offset,
+            });
         }
-        StepTiming.Loop(timingKind, t1);
-        CloseMeshSegment(cmd, s.Interop, timingKind, t0);
+        CloseMeshSegment(job, label, timingKind, t0);
         return meshGroupList.Count;
     }
 
@@ -1004,10 +1032,10 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     /// <summary>Opens a native segment for TERRAIN-mode meshes inside the pass VkGl is drawing: dynamic state (back faces culled,
     /// counter-clockwise), the frame and terrain sets, and the placements' rows from <paramref name="rows"/> at locations 7 to 10.</summary>
-    CommandList OpenMeshSegment(TerrainProgram p, int kind, string label, Silk.NET.Vulkan.Buffer rows, ulong rowsOffset, out MeshSegment s)
+    MeshJob OpenMeshSegment(TerrainProgram p, int kind, string label, Silk.NET.Vulkan.Buffer rows, ulong rowsOffset, out MeshSegment s)
     {
+        // Prepare (wave 4, docs/renderer-native.md 6.2): what the segment's commands need, into a job recorded by CloseMeshSegment.
         var interop = gpu.Interop!;
-        var cmd = interop.BeginNativeInPass(label);
         var targets = interop.CurrentTargets();
         var state = interop.CurrentState();
         s = new MeshSegment
@@ -1015,25 +1043,93 @@ public sealed unsafe class TerrainRenderer : IDisposable
             Interop = interop, Targets = targets, State = state, Segment = SegmentId(kind, p.P, targets, state), Stamp = interop.VertexArrayStamp,
             Ccw = GlConventions.FrontFace(FrontFaceDirection.Ccw), Cw = GlConventions.FrontFace(FrontFaceDirection.CW),
         };
-        cmd.SetViewport(targets.Viewport);
-        cmd.SetScissor(targets.Scissor);
-        cmd.SetRaster(Silk.NET.Vulkan.CullModeFlags.BackBit, s.Ccw);
-        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
-        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+        var job = meshJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Layout, job.Ccw, job.Count) = (this, targets, state, p.Layout, s.Ccw, 0);
         var view = View();
-        nativeFrame.Bind(cmd, p.Layout, in view);
-        BindConstants(cmd, p.Layout);
-        // The placement's rows at locations the meshes' vertex arrays leave free (their other programs do not read them).
-        Span<BufferBinding> bindings = stackalloc BufferBinding[4];
-        for (int a = 0; a < 4; a++) bindings[a] = new BufferBinding(rows, rowsOffset + (ulong)(16 * a));
-        cmd.BindVertexBuffers(TerrainShaders.MeshInstanceLocation, bindings);
-        return cmd;
+        job.Frame = nativeFrame.Prepare(in view);
+        (job.ConstantSet, job.ConstantOffset) = PrepareConstantsBinding();
+        (job.Rows, job.RowsOffset) = (rows, rowsOffset);
+        return job;
     }
 
-    /// <summary>Ends a mesh segment and leaves GL's state as the GL version did (culling off with back faces selected, counter-clockwise, no vertex array).</summary>
-    void CloseMeshSegment(CommandList cmd, IGlInterop interop, int timingKind, long t0)
+    readonly JobPool<MeshJob> meshJobs = new();
+
+    /// <summary>A TERRAIN-mode mesh segment as prepared (<see cref="DrawGroups"/>, <see cref="DrawIndirect"/>): recorded on any thread, the same
+    /// commands as before wave 4.</summary>
+    sealed class MeshJob : RecordJob
     {
-        interop.EndNative(cmd);
+        public struct Draw
+        {
+            public GraphicsPipeline Pipeline;
+            public Silk.NET.Vulkan.FrontFace Front;
+            public OwnVertices Vertices;
+            public int VertexCount;
+            public BufferBinding Elements;
+            public uint IndexCount, Instances, FirstInstance;
+            /// <summary>Indirect: the arguments' buffer (else a plain indexed draw).</summary>
+            public Silk.NET.Vulkan.Buffer Args;
+            public ulong ArgsOffset;
+        }
+
+        public TerrainRenderer Owner = null!;
+        public PassTargets Targets = null!;
+        public DrawState State = null!;
+        public Silk.NET.Vulkan.PipelineLayout Layout;
+        public Silk.NET.Vulkan.FrontFace Ccw;
+        public FrameBinding Frame;
+        public Silk.NET.Vulkan.DescriptorSet ConstantSet;
+        public uint ConstantOffset;
+        public Silk.NET.Vulkan.Buffer Rows;
+        public ulong RowsOffset;
+        public Draw[] Draws = new Draw[64];
+        public int Count;
+
+        public void Add(in Draw d)
+        {
+            if (Count == Draws.Length) Array.Resize(ref Draws, Draws.Length * 2);
+            Draws[Count++] = d;
+        }
+
+        public override void Record(CommandList cmd)
+        {
+            var (targets, state) = (Targets, State);
+            cmd.SetViewport(targets.Viewport);
+            cmd.SetScissor(targets.Scissor);
+            cmd.SetRaster(Silk.NET.Vulkan.CullModeFlags.BackBit, Ccw);
+            cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+            cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+            NativeFrame.Record(cmd, Layout, in Frame);
+            uint offset = ConstantOffset;
+            cmd.BindSets(Layout, TerrainShaders.ConstantsSet, new ReadOnlySpan<Silk.NET.Vulkan.DescriptorSet>(in ConstantSet), new ReadOnlySpan<uint>(in offset));
+            // The placement's rows at locations the meshes' vertex arrays leave free (their other programs do not read them).
+            Span<BufferBinding> bindings = stackalloc BufferBinding[4];
+            for (int a = 0; a < 4; a++) bindings[a] = new BufferBinding(Rows, RowsOffset + (ulong)(16 * a));
+            cmd.BindVertexBuffers(TerrainShaders.MeshInstanceLocation, bindings);
+            var front = Ccw;
+            for (int i = 0; i < Count; i++)
+            {
+                ref readonly var d = ref Draws[i];
+                cmd.BindPipeline(d.Pipeline);
+                if (d.Front != front) { cmd.SetFrontFace(d.Front); front = d.Front; }
+                cmd.BindVertexBuffers(0, ((ReadOnlySpan<BufferBinding>)d.Vertices)[..d.VertexCount]);
+                cmd.BindIndexBuffer(d.Elements, Silk.NET.Vulkan.IndexType.Uint32);
+                if (d.Args.Handle != 0) cmd.DrawIndexedIndirect(d.Args, d.ArgsOffset, 1);
+                else cmd.DrawIndexed(d.IndexCount, d.Instances, 0, 0, d.FirstInstance);
+            }
+        }
+
+        public override void Release()
+        {
+            Array.Clear(Draws, 0, Count);   // no pipelines kept alive by a pooled job
+            Count = 0;
+            Owner.meshJobs.Return(this);
+        }
+    }
+
+    /// <summary>Records a mesh segment and leaves GL's state as the GL version did (culling off with back faces selected, counter-clockwise, no vertex array).</summary>
+    void CloseMeshSegment(MeshJob job, string label, int timingKind, long t0)
+    {
+        gpu.Record(label, job);
         StepTiming.Segment(timingKind, t0);
         gl.CullFace(TriangleFace.Back);
         gl.FrontFace(FrontFaceDirection.Ccw);
@@ -1087,9 +1183,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
     int DrawIndirect(ReadOnlySpan<IndirectMesh> meshes, Silk.NET.Vulkan.Buffer rows, ulong rowsOffset, Silk.NET.Vulkan.Buffer args, ulong argsOffset, TerrainProgram p, int kind, string label, int timingKind)
     {
         long t0 = StepTiming.Now();
-        var cmd = OpenMeshSegment(p, kind, label, rows, rowsOffset, out var s);
-        var front = s.Ccw;
-        long t1 = StepTiming.Now();
+        var job = OpenMeshSegment(p, kind, label, rows, rowsOffset, out var s);
         if (meshGroups.Count > 4096) meshGroups.Clear();   // vertex arrays come and go with streaming
         for (int i = 0; i < meshes.Length; i++)
         {
@@ -1099,15 +1193,14 @@ public sealed unsafe class TerrainRenderer : IDisposable
             if (!meshGroups.TryGetValue(key, out var g)) meshGroups[key] = g = new MeshGroup { Vao = m.Vao, IndexCount = m.IndexCount, Mirrored = m.Mirrored };
             ref var n = ref g.Native(kind);
             if (n.Stamp != s.Stamp) Current(ref n, s.Interop, g.Vao, p, s.Stamp);
-            cmd.BindPipeline(n.SegA == s.Segment ? n.PipeA! : PipelineFor(ref n, p, s.Segment, s.State, s.Targets.Formats, label));
-            var f = m.Mirrored ? s.Cw : s.Ccw;
-            if (f != front) { cmd.SetFrontFace(f); front = f; }
-            cmd.BindVertexBuffers(0, ((ReadOnlySpan<BufferBinding>)n.Vertices)[..n.VertexCount]);
-            cmd.BindIndexBuffer(n.Elements, Silk.NET.Vulkan.IndexType.Uint32);
-            cmd.DrawIndexedIndirect(args, argsOffset + (ulong)i * 20, 1);
+            var pipeline = n.SegA == s.Segment ? n.PipeA! : PipelineFor(ref n, p, s.Segment, s.State, s.Targets.Formats, label);
+            job.Add(new MeshJob.Draw
+            {
+                Pipeline = pipeline, Front = m.Mirrored ? s.Cw : s.Ccw, Vertices = n.Vertices, VertexCount = n.VertexCount, Elements = n.Elements,
+                Args = args, ArgsOffset = argsOffset + (ulong)i * 20,
+            });
         }
-        StepTiming.Loop(timingKind, t1);
-        CloseMeshSegment(cmd, s.Interop, timingKind, t0);
+        CloseMeshSegment(job, label, timingKind, t0);
         return meshes.Length;
     }
 

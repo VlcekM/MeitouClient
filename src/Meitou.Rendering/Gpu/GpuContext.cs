@@ -84,6 +84,27 @@ public sealed unsafe class GpuContext : IDisposable
     /// <summary>What a sampler with nothing bound reads (VkGl's own stand-in while VkGl exists, so both sides bind the same objects).</summary>
     public Func<SamplerInfo, SampledTexture>? DummyOverride { get; set; }
 
+    /// <summary>
+    /// Records a prepared guest segment into the pass being drawn now (docs/renderer-native.md 6.2, wave 4): inside a host's rendering with
+    /// secondaries (<see cref="GpuFrame.Parallel"/>) it is queued and recorded when the host ends it, in this order, possibly on a job thread;
+    /// otherwise at once into the pass VkGl (or a host) has open, as a native segment (<see cref="IGlInterop.BeginNativeInPass"/>). Either way
+    /// <see cref="RecordJob.Record"/> runs with <see cref="RenderJobs.InJob"/> set, so a job that reaches for render-thread state throws.
+    /// </summary>
+    public void Record(string label, RecordJob job)
+    {
+        if (Frame.Parallel.Open) { Frame.Parallel.Add(label, job); return; }
+        var interop = Interop ?? throw new InvalidOperationException("no pass to record into");
+        var cmd = interop.BeginNativeInPass(label);
+        RenderJobs.SetInJob(true);
+        try { job.Record(cmd); }
+        finally
+        {
+            RenderJobs.SetInJob(false);
+            interop.EndNative(cmd);
+        }
+        job.Release();
+    }
+
     readonly Dictionary<(int, ScalarKind, bool), SampledTexture> dummies = [];
 
     /// <summary>The stand-in a sampler reads when nothing is bound: (0, 0, 0, 1), or depth 1 for a shadow sampler.</summary>

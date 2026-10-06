@@ -86,7 +86,7 @@ public sealed unsafe partial class VkGl
     {
         var q = queries[id];
         Issue(q, elapsed: false);
-        vk.CmdWriteTimestamp2(cmd, PipelineStageFlags2.AllCommandsBit, q.Pool, (uint)(q.Base + 1));
+        WriteTimestamp(q.Pool, (uint)(q.Base + 1));
     }
 
     GlQueryObj? activeElapsed;
@@ -95,14 +95,15 @@ public sealed unsafe partial class VkGl
     {
         var q = queries[id];
         Issue(q, elapsed: true);
-        vk.CmdWriteTimestamp2(cmd, PipelineStageFlags2.AllCommandsBit, q.Pool, (uint)q.Base);
+        WriteTimestamp(q.Pool, (uint)q.Base);
         activeElapsed = q;
     }
 
     public void EndQuery(QueryTarget target)
     {
         if (activeElapsed is not { } q) return;
-        vk.CmdWriteTimestamp2(TimestampCmd, PipelineStageFlags2.AllCommandsBit, q.Pool, (uint)(q.Base + 1));
+        _ = TimestampCmd;
+        WriteTimestamp(q.Pool, (uint)(q.Base + 1));
         activeElapsed = null;
     }
 

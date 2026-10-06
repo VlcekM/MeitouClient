@@ -14,6 +14,23 @@ public sealed unsafe partial class VkGl : IGlInterop
     // A native host's own rendering instance is open (BeginHostPass): guest segments record into it (docs/renderer-native.md 4.5).
     CommandList? hostList;
     bool hostGuestOpen;
+    // Wave 4: inside a host rendering with secondaries (GpuFrame.Parallel open), the secondary a guest recording at once has.
+    CommandList? hostInline;
+
+    /// <summary>Writes a timestamp where the frame's commands are going now: the primary, or inside a host's rendering with secondaries a
+    /// secondary of its own in its place (a primary may record nothing but secondaries there).</summary>
+    void WriteTimestamp(QueryPool pool, uint index)
+    {
+        if (hostList is not null && Context.Frame.Parallel.Open && !hostGuestOpen)
+        {
+            var list = Context.Frame.Parallel.BeginInline("timestamp");
+            vk.CmdWriteTimestamp2(list.Handle, PipelineStageFlags2.AllCommandsBit, pool, index);
+            Context.Frame.Parallel.EndInline(list);
+            return;
+        }
+        if (hostInline is { } open) { vk.CmdWriteTimestamp2(open.Handle, PipelineStageFlags2.AllCommandsBit, pool, index); return; }
+        vk.CmdWriteTimestamp2(cmd, PipelineStageFlags2.AllCommandsBit, pool, index);
+    }
 
     void GuardNative()
     {
@@ -53,6 +70,13 @@ public sealed unsafe partial class VkGl : IGlInterop
         {
             // A guest of a native host: the host's rendering instance is the pass; nothing of VkGl's is touched.
             if (hostGuestOpen) throw new InvalidOperationException("BeginNativeInPass inside a native segment");
+            if (Context.Frame.Parallel.Open)
+            {
+                // The host's rendering takes secondaries (wave 4): a guest that records at once gets a secondary of its own on this thread,
+                // executed in its place among the prepared segments.
+                hostGuestOpen = true;
+                return hostInline = Context.Frame.Parallel.BeginInline(label);
+            }
             host.Invalidate();
             Context.Frame.Stats.NativeSegments++;
             host.BeginLabel(label);
@@ -87,6 +111,14 @@ public sealed unsafe partial class VkGl : IGlInterop
 
     public void EndNative(CommandList cmd)
     {
+        if (hostGuestOpen && hostInline is { } inline)
+        {
+            if (!ReferenceEquals(cmd, inline)) throw new InvalidOperationException("EndNative without a matching BeginNativeInPass");
+            hostGuestOpen = false;
+            hostInline = null;
+            Context.Frame.Parallel.EndInline(cmd);   // its counters reach VkGl's with the pass's totals (EndHostPass)
+            return;
+        }
         if (hostGuestOpen)
         {
             if (!ReferenceEquals(cmd, hostList)) throw new InvalidOperationException("EndNative without a matching BeginNativeInPass");

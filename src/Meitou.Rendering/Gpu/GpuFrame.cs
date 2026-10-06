@@ -32,6 +32,63 @@ public sealed unsafe class GpuFrame : IDisposable
         PreFrame = new CommandList(device, Stats);
         Timestamps = new QueryArena(device);
         States = new ResourceStates();
+        Parallel = new ParallelPass(ctx);
+        threads = new ThreadPools?[RenderJobs.Threads];
+    }
+
+    /// <summary>The host's rendering with secondary command buffers, when one is open (docs/renderer-native.md 6, wave 4).</summary>
+    public ParallelPass Parallel { get; }
+
+    /// <summary>Per recording thread (<see cref="RenderJobs.ThreadIndex"/>): a command pool per frame slot and its secondaries, reused when the
+    /// slot comes round (docs/renderer-native.md 6.3). Each thread only touches its own entry; the render thread resets them at the frame's begin.</summary>
+    sealed class ThreadPools(VulkanDevice device, int slots)
+    {
+        public readonly CommandPool[] Pools = new CommandPool[slots];
+        public readonly List<CommandList>[] Lists = [.. Enumerable.Range(0, slots).Select(_ => new List<CommandList>())];
+        public readonly int[] Used = new int[slots];
+
+        public CommandList Next(int slot)
+        {
+            var vk = device.Vk;
+            if (Pools[slot].Handle == 0)
+            {
+                var pi = new CommandPoolCreateInfo { SType = StructureType.CommandPoolCreateInfo, Flags = CommandPoolCreateFlags.TransientBit, QueueFamilyIndex = device.GraphicsFamily };
+                VulkanException.Check(vk.CreateCommandPool(device.Device, in pi, null, out Pools[slot]), "vkCreateCommandPool");
+            }
+            var lists = Lists[slot];
+            if (Used[slot] == lists.Count)
+            {
+                var ai = new CommandBufferAllocateInfo { SType = StructureType.CommandBufferAllocateInfo, CommandPool = Pools[slot], Level = CommandBufferLevel.Secondary, CommandBufferCount = 1 };
+                VulkanException.Check(vk.AllocateCommandBuffers(device.Device, in ai, out var cb), "vkAllocateCommandBuffers");
+                lists.Add(new CommandList(device, new GpuStats()) { Handle = cb });
+            }
+            return lists[Used[slot]++];
+        }
+
+        public void Reset(int slot)
+        {
+            if (Pools[slot].Handle == 0) return;
+            VulkanException.Check(device.Vk.ResetCommandPool(device.Device, Pools[slot], 0), "vkResetCommandPool");
+            Used[slot] = 0;
+        }
+
+        public void Dispose()
+        {
+            foreach (var p in Pools) if (p.Handle != 0) device.Vk.DestroyCommandPool(device.Device, p, null);
+        }
+    }
+
+    readonly ThreadPools?[] threads;
+
+    /// <summary>A secondary command buffer of the calling thread's pool for this slot, begun to continue a rendering of <paramref name="formats"/>.</summary>
+    internal CommandList BeginSecondary(in AttachmentFormats formats)
+    {
+        int t = RenderJobs.ThreadIndex;
+        var pools = threads[t] ??= new ThreadPools(device, device.Frames.Count);
+        var list = pools.Next(Slot);
+        list.Stats.Reset();
+        list.BeginSecondary(formats);
+        return list;
     }
 
     /// <summary>The frame number (FrameRing.FrameNumber); 0 before the first.</summary>
@@ -68,6 +125,7 @@ public sealed unsafe class GpuFrame : IDisposable
         PreFrame.Invalidate();
         constants[Slot].Reset();
         foreach (var p in pools[Slot]) device.Vk.ResetDescriptorPool(device.Device, p, 0);
+        foreach (var t in threads) t?.Reset(Slot);
         Timestamps.Begin(Slot, Number);
         States.AssumeFullBarrier();
         Stats.Reset();
@@ -123,5 +181,6 @@ public sealed unsafe class GpuFrame : IDisposable
         foreach (var list in pools)
             foreach (var p in list) device.Vk.DestroyDescriptorPool(device.Device, p, null);
         Timestamps.Dispose();
+        foreach (var t in threads) t?.Dispose();
     }
 }
