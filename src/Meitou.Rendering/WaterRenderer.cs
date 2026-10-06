@@ -141,16 +141,19 @@ public sealed unsafe class WaterRenderer : IDisposable
     const int ReflectionUnit = 16;
 
     readonly IGl gl;
+    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    public GpuContext Gpu { get; }
     readonly SkyRenderer sky;
     readonly uint program, vao, vbo, colourMap, flowMap, normalMap, paramsA, paramsB;
     readonly Vector4 seaA, seaB;
     readonly Vector3 seaColour;
     readonly Dictionary<string, int> uniforms = [];
 
-    WaterRenderer(IGl gl, SkyRenderer sky, uint colourMap, uint flowMap, uint normalMap, uint paramsA, uint paramsB, Vector4 seaA, Vector4 seaB, Vector3 seaColour)
+    WaterRenderer(IGl gl, GpuContext gpu, SkyRenderer sky, uint colourMap, uint flowMap, uint normalMap, uint paramsA, uint paramsB, Vector4 seaA, Vector4 seaB, Vector3 seaColour)
     {
         (this.seaA, this.seaB, this.seaColour) = (seaA, seaB, seaColour);
         this.gl = gl;
+        Gpu = gpu;
         this.sky = sky;
         (this.colourMap, this.flowMap, this.normalMap, this.paramsA, this.paramsB) = (colourMap, flowMap, normalMap, paramsA, paramsB);
         program = WorldGl.Program(gl, Vertex, Fragment);
@@ -165,7 +168,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         gl.BindVertexArray(0);
     }
 
-    public static WaterRenderer Create(IGl gl, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer sky, List<string> messages)
+    public static WaterRenderer Create(IGl gl, GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer sky, List<string> messages)
     {
         var colour = Load(install, WorldWater.ColourMap);
         var flow = Load(install, WorldWater.FlowMap);
@@ -187,7 +190,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         Console.WriteLine($"sea       open-sea water: scale {sea.A.X * 5000:0.#}, {sea.A.Y * 5000:0.#}, gloss {sea.B.X:0.##}, colour {sea.Colour.X:0.##} {sea.Colour.Y:0.##} {sea.Colour.Z:0.##}");
         uint Rgba(RgbaImage? img, bool repeat, byte[] flat) =>
             img is null ? WorldGl.Texture2D(gl, 1, 1, flat, repeat) : WorldGl.Texture2D(gl, img.Width, img.Height, img.Pixels, repeat, mipmaps: repeat);
-        return new WaterRenderer(gl, sky,
+        return new WaterRenderer(gl, gpu, sky,
             Rgba(colour, false, [0, 32, 64, 255]), Rgba(flow, false, [128, 128, 0, 255]), Rgba(normal, true, [128, 255, 128, 255]),
             FloatTexture(gl, a, blend.Width, blend.Height), FloatTexture(gl, b, blend.Width, blend.Height), sea.A, sea.B, sea.Colour);
     }

@@ -187,8 +187,8 @@ static class CharacterApp
     {
         using var display = new VulkanDisplay(null, vsync: false);
         var gl = display.Gl;
-        using var basis = new Renderer(gl, assets);
-        using var renderer = new CharacterRenderer(gl, basis, scene);
+        using var basis = new Renderer(gl, display.VkGl.Context, assets);
+        using var renderer = new CharacterRenderer(gl, display.VkGl.Context, basis, scene);
         var (camera, render) = Setup(scene, o);
         int w = o.Width, h = o.Height;
         uint msFbo = gl.GenFramebuffer(), msColour = gl.GenRenderbuffer(), msDepth = gl.GenRenderbuffer();
@@ -306,8 +306,8 @@ static class CharacterApp
         }
 
         {
-            basis = new Renderer(gl, assets);
-            renderer = new CharacterRenderer(gl, basis, scene);
+            basis = new Renderer(gl, display.VkGl.Context, assets);
+            renderer = new CharacterRenderer(gl, display.VkGl.Context, basis, scene);
             (camera, render) = Setup(scene, o);
             gl.Enable(EnableCap.Multisample);
             var input = window.CreateInput();

@@ -259,7 +259,7 @@ options, `P` screenshot into C:\Temp, `F1` to `F6` the Faithful / Meitou switche
 
 Camera codes: `Ctrl+C` copies the world camera to the clipboard as 50 hex digits: byte 1, then the target X, Y and Z, the yaw, the pitch (radians) and the distance, as little-endian floats. `Ctrl+V` moves the camera to the code in the clipboard. The format is fixed, so two viewers (e.g. two builds side by side) can be put at the same spot. `--monitor <n>` opens the window on monitor n (1-based) and maximizes it there.
 
-Profiler (`F12`; `FrameProfiler`): a chart along the bottom of the last 300 frames, one line per `StageClock` stage, first the GPU, then the render thread, then off. Every stage lap writes a GPU timestamp, and a stage's GPU time is the gap since the stamp before it, summed when the stage runs once per depth slice (terrain, objects, foliage, water). The results are read a few frames late, without waiting. `other` is the frame's whole GPU time (`VkGlStats.GpuFrameMs`, uploads included) minus the stamped stages, and `present` (render thread only) is the overlay, submit and present after the scene. The wait for a free frame (vsync) is not counted. The legend shows the mean of the last 30 frames for both sides. The y axis scales to a round number above the largest value shown. GPU stages `sky-draw` to `post` should add up to about the post `scene` cost in the F11 statistics.
+Profiler (`F12`; `FrameProfiler`): a chart along the bottom of the last 300 frames, one line per `StageClock` stage, first the GPU, then the render thread, then off. Every stage lap writes a GPU timestamp (through the native `QueryArena`, recorded into VkGl's command buffer with `IGlInterop.Interleave`; GL timestamp queries only without the seam), and a stage's GPU time is the gap since the stamp before it, summed when the stage runs once per depth slice (terrain, objects, foliage, water). The results are read a few frames late, without waiting. `other` is the frame's whole GPU time (`VkGlStats.GpuFrameMs`, uploads included) minus the stamped stages, and `present` (render thread only) is the overlay, submit and present after the scene. The wait for a free frame (vsync) is not counted. The legend shows the mean of the last 30 frames for both sides. The y axis scales to a round number above the largest value shown. GPU stages `sky-draw` to `post` should add up to about the post `scene` cost in the F11 statistics.
 
 ```
 dotnet run --project tools/Meitou.ModelViewer -- --world --town "Shark" --radius 1.5 --distance 3000 --pitch 20
@@ -631,7 +631,10 @@ and the foliage main pass per depth slice.
   all ten parity views (`tools/scripts/parity.sh`, `--faithful all`) and on `--debug-shadows 1` (the atlas drawn into the picture) at
   the forest and The Hub. The rock view with `--debug-shadows 1` (90 rocks on screen) was identical in 8 of 9 runs; one run differed
   in 20 pixels (largest 14/255) at a distant building, not a rock, with the same streaming and residency counts in its log; the
-  build before was identical in 9 of 9. Unexplained, and not reproduced.
+  build before was identical in 9 of 9. Unexplained at the time. Most likely explained 2026-10-06: two texture uploads into the same
+  image in one upload command buffer raced (synchronisation validation: 10 WRITE_AFTER_WRITE hazards per view); a build with step-2
+  timing changes showed few-pixel rock-view differences in 2 of 9 runs, and with the uploads ordered by a barrier 0 of 9 and sync
+  validation clean (docs/engine.md "Vulkan backend", "Memory and order").
 - *Numbers* (`--fly-benchmark 300 --fly-speed 0`, a still camera, three interleaved runs each, medians): forest, draws per frame
   7,485 -> 977, shadow stage 25.3 -> 5.7 ms (its foliage part 23.9 -> 4.2), foliage main pass 7.5 -> 4.1 ms, render-thread CPU per
   frame (p50, commands recorded) 36.9 -> 13.3 ms; The Hub (`--town "The Hub" --distance 40000 --pitch 3`; 46 rocks in the main pass, 3 in the shadow map), draws

@@ -23,6 +23,8 @@ namespace Meitou.Rendering;
 public sealed unsafe class WorldObjectRenderer : IDisposable
 {
     readonly IGl gl;
+    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    public GpuContext Gpu { get; }
     uint program;   // the main program; the depth program while DrawDepth runs
     readonly Dictionary<(uint, string), int> uniforms = [];
     readonly WorldTextureCache textureCache;
@@ -72,9 +74,10 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         public bool Resolved;
     }
 
-    internal WorldObjectRenderer(IGl gl, AssetLocator assets, WorldObjects objects)
+    internal WorldObjectRenderer(IGl gl, GpuContext gpu, AssetLocator assets, WorldObjects objects)
     {
         this.gl = gl;
+        Gpu = gpu;
         this.objects = objects;
         program = WorldGl.Program(gl, BuildingLodShaders.Vertex(), BuildingLodShaders.Fragment());
         textureCache = new WorldTextureCache(gl, assets);

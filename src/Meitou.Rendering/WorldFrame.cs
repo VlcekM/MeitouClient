@@ -377,7 +377,7 @@ static class WorldFrame
         System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency;
     }
 
-    public static Gpu CreateGpu(IGl gl, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive)
+    public static Gpu CreateGpu(IGl gl, GpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive)
     {
         var watch = Stopwatch.StartNew();
         // The game's texture quality, before any texture loads: the world's texture caches read it as they decode. The terrain's layer arrays
@@ -385,17 +385,17 @@ static class WorldFrame
         Meitou.Data.Textures.TextureQuality.Level = o.TextureQuality;
         int layerSize = Math.Max(Math.Min(o.LayerSize, 2048 >> Meitou.Data.Textures.TextureQuality.LevelsToDrop("terrain.dds", "Landscape")), 16);
         if (layerSize != o.LayerSize) Console.WriteLine($"textures  quality {o.TextureQuality} ({Meitou.Data.Textures.TextureQuality.Labels[o.TextureQuality]}): terrain layers {layerSize}² instead of {o.LayerSize}²");
-        var terrain = new TerrainRenderer(gl, scene.Coarse, scene.CoarseSize, scene.Window, new WorldRenderOptions().LodDistance);
+        var terrain = new TerrainRenderer(gl, context, scene.Coarse, scene.CoarseSize, scene.Window, new WorldRenderOptions().LodDistance);
         Console.WriteLine($"uploaded  terrain heights: {terrain.LevelCount} LOD levels, finest {terrain.FinestSpacing:0.#} units ({watch.ElapsedMilliseconds} ms)");
         TerrainTextures? textures = null;
         if (!o.NoTextures && scene.Database is not null)
         {
-            textures = TerrainTextures.Create(gl, install, scene.Database, assets, layerSize);
+            textures = TerrainTextures.Create(gl, context, install, scene.Database, assets, layerSize);
             foreach (var m in textures.Messages.Take(20)) Console.WriteLine($"warning   {m}");
             Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {layerSize}² BC3+BC1, {textures.ArrayBytes / 1048576} MB ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
-        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze }, Post = new PostProcess(gl, o.Post) };
+        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, context, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze }, Post = new PostProcess(gl, context, o.Post) };
         gpu.Post.LoadHeatHaze(assets);
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
@@ -409,19 +409,19 @@ static class WorldFrame
         if (!o.NoWater && scene.Database is not null)
         {
             var messages = new List<string>();
-            gpu.Water = WaterRenderer.Create(gl, install, scene.Database, assets, gpu.Sky, messages);
-            gpu.Reflection = new ReflectionPass(gl) { Level = o.WaterReflection, Range = o.ReflectionRange };
+            gpu.Water = WaterRenderer.Create(gl, context, install, scene.Database, assets, gpu.Sky, messages);
+            gpu.Reflection = new ReflectionPass(gl, context) { Level = o.WaterReflection, Range = o.ReflectionRange };
             foreach (var m in messages) Console.WriteLine($"warning   {m}");
             Console.WriteLine($"water     at height {WorldWater.Height} ({watch.ElapsedMilliseconds} ms)");
         }
         if (scene.Objects is not null)
         {
-            gpu.Objects = new WorldObjectRenderer(gl, assets, scene.Objects) { ObjectDistance = o.ObjectDistance, DistantRange = o.DistantZones * WorldLayout.ZoneSize, NoDistant = o.NoDistant, LoadBudget = interactive ? 8 : 0 };
+            gpu.Objects = new WorldObjectRenderer(gl, context, assets, scene.Objects) { ObjectDistance = o.ObjectDistance, DistantRange = o.DistantZones * WorldLayout.ZoneSize, NoDistant = o.NoDistant, LoadBudget = interactive ? 8 : 0 };
             Console.WriteLine($"objects   GPU ready ({watch.ElapsedMilliseconds} ms)");
         }
         if (!o.NoFoliage && scene.Database is not null)
         {
-            gpu.Foliage = new FoliageRenderer(gl, install, scene.Database, scene.Objects?.Levels ?? WorldLevelData.Load(install), assets);
+            gpu.Foliage = new FoliageRenderer(gl, context, install, scene.Database, scene.Objects?.Levels ?? WorldLevelData.Load(install), assets);
             if (!interactive) gpu.Foliage.SwaySeconds = o.SwayStart;   // offscreen pictures and benchmarks: the grass holds still, so a picture repeats exactly
             var f = gpu.Foliage;
             (f.MeitouRange, f.SmallRange, f.MediumRange, f.LargeRange) = (o.MeitouRange, o.SmallRange ?? f.SmallRange, o.MediumRange ?? f.MediumRange, o.LargeRange ?? f.LargeRange);
@@ -430,7 +430,7 @@ static class WorldFrame
         if (!o.NoShadows)
         {
             // The game's CSM mode (docs/formats/shadows.md): four cascades in one atlas of the `shadow quality` side, out to `Shadow Range`.
-            gpu.Shadow = new ShadowPass(gl, assets) { Settings = new ShadowSettings(KenshiShadows.MapSize(o.ShadowQuality), o.ShadowRange), Meitou = o.MeitouShadows };
+            gpu.Shadow = new ShadowPass(gl, context, assets) { Settings = new ShadowSettings(KenshiShadows.MapSize(o.ShadowQuality), o.ShadowRange), Meitou = o.MeitouShadows };
             if (!gpu.Shadow.HasNoise) Console.WriteLine($"warning   shadows: {KenshiShadows.NoiseTexture} not found, the receiver's jitter is a hash");
             gpu.Shadow.SetTerrain(scene.Coarse, scene.CoarseSize);   // the Meitou shadows' terrain shadow beyond the range
             Console.WriteLine($"shadows   {gpu.Shadow.Settings.MapSize}² atlas, {gpu.Shadow.Settings.Cascades} cascades of {gpu.Shadow.Settings.TileSize}², range {o.ShadowRange:0}");

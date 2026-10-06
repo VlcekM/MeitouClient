@@ -25,9 +25,10 @@ public sealed unsafe partial class VkGl
     readonly Dictionary<PipelineKey, Pipeline> pipelines = [];
     Silk.NET.Vulkan.Extensions.KHR.KhrPushDescriptor? pushDescriptor;
     Pipeline lastPipeline;
-    GpuBuffer? dummyVertex;
+    // The stand-ins for missing attributes and textures, and the samplers: shared with the native API (Gpu/GlConventions.cs).
+    GpuDefaults defaults = null!;
+    SamplerCache samplers = null!;
     readonly Dictionary<(int Kind, bool Depth), GlTextureObj> dummyTextures = [];
-    readonly Dictionary<SamplerKey, Sampler> samplers = [];
 
 
     // Dynamic state as last recorded into the current command buffer.
@@ -40,17 +41,15 @@ public sealed unsafe partial class VkGl
 
     void InitDummies()
     {
-        // Disabled attributes read GL's default generic value (0, 0, 0, 1): float at offset 0, int at 16.
-        dummyVertex = device.Allocator.CreateBuffer(32, BufferUsageFlags.VertexBufferBit, MemoryKind.Upload, "dummy vertex");
-        var p = (float*)dummyVertex.Mapped;
-        p[0] = p[1] = p[2] = 0; p[3] = 1;
-        var ip = (int*)dummyVertex.Mapped + 4;
-        ip[0] = ip[1] = ip[2] = 0; ip[3] = 1;
+        // Disabled attributes read GL's default generic value (0, 0, 0, 1): float at offset 0, int at 16 (GpuDefaults.DummyVertex).
+        defaults = Context.Defaults;
+        samplers = Context.Samplers;
+        Context.DummyOverride = SampledDummy;
+        Context.LodBias = () => TextureLodBias;
     }
 
     void DestroyDummies()
     {
-        if (dummyVertex is not null) device.Allocator.Free(dummyVertex);
         foreach (var t in dummyTextures.Values) DestroyTexture(t);
         dummyTextures.Clear();
     }
@@ -81,6 +80,7 @@ public sealed unsafe partial class VkGl
         if (count == 0 || instancecount == 0 || !PrepareDraw(mode)) return;
         Stats.DrawTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
         long nt = NatStart(); vk.CmdDraw(cmd, count, instancecount, (uint)first, 0); NatEnd(8, nt);
+        if (Context.Log is { } log) LogDraw(log, false, count, instancecount, (uint)first);
         Stats.Draws++;
         Lap(8);
     }
@@ -122,6 +122,7 @@ public sealed unsafe partial class VkGl
         var (buffer, offset) = Use(eb);
         long nt = NatStart(); vk.CmdBindIndexBuffer(cmd, buffer, offset + (ulong)(nint)indices, indexType);
         vk.CmdDrawIndexed(cmd, count, instancecount, 0, 0, 0); NatEnd(8, nt);
+        if (Context.Log is { } log) LogDraw(log, true, count, instancecount, 0, buffer, offset + (ulong)(nint)indices, indexType);
         Stats.Draws++;
         Stats.IndexBufferBinds++;
         Lap(8);
@@ -152,15 +153,7 @@ public sealed unsafe partial class VkGl
         }
 
         var key = new PipelineKey(p.Id, packed[0], packed[1], packed[2], packed[3], packed[4], packed[5], packed[6], packed[7],
-            mode == PrimitiveType.TriangleStrip ? PrimitiveTopology.TriangleStrip : mode switch
-            {
-                PrimitiveType.Triangles => PrimitiveTopology.TriangleList,
-                PrimitiveType.Lines => PrimitiveTopology.LineList,
-                PrimitiveType.LineStrip => PrimitiveTopology.LineStrip,
-                PrimitiveType.Points => PrimitiveTopology.PointList,
-                PrimitiveType.TriangleFan => PrimitiveTopology.TriangleFan,
-                _ => throw new NotSupportedException($"primitive {mode}"),
-            },
+            GlConventions.Topology(mode),
             passColour?.Texture.Format ?? Format.Undefined, passDepth?.Texture.Format ?? Format.Undefined,
             (passColour ?? passDepth)?.Texture.Samples ?? 1,
             blend && passColour is not null, blend ? blendSrc : BlendingFactor.One, blend ? blendDst : BlendingFactor.Zero,
@@ -187,6 +180,7 @@ public sealed unsafe partial class VkGl
         SetDynamicState(cb);
         Lap(3);
         BindResources(cb, p);
+        if (Context.Log is not null) LogPrepare(p, in key);
 
         // Vertex buffers: one binding per input location.
         for (int i = 0; i < locs.Length; i++)
@@ -200,139 +194,42 @@ public sealed unsafe partial class VkGl
                 var (bb, bo) = Use(vb);
                 (buffer, offset) = (bb, bo + (ulong)a.Offset);
             }
-            else (buffer, offset) = (dummyVertex!.Buffer, p.InputKinds[i] == ScalarKind.Float ? 0ul : 16ul);
+            else (buffer, offset) = (defaults.DummyVertex.Buffer, GlConventions.DummyVertexOffset(p.InputKinds[i]));
             long nt = NatStart(); vk.CmdBindVertexBuffers(cb, (uint)loc, 1, &buffer, &offset); NatEnd(7, nt);
             Stats.VertexBufferBinds++;
+            if (Context.Log is not null) LogVertexBuffer((uint)loc, buffer, offset);
         }
         Lap(7);
         return true;
     }
 
-    static Format DummyFormat(ScalarKind kind) => kind switch
-    {
-        ScalarKind.Int => Format.R32G32B32A32Sint,
-        ScalarKind.UInt or ScalarKind.Bool => Format.R32G32B32A32Uint,
-        _ => Format.R32G32B32A32Sfloat,
-    };
+    static Format DummyFormat(ScalarKind kind) => GlConventions.DummyVertexFormat(kind);
 
-    Pipeline CreatePipeline(GlProgramObj p, in PipelineKey key, GlVertexArray vao)
+    /// <summary>The pipeline for a key, through the factory the native API uses (Gpu/Pipelines.cs), so both make the same pipelines.</summary>
+    Pipeline CreatePipeline(GlProgramObj p, in PipelineKey key, GlVertexArray vao) =>
+        PipelineFactory.CreateGraphics(device, p.VertexModule, p.FragmentModule, p.Layout, KeyInputs(p, in key), key.Topology,
+            new AttachmentFormats(key.Colour, key.Depth, key.Samples), new BlendState(key.Blend, Factor(key.Src), Factor(key.Dst)),
+            (ColorComponentFlags)key.Mask, key.Polygon == GlPolygonMode.Line, key.AlphaToCoverage, key.DepthClamp);
+
+    /// <summary>The vertex inputs a key packs: per input location its format, stride and rate (stride 0 for a disabled attribute).</summary>
+    static VertexInput[] KeyInputs(GlProgramObj p, in PipelineKey key)
     {
-        var entry = "main"u8;
         var locs = p.InputLocations;
-        int n = locs.Length;
-        var vbind = stackalloc VertexInputBindingDescription[Math.Max(n, 1)];
-        var vattr = stackalloc VertexInputAttributeDescription[Math.Max(n, 1)];
-        var divisors = stackalloc VertexInputBindingDivisorDescriptionEXT[Math.Max(n, 1)];
+        var inputs = new VertexInput[locs.Length];
         Span<ulong> packed = [key.V0, key.V1, key.V2, key.V3, key.V4, key.V5, key.V6, key.V7];
-        for (int i = 0; i < n; i++)
+        for (int i = 0; i < locs.Length; i++)
         {
             int loc = locs[i];
             uint e = (uint)(packed[loc >> 1] >> ((loc & 1) * 32));
             bool dummy = (e & (1u << 30)) != 0;
-            var format = (Format)(e & 0xFFF);
-            uint stride = dummy ? 0 : (e >> 12) & 0xFFFF;
-            bool instanced = !dummy && ((e >> 28) & 1) != 0;
-            vbind[i] = new VertexInputBindingDescription((uint)loc, stride, instanced ? VertexInputRate.Instance : VertexInputRate.Vertex);
-            vattr[i] = new VertexInputAttributeDescription((uint)loc, (uint)loc, format, 0);
+            inputs[i] = new VertexInput((uint)loc, (Format)(e & 0xFFF), dummy ? 0 : (e >> 12) & 0xFFFF, !dummy && ((e >> 28) & 1) != 0);
         }
-        var vertexInput = new PipelineVertexInputStateCreateInfo
-        {
-            SType = StructureType.PipelineVertexInputStateCreateInfo,
-            VertexBindingDescriptionCount = (uint)n, PVertexBindingDescriptions = vbind,
-            VertexAttributeDescriptionCount = (uint)n, PVertexAttributeDescriptions = vattr,
-        };
-        var assembly = new PipelineInputAssemblyStateCreateInfo { SType = StructureType.PipelineInputAssemblyStateCreateInfo, Topology = key.Topology };
-        var clip = new PipelineViewportDepthClipControlCreateInfoEXT { SType = StructureType.PipelineViewportDepthClipControlCreateInfoExt, NegativeOneToOne = true };
-        var viewportState = new PipelineViewportStateCreateInfo
-        {
-            SType = StructureType.PipelineViewportStateCreateInfo, ViewportCount = 1, ScissorCount = 1,
-            PNext = device.HasDepthClipControl ? &clip : null,
-        };
-        var raster = new PipelineRasterizationStateCreateInfo
-        {
-            SType = StructureType.PipelineRasterizationStateCreateInfo,
-            DepthClampEnable = key.DepthClamp,
-            PolygonMode = key.Polygon == GlPolygonMode.Line && device.FillModeNonSolid ? Silk.NET.Vulkan.PolygonMode.Line : Silk.NET.Vulkan.PolygonMode.Fill,
-            LineWidth = 1,
-        };
-        var multisample = new PipelineMultisampleStateCreateInfo
-        {
-            SType = StructureType.PipelineMultisampleStateCreateInfo,
-            RasterizationSamples = (SampleCountFlags)key.Samples,
-            AlphaToCoverageEnable = key.AlphaToCoverage,
-        };
-        var depthStencil = new PipelineDepthStencilStateCreateInfo { SType = StructureType.PipelineDepthStencilStateCreateInfo };
-        var attachment = new PipelineColorBlendAttachmentState
-        {
-            BlendEnable = key.Blend,
-            SrcColorBlendFactor = Factor(key.Src), DstColorBlendFactor = Factor(key.Dst), ColorBlendOp = BlendOp.Add,
-            SrcAlphaBlendFactor = Factor(key.Src), DstAlphaBlendFactor = Factor(key.Dst), AlphaBlendOp = BlendOp.Add,
-            ColorWriteMask = (ColorComponentFlags)key.Mask,
-        };
-        var blendState = new PipelineColorBlendStateCreateInfo
-        {
-            SType = StructureType.PipelineColorBlendStateCreateInfo,
-            AttachmentCount = key.Colour == Format.Undefined ? 0u : 1u, PAttachments = &attachment,
-        };
-        var dynamics = stackalloc DynamicState[]
-        {
-            DynamicState.Viewport, DynamicState.Scissor, DynamicState.DepthBias, DynamicState.CullMode, DynamicState.FrontFace,
-            DynamicState.DepthTestEnable, DynamicState.DepthWriteEnable, DynamicState.DepthCompareOp, DynamicState.DepthBiasEnable,
-        };
-        var dynamic = new PipelineDynamicStateCreateInfo { SType = StructureType.PipelineDynamicStateCreateInfo, DynamicStateCount = 9, PDynamicStates = dynamics };
-        var colourFormat = key.Colour;
-        bool stencil = key.Depth is Format.D24UnormS8Uint or Format.D32SfloatS8Uint;
-        var rendering = new PipelineRenderingCreateInfo
-        {
-            SType = StructureType.PipelineRenderingCreateInfo,
-            ColorAttachmentCount = colourFormat == Format.Undefined ? 0u : 1u, PColorAttachmentFormats = &colourFormat,
-            DepthAttachmentFormat = key.Depth, StencilAttachmentFormat = stencil ? key.Depth : Format.Undefined,
-        };
-        fixed (byte* name = entry)
-        {
-            var stages = stackalloc PipelineShaderStageCreateInfo[2];
-            stages[0] = new PipelineShaderStageCreateInfo { SType = StructureType.PipelineShaderStageCreateInfo, Stage = ShaderStageFlags.VertexBit, Module = p.VertexModule, PName = name };
-            stages[1] = new PipelineShaderStageCreateInfo { SType = StructureType.PipelineShaderStageCreateInfo, Stage = ShaderStageFlags.FragmentBit, Module = p.FragmentModule, PName = name };
-            var info = new GraphicsPipelineCreateInfo
-            {
-                SType = StructureType.GraphicsPipelineCreateInfo,
-                PNext = &rendering,
-                StageCount = 2, PStages = stages,
-                PVertexInputState = &vertexInput, PInputAssemblyState = &assembly, PViewportState = &viewportState,
-                PRasterizationState = &raster, PMultisampleState = &multisample, PDepthStencilState = &depthStencil,
-                PColorBlendState = &blendState, PDynamicState = &dynamic, Layout = p.Layout,
-            };
-            Check(vk.CreateGraphicsPipelines(dev, device.PipelineCache, 1, &info, null, out var pipeline));
-            return pipeline;
-        }
+        return inputs;
     }
 
-    static BlendFactor Factor(BlendingFactor f) => f switch
-    {
-        BlendingFactor.Zero => BlendFactor.Zero,
-        BlendingFactor.One => BlendFactor.One,
-        BlendingFactor.SrcColor => BlendFactor.SrcColor,
-        BlendingFactor.OneMinusSrcColor => BlendFactor.OneMinusSrcColor,
-        BlendingFactor.DstColor => BlendFactor.DstColor,
-        BlendingFactor.OneMinusDstColor => BlendFactor.OneMinusDstColor,
-        BlendingFactor.SrcAlpha => BlendFactor.SrcAlpha,
-        BlendingFactor.OneMinusSrcAlpha => BlendFactor.OneMinusSrcAlpha,
-        BlendingFactor.DstAlpha => BlendFactor.DstAlpha,
-        BlendingFactor.OneMinusDstAlpha => BlendFactor.OneMinusDstAlpha,
-        _ => throw new NotSupportedException($"blend factor {f}"),
-    };
+    static BlendFactor Factor(BlendingFactor f) => GlConventions.BlendFactor(f);
 
-    static CompareOp Compare(DepthFunction f) => f switch
-    {
-        DepthFunction.Never => CompareOp.Never,
-        DepthFunction.Less => CompareOp.Less,
-        DepthFunction.Equal => CompareOp.Equal,
-        DepthFunction.Lequal => CompareOp.LessOrEqual,
-        DepthFunction.Greater => CompareOp.Greater,
-        DepthFunction.Notequal => CompareOp.NotEqual,
-        DepthFunction.Gequal => CompareOp.GreaterOrEqual,
-        _ => CompareOp.Always,
-    };
+    static CompareOp Compare(DepthFunction f) => GlConventions.CompareOp(f);
 
     void SetDynamicState(CommandBuffer cb)
     {
@@ -364,7 +261,7 @@ public sealed unsafe partial class VkGl
         };
         if (all || cull != sentCull) { Stats.DynamicStateCalls++; long nt = NatStart(); vk.CmdSetCullMode(cb, cull); NatEnd(3, nt); sentCull = cull; }
         // GL's counter-clockwise is Vulkan's clockwise: same pixel rows, opposite sign convention for the area.
-        var front = frontFace == FrontFaceDirection.Ccw ? Silk.NET.Vulkan.FrontFace.Clockwise : Silk.NET.Vulkan.FrontFace.CounterClockwise;
+        var front = GlConventions.FrontFace(frontFace);
         if (all || front != sentFront) { Stats.DynamicStateCalls++; long nt = NatStart(); vk.CmdSetFrontFace(cb, front); NatEnd(3, nt); sentFront = front; }
         bool test = depthTest && passDepth is not null;
         // GL writes depth only while the depth test is on.
@@ -410,6 +307,7 @@ public sealed unsafe partial class VkGl
         var blocks = p.BlockList;
         var samplerList = p.SamplerList;
         int count = blocks.Length + samplerList.Length;
+        if (Context.Log is not null) logRecord.Set0.Clear();
         if (count == 0) { Lap(5); return; }
         var writes = stackalloc WriteDescriptorSet[count];
         var bufferInfos = stackalloc DescriptorBufferInfo[blocks.Length + 1];
@@ -448,6 +346,7 @@ public sealed unsafe partial class VkGl
                 DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &imageInfos[i],
             };
         }
+        if (Context.Log is { } log0) LogSet0(log0, new ReadOnlySpan<WriteDescriptorSet>(writes, w));
         if (same) { Stats.PushSkips++; Lap(5); return; }
         Lap(5);
         p.LastPushEpoch = pushEpoch;
@@ -560,98 +459,35 @@ public sealed unsafe partial class VkGl
         return d;
     }
 
+    /// <summary>The sampler and view VkGl binds for <paramref name="s"/> when nothing is bound (the native API's stand-in while VkGl exists).</summary>
+    SampledTexture SampledDummy(SamplerInfo s)
+    {
+        var t = SamplerTexture(s, -1);
+        var (sampler, view) = SamplerAndView(t, s.Depth);
+        return new SampledTexture(sampler, view, t.Image!.Image);
+    }
+
+    /// <summary>A GL texture object over the shared stand-in image (borrowed: <see cref="DestroyTexture"/> leaves the image to <see cref="GpuDefaults"/>).</summary>
     GlTextureObj CreateDummyTexture(int slot, ScalarKind kind, bool depth)
     {
-        var format = depth ? Format.D32Sfloat : kind switch
+        var d = defaults.Texture(slot, kind, depth);
+        return new GlTextureObj(0)
         {
-            ScalarKind.UInt => Format.R32Uint,
-            ScalarKind.Int => Format.R32Sint,
-            _ => Format.R8G8B8A8Unorm,
-        };
-        int layers = slot == 2 ? 6 : 1;
-        var t = new GlTextureObj(0)
-        {
-            Format = format, Width = 1, Height = 1, Layers = layers, Levels = 1, DefinedLevels = 1,
+            Format = d.Format, Width = 1, Height = 1, Layers = d.Layers, Levels = 1, DefinedLevels = 1,
             Target = slot == 2 ? TextureTarget.TextureCubeMap : slot == 1 ? TextureTarget.Texture2DArray : TextureTarget.Texture2D,
             MinFilter = TextureMinFilter.Nearest, MagFilter = TextureMagFilter.Nearest,
+            Image = d.Image, Borrowed = true,
         };
-        var info = new ImageCreateInfo
-        {
-            SType = StructureType.ImageCreateInfo, ImageType = ImageType.Type2D, Format = format, Extent = new Extent3D(1, 1, 1),
-            MipLevels = 1, ArrayLayers = (uint)layers, Samples = SampleCountFlags.Count1Bit, Tiling = ImageTiling.Optimal,
-            Usage = ImageUsageFlags.SampledBit | ImageUsageFlags.TransferDstBit, SharingMode = SharingMode.Exclusive,
-            Flags = slot == 2 ? ImageCreateFlags.CreateCubeCompatibleBit : 0,
-        };
-        t.Image = device.Allocator.CreateImage(in info, MemoryKind.DeviceLocal, "dummy texture");
-        var cb = device.BeginImmediate();
-        ToGeneral(cb, t);
-        var range = new ImageSubresourceRange(depth ? ImageAspectFlags.DepthBit : ImageAspectFlags.ColorBit, 0, 1, 0, (uint)layers);
-        if (depth)
-        {
-            var value = new ClearDepthStencilValue(1, 0);
-            vk.CmdClearDepthStencilImage(cb, t.Image.Image, ImageLayout.General, &value, 1, &range);
-        }
-        else
-        {
-            var value = kind is ScalarKind.UInt or ScalarKind.Int ? new ClearColorValue(uint32_0: 0, uint32_1: 0, uint32_2: 0, uint32_3: 1) : new ClearColorValue(0f, 0f, 0f, 1f);
-            vk.CmdClearColorImage(cb, t.Image.Image, ImageLayout.General, &value, 1, &range);
-        }
-        device.EndImmediate(cb);
-        return t;
     }
 
-    internal record struct SamplerKey(Filter Min, Filter Mag, SamplerMipmapMode Mip, bool Mipmapped, SamplerAddressMode U, SamplerAddressMode V, SamplerAddressMode W,
-        bool Compare, CompareOp Op, bool TransparentBorder, float Anisotropy, float Bias);
-
-    Sampler SamplerFor(GlTextureObj t, bool shadow)
-    {
-        bool integer = t.IsInteger || t.Format is Format.R32Sint;
-        var (min, mip, mipmapped) = t.MinFilter switch
-        {
-            TextureMinFilter.Nearest => (Filter.Nearest, SamplerMipmapMode.Nearest, false),
-            TextureMinFilter.Linear => (Filter.Linear, SamplerMipmapMode.Nearest, false),
-            TextureMinFilter.NearestMipmapNearest => (Filter.Nearest, SamplerMipmapMode.Nearest, true),
-            TextureMinFilter.LinearMipmapNearest => (Filter.Linear, SamplerMipmapMode.Nearest, true),
-            TextureMinFilter.NearestMipmapLinear => (Filter.Nearest, SamplerMipmapMode.Linear, true),
-            _ => (Filter.Linear, SamplerMipmapMode.Linear, true),
-        };
-        var mag = t.MagFilter == TextureMagFilter.Nearest ? Filter.Nearest : Filter.Linear;
-        if (integer) (min, mag, mip) = (Filter.Nearest, Filter.Nearest, SamplerMipmapMode.Nearest);
-        var key = new SamplerKey(min, mag, mip, mipmapped, Wrap(t.WrapS), Wrap(t.WrapT), Wrap(t.WrapR),
-            shadow && t.Compare, Compare(t.CompareFunc), t.TransparentBorder, device.SamplerAnisotropy ? Math.Clamp(t.Anisotropy, 1, 16) : 1, mipmapped ? TextureLodBias : 0);
-        if (samplers.TryGetValue(key, out var sampler)) return sampler;
-        var info = new SamplerCreateInfo
-        {
-            SType = StructureType.SamplerCreateInfo,
-            MinFilter = key.Min, MagFilter = key.Mag, MipmapMode = key.Mip,
-            AddressModeU = key.U, AddressModeV = key.V, AddressModeW = key.W,
-            AnisotropyEnable = key.Anisotropy > 1, MaxAnisotropy = key.Anisotropy,
-            CompareEnable = key.Compare, CompareOp = key.Op,
-            MinLod = 0, MaxLod = key.Mipmapped ? Vk.LodClampNone : 0.25f,
-            // NVIDIA's OpenGL picks mips a quarter level finer than its Vulkan driver with anisotropic filtering on: matched here
-            // (docs/engine.md "Vulkan backend"; measured 1.2 -> 0.001 mean difference on the rock view).
-            // Plus the upscaler's bias (ITextureLodBias).
-            MipLodBias = (key.Anisotropy > 1 && device.Properties.VendorID == 0x10DE ? -0.25f : 0) + key.Bias,
-            BorderColor = integer ? (key.TransparentBorder ? BorderColor.IntTransparentBlack : BorderColor.IntOpaqueBlack)
-                : key.TransparentBorder ? BorderColor.FloatTransparentBlack : BorderColor.FloatOpaqueWhite,
-        };
-        Check(vk.CreateSampler(dev, &info, null, out sampler));
-        samplers[key] = sampler;
-        return sampler;
-    }
-
-    static SamplerAddressMode Wrap(TextureWrapMode m) => m switch
-    {
-        TextureWrapMode.ClampToEdge => SamplerAddressMode.ClampToEdge,
-        TextureWrapMode.ClampToBorder => SamplerAddressMode.ClampToBorder,
-        TextureWrapMode.MirroredRepeat => SamplerAddressMode.MirroredRepeat,
-        _ => SamplerAddressMode.Repeat,
-    };
+    /// <summary>The sampler GL's state on <paramref name="t"/> describes (<see cref="SamplerDesc.FromGl"/>, shared with the native API).</summary>
+    Sampler SamplerFor(GlTextureObj t, bool shadow) =>
+        samplers.Get(SamplerDesc.FromGl(t.MinFilter, t.MagFilter, t.WrapS, t.WrapT, t.WrapR, shadow && t.Compare, t.CompareFunc, t.TransparentBorder,
+            t.Anisotropy, t.IsInteger || t.Format is Format.R32Sint, TextureLodBias));
 
     void DestroySamplers()
     {
-        foreach (var s in samplers.Values) vk.DestroySampler(dev, s, null);
-        samplers.Clear();
+
         foreach (var pool in descriptorPools) vk.DestroyDescriptorPool(dev, pool, null);
         foreach (var pool in persistentPools) vk.DestroyDescriptorPool(dev, pool, null);
         persistentPools.Clear();

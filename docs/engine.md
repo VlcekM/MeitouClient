@@ -75,7 +75,16 @@ screenshot (C:\Temp), `Esc` quit.
 
 ## Backend interface
 
-A native Vulkan-shaped API to replace `IGl` is proposed in [renderer-native.md](renderer-native.md) (DECISIONS 22, not adopted yet).
+A native Vulkan-shaped API replaces `IGl` renderer by renderer ([renderer-native.md](renderer-native.md), DECISIONS 22, adopted
+2026-10-06). Its foundation is in `src/Meitou.Rendering/Gpu/` (next to `Core/` and `Shaders/`): `GpuContext` (made by VkGl from the
+same device), `GpuFrame` and `CommandList` (recording into VkGl's command buffer of the same frame), `DeviceBuffer` / `Transient` /
+`BufferArena` / `Uploader`, `Texture` / `SamplerCache`, `ShaderLibrary` / `PipelineLibrary`, `BindlessTable`, `ResourceStates`,
+`QueryArena`, and `LegacyProgram` (a GLSL pair with VkGl's SPIR-V and layout, for pixel-identical ports). VkGl and the native API share
+the functions that decide pixels (`GlConventions`, `SamplerDesc.FromGl`, `GpuDefaults`, `PipelineFactory`). The seam is `IGlInterop`
+(on VkGl): `BeginNative` / `EndNative` around native segments (full barriers; VkGl forgets its cached pipeline, dynamic state and
+descriptors; IGl calls that record or flush throw in between), `CurrentTargets`, export of GL textures and buffers (VkGl's own views
+and samplers) and import of native ones. `FrameGlobals` holds the frame-wide textures, blocks and uniform values by GLSL name
+(published by `SkyRenderer`, `ShadowShaders` / `MeitouShadowShaders` and `TerrainRenderer`).
 
 The renderers call `IGl` (`src/Meitou.Rendering/Gpu/IGl.cs`): the exact subset of OpenGL 3.3 they use, with Silk.NET's former
 signatures. The enumerations it takes (`GLEnum`, `TextureTarget`, `InternalFormat`, ...) are ours, in `Gpu/GlEnums.cs`: the GL
@@ -88,14 +97,20 @@ is accepted and ignored; `--renderer gl` prints a line saying OpenGL is gone and
 The window and the device come from `VulkanDisplay` (`Meitou.Rendering.Display`): windowed (swapchain through
 `VulkanPresenter`, MAILBOX without vsync, FIFO with) for `meitou` and the viewer's interactive modes, headless (no window) for
 `--screenshot` and `--fly-benchmark`. `MEITOU_VK_VALIDATION=1` turns on the validation layer for any of them and prints the error
-count on exit.
+count on exit; `=sync` adds synchronisation validation and `=gpu` GPU-assisted validation (bindless indices), both through
+`VK_EXT_layer_settings`. Pipelines are cached on disk in `%LOCALAPPDATA%\Meitou\pipeline-cache.bin` (`MEITOU_PIPELINE_CACHE=<file>`
+elsewhere, `=0` off).
 
 ### Vulkan backend (`VkGl`)
 
 - **Device** (`Core/VulkanDevice`): Vulkan 1.3 with dynamic rendering, synchronization2, timeline semaphores, host query
   reset, scalar/std430 uniform blocks, push descriptors, depth clip control and extended dynamic state; a block allocator
   (64 MB blocks), a frame ring (2 frames in flight, deferred deletion), a pipeline cache. `MEITOU_VK_VALIDATION=1` turns the
-  validation layer on (the Vulkan SDK's layer must be installed).
+  validation layer on (the Vulkan SDK's layer must be installed). **Required** (owner decision 1 of renderer-native.md): descriptor
+  indexing (runtime arrays, partially bound, update after bind, non-uniform indexing) and `multiDrawIndirect` /
+  `drawIndirectFirstInstance`; without them `GpuContext` refuses to start with a message naming what is missing. `drawIndirectCount`
+  and `shaderDrawParameters` are enabled when present. `VK_EXT_debug_utils` is on whenever the loader has it (object names and
+  command labels for capture tools), with or without validation.
 - **Shaders** (`Shaders/`): the renderers' GLSL 3.30 compiled to SPIR-V by shaderc (relaxed Vulkan rules: loose uniforms in
   `gl_DefaultUniformBlock`, automatic bindings, vertex 0.., fragment 32..), varyings given locations by name, reflected from
   the SPIR-V (blocks, members, samplers, inputs). Compiled programs are cached on disk (`%LOCALAPPDATA%\Meitou\shader-cache`;
@@ -121,12 +136,15 @@ count on exit.
 - **Memory and order.** Every image stays in `GENERAL` layout; a full memory barrier before each render pass orders attachment
   writes, transfers and sampling. Uploads go into a command buffer submitted ahead of the frame's own; a static buffer the frame
   has already drawn from is renamed (new memory, old contents copied) before it is written, stream/dynamic buffers get a new
-  version in host-visible per-frame memory; textures are written in place (an upload is seen by the whole frame).
+  version in host-visible per-frame memory; textures are written in place (an upload is seen by the whole frame). A second copy into
+  the same image within one upload command buffer waits for the first (a transfer barrier; before 2026-10-06 the two copies raced,
+  which synchronisation validation reported as 10 WRITE_AFTER_WRITE hazards per view and which made a few rock-view pixels differ
+  between runs, docs/viewer.md).
   `glGenerateMipmap`, blits and readbacks are recorded in order in the frame.
 - **Queries.** GL timestamp and elapsed-time queries are timestamps from a per-frame-slot pool (fresh entries for every issue);
   unread results are kept when the slot is reused. `VkGlStats` counts draws, passes, new pipelines, uploads, renames, pushes,
   the CPU time spent preparing draws, and the last frame's GPU time.
-- **Known differences from OpenGL** (the last OpenGL pictures, master `f127922`, are the parity reference; Vulkan is within 0.08 mean in all eight views): NVIDIA's GL samples anisotropic textures a quarter mip
+- **Known differences from OpenGL** (the last OpenGL pictures, master `f127922`, are the parity reference; Vulkan was within 0.08 mean in all eight views of the time; the forest view came later): NVIDIA's GL samples anisotropic textures a quarter mip
   finer, matched with a −0.25 LOD bias on NVIDIA (DECISIONS 9); alpha-to-coverage edges differ slightly (DECISIONS 10);
   `DEPTH_COMPONENT24` is a 32-bit float depth buffer.
 
@@ -465,13 +483,12 @@ the `detail` lines at the end of a benchmark log give the instances and calls of
 
 ## Checking a change
 
-- `tools/scripts/parity.sh <viewer exe> <out dir>` renders the eight reference views (The Hub from 40000, the rock at
-  −51468,−14324, Port North, zone 14.30; at 13:00 and 02:00) offscreen at 1600×900 on Vulkan; `parity-compare.sh <meitou-tools exe> <a> <b>`
-  compares two such folders (`meitou-tools image-diff`: mean absolute difference in 0..255, share of pixels over 12, maximum, and
-  a ×4 difference image). The reference is the stored folder of OpenGL pictures from master (DECISIONS 1, 4, 18), not a live run: the
-  gate is a mean of 0.08 or less per view.
-  compares two such folders (`meitou-tools image-diff`: mean absolute difference in 0..255, share of pixels over 12, maximum, and
-  a ×4 difference image).
+- `tools/scripts/parity.sh <viewer exe> <out dir>` renders the ten reference pictures (five views: The Hub from 40000, the rock at
+  −51468,−14324, Port North, zone 14.30 and the forest at −37582,−80684; at 13:00 and 02:00) offscreen at 1600×900 on Vulkan;
+  `parity-compare.sh <meitou-tools exe> <a> <b>` compares two such folders (`meitou-tools image-diff`: mean absolute difference in
+  0..255, share of pixels over 12, maximum, and a ×4 difference image). Against the stored OpenGL pictures (DECISIONS 1, 4, 18) the
+  gate was a mean of 0.08 or less per view; the native-renderer ports gate against the build before them at maximum 0
+  (renderer-native.md 7.7).
 - `meitou-viewer --world --fly-benchmark 1500 --size 1600x900 [--fly-pipelined]`: frame-time percentiles of
   a flight; serialized (the GPU waited for each frame, 60 fps pacing) or pipelined (two frames in flight, no pacing: the
   interval between frames).

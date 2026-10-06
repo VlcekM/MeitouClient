@@ -70,9 +70,15 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
         for (int i = 0; i < n; i++) uniformRings[i] = new FrameRings(this);
         rings = new FrameRings[n];
         for (int i = 0; i < n; i++) rings[i] = new FrameRings(this);
+        Context = new GpuContext(device);
+        Context.Interop = this;
         InitState();
         InitDummies();
     }
+
+    /// <summary>The native renderer API on the same device (docs/renderer-native.md); its frame is driven by <see cref="BeginFrame"/> and
+    /// <see cref="EndFrame"/>, and records into this frame's command buffer.</summary>
+    public GpuContext Context { get; }
 
     /// <summary>The Vulkan device under the translation.</summary>
     public VulkanDevice Device => device;
@@ -94,6 +100,7 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
     /// <summary>Starts a frame whose framebuffer 0 is <paramref name="width"/> × <paramref name="height"/> (RGBA8 + depth).</summary>
     public void BeginFrame(int width, int height)
     {
+        GuardNative();
         if (frameOpen)
         {
             // Opened lazily (uploads before the host began the frame): keep it if the size matches, else submit it and start afresh.
@@ -119,13 +126,16 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
         frameOpen = true;
         Stats.BeginFrame();
         ResetFrameState();
+        Context.Frame.Begin(cmd, uploadCmd);
     }
 
     /// <summary>Ends the frame and submits it (uploads first). <paramref name="signal"/>/<paramref name="wait"/>: swapchain semaphores.</summary>
     public void EndFrame(ReadOnlySpan<VkSemaphore> wait = default, ReadOnlySpan<PipelineStageFlags> waitStages = default, ReadOnlySpan<VkSemaphore> signal = default)
     {
+        GuardNative();
         if (!frameOpen) return;
         EndPass();
+        Context.Frame.End();
         TimeFrame(start: false);
         FullBarrier(uploadCmd);
         Check(vk.EndCommandBuffer(uploadCmd));
@@ -161,6 +171,7 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
     /// <summary>Submits what is recorded and waits for it (readbacks, <c>glFinish</c>, waiting query results); the frame goes on after.</summary>
     void Flush()
     {
+        GuardNative();
         if (!frameOpen) { device.Frames.WaitAll(); return; }
         var (w, h) = (backbuffer!.Width, backbuffer.Height);
         EndFrame();
@@ -173,6 +184,7 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
     {
         get
         {
+            GuardNative();
             if (!frameOpen) BeginFrame(backbuffer?.Width ?? 1, backbuffer?.Height ?? 1);
             return cmd;
         }
@@ -182,6 +194,7 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
     {
         get
         {
+            GuardNative();
             if (!frameOpen) BeginFrame(backbuffer?.Width ?? 1, backbuffer?.Height ?? 1);
             return uploadCmd;
         }
@@ -230,6 +243,7 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
         foreach (var r in rings) r.Dispose();
         foreach (var r in uniformRings) r.Dispose();
         for (int i = 0; i < uploadPools.Length; i++) vk.DestroyCommandPool(dev, uploadPools[i], null);
+        Context.Dispose();
         device.Frames.WaitAll();
     }
 }

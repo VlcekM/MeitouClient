@@ -15,6 +15,8 @@ return args switch
     ["world"] => WithInstall(WorldSurvey.Run),
     ["image-diff", var a, var b] => ImageDiff.Run(a, b, null),
     ["image-diff", var a, var b, var d] => ImageDiff.Run(a, b, d),
+    ["draw-log-diff", var a, var b] => DrawLogDiff.Run(a, b),
+    ["draw-log-diff", var a, var b, "--keep-handles"] => DrawLogDiff.Run(a, b, keepHandles: true),
     ["world-map", var png] => WithInstall(i => WorldSurvey.RenderMap(i, png)),
     ["world-map", var png, var step] => WithInstall(i => WorldSurvey.RenderMap(i, png, int.Parse(step))),
     _ => Usage(),
@@ -33,6 +35,7 @@ static int Usage()
         meitou-tools fcs-records N show the fields of the first records of type N in the base game
         meitou-tools world         read the heightmap, zone/level files and features.dat and cross-check them
         meitou-tools image-diff <a.png> <b.png> [diff.png]  compare two screenshots: mean difference, share of pixels over 12/255
+        meitou-tools draw-log-diff <a> <b> [--keep-handles]  compare two MEITOU_DRAW_LOG files draw by draw (handles renamed by first use)
         meitou-tools world-map <png> [step]  render a top-down world map (every step-th height sample, default 16)
         """);
     return 2;

@@ -13,6 +13,8 @@ namespace Meitou.ModelViewer;
 public sealed unsafe class CharacterRenderer : IDisposable
 {
     readonly IGl gl;
+    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    public GpuContext Context { get; }
     readonly Renderer basis;
     readonly uint program, lineProgram, lineVao, lineVbo;
     readonly Dictionary<string, int> uniforms = [], lineUniforms = [];
@@ -29,9 +31,10 @@ public sealed unsafe class CharacterRenderer : IDisposable
         public List<(int Offset, int Count)[]> LodRanges = [];
     }
 
-    public CharacterRenderer(IGl gl, Renderer basis, CharacterScene scene)
+    public CharacterRenderer(IGl gl, GpuContext gpu, Renderer basis, CharacterScene scene)
     {
         this.gl = gl;
+        Context = gpu;
         this.basis = basis;
         program = Link(Shaders.MeshVertex, Fragment);
         lineProgram = Link(Shaders.LineVertex, Shaders.LineFragment);

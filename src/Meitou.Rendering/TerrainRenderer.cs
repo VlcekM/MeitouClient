@@ -67,9 +67,10 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     /// <param name="coarse">Whole-world raw heights, (<paramref name="coarseSize"/>)² samples (2^n + 1 per side).</param>
     /// <param name="fine">The loaded region at its own step.</param>
-    public TerrainRenderer(IGl gl, ushort[] coarse, int coarseSize, HeightWindow fine, float lodDistance)
+    public TerrainRenderer(IGl gl, GpuContext gpu, ushort[] coarse, int coarseSize, HeightWindow fine, float lodDistance)
     {
         this.gl = gl;
+        this.gpu = gpu;
         this.fine = fine;
         this.coarse = coarse;
         this.coarseSize = coarseSize;
@@ -78,9 +79,11 @@ public sealed unsafe class TerrainRenderer : IDisposable
         fineBand = BandOf(fine);
         patchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, TerrainShaders.Fragment);
         meshProgram = WorldGl.Program(gl, TerrainShaders.MeshVertex, TerrainShaders.MeshFragment);
+        nativeMesh = NativeMeshProgram();   // with the GL program it replaces, so a draw never compiles
 
         coarseTexture = HeightTexture(coarse, coarseSize, coarseSize);
         fineTexture = HeightTexture(fine.Raw, fine.Columns, fine.Rows);
+        PublishGlobals();
 
         // The patch grid and its index ranges: the whole grid, then the four quarters.
         var grid = new float[(GridCells + 1) * (GridCells + 1) * 2];
@@ -314,21 +317,56 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// <summary>Binds the height textures and sets the <see cref="TerrainShaders.HeightFunctions"/> uniforms of a program.</summary>
     public void BindHeights(uint program)
     {
+        BindHeightUnits();
+        gl.Uniform1(U(program, "uHeightCoarse"), TerrainShaders.HeightCoarseUnit);
+        gl.Uniform1(U(program, "uHeightFine"), TerrainShaders.HeightFineUnit);
+        var coarseRect = CoarseRect;
+        gl.Uniform4(U(program, "uCoarseRect"), coarseRect.X, coarseRect.Y, coarseRect.Z, coarseRect.W);
+        gl.Uniform2(U(program, "uCoarseCells"), coarseSize - 1f, coarseSize - 1f);
+        var fineRect = FineRect;
+        gl.Uniform4(U(program, "uFineRect"), fineRect.X, fineRect.Y, fineRect.Z, fineRect.W);
+        gl.Uniform2(U(program, "uFineCells"), fine.Columns - 1f, fine.Rows - 1f);
+        gl.Uniform1(U(program, "uFineBand"), fineBand);
+        gl.Uniform1(U(program, "uHasFine"), 1);
+    }
+
+    /// <summary>The height textures on their units (GL state; <see cref="BindHeights"/> without its uniforms).</summary>
+    void BindHeightUnits()
+    {
         gl.ActiveTexture(TextureUnit.Texture0 + TerrainShaders.HeightCoarseUnit);
         gl.BindTexture(TextureTarget.Texture2D, coarseTexture);
         gl.ActiveTexture(TextureUnit.Texture0 + TerrainShaders.HeightFineUnit);
         gl.BindTexture(TextureTarget.Texture2D, fineTexture);
         gl.ActiveTexture(TextureUnit.Texture0);
-        gl.Uniform1(U(program, "uHeightCoarse"), TerrainShaders.HeightCoarseUnit);
-        gl.Uniform1(U(program, "uHeightFine"), TerrainShaders.HeightFineUnit);
-        float h = WorldLayout.HalfWorldSize;
-        gl.Uniform4(U(program, "uCoarseRect"), -h, -h, h, h);
-        gl.Uniform2(U(program, "uCoarseCells"), coarseSize - 1f, coarseSize - 1f);
-        var (x0, z0) = fine.WorldOf(0, 0);
-        gl.Uniform4(U(program, "uFineRect"), (float)x0, (float)z0, (float)x0 + (fine.Columns - 1) * fine.Spacing, (float)z0 + (fine.Rows - 1) * fine.Spacing);
-        gl.Uniform2(U(program, "uFineCells"), fine.Columns - 1f, fine.Rows - 1f);
-        gl.Uniform1(U(program, "uFineBand"), fineBand);
-        gl.Uniform1(U(program, "uHasFine"), 1);
+    }
+
+    static Vector4 CoarseRect => new(-WorldLayout.HalfWorldSize, -WorldLayout.HalfWorldSize, WorldLayout.HalfWorldSize, WorldLayout.HalfWorldSize);
+
+    Vector4 FineRect
+    {
+        get
+        {
+            var (x0, z0) = fine.WorldOf(0, 0);
+            return new((float)x0, (float)z0, (float)x0 + (fine.Columns - 1) * fine.Spacing, (float)z0 + (fine.Rows - 1) * fine.Spacing);
+        }
+    }
+
+    /// <summary>
+    /// The heights as frame globals (docs/renderer-native.md 4.3): the two textures and the <see cref="TerrainShaders.HeightFunctions"/>
+    /// uniforms <see cref="BindHeights"/> sets, read when a consumer draws or applies its globals. No GL call.
+    /// </summary>
+    void PublishGlobals()
+    {
+        if (gpu is not { Interop: { } interop } ctx) return;
+        var g = ctx.Globals;
+        g.Publish("uHeightCoarse", () => interop.Sampled(coarseTexture, shadowSampler: false));
+        g.Publish("uHeightFine", () => interop.Sampled(fineTexture, shadowSampler: false));
+        g.PublishUniform("uCoarseRect", () => CoarseRect);
+        g.PublishUniform("uCoarseCells", () => new Vector2(coarseSize - 1f, coarseSize - 1f));
+        g.PublishUniform("uFineRect", () => FineRect);
+        g.PublishUniform("uFineCells", () => new Vector2(fine.Columns - 1f, fine.Rows - 1f));
+        g.PublishUniform("uFineBand", () => fineBand);
+        g.PublishUniform("uHasFine", () => 1);
     }
 
     /// <summary>
@@ -340,11 +378,126 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// </summary>
     public int DrawMeshes(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth = false)
     {
+        long t0 = MeshTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        int draws = DrawMeshesCore(meshes, depth);
+        if (MeshTiming)
+        {
+            long dt = System.Diagnostics.Stopwatch.GetTimestamp() - t0;
+            if (depth) { meshDepthTicks += dt; meshDepthCalls++; } else { meshColourTicks += dt; meshColourCalls++; }
+            meshDraws += draws;
+        }
+        return draws;
+    }
+
+    /// <summary><c>MEITOU_MESH_TIMING=1</c>: the CPU time of <see cref="DrawMeshes"/> (colour and depth), printed when the renderer is disposed.</summary>
+    static readonly bool MeshTiming = Environment.GetEnvironmentVariable("MEITOU_MESH_TIMING") == "1";
+    long meshColourTicks, meshDepthTicks, meshColourCalls, meshDepthCalls, meshDraws;
+
+    void ReportMeshTiming()
+    {
+        if (!MeshTiming) return;
+        double ms(long t) => t * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"terrain meshes  colour {meshColourCalls} calls {ms(meshColourTicks):F2} ms ({(meshColourCalls > 0 ? ms(meshColourTicks) * 1000 / meshColourCalls : 0):F1} us/call), depth {meshDepthCalls} calls {ms(meshDepthTicks):F2} ms ({(meshDepthCalls > 0 ? ms(meshDepthTicks) * 1000 / meshDepthCalls : 0):F1} us/call), {meshDraws} draws"));
+    }
+
+    int DrawMeshesCore(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth)
+    {
         if (depth) return DrawMeshesDepth(meshes);
         if (!GroupMeshes(meshes, biomes: true)) return 0;
-        Apply(meshProgram, heightNormals: false);
-        gl.Uniform1(U(meshProgram, "uFeature"), 1);
-        return DrawGroups();
+        var p = nativeMesh!;
+        ApplyNative(p);
+        // GL state as Apply left it for the GL code that follows (the program in use, the units bound); no uniforms.
+        gl.UseProgram(meshProgram);
+        SkyRenderer.Active?.BindUnits();
+        BindHeightUnits();
+        textures?.Bind();
+        BindUnitSamplers(p);
+        return DrawGroups(p, "terrain meshes");
+    }
+
+    // ---- the native port of the TERRAIN-mode meshes (docs/renderer-native.md 7.1, step 7: step P, VkGl's SPIR-V and layout) ----
+
+    readonly GpuContext gpu;
+    LegacyProgram? nativeMesh, nativeDepth;
+    MeshUniforms mu;
+    UniformHandle depthViewProjection;
+    Matrix4x4[] instanceData = new Matrix4x4[256];
+
+    /// <summary>The handles of what <see cref="Apply"/> sets, resolved once.</summary>
+    readonly record struct MeshUniforms(UniformHandle ViewProjection, UniformHandle HeightNormals, UniformHandle Feature, UniformHandle FeatureBiome,
+        UniformHandle Wireframe, UniformHandle Eye, UniformHandle LightDir, UniformHandle SunColour, UniformHandle AmbientSky, UniformHandle AmbientGround,
+        UniformHandle FogColour, UniformHandle FogDistance, UniformHandle WaterHeight, UniformHandle HalfWorld, UniformHandle Debug, UniformHandle FarStart,
+        UniformHandle FarEnd, UniformHandle Textured, UniformHandle NormalMaps, UniformHandle HasMaps, UniformHandle MapState, UniformHandle HasGround,
+        UniformHandle HasWorldColour, UniformHandle Region, UniformHandle CellGrid);
+
+    LegacyProgram NativeMeshProgram()
+    {
+        var p = LegacyProgram.Create(gpu, TerrainShaders.MeshVertex, TerrainShaders.MeshFragment, "terrain meshes");
+        mu = new MeshUniforms(p.Uniform("uViewProjection"), p.Uniform("uHeightNormals"), p.Uniform("uFeature"), p.Uniform("uFeatureBiome"),
+            p.Uniform("uWireframe"), p.Uniform("uEye"), p.Uniform("uLightDir"), p.Uniform("uSunColour"), p.Uniform("uAmbientSky"), p.Uniform("uAmbientGround"),
+            p.Uniform("uFogColour"), p.Uniform("uFogDistance"), p.Uniform("uWaterHeight"), p.Uniform("uHalfWorld"), p.Uniform("uDebug"), p.Uniform("uFarStart"),
+            p.Uniform("uFarEnd"), p.Uniform("uTextured"), p.Uniform("uNormalMaps"), p.Uniform("uHasMaps"), p.Uniform("uMapState"), p.Uniform("uHasGround"),
+            p.Uniform("uHasWorldColour"), p.Uniform("uRegion"), p.Uniform("uCellGrid"));
+        return p;
+    }
+
+    /// <summary><see cref="Apply"/>'s uniforms for the meshes (then <c>uFeature</c> 1), with the same int and float forms; the atmosphere and
+    /// height uniforms from the frame globals (published by their owners, the values their GL calls set).</summary>
+    void ApplyNative(LegacyProgram p)
+    {
+        var (vp, eye, options, light) = (frame.ViewProjection, frame.Eye, frame.Options, frame.Light);
+        p.Set(mu.ViewProjection, in vp);
+        p.Set(mu.HeightNormals, 0);
+        p.Set(mu.Feature, 1);
+        p.Set(mu.FeatureBiome, -1);
+        p.Set(mu.Wireframe, 0);
+        p.Set(mu.Eye, eye.X, eye.Y, eye.Z);
+        var s = light.SunDirection;
+        p.Set(mu.LightDir, s.X, s.Y, s.Z);
+        p.Set(mu.SunColour, light.SunColour.X, light.SunColour.Y, light.SunColour.Z);
+        p.Set(mu.AmbientSky, light.AmbientSky.X, light.AmbientSky.Y, light.AmbientSky.Z);
+        p.Set(mu.AmbientGround, light.AmbientGround.X, light.AmbientGround.Y, light.AmbientGround.Z);
+        p.Set(mu.FogColour, light.FogColour.X, light.FogColour.Y, light.FogColour.Z);
+        p.Set(mu.FogDistance, light.FogDistance);
+        p.ApplyGlobals();   // SkyRenderer.Apply's and BindHeights' uniforms
+        p.Set(mu.WaterHeight, options.Water ? WorldWater.Height : -1e6f);
+        p.Set(mu.HalfWorld, (float)WorldLayout.HalfWorldSize);
+        p.Set(mu.Debug, options.Debug);
+        p.Set(mu.FarStart, options.MaterialDistance * 0.8f);
+        p.Set(mu.FarEnd, options.MaterialDistance);
+        var t = textures;
+        bool textured = options.Textures && t is { HasBiomes: true };
+        p.Set(mu.Textured, textured ? 1 : 0);
+        p.Set(mu.NormalMaps, textured && options.NormalMaps ? 1 : 0);
+        p.Set(mu.HasMaps, options.Textures && t is { MapState: 2 } ? 1 : 0);
+        p.Set(mu.MapState, t?.MapState ?? 0);
+        p.Set(mu.HasGround, t is { HasGround: true } ? 1 : 0);
+        p.Set(mu.HasWorldColour, t is { HasWorldColour: true } ? 1 : 0);
+        if (t is not null)
+        {
+            p.Set(mu.Region, t.Region.X, t.Region.Y, t.Region.Z, t.Region.W);
+            p.Set(mu.CellGrid, (float)t.CellsX, t.CellsZ);
+        }
+    }
+
+    /// <summary>The units <see cref="Apply"/> points the material's samplers at (the rest come from the frame globals, or unit 0 as in GL).</summary>
+    static readonly Dictionary<string, int> SamplerUnits = new()
+    {
+        ["uDiffuse"] = 0, ["uNormal"] = 1, ["uParams"] = 2, ["uCells"] = 3, ["uBlendMap"] = 4, ["uOverlay"] = 5, ["uColour"] = 6,
+        ["uGround"] = TerrainShaders.GroundUnit, ["uWorldColour"] = TerrainShaders.WorldColourUnit,
+    };
+
+    /// <summary>Each sampler reads what VkGl would sample for the GL program: the texture on its unit now (after the GL binds above).</summary>
+    void BindUnitSamplers(LegacyProgram p)
+    {
+        var interop = gpu.Interop!;
+        foreach (var name in p.SamplerNames)
+        {
+            if (gpu.Globals.Texture(name) is not null) continue;
+            var slot = p.Sampler(name);
+            p.Bind(slot, interop.SampledUnit(SamplerUnits.GetValueOrDefault(name, 0), p.SamplerInfo(slot)));
+        }
     }
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
@@ -361,6 +514,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
         {
             depthPatchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, ShadowShaders.DepthFragment);
             depthMeshProgram = WorldGl.Program(gl, TerrainShaders.MeshInstancedDepthVertex, ShadowShaders.DepthFragment);
+            nativeDepth = LegacyProgram.Create(gpu, TerrainShaders.MeshInstancedDepthVertex, ShadowShaders.DepthFragment, "terrain mesh depth");
+            depthViewProjection = nativeDepth.Uniform("uViewProjection");
         }
         if (Math.Abs(options.LodDistance - LodDistanceInUse) > 1e-4f)
             quadtree = new TerrainQuadtree((float)quadtree.Spacing(0), GridCells, Math.Max(options.LodDistance, 2f));
@@ -394,10 +549,12 @@ public sealed unsafe class TerrainRenderer : IDisposable
     int DrawMeshesDepth(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes)
     {
         if (depthMeshProgram == 0 || !GroupMeshes(meshes, biomes: false)) return 0;
-        uint program = depthMeshProgram;
-        gl.UseProgram(program);
-        WorldGl.Matrix(gl, U(program, "uViewProjection"), frame.ViewProjection);
-        return DrawGroups();
+        var nativeDepth = this.nativeDepth!;   // made with depthMeshProgram (DrawDepth)
+        var vp = frame.ViewProjection;
+        nativeDepth.Set(depthViewProjection, in vp);
+        gl.UseProgram(depthMeshProgram);   // GL state as before: the program in use
+        BindUnitSamplers(nativeDepth);
+        return DrawGroups(nativeDepth, "terrain mesh depth");
     }
 
     // ---- the TERRAIN-mode meshes, instanced ----
@@ -417,8 +574,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     readonly Dictionary<(uint, int, bool), MeshGroup> meshGroups = [];
     readonly List<MeshGroup> meshGroupList = [];
-    uint meshInstanceBuffer;
-    long meshInstanceBytes;
 
     /// <summary>
     /// Sorts the placements into <see cref="meshGroupList"/> and uploads them (each one's matrix as its four rows; with
@@ -443,36 +598,48 @@ public sealed unsafe class TerrainRenderer : IDisposable
         if (meshGroupList.Count == 0) return false;
         int total = 0;
         foreach (var g in meshGroupList) { g.Offset = total; total += g.Count; }
-        if (meshInstanceBuffer == 0) meshInstanceBuffer = gl.GenBuffer();
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, meshInstanceBuffer);
-        meshInstanceBytes = Math.Max(meshInstanceBytes, total * 64L);
-        gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)meshInstanceBytes, null, BufferUsageARB.StreamDraw);
-        foreach (var g in meshGroupList)
-            fixed (Matrix4x4* p = g.Models)
-                gl.BufferSubData(BufferTargetARB.ArrayBuffer, (nint)(g.Offset * 64L), (nuint)(g.Count * 64L), p);
+        if (instanceData.Length < total) Array.Resize(ref instanceData, Math.Max(total, instanceData.Length * 2));
+        foreach (var g in meshGroupList) Array.Copy(g.Models, 0, instanceData, g.Offset, g.Count);
+        instanceCount = total;
         return true;
     }
 
-    /// <summary>Draws <see cref="meshGroupList"/> with the program in use, back faces culled (a mirroring placement turns the winding round).</summary>
-    int DrawGroups()
+    int instanceCount;
+
+    /// <summary>
+    /// Draws <see cref="meshGroupList"/> natively with <paramref name="p"/> into the pass VkGl is drawing (its targets and GL's state at this
+    /// point), back faces culled, a mirroring placement turning the winding round; the placements from this frame's constants. Leaves GL's
+    /// state as the GL version did (culling off, counter-clockwise, no vertex array).
+    /// </summary>
+    int DrawGroups(LegacyProgram p, string label)
     {
+        var interop = gpu.Interop!;
         gl.Enable(EnableCap.CullFace);
         gl.CullFace(TriangleFace.Back);
+        gl.FrontFace(FrontFaceDirection.Ccw);
+        var cmd = interop.BeginNative(label);
+        var targets = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        var placements = gpu.Frame.Constants.Write<Matrix4x4>(instanceData.AsSpan(0, instanceCount));
+        cmd.BeginRendering(targets.Rendering);
+        Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
         foreach (var g in meshGroupList)
         {
-            gl.FrontFace(g.Mirrored ? FrontFaceDirection.CW : FrontFaceDirection.Ccw);
-            gl.BindVertexArray(g.Vao);
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, meshInstanceBuffer);
-            for (uint a = 0; a < 4; a++)
-            {
+            var va = interop.VertexArray(g.Vao);
+            va.Attributes.AsSpan().CopyTo(attributes);
+            for (int a = 0; a < 4; a++)
                 // The placement's rows at locations the meshes' vertex arrays leave free (their other programs do not read them).
-                uint location = TerrainShaders.MeshInstanceLocation + a;
-                gl.EnableVertexAttribArray(location);
-                gl.VertexAttribPointer(location, 4, VertexAttribPointerType.Float, false, 64, (void*)(g.Offset * 64L + 16 * a));
-                gl.VertexAttribDivisor(location, 1);
-            }
-            gl.DrawElementsInstanced(PrimitiveType.Triangles, (uint)g.IndexCount, DrawElementsType.UnsignedInt, (void*)0, (uint)g.Count);
+                attributes[TerrainShaders.MeshInstanceLocation + a] = new LegacyProgram.Attribute(
+                    new BufferBinding(placements.Handle, placements.Offset + (ulong)(g.Offset * 64L + 16 * a)), Silk.NET.Vulkan.Format.R32G32B32A32Sfloat, 64, true);
+            cmd.BindPipeline(gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout(attributes), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, targets.Formats, label)));
+            state.Record(cmd, targets, GlConventions.FrontFace(g.Mirrored ? FrontFaceDirection.CW : FrontFaceDirection.Ccw));
+            p.BindVertices(cmd, attributes);
+            p.Flush(cmd);
+            cmd.BindIndexBuffer(va.Elements, Silk.NET.Vulkan.IndexType.Uint32);
+            cmd.DrawIndexed((uint)g.IndexCount, (uint)g.Count);
         }
+        cmd.EndRendering();
+        interop.EndNative(cmd);
         gl.FrontFace(FrontFaceDirection.Ccw);
         gl.Disable(EnableCap.CullFace);
         gl.BindVertexArray(0);
@@ -487,8 +654,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     public void Dispose()
     {
+        ReportMeshTiming();
         if (depthPatchProgram != 0) { gl.DeleteProgram(depthPatchProgram); gl.DeleteProgram(depthMeshProgram); }
-        if (meshInstanceBuffer != 0) gl.DeleteBuffer(meshInstanceBuffer);
         gl.DeleteVertexArray(gridVao);
         gl.DeleteBuffer(gridVbo);
         gl.DeleteBuffer(gridEbo);
@@ -498,5 +665,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         gl.DeleteProgram(patchProgram);
         gl.DeleteProgram(meshProgram);
         textures?.Dispose();
+        nativeMesh?.Dispose();
+        nativeDepth?.Dispose();
     }
 }

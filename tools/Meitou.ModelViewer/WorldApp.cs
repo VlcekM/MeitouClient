@@ -68,7 +68,7 @@ static partial class WorldApp
     {
         using var display = new VulkanDisplay(null, vsync: false, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
         streamline = display.Streamline;
-        try { return Screenshot(display.Gl, install, scene, assets, o); }
+        try { return Screenshot(display.Gl, display.VkGl.Context, install, scene, assets, o); }
         finally { streamline = null; }
     }
 
@@ -78,9 +78,9 @@ static partial class WorldApp
         if (gl is VkGl vkGl) vkGl.EndFrame();
     }
 
-    static unsafe int Screenshot(IGl gl, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
+    static unsafe int Screenshot(IGl gl, GpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
-        using var gpu = CreateGpu(gl, install, scene, assets, o, interactive: false);
+        using var gpu = CreateGpu(gl, context, install, scene, assets, o, interactive: false);
         if (gl is VkGl vkGl && gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(vkGl, streamline);
         var (camera, render) = Setup(scene, o);
         if (gpu.Streamer is { } streamer)
@@ -199,7 +199,7 @@ static partial class WorldApp
         if (gpu.Post.AutoExposure is { } band && gpu.Post.ReadExposure() is var (adapted, mean) && float.IsFinite(adapted))
             Console.WriteLine($"exposure  mean luminance {mean:0.000}, band {band.Min:0.###}..{band.Max:0.###}, adapted {adapted:0.000}: x{KenshiLighting.ExposureKey / adapted:0.000}");
         Console.WriteLine($"haze      {(gpu.Sky.KenshiHaze ? "kenshi" : "physical")}, eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {gpu.Sky.EyeClearance:0} above the ground within {KenshiCamera.MaxDistance:0}: altitude weight {gpu.Sky.AltitudeWeight:0.###}, strength {gpu.Sky.HazeStrength:0.##}");
-        if (o.ShowKeys && DebugOverlay.TryCreate(gl) is { } keysOverlay)
+        if (o.ShowKeys && DebugOverlay.TryCreate(gl, context) is { } keysOverlay)
         {
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
             keysOverlay.Visible = true;
@@ -250,14 +250,14 @@ static partial class WorldApp
             () => gpu?.Foliage?.MeitouRange ?? o.MeitouRange, v => { o.MeitouRange = v; if (gpu?.Foliage is { } f) f.MeitouRange = v; });
 
         {
-            gpu = CreateGpu(gl, install, scene, assets, o, interactive: true);
+            gpu = CreateGpu(gl, display.VkGl.Context, install, scene, assets, o, interactive: true);
             if (gl is VkGl vkGl && gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(vkGl, streamline);
-            overlay = DebugOverlay.TryCreate(gl);
+            overlay = DebugOverlay.TryCreate(gl, display.VkGl.Context);
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
             if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render);
-            profiler = new FrameProfiler(gl, gl is VkGl statsGl ? () => statsGl.Stats.GpuFrameMs : null);
+            profiler = new FrameProfiler(gl, display.VkGl.Context, gl is VkGl statsGl ? () => statsGl.Stats.GpuFrameMs : null);
             meter = PassMeter.TryCreate(gl);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             var input = window.CreateInput();
             keyboard = input.Keyboards.FirstOrDefault();

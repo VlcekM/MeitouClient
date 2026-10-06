@@ -123,9 +123,9 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         return o.Screenshot is not null ? Screenshot() : Interactive();
     }
 
-    void Boot(IGl gl, bool interactive)
+    void Boot(IGl gl, GpuContext context, bool interactive)
     {
-        gpu = WorldFrame.CreateGpu(gl, install, scene, assets, o, interactive);
+        gpu = WorldFrame.CreateGpu(gl, context, install, scene, assets, o, interactive);
         if (gl is Meitou.Rendering.Vulkan.VkGl vkGl && gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Vulkan.Upscalers.VendorUpscalers.Factory(vkGl, streamline);
         (camera, render) = WorldFrame.Setup(scene, o);
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate);
@@ -172,7 +172,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         using var display = new VulkanDisplay(null, vsync: false, streamline: WantsDlss());
         streamline = display.Streamline;
         var gl = display.Gl;
-        Boot(gl, interactive: false);
+        Boot(gl, display.VkGl.Context, interactive: false);
         for (int i = 0; i < g.Ticks; i++) session.Tick();
         ApplyCamera(session.Camera.Current);
         gpu.Streamer?.Settle(gpu.Anchor ?? camera.Eye);
@@ -218,8 +218,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         streamline = display.Streamline;
         var window = display.Window!;
         var gl = display.Gl;
-        Boot(gl, interactive: true);
-        var overlay = DebugOverlay.TryCreate(gl);
+        Boot(gl, display.VkGl.Context, interactive: true);
+        var overlay = DebugOverlay.TryCreate(gl, display.VkGl.Context);
         var panel = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render);
         if (panel is not null)
             foreach (var slider in panel.Sliders)

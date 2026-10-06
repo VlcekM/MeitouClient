@@ -53,6 +53,8 @@ public sealed unsafe class DebugOverlay : IDisposable
         """;
 
     readonly IGl gl;
+    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    public GpuContext Gpu { get; }
     readonly uint program, vao, vbo, atlas;
     readonly StbTrueType.stbtt_bakedchar[] glyphs = new StbTrueType.stbtt_bakedchar[CharCount];
     readonly List<float> batch = [];
@@ -63,9 +65,10 @@ public sealed unsafe class DebugOverlay : IDisposable
 
     public bool Visible { get; set; }
 
-    DebugOverlay(IGl gl, byte[] font)
+    DebugOverlay(IGl gl, GpuContext gpu, byte[] font)
     {
         this.gl = gl;
+        Gpu = gpu;
         var pixels = new byte[AtlasSize * AtlasSize];
         fixed (byte* f = font)
         fixed (byte* p = pixels)
@@ -99,10 +102,10 @@ public sealed unsafe class DebugOverlay : IDisposable
     }
 
     /// <summary>The overlay, or null when no monospace font is found.</summary>
-    public static DebugOverlay? TryCreate(IGl gl)
+    public static DebugOverlay? TryCreate(IGl gl, GpuContext gpu)
     {
         var path = FontCandidates.FirstOrDefault(File.Exists);
-        return path is null ? null : new DebugOverlay(gl, File.ReadAllBytes(path));
+        return path is null ? null : new DebugOverlay(gl, gpu, File.ReadAllBytes(path));
     }
 
     /// <summary>

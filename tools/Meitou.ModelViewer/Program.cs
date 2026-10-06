@@ -279,7 +279,7 @@ static class ViewerApp
     {
         using var display = new VulkanDisplay(null, vsync: false);
         var gl = display.Gl;
-        using var renderer = new Renderer(gl, assets);
+        using var renderer = new Renderer(gl, display.VkGl.Context, assets);
         renderer.Upload(scene.Model);
         ApplyMaterials(scene, renderer);
         var (camera, render) = Setup(scene, o);
@@ -338,7 +338,7 @@ static class ViewerApp
         }
 
         {
-            renderer = new Renderer(gl, assets);
+            renderer = new Renderer(gl, display.VkGl.Context, assets);
             renderer.Upload(scene.Model);
             ApplyMaterials(scene, renderer);
             (camera, render) = Setup(scene, o);

@@ -27,6 +27,8 @@ public sealed unsafe class ReflectionPass : IDisposable
     public const int Samples = 4;
 
     readonly IGl gl;
+    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    public GpuContext Gpu { get; }
     readonly uint[] queries = new uint[4];   // two slots of (start, end) timestamps
     readonly bool[] pending = new bool[2];
     readonly WorldRenderOptions options = new();
@@ -41,9 +43,10 @@ public sealed unsafe class ReflectionPass : IDisposable
     readonly List<double> gpuSamples = [];
     readonly List<double> cpuSamples = [];
 
-    public ReflectionPass(IGl gl)
+    public ReflectionPass(IGl gl, GpuContext gpu)
     {
         this.gl = gl;
+        Gpu = gpu;
         // Tuning knobs for experiments (MEITOU_REFL_OBJECTS, _FOLIAGE, _LOD, _AGE); the defaults are what the viewer ships with.
         static float Env(string n, float d) => float.TryParse(Environment.GetEnvironmentVariable("MEITOU_REFL_" + n), System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : d;
         ObjectDistance = Env("OBJECTS", ObjectDistance);

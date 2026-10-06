@@ -17,6 +17,8 @@ static class ShadowShaders
     public const string ReceiverBlock = "KenshiShadowReceiver", CasterBlock = "KenshiShadowCaster";
     /// <summary>The shadow map's texture unit: below the atmosphere's three (<see cref="SkyRenderer.AssignSamplerUnits"/>), out of every scene shader's way.</summary>
     public static int MapUnit { get; private set; } = -1;
+    /// <summary>The GL instances that already have the zero-filled default blocks (one set per device; tests make several in one process).</summary>
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IGl, object> DefaultBlocks = [];
 
     /// <summary>The noise texture's unit (the game's <c>white-noise.png</c>), next below <see cref="MapUnit"/>.</summary>
     public static int NoiseUnit { get; private set; } = -1;
@@ -238,8 +240,9 @@ static class ShadowShaders
     /// </summary>
     public static void Bind(IGl gl, uint program)
     {
-        if (MapUnit < 0)
+        if (!DefaultBlocks.TryGetValue(gl, out _))
         {
+            DefaultBlocks.Add(gl, new object());
             gl.GetInteger(GetPName.MaxCombinedTextureImageUnits, out int combined);
             MapUnit = combined - 4;
             NoiseUnit = combined - 5;
@@ -255,6 +258,7 @@ static class ShadowShaders
                 gl.BindBufferBase(BufferTargetARB.UniformBuffer, binding, buffer);
             }
         }
+        PublishGlobals(gl);
         uint receiver = gl.GetUniformBlockIndex(program, ReceiverBlock);
         if (receiver != uint.MaxValue) gl.UniformBlockBinding(program, receiver, ReceiverBinding);
         uint caster = gl.GetUniformBlockIndex(program, CasterBlock);
@@ -268,5 +272,23 @@ static class ShadowShaders
             gl.UseProgram(0);
         }
         MeitouShadowShaders.Bind(gl, program);
+    }
+
+    /// <summary>
+    /// The shadow blocks and maps as frame globals (docs/renderer-native.md 4.3), once per context: whatever is on their binding points and
+    /// units when a consumer draws, as VkGl would push it for a GL program (ShadowPass binds its buffers and atlas there). No GL call.
+    /// </summary>
+    static void PublishGlobals(IGl gl)
+    {
+        if (GpuContext.Of(gl) is not { Interop: { } interop } ctx || ctx.Globals.Block(ReceiverBlock) is not null) return;
+        var g = ctx.Globals;
+        int map = MapUnit, noise = NoiseUnit;
+        var shadow = FrameGlobals.Sampler2D("uShadowMap", shadow: true);
+        var plain = FrameGlobals.Sampler2D("uShadowNoise");
+        g.Publish(ReceiverBlock, () => interop.UniformBinding(ReceiverBinding));
+        g.Publish(CasterBlock, () => interop.UniformBinding(CasterBinding));
+        g.Publish("uShadowMap", () => interop.SampledUnit(map, shadow));
+        g.Publish("uShadowNoise", () => interop.SampledUnit(noise, plain));
+        MeitouShadowShaders.PublishGlobals(g, interop);
     }
 }

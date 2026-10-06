@@ -20,6 +20,8 @@ public sealed unsafe partial class VkGl
         public int Width, Height, Layers = 1, Levels = 1, Samples = 1;
         public uint DefinedLevels;   // bit per level that has been specified or generated
         public GpuImage? Image;
+        public bool Borrowed;        // the image belongs to someone else (the shared stand-ins, an imported native texture): views are freed, the image is not
+        public Meitou.Rendering.Gpu.Texture? Exported;   // the interop's export (VkGl.Texture), until the image goes
         public readonly Dictionary<(int Base, int Count, int LayerBase, int LayerCount, ImageViewType Type, ulong Swizzle), ImageView> Views = [];
         // GL sampler state
         public TextureMinFilter MinFilter = TextureMinFilter.NearestMipmapLinear;
@@ -39,8 +41,8 @@ public sealed unsafe partial class VkGl
         public GpuImage? CachedImage;
         public Silk.NET.Vulkan.Sampler CachedSampler;
         public ImageView CachedView;
-        public bool IsDepth => Format is Format.D32Sfloat or Format.D24UnormS8Uint or Format.X8D24UnormPack32 or Format.D16Unorm;
-        public bool IsInteger => Format is Format.R8G8B8A8Uint or Format.R32Uint or Format.R16Uint;
+        public bool IsDepth => GlConventions.IsDepthFormat(Format);
+        public bool IsInteger => GlConventions.IsIntegerFormat(Format);
         public bool IsCube => Target == TextureTarget.TextureCubeMap;
         public bool IsArray => Target == TextureTarget.Texture2DArray;
     }
@@ -74,7 +76,9 @@ public sealed unsafe partial class VkGl
 
     void DestroyTexture(GlTextureObj t)
     {
-        var image = t.Image;
+        var image = t.Borrowed ? null : t.Image;
+        t.Exported?.Dispose();
+        t.Exported = null;
         var views = t.Views.Values.ToArray();
         t.Image = null;
         t.Views.Clear();
@@ -144,16 +148,7 @@ public sealed unsafe partial class VkGl
         }
     }
 
-    static ComponentSwizzle Swizzle(int gl) => (GLEnum)gl switch
-    {
-        GLEnum.Red => ComponentSwizzle.R,
-        GLEnum.Green => ComponentSwizzle.G,
-        GLEnum.Blue => ComponentSwizzle.B,
-        GLEnum.Alpha => ComponentSwizzle.A,
-        GLEnum.Zero => ComponentSwizzle.Zero,
-        GLEnum.One => ComponentSwizzle.One,
-        _ => ComponentSwizzle.Identity,
-    };
+    static ComponentSwizzle Swizzle(int gl) => GlConventions.Swizzle(gl);
 
     public void PixelStore(PixelStoreParameter pname, int param)
     {
@@ -161,32 +156,7 @@ public sealed unsafe partial class VkGl
         else if (pname == PixelStoreParameter.PackAlignment) packAlignment = param;
     }
 
-    internal static Format VkFormat(InternalFormat f) => (GLEnum)f switch
-    {
-        GLEnum.Rgba8 or GLEnum.Rgba => Format.R8G8B8A8Unorm,
-        GLEnum.Rgb8 or GLEnum.Rgb => Format.R8G8B8A8Unorm,
-        GLEnum.R8 => Format.R8Unorm,
-        GLEnum.RG8 => Format.R8G8Unorm,
-        GLEnum.R16 => Format.R16Unorm,
-        GLEnum.R16f => Format.R16Sfloat,
-        GLEnum.RG16f => Format.R16G16Sfloat,
-        GLEnum.Rgba16f => Format.R16G16B16A16Sfloat,
-        GLEnum.R32f => Format.R32Sfloat,
-        GLEnum.RG32f => Format.R32G32Sfloat,
-        GLEnum.Rgba32f => Format.R32G32B32A32Sfloat,
-        GLEnum.R11fG11fB10f => Format.B10G11R11UfloatPack32,
-        GLEnum.Rgba8ui => Format.R8G8B8A8Uint,
-        GLEnum.DepthComponent24 or GLEnum.DepthComponent => Format.D32Sfloat,   // engine choice: 32-bit float depth for GL's 24-bit (same or finer)
-        GLEnum.DepthComponent32f => Format.D32Sfloat,
-        GLEnum.Depth24Stencil8 => Format.D24UnormS8Uint,
-        (GLEnum)InternalFormat.CompressedRgbS3TCDxt1Ext => Format.BC1RgbUnormBlock,
-        (GLEnum)InternalFormat.CompressedRgbaS3TCDxt1Ext => Format.BC1RgbaUnormBlock,
-        (GLEnum)InternalFormat.CompressedRgbaS3TCDxt3Ext => Format.BC2UnormBlock,
-        (GLEnum)InternalFormat.CompressedRgbaS3TCDxt5Ext => Format.BC3UnormBlock,
-        GLEnum.CompressedRedRgtc1 => Format.BC4UnormBlock,
-        GLEnum.CompressedRGRgtc2 => Format.BC5UnormBlock,
-        _ => throw new NotSupportedException($"texture format {f}"),
-    };
+    internal static Format VkFormat(InternalFormat f) => GlConventions.VkFormat(f);
 
     static bool IsCompressed(Format f) => f is Format.BC1RgbUnormBlock or Format.BC1RgbaUnormBlock or Format.BC2UnormBlock or Format.BC3UnormBlock or Format.BC4UnormBlock or Format.BC5UnormBlock;
 
@@ -416,7 +386,9 @@ public sealed unsafe partial class VkGl
             int lw = Math.Max(t.Width >> level, 1), lh = Math.Max(t.Height >> level, 1);
             region.ImageExtent = new Extent3D((uint)Math.Min(width, lw - x), (uint)Math.Min(height, lh - y), 1);
         }
-        vk.CmdCopyBufferToImage(UploadCmd, staging.Buffer, t.Image!.Image, ImageLayout.General, 1, &region);
+        var cb = UploadCmd;
+        OrderUpload(cb, t.Image!.Image.Handle);
+        vk.CmdCopyBufferToImage(cb, staging.Buffer, t.Image!.Image, ImageLayout.General, 1, &region);
         Stats.Uploads++;
         Stats.UploadBytes += (long)staging.Size;
     }
@@ -443,6 +415,30 @@ public sealed unsafe partial class VkGl
         }
         FullBarrier(cb);
         t.DefinedLevels = (1u << t.Levels) - 1;
+    }
+
+    // Images copied into by this frame's upload command buffer since its last transfer barrier.
+    readonly HashSet<ulong> uploadedImages = [];
+    long uploadedFrame = -1;
+
+    /// <summary>
+    /// A second copy into an image in one upload command buffer (a strip re-uploaded, a level re-specified) waits for the first: without
+    /// the barrier the two copies race and either may land last (sync validation's WRITE_AFTER_WRITE; it made pixels differ between runs).
+    /// </summary>
+    void OrderUpload(CommandBuffer cb, ulong image)
+    {
+        if (uploadedFrame != device.Frames.FrameNumber) { uploadedImages.Clear(); uploadedFrame = device.Frames.FrameNumber; }
+        if (uploadedImages.Add(image)) return;
+        var barrier = new MemoryBarrier2
+        {
+            SType = StructureType.MemoryBarrier2,
+            SrcStageMask = PipelineStageFlags2.AllTransferBit, SrcAccessMask = AccessFlags2.TransferWriteBit,
+            DstStageMask = PipelineStageFlags2.AllTransferBit, DstAccessMask = AccessFlags2.TransferWriteBit | AccessFlags2.TransferReadBit,
+        };
+        var info = new DependencyInfo { SType = StructureType.DependencyInfo, MemoryBarrierCount = 1, PMemoryBarriers = &barrier };
+        vk.CmdPipelineBarrier2(cb, &info);
+        uploadedImages.Clear();
+        uploadedImages.Add(image);
     }
 
     void BufferWriteBarrierAll(CommandBuffer cb)

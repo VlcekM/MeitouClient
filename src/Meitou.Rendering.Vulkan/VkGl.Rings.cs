@@ -38,7 +38,7 @@ public sealed unsafe partial class VkGl
         {
             // Keep the regular chunks for reuse, drop the oversized ones.
             for (int i = chunks.Count - 1; i >= 0; i--)
-                if (chunks[i].Size > ChunkSize) { owner.device.Allocator.Free(chunks[i]); chunks.RemoveAt(i); }
+                if (chunks[i].Size > ChunkSize) { owner.Context.HostMemory.Forget(chunks[i].Buffer); owner.device.Allocator.Free(chunks[i]); chunks.RemoveAt(i); }
             current = chunks.Count > 0 ? 0 : -1;
             offset = 0;
         }
@@ -59,6 +59,7 @@ public sealed unsafe partial class VkGl
                     if (size <= chunks[current].Size) { offset = size; return Slice(chunks[current], 0, size); }
             }
             var chunk = owner.device.Allocator.CreateBuffer(Math.Max(ChunkSize, size), Usage, MemoryKind.Upload, "frame ring");
+            owner.Context.HostMemory.Register(chunk.Buffer, chunk.Mapped, chunk.Size);   // the draw log hashes what draws read from it
             chunks.Add(chunk);
             current = chunks.Count - 1;
             offset = size;
@@ -69,7 +70,7 @@ public sealed unsafe partial class VkGl
 
         public void Dispose()
         {
-            foreach (var c in chunks) owner.device.Allocator.Free(c);
+            foreach (var c in chunks) { owner.Context.HostMemory.Forget(c.Buffer); owner.device.Allocator.Free(c); }
             chunks.Clear();
         }
     }

@@ -3,7 +3,7 @@
 **Status: Proposed** ([../DECISIONS.md](../DECISIONS.md) 22, which would replace 7). Nothing here is built yet. This is the design that the
 wave-2 foundation agent and the six wave-3 port agents implement from, and the owner reviews. It is an engine document: the labels
 Verified / Observed / Unknown are for facts about the game, so here claims carry where they come from: *from the code* (a file is named),
-*measured* (how is said), *estimate* (with the reasoning), or *open* (a question for the owner, collected in [Open questions](#open-questions)).
+*measured* (how is said), *estimate* (with the reasoning), or *open* (a question for the owner, answered in [Owner decisions](#owner-decisions)).
 
 How to read it. Each section opens with a short plain-language summary. The details under it are for the agents. The order follows
 the brief: goals (1), the API (2), shaders (3), how old and new code share a frame while the port runs (4), GPU-driven foliage and objects
@@ -95,7 +95,7 @@ What the native path needs on top (the foundation turns them on and checks them 
 `bufferDeviceAddress` is **not** needed: storage buffers bound as descriptors cover every use here. That keeps clear of the extension-versus-core
 issue DECISIONS 17 had to work around for Streamline.
 
-**GPU support (estimate, open question 1).** The added features are present on every desktop GPU we expect to run Kenshi with a Vulkan 1.3
+**GPU support (estimate; owner decision 1: required).** The added features are present on every desktop GPU we expect to run Kenshi with a Vulkan 1.3
 driver (NVIDIA since Maxwell, AMD since GCN on current drivers, Intel Xe, the Steam Deck's RADV). This has not been checked against a
 driver database. Only the RTX 4070 in this machine has been tried. A device without them would fail at start with a message.
 Keeping a push-descriptor fallback for such devices is possible, at the price of a second descriptor path.
@@ -162,7 +162,7 @@ public sealed class GpuFrame
 ```
 
 - **Queues.** The graphics queue does everything, as today. `VulkanDevice` already finds a dedicated transfer family
-  (`HasDedicatedTransfer`). Moving streaming uploads onto it is optional work for the foundation (open question 8). It needs either
+  (`HasDedicatedTransfer`). Moving streaming uploads onto it is not wave-2 work (owner decision 8). It needs either
   concurrent sharing on streamed resources or queue-family ownership transfers, and a timeline-semaphore wait in the frame's submit.
 - **Frame ring.** `FrameRing` stays as it is: 2 slots, a fence per slot, deferred deletion (`DeferDelete` is already thread-safe). The
   native per-frame state hangs off the slot.
@@ -494,7 +494,7 @@ A second, separately gated change per renderer moves its shaders to the native d
 - **Why this can still change pixels** (risk 13). The SPIR-V differs (loads from other blocks, indexed sampler arrays), and a driver's
   compiler may schedule or fuse the same expressions differently, for example contracting `a * b + c` into an FMA in one module and not in
   the other. GLSL's `precise` and `invariant gl_Position` limit this, and both are allowed in step O where a gate fails. The gate decides.
-  If a renderer cannot reach 0 differing pixels in step O, it stays on step P until the owner decides (open question 2).
+  If a renderer cannot reach 0 differing pixels in step O, it stays on step P or, under owner decision 2, is accepted at 1/255 per channel with the case documented.
 - **Shared shader text is ported once**, by the foundation as API steward, before wave 3b: the native variants of `Shaders.MeshVertex` /
   `MeshFragment` (used by foliage, buildings and the viewer's mesh and character renderers), `AtmosphereShaders.Functions` (which embeds
   `ShadowShaders.Functions`), `ShadowShaders.DepthFragment` / `MeshDepthFragment`, and `PostProcessShaders.Vertex`. Agents then build their
@@ -601,7 +601,7 @@ public sealed class FrameGlobals
 
 - **Every image stays in `GENERAL`** until phase 8 is done. VkGl assumes it everywhere (attachments, sampling, transfers, the upscalers
   with `ImageLayout.General` tags). A native side using optimal layouts would have to transition back at every seam crossing, for every image
-  VkGl might touch. Whether optimal layouts are worth it afterwards is open question 5: NVIDIA treats GENERAL like the optimal layouts for
+  VkGl might touch. Whether optimal layouts are worth it afterwards stays open until after phase 8 (owner decision 5): NVIDIA treats GENERAL like the optimal layouts for
   these uses, but AMD may lose colour and depth compression. No AMD hardware has been measured.
 - **At every crossing a full barrier** (`ALL_COMMANDS`, memory write to read and write) is placed by `BeginNative` and `EndNative`, and
   `ResourceStates.AssumeFullBarrier()` is called. This is no worse than today: VkGl already places one before every render pass
@@ -769,7 +769,7 @@ contraction into FMA) and the C#'s operation order, the GPU reproduces scalar C#
 - **A2, GPU port.** The same formulas on the GPU. The remaining divergence is the square root inside the fade (`d` for w). A **cull
   verification mode** (`MEITOU_GPU_CULL_VERIFY=1`) runs the A1 CPU cull as well, reads the GPU's per-view lists back a frame later, and
   reports any difference in visible sets (must be none), order (must be none) and fade (each difference with its ulp distance). The pixel
-  gate is 0 differing pixels. If it fails only where the verifier shows fade differences of ≤ 2 ulp, the owner decides (open question 2):
+  gate is 0 differing pixels. If it fails only where the verifier shows fade differences of ≤ 2 ulp, owner decision 2 applies (at most 1/255 per channel, documented); the options were:
   accept with the record, or keep the CPU fade (the GPU decides visibility, the CPU-identical fade is recomputed per instance in the vertex
   shader from the same inputs, at the same precision issue), or emulate a correctly rounded square root.
 
@@ -781,9 +781,9 @@ slices nothing changes, because every slice is its own view, drawn where the CPU
 These change the picture on purpose, so they are not part of any parity step. They come after A2 and C2, each behind an `Enhancement`
 (Meitou default, Faithful = today's ranges and meshes, so `--faithful all` keeps the gate valid):
 
-- **Size-based ranges** (`foliage-range`, name open, open question 3): an instance's range follows its projected size (bounding radius
+- **Size-based ranges** (`range`, owner decision 3): an instance's range follows its projected size (bounding radius
   over distance against a pixel threshold), capped by the layer's range × the setting. Large trees go far, small junk stops sooner. This
-  is how small things become affordable at several thousand units. The draw-distance targets themselves are open question 4.
+  is how small things become affordable at several thousand units. The distances are adjustable settings per size class (owner decision 4).
   **Done on the CPU (2026-10-06)** as the `range` switch, by size class per mesh rather than per instance (a group keeps one range, so the
   ChunkRecord's per-view range carries it unchanged): large / medium / small at 5000 / 2500 / 800 by default, Tab sliders and
   `--range-large|medium|small`; FAR layers' large meshes keep the longer of that and 8000 × the setting (docs/viewer.md "Foliage",
@@ -887,14 +887,94 @@ Deliverables, in order. Each step lands only after the gate (7.7) has passed:
 5. Device features of section 1, the disk pipeline cache path, `VK_EXT_debug_utils` without validation, and `MEITOU_VK_VALIDATION=sync`
    (synchronisation validation through `VK_EXT_layer_settings`; `=gpu` for GPU-assisted validation of bindless indices).
 6. The draw log (7.6) on both sides, and `meitou-tools draw-log-diff`.
-7. **Pilot port**: `TerrainRenderer.DrawMeshes` (the TERRAIN-mode mesh path, instanced in depth, one draw each in colour), step P. It is
+7. **Pilot port**: `TerrainRenderer.DrawMeshes` (the TERRAIN-mode mesh path, instanced in depth and in colour: `GroupMeshes` batches
+   both), step P. It is
    the coupling that foliage and objects both call, so porting it before A and C start removes their only dependency on B. It also runs
    one full gate on a real renderer before six agents rely on the API.
 8. Constructor plumbing: every renderer's constructor gets a `GpuContext` parameter, and `WorldFrame.CreateGpu`, the game and the viewer pass
    it. This is mechanical, and after it no port agent needs to edit `CreateGpu`.
 9. `FrameProfiler` timestamps on `QueryArena` through `Interleave` (StageClock keeps working while the stages move).
 
-After wave 2 the foundation agent stays on as **API steward** for wave 3 (open question 6). Agents request additions to `Meitou.Rendering/Gpu/`.
+**Progress (wave 2, 2026-10-06).** Gate for every step: the build, the tests, the ten pictures (`--faithful all`) at maximum 0 against
+the base build (master `27be7c2`, itself identical in two runs), and validation (`=1` and `=sync`) on the ten views.
+
+- Step 1 (`3a4021f`): done; 0 px, validation 0.
+- Step 2: done. `GlConventions` (formats, blend and compare, address modes, swizzles, front face, topology, vertex formats, the
+  dummy-vertex convention, `Scatter`), `SamplerDesc.FromGl` / `SamplerCache`, `GpuDefaults` (dummy vertex buffer and textures),
+  `PipelineFactory` (VkGl's pipeline creation, now shared). The sampler key gained the integer-format flag (it decides the border
+  colour; VkGl's old key could hand an integer texture the float sampler of an equal key). The gate found a few-pixel rock-view
+  difference in 2 of 9 runs; it was the pre-existing race of two uploads into one image (sync validation's 10 WRITE_AFTER_WRITE
+  per view), fixed in VkGl (`OrderUpload`): 0 of 9 runs differ since, sync validation 0.
+- Step 3: done. The section 2 API and `LegacyProgram`; device features required by `GpuContext` (pulled forward from step 5:
+  bindless needs them). Tests (`GpuApiTests`): native triangle against VkGl byte-identical, SPIR-V identity for all 27 world source
+  pairs, pipeline preparation and `LatePipelines`, `ResourceStates` table, `QueryArena` read-back, the upload assert, `BufferArena`,
+  compute writing indirect arguments for a bindless draw.
+- Step 4: done. `IGlInterop` on VkGl (`VkGl.Interop.cs`), the guard (on the chokepoints that record or flush: the command-buffer and
+  upload-buffer getters, `Flush`, `BeginFrame` / `EndFrame`; calls that only change GL state do not throw), export (`Texture`,
+  `Sampled`, plus `SampledUnit` and `UniformBinding`: what is on a unit or binding point, as a GL program would read it), import.
+  `FrameGlobals` publishes by unit and binding point (so a consumer reads what the GL state holds at its draw) from `SkyRenderer`
+  (and its uniform values), `ShadowShaders` / `MeitouShadowShaders` (the unit and block owners; `ShadowPass` binds into them) and
+  `TerrainRenderer` (heights). `LegacyProgram` reads a published sampler or block it was not given, and `ApplyGlobals()` writes the
+  published uniforms. Seam tests (`SeamTests`): the 4.6 cases with synchronisation validation on; the stale-pipeline case fails
+  with the invalidation removed (checked).
+- Step 5: done. `MEITOU_VK_VALIDATION=sync|gpu` through `VK_EXT_layer_settings`, debug utils without validation, the pipeline cache
+  in `%LOCALAPPDATA%\Meitou\pipeline-cache.bin`.
+- Master `cec04c8` (VkGl counters and phase timers) merged; native segments add their draws, pipeline binds and pushes to `VkGlStats`
+  at `EndNative`, so the pass meter keeps counting ported draws.
+- Step 6: done. VkGl logs each draw (`VkGl.DrawLog.cs`) in `CommandList`'s format; VkGl's per-frame rings are registered as host
+  memory, so per-frame bytes are logged by hash on both sides. `meitou-tools draw-log-diff a b [--keep-handles]` renames handles by
+  first use, ignores labels and comment lines, prints the first differing draws field by field and counts differing draws per program
+  and target format. A test draws one triangle through VkGl and the same through `LegacyProgram` with exported objects and checks
+  the two lines are equal. **Run-to-run noise:** two runs of the same build differ in 30 of 873 draws at the rock view (13:00): 15
+  shadow-depth and 15 colour draws of one instanced mesh program (84-byte vertices, placements at locations 7 to 10), whose batch
+  contents and order follow streaming; the pictures are identical. Compare a port's logs per program (its own lines are stable).
+- Additive exports for ports: `CurrentState()` (GL's fixed-function state as VkGl would apply it, with `DrawState.Pipeline` and
+  `DrawState.Record`) and `VertexArray(vao)` (a VAO's attributes and element buffer).
+- Step 7 (pilot): done. `TerrainRenderer.DrawMeshes` records natively in colour and depth: one native segment per call
+  (`DrawGroups`: `BeginNative`, `CurrentTargets`, `CurrentState`, the placements written to the frame's constants, then per group the
+  VAO's attributes plus the four placement rows at locations 7 to 10, pipeline, dynamic state with the mirrored winding, vertices,
+  `Flush`, indexed instanced draw). Uniforms as `Apply` sets them (`ApplyNative`; atmosphere and heights through `ApplyGlobals`), samplers
+  from the GL units after the same binds (`BindUnitSamplers`), so the GL state after the call is what the GL version left. Both native
+  programs are created with the GL programs they replace (constructor, `DrawDepth`), never inside a draw. Gate against the pre-pilot
+  build (both Release): `--faithful all` ten views 0 px except the rock view at 13:00 (max 14, see below), Meitou default ten views
+  0 px, `--debug-shadows 1` forest and Hub at 13:00 and 2:00 0 px, validation `=1` and `=sync` 0 on the ten views, tests 333 passed.
+  The terrain programs' log lines equal VkGl's except one known artifact (next item).
+- **Draw-log artifact (wave 3: read before diffing an instanced port).** `DrawLog.DescribeVertex` hashes `instances × stride` bytes from
+  each binding's offset. For an attribute at an offset inside the record (locations 8 to 10 here, +16/+32/+48) the hashed range runs up to
+  that many bytes past the data, into whatever follows in the buffer, which differs between VkGl's ring and the native constants. Those
+  locations then differ while the data the shader reads is the same: check the location at offset 0 (7 here), which covers every byte.
+- **Rock view noise (pre-existing, both builds).** The pre-pilot build alone, run four times at the rock view at 13:00, gives two pictures
+  14 levels apart (`--faithful all`), and its two Meitou-default runs differ at the rock view at 2:00 (max 7). The pilot build lands on the
+  same two pictures. It is the instanced mesh program with 84-byte vertices whose instance order follows streaming (step 6's 30 noisy
+  draws, and one draw of it in a forest log); the terrain meshes are not involved. The step-2 fix (`OrderUpload`) removed the upload race,
+  not this. One silent viewer exit at the rock view at 2:00 (no exception, no crash event) was seen once before the pilot and once with
+  it, with other agents' viewers running; six reruns were clean.
+- **Pilot CPU (forest still camera, `--fly-benchmark 300 --fly-speed 0 --faithful all`, `MEITOU_MESH_TIMING=1`, three interleaved runs
+  each, medians, the machine shared with another agent's viewer).** Before (VkGl): colour 101.8 µs per call, depth 333.5 µs per call.
+  After (native step P): colour 176.9 µs, depth 568.9 µs; 13,200 draws in 600 calls (22 per call), +0.3 ms per frame, render-thread
+  p50 5.0 against 5.1 ms (within noise). **Step P did not make this renderer cheaper**: its draws were already instanced (22 per call),
+  so the fixed cost of a native segment dominates. Measured inside the pilot (stopwatch per phase, 300 frames): `BeginNative` 12 µs,
+  `CurrentTargets` + `CurrentState` + the placements' copy + `BeginRendering` ~39 µs, the first `Flush` of a segment ~36 µs (the full
+  set-0 push: every global sampler and block is a getter call into the interop), `EndNative` ~5 µs; per draw ~3 µs (export of the VAO
+  1.0, dynamic state 0.7, pipeline lookup 0.56, vertex buffers 0.5, index + draw 0.35, `Flush` 0.09). For wave 3: keep a native
+  segment per pass, not per call; resolve VAOs and pipelines once per mesh, not per draw (the native model does); set only the dynamic
+  state that changes. The API gained, from these measurements: `Flush` skips set 0 when nothing was bound since the last flush in the same
+  segment (globals are read at a program's first flush in a segment and after a `Bind`; a GL state change inside a native segment is
+  not seen until then), `VertexLayout` returns the previous object when the inputs are equal, frame-global uniforms are written without
+  boxing, `FrameGlobals.ApplyCount` lets an owner compute shared getter values once per `ApplyGlobals` (the sky's 13 atmosphere values).
+- Step 8: done. Every renderer constructor (and factory) takes the `GpuContext` after the `IGl`: `TerrainRenderer`, `TerrainTextures`,
+  `TerrainShadowMap`, `SkyRenderer`, `PostProcess`, `ReflectionPass`, `WaterRenderer`, `WorldObjectRenderer`, `FoliageRenderer`,
+  `ShadowPass`, `DebugOverlay`, `FrameProfiler`, the viewer's `Renderer` and `CharacterRenderer`; each keeps it as `Gpu` (the
+  `CharacterRenderer` as `Context`: it has a nested `Gpu` class). `WorldFrame.CreateGpu(gl, context, ...)`; the game and the viewer
+  pass `display.VkGl.Context`. Owners use it instead of `GpuContext.Of(gl)` (the static `ShadowShaders` / `SkyRenderer.PublishUnits`
+  helpers still look it up).
+- Step 9: done. `FrameProfiler.Stamp` allocates a `QueryArena` slot and records it with `Interleave` (no pass break); results are read
+  a frame ring later with `TryRead`. GL queries remain only when there is no interop. Test: `SeamTests.Profiler_stamps_go_through_the_seam_into_VkGl_passes`
+  (stamps inside VkGl's open pass, three per frame in the native arena, GPU frames read, sync validation clean).
+- Steps 7 to 9 landed in one commit (their edits share `TerrainRenderer.cs`, `SkyRenderer.cs` and `FrameProfiler.cs`); the gate above
+  ran on the combined build.
+
+After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the
 native shader prelude and the shared native shader variants (3.3), each proven on one consumer.
 
@@ -908,8 +988,8 @@ Each agent owns its files completely: it may edit them, and nobody else may. Cal
 | **B terrain + shadow host** | `TerrainRenderer.cs` (except `DrawMeshes`, done by the pilot), `TerrainTextures.cs`, `TerrainStreamer.cs`, `TerrainShaders.cs`, `TerrainShadowMap.cs`, `ShadowPass.cs` and `ShadowPass.Meitou.cs` (except `DrawDebug` and `CaptureDepth`, which belong to F) | 122 + 52 + 48 + 123 + 78, minus the debug views | patches, depth, the atlas host, the Meitou blocker map and terrain shadow sweep | native model; instanced main-pass TERRAIN-mode path (unblocks GPU-driven rocks for A) |
 | **C objects + characters** | `WorldObjectRenderer.cs`, `BuildingLodMesh.cs` (`ObjectMeshCache`), `BuildingLodShaders.cs`, `BuildingMaterial.cs`, `MaterialResolver.cs`, `ObjectStreamer.cs`, `WorldObjects.cs`, `WorldTextureCache.cs` (shared with A: A only reads `WorldTexture`), `Model.cs`; the viewer's `Renderer.cs`, `CharacterRenderer.cs`, `CharacterScene.cs`, `Animator.cs` | 39 + 38 + 34 + 116 + 93 | objects, distant towns, the viewer's mesh and character drawing | native model; GPU-driven objects with LOD (optional, C1/C2 like A1/A2) |
 | **D sky, clouds, water + reflection host** | `SkyRenderer.cs` (the clouds are part of its sky shader), `AtmosphereShaders.cs` *content* (frozen for others), `WaterRenderer.cs`, `ReflectionPass.cs` | 80 + 52 + 60 | sky, clouds, water, the reflection host (MSAA target and resolve) | native model, `FrameConstants` atmosphere part |
-| **E post-processing + upscalers** | `PostProcess.cs`, `PostProcessShaders.cs`, `PostProcessOptions.cs`, `UpscaleShaders.cs`, `Upscaling.cs`, `Upscalers/*` (FSR, DLSS, Streamline) | 181 | (optional, open question 10) the scene targets (host), SSAO, velocity, TAA, exposure, composite, FXAA, heat haze, vendor upscalers on native images | native model |
-| **F overlays, settings, debug** | `DebugOverlay.cs`, `SettingsPanel.cs`, `FrameProfiler.cs`, `FramebufferCapture.cs`, `ShadowPass.DrawDebug` / `CaptureDepth` and their shader text, the viewer's `Program.cs`, `CharacterApp.cs`, `WorldApp.cs`, `WorldApp.Benchmark.cs`, the game's `Program.cs` (its IGl calls: the screenshot target and readback) | 42 + 6 + 2 + debug views + 74 + 11 | (optional, open question 10) overlay text and panels, profiler chart, screenshots and readback, the debug views | native model |
+| **E post-processing + upscalers** | `PostProcess.cs`, `PostProcessShaders.cs`, `PostProcessOptions.cs`, `UpscaleShaders.cs`, `Upscaling.cs`, `Upscalers/*` (FSR, DLSS, Streamline) | 181 | (mandatory, owner decision 10) the scene targets (host), SSAO, velocity, TAA, exposure, composite, FXAA, heat haze, vendor upscalers on native images | native model |
+| **F overlays, settings, debug** | `DebugOverlay.cs`, `SettingsPanel.cs`, `FrameProfiler.cs`, `FramebufferCapture.cs`, `ShadowPass.DrawDebug` / `CaptureDepth` and their shader text, the viewer's `Program.cs`, `CharacterApp.cs`, `WorldApp.cs`, `WorldApp.Benchmark.cs`, the game's `Program.cs` (its IGl calls: the screenshot target and readback) | 42 + 6 + 2 + debug views + 74 + 11 | (optional, owner decision 10) overlay text and panels, profiler chart, screenshots and readback, the debug views | native model |
 
 **Frozen after wave 2** (only the steward edits them, additively):
 - `src/Meitou.Rendering/Gpu/**` (native API, Core, Shaders), `src/Meitou.Rendering.Vulkan/VkGl*.cs`, `Gpu/IGl.cs`, `Gpu/GlEnums.cs`, `Gpu/IGlInterop.cs`, `FrameGlobals`.
@@ -1006,9 +1086,9 @@ For every step that claims parity (foundation steps, 3a ports, A1, A2, C1, C2, s
 | 11 | **Alpha-to-coverage** depends on the target's sample count | reflection (4×) | take samples from the target (5.5) |
 | 12 | **Baseline non-determinism** | the gate itself | double baseline run (7.7) |
 | 13 | **Compiler scheduling** differs once SPIR-V differs (step O, specialisation constants) | step O | step P first with byte-identical SPIR-V; `precise` / `invariant` where needed; owner decision on failures |
-| 14 | **GPU culling floats** (5.6) | A2, C2 | A1/C1 alignment, the verifier, open question 2 |
+| 14 | **GPU culling floats** (5.6) | A2, C2 | A1/C1 alignment, the verifier, owner decision 2 |
 | 15 | **Merge conflicts in `WorldFrame.cs`** | everyone | constructor plumbing by the foundation; line-local edits only |
-| 16 | **Hardware floor** (bindless, multi-draw) | users with old GPUs or drivers | checked at start with a message; open question 1 |
+| 16 | **Hardware floor** (bindless, multi-draw) | users with old GPUs or drivers | checked at start with a message; owner decision 1 |
 
 ---
 
@@ -1149,30 +1229,29 @@ native model ~0.1-0.2 µs, against ~2-4 µs today: roughly 5-10× fewer CPU micr
 
 ---
 
-## Open questions
+## Owner decisions
 
-For the owner. Each names the section it comes from.
+The owner's answers (2026-10-06) to the questions this design left open. They are numbered as the questions were, and the text above
+refers to them as "owner decision N".
 
-1. **Hardware floor** (1, 2.6): require descriptor indexing (bindless), multi-draw indirect, draw-indirect-count and shader draw parameters,
-   and refuse to start without them? Or keep a push-descriptor fallback (a second descriptor path to maintain)? Driver support has not been
-   checked beyond the RTX 4070.
-2. **Exactness where the GPU cannot promise it** (3.3, 5.6): if step O or the GPU culling (A2, C2) leaves pixel differences that the
-   verifier traces to compiler scheduling or to ≤ 2 ulp fade differences, accept them with the record, or stay on step P / the CPU fade? And
-   may A1-style reference-alignment steps change the Faithful picture where they are traced to ulp-level dither flips?
-3. **Names of the new switches** (5.7): `foliage-range` (size-based ranges), `impostors`, `occlusion`. Separate switches or one
-   "draw distance" switch? Meitou default as usual?
-4. **Draw-distance targets** (1, 5.7): "4-5k units" for foliage, junk and objects. Today the foliage setting already defaults to 4× the
-   game's ranges (`FoliageRenderer.RangeSetting`, `MEITOU_FOLIAGE_RANGE`, default 4). Is 4-5k the target for small things (junk, rocks, bushes)
-   at full density, with large trees further?
-5. **Image layouts after phase 8** (4.4): stay in GENERAL (simple, fine on NVIDIA), or move to optimal layouts with `ResourceStates`
-   tracking them (possibly faster on AMD; not measured, no AMD hardware here)?
-6. **API steward** (7.1): keep the foundation agent running through wave 3 to land additive API changes, or have agents propose them to the
-   owner?
-7. **The viewer's mesh and character modes** (7.2): port `tools/Meitou.ModelViewer/Renderer.cs` and `CharacterRenderer.cs` (209 IGl calls)
-   as they are, or retire them in favour of the world renderer's object path, which characters will need in the game anyway?
-8. **Transfer queue** (2.2): move streaming uploads onto the dedicated transfer queue in wave 2, or later? It removes the upload command
-   buffer's GPU time from the frame, and its stutters, but adds ownership-transfer or concurrent-sharing work.
-9. **Documentation drift** (7.7): docs/engine.md and DECISIONS 2 say "eight" parity views. `parity.sh` renders ten. Correct them in the
-   foundation's first change?
-10. **Step P everywhere?** (3.2): step P is proposed as mandatory for A, B, C and D (large shaders with shared includes) and optional for E
-    and F (small, self-contained shaders, where going straight to the native model is cheap to gate). Agree?
+1. **Hardware floor** (1, 2.6): required. The device must have descriptor indexing (`runtimeDescriptorArray`,
+   `descriptorBindingPartiallyBound`, `descriptorBindingVariableDescriptorCount`, `descriptorBindingSampledImageUpdateAfterBind`,
+   `descriptorBindingUpdateUnusedWhilePending`, `shaderSampledImageArrayNonUniformIndexing`) and multi-draw indirect
+   (`multiDrawIndirect`, `drawIndirectFirstInstance`); without them the program refuses to start with a message naming what is missing.
+   No push-descriptor fallback for the native model. `drawIndirectCount` and `shaderDrawParameters` (wave 3b) are enabled where present
+   and reported in `GpuFeatures`.
+2. **Exactness** (3.3, 5.6): parity-port steps (step P, A1, C1, wave 4) must give 0 differing pixels. The later native-model and GPU-driven
+   steps (step O, A2, C2) may differ by at most 1/255 per channel, and every such case is documented (view, pixels, cause from the draw
+   log or the cull verifier).
+3. **Switch names** (5.7): `range` (size-based ranges), `impostors`, `occlusion`; separate `Enhancement` switches, Meitou default.
+4. **Draw distances** (1, 5.7): adjustable settings, not fixed numbers. Tab-panel sliders per size class, for example large (ruins,
+   wrecks), medium (junk, rocks) and small (litter, bushes), with defaults around 5000 / 2500 / 800 units, plus command-line options. This
+   is for agent A's `range` switch in wave 3b; the wave-2 API needs nothing for it (the per-view range cap of 5.3 takes the setting).
+5. **Image layouts** (4.4): stay in GENERAL; revisit after phase 8.
+6. **API steward** (7.1): the foundation agent stays on through wave 3 and lands API additions. No transfer queue in wave 2 (this also
+   answers question 8).
+7. **The viewer's mesh and character modes** (7.2): the character renderer is ported later, by agent C. The plain mesh viewer may be
+   retired later, not by the foundation.
+8. **Transfer queue** (2.2): not in wave 2 (decision 6).
+9. **Documentation drift** (7.7): "eight" parity views corrected to "ten" in docs/engine.md and DECISIONS 2.
+10. **Step P everywhere?** (3.2): step P stays mandatory for post-processing (E) as for A to D; it is optional for overlays (F).
