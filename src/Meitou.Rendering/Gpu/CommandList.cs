@@ -297,6 +297,17 @@ public sealed unsafe class CommandList
         Stats.IndirectDraws++;
     }
 
+    /// <summary>Non-indexed draws from <paramref name="args"/> (<c>VkDrawIndirectCommand</c>, 16 bytes each): the first
+    /// <paramref name="count"/> (a 32-bit value in <paramref name="countBuffer"/> at <paramref name="countOffset"/>, at most <paramref name="maxCount"/>),
+    /// one call. Needs <c>drawIndirectCount</c> (Vulkan 1.2) and <c>drawIndirectFirstInstance</c> for a non-zero firstInstance.</summary>
+    public void DrawIndirectCount(Buffer args, ulong offset, Buffer countBuffer, ulong countOffset, uint maxCount, uint stride = 16)
+    {
+        Log?.Indirect(args, offset, maxCount, stride);
+        vk.CmdDrawIndirectCount(Handle, args, offset, countBuffer, countOffset, maxCount, stride);
+        Stats.Draws++;
+        Stats.IndirectDraws++;
+    }
+
     // ---- compute and transfer ----
 
     public void BindPipeline(ComputePipeline pipeline)
