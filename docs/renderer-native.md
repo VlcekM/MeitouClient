@@ -432,6 +432,16 @@ cmd.EndLabel();
 - **`DrawIndexedIndirectCount`** is for wave 3b, once meshes share one vertex and index arena so one call can cover many batches. In wave 3a
   and the first GPU-driven step, each batch is one `DrawIndexedIndirect` with `count = 1`. That keeps the vertex shaders unchanged
   (section 5.4) and still costs only ~0.06-0.10 µs per draw (measured).
+- *As built (steward additions for A2, 2026-10-06; additive).* **`GpuFrame.PreFrame`**: a `CommandList` recording into the frame's upload
+  command buffer, which VkGl submits ahead of the frame's own in the same submission, with a full barrier at its end. Whatever is recorded there,
+  at any point of the frame's recording (inside a native segment or a host pass too, where a dispatch is impossible), executes before every
+  command of the frame's own list and after the uploads recorded before it; the caller places its own barriers between its commands. That is
+  where a cull per view goes (5.3 as built). Compute workgroup sizes are written in the GLSL (`local_size_x = 256`; `ShaderLibrary.Compute`
+  takes no specialisation). **`ReadbackBuffer`**: host-visible cached memory a copy lands in, read once `ReadbackBuffer.Completed(ctx, frame)`
+  (the frame ring's completed frame), never waited for. `CommandList.DrawIndexedIndirect` goes through a cached device entry point like the
+  other per-draw commands. **Verified** by `GpuApiTests.A_dispatch_recorded_into_PreFrame_runs_before_the_frames_own_commands` (synchronisation
+  validation on): an indirect draw and a copy recorded first in the frame's list read the arguments a dispatch recorded later into `PreFrame`
+  wrote; the pixels and the read-back arguments are the dispatch's.
 
 ### 2.9 Rendering and synchronisation: declared uses, immediate recording
 
@@ -906,9 +916,74 @@ contraction into FMA) and the C#'s operation order, the GPU reproduces scalar C#
   gate is 0 differing pixels. If it fails only where the verifier shows fade differences of ≤ 2 ulp, owner decision 2 applies (at most 1/255 per channel, documented); the options were:
   accept with the record, or keep the CPU fade (the GPU decides visibility, the CPU-identical fade is recomputed per instance in the vertex
   shader from the same inputs, at the same precision issue), or emulate a correctly rounded square root.
+  **Done (2026-10-06), with the last option**: the kernel's `CrSqrt` takes the driver's `sqrt` and corrects it to the correctly rounded root
+  (below), so the fade is bit-identical too and the allowance of owner decision 2 was not used. Verify mode and gate in 7.1 ("step A2").
 
 **Draw order and depth ties.** Inside a batch, the GPU order equals the CPU order (5.3). Between batches, A1 fixes the order. Between depth
 slices nothing changes, because every slice is its own view, drawn where the CPU drew it. Grass is drawn after the meshes, as today.
+
+### 5.6.1 As built (step A2, 2026-10-06): `FoliageGpuCull`
+
+*In short: the CPU still walks zones and groups exactly as A1 does, but instead of testing each instance it writes a short work list; three
+small compute kernels, recorded so that they run before the frame, test the instances and write the draw arguments; the draws are recorded
+where the CPU path drew, one indirect draw per mesh part. Pictures: 0 differing pixels, and the read-back lists equal the CPU's bit for bit.*
+
+Where it differs from 5.2 to 5.5, and why:
+
+- **One cull per view, at the view's own `Draw` call, recorded into `GpuFrame.PreFrame` (2.8), not one dispatch for 8 views.** The views'
+  frustums are only known when each caller draws (the cascades inside `ShadowPass`'s host pass, the reflection inside its host pass, the
+  slices in `WorldFrame`), a dispatch cannot be recorded inside a rendering instance, and `BeginNative` is refused inside a host pass. The
+  frame's upload buffer runs before all of them, so each `Draw` records its cull there and its draws where it is. The frame order of the
+  passes is unchanged; nothing outside the foliage files moved. Wave 4 can keep this: the cull is part of a view's Prepare.
+- **Instances (5.2)** are a `BufferArena` (`foliage instances`, 64 MB, `Storage`), one range per group (a mesh in a zone) rather than per
+  zone, uploaded at the group's first cull (its spheres need the mesh's bounds, known once the mesh is resident), freed when the zone is
+  dropped or a whole layout replaces its groups. A full arena is replaced by one twice the size and every group is placed again (a
+  generation number per group). The arena is never marked as used by a frame: a range is written (upload buffer) only before any chunk names
+  it. Measured use: 2.4 MB in the forest (26,513 non-rock instances), 4 MB at range ×8.
+- **Work list (5.3).** `CollectWork` (the zone walk of `CullZones`, unchanged), then `BuildGpuWork`: batches numbered in first-candidate
+  order (A1's order), chunks of ≤ 256 instances of one group **grouped by batch** with a counting sort (each batch's groups in work-list
+  order, each group's instances in order), so a plain prefix over the chunk list gives each batch a contiguous range in the CPU's emission
+  order. A chunk is 32 bytes: arena index, count, and the group's `Range`, `RangeSquared`, `InverseBand` as the CPU computed them
+  (`FoliageGroupRange.Of`). The shadow cascades of a frame share one work list (same eye and range, no zone box test: A1's candidates), its
+  chunks written once a frame.
+- **Kernels** (`FoliageShaders.CullCompute`, `ScanCompute`, `CompactCompute`; 256 threads): *cull*, a workgroup per chunk, writes each
+  instance's packed fade (or −1) and the chunk's visible count (a shared-memory atomic: a count, so order-free); *scan*, one workgroup, an
+  exclusive prefix of the counts in chunk order (each thread a run of chunks, then a Hillis-Steele scan of the 256 run sums) into the chunk
+  offsets, and each draw's `instanceCount` and `firstInstance` from its batch's chunk range; *compact*, a workgroup per chunk, writes each
+  visible instance's rows (row 0 w = the fade) at the chunk's offset plus its rank (a shared-memory scan of the visible flags). Per view, in
+  device memory of the frame's slot (32 MB chunks, bump-allocated, reused when the slot comes round): 4 bytes of fade and 64 bytes of rows per
+  candidate, the counts, offsets and arguments. Barriers: transfer to compute before (the arena's uploads), compute to compute between the
+  kernels, compute to indirect, vertex input and transfer after.
+- **Draws (5.4).** The rows are bound at locations 7 to 10 at the view's region, each mesh part is `DrawIndexedIndirect(args, 20 × i, 1)`;
+  `FoliageShaders.MeshVertex` is unchanged. Every candidate batch has its arguments, an empty one 0 instances; but a batch whose groups'
+  sphere bounds (a box round all its instances' spheres, one unit of slack, computed with the spheres) all lie outside the view is not drawn
+  at all (`ShowBatches`): a cascade's work list has no zone test, and recording ~60 empty draws a cascade cost more CPU than the cull saved
+  (forest flying: 107 against 26 depth draws a call before this test, 50 after). A batch left out has no visible instance, so the picture is
+  the same; the verify mode checks the GPU found none there.
+- **TERRAIN-mode rocks** stay on the CPU (5.4): their groups are culled with `FoliageCull.CullGroup` per view and drawn through
+  `TerrainRenderer.DrawMeshes`. In the Faithful forest they are most of the instances (2,992 rock draws a cascade call) and now most of the
+  foliage cull's CPU time (7.1, step A2).
+- **Statistics.** `DrawnInstances` adds the GPU's count of the view with the same call number a frame ring earlier (copied into a
+  `ReadbackBuffer`), since the CPU no longer knows it when it draws; `DrawCalls` counts the indirect draws.
+
+**Parity, as built (5.6).**
+- Every decision is `precise` and written out in the C#'s order (`dx * dx + dz * dz`, `((p.x * s.x + p.y * s.y) + p.z * s.z) + p.w`,
+  `-s.w * length`), the range as `!(d2 >= rangeSquared)`, the threshold 0.999 passed as the C# float. Vulkan requires single-precision add
+  and multiply to be correctly rounded, so these match `FoliageCull` bit for bit.
+- **The driver's `sqrt` is not correctly rounded** (**Observed**, RTX 4070, test `FoliageGpuCullTests.CrSqrt_is_the_correctly_rounded_root`:
+  176,979 of 1,048,576 squared distances, 17 percent, get a root 1 ulp from `MathF.Sqrt`, none further). `CrSqrt` corrects it: `r` is the
+  correctly rounded root of `x` exactly when `x` lies strictly between the squares of the midpoints next to `r` (no tie is possible), and
+  both squares are compared exactly as 64-bit integers (`umulExtended` of the mantissas, shifted by the exponents); otherwise `r` moves by an
+  ulp, at most four times. Zero, denormal (a ground distance under 1e-19) and non-finite inputs keep the driver's value. Same test: 0 of
+  1,048,576 differ, including exact squares and midpoint squares and their neighbours. Without the correction the synthetic cull test fails
+  on the first instance whose fade lands on such a root (checked).
+- **Verified** by `FoliageGpuCullTests.Gpu_cull_matches_FoliageCull_on_synthetic_data` (six views, 40 groups in 5 batches, a third of the
+  instances within ±2e-7 of their range, a fifth of the spheres moved onto a plane's limit, one view with 4 planes, an arena that grows):
+  visible sets, order, all 16 floats of every matrix and every draw's arguments equal the CPU's.
+- **Verify mode** (`MEITOU_GPU_CULL_VERIFY=1`): each `Draw` runs the A1 CPU cull too (which also feeds the TERRAIN-mode rocks), keeps its
+  batches, and copies the GPU's offsets, arguments and rows into a `ReadbackBuffer`; a frame ring later they are compared (visible counts per
+  batch, every matrix but the fade bit for bit, the fade by ulp distance, every draw's arguments, the batch order, and that a batch not drawn
+  had nothing visible). The summary line is printed when the renderer is disposed.
 
 ### 5.7 Size-based ranges, LOD, impostors, occlusion: Meitou-mode, behind switches
 
@@ -1775,6 +1850,68 @@ about the TERRAIN-mode meshes. Commits: `25d3ef0` the port, `7e421eb` the groupi
   step P, and both stages also hold the node selection); the saving shows in the callers' caster stages (objects' 0.27 -> 0.17 ms in the forest, 0.42 -> 0.30 at the
   Hub; foliage's moved inside its scatter, down in the forest and up at the Hub) and in the `shadows` stage. GPU time not measured (same SPIR-V maths, same targets).
 
+**Wave 3b, agent A (foliage), step A2: GPU-driven culling (2026-10-06, written on master `a6d1a36`, rebased onto `ddb16da` and gated there).** The foliage meshes
+of every view (the main slices, each shadow cascade, the reflection) are culled by compute kernels and drawn with `DrawIndexedIndirect`; design in 5.6.1, the steward
+additions in 2.8. Commits: `4186728` the steward additions (`GpuFrame.PreFrame`, `ReadbackBuffer`, the cached indirect entry point) and their test, `faaccc7` the
+kernels, the arena and `FoliageGpuCullTests`, `aab0faa` the renderer (switch, verify mode, statistics), `b3fee4d` the per-group bounds test and the rocks' timing.
+Files: `FoliageGpuCull.cs` (new), `FoliageShaders.cs` (`CrSqrt`, `CullCompute`, `ScanCompute`, `CompactCompute`), `FoliageRenderer.cs`; in `Gpu/` additions only.
+
+- *Switches.* `MEITOU_GPU_CULL=0` gives the A1 CPU cull (`FoliageCull`), the default is the GPU; `MEITOU_GPU_CULL_VERIFY=1` runs both and compares (5.6.1).
+  `MEITOU_FOLIAGE_TIMING=1` prints, besides A1's line, the cull's dispatch recording per call, the TERRAIN-mode rocks' share of the cull, and a `foliage gpu
+  cull:` line (views a frame, groups, candidates per view, GPU time per view from the kernels' own timestamps, arena use and growths).
+- **Gate (Release; full gate; base = master `ddb16da` built unchanged, scratch in `C:\Temp\agent-A2`).** Build 0 warnings; `dotnet test -c Release`
+  462 passed, 0 skipped (`KENSHI_PATH` set); `--faithful all` ten views **0 px** against the base (mean 0.0000, max 0; the base's two runs also 0 px between
+  themselves, the rock view included); Meitou default ten views 0 px; `--water-reflection 4` Port North 13:00, `--upscaler taa` forest 13:00 and `--debug-shadows 1`
+  forest 13:00: 0 px. Verify mode: forest screenshot (142 views, 103,217 visible instances), Hub at 40,000 (185 views, 7,123), forest flying 300 frames (1,381
+  views, 1,434,985): 0 differences of sets, order, arguments or batch order, every fade equal; before the rebase also clean at the Hub flying, the trees and the
+  Port North reflection. `MEITOU_VK_VALIDATION=sync` forest 13:00 and Hub 2:00: 0 errors (before the rebase also Port North with reflection 4). The 1/255
+  allowance of owner decision 2 was not used.
+- **Measured: A/B through `MEITOU_GPU_CULL` in the same build (`b92d67a`, i.e. `b3fee4d` before the rebase: the rebase brought only the terrain step O, which both
+  modes share), `--time 13 --size 1600x900 --fly-benchmark 300`, `MEITOU_FOLIAGE_TIMING=1`, three interleaved runs per mode, medians (minima in brackets),
+  Release; the machine was shared.** Views: *forest* (as 7.1, `--fly-speed 0 --faithful all`), *trees* (`--at -39000,-82000 --yaw 45 --pitch 5 --distance 800`,
+  still, Faithful), *flying* (the forest, flying, Faithful), *x8* (the forest still, `MEITOU_FOLIAGE_RANGE=8`, the Tab "Foliage draw distance" slider at its top,
+  Faithful ranges), *large* (the forest still, Meitou's size-based ranges with `--range-large 12000` and x8). "Cull" is the whole cull of one `Draw` call on the
+  render thread (the work list, the chunks, the dispatch recording, and the TERRAIN-mode rocks' CPU cull, shown separately); "meshes" the call's Prepare and Record.
+  The timing skips its first 160 calls; the stages and percentiles cover all 300 frames. "CPU only" is the render thread's frame without its GPU wait.
+
+  | | forest GPU | forest CPU | trees GPU | trees CPU | flying GPU | flying CPU | x8 GPU | x8 CPU | large GPU | large CPU |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | colour cull, us per call | 61.6 (61.0) | 72.2 (71.8) | 94.4 (93.8) | 112.6 (111.4) | 55.6 (54.1) | 76.2 (76.0) | 315 (315) | 375 (370) | 82.3 (80.4) | 151.5 (150.0) |
+  | of which the rocks' CPU cull | 39.2 | | 72.9 | | 17.1 | | 261 | | 27.1 | |
+  | depth cull, us per cascade call | 180.4 (174.5) | 340.8 (340.4) | 163.1 (158.2) | 213.7 (211.2) | 93.9 (93.0) | 185.3 (181.4) | 410 (404) | 765 (765) | 73.5 (72.6) | 153.7 (152.7) |
+  | of which the rocks' CPU cull | 149.1 | | 145.2 | | 37.7 | | 358 | | 25.4 | |
+  | meshes colour / depth, us per call | 28.2 / 61.7 | 10.6 / 27.7 | 39.3 / 43.0 | 13.9 / 20.8 | 36.9 / 78.7 | 18.3 / 36.7 | 33.8 / 65.6 | 19.7 / 32.2 | 27.0 / 46.4 | 11.4 / 16.3 |
+  | draws colour / depth, per call | 28.1 / 51.5 | 12.0 / 36.5 | 34.0 / 28.2 | 14.7 / 16.5 | 20.2 / 49.9 | 12.2 / 26.2 | 33.9 / 54.0 | 27.6 / 39.5 | 25.4 / 30.2 | 9.3 / 13.4 |
+  | stage `foliage`, ms | 0.50 (0.48) | 0.48 (0.47) | 0.72 (0.72) | 0.72 (0.70) | 0.51 (0.50) | 0.53 (0.53) | 2.00 (2.00) | 2.10 (2.08) | 0.53 (0.52) | 0.69 (0.69) |
+  | shadow casters `foliage`, ms | 1.17 (1.16) | 1.18 (1.16) | 1.51 (1.51) | 1.58 (1.56) | 0.92 (0.90) | 0.75 (0.73) | 2.22 (2.19) | 2.64 (2.62) | 0.62 (0.62) | 0.66 (0.66) |
+  | CPU only p50 / p95, ms | 1.9 / 2.4 | 2.2 / 2.6 | 2.7 / 3.1 | 2.8 / 3.2 | 2.4 / 4.8 | 2.5 / 5.1 | 4.6 / 5.1 | 5.5 / 6.0 | 1.6 / 2.2 | 1.9 / 2.2 |
+  | frame p50 / p95, ms | 9.2 / 11.6 | 9.1 / 11.7 | 10.2 / 12.5 | 10.0 / 12.5 | 10.1 / 13.4 | 10.1 / 13.8 | 8.8 / 13.5 | 10.0 / 14.2 | 5.7 / 10.2 | 6.0 / 10.4 |
+  | GPU cull, us per view (kernels' timestamps) | 34.4 (30.1) | | 25.0 (24.0) | | 25.6 (24.0) | | 21.1 (21.0) | | 20.9 (20.7) | |
+  | candidates per view (groups) | 48,600 (164) | | 46,710 (167) | | 38,899 (128) | | 71,522 (238) | | 48,659 (144) | |
+
+  GPU time of the foliage passes (`MEITOU_PASS_STATS=1`, two runs each, forest still, Faithful): main foliage 0.77 / 0.80 ms with the GPU cull against 0.69 / 0.41
+  with the CPU cull, at x8 1.45 / 0.92 against 0.95 / 0.87; the pass meter's scatter between runs is as large as the difference, so **not resolved**; the extra
+  (empty) indirect draws are the likely cost if there is one. The kernels themselves are 20-35 us of GPU a view (the three dispatches and their barriers), run
+  ahead of the frame on the same queue; the frame percentiles did not move beyond the scatter.
+
+  Observed:
+  - The non-rock instances' cull no longer costs CPU per instance: what is left of a call's cull is the work list (per group), the chunks and the dispatch
+    recording (12-20 us a call), and the TERRAIN-mode rocks, which stay on the CPU (5.4) and are now most of it: 149 of 180 us a forest cascade call, 358 of 410 at
+    x8 (2,992 rock draws a cascade call in the Faithful forest). With Meitou's size-based ranges at x8 and a 12,000 large range (*large*) the cull is half the CPU
+    one in both colour and depth.
+  - The depth cull halved (forest 341 -> 180 us, x8 765 -> 410, flying 185 -> 94); the CPU-only frame p50 fell 0.1-0.9 ms, most at x8.
+  - Recording costs more: the GPU path draws every batch whose groups' bounds meet the view, visible instances or not (forest depth 51.5 against 36.5 draws a
+    call), and an indirect draw records about as fast as a direct one, so meshes per call doubled (depth 28 -> 62 us in the forest). The net per call is still a
+    saving everywhere (forest depth 368 -> 242 us, flying 222 -> 173).
+  - The stages: the shadow-caster `foliage` stage fell at the trees and x8, held at the forest and *large*, and **rose** when flying (0.75 -> 0.92 ms) although the
+    timed per-call total fell there; in the same flying runs the terrain and objects caster stages fell (0.33 / 0.31 -> 0.23 / 0.20 ms), so the `shadows` total
+    did not change. Cause **Unknown**: the stage covers all 300 frames and the timing skips the first 160 calls, and while flying new groups keep arriving (their
+    first cull fills the spheres, the bounds and the arena upload on the render thread); not separated.
+- *Follow-ups.* The TERRAIN-mode rocks to the GPU once `TerrainRenderer.DrawMeshes` takes GPU-made placements (5.4); `DrawIndexedIndirectCount` over one mesh arena
+  (2.8), which would also remove the empty draws; the rows are reserved at 64 bytes a candidate a view in device scratch (the visible count is not known when
+  recording; 4.6 MB a view at x8, in 32 MB chunks per frame slot), so a far larger range wants a bound on the rows or a count read back a frame late; the CPU still
+  fills the spheres and uploads them per group at its first cull; grass and impostors were out of scope.
+
 ### 7.2 Wave 3: ownership
 
 Each agent owns its files completely: it may edit them, and nobody else may. Call-site counts are `IGl` calls from section 8.
@@ -1929,6 +2066,13 @@ terrain's step O should do from the start, in order of what it cost foliage:
    right after `#version`. Time a once-a-frame segment without its first calls: averaged over 300 frames, pipeline creation and first registrations made the
    terrain depth segment read 124 us instead of 22. After the commands, the next cost of an instanced path is often the per-instance upload: 64-byte
    placements into write-combined memory run at about 11.5 ns each (5.5 GB/s), so write each one once, in its final place.
+9. *A GPU cull, done this way (7.1, agent A step A2; for the objects' C2).* Record each view's cull into `GpuFrame.PreFrame` where the view is drawn (works
+   inside host passes, where a dispatch cannot be recorded), with your own barriers before (transfer to compute) and after (compute to indirect and vertex
+   input). Keep the CPU's decisions bit-exact: `precise`, the C#'s operation order, and never the driver's `sqrt` (1 ulp off on 17 percent of inputs on the
+   RTX 4070; `FoliageShaders.CrSqrt` is the correctly rounded one). Stable order costs nothing if the chunks are grouped by batch on the CPU and offsets are a
+   plain prefix. An empty indirect draw costs as much CPU as a full one: test each group's bounds against the view before drawing its batch, or a cull with no
+   zone test (the cascades) records more than it saves. Write the verify mode (CPU and GPU both, compared a frame late through a `ReadbackBuffer`) first; it
+   found every problem the pictures did not.
 
 ### 7.6 The draw log
 
