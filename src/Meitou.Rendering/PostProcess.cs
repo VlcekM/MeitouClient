@@ -525,17 +525,24 @@ public sealed unsafe class PostProcess : IDisposable
 
     /// <summary>One full-screen triangle with <paramref name="p"/> into <paramref name="target"/> (its uniforms and samplers set before), in a
     /// rendering of its own, followed by a full barrier (VkGl barriered before every pass).</summary>
+    readonly Dictionary<(LegacyProgram, Vk.Format), GraphicsPipeline> pipelines = [];
+
     void Draw(LegacyProgram p, Target2D target) => Draw(p, target.Attachment, target.Format, target.Width, target.Height, target.Width, target.Height);
 
     void Draw(LegacyProgram p, RenderTarget colour, Vk.Format format, int targetWidth, int targetHeight, int viewportWidth, int viewportHeight)
     {
         var cmd = Segment();
         cmd.BeginRendering(new RenderingDesc(colour, default, targetWidth, targetHeight));
-        var scissor = new Vk.Rect2D(default, new Vk.Extent2D((uint)targetWidth, (uint)targetHeight));
-        PassState.Record(cmd, new PassTargets(colour, default, new AttachmentFormats(format, Vk.Format.Undefined), targetWidth, targetHeight,
-            new Vk.Viewport(0, 0, viewportWidth, viewportHeight, 0, 1), scissor));
-        cmd.BindPipeline(Gpu.Pipelines.Get(PassState.Pipeline(p.Program, p.VertexLayout([]), Vk.PrimitiveTopology.TriangleList,
-            new AttachmentFormats(format, Vk.Format.Undefined), p.Name)));
+        var s = PassState;
+        cmd.SetViewport(new Vk.Viewport(0, 0, viewportWidth, viewportHeight, 0, 1));
+        cmd.SetScissor(new Vk.Rect2D(default, new Vk.Extent2D((uint)targetWidth, (uint)targetHeight)));
+        cmd.SetRaster(s.Cull, s.Front);
+        cmd.SetDepth(s.DepthTest, s.DepthWrite, s.Compare);
+        cmd.SetDepthBias(s.BiasEnable, s.BiasConstant, s.BiasSlope);
+        if (!pipelines.TryGetValue((p, format), out var pipeline))
+            pipelines[(p, format)] = pipeline = Gpu.Pipelines.Get(s.Pipeline(p.Program, p.VertexLayout([]), Vk.PrimitiveTopology.TriangleList,
+                new AttachmentFormats(format, Vk.Format.Undefined), p.Name));
+        cmd.BindPipeline(pipeline);
         p.Flush(cmd);
         cmd.Draw(3);
         cmd.EndRendering();

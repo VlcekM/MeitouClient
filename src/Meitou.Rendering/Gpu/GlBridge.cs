@@ -5,7 +5,8 @@ namespace Meitou.Rendering.Gpu;
 /// a renderer whose resources are now native: the impostor baker and preview bind <see cref="WorldTexture.Id"/> through IGl, and
 /// <see cref="TerrainRenderer.DrawMeshes"/> / <see cref="TerrainRenderer.DrawMeshesIndirect"/> take the TERRAIN-mode meshes as GL vertex
 /// arrays. The native object stays the owner (<see cref="IGlInterop.Import"/>, <see cref="IGlInterop.ImportBuffer"/>: borrowed names).
-/// Goes with VkGl in stage 3, once those consumers take native objects.
+/// Stage 2 added the GL mirror of <see cref="PostProcess"/>'s targets (framebuffers over imported names, their binding, the fixed-function state
+/// its guests read; docs/renderer-native.md 8.6). Goes with VkGl in stage 3, once those consumers take native objects.
 /// </summary>
 public static unsafe class GlBridge
 {
