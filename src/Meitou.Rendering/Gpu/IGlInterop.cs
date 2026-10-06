@@ -94,6 +94,16 @@ public interface IGlInterop
     /// <summary>As <see cref="Sampled(uint, SamplerInfo)"/> for a plain 2D sampler, or a shadow sampler.</summary>
     SampledTexture Sampled(uint glTexture, bool shadowSampler);
 
+    /// <summary>
+    /// The bindless entry of a GL texture with the sampler and view VkGl would bind now (<see cref="Sampled(uint, bool)"/>), registered in
+    /// the array its format selects (<see cref="BindlessTable.KindFor"/>). Usable in the current frame. While the texture's view, sampler
+    /// and the LOD bias are unchanged the same handle is returned; after a change (mip streaming, a parameter, the upscaler's bias) a new
+    /// index is registered and the old one freed after the frames in flight, so a draw recorded earlier keeps what it was given, as in GL.
+    /// Look it up per segment or per draw, not once per texture. 0 or a texture without storage gives the stand-in's entry. Freed with the
+    /// texture's storage.
+    /// </summary>
+    BindlessHandle Bindless(uint glTexture, bool shadowSampler = false);
+
     /// <summary>The GL texture bound to <paramref name="unit"/> for <paramref name="sampler"/>'s type, as VkGl would sample it (the stand-in when none).</summary>
     SampledTexture SampledUnit(int unit, SamplerInfo sampler);
 

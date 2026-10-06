@@ -53,6 +53,7 @@ public sealed unsafe class GpuContext : IDisposable
         Shaders = new ShaderLibrary(device);
         Pipelines = new PipelineLibrary(device);
         Bindless = new BindlessTable(device);
+        Shaders.BindlessLayout = Bindless.Layout;
         Uploads = new Uploader(this);
         Frame = new GpuFrame(this);
     }

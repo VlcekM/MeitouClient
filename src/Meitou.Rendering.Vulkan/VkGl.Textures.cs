@@ -41,6 +41,8 @@ public sealed unsafe partial class VkGl
         public GpuImage? CachedImage;
         public Silk.NET.Vulkan.Sampler CachedSampler;
         public ImageView CachedView;
+        // The interop's bindless entries (VkGl.Bindless), plain and shadow: the handle and what it was registered with.
+        public (BindlessHandle Handle, SampledTexture Texture)? BindlessPlain, BindlessShadow;
         public bool IsDepth => GlConventions.IsDepthFormat(Format);
         public bool IsInteger => GlConventions.IsIntegerFormat(Format);
         public bool IsCube => Target == TextureTarget.TextureCubeMap;
@@ -79,6 +81,9 @@ public sealed unsafe partial class VkGl
         var image = t.Borrowed ? null : t.Image;
         t.Exported?.Dispose();
         t.Exported = null;
+        if (t.BindlessPlain is { } bp) Context.Bindless.Free(bp.Handle);
+        if (t.BindlessShadow is { } bs) Context.Bindless.Free(bs.Handle);
+        t.BindlessPlain = t.BindlessShadow = null;
         var views = t.Views.Values.ToArray();
         t.Image = null;
         t.Views.Clear();

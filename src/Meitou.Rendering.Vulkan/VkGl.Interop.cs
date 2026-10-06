@@ -216,6 +216,23 @@ public sealed unsafe partial class VkGl : IGlInterop
     public SampledTexture Sampled(uint glTexture, bool shadowSampler) =>
         Sampled(glTexture, SamplerOf(textures.GetValueOrDefault(glTexture), shadowSampler));
 
+    public BindlessHandle Bindless(uint glTexture, bool shadowSampler = false)
+    {
+        var known = glTexture != 0 ? textures.GetValueOrDefault(glTexture) : null;
+        var t = known is { Image: not null } && (known.IsDepth || !shadowSampler) ? known : SamplerTexture(SamplerOf(known, shadowSampler), -1);
+        var kind = BindlessTable.KindFor(t.Format, t.IsCube ? TextureKind.Cube : t.IsArray ? TextureKind.Texture2DArray : TextureKind.Texture2D, shadowSampler);
+        var (s, v) = SamplerAndView(t, shadowSampler);
+        var sampled = new SampledTexture(s, v, t.Image!.Image);
+        var entry = shadowSampler ? t.BindlessShadow : t.BindlessPlain;
+        if (entry is { } e && e.Handle.Kind == kind && e.Texture == sampled) return e.Handle;
+        // Changed (view, sampler, LOD bias) or new: a new index, so draws recorded earlier in the frame keep what they were given; the old
+        // index is freed after the frames in flight.
+        if (entry is { } old) Context.Bindless.Free(old.Handle);
+        var handle = new BindlessHandle(kind, Context.Bindless.Register(kind, sampled));
+        if (shadowSampler) t.BindlessShadow = (handle, sampled); else t.BindlessPlain = (handle, sampled);
+        return handle;
+    }
+
     public SampledTexture SampledUnit(int unit, SamplerInfo sampler)
     {
         var t = SamplerTexture(sampler, unit);

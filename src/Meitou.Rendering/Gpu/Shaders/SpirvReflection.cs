@@ -167,6 +167,7 @@ public static class SpirvReflection
                     int len = 0;
                     uint t = pointee;
                     if (m.Types.GetValueOrDefault(t) is TArray arr) { len = ArrayLength(m, arr); t = arr.Element; }
+                    else if (m.Types.GetValueOrDefault(t) is TRuntimeArray rarr) { len = -1; t = rarr.Element; }   // a bindless array
                     if (m.Types.GetValueOrDefault(t) is not TSampledImage si || m.Types[si.Image] is not TImage img) break;
                     if (!m.Used.Contains(id)) { inactive.Add(name); break; }
                     var dim = img.Dim switch { 0 => SamplerDimension.Dim1D, 1 => SamplerDimension.Dim2D, 2 => SamplerDimension.Dim3D, 3 => SamplerDimension.Cube, _ => SamplerDimension.Other };
