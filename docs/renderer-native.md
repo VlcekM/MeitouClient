@@ -671,10 +671,17 @@ public interface IGlInterop
 ```
 
 *`VertexArrayStamp` (wave 3b steward addition, `cbc94d9`).* `long VertexArrayStamp { get; }` moves whenever a `VertexArray(vao)` export may be
-stale: a buffer some export names gets new storage, a new version or a rename; a vertex array is changed or deleted; and at every frame's
-begin (an export marks its buffers used per frame, so the first call of a frame keeps VkGl's rename-on-write rule). A caller that keeps
+stale: a buffer some export names gets new storage, a new version or a rename; a vertex array is changed or deleted. A caller that keeps
 the stamp per mesh skips the per-draw `VertexArray` call (0.35 us a draw measured in the probe) while it is unchanged. Writes to buffers no
 export names do not move it. **Verified** by `SeamTests.The_vertex_array_stamp_moves_exactly_when_an_export_may_be_stale`.
+*Changed by the step-O hot-path work (7.1, `3152deb`):* it no longer moves at every frame's begin. Before, an export marked its buffers used
+per frame, so the stamp moved per frame and every mesh fetched its export again in the frame's first segment; foliage draws each mesh once
+per segment kind, so that was one `VertexArray` call per draw (0.3-0.4 us). Now a buffer an export has named counts as read by every frame
+until it gets fresh storage in that frame (`VkGl.ReadByFrame`, `8ec1d22`): its first write of a frame takes new memory and moves the stamp,
+exactly as after a draw, and later writes of the frame go in place. Conservative (a named buffer no draw of the frame reads is renamed too
+when written). Measured: the forest still run renames 600 buffers in 301 frames before and after, so nothing writes such buffers in steady
+state. The first version (`3152deb`) marked the named buffers at each frame's begin instead; that loop cost 43-49 us a frame for 585 buffers
+(cold objects), so it was replaced by the check at the write, which costs nothing per frame.
 
 ### 4.3 Frame-global resources: `FrameGlobals`
 
@@ -1351,7 +1358,7 @@ a native-then-legacy seam test, `ba46aca` the foliage. The three steward commits
   vertex inputs come from the reflection with `LegacyProgram`'s rules (a disabled attribute reads GL's constant through a stride-0 binding).
   Grass motion takes its colour mask and depth state from `CurrentState()` as in step P. The reflection pass and the shadow cascades use the
   same paths (the cascades read the caster block per segment, 2.6).
-- *Per-draw work removed besides `Flush`.* `interop.VertexArray` is called only when `VertexArrayStamp` moved (once per mesh a frame, at the
+- *Per-draw work removed besides `Flush`.* `interop.VertexArray` is called only when `VertexArrayStamp` moved (once per mesh a frame until the hot-path work, 7.1, at the
   frame's first draw). The grass Prepare no longer looks up the sprite and colour map by name and recounts the density prefix per draw: both
   are kept on the blade buffer per patch (`Patch`), the texture still touched each frame as `textures.Get` did (use count, reload). The draw
   list itself is still built per call (it depends on the view's frustum).
@@ -1577,6 +1584,76 @@ functions. The shaders are untouched.
 - *Not done, on purpose.* The blocker map (`UpdateBlockers`) and `TerrainShadowMap`'s sweep are guests-only segments in VkGl's own pass on their own GL framebuffers (no
   other renderer draws into them), so they need no host; `DrawDebug` and `CaptureDepth` stay (agent F's). The state the guests read is still the GL mirror: see the limits in 4.5.
 
+**Wave 3b, the step-O hot path (agent P, as steward; 2026-10-06, written on master `9d25305`, rebased onto `3af1880` and gated there).** Why foliage
+step O still cost 2-3 us a draw, and the fixes. Seven commits: `3152deb` and `8ec1d22` VkGl (exported buffers count as read by each frame; the stamp no
+longer moves per frame), `b0badb7` `CommandList` (cached device entry points, one-pass vertex-buffer filter), `0ebcc7e` and `e1161d3` foliage Record (bindless indices
+cached per segment by texture id), `3068dfc` `BindlessTable.ScalarOf` (no enum name per call), `5bcb8d1` `SampledTexture`/`BufferBinding` equality by
+handle. Steward changes are internal or additive; the one contract change is `VertexArrayStamp` (4.2, its test updated).
+
+- *How it was measured.* Release, the forest still camera (`--fly-benchmark 300 --fly-speed 0 --faithful all`). A stopwatch breakdown inside each
+  Record loop (not committed: a lap per step; `Stopwatch.GetTimestamp` costs 0.019 us, so every fine "after" figure below carries about 0.02 us of its own
+  lap and every fine "before" figure about 0.04 us (two stamps a lap then); the before/after totals come from a coarse mode with two stamps per loop), counters of Vulkan calls, `VertexArray` fetches and `Bindless`
+  calls per draw, and a micro-benchmark of the floor (9.1). `dotnet-trace` (EventPipe, `dotnet-sampled-thread-time`) was tried and is of no use at
+  this scale: its samples are milliseconds apart and taken at safe points, so a 30 us loop gets a handful of samples on the wrong lines.
+- **Observed: where a step-O foliage draw's time went (before; master `9d25305`, the machine shared; us per draw, the first 200 segments skipped).**
+  Colour meshes (27 draws a segment): textures 0.40, `Current` (the export) 0.31, vertex buffers 0.19, pipeline 0.11, index buffer 0.09, push 0.08, draw 0.08,
+  cull/front flip 0.05; loop 1.45-1.66, segment 1.9-2.2 (`NativeFrame.Bind` 6.3 us a segment). Depth meshes (73 a segment): `Current` 0.43, textures 0.35,
+  vertex buffers 0.23, index buffer 0.12; loop 1.26-1.57. Grass (298 a segment): `Current` 0.34, textures 0.33, vertex buffers 0.16; loop 0.98-1.12.
+  Two causes, not the API: (1) **one `VertexArray` fetch per draw**: the stamp moved at every frame's begin, and foliage draws each mesh once per
+  segment kind a frame, so the "skip while the stamp holds" never skipped (1.00 fetches a draw in all three kinds); (2) **one `Bindless` call per draw
+  or more** (1.33 colour, 0.85 depth, 1.48 grass: the per-slot cache missed whenever consecutive draws used another texture, and grass alternates
+  sprites), and each call cost 0.12-0.20 us even hot because `BindlessTable.KindFor` called `Format.ToString()` (an allocation and three string searches)
+  and comparing two `SampledTexture`s boxed six Silk.NET handle structs (they are not `IEquatable`, so the record's generated equality goes through
+  `ValueType.Equals`). The render thread allocated 39 MB in 300 frames, mostly from these two.
+- *What changed.* VkGl marks every buffer an export has named as used by each new frame (4.2), so an export stays current across frames: 0.00
+  fetches a draw. Foliage caches indices per segment by GL texture id (an array indexed by name with a segment number, no `Array.Fill`): 0.04 calls
+  a grass draw. `ScalarOf` from a table built once; `SampledTexture` and `BufferBinding` compare handles: `Bindless` 0.20 -> 0.024 us hot
+  (micro-benchmark, 100 textures), render thread 39 -> 12 MB allocated per run. `CommandList` calls its per-draw and dynamic-state commands through
+  `vkGetDeviceProcAddr` pointers resolved once and filters vertex buffers in one pass (0.159 -> 0.124 us for the foliage-shaped draw in the
+  micro-benchmark). `SuppressGCTransition` was measured and gives nothing (not used).
+- **Observed: after (us per draw, coarse; the fine split with its lap cost in brackets).** Colour meshes: loop 0.43, segment 0.66 (textures 0.19, vertex
+  buffers 0.15, pipeline 0.09, index buffer 0.09, draw 0.07, push 0.06, `Current` 0.05). Depth meshes: loop 0.50, segment 0.65 (vertex buffers 0.26,
+  textures 0.15, index buffer 0.12). Grass: loop 0.26, segment 0.27 (vertex buffers 0.17, draw 0.05, push 0.05, textures 0.04). Vulkan calls a draw:
+  4.3 colour, 4.0 depth, 3.0 grass. `NativeFrame.Bind` 3.3-5.0 us a segment: the 13 atmosphere getters 1.7-2.3 (`SkyRenderer` recomputes its values
+  once per `ApplyCount`, i.e. per segment), the 7 frame textures 0.8-1.2, push and bind 0.8-1.0, the shadow blocks 0.4-0.5. The depth meshes' missing
+  step-O gain (above) was the per-draw export and texture lookups, not the per-segment `Bind` (0.05-0.13 us a depth draw).
+- **Observed: step P for comparison (the same instrumentation, after the shared fixes, which help them too).** Objects (`WorldObjectRenderer`, 20 draws
+  a colour segment): loop 1.12 us a draw (2.04 before `ScalarOf` and the handle equality): `Flush` 0.51, `VertexArray` per draw 0.41, material uniforms
+  and texture binds 0.28, vertex buffers 0.22, index buffer 0.13. Terrain patches (128 draws a colour segment, 214 depth): loop 0.17 us a draw (0.35 before):
+  two uniform sets 0.18 [lapped], `Flush` 0.10, index buffer 0.04, draw 0.05. The patches are near the floor even in the legacy model: one program, one
+  vertex buffer, a contiguous draw list, and a 32-byte uniform change; the objects pay for a per-draw export, a default-block copy and per-mesh heap objects.
+- *Gate (Release; lighter gate, against master `3af1880` built unchanged, scratch in `C:\Temp\agent-P`).* Build 0 warnings; `dotnet test -c Release` 397
+  passed, 0 skipped; `--faithful all` ten views 0 px (mean 0.0000); `--upscaler taa` and `--water-reflection 4`, forest and Hub at 13:00: 0 px;
+  `MEITOU_VK_VALIDATION=sync` forest 13:00 and Hub 2:00: 0 errors. Renames over a 300-frame run: 600 before and after (the conservative rule renamed nothing more).
+  The whole gate was run on `e1161d3` and again on `8ec1d22`, all passing both times.
+- **Measured: forest still camera (`--fly-benchmark 300 --fly-speed 0 --faithful all`, `MEITOU_FOLIAGE_TIMING=1`), before = master `3af1880`, after =
+  `8ec1d22`, three interleaved runs per build, medians and minima, Release.** The machine was busy (another agent's viewer and builds): every figure is about
+  twice what a quiet run gives, and runs of one build differ by 30 percent, but within each interleaved pair the after build was faster on every per-draw row.
+  Per draw includes the segment's share (12.0 colour, 132.5 grass, 36.5 depth draws per call, empty calls included).
+
+  | | before, median | after, median | before, min | after, min |
+  | --- | ---: | ---: | ---: | ---: |
+  | colour meshes, us per draw (Prepare + Record) | 2.36 | 1.64 | 1.95 | 1.21 |
+  | colour meshes, record only | 2.15 | 1.38 | 1.79 | 1.03 |
+  | grass, us per draw (Prepare + Record) | 1.85 | 1.16 | 1.52 | 0.96 |
+  | grass, record only | 1.17 | 0.46 | 0.99 | 0.41 |
+  | depth meshes, us per draw | 2.34 | 1.54 | 1.70 | 1.20 |
+  | depth meshes, record only | 2.07 | 1.31 | 1.55 | 1.04 |
+  | stage `foliage`, ms | 1.02 | 0.89 | 0.85 | 0.62 |
+  | shadow casters `foliage`, ms | 1.91 | 1.97 | 1.62 | 1.57 |
+  | render thread p50 / p95, ms | 8.4 / 10.5 | 8.2 / 10.8 | 7.3 / 9.0 | 7.3 / 8.8 |
+  | CPU only p50 / p95, ms | 3.9 / 5.3 | 3.8 / 5.7 | 3.1 / 4.2 | 2.9 / 3.6 |
+  | render thread allocations, MB per run | 39 | 12 | 39 | 12 |
+
+  An earlier set on a quieter machine (three pairs, after = `e1161d3`, the same per-draw code with the per-frame marking loop) gave, as medians, colour
+  record 1.10 -> 0.73, grass record 0.70 -> 0.32, depth record 1.00 -> 0.73 us a draw, stage `foliage` 0.58 -> 0.49 ms, shadow casters 1.20 -> 1.28 ms.
+  Observed: record time per draw down by a third (meshes) to more than half (grass); the foliage stage by 0.1-0.2 ms. The shadow casters' foliage time did
+  not move beyond the scatter: there the cull (460-640 us a cascade call) and the TERRAIN-mode rocks (130-160 us) are most of it, and the meshes' record is
+  50-80 us. The frame is GPU-bound in this view (gpu-wait 6-7 ms), so the render-thread percentiles do not move. In the quiet set the CPU-only p95 read
+  0.4-0.6 ms higher after; the marking loop (45 us a frame, now gone) explains a little of that, and in this set the p95 is lower in two of the three pairs,
+  so it is scatter. Note: the "before" figures differ from agent A's table above (1.1 or 2.2 against 2.75 us record a colour mesh draw) on nearly the same
+  code because of the machine's load; compare figures only within one table.
+
 ### 7.2 Wave 3: ownership
 
 Each agent owns its files completely: it may edit them, and nobody else may. Call-site counts are `IGl` calls from section 8.
@@ -1691,11 +1768,34 @@ a handful of draws a frame cost the same through a segment as through the transl
    `ctx.Pipelines.Forget(p)` before disposing one.
 3. Per segment, after `BeginNativeInPass` and the dynamic state: `nativeFrame.Bind(cmd, program.Layout, in view)` once (any of your native
    programs' layout: they are compatible). Not per draw, and again in every segment (the shadow blocks move between cascades).
-4. Per draw: textures by `interop.Bindless(id)` (check `handle.Kind` against the array the shader reads), cached for the segment only;
+4. Per draw: textures by `interop.Bindless(id)` (check `handle.Kind` against the array the shader reads), cached for the segment only, by GL
+   texture id, not by slot (`FoliageRenderer.Texture`: an array indexed by name with a segment number);
    `cmd.PushConstants` of the whole struct, skipped when the bytes equal the last push of the segment.
 5. Vertex arrays: keep `interop.VertexArrayStamp` per mesh and call `interop.VertexArray(vao)` only when it moved; rebuild the layout and
-   buffers only when the returned object differs (`ReferenceEquals`).
+   buffers only when the returned object differs (`ReferenceEquals`). The stamp holds across frames (4.2), so in steady state there is no fetch at all.
 6. Expect 0 px against step P; the pushed frame set stays at set 0 (2.6) as long as legacy programs push theirs.
+
+**The step-O hot path (measured on foliage, objects and terrain patches: 7.1, "the step-O hot path"; the floor in 9.1).** What the objects' and the
+terrain's step O should do from the start, in order of what it cost foliage:
+
+1. *Nothing per draw that is not a command.* The floor of a foliage-shaped draw through `CommandList` (seven vertex buffers, index buffer, 128-byte push,
+   indexed draw) is 0.12 us hot; raw Silk.NET calls 0.11, cached function pointers 0.09-0.10. A step-O draw at 0.4-0.7 us is therefore 75-85 percent
+   renderer-side data access. No export call (`VertexArray`) and no `Bindless` call in the steady state of the loop: both are caches you keep (5 above,
+   and texture indices per segment by id); the objects' step P still calls `VertexArray` per draw (0.41 us of its 1.12).
+2. *No hidden allocation or boxing.* Two of the three big foliage costs were a `Format.ToString()` and record-struct equality over Silk.NET handles
+   (`Sampler`, `ImageView`, `Image`, `Buffer` are not `IEquatable`: a `record struct` holding them boxes on `==`). Compare handles (`.Handle`), never enum
+   names; check the benchmark's `gc ... allocated (render thread N MB)` line before and after a port (12 MB a 300-frame forest run now, most of it not foliage).
+3. *Per-draw data contiguous, few objects per draw.* The terrain patches run at 0.17 us a draw even in step P with `Flush`, because the draw list is one
+   struct array and every draw shares the program and vertex buffer. The foliage meshes at 0.43 touch per draw a `GpuPart`, its `NativeMesh`, its
+   `BufferBinding[]` and the driver's objects for seven buffers: the vertex-buffer bind is now the biggest single item (0.15-0.26 us cold against 0.06-0.09
+   hot). For objects: keep a mesh's pipeline, vertex bindings and index binding inline in one renderer-owned struct array (index per mesh), not in fields
+   of per-part classes; and once meshes are native buffers (phase 8), one interleaved vertex binding per mesh instead of one per attribute.
+4. *Segments big enough.* A segment costs 6-15 us before its first draw (`BeginNativeInPass`, targets and state, the dynamic state, `NativeFrame.Bind`
+   at 3.3-5 us). One segment per pass or cascade with tens of draws; a 2-draw segment (objects in a shadow cascade: 3.9 us a draw) is all overhead.
+5. *Measure the loop and the segment separately, with two stamps, interleaved, minimum of the runs.* Per-step laps cost 0.02 us each (subtract them);
+   EventPipe sampling cannot see this; this machine's load moves the per-draw figures by a factor of two between runs.
+6. *Then look elsewhere.* After this work the foliage cull is 460-640 us per cascade call against 50-80 us of recording; GPU-driven culling (5.3, A2)
+   is the next CPU item for foliage, and for objects the cull (58 us a call, 7.1) is already bigger than the recording should be.
 
 ### 7.6 The draw log
 
@@ -1866,6 +1966,30 @@ docs/viewer.md's ~4 µs per draw was measured in real frames. There each draw to
 is copied whenever a vertex uniform changes (8 KB for mesh programs), and the renderer's own C# work counts too. The spike runs hot caches
 and one program, so its figures are lower bounds for both paths. **Estimate**: in real frames, step P costs ~0.3-0.6 µs per draw and the
 native model ~0.1-0.2 µs, against ~2-4 µs today: roughly 5-10× fewer CPU microseconds per draw for step P, and 15-30× for the native model.
+
+**Actual against the spike (measured after the step-O hot-path work, 7.1; forest still camera, Release).** The floor was measured again in the
+repository's own API: a test (not committed) on a headless device, 20,000 draws a frame cycling 64 meshes, median of 7 frames, validation off,
+tiered compilation off.
+
+| Path (floor, hot caches) | µs per draw |
+| --- | ---: |
+| `CommandList`: 7 vertex buffers + index buffer + 128-byte push + `DrawIndexed` (the foliage mesh shape) | 0.12 (0.16 before `b0badb7`) |
+| the same through Silk.NET's `Vk` directly / through cached `vkGetDeviceProcAddr` pointers / plus `SuppressGCTransition` | 0.11 / 0.09-0.10 / 0.09 |
+| `CommandList` push + draw; draw only | 0.07; 0.03 |
+| `interop.Bindless(id)`, 100 textures | 0.024 (0.12-0.20 before `3068dfc` and `5bcb8d1`) |
+
+| In real frames (loop / with the segment's share) | µs per draw |
+| --- | ---: |
+| foliage colour meshes, step O | 0.43 / 0.66 (1.45-1.66 / 1.9-2.2 before) |
+| foliage depth meshes, step O | 0.50 / 0.65 (1.26-1.57 before) |
+| grass, step O | 0.26 / 0.27 (0.98-1.12 before) |
+| objects colour, step P | 1.12 / 1.20 |
+| terrain patches colour, step P | 0.17 / 0.18 |
+
+So the spike's 0.18-0.3 µs is reached by draws whose data is contiguous and shared (grass, terrain patches), and missed by a factor of about 2 by the
+foliage meshes, whose remaining cost is cold per-mesh data (vertex-buffer bind with seven bindings, index buffer, texture indices), not the API
+(7.5, "the step-O hot path"). Silk.NET's own overhead is about 0.005 µs a call (its vtable lookup and cast), and the managed-to-native
+transition is within the noise (`SuppressGCTransition` measured 0.087-0.114 against 0.091-0.118 µs).
 
 ### 9.2 Per pass (estimates)
 

@@ -26,6 +26,7 @@ public sealed unsafe partial class VkGl
         public bool Borrowed;                 // imported native buffer (ImportBuffer): never freed or written here
         public bool Deleted;                  // DeleteBuffer: its name reads as no buffer (exports made before are stale)
         public bool Exported;                 // named by a vertex array export: its storage changes move VertexArrayStamp
+        public long ExportFreshFrame = -1;    // exported: the frame in which it got storage no draw has read (writes then go in place)
         public bool Defined => Dynamic ? VersionFrame >= 0 : Device is not null;
     }
 
@@ -56,6 +57,15 @@ public sealed unsafe partial class VkGl
     {
         if (b.Exported) exportStamp++;
     }
+
+    /// <summary>
+    /// A buffer an export names counts as read by every frame, as if each export had been fetched (<see cref="IGlInterop.VertexArray"/>)
+    /// and drawn with at the frame's begin, until it gets fresh storage in that frame (a rename by a write, or a re-specification). A caller
+    /// holding an export whose stamp has not moved may therefore draw with it in any later frame without fetching it again: the first write
+    /// of a frame to such a buffer takes new memory (and moves the stamp) exactly as after a draw. Conservative: a buffer no draw of the frame
+    /// reads is renamed too when written. Worked out at the write, so a frame's begin costs nothing per exported buffer.
+    /// </summary>
+    static bool ReadByFrame(GlBufferObj b, long frame) => b.Exported && b.ExportFreshFrame != frame;
 
     void DestroyBuffer(GlBufferObj b)
     {
@@ -120,6 +130,7 @@ public sealed unsafe partial class VkGl
         if (b.Device is { } old) { b.Device = null; device.Frames.DeferDelete(() => device.Allocator.Free(old)); }
         b.Size = Math.Max(size, 4);
         b.Dynamic = dynamic;
+        b.ExportFreshFrame = device.Frames.FrameNumber;   // new storage: no draw has read it (ReadByFrame)
         if (dynamic)
         {
             if (!dynamicBuffers.Contains(b)) dynamicBuffers.Add(b);
@@ -149,12 +160,14 @@ public sealed unsafe partial class VkGl
         if (size <= 0) return;
         NotImported(b);
         if (offset + size > b.Size) throw new ArgumentOutOfRangeException(nameof(size), $"buffer {b.Id}: {offset}+{size} > {b.Size}");
+        long frame = device.Frames.FrameNumber;
         if (b.Dynamic)
         {
-            if (b.VersionFrame != device.Frames.FrameNumber || b.UsedSinceWrite)
+            if (b.VersionFrame != frame || b.UsedSinceWrite || ReadByFrame(b, frame))
             {
                 var old = b.Version;
                 NewVersion(b);
+                b.ExportFreshFrame = frame;
                 System.Buffer.MemoryCopy(old.Pointer, b.Version.Pointer, b.Size, b.Size);
                 Stats.BuffersRenamed++;
             }
@@ -162,7 +175,7 @@ public sealed unsafe partial class VkGl
             return;
         }
         var target = b.Device ?? throw new InvalidOperationException($"buffer {b.Id} has no storage");
-        if (b.UsedFrame == device.Frames.FrameNumber)
+        if (b.UsedFrame == frame || ReadByFrame(b, frame))
         {
             // Drawn from earlier this frame: new memory, the old contents copied over first (in the upload command buffer,
             // which runs before this frame's draws; the old buffer keeps what those draws need).
@@ -175,6 +188,7 @@ public sealed unsafe partial class VkGl
             device.Frames.DeferDelete(() => device.Allocator.Free(old));
             b.Device = target = fresh;
             b.UsedFrame = -1;
+            b.ExportFreshFrame = frame;
             StorageChanged(b);
             Stats.BuffersRenamed++;
         }

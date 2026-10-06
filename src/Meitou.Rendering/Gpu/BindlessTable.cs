@@ -168,7 +168,14 @@ public sealed unsafe class BindlessTable : IDisposable
 
     /// <summary>What a shader reads from a colour texture of <paramref name="format"/>: UInt for UINT formats, Int for SINT, Float otherwise
     /// (UNORM, SNORM, SFLOAT, SRGB, and depth: a depth-stencil format's stencil part is not sampled).</summary>
-    public static ScalarKind ScalarOf(Format format)
+    public static ScalarKind ScalarOf(Format format) => Scalars.TryGetValue(format, out var s) ? s : ScalarByName(format);
+
+    /// <summary><see cref="ScalarByName"/> of every named format, worked out once: <see cref="ScalarOf"/> runs for every
+    /// <c>IGlInterop.Bindless</c> call, and the enum's name is a string allocation and three searches (~0.1 us).</summary>
+    static readonly System.Collections.Frozen.FrozenDictionary<Format, ScalarKind> Scalars =
+        System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(Enum.GetValues<Format>().Distinct(), f => f, ScalarByName);
+
+    static ScalarKind ScalarByName(Format format)
     {
         var name = format.ToString();
         if (GlConventions.IsDepthFormat(format) || name.EndsWith("S8Uint", StringComparison.Ordinal)) return ScalarKind.Float;   // depth(-stencil)
