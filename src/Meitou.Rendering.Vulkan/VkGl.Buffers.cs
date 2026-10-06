@@ -44,6 +44,7 @@ public sealed unsafe partial class VkGl
     public void DeleteBuffer(uint buffer)
     {
         if (!buffers.Remove(buffer, out var b)) return;
+        exportedBuffers.Remove(b);
         b.Deleted = true;
         DestroyBuffer(b);
         if (boundArrayBuffer == buffer) boundArrayBuffer = 0;
@@ -55,6 +56,25 @@ public sealed unsafe partial class VkGl
     void StorageChanged(GlBufferObj b)
     {
         if (b.Exported) exportStamp++;
+    }
+
+    /// <summary>Every buffer an export has named (<see cref="GlBufferObj.Exported"/>) and not deleted since.</summary>
+    readonly HashSet<GlBufferObj> exportedBuffers = [];
+
+    /// <summary>
+    /// At frame begin, after the dynamic buffers are carried: every buffer an export names counts as read by the new frame, as if each
+    /// export had been fetched (<see cref="IGlInterop.VertexArray"/>) and drawn with. A caller holding an export whose stamp has not moved
+    /// may therefore draw with it in any later frame without fetching it again; a write to such a buffer later in the frame takes new memory
+    /// (and moves the stamp) exactly as after a draw. Conservative: a buffer no draw of the frame reads is renamed too when written.
+    /// </summary>
+    void MarkExportsUsed()
+    {
+        long frame = device.Frames.FrameNumber;
+        foreach (var b in exportedBuffers)
+        {
+            if (b.Dynamic) b.UsedSinceWrite = true;
+            else b.UsedFrame = frame;
+        }
     }
 
     void DestroyBuffer(GlBufferObj b)

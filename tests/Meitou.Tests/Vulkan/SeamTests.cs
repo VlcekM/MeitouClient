@@ -558,12 +558,18 @@ public class SeamTests
             gl.BindVertexArray(0);
             Assert.NotEqual(stamp, interop.VertexArrayStamp);
 
-            // A new frame: the exports mark their buffers used per frame, so they are fetched again.
-            interop.VertexArray(vao);
+            // A new frame: the export stays current (no fetch needed), and the buffers it names count as used by the frame anyway, so a
+            // write to one takes new memory and moves the stamp, as after a draw.
+            var current = interop.VertexArray(vao);
             stamp = interop.VertexArrayStamp;
             gl.EndFrame();
             gl.BeginFrame(W, H);
+            Assert.Equal(stamp, interop.VertexArrayStamp);
+            Assert.Same(current, interop.VertexArray(vao));
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+            gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, 4, &x);
             Assert.NotEqual(stamp, interop.VertexArrayStamp);
+            Assert.NotEqual(current.Attributes[0]!.Value.Buffer, interop.VertexArray(vao).Attributes[0]!.Value.Buffer);
             gl.EndFrame();
         }
         ExpectClean(d!);

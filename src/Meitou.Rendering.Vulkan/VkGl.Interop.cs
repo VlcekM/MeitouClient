@@ -236,7 +236,12 @@ public sealed unsafe partial class VkGl : IGlInterop
             elements = new BufferBinding(buffer, offset, (ulong)eb.Size);
         }
         vao.ExportedBuffers = [.. used];
-        foreach (var e in used) if (e.Buffer is { } b) b.Exported = true;
+        foreach (var e in used)
+            if (e.Buffer is { } b)
+            {
+                b.Exported = true;
+                exportedBuffers.Add(b);
+            }
         return new VertexArrayBindings(attributes, elements);
     }
 

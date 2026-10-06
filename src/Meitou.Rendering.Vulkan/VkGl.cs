@@ -110,7 +110,7 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
         EnsureBackbuffer(width, height);
         long beginTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         cmd = device.Frames.BeginFrame();
-        exportStamp++;   // a new frame: exports must be fetched again (they mark their buffers used by the frame)
+        // No stamp move for a new frame: the buffers exports name are marked used by it below (MarkExportsUsed), not by fetching again.
         Stats.FenceWaitTicks += System.Diagnostics.Stopwatch.GetTimestamp() - beginTicks;
         int slot = device.Frames.Slot;
         Check(vk.ResetCommandPool(dev, uploadPools[slot], 0));
@@ -120,6 +120,7 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
         // Uploads may overwrite what earlier frames still read (in-place texture strips): wait for everything before.
         FullBarrier(uploadCmd);
         CarryDynamicBuffers(slot, rings[slot].Reset);
+        MarkExportsUsed();
         uniformRings[slot].Reset();
         ResetFramePools(slot);
         RecycleQueries(slot);
