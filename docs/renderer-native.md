@@ -1094,6 +1094,84 @@ the base build (master `27be7c2`, itself identical in two runs), and validation 
 - Steps 7 to 9 landed in one commit (their edits share `TerrainRenderer.cs`, `SkyRenderer.cs` and `FrameProfiler.cs`); the gate above
   ran on the combined build.
 
+**Wave 3, agent A (foliage), step P as a probe (2026-10-06, `3ce89a4` on top of master `ffd2a23`).** `FoliageRenderer` records natively:
+meshes (colour, and depth for the shadow cascades), grass, and `DrawGrassMotion` (the guest in `PostProcess`' velocity pass). Only
+`FoliageRenderer.cs` changed (the shaders are the same text, so the SPIR-V is byte-identical; `FoliageShaders.cs` and everything frozen are
+untouched). The point of the probe was to see whether native draws are cheaper on a renderer with many small draws. Verdict below the gate.
+
+- *What it does.* Four `LegacyProgram`s (colour mesh, depth mesh, grass, grass motion) are made in the constructor with every uniform handle
+  and sampler slot resolved; the constants GL set on every draw (`uSkinned`, `uAlphaChannel`, `uTint`, ...) are set once. Each draw method is
+  split into **Prepare** (cull, texture ids read through `WorldTexture.Id`, the draw list: `meshDraws`, `grassDraws`, `motionDraws`; no IGl
+  call that could flush) and **Record** (the list into one native segment of VkGl's open pass, `BeginNativeInPass`): viewport, scissor, depth
+  and bias once; the batches' matrices written once into the frame's constants and bound once as the four per-instance rows at locations 7 to 10,
+  each draw reaching its batch by `firstInstance` (the GL `instanceBuffer` is never given storage now, so the vertex arrays' exports stay valid
+  from frame to frame); per draw only what differs: material uniforms when the material key changed (a record struct compare), textures when
+  an id changed, the cull mode when double-sidedness flips, the pipeline, the mesh's own vertex buffers and indices from a per-mesh
+  `NativeMesh` (kept while `VertexArray` returns the same export; two pipelines per mesh, because the reflection's 4x target alternates with the
+  scene's), `Flush`, the draw. One segment for the meshes and one for the grass, because `StageClock.Sub` (the pass meter's `QueryCounter`)
+  sits between them and is an IGl call. The GL state the GL version left (atmosphere units via `SkyRenderer.BindUnits`, cull face off,
+  no vertex array) is restored; the GL foliage programs are no longer made.
+- *Things a port must do that the pilot did not show.* (1) `DrawState.Cull` is `None` while GL's cull face is off, which loses the mode:
+  `gl.Enable(CullFace)` before `CurrentState()` (the foliage toggles culling per material and the shadow pass leaves it off). (2) Alpha-to-coverage
+  and the colour mask (red and green for the grass motion, no depth test) come out of `CurrentState()` as GL set them before the segment; the
+  motion pass needed no code for them. (3) The draw log's `DescribeVertex` artifact (7.1) hits the last batch of every pass: locations 8 to 10 of
+  those draws differ, location 7 is equal. (4) Reading a texture id counts as use and can start a reload: it belongs in Prepare, before the
+  segment opens, not in Record.
+- *Gate (Release both sides, against master `ffd2a23`, which gave identical pictures in two runs for the Faithful and the Meitou sets).* `dotnet build` 0 warnings; tests
+  384 passed, 0 skipped (`KENSHI_PATH` set); `--faithful all` ten views max 0, mean 0; Meitou default ten views max 0; `--debug-shadows 1` forest and
+  Hub at 13:00 and 2:00 max 0; validation `=1` and `=sync` on the ten views: 20 runs, 0 errors. Beyond the 7.7 list: `--water-reflection 4`
+  (forest, Hub, Port North, zone 14,30 at both times) max 0 and 0 sync errors, **but** those pictures equal the level-2 ones, so they do not show the
+  mirrored foliage; the reflection's multisampled foliage draws (alpha-to-coverage on) were checked in the draw log instead (Port North, frame 2:
+  96 foliage draws, all equal but the three last-batch artifact draws). `--upscaler taa` (grass motion active) four views at both times max 0, and
+  the draw log at the forest with TAA: 696 foliage draws, 298 of them grass and 298 grass motion, all equal but two last-batch artifact draws.
+  Draw-log diff (`--faithful all`): forest 13:00 4 of 979 draws differ (the two foliage ones and one terrain-mesh draw only at locations 8 to 10, and
+  the known noisy 84-byte-vertex objects program); Hub 2:00 4 of 391 (three foliage draws and one terrain-mesh draw, locations 8 to 10 only).
+- **Measured: foliage CPU per draw (three to five interleaved runs per build, medians, Release, forest still camera
+  `--fly-benchmark 300 --fly-speed 0 --faithful all`, `MEITOU_FOLIAGE_TIMING=1`, no pass meter; the machine was shared with other viewers and
+  builds, so the unchanged `cull` step alone moves 72 to 120 us between runs).** "Before" is the instrumented VkGl build (`7324a98`: the same
+  code plus the counters). A step's time includes Prepare; "record" is the native segment alone.
+
+  | | forest still (5 runs) | | trees still (5 runs) | | forest, flying 150 u/frame (3 runs) | |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+  | | VkGl | native | VkGl | native | VkGl | native |
+  | colour meshes, draws per call | 12.0 | 12.0 | 14.7 | 14.7 | 12.0 | 12.0 |
+  | colour meshes, us per draw | 4.43 | 2.05 (record 1.92) | 4.21 | 3.20 (record 3.02) | 5.73 | 3.44 |
+  | grass, draws per call | 132.5 | 132.5 | 119.2 | 119.2 | 32.3 | 32.3 |
+  | grass, us per draw | 2.78 | 1.99 (record 1.40) | 2.82 | 2.55 (record 1.69) | 5.70 | 4.90 |
+  | depth meshes, draws per call | 36.5 | 36.5 | 16.5 | 16.5 | 24.5 | 24.5 |
+  | depth meshes, us per draw | 3.30 | 1.26 (record 1.17) | 4.06 | 2.74 (record 2.49) | 4.88 | 2.55 |
+  | stage `foliage`, ms | 1.29 | 0.99 | 1.54 | 1.46 | 1.05 | 0.91 |
+  | shadow casters `foliage`, ms | 1.63 | 1.43 | 2.13 | 2.09 | 1.19 | 1.05 |
+  | render thread cpu-only p50 / p95, ms | 4.0 / 5.4 | 3.2 / 4.3 | 4.8 / 6.3 | 4.8 / 6.7 | 5.2 / 7.8 | 4.8 / 7.5 |
+
+  The same views with the pass meter (`MEITOU_PASS_STATS=1`, two runs per build, the machine quieter): forest stage `foliage` 1.08 / 1.14 ms ->
+  0.88 / 0.87 for 342 draws a frame (27 colour mesh, 298 grass, 17 rock groups), i.e. 3.2-3.3 -> 2.6 us per draw; `fol grass` 0.76 / 0.80 -> 0.61 / 0.60 ms
+  (2.6 -> 2.0 us per draw); the shadow cascade 3 meshes 0.22 / 0.23 -> 0.09 ms for 73 draws; render thread cpu-only p50 3.53 / 3.85 -> 3.23 / 3.28 ms,
+  p95 4.96 / 5.04 -> 4.34 / 4.26. Trees: stage `foliage` 1.31 / 1.32 -> 1.09 / 1.11 ms for 320 draws; p50 4.20 / 4.17 -> 3.84 / 3.89, p95 5.42 / 5.44
+  -> 4.87 / 5.14. VkGl's own counters for the stage drop from 209 KB of uniform copies, 624 copies and 3 533 descriptor writes a frame to none
+  (the native side writes the same default blocks into the frame's constants, uncounted there; the 316 descriptor pushes stay, since the grass
+  changes its sprite on nearly every draw). **GPU time did not
+  change** (stage `foliage` 1.75 / 1.60 -> 1.63 / 1.63 ms in the forest, 2.68 / 2.65 -> 2.35 / 2.28 in the trees; the whole frame 9.8 / 10.0 -> 9.9 / 10.1 ms).
+  The runs without the meter show the same direction with more scatter (the trees' p50 and p95 are inside it).
+- **Observed: where a native draw's time goes (stopwatch per phase inside Record, not committed; forest still, 600 frames, the first ones included).**
+  Grass 1.62 us per draw: `Flush` 0.74 (the changed default blocks copied into the constants, set 1 rebound with dynamic offsets, set 0 pushed
+  when a texture changed), `VertexArray` export 0.35, pipeline and vertex buffers 0.20, key compare and uniform sets 0.18, texture lookups 0.06,
+  the draw call 0.08; 9 us setup and 0.4 us end per segment. Colour meshes 2.0 us: `Flush` 0.85, pipeline, vertex and index buffers 0.40, `VertexArray` 0.35,
+  sets 0.18, texture binds 0.15, draw 0.09; 21 us setup per call. Depth meshes 2.1 us: pipeline and buffers 0.56, `VertexArray` 0.58, `Flush` 0.48,
+  texture binds 0.29, sets 0.12, draw 0.08; 48 us setup per call (cold: the cascades run once or twice a frame each). The trees view gives the same
+  split (grass 1.67, colour meshes 2.25, depth meshes 2.83). Grass's Prepare adds about 0.6 us per draw (the page sort, the frustum tests, two
+  `textures.Get` dictionary lookups per patch), which the port left as it was.
+- **Verdict on the probe.** Native step P is cheaper per draw than VkGl on foliage: 10 to 62 percent less, 0.3 to 2.4 us a draw, depending on
+  the kind of draw (the biggest gains on the meshes, 4.4 -> 2.0 and 3.3 -> 1.3 us in the forest, 24 to 62 percent over the three views; the grass, which
+  is where the many small draws are, 2.8 -> 2.0 us in the forest, 10 to 28 percent over the three views, 298 draws a frame, so 0.2 to 0.25 ms of the
+  foliage stage, and 0.3 to 0.6 ms of the render thread's p50 in the meter runs, which carry noise of that size). That matches what docs/engine.md predicted for removing the layer above the `vkCmd` calls (1 to 1.5 us), and it is **not** the order
+  of magnitude section 1 hopes for (0.1 to 0.3 us per draw): 1.4 to 2 us per draw remains inside the legacy model, because step P keeps VkGl's
+  default blocks and descriptor sets, and the VkGl export calls the seam needs (`VertexArray`) are per draw. The rest comes with step O (push
+  constants and shared blocks instead of copied default blocks: `Flush` 0.5 to 0.85 us, the biggest part), with a cheaper way to keep a mesh's
+  vertex-array export valid (a version number instead of a revalidation per draw: 0.35 us), and with not rebuilding grass's draw list every call
+  (0.6 to 0.9 us). The cold-code effect the pilot found (7.1) did not show here, where draws are many and in a row (a plausible reason, not
+  measured separately): each of the four programs' loops runs 30 to 130 draws in a row.
+
 After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the
 native shader prelude and the shared native shader variants (3.3), each proven on one consumer.
@@ -1186,6 +1264,13 @@ into a pass VkGl has open:
    `va.Elements`. Then `cmd.BindPipeline` (filtered when equal), `cmd.SetFrontFace` only when it flips, `cmd.BindVertexBuffers(0, own)`,
    `cmd.BindIndexBuffer`, `cmd.DrawIndexed(count, instances, 0, 0, firstInstance)` with `firstInstance` reaching this draw's rows.
 5. `interop.EndNative(cmd)`, then restore on `IGl` whatever GL state the GL version left behind (culling, winding, vertex array).
+
+Added by the foliage probe (7.1, `FoliageRenderer`): `gl.Enable(CullFace)` before `CurrentState()` when the segment culls (`DrawState.Cull` is `None` while
+GL's cull face is off, which hides the mode); do the texture-id reads and anything that can start a reload in Prepare, before `BeginNativeInPass`;
+end the segment before a `StageClock.Sub` (the pass meter's `QueryCounter` is an IGl call); keep a mesh's pipeline for the last two segment states
+(the reflection's multisampled target alternates with the scene's); compare a material's uniforms as a value (a record struct) and set them only
+when it changed; the constants GL set on every draw can be set once at construction; per-instance rows from the frame's constants bound once and
+reached by `firstInstance`; take the colour mask and the depth state of a guest pass (grass motion) from `CurrentState()`, never hard-code them.
 
 Avoid in the per-draw loop: dictionary lookups, LINQ, `CurrentTargets` / `CurrentState`, `Flush` when nothing was bound, a
 `BindVertexBuffers` per instance row. Measure with a per-call stopwatch switch like `MEITOU_MESH_TIMING` (`=2` adds the warm repeat, 7.1): a single port's
