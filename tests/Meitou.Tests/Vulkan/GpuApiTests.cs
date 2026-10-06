@@ -520,4 +520,103 @@ public class GpuApiTests
         }
         ExpectClean(d!);
     }
+
+    /// <summary>A prepared segment of the test below: one fullscreen triangle through a scissor, reading one bindless texture.</summary>
+    sealed class ColumnJob(GraphicsPipeline pipeline, PipelineLayout layout, DescriptorSet table, uint texture, int x) : RecordJob
+    {
+        public override void Record(CommandList cmd)
+        {
+            FullTargetState(cmd, W, H);
+            cmd.SetScissor(new Rect2D(new Offset2D(x, 0), new Extent2D((uint)(W - x), H)));
+            cmd.BindPipeline(pipeline);
+            cmd.BindSets(layout, 0, [table], []);
+            cmd.PushConstants(layout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, texture);
+            cmd.Draw(3);
+        }
+    }
+
+    /// <summary>A job that reaches for render-thread state (docs/renderer-native.md 6.3): must throw.</summary>
+    sealed class GreedyJob : RecordJob
+    {
+        public override void Record(CommandList cmd) => RenderJobs.AssertNotInJob();
+    }
+
+    /// <summary>
+    /// Wave 4 (docs/renderer-native.md 6): a native host's rendering with secondaries. Eight segments, each painting from its column to the
+    /// right edge in its own colour, are queued in order (one of them recorded at once on this thread through the seam, as an unported guest
+    /// does) and recorded on the job threads; executed in order, column k shows colour k only if the order held. Validation on, 0 errors; and a
+    /// job that touches render-thread state throws.
+    /// </summary>
+    [Fact]
+    [Slow]
+    public unsafe void Secondaries_recorded_on_job_threads_execute_in_the_order_they_were_queued()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        int mode = Recording.Mode;
+        Recording.Mode = 2;
+        try
+        {
+            using (var gl = new VkGl(d!))
+            {
+                var ctx = gl.Context;
+                IGlInterop interop = gl;
+                const int Columns = 8;
+                var sources = new Texture[Columns];
+                var indices = new uint[Columns];
+                using var target = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, W, H, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "columns"));
+                using var draw = ctx.Shaders.Native(BindlessVertex, BindlessFragment, "bindless", [ctx.Bindless.Layout], 4);
+                var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
+                    TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+                for (int k = 0; k < Columns; k++)
+                {
+                    sources[k] = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, 1, 1, Name: $"column {k}"));
+                    indices[k] = ctx.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, sources[k].View(), sources[k].Image));
+                }
+                var formats = new AttachmentFormats(Format.R8G8B8A8Unorm, Format.Undefined);
+                var pipeline = ctx.Pipelines.Get(new GraphicsPipelineDesc(draw, VertexLayout.Empty, PrimitiveTopology.TriangleList, formats, BlendState.Off,
+                    ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit, Silk.NET.Vulkan.PolygonMode.Fill, false, false, "bindless"));
+
+                gl.BeginFrame(W, H);
+                var frame = ctx.Frame;
+                for (int k = 0; k < Columns; k++) ctx.Uploads.Write(sources[k], 0, 0, new Rect2D(new Offset2D(0, 0), new Extent2D(1, 1)), [(byte)(10 + 30 * k), (byte)(200 - 20 * k), (byte)(5 * k), 255]);
+                var cmd = interop.BeginNative("columns host");
+                cmd.BeginRendering(Target(target), secondaries: true);
+                frame.Parallel.Begin(cmd, formats, 0);
+                interop.BeginHostPass(cmd);
+                for (int k = 0; k < Columns; k++)
+                {
+                    var job = new ColumnJob(pipeline, draw.Layout, ctx.Bindless.Set, indices[k], k * (W / Columns));
+                    if (k == 4)
+                    {
+                        // An unported guest: records at once into a secondary of its own, in its place.
+                        var inline = interop.BeginNativeInPass("inline column");
+                        job.Record(inline);
+                        interop.EndNative(inline);
+                    }
+                    else ctx.Record($"column {k}", job);
+                }
+                Assert.Equal(1 + Columns, frame.Stats.NativeSegments);   // the host's own segment and the columns
+                frame.Parallel.End();
+                Assert.Equal(Columns, frame.Parallel.Totals.Draws);
+                cmd.EndRendering();
+                interop.EndHostPass(cmd);
+                interop.EndNative(cmd);
+                Assert.Throws<InvalidOperationException>(() => ctx.Record("greedy", new GreedyJob()));
+                Assert.False(RenderJobs.InJob);
+                gl.EndFrame();
+
+                var pixels = ctx.ReadBack(target, 4);
+                for (int y = 0; y < H; y++)
+                    for (int x = 0; x < W; x++)
+                    {
+                        int k = x / (W / Columns), i = (y * W + x) * 4;
+                        Assert.Equal((10 + 30 * k, 200 - 20 * k, 5 * k), (pixels[i], pixels[i + 1], pixels[i + 2]));
+                    }
+                foreach (var s in sources) s.Dispose();
+            }
+            ExpectClean(d!);
+        }
+        finally { Recording.Mode = mode; }
+    }
 }

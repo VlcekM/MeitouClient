@@ -148,13 +148,40 @@ public sealed unsafe partial class ShadowPass : IDisposable
         var t = interop.CurrentTargets();
         interop.BeginHostPass(cmd);
         var depth = clear ? t.Depth with { Load = Silk.NET.Vulkan.AttachmentLoadOp.Clear, Clear = new Silk.NET.Vulkan.ClearValue(depthStencil: new Silk.NET.Vulkan.ClearDepthStencilValue(1f, 0)) } : t.Depth;
-        cmd.BeginRendering(new RenderingDesc(default, depth, t.Width, t.Height));
+        // Wave 4 (docs/renderer-native.md 6): the cascades' segments are secondaries, recorded on the job threads when the host ends.
+        bool secondaries = Recording.Secondaries;
+        cmd.BeginRendering(new RenderingDesc(default, depth, t.Width, t.Height), secondaries);
+        if (secondaries) Gpu.Frame.Parallel.Begin(cmd, t.Formats, ShadowStage);
         return cmd;
+    }
+
+    /// <summary>The <see cref="StageClock"/> stage of the shadow casters' jobs.</summary>
+    const int ShadowStage = 12;
+
+    /// <summary>A partial clear of the atlas (a Meitou tile) in its place among the guests: inline into the host's rendering, or as a job of its own
+    /// when the rendering takes secondaries (the primary may record nothing else there).</summary>
+    void ClearTile(CommandList host, Silk.NET.Vulkan.Rect2D rect)
+    {
+        if (!Gpu.Frame.Parallel.Open) { host.ClearDepth(1f, rect); return; }
+        var job = clearJobs.Rent();
+        (job.Owner, job.Rect) = (this, rect);
+        Gpu.Record("shadow tile clear", job);
+    }
+
+    readonly JobPool<ClearJob> clearJobs = new();
+
+    sealed class ClearJob : RecordJob
+    {
+        public ShadowPass Owner = null!;
+        public Silk.NET.Vulkan.Rect2D Rect;
+        public override void Record(CommandList cmd) => cmd.ClearDepth(1f, Rect);
+        public override void Release() => Owner.clearJobs.Return(this);
     }
 
     void EndHost(CommandList cmd)
     {
         var interop = Gpu.Interop!;
+        if (Gpu.Frame.Parallel.Open) Gpu.Frame.Parallel.End();
         cmd.EndRendering();
         interop.EndHostPass(cmd);
         interop.EndNative(cmd);
