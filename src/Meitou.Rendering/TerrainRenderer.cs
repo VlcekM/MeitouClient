@@ -401,6 +401,15 @@ public sealed unsafe class TerrainRenderer : IDisposable
         return h.Kind == kind ? h.Index : standIn;
     }
 
+    /// <summary>The bindless index of a native texture of the terrain's (<see cref="TerrainTexture.Bindless"/>), or the stand-in of
+    /// <paramref name="kind"/>'s array when there is none.</summary>
+    static uint Index(TerrainTexture? texture, BindlessKind kind, uint standIn)
+    {
+        if (texture is null) return standIn;
+        var h = texture.Bindless();
+        return h.Kind == kind ? h.Index : standIn;
+    }
+
     /// <summary>
     /// <see cref="constants"/> for the next segment: <see cref="BindHeights"/>' values and the height textures; with <paramref name="material"/>
     /// also <see cref="Apply"/>'s (<paramref name="patches"/>: the height field's normals, no feature; else <c>uFeature</c> 1) and the material
@@ -445,16 +454,16 @@ public sealed unsafe class TerrainRenderer : IDisposable
             {
                 c.Region = lastRegion = t.Region;
                 c.CellGrid = lastCellGrid = new Vector2(t.CellsX, t.CellsZ);
-                var ids = t.Ids;
-                c.Diffuse = Index(interop, ids.Diffuse, BindlessKind.Texture2DArray, standInArray);
-                c.Normal = Index(interop, ids.Normal, BindlessKind.Texture2DArray, standInArray);
-                c.Params = Index(interop, ids.Params, BindlessKind.Texture2D, standIn2D);
-                c.Cells = Index(interop, ids.Cells, BindlessKind.UTexture2D, standInUInt);
-                c.BlendMap = Index(interop, ids.BlendMap, BindlessKind.Texture2D, standIn2D);
-                c.Overlay = Index(interop, ids.Overlay, BindlessKind.Texture2D, standIn2D);
-                c.Colour = Index(interop, ids.Colour, BindlessKind.Texture2D, standIn2D);
-                c.Ground = Index(interop, ids.Ground, BindlessKind.Texture2D, standIn2D);
-                c.WorldColour = Index(interop, ids.WorldColour, BindlessKind.Texture2D, standIn2D);
+                var set = t.Textures;
+                c.Diffuse = Index(set.Diffuse, BindlessKind.Texture2DArray, standInArray);
+                c.Normal = Index(set.Normal, BindlessKind.Texture2DArray, standInArray);
+                c.Params = Index(set.Params, BindlessKind.Texture2D, standIn2D);
+                c.Cells = Index(set.Cells, BindlessKind.UTexture2D, standInUInt);
+                c.BlendMap = Index(set.BlendMap, BindlessKind.Texture2D, standIn2D);
+                c.Overlay = Index(set.Overlay, BindlessKind.Texture2D, standIn2D);
+                c.Colour = Index(set.Colour, BindlessKind.Texture2D, standIn2D);
+                c.Ground = Index(set.Ground, BindlessKind.Texture2D, standIn2D);
+                c.WorldColour = Index(set.WorldColour, BindlessKind.Texture2D, standIn2D);
             }
         }
         constants = c;
@@ -567,7 +576,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         gl.UseProgram(patchProgram);
         SkyRenderer.Active?.BindUnits();
         BindHeightUnits();
-        textures?.Bind();
         if (nodes.Count == 0) return;
         PrepareConstants(material: true, patches: true);
         RecordPatches(patchColour, "terrain", StepTiming.PatchColour);
@@ -711,7 +719,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         gl.Uniform1(U(program, "uWorldColour"), TerrainShaders.WorldColourUnit);
         if (t is not null)
         {
-            t.Bind();
             gl.Uniform4(U(program, "uRegion"), t.Region.X, t.Region.Y, t.Region.Z, t.Region.W);
             gl.Uniform2(U(program, "uCellGrid"), (float)t.CellsX, t.CellsZ);
         }
@@ -828,7 +835,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         // GL state as Apply left it for the GL code that follows (the units bound: the frame set reads the atmosphere's there).
         SkyRenderer.Active?.BindUnits();
         BindHeightUnits();
-        textures?.Bind();
         PrepareConstants(material: true, patches: false);
         int draws = DrawGroups(meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
         StepTiming.Add(StepTiming.MeshColour, t0, draws);
@@ -1168,7 +1174,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
             // GL state as Apply left it for the GL code that follows (the units bound: the frame set reads the atmosphere's there).
             SkyRenderer.Active?.BindUnits();
             BindHeightUnits();
-            textures?.Bind();
             PrepareConstants(material: true, patches: false);
             draws = DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
             StepTiming.Add(StepTiming.MeshColour, timing, draws);

@@ -417,6 +417,37 @@ public sealed unsafe class CommandList
         vk.CmdBlitImage(Handle, src.Image, ImageLayout.General, dst.Image, ImageLayout.General, 1, &blit, filter);
     }
 
+    /// <summary>
+    /// (Added in phase 8 stage 1, terrain.) Fills levels 1 and up of a colour texture from level 0, all layers, exactly as VkGl's
+    /// <c>GenerateMipmap</c>: a full barrier, then per level a transfer barrier and a linear blit from the level above (GENERAL layout), then a
+    /// full barrier. Outside any rendering.
+    /// </summary>
+    public void GenerateMips(Texture t)
+    {
+        var d = t.Desc;
+        if (d.Levels < 2) return;
+        Barrier(BarrierBatch.Full);
+        var transfer = new BarrierBatch
+        {
+            SrcStages = PipelineStageFlags2.TransferBit, SrcAccess = AccessFlags2.TransferWriteBit,
+            DstStages = PipelineStageFlags2.TransferBit, DstAccess = AccessFlags2.TransferReadBit,
+        };
+        uint layers = (uint)(d.Kind == TextureKind.Cube ? 6 * Math.Max(d.Layers, 1) : d.Layers);
+        for (int level = 1; level < d.Levels; level++)
+        {
+            Barrier(transfer);
+            var blit = new ImageBlit
+            {
+                SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, (uint)level - 1, 0, layers),
+                DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, (uint)level, 0, layers),
+            };
+            blit.SrcOffsets[1] = new Offset3D(Math.Max(d.Width >> (level - 1), 1), Math.Max(d.Height >> (level - 1), 1), 1);
+            blit.DstOffsets[1] = new Offset3D(Math.Max(d.Width >> level, 1), Math.Max(d.Height >> level, 1), 1);
+            vk.CmdBlitImage(Handle, t.Image, ImageLayout.General, t.Image, ImageLayout.General, 1, &blit, Filter.Linear);
+        }
+        Barrier(BarrierBatch.Full);
+    }
+
     // ---- sync, timing, labels ----
 
     public void Barrier(in BarrierBatch batch)
