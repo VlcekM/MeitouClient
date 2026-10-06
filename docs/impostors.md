@@ -2,7 +2,8 @@
 
 Meitou-mode feature (switch name `impostors`, owned and wired by the GPU-driven foliage path, [renderer-native.md](renderer-native.md)
 5.7). Beyond a per-mesh distance, a foliage instance is drawn as one camera-facing quad. The quad samples a pre-rendered atlas of the mesh
-seen from many directions. This doc covers the baker, the file format and cache, the sampling GLSL, and the preview that checks them. The
+seen from many directions. This doc covers the baker, the file format and cache, the sampling GLSL, the preview that checks them, and how
+the foliage path draws them (section 7). The
 original game has no impostors ([formats/foliage.md](formats/foliage.md), "no impostor level was found"), so nothing here is a
 compatibility claim. Faithful mode never draws impostors.
 
@@ -95,8 +96,14 @@ FOLIAGE_MESH's maximum scale):
 
 **At load, from the code (`ImpostorBaker`):**
 
-1. Each row of N frames is rendered into a target of `2·N·frame × 2·frame` (RGBA8 + 24-bit depth) through `IGl`. Each frame has its own
-   viewport and an orthographic projection fitted to the sphere.
+1. Each row of N frames is rendered into a target of `2·N·frame × 2·frame` (RGBA8 + 32-bit float depth, "impostor bake target"). Each
+   frame has its own viewport and an orthographic projection fitted to the sphere. Since phase 8 stage 2 the baker is native
+   (`ImpostorBaker(GpuContext, ...)`, no `IGl`): a row's three passes, the halving blit and the copy into a readback buffer are recorded
+   into the frame's pre-frame command list, and the row is read once that frame has completed (`ImpostorBakeJob.Step`, a few rows per
+   frame, so a bake never stalls a frame; `Bake(..., nextFrame)` drives the frames for tools and tests). The frame's basis vectors reach
+   the shader as a storage block (`ImpostorShaders.BakeBlock`), one slice per frame. **Verified** (2026-10-06, BushTree01, base `6f4af19`
+   GL baker against the native one): the `.mimp` files are byte-identical and all twelve `--impostor-preview` pictures 0 px apart, so
+   `BakerVersion` stays 4 and existing caches stay valid.
 2. The renderer is the **shared mesh shader** (`Shaders.MeshFragment`) with an output switch inserted before its lighting
    (`ImpostorShaders.BakeFragment`). The albedo, normal and gloss are therefore exactly what the mesh shader would have lit, including
    the alpha test, second texture, normal map and triplanar mode.
@@ -235,12 +242,13 @@ normal and position are transformed by the instance matrix, so a live sun lights
 into the albedo but the albedo. The preview sheets under three suns (high, low, behind) show matching shading direction and strength
 (measured by eye).
 
-**Depth (from the code).**
+**Depth (from the code).** Three native programs (`ImpostorDraw`, `ImpostorProgram`):
 
-- `Fragment` keeps early depth testing and writes the quad's depth.
-- `FragmentWithDepth` writes the depth of the reconstructed surface (`gl_FragDepth`), so impostors intersect each other and the terrain
-  correctly and can cast shadows into a depth-only pass. This costs early-Z.
-- Use it for the shadow pass and where trees stand in clusters (estimate).
+- `Plain` (`Fragment`) keeps early depth testing and writes the quad's depth. The foliage path uses it.
+- `DepthWrite` (`FragmentWithDepth`) writes the depth of the reconstructed surface (`gl_FragDepth`), so impostors intersect each other
+  and the terrain correctly. This costs early-Z. The foliage path uses it with `MEITOU_IMPOSTOR_DEPTH=1` (for comparisons); the preview
+  with `--depth-write`.
+- `Caster` (`DepthFragment`): the shadow cascades' depth-only program (section 7, "Shadows").
 
 **Crossfade (from the code).** The mesh fades out with its usual dither (`M14 = fade`, discard where `dither ≥ fade`). The impostor gets
 `M14 = −fade` and discards the complement (`dither < fade`). Over the fade band each pixel shows exactly one of the two, with no double
@@ -263,6 +271,9 @@ instance's projected diameter equals the frame size:
 
 - Recommendation (estimate): switch at this distance (per instance, from its own scale) or beyond. The fade band is the last 10% before
   it. Closer than the transition the impostor is magnified and visibly softer than the mesh.
+- As built (section 7) the foliage path uses one adjustable distance for every atlas instead (a group keeps one range, so the cull's
+  chunk carries one transition): 4000 by default, which is beyond this formula's distance for the base game's large trees at 900p and
+  1080p.
 
 **GPU cost per impostor (estimate):**
 
@@ -315,3 +326,115 @@ The field and near pictures use FOV 50, the eye at height 400. Compare pairs wit
 - Views below the horizon are clamped to it.
 - Wind sway is not represented: the impostor is the rest pose.
 - Cache size cap.
+
+## 7. In the foliage path (as built, phase 8 stage 2, 2026-10-07)
+
+Labels in this section: **Verified** (a test, the verify mode or the parity gate checks it), **Observed** (seen or measured in a run, with
+the machine), **Unknown**, and "from the code".
+
+Code: `FoliageRenderer.Impostors.cs` (streaming and drawing), `FoliageCull.cs` / `FoliageShaders.cs` / `FoliageGpuCull.cs` (the split),
+`Impostors/ImpostorDraw.cs` (programs and pipelines). Tests: `FoliageCullTests.Impostor_split_is_complementary`,
+`FoliageGpuCullTests.Gpu_impostor_split_matches_FoliageCull` (Slow), `ImpostorTests`.
+
+### Switch, distance, option (from the code)
+
+- The `impostors` Enhancement (F7 in the viewer): Meitou (default) draws impostors; Faithful never loads, bakes or draws one (no atlas
+  is asked for while it is off; resident ones are unloaded when idle like any other). `--faithful impostors` turns it off,
+  `--faithful all` includes it.
+- `ImpostorDistance` (default 4000; `--impostor-distance <u>`; Tab slider "Impostor distance (F7 Meitou)", 500 to 40000, log scale): the
+  transition distance T along the ground. Both atlas classes switch there (`ImpostorMediumShare` = 1).
+  - **Observed** (forest view, 13:00): at a medium share of 0.5 (T = 2000 for 128-pixel atlases) a bush at about 2000 to 2500 units
+    became visibly fuller than its mesh (crop `forest_t13_bush` in the review folder); with `--impostor-distance 8000` (medium at 4000)
+    it was the mesh again. Hence one distance for both classes.
+- A group gets an impostor only when its mesh's atlas is resident and T ≤ range − band (the impostor never starts inside the range's own
+  fade). With the default ranges (large 5000, medium 2500, small 800) that leaves the large-range meshes from 3600 on; the gain grows
+  with the large range (the "VRAM" measurements below use 12000).
+
+### The split (Verified)
+
+The crossfade band is [T − B, T) with B = 0.1 T. Per instance, with the transition fade m = clamp((T − d) / B, 0, 1) and the range fade w:
+
+| Distance | Mesh list (row 0 w) | Impostor list (row 0 w) |
+| --- | --- | --- |
+| d < T − B (m = 1) | `Pack(w)` | not listed |
+| T − B ≤ d < T (0 < m < 1) | m | −m (the complementary dither: the impostor discards where the mesh draws) |
+| d ≥ T (m = 0) | not listed | `Pack(w)` (the impostor fades out at the range as the mesh would) |
+
+- CPU: `FoliageCull.CullGroup(..., parts)` with `PackMesh` / `PackImpostor`; the hidden value is −2 (a visible value is above −1.5).
+- GPU: a group with an impostor has its mesh chunks flagged `ImpostorMesh` (4) and a second set of chunks over the same arena range
+  flagged `Impostor` (8), both carrying `Transition` and `InverseTransitionBand` (in the chunk's former padding: still 32 bytes). The cull kernel computes m
+  with the same `precise` clamp and stores −2 for the other side; the scan and compaction count `> −1.5`.
+- Batches are ordered meshes, then TERRAIN-mode rocks, then impostors (numbered by each mesh's first group in the work list). An
+  impostor batch is one `DrawIndexedIndirect` of the six-index quad (`gl_VertexIndex`, no vertex buffer) with the rows at locations 7 to
+  10, bindless atlas indices and the sphere in the push constants (`ImpostorPush`, 80 bytes, bit-cast into the mesh draws' 128-byte
+  push block); the draws are appended to the mesh segment's job, so the recording threads take them as they take the meshes.
+- Parts per group (`WithImpostor`): the meshes only when the zone has ground nearer than T (64 units margin), the impostors only when it
+  has ground at T − B or beyond; a zone entirely beyond T draws no mesh chunks at all.
+- **Verified**: `Impostor_split_is_complementary` (every instance in exactly one list or, in the band, in both with m and −m; the union
+  is the set without a transition); `Gpu_impostor_split_matches_FoliageCull` (four random views, a third of the instances within a few
+  ulps of T or T − B: every list and every fade bit for bit); `MEITOU_GPU_CULL_VERIFY=1` in the forest view (142 views, 106,420 visible
+  instances, impostor batches included: 0 set, order, argument or batch-order differences, all fades equal); `MEITOU_GPU_CULL=0` and
+  `MEITOU_RECORD_THREADS=0` give pictures 0 px from the default path.
+
+### Streaming (from the code)
+
+- Once a second (every update while settling) the zones whose far corner is beyond T − B ask for the atlases of their resident,
+  in-range meshes. A worker loads the meshes (`ImpostorMeshes`), picks the class and reads the cache. A miss is baked on the render
+  thread, one atlas at a time, two rows per frame (all rows per update while settling), the result saved to the cache on a worker.
+- An atlas uploads one level per frame (all while settling) and then counts as resident (36 MB large, 9 MB medium); the CPU copy is
+  dropped. One unused for `IdleSeconds` (60) is unloaded and read from the cache again when wanted.
+- Offscreen settling (`FoliageRenderer.Settle`) ends the frame while a bake waits for its rows (`IGl.Finish`, the constructor's
+  formerly unused `gl`): the bake reads rows back after the frame they were recorded in completes. This is `FoliageRenderer`'s one `IGl`
+  call; stage 3 replaces it with the native frame loop.
+- **Observed**: the forest view, first run, empty cache: 47 atlases baked (255 MB on disk), the view settled in 23 s (with impostors
+  off it settles in about the same time as before; the bakes are most of the difference).
+
+### Shadows (from the code; costs below)
+
+- In the cascades a group with an impostor casts the impostor beyond T (the same split, its own cull per cascade), drawn by the `Caster`
+  program: one frame per texel by the ordered pick (no fade), cut at coverage 0.5, the reconstructed surface's depth with the game's
+  caster bias. The quad faces the sun: the cascade's direction is passed as `uImpostorView` (w 1), so the vertex stage places the eye far
+  out along it (the cascade's eye is not a point). `MEITOU_IMPOSTOR_CASTERS=0` keeps the meshes as casters.
+- Why: a far cascade covering 10,000 to 15,000 units of shadow distance holds thousands of trees; an impostor caster is two triangles
+  against the mesh's hundreds to thousands, and its atlas is already resident for the colour pass.
+- **Observed** (forest 13:00): about half the picture difference against impostors off is in the shadows (mean 2.55 with casters,
+  1.17 without, base `6f4af19` Meitou picture): the impostor casters cast fuller crown shadows, as their crowns are fuller (below).
+
+### Pictures (Observed, 2026-10-07, RTX 4070, 1600 × 900, against the base Meitou pictures)
+
+| View | mean | over 12 | max |
+| --- | ---: | ---: | ---: |
+| forest 13:00 | 2.4486 | 7.855% | 165 |
+| forest 02:00 | 0.1698 | 0.087% | 36 |
+| hub 13:00 / 02:00 | 0.0176 / 0.0046 | 0.051% / 0% | 71 / 16 |
+| portnorth 13:00 / 02:00 | 0 / 0 | 0 / 0 | 0 / 0 |
+| rock 13:00 / 02:00 | 0.0077 / 0.0012 | 0.019% / 0.001% | 124 / 15 |
+| zone14_30 13:00 / 02:00 | 0.3187 / 0.0629 | 1.337% / 0.003% | 70 / 15 |
+
+- Differences are only in instances beyond the band's start and in the ground shadows of the last cascade. Trees and bushes nearer than
+  T − B are unchanged (pixel-identical in the forest view's near half). No holes, no black or white quads, upright crowns.
+- **The crowns are fuller than the meshes'** at the same distance. The meshes' leaves thin out with distance (their cut-out tests the
+  mipmapped alpha, which averages towards transparency), while the atlas keeps each level's covered area (section 3, coverage scaling).
+  The impostor is closer to the tree seen near; the mesh far away is sparser. Raising the impostor's cut to 0.8 thinned them (zone
+  14,30 mean 0.319 → 0.288) but also lost the dark twigs, so 0.5 stays; matching the mesh's distant thinning is open.
+- The frame pick's 4 × 4 pattern is visible on large impostors seen steeply (zone 14,30's corner trees) since it is screen-fixed and TAA
+  does not average it.
+- Review crops (base left, impostors right): `C:\Temp\agent-BB\review\` (not in the repo).
+
+### Frame times and VRAM
+
+**Unknown** as of this writing: the frame-time and VRAM measurements (forest, `--fly-benchmark 300` still and flying, default ranges and
+`--range-large 12000`, impostors off and on; `--range-large 12000` with shadow distance 10000 and 15000, impostors off, on and on without
+impostor casters) were not run, because another 3D application held the GPU (100% load, about 6 GB of the 12 GB) and numbers taken
+beside it are not comparable (three identical forest screenshots gave 130, 6.9 and 5.4 ms frames), and a large-range, long-shadow run
+on top of it risked the out-of-memory driver failure seen before. The fly benchmark now prints the VRAM use against the driver's budget
+(end and peak) and the twelve largest `GpuAllocator.Breakdown` owners, and `MEITOU_BENCH_SHADOW_RANGE=<u>` sets a shadow distance beyond
+`--shadow-range`'s game limit of 9000 (the Tab slider allows up to 200000), so the runs need no code change.
+
+### Open
+
+- Matching the meshes' distant leaf thinning (above); per-instance transition by projected size (section 5) needs a per-instance
+  transition in the cull.
+- The medium class rarely gets an impostor at the default ranges (medium range 2500 < T).
+- The atlas cache has no size cap; resident atlases have no budget (no VRAM guard was built, see the measurements).
+- `FoliageRenderer.Settle`'s `IGl.Finish` (above) until stage 3.

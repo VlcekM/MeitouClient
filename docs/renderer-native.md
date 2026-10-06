@@ -1078,10 +1078,11 @@ These change the picture on purpose, so they are not part of any parity step. Th
 - **LOD selection on the GPU** (objects, C): `MeshLod.Select` / `Blend` per instance in the cull kernel, with two outputs while blending,
   as the CPU emits them. This is parity-relevant (the LOD rule is the game's), so it follows the A1/A2 pattern.
 - **Impostors** (`impostors`): hemi-octahedral impostor atlases (12 × 12 frames, BC3 albedo + BC5 normal + BC5 depth), baked per mesh
-  through `IGl` and cached in `%LOCALAPPDATA%\Meitou\impostors`. Drawn beyond the per-instance transition distance as one quad per
-  instance from the same cull, crossfaded with the mesh by complementary dither. Needs bindless (step O). The baker, format, cache,
-  sampling GLSL (`ImpostorShaders`) and the `--impostor-preview` check exist (from the code); wiring them into the foliage path and the
-  `Enhancement` switch is the foliage path's step. Details, measurements and the GLSL API are in [impostors.md](impostors.md).
+  natively and cached in `%LOCALAPPDATA%\Meitou\impostors`. **Done (phase 8 stage 2, 2026-10-07)**: the `impostors` switch (F7, Meitou
+  default), drawn from the impostor distance (default 4000, Tab slider, `--impostor-distance`) as one quad per instance from the same
+  cull (the kernel splits a group's instances into mesh and impostor lists, crossfaded over a 10% band by complementary dither, separate
+  indirect draws, bindless atlases), lit, fogged and shadowed as the meshes, and cast into the shadow cascades as impostors. Atlases load
+  or bake on demand. Details, measurements and the GLSL API are in [impostors.md](impostors.md) (section 7 for the foliage path).
 - **Hi-Z occlusion** (`occlusion`): last frame's depth pyramid reprojected, a two-phase cull. Conservative in theory but float-sensitive in
   practice, so it is a Meitou-mode switch.
 
@@ -2668,11 +2669,12 @@ before and after, `upd-terrain` 0.46-0.49 → 0.49-0.52 ms, render-thread alloca
   array 0) is now the `DrawState` of each draw (`CurrentState() with { ... }`). Alpha to coverage follows the target's sample count.
 - **Foliage GPU timers** are `QueryArena` timestamps recorded through `Interleave`, read without waiting (stale ones dropped after two
   rounds of frames).
-- **Still-GL users** (the impostor baker and preview, reserved, read `WorldTexture.Id`; `TerrainRenderer.DrawMeshes` takes GL vertex arrays
+- **Still-GL users** (at stage 1: the impostor baker and preview, which read `WorldTexture.Id`; `TerrainRenderer.DrawMeshes` takes GL vertex arrays
   for rocks and terrain-placed foliage) get GL names over the native resources through the additive `Gpu/GlBridge.cs` (seam `Import` /
-  `ImportBuffer`, no raw handle sharing). That file is the only GL left on these paths; it goes when the impostors and `DrawMeshes` take
-  native textures and mesh bindings. `FoliageRenderer` and `WorldObjectRenderer` keep an unused `IGl` constructor parameter (`WorldFrame`
-  is reserved), as does the `WorldTextureCache(IGl, AssetLocator)` overload the impostors call. Also added: `CommandList.BlitLevel`.
+  `ImportBuffer`, no raw handle sharing). That file is the only GL left on these paths. Stage 2 (8.6) ported the impostors and removed
+  `GlBridge`'s texture part, `WorldTexture.Id` and the `WorldTextureCache(IGl, AssetLocator)` overload; the vertex arrays and
+  `EnsureFrame` remain for `DrawMeshes`. `WorldObjectRenderer` keeps an unused `IGl` constructor parameter (`WorldFrame` is reserved);
+  `FoliageRenderer` uses its one since stage 2 (8.6). Also added: `CommandList.BlitLevel`.
 
 Facts:
 - **Verified** (`WorldResourceTests`, sync validation): the native vertex attributes equal what VkGl exported for the GL vertex arrays
@@ -2988,6 +2990,27 @@ device-local): the frame's constants double as the `Uploader`'s staging, and `Li
 the peak of the loading frames stays allocated in host memory. That predates this stage (unchanged code); fixed after it (owner decision 15: 16 MB of frame constants and 56 MB of upload staging, working set 2.6 GB, same benchmark).
 
 ---
+
+### 8.6 Phase 8 stage 2: impostors native and drawn (2026-10-07)
+
+Files: `Impostors/ImpostorBaker.cs`, `ImpostorTextures.cs`, `ImpostorShaders.cs`, `ImpostorPreview.cs`, new `ImpostorDraw.cs`;
+`tools/Meitou.ModelViewer/ImpostorApp.cs`; `NativeProg.cs` (moved out of `FoliageRenderer`); `FoliageRenderer.cs` and new
+`FoliageRenderer.Impostors.cs`, `FoliageCull.cs`, `FoliageShaders.cs`, `FoliageGpuCull.cs`; `Enhancements.cs`, the option, switch and
+slider lines of `WorldFrame.cs` / `WorldApp.cs`; `WorldTextureCache.cs` and `Gpu/GlBridge.cs` (impostor parts removed);
+`WorldApp.Benchmark.cs` (VRAM lines, `MEITOU_BENCH_SHADOW_RANGE`).
+
+- **Ported** (from the code): the baker records each row into the frame's pre-frame list and reads it back after the frame completes
+  (`ImpostorBakeJob`, stepped per frame); the atlas textures are native `Texture`s ("impostor atlas albedo/normal/depth", GENERAL,
+  bindless, trilinear clamp, re-registered on an LOD-bias change); the preview and `--impostor-preview` / `--impostor-bake-all` render
+  with native passes (4× MSAA, resolve, readback). Impostor files no longer use `IGl`.
+- **Verified**: native atlases byte-identical to the base GL baker's (BushTree01), `--impostor-preview` pictures 0 px, `BakerVersion`
+  unchanged; the ten parity views 0 px with `--faithful all` and with Meitou and `--faithful impostors`; the GPU split bit-identical to
+  the CPU (test and verify mode; impostors.md 7); `MEITOU_GPU_CULL=0` and `MEITOU_RECORD_THREADS=0` 0 px from the default; sync
+  validation 0 errors in the forest (13:00, impostors on) and Port North (13:00, `--water-reflection 4`).
+- **IGl count**: `FoliageRenderer.cs` 0 → 1. `Settle` (offscreen loading) waits in a loop without frames, but a bake's rows are read
+  after their frame completes, so it calls `IGl.Finish` (end the frame, wait, begin the next) while a bake needs one. Stage 3 replaces it
+  with the native frame loop's equivalent.
+- **Drawing, shadows, pictures and measurements**: impostors.md section 7.
 
 ## 9. Expected CPU cost, and how the profiler keeps working
 
