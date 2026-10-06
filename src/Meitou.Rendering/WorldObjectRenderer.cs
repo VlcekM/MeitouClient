@@ -317,6 +317,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         DrawnInstances = 0;
         DrawnTriangles = 0;
         DrawCalls = 0;
+        callLoopMs = 0;
         foreach (var b in batchMap.Values) b.Count = 0;
         active.Clear();
         terrainMeshes.Clear();
@@ -442,7 +443,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     static readonly bool ObjTiming = Environment.GetEnvironmentVariable("MEITOU_OBJECT_TIMING") == "1";
     static readonly int ObjSkip = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_OBJECT_TIMING_SKIP"), out int skip) ? skip : 160;
     readonly double[,] objMs = new double[2, 4];
-    readonly double[] objRecordMs = new double[2];
+    readonly double[] objRecordMs = new double[2], objLoopMs = new double[2];
+    double callLoopMs;   // this call's record loops (the part of recordMs between the segment's setup and its end)
     readonly long[] objSeen = new long[2], objCalls = new long[2], objBatchDraws = new long[2], objTerrainDraws = new long[2];
 
     void ObjAccount(int k, double tCull, double tUpload, double tBatches, double tEnd, int batchDraws, int terrainDraws, double recordMs = 0)
@@ -450,6 +452,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         if (objSeen[k]++ < ObjSkip) return;   // the first calls are cold (pipelines, streaming)
         objCalls[k]++;
         objRecordMs[k] += recordMs;
+        objLoopMs[k] += callLoopMs;
         objMs[k, 0] += tCull; objMs[k, 1] += tUpload - tCull; objMs[k, 2] += tBatches - tUpload; objMs[k, 3] += tEnd - tBatches;
         objBatchDraws[k] += batchDraws; objTerrainDraws[k] += terrainDraws;
     }
@@ -464,7 +467,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"" +
                 $"objects timing {names[k]}: {objCalls[k]} calls, per call us: cull {objMs[k, 0] * 1000 / objCalls[k]:F1}, upload {objMs[k, 1] * 1000 / objCalls[k]:F1}, batches {objMs[k, 2] * 1000 / objCalls[k]:F1}, terrain meshes {objMs[k, 3] * 1000 / objCalls[k]:F1}; " +
                 $"draws per call: batches {(double)objBatchDraws[k] / objCalls[k]:F1}, terrain {(double)objTerrainDraws[k] / objCalls[k]:F1}; " +
-                $"us per batch draw {(objBatchDraws[k] > 0 ? objMs[k, 2] * 1000 / objBatchDraws[k] : 0):F2} (record only {(objBatchDraws[k] > 0 ? objRecordMs[k] * 1000 / objBatchDraws[k] : 0):F2})"));
+                $"us per batch draw {(objBatchDraws[k] > 0 ? objMs[k, 2] * 1000 / objBatchDraws[k] : 0):F2} (record only {(objBatchDraws[k] > 0 ? objRecordMs[k] * 1000 / objBatchDraws[k] : 0):F2}, loop only {(objBatchDraws[k] > 0 ? objLoopMs[k] * 1000 / objBatchDraws[k] : 0):F3}; segment setup + end per call us {(objRecordMs[k] - objLoopMs[k]) * 1000 / objCalls[k]:F1})"));
         }
     }
 
@@ -771,6 +774,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         for (int a = 0; a < 4; a++) rows[a] = new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
         cmd.BindVertexBuffers(RowLocation, rows);
         NewTextureSegment();
+        long loop0 = ObjTiming ? Stopwatch.GetTimestamp() : 0;
         var layout = prog.P.Layout;
         var stages = Silk.NET.Vulkan.ShaderStageFlags.VertexBit | Silk.NET.Vulkan.ShaderStageFlags.FragmentBit;
         ObjectPush last = default;
@@ -799,6 +803,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             }
             cmd.DrawIndexed((uint)part.Count[d.Level], d.Instances, 0, 0, d.FirstInstance);
         }
+        if (ObjTiming) callLoopMs += (Stopwatch.GetTimestamp() - loop0) * 1000.0 / Stopwatch.Frequency;
         interop.EndNative(cmd);
         gl.BindVertexArray(0);
     }
