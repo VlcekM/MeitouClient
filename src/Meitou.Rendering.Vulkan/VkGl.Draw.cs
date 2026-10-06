@@ -132,6 +132,8 @@ public sealed unsafe partial class VkGl
     /// nothing can be drawn (no program, or a program that failed to link).</summary>
     bool PrepareDraw(PrimitiveType mode)
     {
+        // Guarded here too: with VkGl's pass open (BeginNativeInPass) nothing below goes through Cmd.
+        GuardNative();
         if (program is not { Linked: true } p) return false;
         EnsurePass();
         var cb = cmd;

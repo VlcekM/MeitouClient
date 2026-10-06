@@ -56,7 +56,16 @@ public interface IGlInterop
     /// </summary>
     CommandList BeginNative(string label);
 
-    /// <summary>A full barrier, then every VkGl cache of command-buffer state is invalidated (pipeline, dynamic state, descriptors, pass).</summary>
+    /// <summary>
+    /// A native segment that draws into the pass VkGl would draw into now (<see cref="CurrentTargets"/>), inside VkGl's own rendering instance:
+    /// the pass is kept open (or begun as a VkGl draw would begin it), and stays open after <see cref="EndNative"/>, so neither side ends it and
+    /// no barrier is placed (draws in one rendering instance are ordered). The native code records draws only: no BeginRendering,
+    /// EndRendering, barriers, copies or dispatches. Same guard as <see cref="BeginNative"/>.
+    /// </summary>
+    CommandList BeginNativeInPass(string label);
+
+    /// <summary>Every VkGl cache of command-buffer state is invalidated (pipeline, dynamic state, descriptors). After <see cref="BeginNative"/>
+    /// a full barrier is placed and VkGl's pass is forgotten; after <see cref="BeginNativeInPass"/> the pass stays open.</summary>
     void EndNative(CommandList cmd);
 
     /// <summary>Records something that does not disturb a render pass (a timestamp, a debug label) into the frame without ending VkGl's pass.</summary>
@@ -68,7 +77,11 @@ public interface IGlInterop
     /// <summary>GL's fixed-function state as VkGl would apply it to a draw into <see cref="CurrentTargets"/> now.</summary>
     DrawState CurrentState();
 
-    /// <summary>A GL vertex array's attributes and element buffer, marked used by this frame (as a VkGl draw with it would).</summary>
+    /// <summary>
+    /// A GL vertex array's attributes and element buffer, marked used by this frame (as a VkGl draw with it would). While neither the vertex
+    /// array nor the storage of a buffer it names has changed, the same object is returned (no allocation): a caller may keep what it
+    /// derived from it (vertex layout, pipeline, bindings) for as long as the result is <see cref="object.ReferenceEquals"/> to the last one.
+    /// </summary>
     VertexArrayBindings VertexArray(uint glVertexArray);
 
     /// <summary>The image behind a GL texture (non-owning; valid while the GL texture keeps its storage).</summary>

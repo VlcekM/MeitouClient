@@ -24,6 +24,7 @@ public sealed unsafe partial class VkGl
         public int VersionSlot = -1;
         public bool UsedSinceWrite;           // dynamic: a draw of this frame read the current version
         public bool Borrowed;                 // imported native buffer (ImportBuffer): never freed or written here
+        public bool Deleted;                  // DeleteBuffer: its name reads as no buffer (exports made before are stale)
         public bool Defined => Dynamic ? VersionFrame >= 0 : Device is not null;
     }
 
@@ -42,6 +43,7 @@ public sealed unsafe partial class VkGl
     public void DeleteBuffer(uint buffer)
     {
         if (!buffers.Remove(buffer, out var b)) return;
+        b.Deleted = true;
         DestroyBuffer(b);
         if (boundArrayBuffer == buffer) boundArrayBuffer = 0;
         if (boundUniformBuffer == buffer) boundUniformBuffer = 0;
@@ -66,7 +68,7 @@ public sealed unsafe partial class VkGl
         switch (target)
         {
             case BufferTargetARB.ArrayBuffer: boundArrayBuffer = buffer; break;
-            case BufferTargetARB.ElementArrayBuffer: CurrentVao.ElementBuffer = buffer; break;
+            case BufferTargetARB.ElementArrayBuffer: { var v = CurrentVao; v.ElementBuffer = buffer; v.Version++; break; }
             case BufferTargetARB.UniformBuffer: boundUniformBuffer = buffer; break;
             default: boundCopyBuffer = buffer; break;
         }
@@ -241,6 +243,26 @@ public sealed unsafe partial class VkGl
     {
         public readonly VertexAttrib[] Attribs = new VertexAttrib[16];
         public uint ElementBuffer;
+        /// <summary>Bumped by every change of <see cref="Attribs"/> or <see cref="ElementBuffer"/> (the five GL calls that write them).</summary>
+        public int Version;
+        // The last export (VkGl.Interop.VertexArray): handed out again while the attributes, the element buffer and the storage of every
+        // buffer they name are unchanged.
+        public VertexArrayBindings? Exported;
+        public int ExportedVersion;
+        public ExportedBuffer[] ExportedBuffers = [];
+    }
+
+    /// <summary>A buffer an exported vertex array reads, as it was at the export: the object its name led to (null: none or no storage)
+    /// and that object's storage.</summary>
+    internal readonly record struct ExportedBuffer(uint Id, GlBufferObj? Buffer, bool Defined, bool Dynamic, GpuBuffer? Device, VkBuffer Version, ulong VersionOffset, long Size)
+    {
+        public static ExportedBuffer Of(uint id, GlBufferObj? b) =>
+            b is null ? new(id, null, false, false, null, default, 0, 0) : new(id, b, b.Defined, b.Dynamic, b.Device, b.Version.Buffer, b.Version.Offset, b.Size);
+
+        /// <summary>The buffer reads as it did at the export: still not there (names are never reused), or not deleted with the same storage.</summary>
+        public bool Still() => Buffer is not { } b ||
+            !b.Deleted && b.Defined == Defined && b.Dynamic == Dynamic && ReferenceEquals(b.Device, Device) && b.Version.Buffer.Handle == Version.Handle &&
+            b.Version.Offset == VersionOffset && b.Size == Size;
     }
 
     readonly GlVertexArray defaultVao = new();
@@ -262,12 +284,14 @@ public sealed unsafe partial class VkGl
 
     public void BindVertexArray(uint array) { Stats.BindCalls++; boundVao = array; }
 
-    public void EnableVertexAttribArray(uint index) { Stats.AttribCalls++; CurrentVao.Attribs[index].Enabled = true; }
+    public void EnableVertexAttribArray(uint index) { Stats.AttribCalls++; var v = CurrentVao; v.Attribs[index].Enabled = true; v.Version++; }
 
     public void VertexAttribPointer(uint index, int size, VertexAttribPointerType type, bool normalized, uint stride, void* pointer)
     {
         Stats.AttribCalls++;
-        ref var a = ref CurrentVao.Attribs[index];
+        var v = CurrentVao;
+        v.Version++;
+        ref var a = ref v.Attribs[index];
         a.Buffer = boundArrayBuffer;
         a.Size = size;
         a.Type = (GLEnum)type;
@@ -280,7 +304,9 @@ public sealed unsafe partial class VkGl
     public void VertexAttribIPointer(uint index, int size, VertexAttribIType type, uint stride, void* pointer)
     {
         Stats.AttribCalls++;
-        ref var a = ref CurrentVao.Attribs[index];
+        var v = CurrentVao;
+        v.Version++;
+        ref var a = ref v.Attribs[index];
         a.Buffer = boundArrayBuffer;
         a.Size = size;
         a.Type = (GLEnum)type;
@@ -294,7 +320,9 @@ public sealed unsafe partial class VkGl
     {
         Stats.AttribCalls++;
         if (divisor > 1) throw new NotSupportedException("vertex attribute divisors above 1");
-        CurrentVao.Attribs[index].Divisor = divisor;
+        var v = CurrentVao;
+        v.Attribs[index].Divisor = divisor;
+        v.Version++;
     }
 
     static Format AttribFormat(in VertexAttrib a) => GlConventions.VertexFormat(a.Type, a.Size, a.Normalized, a.Integer);

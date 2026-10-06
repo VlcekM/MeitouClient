@@ -124,6 +124,13 @@ public sealed unsafe class CommandList
         Log?.Raster(cull, front);
     }
 
+    /// <summary>The front face alone (a draw that turns the winding round, the cull mode left as set).</summary>
+    public void SetFrontFace(FrontFace front)
+    {
+        vk.CmdSetFrontFace(Handle, front);
+        Log?.Front(front);
+    }
+
     public void SetDepth(bool test, bool write, CompareOp op)
     {
         vk.CmdSetDepthTestEnable(Handle, test);
