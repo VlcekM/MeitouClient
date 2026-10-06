@@ -129,6 +129,72 @@ public class TerrainLodTests
     static IEnumerable<(int Level, double X, double Z, double S)> Squares(List<TerrainNode> nodes) =>
         nodes.Select(n => n.Quadrant < 0 ? (n.Level, n.X0, n.Z0, n.Size) : (n.Level, n.X0 + (n.Quadrant & 1) * n.Size / 2, n.Z0 + (n.Quadrant >> 1) * n.Size / 2, n.Size / 2));
 
+    /// <summary>
+    /// The surface the patch shader draws at <paramref name="p"/>: the drawn square holding it, its grid cells around p with the
+    /// vertices slid as the vertex shader does (morph from the unmorphed vertex's distance, height read at the slid position),
+    /// and the height of the slid triangle over p.
+    /// </summary>
+    static float DrawnHeight(TerrainQuadtree q, List<TerrainNode> nodes, Func<double, double, float> height, Vector3 eye, Vector2 p)
+    {
+        var node = nodes.First(n =>
+        {
+            double x0 = n.Quadrant < 0 ? n.X0 : n.X0 + (n.Quadrant & 1) * n.Size / 2, z0 = n.Quadrant < 0 ? n.Z0 : n.Z0 + (n.Quadrant >> 1) * n.Size / 2;
+            double s = n.Quadrant < 0 ? n.Size : n.Size / 2;
+            return p.X >= x0 && p.X < x0 + s && p.Y >= z0 && p.Y < z0 + s;
+        });
+        double spacing = node.Size / q.GridCells;
+        Vector3 Vertex(int i, int j)
+        {
+            var at = new Vector2((float)(node.X0 + i * spacing), (float)(node.Z0 + j * spacing));
+            float d = Vector3.Distance(eye, new Vector3(at.X, Height(height, at.X, at.Y), at.Y));
+            var g = TerrainQuadtree.MorphGrid(new Vector2(i, j), q.Morph(node.Level, d));
+            var slid = new Vector2((float)(node.X0 + g.X * spacing), (float)(node.Z0 + g.Y * spacing));
+            return new Vector3(slid.X, Height(height, slid.X, slid.Y), slid.Y);
+        }
+        int ci = (int)Math.Floor((p.X - node.X0) / spacing), cj = (int)Math.Floor((p.Y - node.Z0) / spacing);
+        // Slid triangles can cover p from a neighbouring cell: look in the cells around it (the grid's triangulation, GridIndices).
+        for (int j = Math.Max(cj - 1, 0); j <= Math.Min(cj + 1, q.GridCells - 1); j++)
+            for (int i = Math.Max(ci - 1, 0); i <= Math.Min(ci + 1, q.GridCells - 1); i++)
+                foreach (var (a, b, c) in new[] { (Vertex(i, j), Vertex(i, j + 1), Vertex(i + 1, j)), (Vertex(i + 1, j), Vertex(i, j + 1), Vertex(i + 1, j + 1)) })
+                {
+                    float area = (b.X - a.X) * (c.Z - a.Z) - (c.X - a.X) * (b.Z - a.Z);
+                    if (Math.Abs(area) < 1e-6f) continue;   // collapsed by the slide
+                    float u = ((p.X - a.X) * (c.Z - a.Z) - (c.X - a.X) * (p.Y - a.Z)) / area;
+                    float v = ((b.X - a.X) * (p.Y - a.Z) - (p.X - a.X) * (b.Z - a.Z)) / area;
+                    if (u >= -1e-4f && v >= -1e-4f && u + v <= 1 + 1e-4f) return a.Y + u * (b.Y - a.Y) + v * (c.Y - a.Y);
+                }
+        throw new InvalidOperationException($"no drawn triangle over {p}");
+    }
+
+    [Theory]
+    [InlineData(10f, 10f, 1100f)]
+    [InlineData(10f, 30f, 1100f)]
+    [InlineData(10f, 10f, 4000f)]
+    [InlineData(4f, 400f, 1100f)]
+    [InlineData(4f, 400f, 300f)]
+    public void Moving_the_eye_changes_the_surface_smoothly_without_pops(float near, float far, float eyeHeight)
+    {
+        // The eye flies 6000 units over the hills in steps of 8 units; points along its way (where levels change around them)
+        // must move only by the morph's small step each time, never jump when a square changes level.
+        var q = new TerrainQuadtree(18, 64, new TerrainLod(Scale1080, near, far, 7500));
+        var bounds = Bounds(Hills);
+        var nodes = new List<TerrainNode>();
+        var points = new List<Vector2>();
+        for (int k = 0; k < 160; k++) points.Add(new Vector2(-3000 + k * 97.3f, 2500 + (k % 13) * 811.7f));
+        float[]? last = null;
+        float worst = 0;
+        for (float t = 0; t <= 6000; t += 8)
+        {
+            var eye = new Vector3(-9000 + t, eyeHeight + 1200, -6000 + t * 0.3f);
+            q.Select(eye, bounds, null, nodes);
+            var now = points.Select(p => DrawnHeight(q, nodes, Hills, eye, p)).ToArray();
+            if (last is not null)
+                for (int k = 0; k < now.Length; k++) worst = Math.Max(worst, Math.Abs(now[k] - last[k]));
+            last = now;
+        }
+        Assert.True(worst < 2f, $"the drawn surface jumped by {worst} units in one step");
+    }
+
     public static TheoryData<float, float, float, float, bool, float, float, float> Views()
     {
         var data = new TheoryData<float, float, float, float, bool, float, float, float>();
