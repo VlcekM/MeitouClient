@@ -154,6 +154,64 @@ public class BindlessTests
         ExpectClean(d!);
     }
 
+    static readonly string CellsFragment = $$"""
+        #version 450
+        {{BindlessTable.GlslDeclarations}}
+        layout(push_constant) uniform Push { uint cells; } pc;
+        layout(location = 0) out uvec4 colour;
+        void main() { colour = texelFetch(utextures2D[nonuniformEXT(pc.cells)], ivec2(gl_FragCoord.xy), 0); }
+        """;
+
+    [Fact]
+    public unsafe void A_GL_texture_exports_a_bindless_index_that_follows_its_sampler()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        using (var gl = new VkGl(d!))
+        {
+            var ctx = gl.Context;
+            IGlInterop interop = gl;
+            using var program = ctx.Shaders.Native(FullScreen, CellsFragment, "bindless cells", [ctx.Bindless.Layout], 4);
+            using var target = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Uint, 2, 1, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "cells target"));
+
+            gl.BeginFrame(2, 1);
+            // As TerrainTextures makes uCells: GL RGBA8UI, nearest.
+            uint tex = gl.GenTexture();
+            gl.BindTexture(TextureTarget.Texture2D, tex);
+            gl.TexImage2D<byte>(TextureTarget.Texture2D, 0, InternalFormat.Rgba8ui, 2, 1, 0, PixelFormat.RgbaInteger, PixelType.UnsignedByte, [9, 8, 7, 6, 250, 251, 252, 253]);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+            var first = interop.Bindless(tex);
+            Assert.Equal(BindlessKind.UTexture2D, first.Kind);
+            Assert.Equal(first, interop.Bindless(tex));   // unchanged: the same entry
+            var none = interop.Bindless(0);
+            Assert.Equal(BindlessKind.Texture2D, none.Kind);
+            Assert.Equal(none, interop.Bindless(0));
+
+            // A sampler parameter changes: a new index (the old one stays valid for draws recorded before, and is freed later).
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            var second = interop.Bindless(tex);
+            Assert.Equal(BindlessKind.UTexture2D, second.Kind);
+            Assert.NotEqual(first.Index, second.Index);
+            Assert.Equal(second, interop.Bindless(tex));
+
+            gl.BeginExternal();
+            ctx.Frame.Commands.Invalidate();
+            Draw(ctx, program, Format.R8G8B8A8Uint, target, [second.Index]);
+            gl.EndExternal();
+            gl.EndFrame();
+            Assert.Equal([9, 8, 7, 6, 250, 251, 252, 253], ctx.ReadBack(target, 4));
+
+            // Deleting the texture frees its entry; after the frames in flight the index is handed out again.
+            gl.DeleteTexture(tex);
+            for (int i = 0; i <= d!.Frames.Count; i++) { gl.BeginFrame(2, 1); gl.EndFrame(); }
+            var reused = new HashSet<uint>();
+            for (int i = 0; i < 2; i++) reused.Add(ctx.Bindless.Register(BindlessKind.UTexture2D, interop.Sampled(0, new SamplerInfo("", 0, 0, SamplerDimension.Dim2D, false, false, false, ScalarKind.UInt, 0))));
+            Assert.Equal([first.Index, second.Index], reused.Order());
+        }
+        ExpectClean(d!);
+    }
+
     [Fact]
     public void A_shader_that_declares_the_bindless_set_wrongly_is_refused()
     {
