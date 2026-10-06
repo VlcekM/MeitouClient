@@ -3,8 +3,114 @@ using Meitou.Data.Textures;
 
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
+using SamplerInfo = Meitou.Rendering.Vulkan.Shaders.SamplerInfo;
 
 namespace Meitou.ModelViewer;
+
+/// <summary>
+/// The viewer's native mesh drawing (docs/renderer-native.md 3.2 and 7.5, step P): a <see cref="LegacyProgram"/> with VkGl's SPIR-V and layout, and per
+/// part a <see cref="Mesh"/> that keeps what a draw needs (the vertex array's export, the layout, the pipelines) while the export is the same object.
+/// <see cref="Renderer"/> and <see cref="CharacterRenderer"/> record into the pass VkGl has open (<c>BeginNativeInPass</c>), one segment per call.
+/// </summary>
+internal sealed class NativeMeshProgram
+{
+    public readonly LegacyProgram P;
+    readonly GpuContext gpu;
+    readonly int own;
+    /// <summary>The samplers of the program that read a GL unit or a frame global (those of <paramref name="direct"/> are the draw's own).</summary>
+    readonly string[] direct;
+    (int Version, (SamplerSlot Slot, int Unit, SamplerInfo Info)[] Samplers)? units;
+
+    /// <summary>A part's native state: the vertex-array export it came from, its layout and vertex buffers, its element buffer, and the pipelines
+    /// of the last two segment states.</summary>
+    public struct Mesh
+    {
+        public VertexArrayBindings? Source;
+        public VertexLayout? Layout;
+        public BufferBinding[] Vertices;
+        public BufferBinding Elements;
+        public int SegA, SegB;
+        public GraphicsPipeline? PipeA, PipeB;
+    }
+
+    public NativeMeshProgram(GpuContext gpu, string vertex, string fragment, string name, string[] direct)
+    {
+        this.gpu = gpu;
+        this.direct = direct;
+        P = LegacyProgram.Create(gpu, vertex, fragment, name);
+        own = P.InputLocations.DefaultIfEmpty(-1).Max() + 1;
+    }
+
+    /// <summary>The samplers that are not the draw's own: the frame globals (atmosphere and shadow units) or what GL has on their units, as a GL program reads them.</summary>
+    public void BindUnitSamplers()
+    {
+        var interop = gpu.Interop!;
+        if (units is not { } u || u.Version != gpu.Globals.Version)
+            units = u = (gpu.Globals.Version, [.. P.SamplerNames.Where(n => Array.IndexOf(direct, n) < 0 && gpu.Globals.Texture(n) is null)
+                .Select(n => (P.Sampler(n), 0, P.SamplerInfo(P.Sampler(n))))]);
+        foreach (var (slot, unit, info) in u.Samplers) P.Bind(slot, interop.SampledUnit(unit, info));
+    }
+
+    readonly record struct SegmentKey(AttachmentFormats Formats, BlendState Blend, Silk.NET.Vulkan.ColorComponentFlags Mask, Silk.NET.Vulkan.PolygonMode Polygon,
+        bool AlphaToCoverage, bool DepthClamp);
+    readonly Dictionary<SegmentKey, int> segments = [];
+    SegmentKey last;
+    int lastId;
+
+    /// <summary>A stable number for a segment's pipeline state, so a part compares one int per draw.</summary>
+    public int Segment(PassTargets t, DrawState s)
+    {
+        var key = new SegmentKey(t.Formats, s.Blend, s.ColourMask, s.Polygon, s.AlphaToCoverage, s.DepthClamp);
+        if (lastId != 0 && key == last) return lastId;
+        if (!segments.TryGetValue(key, out int id)) segments[key] = id = segments.Count + 1;
+        last = key;
+        return lastId = id;
+    }
+
+    /// <summary>The program's texture slot for a sampler, with its reflected kind (null when the program does not read it).</summary>
+    public (SamplerSlot Slot, SamplerInfo? Info) Sampler(string name)
+    {
+        var slot = P.Sampler(name);
+        return (slot, slot.IsValid ? P.SamplerInfo(slot) : null);
+    }
+
+    /// <summary>Binds the GL texture <paramref name="id"/> (0: the stand-in) to a sampler slot.</summary>
+    public void Bind(IGlInterop interop, (SamplerSlot Slot, SamplerInfo? Info) sampler, uint id)
+    {
+        if (sampler.Info is { } info) P.Bind(sampler.Slot, interop.Sampled(id, info));
+    }
+
+    /// <summary>One indexed draw of a part: its pipeline, vertex buffers and indices (from <paramref name="firstIndex"/>), the program's blocks.</summary>
+    public void Draw(IGlInterop interop, CommandList cmd, ref Mesh m, uint vao, int segment, DrawState state, PassTargets t, string label, uint indexCount, uint firstIndex)
+    {
+        var va = interop.VertexArray(vao);
+        if (!ReferenceEquals(m.Source, va))
+        {
+            Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
+            va.Attributes.AsSpan().CopyTo(attributes);
+            m.Layout = P.VertexLayout(attributes);
+            m.Vertices = P.VertexBuffers(attributes, 0, own);
+            m.Elements = va.Elements;
+            m.Source = va;
+            m.SegA = m.SegB = 0;
+            m.PipeA = m.PipeB = null;
+        }
+        GraphicsPipeline pipeline;
+        if (m.SegA == segment) pipeline = m.PipeA!;
+        else if (m.SegB == segment) pipeline = m.PipeB!;
+        else
+        {
+            pipeline = gpu.Pipelines.Get(state.Pipeline(P.Program, m.Layout!, Silk.NET.Vulkan.PrimitiveTopology.TriangleList, t.Formats, label));
+            (m.SegB, m.PipeB) = (m.SegA, m.PipeA);
+            (m.SegA, m.PipeA) = (segment, pipeline);
+        }
+        cmd.BindPipeline(pipeline);
+        cmd.BindVertexBuffers(0, m.Vertices);
+        cmd.BindIndexBuffer(new BufferBinding(m.Elements.Buffer, m.Elements.Offset + (ulong)firstIndex * 4), Silk.NET.Vulkan.IndexType.Uint32);
+        P.Flush(cmd);
+        cmd.DrawIndexed(indexCount);
+    }
+}
 
 public sealed class RenderOptions
 {
@@ -29,8 +135,15 @@ public sealed unsafe class Renderer : IDisposable
     readonly IGl gl;
     /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
     public GpuContext Gpu { get; }
+    /// <summary>The GL mesh program is kept only for what making it does (the sampler units and the shadow blocks it publishes as frame globals,
+    /// which the native program below reads); the parts are drawn by <see cref="native"/>.</summary>
     readonly uint meshProgram, lineProgram;
-    readonly Dictionary<string, int> meshUniforms = [], lineUniforms = [];
+    readonly Dictionary<string, int> lineUniforms = [];
+    readonly NativeMeshProgram native;
+    readonly UniformHandle uViewProjection, uModel, uEye, uLightDir, uTriplanarScale, uBones, uHasHead, uNormalSwizzled, uWireframe, uFlatColour, uSkinned,
+        uHasDiffuse, uHasNormal, uHasDual, uTriplanar, uTile, uAlphaSource, uAlphaChannel, uGreyChannel, uTint, uAlphaThreshold, uEmissive, uUseVertexColour, uSpecular;
+    /// <summary>uDiffuse, uNormal, uDiffuse2, uNormal2, uHeadDiffuse, uHeadNormal (GL units 0 to 5).</summary>
+    readonly (SamplerSlot Slot, Meitou.Rendering.Vulkan.Shaders.SamplerInfo? Info)[] samplers;
     readonly List<GpuPart> parts = [];
     readonly Dictionary<string, uint> textures = new(StringComparer.OrdinalIgnoreCase);
     readonly AssetLocator assets;
@@ -43,7 +156,10 @@ public sealed unsafe class Renderer : IDisposable
         public SurfaceMaterial? Material;
         public uint Diffuse, Normal, Diffuse2, Normal2, HeadDiffuse, HeadNormal;
         public bool NormalSwizzled;
+        public NativeMeshProgram.Mesh Native;
     }
+
+    static readonly string[] SamplerNames = ["uDiffuse", "uNormal", "uDiffuse2", "uNormal2", "uHeadDiffuse", "uHeadNormal"];
 
     public Renderer(IGl gl, GpuContext gpu, AssetLocator assets)
     {
@@ -51,6 +167,16 @@ public sealed unsafe class Renderer : IDisposable
         Gpu = gpu;
         this.assets = assets;
         meshProgram = Program(Shaders.MeshVertex, Shaders.MeshFragment);
+        native = new NativeMeshProgram(gpu, Shaders.MeshVertex, Shaders.MeshFragment, "viewer mesh", SamplerNames);
+        var np = native.P;
+        uViewProjection = np.Uniform("uViewProjection"); uModel = np.Uniform("uModel"); uEye = np.Uniform("uEye"); uLightDir = np.Uniform("uLightDir");
+        uTriplanarScale = np.Uniform("uTriplanarScale"); uBones = np.Uniform("uBones"); uHasHead = np.Uniform("uHasHead");
+        uNormalSwizzled = np.Uniform("uNormalSwizzled"); uWireframe = np.Uniform("uWireframe"); uFlatColour = np.Uniform("uFlatColour");
+        uSkinned = np.Uniform("uSkinned"); uHasDiffuse = np.Uniform("uHasDiffuse"); uHasNormal = np.Uniform("uHasNormal"); uHasDual = np.Uniform("uHasDual");
+        uTriplanar = np.Uniform("uTriplanar"); uTile = np.Uniform("uTile"); uAlphaSource = np.Uniform("uAlphaSource"); uAlphaChannel = np.Uniform("uAlphaChannel");
+        uGreyChannel = np.Uniform("uGreyChannel"); uTint = np.Uniform("uTint"); uAlphaThreshold = np.Uniform("uAlphaThreshold"); uEmissive = np.Uniform("uEmissive");
+        uUseVertexColour = np.Uniform("uUseVertexColour"); uSpecular = np.Uniform("uSpecular");
+        samplers = [.. SamplerNames.Select(native.Sampler)];
         lineProgram = Program(Shaders.LineVertex, Shaders.LineFragment);
         lineVao = gl.GenVertexArray();
         lineVbo = gl.GenBuffer();
@@ -193,25 +319,19 @@ public sealed unsafe class Renderer : IDisposable
         var viewProjection = camera.View * camera.Projection(width / (float)Math.Max(height, 1));
         if (options.Grid) DrawGrid(viewProjection, camera);
 
-        gl.UseProgram(meshProgram);
-        Matrix(meshUniforms, meshProgram, "uViewProjection", viewProjection);
-        Matrix(meshUniforms, meshProgram, "uModel", Matrix4x4.Identity);
+        var np = native.P;
+        np.Set(uViewProjection, in viewProjection);
+        var identity = Matrix4x4.Identity;
+        np.Set(uModel, in identity);
         var eye = camera.Eye;
-        gl.Uniform3(U(meshUniforms, meshProgram, "uEye"), eye.X, eye.Y, eye.Z);
+        np.Set(uEye, eye.X, eye.Y, eye.Z);
         var light = Vector3.Normalize(new Vector3(0.45f, 0.8f, 0.35f));
-        gl.Uniform3(U(meshUniforms, meshProgram, "uLightDir"), light.X, light.Y, light.Z);
-        gl.Uniform1(U(meshUniforms, meshProgram, "uTriplanarScale"), 1f / options.TriplanarSize);
-        gl.Uniform1(U(meshUniforms, meshProgram, "uDiffuse"), 0);
-        gl.Uniform1(U(meshUniforms, meshProgram, "uNormal"), 1);
-        gl.Uniform1(U(meshUniforms, meshProgram, "uDiffuse2"), 2);
-        gl.Uniform1(U(meshUniforms, meshProgram, "uNormal2"), 3);
-        gl.Uniform1(U(meshUniforms, meshProgram, "uHeadDiffuse"), 4);
-        gl.Uniform1(U(meshUniforms, meshProgram, "uHeadNormal"), 5);
+        np.Set(uLightDir, light.X, light.Y, light.Z);
+        np.Set(uTriplanarScale, 1f / options.TriplanarSize);
         if (bones is not null)
         {
             int count = Math.Min(bones.Length, Shaders.MaxBones);
-            fixed (Matrix4x4* p = bones)
-                gl.UniformMatrix4(U(meshUniforms, meshProgram, "uBones"), (uint)count, false, (float*)p);
+            np.Set(uBones, System.Runtime.InteropServices.MemoryMarshal.Cast<Matrix4x4, float>(bones.AsSpan(0, count)), 4, 4);
         }
 
         if (options.Wireframe != 2) DrawParts(options, bones is not null, wire: false);
@@ -228,57 +348,68 @@ public sealed unsafe class Renderer : IDisposable
         gl.BindVertexArray(0);
     }
 
+    /// <summary>The parts in one native segment of VkGl's open pass (step P): dynamic state once, per part the uniforms, textures and the draw.</summary>
     void DrawParts(RenderOptions options, bool skinned, bool wire)
     {
+        if (parts.Count == 0) return;
+        var interop = Gpu.Interop!;
+        var p = native.P;
+        native.BindUnitSamplers();
+        gl.Enable(EnableCap.CullFace);   // the state export reports the cull mode only while the cull face is on
+        gl.CullFace(TriangleFace.Back);
+        var cmd = interop.BeginNativeInPass("viewer mesh");
+        var targets = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        int segment = native.Segment(targets, state);
+        cmd.SetViewport(targets.Viewport);
+        cmd.SetScissor(targets.Scissor);
+        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+        Silk.NET.Vulkan.CullModeFlags? side = null;
         foreach (var gp in parts)
         {
             var m = gp.Material;
             bool textured = options.Textures && gp.Diffuse != 0;
             bool doubleSided = m?.DoubleSided ?? false;
-            if (options.BackfaceCulling && !doubleSided && !wire) gl.Enable(EnableCap.CullFace); else gl.Disable(EnableCap.CullFace);
-            gl.CullFace(TriangleFace.Back);
-            Bind(0, textured ? gp.Diffuse : 0);
+            var want = options.BackfaceCulling && !doubleSided && !wire ? state.Cull : Silk.NET.Vulkan.CullModeFlags.None;
+            if (side != want) { cmd.SetRaster(want, state.Front); side = want; }
+            native.Bind(interop, samplers[0], textured ? gp.Diffuse : 0);
             bool normal = options.NormalMaps && options.Textures && gp.Normal != 0 && gp.Part.HasTangents;
-            Bind(1, options.Textures ? gp.Normal : 0);
+            native.Bind(interop, samplers[1], options.Textures ? gp.Normal : 0);
             bool dual = textured && gp.Diffuse2 != 0 && gp.Part.HasColours;
-            Bind(2, dual ? gp.Diffuse2 : 0);
-            Bind(3, dual ? gp.Normal2 : 0);
+            native.Bind(interop, samplers[2], dual ? gp.Diffuse2 : 0);
+            native.Bind(interop, samplers[3], dual ? gp.Normal2 : 0);
             bool head = textured && gp.HeadDiffuse != 0;
-            Bind(4, head ? gp.HeadDiffuse : 0);
-            Bind(5, head ? gp.HeadNormal : 0);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uHasHead"), head ? 1 : 0);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uNormalSwizzled"), gp.NormalSwizzled ? 1 : 0);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uWireframe"), wire ? 1 : 0);
-            gl.Uniform3(U(meshUniforms, meshProgram, "uFlatColour"), 0.95f, 0.75f, 0.2f);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uSkinned"), skinned && gp.Part.Skinned ? 1 : 0);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uHasDiffuse"), textured ? 1 : 0);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uHasNormal"), normal ? 1 : 0);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uHasDual"), dual ? 1 : 0);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uTriplanar"), textured && (m?.Triplanar ?? false) ? 1 : 0);
+            native.Bind(interop, samplers[4], head ? gp.HeadDiffuse : 0);
+            native.Bind(interop, samplers[5], head ? gp.HeadNormal : 0);
+            p.Set(uHasHead, head ? 1 : 0);
+            p.Set(uNormalSwizzled, gp.NormalSwizzled ? 1 : 0);
+            p.Set(uWireframe, wire ? 1 : 0);
+            p.Set(uFlatColour, 0.95f, 0.75f, 0.2f);
+            p.Set(uSkinned, skinned && gp.Part.Skinned ? 1 : 0);
+            p.Set(uHasDiffuse, textured ? 1 : 0);
+            p.Set(uHasNormal, normal ? 1 : 0);
+            p.Set(uHasDual, dual ? 1 : 0);
+            p.Set(uTriplanar, textured && (m?.Triplanar ?? false) ? 1 : 0);
             var tile = m?.Tile ?? Vector2.One;
-            gl.Uniform2(U(meshUniforms, meshProgram, "uTile"), tile.X, tile.Y);
+            p.Set(uTile, tile.X, tile.Y);
             // Alpha tests need the texture holding the alpha; without it, draw opaque.
             var alpha = m?.Alpha ?? AlphaSource.None;
             if (!textured || alpha == AlphaSource.NormalAlpha && gp.Normal == 0) alpha = AlphaSource.None;
-            gl.Uniform1(U(meshUniforms, meshProgram, "uAlphaSource"), (int)alpha);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uAlphaChannel"), Math.Clamp(m?.AlphaChannel ?? 3, 0, 3));
-            gl.Uniform1(U(meshUniforms, meshProgram, "uGreyChannel"), textured ? m?.GreyChannel ?? -1 : -1);
+            p.Set(uAlphaSource, (int)alpha);
+            p.Set(uAlphaChannel, Math.Clamp(m?.AlphaChannel ?? 3, 0, 3));
+            p.Set(uGreyChannel, textured ? m?.GreyChannel ?? -1 : -1);
             var tint = m?.Tint ?? Vector3.One;
-            gl.Uniform3(U(meshUniforms, meshProgram, "uTint"), tint.X, tint.Y, tint.Z);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uAlphaThreshold"), alpha == AlphaSource.None ? 0f : m!.AlphaThreshold);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uEmissive"), textured && gp.Normal != 0 && (m?.Emissive ?? false) ? 1 : 0);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uUseVertexColour"), options.VertexColours && gp.Part.HasColours && (options.ForceVertexColours || (m?.VertexColours ?? false)) ? 1 : 0);
-            gl.Uniform1(U(meshUniforms, meshProgram, "uSpecular"), textured ? m?.SpecularMult ?? 1 : 0.3f);
-            gl.BindVertexArray(gp.Vao);
-            gl.DrawElements(PrimitiveType.Triangles, (uint)gp.Part.Indices.Length, DrawElementsType.UnsignedInt, (void*)0);
+            p.Set(uTint, tint.X, tint.Y, tint.Z);
+            p.Set(uAlphaThreshold, alpha == AlphaSource.None ? 0f : m!.AlphaThreshold);
+            p.Set(uEmissive, textured && gp.Normal != 0 && (m?.Emissive ?? false) ? 1 : 0);
+            p.Set(uUseVertexColour, options.VertexColours && gp.Part.HasColours && (options.ForceVertexColours || (m?.VertexColours ?? false)) ? 1 : 0);
+            p.Set(uSpecular, textured ? m?.SpecularMult ?? 1 : 0.3f);
+            native.Draw(interop, cmd, ref gp.Native, gp.Vao, segment, state, targets, "viewer mesh", (uint)gp.Part.Indices.Length, 0);
         }
+        interop.EndNative(cmd);
         gl.Disable(EnableCap.CullFace);
-    }
-
-    void Bind(int unit, uint texture)
-    {
-        gl.ActiveTexture(TextureUnit.Texture0 + unit);
-        gl.BindTexture(TextureTarget.Texture2D, texture);
+        gl.BindVertexArray(0);
     }
 
     void DrawGrid(Matrix4x4 viewProjection, Camera camera)
