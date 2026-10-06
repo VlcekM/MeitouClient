@@ -292,4 +292,180 @@ public class FoliageGpuCullTests
         }
         ExpectClean(d!);
     }
+
+    /// <summary>
+    /// TERRAIN-mode rocks (5.6.1) in the same dispatch as ordinary foliage batches: per rock batch (a mesh's plain or mirroring placements)
+    /// the placements the CPU path hands <see cref="TerrainRenderer.DrawMeshes"/> (the A1 cull, then <c>FoliageRenderer.EmitAll</c>: a fade
+    /// of at least 0.5, M14 = 0) as it groups and writes them (by mirroring, in order; row 0 w the biome row when resident, else -1, in
+    /// colour; 0 in depth), bit for bit. Groups mix both kinds of placement, a third of the fades sit within a few ulps of 0.5, biome rows
+    /// include none (-1) and rows beyond the first word of the residency bits.
+    /// </summary>
+    [Fact]
+    public unsafe void Gpu_cull_matches_the_terrain_mesh_path_for_rocks()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        var random = new Random(31);
+        using (var gl = new VkGl(d!))
+        {
+            var ctx = gl.Context;
+            using var cull = new FoliageGpuCull(ctx, arenaBytes: 4 << 20);
+            long totalRocks = 0, totalMirrored = 0, nearThreshold = 0;
+            for (int viewNumber = 0; viewNumber < 6; viewNumber++)
+            {
+                var eye = new Vector3(random.Next(-200000, 200000), 300 + random.Next(0, 2000), random.Next(-200000, 200000));
+                var planes = Frustum(eye, (float)(random.NextDouble() * 6.28), (float)(random.NextDouble() * 0.8 - 0.6));
+                if (viewNumber == 4) planes = planes[..4];
+                bool biomes = viewNumber % 2 == 0;
+                var view = new FoliageCullView().Set(planes);
+                var eyeXz = new Vector2(eye.X, eye.Z);
+                var rockView = new FoliageRockView { BiomeRows = biomes };
+                for (int w = 0; w < 8; w++) rockView.Resident[w] = (uint)random.Next() ^ ((uint)random.Next() << 16);
+                bool Resident(int row) => row >= 0 && ((rockView.Resident[row >> 5] >> (row & 31)) & 1) != 0;
+
+                // Two ordinary batches and three rock meshes (batches: mesh 0, mesh 1, then each rock mesh's plain and mirroring placements).
+                const int MeshBatches = 2, RockMeshes = 3;
+                var meshGroups = Synthetic(random, eye, planes, 8, MeshBatches);
+                var rockGroups = new List<(int Mesh, SyntheticGroup Group)>();
+                for (int g = 0; g < 18; g++)
+                {
+                    int count = random.Next(1, 700);
+                    float range = (float)(random.NextDouble() * 15000 + 300), band = MathF.Max(10, range * 0.1f);
+                    var fr = FoliageGroupRange.Of(range, band);
+                    bool mixed = g % 3 != 2, allMirrored = g % 6 == 2;
+                    var records = new FoliageInstanceRecord[count];
+                    for (int i = 0; i < count; i++)
+                    {
+                        float angle = (float)(random.NextDouble() * Math.PI * 2);
+                        // A third at the middle of the fade (w = 0.5 within a few ulps), the rest anywhere up to beyond the range.
+                        float dist = i % 3 == 0 ? (range - 0.5f * band) * (1 + (float)(random.NextDouble() - 0.5) * 6e-7f) : range * (float)random.NextDouble() * 1.1f;
+                        var p = new Vector3(eye.X + MathF.Cos(angle) * dist, (float)(random.NextDouble() * 300), eye.Z + MathF.Sin(angle) * dist);
+                        float scale = (float)(0.5 + random.NextDouble() * 1.5);
+                        bool mirror = allMirrored || (mixed && random.Next(3) == 0);
+                        var t = Matrix4x4.CreateScale(mirror ? -scale : scale, scale, scale) * Matrix4x4.CreateFromYawPitchRoll((float)random.NextDouble() * 6.28f, 0.05f, 0) * Matrix4x4.CreateTranslation(p);
+                        int row = random.Next(8) == 0 ? -1 : random.Next(0, 250);
+                        records[i] = new FoliageInstanceRecord { Transform = t, Ground = new Vector4(p.X, p.Z, scale, FoliageCull.RockBits(t, row)) };
+                    }
+                    FoliageCull.FillSpheres(records, new Vector3(0.5f, 2, 0.25f), 6);
+                    rockGroups.Add((random.Next(RockMeshes), new SyntheticGroup(-1, records, fr)));
+                }
+
+                gl.BeginFrame(4, 4);
+                bool placed;
+                do
+                {
+                    placed = true;
+                    foreach (var g in meshGroups.Concat(rockGroups.Select(r => r.Group)))
+                        if (!cull.Place(ref g.Arena, ref g.Generation, g.Records)) { placed = false; break; }
+                } while (!placed);
+                var chunks = new List<FoliageCullChunk>();
+                const int Batches = MeshBatches + 2 * RockMeshes;
+                var starts = new int[Batches + 1];
+                void Add(SyntheticGroup g, uint flags)
+                {
+                    for (int at = 0; at < g.Records.Length; at += FoliageShaders.CullChunk)
+                        chunks.Add(new FoliageCullChunk
+                        {
+                            First = FoliageGpuCull.FirstOf(g.Arena) + (uint)at, Count = (uint)Math.Min(FoliageShaders.CullChunk, g.Records.Length - at),
+                            Range = g.Range.Range, RangeSquared = g.Range.RangeSquared, InverseBand = g.Range.InverseBand, Flags = flags,
+                        });
+                }
+                for (int b = 0; b < Batches; b++)
+                {
+                    starts[b] = chunks.Count;
+                    if (b < MeshBatches)
+                        foreach (var g in meshGroups.Where(g => g.Batch == b)) Add(g, 0);
+                    else
+                    {
+                        int mesh = (b - MeshBatches) / 2;
+                        bool mirrored = (b - MeshBatches) % 2 == 1;
+                        foreach (var (m, g) in rockGroups)
+                            if (m == mesh) Add(g, FoliageCullChunk.Rock | (mirrored ? FoliageCullChunk.Mirrored : 0));
+                    }
+                }
+                starts[Batches] = chunks.Count;
+                var draws = new List<FoliageCullDraw>();
+                for (int b = 0; b < Batches; b++)
+                    draws.Add(new FoliageCullDraw { IndexCount = (uint)(30 * b + 7), ChunkStart = (uint)starts[b], ChunkEnd = (uint)starts[b + 1] });
+                var work = cull.Prepare(chunks.ToArray(), draws.ToArray());
+                var result = cull.Dispatch(work, view, eyeXz, in rockView);
+                using var readback = ReadbackBuffer.Create(ctx, FoliageGpuCull.ReadbackBytes(result), "cull readback");
+                cull.CopyForReadback(result, readback);
+                gl.EndFrame();
+                d!.Frames.WaitAll();
+
+                // The CPU reference: the ordinary batches as FoliageCull gives them; the rocks as the terrain's mesh path gets them.
+                var expected = new List<Matrix4x4>[Batches];
+                var output = new FoliageCullOutput();
+                for (int b = 0; b < Batches; b++)
+                {
+                    expected[b] = [];
+                    if (b < MeshBatches)
+                    {
+                        foreach (var g in meshGroups.Where(g => g.Batch == b))
+                        {
+                            FoliageCull.CullGroup(g.Records, g.Range, eyeXz, view, record: false, output);
+                            expected[b].AddRange(output.Visible.AsSpan(0, output.Count));
+                        }
+                        continue;
+                    }
+                    int mesh = (b - MeshBatches) / 2;
+                    bool mirrored = (b - MeshBatches) % 2 == 1;
+                    foreach (var (m, g) in rockGroups)
+                    {
+                        if (m != mesh) continue;
+                        FoliageCull.CullGroup(g.Records, g.Range, eyeXz, view, record: false, output);
+                        foreach (var v in output.Visible.AsSpan(0, output.Count))
+                        {
+                            var t = v;
+                            float w = t.M14 >= 2 ? 1 : t.M14;   // FoliageRenderer.EmitAll and Emit
+                            t.M14 = 0;
+                            if (w < FoliageCull.RockThreshold) continue;
+                            if (t.GetDeterminant() < 0 != mirrored) continue;   // TerrainRenderer.GroupMeshes' key
+                            int row = biomes ? -1 : 0;
+                            if (biomes)
+                            {
+                                // The row the record was given (RockBits), as FeatureBiomeRow answers with this residency.
+                                int index = Array.FindIndex(g.Records, r => r.Transform.Translation == t.Translation && r.Transform.M11 == t.M11);
+                                int any = ((int)g.Records[index].Ground.W & 1023) - 1;
+                                row = Resident(any) ? any : -1;
+                            }
+                            t.M14 = row;
+                            expected[b].Add(t);
+                            if (MathF.Abs(w - 0.5f) < 1e-5f) nearThreshold++;
+                        }
+                    }
+                }
+                int n = chunks.Count;
+                var offsets = MemoryMarshal.Cast<byte, uint>(readback.Read(0, (ulong)(n + 1) * 4)).ToArray();
+                ulong argsAt = FoliageGpuCull.Align16((ulong)(n + 1) * 4);
+                var args = MemoryMarshal.Cast<byte, uint>(readback.Read(argsAt, (ulong)draws.Count * 20)).ToArray();
+                ulong rowsAt = argsAt + FoliageGpuCull.Align16((ulong)draws.Count * 20);
+                var rows = MemoryMarshal.Cast<byte, Matrix4x4>(readback.Read(rowsAt, (ulong)offsets[n] * 64)).ToArray();
+                Assert.Equal(expected.Sum(e => e.Count), (int)offsets[n]);
+                for (int b = 0; b < Batches; b++)
+                {
+                    uint first = offsets[starts[b]], count = offsets[starts[b + 1]] - first;
+                    Assert.True(expected[b].Count == (int)count, $"view {viewNumber}, batch {b}: {count} on the GPU, {expected[b].Count} on the CPU");
+                    for (int j = 0; j < count; j++)
+                    {
+                        var e = expected[b][j];
+                        var got = rows[first + j];
+                        Assert.True(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in e)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in got))),
+                            $"view {viewNumber}, batch {b}, instance {j}: GPU row 0 w {got.M14:R}, CPU {e.M14:R}; translation {got.Translation} against {e.Translation}");
+                    }
+                    Assert.Equal([draws[b].IndexCount, count, 0u, 0u, first], args[(b * 5)..(b * 5 + 5)]);
+                    if (b >= MeshBatches)
+                    {
+                        totalRocks += count;
+                        if ((b - MeshBatches) % 2 == 1) totalMirrored += count;
+                    }
+                }
+            }
+            Assert.True(totalRocks > 500, $"{totalRocks} rock placements drawn: the views should show some");
+            Assert.True(totalMirrored > 100, $"{totalMirrored} mirroring rock placements drawn");
+            Assert.True(nearThreshold > 20, $"{nearThreshold} rocks drawn at a fade within 1e-5 of 0.5: the threshold should be exercised");
+        }
+        ExpectClean(d!);
+    }
 }

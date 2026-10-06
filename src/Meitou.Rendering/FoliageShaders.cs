@@ -321,14 +321,19 @@ static class FoliageShaders
         #version 450
         layout(local_size_x = 256) in;
         struct Instance { vec4 row0; vec4 row1; vec4 row2; vec4 row3; vec4 sphere; vec4 ground; };
-        struct Chunk { uint first; uint count; float range; float rangeSquared; float inverseBand; uint pad0; uint pad1; uint pad2; };
+        struct Chunk { uint first; uint count; float range; float rangeSquared; float inverseBand; uint flags; uint pad1; uint pad2; };
+        // A TERRAIN-mode rock chunk (flags 1; with 2 its group's mirroring placements, else the others): ground.w is 1024 when the placement
+        // mirrors, plus its biome map row + 1 (0: none). The view's biome rows switch (mode.x) and the resident biomes (a bit per row).
+        struct ViewData { vec4 planes[8]; vec4 lengths[2]; uvec4 resident[2]; uvec4 mode; };
         layout(push_constant) uniform Push { vec2 eye; uint planeCount; uint chunkCount; uint drawCount; float fullThreshold; } pc;
         uint ChunkIndex() { return gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x; }
         """;
 
-    /// <summary>Kernel 1: per chunk (one workgroup), each instance's packed fade (-1: not drawn) and the chunk's visible count.</summary>
+    /// <summary>Kernel 1: per chunk (one workgroup), each instance's packed fade (-1: not drawn) and the chunk's visible count. A rock chunk
+    /// (TERRAIN-mode meshes, drawn through the terrain's mesh path) also needs a fade of at least 0.5 (the terrain shader has no dither:
+    /// <c>FoliageRenderer.Emit</c>) and the chunk's mirroring.</summary>
     public static readonly string CullCompute = CullCommon + CrSqrt + """
-        layout(std430, set = 0, binding = 0) readonly buffer View { vec4 planes[8]; vec4 lengths[2]; } view;
+        layout(std430, set = 0, binding = 0) readonly buffer View { ViewData view; };
         layout(std430, set = 0, binding = 1) readonly buffer Instances { Instance instances[]; };
         layout(std430, set = 0, binding = 2) readonly buffer Chunks { Chunk chunks[]; };
         layout(std430, set = 0, binding = 3) writeonly buffer Fades { float fades[]; };
@@ -361,6 +366,8 @@ static class FoliageShaders
                         precise float limit = -sphere.w * view.lengths[p >> 2][p & 3u];
                         if (side < limit) { visible = false; break; }
                     }
+                    if (visible && (k.flags & 1u) != 0u)
+                        visible = !(w < 0.5) && ((uint(ground.w) >= 1024u) == ((k.flags & 2u) != 0u));
                     if (visible) packed = w >= pc.fullThreshold ? 2.0 : w;
                 }
             }
@@ -418,8 +425,11 @@ static class FoliageShaders
         }
         """;
 
-    /// <summary>Kernel 3: per chunk, the visible instances' matrices (row 0 w = the packed fade) at the chunk's offset plus their rank.</summary>
+    /// <summary>Kernel 3: per chunk, the visible instances' matrices (row 0 w = the packed fade) at the chunk's offset plus their rank. A rock's
+    /// row 0 w is what <see cref="TerrainRenderer.DrawMeshes"/> writes there: with the view's biome rows its biome row when resident, else -1;
+    /// without them 0.</summary>
     public static readonly string CompactCompute = CullCommon + """
+        layout(std430, set = 0, binding = 0) readonly buffer View { ViewData view; };
         layout(std430, set = 0, binding = 1) readonly buffer Instances { Instance instances[]; };
         layout(std430, set = 0, binding = 2) readonly buffer Chunks { Chunk chunks[]; };
         layout(std430, set = 0, binding = 3) readonly buffer Fades { float fades[]; };
@@ -446,7 +456,14 @@ static class FoliageShaders
             {
                 uint o = (offsets[c] + rank[i] - 1u) * 4u;
                 uint at = chunks[c].first + i;
-                rows[o] = vec4(instances[at].row0.xyz, f);
+                float w = f;
+                if ((chunks[c].flags & 1u) != 0u)
+                {
+                    int row = int(uint(instances[at].ground.w) & 1023u) - 1;
+                    bool resident = row >= 0 && ((view.resident[row >> 7][(row >> 5) & 3] >> uint(row & 31)) & 1u) != 0u;
+                    w = view.mode.x != 0u ? (resident ? float(row) : -1.0) : 0.0;
+                }
+                rows[o] = vec4(instances[at].row0.xyz, w);
                 rows[o + 1u] = instances[at].row1;
                 rows[o + 2u] = instances[at].row2;
                 rows[o + 3u] = instances[at].row3;
