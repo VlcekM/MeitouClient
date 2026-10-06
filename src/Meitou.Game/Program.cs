@@ -196,7 +196,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         var s = session.Camera.Current;
         Console.WriteLine($"camera    {(session.Camera.IsFree ? "free" : "strategy")}: pivot {s.Target.X:0}, {s.Target.Y:0}, {s.Target.Z:0}, eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, " +
             $"yaw {s.Yaw * 180 / MathF.PI:0.#}, pitch {s.Pitch * 180 / MathF.PI:0.#}, boom {s.Distance:0.#}; {session.Ticks.TotalTicks} ticks, game time {session.Clock.HourOfDay:0.00} h");
-        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, fbo);
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
         FramebufferCapture.SavePng(gl, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
         gpu.Dispose();
@@ -323,8 +323,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
     static void SaveScreenshot(IGl gl, int width, int height)
     {
         var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-{DateTime.Now:yyyyMMdd-HHmmss}.png");
-        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
-        gl.ReadBuffer(ReadBufferMode.Back);
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         FramebufferCapture.SavePng(gl, file, width, height);
         Console.WriteLine($"saved     {file}");
     }

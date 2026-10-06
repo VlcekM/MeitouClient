@@ -212,7 +212,7 @@ static class CharacterApp
         gl.FramebufferRenderbuffer(FramebufferTarget.DrawFramebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, colour);
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, msFbo);
         gl.BlitFramebuffer(0, 0, w, h, 0, 0, w, h, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
-        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, fbo);
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
         ViewerApp.SavePng(gl, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
         return 0;
@@ -346,8 +346,7 @@ static class CharacterApp
             {
                 screenshotRequested = false;
                 var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-viewer-{name}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
-                gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
-                gl.ReadBuffer(ReadBufferMode.Back);
+                gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
                 ViewerApp.SavePng(gl, file, size.X, size.Y);
                 Console.WriteLine($"saved {file}");
             }
