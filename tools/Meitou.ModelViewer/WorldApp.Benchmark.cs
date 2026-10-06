@@ -34,9 +34,8 @@ static partial class WorldApp
         // Pop-in: per frame, how near the nearest foliage zone without its whole layout (within the near reach) and without any layout (within
         // the far reach) are, and the nearest group in range whose mesh is not resident.
         var gaps = new List<(float Zone, float Unlaid, float Mesh, float Grass)>(o.FlyBenchmark);
-        // Pipelined: GL gets the same two frames in flight as the Vulkan frame ring, through a timestamp query per frame waited on two frames later.
+        // Pipelined: no wait for the GPU after each frame (VkGl keeps its own two frames in flight), as the interactive viewer runs.
         bool pipelined = o.FlyPipelined;
-        uint[] fences = pipelined && gl is not VkGl ? [gl.GenQuery(), gl.GenQuery(), gl.GenQuery()] : [];
         var interval = Stopwatch.StartNew();
         var meter = PassMeter.TryCreate(gl);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
         Console.WriteLine($"fly       {(pipelined ? "pipelined, " : "")}{o.FlyBenchmark} frames, circle radius {radius:0} units round {centre.X:0}, {centre.Z:0}, {o.FlySpeed:0} units per frame ({o.FlySpeed * 60:0} per second)");
@@ -56,17 +55,12 @@ static partial class WorldApp
             {
                 // MEITOU_FLY_SHOT=<frame>[,<frame>...]: the picture as drawn at that frame of the flight, nothing waited for (what a flying user sees).
                 gl.Finish();
-                gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, shotFbo);
+                gl.BindFramebuffer(FramebufferTarget.Framebuffer, shotFbo);
                 string shot = Path.ChangeExtension(o.Screenshot, null) + $"-fly{i}.png";
                 FramebufferCapture.SavePng(gl, shot, w, h);
                 Console.WriteLine($"fly shot  frame {i}: eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {shot}");
             }
             if (!pipelined) gl.Finish();
-            else if (fences.Length > 0)
-            {
-                gl.QueryCounter(fences[i % 3], QueryCounterTarget.Timestamp);
-                if (i >= 3) gl.GetQueryObject(fences[(i - 2) % 3], QueryObjectParameterName.Result, out ulong _);
-            }
             StageClock.Lap(11);
             double ms = pipelined ? interval.Elapsed.TotalMilliseconds : frameWatch.Elapsed.TotalMilliseconds;
             interval.Restart();

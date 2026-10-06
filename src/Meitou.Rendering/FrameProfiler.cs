@@ -30,9 +30,7 @@ public sealed class FrameProfiler : IDisposable
         new(0.45f, 0.35f, 0.25f, 1), new(0.50f, 0.50f, 0.50f, 1), new(1.00f, 1.00f, 1.00f, 1),
     ];
 
-    readonly IGl gl;
     readonly Func<double>? gpuFrameMs;
-    readonly uint[,] stamps = new uint[Slots, MaxStamps];
     readonly int[,] stampStage = new int[Slots, MaxStamps];
     readonly int[] stampCount = new int[Slots];
     readonly bool[] pending = new bool[Slots];
@@ -51,15 +49,12 @@ public sealed class FrameProfiler : IDisposable
     public double LastGpuMs => gpuCount == 0 ? 0 : gpu[Total][(gpuHead - 1 + History) % History];
 
     /// <param name="gpuFrameMs">The whole frame's GPU time, when the backend measures it (it includes the uploads before the first stage).</param>
-    public FrameProfiler(IGl gl, GpuContext gpu, Func<double>? gpuFrameMs = null)
+    public FrameProfiler(GpuContext gpu, Func<double>? gpuFrameMs = null)
     {
-        this.gl = gl;
+        if (gpu.Interop is null) throw new InvalidOperationException("The profiler's timestamps go through the seam (GpuContext.Interop).");
         this.gpuFrameMs = gpuFrameMs;
-        native = gpu.Interop is not null ? gpu : null;
-        recordStamp = cmd => cmd.Timestamp(native!.Frame.Timestamps, pendingStamp);
-        if (native is null)
-            for (int s = 0; s < Slots; s++)
-                for (int i = 0; i < MaxStamps; i++) stamps[s, i] = gl.GenQuery();
+        native = gpu;
+        recordStamp = cmd => cmd.Timestamp(native.Frame.Timestamps, pendingStamp);
     }
 
     static float[][] NewHistory()
@@ -107,37 +102,24 @@ public sealed class FrameProfiler : IDisposable
     {
         int n = stampCount[slot];
         if (n >= MaxStamps) return;
-        if (native is { } ctx)
-        {
-            // The native timestamps (QueryArena), recorded through the seam without ending VkGl's pass: they keep working while the
-            // stages move to native code (docs/renderer-native.md 7.1 step 9).
-            var arena = ctx.Frame.Timestamps;
-            var q = arena.Allocate();
-            if (!q.IsValid) return;
-            pendingStamp = q;
-            ctx.Interop!.Interleave(recordStamp);
-            nativeStamps[slot, n] = q;
-        }
-        else gl.QueryCounter(stamps[slot, n], QueryCounterTarget.Timestamp);
+        // The native timestamps (QueryArena), recorded through the seam without ending VkGl's pass: they keep working while the
+        // stages move to native code (docs/renderer-native.md 7.1 step 9).
+        var q = native.Frame.Timestamps.Allocate();
+        if (!q.IsValid) return;
+        pendingStamp = q;
+        native.Interop!.Interleave(recordStamp);
+        nativeStamps[slot, n] = q;
         stampStage[slot, n] = stage;
         stampCount[slot] = n + 1;
     }
 
-    // Native timestamps: the context while VkGl provides the seam, the slots per stamp, and the record callback (no allocation per stamp).
-    readonly GpuContext? native;
+    // Native timestamps: the context (VkGl provides the seam), the slots per stamp, and the record callback (no allocation per stamp).
+    readonly GpuContext native;
     readonly QuerySlot[,] nativeStamps = new QuerySlot[Slots, MaxStamps];
     QuerySlot pendingStamp;
     readonly Action<CommandList> recordStamp;
 
-    bool TryStamp(int s, int i, out ulong ns)
-    {
-        if (native is { } ctx) return ctx.Frame.Timestamps.TryRead(nativeStamps[s, i], out ns);
-        gl.GetQueryObject(stamps[s, i], QueryObjectParameterName.ResultAvailable, out int ready);
-        ns = 0;
-        if (ready == 0) return false;
-        gl.GetQueryObject(stamps[s, i], QueryObjectParameterName.Result, out ns);
-        return true;
-    }
+    bool TryStamp(int s, int i, out ulong ns) => native.Frame.Timestamps.TryRead(nativeStamps[s, i], out ns);
 
     void Collect(int s)
     {
@@ -259,6 +241,5 @@ public sealed class FrameProfiler : IDisposable
     public void Dispose()
     {
         if (StageClock.Profiler == this) StageClock.Profiler = null;
-        if (native is null) foreach (uint q in stamps) gl.DeleteQuery(q);
     }
 }

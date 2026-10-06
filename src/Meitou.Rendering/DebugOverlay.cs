@@ -1,4 +1,6 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
+using Silk.NET.Vulkan;
 using StbTrueTypeSharp;
 
 using Meitou.Rendering.Gpu;
@@ -8,7 +10,8 @@ namespace Meitou.Rendering;
 /// <summary>
 /// Text panels drawn over the frame (the viewer's frame statistics and key list). Text is rasterised from a monospace
 /// system font with stb_truetype; without one the overlay stays off. Draws into the bound framebuffer after
-/// everything else, so screenshots taken before it don't include it.
+/// everything else, so screenshots taken before it don't include it. The draw is native (docs/renderer-native.md 7.5, step P): one
+/// <see cref="LegacyProgram"/> segment in the pass VkGl has open, the vertices in the frame's constants; the atlas is still a GL texture.
 /// </summary>
 public sealed unsafe class DebugOverlay : IDisposable
 {
@@ -55,7 +58,10 @@ public sealed unsafe class DebugOverlay : IDisposable
     readonly IGl gl;
     /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
     public GpuContext Gpu { get; }
-    readonly uint program, vao, vbo, atlas;
+    readonly uint atlas;
+    readonly LegacyProgram program;
+    readonly UniformHandle uScreen;
+    readonly SamplerSlot samplerAtlas;
     readonly StbTrueType.stbtt_bakedchar[] glyphs = new StbTrueType.stbtt_bakedchar[CharCount];
     readonly List<float> batch = [];
     const int Stride = 8;
@@ -87,18 +93,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
         gl.BindTexture(TextureTarget.Texture2D, 0);
 
-        program = WorldGl.Program(gl, Vertex, Fragment);
-        vao = gl.GenVertexArray();
-        vbo = gl.GenBuffer();
-        gl.BindVertexArray(vao);
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-        gl.EnableVertexAttribArray(0);
-        gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, Stride * 4, (void*)0);
-        gl.EnableVertexAttribArray(1);
-        gl.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, Stride * 4, (void*)8);
-        gl.EnableVertexAttribArray(2);
-        gl.VertexAttribPointer(2, 4, VertexAttribPointerType.Float, false, Stride * 4, (void*)16);
-        gl.BindVertexArray(0);
+        program = LegacyProgram.Create(gpu, Vertex, Fragment, "debug overlay");
+        uScreen = program.Uniform("uScreen");
+        samplerAtlas = program.Sampler("uAtlas");
     }
 
     /// <summary>The overlay, or null when no monospace font is found.</summary>
@@ -192,22 +189,38 @@ public sealed unsafe class DebugOverlay : IDisposable
     public void Flush(int width, int height)
     {
         if (batch.Count == 0 || width <= 0 || height <= 0) { batch.Clear(); return; }
+        // The GL state the draw reads (CurrentState, CurrentTargets), as the GL version set it.
         gl.Disable(EnableCap.DepthTest);
         gl.Disable(EnableCap.CullFace);
         gl.Enable(EnableCap.Blend);
         gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
         gl.Viewport(0, 0, (uint)width, (uint)height);
-        gl.UseProgram(program);
-        gl.Uniform2(gl.GetUniformLocation(program, "uScreen"), (float)width, height);
-        gl.ActiveTexture(TextureUnit.Texture0);
-        gl.BindTexture(TextureTarget.Texture2D, atlas);
-        gl.Uniform1(gl.GetUniformLocation(program, "uAtlas"), 0);
-        gl.BindVertexArray(vao);
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-        var data = batch.ToArray();
-        fixed (float* p = data) gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)(data.Length * 4), p, BufferUsageARB.StreamDraw);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, (uint)(data.Length / Stride));
-        gl.BindVertexArray(0);
+
+        // One segment in VkGl's open pass. It is begun first: the overlay is also drawn after a frame ended (a screenshot's key list), and
+        // the segment opens the frame whose constants hold the vertices.
+        var interop = Gpu.Interop!;
+        var cmd = interop.BeginNativeInPass("debug overlay");
+        program.Set(uScreen, (float)width, height);
+        program.Bind(samplerAtlas, interop.Sampled(atlas, program.SamplerInfo(samplerAtlas)));
+        var floats = CollectionsMarshal.AsSpan(batch);
+        var vertices = Gpu.Frame.Constants.Allocate((ulong)(floats.Length * 4), 16);
+        MemoryMarshal.AsBytes(floats).CopyTo(new Span<byte>(vertices.Pointer, floats.Length * 4));
+        var t = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        state.Record(cmd, t);
+        Span<LegacyProgram.Attribute?> attributes =
+        [
+            new LegacyProgram.Attribute(new BufferBinding(vertices.Handle, vertices.Offset), Format.R32G32Sfloat, Stride * 4, false),
+            new LegacyProgram.Attribute(new BufferBinding(vertices.Handle, vertices.Offset + 8), Format.R32G32Sfloat, Stride * 4, false),
+            new LegacyProgram.Attribute(new BufferBinding(vertices.Handle, vertices.Offset + 16), Format.R32G32B32A32Sfloat, Stride * 4, false),
+        ];
+        var pipeline = Gpu.Pipelines.Get(state.Pipeline(program.Program, program.VertexLayout(attributes), PrimitiveTopology.TriangleList, t.Formats, "debug overlay"));
+        cmd.BindPipeline(pipeline);
+        cmd.BindVertexBuffers(0, program.VertexBuffers(attributes, 0, 3));
+        program.Flush(cmd);
+        cmd.Draw((uint)(floats.Length / Stride));
+        interop.EndNative(cmd);
+
         gl.Disable(EnableCap.Blend);
         gl.Enable(EnableCap.DepthTest);
         batch.Clear();
@@ -238,8 +251,6 @@ public sealed unsafe class DebugOverlay : IDisposable
     public void Dispose()
     {
         gl.DeleteTexture(atlas);
-        gl.DeleteBuffer(vbo);
-        gl.DeleteVertexArray(vao);
-        gl.DeleteProgram(program);
+        program.Dispose();
     }
 }
