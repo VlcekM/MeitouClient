@@ -2741,6 +2741,10 @@ the upscaler is deterministic.*
   was in `gl texture` before. The haze maps are 2 × 2.8 MB. Before, every GL texture also had its whole mip chain allocated (about +33%).
 - **Unknown**: whether code after `End` still needs the culling and blending off that `End` leaves. That state is kept as it was, untested
   without it.
+- **Unknown** (not run): the window path, `Target = 0`. Every screenshot, fly benchmark and test draws into an offscreen GL framebuffer; only
+  the interactive viewer and the game draw into the window, and neither exits by itself. From the code, framebuffer 0's attachment is VkGl's own
+  backbuffer texture (GENERAL layout, blitted to the swapchain by the presenter after the frame). That is the same kind of attachment as an
+  offscreen framebuffer's, and `ShadowPass.DrawDebug` already draws natively into it the same way.
 
 **Gate** (Release, RTX 4070, against `C:\Temp\base-6f4af19`):
 - Build 0 warnings. `dotnet test -c Release` (`KENSHI_PATH` set): 470 passed, 0 skipped. New: `PostProcessNativeTests` (`[Slow]`, two cases).
