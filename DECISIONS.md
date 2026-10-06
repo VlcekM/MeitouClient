@@ -3,8 +3,8 @@
 Choices made while working unattended on the `engine` branch, with the reason. Newest last.
 
 1. **Parity reference.** The reference viewer is master at `f127922`, built Release into
-   `R:\VlcekM\MeitouClient-engine-work\ref\viewer` (outside the repo). Screenshots and benchmark output live in
-   `R:\VlcekM\MeitouClient-engine-work` too. After each merge of master into `engine` the reference is rebuilt from the
+   `<work dir outside the repo>\ref\viewer` (outside the repo). Screenshots and benchmark output live in
+   `<work dir outside the repo>` too. After each merge of master into `engine` the reference is rebuilt from the
    merged master commit and the reference screenshots are taken again.
 2. **Parity tooling.** `meitou-tools image-diff a.png b.png [diff.png]` (mean absolute RGB difference in 0..255, share of
    pixels whose largest channel difference is over 12, maximum) and `tools/scripts/parity.sh` /
@@ -20,7 +20,7 @@ Choices made while working unattended on the `engine` branch, with the reason. N
    (rock view mean 0.28, zone 14.30 0.08 between two runs of master). Offscreen renders now hold it still
    (`FoliageRenderer.SwaySeconds = 0`); interactively it follows real time as before. The exact parity gate (mean 0.0000 in all
    eight views) was measured against master `f127922` plus the same two-line patch (worktree
-   `R:\VlcekM\MeitouClient-engine-work\refdet-src`); against unpatched master the only differences are the swaying grass
+   `<work dir outside the repo>\refdet-src`); against unpatched master the only differences are the swaying grass
    blades (rock 0.76, zone 14.30 0.07, the rest 0.0000).
 5. **Benchmark location.** The brief gives `--fly-benchmark 1500 --size 1600x900` without a place; the viewer's default is the
    world's centre. The benchmark is run at `--town "The Hub"` (the place docs/viewer.md measured before), the same for master

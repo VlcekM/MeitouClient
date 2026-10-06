@@ -15,7 +15,7 @@ Sources:
   (**Verified** in the disassembly of `FUN_140896e20` and the constructors). A model in doubles can be off by one on a
   product such as `500 * 1.4`, which is 700 in float but 699 in double; the worked examples in 4.6 use float arithmetic.
 - **Data**: `gamedata.base` plus the core mods the probe's `BaseGame` load order brings in, read through
-  `GameDatabase.Load` (probe `R:\VlcekM\MeitouClient-re\probes\economy`); field descriptions from the install's
+  `GameDatabase.Load` (probe `<RE workspace outside the repo>/probes\economy`); field descriptions from the install's
   `fcs.def` (the designers' text; sometimes stale, see "Data corrections"). The editor's `itemType` numbers are the ones
   in [fcs-mod.md](../formats/fcs-mod.md#record-types).
 - **No game run.** Nothing here was checked against a running game; "Verified" below means game data, or two

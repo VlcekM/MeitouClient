@@ -232,7 +232,7 @@ compilation in both, see the runtimeconfig). The user runs Debug.
 - `MEITOU_VKGL_PHASES=1`: Stopwatch around the nine parts of `PrepareDraw` and, separately, around the `vkCmd*` calls themselves
   (`VkGlStats.PhaseTicks/NativeTicks`; ~0.05 Âµs per read, so the sums read a little high). `MEITOU_VK_MICRO=1`: 100 000 `vkCmdSetScissor` / `vkCmdSetCullMode`
   recorded through Silk.NET and through the raw function pointer.
-- Benchmark runs: `set KENSHI_PATH=E:\SteamLibrary\steamapps\common\Kenshi`, `set MEITOU_PASS_STATS=1`, `set MEITOU_PASS_STATS_SKIP=80`, then
+- Benchmark runs: `set KENSHI_PATH=<Kenshi install>`, `set MEITOU_PASS_STATS=1`, `set MEITOU_PASS_STATS_SKIP=80`, then
   `meitou-viewer.exe --world <view> [--faithful shadows] --time 13 --size 1600x900 --fly-benchmark 300 --fly-speed 0` (serialised: the GPU is waited
   for after each frame; 220 measured frames). Views: `hub` = `--town "The Hub" --distance 40000 --pitch 3`; `rock` = `--at -51468,-14324 --yaw 95 --pitch 2 --distance 300`;
   `portnorth` = `--town "Port North"`; `zone14_30` = `--zone 14,30`; `forest` = `--at -37582,-80684 --yaw -70.5 --pitch 6.1 --distance 10588`;

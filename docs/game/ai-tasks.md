@@ -7,7 +7,7 @@ Where the task classes are used: [pathfinding.md](pathfinding.md#movement) (Task
 
 Sources: `kenshi_x64.exe` decompile dump and disassembly read outside the repository on 2026-10-05 (addresses like `FUN_14032ebd0` cite
 functions); `fcs_enums.def` (taskType names); the install's merged database read with `GameDatabase` (probe
-`R:\VlcekM\MeitouClient-re\probes\ai`). No decompiled text is quoted; the tables are facts read out of the registration code and a
+`<RE workspace outside the repo>/probes\ai`). No decompiled text is quoted; the tables are facts read out of the registration code and a
 jump table.
 
 ## taskType to Task class

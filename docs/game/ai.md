@@ -9,7 +9,7 @@ Sources: the decompile dump and disassembly of `kenshi_x64.exe` (Ghidra default 
 class and slot names come from the MSVC RTTI tables) read outside the repository on 2026-10-05; the FCS editor's decompiled enums
 (`taskPriority`, `UnloadedPlatoonJob`, `BlackboardSignalFunctions`, `EventTriggerEnum`, `DialogActionEnum`, `DialogConditionEnum`, ...);
 `fcs.def` and `fcs_enums.def`; the install's `data/gamedata.base` + `Newwworld.mod` + `Dialogue.mod` + `rebirth.mod` read with the
-repo's `GameDatabase` (probes `R:\VlcekM\MeitouClient-re\probes\ai` and `...\ai-verify`).
+repo's `GameDatabase` (probes `<RE workspace outside the repo>/probes\ai` and `...\ai-verify`).
 No decompiled text is quoted; rules are restated. The game was never run, and no save was inspected for this doc (the install holds none; the one sample save, from the user's save folder, is analysed in [../formats/save.md](../formats/save.md)).
 Related: [game-loop.md](game-loop.md) (when the AI updates), [combat.md](combat.md), [character-stats.md](character-stats.md),
 [../formats/fcs-mod.md](../formats/fcs-mod.md), [../formats/save.md](../formats/save.md), [factions-squads-towns.md](factions-squads-towns.md) (platoons, squad templates and their `AI packages`, relations),

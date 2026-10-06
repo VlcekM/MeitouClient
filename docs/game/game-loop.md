@@ -6,7 +6,7 @@ every frame versus rarely or not at all when something is far from the player. L
 Sources: the decompile dump of `kenshi_x64.exe` (Ghidra default names; addresses like `FUN_140788a00` cite functions, class and
 slot names come from the MSVC RTTI tables) and of the bundled `OgreMain_x64.dll` and `SkyX_x64.dll`, read outside the repository on
 2026-10-05; the install's `data/gamedata.base` (+ `Newwworld.mod`, `rebirth.mod`) read with the repo's `GameDatabase` (probe
-`R:\VlcekM\MeitouClient-re\probes\gameloop`), `fcs.def`, `settings.cfg`, `controls.cfg`, `data/gui/layout/Kenshi_MainPanel.layout`.
+`<RE workspace outside the repo>/probes\gameloop`), `fcs.def`, `settings.cfg`, `controls.cfg`, `data/gui/layout/Kenshi_MainPanel.layout`.
 No decompiled text is quoted; rules are restated. The install's `save/` folders hold no files; the one sample save, from the user's save folder, is analysed in [../formats/save.md](../formats/save.md) and was not used for this doc.
 Related: [formats/weather.md](../formats/weather.md) (weather calendar and its time bases), [formats/terrain.md](../formats/terrain.md#sun-path-verified-kenshi_x64exe-sky-controller-and-the-constants-record)
 (sun path), [formats/sky.md](../formats/sky.md), [formats/lighting.md](../formats/lighting.md), [formats/zones.md](../formats/zones.md),

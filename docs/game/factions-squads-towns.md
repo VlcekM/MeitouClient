@@ -9,7 +9,7 @@ Sources:
   population code (0x1408f5xxx - 0x1408fexxx), the town and nest classes (0x140926xxx - 0x14093xxxx), world-state
   evaluation (0x1409a7e00, 0x1409a9570, 0x1409a9a70), `BuildingItemGroup` (0x140549xxx, 0x1405534f0).
 - **Data**: `data/gamedata.base` plus the three core mods through `GameDatabase.Load(LoadOrder.FromInstall)` (probe
-  `R:\VlcekM\MeitouClient-re\probes\factions`); field meanings from `fcs.def` (descriptions are the designers' text
+  `<RE workspace outside the repo>/probes\factions`); field meanings from `fcs.def` (descriptions are the designers' text
   and sometimes stale, see "Data corrections"); enum names and numbers from the editor's own enums (the decompiled
   `forgotten construction set.exe`: `TownType`, `CharacterTypeEnum`, `SquadMemberType`, `DialogActionEnum`,
   `BuildingDesignation`, `CrimeEnum`).

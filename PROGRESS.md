@@ -29,11 +29,11 @@
 
 ## Summary (overnight job, read this first)
 
-All three phases are done on branch `engine` (worktree `R:\VlcekM\MeitouClient-engine`). Nothing was pushed and master was not touched.
+All three phases are done on branch `engine` (worktree `<engine worktree>`). Nothing was pushed and master was not touched.
 Master has not moved since `f127922`, so the merge is a fast-forward:
 
 ```
-cd R:\VlcekM\MeitouClient
+cd <repository root>
 git merge engine
 ```
 
@@ -70,7 +70,7 @@ git merge engine
 - An interleaved A/B against the Phase 2 tip shows no regression from Phase 3 with the upscaler off (p50 4.0 vs 4.0-4.1, p99 9.1-9.5 vs 8.9-9.5).
   An earlier batch read about 10 ms p50 for every mode; it was disturbed and is superseded (`bench/up-*`).
 
-**Screenshots** (`R:\VlcekM\MeitouClient-engine-work\shots\taa1`):
+**Screenshots** (`<work dir outside the repo>\shots\taa1`):
 - stills: `rock_taa.png`, `rock_taaq.png`, `rock_fsr.png`, `rock_dlss.png`;
 - after an orbit (history under motion): `rock_orbit_taa.png`, `fsr_orbit.png`, `dlss_orbit.png`;
 - `pn_reactive.png`: Port North water with the reactive mask.
@@ -105,12 +105,12 @@ git merge engine
 ## Details
 
 Unattended job: reorganise into a bootable game (Phase 1), Vulkan backend (Phase 2), upscalers (Phase 3). Brief at
-`C:\Temp\meitou-engine-vulkan-upscalers-prompt.md`. Decisions in [DECISIONS.md](DECISIONS.md). Work files (reference
-viewer, screenshots, benchmark logs) in `R:\VlcekM\MeitouClient-engine-work` (outside the repo).
+a prompt file outside the repository. Decisions in [DECISIONS.md](DECISIONS.md). Work files (reference
+viewer, screenshots, benchmark logs) in `<work dir outside the repo>` (outside the repo).
 
 ## Phase 1: reorganise into a bootable game — done
 
-- [x] Worktree `R:\VlcekM\MeitouClient-engine`, branch `engine` from master `f127922` (master has not moved since).
+- [x] Worktree `<engine worktree>`, branch `engine` from master `f127922` (master has not moved since).
 - [x] Parity tooling: `meitou-tools image-diff`, `tools/scripts/parity.sh`, `parity-compare.sh`.
 - [x] `src/Meitou.Engine`: `WorldSession`, fixed tick (30 Hz), game clock (scale, pause), input actions and bindings, Kenshi
       strategy camera + free camera, interpolation; 44 tests.
