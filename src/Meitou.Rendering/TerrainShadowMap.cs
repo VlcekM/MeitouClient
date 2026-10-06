@@ -103,12 +103,11 @@ sealed unsafe class TerrainShadowMap : IDisposable
         int passes = 1;
         while ((1 << (passes - 1)) < size) passes++;
         int write = 0;
-        var interop = Gpu.Interop!;
         pipeline ??= Gpu.Pipelines.Get(state.Pipeline(sweep.Program, sweep.VertexLayout([]), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, format, "terrain shadow sweep"));
         var viewport = new Silk.NET.Vulkan.Viewport(0, 0, size, size, 0, 1);
         var scissor = new Silk.NET.Vulkan.Rect2D(default, new((uint)size, (uint)size));
         sweep.Set(uSize, (float)size);
-        var cmd = interop.BeginNative("terrain shadow sweep");
+        var cmd = Gpu.BeginNative("terrain shadow sweep");
         for (int pass = 0; pass < passes; pass++)
         {
             float step = pass == 0 ? 1 : 1 << (pass - 1);   // the first pass reaches one sample, the k-th 2^(k-1) more
@@ -131,7 +130,7 @@ sealed unsafe class TerrainShadowMap : IDisposable
             cmd.Barrier(BarrierBatch.Full);   // the next pass reads what this one wrote (VkGl: a full barrier before each pass)
             write = 1 - write;
         }
-        interop.EndNative(cmd);
+        Gpu.EndNative(cmd);
         result = 1 - write;
         builtFor = toSun;
         StepTiming.Add(StepTiming.Sweep, timing, passes);

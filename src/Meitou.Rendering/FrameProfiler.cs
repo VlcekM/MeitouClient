@@ -107,7 +107,7 @@ public sealed class FrameProfiler : IDisposable
         var q = native.Frame.Timestamps.Allocate();
         if (!q.IsValid) return;
         pendingStamp = q;
-        native.Interop!.Interleave(recordStamp);
+        native.Interleave(recordStamp);
         nativeStamps[slot, n] = q;
         stampStage[slot, n] = stage;
         stampCount[slot] = n + 1;

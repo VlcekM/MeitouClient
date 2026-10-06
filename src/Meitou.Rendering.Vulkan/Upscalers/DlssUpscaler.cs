@@ -147,7 +147,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         r = sl.SetConstants(&constants, token, viewport);
         if (r != 0) return Fail($"slSetConstants failed ({r})");
 
-        var list = gl.BeginNative("dlss upscale");
+        var list = gl.Context.BeginNative("dlss upscale");
         var cb = list.Handle;
         try
         {
@@ -174,7 +174,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         }
         finally
         {
-            gl.EndNative(list);
+            gl.Context.EndNative(list);
         }
         return true;
     }

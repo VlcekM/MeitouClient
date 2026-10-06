@@ -164,8 +164,7 @@ public sealed unsafe partial class ShadowPass
         var map = blocker!;
         p.Set(blockerSizeHandle, (float)atlasSize);
         p.Bind(blockerAtlasSlot, atlasPlain);
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNative("shadow blockers");
+        var cmd = Gpu.BeginNative("shadow blockers");
         var target = new RenderTarget(map.Attachment(), AttachmentLoadOp.Load, default, map.Image);
         var formats = new AttachmentFormats(map.Desc.Format, Format.Undefined, 1);
         int side = map.Desc.Width;
@@ -182,7 +181,7 @@ public sealed unsafe partial class ShadowPass
             tiles++;
         }
         cmd.EndRendering();
-        interop.EndNative(cmd);
+        Gpu.EndNative(cmd);
     }
 
     /// <summary>The blocker search's and the filter's widest radius in a cascade (world units).</summary>

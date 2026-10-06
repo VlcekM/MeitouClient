@@ -340,7 +340,7 @@ public sealed unsafe class PostProcess : IDisposable
         {
             stampWriter ??= c => { written = Gpu.Frame.Timestamps.Allocate(); c.Timestamp(Gpu.Frame.Timestamps, written); };
             written = default;
-            interop.Interleave(stampWriter);
+            Gpu.Interleave(stampWriter);
             slot = written;
         }
         set.Slots[set.Count] = slot;
@@ -489,13 +489,13 @@ public sealed unsafe class PostProcess : IDisposable
     {
         if (!Temporal) return;
         // The clear GL's Clear(DEPTH) made: a rendering of its own clearing the far depth to 1.
-        var cmd = interop.BeginNative("post far slice clear");
+        var cmd = Gpu.BeginNative("post far slice clear");
         cmd.BeginRendering(new RenderingDesc(default, farDepth!.Attachment with
         {
             Load = Vk.AttachmentLoadOp.Clear, Clear = new Vk.ClearValue(depthStencil: new Vk.ClearDepthStencilValue(1f, 0)),
         }, width, height));
         cmd.EndRendering();
-        interop.EndNative(cmd);
+        Gpu.EndNative(cmd);
         GlBridge.Bind(Gpu, farFbo, width, height);
         SceneTargets = PassTargets.Of(sceneColour!.Texture, farDepth!.Texture);
         farToPrevious = ToPrevious(near, far);
@@ -518,13 +518,13 @@ public sealed unsafe class PostProcess : IDisposable
     CommandList? segment;
 
     /// <summary>The open native segment of the chain (one is begun when none is open: VkGl's pass ends, a full barrier is placed).</summary>
-    CommandList Segment() => segment ??= interop.BeginNative("post");
+    CommandList Segment() => segment ??= Gpu.BeginNative("post");
 
     /// <summary>Ends the open segment (before anything that records through VkGl: the vendor upscalers, the grass-motion guest).</summary>
     void CloseSegment()
     {
         if (segment is null) return;
-        interop.EndNative(segment);
+        Gpu.EndNative(segment);
         segment = null;
     }
 
@@ -654,14 +654,14 @@ public sealed unsafe class PostProcess : IDisposable
             // The guests' host (the grass's motion): the motion target loaded, red and green written, no depth, culling or blending.
             CloseSegment();
             var targets = PassTargets.Of(motion!.Texture, null);
-            var cmd = interop.BeginNative("object motion");
+            var cmd = Gpu.BeginNative("object motion");
             cmd.BeginRendering(targets.Rendering);
             Gpu.BeginHostPass(cmd, targets, DrawState.For(targets.Formats, Gpu.Device.DepthClamp,
                 mask: Silk.NET.Vulkan.ColorComponentFlags.RBit | Silk.NET.Vulkan.ColorComponentFlags.GBit));
             objectMotion(new MotionTargets(Sampled(sceneDepth!), nearPlanes, new Vector2(2 * JitterPixels.X / width, 2 * JitterPixels.Y / height)));
             cmd.EndRendering();
             Gpu.EndHostPass(cmd);
-            interop.EndNative(cmd);
+            Gpu.EndNative(cmd);
         }
         (historyA, historyB) = (historyB, historyA);
         var output = historyB!;

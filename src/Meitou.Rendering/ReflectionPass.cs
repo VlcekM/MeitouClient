@@ -231,8 +231,7 @@ public sealed unsafe class ReflectionPass : IDisposable
         // The native host (docs/renderer-native.md 4.5): the multisampled target's rendering instance is opened here, cleared by its load ops,
         // and the sky, terrain, objects and foliage record into it through BeginNativeInPass, with the targets and state handed over here
         // (GpuContext.CurrentTargets, CurrentState).
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNative("reflection");
+        var cmd = Gpu.BeginNative("reflection");
         var target = msColour is not null ? PassTargets.Of(msColour, msDepth) : PassTargets.Of(colour, depth);
         // Wave 4 (docs/renderer-native.md 6): the guests' segments are secondaries, recorded on the job threads when the pass ends.
         bool secondaries = Recording.Secondaries;
@@ -289,7 +288,7 @@ public sealed unsafe class ReflectionPass : IDisposable
             cmd.Resolve(msColour, colour!);
         }
         Gpu.EndHostPass(cmd);
-        interop.EndNative(cmd);
+        Gpu.EndNative(cmd);
         gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, (uint)drawFbo);
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, (uint)readFbo);
         gl.Viewport(viewport[0], viewport[1], (uint)viewport[2], (uint)viewport[3]);

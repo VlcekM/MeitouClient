@@ -254,8 +254,7 @@ sealed class SceneHost
     public void Open(int stage, PassTargets targets)
     {
         if (cmd is not null) { Stage(stage); return; }
-        var interop = ctx.Interop!;
-        var list = interop.BeginNative("scene");
+        var list = ctx.BeginNative("scene");
         bool secondaries = Recording.Secondaries;
         list.BeginRendering(targets.Rendering, secondaries);
         ctx.BeginHostPass(list, targets, DrawState.Scene(targets.Formats));
@@ -272,11 +271,10 @@ sealed class SceneHost
     public void Close()
     {
         if (cmd is not { } list) return;
-        var interop = ctx.Interop!;
         if (ctx.Frame.Parallel.Open) ctx.Frame.Parallel.End();
         list.EndRendering();
         ctx.EndHostPass(list);
-        interop.EndNative(list);
+        ctx.EndNative(list);
         cmd = null;
     }
 }

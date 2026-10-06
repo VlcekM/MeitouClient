@@ -764,7 +764,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 int start = at, length = Math.Min(SlabBytes, vertexBytes - at);
                 uploads.Enqueue(() =>
                 {
-                    GlBridge.EnsureFrame(Gpu);
+                    Gpu.EnsureFrame();
                     Gpu.Uploads.Write(gp!.Vertices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(p.Vertices.AsSpan()).Slice(start, length));
                 });
             }
@@ -773,7 +773,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 int start = at, length = Math.Min(SlabBytes, indexBytes - at);
                 uploads.Enqueue(() =>
                 {
-                    GlBridge.EnsureFrame(Gpu);
+                    Gpu.EnsureFrame();
                     Gpu.Uploads.Write(gp!.Indices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(p.Indices.AsSpan()).Slice(start, length));
                 });
             }
@@ -1868,7 +1868,6 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     void RecordMeshes(NativeProg mp, bool depth, Matrix4x4 viewProjection, Vector3 eye, Vector3 light, Vector3 fogColour, float fogDistance, bool coverage)
     {
         var p = mp.P;
-        var interop = Gpu.Interop!;
         string label = depth ? "foliage mesh depth" : "foliage meshes";
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the sets, and per draw everything resolved (pipeline, buffers, the push
         // block with its bindless indices), into a job that only records.
@@ -2101,7 +2100,6 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         var gp = grassProgram;
         var p = gp.P;
-        var interop = Gpu.Interop!;
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the sets, and per draw the push block with its bindless indices.
         var targets = Gpu.CurrentTargets();
         var state = GrassState(Gpu, coverage);
@@ -2264,8 +2262,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         var gp = grassMotionProgram;
         var p = gp.P;
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNativeInPass("foliage grass motion");
+        var cmd = Gpu.BeginGuest("foliage grass motion");
         var pass = Gpu.CurrentTargets();
         var drawState = MotionState(Gpu);
         int segment = SegmentId(MotionKind, p, pass, drawState);
@@ -2295,7 +2292,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             Push(cmd, p, in pc, ref last, ref pushed);
             cmd.Draw(d.Vertices, (uint)buffer.Shown, 0, buffer.FirstBlade);
         }
-        interop.EndNative(cmd);
+        Gpu.EndGuest(cmd);
     }
 
     // GPU timing with the frame's timestamps (QueryArena), written where the GL version wrote its timestamp queries (through the seam's
@@ -2312,7 +2309,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     void Stamp(QuerySlot slot)
     {
         pendingStamp = slot;
-        Gpu.Interop!.Interleave(recordStamp ??= cmd => cmd.Timestamp(Gpu.Frame.Timestamps, pendingStamp));
+        Gpu.Interleave(recordStamp ??= cmd => cmd.Timestamp(Gpu.Frame.Timestamps, pendingStamp));
     }
 
     int BeginTimer(bool continuation)

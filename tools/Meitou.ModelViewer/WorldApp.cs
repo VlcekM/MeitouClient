@@ -449,7 +449,7 @@ static partial class WorldApp
             if (timing)
             {
                 var begin = arena.Allocate();
-                if (begin.IsValid) { context.Interop!.Interleave(cmd => cmd.Timestamp(arena, begin)); timers[queryIndex].Begin = begin; }
+                if (begin.IsValid) { context.Interleave(cmd => cmd.Timestamp(arena, begin)); timers[queryIndex].Begin = begin; }
                 else timing = false;
             }
             frameWatch.Restart();
@@ -461,7 +461,7 @@ static partial class WorldApp
                 var end = arena.Allocate();
                 if (end.IsValid)
                 {
-                    context.Interop!.Interleave(cmd => cmd.Timestamp(arena, end));
+                    context.Interleave(cmd => cmd.Timestamp(arena, end));
                     timers[queryIndex].End = end;
                     timerPending[queryIndex] = true;
                 }

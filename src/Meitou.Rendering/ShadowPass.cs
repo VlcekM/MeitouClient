@@ -165,8 +165,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// </summary>
     CommandList BeginHost(string label, bool clear)
     {
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNative(label);
+        var cmd = Gpu.BeginNative(label);
         var t = PassTargets.Of(null, atlas!);
         var depth = clear ? t.Depth with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(depthStencil: new ClearDepthStencilValue(1f, 0)) } : t.Depth;
         // Wave 4 (docs/renderer-native.md 6): the cascades' segments are secondaries, recorded on the job threads when the host ends.
@@ -196,11 +195,10 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     void EndHost(CommandList cmd)
     {
-        var interop = Gpu.Interop!;
         if (Gpu.Frame.Parallel.Open) Gpu.Frame.Parallel.End();
         cmd.EndRendering();
         Gpu.EndHostPass(cmd);
-        interop.EndNative(cmd);
+        Gpu.EndNative(cmd);
     }
 
     /// <summary>Marks the shadows off for the receivers (the term is 1 everywhere).</summary>
@@ -339,9 +337,8 @@ public sealed unsafe partial class ShadowPass : IDisposable
             sceneDepth = Texture.Create(Gpu, new TextureDesc(Format.D32Sfloat, width, height, Name: "shadow debug scene depth"));
             sceneDepthSampled = Sampled(sceneDepth, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.Repeat);
         }
-        var interop = Gpu.Interop!;
         var source = scene.Image;
-        var cmd = interop.BeginNative("shadow debug depth copy");
+        var cmd = Gpu.BeginNative("shadow debug depth copy");
         var region = new ImageCopy
         {
             SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.DepthBit, 0, 0, 1),
@@ -349,7 +346,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
             Extent = new Extent3D((uint)width, (uint)height, 1),
         };
         Gpu.Device.Vk.CmdCopyImage(cmd.Handle, source, ImageLayout.General, sceneDepth.Image, ImageLayout.General, 1, &region);
-        interop.EndNative(cmd);
+        Gpu.EndNative(cmd);
     }
 
     /// <summary>
@@ -376,7 +373,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
         var t = interop.CurrentTargets();
         var state = DrawState.For(t.Formats, Gpu.Device.DepthClamp);
         bool scene = mode >= 2 && sceneDepth is not null;
-        var cmd = interop.BeginNative("shadow debug");
+        var cmd = Gpu.BeginNative("shadow debug");
         cmd.BeginRendering(t.Rendering);
         if (scene)
         {
@@ -399,7 +396,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
             DrawFullscreen(cmd, p, t, scene ? state with { Blend = BlendState.Off } : state, new Viewport(width - side - 8, 8, side, side, 0, 1), "shadow atlas debug");
         }
         cmd.EndRendering();
-        interop.EndNative(cmd);
+        Gpu.EndNative(cmd);
     }
 
     /// <summary>One fullscreen triangle of <paramref name="p"/> in the debug views' rendering.</summary>

@@ -274,7 +274,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
             int start = at, length = Math.Min(SlabBytes, vertexBytes - at);
             uploads.Add(() =>
             {
-                GlBridge.EnsureFrame(gpuContext);
+                gpuContext.EnsureFrame();
                 gpuContext.Uploads.Write(gp!.Vertices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(part.Vertices.AsSpan()).Slice(start, length));
             }, label + " (vertices)");
         }
@@ -283,7 +283,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
             int start = at, length = Math.Min(SlabBytes, indexBytes - at);
             uploads.Add(() =>
             {
-                GlBridge.EnsureFrame(gpuContext);
+                gpuContext.EnsureFrame();
                 gpuContext.Uploads.Write(gp!.Indices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(prepared.All.AsSpan()).Slice(start, length));
             }, label + " (indices)");
         }
@@ -330,7 +330,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
         {
             var indices = part.LevelIndices![level];
             elements = DeviceBuffer.Create(gpuContext, (ulong)indices.Length * 4, BufferUse.Index, AllocationName);
-            GlBridge.EnsureFrame(gpuContext);
+            gpuContext.EnsureFrame();
             gpuContext.Uploads.Write(elements, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(indices.AsSpan()));
             part.PlainEbo[level] = elements;
         }

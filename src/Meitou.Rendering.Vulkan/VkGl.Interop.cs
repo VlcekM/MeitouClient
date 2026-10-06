@@ -48,6 +48,29 @@ public sealed unsafe partial class VkGl : IGlInterop
             throw new InvalidOperationException("IGl call between BeginNative and EndNative: it could end the frame under the native command list");
     }
 
+    public void SegmentOpening(CommandList list)
+    {
+        GuardNative();
+        EndPass();
+        nativeOpen = true;
+        nativeInPass = false;
+        nativeList = list;
+    }
+
+    public void SegmentClosed(CommandList list)
+    {
+        if (!nativeOpen || !ReferenceEquals(list, nativeList)) throw new InvalidOperationException("SegmentClosed without a matching SegmentOpening");
+        nativeOpen = false;
+        nativeList = null;
+        // Whatever the native code bound is now in the command buffer, and its closing barrier is recorded: VkGl assumes nothing.
+        lastPipeline = default;
+        dynamicStateDirty = true;
+        boundProgram = null;
+        pushEpoch++;
+        passActive = false;
+        passColour = passDepth = null;
+    }
+
     public CommandList BeginNative(string label)
     {
         GuardNative();

@@ -12,13 +12,6 @@ public static unsafe class GlBridge
 {
     static IGl Gl(GpuContext ctx) => ctx.Interop as IGl ?? throw new InvalidOperationException("GL names need VkGl (the interop)");
 
-    /// <summary>Opens the frame where a GL upload would have (VkGl opens one lazily, before the host begins it: loading, offscreen tools), so a
-    /// native upload (<see cref="Uploader"/>, <see cref="GpuFrame.PreFrame"/>) can record. Nothing when one is open.</summary>
-    public static void EnsureFrame(GpuContext ctx)
-    {
-        if (!ctx.Frame.Open) ctx.Interop?.Interleave(static _ => { });
-    }
-
     /// <summary>A GL texture name for <paramref name="texture"/> with GL sampler state of its own (what the GL texture it replaces was given):
     /// trilinear, <paramref name="wrap"/> on S and T, a border colour of 0 when <paramref name="transparentBorder"/>, the anisotropy, and the
     /// swizzle (GL enum values, 0 for none). Leaves no texture bound on the active unit.</summary>

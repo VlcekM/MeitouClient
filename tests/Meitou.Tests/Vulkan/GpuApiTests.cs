@@ -276,7 +276,7 @@ public class GpuApiTests
             gl.BeginExternal();
             var arena = ctx.Frame.Timestamps;
             QuerySlot a = arena.Allocate(), b = arena.Allocate();
-            Assert.Equal(2, arena.Count);
+            Assert.Equal(3, arena.Count);   // and the frame's own start (GpuContext.GpuFrameMs)
             ctx.Frame.Commands.Timestamp(arena, a);
             ctx.Frame.Commands.FillBuffer(scratch.Handle, 0, 64, 0);   // something between them
             ctx.Frame.Commands.Timestamp(arena, b);

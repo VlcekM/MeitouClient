@@ -26,16 +26,6 @@ public sealed unsafe partial class VkGl
     const int PairsPerSlot = 4096;
     int queryCursor;
     List<GlQueryObj>[]? issuedQueries;
-    bool[]? frameTimed;
-    const uint FrameTimerBase = PairsPerSlot * 2 - 2;   // the last pair of each slot's pool: the whole frame on the GPU (VkGlStats.GpuFrameMs)
-
-    /// <summary>Timestamps around the frame: the start at the top of the upload command buffer, the end after the last pass.</summary>
-    void TimeFrame(bool start)
-    {
-        int slot = device.Frames.Slot;
-        vk.CmdWriteTimestamp2(start ? uploadCmd : cmd, start ? PipelineStageFlags2.TopOfPipeBit : PipelineStageFlags2.BottomOfPipeBit, queryPools![slot], FrameTimerBase + (start ? 0u : 1u));
-        if (!start) frameTimed![slot] = true;
-    }
 
     void EnsureQueryPool()
     {
@@ -48,7 +38,6 @@ public sealed unsafe partial class VkGl
             Check(vk.CreateQueryPool(dev, &info, null, out queryPools[i]));
             vk.ResetQueryPool(dev, queryPools[i], 0, PairsPerSlot * 2);
         }
-        frameTimed = new bool[n];
         issuedQueries = new List<GlQueryObj>[n];
         for (int i = 0; i < n; i++) issuedQueries[i] = [];
     }
@@ -58,13 +47,6 @@ public sealed unsafe partial class VkGl
     {
         queryCursor = 0;
         EnsureQueryPool();
-        if (frameTimed![slot])
-        {
-            var ts = stackalloc ulong[4];
-            if (vk.GetQueryPoolResults(dev, queryPools![slot], FrameTimerBase, 2, 32, ts, 16, QueryResultFlags.Result64Bit | QueryResultFlags.ResultWithAvailabilityBit) == Result.Success && ts[1] != 0 && ts[3] != 0)
-                Stats.GpuFrameMs = (ts[2] - ts[0]) * device.Limits.TimestampPeriod / 1e6;
-            frameTimed[slot] = false;
-        }
         var list = issuedQueries![slot];
         foreach (var q in list)
             if (q.Result is null && q.Slot == slot && Read(q, wait: false) is null) q.Result = 0;   // never completed (unpaired): expires as 0
@@ -113,7 +95,7 @@ public sealed unsafe partial class VkGl
         get
         {
             GuardNativePass();
-            if (!frameOpen) BeginFrame(backbuffer?.Width ?? 1, backbuffer?.Height ?? 1);
+            Context.EnsureFrame();
             return cmd;
         }
     }
@@ -170,7 +152,6 @@ public sealed unsafe partial class VkGl
         return q.Result;
     }
 
-    void PollQueries() { }
 
     void DestroyQueries()
     {

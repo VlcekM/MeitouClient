@@ -154,7 +154,7 @@ public unsafe class WorldResourceTests
             gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, 1000);
             gl.GenerateMipmap(TextureTarget.Texture2D);
             // The native way.
-            GlBridge.EnsureFrame(ctx);
+            ctx.EnsureFrame();
             using var texture = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, W, H, levels,
                 Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.TransferSrc, Name: "test textures"), ctx.Frame.PreFrame.Handle);
             ctx.Uploads.Write(texture, 0, 0, new Rect2D(new Offset2D(0, 0), new Extent2D(W, H)), pixels);

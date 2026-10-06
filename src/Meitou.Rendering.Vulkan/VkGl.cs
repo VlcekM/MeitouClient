@@ -40,10 +40,10 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
     readonly Dictionary<uint, GlQueryObj> queries = [];
     uint nextId = 1;
 
-    CommandBuffer cmd, uploadCmd;
-    bool frameOpen;
-    readonly CommandPool[] uploadPools;
-    readonly CommandBuffer[] uploadBuffers;
+    // The context's frame (phase 8 stage 3: GpuContext begins and submits frames; VkGl records into them).
+    CommandBuffer cmd => Context.Frame.Commands.Handle;
+    CommandBuffer uploadCmd => Context.Frame.UploadCommands;
+    bool frameOpen => Context.Frame.Open;
 
     /// <summary>The host's backbuffer (framebuffer 0): what the window shows, flipped, at <see cref="Present"/>.</summary>
     GlTextureObj? backbuffer;
@@ -55,17 +55,6 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
         vk = device.Vk;
         dev = device.Device;
         int n = device.Frames.Count;
-        uploadPools = new CommandPool[n];
-        uploadBuffers = new CommandBuffer[n];
-        for (int i = 0; i < n; i++)
-        {
-            var poolInfo = new CommandPoolCreateInfo { SType = StructureType.CommandPoolCreateInfo, QueueFamilyIndex = device.GraphicsFamily, Flags = CommandPoolCreateFlags.TransientBit };
-            Check(vk.CreateCommandPool(dev, &poolInfo, null, out uploadPools[i]));
-            var alloc = new CommandBufferAllocateInfo { SType = StructureType.CommandBufferAllocateInfo, CommandPool = uploadPools[i], Level = CommandBufferLevel.Primary, CommandBufferCount = 1 };
-            CommandBuffer cb;
-            Check(vk.AllocateCommandBuffers(dev, &alloc, &cb));
-            uploadBuffers[i] = cb;
-        }
         uniformRings = new FrameRings[n];
         for (int i = 0; i < n; i++) uniformRings[i] = new FrameRings(this);
         rings = new FrameRings[n];
@@ -108,43 +97,36 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
             EndFrame();
         }
         EnsureBackbuffer(width, height);
-        long beginTicks = System.Diagnostics.Stopwatch.GetTimestamp();
-        cmd = device.Frames.BeginFrame();
-        // No stamp move for a new frame: the buffers exports name count as read by every frame (VkGl.ReadByFrame), not by fetching again.
-        Stats.FenceWaitTicks += System.Diagnostics.Stopwatch.GetTimestamp() - beginTicks;
-        int slot = device.Frames.Slot;
-        Check(vk.ResetCommandPool(dev, uploadPools[slot], 0));
-        uploadCmd = uploadBuffers[slot];
-        var begin = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
-        Check(vk.BeginCommandBuffer(uploadCmd, &begin));
-        // Uploads may overwrite what earlier frames still read (in-place texture strips): wait for everything before.
-        FullBarrier(uploadCmd);
+        Context.BeginFrame();
+    }
+
+    /// <summary>The context began a frame: the per-frame state of the translation (dynamic buffers carried, rings and pools reset, the slot's
+    /// queries collected, caches forgotten), as VkGl's own frame begin did after the uploads' barrier.</summary>
+    public void FrameBegun(int slot)
+    {
+        if (backbuffer is null) EnsureBackbuffer(1, 1);   // a frame the context opened before any host gave a size (loading)
         CarryDynamicBuffers(slot, rings[slot].Reset);
         uniformRings[slot].Reset();
         ResetFramePools(slot);
         RecycleQueries(slot);
-        TimeFrame(start: true);
-        frameOpen = true;
+        (Stats.GpuFrameMs, Stats.FenceWaitTicks, Stats.SubmitTicks) = (Context.GpuFrameMs, Context.FenceWaitTicks, Context.SubmitTicks);
         Stats.BeginFrame();
         ResetFrameState();
-        Context.Frame.Begin(cmd, uploadCmd);
     }
+
+    public void FrameEnding()
+    {
+        GuardNative();
+        EndPass();
+    }
+
+    public void CountBarrier() => Stats.Barriers++;
 
     /// <summary>Ends the frame and submits it (uploads first). <paramref name="signal"/>/<paramref name="wait"/>: swapchain semaphores.</summary>
     public void EndFrame(ReadOnlySpan<VkSemaphore> wait = default, ReadOnlySpan<PipelineStageFlags> waitStages = default, ReadOnlySpan<VkSemaphore> signal = default)
     {
         GuardNative();
-        if (!frameOpen) return;
-        EndPass();
-        Context.Frame.End();
-        TimeFrame(start: false);
-        FullBarrier(uploadCmd);
-        Check(vk.EndCommandBuffer(uploadCmd));
-        long submitTicks = System.Diagnostics.Stopwatch.GetTimestamp();
-        device.Frames.EndFrame(wait, waitStages, signal, before: uploadCmd);
-        Stats.SubmitTicks += System.Diagnostics.Stopwatch.GetTimestamp() - submitTicks;
-        frameOpen = false;
-        PollQueries();
+        Context.EndFrame(wait, waitStages, signal);
     }
 
     /// <summary>Records <paramref name="record"/> into the frame's command buffer outside any render pass, after everything recorded so far
@@ -173,20 +155,16 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
     void Flush()
     {
         GuardNative();
-        if (!frameOpen) { device.Frames.WaitAll(); return; }
-        var (w, h) = (backbuffer!.Width, backbuffer.Height);
-        EndFrame();
-        device.Frames.WaitAll();
-        BeginFrame(w, h);
+        Context.Finish();
     }
 
-    /// <summary>Records into the frame, opening one at the backbuffer's size if the host has not (offscreen tools).</summary>
+    /// <summary>Records into the frame, opening one if the host has not (offscreen tools).</summary>
     CommandBuffer Cmd
     {
         get
         {
             GuardNative();
-            if (!frameOpen) BeginFrame(backbuffer?.Width ?? 1, backbuffer?.Height ?? 1);
+            Context.EnsureFrame();
             return cmd;
         }
     }
@@ -196,7 +174,7 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
         get
         {
             GuardNativePass();
-            if (!frameOpen) BeginFrame(backbuffer?.Width ?? 1, backbuffer?.Height ?? 1);
+            Context.EnsureFrame();
             return uploadCmd;
         }
     }
@@ -243,7 +221,6 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
         DestroySamplers();
         foreach (var r in rings) r.Dispose();
         foreach (var r in uniformRings) r.Dispose();
-        for (int i = 0; i < uploadPools.Length; i++) vk.DestroyCommandPool(dev, uploadPools[i], null);
         Context.Dispose();
         device.Frames.WaitAll();
     }

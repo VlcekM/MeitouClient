@@ -93,14 +93,13 @@ public sealed unsafe partial class GpuContext : IDisposable
     public void Record(string label, RecordJob job)
     {
         if (Frame.Parallel.Open) { Frame.Parallel.Add(label, job); return; }
-        var interop = Interop ?? throw new InvalidOperationException("no pass to record into");
-        var cmd = interop.BeginNativeInPass(label);
+        var cmd = BeginGuest(label);
         RenderJobs.SetInJob(true);
         try { job.Record(cmd); }
         finally
         {
             RenderJobs.SetInJob(false);
-            interop.EndNative(cmd);
+            EndGuest(cmd);
         }
         job.Release();
     }
@@ -204,6 +203,7 @@ public sealed unsafe partial class GpuContext : IDisposable
     {
         Device.WaitIdle();
         Frame.Dispose();
+        DisposeFrameLoop();
         Pipelines.Dispose();
         Bindless.Dispose();
         foreach (var p in persistentPools) Device.Vk.DestroyDescriptorPool(Device.Device, p, null);

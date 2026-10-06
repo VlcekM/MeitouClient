@@ -195,7 +195,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         // One segment in VkGl's open pass. It is begun first: the overlay is also drawn after a frame ended (a screenshot's key list), and
         // the segment opens the frame whose constants hold the vertices.
         var interop = Gpu.Interop!;
-        var cmd = interop.BeginNativeInPass("debug overlay");
+        var cmd = Gpu.BeginGuest("debug overlay");
         program.Set(uScreen, (float)width, height);
         program.Bind(samplerAtlas, interop.Sampled(atlas, program.SamplerInfo(samplerAtlas)));
         var floats = CollectionsMarshal.AsSpan(batch);
@@ -216,7 +216,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         cmd.BindVertexBuffers(0, program.VertexBuffers(attributes, 0, 3));
         program.Flush(cmd);
         cmd.Draw((uint)(floats.Length / Stride));
-        interop.EndNative(cmd);
+        Gpu.EndGuest(cmd);
         batch.Clear();
     }
 

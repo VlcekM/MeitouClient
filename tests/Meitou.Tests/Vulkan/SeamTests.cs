@@ -744,7 +744,7 @@ public class SeamTests
                 StageClock.Lap(0);   // a stamp inside VkGl's open pass
                 gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
                 StageClock.Lap(1);
-                Assert.Equal(3, gl.Context.Frame.Timestamps.Count);   // the native arena's, not GL queries
+                Assert.Equal(4, gl.Context.Frame.Timestamps.Count);   // the native arena's (and the frame's start), not GL queries
                 profiler.EndFrame();
                 gl.EndFrame();
             }

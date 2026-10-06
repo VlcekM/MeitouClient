@@ -29,7 +29,7 @@ sealed class PassTimer(GpuContext gpu)
         stamp = arena.Allocate();
         if (!stamp.IsValid) return default;
         write ??= cmd => cmd.Timestamp(gpu.Frame.Timestamps, stamp);
-        gpu.Interop!.Interleave(write);
+        gpu.Interleave(write);
         return stamp;
     }
 

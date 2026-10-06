@@ -712,7 +712,6 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     void RecordDraws(ObjProg prog, bool wire, in ViewConstants view, Vector4 fadeRange)
     {
         if (drawCount == 0) return;
-        var interop = Gpu.Interop!;
         string label = depthPass ? "objects depth" : wire ? "objects wire" : "objects";
         int kind = (depthPass ? 1 : 0) + (wire ? 2 : 0);
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the sets, and per draw everything resolved (pipeline, buffers, the push

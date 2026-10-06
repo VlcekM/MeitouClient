@@ -301,8 +301,7 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     void Record()
     {
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNativeInPass("water");
+        var cmd = Gpu.BeginGuest("water");
         var targets = Gpu.CurrentTargets();
         // What the GL code's Enable(DepthTest), DepthMask(false), Disable(CullFace), Enable(Blend) and BlendFunc made of the pass's state (the
         // depth test and blending only with the attachment they need, as VkGl's CurrentState).
@@ -321,7 +320,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         cmd.BindVertexBuffers(0, quadVertices);
         program.Flush(cmd);
         cmd.Draw(4);
-        interop.EndNative(cmd);
+        Gpu.EndGuest(cmd);
     }
 
     public void Dispose()

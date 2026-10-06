@@ -512,8 +512,7 @@ public sealed unsafe class SkyRenderer : IDisposable
 
     void Record(SkyProg program)
     {
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNativeInPass(program == sky ? "sky" : "sky simple");
+        var cmd = Gpu.BeginGuest(program == sky ? "sky" : "sky simple");
         var targets = Gpu.CurrentTargets();
         // What the GL code's Disable(DepthTest) and DepthMask(false) made of the pass's state.
         var drawState = Gpu.CurrentState() with { DepthTest = false, DepthWrite = false };
@@ -525,7 +524,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         cmd.BindPipeline(program.Segment.Get(drawState, targets.Formats, null));
         program.P.Flush(cmd);
         cmd.Draw(3);
-        interop.EndNative(cmd);
+        Gpu.EndGuest(cmd);
     }
 
     void SetSkyUniforms(SkyProg program)

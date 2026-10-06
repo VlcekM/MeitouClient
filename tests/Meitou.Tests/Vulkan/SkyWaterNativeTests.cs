@@ -113,7 +113,7 @@ public unsafe class SkyWaterNativeTests
             Assert.NotNull(g.UniformValue("uAtmoSun"));
             // --no-shadows: zero-filled blocks of the sizes the shaders declare, as ShadowShaders.Bind's GL buffers were.
             var receiver = g.Block(ShadowShaders.ReceiverBlock)!;
-            GlBridge.EnsureFrame(ctx);   // a frame for the constants
+            ctx.EnsureFrame();   // a frame for the constants
             Assert.False(receiver().IsNull);
             Assert.False(g.Block(ShadowShaders.CasterBlock)!().IsNull);
             Assert.False(g.Block(MeitouShadowShaders.Block)!().IsNull);

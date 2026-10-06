@@ -15,6 +15,23 @@ public interface IGlInterop
 {
     GpuContext Context { get; }
 
+    /// <summary>(Phase 8 stage 3.) The context began a frame in <paramref name="slot"/> (<see cref="GpuContext.BeginFrame"/>): VkGl resets its
+    /// per-frame state (rings, descriptor pools, queries, caches).</summary>
+    void FrameBegun(int slot);
+
+    /// <summary>The context is about to end the frame: VkGl ends its open pass.</summary>
+    void FrameEnding();
+
+    /// <summary>A full barrier was recorded (VkGl's counter).</summary>
+    void CountBarrier();
+
+    /// <summary>The context opens a native segment on <paramref name="list"/> (<see cref="GpuContext.BeginNative"/>): VkGl ends its pass, and
+    /// until <see cref="SegmentClosed"/> IGl calls that record or flush throw.</summary>
+    void SegmentOpening(CommandList list);
+
+    /// <summary>The segment is closed (its closing barrier recorded): VkGl assumes nothing bound and no pass open.</summary>
+    void SegmentClosed(CommandList list);
+
     /// <summary>
     /// Ends VkGl's open pass, places a full barrier and returns the frame's command list (invalidated: nothing is assumed bound). Until
     /// <see cref="EndNative"/>, IGl calls that record or flush throw: they could end the frame under the native code (VkGl.Flush).

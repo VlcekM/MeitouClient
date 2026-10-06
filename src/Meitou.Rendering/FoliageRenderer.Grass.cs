@@ -217,7 +217,6 @@ public sealed unsafe partial class FoliageRenderer
         if (BuildGrassRows(false, options, coverage) == 0) return false;
         var gp = grassGpuProgram!;
         var p = gp.P;
-        var interop = Gpu.Interop!;
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the cull (into PreFrame), the sets and the draw, into a job.
         var targets = Gpu.CurrentTargets();
         var state = GrassState(Gpu, coverage);
@@ -286,8 +285,7 @@ public sealed unsafe partial class FoliageRenderer
         if (BuildGrassRows(true, default!, false) == 0) return;
         var gp = grassMotionGpuProgram!;
         var p = gp.P;
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNativeInPass("foliage grass motion");
+        var cmd = Gpu.BeginGuest("foliage grass motion");
         var pass = Gpu.CurrentTargets();
         var drawState = MotionState(Gpu);
         int segment = SegmentId(MotionKind, p, pass, drawState);
@@ -313,6 +311,6 @@ public sealed unsafe partial class FoliageRenderer
             cmd.BindVertexBuffers(0, grassMeshMotionGpu.Vertices);
             cmd.DrawIndirectCount(result.Draws, result.DrawsOffset, result.Counters, result.CountersOffset, (uint)result.MaxDraws);
         }
-        interop.EndNative(cmd);
+        Gpu.EndGuest(cmd);
     }
 }
