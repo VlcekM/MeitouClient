@@ -334,6 +334,63 @@ public class SeamTests
     }
 
     [Fact]
+    public unsafe void The_vertex_array_stamp_moves_exactly_when_an_export_may_be_stale()
+    {
+        using var d = TryCreate(sync: false);
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        using (var gl = new VkGl(d!))
+        {
+            IGlInterop interop = gl;
+            gl.BeginFrame(W, H);
+            uint vao = gl.GenVertexArray(), vbo = gl.GenBuffer(), other = gl.GenBuffer();
+            gl.BindVertexArray(vao);
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+            gl.BufferData<float>(BufferTargetARB.ArrayBuffer, new float[12], BufferUsageARB.StaticDraw);
+            gl.EnableVertexAttribArray(0);
+            gl.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 12, (void*)0);
+            gl.BindVertexArray(0);
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, other);
+            gl.BufferData<float>(BufferTargetARB.ArrayBuffer, new float[4], BufferUsageARB.DynamicDraw);
+
+            var first = interop.VertexArray(vao);
+            long stamp = interop.VertexArrayStamp;
+            Assert.Same(first, interop.VertexArray(vao));
+            Assert.Equal(stamp, interop.VertexArrayStamp);   // fetching an export moves nothing
+
+            // A buffer no export names: written and renamed as often as it likes, the stamp stays.
+            float x = 1;
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, other);
+            gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, 4, &x);
+            gl.BufferData<float>(BufferTargetARB.ArrayBuffer, new float[8], BufferUsageARB.DynamicDraw);
+            Assert.Equal(stamp, interop.VertexArrayStamp);
+
+            // The exported static buffer written after this frame used it: renamed, so the stamp moves and the export is new.
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+            gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, 4, &x);
+            Assert.NotEqual(stamp, interop.VertexArrayStamp);
+            var second = interop.VertexArray(vao);
+            Assert.NotSame(first, second);
+            Assert.NotEqual(first.Attributes[0]!.Value.Buffer, second.Attributes[0]!.Value.Buffer);
+
+            // The vertex array itself changes.
+            stamp = interop.VertexArrayStamp;
+            gl.BindVertexArray(vao);
+            gl.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 12, (void*)0);
+            gl.BindVertexArray(0);
+            Assert.NotEqual(stamp, interop.VertexArrayStamp);
+
+            // A new frame: the exports mark their buffers used per frame, so they are fetched again.
+            interop.VertexArray(vao);
+            stamp = interop.VertexArrayStamp;
+            gl.EndFrame();
+            gl.BeginFrame(W, H);
+            Assert.NotEqual(stamp, interop.VertexArrayStamp);
+            gl.EndFrame();
+        }
+        ExpectClean(d!);
+    }
+
+    [Fact]
     public void Exports_are_VkGl_own_objects()
     {
         using var d = TryCreate(sync: false);
