@@ -75,6 +75,41 @@ public sealed class DeviceBuffer : IDisposable
     }
 }
 
+/// <summary>
+/// (Added for the GPU cull's verify mode, docs/renderer-native.md 5.6.) A host-visible, cached buffer the GPU copies into (transfer
+/// destination) and the CPU reads once the frame that wrote it has completed (<see cref="Completed"/>), never waiting for it.
+/// </summary>
+public sealed unsafe class ReadbackBuffer : IDisposable
+{
+    readonly VulkanDevice device;
+    readonly GpuBuffer buffer;
+
+    ReadbackBuffer(VulkanDevice device, GpuBuffer buffer)
+    {
+        this.device = device;
+        this.buffer = buffer;
+    }
+
+    public static ReadbackBuffer Create(GpuContext ctx, ulong size, string name) =>
+        new(ctx.Device, ctx.Device.Allocator.CreateBuffer(Math.Max(size, 4), BufferUsageFlags.TransferDstBit, MemoryKind.Readback, name));
+
+    public Buffer Handle => buffer.Buffer;
+    public ulong Size => buffer.Size;
+
+    /// <summary>Whether frame <paramref name="frame"/> (a <see cref="GpuFrame.Number"/>) has completed on the GPU, so what it copied can be read.</summary>
+    public static bool Completed(GpuContext ctx, long frame) => ctx.Device.Frames.CompletedFrame >= frame;
+
+    /// <summary>The bytes [<paramref name="offset"/>, +<paramref name="size"/>), made visible to the host first (invalidated when not coherent).</summary>
+    public ReadOnlySpan<byte> Read(ulong offset, ulong size)
+    {
+        if (offset + size > buffer.Size) throw new ArgumentOutOfRangeException(nameof(size));
+        device.Allocator.Invalidate(buffer.Allocation);
+        return new ReadOnlySpan<byte>((byte*)buffer.Mapped + offset, (int)size);
+    }
+
+    public void Dispose() => device.DeferFree(buffer);
+}
+
 /// <summary>A slice of host-visible per-frame memory, valid until the frame slot comes round again.</summary>
 public readonly unsafe struct Transient(Buffer handle, ulong offset, byte* pointer, ulong size)
 {

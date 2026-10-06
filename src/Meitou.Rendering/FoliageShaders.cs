@@ -272,6 +272,188 @@ static class FoliageShaders
     public static string GrassMotionVertexNative() => NativeShaders.Port(GrassMotionVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
     public static string GrassMotionFragmentNative() => NativeShaders.Port(GrassMotionFragment, NativeShaders.Map(GrassMap), GrassPushMembers);
 
+    // ------------------------------------------------------------------ the GPU cull (docs/renderer-native.md 5.3, step A2)
+    // Three kernels per view, recorded ahead of the frame (FoliageGpuCull): cull (per chunk of at most 256 instances of one group: the
+    // A1 tests in FoliageCull's operation order, a packed fade or -1 per instance, the visible count per chunk), scan (one workgroup:
+    // each chunk's output offset in chunk order, and each draw's instance count and first instance), compact (per chunk: the visible
+    // instances' matrices, fade in row 0 w, at the chunk's offset plus their rank in it, so the order is the CPU's). Every float operation
+    // of a decision is `precise` (no FMA contraction) and written out in the C#'s order: IEEE adds and multiplies are correctly rounded in
+    // Vulkan, so the decisions are the CPU's bit for bit; the square root of the fade is corrected to the correctly rounded one (CrSqrt).
+
+    /// <summary>The workgroup size and the largest chunk (instances of one group per workgroup).</summary>
+    public const int CullChunk = 256;
+
+    /// <summary>
+    /// <c>float CrSqrt(float x)</c>: the correctly rounded square root, as .NET's <c>MathF.Sqrt</c> (sqrtss) gives it. Vulkan does not require
+    /// <c>sqrt</c> to be correctly rounded; this takes the driver's result and moves it by an ulp while it is not: <c>r</c> is the correctly
+    /// rounded root of <c>x</c> exactly when <c>x</c> lies strictly between the squares of the midpoints next to <c>r</c> (a tie cannot occur).
+    /// The squares are compared exactly in 64-bit integers (<c>umulExtended</c>): x = X·2^F and a midpoint m·2^e with integer mantissas.
+    /// Zero, denormal, infinite and NaN inputs return the driver's value (a ground distance below 1e-19 is not drawn any differently).
+    /// </summary>
+    public const string CrSqrt = """
+        uvec2 CrSquare(uint a) { uint hi, lo; umulExtended(a, a, hi, lo); return uvec2(lo, hi); }
+        uvec2 CrShift(uint x, int k) { return k == 0 ? uvec2(x, 0u) : k < 32 ? uvec2(x << k, x >> (32 - k)) : uvec2(0u, x << (k - 32)); }
+        bool CrLess(uvec2 a, uvec2 b) { return a.y < b.y || (a.y == b.y && a.x < b.x); }
+        float CrSqrt(float x)
+        {
+            float r = sqrt(x);
+            uint xb = floatBitsToUint(x);
+            if (!(x > 0.0) || (xb >> 23) == 0u || (xb >> 23) >= 255u) return r;
+            uint X = (xb & 0x7FFFFFu) | 0x800000u;
+            int F = int(xb >> 23) - 150;
+            for (int step = 0; step < 4; step++)
+            {
+                uint rb = floatBitsToUint(r);
+                uint M = (rb & 0x7FFFFFu) | 0x800000u;
+                int E = int(rb >> 23) - 150;
+                int k = F - 2 * E + 2;   // x < ((2M + 1) 2^(E-1))^2  <=>  X 2^k < (2M + 1)^2
+                if (k < 0 || k > 38) return r;
+                if (!CrLess(CrShift(X, k), CrSquare(2u * M + 1u))) { r = uintBitsToFloat(rb + 1u); continue; }
+                bool power = M == 0x800000u;   // below a power of two the gap is half as wide
+                if (!CrLess(power ? CrSquare(4u * M - 1u) : CrSquare(2u * M - 1u), power ? CrShift(X, k + 2) : CrShift(X, k))) { r = uintBitsToFloat(rb - 1u); continue; }
+                return r;
+            }
+            return r;
+        }
+        """;
+
+    const string CullCommon = """
+        #version 450
+        layout(local_size_x = 256) in;
+        struct Instance { vec4 row0; vec4 row1; vec4 row2; vec4 row3; vec4 sphere; vec4 ground; };
+        struct Chunk { uint first; uint count; float range; float rangeSquared; float inverseBand; uint pad0; uint pad1; uint pad2; };
+        layout(push_constant) uniform Push { vec2 eye; uint planeCount; uint chunkCount; uint drawCount; float fullThreshold; } pc;
+        uint ChunkIndex() { return gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x; }
+        """;
+
+    /// <summary>Kernel 1: per chunk (one workgroup), each instance's packed fade (-1: not drawn) and the chunk's visible count.</summary>
+    public static readonly string CullCompute = CullCommon + CrSqrt + """
+        layout(std430, set = 0, binding = 0) readonly buffer View { vec4 planes[8]; vec4 lengths[2]; } view;
+        layout(std430, set = 0, binding = 1) readonly buffer Instances { Instance instances[]; };
+        layout(std430, set = 0, binding = 2) readonly buffer Chunks { Chunk chunks[]; };
+        layout(std430, set = 0, binding = 3) writeonly buffer Fades { float fades[]; };
+        layout(std430, set = 0, binding = 4) writeonly buffer Counts { uint counts[]; };
+        shared uint visibleCount;
+        void main()
+        {
+            uint c = ChunkIndex();
+            if (c >= pc.chunkCount) return;
+            uint i = gl_LocalInvocationID.x;
+            if (i == 0u) visibleCount = 0u;
+            barrier();
+            Chunk k = chunks[c];
+            float packed = -1.0;
+            if (i < k.count)
+            {
+                vec4 ground = instances[k.first + i].ground;
+                vec4 sphere = instances[k.first + i].sphere;
+                precise float dx = ground.x - pc.eye.x;
+                precise float dz = ground.y - pc.eye.y;
+                precise float d2 = dx * dx + dz * dz;
+                if (!(d2 >= k.rangeSquared))
+                {
+                    precise float w = clamp((k.range - CrSqrt(d2)) * k.inverseBand, 0.0, 1.0);
+                    bool visible = true;
+                    for (uint p = 0u; p < pc.planeCount; p++)
+                    {
+                        vec4 q = view.planes[p];
+                        precise float side = q.x * sphere.x + q.y * sphere.y + q.z * sphere.z + q.w;
+                        precise float limit = -sphere.w * view.lengths[p >> 2][p & 3u];
+                        if (side < limit) { visible = false; break; }
+                    }
+                    if (visible) packed = w >= pc.fullThreshold ? 2.0 : w;
+                }
+            }
+            fades[c * 256u + i] = packed;
+            if (packed >= 0.0) atomicAdd(visibleCount, 1u);
+            barrier();
+            if (i == 0u) counts[c] = visibleCount;
+        }
+        """;
+
+    /// <summary>Kernel 2: one workgroup. Each chunk's output offset (an exclusive prefix of the counts in chunk order; the chunks of a batch
+    /// are consecutive, so a batch's instances are too), the total at the end, and each draw's instance count and first instance.</summary>
+    public static readonly string ScanCompute = CullCommon + """
+        struct Draw { uint indexCount; uint chunkStart; uint chunkEnd; uint pad; };
+        struct Args { uint indexCount; uint instanceCount; uint firstIndex; int vertexOffset; uint firstInstance; };
+        layout(std430, set = 0, binding = 4) readonly buffer Counts { uint counts[]; };
+        layout(std430, set = 0, binding = 5) writeonly buffer Offsets { uint offsets[]; };
+        layout(std430, set = 0, binding = 6) readonly buffer Draws { Draw draws[]; };
+        layout(std430, set = 0, binding = 7) writeonly buffer ArgsBuffer { Args args[]; };
+        shared uint partial[256];
+        uint per;
+        uint OffsetOf(uint c)
+        {
+            if (c >= pc.chunkCount) return partial[255];
+            uint segment = c / per;
+            uint o = segment == 0u ? 0u : partial[segment - 1u];
+            for (uint j = segment * per; j < c; j++) o += counts[j];
+            return o;
+        }
+        void main()
+        {
+            uint t = gl_LocalInvocationID.x, n = pc.chunkCount;
+            per = max((n + 255u) / 256u, 1u);
+            uint begin = min(t * per, n), end = min(begin + per, n);
+            uint sum = 0u;
+            for (uint c = begin; c < end; c++) sum += counts[c];
+            partial[t] = sum;
+            barrier();
+            for (uint s = 1u; s < 256u; s <<= 1)
+            {
+                uint v = t >= s ? partial[t - s] : 0u;
+                barrier();
+                partial[t] += v;
+                barrier();
+            }
+            uint base = partial[t] - sum;
+            for (uint c = begin; c < end; c++) { offsets[c] = base; base += counts[c]; }
+            if (t == 255u) offsets[n] = partial[255];
+            for (uint d = t; d < pc.drawCount; d += 256u)
+            {
+                Draw draw = draws[d];
+                uint first = OffsetOf(draw.chunkStart);
+                args[d] = Args(draw.indexCount, OffsetOf(draw.chunkEnd) - first, 0u, 0, first);
+            }
+        }
+        """;
+
+    /// <summary>Kernel 3: per chunk, the visible instances' matrices (row 0 w = the packed fade) at the chunk's offset plus their rank.</summary>
+    public static readonly string CompactCompute = CullCommon + """
+        layout(std430, set = 0, binding = 1) readonly buffer Instances { Instance instances[]; };
+        layout(std430, set = 0, binding = 2) readonly buffer Chunks { Chunk chunks[]; };
+        layout(std430, set = 0, binding = 3) readonly buffer Fades { float fades[]; };
+        layout(std430, set = 0, binding = 5) readonly buffer Offsets { uint offsets[]; };
+        layout(std430, set = 0, binding = 8) writeonly buffer Rows { vec4 rows[]; };
+        shared uint rank[256];
+        void main()
+        {
+            uint c = ChunkIndex();
+            if (c >= pc.chunkCount) return;
+            uint i = gl_LocalInvocationID.x;
+            float f = fades[c * 256u + i];
+            uint visible = f >= 0.0 ? 1u : 0u;
+            rank[i] = visible;
+            barrier();
+            for (uint s = 1u; s < 256u; s <<= 1)
+            {
+                uint v = i >= s ? rank[i - s] : 0u;
+                barrier();
+                rank[i] += v;
+                barrier();
+            }
+            if (visible != 0u)
+            {
+                uint o = (offsets[c] + rank[i] - 1u) * 4u;
+                uint at = chunks[c].first + i;
+                rows[o] = vec4(instances[at].row0.xyz, f);
+                rows[o + 1u] = instances[at].row1;
+                rows[o + 2u] = instances[at].row2;
+                rows[o + 3u] = instances[at].row3;
+            }
+        }
+        """;
+
     static string Replace(string source, string pattern, string replacement, bool required)
     {
         var regex = new Regex(pattern);
