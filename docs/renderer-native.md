@@ -790,8 +790,11 @@ These change the picture on purpose, so they are not part of any parity step. Th
   docs/formats/foliage.md "Mesh sizes").
 - **LOD selection on the GPU** (objects, C): `MeshLod.Select` / `Blend` per instance in the cull kernel, with two outputs while blending,
   as the CPU emits them. This is parity-relevant (the LOD rule is the game's), so it follows the A1/A2 pattern.
-- **Impostors** (`impostors`): octahedral impostor atlases rendered per mesh at load, drawn beyond a distance as one quad per instance from
-  the same cull. Needs bindless (step O).
+- **Impostors** (`impostors`): hemi-octahedral impostor atlases (12 × 12 frames, BC3 albedo + BC5 normal + BC5 depth), baked per mesh
+  through `IGl` and cached in `%LOCALAPPDATA%\Meitou\impostors`. Drawn beyond the per-instance transition distance as one quad per
+  instance from the same cull, crossfaded with the mesh by complementary dither. Needs bindless (step O). The baker, format, cache,
+  sampling GLSL (`ImpostorShaders`) and the `--impostor-preview` check exist (from the code); wiring them into the foliage path and the
+  `Enhancement` switch is the foliage path's step. Details, measurements and the GLSL API are in [impostors.md](impostors.md).
 - **Hi-Z occlusion** (`occlusion`): last frame's depth pyramid reprojected, a two-phase cull. Conservative in theory but float-sensitive in
   practice, so it is a Meitou-mode switch.
 

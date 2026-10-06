@@ -19,6 +19,7 @@ System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureIn
 args = SmokeTest.Strip(args);
 if (args.Contains("--world")) return WorldApp.Run(args);
 if (args.Contains("--character")) return CharacterApp.Run(args);
+if (args.Contains("--impostor-preview") || args.Contains("--impostor-bake-all")) return ImpostorApp.Run(args);
 return ViewerApp.Run(args);
 
 sealed class ViewerOptions
