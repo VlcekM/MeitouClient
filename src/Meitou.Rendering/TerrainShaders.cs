@@ -226,7 +226,7 @@ static class TerrainShaders
 
             // A layer whose weight is exactly 0 at this pixel is not sampled: mixing in a weight of 0 leaves the value as it was
             // (x + 0 * (y - x) and x * 1 + y * 0 are both x). Most ground has no road, dirt, slope or cliff, so this skips most of
-            // the 14 layer samples per biome (docs/viewer.md, "Terrain shading cost").
+            // the 14 layer samples per biome (docs/formats/terrain.md, "In the viewer").
             Coord base = coord(uv * sB.xy), grass = coord(uv * sB.zw), slopeUv = coord(uv * sA.xy), dirt = coord(uv * sC.xy), road = coord(uv * sC.zw);
             Coord cliffX = coord(vec2(uv.y, vert) * sA.zw), cliffZ = coord(vec2(uv.x, vert) * sA.zw);
             float far = clamp(distance * fade.a - 0.3, 0.0, 1.0);
