@@ -11,11 +11,11 @@ namespace Meitou.Tests.Vulkan;
 /// <summary>The native renderer API (docs/renderer-native.md 2 and 3.2) next to VkGl: same pixels, same SPIR-V, its bookkeeping.</summary>
 public class GpuApiTests
 {
-    static VulkanDevice? TryCreate()
+    static VulkanDevice? TryCreate(bool sync = false)
     {
         try
         {
-            return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true });
+            return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = sync });
         }
         catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
         {
@@ -412,6 +412,83 @@ public class GpuApiTests
     }
 
     static byte[] MemoryMarshalBytes(uint[] values) => System.Runtime.InteropServices.MemoryMarshal.AsBytes(values.AsSpan()).ToArray();
+
+    /// <summary>
+    /// <see cref="GpuFrame.PreFrame"/> (docs/renderer-native.md 5.3 as built): a dispatch recorded into it after the frame's own commands, while a
+    /// native segment holds VkGl's pass open, runs before them: the frame's indirect draw and its copy, recorded earlier, read what it wrote.
+    /// The copy lands in a <see cref="ReadbackBuffer"/>, read once the frame has completed. Synchronisation validation is on.
+    /// </summary>
+    [Fact]
+    public unsafe void A_dispatch_recorded_into_PreFrame_runs_before_the_frames_own_commands()
+    {
+        using var d = TryCreate(sync: true);
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        using (var gl = new VkGl(d!))
+        {
+            var ctx = gl.Context;
+            using var source = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, 1, 1, Name: "pre-frame source"));
+            using var target = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, 16, 8, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "pre-frame target"));
+            using var args = DeviceBuffer.Create(ctx, 20, BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferSrc, "pre-frame args");
+            using var indices = DeviceBuffer.Create(ctx, 16, BufferUse.Index | BufferUse.TransferDst, "indices");
+            using var readback = ReadbackBuffer.Create(ctx, 20, "pre-frame readback");
+            using var compute = ctx.Shaders.Compute(ArgsCompute, "args");
+            using var draw = ctx.Shaders.Native(BindlessVertex, BindlessFragment, "bindless", [ctx.Bindless.Layout], 4);
+            var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
+                TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+            uint index = ctx.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, source.View(), source.Image));
+
+            gl.BeginFrame(16, 8);
+            var frame = ctx.Frame;
+            ctx.Uploads.Write(source, 0, 0, new Rect2D(new Offset2D(0, 0), new Extent2D(1, 1)), [40, 90, 160, 255]);
+            ctx.Uploads.Write(indices, 0, MemoryMarshalBytes([0u, 1u, 2u]));
+            // The frame's own commands first (in CPU order): an indirect draw from args, then a copy of args.
+            gl.BeginExternal();
+            var cmd = frame.Commands;
+            cmd.Invalidate();
+            var pipeline = ctx.Pipelines.Get(new GraphicsPipelineDesc(draw, VertexLayout.Empty, PrimitiveTopology.TriangleList,
+                new AttachmentFormats(Format.R8G8B8A8Unorm, Format.Undefined), BlendState.Off,
+                ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit, Silk.NET.Vulkan.PolygonMode.Fill, false, false, "bindless"));
+            cmd.BeginRendering(Target(target));
+            cmd.BindPipeline(pipeline);
+            FullTargetState(cmd, 16, 8);
+            cmd.BindSets(draw.Layout, 0, [ctx.Bindless.Set], []);
+            cmd.PushConstants(draw.Layout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, index);
+            cmd.BindIndexBuffer(indices.Binding(frame), IndexType.Uint32);
+            cmd.DrawIndexedIndirect(args.Handle, 0, 1);
+
+            // Later on the CPU, with that rendering still open: the dispatch that writes args, into the pre-frame list.
+            var pre = frame.PreFrame;
+            var cp = ctx.Pipelines.Get(new ComputePipelineDesc(compute, "args"));
+            pre.BindPipeline(cp);
+            var info = new DescriptorBufferInfo(args.Handle, 0, 20);
+            var write = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.StorageBuffer, PBufferInfo = &info };
+            pre.PushDescriptors(compute.Layout, 0, [write], PipelineBindPoint.Compute);
+            pre.PushConstants(compute.Layout, ShaderStageFlags.ComputeBit, 3u);
+            pre.Dispatch(1);
+            var after = new BarrierBatch();
+            after.Add(PipelineStageFlags2.ComputeShaderBit, AccessFlags2.ShaderStorageWriteBit, PipelineStageFlags2.DrawIndirectBit | PipelineStageFlags2.AllTransferBit,
+                AccessFlags2.IndirectCommandReadBit | AccessFlags2.TransferReadBit);
+            pre.Barrier(after);
+
+            cmd.EndRendering();
+            var full = new BarrierBatch();
+            full.Add(PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryWriteBit, PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit);
+            cmd.Barrier(full);
+            cmd.CopyBuffer(args.Handle, readback.Handle, new BufferCopy(0, 0, 20));
+            gl.EndExternal();
+            long number = frame.Number;
+            gl.EndFrame();
+            Assert.False(ReadbackBuffer.Completed(ctx, number + 1));
+            d!.Frames.WaitAll();
+            Assert.True(ReadbackBuffer.Completed(ctx, number));
+            var written = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(readback.Read(0, 20)).ToArray();
+            Assert.Equal([3u, 1u, 0u, 0u, 0u], written);
+            var pixels = ctx.ReadBack(target, 4);
+            for (int i = 0; i < pixels.Length; i += 4)
+                Assert.Equal((40, 90, 160, 255), (pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]));
+        }
+        ExpectClean(d!);
+    }
 
     [Fact]
     public void Buffer_arena_reuses_freed_ranges_after_the_frames_in_flight()

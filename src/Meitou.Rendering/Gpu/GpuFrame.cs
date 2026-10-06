@@ -29,6 +29,7 @@ public sealed unsafe class GpuFrame : IDisposable
         }
         Stats = new GpuStats();
         Commands = new CommandList(device, Stats);
+        PreFrame = new CommandList(device, Stats);
         Timestamps = new QueryArena(device);
         States = new ResourceStates();
     }
@@ -45,6 +46,15 @@ public sealed unsafe class GpuFrame : IDisposable
     public GpuStats Stats { get; }
     /// <summary>The command buffer the host submits ahead of this frame's own (uploads).</summary>
     internal CommandBuffer UploadCommands { get; private set; }
+    /// <summary>
+    /// (Added for GPU-driven foliage, docs/renderer-native.md 5.3 as built.) A command list recording into <see cref="UploadCommands"/>: the
+    /// buffer the host submits ahead of the frame's own, in the same submission, with a full barrier at its end (VkGl). Whatever is recorded
+    /// here, at any point of the frame's recording (inside a native segment or a host pass too), executes before every command of the frame's
+    /// own list, after the uploads recorded before it. For transfers and compute whose results the frame's passes read (a cull per view that
+    /// writes instance lists and indirect arguments): no rendering, and the caller places its own barriers between its commands (uploads
+    /// place transfer-to-transfer ones only). Valid while the frame is open; render thread only.
+    /// </summary>
+    public CommandList PreFrame { get; }
 
     /// <summary>Called by the host after <c>FrameRing.BeginFrame</c>: the slot's fence has passed, so its memory, pools and queries are free.</summary>
     public void Begin(CommandBuffer commands, CommandBuffer uploads)
@@ -54,6 +64,8 @@ public sealed unsafe class GpuFrame : IDisposable
         Commands.Handle = commands;
         Commands.Invalidate();
         UploadCommands = uploads;
+        PreFrame.Handle = uploads;
+        PreFrame.Invalidate();
         constants[Slot].Reset();
         foreach (var p in pools[Slot]) device.Vk.ResetDescriptorPool(device.Device, p, 0);
         Timestamps.Begin(Slot, Number);

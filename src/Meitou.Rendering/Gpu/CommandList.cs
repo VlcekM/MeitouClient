@@ -55,6 +55,7 @@ public sealed unsafe class CommandList
     readonly delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void> cmdPushConstants;
     readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void> cmdDraw;
     readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void> cmdDrawIndexed;
+    readonly delegate* unmanaged<CommandBuffer, Buffer, ulong, uint, uint, void> cmdDrawIndexedIndirect;
 
     internal CommandList(VulkanDevice device, GpuStats stats)
     {
@@ -79,6 +80,7 @@ public sealed unsafe class CommandList
         cmdPushConstants = (delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void>)Proc("vkCmdPushConstants");
         cmdDraw = (delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void>)Proc("vkCmdDraw");
         cmdDrawIndexed = (delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void>)Proc("vkCmdDrawIndexed");
+        cmdDrawIndexedIndirect = (delegate* unmanaged<CommandBuffer, Buffer, ulong, uint, uint, void>)Proc("vkCmdDrawIndexedIndirect");
     }
 
     /// <summary>A device-level command entry point (all of them core in Vulkan 1.3, which the device requires).</summary>
@@ -282,7 +284,7 @@ public sealed unsafe class CommandList
     public void DrawIndexedIndirect(Buffer args, ulong offset, uint count, uint stride = 20)
     {
         Log?.Indirect(args, offset, count, stride);
-        vk.CmdDrawIndexedIndirect(Handle, args, offset, count, stride);
+        cmdDrawIndexedIndirect(Handle, args, offset, count, stride);
         Stats.Draws++;
         Stats.IndirectDraws++;
     }
