@@ -483,8 +483,9 @@ static partial class WorldApp
                 var lines = keyItems.Select(item => KeyState(item.Split(' ')[0]) is { } state ? item.PadRight(width) + state : item).ToList();
                 overlay.Draw(size.X, size.Y, "Keys   (F10 hides this)", lines, panelsBottom);
             }
-            if (!shot) panel?.Draw(size.X, size.Y);
             if (!shot && overlay is not null) profiler?.Draw(overlay, size.X, size.Y);
+            // Last, over the statistics and the profiler: the settings sit at the top left.
+            if (!shot) panel?.Draw(size.X, size.Y);
             StageClock.Phase("overlays");
             display.Present();
             profiler?.EndFrame();

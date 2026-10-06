@@ -26,13 +26,16 @@ public sealed record Slider(string Label, float Min, float Max, Func<float> Get,
 }
 
 /// <summary>
-/// A panel of sliders drawn with the <see cref="DebugOverlay"/> in the top-right corner. Drag a slider with the left mouse
+/// A panel of sliders drawn with the <see cref="DebugOverlay"/> in two columns in the top-left corner, over the other panels. Drag a slider with the left mouse
 /// button; while the pointer is on the panel, the camera ignores the mouse. The button at the bottom puts every slider back to
 /// the value it had when the panel was made (before a saved config or a drag changed it).
 /// </summary>
 public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyList<Slider> sliders)
 {
-    const float Margin = 16, Pad = 12, TrackWidth = 220, TrackHeight = 6, RowGap = 10;
+    const float Margin = 16, Pad = 12, TrackHeight = 6, RowGap = 10, ColumnGap = 28, MinTrackWidth = 220;
+    const int Columns = 2;
+    /// <summary>Nearly opaque: the panel is drawn over the statistics and the profiler.</summary>
+    static readonly Vector4 Background = new(0.05f, 0.05f, 0.06f, 0.95f);
     const string ResetLabel = "Reset to defaults";
 
     readonly float[] defaults = sliders.Select(s => s.Get()).ToArray();
@@ -47,28 +50,31 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
         for (int i = 0; i < sliders.Count; i++) sliders[i].Set(defaults[i]);
     }
 
-    float ButtonTop => panelY0 + Pad + overlay.LineHeight * 1.5f + sliders.Count * rowHeight;
+    float ButtonTop => panelY0 + Pad + overlay.LineHeight * 1.5f + Rows * rowHeight;
     float ButtonBottom => ButtonTop + overlay.LineHeight + 8;
 
     int dragging = -1;
-    float panelX0, panelY0, panelX1, panelY1, trackX0;
+    float panelX0, panelY0, panelX1, panelY1, columnWidth;
     float rowHeight => overlay.LineHeight + TrackHeight + RowGap;
 
     float ButtonWidth => ResetLabel.Length * overlay.CharWidth + 16;
 
-    float LabelWidth => sliders.Max(s => s.Label.Length + 12) * overlay.CharWidth;
+    float LabelWidth => sliders.Max(s => s.Label.Length + 9) * overlay.CharWidth;
+
+    /// <summary>The sliders run down the first column, then the second.</summary>
+    int Rows => (sliders.Count + Columns - 1) / Columns;
 
     void Layout(int width)
     {
-        float w = Math.Max(LabelWidth, TrackWidth) + 2 * Pad;
-        panelX1 = width - Margin;
-        panelX0 = panelX1 - w;
+        columnWidth = Math.Max(LabelWidth, MinTrackWidth);
+        panelX0 = Margin;
+        panelX1 = panelX0 + 2 * Pad + Columns * columnWidth + (Columns - 1) * ColumnGap;
         panelY0 = Margin;
-        panelY1 = panelY0 + Pad + overlay.LineHeight * 1.5f + sliders.Count * rowHeight + overlay.LineHeight + 8 + Pad;
-        trackX0 = panelX0 + Pad;
+        panelY1 = panelY0 + Pad + overlay.LineHeight * 1.5f + Rows * rowHeight + overlay.LineHeight + 8 + Pad;
     }
 
-    float TrackTop(int i) => panelY0 + Pad + overlay.LineHeight * 1.5f + i * rowHeight + overlay.LineHeight + 2;
+    float TrackX(int i) => panelX0 + Pad + i / Rows * (columnWidth + ColumnGap);
+    float TrackTop(int i) => panelY0 + Pad + overlay.LineHeight * 1.5f + i % Rows * rowHeight + overlay.LineHeight + 2;
 
     /// <summary>Whether a point (window pixels) is on the panel.</summary>
     public bool Contains(Vector2 p) => Visible && p.X >= panelX0 && p.X <= panelX1 && p.Y >= panelY0 && p.Y <= panelY1;
@@ -77,15 +83,15 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     public bool MouseDown(Vector2 p)
     {
         if (!Contains(p)) return false;
-        if (p.Y >= ButtonTop && p.Y <= ButtonBottom && p.X >= trackX0 && p.X <= trackX0 + ButtonWidth)
+        if (p.Y >= ButtonTop && p.Y <= ButtonBottom && p.X >= panelX0 + Pad && p.X <= panelX0 + Pad + ButtonWidth)
         {
             Reset();
             return true;
         }
         for (int i = 0; i < sliders.Count; i++)
         {
-            float top = TrackTop(i);
-            if (p.Y >= top - overlay.LineHeight - 2 && p.Y <= top + TrackHeight + RowGap * 0.5f)
+            float top = TrackTop(i), x = TrackX(i);
+            if (p.Y >= top - overlay.LineHeight - 2 && p.Y <= top + TrackHeight + RowGap * 0.5f && p.X >= x - Pad / 2 && p.X <= x + columnWidth + Pad / 2)
             {
                 dragging = i;
                 MouseMove(p);
@@ -99,7 +105,7 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     public bool MouseMove(Vector2 p)
     {
         if (dragging < 0) return false;
-        sliders[dragging].SetFraction((p.X - trackX0) / TrackWidth);
+        sliders[dragging].SetFraction((p.X - TrackX(dragging)) / columnWidth);
         return true;
     }
 
@@ -116,23 +122,23 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
         if (!Visible) return;
         Layout(width);
         Vector4 track = new(0.3f, 0.3f, 0.32f, 1), fill = new(0.85f, 0.65f, 0.35f, 1), dim = new(0.7f, 0.7f, 0.68f, 1);
-        overlay.Rect(panelX0, panelY0, panelX1, panelY1, DebugOverlay.PanelColour);
+        overlay.Rect(panelX0, panelY0, panelX1, panelY1, Background);
         overlay.Text(title, panelX0 + Pad, panelY0 + Pad, DebugOverlay.TextColour);
         for (int i = 0; i < sliders.Count; i++)
         {
             var s = sliders[i];
-            float top = TrackTop(i);
-            overlay.Text(s.Label, trackX0, top - overlay.LineHeight - 2, i == dragging ? fill : DebugOverlay.TextColour);
+            float top = TrackTop(i), x = TrackX(i);
+            overlay.Text(s.Label, x, top - overlay.LineHeight - 2, i == dragging ? fill : DebugOverlay.TextColour);
             string value = s.Display;
-            overlay.Text(value, panelX1 - Pad - value.Length * overlay.CharWidth, top - overlay.LineHeight - 2, dim);
+            overlay.Text(value, x + columnWidth - value.Length * overlay.CharWidth, top - overlay.LineHeight - 2, dim);
             float t = s.Fraction;
-            overlay.Rect(trackX0, top, trackX0 + TrackWidth, top + TrackHeight, track);
-            overlay.Rect(trackX0, top, trackX0 + TrackWidth * t, top + TrackHeight, fill);
-            float knob = trackX0 + TrackWidth * t;
+            overlay.Rect(x, top, x + columnWidth, top + TrackHeight, track);
+            overlay.Rect(x, top, x + columnWidth * t, top + TrackHeight, fill);
+            float knob = x + columnWidth * t;
             overlay.Rect(knob - 3, top - 4, knob + 3, top + TrackHeight + 4, DebugOverlay.TextColour);
         }
-        overlay.Rect(trackX0, ButtonTop, trackX0 + ButtonWidth, ButtonBottom, track);
-        overlay.Text(ResetLabel, trackX0 + 8, ButtonTop + 4, DebugOverlay.TextColour);
+        overlay.Rect(panelX0 + Pad, ButtonTop, panelX0 + Pad + ButtonWidth, ButtonBottom, track);
+        overlay.Text(ResetLabel, panelX0 + Pad + 8, ButtonTop + 4, DebugOverlay.TextColour);
         overlay.Flush(width, height);
     }
 }
