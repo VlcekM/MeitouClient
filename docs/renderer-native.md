@@ -1450,6 +1450,49 @@ Three commits. These are few draws, so the goal was fewer `IGl` calls for phase 
   run (`--world --town "The Hub" --quit-after 6`, sync validation, with a temporary patch that switched the GPU chart and the overlay on and printed the timers;
   not committed) ran 400 frames, the native frame timer gave samples (2 to 8 ms) next to the profiler's GPU frames, 0 validation errors. `OverlayTests` and
   `SeamTests` share an xUnit collection because `StageClock` is static (the profiler test failed once when both ran in parallel).
+**Wave 3, agent E (post-processing + upscalers), step P (2026-10-06, written on master `223182a`, rebased onto `d860e8e` and gated again there).** Files:
+`PostProcess.cs` and the two vendor upscaler files (`FsrUpscaler.cs`, `DlssUpscaler.cs`); the shader text (`PostProcessShaders.cs`, `UpscaleShaders.cs`) is untouched, so the
+SPIR-V is byte-identical (the existing identity test covers all nine programs).
+
+- *What is native.* Every draw of the chain: the SSAO draw and its two blur draws, the velocity pass (motion, and in the vendor path the depth and reactive
+  targets), the TAA resolve, the luminance and adaptation passes, the composite, FXAA and the heat haze. Nine `LegacyProgram`s are made in the constructor
+  (`SsaoPass`, `BlurPass`, ... `TaaPass`: one small class each with the sampler and uniform handles resolved once); the nine GL programs, the string-keyed
+  `uniforms` dictionary and the empty vertex array are gone. A pass is: GL binds the target framebuffer and viewport (`Pass()`, as before), the uniforms
+  and `Bind(program, slot, glTexture)` (`interop.Sampled`) are set, then `Fullscreen(program)`: `BeginNativeInPass`, `CurrentTargets`, `CurrentState`,
+  `state.Record`, pipeline, `Flush`, `Draw(3)`, `EndNative`. The textures are no longer bound on GL texture units (14 binds and 51 uniform calls a frame
+  fewer, from the pass meter's `gltex` and `gluni` columns); `Sampled` is called exactly where the GL code bound the unit (after `GenerateMipmap` for the
+  luminance, after the LOD-bias reset for the heat haze), since the view and sampler it returns depend on both.
+- *Hosts and guests (4.5).* The scene targets stay GL objects (made through `IGl`, bound as framebuffers by `Begin`/`BeginFarSlice`/`BeginNearSlice`): every
+  scene renderer still draws into them through `CurrentTargets`. The velocity pass is still a host on VkGl: the segment of the velocity draw ends, then
+  `Pass(motion)`, depth test and blending off, `ColorMask(R, G)`, `ObjectMotion` (the foliage's `DrawGrassMotion`, which takes the mask and state from
+  `CurrentState()` and keeps the host's rendering instance open through `BeginNativeInPass`), then the mask is restored. That sequence is unchanged, and foliage
+  step O (master `d860e8e`) runs inside it with no change on either side. `ITextureLodBias` is set in `Begin` and reset in `RunHeatHaze` at the same points.
+- *Vendor upscalers.* `FsrUpscaler` and `DlssUpscaler` record inside `BeginNative`/`EndNative` instead of `BeginExternal`/`EndExternal`: the same barriers, plus a label
+  and the cache invalidation of 4.1 that `EndExternal` lacks. They still read the images through `VkGl.ImageOf` (the image, a level-0 view and the real usage
+  flags): the borrowed `Texture` from `interop.Texture` carries no usage flags, and Streamline's resource description wants them. Moving the inputs to
+  natively owned `Texture`s is phase-8 work together with the render targets themselves (they are GL objects until the scene renderers are native).
+- *Gate (Release; lighter gate; against master `d860e8e` built unchanged; scratch in `C:\Temp\agent-E`).* Build 0 warnings; `dotnet test -c Release` 395 passed, 0 skipped;
+  `--faithful all` ten views max 0 (mean 0.0000), baseline rendered once; Meitou default ten views max 0 (SSAO, TAA and exposure in the chain); at the Hub 13:00 and the
+  forest 02:00, max 0 for `--faithful all --heat-haze 1` (FXAA then haze), `--heat-haze 1` (TAA then haze), `--faithful all --upscaler taa`, and `--upscaler taa
+  --render-scale 0.5 --heat-haze 1` (render size half the display size); `MEITOU_VK_VALIDATION=sync`: 0 errors for the Hub (Meitou, haze), the forest (Faithful, FXAA, haze), and
+  the Hub with FSR and with DLSS. **FSR** (FidelityFX 1.1.4 from `MEITOU_FFX_PATH`, quality, 0.667) is not bit-reproducible: old build against new differs by max 10 and
+  mean 0.087 (Hub), new against new by max 7 and mean 0.087, so the difference is the run-to-run scatter (the frame time it is given moves with the wall clock). **DLSS**
+  (Streamline from `MEITOU_STREAMLINE_PATH`, quality) came out identical (max 0) between old and new, and between two runs of new. Both run and look as before. The draw log was
+  not needed (no difference to explain).
+- **Measured (Hub still camera `--town "The Hub" --distance 3000 --pitch 10 --time 13 --fly-benchmark 300 --fly-speed 0`, three interleaved runs per build, medians, Release; the
+  machine was shared and runs of one build scatter by 20 to 70 percent; two sets, on master `223182a` and on `d860e8e`).** Stage `post`, CPU, ms:
+
+  | | Meitou (SSAO, TAA, exposure, composite) | | Faithful (exposure, composite, FXAA) | |
+  | --- | ---: | ---: | ---: | ---: |
+  | | before | after | before | after |
+  | set 1 (`223182a`) | 0.35 | 0.37 | 0.10 | 0.11 |
+  | set 2 (`d860e8e`) | 0.42 | 0.35 | 0.19 | 0.13 |
+
+  Honest reading: **no CPU saving that the measurement can see.** The pass meter (`MEITOU_PASS_STATS=1`, one run each) has the `post` row at 0.22 ms CPU before and after, with
+  the same draws in it (96, 81 of them the grass-motion guest's); the GL state and uniform calls leave (51 `glUniform` and 14 texture binds a frame) and VkGl's draw preparation
+  (0.07 ms) goes with them, and the native segments take their place at about the same cost. That is what 7.1 predicted for a few full-screen draws: a segment's fixed cost
+  is about the translator's per-draw state work, so the port pays back as phase 8 deleting the GL calls and the programs, not as milliseconds. GPU time was not
+  measured separately (the same SPIR-V, pipeline state and targets; the `post cost gpu` rows of the runs above are inside the run-to-run scatter).
 
 After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the
@@ -1561,6 +1604,12 @@ framebuffer creation, clears, a blit and calls to its guests (`ReflectionPass`) 
 Avoid in the per-draw loop: dictionary lookups, LINQ, `CurrentTargets` / `CurrentState`, `Flush` when nothing was bound, a
 `BindVertexBuffers` per instance row. Measure with a per-call stopwatch switch like `MEITOU_MESH_TIMING` (`=2` adds the warm repeat, 7.1): a single port's
 first call per frame is dominated by cold code and data, not by the API's per-draw cost.
+
+Added by the post-processing port (7.1, `PostProcess`): a **chain of full-screen draws into different targets** is one `BeginNativeInPass` segment per draw, with the GL side keeping
+only `BindFramebuffer` and `Viewport` (that is what `CurrentTargets` reads, and what a guest in the same pass needs). Textures need no GL binds at all: `interop.Sampled(texture, program.SamplerInfo(slot))`
+returns what VkGl would bind, but resolve it at the point where the GL code bound the unit (after `GenerateMipmap`, after a LOD-bias change), because the levels and the bias are baked
+into the view and sampler. A sampler uniform set with `glUniform1i` has no native counterpart (the slot is the binding), so those calls just go. Such a port is not a saving:
+a handful of draws a frame cost the same through a segment as through the translator (7.1, agent E), so do it for the phase-8 deletion and check the pixels, not the milliseconds.
 
 **Step O (from the foliage, 7.1).** On top of the step-P pattern:
 
@@ -1680,7 +1729,7 @@ here: calls on an `IGl` (`gl.` or `Gl.` followed by an `IGl` member name), exclu
 *Numbers in brackets: agent F's files after step P (2026-10-06, counted as `gl.` / `Gl.` calls in the file, comments excluded; the total above is not recomputed).*
 
 Besides `IGl`, code uses **VkGl's own public surface**: `VulkanPresenter.cs` (`BeginFrame`, `EndFrame`, `Backbuffer`, `RecordInFrame`),
-`FsrUpscaler.cs` and `DlssUpscaler.cs` (`ImageOf`, `BeginExternal`, `EndExternal`, `Device`), `VulkanDisplay.cs` (constructs it), and the
+`FsrUpscaler.cs` and `DlssUpscaler.cs` (`ImageOf`, `BeginNative`, `EndNative`, `Device`; they used `BeginExternal` and `EndExternal` until wave 3 agent E), `VulkanDisplay.cs` (constructs it), and the
 game's and viewer's frame loop. **Tests**: `tests/Meitou.Tests/Vulkan/VkGlTests.cs` makes 129 `IGl` calls. The `Vulkan` test folder has 30
 tests in all (`CoreTests`, `ShaderCompilerTests`, `ShaderInterfaceTests`, `ShaderReflectionTests`, `VkGlTests`).
 
