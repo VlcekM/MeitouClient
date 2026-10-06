@@ -549,6 +549,12 @@ public interface IGlInterop
     /// boundProgram = null, pushEpoch++ (forces set 0 to be re-pushed and set 1 rebound), passActive = false. Vertex and index buffers
     /// are rebound at every VkGl draw already.
     void EndNative(CommandList cmd);
+    /// (Added in the pilot's step 1.) A native segment inside VkGl's own rendering instance: the pass a VkGl draw would draw into now
+    /// is kept open (or begun exactly as a VkGl draw begins it) and stays open after EndNative. No EndRendering, no barriers, no
+    /// BeginRendering of the caller's own: the native code records draws only (no copies, dispatches or barriers). EndNative then
+    /// invalidates the same caches but places no barrier and keeps the pass. The IGl guard applies as for BeginNative (also on the draw
+    /// path, which does not go through the command-buffer getter while a pass is open).
+    CommandList BeginNativeInPass(string label);
     /// Records a command that does not disturb a render pass (a timestamp, a debug label) into the frame without ending VkGl's pass.
     void Interleave(Action<CommandList> record);
 
@@ -929,7 +935,10 @@ the base build (master `27be7c2`, itself identical in two runs), and validation 
   shadow-depth and 15 colour draws of one instanced mesh program (84-byte vertices, placements at locations 7 to 10), whose batch
   contents and order follow streaming; the pictures are identical. Compare a port's logs per program (its own lines are stable).
 - Additive exports for ports: `CurrentState()` (GL's fixed-function state as VkGl would apply it, with `DrawState.Pipeline` and
-  `DrawState.Record`) and `VertexArray(vao)` (a VAO's attributes and element buffer).
+  `DrawState.Record`) and `VertexArray(vao)` (a VAO's attributes and element buffer). Since the pilot's step 1, `VertexArray` returns the
+  **same object** while neither the VAO (a version bumped by every attribute, divisor and element-buffer change) nor the storage of any
+  buffer it names (deleted, redefined, renamed version, size) has changed; a port keeps whatever it derived from the export for as long as
+  the result is reference-equal to the last one.
 - Step 7 (pilot): done. `TerrainRenderer.DrawMeshes` records natively in colour and depth: one native segment per call
   (`DrawGroups`: `BeginNative`, `CurrentTargets`, `CurrentState`, the placements written to the frame's constants, then per group the
   VAO's attributes plus the four placement rows at locations 7 to 10, pipeline, dynamic state with the mirrored winding, vertices,
@@ -962,6 +971,57 @@ the base build (master `27be7c2`, itself identical in two runs), and validation 
   segment (globals are read at a program's first flush in a segment and after a `Bind`; a GL state change inside a native segment is
   not seen until then), `VertexLayout` returns the previous object when the inputs are equal, frame-global uniforms are written without
   boxing, `FrameGlobals.ApplyCount` lets an owner compute shared getter values once per `ApplyGlobals` (the sky's 13 atmosphere values).
+- **Pilot step 1, the hot path (`ea1f20d`, 2026-10-06).** What changed: the segment joins VkGl's open rendering instance
+  (`BeginNativeInPass`, 4.2: no `EndPass`, no two full barriers, no `BeginRendering` of ours and no restart of VkGl's pass after it);
+  `VertexArray` returns the same export while nothing changed, and each mesh keeps its pipeline, own vertex buffers and indices per
+  program (`NativeMesh`, revalidated by one reference compare and one segment number per draw); the placements of all groups go into the
+  frame's constants with one copy and are bound once per segment at locations 7 to 10, each draw reaching its group by `firstInstance`;
+  viewport, scissor, depth, bias and culling once per segment, the front face only when a mirrored mesh flips it (`CommandList.SetFrontFace`,
+  new); `Flush` once per segment; the sampler lookups of `BindUnitSamplers` resolved once per `FrameGlobals.Version`; `LegacyProgram`'s
+  dynamic set found through a two-entry most-recent cache instead of a dictionary; the guard now also covers VkGl's draw path (with a pass
+  open the draw did not go through the guarded getter). The draw log takes a binding's stride and rate from the pipeline bound at the draw
+  (as Vulkan does), so binding before the pipeline logs correctly. Gate: tests 384 passed (new: `SeamTests.An_in_pass_native_segment_...`,
+  sync validation on); `--faithful all` ten views 0 px against master `63181e5` (master itself identical in two runs; step 1 run three
+  times, all 0, the rock view included); Meitou default ten views 0 px; validation `=1` and `=sync` 0 errors on the ten views; draw-log
+  diff against master at forest 13:00 and Hub 2:00: the terrain-mesh lines identical (forest: 1 of 979 draws differs, the known noisy
+  84-byte-vertex program; Hub: identical).
+- **Pilot cost after step 1 (Measured: forest still camera, `--fly-benchmark 300 --fly-speed 0 --faithful all`, three interleaved runs per
+  build, medians, Release; 1 colour and 1 depth call per frame, 17 and 27 draws per call, 574 and 5,985 placements).**
+
+  | | before: VkGl (`954326a`) | step P (master `63181e5`) | step 1 (`ea1f20d`) |
+  | --- | ---: | ---: | ---: |
+  | colour, µs per call | 73.3 | 104.0 | 103.1 |
+  | depth, µs per call | 245.1 | 404.4 | 356.4 |
+  | colour, µs per call, warm (`MEITOU_MESH_TIMING=2`) | 46.3 | — | 32.4 |
+  | depth, µs per call, warm | 213.6 | — | 202.9 |
+  | render thread, cpu-only p50 (ms) | 2.8 | 2.9 | 2.7 |
+  | stage `terrain` mean (ms) | 0.37 | 0.33 | 0.34 |
+  | stage shadow casters `terrain` mean (ms) | 0.39 | 0.34 | 0.32 |
+
+  `MEITOU_MESH_TIMING=2` calls `DrawMeshes` a second time at once and times that one alone (diagnostic only; its pictures are not for
+  comparison). In the warm runs the first call measured colour 68.9 / 94.2 µs and depth 243.9 / 352.3 µs (VkGl / step 1). Grouping and the
+  placements' copy (`GroupMeshes`, shared by both paths) is ~28 µs of a colour call and ~215 µs of a depth call (Observed, stopwatch per
+  phase).
+- **Cold against warm (Observed, stopwatch per phase in instrumented builds, not committed).** Per draw, step 1 records in ~0.6 µs in colour
+  and ~2.4 µs in depth on the first call of a frame (depth: mostly data misses on 27 meshes' state), VkGl in ~2.0 µs. The fixed part of the
+  first call (uniform writes ~30 µs, `BindUnitSamplers` ~22 µs, `Flush` 9 µs in colour, 42 µs in depth) is first-touch cost: run a second
+  time at once, the whole native call is cheaper than VkGl's (table). VkGl's code stays hot because every unported renderer runs it each
+  frame; the pilot's code runs once per frame per kind. Ruled out as causes: the GC (`DOTNET_gcServer=0`: no change), W^X
+  (`DOTNET_EnableWriteXorExecute=0`: no change), draining write-combined memory (a barrier after the copy: 0.24 µs), a slow context (the
+  same small loop repeated runs at 0.094 / 0.022 µs). Expectation (not measured): the gap closes as wave 3 moves more renderers onto the
+  same native code (`LegacyProgram.Flush`, `CommandList`), which then stays hot.
+- **Result.** Per call, the pilot is still dearer than VkGl when cold (colour +41 %, depth +45 %), cheaper when warm (colour −30 %,
+  depth −5 %); per frame it is not worse (cpu-only p50 2.7 against 2.8 ms; the stages that contain the calls are cheaper, since the pass
+  restart and barriers VkGl paid after a step-P segment are gone). Per draw, well under 1 µs in colour; in depth the cold per-draw
+  cost is not.
+- **Step O not done (stopped at step 1).** Three reasons. (1) The terrain fragment program samples `usampler2D uCells` (integer blend
+  cells) and `BindlessTable` has only float arrays (`textures2D`, `textures2DArray`, `texturesCube`, `shadowTextures`): the same maths
+  needs an integer array first. (2) `BindlessTable.Register` makes an index valid from the next frame that begins, while these textures are
+  GL textures found at draw time whose view and sampler VkGl recreates (mip streaming, the LOD bias set by post-processing): a fresh
+  index would lag one frame behind what GL binds, and with TAA history a one-frame difference is not pixel-identical. (3) All draws of a
+  call share one material, so bindless indices and push constants carry nothing per draw here; set 0 is already pushed once per
+  segment (~7 µs colour, ~3 µs depth warm). Step O would add risk for no saving on this renderer. Steward additions for wave 3b: an
+  integer-sampler bindless array, and a same-frame registration (an index usable in the frame it is registered in).
 - Step 8: done. Every renderer constructor (and factory) takes the `GpuContext` after the `IGl`: `TerrainRenderer`, `TerrainTextures`,
   `TerrainShadowMap`, `SkyRenderer`, `PostProcess`, `ReflectionPass`, `WaterRenderer`, `WorldObjectRenderer`, `FoliageRenderer`,
   `ShadowPass`, `DebugOverlay`, `FrameProfiler`, the viewer's `Renderer` and `CharacterRenderer`; each keeps it as `Gpu` (the
@@ -1033,6 +1093,29 @@ Each agent owns its files completely: it may edit them, and nobody else may. Cal
 3. Split each draw method into `Prepare` and `Record` (6.2).
 4. Draw-log diff: the native log must equal the reference (same programs, the same pipeline state, dynamic state, the same texture and buffer
    handles, the same default-block bytes, the same counts, in the same order). Then the gate.
+
+**The hot-path pattern (from the pilot, `TerrainRenderer.DrawGroups` after step 1; costs in 7.1).** Step P of a renderer that draws
+into a pass VkGl has open:
+
+1. Before the segment, on the GL side as the GL version did: `Apply`-style uniform writes (`LegacyProgram.Set*`, `ApplyGlobals()`),
+   sampler binds (`Bind(slot, interop.Sampled(...))`; resolve slot lookups once per `FrameGlobals.Version`, not per call). Per-frame
+   instance data: one `ctx.Frame.Constants.Allocate` and one copy for all draws of the call.
+2. `var cmd = interop.BeginNativeInPass(label)`; `var t = interop.CurrentTargets()`; `var s = interop.CurrentState()`. Use `BeginNative`
+   (and your own `BeginRendering` / `EndRendering`) only when the segment needs barriers, copies, dispatches or another target.
+3. Once per segment: `cmd.SetViewport(t.Viewport)`, `cmd.SetScissor(t.Scissor)`, `cmd.SetRaster(cull, front)`,
+   `cmd.SetDepth(s.DepthTest, s.DepthWrite, s.Compare)`, `cmd.SetDepthBias(...)`, `program.Flush(cmd)`, and the shared instance buffer
+   with `cmd.BindVertexBuffers(firstLocation, rows)`.
+4. Per draw, only what differs, from a per-mesh cache built on first use: `var va = interop.VertexArray(vao)`; if
+   `!ReferenceEquals(cached.Source, va)` or the segment's pipeline state changed (compare one number you bump when the
+   `(program, t.Formats, s.Blend, s.ColourMask, s.Polygon, s.AlphaToCoverage, s.DepthClamp)` record changes), rebuild: `ctx.Pipelines.Get(
+   s.Pipeline(program.Program, program.VertexLayout(attributes), topology, t.Formats, label))`, `program.VertexBuffers(attributes, 0, own)`,
+   `va.Elements`. Then `cmd.BindPipeline` (filtered when equal), `cmd.SetFrontFace` only when it flips, `cmd.BindVertexBuffers(0, own)`,
+   `cmd.BindIndexBuffer`, `cmd.DrawIndexed(count, instances, 0, 0, firstInstance)` with `firstInstance` reaching this draw's rows.
+5. `interop.EndNative(cmd)`, then restore on `IGl` whatever GL state the GL version left behind (culling, winding, vertex array).
+
+Avoid in the per-draw loop: dictionary lookups, LINQ, `CurrentTargets` / `CurrentState`, `Flush` when nothing was bound, a
+`BindVertexBuffers` per instance row. Measure with a per-call stopwatch switch like `MEITOU_MESH_TIMING` (`=2` adds the warm repeat, 7.1): a single port's
+first call per frame is dominated by cold code and data, not by the API's per-draw cost.
 
 ### 7.6 The draw log
 
