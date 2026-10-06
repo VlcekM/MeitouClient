@@ -16,11 +16,37 @@ public static class RenderJobs
     static RenderJobs()
     {
         for (int i = 0; i < workers; i++)
-            new Thread(Worker) { IsBackground = true, Priority = ThreadPriority.AboveNormal, Name = $"meitou-render-job-{i}" }.Start();
+        {
+            int index = i + 1;
+            new Thread(() => Worker(index)) { IsBackground = true, Priority = ThreadPriority.AboveNormal, Name = $"meitou-render-job-{i}" }.Start();
+        }
     }
 
-    static void Worker()
+    /// <summary>The threads a loop runs on: the job threads and the calling (render) thread.</summary>
+    public static int Threads => workers + 1;
+
+    /// <summary>This thread's index among <see cref="Threads"/>: 0 for the render thread (and any other thread), 1 .. workers for the job threads.
+    /// Per-thread resources (command pools for secondaries, docs/renderer-native.md 6.3) are indexed by it.</summary>
+    public static int ThreadIndex => threadIndex;
+    [ThreadStatic] static int threadIndex;
+
+    /// <summary>True while this thread runs a recording job (<see cref="Recording"/>): what a job may not touch checks it
+    /// (<see cref="AssertNotInJob"/>), so a recording job that reaches for render-thread state fails at once instead of racing.</summary>
+    public static bool InJob => inJob;
+    [ThreadStatic] static bool inJob;
+
+    /// <summary>Marks the calling thread as running a recording job (or not).</summary>
+    internal static void SetInJob(bool value) => inJob = value;
+
+    /// <summary>Throws on a recording job's thread: Prepare-only state (the frame's constants, the bindless table, the GL mirror, the frame globals).</summary>
+    public static void AssertNotInJob()
     {
+        if (inJob) throw new InvalidOperationException("render-thread state used by a recording job (docs/renderer-native.md 6.3: Record reads only what Prepare made)");
+    }
+
+    static void Worker(int index)
+    {
+        threadIndex = index;
         while (true)
         {
             wake.Wait();

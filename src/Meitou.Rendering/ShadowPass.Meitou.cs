@@ -102,7 +102,7 @@ public sealed unsafe partial class ShadowPass
             gl.Viewport(x, y, (uint)s, (uint)s);
             gl.Scissor(x, y, (uint)s, (uint)s);
             if (drawing != count)   // only this tile: the others keep what they hold
-                host.ClearDepth(1f, new Silk.NET.Vulkan.Rect2D(new Silk.NET.Vulkan.Offset2D(x, y), new Silk.NET.Vulkan.Extent2D((uint)s, (uint)s)));
+                ClearTile(host, new Silk.NET.Vulkan.Rect2D(new Silk.NET.Vulkan.Offset2D(x, y), new Silk.NET.Vulkan.Extent2D((uint)s, (uint)s)));
             var bias = new Vector4(c.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 0);
             gl.BindBuffer(BufferTargetARB.UniformBuffer, casterUbo);
             gl.BufferSubData(BufferTargetARB.UniformBuffer, 0, 16, &bias);

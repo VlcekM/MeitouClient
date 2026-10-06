@@ -223,10 +223,13 @@ public sealed unsafe class ReflectionPass : IDisposable
         var cmd = interop.BeginNative("reflection");
         var target = interop.CurrentTargets();
         interop.BeginHostPass(cmd);
+        // Wave 4 (docs/renderer-native.md 6): the guests' segments are secondaries, recorded on the job threads when the pass ends.
+        bool secondaries = Recording.Secondaries;
         cmd.BeginRendering(new RenderingDesc(
             target.Colour with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(new ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1)) },
             target.Depth with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(depthStencil: new ClearDepthStencilValue(1f, 0)) },
-            target.Width, target.Height));
+            target.Width, target.Height), secondaries);
+        if (secondaries) Gpu.Frame.Parallel.Begin(cmd, target.Formats, ReflectionStage);
         Lap(4);
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
         sky.Draw(rotation * Perspective(camera.FieldOfView, aspect, 1, 1000), colours);
@@ -251,7 +254,7 @@ public sealed unsafe class ReflectionPass : IDisposable
         {
             float far = Math.Min(far0, MaxDistance);
             if (far <= near * 1.5f) continue;
-            if (!first) cmd.ClearDepth(1f, new Rect2D(new Offset2D(0, 0), new Extent2D((uint)target.Width, (uint)target.Height)));
+            if (!first) Gpu.ClearDepth(cmd, 1f, new Rect2D(new Offset2D(0, 0), new Extent2D((uint)target.Width, (uint)target.Height)));
             first = false;
             var projection = Oblique(Perspective(camera.FieldOfView, aspect, near, far), view, clip);
             var viewProjection = view * projection;
@@ -265,6 +268,7 @@ public sealed unsafe class ReflectionPass : IDisposable
         ViewProjection = mapped;   // x and y do not depend on the near plane
         Valid = hasImage = !first;
 
+        if (Gpu.Frame.Parallel.Open) Gpu.Frame.Parallel.End();
         cmd.EndRendering();
         if (msFbo != 0)
         {
@@ -302,6 +306,9 @@ public sealed unsafe class ReflectionPass : IDisposable
         float up = Vector3.Dot(new Vector3(view.M12, view.M22, view.M32), new Vector3(lastView.M12, lastView.M22, lastView.M32));
         return camera.FieldOfView == lastFov && shift <= 3 + 0.004f * (camera.Eye.Y - WorldWater.Height) && turn > 0.999998f && up > 0.999998f;
     }
+
+    /// <summary>The <see cref="StageClock"/> stage of the reflection's recording jobs.</summary>
+    const int ReflectionStage = 4;
 
     /// <summary>CPU time of the parts of the pass (sky, terrain, objects, foliage), summed over the passes drawn; the scene callback adds its own.</summary>
     public readonly double[] PhaseMs = new double[5];

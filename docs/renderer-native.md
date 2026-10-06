@@ -1136,6 +1136,142 @@ Jobs are executed in the order the single-threaded code recorded them. Each job 
 did. The picture is therefore identical, and the gate is the usual 0 differing pixels. Load imbalance is handled by splitting large
 renderers' draw lists into several jobs that are still executed in order.
 
+### 6.5 As built (wave 4, 2026-10-06)
+
+*In short: the shadow cascades, the reflection and the main scene are hosts whose rendering takes secondary command buffers. Every native
+guest prepares a small job on the render thread, and the jobs are recorded on the job threads when the host ends, then executed in the
+order they were queued. The picture is unchanged (0 px). The render thread is no faster: the frame is GPU-bound, and the recording that
+moves off it costs about as much as the fork-join that brings it back (6.6).*
+
+**Pieces** (`src/Meitou.Rendering/Gpu/Recording.cs`, `GpuFrame.cs`, `GpuContext.cs`):
+
+- **`RecordJob`**: one guest segment. Prepare runs on the render thread in frame order and fills the job. It reads the GL mirror
+  (`CurrentTargets`, `CurrentState`, copied into the job), the exports, pipelines, bindless indices and counters, and writes the frame's
+  constants. `NativeFrame.Bind` is split into `Prepare` (render thread, returns a `FrameBinding` value) and a static `Record`.
+  `Record(CommandList)` then only issues commands from the job's fields. Jobs come from per-renderer `JobPool<T>`s and go back after
+  `ParallelPass.End`. `Size` is the job's draw count.
+  Ported so far:
+  - terrain: patches and meshes (`PatchJob`, `MeshJob`);
+  - foliage: meshes, CPU grass and GPU grass (`MeshJob`, `GrassJob`, `GrassGpuJob`). For GPU grass the compute dispatch stays in Prepare, in PreFrame;
+  - objects (`DrawJob`).
+- **`GpuContext.Record(label, job)`**: if a parallel pass is open, it queues the job. Otherwise it records the job at once into the segment
+  that `BeginNativeInPass` returns (mode 0, or a guest outside a host).
+- **`ParallelPass`** (`GpuFrame.Parallel`, one per context): `Begin(host, formats, stage)` comes after the host's
+  `BeginRendering(..., secondaries: true)`. The pass then holds an ordered list of entries:
+  - queued jobs;
+  - inline secondaries (`BeginInline`/`EndInline`): code that records on the render thread now, such as an unported guest, a timestamp or a clear.
+
+  `End()` records the jobs through `RenderJobs.For`, sums the secondaries' `GpuStats` into the frame's, adds each job's CPU time to
+  `StageClock.JobMs[stage]`, and calls `vkCmdExecuteCommands` once with every secondary in order. The jobs are recorded on the render thread
+  instead when any of these holds:
+  - `MEITOU_RECORD_THREADS=1`;
+  - a draw log is being written (its order must be the frame's);
+  - there is one job only;
+  - the jobs' `Size` sum is below `Recording.MinThreadedDraws`. This is `MEITOU_RECORD_MIN_DRAWS`, default 32: a reflection slice or a
+    small cascade costs less to record than to wake the workers.
+- **Secondaries per (thread, slot)**: `GpuFrame.ThreadPools`, one command pool per frame slot for each of `RenderJobs.Threads`
+  (workers + the render thread, `RenderJobs.ThreadIndex`). The buffers are allocated as needed, reused and reset when the slot comes round.
+  `CommandList.BeginSecondary` inherits the rendering (`VkCommandBufferInheritanceRenderingInfo` with the host's formats and samples) with
+  `RENDER_PASS_CONTINUE | ONE_TIME_SUBMIT`.
+- **Hosts**:
+  - `ShadowPass.BeginHost`/`EndHost` (stage `shadows`). The Meitou tile clears are `GpuContext.ClearDepth`, a queued `ClearJob` inside the pass.
+  - `ReflectionPass` (stage `reflection`). Its depth clear between slices works the same way.
+  - The new `SceneHost` in `WorldFrame.cs`. It opens after the frame's `gl.Clear` and spans the sky and every depth slice (stages `terrain`,
+    `objects`, `foliage`, `water`, set with `Stage`), and closes after the slice loop. With an upscaler the slices draw into different
+    framebuffers, so there is one host per slice. The scene host is off with the terrain wireframe (a VkGl draw) and in mode 0.
+- **VkGl inside a host** (`VkGl.Interop.cs`, `VkGl.Framebuffers.cs`, `VkGl.Queries.cs`). Only these calls may touch the primary while the rendering is open:
+  - `BeginNativeInPass` returns an inline secondary while the parallel pass is open.
+  - `gl.Clear` of the host's own targets records `vkCmdClearAttachments` (`CommandList.Clear`) in its place, with the GL scissor. It
+    throws for other targets.
+  - Timestamps (`QueryCounter`, `Begin/EndQuery`, `Interleave`) go into a one-command inline secondary, or into the open inline guest.
+
+**Deviations from 6.1 to 6.3:**
+
+- The cascades and the reflection use secondaries in their host's rendering, not one primary per job. The host already existed, and one
+  mechanism serves all three hosts. **Observed**: the parity gate is 0 px.
+- There is no `LinearAllocator` per recording thread. `Record` allocates nothing: constants, descriptor sets and bindless entries are made
+  in Prepare. `RenderJobs.AssertNotInJob` enforces this. It throws when called inside a recording job, and it guards `NativeFrame.Prepare`,
+  `LinearAllocator.Allocate`, `GpuFrame.AllocateSet`, `BindlessTable.Register/Update/Free` and `ParallelPass.Begin/BeginInline`.
+- `PipelineLibrary.Get` is already locked, so it needs no change; it is called in Prepare. `QueryArena.Allocate` was already interlocked.
+  `SkyRenderer.Active` and `WorldTexture.Id` are read in Prepare only. **Verified** by reading every `RecordJob.Record` body: none
+  touches textures, the bindless table, pipelines or allocators.
+- Counters: a host's secondaries add their `GpuStats` to the frame at `End`. The `MEITOU_PASS_STATS` rows (the `PassMeter`) therefore show
+  a host's native draws in the row where the host ends. This changes neither the totals nor the render-thread times. **Observed**
+  (forest 13:00 still, core validation 0 errors):
+  - the shadows' 325 draws are in the `shadows` row's own line, after the cascades, whose rows show 0;
+  - the reflection's 53 draws are in `reflection/rest`;
+  - the scene's 311 draws are in `water`.
+
+**Still on the render thread**, recorded inline at their place in a host or outside any host:
+- the sky (one draw) and the water (one draw), as inline secondaries;
+- timestamps: `PassMeter`, the GL timer queries, `StepTiming`;
+- the grass motion pass (a guest of post-processing's velocity pass, not a host);
+- the Meitou shadow blocker map;
+- post-processing, the debug views and the overlays (VkGl and `LegacyProgram`, outside the hosts).
+
+**The switch**: `MEITOU_RECORD_THREADS`, read by `Recording.Mode`:
+- `0`: everything inline into the frame's command buffer, exactly as before wave 4;
+- `1`: the hosts use secondaries, recorded serially on the render thread. This tells a secondary-buffer problem from a race;
+- anything else (the default, `2`): the job threads.
+
+### 6.6 Progress (wave 4, 2026-10-06)
+
+Commits `2df6b57` (infrastructure: jobs, secondaries, `ParallelPass`, terrain and foliage jobs), `21ec916` (the cascades in parallel,
+objects jobs), `5f3c5a3` (the reflection and the scene as hosts, VkGl clears and timestamps inside a host, grass jobs), `fb48f73` (the
+32-draw threshold, the last scene close counted as `water`), `e470008` (the `AssertNotInJob` guards).
+
+**Gate** (**Verified**, Release, RTX 4070):
+- `dotnet build -c Release`: 0 warnings. `dotnet test -c Release`: 465 passed, 0 skipped. New tests:
+  - `GpuApiTests.Secondaries_recorded_on_job_threads_execute_in_the_order_they_were_queued` (`[Slow]`): eight jobs on the job threads
+    plus an inline guest between them. It checks the order by the colour columns, the counters, that `AssertNotInJob` throws inside a job,
+    and validation.
+  - `SeamTests` now clears inside a host through `gl.Clear`.
+- Parity at maximum 0 against master `a23a0ac`, 26 pictures per run: ten `--faithful all`, ten Meitou, and six extras (`--debug-shadows 1`
+  in both modes, `--water-reflection 4` Port North, `--upscaler taa`, `MEITOU_GPU_CULL=0`, `MEITOU_GPU_GRASS=0`).
+  - three runs in mode 2;
+  - one run each in modes 0 and 1;
+  - four views and the extras with `MEITOU_RECORD_MIN_DRAWS=0` (every pass threaded).
+- `MEITOU_VK_VALIDATION=sync`, forest and Port North 13:00 with `--water-reflection 4`: 0 errors. The same with `--upscaler taa` (one host
+  per slice): 0 errors. Core validation with every pass threaded: 0 errors.
+
+**Measurements** (**Observed**, 2026-10-06, RTX 4070, 1600 × 900, `--faithful all`, `--fly-benchmark 300`, modes 0 and 2 interleaved, three
+runs each, medians; Hub mode 1 three runs after them). The views:
+- forest: `--at -37582,-80684 --yaw -70.5 --pitch 6.1 --distance 10588 --time 13`;
+- still: forest with `--fly-speed 0`;
+- Hub: `--town "The Hub" --distance 40000 --pitch 3 --time 13`.
+
+"cpu only" is the frame without the GPU wait, and the stages are the render thread's wall time. The job threads' summed CPU time is shown
+separately (`jobs` line).
+
+| View, mode | frame p50 | cpu only p50 | shadows | reflection | terrain | objects | foliage | water | gpu-wait | jobs: shadows, reflection, terrain, objects, foliage |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| still, 0 | 5.1 | 1.0 | 0.93 | 0.23 | 0.10 | 0.08 | 0.19 | 0.03 | 4.45 | — |
+| still, 2 | 4.9 | 1.0 | 0.86 | 0.24 | 0.09 | 0.06 | 0.17 | 0.13 | 4.25 | 0.29, 0.03, 0.04, 0.03, 0.07 |
+| fly, 0 | 6.8 | 1.9 | 1.17 | 0.44 | 0.11 | 0.08 | 0.26 | 0.04 | 4.45 | — |
+| fly, 2 | 6.9 | 2.3 | 1.20 | 0.52 | 0.10 | 0.07 | 0.28 | 0.15 | 4.42 | 0.39, 0.14, 0.04, 0.04, 0.09 |
+| Hub, 0 | 6.2 | 2.8 | 1.44 | 0.55 | 0.14 | 0.10 | 0.40 | 0.05 | 3.68 | — |
+| Hub, 1 | 6.6 | 3.4 | 1.90 | 0.70 | 0.13 | 0.09 | 0.48 | 0.29 | 3.59 | (on the render thread) 0.32, 0.12, 0.04, 0.04, 0.10 |
+| Hub, 2 | 7.0 | 3.0 | 1.62 | 0.64 | 0.12 | 0.08 | 0.39 | 0.20 | 4.48 | 0.47, 0.14, 0.04, 0.05, 0.13 |
+
+(ms; `water` in modes 1 and 2 includes the scene host's close: the fork-join and `vkCmdExecuteCommands`. With an upscaler, a slice's
+host closes before the next slice begins, so that close counts in the next slice's `terrain`; only the last one counts in `water`.)
+
+Reading (**Observed**):
+- Recording moves 0.4 to 0.8 ms of CPU a frame onto the job threads, most of it the cascades'. The render thread does not get faster:
+  - "cpu only" is even on the still view and 0.2 to 0.4 ms worse on the fly and Hub views.
+  - Mode 1 shows the cost of the secondaries alone: about 0.6 ms at the Hub. Threading wins back about 0.4 ms of that.
+  - The record loops were small to begin with, about 1.3 µs a draw after waves 3a and 3b (foliage at the Hub, `MEITOU_FOLIAGE_TIMING=1`). The fork-join at each host's end then
+    costs as much as the recording it moves.
+- The frame is GPU-bound in these views (gpu-wait 3.7 to 4.5 ms of 5 to 7 ms), so the frame time follows the GPU.
+- The Hub runs are noisy: the update stages, which this wave does not touch, also move by 0.1 to 0.15 ms between modes.
+
+**Open** (**Unknown** whether it pays):
+- Overlap instead of fork-join: start a host's jobs while the render thread prepares the next host (the cascades while the reflection
+  prepares, the reflection while the scene prepares). This needs no new threads, only an `End` that is not awaited until the
+  `vkCmdExecuteCommands`.
+- Larger jobs: one job per renderer per host instead of per segment, so fewer secondaries.
+- Port the sky and the water to jobs. They are one draw each, so this is for completeness only.
+
 ---
 
 ## 7. Parallel work plan

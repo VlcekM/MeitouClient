@@ -186,6 +186,7 @@ public sealed unsafe class LinearAllocator : IDisposable
 
     public Transient Allocate(ulong size, ulong alignment)
     {
+        RenderJobs.AssertNotInJob();   // one allocator per frame, used in Prepare only (docs/renderer-native.md 6.5)
         if (size == 0) size = 4;
         if (alignment == 0) alignment = 1;
         Used += size;

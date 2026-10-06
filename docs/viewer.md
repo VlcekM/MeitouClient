@@ -251,6 +251,19 @@ frame, 9000 per second at the 60 frames per second of wall time it paces itself 
 frames with the render-thread time of each stage, and the resident memory. With `--screenshot` the picture is taken afterwards,
 back at the start.
 
+Its `jobs` line names the recording mode and thread count and gives the job threads' summed CPU time per stage, as a mean per frame. That
+is the command recording which wave 4 moved off the render thread ([renderer-native.md 6.5](renderer-native.md#65-as-built-wave-4-2026-10-06)).
+
+The switches:
+- `MEITOU_RECORD_THREADS`:
+  - `0`: the single-threaded command stream as before;
+  - `1`: the shadow, reflection and scene hosts use secondary command buffers, recorded on the render thread;
+  - the default: the secondaries are recorded on the job threads.
+- `MEITOU_RECORD_MIN_DRAWS`: the draw count below which a pass is recorded on the render thread anyway. The default is 32; `0` threads
+  every pass.
+
+The picture is the same in every mode.
+
 Keys: left drag orbits the target, right drag looks
 around, wheel zooms, `W A S D` free fly along the view direction, `Q`/`E` world down/up (speed follows the height above ground; Shift ×4, Ctrl ×0.25), `T` textures, `N` normal
 maps, `O` objects, `G` water, `B` simple sky, `,`/`.` time of day −/+ 1 hour, `X` wireframe, `V` debug view (blend weights,

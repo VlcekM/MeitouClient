@@ -26,6 +26,7 @@ static partial class WorldApp
         var worst = new List<(double Ms, int Frame, string Stages)>();
         var stageSums = new double[StageClock.Names.Length];
         var shadowSums = new double[3];
+        var jobSums = new double[StageClock.Names.Length];
         var frameWatch = new Stopwatch();
         long gc2 = GC.CollectionCount(2), gcPrev = gc2, gc0 = GC.CollectionCount(0), gc1 = GC.CollectionCount(1), allocated = GC.GetTotalAllocatedBytes(), renderAllocated = GC.GetAllocatedBytesForCurrentThread();
         TimeSpan pause0 = GC.GetTotalPauseDuration(), pausePrev = pause0;
@@ -66,7 +67,7 @@ static partial class WorldApp
             interval.Restart();
             times.Add(ms);
             if (i % 150 == 0) resident.Add($"{(((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576)}");
-            for (int k = 0; k < stageSums.Length; k++) stageSums[k] += StageClock.Ms[k];
+            for (int k = 0; k < stageSums.Length; k++) { stageSums[k] += StageClock.Ms[k]; jobSums[k] += StageClock.JobMs[k]; }
             if (gpu.Shadow is { } shadowStats) for (int k = 0; k < 3; k++) shadowSums[k] += shadowStats.PhaseMs[k];
             long gcNow = GC.CollectionCount(2);
             worst.Add((ms, i, ((gpu.Reflection is { Valid: true } rr && rr.CpuMs >= 5 ? $"reflection[{rr.DescribeLast()}], " : "") + (gcNow != gcPrev ? "gen2 GC, " : "") + (GC.GetTotalPauseDuration() - pausePrev is { TotalMilliseconds: >= 0.5 } pause ? $"GC pause {pause.TotalMilliseconds:0.0}, " : "")) + string.Join(", ", StageClock.Names.Select((n, k) => (n, v: StageClock.Ms[k])).Where(s => s.v >= 1).Select(s => $"{s.n} {s.v:0.0}"))));
@@ -83,6 +84,10 @@ static partial class WorldApp
         Console.WriteLine($"gc        gen0 {GC.CollectionCount(0) - gc0}, gen1 {GC.CollectionCount(1) - gc1}, pauses {(GC.GetTotalPauseDuration() - pause0).TotalMilliseconds:0} ms; allocated {(GC.GetTotalAllocatedBytes() - allocated) / 1048576} MB (render thread {(GC.GetAllocatedBytesForCurrentThread() - renderAllocated) / 1048576} MB)");
         Console.WriteLine($"stages    mean ms: {string.Join(", ", StageClock.Names.Select((n, k) => $"{n} {stageSums[k] / o.FlyBenchmark:0.00}"))}");
         Console.WriteLine($"stages    shadow casters mean ms: terrain {shadowSums[0] / o.FlyBenchmark:0.00}, objects {shadowSums[1] / o.FlyBenchmark:0.00}, foliage {shadowSums[2] / o.FlyBenchmark:0.00}");
+        // Wave 4 (docs/renderer-native.md 9.3): the recording jobs' own CPU time per stage, summed over the threads that ran them; the stage
+        // times above are the render thread's wall time (including any wait for the jobs), so the two do not add up.
+        Console.WriteLine($"jobs      record mode {Meitou.Rendering.Gpu.Recording.Mode} ({RenderJobs.Threads} threads); summed cpu mean ms: " +
+            string.Join(", ", StageClock.Names.Select((n, k) => (n, k)).Where(x => jobSums[x.k] > 0).Select(x => $"{x.n} {jobSums[x.k] / o.FlyBenchmark:0.00}")));
         if (BackgroundWork.ReportJobs) { BackgroundWork.Measure = false; BackgroundWork.Report(); }
         Console.WriteLine($"cpu only  p50 {C(0.5):0.0} ms, p95 {C(0.95):0.0} ms, p99 {C(0.99):0.0} ms, max {cpuSorted[^1]:0.0} ms (commands recorded, GPU not waited for)");
         if (gpu.Reflection is { } reflectionStats && render.Reflections) Console.WriteLine($"reflect   {reflectionStats.DescribeStats()}");

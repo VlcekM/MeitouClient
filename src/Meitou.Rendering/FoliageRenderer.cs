@@ -1976,24 +1976,21 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         gl.Enable(EnableCap.CullFace);   // the state export reports the cull face's mode only while it is on
         var interop = Gpu.Interop!;
         string label = depth ? "foliage mesh depth" : "foliage meshes";
-        var cmd = interop.BeginNativeInPass(label);
+        // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the sets, and per draw everything resolved (pipeline, buffers, the push
+        // block with its bindless indices), into a job that only records.
         var targets = interop.CurrentTargets();
         var state = interop.CurrentState();
         int segment = SegmentId(depth ? DepthKind : ColourKind, p, targets, state);
         long stamp = interop.VertexArrayStamp;
-        cmd.SetViewport(targets.Viewport);
-        cmd.SetScissor(targets.Scissor);
-        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
-        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+        var job = meshJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Layout, job.Count) = (this, targets, state, p.Layout, 0);
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance };
-        nativeFrame.Bind(cmd, p.Layout, in view);
-        Span<BufferBinding> rows = stackalloc BufferBinding[4];
+        job.Frame = nativeFrame.Prepare(in view);
         // The GPU cull's compacted rows and one indirect draw per mesh draw (its batch's count and first instance), else this call's constants.
         bool indirect = !gpuResult.IsEmpty;
         for (int a = 0; a < 4; a++)
-            rows[a] = indirect ? new BufferBinding(gpuResult.Rows, gpuResult.RowsOffset + (ulong)(16 * a)) : new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
+            job.Rows[a] = indirect ? new BufferBinding(gpuResult.Rows, gpuResult.RowsOffset + (ulong)(16 * a)) : new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
         int drawIndex = 0;
-        cmd.BindVertexBuffers(RowLocation, rows);
         NewTextureSegment();
         // The constants the GL code set on every draw (Shaders.MeshFragment's uniforms the foliage does not vary).
         uint standIn = Texture(interop, 0);
@@ -2002,8 +1999,6 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             Tint = Vector3.One, TriplanarScale = 1f / 5000, AlphaChannel = 3, GreyChannel = -1, HeadDiffuse = standIn, HeadNormal = standIn,
             Coverage = coverage ? 1u : 0u,
         };
-        MeshPush last = default;
-        bool pushed = false;
         var sided = Silk.NET.Vulkan.CullModeFlags.None;
         Silk.NET.Vulkan.CullModeFlags? side = null;
         foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(meshDraws))
@@ -2025,21 +2020,99 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             pc.Diffuse2 = Texture(interop, d.Diffuse2);
             pc.Normal2 = Texture(interop, d.Normal2);
             var want = d.DoubleSided ? sided : state.Cull;
-            if (side != want) { cmd.SetRaster(want, state.Front); side = want; }
+            bool raster = side != want;
+            side = want;
             var part = d.Part;
             ref var n = ref (depth ? ref part.DepthNative : ref part.ColourNative);
             Current(ref n, interop, part.Vao, mp, stamp, rows: true);
-            cmd.BindPipeline(n.SegA == segment ? n.PipeA! : PipelineFor(ref n, mp, segment, state, targets.Formats, label));
-            cmd.BindVertexBuffers(0, n.Vertices);
-            cmd.BindIndexBuffer(n.Elements, Silk.NET.Vulkan.IndexType.Uint32);
-            Push(cmd, p, in pc, ref last, ref pushed);
-            if (indirect) cmd.DrawIndexedIndirect(gpuResult.Args, gpuResult.ArgsOffset + (ulong)drawIndex * 20, 1);
-            else cmd.DrawIndexed((uint)part.Count, d.Instances, 0, 0, d.FirstInstance);
+            job.Add(new MeshJob.Draw
+            {
+                SetRaster = raster, Cull = want, Pipeline = n.SegA == segment ? n.PipeA! : PipelineFor(ref n, mp, segment, state, targets.Formats, label),
+                Vertices = n.Vertices, Elements = n.Elements, Push = pc,
+                Args = indirect ? gpuResult.Args : default, ArgsOffset = gpuResult.ArgsOffset + (ulong)drawIndex * 20,
+                IndexCount = (uint)part.Count, Instances = d.Instances, FirstInstance = d.FirstInstance,
+            });
             drawIndex++;
         }
-        interop.EndNative(cmd);
+        Gpu.Record(label, job);
         gl.Enable(EnableCap.CullFace);   // as the GL version leaves it after the meshes
         gl.BindVertexArray(0);
+    }
+
+    readonly JobPool<MeshJob> meshJobs = new();
+
+    /// <summary>One foliage mesh segment as prepared (<see cref="RecordMeshes"/>): recorded on any thread, the same commands as before wave 4.</summary>
+    sealed class MeshJob : RecordJob
+    {
+        public struct Draw
+        {
+            public bool SetRaster;
+            public Silk.NET.Vulkan.CullModeFlags Cull;
+            public GraphicsPipeline Pipeline;
+            public BufferBinding[] Vertices;
+            public BufferBinding Elements;
+            public MeshPush Push;
+            /// <summary>Indirect: the arguments' buffer (else a plain indexed draw).</summary>
+            public Silk.NET.Vulkan.Buffer Args;
+            public ulong ArgsOffset;
+            public uint IndexCount, Instances, FirstInstance;
+        }
+
+        public FoliageRenderer Owner = null!;
+        public PassTargets Targets = null!;
+        public DrawState State = null!;
+        public Silk.NET.Vulkan.PipelineLayout Layout;
+        public FrameBinding Frame;
+        public readonly BufferBinding[] Rows = new BufferBinding[4];
+        public Draw[] Draws = new Draw[64];
+        public int Count;
+        public override int Size => Count;
+
+        public void Add(in Draw d)
+        {
+            if (Count == Draws.Length) Array.Resize(ref Draws, Draws.Length * 2);
+            Draws[Count++] = d;
+        }
+
+        public override void Record(CommandList cmd)
+        {
+            var (targets, state, layout) = (Targets, State, Layout);
+            cmd.SetViewport(targets.Viewport);
+            cmd.SetScissor(targets.Scissor);
+            cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+            cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+            NativeFrame.Record(cmd, layout, in Frame);
+            cmd.BindVertexBuffers(RowLocation, Rows);
+            MeshPush last = default;
+            bool pushed = false;
+            for (int i = 0; i < Count; i++)
+            {
+                ref readonly var d = ref Draws[i];
+                if (d.SetRaster) cmd.SetRaster(d.Cull, state.Front);
+                cmd.BindPipeline(d.Pipeline);
+                cmd.BindVertexBuffers(0, d.Vertices);
+                cmd.BindIndexBuffer(d.Elements, Silk.NET.Vulkan.IndexType.Uint32);
+                PushTo(cmd, layout, in d.Push, ref last, ref pushed);
+                if (d.Args.Handle != 0) cmd.DrawIndexedIndirect(d.Args, d.ArgsOffset, 1);
+                else cmd.DrawIndexed(d.IndexCount, d.Instances, 0, 0, d.FirstInstance);
+            }
+        }
+
+        public override void Release()
+        {
+            Array.Clear(Draws, 0, Count);
+            Count = 0;
+            Owner.meshJobs.Return(this);
+        }
+    }
+
+    /// <summary><see cref="Push{T}"/> by layout (a job keeps the layout, not the program).</summary>
+    static void PushTo<T>(CommandList cmd, Silk.NET.Vulkan.PipelineLayout layout, in T value, ref T last, ref bool pushed) where T : unmanaged
+    {
+        if (pushed && System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in value)).SequenceEqual(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in last)))) return;
+        cmd.PushConstants(layout, Silk.NET.Vulkan.ShaderStageFlags.VertexBit | Silk.NET.Vulkan.ShaderStageFlags.FragmentBit, in value);
+        last = value;
+        pushed = true;
     }
 
     // ---- grass ----
@@ -2137,34 +2210,80 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         var p = gp.P;
         gl.Disable(EnableCap.CullFace);
         var interop = Gpu.Interop!;
-        var cmd = interop.BeginNativeInPass("foliage grass");
+        // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the sets, and per draw the push block with its bindless indices.
         var targets = interop.CurrentTargets();
         var state = interop.CurrentState();
         int segment = SegmentId(GrassKind, p, targets, state);
-        cmd.SetViewport(targets.Viewport);
-        cmd.SetScissor(targets.Scissor);
-        cmd.SetRaster(state.Cull, state.Front);
-        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
-        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance, Time = SwayPhase() };
-        nativeFrame.Bind(cmd, p.Layout, in view);
+        var job = grassJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Layout, job.Count) = (this, targets, state, p.Layout, 0);
+        job.Frame = nativeFrame.Prepare(in view);
         NewTextureSegment();
-        GrassPush last = default;
-        bool pushed = false;
         // The blades of every page are one buffer (the grass arena): one pipeline and one vertex binding for the segment, the draw's first instance finds its page.
-        cmd.BindPipeline(PipelineFor(ref grassMeshCpu, gp, segment, state, targets.Formats, "foliage grass"));
-        cmd.BindVertexBuffers(0, grassMeshCpu.Vertices);
+        job.Pipeline = PipelineFor(ref grassMeshCpu, gp, segment, state, targets.Formats, "foliage grass");
+        job.Vertices = grassMeshCpu.Vertices;
+        if (job.Draws.Length < grassDraws.Count) job.Draws = new GrassJob.Draw[Math.Max(grassDraws.Count, job.Draws.Length * 2)];
         foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(grassDraws))
         {
             var pc = d.Push;
             pc.Sprite = Texture(interop, d.Sprite);
             pc.ColourMap = Texture(interop, d.Colour);
             var buffer = d.Buffer;
-            Push(cmd, p, in pc, ref last, ref pushed);
-            cmd.Draw(d.Vertices, (uint)buffer.Shown, 0, buffer.FirstBlade);
+            job.Draws[job.Count++] = new GrassJob.Draw { Push = pc, Vertices = d.Vertices, Instances = (uint)buffer.Shown, FirstInstance = buffer.FirstBlade };
         }
-        interop.EndNative(cmd);
+        Gpu.Record("foliage grass", job);
         gl.BindVertexArray(0);
+    }
+
+    readonly JobPool<GrassJob> grassJobs = new();
+
+    /// <summary>The CPU-culled grass of one view as prepared (<see cref="RecordGrass"/>): recorded on any thread, the same commands as before wave 4.</summary>
+    sealed class GrassJob : RecordJob
+    {
+        public struct Draw
+        {
+            public GrassPush Push;
+            public uint Vertices, Instances, FirstInstance;
+        }
+
+        public FoliageRenderer Owner = null!;
+        public PassTargets Targets = null!;
+        public DrawState State = null!;
+        public Silk.NET.Vulkan.PipelineLayout Layout;
+        public FrameBinding Frame;
+        public GraphicsPipeline Pipeline = null!;
+        public BufferBinding[] Vertices = [];
+        public Draw[] Draws = new Draw[64];
+        public int Count;
+        public override int Size => Count;
+
+        public override void Record(CommandList cmd)
+        {
+            var (targets, state, layout) = (Targets, State, Layout);
+            cmd.SetViewport(targets.Viewport);
+            cmd.SetScissor(targets.Scissor);
+            cmd.SetRaster(state.Cull, state.Front);
+            cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+            cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+            NativeFrame.Record(cmd, layout, in Frame);
+            GrassPush last = default;
+            bool pushed = false;
+            cmd.BindPipeline(Pipeline);
+            cmd.BindVertexBuffers(0, Vertices);
+            for (int i = 0; i < Count; i++)
+            {
+                ref readonly var d = ref Draws[i];
+                PushTo(cmd, layout, in d.Push, ref last, ref pushed);
+                cmd.Draw(d.Vertices, d.Instances, 0, d.FirstInstance);
+            }
+        }
+
+        public override void Release()
+        {
+            Pipeline = null!;
+            Count = 0;
+            Owner.grassJobs.Return(this);
+        }
     }
 
     float SwayPhase() => (float)((SwaySeconds ?? clock.Elapsed.TotalSeconds) * 0.3 * Math.PI % (2 * Math.PI));

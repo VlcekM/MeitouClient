@@ -759,26 +759,19 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         var interop = Gpu.Interop!;
         string label = depthPass ? "objects depth" : wire ? "objects wire" : "objects";
         int kind = (depthPass ? 1 : 0) + (wire ? 2 : 0);
-        var cmd = interop.BeginNativeInPass(label);
+        // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the sets, and per draw everything resolved (pipeline, buffers, the push
+        // block with its bindless indices), into a job that only records.
         var targets = interop.CurrentTargets();
         var state = interop.CurrentState();
         int segment = SegmentId(kind, prog.P, targets, state);
         long stamp = interop.VertexArrayStamp;
-        cmd.SetViewport(targets.Viewport);
-        cmd.SetScissor(targets.Scissor);
-        cmd.SetRaster(state.Cull, state.Front);
-        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
-        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
-        nativeFrame.Bind(cmd, prog.P.Layout, in view);
-        Span<BufferBinding> rows = stackalloc BufferBinding[4];
-        for (int a = 0; a < 4; a++) rows[a] = new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
-        cmd.BindVertexBuffers(RowLocation, rows);
+        var job = drawJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Layout, job.Count) = (this, targets, state, prog.P.Layout, 0);
+        job.Frame = nativeFrame.Prepare(in view);
+        for (int a = 0; a < 4; a++) job.Rows[a] = new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
         NewTextureSegment();
         long loop0 = ObjTiming ? Stopwatch.GetTimestamp() : 0;
-        var layout = prog.P.Layout;
-        var stages = Silk.NET.Vulkan.ShaderStageFlags.VertexBit | Silk.NET.Vulkan.ShaderStageFlags.FragmentBit;
-        ObjectPush last = default;
-        bool pushed = false;
+        if (job.Draws.Length < drawCount) job.Draws = new DrawJob.Draw[Math.Max(drawCount, job.Draws.Length * 2)];
         var list = draws;
         for (int i = 0; i < drawCount; i++)
         {
@@ -792,20 +785,78 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             var part = d.Part;
             ref var n = ref (depthPass ? ref part.DepthNative : ref part.ColourNative);
             Current(ref n, interop, part.Vao, prog, stamp);
-            cmd.BindPipeline(n.SegA == segment ? n.PipeA! : PipelineFor(ref n, prog, segment, state, targets.Formats, label));
-            cmd.BindVertexBuffers(0, n.Vertices);
-            cmd.BindIndexBuffer(new BufferBinding(n.Elements.Buffer, n.Elements.Offset + (ulong)part.Offset[d.Level] * 4), Silk.NET.Vulkan.IndexType.Uint32);
-            if (!pushed || !System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<ObjectPush>(in pc)).SequenceEqual(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<ObjectPush>(in last))))
+            job.Draws[i] = new DrawJob.Draw
             {
-                cmd.PushConstants(layout, stages, in pc);
-                last = pc;
-                pushed = true;
-            }
-            cmd.DrawIndexed((uint)part.Count[d.Level], d.Instances, 0, 0, d.FirstInstance);
+                Pipeline = n.SegA == segment ? n.PipeA! : PipelineFor(ref n, prog, segment, state, targets.Formats, label),
+                Vertices = n.Vertices, Elements = new BufferBinding(n.Elements.Buffer, n.Elements.Offset + (ulong)part.Offset[d.Level] * 4),
+                Push = pc, IndexCount = (uint)part.Count[d.Level], Instances = d.Instances, FirstInstance = d.FirstInstance,
+            };
         }
+        job.Count = drawCount;
         if (ObjTiming) callLoopMs += (Stopwatch.GetTimestamp() - loop0) * 1000.0 / Stopwatch.Frequency;
-        interop.EndNative(cmd);
+        Gpu.Record(label, job);
         gl.BindVertexArray(0);
+    }
+
+    readonly JobPool<DrawJob> drawJobs = new();
+
+    /// <summary>One objects segment as prepared (<see cref="RecordDraws"/>): recorded on any thread, the same commands as before wave 4.</summary>
+    sealed class DrawJob : RecordJob
+    {
+        public struct Draw
+        {
+            public GraphicsPipeline Pipeline;
+            public BufferBinding[] Vertices;
+            public BufferBinding Elements;
+            public ObjectPush Push;
+            public uint IndexCount, Instances, FirstInstance;
+        }
+
+        public WorldObjectRenderer Owner = null!;
+        public PassTargets Targets = null!;
+        public DrawState State = null!;
+        public Silk.NET.Vulkan.PipelineLayout Layout;
+        public FrameBinding Frame;
+        public readonly BufferBinding[] Rows = new BufferBinding[4];
+        public Draw[] Draws = new Draw[64];
+        public int Count;
+        public override int Size => Count;
+
+        public override void Record(CommandList cmd)
+        {
+            var (targets, state, layout) = (Targets, State, Layout);
+            cmd.SetViewport(targets.Viewport);
+            cmd.SetScissor(targets.Scissor);
+            cmd.SetRaster(state.Cull, state.Front);
+            cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+            cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+            NativeFrame.Record(cmd, layout, in Frame);
+            cmd.BindVertexBuffers(RowLocation, Rows);
+            var stages = Silk.NET.Vulkan.ShaderStageFlags.VertexBit | Silk.NET.Vulkan.ShaderStageFlags.FragmentBit;
+            ObjectPush last = default;
+            bool pushed = false;
+            for (int i = 0; i < Count; i++)
+            {
+                ref readonly var d = ref Draws[i];
+                cmd.BindPipeline(d.Pipeline);
+                cmd.BindVertexBuffers(0, d.Vertices);
+                cmd.BindIndexBuffer(d.Elements, Silk.NET.Vulkan.IndexType.Uint32);
+                if (!pushed || !System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<ObjectPush>(in d.Push)).SequenceEqual(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<ObjectPush>(in last))))
+                {
+                    cmd.PushConstants(layout, stages, in d.Push);
+                    last = d.Push;
+                    pushed = true;
+                }
+                cmd.DrawIndexed(d.IndexCount, d.Instances, 0, 0, d.FirstInstance);
+            }
+        }
+
+        public override void Release()
+        {
+            Array.Clear(Draws, 0, Count);
+            Count = 0;
+            Owner.drawJobs.Return(this);
+        }
     }
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----

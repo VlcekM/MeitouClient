@@ -93,6 +93,18 @@ sealed unsafe class NativeFrame : IDisposable
     /// </summary>
     public void Bind(CommandList cmd, PipelineLayout layout, in ViewConstants view, ReadOnlySpan<BufferBinding> extra = default)
     {
+        var binding = Prepare(in view, extra);
+        Record(cmd, layout, in binding);
+    }
+
+    /// <summary>
+    /// The render-thread half of <see cref="Bind"/> (docs/renderer-native.md 6.2, wave 4): evaluates the frame globals as they are now, registers
+    /// the frame textures' bindless entries, writes the frame block (when it changed) and <paramref name="view"/> into the frame's constants, and
+    /// returns what <see cref="Record"/> binds. Where the device has no push descriptors, the set is allocated and written here.
+    /// </summary>
+    public FrameBinding Prepare(in ViewConstants view, ReadOnlySpan<BufferBinding> extra = default)
+    {
+        RenderJobs.AssertNotInJob();
         if (extra.Length != extraStorage) throw new ArgumentException($"this frame's set has {extraStorage} extra storage bindings, {extra.Length} given", nameof(extra));
         var frame = ctx.Frame;
         var g = ctx.Globals;
@@ -125,10 +137,11 @@ sealed unsafe class NativeFrame : IDisposable
         if (bonesFrame != frame.Number) { bones = frame.Constants.Allocate(BonesBytes, align); bonesFrame = frame.Number; }
 
         int count = 6 + extraStorage;
-        var infos = stackalloc DescriptorBufferInfo[count];
-        infos[NativeShaders.FrameBinding] = new DescriptorBufferInfo(frameSlice.Handle, frameSlice.Offset, (ulong)sizeof(FrameConstants));
-        infos[NativeShaders.ViewBinding] = new DescriptorBufferInfo(viewSlice.Handle, viewSlice.Offset, (ulong)sizeof(ViewConstants));
-        infos[NativeShaders.BonesBinding] = new DescriptorBufferInfo(bones.Handle, bones.Offset, BonesBytes);
+        var result = new FrameBinding { Count = count, Table = ctx.Bindless.Set, Push = push };
+        Span<DescriptorBufferInfo> infos = result.Infos;
+        infos[(int)NativeShaders.FrameBinding] = new DescriptorBufferInfo(frameSlice.Handle, frameSlice.Offset, (ulong)sizeof(FrameConstants));
+        infos[(int)NativeShaders.ViewBinding] = new DescriptorBufferInfo(viewSlice.Handle, viewSlice.Offset, (ulong)sizeof(ViewConstants));
+        infos[(int)NativeShaders.BonesBinding] = new DescriptorBufferInfo(bones.Handle, bones.Offset, BonesBytes);
         for (int i = 0; i < Blocks.Length; i++)
         {
             var (name, binding, size) = Blocks[i];
@@ -141,25 +154,39 @@ sealed unsafe class NativeFrame : IDisposable
                 value = zeros.Binding;
             }
             ulong range = value.Size == Vk.WholeSize ? (ulong)size : Math.Min((ulong)size, value.Size);
-            infos[binding] = new DescriptorBufferInfo(value.Buffer, value.Offset, range);
+            infos[(int)binding] = new DescriptorBufferInfo(value.Buffer, value.Offset, range);
         }
         for (int i = 0; i < extraStorage; i++) infos[6 + i] = new DescriptorBufferInfo(extra[i].Buffer, extra[i].Offset, extra[i].Size);
-        var writes = stackalloc WriteDescriptorSet[count];
-        for (int b = 0; b < count; b++)
-            writes[b] = new WriteDescriptorSet
-            {
-                SType = StructureType.WriteDescriptorSet, DstBinding = (uint)b, DescriptorCount = 1,
-                DescriptorType = b < 6 ? DescriptorType.UniformBuffer : DescriptorType.StorageBuffer, PBufferInfo = &infos[b],
-            };
-        var table = ctx.Bindless.Set;
-        cmd.BindSets(layout, NativeShaders.BindlessSet, new ReadOnlySpan<DescriptorSet>(in table), []);
-        var all = new ReadOnlySpan<WriteDescriptorSet>(writes, count);
-        if (push) cmd.PushDescriptors(layout, NativeShaders.FrameSet, all);
-        else
+        if (!push)
         {
             var set = frame.AllocateSet(SetLayout);
-            for (int b = 0; b < count; b++) writes[b].DstSet = set;
+            var writes = stackalloc WriteDescriptorSet[count];
+            fixed (DescriptorBufferInfo* pi = infos) FrameBinding.Writes(writes, pi, count, set);
             ctx.Device.Vk.UpdateDescriptorSets(ctx.Device.Device, (uint)count, writes, 0, null);
+            result.Set = set;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// The recording half of <see cref="Bind"/>: binds the bindless table (set 1) and pushes (or binds) set 0 as <paramref name="binding"/> says.
+    /// Reads nothing else: safe on a recording job's thread.
+    /// </summary>
+    public static void Record(CommandList cmd, PipelineLayout layout, in FrameBinding binding)
+    {
+        var table = binding.Table;
+        cmd.BindSets(layout, NativeShaders.BindlessSet, new ReadOnlySpan<DescriptorSet>(in table), []);
+        if (binding.Push)
+        {
+            int count = binding.Count;
+            var copy = binding.Infos;   // on the stack: the writes point at it
+            var writes = stackalloc WriteDescriptorSet[count];
+            FrameBinding.Writes(writes, (DescriptorBufferInfo*)&copy, count, default);
+            cmd.PushDescriptors(layout, NativeShaders.FrameSet, new ReadOnlySpan<WriteDescriptorSet>(writes, count));
+        }
+        else
+        {
+            var set = binding.Set;
             cmd.BindSets(layout, NativeShaders.FrameSet, new ReadOnlySpan<DescriptorSet>(in set), []);
         }
     }
@@ -180,5 +207,32 @@ sealed unsafe class NativeFrame : IDisposable
             if (entries[i].Has) ctx.Bindless.Free(FrameConstants.Textures[i].Kind, entries[i].Index);
         var (vk, dev, layout) = (ctx.Device.Vk, ctx.Device.Device, SetLayout);
         ctx.Device.Frames.DeferDelete(() => vk.DestroyDescriptorSetLayout(dev, layout, null));
+    }
+}
+
+/// <summary>
+/// Set 0 and set 1 of one native segment as <see cref="NativeFrame.Prepare"/> resolved them (docs/renderer-native.md 6.2, wave 4): the buffer of
+/// each binding of set 0, the bindless table, and either "push" or the set written on the render thread. A value: a recording job keeps its own copy.
+/// </summary>
+unsafe struct FrameBinding
+{
+    public const int MaxBindings = 8;
+    [System.Runtime.CompilerServices.InlineArray(MaxBindings)]
+    public struct InfoArray { DescriptorBufferInfo first; }
+    public InfoArray Infos;
+    public int Count;
+    public DescriptorSet Table;
+    public DescriptorSet Set;
+    public bool Push;
+
+    /// <summary>The writes of set 0 (uniform buffers 0 to 5, storage buffers after them) pointing at <paramref name="infos"/>.</summary>
+    public static void Writes(WriteDescriptorSet* writes, DescriptorBufferInfo* infos, int count, DescriptorSet set)
+    {
+        for (int b = 0; b < count; b++)
+            writes[b] = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet, DstSet = set, DstBinding = (uint)b, DescriptorCount = 1,
+                DescriptorType = b < 6 ? DescriptorType.UniformBuffer : DescriptorType.StorageBuffer, PBufferInfo = &infos[b],
+            };
     }
 }

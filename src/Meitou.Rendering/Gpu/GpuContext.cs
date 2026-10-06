@@ -84,6 +84,56 @@ public sealed unsafe class GpuContext : IDisposable
     /// <summary>What a sampler with nothing bound reads (VkGl's own stand-in while VkGl exists, so both sides bind the same objects).</summary>
     public Func<SamplerInfo, SampledTexture>? DummyOverride { get; set; }
 
+    /// <summary>
+    /// Records a prepared guest segment into the pass being drawn now (docs/renderer-native.md 6.2, wave 4): inside a host's rendering with
+    /// secondaries (<see cref="GpuFrame.Parallel"/>) it is queued and recorded when the host ends it, in this order, possibly on a job thread;
+    /// otherwise at once into the pass VkGl (or a host) has open, as a native segment (<see cref="IGlInterop.BeginNativeInPass"/>). Either way
+    /// <see cref="RecordJob.Record"/> runs with <see cref="RenderJobs.InJob"/> set, so a job that reaches for render-thread state throws.
+    /// </summary>
+    public void Record(string label, RecordJob job)
+    {
+        if (Frame.Parallel.Open) { Frame.Parallel.Add(label, job); return; }
+        var interop = Interop ?? throw new InvalidOperationException("no pass to record into");
+        var cmd = interop.BeginNativeInPass(label);
+        RenderJobs.SetInJob(true);
+        try { job.Record(cmd); }
+        finally
+        {
+            RenderJobs.SetInJob(false);
+            interop.EndNative(cmd);
+        }
+        job.Release();
+    }
+
+    /// <summary>
+    /// A host's partial depth clear (<see cref="CommandList.ClearDepth"/>: a shadow tile, the depth between slices) in its place among the
+    /// guests: into <paramref name="host"/>'s rendering, or, while it takes secondaries, as a segment of its own (a primary may record nothing
+    /// else inside such a rendering).
+    /// </summary>
+    public void ClearDepth(CommandList host, float value, Rect2D rect) => Clear(host, false, default, true, value, rect);
+
+    /// <summary>As <see cref="ClearDepth"/> for the colour and / or depth attachment (<see cref="CommandList.Clear"/>; VkGl's <c>Clear</c> inside a host).</summary>
+    public void Clear(CommandList host, bool colour, ClearColorValue colourValue, bool depth, float depthValue, Rect2D rect)
+    {
+        if (!Frame.Parallel.Open) { host.Clear(colour, colourValue, depth, depthValue, rect); return; }
+        var job = clearJobs.Rent();
+        (job.Owner, job.Colour, job.ColourValue, job.Depth, job.DepthValue, job.Rect) = (this, colour, colourValue, depth, depthValue, rect);
+        Frame.Parallel.Add(depth && !colour ? "clear depth" : "clear", job);
+    }
+
+    readonly JobPool<ClearJob> clearJobs = new();
+
+    sealed class ClearJob : RecordJob
+    {
+        public GpuContext Owner = null!;
+        public bool Colour, Depth;
+        public ClearColorValue ColourValue;
+        public float DepthValue;
+        public Rect2D Rect;
+        public override void Record(CommandList cmd) => cmd.Clear(Colour, ColourValue, Depth, DepthValue, Rect);
+        public override void Release() => Owner.clearJobs.Return(this);
+    }
+
     readonly Dictionary<(int, ScalarKind, bool), SampledTexture> dummies = [];
 
     /// <summary>The stand-in a sampler reads when nothing is bound: (0, 0, 0, 1), or depth 1 for a shadow sampler.</summary>

@@ -14,6 +14,25 @@ public sealed unsafe partial class VkGl : IGlInterop
     // A native host's own rendering instance is open (BeginHostPass): guest segments record into it (docs/renderer-native.md 4.5).
     CommandList? hostList;
     bool hostGuestOpen;
+    // Wave 4: inside a host rendering with secondaries (GpuFrame.Parallel open), the secondary a guest recording at once has.
+    CommandList? hostInline;
+    // The GL draw framebuffer's attachments when the host pass began (a Clear inside the host must be of these).
+    (Attachment? Colour, Attachment? Depth) hostTargets;
+
+    /// <summary>Writes a timestamp where the frame's commands are going now: the primary, or inside a host's rendering with secondaries a
+    /// secondary of its own in its place (a primary may record nothing but secondaries there).</summary>
+    void WriteTimestamp(QueryPool pool, uint index)
+    {
+        if (hostList is not null && Context.Frame.Parallel.Open && !hostGuestOpen)
+        {
+            var list = Context.Frame.Parallel.BeginInline("timestamp");
+            vk.CmdWriteTimestamp2(list.Handle, PipelineStageFlags2.AllCommandsBit, pool, index);
+            Context.Frame.Parallel.EndInline(list);
+            return;
+        }
+        if (hostInline is { } open) { vk.CmdWriteTimestamp2(open.Handle, PipelineStageFlags2.AllCommandsBit, pool, index); return; }
+        vk.CmdWriteTimestamp2(cmd, PipelineStageFlags2.AllCommandsBit, pool, index);
+    }
 
     void GuardNative()
     {
@@ -53,6 +72,13 @@ public sealed unsafe partial class VkGl : IGlInterop
         {
             // A guest of a native host: the host's rendering instance is the pass; nothing of VkGl's is touched.
             if (hostGuestOpen) throw new InvalidOperationException("BeginNativeInPass inside a native segment");
+            if (Context.Frame.Parallel.Open)
+            {
+                // The host's rendering takes secondaries (wave 4): a guest that records at once gets a secondary of its own on this thread,
+                // executed in its place among the prepared segments.
+                hostGuestOpen = true;
+                return hostInline = Context.Frame.Parallel.BeginInline(label);
+            }
             host.Invalidate();
             Context.Frame.Stats.NativeSegments++;
             host.BeginLabel(label);
@@ -87,6 +113,14 @@ public sealed unsafe partial class VkGl : IGlInterop
 
     public void EndNative(CommandList cmd)
     {
+        if (hostGuestOpen && hostInline is { } inline)
+        {
+            if (!ReferenceEquals(cmd, inline)) throw new InvalidOperationException("EndNative without a matching BeginNativeInPass");
+            hostGuestOpen = false;
+            hostInline = null;
+            Context.Frame.Parallel.EndInline(cmd);   // its counters reach VkGl's with the pass's totals (EndHostPass)
+            return;
+        }
         if (hostGuestOpen)
         {
             if (!ReferenceEquals(cmd, hostList)) throw new InvalidOperationException("EndNative without a matching BeginNativeInPass");
@@ -132,6 +166,7 @@ public sealed unsafe partial class VkGl : IGlInterop
         if (!nativeOpen || nativeInPass || !ReferenceEquals(cmd, nativeList)) throw new InvalidOperationException("BeginHostPass needs the list of an open BeginNative segment");
         if (hostList is not null) throw new InvalidOperationException("a host pass is already open");
         hostList = cmd;
+        hostTargets = DrawTargets();
         Stats.RenderPasses++;
     }
 
@@ -144,6 +179,19 @@ public sealed unsafe partial class VkGl : IGlInterop
 
     public void Interleave(Action<CommandList> record)
     {
+        if (hostList is { } host && !hostGuestOpen)
+        {
+            // Inside a native host's rendering (wave 4: the scene's host spans the stage laps): into a secondary of its own when the rendering
+            // takes secondaries, else into the host's list (a timestamp or a label does not disturb the pass).
+            if (Context.Frame.Parallel.Open)
+            {
+                var list = Context.Frame.Parallel.BeginInline("interleave");
+                record(list);
+                Context.Frame.Parallel.EndInline(list);
+            }
+            else record(host);
+            return;
+        }
         GuardNative();
         _ = Cmd;   // a frame is open
         record(Context.Frame.Commands);

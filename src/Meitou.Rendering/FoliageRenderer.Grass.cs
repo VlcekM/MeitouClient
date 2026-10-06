@@ -219,33 +219,65 @@ public sealed unsafe partial class FoliageRenderer
         var p = gp.P;
         gl.Disable(EnableCap.CullFace);
         var interop = Gpu.Interop!;
-        var cmd = interop.BeginNativeInPass("foliage grass");
+        // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the cull (into PreFrame), the sets and the draw, into a job.
         var targets = interop.CurrentTargets();
         var state = interop.CurrentState();
         int segment = SegmentId(GrassKind, p, targets, state);
-        cmd.SetViewport(targets.Viewport);
-        cmd.SetScissor(targets.Scissor);
-        cmd.SetRaster(state.Cull, state.Front);
-        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
-        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
         NewTextureSegment();
         var tables = BindRows(interop, 0);
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
         var result = grassStore.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
         if (GpuCullVerify && !result.IsEmpty) QueueGrassVerify("colour", result);
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance, Time = SwayPhase() };
-        grassFrame!.Bind(cmd, p.Layout, in view, [tables.Patches.Binding]);
-        if (!result.IsEmpty)
-        {
-            cmd.BindPipeline(PipelineFor(ref grassMeshGpu, gp, segment, state, targets.Formats, "foliage grass gpu"));
-            cmd.BindVertexBuffers(0, grassMeshGpu.Vertices);
-            cmd.DrawIndirectCount(result.Draws, result.DrawsOffset, result.Counters, result.CountersOffset, (uint)result.MaxDraws);
-        }
-        interop.EndNative(cmd);
+        var job = grassGpuJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Layout) = (this, targets, state, p.Layout);
+        job.Frame = grassFrame!.Prepare(in view, [tables.Patches.Binding]);
+        job.Pipeline = result.IsEmpty ? null : PipelineFor(ref grassMeshGpu, gp, segment, state, targets.Formats, "foliage grass gpu");
+        (job.Vertices, job.Result) = (grassMeshGpu.Vertices, result);
+        Gpu.Record("foliage grass", job);
         gl.BindVertexArray(0);
         DrawCalls += grassStore.LateDraws;
         DrawnBlades += (int)grassStore.LateBlades;
         return true;
+    }
+
+    readonly JobPool<GrassGpuJob> grassGpuJobs = new();
+
+    /// <summary>One view's GPU grass as prepared (<see cref="DrawGrassGpu"/>): recorded on any thread, the same commands as before wave 4.</summary>
+    sealed class GrassGpuJob : RecordJob
+    {
+        public FoliageRenderer Owner = null!;
+        public PassTargets Targets = null!;
+        public DrawState State = null!;
+        public Silk.NET.Vulkan.PipelineLayout Layout;
+        public FrameBinding Frame;
+        public GraphicsPipeline? Pipeline;
+        public BufferBinding[] Vertices = [];
+        public GrassResult Result;
+
+        public override void Record(CommandList cmd)
+        {
+            var (targets, state) = (Targets, State);
+            cmd.SetViewport(targets.Viewport);
+            cmd.SetScissor(targets.Scissor);
+            cmd.SetRaster(state.Cull, state.Front);
+            cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+            cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+            NativeFrame.Record(cmd, Layout, in Frame);
+            if (Pipeline is { } pipeline)
+            {
+                var r = Result;
+                cmd.BindPipeline(pipeline);
+                cmd.BindVertexBuffers(0, Vertices);
+                cmd.DrawIndirectCount(r.Draws, r.DrawsOffset, r.Counters, r.CountersOffset, (uint)r.MaxDraws);
+            }
+        }
+
+        public override void Release()
+        {
+            Pipeline = null;
+            Owner.grassGpuJobs.Return(this);
+        }
     }
 
     /// <summary><see cref="DrawGrassMotion"/> on the GPU: the same cull for the near slice's camera over the patches that sway, one indirect draw.</summary>

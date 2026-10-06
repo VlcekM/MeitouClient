@@ -148,13 +148,23 @@ public sealed unsafe partial class ShadowPass : IDisposable
         var t = interop.CurrentTargets();
         interop.BeginHostPass(cmd);
         var depth = clear ? t.Depth with { Load = Silk.NET.Vulkan.AttachmentLoadOp.Clear, Clear = new Silk.NET.Vulkan.ClearValue(depthStencil: new Silk.NET.Vulkan.ClearDepthStencilValue(1f, 0)) } : t.Depth;
-        cmd.BeginRendering(new RenderingDesc(default, depth, t.Width, t.Height));
+        // Wave 4 (docs/renderer-native.md 6): the cascades' segments are secondaries, recorded on the job threads when the host ends.
+        bool secondaries = Recording.Secondaries;
+        cmd.BeginRendering(new RenderingDesc(default, depth, t.Width, t.Height), secondaries);
+        if (secondaries) Gpu.Frame.Parallel.Begin(cmd, t.Formats, ShadowStage);
         return cmd;
     }
+
+    /// <summary>The <see cref="StageClock"/> stage of the shadow casters' jobs.</summary>
+    const int ShadowStage = 12;
+
+    /// <summary>A partial clear of the atlas (a Meitou tile) in its place among the guests (<see cref="GpuContext.ClearDepth"/>).</summary>
+    void ClearTile(CommandList host, Silk.NET.Vulkan.Rect2D rect) => Gpu.ClearDepth(host, 1f, rect);
 
     void EndHost(CommandList cmd)
     {
         var interop = Gpu.Interop!;
+        if (Gpu.Frame.Parallel.Open) Gpu.Frame.Parallel.End();
         cmd.EndRendering();
         interop.EndHostPass(cmd);
         interop.EndNative(cmd);

@@ -111,7 +111,9 @@ public sealed unsafe class CommandList
 
     // ---- rendering ----
 
-    public void BeginRendering(in RenderingDesc d)
+    /// <summary>Begins dynamic rendering on <paramref name="d"/>. <paramref name="secondaries"/>: its contents are recorded in secondary command
+    /// buffers (<see cref="ExecuteCommands"/>, docs/renderer-native.md 6.1); nothing else may then be recorded into this list until <see cref="EndRendering"/>.</summary>
+    public void BeginRendering(in RenderingDesc d, bool secondaries = false)
     {
         var colour = new RenderingAttachmentInfo
         {
@@ -126,6 +128,7 @@ public sealed unsafe class CommandList
         var info = new RenderingInfo
         {
             SType = StructureType.RenderingInfo,
+            Flags = secondaries ? RenderingFlags.ContentsSecondaryCommandBuffersBit : 0,
             RenderArea = new Rect2D(new Offset2D(d.X, d.Y), new Extent2D((uint)d.Width, (uint)d.Height)),
             LayerCount = 1,
             ColorAttachmentCount = d.Colour.IsNull ? 0u : 1u, PColorAttachments = d.Colour.IsNull ? null : &colour,
@@ -140,12 +143,52 @@ public sealed unsafe class CommandList
 
     public void EndRendering() => vk.CmdEndRendering(Handle);
 
-    /// <summary>Clears the depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>; a shadow atlas tile, a depth slice).</summary>
-    public void ClearDepth(float value, Rect2D rect)
+    /// <summary>Executes secondary command buffers in order (inside a rendering begun with secondaries). Afterwards nothing is assumed bound.</summary>
+    public void ExecuteCommands(ReadOnlySpan<CommandBuffer> buffers)
     {
-        var attachment = new ClearAttachment(ImageAspectFlags.DepthBit, 0, new ClearValue(depthStencil: new ClearDepthStencilValue(value, 0)));
+        if (buffers.IsEmpty) return;
+        fixed (CommandBuffer* p = buffers) vk.CmdExecuteCommands(Handle, (uint)buffers.Length, p);
+        Invalidate();
+    }
+
+    /// <summary>Begins this list's command buffer as a secondary that continues a rendering of <paramref name="formats"/> (the dynamic-rendering inheritance).</summary>
+    internal void BeginSecondary(in AttachmentFormats formats)
+    {
+        var colour = formats.Colour;
+        var rendering = new CommandBufferInheritanceRenderingInfo
+        {
+            SType = StructureType.CommandBufferInheritanceRenderingInfo,
+            ColorAttachmentCount = colour == Format.Undefined ? 0u : 1u, PColorAttachmentFormats = &colour,
+            DepthAttachmentFormat = formats.Depth, StencilAttachmentFormat = Format.Undefined,
+            RasterizationSamples = (SampleCountFlags)Math.Max(formats.Samples, 1),
+        };
+        var inheritance = new CommandBufferInheritanceInfo { SType = StructureType.CommandBufferInheritanceInfo, PNext = &rendering };
+        var begin = new CommandBufferBeginInfo
+        {
+            SType = StructureType.CommandBufferBeginInfo,
+            Flags = CommandBufferUsageFlags.RenderPassContinueBit | CommandBufferUsageFlags.OneTimeSubmitBit,
+            PInheritanceInfo = &inheritance,
+        };
+        VulkanException.Check(vk.BeginCommandBuffer(Handle, &begin), "vkBeginCommandBuffer");
+        Invalidate();
+    }
+
+    internal void EndSecondary() => VulkanException.Check(vk.EndCommandBuffer(Handle), "vkEndCommandBuffer");
+
+    /// <summary>Clears the depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>; a shadow atlas tile, a depth slice).</summary>
+    public void ClearDepth(float value, Rect2D rect) => Clear(false, default, true, value, rect);
+
+    /// <summary>Clears the colour and / or depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>,
+    /// the colour first, as <c>VkGl.Clear</c> records it).</summary>
+    public void Clear(bool colour, ClearColorValue colourValue, bool depth, float depthValue, Rect2D rect)
+    {
+        var attachments = stackalloc ClearAttachment[2];
+        uint n = 0;
+        if (colour) attachments[n++] = new ClearAttachment(ImageAspectFlags.ColorBit, 0, new ClearValue(colourValue));
+        if (depth) attachments[n++] = new ClearAttachment(ImageAspectFlags.DepthBit, 0, new ClearValue(depthStencil: new ClearDepthStencilValue(depthValue, 0)));
+        if (n == 0) return;
         var area = new ClearRect(rect, 0, 1);
-        vk.CmdClearAttachments(Handle, 1, &attachment, 1, &area);
+        vk.CmdClearAttachments(Handle, n, attachments, 1, &area);
     }
 
     public void BindPipeline(GraphicsPipeline pipeline)
