@@ -30,6 +30,11 @@ sealed class WorldOptions
     public float Hour = 13;
     public float ViewDistance = 450000, FogDistance = 250000, MaterialDistance = 30000;
     public bool NoWater, NoStream, NoReflections, SimpleSky, ShowKeys;
+    /// <summary>The game's <c>texture resolution gimping</c> (0..4; missing key: 1) and <c>water reflection</c> (0..4; missing: 2) / <c>reflection range</c> (missing: 0.6) settings (docs/formats/settings.md).</summary>
+    // The viewer starts at full quality (the old look); the game's missing-key defaults are TextureQuality.Default (1),
+    // ReflectionPass.DefaultLevel (2) and DefaultRange (0.6): --texture-quality 1 --water-reflection 2 --reflection-range 0.6.
+    public int TextureQuality = 0, WaterReflection = 4;
+    public float ReflectionRange = 3;
     /// <summary>Sun shadows (docs/formats/shadows.md): off, the game's <c>shadow quality</c> index, <c>Shadow Range</c>, the debug view.</summary>
     public bool NoShadows;
     public int ShadowQuality = 1, DebugShadows;
@@ -81,7 +86,10 @@ sealed class WorldOptions
           --debug <n>              1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass)
           --time <hour>            time of day for the sun (default 13; sunrise and sunset from the CONSTANTS record)
           --no-water               leave out the water
-          --no-reflections         the water reflects only the sky colour, not the mirrored scene (R toggles)
+          --no-reflections         the water reflects only the sky colour, not the mirrored scene (R toggles; the same as --water-reflection 0)
+          --water-reflection <0..4> the game's `water reflection`: what the water mirrors: 0 nothing (sky colour), 1 sky and terrain, 2 the same (the characters' level; none yet), 3 + buildings and features, 4 + trees, bushes and rocks (default 2; Tab slider)
+          --reflection-range <x>   the game's `reflection range`: the mirrored scene is drawn out to haze distance x this (default 0.6, with the default haze distance 30000)
+          --texture-quality <0..4> the game's `texture resolution gimping`: 0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly; each step drops the top mip of compressed textures as they load (default 1; 0 restores full size)
           --no-shadows             no sun shadow map   --shadow-quality <0|1|2> map side 1024/2048/4096 (default 1)   --shadow-range <u> (1000..9000, default 5000)
           --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture
           (the shadows switch, F5: Meitou by default, view-fitted cascades with soft contact-hardening penumbrae and the terrain's shadow out to the horizon; --faithful shadows the game's CSM)
@@ -174,6 +182,9 @@ sealed class WorldOptions
                 case "--time": o.Hour = F(); break;
                 case "--no-water": o.NoWater = true; break;
                 case "--no-reflections": o.NoReflections = true; break;
+                case "--water-reflection": o.WaterReflection = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, 4); break;
+                case "--reflection-range": o.ReflectionRange = F(); break;
+                case "--texture-quality": o.TextureQuality = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, Meitou.Data.Textures.TextureQuality.Maximum); break;
                 case "--no-shadows": o.NoShadows = true; break;
                 case "--shadow-quality": o.ShadowQuality = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--shadow-range": o.ShadowRange = Math.Clamp(F(), KenshiShadows.MinRange, KenshiShadows.MaxRange); break;
@@ -369,14 +380,19 @@ static class WorldFrame
     public static Gpu CreateGpu(IGl gl, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive)
     {
         var watch = Stopwatch.StartNew();
+        // The game's texture quality, before any texture loads: the world's texture caches read it as they decode. The terrain's layer arrays
+        // have one size, so the Landscape group's drop (the game's textures are 2048²) lowers it instead of dropping mips per file.
+        Meitou.Data.Textures.TextureQuality.Level = o.TextureQuality;
+        int layerSize = Math.Max(Math.Min(o.LayerSize, 2048 >> Meitou.Data.Textures.TextureQuality.LevelsToDrop("terrain.dds", "Landscape")), 16);
+        if (layerSize != o.LayerSize) Console.WriteLine($"textures  quality {o.TextureQuality} ({Meitou.Data.Textures.TextureQuality.Labels[o.TextureQuality]}): terrain layers {layerSize}² instead of {o.LayerSize}²");
         var terrain = new TerrainRenderer(gl, scene.Coarse, scene.CoarseSize, scene.Window, new WorldRenderOptions().LodDistance);
         Console.WriteLine($"uploaded  terrain heights: {terrain.LevelCount} LOD levels, finest {terrain.FinestSpacing:0.#} units ({watch.ElapsedMilliseconds} ms)");
         TerrainTextures? textures = null;
         if (!o.NoTextures && scene.Database is not null)
         {
-            textures = TerrainTextures.Create(gl, install, scene.Database, assets, o.LayerSize);
+            textures = TerrainTextures.Create(gl, install, scene.Database, assets, layerSize);
             foreach (var m in textures.Messages.Take(20)) Console.WriteLine($"warning   {m}");
-            Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {o.LayerSize}² BC3+BC1, {textures.ArrayBytes / 1048576} MB ({watch.ElapsedMilliseconds} ms)");
+            Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {layerSize}² BC3+BC1, {textures.ArrayBytes / 1048576} MB ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
         var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(gl, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze }, Post = new PostProcess(gl, o.Post) };
@@ -394,7 +410,7 @@ static class WorldFrame
         {
             var messages = new List<string>();
             gpu.Water = WaterRenderer.Create(gl, install, scene.Database, assets, gpu.Sky, messages);
-            gpu.Reflection = new ReflectionPass(gl);
+            gpu.Reflection = new ReflectionPass(gl) { Level = o.WaterReflection, Range = o.ReflectionRange };
             foreach (var m in messages) Console.WriteLine($"warning   {m}");
             Console.WriteLine($"water     at height {WorldWater.Height} ({watch.ElapsedMilliseconds} ms)");
         }
@@ -447,6 +463,12 @@ static class WorldFrame
             sliders.Add(new Slider("Small foliage range", 200, 4000, () => foliage.SmallRange, v => foliage.SmallRange = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
             sliders.Add(new Slider("Grass draw distance x", 0.25f, 8, () => foliage.GrassRangeSetting, v => foliage.GrassRangeSetting = v, "0.00", Logarithmic: true));
             sliders.Add(new Slider("Grass density x", 0.1f, 2, () => foliage.GrassDensitySetting, v => foliage.GrassDensitySetting = v, "0.00"));
+        }
+        // The game's `water reflection` (0 off .. 4 everything) and `reflection range` (x the haze distance), docs/formats/settings.md.
+        if (g.Reflection is { } reflection)
+        {
+            sliders.Add(new Slider("Water reflection 0-4 (game)", 0, 4, () => reflection.Level, v => reflection.Level = (int)MathF.Round(v), "0"));
+            sliders.Add(new Slider("Reflection range x (game 0.6)", 0.1f, 5, () => reflection.Range, v => reflection.Range = v, "0.00", Logarithmic: true));
         }
         sliders.Add(new Slider("Terrain LOD distance", 2, 16, () => r.LodDistance, v => r.LodDistance = v, "0.0"));
         // The game's `Shadow Range` slider goes 1000 to 9000; the viewer allows more (the cascades stretch over it).
@@ -510,26 +532,30 @@ static class WorldFrame
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, sun.Y); }
         StageClock.Lap(12);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
-        bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is not null;
-        if (gpu.Reflection is not null) gpu.Reflection.RestoreFramebuffer = gpu.Post?.SceneFramebuffer;
+        bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is { Level: > 0 };   // level 0: no pass, the water shows the sky colour
+        if (gpu.Reflection is not null) { gpu.Reflection.RestoreFramebuffer = gpu.Post?.SceneFramebuffer; gpu.Reflection.MaxDistance = gpu.Sky.HazeDistance * gpu.Reflection.Range; }
         if (reflecting)
             gpu.Reflection!.Render(camera, rw, rh, gpu.Sky, colours, light, gpu.Terrain, render, gpu.Objects is null ? null : (vp, e, frustum) =>
             {
                 var reflection = gpu.Reflection;
                 var objects = gpu.Objects;
-                float distance = objects.ObjectDistance;
-                float bias = objects.LodBias;
-                objects.LodBias = bias * reflection.ObjectLodBias;
-                objects.ObjectDistance = Math.Min(distance, gpu.Reflection.ObjectDistance);
-                objects.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
-                reflection.Lap(2);
-                StageClock.Sub("refl up to objects");
-                objects.ObjectDistance = distance;
-                objects.LodBias = bias;
-                gpu.Foliage?.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, grass: false, maxRange: reflection.FoliageDistance);
+                // The level (docs/formats/settings.md): 3 adds buildings (and the map features, which are not told apart), 4 everything else (foliage).
+                if (reflection.Level >= 3)
+                {
+                    float distance = objects.ObjectDistance;
+                    float bias = objects.LodBias;
+                    objects.LodBias = bias * reflection.ObjectLodBias;
+                    objects.ObjectDistance = Math.Min(distance, gpu.Reflection.ObjectDistance);
+                    objects.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+                    reflection.Lap(2);
+                    StageClock.Sub("refl up to objects");
+                    objects.ObjectDistance = distance;
+                    objects.LodBias = bias;
+                }
+                if (reflection.Level >= 4) gpu.Foliage?.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, grass: false, maxRange: reflection.FoliageDistance);
                 reflection.Lap(3);
                 StageClock.Sub("refl foliage");
-                reflection.SceneStats = $"{objects.DrawnInstances} objects ({objects.DrawnTriangles:N0} triangles, {objects.DrawCalls} calls), {gpu.Foliage?.DrawnInstances ?? 0} foliage meshes ({gpu.Foliage?.DrawCalls ?? 0} calls)";
+                reflection.SceneStats = reflection.Level < 3 ? "no objects (level < 3)" : $"{objects.DrawnInstances} objects ({objects.DrawnTriangles:N0} triangles, {objects.DrawCalls} calls), {(reflection.Level >= 4 ? gpu.Foliage?.DrawnInstances ?? 0 : 0)} foliage meshes ({(reflection.Level >= 4 ? gpu.Foliage?.DrawCalls ?? 0 : 0)} calls)";
             });
         StageClock.Lap(4);
         gl.Viewport(0, 0, (uint)rw, (uint)rh);

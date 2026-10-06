@@ -238,7 +238,7 @@ centre), `--radius` in zones (default 1.5), `--step` (heightmap sample step; by 
 two keeping at most 2048 cells per side, so `--radius 32`, the whole world, uses step 8), camera
 (`--yaw`, `--pitch`, `--distance`), `--screenshot` / `--size` (the window opens maximized on Vulkan, vsync on; `--size` is for
 screenshots, which are headless), `--no-textures`, `--no-objects`, `--no-foliage` (`F` toggles), `--distant-range <zones>`, `--no-distant`,
-`--object-distance`, `--layer-size` (terrain layer textures, default 2048), `--debug 1|2|3`, `--time <hour>` (default 13), `--no-water`,
+`--object-distance`, `--layer-size` (terrain layer textures, at most 2048), `--texture-quality 0..4` (the game's `texture resolution gimping`; the viewer defaults to 0, full size; the game's missing-key default 1 drops one top mip of compressed textures as they load, so the terrain layers become 1024²; [formats/settings.md](formats/settings.md#viewer-texture-quality)), `--water-reflection 0..4`, `--reflection-range`, `--debug 1|2|3`, `--time <hour>` (default 13), `--no-water`,
 `--view-distance` (default 450000), `--fog` (distance where the haze is complete at ground level, default 250000), `--simple-sky` (the old colour-model sky and fog; `B` toggles), `--weather <name>` (a WEATHER record's sky colour, fog and clouds; default "Default": clear), `--clouds <0..1>` and
 `--material-distance` (where the full terrain material gives way to the ground colour, default 30000 as in the
 game). `--camera-at x,z` starts the camera somewhere
@@ -555,7 +555,7 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   (about 80 bytes each, up to ~0.5 GB), 2600 grass pages with 5.8M blades in the forest, 3400-5600 draw calls, draw
   CPU 25-70 ms, GPU 30-150 ms, layout 45-190 s: x16 is not usable (sliders stop at x8, not measured). x4 is within 3 ms GPU for
   foliage when the GPU is not shared.
-- **Reflections** (`ReflectionPass`; what the game does is in [formats/terrain.md](formats/terrain.md#shading-observed-waterhlsl)): the
+- **Reflections** (`ReflectionPass`; what the game does is in [formats/terrain.md](formats/terrain.md#shading-observed-waterhlsl)). **What is drawn follows the game's `water reflection` and `reflection range`** (`--water-reflection 0..4`, viewer default 4 (the game's missing-key default is 2: sky and terrain only; 3 adds objects, 4 foliage); `--reflection-range`, viewer default 3 x haze distance (the game's is 0.6); Tab sliders; details and what is not done in [formats/settings.md](formats/settings.md#viewer-water-reflection)); the cut-downs below say how much of it. The
   mirrored scene is drawn into a half-resolution 4x multisampled texture, and what it draws is cut to what a half-resolution, ripple-distorted
   image can show. Foliage meshes (no grass) and objects reach 3000 units from the eye (`FoliageDistance` through `FoliageRenderer.Draw(...,
   maxRange)`, which also stops the pass walking the far zones; `ObjectDistance`; before, the foliage went as far as the picture's own layers, up to 32000

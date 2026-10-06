@@ -63,7 +63,7 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
     /// <summary>Unused for this long: unloaded.</summary>
     public double IdleSeconds { get; set; } = StreamingTuning.IdleSeconds;
     /// <summary>Above this the least recently used textures that were unused for <see cref="PressureIdleSeconds"/> go too.</summary>
-    public double HighWaterMb { get; set; } = StreamingTuning.IdleSeconds > 1e8 ? double.MaxValue : 1024;
+    public double HighWaterMb { get; set; } = StreamingTuning.IdleSeconds > 1e8 ? double.MaxValue : TextureQuality.MemoryBudgetMb(TextureQuality.Level);
     public double PressureIdleSeconds { get; set; } = 8;
 
     public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far)";
@@ -97,7 +97,7 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
         t.State = WorldTexture.Residency.Loading;
         t.Pending = BackgroundWork.Run(() =>
         {
-            try { return Load(path); }
+            try { return Load(path, TextureQuality.LevelsToDrop(System.IO.Path.GetFileName(path), assets.Configured.GroupOfFile(path))); }
             catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException)
             {
                 lock (Messages) Messages.Add($"texture {name}: {e.Message}");
@@ -195,12 +195,12 @@ public sealed unsafe class WorldTextureCache(IGl gl, AssetLocator assets) : IDis
     /// </summary>
     static readonly bool Uncompressed = Environment.GetEnvironmentVariable("MEITOU_UNCOMPRESSED_TEXTURES") == "1";
 
-    static TextureData Load(string path)
+    static TextureData Load(string path, int dropMips)
     {
         var bytes = File.ReadAllBytes(path);
         if (bytes.Length >= 4 && BitConverter.ToUInt32(bytes, 0) == DdsReader.Magic)
         {
-            var dds = DdsReader.Read(bytes);
+            var dds = TextureQuality.DropTopMips(DdsReader.Read(bytes), dropMips);   // texture quality: the game drops top mips as it loads (docs/formats/settings.md)
             if (!Uncompressed && CanUploadCompressed(dds))
             {
                 // Only the level the swizzle test looks at is decoded on the CPU.
