@@ -738,6 +738,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         {
             long dt = System.Diagnostics.Stopwatch.GetTimestamp() - t0;
             int k = depth ? 1 : 0;
+            if (meshSeen[k]++ < StepTiming.WarmCalls) return draws;   // the first calls: pipelines, registrations, cold caches
             meshTicks[k] += dt; meshCalls[k]++; meshDraws[k] += draws;
             if (MeshTiming == 2)
             {
@@ -756,7 +757,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// <c>=2</c> also records each call a second time and reports that one as "warm" (docs/renderer-native.md 7.1, cold and warm cost).
     /// </summary>
     static readonly int MeshTiming = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_MESH_TIMING"), out int mode) ? mode : 0;
-    readonly long[] meshTicks = new long[2], meshWarmTicks = new long[2], meshCalls = new long[2], meshDraws = new long[2];
+    readonly long[] meshTicks = new long[2], meshWarmTicks = new long[2], meshCalls = new long[2], meshDraws = new long[2], meshSeen = new long[2];
 
     void ReportMeshTiming()
     {
@@ -843,9 +844,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
     sealed class MeshGroup
     {
         public uint Vao;
-        public int IndexCount, Count, Offset;
+        public int IndexCount, Count, Offset, Index;
         public bool Mirrored;
-        public Matrix4x4[] Models = new Matrix4x4[16];
         /// <summary>What a native draw of this mesh needs, per program: kept while the vertex-array stamp holds and the export is the same.
         /// Inline (no object of its own), so a draw reads what grouping has just touched.</summary>
         public NativeMesh ColourNative, DepthNative;
@@ -903,27 +903,44 @@ public sealed unsafe class TerrainRenderer : IDisposable
         foreach (var g in meshGroupList) g.Count = 0;
         meshGroupList.Clear();
         if (meshGroups.Count > 4096) meshGroups.Clear();   // vertex arrays come and go with streaming
-        foreach (var (vao, count, m) in meshes)
+        var items = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(meshes);
+        if (groupOf.Length < items.Length) groupOf = new int[Math.Max(items.Length, groupOf.Length * 2)];
+        // Pass 1: each placement's group (the callers list a mesh's placements in runs, so the last group usually answers without a lookup).
+        MeshGroup? last = null;
+        for (int i = 0; i < items.Length; i++)
         {
-            var key = (vao, count, m.GetDeterminant() < 0);
-            if (!meshGroups.TryGetValue(key, out var g)) meshGroups[key] = g = new MeshGroup { Vao = vao, IndexCount = count, Mirrored = key.Item3 };
-            if (g.Count == 0) meshGroupList.Add(g);
-            if (g.Count == g.Models.Length) Array.Resize(ref g.Models, g.Count * 2);
-            var placed = m;
-            // Not resident yet (or no textures): -1, blend the biomes as the terrain does.
-            if (biomes) placed.M14 = textures?.FeatureBiomeRow(m.Translation.X, m.Translation.Z) ?? -1;
-            g.Models[g.Count++] = placed;
+            ref readonly var item = ref items[i];
+            bool mirrored = item.Model.GetDeterminant() < 0;
+            var g = last;
+            if (g is null || g.Vao != item.Vao || g.IndexCount != item.IndexCount || g.Mirrored != mirrored)
+            {
+                var key = (item.Vao, item.IndexCount, mirrored);
+                if (!meshGroups.TryGetValue(key, out g)) meshGroups[key] = g = new MeshGroup { Vao = item.Vao, IndexCount = item.IndexCount, Mirrored = mirrored };
+                if (g.Count == 0) { g.Index = meshGroupList.Count; meshGroupList.Add(g); }
+                last = g;
+            }
+            g.Count++;
+            groupOf[i] = g.Index;
         }
         if (meshGroupList.Count == 0) return false;
         int total = 0;
-        foreach (var g in meshGroupList) { g.Offset = total; total += g.Count; }
-        // One copy: each group's placements straight into the frame's (write-combined) constants, in order.
-        placements = gpu.Frame.Constants.Allocate((ulong)total * 64, 16);
-        var target = new Span<Matrix4x4>(placements.Pointer, total);
-        foreach (var g in meshGroupList) g.Models.AsSpan(0, g.Count).CopyTo(target[g.Offset..]);
+        if (cursors.Length < meshGroupList.Count) cursors = new int[Math.Max(meshGroupList.Count, cursors.Length * 2)];
+        for (int k = 0; k < meshGroupList.Count; k++) { var g = meshGroupList[k]; cursors[k] = g.Offset = total; total += g.Count; }
+        // Pass 2: each placement straight into its group's place in the frame's (write-combined) constants, one 64-byte line each.
+        placements = gpu.Frame.Constants.Allocate((ulong)total * 64, 64);
+        var target = (Matrix4x4*)placements.Pointer;
+        var t = biomes ? textures : null;
+        for (int i = 0; i < items.Length; i++)
+        {
+            var placed = items[i].Model;
+            // Not resident yet (or no textures): -1, blend the biomes as the terrain does.
+            if (biomes) placed.M14 = t?.FeatureBiomeRow(placed.M41, placed.M43) ?? -1;
+            target[cursors[groupOf[i]]++] = placed;
+        }
         return true;
     }
 
+    int[] groupOf = new int[1024], cursors = new int[64];
     /// <summary>
     /// Draws <see cref="meshGroupList"/> natively with <paramref name="p"/> inside the pass VkGl is drawing (its targets and GL's state at this
     /// point), back faces culled, a mirroring placement turning the winding round; the placements from this frame's constants. Leaves GL's
@@ -1043,7 +1060,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
 /// <c>MEITOU_TERRAIN_TIMING=1</c>: CPU time of the terrain patches (colour, shadow depth), the TERRAIN-mode meshes (colour, depth), the Meitou
 /// blocker map and the terrain shadow sweep, per call and per draw, printed when the terrain renderer is disposed (docs/renderer-native.md
 /// 7.1, wave 3 agent B and wave 3b step O). For the native segments also the segment alone (<c>BeginNativeInPass</c> to <c>EndNative</c>)
-/// and its draw loop alone, two stamps each; for the meshes the grouping of the placements.
+/// and its draw loop alone, two stamps each; for the meshes the grouping of the placements. The first <see cref="WarmCalls"/> calls of the
+/// patches and the meshes are left out.
 /// </summary>
 internal static class StepTiming
 {
@@ -1051,21 +1069,26 @@ internal static class StepTiming
     public const int PatchColour = 0, PatchDepth = 1, Blocker = 2, Sweep = 3, MeshColour = 4, MeshDepth = 5;
     const int Kinds = 6;
     static readonly string[] Names = ["patches colour", "patches depth", "blocker map", "terrain sweep", "meshes colour", "meshes depth"];
-    static readonly long[] ticks = new long[Kinds], calls = new long[Kinds], draws = new long[Kinds], segment = new long[Kinds], loop = new long[Kinds], group = new long[Kinds];
+    static readonly long[] ticks = new long[Kinds], calls = new long[Kinds], draws = new long[Kinds], segment = new long[Kinds], loop = new long[Kinds], group = new long[Kinds], seen = new long[Kinds];
+    /// <summary>Calls left out at the start per kind (pipeline creation, first registrations, cold caches of the first frames); none for the
+    /// blocker map and the sweep (the sweep runs once).</summary>
+    static readonly int[] warm = [WarmCalls, WarmCalls, 0, 0, WarmCalls, WarmCalls];
+    public const int WarmCalls = 100;
+    static bool Counted(int kind) => seen[kind] >= warm[kind];
 
     public static long Now() => On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
 
     public static void Add(int kind, long start, int count)
     {
-        if (!On) return;
+        if (!On || seen[kind]++ < warm[kind]) return;
         ticks[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start;
         calls[kind]++;
         draws[kind] += count;
     }
 
-    public static void Segment(int kind, long start) { if (On) segment[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start; }
-    public static void Loop(int kind, long start) { if (On) loop[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start; }
-    public static void Group(int kind, long start) { if (On) group[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start; }
+    public static void Segment(int kind, long start) { if (On && Counted(kind)) segment[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start; }
+    public static void Loop(int kind, long start) { if (On && Counted(kind)) loop[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start; }
+    public static void Group(int kind, long start) { if (On && Counted(kind)) group[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start; }
 
     public static void Report()
     {
@@ -1079,7 +1102,7 @@ internal static class StepTiming
                 $"terrain timing  {Names[k],-15} {calls[k]} calls, {draws[k]} draws, {us / calls[k]:F1} us/call, {perDraw(ticks[k]):F2} us/draw") +
                 (segment[k] > 0 ? FormattableString.Invariant($", segment {segment[k] * f / calls[k]:F1} us/call {perDraw(segment[k]):F3} us/draw, loop {perDraw(loop[k]):F3} us/draw") : "") +
                 (group[k] > 0 ? FormattableString.Invariant($", grouping {group[k] * f / calls[k]:F1} us/call") : ""));
-            ticks[k] = calls[k] = draws[k] = segment[k] = loop[k] = group[k] = 0;
+            ticks[k] = calls[k] = draws[k] = segment[k] = loop[k] = group[k] = seen[k] = 0;
         }
     }
 }
