@@ -2209,34 +2209,79 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         var p = gp.P;
         gl.Disable(EnableCap.CullFace);
         var interop = Gpu.Interop!;
-        var cmd = interop.BeginNativeInPass("foliage grass");
+        // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the sets, and per draw the push block with its bindless indices.
         var targets = interop.CurrentTargets();
         var state = interop.CurrentState();
         int segment = SegmentId(GrassKind, p, targets, state);
-        cmd.SetViewport(targets.Viewport);
-        cmd.SetScissor(targets.Scissor);
-        cmd.SetRaster(state.Cull, state.Front);
-        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
-        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance, Time = SwayPhase() };
-        nativeFrame.Bind(cmd, p.Layout, in view);
+        var job = grassJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Layout, job.Count) = (this, targets, state, p.Layout, 0);
+        job.Frame = nativeFrame.Prepare(in view);
         NewTextureSegment();
-        GrassPush last = default;
-        bool pushed = false;
         // The blades of every page are one buffer (the grass arena): one pipeline and one vertex binding for the segment, the draw's first instance finds its page.
-        cmd.BindPipeline(PipelineFor(ref grassMeshCpu, gp, segment, state, targets.Formats, "foliage grass"));
-        cmd.BindVertexBuffers(0, grassMeshCpu.Vertices);
+        job.Pipeline = PipelineFor(ref grassMeshCpu, gp, segment, state, targets.Formats, "foliage grass");
+        job.Vertices = grassMeshCpu.Vertices;
+        if (job.Draws.Length < grassDraws.Count) job.Draws = new GrassJob.Draw[Math.Max(grassDraws.Count, job.Draws.Length * 2)];
         foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(grassDraws))
         {
             var pc = d.Push;
             pc.Sprite = Texture(interop, d.Sprite);
             pc.ColourMap = Texture(interop, d.Colour);
             var buffer = d.Buffer;
-            Push(cmd, p, in pc, ref last, ref pushed);
-            cmd.Draw(d.Vertices, (uint)buffer.Shown, 0, buffer.FirstBlade);
+            job.Draws[job.Count++] = new GrassJob.Draw { Push = pc, Vertices = d.Vertices, Instances = (uint)buffer.Shown, FirstInstance = buffer.FirstBlade };
         }
-        interop.EndNative(cmd);
+        Gpu.Record("foliage grass", job);
         gl.BindVertexArray(0);
+    }
+
+    readonly JobPool<GrassJob> grassJobs = new();
+
+    /// <summary>The CPU-culled grass of one view as prepared (<see cref="RecordGrass"/>): recorded on any thread, the same commands as before wave 4.</summary>
+    sealed class GrassJob : RecordJob
+    {
+        public struct Draw
+        {
+            public GrassPush Push;
+            public uint Vertices, Instances, FirstInstance;
+        }
+
+        public FoliageRenderer Owner = null!;
+        public PassTargets Targets = null!;
+        public DrawState State = null!;
+        public Silk.NET.Vulkan.PipelineLayout Layout;
+        public FrameBinding Frame;
+        public GraphicsPipeline Pipeline = null!;
+        public BufferBinding[] Vertices = [];
+        public Draw[] Draws = new Draw[64];
+        public int Count;
+
+        public override void Record(CommandList cmd)
+        {
+            var (targets, state, layout) = (Targets, State, Layout);
+            cmd.SetViewport(targets.Viewport);
+            cmd.SetScissor(targets.Scissor);
+            cmd.SetRaster(state.Cull, state.Front);
+            cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+            cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+            NativeFrame.Record(cmd, layout, in Frame);
+            GrassPush last = default;
+            bool pushed = false;
+            cmd.BindPipeline(Pipeline);
+            cmd.BindVertexBuffers(0, Vertices);
+            for (int i = 0; i < Count; i++)
+            {
+                ref readonly var d = ref Draws[i];
+                PushTo(cmd, layout, in d.Push, ref last, ref pushed);
+                cmd.Draw(d.Vertices, d.Instances, 0, d.FirstInstance);
+            }
+        }
+
+        public override void Release()
+        {
+            Pipeline = null!;
+            Count = 0;
+            Owner.grassJobs.Return(this);
+        }
     }
 
     float SwayPhase() => (float)((SwaySeconds ?? clock.Elapsed.TotalSeconds) * 0.3 * Math.PI % (2 * Math.PI));

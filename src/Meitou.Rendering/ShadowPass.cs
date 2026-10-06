@@ -158,25 +158,8 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// <summary>The <see cref="StageClock"/> stage of the shadow casters' jobs.</summary>
     const int ShadowStage = 12;
 
-    /// <summary>A partial clear of the atlas (a Meitou tile) in its place among the guests: inline into the host's rendering, or as a job of its own
-    /// when the rendering takes secondaries (the primary may record nothing else there).</summary>
-    void ClearTile(CommandList host, Silk.NET.Vulkan.Rect2D rect)
-    {
-        if (!Gpu.Frame.Parallel.Open) { host.ClearDepth(1f, rect); return; }
-        var job = clearJobs.Rent();
-        (job.Owner, job.Rect) = (this, rect);
-        Gpu.Record("shadow tile clear", job);
-    }
-
-    readonly JobPool<ClearJob> clearJobs = new();
-
-    sealed class ClearJob : RecordJob
-    {
-        public ShadowPass Owner = null!;
-        public Silk.NET.Vulkan.Rect2D Rect;
-        public override void Record(CommandList cmd) => cmd.ClearDepth(1f, Rect);
-        public override void Release() => Owner.clearJobs.Return(this);
-    }
+    /// <summary>A partial clear of the atlas (a Meitou tile) in its place among the guests (<see cref="GpuContext.ClearDepth"/>).</summary>
+    void ClearTile(CommandList host, Silk.NET.Vulkan.Rect2D rect) => Gpu.ClearDepth(host, 1f, rect);
 
     void EndHost(CommandList cmd)
     {

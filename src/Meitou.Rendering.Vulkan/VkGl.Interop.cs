@@ -16,6 +16,8 @@ public sealed unsafe partial class VkGl : IGlInterop
     bool hostGuestOpen;
     // Wave 4: inside a host rendering with secondaries (GpuFrame.Parallel open), the secondary a guest recording at once has.
     CommandList? hostInline;
+    // The GL draw framebuffer's attachments when the host pass began (a Clear inside the host must be of these).
+    (Attachment? Colour, Attachment? Depth) hostTargets;
 
     /// <summary>Writes a timestamp where the frame's commands are going now: the primary, or inside a host's rendering with secondaries a
     /// secondary of its own in its place (a primary may record nothing but secondaries there).</summary>
@@ -164,6 +166,7 @@ public sealed unsafe partial class VkGl : IGlInterop
         if (!nativeOpen || nativeInPass || !ReferenceEquals(cmd, nativeList)) throw new InvalidOperationException("BeginHostPass needs the list of an open BeginNative segment");
         if (hostList is not null) throw new InvalidOperationException("a host pass is already open");
         hostList = cmd;
+        hostTargets = DrawTargets();
         Stats.RenderPasses++;
     }
 
@@ -176,6 +179,19 @@ public sealed unsafe partial class VkGl : IGlInterop
 
     public void Interleave(Action<CommandList> record)
     {
+        if (hostList is { } host && !hostGuestOpen)
+        {
+            // Inside a native host's rendering (wave 4: the scene's host spans the stage laps): into a secondary of its own when the rendering
+            // takes secondaries, else into the host's list (a timestamp or a label does not disturb the pass).
+            if (Context.Frame.Parallel.Open)
+            {
+                var list = Context.Frame.Parallel.BeginInline("interleave");
+                record(list);
+                Context.Frame.Parallel.EndInline(list);
+            }
+            else record(host);
+            return;
+        }
         GuardNative();
         _ = Cmd;   // a frame is open
         record(Context.Frame.Commands);

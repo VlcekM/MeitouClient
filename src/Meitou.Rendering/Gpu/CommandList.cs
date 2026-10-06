@@ -176,11 +176,19 @@ public sealed unsafe class CommandList
     internal void EndSecondary() => VulkanException.Check(vk.EndCommandBuffer(Handle), "vkEndCommandBuffer");
 
     /// <summary>Clears the depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>; a shadow atlas tile, a depth slice).</summary>
-    public void ClearDepth(float value, Rect2D rect)
+    public void ClearDepth(float value, Rect2D rect) => Clear(false, default, true, value, rect);
+
+    /// <summary>Clears the colour and / or depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>,
+    /// the colour first, as <c>VkGl.Clear</c> records it).</summary>
+    public void Clear(bool colour, ClearColorValue colourValue, bool depth, float depthValue, Rect2D rect)
     {
-        var attachment = new ClearAttachment(ImageAspectFlags.DepthBit, 0, new ClearValue(depthStencil: new ClearDepthStencilValue(value, 0)));
+        var attachments = stackalloc ClearAttachment[2];
+        uint n = 0;
+        if (colour) attachments[n++] = new ClearAttachment(ImageAspectFlags.ColorBit, 0, new ClearValue(colourValue));
+        if (depth) attachments[n++] = new ClearAttachment(ImageAspectFlags.DepthBit, 0, new ClearValue(depthStencil: new ClearDepthStencilValue(depthValue, 0)));
+        if (n == 0) return;
         var area = new ClearRect(rect, 0, 1);
-        vk.CmdClearAttachments(Handle, 1, &attachment, 1, &area);
+        vk.CmdClearAttachments(Handle, n, attachments, 1, &area);
     }
 
     public void BindPipeline(GraphicsPipeline pipeline)

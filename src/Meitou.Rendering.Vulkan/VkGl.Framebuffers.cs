@@ -194,6 +194,18 @@ public sealed unsafe partial class VkGl
         var size = colour is { } ca ? Size(ca) : Size(depth!.Value);
         bool full = !scissorTest || (scissor.X <= 0 && scissor.Y <= 0 && scissor.X + scissor.W >= size.Item1 && scissor.Y + scissor.H >= size.Item2);
         bool partialMask = c && !(colourMask.R && colourMask.G && colourMask.B && colourMask.A);
+        if (hostList is { } host && !hostGuestOpen)
+        {
+            // Inside a native host's rendering of the same targets (wave 4, the scene's host): the clear VkGl would record into its own open pass
+            // (vkCmdClearAttachments over the target or the scissor), recorded in its place among the host's segments.
+            if (colour != hostTargets.Colour || depth != hostTargets.Depth) throw new InvalidOperationException("Clear inside a native host of other targets");
+            if (partialMask) throw new NotSupportedException("clearing with a partial colour mask");
+            var area = full
+                ? new Rect2D(new Offset2D(0, 0), new Extent2D((uint)size.Item1, (uint)size.Item2))
+                : new Rect2D(new Offset2D(Math.Max(scissor.X, 0), Math.Max(scissor.Y, 0)), new Extent2D((uint)Math.Max(scissor.W, 0), (uint)Math.Max(scissor.H, 0)));
+            Context.Clear(host, c, new ClearColorValue(clearColourValue.X, clearColourValue.Y, clearColourValue.Z, clearColourValue.W), d, (float)clearDepthValue, area);
+            return;
+        }
         if (full && !partialMask && !(passActive && passColour == colour && passDepth == depth))
         {
             EnsurePass(c, d);

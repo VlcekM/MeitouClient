@@ -231,6 +231,55 @@ sealed class WorldOptions
     }
 }
 
+/// <summary>
+/// The scene's passes as a native host (wave 4, docs/renderer-native.md 4.5 and 6): <see cref="Open"/> takes over the framebuffer GL has bound
+/// (VkGl's pass ends, its clears already done), begins a rendering of its targets (LOAD / STORE) whose contents are secondaries, and the guests'
+/// segments are queued (<see cref="GpuContext.Record"/>) or recorded at once into secondaries of their own (sky, water, the grass, timestamps);
+/// <see cref="Close"/> records the queued jobs on the job threads, executes everything in order and hands the frame back to VkGl.
+/// A <c>gl.Clear</c> while it is open is recorded in its place (<c>VkGl.Clear</c> inside a host).
+/// </summary>
+sealed class SceneHost
+{
+    readonly GpuContext ctx;
+    CommandList? cmd;
+
+    SceneHost(GpuContext ctx) => this.ctx = ctx;
+
+    public static SceneHost? Create(IGl gl) => GpuContext.Of(gl) is { Interop: not null } ctx ? new SceneHost(ctx) : null;
+
+    public bool IsOpen => cmd is not null;
+
+    /// <summary>Opens the host on the bound framebuffer (nothing when it is open already); its jobs count towards <paramref name="stage"/>.</summary>
+    public void Open(int stage)
+    {
+        if (cmd is not null) { Stage(stage); return; }
+        var interop = ctx.Interop!;
+        var list = interop.BeginNative("scene");
+        var t = interop.CurrentTargets();
+        interop.BeginHostPass(list);
+        list.BeginRendering(t.Rendering, secondaries: true);
+        ctx.Frame.Parallel.Begin(list, t.Formats, stage);
+        cmd = list;
+    }
+
+    /// <summary>The <see cref="StageClock"/> stage the guests' jobs count towards from now on.</summary>
+    public void Stage(int stage)
+    {
+        if (cmd is not null) ctx.Frame.Parallel.Stage = stage;
+    }
+
+    public void Close()
+    {
+        if (cmd is not { } list) return;
+        var interop = ctx.Interop!;
+        ctx.Frame.Parallel.End();
+        list.EndRendering();
+        interop.EndHostPass(list);
+        interop.EndNative(list);
+        cmd = null;
+    }
+}
+
 /// <summary>The loaded world region: heights (the region fine, the whole world coarse), and where the camera starts.</summary>
 sealed class WorldScene : IDisposable
 {
@@ -350,6 +399,8 @@ static class WorldFrame
         public WorldObjectRenderer? Objects;
         public FoliageRenderer? Foliage;
         public TerrainStreamer? Streamer;
+        /// <summary>The scene's native host (wave 4), made at the first frame.</summary>
+        public SceneHost? Scene;
         /// <summary>With <c>--no-stream</c>: where the streamer is kept, instead of at the eye.</summary>
         public Vector3? Anchor;
         /// <summary>The heat haze's target this frame (the weather's <c>heat haze</c> × strength 1 × the sun factor), for the statistics.</summary>
@@ -582,6 +633,12 @@ static class WorldFrame
         gl.Viewport(0, 0, (uint)rw, (uint)rh);
         gl.ClearColor(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1);
         gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        // Wave 4 (docs/renderer-native.md 6): the scene's passes are a native host whose rendering takes secondaries, the guests' segments
+        // recorded on the job threads when it ends; not with the terrain's debug outline (a VkGl draw) or with MEITOU_RECORD_THREADS=0.
+        var host = gpu.Scene ??= SceneHost.Create(gl);
+        bool hosted = host is not null && Recording.Secondaries && render.Wireframe == 0;
+        bool temporal = gpu.Post?.Temporal == true;
+        if (hosted) host!.Open(5);
         float aspect = width / (float)Math.Max(height, 1);
         var view = camera.View;
         // Rotation only: with the eye's world position in the matrix, the directions rebuilt from it lose float
@@ -597,8 +654,11 @@ static class WorldFrame
         foreach (var (near, far) in camera.Slices())
         {
             bool nearSlice = near <= camera.Near;
+            // With an upscaler the slices draw into different framebuffers (the far slice's own depth): one host per slice then.
+            if (hosted && temporal) host!.Close();
             if (!first || nearSlice) gpu.Post?.BeginNearSlice(near, far); else gpu.Post?.BeginFarSlice(near, far);
-            if (!first) gl.Clear(ClearBufferMask.DepthBufferBit);
+            if (!first) gl.Clear(ClearBufferMask.DepthBufferBit);   // inside the host: in its place among the segments (VkGl.Clear)
+            if (hosted) host!.Open(6);
             first = false;
             if (nearSlice) gpu.Post?.SetNearSlice(near, far, camera.FieldOfView, aspect);
             var viewProjection = view * Jitter.Apply(camera.Projection(aspect, near, far), jitter, rw, rh);
@@ -608,17 +668,22 @@ static class WorldFrame
                 gpu.Post.ObjectMotion ??= swaying.DrawGrassMotion;
                 swaying.SetMotionCamera(viewProjection, view * camera.Projection(aspect, near, far), eye, frustum);
             }
+            host?.Stage(6);
             gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
             StageClock.Lap(6);
+            host?.Stage(7);
             if (render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
             StageClock.Lap(7);
             // Foliage in every depth slice (it reaches 32000+ units at the default x4), counted as one draw.
+            host?.Stage(8);
             gpu.Foliage?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, continuation: foliageDrawn);
             foliageDrawn = true;
             StageClock.Lap(8);
+            host?.Stage(9);
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
             StageClock.Lap(9);
         }
+        host?.Close();   // records the last slice's jobs and executes them (stage 9's time on the render thread)
         if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneFramebuffer, rw, rh);
         gpu.Post?.End(); // SSAO, upscaler, exposure, tone map, FXAA into gpu.Post.Target
         if (gpu.DebugShadows > 0 && gpu.Shadow is not null)
