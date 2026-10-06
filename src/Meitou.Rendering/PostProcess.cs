@@ -41,16 +41,126 @@ public sealed unsafe class PostProcess : IDisposable
     Target2D? motion, upscaleDepth, reactive, historyA, historyB;
     bool historyValid, farSliceDrawn, warnedFallback;
     long frameIndex;
-    readonly uint progVelocity, progTaa;
     Target2D? aoA, aoB;
     Target2D? ldr, ldrFxaa;   // the composite's LDR picture that FXAA or the heat haze reads, and FXAA's when the heat haze follows it
     uint flowTexture, perturbationTexture;   // the heat haze's FlowHAZE.dds and Perturber.dds (0: not found, no heat haze)
     Target2D? luminance, adaptA, adaptB;   // Kenshi's exposure: the luminance measure (mipmapped) and the adapted value (1 × 1, ping-pong)
     bool adaptedValid;
     readonly System.Diagnostics.Stopwatch adaptClock = new();
-    readonly uint vao;
-    readonly uint progSsao, progBlur, progComposite, progLuminance, progAdapt, progFxaa, progHeatHaze;
-    readonly Dictionary<(uint, string), int> uniforms = [];
+
+    // Native full-screen passes (docs/renderer-native.md 7.1, wave 3 agent E, step P): the same SPIR-V and layout as the GL programs they replace,
+    // one segment per draw in VkGl's pass (the framebuffer and viewport are still GL's, which is what CurrentTargets reads and what the foliage's
+    // grass-motion guest needs in the velocity pass). Every handle is resolved once, here.
+    readonly IGlInterop interop;
+    readonly SsaoPass ssao;
+    readonly BlurPass blur;
+    readonly LuminancePass luminancePass;
+    readonly AdaptPass adaptPass;
+    readonly CompositePass compositePass;
+    readonly FxaaPass fxaaPass;
+    readonly HeatHazePass hazePass;
+    readonly VelocityPass velocityPass;
+    readonly TaaPass taaPass;
+
+    /// <summary>One native full-screen program: the shared vertex shader with a fragment shader, and its resolved handles.</summary>
+    abstract class FullscreenProgram
+    {
+        public readonly LegacyProgram P;
+        protected FullscreenProgram(GpuContext gpu, string fragment, string name) => P = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, fragment, name);
+    }
+
+    sealed class BlurPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Ao;
+        public readonly UniformHandle Step;
+        public BlurPass(GpuContext gpu) : base(gpu, PostProcessShaders.SsaoBlur, "post ssao blur") => (Ao, Step) = (P.Sampler("uAo"), P.Uniform("uStep"));
+    }
+
+    sealed class LuminancePass : FullscreenProgram
+    {
+        public readonly SamplerSlot Scene;
+        public readonly UniformHandle Cell;
+        public LuminancePass(GpuContext gpu) : base(gpu, PostProcessShaders.Luminance, "post luminance") => (Scene, Cell) = (P.Sampler("uScene"), P.Uniform("uCell"));
+    }
+
+    sealed class AdaptPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Luminance, Last;
+        public readonly UniformHandle Level, Blend, Band;
+        public AdaptPass(GpuContext gpu) : base(gpu, PostProcessShaders.Adapt, "post adapt")
+        {
+            (Luminance, Last) = (P.Sampler("uLuminance"), P.Sampler("uLast"));
+            (Level, Blend, Band) = (P.Uniform("uLevel"), P.Uniform("uBlend"), P.Uniform("uBand"));
+        }
+    }
+
+    sealed class CompositePass : FullscreenProgram
+    {
+        public readonly SamplerSlot Scene, Ao, Adapted;
+        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug;
+        public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
+        {
+            (Scene, Ao, Adapted) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"));
+            (Auto, Exposure, UseAo, Dither, Debug) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"), P.Uniform("uDebug"));
+        }
+    }
+
+    sealed class FxaaPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Image;
+        public readonly UniformHandle Texel;
+        public FxaaPass(GpuContext gpu) : base(gpu, PostProcessShaders.Fxaa, "post fxaa") => (Image, Texel) = (P.Sampler("uImage"), P.Uniform("uTexel"));
+    }
+
+    sealed class HeatHazePass : FullscreenProgram
+    {
+        public readonly SamplerSlot Flow, Perturbation, Depth, Image;
+        public readonly UniformHandle Phase, Amount, Tan, NearFar, FarClip, HasDepth;
+        public HeatHazePass(GpuContext gpu) : base(gpu, PostProcessShaders.HeatHaze, "post heat haze")
+        {
+            (Flow, Perturbation, Depth, Image) = (P.Sampler("uFlow"), P.Sampler("uPerturbation"), P.Sampler("uDepth"), P.Sampler("uImage"));
+            (Phase, Amount, Tan, NearFar, FarClip, HasDepth) = (P.Uniform("uPhase"), P.Uniform("uAmount"), P.Uniform("uTan"), P.Uniform("uNearFar"),
+                P.Uniform("uFarClip"), P.Uniform("uHasDepth"));
+        }
+    }
+
+    sealed class VelocityPass : FullscreenProgram
+    {
+        public readonly SamplerSlot NearDepth, FarDepth;
+        public readonly UniformHandle NearToPrev, FarToPrev, NearPlanes, FarPlanes, FullPlanes, JitterNdc, HasFar, Mode, Tan, Right, Up, Back, EyeY, WaterY, WaterReactive;
+        public VelocityPass(GpuContext gpu) : base(gpu, UpscaleShaders.Velocity, "post velocity")
+        {
+            (NearDepth, FarDepth) = (P.Sampler("uNearDepth"), P.Sampler("uFarDepth"));
+            (NearToPrev, FarToPrev, NearPlanes, FarPlanes, FullPlanes) = (P.Uniform("uNearToPrev"), P.Uniform("uFarToPrev"), P.Uniform("uNearPlanes"),
+                P.Uniform("uFarPlanes"), P.Uniform("uFullPlanes"));
+            (JitterNdc, HasFar, Mode, Tan) = (P.Uniform("uJitterNdc"), P.Uniform("uHasFar"), P.Uniform("uMode"), P.Uniform("uTan"));
+            (Right, Up, Back, EyeY, WaterY, WaterReactive) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uEyeY"),
+                P.Uniform("uWaterY"), P.Uniform("uWaterReactive"));
+        }
+    }
+
+    sealed class TaaPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Colour, Motion, History;
+        public readonly UniformHandle RenderSize, DisplaySize, Jitter, Blend, Reset;
+        public TaaPass(GpuContext gpu) : base(gpu, UpscaleShaders.Taa, "post taa")
+        {
+            (Colour, Motion, History) = (P.Sampler("uColour"), P.Sampler("uMotion"), P.Sampler("uHistory"));
+            (RenderSize, DisplaySize, Jitter, Blend, Reset) = (P.Uniform("uRenderSize"), P.Uniform("uDisplaySize"), P.Uniform("uJitter"), P.Uniform("uBlend"), P.Uniform("uReset"));
+        }
+    }
+
+    sealed class SsaoPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Depth;
+        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd;
+        public SsaoPass(GpuContext gpu) : base(gpu, PostProcessShaders.Ssao, "post ssao")
+        {
+            Depth = P.Sampler("uDepth");
+            (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
+                P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
+        }
+    }
 
     float nearPlane = 1, farPlane = 1000, fovY = 0.87f, aspect = 1;
     bool haveNearSlice;
@@ -69,26 +179,12 @@ public sealed unsafe class PostProcess : IDisposable
         this.gl = gl;
         Gpu = gpu;
         Options = options;
-        vao = gl.GenVertexArray();
-        progSsao = Program(PostProcessShaders.Ssao);
-        progBlur = Program(PostProcessShaders.SsaoBlur);
-        progComposite = Program(PostProcessShaders.Composite);
-        progFxaa = Program(PostProcessShaders.Fxaa);
-        progHeatHaze = Program(PostProcessShaders.HeatHaze);
-        progLuminance = Program(PostProcessShaders.Luminance);
-        progAdapt = Program(PostProcessShaders.Adapt);
-        progVelocity = Program(UpscaleShaders.Velocity);
-        progTaa = Program(UpscaleShaders.Taa);
+        interop = gpu.Interop ?? throw new InvalidOperationException("PostProcess needs the native seam (VkGl)");
+        (ssao, blur, luminancePass, adaptPass) = (new SsaoPass(gpu), new BlurPass(gpu), new LuminancePass(gpu), new AdaptPass(gpu));
+        (compositePass, fxaaPass, hazePass) = (new CompositePass(gpu), new FxaaPass(gpu), new HeatHazePass(gpu));
+        (velocityPass, taaPass) = (new VelocityPass(gpu), new TaaPass(gpu));
         for (int s = 0; s < Slots; s++)
             for (int i = 0; i < MaxStamps; i++) stamps[s, i] = gl.GenQuery();
-    }
-
-    uint Program(string fragment) => WorldGl.Program(gl, PostProcessShaders.Vertex, fragment);
-
-    int U(uint p, string name)
-    {
-        if (!uniforms.TryGetValue((p, name), out int location)) uniforms[(p, name)] = location = gl.GetUniformLocation(p, name);
-        return location;
     }
 
     /// <summary>The near depth slice's planes and the projection: what the depth buffer at the end of the frame holds (the far slice's depth is cleared).</summary>
@@ -383,7 +479,6 @@ public sealed unsafe class PostProcess : IDisposable
         gl.Disable(EnableCap.Blend);
         gl.DepthMask(false);
         bool needDepth = o.Ssao && haveNearSlice;
-        gl.BindVertexArray(vao);
 
         bool ao = needDepth;
         if (ao) RunSsao();
@@ -401,25 +496,25 @@ public sealed unsafe class PostProcess : IDisposable
         bool haze = HeatHazeRuns;
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, fxaa || haze ? ldr!.Framebuffer : Target);
         gl.Viewport(0, 0, (uint)displayWidth, (uint)displayHeight);
-        gl.UseProgram(progComposite);
-        Bind(0, postColour); gl.Uniform1(U(progComposite, "uScene"), 0);
-        Bind(1, aoB?.Texture ?? 0); gl.Uniform1(U(progComposite, "uAo"), 1);
-        Bind(3, auto ? adaptB!.Texture : 0); gl.Uniform1(U(progComposite, "uAdapted"), 3);
-        gl.Uniform1(U(progComposite, "uAuto"), auto ? 1 : 0);
-        gl.Uniform1(U(progComposite, "uExposure"), o.Exposure);
-        gl.Uniform1(U(progComposite, "uUseAo"), ao ? 1 : 0);
-        gl.Uniform1(U(progComposite, "uDither"), o.Dither ? 1 : 0);
-        gl.Uniform1(U(progComposite, "uDebug"), o.Debug);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        var c = compositePass;
+        Bind(c.P, c.Scene, postColour);
+        Bind(c.P, c.Ao, aoB?.Texture ?? 0);
+        Bind(c.P, c.Adapted, auto ? adaptB!.Texture : 0);
+        c.P.Set(c.Auto, auto ? 1 : 0);
+        c.P.Set(c.Exposure, o.Exposure);
+        c.P.Set(c.UseAo, ao ? 1 : 0);
+        c.P.Set(c.Dither, o.Dither ? 1 : 0);
+        c.P.Set(c.Debug, o.Debug);
+        Fullscreen(c.P);
         Stamp("composite");
         var picture = ldr;
         if (fxaa)
         {
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, haze ? ldrFxaa!.Framebuffer : Target);
-            gl.UseProgram(progFxaa);
-            Bind(0, ldr!.Texture); gl.Uniform1(U(progFxaa, "uImage"), 0);
-            gl.Uniform2(U(progFxaa, "uTexel"), 1f / displayWidth, 1f / displayHeight);
-            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            var f = fxaaPass;
+            Bind(f.P, f.Image, ldr!.Texture);
+            f.P.Set(f.Texel, 1f / displayWidth, 1f / displayHeight);
+            Fullscreen(f.P);
             Stamp("fxaa");
             picture = ldrFxaa;
         }
@@ -497,16 +592,16 @@ public sealed unsafe class PostProcess : IDisposable
                 warnedFallback = true;
             }
             Pass(output);
-            gl.UseProgram(progTaa);
-            Bind(0, sceneColour); gl.Uniform1(U(progTaa, "uColour"), 0);
-            Bind(1, motion!.Texture); gl.Uniform1(U(progTaa, "uMotion"), 1);
-            Bind(2, historyA!.Texture); gl.Uniform1(U(progTaa, "uHistory"), 2);
-            gl.Uniform2(U(progTaa, "uRenderSize"), (float)width, (float)height);
-            gl.Uniform2(U(progTaa, "uDisplaySize"), (float)displayWidth, (float)displayHeight);
-            gl.Uniform2(U(progTaa, "uJitter"), JitterPixels.X, JitterPixels.Y);
-            gl.Uniform1(U(progTaa, "uBlend"), 0.1f);
-            gl.Uniform1(U(progTaa, "uReset"), reset ? 1 : 0);
-            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            var t = taaPass;
+            Bind(t.P, t.Colour, sceneColour);
+            Bind(t.P, t.Motion, motion!.Texture);
+            Bind(t.P, t.History, historyA!.Texture);
+            t.P.Set(t.RenderSize, (float)width, (float)height);
+            t.P.Set(t.DisplaySize, (float)displayWidth, (float)displayHeight);
+            t.P.Set(t.Jitter, JitterPixels.X, JitterPixels.Y);
+            t.P.Set(t.Blend, 0.1f);
+            t.P.Set(t.Reset, reset ? 1 : 0);
+            Fullscreen(t.P);
             ActiveUpscaler = width == displayWidth && height == displayHeight ? "taa" : $"taa {width}x{height}";
         }
         historyValid = true;
@@ -520,35 +615,28 @@ public sealed unsafe class PostProcess : IDisposable
 
     void Velocity(Target2D target, int mode)
     {
+        var v = velocityPass;
         Pass(target);
-        gl.UseProgram(progVelocity);
-        Bind(0, sceneDepth); gl.Uniform1(U(progVelocity, "uNearDepth"), 0);
-        Bind(1, farDepth); gl.Uniform1(U(progVelocity, "uFarDepth"), 1);
-        var toNear = nearToPrevious; var toFar = farToPrevious;
-        gl.UniformMatrix4(U(progVelocity, "uNearToPrev"), 1, false, (float*)&toNear);
-        gl.UniformMatrix4(U(progVelocity, "uFarToPrev"), 1, false, (float*)&toFar);
-        gl.Uniform2(U(progVelocity, "uNearPlanes"), nearPlanes.X, nearPlanes.Y);
-        gl.Uniform2(U(progVelocity, "uFarPlanes"), farPlanes.X, farPlanes.Y);
-        gl.Uniform2(U(progVelocity, "uFullPlanes"), UpscaleNear, UpscaleFar);
-        gl.Uniform2(U(progVelocity, "uJitterNdc"), 2 * JitterPixels.X / width, 2 * JitterPixels.Y / height);
-        gl.Uniform1(U(progVelocity, "uHasFar"), farSliceDrawn ? 1 : 0);
-        gl.Uniform1(U(progVelocity, "uMode"), mode);
+        Bind(v.P, v.NearDepth, sceneDepth);
+        Bind(v.P, v.FarDepth, farDepth);
+        v.P.Set(v.NearToPrev, nearToPrevious);
+        v.P.Set(v.FarToPrev, farToPrevious);
+        v.P.Set(v.NearPlanes, nearPlanes.X, nearPlanes.Y);
+        v.P.Set(v.FarPlanes, farPlanes.X, farPlanes.Y);
+        v.P.Set(v.FullPlanes, UpscaleNear, UpscaleFar);
+        v.P.Set(v.JitterNdc, 2 * JitterPixels.X / width, 2 * JitterPixels.Y / height);
+        v.P.Set(v.HasFar, farSliceDrawn ? 1 : 0);
+        v.P.Set(v.Mode, mode);
         float tanY = MathF.Tan(fovNow * 0.5f);
-        gl.Uniform2(U(progVelocity, "uTan"), tanY * aspectNow, tanY);
+        v.P.Set(v.Tan, tanY * aspectNow, tanY);
         var r = viewRotation;
-        gl.Uniform3(U(progVelocity, "uRight"), r.M11, r.M21, r.M31);
-        gl.Uniform3(U(progVelocity, "uUp"), r.M12, r.M22, r.M32);
-        gl.Uniform3(U(progVelocity, "uBack"), r.M13, r.M23, r.M33);
-        gl.Uniform1(U(progVelocity, "uEyeY"), eyeNow.Y);
-        gl.Uniform1(U(progVelocity, "uWaterY"), WaterHeight ?? float.MinValue);
-        gl.Uniform1(U(progVelocity, "uWaterReactive"), WaterReactive);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
-    }
-
-    void Bind(int unit, uint texture)
-    {
-        gl.ActiveTexture(TextureUnit.Texture0 + unit);
-        gl.BindTexture(TextureTarget.Texture2D, texture);
+        v.P.Set(v.Right, r.M11, r.M21, r.M31);
+        v.P.Set(v.Up, r.M12, r.M22, r.M32);
+        v.P.Set(v.Back, r.M13, r.M23, r.M33);
+        v.P.Set(v.EyeY, eyeNow.Y);
+        v.P.Set(v.WaterY, WaterHeight ?? float.MinValue);
+        v.P.Set(v.WaterReactive, WaterReactive);
+        Fullscreen(v.P);
     }
 
     void Pass(Target2D target)
@@ -557,32 +645,53 @@ public sealed unsafe class PostProcess : IDisposable
         gl.Viewport(0, 0, (uint)target.Width, (uint)target.Height);
     }
 
+    /// <summary>The texture a sampler reads, as VkGl would bind it now (0: GL's stand-in). Call where the GL code bound the unit: the view and
+    /// sampler VkGl hands out depend on the texture's defined levels and on the LOD bias at this moment.</summary>
+    void Bind(LegacyProgram p, SamplerSlot slot, uint texture)
+    {
+        if (slot.IsValid) p.Bind(slot, interop.Sampled(texture, p.SamplerInfo(slot)));
+    }
+
+    /// <summary>One full-screen triangle with <paramref name="p"/> into the framebuffer GL has bound, in VkGl's open pass (a segment per draw: the
+    /// targets differ from pass to pass). Uniforms and samplers are set before the call; the draw state is GL's, as VkGl would draw with it.</summary>
+    void Fullscreen(LegacyProgram p)
+    {
+        var cmd = interop.BeginNativeInPass(p.Name);
+        var t = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        state.Record(cmd, t);
+        cmd.BindPipeline(Gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout([]), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, t.Formats, p.Name)));
+        p.Flush(cmd);
+        cmd.Draw(3);
+        interop.EndNative(cmd);
+    }
+
     void RunSsao()
     {
         var a = aoA!; var b = aoB!;
         float tanY = MathF.Tan(fovY * 0.5f);
+        var s = ssao;
         Pass(a);
-        gl.UseProgram(progSsao);
-        Bind(0, sceneDepth); gl.Uniform1(U(progSsao, "uDepth"), 0);
-        gl.Uniform2(U(progSsao, "uTan"), tanY * aspect, tanY);
-        gl.Uniform2(U(progSsao, "uNearFar"), nearPlane, farPlane);
-        gl.Uniform2(U(progSsao, "uSize"), (float)width, (float)height);
-        gl.Uniform1(U(progSsao, "uRadius"), Options.SsaoRadius);
-        gl.Uniform1(U(progSsao, "uStrength"), Options.SsaoStrength);
+        Bind(s.P, s.Depth, sceneDepth);
+        s.P.Set(s.Tan, tanY * aspect, tanY);
+        s.P.Set(s.NearFar, nearPlane, farPlane);
+        s.P.Set(s.Size, (float)width, (float)height);
+        s.P.Set(s.Radius, Options.SsaoRadius);
+        s.P.Set(s.Strength, Options.SsaoStrength);
         // Fade out with distance: the occlusion is a detail effect, and far geometry is hazy and has little depth precision.
-        gl.Uniform1(U(progSsao, "uFadeStart"), 3000f);
-        gl.Uniform1(U(progSsao, "uFadeEnd"), 10000f);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        s.P.Set(s.FadeStart, 3000f);
+        s.P.Set(s.FadeEnd, 10000f);
+        Fullscreen(s.P);
 
-        gl.UseProgram(progBlur);
+        var bl = blur;
         Pass(b);
-        Bind(0, a.Texture); gl.Uniform1(U(progBlur, "uAo"), 0);
-        gl.Uniform2(U(progBlur, "uStep"), 1f / a.Width, 0f);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        Bind(bl.P, bl.Ao, a.Texture);
+        bl.P.Set(bl.Step, 1f / a.Width, 0f);
+        Fullscreen(bl.P);
         Pass(a);
-        Bind(0, b.Texture);
-        gl.Uniform2(U(progBlur, "uStep"), 0f, 1f / a.Height);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        Bind(bl.P, bl.Ao, b.Texture);
+        bl.P.Set(bl.Step, 0f, 1f / a.Height);
+        Fullscreen(bl.P);
         // The composite reads aoB: swap so the finished result is there.
         (aoA, aoB) = (aoB, aoA);
     }
@@ -661,21 +770,21 @@ public sealed unsafe class PostProcess : IDisposable
         if (gl is ITextureLodBias lod) lod.TextureLodBias = 0;
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, Target);
         gl.Viewport(0, 0, (uint)displayWidth, (uint)displayHeight);
-        gl.UseProgram(progHeatHaze);
-        Bind(0, flowTexture); gl.Uniform1(U(progHeatHaze, "uFlow"), 0);
-        Bind(1, perturbationTexture); gl.Uniform1(U(progHeatHaze, "uPerturbation"), 1);
-        Bind(2, sceneDepth); gl.Uniform1(U(progHeatHaze, "uDepth"), 2);
-        Bind(3, source.Texture); gl.Uniform1(U(progHeatHaze, "uImage"), 3);
+        var h = hazePass;
+        Bind(h.P, h.Flow, flowTexture);
+        Bind(h.P, h.Perturbation, perturbationTexture);
+        Bind(h.P, h.Depth, sceneDepth);
+        Bind(h.P, h.Image, source.Texture);
         // The phase in double first: game hours × 100 loses its fraction in float after long sessions.
         double phase = HeatHazeHours * 100;
-        gl.Uniform1(U(progHeatHaze, "uPhase"), (float)(phase - Math.Floor(phase)));
-        gl.Uniform1(U(progHeatHaze, "uAmount"), HeatHazeAmount);
+        h.P.Set(h.Phase, (float)(phase - Math.Floor(phase)));
+        h.P.Set(h.Amount, HeatHazeAmount);
         float tanY = MathF.Tan(fovY * 0.5f);
-        gl.Uniform2(U(progHeatHaze, "uTan"), tanY * aspect, tanY);
-        gl.Uniform2(U(progHeatHaze, "uNearFar"), nearPlane, farPlane);
-        gl.Uniform1(U(progHeatHaze, "uFarClip"), HeatHazeFarClip);
-        gl.Uniform1(U(progHeatHaze, "uHasDepth"), haveNearSlice ? 1 : 0);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        h.P.Set(h.Tan, tanY * aspect, tanY);
+        h.P.Set(h.NearFar, nearPlane, farPlane);
+        h.P.Set(h.FarClip, HeatHazeFarClip);
+        h.P.Set(h.HasDepth, haveNearSlice ? 1 : 0);
+        Fullscreen(h.P);
         Stamp("heathaze");
     }
 
@@ -705,10 +814,10 @@ public sealed unsafe class PostProcess : IDisposable
     {
         var lum = luminance!;
         Pass(lum);
-        gl.UseProgram(progLuminance);
-        Bind(0, postColour); gl.Uniform1(U(progLuminance, "uScene"), 0);
-        gl.Uniform2(U(progLuminance, "uCell"), 1f / LuminanceSize, 1f / LuminanceSize);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        var lp = luminancePass;
+        Bind(lp.P, lp.Scene, postColour);
+        lp.P.Set(lp.Cell, 1f / LuminanceSize, 1f / LuminanceSize);
+        Fullscreen(lp.P);
         gl.BindTexture(TextureTarget.Texture2D, lum.Texture);
         gl.GenerateMipmap(TextureTarget.Texture2D);
         float dt = (float)adaptClock.Elapsed.TotalSeconds;
@@ -716,14 +825,14 @@ public sealed unsafe class PostProcess : IDisposable
         float blend = InstantAdaptation || !adaptedValid ? 1 : 1 - MathF.Exp(-dt * AdaptationRate);
         (adaptA, adaptB) = (adaptB, adaptA);
         Pass(adaptB!);
-        gl.UseProgram(progAdapt);
-        Bind(0, lum.Texture); gl.Uniform1(U(progAdapt, "uLuminance"), 0);
-        Bind(1, adaptA!.Texture); gl.Uniform1(U(progAdapt, "uLast"), 1);
-        gl.Uniform1(U(progAdapt, "uLevel"), MathF.Log2(LuminanceSize));
-        gl.Uniform1(U(progAdapt, "uBlend"), blend);
+        var ap = adaptPass;
+        Bind(ap.P, ap.Luminance, lum.Texture);
+        Bind(ap.P, ap.Last, adaptA!.Texture);
+        ap.P.Set(ap.Level, MathF.Log2(LuminanceSize));
+        ap.P.Set(ap.Blend, blend);
         var band = AutoExposure!.Value;
-        gl.Uniform2(U(progAdapt, "uBand"), band.Min, band.Max);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        ap.P.Set(ap.Band, band.Min, band.Max);
+        Fullscreen(ap.P);
         adaptedValid = true;
     }
 
@@ -731,8 +840,7 @@ public sealed unsafe class PostProcess : IDisposable
     {
         External?.Dispose();
         Free();
-        gl.DeleteVertexArray(vao);
-        foreach (var p in new[] { progSsao, progBlur, progComposite, progLuminance, progAdapt, progFxaa, progHeatHaze, progVelocity, progTaa }) gl.DeleteProgram(p);
+        foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass }) p.P.Dispose();
         foreach (var t in new[] { flowTexture, perturbationTexture }) if (t != 0) gl.DeleteTexture(t);
         for (int s = 0; s < Slots; s++)
             for (int i = 0; i < MaxStamps; i++) gl.DeleteQuery(stamps[s, i]);
