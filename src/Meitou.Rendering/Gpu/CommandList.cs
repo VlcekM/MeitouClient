@@ -417,6 +417,22 @@ public sealed unsafe class CommandList
         vk.CmdBlitImage(Handle, src.Image, ImageLayout.General, dst.Image, ImageLayout.General, 1, &blit, filter);
     }
 
+    /// <summary>(Phase 8 stage 1.) Scales level <paramref name="srcLevel"/> of <paramref name="texture"/> over its level <paramref name="dstLevel"/>
+    /// (all layers), as VkGl's <c>GenerateMipmap</c> does per level.</summary>
+    public void BlitLevel(Texture texture, int srcLevel, int dstLevel, Filter filter)
+    {
+        var d = texture.Desc;
+        uint layers = (uint)(d.Kind == TextureKind.Cube ? 6 * Math.Max(d.Layers, 1) : d.Layers);
+        var blit = new ImageBlit
+        {
+            SrcSubresource = new ImageSubresourceLayers(d.Aspect, (uint)srcLevel, 0, layers),
+            DstSubresource = new ImageSubresourceLayers(d.Aspect, (uint)dstLevel, 0, layers),
+        };
+        blit.SrcOffsets[1] = new Offset3D(Math.Max(d.Width >> srcLevel, 1), Math.Max(d.Height >> srcLevel, 1), 1);
+        blit.DstOffsets[1] = new Offset3D(Math.Max(d.Width >> dstLevel, 1), Math.Max(d.Height >> dstLevel, 1), 1);
+        vk.CmdBlitImage(Handle, texture.Image, ImageLayout.General, texture.Image, ImageLayout.General, 1, &blit, filter);
+    }
+
     // ---- sync, timing, labels ----
 
     public void Barrier(in BarrierBatch batch)

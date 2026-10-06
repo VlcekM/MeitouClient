@@ -23,8 +23,7 @@ namespace Meitou.Rendering;
 /// </summary>
 public sealed unsafe class WorldObjectRenderer : IDisposable
 {
-    readonly IGl gl;
-    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    /// <summary>The native GPU API (docs/renderer-native.md 7.1 step 8; since phase 8 stage 1 the only one this renderer uses).</summary>
     public GpuContext Gpu { get; }
     readonly NativeFrame nativeFrame;
     readonly ObjProg colourProg, depthProg;   // the colour and the depth (shadow caster) programs, native
@@ -34,7 +33,6 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     readonly ObjectMeshCache meshes;
     readonly ObjectStreamer streamer;
     readonly WorldObjects objects;
-    readonly uint instanceBuffer;
     readonly Dictionary<(string, string, string), ObjectMaterialSet> materialSets = [];
     readonly List<TownDraw> towns = [];
     readonly ObjectMaterialSet distantMaterial;
@@ -71,20 +69,21 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         public bool Resolved;
     }
 
+    /// <param name="gl">Unused since phase 8 stage 1 (meshes, textures and draws are native); kept for the caller (<c>WorldFrame</c>) until
+    /// stage 3 removes IGl.</param>
     internal WorldObjectRenderer(IGl gl, GpuContext gpu, AssetLocator assets, WorldObjects objects)
     {
-        this.gl = gl;
+        _ = gl;
         Gpu = gpu;
         this.objects = objects;
         // Both native programs are made here with every handle resolved, never inside a draw (the GL programs they replace are not made).
         nativeFrame = new NativeFrame(gpu);
         colourProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(), "objects");
         depthProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), "objects depth");
-        textureCache = new WorldTextureCache(gl, assets);
+        textureCache = new WorldTextureCache(gpu, assets, "object textures");
         var library = OgreMaterialLibrary.LoadConfigured(objects.Install, out _);
         resolver = new MaterialResolver(objects.Database, library, assets);
-        instanceBuffer = gl.GenBuffer();
-        meshes = new ObjectMeshCache(gl, assets, uploads, instanceBuffer);
+        meshes = new ObjectMeshCache(gpu, assets, uploads);
         meshes.Unloaded = gpu => { unloadedMeshes.Add(gpu); RemoveBatches(gpu); };
         streamer = new ObjectStreamer(objects, meshes);
         var distant = new SurfaceMaterial { Description = "DistantTown (vertex colour x texture x 1.5)", Diffuse = DistantTowns.DiffuseTexture, VertexColours = true, SpecularMult = 0 };
@@ -399,7 +398,6 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
         // 3. Draw: Prepare reads the textures (WorldTexture.Id) and makes the draw list, Record puts it into a native segment of VkGl's pass.
         var prog = depthPass ? depthProg : colourProg;
-        gl.Disable(EnableCap.CullFace);   // the objects are drawn double-sided (the export's cull mode is None while GL's cull face is off)
         int wireMode = debugLevels == 2 ? 2 : options.Wireframe;
         double recordMs = 0;
         if (active.Count > 0)
@@ -416,23 +414,15 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             if (wireMode != 0)
             {
                 PrepareDraws(options, wire: true);
-                gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Line);
-                gl.Enable(EnableCap.PolygonOffsetLine);
-                gl.PolygonOffset(-1, -1);
                 long r0 = ObjTiming ? Stopwatch.GetTimestamp() : 0;
                 RecordDraws(prog, wire: true, in view, fadeRange);
                 if (ObjTiming) recordMs += (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
-                gl.Disable(EnableCap.PolygonOffsetLine);
-                gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Fill);
             }
         }
         SkyRenderer.Active?.BindUnits();   // the atmosphere's texture units, as Apply left them for the GL code that follows
-        gl.BindVertexArray(0);
         double tBatches = cpu.Elapsed.TotalMilliseconds;
         int batchDraws = DrawCalls;
         if (terrainMeshes.Count > 0) DrawCalls += terrain.DrawMeshes(terrainMeshes, depthPass);
-        gl.Disable(EnableCap.CullFace);
-        gl.BindVertexArray(0);
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
         if (ObjTiming) ObjAccount(depthPass ? 1 : 0, tCull, tUpload, tBatches, LastDrawCpuMs, batchDraws, DrawCalls - batchDraws, recordMs);
     }
@@ -616,23 +606,18 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         return segmentIds[kind] = id;
     }
 
-    /// <summary>A part's native state for <paramref name="p"/>, current at <paramref name="stamp"/>: fetched again only when the stamp moved
-    /// (<see cref="IGlInterop.VertexArrayStamp"/>), rebuilt only when the export changed. The batch matrices are four per-instance rows of 64
-    /// bytes at locations 7 to 10 (bound once per segment).</summary>
-    static void Current(ref ObjectNativeMesh n, IGlInterop interop, uint vao, ObjProg p, long stamp)
+    /// <summary>A part's native state for <paramref name="p"/>, made on first use from its native buffers (they never change while the part
+    /// lives). The batch matrices are four per-instance rows of 64 bytes at locations 7 to 10 (bound once per segment).</summary>
+    static void Current(ref ObjectNativeMesh n, GpuObjectPart part, ObjProg p)
     {
-        if (n.Stamp == stamp && n.Source is not null) return;
-        var va = interop.VertexArray(vao);
-        n.Stamp = stamp;
-        if (ReferenceEquals(n.Source, va)) return;
+        if (n.Layout is not null) return;
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
-        va.Attributes.AsSpan().CopyTo(attributes);
+        part.Attributes.AsSpan().CopyTo(attributes);
         for (int a = 0; a < 4; a++)
             attributes[RowLocation + a] = new LegacyProgram.Attribute(default, Silk.NET.Vulkan.Format.R32G32B32A32Sfloat, InstanceStride, true);
         n.Layout = p.Layout(attributes);
         n.Vertices = p.Buffers(attributes, p.Own);
-        n.Elements = va.Elements;
-        n.Source = va;
+        n.Elements = new BufferBinding(part.Indices.Handle, 0, part.Indices.Size);
         n.SegA = n.SegB = 0;
         n.PipeA = n.PipeB = null;
     }
@@ -646,49 +631,21 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         return pipeline;
     }
 
-    /// <summary>The bindless indices of the segment being recorded, by GL texture id (an entry counts while its segment number is
-    /// <see cref="textureSegment"/>): a texture's view or sampler may change between segments (mip streaming, the upscaler's bias), never
-    /// inside one, so each texture is looked up once per segment.</summary>
-    (uint Index, int Segment)[] textureIndices = new (uint, int)[1024];
-    /// <summary>GL names (a counter shared by every GL object) beyond the array's cap of <see cref="TextureArrayCap"/> (2 MB).</summary>
-    readonly Dictionary<uint, (uint Index, int Segment)> textureIndicesFar = [];
-    const uint TextureArrayCap = 1 << 18;
-    int textureSegment;
+    /// <summary>The segment's LOD bias (the upscaler's, <see cref="GpuContext.LodBias"/>) and GL's stand-in for a texture not resident.</summary>
+    float textureBias;
+    uint textureStandIn;
 
-    /// <summary>A new segment: forget the indices of the last one.</summary>
-    void NewTextureSegment()
+    /// <summary>A new segment: the bias in effect now and the stand-in's bindless index (the 2D float array the shaders index).</summary>
+    void NewTextureSegment(IGlInterop interop)
     {
-        textureSegment++;
-        if (textureIndicesFar.Count > 4096) textureIndicesFar.Clear();   // only this segment's entries count anyway
+        textureBias = Gpu.LodBias();
+        var h = interop.Bindless(0);
+        if (h.Kind != BindlessKind.Texture2D) throw new InvalidOperationException($"the stand-in texture is in the bindless {h.Kind} array, the shaders read textures2D");
+        textureStandIn = h.Index;
     }
 
-    /// <summary>The bindless index of a GL texture VkGl owns (<see cref="IGlInterop.Bindless"/>): what <c>Sampled</c> would bind now, in the 2D
-    /// float array the shaders index (0: GL's stand-in).</summary>
-    static uint Index2D(IGlInterop interop, uint glTexture)
-    {
-        var h = interop.Bindless(glTexture);
-        if (h.Kind != BindlessKind.Texture2D) throw new InvalidOperationException($"object texture {glTexture} is in the bindless {h.Kind} array, the shaders read textures2D");
-        return h.Index;
-    }
-
-    uint Texture(IGlInterop interop, uint id)
-    {
-        if (id >= TextureArrayCap)
-        {
-            ref var far = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(textureIndicesFar, id, out bool exists);
-            if (!exists || far.Segment != textureSegment) far = (Index2D(interop, id), textureSegment);
-            return far.Index;
-        }
-        if (id < (uint)textureIndices.Length)
-        {
-            ref var e = ref textureIndices[id];
-            if (e.Segment == textureSegment) return e.Index;
-        }
-        else Array.Resize(ref textureIndices, (int)Math.Min(Math.Max(id + 1, (uint)textureIndices.Length * 2), TextureArrayCap));
-        uint index = Index2D(interop, id);
-        textureIndices[id] = (index, textureSegment);
-        return index;
-    }
+    /// <summary>The bindless index of a texture by its <see cref="WorldTexture.Key"/> (0: the stand-in), as the GL texture was sampled.</summary>
+    uint Texture(uint key) => key == 0 ? textureStandIn : textureCache.Index(key, textureBias, textureStandIn);
 
     /// <summary>The batches' parts as draws, in order, with the texture ids the GL code bound (reading an id counts as use: here, not in Record).</summary>
     void PrepareDraws(WorldRenderOptions options, bool wire)
@@ -762,14 +719,16 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the sets, and per draw everything resolved (pipeline, buffers, the push
         // block with its bindless indices), into a job that only records.
         var targets = interop.CurrentTargets();
-        var state = interop.CurrentState();
+        // The objects are drawn double-sided (the GL version turned the cull face off); the wireframe as lines pulled forward
+        // (GL's PolygonMode LINE with POLYGON_OFFSET_LINE and PolygonOffset(-1, -1)).
+        var state = interop.CurrentState() with { Cull = Silk.NET.Vulkan.CullModeFlags.None };
+        if (wire) state = state with { Polygon = Silk.NET.Vulkan.PolygonMode.Line, BiasEnable = true, BiasConstant = -1, BiasSlope = -1 };
         int segment = SegmentId(kind, prog.P, targets, state);
-        long stamp = interop.VertexArrayStamp;
         var job = drawJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Layout, job.Count) = (this, targets, state, prog.P.Layout, 0);
         job.Frame = nativeFrame.Prepare(in view);
         for (int a = 0; a < 4; a++) job.Rows[a] = new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
-        NewTextureSegment();
+        NewTextureSegment(interop);
         long loop0 = ObjTiming ? Stopwatch.GetTimestamp() : 0;
         if (job.Draws.Length < drawCount) job.Draws = new DrawJob.Draw[Math.Max(drawCount, job.Draws.Length * 2)];
         var list = draws;
@@ -778,13 +737,13 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             ref var d = ref list[i];
             ref var pc = ref d.Push;
             pc.FadeRange = fadeRange;
-            pc.Diffuse = Texture(interop, d.Diffuse);
-            pc.Normal = Texture(interop, d.Normal);
-            pc.Diffuse2 = Texture(interop, d.Diffuse2);
-            pc.Normal2 = Texture(interop, d.Normal2);
+            pc.Diffuse = Texture(d.Diffuse);
+            pc.Normal = Texture(d.Normal);
+            pc.Diffuse2 = Texture(d.Diffuse2);
+            pc.Normal2 = Texture(d.Normal2);
             var part = d.Part;
             ref var n = ref (depthPass ? ref part.DepthNative : ref part.ColourNative);
-            Current(ref n, interop, part.Vao, prog, stamp);
+            Current(ref n, part, prog);
             job.Draws[i] = new DrawJob.Draw
             {
                 Pipeline = n.SegA == segment ? n.PipeA! : PipelineFor(ref n, prog, segment, state, targets.Formats, label),
@@ -795,7 +754,6 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         job.Count = drawCount;
         if (ObjTiming) callLoopMs += (Stopwatch.GetTimestamp() - loop0) * 1000.0 / Stopwatch.Frequency;
         Gpu.Record(label, job);
-        gl.BindVertexArray(0);
     }
 
     readonly JobPool<DrawJob> drawJobs = new();
@@ -883,7 +841,6 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         streamer.Dispose();
         meshes.Dispose();
         textureCache.Dispose();
-        gl.DeleteBuffer(instanceBuffer);
         objects.Dispose();
     }
 }
