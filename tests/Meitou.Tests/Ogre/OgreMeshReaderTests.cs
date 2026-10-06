@@ -119,6 +119,7 @@ public class OgreMeshReaderTests
     /// position lies inside the mesh's stored bounds (which checks the vertex layout decoding).
     /// </summary>
     [Fact]
+    [Slow]
     public void Reads_every_base_game_mesh()
     {
         var install = GameInstall.Locate();

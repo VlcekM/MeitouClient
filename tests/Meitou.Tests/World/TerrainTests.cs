@@ -150,6 +150,7 @@ public class TerrainTests
     // --- Base game -------------------------------------------------------------------------------
 
     [Fact]
+    [Slow]
     public void Base_game_heightmap_covers_the_zone_grid()
     {
         var install = GameInstall.Locate();
@@ -169,6 +170,7 @@ public class TerrainTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_legacy_height_tiles_share_their_edges()
     {
         var install = GameInstall.Locate();

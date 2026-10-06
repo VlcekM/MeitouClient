@@ -169,6 +169,7 @@ public class FoliageTests
     }
 
     [Fact]
+    [Slow]
     public void Catalog_and_a_zone_load_from_the_game()
     {
         var install = GameInstall.Locate();
@@ -200,6 +201,7 @@ public class FoliageTests
     }
 
     [Fact]
+    [Slow]
     public void Far_only_layout_places_exactly_the_far_instances_of_the_whole_layout()
     {
         // docs/formats/foliage.md, "Distances": a layer reseeds its own generator and, without "limit to grass areas", reads nothing the
@@ -230,6 +232,7 @@ public class FoliageTests
     }
 
     [Fact]
+    [Slow]
     public void Generated_grass_coverage_has_the_shipped_overlay_footprint()
     {
         // Observed (docs/formats/foliage.md, "Grass coverage"): the regenerated R channel is non-zero on about the same pixels as

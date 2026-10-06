@@ -28,6 +28,7 @@ public class WaterTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_water_parameters_and_colour_map()
     {
         var install = GameInstall.Locate();
@@ -68,6 +69,7 @@ public class WaterTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_low_buildings_are_water_structures()
     {
         var install = GameInstall.Locate();

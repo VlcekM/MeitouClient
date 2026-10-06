@@ -9,6 +9,7 @@ public class ShaderReflectionTests
     const string Vs = "#version 330 core\nuniform vec4 uA[3];\nvoid main() { gl_Position = uA[2]; }\n";
 
     [Fact]
+    [Slow]
     public void UnusedSamplersAndBlocksAreInactiveNotBound()
     {
         string fs = "#version 330 core\nlayout(std140) uniform Blk { vec4 x; };\nuniform sampler2D used;\nuniform samplerCube unusedA, unusedB;\nuniform usampler2D alsoUnused;\nout vec4 c;\nvoid main() { c = texture(used, vec2(0.5)); }\n";
@@ -21,6 +22,7 @@ public class ShaderReflectionTests
     }
 
     [Fact]
+    [Slow]
     public void UsedThroughAFunctionCountsAsActive()
     {
         string fs = "#version 330 core\nuniform samplerCube a;\nuniform sampler2DShadow s;\nuniform usampler2D u;\nuniform float k[2];\nout vec4 c;\nvec4 f() { return texture(a, vec3(k[1])); }\nvoid main() { c = f() + vec4(texture(s, vec3(0.5)), float(texture(u, vec2(0.5)).x), 0.0, 0.0); }\n";
@@ -39,6 +41,7 @@ public class ShaderReflectionTests
     }
 
     [Fact]
+    [Slow]
     public void VertexUniformArraysAreReported()
     {
         var p = Compiler.Compile(Vs, "#version 330 core\nout vec4 c;\nvoid main() { c = vec4(1.0); }\n");

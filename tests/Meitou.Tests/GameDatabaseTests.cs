@@ -182,6 +182,7 @@ public class GameDatabaseTests
     /// two raw records, so the test needs no copied game data.
     /// </summary>
     [Fact]
+    [Slow]
     public void Iron_rock_merges_rebirth_changes_over_gamedata_base()
     {
         var install = GameInstall.Locate();
@@ -209,6 +210,7 @@ public class GameDatabaseTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_loads_with_every_record_accounted_for()
     {
         var install = GameInstall.Locate();

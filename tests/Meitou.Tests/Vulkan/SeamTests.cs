@@ -132,6 +132,7 @@ public class SeamTests
     }
 
     [Fact]
+    [Slow]
     public void VkGl_native_VkGl_in_one_frame_draws_each_part_with_its_own_state()
     {
         using var d = TryCreate();
@@ -192,6 +193,7 @@ public class SeamTests
     }
 
     [Fact]
+    [Slow]
     public void An_in_pass_native_segment_draws_into_VkGl_open_pass_and_VkGl_continues_it()
     {
         using var d = TryCreate();
@@ -244,6 +246,7 @@ public class SeamTests
     }
 
     [Fact]
+    [Slow]
     public unsafe void A_native_host_clears_and_its_native_guests_record_into_its_rendering_through_the_same_seam_calls()
     {
         using var d = TryCreate();
@@ -330,6 +333,7 @@ public class SeamTests
     }
 
     [Fact]
+    [Slow]
     public void Legacy_programs_take_frame_globals_they_were_not_given()
     {
         using var d = TryCreate(sync: false);
@@ -381,6 +385,7 @@ public class SeamTests
         """;
 
     [Fact]
+    [Slow]
     public unsafe void A_port_logs_the_same_draw_as_VkGl()
     {
         using var d = TryCreate(sync: false);
@@ -448,6 +453,7 @@ public class SeamTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    [Slow]
     public void A_native_model_segment_then_a_legacy_segment_then_VkGl_each_draw_their_own(bool pushed)
     {
         using var d = TryCreate();
@@ -513,6 +519,7 @@ public class SeamTests
     }
 
     [Fact]
+    [Slow]
     public unsafe void The_vertex_array_stamp_moves_exactly_when_an_export_may_be_stale()
     {
         using var d = TryCreate(sync: false);
@@ -576,6 +583,7 @@ public class SeamTests
     }
 
     [Fact]
+    [Slow]
     public void Exports_are_VkGl_own_objects()
     {
         using var d = TryCreate(sync: false);
@@ -608,6 +616,7 @@ public class SeamTests
     }
 
     [Fact]
+    [Slow]
     public void Imported_and_exported_textures_read_back_identically_on_both_sides()
     {
         using var d = TryCreate();
@@ -670,6 +679,7 @@ public class SeamTests
     }
 
     [Fact]
+    [Slow]
     public void A_flush_after_a_bind_pushes_the_new_texture_and_one_without_keeps_it()
     {
         using var d = TryCreate();
@@ -711,6 +721,7 @@ public class SeamTests
     }
 
     [Fact]
+    [Slow]
     public void Profiler_stamps_go_through_the_seam_into_VkGl_passes()
     {
         using var d = TryCreate();

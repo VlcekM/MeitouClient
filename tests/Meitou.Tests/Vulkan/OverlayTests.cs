@@ -32,6 +32,7 @@ public class OverlayTests
     }
 
     [Fact]
+    [Slow]
     public void Panels_and_the_profiler_chart_draw_natively_and_the_screenshot_readback_equals_ReadPixels()
     {
         using var d = TryCreate();

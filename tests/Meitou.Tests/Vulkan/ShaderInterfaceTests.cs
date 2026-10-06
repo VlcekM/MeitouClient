@@ -10,6 +10,7 @@ public class ShaderInterfaceTests
     const string Main = "void main() { }\n";
 
     [Fact]
+    [Slow]
     public void QualifiersArraysMatricesAndMultipleNames()
     {
         string vs = """
@@ -70,6 +71,7 @@ public class ShaderInterfaceTests
     }
 
     [Fact]
+    [Slow]
     public void ExplicitLocationsAreHonouredAcrossStages()
     {
         string vs = "#version 330 core\nlayout(location = 2) out vec4 vA;\nout vec4 vB;\nvoid main() { vA = vec4(0.0); vB = vec4(0.0); gl_Position = vec4(0.0); }\n";

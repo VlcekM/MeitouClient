@@ -63,6 +63,7 @@ public class ShaderCompilerTests
 
     [Theory]
     [MemberData(nameof(PairNames))]
+    [Slow]
     public void PairCompilesAndInterfacesMatch(string name)
     {
         var (v, f) = Find(name);
@@ -155,6 +156,7 @@ public class ShaderCompilerTests
     }
 
     [Fact]
+    [Slow]
     public void MeshReflectionHasBoneArrayAndBool()
     {
         var program = Compiler.Compile(Shaders.MeshVertex, Shaders.MeshFragment);
@@ -224,6 +226,7 @@ public class ShaderCompilerTests
     }
 
     [Fact]
+    [Slow]
     public void RemapClipDepthCompilesAndAppendsTheRemap()
     {
         var (v, f) = Find("mesh");
@@ -237,6 +240,7 @@ public class ShaderCompilerTests
     }
 
     [Fact]
+    [Slow]
     public void DiskCacheRoundTripAndCorruptFileIsRewritten()
     {
         string dir = Path.Combine(Path.GetTempPath(), "meitou-shader-test-" + Guid.NewGuid().ToString("N"));

@@ -51,6 +51,9 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
+The tests that need the Kenshi install or a Vulkan device, or take long, are marked `[Slow]`. While iterating,
+`dotnet test -c Release --filter "Category!=Slow"` runs the rest in seconds; run the whole suite before committing.
+
 The world viewer, starting at The Hub:
 
 ```

@@ -26,6 +26,7 @@ public class FoliageSizeTests
     /// <summary>Named base-game meshes land in the class the owner's examples put them in: litter and small plants small, junk, boulders
     /// and bushes medium, trees, ruins, wrecks and rock stacks large (sizes as the renderer measures them, from the decoded meshes).</summary>
     [Fact]
+    [Slow]
     public void Base_game_meshes_fall_into_the_expected_classes()
     {
         var install = GameInstall.Locate();

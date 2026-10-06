@@ -307,6 +307,7 @@ public class ImpostorTests
     /// red's depth in front of blue's.
     /// </summary>
     [Fact]
+    [Slow]
     public void Bake_renders_the_nearest_surface_in_the_frame_orientation()
     {
         using var device = TryCreate();

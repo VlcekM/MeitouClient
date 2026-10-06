@@ -47,6 +47,7 @@ public class LegacySpirvGoldenTests
         Convert.ToHexString(SHA256.HashData([.. p.VertexSpirv, .. p.FragmentSpirv]))[..32];
 
     [Fact]
+    [Slow]
     public void Every_world_program_compiles_to_the_SPIR_V_master_produced()
     {
         var plain = new GlslProgramCompiler(new ShaderCompileOptions { UseDiskCache = false, UseMemoryCache = false });

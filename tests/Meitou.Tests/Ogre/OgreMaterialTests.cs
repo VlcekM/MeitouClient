@@ -485,6 +485,7 @@ public class OgreMaterialTests
     }
 
     [Fact]
+    [Slow]
     public void Wildcard_match_is_a_glob()
     {
         Assert.True(OgreScriptCompiler.WildcardMatch("diffuseMap", "*Map"));
@@ -511,6 +512,7 @@ public class OgreMaterialTests
     /// Every base object and every referenced GPU program is found.
     /// </summary>
     [Fact]
+    [Slow]
     public void Compiles_every_base_game_material_script()
     {
         var install = Install();
@@ -547,6 +549,7 @@ public class OgreMaterialTests
     /// exported .material files. The undefined ones are exporter defaults and an empty name.
     /// </summary>
     [Fact]
+    [Slow]
     public void Base_game_mesh_materials_are_mostly_not_script_materials()
     {
         var install = Install();
@@ -572,6 +575,7 @@ public class OgreMaterialTests
     /// first word only), names with folders, and a few particle textures.
     /// </summary>
     [Fact]
+    [Slow]
     public void Base_game_material_textures_mostly_exist()
     {
         var install = Install();

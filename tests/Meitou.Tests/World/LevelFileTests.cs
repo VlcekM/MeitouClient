@@ -130,6 +130,7 @@ public class LevelFileTests
             .Where(f => f.EndsWith(".zone", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".level", StringComparison.OrdinalIgnoreCase));
 
     [Fact]
+    [Slow]
     public void Every_base_game_level_file_parses_to_its_end_and_round_trips()
     {
         var install = GameInstall.Locate();
@@ -158,6 +159,7 @@ public class LevelFileTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_world_placements_are_consistent()
     {
         var install = GameInstall.Locate();
@@ -194,6 +196,7 @@ public class LevelFileTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_heights_match_the_heightmap()
     {
         var install = GameInstall.Locate();

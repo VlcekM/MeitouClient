@@ -51,6 +51,7 @@ public class FoliageCullTests
     }
 
     [Fact]
+    [Slow]
     public void Scalar_ground_distance_is_bit_identical_to_Vector2_Distance()
     {
         var random = new Random(1);
@@ -64,6 +65,7 @@ public class FoliageCullTests
     }
 
     [Fact]
+    [Slow]
     public void Squared_range_test_differs_only_within_an_ulp_of_the_range()
     {
         var random = new Random(2);
@@ -87,6 +89,7 @@ public class FoliageCullTests
     }
 
     [Fact]
+    [Slow]
     public void Reciprocal_band_fade_is_within_one_ulp_of_the_division()
     {
         var random = new Random(3);
@@ -117,6 +120,7 @@ public class FoliageCullTests
     }
 
     [Fact]
+    [Slow]
     public void Precomputed_spheres_and_plane_lengths_reproduce_the_per_frame_test_exactly()
     {
         var random = new Random(4);
@@ -142,6 +146,7 @@ public class FoliageCullTests
     }
 
     [Fact]
+    [Slow]
     public void Cull_keeps_index_order_and_matches_the_old_decisions()
     {
         var random = new Random(5);

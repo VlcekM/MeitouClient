@@ -52,6 +52,7 @@ public class TerrainBiomeTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_slot_masks_describe_the_blend_map()
     {
         var install = GameInstall.Locate();
@@ -97,6 +98,7 @@ public class TerrainBiomeTests
     static uint Rgb(byte[] p, int i) => (uint)(p[i] << 16 | p[i + 1] << 8 | p[i + 2]);
 
     [Fact]
+    [Slow]
     public void Base_game_blend_map_channels_weight_the_cell_slots()
     {
         var install = GameInstall.Locate();
@@ -140,6 +142,7 @@ public class TerrainBiomeTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_overlay_alpha_marks_roads()
     {
         var install = GameInstall.Locate();

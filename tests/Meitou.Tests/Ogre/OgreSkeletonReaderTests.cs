@@ -179,6 +179,7 @@ public class OgreSkeletonReaderTests
     /// keyframe times ordered and inside the animation, unit quaternions.
     /// </summary>
     [Fact]
+    [Slow]
     public void Reads_every_base_game_skeleton()
     {
         var install = GameInstall.Locate();
@@ -274,6 +275,7 @@ public class OgreSkeletonReaderTests
     /// A skeleton name found in several folders must be byte-identical copies.
     /// </summary>
     [Fact]
+    [Slow]
     public void Every_base_game_skinned_mesh_matches_its_skeleton()
     {
         var install = GameInstall.Locate();

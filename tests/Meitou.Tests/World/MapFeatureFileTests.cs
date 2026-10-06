@@ -55,6 +55,7 @@ public class MapFeatureFileTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_features_lie_in_their_zones_and_name_map_features()
     {
         var install = GameInstall.Locate();

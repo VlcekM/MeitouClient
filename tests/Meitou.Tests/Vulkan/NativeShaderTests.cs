@@ -70,6 +70,7 @@ public class NativeShaderTests
     }
 
     [Fact]
+    [Slow]
     public void Native_variants_compile_and_their_blocks_match_the_CSharp_structs()
     {
         using var d = TryCreate();

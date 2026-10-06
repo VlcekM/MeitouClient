@@ -77,6 +77,7 @@ public class TerrainLodTests
 
     [Theory]
     [MemberData(nameof(Rules))]
+    [Slow]
     public void Drawn_level_never_gets_finer_with_distance(float scale, float near, float far, float ramp)
     {
         var q = new TerrainQuadtree(18, 64, new TerrainLod(scale, near, far, ramp));
@@ -172,6 +173,7 @@ public class TerrainLodTests
     [InlineData(10f, 10f, 4000f)]
     [InlineData(4f, 400f, 1100f)]
     [InlineData(4f, 400f, 300f)]
+    [Slow]
     public void Moving_the_eye_changes_the_surface_smoothly_without_pops(float near, float far, float eyeHeight)
     {
         // The eye flies 6000 units over the hills in steps of 8 units; points along its way (where levels change around them)
@@ -208,6 +210,7 @@ public class TerrainLodTests
 
     [Theory]
     [MemberData(nameof(Views))]
+    [Slow]
     public void Touching_squares_differ_by_one_level_and_meet_without_cracks(float scale, float near, float far, float ramp, bool hills, float x, float y, float z)
     {
         Func<double, double, float> height = hills ? Hills : Flat;

@@ -224,6 +224,7 @@ public class DdsReaderTests
     /// format decodes (largest and smallest level). Also pins the format survey in docs/formats/dds.md.
     /// </summary>
     [Fact]
+    [Slow]
     public void Reads_every_base_game_dds()
     {
         var install = GameInstall.Locate();

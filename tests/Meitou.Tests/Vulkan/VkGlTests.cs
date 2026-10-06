@@ -57,6 +57,7 @@ public unsafe class VkGlTests
     }
 
     [Fact]
+    [Slow]
     public void Clear_reads_back()
     {
         using var d = TryCreate();
@@ -121,6 +122,7 @@ public unsafe class VkGlTests
     /// <summary>A counter-clockwise (GL front-facing) triangle over the lower-left half, drawn with back faces culled: it must show,
     /// and row 0 of the read-back must be the bottom of the picture.</summary>
     [Fact]
+    [Slow]
     public void Triangle_follows_GL_conventions()
     {
         using var d = TryCreate();
@@ -179,6 +181,7 @@ public unsafe class VkGlTests
 
     /// <summary>A depth texture bound to a plain (non-shadow) sampler reads its depth value, as in GL (SSAO and the motion vectors do).</summary>
     [Fact]
+    [Slow]
     public void Depth_texture_reads_through_a_plain_sampler()
     {
         using var d = TryCreate();
@@ -231,6 +234,7 @@ public unsafe class VkGlTests
     /// <c>(floor(uv · size) + 0.5) / size</c>, gives exactly that texel's compare (weights 1, 0, 0, 0), never a blend with its neighbours.
     /// </summary>
     [Fact]
+    [Slow]
     public void Linear_compare_at_texel_centres_is_point_sampling()
     {
         using var d = TryCreate();

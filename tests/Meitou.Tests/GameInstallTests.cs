@@ -17,6 +17,7 @@ public class GameInstallTests
     }
 
     [Fact]
+    [Slow]
     public void Opens_real_install_when_configured()
     {
         var install = GameInstall.Locate();

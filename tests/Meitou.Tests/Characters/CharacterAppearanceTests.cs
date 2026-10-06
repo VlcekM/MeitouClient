@@ -39,6 +39,7 @@ public class CharacterAppearanceTests
     }
 
     [Fact]
+    [Slow]
     public void Weapon_attachment_points_match_the_male_skeleton()
     {
         var install = GameInstall.Locate();
@@ -71,6 +72,7 @@ public class CharacterAppearanceTests
     }
 
     [Fact]
+    [Slow]
     public void Every_attachment_phs_reads_or_is_refused()
     {
         var install = GameInstall.Locate();
@@ -90,6 +92,7 @@ public class CharacterAppearanceTests
     }
 
     [Fact]
+    [Slow]
     public void Ruka_body_file_reads()
     {
         var install = GameInstall.Locate();
@@ -106,6 +109,7 @@ public class CharacterAppearanceTests
     }
 
     [Fact]
+    [Slow]
     public void Modern_body_files_read_and_legacy_ones_are_counted()
     {
         var install = GameInstall.Locate();
@@ -127,6 +131,7 @@ public class CharacterAppearanceTests
     }
 
     [Fact]
+    [Slow]
     public void Dust_bandit_assembles()
     {
         var install = GameInstall.Locate();
@@ -146,6 +151,7 @@ public class CharacterAppearanceTests
     }
 
     [Fact]
+    [Slow]
     public void Drawn_weapon_uses_bare_sword_and_sheath()
     {
         var install = GameInstall.Locate();
@@ -156,6 +162,7 @@ public class CharacterAppearanceTests
     }
 
     [Fact]
+    [Slow]
     public void Walk_records_split_the_body_between_lower_and_upper()
     {
         var install = GameInstall.Locate();
@@ -175,6 +182,7 @@ public class CharacterAppearanceTests
     }
 
     [Fact]
+    [Slow]
     public void Body_mesh_poses_are_named_morphs()
     {
         var install = GameInstall.Locate();
@@ -188,6 +196,7 @@ public class CharacterAppearanceTests
     }
 
     [Fact]
+    [Slow]
     public void Beep_uses_her_body_file()
     {
         var install = GameInstall.Locate();

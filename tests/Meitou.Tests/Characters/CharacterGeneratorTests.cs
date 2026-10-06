@@ -54,6 +54,7 @@ public class CharacterGeneratorTests
     }
 
     [Fact]
+    [Slow]
     public void Human_editor_limits_read_with_kenshi_defaults()
     {
         var install = GameInstall.Locate();
@@ -80,6 +81,7 @@ public class CharacterGeneratorTests
     }
 
     [Fact]
+    [Slow]
     public void Same_seed_same_character_and_seeds_vary()
     {
         var install = GameInstall.Locate();
@@ -95,6 +97,7 @@ public class CharacterGeneratorTests
     }
 
     [Fact]
+    [Slow]
     public void Dust_bandits_roll_by_the_games_rules()
     {
         var install = GameInstall.Locate();
@@ -152,6 +155,7 @@ public class CharacterGeneratorTests
     }
 
     [Fact]
+    [Slow]
     public void Faces_repeat_per_morph_index()
     {
         var install = GameInstall.Locate();
@@ -170,6 +174,7 @@ public class CharacterGeneratorTests
     }
 
     [Fact]
+    [Slow]
     public void Seeded_build_uses_the_loadout()
     {
         var install = GameInstall.Locate();
@@ -189,6 +194,7 @@ public class CharacterGeneratorTests
     }
 
     [Fact]
+    [Slow]
     public void Body_files_are_kept()
     {
         var install = GameInstall.Locate();

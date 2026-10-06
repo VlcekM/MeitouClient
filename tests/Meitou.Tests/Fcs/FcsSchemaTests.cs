@@ -51,6 +51,7 @@ public class FcsSchemaTests
     /// sections for the fields its records actually use in the base game.
     /// </summary>
     [Fact]
+    [Slow]
     public void Record_type_names_match_fcs_def_against_base_game()
     {
         var install = GameInstall.Locate();

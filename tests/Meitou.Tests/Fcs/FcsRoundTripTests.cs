@@ -78,6 +78,7 @@ public class FcsRoundTripTests
 
     [Theory]
     [MemberData(nameof(BaseGameFiles))]
+    [Slow]
     public void Base_game_file_round_trips_byte_for_byte(string name)
     {
         var install = GameInstall.Locate();

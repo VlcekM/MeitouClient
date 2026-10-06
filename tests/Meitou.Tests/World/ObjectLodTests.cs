@@ -96,6 +96,7 @@ public class ObjectLodTests
     }
 
     [Fact]
+    [Slow]
     public void Placed_distant_mesh_is_scaled_rotated_and_moved_like_the_town_batching()
     {
         var install = GameInstall.Locate();
@@ -116,6 +117,7 @@ public class ObjectLodTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_distant_town_meshes_are_the_merged_distant_meshes_of_their_buildings()
     {
         var install = GameInstall.Locate();
@@ -179,6 +181,7 @@ public class ObjectLodTests
     }
 
     [Fact]
+    [Slow]
     public void Building_distant_meshes_have_vertex_colours_and_few_triangles()
     {
         var install = GameInstall.Locate();
@@ -197,6 +200,7 @@ public class ObjectLodTests
     }
 
     [Fact]
+    [Slow]
     public void Building_part_meshes_with_lod_levels_read_into_ascending_distances()
     {
         var install = GameInstall.Locate();

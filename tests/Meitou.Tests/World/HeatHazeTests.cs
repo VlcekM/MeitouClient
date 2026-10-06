@@ -29,6 +29,7 @@ public class HeatHazeTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_weathers_and_textures()
     {
         var install = GameInstall.Locate();

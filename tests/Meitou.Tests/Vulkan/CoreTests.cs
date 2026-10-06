@@ -24,6 +24,7 @@ public unsafe class CoreTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [Slow]
     public void Device_reports_features()
     {
         using var d = TryCreate();
@@ -43,6 +44,7 @@ public unsafe class CoreTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [Slow]
     public void Allocator_mixed_sizes_coalesce_on_free()
     {
         using var d = TryCreate();
@@ -115,6 +117,7 @@ public unsafe class CoreTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [Slow]
     public void Clear_image_and_read_back()
     {
         using var d = TryCreate();
@@ -191,6 +194,7 @@ public unsafe class CoreTests(ITestOutputHelper output)
     [Theory]
     [InlineData(2)]
     [InlineData(3)]
+    [Slow]
     public void Frame_ring_runs_deletions_after_their_fence(int inFlight)
     {
         using var d = TryCreate(true, inFlight);
@@ -234,6 +238,7 @@ public unsafe class CoreTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [Slow]
     public void Timeline_semaphore_signals_and_waits()
     {
         using var d = TryCreate();
@@ -248,6 +253,7 @@ public unsafe class CoreTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [Slow]
     public void Pipeline_cache_round_trips_and_a_bad_file_is_ignored()
     {
         var path = Path.Combine(Path.GetTempPath(), "meitou-vk-test-" + Guid.NewGuid().ToString("N") + ".cache");
@@ -281,6 +287,7 @@ public unsafe class CoreTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [Slow]
     public void Dispose_leaves_no_validation_errors()
     {
         var d = TryCreate();

@@ -164,6 +164,7 @@ public class AtmosphereTests
     }
 
     [Fact]
+    [Slow]
     public void Ambient_map_built_from_the_biomes_matches_the_shipped_one()
     {
         var install = GameInstall.Locate();
@@ -183,6 +184,7 @@ public class AtmosphereTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_default_weather_is_clear()
     {
         var install = GameInstall.Locate();
@@ -204,6 +206,7 @@ public class AtmosphereTests
     }
 
     [Fact]
+    [Slow]
     public void Merged_constants_give_the_exposure_band()
     {
         var install = GameInstall.Locate();

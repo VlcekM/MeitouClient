@@ -86,6 +86,7 @@ public class FoliageGpuCullTests
     }
 
     [Fact]
+    [Slow]
     public unsafe void CrSqrt_is_the_correctly_rounded_root()
     {
         using var d = TryCreate();
@@ -192,6 +193,7 @@ public class FoliageGpuCullTests
     }
 
     [Fact]
+    [Slow]
     public unsafe void Gpu_cull_matches_FoliageCull_on_synthetic_data()
     {
         using var d = TryCreate();
@@ -301,6 +303,7 @@ public class FoliageGpuCullTests
     /// include none (-1) and rows beyond the first word of the residency bits.
     /// </summary>
     [Fact]
+    [Slow]
     public unsafe void Gpu_cull_matches_the_terrain_mesh_path_for_rocks()
     {
         using var d = TryCreate();

@@ -113,6 +113,7 @@ public class BindlessTests
     }
 
     [Fact]
+    [Slow]
     public unsafe void Integer_textures_read_back_exact_values_through_the_bindless_arrays()
     {
         using var d = TryCreate();
@@ -164,6 +165,7 @@ public class BindlessTests
         """;
 
     [Fact]
+    [Slow]
     public unsafe void A_GL_texture_exports_a_bindless_index_that_follows_its_sampler()
     {
         using var d = TryCreate();
@@ -214,6 +216,7 @@ public class BindlessTests
     }
 
     [Fact]
+    [Slow]
     public void A_shader_that_declares_the_bindless_set_wrongly_is_refused()
     {
         using var d = TryCreate();
@@ -236,6 +239,7 @@ public class BindlessTests
     }
 
     [Fact]
+    [Slow]
     public unsafe void Indices_registered_or_updated_in_a_frame_are_seen_in_that_frame()
     {
         using var d = TryCreate();

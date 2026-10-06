@@ -66,6 +66,7 @@ public class GpuApiTests
     }
 
     [Fact]
+    [Slow]
     public unsafe void Legacy_program_draws_the_same_bytes_as_VkGl()
     {
         using var d = TryCreate();
@@ -172,6 +173,7 @@ public class GpuApiTests
     }
 
     [Fact]
+    [Slow]
     public void Legacy_programs_get_VkGl_SPIR_V_for_every_world_program()
     {
         using var d = TryCreate();
@@ -195,6 +197,7 @@ public class GpuApiTests
     }
 
     [Fact]
+    [Slow]
     public async Task Prepared_pipelines_are_not_late()
     {
         using var d = TryCreate();
@@ -260,6 +263,7 @@ public class GpuApiTests
     }
 
     [Fact]
+    [Slow]
     public void Timestamps_read_back_a_ring_later()
     {
         using var d = TryCreate();
@@ -293,6 +297,7 @@ public class GpuApiTests
     }
 
     [Fact]
+    [Slow]
     public void Uploading_into_a_buffer_the_frame_drew_from_throws()
     {
         using var d = TryCreate();
@@ -348,6 +353,7 @@ public class GpuApiTests
         """;
 
     [Fact]
+    [Slow]
     public unsafe void Compute_writes_indirect_arguments_for_a_bindless_draw()
     {
         using var d = TryCreate();
@@ -419,6 +425,7 @@ public class GpuApiTests
     /// The copy lands in a <see cref="ReadbackBuffer"/>, read once the frame has completed. Synchronisation validation is on.
     /// </summary>
     [Fact]
+    [Slow]
     public unsafe void A_dispatch_recorded_into_PreFrame_runs_before_the_frames_own_commands()
     {
         using var d = TryCreate(sync: true);
@@ -491,6 +498,7 @@ public class GpuApiTests
     }
 
     [Fact]
+    [Slow]
     public void Buffer_arena_reuses_freed_ranges_after_the_frames_in_flight()
     {
         using var d = TryCreate();

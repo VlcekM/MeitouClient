@@ -179,6 +179,7 @@ public class TerrainQuadtreeTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_window_matches_point_samples()
     {
         var install = GameInstall.Locate();

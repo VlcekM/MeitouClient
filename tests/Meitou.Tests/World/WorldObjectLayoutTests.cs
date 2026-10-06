@@ -90,6 +90,7 @@ public class WorldObjectLayoutTests
     }
 
     [Fact]
+    [Slow]
     public void Base_game_buildings_have_meshes_and_materials()
     {
         var install = GameInstall.Locate();
@@ -129,6 +130,7 @@ public class WorldObjectLayoutTests
     }
 
     [Fact]
+    [Slow]
     public void Town_handles_and_town_materials()
     {
         var install = GameInstall.Locate();
@@ -161,6 +163,7 @@ public class WorldObjectLayoutTests
     }
 
     [Fact]
+    [Slow]
     public void Destroyed_buildings_swap_meshes_and_lose_upper_floors_and_doors()
     {
         var install = GameInstall.Locate();
@@ -202,6 +205,7 @@ public class WorldObjectLayoutTests
     }
 
     [Fact]
+    [Slow]
     public void Exterior_layout_names_resolve_to_interiors_level_layouts()
     {
         var install = GameInstall.Locate();

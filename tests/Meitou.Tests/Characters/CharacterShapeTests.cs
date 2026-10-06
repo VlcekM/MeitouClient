@@ -122,6 +122,7 @@ public class CharacterShapeTests
     }
 
     [Fact]
+    [Slow]
     public void Ruka_gets_her_body_file_proportions()
     {
         var install = GameInstall.Locate();
@@ -154,6 +155,7 @@ public class CharacterLodTests
     }
 
     [Fact]
+    [Slow]
     public void Human_male_body_has_one_reduced_level_at_200()
     {
         var install = GameInstall.Locate();
