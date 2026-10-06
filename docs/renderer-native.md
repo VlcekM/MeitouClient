@@ -903,7 +903,7 @@ in wave 3 makes wave 4 a scheduling change rather than a rewrite.
 | `LinearAllocator` (constants) | — | one per recording thread per slot, chunks from a locked pool |
 | Command pools | one per slot (`FrameRing`), plus VkGl's upload pools | one per (thread, slot) for secondaries, reset when the slot comes round |
 | `PipelineLibrary` | — | read-only after load. A late creation takes a lock and is counted |
-| `BindlessTable` | — | registration on the render thread only. Recording reads indices |
+| `BindlessTable` | — | `Register`, `Update` and `Free` on the render thread only (`Free` writes the journal, see 2.6). Recording reads indices |
 | `QueryArena` | — | slots handed out with `Interlocked.Increment` |
 | `StageClock` | static, render thread | per-job CPU time recorded per job, summed per stage. The render thread's laps keep wall time |
 | Renderers' counters (`DrawnInstances`, `DrawCalls`, `PhaseMs`...) | fields written while drawing | written in Prepare, or per job and summed |
@@ -1208,8 +1208,8 @@ For every step that claims parity (foundation steps, 3a ports, A1, A2, C1, C2, s
 1. **Pre-port build**: master (or the step's base) in Release. Run `tools/scripts/parity.sh <viewer> <dir1> --faithful all` **twice**
    (`dir1`, `dir2`) and compare them with `parity-compare.sh`. Every view must show maximum difference 0. A view that is not deterministic
    is reported and rerun, and the step cannot be judged on it until it is explained. docs/viewer.md has one unexplained rock-view run with
-   20 differing pixels. The script renders **five views at 13:00 and 02:00, ten pictures**. docs/engine.md and DECISIONS 2 still say eight
-   (the forest view was added later), and should be corrected separately.
+   20 differing pixels. The script renders **five views at 13:00 and 02:00, ten pictures** (docs/engine.md and DECISIONS 2 say the
+   same; older entries that say eight views date from before the forest view).
 2. **Port build**: the same command into `dir3`. Compared to `dir1`: **maximum 0 and mean 0.0000 in all ten**. "0 differing pixels"
    means the largest channel difference is 0. The tool's "share over 12" is not enough.
 3. **Meitou default too** (step P and wave 4): the same without `--faithful`. TAA is deterministic for screenshots (fixed warm-up,

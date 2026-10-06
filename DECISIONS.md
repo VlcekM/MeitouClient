@@ -8,7 +8,7 @@ Choices made while working unattended on the `engine` branch, with the reason. N
    merged master commit and the reference screenshots are taken again.
 2. **Parity tooling.** `meitou-tools image-diff a.png b.png [diff.png]` (mean absolute RGB difference in 0..255, share of
    pixels whose largest channel difference is over 12, maximum) and `tools/scripts/parity.sh` /
-   `parity-compare.sh` (the gate views: four places at 13:00 and 02:00, offscreen 1600x900; ten pictures since the forest view was added). No Python on the machine,
+   `parity-compare.sh` (the gate views: five places at 13:00 and 02:00, offscreen 1600x900, ten pictures; four places and eight pictures before the forest view was added). No Python on the machine,
    so the comparison is a C# tool. `PngWriter` moved from the viewer to `Meitou.Data.Textures` so the tool can write diff
    images.
 3. **Phase 1 is a move, not a rewrite.** The gate is pixel identity (mean < 0.05), so the renderers move into

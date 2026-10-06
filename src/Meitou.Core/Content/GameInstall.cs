@@ -49,7 +49,8 @@ public sealed class GameInstall
 
     /// <summary>
     /// Finds the install from <c>KENSHI_PATH</c>, then <c>meitou.local.json</c> (<c>{"kenshiPath": "..."}</c>)
-    /// in the working directory or next to the executable. Returns null when none is configured.
+    /// in the working directory or next to the executable, or in one of their parent directories (so a test or tool run
+    /// from <c>bin/</c> finds the repository root's file). Returns null when none is configured.
     /// </summary>
     public static GameInstall? Locate()
     {
@@ -62,8 +63,9 @@ public sealed class GameInstall
     static IEnumerable<string?> Candidates()
     {
         yield return Environment.GetEnvironmentVariable(EnvironmentVariable);
-        foreach (var dir in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
-            yield return ReadLocalConfig(Path.Combine(dir, LocalConfigFile));
+        foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+            for (var dir = new DirectoryInfo(start); dir is not null; dir = dir.Parent)
+                yield return ReadLocalConfig(Path.Combine(dir.FullName, LocalConfigFile));
     }
 
     static string? ReadLocalConfig(string file)
