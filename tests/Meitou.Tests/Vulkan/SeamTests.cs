@@ -7,6 +7,7 @@ using Silk.NET.Vulkan;
 namespace Meitou.Tests.Vulkan;
 
 /// <summary>The coexistence seam's invariants (docs/renderer-native.md 4.6): VkGl and native segments in one frame, sharing objects.</summary>
+[Collection("StageClock")]   // the profiler test and OverlayTests share StageClock's statics
 public class SeamTests
 {
     static VulkanDevice? TryCreate(bool sync = true)
@@ -626,7 +627,7 @@ public class SeamTests
         {
             uint solid = WorldGl.Program(gl, Fullscreen, Solid);
             gl.BindVertexArray(gl.GenVertexArray());
-            using var profiler = new FrameProfiler(gl, gl.Context);
+            using var profiler = new FrameProfiler(gl.Context);
             for (int frame = 0; frame < 2 * d!.Frames.Count + 2; frame++)
             {
                 gl.BeginFrame(W, H);

@@ -1408,6 +1408,49 @@ clouds are part of the sky shader) and `WaterRenderer` record natively in VkGl's
   Both renderers draw once or twice a frame, so there is little to save: the per-draw 2 us of 7.1 does not apply (cold code and one-off uniform writes
   dominate), and what is left is the 20 uniform writes and the six `Sampled` calls of Prepare.
 
+**Wave 3, agent F (overlays, settings, debug views, readback), step P (2026-10-06, written on master `6c4ac6d`, rebased onto `d860e8e` and gated again there).**
+Three commits. These are few draws, so the goal was fewer `IGl` calls for phase 8 with identical pictures, not speed (nothing was timed).
+
+- *Overlay.* `DebugOverlay.Flush` is one native segment (`BeginNativeInPass`) with one `LegacyProgram` (made in the constructor, handles resolved once).
+  The vertices go into the frame's constants (`Frame.Constants.Allocate`, three attributes of one interleaved range at 0, 8 and 16 bytes, stride 32), the
+  atlas stays a GL texture read through `interop.Sampled`. The depth, cull and blend state are still set on GL before the segment, so `CurrentState()`
+  reports them; viewport and scissor come from `CurrentTargets()`. The segment is begun **first**, before the constants are allocated: the overlay is also
+  drawn after the last frame ended (the key list and the settings panel of a `--show-keys` screenshot), and `BeginNativeInPass` is what opens the frame whose
+  constants hold the vertices. Allocating before it would have written them into a frame slot that is reset when the new frame begins (found by reading
+  `GpuFrame.Constants` and `VkGl.Cmd`, not by a failure). What GL left behind that is no longer left: the program, unit 0's texture and the vertex array
+  binding (nothing reads them after the overlay). `SettingsPanel` has no draws of its own (it uses the overlay), so the time-of-day slider and the Reset
+  button needed no change.
+- *Profiler.* `FrameProfiler` already stamped through the seam; the GL query fallback is gone (its constructor takes only the `GpuContext`, and throws without
+  the interop). The viewer's per-frame GPU timer (`TIME_ELAPSED` query pairs, the `gpu` figure of the statistics panel) is a pair of native timestamps
+  (`QueryArena`, recorded with `Interleave`, read through `TryRead` a frame ring later; a pair whose frame is more than 8 frames old is dropped). The
+  benchmark's non-VkGl fence queries were dead code (`gl is not VkGl`) and are removed.
+- *Debug views.* `ShadowPass.DrawDebug` (modes 1 to 3: the scene-depth view with the receiver's blocks and textures from the frame globals, and the atlas in
+  the corner) is two `LegacyProgram`s and a `DrawFullscreen` segment each; the GL state (framebuffer, viewport, the multiply blend of mode 3, depth mask) is
+  set around them as before. The compare-mode-off toggle on the atlas is gone: a plain `sampler2D` never compares (risk 2), and `--debug-shadows 1` and `2`
+  stay at 0 px. `CaptureDepth` **stays on IGl**: it blits the scene's depth (possibly multisampled, which VkGl resolves with a rendering pass) into a texture of
+  its own; a native version needs the depth-resolve pass, which is not worth it for a debug view.
+- *Readback.* `FramebufferCapture.SavePng` calls `Finish` (as VkGl's `ReadPixels` flushed the frame), takes the draw target's image from `CurrentTargets()` and
+  copies it to host memory with an immediate command buffer (what `GpuContext.ReadBack` does, on the raw image: it has no `Texture` for a renderbuffer). It
+  falls back to `ReadPixels` unless the target is single-sampled RGBA8 at least as big as the picture and the read framebuffer is the draw framebuffer
+  (`GetInteger` on both bindings; level 0 and layer 0 are assumed, as for every screenshot target). The screenshot and key callers bind `Framebuffer` (both)
+  instead of `ReadFramebuffer` and no longer call `ReadBuffer`. **Observed:** the `IGl` count of this file went up (2 to 5), because of the guards and the
+  kept fallback; the readback itself is native. Both go in phase 8 with the screenshot targets.
+- *What stays on IGl in these files, and why.* The offscreen targets of the screenshots (framebuffer, renderbuffers, the 4x multisampled target and its
+  blit in the viewer's mesh and character screenshots): `PostProcess.Target` and the viewer's renderers draw into the GL framebuffer binding (4.5), so
+  these go with their guests. `Finish` calls of the frame loops and benchmarks (frame splits, risk 10), `BindFramebuffer(0)` before the overlay, the
+  overlay's atlas, `Enable(Multisample)`. The game's `Program.cs` changed only in the screenshot readback.
+- *Gate (Release; lighter gate of the coordinator, against the Release build of master `d860e8e`, after the rebase; an earlier run against `6c4ac6d` gave the same results).* Build
+  0 warnings; `dotnet test -c Release` 396 passed, 0 skipped (`KENSHI_PATH` set); `--faithful all` ten views max 0, mean 0.0000 (they go through the new
+  readback); `--show-keys` The Hub 13:00 (both panels) max 0; `--debug-shadows 1`, `2` and `3` The Hub 13:00 max 0; `--character "Dust Bandit"` max 0;
+  `MEITOU_VK_VALIDATION=sync` The Hub with `--show-keys`, The Hub 2:00 with `--debug-shadows 2`, and the character screenshot: 0 errors (the character run
+  prints "10 leaked objects" at device destruction, which the build of `d860e8e` prints too).
+- *The profiler chart.* No screenshot path draws it (F12 in the interactive viewer). Checked two ways. **Verified** by the new `OverlayTests` (sync validation): a
+  panel and the profiler's cpu chart after three profiled frames are drawn into an offscreen target, the panel colour is where it should be, more than a tenth of
+  the picture differs from the clear colour, 0 validation errors, and `SavePng`'s pixels equal `ReadPixels`' for the same target. **Observed:** an interactive
+  run (`--world --town "The Hub" --quit-after 6`, sync validation, with a temporary patch that switched the GPU chart and the overlay on and printed the timers;
+  not committed) ran 400 frames, the native frame timer gave samples (2 to 8 ms) next to the profiler's GPU frames, 0 validation errors. `OverlayTests` and
+  `SeamTests` share an xUnit collection because `StageClock` is static (the profiler test failed once when both ran in parallel).
+
 After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the
 native shader prelude and the shared native shader variants (3.3), each proven on one consumer.
@@ -1607,7 +1650,7 @@ here: calls on an `IGl` (`gl.` or `Gl.` followed by an `IGl` member name), exclu
 | --- | ---: | --- |
 | `src/Meitou.Rendering/PostProcess.cs` | 181 | E |
 | `src/Meitou.Rendering/FoliageRenderer.cs` | 147 | A |
-| `src/Meitou.Rendering/ShadowPass.cs` | 123 | B (debug views F) |
+| `src/Meitou.Rendering/ShadowPass.cs` | 123 (101 after F's debug views) | B (debug views F) |
 | `src/Meitou.Rendering/TerrainRenderer.cs` | 122 | B (`DrawMeshes`: foundation pilot) |
 | `tools/Meitou.ModelViewer/Renderer.cs` | 116 | C |
 | `tools/Meitou.ModelViewer/CharacterRenderer.cs` | 93 | C |
@@ -1617,22 +1660,24 @@ here: calls on an `IGl` (`gl.` or `Gl.` followed by an `IGl` member name), exclu
 | `src/Meitou.Rendering/WaterRenderer.cs` | 52 | D |
 | `src/Meitou.Rendering/TerrainTextures.cs` | 52 | B |
 | `src/Meitou.Rendering/TerrainShadowMap.cs` | 48 | B |
-| `src/Meitou.Rendering/DebugOverlay.cs` | 42 | F |
+| `src/Meitou.Rendering/DebugOverlay.cs` | 42 (16 after step P: the atlas texture, the GL state around the draw) | F |
 | `src/Meitou.Rendering/WorldObjectRenderer.cs` | 39 | C |
 | `src/Meitou.Rendering/BuildingLodMesh.cs` | 38 | C |
 | `src/Meitou.Rendering/WorldTextureCache.cs` | 34 | C |
 | `src/Meitou.Rendering/WorldGl.cs` | 23 | foundation |
-| `tools/Meitou.ModelViewer/Program.cs` | 23 | F |
-| `tools/Meitou.ModelViewer/CharacterApp.cs` | 23 | F |
-| `tools/Meitou.ModelViewer/WorldApp.cs` | 20 | F |
+| `tools/Meitou.ModelViewer/Program.cs` | 23 (22) | F |
+| `tools/Meitou.ModelViewer/CharacterApp.cs` | 23 (22) | F |
+| `tools/Meitou.ModelViewer/WorldApp.cs` | 20 (14) | F |
 | `src/Meitou.Rendering/ShadowShaders.cs` | 16 | foundation (`Bind`) |
-| `src/Meitou.Game/Program.cs` | 11 | F |
-| `tools/Meitou.ModelViewer/WorldApp.Benchmark.cs` | 8 | F |
+| `src/Meitou.Game/Program.cs` | 11 (10) | F |
+| `tools/Meitou.ModelViewer/WorldApp.Benchmark.cs` | 8 (4) | F |
 | `src/Meitou.Rendering/MeitouShadowShaders.cs` | 8 | foundation (`Bind`) |
 | `src/Meitou.Rendering/WorldFrame.cs` | 7 | the agents of the calls (clears and state around the sky and slices: foundation) |
-| `src/Meitou.Rendering/FrameProfiler.cs` | 6 | F |
-| `src/Meitou.Rendering/FramebufferCapture.cs` | 2 | F |
+| `src/Meitou.Rendering/FrameProfiler.cs` | 6 (0) | F |
+| `src/Meitou.Rendering/FramebufferCapture.cs` | 2 (5: the fallback and the guards) | F |
 | **total** | **1,452** | 1,158 in `src/Meitou.Rendering`, 283 in the viewer, 11 in the game |
+
+*Numbers in brackets: agent F's files after step P (2026-10-06, counted as `gl.` / `Gl.` calls in the file, comments excluded; the total above is not recomputed).*
 
 Besides `IGl`, code uses **VkGl's own public surface**: `VulkanPresenter.cs` (`BeginFrame`, `EndFrame`, `Backbuffer`, `RecordInFrame`),
 `FsrUpscaler.cs` and `DlssUpscaler.cs` (`ImageOf`, `BeginExternal`, `EndExternal`, `Device`), `VulkanDisplay.cs` (constructs it), and the

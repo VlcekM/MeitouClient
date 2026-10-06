@@ -209,7 +209,7 @@ static partial class WorldApp
             settings.Draw(w, h);
             keysOverlay.Dispose();
         }
-        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, fbo);
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
         FramebufferCapture.SavePng(gl, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
         if (Environment.GetEnvironmentVariable("MEITOU_SKY_BENCH") == "1")
@@ -257,7 +257,7 @@ static partial class WorldApp
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
             if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v);
-            profiler = new FrameProfiler(gl, display.VkGl.Context, gl is VkGl statsGl ? () => statsGl.Stats.GpuFrameMs : null);
+            profiler = new FrameProfiler(display.VkGl.Context, gl is VkGl statsGl ? () => statsGl.Stats.GpuFrameMs : null);
             meter = PassMeter.TryCreate(gl);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             var input = window.CreateInput();
             keyboard = input.Keyboards.FirstOrDefault();
@@ -370,8 +370,9 @@ static partial class WorldApp
 
         double titleTimer = 0, cpuMs = 0, gpuMs = 0;
         int frames = 0, gpuSamples = 0, queryIndex = 0;
-        uint[] queries = [];
-        bool[] queryPending = [];
+        // The GPU time of a frame: a native timestamp before and after it (QueryArena), read a frame ring later without waiting.
+        var timers = new (QuerySlot Begin, QuerySlot End)[4];
+        var timerPending = new bool[4];
         var frameWatch = new Stopwatch();
         window.Update += dt =>
         {
@@ -422,36 +423,42 @@ static partial class WorldApp
             if (gpu is null) return;
             var size = window.FramebufferSize;
             if (!display.BeginFrame(size.X, size.Y)) return; // minimized, or not yet shown at its maximized size
-            if (queries.Length == 0)
+            var context = display.VkGl.Context;
+            var arena = context.Frame.Timestamps;
+            // Collect finished GPU timings from earlier frames without waiting for them (one that never comes, its frame long gone, is dropped).
+            for (int i = 0; i < timers.Length; i++)
             {
-                queries = new uint[4];
-                queryPending = new bool[4];
-                for (int i = 0; i < queries.Length; i++) queries[i] = gl.GenQuery();
+                if (!timerPending[i]) continue;
+                if (arena.TryRead(timers[i].Begin, out ulong begin) && arena.TryRead(timers[i].End, out ulong end))
+                {
+                    gpuMs += (end - begin) / 1e6;
+                    gpuSamples++;
+                    timerPending[i] = false;
+                }
+                else if (context.Frame.Number - timers[i].End.Frame > 8) timerPending[i] = false;
             }
-            // Collect finished GPU timings from earlier frames without waiting for them.
-            for (int i = 0; i < queries.Length; i++)
+            bool timing = !timerPending[queryIndex];
+            if (timing)
             {
-                if (!queryPending[i]) continue;
-                gl.GetQueryObject(queries[i], QueryObjectParameterName.ResultAvailable, out int available);
-                if (available == 0) continue;
-                gl.GetQueryObject(queries[i], QueryObjectParameterName.Result, out ulong nanoseconds);
-                gpuMs += nanoseconds / 1e6;
-                gpuSamples++;
-                queryPending[i] = false;
+                var begin = arena.Allocate();
+                if (begin.IsValid) { context.Interop!.Interleave(cmd => cmd.Timestamp(arena, begin)); timers[queryIndex].Begin = begin; }
+                else timing = false;
             }
-            uint query = queries[queryIndex];
-            bool timing = !queryPending[queryIndex];
-            if (timing) gl.BeginQuery(QueryTarget.TimeElapsed, query);
             frameWatch.Restart();
             profiler?.BeginFrame();
             Draw(gl, gpu, scene, camera, render, size.X, size.Y, hour, (float)clock.Elapsed.TotalSeconds / 600f, o.FogDistance);
             cpuMs += frameWatch.Elapsed.TotalMilliseconds;
             if (timing)
             {
-                gl.EndQuery(QueryTarget.TimeElapsed);
-                queryPending[queryIndex] = true;
+                var end = arena.Allocate();
+                if (end.IsValid)
+                {
+                    context.Interop!.Interleave(cmd => cmd.Timestamp(arena, end));
+                    timers[queryIndex].End = end;
+                    timerPending[queryIndex] = true;
+                }
             }
-            queryIndex = (queryIndex + 1) % queries.Length;
+            queryIndex = (queryIndex + 1) % timers.Length;
             frames++;
             // The picture is read after the present (framebuffer 0 stays intact until the next frame); the frame that is saved is drawn
             // without the overlay and the panel, so saved pictures never show them.
@@ -478,8 +485,7 @@ static partial class WorldApp
             {
                 // Into C:\Temp (the user's screenshot folder), never the working directory (which may be the repo).
                 var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-world-{DateTime.Now:yyyyMMdd-HHmmss}.png");
-                gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
-                gl.ReadBuffer(ReadBufferMode.Back);
+                gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
                 FramebufferCapture.SavePng(gl, file, size.X, size.Y);
                 Console.WriteLine($"saved {Path.GetFullPath(file)}");
             }

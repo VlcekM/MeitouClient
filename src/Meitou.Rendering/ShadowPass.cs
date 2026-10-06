@@ -27,10 +27,11 @@ public sealed unsafe partial class ShadowPass : IDisposable
     readonly List<double> gpuSamples = [], cpuSamples = [];
     uint atlas, fbo, noise;
     int atlasSize, slot;
-    uint debugProgram, atlasProgram, emptyVao;
+    LegacyProgram? debugProgram, atlasProgram;   // the debug views (native, made on first use)
+    UniformHandle debugInverse, debugEye, debugMode;
+    SamplerSlot debugDepth, atlasSlot;
     uint sceneDepth, sceneFbo;
     int sceneWidth, sceneHeight;
-    readonly Dictionary<(uint, string), int> uniforms = [];
 
     /// <param name="assets">Where to find the game's <c>white-noise.png</c> (the receiver's jitter); without it a hash stands in.</param>
     public ShadowPass(IGl gl, GpuContext gpu, AssetLocator? assets = null)
@@ -310,21 +311,23 @@ public sealed unsafe partial class ShadowPass : IDisposable
     public void DrawDebug(int mode, uint target, int width, int height, Matrix4x4 view, Matrix4x4 nearProjection, Vector3 eye)
     {
         if (mode <= 0) return;
-        if (debugProgram == 0)
+        if (debugProgram is null)
         {
-            debugProgram = WorldGl.Program(gl, ShadowShaders.FullscreenVertex, ShadowShaders.DebugFragment);
-            atlasProgram = WorldGl.Program(gl, ShadowShaders.FullscreenVertex, ShadowShaders.AtlasFragment);
-            emptyVao = gl.GenVertexArray();
+            // Native (docs/renderer-native.md 7.1, wave 3 agent F, step P): VkGl's SPIR-V and layout, made once; the receiver's blocks and
+            // textures come from the frame globals.
+            var d = debugProgram = LegacyProgram.Create(Gpu, ShadowShaders.FullscreenVertex, ShadowShaders.DebugFragment, "shadow debug");
+            (debugInverse, debugEye, debugMode, debugDepth) = (d.Uniform("uInverse"), d.Uniform("uEye"), d.Uniform("uMode"), d.Sampler("uSceneDepth"));
+            var a = atlasProgram = LegacyProgram.Create(Gpu, ShadowShaders.FullscreenVertex, ShadowShaders.AtlasFragment, "shadow atlas debug");
+            atlasSlot = a.Sampler("uAtlas");
         }
+        var interop = Gpu.Interop!;
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, target);
         gl.Disable(EnableCap.DepthTest);
         gl.DepthMask(false);
         gl.Disable(EnableCap.CullFace);
-        gl.BindVertexArray(emptyVao);
         if (mode >= 2 && sceneDepth != 0)
         {
             gl.Viewport(0, 0, (uint)width, (uint)height);
-            gl.UseProgram(debugProgram);
             if (mode == 3)
             {
                 gl.Enable(EnableCap.Blend);
@@ -332,39 +335,40 @@ public sealed unsafe partial class ShadowPass : IDisposable
             }
             var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
             Matrix4x4.Invert(rotation * nearProjection, out var inverse);
-            WorldGl.Matrix(gl, U(debugProgram, "uInverse"), inverse);
-            gl.Uniform3(U(debugProgram, "uEye"), eye.X, eye.Y, eye.Z);
-            gl.Uniform1(U(debugProgram, "uMode"), mode);
-            gl.ActiveTexture(TextureUnit.Texture0);
-            gl.BindTexture(TextureTarget.Texture2D, sceneDepth);
-            gl.Uniform1(U(debugProgram, "uSceneDepth"), 0);
-            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            var p = debugProgram;
+            p.Set(debugInverse, inverse);
+            p.Set(debugEye, eye);
+            p.Set(debugMode, mode);
+            p.Bind(debugDepth, interop.Sampled(sceneDepth, p.SamplerInfo(debugDepth)));
+            DrawFullscreen(p, "shadow debug");
             gl.Disable(EnableCap.Blend);
         }
         if ((mode == 1 || mode == 2) && atlas != 0)
         {
-            // The atlas in the lower right corner, plain depth values (the comparison off for the read).
+            // The atlas in the lower right corner, plain depth values (a plain sampler never compares).
             int side = Math.Min(width, height) / (mode == 1 ? 2 : 3);
             gl.Viewport(width - side - 8, 8, (uint)side, (uint)side);
-            gl.UseProgram(atlasProgram);
-            gl.ActiveTexture(TextureUnit.Texture0);
-            gl.BindTexture(TextureTarget.Texture2D, atlas);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)TextureCompareMode.None);
-            gl.Uniform1(U(atlasProgram, "uAtlas"), 0);
-            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)TextureCompareMode.CompareRefToTexture);
+            var p = atlasProgram!;
+            p.Bind(atlasSlot, interop.Sampled(atlas, p.SamplerInfo(atlasSlot)));
+            DrawFullscreen(p, "shadow atlas debug");
         }
-        gl.BindTexture(TextureTarget.Texture2D, 0);
-        gl.BindVertexArray(0);
         gl.Viewport(0, 0, (uint)width, (uint)height);
         gl.DepthMask(true);
         gl.Enable(EnableCap.DepthTest);
     }
 
-    int U(uint program, string name)
+    /// <summary>One fullscreen triangle of <paramref name="p"/> as a native segment in the pass VkGl has open (the GL state is what <see cref="DrawDebug"/> set).</summary>
+    void DrawFullscreen(LegacyProgram p, string label)
     {
-        if (!uniforms.TryGetValue((program, name), out int location)) uniforms[(program, name)] = location = gl.GetUniformLocation(program, name);
-        return location;
+        var interop = Gpu.Interop!;
+        var cmd = interop.BeginNativeInPass(label);
+        var targets = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        state.Record(cmd, targets);
+        cmd.BindPipeline(Gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout([]), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, targets.Formats, label)));
+        p.Flush(cmd);
+        cmd.Draw(3);
+        interop.EndNative(cmd);
     }
 
     public void Dispose()
@@ -373,7 +377,8 @@ public sealed unsafe partial class ShadowPass : IDisposable
         FreeAtlas();
         if (noise != 0) gl.DeleteTexture(noise);
         if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneDepth); }
-        if (debugProgram != 0) { gl.DeleteProgram(debugProgram); gl.DeleteProgram(atlasProgram); gl.DeleteVertexArray(emptyVao); }
+        debugProgram?.Dispose();
+        atlasProgram?.Dispose();
         gl.DeleteBuffer(receiverUbo);
         gl.DeleteBuffer(casterUbo);
         foreach (var q in queries) gl.DeleteQuery(q);
