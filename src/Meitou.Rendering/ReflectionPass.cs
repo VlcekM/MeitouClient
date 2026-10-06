@@ -30,8 +30,8 @@ public sealed unsafe class ReflectionPass : IDisposable
 
     /// <summary>
     /// GL is left only for what the guests (sky, terrain, objects, foliage: native) read through the seam's GL mirror, the framebuffer binding,
-    /// viewport and fixed-function state (<c>CurrentTargets</c>, <c>CurrentState</c>; docs/renderer-native.md 4.5, 8.1), and for the colour's GL
-    /// name the water samples through VkGl (<see cref="Texture"/>, with its GL sampler parameters). The targets, the resolve and the timing are native.
+    /// viewport and fixed-function state (<c>CurrentTargets</c>, <c>CurrentState</c>; docs/renderer-native.md 4.5, 8.1). The targets, the resolve, the
+    /// timing and the water's texture (<see cref="Sampled"/>, phase 8 stage 2) are native.
     /// </summary>
     readonly IGl gl;
     /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
@@ -97,8 +97,16 @@ public sealed unsafe class ReflectionPass : IDisposable
     public bool Valid { get; private set; }
     /// <summary>Maps a point on the water to the texture: clip.xy / clip.w * 0.5 + 0.5.</summary>
     public Matrix4x4 ViewProjection { get; private set; }
-    /// <summary>The reflection as a GL name (an imported native texture, with GL sampler parameters), for the water.</summary>
+    /// <summary>The reflection as a GL name (an imported native texture, GL's default sampler state; for GL code only: the water samples
+    /// <see cref="Sampled"/>).</summary>
     public uint Texture => colourGl;
+    /// <summary>
+    /// (Phase 8 stage 2.) The reflection as the water samples it: the native colour with the sampler its GL name was given until then (linear,
+    /// clamped to the edge, no mips, so no LOD bias; <see cref="SamplerDesc.FromGl"/>, R at GL's default). Default before the first pass.
+    /// </summary>
+    public SampledTexture Sampled => colour is null ? default
+        : new(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
+            TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0)), colour.View(), colour.Image);
     public int Width => width;
     public int Height => height;
     /// <summary>Time the CPU spent recording the last reflection pass, and what the GPU spent on it (a few frames late).</summary>
@@ -116,13 +124,8 @@ public sealed unsafe class ReflectionPass : IDisposable
         (width, height) = (w, h);
         var interop = Gpu.Interop!;
         colour = GpuTexture.Create(Gpu, new TextureDesc(Format.R16G16B16A16Sfloat, w, h, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferDst, Name: "reflection colour"));
-        // The water samples the colour through VkGl (interop.Sampled of this GL name), with the GL sampler parameters it always had.
+        // The water samples the native colour (Sampled, with the sampler state the GL name had); the GL name is only the guests' framebuffer attachment.
         colourGl = interop.Import(colour);
-        gl.BindTexture(TextureTarget.Texture2D, colourGl);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
 
         // The picture is drawn multisampled and resolved: the mirrored shoreline, fences and rooflines are hard edges, and
         // without it each texel of the half-resolution image is a visible stair step that the wave distortion then smears.

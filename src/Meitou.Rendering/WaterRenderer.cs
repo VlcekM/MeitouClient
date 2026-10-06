@@ -138,11 +138,12 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
         """;
 
-    readonly IGl gl;
-    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    /// <summary>The native GPU API (phase 8 stage 2: the water makes no GL call; docs/renderer-native.md 8.6).</summary>
     public GpuContext Gpu { get; }
-    readonly SkyRenderer sky;
-    readonly uint vao, vbo, colourMap, flowMap, normalMap, paramsA, paramsB;   // the quad and the maps stay GL resources (exported to the native draw)
+    readonly DeviceBuffer quad;
+    readonly VertexArrayBindings quadSource;   // the quad's vertex input, as the GL vertex array was exported (the pipeline cache's key)
+    readonly BufferBinding[] quadVertices;
+    readonly SampledImage[] maps;   // colour, flow, normal, parameters A and B, in the order of mapSamplers
     readonly Vector4 seaA, seaB;
     readonly Vector3 seaColour;
     readonly LegacyProgram program;
@@ -158,13 +159,11 @@ public sealed unsafe class WaterRenderer : IDisposable
         UniformHandle SunColour, UniformHandle FogColour, UniformHandle FogDistance, UniformHandle Reflect, UniformHandle ReflectionViewProjection,
         SkyColourHandles Sky);
 
-    WaterRenderer(IGl gl, GpuContext gpu, SkyRenderer sky, uint colourMap, uint flowMap, uint normalMap, uint paramsA, uint paramsB, Vector4 seaA, Vector4 seaB, Vector3 seaColour)
+    WaterRenderer(GpuContext gpu, SampledImage[] maps, Vector4 seaA, Vector4 seaB, Vector3 seaColour)
     {
         (this.seaA, this.seaB, this.seaColour) = (seaA, seaB, seaColour);
-        this.gl = gl;
         Gpu = gpu;
-        this.sky = sky;
-        (this.colourMap, this.flowMap, this.normalMap, this.paramsA, this.paramsB) = (colourMap, flowMap, normalMap, paramsA, paramsB);
+        this.maps = maps;
         program = LegacyProgram.Create(gpu, Vertex, Fragment, "water");
         segment = new NativeSegment(gpu, program, Silk.NET.Vulkan.PrimitiveTopology.TriangleStrip, "water");
         h = new Handles(program.Uniform("uViewProjection"), program.Uniform("uWaterHeight"), program.Uniform("uCentre"), program.Uniform("uExtent"),
@@ -175,19 +174,21 @@ public sealed unsafe class WaterRenderer : IDisposable
             .Select(n => { var slot = program.Sampler(n); return (slot, program.SamplerInfo(slot)); }).ToArray();
         reflectionSlot = program.Sampler("uReflection");
         reflectionInfo = program.SamplerInfo(reflectionSlot);
-        float[] quad = [-1, -1, -1, 1, 1, -1, 1, 1]; // triangle strip, counter-clockwise from above
-        vao = gl.GenVertexArray();
-        gl.BindVertexArray(vao);
-        vbo = gl.GenBuffer();
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-        gl.BufferData<float>(BufferTargetARB.ArrayBuffer, quad.AsSpan(), BufferUsageARB.StaticDraw);
-        gl.EnableVertexAttribArray(0);
-        gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 8, (void*)0);
-        gl.BindVertexArray(0);
+        float[] corners = [-1, -1, -1, 1, 1, -1, 1, 1]; // triangle strip, counter-clockwise from above
+        quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "water quad");
+        using (var batch = gpu.Uploads.Begin()) batch.Write(quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(corners.AsSpan()));
+        // Location 0: two floats, 8 bytes apart (the GL vertex array's VertexAttribPointer(0, 2, FLOAT, false, 8, 0)), no element buffer.
+        var attributes = new LegacyProgram.Attribute?[1];
+        attributes[0] = new LegacyProgram.Attribute(new BufferBinding(quad.Handle, 0), GlConventions.VertexFormat(GLEnum.Float, 2, false, false), 8, false);
+        quadSource = new VertexArrayBindings(attributes, default);
+        quadVertices = program.VertexBuffers(attributes, 0, 1);
     }
 
-    public static WaterRenderer Create(IGl gl, GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer sky, List<string> messages)
+    /// <param name="gl">Unused since phase 8 stage 2 (kept for the callers that still pass it: <c>WorldFrame</c>).</param>
+    /// <param name="sky">Unused since phase 8 stage 2: the atmosphere comes through the frame globals.</param>
+    public static WaterRenderer Create(IGl? gl, GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky, List<string> messages)
     {
+        _ = (gl, sky);
         var colour = Load(install, WorldWater.ColourMap);
         var flow = Load(install, WorldWater.FlowMap);
         var normalPath = assets.Find("water.png");
@@ -206,11 +207,15 @@ public sealed unsafe class WaterRenderer : IDisposable
 
         var sea = OpenSea(a, b, blend.Width, blend.Height, colour);
         Console.WriteLine($"sea       open-sea water: scale {sea.A.X * 5000:0.#}, {sea.A.Y * 5000:0.#}, gloss {sea.B.X:0.##}, colour {sea.Colour.X:0.##} {sea.Colour.Y:0.##} {sea.Colour.Z:0.##}");
-        uint Rgba(RgbaImage? img, bool repeat, byte[] flat) =>
-            img is null ? WorldGl.Texture2D(gl, 1, 1, flat, repeat) : WorldGl.Texture2D(gl, img.Width, img.Height, img.Pixels, repeat, mipmaps: repeat);
-        return new WaterRenderer(gl, gpu, sky,
-            Rgba(colour, false, [0, 32, 64, 255]), Rgba(flow, false, [128, 128, 0, 255]), Rgba(normal, true, [128, 255, 128, 255]),
-            FloatTexture(gl, a, blend.Width, blend.Height), FloatTexture(gl, b, blend.Width, blend.Height), sea.A, sea.B, sea.Colour);
+        // As the GL textures were made (WorldGl.Texture2D): a found map has mips only where it repeats; the 1 × 1 stand-in for a missing one
+        // always had its (single-level) chain and a trilinear filter.
+        SampledImage Rgba(RgbaImage? img, bool repeat, byte[] flat, string name) =>
+            img is null ? SampledImage.Rgba8(gpu, 1, 1, flat, repeat, mipmaps: true, name) : SampledImage.Rgba8(gpu, img, repeat, mipmaps: repeat, name);
+        return new WaterRenderer(gpu,
+            [Rgba(colour, false, [0, 32, 64, 255], "water colour map"), Rgba(flow, false, [128, 128, 0, 255], "water flow map"),
+             Rgba(normal, true, [128, 255, 128, 255], "water normal map"),
+             SampledImage.Rgba32F(gpu, a, blend.Width, blend.Height, "water parameters a"), SampledImage.Rgba32F(gpu, b, blend.Width, blend.Height, "water parameters b")],
+            sea.A, sea.B, sea.Colour);
     }
 
     /// <summary>
@@ -246,21 +251,12 @@ public sealed unsafe class WaterRenderer : IDisposable
         return File.Exists(path) ? TextureLoader.LoadImage(File.ReadAllBytes(path)) : null;
     }
 
-    static uint FloatTexture(IGl gl, Vector4[] data, int width, int height)
-    {
-        uint id = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, id);
-        gl.TexImage2D<Vector4>(TextureTarget.Texture2D, 0, InternalFormat.Rgba32f, (uint)width, (uint)height, 0, PixelFormat.Rgba, PixelType.Float, data.AsSpan());
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-        return id;
-    }
-
     /// <summary>
     /// The water surface: one quad, blended, into the pass VkGl has open. Prepare sets the uniforms and the textures the shader reads (the height
-    /// textures, the atmosphere and the heights' uniforms come through the frame globals); Record is one native segment.
+    /// textures, the atmosphere and the heights' uniforms come through the frame globals); Record is one native segment with the pass's state
+    /// and the water's own: no culling, depth test without write, alpha blending. No GL state is changed (phase 8 stage 2): the GL code set
+    /// these and put back the depth write and blending after the draw; what it left differently (the cull face off, the blend factors) is read by
+    /// no later draw (docs/renderer-native.md 8.6).
     /// </summary>
     /// <param name="time">Animation time; the game's unit for it is Unknown (the viewer uses real hours).</param>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent, ReflectionPass? reflection = null)
@@ -287,37 +283,32 @@ public sealed unsafe class WaterRenderer : IDisposable
         p.Set(h.FogColour, light.FogColour.X, light.FogColour.Y, light.FogColour.Z);
         p.Set(h.FogDistance, light.FogDistance);
         h.Sky.Set(p, colours);
-        p.ApplyGlobals();   // the atmosphere's and the heights' uniforms (SkyRenderer.Apply, TerrainRenderer.BindHeights), through the frame globals
-        sky.BindUnits();    // the atmosphere's textures on their units: the frame globals read them there
-        var interop = Gpu.Interop!;
-        uint[] textures = [colourMap, flowMap, normalMap, paramsA, paramsB];
-        for (int i = 0; i < textures.Length; i++) p.Bind(mapSamplers[i].Slot, interop.Sampled(textures[i], mapSamplers[i].Info));
+        p.ApplyGlobals();   // the atmosphere's and the heights' uniforms and textures, through the frame globals
+        for (int i = 0; i < maps.Length; i++) p.Bind(mapSamplers[i].Slot, maps[i].Sampled());
         bool reflect = reflection is { Valid: true };
         p.Set(h.Reflect, reflect ? 1f : 0f);
         if (reflect)
         {
-            p.Bind(reflectionSlot, interop.Sampled(reflection!.Texture, reflectionInfo));
+            p.Bind(reflectionSlot, reflection!.Sampled);
             p.Set(h.ReflectionViewProjection, reflection.ViewProjection);
         }
-        gl.ActiveTexture(TextureUnit.Texture0);
-        gl.Enable(EnableCap.DepthTest);
-        gl.Disable(EnableCap.CullFace);
-        gl.Enable(EnableCap.Blend);
-        gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-        gl.DepthMask(false);
     }
 
-    VertexArrayBindings? quadSource;
-    BufferBinding[] quadVertices = [];
+    static readonly BlendState AlphaBlend = new(true, Silk.NET.Vulkan.BlendFactor.SrcAlpha, Silk.NET.Vulkan.BlendFactor.OneMinusSrcAlpha);
 
     void Record()
     {
         var interop = Gpu.Interop!;
         var cmd = interop.BeginNativeInPass("water");
         var targets = interop.CurrentTargets();
-        var state = interop.CurrentState();
-        var va = interop.VertexArray(vao);
-        if (!ReferenceEquals(quadSource, va)) { quadVertices = program.VertexBuffers(va.Attributes, 0, 1); quadSource = va; }
+        // What the GL code's Enable(DepthTest), DepthMask(false), Disable(CullFace), Enable(Blend) and BlendFunc made of the pass's state (the
+        // depth test and blending only with the attachment they need, as VkGl's CurrentState).
+        bool hasDepth = targets.Formats.Depth != Silk.NET.Vulkan.Format.Undefined, hasColour = targets.Formats.Colour != Silk.NET.Vulkan.Format.Undefined;
+        var state = interop.CurrentState() with
+        {
+            Cull = Silk.NET.Vulkan.CullModeFlags.None, DepthTest = hasDepth, DepthWrite = false, Blend = hasColour ? AlphaBlend : BlendState.Off,
+        };
+        var va = quadSource;
         cmd.SetViewport(targets.Viewport);
         cmd.SetScissor(targets.Scissor);
         cmd.SetRaster(state.Cull, state.Front);
@@ -328,16 +319,12 @@ public sealed unsafe class WaterRenderer : IDisposable
         program.Flush(cmd);
         cmd.Draw(4);
         interop.EndNative(cmd);
-        gl.BindVertexArray(0);
-        gl.DepthMask(true);
-        gl.Disable(EnableCap.Blend);
     }
 
     public void Dispose()
     {
-        gl.DeleteVertexArray(vao);
-        gl.DeleteBuffer(vbo);
-        foreach (var t in new[] { colourMap, flowMap, normalMap, paramsA, paramsB }) gl.DeleteTexture(t);
+        quad.Dispose();
+        foreach (var t in maps) t.Dispose();
         program.Dispose();
     }
 }
