@@ -23,14 +23,13 @@ public class ShadowPassNativeTests
         using (var gl = new VkGl(device!))
         {
             var ctx = gl.Context;
-            using var shadows = new ShadowPass(gl, ctx) { Meitou = true, ContactHardening = true, Settings = new ShadowSettings(MapSize: 256, Range: 2000) };
+            using var shadows = new ShadowPass(ctx) { Meitou = true, ContactHardening = true, Settings = new ShadowSettings(MapSize: 256, Range: 2000) };
             var view = new ShadowView(new Vector3(0, 100, 0), Vector3.UnitZ, Vector3.UnitY, 1.0f, 16 / 9f, 1);
             int calls = 0;
             // No casters: the cascades are only cleared (every one drawn in the first frame: the whole atlas by the load op).
-            shadows.Render(view, Vector3.Normalize(new Vector3(0.3f, 0.8f, 0.2f)), 0, 64, 64, (_, _, _, _) => calls++);
+            shadows.Render(view, Vector3.Normalize(new Vector3(0.3f, 0.8f, 0.2f)), (_, _, _, _) => calls++);
             Assert.Equal(4, calls);
             Assert.NotNull(shadows.AtlasTexture);
-            Assert.NotEqual(0u, shadows.Atlas);   // the GL name the casters' framebuffer has
 
             var names = device!.Allocator.Breakdown().Select(o => o.Name).ToList();
             Assert.Contains("shadow atlas", names);

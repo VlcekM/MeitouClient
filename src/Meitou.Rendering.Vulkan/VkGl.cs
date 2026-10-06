@@ -46,8 +46,11 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
     bool frameOpen => Context.Frame.Open;
 
     /// <summary>The host's backbuffer (framebuffer 0): what the window shows, flipped, at <see cref="Present"/>.</summary>
+    /// Since phase 8 stage 3 native textures (<see cref="BackbufferTexture"/>), imported as GL names for the GL code still drawing into it.
     GlTextureObj? backbuffer;
     GlTextureObj? backbufferDepth;
+    Meitou.Rendering.Gpu.Texture? backbufferTexture, backbufferDepthTexture;
+    uint backbufferId, backbufferDepthId;
 
     public VkGl(VulkanDevice device)
     {
@@ -199,10 +202,27 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
         width = Math.Max(width, 1);
         height = Math.Max(height, 1);
         if (backbuffer is { } b && b.Width == width && b.Height == height) return;
-        if (backbuffer is not null) { DestroyTexture(backbuffer); DestroyTexture(backbufferDepth!); }
-        backbuffer = NewRenderTexture(Format.R8G8B8A8Unorm, width, height, 1, "backbuffer");
-        backbufferDepth = NewRenderTexture(Format.D32Sfloat, width, height, 1, "backbuffer depth");
+        FreeBackbuffer();
+        const TextureUse common = TextureUse.TransferSrc | TextureUse.TransferDst | TextureUse.Sampled;
+        backbufferTexture = Meitou.Rendering.Gpu.Texture.Create(Context, new TextureDesc(Format.R8G8B8A8Unorm, width, height, Use: TextureUse.ColourTarget | common, Name: "backbuffer"));
+        backbufferDepthTexture = Meitou.Rendering.Gpu.Texture.Create(Context, new TextureDesc(Format.D32Sfloat, width, height, Use: TextureUse.DepthTarget | common, Name: "backbuffer depth"));
+        backbufferId = Import(backbufferTexture);
+        backbufferDepthId = Import(backbufferDepthTexture);
+        (backbuffer, backbufferDepth) = (textures[backbufferId], textures[backbufferDepthId]);
     }
+
+    void FreeBackbuffer()
+    {
+        if (backbuffer is null) return;
+        DeleteTexture(backbufferId);
+        DeleteTexture(backbufferDepthId);
+        backbufferTexture!.Dispose();   // released after the frames in flight
+        backbufferDepthTexture!.Dispose();
+        (backbuffer, backbufferDepth, backbufferTexture, backbufferDepthTexture, backbufferId, backbufferDepthId) = (null, null, null, null, 0, 0);
+    }
+
+    /// <summary>The backbuffer (framebuffer 0's colour) as a native texture: what the window path's chain draws into (phase 8 stage 3).</summary>
+    public Meitou.Rendering.Gpu.Texture BackbufferTexture => backbufferTexture ?? throw new InvalidOperationException("no backbuffer yet (BeginFrame gives its size)");
 
     /// <summary>The backbuffer image (framebuffer 0's colour), for presenting and screenshots.</summary>
     public (Image Image, int Width, int Height) Backbuffer => (backbuffer!.Image!.Image, backbuffer.Width, backbuffer.Height);
@@ -212,7 +232,6 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
         device.WaitIdle();
         foreach (var t in textures.Values.ToList()) DestroyTexture(t);
         foreach (var r in renderbuffers.Values) if (r.Texture is not null) DestroyTexture(r.Texture);
-        if (backbuffer is not null) { DestroyTexture(backbuffer); DestroyTexture(backbufferDepth!); }
         foreach (var b in buffers.Values.ToList()) DestroyBuffer(b);
         foreach (var p in programs.Values.ToList()) DestroyProgram(p);
         foreach (var q in queries.Values) q.Dispose(this);
@@ -221,6 +240,8 @@ public sealed unsafe partial class VkGl : IGl, IDisposable
         DestroySamplers();
         foreach (var r in rings) r.Dispose();
         foreach (var r in uniformRings) r.Dispose();
+        backbufferTexture?.Dispose();
+        backbufferDepthTexture?.Dispose();
         Context.Dispose();
         device.Frames.WaitAll();
     }

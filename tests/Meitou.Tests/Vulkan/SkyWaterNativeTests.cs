@@ -119,7 +119,7 @@ public unsafe class SkyWaterNativeTests
             Assert.False(g.Block(MeitouShadowShaders.Block)!().IsNull);
             sky.Prepare(Vector3.Normalize(new Vector3(0.3f, 0.8f, 0.2f)), 100, 50000);
             // A ShadowPass made later publishes its own blocks over them.
-            using var shadows = new ShadowPass(gl, ctx);
+            using var shadows = new ShadowPass(ctx);
             Assert.NotSame(receiver, g.Block(ShadowShaders.ReceiverBlock));
             gl.Finish();
         }

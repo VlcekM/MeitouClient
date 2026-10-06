@@ -103,19 +103,11 @@ static partial class WorldApp
         }
         FinishLoading(gl);
 
-        // Offscreen: the post-processing chain (HDR scene, resolve, effects) ends in a plain RGBA8 framebuffer that is read back.
+        // Offscreen: the post-processing chain (HDR scene, resolve, effects) ends in a plain RGBA8 texture that is read back.
         int w = o.Width, h = o.Height;
-        uint fbo = gl.GenFramebuffer(), colour = gl.GenRenderbuffer();
-        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, colour);
-        gl.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.Rgba8, (uint)w, (uint)h);
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, colour);
-        if (gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
-        {
-            Console.Error.WriteLine("Offscreen framebuffer incomplete.");
-            return 1;
-        }
-        gpu.Post!.Target = fbo;
+        using var target = Meitou.Rendering.Gpu.Texture.Create(context, new TextureDesc(Silk.NET.Vulkan.Format.R8G8B8A8Unorm, w, h,
+            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "offscreen picture"));
+        gpu.Post!.Target = target;
         gpu.Post.InstantAdaptation = true;   // a still picture: the exposure settles at once
         Console.WriteLine($"post      {o.Post.Describe()}");
         if (o.FlyBenchmark > 0)
@@ -199,9 +191,9 @@ static partial class WorldApp
         if (gpu.Post.AutoExposure is { } band && gpu.Post.ReadExposure() is var (adapted, mean) && float.IsFinite(adapted))
             Console.WriteLine($"exposure  mean luminance {mean:0.000}, band {band.Min:0.###}..{band.Max:0.###}, adapted {adapted:0.000}: x{KenshiLighting.ExposureKey / adapted:0.000}");
         Console.WriteLine($"haze      {(gpu.Sky.KenshiHaze ? "kenshi" : "physical")}, eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {gpu.Sky.EyeClearance:0} above the ground within {KenshiCamera.MaxDistance:0}: altitude weight {gpu.Sky.AltitudeWeight:0.###}, strength {gpu.Sky.HazeStrength:0.##}");
-        if (o.ShowKeys && DebugOverlay.TryCreate(gl, context) is { } keysOverlay)
+        if (o.ShowKeys && DebugOverlay.TryCreate(context) is { } keysOverlay)
         {
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
+            keysOverlay.Target = target;
             keysOverlay.Visible = true;
             keysOverlay.Draw(w, h, "Keys   (F10 hides this)", DebugOverlay.KeyItems(WorldOptions.Usage));
             var settings = CreateSettingsPanel(keysOverlay, gpu, render, () => o.Hour, v => o.Hour = v);
@@ -209,8 +201,7 @@ static partial class WorldApp
             settings.Draw(w, h);
             keysOverlay.Dispose();
         }
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        FramebufferCapture.SavePng(gl, o.Screenshot!, w, h);
+        FramebufferCapture.SavePng(context, target, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
         if (Environment.GetEnvironmentVariable("MEITOU_SKY_BENCH") == "1")
         {
@@ -252,7 +243,7 @@ static partial class WorldApp
         {
             gpu = CreateGpu(gl, display.VkGl.Context, install, scene, assets, o, interactive: true);
             if (gl is VkGl vkGl && gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(vkGl, streamline);
-            overlay = DebugOverlay.TryCreate(gl, display.VkGl.Context);
+            overlay = DebugOverlay.TryCreate(display.VkGl.Context);
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
@@ -432,6 +423,10 @@ static partial class WorldApp
             var size = window.FramebufferSize;
             if (!display.BeginFrame(size.X, size.Y)) return; // minimized, or not yet shown at its maximized size
             var context = display.VkGl.Context;
+            // The chain and the overlays draw into the window's backbuffer (made again when the size changes).
+            var backbuffer = display.VkGl.BackbufferTexture;
+            if (gpu.Post is { } windowPost) windowPost.Target = backbuffer;
+            if (overlay is not null) overlay.Target = backbuffer;
             var arena = context.Frame.Timestamps;
             // Collect finished GPU timings from earlier frames without waiting for them (one that never comes, its frame long gone, is dropped).
             for (int i = 0; i < timers.Length; i++)
@@ -472,7 +467,6 @@ static partial class WorldApp
             // without the overlay and the panel, so saved pictures never show them.
             bool shot = screenshotRequested;
             screenshotRequested = false;
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
             // The statistics at the top left, the key list below them.
             float panelsBottom = !shot && statsVisible && overlay is not null && stats.Count > 0
                 ? overlay.Panel(size.X, size.Y, $"Meitou world ({RendererName(o)})   (F11 hides this)", stats) : 0;
@@ -494,8 +488,7 @@ static partial class WorldApp
             {
                 // Into C:\Temp (the user's screenshot folder), never the working directory (which may be the repo).
                 var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-world-{DateTime.Now:yyyyMMdd-HHmmss}.png");
-                gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-                FramebufferCapture.SavePng(gl, file, size.X, size.Y);
+                FramebufferCapture.SavePng(display.VkGl.Context, backbuffer, file, size.X, size.Y);
                 Console.WriteLine($"saved {Path.GetFullPath(file)}");
             }
         };

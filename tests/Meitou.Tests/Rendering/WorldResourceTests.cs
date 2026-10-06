@@ -9,8 +9,8 @@ namespace Meitou.Tests.Rendering;
 
 /// <summary>
 /// Phase 8 stage 1 (docs/renderer-native.md 8): the objects' and foliage's meshes and textures are native resources. These check that what the
-/// native code makes is what VkGl made from the GL calls it replaced: the vertex attributes of the GL vertex arrays (and of the GL names
-/// <see cref="GlBridge"/> still hands to GL code), and the mip levels VkGl's <c>GenerateMipmap</c> blitted. Synchronisation validation on.
+/// native code makes is what VkGl made from the GL calls it replaced: the vertex attributes of the GL vertex arrays,
+/// and the mip levels VkGl's <c>GenerateMipmap</c> blitted. Synchronisation validation on.
 /// </summary>
 public unsafe class WorldResourceTests
 {

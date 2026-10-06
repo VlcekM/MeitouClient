@@ -7,6 +7,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
+using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Rendering;
 
@@ -232,31 +233,31 @@ sealed class WorldOptions
 }
 
 /// <summary>
-/// The scene's passes as a native host (wave 4, docs/renderer-native.md 4.5 and 6): <see cref="Open"/> takes over the framebuffer GL has bound
-/// (VkGl's pass ends, its clears already done), begins a rendering of its targets (LOAD / STORE) whose contents are secondaries, and the guests'
-/// segments are queued (<see cref="GpuContext.Record"/>) or recorded at once into secondaries of their own (sky, water, the grass, timestamps);
-/// <see cref="Close"/> records the queued jobs on the job threads, executes everything in order and hands the frame back to VkGl.
-/// A <c>gl.Clear</c> while it is open is recorded in its place (<c>VkGl.Clear</c> inside a host).
+/// The scene's passes as a native host (wave 4, docs/renderer-native.md 4.5 and 6; phase 8 stage 3, 8.9): <see cref="Open"/> begins a rendering
+/// of the slice's targets whose contents are secondaries, clearing them by load ops where asked, and hands the guests the targets and the scene's
+/// state; their segments are queued (<see cref="GpuContext.Record"/>) or recorded at once into secondaries of their own (sky, water, the grass,
+/// timestamps); <see cref="Close"/> records the queued jobs on the job threads and executes everything in order. <see cref="ClearDepth"/> clears
+/// the depth in its place among the guests.
 /// </summary>
-sealed class SceneHost
+sealed class SceneHost(GpuContext ctx)
 {
-    readonly GpuContext ctx;
     CommandList? cmd;
-
-    SceneHost(GpuContext ctx) => this.ctx = ctx;
-
-    public static SceneHost? Create(IGl gl) => GpuContext.Of(gl) is { Interop: not null } ctx ? new SceneHost(ctx) : null;
+    PassTargets? targets;
 
     public bool IsOpen => cmd is not null;
 
     /// <summary>Opens the host on <paramref name="targets"/> (nothing when it is open already); its jobs count towards <paramref name="stage"/>.
+    /// <paramref name="clearColour"/> / <paramref name="clearDepth"/>: the attachments are cleared by the rendering's load ops (to the colour, to 1).
     /// Without secondaries (<see cref="Recording.Mode"/> 0) the guests record straight into its rendering.</summary>
-    public void Open(int stage, PassTargets targets)
+    public void Open(int stage, PassTargets targets, Vk.ClearColorValue? clearColour = null, bool clearDepth = false)
     {
         if (cmd is not null) { Stage(stage); return; }
         var list = ctx.BeginNative("scene");
         bool secondaries = Recording.Secondaries;
-        list.BeginRendering(targets.Rendering, secondaries);
+        var colour = clearColour is { } c ? targets.Colour with { Load = Vk.AttachmentLoadOp.Clear, Clear = new Vk.ClearValue(c) } : targets.Colour;
+        var depth = clearDepth ? targets.Depth with { Load = Vk.AttachmentLoadOp.Clear, Clear = new Vk.ClearValue(depthStencil: new Vk.ClearDepthStencilValue(1f, 0)) } : targets.Depth;
+        list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height), secondaries);
+        this.targets = targets;
         ctx.BeginHostPass(list, targets, DrawState.Scene(targets.Formats));
         if (secondaries) ctx.Frame.Parallel.Begin(list, targets.Formats, stage);
         cmd = list;
@@ -268,6 +269,13 @@ sealed class SceneHost
         if (cmd is not null) ctx.Frame.Parallel.Stage = stage;
     }
 
+    /// <summary>Clears the open rendering's depth to 1 over the whole target, in its place among the guests' segments.</summary>
+    public void ClearDepth()
+    {
+        if (cmd is not { } list || targets is not { } t) throw new InvalidOperationException("ClearDepth without an open scene host");
+        ctx.ClearDepth(list, 1f, new Vk.Rect2D(default, new Vk.Extent2D((uint)t.Width, (uint)t.Height)));
+    }
+
     public void Close()
     {
         if (cmd is not { } list) return;
@@ -276,6 +284,7 @@ sealed class SceneHost
         ctx.EndHostPass(list);
         ctx.EndNative(list);
         cmd = null;
+        targets = null;
     }
 }
 
@@ -469,7 +478,7 @@ static class WorldFrame
         {
             var messages = new List<string>();
             gpu.Water = WaterRenderer.Create(gl, context, install, scene.Database, assets, gpu.Sky, messages);
-            gpu.Reflection = new ReflectionPass(gl, context) { Level = o.WaterReflection, Range = o.ReflectionRange };
+            gpu.Reflection = new ReflectionPass(context) { Level = o.WaterReflection, Range = o.ReflectionRange };
             foreach (var m in messages) Console.WriteLine($"warning   {m}");
             Console.WriteLine($"water     at height {WorldWater.Height} ({watch.ElapsedMilliseconds} ms)");
         }
@@ -489,7 +498,7 @@ static class WorldFrame
         if (!o.NoShadows)
         {
             // The game's CSM mode (docs/formats/shadows.md): four cascades in one atlas of the `shadow quality` side, out to `Shadow Range`.
-            gpu.Shadow = new ShadowPass(gl, context, assets) { Settings = new ShadowSettings(KenshiShadows.MapSize(o.ShadowQuality), o.ShadowRange), Meitou = o.MeitouShadows };
+            gpu.Shadow = new ShadowPass(context, assets) { Settings = new ShadowSettings(KenshiShadows.MapSize(o.ShadowQuality), o.ShadowRange), Meitou = o.MeitouShadows };
             if (!gpu.Shadow.HasNoise) Console.WriteLine($"warning   shadows: {KenshiShadows.NoiseTexture} not found, the receiver's jitter is a hash");
             gpu.Shadow.SetTerrain(scene.Coarse, scene.CoarseSize);   // the Meitou shadows' terrain shadow beyond the range
             Console.WriteLine($"shadows   {gpu.Shadow.Settings.MapSize}² atlas, {gpu.Shadow.Settings.Cascades} cascades of {gpu.Shadow.Settings.TileSize}², range {o.ShadowRange:0}");
@@ -593,7 +602,7 @@ static class WorldFrame
         var sun = scene.Clock.SunDirection(hour);
         var (colours, light) = gpu.Sky.Prepare(sun, eye.Y, fogDistance + 3 * Math.Max(eye.Y, 0));
         // The game's exposure (0.55 over the mean luminance, clamped to its band) goes with the game's sky and light; the simple sky keeps a plain scale.
-        if (gpu.Post is { } post) post.AutoExposure = gpu.Sky.Physical ? (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance) : null;
+        if (gpu.Post is { } exposed) exposed.AutoExposure = gpu.Sky.Physical ? (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance) : null;
         if (gpu.Post is { } upscaling) upscaling.WaterHeight = render.Water && gpu.Water is not null ? WorldWater.Height : null;
         if (gpu.Post is { } hazy) UpdateHeatHaze(gpu, hazy, sun.Y);
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
@@ -604,7 +613,7 @@ static class WorldFrame
         StageClock.Lap(12);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is { Level: > 0 };   // level 0: no pass, the water shows the sky colour
-        if (gpu.Reflection is not null) { gpu.Reflection.RestoreFramebuffer = gpu.Post?.SceneFramebuffer; gpu.Reflection.MaxDistance = gpu.Sky.HazeDistance * gpu.Reflection.Range; }
+        if (gpu.Reflection is not null) { gpu.Reflection.MaxDistance = gpu.Sky.HazeDistance * gpu.Reflection.Range; }
         if (reflecting)
             gpu.Reflection!.Render(camera, rw, rh, gpu.Sky, colours, light, gpu.Terrain, render, gpu.Objects is null ? null : (vp, e, frustum) =>
             {
@@ -629,15 +638,13 @@ static class WorldFrame
                 reflection.SceneStats = reflection.Level < 3 ? "no objects (level < 3)" : $"{objects.DrawnInstances} objects ({objects.DrawnTriangles:N0} triangles, {objects.DrawCalls} calls), {(reflection.Level >= 4 ? gpu.Foliage?.DrawnInstances ?? 0 : 0)} foliage meshes ({(reflection.Level >= 4 ? gpu.Foliage?.DrawCalls ?? 0 : 0)} calls)";
             });
         StageClock.Lap(4);
-        gl.Viewport(0, 0, (uint)rw, (uint)rh);
-        gl.ClearColor(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1);
-        gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
         // The scene's passes are a native host that hands its guests the targets and state (phase 8 stage 3); wave 4 (docs/renderer-native.md 6):
         // its rendering takes secondaries, the guests' segments recorded on the job threads when it ends (not with MEITOU_RECORD_THREADS=0).
-        var host = gpu.Scene ??= SceneHost.Create(gl);
-        bool hosted = host is not null && gpu.Post is not null;
-        bool temporal = gpu.Post?.Temporal == true;
-        if (hosted) host!.Open(5, gpu.Post!.SceneTargets);
+        // The scene starts cleared to the fog colour and depth 1 (the rendering's load ops).
+        var post = gpu.Post ?? throw new InvalidOperationException("the world frame needs the post-processing chain");
+        var host = gpu.Scene ??= new SceneHost(post.Gpu);
+        bool temporal = post.Temporal;
+        host.Open(5, post.SceneTargets, new Vk.ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1), clearDepth: true);
         float aspect = width / (float)Math.Max(height, 1);
         var view = camera.View;
         // Rotation only: with the eye's world position in the matrix, the directions rebuilt from it lose float
@@ -652,10 +659,11 @@ static class WorldFrame
         {
             bool nearSlice = near <= camera.Near;
             // With an upscaler the slices draw into different framebuffers (the far slice's own depth): one host per slice then.
-            if (hosted && temporal) host!.Close();
-            if (!first || nearSlice) gpu.Post?.BeginNearSlice(near, far); else gpu.Post?.BeginFarSlice(near, far);
-            if (!first) gl.Clear(ClearBufferMask.DepthBufferBit);   // inside the host: in its place among the segments (VkGl.Clear)
-            if (hosted) host!.Open(6, gpu.Post!.SceneTargets);
+            if (temporal) host.Close();
+            if (!first || nearSlice) post.BeginNearSlice(near, far); else post.BeginFarSlice(near, far);
+            // A later slice starts on a cleared depth: in its place among the segments while the host stays open, else by the load op.
+            if (!first && host.IsOpen) host.ClearDepth();
+            host.Open(6, post.SceneTargets, clearDepth: !first && !host.IsOpen);
             first = false;
             if (nearSlice) gpu.Post?.SetNearSlice(near, far, camera.FieldOfView, aspect);
             var viewProjection = view * Jitter.Apply(camera.Projection(aspect, near, far), jitter, rw, rh);
@@ -665,29 +673,29 @@ static class WorldFrame
                 gpu.Post.ObjectMotion ??= swaying.DrawGrassMotion;
                 swaying.SetMotionCamera(viewProjection, view * camera.Projection(aspect, near, far), eye, frustum);
             }
-            host?.Stage(6);
+            host.Stage(6);
             gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
             StageClock.Lap(6);
-            host?.Stage(7);
+            host.Stage(7);
             if (render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
             StageClock.Lap(7);
             // Foliage in every depth slice (it reaches 32000+ units at the default x4), counted as one draw.
-            host?.Stage(8);
+            host.Stage(8);
             gpu.Foliage?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, continuation: foliageDrawn);
             foliageDrawn = true;
             StageClock.Lap(8);
-            host?.Stage(9);
+            host.Stage(9);
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
             StageClock.Lap(9);
         }
         // Records the last slice's jobs and executes them: the render thread's share (the fork-join) counts as "water", the last stage of the host.
-        if (host?.IsOpen == true) { host.Close(); StageClock.Lap(9); }
+        if (host.IsOpen) { host.Close(); StageClock.Lap(9); }
         if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneDepth, rw, rh);
         gpu.Post?.End(); // SSAO, upscaler, exposure, tone map, FXAA into gpu.Post.Target
         if (gpu.DebugShadows > 0 && gpu.Shadow is not null)
         {
             var (nearestNear, nearestFar) = camera.Slices().Last();
-            gpu.Shadow.DrawDebug(gpu.DebugShadows, gpu.Post?.Target ?? 0, width, height, view, camera.Projection(aspect, nearestNear, nearestFar), eye);
+            gpu.Shadow.DrawDebug(gpu.DebugShadows, gpu.Post!.Target!, width, height, view, camera.Projection(aspect, nearestNear, nearestFar), eye);
         }
         StageClock.Lap(10);
     }
@@ -724,7 +732,7 @@ static class WorldFrame
         int objects = 0, foliage = 0;
         gpu.Terrain.DepthTriangles = 0;
         var cascades = DetailedStats ? new System.Text.StringBuilder() : null;
-        shadow.Render(view, light.SunDirection, gpu.Post?.SceneFramebuffer ?? 0, width, height, (cascade, worldToClip, planes, lodEye) =>
+        shadow.Render(view, light.SunDirection, (cascade, worldToClip, planes, lodEye) =>
         {
             long t0 = Stopwatch.GetTimestamp();
             long tri = gpu.Terrain.DepthTriangles;

@@ -62,7 +62,7 @@ public sealed unsafe partial class ShadowPass
     public string DescribeMeitou() =>
         $"drawn {string.Join("/", CascadeDraws)} times in {MeitouFrames} frames; terrain shadow rebuilt {terrainMap?.Builds ?? 0} times (cpu {terrainMap?.LastBuildCpuMs ?? 0:0.00} ms)";
 
-    void RenderMeitou(ShadowView view, Vector3 toSun, uint restoreFramebuffer, int restoreWidth, int restoreHeight, CasterDraw draw)
+    void RenderMeitou(ShadowView view, Vector3 toSun, CasterDraw draw)
     {
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
@@ -107,10 +107,8 @@ public sealed unsafe partial class ShadowPass
         {
             terrainMap ??= new TerrainShadowMap(Gpu, coarse, coarseSize);
         }
-        // The terrain map, then the GL binding restored (as the GL code's order was).
+        // The terrain map (rebuilt when the sun has moved).
         terrainMap?.Update(toSun);
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, restoreFramebuffer);
-        gl.Viewport(0, 0, (uint)restoreWidth, (uint)restoreHeight);
         timer.End();
         if (all) { storedSun = toSun; storedSplits = splits; storedMapSize = Settings.MapSize; }
         meitouValid = true;

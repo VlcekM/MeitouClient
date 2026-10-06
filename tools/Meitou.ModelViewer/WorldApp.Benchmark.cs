@@ -52,13 +52,11 @@ static partial class WorldApp
             if (gl is Meitou.Rendering.Vulkan.VkGl vkStats && (i % 500 == 0 || i <= 4)) Console.WriteLine($"vkgl      frame {i}: {vkStats.Stats}");
             cpu.Add(cpuMs);
             if (gpu.Foliage is { } fol) gaps.Add((fol.NearestIncompleteZone, fol.NearestUnlaidZone, fol.NearestMissingMesh, fol.NearestMissingGrass));
-            if (o.Screenshot is not null && FlyShots.Contains(i) && gpu.Post is { Target: var shotFbo and not 0 })
+            if (o.Screenshot is not null && FlyShots.Contains(i) && gpu.Post is { Target: { } shotTarget } shotPost)
             {
                 // MEITOU_FLY_SHOT=<frame>[,<frame>...]: the picture as drawn at that frame of the flight, nothing waited for (what a flying user sees).
-                gl.Finish();
-                gl.BindFramebuffer(FramebufferTarget.Framebuffer, shotFbo);
                 string shot = Path.ChangeExtension(o.Screenshot, null) + $"-fly{i}.png";
-                FramebufferCapture.SavePng(gl, shot, w, h);
+                FramebufferCapture.SavePng(shotPost.Gpu, shotTarget, shot, w, h);
                 Console.WriteLine($"fly shot  frame {i}: eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {shot}");
             }
             if (!pipelined) gl.Finish();
