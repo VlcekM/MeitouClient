@@ -65,10 +65,86 @@ static class BuildingLodShaders
         return f;
     }
 
+    // ---- the native model (docs/renderer-native.md 3.3, step O) ----
+
+    /// <summary>The objects' push constants (<see cref="ObjectPush"/> is the C# side; std430, 128 bytes): <see cref="NativeShaders.MeshPushMembers"/>
+    /// without what these programs never vary (the head textures, <c>uHasHead</c> and <c>uSkinned</c>, which the GL code set to 0 once, are
+    /// constants false here; <c>uCoverage</c> is foliage's), plus the dither fade's mode and range.</summary>
+    public const string PushMembers = """
+            vec3 tint;
+            float triplanarScale;
+            vec3 flatColour;
+            float alphaThreshold;
+            vec2 tile;
+            float specular;
+            int alphaSource;
+            int alphaChannel;
+            int greyChannel;
+            uint diffuse;
+            uint normal;
+            uint diffuse2;
+            uint normal2;
+            int fadeMode;
+            bool normalSwizzled;
+            bool hasDiffuse;
+            bool hasNormal;
+            bool hasDual;
+            bool triplanar;
+            bool emissive;
+            bool useVertexColour;
+            bool wireframe;
+            uint spare;
+            vec4 fadeRange;
+        """;
+
+    /// <summary>What these programs map beyond <see cref="NativeShaders.Map"/>: the fade (the eye is the view's), and the constants.</summary>
+    static readonly Dictionary<string, string> Own = new()
+    {
+        ["uFadeMode"] = "pc.fadeMode", ["uFadeEye"] = "view.eye", ["uFadeRange"] = "pc.fadeRange",
+        ["uSkinned"] = "false", ["uHasHead"] = "false",
+        // Read only under uHasHead (never): any valid bindless entry.
+        ["uHeadDiffuse"] = "textures2D[pc.diffuse]", ["uHeadNormal"] = "textures2D[pc.normal]",
+    };
+
+    public static string VertexNative() => NativeShaders.Port(Vertex(), NativeShaders.Map(Own), PushMembers);
+    public static string FragmentNative() => NativeShaders.Port(Fragment(), NativeShaders.Map(Own), PushMembers);
+    /// <summary><see cref="ShadowShaders.MeshDepthFragment"/> for <see cref="VertexNative"/>.</summary>
+    public static string DepthNative() => NativeShaders.Port(ShadowShaders.MeshDepthFragment, NativeShaders.Map(Own), PushMembers);
+
     static string Replace(string source, string pattern, string replacement)
     {
         var regex = new Regex(pattern);
         if (!regex.IsMatch(source)) throw new InvalidOperationException($"BuildingLodShaders: '{pattern}' not found in the shared mesh shader; update the patch.");
         return regex.Replace(source, _ => replacement, 1);
     }
+}
+
+/// <summary>The C# side of <see cref="BuildingLodShaders.PushMembers"/> (std430 push constants, 128 bytes). GLSL bools are 32-bit (0 / 1).</summary>
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 128)]
+struct ObjectPush
+{
+    [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector3 Tint;
+    [System.Runtime.InteropServices.FieldOffset(12)] public float TriplanarScale;
+    [System.Runtime.InteropServices.FieldOffset(16)] public System.Numerics.Vector3 FlatColour;
+    [System.Runtime.InteropServices.FieldOffset(28)] public float AlphaThreshold;
+    [System.Runtime.InteropServices.FieldOffset(32)] public System.Numerics.Vector2 Tile;
+    [System.Runtime.InteropServices.FieldOffset(40)] public float Specular;
+    [System.Runtime.InteropServices.FieldOffset(44)] public int AlphaSource;
+    [System.Runtime.InteropServices.FieldOffset(48)] public int AlphaChannel;
+    [System.Runtime.InteropServices.FieldOffset(52)] public int GreyChannel;
+    [System.Runtime.InteropServices.FieldOffset(56)] public uint Diffuse;
+    [System.Runtime.InteropServices.FieldOffset(60)] public uint Normal;
+    [System.Runtime.InteropServices.FieldOffset(64)] public uint Diffuse2;
+    [System.Runtime.InteropServices.FieldOffset(68)] public uint Normal2;
+    [System.Runtime.InteropServices.FieldOffset(72)] public int FadeMode;
+    [System.Runtime.InteropServices.FieldOffset(76)] public uint NormalSwizzled;
+    [System.Runtime.InteropServices.FieldOffset(80)] public uint HasDiffuse;
+    [System.Runtime.InteropServices.FieldOffset(84)] public uint HasNormal;
+    [System.Runtime.InteropServices.FieldOffset(88)] public uint HasDual;
+    [System.Runtime.InteropServices.FieldOffset(92)] public uint Triplanar;
+    [System.Runtime.InteropServices.FieldOffset(96)] public uint Emissive;
+    [System.Runtime.InteropServices.FieldOffset(100)] public uint UseVertexColour;
+    [System.Runtime.InteropServices.FieldOffset(104)] public uint Wireframe;
+    [System.Runtime.InteropServices.FieldOffset(108)] public uint Spare;
+    [System.Runtime.InteropServices.FieldOffset(112)] public System.Numerics.Vector4 FadeRange;
 }

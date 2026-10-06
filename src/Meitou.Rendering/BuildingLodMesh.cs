@@ -48,6 +48,7 @@ sealed class GpuObjectPart
 struct ObjectNativeMesh
 {
     public VertexArrayBindings? Source;
+    public long Stamp;
     public VertexLayout? Layout;
     public BufferBinding[] Vertices;
     public BufferBinding Elements;

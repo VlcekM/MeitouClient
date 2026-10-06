@@ -1654,6 +1654,58 @@ handle. Steward changes are internal or additive; the one contract change is `Ve
   so it is scatter. Note: the "before" figures differ from agent A's table above (1.1 or 2.2 against 2.75 us record a colour mesh draw) on nearly the same
   code because of the machine's load; compare figures only within one table.
 
+**Wave 3b, agent C (objects), step O (2026-10-06, on master `68c30f8`).** `WorldObjectRenderer` (colour, shadow-caster depth, reflection and distant towns,
+which share the code) records with native-model programs: `BuildingLodShaders.VertexNative()` / `FragmentNative()` / `DepthNative()` are
+`NativeShaders.Port` of the legacy patched text with its own push block. Commits: `0400580` the port, `1a98868` the timing split. Files:
+`WorldObjectRenderer.cs`, `BuildingLodShaders.cs` (the push block, `ObjectPush`), `BuildingLodMesh.cs` (`ObjectNativeMesh.Stamp`), and the two variants added to
+`NativeShaderTests.Variants()`. `NativeShaders` and `NativeFrame` untouched.
+
+- *Shaders.* The maths is the shared mesh text, as foliage. The push block is `MeshPush` less what the objects never vary (`uHeadDiffuse`, `uHeadNormal`,
+  `uHasHead`, `uSkinned`: the GL code set them to 0 once, now `#define uHasHead false`, the head samplers any valid entry; `uCoverage`, which
+  objects do not declare), plus the fade: `uFadeMode` (`pc.fadeMode`, 1 for distant towns), `uFadeRange` (`pc.fadeRange`, vec4, per call) and `uFadeEye`
+  (`view.eye`: the legacy code set it to the eye). 128 bytes exactly (`ObjectPush`; the test checks the offsets). `uTriplanarScale` stays a push member
+  (1/5000, set in every draw) rather than a constant, so the shader keeps a runtime value there as the GL program had.
+- *Recording.* One `NativeFrame` for the renderer; per segment `BeginNativeInPass`, dynamic state (cull `None`: the objects are double-sided and GL's cull
+  face stays off), `NativeFrame.Bind`, the four per-instance row bindings (the batch matrices in one `Frame.Constants` allocation per call, as in step P).
+  Per draw: texture ids to bindless indices through a per-segment table indexed by GL name (no `Bindless` call after a texture's first use in the segment),
+  the part's pipeline, vertex buffers and index buffer from its `ObjectNativeMesh` (kept while `VertexArrayStamp` holds: no `VertexArray` call), the 128-byte
+  push when its bytes differ from the segment's last, `DrawIndexed`. The draw list is one renderer-owned `ObjDraw[]` (the part, the level and instance range,
+  the GL texture ids and the push template built in Prepare); the material record struct, the per-program uniform copies, `Flush` and the unit samplers
+  are gone. Prepare still reads the texture ids through `WorldTexture.Id` (reading counts as use) and still builds a push template per draw.
+- **Gate (Release; lighter gate of the coordinator, base = master `68c30f8` built unchanged, scratch in `C:\Temp\agent-CO`).** Build 0 warnings; `dotnet test
+  -c Release` 397 passed, 0 skipped (the legacy SPIR-V golden test unchanged: only a native program was added); `--faithful all` ten views **0 px** (mean 0.0000,
+  max 0; the rock view included) on `0400580` and again on `1a98868`; `--debug-shadows 1` Hub 13:00 and `--water-reflection 4` Port North 13:00: 0 px;
+  `MEITOU_VK_VALIDATION=sync` Port North 13:00 and Hub 2:00: 0 errors. The 1/255 allowance of owner decision 2 was not used, no `precise` / `invariant`
+  needed; the dead skinning and head branches (constants) did not change a pixel. As for foliage the Port North reflection picture does not show the mirrored
+  objects (the level-3 reflection has them already): that run checks the path, not the mirror.
+- **Measured: still cameras (`--fly-benchmark 300 --fly-speed 0 --faithful all`, `MEITOU_OBJECT_TIMING=1`, `MEITOU_PASS_STATS=1`), three interleaved base/new pairs
+  per view, medians (minima in brackets), Release; the machine was shared and a run's figures move by 15 percent.** Hub: `--town "The Hub" --distance 3000
+  --pitch 10 --time 13`, 42.9 colour and 46.0 depth draws per call; Port North: `--town "Port North" --distance 1500 --pitch 10 --time 13`, 53.8 and 47.7. "Per draw"
+  is a call's whole record (segment setup and end included, divided by the call's draws), "loop" the per-draw loop alone (two stamps), both from the same stamps
+  as the step-P figures (the "before" column is step P on `68c30f8`).
+
+  | | Hub before | Hub after | Port North before | Port North after |
+  | --- | ---: | ---: | ---: | ---: |
+  | colour, us per draw (Prepare + Record) | 1.53 (1.43) | 0.66 (0.64) | 1.24 (1.22) | 0.49 (0.48) |
+  | colour, record only | 1.28 (1.20) | 0.47 (0.46) | 1.07 (1.05) | 0.36 (0.36) |
+  | colour, loop only | n/a | 0.37 (0.36) | n/a | 0.29 (0.29) |
+  | depth, us per draw (Prepare + Record) | 1.54 (1.32) | 0.99 (0.92) | 1.26 (1.23) | 0.89 (0.86) |
+  | depth, record only | 1.23 (1.04) | 0.70 (0.67) | 1.03 (1.00) | 0.64 (0.64) |
+  | depth, loop only | n/a | 0.52 (0.50) | n/a | 0.50 (0.49) |
+  | stage `objects`, ms | 0.22 (0.21) | 0.13 (0.13) | 0.16 (0.15) | 0.09 (0.08) |
+  | shadow casters `objects`, ms | 0.37 (0.36) | 0.37 (0.36) | 0.42 (0.42) | 0.42 (0.40) |
+  | render thread allocations, MB per run | 16 | 16 | 13 | 13 |
+
+  Observed: the colour draws cost less than half (record 1.28 -> 0.47 us a draw), the objects stage 0.22 -> 0.13 ms at the Hub; the loop is 0.29-0.37 us a colour draw
+  and 0.49-0.52 a depth draw (the floor of a foliage-shaped draw is 0.12, 7.5), the per-call segment setup and end 3.7-5.5 us (colour) and 7-10 us (depth).
+  Not measured: where the remaining 0.2-0.3 us a draw go (the vertex-buffer binds of 4 to 7 attributes, the 128-byte push, which differs on nearly every draw
+  because the parts have their own materials). The shadow-caster stage did not move beyond the scatter: a cascade call is 40-50 us of cull, 55 us of recording
+  (was 60 to 80) and the TERRAIN-mode meshes, and the stage's own total is 0.37-0.42 ms; the depth recording saved 20 us a call. Allocations did not change (the render
+  thread's 13-16 MB are not the objects'). Sources of the segment cost, not changed here: `NativeFrame.Bind` read 3.5 us in a colour segment and 8 us in a depth
+  one (temporary stopwatch, not committed; the depth shader reads none of the atmosphere or the frame textures, so a depth-only bind that skips them is a possible steward addition).
+- *Follow-ups.* The TERRAIN-mode map features still go through `TerrainRenderer.DrawMeshes` (legacy program, step P); a per-material push template cached across
+  frames would take Prepare's 0.2-0.3 us a draw; once meshes are native buffers one interleaved vertex binding per mesh would replace the 4 to 7 binds.
+
 ### 7.2 Wave 3: ownership
 
 Each agent owns its files completely: it may edit them, and nobody else may. Call-site counts are `IGl` calls from section 8.
@@ -1781,7 +1833,7 @@ terrain's step O should do from the start, in order of what it cost foliage:
 1. *Nothing per draw that is not a command.* The floor of a foliage-shaped draw through `CommandList` (seven vertex buffers, index buffer, 128-byte push,
    indexed draw) is 0.12 us hot; raw Silk.NET calls 0.11, cached function pointers 0.09-0.10. A step-O draw at 0.4-0.7 us is therefore 75-85 percent
    renderer-side data access. No export call (`VertexArray`) and no `Bindless` call in the steady state of the loop: both are caches you keep (5 above,
-   and texture indices per segment by id); the objects' step P still calls `VertexArray` per draw (0.41 us of its 1.12).
+   and texture indices per segment by id); the objects' step P called `VertexArray` per draw (0.41 us of its 1.12): step O keeps the stamp.
 2. *No hidden allocation or boxing.* Two of the three big foliage costs were a `Format.ToString()` and record-struct equality over Silk.NET handles
    (`Sampler`, `ImageView`, `Image`, `Buffer` are not `IEquatable`: a `record struct` holding them boxes on `==`). Compare handles (`.Handle`), never enum
    names; check the benchmark's `gc ... allocated (render thread N MB)` line before and after a port (12 MB a 300-frame forest run now, most of it not foliage).
@@ -1796,6 +1848,11 @@ terrain's step O should do from the start, in order of what it cost foliage:
    EventPipe sampling cannot see this; this machine's load moves the per-draw figures by a factor of two between runs.
 6. *Then look elsewhere.* After this work the foliage cull is 460-640 us per cascade call against 50-80 us of recording; GPU-driven culling (5.3, A2)
    is the next CPU item for foliage, and for objects the cull (58 us a call, 7.1) is already bigger than the recording should be.
+7. *Objects, done this way (7.1, agent C step O).* The loop is 0.29-0.37 us a colour draw and 0.50 a depth draw, the whole record 0.5-0.7 and 1.0 including the
+   segment: the guidance above took the colour draw from 1.28 to 0.47 us. Lessons: a part's draw list entry should carry its push template built in Prepare
+   (only the texture indices are patched per segment); a shader whose consumer never varies a mapped uniform (head textures, skinning) can map it to a
+   constant in its `own` map and give the push block's bytes to what it does vary (the fade range) without leaving the 128 bytes; the segment's fixed part
+   (setup, `NativeFrame.Bind` 3.5-8 us) is what keeps a two-draw cascade expensive per draw, which only a depth-only bind or fewer segments would change.
 
 ### 7.6 The draw log
 
