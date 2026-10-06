@@ -1263,6 +1263,56 @@ open pass. Four commits: the timing switch, the zone order, the viewer, the obje
   draw few nodes per cascade (25) and are cold code once per cascade, so the segment's fixed cost eats the saving; the blocker map and the sweep are ports for the
   phase-8 deletion, not savings (a few draws each, or once).
 
+**Wave 3, agent D (sky, clouds, water, reflection host), step P (2026-10-06, on master `ee54f0b`).** `SkyRenderer` (the sky and the simple sky; the
+clouds are part of the sky shader) and `WaterRenderer` record natively in VkGl's open pass. `ReflectionPass` is unchanged. Files: `SkyRenderer.cs`,
+`WaterRenderer.cs`, and the one line of `WorldFrame.cs` that calls `Water.Draw` (the unused `terrain` argument is gone).
+
+- *Sky.* Two `LegacyProgram`s (`sky`, `sky simple`, made in the constructor with every handle and sampler slot resolved) replace the GL programs, the
+  empty vertex array and the string-keyed uniform lookups for these draws. `Draw` is **Prepare** (the inverse matrix, the colour uniforms, the cloud,
+  moon and star uniforms, the three textures through `interop.Sampled`, `ApplyGlobals()` for `SkyRenderer.Apply`'s values, `BindUnits()` for the
+  atmosphere's units, which the frame globals read) and **Record** (one segment: dynamic state from `CurrentTargets()` / `CurrentState()`, the pipeline,
+  `Flush`, `Draw(3)`). The depth test and mask are switched on the GL side before the segment opens, so `CurrentState()` reports them. `Apply`,
+  `BindUnits` and `PublishGlobals` still publish the same values: nothing in the frame globals changed.
+- *Water.* One `LegacyProgram` (`water`, triangle strip), handles for its 16 loose uniforms and the five map samplers and the reflection sampler resolved
+  once. The height textures, their rect uniforms and the atmosphere come through the frame globals (`TerrainRenderer.BindHeights` is no longer called, so the
+  water no longer binds units 7, 8 and 11 to 16; nothing reads them after it). The quad's vertex array stays a GL resource; its export (`VertexArray`) is
+  fetched once per segment and its vertex buffer kept while the export is the same object. Blend (src alpha, one minus src alpha), no culling and no depth
+  write are set on GL before the segment, and put back after it as the GL version did.
+- *Pipelines.* `NativeSegment` (in `SkyRenderer.cs`, shared by both) keeps the last two segment states (formats, blend, mask, polygon, alpha to coverage,
+  depth clamp) and the vertex export they were made for. The scene's pass and the reflection's 4x multisampled pass alternate, so one slot per state
+  means no pipeline description is built per draw.
+- *Reflection host: left on GL.* `ReflectionPass.Render` has no draws of its own: it creates the multisampled framebuffer and its resolve texture, clears,
+  calls `sky.Draw`, `terrain.Draw` and the scene callback, and blits. Opening its pass natively would break the guests' contract (terrain, objects and
+  foliage read `CurrentTargets()` / `CurrentState()` from the GL framebuffer binding, 4.5). Its only own draw, the mirrored sky, is the native sky draw
+  above, and records into the multisampled target. Its resources stay on `IGl`, as the recipe allows; its clear, blit and timestamp queries are IGl calls
+  outside any segment.
+- *Gate (Release; lighter gate of the coordinator, against the build of master `ee54f0b`, which is also the port's base, so no rebase was needed).* Build 0
+  warnings; tests 389 passed, 0 skipped (`KENSHI_PATH` set); `--faithful all` ten views max 0, mean 0.0000; Meitou default ten views max 0 (the sky, the
+  haze meaning and the water are in all of them); `--water-reflection 4` Port North 13:00 and 2:00 max 0 (as for foliage and objects, this picture equals the
+  level-2 one, so it checks that the multisampled sky path runs, not the mirrored foliage); `MEITOU_VK_VALIDATION=sync` Port North (reflection 4) and The Hub
+  at 13:00: 0 errors. Draw-log diff, Port North 13:00 with reflection 4: 522 draws each, 4 differ, all of them locations 8 to 10 of the last batch of a
+  foliage, terrain-mesh or object pass (the `DescribeVertex` artifact of 7.1); every sky and water draw, the reflection's included, is equal.
+- **Measured: Port North still camera (`--town "Port North" --distance 3000 --pitch 10 --time 13 --faithful all --fly-benchmark 300 --fly-speed 0`,
+  `MEITOU_PASS_STATS=1`, three interleaved runs per build, medians, Release; the machine was shared).** "Before" is the GL path of `ee54f0b`. Stage CPU
+  times from the pass meter's rows; the stage includes Prepare. `sky-draw` is the stage between the reflection and the slices (viewport, clear, sky), 1 draw;
+  `water` is 2 draws (the far and the near slice); `reflection` is the whole host pass, 56.75 draws on average over the frames that draw it.
+
+  | | before | after |
+  | --- | ---: | ---: |
+  | stage `sky-draw`, ms (1 draw) | 0.0587 | 0.0519 |
+  | stage `water`, ms (2 draws) | 0.0709 | 0.0530 |
+  | water, us per draw | 35.5 | 26.5 |
+  | stage `reflection`, ms | 0.284 | 0.210 |
+  | reflection's own rows (`rest`, the sky inside it), ms | 0.0078 | 0.0074 |
+  | stage `water` GPU, ms | 0.0194 | 0.0164 |
+  | render thread cpu-only p50, ms | 3.17 | 3.08 |
+
+  Runs of one build scatter by 10 to 40 percent (the `reflection` stage most: 0.217 to 0.386 ms before, 0.197 to 0.230 after, and it is mostly the objects
+  and terrain guests), so only the water is clearly different: 25 percent less, 9 us a draw. The sky saves about 7 us of a stage that is mostly the GL
+  clear; the reflection's sky draw is inside the unnamed rest of the host and its part cannot be seen separately (`rest` 7 to 8 us either way).
+  Both renderers draw once or twice a frame, so there is little to save: the per-draw 2 us of 7.1 does not apply (cold code and one-off uniform writes
+  dominate), and what is left is the 20 uniform writes and the six `Sampled` calls of Prepare.
+
 After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the
 native shader prelude and the shared native shader variants (3.3), each proven on one consumer.
@@ -1362,6 +1412,13 @@ end the segment before a `StageClock.Sub` (the pass meter's `QueryCounter` is an
 (the reflection's multisampled target alternates with the scene's); compare a material's uniforms as a value (a record struct) and set them only
 when it changed; the constants GL set on every draw can be set once at construction; per-instance rows from the frame's constants bound once and
 reached by `firstInstance`; take the colour mask and the depth state of a guest pass (grass motion) from `CurrentState()`, never hard-code them.
+
+Added by sky and water (7.1, agent D): a draw with no index buffer and no or one vertex buffer (a full-screen triangle from `gl_VertexID`, a strip quad)
+is `cmd.Draw(n)` with a vertex layout of what `VertexArray` exports (none for the sky); set the GL state the draw reads (depth test and mask, blend, cull)
+on `IGl` before `BeginNativeInPass`, so `CurrentState()` sees it, and put it back after `EndNative`. Dropping a renderer's GL programs is safe for the
+atmosphere's sampler units: any later `WorldGl.Program` (the terrain's, built first) assigns them and publishes the units. A host whose only work is
+framebuffer creation, clears, a blit and calls to its guests (`ReflectionPass`) has nothing to record natively: leave it on GL, and the guest segments
+(here the multisampled sky) use `CurrentTargets()`. `NativeSegment` (`SkyRenderer.cs`) is a reusable two-slot pipeline cache for such single draws.
 
 Avoid in the per-draw loop: dictionary lookups, LINQ, `CurrentTargets` / `CurrentState`, `Flush` when nothing was bound, a
 `BindVertexBuffers` per instance row. Measure with a per-call stopwatch switch like `MEITOU_MESH_TIMING` (`=2` adds the warm repeat, 7.1): a single port's
