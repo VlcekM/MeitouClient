@@ -52,6 +52,9 @@ public sealed unsafe partial class ShadowPass
     SamplerSlot blockerAtlasSlot;
     UniformHandle blockerSizeHandle;
 
+    /// <summary>The half-resolution blocker map (native; null until the first frame with contact hardening).</summary>
+    public Texture? BlockerMap => blocker;
+
     /// <summary>The whole-world height grid (WorldScene.Coarse) for the terrain shadow beyond the range; uploaded when first needed.</summary>
     public void SetTerrain(ushort[] heights, int size) => (coarse, coarseSize) = (heights, size);
 
@@ -139,7 +142,7 @@ public sealed unsafe partial class ShadowPass
         if (blocker is null || blocker.Desc.Width != size)
         {
             blocker?.Dispose();
-            blocker = Texture.Create(Gpu, new TextureDesc(Format.R32Sfloat, size, size, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "shadow blocker map"));
+            blocker = Texture.Create(Gpu, new TextureDesc(Format.R32Sfloat, size, size, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "shadow blocker map"));
             blockerSampled = Sampled(blocker, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge);
             blockerPublished = false;
             fresh = true;

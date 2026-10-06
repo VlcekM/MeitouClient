@@ -307,8 +307,6 @@ public sealed unsafe partial class ShadowPass : IDisposable
         fbo = gl.GenFramebuffer();
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
         gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, atlasGl, 0);
-        gl.DrawBuffer(DrawBufferMode.None);
-        gl.ReadBuffer(ReadBufferMode.None);
     }
 
     void FreeAtlas()
