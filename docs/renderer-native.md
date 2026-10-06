@@ -1172,6 +1172,51 @@ untouched). The point of the probe was to see whether native draws are cheaper o
   (0.6 to 0.9 us). The cold-code effect the pilot found (7.1) did not show here, where draws are many and in a row (a plausible reason, not
   measured separately): each of the four programs' loops runs 30 to 130 draws in a row.
 
+**Wave 3, agent C (objects + characters), step P (2026-10-06, on master `8c65331`).** `WorldObjectRenderer` (colour, and depth for the shadow
+cascades, which the reflection pass and the distant towns share), and the viewer's `Renderer` and `CharacterRenderer` record natively in VkGl's
+open pass. Four commits: the timing switch, the zone order, the viewer, the objects.
+
+- *Objects.* Two `LegacyProgram`s (colour fragment, `ShadowShaders.MeshDepthFragment`) are made in the constructor with every handle resolved; the GL
+  programs and the string-keyed uniform cache are gone (the constants GL set per call, `uTriplanarScale`, `uSkinned`, `uHasHead`, are set once).
+  `Draw` is split: the cull and level choice, the batches' matrices into one `Frame.Constants` allocation (bound once as the rows at locations 7 to 10,
+  each draw reaching its batch by `firstInstance`; the GL `instanceBuffer` never gets storage, so the part vertex arrays' exports stay valid), then
+  **Prepare** (`PrepareDraws`: the texture ids through `WorldTexture.Id`, the material as a record struct, wireframe/`MEITOU_LOD_DEBUG` colours; also where
+  `meshes.PlainVao` creates VAOs for the TERRAIN-mode path) and **Record** (one segment per call and kind: dynamic state once, per draw the changed
+  uniforms and textures, the pipeline and own vertex buffers from a per-part `ObjectNativeMesh` for the last two segment states, the index buffer at the
+  level's byte offset as VkGl binds it, `Flush`, `DrawIndexed`). The wireframe pass is a second segment with GL's polygon mode and offset set around it.
+  `TerrainRenderer.DrawMeshes` is called as before, after the segment has ended.
+- *What objects needed that foliage did not.* Cull stays `None` (the objects are double-sided and GL's cull face is off, which the state export reports
+  as `None`: no `Enable(CullFace)` trick). The depth program has no `uCoverage`; it shares the vertex shader, so the fade uniforms exist in both. Each draw
+  differs in level (index offset) and in `uFadeMode` (towns), so those are compared per draw like the material.
+- *Viewer.* `NativeMeshProgram` (in `Renderer.cs`) is the small shared helper: a `LegacyProgram`, the sampler binds, a segment number and a per-part draw.
+  The GL mesh program of `Renderer` is still created, for what making it does (the sampler units and shadow blocks it publishes as frame globals);
+  the grid and skeleton lines stay on GL (one upload and draw each, not mesh work). `CharacterRenderer`'s program is native only.
+- *Determinism.* The 84-byte-vertex noisy program of 7.1 is partly this renderer: `ObjectStreamer.ZonesNear` enumerated a dictionary in the order
+  workers finished zones, and the batches and each batch's instances followed it (two baseline runs differed in the draw order at the Hub). Zones are now
+  sorted by position. Two runs of the sorted build give identical draw logs. Observed: the ten parity views and the Hub still view stay at 0 px against
+  the unsorted master; at the Hub still view (not a parity view) the sorted order differs from one unsorted run in a few pixels (max 29), which is the
+  depth-tie choice of an arbitrary order.
+- *Gate (Release; lighter gate of the coordinator, against master `8c65331`).* Build 0 warnings; tests 389 passed, 0 skipped; `--faithful all` ten views 0 px
+  (mean 0.0000), the rock view included; `--debug-shadows 1` Hub 13:00 0 px; `--water-reflection 4` Port North 13:00 0 px (as for foliage this picture
+  does not show the mirrored objects: the level-3 reflection already has them, so this is a check that the reflection path runs and does not crash);
+  `MEITOU_VK_VALIDATION=sync` Port North and Hub still at 13:00: 0 errors; the viewer: `--character "Dust Bandit"` solid and wireframe, a mesh
+  (`antilop250.mesh`) solid and wireframe: 0 px. Draw-log diff of the port against the unsorted build at the Hub still view: 920 draws each, the 14 that
+  differ are locations 8 to 10 of last batches (the known `DescribeVertex` artifact) and terrain-mesh groups in another order (the pre-sort noise).
+- **Measured: Hub still camera (`--town "The Hub" --distance 3000 --pitch 10 --time 13 --fly-benchmark 300 --fly-speed 0`, `MEITOU_OBJECT_TIMING=1`,
+  `MEITOU_PASS_STATS=1`, three interleaved runs per build, medians, Release; the machine was shared).** Before is the GL path with the zone sort
+  (`97e4e1d`), after the port (`9601e6d`); 43 colour and 34 depth draws per call.
+
+  | | before | after |
+  | --- | ---: | ---: |
+  | colour batches, us per draw (Prepare + Record) | 5.79 | 3.42 (record only 2.81) |
+  | depth batches, us per draw | 5.83 | 3.43 (record only 2.82) |
+  | stage `objects`, ms | 0.689 | 0.465 |
+  | shadow casters `objects`, cascade 1 / 2 / 3, ms | 0.171 / 0.143 / 0.146 | 0.111 / 0.087 / 0.095 |
+
+  GPU time was not different beyond the run-to-run scatter (the GPU column of the pass meter moves 0.2 to 4.9 ms between runs of one build). The saving
+  is the same shape as foliage: 2.4 us per draw, 1.6 to 2.0 us left above the `vkCmd` calls inside the legacy model (`Flush`'s default-block copy and the
+  `VertexArray` export are per draw); the cull (58 us a call) and the material compare are untouched by step P.
+
 After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the
 native shader prelude and the shared native shader variants (3.3), each proven on one consumer.

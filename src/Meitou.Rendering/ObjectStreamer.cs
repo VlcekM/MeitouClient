@@ -198,6 +198,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
             var max = new Vector3((float)zone.X0 + WorldLayout.ZoneSize, 20000, (float)zone.Z0 + WorldLayout.ZoneSize);
             if (WorldCamera.Intersects(frustum, min, max)) near.Add(zone);
         }
+        // The dictionary enumerates in the order zones were taken in (worker completion), and the batches' and the instances' order, the depth ties and
+        // the draw log follow it: by position, a frame draws in the same order whatever the streaming did.
+        near.Sort(static (a, b) => a.X0 != b.X0 ? a.X0.CompareTo(b.X0) : a.Z0.CompareTo(b.Z0));
         return near;
     }
 
