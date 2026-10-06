@@ -201,8 +201,13 @@ public sealed unsafe class BindlessTable : IDisposable
     /// <summary>As <see cref="Update(BindlessKind, uint, in SampledTexture)"/>.</summary>
     public void Update(BindlessHandle handle, in SampledTexture texture) => Update(handle.Kind, handle.Index, texture);
 
-    /// <summary>Releases an index once the frames in flight are done with it.</summary>
-    public void Free(BindlessKind kind, uint index) => device.Frames.DeferDelete(() => free[(int)kind].Push(index));
+    /// <summary>Releases an index once the frames in flight are done with it. Draws recorded earlier in the open frame still read the
+    /// entry; slots that have not seen it yet skip it (its view may be destroyed before they replay the journal).</summary>
+    public void Free(BindlessKind kind, uint index)
+    {
+        journal.Add((kind, index, default));   // a tombstone (null view)
+        device.Frames.DeferDelete(() => free[(int)kind].Push(index));
+    }
 
     /// <summary>As <see cref="Free(BindlessKind, uint)"/>.</summary>
     public void Free(BindlessHandle handle) => Free(handle.Kind, handle.Index);
@@ -212,7 +217,7 @@ public sealed unsafe class BindlessTable : IDisposable
     internal void BeginFrame(int slot)
     {
         currentSlot = slot;
-        Apply(slot);
+        Apply(slot, endOfFrame: false);
         open = true;
     }
 
@@ -222,10 +227,17 @@ public sealed unsafe class BindlessTable : IDisposable
     {
         if (!open) return;
         open = false;
-        Apply(currentSlot);
+        Apply(currentSlot, endOfFrame: true);
     }
 
-    void Apply(int slot)
+    readonly HashSet<(BindlessKind, uint)> written = [];
+
+    /// <summary>
+    /// Writes the journal's entries the slot has not seen, newest first, each (array, index) once: an entry overwritten later is skipped (its
+    /// view may be gone by now). At a frame's begin an index freed later is skipped too. At the end of the open frame it is still written:
+    /// the frame's draws may have read it before the free, and its view lives until the frame has finished (deferred deletion).
+    /// </summary>
+    void Apply(int slot, bool endOfFrame)
     {
         long end = journalBase + journal.Count;
         long from = Math.Max(applied[slot], journalBase);
@@ -234,20 +246,29 @@ public sealed unsafe class BindlessTable : IDisposable
         {
             var writes = new WriteDescriptorSet[n];
             var infos = new DescriptorImageInfo[n];
+            int count = 0;
+            written.Clear();
             fixed (DescriptorImageInfo* pi = infos)
             fixed (WriteDescriptorSet* pw = writes)
             {
-                for (int i = 0; i < n; i++)
+                for (int i = n - 1; i >= 0; i--)
                 {
                     var (kind, index, t) = journal[(int)(from - journalBase) + i];
-                    pi[i] = new DescriptorImageInfo(t.Sampler, t.View, ImageLayout.General);
-                    pw[i] = new WriteDescriptorSet
+                    if (t.IsNull)
+                    {
+                        if (!endOfFrame) written.Add((kind, index));
+                        continue;
+                    }
+                    if (!written.Add((kind, index))) continue;
+                    pi[count] = new DescriptorImageInfo(t.Sampler, t.View, ImageLayout.General);
+                    pw[count] = new WriteDescriptorSet
                     {
                         SType = StructureType.WriteDescriptorSet, DstSet = sets[slot], DstBinding = (uint)kind, DstArrayElement = index,
-                        DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &pi[i],
+                        DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &pi[count],
                     };
+                    count++;
                 }
-                device.Vk.UpdateDescriptorSets(device.Device, (uint)n, pw, 0, null);
+                if (count > 0) device.Vk.UpdateDescriptorSets(device.Device, (uint)count, pw, 0, null);
             }
         }
         applied[slot] = end;
