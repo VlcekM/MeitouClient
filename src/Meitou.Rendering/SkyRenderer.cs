@@ -171,7 +171,8 @@ public sealed unsafe class SkyRenderer : IDisposable
     readonly IGl gl;
     /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
     public GpuContext Gpu { get; }
-    readonly uint simpleProgram, skyProgram, vao;
+    // Native programs (docs/renderer-native.md 7.1, wave 3 agent D): the same SPIR-V as the GL programs they replace.
+    readonly SkyProg simple, sky;
     readonly Dictionary<(uint, string), int> uniforms = [];
     uint starsTexture, moonTexture, cloudsTexture, irradianceCube, specularCube, ambientMap;
     readonly GpuSpan skyTimer;
@@ -259,9 +260,8 @@ public sealed unsafe class SkyRenderer : IDisposable
     {
         this.gl = gl;
         Gpu = gpu;
-        simpleProgram = WorldGl.Program(gl, Vertex, SimpleFragment);
-        skyProgram = WorldGl.Program(gl, Vertex, SkyFragment);
-        vao = gl.GenVertexArray();
+        simple = new SkyProg(gpu, Vertex, SimpleFragment, "sky simple");
+        sky = new SkyProg(gpu, Vertex, SkyFragment, "sky");
         skyTimer = new GpuSpan(gl);
         if (assets is not null)
         {
@@ -561,29 +561,56 @@ public sealed unsafe class SkyRenderer : IDisposable
 
     // ---- drawing ---------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// The sky pass: a full-screen triangle into the pass VkGl has open (the scene's, or the reflection's multisampled one). Prepare sets the
+    /// program's uniforms and the GL-side binds it reads (the atmosphere's units); Record is one native segment (docs/renderer-native.md 7.5).
+    /// </summary>
     public void Draw(Matrix4x4 viewProjection, SkyColours colours)
     {
         if (!Matrix4x4.Invert(viewProjection, out var inverse)) return;
         skyTimer.Begin();
-        uint program = Physical && state.Valid ? skyProgram : simpleProgram;
-        gl.UseProgram(program);
-        WorldGl.Matrix(gl, U(program, "uInverseViewProjection"), inverse);
-        SetUniforms(program, colours);
-        if (program == skyProgram) SetSkyUniforms();
-        gl.Disable(EnableCap.DepthTest);
-        gl.DepthMask(false);
-        gl.BindVertexArray(vao);
-        gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
-        gl.BindVertexArray(0);
-        gl.DepthMask(true);
-        gl.Enable(EnableCap.DepthTest);
-        gl.ActiveTexture(TextureUnit.Texture0);
+        var program = Physical && state.Valid ? sky : simple;
+        Prepare(program, inverse, colours);
+        Record(program);
         skyTimer.End();
     }
 
-    void SetSkyUniforms()
+    void Prepare(SkyProg program, in Matrix4x4 inverse, SkyColours colours)
+    {
+        var p = program.P;
+        p.Set(program.InverseViewProjection, in inverse);
+        program.Colours.Set(p, colours);
+        if (program == sky) SetSkyUniforms(program);
+        p.ApplyGlobals();   // Apply's atmosphere uniforms, through the frame globals
+        BindUnits();        // the atmosphere's textures on their units: the frame globals read them there
+    }
+
+    void Record(SkyProg program)
+    {
+        gl.Disable(EnableCap.DepthTest);
+        gl.DepthMask(false);
+        var interop = Gpu.Interop!;
+        var cmd = interop.BeginNativeInPass(program == sky ? "sky" : "sky simple");
+        var targets = interop.CurrentTargets();
+        var drawState = interop.CurrentState();
+        cmd.SetViewport(targets.Viewport);
+        cmd.SetScissor(targets.Scissor);
+        cmd.SetRaster(drawState.Cull, drawState.Front);
+        cmd.SetDepth(drawState.DepthTest, drawState.DepthWrite, drawState.Compare);
+        cmd.SetDepthBias(drawState.BiasEnable, drawState.BiasConstant, drawState.BiasSlope);
+        cmd.BindPipeline(program.Segment.Get(drawState, targets.Formats, null));
+        program.P.Flush(cmd);
+        cmd.Draw(3);
+        interop.EndNative(cmd);
+        gl.DepthMask(true);
+        gl.Enable(EnableCap.DepthTest);
+        gl.ActiveTexture(TextureUnit.Texture0);
+    }
+
+    void SetSkyUniforms(SkyProg program)
     {
         var s = state;
+        var p = program.P;
         float coverage = Math.Clamp(CloudCoverage ?? Weather.CloudDensity, 0, 1.5f);
         // The stars turn with the sun's half-turn (a = phase · π); the moon stands opposite the sun.
         float turn = MathF.Atan2(s.Sun.Z, s.Sun.X);
@@ -591,35 +618,19 @@ public sealed unsafe class SkyRenderer : IDisposable
         var right = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, moon));
         var up = Vector3.Cross(moon, right);
         const float moonRadius = 0.016f;
-        gl.Uniform4(U(skyProgram, "uSkyExtra"), 0, coverage, turn, moonRadius);
-        gl.Uniform3(U(skyProgram, "uMoonDir"), moon.X, moon.Y, moon.Z);
-        gl.Uniform3(U(skyProgram, "uMoonRight"), right.X, right.Y, right.Z);
-        gl.Uniform3(U(skyProgram, "uMoonUp"), up.X, up.Y, up.Z);
+        p.Set(program.Extra, 0, coverage, turn, moonRadius);
+        p.Set(program.MoonDir, moon.X, moon.Y, moon.Z);
+        p.Set(program.MoonRight, right.X, right.Y, right.Z);
+        p.Set(program.MoonUp, up.X, up.Y, up.Z);
         var (_, _, darkness) = HorizonClouds(s);
         var zenith = s.Colours.Zenith;
-        gl.Uniform4(U(skyProgram, "uCloudLight"), zenith.X, zenith.Y, zenith.Z, MathF.Max(darkness, 0.35f));
-        gl.Uniform3(U(skyProgram, "uHas"), starsTexture != 0 ? 1f : 0f, moonTexture != 0 ? 1f : 0f, cloudsTexture != 0 ? 1f : 0f);
-        (string, uint)[] textures = [("uStars", starsTexture), ("uMoon", moonTexture), ("uClouds", cloudsTexture)];
-        for (int i = 0; i < textures.Length; i++)
-        {
-            gl.ActiveTexture(TextureUnit.Texture0 + 1 + i);
-            gl.BindTexture(TextureTarget.Texture2D, textures[i].Item2);
-            gl.Uniform1(U(skyProgram, textures[i].Item1), 1 + i);
-        }
-        gl.ActiveTexture(TextureUnit.Texture0);
-        Apply(skyProgram);
-    }
-
-    /// <summary>Sets the legacy sky uniforms (the simple model's, and the zenith colour the water shader reads) and the atmosphere's.</summary>
-    public void SetUniforms(uint target, SkyColours sky)
-    {
-        gl.UseProgram(target);
-        gl.Uniform3(U(target, "uSkySun"), sky.Sun.X, sky.Sun.Y, sky.Sun.Z);
-        gl.Uniform3(U(target, "uSkyZenith"), sky.Zenith.X, sky.Zenith.Y, sky.Zenith.Z);
-        gl.Uniform3(U(target, "uSkyHorizon"), sky.Horizon.X, sky.Horizon.Y, sky.Horizon.Z);
-        gl.Uniform3(U(target, "uSkySunColour"), sky.SunColour.X, sky.SunColour.Y, sky.SunColour.Z);
-        gl.Uniform1(U(target, "uSkyTwilight"), sky.Twilight);
-        Apply(target);
+        p.Set(program.CloudLight, zenith.X, zenith.Y, zenith.Z, MathF.Max(darkness, 0.35f));
+        p.Set(program.Has, starsTexture != 0 ? 1f : 0f, moonTexture != 0 ? 1f : 0f, cloudsTexture != 0 ? 1f : 0f);
+        var interop = Gpu.Interop!;
+        // A missing texture reads GL's stand-in, which an unbound sampler does too.
+        if (starsTexture != 0) p.Bind(program.Stars, interop.Sampled(starsTexture, program.StarsInfo!));
+        if (moonTexture != 0) p.Bind(program.Moon, interop.Sampled(moonTexture, program.MoonInfo!));
+        if (cloudsTexture != 0) p.Bind(program.Clouds, interop.Sampled(cloudsTexture, program.CloudsInfo!));
     }
 
     /// <summary>Times <paramref name="count"/> sky passes back to back (ms each; no table any more); for the screenshot mode's cost report.</summary>
@@ -652,9 +663,9 @@ public sealed unsafe class SkyRenderer : IDisposable
     {
         if (Active == this) Active = null;
         skyTimer.Dispose();
-        gl.DeleteVertexArray(vao);
         foreach (var t in new[] { starsTexture, moonTexture, cloudsTexture, irradianceCube, specularCube, ambientMap }) if (t != 0) gl.DeleteTexture(t);
-        foreach (var p in new[] { simpleProgram, skyProgram }) gl.DeleteProgram(p);
+        simple.Dispose();
+        sky.Dispose();
     }
 
     /// <summary>GPU time of a span of commands, by timestamp queries (ring of a few, read without stalling).</summary>
@@ -695,4 +706,81 @@ public sealed unsafe class SkyRenderer : IDisposable
         }
         public void Dispose() { for (int i = 0; i < 4; i++) { gl.DeleteQuery(begin[i]); gl.DeleteQuery(end[i]); } }
     }
+}
+
+/// <summary>The handles of the sky colour uniforms of <see cref="SkyRenderer.SkyFunctions"/> in a native program, resolved once.</summary>
+public readonly record struct SkyColourHandles(UniformHandle Sun, UniformHandle Zenith, UniformHandle Horizon, UniformHandle SunColour, UniformHandle Twilight)
+{
+    public static SkyColourHandles Resolve(LegacyProgram p) =>
+        new(p.Uniform("uSkySun"), p.Uniform("uSkyZenith"), p.Uniform("uSkyHorizon"), p.Uniform("uSkySunColour"), p.Uniform("uSkyTwilight"));
+
+    /// <summary>What the GL <c>SetUniforms</c> set on a program; the atmosphere's uniforms come from <see cref="LegacyProgram.ApplyGlobals"/>.</summary>
+    public void Set(LegacyProgram p, SkyColours c)
+    {
+        p.Set(Sun, c.Sun.X, c.Sun.Y, c.Sun.Z);
+        p.Set(Zenith, c.Zenith.X, c.Zenith.Y, c.Zenith.Z);
+        p.Set(Horizon, c.Horizon.X, c.Horizon.Y, c.Horizon.Z);
+        p.Set(SunColour, c.SunColour.X, c.SunColour.Y, c.SunColour.Z);
+        p.Set(Twilight, c.Twilight);
+    }
+}
+
+/// <summary>
+/// The pipelines of one native program's draws (docs/renderer-native.md 7.5): remembers the last two segment states (the scene's pass and the
+/// reflection's multisampled one alternate) and the vertex export they were made for, so a draw compares a few fields instead of building a
+/// pipeline description.
+/// </summary>
+internal sealed class NativeSegment(GpuContext gpu, LegacyProgram program, Silk.NET.Vulkan.PrimitiveTopology topology, string label)
+{
+    readonly record struct Key(AttachmentFormats Formats, BlendState Blend, Silk.NET.Vulkan.ColorComponentFlags Mask, Silk.NET.Vulkan.PolygonMode Polygon,
+        bool AlphaToCoverage, bool DepthClamp);
+
+    Key key0, key1;
+    GraphicsPipeline? pipeline0, pipeline1;
+    VertexArrayBindings? source0, source1;
+
+    /// <summary>The pipeline for <paramref name="state"/> into <paramref name="formats"/>, with the vertex inputs of <paramref name="vertices"/> (null: none).</summary>
+    public GraphicsPipeline Get(DrawState state, AttachmentFormats formats, VertexArrayBindings? vertices)
+    {
+        var key = new Key(formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp);
+        if (pipeline0 is not null && key == key0 && ReferenceEquals(vertices, source0)) return pipeline0;
+        if (pipeline1 is not null && key == key1 && ReferenceEquals(vertices, source1)) return pipeline1;
+        var made = gpu.Pipelines.Get(state.Pipeline(program.Program, program.VertexLayout(vertices is null ? default : vertices.Attributes), topology, formats, label));
+        (key1, pipeline1, source1) = (key0, pipeline0, source0);
+        (key0, pipeline0, source0) = (key, made, vertices);
+        return made;
+    }
+}
+
+/// <summary>A native sky program with its handles resolved at load.</summary>
+sealed class SkyProg : IDisposable
+{
+    public readonly LegacyProgram P;
+    public readonly NativeSegment Segment;
+    public readonly UniformHandle InverseViewProjection, Extra, MoonDir, MoonRight, MoonUp, CloudLight, Has;
+    public readonly SkyColourHandles Colours;
+    public readonly SamplerSlot Stars, Moon, Clouds;
+    public readonly Meitou.Rendering.Vulkan.Shaders.SamplerInfo? StarsInfo, MoonInfo, CloudsInfo;
+
+    public SkyProg(GpuContext gpu, string vertex, string fragment, string name)
+    {
+        P = LegacyProgram.Create(gpu, vertex, fragment, name);
+        Segment = new NativeSegment(gpu, P, Silk.NET.Vulkan.PrimitiveTopology.TriangleList, name);
+        InverseViewProjection = P.Uniform("uInverseViewProjection");
+        Colours = SkyColourHandles.Resolve(P);
+        Extra = P.Uniform("uSkyExtra");
+        MoonDir = P.Uniform("uMoonDir");
+        MoonRight = P.Uniform("uMoonRight");
+        MoonUp = P.Uniform("uMoonUp");
+        CloudLight = P.Uniform("uCloudLight");
+        Has = P.Uniform("uHas");
+        Stars = P.Sampler("uStars");
+        Moon = P.Sampler("uMoon");
+        Clouds = P.Sampler("uClouds");
+        if (Stars.IsValid) StarsInfo = P.SamplerInfo(Stars);
+        if (Moon.IsValid) MoonInfo = P.SamplerInfo(Moon);
+        if (Clouds.IsValid) CloudsInfo = P.SamplerInfo(Clouds);
+    }
+
+    public void Dispose() => P.Dispose();
 }
