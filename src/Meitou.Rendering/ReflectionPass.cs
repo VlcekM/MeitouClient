@@ -54,6 +54,17 @@ public sealed unsafe class ReflectionPass : IDisposable
         for (int i = 0; i < queries.Length; i++) queries[i] = gl.GenQuery();
     }
 
+    /// <summary>The game's <c>water reflection</c> when the key is missing, and <c>reflection range</c> (docs/formats/settings.md).</summary>
+    public const int DefaultLevel = 2;
+    public const float DefaultRange = 0.6f;
+    /// <summary>
+    /// The game's <c>water reflection</c> 0..4: what the mirrored scene holds. 0 no pass (the water shows the sky colour, the viewer's
+    /// counterpart of the shader's NO_REFLECTION branch), 1 sky and terrain, 2 adds the characters (none in the viewer yet), 3 adds
+    /// buildings (here every placed object), 4 everything (also foliage). The frame loop reads it for what to draw.
+    /// </summary>
+    public int Level { get; set; } = DefaultLevel;
+    /// <summary>The game's <c>reflection range</c>: the far clip is the haze distance (the game's view distance × 10) times this; the frame loop sets <see cref="MaxDistance"/> from it.</summary>
+    public float Range { get; set; } = DefaultRange;
     /// <summary>Furthest distance reflected: mountains beyond it are not mirrored (the sea there is mostly haze anyway).</summary>
     public float MaxDistance { get; set; } = 150000;
     /// <summary>Objects (buildings, features) further than this from the eye are left out of the reflection.</summary>

@@ -338,12 +338,55 @@ options screen reads `Full Screen` and `Border` from the render system's current
 | `objects view range`, `feature range`, `distant town range` | Constants in `ObjectRanges`; the viewer's own `--object-distance` (default 12000) and `--distant-range` replace them |
 | `FXAA`, `HeatHaze` | Honoured as options (`--fxaa` / `--no-fxaa`, `--heat-haze` / `--no-heat-haze`; Faithful switches) |
 | `camera speed`, `camera zoom` | Constants in `KenshiCamera` / `CameraSettings` (500, 125) |
-| `water reflection`, `reflection range` | Not honoured: the viewer has its own reflection pass (`--no-reflections` turns it off), drawing sky, terrain and objects to its own range |
+| `water reflection`, `reflection range` | Honoured as options (2026-10-06): `--water-reflection <0..4>` (default 2, the game's) and `--reflection-range <x>` (default 0.6), Tab sliders for both; `--no-reflections` / `R` stay as the on/off switch. See "Viewer: water reflection" below |
 | `terrain detail`, `terrain distant`, `terrain threshold`, `terrain patch size` | Not honoured: the viewer's own CDLOD (64-quad patches, range factor K) |
-| `texture resolution gimping` | Not honoured: full-resolution textures |
+| `texture resolution gimping` | Honoured as `--texture-quality <0..4>` (default 1, the game's; restart to change, like the game). See "Viewer: texture quality" below |
 | `Decal Range`, `Decal Resolution`, `Blood`, `harpoonLimit` | Not implemented (no decals) |
 | `generate distant towns` | Not honoured: towns without a baked mesh are drawn from their buildings' distant meshes |
 | `npc range`, `mouse speed *`, `invert *`, UI, audio, gameplay keys | Not applicable / not implemented |
+
+### Viewer: texture quality
+
+`--texture-quality <0..4>` (default **1**, the game's value for a missing key; `TextureQuality` in `Meitou.Data.Textures`). Like the game it
+is read when textures load, so it needs a restart; it is set from the options before the world loads.
+
+- **Object and foliage textures** (`WorldTextureCache`): the DDS is rewritten as in "Mip skipping" above (`TextureQuality.LevelsToDrop`
+  for the name and resource group, `DropTopMips` for the rewrite; unit tests in `TextureQualityTests`). The group is the file's
+  `resources.cfg` group (`OgreScriptResources.GroupOfFile`; the first group in ordinal order that holds the file, so a folder listed in
+  two groups is not told apart: **Observed**, a file the game loads through one group and finds in another is a corner case not checked).
+  442 `_HI.` / `_LO.` files exist in the install (mostly `animal`, `characters`), so those branches are live.
+- **Terrain layers** (**Observed** approximation): the game's biome textures are in the `Landscape` group (see
+  [terrain.md](terrain.md#biomes-fields-and-shader-parameters-verified-kenshi_x64exe)), so at 1 and above they lose `level` mips: 2048² becomes
+  1024² at the default. The viewer's layer arrays have one size (`--layer-size`, 2048), so the size is lowered to `min(--layer-size, 2048 >> drop)` for all
+  layers instead of per file. **This halves the terrain texture resolution against earlier builds at the default**; `--texture-quality 0` restores it.
+  Sources smaller than 2048² (a few 1024² and one 512²) are not given a further drop, so they differ from the game slightly.
+- **Memory budget**: the game sets the TextureManager to 2 GiB / 1.5 GiB / 1 GiB (above). The viewer's two texture caches (objects, foliage)
+  each use it as the size at which they unload least-recently-used textures (`HighWaterMb`; before: 1024 always). The game has one manager, so the
+  viewer's total can be up to twice that: **Observed** (an approximation).
+- **Not applied**: sky, water, post-processing and heat-haze textures (the game also drops mips of non-cube `SkyX` / `General` group DXT textures; the viewer loads those at
+  full size), the decal compensation (no decals), and per-file group lookups for the model viewer (it keeps level 0).
+
+### Viewer: water reflection
+
+`--water-reflection <0..4>` (default **2**, the game's value for a missing key; Tab slider "Water reflection 0-4 (game)") and `--reflection-range <x>`
+(default 0.6; Tab slider). `ReflectionPass.Level` / `Range`. What the levels draw, in the viewer's terms (the sky and terrain always come first; the
+viewer's own cut-downs from [viewer.md](../viewer.md#world-mode) "Reflections" stay and say *how much*, the level says *what*):
+
+| Level | Game | Viewer |
+| --- | --- | --- |
+| 0 | no pass; water shaders built with `NO_REFLECTION` | no pass; the water's `uReflect = 0` path: the sky colour is reflected unattenuated (**Observed** to be the counterpart of the game's reflection factor 1; the viewer's shader is not the game's, so the look is not compared) |
+| 1 | queues 5-8, 25 | sky and terrain |
+| 2 | + queue 50 | the same: queue 50 is the characters (**Observed** from the label), none exist in the viewer yet |
+| 3 | + queue 20 | + every placed object (buildings and map features are not told apart: **Unknown** which queue the features use) |
+| 4 | no list: everything | + foliage (trees, bushes, rocks; no grass, as before). Which queue the game's foliage is in is **Unknown**; "everything" is assumed to be the only level that includes it |
+
+- **Reflection range**: the mirrored scene's far clip is `Sky.HazeDistance × range` (the game's view distance × 10 × value; 30000 with the defaults),
+  set each frame (the intended value: the game's quirk that it only applies once the View Distance or Terrain Detail slider has moved, before which Ogre's
+  default far clip applies, is **not** reproduced). The viewer's previous constant was 150000, which `--reflection-range 3` reproduces.
+- **Not done**: the "only when more than 100 water pixels are visible" occlusion query. The Vulkan GL layer's `BeginQuery` supports only elapsed-time queries
+  (`QueryTarget` has no samples-passed), and that layer is not part of this change. Town display state 4 at levels 3 and 4 is not reproduced either (**Unknown**).
+- **Default changed**: the viewer used to draw sky, terrain, objects and foliage (level 4) out to 150000; the default is now the game's level 2 and
+  range 0.6, so objects and foliage no longer appear in reflections unless `--water-reflection 3` / `4` is given.
 
 ## Unknowns
 

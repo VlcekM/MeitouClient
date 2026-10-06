@@ -145,6 +145,20 @@ public sealed class OgreScriptResources
     public bool Contains(string name) => Find(name) is not null;
 
     /// <summary>
+    /// The resource group a file of the index belongs to (the first, in ordinal order, whose index maps its bare name to this path), or
+    /// <c>General</c> for a file outside every location.
+    /// </summary>
+    public string GroupOfFile(string path)
+    {
+        string name = Path.GetFileName(path);
+        string full = Path.GetFullPath(path);
+        foreach (var (group, index) in groups)
+            if (index.TryGetValue(name, out var found) && string.Equals(Path.GetFullPath(found), full, StringComparison.OrdinalIgnoreCase))
+                return group;
+        return "General";
+    }
+
+    /// <summary>
     /// Script files in Kenshi's parse order: group <c>GUI</c> first, then the other groups in ordinal order; within a
     /// group pattern by pattern, then location by location, then by file name. A file in two locations is returned
     /// for each. For <see cref="FromDirectory"/> indexes the folder is searched recursively.
