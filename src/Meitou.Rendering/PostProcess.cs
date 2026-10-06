@@ -853,31 +853,12 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>Skip the smoothing: the exposure settles at once (screenshots, benchmarks).</summary>
     public bool InstantAdaptation { get; set; }
 
-    /// <summary>The last frame's adapted luminance and measured mean (the composite's scale is 0.55 / adapted); reads the GPU back and waits,
-    /// so for reports only, after the frame has been submitted and finished.</summary>
+    /// <summary>The last frame's adapted luminance and measured mean (the composite's scale is 0.55 / adapted); waits for the GPU and reads it
+    /// back (<see cref="GpuContext.ReadBack"/>), so for reports only, outside a frame.</summary>
     public (float Adapted, float Mean) ReadExposure()
     {
         if (adaptB is null || !adaptedValid) return (float.NaN, float.NaN);
-        using var readback = ReadbackBuffer.Create(Gpu, 8, "post exposure readback");
-        var device = Gpu.Device;
-        var vk = device.Vk;
-        var cb = device.BeginImmediate();
-        var barrier = new Vk.MemoryBarrier2
-        {
-            SType = Vk.StructureType.MemoryBarrier2,
-            SrcStageMask = Vk.PipelineStageFlags2.AllCommandsBit, SrcAccessMask = Vk.AccessFlags2.MemoryWriteBit,
-            DstStageMask = Vk.PipelineStageFlags2.AllTransferBit, DstAccessMask = Vk.AccessFlags2.TransferReadBit,
-        };
-        var dependency = new Vk.DependencyInfo { SType = Vk.StructureType.DependencyInfo, MemoryBarrierCount = 1, PMemoryBarriers = &barrier };
-        vk.CmdPipelineBarrier2(cb, &dependency);
-        var region = new Vk.BufferImageCopy
-        {
-            ImageSubresource = new Vk.ImageSubresourceLayers(Vk.ImageAspectFlags.ColorBit, 0, 0, 1),
-            ImageExtent = new Vk.Extent3D(1, 1, 1),
-        };
-        vk.CmdCopyImageToBuffer(cb, adaptB.Texture.Image, Vk.ImageLayout.General, readback.Handle, 1, &region);
-        device.EndImmediate(cb);
-        var v = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(readback.Read(0, 8));
+        var v = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(Gpu.ReadBack(adaptB.Texture, 8));   // RG32F
         return (v[0], v[1]);
     }
 
