@@ -1217,6 +1217,52 @@ open pass. Four commits: the timing switch, the zone order, the viewer, the obje
   is the same shape as foliage: 2.4 us per draw, 1.6 to 2.0 us left above the `vkCmd` calls inside the legacy model (`Flush`'s default-block copy and the
   `VertexArray` export are per draw); the cull (58 us a call) and the material compare are untouched by step P.
 
+**Wave 3, agent B (terrain + shadow host), step P (2026-10-06, on master `ee54f0b`).** Files: `TerrainRenderer.cs`, `ShadowPass.Meitou.cs`,
+`TerrainShadowMap.cs` (nothing else; the shaders are the same text, so the SPIR-V is byte-identical).
+
+- *What is native.* (1) The terrain patches, colour (`Draw`) and shadow depth (`DrawDepth`): two `LegacyProgram`s (`PatchVertex` with the colour
+  fragment and with `DepthFragment`), Prepare (`PreparePatches`: the selected nodes as a `PatchDraw` list with `uNode`/`uMorph` values and the index range)
+  and Record (`RecordPatches`: one `BeginNativeInPass` segment; `CurrentTargets`/`CurrentState`, `state.Record`, pipeline and the grid's vertex buffer
+  once, then per node two uniforms, `Flush`, the index range bound at its byte offset as VkGl binds it, and the draw). The pipeline and bindings are kept per
+  (pass state, vertex-array export) in a small list (the reflection's 4x target alternates with the scene's). The colour uniforms are `ApplyNative`
+  (generalised from the pilot's mesh version: `uHeightNormals` 1 and `uFeature` 0 for patches), atmosphere and heights through `ApplyGlobals`, samplers from the GL
+  units (`BindUnitSamplers`) after the same GL binds as `Apply`. The wireframe outline (`Wireframe` 1 or 2) stays on the GL program (debug only). The GL
+  depth patch program is no longer made. (2) The Meitou blocker map (`UpdateBlockers`): one segment into the blocker framebuffer, the atlas through
+  `SampledUnit(0)` after the GL compare-mode-off call, a viewport and `Draw(3)` per tile. (3) The terrain shadow sweep (`TerrainShadowMap.Update`): one segment per
+  pass (the GL framebuffer and source texture change per pass, so VkGl begins a new rendering instance with its barrier, which orders the ping-pong).
+- *What is not, and why (guest contract).* `ShadowPass.Render`/`RenderMeitou` (the host) still open the atlas on the GL side (framebuffer, viewport, scissor per tile,
+  clears including the Meitou per-tile scissored clear, the caster block write). It draws nothing itself (pass meter: its own rows are ~0.04 ms), and
+  its guests need exactly this: `BeginNativeInPass` takes the pass from the GL framebuffer binding (4.5, host on VkGl, guest native), and the objects (C) and
+  foliage (A) guests call `BeginNativeInPass`/`CurrentTargets`/`CurrentState` inside it unchanged; a VkGl guest's IGl calls would throw inside a native host's
+  segment. The host goes native when all three guests are. `TerrainTextures.cs` and `TerrainStreamer.cs` have no draws (uploads and resource creation stay on IGl).
+- *Things learned.* (1) A patch draw gets the same per-draw cost as foliage's: `Flush` copies the vertex default block (uNode and uMorph change every draw);
+  the instanced form is wave 3b (it changes the shader). (2) Bind the index buffer at the range's byte offset with `firstIndex` 0, as VkGl does, and the draw
+  log of the patches is equal to VkGl's draw for draw (a `firstIndex` form would differ in every line for no pixel reason). (3) A segment's fixed cost
+  (BeginNativeInPass, CurrentTargets/CurrentState, first Flush, EndNative, cold code) is about 30 us: it pays back from tens of draws, not for the blocker map's two.
+- *Gate (Release, against the build of the timing-only commit on master `ee54f0b`, which is master plus counters; scratch in `C:\Temp\agent-B`).* Build 0 warnings;
+  `dotnet test -c Release` 389 passed, 0 skipped; `--faithful all` ten views max 0 (one earlier run of the build before the last rebase had the rock view at 2:00 at
+  max 8 against one baseline run and max 0 against the other and against a second run of itself: the documented instanced-mesh noise, which master `ee54f0b`
+  has since fixed by ordering zones); Meitou default ten views max 0 (one run each); `--debug-shadows 1` forest and Hub at 13:00 max 0; `MEITOU_VK_VALIDATION=sync`
+  forest 13:00 and Hub 2:00, 0 errors. Draw-log diff (before the last rebase, forest 13:00 and Hub 2:00, Faithful and Meitou): every terrain patch, blocker and sweep line equal;
+  the only differing draws are the known last-batch locations 8 to 10 of foliage and terrain meshes and one objects draw's placement rows (streaming order).
+- **Measured (forest still camera, `--fly-benchmark 300 --fly-speed 0`, Meitou default, `MEITOU_TERRAIN_TIMING=1`, three interleaved runs per build, medians, Release,
+  the machine shared: runs of the same build differ by 20 percent).** Per call includes the node selection (shared code).
+
+  | | before (VkGl) | native | change |
+  | --- | ---: | ---: | ---: |
+  | patches colour, us per call (about 128 draws) | 293.5 | 120.7 | -59 % |
+  | patches colour, us per draw | 2.29 | 0.94 | -59 % |
+  | patches depth, us per call (about 25 draws) | 211.4 | 201.9 | -4 % (inside noise) |
+  | blocker map, us per call (2 draws) | 43.9 | 47.7 | +9 % |
+  | terrain sweep, us for the whole rebuild (13 passes, once) | 472 | 485 | same |
+  | stage `terrain`, ms | 0.72 | 0.30 | -0.42 |
+  | stage shadow casters `terrain`, ms | 0.44 | 0.41 | -0.03 |
+  | render thread cpu-only p50, ms | 4.8 | 4.2 | noisy |
+
+  GPU time and the flying benchmark were not measured (lighter gate). Verdict: the colour patches are the win (two thirds of the terrain stage); the shadow depth patches
+  draw few nodes per cascade (25) and are cold code once per cascade, so the segment's fixed cost eats the saving; the blocker map and the sweep are ports for the
+  phase-8 deletion, not savings (a few draws each, or once).
+
 After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the
 native shader prelude and the shared native shader variants (3.3), each proven on one consumer.
