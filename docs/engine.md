@@ -466,7 +466,12 @@ active with TAA/FSR/DLSS); (5) objects 0.18 (0.42), reflection 0.12 (0.40), wate
 cascade-3 casters 1.9 ms lead): the CPU follows the **number of draws and of descriptor/uniform work per draw**, the GPU the pixels and triangles. The render thread never waited for the GPU or
 for the swapchain in the measured frames beyond the deliberate per-frame wait of the benchmark, and acquire, submit and present together are 0.2 ms.
 
-**Where the per-draw CPU goes**: about 1.5-2.3 µs of VkGl work per draw (Release), a third of it in the driver; the larger part is C# that rebuilds, per draw, state the renderer
+**After the native foliage port** (2026-10-06, wave 3 probe; docs/renderer-native.md 7.1 has the method and every number): the foliage renderer records
+natively with the same shaders, and its CPU per draw fell from 4.4 / 2.8 / 3.3 µs (colour meshes, grass, shadow-cascade meshes, forest still camera) to
+2.0 / 2.0 / 1.3 µs. In the forest view the foliage stage went from 1.08-1.14 to 0.87-0.88 ms (pass meter), the render thread's p50 by roughly 0.3 ms;
+GPU time did not change. What is left per draw (1.4-2 µs) is the legacy model's default-block copies and descriptor work, as predicted below.
+
+**Where the per-draw CPU goes** (measured before the port): about 1.5-2.3 µs of VkGl work per draw (Release), a third of it in the driver; the larger part is C# that rebuilds, per draw, state the renderer
 could have kept: a descriptor set 0 compare/build (the grass pushes 9 images to the same set 298 times a frame: 2 682 texture descriptors, 3 278 descriptor writes, each grass draw copies the whole vertex and fragment default blocks, 640 bytes in two ring copies, 190 KB of ring copies a frame for grass alone, 381 KB for the forest frame), a pipeline key of 20 fields hashed per draw (the cache never missed: 0 new pipelines), one
 `vkCmdBindVertexBuffers` per input location (about 3 per draw: 3 073 a frame), and ~5 000 GL uniform calls, ~1 400 texture binds and ~1 000 other bind calls a frame (about 4.5, 1.2 and 0.9 per draw) that the
 translation layer has to absorb before the draw. Debug triples all of it. In the same breath the vkCmd calls are only 0.5-0.8 µs per draw, so even a perfect native layer would still pay ~0.7 µs per draw for the calls
