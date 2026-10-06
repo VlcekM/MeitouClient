@@ -39,6 +39,9 @@ public class NativeShaderTests
         yield return ("foliage mesh depth", FoliageShaders.MeshVertexNative(), FoliageShaders.MeshDepthNative(), typeof(MeshPush));
         yield return ("foliage grass", FoliageShaders.GrassVertexNative(), FoliageShaders.GrassFragmentNative(), typeof(GrassPush));
         yield return ("foliage grass motion", FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(), typeof(GrassPush));
+        // Objects (step O): the buildings' dithered cross-fade on the shared mesh text, with their own push block.
+        yield return ("objects", BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(), typeof(ObjectPush));
+        yield return ("objects depth", BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), typeof(ObjectPush));
     }
 
     [Fact]
