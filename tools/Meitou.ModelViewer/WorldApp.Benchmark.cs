@@ -18,6 +18,15 @@ static partial class WorldApp
     {
         var context = display.Context;
         var centre = camera.Target;
+        // MEITOU_BENCH_SHADOW_RANGE=<u>: the shadow distance beyond --shadow-range's game limit (9000), as the Tab slider allows (VRAM measurements).
+        if (float.TryParse(Environment.GetEnvironmentVariable("MEITOU_BENCH_SHADOW_RANGE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float shadowRange)
+            && gpu.Shadow is { } rangedShadow)
+        {
+            rangedShadow.Settings = rangedShadow.Settings with { Range = shadowRange };
+            Console.WriteLine($"shadows   range {shadowRange:0} (MEITOU_BENCH_SHADOW_RANGE)");
+        }
+        var device = context.Device;
+        ulong vramPeak = 0;
         float radius = Math.Max(o.FlyRadius, 1);
         // Start at angle 0 on the circle's east point so the first frame is where the settled view was not: the flight starts by moving.
         float angleStep = o.FlySpeed / radius;
@@ -65,6 +74,7 @@ static partial class WorldApp
             interval.Restart();
             times.Add(ms);
             if (i % 150 == 0) resident.Add($"{(((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576)}");
+            if (i % 30 == 0 && device is not null) vramPeak = Math.Max(vramPeak, device.VideoMemory().Used);
             for (int k = 0; k < stageSums.Length; k++) { stageSums[k] += StageClock.Ms[k]; jobSums[k] += StageClock.JobMs[k]; }
             if (gpu.Shadow is { } shadowStats) for (int k = 0; k < 3; k++) shadowSums[k] += shadowStats.PhaseMs[k];
             long gcNow = GC.CollectionCount(2);
@@ -102,8 +112,10 @@ static partial class WorldApp
         }
         Console.WriteLine($"resident  every 150 frames (objects + foliage, MB): {string.Join(" ", resident)}");
         Console.WriteLine($"resident  {Resident(gpu)}; working set {Environment.WorkingSet / 1048576} MB, managed heap {GC.GetTotalMemory(false) / 1048576} MB");
-        // Every allocator owner (names without their numbers, GpuAllocator.Breakdown), largest first: what fills the VRAM.
-        Console.WriteLine($"vram      owners (MB, device-local MB, count): {string.Join(", ", context.Device.Allocator.Breakdown().OrderByDescending(b => b.Bytes).Select(b => $"{b.Name} {b.Bytes / 1048576.0:0.0} ({b.DeviceLocal / 1048576.0:0.0}) x{b.Count}"))}");
+        // The F11 VRAM lines: the process's use of the driver's budget (peak sampled every 30 frames), then every allocator owner (GpuAllocator.Breakdown), largest first.
+        var (vramUsed, vramBudget) = device.VideoMemory();
+        Console.WriteLine($"vram      {vramUsed / 1048576.0:0} MB of {vramBudget / 1048576.0:0} MB budget at the end, peak {Math.Max(vramPeak, vramUsed) / 1048576.0:0} MB; our blocks {device.Allocator.TotalAllocatedBytes / 1048576.0:0} MB, {device.Allocator.TotalUsedBytes / 1048576.0:0} used");
+        Console.WriteLine($"vram      owners (MB, device-local MB, count): {string.Join(", ", device.Allocator.Breakdown().OrderByDescending(b => b.Bytes).Select(b => $"{b.Name} {b.Bytes / 1048576.0:0.0} ({b.DeviceLocal / 1048576.0:0.0}) x{b.Count}"))}");
         if (meter is not null) ReportPasses(meter, display, gpu, scene, camera, render, o, w, h);
         if (o.Screenshot is not null)
         {
