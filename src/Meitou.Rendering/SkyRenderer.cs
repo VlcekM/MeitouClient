@@ -493,6 +493,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     public void Draw(Matrix4x4 viewProjection, SkyColours colours)
     {
         if (!Matrix4x4.Invert(viewProjection, out var inverse)) return;
+        Poll();   // a timestamp pair is readable only for a few frames after its own (the arena's ring), so collect them as they come
         skyTimer.Begin();
         var program = Physical && state.Valid ? sky : simple;
         Prepare(program, inverse, colours);

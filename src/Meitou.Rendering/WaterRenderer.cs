@@ -177,12 +177,15 @@ public sealed unsafe class WaterRenderer : IDisposable
         float[] corners = [-1, -1, -1, 1, 1, -1, 1, 1]; // triangle strip, counter-clockwise from above
         quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "water quad");
         using (var batch = gpu.Uploads.Begin()) batch.Write(quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(corners.AsSpan()));
-        // Location 0: two floats, 8 bytes apart (the GL vertex array's VertexAttribPointer(0, 2, FLOAT, false, 8, 0)), no element buffer.
-        var attributes = new LegacyProgram.Attribute?[1];
-        attributes[0] = new LegacyProgram.Attribute(new BufferBinding(quad.Handle, 0), GlConventions.VertexFormat(GLEnum.Float, 2, false, false), 8, false);
+        LegacyProgram.Attribute?[] attributes = [QuadAttribute(quad)];
         quadSource = new VertexArrayBindings(attributes, default);
         quadVertices = program.VertexBuffers(attributes, 0, 1);
     }
+
+    /// <summary>The quad's only vertex input, location 0: two floats, 8 bytes apart (the GL vertex array's
+    /// <c>VertexAttribPointer(0, 2, FLOAT, false, 8, 0)</c>); no element buffer.</summary>
+    internal static LegacyProgram.Attribute QuadAttribute(DeviceBuffer quad) =>
+        new(new BufferBinding(quad.Handle, 0), GlConventions.VertexFormat(GLEnum.Float, 2, false, false), 8, false);
 
     /// <param name="gl">Unused since phase 8 stage 2 (kept for the callers that still pass it: <c>WorldFrame</c>).</param>
     /// <param name="sky">Unused since phase 8 stage 2: the atmosphere comes through the frame globals.</param>
