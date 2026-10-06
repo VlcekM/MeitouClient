@@ -374,4 +374,76 @@ public class SeamTests
         }
         ExpectClean(d!);
     }
+
+    [Fact]
+    public void A_flush_after_a_bind_pushes_the_new_texture_and_one_without_keeps_it()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        using (var gl = new VkGl(d!))
+        {
+            IGlInterop interop = gl;
+            var ctx = gl.Context;
+            uint blue = WorldGl.Texture2D(gl, 2, 2, [0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255], repeat: false, mipmaps: false);
+            uint red = WorldGl.Texture2D(gl, 2, 2, [255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255], repeat: false, mipmaps: false);
+            using var sampled = LegacyProgram.Create(ctx, Fullscreen, Sampled, "flush skip");
+            gl.BindVertexArray(gl.GenVertexArray());
+            Target(gl);
+            gl.ClearColor(0, 0, 0, 1);
+            gl.Clear(ClearBufferMask.ColorBufferBit);
+
+            var cmd = interop.BeginNative("flush skip");
+            var targets = interop.CurrentTargets();
+            cmd.BeginRendering(targets.Rendering);
+            cmd.BindPipeline(ctx.Pipelines.Get(Desc(sampled, targets.Formats)));
+            var slot = sampled.Sampler("uTex");
+            for (int q = 0; q < 3; q++)
+            {
+                State(cmd, targets, new Rect2D(new Offset2D(q * W / 4, 0), new Extent2D(W / 4, H)));
+                if (q < 2) sampled.Bind(slot, interop.Sampled(q == 0 ? blue : red, shadowSampler: false));   // the third flushes with no bind
+                sampled.Flush(cmd);
+                cmd.Draw(3);
+            }
+            cmd.EndRendering();
+            interop.EndNative(cmd);
+
+            var p = Read(gl);
+            Assert.Equal((0, 0, 255, 255), At(p, 2, 2));
+            Assert.Equal((255, 0, 0, 255), At(p, W / 4 + 2, 2));
+            Assert.Equal((255, 0, 0, 255), At(p, W / 2 + 2, 2));
+            Assert.Equal((0, 0, 0, 255), At(p, 3 * W / 4 + 2, 2));
+        }
+        ExpectClean(d!);
+    }
+
+    [Fact]
+    public void Profiler_stamps_go_through_the_seam_into_VkGl_passes()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        using (var gl = new VkGl(d!))
+        {
+            uint solid = WorldGl.Program(gl, Fullscreen, Solid);
+            gl.BindVertexArray(gl.GenVertexArray());
+            using var profiler = new FrameProfiler(gl, gl.Context);
+            for (int frame = 0; frame < 2 * d!.Frames.Count + 2; frame++)
+            {
+                gl.BeginFrame(W, H);
+                profiler.BeginFrame();
+                Target(gl);
+                gl.UseProgram(solid);
+                gl.Uniform4(gl.GetUniformLocation(solid, "uColour"), 1f, 0f, 0f, 1f);
+                gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+                StageClock.Lap(0);   // a stamp inside VkGl's open pass
+                gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+                StageClock.Lap(1);
+                Assert.Equal(3, gl.Context.Frame.Timestamps.Count);   // the native arena's, not GL queries
+                profiler.EndFrame();
+                gl.EndFrame();
+            }
+            Assert.True(profiler.GpuFrames > 0, "no GPU frame read");
+            Assert.True(profiler.LastGpuMs >= 0);
+        }
+        ExpectClean(d!);
+    }
 }

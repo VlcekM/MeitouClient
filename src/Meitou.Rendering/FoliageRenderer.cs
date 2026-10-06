@@ -30,6 +30,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
     const int InstanceStride = 64;
 
     readonly IGl gl;
+    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    public GpuContext Gpu { get; }
     readonly GameInstall install;
     readonly GameDatabase db;
     readonly WorldLevelData levels;
@@ -60,9 +62,10 @@ public sealed unsafe class FoliageRenderer : IDisposable
     /// <summary>Zone layouts in flight: whole ones and far-only ones, each limited to <see cref="workers"/> at a time.</summary>
     int runningWhole, runningFar;
 
-    public FoliageRenderer(IGl gl, GameInstall install, GameDatabase db, WorldLevelData levels, AssetLocator assets)
+    public FoliageRenderer(IGl gl, GpuContext gpu, GameInstall install, GameDatabase db, WorldLevelData levels, AssetLocator assets)
     {
         this.gl = gl;
+        Gpu = gpu;
         this.install = install;
         this.db = db;
         this.levels = levels;

@@ -917,6 +917,49 @@ the base build (master `27be7c2`, itself identical in two runs), and validation 
   contents and order follow streaming; the pictures are identical. Compare a port's logs per program (its own lines are stable).
 - Additive exports for ports: `CurrentState()` (GL's fixed-function state as VkGl would apply it, with `DrawState.Pipeline` and
   `DrawState.Record`) and `VertexArray(vao)` (a VAO's attributes and element buffer).
+- Step 7 (pilot): done. `TerrainRenderer.DrawMeshes` records natively in colour and depth: one native segment per call
+  (`DrawGroups`: `BeginNative`, `CurrentTargets`, `CurrentState`, the placements written to the frame's constants, then per group the
+  VAO's attributes plus the four placement rows at locations 7 to 10, pipeline, dynamic state with the mirrored winding, vertices,
+  `Flush`, indexed instanced draw). Uniforms as `Apply` sets them (`ApplyNative`; atmosphere and heights through `ApplyGlobals`), samplers
+  from the GL units after the same binds (`BindUnitSamplers`), so the GL state after the call is what the GL version left. Both native
+  programs are created with the GL programs they replace (constructor, `DrawDepth`), never inside a draw. Gate against the pre-pilot
+  build (both Release): `--faithful all` ten views 0 px except the rock view at 13:00 (max 14, see below), Meitou default ten views
+  0 px, `--debug-shadows 1` forest and Hub at 13:00 and 2:00 0 px, validation `=1` and `=sync` 0 on the ten views, tests 333 passed.
+  The terrain programs' log lines equal VkGl's except one known artifact (next item).
+- **Draw-log artifact (wave 3: read before diffing an instanced port).** `DrawLog.DescribeVertex` hashes `instances × stride` bytes from
+  each binding's offset. For an attribute at an offset inside the record (locations 8 to 10 here, +16/+32/+48) the hashed range runs up to
+  that many bytes past the data, into whatever follows in the buffer, which differs between VkGl's ring and the native constants. Those
+  locations then differ while the data the shader reads is the same: check the location at offset 0 (7 here), which covers every byte.
+- **Rock view noise (pre-existing, both builds).** The pre-pilot build alone, run four times at the rock view at 13:00, gives two pictures
+  14 levels apart (`--faithful all`), and its two Meitou-default runs differ at the rock view at 2:00 (max 7). The pilot build lands on the
+  same two pictures. It is the instanced mesh program with 84-byte vertices whose instance order follows streaming (step 6's 30 noisy
+  draws, and one draw of it in a forest log); the terrain meshes are not involved. The step-2 fix (`OrderUpload`) removed the upload race,
+  not this. One silent viewer exit at the rock view at 2:00 (no exception, no crash event) was seen once before the pilot and once with
+  it, with other agents' viewers running; six reruns were clean.
+- **Pilot CPU (forest still camera, `--fly-benchmark 300 --fly-speed 0 --faithful all`, `MEITOU_MESH_TIMING=1`, three interleaved runs
+  each, medians, the machine shared with another agent's viewer).** Before (VkGl): colour 101.8 µs per call, depth 333.5 µs per call.
+  After (native step P): colour 176.9 µs, depth 568.9 µs; 13,200 draws in 600 calls (22 per call), +0.3 ms per frame, render-thread
+  p50 5.0 against 5.1 ms (within noise). **Step P did not make this renderer cheaper**: its draws were already instanced (22 per call),
+  so the fixed cost of a native segment dominates. Measured inside the pilot (stopwatch per phase, 300 frames): `BeginNative` 12 µs,
+  `CurrentTargets` + `CurrentState` + the placements' copy + `BeginRendering` ~39 µs, the first `Flush` of a segment ~36 µs (the full
+  set-0 push: every global sampler and block is a getter call into the interop), `EndNative` ~5 µs; per draw ~3 µs (export of the VAO
+  1.0, dynamic state 0.7, pipeline lookup 0.56, vertex buffers 0.5, index + draw 0.35, `Flush` 0.09). For wave 3: keep a native
+  segment per pass, not per call; resolve VAOs and pipelines once per mesh, not per draw (the native model does); set only the dynamic
+  state that changes. The API gained, from these measurements: `Flush` skips set 0 when nothing was bound since the last flush in the same
+  segment (globals are read at a program's first flush in a segment and after a `Bind`; a GL state change inside a native segment is
+  not seen until then), `VertexLayout` returns the previous object when the inputs are equal, frame-global uniforms are written without
+  boxing, `FrameGlobals.ApplyCount` lets an owner compute shared getter values once per `ApplyGlobals` (the sky's 13 atmosphere values).
+- Step 8: done. Every renderer constructor (and factory) takes the `GpuContext` after the `IGl`: `TerrainRenderer`, `TerrainTextures`,
+  `TerrainShadowMap`, `SkyRenderer`, `PostProcess`, `ReflectionPass`, `WaterRenderer`, `WorldObjectRenderer`, `FoliageRenderer`,
+  `ShadowPass`, `DebugOverlay`, `FrameProfiler`, the viewer's `Renderer` and `CharacterRenderer`; each keeps it as `Gpu` (the
+  `CharacterRenderer` as `Context`: it has a nested `Gpu` class). `WorldFrame.CreateGpu(gl, context, ...)`; the game and the viewer
+  pass `display.VkGl.Context`. Owners use it instead of `GpuContext.Of(gl)` (the static `ShadowShaders` / `SkyRenderer.PublishUnits`
+  helpers still look it up).
+- Step 9: done. `FrameProfiler.Stamp` allocates a `QueryArena` slot and records it with `Interleave` (no pass break); results are read
+  a frame ring later with `TryRead`. GL queries remain only when there is no interop. Test: `SeamTests.Profiler_stamps_go_through_the_seam_into_VkGl_passes`
+  (stamps inside VkGl's open pass, three per frame in the native arena, GPU frames read, sync validation clean).
+- Steps 7 to 9 landed in one commit (their edits share `TerrainRenderer.cs`, `SkyRenderer.cs` and `FrameProfiler.cs`); the gate above
+  ran on the combined build.
 
 After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the

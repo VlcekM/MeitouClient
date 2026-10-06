@@ -28,6 +28,8 @@ public sealed unsafe class TerrainTextures : IDisposable
     const byte Pending = 254, Unused = 255;
 
     readonly IGl gl;
+    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    public GpuContext Gpu { get; }
     readonly GameInstall install;
     readonly AssetLocator assets;
     readonly int layerSize, levelCount;
@@ -67,9 +69,10 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     sealed record Decoded(Pair Pair, byte[][]? Diffuse, byte[][]? Normal);
 
-    TerrainTextures(IGl gl, GameInstall install, AssetLocator assets, BlendInfoFile info, BiomeTerrain[] all, int layerSize, MapWindows? maps)
+    TerrainTextures(IGl gl, GpuContext gpu, GameInstall install, AssetLocator assets, BlendInfoFile info, BiomeTerrain[] all, int layerSize, MapWindows? maps)
     {
         this.gl = gl;
+        Gpu = gpu;
         this.install = install;
         this.assets = assets;
         this.info = info;
@@ -125,7 +128,7 @@ public sealed unsafe class TerrainTextures : IDisposable
                         !pairs.Values.Any(p => p.Loading) && (MapState != 1 || mapWindows is null);
 
     /// <param name="layerSize">Edge length every layer texture is brought to (the arrays need one size).</param>
-    public static TerrainTextures Create(IGl gl, GameInstall install, GameDatabase db, AssetLocator assets, int layerSize = 512, int worldColourSize = 2048)
+    public static TerrainTextures Create(IGl gl, GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, int layerSize = 512, int worldColourSize = 2048)
     {
         var info = BlendInfoFile.Open(install);
         var all = BiomeTerrain.ByIndex(db);
@@ -136,7 +139,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         {
             messages.Add($"overlay maps: {e.Message}");
         }
-        var t = new TerrainTextures(gl, install, assets, info, [.. all.Values], layerSize, maps);
+        var t = new TerrainTextures(gl, gpu, install, assets, info, [.. all.Values], layerSize, maps);
         t.Messages.AddRange(messages);
         if (maps is null) t.MapState = 0;
         else

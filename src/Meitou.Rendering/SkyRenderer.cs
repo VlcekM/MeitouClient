@@ -169,6 +169,8 @@ public sealed unsafe class SkyRenderer : IDisposable
         """;
 
     readonly IGl gl;
+    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    public GpuContext Gpu { get; }
     readonly uint simpleProgram, skyProgram, vao;
     readonly Dictionary<(uint, string), int> uniforms = [];
     uint starsTexture, moonTexture, cloudsTexture, irradianceCube, specularCube, ambientMap;
@@ -253,9 +255,10 @@ public sealed unsafe class SkyRenderer : IDisposable
     SkyWeather? builtWeather;
     bool builtPhysical;
 
-    public SkyRenderer(IGl gl, AssetLocator? assets = null)
+    public SkyRenderer(IGl gl, GpuContext gpu, AssetLocator? assets = null)
     {
         this.gl = gl;
+        Gpu = gpu;
         simpleProgram = WorldGl.Program(gl, Vertex, SimpleFragment);
         skyProgram = WorldGl.Program(gl, Vertex, SkyFragment);
         vao = gl.GenVertexArray();
@@ -459,23 +462,34 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// </summary>
     void PublishGlobals()
     {
-        if (GpuContext.Of(gl) is not { Interop: { } interop } ctx) return;
+        if (Gpu is not { Interop: { } interop } ctx) return;
         var g = ctx.Globals;
         bool Valid() => state.Valid;
-        g.PublishUniform("uAtmoTau", () => Uniforms().Tau, Valid);
-        g.PublishUniform("uAtmoParams", () => Uniforms().Params, Valid);
-        g.PublishUniform("uAtmoSun", () => Uniforms().Sun, Valid);
-        g.PublishUniform("uAtmoLight", () => Uniforms().Light, Valid);
-        g.PublishUniform("uAtmoSunLight", () => Uniforms().SunLight, Valid);
-        g.PublishUniform("uAtmoTint", () => Uniforms().Tint, Valid);
-        g.PublishUniform("uAtmoFog", () => Uniforms().Fog, Valid);
-        g.PublishUniform("uAtmoFogColour", () => Uniforms().FogColour, Valid);
-        g.PublishUniform("uAtmoSimple", () => Uniforms().Simple, Valid);
-        g.PublishUniform("uAtmoHaze", () => Uniforms().Haze, Valid);
-        g.PublishUniform("uAtmoHazeCloud", () => Uniforms().HazeCloud, Valid);
-        g.PublishUniform("uAtmoAltitude", () => Uniforms().Altitude, Valid);
-        g.PublishUniform("uAtmoMaps", () => Uniforms().Maps, Valid);
+        g.PublishUniform("uAtmoTau", () => Published().Tau, Valid);
+        g.PublishUniform("uAtmoParams", () => Published().Params, Valid);
+        g.PublishUniform("uAtmoSun", () => Published().Sun, Valid);
+        g.PublishUniform("uAtmoLight", () => Published().Light, Valid);
+        g.PublishUniform("uAtmoSunLight", () => Published().SunLight, Valid);
+        g.PublishUniform("uAtmoTint", () => Published().Tint, Valid);
+        g.PublishUniform("uAtmoFog", () => Published().Fog, Valid);
+        g.PublishUniform("uAtmoFogColour", () => Published().FogColour, Valid);
+        g.PublishUniform("uAtmoSimple", () => Published().Simple, Valid);
+        g.PublishUniform("uAtmoHaze", () => Published().Haze, Valid);
+        g.PublishUniform("uAtmoHazeCloud", () => Published().HazeCloud, Valid);
+        g.PublishUniform("uAtmoAltitude", () => Published().Altitude, Valid);
+        g.PublishUniform("uAtmoMaps", () => Published().Maps, Valid);
         PublishUnits(gl);
+    }
+
+    // The values the getters above share, computed once per ApplyGlobals call (FrameGlobals.ApplyCount) instead of once per name.
+    AtmosphereUniforms published;
+    int publishedAt = -1;
+
+    AtmosphereUniforms Published()
+    {
+        int at = Gpu.Globals.ApplyCount;
+        if (at != publishedAt) (published, publishedAt) = (Uniforms(), at);
+        return published;
     }
 
     /// <summary>The atmosphere's textures as frame globals: whatever is bound on their units when a consumer draws (as a GL program samples them).</summary>
@@ -509,6 +523,16 @@ public sealed unsafe class SkyRenderer : IDisposable
         gl.Uniform4(U(program, "uAtmoHazeCloud"), a.HazeCloud.X, a.HazeCloud.Y, a.HazeCloud.Z, a.HazeCloud.W);
         gl.Uniform4(U(program, "uAtmoAltitude"), a.Altitude.X, a.Altitude.Y, a.Altitude.Z, a.Altitude.W);
         gl.Uniform4(U(program, "uAtmoMaps"), a.Maps.X, a.Maps.Y, a.Maps.Z, a.Maps.W);
+        BindUnits();
+    }
+
+    /// <summary>
+    /// The texture binds of <see cref="Apply"/> without its uniforms (GL state only): for a ported caller whose native program reads the
+    /// atmosphere through the frame globals but whose GL successors expect the units bound as <see cref="Apply"/> leaves them.
+    /// </summary>
+    public void BindUnits()
+    {
+        if (!state.Valid) return;
         if (irradianceUnit >= 0)
         {
             gl.ActiveTexture(TextureUnit.Texture0 + irradianceUnit);

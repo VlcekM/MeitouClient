@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Meitou.Rendering.Vulkan.Shaders;
 
 namespace Meitou.Rendering.Gpu;
@@ -27,18 +28,22 @@ public sealed class FrameGlobals
         {
             if (when is not null && !when()) return;   // the owner would not have set it (as SkyRenderer.Apply before the sky is valid)
             var v = get();
-            switch (v)
-            {
-                case float f: program.Set(handle, f); break;
-                case int i: program.Set(handle, i); break;
-                case Vector2 v2: program.Set(handle, v2); break;
-                case Vector3 v3: program.Set(handle, v3); break;
-                case Vector4 v4: program.Set(handle, v4); break;
-                case Matrix4x4 m: program.Set(handle, in m); break;
-                default: throw new NotSupportedException($"frame-global uniform of type {typeof(T).Name}");
-            }
+            // By type test on T, not a switch on the value (which would box it on every write).
+            if (typeof(T) == typeof(float)) program.Set(handle, Unsafe.As<T, float>(ref v));
+            else if (typeof(T) == typeof(int)) program.Set(handle, Unsafe.As<T, int>(ref v));
+            else if (typeof(T) == typeof(Vector2)) program.Set(handle, Unsafe.As<T, Vector2>(ref v));
+            else if (typeof(T) == typeof(Vector3)) program.Set(handle, Unsafe.As<T, Vector3>(ref v));
+            else if (typeof(T) == typeof(Vector4)) program.Set(handle, Unsafe.As<T, Vector4>(ref v));
+            else if (typeof(T) == typeof(Matrix4x4)) program.Set(handle, in Unsafe.As<T, Matrix4x4>(ref v));
+            else throw new NotSupportedException($"frame-global uniform of type {typeof(T).Name}");
         }
     }
+
+    /// <summary>
+    /// Counts <see cref="LegacyProgram.ApplyGlobals"/> calls. Nothing an owner reads changes during one call, so an owner whose getters share
+    /// one computation (<c>SkyRenderer</c>'s atmosphere values) may keep its result for as long as this number stays the same.
+    /// </summary>
+    public int ApplyCount { get; internal set; }
 
     /// <summary>Bumped by every publish (consumers re-resolve their names).</summary>
     public int Version { get; private set; }

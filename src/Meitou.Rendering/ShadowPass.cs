@@ -19,6 +19,8 @@ public sealed unsafe partial class ShadowPass : IDisposable
     public delegate void CasterDraw(ShadowCascade cascade, Matrix4x4 worldToClip, Vector4[] planes, Vector3 lodEye);
 
     readonly IGl gl;
+    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    public GpuContext Gpu { get; }
     readonly uint receiverUbo, casterUbo;
     readonly uint[] queries = new uint[4];
     readonly bool[] pending = new bool[2];
@@ -31,9 +33,10 @@ public sealed unsafe partial class ShadowPass : IDisposable
     readonly Dictionary<(uint, string), int> uniforms = [];
 
     /// <param name="assets">Where to find the game's <c>white-noise.png</c> (the receiver's jitter); without it a hash stands in.</param>
-    public ShadowPass(IGl gl, AssetLocator? assets = null)
+    public ShadowPass(IGl gl, GpuContext gpu, AssetLocator? assets = null)
     {
         this.gl = gl;
+        Gpu = gpu;
         LoadNoise(assets);
         receiverUbo = gl.GenBuffer();
         gl.BindBuffer(BufferTargetARB.UniformBuffer, receiverUbo);

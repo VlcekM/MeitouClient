@@ -44,13 +44,22 @@ public sealed class FrameProfiler : IDisposable
 
     public Mode Showing { get; set; }
 
+    /// <summary>Frames whose GPU stage times have been read (at most <see cref="History"/>).</summary>
+    public int GpuFrames => gpuCount;
+
+    /// <summary>The newest frame's GPU time over its stamped stages, in ms (0 before the first frame is read).</summary>
+    public double LastGpuMs => gpuCount == 0 ? 0 : gpu[Total][(gpuHead - 1 + History) % History];
+
     /// <param name="gpuFrameMs">The whole frame's GPU time, when the backend measures it (it includes the uploads before the first stage).</param>
-    public FrameProfiler(IGl gl, Func<double>? gpuFrameMs = null)
+    public FrameProfiler(IGl gl, GpuContext gpu, Func<double>? gpuFrameMs = null)
     {
         this.gl = gl;
         this.gpuFrameMs = gpuFrameMs;
-        for (int s = 0; s < Slots; s++)
-            for (int i = 0; i < MaxStamps; i++) stamps[s, i] = gl.GenQuery();
+        native = gpu.Interop is not null ? gpu : null;
+        recordStamp = cmd => cmd.Timestamp(native!.Frame.Timestamps, pendingStamp);
+        if (native is null)
+            for (int s = 0; s < Slots; s++)
+                for (int i = 0; i < MaxStamps; i++) stamps[s, i] = gl.GenQuery();
     }
 
     static float[][] NewHistory()
@@ -98,23 +107,49 @@ public sealed class FrameProfiler : IDisposable
     {
         int n = stampCount[slot];
         if (n >= MaxStamps) return;
-        gl.QueryCounter(stamps[slot, n], QueryCounterTarget.Timestamp);
+        if (native is { } ctx)
+        {
+            // The native timestamps (QueryArena), recorded through the seam without ending VkGl's pass: they keep working while the
+            // stages move to native code (docs/renderer-native.md 7.1 step 9).
+            var arena = ctx.Frame.Timestamps;
+            var q = arena.Allocate();
+            if (!q.IsValid) return;
+            pendingStamp = q;
+            ctx.Interop!.Interleave(recordStamp);
+            nativeStamps[slot, n] = q;
+        }
+        else gl.QueryCounter(stamps[slot, n], QueryCounterTarget.Timestamp);
         stampStage[slot, n] = stage;
         stampCount[slot] = n + 1;
+    }
+
+    // Native timestamps: the context while VkGl provides the seam, the slots per stamp, and the record callback (no allocation per stamp).
+    readonly GpuContext? native;
+    readonly QuerySlot[,] nativeStamps = new QuerySlot[Slots, MaxStamps];
+    QuerySlot pendingStamp;
+    readonly Action<CommandList> recordStamp;
+
+    bool TryStamp(int s, int i, out ulong ns)
+    {
+        if (native is { } ctx) return ctx.Frame.Timestamps.TryRead(nativeStamps[s, i], out ns);
+        gl.GetQueryObject(stamps[s, i], QueryObjectParameterName.ResultAvailable, out int ready);
+        ns = 0;
+        if (ready == 0) return false;
+        gl.GetQueryObject(stamps[s, i], QueryObjectParameterName.Result, out ns);
+        return true;
     }
 
     void Collect(int s)
     {
         if (!pending[s]) return;
         int n = stampCount[s];
-        gl.GetQueryObject(stamps[s, n - 1], QueryObjectParameterName.ResultAvailable, out int ready);
-        if (ready == 0) return;
+        if (!TryStamp(s, n - 1, out _)) return;
         Array.Clear(gpuFrame);
-        gl.GetQueryObject(stamps[s, 0], QueryObjectParameterName.Result, out ulong previous);
+        TryStamp(s, 0, out ulong previous);
         double sum = 0;
         for (int i = 1; i < n; i++)
         {
-            gl.GetQueryObject(stamps[s, i], QueryObjectParameterName.Result, out ulong now);
+            TryStamp(s, i, out ulong now);
             double ms = now >= previous ? (now - previous) / 1e6 : 0;
             gpuFrame[stampStage[s, i]] += ms;
             sum += ms;
@@ -224,6 +259,6 @@ public sealed class FrameProfiler : IDisposable
     public void Dispose()
     {
         if (StageClock.Profiler == this) StageClock.Profiler = null;
-        foreach (uint q in stamps) gl.DeleteQuery(q);
+        if (native is null) foreach (uint q in stamps) gl.DeleteQuery(q);
     }
 }

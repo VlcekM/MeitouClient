@@ -117,7 +117,7 @@ public sealed unsafe partial class ShadowPass
         bool blockers = ContactHardening && UpdateBlockers(drawNow, count);
         if (coarse is not null)
         {
-            terrainMap ??= new TerrainShadowMap(gl, coarse, coarseSize);
+            terrainMap ??= new TerrainShadowMap(gl, Gpu, coarse, coarseSize);
             terrainMap.Update(toSun);
         }
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, restoreFramebuffer);

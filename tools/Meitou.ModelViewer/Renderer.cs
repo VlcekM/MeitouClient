@@ -27,6 +27,8 @@ public sealed class RenderOptions
 public sealed unsafe class Renderer : IDisposable
 {
     readonly IGl gl;
+    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    public GpuContext Gpu { get; }
     readonly uint meshProgram, lineProgram;
     readonly Dictionary<string, int> meshUniforms = [], lineUniforms = [];
     readonly List<GpuPart> parts = [];
@@ -43,9 +45,10 @@ public sealed unsafe class Renderer : IDisposable
         public bool NormalSwizzled;
     }
 
-    public Renderer(IGl gl, AssetLocator assets)
+    public Renderer(IGl gl, GpuContext gpu, AssetLocator assets)
     {
         this.gl = gl;
+        Gpu = gpu;
         this.assets = assets;
         meshProgram = Program(Shaders.MeshVertex, Shaders.MeshFragment);
         lineProgram = Program(Shaders.LineVertex, Shaders.LineFragment);

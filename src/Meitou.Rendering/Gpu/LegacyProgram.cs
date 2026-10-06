@@ -42,8 +42,11 @@ public sealed unsafe class LegacyProgram : IDisposable
     readonly string[] blockNames, samplerNames;
     readonly BufferBinding[] blockValues;     // per block name
     readonly SampledTexture[] samplerValues;  // per sampler name
+    readonly int[] blockIndex, samplerIndex;  // each set-0 entry's name index
     readonly ulong[] lastPush;
     long lastPushEpoch = -1;
+    bool bindingsDirty = true;                // a Bind since the last Flush
+    int pushedGlobals = -1;                   // the globals version set 0 was last evaluated with
     bool vertexDirty = true, fragmentDirty = true;
     long sliceFrame = -1;
     Transient vertexSlice, fragmentSlice;
@@ -67,6 +70,8 @@ public sealed unsafe class LegacyProgram : IDisposable
         blockValues = new BufferBinding[blockNames.Length];
         samplerValues = new SampledTexture[samplerNames.Length];
         lastPush = new ulong[(blocks.Length + samplers.Length) * 3];
+        blockIndex = [.. blocks.Select(b => Array.IndexOf(blockNames, b.Name))];
+        samplerIndex = [.. samplers.Select(s => Array.IndexOf(samplerNames, s.Name))];
         InputLocations = [.. c.Vertex.Inputs.SelectMany(i => Enumerable.Range(i.Location, i.Slots))];
         InputKinds = [.. c.Vertex.Inputs.SelectMany(i => Enumerable.Repeat(i.Kind, i.Slots))];
     }
@@ -142,16 +147,16 @@ public sealed unsafe class LegacyProgram : IDisposable
     /// <summary>The texture a sampler reads (default: nothing, the GL stand-in).</summary>
     public void Bind(SamplerSlot s, in SampledTexture texture)
     {
-        if (s.IsValid) samplerValues[s.Index] = texture;
+        if (s.IsValid) { samplerValues[s.Index] = texture; bindingsDirty = true; }
     }
 
     public void Bind(BlockSlot b, in BufferBinding buffer)
     {
-        if (b.IsValid) blockValues[b.Index] = buffer;
+        if (b.IsValid) { blockValues[b.Index] = buffer; bindingsDirty = true; }
     }
 
     /// <summary>The reflected sampler behind a slot (its kind decides the stand-in and whether it compares).</summary>
-    public SamplerInfo SamplerInfo(SamplerSlot s) => samplers.First(x => x.Name == samplerNames[s.Index]).Info;
+    public SamplerInfo SamplerInfo(SamplerSlot s) => samplers[Array.IndexOf(samplerIndex, s.Index)].Info;
 
     // ---- frame globals (docs/renderer-native.md 4.3) ----
 
@@ -177,6 +182,7 @@ public sealed unsafe class LegacyProgram : IDisposable
     public void ApplyGlobals()
     {
         ResolveGlobals();
+        ctx.Globals.ApplyCount++;
         foreach (var (h, v) in globalUniforms) v.Write(this, h);
     }
 
@@ -208,7 +214,10 @@ public sealed unsafe class LegacyProgram : IDisposable
         }
 
         int count = blocks.Length + samplers.Length;
-        if (count > 0)
+        // Set 0 as last pushed in this epoch, nothing bound since and the same globals: nothing to compare (the per-draw cost of a
+        // batch of draws with one program). Globals are read at the program's first Flush of a native segment and after a Bind.
+        bool unchanged = !programChanged && !bindingsDirty && pushedGlobals == globalsVersion && cmd.Log is null;
+        if (count > 0 && !unchanged)
         {
             var writes = stackalloc WriteDescriptorSet[count];
             var bufferInfos = stackalloc DescriptorBufferInfo[blocks.Length + 1];
@@ -218,7 +227,7 @@ public sealed unsafe class LegacyProgram : IDisposable
             for (int i = 0; i < blocks.Length; i++)
             {
                 var b = blocks[i];
-                int bi = Array.IndexOf(blockNames, b.Name);
+                int bi = blockIndex[i];
                 var value = blockValues[bi];
                 if (value.IsNull && globalBlocks[bi] is { } gb) value = gb();
                 if (value.IsNull) throw new InvalidOperationException($"{Name}: no buffer bound for uniform block {b.Name}");
@@ -235,7 +244,7 @@ public sealed unsafe class LegacyProgram : IDisposable
             for (int i = 0; i < samplers.Length; i++)
             {
                 var s = samplers[i];
-                int si = Array.IndexOf(samplerNames, s.Name);
+                int si = samplerIndex[i];
                 var t = samplerValues[si];
                 if (t.IsNull && globalTextures[si] is { } gt) t = gt();
                 if (t.IsNull) t = ctx.Dummy(s.Info);
@@ -264,6 +273,8 @@ public sealed unsafe class LegacyProgram : IDisposable
             }
         }
         lastPushEpoch = cmd.Epoch;
+        bindingsDirty = false;
+        pushedGlobals = globalsVersion;
         cmd.BoundProgram = this;
         cmd.Log?.DefaultBlocks(VertexDefault, FragmentDefault);
     }
@@ -304,7 +315,7 @@ public sealed unsafe class LegacyProgram : IDisposable
     /// </summary>
     public VertexLayout VertexLayout(ReadOnlySpan<Attribute?> byLocation)
     {
-        var inputs = new VertexInput[InputLocations.Length];
+        Span<VertexInput> inputs = stackalloc VertexInput[InputLocations.Length];
         for (int i = 0; i < inputs.Length; i++)
         {
             int loc = InputLocations[i];
@@ -312,8 +323,12 @@ public sealed unsafe class LegacyProgram : IDisposable
                 ? new VertexInput((uint)loc, a.Format, a.Stride, a.PerInstance)
                 : new VertexInput((uint)loc, GlConventions.DummyVertexFormat(InputKinds[i]), 0, false);
         }
-        return new VertexLayout(inputs);
+        // Draws in a row mostly share one layout: the same object again (no allocation, and the pipeline lookup compares by reference).
+        if (lastLayout is { } last && inputs.SequenceEqual(last.Inputs)) return last;
+        return lastLayout = new VertexLayout(inputs.ToArray());
     }
+
+    VertexLayout? lastLayout;
 
     /// <summary>Binds each input location's buffer (the dummy constant where null) in one call per run of consecutive locations.</summary>
     public void BindVertices(CommandList cmd, ReadOnlySpan<Attribute?> byLocation)
