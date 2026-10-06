@@ -228,12 +228,31 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public required bool Far;
         /// <summary>The largest instance scale: how far a mesh's bounds can reach from its instance's position (the zone's cull box).</summary>
         public required float MaxScale;
+        /// <summary>The zone the group is in (its cull box: the GPU path's per-cascade batch test, <see cref="ShowBatches"/>).</summary>
+        public required ZoneState Zone;
         /// <summary>The instances (<see cref="FoliageCull"/>'s records), their bounding spheres filled once the mesh's bounds are known (<see cref="SpheresReady"/>).</summary>
         public required FoliageInstanceRecord[] Instances;
         public bool SpheresReady;
         /// <summary>Where <see cref="Instances"/> are in the GPU cull's arena, and the arena generation they were placed in (0: never).</summary>
         public ArenaRange Arena;
         public int ArenaGeneration;
+        /// <summary>A box around every instance's bounding sphere (with a unit of slack for rounding), set with the spheres: the GPU path
+        /// draws a batch in a view only when one of its groups' boxes meets the frustum (<see cref="ShowBatches"/>).</summary>
+        public Vector3 BoundMin, BoundMax;
+        public bool BoundsReady;
+
+        public void ComputeBounds()
+        {
+            var min = new Vector3(float.MaxValue);
+            var max = new Vector3(float.MinValue);
+            foreach (ref readonly var r in Instances.AsSpan())
+            {
+                var c = new Vector3(r.Sphere.X, r.Sphere.Y, r.Sphere.Z);
+                min = Vector3.Min(min, c - new Vector3(r.Sphere.W + 1));
+                max = Vector3.Max(max, c + new Vector3(r.Sphere.W + 1));
+            }
+            (BoundMin, BoundMax, BoundsReady) = (min, max, true);
+        }
     }
 
     sealed class GrassPage
@@ -425,6 +444,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
                 Far = FoliageLayout.IsFarLayer(g.Layer),
                 MaxScale = g.MaxScale,
                 Instances = g.Instances,
+                Zone = state,
             });
         FreeArena(state.Groups);
         state.Groups = groups;
@@ -945,7 +965,9 @@ public sealed unsafe class FoliageRenderer : IDisposable
                 BuildGpuWork(options);
             }
             foreach (var a in gpuOrder) BatchOf(a);
+            double r0 = cpu.Elapsed.TotalMilliseconds;
             CullRocks(eye, options);
+            rockCullMs = cpu.Elapsed.TotalMilliseconds - r0;
         }
         else
         {
@@ -955,6 +977,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
             else if (!reuseWork) BuildGpuWork(options);   // the verify mode: the GPU's work from the list the CPU just culled
         }
         if (gpu && !reuseWork) (gpuWorkFrame, gpuWorkEye, gpuWorkRange) = depthPass ? (Gpu.Frame.Number, eye, maxRange) : (-1, default, 0);
+        if (gpu) ShowBatches();
         double tCull = cpu.Elapsed.TotalMilliseconds;
         StageClock.Sub("fol cull");
 
@@ -980,7 +1003,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         double recMeshes = 0, recGrass = 0, dispatchMs = 0;
         if (active.Count > 0 && !debugNoMeshes)
         {
-            PrepareMeshes(options);
+            PrepareMeshes(options, gpu);
             if (meshDraws.Count > 0)
             {
                 long r0 = FolTiming ? Stopwatch.GetTimestamp() : 0;
@@ -1043,7 +1066,9 @@ public sealed unsafe class FoliageRenderer : IDisposable
     /// draws each step issued, printed when the renderer is disposed (docs/renderer-native.md 7.1, wave 3 foliage probe).</summary>
     static readonly bool FolTiming = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_TIMING") == "1";
     readonly double[,] folMs = new double[2, 5], folRecordMs = new double[2, 2];
-    readonly double[] folDispatchMs = new double[2];
+    readonly double[] folDispatchMs = new double[2], folRockCullMs = new double[2];
+    /// <summary>The GPU path's CPU cull of the TERRAIN-mode rocks in the current call (<c>MEITOU_FOLIAGE_TIMING</c>).</summary>
+    double rockCullMs;
     readonly long[] folSeen = new long[2];
     static readonly int FolSkip = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_TIMING_SKIP"), out int skip) ? skip : 160;
     readonly long[] folCalls = new long[2], folMeshDraws = new long[2], folGrassDraws = new long[2], folRocks = new long[2];
@@ -1056,6 +1081,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         folMeshDraws[k] += meshDraws; folGrassDraws[k] += grassDraws; folRocks[k] += rocks;
         folRecordMs[k, 0] += recMeshes; folRecordMs[k, 1] += recGrass;
         folDispatchMs[k] += dispatchMs;
+        folRockCullMs[k] += rockCullMs;
     }
 
     void ReportFoliageTiming()
@@ -1070,7 +1096,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
                 $"foliage timing {names[k]}: {folCalls[k]} calls, per call us: cull {folMs[k, 0] * 1000 / folCalls[k]:F1}, upload {folMs[k, 1] * 1000 / folCalls[k]:F1}, meshes {folMs[k, 2] * 1000 / folCalls[k]:F1}, grass {folMs[k, 3] * 1000 / folCalls[k]:F1}, rocks {folMs[k, 4] * 1000 / folCalls[k]:F1}; " +
                 $"draws per call: meshes {(double)folMeshDraws[k] / folCalls[k]:F1}, grass {(double)folGrassDraws[k] / folCalls[k]:F1}, rock groups {(double)folRocks[k] / folCalls[k]:F1}; " +
                 $"us per draw: meshes {perDraw(2, folMeshDraws[k]):F2}, grass {perDraw(3, folGrassDraws[k]):F2}; record only (native): meshes {(folMeshDraws[k] > 0 ? folRecordMs[k, 0] * 1000 / folMeshDraws[k] : 0):F2}, grass {(folGrassDraws[k] > 0 ? folRecordMs[k, 1] * 1000 / folGrassDraws[k] : 0):F2}; " +
-                $"cull {(GpuCull && gpuCull is not null ? "gpu" : "cpu")}, dispatch recording us per call {folDispatchMs[k] * 1000 / folCalls[k]:F1}"));
+                $"cull {(GpuCull && gpuCull is not null ? "gpu" : "cpu")}, dispatch recording us per call {folDispatchMs[k] * 1000 / folCalls[k]:F1}, of the cull the TERRAIN-mode rocks' CPU cull {folRockCullMs[k] * 1000 / folCalls[k]:F1}"));
         }
         if (gpuCull is { } g)
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
@@ -1259,6 +1285,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
                     g.SpheresReady = true;
                 }
                 if (g.Asset.Terrain && options.Textures) continue;
+                if (!g.BoundsReady) g.ComputeBounds();
                 // A grown arena (full) moved every group: place them all again before a chunk names one.
                 if (!cull.Place(ref g.Arena, ref g.ArenaGeneration, g.Instances)) { placed = false; break; }
             }
@@ -1273,6 +1300,9 @@ public sealed unsafe class FoliageRenderer : IDisposable
             if (a.Terrain && options.Textures) { gpuRocks.Add((g, range)); continue; }
             if (a.WorkStamp != stamp) { (a.WorkStamp, a.WorkIndex) = (stamp, gpuOrder.Count); gpuOrder.Add(a); }
         }
+        gpuEntries.Clear();
+        foreach (var (g, _) in cullWork)
+            if (!(g.Asset.Terrain && options.Textures)) gpuEntries.Add((g.Asset.WorkIndex, g));
         int batches = gpuOrder.Count;
         if (gpuBatchStart.Length < batches + 1) { gpuBatchStart = new int[batches * 2 + 1]; gpuCursor = new int[batches * 2]; }
         Array.Clear(gpuBatchStart, 0, batches + 1);
@@ -1305,6 +1335,27 @@ public sealed unsafe class FoliageRenderer : IDisposable
         gpuWorkBuilds++;
         gpuWorkGroups += groups;
         gpuWorkCandidates += n * (long)Chunk;
+    }
+
+    /// <summary>The work list's groups as (batch, zone), and per batch whether this view draws it (<see cref="ShowBatches"/>).</summary>
+    readonly List<(int Batch, Group Group)> gpuEntries = [];
+    bool[] gpuBatchShown = new bool[64];
+
+    /// <summary>
+    /// Which batches this view draws. Every candidate batch is drawn indirect, an empty one with 0 instances, so a cascade (whose work list,
+    /// like the CPU's candidates, has no zone test) would record draws for meshes far outside it, at the CPU cost of a draw each. A batch is
+    /// drawn only when the box round one of its groups' spheres (<see cref="Group.BoundMin"/>) meets the frustum. A batch left out has no
+    /// visible instance (every sphere of its groups is outside a plane), so the picture is the same; the GPU still culls its groups, and the
+    /// verify mode checks that it found none there.
+    /// </summary>
+    void ShowBatches()
+    {
+        int n = gpuOrder.Count;
+        if (gpuBatchShown.Length < n) gpuBatchShown = new bool[n * 2];
+        Array.Clear(gpuBatchShown, 0, n);
+        var planes = cullView.Planes;
+        foreach (var (b, g) in gpuEntries)
+            if (!gpuBatchShown[b] && WorldCamera.Intersects(planes, g.BoundMin, g.BoundMax)) gpuBatchShown[b] = true;
     }
 
     /// <summary>The work list's TERRAIN-mode rocks, culled on the CPU for this view (they draw through the terrain's mesh path: 5.4).</summary>
@@ -1352,6 +1403,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public required string Kind;
         public readonly List<(string Mesh, Matrix4x4[] Expected)> Batches = [];
         public int[] BatchStart = [];
+        public bool[] Shown = [];
         public FoliageCullDraw[] Draws = [];
         public int[] DrawBatch = [];
     }
@@ -1381,6 +1433,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         var v = new VerifyCall { Frame = Gpu.Frame.Number, Result = r, Kind = depthPass ? "depth" : "colour", Buffer = ReadbackBuffer.Create(Gpu, FoliageGpuCull.ReadbackBytes(r), "foliage cull verify") };
         foreach (var b in active) v.Batches.Add((b.Asset.Mesh.MeshPath, b.Data.AsSpan(0, b.Count).ToArray()));
         v.BatchStart = gpuBatchStart.AsSpan(0, gpuOrder.Count + 1).ToArray();
+        v.Shown = gpuBatchShown.AsSpan(0, gpuOrder.Count).ToArray();
         v.Draws = gpuDraws.AsSpan(0, meshDraws.Count).ToArray();
         v.DrawBatch = [.. meshDraws.Select(d => d.Batch)];
         gpuCull!.CopyForReadback(r, v.Buffer);
@@ -1425,6 +1478,12 @@ public sealed unsafe class FoliageRenderer : IDisposable
             var (mesh, expected) = v.Batches[b];
             uint first = offsets[v.BatchStart[b]], count = offsets[v.BatchStart[b + 1]] - first;
             verifyInstances += expected.Length;
+            if (!v.Shown[b] && (count > 0 || expected.Length > 0))
+            {
+                verifySets++;
+                VerifyNote($"frame {v.Frame} {v.Kind}: {mesh}: not drawn (no group's zone in view), yet {count} visible on the GPU, {expected.Length} on the CPU");
+                continue;
+            }
             if (count != expected.Length)
             {
                 verifySets++;
@@ -1735,11 +1794,12 @@ public sealed unsafe class FoliageRenderer : IDisposable
     static uint IdOf(WorldTexture? t) => t?.Id ?? 0;
 
     /// <summary>The batches' mesh parts as draws, in order, with the texture ids the GL code bound (reading an id counts as use: here, not in Record).</summary>
-    void PrepareMeshes(WorldRenderOptions options)
+    void PrepareMeshes(WorldRenderOptions options, bool gpu)
     {
         meshDraws.Clear();
         foreach (var b in active)
         {
+            if (gpu && !gpuBatchShown[b.Index]) continue;   // the GPU cull: no group of the batch can be in view (ShowBatches)
             var a = b.Asset;
             AddMesh(a.Main!, a.MainMaterial!, b, options);
             if (a.Leaves is not null) AddMesh(a.Leaves, a.LeavesMaterial!, b, options);
