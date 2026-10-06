@@ -30,7 +30,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
     public GpuContext Gpu { get; }
     // The receiver block (the faithful layout, also the Meitou receiver's cascades) and the casters' bias of the cascade being drawn.
     readonly FrameBlock receiver;
-    BufferBinding casterBias;
+    readonly FrameBlock casterBias;
     readonly PassTimer timer;
     readonly List<double> gpuSamples = [], cpuSamples = [];
     Texture? atlas, noise;
@@ -52,6 +52,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
         this.gl = gl;
         Gpu = gpu;
         receiver = new FrameBlock(gpu, ReceiverBytes);
+        casterBias = new FrameBlock(gpu, 16);
         meitouBlock = new FrameBlock(gpu, MeitouShadowShaders.BlockBytes);
         timer = new PassTimer(gpu);
         LoadNoise(assets);
@@ -70,9 +71,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         var g = Gpu.Globals;
         var plain = FrameGlobals.Sampler2D("");
         g.Publish(ShadowShaders.ReceiverBlock, receiver.Binding);
-        g.Publish(ShadowShaders.CasterBlock, () => casterBias);
+        g.Publish(ShadowShaders.CasterBlock, casterBias.Binding);
         g.Publish("uShadowMap", () => atlasPublished ? atlasShadow : default);
-        g.Publish("uShadowNoise", () => noiseSampled);
+        g.Publish("uShadowNoise", () => { UploadNoise(); return noiseSampled; });   // a segment being prepared: a frame is open
         g.Publish(MeitouShadowShaders.Block, meitouBlock.Binding);
         // The terrain shadow map is still a GL texture of TerrainShadowMap's (the export path, 4.6 #5): the view and sampler VkGl would bind.
         g.Publish("uShadowTerrain", () => boundTerrain != 0 ? Gpu.Interop!.Sampled(boundTerrain, plain) : default);
@@ -178,9 +179,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         gl.Viewport(0, 0, (uint)restoreWidth, (uint)restoreHeight);
     }
 
-    /// <summary>The casters' bias block of the cascade about to be drawn: a fresh slice the guests' segments take when they are prepared (in the
-    /// draw callback), as VkGl renamed the GL buffer written between their draws.</summary>
-    void SetCasterBias(in Vector4 bias) => casterBias = FrameBlock.Slice(Gpu, in bias);
+    /// <summary>The casters' bias block of the cascade about to be drawn: the guests' segments take it when they are prepared (in the
+    /// draw callback), a new slice after each write, as VkGl renamed the GL buffer written between their draws.</summary>
+    void SetCasterBias(in Vector4 bias) => casterBias.Set([bias.X, bias.Y, bias.Z, bias.W]);
 
     /// <summary>
     /// Opens the atlas's rendering as a native host (docs/renderer-native.md 4.5): the caller has the atlas framebuffer bound and the GL state its

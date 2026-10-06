@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-
 using Meitou.Rendering.Gpu;
 
 namespace Meitou.Rendering;
@@ -62,6 +60,7 @@ sealed class PassTimer(GpuContext gpu)
 sealed class FrameBlock(GpuContext gpu, int bytes)
 {
     readonly float[] data = new float[bytes / 4];
+    readonly ulong align = Math.Max(gpu.Device.Limits.MinUniformBufferOffsetAlignment, 16);
     int version = 1, written = -1;
     long frame = -1;
     BufferBinding binding;
@@ -74,19 +73,10 @@ sealed class FrameBlock(GpuContext gpu, int bytes)
         var f = gpu.Frame;
         if (frame != f.Number || written != version)
         {
-            ulong align = Math.Max(gpu.Device.Limits.MinUniformBufferOffsetAlignment, 16);
             binding = f.Constants.Write<float>(data, align).Binding;
             (frame, written) = (f.Number, version);
             f.Stats.ConstantBytes += data.Length * 4;
         }
         return binding;
-    }
-
-    /// <summary>One value as a fresh slice of the frame's constants (a block written per draw, as the casters' bias per cascade).</summary>
-    public static BufferBinding Slice<T>(GpuContext gpu, in T value) where T : unmanaged
-    {
-        ulong align = Math.Max(gpu.Device.Limits.MinUniformBufferOffsetAlignment, 16);
-        gpu.Frame.Stats.ConstantBytes += Marshal.SizeOf<T>();
-        return gpu.Frame.Constants.Write<T>(new ReadOnlySpan<T>(in value), align).Binding;
     }
 }

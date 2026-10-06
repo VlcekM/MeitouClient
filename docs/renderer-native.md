@@ -2474,10 +2474,10 @@ Every resource is native now; what is left on GL is the GL mirror the native gue
 - *The atlas.* It is a `Texture` (`D32Sfloat`, named "shadow atlas"). Its samplers come from `SamplerDesc.FromGl` with the GL parameters it
   had: linear, clamp to edge, compare `LEQUAL` for the receivers, and no compare for the blocker pass and the debug view. It is imported into GL
   (`interop.Import`) only to be attached to the GL framebuffer whose binding the casters' `CurrentTargets` reads.
-- *The noise* ("shadow noise", RGBA8) is uploaded through the `Uploader` in the first frame (uploads need an open frame).
-- *The blocks.* The receiver block and the Meitou block are `FrameBlock`s: on the first read in a frame after a write, they write the
-  current data into a slice of the frame's constants. The casters' bias is a fresh slice per cascade, set before the draw callback, and the
-  guests take it in their Prepare. This is what VkGl's renaming of the GL buffer gave. `ShadowPass` publishes the seven shadow globals itself
+- *The noise* ("shadow noise", RGBA8) is uploaded through the `Uploader` in the first frame (uploads need an open frame), at the latest when a segment first reads it.
+- *The blocks.* The receiver, caster and Meitou blocks are `FrameBlock`s: on the first read in a frame after a write, they write the
+  current data into a slice of the frame's constants. The casters' bias is set per cascade before the draw callback, and the
+  guests take a new slice in their Prepare. A slice never outlives its frame. This is what VkGl's renaming of the GL buffer gave. `ShadowPass` publishes the seven shadow globals itself
   (the blocks, `uShadowMap`, `uShadowNoise`, `uShadowBlocker`, `uShadowTerrain`). They replace `ShadowShaders.PublishGlobals`, which reads
   units and binding points and stays the source without a `ShadowPass` (`--no-shadows`, the model viewer).
   - `uShadowTerrain` is `interop.Sampled(TerrainShadowMap.Texture)`: the terrain map is still a GL texture, owned by the terrain agent's file.
