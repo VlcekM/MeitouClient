@@ -618,6 +618,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         public uint ConstantOffset;
         public PatchDraw[] Draws = new PatchDraw[256];
         public int Count;
+        public override int Size => Count;
 
         public override void Record(CommandList cmd)
         {
@@ -1083,6 +1084,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         public ulong RowsOffset;
         public Draw[] Draws = new Draw[64];
         public int Count;
+        public override int Size => Count;
 
         public void Add(in Draw d)
         {

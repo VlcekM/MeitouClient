@@ -280,8 +280,10 @@ public class SeamTests
             Assert.Throws<InvalidOperationException>(() => interop.BeginNative("nested"));
             cmd.BeginRendering(targets.Rendering with { Colour = targets.Colour with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(new ClearColorValue(0, 0, 1, 1)) } });
 
-            // What the IGl calls of a host and its guests do meanwhile: state is free, uploads and timestamps record, a pass-touching call throws.
-            Assert.Throws<InvalidOperationException>(() => gl.Clear(ClearBufferMask.ColorBufferBit));
+            // What the IGl calls of a host and its guests do meanwhile: state is free, uploads and timestamps record, a clear of the host's
+            // targets records in its place (wave 4: vkCmdClearAttachments, here the load op's blue again in the scissored first quarter), a draw throws.
+            gl.ClearColor(0, 0, 1, 1);
+            gl.Clear(ClearBufferMask.ColorBufferBit);
             Assert.Throws<InvalidOperationException>(() => gl.DrawArrays(PrimitiveType.Triangles, 0, 3));
             fixed (byte* zero = new byte[16]) gl.BufferSubData(BufferTargetARB.UniformBuffer, 0, 16, zero);
             gl.QueryCounter(query, QueryCounterTarget.Timestamp);

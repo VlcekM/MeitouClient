@@ -553,8 +553,8 @@ public class GpuApiTests
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        int mode = Recording.Mode;
-        Recording.Mode = 2;
+        (int mode, int min) = (Recording.Mode, Recording.MinThreadedDraws);
+        (Recording.Mode, Recording.MinThreadedDraws) = (2, 0);   // eight one-draw jobs: on the job threads
         try
         {
             using (var gl = new VkGl(d!))
@@ -617,6 +617,6 @@ public class GpuApiTests
             }
             ExpectClean(d!);
         }
-        finally { Recording.Mode = mode; }
+        finally { (Recording.Mode, Recording.MinThreadedDraws) = (mode, min); }
     }
 }

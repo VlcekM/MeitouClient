@@ -17,6 +17,10 @@ public abstract class RecordJob
     /// <summary>Records the segment into <paramref name="cmd"/> (the host's rendering instance, or a secondary that continues it).</summary>
     public abstract void Record(CommandList cmd);
 
+    /// <summary>About how many draws <see cref="Record"/> records (read on the render thread when queued): a pass with little work is recorded
+    /// on the render thread rather than waking the job threads (<see cref="Recording.MinThreadedDraws"/>).</summary>
+    public virtual int Size => 1;
+
     /// <summary>Called on the render thread after <see cref="Record"/> (the owner's pool takes the job back).</summary>
     public virtual void Release() { }
 }
@@ -50,6 +54,12 @@ public static class Recording
 
     /// <summary>Hosts open their rendering with secondaries (modes 1 and 2).</summary>
     public static bool Secondaries => Mode > 0;
+
+    /// <summary>
+    /// In mode 2, a pass whose jobs record fewer draws than this (<see cref="RecordJob.Size"/> summed) is recorded on the render thread as in mode 1:
+    /// waking the job threads costs more than a few draws (<c>MEITOU_RECORD_MIN_DRAWS</c>, default 32; 0 always threads).
+    /// </summary>
+    public static int MinThreadedDraws { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_RECORD_MIN_DRAWS"), out int n) ? n : 32;
 }
 
 /// <summary>
@@ -74,7 +84,7 @@ public sealed class ParallelPass
     Entry[] entries = new Entry[64];
     int count;
     int[] jobs = new int[64];
-    int jobCount;
+    int jobCount, work;
     CommandBuffer[] handles = new CommandBuffer[64];
     CommandList? primary;
     AttachmentFormats formats;
@@ -101,7 +111,7 @@ public sealed class ParallelPass
     {
         RenderJobs.AssertNotInJob();
         if (Open) throw new InvalidOperationException("a parallel pass is already open");
-        (primary, formats, Stage, Open, count, jobCount) = (host, targets, stage, true, 0, 0);
+        (primary, formats, Stage, Open, count, jobCount, work) = (host, targets, stage, true, 0, 0, 0);
         Totals.Reset();
     }
 
@@ -113,6 +123,7 @@ public sealed class ParallelPass
         (e.Job, e.Label, e.List, e.Stage, e.Ticks) = (job, label, null, Stage, 0);
         if (jobCount == jobs.Length) Array.Resize(ref jobs, jobs.Length * 2);
         jobs[jobCount++] = count - 1;
+        work += job.Size;
         ctx.Frame.Stats.NativeSegments++;
     }
 
@@ -147,7 +158,7 @@ public sealed class ParallelPass
     {
         if (!Open) throw new InvalidOperationException("ParallelPass.End without Begin");
         if (inline is not null) throw new InvalidOperationException("ParallelPass.End with an inline segment open");
-        bool threaded = Recording.Mode >= 2 && ctx.Log is null && jobCount > 1;
+        bool threaded = Recording.Mode >= 2 && ctx.Log is null && jobCount > 1 && work >= Recording.MinThreadedDraws;
         if (threaded) RenderJobs.For(jobCount, recordOne);
         else for (int k = 0; k < jobCount; k++) RecordEntry(jobs[k], threaded: false);
         if (handles.Length < count) handles = new CommandBuffer[Math.Max(count, handles.Length * 2)];

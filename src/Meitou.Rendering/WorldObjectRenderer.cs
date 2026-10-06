@@ -820,6 +820,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         public readonly BufferBinding[] Rows = new BufferBinding[4];
         public Draw[] Draws = new Draw[64];
         public int Count;
+        public override int Size => Count;
 
         public override void Record(CommandList cmd)
         {
