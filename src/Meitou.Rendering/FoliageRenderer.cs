@@ -7,6 +7,7 @@ using Meitou.Data.Ogre;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
+using SamplerInfo = Meitou.Rendering.Vulkan.Shaders.SamplerInfo;
 
 namespace Meitou.Rendering;
 
@@ -37,11 +38,12 @@ public sealed unsafe class FoliageRenderer : IDisposable
     readonly WorldLevelData levels;
     readonly AssetLocator assets;
     readonly FoliageCatalog catalog;
-    uint meshProgram;   // the depth program while DrawDepth runs
-    readonly uint grassProgram;
-    readonly uint grassMotionProgram;
-    readonly Dictionary<(uint, string), int> uniforms = [];
+    // The native programs (docs/renderer-native.md 3.2, step P: VkGl's SPIR-V and layout), made with the renderer so a draw never compiles.
+    readonly MeshProg colourMesh, depthMesh;
+    readonly GrassProg grassProgram, grassMotionProgram;
     readonly WorldTextureCache textures;
+    /// <summary>The GL buffer the vertex arrays name for the per-instance rows (locations 7 to 10). Never given storage: native draws bind the
+    /// frame's constants there (<see cref="instances"/>), so a vertex array's export stays valid from frame to frame.</summary>
     readonly uint instanceBuffer;
     readonly ConcurrentBag<FoliageWorld> worlds = [];
     readonly List<FoliageWorld> allWorlds = [];
@@ -58,7 +60,6 @@ public sealed unsafe class FoliageRenderer : IDisposable
     readonly int workers;
     /// <summary>MEITOU_FOLIAGE_DEBUG: "nograss" or "nomeshes" leaves that part out (to measure the other).</summary>
     readonly bool debugNoGrass = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_DEBUG") == "nograss", debugNoMeshes = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_DEBUG") == "nomeshes";
-    long instanceBufferSize;
     /// <summary>Zone layouts in flight: whole ones and far-only ones, each limited to <see cref="workers"/> at a time.</summary>
     int runningWhole, runningFar;
 
@@ -72,9 +73,10 @@ public sealed unsafe class FoliageRenderer : IDisposable
         this.assets = assets;
         var watch = Stopwatch.StartNew();
         catalog = FoliageCatalog.Load(db);
-        meshProgram = WorldGl.Program(gl, FoliageShaders.MeshVertex(), FoliageShaders.MeshFragment());
-        grassProgram = WorldGl.Program(gl, FoliageShaders.GrassVertex, FoliageShaders.GrassFragment);
-        grassMotionProgram = WorldGl.Program(gl, FoliageShaders.GrassMotionVertex, FoliageShaders.GrassMotionFragment);
+        colourMesh = new MeshProg(gpu, FoliageShaders.MeshVertex(), FoliageShaders.MeshFragment(), "foliage meshes");
+        depthMesh = new MeshProg(gpu, FoliageShaders.MeshVertex(), ShadowShaders.MeshDepthFragment, "foliage mesh depth");
+        grassProgram = new GrassProg(gpu, FoliageShaders.GrassVertex, FoliageShaders.GrassFragment, "foliage grass");
+        grassMotionProgram = new GrassProg(gpu, FoliageShaders.GrassMotionVertex, FoliageShaders.GrassMotionFragment, "foliage grass motion");
         textures = new WorldTextureCache(gl, assets);
         instanceBuffer = gl.GenBuffer();
         workers = Math.Clamp(Environment.ProcessorCount / 4, 1, 3);
@@ -229,6 +231,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
     sealed class GrassBuffer
     {
         public uint Vao, Vbo;
+        /// <summary>What a native draw needs, per program (<see cref="NativeMesh"/>).</summary>
+        public NativeMesh GrassNative, MotionNative;
         public int Count;
         /// <summary>Blades after each 1/64 of the candidates (<see cref="FoliageGrassField.BladesWithPrefixes"/>): the density setting draws a prefix.</summary>
         public int[] Prefixes = [];
@@ -598,6 +602,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
     sealed class GpuPart
     {
         public uint Vao, PlainVao, Vbo, Ebo;
+        /// <summary>What a native draw needs, per program (<see cref="NativeMesh"/>).</summary>
+        public NativeMesh ColourNative, DepthNative;
         public int Count;
         /// <summary>Blades after each 1/64 of the candidates (<see cref="FoliageGrassField.BladesWithPrefixes"/>): the density setting draws a prefix.</summary>
         public int[] Prefixes = [];
@@ -894,18 +900,15 @@ public sealed unsafe class FoliageRenderer : IDisposable
         double tCull = cpu.Elapsed.TotalMilliseconds;
         StageClock.Sub("fol cull");
 
-        // 2. Upload the instances: one buffer, each batch's matrices contiguous.
+        // 2. The instances: each batch's matrices contiguous, in this frame's constants (one copy; the draws reach a batch by firstInstance).
         int total = 0;
         foreach (var b in active) { b.Offset = total; total += b.Count; }
         if (total > 0)
         {
-            long bytes = total * (long)InstanceStride;
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, instanceBuffer);
-            instanceBufferSize = Math.Max(bytes, instanceBufferSize);
-            gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)instanceBufferSize, null, BufferUsageARB.StreamDraw);
+            instances = Gpu.Frame.Constants.Allocate((ulong)total * InstanceStride, 16);
+            var target = new Span<byte>(instances.Pointer, total * InstanceStride);
             foreach (var b in active)
-                fixed (Matrix4x4* p = b.Data)
-                    gl.BufferSubData(BufferTargetARB.ArrayBuffer, (nint)(b.Offset * (long)InstanceStride), (nuint)(b.Count * (long)InstanceStride), p);
+                System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
         }
 
         double tUpload = cpu.Elapsed.TotalMilliseconds;
@@ -914,40 +917,37 @@ public sealed unsafe class FoliageRenderer : IDisposable
         bool coverage = samples > 1;
         if (coverage) gl.Enable(EnableCap.SampleAlphaToCoverage);
 
-        // 3. Meshes.
+        // 3. Meshes: Prepare reads the textures (WorldTexture.Id) and makes the draw list, Record puts it into a native segment of VkGl's pass.
+        bool drew = false;
+        double recMeshes = 0, recGrass = 0;
         if (active.Count > 0 && !debugNoMeshes)
         {
-            uint prog = meshProgram;
-            gl.UseProgram(prog);
-            WorldGl.Matrix(gl, U(prog, "uViewProjection"), viewProjection);
-            gl.Uniform3(U(prog, "uEye"), eye.X, eye.Y, eye.Z);
-            gl.Uniform3(U(prog, "uLightDir"), light.X, light.Y, light.Z);
-            gl.Uniform3(U(prog, "uFogColour"), fogColour.X, fogColour.Y, fogColour.Z);
-            gl.Uniform1(U(prog, "uFogDistance"), fogDistance);
-            gl.Uniform1(U(prog, "uTriplanarScale"), 1f / 5000);
-            string[] samplers = ["uDiffuse", "uNormal", "uDiffuse2", "uNormal2", "uHeadDiffuse", "uHeadNormal"];
-            for (int i = 0; i < samplers.Length; i++) gl.Uniform1(U(prog, samplers[i]), i);
-            gl.Uniform1(U(prog, "uSkinned"), 0);
-            gl.Uniform1(U(prog, "uHasHead"), 0);
-            gl.Uniform1(U(prog, "uWireframe"), 0);
-            gl.Uniform1(U(prog, "uCoverage"), coverage ? 1 : 0);
-            SkyRenderer.Active?.Apply(prog);   // the atmosphere's uniforms, as the objects and terrain get them
-            gl.UseProgram(prog);
-            foreach (var b in active)
+            PrepareMeshes(options);
+            if (meshDraws.Count > 0)
             {
-                var a = b.Asset;
-                DrawMesh(a.Main!, a.MainMaterial!, b, options);
-                if (a.Leaves is not null) DrawMesh(a.Leaves, a.LeavesMaterial!, b, options);
+                long r0 = FolTiming ? Stopwatch.GetTimestamp() : 0;
+                RecordMeshes(depthPass ? depthMesh : colourMesh, depthPass, viewProjection, eye, light, fogColour, fogDistance, coverage);
+                if (FolTiming) recMeshes = (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
+                drew = true;
             }
-            gl.Enable(EnableCap.CullFace);
-            gl.BindVertexArray(0);
         }
 
         double tMeshes = cpu.Elapsed.TotalMilliseconds;
         int callsMeshes = DrawCalls;
         StageClock.Sub("fol meshes");
         // 4. Grass.
-        if (grass && !debugNoGrass) DrawGrass(viewProjection, eye, frustum, options, light, fogColour, fogDistance, coverage);
+        if (grass && !debugNoGrass)
+        {
+            PrepareGrass(eye, frustum, options);
+            if (grassDraws.Count > 0)
+            {
+                long r0 = FolTiming ? Stopwatch.GetTimestamp() : 0;
+                RecordGrass(viewProjection, eye, options, light, fogColour, fogDistance, coverage);
+                if (FolTiming) recGrass = (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
+                drew = true;
+            }
+        }
+        if (drew) SkyRenderer.Active?.BindUnits();   // the atmosphere's texture units, as Apply leaves them for the GL code that follows
         double tGrass = cpu.Elapsed.TotalMilliseconds;
         int callsGrass = DrawCalls;
         StageClock.Sub("fol grass");
@@ -962,7 +962,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         }
         gl.Disable(EnableCap.CullFace);
         StageClock.Sub("fol rocks");
-        if (FolTiming) FolAccount(depthPass ? 1 : 0, tCull, tUpload, tMeshes, tGrass, cpu.Elapsed.TotalMilliseconds, callsMeshes - callsBefore, callsGrass - callsMeshes, terrainDraws.Count);
+        if (FolTiming) FolAccount(depthPass ? 1 : 0, tCull, tUpload, tMeshes, tGrass, cpu.Elapsed.TotalMilliseconds, callsMeshes - callsBefore, callsGrass - callsMeshes, terrainDraws.Count, recMeshes, recGrass);
         if (WorldFrame.DetailedStats)
         {
             double tEnd = cpu.Elapsed.TotalMilliseconds;
@@ -978,17 +978,18 @@ public sealed unsafe class FoliageRenderer : IDisposable
     /// <summary><c>MEITOU_FOLIAGE_TIMING=1</c>: the CPU time of <see cref="Draw"/>'s steps summed over the run by kind (colour or depth), with the
     /// draws each step issued, printed when the renderer is disposed (docs/renderer-native.md 7.1, wave 3 foliage probe).</summary>
     static readonly bool FolTiming = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_TIMING") == "1";
-    readonly double[,] folMs = new double[2, 5];
+    readonly double[,] folMs = new double[2, 5], folRecordMs = new double[2, 2];
     readonly long[] folSeen = new long[2];
     static readonly int FolSkip = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_TIMING_SKIP"), out int skip) ? skip : 160;
     readonly long[] folCalls = new long[2], folMeshDraws = new long[2], folGrassDraws = new long[2], folRocks = new long[2];
 
-    void FolAccount(int k, double tCull, double tUpload, double tMeshes, double tGrass, double tEnd, int meshDraws, int grassDraws, int rocks)
+    void FolAccount(int k, double tCull, double tUpload, double tMeshes, double tGrass, double tEnd, int meshDraws, int grassDraws, int rocks, double recMeshes, double recGrass)
     {
         if (folSeen[k]++ < FolSkip) return;   // the first calls are cold (pipelines, streaming)
         folCalls[k]++;
         folMs[k, 0] += tCull; folMs[k, 1] += tUpload - tCull; folMs[k, 2] += tMeshes - tUpload; folMs[k, 3] += tGrass - tMeshes; folMs[k, 4] += tEnd - tGrass;
         folMeshDraws[k] += meshDraws; folGrassDraws[k] += grassDraws; folRocks[k] += rocks;
+        folRecordMs[k, 0] += recMeshes; folRecordMs[k, 1] += recGrass;
     }
 
     void ReportFoliageTiming()
@@ -1002,7 +1003,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"" +
                 $"foliage timing {names[k]}: {folCalls[k]} calls, per call us: cull {folMs[k, 0] * 1000 / folCalls[k]:F1}, upload {folMs[k, 1] * 1000 / folCalls[k]:F1}, meshes {folMs[k, 2] * 1000 / folCalls[k]:F1}, grass {folMs[k, 3] * 1000 / folCalls[k]:F1}, rocks {folMs[k, 4] * 1000 / folCalls[k]:F1}; " +
                 $"draws per call: meshes {(double)folMeshDraws[k] / folCalls[k]:F1}, grass {(double)folGrassDraws[k] / folCalls[k]:F1}, rock groups {(double)folRocks[k] / folCalls[k]:F1}; " +
-                $"us per draw: meshes {perDraw(2, folMeshDraws[k]):F2}, grass {perDraw(3, folGrassDraws[k]):F2}"));
+                $"us per draw: meshes {perDraw(2, folMeshDraws[k]):F2}, grass {perDraw(3, folGrassDraws[k]):F2}; record only (native): meshes {(folMeshDraws[k] > 0 ? folRecordMs[k, 0] * 1000 / folMeshDraws[k] : 0):F2}, grass {(folGrassDraws[k] > 0 ? folRecordMs[k, 1] * 1000 / folGrassDraws[k] : 0):F2}"));
         }
     }
 
@@ -1172,7 +1173,6 @@ public sealed unsafe class FoliageRenderer : IDisposable
     }
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
-    uint depthProgram;
     bool depthPass;
 
     /// <summary>
@@ -1182,121 +1182,425 @@ public sealed unsafe class FoliageRenderer : IDisposable
     /// </summary>
     public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float maxRange = float.PositiveInfinity)
     {
-        if (depthProgram == 0) depthProgram = WorldGl.Program(gl, FoliageShaders.MeshVertex(), ShadowShaders.MeshDepthFragment);
-        uint main = meshProgram;
-        meshProgram = depthProgram;
         depthPass = true;
         try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain, grass: false, maxRange: maxRange); }
-        finally { meshProgram = main; depthPass = false; }
+        finally { depthPass = false; }
     }
 
-    void DrawMesh(GpuMesh mesh, FoliageMaterial m, Batch b, WorldRenderOptions options)
+    // ------------------------------------------------------------------ native recording
+    // docs/renderer-native.md 3.2 and 7.5, step P: VkGl's SPIR-V and layout through LegacyProgram, recorded into the pass VkGl has open
+    // (BeginNativeInPass). Each draw method is split into Prepare (reads the textures and the zones' state, makes a draw list) and Record (the
+    // list into one native segment: dynamic state once, per draw only what differs, pipelines and vertex buffers resolved once per mesh).
+
+    const int ColourKind = 0, DepthKind = 1, GrassKind = 2, MotionKind = 3;
+    /// <summary>The first location the per-instance rows (the batch matrices) take; the mesh's own inputs are below it.</summary>
+    const int RowLocation = FoliageShaders.InstanceLocation;
+
+    /// <summary>This call's batch matrices in the frame's constants (a batch at its <see cref="Batch.Offset"/>; the draws reach it by firstInstance).</summary>
+    Transient instances;
+
+    /// <summary>A mesh's native state for one program: the export it came from, its vertex layout and own vertex buffers, its indices, and the
+    /// pipelines for the last two segment states (the reflection's multisampled target alternates with the scene's).</summary>
+    struct NativeMesh
     {
-        uint prog = meshProgram;
-        bool textured = options.Textures && m.Diffuse is { Id: not 0 };
-        Bind(0, textured ? m.Diffuse!.Id : 0);
-        bool normal = textured && m.Normal is { Id: not 0 };
-        Bind(1, normal ? m.Normal!.Id : 0);
-        bool dual = textured && m.Diffuse2 is { Id: not 0 };
-        Bind(2, dual ? m.Diffuse2!.Id : 0);
-        Bind(3, dual && m.Normal2 is { Id: not 0 } ? m.Normal2!.Id : 0);
-        gl.Uniform1(U(prog, "uNormalSwizzled"), normal && m.Normal!.Swizzled ? 1 : 0);
-        gl.Uniform1(U(prog, "uHasDiffuse"), textured ? 1 : 0);
-        gl.Uniform1(U(prog, "uTriplanar"), textured && m.Triplanar ? 1 : 0);
-        gl.Uniform2(U(prog, "uTile"), m.Tile.X, m.Tile.Y);
+        public VertexArrayBindings? Source;
+        public VertexLayout? Layout;
+        public BufferBinding[] Vertices;
+        public BufferBinding Elements;
+        public int SegA, SegB;
+        public GraphicsPipeline? PipeA, PipeB;
+    }
+
+    /// <summary>The pipeline state a segment's draws share (everything of <see cref="GraphicsPipelineDesc"/> but the vertex layout).</summary>
+    readonly record struct SegmentPipeline(LegacyProgram Program, AttachmentFormats Formats, BlendState Blend, Silk.NET.Vulkan.ColorComponentFlags Mask,
+        Silk.NET.Vulkan.PolygonMode Polygon, bool AlphaToCoverage, bool DepthClamp);
+
+    readonly Dictionary<(int Kind, SegmentPipeline State), int> segmentByState = [];
+    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[4];
+    readonly int[] segmentIds = new int[4];
+    int segmentCount;
+
+    /// <summary>A stable number for a segment's pipeline state, so a mesh compares one int per draw.</summary>
+    int SegmentId(int kind, LegacyProgram p, PassTargets t, DrawState s)
+    {
+        var segment = new SegmentPipeline(p, t.Formats, s.Blend, s.ColourMask, s.Polygon, s.AlphaToCoverage, s.DepthClamp);
+        if (segmentIds[kind] != 0 && segment == lastSegment[kind]) return segmentIds[kind];
+        if (!segmentByState.TryGetValue((kind, segment), out int id)) segmentByState[(kind, segment)] = id = ++segmentCount;
+        lastSegment[kind] = segment;
+        return segmentIds[kind] = id;
+    }
+
+    /// <summary>A mesh's (or blade buffer's) vertex layout and buffers for <paramref name="p"/> from its vertex array's export; with
+    /// <paramref name="rows"/> the batch matrices as four per-instance rows of 64 bytes at locations 7 to 10 (bound once per segment).</summary>
+    static void ResolveVertices(ref NativeMesh n, LegacyProgram p, VertexArrayBindings va, bool rows, int own)
+    {
+        Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
+        va.Attributes.AsSpan().CopyTo(attributes);
+        if (rows)
+            for (int a = 0; a < 4; a++)
+                attributes[RowLocation + a] = new LegacyProgram.Attribute(default, Silk.NET.Vulkan.Format.R32G32B32A32Sfloat, InstanceStride, true);
+        n.Layout = p.VertexLayout(attributes);
+        n.Vertices = p.VertexBuffers(attributes, 0, own);
+        n.Elements = va.Elements;
+        n.Source = va;
+        n.SegA = n.SegB = 0;
+        n.PipeA = n.PipeB = null;
+    }
+
+    GraphicsPipeline PipelineFor(ref NativeMesh n, LegacyProgram p, int segment, DrawState state, AttachmentFormats formats, string label)
+    {
+        if (n.SegB == segment) return n.PipeB!;
+        var pipeline = Gpu.Pipelines.Get(state.Pipeline(p.Program, n.Layout!, Silk.NET.Vulkan.PrimitiveTopology.TriangleList, formats, label));
+        (n.SegB, n.PipeB) = (n.SegA, n.PipeA);
+        (n.SegA, n.PipeA) = (segment, pipeline);
+        return pipeline;
+    }
+
+    static int OwnInputs(LegacyProgram p) => p.InputLocations.Where(l => l < RowLocation).DefaultIfEmpty(-1).Max() + 1;
+
+    /// <summary>The samplers of a program that read a GL unit (not a frame global, not one of the draw's own textures), resolved once per
+    /// <see cref="FrameGlobals.Version"/>.</summary>
+    sealed record UnitSamplers(int GlobalsVersion, (SamplerSlot Slot, int Unit, SamplerInfo Info)[] Samplers);
+
+    /// <summary>The units the GL code pointed the shared mesh shader's head textures at (nothing is bound there; the stand-ins are read).</summary>
+    static readonly Dictionary<string, int> UnitOf = new() { ["uHeadDiffuse"] = 4, ["uHeadNormal"] = 5 };
+
+    void BindUnitSamplers(LegacyProgram p, ref UnitSamplers? resolved, string[] direct)
+    {
+        var interop = Gpu.Interop!;
+        if (resolved is null || resolved.GlobalsVersion != Gpu.Globals.Version)
+            resolved = new UnitSamplers(Gpu.Globals.Version, [.. p.SamplerNames.Where(n => Array.IndexOf(direct, n) < 0 && Gpu.Globals.Texture(n) is null)
+                .Select(n => (p.Sampler(n), UnitOf.GetValueOrDefault(n, 0), p.SamplerInfo(p.Sampler(n))))]);
+        foreach (var (slot, unit, info) in resolved.Samplers) p.Bind(slot, interop.SampledUnit(unit, info));
+    }
+
+    static SamplerInfo? InfoOf(LegacyProgram p, SamplerSlot s) => s.IsValid ? p.SamplerInfo(s) : null;
+
+    // ---- meshes ----
+
+    /// <summary>What a mesh draw sets besides its textures (<see cref="MeshProg"/> keeps the last, so a batch of the same material sets nothing).</summary>
+    readonly record struct MaterialKey(bool Swizzled, bool HasDiffuse, bool Triplanar, float TileX, float TileY, int AlphaSource, float AlphaThreshold, bool Emissive, float Specular);
+
+    struct MeshDraw
+    {
+        public GpuPart Part;
+        public uint FirstInstance, Instances;
+        public uint Diffuse, Normal, Diffuse2, Normal2;
+        public MaterialKey Material;
+        /// <summary>1: uHasNormal, 2: uHasDual, 4: uUseVertexColour.</summary>
+        public int PartBits;
+        public bool DoubleSided;
+    }
+
+    /// <summary>The shared mesh shader as the foliage drives it, with every handle resolved at load. The constants GL set on every draw are set
+    /// once: a program's default block keeps its values (docs/renderer-native.md 3.2).</summary>
+    sealed class MeshProg
+    {
+        public readonly LegacyProgram P;
+        public readonly UniformHandle ViewProjection, Eye, LightDir, FogColour, FogDistance, Coverage, NormalSwizzled, HasDiffuse, Triplanar, Tile,
+            AlphaSource, AlphaThreshold, Emissive, Specular, HasNormal, HasDual, UseVertexColour;
+        public readonly SamplerSlot[] Slots;
+        public readonly SamplerInfo?[] Infos;
+        public readonly int Own;
+        public UnitSamplers? Units;
+        public MaterialKey Material;
+        public bool HasMaterial;
+        public int PartBits = -1;
+        public readonly uint[] Bound = new uint[4];
+
+        public MeshProg(GpuContext gpu, string vertex, string fragment, string name)
+        {
+            P = LegacyProgram.Create(gpu, vertex, fragment, name);
+            ViewProjection = P.Uniform("uViewProjection"); Eye = P.Uniform("uEye"); LightDir = P.Uniform("uLightDir"); FogColour = P.Uniform("uFogColour");
+            FogDistance = P.Uniform("uFogDistance"); Coverage = P.Uniform("uCoverage"); NormalSwizzled = P.Uniform("uNormalSwizzled");
+            HasDiffuse = P.Uniform("uHasDiffuse"); Triplanar = P.Uniform("uTriplanar"); Tile = P.Uniform("uTile"); AlphaSource = P.Uniform("uAlphaSource");
+            AlphaThreshold = P.Uniform("uAlphaThreshold"); Emissive = P.Uniform("uEmissive"); Specular = P.Uniform("uSpecular");
+            HasNormal = P.Uniform("uHasNormal"); HasDual = P.Uniform("uHasDual"); UseVertexColour = P.Uniform("uUseVertexColour");
+            Slots = [P.Sampler("uDiffuse"), P.Sampler("uNormal"), P.Sampler("uDiffuse2"), P.Sampler("uNormal2")];
+            Infos = [.. Slots.Select(s => InfoOf(P, s))];
+            Own = OwnInputs(P);
+            P.Set(P.Uniform("uTriplanarScale"), 1f / 5000);
+            P.Set(P.Uniform("uSkinned"), 0);
+            P.Set(P.Uniform("uHasHead"), 0);
+            P.Set(P.Uniform("uWireframe"), 0);
+            P.Set(P.Uniform("uAlphaChannel"), 3);
+            P.Set(P.Uniform("uGreyChannel"), -1);
+            P.Set(P.Uniform("uTint"), 1f, 1f, 1f);
+        }
+    }
+
+    static readonly string[] MeshDirect = ["uDiffuse", "uNormal", "uDiffuse2", "uNormal2"];
+    readonly List<MeshDraw> meshDraws = [];
+
+    static uint IdOf(WorldTexture? t) => t?.Id ?? 0;
+
+    /// <summary>The batches' mesh parts as draws, in order, with the texture ids the GL code bound (reading an id counts as use: here, not in Record).</summary>
+    void PrepareMeshes(WorldRenderOptions options)
+    {
+        meshDraws.Clear();
+        foreach (var b in active)
+        {
+            var a = b.Asset;
+            AddMesh(a.Main!, a.MainMaterial!, b, options);
+            if (a.Leaves is not null) AddMesh(a.Leaves, a.LeavesMaterial!, b, options);
+        }
+    }
+
+    void AddMesh(GpuMesh mesh, FoliageMaterial m, Batch b, WorldRenderOptions options)
+    {
+        uint diffuse = options.Textures ? IdOf(m.Diffuse) : 0;
+        bool textured = diffuse != 0;
+        uint normalId = textured ? IdOf(m.Normal) : 0;
+        bool normal = normalId != 0;
+        uint diffuse2 = textured ? IdOf(m.Diffuse2) : 0;
+        bool dual = diffuse2 != 0;
+        uint normal2 = dual ? IdOf(m.Normal2) : 0;
         // The cut-out mask is the normal map's alpha: sampled whenever the map exists (the lighting checks for tangents itself).
         bool cut = normal && m.AlphaThreshold > 0;
-        gl.Uniform1(U(prog, "uAlphaSource"), cut ? 2 : 0);
-        gl.Uniform1(U(prog, "uAlphaChannel"), 3);
-        gl.Uniform1(U(prog, "uGreyChannel"), -1);
-        gl.Uniform3(U(prog, "uTint"), 1f, 1f, 1f);
-        gl.Uniform1(U(prog, "uAlphaThreshold"), cut ? m.AlphaThreshold : 0f);
-        gl.Uniform1(U(prog, "uEmissive"), textured && normal && m.Emissive ? 1 : 0);
-        gl.Uniform1(U(prog, "uSpecular"), textured ? m.Specular : 0.3f);
-        if (m.DoubleSided) gl.Disable(EnableCap.CullFace);
-        else gl.Enable(EnableCap.CullFace);
+        var key = new MaterialKey(normal && m.Normal!.Swizzled, textured, textured && m.Triplanar, m.Tile.X, m.Tile.Y, cut ? 2 : 0,
+            cut ? m.AlphaThreshold : 0f, textured && normal && m.Emissive, textured ? m.Specular : 0.3f);
         foreach (var gp in mesh.Parts)
         {
-            gl.Uniform1(U(prog, "uHasNormal"), normal && options.NormalMaps || cut ? 1 : 0);
-            gl.Uniform1(U(prog, "uHasDual"), dual && gp.HasColours ? 1 : 0);
-            gl.Uniform1(U(prog, "uUseVertexColour"), gp.HasColours ? 1 : 0);
-            gl.BindVertexArray(gp.Vao);
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, instanceBuffer);
-            for (uint a = 0; a < 4; a++)
-                gl.VertexAttribPointer(FoliageShaders.InstanceLocation + a, 4, VertexAttribPointerType.Float, false, InstanceStride, (void*)(b.Offset * (long)InstanceStride + 16 * a));
-            gl.DrawElementsInstanced(PrimitiveType.Triangles, (uint)gp.Count, DrawElementsType.UnsignedInt, (void*)0, (uint)b.Count);
+            int bits = (normal && options.NormalMaps || cut ? 1 : 0) | (dual && gp.HasColours ? 2 : 0) | (gp.HasColours ? 4 : 0);
+            meshDraws.Add(new MeshDraw
+            {
+                Part = gp, FirstInstance = (uint)b.Offset, Instances = (uint)b.Count, Diffuse = diffuse, Normal = normalId, Diffuse2 = diffuse2, Normal2 = normal2,
+                Material = key, PartBits = bits, DoubleSided = m.DoubleSided,
+            });
             DrawCalls++;
         }
     }
 
+    /// <summary>The mesh draw list in one native segment (colour or depth), back faces culled unless the material is double-sided.</summary>
+    void RecordMeshes(MeshProg mp, bool depth, Matrix4x4 viewProjection, Vector3 eye, Vector3 light, Vector3 fogColour, float fogDistance, bool coverage)
+    {
+        var p = mp.P;
+        p.Set(mp.ViewProjection, in viewProjection);
+        p.Set(mp.Eye, eye.X, eye.Y, eye.Z);
+        p.Set(mp.LightDir, light.X, light.Y, light.Z);
+        p.Set(mp.FogColour, fogColour.X, fogColour.Y, fogColour.Z);
+        p.Set(mp.FogDistance, fogDistance);
+        p.Set(mp.Coverage, coverage ? 1 : 0);
+        p.ApplyGlobals();   // the atmosphere's uniforms (SkyRenderer.Apply's), through the frame globals
+        BindUnitSamplers(p, ref mp.Units, MeshDirect);
+        gl.Enable(EnableCap.CullFace);   // the state export reports the cull face's mode only while it is on
+        var interop = Gpu.Interop!;
+        string label = depth ? "foliage mesh depth" : "foliage meshes";
+        var cmd = interop.BeginNativeInPass(label);
+        var targets = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        int segment = SegmentId(depth ? DepthKind : ColourKind, p, targets, state);
+        cmd.SetViewport(targets.Viewport);
+        cmd.SetScissor(targets.Scissor);
+        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+        Span<BufferBinding> rows = stackalloc BufferBinding[4];
+        for (int a = 0; a < 4; a++) rows[a] = new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
+        cmd.BindVertexBuffers(RowLocation, rows);
+        Array.Fill(mp.Bound, uint.MaxValue);   // what a texture is (its view, sampler) can change between segments
+        var sided = Silk.NET.Vulkan.CullModeFlags.None;
+        Silk.NET.Vulkan.CullModeFlags? side = null;
+        foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(meshDraws))
+        {
+            if (!mp.HasMaterial || mp.Material != d.Material)
+            {
+                var k = d.Material;
+                p.Set(mp.NormalSwizzled, k.Swizzled ? 1 : 0);
+                p.Set(mp.HasDiffuse, k.HasDiffuse ? 1 : 0);
+                p.Set(mp.Triplanar, k.Triplanar ? 1 : 0);
+                p.Set(mp.Tile, k.TileX, k.TileY);
+                p.Set(mp.AlphaSource, k.AlphaSource);
+                p.Set(mp.AlphaThreshold, k.AlphaThreshold);
+                p.Set(mp.Emissive, k.Emissive ? 1 : 0);
+                p.Set(mp.Specular, k.Specular);
+                mp.Material = k;
+                mp.HasMaterial = true;
+            }
+            if (mp.PartBits != d.PartBits)
+            {
+                p.Set(mp.HasNormal, (d.PartBits & 1) != 0 ? 1 : 0);
+                p.Set(mp.HasDual, (d.PartBits & 2) != 0 ? 1 : 0);
+                p.Set(mp.UseVertexColour, (d.PartBits & 4) != 0 ? 1 : 0);
+                mp.PartBits = d.PartBits;
+            }
+            BindMaterialTexture(interop, mp, 0, d.Diffuse);
+            BindMaterialTexture(interop, mp, 1, d.Normal);
+            BindMaterialTexture(interop, mp, 2, d.Diffuse2);
+            BindMaterialTexture(interop, mp, 3, d.Normal2);
+            var want = d.DoubleSided ? sided : state.Cull;
+            if (side != want) { cmd.SetRaster(want, state.Front); side = want; }
+            var part = d.Part;
+            var va = interop.VertexArray(part.Vao);
+            ref var n = ref (depth ? ref part.DepthNative : ref part.ColourNative);
+            if (!ReferenceEquals(n.Source, va)) ResolveVertices(ref n, p, va, rows: true, mp.Own);
+            cmd.BindPipeline(n.SegA == segment ? n.PipeA! : PipelineFor(ref n, p, segment, state, targets.Formats, label));
+            cmd.BindVertexBuffers(0, n.Vertices);
+            cmd.BindIndexBuffer(n.Elements, Silk.NET.Vulkan.IndexType.Uint32);
+            p.Flush(cmd);
+            cmd.DrawIndexed((uint)part.Count, d.Instances, 0, 0, d.FirstInstance);
+        }
+        interop.EndNative(cmd);
+        gl.Enable(EnableCap.CullFace);   // as the GL version leaves it after the meshes
+        gl.BindVertexArray(0);
+    }
+
+    void BindMaterialTexture(IGlInterop interop, MeshProg mp, int slot, uint id)
+    {
+        if (mp.Bound[slot] == id) return;
+        mp.Bound[slot] = id;
+        if (mp.Infos[slot] is { } info) mp.P.Bind(mp.Slots[slot], interop.Sampled(id, info));
+    }
+
+    // ---- grass ----
+
+    /// <summary>What a blade draw sets besides its textures (<see cref="GrassProg"/> keeps the last).</summary>
+    readonly record struct GrassKey(bool HasColour, float X0, float Z0, float X1, float Z1, float MinWidth, float MaxWidth, float MinHeight, float MaxHeight, bool Cross, float Sway, float Range);
+
+    struct GrassDraw
+    {
+        public GrassBuffer Buffer;
+        public uint Shown, Vertices, Sprite, Colour;
+        public GrassKey Key;
+    }
+
+    /// <summary>The motion draw of one patch's blades: the size, sway and range its program sets.</summary>
+    readonly record struct MotionKey(Vector4 Size, float Sway, float Range);
+
+    struct MotionDraw
+    {
+        public GrassBuffer Buffer;
+        public uint Shown, Vertices, Sprite;
+        public MotionKey Key;
+    }
+
+    /// <summary>A blade program (the grass or its motion pass) with its handles resolved at load.</summary>
+    sealed class GrassProg
+    {
+        public readonly LegacyProgram P;
+        public readonly UniformHandle ViewProjection, PreviousViewProjection, Eye, LightDir, FogColour, FogDistance, Time, PreviousTime, Frequency, Coverage,
+            Wireframe, HasColourMap, ColourBounds, Size, Cross, Sway, Range, NearPlanes, JitterNdc;
+        public readonly SamplerSlot Sprite, ColourMap, NearDepth;
+        public readonly SamplerInfo? SpriteInfo, ColourMapInfo, NearDepthInfo;
+        public readonly int Own;
+        public UnitSamplers? Units;
+        public bool HasKey;
+        public GrassKey Key;
+        public MotionKey MotionKey;
+        public uint BoundSprite, BoundColour;
+
+        public GrassProg(GpuContext gpu, string vertex, string fragment, string name)
+        {
+            P = LegacyProgram.Create(gpu, vertex, fragment, name);
+            ViewProjection = P.Uniform("uViewProjection"); PreviousViewProjection = P.Uniform("uPreviousViewProjection"); Eye = P.Uniform("uEye");
+            LightDir = P.Uniform("uLightDir"); FogColour = P.Uniform("uFogColour"); FogDistance = P.Uniform("uFogDistance"); Time = P.Uniform("uTime");
+            PreviousTime = P.Uniform("uPreviousTime"); Frequency = P.Uniform("uFrequency"); Coverage = P.Uniform("uCoverage"); Wireframe = P.Uniform("uWireframe");
+            HasColourMap = P.Uniform("uHasColourMap"); ColourBounds = P.Uniform("uColourBounds"); Size = P.Uniform("uSize"); Cross = P.Uniform("uCross");
+            Sway = P.Uniform("uSway"); Range = P.Uniform("uRange"); NearPlanes = P.Uniform("uNearPlanes"); JitterNdc = P.Uniform("uJitterNdc");
+            Sprite = P.Sampler("uSprite"); ColourMap = P.Sampler("uColourMap"); NearDepth = P.Sampler("uNearDepth");
+            (SpriteInfo, ColourMapInfo, NearDepthInfo) = (InfoOf(P, Sprite), InfoOf(P, ColourMap), InfoOf(P, NearDepth));
+            Own = OwnInputs(P);
+        }
+    }
+
+    static readonly string[] GrassDirect = ["uSprite", "uColourMap", "uNearDepth"];
+    readonly List<GrassDraw> grassDraws = [];
     readonly List<(float Distance, ZoneState State, int Key, GrassPage Page)> grassOrder = [];
 
-    void DrawGrass(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, bool coverage)
+    /// <summary>The blade draws of the pages in view, nearest page first (so the depth test rejects most of the hidden blades before they are shaded).</summary>
+    void PrepareGrass(Vector3 eye, Vector4[] frustum, WorldRenderOptions options)
     {
-        uint prog = grassProgram;
-        bool set = false;
-        float time = SwayPhase();
-        // Nearest pages first, so the depth test rejects most of the hidden blades before they are shaded.
+        grassDraws.Clear();
         grassOrder.Clear();
         foreach (var st in zones.Values)
             foreach (var (k, pg) in st.Pages)
                 if (pg.Buffers is not null)
                     grassOrder.Add((BoxDistance(st.X0 + k % PagesPerZone * PageSize, st.Z0 + k / PagesPerZone * PageSize, PageSize, eye), st, k, pg));
         grassOrder.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+        foreach (var (d, state, key, page) in grassOrder)
         {
-            foreach (var (d, state, key, page) in grassOrder)
+            float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
+            float y = eye.Y;
+            if (state.Ground is { } ground) y = ground.Height(x0 + PageSize / 2, z0 + PageSize / 2);
+            if (!WorldCamera.Intersects(frustum, new Vector3(x0, y - 2000, z0), new Vector3(x0 + PageSize, y + 2000, z0 + PageSize))) continue;
+            if (page.Buffers is null) continue;
+            for (int i = 0; i < page.Buffers.Length && i < state.Patches.Count; i++)
             {
-                float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
-                float y = eye.Y;
-                if (state.Ground is { } ground) y = ground.Height(x0 + PageSize / 2, z0 + PageSize / 2);
-                if (!WorldCamera.Intersects(frustum, new Vector3(x0, y - 2000, z0), new Vector3(x0 + PageSize, y + 2000, z0 + PageSize))) continue;
-                if (page.Buffers is null) continue;
-                for (int i = 0; i < page.Buffers.Length && i < state.Patches.Count; i++)
+                var b = page.Buffers[i];
+                var patch = state.Patches[i];
+                float range = GrassRange(patch);
+                int shown = b.Count == 0 ? 0 : FoliageGrassField.PrefixCount(b.Prefixes, Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);   // the density setting: the first blades of the page
+                if (shown == 0 || d >= range) continue;
+                var sprite = textures.Get(patch.Grass.Sprite, false);
+                if (sprite is not { Id: not 0 }) continue;
+                var g = patch.Grass;
+                var colourMap = textures.Get(g.ColourMap, false);
+                bool hasColour = options.Textures && colourMap is { Id: not 0 };
+                grassDraws.Add(new GrassDraw
                 {
-                    var b = page.Buffers[i];
-                    var patch = state.Patches[i];
-                    float range = GrassRange(patch);
-                    int shown = b.Count == 0 ? 0 : FoliageGrassField.PrefixCount(b.Prefixes, Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);   // the density setting: the first blades of the page
-                    if (shown == 0 || d >= range) continue;
-                    var sprite = textures.Get(patch.Grass.Sprite, false);
-                    if (sprite is not { Id: not 0 }) continue;
-                    if (!set)
-                    {
-                        set = true;
-                        gl.UseProgram(prog);
-                        WorldGl.Matrix(gl, U(prog, "uViewProjection"), viewProjection);
-                        gl.Uniform3(U(prog, "uEye"), eye.X, eye.Y, eye.Z);
-                        gl.Uniform3(U(prog, "uLightDir"), light.X, light.Y, light.Z);
-                        gl.Uniform3(U(prog, "uFogColour"), fogColour.X, fogColour.Y, fogColour.Z);
-                        gl.Uniform1(U(prog, "uFogDistance"), fogDistance);
-                        gl.Uniform1(U(prog, "uTime"), time);
-                        gl.Uniform1(U(prog, "uFrequency"), 2f);
-                        gl.Uniform1(U(prog, "uSprite"), 0);
-                        gl.Uniform1(U(prog, "uColourMap"), 1);
-                        gl.Uniform1(U(prog, "uCoverage"), coverage ? 1 : 0);
-                        gl.Uniform1(U(prog, "uWireframe"), options.Wireframe == 2 ? 1 : 0);
-                        SkyRenderer.Active?.Apply(prog);
-                        gl.UseProgram(prog);
-                        gl.Disable(EnableCap.CullFace);
-                    }
-                    var g = patch.Grass;
-                    Bind(0, options.Textures ? sprite.Id : 0);
-                    var colourMap = textures.Get(g.ColourMap, false);
-                    bool hasColour = options.Textures && colourMap is { Id: not 0 };
-                    Bind(1, hasColour ? colourMap!.Id : 0);
-                    gl.Uniform1(U(prog, "uHasColourMap"), hasColour ? 1 : 0);
-                    gl.Uniform4(U(prog, "uColourBounds"), patch.X0, patch.Z0, patch.X1, patch.Z1);
-                    gl.Uniform4(U(prog, "uSize"), g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight);
-                    gl.Uniform1(U(prog, "uCross"), g.CrossQuads ? 1 : 0);
-                    gl.Uniform1(U(prog, "uSway"), patch.Layer.Wind ? g.SwayLength : 0f);
-                    gl.Uniform1(U(prog, "uRange"), range);
-                    gl.BindVertexArray(b.Vao);
-                    gl.DrawArraysInstanced(PrimitiveType.Triangles, 0, g.CrossQuads ? 12u : 6u, (uint)shown);
-                    DrawCalls++;
-                    DrawnBlades += shown;
-                }
+                    Buffer = b, Shown = (uint)shown, Vertices = g.CrossQuads ? 12u : 6u, Sprite = options.Textures ? sprite.Id : 0, Colour = hasColour ? colourMap!.Id : 0,
+                    Key = new GrassKey(hasColour, patch.X0, patch.Z0, patch.X1, patch.Z1, g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight,
+                        g.CrossQuads, patch.Layer.Wind ? g.SwayLength : 0f, range),
+                });
+                DrawCalls++;
+                DrawnBlades += shown;
             }
         }
+    }
+
+    /// <summary>The blade draw list in one native segment: no culling, instanced quads from the blade buffers (the vertex array's export, resolved once per page).</summary>
+    void RecordGrass(Matrix4x4 viewProjection, Vector3 eye, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, bool coverage)
+    {
+        var gp = grassProgram;
+        var p = gp.P;
+        p.Set(gp.ViewProjection, in viewProjection);
+        p.Set(gp.Eye, eye.X, eye.Y, eye.Z);
+        p.Set(gp.LightDir, light.X, light.Y, light.Z);
+        p.Set(gp.FogColour, fogColour.X, fogColour.Y, fogColour.Z);
+        p.Set(gp.FogDistance, fogDistance);
+        p.Set(gp.Time, SwayPhase());
+        p.Set(gp.Frequency, 2f);
+        p.Set(gp.Coverage, coverage ? 1 : 0);
+        p.Set(gp.Wireframe, options.Wireframe == 2 ? 1 : 0);
+        p.ApplyGlobals();
+        BindUnitSamplers(p, ref gp.Units, GrassDirect);
+        gl.Disable(EnableCap.CullFace);
+        var interop = Gpu.Interop!;
+        var cmd = interop.BeginNativeInPass("foliage grass");
+        var targets = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        int segment = SegmentId(GrassKind, p, targets, state);
+        cmd.SetViewport(targets.Viewport);
+        cmd.SetScissor(targets.Scissor);
+        cmd.SetRaster(state.Cull, state.Front);
+        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+        gp.BoundSprite = gp.BoundColour = uint.MaxValue;
+        foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(grassDraws))
+        {
+            if (!gp.HasKey || gp.Key != d.Key)
+            {
+                var k = d.Key;
+                p.Set(gp.HasColourMap, k.HasColour ? 1 : 0);
+                p.Set(gp.ColourBounds, k.X0, k.Z0, k.X1, k.Z1);
+                p.Set(gp.Size, k.MinWidth, k.MaxWidth, k.MinHeight, k.MaxHeight);
+                p.Set(gp.Cross, k.Cross ? 1 : 0);
+                p.Set(gp.Sway, k.Sway);
+                p.Set(gp.Range, k.Range);
+                gp.Key = k;
+                gp.HasKey = true;
+            }
+            if (gp.BoundSprite != d.Sprite) { gp.BoundSprite = d.Sprite; if (gp.SpriteInfo is { } si) p.Bind(gp.Sprite, interop.Sampled(d.Sprite, si)); }
+            if (gp.BoundColour != d.Colour) { gp.BoundColour = d.Colour; if (gp.ColourMapInfo is { } ci) p.Bind(gp.ColourMap, interop.Sampled(d.Colour, ci)); }
+            var buffer = d.Buffer;
+            var va = interop.VertexArray(buffer.Vao);
+            if (!ReferenceEquals(buffer.GrassNative.Source, va)) ResolveVertices(ref buffer.GrassNative, p, va, rows: false, gp.Own);
+            ref var n = ref buffer.GrassNative;
+            cmd.BindPipeline(n.SegA == segment ? n.PipeA! : PipelineFor(ref n, p, segment, state, targets.Formats, "foliage grass"));
+            cmd.BindVertexBuffers(0, n.Vertices);
+            p.Flush(cmd);
+            cmd.Draw(d.Vertices, d.Shown);
+        }
+        interop.EndNative(cmd);
         gl.BindVertexArray(0);
     }
 
@@ -1309,6 +1613,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
     Vector4[] motionFrustum = [];
     float? previousSwayPhase;
     bool motionCamera, havePrevious;
+    readonly List<MotionDraw> motionDraws = [];
 
     /// <summary>The near depth slice's camera for <see cref="DrawGrassMotion"/>: this frame's view-projection as drawn (jittered) and unjittered.</summary>
     public void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum)
@@ -1331,8 +1636,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
         var previous = havePrevious ? previousUnjittered : motionUnjittered;
         (previousSwayPhase, previousUnjittered, havePrevious) = (time, motionUnjittered, true);
         var eye = motionEye;
-        uint prog = grassMotionProgram;
-        bool set = false;
+        // Prepare
+        motionDraws.Clear();
         foreach (var state in zones.Values)
             foreach (var (key, page) in state.Pages)
             {
@@ -1352,32 +1657,65 @@ public sealed unsafe class FoliageRenderer : IDisposable
                     if (shown == 0 || d >= range) continue;
                     var sprite = textures.Get(g.Sprite, false);
                     if (sprite is not { Id: not 0 }) continue;
-                    if (!set)
+                    motionDraws.Add(new MotionDraw
                     {
-                        set = true;
-                        gl.UseProgram(prog);
-                        WorldGl.Matrix(gl, U(prog, "uViewProjection"), motionViewProjection);
-                        WorldGl.Matrix(gl, U(prog, "uPreviousViewProjection"), previous);
-                        gl.Uniform3(U(prog, "uEye"), eye.X, eye.Y, eye.Z);
-                        gl.Uniform1(U(prog, "uTime"), time);
-                        gl.Uniform1(U(prog, "uPreviousTime"), previousTime);
-                        gl.Uniform1(U(prog, "uFrequency"), 2f);
-                        gl.Uniform2(U(prog, "uNearPlanes"), targets.NearPlanes.X, targets.NearPlanes.Y);
-                        gl.Uniform2(U(prog, "uJitterNdc"), targets.JitterNdc.X, targets.JitterNdc.Y);
-                        gl.Uniform1(U(prog, "uSprite"), 0);
-                        gl.Uniform1(U(prog, "uNearDepth"), 1);
-                        Bind(1, targets.NearDepth);
-                        gl.Disable(EnableCap.CullFace);
-                    }
-                    Bind(0, sprite.Id);
-                    gl.Uniform4(U(prog, "uSize"), g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight);
-                    gl.Uniform1(U(prog, "uSway"), g.SwayLength);
-                    gl.Uniform1(U(prog, "uRange"), range);
-                    gl.BindVertexArray(b.Vao);
-                    gl.DrawArraysInstanced(PrimitiveType.Triangles, 0, g.CrossQuads ? 12u : 6u, (uint)shown);
+                        Buffer = b, Shown = (uint)shown, Vertices = g.CrossQuads ? 12u : 6u, Sprite = sprite.Id,
+                        Key = new MotionKey(new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight), g.SwayLength, range),
+                    });
                 }
             }
-        if (set) { gl.BindVertexArray(0); Bind(1, 0); gl.ActiveTexture(TextureUnit.Texture0); }
+        if (motionDraws.Count == 0) return;
+        // Record
+        var gp = grassMotionProgram;
+        var p = gp.P;
+        p.Set(gp.ViewProjection, in motionViewProjection);
+        p.Set(gp.PreviousViewProjection, in previous);
+        p.Set(gp.Eye, eye.X, eye.Y, eye.Z);
+        p.Set(gp.Time, time);
+        p.Set(gp.PreviousTime, previousTime);
+        p.Set(gp.Frequency, 2f);
+        p.Set(gp.NearPlanes, targets.NearPlanes.X, targets.NearPlanes.Y);
+        p.Set(gp.JitterNdc, targets.JitterNdc.X, targets.JitterNdc.Y);
+        BindUnitSamplers(p, ref gp.Units, GrassDirect);
+        gl.Disable(EnableCap.CullFace);
+        var interop = Gpu.Interop!;
+        if (gp.NearDepthInfo is { } depthInfo) p.Bind(gp.NearDepth, interop.Sampled(targets.NearDepth, depthInfo));
+        var cmd = interop.BeginNativeInPass("foliage grass motion");
+        var pass = interop.CurrentTargets();
+        var drawState = interop.CurrentState();   // the host's colour mask (red and green), no depth test, no blending
+        int segment = SegmentId(MotionKind, p, pass, drawState);
+        cmd.SetViewport(pass.Viewport);
+        cmd.SetScissor(pass.Scissor);
+        cmd.SetRaster(drawState.Cull, drawState.Front);
+        cmd.SetDepth(drawState.DepthTest, drawState.DepthWrite, drawState.Compare);
+        cmd.SetDepthBias(drawState.BiasEnable, drawState.BiasConstant, drawState.BiasSlope);
+        gp.BoundSprite = uint.MaxValue;
+        gp.HasKey = false;
+        foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(motionDraws))
+        {
+            if (!gp.HasKey || gp.MotionKey != d.Key)
+            {
+                var k = d.Key;
+                p.Set(gp.Size, k.Size);
+                p.Set(gp.Sway, k.Sway);
+                p.Set(gp.Range, k.Range);
+                gp.MotionKey = k;
+                gp.HasKey = true;
+            }
+            if (gp.BoundSprite != d.Sprite) { gp.BoundSprite = d.Sprite; if (gp.SpriteInfo is { } si) p.Bind(gp.Sprite, interop.Sampled(d.Sprite, si)); }
+            var buffer = d.Buffer;
+            var va = interop.VertexArray(buffer.Vao);
+            if (!ReferenceEquals(buffer.MotionNative.Source, va)) ResolveVertices(ref buffer.MotionNative, p, va, rows: false, gp.Own);
+            ref var n = ref buffer.MotionNative;
+            cmd.BindPipeline(n.SegA == segment ? n.PipeA! : PipelineFor(ref n, p, segment, drawState, pass.Formats, "foliage grass motion"));
+            cmd.BindVertexBuffers(0, n.Vertices);
+            p.Flush(cmd);
+            cmd.Draw(d.Vertices, d.Shown);
+        }
+        interop.EndNative(cmd);
+        gl.BindVertexArray(0);
+        Bind(1, 0);
+        gl.ActiveTexture(TextureUnit.Texture0);
     }
 
     void Bind(int unit, uint texture)
@@ -1435,11 +1773,6 @@ public sealed unsafe class FoliageRenderer : IDisposable
         if (gpuCount > 0) { GpuMs = gpuSum / gpuCount; gpuSum = 0; gpuCount = 0; }
     }
 
-    int U(uint program, string name)
-    {
-        if (!uniforms.TryGetValue((program, name), out int location)) uniforms[(program, name)] = location = gl.GetUniformLocation(program, name);
-        return location;
-    }
 
     public void Dispose()
     {
@@ -1461,10 +1794,10 @@ public sealed unsafe class FoliageRenderer : IDisposable
         lock (allWorlds) foreach (var w in allWorlds) w.Dispose();
         textures.Dispose();
         gl.DeleteBuffer(instanceBuffer);
-        gl.DeleteProgram(meshProgram);
-        if (depthProgram != 0) gl.DeleteProgram(depthProgram);
-        gl.DeleteProgram(grassProgram);
-        gl.DeleteProgram(grassMotionProgram);
+        colourMesh.P.Dispose();
+        depthMesh.P.Dispose();
+        grassProgram.P.Dispose();
+        grassMotionProgram.P.Dispose();
         foreach (var q in timers) { gl.DeleteQuery(q.Start); gl.DeleteQuery(q.End); }
     }
 }
