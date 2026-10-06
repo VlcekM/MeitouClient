@@ -399,6 +399,8 @@ static partial class WorldApp
                 string gpuText = gpuSamples > 0 ? $"{gpuMs / gpuSamples:0.00}" : "-";
                 stats.Clear();
                 stats.Add($"{frames / titleTimer:0} fps (vsync), cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms");
+                var (vramUsed, vramBudget) = display.VkGl.Context.Device.VideoMemory();
+                stats.Add($"vram        {vramUsed / 1073741824.0:0.00} of {vramBudget / 1073741824.0:0.0} GB");
                 if (gpu.Reflection is { Valid: true } refl && render.Reflections) stats.Add($"reflection  cpu {refl.CpuMs:0.00} ms, gpu {refl.GpuMs:0.00} ms");
                 gpu.Sky.Poll();
                 stats.Add(gpu.Sky.Physical ? $"sky         cpu {gpu.Sky.PrepareMs:0.00} ms, gpu {gpu.Sky.GpuMs:0.00} ms" : "sky         simple");

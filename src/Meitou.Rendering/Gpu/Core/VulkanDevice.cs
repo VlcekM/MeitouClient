@@ -127,6 +127,29 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     public PhysicalDeviceLimits Limits => Properties.Limits;
 
+    /// <summary>Whether VK_EXT_memory_budget is enabled (<see cref="VideoMemory"/> then reports the driver's figures).</summary>
+    public bool HasMemoryBudget { get; private set; }
+
+    /// <summary>
+    /// Device-local memory summed over the device-local heaps: this process's usage and the budget the driver allows it (VK_EXT_memory_budget;
+    /// the usage includes the driver's own allocations). Without the extension, the allocator's bytes and the heaps' size.
+    /// </summary>
+    public (ulong Used, ulong Budget) VideoMemory()
+    {
+        var budget = new PhysicalDeviceMemoryBudgetPropertiesEXT { SType = StructureType.PhysicalDeviceMemoryBudgetPropertiesExt };
+        var props = new PhysicalDeviceMemoryProperties2 { SType = StructureType.PhysicalDeviceMemoryProperties2, PNext = HasMemoryBudget ? &budget : null };
+        Vk.GetPhysicalDeviceMemoryProperties2(PhysicalDevice, &props);
+        ulong used = 0, total = 0;
+        for (int i = 0; i < props.MemoryProperties.MemoryHeapCount; i++)
+        {
+            var heap = props.MemoryProperties.MemoryHeaps[i];
+            if ((heap.Flags & MemoryHeapFlags.DeviceLocalBit) == 0) continue;
+            used += HasMemoryBudget ? budget.HeapUsage[i] : 0;
+            total += HasMemoryBudget ? budget.HeapBudget[i] : heap.Size;
+        }
+        return (HasMemoryBudget ? used : Allocator.TotalAllocatedBytes, total);
+    }
+
     /// <summary>One line per feature, for logs and test output.</summary>
     public string DescribeFeatures()
     {
@@ -683,6 +706,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         if (extClip) names.Add("VK_EXT_depth_clip_control");
         if (extVid) names.Add("VK_EXT_vertex_input_dynamic_state");
         if (extPush) names.Add("VK_KHR_push_descriptor");
+        // Only read by VideoMemory (the viewer's statistics): the process's usage and budget per heap.
+        HasMemoryBudget = have.Contains("VK_EXT_memory_budget");
+        if (HasMemoryBudget) names.Add("VK_EXT_memory_budget");
         // Core since 1.1, but AMD's FidelityFX DLL calls the KHR-named entry points when the GPU lists the extensions, and those are
         // null unless the extensions are enabled (DECISIONS 16).
         foreach (var e in (string[])["VK_KHR_get_memory_requirements2", "VK_KHR_dedicated_allocation"])

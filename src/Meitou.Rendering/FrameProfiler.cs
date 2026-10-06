@@ -115,6 +115,8 @@ public sealed class FrameProfiler : IDisposable
 
     // Native timestamps: the context (VkGl provides the seam), the slots per stamp, and the record callback (no allocation per stamp).
     readonly GpuContext native;
+    (ulong Used, ulong Budget) vram;
+    int vramAge;
     readonly QuerySlot[,] nativeStamps = new QuerySlot[Slots, MaxStamps];
     QuerySlot pendingStamp;
     readonly Action<CommandList> recordStamp;
@@ -179,7 +181,10 @@ public sealed class FrameProfiler : IDisposable
         float panelH = (Order.Length + 2.5f) * lh + 2 * pad;
         float x0 = margin, x1 = width - margin, y1 = height - margin, y0 = Math.Max(y1 - panelH, margin);
         overlay.Rect(x0, y0, x1, y1, DebugOverlay.PanelColour);
-        overlay.Text($"Profiler: {(showGpu ? "GPU" : "render thread")} ms per stage, last {History} frames   (F12: {(showGpu ? "cpu" : "off")})", x0 + pad, y0 + pad, DebugOverlay.TextColour);
+        // VRAM is read every 30 frames (a driver call) and shown in the header.
+        if (vramAge-- <= 0) { vram = native.Device.VideoMemory(); vramAge = 30; }
+        overlay.Text($"Profiler: {(showGpu ? "GPU" : "render thread")} ms per stage, last {History} frames   (F12: {(showGpu ? "cpu" : "off")})   " +
+            $"vram {vram.Used / 1073741824.0:0.00} of {vram.Budget / 1073741824.0:0.0} GB", x0 + pad, y0 + pad, DebugOverlay.TextColour);
 
         // Legend at the right: swatch, stage, mean of the last frames on the CPU and the GPU.
         float legendW = swatch + 6 + (12 + 10 + 10) * cw;
