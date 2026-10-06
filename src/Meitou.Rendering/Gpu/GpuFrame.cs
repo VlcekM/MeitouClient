@@ -158,6 +158,7 @@ public sealed unsafe class GpuFrame : IDisposable
     /// <summary>A descriptor set from this frame's pools (sets that cannot be pushed); freed when the slot comes round.</summary>
     public DescriptorSet AllocateSet(DescriptorSetLayout layout)
     {
+        RenderJobs.AssertNotInJob();
         var list = pools[Slot];
         var sizes = stackalloc DescriptorPoolSize[] { new(DescriptorType.UniformBuffer, 4096), new(DescriptorType.CombinedImageSampler, 8192), new(DescriptorType.StorageBuffer, 2048) };
         for (int attempt = 0; attempt < 2; attempt++)

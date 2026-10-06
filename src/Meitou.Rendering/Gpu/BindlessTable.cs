@@ -187,6 +187,7 @@ public sealed unsafe class BindlessTable : IDisposable
     /// <summary>Adds a texture. Its index is valid in the frame that is open (when one is) and in every frame that begins after the call.</summary>
     public uint Register(BindlessKind kind, in SampledTexture texture)
     {
+        RenderJobs.AssertNotInJob();   // the table and its journal are the render thread's (docs/renderer-native.md 6.5)
         int k = (int)kind;
         uint index = free[k].Count > 0 ? free[k].Pop() : next[k] < Capacity[k] ? next[k]++ : throw new InvalidOperationException($"bindless {kind} array is full ({Capacity[k]})");
         journal.Add((kind, index, texture));
@@ -203,7 +204,11 @@ public sealed unsafe class BindlessTable : IDisposable
 
     /// <summary>Replaces an entry's sampler or view (the upscaler's LOD bias changed, a texture was re-created). Takes effect in the frame
     /// that is open (for all of its draws: see the remarks) and in every frame that begins after the call.</summary>
-    public void Update(BindlessKind kind, uint index, in SampledTexture texture) => journal.Add((kind, index, texture));
+    public void Update(BindlessKind kind, uint index, in SampledTexture texture)
+    {
+        RenderJobs.AssertNotInJob();
+        journal.Add((kind, index, texture));
+    }
 
     /// <summary>As <see cref="Update(BindlessKind, uint, in SampledTexture)"/>.</summary>
     public void Update(BindlessHandle handle, in SampledTexture texture) => Update(handle.Kind, handle.Index, texture);
@@ -212,6 +217,7 @@ public sealed unsafe class BindlessTable : IDisposable
     /// entry; slots that have not seen it yet skip it (its view may be destroyed before they replay the journal).</summary>
     public void Free(BindlessKind kind, uint index)
     {
+        RenderJobs.AssertNotInJob();
         journal.Add((kind, index, default));   // a tombstone (null view)
         device.Frames.DeferDelete(() => free[(int)kind].Push(index));
     }
