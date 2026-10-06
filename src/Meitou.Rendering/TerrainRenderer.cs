@@ -80,6 +80,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         patchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, TerrainShaders.Fragment);
         meshProgram = WorldGl.Program(gl, TerrainShaders.MeshVertex, TerrainShaders.MeshFragment);
         nativeMesh = NativeMeshProgram();   // with the GL program it replaces, so a draw never compiles
+        nativePatch = NativePatchProgram();
 
         coarseTexture = HeightTexture(coarse, coarseSize, coarseSize);
         fineTexture = HeightTexture(fine.Raw, fine.Columns, fine.Rows);
@@ -214,6 +215,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// <summary>Draws the terrain; nodes whose highest point is under <paramref name="cullBelow"/> are skipped (the reflection pass clips everything below the water). <paramref name="secondary"/>: the reflection's call, with its own quadtree for its own LOD distance.</summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity, bool secondary = false)
     {
+        long timing = StepTiming.Now();
         if (secondary)
         {
             if (spare is null || Math.Abs(options.LodDistance - (float)(spare.Ranges[0] / spare.NodeSize(0))) > 1e-4f)
@@ -227,29 +229,32 @@ public sealed unsafe class TerrainRenderer : IDisposable
             current = quadtree;
         }
         frame = new Frame(viewProjection, eye, options, light);
-        Apply(patchProgram, heightNormals: true);
         current.Select(eye, bounds, (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max), nodes);
 
         gl.Enable(EnableCap.DepthTest);
         gl.Enable(EnableCap.CullFace);
         gl.CullFace(TriangleFace.Back);
         gl.FrontFace(FrontFaceDirection.Ccw);
-        gl.BindVertexArray(gridVao);
-        if (options.Wireframe != 2) DrawNodes(wire: false);
+        if (options.Wireframe != 2) DrawPatches();
         if (options.Wireframe != 0)
         {
+            // The debug outline stays on the GL path (its own program and GL's line state).
+            Apply(patchProgram, heightNormals: true);
+            gl.BindVertexArray(gridVao);
             gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Line);
             gl.Enable(EnableCap.PolygonOffsetLine);
             gl.PolygonOffset(-1, -1);
             DrawNodes(wire: true);
             gl.Disable(EnableCap.PolygonOffsetLine);
             gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Fill);
+            gl.BindVertexArray(0);
         }
-        gl.BindVertexArray(0);
+        StepTiming.Add(StepTiming.PatchColour, timing, nodes.Count);
     }
 
     float LodDistanceInUse => (float)(quadtree.Ranges[0] / quadtree.NodeSize(0));
 
+    /// <summary>The debug outline (<c>Wireframe</c> 1 and 2): the GL path, as before the port.</summary>
     void DrawNodes(bool wire)
     {
         gl.Uniform1(U(patchProgram, "uWireframe"), wire ? 1 : 0);
@@ -261,12 +266,125 @@ public sealed unsafe class TerrainRenderer : IDisposable
             gl.Uniform2(uMorph, start == float.MaxValue ? 1e31f : start, end == float.MaxValue ? 2e31f : end);
             int part = n.Quadrant + 1;
             gl.DrawElements(PrimitiveType.Triangles, (uint)indexCounts[part], DrawElementsType.UnsignedInt, (void*)indexOffsets[part]);
-            if (!wire)
-            {
-                DrawnChunks++;
-                DrawnTriangles += indexCounts[part] / 3;
-            }
         }
+    }
+
+    // ---- the terrain patches, native (docs/renderer-native.md 7.1, wave 3 agent B: step P, VkGl's SPIR-V and layout) ----
+
+    /// <summary>One selected node as its draw needs it (Prepare fills the list, Record walks it): the <c>uNode</c> and <c>uMorph</c> values
+    /// and the index range (<c>Quadrant + 1</c>).</summary>
+    readonly record struct PatchDraw(float X, float Z, float Size, float MorphStart, float MorphEnd, int Part);
+
+    PatchDraw[] patchDraws = new PatchDraw[512];
+    LegacyProgram? nativePatch, nativePatchDepth;
+    MeshUniforms patchMu;
+    UniformHandle patchNode, patchMorph, depthPatchViewProjection, depthPatchEye, depthPatchNode, depthPatchMorph;
+    UnitSamplers? patchUnitSamplers;
+
+
+    /// <summary>A patch program resolved for one pass state: the pipeline, the grid's vertex buffer, and the five index ranges as bindings.</summary>
+    sealed class PatchPipeline
+    {
+        public SegmentPipeline Segment;
+        public VertexArrayBindings Source = null!;
+        public GraphicsPipeline Pipeline = null!;
+        public BufferBinding Vertex;
+        public readonly BufferBinding[] Indices = new BufferBinding[5];
+    }
+
+    readonly List<PatchPipeline> patchPipelines = [];
+
+    /// <summary>
+    /// Fills <see cref="patchDraws"/> from <see cref="nodes"/> (the tree's morph ranges, the index range per node) and counts them.
+    /// </summary>
+    void PreparePatches(TerrainQuadtree tree)
+    {
+        int n = nodes.Count;
+        if (patchDraws.Length < n) patchDraws = new PatchDraw[Math.Max(n, patchDraws.Length * 2)];
+        long triangles = 0;
+        for (int i = 0; i < n; i++)
+        {
+            var node = nodes[i];
+            float start = tree.MorphStart[node.Level], end = tree.MorphEnd[node.Level];
+            int part = node.Quadrant + 1;
+            patchDraws[i] = new PatchDraw((float)node.X0, (float)node.Z0, (float)node.Size,
+                start == float.MaxValue ? 1e31f : start, end == float.MaxValue ? 2e31f : end, part);
+            triangles += indexCounts[part] / 3;
+        }
+        patchTriangles = triangles;
+    }
+
+    long patchTriangles;
+
+    /// <summary>The solid patches of <see cref="Draw"/>: <see cref="Apply"/>'s uniforms on the native program, the GL state the GL version
+    /// left, then one native segment in the pass VkGl has open.</summary>
+    void DrawPatches()
+    {
+        var p = nativePatch!;
+        PreparePatches(current);
+        ApplyNative(p, in patchMu, patches: true);
+        // GL state as Apply left it for the GL code that follows (the program in use, the units bound); no uniforms.
+        gl.UseProgram(patchProgram);
+        SkyRenderer.Active?.BindUnits();
+        BindHeightUnits();
+        textures?.Bind();
+        BindUnitSamplers(p, ref patchUnitSamplers);
+        if (nodes.Count == 0) return;
+        RecordPatches(p, "terrain", patchNode, patchMorph);
+        DrawnChunks += nodes.Count;
+        DrawnTriangles += patchTriangles;
+    }
+
+    /// <summary>
+    /// Records <see cref="patchDraws"/> into one native segment of the pass VkGl is drawing into (back faces culled as GL has it set): the
+    /// pipeline, the grid's vertex buffer and the dynamic state once; per node its two uniforms, <see cref="LegacyProgram.Flush"/>, the index range
+    /// (bound at its offset, as VkGl binds it) and the draw.
+    /// </summary>
+    void RecordPatches(LegacyProgram p, string label, UniformHandle uNode, UniformHandle uMorph)
+    {
+        var interop = gpu.Interop!;
+        var cmd = interop.BeginNativeInPass(label);
+        var targets = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        var r = ResolvePatches(p, interop, state, targets, label);
+        state.Record(cmd, targets);
+        cmd.BindPipeline(r.Pipeline);
+        cmd.BindVertexBuffers(0, new ReadOnlySpan<BufferBinding>(in r.Vertex));
+        var indices = r.Indices;
+        int count = nodes.Count;
+        for (int i = 0; i < count; i++)
+        {
+            ref readonly var d = ref patchDraws[i];
+            p.Set(uNode, d.X, d.Z, d.Size, GridCells);
+            p.Set(uMorph, d.MorphStart, d.MorphEnd);
+            p.Flush(cmd);
+            cmd.BindIndexBuffer(indices[d.Part], Silk.NET.Vulkan.IndexType.Uint32);
+            cmd.DrawIndexed((uint)indexCounts[d.Part]);
+        }
+        interop.EndNative(cmd);
+    }
+
+    /// <summary>The pipeline and bindings for <paramref name="p"/> in this pass state, kept while the grid's vertex-array export and the state
+    /// stay the same (the reflection's multisampled target alternates with the scene's: a few entries).</summary>
+    PatchPipeline ResolvePatches(LegacyProgram p, IGlInterop interop, DrawState state, PassTargets targets, string label)
+    {
+        var va = interop.VertexArray(gridVao);
+        var segment = new SegmentPipeline(p, targets.Formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp);
+        foreach (var e in patchPipelines)
+            if (ReferenceEquals(e.Source, va) && e.Segment == segment) return e;
+        if (patchPipelines.Count >= 16) patchPipelines.Clear();
+        Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
+        va.Attributes.AsSpan().CopyTo(attributes);
+        var entry = new PatchPipeline
+        {
+            Segment = segment, Source = va,
+            Pipeline = gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout(attributes), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, targets.Formats, label)),
+            Vertex = p.VertexBuffers(attributes, 0, 1)[0],
+        };
+        for (int part = 0; part < 5; part++)
+            entry.Indices[part] = new BufferBinding(va.Elements.Buffer, va.Elements.Offset + (ulong)indexOffsets[part]);
+        patchPipelines.Add(entry);
+        return entry;
     }
 
     /// <summary>Sets the frame's uniforms and textures on one of the two programs.</summary>
@@ -406,6 +524,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     void ReportMeshTiming()
     {
+        StepTiming.Report();
         if (MeshTiming == 0) return;
         double ms(long t) => t * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         string Kind(int k) =>
@@ -419,7 +538,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         if (depth) return DrawMeshesDepth(meshes);
         if (!GroupMeshes(meshes, biomes: true)) return 0;
         var p = nativeMesh!;
-        ApplyNative(p);
+        ApplyNative(p, in mu);
         // GL state as Apply left it for the GL code that follows (the program in use, the units bound); no uniforms.
         gl.UseProgram(meshProgram);
         SkyRenderer.Active?.BindUnits();
@@ -446,25 +565,39 @@ public sealed unsafe class TerrainRenderer : IDisposable
         UniformHandle FarEnd, UniformHandle Textured, UniformHandle NormalMaps, UniformHandle HasMaps, UniformHandle MapState, UniformHandle HasGround,
         UniformHandle HasWorldColour, UniformHandle Region, UniformHandle CellGrid);
 
-    LegacyProgram NativeMeshProgram()
-    {
-        var p = LegacyProgram.Create(gpu, TerrainShaders.MeshVertex, TerrainShaders.MeshFragment, "terrain meshes");
-        mu = new MeshUniforms(p.Uniform("uViewProjection"), p.Uniform("uHeightNormals"), p.Uniform("uFeature"), p.Uniform("uFeatureBiome"),
+    static MeshUniforms ResolveUniforms(LegacyProgram p) =>
+        new(p.Uniform("uViewProjection"), p.Uniform("uHeightNormals"), p.Uniform("uFeature"), p.Uniform("uFeatureBiome"),
             p.Uniform("uWireframe"), p.Uniform("uEye"), p.Uniform("uLightDir"), p.Uniform("uSunColour"), p.Uniform("uAmbientSky"), p.Uniform("uAmbientGround"),
             p.Uniform("uFogColour"), p.Uniform("uFogDistance"), p.Uniform("uWaterHeight"), p.Uniform("uHalfWorld"), p.Uniform("uDebug"), p.Uniform("uFarStart"),
             p.Uniform("uFarEnd"), p.Uniform("uTextured"), p.Uniform("uNormalMaps"), p.Uniform("uHasMaps"), p.Uniform("uMapState"), p.Uniform("uHasGround"),
             p.Uniform("uHasWorldColour"), p.Uniform("uRegion"), p.Uniform("uCellGrid"));
+
+    LegacyProgram NativeMeshProgram()
+    {
+        var p = LegacyProgram.Create(gpu, TerrainShaders.MeshVertex, TerrainShaders.MeshFragment, "terrain meshes");
+        mu = ResolveUniforms(p);
         return p;
     }
 
-    /// <summary><see cref="Apply"/>'s uniforms for the meshes (then <c>uFeature</c> 1), with the same int and float forms; the atmosphere and
-    /// height uniforms from the frame globals (published by their owners, the values their GL calls set).</summary>
-    void ApplyNative(LegacyProgram p)
+    /// <summary>The patch program (<see cref="TerrainShaders.PatchVertex"/>, the colour fragment), made with the GL program it replaces (the
+    /// outline still uses that one), so a draw never compiles.</summary>
+    LegacyProgram NativePatchProgram()
+    {
+        var p = LegacyProgram.Create(gpu, TerrainShaders.PatchVertex, TerrainShaders.Fragment, "terrain");
+        patchMu = ResolveUniforms(p);
+        (patchNode, patchMorph) = (p.Uniform("uNode"), p.Uniform("uMorph"));
+        return p;
+    }
+
+    /// <summary><see cref="Apply"/>'s uniforms for the meshes (then <c>uFeature</c> 1) or the patches (<paramref name="patches"/>: the height
+    /// field's normals), with the same int and float forms; the atmosphere and height uniforms from the frame globals (published by their
+    /// owners, the values their GL calls set).</summary>
+    void ApplyNative(LegacyProgram p, in MeshUniforms mu, bool patches = false)
     {
         var (vp, eye, options, light) = (frame.ViewProjection, frame.Eye, frame.Options, frame.Light);
         p.Set(mu.ViewProjection, in vp);
-        p.Set(mu.HeightNormals, 0);
-        p.Set(mu.Feature, 1);
+        p.Set(mu.HeightNormals, patches ? 1 : 0);
+        p.Set(mu.Feature, patches ? 0 : 1);
         p.Set(mu.FeatureBiome, -1);
         p.Set(mu.Wireframe, 0);
         p.Set(mu.Eye, eye.X, eye.Y, eye.Z);
@@ -518,7 +651,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
     }
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
-    uint depthPatchProgram, depthMeshProgram;
+    uint depthMeshProgram;
 
     /// <summary>
     /// Draws the terrain's depth for a shadow cascade (<see cref="ShadowShaders.DepthFragment"/>, the caster bias): the main tree's
@@ -527,37 +660,35 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// </summary>
     public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options)
     {
-        if (depthPatchProgram == 0)
+        long timing = StepTiming.Now();
+        if (nativePatchDepth is null)
         {
-            depthPatchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, ShadowShaders.DepthFragment);
             depthMeshProgram = WorldGl.Program(gl, TerrainShaders.MeshInstancedDepthVertex, ShadowShaders.DepthFragment);
             nativeDepth = LegacyProgram.Create(gpu, TerrainShaders.MeshInstancedDepthVertex, ShadowShaders.DepthFragment, "terrain mesh depth");
             depthViewProjection = nativeDepth.Uniform("uViewProjection");
+            var d = nativePatchDepth = LegacyProgram.Create(gpu, TerrainShaders.PatchVertex, ShadowShaders.DepthFragment, "terrain depth");
+            (depthPatchViewProjection, depthPatchEye, depthPatchNode, depthPatchMorph) =
+                (d.Uniform("uViewProjection"), d.Uniform("uEye"), d.Uniform("uNode"), d.Uniform("uMorph"));
         }
         if (Math.Abs(options.LodDistance - LodDistanceInUse) > 1e-4f)
             quadtree = new TerrainQuadtree((float)quadtree.Spacing(0), GridCells, Math.Max(options.LodDistance, 2f));
         frame = new Frame(viewProjection, eye, options, frame.Light);
         quadtree.Select(eye, bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), nodes);
-        uint program = depthPatchProgram;
-        gl.UseProgram(program);
-        WorldGl.Matrix(gl, U(program, "uViewProjection"), viewProjection);
-        gl.Uniform3(U(program, "uEye"), eye.X, eye.Y, eye.Z);
-        BindHeights(program);
+        PreparePatches(quadtree);
+        var p = nativePatchDepth;
+        p.Set(depthPatchViewProjection, in viewProjection);
+        p.Set(depthPatchEye, eye.X, eye.Y, eye.Z);
+        p.ApplyGlobals();   // BindHeights' uniforms
+        BindHeightUnits();
         gl.Enable(EnableCap.CullFace);
         gl.CullFace(TriangleFace.Back);
         gl.FrontFace(FrontFaceDirection.Ccw);
-        gl.BindVertexArray(gridVao);
-        int uNode = U(program, "uNode"), uMorph = U(program, "uMorph");
-        foreach (var n in nodes)
+        if (nodes.Count > 0)
         {
-            gl.Uniform4(uNode, (float)n.X0, (float)n.Z0, (float)n.Size, GridCells);
-            float start = quadtree.MorphStart[n.Level], end = quadtree.MorphEnd[n.Level];
-            gl.Uniform2(uMorph, start == float.MaxValue ? 1e31f : start, end == float.MaxValue ? 2e31f : end);
-            int part = n.Quadrant + 1;
-            gl.DrawElements(PrimitiveType.Triangles, (uint)indexCounts[part], DrawElementsType.UnsignedInt, (void*)indexOffsets[part]);
-            DepthTriangles += indexCounts[part] / 3;
+            RecordPatches(p, "terrain depth", depthPatchNode, depthPatchMorph);
+            DepthTriangles += patchTriangles;
         }
-        gl.BindVertexArray(0);
+        StepTiming.Add(StepTiming.PatchDepth, timing, nodes.Count);
     }
 
     /// <summary>Terrain triangles the depth draws have drawn since the counter was last reset (by the caller).</summary>
@@ -728,7 +859,9 @@ public sealed unsafe class TerrainRenderer : IDisposable
     public void Dispose()
     {
         ReportMeshTiming();
-        if (depthPatchProgram != 0) { gl.DeleteProgram(depthPatchProgram); gl.DeleteProgram(depthMeshProgram); }
+        if (depthMeshProgram != 0) gl.DeleteProgram(depthMeshProgram);
+        nativePatch?.Dispose();
+        nativePatchDepth?.Dispose();
         gl.DeleteVertexArray(gridVao);
         gl.DeleteBuffer(gridVbo);
         gl.DeleteBuffer(gridEbo);
@@ -740,5 +873,40 @@ public sealed unsafe class TerrainRenderer : IDisposable
         textures?.Dispose();
         nativeMesh?.Dispose();
         nativeDepth?.Dispose();
+    }
+}
+
+/// <summary>
+/// <c>MEITOU_TERRAIN_TIMING=1</c>: CPU time of the terrain patches (colour, shadow depth), the Meitou blocker map and the terrain shadow
+/// sweep, per call and per draw, printed when the terrain renderer is disposed (docs/renderer-native.md 7.1, wave 3 agent B).
+/// </summary>
+internal static class StepTiming
+{
+    public static readonly bool On = Environment.GetEnvironmentVariable("MEITOU_TERRAIN_TIMING") == "1";
+    public const int PatchColour = 0, PatchDepth = 1, Blocker = 2, Sweep = 3;
+    static readonly string[] Names = ["patches colour", "patches depth", "blocker map", "terrain sweep"];
+    static readonly long[] ticks = new long[4], calls = new long[4], draws = new long[4];
+
+    public static long Now() => On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+
+    public static void Add(int kind, long start, int count)
+    {
+        if (!On) return;
+        ticks[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start;
+        calls[kind]++;
+        draws[kind] += count;
+    }
+
+    public static void Report()
+    {
+        if (!On) return;
+        for (int k = 0; k < 4; k++)
+        {
+            if (calls[k] == 0) continue;
+            double us = ticks[k] * 1e6 / System.Diagnostics.Stopwatch.Frequency;
+            Console.WriteLine(FormattableString.Invariant(
+                $"terrain timing  {Names[k],-15} {calls[k]} calls, {draws[k]} draws, {us / calls[k]:F1} us/call, {(draws[k] > 0 ? us / draws[k] : 0):F2} us/draw"));
+            ticks[k] = calls[k] = draws[k] = 0;
+        }
     }
 }
