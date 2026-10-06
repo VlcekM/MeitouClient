@@ -69,35 +69,56 @@ public static class ImpostorShaders
             vec3 local = point - centre;
             return vec2(dot(local, right), dot(local, up)) / (2.0 * radius) + 0.5;
         }
-        // What the lighting needs, blended from the three frames. normal and position are in object space; coverage is the blended
-        // cut-out (cut at 0.5); gloss is the gloss × specular the mesh shader passes to kenshiLight.
+        """;
+
+    /// <summary>
+    /// The fragment-stage sampling (<see cref="Functions"/> first): <c>impostorSample</c> returns the surface the lighting needs, either from
+    /// one of the three frames chosen per pixel by the weights (<c>pick</c> in [0, 1), a dither value: crisp cut-outs, the frames interleave and
+    /// temporal anti-aliasing averages them) or the three blended by their weights (<c>pick</c> &lt; 0: smooth, but leaves and branches that do
+    /// not line up between the frames thin out).
+    /// </summary>
+    public const string FragmentFunctions = """
+
+        // What the lighting needs. normal and position are in object space; coverage is the cut-out (cut at 0.5); gloss is the
+        // gloss × specular the mesh shader passes to kenshiLight.
         struct ImpostorSurface { vec3 albedo; float coverage; vec3 normal; float gloss; vec3 position; };
         // grid: frames per atlas side; centre, radius: the baked bounding sphere (object space); origin: the eye in object space; ray: from the
         // eye to this pixel's point on the billboard (object space, any length); cells and weights from impostorSelect (constant per instance);
-        // parallax: one depth step per frame before sampling (3 more fetches; better agreement between the frames).
+        // pick: a dither value in [0, 1) to use one frame, or < 0 to blend the three; parallax: one depth step per frame before sampling.
         ImpostorSurface impostorSample(sampler2D albedoMap, sampler2D normalMap, sampler2D depthMap, float grid, vec3 centre, float radius,
-                                       vec3 origin, vec3 ray, vec2 cellA, vec2 cellB, vec2 cellC, vec3 weights, bool parallax)
+                                       vec3 origin, vec3 ray, vec2 cellA, vec2 cellB, vec2 cellC, vec3 weights, float pick, bool parallax)
         {
             ImpostorSurface s = ImpostorSurface(vec3(0.0), 0.0, vec3(0.0), 0.0, vec3(0.0));
             vec2 cells[3] = vec2[3](cellA, cellB, cellC);
+            // One set of texture gradients for every fetch, from frame A's projection (the frames are a grid step apart, their scales
+            // agree): the fetches below are in non-uniform control flow when frames are picked per pixel.
+            vec3 dirA = impostorDecode(cellA / (grid - 1.0)), rightA, upA, pointA;
+            impostorBasis(dirA, rightA, upA);
+            vec2 localA = impostorFrameUv(dirA, rightA, upA, centre, radius, origin, ray, 0.0, pointA) / grid;
+            vec2 gx = dFdx(localA), gy = dFdy(localA);
+            if (pick >= 0.0)
+            {
+                // The frame whose cumulative weight passes the dither value.
+                weights = pick < weights.x ? vec3(1.0, 0.0, 0.0) : pick < weights.x + weights.y ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
+            }
             float total = 0.0;
             vec3 fallback = vec3(0.0);
             for (int k = 0; k < 3; k++)
             {
                 float w = weights[k];
-                if (w <= 0.0) continue;   // the weights are the same over the whole billboard: uniform control flow for the derivatives
+                if (w <= 0.0) continue;
                 vec3 dir = impostorDecode(cells[k] / (grid - 1.0)), right, up, point;
                 impostorBasis(dir, right, up);
                 vec2 local = impostorFrameUv(dir, right, up, centre, radius, origin, ray, 0.0, point);
                 if (parallax)
                 {
-                    float h = texture(depthMap, (cells[k] + clamp(local, 0.0, 1.0)) / grid).r * 2.0 - 1.0;
+                    float h = textureGrad(depthMap, (cells[k] + clamp(local, 0.0, 1.0)) / grid, gx, gy).r * 2.0 - 1.0;
                     local = impostorFrameUv(dir, right, up, centre, radius, origin, ray, h * radius, point);
                 }
                 vec2 uv = (cells[k] + clamp(local, 0.0, 1.0)) / grid;
-                vec4 a = texture(albedoMap, uv);
-                vec3 nf = impostorDecodeNormal(texture(normalMap, uv).rg * 2.0 - 1.0);
-                vec2 dg = texture(depthMap, uv).rg;
+                vec4 a = textureGrad(albedoMap, uv, gx, gy);
+                vec3 nf = impostorDecodeNormal(textureGrad(normalMap, uv, gx, gy).rg * 2.0 - 1.0);
+                vec2 dg = textureGrad(depthMap, uv, gx, gy).rg;
                 bool inside = all(greaterThanEqual(local, vec2(0.0))) && all(lessThanEqual(local, vec2(1.0)));
                 float cw = w * (inside ? a.a : 0.0);
                 float t = (dot(centre - origin, dir) + (dg.r * 2.0 - 1.0) * radius) / dot(ray, dir);
@@ -190,7 +211,7 @@ public static class ImpostorShaders
     /// <summary>The fragment shader writing the blended surface's depth (depth-correct intersections and shadows; turns early depth testing off).</summary>
     public static readonly string FragmentWithDepth = BuildFragment(depthWrite: true);
 
-    static string BuildFragment(bool depthWrite) => "#version 330 core\n" + AtmosphereShaders.Functions + Functions + """
+    static string BuildFragment(bool depthWrite) => "#version 330 core\n" + AtmosphereShaders.Functions + Functions + FragmentFunctions + """
         in vec3 vObjectPoint;
         flat in vec3 vObjectEye;
         flat in vec2 vCellA;
@@ -208,7 +229,8 @@ public static class ImpostorShaders
         uniform vec4 uImpostor;
         uniform float uImpostorGrid;
         uniform bool uImpostorParallax;
-        uniform int uImpostorDebug;
+        uniform bool uImpostorBlend;     // blend the three frames instead of picking one per pixel
+        uniform int uImpostorDebug;      // 1: albedo, 2: normal (object space), 3: coverage, unlit
         uniform mat4 uViewProjection;
         uniform bool uCoverage;          // alpha to coverage (multisampled target), as the foliage meshes
         uniform vec3 uLightDir;
@@ -222,13 +244,13 @@ public static class ImpostorShaders
             // The fade: as the meshes (a dither threshold, 2 = whole); negative = the complement of the mesh's dither (the crossfade).
             float dither = foliageDither();
             if (vFade < 0.0 ? dither < -vFade : (vFade < 1.0 && dither >= vFade)) discard;
+            // The frame pick: a 4 × 4 ordered dither (independent of the fade's), or blend the three frames.
+            ivec2 q = ivec2(gl_FragCoord.xy) & 3;
+            int bayer[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
+            float pick = uImpostorBlend ? -1.0 : (float(bayer[q.y * 4 + q.x]) + 0.5) / 16.0;
             ImpostorSurface s = impostorSample(uImpostorAlbedo, uImpostorNormal, uImpostorDepth, uImpostorGrid, uImpostor.xyz, uImpostor.w,
-                vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, uImpostorParallax);
-            if (uImpostorDebug == 1) { vec3 dA = impostorDecode(vCellA / (uImpostorGrid - 1.0)), rA, uA, pA; impostorBasis(dA, rA, uA); vec2 lA = impostorFrameUv(dA, rA, uA, uImpostor.xyz, uImpostor.w, vObjectEye, vObjectPoint - vObjectEye, 0.0, pA); fragColour = vec4(lA, vCellA.x / 11.0, 1.0); return; }
-            if (uImpostorDebug >= 3 && uImpostorDebug < 10) { vec3 dA = impostorDecode(vCellA / (uImpostorGrid - 1.0)), rA, uA, pA; impostorBasis(dA, rA, uA); vec2 lA = impostorFrameUv(dA, rA, uA, uImpostor.xyz, uImpostor.w, vObjectEye, vObjectPoint - vObjectEye, 0.0, pA); vec4 t = textureLod(uImpostorAlbedo, (vCellA + clamp(lA, 0.0, 1.0)) / uImpostorGrid, float(uImpostorDebug - 3)); fragColour = vec4(t.rgb * t.a, 1.0); return; }
-            if (uImpostorDebug == 2) { fragColour = vec4(vec3(s.coverage), 1.0); return; }
-            if (uImpostorDebug == 10 && s.coverage >= 0.5) { fragColour = vec4(s.albedo, 1.0); return; }
-            if (uImpostorDebug == 11 && s.coverage >= 0.5) { fragColour = vec4(s.normal * 0.5 + 0.5, 1.0); return; }
+                vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, pick, uImpostorParallax);
+            if (uImpostorDebug == 3) { fragColour = vec4(vec3(s.coverage), 1.0); return; }
             float coverage = 1.0;
             if (uCoverage)
             {
@@ -240,6 +262,8 @@ public static class ImpostorShaders
             vec3 world = (model * vec4(s.position, 1.0)).xyz;
             vec3 n = normalize(mat3(model) * s.normal);
             float gloss = s.gloss;
+            if (uImpostorDebug == 1) { fragColour = vec4(s.albedo, 1.0); return; }
+            if (uImpostorDebug == 2) { fragColour = vec4(n * 0.5 + 0.5, 1.0); return; }
             // The mesh shader's lighting (Shaders.MeshFragment), from the same inputs.
             vec3 l = normalize(uLightDir);
             vec3 v = normalize(uEye - world);

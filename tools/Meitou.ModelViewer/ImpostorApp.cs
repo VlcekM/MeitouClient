@@ -25,8 +25,9 @@ static class ImpostorApp
           --out <dir>        where the pictures go (default C:\Temp\meitou-impostors)
           --size <W>x<H>     the field pictures' size (default 1600x900)
           --rebake           ignore the cache (the new atlas is written to it)
-          --rgba             keep the maps uncompressed (not written to the cache)
           --parallax         one depth step per frame when sampling
+          --blend            blend the three frames (default: one frame per pixel, ordered dither)
+          --debug <n>        unlit impostor: 1 albedo, 2 normal, 3 coverage
           --depth-write      the impostor writes its blended depth
           --class <medium|large>   force the size class
         Pictures: <name>-sheet-<sun>.png (rows: elevation -8..85 degrees; columns: mesh | impostor at four azimuths, seen from 1500 units),
@@ -37,7 +38,8 @@ static class ImpostorApp
     sealed class Options
     {
         public string? Mesh;
-        public bool BakeAll, Rebake, Rgba, Parallax, DepthWrite;
+        public bool BakeAll, Rebake, Parallax, DepthWrite, Blend;
+        public int Debug;
         public string Out = @"C:\Temp\meitou-impostors";
         public int Width = 1600, Height = 900;
         public string? Class;
@@ -63,8 +65,9 @@ static class ImpostorApp
                         o.Height = int.Parse(parts[1], CultureInfo.InvariantCulture);
                         break;
                     case "--rebake": o.Rebake = true; break;
-                    case "--rgba": o.Rgba = true; break;
                     case "--parallax": o.Parallax = true; break;
+                    case "--blend": o.Blend = true; break;
+                    case "--debug": o.Debug = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                     case "--depth-write": o.DepthWrite = true; break;
                     case "--class": o.Class = Next(); break;
                     case "--renderer": WorldOptions.IgnoreRenderer(Next()); break;
@@ -99,10 +102,9 @@ static class ImpostorApp
 
     static (ImpostorAtlas Atlas, bool Hit) Obtain(ImpostorBaker baker, ImpostorCache cache, ImpostorSource source, ImpostorMeshes meshes, ImpostorClass size, Options o)
     {
-        if (!o.Rebake && !o.Rgba && cache.TryLoad(source) is { } cached && cached.FramePixels == size.FramePixels && cached.Grid == size.Grid) return (cached, true);
-        baker.Compress = !o.Rgba;
+        if (!o.Rebake && cache.TryLoad(source) is { } cached && cached.FramePixels == size.FramePixels && cached.Grid == size.Grid) return (cached, true);
         var atlas = baker.Bake(source, meshes, size);
-        if (!o.Rgba) cache.Save(source, atlas);
+        cache.Save(source, atlas);
         return (atlas, false);
     }
 
@@ -210,7 +212,7 @@ static class ImpostorApp
             PngWriter.Write($"{stem}-atlas-{map.ToString().ToLowerInvariant()}.png", px, px, Flip(rgba, px, px));
         }
 
-        using var preview = new ImpostorPreview(gl, assets) { Parallax = o.Parallax, DepthWrite = o.DepthWrite };
+        using var preview = new ImpostorPreview(gl, assets) { Parallax = o.Parallax, DepthWrite = o.DepthWrite, Blend = o.Blend, Debug = o.Debug };
         preview.SetMesh(source, meshes);
         preview.SetAtlas(atlas);
         var suns = new (string Name, Vector3 Direction)[]

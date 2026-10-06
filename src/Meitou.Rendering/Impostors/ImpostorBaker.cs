@@ -122,6 +122,16 @@ public sealed unsafe class ImpostorBaker : IDisposable
         gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, colour, 0);
         gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, RenderbufferTarget.Renderbuffer, depth);
         if (gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete) throw new InvalidOperationException("impostor bake target incomplete");
+        // The half-size target the row is box-filtered into (a linear blit at exactly 2:1 averages 2 × 2 samples), which is read back.
+        int small = grid * frame;
+        uint smallFbo = gl.GenFramebuffer(), smallColour = gl.GenTexture();
+        gl.BindTexture(TextureTarget.Texture2D, smallColour);
+        gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, (uint)small, (uint)frame, 0, PixelFormat.Rgba, PixelType.UnsignedByte, null);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, smallFbo);
+        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, smallColour, 0);
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
 
         gl.UseProgram(program);
         string[] samplers = ["uDiffuse", "uNormal", "uDiffuse2", "uNormal2", "uHeadDiffuse", "uHeadNormal"];
@@ -137,27 +147,28 @@ public sealed unsafe class ImpostorBaker : IDisposable
         float r = meshes.Radius;
         gl.Uniform4(U("uImpostorSphere"), c.X, c.Y, c.Z, r);
         gl.Enable(EnableCap.DepthTest);
-        gl.DepthFunc(Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_GREATER") == "1" ? DepthFunction.Greater : DepthFunction.Less);
-        if (Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_GREATER") == "1") gl.ClearDepth(0);
+        gl.DepthFunc(DepthFunction.Less);
         gl.DepthMask(true);
         gl.Disable(EnableCap.Blend);
         gl.ColorMask(true, true, true, true);
 
         var assembler = new ImpostorAssembler(grid, frame, size.Levels);
-        var buffers = new[] { new byte[width * samples * 4], new byte[width * samples * 4], new byte[width * samples * 4] };
+        int rowBytes = small * frame * 4;
+        var buffers = new[] { new byte[rowBytes], new byte[rowBytes], new byte[rowBytes] };
         double render = 0, filter = 0;
         Task? previous = null;
-        var spare = new[] { new byte[width * samples * 4], new byte[width * samples * 4], new byte[width * samples * 4] };
+        var spare = new[] { new byte[rowBytes], new byte[rowBytes], new byte[rowBytes] };
         for (int row = 0; row < grid; row++)
         {
             var t0 = watch.Elapsed.TotalMilliseconds;
             for (int pass = 0; pass < 3; pass++)
             {
+                gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
                 gl.UseProgram(program);
                 gl.Uniform1(U("uImpostorPass"), pass);
                 gl.Viewport(0, 0, (uint)width, (uint)samples);
                 gl.ClearColor(0, 0, 0, 0);
-                gl.ClearDepth(Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_GREATER") == "1" ? 0 : 1);
+                gl.ClearDepth(1);
                 gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
                 for (int column = 0; column < grid; column++)
                 {
@@ -176,8 +187,12 @@ public sealed unsafe class ImpostorBaker : IDisposable
                     Draw(mainParts, main);
                     if (leaves is not null) Draw(leavesParts, leaves);
                 }
+                gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, fbo);
+                gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, smallFbo);
+                gl.BlitFramebuffer(0, 0, width, samples, 0, 0, small, frame, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
+                gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, smallFbo);
                 gl.PixelStore(PixelStoreParameter.PackAlignment, 1);
-                gl.ReadPixels<byte>(0, 0, (uint)width, (uint)samples, PixelFormat.Rgba, PixelType.UnsignedByte, buffers[pass].AsSpan());
+                gl.ReadPixels<byte>(0, 0, (uint)small, (uint)frame, PixelFormat.Rgba, PixelType.UnsignedByte, buffers[pass].AsSpan());
             }
             render += watch.Elapsed.TotalMilliseconds - t0;
             // Filter this row on the worker threads while the next one renders.
@@ -196,6 +211,8 @@ public sealed unsafe class ImpostorBaker : IDisposable
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         gl.DeleteFramebuffer(fbo);
         gl.DeleteTexture(colour);
+        gl.DeleteFramebuffer(smallFbo);
+        gl.DeleteTexture(smallColour);
         gl.DeleteRenderbuffer(depth);
         foreach (var p in mainParts.Concat(leavesParts))
         {

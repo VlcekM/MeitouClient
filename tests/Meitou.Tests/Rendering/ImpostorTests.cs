@@ -208,6 +208,26 @@ public class ImpostorTests
         }
     }
 
+    [Fact]
+    public void Bc3_keeps_both_colours_of_a_two_colour_block_and_its_coverage()
+    {
+        // Orange leaves and blue-grey twigs in one block, the rest uncovered (a typical frame edge): both hues must survive.
+        const int size = 4;
+        var rgba = new byte[size * size * 4];
+        for (int i = 0; i < 16; i++)
+        {
+            (byte r, byte g, byte b, byte a) = (i % 3) switch { 0 => ((byte)210, (byte)130, (byte)40, (byte)255), 1 => ((byte)90, (byte)100, (byte)120, (byte)200), _ => ((byte)0, (byte)0, (byte)0, (byte)0) };
+            (rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2], rgba[i * 4 + 3]) = (r, g, b, a);
+        }
+        var decoded = ImpostorEncoder.Decode(ImpostorEncoding.Bc3, ImpostorEncoder.Encode(ImpostorEncoding.Bc3, rgba, size), size);
+        for (int i = 0; i < 16; i++)
+        {
+            Assert.InRange(Math.Abs(decoded[i * 4 + 3] - rgba[i * 4 + 3]), 0, 18);   // half a step of the 0..255 eight-value ramp
+            if (rgba[i * 4 + 3] == 0) continue;
+            for (int c = 0; c < 3; c++) Assert.InRange(Math.Abs(decoded[i * 4 + c] - rgba[i * 4 + c]), 0, 10);
+        }
+    }
+
     static ImpostorSource Source(string directory, string name = "Tree") => new()
     {
         Name = name,

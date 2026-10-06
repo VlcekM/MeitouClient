@@ -4,15 +4,15 @@ namespace Meitou.Rendering.Impostors;
 
 /// <summary>
 /// The CPU half of a bake (docs/impostors.md, "Filtering"): takes the rendered rows of frames (each frame rendered at 2× the frame size with
-/// a hard cut-out), and per frame
+/// a hard cut-out and box-filtered to the frame size on the GPU), and per frame
 /// <list type="number">
-/// <item>reduces 2 × 2 samples to a pixel: coverage = covered samples / 4; albedo, depth and gloss the mean of the covered samples; the
-/// normal their normalised sum (stored octahedrally encoded in the frame's basis, so normals facing away from the frame keep their direction);</item>
+/// <item>undoes the premultiplication: coverage = covered samples / 4; albedo, depth and gloss the mean of the covered samples; the normal
+/// their normalised sum (stored octahedrally encoded in the frame's basis, so normals facing away from the frame keep their direction);</item>
 /// <item>fills the empty pixels by pull-push from the covered ones, so bilinear filtering and the mips never pull in black or a wrong normal at the
 /// silhouette;</item>
 /// <item>builds the mip chain within the frame (coverage-weighted averages, so frames never bleed into each other), down to 4 × 4;</item>
-/// <item>scales each mip's coverage so the share of pixels at or above the 0.5 cut equals level 0's (thin branches do not vanish in the
-/// distance, the alpha-to-coverage mip correction).</item>
+/// <item>scales each level's coverage (level 0's too) so the share of pixels at or above the 0.5 cut equals the frame's covered area (thin
+/// branches do not vanish, nearby or in the distance: the alpha-test mip correction).</item>
 /// </list>
 /// Then <see cref="Finish"/> encodes the levels (BC3 albedo, BC5 normal and depth). Frames are independent, so a row is processed in parallel.
 /// </summary>
@@ -38,15 +38,16 @@ public sealed class ImpostorAssembler
     }
 
     /// <summary>
-    /// One row of frames as rendered: three RGBA8 pictures (albedo + coverage, normal, depth + gloss) of <c>grid × 2·frame</c> by <c>2·frame</c>
-    /// pixels, rows bottom first; alpha 255 where the mesh covers a sample.
+    /// One row of frames, three RGBA8 pictures (albedo, normal × 0.5 + 0.5, depth + gloss) of <c>grid × frame</c> by <c>frame</c> pixels, rows
+    /// bottom first, each the 2 × 2 box average of a picture rendered at twice the size with alpha 1 on covered samples and 0 elsewhere
+    /// (the GPU's linear half-size blit): so alpha is the coverage and the colour is premultiplied by it.
     /// </summary>
     public void AddRow(int row, byte[] albedo, byte[] normal, byte[] depth) =>
         Parallel.For(0, grid, i => Frame(i, row, albedo, normal, depth));
 
     void Frame(int column, int row, byte[] albedo, byte[] normal, byte[] depth)
     {
-        int f = frame, s = 2 * frame, width = grid * s, n = f * f;
+        int f = frame, width = grid * f, n = f * f;
         var cov = new float[n];
         var alb = new float[n * 3];
         var nrm = new float[n * 3];
@@ -54,33 +55,23 @@ public sealed class ImpostorAssembler
         for (int y = 0; y < f; y++)
             for (int x = 0; x < f; x++)
             {
-                int p = y * f + x, count = 0;
-                Vector3 a = default, nn = default;
-                Vector2 d = default;
-                for (int dy = 0; dy < 2; dy++)
-                    for (int dx = 0; dx < 2; dx++)
-                    {
-                        int o = ((2 * y + dy) * width + column * s + 2 * x + dx) * 4;
-                        if (albedo[o + 3] < 128) continue;
-                        count++;
-                        a += new Vector3(albedo[o], albedo[o + 1], albedo[o + 2]) / 255f;
-                        nn += new Vector3(normal[o], normal[o + 1], normal[o + 2]) / 127.5f - Vector3.One;
-                        d += new Vector2(depth[o], depth[o + 1]) / 255f;
-                    }
-                if (count == 0) continue;
-                cov[p] = count / 4f;
-                a /= count;
-                d /= count;
-                nn = Unit(nn);
+                int p = y * f + x, o = (y * width + column * f + x) * 4;
+                if (albedo[o + 3] == 0) continue;
+                float c = albedo[o + 3] / 255f, k = 1 / (255f * c);
+                var a = Vector3.Min(new Vector3(albedo[o], albedo[o + 1], albedo[o + 2]) * k, Vector3.One);
+                var nn = Unit(new Vector3(normal[o], normal[o + 1], normal[o + 2]) * k * 2 - Vector3.One);
+                var d = Vector2.Min(new Vector2(depth[o], depth[o + 1]) * k, Vector2.One);
+                cov[p] = c;
                 (alb[p * 3], alb[p * 3 + 1], alb[p * 3 + 2]) = (a.X, a.Y, a.Z);
                 (nrm[p * 3], nrm[p * 3 + 1], nrm[p * 3 + 2]) = (nn.X, nn.Y, nn.Z);
                 (dep[p * 2], dep[p * 2 + 1]) = (d.X, d.Y);
             }
 
-        // Level 0's share of pixels the runtime cut (coverage ≥ 0.5) keeps: each mip's coverage is scaled to keep it.
-        int kept = 0;
-        foreach (float c in cov) if (c >= 0.5f) kept++;
-        float target = kept / (float)n;
+        // The frame's covered area (the mean of the samples): every level's coverage, level 0's too, is scaled so that the runtime cut
+        // (coverage ≥ 0.5) keeps that share of its pixels. Without it branches thinner than half a pixel vanish (their 2 × 2 coverage is 0.25).
+        float area = 0;
+        foreach (float c in cov) area += c;
+        float target = area / n;
 
         Fill(cov, alb, 3, f);
         Fill(cov, nrm, 3, f);
@@ -98,7 +89,7 @@ public sealed class ImpostorAssembler
             {
                 (cov, alb, nrm, dep) = Reduce(cov, alb, nrm, dep, size * 2);
             }
-            float scale = level == 0 ? 1 : CoverageScale(cov, target);
+            float scale = CoverageScale(cov, target);
             Store(column, row, level, size, cov, scale, alb, nrm, dep);
         }
     }

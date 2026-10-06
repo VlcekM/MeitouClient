@@ -37,7 +37,18 @@ public sealed unsafe class ImpostorTextures : IDisposable
             fixed (byte* p = data)
             {
                 if (texture.Encoding == ImpostorEncoding.Rgba8)
-                    gl.TexImage2D(TextureTarget.Texture2D, level, InternalFormat.Rgba8, size, size, 0, PixelFormat.Rgba, PixelType.UnsignedByte, p);
+                {
+                    // Uncompressed (ImpostorBaker.Compress = false; tests only). Open: through VkGl a 3072² RGBA8 atlas samples wrong coverage
+                    // (the CPU data is right; docs/impostors.md), so the viewer no longer offers it. Each level declared without data, then
+                    // filled in strips of at most 4 MB.
+                    gl.TexImage2D(TextureTarget.Texture2D, level, InternalFormat.Rgba8, size, size, 0, PixelFormat.Rgba, PixelType.UnsignedByte, null);
+                    int strip = (int)Math.Max(1, (4 << 20) / (size * 4));
+                    for (int y = 0; y < size; y += strip)
+                    {
+                        uint rows = (uint)Math.Min(strip, (int)size - y);
+                        gl.TexSubImage2D(TextureTarget.Texture2D, level, 0, y, size, rows, PixelFormat.Rgba, PixelType.UnsignedByte, p + (long)y * size * 4);
+                    }
+                }
                 else
                     gl.CompressedTexImage2D(TextureTarget.Texture2D, level,
                         texture.Encoding == ImpostorEncoding.Bc3 ? InternalFormat.CompressedRgbaS3TCDxt5Ext : (InternalFormat)GLEnum.CompressedRGRgtc2,

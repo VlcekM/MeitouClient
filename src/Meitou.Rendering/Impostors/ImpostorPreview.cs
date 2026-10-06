@@ -44,6 +44,10 @@ internal sealed unsafe class ImpostorPreview : IDisposable
 
     /// <summary>Parallax step in the impostor sampling.</summary>
     public bool Parallax { get; set; }
+    /// <summary>Blend the three frames instead of picking one per pixel.</summary>
+    public bool Blend { get; set; }
+    /// <summary>Unlit debug output of the impostor: 1 albedo, 2 normal, 3 coverage (0 lit).</summary>
+    public int Debug { get; set; }
     /// <summary>Write the impostor's blended depth (<see cref="ImpostorShaders.FragmentWithDepth"/>).</summary>
     public bool DepthWrite { get; set; }
 
@@ -193,7 +197,8 @@ internal sealed unsafe class ImpostorPreview : IDisposable
         gl.Uniform4(U(prog, "uImpostor"), a.Centre.X, a.Centre.Y, a.Centre.Z, a.Radius);
         gl.Uniform1(U(prog, "uImpostorGrid"), (float)a.Grid);
         gl.Uniform1(U(prog, "uImpostorParallax"), Parallax ? 1 : 0);
-        gl.Uniform1(U(prog, "uImpostorDebug"), int.TryParse(Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_DEBUG"), out int debug) ? debug : 0);
+        gl.Uniform1(U(prog, "uImpostorBlend"), Blend ? 1 : 0);
+        gl.Uniform1(U(prog, "uImpostorDebug"), Debug);
         gl.Uniform1(U(prog, "uCoverage"), coverage ? 1 : 0);
         gl.Uniform1(U(prog, "uImpostorAlbedo"), 0);
         gl.Uniform1(U(prog, "uImpostorNormal"), 1);

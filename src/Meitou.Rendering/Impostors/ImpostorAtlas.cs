@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Numerics;
 using System.Text;
 
@@ -7,11 +7,11 @@ namespace Meitou.Rendering.Impostors;
 /// <summary>The three maps of an atlas (docs/impostors.md, "Maps").</summary>
 public enum ImpostorMap
 {
-    /// <summary>RGB: the albedo the mesh shader lights (texture × vertex colour, dual blend); A: coverage (cut-out, mip-coverage preserved).</summary>
+    /// <summary>RGB: the albedo the mesh shader lights (texture Ã— vertex colour, dual blend); A: coverage (cut-out, mip-coverage preserved).</summary>
     Albedo = 0,
-    /// <summary>RG: the shading normal in the frame's basis (x right, y up, z towards the viewer), octahedrally encoded (<see cref="ImpostorLayout.EncodeNormal"/>), × 0.5 + 0.5.</summary>
+    /// <summary>RG: the shading normal in the frame's basis (x right, y up, z towards the viewer), octahedrally encoded (<see cref="ImpostorLayout.EncodeNormal"/>), Ã— 0.5 + 0.5.</summary>
     Normal = 1,
-    /// <summary>R: depth towards the viewer, <c>dot(p − c, dir) / r × 0.5 + 0.5</c>; G: gloss × specular (what the mesh passes to the lighting).</summary>
+    /// <summary>R: depth towards the viewer, <c>dot(p âˆ’ c, dir) / r Ã— 0.5 + 0.5</c>; G: gloss Ã— specular (what the mesh passes to the lighting).</summary>
     Depth = 2,
 }
 
@@ -26,7 +26,7 @@ public enum ImpostorEncoding
     Bc5 = 2,
 }
 
-/// <summary>One map: its encoding and its levels, level 0 first (each <c>Grid × frame / 2^level</c> pixels square, rows bottom first).</summary>
+/// <summary>One map: its encoding and its levels, level 0 first (each <c>Grid Ã— frame / 2^level</c> pixels square, rows bottom first).</summary>
 public sealed class ImpostorTexture
 {
     public required ImpostorMap Map { get; init; }
@@ -48,7 +48,7 @@ public sealed class ImpostorAtlas
     public const int FormatVersion = 1;
 
     /// <summary>Bumped whenever the baker's output changes (shader, filtering, layout): part of the cache key and checked on load.</summary>
-    public const int BakerVersion = 2;
+    public const int BakerVersion = 4;
 
     public required int Grid { get; init; }
     public required int FramePixels { get; init; }
