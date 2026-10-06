@@ -2865,6 +2865,7 @@ byte-identical to the GL baker's. The GL texture names the baker read from `Worl
 the ten views in both modes 0 px against `C:\Temp\base-6f4af19`, tests 472 passed, 0 skipped. The drawing of impostors in the foliage path
 (the rest of that work) is kept on the branch `billboards-wip`, not merged (owner, 2026-10-07): it cost 1.1-2.4 GB of VRAM for little frame
 time (forest, measured on that branch), and its VRAM cut was not finished.
+
 ---
 
 ## 9. Expected CPU cost, and how the profiler keeps working
