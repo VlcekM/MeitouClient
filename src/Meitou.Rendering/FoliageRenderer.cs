@@ -115,8 +115,23 @@ public sealed unsafe class FoliageRenderer : IDisposable
     /// <summary>The nearest grass page of a laid-out zone within four fifths of its range (before the blades sink) that is not uploaded yet.</summary>
     public float NearestMissingGrass { get; private set; } = float.PositiveInfinity;
 
-    /// <summary>Zones within this ground distance of the eye are laid out whole: the longest MEDIUM / CLOSE mesh layer range or grass range at the current settings.</summary>
-    public float NearReach => Math.Max(NearMeshRange * RangeSetting, GrassMaxRange * GrassRangeSetting);
+    /// <summary>
+    /// The <c>range</c> switch (Enhancements): Meitou (true, the default) draws each mesh to the range of its size class
+    /// (<see cref="SmallRange"/>, <see cref="MediumRange"/>, <see cref="LargeRange"/>; <see cref="FoliageSizes"/>) instead of its layer's
+    /// range × <see cref="RangeSetting"/>. Large meshes of FAR layers keep the longer of the two, so the landmark formations still reach
+    /// 8000 × the setting. False: the game's per-layer ranges.
+    /// </summary>
+    public bool MeitouRange { get; set; } = true;
+    /// <summary>How far small, medium and large meshes are drawn with <see cref="MeitouRange"/> (units along the ground; the Tab sliders).</summary>
+    public float SmallRange { get; set; } = FoliageSizes.DefaultSmallRange;
+    public float MediumRange { get; set; } = FoliageSizes.DefaultMediumRange;
+    public float LargeRange { get; set; } = FoliageSizes.DefaultLargeRange;
+    float LongestClassRange => Math.Max(Math.Max(SmallRange, MediumRange), LargeRange);
+    float ClassRange(FoliageSizeClass c) => c switch { FoliageSizeClass.Small => SmallRange, FoliageSizeClass.Medium => MediumRange, _ => LargeRange };
+
+    /// <summary>Zones within this ground distance of the eye are laid out whole: the longest MEDIUM / CLOSE mesh layer range (with
+    /// <see cref="MeitouRange"/>: the longest class range, as any class can be in a MEDIUM layer) or grass range at the current settings.</summary>
+    public float NearReach => Math.Max(MeitouRange ? LongestClassRange : NearMeshRange * RangeSetting, GrassMaxRange * GrassRangeSetting);
     /// <summary>Zones within this distance are laid out at least for their far layers (FAR, 8000 x the setting).</summary>
     public float FarReach => Math.Max(MeshRange * RangeSetting, NearReach);
     /// <summary>The longest range of a mesh layer that is not a far layer (<see cref="FoliageLayout.IsFarLayer"/>), at setting 1.</summary>
@@ -168,7 +183,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
     }
 
     /// <summary>A zone's instances grouped per (mesh, layer) with their arrays built, made on a worker.</summary>
-    sealed record PreparedGroup(FoliageMesh Mesh, FoliageLayer Layer, Matrix4x4[] Transforms, Vector3[] Positions, float[] Scales, float MaxScale);
+    sealed record PreparedGroup(FoliageMesh Mesh, FoliageLayer Layer, FoliageInstanceRecord[] Instances, float MaxScale);
     sealed record PreparedZone(List<PreparedGroup> Groups, float MinY, float MaxY);
 
     static PreparedZone Prepare(FoliageZone zone)
@@ -177,7 +192,11 @@ public sealed unsafe class FoliageRenderer : IDisposable
         foreach (var g in zone.Instances.GroupBy(i => (i.Mesh, i.Layer)))
         {
             var list = g.ToList();
-            groups.Add(new PreparedGroup(g.Key.Mesh, g.Key.Layer, [.. list.Select(i => i.Transform)], [.. list.Select(i => i.Position)], [.. list.Select(i => i.Scale)], list.Max(i => i.Scale)));
+            int index = groups.Count;
+            var records = new FoliageInstanceRecord[list.Count];
+            for (int i = 0; i < records.Length; i++)
+                records[i] = new FoliageInstanceRecord { Transform = list[i].Transform, Ground = new Vector4(list[i].Position.X, list[i].Position.Z, list[i].Scale, index) };
+            groups.Add(new PreparedGroup(g.Key.Mesh, g.Key.Layer, records, list.Max(i => i.Scale)));
         }
         return new PreparedZone(groups, zone.Instances.Count == 0 ? 0 : zone.Instances.Min(i => i.Position.Y), zone.Instances.Count == 0 ? 0 : zone.Instances.Max(i => i.Position.Y));
     }
@@ -188,11 +207,13 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public required MeshAsset Asset;
         /// <summary>The layer's range at setting 1 and its transition: the drawn range follows the current <see cref="RangeSetting"/> (<see cref="RangeOf"/>).</summary>
         public required float BaseRange, Transition;
+        /// <summary>Placed by a FAR layer (<see cref="FoliageLayout.IsFarLayer"/>).</summary>
+        public required bool Far;
         /// <summary>The largest instance scale: how far a mesh's bounds can reach from its instance's position (the zone's cull box).</summary>
         public required float MaxScale;
-        public required Matrix4x4[] Transforms;
-        public required Vector3[] Positions;
-        public required float[] Scales;
+        /// <summary>The instances (<see cref="FoliageCull"/>'s records), their bounding spheres filled once the mesh's bounds are known (<see cref="SpheresReady"/>).</summary>
+        public required FoliageInstanceRecord[] Instances;
+        public bool SpheresReady;
     }
 
     sealed class GrassPage
@@ -373,10 +394,9 @@ public sealed unsafe class FoliageRenderer : IDisposable
                 Asset = AssetFor(g.Mesh),
                 BaseRange = g.Layer.Range,
                 Transition = g.Layer.Transition,
+                Far = FoliageLayout.IsFarLayer(g.Layer),
                 MaxScale = g.MaxScale,
-                Transforms = g.Transforms,
-                Positions = g.Positions,
-                Scales = g.Scales,
+                Instances = g.Instances,
             });
         state.Groups = groups;
         state.Instances = zone.Instances.Count;
@@ -394,10 +414,18 @@ public sealed unsafe class FoliageRenderer : IDisposable
     }
 
     /// <summary>The range a group is drawn to at the current <see cref="RangeSetting"/>, and its fade band: the game's transition is 10 units
-    /// (100 for wind layers), too short to see, so a tenth of the range instead.</summary>
+    /// (100 for wind layers), too short to see, so a tenth of the range instead.
+    /// With <see cref="MeitouRange"/> the range is the mesh's size class's (the longest class range until the mesh is decoded and its size known),
+    /// or for a large mesh of a FAR layer the longer of that and the layer's; the band is the same rule.</summary>
     (float Range, float Band) RangeOf(Group g)
     {
         float range = g.BaseRange * RangeSetting;
+        if (MeitouRange)
+        {
+            var a = g.Asset;
+            float size = a.HasBounds ? ClassRange(a.SizeClass) : LongestClassRange;
+            range = g.Far && (!a.HasBounds || a.SizeClass == FoliageSizeClass.Large) ? Math.Max(range, size) : size;
+        }
         return (range, Math.Max(g.Transition, range * 0.1f));
     }
 
@@ -554,6 +582,9 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public bool Terrain => Mesh.MaterialType == 2;
         public Vector3 Centre;
         public float Radius = 1;
+        /// <summary><see cref="Centre"/>, <see cref="Radius"/> and <see cref="SizeClass"/> are known (the mesh was decoded once; they never change).</summary>
+        public bool HasBounds;
+        public FoliageSizeClass SizeClass;
     }
 
     sealed class GpuMesh
@@ -623,6 +654,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
             if (leaves is not null) { min = Vector3.Min(min, leaves.Min); max = Vector3.Max(max, leaves.Max); }
             a.Centre = (min + max) / 2;
             a.Radius = Math.Max((max - min).Length() / 2, 1);
+            a.SizeClass = FoliageSizes.Classify(FoliageSizes.Size(a.Radius, a.Mesh));
+            a.HasBounds = true;
             QueueMesh(a, main, leaves);
         }
     }
@@ -797,6 +830,8 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public required MeshAsset Asset;
         public Matrix4x4[] Data = new Matrix4x4[64];
         public int Count, Offset;
+        /// <summary>The <see cref="Draw"/> call that last put this batch into <c>active</c> (<see cref="BatchOf"/>).</summary>
+        public long Stamp = -1;
 
         public void Add(in Matrix4x4 m)
         {
@@ -806,9 +841,14 @@ public sealed unsafe class FoliageRenderer : IDisposable
     }
 
 
-    /// <summary>An instance in range of the shadow cascades' eye, kept for the frame's further cascades (see <see cref="Draw"/>).</summary>
-    readonly record struct ShadowCandidate(MeshAsset Asset, Matrix4x4 Transform, Vector3 Centre, float Radius, float Weight);
+    /// <summary>An instance in range of the shadow cascades' eye (its group's records and index), kept for the frame's further cascades (see <see cref="Draw"/>).</summary>
+    readonly record struct ShadowCandidate(MeshAsset Asset, FoliageInstanceRecord[] Instances, int Index, float Weight);
     readonly List<ShadowCandidate> shadowCandidates = [];
+    /// <summary>The meshes of the recording pass's work list, in order: the further cascades' batch order (<see cref="CullCandidates"/>).</summary>
+    readonly List<MeshAsset> shadowCandidateOrder = [];
+    /// <summary>Counts <see cref="Draw"/> calls (<see cref="Batch.Stamp"/>).</summary>
+    long drawStamp;
+    readonly FoliageCullView cullView = new();
     long shadowCandidatesFrame = -1, updates;
     Vector3 shadowCandidatesEye;
     float shadowCandidatesRange;
@@ -823,11 +863,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
             foreach (var gp in a.Main!.Parts) terrainDraws.Add((gp.PlainVao, gp.Count, t));
             return;
         }
-        if (!batches.TryGetValue(a, out var batch)) batches[a] = batch = new Batch { Asset = a };
-        if (batch.Count == 0) active.Add(batch);
-        var m = t;
-        m.M14 = w >= 0.999f ? 2 : w;
-        batch.Add(m);
+        BatchOf(a).Add(FoliageCull.Packed(t, w));
     }
     /// <summary>Draws the foliage seen from <paramref name="eye"/> through <paramref name="frustum"/>. Without <paramref name="grass"/> only the meshes (e.g. for a reflection).
     /// <paramref name="continuation"/>: a further depth slice of the same frame, adding to the counts and the GPU time. <paramref name="maxRange"/> caps every layer's range (the reflection).</summary>
@@ -837,17 +873,20 @@ public sealed unsafe class FoliageRenderer : IDisposable
         if (!Enabled) return;
         int timer = grass ? BeginTimer(continuation) : -1;
         var cpu = Stopwatch.StartNew();
-        foreach (var b in batches.Values) b.Count = 0;
+        drawStamp++;
         active.Clear();
         terrainDraws.Clear();
 
         // 1. Cull: each instance by its distance along the ground (the game's pages) and its bounding sphere, the groups (a mesh in a zone)
         // in parallel, each into its own list, merged into the batches in order (the same instance order as one pass would give). The shadow
         // cascades of a frame share one pass over the zones (DrawDepth with the same eye and range): it keeps every instance in range, and
-        // each cascade then only tests those spheres against its own frustum.
+        // each cascade then only tests those spheres against its own frustum. The batches are drawn in the order of their mesh's first
+        // group in the work list, whatever is visible (step A1 of docs/renderer-native.md: an order a GPU cull can reproduce), minus the empty ones.
         bool cachedDepth = depthPass && shadowCandidatesFrame == updates && shadowCandidatesEye == eye && shadowCandidatesRange == maxRange;
-        if (cachedDepth) CullCandidates(frustum, options);
-        else CullZones(eye, frustum, options, maxRange, record: depthPass);
+        cullView.Set(frustum);
+        if (cachedDepth) CullCandidates(options);
+        else CullZones(eye, options, maxRange, record: depthPass);
+        active.RemoveAll(static b => b.Count == 0);
         double tCull = cpu.Elapsed.TotalMilliseconds;
         StageClock.Sub("fol cull");
 
@@ -931,22 +970,18 @@ public sealed unsafe class FoliageRenderer : IDisposable
 
     // ---- culling (Draw step 1) ----
 
-    /// <summary>One group's share of a culling pass: the instances it keeps, as batch matrices (row 0 w = the fade), and the shadow candidates when recording.</summary>
-    sealed class CullOutput
+
+    /// <summary>A further cascade's share of the candidates: the visible ones as batch matrices, in runs of one mesh.</summary>
+    sealed class CandidateOutput
     {
         public Matrix4x4[] Visible = new Matrix4x4[64];
         public int Count;
-        public ShadowCandidate[] Candidates = new ShadowCandidate[64];
-        public int CandidateCount;
-        /// <summary>Runs of <see cref="Visible"/> that share a mesh (the shadow candidates' chunks).</summary>
         public readonly List<(MeshAsset Asset, int Start, int Count)> Runs = [];
     }
 
-    readonly List<(Group Group, float Range, float Band)> cullWork = [];
-    readonly List<CullOutput> cullOutputs = [];
-
-    /// <summary>The fade packed into a batch matrix: row 0 w, 2 = fully visible (see <see cref="FoliageShaders.MeshVertex"/>).</summary>
-    static Matrix4x4 Packed(in Matrix4x4 t, float w) { var m = t; m.M14 = w >= 0.999f ? 2 : w; return m; }
+    /// <summary>The groups a culling pass tests, in order (the batch order follows it), with their range for this view.</summary>
+    readonly List<(Group Group, FoliageGroupRange Range)> cullWork = [];
+    readonly List<FoliageCullOutput> cullOutputs = [];
 
     /// <summary>
     /// How far beyond its instances' positions a zone's meshes can reach: the largest (bounds radius + bounds centre offset) x the largest scale
@@ -962,9 +997,10 @@ public sealed unsafe class FoliageRenderer : IDisposable
         return margin;
     }
 
-    void CullZones(Vector3 eye, Vector4[] frustum, WorldRenderOptions options, float maxRange, bool record)
+    void CullZones(Vector3 eye, WorldRenderOptions options, float maxRange, bool record)
     {
-        if (record) { shadowCandidates.Clear(); (shadowCandidatesFrame, shadowCandidatesEye, shadowCandidatesRange) = (updates, eye, maxRange); }
+        var frustum = cullView.Planes;
+        if (record) { shadowCandidates.Clear(); shadowCandidateOrder.Clear(); (shadowCandidatesFrame, shadowCandidatesEye, shadowCandidatesRange) = (updates, eye, maxRange); }
         // The zones and groups in range, on this thread (reloads start here).
         cullWork.Clear();
         foreach (var state in zones.Values)
@@ -991,50 +1027,48 @@ public sealed unsafe class FoliageRenderer : IDisposable
                     if (!g.Asset.Failed) NearestMissingMesh = Math.Min(NearestMissingMesh, zoneDistance);
                     continue;
                 }
-                cullWork.Add((g, range, band));
+                cullWork.Add((g, FoliageGroupRange.Of(range, band)));
             }
         }
-        while (cullOutputs.Count < cullWork.Count) cullOutputs.Add(new CullOutput());
+        // The batch order: each mesh's first group in the work list (TERRAIN-mode rocks have no batch).
+        foreach (var (g, _) in cullWork)
+        {
+            if (record) shadowCandidateOrder.Add(g.Asset);
+            if (!(g.Asset.Terrain && options.Textures)) BatchOf(g.Asset);
+        }
+        while (cullOutputs.Count < cullWork.Count) cullOutputs.Add(new FoliageCullOutput());
         var eyeXz = new Vector2(eye.X, eye.Z);
+        var view = cullView;
         RenderJobs.For(cullWork.Count, k =>
         {
-            var (g, range, band) = cullWork[k];
-            var output = cullOutputs[k];
-            output.Count = output.CandidateCount = 0;
-            var a = g.Asset;
-            for (int i = 0; i < g.Positions.Length; i++)
+            var (g, range) = cullWork[k];
+            if (!g.SpheresReady)
             {
-                var p = g.Positions[i];
-                float d = Vector2.Distance(new Vector2(p.X, p.Z), eyeXz);
-                if (d >= range) continue;
-                ref var t = ref g.Transforms[i];
-                var centre = Vector3.Transform(a.Centre, t);
-                float radius = a.Radius * g.Scales[i];
-                float w = Math.Clamp((range - d) / band, 0, 1);
-                if (record)
-                {
-                    if (output.CandidateCount == output.Candidates.Length) Array.Resize(ref output.Candidates, output.CandidateCount * 2);
-                    output.Candidates[output.CandidateCount++] = new ShadowCandidate(a, t, centre, radius, w);
-                }
-                if (!SphereVisible(frustum, centre, radius)) continue;
-                if (output.Count == output.Visible.Length) Array.Resize(ref output.Visible, output.Count * 2);
-                output.Visible[output.Count++] = Packed(t, w);
+                FoliageCull.FillSpheres(g.Instances, g.Asset.Centre, g.Asset.Radius);   // the mesh's bounds are known once it is resident, and never change
+                g.SpheresReady = true;
             }
+            FoliageCull.CullGroup(g.Instances, range, eyeXz, view, record, cullOutputs[k]);
         });
         for (int k = 0; k < cullWork.Count; k++)
         {
             var output = cullOutputs[k];
-            if (record) shadowCandidates.AddRange(output.Candidates.AsSpan(0, output.CandidateCount));
-            EmitAll(cullWork[k].Group.Asset, output.Visible.AsSpan(0, output.Count), options);
+            var g = cullWork[k].Group;
+            if (record)
+                for (int i = 0; i < output.InRangeCount; i++)
+                    shadowCandidates.Add(new ShadowCandidate(g.Asset, g.Instances, output.InRange[i], output.InRangeFade[i]));
+            EmitAll(g.Asset, output.Visible.AsSpan(0, output.Count), options);
         }
     }
 
     /// <summary>A further shadow cascade: the frame's recorded candidates against this cascade's frustum (tested in parallel, emitted in order).</summary>
-    void CullCandidates(Vector4[] frustum, WorldRenderOptions options)
+    void CullCandidates(WorldRenderOptions options)
     {
+        foreach (var a in shadowCandidateOrder)
+            if (!(a.Terrain && options.Textures)) BatchOf(a);
         int count = shadowCandidates.Count, chunks = (count + CandidateChunk - 1) / CandidateChunk;
-        while (candidateOutputs.Count < chunks) candidateOutputs.Add(new CullOutput());
+        while (candidateOutputs.Count < chunks) candidateOutputs.Add(new CandidateOutput());
         var list = shadowCandidates;
+        var view = cullView;
         // Each chunk keeps its visible candidates as batch matrices, in runs of one mesh (the candidates were recorded group by group).
         RenderJobs.For(chunks, k =>
         {
@@ -1045,10 +1079,11 @@ public sealed unsafe class FoliageRenderer : IDisposable
             for (int i = k * CandidateChunk, end = Math.Min(i + CandidateChunk, count); i < end; i++)
             {
                 ref readonly var c = ref span[i];
-                if (!SphereVisible(frustum, c.Centre, c.Radius)) continue;
+                ref readonly var r = ref c.Instances[c.Index];
+                if (!FoliageCull.SphereVisible(view, r.Sphere)) continue;
                 if (output.Runs.Count == 0 || output.Runs[^1].Asset != c.Asset) output.Runs.Add((c.Asset, output.Count, 0));
                 if (output.Count == output.Visible.Length) Array.Resize(ref output.Visible, output.Count * 2);
-                output.Visible[output.Count++] = Packed(c.Transform, c.Weight);
+                output.Visible[output.Count++] = FoliageCull.Packed(r.Transform, c.Weight);
                 var run = output.Runs[^1];
                 output.Runs[^1] = run with { Count = run.Count + 1 };
             }
@@ -1061,12 +1096,18 @@ public sealed unsafe class FoliageRenderer : IDisposable
     }
 
     const int CandidateChunk = 2048;
-    readonly List<CullOutput> candidateOutputs = [];
+    readonly List<CandidateOutput> candidateOutputs = [];
 
+    /// <summary>The mesh's batch, put into <c>active</c> (emptied) by the first call of this <see cref="Draw"/>.</summary>
     Batch BatchOf(MeshAsset a)
     {
         if (!batches.TryGetValue(a, out var batch)) batches[a] = batch = new Batch { Asset = a };
-        if (batch.Count == 0) active.Add(batch);
+        if (batch.Stamp != drawStamp)
+        {
+            batch.Stamp = drawStamp;
+            batch.Count = 0;
+            active.Add(batch);
+        }
         return batch;
     }
 
@@ -1305,13 +1346,6 @@ public sealed unsafe class FoliageRenderer : IDisposable
     {
         gl.ActiveTexture(TextureUnit.Texture0 + unit);
         gl.BindTexture(TextureTarget.Texture2D, texture);
-    }
-
-    static bool SphereVisible(Vector4[] planes, Vector3 centre, float radius)
-    {
-        foreach (var p in planes)
-            if (p.X * centre.X + p.Y * centre.Y + p.Z * centre.Z + p.W < -radius * MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z)) return false;
-        return true;
     }
 
     // GPU timing with timestamps (the frame itself may be inside a TimeElapsed query, which cannot nest).

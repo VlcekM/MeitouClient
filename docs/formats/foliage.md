@@ -205,6 +205,35 @@ The order of work in a zone:
   instances whether or not any other layer is placed. Of the 257 layers the BIOMES use, 5 have such a mesh; all 13 FAR layers
   stand alone (base game, Observed by listing). The viewer uses this to lay out only the FAR layers of distant zones.
 
+## Mesh sizes
+
+Not a game concept: the game ranges a mesh by its layer only ("Distances"). The viewer's Meitou `range` switch draws meshes by size instead
+(docs/viewer.md, "Foliage"), so the sizes of the meshes the biomes place were measured (**Observed**, 2026-10-06, a scratch survey over the
+install's load order: every FOLIAGE_MESH of a non-grass layer of a BIOMES record, children included, 643 meshes, all of them found and
+decoded). A mesh's **size** is its bounding radius (half the diagonal of the box around the mesh and its leaves mesh, at least 1; what the
+renderer measures after decoding) times the larger of its record's two scale limits (`MaxScale`; some records have them swapped, e.g.
+`Land Sail-Wrapped` 0.8 / 0.4).
+
+- Spread: median 83 units; 5 % below 4, 25 % below 29, 75 % below 295, 95 % below 858; the largest are `FOLIAGE_Plant_Swamp-TwigLarger`
+  (3169) and `Giant_MultiLimbTree` (2020). Unscaled radii run from 1 (skeleton parts) to 3209 (`Jungle_TREE&Branches`, placed at scale
+  0.07 to 0.13), so the scale must be part of the measure.
+- **Classes** (`FoliageSizes`): **small** below 40, **medium** 40 to 125, **large** from 125. 205 small, 157 medium, 281 large meshes. The
+  thresholds come from the default class ranges 800 / 2500 / 5000: the largest small mesh at the end of the small range subtends the same
+  angle as the largest medium one at the end of the medium range (40 / 800 = 125 / 2500); the smallest large mesh ends at 5000 at half that.
+- Examples (size): small: skeleton parts (2-6), `Robotics-Junk` (6-25), small boulders (`Bouldersmall*`, 3-8), the `SPARSER` junk pieces
+  (9-27), `Bleached_Skull01` (12), cacti trumpets (18-22), `Thorny Plant Singles` (13), motor parts (33-39); medium: `TechJunk04` (64),
+  `TechRustyJunk_05` (59), boulders (`FOLIAGE_Boulder_GREY-01` 86, `DUNE_Boulder06` 44), `SageBrush` (77), `RuinBlocks` (52-53), `CacTreeTu`
+  (47-82), most bone clusters (74-110); large: trees (`Thin Tree [Wide]` 145, `CraggyTree` 207, `Cascade Tree01` 221, `Foliage_CYPRUS-TYPE`
+  429, `BushTree01` 626), ruins (`HugeRuinWall` 484-485, `Crumble-Building_Corner01` 541, `RUIN-RefineryHead` 215-551), wrecks
+  (`JunkSat01` 355), rock stacks and hoodoos (`Foliage_1K_RockStack` 198-226, `FlatTop_Hoodoo` 237-348, `Rock01 Foliage-Rockstack` 937-960),
+  resource rocks (160-210), the FAR formations (`Barkworm_Pillar` 569-1895, `Canyon_NewBlockside` 333-560).
+- Near the large threshold (where the choice is a judgement): medium `Baobabesque Tree` and `FruitBall_Tree` (121), `SpindleTree05` (112),
+  `PalmType OASIS` (106), `Rod-Tree` (89-91); large swamp ferns (126-151), `BigGrassClump` (136), `TreeFall01` (134), `Skin_Cliff_Ridge`
+  (148-151). Test: `Base_game_meshes_fall_into_the_expected_classes`.
+- The FAR layers (13 of the 257 the biomes use) are mostly large formations: `Barkworm_Pillars`, `BlackRocks`, `Canyon_NewBlocksides`,
+  `Rusty Land Extrusions`, `MoltenCliffStrings`, `Ejecta-Boulder01`, `Foliage_1K_RockStacks KenshiBowl`. Small and medium meshes in them are
+  children (`SageBrush` and `Cactus_Type03` under `BlackRocks`). The trees are MEDIUM layers.
+
 ## Materials
 
 **Verified (decompiled)**; runtime-materials.md has the builder and its flags.

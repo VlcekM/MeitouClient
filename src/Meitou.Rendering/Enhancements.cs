@@ -31,7 +31,8 @@ public static class Enhancements
     /// The switches, in key order (F1 upwards in the viewer), over the post-processing options and the haze strength
     /// (docs/formats/post-processing.md and sky.md for what the game does).
     /// </summary>
-    public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<float> hazeStrength, Action<float> setHazeStrength, Func<bool> meitouShadows, Action<bool> setMeitouShadows) =>
+    public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<float> hazeStrength, Action<float> setHazeStrength, Func<bool> meitouShadows, Action<bool> setMeitouShadows,
+        Func<bool> meitouRange, Action<bool> setMeitouRange) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -46,6 +47,9 @@ public static class Enhancements
         new("shadows", "Shadows", "CSM", "soft, far terrain",
             meitouShadows, setMeitouShadows,
             "the game draws hard-edged cascades that end abruptly at the shadow range; Meitou fits them to the view, filters them softly with contact-hardening penumbrae, blends the cascades, and lets mountains shadow the land out to the horizon"),
+        new("range", "Foliage ranges", "per layer", "by size",
+            meitouRange, setMeitouRange,
+            "the game ends all of a layer's meshes at one range (1000 x foliage range for most: trees, ruins, junk and litter alike); Meitou draws large meshes (trees, ruins, wrecks, rock stacks) far, medium ones (junk, boulders, bushes) midway and small ones (litter, small plants) near, each class with its own Tab slider"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

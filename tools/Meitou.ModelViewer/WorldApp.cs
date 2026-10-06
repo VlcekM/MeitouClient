@@ -246,7 +246,8 @@ static partial class WorldApp
         var keyItems = DebugOverlay.KeyItems(WorldOptions.Usage);
         // F1 upwards: the Faithful / Meitou switches (Enhancements), in order.
         var switches = Enhancements.Create(o.Post, () => gpu?.Sky.HazeStrength ?? o.HazeStrength, v => { if (gpu is not null) gpu.Sky.HazeStrength = v; },
-            () => gpu?.Shadow?.Meitou ?? o.MeitouShadows, v => { o.MeitouShadows = v; if (gpu?.Shadow is { } s) s.Meitou = v; });
+            () => gpu?.Shadow?.Meitou ?? o.MeitouShadows, v => { o.MeitouShadows = v; if (gpu?.Shadow is { } s) s.Meitou = v; },
+            () => gpu?.Foliage?.MeitouRange ?? o.MeitouRange, v => { o.MeitouRange = v; if (gpu?.Foliage is { } f) f.MeitouRange = v; });
 
         {
             gpu = CreateGpu(gl, install, scene, assets, o, interactive: true);

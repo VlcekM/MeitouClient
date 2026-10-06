@@ -414,6 +414,31 @@ The draw count grows with the area (x8: 3.2 times x4's); mesh instances are batc
 the rest is the shadow cascade 0 (the foliage culling it pays for: 0.46 -> 2.2 ms), the cascade-3 casters (0.14 -> 0.9) and the post stage's grass-motion redraw (33 -> 936 draws,
 0.21 -> 2.2 ms). The GPU frame time grew 8.2 -> 15.4 ms (Release) at x8 as well.
 
+### Foliage ranges by size (the `range` switch)
+
+`trees` and `junk` views, Release, Meitou shadows, `--fly-benchmark 300 --fly-speed 0`, `MEITOU_PASS_STATS=1 MEITOU_PASS_STATS_SKIP=80`, foliage x4;
+`--faithful range` against Meitou ranges at three slider sets (large / medium / small: low 3000 / 1500 / 500, default 5000 / 2500 / 800, high
+8000 / 4000 / 1600, through `--range-large/-medium/-small`), interleaved, 2 runs each, mean of the two (**Observed** 2026-10-06; the owner was gaming on
+the machine, so the frame means were noisy, 6-12 ms for the same run: the table gives the frame p50 and the per-stage means; compare within a view only).
+"fol cull" is the sum of the culling steps (the main pass's depth slices and the first shadow cascade's shared candidate pass).
+
+| view | ranges | foliage meshes drawn (main pass) | frame CPU p50 ms | foliage stage ms | shadow c0 ms | fol cull ms | meshes laid out (settle) |
+|---|---|---|---|---|---|---|---|
+| trees | Faithful (4000 for MEDIUM) | 5 034 | 7.47 | 3.50 | 1.73 | 4.11 | 128 471 (5.1 s) |
+| trees | Meitou low | 368 | 5.24 | 2.25 | 0.53 | 1.03 | 128 471 |
+| trees | Meitou default | 1 202 | 5.67 | 2.12 | 0.86 | 1.21 | 187 864 (11.5 s) |
+| trees | Meitou high | 3 619 | 6.42 | 2.39 | 1.26 | 1.93 | 325 409 |
+| junk | Faithful | 671 | 5.61 | 2.82 | 0.79 | 2.65 | 44 161 |
+| junk | Meitou low | 260 | 4.63 | 1.61 | 0.56 | 0.60 | 44 161 |
+| junk | Meitou default | 377 | 4.70 | 1.75 | 0.58 | 0.81 | 56 979 |
+| junk | Meitou high | 545 | 5.96 | 3.06 | 0.90 | 1.61 | 91 244 |
+
+Reading: most of the instances the game's per-layer range draws at x4 are small and medium meshes (litter, bushes, boulders), so the default
+Meitou ranges draw a quarter of the trees view's meshes while reaching 1000 units further for the large ones; the culling cost follows the
+number of instances in range (Faithful's 4.1 ms of culling in the trees view against 1.2). The longer near reach (the longest class range,
+5000, against 4000) lays out 1.5 times the meshes on the worker threads and doubles the settle time of a still picture; at 8000 it is 2.5 times.
+The low and default rows differ by less than the noise. GPU frame times were 3.7-5.7 ms in all rows.
+
 ### Reading
 
 **What dominates** (Release, forest, Meitou shadows, 3.35 ms; Debug 9.5 ms): (1) the foliage stage, 1.0 ms (Debug 3.1): 298 grass-page draws take 0.68 ms of it, the instanced meshes 0.10, the

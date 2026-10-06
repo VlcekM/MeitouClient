@@ -760,6 +760,12 @@ contraction into FMA) and the C#'s operation order, the GPU reproduces scalar C#
   first *candidate* group in `cullWork`, not their first visible instance. Gate A1 against the build before. Expected: 0 differing pixels.
   A non-zero result must be traced to a named instance (draw log), because the only pixels that can move are depth ties between different
   meshes and dither thresholds within an ulp.
+  **Done (2026-10-06)**: `FoliageCull` (`FoliageInstanceRecord` of 5.2, spheres filled once per group when the mesh's bounds are known,
+  `FoliageGroupRange` with range² and 1 / band, `FoliageCullView` with the normal lengths, batches in first-candidate order, the cascades'
+  too); scalar `sqrt(dx² + dz²)` measured bit-identical to `Vector2.Distance` (2M samples), the reciprocal fade within 1 ulp (tests
+  `FoliageCullTests`). Gate: 0 differing pixels in all ten views (`--faithful all` in Debug, Meitou with `--faithful range` in Release), except the rock view, which differs between
+  two runs of the base build itself (21 pixels at 13:00, 6 at 02:00, one spot at (717-724, 315-323)); A1's rock pictures equal one of the
+  base runs' exactly (docs/viewer.md, "Foliage").
 - **A2, GPU port.** The same formulas on the GPU. The remaining divergence is the square root inside the fade (`d` for w). A **cull
   verification mode** (`MEITOU_GPU_CULL_VERIFY=1`) runs the A1 CPU cull as well, reads the GPU's per-view lists back a frame later, and
   reports any difference in visible sets (must be none), order (must be none) and fade (each difference with its ulp distance). The pixel
@@ -778,6 +784,10 @@ These change the picture on purpose, so they are not part of any parity step. Th
 - **Size-based ranges** (`foliage-range`, name open, open question 3): an instance's range follows its projected size (bounding radius
   over distance against a pixel threshold), capped by the layer's range × the setting. Large trees go far, small junk stops sooner. This
   is how small things become affordable at several thousand units. The draw-distance targets themselves are open question 4.
+  **Done on the CPU (2026-10-06)** as the `range` switch, by size class per mesh rather than per instance (a group keeps one range, so the
+  ChunkRecord's per-view range carries it unchanged): large / medium / small at 5000 / 2500 / 800 by default, Tab sliders and
+  `--range-large|medium|small`; FAR layers' large meshes keep the longer of that and 8000 × the setting (docs/viewer.md "Foliage",
+  docs/formats/foliage.md "Mesh sizes").
 - **LOD selection on the GPU** (objects, C): `MeshLod.Select` / `Blend` per instance in the cull kernel, with two outputs while blending,
   as the CPU emits them. This is parity-relevant (the LOD rule is the game's), so it follows the A1/A2 pattern.
 - **Impostors** (`impostors`): octahedral impostor atlases rendered per mesh at load, drawn beyond a distance as one quad per instance from
