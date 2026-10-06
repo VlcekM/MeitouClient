@@ -29,6 +29,9 @@ sealed class WorldOptions
     public bool NoFoliage;
     public float Hour = 13;
     public float ViewDistance = 450000, FogDistance = 250000, MaterialDistance = 30000;
+    /// <summary>Terrain LOD (<see cref="TerrainLod"/>): the screen-space error in render pixels near the eye, far (null: in proportion to the defaults) and where the ramp between them starts.</summary>
+    public float TerrainError = WorldRenderOptions.DefaultTerrainPixelError, TerrainRamp = WorldRenderOptions.DefaultTerrainRampStart;
+    public float? TerrainFarError;
     public bool NoWater, NoStream, NoReflections, SimpleSky, ShowKeys;
     /// <summary>The game's <c>texture resolution gimping</c> (0..4; missing key: 1) and <c>water reflection</c> (0..4; missing: 2) / <c>reflection range</c> (missing: 0.6) settings (docs/formats/settings.md).</summary>
     // The viewer starts at full quality (the old look); the game's missing-key defaults are TextureQuality.Default (1),
@@ -113,6 +116,8 @@ sealed class WorldOptions
           --view-distance <u>      furthest terrain drawn (default 450000: the whole world)
           --fog <u>                distance where the haze is complete (default 250000)
           --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
+          --terrain-error <px>     terrain LOD: the height error allowed near the eye, in pixels of the rendered picture (default 10; Tab slider)
+          --terrain-far-error <px> --terrain-ramp <u>   the error grows to the far one between the ramp distance and twice it (defaults 10: no ramp, 7500)
           --wireframe --info
           --post <meitou|kenshi|off>   post-processing preset (default meitou), before the options below: HDR scene, SSAO
           --ssao / --no-ssao, --dither / --no-dither   --no-fxaa
@@ -214,6 +219,9 @@ sealed class WorldOptions
                 case "--view-distance": o.ViewDistance = F(); break;
                 case "--fog": o.FogDistance = F(); break;
                 case "--material-distance": o.MaterialDistance = F(); break;
+                case "--terrain-error": o.TerrainError = F(); break;
+                case "--terrain-far-error": o.TerrainFarError = F(); break;
+                case "--terrain-ramp": o.TerrainRamp = F(); break;
                 case "-h" or "--help": return null;
                 default: throw new ArgumentException($"unknown option {a}");
             }
@@ -325,7 +333,8 @@ static class WorldFrame
             MinViewDistance = o.ViewDistance,
             SplitDistance = Math.Max(20000, o.ObjectDistance * 1.1f),
         };
-        var render = new WorldRenderOptions { Textures = !o.NoTextures, Objects = !o.NoObjects, Water = !o.NoWater, Reflections = !o.NoReflections, Wireframe = o.Wireframe ? 1 : 0, Debug = o.Debug, MaterialDistance = o.MaterialDistance };
+        var render = new WorldRenderOptions { Textures = !o.NoTextures, Objects = !o.NoObjects, Water = !o.NoWater, Reflections = !o.NoReflections, Wireframe = o.Wireframe ? 1 : 0, Debug = o.Debug, MaterialDistance = o.MaterialDistance,
+            TerrainPixelError = o.TerrainError, TerrainFarPixelError = o.TerrainFarError ?? WorldRenderOptions.DefaultTerrainFarPixelError * o.TerrainError / WorldRenderOptions.DefaultTerrainPixelError, TerrainRampStart = o.TerrainRamp };
         return (camera, render);
     }
 
@@ -385,7 +394,7 @@ static class WorldFrame
         Meitou.Data.Textures.TextureQuality.Level = o.TextureQuality;
         int layerSize = Math.Max(Math.Min(o.LayerSize, 2048 >> Meitou.Data.Textures.TextureQuality.LevelsToDrop("terrain.dds", "Landscape")), 16);
         if (layerSize != o.LayerSize) Console.WriteLine($"textures  quality {o.TextureQuality} ({Meitou.Data.Textures.TextureQuality.Labels[o.TextureQuality]}): terrain layers {layerSize}² instead of {o.LayerSize}²");
-        var terrain = new TerrainRenderer(gl, context, scene.Coarse, scene.CoarseSize, scene.Window, new WorldRenderOptions().LodDistance);
+        var terrain = new TerrainRenderer(gl, context, scene.Coarse, scene.CoarseSize, scene.Window);
         Console.WriteLine($"uploaded  terrain heights: {terrain.LevelCount} LOD levels, finest {terrain.FinestSpacing:0.#} units ({watch.ElapsedMilliseconds} ms)");
         TerrainTextures? textures = null;
         if (!o.NoTextures && scene.Database is not null)
@@ -473,7 +482,7 @@ static class WorldFrame
             sliders.Add(new Slider("Water reflection 0-4 (game)", 0, 4, () => reflection.Level, v => reflection.Level = (int)MathF.Round(v), "0"));
             sliders.Add(new Slider("Reflection range x (game 0.6)", 0.1f, 5, () => reflection.Range, v => reflection.Range = v, "0.00", Logarithmic: true));
         }
-        sliders.Add(new Slider("Terrain LOD distance", 2, 16, () => r.LodDistance, v => r.LodDistance = v, "0.0"));
+        sliders.Add(new Slider("Terrain detail: error px (less = finer)", 1, 32, () => r.TerrainPixelError, v => (r.TerrainPixelError, r.TerrainFarPixelError) = (v, v * r.TerrainFarPixelError / r.TerrainPixelError), "0.0", Logarithmic: true));
         // The game's `Shadow Range` slider goes 1000 to 9000; the viewer allows more (the cascades stretch over it).
         if (g.Shadow is { } shadow)
             sliders.Add(new Slider("Shadow distance (game 1k-9k)", KenshiShadows.MinRange, 20000, () => shadow.Settings.Range,
@@ -514,6 +523,8 @@ static class WorldFrame
         gpu.Post?.Begin(width, height);
         // The scene is drawn at the render size (smaller than the display with an upscaler), its projection jittered by the upscaler.
         int rw = gpu.Post?.RenderWidth ?? width, rh = gpu.Post?.RenderHeight ?? height;
+        // The terrain LOD measures its error in the pixels actually rendered (after the upscaler's render scale).
+        render.TerrainPixelScale = TerrainLod.ProjectionScale(rh, camera.FieldOfView);
         var jitter = gpu.Post?.JitterPixels ?? Vector2.Zero;
         var eye = camera.Eye;
         gpu.Streamer?.Update(gpu.Anchor ?? eye);

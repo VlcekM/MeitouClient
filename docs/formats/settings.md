@@ -83,11 +83,24 @@ T_far, D_t)`; the plugin's code read in full):
 - At start the terrain is created (FUN_140874930) with the plugin defaults `(8, 8, 0)` and immediately overwritten from the
   settings (FUN_140815b40), so the settings apply from the start. The View Distance and Terrain Detail sliders re-apply all three.
 - The plugin stores T<sub>near</sub>, the ratio T<sub>near</sub> / T<sub>far</sub> and D<sub>t</sub>. For each quadtree node it computes a metric
-  `K × nodeError / max(distance, 1)` (distance from the eye to the node's box; K is a per-camera value at offset +0x14 of the
-  LOD context, presumably the projection scale: **Unknown**). If the ratio is below 1 (far coarser than near), the metric is
+  `K × nodeError / max(distance, 1)` (distance from the eye to the node's box). If the ratio is below 1 (far coarser than near), the metric is
   multiplied by `1 − t + t × ratio` with `t = clamp((distance − D_t) / D_t, 0, 1)`: the effective threshold is T<sub>near</sub> up to
   D<sub>t</sub> and ramps linearly to T<sub>far</sub> at 2 D<sub>t</sub>. A node is split while the metric exceeds T<sub>near</sub>. With
   `terrain distant` ≥ `terrain detail` (ratio ≥ 1) there is no ramp and T<sub>near</sub> applies everywhere.
+- **K is the viewport's height in pixels** (**Verified**, 2026-10-06: the plugin's per-camera LOD context set-up stores
+  `Viewport::getActualHeight()` of the camera's last viewport, as a float, at +0x14; the metric function reads it from there). There
+  is no field-of-view term, so the thresholds are "pixels" only approximately: with Kenshi's camera (vertical field of view about 50°,
+  [camera.md](camera.md)) the true projection scale is height / (2 tan 25°) ≈ 1.07 × height, so the game's 5 and 35 are about 4.7 and
+  33 real pixels of height error. The resolution matters: at 1440p the same settings give finer terrain than at 1080p.
+- **The node error is a height in world units** (**Verified**, the plugin's patch build and its tree update): the largest vertical
+  distance any vertex of the node's patch moves when it slides onto the next coarser grid (`|mean of its two neighbours along the odd
+  axis, or the diagonal pair − its height|`), at least 0.1 × the patch's vertex spacing, and at least each child's error (children's
+  errors are carried up to all ancestors).
+- **The eye's height is moved 40% of the way towards the node box's centre height** before the box distance is taken (**Verified**:
+  `eye.y + 0.4 × (centre.y − eye.y)`), so the vertical part of the distance counts 60%: a high camera gets finer terrain below it than
+  the plain distance would give.
+- Each drawn patch's morph factor is set on the CPU from its metric and its parent's (`(T − parent) / (own − parent)`, the parent's
+  taken as 1.001 × its own when not larger) (**Observed**: which way round the vertex shader uses it was not traced).
 - Nodes shallower than depth 4 are always split; nodes at the maximum depth never are (below). Children unused for 500 frames are
   freed (**Observed**, the frame counter test).
 
@@ -339,7 +352,7 @@ options screen reads `Full Screen` and `Border` from the render system's current
 | `FXAA`, `HeatHaze` | Honoured as options (`--fxaa` / `--no-fxaa`, `--heat-haze` / `--no-heat-haze`; Faithful switches) |
 | `camera speed`, `camera zoom` | Constants in `KenshiCamera` / `CameraSettings` (500, 125) |
 | `water reflection`, `reflection range` | Honoured as options (2026-10-06): `--water-reflection <0..4>` (viewer default 4; the game's missing-key default is 2) and `--reflection-range <x>` (viewer default 3; the game's 0.6), Tab sliders for both; `--no-reflections` / `R` stay as the on/off switch. See "Viewer: water reflection" below |
-| `terrain detail`, `terrain distant`, `terrain threshold`, `terrain patch size` | Not honoured: the viewer's own CDLOD (64-quad patches, range factor K) |
+| `terrain detail`, `terrain distant`, `terrain threshold`, `terrain patch size` | Not honoured, deliberately (2026-10-06): the viewer does not replicate the game's per-node rule above. Its CDLOD (64-quad patches) uses its own resolution-aware screen-space error, measured in pixels of the picture actually rendered (after the upscaler's render scale): `--terrain-error <px>` (default 10, Tab slider "Terrain detail"), optionally a far ramp like the game's (`--terrain-far-error`, `--terrain-ramp`; off by default). See [terrain.md](terrain.md#in-the-viewer-terrainquadtree-terrainlod-terrainrenderer-terrainshaders) |
 | `texture resolution gimping` | Honoured as `--texture-quality <0..4>` (viewer default 0, full size; the game's missing-key default is 1; restart to change, like the game). See "Viewer: texture quality" below |
 | `Decal Range`, `Decal Resolution`, `Blood`, `harpoonLimit` | Not implemented (no decals) |
 | `generate distant towns` | Not honoured: towns without a baked mesh are drawn from their buildings' distant meshes |
@@ -393,8 +406,8 @@ viewer's own cut-downs from [viewer.md](../viewer.md#world-mode) "Reflections" s
 
 ## Unknowns
 
-- K in the terrain LOD metric (the per-camera value the plugin divides by distance) and the node error's units, so the
-  thresholds' unit ("pixels") is not confirmed.
+- (Resolved 2026-10-06: K in the terrain LOD metric is the viewport height and the node error a height in world units, see
+  "Graphics: terrain".) Still open there: which way round the terrain vertex shader applies the per-patch morph factor.
 - What town display state 4 is (set for reflections at levels 3 and 4), and when the water programs are rebuilt after
   `water reflection` changes to or from 0.
 - The reflection camera's far clip before FUN_1403e7490 first runs (Ogre's default assumed).

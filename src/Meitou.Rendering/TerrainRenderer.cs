@@ -19,12 +19,21 @@ public sealed class WorldRenderOptions
     /// <summary>0 normal, 1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass), 3 plain shading.</summary>
     public int Debug { get; set; }
     /// <summary>
-    /// Range of a terrain LOD level in multiples of its node size (TerrainQuadtree; at least 2). Fixed at the useful
-    /// maximum: the finest level (64 cells of 18 units) then covers 8 × 1152 = 9216 units, about what the streamed
-    /// fine-height window (1536 cells, re-centred after 15% of its width) always holds around the eye; beyond it the
-    /// heights are the coarse 144-unit ones, so a larger value only adds triangles. A graphics option later.
+    /// Terrain LOD (<see cref="Meitou.Data.World.TerrainLod"/>): the screen-space height error allowed near the eye, in pixels of
+    /// the picture rendered (<c>--terrain-error</c>, the Tab slider), and the error it grows to from twice <see cref="TerrainRampStart"/>
+    /// on (<c>--terrain-far-error</c>; equal to the near one: no ramp).
     /// </summary>
-    public float LodDistance { get; set; } = 8f;
+    public float TerrainPixelError { get; set; } = DefaultTerrainPixelError;
+    public float TerrainFarPixelError { get; set; } = DefaultTerrainFarPixelError;
+    public float TerrainRampStart { get; set; } = DefaultTerrainRampStart;
+    public const float DefaultTerrainPixelError = 10, DefaultTerrainFarPixelError = 10, DefaultTerrainRampStart = 7500;
+    /// <summary>
+    /// Pixels per world unit at distance 1 in the picture being drawn: the frame sets it from the render height (after the
+    /// upscaler's render scale) and the field of view, the reflection pass from its own (half-size) target.
+    /// </summary>
+    public float TerrainPixelScale { get; set; } = TerrainLod.ProjectionScale(720, 50 * MathF.PI / 180);
+    /// <summary>The LOD rule these options give.</summary>
+    public TerrainLod TerrainLod => new(TerrainPixelScale, TerrainPixelError, TerrainFarPixelError, TerrainRampStart);
     /// <summary>Beyond this distance the terrain takes the biomes' ground colour (the game's material distance is 30000).</summary>
     public float MaterialDistance { get; set; } = 30000;
 }
@@ -55,19 +64,22 @@ public sealed unsafe class TerrainRenderer : IDisposable
     readonly ushort[] coarse;
     readonly int coarseSize;
     float fineBand;
-    TerrainQuadtree quadtree;
-    TerrainQuadtree? spare;   // the reflection's own tree (coarser), so the two passes do not rebuild each other's every frame
+    readonly TerrainQuadtree quadtree;
+    readonly TerrainQuadtree spare;   // the reflection's own tree (its own, smaller picture), so the two passes do not reset each other's ranges every frame
     TerrainQuadtree current = null!;   // the tree the running Draw selects with
     TerrainTextures? textures;
     Frame frame;
 
     const int GridCells = 64;
 
+    /// <summary><c>MEITOU_TERRAIN_LOD_LOG=1</c>: print the level ranges when they change and the drawn nodes per level now and then.</summary>
+    static readonly bool LodLog = Environment.GetEnvironmentVariable("MEITOU_TERRAIN_LOD_LOG") == "1";
+
     record struct Frame(Matrix4x4 ViewProjection, Vector3 Eye, WorldRenderOptions Options, WorldLighting Light);
 
     /// <param name="coarse">Whole-world raw heights, (<paramref name="coarseSize"/>)² samples (2^n + 1 per side).</param>
     /// <param name="fine">The loaded region at its own step.</param>
-    public TerrainRenderer(IGl gl, GpuContext gpu, ushort[] coarse, int coarseSize, HeightWindow fine, float lodDistance)
+    public TerrainRenderer(IGl gl, GpuContext gpu, ushort[] coarse, int coarseSize, HeightWindow fine)
     {
         this.gl = gl;
         this.gpu = gpu;
@@ -75,7 +87,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
         this.coarse = coarse;
         this.coarseSize = coarseSize;
         bounds = new TerrainHeightBounds(coarse, coarseSize, fine);
-        quadtree = new TerrainQuadtree(fine.Spacing, GridCells, lodDistance);
+        quadtree = new TerrainQuadtree(fine.Spacing, GridCells, new WorldRenderOptions().TerrainLod);
+        spare = new TerrainQuadtree(fine.Spacing, GridCells, new WorldRenderOptions().TerrainLod);
         fineBand = BandOf(fine);
         patchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, TerrainShaders.Fragment);
         meshProgram = WorldGl.Program(gl, TerrainShaders.MeshVertex, TerrainShaders.MeshFragment);
@@ -216,20 +229,13 @@ public sealed unsafe class TerrainRenderer : IDisposable
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity, bool secondary = false)
     {
         long timing = StepTiming.Now();
-        if (secondary)
-        {
-            if (spare is null || Math.Abs(options.LodDistance - (float)(spare.Ranges[0] / spare.NodeSize(0))) > 1e-4f)
-                spare = new TerrainQuadtree((float)quadtree.Spacing(0), GridCells, Math.Max(options.LodDistance, 2f));
-            current = spare;
-        }
-        else
-        {
-            if (Math.Abs(options.LodDistance - LodDistanceInUse) > 1e-4f)
-                quadtree = new TerrainQuadtree((float)quadtree.Spacing(0), GridCells, Math.Max(options.LodDistance, 2f));
-            current = quadtree;
-        }
+        current = secondary ? spare : quadtree;
+        if (current.SetRanges(options.TerrainLod) && LodLog)
+            Console.WriteLine($"terrain   lod {(secondary ? "reflection" : "main")} {options.TerrainLod}: ranges {string.Join(" ", current.Ranges.SkipLast(1).Select(r => r.ToString("0")))}");
         frame = new Frame(viewProjection, eye, options, light);
         current.Select(eye, bounds, (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max), nodes);
+        if (LodLog && !secondary && (frameNumber < 4 || frameNumber % 60 == 1))
+            Console.WriteLine($"terrain   frame {frameNumber} nodes per level (whole + quarters): {string.Join(" ", Enumerable.Range(0, current.LevelCount).Select(l => $"{nodes.Count(n => n.Level == l && n.Quadrant < 0)}+{nodes.Count(n => n.Level == l && n.Quadrant >= 0)}"))}");
 
         gl.Enable(EnableCap.DepthTest);
         gl.Enable(EnableCap.CullFace);
@@ -252,7 +258,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         StepTiming.Add(StepTiming.PatchColour, timing, nodes.Count);
     }
 
-    float LodDistanceInUse => (float)(quadtree.Ranges[0] / quadtree.NodeSize(0));
 
     /// <summary>The debug outline (<c>Wireframe</c> 1 and 2): the GL path, as before the port.</summary>
     void DrawNodes(bool wire)
@@ -670,8 +675,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
             (depthPatchViewProjection, depthPatchEye, depthPatchNode, depthPatchMorph) =
                 (d.Uniform("uViewProjection"), d.Uniform("uEye"), d.Uniform("uNode"), d.Uniform("uMorph"));
         }
-        if (Math.Abs(options.LodDistance - LodDistanceInUse) > 1e-4f)
-            quadtree = new TerrainQuadtree((float)quadtree.Spacing(0), GridCells, Math.Max(options.LodDistance, 2f));
+        if (quadtree.SetRanges(options.TerrainLod) && LodLog) Console.WriteLine($"terrain   lod main {options.TerrainLod}: ranges {string.Join(" ", quadtree.Ranges.SkipLast(1).Select(r => r.ToString("0")))}");
         frame = new Frame(viewProjection, eye, options, frame.Light);
         quadtree.Select(eye, bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), nodes);
         PreparePatches(quadtree);

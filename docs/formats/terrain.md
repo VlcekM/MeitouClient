@@ -204,19 +204,79 @@ mostly hidden below it. Checked with a probe outside the repo, plus top-down scr
   Each patch is a regular grid; with distance, the vertex shader morphs the odd grid vertices onto the next
   coarser grid (height and normal towards a coarser level in `position.w` and `BINORMAL`), so levels meet
   without cracks or pops.
+- **Verified** (`Plugin_Terrain_x64.dll`, 2026-10-06): which nodes are split is a screen-space error test per node:
+  `viewport height × node error / distance` against thresholds of 5 px near and 35 px far by default, ramping between 7500
+  and 15000 units; the node error is the largest height change of the node's vertices when they slide onto the next coarser
+  grid. The full rule, its settings and its quirks (no field of view in the metric, the eye's height counted 60%) are in
+  [settings.md](settings.md#graphics-terrain).
 
-### In the viewer (`TerrainQuadtree`, `TerrainRenderer`, `TerrainShaders`)
+### In the viewer (`TerrainQuadtree`, `TerrainLod`, `TerrainRenderer`, `TerrainShaders`)
 
 CDLOD in our own implementation. Heights live in two R16 textures that the vertex shader samples: the whole map
 every 8th sample (2049², 144 units), and a `HeightWindow` of the finest samples (every `--step`-th) around the
 camera, re-read from the file when the camera leaves its middle (docs/viewer.md, Streaming). The fine one fades in over
-a band at its border. A 64 × 64 grid patch is drawn per selected node. Node ranges are
-`leaf size × 2^level × K` (K = 3, `[` / `]` change it). A node morphs over the last 30% of its range: its odd
-vertices slide onto the coarser grid, so touching nodes differ by at most one level and their edges match
-(`TerrainQuadtreeTests`). Bounds come from a min/max pyramid of the heights. Normals are computed per pixel from
-the height textures. Beyond the material distance (30000, as in the game), the terrain is shaded with the biome
+a band at its border. A 64 × 64 grid patch is drawn per selected node. Bounds come from a min/max pyramid of the heights. Normals
+are computed per pixel from the height textures, so shading does not depend on the LOD; only silhouettes, occlusion and where the
+water meets the ground do. Beyond the material distance (30000, as in the game), the terrain is shaded with the biome
 ground colour × the colour map (2048², box-filtered from the 64 tiles), fading over a band. The scene is drawn in
 two depth slices (far: 20000 to 450000, then near), so a 24-bit depth buffer reaches the horizon.
+
+**The viewer does not replicate the game's LOD rule** (decided 2026-10-06): the game's thresholds are in viewport-height units
+without the field of view, its error is per node, and its far threshold (35) visibly rounds ridgelines. The viewer uses its own
+resolution-aware screen-space error (`TerrainLod`), one rule for all of its Faithful / Meitou settings:
+
+- **Metric**: a level-l node is split while `P × E / distance > T`. `P` is the true projection scale of the picture **actually
+  rendered**: render height / (2 tan(fov / 2)), the render height after the upscaler's render scale (so DLSS / FSR at 0.67 draw about
+  half the triangles, and the Tab render-scale slider re-tessellates the terrain). `E = 2 × vertex spacing of level l + 1` is the
+  height error of the coarser grid, in the game's sense (above). `T` is `--terrain-error` (default **10 px**; Tab slider "Terrain
+  detail"). Optionally `T` grows like the game's ramp to `--terrain-far-error` between `--terrain-ramp` (7500) and twice it; the
+  default has no ramp (see "Choosing the defaults").
+- **Why one error per level** (`TerrainLod.Roughness` = 2): CDLOD needs one range per level, not per node (neighbouring nodes of a
+  level must morph alike or their shared edge cracks), so the game's per-node error becomes one number per level. **Observed**
+  (fullmap.tif, every 64-cell node over land at each level from 18 to 2304 units of spacing, the game's error definition): the
+  node error divided by the spacing hardly depends on the level, median 0.8 to 1.2, 75th percentile 1.5 to 2.1, 90th 2.6 to 3.7. The
+  viewer takes the 75th percentile, 2. Measured in rings of 0-20k, 20-50k and 50-120k units around The Hub, the forest view and the
+  world centre at the coarse levels, the 75th percentile stays 1.2 to 4.1 (mostly near 2), so a per-region value would gain little.
+- **Ranges**: level l is drawn within `R_l` = the distance where a level-(l+1) node stops being split; the root everywhere else.
+  Each level morphs over the last 30% of the band between the finer level's range and its own (`TerrainQuadtree.SetRanges`).
+- **Neighbours within one level, no cracks, no pops**: a level-l square touching a level-(l+1) one lies within `R_l` + its node's
+  diagonal of the eye, and the coarser square's vertices on the shared edge must not have started morphing there. That needs
+  `R_(l+1) − R_l ≥ √(2 + h²) / 0.7` node sizes of level l, h the node's height range over its width. The viewer raises ranges to
+  keep at least **2.5** (`TerrainLod.MinimumGap`, covers h up to 1). The same bound makes a square changing level in time a no-op:
+  the finer square's vertices are fully slid (k = 1) exactly when the coarser quarter replaces it, whose own vertices have not started
+  sliding (k = 0). **Verified** by `TerrainLodTests`: touching squares differ by one level and their edge vertices meet on flat
+  ground and on 45° hills; a moving eye changes the drawn surface by less than 2 units per 8-unit step; ranges grow with the level
+  and the drawn level never gets finer with distance. **Observed** (the same tests run by hand with the constant lowered, not kept
+  as tests): with a gap of 2 (the old rule's floor, the flat-ground bound) one hills view cracks, and with 1.4 the moving eye's
+  surface jumps by 3.1 units in one step.
+- **Other passes**: the reflection uses its own tree with `P × 0.5` (`ReflectionPass.TerrainLodScale`: its target is half the size,
+  so the error is measured in its pixels). The shadow casters use the main tree with the camera's eye, so the shadows' terrain matches
+  the picture's.
+- **Shading cost**: the terrain fragment shader skips a biome layer's samples where its weight is exactly 0 (most ground has no road,
+  dirt, slope or cliff); beyond the material distance it already skipped the whole material. The coordinates' derivatives are taken
+  before the branches with coarse derivatives, which on the RTX 4070 reproduce the implicit mip selection exactly (0 differing pixels
+  in all ten parity views, Faithful and Meitou; with fine derivatives or implicit sampling inside the branches, pixels at the layer
+  edges changed by up to 20 of 255). **Unknown** whether other vendors' implicit LOD also uses coarse derivatives (if not, layer
+  edges may differ by a little there).
+
+#### Choosing the defaults (Observed, 2026-10-06, Release, RTX 4070, 1920 x 1080, TAA at render scale 1)
+
+Terrain triangles (deterministic) against the old fixed rule (ranges 8 node sizes, about equal to `T` = 9 at 1080p):
+
+| View | old | T = 8 | **T = 10** | T = 12 | T = 16 | T = 10 at render scale 0.67 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Hub, distance 9000, pitch 10, yaw 300 | 2.12 M | 2.62 M | **1.86 M** | 1.44 M | 1.10 M | 1.10 M |
+| Hub from 40000 up, pitch 25 | 1.40 M | 1.69 M | **1.23 M** | 0.95 M | | 0.68 M |
+| Forest parity view | 1.95 M | 2.42 M | **1.69 M** | 1.34 M | | |
+| Port North | 1.11 M | 1.29 M | **0.99 M** | 0.82 M | | |
+
+- At 12 and above, distant peaks lose a little sharpness and the waterline of far ponds turns angular (flipping between pictures
+  at 1:1); at 16 far mesa silhouettes change. A far ramp like the game's (8 → 24) cuts the high view's triangles more but makes the
+  mid-distance pond outlines and shadow edges visibly blocky, so no ramp by default. 10 shows no difference at normal viewing.
+- GPU time could not be measured cleanly: other agents' viewers shared the GPU, and the same configuration's terrain pass varied
+  0.6 to 1.8 ms between runs. Best of 8 interleaved runs (contention only adds): Hub 0.97 → 0.75 ms, high view 0.82 → 0.57 ms
+  (layer skip and LOD together). A run with the whole material off (`--material-distance 1`) showed the terrain about half
+  shading and half geometry at the Hub before these changes.
 
 ## Water
 
