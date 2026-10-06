@@ -45,7 +45,6 @@ public sealed unsafe partial class VkGl
         defaults = Context.Defaults;
         samplers = Context.Samplers;
         Context.DummyOverride = SampledDummy;
-        Context.LodBias = () => TextureLodBias;
     }
 
     void DestroyDummies()

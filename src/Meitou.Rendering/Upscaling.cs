@@ -85,7 +85,7 @@ public static class Jitter
 }
 
 /// <summary>
-/// One frame's inputs to an external upscaler (FSR, DLSS), as GL texture names of the backend. Conventions: textures are bottom-up
+/// One frame's inputs to an external upscaler (FSR, DLSS), as native textures (each kept in GENERAL). Conventions: textures are bottom-up
 /// (GL row 0 is the first row of the image), so "up" in them is +row; <see cref="Motion"/> holds, per render pixel, the screen-space
 /// motion in UV units from the previous frame to this one without the jitter (previous UV = UV − motion; RG of an RGBA16F);
 /// <see cref="Depth"/> is an R32F 0..1 depth of one D3D-style projection with <see cref="Near"/> and <see cref="Far"/> (1 = far, not inverted);
@@ -93,8 +93,8 @@ public static class Jitter
 /// </summary>
 public sealed record UpscaleInputs
 {
-    public required uint Colour, Depth, Motion, Output;
-    public uint Reactive;
+    public required Gpu.Texture Colour, Depth, Motion, Output;
+    public Gpu.Texture? Reactive;
     public required int RenderWidth, RenderHeight, DisplayWidth, DisplayHeight;
     public required Vector2 JitterPixels;
     public required float Near, Far, FieldOfView, DeltaSeconds, Sharpness;

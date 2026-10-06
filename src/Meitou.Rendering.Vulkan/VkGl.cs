@@ -25,7 +25,7 @@ namespace Meitou.Rendering.Vulkan;
 /// </list>
 /// Not in this model: bindless descriptors and multithreaded command recording (DECISIONS.md 7).
 /// </summary>
-public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
+public sealed unsafe partial class VkGl : IGl, IDisposable
 {
     readonly VulkanDevice device;
     readonly Vk vk;
@@ -85,8 +85,8 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
 
     /// <summary>Counters for the frame (draws, pipelines created, render passes, renamed buffers), reset by <see cref="BeginFrame"/>.</summary>
     public VkGlStats Stats { get; } = new();
-    /// <summary>Added to the mip level of every mipmapped fetch (ITextureLodBias; set by the post-processing chain for an upscaler).</summary>
-    public float TextureLodBias { get; set; }
+    /// <summary>The context's LOD bias (<see cref="GpuContext.LodBias"/>), which VkGl's samplers apply too.</summary>
+    public float TextureLodBias { get => Context.LodBias; set => Context.LodBias = value; }
 
     internal static void Check(Result r)
     {

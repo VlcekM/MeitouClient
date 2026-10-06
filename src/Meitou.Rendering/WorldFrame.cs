@@ -249,16 +249,17 @@ sealed class SceneHost
 
     public bool IsOpen => cmd is not null;
 
-    /// <summary>Opens the host on the bound framebuffer (nothing when it is open already); its jobs count towards <paramref name="stage"/>.</summary>
-    public void Open(int stage)
+    /// <summary>Opens the host on <paramref name="targets"/> (nothing when it is open already); its jobs count towards <paramref name="stage"/>.
+    /// Without secondaries (<see cref="Recording.Mode"/> 0) the guests record straight into its rendering.</summary>
+    public void Open(int stage, PassTargets targets)
     {
         if (cmd is not null) { Stage(stage); return; }
         var interop = ctx.Interop!;
         var list = interop.BeginNative("scene");
-        var t = interop.CurrentTargets();
-        interop.BeginHostPass(list);
-        list.BeginRendering(t.Rendering, secondaries: true);
-        ctx.Frame.Parallel.Begin(list, t.Formats, stage);
+        bool secondaries = Recording.Secondaries;
+        list.BeginRendering(targets.Rendering, secondaries);
+        ctx.BeginHostPass(list, targets, DrawState.Scene(targets.Formats));
+        if (secondaries) ctx.Frame.Parallel.Begin(list, targets.Formats, stage);
         cmd = list;
     }
 
@@ -272,9 +273,9 @@ sealed class SceneHost
     {
         if (cmd is not { } list) return;
         var interop = ctx.Interop!;
-        ctx.Frame.Parallel.End();
+        if (ctx.Frame.Parallel.Open) ctx.Frame.Parallel.End();
         list.EndRendering();
-        interop.EndHostPass(list);
+        ctx.EndHostPass(list);
         interop.EndNative(list);
         cmd = null;
     }
@@ -633,20 +634,18 @@ static class WorldFrame
         gl.Viewport(0, 0, (uint)rw, (uint)rh);
         gl.ClearColor(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1);
         gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-        // Wave 4 (docs/renderer-native.md 6): the scene's passes are a native host whose rendering takes secondaries, the guests' segments
-        // recorded on the job threads when it ends; not with the terrain's debug outline (a VkGl draw) or with MEITOU_RECORD_THREADS=0.
+        // The scene's passes are a native host that hands its guests the targets and state (phase 8 stage 3); wave 4 (docs/renderer-native.md 6):
+        // its rendering takes secondaries, the guests' segments recorded on the job threads when it ends (not with MEITOU_RECORD_THREADS=0).
         var host = gpu.Scene ??= SceneHost.Create(gl);
-        bool hosted = host is not null && Recording.Secondaries && render.Wireframe == 0;
+        bool hosted = host is not null && gpu.Post is not null;
         bool temporal = gpu.Post?.Temporal == true;
-        if (hosted) host!.Open(5);
+        if (hosted) host!.Open(5, gpu.Post!.SceneTargets);
         float aspect = width / (float)Math.Max(height, 1);
         var view = camera.View;
         // Rotation only: with the eye's world position in the matrix, the directions rebuilt from it lose float
         // precision far from the origin and the sky blurs.
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
         gpu.Sky.Draw(rotation * Jitter.Apply(camera.Projection(aspect, 1, 1000), jitter, rw, rh), colours);
-        gl.Enable(EnableCap.DepthTest);
-        gl.DepthFunc(DepthFunction.Lequal);
         StageClock.Lap(5);
         gpu.Post?.SetCamera(eye, view, camera.FieldOfView, aspect);
         gpu.Terrain.BeginFrame();
@@ -658,7 +657,7 @@ static class WorldFrame
             if (hosted && temporal) host!.Close();
             if (!first || nearSlice) gpu.Post?.BeginNearSlice(near, far); else gpu.Post?.BeginFarSlice(near, far);
             if (!first) gl.Clear(ClearBufferMask.DepthBufferBit);   // inside the host: in its place among the segments (VkGl.Clear)
-            if (hosted) host!.Open(6);
+            if (hosted) host!.Open(6, gpu.Post!.SceneTargets);
             first = false;
             if (nearSlice) gpu.Post?.SetNearSlice(near, far, camera.FieldOfView, aspect);
             var viewProjection = view * Jitter.Apply(camera.Projection(aspect, near, far), jitter, rw, rh);
@@ -685,7 +684,7 @@ static class WorldFrame
         }
         // Records the last slice's jobs and executes them: the render thread's share (the fork-join) counts as "water", the last stage of the host.
         if (host?.IsOpen == true) { host.Close(); StageClock.Lap(9); }
-        if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneFramebuffer, rw, rh);
+        if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneDepth, rw, rh);
         gpu.Post?.End(); // SSAO, upscaler, exposure, tone map, FXAA into gpu.Post.Target
         if (gpu.DebugShadows > 0 && gpu.Shadow is not null)
         {

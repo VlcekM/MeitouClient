@@ -83,58 +83,9 @@ public static unsafe class GlBridge
         gl.Viewport(0, 0, (uint)width, (uint)height);
     }
 
-    /// <summary>(Phase 8 stage 2, post.) The GL fixed-function state guests and later GL users read (<see cref="IGlInterop.CurrentState"/>):
-    /// depth test, depth write, face culling, blending, and the colour mask.</summary>
-    public static void State(GpuContext ctx, bool depthTest, bool depthWrite, bool cullFace, bool blend, bool red = true, bool green = true, bool blue = true, bool alpha = true)
-    {
-        var gl = Gl(ctx);
-        if (depthTest) gl.Enable(EnableCap.DepthTest); else gl.Disable(EnableCap.DepthTest);
-        gl.DepthMask(depthWrite);
-        if (cullFace) gl.Enable(EnableCap.CullFace); else gl.Disable(EnableCap.CullFace);
-        if (blend) gl.Enable(EnableCap.Blend); else gl.Disable(EnableCap.Blend);
-        gl.ColorMask(red, green, blue, alpha);
-    }
-
     /// <summary>Forgets a name made by <see cref="Texture"/> (the image stays the native texture's).</summary>
     public static void DeleteTexture(GpuContext ctx, uint id)
     {
         if (id != 0 && ctx.Interop is IGl gl) gl.DeleteTexture(id);
-    }
-
-    /// <summary>A float (or, with <see cref="Integer"/>, integer) vertex attribute of a <see cref="VertexArray"/>.</summary>
-    public readonly record struct Attribute(uint Location, int Size, int Offset, bool Integer = false);
-
-    /// <summary>A GL vertex array and the borrowed buffer names it holds.</summary>
-    public readonly record struct VertexArrayNames(uint Vao, uint Vertices, uint Elements);
-
-    /// <summary>A GL vertex array over native buffers: <paramref name="attributes"/> read <paramref name="vertices"/> with
-    /// <paramref name="stride"/> (floats unnormalised, integers as unsigned bytes), and <paramref name="elements"/> is its element buffer.
-    /// Leaves no vertex array bound.</summary>
-    public static VertexArrayNames VertexArray(GpuContext ctx, DeviceBuffer vertices, uint stride, ReadOnlySpan<Attribute> attributes, DeviceBuffer elements)
-    {
-        var gl = Gl(ctx);
-        var interop = ctx.Interop!;
-        uint vbo = interop.ImportBuffer(vertices), ebo = interop.ImportBuffer(elements);
-        uint vao = gl.GenVertexArray();
-        gl.BindVertexArray(vao);
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-        gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, ebo);
-        foreach (var a in attributes)
-        {
-            gl.EnableVertexAttribArray(a.Location);
-            if (a.Integer) gl.VertexAttribIPointer(a.Location, a.Size, VertexAttribIType.UnsignedByte, stride, (void*)a.Offset);
-            else gl.VertexAttribPointer(a.Location, a.Size, VertexAttribPointerType.Float, false, stride, (void*)a.Offset);
-        }
-        gl.BindVertexArray(0);
-        return new VertexArrayNames(vao, vbo, ebo);
-    }
-
-    /// <summary>Deletes what <see cref="VertexArray"/> made (the buffers stay the native owner's).</summary>
-    public static void DeleteVertexArray(GpuContext ctx, VertexArrayNames names)
-    {
-        if (names.Vao == 0 || ctx.Interop is not IGl gl) return;
-        gl.DeleteVertexArray(names.Vao);
-        gl.DeleteBuffer(names.Vertices);
-        gl.DeleteBuffer(names.Elements);
     }
 }

@@ -79,7 +79,7 @@ public unsafe class WorldResourceTests
 
     [Fact]
     [Slow]
-    public void Native_mesh_attributes_are_the_GL_vertex_arrays_and_the_bridge_vertex_array_exports_the_same()
+    public void Native_mesh_attributes_are_the_GL_vertex_arrays_and_the_terrain_mesh_path_takes_them()
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
@@ -98,13 +98,11 @@ public unsafe class WorldResourceTests
                 Assert.Equal(count, native.Length);
                 SameAttributes(export.Attributes, native, vertices.Handle, count);
 
-                // The terrain's mesh path takes GL vertex arrays: the bridge's over the native buffers exports those buffers with the same attributes.
-                var names = GlBridge.VertexArray(ctx, vertices, (uint)Vertex.Size, objects ? ObjectMeshCache.Layout : FoliageRenderer.MeshLayout, indices);
-                var bridged = interop.VertexArray(names.Vao);
-                SameAttributes(export.Attributes, bridged.Attributes, vertices.Handle, count);
-                Assert.Equal(indices.Handle.Handle, bridged.Elements.Buffer.Handle);
-                Assert.Equal(0ul, bridged.Elements.Offset);
-                GlBridge.DeleteVertexArray(ctx, names);
+                // The terrain's mesh path takes the same attributes and the whole index buffer.
+                var mesh = MeshBindings.Of(native, indices);
+                SameAttributes(export.Attributes, mesh.Attributes, vertices.Handle, count);
+                Assert.Equal(indices.Handle.Handle, mesh.Elements.Buffer.Handle);
+                Assert.Equal(0ul, mesh.Elements.Offset);
             }
             gl.EndFrame();
         }

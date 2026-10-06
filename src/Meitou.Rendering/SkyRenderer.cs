@@ -514,9 +514,9 @@ public sealed unsafe class SkyRenderer : IDisposable
     {
         var interop = Gpu.Interop!;
         var cmd = interop.BeginNativeInPass(program == sky ? "sky" : "sky simple");
-        var targets = interop.CurrentTargets();
+        var targets = Gpu.CurrentTargets();
         // What the GL code's Disable(DepthTest) and DepthMask(false) made of the pass's state.
-        var drawState = interop.CurrentState() with { DepthTest = false, DepthWrite = false };
+        var drawState = Gpu.CurrentState() with { DepthTest = false, DepthWrite = false };
         cmd.SetViewport(targets.Viewport);
         cmd.SetScissor(targets.Scissor);
         cmd.SetRaster(drawState.Cull, drawState.Front);
@@ -702,7 +702,7 @@ internal sealed class SampledImage : IDisposable
     /// <summary>The sampler and view a draw samples it with now (what VkGl's <c>Sampled</c> gave for the GL texture).</summary>
     public SampledTexture Sampled()
     {
-        float bias = ctx.LodBias();
+        float bias = ctx.LodBias;
         if (!(bias == cachedBias))
         {
             var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, wrapR, false, DepthFunction.Lequal, false, 1, false, bias));

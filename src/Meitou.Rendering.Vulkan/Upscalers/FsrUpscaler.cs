@@ -151,15 +151,15 @@ public sealed unsafe class FsrUpscaler : IUpscaler
         _ => 0,
     };
 
-    ApiResource Resource(uint texture, bool output)
+    static ApiResource Resource(Meitou.Rendering.Gpu.Texture texture, bool output)
     {
-        var image = gl.ImageOf(texture);
+        var d = texture.Desc;
         return new ApiResource
         {
-            Handle = (nint)image.Image.Handle,
+            Handle = (nint)texture.Image.Handle,
             Description = new ResourceDescription
             {
-                Type = TypeTexture2D, Format = SurfaceFormat(image.Format), Width = (uint)image.Width, Height = (uint)image.Height,
+                Type = TypeTexture2D, Format = SurfaceFormat(d.Format), Width = (uint)d.Width, Height = (uint)d.Height,
                 Depth = 1, MipCount = 1, Usage = output ? UsageUav : 0,
             },
             // VkGl keeps every image in GENERAL: COMMON (inputs) and UNORDERED_ACCESS (output) are both GENERAL to the backend.
@@ -176,7 +176,7 @@ public sealed unsafe class FsrUpscaler : IUpscaler
             Color = Resource(i.Colour, false),
             Depth = Resource(i.Depth, false),
             MotionVectors = Resource(i.Motion, false),
-            Reactive = i.Reactive != 0 ? Resource(i.Reactive, false) : default,
+            Reactive = i.Reactive is { } r ? Resource(r, false) : default,
             Output = Resource(i.Output, true),
             // Both move the picture by +jitter along +column and +row of the image (ours is bottom-up GL, FSR's top-down D3D with
             // the y offset negated in the projection: the same direction in image rows).

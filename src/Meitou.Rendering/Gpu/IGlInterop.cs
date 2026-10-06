@@ -3,41 +3,6 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Rendering.Gpu;
 
-/// <summary>
-/// What VkGl is drawing into (<see cref="IGlInterop.CurrentTargets"/>): the bound draw framebuffer's attachments, their formats and size, and
-/// GL's viewport and scissor as VkGl would set them for a draw (viewport 0 × 0 means the whole target; the scissor clipped to the target).
-/// A native renderer drawing into the current pass begins its own rendering on <see cref="Rendering"/> (LOAD / STORE) and sets these.
-/// </summary>
-public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, AttachmentFormats Formats, int Width, int Height, Viewport Viewport, Rect2D Scissor)
-{
-    public RenderingDesc Rendering => new(Colour, Depth, Width, Height);
-}
-
-/// <summary>
-/// GL's fixed-function state as VkGl would turn it into a pipeline and dynamic state for a draw into <see cref="IGlInterop.CurrentTargets"/>
-/// now (<see cref="IGlInterop.CurrentState"/>): depth test and write only with a depth attachment (write only while testing), blend only
-/// with a colour attachment, alpha-to-coverage only with more than one sample, depth clamp only where the device has it.
-/// </summary>
-public sealed record DrawState(CullModeFlags Cull, FrontFace Front, bool DepthTest, bool DepthWrite, CompareOp Compare,
-    bool BiasEnable, float BiasConstant, float BiasSlope, BlendState Blend, ColorComponentFlags ColourMask, Silk.NET.Vulkan.PolygonMode Polygon,
-    bool AlphaToCoverage, bool DepthClamp)
-{
-    /// <summary>The pipeline VkGl would make for <paramref name="program"/> with this state.</summary>
-    public GraphicsPipelineDesc Pipeline(ShaderProgram program, VertexLayout vertex, PrimitiveTopology topology, AttachmentFormats targets, string name = "") =>
-        new(program, vertex, topology, targets, Blend, ColourMask, Polygon, AlphaToCoverage, DepthClamp, name);
-
-    /// <summary>Records the dynamic state: <paramref name="t"/>'s viewport and scissor, and this cull, front face, depth and bias
-    /// (<paramref name="front"/> overrides the front face, for a draw that turns the winding round).</summary>
-    public void Record(CommandList cmd, PassTargets t, FrontFace? front = null)
-    {
-        cmd.SetViewport(t.Viewport);
-        cmd.SetScissor(t.Scissor);
-        cmd.SetRaster(Cull, front ?? Front);
-        cmd.SetDepth(DepthTest, DepthWrite, Compare);
-        cmd.SetDepthBias(BiasEnable, BiasConstant, BiasSlope);
-    }
-}
-
 /// <summary>A GL vertex array as VkGl would feed it (<see cref="IGlInterop.VertexArray"/>): per location the attribute (null when disabled)
 /// and the element buffer (null binding when none).</summary>
 public sealed record VertexArrayBindings(LegacyProgram.Attribute?[] Attributes, BufferBinding Elements);

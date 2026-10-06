@@ -189,11 +189,7 @@ public sealed unsafe class DebugOverlay : IDisposable
     public void Flush(int width, int height)
     {
         if (batch.Count == 0 || width <= 0 || height <= 0) { batch.Clear(); return; }
-        // The GL state the draw reads (CurrentState, CurrentTargets), as the GL version set it.
-        gl.Disable(EnableCap.DepthTest);
-        gl.Disable(EnableCap.CullFace);
-        gl.Enable(EnableCap.Blend);
-        gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+        // The viewport the targets are read with (CurrentTargets).
         gl.Viewport(0, 0, (uint)width, (uint)height);
 
         // One segment in VkGl's open pass. It is begun first: the overlay is also drawn after a frame ended (a screenshot's key list), and
@@ -206,7 +202,8 @@ public sealed unsafe class DebugOverlay : IDisposable
         var vertices = Gpu.Frame.Constants.Allocate((ulong)(floats.Length * 4), 16);
         MemoryMarshal.AsBytes(floats).CopyTo(new Span<byte>(vertices.Pointer, floats.Length * 4));
         var t = interop.CurrentTargets();
-        var state = interop.CurrentState();
+        // As the GL version drew: no depth test or culling, blended over by alpha.
+        var state = DrawState.For(t.Formats, Gpu.Device.DepthClamp, blend: new BlendState(true, BlendFactor.SrcAlpha, BlendFactor.OneMinusSrcAlpha));
         state.Record(cmd, t);
         Span<LegacyProgram.Attribute?> attributes =
         [
@@ -220,9 +217,6 @@ public sealed unsafe class DebugOverlay : IDisposable
         program.Flush(cmd);
         cmd.Draw((uint)(floats.Length / Stride));
         interop.EndNative(cmd);
-
-        gl.Disable(EnableCap.Blend);
-        gl.Enable(EnableCap.DepthTest);
         batch.Clear();
     }
 

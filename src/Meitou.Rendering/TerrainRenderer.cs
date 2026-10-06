@@ -570,9 +570,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
     {
         long t0 = StepTiming.Now();
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass's targets and state now, the pipeline, the sets, the draws, into a job.
-        var interop = gpu.Interop!;
-        var targets = interop.CurrentTargets();
-        var state = PatchState(interop.CurrentState(), mode);
+        var targets = gpu.CurrentTargets();
+        var state = PatchState(gpu.CurrentState(), mode);
         var r = ResolvePatches(p, state, targets, label);
         var job = patchJobs.Rent();
         job.Owner = this;
@@ -681,12 +680,12 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     /// <summary>
     /// Draws other meshes with the terrain material (TERRAIN-mode map features), after <see cref="Draw"/> set the
-    /// frame. Each item: a vertex array with position at attribute 0 and normal at 1, its index count, its transform.
+    /// frame. Each item: a mesh with position at location 0 and normal at 1, its index count, its transform.
     /// As the game's <c>Feature_Terrain_DX11</c> (docs/formats/foliage.md, "TERRAIN-mode meshes"): one biome per mesh,
     /// the one of <c>biomemap.png</c> at the mesh's origin, back faces culled. Drawn instanced (<see cref="GroupMeshes"/>); returns
     /// the number of draw calls.
     /// </summary>
-    public int DrawMeshes(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth = false)
+    public int DrawMeshes(List<(MeshBindings Mesh, int IndexCount, Matrix4x4 Model)> meshes, bool depth = false)
     {
         long t0 = MeshTiming > 0 ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         int draws = DrawMeshesCore(meshes, depth);
@@ -726,7 +725,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         Console.WriteLine($"terrain meshes  colour {Kind(0)}, depth {Kind(1)}, {meshDraws[0] + meshDraws[1]} draws ({meshDraws[0]} colour, {meshDraws[1]} depth)");
     }
 
-    int DrawMeshesCore(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth)
+    int DrawMeshesCore(List<(MeshBindings Mesh, int IndexCount, Matrix4x4 Model)> meshes, bool depth)
     {
         if (depth) return DrawMeshesDepth(meshes);
         long t0 = StepTiming.Now();
@@ -773,7 +772,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// <summary>Terrain triangles the depth draws have drawn since the counter was last reset (by the caller).</summary>
     public long DepthTriangles { get; set; }
 
-    int DrawMeshesDepth(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes)
+    int DrawMeshesDepth(List<(MeshBindings Mesh, int IndexCount, Matrix4x4 Model)> meshes)
     {
         long t0 = StepTiming.Now();
         if (!depthReady || !GroupMeshes(meshes, biomes: false)) return 0;   // the frame's matrix is the cascade's once DrawDepth has run
@@ -793,10 +792,10 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     sealed class MeshGroup
     {
-        public uint Vao;
+        public MeshBindings Mesh = null!;
         public int IndexCount, Count, Offset, Index;
         public bool Mirrored;
-        /// <summary>What a native draw of this mesh needs, per program: kept while the vertex-array stamp holds and the export is the same.
+        /// <summary>What a native draw of this mesh needs, per program.
         /// Inline (no object of its own), so a draw reads what grouping has just touched.</summary>
         public NativeMesh ColourNative, DepthNative;
         public ref NativeMesh Native(int kind) => ref kind == Colour ? ref ColourNative : ref DepthNative;
@@ -810,13 +809,12 @@ public sealed unsafe class TerrainRenderer : IDisposable
     [System.Runtime.CompilerServices.InlineArray(2)]
     struct OwnVertices { BufferBinding first; }
 
-    /// <summary>A mesh resolved for one program: the export it came from and the <see cref="IGlInterop.VertexArrayStamp"/> it was current at,
-    /// its vertex layout and own vertex buffers (locations 0 up to the placements), its indices, and its pipelines for the last two segment
-    /// states (the reflection's multisampled target alternates with the scene's).</summary>
+    /// <summary>A mesh resolved for one program: the mesh it came from, its vertex layout and own vertex buffers (locations 0 up to the
+    /// placements), its indices, and its pipelines for the last two segment states (the reflection's multisampled target alternates with the
+    /// scene's).</summary>
     struct NativeMesh
     {
-        public VertexArrayBindings? Source;
-        public long Stamp;
+        public MeshBindings? Source;
         public VertexLayout? Layout;
         public int VertexCount;
         public OwnVertices Vertices;
@@ -840,7 +838,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         return segmentIds[kind] = id;
     }
 
-    readonly Dictionary<(uint, int, bool), MeshGroup> meshGroups = [];
+    readonly Dictionary<(MeshBindings, int, bool), MeshGroup> meshGroups = [];
     readonly List<MeshGroup> meshGroupList = [];
 
     /// <summary>
@@ -848,11 +846,11 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// matrix as its four rows; with <paramref name="biomes"/> row 0's w, which only feeds the position's unused w, carries the biome row).
     /// False when there is none.
     /// </summary>
-    bool GroupMeshes(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool biomes)
+    bool GroupMeshes(List<(MeshBindings Mesh, int IndexCount, Matrix4x4 Model)> meshes, bool biomes)
     {
         foreach (var g in meshGroupList) g.Count = 0;
         meshGroupList.Clear();
-        if (meshGroups.Count > 4096) meshGroups.Clear();   // vertex arrays come and go with streaming
+        if (meshGroups.Count > 4096) meshGroups.Clear();   // meshes come and go with streaming
         var items = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(meshes);
         if (groupOf.Length < items.Length) groupOf = new int[Math.Max(items.Length, groupOf.Length * 2)];
         // Pass 1: each placement's group (the callers list a mesh's placements in runs, so the last group usually answers without a lookup).
@@ -862,10 +860,10 @@ public sealed unsafe class TerrainRenderer : IDisposable
             ref readonly var item = ref items[i];
             bool mirrored = item.Model.GetDeterminant() < 0;
             var g = last;
-            if (g is null || g.Vao != item.Vao || g.IndexCount != item.IndexCount || g.Mirrored != mirrored)
+            if (g is null || g.Mesh != item.Mesh || g.IndexCount != item.IndexCount || g.Mirrored != mirrored)
             {
-                var key = (item.Vao, item.IndexCount, mirrored);
-                if (!meshGroups.TryGetValue(key, out g)) meshGroups[key] = g = new MeshGroup { Vao = item.Vao, IndexCount = item.IndexCount, Mirrored = mirrored };
+                var key = (item.Mesh, item.IndexCount, mirrored);
+                if (!meshGroups.TryGetValue(key, out g)) meshGroups[key] = g = new MeshGroup { Mesh = item.Mesh, IndexCount = item.IndexCount, Mirrored = mirrored };
                 if (g.Count == 0) { g.Index = meshGroupList.Count; meshGroupList.Add(g); }
                 last = g;
             }
@@ -909,7 +907,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         foreach (var g in meshGroupList)
         {
             ref var n = ref g.Native(kind);
-            if (n.Stamp != s.Stamp) Current(ref n, s.Interop, g.Vao, p, s.Stamp);
+            if (n.Source != g.Mesh) Current(ref n, g.Mesh, p);
             var pipeline = n.SegA == s.Segment ? n.PipeA! : PipelineFor(ref n, p, s.Segment, s.State, s.Targets.Formats, label);
             job.Add(new MeshJob.Draw
             {
@@ -924,25 +922,22 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// <summary>What the draws of a mesh segment share (<see cref="OpenMeshSegment"/>).</summary>
     struct MeshSegment
     {
-        public IGlInterop Interop;
         public PassTargets Targets;
         public DrawState State;
         public int Segment;
-        public long Stamp;
         public Silk.NET.Vulkan.FrontFace Ccw, Cw;
     }
 
-    /// <summary>Opens a native segment for TERRAIN-mode meshes inside the pass VkGl is drawing: dynamic state (back faces culled,
-    /// counter-clockwise), the frame and terrain sets, and the placements' rows from <paramref name="rows"/> at locations 7 to 10.</summary>
+    /// <summary>Opens a native segment for TERRAIN-mode meshes inside the host's pass: dynamic state (back faces culled, counter-clockwise),
+    /// the frame and terrain sets, and the placements' rows from <paramref name="rows"/> at locations 7 to 10.</summary>
     MeshJob OpenMeshSegment(TerrainProgram p, int kind, string label, Silk.NET.Vulkan.Buffer rows, ulong rowsOffset, out MeshSegment s)
     {
         // Prepare (wave 4, docs/renderer-native.md 6.2): what the segment's commands need, into a job recorded by CloseMeshSegment.
-        var interop = gpu.Interop!;
-        var targets = interop.CurrentTargets();
-        var state = interop.CurrentState();
+        var targets = gpu.CurrentTargets();
+        var state = gpu.CurrentState();
         s = new MeshSegment
         {
-            Interop = interop, Targets = targets, State = state, Segment = SegmentId(kind, p.P, targets, state), Stamp = interop.VertexArrayStamp,
+            Targets = targets, State = state, Segment = SegmentId(kind, p.P, targets, state),
             Ccw = GlConventions.FrontFace(FrontFaceDirection.Ccw), Cw = GlConventions.FrontFace(FrontFaceDirection.CW),
         };
         var job = meshJobs.Rent();
@@ -1038,7 +1033,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     /// <summary>A TERRAIN-mode mesh drawn indirect (<see cref="DrawMeshesIndirect"/>): the vertex array (position at 0, normal at 1), its index
     /// count, and whether its placements mirror (the winding turns round), as <see cref="DrawMeshes"/> groups them.</summary>
-    public readonly record struct IndirectMesh(uint Vao, int IndexCount, bool Mirrored);
+    public readonly record struct IndirectMesh(MeshBindings Mesh, int IndexCount, bool Mirrored);
 
     /// <summary>
     /// <see cref="DrawMeshes"/> with placements and draw arguments made on the GPU (the foliage's GPU cull, docs/renderer-native.md 5.6.1): mesh
@@ -1081,15 +1076,15 @@ public sealed unsafe class TerrainRenderer : IDisposable
     {
         long t0 = StepTiming.Now();
         var job = OpenMeshSegment(p, kind, label, rows, rowsOffset, out var s);
-        if (meshGroups.Count > 4096) meshGroups.Clear();   // vertex arrays come and go with streaming
+        if (meshGroups.Count > 4096) meshGroups.Clear();   // meshes come and go with streaming
         for (int i = 0; i < meshes.Length; i++)
         {
             var m = meshes[i];
             // The mesh's native state lives with its group (shared with DrawMeshes' draws of the same mesh).
-            var key = (m.Vao, m.IndexCount, m.Mirrored);
-            if (!meshGroups.TryGetValue(key, out var g)) meshGroups[key] = g = new MeshGroup { Vao = m.Vao, IndexCount = m.IndexCount, Mirrored = m.Mirrored };
+            var key = (m.Mesh, m.IndexCount, m.Mirrored);
+            if (!meshGroups.TryGetValue(key, out var g)) meshGroups[key] = g = new MeshGroup { Mesh = m.Mesh, IndexCount = m.IndexCount, Mirrored = m.Mirrored };
             ref var n = ref g.Native(kind);
-            if (n.Stamp != s.Stamp) Current(ref n, s.Interop, g.Vao, p, s.Stamp);
+            if (n.Source != g.Mesh) Current(ref n, g.Mesh, p);
             var pipeline = n.SegA == s.Segment ? n.PipeA! : PipelineFor(ref n, p, s.Segment, s.State, s.Targets.Formats, label);
             job.Add(new MeshJob.Draw
             {
@@ -1101,14 +1096,10 @@ public sealed unsafe class TerrainRenderer : IDisposable
         return meshes.Length;
     }
 
-    /// <summary>A mesh's state for <paramref name="p"/>, current at <paramref name="stamp"/>: the export fetched again (the stamp moved), the
-    /// layout and own vertex buffers rebuilt only when the export is another object; the placements as per-instance rows of 64 bytes at
-    /// locations 7 to 10.</summary>
-    static void Current(ref NativeMesh n, IGlInterop interop, uint vao, TerrainProgram p, long stamp)
+    /// <summary>A mesh's state for <paramref name="p"/>, made when the group meets another mesh: the layout and own vertex buffers, the
+    /// placements as per-instance rows of 64 bytes at locations 7 to 10.</summary>
+    static void Current(ref NativeMesh n, MeshBindings va, TerrainProgram p)
     {
-        var va = interop.VertexArray(vao);
-        n.Stamp = stamp;
-        if (ReferenceEquals(n.Source, va)) return;
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
         va.Attributes.AsSpan().CopyTo(attributes);
         for (int a = 0; a < 4; a++)

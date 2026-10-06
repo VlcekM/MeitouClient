@@ -89,16 +89,16 @@ public sealed unsafe class DlssUpscaler : IUpscaler
     /// <summary>Flips y of a clip space: our clip y = +1 is image row H (bottom-up), DLSS's is row 0.</summary>
     static readonly Matrix4x4 FlipY = Matrix4x4.CreateScale(1, -1, 1);
 
-    SlResource Resource(uint texture, uint layout)
+    static SlResource Resource(Meitou.Rendering.Gpu.Texture texture, uint layout)
     {
-        var image = gl.ImageOf(texture);
+        var d = texture.Desc;
         return new SlResource
         {
             StructType = Streamline.ResourceType, StructVersion = 1,
             Type = 0,   // eTex2d
-            Native = (nint)image.Image.Handle, View = (nint)image.View.Handle, State = layout,
-            Width = (uint)image.Width, Height = (uint)image.Height, NativeFormat = (uint)image.Format,
-            MipLevels = (uint)image.Levels, ArrayLayers = 1, Usage = (uint)image.Usage,
+            Native = (nint)texture.Image.Handle, View = (nint)texture.Attachment().Handle, State = layout,
+            Width = (uint)d.Width, Height = (uint)d.Height, NativeFormat = (uint)d.Format,
+            MipLevels = (uint)d.Levels, ArrayLayers = 1, Usage = (uint)(texture.Underlying?.Usage ?? 0),
         };
     }
 
@@ -156,8 +156,8 @@ public sealed unsafe class DlssUpscaler : IUpscaler
             var motion = Resource(i.Motion, (uint)ImageLayout.General);
             var colour = Resource(i.Colour, (uint)ImageLayout.General);
             var output = Resource(i.Output, (uint)ImageLayout.General);
-            bool hint = i.Reactive != 0;
-            var reactive = hint ? Resource(i.Reactive, (uint)ImageLayout.General) : default;
+            bool hint = i.Reactive is not null;
+            var reactive = hint ? Resource(i.Reactive!, (uint)ImageLayout.General) : default;
             var tags = stackalloc ResourceTag[5];
             tags[0] = Tag(&depth, BufferDepth);
             tags[1] = Tag(&motion, BufferMotionVectors);

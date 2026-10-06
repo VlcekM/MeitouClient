@@ -761,7 +761,7 @@ internal sealed class TerrainTexture : IDisposable
     /// <summary>The sampler and view a draw samples it with now (what VkGl's <c>Sampled</c> gave for the GL texture).</summary>
     public SampledTexture Sampled()
     {
-        float bias = ctx.LodBias();
+        float bias = ctx.LodBias;
         if (!(bias == cachedBias))
         {
             var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, anisotropy, integer, bias));

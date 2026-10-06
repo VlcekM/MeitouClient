@@ -219,10 +219,10 @@ public sealed unsafe partial class FoliageRenderer
         var p = gp.P;
         var interop = Gpu.Interop!;
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the cull (into PreFrame), the sets and the draw, into a job.
-        var targets = interop.CurrentTargets();
-        var state = GrassState(interop, coverage);
+        var targets = Gpu.CurrentTargets();
+        var state = GrassState(Gpu, coverage);
         int segment = SegmentId(GrassKind, p, targets, state);
-        NewTextureSegment(interop);
+        NewTextureSegment();
         var tables = BindRows(0);
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
         var result = grassStore.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
@@ -288,8 +288,8 @@ public sealed unsafe partial class FoliageRenderer
         var p = gp.P;
         var interop = Gpu.Interop!;
         var cmd = interop.BeginNativeInPass("foliage grass motion");
-        var pass = interop.CurrentTargets();
-        var drawState = MotionState(interop);
+        var pass = Gpu.CurrentTargets();
+        var drawState = MotionState(Gpu);
         int segment = SegmentId(MotionKind, p, pass, drawState);
         cmd.SetViewport(pass.Viewport);
         cmd.SetScissor(pass.Scissor);
@@ -301,8 +301,8 @@ public sealed unsafe partial class FoliageRenderer
             ViewProjection = motionViewProjection, PreviousViewProjection = previous, Eye = eye, Time = time, PreviousTime = previousTime,
             NearPlanes = targets.NearPlanes, JitterNdc = targets.JitterNdc,
         };
-        NewTextureSegment(interop);
-        var tables = BindRows(Index2D(interop, targets.NearDepth));
+        NewTextureSegment();
+        var tables = BindRows(NearDepthIndex(targets.NearDepth));
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
         var result = grassStore.Dispatch(motionFrustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
         if (GpuCullVerify && !result.IsEmpty) QueueGrassVerify("motion", result);

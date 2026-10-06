@@ -15,7 +15,7 @@ public readonly record struct SamplerDesc(Filter Min, Filter Mag, SamplerMipmapM
     bool IntegerFormat, float Anisotropy, float LodBias)
 {
     /// <param name="compare">The sampler is a shadow sampler and the texture's compare mode is on.</param>
-    /// <param name="lodBias">The upscaler's bias (<see cref="ITextureLodBias"/>); applied only when the filter is mipmapped.</param>
+    /// <param name="lodBias">The upscaler's bias (<see cref="GpuContext.LodBias"/>); applied only when the filter is mipmapped.</param>
     public static SamplerDesc FromGl(TextureMinFilter min, TextureMagFilter mag, TextureWrapMode s, TextureWrapMode t, TextureWrapMode r,
         bool compare, DepthFunction func, bool transparentBorder, float anisotropy, bool integerFormat, float lodBias)
     {

@@ -38,7 +38,7 @@ public sealed record GpuFeatures(bool Bindless, bool MultiDrawIndirect, bool Dra
 /// The native renderer API for one device (docs/renderer-native.md 2.2): what every renderer shares. Created next to VkGl from the same
 /// device (VkGl makes it, and drives <see cref="Frame"/> from its own frame begin and end while it exists).
 /// </summary>
-public sealed unsafe class GpuContext : IDisposable
+public sealed unsafe partial class GpuContext : IDisposable
 {
     readonly List<DescriptorPool> persistentPools = [];
 
@@ -79,8 +79,8 @@ public sealed unsafe class GpuContext : IDisposable
     public HostMemory HostMemory { get; }
     /// <summary>The draw log of the frame being recorded, when one is asked for (<see cref="DrawLog.RequestedPath"/>).</summary>
     public DrawLog? Log { get; internal set; }
-    /// <summary>The upscaler's texture LOD bias (VkGl's <c>ITextureLodBias</c> while VkGl exists).</summary>
-    public Func<float> LodBias { get; set; } = () => 0;
+    /// <summary>The upscaler's texture LOD bias: added to the mip level of every mipmapped fetch (set by the post-processing chain).</summary>
+    public float LodBias { get; set; }
     /// <summary>What a sampler with nothing bound reads (VkGl's own stand-in while VkGl exists, so both sides bind the same objects).</summary>
     public Func<SamplerInfo, SampledTexture>? DummyOverride { get; set; }
 
@@ -133,6 +133,12 @@ public sealed unsafe class GpuContext : IDisposable
         public override void Record(CommandList cmd) => cmd.Clear(Colour, ColourValue, Depth, DepthValue, Rect);
         public override void Release() => Owner.clearJobs.Return(this);
     }
+
+    uint? standIn2D;
+
+    /// <summary>The stand-in's index in the bindless 2D float array (what a 2D sampler with nothing bound reads, <see cref="Dummy"/>), registered once.</summary>
+    public uint StandIn2D => standIn2D ??= Bindless.Register(BindlessKind.Texture2D,
+        Dummy(new SamplerInfo("", 0, 0, SamplerDimension.Dim2D, false, false, false, ScalarKind.Float, 0)));
 
     readonly Dictionary<(int, ScalarKind, bool), SampledTexture> dummies = [];
 

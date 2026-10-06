@@ -228,23 +228,21 @@ public sealed unsafe class ReflectionPass : IDisposable
         // Keep a metre below the surface too, so the waves' troughs do not show a gap at the shore.
         var clip = new Vector4(0, 1, 0, -(plane - 1));
 
-        gl.ColorMask(true, true, true, true);
-        gl.DepthMask(true);
-        gl.Disable(EnableCap.Blend);
-        gl.Disable(EnableCap.ScissorTest);
         // The native host (docs/renderer-native.md 4.5): the multisampled target's rendering instance is opened here, cleared by its load ops,
-        // and the sky, terrain, objects and foliage record into it through BeginNativeInPass. The GL framebuffer binding, viewport and state stay
-        // what the guests read (CurrentTargets, CurrentState, GetInteger(Samples)).
+        // and the sky, terrain, objects and foliage record into it through BeginNativeInPass, with the targets and state handed over here
+        // (GpuContext.CurrentTargets, CurrentState).
         var interop = Gpu.Interop!;
         var cmd = interop.BeginNative("reflection");
-        var target = interop.CurrentTargets();
-        interop.BeginHostPass(cmd);
+        var target = msColour is not null ? PassTargets.Of(msColour, msDepth) : PassTargets.Of(colour, depth);
         // Wave 4 (docs/renderer-native.md 6): the guests' segments are secondaries, recorded on the job threads when the pass ends.
         bool secondaries = Recording.Secondaries;
         cmd.BeginRendering(new RenderingDesc(
             target.Colour with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(new ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1)) },
             target.Depth with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(depthStencil: new ClearDepthStencilValue(1f, 0)) },
             target.Width, target.Height), secondaries);
+        // What the guests draw with: the scene's state (depth tested with less-or-equal and written, no culling, blending or clamp, every channel).
+        // The sky turns the depth test off for itself.
+        Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
         if (secondaries) Gpu.Frame.Parallel.Begin(cmd, target.Formats, ReflectionStage);
         Lap(4);
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
@@ -261,8 +259,6 @@ public sealed unsafe class ReflectionPass : IDisposable
         options.TerrainPixelScale = render.TerrainPixelScale * TerrainLodScale;
         options.MaterialDistance = Math.Min(render.MaterialDistance, MaterialDistance);
 
-        gl.Enable(EnableCap.DepthTest);
-        gl.DepthFunc(DepthFunction.Lequal);
         terrain.BeginFrame();
         bool first = true;
         Matrix4x4 mapped = default;
@@ -292,7 +288,7 @@ public sealed unsafe class ReflectionPass : IDisposable
             cmd.Barrier(BarrierBatch.Full);
             cmd.Resolve(msColour, colour!);
         }
-        interop.EndHostPass(cmd);
+        Gpu.EndHostPass(cmd);
         interop.EndNative(cmd);
         gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, (uint)drawFbo);
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, (uint)readFbo);
