@@ -226,6 +226,12 @@ public sealed unsafe class DebugOverlay : IDisposable
         batch.Clear();
     }
 
+    /// <summary>Queues a solid triangle (pixels, top-left origin).</summary>
+    public void Triangle(Vector2 a, Vector2 b, Vector2 c, Vector4 colour)
+    {
+        Emit(a.X, a.Y, -1, 0, colour); Emit(b.X, b.Y, -1, 0, colour); Emit(c.X, c.Y, -1, 0, colour);
+    }
+
     /// <summary>Queues a solid line segment <paramref name="thickness"/> pixels wide.</summary>
     public void Line(float x0, float y0, float x1, float y1, float thickness, Vector4 colour)
     {

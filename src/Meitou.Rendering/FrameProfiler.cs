@@ -117,6 +117,66 @@ public sealed class FrameProfiler : IDisposable
     readonly GpuContext native;
     (ulong Used, ulong Budget) vram;
     int vramAge;
+    List<(string Name, ulong Bytes)> vramSlices = [];
+
+    static readonly Vector4[] PieColours =
+    [
+        new(0.35f, 0.60f, 1.00f, 1), new(0.95f, 0.55f, 0.25f, 1), new(0.40f, 0.85f, 0.40f, 1), new(0.95f, 0.35f, 0.35f, 1),
+        new(0.65f, 0.45f, 0.95f, 1), new(0.95f, 0.85f, 0.35f, 1), new(0.25f, 0.80f, 0.85f, 1), new(0.95f, 0.55f, 0.85f, 1),
+        new(0.55f, 0.55f, 0.55f, 1), new(0.35f, 0.35f, 0.40f, 1), new(0.20f, 0.20f, 0.22f, 1),
+    ];
+
+    /// <summary>
+    /// The VRAM by owner: the eight largest device-local owners of <see cref="GpuAllocator.Breakdown"/>, the rest of ours, the unused room in
+    /// our blocks, and what the driver counts beyond our blocks (its own allocations, swapchain, other APIs' resources such as DLSS's).
+    /// </summary>
+    List<(string Name, ulong Bytes)> VramSlices()
+    {
+        var alloc = native.Device.Allocator;
+        var owners = alloc.Breakdown().Where(o => o.DeviceLocal > 0).OrderByDescending(o => o.DeviceLocal).ToList();
+        var slices = owners.Take(8).Select(o => (o.Name, o.DeviceLocal)).ToList();
+        ulong ours = (ulong)owners.Sum(o => (double)o.DeviceLocal), shown = (ulong)slices.Sum(s => (double)s.DeviceLocal);
+        if (ours > shown) slices.Add(("other of ours", ours - shown));
+        ulong blocks = alloc.TotalAllocatedBytes, used = alloc.TotalUsedBytes;
+        if (blocks > used) slices.Add(("free in our blocks", blocks - used));
+        if (vram.Used > blocks) slices.Add(("driver and others", vram.Used - blocks));
+        return slices;
+    }
+
+    void DrawVramPie(DebugOverlay overlay, int width)
+    {
+        if (vramSlices.Count == 0) return;
+        double total = vramSlices.Sum(s => (double)s.Bytes);
+        if (total <= 0) return;
+        const float margin = 16, pad = 12, radius = 70;
+        float lh = overlay.LineHeight, cw = overlay.CharWidth;
+        float legendW = 2 * cw + 30 * cw;
+        float panelW = pad * 3 + 2 * radius + legendW, panelH = Math.Max(2 * radius, (vramSlices.Count + 1.5f) * lh) + 2 * pad;
+        float x1 = width - margin, x0 = x1 - panelW, y0 = margin;
+        overlay.Rect(x0, y0, x1, y0 + panelH, DebugOverlay.PanelColour);
+        var centre = new Vector2(x0 + pad + radius, y0 + pad + Math.Max(radius, (panelH - 2 * pad) / 2));
+        double angle = -Math.PI / 2;
+        float lx = x0 + pad * 2 + 2 * radius, ly = y0 + pad;
+        overlay.Text($"VRAM {vram.Used / 1073741824.0:0.00} of {vram.Budget / 1073741824.0:0.0} GB", lx, ly, DebugOverlay.TextColour);
+        for (int i = 0; i < vramSlices.Count; i++)
+        {
+            var (name, bytes) = vramSlices[i];
+            var colour = PieColours[Math.Min(i, PieColours.Length - 1)];
+            double sweep = bytes / total * Math.Tau;
+            int steps = Math.Max(1, (int)Math.Ceiling(sweep / (Math.Tau / 96)));
+            for (int k = 0; k < steps; k++)
+            {
+                double a0 = angle + sweep * k / steps, a1 = angle + sweep * (k + 1) / steps;
+                overlay.Triangle(centre, centre + radius * new Vector2((float)Math.Cos(a0), (float)Math.Sin(a0)),
+                    centre + radius * new Vector2((float)Math.Cos(a1), (float)Math.Sin(a1)), colour);
+            }
+            angle += sweep;
+            float top = ly + (i + 1.5f) * lh;
+            overlay.Rect(lx, top + 4, lx + 10, top + 14, colour);
+            string label = name.Length > 20 ? name[..20] : name;
+            overlay.Text($"{label,-20}{bytes / 1048576.0,7:0} MB", lx + 2 * cw, top, DebugOverlay.TextColour);
+        }
+    }
     readonly QuerySlot[,] nativeStamps = new QuerySlot[Slots, MaxStamps];
     QuerySlot pendingStamp;
     readonly Action<CommandList> recordStamp;
@@ -181,8 +241,9 @@ public sealed class FrameProfiler : IDisposable
         float panelH = (Order.Length + 2.5f) * lh + 2 * pad;
         float x0 = margin, x1 = width - margin, y1 = height - margin, y0 = Math.Max(y1 - panelH, margin);
         overlay.Rect(x0, y0, x1, y1, DebugOverlay.PanelColour);
-        // VRAM is read every 30 frames (a driver call) and shown in the header.
-        if (vramAge-- <= 0) { vram = native.Device.VideoMemory(); vramAge = 30; }
+        // VRAM is read every 30 frames (a driver call), shown in the header and as the pie at the top right.
+        if (vramAge-- <= 0) { vram = native.Device.VideoMemory(); vramSlices = VramSlices(); vramAge = 30; }
+        DrawVramPie(overlay, width);
         overlay.Text($"Profiler: {(showGpu ? "GPU" : "render thread")} ms per stage, last {History} frames   (F12: {(showGpu ? "cpu" : "off")})   " +
             $"vram {vram.Used / 1073741824.0:0.00} of {vram.Budget / 1073741824.0:0.0} GB", x0 + pad, y0 + pad, DebugOverlay.TextColour);
 
