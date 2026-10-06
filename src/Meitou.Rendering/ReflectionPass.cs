@@ -83,7 +83,7 @@ public sealed unsafe class ReflectionPass : IDisposable
     public int MaxAge { get; set; } = 3;
     /// <summary>The framebuffer (viewport: the whole picture) to go back to afterwards, when the caller knows it; otherwise it is queried.</summary>
     public uint? RestoreFramebuffer { get; set; }
-    /// <summary>Multiplies the terrain's LOD distance setting for the mirrored terrain (below 1: coarser patches sooner).</summary>
+    /// <summary>Multiplies the terrain LOD's pixel scale for the mirrored terrain (its target is half the picture's size, so 0.5 measures the error in its own pixels; below: coarser).</summary>
     public float TerrainLodScale { get; set; } = 0.5f;
 
     /// <summary>Whether this frame has a reflection to sample (not when the eye is under the water).</summary>
@@ -238,7 +238,8 @@ public sealed unsafe class ReflectionPass : IDisposable
         options.Water = render.Water;
         options.Wireframe = 0;
         options.Debug = 0;
-        options.LodDistance = Math.Max(render.LodDistance * TerrainLodScale, 2);
+        (options.TerrainPixelError, options.TerrainFarPixelError, options.TerrainRampStart) = (render.TerrainPixelError, render.TerrainFarPixelError, render.TerrainRampStart);
+        options.TerrainPixelScale = render.TerrainPixelScale * TerrainLodScale;
         options.MaterialDistance = Math.Min(render.MaterialDistance, MaterialDistance);
 
         gl.Enable(EnableCap.DepthTest);

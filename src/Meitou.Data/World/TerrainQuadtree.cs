@@ -160,6 +160,8 @@ public readonly record struct TerrainNode(int Level, double X0, double Z0, doubl
 /// <see cref="Ranges"/>[l] of it and refined where it is within Ranges[l − 1]. Between <see cref="MorphStart"/> and
 /// <see cref="MorphEnd"/> of its level a vertex slides onto the grid of the next coarser level, reaching it by the end
 /// of the range, so neighbouring levels meet without cracks or pops as long as the height depends on position only.
+/// The ranges come from a screen-space error rule (<see cref="TerrainLod"/>, <see cref="SetRanges(TerrainLod)"/>) or, for tests,
+/// a fixed multiple of the node size.
 /// </summary>
 public sealed class TerrainQuadtree
 {
@@ -175,20 +177,59 @@ public sealed class TerrainQuadtree
         while (levels < 20 && WorldLayout.WorldSize / (double)(1 << levels) / gridCells >= finestSpacing - 1e-6) levels++;
         LevelCount = levels;
         LeafSize = WorldLayout.WorldSize / (double)(1 << (levels - 1));
+        this.morphFraction = morphFraction;
         Ranges = new float[levels];
         MorphStart = new float[levels];
         MorphEnd = new float[levels];
+        var ranges = new float[levels];
         for (int l = 0; l < levels; l++)
-            Ranges[l] = (float)(LeafSize * (1 << l) * lodDistance);
-        for (int l = 0; l < levels; l++)
+            ranges[l] = (float)(LeafSize * (1 << l) * lodDistance);
+        SetRanges(ranges);
+    }
+
+    /// <summary>A tree whose level ranges come from a screen-space error rule (<see cref="TerrainLod.Ranges"/>).</summary>
+    public TerrainQuadtree(float finestSpacing, int gridCells, TerrainLod lod) : this(finestSpacing, gridCells) => SetRanges(lod);
+
+    readonly float morphFraction;
+
+    /// <summary>Takes the level ranges of <paramref name="lod"/>; false when they are the ones in use already.</summary>
+    public bool SetRanges(TerrainLod lod)
+    {
+        if (lod == lastLod) return false;   // the frame's passes ask every time; the rule rarely changes
+        bool changed = SetRanges(lod.Ranges(LevelCount, LeafSize, GridCells));
+        lastLod = lod;
+        return changed;
+    }
+
+    TerrainLod? lastLod;
+
+    /// <summary>
+    /// Sets the level ranges (increasing; the last one is ignored: the root is drawn wherever nothing finer is) and the morph
+    /// band of each level, the last <c>1 − morphFraction</c> of the distances between the finer level's range and its own.
+    /// False when nothing changed.
+    /// </summary>
+    public bool SetRanges(ReadOnlySpan<float> ranges)
+    {
+        if (ranges.Length != LevelCount) throw new ArgumentException($"{LevelCount} ranges needed, got {ranges.Length}", nameof(ranges));
+        lastLod = null;
+        bool same = true;
+        for (int l = 0; l + 1 < LevelCount; l++) same &= Ranges[l] == ranges[l];
+        if (same && Ranges[^1] == float.MaxValue) return false;
+        for (int l = 0; l + 1 < LevelCount; l++)
+        {
+            if (!(ranges[l] > (l == 0 ? 0 : ranges[l - 1]))) throw new ArgumentException($"range {l} ({ranges[l]}) does not grow", nameof(ranges));
+            Ranges[l] = ranges[l];
+        }
+        for (int l = 0; l < LevelCount; l++)
         {
             float lo = l == 0 ? 0 : Ranges[l - 1];
             MorphEnd[l] = Ranges[l];
             MorphStart[l] = lo + (Ranges[l] - lo) * morphFraction;
         }
         // The root is drawn wherever nothing finer is: it covers the whole world from any eye position.
-        Ranges[levels - 1] = float.MaxValue;
-        MorphStart[levels - 1] = MorphEnd[levels - 1] = float.MaxValue;
+        Ranges[LevelCount - 1] = float.MaxValue;
+        MorphStart[LevelCount - 1] = MorphEnd[LevelCount - 1] = float.MaxValue;
+        return true;
     }
 
     public int GridCells { get; }
