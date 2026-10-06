@@ -2487,7 +2487,7 @@ Commits `b5fa777` (textures), `8ecf886` (shadow map), `63a541c` (renderer).
   `Apply`, `BindHeights`, `BindHeightUnits` and the uniform-location cache are gone (`BindHeights` was public but had no caller).
 - `TerrainShadowMap`: the heights (R16) and the two RG32F targets are native; the sweep is one `BeginNative` segment, each doubling pass a
   rendering of its own into one target with a full barrier after it, the source bound as a native `SampledTexture` (no GL unit).
-- `TerrainTexture` (in `TerrainTextures.cs`, used by all three): a native texture with the GL sampler state its GL version had
+- `TerrainTexture` (in `TerrainTextures.cs`, used by it and `TerrainRenderer`; the shadow map keeps plain `Texture`s and `SampledTexture`s): a native texture with the GL sampler state its GL version had
   (`SamplerDesc.FromGl`, the upscaler's LOD bias from `GpuContext.LodBias` on mipmapped filters, as `VkGl.SamplerFor`) and its bindless entry,
   re-registered (the old index freed) when the sampler changes, as `IGlInterop.Bindless` does.
 
@@ -2531,7 +2531,8 @@ barrier, per level a transfer barrier and a linear blit from the level above, a 
 
 **Gate** (Release, RTX 4070): `dotnet build -c Release` 0 warnings; `dotnet test -c Release` 465 passed, 0 skipped; the ten views `--faithful all` and Meitou 0 px max against
 `C:\Temp\base-6f4af19`; extras against the base viewer, 0 px: `--debug-shadows 1` forest 13:00, `--water-reflection 4` Port North 13:00,
-`--upscaler taa` forest 13:00, `MEITOU_RECORD_THREADS=0` forest 13:00, `--wireframe` forest 13:00. `MEITOU_VK_VALIDATION=sync`: forest 13:00
+`--upscaler taa` forest 13:00, `MEITOU_RECORD_THREADS=0` forest 13:00, `--wireframe` forest 13:00, and a low sun for the terrain shadow map
+(forest 07:00, Hub 17:00, Meitou). `MEITOU_VK_VALIDATION=sync`: forest 13:00
 and Port North 13:00 with `--water-reflection 4` 0 errors; a 150-frame forest fly under sync validation (six fine-height swaps, layer and map
 streaming) 0 errors. `--fly-benchmark` 300, `--faithful all`, two interleaved runs each (noisy machine): the `terrain` stage 0.13-0.14 ms
 before and after, `upd-terrain` 0.46-0.49 → 0.49-0.52 ms, render-thread allocation 14-20 → 17-18 MB: no change beyond the noise.
