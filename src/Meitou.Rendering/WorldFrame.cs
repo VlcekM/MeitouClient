@@ -86,7 +86,7 @@ sealed class WorldOptions
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
           --range-large <u> --range-medium <u> --range-small <u>   foliage draw range by mesh size (the range switch, F6; defaults 5000, 2500, 800; Tab sliders)
-          --impostor-distance <u>  large foliage meshes become impostors (baked billboards) from here, medium ones from half of it (the impostors switch, F7; default 4000; Tab slider)
+          --impostor-distance <u>  foliage meshes with an impostor atlas (large and medium) become baked billboards from here (the impostors switch, F7; default 4000; Tab slider)
           --object-distance <u>    draw placed objects at full detail up to this distance (default 12000)
           --distant-range <zones>  distant towns (and buildings' distant meshes) up to this many zones (default 10, the game's setting maximum; its default is 6)
           --no-distant             no distant towns: objects beyond --object-distance are simply not drawn

@@ -18,8 +18,9 @@ public sealed partial class FoliageRenderer
 {
     /// <summary>The default transition distance of large meshes (units along the ground; the Tab slider "Impostor distance").</summary>
     public const float DefaultImpostorDistance = 4000;
-    /// <summary>Medium-class atlases (128-pixel frames, radius 48 to 160) switch at this share of <see cref="ImpostorDistance"/>.</summary>
-    public const float ImpostorMediumShare = 0.5f;
+    /// <summary>Medium-class atlases (128-pixel frames, radius 48 to 160) switch at this share of <see cref="ImpostorDistance"/>: 1, since at 0.5
+    /// (2000) bushes visibly thickened against their meshes (docs/impostors.md "Drawing").</summary>
+    public const float ImpostorMediumShare = 1f;
     /// <summary>The crossfade band before the transition, as a share of it.</summary>
     public const float ImpostorBand = 0.1f;
 
