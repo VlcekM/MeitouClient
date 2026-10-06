@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Meitou.Rendering.Vulkan.Core;
+using Silk.NET.Core;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
@@ -37,6 +38,24 @@ public sealed unsafe class CommandList
     readonly ulong[] lastVertexOffset = new ulong[32];
     uint vertexValid;   // bit per binding whose last* entry is known
 
+    // The per-draw and per-segment commands, called through the device's own entry points (vkGetDeviceProcAddr: the driver's, or the top
+    // layer's when validation is on) instead of Silk.NET's per-call vtable lookup and cast (docs/renderer-native.md 9: ~0.02 us a draw).
+    // The same commands with the same arguments; nothing else changes.
+    readonly delegate* unmanaged<CommandBuffer, PipelineBindPoint, Pipeline, void> cmdBindPipeline;
+    readonly delegate* unmanaged<CommandBuffer, uint, uint, Viewport*, void> cmdSetViewport;
+    readonly delegate* unmanaged<CommandBuffer, uint, uint, Rect2D*, void> cmdSetScissor;
+    readonly delegate* unmanaged<CommandBuffer, CullModeFlags, void> cmdSetCullMode;
+    readonly delegate* unmanaged<CommandBuffer, FrontFace, void> cmdSetFrontFace;
+    readonly delegate* unmanaged<CommandBuffer, Bool32, void> cmdSetDepthTestEnable, cmdSetDepthWriteEnable, cmdSetDepthBiasEnable;
+    readonly delegate* unmanaged<CommandBuffer, CompareOp, void> cmdSetDepthCompareOp;
+    readonly delegate* unmanaged<CommandBuffer, float, float, float, void> cmdSetDepthBias;
+    readonly delegate* unmanaged<CommandBuffer, uint, uint, Buffer*, ulong*, void> cmdBindVertexBuffers;
+    readonly delegate* unmanaged<CommandBuffer, Buffer, ulong, IndexType, void> cmdBindIndexBuffer;
+    readonly delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint, DescriptorSet*, uint, uint*, void> cmdBindDescriptorSets;
+    readonly delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void> cmdPushConstants;
+    readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void> cmdDraw;
+    readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void> cmdDrawIndexed;
+
     internal CommandList(VulkanDevice device, GpuStats stats)
     {
         this.device = device;
@@ -44,6 +63,29 @@ public sealed unsafe class CommandList
         Stats = stats;
         if (device.HasPushDescriptor) vk.TryGetDeviceExtension(device.Instance, device.Device, out push);
         debug = device.DebugUtils;
+        cmdBindPipeline = (delegate* unmanaged<CommandBuffer, PipelineBindPoint, Pipeline, void>)Proc("vkCmdBindPipeline");
+        cmdSetViewport = (delegate* unmanaged<CommandBuffer, uint, uint, Viewport*, void>)Proc("vkCmdSetViewport");
+        cmdSetScissor = (delegate* unmanaged<CommandBuffer, uint, uint, Rect2D*, void>)Proc("vkCmdSetScissor");
+        cmdSetCullMode = (delegate* unmanaged<CommandBuffer, CullModeFlags, void>)Proc("vkCmdSetCullMode");
+        cmdSetFrontFace = (delegate* unmanaged<CommandBuffer, FrontFace, void>)Proc("vkCmdSetFrontFace");
+        cmdSetDepthTestEnable = (delegate* unmanaged<CommandBuffer, Bool32, void>)Proc("vkCmdSetDepthTestEnable");
+        cmdSetDepthWriteEnable = (delegate* unmanaged<CommandBuffer, Bool32, void>)Proc("vkCmdSetDepthWriteEnable");
+        cmdSetDepthBiasEnable = (delegate* unmanaged<CommandBuffer, Bool32, void>)Proc("vkCmdSetDepthBiasEnable");
+        cmdSetDepthCompareOp = (delegate* unmanaged<CommandBuffer, CompareOp, void>)Proc("vkCmdSetDepthCompareOp");
+        cmdSetDepthBias = (delegate* unmanaged<CommandBuffer, float, float, float, void>)Proc("vkCmdSetDepthBias");
+        cmdBindVertexBuffers = (delegate* unmanaged<CommandBuffer, uint, uint, Buffer*, ulong*, void>)Proc("vkCmdBindVertexBuffers");
+        cmdBindIndexBuffer = (delegate* unmanaged<CommandBuffer, Buffer, ulong, IndexType, void>)Proc("vkCmdBindIndexBuffer");
+        cmdBindDescriptorSets = (delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint, DescriptorSet*, uint, uint*, void>)Proc("vkCmdBindDescriptorSets");
+        cmdPushConstants = (delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void>)Proc("vkCmdPushConstants");
+        cmdDraw = (delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void>)Proc("vkCmdDraw");
+        cmdDrawIndexed = (delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void>)Proc("vkCmdDrawIndexed");
+    }
+
+    /// <summary>A device-level command entry point (all of them core in Vulkan 1.3, which the device requires).</summary>
+    void* Proc(string name)
+    {
+        var p = (void*)vk.GetDeviceProcAddr(device.Device, name).Handle;
+        return p != null ? p : throw new InvalidOperationException($"{name} not found on the device");
     }
 
     public CommandBuffer Handle { get; internal set; }
@@ -108,80 +150,95 @@ public sealed unsafe class CommandList
     {
         Log?.Pipeline(pipeline);
         if (pipeline.Handle.Handle == lastPipeline.Handle && lastPoint == PipelineBindPoint.Graphics) return;
-        vk.CmdBindPipeline(Handle, PipelineBindPoint.Graphics, pipeline.Handle);
+        cmdBindPipeline(Handle, PipelineBindPoint.Graphics, pipeline.Handle);
         (lastPipeline, lastPoint) = (pipeline.Handle, PipelineBindPoint.Graphics);
         Stats.PipelinesBound++;
     }
 
     public void SetViewport(in Viewport v)
     {
-        fixed (Viewport* p = &v) vk.CmdSetViewport(Handle, 0, 1, p);
+        fixed (Viewport* p = &v) cmdSetViewport(Handle, 0, 1, p);
         Log?.Viewport(in v);
     }
 
     public void SetScissor(in Rect2D r)
     {
-        fixed (Rect2D* p = &r) vk.CmdSetScissor(Handle, 0, 1, p);
+        fixed (Rect2D* p = &r) cmdSetScissor(Handle, 0, 1, p);
         Log?.Scissor(in r);
     }
 
     public void SetRaster(CullModeFlags cull, FrontFace front)
     {
-        vk.CmdSetCullMode(Handle, cull);
-        vk.CmdSetFrontFace(Handle, front);
+        cmdSetCullMode(Handle, cull);
+        cmdSetFrontFace(Handle, front);
         Log?.Raster(cull, front);
     }
 
     /// <summary>The front face alone (a draw that turns the winding round, the cull mode left as set).</summary>
     public void SetFrontFace(FrontFace front)
     {
-        vk.CmdSetFrontFace(Handle, front);
+        cmdSetFrontFace(Handle, front);
         Log?.Front(front);
     }
 
     public void SetDepth(bool test, bool write, CompareOp op)
     {
-        vk.CmdSetDepthTestEnable(Handle, test);
-        vk.CmdSetDepthWriteEnable(Handle, write);
-        vk.CmdSetDepthCompareOp(Handle, op);
+        cmdSetDepthTestEnable(Handle, test);
+        cmdSetDepthWriteEnable(Handle, write);
+        cmdSetDepthCompareOp(Handle, op);
         Log?.Depth(test, write, op);
     }
 
     public void SetDepthBias(bool enable, float constant, float slope)
     {
-        vk.CmdSetDepthBiasEnable(Handle, enable);
-        vk.CmdSetDepthBias(Handle, constant, 0, slope);
+        cmdSetDepthBiasEnable(Handle, enable);
+        cmdSetDepthBias(Handle, constant, 0, slope);
         Log?.Bias(enable, constant, slope);
     }
 
     public void BindVertexBuffers(uint first, ReadOnlySpan<BufferBinding> bindings)
     {
-        int n = bindings.Length;
-        bool same = first + n <= 32;
-        for (int i = 0; i < n && same; i++)
-        {
-            uint b = first + (uint)i;
-            same = (vertexValid & (1u << (int)b)) != 0 && lastVertex[b].Handle == bindings[i].Buffer.Handle && lastVertexOffset[b] == bindings[i].Offset;
-        }
         Log?.VertexBuffers(first, bindings);
-        if (same) return;
+        int n = bindings.Length;
         var buffers = stackalloc Buffer[n];
         var offsets = stackalloc ulong[n];
-        for (int i = 0; i < n; i++)
+        if (first + (uint)n <= 32)
         {
-            buffers[i] = bindings[i].Buffer;
-            offsets[i] = bindings[i].Offset;
-            uint b = first + (uint)i;
-            if (b < 32) { lastVertex[b] = buffers[i]; lastVertexOffset[b] = offsets[i]; vertexValid |= 1u << (int)b; }
+            // One pass: compare with what is bound and gather the arguments; record only when a binding differs or is not known.
+            uint mask = (n == 32 ? uint.MaxValue : (1u << n) - 1) << (int)first;
+            bool same = (vertexValid & mask) == mask;
+            for (int i = 0; i < n; i++)
+            {
+                ref readonly var bb = ref bindings[i];
+                buffers[i] = bb.Buffer;
+                offsets[i] = bb.Offset;
+                uint b = first + (uint)i;
+                if (lastVertex[b].Handle != bb.Buffer.Handle || lastVertexOffset[b] != bb.Offset)
+                {
+                    same = false;
+                    lastVertex[b] = bb.Buffer;
+                    lastVertexOffset[b] = bb.Offset;
+                }
+            }
+            if (same) return;
+            vertexValid |= mask;
         }
-        vk.CmdBindVertexBuffers(Handle, first, (uint)n, buffers, offsets);
+        else
+            for (int i = 0; i < n; i++)
+            {
+                buffers[i] = bindings[i].Buffer;
+                offsets[i] = bindings[i].Offset;
+                uint b = first + (uint)i;
+                if (b < 32) { lastVertex[b] = buffers[i]; lastVertexOffset[b] = offsets[i]; vertexValid |= 1u << (int)b; }
+            }
+        cmdBindVertexBuffers(Handle, first, (uint)n, buffers, offsets);
     }
 
     public void BindIndexBuffer(BufferBinding binding, IndexType type)
     {
         Log?.IndexBuffer(binding, type);
         if (binding.Buffer.Handle == lastIndex.Buffer.Handle && binding.Offset == lastIndex.Offset && type == lastIndexType && lastIndex.Buffer.Handle != 0) return;
-        vk.CmdBindIndexBuffer(Handle, binding.Buffer, binding.Offset, type);
+        cmdBindIndexBuffer(Handle, binding.Buffer, binding.Offset, type);
         (lastIndex, lastIndexType) = (binding, type);
     }
 
@@ -189,7 +246,7 @@ public sealed unsafe class CommandList
     {
         fixed (DescriptorSet* ps = sets)
         fixed (uint* po = dynamicOffsets)
-            vk.CmdBindDescriptorSets(Handle, point, layout, first, (uint)sets.Length, ps, (uint)dynamicOffsets.Length, po);
+            cmdBindDescriptorSets(Handle, point, layout, first, (uint)sets.Length, ps, (uint)dynamicOffsets.Length, po);
         Log?.Sets(first, sets, dynamicOffsets);
     }
 
@@ -204,21 +261,21 @@ public sealed unsafe class CommandList
 
     public void PushConstants<T>(PipelineLayout layout, ShaderStageFlags stages, in T value, uint offset = 0) where T : unmanaged
     {
-        fixed (T* p = &value) vk.CmdPushConstants(Handle, layout, stages, offset, (uint)sizeof(T), p);
+        fixed (T* p = &value) cmdPushConstants(Handle, layout, stages, offset, (uint)sizeof(T), p);
         Log?.PushConstants(offset, new ReadOnlySpan<byte>(Unsafe.AsPointer(ref Unsafe.AsRef(in value)), sizeof(T)));
     }
 
     public void Draw(uint vertices, uint instances = 1, uint firstVertex = 0, uint firstInstance = 0)
     {
         Log?.Draw(false, vertices, instances, firstVertex, 0, firstInstance);
-        vk.CmdDraw(Handle, vertices, instances, firstVertex, firstInstance);
+        cmdDraw(Handle, vertices, instances, firstVertex, firstInstance);
         Stats.Draws++;
     }
 
     public void DrawIndexed(uint indices, uint instances = 1, uint firstIndex = 0, int vertexOffset = 0, uint firstInstance = 0)
     {
         Log?.Draw(true, indices, instances, firstIndex, vertexOffset, firstInstance);
-        vk.CmdDrawIndexed(Handle, indices, instances, firstIndex, vertexOffset, firstInstance);
+        cmdDrawIndexed(Handle, indices, instances, firstIndex, vertexOffset, firstInstance);
         Stats.Draws++;
     }
 
