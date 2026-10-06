@@ -5,6 +5,7 @@ using Meitou.Data.Ogre;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
+using SamplerInfo = Meitou.Rendering.Vulkan.Shaders.SamplerInfo;
 
 namespace Meitou.Rendering;
 
@@ -25,8 +26,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     readonly IGl gl;
     /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
     public GpuContext Gpu { get; }
-    uint program;   // the main program; the depth program while DrawDepth runs
-    readonly Dictionary<(uint, string), int> uniforms = [];
+    readonly ObjProg colourProg, depthProg;   // the colour and the depth (shadow caster) programs, native
     readonly WorldTextureCache textureCache;
     readonly MaterialResolver resolver;
     readonly UploadQueue uploads = new();
@@ -40,12 +40,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     readonly Dictionary<(GpuObjectMesh, ObjectMaterialSet, int, bool), Batch> batchMap = [];
     readonly List<Batch> active = [];
     readonly List<(uint, int, Matrix4x4)> terrainMeshes = [];   // the TERRAIN-mode instances of a draw (TerrainRenderer.DrawMeshes)
-    readonly Vector4[] uniformCache = new Vector4[256];
-    readonly bool[] uniformKnown = new bool[256];
-    readonly uint[] boundTextures = new uint[4];
     /// <summary>MEITOU_LOD_DEBUG: 1 colours solid surfaces by LOD level, 2 draws wireframe only coloured by level (green 0, yellow 1, orange 2, red 3, magenta manual, blue distant stand-ins).</summary>
     readonly int debugLevels = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_LOD_DEBUG"), out int dl) ? dl : 0;
-    long instanceBufferSize;
 
     /// <summary>One batch of instances: the same (mesh, materials, LOD level), drawn with one call per part.</summary>
     sealed class Batch
@@ -79,7 +75,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         this.gl = gl;
         Gpu = gpu;
         this.objects = objects;
-        program = WorldGl.Program(gl, BuildingLodShaders.Vertex(), BuildingLodShaders.Fragment());
+        // Both native programs are made here with every handle resolved, never inside a draw (the GL programs they replace are not made).
+        colourProg = new ObjProg(gpu, BuildingLodShaders.Vertex(), BuildingLodShaders.Fragment(), "objects");
+        depthProg = new ObjProg(gpu, BuildingLodShaders.Vertex(), ShadowShaders.MeshDepthFragment, "objects depth");
         textureCache = new WorldTextureCache(gl, assets);
         var library = OgreMaterialLibrary.LoadConfigured(objects.Install, out _);
         resolver = new MaterialResolver(objects.Database, library, assets);
@@ -383,40 +381,48 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
         double tCull = cpu.Elapsed.TotalMilliseconds;
 
-        // 2. Upload the instances: one buffer, each batch's matrices contiguous.
+        // 2. The instances: each batch's matrices contiguous, in this frame's constants (one copy; the draws reach a batch by firstInstance).
         int total = 0;
         foreach (var b in active) { b.Offset = total; total += b.Count; }
-        long bytes = Math.Max(total, 1) * 64L;
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, instanceBuffer);
-        instanceBufferSize = Math.Max(bytes, instanceBufferSize);
-        gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)instanceBufferSize, null, BufferUsageARB.StreamDraw);
-        foreach (var b in active)
-            fixed (Matrix4x4* p = b.Data)
-                gl.BufferSubData(BufferTargetARB.ArrayBuffer, (nint)(b.Offset * 64L), (nuint)(b.Count * 64L), p);
+        if (total > 0)
+        {
+            instances = Gpu.Frame.Constants.Allocate((ulong)total * InstanceStride, 16);
+            var target = new Span<byte>(instances.Pointer, total * InstanceStride);
+            foreach (var b in active)
+                System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
+        }
 
         double tUpload = cpu.Elapsed.TotalMilliseconds;
 
-        // 3. Draw.
-        gl.UseProgram(program);
-        Array.Clear(uniformKnown);
-        Array.Fill(boundTextures, uint.MaxValue);
-        WorldGl.Matrix(gl, U("uViewProjection"), viewProjection);
-        gl.Uniform3(U("uEye"), eye.X, eye.Y, eye.Z);
-        gl.Uniform3(U("uLightDir"), light.X, light.Y, light.Z);
-        gl.Uniform3(U("uFogColour"), fogColour.X, fogColour.Y, fogColour.Z);
-        gl.Uniform1(U("uFogDistance"), fogDistance);
-        gl.Uniform1(U("uTriplanarScale"), 1f / 5000);
-        string[] samplers = ["uDiffuse", "uNormal", "uDiffuse2", "uNormal2", "uHeadDiffuse", "uHeadNormal"];
-        for (int i = 0; i < samplers.Length; i++) gl.Uniform1(U(samplers[i]), i);
-        gl.Uniform1(U("uSkinned"), 0);
-        gl.Uniform1(U("uHasHead"), 0);
-        gl.Uniform3(U("uFadeEye"), eye.X, eye.Y, eye.Z);
-        gl.Uniform4(U("uFadeRange"), real - realBand, real, DistantRange - distantBand, DistantRange);
-        SkyRenderer.Active?.Apply(program);   // the atmosphere's uniforms (aerial perspective, sky light), as the terrain does
-        gl.Disable(EnableCap.CullFace);
+        // 3. Draw: Prepare reads the textures (WorldTexture.Id) and makes the draw list, Record puts it into a native segment of VkGl's pass.
+        var prog = depthPass ? depthProg : colourProg;
+        gl.Disable(EnableCap.CullFace);   // the objects are drawn double-sided (the export's cull mode is None while GL's cull face is off)
         int wireMode = debugLevels == 2 ? 2 : options.Wireframe;
-        if (wireMode != 2 && active.Count > 0) DrawBatches(options, wire: false);
-        if (wireMode != 0 && active.Count > 0) DrawBatches(options, wire: true);
+        double recordMs = 0;
+        if (active.Count > 0)
+        {
+            SetFrameUniforms(prog, viewProjection, eye, light, fogColour, fogDistance, real - realBand, real, DistantRange - distantBand, DistantRange);
+            if (wireMode != 2)
+            {
+                PrepareDraws(options, wire: false);
+                long r0 = ObjTiming ? Stopwatch.GetTimestamp() : 0;
+                RecordDraws(prog, wire: false);
+                if (ObjTiming) recordMs += (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
+            }
+            if (wireMode != 0)
+            {
+                PrepareDraws(options, wire: true);
+                gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Line);
+                gl.Enable(EnableCap.PolygonOffsetLine);
+                gl.PolygonOffset(-1, -1);
+                long r0 = ObjTiming ? Stopwatch.GetTimestamp() : 0;
+                RecordDraws(prog, wire: true);
+                if (ObjTiming) recordMs += (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
+                gl.Disable(EnableCap.PolygonOffsetLine);
+                gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Fill);
+            }
+        }
+        SkyRenderer.Active?.BindUnits();   // the atmosphere's texture units, as Apply left them for the GL code that follows
         gl.BindVertexArray(0);
         double tBatches = cpu.Elapsed.TotalMilliseconds;
         int batchDraws = DrawCalls;
@@ -424,20 +430,23 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         gl.Disable(EnableCap.CullFace);
         gl.BindVertexArray(0);
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
-        if (ObjTiming) ObjAccount(depthPass ? 1 : 0, tCull, tUpload, tBatches, LastDrawCpuMs, batchDraws, DrawCalls - batchDraws);
+        if (ObjTiming) ObjAccount(depthPass ? 1 : 0, tCull, tUpload, tBatches, LastDrawCpuMs, batchDraws, DrawCalls - batchDraws, recordMs);
     }
+
 
     /// <summary><c>MEITOU_OBJECT_TIMING=1</c>: the CPU time of <see cref="Draw"/>'s steps summed over the run by kind (colour or depth), with the
     /// draws each issued, printed when the renderer is disposed (docs/renderer-native.md 7.1, wave 3 objects).</summary>
     static readonly bool ObjTiming = Environment.GetEnvironmentVariable("MEITOU_OBJECT_TIMING") == "1";
     static readonly int ObjSkip = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_OBJECT_TIMING_SKIP"), out int skip) ? skip : 160;
     readonly double[,] objMs = new double[2, 4];
+    readonly double[] objRecordMs = new double[2];
     readonly long[] objSeen = new long[2], objCalls = new long[2], objBatchDraws = new long[2], objTerrainDraws = new long[2];
 
-    void ObjAccount(int k, double tCull, double tUpload, double tBatches, double tEnd, int batchDraws, int terrainDraws)
+    void ObjAccount(int k, double tCull, double tUpload, double tBatches, double tEnd, int batchDraws, int terrainDraws, double recordMs = 0)
     {
         if (objSeen[k]++ < ObjSkip) return;   // the first calls are cold (pipelines, streaming)
         objCalls[k]++;
+        objRecordMs[k] += recordMs;
         objMs[k, 0] += tCull; objMs[k, 1] += tUpload - tCull; objMs[k, 2] += tBatches - tUpload; objMs[k, 3] += tEnd - tBatches;
         objBatchDraws[k] += batchDraws; objTerrainDraws[k] += terrainDraws;
     }
@@ -452,7 +461,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"" +
                 $"objects timing {names[k]}: {objCalls[k]} calls, per call us: cull {objMs[k, 0] * 1000 / objCalls[k]:F1}, upload {objMs[k, 1] * 1000 / objCalls[k]:F1}, batches {objMs[k, 2] * 1000 / objCalls[k]:F1}, terrain meshes {objMs[k, 3] * 1000 / objCalls[k]:F1}; " +
                 $"draws per call: batches {(double)objBatchDraws[k] / objCalls[k]:F1}, terrain {(double)objTerrainDraws[k] / objCalls[k]:F1}; " +
-                $"us per batch draw {(objBatchDraws[k] > 0 ? objMs[k, 2] * 1000 / objBatchDraws[k] : 0):F2}"));
+                $"us per batch draw {(objBatchDraws[k] > 0 ? objMs[k, 2] * 1000 / objBatchDraws[k] : 0):F2} (record only {(objBatchDraws[k] > 0 ? objRecordMs[k] * 1000 / objBatchDraws[k] : 0):F2})"));
         }
     }
 
@@ -496,110 +505,277 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         return true;
     }
 
-    void DrawBatches(WorldRenderOptions options, bool wire)
+    // ------------------------------------------------------------------ native recording
+    // docs/renderer-native.md 3.2 and 7.5, step P: VkGl's SPIR-V and layout through LegacyProgram, recorded into the pass VkGl has open
+    // (BeginNativeInPass). Draw is split into Prepare (cull, levels, batches, then PrepareDraws: the texture ids through WorldTexture.Id and
+    // the draw list, every IGl call that can flush or start a reload) and Record (the list into one native segment: dynamic state once, per
+    // draw only what differs, pipelines and vertex buffers resolved once per mesh part).
+
+    const int InstanceStride = 64;
+    /// <summary>The first location the per-instance rows (the batch matrices) take; the mesh's own inputs are below it.</summary>
+    const int RowLocation = BuildingLodShaders.InstanceLocation;
+
+    /// <summary>This call's batch matrices in the frame's constants (a batch at its <see cref="Batch.Offset"/>; the draws reach it by firstInstance).</summary>
+    Transient instances;
+
+    /// <summary>What a part draw sets besides its textures (<see cref="ObjProg"/> keeps the last, so a batch of the same material sets nothing).</summary>
+    readonly record struct ObjMaterial(bool Swizzled, bool HasDiffuse, bool HasNormal, bool HasDual, bool Triplanar, float TileX, float TileY, int AlphaSource,
+        int AlphaChannel, int GreyChannel, Vector3 Tint, float AlphaThreshold, bool Emissive, bool UseVertexColour, float Specular);
+
+    struct ObjDraw
     {
-        Set1(U("uWireframe"), 0);
-        if (wire)
+        public GpuObjectPart Part;
+        public int Level;
+        public uint FirstInstance, Instances;
+        public uint Diffuse, Normal, Diffuse2, Normal2;
+        public ObjMaterial Material;
+        /// <summary>Wireframe or LOD-debug colouring: <see cref="FlatColour"/> instead of the material.</summary>
+        public bool Flat;
+        public Vector3 FlatColour;
+        /// <summary>uFadeMode: 1 for the distant towns (the fade comes per vertex), else 0.</summary>
+        public int Fade;
+    }
+
+    /// <summary>The objects' mesh shader (colour or depth fragment), with every handle resolved at load. The constants GL set on every draw are
+    /// set once: a program's default block keeps its values (docs/renderer-native.md 3.2).</summary>
+    sealed class ObjProg
+    {
+        public readonly LegacyProgram P;
+        public readonly UniformHandle ViewProjection, Eye, LightDir, FogColour, FogDistance, FadeEye, FadeRange, FadeMode, Wireframe, FlatColour, NormalSwizzled,
+            HasDiffuse, HasNormal, HasDual, Triplanar, Tile, AlphaSource, AlphaChannel, GreyChannel, Tint, AlphaThreshold, Emissive, UseVertexColour, Specular;
+        public readonly SamplerSlot[] Slots;
+        public readonly SamplerInfo?[] Infos;
+        public readonly int Own;
+        public UnitSamplers? Units;
+        public ObjMaterial Material;
+        public bool HasMaterial, HasFlat;
+        public Vector3 Flat;
+        public int Wire = -1, Fade = -1;
+        public readonly uint[] Bound = new uint[4];
+
+        public ObjProg(GpuContext gpu, string vertex, string fragment, string name)
         {
-            gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Line);
-            gl.Enable(EnableCap.PolygonOffsetLine);
-            gl.PolygonOffset(-1, -1);
+            P = LegacyProgram.Create(gpu, vertex, fragment, name);
+            ViewProjection = P.Uniform("uViewProjection"); Eye = P.Uniform("uEye"); LightDir = P.Uniform("uLightDir"); FogColour = P.Uniform("uFogColour");
+            FogDistance = P.Uniform("uFogDistance"); FadeEye = P.Uniform("uFadeEye"); FadeRange = P.Uniform("uFadeRange"); FadeMode = P.Uniform("uFadeMode");
+            Wireframe = P.Uniform("uWireframe"); FlatColour = P.Uniform("uFlatColour"); NormalSwizzled = P.Uniform("uNormalSwizzled");
+            HasDiffuse = P.Uniform("uHasDiffuse"); HasNormal = P.Uniform("uHasNormal"); HasDual = P.Uniform("uHasDual"); Triplanar = P.Uniform("uTriplanar");
+            Tile = P.Uniform("uTile"); AlphaSource = P.Uniform("uAlphaSource"); AlphaChannel = P.Uniform("uAlphaChannel"); GreyChannel = P.Uniform("uGreyChannel");
+            Tint = P.Uniform("uTint"); AlphaThreshold = P.Uniform("uAlphaThreshold"); Emissive = P.Uniform("uEmissive");
+            UseVertexColour = P.Uniform("uUseVertexColour"); Specular = P.Uniform("uSpecular");
+            Slots = [P.Sampler("uDiffuse"), P.Sampler("uNormal"), P.Sampler("uDiffuse2"), P.Sampler("uNormal2")];
+            Infos = [.. Slots.Select(s => s.IsValid ? P.SamplerInfo(s) : (SamplerInfo?)null)];
+            Own = P.InputLocations.Where(l => l < RowLocation).DefaultIfEmpty(-1).Max() + 1;
+            P.Set(P.Uniform("uTriplanarScale"), 1f / 5000);
+            P.Set(P.Uniform("uSkinned"), 0);
+            P.Set(P.Uniform("uHasHead"), 0);
         }
-        int mode = -1;
+    }
+
+    /// <summary>The samplers of a program that read a GL unit (not a frame global, not one of the draw's own textures), resolved once per
+    /// <see cref="FrameGlobals.Version"/>.</summary>
+    sealed record UnitSamplers(int GlobalsVersion, (SamplerSlot Slot, int Unit, SamplerInfo Info)[] Samplers);
+
+    /// <summary>The units the GL code pointed the shared mesh shader's head textures at (nothing is bound there; the stand-ins are read).</summary>
+    static readonly Dictionary<string, int> UnitOf = new() { ["uHeadDiffuse"] = 4, ["uHeadNormal"] = 5 };
+    static readonly string[] Direct = ["uDiffuse", "uNormal", "uDiffuse2", "uNormal2"];
+
+    void BindUnitSamplers(ObjProg prog)
+    {
+        var p = prog.P;
+        var interop = Gpu.Interop!;
+        if (prog.Units is null || prog.Units.GlobalsVersion != Gpu.Globals.Version)
+            prog.Units = new UnitSamplers(Gpu.Globals.Version, [.. p.SamplerNames.Where(n => Array.IndexOf(Direct, n) < 0 && Gpu.Globals.Texture(n) is null)
+                .Select(n => (p.Sampler(n), UnitOf.GetValueOrDefault(n, 0), p.SamplerInfo(p.Sampler(n))))]);
+        foreach (var (slot, unit, info) in prog.Units.Samplers) p.Bind(slot, interop.SampledUnit(unit, info));
+    }
+
+    /// <summary>The pipeline state a segment's draws share (everything of <see cref="GraphicsPipelineDesc"/> but the vertex layout).</summary>
+    readonly record struct SegmentPipeline(LegacyProgram Program, AttachmentFormats Formats, BlendState Blend, Silk.NET.Vulkan.ColorComponentFlags Mask,
+        Silk.NET.Vulkan.PolygonMode Polygon, bool AlphaToCoverage, bool DepthClamp);
+
+    readonly Dictionary<(int Kind, SegmentPipeline State), int> segmentByState = [];
+    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[4];
+    readonly int[] segmentIds = new int[4];
+    int segmentCount;
+
+    /// <summary>A stable number for a segment's pipeline state, so a part compares one int per draw.</summary>
+    int SegmentId(int kind, LegacyProgram p, PassTargets t, DrawState s)
+    {
+        var segment = new SegmentPipeline(p, t.Formats, s.Blend, s.ColourMask, s.Polygon, s.AlphaToCoverage, s.DepthClamp);
+        if (segmentIds[kind] != 0 && segment == lastSegment[kind]) return segmentIds[kind];
+        if (!segmentByState.TryGetValue((kind, segment), out int id)) segmentByState[(kind, segment)] = id = ++segmentCount;
+        lastSegment[kind] = segment;
+        return segmentIds[kind] = id;
+    }
+
+    /// <summary>A part's vertex layout and buffers for <paramref name="prog"/> from its vertex array's export, with the batch matrices as four
+    /// per-instance rows of 64 bytes at locations 7 to 10 (bound once per segment).</summary>
+    static void ResolveVertices(ref ObjectNativeMesh n, ObjProg prog, VertexArrayBindings va)
+    {
+        Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
+        va.Attributes.AsSpan().CopyTo(attributes);
+        for (int a = 0; a < 4; a++)
+            attributes[RowLocation + a] = new LegacyProgram.Attribute(default, Silk.NET.Vulkan.Format.R32G32B32A32Sfloat, InstanceStride, true);
+        n.Layout = prog.P.VertexLayout(attributes);
+        n.Vertices = prog.P.VertexBuffers(attributes, 0, prog.Own);
+        n.Elements = va.Elements;
+        n.Source = va;
+        n.SegA = n.SegB = 0;
+        n.PipeA = n.PipeB = null;
+    }
+
+    GraphicsPipeline PipelineFor(ref ObjectNativeMesh n, LegacyProgram p, int segment, DrawState state, AttachmentFormats formats, string label)
+    {
+        if (n.SegB == segment) return n.PipeB!;
+        var pipeline = Gpu.Pipelines.Get(state.Pipeline(p.Program, n.Layout!, Silk.NET.Vulkan.PrimitiveTopology.TriangleList, formats, label));
+        (n.SegB, n.PipeB) = (n.SegA, n.PipeA);
+        (n.SegA, n.PipeA) = (segment, pipeline);
+        return pipeline;
+    }
+
+    readonly List<ObjDraw> draws = [];
+
+    /// <summary>The call's per-call uniforms, as the GL version set them before its draws (the atmosphere's through the frame globals).</summary>
+    static void SetFrameUniforms(ObjProg prog, in Matrix4x4 viewProjection, Vector3 eye, Vector3 light, Vector3 fogColour, float fogDistance, float r0, float r1, float r2, float r3)
+    {
+        var p = prog.P;
+        p.Set(prog.ViewProjection, in viewProjection);
+        p.Set(prog.Eye, eye.X, eye.Y, eye.Z);
+        p.Set(prog.LightDir, light.X, light.Y, light.Z);
+        p.Set(prog.FogColour, fogColour.X, fogColour.Y, fogColour.Z);
+        p.Set(prog.FogDistance, fogDistance);
+        p.Set(prog.FadeEye, eye.X, eye.Y, eye.Z);
+        p.Set(prog.FadeRange, r0, r1, r2, r3);
+        p.ApplyGlobals();   // the atmosphere's uniforms (SkyRenderer.Apply's), through the frame globals
+    }
+
+    /// <summary>The batches' parts as draws, in order, with the texture ids the GL code bound (reading an id counts as use: here, not in Record).</summary>
+    void PrepareDraws(WorldRenderOptions options, bool wire)
+    {
+        draws.Clear();
         foreach (var b in active)
         {
-            if (mode != (b.Town ? 1 : 0))
-            {
-                mode = b.Town ? 1 : 0;
-                gl.Uniform1(U("uFadeMode"), mode);
-            }
+            int fade = b.Town ? 1 : 0;
             for (int i = 0; i < b.Mesh.Parts.Count; i++)
             {
                 var gp = b.Mesh.Parts[i];
                 if (gp.Count[b.Level] == 0) continue;
+                var d = new ObjDraw { Part = gp, Level = b.Level, FirstInstance = (uint)b.Offset, Instances = (uint)b.Count, Fade = fade };
                 if (wire || debugLevels == 1)
                 {
-                    Set1(U("uWireframe"), 1);
-                    Set3(U("uFlatColour"), LevelColour(b.Level, b.Manual, ReferenceEquals(b.Materials, distantMaterial)));
+                    d.Flat = true;
+                    d.FlatColour = LevelColour(b.Level, b.Manual, ReferenceEquals(b.Materials, distantMaterial));
                 }
-                else SetMaterial(gp, b.Materials.Parts[Math.Min(i, b.Materials.Parts.Length - 1)], options);
-                gl.BindVertexArray(gp.Vao);
-                gl.BindBuffer(BufferTargetARB.ArrayBuffer, instanceBuffer);
-                for (uint a = 0; a < 4; a++)
-                    gl.VertexAttribPointer(BuildingLodShaders.InstanceLocation + a, 4, VertexAttribPointerType.Float, false, 64, (void*)(b.Offset * 64L + 16 * a));
-                gl.DrawElementsInstanced(PrimitiveType.Triangles, (uint)gp.Count[b.Level], DrawElementsType.UnsignedInt, (void*)(gp.Offset[b.Level] * 4L), (uint)b.Count);
+                else Material(ref d, gp, b.Materials.Parts[Math.Min(i, b.Materials.Parts.Length - 1)], options);
+                draws.Add(d);
                 DrawCalls++;
                 DrawnTriangles += (long)gp.Count[b.Level] / 3 * b.Count;
             }
         }
-        if (wire)
-        {
-            gl.Disable(EnableCap.PolygonOffsetLine);
-            gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Fill);
-        }
     }
 
-    void SetMaterial(GpuObjectPart gp, ObjectPartMaterial pm, WorldRenderOptions options)
+    static void Material(ref ObjDraw d, GpuObjectPart gp, ObjectPartMaterial pm, WorldRenderOptions options)
     {
         var m = pm.Material;
-        bool textured = options.Textures && pm.Diffuse != 0;
-        Bind(0, textured ? pm.Diffuse : 0);
-        bool normal = options.NormalMaps && textured && pm.Normal != 0 && gp.HasTangents;
-        Bind(1, textured ? pm.Normal : 0);
-        bool dual = textured && pm.Diffuse2 != 0 && gp.HasColours;
-        Bind(2, dual ? pm.Diffuse2 : 0);
-        Bind(3, dual ? pm.Normal2 : 0);
-        Set1(U("uNormalSwizzled"), pm.Swizzled ? 1 : 0);
-        Set1(U("uWireframe"), 0);
-        Set1(U("uHasDiffuse"), textured ? 1 : 0);
-        Set1(U("uHasNormal"), normal ? 1 : 0);
-        Set1(U("uHasDual"), dual ? 1 : 0);
-        Set1(U("uTriplanar"), textured && (m?.Triplanar ?? false) ? 1 : 0);
-        Set2(U("uTile"), m?.Tile ?? Vector2.One);
+        uint diffuse = pm.Diffuse;
+        bool textured = options.Textures && diffuse != 0;
+        uint normalId = textured ? pm.Normal : 0;
+        bool normal = options.NormalMaps && textured && normalId != 0 && gp.HasTangents;
+        uint diffuse2 = textured ? pm.Diffuse2 : 0;
+        bool dual = textured && diffuse2 != 0 && gp.HasColours;
+        d.Diffuse = textured ? diffuse : 0;
+        d.Normal = normalId;
+        d.Diffuse2 = dual ? diffuse2 : 0;
+        d.Normal2 = dual ? pm.Normal2 : 0;
         var alpha = m?.Alpha ?? AlphaSource.None;
-        if (!textured || alpha == AlphaSource.NormalAlpha && pm.Normal == 0) alpha = AlphaSource.None;
-        Set1(U("uAlphaSource"), (int)alpha);
-        Set1(U("uAlphaChannel"), Math.Clamp(m?.AlphaChannel ?? 3, 0, 3));
-        Set1(U("uGreyChannel"), textured ? m?.GreyChannel ?? -1 : -1);
-        Set3(U("uTint"), m?.Tint ?? Vector3.One);
-        Set1(U("uAlphaThreshold"), alpha == AlphaSource.None ? 0f : m!.AlphaThreshold);
-        Set1(U("uEmissive"), textured && pm.Normal != 0 && (m?.Emissive ?? false) ? 1 : 0);
-        Set1(U("uUseVertexColour"), gp.HasColours && (m?.VertexColours ?? false) ? 1 : 0);
-        Set1(U("uSpecular"), textured ? m?.SpecularMult ?? 1 : 0.3f);
+        if (!textured || alpha == AlphaSource.NormalAlpha && normalId == 0) alpha = AlphaSource.None;
+        var tile = m?.Tile ?? Vector2.One;
+        d.Material = new ObjMaterial(pm.Swizzled, textured, normal, dual, textured && (m?.Triplanar ?? false), tile.X, tile.Y, (int)alpha,
+            Math.Clamp(m?.AlphaChannel ?? 3, 0, 3), textured ? m?.GreyChannel ?? -1 : -1, m?.Tint ?? Vector3.One, alpha == AlphaSource.None ? 0f : m!.AlphaThreshold,
+            textured && normalId != 0 && (m?.Emissive ?? false), gp.HasColours && (m?.VertexColours ?? false), textured ? m?.SpecularMult ?? 1 : 0.3f);
     }
 
-    // Uniform setters that skip a call when the value is the one already set (the program is only used here).
-    void Set1(int loc, float v) { if (Changed(loc, new Vector4(v, 0, 0, 0))) gl.Uniform1(loc, v); }
-    void Set1(int loc, int v) { if (Changed(loc, new Vector4(v, 0, 0, 0))) gl.Uniform1(loc, v); }
-    void Set2(int loc, Vector2 v) { if (Changed(loc, new Vector4(v, 0, 0))) gl.Uniform2(loc, v.X, v.Y); }
-    void Set3(int loc, Vector3 v) { if (Changed(loc, new Vector4(v, 0))) gl.Uniform3(loc, v.X, v.Y, v.Z); }
-
-    bool Changed(int loc, Vector4 value)
+    /// <summary>The draw list in one native segment of VkGl's open pass (colour or depth, solid or wireframe).</summary>
+    void RecordDraws(ObjProg prog, bool wire)
     {
-        if (loc < 0) return false;
-        if (loc >= uniformCache.Length) return true;
-        if (uniformKnown[loc] && uniformCache[loc] == value) return false;
-        uniformCache[loc] = value;
-        uniformKnown[loc] = true;
-        return true;
+        if (draws.Count == 0) return;
+        var p = prog.P;
+        BindUnitSamplers(prog);
+        var interop = Gpu.Interop!;
+        string label = depthPass ? "objects depth" : wire ? "objects wire" : "objects";
+        int kind = (depthPass ? 1 : 0) + (wire ? 2 : 0);
+        var cmd = interop.BeginNativeInPass(label);
+        var targets = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        int segment = SegmentId(kind, p, targets, state);
+        cmd.SetViewport(targets.Viewport);
+        cmd.SetScissor(targets.Scissor);
+        cmd.SetRaster(state.Cull, state.Front);
+        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+        Span<BufferBinding> rows = stackalloc BufferBinding[4];
+        for (int a = 0; a < 4; a++) rows[a] = new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
+        cmd.BindVertexBuffers(RowLocation, rows);
+        Array.Fill(prog.Bound, uint.MaxValue);   // what a texture is (its view, sampler) can change between segments
+        foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(draws))
+        {
+            if (prog.Fade != d.Fade) { p.Set(prog.FadeMode, d.Fade); prog.Fade = d.Fade; }
+            if (d.Flat)
+            {
+                if (prog.Wire != 1) { p.Set(prog.Wireframe, 1); prog.Wire = 1; }
+                if (!prog.HasFlat || prog.Flat != d.FlatColour) { p.Set(prog.FlatColour, d.FlatColour); prog.Flat = d.FlatColour; prog.HasFlat = true; }
+            }
+            else
+            {
+                if (prog.Wire != 0) { p.Set(prog.Wireframe, 0); prog.Wire = 0; }
+                if (!prog.HasMaterial || prog.Material != d.Material)
+                {
+                    var k = d.Material;
+                    p.Set(prog.NormalSwizzled, k.Swizzled ? 1 : 0);
+                    p.Set(prog.HasDiffuse, k.HasDiffuse ? 1 : 0);
+                    p.Set(prog.HasNormal, k.HasNormal ? 1 : 0);
+                    p.Set(prog.HasDual, k.HasDual ? 1 : 0);
+                    p.Set(prog.Triplanar, k.Triplanar ? 1 : 0);
+                    p.Set(prog.Tile, k.TileX, k.TileY);
+                    p.Set(prog.AlphaSource, k.AlphaSource);
+                    p.Set(prog.AlphaChannel, k.AlphaChannel);
+                    p.Set(prog.GreyChannel, k.GreyChannel);
+                    p.Set(prog.Tint, k.Tint);
+                    p.Set(prog.AlphaThreshold, k.AlphaThreshold);
+                    p.Set(prog.Emissive, k.Emissive ? 1 : 0);
+                    p.Set(prog.UseVertexColour, k.UseVertexColour ? 1 : 0);
+                    p.Set(prog.Specular, k.Specular);
+                    prog.Material = k;
+                    prog.HasMaterial = true;
+                }
+                BindMaterialTexture(interop, prog, 0, d.Diffuse);
+                BindMaterialTexture(interop, prog, 1, d.Normal);
+                BindMaterialTexture(interop, prog, 2, d.Diffuse2);
+                BindMaterialTexture(interop, prog, 3, d.Normal2);
+            }
+            var part = d.Part;
+            var va = interop.VertexArray(part.Vao);
+            ref var n = ref (depthPass ? ref part.DepthNative : ref part.ColourNative);
+            if (!ReferenceEquals(n.Source, va)) ResolveVertices(ref n, prog, va);
+            cmd.BindPipeline(n.SegA == segment ? n.PipeA! : PipelineFor(ref n, p, segment, state, targets.Formats, label));
+            cmd.BindVertexBuffers(0, n.Vertices);
+            cmd.BindIndexBuffer(new BufferBinding(n.Elements.Buffer, n.Elements.Offset + (ulong)part.Offset[d.Level] * 4), Silk.NET.Vulkan.IndexType.Uint32);
+            p.Flush(cmd);
+            cmd.DrawIndexed((uint)part.Count[d.Level], d.Instances, 0, 0, d.FirstInstance);
+        }
+        interop.EndNative(cmd);
+        gl.BindVertexArray(0);
     }
 
-    void Bind(int unit, uint texture)
+    void BindMaterialTexture(IGlInterop interop, ObjProg prog, int slot, uint id)
     {
-        if (boundTextures[unit] == texture) return;
-        boundTextures[unit] = texture;
-        gl.ActiveTexture(TextureUnit.Texture0 + unit);
-        gl.BindTexture(TextureTarget.Texture2D, texture);
-    }
-
-    int U(string name)
-    {
-        if (!uniforms.TryGetValue((program, name), out int location)) uniforms[(program, name)] = location = gl.GetUniformLocation(program, name);
-        return location;
+        if (prog.Bound[slot] == id) return;
+        prog.Bound[slot] = id;
+        if (prog.Infos[slot] is { } info) prog.P.Bind(prog.Slots[slot], interop.Sampled(id, info));
     }
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
-    uint depthProgram;
     bool depthPass;
 
     /// <summary>
@@ -609,23 +785,20 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// </summary>
     public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain)
     {
-        if (depthProgram == 0) depthProgram = WorldGl.Program(gl, BuildingLodShaders.Vertex(), ShadowShaders.MeshDepthFragment);
-        uint main = program;
-        program = depthProgram;
         depthPass = true;
         try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain); }
-        finally { program = main; depthPass = false; }
+        finally { depthPass = false; }
     }
 
     public void Dispose()
     {
         ReportObjectTiming();
-        if (depthProgram != 0) gl.DeleteProgram(depthProgram);
+        colourProg.P.Dispose();
+        depthProg.P.Dispose();
         streamer.Dispose();
         meshes.Dispose();
         textureCache.Dispose();
         gl.DeleteBuffer(instanceBuffer);
-        gl.DeleteProgram(program);
         objects.Dispose();
     }
 }

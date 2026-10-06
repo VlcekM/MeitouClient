@@ -39,6 +39,20 @@ sealed class GpuObjectPart
     public uint[]? PlainVao;
     public uint[]? PlainEbo;
     public uint[][]? LevelIndices;
+    /// <summary>What a native draw needs, per program (<see cref="WorldObjectRenderer"/>).</summary>
+    public ObjectNativeMesh ColourNative, DepthNative;
+}
+
+/// <summary>A part's native state for one program: the vertex-array export it came from, its vertex layout and own vertex buffers, its
+/// element buffer, and the pipelines for the last two segment states (the reflection's multisampled target alternates with the scene's).</summary>
+struct ObjectNativeMesh
+{
+    public VertexArrayBindings? Source;
+    public VertexLayout? Layout;
+    public BufferBinding[] Vertices;
+    public BufferBinding Elements;
+    public int SegA, SegB;
+    public GraphicsPipeline? PipeA, PipeB;
 }
 
 sealed class GpuObjectMesh
