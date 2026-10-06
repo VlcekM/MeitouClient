@@ -1368,19 +1368,32 @@ public sealed unsafe class FoliageRenderer : IDisposable
     /// <see cref="textureSegment"/>): a texture's view or sampler may change between segments (mip streaming, the upscaler's bias), never
     /// inside one, so each texture is looked up once per segment (the grass alternates between a few sprites draw by draw).</summary>
     (uint Index, int Segment)[] textureIndices = new (uint, int)[1024];
+    /// <summary>GL names (a counter shared by every GL object) beyond the array's cap of <see cref="TextureArrayCap"/> (2 MB).</summary>
+    readonly Dictionary<uint, (uint Index, int Segment)> textureIndicesFar = [];
+    const uint TextureArrayCap = 1 << 18;
     int textureSegment;
 
     /// <summary>A new segment: forget the indices of the last one.</summary>
-    void NewTextureSegment() => textureSegment++;
+    void NewTextureSegment()
+    {
+        textureSegment++;
+        if (textureIndicesFar.Count > 4096) textureIndicesFar.Clear();   // only this segment's entries count anyway
+    }
 
     uint Texture(IGlInterop interop, uint id)
     {
+        if (id >= TextureArrayCap)
+        {
+            ref var far = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(textureIndicesFar, id, out bool exists);
+            if (!exists || far.Segment != textureSegment) far = (Index2D(interop, id), textureSegment);
+            return far.Index;
+        }
         if (id < (uint)textureIndices.Length)
         {
             ref var e = ref textureIndices[id];
             if (e.Segment == textureSegment) return e.Index;
         }
-        else Array.Resize(ref textureIndices, (int)Math.Max(id + 1, (uint)textureIndices.Length * 2));
+        else Array.Resize(ref textureIndices, (int)Math.Min(Math.Max(id + 1, (uint)textureIndices.Length * 2), TextureArrayCap));
         uint index = Index2D(interop, id);
         textureIndices[id] = (index, textureSegment);
         return index;
