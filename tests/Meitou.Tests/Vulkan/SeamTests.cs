@@ -244,6 +244,92 @@ public class SeamTests
     }
 
     [Fact]
+    public unsafe void A_native_host_clears_and_its_native_guests_record_into_its_rendering_through_the_same_seam_calls()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        using (var gl = new VkGl(d!))
+        {
+            IGlInterop interop = gl;
+            var ctx = gl.Context;
+            uint solid = WorldGl.Program(gl, Fullscreen, Solid);
+            using var red = LegacyProgram.Create(ctx, Fullscreen, Solid, "seam host red");
+            using var yellow = LegacyProgram.Create(ctx, Fullscreen, Yellow, "seam host yellow");
+            var colour = red.Uniform("uColour");
+            gl.BindVertexArray(gl.GenVertexArray());
+            uint query = gl.GenQuery();
+            uint buffer = gl.GenBuffer();
+            gl.BindBuffer(BufferTargetARB.UniformBuffer, buffer);
+            gl.BufferData<byte>(BufferTargetARB.UniformBuffer, new byte[16], BufferUsageARB.DynamicDraw);
+
+            Target(gl);
+            gl.ClearColor(0, 0, 0, 1);
+            gl.Clear(ClearBufferMask.ColorBufferBit);
+            gl.UseProgram(solid);
+            gl.Uniform4(gl.GetUniformLocation(solid, "uColour"), 1f, 1f, 1f, 1f);
+            Quarter(gl, 0);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);   // white in the first quarter: the host's clear must wipe it
+
+            // The host: its own segment and rendering instance (cleared by the load op), announced to the seam.
+            var cmd = interop.BeginNative("seam host");
+            var targets = interop.CurrentTargets();
+            interop.BeginHostPass(cmd);
+            Assert.Throws<InvalidOperationException>(() => interop.BeginNative("nested"));
+            cmd.BeginRendering(targets.Rendering with { Colour = targets.Colour with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(new ClearColorValue(0, 0, 1, 1)) } });
+
+            // What the IGl calls of a host and its guests do meanwhile: state is free, uploads and timestamps record, a pass-touching call throws.
+            Assert.Throws<InvalidOperationException>(() => gl.Clear(ClearBufferMask.ColorBufferBit));
+            Assert.Throws<InvalidOperationException>(() => gl.DrawArrays(PrimitiveType.Triangles, 0, 3));
+            fixed (byte* zero = new byte[16]) gl.BufferSubData(BufferTargetARB.UniformBuffer, 0, 16, zero);
+            gl.QueryCounter(query, QueryCounterTarget.Timestamp);
+
+            // Guest A: the pass is the host's, with the GL scissor of its quarter; the same calls a guest on VkGl's own pass makes.
+            Quarter(gl, 1);
+            var a = interop.BeginNativeInPass("guest a");
+            Assert.Same(cmd, a);
+            Assert.Throws<InvalidOperationException>(() => interop.BeginNativeInPass("nested guest"));
+            var ta = interop.CurrentTargets();
+            Assert.Equal(new Rect2D(new Offset2D(W / 4, 0), new Extent2D(W / 4, H)), ta.Scissor);
+            Assert.Equal(targets.Formats, ta.Formats);
+            var state = interop.CurrentState();
+            a.BindPipeline(ctx.Pipelines.Get(state.Pipeline(red.Program, red.VertexLayout([]), PrimitiveTopology.TriangleList, ta.Formats, "seam host red")));
+            state.Record(a, ta);
+            red.Set(colour, 1f, 0f, 0f, 1f);
+            red.Flush(a);
+            a.Draw(3);
+            interop.EndNative(a);
+
+            // Guest B: another program and quarter in the same rendering instance, after the first one's segment ended.
+            Quarter(gl, 3);
+            var b = interop.BeginNativeInPass("guest b");
+            var tb = interop.CurrentTargets();
+            b.BindPipeline(ctx.Pipelines.Get(state.Pipeline(yellow.Program, yellow.VertexLayout([]), PrimitiveTopology.TriangleList, tb.Formats, "seam host yellow")));
+            state.Record(b, tb);
+            yellow.Flush(b);
+            b.Draw(3);
+            interop.EndNative(b);
+
+            cmd.EndRendering();
+            interop.EndHostPass(cmd);
+            Assert.Throws<InvalidOperationException>(() => interop.EndHostPass(cmd));
+            interop.EndNative(cmd);
+
+            // VkGl again, the same program and pipeline it had before.
+            gl.Uniform4(gl.GetUniformLocation(solid, "uColour"), 0f, 1f, 0f, 1f);
+            Quarter(gl, 2);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            gl.Disable(EnableCap.ScissorTest);
+
+            var p = Read(gl);
+            Assert.Equal((0, 0, 255, 255), At(p, 2, 2));
+            Assert.Equal((255, 0, 0, 255), At(p, W / 4 + 2, 2));
+            Assert.Equal((0, 255, 0, 255), At(p, W / 2 + 2, 2));
+            Assert.Equal((255, 255, 0, 255), At(p, 3 * W / 4 + 2, H - 2));
+        }
+        ExpectClean(d!);
+    }
+
+    [Fact]
     public void Legacy_programs_take_frame_globals_they_were_not_given()
     {
         using var d = TryCreate(sync: false);

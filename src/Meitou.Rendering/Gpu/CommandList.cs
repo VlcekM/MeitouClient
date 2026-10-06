@@ -96,6 +96,14 @@ public sealed unsafe class CommandList
 
     public void EndRendering() => vk.CmdEndRendering(Handle);
 
+    /// <summary>Clears the depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>; a shadow atlas tile, a depth slice).</summary>
+    public void ClearDepth(float value, Rect2D rect)
+    {
+        var attachment = new ClearAttachment(ImageAspectFlags.DepthBit, 0, new ClearValue(depthStencil: new ClearDepthStencilValue(value, 0)));
+        var area = new ClearRect(rect, 0, 1);
+        vk.CmdClearAttachments(Handle, 1, &attachment, 1, &area);
+    }
+
     public void BindPipeline(GraphicsPipeline pipeline)
     {
         Log?.Pipeline(pipeline);
@@ -269,6 +277,18 @@ public sealed unsafe class CommandList
             Extent = new Extent3D((uint)src.Desc.Width, (uint)src.Desc.Height, 1),
         };
         vk.CmdResolveImage(Handle, src.Image, ImageLayout.General, dst.Image, ImageLayout.General, 1, &region);
+    }
+
+    /// <summary>As <see cref="Resolve(Texture, Texture)"/> for two images in GENERAL layout (a render target taken from <see cref="PassTargets"/>), <paramref name="width"/> × <paramref name="height"/> from the origin.</summary>
+    public void Resolve(Image src, Image dst, int width, int height)
+    {
+        var region = new ImageResolve
+        {
+            SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
+            DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
+            Extent = new Extent3D((uint)width, (uint)height, 1),
+        };
+        vk.CmdResolveImage(Handle, src, ImageLayout.General, dst, ImageLayout.General, 1, &region);
     }
 
     /// <summary>Scales level 0 / layer 0 of <paramref name="src"/> over level 0 of <paramref name="dst"/>.</summary>

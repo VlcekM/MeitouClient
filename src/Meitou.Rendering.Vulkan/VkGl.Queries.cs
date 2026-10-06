@@ -102,13 +102,24 @@ public sealed unsafe partial class VkGl
     public void EndQuery(QueryTarget target)
     {
         if (activeElapsed is not { } q) return;
-        vk.CmdWriteTimestamp2(Cmd, PipelineStageFlags2.AllCommandsBit, q.Pool, (uint)(q.Base + 1));
+        vk.CmdWriteTimestamp2(TimestampCmd, PipelineStageFlags2.AllCommandsBit, q.Pool, (uint)(q.Base + 1));
         activeElapsed = null;
+    }
+
+    /// <summary>The command buffer a timestamp goes into: the frame's, also inside a native host's rendering (a timestamp does not disturb a pass).</summary>
+    CommandBuffer TimestampCmd
+    {
+        get
+        {
+            GuardNativePass();
+            if (!frameOpen) BeginFrame(backbuffer?.Width ?? 1, backbuffer?.Height ?? 1);
+            return cmd;
+        }
     }
 
     void Issue(GlQueryObj q, bool elapsed)
     {
-        _ = Cmd;   // opens the frame, so Frames.Slot is the slot the timestamps go into
+        _ = TimestampCmd;   // opens the frame, so Frames.Slot is the slot the timestamps go into
         if (queryCursor >= PairsPerSlot - 1) throw new InvalidOperationException($"more than {PairsPerSlot} GL queries in one frame");
         int slot = device.Frames.Slot;
         q.Pool = queryPools![slot];

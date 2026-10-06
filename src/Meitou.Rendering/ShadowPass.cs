@@ -98,13 +98,13 @@ public sealed unsafe partial class ShadowPass : IDisposable
         gl.DepthMask(true);
         gl.ColorMask(false, false, false, false);
         gl.ClearDepth(1.0);
-        gl.Clear(ClearBufferMask.DepthBufferBit);
         gl.Enable(EnableCap.DepthTest);
         gl.DepthFunc(DepthFunction.Less);
         gl.Enable(EnableCap.DepthClamp);   // casters between the box and the sun are flattened onto its near side, not clipped
         gl.Disable(EnableCap.Blend);
         gl.Enable(EnableCap.ScissorTest);
         gl.BindBufferBase(BufferTargetARB.UniformBuffer, ShadowShaders.CasterBinding, casterUbo);
+        var host = BeginHost("shadow atlas", clear: true);
         foreach (var c in cascades)
         {
             if (c.Unused) continue;   // in front of the camera's near plane: nothing on screen reads it (a viewer saving)
@@ -116,6 +116,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
             gl.BufferSubData(BufferTargetARB.UniformBuffer, 0, 16, &bias);
             draw(c, c.WorldToClip(), c.CullPlanes(), view.Eye);
         }
+        EndHost(host);
         gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
         gl.Disable(EnableCap.ScissorTest);
         gl.Disable(EnableCap.DepthClamp);
@@ -133,6 +134,30 @@ public sealed unsafe partial class ShadowPass : IDisposable
         Publish(view, cascades);
         CpuMs = watch.Elapsed.TotalMilliseconds;
         cpuSamples.Add(CpuMs);
+    }
+
+    /// <summary>
+    /// Opens the atlas's rendering as a native host (docs/renderer-native.md 4.5): the caller has the atlas framebuffer bound and the GL state its
+    /// guests read set, and the guests (terrain, objects, foliage, all native) record into the returned list's rendering instance through
+    /// <c>BeginNativeInPass</c>, which finds the host. <paramref name="clear"/>: the whole atlas is cleared by the load op (else it is loaded).
+    /// </summary>
+    CommandList BeginHost(string label, bool clear)
+    {
+        var interop = Gpu.Interop!;
+        var cmd = interop.BeginNative(label);
+        var t = interop.CurrentTargets();
+        interop.BeginHostPass(cmd);
+        var depth = clear ? t.Depth with { Load = Silk.NET.Vulkan.AttachmentLoadOp.Clear, Clear = new Silk.NET.Vulkan.ClearValue(depthStencil: new Silk.NET.Vulkan.ClearDepthStencilValue(1f, 0)) } : t.Depth;
+        cmd.BeginRendering(new RenderingDesc(default, depth, t.Width, t.Height));
+        return cmd;
+    }
+
+    void EndHost(CommandList cmd)
+    {
+        var interop = Gpu.Interop!;
+        cmd.EndRendering();
+        interop.EndHostPass(cmd);
+        interop.EndNative(cmd);
     }
 
     /// <summary>Marks the shadows off for the receivers (the term is 1 everywhere).</summary>

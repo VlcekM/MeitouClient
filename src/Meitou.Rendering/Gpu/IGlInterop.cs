@@ -64,6 +64,20 @@ public interface IGlInterop
     /// </summary>
     CommandList BeginNativeInPass(string label);
 
+    /// <summary>
+    /// (Added for the native hosts, wave 3 step H.) Announces that the caller, inside its own <see cref="BeginNative"/> segment, has begun a rendering
+    /// instance of its own on <paramref name="cmd"/> (<see cref="CommandList.BeginRendering"/>, into the targets of the GL framebuffer it keeps bound
+    /// with the GL viewport, scissor and fixed-function state its guests expect). Until <see cref="EndHostPass"/> that rendering is "the pass": a guest's
+    /// <see cref="BeginNativeInPass"/> returns <paramref name="cmd"/> without touching any pass, and <see cref="CurrentTargets"/>,
+    /// <see cref="CurrentState"/> and <c>GetInteger(Samples)</c> answer as they do for VkGl's own pass (they read the GL state). Uploads and timestamps
+    /// are still allowed through IGl (they go into the upload command buffer or write a timestamp); anything that would touch a pass (a clear, a draw, a blit, a
+    /// flush) still throws. The host clears with load ops and <see cref="CommandList.ClearDepth"/> inside its rendering.
+    /// </summary>
+    void BeginHostPass(CommandList cmd);
+
+    /// <summary>Ends the announcement; call after <see cref="CommandList.EndRendering"/> and before <see cref="EndNative"/> of the host's own segment.</summary>
+    void EndHostPass(CommandList cmd);
+
     /// <summary>Every VkGl cache of command-buffer state is invalidated (pipeline, dynamic state, descriptors). After <see cref="BeginNative"/>
     /// a full barrier is placed and VkGl's pass is forgotten; after <see cref="BeginNativeInPass"/> the pass stays open.</summary>
     void EndNative(CommandList cmd);
