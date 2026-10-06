@@ -196,11 +196,12 @@ public sealed unsafe class FsrUpscaler : IUpscaler
             Flags = Environment.GetEnvironmentVariable("MEITOU_FFX_DEBUGVIEW") == "1" ? 1u : 0,
             ViewSpaceToMetersFactor = 0.1f,   // Kenshi units taken as decimetres (docs/formats/terrain.md "Unit size"; DECISIONS 16)
         };
-        var cb = gl.BeginExternal();
+        var list = gl.BeginNative("fsr upscale");
+        var cb = list.Handle;
         desc.CommandList = cb.Handle;
         nint c = context;
         uint rc = dispatch(&c, &desc);
-        gl.EndExternal();
+        gl.EndNative(list);
         if (rc != 0)
         {
             Console.WriteLine($"upscaler  ffxDispatch failed ({rc})");

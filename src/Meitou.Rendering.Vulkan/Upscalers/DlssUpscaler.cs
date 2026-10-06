@@ -147,7 +147,8 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         r = sl.SetConstants(&constants, token, viewport);
         if (r != 0) return Fail($"slSetConstants failed ({r})");
 
-        var cb = gl.BeginExternal();
+        var list = gl.BeginNative("dlss upscale");
+        var cb = list.Handle;
         try
         {
             // VkGl keeps every image in GENERAL.
@@ -173,7 +174,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         }
         finally
         {
-            gl.EndExternal();
+            gl.EndNative(list);
         }
         return true;
     }
