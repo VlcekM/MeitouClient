@@ -32,7 +32,7 @@ public static class Enhancements
     /// (docs/formats/post-processing.md and sky.md for what the game does).
     /// </summary>
     public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<float> hazeStrength, Action<float> setHazeStrength, Func<bool> meitouShadows, Action<bool> setMeitouShadows,
-        Func<bool> meitouRange, Action<bool> setMeitouRange) =>
+        Func<bool> meitouRange, Action<bool> setMeitouRange, Func<bool> impostors, Action<bool> setImpostors) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -50,6 +50,9 @@ public static class Enhancements
         new("range", "Foliage ranges", "per layer", "by size",
             meitouRange, setMeitouRange,
             "the game ends all of a layer's meshes at one range (1000 x foliage range for most: trees, ruins, junk and litter alike); Meitou draws large meshes (trees, ruins, wrecks, rock stacks) far, medium ones (junk, boulders, bushes) midway and small ones (litter, small plants) near, each class with its own Tab slider"),
+        new("impostors", "Far impostors", "off", "billboards",
+            impostors, setImpostors,
+            "the game draws every foliage mesh in full out to its range; Meitou draws large and medium meshes beyond the impostor distance (Tab slider; medium ones from half of it) as baked billboards, crossfaded, which also stand in as shadow casters far out"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

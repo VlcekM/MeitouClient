@@ -47,6 +47,9 @@ sealed class WorldOptions
     /// <summary>The range switch (Enhancements): foliage meshes drawn to their size class's range (Meitou, default) or their layer's (the game); the class ranges (null: the defaults).</summary>
     public bool MeitouRange = true;
     public float? SmallRange, MediumRange, LargeRange;
+    /// <summary>The impostors switch (Enhancements): far foliage as baked billboards (Meitou, default) or meshes only (the game); the distance (null: the default).</summary>
+    public bool Impostors = true;
+    public float? ImpostorDistance;
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
     public float? HazeDistance;
     public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze switch (default); 1 = the game's haze
@@ -83,6 +86,7 @@ sealed class WorldOptions
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
           --range-large <u> --range-medium <u> --range-small <u>   foliage draw range by mesh size (the range switch, F6; defaults 5000, 2500, 800; Tab sliders)
+          --impostor-distance <u>  large foliage meshes become impostors (baked billboards) from here, medium ones from half of it (the impostors switch, F7; default 4000; Tab slider)
           --object-distance <u>    draw placed objects at full detail up to this distance (default 12000)
           --distant-range <zones>  distant towns (and buildings' distant meshes) up to this many zones (default 10, the game's setting maximum; its default is 6)
           --no-distant             no distant towns: objects beyond --object-distance are simply not drawn
@@ -98,13 +102,13 @@ sealed class WorldOptions
           --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture
           (the shadows switch, F5: Meitou by default, view-fitted cascades with soft contact-hardening penumbrae and the terrain's shadow out to the horizon; --faithful shadows the game's CSM)
           --simple-sky             the old colour-model sky and squared-distance fog instead of the atmosphere (B toggles)
-          --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral (F7 toggles)
+          --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral
           --haze-distance <u>      the game's far distance D (view distance x 10) for its haze, which ramps in from 0.06 D to 0.6 D (default 50000: view distance 5000)
           --haze-strength <x>      the viewer's haze strength: scales how far the haze is blended in (default 0.87: far mountains stay visible; 1 is the game's; also a Tab slider)
           --weather <name>         a WEATHER record's sky colour, fog, clouds and heat haze (default "Default": clear, no fog, no clouds, no heat haze)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
-          --faithful <all|ao,dither,haze,aa,shadows,range>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
+          --faithful <all|ao,dither,haze,aa,shadows,range,impostors>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
           --show-keys              start with the key list overlay open (toggle with F10)
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
@@ -127,7 +131,7 @@ sealed class WorldOptions
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
           G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, Ctrl+C copy camera code, Ctrl+V go to camera code, P save screenshot, Tab settings sliders, Esc quit.
-          F1 ambient occlusion, F2 dithering, F3 haze, F4 anti-aliasing, F5 shadows, F6 foliage ranges;
+          F1 ambient occlusion, F2 dithering, F3 haze, F4 anti-aliasing, F5 shadows, F6 foliage ranges, F7 far impostors;
           - / = exposure; F10 key list, F11 frame statistics, F12 profiler (gpu, cpu, off).
         """;
 
@@ -139,7 +143,7 @@ sealed class WorldOptions
 
     /// <summary>The Faithful / Meitou switches over the options (for <c>--meitou</c> / <c>--faithful</c>).</summary>
     static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
-        () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v);
+        () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -176,6 +180,7 @@ sealed class WorldOptions
                 case "--no-objects": o.NoObjects = true; break;
                 case "--no-foliage": o.NoFoliage = true; break;
                 case "--range-large": o.LargeRange = F(); break;
+                case "--impostor-distance": o.ImpostorDistance = F(); break;
                 case "--range-medium": o.MediumRange = F(); break;
                 case "--range-small": o.SmallRange = F(); break;
                 case "--object-distance": o.ObjectDistance = F(); break;
@@ -493,6 +498,7 @@ static class WorldFrame
             if (!interactive) gpu.Foliage.SwaySeconds = o.SwayStart;   // offscreen pictures and benchmarks: the grass holds still, so a picture repeats exactly
             var f = gpu.Foliage;
             (f.MeitouRange, f.SmallRange, f.MediumRange, f.LargeRange) = (o.MeitouRange, o.SmallRange ?? f.SmallRange, o.MediumRange ?? f.MediumRange, o.LargeRange ?? f.LargeRange);
+            (f.Impostors, f.ImpostorDistance) = (o.Impostors, o.ImpostorDistance ?? f.ImpostorDistance);
             Console.WriteLine($"foliage   catalog and shaders ready ({gpu.Foliage.LoadMs:0} ms)");
         }
         if (!o.NoShadows)
@@ -530,6 +536,7 @@ static class WorldFrame
             sliders.Add(new Slider("Foliage draw distance x", 0.25f, 80, () => foliage.RangeSetting, v => foliage.RangeSetting = v, "0.00", Logarithmic: true));
             // The range switch's class ranges (Meitou; the slider above then only moves the FAR layers' large meshes).
             sliders.Add(new Slider("Large foliage range (F6 Meitou)", 1000, 120000, () => foliage.LargeRange, v => foliage.LargeRange = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
+            sliders.Add(new Slider("Impostor distance (F7 Meitou)", 500, 40000, () => foliage.ImpostorDistance, v => foliage.ImpostorDistance = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
             sliders.Add(new Slider("Medium foliage range", 400, 80000, () => foliage.MediumRange, v => foliage.MediumRange = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
             sliders.Add(new Slider("Small foliage range", 200, 40000, () => foliage.SmallRange, v => foliage.SmallRange = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
             sliders.Add(new Slider("Grass draw distance x", 0.25f, 80, () => foliage.GrassRangeSetting, v => foliage.GrassRangeSetting = v, "0.00", Logarithmic: true));

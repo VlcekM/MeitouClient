@@ -321,9 +321,11 @@ static class FoliageShaders
         #version 450
         layout(local_size_x = 256) in;
         struct Instance { vec4 row0; vec4 row1; vec4 row2; vec4 row3; vec4 sphere; vec4 ground; };
-        struct Chunk { uint first; uint count; float range; float rangeSquared; float inverseBand; uint flags; uint pad1; uint pad2; };
+        struct Chunk { uint first; uint count; float range; float rangeSquared; float inverseBand; uint flags; float transition; float inverseTransitionBand; };
         // A TERRAIN-mode rock chunk (flags 1; with 2 its group's mirroring placements, else the others): ground.w is 1024 when the placement
         // mirrors, plus its biome map row + 1 (0: none). The view's biome rows switch (mode.x) and the resident biomes (a bit per row).
+        // A mesh chunk of a group with an impostor (flags 4) keeps the instances before the transition, the group's impostor chunk (flags 8,
+        // the same instances) those from the crossfade band on (docs/impostors.md "Drawing"). Not drawn: -2 (visible values are above -1.5).
         struct ViewData { vec4 planes[8]; vec4 lengths[2]; uvec4 resident[2]; uvec4 mode; };
         layout(push_constant) uniform Push { vec2 eye; uint planeCount; uint chunkCount; uint drawCount; float fullThreshold; } pc;
         uint ChunkIndex() { return gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x; }
@@ -347,7 +349,7 @@ static class FoliageShaders
             if (i == 0u) visibleCount = 0u;
             barrier();
             Chunk k = chunks[c];
-            float packed = -1.0;
+            float packed = -2.0;
             if (i < k.count)
             {
                 vec4 ground = instances[k.first + i].ground;
@@ -357,7 +359,8 @@ static class FoliageShaders
                 precise float d2 = dx * dx + dz * dz;
                 if (!(d2 >= k.rangeSquared))
                 {
-                    precise float w = clamp((k.range - CrSqrt(d2)) * k.inverseBand, 0.0, 1.0);
+                    precise float d = CrSqrt(d2);
+                    precise float w = clamp((k.range - d) * k.inverseBand, 0.0, 1.0);
                     bool visible = true;
                     for (uint p = 0u; p < pc.planeCount; p++)
                     {
@@ -369,10 +372,16 @@ static class FoliageShaders
                     if (visible && (k.flags & 1u) != 0u)
                         visible = !(w < 0.5) && ((uint(ground.w) >= 1024u) == ((k.flags & 2u) != 0u));
                     if (visible) packed = w >= pc.fullThreshold ? 2.0 : w;
+                    if (visible && (k.flags & 12u) != 0u)
+                    {
+                        precise float m = clamp((k.transition - d) * k.inverseTransitionBand, 0.0, 1.0);
+                        if ((k.flags & 8u) != 0u) packed = m < 1.0 ? (m > 0.0 ? -m : packed) : -2.0;
+                        else packed = m > 0.0 ? (m < 1.0 ? m : packed) : -2.0;
+                    }
                 }
             }
             fades[c * 256u + i] = packed;
-            if (packed >= 0.0) atomicAdd(visibleCount, 1u);
+            if (packed > -1.5) atomicAdd(visibleCount, 1u);
             barrier();
             if (i == 0u) counts[c] = visibleCount;
         }
@@ -442,7 +451,7 @@ static class FoliageShaders
             if (c >= pc.chunkCount) return;
             uint i = gl_LocalInvocationID.x;
             float f = fades[c * 256u + i];
-            uint visible = f >= 0.0 ? 1u : 0u;
+            uint visible = f > -1.5 ? 1u : 0u;
             rank[i] = visible;
             barrier();
             for (uint s = 1u; s < 256u; s <<= 1)

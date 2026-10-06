@@ -16,10 +16,12 @@ public struct FoliageCullChunk
     public uint First, Count;
     public float Range, RangeSquared, InverseBand;
     public uint Flags;
-    uint pad1, pad2;
+    /// <summary>With <see cref="ImpostorMesh"/> or <see cref="Impostor"/>: the group's transition and the crossfade band's reciprocal (<see cref="FoliageGroupRange"/>).</summary>
+    public float Transition, InverseTransitionBand;
 
     public const int Size = 32;
-    public const uint Rock = 1, Mirrored = 2;
+    /// <summary><see cref="ImpostorMesh"/>: the meshes of a group with an impostor (before its transition); <see cref="Impostor"/>: its impostors.</summary>
+    public const uint Rock = 1, Mirrored = 2, ImpostorMesh = 4, Impostor = 8;
 }
 
 /// <summary>What a view's rock chunks write into row 0 w (<see cref="FoliageShaders.CompactCompute"/>): with <see cref="BiomeRows"/> (the

@@ -40,10 +40,19 @@ public sealed class FoliageCullView
     }
 }
 
-/// <summary>A group's (one mesh of one layer in one zone) range for one view: where instances end, and the fade band as a reciprocal.</summary>
-public readonly record struct FoliageGroupRange(float Range, float RangeSquared, float InverseBand)
+/// <summary>
+/// A group's (one mesh of one layer in one zone) range for one view: where instances end, and the fade band as a reciprocal. With an impostor
+/// (docs/impostors.md "Drawing"): <see cref="Transition"/>, the ground distance from which the instance is its impostor, and the crossfade band
+/// before it as a reciprocal (<see cref="FoliageCull.TransitionFade"/>); infinite without one.
+/// </summary>
+public readonly record struct FoliageGroupRange(float Range, float RangeSquared, float InverseBand, float Transition = float.PositiveInfinity, float InverseTransitionBand = 0)
 {
     public static FoliageGroupRange Of(float range, float band) => new(range, range * range, 1 / band);
+
+    /// <summary>This range with an impostor from <paramref name="transition"/> on, crossfaded over <paramref name="band"/> before it.</summary>
+    public FoliageGroupRange WithTransition(float transition, float band) => this with { Transition = transition, InverseTransitionBand = 1 / band };
+
+    public bool HasImpostor => Transition < float.PositiveInfinity;
 }
 
 /// <summary>The output of culling one group: the visible instances as batch matrices (fade in <c>M14</c>), and, when recording for the
@@ -55,6 +64,12 @@ public sealed class FoliageCullOutput
     public int[] InRange = new int[64];
     public float[] InRangeFade = new float[64];
     public int InRangeCount;
+    /// <summary>The visible impostors (<see cref="FoliageCull.CullGroup"/> with <see cref="FoliageCull.ImpostorPart"/>), fade in <c>M14</c>
+    /// (negative in the crossfade band: the complement of the mesh's dither).</summary>
+    public Matrix4x4[] ImpostorVisible = new Matrix4x4[64];
+    public int ImpostorCount;
+    /// <summary>With record: each in-range instance's packed mesh and impostor values (<see cref="FoliageCull.Hidden"/> where that part is not drawn).</summary>
+    public float[] InRangeMesh = new float[64], InRangeImpostor = new float[64];
 }
 
 /// <summary>
@@ -94,6 +109,21 @@ public static class FoliageCull
 
     public static float Fade(in FoliageGroupRange range, float distance) => Math.Clamp((range.Range - distance) * range.InverseBand, 0, 1);
 
+    /// <summary>The parts of a group a view draws (<see cref="CullGroup"/>): its meshes, its impostors (both for a group straddling the transition).</summary>
+    public const int MeshPart = 1, ImpostorPart = 2;
+
+    /// <summary>The packed value of a part not drawn (the kernels' sentinel: visible values are above −1.5).</summary>
+    public const float Hidden = -2;
+
+    /// <summary>The share of the mesh at <paramref name="distance"/>: 1 before the crossfade band, 0 from the transition on.</summary>
+    public static float TransitionFade(in FoliageGroupRange range, float distance) => Math.Clamp((range.Transition - distance) * range.InverseTransitionBand, 0, 1);
+
+    /// <summary>The mesh's packed value with an impostor: <paramref name="m"/> in the band (the mesh's dither keeps that share), else the range fade's.</summary>
+    public static float PackMesh(float m, float w) => m > 0 ? m < 1 ? m : Pack(w) : Hidden;
+
+    /// <summary>The impostor's packed value: −<paramref name="m"/> in the band (the complement of the mesh's dither), else the range fade's.</summary>
+    public static float PackImpostor(float m, float w) => m < 1 ? m > 0 ? -m : Pack(w) : Hidden;
+
     /// <summary>The fade as the mesh shader reads it from row 0 w (<see cref="FoliageShaders.MeshVertex"/>).</summary>
     public static float Pack(float w) => w >= 0.999f ? 2 : w;
 
@@ -111,30 +141,57 @@ public static class FoliageCull
         return true;
     }
 
-    /// <summary>Culls one group's instances for one view. With <paramref name="record"/>, every instance in range is also listed (index and fade) for later views that share the range (the shadow cascades).</summary>
-    public static void CullGroup(ReadOnlySpan<FoliageInstanceRecord> instances, in FoliageGroupRange range, Vector2 eye, FoliageCullView view, bool record, FoliageCullOutput output)
+    /// <summary>Culls one group's instances for one view. With <paramref name="record"/>, every instance in range is also listed (index and fade) for later views that share the range (the shadow cascades).
+    /// <paramref name="parts"/>: <see cref="MeshPart"/> and / or <see cref="ImpostorPart"/>; with a transition (<see cref="FoliageGroupRange.HasImpostor"/>) the
+    /// meshes keep only the instances before it (<see cref="PackMesh"/>) and the impostors only those from its band on (<see cref="PackImpostor"/>).</summary>
+    public static void CullGroup(ReadOnlySpan<FoliageInstanceRecord> instances, in FoliageGroupRange range, Vector2 eye, FoliageCullView view, bool record, FoliageCullOutput output, int parts = MeshPart)
     {
-        output.Count = output.InRangeCount = 0;
+        output.Count = output.InRangeCount = output.ImpostorCount = 0;
+        bool split = range.HasImpostor;
         for (int i = 0; i < instances.Length; i++)
         {
             ref readonly var r = ref instances[i];
             float dx = r.Ground.X - eye.X, dz = r.Ground.Y - eye.Y;
             float d2 = dx * dx + dz * dz;
             if (d2 >= range.RangeSquared) continue;
-            float w = Fade(range, MathF.Sqrt(d2));
+            float d = MathF.Sqrt(d2);
+            float w = Fade(range, d);
+            float mesh = Pack(w), impostor = Hidden;
+            if (split)
+            {
+                float m = TransitionFade(range, d);
+                mesh = (parts & MeshPart) != 0 ? PackMesh(m, w) : Hidden;
+                impostor = (parts & ImpostorPart) != 0 ? PackImpostor(m, w) : Hidden;
+            }
             if (record)
             {
                 if (output.InRangeCount == output.InRange.Length)
                 {
                     Array.Resize(ref output.InRange, output.InRangeCount * 2);
                     Array.Resize(ref output.InRangeFade, output.InRangeCount * 2);
+                    Array.Resize(ref output.InRangeMesh, output.InRangeCount * 2);
+                    Array.Resize(ref output.InRangeImpostor, output.InRangeCount * 2);
                 }
                 output.InRange[output.InRangeCount] = i;
+                output.InRangeMesh[output.InRangeCount] = mesh;
+                output.InRangeImpostor[output.InRangeCount] = impostor;
                 output.InRangeFade[output.InRangeCount++] = w;
             }
             if (!SphereVisible(view, r.Sphere)) continue;
-            if (output.Count == output.Visible.Length) Array.Resize(ref output.Visible, output.Count * 2);
-            output.Visible[output.Count++] = Packed(r.Transform, w);
+            if (mesh > Hidden)
+            {
+                if (output.Count == output.Visible.Length) Array.Resize(ref output.Visible, output.Count * 2);
+                var t = r.Transform;
+                t.M14 = mesh;
+                output.Visible[output.Count++] = t;
+            }
+            if (impostor > Hidden)
+            {
+                if (output.ImpostorCount == output.ImpostorVisible.Length) Array.Resize(ref output.ImpostorVisible, output.ImpostorCount * 2);
+                var t = r.Transform;
+                t.M14 = impostor;
+                output.ImpostorVisible[output.ImpostorCount++] = t;
+            }
         }
     }
 }
