@@ -214,6 +214,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// <summary>Draws the terrain; nodes whose highest point is under <paramref name="cullBelow"/> are skipped (the reflection pass clips everything below the water). <paramref name="secondary"/>: the reflection's call, with its own quadtree for its own LOD distance.</summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity, bool secondary = false)
     {
+        long timing = StepTiming.Now();
         if (secondary)
         {
             if (spare is null || Math.Abs(options.LodDistance - (float)(spare.Ranges[0] / spare.NodeSize(0))) > 1e-4f)
@@ -246,6 +247,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
             gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Fill);
         }
         gl.BindVertexArray(0);
+        StepTiming.Add(StepTiming.PatchColour, timing, nodes.Count);
     }
 
     float LodDistanceInUse => (float)(quadtree.Ranges[0] / quadtree.NodeSize(0));
@@ -406,6 +408,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     void ReportMeshTiming()
     {
+        StepTiming.Report();
         if (MeshTiming == 0) return;
         double ms(long t) => t * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         string Kind(int k) =>
@@ -527,6 +530,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// </summary>
     public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options)
     {
+        long timing = StepTiming.Now();
         if (depthPatchProgram == 0)
         {
             depthPatchProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, ShadowShaders.DepthFragment);
@@ -558,6 +562,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
             DepthTriangles += indexCounts[part] / 3;
         }
         gl.BindVertexArray(0);
+        StepTiming.Add(StepTiming.PatchDepth, timing, nodes.Count);
     }
 
     /// <summary>Terrain triangles the depth draws have drawn since the counter was last reset (by the caller).</summary>
@@ -740,5 +745,40 @@ public sealed unsafe class TerrainRenderer : IDisposable
         textures?.Dispose();
         nativeMesh?.Dispose();
         nativeDepth?.Dispose();
+    }
+}
+
+/// <summary>
+/// <c>MEITOU_TERRAIN_TIMING=1</c>: CPU time of the terrain patches (colour, shadow depth), the Meitou blocker map and the terrain shadow
+/// sweep, per call and per draw, printed when the terrain renderer is disposed (docs/renderer-native.md 7.1, wave 3 agent B).
+/// </summary>
+internal static class StepTiming
+{
+    public static readonly bool On = Environment.GetEnvironmentVariable("MEITOU_TERRAIN_TIMING") == "1";
+    public const int PatchColour = 0, PatchDepth = 1, Blocker = 2, Sweep = 3;
+    static readonly string[] Names = ["patches colour", "patches depth", "blocker map", "terrain sweep"];
+    static readonly long[] ticks = new long[4], calls = new long[4], draws = new long[4];
+
+    public static long Now() => On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+
+    public static void Add(int kind, long start, int count)
+    {
+        if (!On) return;
+        ticks[kind] += System.Diagnostics.Stopwatch.GetTimestamp() - start;
+        calls[kind]++;
+        draws[kind] += count;
+    }
+
+    public static void Report()
+    {
+        if (!On) return;
+        for (int k = 0; k < 4; k++)
+        {
+            if (calls[k] == 0) continue;
+            double us = ticks[k] * 1e6 / System.Diagnostics.Stopwatch.Frequency;
+            Console.WriteLine(FormattableString.Invariant(
+                $"terrain timing  {Names[k],-15} {calls[k]} calls, {draws[k]} draws, {us / calls[k]:F1} us/call, {(draws[k] > 0 ? us / draws[k] : 0):F2} us/draw"));
+            ticks[k] = calls[k] = draws[k] = 0;
+        }
     }
 }

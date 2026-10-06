@@ -141,6 +141,7 @@ public sealed unsafe partial class ShadowPass
     /// <summary>Rebuilds the blocker map's tiles of the cascades drawn this frame (the atlas read raw: its comparison off meanwhile).</summary>
     bool UpdateBlockers(ReadOnlySpan<bool> drawn, int count)
     {
+        long timing = StepTiming.Now();
         int size = atlasSize / 2;
         bool fresh = false;   // a new map: every tile
         if (blockerTexture == 0 || blockerSize != size)
@@ -179,18 +180,20 @@ public sealed unsafe partial class ShadowPass
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)TextureCompareMode.None);
         gl.Uniform1(blockerAtlasU, 0);
         gl.Uniform1(blockerSizeU, (float)atlasSize);
-        int tile = Settings.TileSize / 2, grid = Settings.Grid;
+        int tile = Settings.TileSize / 2, grid = Settings.Grid, tiles = 0;
         for (int i = 0; i < count; i++)
         {
             if (!drawn[i] && !fresh) continue;
             gl.Viewport(i % grid * tile, i / grid * tile, (uint)tile, (uint)tile);
             gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            tiles++;
         }
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)TextureCompareMode.CompareRefToTexture);
         gl.BindTexture(TextureTarget.Texture2D, 0);
         gl.BindVertexArray(0);
         gl.DepthMask(true);
         gl.Enable(EnableCap.DepthTest);
+        StepTiming.Add(StepTiming.Blocker, timing, tiles);
         return true;
     }
 
