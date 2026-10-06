@@ -1,11 +1,11 @@
 namespace Meitou.Rendering.Gpu;
 
 /// <summary>
-/// (Phase 8 stage 1, docs/renderer-native.md 8.) GL names over native resources, for code that still takes a GL texture or vertex array from
-/// a renderer whose resources are now native: the impostor baker and preview bind <see cref="WorldTexture.Id"/> through IGl, and
-/// <see cref="TerrainRenderer.DrawMeshes"/> / <see cref="TerrainRenderer.DrawMeshesIndirect"/> take the TERRAIN-mode meshes as GL vertex
-/// arrays. The native object stays the owner (<see cref="IGlInterop.Import"/>, <see cref="IGlInterop.ImportBuffer"/>: borrowed names).
-/// Goes with VkGl in stage 3, once those consumers take native objects.
+/// (Phase 8 stage 1, docs/renderer-native.md 8.) GL names over native resources, for code that still takes a GL vertex array from a renderer
+/// whose resources are now native: <see cref="TerrainRenderer.DrawMeshes"/> / <see cref="TerrainRenderer.DrawMeshesIndirect"/> take the
+/// TERRAIN-mode meshes as GL vertex arrays. The native object stays the owner (<see cref="IGlInterop.ImportBuffer"/>: borrowed names). The
+/// GL texture names the impostor baker and preview needed went with their native port (stage 2). Goes with VkGl in stage 3, once those
+/// consumers take native objects.
 /// </summary>
 public static unsafe class GlBridge
 {
@@ -16,32 +16,6 @@ public static unsafe class GlBridge
     public static void EnsureFrame(GpuContext ctx)
     {
         if (!ctx.Frame.Open) ctx.Interop?.Interleave(static _ => { });
-    }
-
-    /// <summary>A GL texture name for <paramref name="texture"/> with GL sampler state of its own (what the GL texture it replaces was given):
-    /// trilinear, <paramref name="wrap"/> on S and T, a border colour of 0 when <paramref name="transparentBorder"/>, the anisotropy, and the
-    /// swizzle (GL enum values, 0 for none). Leaves no texture bound on the active unit.</summary>
-    public static uint Texture(GpuContext ctx, Texture texture, TextureWrapMode wrap, bool transparentBorder, float anisotropy, ReadOnlySpan<int> swizzle)
-    {
-        var gl = Gl(ctx);
-        uint id = ctx.Interop!.Import(texture);
-        gl.BindTexture(TextureTarget.Texture2D, id);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)wrap);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)wrap);
-        if (transparentBorder) gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureBorderColor, [0f, 0f, 0f, 0f]);
-        gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x84FE, anisotropy);   // TEXTURE_MAX_ANISOTROPY
-        for (int i = 0; i < swizzle.Length && i < 4; i++)
-            if (swizzle[i] != 0) gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)(0x8E42 + i), swizzle[i]);   // TEXTURE_SWIZZLE_R..A
-        gl.BindTexture(TextureTarget.Texture2D, 0);
-        return id;
-    }
-
-    /// <summary>Forgets a name made by <see cref="Texture"/> (the image stays the native texture's).</summary>
-    public static void DeleteTexture(GpuContext ctx, uint id)
-    {
-        if (id != 0 && ctx.Interop is IGl gl) gl.DeleteTexture(id);
     }
 
     /// <summary>A float (or, with <see cref="Integer"/>, integer) vertex attribute of a <see cref="VertexArray"/>.</summary>
