@@ -21,19 +21,19 @@ public class NativeShaderTests
     static readonly Dictionary<string, string> Model = new() { ["uModel"] = "mat4(1.0)" };
 
     /// <summary>Each shared native variant with a vertex or fragment partner, as a consumer pairs them.</summary>
-    static IEnumerable<(string Name, string Vertex, string Fragment)> Variants()
+    static IEnumerable<(string Name, string Vertex, string Fragment, Type Push)> Variants()
     {
         string mesh = NativeShaders.MeshVertex(Model);
-        yield return ("mesh", mesh, NativeShaders.MeshFragment());
-        yield return ("mesh depth", mesh, NativeShaders.MeshDepthFragment());
-        yield return ("mesh plain depth", mesh, NativeShaders.DepthFragment);
+        yield return ("mesh", mesh, NativeShaders.MeshFragment(), typeof(MeshPush));
+        yield return ("mesh depth", mesh, NativeShaders.MeshDepthFragment(), typeof(MeshPush));
+        yield return ("mesh plain depth", mesh, NativeShaders.DepthFragment, typeof(MeshPush));
         const string fragment = """
             layout(location = 0) in vec2 vUv;
             layout(location = 0) out vec4 fragColour;
             void main() { fragColour = vec4(atmoApply(vec3(vUv, 0.0), view.eye, vec3(1.0)), kenshiShadow(vec3(vUv, 1.0), vec3(0.0, 1.0, 0.0))); }
             """;
         yield return ("post vertex + atmosphere", NativeShaders.PostProcessVertex,
-            "#version 450\n" + NativeShaders.Prelude(NativeShaders.MeshPushMembers) + NativeShaders.AtmosphereFunctions + fragment);
+            "#version 450\n" + NativeShaders.Prelude(NativeShaders.MeshPushMembers) + NativeShaders.AtmosphereFunctions + fragment, typeof(MeshPush));
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public class NativeShaderTests
     {
         string legacy = Shaders.MeshFragment, native = NativeShaders.MeshFragment();
         Assert.DoesNotContain(native.Split('\n'), l => l.TrimStart().StartsWith("uniform ", StringComparison.Ordinal));   // no loose uniform left
-        Assert.Contains("layout(std140, set = 1, binding = 1) uniform KenshiShadowReceiver", native);
+        Assert.Contains($"layout(std140, set = {NativeShaders.FrameSet}, binding = 1) uniform KenshiShadowReceiver", native);
         Assert.Contains("#define uDiffuse textures2D[pc.diffuse]", native);
         // Every line of the legacy text that is not a declaration appears unchanged, in order.
         int at = 0;
@@ -64,7 +64,7 @@ public class NativeShaderTests
         using (var gl = new VkGl(d!))
         {
             using var frame = new NativeFrame(gl.Context);
-            foreach (var (name, v, f) in Variants())
+            foreach (var (name, v, f, pushType) in Variants())
             {
                 using var p = frame.Program(v, f, name);
                 foreach (var r in new[] { p.VertexReflection!, p.FragmentReflection! })
@@ -72,10 +72,10 @@ public class NativeShaderTests
                     {
                         Type? type = b.Name switch
                         {
-                            "FrameConstants" => typeof(FrameConstants), "ViewConstants" => typeof(ViewConstants), "Push" => typeof(MeshPush), _ => null,
+                            "FrameConstants" => typeof(FrameConstants), "ViewConstants" => typeof(ViewConstants), "Push" => pushType, _ => null,
                         };
                         if (b.Name is "FrameConstants" or "ViewConstants" or "MeshBones" or "KenshiShadowReceiver" or "KenshiShadowCaster" or "MeitouShadowReceiver")
-                            Assert.Equal(1, b.Set);
+                            Assert.Equal(NativeShaders.FrameSet, b.Set);
                         if (type is null) continue;
                         foreach (var m in b.Members)
                         {
@@ -85,7 +85,7 @@ public class NativeShaderTests
                         }
                         Assert.True(b.Size <= Marshal.SizeOf(type), $"{name}: {b.Name} is {b.Size} bytes, C# {Marshal.SizeOf(type)}");
                     }
-                foreach (var s in p.VertexReflection!.Samplers.Concat(p.FragmentReflection!.Samplers)) Assert.Equal(0, s.Set);
+                foreach (var s in p.VertexReflection!.Samplers.Concat(p.FragmentReflection!.Samplers)) Assert.Equal(NativeShaders.BindlessSet, s.Set);
             }
         }
         Assert.True(d!.ValidationErrors == 0, "Validation errors:\n" + string.Join("\n", d.ValidationLog));

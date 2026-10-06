@@ -8,7 +8,7 @@ namespace Meitou.Rendering;
 
 /// <summary>
 /// The CPU side of the native model's sets (docs/renderer-native.md 2.6 and 3.3, <see cref="NativeShaders"/>): makes native programs with the
-/// model's layout and, once per native segment, binds the bindless table (set 0) and pushes set 1: <see cref="FrameConstants"/> built from the
+/// model's layout and, once per native segment, pushes set 0 and binds the bindless table (set 1): <see cref="FrameConstants"/> built from the
 /// frame globals as they are now (the atmosphere's values and the bindless indices of its and the shadows' textures), the three shadow blocks
 /// the GL code has bound, the segment's <see cref="ViewConstants"/>, and the skinning block. One per consumer (it owns its frame textures'
 /// bindless entries and its set layout); render thread only.
@@ -37,7 +37,7 @@ sealed unsafe class NativeFrame : IDisposable
     readonly (SampledTexture Texture, uint Index, bool Has)[] entries = new (SampledTexture, uint, bool)[FrameConstants.Textures.Length];
     readonly SamplerInfo[] standIns;
 
-    /// <summary>The shadow blocks of set 1: name, binding, std140 size.</summary>
+    /// <summary>The shadow blocks of set 0: name, binding, std140 size.</summary>
     static readonly (string Name, uint Binding, int Size)[] Blocks =
     [
         (ShadowShaders.ReceiverBlock, NativeShaders.ReceiverBinding, ShadowPass.ReceiverBytes),
@@ -54,11 +54,11 @@ sealed unsafe class NativeFrame : IDisposable
         var stages = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit;
         DescriptorSetLayoutBinding[] bindings = [.. Enumerable.Range(0, 6).Select(b => new DescriptorSetLayoutBinding((uint)b, DescriptorType.UniformBuffer, 1, stages))];
         SetLayout = ctx.Shaders.CreateSetLayout(bindings, push ? DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr : 0);
-        SetLayouts = [ctx.Bindless.Layout, SetLayout];
+        SetLayouts = [SetLayout, ctx.Bindless.Layout];
         standIns = [.. FrameConstants.Textures.Select(t => FrameGlobals.Sampler2D(t.Name, cube: t.Kind == BindlessKind.Cube, shadow: t.Kind == BindlessKind.Shadow2D))];
     }
 
-    /// <summary>Set 1 of the native model (six uniform buffers; a push-descriptor set where the device has them).</summary>
+    /// <summary>Set 0 of the native model (six uniform buffers; a push-descriptor set where the device has them).</summary>
     public DescriptorSetLayout SetLayout { get; }
     /// <summary>The native model's sets: the bindless table, then <see cref="SetLayout"/>.</summary>
     public DescriptorSetLayout[] SetLayouts { get; }
@@ -80,7 +80,7 @@ sealed unsafe class NativeFrame : IDisposable
     }
 
     /// <summary>
-    /// Once per native segment, before its draws: binds set 0 (the bindless table) and set 1 for <paramref name="layout"/> (any native
+    /// Once per native segment, before its draws: binds set 1 (the bindless table) and set 0 for <paramref name="layout"/> (any native
     /// program's: they are all compatible) with this segment's frame constants, shadow blocks and <paramref name="view"/>.
     /// </summary>
     public void Bind(CommandList cmd, PipelineLayout layout, in ViewConstants view)
@@ -139,16 +139,16 @@ sealed unsafe class NativeFrame : IDisposable
             {
                 SType = StructureType.WriteDescriptorSet, DstBinding = (uint)b, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &infos[b],
             };
-        var set0 = ctx.Bindless.Set;
-        cmd.BindSets(layout, NativeShaders.BindlessSet, new ReadOnlySpan<DescriptorSet>(in set0), []);
+        var table = ctx.Bindless.Set;
+        cmd.BindSets(layout, NativeShaders.BindlessSet, new ReadOnlySpan<DescriptorSet>(in table), []);
         var all = new ReadOnlySpan<WriteDescriptorSet>(writes, 6);
         if (push) cmd.PushDescriptors(layout, NativeShaders.FrameSet, all);
         else
         {
-            var set1 = frame.AllocateSet(SetLayout);
-            for (int b = 0; b < 6; b++) writes[b].DstSet = set1;
+            var set = frame.AllocateSet(SetLayout);
+            for (int b = 0; b < 6; b++) writes[b].DstSet = set;
             ctx.Device.Vk.UpdateDescriptorSets(ctx.Device.Device, 6, writes, 0, null);
-            cmd.BindSets(layout, NativeShaders.FrameSet, new ReadOnlySpan<DescriptorSet>(in set1), []);
+            cmd.BindSets(layout, NativeShaders.FrameSet, new ReadOnlySpan<DescriptorSet>(in set), []);
         }
     }
 

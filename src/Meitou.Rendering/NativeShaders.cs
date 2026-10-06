@@ -17,23 +17,30 @@ namespace Meitou.Rendering;
 /// rules off), so a uniform the maps do not cover is an error rather than a silent default block: <see cref="Port"/> throws naming it.
 /// </summary>
 /// <remarks>
-/// The layout (steward, wave 3b): set 0 the bindless table (<see cref="BindlessTable.GlslDeclarations"/>); set 1 one push-descriptor set per
-/// native segment (<see cref="NativeFrame"/>) with <see cref="FrameConstants"/> (binding 0), the three shadow blocks as the GL code binds them
-/// (1 receiver, 2 caster, 3 Meitou: they are GL buffers VkGl renames, and the caster block changes between cascades, so they are taken per
-/// segment, not per frame), <see cref="ViewConstants"/> (4) and the skinning matrices (5); push constants of up to <see cref="PushBytes"/>
-/// bytes, the same range in every native program so all native pipeline layouts are compatible and the sets are bound once per segment.
+/// The layout (steward, wave 3b): set 0 one push-descriptor set per native segment (<see cref="NativeFrame"/>) with <see cref="FrameConstants"/>
+/// (binding 0), the three shadow blocks as the GL code binds them (1 receiver, 2 caster, 3 Meitou: they are GL buffers VkGl renames, and
+/// the caster block changes between cascades, so they are taken per segment, not per frame), <see cref="ViewConstants"/> (4) and the skinning matrices (5); push constants of up to <see cref="PushBytes"/>
+/// bytes, the same range in every native program so all native pipeline layouts are compatible and the sets are bound once per segment;
+/// set 1 the bindless table (<see cref="BindlessTable.Declarations"/>).
+/// <para>
+/// The pushed set is set 0, as the legacy programs' is, and the table is set 1, not the other way round: with the table at 0 and set 1
+/// pushed, a legacy program's push of its set 0 after a native segment crashed the validation layer (1.4.363) inside
+/// vkCmdPushDescriptorSetKHR with no error reported (observed: SeamTests' native-then-legacy test, and the forest view after the foliage's
+/// step O segments, with MEITOU_VK_VALIDATION=1 and =sync; a minidump puts the fault in VkLayer_khronos_validation.dll). With the push
+/// always at set 0 both run clean. Without the layer both orders render the same.
+/// </para>
 /// </remarks>
 static partial class NativeShaders
 {
-    public const int BindlessSet = 0, FrameSet = 1;
+    public const int BindlessSet = 1, FrameSet = 0;
     public const uint FrameBinding = 0, ReceiverBinding = 1, CasterBinding = 2, MeitouBinding = 3, ViewBinding = 4, BonesBinding = 5;
     /// <summary>The push-constant range of every native program (the guaranteed minimum).</summary>
     public const uint PushBytes = 128;
 
-    /// <summary>Set 1, binding 0: the frame's atmosphere (the values <c>SkyRenderer.Apply</c> sets) and the bindless indices of the frame's
+    /// <summary>Set 0, binding 0: the frame's atmosphere (the values <c>SkyRenderer.Apply</c> sets) and the bindless indices of the frame's
     /// shared textures. Layout std140; <see cref="FrameConstants"/> is the C# side.</summary>
     public const string FrameBlock = """
-        layout(std140, set = 1, binding = 0) uniform FrameConstants
+        layout(std140, set = 0, binding = 0) uniform FrameConstants
         {
             vec4 atmoSun;
             vec4 atmoLight;
@@ -59,9 +66,9 @@ static partial class NativeShaders
 
         """;
 
-    /// <summary>Set 1, binding 4: what one view (a native segment's camera) shares. Layout std140; <see cref="ViewConstants"/> is the C# side.</summary>
+    /// <summary>Set 0, binding 4: what one view (a native segment's camera) shares. Layout std140; <see cref="ViewConstants"/> is the C# side.</summary>
     public const string ViewBlock = """
-        layout(std140, set = 1, binding = 4) uniform ViewConstants
+        layout(std140, set = 0, binding = 4) uniform ViewConstants
         {
             mat4 viewProjection;
             mat4 previousViewProjection;
@@ -77,9 +84,9 @@ static partial class NativeShaders
 
         """;
 
-    /// <summary>Set 1, binding 5: the shared mesh shader's skinning matrices (<c>uBones</c>).</summary>
+    /// <summary>Set 0, binding 5: the shared mesh shader's skinning matrices (<c>uBones</c>).</summary>
     public const string BonesBlock = """
-        layout(std140, set = 1, binding = 5) uniform MeshBones
+        layout(std140, set = 0, binding = 5) uniform MeshBones
         {
             mat4 bones[128];
         } meshBones;
@@ -121,12 +128,12 @@ static partial class NativeShaders
     public static string PushBlock(string members) => $"layout(push_constant) uniform Push\n{{\n{members}\n}} pc;\n";
 
     /// <summary>
-    /// What follows <c>#version 450</c> in every native program: the bindless arrays (set 0), the frame, view and bones blocks (set 1) and the
+    /// What follows <c>#version 450</c> in every native program: the bindless arrays (set 1), the frame, view and bones blocks (set 0) and the
     /// push-constant block. <c>gl_VertexID</c> is GL's name; with relaxed rules off it is <c>gl_VertexIndex</c> (the same value: the native
     /// draws start at vertex 0).
     /// </summary>
     public static string Prelude(string pushMembers) =>
-        BindlessTable.GlslDeclarations + FrameBlock + ViewBlock + BonesBlock + PushBlock(pushMembers) + "#define gl_VertexID gl_VertexIndex\n";
+        BindlessTable.Declarations(BindlessSet) + FrameBlock + ViewBlock + BonesBlock + PushBlock(pushMembers) + "#define gl_VertexID gl_VertexIndex\n";
 
     /// <summary>The atmosphere's and the shadows' uniforms (<see cref="AtmosphereShaders"/>, <see cref="ShadowShaders"/>, <see cref="MeitouShadowShaders"/>):
     /// <see cref="FrameConstants"/> members and the bindless arrays they index.</summary>
@@ -165,7 +172,7 @@ static partial class NativeShaders
         ["uSpecular"] = "pc.specular", ["uWireframe"] = "pc.wireframe", ["uFlatColour"] = "pc.flatColour", ["uCoverage"] = "pc.coverage",
     };
 
-    /// <summary>The shadow blocks' bindings in set 1.</summary>
+    /// <summary>The shadow blocks' bindings in set 0.</summary>
     public static readonly IReadOnlyDictionary<string, uint> BlockBindings = new Dictionary<string, uint>
     {
         [ShadowShaders.ReceiverBlock] = ReceiverBinding, [ShadowShaders.CasterBlock] = CasterBinding, [MeitouShadowShaders.Block] = MeitouBinding,
@@ -185,7 +192,7 @@ static partial class NativeShaders
     /// The native variant of a legacy GLSL text: <c>#version 330 core</c> becomes <c>#version 450</c> and the prelude (with the push block of
     /// <paramref name="pushMembers"/>; a text without a version line, such as <see cref="AtmosphereShaders.Functions"/>, gets none), each
     /// loose <c>uniform T a, b;</c> becomes <c>#define a ...</c> lines from <paramref name="map"/> (default: <see cref="Map"/>), and each
-    /// <c>layout(std140) uniform Block</c> gets set 1 and its binding from <see cref="BlockBindings"/>. Nothing else is touched. Throws when a
+    /// <c>layout(std140) uniform Block</c> gets set <see cref="FrameSet"/> and its binding from <see cref="BlockBindings"/>. Nothing else is touched. Throws when a
     /// uniform or a block is not mapped.
     /// </summary>
     public static string Port(string legacy, IReadOnlyDictionary<string, string>? map = null, string pushMembers = MeshPushMembers)
@@ -237,7 +244,7 @@ static partial class NativeShaders
     public static string AtmosphereFunctions => Port(AtmosphereShaders.Functions, Map());
     /// <summary><see cref="ShadowShaders.Functions"/> alone (the shadow receivers).</summary>
     public static string ShadowFunctions => Port(ShadowShaders.Functions, Map());
-    /// <summary><see cref="ShadowShaders.DepthFragment"/> (the caster block at set 1, binding 2).</summary>
+    /// <summary><see cref="ShadowShaders.DepthFragment"/> (the caster block at set 0, binding 2).</summary>
     public static string DepthFragment => Port(ShadowShaders.DepthFragment, Map());
     /// <summary><see cref="ShadowShaders.MeshDepthFragment"/>: the mesh shaders' cut-out on <see cref="MeshPush"/>.</summary>
     public static string MeshDepthFragment(IReadOnlyDictionary<string, string>? own = null) => Port(ShadowShaders.MeshDepthFragment, Map(own));
