@@ -425,8 +425,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             Update(eye, settling: true);
             if (++rounds > 2 && Pending == 0) return;
-            // An impostor bake reads its rows back after the frame they were recorded into: end it.
-            if (impostorBake is { NeedsFrame: true }) Gpu.Finish();
+            // An impostor bake reads its rows back after the frame they were recorded into, and atlas uploads are spread over frames: end it.
+            if (impostorBake is { NeedsFrame: true } || impostorUploadsWaiting) Gpu.Finish();
             else Thread.Sleep(2);
         }
         Console.WriteLine($"warning   foliage streaming did not finish in {timeoutMs / 1000} s");

@@ -52,6 +52,9 @@ public sealed partial class FoliageRenderer
     readonly ImpostorCache impostorCache = new();
     ImpostorBaker? impostorBaker;
     ImpostorBakeJob? impostorBake;
+    /// <summary>Atlas bytes uploaded per frame while settling; <see cref="impostorUploadsWaiting"/>: more wait for the next frame.</summary>
+    const long SettleUploadBytes = 64L << 20, UploadBytesPerFrame = 12L << 20;
+    bool impostorUploadsWaiting;
     MeshAsset? impostorBakeAsset;
     ImpostorDraw? impostorDraw;
     readonly Queue<MeshAsset> impostorBakes = new();
@@ -115,7 +118,10 @@ public sealed partial class FoliageRenderer
                 foreach (var g in state.Groups)
                 {
                     var a = g.Asset;
-                    if (!a.Resident || !a.HasBounds || near > RangeOf(g).Range) continue;
+                    // Only meshes that can be impostors here: the group reaches beyond the transition (its range ends after it and its
+                    // fade band, as WithImpostor requires) and this zone has ground from the band on.
+                    var (range, band) = RangeOf(g);
+                    if (!a.Resident || !a.HasBounds || near > range || range - band < ImpostorDistance) continue;
                     if (a.Impostor is { } s) { s.LastUsed = now; continue; }
                     RequestImpostor(a, now);
                 }
@@ -123,9 +129,11 @@ public sealed partial class FoliageRenderer
         }
         if (now - lastImpostorScan < 2000 || settling)
             foreach (var a in assetsByMesh.Values)
-                if (a.Impostor is { Stage: ImpostorStage.Ready } s && (now - s.LastUsed) / 1000.0 > IdleSeconds) UnloadImpostor(a);
+                if (a.Impostor is { Stage: ImpostorStage.Ready } s && (now - s.LastUsed) / 1000.0 > ImpostorIdleSeconds) UnloadImpostor(a);
         if (impostorWork.Count == 0 && impostorBakes.Count == 0 && impostorBake is null) return;
         GlBridge.EnsureFrame(Gpu);
+        long uploaded = 0;
+        impostorUploadsWaiting = false;
         for (int i = 0; i < impostorWork.Count; i++)
         {
             var a = impostorWork[i];
@@ -142,7 +150,13 @@ public sealed partial class FoliageRenderer
                 s.Atlas = atlas;
                 s.Stage = ImpostorStage.Uploading;
             }
-            if (s.Stage == ImpostorStage.Uploading && UploadImpostor(a, settling)) impostorWork.RemoveAt(i--);
+            if (s.Stage != ImpostorStage.Uploading) continue;
+            // At most a budget of atlas levels a frame, over all atlases: the copy into the staging is render-thread time (a flight that
+            // reaches a new biome asks for dozens at once), and while settling, when no frames end, the staging lives in the frame's
+            // constant chunks, which are kept for good.
+            long budget = settling ? SettleUploadBytes : UploadBytesPerFrame;
+            if (uploaded >= budget) { impostorUploadsWaiting = settling; continue; }
+            if (UploadImpostor(a, budget, ref uploaded)) impostorWork.RemoveAt(i--);
         }
         StepBake(settling);
     }
@@ -171,13 +185,38 @@ public sealed partial class FoliageRenderer
         impostorWork.Add(a);
     }
 
-    /// <summary>The atlas's textures, one level a frame (all of them while settling); true when resident.</summary>
-    bool UploadImpostor(MeshAsset a, bool settling)
+    /// <summary>The picture height the atlas resolution is chosen for (<see cref="LevelsToSkip"/>): 1080 lines (above it the nearest impostors are slightly softer).</summary>
+    const float ImpostorReferenceHeight = 1080;
+    /// <summary>Impostor atlases unused this long are unloaded (shorter than the meshes' <see cref="IdleSeconds"/>: an atlas is 9 to 36 MB).</summary>
+    const double ImpostorIdleSeconds = 20;
+
+    /// <summary>
+    /// The top levels an atlas never needs (docs/impostors.md 7, "VRAM"): an instance is an impostor from the transition on, where its sphere
+    /// (radius × the mesh's largest scale) spans r·H / (tan(fov / 2)·T) pixels at the reference height and the camera's 50° field of view;
+    /// a level whose frames are at least that big is kept, larger ones are left out.
+    /// </summary>
+    internal static int LevelsToSkip(ImpostorAtlas atlas, float maxScale, float transition)
+    {
+        float pixels = atlas.Radius * maxScale * ImpostorReferenceHeight / (MathF.Tan(25 * MathF.PI / 180) * Math.Max(transition, 1));
+        int skip = 0;
+        while (skip < atlas.Levels - 1 && (atlas.FramePixels >> (skip + 1)) >= pixels) skip++;
+        return skip;
+    }
+
+    /// <summary>The atlas's textures, level by level within the frame's upload budget; true when resident.</summary>
+    bool UploadImpostor(MeshAsset a, long budget, ref long uploaded)
     {
         var s = a.Impostor!;
         using var batch = Gpu.Uploads.Begin();
-        s.Textures ??= new ImpostorTextures(Gpu, s.Atlas!, batch);
-        for (int k = 0; (settling || k < 1) && s.Textures.UploadStep(batch); k++) { }
+        // The normal and depth maps one level coarser than the albedo: they shape the lighting, which varies slowly over a crown.
+        int skip = LevelsToSkip(s.Atlas!, a.Mesh.MaxScale, ImpostorDistance);
+        s.Textures ??= new ImpostorTextures(Gpu, s.Atlas!, batch, skip, skip + 1);
+        // At least one step (a level larger than the budget still goes), then while the budget lasts.
+        do
+        {
+            uploaded += s.Textures.NextStepBytes;
+            s.Textures.UploadStep(batch);
+        } while (!s.Textures.Complete && uploaded + s.Textures.NextStepBytes <= budget);
         if (!s.Textures.Complete) return false;
         s.Stage = ImpostorStage.Ready;
         s.Atlas = null;   // the CPU copy is not needed any more (a reload reads the cache again)
