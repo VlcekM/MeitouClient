@@ -22,7 +22,7 @@ namespace Meitou.Rendering;
 /// </list>
 /// <see cref="Draw"/> can be called with any camera (e.g. the water reflection's) between <see cref="Update"/> calls.
 /// </summary>
-public sealed unsafe class FoliageRenderer : IDisposable
+public sealed unsafe partial class FoliageRenderer : IDisposable
 {
     /// <summary>Grass pages per zone side (576 units each).</summary>
     const int PagesPerZone = 8;
@@ -79,6 +79,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         grassMotionProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(), "foliage grass motion");
         textures = new WorldTextureCache(gl, assets);
         if (gpu.Interop is not null) gpuCull = new FoliageGpuCull(gpu);
+        InitGrassStore(gpu);
         instanceBuffer = gl.GenBuffer();
         workers = Math.Clamp(Environment.ProcessorCount / 4, 1, 3);
         var used = catalog.ByBiome.Values.SelectMany(l => l).Distinct().ToList();
@@ -188,6 +189,10 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public List<Group> Groups = [];
         public FoliageGround? Ground;
         public List<FoliageGrassPatch> Patches = [];
+        /// <summary>The sprite and colour map of each of <see cref="Patches"/> (looked up once when the patches are set), for the GPU grass's patch table.</summary>
+        public (WorldTexture? Sprite, WorldTexture? ColourMap)[] PatchTextures = [];
+        /// <summary>This zone's number in the GPU grass tables (<see cref="FoliageGrassGpu"/>'s slots name it), -1 before its first page is placed.</summary>
+        public int GrassZone = -1;
         public readonly Dictionary<int, GrassPage> Pages = [];
         public int GrassRunning;
         public int Instances;
@@ -265,13 +270,18 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public Task<(float[][] Blades, int[][] Prefixes)>? Job;
         public GrassBuffer[]? Buffers;
         public bool Dropped;
+        /// <summary>The generated blades while the arena or the slot table had no room (<see cref="FoliageGrassGpu.Misses"/>): placed again by <see cref="UpdateGrass"/>.</summary>
+        public float[][]? PendingBlades;
+        public int[][]? PendingPrefixes;
     }
 
     sealed class GrassBuffer
     {
-        public uint Vao, Vbo;
-        /// <summary>What a native draw needs, per program (<see cref="NativeMesh"/>).</summary>
-        public NativeMesh GrassNative, MotionNative;
+        /// <summary>Where the blades are in the grass arena (<see cref="FoliageGrassGpu"/>): the draw's first instance is <see cref="FirstBlade"/>; <see cref="Slot"/> is its
+        /// place in the GPU cull's slot table (-1 for a patch without blades).</summary>
+        public ArenaRange Range;
+        public uint FirstBlade;
+        public int Slot = -1;
         public int Count;
         /// <summary>The patch the cached textures and count belong to (<see cref="Patch"/>): its sprite and colour map looked up once, and the
         /// blades shown at <see cref="ShownDensity"/>.</summary>
@@ -458,10 +468,11 @@ public sealed unsafe class FoliageRenderer : IDisposable
         state.MaxY = prepared.MaxY;
         state.Ground = ground;
         state.Patches = zone.Grass.Where(p => p.Grass.Sprite is not null && p.Density.Any(d => d != 0)).ToList();
-        foreach (var p in state.Patches)
+        state.PatchTextures = new (WorldTexture?, WorldTexture?)[state.Patches.Count];
+        for (int i = 0; i < state.Patches.Count; i++)
         {
-            textures.Get(p.Grass.Sprite, false);   // start decoding now, not at the first draw
-            textures.Get(p.Grass.ColourMap, false);
+            var p = state.Patches[i];
+            state.PatchTextures[i] = (textures.Get(p.Grass.Sprite, false), textures.Get(p.Grass.ColourMap, false));   // start decoding now, not at the first draw
         }
         state.Ready = true;
         state.Complete = zone.Complete;
@@ -499,19 +510,31 @@ public sealed unsafe class FoliageRenderer : IDisposable
         FreeArena(state.Groups);
         foreach (var page in state.Pages.Values) FreePage(page);
         state.Pages.Clear();
+        ReleaseGrassZone(state);
         zones.Remove(state.Zone);
     }
 
     void FreePage(GrassPage page)
     {
-        page.Dropped = true;   // an upload still queued for it deletes what it made instead of attaching it
+        page.Dropped = true;   // an upload still queued for it frees what it made instead of attaching it
+        page.PendingBlades = null;
+        page.PendingPrefixes = null;
         if (page.Buffers is null) return;
-        foreach (var b in page.Buffers)
-        {
-            if (b.Vao != 0) gl.DeleteVertexArray(b.Vao);
-            if (b.Vbo != 0) gl.DeleteBuffer(b.Vbo);
-        }
+        ReleaseBuffers(page.Buffers);
         page.Buffers = null;
+    }
+
+    /// <summary>A page's blade ranges and slots back to the grass store (after the frames in flight).</summary>
+    void ReleaseBuffers(GrassBuffer[] buffers)
+    {
+        if (grassDisposing) return;
+        foreach (var b in buffers)
+        {
+            if (b.Slot >= 0) grassStore.FreeSlot(b.Slot);
+            if (!b.Range.IsEmpty) grassStore.FreeBlades(b.Range);
+            b.Slot = -1;
+            b.Range = default;
+        }
     }
 
     float GrassRange(FoliageGrassPatch patch) => patch.Layer.Range * GrassRangeSetting;
@@ -557,9 +580,9 @@ public sealed unsafe class FoliageRenderer : IDisposable
                         state.GrassRunning--;
                         page.Job = null;
                         var result = job.Result;
-                        var p = page;
-                        QueuePage(p, result.Blades, result.Prefixes);
+                        QueuePage(state, key, page, result.Blades, result.Prefixes);
                     }
+                    else if (page.PendingBlades is not null) QueuePage(state, key, page, page.PendingBlades, page.PendingPrefixes!);   // no room last time
                 }
         }
         // Missing pages nearest first, a bounded number at a time. Pages hold the blades of the highest density setting,
@@ -588,49 +611,6 @@ public sealed unsafe class FoliageRenderer : IDisposable
     }
 
     const int SlabBytes = 512 << 10;
-
-    /// <summary>A grass page's upload as steps of about 512 KB (allocate, slabs, then the page takes the buffers), so no frame holds a whole page.</summary>
-    void QueuePage(GrassPage page, float[][] blades, int[][] prefixes)
-    {
-        var buffers = new GrassBuffer[blades.Length];
-        for (int i = 0; i < blades.Length; i++)
-        {
-            var b = buffers[i] = new GrassBuffer { Count = blades[i].Length / FoliageGrassField.Stride, Prefixes = prefixes[i] };
-            if (b.Count == 0) continue;
-            var data = blades[i];
-            int bytes = data.Length * sizeof(float);
-            uploads.Enqueue(() =>
-            {
-                b.Vao = gl.GenVertexArray();
-                b.Vbo = gl.GenBuffer();
-                gl.BindVertexArray(b.Vao);
-                gl.BindBuffer(BufferTargetARB.ArrayBuffer, b.Vbo);
-                gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)bytes, null, BufferUsageARB.StaticDraw);
-                uint stride = FoliageGrassField.Stride * 4;
-                gl.EnableVertexAttribArray(0);
-                gl.VertexAttribPointer(0, 4, VertexAttribPointerType.Float, false, stride, (void*)0);
-                gl.VertexAttribDivisor(0, 1);
-                gl.EnableVertexAttribArray(1);
-                gl.VertexAttribPointer(1, 1, VertexAttribPointerType.Float, false, stride, (void*)16);
-                gl.VertexAttribDivisor(1, 1);
-                gl.BindVertexArray(0);
-            });
-            for (int at = 0; at < bytes; at += SlabBytes)
-            {
-                int start = at, length = Math.Min(SlabBytes, bytes - at);
-                uploads.Enqueue(() =>
-                {
-                    gl.BindBuffer(BufferTargetARB.ArrayBuffer, b.Vbo);
-                    fixed (float* p = data) gl.BufferSubData(BufferTargetARB.ArrayBuffer, start, (nuint)length, (byte*)p + start);
-                });
-            }
-        }
-        uploads.Enqueue(() =>
-        {
-            page.Buffers = buffers;
-            if (page.Dropped) FreePage(page);   // the page went out of range while its buffers were being filled
-        });
-    }
 
     /// <summary>GPU bytes of the grass pages (blades and the instance data).</summary>
     long GrassBytes() => zones.Values.Sum(z => z.Pages.Values.Sum(p => p.Buffers?.Sum(b => (long)b.Count * FoliageGrassField.Stride * 4) ?? 0));
@@ -949,6 +929,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         var cpu = Stopwatch.StartNew();
         drawStamp++;
         if (GpuCullVerify && verifyPending.Count > 0) CheckVerify(all: false);
+        if (GpuCullVerify) CheckGrassVerify(all: false);
         int callsBefore = DrawCalls;
         active.Clear();
         terrainDraws.Clear();
@@ -1034,13 +1015,22 @@ public sealed unsafe class FoliageRenderer : IDisposable
         // 4. Grass.
         if (grass && !debugNoGrass)
         {
-            PrepareGrass(eye, frustum, options, coverage);
-            if (grassDraws.Count > 0)
+            if (GpuGrassActive)
             {
                 long r0 = FolTiming ? Stopwatch.GetTimestamp() : 0;
-                RecordGrass(viewProjection, eye, light, fogColour, fogDistance);
+                if (DrawGrassGpu(viewProjection, eye, frustum, options, light, fogColour, fogDistance, coverage)) drew = true;
                 if (FolTiming) recGrass = (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
-                drew = true;
+            }
+            else
+            {
+                PrepareGrass(eye, frustum, options, coverage);
+                if (grassDraws.Count > 0)
+                {
+                    long r0 = FolTiming ? Stopwatch.GetTimestamp() : 0;
+                    RecordGrass(viewProjection, eye, light, fogColour, fogDistance);
+                    if (FolTiming) recGrass = (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
+                    drew = true;
+                }
             }
         }
         if (drew) SkyRenderer.Active?.BindUnits();   // the atmosphere's texture units, as Apply leaves them for the GL code that follows
@@ -1112,6 +1102,9 @@ public sealed unsafe class FoliageRenderer : IDisposable
                 $"us per draw: meshes {perDraw(2, folMeshDraws[k]):F2}, grass {perDraw(3, folGrassDraws[k]):F2}; record only (native): meshes {(folMeshDraws[k] > 0 ? folRecordMs[k, 0] * 1000 / folMeshDraws[k] : 0):F2}, grass {(folGrassDraws[k] > 0 ? folRecordMs[k, 1] * 1000 / folGrassDraws[k] : 0):F2}; " +
                 $"cull {(GpuCull && gpuCull is not null ? "gpu" : "cpu")}, dispatch recording us per call {folDispatchMs[k] * 1000 / folCalls[k]:F1}"));
         }
+        Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"foliage grass: {(GpuGrassActive ? "gpu" : "cpu")}, arena {grassStore.ArenaUsed / 1048576.0:F1} of {grassStore.ArenaBytes / 1048576.0:F0} MB, slots {grassStore.SlotsUsed} (high {grassStore.SlotHigh}) of {grassStore.SlotCapacity}, " +
+            $"{grassStore.Misses} pages without room; {grassStore.Dispatched} views, gpu us per view {(grassStore.GpuTimedViews > 0 ? grassStore.GpuMicroseconds / grassStore.GpuTimedViews : 0):F1}"));
         if (gpuCull is { } g)
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
                 $"foliage gpu cull: {g.Dispatched} views, gpu us per view {(g.GpuTimedViews > 0 ? g.GpuMicroseconds / g.GpuTimedViews : 0):F1} ({g.GpuTimedViews} timed), " +
@@ -2055,6 +2048,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
     {
         public GrassBuffer Buffer;
         public uint Vertices, Sprite, Colour;
+        public float Distance;
         public GrassPush Push;
     }
 
@@ -2121,7 +2115,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
                 bool hasColour = options.Textures && b.ColourMap is { Id: not 0 };
                 grassDraws.Add(new GrassDraw
                 {
-                    Buffer = b, Vertices = g.CrossQuads ? 12u : 6u, Sprite = options.Textures ? sprite.Id : 0, Colour = hasColour ? b.ColourMap!.Id : 0,
+                    Buffer = b, Distance = d, Vertices = g.CrossQuads ? 12u : 6u, Sprite = options.Textures ? sprite.Id : 0, Colour = hasColour ? b.ColourMap!.Id : 0,
                     Push = new GrassPush
                     {
                         Size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight),
@@ -2147,7 +2141,6 @@ public sealed unsafe class FoliageRenderer : IDisposable
         var targets = interop.CurrentTargets();
         var state = interop.CurrentState();
         int segment = SegmentId(GrassKind, p, targets, state);
-        long stamp = interop.VertexArrayStamp;
         cmd.SetViewport(targets.Viewport);
         cmd.SetScissor(targets.Scissor);
         cmd.SetRaster(state.Cull, state.Front);
@@ -2158,18 +2151,17 @@ public sealed unsafe class FoliageRenderer : IDisposable
         NewTextureSegment();
         GrassPush last = default;
         bool pushed = false;
+        // The blades of every page are one buffer (the grass arena): one pipeline and one vertex binding for the segment, the draw's first instance finds its page.
+        cmd.BindPipeline(PipelineFor(ref grassMeshCpu, gp, segment, state, targets.Formats, "foliage grass"));
+        cmd.BindVertexBuffers(0, grassMeshCpu.Vertices);
         foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(grassDraws))
         {
             var pc = d.Push;
             pc.Sprite = Texture(interop, d.Sprite);
             pc.ColourMap = Texture(interop, d.Colour);
             var buffer = d.Buffer;
-            ref var n = ref buffer.GrassNative;
-            Current(ref n, interop, buffer.Vao, gp, stamp, rows: false);
-            cmd.BindPipeline(n.SegA == segment ? n.PipeA! : PipelineFor(ref n, gp, segment, state, targets.Formats, "foliage grass"));
-            cmd.BindVertexBuffers(0, n.Vertices);
             Push(cmd, p, in pc, ref last, ref pushed);
-            cmd.Draw(d.Vertices, (uint)buffer.Shown);
+            cmd.Draw(d.Vertices, (uint)buffer.Shown, 0, buffer.FirstBlade);
         }
         interop.EndNative(cmd);
         gl.BindVertexArray(0);
@@ -2207,7 +2199,19 @@ public sealed unsafe class FoliageRenderer : IDisposable
         var previous = havePrevious ? previousUnjittered : motionUnjittered;
         (previousSwayPhase, previousUnjittered, havePrevious) = (time, motionUnjittered, true);
         var eye = motionEye;
-        // Prepare
+        if (GpuGrassActive)
+        {
+            DrawGrassMotionGpu(targets, eye, time, previousTime, previous);
+            return;
+        }
+        PrepareMotion(eye);
+        if (motionDraws.Count == 0) return;
+        RecordMotion(targets, eye, time, previousTime, previous);
+    }
+
+    /// <summary>The motion draws of the pages in the near slice's view, in the zones' and pages' dictionary order (the CPU reference; the GPU path orders by distance, 5.6.2).</summary>
+    void PrepareMotion(Vector3 eye)
+    {
         motionDraws.Clear();
         foreach (var state in zones.Values)
             foreach (var (key, page) in state.Pages)
@@ -2236,8 +2240,10 @@ public sealed unsafe class FoliageRenderer : IDisposable
                     });
                 }
             }
-        if (motionDraws.Count == 0) return;
-        // Record
+    }
+
+    void RecordMotion(PostProcess.MotionTargets targets, Vector3 eye, float time, float previousTime, Matrix4x4 previous)
+    {
         var gp = grassMotionProgram;
         var p = gp.P;
         gl.Disable(EnableCap.CullFace);
@@ -2246,7 +2252,6 @@ public sealed unsafe class FoliageRenderer : IDisposable
         var pass = interop.CurrentTargets();
         var drawState = interop.CurrentState();   // the host's colour mask (red and green), no depth test, no blending
         int segment = SegmentId(MotionKind, p, pass, drawState);
-        long stamp = interop.VertexArrayStamp;
         cmd.SetViewport(pass.Viewport);
         cmd.SetScissor(pass.Scissor);
         cmd.SetRaster(drawState.Cull, drawState.Front);
@@ -2262,18 +2267,16 @@ public sealed unsafe class FoliageRenderer : IDisposable
         uint nearDepth = Index2D(interop, targets.NearDepth);
         GrassPush last = default;
         bool pushed = false;
+        cmd.BindPipeline(PipelineFor(ref grassMeshMotionCpu, gp, segment, drawState, pass.Formats, "foliage grass motion"));
+        cmd.BindVertexBuffers(0, grassMeshMotionCpu.Vertices);
         foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(motionDraws))
         {
             var pc = d.Push;
             pc.Sprite = Texture(interop, d.Sprite);
             pc.NearDepth = nearDepth;
             var buffer = d.Buffer;
-            ref var n = ref buffer.MotionNative;
-            Current(ref n, interop, buffer.Vao, gp, stamp, rows: false);
-            cmd.BindPipeline(n.SegA == segment ? n.PipeA! : PipelineFor(ref n, gp, segment, drawState, pass.Formats, "foliage grass motion"));
-            cmd.BindVertexBuffers(0, n.Vertices);
             Push(cmd, p, in pc, ref last, ref pushed);
-            cmd.Draw(d.Vertices, (uint)buffer.Shown);
+            cmd.Draw(d.Vertices, (uint)buffer.Shown, 0, buffer.FirstBlade);
         }
         interop.EndNative(cmd);
         gl.BindVertexArray(0);
@@ -2339,8 +2342,10 @@ public sealed unsafe class FoliageRenderer : IDisposable
 
     public void Dispose()
     {
+        grassDisposing = true;   // the pages are freed with the store
         ReportFoliageTiming();
         ReportVerify();
+        ReportGrassVerify();
         foreach (var z in zones.Values) { try { z.Job?.Wait(); } catch (AggregateException) { } foreach (var p in z.Pages.Values) { try { p.Job?.Wait(); } catch (AggregateException) { } FreePage(p); } }
         foreach (var a in assetsByMesh.Values)
         {
@@ -2362,6 +2367,7 @@ public sealed unsafe class FoliageRenderer : IDisposable
         depthMesh.Dispose();
         grassProgram.Dispose();
         grassMotionProgram.Dispose();
+        DisposeGrassStore();
         gpuCull?.Dispose();
         nativeFrame.Dispose();
         foreach (var q in timers) { gl.DeleteQuery(q.Start); gl.DeleteQuery(q.End); }

@@ -532,6 +532,7 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
     are tested by compute kernels per view (main slices, cascades, reflection) and drawn with indirect draws; the TERRAIN-mode rocks too, in the same dispatch, drawn through `TerrainRenderer.DrawMeshesIndirect` with their biome rows and mirroring.
     `MEITOU_GPU_CULL=0` brings back the CPU cull above (for A/B); `MEITOU_GPU_CULL_VERIFY=1` runs both, compares the GPU's lists a frame later
     with the CPU's (sets, order, every matrix and fade, the draw arguments, every rock placement) and prints a `gpu cull verify` line at exit. Pictures unchanged (0 px);
+    the grass too: its pages are picked, thinned and ordered by two kernels per view and drawn with one indirect draw (`MEITOU_GPU_GRASS=0` for the CPU walk; [5.6.2](renderer-native.md#562-as-built-wave-3b-gpu-grass-2026-10-06-foliagegrassgpu));
     `MEITOU_FOLIAGE_TIMING=1` adds the dispatch recording, the rock draws per call and a `foliage gpu cull:` line with the kernels' GPU time per view.
 - **Grass**: blades are generated per 576-unit page (8 × 8 a zone) on worker threads when the page comes within
   the grass range (`FoliageGrassField`, the game's candidate rule; seeded per page, so deterministic but not the

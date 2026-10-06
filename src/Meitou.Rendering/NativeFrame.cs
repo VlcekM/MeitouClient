@@ -46,13 +46,21 @@ sealed unsafe class NativeFrame : IDisposable
     ];
     const int BonesBytes = 128 * 64;
 
-    public NativeFrame(GpuContext ctx)
+    /// <summary>Storage buffers a consumer's own programs read at set 0, bindings 6 and up (<c>readonly buffer</c> in the shader), given to <see cref="Bind"/>.</summary>
+    readonly int extraStorage;
+
+    public NativeFrame(GpuContext ctx, int extraStorage = 0)
     {
         this.ctx = ctx;
+        this.extraStorage = extraStorage;
         push = ctx.Device.HasPushDescriptor;
         align = Math.Max(ctx.Device.Limits.MinUniformBufferOffsetAlignment, 16);
         var stages = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit;
-        DescriptorSetLayoutBinding[] bindings = [.. Enumerable.Range(0, 6).Select(b => new DescriptorSetLayoutBinding((uint)b, DescriptorType.UniformBuffer, 1, stages))];
+        DescriptorSetLayoutBinding[] bindings =
+        [
+            .. Enumerable.Range(0, 6).Select(b => new DescriptorSetLayoutBinding((uint)b, DescriptorType.UniformBuffer, 1, stages)),
+            .. Enumerable.Range(6, extraStorage).Select(b => new DescriptorSetLayoutBinding((uint)b, DescriptorType.StorageBuffer, 1, stages)),
+        ];
         SetLayout = ctx.Shaders.CreateSetLayout(bindings, push ? DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr : 0);
         SetLayouts = [SetLayout, ctx.Bindless.Layout];
         standIns = [.. FrameConstants.Textures.Select(t => FrameGlobals.Sampler2D(t.Name, cube: t.Kind == BindlessKind.Cube, shadow: t.Kind == BindlessKind.Shadow2D))];
@@ -83,8 +91,9 @@ sealed unsafe class NativeFrame : IDisposable
     /// Once per native segment, before its draws: binds set 1 (the bindless table) and set 0 for <paramref name="layout"/> (any native
     /// program's: they are all compatible) with this segment's frame constants, shadow blocks and <paramref name="view"/>.
     /// </summary>
-    public void Bind(CommandList cmd, PipelineLayout layout, in ViewConstants view)
+    public void Bind(CommandList cmd, PipelineLayout layout, in ViewConstants view, ReadOnlySpan<BufferBinding> extra = default)
     {
+        if (extra.Length != extraStorage) throw new ArgumentException($"this frame's set has {extraStorage} extra storage bindings, {extra.Length} given", nameof(extra));
         var frame = ctx.Frame;
         var g = ctx.Globals;
         if (g.Version != resolvedVersion) Resolve();
@@ -115,7 +124,8 @@ sealed unsafe class NativeFrame : IDisposable
         // Skinning matrices: no consumer skins yet; the block is valid memory that is never read (uSkinned is 0).
         if (bonesFrame != frame.Number) { bones = frame.Constants.Allocate(BonesBytes, align); bonesFrame = frame.Number; }
 
-        var infos = stackalloc DescriptorBufferInfo[6];
+        int count = 6 + extraStorage;
+        var infos = stackalloc DescriptorBufferInfo[count];
         infos[NativeShaders.FrameBinding] = new DescriptorBufferInfo(frameSlice.Handle, frameSlice.Offset, (ulong)sizeof(FrameConstants));
         infos[NativeShaders.ViewBinding] = new DescriptorBufferInfo(viewSlice.Handle, viewSlice.Offset, (ulong)sizeof(ViewConstants));
         infos[NativeShaders.BonesBinding] = new DescriptorBufferInfo(bones.Handle, bones.Offset, BonesBytes);
@@ -133,21 +143,23 @@ sealed unsafe class NativeFrame : IDisposable
             ulong range = value.Size == Vk.WholeSize ? (ulong)size : Math.Min((ulong)size, value.Size);
             infos[binding] = new DescriptorBufferInfo(value.Buffer, value.Offset, range);
         }
-        var writes = stackalloc WriteDescriptorSet[6];
-        for (int b = 0; b < 6; b++)
+        for (int i = 0; i < extraStorage; i++) infos[6 + i] = new DescriptorBufferInfo(extra[i].Buffer, extra[i].Offset, extra[i].Size);
+        var writes = stackalloc WriteDescriptorSet[count];
+        for (int b = 0; b < count; b++)
             writes[b] = new WriteDescriptorSet
             {
-                SType = StructureType.WriteDescriptorSet, DstBinding = (uint)b, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &infos[b],
+                SType = StructureType.WriteDescriptorSet, DstBinding = (uint)b, DescriptorCount = 1,
+                DescriptorType = b < 6 ? DescriptorType.UniformBuffer : DescriptorType.StorageBuffer, PBufferInfo = &infos[b],
             };
         var table = ctx.Bindless.Set;
         cmd.BindSets(layout, NativeShaders.BindlessSet, new ReadOnlySpan<DescriptorSet>(in table), []);
-        var all = new ReadOnlySpan<WriteDescriptorSet>(writes, 6);
+        var all = new ReadOnlySpan<WriteDescriptorSet>(writes, count);
         if (push) cmd.PushDescriptors(layout, NativeShaders.FrameSet, all);
         else
         {
             var set = frame.AllocateSet(SetLayout);
-            for (int b = 0; b < 6; b++) writes[b].DstSet = set;
-            ctx.Device.Vk.UpdateDescriptorSets(ctx.Device.Device, 6, writes, 0, null);
+            for (int b = 0; b < count; b++) writes[b].DstSet = set;
+            ctx.Device.Vk.UpdateDescriptorSets(ctx.Device.Device, (uint)count, writes, 0, null);
             cmd.BindSets(layout, NativeShaders.FrameSet, new ReadOnlySpan<DescriptorSet>(in set), []);
         }
     }

@@ -1015,6 +1015,24 @@ Where it differs from 5.2 to 5.5, and why:
   batch, every matrix but the fade bit for bit, the fade by ulp distance, every draw's arguments, the batch order, and that a batch not drawn
   had nothing visible). The summary line is printed when the renderer is disposed.
 
+
+### 5.6.2 As built (wave 3b, GPU grass, 2026-10-06): `FoliageGrassGpu`
+
+- **Storage.** Every grass page's blades live in one arena (`MEITOU_GRASS_ARENA_MB`, 160 MB by default), a vertex buffer read at instance rate, so
+  a blade draw is `Draw(vertices, blades, 0, firstBlade)` from one binding. Each (page, grass type) takes a slot in a table
+  (`MEITOU_GRASS_SLOTS`, 32,768) that the kernels read; pages leave the arena after the frames in flight. A page that finds no room is counted
+  ("pages without room") and not drawn.
+- **Per view** (main slices, the grass motion of the near slice): the CPU writes a patch table into the frame's constants, and two kernels in
+  `GpuFrame.PreFrame` choose the pages in view (the same frustum and range tests as the CPU's `PrepareGrass`), the blades each shows (the
+  density's prefix, `FoliageGrassGpu.DensityStep`) and the nearest-first order. One `DrawIndirectCount` records them all: 1,042 draws become 2.
+- **Switches.** `MEITOU_GPU_GRASS=0` (or `MEITOU_GPU_CULL=0`) keeps the CPU path, the reference. `MEITOU_GPU_CULL_VERIFY=1` runs both and
+  compares the GPU's draw list a frame later with the CPU's (set, blade counts, vertex counts, first blades, order): a `gpu grass verify` line at exit.
+- **Gate** (master `50b630d` + the grass branch, Release): build 0 warnings; tests 464 passed, 0 skipped (`FoliageGrassGpuTests`: synthetic pages
+  against the CPU's decisions, `[Slow]`); `--faithful all` ten views 0 px against the rocks merge; verify mode forest flying 60 frames, grass range 8
+  and density 2: 180 views, 125,040 draws, 0 set or order differences; `MEITOU_VK_VALIDATION=sync` forest 13:00 (TAA) and Hub 02:00: 0 errors.
+- **Measured** (forest, `--fly-benchmark 200 --fly-speed 0 --faithful all`, grass range 8, density 2, two runs each, the grass agent's build): the
+  grass step 0.47 / 0.43 ms CPU on the CPU path, 0.07 / 0.05 ms on the GPU path; draws 1,042 to 2; the grass's GPU time 0.50 to 0.50-0.53 ms
+  (the kernels are within the noise). The foliage pass as a whole: 0.63 / 0.58 ms CPU to 0.27 / 0.22 ms.
 ### 5.7 Size-based ranges, LOD, impostors, occlusion: Meitou-mode, behind switches
 
 These change the picture on purpose, so they are not part of any parity step. They come after A2 and C2, each behind an `Enhancement`
