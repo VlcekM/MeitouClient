@@ -49,6 +49,31 @@ public class SeamTests
         void main() { colour = vec4(1.0, 1.0, 0.0, 1.0); }
         """;
 
+    // As Fullscreen and Sampled, with default blocks in both stages (set 1 bound before set 0, as LegacyProgram.Flush does) and a set 0 too big to push.
+    const string FullscreenScaled = """
+        #version 330 core
+        uniform float uScale;
+        void main()
+        {
+            vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+            gl_Position = vec4((p * 2.0 - 1.0) * uScale, 0.5, 1.0);
+        }
+        """;
+
+    // 40 samplers: more than the push-descriptor limit, so set 0 is an allocated set, as the terrain mesh program's.
+    static readonly string SampledTinted = "#version 330 core\nuniform sampler2D uTex;\nuniform vec4 uTint;\nout vec4 colour;\n" +
+        string.Concat(Enumerable.Range(0, 40).Select(i => $"uniform sampler2D uMany{i};\n")) +
+        "void main() { colour = texelFetch(uTex, ivec2(gl_FragCoord.xy) % textureSize(uTex, 0), 0) * uTint" +
+        string.Concat(Enumerable.Range(0, 40).Select(i => $" + texelFetch(uMany{i}, ivec2(0), 0) * 0.0")) + "; }\n";
+
+    const string SampledTintedFew = """
+        #version 330 core
+        uniform sampler2D uTex;
+        uniform vec4 uTint;
+        out vec4 colour;
+        void main() { colour = texelFetch(uTex, ivec2(gl_FragCoord.xy) % textureSize(uTex, 0), 0) * uTint; }
+        """;
+
     const string Sampled = """
         #version 330 core
         uniform sampler2D uTex;
@@ -329,6 +354,130 @@ public class SeamTests
             Assert.Equal(2, lines.Length);
             static string Body(string line) => line[(line.IndexOf("] ", StringComparison.Ordinal) + 2)..];
             Assert.Equal(Body(lines[0]), Body(lines[1]));
+        }
+        ExpectClean(d!);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_native_model_segment_then_a_legacy_segment_then_VkGl_each_draw_their_own(bool pushed)
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        using (var gl = new VkGl(d!))
+        {
+            IGlInterop interop = gl;
+            var ctx = gl.Context;
+            uint blue = WorldGl.Texture2D(gl, 2, 2, [0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255], repeat: false, mipmaps: false);
+            uint red = WorldGl.Texture2D(gl, 2, 2, [255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255], repeat: false, mipmaps: false);
+            uint yellow = WorldGl.Program(gl, Fullscreen, Yellow);
+            // Set 0 pushed (the terrain meshes' program) or allocated (more samplers than a push may hold).
+            using var sampled = LegacyProgram.Create(ctx, FullscreenScaled, pushed ? SampledTintedFew : SampledTinted, "seam legacy after native");
+            Assert.Equal(pushed, sampled.Program.PushDescriptors);
+            using var frame = new NativeFrame(ctx);
+            const string nativeFragment = "layout(location = 0) out vec4 colour;\nvoid main() { colour = texelFetch(textures2D[pc.diffuse], ivec2(0), 0); }\n";
+            using var native = frame.Program(NativeShaders.Port(Fullscreen), "#version 450\n" + NativeShaders.Prelude(NativeShaders.MeshPushMembers) + nativeFragment, "seam native model");
+            gl.BindVertexArray(gl.GenVertexArray());
+            Target(gl);
+            gl.ClearColor(0, 0, 0, 1);
+            gl.Clear(ClearBufferMask.ColorBufferBit);
+            gl.UseProgram(yellow);
+            Quarter(gl, 0);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+
+            for (int round = 0; round < 2; round++)
+            {
+                // The native model: bindless set 0, set 1 from NativeFrame, push constants.
+                var cmd = interop.BeginNativeInPass("seam native model");
+                var targets = interop.CurrentTargets();
+                cmd.BindPipeline(ctx.Pipelines.Get(new GraphicsPipelineDesc(native, new VertexLayout([]), PrimitiveTopology.TriangleList, targets.Formats, BlendState.Off,
+                    ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit, Silk.NET.Vulkan.PolygonMode.Fill, false, false)));
+                State(cmd, targets, new Rect2D(new Offset2D(W / 4, 0), new Extent2D(W / 4, H)));
+                frame.Bind(cmd, native.Layout, new ViewConstants());
+                var pc = new MeshPush { Diffuse = interop.Bindless(blue).Index };
+                cmd.PushConstants(native.Layout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, in pc);
+                cmd.Draw(3);
+                interop.EndNative(cmd);
+
+                // A legacy program's segment next (its set 0 pushed over the native sets), as the terrain meshes follow the foliage.
+                cmd = interop.BeginNativeInPass("seam legacy");
+                State(cmd, targets, new Rect2D(new Offset2D(W / 2, 0), new Extent2D(W / 4, H)));
+                sampled.Bind(sampled.Sampler("uTex"), interop.Sampled(red, shadowSampler: false));
+                sampled.Set(sampled.Uniform("uScale"), 1f);
+                sampled.Set(sampled.Uniform("uTint"), 1f, 1f, 1f, 1f);
+                sampled.Flush(cmd);
+                cmd.BindPipeline(ctx.Pipelines.Get(Desc(sampled, targets.Formats)));
+                cmd.Draw(3);
+                interop.EndNative(cmd);
+            }
+
+            gl.UseProgram(yellow);
+            Quarter(gl, 3);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            gl.Disable(EnableCap.ScissorTest);
+            var p = Read(gl);
+            Assert.Equal((255, 255, 0, 255), At(p, 2, 2));
+            Assert.Equal((0, 0, 255, 255), At(p, W / 4 + 2, 2));
+            Assert.Equal((255, 0, 0, 255), At(p, W / 2 + 2, 2));
+            Assert.Equal((255, 255, 0, 255), At(p, 3 * W / 4 + 2, H - 2));
+        }
+        ExpectClean(d!);
+    }
+
+    [Fact]
+    public unsafe void The_vertex_array_stamp_moves_exactly_when_an_export_may_be_stale()
+    {
+        using var d = TryCreate(sync: false);
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        using (var gl = new VkGl(d!))
+        {
+            IGlInterop interop = gl;
+            gl.BeginFrame(W, H);
+            uint vao = gl.GenVertexArray(), vbo = gl.GenBuffer(), other = gl.GenBuffer();
+            gl.BindVertexArray(vao);
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+            gl.BufferData<float>(BufferTargetARB.ArrayBuffer, new float[12], BufferUsageARB.StaticDraw);
+            gl.EnableVertexAttribArray(0);
+            gl.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 12, (void*)0);
+            gl.BindVertexArray(0);
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, other);
+            gl.BufferData<float>(BufferTargetARB.ArrayBuffer, new float[4], BufferUsageARB.DynamicDraw);
+
+            var first = interop.VertexArray(vao);
+            long stamp = interop.VertexArrayStamp;
+            Assert.Same(first, interop.VertexArray(vao));
+            Assert.Equal(stamp, interop.VertexArrayStamp);   // fetching an export moves nothing
+
+            // A buffer no export names: written and renamed as often as it likes, the stamp stays.
+            float x = 1;
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, other);
+            gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, 4, &x);
+            gl.BufferData<float>(BufferTargetARB.ArrayBuffer, new float[8], BufferUsageARB.DynamicDraw);
+            Assert.Equal(stamp, interop.VertexArrayStamp);
+
+            // The exported static buffer written after this frame used it: renamed, so the stamp moves and the export is new.
+            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+            gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, 4, &x);
+            Assert.NotEqual(stamp, interop.VertexArrayStamp);
+            var second = interop.VertexArray(vao);
+            Assert.NotSame(first, second);
+            Assert.NotEqual(first.Attributes[0]!.Value.Buffer, second.Attributes[0]!.Value.Buffer);
+
+            // The vertex array itself changes.
+            stamp = interop.VertexArrayStamp;
+            gl.BindVertexArray(vao);
+            gl.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 12, (void*)0);
+            gl.BindVertexArray(0);
+            Assert.NotEqual(stamp, interop.VertexArrayStamp);
+
+            // A new frame: the exports mark their buffers used per frame, so they are fetched again.
+            interop.VertexArray(vao);
+            stamp = interop.VertexArrayStamp;
+            gl.EndFrame();
+            gl.BeginFrame(W, H);
+            Assert.NotEqual(stamp, interop.VertexArrayStamp);
+            gl.EndFrame();
         }
         ExpectClean(d!);
     }

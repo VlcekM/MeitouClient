@@ -470,6 +470,9 @@ for the swapchain in the measured frames beyond the deliberate per-frame wait of
 natively with the same shaders, and its CPU per draw fell from 4.4 / 2.8 / 3.3 µs (colour meshes, grass, shadow-cascade meshes, forest still camera) to
 2.0 / 2.0 / 1.3 µs. In the forest view the foliage stage went from 1.08-1.14 to 0.87-0.88 ms (pass meter), the render thread's p50 by roughly 0.3 ms;
 GPU time did not change. What is left per draw (1.4-2 µs) is the legacy model's default-block copies and descriptor work, as predicted below.
+Its step O (the native descriptor model: push constants, one frame set per segment, bindless textures; same pictures) took a further 0.35 /
+0.7 µs off a colour mesh / grass draw and about 0.3 ms off the foliage stage in the forest (three runs each on a shared machine; the depth
+meshes did not gain within the scatter); docs/renderer-native.md 7.1.
 
 **Where the per-draw CPU goes** (measured before the port): about 1.5-2.3 µs of VkGl work per draw (Release), a third of it in the driver; the larger part is C# that rebuilds, per draw, state the renderer
 could have kept: a descriptor set 0 compare/build (the grass pushes 9 images to the same set 298 times a frame: 2 682 texture descriptors, 3 278 descriptor writes, each grass draw copies the whole vertex and fragment default blocks, 640 bytes in two ring copies, 190 KB of ring copies a frame for grass alone, 381 KB for the forest frame), a pipeline key of 20 fields hashed per draw (the cache never missed: 0 new pipelines), one

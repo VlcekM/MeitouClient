@@ -1,3 +1,5 @@
+using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
 namespace Meitou.Rendering;
@@ -233,6 +235,43 @@ static class FoliageShaders
         }
         """;
 
+    // ---- the native model (docs/renderer-native.md 3.3, step O): the texts above through NativeShaders.Port, bodies unchanged ----
+
+    /// <summary><see cref="MeshVertex"/> in the native model (the shared mesh uniforms on <see cref="MeshPush"/> and <see cref="ViewConstants"/>).</summary>
+    public static string MeshVertexNative() => NativeShaders.Port(MeshVertex());
+    public static string MeshFragmentNative() => NativeShaders.Port(MeshFragment());
+    /// <summary><see cref="ShadowShaders.MeshDepthFragment"/> in the native model, for <see cref="MeshVertexNative"/>.</summary>
+    public static string MeshDepthNative() => NativeShaders.MeshDepthFragment();
+
+    /// <summary>The blade programs' push constants (<see cref="GrassPush"/> is the C# side; std430).</summary>
+    public const string GrassPushMembers = """
+            vec4 size;
+            vec4 colourBounds;
+            float sway;
+            float range;
+            float frequency;
+            bool cross;
+            bool hasColourMap;
+            bool coverage;
+            bool wireframe;
+            uint sprite;
+            uint colourMap;
+            uint nearDepth;
+        """;
+
+    /// <summary>The blade programs' own uniforms: <see cref="GrassPush"/> members (the camera, light, fog and sway phases are <see cref="ViewConstants"/>).</summary>
+    static readonly Dictionary<string, string> GrassMap = new()
+    {
+        ["uSize"] = "pc.size", ["uColourBounds"] = "pc.colourBounds", ["uSway"] = "pc.sway", ["uRange"] = "pc.range", ["uFrequency"] = "pc.frequency",
+        ["uCross"] = "pc.cross", ["uHasColourMap"] = "pc.hasColourMap", ["uCoverage"] = "pc.coverage", ["uWireframe"] = "pc.wireframe",
+        ["uSprite"] = "textures2D[pc.sprite]", ["uColourMap"] = "textures2D[pc.colourMap]", ["uNearDepth"] = "textures2D[pc.nearDepth]",
+    };
+
+    public static string GrassVertexNative() => NativeShaders.Port(GrassVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
+    public static string GrassFragmentNative() => NativeShaders.Port(GrassFragment, NativeShaders.Map(GrassMap), GrassPushMembers);
+    public static string GrassMotionVertexNative() => NativeShaders.Port(GrassMotionVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
+    public static string GrassMotionFragmentNative() => NativeShaders.Port(GrassMotionFragment, NativeShaders.Map(GrassMap), GrassPushMembers);
+
     static string Replace(string source, string pattern, string replacement, bool required)
     {
         var regex = new Regex(pattern);
@@ -243,4 +282,22 @@ static class FoliageShaders
         }
         return regex.Replace(source, _ => replacement, 1);
     }
+}
+
+/// <summary>The C# side of <see cref="FoliageShaders.GrassPushMembers"/> (std430 push constants). GLSL bools are 32-bit (0 / 1).</summary>
+[StructLayout(LayoutKind.Explicit, Size = 72)]
+struct GrassPush
+{
+    [FieldOffset(0)] public Vector4 Size;
+    [FieldOffset(16)] public Vector4 ColourBounds;
+    [FieldOffset(32)] public float Sway;
+    [FieldOffset(36)] public float Range;
+    [FieldOffset(40)] public float Frequency;
+    [FieldOffset(44)] public uint Cross;
+    [FieldOffset(48)] public uint HasColourMap;
+    [FieldOffset(52)] public uint Coverage;
+    [FieldOffset(56)] public uint Wireframe;
+    [FieldOffset(60)] public uint Sprite;
+    [FieldOffset(64)] public uint ColourMap;
+    [FieldOffset(68)] public uint NearDepth;
 }

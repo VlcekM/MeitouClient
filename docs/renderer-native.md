@@ -277,6 +277,28 @@ only for parity ports (wave 3a).**
 | set 3 `Pass` (optional, per renderer) | per pass | storage buffers the pass reads: material table, instance stores, per-view compacted instances | once per pass |
 | push constants (≤ 128 B, the guaranteed minimum) | per draw | material index, instance base, small per-draw values (terrain `uNode` and `uMorph`, grass patch bounds and sizes) | per draw |
 
+**As built (steward, wave 3b; `NativeShaders`, `NativeFrame`).** Two sets and one push range, not four sets:
+
+| Set / range | Contents | Bound |
+| --- | --- | --- |
+| set 0 `Frame` (push-descriptor set) | binding 0 `FrameConstants` (the 13 atmosphere values and the bindless indices of the 7 frame textures, 240 B), 1 `KenshiShadowReceiver`, 2 `KenshiShadowCaster`, 3 `MeitouShadowReceiver` (the GL buffers as bound now), 4 `ViewConstants` (192 B), 5 `MeshBones` (8 KB, allocated once a frame, unread until a consumer skins) | once per native segment (`NativeFrame.Bind`) |
+| set 1 `Bindless` | the table above (`BindlessTable.Declarations(1)`) | once per native segment |
+| push constants, 128 B, vertex + fragment, the same range in every native program | `MeshPush` (tint, material values, the bindless indices of the 2 to 6 textures) or a consumer's own (`GrassPush`, 72 B) | per draw, only when the bytes differ |
+
+- *Per segment, not per frame.* The shadow blocks are VkGl buffers it renames, and the caster block is rewritten for each cascade, so they are
+  read when the segment begins, as a legacy program reads them at its first `Flush`. The frame block is rewritten only when its bytes changed
+  within the frame (the usual case: one 240-byte write a frame). The view goes to a set binding, not a dynamic offset: one write per segment.
+- *The pushed set is set 0, the table set 1* (the proposal had the table at 0). With the table at set 0 and set 1 pushed, the next legacy
+  program's push of its set 0 crashed the validation layer (SDK 1.4.363) inside `vkCmdPushDescriptorSetKHR`, with no error reported before.
+  **Observed**: `SeamTests.A_native_model_segment_then_a_legacy_segment_then_VkGl_each_draw_their_own(pushed: true)` crashed the test host
+  (`0xC0000005`), and the forest view crashed at the first terrain-mesh `Flush` after the foliage's segments, under `MEITOU_VK_VALIDATION=1`
+  and `=sync`; a minidump of the viewer puts the fault inside `VkLayer_khronos_validation.dll` (no driver frame). A set 1 written per segment
+  from the frame's pool (not pushed) fixed the test but not the viewer; legacy programs forced to allocated sets ran clean. With the push at set
+  0 for both models (the table at 1) both run clean, 0 errors. Without the layer the two orders draw the same pictures (the ten parity views
+  0 px, 7.1). Treated as a layer bug, not reported upstream yet; keep the push at set 0 while legacy programs exist.
+- *Frame textures* are bindless entries `NativeFrame` registers per consumer: a new index whenever the texture's view or sampler changed (the
+  old one freed after the frames in flight), so a segment recorded earlier keeps what it was given; 7 compares per segment.
+
 Why this choice:
 
 - **Push descriptors** (VkGl today, `KHR_push_descriptor`): measured at 0.11-0.12 µs per draw for one texture write, and 0.30 µs per draw
@@ -545,6 +567,18 @@ A second, separately gated change per renderer moves its shaders to the native d
   `ShadowShaders.Functions`), `ShadowShaders.DepthFragment` / `MeshDepthFragment`, and `PostProcessShaders.Vertex`. Agents then build their
   own shaders on those.
 
+**As built (steward, wave 3b).** `NativeShaders.Port(legacy, map, pushMembers)` makes a native variant: `#version 330 core` becomes
+`#version 450` plus `Prelude(pushMembers)` (the table, the frame, view and bones blocks, the `Push pc` block, `#define gl_VertexID
+gl_VertexIndex`); every loose `uniform T a, b;` becomes one `#define` per name from the map (`FrameMap`, `ViewMap`, `MeshMap`, merged by
+`Map(own)`), and an unmapped name throws; `layout(std140) uniform Block` gets `set = 0, binding = N` (`BlockBindings`). Nothing else changes:
+**Verified** by `NativeShaderTests` (every non-declaration line of `Shaders.MeshFragment` is in the native text, in order; every native variant
+compiles through `NativeFrame` with strict rules, its `FrameConstants`, `ViewConstants` and `Push` members sit at the C# structs' offsets,
+every sampler is in the table's set). The variants: `MeshVertex(own)` (the consumer maps `uModel`, e.g. to its instance rows),
+`MeshFragment()`, `MeshDepthFragment()`, `DepthFragment`, `AtmosphereFunctions`, `ShadowFunctions`, `PostProcessVertex`. The C# sides:
+`FrameConstants` (240 B, with `Uniforms` and `Textures` tables naming the frame globals), `ViewConstants` (192 B), `MeshPush` (128 B). The
+first consumer, the foliage (7.1), drew **0 differing pixels** on every gate picture, so the 1/255 allowance of owner decision 2 was not used
+and no `precise` / `invariant` was needed.
+
 ### 3.4 Compiler and reflection changes
 
 - `ShaderCompileOptions` gains `Model` (`Legacy` or `Native`) and `Stage` kinds (vertex+fragment pair, or compute). **Legacy output must not
@@ -554,6 +588,10 @@ A second, separately gated change per renderer moves its shaders to the native d
   workgroup size. For native programs, reflection *checks* the shader against the model (sets, bindings, push-constant size ≤ 128) at load
   in debug builds. The layout comes from the model, not from reflection.
 - `InterfaceLocations`, the clip-depth remap and `MEITOU_FRAGMENT` stay as they are for both models.
+- *As built (wave 3b).* `ShaderLibrary.Native` compiles with cache version 4, runs `InterfaceLocations.Apply` on the pair as the legacy path
+  does, and refuses a push-constant block larger than the layout's range. **Verified**: `LegacySpirvGoldenTests` hashes the vertex and
+  fragment SPIR-V of the 27 world programs (with and without the clip-depth remap) against a table generated at master `365bb88`; it passes
+  on every steward commit, so the legacy output is byte-identical.
 
 ---
 
@@ -626,6 +664,12 @@ public interface IGlInterop
 }
 ```
 
+*`VertexArrayStamp` (wave 3b steward addition, `cbc94d9`).* `long VertexArrayStamp { get; }` moves whenever a `VertexArray(vao)` export may be
+stale: a buffer some export names gets new storage, a new version or a rename; a vertex array is changed or deleted; and at every frame's
+begin (an export marks its buffers used per frame, so the first call of a frame keeps VkGl's rename-on-write rule). A caller that keeps
+the stamp per mesh skips the per-draw `VertexArray` call (0.35 us a draw measured in the probe) while it is unchanged. Writes to buffers no
+export names do not move it. **Verified** by `SeamTests.The_vertex_array_stamp_moves_exactly_when_an_export_may_be_stale`.
+
 ### 4.3 Frame-global resources: `FrameGlobals`
 
 Several values reach every program in the frame. `SkyRenderer.Apply` sets the atmosphere uniforms and binds the irradiance, specular and
@@ -642,7 +686,7 @@ public sealed class FrameGlobals
     public void Publish(string name, Func<BufferBinding> block);             // "KenshiShadowReceiver", "KenshiShadowCaster", "MeitouShadowReceiver"
     public void Publish<T>(string name, Func<T> uniformValue) where T : unmanaged;   // "uAtmoTau", "uAtmoParams", ... (step P)
     public FrameConstants Constants { get; }                                 // step O: the same values as one struct, uploaded once
-    // consumers (LegacyProgram.Create binds every name it finds in its reflection; native-model programs read set 1)
+    // consumers (LegacyProgram.Create binds every name it finds in its reflection; native-model programs read the frame set, set 0 as built: 2.6)
 }
 ```
 
@@ -1263,6 +1307,57 @@ open pass. Four commits: the timing switch, the zone order, the viewer, the obje
   draw few nodes per cascade (25) and are cold code once per cascade, so the segment's fixed cost eats the saving; the blocker map and the sweep are ports for the
   phase-8 deletion, not savings (a few draws each, or once).
 
+**Wave 3b, agent A (foliage), step O, with the steward's native prelude (2026-10-06, on master `ee54f0b`).** Four commits, in merge order:
+`3b4b20d` the prelude and the shared native shader text (3.3; `NativeShaders`, `NativeFrame`, `FrameGlobals.Uniform.TryRead`, the legacy
+SPIR-V golden test), `cbc94d9` the seam's `IGlInterop.VertexArrayStamp`, `d368214` the set order (frame set pushed at 0, table at 1: 2.6) and
+a native-then-legacy seam test, `ba46aca` the foliage. The three steward commits merge without the foliage one (at d368214, in a checkout of its own: build 0 warnings,
+334 tests passed, the 61 that need the game install skipped there); the foliage one needs all three.
+
+- *What changed in `FoliageRenderer`.* The four programs (meshes, mesh depth, grass, grass motion) are native programs made by `NativeFrame`
+  from `FoliageShaders.*Native()` (built on `NativeShaders.MeshVertex` / `MeshFragment` / `MeshDepthFragment`; grass with its own
+  `GrassPush`, 72 B). No `LegacyProgram`, no default block, no `Flush`: per segment one `NativeFrame.Bind` (frame block, shadow blocks, view,
+  table), per draw a push of `MeshPush` / `GrassPush` only when its bytes differ, textures as bindless indices (`interop.Bindless`, checked to
+  be `Texture2D`; cached per segment and texture slot, since a view or sampler may change between segments, never inside one). The
+  vertex inputs come from the reflection with `LegacyProgram`'s rules (a disabled attribute reads GL's constant through a stride-0 binding).
+  Grass motion takes its colour mask and depth state from `CurrentState()` as in step P. The reflection pass and the shadow cascades use the
+  same paths (the cascades read the caster block per segment, 2.6).
+- *Per-draw work removed besides `Flush`.* `interop.VertexArray` is called only when `VertexArrayStamp` moved (once per mesh a frame, at the
+  frame's first draw). The grass Prepare no longer looks up the sprite and colour map by name and recounts the density prefix per draw: both
+  are kept on the blade buffer per patch (`Patch`), the texture still touched each frame as `textures.Get` did (use count, reload). The draw
+  list itself is still built per call (it depends on the view's frustum).
+- *Gate (Release; the coordinator's lighter gate, against master `ee54f0b` built in its own folder).* Build 0 warnings; `dotnet test -c
+  Release` 395 passed, 0 skipped; `--faithful all` ten views **0 px** (mean 0.0000, max 0, the rock view included); `--debug-shadows 1`,
+  `--water-reflection 4` and `--upscaler taa`, each on forest and Hub at 13:00: 0 px; `MEITOU_VK_VALIDATION=sync` forest and Hub at 13:00:
+  0 errors (after `d368214`; before it the forest view crashed the layer, 2.6). The 1/255 allowance (owner decision 2) was not needed.
+- **Measured: forest still camera (`--fly-benchmark 300 --fly-speed 0 --faithful all`, `MEITOU_FOLIAGE_TIMING=1`), three interleaved runs per
+  build, means, Release; the machine was shared with two other agents' builds and runs, so run-to-run scatter is 10 to 20 percent.** Before is
+  master `ee54f0b` (step P), after is `ba46aca`. Per call: 12.0 colour mesh draws, 132.5 grass draws, 36.5 depth mesh draws.
+
+  | | before (step P) | after (step O) |
+  | --- | ---: | ---: |
+  | colour meshes, us per draw (Prepare + Record) | 3.37 | 3.02 |
+  | colour meshes, record only | 3.11 | 2.75 |
+  | grass, us per draw (Prepare + Record) | 2.89 | 2.16 |
+  | grass, record only | 1.93 | 1.35 |
+  | depth meshes, us per draw | 2.22 | 2.50 |
+  | stage `foliage`, ms | 1.55 | 1.25 |
+  | shadow casters `foliage`, ms | 1.94 | 2.09 |
+  | render thread p50 / p95, ms | 8.1 / 12.5 | 8.4 / 13.4 |
+  | CPU only p50, ms | 4.8 | 4.8 |
+
+  Observed: the colour draws gain 0.35 to 0.75 us a draw (grass most, 30 percent of its record time), the foliage stage 0.3 ms. The depth
+  meshes did not gain (2.22 -> 2.50, inside the scatter of the three runs: 2.01 to 2.69). Plausible reasons, not measured: the per-segment `NativeFrame.Bind` (a 6-binding push,
+  7 frame-texture compares, the view write) is spread over 36 draws per cascade call, and the depth draws had little `Flush` work to lose.
+  The cull (not changed by this step) read 20 percent slower in the after runs in both passes, and the frame-time percentiles moved the other
+  way from the stage; with this scatter neither is a result. GPU time: no difference beyond the scatter (gpu-wait 3.2 to 5.1 ms either build).
+  A quieter machine is needed for numbers below 0.3 us a draw.
+- *A1 / A2.* A1 (the CPU cull in the order a GPU cull can reproduce, `FoliageCull`) is done (5.6). A2 (the GPU cull with the verify mode) is
+  **not** done and was not part of this step.
+- *Follow-ups.* A2, then GPU-driven grass (5.4: density prefix and range into indirect arguments); 5.7 impostors (need this step's bindless
+  materials); the TERRAIN-mode rocks still go through `TerrainRenderer.DrawMeshes` with the terrain's legacy program (574 groups a colour call
+  in the forest), so they move with the terrain's step O; a per-segment cost check for the depth cascades (push the frame set once per
+  cascade pass rather than per call); report the push-descriptor crash to the validation layer's tracker with the seam test as the repro.
+
 After wave 2 the foundation agent stays on as **API steward** for wave 3 (owner decision 6). Agents request additions to `Meitou.Rendering/Gpu/`.
 The steward lands them additively (no signature changes), one at a time, and agents rebase. Before wave 3b, the steward also lands the
 native shader prelude and the shared native shader variants (3.3), each proven on one consumer.
@@ -1366,6 +1461,22 @@ reached by `firstInstance`; take the colour mask and the depth state of a guest 
 Avoid in the per-draw loop: dictionary lookups, LINQ, `CurrentTargets` / `CurrentState`, `Flush` when nothing was bound, a
 `BindVertexBuffers` per instance row. Measure with a per-call stopwatch switch like `MEITOU_MESH_TIMING` (`=2` adds the warm repeat, 7.1): a single port's
 first call per frame is dominated by cold code and data, not by the API's per-draw cost.
+
+**Step O (from the foliage, 7.1).** On top of the step-P pattern:
+
+1. Shaders: build on `NativeShaders` (`MeshVertex(own)`, `MeshFragment()`, ...) or port your own text with `NativeShaders.Port(legacy,
+   NativeShaders.Map(own), pushMembers)`; `own` maps only your uniforms (to `pc.*` members or constants). Declare your push block's C# struct
+   with explicit offsets and add the variant to `NativeShaderTests.Variants()`, which checks the offsets against the reflection. Keep the
+   whole push block within 128 bytes.
+2. One `NativeFrame` per renderer (it owns its frame textures' entries and its set layout), programs from `nativeFrame.Program(v, f, name)`;
+   `ctx.Pipelines.Forget(p)` before disposing one.
+3. Per segment, after `BeginNativeInPass` and the dynamic state: `nativeFrame.Bind(cmd, program.Layout, in view)` once (any of your native
+   programs' layout: they are compatible). Not per draw, and again in every segment (the shadow blocks move between cascades).
+4. Per draw: textures by `interop.Bindless(id)` (check `handle.Kind` against the array the shader reads), cached for the segment only;
+   `cmd.PushConstants` of the whole struct, skipped when the bytes equal the last push of the segment.
+5. Vertex arrays: keep `interop.VertexArrayStamp` per mesh and call `interop.VertexArray(vao)` only when it moved; rebuild the layout and
+   buffers only when the returned object differs (`ReferenceEquals`).
+6. Expect 0 px against step P; the pushed frame set stays at set 0 (2.6) as long as legacy programs push theirs.
 
 ### 7.6 The draw log
 

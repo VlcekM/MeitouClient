@@ -84,6 +84,15 @@ public interface IGlInterop
     /// </summary>
     VertexArrayBindings VertexArray(uint glVertexArray);
 
+    /// <summary>
+    /// (Added for wave 3b, the per-draw export cost.) Moves whenever a <see cref="VertexArray"/> export could have become stale (an exported
+    /// vertex array changed or was deleted; the storage of a buffer an export names changed: re-specified, renamed, deleted) and at every
+    /// frame begin. While it equals the value read right after a <see cref="VertexArray"/> call for a vertex array, that export is current
+    /// and its buffers are already marked used by this frame, so the call may be skipped: keep the stamp with what was derived from the
+    /// export and compare one number per draw. It does not move for buffers no export names (other renderers' per-draw uniform buffers).
+    /// </summary>
+    long VertexArrayStamp { get; }
+
     /// <summary>The image behind a GL texture (non-owning; valid while the GL texture keeps its storage).</summary>
     Texture Texture(uint glTexture);
 

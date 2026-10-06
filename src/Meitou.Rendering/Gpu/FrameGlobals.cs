@@ -20,6 +20,10 @@ public sealed class FrameGlobals
     public abstract class Uniform
     {
         internal abstract void Write(LegacyProgram program, UniformHandle handle);
+
+        /// <summary>The value's bytes into <paramref name="destination"/> (its exact size), for a native constant block; false (nothing written)
+        /// while the owner would not set it, as <see cref="Write"/> skips it then.</summary>
+        internal abstract bool TryRead(Span<byte> destination);
     }
 
     sealed class Uniform<T>(Func<T> get, Func<bool>? when) : Uniform where T : unmanaged
@@ -36,6 +40,16 @@ public sealed class FrameGlobals
             else if (typeof(T) == typeof(Vector4)) program.Set(handle, Unsafe.As<T, Vector4>(ref v));
             else if (typeof(T) == typeof(Matrix4x4)) program.Set(handle, in Unsafe.As<T, Matrix4x4>(ref v));
             else throw new NotSupportedException($"frame-global uniform of type {typeof(T).Name}");
+        }
+
+        internal override bool TryRead(Span<byte> destination)
+        {
+            if (when is not null && !when()) return false;
+            if (destination.Length != Unsafe.SizeOf<T>())
+                throw new ArgumentException($"frame-global uniform of type {typeof(T).Name} is {Unsafe.SizeOf<T>()} bytes, not {destination.Length}");
+            var v = get();
+            System.Runtime.InteropServices.MemoryMarshal.Write(destination, in v);
+            return true;
         }
     }
 

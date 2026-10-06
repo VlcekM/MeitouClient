@@ -110,6 +110,7 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
         EnsureBackbuffer(width, height);
         long beginTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         cmd = device.Frames.BeginFrame();
+        exportStamp++;   // a new frame: exports must be fetched again (they mark their buffers used by the frame)
         Stats.FenceWaitTicks += System.Diagnostics.Stopwatch.GetTimestamp() - beginTicks;
         int slot = device.Frames.Slot;
         Check(vk.ResetCommandPool(dev, uploadPools[slot], 0));
