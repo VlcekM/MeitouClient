@@ -640,6 +640,12 @@ public interface IGlInterop
     CommandList BeginNativeInPass(string label);
     /// Records a command that does not disturb a render pass (a timestamp, a debug label) into the frame without ending VkGl's pass.
     void Interleave(Action<CommandList> record);
+    /// (Added for the native hosts, wave 3 step H, 4.5.) A native host that has begun its own rendering instance inside its BeginNative segment
+    /// announces it: until EndHostPass, a guest's BeginNativeInPass returns the host's list (no pass of VkGl's is touched), and CurrentTargets,
+    /// CurrentState and GetInteger(Samples) answer as before from the GL framebuffer binding, viewport, scissor and fixed-function state the host
+    /// keeps set. Uploads and timestamps through IGl stay allowed inside it; a clear, draw, blit or flush still throws.
+    void BeginHostPass(CommandList cmd);
+    void EndHostPass(CommandList cmd);
 
     /// What VkGl is drawing into right now: the bound draw framebuffer's attachments as textures, and GL's viewport and scissor. While any
     /// VkGl code remains, the GL framebuffer binding is the source of truth for "the current pass" (4.5).
@@ -722,7 +728,30 @@ public sealed class FrameGlobals
   velocity pass through `PostProcess.ObjectMotion`). A host and its guests can be on different sides:
   - *host on VkGl, guest native*: the guest uses `CurrentTargets()`, because the host bound a GL framebuffer as today.
   - *host native, guest on VkGl*: the host creates native targets, `Import`s them into GL names, attaches them to a GL framebuffer and
-    binds it before calling the guest. That is the GL code the host had, kept for the guests until all of them are native.
+    binds it before calling the guest. That is the GL code the host had, kept for the guests until all of them are native. (Not used: both
+    hosts went straight to the next case.)
+  - *host native, guest native* (wave 3 step H: `ShadowPass` in both modes and `ReflectionPass`; **Verified**, 0 px, 7.1). The host keeps the GL
+    side exactly as it was, minus the calls that record: its GL framebuffer stays bound (so the targets, formats and sample count the guests read
+    through `CurrentTargets()`, `CurrentState()` and `GetInteger(Samples)` are the host's), and so do the GL viewport, scissor and fixed-function state
+    it sets for them (depth test and compare, depth clamp, colour mask, blending: pure state calls, which record nothing). Then:
+    1. `cmd = interop.BeginNative(label)` (ends VkGl's pass, full barrier), `t = interop.CurrentTargets()`, `interop.BeginHostPass(cmd)`;
+    2. `cmd.BeginRendering` on `t` with the host's load ops: `CLEAR` where the GL code cleared the whole attachment (the atlas when every cascade
+       is drawn; the reflection's colour and depth), `LOAD` otherwise;
+    3. per cascade (or depth slice): the GL viewport and scissor (state), the caster-bias uniform buffer write (an upload, allowed), a partial clear
+       as `cmd.ClearDepth(1, rect)` (`vkCmdClearAttachments` inside the instance, as `VkGl.Clear` records it: a Meitou tile, the reflection's depth between slices),
+       then the guest: unchanged, its `BeginNativeInPass` returns `cmd` and records into the host's instance, its `EndNative` ends only its segment;
+    4. `cmd.EndRendering()`, anything between instances (the reflection's `Barrier(Full)` and `Resolve(src, dst)` of the 4x colour into the sampled texture),
+       `interop.EndHostPass(cmd)`, `interop.EndNative(cmd)` (full barrier, VkGl forgets what it believed bound).
+    Guests need **no change**: the three seam calls resolve to "the current pass", which is the host's while a host pass is open. The guard
+    stays strict where it protects the host: a draw or clear through `IGl`, `BeginNative` and a second `BeginNativeInPass` while a segment is open throw.
+    **Limits for wave 4 (6).** The ambient host pass is one field and the state the guests read is VkGl's one GL mirror, so this is a single-thread
+    shape: it moves the pass lifecycle, the clears, the resolve and the barriers to the host and puts the guests' recording into the host's command list.
+    Splitting a cascade onto its own thread needs (a) the host pass per thread (a `[ThreadStatic]` or a field of the thread's `CommandList`/job, with
+    `BeginNativeInPass` returning that job's list), (b) the viewport and scissor of the job carried by the host instead of read from GL state (the host
+    already knows them: they are what it sets per cascade), and (c) each guest taking its cull, depth and bias state from a `DrawState` the host gives
+    it instead of from `gl.Enable`/`gl.CullFace` calls it makes before `CurrentState()` (that is the guests' Prepare/Record split of 6.2; the GL calls are
+    only state, and the state they set is already in one place per guest). The load ops, clears and resolve are already per-instance, so each cascade
+    can be its own primary (6.1: "whole passes that have nothing to share") with the same host code.
 - **State the GL code inherits.** Native code may not rely on state left behind by earlier calls. For example, `WorldFrame.Draw` enables the
   depth test with `LEQUAL` before the slices, `ShadowPass` uses `LESS` with depth clamp and a scissor per tile, and the foliage leaves culling
   disabled. Each port lists the GL state in effect at its draws (the draw log shows it) and sets it explicitly.
@@ -940,6 +969,7 @@ in wave 3 makes wave 4 a scheduling change rather than a rewrite.
 
 | Thing (file) | Today | In wave 4 |
 | --- | --- | --- |
+| Host pass (`IGlInterop.BeginHostPass`, 4.5; step H) | one ambient field of `VkGl`, the guests' state is VkGl's GL mirror | a per-job host pass (thread-local or on the job's `CommandList`), its viewport and scissor and a `DrawState` carried by the host, so a guest reads nothing global. The shadow and reflection hosts are native from step H, so this is the only thing left between them and per-cascade jobs |
 | `VkGl` (all of it) | one thread, implicit state | not used by recorded jobs: a pass is parallel only once all of its draws are native. Overlays and debug views may stay on the render thread at the end of the frame until phase 8 |
 | `RenderJobs` | "one caller at a time (the render thread); bodies must not call back in" | recording jobs are top-level `RenderJobs.For` calls. The foliage CPU cull in `Draw` moves into `Prepare` (or away, with GPU culling), so loops are not nested |
 | `FrameRing.BeginFrame/EndFrame` | one thread | unchanged (render thread). `DeferDelete` is already locked |
@@ -1513,6 +1543,40 @@ native shader prelude and the shared native shader variants (3.3), each proven o
 - The array follows the texture's format (`KindFor`): an RGBA8UI texture must be read through `utextures2D`, never `textures2D`, and
   `ShaderLibrary.Native` refuses a declaration that disagrees with the table.
 
+**Wave 3, step H (the shadow and reflection hosts native; 2026-10-06, on master `9d25305`).** Files: `ShadowPass.cs` (Faithful atlas), `ShadowPass.Meitou.cs`
+(the Meitou cascades; `UpdateBlockers` and `DrawDebug`/`CaptureDepth` are as before), `ReflectionPass.cs`, and the steward's additive seam change (`VkGl.Interop.cs`,
+`VkGl.cs`, `VkGl.Queries.cs`, `IGlInterop.cs`, `CommandList.cs`). No guest file (terrain, objects, foliage, sky) changed: they call the same three seam
+functions. The shaders are untouched.
+
+- *What changed.* The hosts no longer record anything through `IGl`: `gl.Clear` (the atlas, the reflection's colour and depth, each Meitou tile, the depth
+  between reflection slices) and `gl.BlitFramebuffer` (the 4x resolve) are native commands of the host's own segment (4.5, "host native, guest native").
+  Everything else the hosts did stays (GL framebuffer bound, viewport and scissor per cascade, depth state, the caster bias in the GL uniform buffer, the
+  receiver blocks, the timestamps); those are state calls and uploads, which record nothing into the pass. Seam additions: `BeginHostPass`/`EndHostPass`;
+  inside a host pass `UploadCmd` and the query timestamps are allowed (new `GuardNativePass`; `StageClock.Sub` between guests and the caster-bias
+  `BufferSubData` need them) and `BeginNativeInPass`/`EndNative` take the guest path; `CommandList.ClearDepth(value, rect)` and `Resolve(Image, Image, w, h)`.
+- *Seam test* `A_native_host_clears_and_its_native_guests_record_into_its_rendering_through_the_same_seam_calls`: a host clears by load op over a
+  quarter VkGl had drawn, two guests with different programs and scissors record into its instance, then VkGl draws again: read-back pixels, and the guards
+  (an `IGl` clear and draw, `BeginNative`, a nested `BeginNativeInPass` and a second `EndHostPass` throw; a buffer upload and a timestamp do not), sync validation 0 errors.
+- *Gate (Release; lighter gate; reference = master `9d25305` built unchanged, scratch in `C:\Temp\agent-H`).* Build 0 warnings; `dotnet test -c Release` 397 passed,
+  0 skipped; `--faithful all` ten views 0 px (mean 0.0000); Meitou default ten views 0 px (the Meitou cascades are in the host); `--debug-shadows 1` Hub 13:00 0 px;
+  `--water-reflection 4` Port North 13:00 and 02:00 0 px; `MEITOU_VK_VALIDATION=sync` with `MEITOU_PASS_STATS=1` on Port North (reflection 4) and the Hub: 0 errors,
+  and the pass meter's `StageClock.Sub` stamps inside both hosts do not throw. (As the earlier reflection gates note, the Port North pictures hardly show the
+  mirrored objects and foliage: they check that the path runs and the resolve is right, not the guests' content in the mirror.)
+- **Measured: shadows and reflection stage CPU (`--fly-benchmark 300 --fly-speed 0 --water-reflection 4`, three interleaved runs per build, medians, Release; the
+  machine was shared and runs of one build differ by 20 percent).** Before = master `9d25305`, after = step H. `reflection` is the stage's mean per frame (the pass
+  runs every fourth frame with a still camera); per pass is the pass's own CPU mean from the `reflect` line.
+
+  | | Hub before | Hub after | forest before | forest after |
+  | --- | ---: | ---: | ---: | ---: |
+  | stage `shadows`, ms | 1.64 | 1.53 | 1.44 | 1.48 |
+  | stage `reflection`, ms per frame | 0.28 | 0.23 | 0.30 | 0.29 |
+  | reflection pass, ms per pass drawn | 0.33 | 0.36 | 0.29 | 0.31 |
+
+  **Observed:** no change beyond the scatter, as expected: the host's own work is a begin and end of one rendering instance and a handful of commands, and the guests are
+  the same code. The step is for structure (every world pass now records natively, the prerequisite for wave 4), not for milliseconds.
+- *Not done, on purpose.* The blocker map (`UpdateBlockers`) and `TerrainShadowMap`'s sweep are guests-only segments in VkGl's own pass on their own GL framebuffers (no
+  other renderer draws into them), so they need no host; `DrawDebug` and `CaptureDepth` stay (agent F's). The state the guests read is still the GL mirror: see the limits in 4.5.
+
 ### 7.2 Wave 3: ownership
 
 Each agent owns its files completely: it may edit them, and nobody else may. Call-site counts are `IGl` calls from section 8.
@@ -1599,8 +1663,13 @@ Added by sky and water (7.1, agent D): a draw with no index buffer and no or one
 is `cmd.Draw(n)` with a vertex layout of what `VertexArray` exports (none for the sky); set the GL state the draw reads (depth test and mask, blend, cull)
 on `IGl` before `BeginNativeInPass`, so `CurrentState()` sees it, and put it back after `EndNative`. Dropping a renderer's GL programs is safe for the
 atmosphere's sampler units: any later `WorldGl.Program` (the terrain's, built first) assigns them and publishes the units. A host whose only work is
-framebuffer creation, clears, a blit and calls to its guests (`ReflectionPass`) has nothing to record natively: leave it on GL, and the guest segments
-(here the multisampled sky) use `CurrentTargets()`. `NativeSegment` (`SkyRenderer.cs`) is a reusable two-slot pipeline cache for such single draws.
+framebuffer creation, clears, a blit and calls to its guests (`ReflectionPass`) had nothing to record natively at the time: it was left on GL, and the guest segments
+(here the multisampled sky) used `CurrentTargets()`. (Since step H both hosts are native, 4.5.) `NativeSegment` (`SkyRenderer.cs`) is a reusable two-slot pipeline cache for such single draws.
+
+Added by the native hosts (step H, 4.5): a host that owns a rendering instance keeps its GL framebuffer bound and its GL state set (guests read the targets, the sample
+count for alpha-to-coverage and the fixed-function state from them) and moves only the commands that record (clears, blits) into its own segment. A guest then needs no
+change. Inside a host pass `IGl` uploads and timestamps are allowed (the pass meter's `StageClock.Sub` and a per-cascade uniform-buffer write between guests), anything
+that touches a pass still throws. (The guests still end their own segment before a `StageClock.Sub`, as above; not re-checked inside a segment.)
 
 Avoid in the per-draw loop: dictionary lookups, LINQ, `CurrentTargets` / `CurrentState`, `Flush` when nothing was bound, a
 `BindVertexBuffers` per instance row. Measure with a per-call stopwatch switch like `MEITOU_MESH_TIMING` (`=2` adds the warm repeat, 7.1): a single port's

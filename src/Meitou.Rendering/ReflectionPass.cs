@@ -3,6 +3,7 @@ using System.Numerics;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
+using Silk.NET.Vulkan;
 
 namespace Meitou.Rendering;
 
@@ -215,8 +216,17 @@ public sealed unsafe class ReflectionPass : IDisposable
         gl.DepthMask(true);
         gl.Disable(EnableCap.Blend);
         gl.Disable(EnableCap.ScissorTest);
-        gl.ClearColor(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1);
-        gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        // The native host (docs/renderer-native.md 4.5): the multisampled target's rendering instance is opened here, cleared by its load ops,
+        // and the sky, terrain, objects and foliage record into it through BeginNativeInPass. The GL framebuffer binding, viewport and state stay
+        // what the guests read (CurrentTargets, CurrentState, GetInteger(Samples)).
+        var interop = Gpu.Interop!;
+        var cmd = interop.BeginNative("reflection");
+        var target = interop.CurrentTargets();
+        interop.BeginHostPass(cmd);
+        cmd.BeginRendering(new RenderingDesc(
+            target.Colour with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(new ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1)) },
+            target.Depth with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(depthStencil: new ClearDepthStencilValue(1f, 0)) },
+            target.Width, target.Height));
         Lap(4);
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
         sky.Draw(rotation * Perspective(camera.FieldOfView, aspect, 1, 1000), colours);
@@ -240,7 +250,7 @@ public sealed unsafe class ReflectionPass : IDisposable
         {
             float far = Math.Min(far0, MaxDistance);
             if (far <= near * 1.5f) continue;
-            if (!first) gl.Clear(ClearBufferMask.DepthBufferBit);
+            if (!first) cmd.ClearDepth(1f, new Rect2D(new Offset2D(0, 0), new Extent2D((uint)target.Width, (uint)target.Height)));
             first = false;
             var projection = Oblique(Perspective(camera.FieldOfView, aspect, near, far), view, clip);
             var viewProjection = view * projection;
@@ -254,12 +264,15 @@ public sealed unsafe class ReflectionPass : IDisposable
         ViewProjection = mapped;   // x and y do not depend on the near plane
         Valid = hasImage = !first;
 
+        cmd.EndRendering();
         if (msFbo != 0)
         {
-            gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, msFbo);
-            gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, fbo);
-            gl.BlitFramebuffer(0, 0, width, height, 0, 0, width, height, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+            // The multisampled colour into the texture the water samples (a resolve, as the framebuffer blit was), between full barriers.
+            cmd.Barrier(BarrierBatch.Full);
+            cmd.Resolve(target.Colour.Image, interop.Texture(colour).Image, width, height);
         }
+        interop.EndHostPass(cmd);
+        interop.EndNative(cmd);
         gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, (uint)drawFbo);
         gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, (uint)readFbo);
         gl.Viewport(viewport[0], viewport[1], (uint)viewport[2], (uint)viewport[3]);

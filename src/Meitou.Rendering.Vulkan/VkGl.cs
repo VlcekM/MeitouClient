@@ -195,7 +195,7 @@ public sealed unsafe partial class VkGl : IGl, ITextureLodBias, IDisposable
     {
         get
         {
-            GuardNative();
+            GuardNativePass();
             if (!frameOpen) BeginFrame(backbuffer?.Width ?? 1, backbuffer?.Height ?? 1);
             return uploadCmd;
         }

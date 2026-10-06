@@ -87,16 +87,13 @@ public sealed unsafe partial class ShadowPass
         gl.ColorMask(false, false, false, false);
         gl.ClearDepth(1.0);
         gl.Disable(EnableCap.Blend);
-        if (drawing == count)
-        {
-            gl.Disable(EnableCap.ScissorTest);
-            gl.Clear(ClearBufferMask.DepthBufferBit);
-        }
         gl.Enable(EnableCap.DepthTest);
         gl.DepthFunc(DepthFunction.Less);
         gl.Enable(EnableCap.DepthClamp);
         gl.Enable(EnableCap.ScissorTest);
         gl.BindBufferBase(BufferTargetARB.UniformBuffer, ShadowShaders.CasterBinding, casterUbo);
+        // The whole atlas is cleared by the load op when every cascade is drawn; else each drawn tile is cleared inside the pass.
+        var host = BeginHost("shadow cascades", clear: drawing == count);
         for (int i = 0; i < count; i++)
         {
             if (!drawNow[i]) continue;
@@ -104,7 +101,8 @@ public sealed unsafe partial class ShadowPass
             int x = (int)MathF.Round(c.Tile.X * atlasSize), y = (int)MathF.Round(c.Tile.Y * atlasSize), s = Settings.TileSize;
             gl.Viewport(x, y, (uint)s, (uint)s);
             gl.Scissor(x, y, (uint)s, (uint)s);
-            if (drawing != count) gl.Clear(ClearBufferMask.DepthBufferBit);   // only this tile: the others keep what they hold
+            if (drawing != count)   // only this tile: the others keep what they hold
+                host.ClearDepth(1f, new Silk.NET.Vulkan.Rect2D(new Silk.NET.Vulkan.Offset2D(x, y), new Silk.NET.Vulkan.Extent2D((uint)s, (uint)s)));
             var bias = new Vector4(c.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 0);
             gl.BindBuffer(BufferTargetARB.UniformBuffer, casterUbo);
             gl.BufferSubData(BufferTargetARB.UniformBuffer, 0, 16, &bias);
@@ -112,6 +110,7 @@ public sealed unsafe partial class ShadowPass
             stored[i] = c;
             CascadeDraws[i]++;
         }
+        EndHost(host);
         gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
         gl.Disable(EnableCap.ScissorTest);
         gl.Disable(EnableCap.DepthClamp);

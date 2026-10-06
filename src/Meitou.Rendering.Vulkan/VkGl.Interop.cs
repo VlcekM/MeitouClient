@@ -11,10 +11,21 @@ public sealed unsafe partial class VkGl : IGlInterop
     bool nativeOpen, nativeInPass;
     CommandList? nativeList;
     (long Draws, long Pipelines, long Pushes) nativeStart;
+    // A native host's own rendering instance is open (BeginHostPass): guest segments record into it (docs/renderer-native.md 4.5).
+    CommandList? hostList;
+    bool hostGuestOpen;
 
     void GuardNative()
     {
         if (nativeOpen)
+            throw new InvalidOperationException("IGl call between BeginNative and EndNative: it could end the frame under the native command list");
+    }
+
+    /// <summary>For calls that put something into the frame without touching the pass (an upload into the upload command buffer, a
+    /// timestamp): allowed while a native host's rendering is open, where only the host's own commands may touch the pass.</summary>
+    void GuardNativePass()
+    {
+        if (nativeOpen && hostList is null)
             throw new InvalidOperationException("IGl call between BeginNative and EndNative: it could end the frame under the native command list");
     }
 
@@ -38,6 +49,19 @@ public sealed unsafe partial class VkGl : IGlInterop
 
     public CommandList BeginNativeInPass(string label)
     {
+        if (hostList is { } host)
+        {
+            // A guest of a native host: the host's rendering instance is the pass; nothing of VkGl's is touched.
+            if (hostGuestOpen) throw new InvalidOperationException("BeginNativeInPass inside a native segment");
+            host.Invalidate();
+            Context.Frame.Stats.NativeSegments++;
+            host.BeginLabel(label);
+            host.Log?.Note($"native {label} (in host pass)");
+            hostGuestOpen = true;
+            var hs = host.Stats;
+            nativeStart = (hs.Draws, hs.PipelinesBound, hs.DescriptorPushes);
+            return host;
+        }
         GuardNative();
         // The pass a VkGl draw would draw into now: kept open, or begun (with its barrier) exactly as PrepareDraw begins it.
         EnsurePass();
@@ -63,6 +87,18 @@ public sealed unsafe partial class VkGl : IGlInterop
 
     public void EndNative(CommandList cmd)
     {
+        if (hostGuestOpen)
+        {
+            if (!ReferenceEquals(cmd, hostList)) throw new InvalidOperationException("EndNative without a matching BeginNativeInPass");
+            hostGuestOpen = false;
+            cmd.EndLabel();
+            var gs = cmd.Stats;
+            Stats.Draws += gs.Draws - nativeStart.Draws;
+            Stats.PipelineBinds += gs.PipelinesBound - nativeStart.Pipelines;
+            Stats.DescriptorPushes += gs.DescriptorPushes - nativeStart.Pushes;
+            cmd.Log?.Note("end native (in host pass)");
+            return;   // the host's rendering goes on; VkGl's caches are invalidated when the host's own segment ends
+        }
         if (!nativeOpen || !ReferenceEquals(cmd, nativeList)) throw new InvalidOperationException("EndNative without a matching BeginNative");
         cmd.EndLabel();
         // The segment's draws count in VkGl's totals too, so the pass meter and the stats line see them (the native side's own are in GpuStats).
@@ -89,6 +125,21 @@ public sealed unsafe partial class VkGl : IGlInterop
             passColour = passDepth = null;
         }
         cmd.Log?.Note("end native");
+    }
+
+    public void BeginHostPass(CommandList cmd)
+    {
+        if (!nativeOpen || nativeInPass || !ReferenceEquals(cmd, nativeList)) throw new InvalidOperationException("BeginHostPass needs the list of an open BeginNative segment");
+        if (hostList is not null) throw new InvalidOperationException("a host pass is already open");
+        hostList = cmd;
+        Stats.RenderPasses++;
+    }
+
+    public void EndHostPass(CommandList cmd)
+    {
+        if (hostList is null || !ReferenceEquals(cmd, hostList)) throw new InvalidOperationException("EndHostPass without a matching BeginHostPass");
+        if (hostGuestOpen) throw new InvalidOperationException("EndHostPass with a guest segment open");
+        hostList = null;
     }
 
     public void Interleave(Action<CommandList> record)
