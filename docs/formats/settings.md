@@ -385,6 +385,9 @@ viewer's own cut-downs from [viewer.md](../viewer.md#world-mode) "Reflections" s
   default far clip applies, is **not** reproduced). The viewer's previous constant was 150000, which `--reflection-range 3` reproduces.
 - **Not done**: the "only when more than 100 water pixels are visible" occlusion query. The Vulkan GL layer's `BeginQuery` supports only elapsed-time queries
   (`QueryTarget` has no samples-passed), and that layer is not part of this change. Town display state 4 at levels 3 and 4 is not reproduced either (**Unknown**).
+- **Checked** (**Observed**, Release, Port North from the west at 1280x720): levels 0 to 1 differ by the mirrored terrain and sky on the sea (mean 0.15 of 255), 1 to 3 add the
+  mirrored town (mean 0.53, 1.5% of pixels over 12), 3 to 4 are identical there (a desert: no foliage; the foliage path is unchanged from before and
+  `--water-reflection 4 --reflection-range 3` reproduces the old pictures exactly). Range 0.6 against 3 in the default (Meitou) haze: no difference in that view, no hard edge seen.
 - **Default changed**: the viewer used to draw sky, terrain, objects and foliage (level 4) out to 150000; the default is now the game's level 2 and
   range 0.6, so objects and foliage no longer appear in reflections unless `--water-reflection 3` / `4` is given.
 
