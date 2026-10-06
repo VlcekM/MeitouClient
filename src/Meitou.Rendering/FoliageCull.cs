@@ -15,7 +15,7 @@ public struct FoliageInstanceRecord
     public Matrix4x4 Transform;
     /// <summary>Bounding sphere in the world: xyz = <c>Vector3.Transform(mesh centre, Transform)</c>, w = mesh radius × scale.</summary>
     public Vector4 Sphere;
-    /// <summary>x, z of the position (the range is measured along the ground), the scale, and the group's index within its zone.</summary>
+    /// <summary>x, z of the position (the range is measured along the ground), the scale, and the group's index within its zone; for a TERRAIN-mode rock group on the GPU cull, <see cref="FoliageCull.RockBits"/> instead (nothing else reads w).</summary>
     public Vector4 Ground;
 
     public const int Size = 96;

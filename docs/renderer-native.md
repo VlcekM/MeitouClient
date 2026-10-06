@@ -987,7 +987,10 @@ Where it differs from 5.2 to 5.5, and why:
     `DrawGroups`), per-mesh native cache (`meshGroups`) and GL state left behind as `DrawMeshes`; one `DrawIndexedIndirect` per (part,
     mirroring). `DrawMeshes` (objects' map features, and the CPU path) is unchanged.
   - *Order.* The CPU path orders the terrain groups by first *visible* placement; the GPU path by first candidate. Only exact depth ties
-    between two different rocks in colour could show it (depth passes keep the nearest); measured 0 px (7.1).
+    between two different rocks in colour could show it (depth passes keep the nearest); measured 0 px (7.1). A second difference: when a rock
+    batch is shown but nothing in it is visible, the GPU path still runs the colour set-up (`BindUnits`, `BindHeightUnits`, `textures.Bind`,
+    `PrepareConstants`) and records a segment of empty draws, where `DrawMeshes` returns before any of it. Also 0 px; the first suspect if a
+    later picture differs where no rock is drawn.
   - *Verify mode:* the CPU's `terrainDraws` grouped as `GroupMeshes` would (biome row filled in colour), compared per (vertex array,
     mirroring) with each rock draw's arguments and rows, all 16 floats bit for bit; a group with CPU placements but no GPU draw is a difference.
 - **Statistics.** `DrawnInstances` adds the GPU's count of the view with the same call number a frame ring earlier (copied into a

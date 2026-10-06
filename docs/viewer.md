@@ -529,10 +529,10 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   the rock; cause **Unknown**): A1's rock pictures equal one of the base runs' exactly, and the Release
   Meitou run differs from the base in the same spot (31 pixels). Tests `FoliageCullTests`.
   - **GPU cull** (step A2, [renderer-native.md](renderer-native.md#561-as-built-step-a2-2026-10-06-foliagegpucull)): by default the meshes' instances
-    are tested by compute kernels per view (main slices, cascades, reflection) and drawn with indirect draws; the TERRAIN-mode rocks stay on the CPU.
+    are tested by compute kernels per view (main slices, cascades, reflection) and drawn with indirect draws; the TERRAIN-mode rocks too, in the same dispatch, drawn through `TerrainRenderer.DrawMeshesIndirect` with their biome rows and mirroring.
     `MEITOU_GPU_CULL=0` brings back the CPU cull above (for A/B); `MEITOU_GPU_CULL_VERIFY=1` runs both, compares the GPU's lists a frame later
-    with the CPU's (sets, order, every matrix and fade, the draw arguments) and prints a `gpu cull verify` line at exit. Pictures unchanged (0 px);
-    `MEITOU_FOLIAGE_TIMING=1` adds the dispatch recording, the rocks' share and a `foliage gpu cull:` line with the kernels' GPU time per view.
+    with the CPU's (sets, order, every matrix and fade, the draw arguments, every rock placement) and prints a `gpu cull verify` line at exit. Pictures unchanged (0 px);
+    `MEITOU_FOLIAGE_TIMING=1` adds the dispatch recording, the rock draws per call and a `foliage gpu cull:` line with the kernels' GPU time per view.
 - **Grass**: blades are generated per 576-unit page (8 × 8 a zone) on worker threads when the page comes within
   the grass range (`FoliageGrassField`, the game's candidate rule; seeded per page, so deterministic but not the
   game's exact blades), uploaded as one instance buffer per (page, grass type), and drawn nearest page first with
