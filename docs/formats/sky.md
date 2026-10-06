@@ -256,9 +256,10 @@ and sky-view tables, the 0.36° sun disc) is gone, with `AtmosphereModel.cs`.
 
 Include `AtmosphereShaders.Functions` in the fragment shader (after `#version`), light the surface with
 `kenshiLight(albedo, normal, towardsEye, gloss, worldPosition)` in game-sky mode (`uAtmoParams.x > 0.5`), end with
-`colour = atmoApply(colour, eyePosition, worldPosition)`, call `SkyRenderer.AssignSamplerUnits(gl, program)` once after linking
-(the cube and ambient-map samplers go on the top three texture units) and `SkyRenderer.Active?.Apply(program)` each frame before
-drawing. `SkyRenderer.SkyFunctions` additionally has `skyColour(direction, disc)` for reflections. In game-sky mode colours are
+`colour = atmoApply(colour, eyePosition, worldPosition)`. A native program (`LegacyProgram`, or the native model's frame constants) gets
+the uniforms and the three textures (irradiance and specular cubes, ambient map) from the frame globals the `SkyRenderer` publishes
+(docs/renderer-native.md 4.3, 8.6). A GL program, while any is left, calls `AtmosphereShaders.AssignSamplerUnits(gl, program)` once after
+linking (the cube and ambient-map samplers go on the top three texture units); nothing binds textures there any more. `SkyRenderer.SkyFunctions` additionally has `skyColour(direction, disc)` for reflections. In game-sky mode colours are
 HDR in the game's units; the post-processing's exposure brings them to the screen.
 
 ### Not reproduced

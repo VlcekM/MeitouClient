@@ -168,14 +168,16 @@ public sealed unsafe class SkyRenderer : IDisposable
         }
         """;
 
-    readonly IGl gl;
-    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    /// <summary>The native GPU API (phase 8 stage 2: the sky makes no GL call; docs/renderer-native.md 8.6).</summary>
     public GpuContext Gpu { get; }
     // Native programs (docs/renderer-native.md 7.1, wave 3 agent D): the same SPIR-V as the GL programs they replace.
     readonly SkyProg simple, sky;
-    readonly Dictionary<(uint, string), int> uniforms = [];
-    uint starsTexture, moonTexture, cloudsTexture, irradianceCube, specularCube, ambientMap;
-    readonly GpuSpan skyTimer;
+    // Native textures with the GL sampler state their GL versions had (phase 8 stage 2); null when the file was not found.
+    SampledImage? starsTexture, moonTexture, cloudsTexture, irradianceCube, specularCube, ambientMap;
+    readonly PassTimer skyTimer;
+    readonly List<double> gpuSamples = [];
+    double gpuTotal;
+    int gpuCount;
 
     /// <summary>The game's sky and light (default) or the old simple colour model.</summary>
     public bool Physical { get; set; } = true;
@@ -241,7 +243,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// <summary>CPU time of the last <see cref="Prepare"/> in ms.</summary>
     public double PrepareMs { get; private set; }
     /// <summary>Which of the game's lighting textures were found (irradiance cube, specular cube, ambient map).</summary>
-    public string LightingTextures => $"irradiance {(irradianceCube != 0 ? "yes" : "no")}, specularity {(specularCube != 0 ? "yes" : "no")}, ambient map {(ambientMap != 0 ? "yes" : "no")}";
+    public string LightingTextures => $"irradiance {(irradianceCube is not null ? "yes" : "no")}, specularity {(specularCube is not null ? "yes" : "no")}, ambient map {(ambientMap is not null ? "yes" : "no")}";
 
     struct State
     {
@@ -256,20 +258,22 @@ public sealed unsafe class SkyRenderer : IDisposable
     SkyWeather? builtWeather;
     bool builtPhysical;
 
-    public SkyRenderer(IGl gl, GpuContext gpu, AssetLocator? assets = null)
+    /// <param name="gl">Unused since phase 8 stage 2 (kept for the callers that still pass it: <c>WorldFrame</c>).</param>
+    public SkyRenderer(IGl? gl, GpuContext gpu, AssetLocator? assets = null)
     {
-        this.gl = gl;
+        _ = gl;
         Gpu = gpu;
         simple = new SkyProg(gpu, Vertex, SimpleFragment, "sky simple");
         sky = new SkyProg(gpu, Vertex, SkyFragment, "sky");
-        skyTimer = new GpuSpan(gl);
+        skyTimer = new PassTimer(gpu);
         if (assets is not null)
         {
             LoadTextures(assets);
-            Console.WriteLine($"sky       textures: starfield {(starsTexture != 0 ? "yes" : "no")}, moon {(moonTexture != 0 ? "yes" : "no")}, clouds {(cloudsTexture != 0 ? "yes" : "no")}");
+            Console.WriteLine($"sky       textures: starfield {(starsTexture is not null ? "yes" : "no")}, moon {(moonTexture is not null ? "yes" : "no")}, clouds {(cloudsTexture is not null ? "yes" : "no")}");
         }
         Active = this;
         PublishGlobals();
+        ShadowsOffGlobals.Publish(gpu);
     }
 
     void LoadTextures(AssetLocator assets)
@@ -280,48 +284,25 @@ public sealed unsafe class SkyRenderer : IDisposable
             {
                 var dds = DdsReader.ReadFile(stars);
                 var img = DdsDecoder.Decode(dds, 0, Math.Min(2, dds.MipCount - 1));   // 1024²: one level of the 4096² file
-                starsTexture = WorldGl.Texture2D(gl, img.Width, img.Height, img.Pixels, repeat: false);
+                starsTexture = SampledImage.Rgba8(Gpu, img, repeat: false, mipmaps: true, "sky stars");
             }
             if (assets.Find("SkyX_Moon.png") is { } moon)
             {
                 var img = TextureLoader.LoadFile(moon, allMips: false).Levels[0];
-                moonTexture = WorldGl.Texture2D(gl, img.Width, img.Height, img.Pixels, repeat: false);
+                moonTexture = SampledImage.Rgba8(Gpu, img, repeat: false, mipmaps: true, "sky moon");
             }
             if (assets.Find("Clouds.dds") is { } clouds)
             {
                 var img = TextureLoader.LoadFile(clouds, allMips: false).Levels[0];
-                cloudsTexture = WorldGl.Texture2D(gl, img.Width, img.Height, img.Pixels, repeat: true);
+                cloudsTexture = SampledImage.Rgba8(Gpu, img, repeat: true, mipmaps: true, "sky clouds");
             }
-            if (assets.Find("mp_irradiance.dds") is { } irradiance) irradianceCube = Cube(DdsReader.ReadFile(irradiance));
-            if (assets.Find("mp_specularity.dds") is { } specularity) specularCube = Cube(DdsReader.ReadFile(specularity));
+            if (assets.Find("mp_irradiance.dds") is { } irradiance) irradianceCube = SampledImage.Cube(Gpu, DdsReader.ReadFile(irradiance), "sky irradiance");
+            if (assets.Find("mp_specularity.dds") is { } specularity) specularCube = SampledImage.Cube(Gpu, DdsReader.ReadFile(specularity), "sky specularity");
         }
         catch (Exception e) when (e is DdsFormatException or IOException or InvalidOperationException)
         {
             Console.WriteLine($"warning   sky textures: {e.Message}");
         }
-    }
-
-    /// <summary>A cube map with all its mips, faces in the DDS order (+X, −X, +Y, −Y, +Z, −Z) on GL's faces of the same names.</summary>
-    uint Cube(DdsFile dds)
-    {
-        if (!dds.IsCubemap || dds.ImageCount < 6) throw new InvalidOperationException($"not a cube map: {dds}");
-        uint t = gl.GenTexture();
-        gl.BindTexture(TextureTarget.TextureCubeMap, t);
-        for (int face = 0; face < 6; face++)
-            for (int level = 0; level < dds.MipCount; level++)
-            {
-                var img = DdsDecoder.Decode(dds, face, level);
-                fixed (byte* p = img.Pixels)
-                    gl.TexImage2D(TextureTarget.TextureCubeMapPositiveX + face, level, InternalFormat.Rgba8, (uint)img.Width, (uint)img.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, p);
-            }
-        gl.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
-        gl.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        gl.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureMaxLevel, dds.MipCount - 1);
-        foreach (var w in new[] { TextureParameterName.TextureWrapS, TextureParameterName.TextureWrapT, TextureParameterName.TextureWrapR })
-            gl.TexParameter(TextureTarget.TextureCubeMap, w, (int)TextureWrapMode.ClampToEdge);
-        gl.Enable(EnableCap.TextureCubeMapSeamless);
-        gl.BindTexture(TextureTarget.TextureCubeMap, 0);
-        return t;
     }
 
     /// <summary>
@@ -335,7 +316,8 @@ public sealed unsafe class SkyRenderer : IDisposable
         {
             var biomes = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install.DataDirectory, TerrainMaps.BiomeMap)));
             var map = AmbientMap.Build(db, biomes);
-            ambientMap = WorldGl.Texture2D(gl, map.Width, map.Height, map.Pixels, repeat: false, mipmaps: false);
+            ambientMap?.Dispose();
+            ambientMap = SampledImage.Rgba8(Gpu, map, repeat: false, mipmaps: false, "sky ambient map");
         }
         catch (Exception e) when (e is IOException or InvalidOperationException or InvalidDataException)
         {
@@ -399,28 +381,12 @@ public sealed unsafe class SkyRenderer : IDisposable
         return (state.Colours, state.Light);
     }
 
-    /// <summary>Texture units of the atmosphere's samplers: the top three of the combined units, out of the way of every scene shader.</summary>
-    static int irradianceUnit = -1, specularUnit, ambientUnit;
-
     /// <summary>
-    /// Points the atmosphere's sampler uniforms of a freshly linked program at their own units (a cube sampler left on unit 0 would clash with
-    /// the 2D samplers there). Called by every program builder that may include <see cref="AtmosphereShaders.Functions"/>.
+    /// For the GL programs that are left (<c>WorldGl.Program</c>: the impostor baker and preview; the model viewer's own): moves the atmosphere's
+    /// sampler uniforms off unit 0 (<see cref="AtmosphereShaders.AssignSamplerUnits"/>). Nothing binds textures there any more: the native draws
+    /// read the atmosphere's textures from the frame globals the sky publishes.
     /// </summary>
-    public static void AssignSamplerUnits(IGl gl, uint program)
-    {
-        if (irradianceUnit < 0)
-        {
-            gl.GetInteger(GetPName.MaxCombinedTextureImageUnits, out int combined);
-            irradianceUnit = combined - 1; specularUnit = combined - 2; ambientUnit = combined - 3;
-        }
-        gl.UseProgram(program);
-        int a = gl.GetUniformLocation(program, "uAtmoIrradiance"), b = gl.GetUniformLocation(program, "uAtmoSpecular"), c = gl.GetUniformLocation(program, "uAtmoAmbientMap");
-        if (a >= 0) gl.Uniform1(a, irradianceUnit);
-        if (b >= 0) gl.Uniform1(b, specularUnit);
-        if (c >= 0) gl.Uniform1(c, ambientUnit);
-        gl.UseProgram(0);
-        PublishUnits(gl);
-    }
+    public static void AssignSamplerUnits(IGl gl, uint program) => AtmosphereShaders.AssignSamplerUnits(gl, program);
 
     /// <summary>The values of <see cref="AtmosphereShaders.Functions"/>' loose uniforms (what <see cref="Apply"/> sets), by GLSL name minus <c>uAtmo</c>.</summary>
     public readonly record struct AtmosphereUniforms(Vector4 Tau, Vector4 Params, Vector4 Sun, Vector4 Light, Vector3 SunLight, Vector3 Tint, Vector4 Fog,
@@ -453,18 +419,22 @@ public sealed unsafe class SkyRenderer : IDisposable
             new Vector4(KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, w.FogEnabled && w.FogMax > 1 ? 1f / w.FogMax : 0f),
             new Vector4(cloud.X, cloud.Y, cloud.Z, pull),
             new Vector4(KenshiHaze ? AltitudeWeight : 1f, MathF.Max(HazeStrength, 0), AltitudeWeight, 0),
-            new Vector4(irradianceCube != 0 ? 1f : 0f, specularCube != 0 ? 1f : 0f, ambientMap != 0 ? 1f : 0f, AmbientMap.HalfWorld));
+            new Vector4(irradianceCube is not null ? 1f : 0f, specularCube is not null ? 1f : 0f, ambientMap is not null ? 1f : 0f, AmbientMap.HalfWorld));
     }
 
     /// <summary>
-    /// Publishes the atmosphere to the frame globals (docs/renderer-native.md 4.3): the uniform values <see cref="Apply"/> sets, and the three
-    /// textures as VkGl samples them on their units. Changes no GL call.
+    /// Publishes the atmosphere to the frame globals (docs/renderer-native.md 4.3): the uniform values (what the GL <c>Apply</c> set on a
+    /// program), and the three textures, natively (phase 8 stage 2; before, the GL texture units <c>BindUnits</c> bound them to). Both appear
+    /// once the sky has a state (<see cref="Prepare(Vector3, float, float)"/>), as the GL code set them from then on; before that the readers get
+    /// the stand-in. A missing file gives the stand-in too (GL's unbound unit).
     /// </summary>
     void PublishGlobals()
     {
-        if (Gpu is not { Interop: { } interop } ctx) return;
-        var g = ctx.Globals;
+        var g = Gpu.Globals;
         bool Valid() => state.Valid;
+        g.Publish("uAtmoIrradiance", () => state.Valid && irradianceCube is { } t ? t.Sampled() : default);
+        g.Publish("uAtmoSpecular", () => state.Valid && specularCube is { } t ? t.Sampled() : default);
+        g.Publish("uAtmoAmbientMap", () => state.Valid && ambientMap is { } t ? t.Sampled() : default);
         g.PublishUniform("uAtmoTau", () => Published().Tau, Valid);
         g.PublishUniform("uAtmoParams", () => Published().Params, Valid);
         g.PublishUniform("uAtmoSun", () => Published().Sun, Valid);
@@ -478,7 +448,6 @@ public sealed unsafe class SkyRenderer : IDisposable
         g.PublishUniform("uAtmoHazeCloud", () => Published().HazeCloud, Valid);
         g.PublishUniform("uAtmoAltitude", () => Published().Altitude, Valid);
         g.PublishUniform("uAtmoMaps", () => Published().Maps, Valid);
-        PublishUnits(gl);
     }
 
     // The values the getters above share, computed once per ApplyGlobals call (FrameGlobals.ApplyCount) instead of once per name.
@@ -492,58 +461,12 @@ public sealed unsafe class SkyRenderer : IDisposable
         return published;
     }
 
-    /// <summary>The atmosphere's textures as frame globals: whatever is bound on their units when a consumer draws (as a GL program samples them).</summary>
-    static void PublishUnits(IGl gl)
-    {
-        if (irradianceUnit < 0 || GpuContext.Of(gl) is not { Interop: { } interop } ctx || ctx.Globals.Texture("uAtmoIrradiance") is not null) return;
-        var cube = FrameGlobals.Sampler2D("", cube: true);
-        var plain = FrameGlobals.Sampler2D("");
-        int irradiance = irradianceUnit, specular = specularUnit, ambient = ambientUnit;
-        ctx.Globals.Publish("uAtmoIrradiance", () => interop.SampledUnit(irradiance, cube));
-        ctx.Globals.Publish("uAtmoSpecular", () => interop.SampledUnit(specular, cube));
-        ctx.Globals.Publish("uAtmoAmbientMap", () => interop.SampledUnit(ambient, plain));
-    }
-
-    /// <summary>Sets the atmosphere's uniforms (and binds its textures) on a program that includes <see cref="AtmosphereShaders.Functions"/>.</summary>
-    public void Apply(uint program)
-    {
-        if (!state.Valid) return;
-        var a = Uniforms();
-        gl.UseProgram(program);
-        gl.Uniform4(U(program, "uAtmoTau"), a.Tau.X, a.Tau.Y, a.Tau.Z, a.Tau.W);
-        gl.Uniform4(U(program, "uAtmoParams"), a.Params.X, a.Params.Y, a.Params.Z, a.Params.W);
-        gl.Uniform4(U(program, "uAtmoSun"), a.Sun.X, a.Sun.Y, a.Sun.Z, a.Sun.W);
-        gl.Uniform4(U(program, "uAtmoLight"), a.Light.X, a.Light.Y, a.Light.Z, a.Light.W);
-        gl.Uniform3(U(program, "uAtmoSunLight"), a.SunLight.X, a.SunLight.Y, a.SunLight.Z);
-        gl.Uniform3(U(program, "uAtmoTint"), a.Tint.X, a.Tint.Y, a.Tint.Z);
-        gl.Uniform4(U(program, "uAtmoFog"), a.Fog.X, a.Fog.Y, a.Fog.Z, a.Fog.W);
-        gl.Uniform3(U(program, "uAtmoFogColour"), a.FogColour.X, a.FogColour.Y, a.FogColour.Z);
-        gl.Uniform4(U(program, "uAtmoSimple"), a.Simple.X, a.Simple.Y, a.Simple.Z, a.Simple.W);
-        gl.Uniform4(U(program, "uAtmoHaze"), a.Haze.X, a.Haze.Y, a.Haze.Z, a.Haze.W);
-        gl.Uniform4(U(program, "uAtmoHazeCloud"), a.HazeCloud.X, a.HazeCloud.Y, a.HazeCloud.Z, a.HazeCloud.W);
-        gl.Uniform4(U(program, "uAtmoAltitude"), a.Altitude.X, a.Altitude.Y, a.Altitude.Z, a.Altitude.W);
-        gl.Uniform4(U(program, "uAtmoMaps"), a.Maps.X, a.Maps.Y, a.Maps.Z, a.Maps.W);
-        BindUnits();
-    }
-
     /// <summary>
-    /// The texture binds of <see cref="Apply"/> without its uniforms (GL state only): for a ported caller whose native program reads the
-    /// atmosphere through the frame globals but whose GL successors expect the units bound as <see cref="Apply"/> leaves them.
+    /// Nothing since phase 8 stage 2: the atmosphere's textures are frame globals of their own (<see cref="PublishGlobals"/>), no GL unit binds
+    /// them and no GL program of the world view samples them. Kept for the callers in files of other owners (terrain, objects, foliage) until
+    /// they drop the call.
     /// </summary>
-    public void BindUnits()
-    {
-        if (!state.Valid) return;
-        if (irradianceUnit >= 0)
-        {
-            gl.ActiveTexture(TextureUnit.Texture0 + irradianceUnit);
-            gl.BindTexture(TextureTarget.TextureCubeMap, irradianceCube);
-            gl.ActiveTexture(TextureUnit.Texture0 + specularUnit);
-            gl.BindTexture(TextureTarget.TextureCubeMap, specularCube);
-            gl.ActiveTexture(TextureUnit.Texture0 + ambientUnit);
-            gl.BindTexture(TextureTarget.Texture2D, ambientMap);
-        }
-        gl.ActiveTexture(TextureUnit.Texture0);
-    }
+    public void BindUnits() { }
 
     /// <summary>
     /// <c>horizonClouds</c>: the pull is the game's (cloud cover); the colour is built the game's way,
@@ -563,11 +486,14 @@ public sealed unsafe class SkyRenderer : IDisposable
 
     /// <summary>
     /// The sky pass: a full-screen triangle into the pass VkGl has open (the scene's, or the reflection's multisampled one). Prepare sets the
-    /// program's uniforms and the GL-side binds it reads (the atmosphere's units); Record is one native segment (docs/renderer-native.md 7.5).
+    /// program's uniforms and textures; Record is one native segment (docs/renderer-native.md 7.5) with the pass's state, depth test and write off.
+    /// No GL state is changed (phase 8 stage 2): the GL code turned the depth test and write off around the draw and back on after it, and
+    /// every caller turns the depth test on after the sky itself (docs/renderer-native.md 8.6).
     /// </summary>
     public void Draw(Matrix4x4 viewProjection, SkyColours colours)
     {
         if (!Matrix4x4.Invert(viewProjection, out var inverse)) return;
+        Poll();   // a timestamp pair is readable only for a few frames after its own (the arena's ring), so collect them as they come
         skyTimer.Begin();
         var program = Physical && state.Valid ? sky : simple;
         Prepare(program, inverse, colours);
@@ -581,18 +507,16 @@ public sealed unsafe class SkyRenderer : IDisposable
         p.Set(program.InverseViewProjection, in inverse);
         program.Colours.Set(p, colours);
         if (program == sky) SetSkyUniforms(program);
-        p.ApplyGlobals();   // Apply's atmosphere uniforms, through the frame globals
-        BindUnits();        // the atmosphere's textures on their units: the frame globals read them there
+        p.ApplyGlobals();   // the atmosphere's uniforms and textures, through the frame globals
     }
 
     void Record(SkyProg program)
     {
-        gl.Disable(EnableCap.DepthTest);
-        gl.DepthMask(false);
         var interop = Gpu.Interop!;
         var cmd = interop.BeginNativeInPass(program == sky ? "sky" : "sky simple");
         var targets = interop.CurrentTargets();
-        var drawState = interop.CurrentState();
+        // What the GL code's Disable(DepthTest) and DepthMask(false) made of the pass's state.
+        var drawState = interop.CurrentState() with { DepthTest = false, DepthWrite = false };
         cmd.SetViewport(targets.Viewport);
         cmd.SetScissor(targets.Scissor);
         cmd.SetRaster(drawState.Cull, drawState.Front);
@@ -602,9 +526,6 @@ public sealed unsafe class SkyRenderer : IDisposable
         program.P.Flush(cmd);
         cmd.Draw(3);
         interop.EndNative(cmd);
-        gl.DepthMask(true);
-        gl.Enable(EnableCap.DepthTest);
-        gl.ActiveTexture(TextureUnit.Texture0);
     }
 
     void SetSkyUniforms(SkyProg program)
@@ -625,86 +546,55 @@ public sealed unsafe class SkyRenderer : IDisposable
         var (_, _, darkness) = HorizonClouds(s);
         var zenith = s.Colours.Zenith;
         p.Set(program.CloudLight, zenith.X, zenith.Y, zenith.Z, MathF.Max(darkness, 0.35f));
-        p.Set(program.Has, starsTexture != 0 ? 1f : 0f, moonTexture != 0 ? 1f : 0f, cloudsTexture != 0 ? 1f : 0f);
-        var interop = Gpu.Interop!;
+        p.Set(program.Has, starsTexture is not null ? 1f : 0f, moonTexture is not null ? 1f : 0f, cloudsTexture is not null ? 1f : 0f);
         // A missing texture reads GL's stand-in, which an unbound sampler does too.
-        if (starsTexture != 0) p.Bind(program.Stars, interop.Sampled(starsTexture, program.StarsInfo!));
-        if (moonTexture != 0) p.Bind(program.Moon, interop.Sampled(moonTexture, program.MoonInfo!));
-        if (cloudsTexture != 0) p.Bind(program.Clouds, interop.Sampled(cloudsTexture, program.CloudsInfo!));
+        if (starsTexture is not null) p.Bind(program.Stars, starsTexture.Sampled());
+        if (moonTexture is not null) p.Bind(program.Moon, moonTexture.Sampled());
+        if (cloudsTexture is not null) p.Bind(program.Clouds, cloudsTexture.Sampled());
     }
 
-    /// <summary>Times <paramref name="count"/> sky passes back to back (ms each; no table any more); for the screenshot mode's cost report.</summary>
+    /// <summary>
+    /// Records <paramref name="count"/> sky passes back to back and returns the CPU time each took to record (ms; no table any more), for the
+    /// screenshot mode's cost report (<c>MEITOU_SKY_BENCH</c>). The GL version waited for the GPU (<c>Finish</c>); the native API has no such
+    /// wait inside a frame, so the GPU's share shows in <see cref="GpuMs"/> instead.
+    /// </summary>
     public (double SkyPassMs, double TableMs) Benchmark(Matrix4x4 viewProjection, int count = 100)
     {
         var colours = state.Colours;
-        gl.Finish();
         var watch = Stopwatch.StartNew();
         for (int i = 0; i < count; i++) Draw(viewProjection, colours);
-        gl.Finish();
         return (watch.Elapsed.TotalMilliseconds / count, 0);
     }
 
-    /// <summary>Collects finished GPU timings (without waiting unless asked).</summary>
-    public void Poll(bool wait = false) => skyTimer.Poll(wait);
+    /// <summary>Collects finished GPU timings: native timestamps, read once their frame's slot comes round. Nothing waits, also with
+    /// <paramref name="wait"/> (kept for callers; the GL queries could block).</summary>
+    public void Poll(bool wait = false)
+    {
+        _ = wait;
+        gpuSamples.Clear();
+        skyTimer.Poll(gpuSamples);
+        foreach (double ms in gpuSamples)
+        {
+            if (ms <= 0 || ms >= 1000) continue;
+            gpuTotal += ms;
+            gpuCount++;
+            if (gpuCount > 120) { gpuTotal *= 0.5; gpuCount /= 2; }
+        }
+    }
 
     public string DescribeCost() =>
-        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {skyTimer.AverageMs:0.00} ms/frame (SkyX per pixel)"
-                 : $"simple sky: GPU {skyTimer.AverageMs:0.00} ms/frame";
+        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {GpuMs:0.00} ms/frame (SkyX per pixel)"
+                 : $"simple sky: GPU {GpuMs:0.00} ms/frame";
 
-    public double GpuMs => skyTimer.AverageMs;
-
-    int U(uint p, string name)
-    {
-        if (!uniforms.TryGetValue((p, name), out int location)) uniforms[(p, name)] = location = gl.GetUniformLocation(p, name);
-        return location;
-    }
+    /// <summary>Mean GPU time of a sky pass over the last hundred or so (a running mean, halved now and then).</summary>
+    public double GpuMs => gpuCount == 0 ? 0 : gpuTotal / gpuCount;
 
     public void Dispose()
     {
         if (Active == this) Active = null;
-        skyTimer.Dispose();
-        foreach (var t in new[] { starsTexture, moonTexture, cloudsTexture, irradianceCube, specularCube, ambientMap }) if (t != 0) gl.DeleteTexture(t);
+        foreach (var t in new[] { starsTexture, moonTexture, cloudsTexture, irradianceCube, specularCube, ambientMap }) t?.Dispose();
         simple.Dispose();
         sky.Dispose();
-    }
-
-    /// <summary>GPU time of a span of commands, by timestamp queries (ring of a few, read without stalling).</summary>
-    sealed class GpuSpan : IDisposable
-    {
-        readonly IGl gl;
-        readonly uint[] begin = new uint[4], end = new uint[4];
-        readonly bool[] pending = new bool[4];
-        int index;
-        double total;
-        int samples;
-        public GpuSpan(IGl gl)
-        {
-            this.gl = gl;
-            for (int i = 0; i < 4; i++) { begin[i] = gl.GenQuery(); end[i] = gl.GenQuery(); }
-        }
-        public double AverageMs => samples == 0 ? 0 : total / samples;
-        public void Begin() { if (!pending[index]) gl.QueryCounter(begin[index], QueryCounterTarget.Timestamp); }
-        public void End()
-        {
-            if (pending[index]) { index = (index + 1) % 4; return; }
-            gl.QueryCounter(end[index], QueryCounterTarget.Timestamp);
-            pending[index] = true;
-            index = (index + 1) % 4;
-        }
-        public void Poll(bool wait)
-        {
-            for (int i = 0; i < 4; i++)
-            {
-                if (!pending[i]) continue;
-                gl.GetQueryObject(end[i], QueryObjectParameterName.ResultAvailable, out int available);
-                if (available == 0 && !wait) continue;
-                gl.GetQueryObject(begin[i], QueryObjectParameterName.Result, out ulong b);
-                gl.GetQueryObject(end[i], QueryObjectParameterName.Result, out ulong e);
-                pending[i] = false;
-                if (e > b && e - b < 1_000_000_000UL) { total += (e - b) / 1e6; samples++; if (samples > 120) { total *= 0.5; samples /= 2; } }
-            }
-        }
-        public void Dispose() { for (int i = 0; i < 4; i++) { gl.DeleteQuery(begin[i]); gl.DeleteQuery(end[i]); } }
     }
 }
 
@@ -783,4 +673,111 @@ sealed class SkyProg : IDisposable
     }
 
     public void Dispose() => P.Dispose();
+}
+
+/// <summary>
+/// (Phase 8 stage 2.) A native texture with the sampler state of the GL texture it replaces: <see cref="SamplerDesc.FromGl"/> with the GL
+/// parameters and, on a mipmapped filter, the upscaler's LOD bias (<see cref="GpuContext.LodBias"/>), as VkGl's <c>SamplerFor</c> made it; the
+/// view covers the levels VkGl's covered. For <see cref="LegacyProgram.Bind"/> and the frame globals (no bindless entry of its own).
+/// Render thread only.
+/// </summary>
+internal sealed class SampledImage : IDisposable
+{
+    readonly GpuContext ctx;
+    readonly TextureMinFilter min;
+    readonly TextureMagFilter mag;
+    readonly TextureWrapMode wrap, wrapR;
+    float cachedBias = float.NaN;
+    SampledTexture cached;
+
+    SampledImage(GpuContext ctx, Texture texture, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, TextureWrapMode wrapR)
+    {
+        this.ctx = ctx;
+        Texture = texture;
+        (this.min, this.mag, this.wrap, this.wrapR) = (min, mag, wrap, wrapR);
+    }
+
+    public Texture Texture { get; }
+
+    /// <summary>The sampler and view a draw samples it with now (what VkGl's <c>Sampled</c> gave for the GL texture).</summary>
+    public SampledTexture Sampled()
+    {
+        float bias = ctx.LodBias();
+        if (!(bias == cachedBias))
+        {
+            var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, wrapR, false, DepthFunction.Lequal, false, 1, false, bias));
+            (cached, cachedBias) = (new SampledTexture(sampler, Texture.View(), Texture.Image), bias);
+        }
+        return cached;
+    }
+
+    static Silk.NET.Vulkan.Rect2D Rect(int width, int height) => new(new(0, 0), new((uint)width, (uint)height));
+
+    /// <summary>
+    /// What <c>WorldGl.Texture2D</c> made: RGBA8 from top-first rows, with <paramref name="mipmaps"/> the whole chain made on the GPU as GL's
+    /// GenerateMipmap made it in VkGl (<see cref="CommandList.GenerateMips"/>) and trilinear filtering, else one level, linear; repeating or
+    /// clamped to the edge (S and T; R stays GL's default, repeat).
+    /// </summary>
+    public static SampledImage Rgba8(GpuContext ctx, RgbaImage image, bool repeat, bool mipmaps, string name) =>
+        Rgba8(ctx, image.Width, image.Height, image.Pixels, repeat, mipmaps, name);
+
+    /// <inheritdoc cref="Rgba8(GpuContext, RgbaImage, bool, bool, string)"/>
+    public static SampledImage Rgba8(GpuContext ctx, int width, int height, byte[] rgba, bool repeat, bool mipmaps, string name)
+    {
+        int levels = mipmaps ? 1 + (int)Math.Floor(Math.Log2(Math.Max(Math.Max(width, height), 1))) : 1;
+        using var batch = ctx.Uploads.Begin();
+        var t = batch.Create(new TextureDesc(Silk.NET.Vulkan.Format.R8G8B8A8Unorm, width, height, levels,
+            Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.TransferSrc, Name: name));
+        batch.Write(t, 0, 0, Rect(width, height), rgba.AsSpan(0, width * height * 4));
+        if (mipmaps) batch.Commands.GenerateMips(t);
+        return new SampledImage(ctx, t, mipmaps ? TextureMinFilter.LinearMipmapLinear : TextureMinFilter.Linear, TextureMagFilter.Linear,
+            repeat ? TextureWrapMode.Repeat : TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat);
+    }
+
+    /// <summary>RGBA32F, one level, linear, clamped to the edge: the GL texture <c>WaterRenderer</c> made for its biome parameter maps.</summary>
+    public static SampledImage Rgba32F(GpuContext ctx, Vector4[] data, int width, int height, string name)
+    {
+        using var batch = ctx.Uploads.Begin();
+        var t = batch.Create(new TextureDesc(Silk.NET.Vulkan.Format.R32G32B32A32Sfloat, width, height, Name: name));
+        batch.Write(t, 0, 0, Rect(width, height), System.Runtime.InteropServices.MemoryMarshal.AsBytes(data.AsSpan(0, width * height)));
+        return new SampledImage(ctx, t, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat);
+    }
+
+    /// <summary>
+    /// A cube map from a DDS file with all its mips (RGBA8), faces in the DDS order (+X, −X, +Y, −Y, +Z, −Z) as layers 0..5 (Vulkan's and GL's
+    /// face order); trilinear, clamped to the edge on S, T and R (Vulkan's cube sampling is always seamless, as GL's was with
+    /// <c>TEXTURE_CUBE_MAP_SEAMLESS</c>). The GL version's <c>MAX_LEVEL</c> was the file's last level, so its view had the file's levels too.
+    /// </summary>
+    public static SampledImage Cube(GpuContext ctx, DdsFile dds, string name)
+    {
+        if (!dds.IsCubemap || dds.ImageCount < 6) throw new InvalidOperationException($"not a cube map: {dds}");
+        var first = DdsDecoder.Decode(dds, 0, 0);
+        using var batch = ctx.Uploads.Begin();
+        var t = batch.Create(new TextureDesc(Silk.NET.Vulkan.Format.R8G8B8A8Unorm, first.Width, first.Height, dds.MipCount, Kind: TextureKind.Cube, Name: name));
+        for (int face = 0; face < 6; face++)
+            for (int level = 0; level < dds.MipCount; level++)
+            {
+                var img = face == 0 && level == 0 ? first : DdsDecoder.Decode(dds, face, level);
+                batch.Write(t, level, face, Rect(img.Width, img.Height), img.Pixels);
+            }
+        return new SampledImage(ctx, t, TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge);
+    }
+
+    public void Dispose() => Texture.Dispose();
+}
+
+/// <summary>
+/// (Phase 8 stage 2.) The shadow blocks a world program reads when there is no <see cref="ShadowPass"/> (<c>--no-shadows</c>), as frame
+/// globals: zeros (shadows off), what <c>ShadowShaders.Bind</c> put on the GL binding points through the unused GL program the terrain
+/// linked for it. Published only where nothing is yet; a <see cref="ShadowPass"/> publishes its own over them whenever it is made. The shadow
+/// textures stay unpublished: readers get the stand-in, as an empty GL unit gave. Called by the sky, which every world view has.
+/// </summary>
+static class ShadowsOffGlobals
+{
+    public static void Publish(GpuContext gpu)
+    {
+        var g = gpu.Globals;
+        foreach (var (name, bytes) in new[] { (ShadowShaders.ReceiverBlock, ShadowPass.ReceiverBytes), (ShadowShaders.CasterBlock, 16), (MeitouShadowShaders.Block, MeitouShadowShaders.BlockBytes) })
+            if (g.Block(name) is null) g.Publish(name, new FrameBlock(gpu, bytes).Binding);
+    }
 }

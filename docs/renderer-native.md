@@ -2404,14 +2404,14 @@ here: calls on an `IGl` (`gl.` or `Gl.` followed by an `IGl` member name), exclu
 | --- | ---: | --- |
 | `src/Meitou.Rendering/PostProcess.cs` | 181 | E |
 | `src/Meitou.Rendering/ShadowPass.cs` | 123 (101 after F's debug views; 97 at `6f4af19`, **24** after phase 8 stage 1, 8.3) | B (debug views F) |
-| `src/Meitou.Rendering/TerrainRenderer.cs` | 122 (98 at `6f4af19`; **1** after phase 8 stage 1: the globals program, 8.4) | B (`DrawMeshes`: foundation pilot) |
+| `src/Meitou.Rendering/TerrainRenderer.cs` | 122 (98 at `6f4af19`; 1 after phase 8 stage 1: the globals program, 8.4; **0** after stage 2, 8.6) | B (`DrawMeshes`: foundation pilot) |
 | `src/Meitou.Rendering/FoliageRenderer.cs` | 147 (0 after phase 8 stage 1, `.Grass.cs` too) | A |
 | `tools/Meitou.ModelViewer/Renderer.cs` | 116 | C |
 | `tools/Meitou.ModelViewer/CharacterRenderer.cs` | 93 | C |
-| `src/Meitou.Rendering/SkyRenderer.cs` | 80 | D |
+| `src/Meitou.Rendering/SkyRenderer.cs` | 80 (57 at `5fcc3e1`; **0** after phase 8 stage 2, 8.6) | D |
 | `src/Meitou.Rendering/ShadowPass.Meitou.cs` | 78 (61 at `6f4af19`, **9** after stage 1, 8.3) | B |
-| `src/Meitou.Rendering/ReflectionPass.cs` | 60 (50 at `6f4af19`, **27** after stage 1, 8.3) | D |
-| `src/Meitou.Rendering/WaterRenderer.cs` | 52 | D |
+| `src/Meitou.Rendering/ReflectionPass.cs` | 60 (50 at `6f4af19`, 27 after stage 1, 8.3; **22** after stage 2: the water's handoff gone, 8.6) | D |
+| `src/Meitou.Rendering/WaterRenderer.cs` | 52 (27 at `5fcc3e1`; **0** after phase 8 stage 2, 8.6) | D |
 | `src/Meitou.Rendering/TerrainTextures.cs` | 52 (**0** after phase 8 stage 1) | B |
 | `src/Meitou.Rendering/TerrainShadowMap.cs` | 48 (33 at `6f4af19`; **4** after phase 8 stage 1: the imported name's sampler state, 8.4) | B |
 | `src/Meitou.Rendering/DebugOverlay.cs` | 42 (16 after step P: the atlas texture, the GL state around the draw) | F |
@@ -2441,14 +2441,15 @@ tests in all (`CoreTests`, `ShaderCompilerTests`, `ShaderInterfaceTests`, `Shade
 Beyond the draw calls, resource creation also goes through `IGl` in `TerrainTextures`, `WorldTextureCache`, `BuildingLodMesh`, `TerrainShadowMap`,
 the foliage meshes and grass pages, `PostProcess` targets and `SkyRenderer` textures. Phase 8 includes moving those to native `Texture` /
 `DeviceBuffer` creation through the `Uploader`. That is owner work by the same agents (7.2), since step P may leave resource creation on IGl.
-`WorldTextureCache`, `BuildingLodMesh` and the foliage meshes are done (phase 8 stage 1, 8.5).
+`WorldTextureCache`, `BuildingLodMesh` and the foliage meshes are done (phase 8 stage 1, 8.5); the sky's and the water's in stage 2 (8.6).
 
 ### 8.2 End state
 
 Deleted:
 - `src/Meitou.Rendering/Gpu/IGl.cs`, `GlEnums.cs` (343 lines), `ITextureLodBias.cs` (replaced by the sampler bias of 2.6), `IGlInterop.cs`.
 - `src/Meitou.Rendering.Vulkan/VkGl*.cs` (2,806 lines), and with it the per-draw translation.
-- `WorldGl.cs` (`Program`, `Matrix`, `Texture2D` helpers), `SkyRenderer.AssignSamplerUnits`, `ShadowShaders.Bind`, `MeitouShadowShaders.Bind`
+- `WorldGl.cs` (`Program`, `Matrix`, `Texture2D` helpers), `SkyRenderer.AssignSamplerUnits` (since stage 2 a forwarder to
+  `AtmosphereShaders.AssignSamplerUnits`, 8.6), `SkyRenderer.BindUnits` (empty since stage 2), `ShadowShaders.Bind`, `MeitouShadowShaders.Bind`
   (units and binding points no longer exist).
 - The legacy shader model (`LegacyProgram`, `MoveDefaultBlock`, the stage binding shift) once no program uses it. GLSL sources stay, in the
   native model.
@@ -2507,7 +2508,8 @@ Every resource is native now; what is left on GL is the GL mirror the native gue
   This accounts for 22 calls in `ShadowPass.cs`, 8 in `ShadowPass.Meitou.cs` and 22 in `ReflectionPass.cs`.
 - (b) The reflection's colour keeps a GL name with its GL sampler parameters (`BindTexture` + 4 `TexParameter`). `WaterRenderer` (reserved)
   samples it through `interop.Sampled(reflection.Texture, ...)`, and an imported name would otherwise have GL's default sampler (nearest
-  mipmap, repeat).
+  mipmap, repeat). *Gone in stage 2 (8.6): the water samples `ReflectionPass.Sampled`, the native colour with that sampler state; the GL
+  name is left only as the guests' framebuffer attachment.*
 - (c) State that later GL-state readers inherit:
   - `gl.Disable(CullFace)` after the blocker pass, which the GL version left off. `WorldObjectRenderer` never sets the enable, so it
     inherits it. **Unknown** whether pixels move without it: kept, not tested.
@@ -2524,7 +2526,8 @@ Every resource is native now; what is left on GL is the GL mirror the native gue
    The guests still change GL state before `CurrentState()`: the casters' `Enable(CullFace)`/`CullFace`/`PolygonOffset`, and the sky inside
    the reflection turns the depth test off and on. So either the merge rule is "the host's base state, then the guest's own GL calls", or
    each guest takes a `DrawState` from its host (4.5, Limits (c)).
-2. `WaterRenderer` takes the reflection as a native `Texture` (with its own sampler) instead of the GL name. That removes group (b).
+2. `WaterRenderer` takes the reflection as a native `Texture` (with its own sampler) instead of the GL name. That removes group (b). *Done in
+   stage 2 (8.6).*
 3. `ShadowShaders.Bind` and `MeitouShadowShaders.Bind` go when no GL program is linked any more (stage 3).
 
 **Learned:**
@@ -2591,7 +2594,10 @@ barrier, per level a transfer barrier and a linear blit from the level above, a 
    `SkyRenderer.AssignSamplerUnits` (the atmosphere's units, without which `PublishUnits` and `BindUnits` do nothing) and `ShadowShaders.Bind`
    (the zero-filled default shadow blocks on their binding points, and the shadow globals' publication). The terrain renderer is built first and
    is the last world renderer that links a GL program. **Verified**: without it the viewer throws `IndexOutOfRangeException` in the first frame.
-   Needed: the sky and the shadows publish their globals without a GL program (`SkyRenderer`, `ShadowShaders`), then this goes.
+   Needed: the sky and the shadows publish their globals without a GL program (`SkyRenderer`, `ShadowShaders`), then this goes. *Gone in
+   stage 2 (8.6): the sky publishes its textures natively and the shadows-off blocks; `TerrainRenderer` makes no GL call now. Observed there:
+   at `5fcc3e1` the viewer no longer threw without the program (forest 13:00 ran through), but the picture was wrong (mean 16, max 95: the
+   atmosphere's cubes and ambient map were the stand-in), so the exception's cause had moved since this note and was not looked for.*
 2. `TerrainShadowMap` imports each target into a GL name (`IGlInterop.Import`) because `ShadowPass.Meitou` binds the finished map to a GL unit
    (`Texture`). An import starts with GL's default sampler state (`NEAREST_MIPMAP_LINEAR`, `REPEAT`, so mipmapped: the upscaler's bias would
    apply), so the name is given the linear, clamped state the GL texture had: `BindTexture`, `TexParameter` (four parameters), `BindTexture(0)`,
@@ -2669,6 +2675,89 @@ Port North 13, `--upscaler taa` forest 13, `MEITOU_GPU_CULL=0`, `MEITOU_GPU_GRAS
 `MEITOU_VK_VALIDATION=sync` forest 13 and Port North 13 (`--water-reflection 4`): 0 errors. `MEITOU_GPU_CULL_VERIFY=1` forest: 142 views,
 0 differences (grass 129 views, 0). Benchmark forest `--faithful all --fly-benchmark 300` (base / this): foliage 0.41-0.43 / 0.33 ms,
 objects 0.10-0.11 / 0.09 ms, CPU-only p50 3.5-3.9 / 3.1 ms, render-thread allocations 18 / 17 MB: no regression.
+
+### 8.6 Phase 8 stage 2 (sky and water) as built
+
+*2026-10-06, off master `5fcc3e1`. In short: the sky and the water make no GL call. Their textures, the water's quad and the sky's timer
+are native, and their draws take a `DrawState` instead of changing GL state. The sky publishes the atmosphere's textures and the shadows-off
+blocks itself, so the terrain's unused GL program is gone. The water samples the reflection natively, so `ReflectionPass` loses its 5 calls
+for that handoff. 0 px everywhere.*
+
+**Calls** (`gl.` / `Gl.`, comments excluded, at `5fcc3e1` → now): `SkyRenderer.cs` 57 → 0, `WaterRenderer.cs` 27 → 0, `ReflectionPass.cs`
+27 → 22, `TerrainRenderer.cs` 1 → 0. `AtmosphereShaders.cs` 0 → 9: `AssignSamplerUnits` moved there (below).
+
+**What moved.**
+- *Sky textures* (`SampledImage`, in `SkyRenderer.cs`): a native `Texture` with the sampler its GL texture had (`SamplerDesc.FromGl`, the
+  upscaler's LOD bias on mipmapped filters, as VkGl's `SamplerFor`). Uploads go through `Uploader.Begin()`.
+  - The starfield, moon and clouds are RGBA8 with the full chain from `CommandList.GenerateMips` (`WorldGl.Texture2D`'s `GenerateMipmap`).
+  - The irradiance and specular cubes are RGBA8 cubes with exactly the file's levels (the GL `MAX_LEVEL`), clamped on S, T and R. Vulkan's
+    cube sampling is always seamless, as GL's was with `TEXTURE_CUBE_MAP_SEAMLESS`.
+  - The ambient map is one level, linear.
+  - Names: "sky stars", "sky moon", "sky clouds", "sky irradiance", "sky specularity", "sky ambient map".
+- *Atmosphere globals*: `uAtmoIrradiance`, `uAtmoSpecular` and `uAtmoAmbientMap` are published as these textures once the sky has a state.
+  Before, they were the GL units `BindUnits` bound. That is why the sky needed a linked GL program (`AssignSamplerUnits` set the units).
+  `BindUnits` is empty now; it stays for its callers in the terrain, objects and foliage files. `Apply(program)` had no caller and is gone.
+- *Shadows-off blocks* (`ShadowsOffGlobals`, called by the sky's constructor): zero-filled `FrameBlock`s for the receiver, caster and
+  Meitou blocks, published only where nothing is yet. This is what `ShadowShaders.Bind` put on the binding points through the terrain's GL
+  program. A `ShadowPass` publishes its own over them whenever it is made. With `--no-shadows` a `LegacyProgram` would otherwise throw on
+  the unbound block (8.3, Learned). The shadow textures stay unpublished, so readers get the stand-in, as an empty GL unit gave.
+- *`TerrainRenderer`'s `globalsProgram`* is removed (its three lines). The terrain file has no GL call left.
+- *`AssignSamplerUnits`* (GL only) moved to `AtmosphereShaders`. `SkyRenderer.AssignSamplerUnits` forwards to it, because `WorldGl.Program`
+  (reserved) and the model viewer's `Renderer` call it. Only GL programs need it: the impostor baker and preview (the impostor tool,
+  which has no sky) and the model viewer's own. It no longer publishes unit-based globals.
+- *Sky timer*: `PassTimer` replaces the GL timestamp queries. `Draw` polls each time, because a pair is readable only until its frame's
+  query pool comes round again. `Benchmark` (`MEITOU_SKY_BENCH`) now reports recording CPU time: the native API has no `Finish` inside a frame.
+- *Water*: the five maps are `SampledImage`s:
+  - "water colour map" and "water flow map": one level, clamped;
+  - "water normal map": mipmapped, repeating. A missing map's 1 × 1 stand-in keeps its trilinear filter;
+  - "water parameters a" and "water parameters b": RGBA32F, linear, clamped.
+
+  The quad is a `DeviceBuffer` ("water quad"). Its single vertex input is built directly (`WaterRenderer.QuadAttribute`), and the pipeline
+  cache keys on a `VertexArrayBindings` the water owns. `ReflectionPass.Sampled` gives the reflection colour with the sampler its GL name
+  had (linear, clamped, no mips). The 5 calls (`BindTexture` + 4 `TexParameter`) are gone. The GL name stays only as the guests'
+  framebuffer attachment.
+- *GL state*: the sky takes `CurrentState() with { DepthTest = false, DepthWrite = false }`. The water takes `with { Cull = None,
+  DepthTest = <has depth>, DepthWrite = false, Blend = src alpha / one minus src alpha }` (blend and depth only with their attachment, as
+  VkGl's `CurrentState`).
+- Constructors keep their `IGl` parameter (`WorldFrame`, reserved, passes it); it is unused. `WaterRenderer.Create`'s `SkyRenderer` is unused too.
+
+**Facts.**
+- **Observed** (a temporary probe of VkGl's GL state at the entry and exit of every sky and water draw: Port North 13:00 in both modes,
+  02:00 with `--water-reflection 0`, forest `--no-shadows`):
+  - At the sky's entry the depth mask is always on. The depth test is off only in the first frame, and the caller turns it on right after
+    the sky in every case (`WorldFrame`, `ReflectionPass`). So the sky's restore (`DepthMask(true)`, `Enable(DepthTest)`,
+    `ActiveTexture(0)`) changed nothing a successor read.
+  - At the water's entry: depth test on, mask on, cull face off, blend off, active unit 0. Its exit differs only in the blend factors it set,
+    and nothing reads those (`DebugOverlay`, the only GL code that enables blending, sets its own; VkGl reports `(One, Zero)` with blending off).
+- **Verified** (`SkyWaterNativeTests`, `[Slow]`, sync validation): for a mipmapped clamped, a mipmapped repeating, a one-level and a 1 × 1 RGBA8
+  texture and an RGBA32F one, `SampledImage.Sampled()` gives the same Vulkan sampler object as VkGl's `Sampled` of the GL texture it replaces
+  (one `SamplerCache`), at LOD bias 0 and 0.75. Same for the format. The water quad's attribute equals VkGl's export of the old GL vertex array
+  (format, stride, rate, offset). The sky publishes the atmosphere's names and non-null shadows-off blocks with no GL program, and a later
+  `ShadowPass` replaces them.
+- **Observed**: at `5fcc3e1`, without the terrain's GL program the viewer did not throw (8.4 #1 said it did), but drew the atmosphere with
+  stand-ins (forest 13:00 mean 16, max 95). With the native globals: 0 px.
+
+**Left, and why** (outside these files):
+1. `SkyRenderer.AssignSamplerUnits` (a forwarder) and `AtmosphereShaders.AssignSamplerUnits` (9 GL calls) stay while `WorldGl.Program` and the
+   model viewer's `Renderer` link GL programs. They go with those programs (stage 3).
+2. `SkyRenderer.BindUnits()` is an empty method still called by `TerrainRenderer` (3×), `WorldObjectRenderer` and `FoliageRenderer`. The owners
+   can drop the calls.
+3. The `IGl` constructor parameters of `SkyRenderer` and `WaterRenderer.Create` (unused) go when `WorldFrame` stops passing them.
+4. Both draws still open their segment through the seam (`BeginNativeInPass`, `CurrentTargets`, `CurrentState`). The host-pass seam work of
+   8.3 (seam needs, 1) covers them.
+
+**Gate** (Release, RTX 4070, against the shared baseline of `6f4af19` and renders of its viewer):
+- Build: `dotnet build -c Release`, 0 warnings. `dotnet test -c Release` (`KENSHI_PATH` set): 470 passed, 0 skipped.
+- Pixels, all max 0 (mean 0):
+  - the ten views `--faithful all` and the ten views in Meitou mode, against the baseline;
+  - against the base viewer: Port North `--water-reflection 4` at 13:00 and 02:00 in both modes; `--water-reflection 0` (Meitou) and `1`
+    (Faithful) at 13:00; `--debug-shadows 1` forest 13:00 in both modes; `--upscaler taa` forest and Port North 13:00 (a non-zero LOD bias
+    on the mipmapped sky and water maps); `--no-shadows` forest 13:00 in both modes; forest at 06:30 and 19:00 in both modes; Port North
+    19:00; `--simple-sky` forest 13:00 and Port North 19:00; `MEITOU_RECORD_THREADS=0` forest and Port North 13:00.
+- `MEITOU_VK_VALIDATION=sync`, 0 errors on each of: forest 13:00; Port North 13:00 `--water-reflection 4` in both modes; forest `--no-shadows`.
+- `--fly-benchmark 150`, Port North 13:00 `--faithful all`, two interleaved runs each (base / this; noisy machine; 150 frames, not the 300
+  for reported numbers): `sky-draw` 0.09-0.11 / 0.11-0.12 ms, `water` 0.24-0.25 / 0.23-0.24 ms, CPU-only p50 2.6-2.8 / 2.4-2.7 ms. No change
+  beyond the noise. The sky's GPU time in the screenshot log reads as before (Port North 13:00: 0.04 ms).
 
 ---
 
