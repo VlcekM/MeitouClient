@@ -2404,13 +2404,13 @@ here: calls on an `IGl` (`gl.` or `Gl.` followed by an `IGl` member name), exclu
 | --- | ---: | --- |
 | `src/Meitou.Rendering/PostProcess.cs` | 181 | E |
 | `src/Meitou.Rendering/FoliageRenderer.cs` | 147 | A |
-| `src/Meitou.Rendering/ShadowPass.cs` | 123 (101 after F's debug views) | B (debug views F) |
+| `src/Meitou.Rendering/ShadowPass.cs` | 123 (101 after F's debug views; 97 at `6f4af19`, **24** after phase 8 stage 1, 8.3) | B (debug views F) |
 | `src/Meitou.Rendering/TerrainRenderer.cs` | 122 | B (`DrawMeshes`: foundation pilot) |
 | `tools/Meitou.ModelViewer/Renderer.cs` | 116 | C |
 | `tools/Meitou.ModelViewer/CharacterRenderer.cs` | 93 | C |
 | `src/Meitou.Rendering/SkyRenderer.cs` | 80 | D |
-| `src/Meitou.Rendering/ShadowPass.Meitou.cs` | 78 | B |
-| `src/Meitou.Rendering/ReflectionPass.cs` | 60 | D |
+| `src/Meitou.Rendering/ShadowPass.Meitou.cs` | 78 (61 at `6f4af19`, **9** after stage 1, 8.3) | B |
+| `src/Meitou.Rendering/ReflectionPass.cs` | 60 (50 at `6f4af19`, **27** after stage 1, 8.3) | D |
 | `src/Meitou.Rendering/WaterRenderer.cs` | 52 | D |
 | `src/Meitou.Rendering/TerrainTextures.cs` | 52 | B |
 | `src/Meitou.Rendering/TerrainShadowMap.cs` | 48 | B |
@@ -2422,10 +2422,10 @@ here: calls on an `IGl` (`gl.` or `Gl.` followed by an `IGl` member name), exclu
 | `tools/Meitou.ModelViewer/Program.cs` | 23 (22) | F |
 | `tools/Meitou.ModelViewer/CharacterApp.cs` | 23 (22) | F |
 | `tools/Meitou.ModelViewer/WorldApp.cs` | 20 (14) | F |
-| `src/Meitou.Rendering/ShadowShaders.cs` | 16 | foundation (`Bind`) |
+| `src/Meitou.Rendering/ShadowShaders.cs` | 16 (15 at `6f4af19`; unchanged by stage 1, 8.3) | foundation (`Bind`) |
 | `src/Meitou.Game/Program.cs` | 11 (10) | F |
 | `tools/Meitou.ModelViewer/WorldApp.Benchmark.cs` | 8 (4) | F |
-| `src/Meitou.Rendering/MeitouShadowShaders.cs` | 8 | foundation (`Bind`) |
+| `src/Meitou.Rendering/MeitouShadowShaders.cs` | 8 (unchanged by stage 1, 8.3) | foundation (`Bind`) |
 | `src/Meitou.Rendering/WorldFrame.cs` | 7 | the agents of the calls (clears and state around the sky and slices: foundation) |
 | `src/Meitou.Rendering/FrameProfiler.cs` | 6 (0) | F |
 | `src/Meitou.Rendering/FramebufferCapture.cs` | 2 (5: the fallback and the guards) | F |
@@ -2463,6 +2463,95 @@ Updated: docs/engine.md "Backend interface" and "Vulkan backend" rewritten for t
 adopted), and 18's "the GL-shaped IGl over VkGl stays" sentence amended. The memory note on `IGl` staying is updated by the owner.
 
 The phase-8 gate is the usual one: 0 differing pixels against the last build with VkGl present.
+
+### 8.3 Stage 1, shadows and reflection: as built (2026-10-06, on master `6f4af19`)
+
+Files: `ShadowPass.cs`, `ShadowPass.Meitou.cs`, `ReflectionPass.cs`, and a new `PassTimer.cs` (`PassTimer`, `FrameBlock`). No file in `Gpu/` and
+no reserved file changed. `IGl` calls (8.1's count): `ShadowPass.cs` 97 → 24, `ShadowPass.Meitou.cs` 61 → 9, `ReflectionPass.cs` 50 → 27.
+Every resource is native now; what is left on GL is the GL mirror the native guests still read (4.5).
+
+**Native now:**
+- *The atlas.* It is a `Texture` (`D32Sfloat`, named "shadow atlas"). Its samplers come from `SamplerDesc.FromGl` with the GL parameters it
+  had: linear, clamp to edge, compare `LEQUAL` for the receivers, and no compare for the blocker pass and the debug view. It is imported into GL
+  (`interop.Import`) only to be attached to the GL framebuffer whose binding the casters' `CurrentTargets` reads.
+- *The noise* ("shadow noise", RGBA8) is uploaded through the `Uploader` in the first frame (uploads need an open frame).
+- *The blocks.* The receiver block and the Meitou block are `FrameBlock`s: on the first read in a frame after a write, they write the
+  current data into a slice of the frame's constants. The casters' bias is a fresh slice per cascade, set before the draw callback, and the
+  guests take it in their Prepare. This is what VkGl's renaming of the GL buffer gave. `ShadowPass` publishes the seven shadow globals itself
+  (the blocks, `uShadowMap`, `uShadowNoise`, `uShadowBlocker`, `uShadowTerrain`). They replace `ShadowShaders.PublishGlobals`, which reads
+  units and binding points and stays the source without a `ShadowPass` (`--no-shadows`, the model viewer).
+  - `uShadowTerrain` is `interop.Sampled(TerrainShadowMap.Texture)`: the terrain map is still a GL texture, owned by the terrain agent's file.
+  - A texture is published from the point where the GL code bound it to its unit. Before that, readers get the stand-in.
+- *The blocker map* ("shadow blocker map", R32F) is drawn in its own `BeginNative` segment and rendering (`LOAD`), with a `DrawState`
+  written out (no cull, depth or blending, RGBA mask: what `CurrentState` reported there). It reads the atlas through the plain sampler,
+  so the atlas's compare-mode `TexParameter` toggle is gone.
+- *GPU timing*: `PassTimer` (the frame's `QueryArena` through `Interleave`) replaces the GL timer queries. `Poll(wait)` keeps its signature
+  but no longer blocks.
+- *The debug views*: their own rendering on the target's `CurrentTargets`, with the state `CurrentState()` plus what the GL code set (no depth,
+  no cull, the multiply for mode 3, blending off for the atlas after the scene view, the inherited blend otherwise). The scene's depth is
+  copied with `vkCmdCopyImage` into "shadow debug scene depth".
+- *The reflection*:
+  - Targets: "reflection colour" (RGBA16F, sampled by the water), "reflection colour msaa" and "reflection depth msaa" (4×).
+  - "reflection depth" is made only without MSAA. Before, it was always allocated and never used with MSAA.
+  - The resolve is `Resolve(Texture, Texture)`. The sample count comes from the device's limits (VkGl answered `MAX_SAMPLES` with 8, so it is
+    4 either way).
+
+**What stays on GL, and why:**
+- (a) The guests' GL mirror. Guests read `CurrentTargets()` and `CurrentState()` from VkGl's GL state, so the hosts still keep it:
+  - the framebuffer binding (the native targets imported and attached; creation and deletion of that framebuffer);
+  - the viewport and scissor per cascade or slice;
+  - depth test, mask, function and clamp; the colour mask; blending; the scissor enable;
+  - the restore afterwards, and in the reflection 3 `GetInteger` calls, used only when the caller does not say what to restore.
+
+  This accounts for 22 calls in `ShadowPass.cs`, 8 in `ShadowPass.Meitou.cs` and 22 in `ReflectionPass.cs`.
+- (b) The reflection's colour keeps a GL name with its GL sampler parameters (`BindTexture` + 4 `TexParameter`). `WaterRenderer` (reserved)
+  samples it through `interop.Sampled(reflection.Texture, ...)`, and an imported name would otherwise have GL's default sampler (nearest
+  mipmap, repeat).
+- (c) State that later GL-state readers inherit:
+  - `gl.Disable(CullFace)` after the blocker pass, which the GL version left off. `WorldObjectRenderer` never sets the enable, so it
+    inherits it. **Unknown** whether pixels move without it: kept, not tested.
+  - The debug views and the depth copy bind the target framebuffer once each, to name it for `CurrentTargets`.
+- `ShadowShaders.cs` and `MeitouShadowShaders.cs` are unchanged: `Bind` is still called by `WorldGl.Program` and the model viewer's
+  `Renderer`, and their unit-based `PublishGlobals` is the fallback above.
+
+**Seam needs (for stage 2 or 3):**
+1. A host that supplies its own targets and state, so that group (a) goes:
+   - `IGlInterop.BeginHostPass(CommandList cmd, PassTargets targets, DrawState state)`, plus a per-cascade or per-slice
+     `SetHostViewport(Viewport, Rect2D)`;
+   - while the host pass is open, `CurrentTargets()` and `CurrentState()` answer from these.
+
+   The guests still change GL state before `CurrentState()`: the casters' `Enable(CullFace)`/`CullFace`/`PolygonOffset`, and the sky inside
+   the reflection turns the depth test off and on. So either the merge rule is "the host's base state, then the guest's own GL calls", or
+   each guest takes a `DrawState` from its host (4.5, Limits (c)).
+2. `WaterRenderer` takes the reflection as a native `Texture` (with its own sampler) instead of the GL name. That removes group (b).
+3. `ShadowShaders.Bind` and `MeitouShadowShaders.Bind` go when no GL program is linked any more (stage 3).
+
+**Learned:**
+- **Verified** (code reading and 0 px): VkGl's `SamplerFor` compares only for `shadow && t.Compare`. So the GL version's compare-mode toggle
+  around the blocker pass never changed the plain sampler the blocker shader got. The native version keeps two samplers and has no toggle.
+- **Verified** (`ShadowPassNativeTests`, and 0 px): an owner's `FrameGlobals.Publish` wins over `ShadowShaders.PublishGlobals` whatever
+  their order. The latter returns at once when the receiver block is already published.
+- **Observed**: a `LegacyProgram` whose shader declares `MeitouShadowReceiver` throws when the block has no binding. This happened with the
+  Faithful debug view, mode 3, in the first attempt. `NativeFrame` substitutes zeros, `LegacyProgram` does not. So a `FrameBlock` starts
+  as a zero slice, as the zero-filled GL buffers on the binding points were.
+- **VRAM** (`GpuAllocator.Breakdown`):
+  - The new names are "shadow atlas" (16 MB at 2048²), "shadow blocker map" (4 MB), "shadow noise", "reflection colour", "reflection colour
+    msaa" and "reflection depth msaa" (about 3, 11 and 6 MB at 800 × 450), and "shadow debug scene depth" (debug views only).
+  - `gl texture` loses the atlas, the blocker map, the noise and the reflection colour, and `renderbuffer` loses the reflection's three.
+  - The shadow names are **Verified** by `ShadowPassNativeTests`. The F12 pie itself was not looked at (interactive).
+
+**Gate** (Release, RTX 4070, against the shared baseline of `6f4af19`):
+- Build: 0 warnings. `dotnet test -c Release`: 466 passed, 0 skipped.
+- Pixels, all max 0 (mean 0):
+  - the ten views `--faithful all` and the ten views in Meitou mode;
+  - against base-viewer renders of the same build: `--debug-shadows 1` forest 13:00 in both modes, `--debug-shadows 2` (Meitou) and `3`
+    (Faithful), `--water-reflection 4` Port North 13:00 in both modes, `--upscaler taa` forest, `MEITOU_RECORD_THREADS=0` forest, forest
+    and zone 14,30 Meitou, Hub Faithful.
+- `MEITOU_VK_VALIDATION=sync`, 0 errors on each of: forest 13:00; Port North 13:00 `--water-reflection 4` in both modes; forest
+  `--debug-shadows 2`; forest `--debug-shadows 1 --faithful all`.
+- New test: `ShadowPassNativeTests` (`[Slow]`, sync validation). A Meitou pass with no casters has the named allocations, the native
+  globals (the atlas image behind `uShadowMap`), and a blocker map of 1.0 everywhere.
+- Benchmark: not run. Per frame, a GL `BufferSubData` and rename per cascade became a 16-byte constants slice, and the GL timer queries became native timestamps; nothing was added to a per-draw path.
 
 ---
 
