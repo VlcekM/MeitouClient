@@ -381,6 +381,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 DrawnInstances++;
             }
 
+        double tCull = cpu.Elapsed.TotalMilliseconds;
+
         // 2. Upload the instances: one buffer, each batch's matrices contiguous.
         int total = 0;
         foreach (var b in active) { b.Offset = total; total += b.Count; }
@@ -391,6 +393,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         foreach (var b in active)
             fixed (Matrix4x4* p = b.Data)
                 gl.BufferSubData(BufferTargetARB.ArrayBuffer, (nint)(b.Offset * 64L), (nuint)(b.Count * 64L), p);
+
+        double tUpload = cpu.Elapsed.TotalMilliseconds;
 
         // 3. Draw.
         gl.UseProgram(program);
@@ -414,10 +418,42 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         if (wireMode != 2 && active.Count > 0) DrawBatches(options, wire: false);
         if (wireMode != 0 && active.Count > 0) DrawBatches(options, wire: true);
         gl.BindVertexArray(0);
+        double tBatches = cpu.Elapsed.TotalMilliseconds;
+        int batchDraws = DrawCalls;
         if (terrainMeshes.Count > 0) DrawCalls += terrain.DrawMeshes(terrainMeshes, depthPass);
         gl.Disable(EnableCap.CullFace);
         gl.BindVertexArray(0);
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
+        if (ObjTiming) ObjAccount(depthPass ? 1 : 0, tCull, tUpload, tBatches, LastDrawCpuMs, batchDraws, DrawCalls - batchDraws);
+    }
+
+    /// <summary><c>MEITOU_OBJECT_TIMING=1</c>: the CPU time of <see cref="Draw"/>'s steps summed over the run by kind (colour or depth), with the
+    /// draws each issued, printed when the renderer is disposed (docs/renderer-native.md 7.1, wave 3 objects).</summary>
+    static readonly bool ObjTiming = Environment.GetEnvironmentVariable("MEITOU_OBJECT_TIMING") == "1";
+    static readonly int ObjSkip = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_OBJECT_TIMING_SKIP"), out int skip) ? skip : 160;
+    readonly double[,] objMs = new double[2, 4];
+    readonly long[] objSeen = new long[2], objCalls = new long[2], objBatchDraws = new long[2], objTerrainDraws = new long[2];
+
+    void ObjAccount(int k, double tCull, double tUpload, double tBatches, double tEnd, int batchDraws, int terrainDraws)
+    {
+        if (objSeen[k]++ < ObjSkip) return;   // the first calls are cold (pipelines, streaming)
+        objCalls[k]++;
+        objMs[k, 0] += tCull; objMs[k, 1] += tUpload - tCull; objMs[k, 2] += tBatches - tUpload; objMs[k, 3] += tEnd - tBatches;
+        objBatchDraws[k] += batchDraws; objTerrainDraws[k] += terrainDraws;
+    }
+
+    void ReportObjectTiming()
+    {
+        if (!ObjTiming) return;
+        string[] names = ["colour", "depth"];
+        for (int k = 0; k < 2; k++)
+        {
+            if (objCalls[k] == 0) continue;
+            Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"" +
+                $"objects timing {names[k]}: {objCalls[k]} calls, per call us: cull {objMs[k, 0] * 1000 / objCalls[k]:F1}, upload {objMs[k, 1] * 1000 / objCalls[k]:F1}, batches {objMs[k, 2] * 1000 / objCalls[k]:F1}, terrain meshes {objMs[k, 3] * 1000 / objCalls[k]:F1}; " +
+                $"draws per call: batches {(double)objBatchDraws[k] / objCalls[k]:F1}, terrain {(double)objTerrainDraws[k] / objCalls[k]:F1}; " +
+                $"us per batch draw {(objBatchDraws[k] > 0 ? objMs[k, 2] * 1000 / objBatchDraws[k] : 0):F2}"));
+        }
     }
 
     /// <summary>Adds an instance at its LOD level: two batches while blending levels, the upper level taking [0, t·w) of the dither range and the lower [t·w, w).</summary>
@@ -583,6 +619,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
     public void Dispose()
     {
+        ReportObjectTiming();
         if (depthProgram != 0) gl.DeleteProgram(depthProgram);
         streamer.Dispose();
         meshes.Dispose();
