@@ -1364,15 +1364,26 @@ public sealed unsafe class FoliageRenderer : IDisposable
         public bool DoubleSided;
     }
 
-    /// <summary>The per-texture-slot bindless indices of the segment being recorded (GL texture id → index), reset per segment: a
-    /// texture's view or sampler may change between segments (mip streaming, the upscaler's bias), never inside one.</summary>
-    readonly uint[] boundId = new uint[4], boundIndex = new uint[4];
+    /// <summary>The bindless indices of the segment being recorded, by GL texture id (an entry counts while its segment number is
+    /// <see cref="textureSegment"/>): a texture's view or sampler may change between segments (mip streaming, the upscaler's bias), never
+    /// inside one, so each texture is looked up once per segment (the grass alternates between a few sprites draw by draw).</summary>
+    (uint Index, int Segment)[] textureIndices = new (uint, int)[1024];
+    int textureSegment;
 
-    uint Texture(IGlInterop interop, int slot, uint id)
+    /// <summary>A new segment: forget the indices of the last one.</summary>
+    void NewTextureSegment() => textureSegment++;
+
+    uint Texture(IGlInterop interop, uint id)
     {
-        if (boundId[slot] == id) return boundIndex[slot];
-        boundId[slot] = id;
-        return boundIndex[slot] = Index2D(interop, id);
+        if (id < (uint)textureIndices.Length)
+        {
+            ref var e = ref textureIndices[id];
+            if (e.Segment == textureSegment) return e.Index;
+        }
+        else Array.Resize(ref textureIndices, (int)Math.Max(id + 1, (uint)textureIndices.Length * 2));
+        uint index = Index2D(interop, id);
+        textureIndices[id] = (index, textureSegment);
+        return index;
     }
 
     readonly List<MeshDraw> meshDraws = [];
@@ -1437,9 +1448,9 @@ public sealed unsafe class FoliageRenderer : IDisposable
         Span<BufferBinding> rows = stackalloc BufferBinding[4];
         for (int a = 0; a < 4; a++) rows[a] = new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
         cmd.BindVertexBuffers(RowLocation, rows);
-        Array.Fill(boundId, uint.MaxValue);
+        NewTextureSegment();
         // The constants the GL code set on every draw (Shaders.MeshFragment's uniforms the foliage does not vary).
-        uint standIn = Index2D(interop, 0);
+        uint standIn = Texture(interop, 0);
         var pc = new MeshPush
         {
             Tint = Vector3.One, TriplanarScale = 1f / 5000, AlphaChannel = 3, GreyChannel = -1, HeadDiffuse = standIn, HeadNormal = standIn,
@@ -1463,10 +1474,10 @@ public sealed unsafe class FoliageRenderer : IDisposable
             pc.HasNormal = (d.PartBits & 1) != 0 ? 1u : 0u;
             pc.HasDual = (d.PartBits & 2) != 0 ? 1u : 0u;
             pc.UseVertexColour = (d.PartBits & 4) != 0 ? 1u : 0u;
-            pc.Diffuse = Texture(interop, 0, d.Diffuse);
-            pc.Normal = Texture(interop, 1, d.Normal);
-            pc.Diffuse2 = Texture(interop, 2, d.Diffuse2);
-            pc.Normal2 = Texture(interop, 3, d.Normal2);
+            pc.Diffuse = Texture(interop, d.Diffuse);
+            pc.Normal = Texture(interop, d.Normal);
+            pc.Diffuse2 = Texture(interop, d.Diffuse2);
+            pc.Normal2 = Texture(interop, d.Normal2);
             var want = d.DoubleSided ? sided : state.Cull;
             if (side != want) { cmd.SetRaster(want, state.Front); side = want; }
             var part = d.Part;
@@ -1589,14 +1600,14 @@ public sealed unsafe class FoliageRenderer : IDisposable
         cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance, Time = SwayPhase() };
         nativeFrame.Bind(cmd, p.Layout, in view);
-        Array.Fill(boundId, uint.MaxValue);
+        NewTextureSegment();
         GrassPush last = default;
         bool pushed = false;
         foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(grassDraws))
         {
             var pc = d.Push;
-            pc.Sprite = Texture(interop, 0, d.Sprite);
-            pc.ColourMap = Texture(interop, 1, d.Colour);
+            pc.Sprite = Texture(interop, d.Sprite);
+            pc.ColourMap = Texture(interop, d.Colour);
             var buffer = d.Buffer;
             ref var n = ref buffer.GrassNative;
             Current(ref n, interop, buffer.Vao, gp, stamp, rows: false);
@@ -1692,14 +1703,14 @@ public sealed unsafe class FoliageRenderer : IDisposable
             NearPlanes = targets.NearPlanes, JitterNdc = targets.JitterNdc,
         };
         nativeFrame.Bind(cmd, p.Layout, in view);
-        Array.Fill(boundId, uint.MaxValue);
+        NewTextureSegment();
         uint nearDepth = Index2D(interop, targets.NearDepth);
         GrassPush last = default;
         bool pushed = false;
         foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(motionDraws))
         {
             var pc = d.Push;
-            pc.Sprite = Texture(interop, 0, d.Sprite);
+            pc.Sprite = Texture(interop, d.Sprite);
             pc.NearDepth = nearDepth;
             var buffer = d.Buffer;
             ref var n = ref buffer.MotionNative;
