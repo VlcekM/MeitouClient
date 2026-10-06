@@ -74,6 +74,7 @@ public sealed unsafe class GpuFrame : IDisposable
     public void End()
     {
         Timestamps.End();
+        ctx.Bindless?.EndFrame();   // what was registered during the frame, into its set before the submit
         Open = false;
         if (ctx.Log is { } log)
         {

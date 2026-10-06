@@ -35,7 +35,8 @@ public sealed class UniformBlockInfo
     public bool IsDefault => Name == "gl_DefaultUniformBlock";
 }
 
-/// <summary>A sampled image (a GLSL sampler).</summary>
+/// <summary>A sampled image (a GLSL sampler). <see cref="ArrayLength"/>: 0 for a single sampler, the length of a sized array, -1 for a
+/// runtime-sized array (the bindless arrays of the native model).</summary>
 public sealed record SamplerInfo(string Name, int Set, int Binding, SamplerDimension Dimension, bool Arrayed, bool Multisampled, bool Depth, ScalarKind SampledKind, int ArrayLength);
 
 /// <summary>A stage input or output variable (built-ins excluded).</summary>

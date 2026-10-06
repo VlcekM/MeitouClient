@@ -198,7 +198,9 @@ public sealed unsafe class ShaderLibrary
             if (b.Kind != BlockKind.PushConstant && b.Set == 0)
                 bindings.Add(new DescriptorSetLayoutBinding((uint)b.Binding, b.Kind == BlockKind.StorageBuffer ? DescriptorType.StorageBuffer : DescriptorType.UniformBuffer, 1, ShaderStageFlags.ComputeBit));
         foreach (var s in r.Samplers)
-            if (s.Set == 0) bindings.Add(new DescriptorSetLayoutBinding((uint)s.Binding, DescriptorType.CombinedImageSampler, (uint)Math.Max(1, s.ArrayLength), ShaderStageFlags.ComputeBit));
+            if (s.Set == 0 && s.ArrayLength < 0)
+                throw new InvalidOperationException($"{name}: runtime-sized sampler array '{s.Name}' in set 0; declare the bindless table at an extra set (BindlessTable.Declarations(1))");
+            else if (s.Set == 0) bindings.Add(new DescriptorSetLayoutBinding((uint)s.Binding, DescriptorType.CombinedImageSampler, (uint)Math.Max(1, s.ArrayLength), ShaderStageFlags.ComputeBit));
         bool push = device.HasPushDescriptor && bindings.Sum(b => (int)b.DescriptorCount) <= device.MaxPushDescriptors;
         var set0 = CreateSetLayout([.. bindings], push ? DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr : 0);
         uint pc = (uint)(r.Blocks.FirstOrDefault(b => b.Kind == BlockKind.PushConstant)?.Size ?? 0);
@@ -216,8 +218,22 @@ public sealed unsafe class ShaderLibrary
         var f = Compiler.CompileNative(fragmentGlsl, fragment: true);
         var stages = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit;
         var layout = CreateLayout(setLayouts, pushConstantBytes, stages);
-        return new ShaderProgram(device, name, ShaderModel.Native, v, f, null, null, setLayouts, [], layout, false, pushConstantBytes, pushConstantBytes > 0 ? stages : 0);
+        var program = new ShaderProgram(device, name, ShaderModel.Native, v, f, null, null, setLayouts, [], layout, false, pushConstantBytes, pushConstantBytes > 0 ? stages : 0);
+        // The samplers declared in the bindless set must be the table's arrays (a float view read through a usampler is undefined).
+        int bindless = Array.FindIndex(setLayouts, l => l.Handle != 0 && l.Handle == BindlessLayout.Handle);
+        if (bindless >= 0)
+            foreach (var s in program.VertexReflection!.Samplers.Concat(program.FragmentReflection!.Samplers))
+                if (s.Set == bindless)
+                {
+                    try { BindlessTable.Check(s, name); }
+                    catch { program.Dispose(); throw; }
+                }
+        return program;
     }
+
+    /// <summary>The bindless table's set layout (set by <see cref="GpuContext"/>), so <see cref="Native"/> can check a program's
+    /// declarations of it.</summary>
+    internal DescriptorSetLayout BindlessLayout { get; set; }
 
     internal DescriptorSetLayout CreateSetLayout(DescriptorSetLayoutBinding[] bindings, DescriptorSetLayoutCreateFlags flags)
     {
