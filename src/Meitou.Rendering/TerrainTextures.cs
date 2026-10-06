@@ -174,6 +174,19 @@ public sealed unsafe class TerrainTextures : IDisposable
     public int FeatureBiomeRow(float x, float z) =>
         biomeMap is not null && rowOf.TryGetValue(biomeMap.At(x, z), out int row) && state[row].Resident ? row : -1;
 
+    /// <summary><see cref="FeatureBiomeRow"/> before the residency test: the row of the biome at (x, z), or -1 when it has none. Fixed per
+    /// position; <see cref="FeatureBiomeRow"/> is this when <see cref="ResidentBiomeBits"/> has the row's bit, else -1.</summary>
+    public int FeatureBiomeRowAny(float x, float z) =>
+        biomeMap is not null && rowOf.TryGetValue(biomeMap.At(x, z), out int row) ? row : -1;
+
+    /// <summary>A bit per resident biome row (row r: word r / 32, bit r % 32); rows beyond the span are left out (there are fewer than 254).</summary>
+    public void ResidentBiomeBits(Span<uint> bits)
+    {
+        bits.Clear();
+        for (int r = 0; r < state.Length && r < bits.Length * 32; r++)
+            if (state[r].Resident) bits[r >> 5] |= 1u << (r & 31);
+    }
+
     void BuildBiomes()
     {
         if (biomes.Count == 0) return;

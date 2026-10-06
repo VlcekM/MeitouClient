@@ -867,7 +867,9 @@ sums, so atomics (if a variant uses them) do not affect the result.
   a per-draw table indexed by `gl_DrawID`. That needs step O's bindless materials.
 - **TERRAIN-mode rocks** stay CPU-culled until agent B provides an instanced main-pass TERRAIN-mode path. Today only the depth path is
   instanced (`TerrainShaders.MeshInstancedDepthVertex`). The main pass draws one draw each with a uniform matrix, through
-  `TerrainShaders.MeshVertex`. A new instanced main-pass shader is a shader change with its own gate.
+  `TerrainShaders.MeshVertex`. A new instanced main-pass shader is a shader change with its own gate. *Since then:* the terrain's step O made
+  both passes instanced (7.1), and the rocks are now culled on the GPU too (5.6.1, "TERRAIN-mode rocks"), drawn through
+  `TerrainRenderer.DrawMeshesIndirect` with the terrain's own programs unchanged.
 - **Grass**: in step P, a native draw per (page, patch) with push constants for the patch values. GPU-driven grass (page and patch tests,
   density prefix and range into indirect arguments) is a wave 3b item. Its page order (nearest first, `grassOrder`) only affects early
   depth rejection, plus the tie risk of 5.6.
@@ -960,9 +962,37 @@ Where it differs from 5.2 to 5.5, and why:
   at all (`ShowBatches`): a cascade's work list has no zone test, and recording ~60 empty draws a cascade cost more CPU than the cull saved
   (forest flying: 107 against 26 depth draws a call before this test, 50 after). A batch left out has no visible instance, so the picture is
   the same; the verify mode checks the GPU found none there.
-- **TERRAIN-mode rocks** stay on the CPU (5.4): their groups are culled with `FoliageCull.CullGroup` per view and drawn through
-  `TerrainRenderer.DrawMeshes`. In the Faithful forest they are most of the instances (2,992 rock draws a cascade call) and now most of the
-  foliage cull's CPU time (7.1, step A2).
+- **TERRAIN-mode rocks** (as first built in A2: on the CPU, `FoliageCull.CullGroup` per view and `TerrainRenderer.DrawMeshes`, then most of
+  the foliage cull's CPU time; now on the GPU, 2026-10-06, 7.1 "TERRAIN-mode rocks"). They go into the **same work list and dispatch** as the
+  other meshes, as extra batches after the mesh batches:
+  - *What the CPU path gives the terrain, and how the GPU reproduces it.* `EmitAll` / `Emit` hand `DrawMeshes` a rock only when its fade
+    w ≥ 0.5 (the terrain shader has no dither), with M14 = 0, one placement per mesh part. `GroupMeshes` groups the placements by (vertex
+    array, index count, mirroring: `GetDeterminant() < 0`), in order within a group, and in colour writes row 0 w = the biome row
+    (`TerrainTextures.FeatureBiomeRow`: the biome map's row at the placement's x, z when that biome is resident, else -1); depth leaves 0.
+  - *Batches.* A rock batch is one mesh's plain placements, or its mirroring ones (both kinds can sit in one group): `(asset, mirrored)`,
+    numbered by first candidate in the work list (a group's first placement's kind first). Each part of the mesh is one indirect draw of the
+    batch. `ShowBatches` covers them (each rock group's sphere box).
+  - *Per instance, once per group:* `Ground.W` (unused by anything else) = `FoliageCull.RockBits`: 1024 when the placement mirrors, plus the
+    biome map row + 1 regardless of residency (`FeatureBiomeRowAny`), with the same C# calls `GroupMeshes` makes per frame. Made again (and the
+    group placed again in the arena) only when the terrain's textures object changes (`TerrainRenderer.FeatureBiomes`).
+  - *Per chunk:* `FoliageCullChunk.Flags` (was padding): `Rock`, `Mirrored`. A rock group with both kinds has one chunk run per kind over
+    the same arena range, each keeping only its own kind, so a batch holds (work-list group order, index order) as `GroupMeshes` does.
+  - *Per view:* the kernels' View buffer grows from 160 to 208 bytes: a residency bit per biome row (256 bits, from
+    `TerrainTextures.ResidentBiomeBits` at the view's `Draw`, where the CPU path reads residency too) and the biome-rows switch (colour views,
+    the reflection included; off in the cascades).
+  - *Kernels:* `cull` adds, for rock chunks, `!(w < 0.5)` (the precise w the fade already uses: exact) and the mirroring match; `compact`
+    writes rock rows with row 0 w = biomes ? (resident ? row : −1) : 0. Mesh chunks (flags 0) take the old paths unchanged.
+  - *Draws:* the rock draws' arguments follow the mesh draws' in the same arguments buffer; `TerrainRenderer.DrawMeshesIndirect(meshes,
+    rows, args)` records them at the old place (after grass) with the same programs, segment set-up (now `OpenMeshSegment`, shared with
+    `DrawGroups`), per-mesh native cache (`meshGroups`) and GL state left behind as `DrawMeshes`; one `DrawIndexedIndirect` per (part,
+    mirroring). `DrawMeshes` (objects' map features, and the CPU path) is unchanged.
+  - *Order.* The CPU path orders the terrain groups by first *visible* placement; the GPU path by first candidate. Only exact depth ties
+    between two different rocks in colour could show it (depth passes keep the nearest); measured 0 px (7.1). A second difference: when a rock
+    batch is shown but nothing in it is visible, the GPU path still runs the colour set-up (`BindUnits`, `BindHeightUnits`, `textures.Bind`,
+    `PrepareConstants`) and records a segment of empty draws, where `DrawMeshes` returns before any of it. Also 0 px; the first suspect if a
+    later picture differs where no rock is drawn.
+  - *Verify mode:* the CPU's `terrainDraws` grouped as `GroupMeshes` would (biome row filled in colour), compared per (vertex array,
+    mirroring) with each rock draw's arguments and rows, all 16 floats bit for bit; a group with CPU placements but no GPU draw is a difference.
 - **Statistics.** `DrawnInstances` adds the GPU's count of the view with the same call number a frame ring earlier (copied into a
   `ReadbackBuffer`), since the CPU no longer knows it when it draws; `DrawCalls` counts the indirect draws.
 
@@ -1907,10 +1937,68 @@ Files: `FoliageGpuCull.cs` (new), `FoliageShaders.cs` (`CrSqrt`, `CullCompute`, 
     timed per-call total fell there; in the same flying runs the terrain and objects caster stages fell (0.33 / 0.31 -> 0.23 / 0.20 ms), so the `shadows` total
     did not change. Cause **Unknown**: the stage covers all 300 frames and the timing skips the first 160 calls, and while flying new groups keep arriving (their
     first cull fills the spheres, the bounds and the arena upload on the render thread); not separated.
-- *Follow-ups.* The TERRAIN-mode rocks to the GPU once `TerrainRenderer.DrawMeshes` takes GPU-made placements (5.4); `DrawIndexedIndirectCount` over one mesh arena
+- *Follow-ups.* The TERRAIN-mode rocks to the GPU once `TerrainRenderer.DrawMeshes` takes GPU-made placements (5.4; **done**, next entry); `DrawIndexedIndirectCount` over one mesh arena
   (2.8), which would also remove the empty draws; the rows are reserved at 64 bytes a candidate a view in device scratch (the visible count is not known when
   recording; 4.6 MB a view at x8, in 32 MB chunks per frame slot), so a far larger range wants a bound on the rows or a count read back a frame late; the CPU still
   fills the spheres and uploads them per group at its first cull; grass and impostors were out of scope.
+
+**Wave 3b, agent A (foliage), TERRAIN-mode rocks on the GPU cull (2026-10-06, on master `5827596`, gated there).** The rocks (TERRAIN-mode foliage
+meshes) of every view (main slices, each cascade, the reflection) are culled and their placements written by the A2 kernels, in the same dispatch, and drawn
+with `DrawIndexedIndirect` through the terrain's TERRAIN-mode programs; design in 5.6.1 ("TERRAIN-mode rocks"). Commits: `58b7553` the kernels (rock chunks:
+fade ≥ 0.5, mirroring, biome rows by residency bits), `FoliageCull.RockBits`, the View buffer, and the test; `cbf97ba` the renderer (`FoliageRenderer` rock
+batches and draws, `TerrainRenderer.DrawMeshesIndirect` with `OpenMeshSegment` / `CloseMeshSegment` shared with `DrawGroups`, `TerrainTextures`
+`FeatureBiomeRowAny` / `ResidentBiomeBits`, verify mode). `DrawMeshes`' signature and the objects' calls are unchanged (objects' map features stay on it);
+`MEITOU_GPU_CULL=0` keeps the CPU path for the rocks as for the rest. Nothing in `Gpu/` changed.
+
+- **Gate (Release; lighter gate; base = master `5827596` built unchanged in `C:\Temp\agent-RK`).** Build 0 warnings; `dotnet test -c Release` 463 passed, 0
+  skipped (`KENSHI_PATH` set; new `FoliageGpuCullTests.Gpu_cull_matches_the_terrain_mesh_path_for_rocks`: rock and mesh batches in one dispatch, mixed
+  mirroring in a group, a third of the fades within ~50 ulp of 0.5, biome rows −1 and across all residency words, both biome modes: every row and argument
+  bit for bit; it fails when the kernel's 0.5 is moved to 0.49999, checked); `--faithful all` ten views **0 px** (max 0); Meitou default ten views 0 px;
+  `--debug-shadows 1` forest 13:00, `--water-reflection 4` Port North 13:00, `--upscaler taa` forest 13:00: 0 px; `MEITOU_GPU_CULL=0` forest and rock
+  13:00 (Faithful) 0 px against the base too. Verify mode: forest screenshot (36 views, 54,802 instances and 72,149 rock placements), rock view (142,
+  3,384 and 5,661), Hub at 40,000 (185, 7,123 and 996), forest flying 300 frames (1,379, 1,180,987 and 170,009): 0 differences of sets, order,
+  arguments or batch order, every fade and every rock row equal. `MEITOU_VK_VALIDATION=sync` forest 13:00 (Faithful) and Port North 13:00 (reflection 4): 0
+  errors. The 1/255 allowance was not used; the changed rock group order (5.6.1) showed no pixel.
+- **Measured: A/B through `MEITOU_GPU_CULL` in the same build (`cbf97ba`), `--time 13 --size 1600x900 --fly-benchmark 300 --faithful all`,
+  `MEITOU_FOLIAGE_TIMING=1 MEITOU_MESH_TIMING=1`, three rounds with the mode order alternating, medians (minima in brackets), Release; the machine was shared
+  and slower than during A2 (the same CPU-mode figures are 1.5-2x A2's), so compare within this table only.** Views: *forest* (as 7.1, `--fly-speed 0`),
+  *rock* (the parity rock view, `--at -51468,-14324 --yaw 95 --pitch 2 --distance 300 --fly-speed 0`), *flying* (the forest, flying). "Cull", "meshes",
+  "rocks" are `Draw`'s steps per call (rocks: the TERRAIN-mode draw step, `DrawMeshes` or `DrawMeshesIndirect`); the CPU mode's rock cull is inside its
+  cull (the groups are culled together), so the per-cascade rock cost is read from the cull and rocks columns together; "terrain meshes" is
+  `MEITOU_MESH_TIMING`'s per call (foliage's and objects' calls).
+
+  | | forest GPU | forest CPU | rock GPU | rock CPU | flying GPU | flying CPU |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+  | depth cull, us per cascade call | 84.8 (71.7) | 593.0 (573.1) | 29.9 (26.1) | 290.2 (273.4) | 90.6 (88.0) | 214.7 (184.0) |
+  | depth meshes (incl. dispatch recording), us per call | 127.5 (115.0) | 52.9 (49.7) | 59.5 (53.1) | 27.7 (27.5) | 114.3 (109.1) | 46.8 (38.0) |
+  | of which dispatch recording | 34.0 (29.4) | | 20.7 (19.1) | | 28.7 (27.2) | |
+  | depth rocks step, us per call | 23.6 (20.6) | 85.4 (84.5) | 6.2 (5.8) | 6.6 (6.3) | 23.7 (22.4) | 17.5 (16.6) |
+  | depth cull + meshes + rocks, us per call | 236 | 731 | 96 | 325 | 229 | 279 |
+  | rocks per depth call: indirect draws / CPU placements | 19.5 | 2,992.5 | 7.5 | 33.2 | 17.7 | 101.1 |
+  | colour cull / meshes / rocks, us per call | 40.8 / 46.4 / 13.6 | 132.8 / 19.8 / 18.4 | 37.1 / 29.5 / 9.9 | 115.7 / 16.8 / 10.5 | 56.9 / 51.0 / 15.9 | 108.4 / 23.9 / 9.2 |
+  | terrain meshes colour / depth, us per call | 23.8 / 22.9 | 40.9 / 172.4 | 14.6 / 18.5 | 15.7 / 18.2 | 21.8 / 22.9 | 19.2 / 25.7 |
+  | shadow casters `foliage`, ms | 1.06 (0.84) | 1.82 (1.64) | 0.63 (0.62) | 1.64 (1.63) | 0.94 (0.90) | 0.91 (0.80) |
+  | shadow casters `terrain`, ms | 0.13 (0.11) | 0.37 (0.35) | 0.38 (0.38) | 0.41 (0.34) | 0.15 (0.15) | 0.37 (0.36) |
+  | stage `foliage`, ms | 0.13 (0.11) | 0.12 (0.11) | 0.11 (0.10) | 0.11 (0.10) | 0.55 (0.52) | 0.45 (0.43) |
+  | stage `shadows`, ms | 1.56 (1.28) | 2.63 (2.35) | 1.59 (1.57) | 2.65 (2.51) | 1.56 (1.54) | 1.76 (1.60) |
+  | CPU only p50 / p95, ms | 2.2 / 4.4 | 3.2 / 5.4 | 2.1 / 3.7 | 3.1 / 5.3 | 3.0 / 5.9 | 3.0 / 6.5 |
+  | frame p50 / p95, ms | 5.8 / 8.9 | 6.4 / 10.1 | 5.3 / 10.8 | 6.5 / 9.4 | 6.9 / 13.9 | 7.0 / 16.0 |
+  | GPU cull, us per view (kernels' timestamps, rocks included) | 24.7 (19.5) | | 22.3 (19.7) | | 19.5 (19.0) | |
+
+  Observed:
+  - In the still forest a cascade's foliage call fell from ~730 to ~240 us: the rocks' CPU cull (2,992 placements a cascade) and their grouping and
+    placement copy in `DrawMeshes` (85 -> 24 us for the step, 172 -> 23 us a terrain mesh depth call) are gone; the shadow-caster `foliage` stage fell
+    1.82 -> 1.06 ms, `shadows` 2.63 -> 1.56 ms, the CPU-only p50 3.2 -> 2.2 ms. The rock view gains the same way (casters 1.64 -> 0.63 ms).
+  - The GPU-mode meshes step is 2-2.5x the CPU mode's (more draws: every shown batch, empty ones too, and the dispatch recording, 20-34 us a call);
+    with few rocks in view (flying) the rocks step costs a little more than the CPU's (24 against 17.5 us: the segment's fixed part for ~18 indirect
+    draws, some empty, against ~100 placements), and the shadow-caster `foliage` stage did not move (0.94 against 0.91 ms) while `shadows` and the terrain
+    caster stage fell.
+  - The terrain caster stage fell in the forest and flying (0.37 -> 0.13-0.15 ms); cause **Unknown** (the rocks are drawn inside the foliage stage);
+    not separated.
+  - GPU time of the kernels per view is 19-25 us with the rocks in (22k rock candidates a view in the forest, ~90k chunk slots in all); A2 measured
+    21-34 us without them on a less loaded machine, so the rocks' GPU share is **not resolved** by these runs.
+- *Follow-ups.* The empty indirect draws (in the meshes and rocks steps) would go with `DrawIndexedIndirectCount` (2.8); a rock group with both kinds
+  of placement is tested twice (one run per kind); objects' TERRAIN-mode map features still go through `DrawMeshes` on the CPU.
 
 ### 7.2 Wave 3: ownership
 

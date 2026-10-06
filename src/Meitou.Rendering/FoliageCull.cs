@@ -15,7 +15,7 @@ public struct FoliageInstanceRecord
     public Matrix4x4 Transform;
     /// <summary>Bounding sphere in the world: xyz = <c>Vector3.Transform(mesh centre, Transform)</c>, w = mesh radius × scale.</summary>
     public Vector4 Sphere;
-    /// <summary>x, z of the position (the range is measured along the ground), the scale, and the group's index within its zone.</summary>
+    /// <summary>x, z of the position (the range is measured along the ground), the scale, and the group's index within its zone; for a TERRAIN-mode rock group on the GPU cull, <see cref="FoliageCull.RockBits"/> instead (nothing else reads w).</summary>
     public Vector4 Ground;
 
     public const int Size = 96;
@@ -81,6 +81,16 @@ public static class FoliageCull
             r.Sphere = new Vector4(c, radius * r.Ground.Z);
         }
     }
+
+    /// <summary>A placement turns the winding round (<see cref="TerrainRenderer.DrawMeshes"/>' test, on the matrix it is given: M14 = 0).</summary>
+    public static bool Mirrors(in Matrix4x4 transform) => transform.GetDeterminant() < 0;
+
+    /// <summary>A TERRAIN-mode rock's <c>Ground.W</c> for the GPU cull (<see cref="FoliageShaders.CullCompute"/>): 1024 when the placement
+    /// mirrors, plus its biome map row + 1 (<paramref name="biomeRow"/> -1: none; at most 1022). Whole numbers, exact in a float.</summary>
+    public static float RockBits(in Matrix4x4 transform, int biomeRow) => (Mirrors(transform) ? 1024 : 0) + Math.Clamp(biomeRow, -1, 1022) + 1;
+
+    /// <summary>The fade a TERRAIN-mode rock needs to be drawn at all: the terrain shader has no dither, so it goes at the middle of the fade.</summary>
+    public const float RockThreshold = 0.5f;
 
     public static float Fade(in FoliageGroupRange range, float distance) => Math.Clamp((range.Range - distance) * range.InverseBand, 0, 1);
 

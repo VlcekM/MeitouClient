@@ -7,15 +7,32 @@ using Buffer = Silk.NET.Vulkan.Buffer;
 namespace Meitou.Rendering;
 
 /// <summary>A run of at most <see cref="FoliageShaders.CullChunk"/> instances of one group (std430, 32 bytes): where they are in the
-/// instance arena, and the group's range for the view as the CPU computed it (<see cref="FoliageGroupRange"/>).</summary>
+/// instance arena, and the group's range for the view as the CPU computed it (<see cref="FoliageGroupRange"/>). <see cref="Flags"/> 0 for
+/// the foliage meshes; <see cref="Rock"/> for TERRAIN-mode rocks (their records' <c>Ground.W</c> from <see cref="FoliageCull.RockBits"/>),
+/// with <see cref="Mirrored"/> for the run of the group's mirroring placements.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct FoliageCullChunk
 {
     public uint First, Count;
     public float Range, RangeSquared, InverseBand;
-    uint pad0, pad1, pad2;
+    public uint Flags;
+    uint pad1, pad2;
 
     public const int Size = 32;
+    public const uint Rock = 1, Mirrored = 2;
+}
+
+/// <summary>What a view's rock chunks write into row 0 w (<see cref="FoliageShaders.CompactCompute"/>): with <see cref="BiomeRows"/> (the
+/// colour views) the biome row when <see cref="Resident"/> has its bit (else -1), without it 0; as <see cref="TerrainRenderer.DrawMeshes"/>
+/// writes the placements.</summary>
+public struct FoliageRockView
+{
+    public bool BiomeRows;
+    /// <summary>A bit per biome row (256), row r at word r / 32, bit r % 32.</summary>
+    public ResidentBits Resident;
+
+    [System.Runtime.CompilerServices.InlineArray(8)]
+    public struct ResidentBits { uint first; }
 }
 
 /// <summary>An indirect draw the scan fills (std430, 16 bytes): the part's index count and the chunks [ChunkStart, ChunkEnd) of its batch.</summary>
@@ -61,6 +78,8 @@ public readonly record struct FoliageCullResult(Buffer Rows, ulong RowsOffset, u
 public sealed unsafe class FoliageGpuCull : IDisposable
 {
     const ulong Align = 256;
+    /// <summary>The kernels' View buffer (<c>ViewData</c>): 8 planes, their normals' lengths, the resident biome bits, the mode.</summary>
+    const ulong ViewBytes = 208;
     const ulong ScratchChunk = 32ul << 20;
     readonly GpuContext ctx;
     readonly ShaderProgram cull, scan, compact;
@@ -222,7 +241,11 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     /// the eye along the ground, the work list; <paramref name="fullThreshold"/> the fade at and above which an instance is drawn whole (the
     /// mesh shader's 2). The result's buffers are read by this frame's draws.
     /// </summary>
-    public FoliageCullResult Dispatch(in FoliageCullWork work, FoliageCullView view, Vector2 eye, float fullThreshold = 0.999f)
+    public FoliageCullResult Dispatch(in FoliageCullWork work, FoliageCullView view, Vector2 eye, float fullThreshold = 0.999f) =>
+        Dispatch(work, view, eye, default, fullThreshold);
+
+    /// <summary><see cref="Dispatch(in FoliageCullWork, FoliageCullView, Vector2, float)"/> with what the view's rock chunks write (<see cref="FoliageRockView"/>).</summary>
+    public FoliageCullResult Dispatch(in FoliageCullWork work, FoliageCullView view, Vector2 eye, in FoliageRockView rock, float fullThreshold = 0.999f)
     {
         if (work.ChunkCount == 0) return default;
         if (view.Planes.Length > 8) throw new ArgumentException("at most 8 planes", nameof(view));
@@ -234,14 +257,18 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         var args = Scratch((ulong)Math.Max(work.DrawCount, 1) * 20);
         ulong rowsBytes = (ulong)work.Candidates * 64;
         var rows = Scratch(rowsBytes);
-        var viewData = ctx.Frame.Constants.Allocate(160, Align);
+        var viewData = ctx.Frame.Constants.Allocate(ViewBytes, Align);
         var planes = (Vector4*)viewData.Pointer;
         var lengths = (float*)(viewData.Pointer + 128);
         for (int i = 0; i < 8; i++) planes[i] = i < view.Planes.Length ? view.Planes[i] : default;
         for (int i = 0; i < 8; i++) lengths[i] = i < view.Planes.Length ? view.NormalLengths[i] : 0;
+        var resident = (uint*)(viewData.Pointer + 160);
+        for (int i = 0; i < 8; i++) resident[i] = rock.Resident[i];
+        var mode = (uint*)(viewData.Pointer + 192);
+        (mode[0], mode[1], mode[2], mode[3]) = (rock.BiomeRows ? 1u : 0u, 0u, 0u, 0u);
 
         Span<BufferBinding> b = stackalloc BufferBinding[9];
-        b[0] = new BufferBinding(viewData.Handle, viewData.Offset, 160);
+        b[0] = new BufferBinding(viewData.Handle, viewData.Offset, ViewBytes);
         b[1] = new BufferBinding(arena.Buffer.Handle, 0, arena.Buffer.Size);
         b[2] = new BufferBinding(work.Chunks.Handle, work.Chunks.Offset, (ulong)n * FoliageCullChunk.Size);
         b[3] = new BufferBinding(fades.Buffer, fades.Offset, (ulong)work.Candidates * 4);

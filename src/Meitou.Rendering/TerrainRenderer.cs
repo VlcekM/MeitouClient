@@ -182,6 +182,23 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// <summary>Uses biome textures and land maps from now on (null: untextured).</summary>
     public void SetTextures(TerrainTextures? t) => textures = t;
 
+    /// <summary>The textures the TERRAIN-mode meshes' biome rows come from (null: none, every row -1): a caller keeping
+    /// <see cref="FeatureBiomeRowAny"/> per placement computes it again when this object changes.</summary>
+    public object? FeatureBiomes => textures;
+
+    /// <summary>The biome row <see cref="DrawMeshes"/> gives a placement at (x, z) in colour: the biome map's row there when resident, else -1.</summary>
+    public int FeatureBiomeRow(float x, float z) => textures?.FeatureBiomeRow(x, z) ?? -1;
+
+    /// <summary>The biome map's row at (x, z) whatever its residency (-1: none); <see cref="FeatureBiomeRow"/> once <see cref="FeatureResidentBiomes"/> has its bit.</summary>
+    public int FeatureBiomeRowAny(float x, float z) => textures?.FeatureBiomeRowAny(x, z) ?? -1;
+
+    /// <summary>A bit per resident biome row (row r: word r / 32, bit r % 32), as <see cref="FeatureBiomeRow"/> tests them now.</summary>
+    public void FeatureResidentBiomes(Span<uint> bits)
+    {
+        if (textures is null) bits.Clear();
+        else textures.ResidentBiomeBits(bits);
+    }
+
     /// <summary>The window the fine height texture currently holds.</summary>
     public HeightWindow Fine => fine;
 
@@ -955,47 +972,143 @@ public sealed unsafe class TerrainRenderer : IDisposable
     int DrawGroups(TerrainProgram p, int kind, string label, int timingKind)
     {
         long t0 = StepTiming.Now();
-        var interop = gpu.Interop!;
-        var cmd = interop.BeginNativeInPass(label);
-        var targets = interop.CurrentTargets();
-        var state = interop.CurrentState();
-        int segment = SegmentId(kind, p.P, targets, state);
-        long stamp = interop.VertexArrayStamp;
-        var ccw = GlConventions.FrontFace(FrontFaceDirection.Ccw);
-        var cw = GlConventions.FrontFace(FrontFaceDirection.CW);
-        cmd.SetViewport(targets.Viewport);
-        cmd.SetScissor(targets.Scissor);
-        cmd.SetRaster(Silk.NET.Vulkan.CullModeFlags.BackBit, ccw);
-        var front = ccw;
-        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
-        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
-        var view = View();
-        nativeFrame.Bind(cmd, p.Layout, in view);
-        BindConstants(cmd, p.Layout);
-        // The placement's rows at locations the meshes' vertex arrays leave free (their other programs do not read them).
-        Span<BufferBinding> rows = stackalloc BufferBinding[4];
-        for (int a = 0; a < 4; a++) rows[a] = new BufferBinding(placements.Handle, placements.Offset + (ulong)(16 * a));
-        cmd.BindVertexBuffers(TerrainShaders.MeshInstanceLocation, rows);
+        var cmd = OpenMeshSegment(p, kind, label, placements.Handle, placements.Offset, out var s);
+        var front = s.Ccw;
         long t1 = StepTiming.Now();
         foreach (var g in meshGroupList)
         {
             ref var n = ref g.Native(kind);
-            if (n.Stamp != stamp) Current(ref n, interop, g.Vao, p, stamp);
-            cmd.BindPipeline(n.SegA == segment ? n.PipeA! : PipelineFor(ref n, p, segment, state, targets.Formats, label));
-            var f = g.Mirrored ? cw : ccw;
+            if (n.Stamp != s.Stamp) Current(ref n, s.Interop, g.Vao, p, s.Stamp);
+            cmd.BindPipeline(n.SegA == s.Segment ? n.PipeA! : PipelineFor(ref n, p, s.Segment, s.State, s.Targets.Formats, label));
+            var f = g.Mirrored ? s.Cw : s.Ccw;
             if (f != front) { cmd.SetFrontFace(f); front = f; }
             cmd.BindVertexBuffers(0, ((ReadOnlySpan<BufferBinding>)n.Vertices)[..n.VertexCount]);
             cmd.BindIndexBuffer(n.Elements, Silk.NET.Vulkan.IndexType.Uint32);
             cmd.DrawIndexed((uint)g.IndexCount, (uint)g.Count, 0, 0, (uint)g.Offset);
         }
         StepTiming.Loop(timingKind, t1);
+        CloseMeshSegment(cmd, s.Interop, timingKind, t0);
+        return meshGroupList.Count;
+    }
+
+    /// <summary>What the draws of a mesh segment share (<see cref="OpenMeshSegment"/>).</summary>
+    struct MeshSegment
+    {
+        public IGlInterop Interop;
+        public PassTargets Targets;
+        public DrawState State;
+        public int Segment;
+        public long Stamp;
+        public Silk.NET.Vulkan.FrontFace Ccw, Cw;
+    }
+
+    /// <summary>Opens a native segment for TERRAIN-mode meshes inside the pass VkGl is drawing: dynamic state (back faces culled,
+    /// counter-clockwise), the frame and terrain sets, and the placements' rows from <paramref name="rows"/> at locations 7 to 10.</summary>
+    CommandList OpenMeshSegment(TerrainProgram p, int kind, string label, Silk.NET.Vulkan.Buffer rows, ulong rowsOffset, out MeshSegment s)
+    {
+        var interop = gpu.Interop!;
+        var cmd = interop.BeginNativeInPass(label);
+        var targets = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        s = new MeshSegment
+        {
+            Interop = interop, Targets = targets, State = state, Segment = SegmentId(kind, p.P, targets, state), Stamp = interop.VertexArrayStamp,
+            Ccw = GlConventions.FrontFace(FrontFaceDirection.Ccw), Cw = GlConventions.FrontFace(FrontFaceDirection.CW),
+        };
+        cmd.SetViewport(targets.Viewport);
+        cmd.SetScissor(targets.Scissor);
+        cmd.SetRaster(Silk.NET.Vulkan.CullModeFlags.BackBit, s.Ccw);
+        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+        var view = View();
+        nativeFrame.Bind(cmd, p.Layout, in view);
+        BindConstants(cmd, p.Layout);
+        // The placement's rows at locations the meshes' vertex arrays leave free (their other programs do not read them).
+        Span<BufferBinding> bindings = stackalloc BufferBinding[4];
+        for (int a = 0; a < 4; a++) bindings[a] = new BufferBinding(rows, rowsOffset + (ulong)(16 * a));
+        cmd.BindVertexBuffers(TerrainShaders.MeshInstanceLocation, bindings);
+        return cmd;
+    }
+
+    /// <summary>Ends a mesh segment and leaves GL's state as the GL version did (culling off with back faces selected, counter-clockwise, no vertex array).</summary>
+    void CloseMeshSegment(CommandList cmd, IGlInterop interop, int timingKind, long t0)
+    {
         interop.EndNative(cmd);
         StepTiming.Segment(timingKind, t0);
         gl.CullFace(TriangleFace.Back);
         gl.FrontFace(FrontFaceDirection.Ccw);
         gl.Disable(EnableCap.CullFace);
         gl.BindVertexArray(0);
-        return meshGroupList.Count;
+    }
+
+    /// <summary>A TERRAIN-mode mesh drawn indirect (<see cref="DrawMeshesIndirect"/>): the vertex array (position at 0, normal at 1), its index
+    /// count, and whether its placements mirror (the winding turns round), as <see cref="DrawMeshes"/> groups them.</summary>
+    public readonly record struct IndirectMesh(uint Vao, int IndexCount, bool Mirrored);
+
+    /// <summary>
+    /// <see cref="DrawMeshes"/> with placements and draw arguments made on the GPU (the foliage's GPU cull, docs/renderer-native.md 5.6.1): mesh
+    /// <c>i</c> is drawn by the <c>VkDrawIndexedIndirectCommand</c> at <paramref name="argsOffset"/> + 20 i, its instances read from
+    /// <paramref name="rows"/> (64 bytes each, the four rows of the matrix, row 0's w the biome row in colour, as <see cref="DrawMeshes"/>
+    /// writes them) from <paramref name="rowsOffset"/>, with the argument's firstInstance. Same programs, state, and GL state left behind as
+    /// <see cref="DrawMeshes"/>; the caller orders the meshes. Returns the number of draw calls.
+    /// </summary>
+    public int DrawMeshesIndirect(ReadOnlySpan<IndirectMesh> meshes, Silk.NET.Vulkan.Buffer rows, ulong rowsOffset, Silk.NET.Vulkan.Buffer args, ulong argsOffset, bool depth = false)
+    {
+        if (meshes.Length == 0) return 0;
+        long t0 = MeshTiming > 0 ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        int draws;
+        long timing = StepTiming.Now();
+        if (depth)
+        {
+            if (!depthReady) return 0;   // the frame's matrix is the cascade's once DrawDepth has run
+            PrepareConstants(material: false, patches: false);
+            draws = DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, meshDepth, Depth, "terrain mesh depth", StepTiming.MeshDepth);
+            StepTiming.Add(StepTiming.MeshDepth, timing, draws);
+        }
+        else
+        {
+            // GL state as Apply left it for the GL code that follows (the units bound: the frame set reads the atmosphere's there).
+            SkyRenderer.Active?.BindUnits();
+            BindHeightUnits();
+            textures?.Bind();
+            PrepareConstants(material: true, patches: false);
+            draws = DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
+            StepTiming.Add(StepTiming.MeshColour, timing, draws);
+        }
+        if (MeshTiming > 0)
+        {
+            long dt = System.Diagnostics.Stopwatch.GetTimestamp() - t0;
+            int k = depth ? 1 : 0;
+            if (meshSeen[k]++ >= StepTiming.WarmCalls) { meshTicks[k] += dt; meshCalls[k]++; meshDraws[k] += draws; }
+        }
+        return draws;
+    }
+
+    int DrawIndirect(ReadOnlySpan<IndirectMesh> meshes, Silk.NET.Vulkan.Buffer rows, ulong rowsOffset, Silk.NET.Vulkan.Buffer args, ulong argsOffset, TerrainProgram p, int kind, string label, int timingKind)
+    {
+        long t0 = StepTiming.Now();
+        var cmd = OpenMeshSegment(p, kind, label, rows, rowsOffset, out var s);
+        var front = s.Ccw;
+        long t1 = StepTiming.Now();
+        if (meshGroups.Count > 4096) meshGroups.Clear();   // vertex arrays come and go with streaming
+        for (int i = 0; i < meshes.Length; i++)
+        {
+            var m = meshes[i];
+            // The mesh's native state lives with its group (shared with DrawMeshes' draws of the same mesh).
+            var key = (m.Vao, m.IndexCount, m.Mirrored);
+            if (!meshGroups.TryGetValue(key, out var g)) meshGroups[key] = g = new MeshGroup { Vao = m.Vao, IndexCount = m.IndexCount, Mirrored = m.Mirrored };
+            ref var n = ref g.Native(kind);
+            if (n.Stamp != s.Stamp) Current(ref n, s.Interop, g.Vao, p, s.Stamp);
+            cmd.BindPipeline(n.SegA == s.Segment ? n.PipeA! : PipelineFor(ref n, p, s.Segment, s.State, s.Targets.Formats, label));
+            var f = m.Mirrored ? s.Cw : s.Ccw;
+            if (f != front) { cmd.SetFrontFace(f); front = f; }
+            cmd.BindVertexBuffers(0, ((ReadOnlySpan<BufferBinding>)n.Vertices)[..n.VertexCount]);
+            cmd.BindIndexBuffer(n.Elements, Silk.NET.Vulkan.IndexType.Uint32);
+            cmd.DrawIndexedIndirect(args, argsOffset + (ulong)i * 20, 1);
+        }
+        StepTiming.Loop(timingKind, t1);
+        CloseMeshSegment(cmd, s.Interop, timingKind, t0);
+        return meshes.Length;
     }
 
     /// <summary>A mesh's state for <paramref name="p"/>, current at <paramref name="stamp"/>: the export fetched again (the stamp moved), the
