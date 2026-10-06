@@ -4,13 +4,14 @@ using Meitou.Data.Textures;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
+using Silk.NET.Vulkan;
 
 namespace Meitou.Rendering;
 
 /// <summary>
 /// The sun's shadow map as the game's CSM mode draws it (docs/formats/shadows.md): four cascades fitted by <see cref="ShadowCascades"/>
 /// (Meitou.Data, backend-independent) in the tiles of one square depth atlas, the casters drawn by the renderers' depth-only entry points
-/// through <see cref="CasterDraw"/>. This class is the thin GL part: the atlas, the caster state, the uniform blocks the receivers read
+/// through <see cref="CasterDraw"/>. This class is the thin GPU part: the atlas, the caster state, the uniform blocks the receivers read
 /// (<see cref="ShadowShaders.Functions"/>), timing and the debug views.
 /// </summary>
 public sealed unsafe partial class ShadowPass : IDisposable
@@ -18,37 +19,70 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// <summary>Draws the casters of one cascade: the matrix maps absolute world positions to the tile's clip space (depth 0..1), the planes cull (no near plane), the eye picks levels of detail.</summary>
     public delegate void CasterDraw(ShadowCascade cascade, Matrix4x4 worldToClip, Vector4[] planes, Vector3 lodEye);
 
+    /// <summary>
+    /// GL is left only for what the casters (native guests of the atlas's host) read through the seam's GL mirror: the atlas's framebuffer
+    /// binding, the viewport and scissor per cascade, and the fixed-function state (<c>CurrentTargets</c>, <c>CurrentState</c>; docs/renderer-native.md
+    /// 4.5, 8.1), plus the two bindings the debug views and the depth copy take their target from. Everything else is native: the atlas, the
+    /// noise, the blocks, the timestamps, the blocker map and the debug views' draws.
+    /// </summary>
     readonly IGl gl;
     /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
     public GpuContext Gpu { get; }
-    readonly uint receiverUbo, casterUbo;
-    readonly uint[] queries = new uint[4];
-    readonly bool[] pending = new bool[2];
+    // The receiver block (the faithful layout, also the Meitou receiver's cascades) and the casters' bias of the cascade being drawn.
+    readonly FrameBlock receiver;
+    BufferBinding casterBias;
+    readonly PassTimer timer;
     readonly List<double> gpuSamples = [], cpuSamples = [];
-    uint atlas, fbo, noise;
-    int atlasSize, slot;
+    Texture? atlas, noise;
+    uint atlasGl, fbo;   // the atlas imported into GL, and its framebuffer: what the casters' CurrentTargets reads
+    SampledTexture atlasShadow, atlasPlain, noiseSampled;
+    bool atlasPublished, noiseUploaded;
+    byte[]? noisePixels;
+    (int Width, int Height) noiseSize;
+    int atlasSize;
     LegacyProgram? debugProgram, atlasProgram;   // the debug views (native, made on first use)
     UniformHandle debugInverse, debugEye, debugMode;
     SamplerSlot debugDepth, atlasSlot;
-    uint sceneDepth, sceneFbo;
-    int sceneWidth, sceneHeight;
+    Texture? sceneDepth;
+    SampledTexture sceneDepthSampled;
 
     /// <param name="assets">Where to find the game's <c>white-noise.png</c> (the receiver's jitter); without it a hash stands in.</param>
     public ShadowPass(IGl gl, GpuContext gpu, AssetLocator? assets = null)
     {
         this.gl = gl;
         Gpu = gpu;
+        receiver = new FrameBlock(gpu, ReceiverBytes);
+        meitouBlock = new FrameBlock(gpu, MeitouShadowShaders.BlockBytes);
+        timer = new PassTimer(gpu);
         LoadNoise(assets);
-        receiverUbo = gl.GenBuffer();
-        gl.BindBuffer(BufferTargetARB.UniformBuffer, receiverUbo);
-        gl.BufferData(BufferTargetARB.UniformBuffer, ReceiverBytes, null, BufferUsageARB.DynamicDraw);
-        casterUbo = gl.GenBuffer();
-        gl.BindBuffer(BufferTargetARB.UniformBuffer, casterUbo);
-        gl.BufferData(BufferTargetARB.UniformBuffer, 16, null, BufferUsageARB.DynamicDraw);
-        gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
-        for (int i = 0; i < queries.Length; i++) queries[i] = gl.GenQuery();
+        PublishGlobals();
         Disable();   // a valid block (shadows off) before the first frame
     }
+
+    /// <summary>
+    /// The shadow blocks and maps as frame globals (docs/renderer-native.md 4.3), native: they replace what <see cref="ShadowShaders"/> publishes
+    /// from GL's binding points and units (still the source without a ShadowPass: --no-shadows, the model viewer). A texture appears where the GL
+    /// code bound it to its unit (the atlas with the receiver block, the noise from the first frame, the terrain and blocker maps with the Meitou
+    /// block when they are on); before that the readers get the stand-in.
+    /// </summary>
+    void PublishGlobals()
+    {
+        var g = Gpu.Globals;
+        var plain = FrameGlobals.Sampler2D("");
+        g.Publish(ShadowShaders.ReceiverBlock, receiver.Binding);
+        g.Publish(ShadowShaders.CasterBlock, () => casterBias);
+        g.Publish("uShadowMap", () => atlasPublished ? atlasShadow : default);
+        g.Publish("uShadowNoise", () => noiseSampled);
+        g.Publish(MeitouShadowShaders.Block, meitouBlock.Binding);
+        // The terrain shadow map is still a GL texture of TerrainShadowMap's (the export path, 4.6 #5): the view and sampler VkGl would bind.
+        g.Publish("uShadowTerrain", () => boundTerrain != 0 ? Gpu.Interop!.Sampled(boundTerrain, plain) : default);
+        g.Publish("uShadowBlocker", () => blockerPublished ? blockerSampled : default);
+    }
+
+    /// <summary>A texture with the sampler VkGl made from these GL parameters (the same rule, <see cref="SamplerDesc.FromGl"/>). None of these
+    /// textures is mipmapped, so the LOD bias never applies; wrap R is GL's default.</summary>
+    SampledTexture Sampled(Texture t, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, bool compare = false) =>
+        new(Gpu.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, compare, DepthFunction.Lequal, false, 1, false, 0)), t.View(), t.Image);
 
     /// <summary>The atlas side, the range and the number of cascades (the game's <c>shadow quality</c> and <c>Shadow Range</c>).</summary>
     public ShadowSettings Settings { get; set; } = new();
@@ -59,10 +93,13 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// </summary>
     public float MinSunHeight { get; set; } = KenshiLighting.SunColourCutoff;
     /// <summary>Whether the game's noise texture was found (else the receiver's jitter is a hash).</summary>
-    public bool HasNoise => noise != 0;
+    public bool HasNoise => noise is not null;
     /// <summary>The cascades of the last frame (null when nothing was drawn).</summary>
     public ShadowCascade[]? Cascades { get; private set; }
-    public uint Atlas => atlas;
+    /// <summary>The atlas as a GL name (imported, for GL code), 0 before the first frame.</summary>
+    public uint Atlas => atlasGl;
+    /// <summary>The atlas (native; null before the first frame).</summary>
+    public Texture? AtlasTexture => atlas;
     public double CpuMs { get; private set; }
     public double GpuMs { get; private set; }
     /// <summary>What the caster callback drew in the last frame (for the log).</summary>
@@ -81,6 +118,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
     public void Render(ShadowView view, Vector3 toSun, uint restoreFramebuffer, int restoreWidth, int restoreHeight, CasterDraw draw, float? sunHeight = null)
     {
         Poll();
+        UploadNoise();
         Cascades = null;
         if (!Enabled || (sunHeight ?? toSun.Y) < MinSunHeight || toSun.LengthSquared() < 1e-8f) { Disable(); return; }
         if (Meitou) { RenderMeitou(view, Vector3.Normalize(toSun), restoreFramebuffer, restoreWidth, restoreHeight, draw); return; }
@@ -89,21 +127,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         Array.Clear(PhaseMs);
         Resize(Settings.MapSize);
         var cascades = ShadowCascades.Fit(view, Vector3.Normalize(toSun), Settings);
-        int timed = -1;
-        if (!pending[slot]) { timed = slot; gl.QueryCounter(queries[timed * 2], QueryCounterTarget.Timestamp); }
+        timer.Begin();
 
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        gl.Viewport(0, 0, (uint)atlasSize, (uint)atlasSize);
-        gl.Disable(EnableCap.ScissorTest);
-        gl.DepthMask(true);
-        gl.ColorMask(false, false, false, false);
-        gl.ClearDepth(1.0);
-        gl.Enable(EnableCap.DepthTest);
-        gl.DepthFunc(DepthFunction.Less);
-        gl.Enable(EnableCap.DepthClamp);   // casters between the box and the sun are flattened onto its near side, not clipped
-        gl.Disable(EnableCap.Blend);
-        gl.Enable(EnableCap.ScissorTest);
-        gl.BindBufferBase(BufferTargetARB.UniformBuffer, ShadowShaders.CasterBinding, casterUbo);
+        BindCasterState();
         var host = BeginHost("shadow atlas", clear: true);
         foreach (var c in cascades)
         {
@@ -111,30 +137,50 @@ public sealed unsafe partial class ShadowPass : IDisposable
             int x = (int)MathF.Round(c.Tile.X * atlasSize), y = (int)MathF.Round(c.Tile.Y * atlasSize), s = Settings.TileSize;
             gl.Viewport(x, y, (uint)s, (uint)s);
             gl.Scissor(x, y, (uint)s, (uint)s);
-            var bias = new Vector4(c.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 0);
-            gl.BindBuffer(BufferTargetARB.UniformBuffer, casterUbo);
-            gl.BufferSubData(BufferTargetARB.UniformBuffer, 0, 16, &bias);
+            SetCasterBias(new Vector4(c.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 0));
             draw(c, c.WorldToClip(), c.CullPlanes(), view.Eye);
         }
         EndHost(host);
-        gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
+        RestoreState(restoreFramebuffer, restoreWidth, restoreHeight);
+        timer.End();
+        Cascades = cascades;
+        Publish(view, cascades);
+        CpuMs = watch.Elapsed.TotalMilliseconds;
+        cpuSamples.Add(CpuMs);
+    }
+
+    /// <summary>
+    /// The GL state the casters read through the seam (<c>CurrentTargets</c>, <c>CurrentState</c>): the atlas's framebuffer, depth only, tested
+    /// with less, clamped (casters between the box and the sun are flattened onto its near side, not clipped), no blending, the scissor on.
+    /// </summary>
+    void BindCasterState()
+    {
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
+        gl.Viewport(0, 0, (uint)atlasSize, (uint)atlasSize);
+        gl.DepthMask(true);
+        gl.ColorMask(false, false, false, false);
+        gl.Enable(EnableCap.DepthTest);
+        gl.DepthFunc(DepthFunction.Less);
+        gl.Enable(EnableCap.DepthClamp);
+        gl.Disable(EnableCap.Blend);
+        gl.Enable(EnableCap.ScissorTest);
+    }
+
+    /// <summary>The GL state after the cascades, as the GL code left it: the scissor and clamp off, colour writes on, the scene's depth test,
+    /// the framebuffer and viewport given.</summary>
+    void RestoreState(uint restoreFramebuffer, int restoreWidth, int restoreHeight)
+    {
         gl.Disable(EnableCap.ScissorTest);
         gl.Disable(EnableCap.DepthClamp);
         gl.ColorMask(true, true, true, true);
         gl.DepthFunc(DepthFunction.Lequal);
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, restoreFramebuffer);
         gl.Viewport(0, 0, (uint)restoreWidth, (uint)restoreHeight);
-        if (timed >= 0)
-        {
-            gl.QueryCounter(queries[timed * 2 + 1], QueryCounterTarget.Timestamp);
-            pending[timed] = true;
-            slot = (slot + 1) % 2;
-        }
-        Cascades = cascades;
-        Publish(view, cascades);
-        CpuMs = watch.Elapsed.TotalMilliseconds;
-        cpuSamples.Add(CpuMs);
     }
+
+    /// <summary>The casters' bias block of the cascade about to be drawn: a fresh slice the guests' segments take when they are prepared (in the
+    /// draw callback), as VkGl renamed the GL buffer written between their draws.</summary>
+    void SetCasterBias(in Vector4 bias) => casterBias = FrameBlock.Slice(Gpu, in bias);
 
     /// <summary>
     /// Opens the atlas's rendering as a native host (docs/renderer-native.md 4.5): the caller has the atlas framebuffer bound and the GL state its
@@ -147,7 +193,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
         var cmd = interop.BeginNative(label);
         var t = interop.CurrentTargets();
         interop.BeginHostPass(cmd);
-        var depth = clear ? t.Depth with { Load = Silk.NET.Vulkan.AttachmentLoadOp.Clear, Clear = new Silk.NET.Vulkan.ClearValue(depthStencil: new Silk.NET.Vulkan.ClearDepthStencilValue(1f, 0)) } : t.Depth;
+        var depth = clear ? t.Depth with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(depthStencil: new ClearDepthStencilValue(1f, 0)) } : t.Depth;
         // Wave 4 (docs/renderer-native.md 6): the cascades' segments are secondaries, recorded on the job threads when the host ends.
         bool secondaries = Recording.Secondaries;
         cmd.BeginRendering(new RenderingDesc(default, depth, t.Width, t.Height), secondaries);
@@ -159,7 +205,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
     const int ShadowStage = 12;
 
     /// <summary>A partial clear of the atlas (a Meitou tile) in its place among the guests (<see cref="GpuContext.ClearDepth"/>).</summary>
-    void ClearTile(CommandList host, Silk.NET.Vulkan.Rect2D rect) => Gpu.ClearDepth(host, 1f, rect);
+    void ClearTile(CommandList host, Rect2D rect) => Gpu.ClearDepth(host, 1f, rect);
 
     void EndHost(CommandList cmd)
     {
@@ -193,34 +239,21 @@ public sealed unsafe partial class ShadowPass : IDisposable
         Put(data, 112, cascades[0].Rotation);
         Put(data, 128, new Vector4(origin, 1));
         Put(data, 132, new Vector4(Vector3.Normalize(view.Forward), Math.Min(cascades.Length, 4)));
-        Put(data, 136, new Vector4(atlasSize, 0, noise != 0 ? 1 : 0, 0));
+        Put(data, 136, new Vector4(atlasSize, 0, noise is not null ? 1 : 0, 0));
         Upload(data);
     }
 
+    /// <summary>The receiver block; the atlas is published to the receivers from now on (the GL code bound it to its unit here).</summary>
     void Upload(float[] data)
     {
-        gl.BindBuffer(BufferTargetARB.UniformBuffer, receiverUbo);
-        fixed (float* p = data) gl.BufferSubData(BufferTargetARB.UniformBuffer, 0, (nuint)(data.Length * 4), p);
-        gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
-        gl.BindBufferBase(BufferTargetARB.UniformBuffer, ShadowShaders.ReceiverBinding, receiverUbo);
-        if (ShadowShaders.MapUnit >= 0 && atlas != 0)
-        {
-            gl.ActiveTexture(TextureUnit.Texture0 + ShadowShaders.MapUnit);
-            gl.BindTexture(TextureTarget.Texture2D, atlas);
-            gl.ActiveTexture(TextureUnit.Texture0);
-        }
-        if (ShadowShaders.NoiseUnit >= 0 && noise != 0)
-        {
-            gl.ActiveTexture(TextureUnit.Texture0 + ShadowShaders.NoiseUnit);
-            gl.BindTexture(TextureTarget.Texture2D, noise);
-            gl.ActiveTexture(TextureUnit.Texture0);
-        }
+        receiver.Set(data);
+        if (atlas is not null) atlasPublished = true;
     }
 
     /// <summary>
     /// The game's jitter texture, <c>data/materials/white-noise.png</c> (64² RGB), which <c>Main_Lighting_CSM</c> binds with
     /// <c>filtering none</c> and the default wrap. The receiver reads it with texelFetch (its own point sampling and wrap), so the
-    /// texture's sampler state does not matter. Read from the install at run time, never shipped.
+    /// texture's sampler state does not matter. Read from the install at run time, never shipped. Uploaded in the first frame.
     /// </summary>
     void LoadNoise(AssetLocator? assets)
     {
@@ -228,13 +261,24 @@ public sealed unsafe partial class ShadowPass : IDisposable
         try
         {
             var image = TextureLoader.LoadFile(path, allMips: false).Levels[0];
-            noise = WorldGl.Texture2D(gl, image.Width, image.Height, image.Pixels, repeat: true, mipmaps: false);
-            gl.BindTexture(TextureTarget.Texture2D, 0);
+            noise = Texture.Create(Gpu, new TextureDesc(Format.R8G8B8A8Unorm, image.Width, image.Height, Name: "shadow noise"));
+            noiseSize = (image.Width, image.Height);
+            noisePixels = image.Pixels;
         }
         catch (Exception e) when (e is IOException or InvalidOperationException or ArgumentException)
         {
             Console.WriteLine($"warning   shadow noise: {e.Message}");
         }
+    }
+
+    /// <summary>The noise's texels, in the first frame (an upload goes with a frame); published from then on.</summary>
+    void UploadNoise()
+    {
+        if (noiseUploaded || noise is null || noisePixels is null || !Gpu.Frame.Open) return;
+        Gpu.Uploads.Write(noise, 0, 0, new Rect2D(default, new Extent2D((uint)noiseSize.Width, (uint)noiseSize.Height)), noisePixels);
+        noiseSampled = Sampled(noise, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.Repeat);
+        noiseUploaded = true;
+        noisePixels = null;
     }
 
     static void Put(float[] d, int at, Matrix4x4 m)
@@ -250,58 +294,46 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     void Resize(int size)
     {
-        if (size == atlasSize && fbo != 0) return;
+        if (size == atlasSize && atlas is not null) return;
         FreeAtlas();
         atlasSize = size;
-        atlas = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, atlas);
-        gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.DepthComponent32f, (uint)size, (uint)size, 0, PixelFormat.DepthComponent, PixelType.Float, null);
+        atlas = Texture.Create(Gpu, new TextureDesc(Format.D32Sfloat, size, size, Use: TextureUse.Sampled | TextureUse.DepthTarget, Name: "shadow atlas"));
         // Linear comparison: the faithful receiver reads texel centres, where the weights are 1, 0, 0, 0 (the game's point sampling);
-        // other receivers may use the bilinear weights.
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)TextureCompareMode.CompareRefToTexture);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareFunc, (int)DepthFunction.Lequal);
-        gl.BindTexture(TextureTarget.Texture2D, 0);
+        // other receivers may use the bilinear weights. The plain sampler (no comparison) is the blocker pass's and the debug view's.
+        atlasShadow = Sampled(atlas, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, compare: true);
+        atlasPlain = Sampled(atlas, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge);
+        // The casters still find their target through GL's framebuffer binding (docs/renderer-native.md 4.5): the atlas imported and attached.
+        atlasGl = Gpu.Interop!.Import(atlas);
         fbo = gl.GenFramebuffer();
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, atlas, 0);
+        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, atlasGl, 0);
         gl.DrawBuffer(DrawBufferMode.None);
         gl.ReadBuffer(ReadBufferMode.None);
-        if (gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
-            throw new InvalidOperationException("Shadow atlas framebuffer incomplete.");
     }
 
     void FreeAtlas()
     {
-        if (fbo != 0) { gl.DeleteFramebuffer(fbo); gl.DeleteTexture(atlas); fbo = 0; atlas = 0; }
+        if (atlas is null) return;
+        gl.DeleteFramebuffer(fbo);
+        gl.DeleteTexture(atlasGl);   // an imported name: GL forgets it, the image is ours
+        atlas.Dispose();
+        (atlas, fbo, atlasGl, atlasPublished) = (null, 0, 0, false);
     }
 
     // ------------------------------------------------------------------ cost
 
-    /// <summary>Collects finished GPU timings (<paramref name="wait"/>: block for them).</summary>
+    /// <summary>Collects finished GPU timings: native timestamps, read once their frame's slot comes round. Nothing waits, also with
+    /// <paramref name="wait"/> (kept for callers; the GL queries could block): a pass only a frame old has no time yet.</summary>
     public void Poll(bool wait = false)
     {
-        for (int s = 0; s < 2; s++)
-        {
-            if (!pending[s]) continue;
-            int available = 1;
-            if (!wait) gl.GetQueryObject(queries[s * 2 + 1], QueryObjectParameterName.ResultAvailable, out available);
-            if (available == 0) continue;
-            gl.GetQueryObject(queries[s * 2], QueryObjectParameterName.Result, out ulong start);
-            gl.GetQueryObject(queries[s * 2 + 1], QueryObjectParameterName.Result, out ulong end);
-            GpuMs = (end - start) / 1e6;
-            gpuSamples.Add(GpuMs);
-            pending[s] = false;
-        }
+        _ = wait;
+        if (timer.Poll(gpuSamples) is { } ms) GpuMs = ms;
     }
 
     /// <summary>Mean and 95th percentile of the pass's GPU and CPU time over the frames drawn (the first left out: shaders warm up).</summary>
     public string DescribeStats()
     {
-        Poll(wait: true);
+        Poll();
         static string One(List<double> values)
         {
             var s = values.Skip(1).OrderBy(x => x).ToList();
@@ -316,26 +348,25 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// <summary>Copies the scene's depth (the near slice, what the depth buffer holds at the end of the frame) for <see cref="DrawDebug"/>. Call before the post-processing resolves.</summary>
     public void CaptureDepth(uint sceneFramebuffer, int width, int height)
     {
-        if (sceneFbo == 0 || width != sceneWidth || height != sceneHeight)
+        if (sceneDepth is null || width != sceneDepth.Desc.Width || height != sceneDepth.Desc.Height)
         {
-            if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneDepth); }
-            (sceneWidth, sceneHeight) = (width, height);
-            sceneDepth = gl.GenTexture();
-            gl.BindTexture(TextureTarget.Texture2D, sceneDepth);
-            gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.DepthComponent24, (uint)width, (uint)height, 0, PixelFormat.DepthComponent, PixelType.UnsignedInt, null);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
-            gl.BindTexture(TextureTarget.Texture2D, 0);
-            sceneFbo = gl.GenFramebuffer();
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, sceneFbo);
-            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, sceneDepth, 0);
-            gl.DrawBuffer(DrawBufferMode.None);
-            gl.ReadBuffer(ReadBufferMode.None);
+            sceneDepth?.Dispose();
+            sceneDepth = Texture.Create(Gpu, new TextureDesc(Format.D32Sfloat, width, height, Name: "shadow debug scene depth"));
+            sceneDepthSampled = Sampled(sceneDepth, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.Repeat);
         }
-        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, sceneFramebuffer);
-        gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, sceneFbo);
-        gl.BlitFramebuffer(0, 0, width, height, 0, 0, width, height, ClearBufferMask.DepthBufferBit, BlitFramebufferFilter.Nearest);
+        // The scene's depth image through the seam: the GL binding names the framebuffer (it stays bound afterwards, as before).
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, sceneFramebuffer);
+        var interop = Gpu.Interop!;
+        var source = interop.CurrentTargets().Depth.Image;
+        var cmd = interop.BeginNative("shadow debug depth copy");
+        var region = new ImageCopy
+        {
+            SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.DepthBit, 0, 0, 1),
+            DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.DepthBit, 0, 0, 1),
+            Extent = new Extent3D((uint)width, (uint)height, 1),
+        };
+        Gpu.Device.Vk.CmdCopyImage(cmd.Handle, source, ImageLayout.General, sceneDepth.Image, ImageLayout.General, 1, &region);
+        interop.EndNative(cmd);
     }
 
     /// <summary>
@@ -355,67 +386,56 @@ public sealed unsafe partial class ShadowPass : IDisposable
             var a = atlasProgram = LegacyProgram.Create(Gpu, ShadowShaders.FullscreenVertex, ShadowShaders.AtlasFragment, "shadow atlas debug");
             atlasSlot = a.Sampler("uAtlas");
         }
-        var interop = Gpu.Interop!;
+        // The target through the seam: the GL binding names it (it stays bound afterwards, as before). The draws' state is the GL state the views
+        // inherit (the colour mask; the blending where the GL code left it alone) with what the GL code set: no depth test or write, no culling,
+        // the multiply for mode 3, blending off for the atlas after the scene view.
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, target);
-        gl.Disable(EnableCap.DepthTest);
-        gl.DepthMask(false);
-        gl.Disable(EnableCap.CullFace);
-        if (mode >= 2 && sceneDepth != 0)
+        var interop = Gpu.Interop!;
+        var t = interop.CurrentTargets();
+        var state = interop.CurrentState() with { Cull = CullModeFlags.None, DepthTest = false, DepthWrite = false };
+        bool scene = mode >= 2 && sceneDepth is not null;
+        var cmd = interop.BeginNative("shadow debug");
+        cmd.BeginRendering(t.Rendering);
+        if (scene)
         {
-            gl.Viewport(0, 0, (uint)width, (uint)height);
-            if (mode == 3)
-            {
-                gl.Enable(EnableCap.Blend);
-                gl.BlendFunc(BlendingFactor.DstColor, BlendingFactor.Zero);
-            }
             var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
             Matrix4x4.Invert(rotation * nearProjection, out var inverse);
             var p = debugProgram;
             p.Set(debugInverse, inverse);
             p.Set(debugEye, eye);
             p.Set(debugMode, mode);
-            p.Bind(debugDepth, interop.Sampled(sceneDepth, p.SamplerInfo(debugDepth)));
-            DrawFullscreen(p, "shadow debug");
-            gl.Disable(EnableCap.Blend);
+            p.Bind(debugDepth, sceneDepthSampled);
+            var s = mode == 3 ? state with { Blend = new BlendState(true, BlendFactor.DstColor, BlendFactor.Zero) } : state;
+            DrawFullscreen(cmd, p, t, s, new Viewport(0, 0, width, height, 0, 1), "shadow debug");
         }
-        if ((mode == 1 || mode == 2) && atlas != 0)
+        if ((mode == 1 || mode == 2) && atlas is not null)
         {
             // The atlas in the lower right corner, plain depth values (a plain sampler never compares).
             int side = Math.Min(width, height) / (mode == 1 ? 2 : 3);
-            gl.Viewport(width - side - 8, 8, (uint)side, (uint)side);
             var p = atlasProgram!;
-            p.Bind(atlasSlot, interop.Sampled(atlas, p.SamplerInfo(atlasSlot)));
-            DrawFullscreen(p, "shadow atlas debug");
+            p.Bind(atlasSlot, atlasPlain);
+            DrawFullscreen(cmd, p, t, scene ? state with { Blend = BlendState.Off } : state, new Viewport(width - side - 8, 8, side, side, 0, 1), "shadow atlas debug");
         }
-        gl.Viewport(0, 0, (uint)width, (uint)height);
-        gl.DepthMask(true);
-        gl.Enable(EnableCap.DepthTest);
+        cmd.EndRendering();
+        interop.EndNative(cmd);
     }
 
-    /// <summary>One fullscreen triangle of <paramref name="p"/> as a native segment in the pass VkGl has open (the GL state is what <see cref="DrawDebug"/> set).</summary>
-    void DrawFullscreen(LegacyProgram p, string label)
+    /// <summary>One fullscreen triangle of <paramref name="p"/> in the debug views' rendering.</summary>
+    void DrawFullscreen(CommandList cmd, LegacyProgram p, PassTargets t, DrawState state, Viewport viewport, string label)
     {
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNativeInPass(label);
-        var targets = interop.CurrentTargets();
-        var state = interop.CurrentState();
-        state.Record(cmd, targets);
-        cmd.BindPipeline(Gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout([]), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, targets.Formats, label)));
+        state.Record(cmd, t with { Viewport = viewport });
+        cmd.BindPipeline(Gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout([]), PrimitiveTopology.TriangleList, t.Formats, label)));
         p.Flush(cmd);
         cmd.Draw(3);
-        interop.EndNative(cmd);
     }
 
     public void Dispose()
     {
         DisposeMeitou();
         FreeAtlas();
-        if (noise != 0) gl.DeleteTexture(noise);
-        if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneDepth); }
+        noise?.Dispose();
+        sceneDepth?.Dispose();
         debugProgram?.Dispose();
         atlasProgram?.Dispose();
-        gl.DeleteBuffer(receiverUbo);
-        gl.DeleteBuffer(casterUbo);
-        foreach (var q in queries) gl.DeleteQuery(q);
     }
 }

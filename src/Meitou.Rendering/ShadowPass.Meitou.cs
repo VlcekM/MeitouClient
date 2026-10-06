@@ -3,6 +3,7 @@ using System.Numerics;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
+using Silk.NET.Vulkan;
 
 namespace Meitou.Rendering;
 
@@ -39,15 +40,17 @@ public sealed unsafe partial class ShadowPass
     Vector3 storedSun;
     int storedMapSize, meitouFrame;
     bool meitouValid;
-    uint meitouUbo;
+    readonly FrameBlock meitouBlock;
     ushort[]? coarse;
     int coarseSize;
     TerrainShadowMap? terrainMap;
-    uint blockerTexture, blockerFbo;
+    uint boundTerrain;   // the terrain shadow map (a GL texture) the receivers sample, as the GL code bound it to its unit
+    Texture? blocker;
+    SampledTexture blockerSampled;
+    bool blockerPublished;
     LegacyProgram? blockerNative;
     SamplerSlot blockerAtlasSlot;
     UniformHandle blockerSizeHandle;
-    int blockerSize;
 
     /// <summary>The whole-world height grid (WorldScene.Coarse) for the terrain shadow beyond the range; uploaded when first needed.</summary>
     public void SetTerrain(ushort[] heights, int size) => (coarse, coarseSize) = (heights, size);
@@ -79,19 +82,8 @@ public sealed unsafe partial class ShadowPass
             if (drawNow[i]) drawing++;
         }
 
-        int timed = -1;
-        if (!pending[slot]) { timed = slot; gl.QueryCounter(queries[timed * 2], QueryCounterTarget.Timestamp); }
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        gl.Viewport(0, 0, (uint)atlasSize, (uint)atlasSize);
-        gl.DepthMask(true);
-        gl.ColorMask(false, false, false, false);
-        gl.ClearDepth(1.0);
-        gl.Disable(EnableCap.Blend);
-        gl.Enable(EnableCap.DepthTest);
-        gl.DepthFunc(DepthFunction.Less);
-        gl.Enable(EnableCap.DepthClamp);
-        gl.Enable(EnableCap.ScissorTest);
-        gl.BindBufferBase(BufferTargetARB.UniformBuffer, ShadowShaders.CasterBinding, casterUbo);
+        timer.Begin();
+        BindCasterState();
         // The whole atlas is cleared by the load op when every cascade is drawn; else each drawn tile is cleared inside the pass.
         var host = BeginHost("shadow cascades", clear: drawing == count);
         for (int i = 0; i < count; i++)
@@ -103,33 +95,27 @@ public sealed unsafe partial class ShadowPass
             gl.Scissor(x, y, (uint)s, (uint)s);
             if (drawing != count)   // only this tile: the others keep what they hold
                 ClearTile(host, new Silk.NET.Vulkan.Rect2D(new Silk.NET.Vulkan.Offset2D(x, y), new Silk.NET.Vulkan.Extent2D((uint)s, (uint)s)));
-            var bias = new Vector4(c.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 0);
-            gl.BindBuffer(BufferTargetARB.UniformBuffer, casterUbo);
-            gl.BufferSubData(BufferTargetARB.UniformBuffer, 0, 16, &bias);
+            SetCasterBias(new Vector4(c.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 0));
             draw(c, c.WorldToClip(), c.CullPlanes(), view.Eye);
             stored[i] = c;
             CascadeDraws[i]++;
         }
         EndHost(host);
-        gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
-        gl.Disable(EnableCap.ScissorTest);
-        gl.Disable(EnableCap.DepthClamp);
-        gl.ColorMask(true, true, true, true);
-        gl.DepthFunc(DepthFunction.Lequal);
         bool blockers = ContactHardening && UpdateBlockers(drawNow, count);
         if (coarse is not null)
         {
             terrainMap ??= new TerrainShadowMap(gl, Gpu, coarse, coarseSize);
-            terrainMap.Update(toSun);
         }
+        // The GL state as the GL code left it (RestoreState), then the terrain map (TerrainShadowMap's own GL calls, after the state, as before
+        // the framebuffer binding was restored).
+        gl.Disable(EnableCap.ScissorTest);
+        gl.Disable(EnableCap.DepthClamp);
+        gl.ColorMask(true, true, true, true);
+        gl.DepthFunc(DepthFunction.Lequal);
+        terrainMap?.Update(toSun);
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, restoreFramebuffer);
         gl.Viewport(0, 0, (uint)restoreWidth, (uint)restoreHeight);
-        if (timed >= 0)
-        {
-            gl.QueryCounter(queries[timed * 2 + 1], QueryCounterTarget.Timestamp);
-            pending[timed] = true;
-            slot = (slot + 1) % 2;
-        }
+        timer.End();
         if (all) { storedSun = toSun; storedSplits = splits; storedMapSize = Settings.MapSize; }
         meitouValid = true;
         var cascades = new ShadowCascade[count];
@@ -140,28 +126,22 @@ public sealed unsafe partial class ShadowPass
         cpuSamples.Add(CpuMs);
     }
 
-    /// <summary>Rebuilds the blocker map's tiles of the cascades drawn this frame (the atlas read raw: its comparison off meanwhile).</summary>
+    /// <summary>
+    /// Rebuilds the blocker map's tiles of the cascades drawn this frame: one native segment with its own rendering on the map (loaded: the
+    /// tiles not drawn keep what they hold), the atlas read raw through a plain sampler (no comparison), per tile its viewport and the
+    /// fullscreen triangle. Leaves GL's culling off, as the GL version did (unported code inherits it).
+    /// </summary>
     bool UpdateBlockers(ReadOnlySpan<bool> drawn, int count)
     {
         long timing = StepTiming.Now();
         int size = atlasSize / 2;
         bool fresh = false;   // a new map: every tile
-        if (blockerTexture == 0 || blockerSize != size)
+        if (blocker is null || blocker.Desc.Width != size)
         {
-            if (blockerTexture != 0) { gl.DeleteFramebuffer(blockerFbo); gl.DeleteTexture(blockerTexture); }
-            blockerSize = size;
-            blockerTexture = gl.GenTexture();
-            gl.BindTexture(TextureTarget.Texture2D, blockerTexture);
-            gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.R32f, (uint)size, (uint)size, 0, PixelFormat.Red, PixelType.Float, null);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-            blockerFbo = gl.GenFramebuffer();
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, blockerFbo);
-            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, blockerTexture, 0);
-            if (gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
-                throw new InvalidOperationException("Shadow blocker framebuffer incomplete.");
+            blocker?.Dispose();
+            blocker = Texture.Create(Gpu, new TextureDesc(Format.R32Sfloat, size, size, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "shadow blocker map"));
+            blockerSampled = Sampled(blocker, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge);
+            blockerPublished = false;
             fresh = true;
         }
         if (blockerNative is null)
@@ -170,48 +150,43 @@ public sealed unsafe partial class ShadowPass
             var p = blockerNative = LegacyProgram.Create(Gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.BlockerFragment, "shadow blockers");
             (blockerAtlasSlot, blockerSizeHandle) = (p.Sampler("uAtlas"), p.Uniform("uAtlasSize"));
         }
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, blockerFbo);
-        gl.Disable(EnableCap.DepthTest);
-        gl.DepthMask(false);
-        gl.Disable(EnableCap.CullFace);
-        gl.ActiveTexture(TextureUnit.Texture0);
-        gl.BindTexture(TextureTarget.Texture2D, atlas);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)TextureCompareMode.None);
         int tile = Settings.TileSize / 2, grid = Settings.Grid;
         RecordBlockers(drawn, count, fresh, tile, grid, out int tiles);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)TextureCompareMode.CompareRefToTexture);
-        gl.BindTexture(TextureTarget.Texture2D, 0);
-        gl.DepthMask(true);
-        gl.Enable(EnableCap.DepthTest);
+        gl.Disable(EnableCap.CullFace);
         StepTiming.Add(StepTiming.Blocker, timing, tiles);
         return true;
     }
 
-    /// <summary>
-    /// The blocker map's draws as one native segment in the pass VkGl has open on the blocker framebuffer: the atlas as GL has it bound on unit 0
-    /// (comparison off), <c>uAtlasSize</c>, then per tile its viewport and the fullscreen triangle.
-    /// </summary>
+    /// <summary>The blocker pass's state, as the GL version's was: no culling, depth or blending, every colour channel written.</summary>
+    static readonly DrawState BlockerState = new(CullModeFlags.None, FrontFace.Clockwise, false, false, CompareOp.LessOrEqual, false, 0, 0,
+        BlendState.Off, ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit,
+        Silk.NET.Vulkan.PolygonMode.Fill, false, false);
+
     void RecordBlockers(ReadOnlySpan<bool> drawn, int count, bool fresh, int tile, int grid, out int tiles)
     {
         tiles = 0;
         var p = blockerNative!;
-        var interop = Gpu.Interop!;
+        var map = blocker!;
         p.Set(blockerSizeHandle, (float)atlasSize);
-        p.Bind(blockerAtlasSlot, interop.SampledUnit(0, p.SamplerInfo(blockerAtlasSlot)));
-        var cmd = interop.BeginNativeInPass("shadow blockers");
-        var targets = interop.CurrentTargets();
-        var state = interop.CurrentState();
-        var pipeline = Gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout([]), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, targets.Formats, "shadow blockers"));
-        state.Record(cmd, targets);
-        cmd.BindPipeline(pipeline);
+        p.Bind(blockerAtlasSlot, atlasPlain);
+        var interop = Gpu.Interop!;
+        var cmd = interop.BeginNative("shadow blockers");
+        var target = new RenderTarget(map.Attachment(), AttachmentLoadOp.Load, default, map.Image);
+        var formats = new AttachmentFormats(map.Desc.Format, Format.Undefined, 1);
+        int side = map.Desc.Width;
+        cmd.BeginRendering(new RenderingDesc(target, default, side, side));
+        var whole = new Rect2D(default, new Extent2D((uint)side, (uint)side));
+        BlockerState.Record(cmd, new PassTargets(target, default, formats, side, side, new Viewport(0, 0, side, side, 0, 1), whole));
+        cmd.BindPipeline(Gpu.Pipelines.Get(BlockerState.Pipeline(p.Program, p.VertexLayout([]), PrimitiveTopology.TriangleList, formats, "shadow blockers")));
         p.Flush(cmd);
         for (int i = 0; i < count; i++)
         {
             if (!drawn[i] && !fresh) continue;
-            cmd.SetViewport(new Silk.NET.Vulkan.Viewport(i % grid * tile, i / grid * tile, tile, tile, 0, 1));
+            cmd.SetViewport(new Viewport(i % grid * tile, i / grid * tile, tile, tile, 0, 1));
             cmd.Draw(3);
             tiles++;
         }
+        cmd.EndRendering();
         interop.EndNative(cmd);
     }
 
@@ -255,34 +230,17 @@ public sealed unsafe partial class ShadowPass
         }
         Put(ms, 44, new Vector4(blockers ? 1 : 0, range * 0.9f, 0, 0));
         Upload(data);
-        if (meitouUbo == 0)
-        {
-            meitouUbo = gl.GenBuffer();
-            gl.BindBuffer(BufferTargetARB.UniformBuffer, meitouUbo);
-            gl.BufferData(BufferTargetARB.UniformBuffer, MeitouShadowShaders.BlockBytes, null, BufferUsageARB.DynamicDraw);
-        }
-        gl.BindBuffer(BufferTargetARB.UniformBuffer, meitouUbo);
-        fixed (float* p = ms) gl.BufferSubData(BufferTargetARB.UniformBuffer, 0, (nuint)(ms.Length * 4), p);
-        gl.BindBuffer(BufferTargetARB.UniformBuffer, 0);
-        gl.BindBufferBase(BufferTargetARB.UniformBuffer, MeitouShadowShaders.Binding, meitouUbo);
-        if (terrain)
-        {
-            gl.ActiveTexture(TextureUnit.Texture0 + MeitouShadowShaders.TerrainUnit);
-            gl.BindTexture(TextureTarget.Texture2D, terrainMap!.Texture);
-        }
-        if (blockers)
-        {
-            gl.ActiveTexture(TextureUnit.Texture0 + MeitouShadowShaders.BlockerUnit);
-            gl.BindTexture(TextureTarget.Texture2D, blockerTexture);
-        }
-        gl.ActiveTexture(TextureUnit.Texture0);
+        meitouBlock.Set(ms);
+        // The maps the receivers sample from now on (the GL code bound them to their units here; a unit kept what it held).
+        if (terrain) boundTerrain = terrainMap!.Texture;
+        if (blockers) blockerPublished = true;
     }
 
     void DisposeMeitou()
     {
         terrainMap?.Dispose();
-        if (blockerTexture != 0) { gl.DeleteFramebuffer(blockerFbo); gl.DeleteTexture(blockerTexture); }
+        boundTerrain = 0;
+        blocker?.Dispose();
         blockerNative?.Dispose();
-        if (meitouUbo != 0) gl.DeleteBuffer(meitouUbo);
     }
 }
