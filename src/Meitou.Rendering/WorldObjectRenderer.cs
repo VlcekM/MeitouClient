@@ -396,7 +396,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
         double tUpload = cpu.Elapsed.TotalMilliseconds;
 
-        // 3. Draw: Prepare reads the textures (WorldTexture.Id) and makes the draw list, Record puts it into a native segment of VkGl's pass.
+        // 3. Draw: Prepare reads the textures (WorldTexture.Key) and makes the draw list, Record puts it into a native segment of VkGl's pass.
         var prog = depthPass ? depthProg : colourProg;
         int wireMode = debugLevels == 2 ? 2 : options.Wireframe;
         double recordMs = 0;
@@ -504,10 +504,11 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     // ------------------------------------------------------------------ native recording
     // docs/renderer-native.md 3.3 and 7.5, step O: native-model programs (BuildingLodShaders' native variants: the same maths, the values in
     // FrameConstants / ViewConstants / push constants, the textures by bindless index), recorded into the pass VkGl has open
-    // (BeginNativeInPass). Draw is split into Prepare (cull, levels, batches, then PrepareDraws: the texture ids through WorldTexture.Id and
-    // the draw list, every IGl call that can flush or start a reload) and Record (the list into one native segment: the sets and dynamic state
-    // once, per draw a push of the changed bytes and the part's own buffers). Nothing but commands in the loop: no VertexArray call (the
-    // stamp), no Bindless call (indices cached per segment by texture id), no hidden allocation.
+    // (BeginNativeInPass). Draw is split into Prepare (cull, levels, batches, then PrepareDraws: the texture keys through WorldTexture.Key,
+    // which can start a reload, and the draw list) and Record (the list into one native segment: the sets and dynamic state once, per draw a
+    // push of the changed bytes and the part's own buffers). Since phase 8 stage 1 the meshes and textures are native (ObjectMeshCache,
+    // WorldTextureCache): the vertex layout is made once per part, the bindless index kept on the texture per LOD bias. Nothing but commands in
+    // the loop, no hidden allocation.
 
     const int InstanceStride = 64;
     /// <summary>The first location the per-instance rows (the batch matrices) take; the mesh's own inputs are below it.</summary>
@@ -516,7 +517,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>This call's batch matrices in the frame's constants (a batch at its <see cref="Batch.Offset"/>; the draws reach it by firstInstance).</summary>
     Transient instances;
 
-    /// <summary>One part draw, in the renderer-owned list: the part, its level and instance range, the GL texture ids (their bindless indices
+    /// <summary>One part draw, in the renderer-owned list: the part, its level and instance range, the texture keys (their bindless indices
     /// are patched into <see cref="Push"/> per segment) and the push constants it needs.</summary>
     struct ObjDraw
     {
@@ -647,7 +648,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>The bindless index of a texture by its <see cref="WorldTexture.Key"/> (0: the stand-in), as the GL texture was sampled.</summary>
     uint Texture(uint key) => key == 0 ? textureStandIn : textureCache.Index(key, textureBias, textureStandIn);
 
-    /// <summary>The batches' parts as draws, in order, with the texture ids the GL code bound (reading an id counts as use: here, not in Record).</summary>
+    /// <summary>The batches' parts as draws, in order, with the texture keys (reading a key counts as use: here, not in Record).</summary>
     void PrepareDraws(WorldRenderOptions options, bool wire)
     {
         drawCount = 0;

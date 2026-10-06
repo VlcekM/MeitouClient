@@ -847,10 +847,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
 
     /// <summary>The mesh layout: position, normal, texture coordinates, tangent, colour of <see cref="Vertex"/> (locations 0 to 4).</summary>
-    static readonly GlBridge.Attribute[] MeshLayout = [new(0, 3, 0), new(1, 3, 12), new(2, 2, 24), new(3, 4, 32), new(4, 4, 48)];
+    internal static readonly GlBridge.Attribute[] MeshLayout = [new(0, 3, 0), new(1, 3, 12), new(2, 2, 24), new(3, 4, 32), new(4, 4, 48)];
 
     /// <summary>The attributes at locations 0 to 4 as VkGl exported the GL vertex array (one binding per attribute, at its offset).</summary>
-    static LegacyProgram.Attribute?[] VertexAttributes(DeviceBuffer vertices)
+    internal static LegacyProgram.Attribute?[] VertexAttributes(DeviceBuffer vertices)
     {
         var result = new LegacyProgram.Attribute?[MeshLayout.Length];
         foreach (var a in MeshLayout)
@@ -973,7 +973,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // Alpha to coverage with a multisampled target (the GL version enabled SAMPLE_ALPHA_TO_COVERAGE around the meshes and the grass).
         bool coverage = Gpu.Interop!.CurrentTargets().Formats.Samples > 1;
 
-        // 3. Meshes: Prepare reads the textures (WorldTexture.Id) and makes the draw list, Record puts it into a native segment of VkGl's pass.
+        // 3. Meshes: Prepare reads the textures (WorldTexture.Key) and makes the draw list, Record puts it into a native segment of VkGl's pass.
         bool drew = false;
         double recMeshes = 0, recGrass = 0, dispatchMs = 0;
         if (active.Count > 0 && !debugNoMeshes) PrepareMeshes(options, gpu);

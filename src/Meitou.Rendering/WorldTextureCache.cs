@@ -409,7 +409,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             long bytes = tex.Levels.Sum(l => (long)l.Width * l.Height * 4);
             if (generate)
             {
-                GenerateMipmaps(texture!);
+                GenerateMipmaps(gpu, texture!);
                 bytes = bytes * 4 / 3;   // the full chain the blits made
             }
             t.Native = texture;
@@ -420,7 +420,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     }
 
     /// <summary>Each level from the one above by a linear blit, in the frame's upload commands after the uploads (VkGl's <c>GenerateMipmap</c>).</summary>
-    void GenerateMipmaps(Texture texture)
+    internal static void GenerateMipmaps(GpuContext gpu, Texture texture)
     {
         var cmd = gpu.Frame.PreFrame;
         cmd.Barrier(BarrierBatch.Full);

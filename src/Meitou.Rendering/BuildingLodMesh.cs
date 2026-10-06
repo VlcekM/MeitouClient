@@ -297,13 +297,13 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
     }
 
     /// <summary>The vertex layout of <see cref="Vertex"/> (as <c>Renderer.Upload</c>; bones and weights stay zero: no skinning in the world view).</summary>
-    static readonly GlBridge.Attribute[] Layout =
+    internal static readonly GlBridge.Attribute[] Layout =
     [
         new(0, 3, 0), new(1, 3, 12), new(2, 2, 24), new(3, 4, 32), new(4, 4, 48), new(5, 4, 64, Integer: true), new(6, 4, 68),
     ];
 
     /// <summary>The attributes at locations 0 to 6 as VkGl exported the GL vertex array (one binding per attribute, at its offset).</summary>
-    static LegacyProgram.Attribute?[] VertexAttributes(DeviceBuffer vertices)
+    internal static LegacyProgram.Attribute?[] VertexAttributes(DeviceBuffer vertices)
     {
         var result = new LegacyProgram.Attribute?[Layout.Length];
         foreach (var a in Layout)
