@@ -1263,7 +1263,7 @@ open pass. Four commits: the timing switch, the zone order, the viewer, the obje
   draw few nodes per cascade (25) and are cold code once per cascade, so the segment's fixed cost eats the saving; the blocker map and the sweep are ports for the
   phase-8 deletion, not savings (a few draws each, or once).
 
-**Wave 3, agent D (sky, clouds, water, reflection host), step P (2026-10-06, on master `ee54f0b`).** `SkyRenderer` (the sky and the simple sky; the
+**Wave 3, agent D (sky, clouds, water, reflection host), step P (2026-10-06, written on master `ee54f0b`, rebased onto `223182a` and gated again there).** `SkyRenderer` (the sky and the simple sky; the
 clouds are part of the sky shader) and `WaterRenderer` record natively in VkGl's open pass. `ReflectionPass` is unchanged. Files: `SkyRenderer.cs`,
 `WaterRenderer.cs`, and the one line of `WorldFrame.cs` that calls `Water.Draw` (the unused `terrain` argument is gone).
 
@@ -1286,7 +1286,7 @@ clouds are part of the sky shader) and `WaterRenderer` record natively in VkGl's
   foliage read `CurrentTargets()` / `CurrentState()` from the GL framebuffer binding, 4.5). Its only own draw, the mirrored sky, is the native sky draw
   above, and records into the multisampled target. Its resources stay on `IGl`, as the recipe allows; its clear, blit and timestamp queries are IGl calls
   outside any segment.
-- *Gate (Release; lighter gate of the coordinator, against the build of master `ee54f0b`, which is also the port's base, so no rebase was needed).* Build 0
+- *Gate (Release; lighter gate of the coordinator, against the Release build of master `223182a`, after the rebase; the first gate, against `ee54f0b`, gave the same results; the measurements below are from that first one).* Build 0
   warnings; tests 389 passed, 0 skipped (`KENSHI_PATH` set); `--faithful all` ten views max 0, mean 0.0000; Meitou default ten views max 0 (the sky, the
   haze meaning and the water are in all of them); `--water-reflection 4` Port North 13:00 and 2:00 max 0 (as for foliage and objects, this picture equals the
   level-2 one, so it checks that the multisampled sky path runs, not the mirrored foliage); `MEITOU_VK_VALIDATION=sync` Port North (reflection 4) and The Hub
