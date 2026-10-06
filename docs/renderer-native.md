@@ -1326,7 +1326,7 @@ a native-then-legacy seam test, `ba46aca` the foliage. The three steward commits
   are kept on the blade buffer per patch (`Patch`), the texture still touched each frame as `textures.Get` did (use count, reload). The draw
   list itself is still built per call (it depends on the view's frustum).
 - *Gate (Release; the coordinator's lighter gate, against master `ee54f0b` built in its own folder).* Build 0 warnings; `dotnet test -c
-  Release` 395 passed, 0 skipped; `--faithful all` ten views **0 px** (mean 0.0000, max 0, the rock view included); `--debug-shadows 1`,
+  Release` 396 passed, 0 skipped (on `13812a2`); `--faithful all` ten views **0 px** (mean 0.0000, max 0, the rock view included); `--debug-shadows 1`,
   `--water-reflection 4` and `--upscaler taa`, each on forest and Hub at 13:00: 0 px; `MEITOU_VK_VALIDATION=sync` forest and Hub at 13:00:
   0 errors (after `d368214`; before it the forest view crashed the layer, 2.6). The 1/255 allowance (owner decision 2) was not needed.
 - **Measured: forest still camera (`--fly-benchmark 300 --fly-speed 0 --faithful all`, `MEITOU_FOLIAGE_TIMING=1`), three interleaved runs per
@@ -1408,7 +1408,7 @@ clouds are part of the sky shader) and `WaterRenderer` record natively in VkGl's
   Both renderers draw once or twice a frame, so there is little to save: the per-draw 2 us of 7.1 does not apply (cold code and one-off uniform writes
   dominate), and what is left is the 20 uniform writes and the six `Sampled` calls of Prepare.
 
-**Wave 3, agent F (overlays, settings, debug views, readback), step P (2026-10-06, written on master `6c4ac6d`, rebased onto `d860e8e` and gated again there).**
+**Wave 3, agent F (overlays, settings, debug views, readback), step P (2026-10-06, written on master `6c4ac6d`, rebased onto `d860e8e` and then `13812a2`, gated again on both; the FSR and DLSS runs on `d860e8e` only, the later merge touched overlays).**
 Three commits. These are few draws, so the goal was fewer `IGl` calls for phase 8 with identical pictures, not speed (nothing was timed).
 
 - *Overlay.* `DebugOverlay.Flush` is one native segment (`BeginNativeInPass`) with one `LegacyProgram` (made in the constructor, handles resolved once).
@@ -1450,7 +1450,8 @@ Three commits. These are few draws, so the goal was fewer `IGl` calls for phase 
   run (`--world --town "The Hub" --quit-after 6`, sync validation, with a temporary patch that switched the GPU chart and the overlay on and printed the timers;
   not committed) ran 400 frames, the native frame timer gave samples (2 to 8 ms) next to the profiler's GPU frames, 0 validation errors. `OverlayTests` and
   `SeamTests` share an xUnit collection because `StageClock` is static (the profiler test failed once when both ran in parallel).
-**Wave 3, agent E (post-processing + upscalers), step P (2026-10-06, written on master `223182a`, rebased onto `d860e8e` and gated again there).** Files:
+
+**Wave 3, agent E (post-processing + upscalers), step P (2026-10-06, written on master `223182a`, rebased onto `d860e8e` and then `13812a2`, gated again on both; the FSR and DLSS runs on `d860e8e` only, the later merge touched overlays).** Files:
 `PostProcess.cs` and the two vendor upscaler files (`FsrUpscaler.cs`, `DlssUpscaler.cs`); the shader text (`PostProcessShaders.cs`, `UpscaleShaders.cs`) is untouched, so the
 SPIR-V is byte-identical (the existing identity test covers all nine programs).
 
@@ -1471,7 +1472,7 @@ SPIR-V is byte-identical (the existing identity test covers all nine programs).
   and the cache invalidation of 4.1 that `EndExternal` lacks. They still read the images through `VkGl.ImageOf` (the image, a level-0 view and the real usage
   flags): the borrowed `Texture` from `interop.Texture` carries no usage flags, and Streamline's resource description wants them. Moving the inputs to
   natively owned `Texture`s is phase-8 work together with the render targets themselves (they are GL objects until the scene renderers are native).
-- *Gate (Release; lighter gate; against master `d860e8e` built unchanged; scratch in `C:\Temp\agent-E`).* Build 0 warnings; `dotnet test -c Release` 395 passed, 0 skipped;
+- *Gate (Release; lighter gate; against master `d860e8e` built unchanged; scratch in `C:\Temp\agent-E`).* Build 0 warnings; `dotnet test -c Release` 396 passed, 0 skipped (on `13812a2`);
   `--faithful all` ten views max 0 (mean 0.0000), baseline rendered once; Meitou default ten views max 0 (SSAO, TAA and exposure in the chain); at the Hub 13:00 and the
   forest 02:00, max 0 for `--faithful all --heat-haze 1` (FXAA then haze), `--heat-haze 1` (TAA then haze), `--faithful all --upscaler taa`, and `--upscaler taa
   --render-scale 0.5 --heat-haze 1` (render size half the display size); `MEITOU_VK_VALIDATION=sync`: 0 errors for the Hub (Meitou, haze), the forest (Faithful, FXAA, haze), and
