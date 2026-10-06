@@ -2402,7 +2402,7 @@ here: calls on an `IGl` (`gl.` or `Gl.` followed by an `IGl` member name), exclu
 
 | File | IGl calls | Owner (7.2) |
 | --- | ---: | --- |
-| `src/Meitou.Rendering/PostProcess.cs` | 181 | E |
+| `src/Meitou.Rendering/PostProcess.cs` | 181 (88 at `5fcc3e1`; **0** after phase 8 stage 2, 8.7: the GL mirror its guests read moved into `GlBridge`) | E |
 | `src/Meitou.Rendering/ShadowPass.cs` | 123 (101 after F's debug views; 97 at `6f4af19`, **24** after phase 8 stage 1, 8.3) | B (debug views F) |
 | `src/Meitou.Rendering/TerrainRenderer.cs` | 122 (98 at `6f4af19`; 1 after phase 8 stage 1: the globals program, 8.4; **0** after stage 2, 8.6) | B (`DrawMeshes`: foundation pilot) |
 | `src/Meitou.Rendering/FoliageRenderer.cs` | 147 (0 after phase 8 stage 1, `.Grass.cs` too) | A |
@@ -2441,7 +2441,7 @@ tests in all (`CoreTests`, `ShaderCompilerTests`, `ShaderInterfaceTests`, `Shade
 Beyond the draw calls, resource creation also goes through `IGl` in `TerrainTextures`, `WorldTextureCache`, `BuildingLodMesh`, `TerrainShadowMap`,
 the foliage meshes and grass pages, `PostProcess` targets and `SkyRenderer` textures. Phase 8 includes moving those to native `Texture` /
 `DeviceBuffer` creation through the `Uploader`. That is owner work by the same agents (7.2), since step P may leave resource creation on IGl.
-`WorldTextureCache`, `BuildingLodMesh` and the foliage meshes are done (phase 8 stage 1, 8.5); the sky's and the water's in stage 2 (8.6).
+`WorldTextureCache`, `BuildingLodMesh` and the foliage meshes are done (phase 8 stage 1, 8.5); the sky's and the water's in stage 2 (8.6), the `PostProcess` targets too (8.7).
 
 ### 8.2 End state
 
@@ -2758,6 +2758,102 @@ for that handoff. 0 px everywhere.*
 - `--fly-benchmark 150`, Port North 13:00 `--faithful all`, two interleaved runs each (base / this; noisy machine; 150 frames, not the 300
   for reported numbers): `sky-draw` 0.09-0.11 / 0.11-0.12 ms, `water` 0.24-0.25 / 0.23-0.24 ms, CPU-only p50 2.6-2.8 / 2.4-2.7 ms. No change
   beyond the noise. The sky's GPU time in the screenshot log reads as before (Port North 13:00: 0.04 ms).
+
+### 8.7 Phase 8 stage 2 (post-processing) as built
+
+*2026-10-06, off master `5fcc3e1`. In short: every target, texture, pass and timer of `PostProcess` is native; it makes 0 `IGl` calls (88
+before) and holds no `IGl`. What is left of GL is the mirror that still-GL code reads: GL names and framebuffers over the native targets, their
+binding and four pieces of fixed-function state. That moved into additive `GlBridge` helpers (39 GL calls there, 21 before). 0 px everywhere
+the upscaler is deterministic.*
+
+**Native now** (`PostProcess.cs`):
+- *Targets* are `Texture`s made through `Uploader.Begin()` (`UploadBatch`), named for the VRAM pie: "post scene colour" (RGBA16F), "post scene
+  depth" and "post far slice depth" (`DEPTH_COMPONENT24` → D32 float, `GlConventions.VkFormat`), "post motion" (RGBA16F), "post upscale
+  depth" and "post reactive" (R32F), "post taa history" (two, RGBA16F), "post ldr" and "post ldr fxaa" (RGBA8), "post ssao" (two, RG16F at
+  half size), "post luminance" (R32F 256², all 9 levels), "post exposure adapted" (two, RG32F 1 × 1). Usage as VkGl gave its images:
+  sampled, transfer source and destination, the attachment, and storage for the float colour formats where the device has it (the vendor
+  upscalers write their output with compute). One level each except the luminance; VkGl allocated every GL texture's whole mip chain.
+- *Sampling*: each read is a `SampledTexture` from `SamplerDesc.FromGl` with the GL filters the target had (linear, or nearest for the depths,
+  motion, upscale depth and reactive; `LINEAR_MIPMAP_NEAREST` for the luminance), clamped, anisotropy 1, and the LOD bias as it is at that
+  moment (`GpuContext.LodBias`). Nothing bound is `GpuContext.Dummy`.
+- *Heat-haze maps* ("post heat haze flow", "post heat haze perturbation"): BC1 with the file's levels, uploaded in one batch each at load,
+  sampled trilinear, anisotropy 16, repeating (the NVIDIA -0.25 comes from `SamplerCache` as before).
+- *Passes*: each full-screen draw is a rendering of its own (`LOAD`, the whole target, the viewport VkGl derived) in a native segment
+  (`BeginNative`), with a fixed `DrawState` (no cull, depth test, write, bias or blending; RGBA; fill) and a full barrier after it, as VkGl
+  barriered before every pass. A segment is closed before the vendor upscaler (it opens its own) and before the grass-motion guest. The luminance's mips are
+  `CommandList.GenerateMips`. The far slice's depth clear is a rendering of its own with a `CLEAR` load op. The final passes draw into the
+  attachment `CurrentTargets()` reports for `Target` (the window's backbuffer or the caller's framebuffer).
+- *GPU timing*: native timestamps (the frame's `QueryArena`) in the segment, or through `Interleave` outside one ("start", "scene"). A frame's
+  set is read when its slot of the frame ring comes round. `Flush()` keeps its signature but no longer waits, so the last frames in flight
+  are counted later (as `ShadowPass.Poll` since 8.3).
+- `ReadExposure` reads the adapted texel with `GpuContext.ReadBack`.
+
+**Left on GL, and why** (all in `GlBridge`, all for other code):
+1. *The scene's framebuffer and the far slice's*: GL framebuffers over imported names of "post scene colour" and the two depths
+   (`GlBridge.Framebuffer`), bound in `Begin`, `BeginFarSlice` and `BeginNearSlice` (`GlBridge.Bind`: framebuffer and viewport). The scene's
+   guests and `SceneHost` read `CurrentTargets()`. `WorldFrame` clears with `gl.Clear`. `ReflectionPass.RestoreFramebuffer`,
+   `ShadowPass.Render` and `ShadowPass.CaptureDepth` take `SceneFramebuffer` as a GL name.
+2. *The grass-motion guest* (`FoliageRenderer.DrawGrassMotion`) draws into "the bound framebuffer" with `CurrentState()`. So the motion
+   target keeps a GL framebuffer, and around the call `GlBridge.State` sets what the GL code set: depth test, write, culling and blending off,
+   colour mask red and green (then all channels). It gets the near depth as a GL name (`MotionTargets.NearDepth`) that it registers through
+   `IGlInterop.Bindless`, so the name carries the nearest, clamped sampler state the GL texture had (`GlBridge.Texture` with filter and
+   wrap, an additive overload). An import starts with GL's defaults.
+3. *The vendor upscalers* take their textures by GL name (`UpscaleInputs`, `VkGl.ImageOf`): scene colour, upscale depth, motion, reactive and
+   the history output are imported.
+4. *`Target`* is a GL framebuffer name (the viewer's and the game's offscreen one, 0 for the window). It is bound at the start of `End` to
+   read its attachment and again at the end. `DebugOverlay` draws into the bound framebuffer afterwards, and at the end `GlBridge.State`
+   leaves depth test and write on and culling and blending off, as `End` did.
+5. The LOD bias is set through the seam (`Interop as ITextureLodBias`): `GpuContext.LodBias` is a getter VkGl supplies, with no setter.
+   The constructor keeps its `IGl` parameter, unused, because `WorldFrame` is reserved.
+
+**Seam needs (stage 3):**
+- (a) The scene's host and guests take native targets and a `DrawState` from the host instead of the GL binding: `SceneHost`, `WorldFrame`'s
+  clears, the reflection's and the shadows' restore, and `CaptureDepth`. Items 1 and 2 then go.
+- (b) `Target` as a native `RenderTarget` or `Texture` from the presenter and the viewer (item 4).
+- (c) `UpscaleInputs` with `Texture`s, so the reserved upscalers no longer need `ImageOf` (item 3).
+- (d) `MotionTargets.NearDepth` as a `SampledTexture` (the foliage file is a stage-1 file).
+- (e) A settable `GpuContext.LodBias`, replacing `ITextureLodBias` (item 5).
+
+**Learned:**
+- **Verified** (gate below): the native targets with one level match VkGl's full-chain GL textures to the pixel. VkGl's view covered only
+  the defined level, and the sampler is the same `FromGl` result.
+- **Verified**: the luminance sampler takes the upscaler's LOD bias (`LINEAR_MIPMAP_NEAREST` is a mipmapped filter, and `textureLod` in the
+  adapt pass adds the sampler's `mipLodBias`). With the bias from `GpuContext.LodBias` at bind time, `--upscaler taa` (bias -0.5) is 0 px.
+- **Verified**: the post passes need no GL state from before `End`. The fixed `DrawState` gives 0 px in every option set below, the haze
+  included.
+- **Verified** (`PostProcessNativeTests`, sync validation, with and without TAA): the named allocations exist, a resize from 64 × 36 to
+  80 × 48 in one process works, a grey scene of luminance 0.5 reads back as mean and adapted 0.5, and the target receives 0.5 × 0.55 / 0.5.
+- **Observed**: FSR (FidelityFX 1.1.4) is not deterministic between two runs of the same build. The base viewer against itself differs by
+  mean 0.008 and max 17. New against base is mean 0.007 with max 25-31, over12 0% in all cases, so it is structurally the same picture.
+  DLSS is deterministic: base against base 0 px, new against base 0 px.
+- **Observed** (computed from the formats, not measured on the F12 pie): at 1600 × 900 with TAA, the post targets come to about 80 MB, which
+  was in `gl texture` before. The haze maps are 2 × 2.8 MB. Before, every GL texture also had its whole mip chain allocated (about +33%).
+- **Unknown**: whether code after `End` still needs the culling and blending off that `End` leaves. That state is kept as it was, untested
+  without it.
+- **Unknown** (not run): the window path, `Target = 0`. Every screenshot, fly benchmark and test draws into an offscreen GL framebuffer; only
+  the interactive viewer and the game draw into the window, and neither exits by itself. From the code, framebuffer 0's attachment is VkGl's own
+  backbuffer texture (GENERAL layout, blitted to the swapchain by the presenter after the frame). That is the same kind of attachment as an
+  offscreen framebuffer's, and `ShadowPass.DrawDebug` already draws natively into it the same way.
+
+**Gate** (Release, RTX 4070, against `C:\Temp\base-6f4af19`):
+- Build 0 warnings. `dotnet test -c Release` (`KENSHI_PATH` set): 470 passed, 0 skipped. New: `PostProcessNativeTests` (`[Slow]`, two cases).
+- Ten views, `--faithful all` and Meitou mode (which runs TAA at scale 1): 0 px max.
+- Against the base viewer, 0 px:
+  - `--heat-haze 1` forest 13:00 in both modes, and `--heat-haze 0.6` Hub (no parity view has heat haze in its weather);
+  - `--upscaler taa --faithful all` forest; `--upscaler taa --render-scale 0.67 --water-reflection 4` Port North; `--render-scale 0.5` at
+    1001 × 613 (odd sizes) Rock;
+  - `--size 1280x720` forest and `--size 1920x1080` Hub Faithful (the targets at other sizes);
+  - `--debug-shadows 1` and `2` forest (`CaptureDepth` through the scene's GL framebuffer); `--water-reflection 4` Port North;
+    `--post-debug ao`;
+  - `MEITOU_RECORD_THREADS=0` forest in Meitou mode, and Faithful with heat haze;
+  - DLSS (`MEITOU_STREAMLINE_PATH`) forest 13:00 at scale 1 and Port North at 0.67.
+- FSR: structurally the same (see Learned).
+- `MEITOU_VK_VALIDATION=sync`, 0 errors on each of: forest 13:00 Meitou, Faithful, Faithful + TAA, TAA at 0.5; Port North
+  `--water-reflection 4` in both modes; heat haze in both modes; DLSS; FSR.
+- Benchmark: forest, Meitou mode (TAA), `--fly-benchmark 300`, base and this build interleaved twice. The `post` stage went from 0.21-0.23
+  to 0.25-0.26 ms (+0.03). Every other stage, CPU-only p50 (base 2.7-3.1, this 3.3-3.5 ms, but the stages do not add up to that difference)
+  and render-thread allocations (20-21 MB) are within the noise of this machine. The extra likely comes from the GL mirror (the `Target` bind and
+  `CurrentTargets` at the start of `End`, the state calls) and a segment of its own for the far slice's clear. **Unknown**: not profiled further.
 
 ---
 

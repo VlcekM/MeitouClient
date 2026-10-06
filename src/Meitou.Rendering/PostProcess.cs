@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Text;
 
 using Meitou.Rendering.Gpu;
+using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Rendering;
 
@@ -14,16 +15,29 @@ namespace Meitou.Rendering;
 /// Anything that draws into another framebuffer in between must rebind the one it found (<see cref="SceneFramebuffer"/>).
 /// Facts about the game's own chain: docs/formats/post-processing.md.
 /// </summary>
+/// <remarks>
+/// Native (docs/renderer-native.md 8, phase 8 stage 2): every target and texture is a native <see cref="Texture"/> ("post …"), every pass a
+/// rendering of its own in a native segment, the timings native timestamps. GL names and framebuffers exist only over the targets the
+/// still-GL users take by name (the scene's guests through the bound framebuffer, the reflection's and the shadows' restore, the grass-motion
+/// guest, the vendor upscalers), made and bound through <see cref="GlBridge"/>.
+/// </remarks>
 public sealed unsafe class PostProcess : IDisposable
 {
-    sealed class Target2D
+    /// <summary>A native target with the GL sampler state its GL texture had (linear or nearest, clamped; the luminance's mipmapped
+    /// minification), and the GL name and framebuffer a still-GL user needs (0: none).</summary>
+    sealed class Target2D(Texture texture, TextureMinFilter min, TextureMagFilter mag)
     {
-        public uint Texture, Framebuffer;
-        public int Width, Height;
+        public readonly Texture Texture = texture;
+        public readonly TextureMinFilter Min = min;
+        public readonly TextureMagFilter Mag = mag;
+        public uint Name, Framebuffer;
+        public int Width => Texture.Desc.Width;
+        public int Height => Texture.Desc.Height;
+        public Vk.Format Format => Texture.Desc.Format;
+        public RenderTarget Attachment => new(Texture.Attachment(), Vk.AttachmentLoadOp.Load, default, Texture.Image);
     }
 
-    readonly IGl gl;
-    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    /// <summary>The native GPU API (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
     public GpuContext Gpu { get; }
     public PostOptions Options { get; }
     /// <summary>Framebuffer the final image goes to: 0 for the window, or an RGBA8 framebuffer of the same size.</summary>
@@ -35,23 +49,25 @@ public sealed unsafe class PostProcess : IDisposable
     int width, height, displayWidth, displayHeight;
     float allocatedScale;
     UpscalerKind allocatedKind;
-    uint sceneFbo, sceneColour, sceneDepth;
+    Target2D? sceneColour, sceneDepth;
+    uint sceneFbo;
     // Temporal upscaling: the far slice's own depth (instead of clearing), the motion and depth targets, the display-size history (ping-pong).
-    uint farFbo, farDepth;
+    Target2D? farDepth;
+    uint farFbo;
     Target2D? motion, upscaleDepth, reactive, historyA, historyB;
     bool historyValid, farSliceDrawn, warnedFallback;
     long frameIndex;
     Target2D? aoA, aoB;
     Target2D? ldr, ldrFxaa;   // the composite's LDR picture that FXAA or the heat haze reads, and FXAA's when the heat haze follows it
-    uint flowTexture, perturbationTexture;   // the heat haze's FlowHAZE.dds and Perturber.dds (0: not found, no heat haze)
+    Texture? flowTexture, perturbationTexture;   // the heat haze's FlowHAZE.dds and Perturber.dds (null: not found, no heat haze)
     Target2D? luminance, adaptA, adaptB;   // Kenshi's exposure: the luminance measure (mipmapped) and the adapted value (1 × 1, ping-pong)
     bool adaptedValid;
     readonly System.Diagnostics.Stopwatch adaptClock = new();
 
-    // Native full-screen passes (docs/renderer-native.md 7.1, wave 3 agent E, step P): the same SPIR-V and layout as the GL programs they replace,
-    // one segment per draw in VkGl's pass (the framebuffer and viewport are still GL's, which is what CurrentTargets reads and what the foliage's
-    // grass-motion guest needs in the velocity pass). Every handle is resolved once, here.
+    // The native full-screen passes (docs/renderer-native.md 7.1, wave 3 agent E, step P): the same SPIR-V and layout as the GL programs they
+    // replaced. Since phase 8 stage 2 each draws in a rendering of its own (8.6). Every handle is resolved once, here.
     readonly IGlInterop interop;
+    readonly ITextureLodBias? lodBias;
     readonly SsaoPass ssao;
     readonly BlurPass blur;
     readonly LuminancePass luminancePass;
@@ -61,6 +77,7 @@ public sealed unsafe class PostProcess : IDisposable
     readonly HeatHazePass hazePass;
     readonly VelocityPass velocityPass;
     readonly TaaPass taaPass;
+
 
     /// <summary>One native full-screen program: the shared vertex shader with a fragment shader, and its resolved handles.</summary>
     abstract class FullscreenProgram
@@ -162,29 +179,43 @@ public sealed unsafe class PostProcess : IDisposable
         }
     }
 
+
     float nearPlane = 1, farPlane = 1000, fovY = 0.87f, aspect = 1;
     bool haveNearSlice;
 
-    // GPU timestamps: one set per frame in flight, section k lasts from stamp k-1 to stamp k.
-    const int Slots = 4, MaxStamps = 10;
-    readonly uint[,] stamps = new uint[Slots, MaxStamps];
-    readonly string[,] stampNames = new string[Slots, MaxStamps];
-    readonly int[] stampCount = new int[Slots];
-    readonly bool[] pending = new bool[Slots];
-    int slot;
+    // GPU timestamps (the frame's QueryArena): a set per frame, section k lasting from stamp k-1 to stamp k, read once its frame has been collected.
+    const int MaxStamps = 10;
+    sealed class StampSet
+    {
+        public readonly QuerySlot[] Slots = new QuerySlot[MaxStamps];
+        public readonly string[] Names = new string[MaxStamps];
+        public int Count;
+        public long Frame;
+    }
+    readonly Queue<StampSet> pendingStamps = new();
+    readonly Stack<StampSet> freeStamps = new();
+    StampSet? stamps;
+    Action<CommandList>? stampWriter;
+    QuerySlot written;
     readonly Dictionary<string, (double Sum, int Count)> costs = [];
 
+    /// <summary>What every pass draws with: what VkGl made of the GL state the chain set (no culling, depth test or write, bias or blending; all
+    /// channels; filled; one sample).</summary>
+    static readonly DrawState PassState = new(Vk.CullModeFlags.None, GlConventions.FrontFace(FrontFaceDirection.Ccw), false, false, Vk.CompareOp.LessOrEqual,
+        false, 0, 0, BlendState.Off, Vk.ColorComponentFlags.RBit | Vk.ColorComponentFlags.GBit | Vk.ColorComponentFlags.BBit | Vk.ColorComponentFlags.ABit,
+        Vk.PolygonMode.Fill, false, false);
+
+    /// <param name="gl">Unused since phase 8 stage 2 (the caller is reserved); the LOD bias goes to the seam's <see cref="ITextureLodBias"/>.</param>
     public PostProcess(IGl gl, GpuContext gpu, PostOptions options)
     {
-        this.gl = gl;
+        _ = gl;
         Gpu = gpu;
         Options = options;
         interop = gpu.Interop ?? throw new InvalidOperationException("PostProcess needs the native seam (VkGl)");
+        lodBias = interop as ITextureLodBias;
         (ssao, blur, luminancePass, adaptPass) = (new SsaoPass(gpu), new BlurPass(gpu), new LuminancePass(gpu), new AdaptPass(gpu));
         (compositePass, fxaaPass, hazePass) = (new CompositePass(gpu), new FxaaPass(gpu), new HeatHazePass(gpu));
         (velocityPass, taaPass) = (new VelocityPass(gpu), new TaaPass(gpu));
-        for (int s = 0; s < Slots; s++)
-            for (int i = 0; i < MaxStamps; i++) stamps[s, i] = gl.GenQuery();
     }
 
     /// <summary>The near depth slice's planes and the projection: what the depth buffer at the end of the frame holds (the far slice's depth is cleared).</summary>
@@ -196,32 +227,50 @@ public sealed unsafe class PostProcess : IDisposable
 
     // ---- targets ----
 
+    IEnumerable<Target2D> Targets() =>
+        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB }.OfType<Target2D>();
+
     void Free()
     {
-        if (sceneFbo != 0) { gl.DeleteFramebuffer(sceneFbo); gl.DeleteTexture(sceneColour); gl.DeleteTexture(sceneDepth); sceneFbo = 0; }
-        if (farFbo != 0) { gl.DeleteFramebuffer(farFbo); gl.DeleteTexture(farDepth); farFbo = 0; }
-        foreach (var t in new[] { aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB, motion, upscaleDepth, reactive, historyA, historyB }) if (t is not null) Release(t);
-        aoA = aoB = ldr = ldrFxaa = luminance = adaptA = adaptB = motion = upscaleDepth = reactive = historyA = historyB = null;
+        GlBridge.DeleteFramebuffer(Gpu, sceneFbo);
+        GlBridge.DeleteFramebuffer(Gpu, farFbo);
+        sceneFbo = farFbo = 0;
+        foreach (var t in Targets())
+        {
+            GlBridge.DeleteFramebuffer(Gpu, t.Framebuffer);
+            GlBridge.DeleteTexture(Gpu, t.Name);
+            t.Texture.Dispose();   // released after the frames in flight
+        }
+        sceneColour = sceneDepth = farDepth = motion = upscaleDepth = reactive = historyA = historyB = null;
+        aoA = aoB = ldr = ldrFxaa = luminance = adaptA = adaptB = null;
         adaptedValid = historyValid = false;
     }
 
-    void Release(Target2D t) { gl.DeleteFramebuffer(t.Framebuffer); gl.DeleteTexture(t.Texture); }
+    readonly Dictionary<Vk.Format, bool> storageSupport = [];
 
-    Target2D MakeTarget(int w, int h, InternalFormat format, PixelFormat pf, PixelType type)
+    /// <summary>Whether the device can make <paramref name="format"/> a storage image (VkGl gave its float colour textures storage use, which the vendor upscalers write with).</summary>
+    bool SupportsStorage(Vk.Format format)
     {
-        var t = new Target2D { Width = w, Height = h };
-        t.Texture = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, t.Texture);
-        gl.TexImage2D(TextureTarget.Texture2D, 0, format, (uint)w, (uint)h, 0, pf, type, null);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-        t.Framebuffer = gl.GenFramebuffer();
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, t.Framebuffer);
-        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, t.Texture, 0);
-        return t;
+        if (!storageSupport.TryGetValue(format, out bool ok))
+        {
+            Gpu.Device.Vk.GetPhysicalDeviceFormatProperties(Gpu.Device.PhysicalDevice, format, out var props);
+            storageSupport[format] = ok = (props.OptimalTilingFeatures & Vk.FormatFeatureFlags.StorageImageBit) != 0;
+        }
+        return ok;
     }
+
+    /// <summary>A target of a GL internal format (the format VkGl made of it), with the uses VkGl's image had, one level unless asked.</summary>
+    Target2D Make(UploadBatch batch, int w, int h, InternalFormat glFormat, TextureMinFilter min, string name, int levels = 1)
+    {
+        var format = GlConventions.VkFormat(glFormat);
+        var use = TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst | (GlConventions.IsDepthFormat(format) ? TextureUse.DepthTarget : TextureUse.ColourTarget);
+        if (format is Vk.Format.R16G16B16A16Sfloat or Vk.Format.R32Sfloat or Vk.Format.R16G16Sfloat && SupportsStorage(format)) use |= TextureUse.Storage;
+        var texture = batch.Create(new TextureDesc(format, w, h, levels, Use: use, Name: name));
+        return new Target2D(texture, min, min == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear);
+    }
+
+    /// <summary>The GL name of a target for a still-GL user, with the sampler state its GL texture had.</summary>
+    uint Name(Target2D t) => t.Name = GlBridge.Texture(Gpu, t.Texture, t.Min, TextureWrapMode.ClampToEdge);
 
     void Allocate(int displayW, int displayH)
     {
@@ -232,115 +281,100 @@ public sealed unsafe class PostProcess : IDisposable
         var (w, h) = up.RenderSize(displayW, displayH);
         width = w; height = h;
 
-        // Colour (RGBA16F) and depth (24 bit) textures the scene is drawn into.
-        sceneColour = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, sceneColour);
-        gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba16f, (uint)w, (uint)h, 0, PixelFormat.Rgba, PixelType.HalfFloat, null);
-        SamplerState(TextureMinFilter.Linear);
-        sceneDepth = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, sceneDepth);
-        gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.DepthComponent24, (uint)w, (uint)h, 0, PixelFormat.DepthComponent, PixelType.UnsignedInt, null);
-        SamplerState(TextureMinFilter.Nearest);
-        sceneFbo = gl.GenFramebuffer();
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, sceneFbo);
-        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, sceneColour, 0);
-        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, sceneDepth, 0);
-        Check("scene");
-
-        if (up.Temporal)
+        using (var batch = Gpu.Uploads.Begin())
         {
-            farDepth = gl.GenTexture();
-            gl.BindTexture(TextureTarget.Texture2D, farDepth);
-            gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.DepthComponent24, (uint)w, (uint)h, 0, PixelFormat.DepthComponent, PixelType.UnsignedInt, null);
-            SamplerState(TextureMinFilter.Nearest);
-            farFbo = gl.GenFramebuffer();
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, farFbo);
-            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, sceneColour, 0);
-            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, farDepth, 0);
-            Check("far slice");
-            motion = MakeTarget(w, h, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
-            Nearest(motion);
-            upscaleDepth = MakeTarget(w, h, InternalFormat.R32f, PixelFormat.Red, PixelType.Float);
-            Nearest(upscaleDepth);
-            // R32F, not R8: Streamline cannot size an R8_UNORM resource and drops it (DLSS's hint), FSR takes either.
-            reactive = MakeTarget(w, h, InternalFormat.R32f, PixelFormat.Red, PixelType.Float);
-            Nearest(reactive);
-            historyA = MakeTarget(displayW, displayH, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
-            historyB = MakeTarget(displayW, displayH, InternalFormat.Rgba16f, PixelFormat.Rgba, PixelType.HalfFloat);
+            // Colour (RGBA16F) and depth (GL's 24 bit, a 32-bit float buffer) the scene is drawn into.
+            sceneColour = Make(batch, w, h, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post scene colour");
+            sceneDepth = Make(batch, w, h, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, "post scene depth");
+            if (up.Temporal)
+            {
+                farDepth = Make(batch, w, h, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, "post far slice depth");
+                motion = Make(batch, w, h, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post motion");
+                upscaleDepth = Make(batch, w, h, InternalFormat.R32f, TextureMinFilter.Nearest, "post upscale depth");
+                // R32F, not R8: Streamline cannot size an R8_UNORM resource and drops it (DLSS's hint), FSR takes either.
+                reactive = Make(batch, w, h, InternalFormat.R32f, TextureMinFilter.Nearest, "post reactive");
+                historyA = Make(batch, displayW, displayH, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post taa history");
+                historyB = Make(batch, displayW, displayH, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post taa history");
+            }
+            // FXAA and the heat haze read the composite's LDR picture, as the game's run on its A8R8G8B8 buffers after the HDR composite
+            // (both always made, so switching either at run time needs no new targets).
+            ldr = Make(batch, displayW, displayH, InternalFormat.Rgba8, TextureMinFilter.Linear, "post ldr");
+            ldrFxaa = Make(batch, displayW, displayH, InternalFormat.Rgba8, TextureMinFilter.Linear, "post ldr fxaa");
+            int hw = Math.Max((w + 1) / 2, 1), hh = Math.Max((h + 1) / 2, 1);
+            aoA = Make(batch, hw, hh, InternalFormat.RG16f, TextureMinFilter.Linear, "post ssao");
+            aoB = Make(batch, hw, hh, InternalFormat.RG16f, TextureMinFilter.Linear, "post ssao");
+            // Exposure runs after the upscaler, at the display size: the luminance's whole mip chain (GL's, defined by GenerateMipmap), read mipmapped.
+            luminance = Make(batch, LuminanceSize, LuminanceSize, InternalFormat.R32f, TextureMinFilter.LinearMipmapNearest, "post luminance", LuminanceLevels);
+            adaptA = Make(batch, 1, 1, InternalFormat.RG32f, TextureMinFilter.Linear, "post exposure adapted");
+            adaptB = Make(batch, 1, 1, InternalFormat.RG32f, TextureMinFilter.Linear, "post exposure adapted");
         }
 
-        // FXAA and the heat haze read the composite's LDR picture, as the game's run on its A8R8G8B8 buffers after the HDR composite
-        // (both always made, so switching either at run time needs no new targets).
-        ldr = MakeTarget(displayW, displayH, InternalFormat.Rgba8, PixelFormat.Rgba, PixelType.UnsignedByte);
-        ldrFxaa = MakeTarget(displayW, displayH, InternalFormat.Rgba8, PixelFormat.Rgba, PixelType.UnsignedByte);
-        int hw = Math.Max((w + 1) / 2, 1), hh = Math.Max((h + 1) / 2, 1);
-        aoA = MakeTarget(hw, hh, InternalFormat.RG16f, PixelFormat.RG, PixelType.HalfFloat);
-        aoB = MakeTarget(hw, hh, InternalFormat.RG16f, PixelFormat.RG, PixelType.HalfFloat);
-        // Exposure runs after the upscaler, at the display size.
-        luminance = MakeTarget(LuminanceSize, LuminanceSize, InternalFormat.R32f, PixelFormat.Red, PixelType.Float);
-        gl.BindTexture(TextureTarget.Texture2D, luminance.Texture);
-        gl.GenerateMipmap(TextureTarget.Texture2D);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapNearest);
-        adaptA = MakeTarget(1, 1, InternalFormat.RG32f, PixelFormat.RG, PixelType.Float);
-        adaptB = MakeTarget(1, 1, InternalFormat.RG32f, PixelFormat.RG, PixelType.Float);
-        gl.BindTexture(TextureTarget.Texture2D, 0);
-    }
-
-    void SamplerState(TextureMinFilter filter)
-    {
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)filter);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)(filter == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear));
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-    }
-
-    void Nearest(Target2D t)
-    {
-        gl.BindTexture(TextureTarget.Texture2D, t.Texture);
-        SamplerState(TextureMinFilter.Nearest);
-    }
-
-    void Check(string what)
-    {
-        var status = gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer);
-        if (status != GLEnum.FramebufferComplete) throw new InvalidOperationException($"Post-processing framebuffer '{what}' incomplete: {status}");
+        // GL names and framebuffers for the still-GL users: the scene's guests draw into the bound framebuffer (the far slice's shares the
+        // colour), the grass-motion guest into the motion target, and the vendor upscalers take their images by GL name (VkGl.ImageOf).
+        sceneFbo = GlBridge.Framebuffer(Gpu, Name(sceneColour), Name(sceneDepth));
+        if (up.Temporal)
+        {
+            farFbo = GlBridge.Framebuffer(Gpu, sceneColour.Name, Name(farDepth!));
+            motion!.Framebuffer = GlBridge.Framebuffer(Gpu, Name(motion), 0);
+            foreach (var t in new[] { upscaleDepth!, reactive!, historyA!, historyB! }) Name(t);
+        }
     }
 
     // ---- timing ----
 
+    /// <summary>A timestamp at this point of the frame: into the open segment, or interleaved into the frame (VkGl's pass is not ended).</summary>
     void Stamp(string name)
     {
-        int n = stampCount[slot];
-        if (n >= MaxStamps) return;
-        gl.QueryCounter(stamps[slot, n], QueryCounterTarget.Timestamp);
-        stampNames[slot, n] = name;
+        var set = stamps;
+        if (set is null || set.Count >= MaxStamps) return;
+        var arena = Gpu.Frame.Timestamps;
+        QuerySlot slot;
+        if (segment is { } cmd)
+        {
+            slot = arena.Allocate();
+            cmd.Timestamp(arena, slot);
+        }
+        else
+        {
+            stampWriter ??= c => { written = Gpu.Frame.Timestamps.Allocate(); c.Timestamp(Gpu.Frame.Timestamps, written); };
+            written = default;
+            interop.Interleave(stampWriter);
+            slot = written;
+        }
+        set.Slots[set.Count] = slot;
+        set.Names[set.Count++] = name;
         if (StageClock.OnClose is not null) StageClock.Sub("post " + name);
-        stampCount[slot] = n + 1;
     }
 
-    void Collect(int s, bool wait)
+    /// <summary>Adds the sections of every frame whose timestamps have been collected (a frame ring after it); drops frames too old to arrive.</summary>
+    void Collect()
     {
-        if (!pending[s]) return;
-        int n = stampCount[s];
-        if (!wait)
+        var arena = Gpu.Frame.Timestamps;
+        while (pendingStamps.TryPeek(out var set))
         {
-            gl.GetQueryObject(stamps[s, n - 1], QueryObjectParameterName.ResultAvailable, out int ready);
-            if (ready == 0) return;
+            bool ready = set.Count > 1;
+            for (int i = 0; i < set.Count && ready; i++) ready = arena.TryRead(set.Slots[i], out _);
+            if (ready)
+            {
+                arena.TryRead(set.Slots[0], out ulong previous);
+                for (int i = 1; i < set.Count; i++)
+                {
+                    arena.TryRead(set.Slots[i], out ulong now);
+                    string name = set.Names[i];
+                    costs.TryGetValue(name, out var c);
+                    costs[name] = (c.Sum + (now - previous) / 1e6, c.Count + 1);
+                    previous = now;
+                }
+            }
+            else if (Gpu.Frame.Number - set.Frame < 16) break;   // not collected yet
+            pendingStamps.Dequeue();
+            freeStamps.Push(set);
         }
-        gl.GetQueryObject(stamps[s, 0], QueryObjectParameterName.Result, out ulong previous);
-        for (int i = 1; i < n; i++)
-        {
-            gl.GetQueryObject(stamps[s, i], QueryObjectParameterName.Result, out ulong now);
-            string name = stampNames[s, i]!;
-            costs.TryGetValue(name, out var c);
-            costs[name] = (c.Sum + (now - previous) / 1e6, c.Count + 1);
-            previous = now;
-        }
-        pending[s] = false;
     }
 
-    /// <summary>Waits for every outstanding timing (after a <c>glFinish</c>); for the offscreen path.</summary>
-    public void Flush() { for (int s = 0; s < Slots; s++) Collect(s, true); }
+    /// <summary>Takes in every timing that has arrived. No longer waits (since phase 8 stage 2): a frame's timestamps arrive when its slot of the
+    /// frame ring comes round, so the frames still in flight are counted later.</summary>
+    public void Flush() => Collect();
 
     /// <summary>Average GPU milliseconds per section since the last call ("scene" is the frame before post-processing), then resets.</summary>
     public IReadOnlyList<(string Name, double Ms)> TakeCosts()
@@ -365,19 +399,17 @@ public sealed unsafe class PostProcess : IDisposable
         var up = Options.Upscale;
         if (w != displayWidth || h != displayHeight || up.Kind != allocatedKind || up.EffectiveScale != allocatedScale)
             Allocate(w, h);
-        slot = (slot + 1) % Slots;
-        Collect(slot, false);
-        pending[slot] = false;
-        stampCount[slot] = 0;
+        Collect();
+        stamps = freeStamps.Count > 0 ? freeStamps.Pop() : new StampSet();
+        stamps.Count = 0;
         haveNearSlice = farSliceDrawn = false;
         Stamp("start");
         frameIndex++;
         JitterPixels = Temporal ? Jitter.Offset(frameIndex, JitterPhases) : Vector2.Zero;
         // Textures at the display size's detail: log2 of the scale, and further for the vendor upscalers as they recommend (DECISIONS 15).
-        if (gl is ITextureLodBias lod) lod.TextureLodBias = Temporal ? MathF.Log2(width / (float)displayWidth) - (allocatedKind == UpscalerKind.Taa ? 0.5f : 1f) : 0;
+        if (lodBias is not null) lodBias.TextureLodBias = Temporal ? MathF.Log2(width / (float)displayWidth) - (allocatedKind == UpscalerKind.Taa ? 0.5f : 1f) : 0;
         SceneFramebuffer = sceneFbo;
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, SceneFramebuffer);
-        gl.Viewport(0, 0, (uint)width, (uint)height);
+        GlBridge.Bind(Gpu, SceneFramebuffer, width, height);
     }
 
     // ---- temporal upscaling ----
@@ -395,7 +427,7 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>The vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/>; without one (or on failure) TAA runs.</summary>
     public IUpscaler? External { get; set; }
 
-    /// <summary>What <see cref="ObjectMotion"/> gets: the near slice's depth texture and planes, and the jitter in NDC.</summary>
+    /// <summary>What <see cref="ObjectMotion"/> gets: the near slice's depth texture (a GL name) and planes, and the jitter in NDC.</summary>
     public readonly record struct MotionTargets(uint NearDepth, Vector2 NearPlanes, Vector2 JitterNdc);
 
     /// <summary>
@@ -453,8 +485,15 @@ public sealed unsafe class PostProcess : IDisposable
     public void BeginFarSlice(float near, float far)
     {
         if (!Temporal) return;
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, farFbo);
-        gl.Clear(ClearBufferMask.DepthBufferBit);
+        // The clear GL's Clear(DEPTH) made: a rendering of its own clearing the far depth to 1.
+        var cmd = interop.BeginNative("post far slice clear");
+        cmd.BeginRendering(new RenderingDesc(default, farDepth!.Attachment with
+        {
+            Load = Vk.AttachmentLoadOp.Clear, Clear = new Vk.ClearValue(depthStencil: new Vk.ClearDepthStencilValue(1f, 0)),
+        }, width, height));
+        cmd.EndRendering();
+        interop.EndNative(cmd);
+        GlBridge.Bind(Gpu, farFbo, width, height);
         farToPrevious = ToPrevious(near, far);
         farPlanes = new Vector2(near, far);
         farSliceDrawn = true;
@@ -464,9 +503,64 @@ public sealed unsafe class PostProcess : IDisposable
     public void BeginNearSlice(float near, float far)
     {
         if (!Temporal) return;
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, sceneFbo);
+        GlBridge.Bind(Gpu, sceneFbo, width, height);
         nearToPrevious = ToPrevious(near, far);
         nearPlanes = new Vector2(near, far);
+    }
+
+    // ---- native passes ----
+
+    CommandList? segment;
+
+    /// <summary>The open native segment of the chain (one is begun when none is open: VkGl's pass ends, a full barrier is placed).</summary>
+    CommandList Segment() => segment ??= interop.BeginNative("post");
+
+    /// <summary>Ends the open segment (before anything that records through VkGl: the vendor upscalers, the grass-motion guest).</summary>
+    void CloseSegment()
+    {
+        if (segment is null) return;
+        interop.EndNative(segment);
+        segment = null;
+    }
+
+    /// <summary>One full-screen triangle with <paramref name="p"/> into <paramref name="target"/> (its uniforms and samplers set before), in a
+    /// rendering of its own, followed by a full barrier (VkGl barriered before every pass).</summary>
+    readonly Dictionary<(LegacyProgram, Vk.Format), GraphicsPipeline> pipelines = [];
+
+    void Draw(LegacyProgram p, Target2D target) => Draw(p, target.Attachment, target.Format, target.Width, target.Height, target.Width, target.Height);
+
+    void Draw(LegacyProgram p, RenderTarget colour, Vk.Format format, int targetWidth, int targetHeight, int viewportWidth, int viewportHeight)
+    {
+        var cmd = Segment();
+        cmd.BeginRendering(new RenderingDesc(colour, default, targetWidth, targetHeight));
+        var s = PassState;
+        cmd.SetViewport(new Vk.Viewport(0, 0, viewportWidth, viewportHeight, 0, 1));
+        cmd.SetScissor(new Vk.Rect2D(default, new Vk.Extent2D((uint)targetWidth, (uint)targetHeight)));
+        cmd.SetRaster(s.Cull, s.Front);
+        cmd.SetDepth(s.DepthTest, s.DepthWrite, s.Compare);
+        cmd.SetDepthBias(s.BiasEnable, s.BiasConstant, s.BiasSlope);
+        if (!pipelines.TryGetValue((p, format), out var pipeline))
+            pipelines[(p, format)] = pipeline = Gpu.Pipelines.Get(s.Pipeline(p.Program, p.VertexLayout([]), Vk.PrimitiveTopology.TriangleList,
+                new AttachmentFormats(format, Vk.Format.Undefined), p.Name));
+        cmd.BindPipeline(pipeline);
+        p.Flush(cmd);
+        cmd.Draw(3);
+        cmd.EndRendering();
+        cmd.Barrier(BarrierBatch.Full);
+    }
+
+    /// <summary>A target as its GL texture was sampled: its filters, clamped, the upscaler's LOD bias on a mipmapped filter (VkGl's rule,
+    /// <see cref="SamplerDesc.FromGl"/>, with the bias as it is now).</summary>
+    SampledTexture Sampled(Target2D t) => Sampled(t.Texture, t.Min, t.Mag, TextureWrapMode.ClampToEdge, 1);
+
+    SampledTexture Sampled(Texture t, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, float anisotropy) =>
+        new(Gpu.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, anisotropy, false, Gpu.LodBias())),
+            t.View(), t.Image);
+
+    /// <summary>Binds a target (null: the stand-in VkGl bound for nothing). Call where the GL code bound the unit: the sampler depends on the LOD bias then.</summary>
+    void Bind(LegacyProgram p, SamplerSlot slot, Target2D? target)
+    {
+        if (slot.IsValid) p.Bind(slot, target is null ? Gpu.Dummy(p.SamplerInfo(slot)) : Sampled(target));
     }
 
     /// <summary>Resolves the scene and runs the chain into <see cref="Target"/>.</summary>
@@ -474,17 +568,16 @@ public sealed unsafe class PostProcess : IDisposable
     {
         var o = Options;
         Stamp("scene");
-        gl.Disable(EnableCap.DepthTest);
-        gl.Disable(EnableCap.CullFace);
-        gl.Disable(EnableCap.Blend);
-        gl.DepthMask(false);
+        // The final passes draw into Target: its attachment as GL's binding names it (the window's backbuffer, or the caller's framebuffer).
+        GlBridge.Bind(Gpu, Target, displayWidth, displayHeight);
+        var final = interop.CurrentTargets();
         bool needDepth = o.Ssao && haveNearSlice;
 
         bool ao = needDepth;
         if (ao) RunSsao();
         if (ao) Stamp("ssao");
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
-        postColour = sceneColour;
+        postColour = sceneColour!;
         if (Temporal) { postColour = RunUpscale(); Stamp("upscale"); }
         else ActiveUpscaler = "off";
         bool auto = AutoExposure is not null && luminance is not null;
@@ -494,43 +587,48 @@ public sealed unsafe class PostProcess : IDisposable
         // Composite: to the target, or to the LDR picture FXAA and / or the heat haze then read (the game's order: FXAA, HeatHaze).
         bool fxaa = o.Fxaa && !Temporal && ldr is not null;
         bool haze = HeatHazeRuns;
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fxaa || haze ? ldr!.Framebuffer : Target);
-        gl.Viewport(0, 0, (uint)displayWidth, (uint)displayHeight);
         var c = compositePass;
         Bind(c.P, c.Scene, postColour);
-        Bind(c.P, c.Ao, aoB?.Texture ?? 0);
-        Bind(c.P, c.Adapted, auto ? adaptB!.Texture : 0);
+        Bind(c.P, c.Ao, aoB);
+        Bind(c.P, c.Adapted, auto ? adaptB : null);
         c.P.Set(c.Auto, auto ? 1 : 0);
         c.P.Set(c.Exposure, o.Exposure);
         c.P.Set(c.UseAo, ao ? 1 : 0);
         c.P.Set(c.Dither, o.Dither ? 1 : 0);
         c.P.Set(c.Debug, o.Debug);
-        Fullscreen(c.P);
+        if (fxaa || haze) Draw(c.P, ldr!); else DrawFinal(c.P, final);
         Stamp("composite");
         var picture = ldr;
         if (fxaa)
         {
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, haze ? ldrFxaa!.Framebuffer : Target);
             var f = fxaaPass;
-            Bind(f.P, f.Image, ldr!.Texture);
+            Bind(f.P, f.Image, ldr);
             f.P.Set(f.Texel, 1f / displayWidth, 1f / displayHeight);
-            Fullscreen(f.P);
+            if (haze) Draw(f.P, ldrFxaa!); else DrawFinal(f.P, final);
             Stamp("fxaa");
             picture = ldrFxaa;
         }
-        if (haze) RunHeatHaze(picture!);
+        if (haze) RunHeatHaze(picture!, final);
+        CloseSegment();
 
-        pending[slot] = true;
+        if (stamps is { } set)
+        {
+            set.Frame = Gpu.Frame.Number;
+            pendingStamps.Enqueue(set);
+            stamps = null;
+        }
         (previousRotation, previousEye, previousFov, previousAspect, previousValid) = (viewRotation, eyeNow, fovNow, aspectNow, Temporal);
 
-        gl.BindVertexArray(0);
-        gl.BindTexture(TextureTarget.Texture2D, 0);
-        gl.ActiveTexture(TextureUnit.Texture0);
-        gl.DepthMask(true);
-        gl.Enable(EnableCap.DepthTest);
+        // The GL state the chain leaves for what draws after it (the overlay draws into the bound framebuffer): Target bound at the display
+        // size, depth test and write on, no culling or blending.
+        GlBridge.Bind(Gpu, Target, displayWidth, displayHeight);
+        GlBridge.State(Gpu, depthTest: true, depthWrite: true, cullFace: false, blend: false);
     }
 
-    uint postColour;
+    void DrawFinal(LegacyProgram p, PassTargets final) =>
+        Draw(p, final.Colour, final.Formats.Colour, final.Width, final.Height, displayWidth, displayHeight);
+
+    Target2D postColour = null!;
 
     /// <summary>The one projection the upscalers' depth is written for (camera near .. view distance, unjittered).</summary>
     Matrix4x4 FullProjection(float fov, float aspectRatio) => Matrix4x4.CreatePerspectiveFieldOfView(fov, aspectRatio, UpscaleNear, UpscaleFar);
@@ -542,7 +640,7 @@ public sealed unsafe class PostProcess : IDisposable
     public const float UpscaleNear = 1, UpscaleFar = 1_000_000;
 
     /// <summary>Motion vectors, then the vendor upscaler or TAA into the history; returns the display-size picture.</summary>
-    uint RunUpscale()
+    Target2D RunUpscale()
     {
         bool reset = !historyValid || !previousValid || Vector3.Distance(eyeNow, previousEye) > 5000;
         float dt = (float)frameClock.Elapsed.TotalSeconds;
@@ -550,12 +648,12 @@ public sealed unsafe class PostProcess : IDisposable
         Velocity(motion!, 0);
         if (ObjectMotion is { } objectMotion)
         {
-            Pass(motion!);
-            gl.Disable(EnableCap.DepthTest);
-            gl.Disable(EnableCap.Blend);
-            gl.ColorMask(true, true, false, false);
-            objectMotion(new MotionTargets(sceneDepth, nearPlanes, new Vector2(2 * JitterPixels.X / width, 2 * JitterPixels.Y / height)));
-            gl.ColorMask(true, true, true, true);
+            // A guest drawing into "the bound framebuffer" with GL's state (VkGl's pass): the motion target bound, red and green only.
+            CloseSegment();
+            GlBridge.Bind(Gpu, motion!.Framebuffer, motion.Width, motion.Height);
+            GlBridge.State(Gpu, depthTest: false, depthWrite: false, cullFace: false, blend: false, red: true, green: true, blue: false, alpha: false);
+            objectMotion(new MotionTargets(sceneDepth!.Name, nearPlanes, new Vector2(2 * JitterPixels.X / width, 2 * JitterPixels.Y / height)));
+            GlBridge.State(Gpu, depthTest: false, depthWrite: false, cullFace: false, blend: false);
         }
         (historyA, historyB) = (historyB, historyA);
         var output = historyB!;
@@ -564,9 +662,10 @@ public sealed unsafe class PostProcess : IDisposable
         {
             Velocity(upscaleDepth!, 1);
             if (WaterHeight is not null) Velocity(reactive!, 2);
+            CloseSegment();   // the vendor upscaler records its own segment
             done = external.Dispatch(new UpscaleInputs
             {
-                Colour = sceneColour, Depth = upscaleDepth!.Texture, Motion = motion!.Texture, Output = output.Texture, Reactive = WaterHeight is null ? 0 : reactive!.Texture,
+                Colour = sceneColour!.Name, Depth = upscaleDepth!.Name, Motion = motion!.Name, Output = output.Name, Reactive = WaterHeight is null ? 0 : reactive!.Name,
                 RenderWidth = width, RenderHeight = height, DisplayWidth = displayWidth, DisplayHeight = displayHeight,
                 JitterPixels = JitterPixels, Near = UpscaleNear, Far = UpscaleFar, FieldOfView = fovNow,
                 DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f), Sharpness = Options.Upscale.Sharpness, Reset = reset,
@@ -591,21 +690,20 @@ public sealed unsafe class PostProcess : IDisposable
                 Console.WriteLine($"upscaler  {Options.Upscale.Kind.ToString().ToUpperInvariant()} is not available here; using TAA");
                 warnedFallback = true;
             }
-            Pass(output);
             var t = taaPass;
             Bind(t.P, t.Colour, sceneColour);
-            Bind(t.P, t.Motion, motion!.Texture);
-            Bind(t.P, t.History, historyA!.Texture);
+            Bind(t.P, t.Motion, motion);
+            Bind(t.P, t.History, historyA);
             t.P.Set(t.RenderSize, (float)width, (float)height);
             t.P.Set(t.DisplaySize, (float)displayWidth, (float)displayHeight);
             t.P.Set(t.Jitter, JitterPixels.X, JitterPixels.Y);
             t.P.Set(t.Blend, 0.1f);
             t.P.Set(t.Reset, reset ? 1 : 0);
-            Fullscreen(t.P);
+            Draw(t.P, output);
             ActiveUpscaler = width == displayWidth && height == displayHeight ? "taa" : $"taa {width}x{height}";
         }
         historyValid = true;
-        return output.Texture;
+        return output;
     }
 
     /// <summary>The water plane's height when water is drawn (for the upscalers' reactive mask), else null.</summary>
@@ -616,7 +714,6 @@ public sealed unsafe class PostProcess : IDisposable
     void Velocity(Target2D target, int mode)
     {
         var v = velocityPass;
-        Pass(target);
         Bind(v.P, v.NearDepth, sceneDepth);
         Bind(v.P, v.FarDepth, farDepth);
         v.P.Set(v.NearToPrev, nearToPrevious);
@@ -636,34 +733,7 @@ public sealed unsafe class PostProcess : IDisposable
         v.P.Set(v.EyeY, eyeNow.Y);
         v.P.Set(v.WaterY, WaterHeight ?? float.MinValue);
         v.P.Set(v.WaterReactive, WaterReactive);
-        Fullscreen(v.P);
-    }
-
-    void Pass(Target2D target)
-    {
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, target.Framebuffer);
-        gl.Viewport(0, 0, (uint)target.Width, (uint)target.Height);
-    }
-
-    /// <summary>The texture a sampler reads, as VkGl would bind it now (0: GL's stand-in). Call where the GL code bound the unit: the view and
-    /// sampler VkGl hands out depend on the texture's defined levels and on the LOD bias at this moment.</summary>
-    void Bind(LegacyProgram p, SamplerSlot slot, uint texture)
-    {
-        if (slot.IsValid) p.Bind(slot, interop.Sampled(texture, p.SamplerInfo(slot)));
-    }
-
-    /// <summary>One full-screen triangle with <paramref name="p"/> into the framebuffer GL has bound, in VkGl's open pass (a segment per draw: the
-    /// targets differ from pass to pass). Uniforms and samplers are set before the call; the draw state is GL's, as VkGl would draw with it.</summary>
-    void Fullscreen(LegacyProgram p)
-    {
-        var cmd = interop.BeginNativeInPass(p.Name);
-        var t = interop.CurrentTargets();
-        var state = interop.CurrentState();
-        state.Record(cmd, t);
-        cmd.BindPipeline(Gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout([]), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, t.Formats, p.Name)));
-        p.Flush(cmd);
-        cmd.Draw(3);
-        interop.EndNative(cmd);
+        Draw(v.P, target);
     }
 
     void RunSsao()
@@ -671,7 +741,6 @@ public sealed unsafe class PostProcess : IDisposable
         var a = aoA!; var b = aoB!;
         float tanY = MathF.Tan(fovY * 0.5f);
         var s = ssao;
-        Pass(a);
         Bind(s.P, s.Depth, sceneDepth);
         s.P.Set(s.Tan, tanY * aspect, tanY);
         s.P.Set(s.NearFar, nearPlane, farPlane);
@@ -681,17 +750,15 @@ public sealed unsafe class PostProcess : IDisposable
         // Fade out with distance: the occlusion is a detail effect, and far geometry is hazy and has little depth precision.
         s.P.Set(s.FadeStart, 3000f);
         s.P.Set(s.FadeEnd, 10000f);
-        Fullscreen(s.P);
+        Draw(s.P, a);
 
         var bl = blur;
-        Pass(b);
-        Bind(bl.P, bl.Ao, a.Texture);
+        Bind(bl.P, bl.Ao, a);
         bl.P.Set(bl.Step, 1f / a.Width, 0f);
-        Fullscreen(bl.P);
-        Pass(a);
-        Bind(bl.P, bl.Ao, b.Texture);
+        Draw(bl.P, b);
+        Bind(bl.P, bl.Ao, b);
         bl.P.Set(bl.Step, 0f, 1f / a.Height);
-        Fullscreen(bl.P);
+        Draw(bl.P, a);
         // The composite reads aoB: swap so the finished result is there.
         (aoA, aoB) = (aoB, aoA);
     }
@@ -705,7 +772,7 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>The game's far clip D, which its G-buffer depth is divided by (view distance × 10 = 50000; docs/formats/sky.md).</summary>
     public float HeatHazeFarClip { get; set; } = 50000;
     /// <summary>Whether the heat-haze textures were found (else the pass never runs).</summary>
-    public bool HasHeatHaze => flowTexture != 0 && perturbationTexture != 0;
+    public bool HasHeatHaze => flowTexture is not null && perturbationTexture is not null;
     /// <summary>Whether this frame ends with the heat haze: it is on, has its textures and an amount.</summary>
     public bool HeatHazeRuns => Options.HeatHaze && HasHeatHaze && HeatHazeAmount > 0 && ldr is not null;
 
@@ -722,8 +789,8 @@ public sealed unsafe class PostProcess : IDisposable
                 Console.WriteLine("warning   heat haze: FlowHAZE.dds or Perturber.dds not found, no heat haze");
                 return;
             }
-            flowTexture = HazeTexture(Meitou.Data.Textures.DdsReader.ReadFile(flow));
-            perturbationTexture = HazeTexture(Meitou.Data.Textures.DdsReader.ReadFile(perturbation));
+            flowTexture = HazeTexture(Meitou.Data.Textures.DdsReader.ReadFile(flow), "post heat haze flow");
+            perturbationTexture = HazeTexture(Meitou.Data.Textures.DdsReader.ReadFile(perturbation), "post heat haze perturbation");
         }
         catch (Exception e) when (e is Meitou.Data.Textures.DdsFormatException or IOException)
         {
@@ -731,50 +798,41 @@ public sealed unsafe class PostProcess : IDisposable
         }
     }
 
-    uint HazeTexture(Meitou.Data.Textures.DdsFile dds)
+    /// <summary>The file's levels as they are (BC1 blocks), or decoded to RGBA8 for another format; every level the file has.</summary>
+    Texture HazeTexture(Meitou.Data.Textures.DdsFile dds, string name)
     {
-        uint t = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, t);
-        if (dds.Format == Meitou.Data.Textures.DdsFormat.Bc1)
+        bool bc1 = dds.Format == Meitou.Data.Textures.DdsFormat.Bc1;
+        var top = dds.Surface(0, 0);
+        var format = GlConventions.VkFormat(bc1 ? InternalFormat.CompressedRgbaS3TCDxt1Ext : InternalFormat.Rgba8);
+        using var batch = Gpu.Uploads.Begin();
+        var texture = batch.Create(new TextureDesc(format, top.Width, top.Height, dds.MipCount, Name: name));
+        for (int level = 0; level < dds.MipCount; level++)
         {
-            for (int level = 0; level < dds.MipCount; level++)
+            if (bc1)
             {
                 var s = dds.Surface(0, level);
-                fixed (byte* p = &dds.Data[s.Offset])
-                    gl.CompressedTexImage2D(TextureTarget.Texture2D, level, InternalFormat.CompressedRgbaS3TCDxt1Ext, (uint)s.Width, (uint)s.Height, 0, (uint)s.Length, p);
+                batch.Write(texture, level, 0, new Vk.Rect2D(default, new Vk.Extent2D((uint)s.Width, (uint)s.Height)), dds.Data.AsSpan(s.Offset, s.Length));
             }
-        }
-        else
-        {
-            gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
-            for (int level = 0; level < dds.MipCount; level++)
+            else
             {
                 var img = Meitou.Data.Textures.DdsDecoder.Decode(dds, 0, level);
-                gl.TexImage2D<byte>(TextureTarget.Texture2D, level, InternalFormat.Rgba8, (uint)img.Width, (uint)img.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, img.Pixels.AsSpan());
+                batch.Write(texture, level, 0, new Vk.Rect2D(default, new Vk.Extent2D((uint)img.Width, (uint)img.Height)), img.Pixels);
             }
         }
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, dds.MipCount - 1);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x84FE, 16f);   // TEXTURE_MAX_ANISOTROPY: Ogre's default 16 in the game
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
-        gl.BindTexture(TextureTarget.Texture2D, 0);
-        return t;
+        return texture;
     }
 
     /// <summary>The game's heat haze from <paramref name="source"/> (the finished LDR picture) into <see cref="Target"/>.</summary>
-    void RunHeatHaze(Target2D source)
+    void RunHeatHaze(Target2D source, PassTargets final)
     {
         // The upscaler's mip bias is for the scene's textures; the haze's maps are sampled as the game does.
-        if (gl is ITextureLodBias lod) lod.TextureLodBias = 0;
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, Target);
-        gl.Viewport(0, 0, (uint)displayWidth, (uint)displayHeight);
+        if (lodBias is not null) lodBias.TextureLodBias = 0;
         var h = hazePass;
-        Bind(h.P, h.Flow, flowTexture);
-        Bind(h.P, h.Perturbation, perturbationTexture);
+        // GL's state for them: trilinear, anisotropy 16 (Ogre's default in the game), repeating.
+        if (h.Flow.IsValid) h.P.Bind(h.Flow, Sampled(flowTexture!, TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.Repeat, 16));
+        if (h.Perturbation.IsValid) h.P.Bind(h.Perturbation, Sampled(perturbationTexture!, TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.Repeat, 16));
         Bind(h.P, h.Depth, sceneDepth);
-        Bind(h.P, h.Image, source.Texture);
+        Bind(h.P, h.Image, source);
         // The phase in double first: game hours × 100 loses its fraction in float after long sessions.
         double phase = HeatHazeHours * 100;
         h.P.Set(h.Phase, (float)(phase - Math.Floor(phase)));
@@ -784,11 +842,13 @@ public sealed unsafe class PostProcess : IDisposable
         h.P.Set(h.NearFar, nearPlane, farPlane);
         h.P.Set(h.FarClip, HeatHazeFarClip);
         h.P.Set(h.HasDepth, haveNearSlice ? 1 : 0);
-        Fullscreen(h.P);
+        DrawFinal(h.P, final);
         Stamp("heathaze");
     }
 
     const int LuminanceSize = 256;
+    /// <summary>The luminance's whole mip chain: 256 down to 1.</summary>
+    const int LuminanceLevels = 9;
     /// <summary>The game's adaptation rate (`AUTOEXP_ADAPTATION_RATE`, 1 / s).</summary>
     const float AdaptationRate = 0.5f;
 
@@ -800,39 +860,35 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>Skip the smoothing: the exposure settles at once (screenshots, benchmarks).</summary>
     public bool InstantAdaptation { get; set; }
 
-    /// <summary>The last frame's adapted luminance and measured mean (the composite's scale is 0.55 / adapted); reads the GPU back, so for reports only.</summary>
+    /// <summary>The last frame's adapted luminance and measured mean (the composite's scale is 0.55 / adapted); waits for the GPU and reads it
+    /// back (<see cref="GpuContext.ReadBack"/>), so for reports only, outside a frame.</summary>
     public (float Adapted, float Mean) ReadExposure()
     {
         if (adaptB is null || !adaptedValid) return (float.NaN, float.NaN);
-        float* v = stackalloc float[4];
-        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, adaptB.Framebuffer);
-        gl.ReadPixels(0, 0, 1, 1, PixelFormat.Rgba, PixelType.Float, v);
+        var v = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(Gpu.ReadBack(adaptB.Texture, 8));   // RG32F
         return (v[0], v[1]);
     }
 
     void RunExposure()
     {
         var lum = luminance!;
-        Pass(lum);
         var lp = luminancePass;
         Bind(lp.P, lp.Scene, postColour);
         lp.P.Set(lp.Cell, 1f / LuminanceSize, 1f / LuminanceSize);
-        Fullscreen(lp.P);
-        gl.BindTexture(TextureTarget.Texture2D, lum.Texture);
-        gl.GenerateMipmap(TextureTarget.Texture2D);
+        Draw(lp.P, lum);
+        Segment().GenerateMips(lum.Texture);   // VkGl's GenerateMipmap: linear blits level by level, full barriers around
         float dt = (float)adaptClock.Elapsed.TotalSeconds;
         adaptClock.Restart();
         float blend = InstantAdaptation || !adaptedValid ? 1 : 1 - MathF.Exp(-dt * AdaptationRate);
         (adaptA, adaptB) = (adaptB, adaptA);
-        Pass(adaptB!);
         var ap = adaptPass;
-        Bind(ap.P, ap.Luminance, lum.Texture);
-        Bind(ap.P, ap.Last, adaptA!.Texture);
+        Bind(ap.P, ap.Luminance, lum);
+        Bind(ap.P, ap.Last, adaptA);
         ap.P.Set(ap.Level, MathF.Log2(LuminanceSize));
         ap.P.Set(ap.Blend, blend);
         var band = AutoExposure!.Value;
         ap.P.Set(ap.Band, band.Min, band.Max);
-        Fullscreen(ap.P);
+        Draw(ap.P, adaptB!);
         adaptedValid = true;
     }
 
@@ -841,8 +897,7 @@ public sealed unsafe class PostProcess : IDisposable
         External?.Dispose();
         Free();
         foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass }) p.P.Dispose();
-        foreach (var t in new[] { flowTexture, perturbationTexture }) if (t != 0) gl.DeleteTexture(t);
-        for (int s = 0; s < Slots; s++)
-            for (int i = 0; i < MaxStamps; i++) gl.DeleteQuery(stamps[s, i]);
+        flowTexture?.Dispose();
+        perturbationTexture?.Dispose();
     }
 }

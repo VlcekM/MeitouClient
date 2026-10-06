@@ -5,7 +5,8 @@ namespace Meitou.Rendering.Gpu;
 /// a renderer whose resources are now native: the impostor baker and preview bind <see cref="WorldTexture.Id"/> through IGl, and
 /// <see cref="TerrainRenderer.DrawMeshes"/> / <see cref="TerrainRenderer.DrawMeshesIndirect"/> take the TERRAIN-mode meshes as GL vertex
 /// arrays. The native object stays the owner (<see cref="IGlInterop.Import"/>, <see cref="IGlInterop.ImportBuffer"/>: borrowed names).
-/// Goes with VkGl in stage 3, once those consumers take native objects.
+/// Stage 2 added the GL mirror of <see cref="PostProcess"/>'s targets (framebuffers over imported names, their binding, the fixed-function state
+/// its guests read; docs/renderer-native.md 8.6). Goes with VkGl in stage 3, once those consumers take native objects.
 /// </summary>
 public static unsafe class GlBridge
 {
@@ -36,6 +37,62 @@ public static unsafe class GlBridge
             if (swizzle[i] != 0) gl.TexParameter(TextureTarget.Texture2D, (TextureParameterName)(0x8E42 + i), swizzle[i]);   // TEXTURE_SWIZZLE_R..A
         gl.BindTexture(TextureTarget.Texture2D, 0);
         return id;
+    }
+
+    /// <summary>(Phase 8 stage 2, post.) A GL texture name for <paramref name="texture"/> with the plain sampler state the GL texture it replaces
+    /// had (no mips: <paramref name="filter"/> is <c>NEAREST</c> or <c>LINEAR</c> for both min and mag, <paramref name="wrap"/> on S and T), for a
+    /// still-GL user that samples it by name. Leaves no texture bound on the active unit.</summary>
+    public static uint Texture(GpuContext ctx, Texture texture, TextureMinFilter filter, TextureWrapMode wrap)
+    {
+        var gl = Gl(ctx);
+        uint id = ctx.Interop!.Import(texture);
+        gl.BindTexture(TextureTarget.Texture2D, id);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)filter);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)(filter == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear));
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)wrap);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)wrap);
+        gl.BindTexture(TextureTarget.Texture2D, 0);
+        return id;
+    }
+
+    /// <summary>(Phase 8 stage 2, post.) A GL framebuffer over GL texture names (<see cref="Texture(GpuContext, Gpu.Texture, TextureMinFilter, TextureWrapMode)"/>;
+    /// 0 for no attachment), for guests that draw into "the bound framebuffer" (<see cref="IGlInterop.CurrentTargets"/>) and for hosts that
+    /// take a framebuffer name to restore. Leaves it bound.</summary>
+    public static uint Framebuffer(GpuContext ctx, uint colour, uint depth)
+    {
+        var gl = Gl(ctx);
+        uint fbo = gl.GenFramebuffer();
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
+        if (colour != 0) gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, colour, 0);
+        if (depth != 0) gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, depth, 0);
+        return fbo;
+    }
+
+    /// <summary>Deletes a framebuffer made by <see cref="Framebuffer"/> (not its attachments).</summary>
+    public static void DeleteFramebuffer(GpuContext ctx, uint fbo)
+    {
+        if (fbo != 0 && ctx.Interop is IGl gl) gl.DeleteFramebuffer(fbo);
+    }
+
+    /// <summary>(Phase 8 stage 2, post.) Binds a GL framebuffer (0: the window) with a viewport of <paramref name="width"/> × <paramref name="height"/>:
+    /// what <see cref="IGlInterop.CurrentTargets"/> then reports, for the guests drawing into it and for code that draws into "the bound one".</summary>
+    public static void Bind(GpuContext ctx, uint fbo, int width, int height)
+    {
+        var gl = Gl(ctx);
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
+        gl.Viewport(0, 0, (uint)width, (uint)height);
+    }
+
+    /// <summary>(Phase 8 stage 2, post.) The GL fixed-function state guests and later GL users read (<see cref="IGlInterop.CurrentState"/>):
+    /// depth test, depth write, face culling, blending, and the colour mask.</summary>
+    public static void State(GpuContext ctx, bool depthTest, bool depthWrite, bool cullFace, bool blend, bool red = true, bool green = true, bool blue = true, bool alpha = true)
+    {
+        var gl = Gl(ctx);
+        if (depthTest) gl.Enable(EnableCap.DepthTest); else gl.Disable(EnableCap.DepthTest);
+        gl.DepthMask(depthWrite);
+        if (cullFace) gl.Enable(EnableCap.CullFace); else gl.Disable(EnableCap.CullFace);
+        if (blend) gl.Enable(EnableCap.Blend); else gl.Disable(EnableCap.Blend);
+        gl.ColorMask(red, green, blue, alpha);
     }
 
     /// <summary>Forgets a name made by <see cref="Texture"/> (the image stays the native texture's).</summary>
