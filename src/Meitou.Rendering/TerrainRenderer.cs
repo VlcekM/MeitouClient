@@ -54,10 +54,6 @@ public readonly record struct WorldLighting(Vector3 SunDirection, Vector3 SunCol
 public sealed unsafe class TerrainRenderer : IDisposable
 {
     readonly IGl gl;
-    /// <summary>A GL program nothing draws with: linking it is what assigns the atmosphere's sampler units and publishes the shadow globals
-    /// (<c>WorldGl.Program</c>: <c>SkyRenderer.AssignSamplerUnits</c>, <c>ShadowShaders.Bind</c>), which the native frame set reads. The terrain's
-    /// renderer is the first one made, and the last world renderer that links a GL program; phase 8 moves that start-up elsewhere.</summary>
-    readonly uint globalsProgram;
     readonly DeviceBuffer gridVertices, gridIndices;
     readonly TerrainTexture coarseTexture;
     TerrainTexture fineTexture;
@@ -94,7 +90,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         quadtree = new TerrainQuadtree(fine.Spacing, GridCells, new WorldRenderOptions().TerrainLod);
         spare = new TerrainQuadtree(fine.Spacing, GridCells, new WorldRenderOptions().TerrainLod);
         fineBand = BandOf(fine);
-        globalsProgram = WorldGl.Program(gl, TerrainShaders.PatchVertex, TerrainShaders.Fragment);
         // The native programs (docs/renderer-native.md 7.1, step O), all made here so a draw never compiles.
         nativeFrame = new NativeFrame(gpu);
         uniformAlign = Math.Max(gpu.Device.Limits.MinUniformBufferOffsetAlignment, 16);
@@ -1145,7 +1140,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         coarseTexture.Dispose();
         fineTexture.Dispose();
         foreach (var r in retired) r.Texture.Dispose();
-        gl.DeleteProgram(globalsProgram);
         textures?.Dispose();
         foreach (var p in new[] { patchColour, patchDepth, meshColour, meshDepth }) p.Dispose();
         gpu.Bindless.Free(BindlessKind.Texture2D, standIn2D);
