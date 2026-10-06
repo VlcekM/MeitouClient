@@ -3,8 +3,12 @@ using System.Numerics;
 namespace Meitou.Rendering;
 
 /// <summary>One slider: a value between <see cref="Min"/> and <see cref="Max"/>, read and written through the callbacks.</summary>
-public sealed record Slider(string Label, float Min, float Max, Func<float> Get, Action<float> Set, string Format = "0.##", bool Logarithmic = false)
+public sealed record Slider(string Label, float Min, float Max, Func<float> Get, Action<float> Set, string Format = "0.##", bool Logarithmic = false,
+    Func<float, string>? Text = null)
 {
+    /// <summary>The value as the panel shows it (<see cref="Text"/> when given, else <see cref="Format"/>).</summary>
+    public string Display => Text?.Invoke(Get()) ?? Get().ToString(Format, System.Globalization.CultureInfo.InvariantCulture);
+
     public float Fraction
     {
         get
@@ -23,19 +27,34 @@ public sealed record Slider(string Label, float Min, float Max, Func<float> Get,
 
 /// <summary>
 /// A panel of sliders drawn with the <see cref="DebugOverlay"/> in the top-right corner. Drag a slider with the left mouse
-/// button; while the pointer is on the panel, the camera ignores the mouse.
+/// button; while the pointer is on the panel, the camera ignores the mouse. The button at the bottom puts every slider back to
+/// the value it had when the panel was made (before a saved config or a drag changed it).
 /// </summary>
 public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyList<Slider> sliders)
 {
     const float Margin = 16, Pad = 12, TrackWidth = 220, TrackHeight = 6, RowGap = 10;
+    const string ResetLabel = "Reset to defaults";
+
+    readonly float[] defaults = sliders.Select(s => s.Get()).ToArray();
 
     public bool Visible { get; set; }
     /// <summary>The sliders (the game saves their values in its user config, by label).</summary>
     public IReadOnlyList<Slider> Sliders => sliders;
 
+    /// <summary>Sets every slider back to its value when the panel was made.</summary>
+    public void Reset()
+    {
+        for (int i = 0; i < sliders.Count; i++) sliders[i].Set(defaults[i]);
+    }
+
+    float ButtonTop => panelY0 + Pad + overlay.LineHeight * 1.5f + sliders.Count * rowHeight;
+    float ButtonBottom => ButtonTop + overlay.LineHeight + 8;
+
     int dragging = -1;
     float panelX0, panelY0, panelX1, panelY1, trackX0;
     float rowHeight => overlay.LineHeight + TrackHeight + RowGap;
+
+    float ButtonWidth => ResetLabel.Length * overlay.CharWidth + 16;
 
     float LabelWidth => sliders.Max(s => s.Label.Length + 12) * overlay.CharWidth;
 
@@ -45,7 +64,7 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
         panelX1 = width - Margin;
         panelX0 = panelX1 - w;
         panelY0 = Margin;
-        panelY1 = panelY0 + Pad + overlay.LineHeight * 1.5f + sliders.Count * rowHeight + Pad;
+        panelY1 = panelY0 + Pad + overlay.LineHeight * 1.5f + sliders.Count * rowHeight + overlay.LineHeight + 8 + Pad;
         trackX0 = panelX0 + Pad;
     }
 
@@ -58,6 +77,11 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     public bool MouseDown(Vector2 p)
     {
         if (!Contains(p)) return false;
+        if (p.Y >= ButtonTop && p.Y <= ButtonBottom && p.X >= trackX0 && p.X <= trackX0 + ButtonWidth)
+        {
+            Reset();
+            return true;
+        }
         for (int i = 0; i < sliders.Count; i++)
         {
             float top = TrackTop(i);
@@ -99,7 +123,7 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
             var s = sliders[i];
             float top = TrackTop(i);
             overlay.Text(s.Label, trackX0, top - overlay.LineHeight - 2, i == dragging ? fill : DebugOverlay.TextColour);
-            string value = s.Get().ToString(s.Format, System.Globalization.CultureInfo.InvariantCulture);
+            string value = s.Display;
             overlay.Text(value, panelX1 - Pad - value.Length * overlay.CharWidth, top - overlay.LineHeight - 2, dim);
             float t = s.Fraction;
             overlay.Rect(trackX0, top, trackX0 + TrackWidth, top + TrackHeight, track);
@@ -107,6 +131,8 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
             float knob = trackX0 + TrackWidth * t;
             overlay.Rect(knob - 3, top - 4, knob + 3, top + TrackHeight + 4, DebugOverlay.TextColour);
         }
+        overlay.Rect(trackX0, ButtonTop, trackX0 + ButtonWidth, ButtonBottom, track);
+        overlay.Text(ResetLabel, trackX0 + 8, ButtonTop + 4, DebugOverlay.TextColour);
         overlay.Flush(width, height);
     }
 }

@@ -204,7 +204,7 @@ static partial class WorldApp
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
             keysOverlay.Visible = true;
             keysOverlay.Draw(w, h, "Keys   (F10 hides this)", DebugOverlay.KeyItems(WorldOptions.Usage));
-            var settings = CreateSettingsPanel(keysOverlay, gpu, render);
+            var settings = CreateSettingsPanel(keysOverlay, gpu, render, () => o.Hour, v => o.Hour = v);
             settings.Visible = true;
             settings.Draw(w, h);
             keysOverlay.Dispose();
@@ -256,7 +256,7 @@ static partial class WorldApp
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
-            if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render);
+            if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v);
             profiler = new FrameProfiler(gl, display.VkGl.Context, gl is VkGl statsGl ? () => statsGl.Stats.GpuFrameMs : null);
             meter = PassMeter.TryCreate(gl);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             var input = window.CreateInput();
@@ -313,7 +313,7 @@ static partial class WorldApp
                 "G" => OnOff(render.Water),
                 "R" => OnOff(render.Reflections),
                 "B" => gpu is null ? null : gpu.Sky.Physical ? "atmosphere" : "simple",
-                "," => $"{hour:00}:00",
+                "," => TimeText(hour),
                 ['F', >= '1' and <= '9'] when key[1] - '1' < switches.Count => switches[key[1] - '1'].State,
                 "-" => $"{o.Post.Exposure:0.00}",
                 "F10" => "on",
@@ -353,8 +353,8 @@ static partial class WorldApp
                 case Key.G: render.Water = !render.Water; break;
                 case Key.R: render.Reflections = !render.Reflections; break;
                 case Key.B when gpu is not null: gpu.Sky.Physical = !gpu.Sky.Physical; Console.WriteLine(gpu.Sky.Physical ? "sky      atmosphere" : "sky      simple colour model"); break;
-                case Key.Comma: hour = (hour + 23) % 24; Console.WriteLine($"time {hour:0}:00"); break;
-                case Key.Period: hour = (hour + 1) % 24; Console.WriteLine($"time {hour:0}:00"); break;
+                case Key.Comma: hour = (hour + 23) % 24; Console.WriteLine($"time {TimeText(hour)}"); break;
+                case Key.Period: hour = (hour + 1) % 24; Console.WriteLine($"time {TimeText(hour)}"); break;
                 case Key.H:
                     Console.WriteLine($"camera target {camera.Target.X:0}, {camera.Target.Y:0}, {camera.Target.Z:0} (zone {WorldLayout.ZoneOf(camera.Target.X, camera.Target.Z)}), " +
                         $"yaw {camera.Yaw * 180 / MathF.PI:0}, pitch {camera.Pitch * 180 / MathF.PI:0}, distance {camera.Distance:0}; " +

@@ -444,9 +444,12 @@ static class WorldFrame
     /// <summary>The upscaler sliders' labels (the game keeps command-line upscaler options over the saved ones).</summary>
     public static readonly string[] UpscalerSliders = ["Anti-aliasing: 0 FXAA 1 TAA 2 FSR 3 DLSS", "Render scale (upscaler)", "Upscaler sharpness"];
 
-    public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r)
+    public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null)
     {
         var sliders = new List<Slider>();
+        // The viewer's time of day (the `--time` option and the , / . keys), to the minute. The game passes none: its clock runs on its own.
+        if (getHour is not null && setHour is not null)
+            sliders.Add(new Slider("Time of day", 0, 24 - 1 / 60f, getHour, v => setHour(MathF.Round(v * 60) / 60), Text: TimeText));
         if (g.Objects is { } objects)
         {
             sliders.Add(new Slider("Object draw distance", 1000, 40000, () => objects.ObjectDistance, v => objects.ObjectDistance = v, "0", Logarithmic: true));
@@ -490,6 +493,13 @@ static class WorldFrame
             sliders.Add(new Slider(UpscalerSliders[2], 0, 1, () => up.Sharpness, v => up.Sharpness = v, "0.00"));
         }
         return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders);
+    }
+
+    /// <summary>An hour as <c>HH:MM</c>.</summary>
+    public static string TimeText(float hour)
+    {
+        int minutes = (int)MathF.Round(hour * 60) % (24 * 60);
+        return $"{minutes / 60:00}:{minutes % 60:00}";
     }
 
     /// <summary>The swaying grass's own motion for the upscalers (MEITOU_GRASS_MOTION=0 turns it off, for comparisons).</summary>
