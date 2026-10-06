@@ -138,16 +138,25 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
         """;
 
-    const int ReflectionUnit = 16;
-
     readonly IGl gl;
     /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
     public GpuContext Gpu { get; }
     readonly SkyRenderer sky;
-    readonly uint program, vao, vbo, colourMap, flowMap, normalMap, paramsA, paramsB;
+    readonly uint vao, vbo, colourMap, flowMap, normalMap, paramsA, paramsB;   // the quad and the maps stay GL resources (exported to the native draw)
     readonly Vector4 seaA, seaB;
     readonly Vector3 seaColour;
-    readonly Dictionary<string, int> uniforms = [];
+    readonly LegacyProgram program;
+    readonly NativeSegment segment;
+    readonly Handles h;
+    readonly (SamplerSlot Slot, Meitou.Rendering.Vulkan.Shaders.SamplerInfo Info)[] mapSamplers;
+    readonly SamplerSlot reflectionSlot;
+    readonly Meitou.Rendering.Vulkan.Shaders.SamplerInfo reflectionInfo;
+
+    /// <summary>The program's loose uniforms, resolved once.</summary>
+    readonly record struct Handles(UniformHandle ViewProjection, UniformHandle WaterHeight, UniformHandle Centre, UniformHandle Extent, UniformHandle Eye,
+        UniformHandle HalfWorld, UniformHandle SeaA, UniformHandle SeaB, UniformHandle SeaColour, UniformHandle Time, UniformHandle SunDir,
+        UniformHandle SunColour, UniformHandle FogColour, UniformHandle FogDistance, UniformHandle Reflect, UniformHandle ReflectionViewProjection,
+        SkyColourHandles Sky);
 
     WaterRenderer(IGl gl, GpuContext gpu, SkyRenderer sky, uint colourMap, uint flowMap, uint normalMap, uint paramsA, uint paramsB, Vector4 seaA, Vector4 seaB, Vector3 seaColour)
     {
@@ -156,7 +165,16 @@ public sealed unsafe class WaterRenderer : IDisposable
         Gpu = gpu;
         this.sky = sky;
         (this.colourMap, this.flowMap, this.normalMap, this.paramsA, this.paramsB) = (colourMap, flowMap, normalMap, paramsA, paramsB);
-        program = WorldGl.Program(gl, Vertex, Fragment);
+        program = LegacyProgram.Create(gpu, Vertex, Fragment, "water");
+        segment = new NativeSegment(gpu, program, Silk.NET.Vulkan.PrimitiveTopology.TriangleStrip, "water");
+        h = new Handles(program.Uniform("uViewProjection"), program.Uniform("uWaterHeight"), program.Uniform("uCentre"), program.Uniform("uExtent"),
+            program.Uniform("uEye"), program.Uniform("uHalfWorld"), program.Uniform("uSeaA"), program.Uniform("uSeaB"), program.Uniform("uSeaColour"),
+            program.Uniform("uTime"), program.Uniform("uSunDir"), program.Uniform("uSunColour"), program.Uniform("uFogColour"), program.Uniform("uFogDistance"),
+            program.Uniform("uReflect"), program.Uniform("uReflectionViewProjection"), SkyColourHandles.Resolve(program));
+        mapSamplers = new[] { "uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB" }
+            .Select(n => { var slot = program.Sampler(n); return (slot, program.SamplerInfo(slot)); }).ToArray();
+        reflectionSlot = program.Sampler("uReflection");
+        reflectionInfo = program.SamplerInfo(reflectionSlot);
         float[] quad = [-1, -1, -1, 1, 1, -1, 1, 1]; // triangle strip, counter-clockwise from above
         vao = gl.GenVertexArray();
         gl.BindVertexArray(vao);
@@ -240,61 +258,79 @@ public sealed unsafe class WaterRenderer : IDisposable
         return id;
     }
 
+    /// <summary>
+    /// The water surface: one quad, blended, into the pass VkGl has open. Prepare sets the uniforms and the textures the shader reads (the height
+    /// textures, the atmosphere and the heights' uniforms come through the frame globals); Record is one native segment.
+    /// </summary>
     /// <param name="time">Animation time; the game's unit for it is Unknown (the viewer uses real hours).</param>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, TerrainRenderer terrain, float time, float extent, ReflectionPass? reflection = null)
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent, ReflectionPass? reflection = null)
     {
-        gl.UseProgram(program);
-        WorldGl.Matrix(gl, U("uViewProjection"), viewProjection);
-        gl.Uniform1(U("uWaterHeight"), WorldWater.Height);
-        gl.Uniform2(U("uCentre"), eye.X, eye.Z);
-        gl.Uniform1(U("uExtent"), extent);
-        gl.Uniform3(U("uEye"), eye.X, eye.Y, eye.Z);
-        gl.Uniform1(U("uHalfWorld"), (float)WorldLayout.HalfWorldSize);
-        gl.Uniform4(U("uSeaA"), seaA.X, seaA.Y, seaA.Z, seaA.W);
-        gl.Uniform4(U("uSeaB"), seaB.X, seaB.Y, seaB.Z, seaB.W);
-        gl.Uniform3(U("uSeaColour"), seaColour.X, seaColour.Y, seaColour.Z);
-        gl.Uniform1(U("uTime"), time);
-        gl.Uniform3(U("uSunDir"), light.SunDirection.X, light.SunDirection.Y, light.SunDirection.Z);
-        gl.Uniform3(U("uSunColour"), light.SunColour.X, light.SunColour.Y, light.SunColour.Z);
-        gl.Uniform3(U("uFogColour"), light.FogColour.X, light.FogColour.Y, light.FogColour.Z);
-        gl.Uniform1(U("uFogDistance"), light.FogDistance);
-        sky.SetUniforms(program, colours);
-        terrain.BindHeights(program);
+        Prepare(viewProjection, eye, light, colours, time, extent, reflection);
+        Record();
+    }
+
+    void Prepare(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent, ReflectionPass? reflection)
+    {
+        var p = program;
+        p.Set(h.ViewProjection, in viewProjection);
+        p.Set(h.WaterHeight, WorldWater.Height);
+        p.Set(h.Centre, eye.X, eye.Z);
+        p.Set(h.Extent, extent);
+        p.Set(h.Eye, eye.X, eye.Y, eye.Z);
+        p.Set(h.HalfWorld, (float)WorldLayout.HalfWorldSize);
+        p.Set(h.SeaA, seaA.X, seaA.Y, seaA.Z, seaA.W);
+        p.Set(h.SeaB, seaB.X, seaB.Y, seaB.Z, seaB.W);
+        p.Set(h.SeaColour, seaColour.X, seaColour.Y, seaColour.Z);
+        p.Set(h.Time, time);
+        p.Set(h.SunDir, light.SunDirection.X, light.SunDirection.Y, light.SunDirection.Z);
+        p.Set(h.SunColour, light.SunColour.X, light.SunColour.Y, light.SunColour.Z);
+        p.Set(h.FogColour, light.FogColour.X, light.FogColour.Y, light.FogColour.Z);
+        p.Set(h.FogDistance, light.FogDistance);
+        h.Sky.Set(p, colours);
+        p.ApplyGlobals();   // the atmosphere's and the heights' uniforms (SkyRenderer.Apply, TerrainRenderer.BindHeights), through the frame globals
+        sky.BindUnits();    // the atmosphere's textures on their units: the frame globals read them there
+        var interop = Gpu.Interop!;
         uint[] textures = [colourMap, flowMap, normalMap, paramsA, paramsB];
-        string[] names = ["uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB"];
-        for (int i = 0; i < textures.Length; i++)
-        {
-            gl.ActiveTexture(TextureUnit.Texture0 + 11 + i);
-            gl.BindTexture(TextureTarget.Texture2D, textures[i]);
-            gl.Uniform1(U(names[i]), 11 + i);
-        }
+        for (int i = 0; i < textures.Length; i++) p.Bind(mapSamplers[i].Slot, interop.Sampled(textures[i], mapSamplers[i].Info));
         bool reflect = reflection is { Valid: true };
-        gl.Uniform1(U("uReflect"), reflect ? 1f : 0f);
-        gl.Uniform1(U("uReflection"), ReflectionUnit);
+        p.Set(h.Reflect, reflect ? 1f : 0f);
         if (reflect)
         {
-            gl.ActiveTexture(TextureUnit.Texture0 + ReflectionUnit);
-            gl.BindTexture(TextureTarget.Texture2D, reflection!.Texture);
-            WorldGl.Matrix(gl, U("uReflectionViewProjection"), reflection.ViewProjection);
+            p.Bind(reflectionSlot, interop.Sampled(reflection!.Texture, reflectionInfo));
+            p.Set(h.ReflectionViewProjection, reflection.ViewProjection);
         }
         gl.ActiveTexture(TextureUnit.Texture0);
-
         gl.Enable(EnableCap.DepthTest);
         gl.Disable(EnableCap.CullFace);
         gl.Enable(EnableCap.Blend);
         gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
         gl.DepthMask(false);
-        gl.BindVertexArray(vao);
-        gl.DrawArrays(PrimitiveType.TriangleStrip, 0, 4);
+    }
+
+    VertexArrayBindings? quadSource;
+    BufferBinding[] quadVertices = [];
+
+    void Record()
+    {
+        var interop = Gpu.Interop!;
+        var cmd = interop.BeginNativeInPass("water");
+        var targets = interop.CurrentTargets();
+        var state = interop.CurrentState();
+        var va = interop.VertexArray(vao);
+        if (!ReferenceEquals(quadSource, va)) { quadVertices = program.VertexBuffers(va.Attributes, 0, 1); quadSource = va; }
+        cmd.SetViewport(targets.Viewport);
+        cmd.SetScissor(targets.Scissor);
+        cmd.SetRaster(state.Cull, state.Front);
+        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+        cmd.BindPipeline(segment.Get(state, targets.Formats, va));
+        cmd.BindVertexBuffers(0, quadVertices);
+        program.Flush(cmd);
+        cmd.Draw(4);
+        interop.EndNative(cmd);
         gl.BindVertexArray(0);
         gl.DepthMask(true);
         gl.Disable(EnableCap.Blend);
-    }
-
-    int U(string name)
-    {
-        if (!uniforms.TryGetValue(name, out int location)) uniforms[name] = location = gl.GetUniformLocation(program, name);
-        return location;
     }
 
     public void Dispose()
@@ -302,6 +338,6 @@ public sealed unsafe class WaterRenderer : IDisposable
         gl.DeleteVertexArray(vao);
         gl.DeleteBuffer(vbo);
         foreach (var t in new[] { colourMap, flowMap, normalMap, paramsA, paramsB }) gl.DeleteTexture(t);
-        gl.DeleteProgram(program);
+        program.Dispose();
     }
 }
