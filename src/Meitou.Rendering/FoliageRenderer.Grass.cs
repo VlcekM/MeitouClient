@@ -212,6 +212,7 @@ public sealed unsafe partial class FoliageRenderer
     /// <summary>One view's grass on the GPU: the cull into <see cref="GpuFrame.PreFrame"/>, then one indirect draw in a native segment. False when nothing can draw.</summary>
     bool DrawGrassGpu(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, bool coverage)
     {
+        if (GpuCullVerify) { int calls = DrawCalls, blades = DrawnBlades; PrepareGrass(eye, frustum, options, coverage); (DrawCalls, DrawnBlades) = (calls, blades); }
         if (grassStore.SlotHigh == 0 || frustum.Length > 8) return false;
         if (BuildGrassRows(false, options, coverage) == 0) return false;
         var gp = grassGpuProgram!;
@@ -231,6 +232,7 @@ public sealed unsafe partial class FoliageRenderer
         var tables = BindRows(interop, 0);
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
         var result = grassStore.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
+        if (GpuCullVerify && !result.IsEmpty) QueueGrassVerify("colour", result);
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance, Time = SwayPhase() };
         grassFrame!.Bind(cmd, p.Layout, in view, [tables.Patches.Binding]);
         if (!result.IsEmpty)
@@ -249,6 +251,7 @@ public sealed unsafe partial class FoliageRenderer
     /// <summary><see cref="DrawGrassMotion"/> on the GPU: the same cull for the near slice's camera over the patches that sway, one indirect draw.</summary>
     void DrawGrassMotionGpu(PostProcess.MotionTargets targets, Vector3 eye, float time, float previousTime, Matrix4x4 previous)
     {
+        if (GpuCullVerify) PrepareMotion(eye);
         if (grassStore.SlotHigh == 0 || motionFrustum.Length > 8) return;
         if (BuildGrassRows(true, default!, false) == 0) return;
         var gp = grassMotionGpuProgram!;
@@ -273,6 +276,7 @@ public sealed unsafe partial class FoliageRenderer
         var tables = BindRows(interop, Index2D(interop, targets.NearDepth));
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
         var result = grassStore.Dispatch(motionFrustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
+        if (GpuCullVerify && !result.IsEmpty) QueueGrassVerify("motion", result);
         grassFrame!.Bind(cmd, p.Layout, in view, [tables.Patches.Binding]);
         if (!result.IsEmpty)
         {

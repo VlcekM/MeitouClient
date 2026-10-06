@@ -921,6 +921,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         var cpu = Stopwatch.StartNew();
         drawStamp++;
         if (GpuCullVerify && verifyPending.Count > 0) CheckVerify(all: false);
+        if (GpuCullVerify) CheckGrassVerify(all: false);
         int callsBefore = DrawCalls;
         active.Clear();
         terrainDraws.Clear();
@@ -1087,6 +1088,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 $"us per draw: meshes {perDraw(2, folMeshDraws[k]):F2}, grass {perDraw(3, folGrassDraws[k]):F2}; record only (native): meshes {(folMeshDraws[k] > 0 ? folRecordMs[k, 0] * 1000 / folMeshDraws[k] : 0):F2}, grass {(folGrassDraws[k] > 0 ? folRecordMs[k, 1] * 1000 / folGrassDraws[k] : 0):F2}; " +
                 $"cull {(GpuCull && gpuCull is not null ? "gpu" : "cpu")}, dispatch recording us per call {folDispatchMs[k] * 1000 / folCalls[k]:F1}, of the cull the TERRAIN-mode rocks' CPU cull {folRockCullMs[k] * 1000 / folCalls[k]:F1}"));
         }
+        Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"foliage grass: {(GpuGrassActive ? "gpu" : "cpu")}, arena {grassStore.ArenaUsed / 1048576.0:F1} of {grassStore.ArenaBytes / 1048576.0:F0} MB, slots {grassStore.SlotsUsed} (high {grassStore.SlotHigh}) of {grassStore.SlotCapacity}, " +
+            $"{grassStore.Misses} pages without room; {grassStore.Dispatched} views, gpu us per view {(grassStore.GpuTimedViews > 0 ? grassStore.GpuMicroseconds / grassStore.GpuTimedViews : 0):F1}"));
         if (gpuCull is { } g)
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
                 $"foliage gpu cull: {g.Dispatched} views, gpu us per view {(g.GpuTimedViews > 0 ? g.GpuMicroseconds / g.GpuTimedViews : 0):F1} ({g.GpuTimedViews} timed), " +
@@ -1899,6 +1903,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         public GrassBuffer Buffer;
         public uint Vertices, Sprite, Colour;
+        public float Distance;
         public GrassPush Push;
     }
 
@@ -1965,7 +1970,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 bool hasColour = options.Textures && b.ColourMap is { Id: not 0 };
                 grassDraws.Add(new GrassDraw
                 {
-                    Buffer = b, Vertices = g.CrossQuads ? 12u : 6u, Sprite = options.Textures ? sprite.Id : 0, Colour = hasColour ? b.ColourMap!.Id : 0,
+                    Buffer = b, Distance = d, Vertices = g.CrossQuads ? 12u : 6u, Sprite = options.Textures ? sprite.Id : 0, Colour = hasColour ? b.ColourMap!.Id : 0,
                     Push = new GrassPush
                     {
                         Size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight),
@@ -2195,6 +2200,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         grassDisposing = true;   // the pages are freed with the store
         ReportFoliageTiming();
         ReportVerify();
+        ReportGrassVerify();
         foreach (var z in zones.Values) { try { z.Job?.Wait(); } catch (AggregateException) { } foreach (var p in z.Pages.Values) { try { p.Job?.Wait(); } catch (AggregateException) { } FreePage(p); } }
         foreach (var a in assetsByMesh.Values)
         {
