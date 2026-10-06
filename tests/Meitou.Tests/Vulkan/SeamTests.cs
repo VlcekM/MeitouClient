@@ -166,6 +166,58 @@ public class SeamTests
     }
 
     [Fact]
+    public void An_in_pass_native_segment_draws_into_VkGl_open_pass_and_VkGl_continues_it()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        using (var gl = new VkGl(d!))
+        {
+            IGlInterop interop = gl;
+            var ctx = gl.Context;
+            uint blue = WorldGl.Texture2D(gl, 2, 2, [0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255], repeat: false, mipmaps: false);
+            uint solid = WorldGl.Program(gl, Fullscreen, Solid), yellow = WorldGl.Program(gl, Fullscreen, Yellow);
+            using var sampled = LegacyProgram.Create(ctx, Fullscreen, Sampled, "seam in-pass sampled");
+            gl.BindVertexArray(gl.GenVertexArray());
+
+            Target(gl);
+            gl.ClearColor(0, 0, 0, 1);
+            gl.Clear(ClearBufferMask.ColorBufferBit);
+
+            gl.UseProgram(solid);
+            gl.Uniform4(gl.GetUniformLocation(solid, "uColour"), 1f, 0f, 0f, 1f);
+            Quarter(gl, 0);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+
+            // Native, inside the pass VkGl has open: no BeginRendering of our own, our own pipeline and dynamic state.
+            var cmd = interop.BeginNativeInPass("seam in-pass");
+            Assert.Throws<InvalidOperationException>(() => gl.DrawArrays(PrimitiveType.Triangles, 0, 3));
+            var targets = interop.CurrentTargets();
+            cmd.BindPipeline(ctx.Pipelines.Get(Desc(sampled, targets.Formats)));
+            State(cmd, targets, new Rect2D(new Offset2D(W / 4, 0), new Extent2D(W / 4, H)));
+            sampled.Bind(sampled.Sampler("uTex"), interop.Sampled(blue, shadowSampler: false));
+            sampled.Flush(cmd);
+            cmd.Draw(3);
+            interop.EndNative(cmd);
+
+            // VkGl continues the same pass: its pipeline and dynamic state must be re-set over ours.
+            gl.Uniform4(gl.GetUniformLocation(solid, "uColour"), 0f, 1f, 0f, 1f);
+            Quarter(gl, 2);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            gl.UseProgram(yellow);
+            Quarter(gl, 3);
+            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            gl.Disable(EnableCap.ScissorTest);
+
+            var p = Read(gl);
+            Assert.Equal((255, 0, 0, 255), At(p, 2, 2));
+            Assert.Equal((0, 0, 255, 255), At(p, W / 4 + 2, 2));
+            Assert.Equal((0, 255, 0, 255), At(p, W / 2 + 2, 2));
+            Assert.Equal((255, 255, 0, 255), At(p, 3 * W / 4 + 2, H - 2));
+        }
+        ExpectClean(d!);
+    }
+
+    [Fact]
     public void Legacy_programs_take_frame_globals_they_were_not_given()
     {
         using var d = TryCreate(sync: false);

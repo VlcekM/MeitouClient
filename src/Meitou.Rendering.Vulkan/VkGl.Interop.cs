@@ -8,7 +8,7 @@ namespace Meitou.Rendering.Vulkan;
 public sealed unsafe partial class VkGl : IGlInterop
 {
     // Between BeginNative and EndNative: IGl calls that record or flush throw (GuardNative).
-    bool nativeOpen;
+    bool nativeOpen, nativeInPass;
     CommandList? nativeList;
     (long Draws, long Pipelines, long Pushes) nativeStart;
 
@@ -36,6 +36,31 @@ public sealed unsafe partial class VkGl : IGlInterop
         return list;
     }
 
+    public CommandList BeginNativeInPass(string label)
+    {
+        GuardNative();
+        // The pass a VkGl draw would draw into now: kept open, or begun (with its barrier) exactly as PrepareDraw begins it.
+        EnsurePass();
+        var list = Context.Frame.Commands;
+        list.Invalidate();
+        Context.Frame.Stats.NativeSegments++;
+        list.BeginLabel(label);
+        if (list.Log is { } log)
+        {
+            log.Note($"native {label} (in pass)");
+            log.BeginRendering(new RenderingDesc(
+                passColour is { } c ? new RenderTarget(AttachmentView(c.Texture, c.Level, c.Layer), Image: c.Texture.Image!.Image) : default,
+                passDepth is { } d ? new RenderTarget(AttachmentView(d.Texture, d.Level, d.Layer), Image: d.Texture.Image!.Image) : default,
+                passWidth, passHeight));
+        }
+        nativeOpen = true;
+        nativeInPass = true;
+        nativeList = list;
+        var s = list.Stats;
+        nativeStart = (s.Draws, s.PipelinesBound, s.DescriptorPushes);
+        return list;
+    }
+
     public void EndNative(CommandList cmd)
     {
         if (!nativeOpen || !ReferenceEquals(cmd, nativeList)) throw new InvalidOperationException("EndNative without a matching BeginNative");
@@ -47,14 +72,22 @@ public sealed unsafe partial class VkGl : IGlInterop
         Stats.DescriptorPushes += s.DescriptorPushes - nativeStart.Pushes;
         nativeOpen = false;
         nativeList = null;
-        FullBarrier(Cmd);
         // Whatever the native code bound is now in the command buffer: VkGl assumes nothing (docs/renderer-native.md 4.1).
         lastPipeline = default;
         dynamicStateDirty = true;
         boundProgram = null;
         pushEpoch++;
-        passActive = false;
-        passColour = passDepth = null;
+        if (nativeInPass)
+        {
+            // Drawn inside VkGl's pass: the pass stays open for the draws that follow, in the same rendering instance (no barrier needed).
+            nativeInPass = false;
+        }
+        else
+        {
+            FullBarrier(Cmd);
+            passActive = false;
+            passColour = passDepth = null;
+        }
         cmd.Log?.Note("end native");
     }
 
@@ -107,11 +140,37 @@ public sealed unsafe partial class VkGl : IGlInterop
     public VertexArrayBindings VertexArray(uint glVertexArray)
     {
         var vao = glVertexArray != 0 && vertexArrays.TryGetValue(glVertexArray, out var v) ? v : defaultVao;
+        if (vao.Exported is { } exported && ExportStillValid(vao))
+        {
+            // The same object again (callers may keep what they derived from it, by reference), marked used as a draw would.
+            foreach (var e in vao.ExportedBuffers) if (e is { Buffer: { } b, Defined: true }) Use(b);
+            return exported;
+        }
+        return vao.Exported = Export(vao);
+    }
+
+    static bool ExportStillValid(GlVertexArray vao)
+    {
+        if (vao.Version != vao.ExportedVersion) return false;
+        foreach (var e in vao.ExportedBuffers) if (!e.Still()) return false;
+        return true;
+    }
+
+    VertexArrayBindings Export(GlVertexArray vao)
+    {
+        vao.ExportedVersion = vao.Version;
+        List<ExportedBuffer> used = [];
+        void Note(uint id)
+        {
+            foreach (var e in used) if (e.Id == id) return;
+            used.Add(ExportedBuffer.Of(id, buffers.GetValueOrDefault(id)));
+        }
         var attributes = new LegacyProgram.Attribute?[vao.Attribs.Length];
         for (int loc = 0; loc < attributes.Length; loc++)
         {
             ref var a = ref vao.Attribs[loc];
             if (!a.Enabled) continue;
+            Note(a.Buffer);
             // As PrepareDraw: an enabled attribute without storage keeps its format and stride but reads the stand-in.
             BufferBinding binding = buffers.TryGetValue(a.Buffer, out var vb) && vb.Defined
                 ? Use(vb) is var (bb, bo) ? new BufferBinding(bb, bo + (ulong)a.Offset) : default
@@ -119,11 +178,13 @@ public sealed unsafe partial class VkGl : IGlInterop
             attributes[loc] = new LegacyProgram.Attribute(binding, AttribFormat(in a), a.Stride == 0 ? AttribBytes(in a) : a.Stride, a.Divisor != 0);
         }
         BufferBinding elements = default;
+        Note(vao.ElementBuffer);
         if (buffers.TryGetValue(vao.ElementBuffer, out var eb) && eb.Defined)
         {
             var (buffer, offset) = Use(eb);
             elements = new BufferBinding(buffer, offset, (ulong)eb.Size);
         }
+        vao.ExportedBuffers = [.. used];
         return new VertexArrayBindings(attributes, elements);
     }
 

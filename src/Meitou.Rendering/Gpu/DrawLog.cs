@@ -85,7 +85,8 @@ public sealed unsafe class DrawLog : IDisposable
     // Native state as recorded.
     readonly DrawRecord state = new();
     readonly Stack<string> labels = new();
-    readonly Dictionary<uint, (BufferBinding Binding, uint Stride, bool PerInstance)> vertex = [];
+    // Bound vertex buffers by location; their stride and rate come from the pipeline bound at the draw (as in Vulkan), not at the bind.
+    readonly Dictionary<uint, BufferBinding> vertex = [];
     BufferBinding index;
     IndexType indexType;
 
@@ -166,17 +167,13 @@ public sealed unsafe class DrawLog : IDisposable
     internal void Viewport(in Viewport v) => state.Viewport = (v.X, v.Y, v.Width, v.Height, v.MinDepth, v.MaxDepth);
     internal void Scissor(in Rect2D r) => state.Scissor = (r.Offset.X, r.Offset.Y, (int)r.Extent.Width, (int)r.Extent.Height);
     internal void Raster(CullModeFlags cull, FrontFace front) => (state.Cull, state.Front) = (cull, front);
+    internal void Front(FrontFace front) => state.Front = front;
     internal void Depth(bool test, bool write, CompareOp op) => (state.DepthTest, state.DepthWrite, state.Compare) = (test, write, op);
     internal void Bias(bool enable, float constant, float slope) => (state.BiasEnable, state.BiasConstant, state.BiasSlope) = (enable, constant, slope);
 
     internal void VertexBuffers(uint first, ReadOnlySpan<BufferBinding> bindings)
     {
-        for (int i = 0; i < bindings.Length; i++)
-        {
-            uint loc = first + (uint)i;
-            var input = vertexLayout?.Inputs.FirstOrDefault(x => x.Location == loc) ?? default;
-            vertex[loc] = (bindings[i], input.Stride, input.PerInstance);
-        }
+        for (int i = 0; i < bindings.Length; i++) vertex[first + (uint)i] = bindings[i];
     }
 
     internal void IndexBuffer(BufferBinding b, IndexType type) => (index, indexType) = (b, type);
@@ -221,9 +218,12 @@ public sealed unsafe class DrawLog : IDisposable
     void Fill(DrawRecord r, bool indexed, uint count, uint instances, uint first, int vertexOffset, uint firstInstance)
     {
         r.VertexBuffers.Clear();
-        foreach (var (loc, (b, stride, perInstance)) in vertex)
-            if (vertexLayout?.Inputs.Any(x => x.Location == loc) == true)
-                r.VertexBuffers[loc] = DescribeVertex(b.Buffer, b.Offset, stride, perInstance, instances, firstInstance, vertexOffset);
+        foreach (var (loc, b) in vertex)
+            if (vertexLayout is { } layout && layout.Inputs.Any(x => x.Location == loc))
+            {
+                var input = layout.Inputs.First(x => x.Location == loc);
+                r.VertexBuffers[loc] = DescribeVertex(b.Buffer, b.Offset, input.Stride, input.PerInstance, instances, firstInstance, vertexOffset);
+            }
         r.Index = indexed ? DescribeIndex(index.Buffer, index.Offset, indexType, first, count) : "-";
         r.Call = indexed ? $"indexed {count} x{instances}" : $"draw {count} x{instances} first={first}";
     }

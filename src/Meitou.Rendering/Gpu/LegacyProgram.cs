@@ -34,6 +34,7 @@ public readonly record struct BlockSlot(int Index)
 public sealed unsafe class LegacyProgram : IDisposable
 {
     readonly GpuContext ctx;
+    readonly ulong uniformAlign;              // the default blocks' slice alignment (the device limit, at least 16)
     readonly List<(string Name, UniformLookup? Vertex, UniformLookup? Fragment)> uniforms = [];
     readonly Dictionary<string, int> uniformIndex = [];
     // Set 0, in VkGl's order: every non-default uniform block of the vertex stage, then of the fragment stage; then every sampler of both.
@@ -55,6 +56,7 @@ public sealed unsafe class LegacyProgram : IDisposable
     LegacyProgram(GpuContext ctx, ShaderProgram program)
     {
         this.ctx = ctx;
+        uniformAlign = Math.Max(ctx.Device.Limits.MinUniformBufferOffsetAlignment, 16);
         Program = program;
         var c = program.Compiled!;
         VertexBlock = c.Vertex.DefaultBlock;
@@ -165,10 +167,10 @@ public sealed unsafe class LegacyProgram : IDisposable
     Func<BufferBinding>?[] globalBlocks = [];
     (UniformHandle Handle, FrameGlobals.Uniform Value)[] globalUniforms = [];
 
+    /// <summary>Re-reads the published names (call only when <see cref="FrameGlobals.Version"/> moved: its closure allocates).</summary>
     void ResolveGlobals()
     {
         var g = ctx.Globals;
-        if (g.Version == globalsVersion) return;
         globalsVersion = g.Version;
         globalTextures = [.. samplerNames.Select(g.Texture)];
         globalBlocks = [.. blockNames.Select(g.Block)];
@@ -181,7 +183,7 @@ public sealed unsafe class LegacyProgram : IDisposable
     /// </summary>
     public void ApplyGlobals()
     {
-        ResolveGlobals();
+        if (ctx.Globals.Version != globalsVersion) ResolveGlobals();
         ctx.Globals.ApplyCount++;
         foreach (var (h, v) in globalUniforms) v.Write(this, h);
     }
@@ -193,13 +195,13 @@ public sealed unsafe class LegacyProgram : IDisposable
     public void Flush(CommandList cmd)
     {
         var frame = ctx.Frame;
-        ResolveGlobals();
+        if (ctx.Globals.Version != globalsVersion) ResolveGlobals();
         bool programChanged = !ReferenceEquals(cmd.BoundProgram, this) || cmd.Epoch != lastPushEpoch;
         if (VertexBlock is not null || FragmentBlock is not null)
         {
             if (sliceFrame != frame.Number) { vertexDirty = fragmentDirty = true; sliceFrame = frame.Number; }
             bool moved = false;
-            ulong align = Math.Max(ctx.Device.Limits.MinUniformBufferOffsetAlignment, 16);
+            ulong align = uniformAlign;
             if (vertexDirty && VertexDefault.Length > 0) { vertexSlice = frame.Constants.Write<byte>(VertexDefault, align); vertexDirty = false; moved = true; frame.Stats.ConstantBytes += VertexDefault.Length; }
             if (fragmentDirty && FragmentDefault.Length > 0) { fragmentSlice = frame.Constants.Write<byte>(FragmentDefault, align); fragmentDirty = false; moved = true; frame.Stats.ConstantBytes += FragmentDefault.Length; }
             if (moved || programChanged)
@@ -209,7 +211,7 @@ public sealed unsafe class LegacyProgram : IDisposable
                 int n = 0;
                 if (VertexBlock is not null) offsets[n++] = (uint)vertexSlice.Offset;
                 if (FragmentBlock is not null) offsets[n++] = (uint)fragmentSlice.Offset;
-                cmd.BindSets(Layout, 1, [set], offsets[..n]);
+                cmd.BindSets(Layout, 1, new ReadOnlySpan<DescriptorSet>(in set), offsets[..n]);
             }
         }
 
@@ -268,7 +270,7 @@ public sealed unsafe class LegacyProgram : IDisposable
                     var set0 = frame.AllocateSet(Program.SetLayouts[0]);
                     for (int i = 0; i < w; i++) writes[i].DstSet = set0;
                     ctx.Device.Vk.UpdateDescriptorSets(ctx.Device.Device, (uint)w, writes, 0, null);
-                    cmd.BindSets(Layout, 0, [set0], []);
+                    cmd.BindSets(Layout, 0, new ReadOnlySpan<DescriptorSet>(in set0), []);
                 }
             }
         }
@@ -282,8 +284,21 @@ public sealed unsafe class LegacyProgram : IDisposable
     DescriptorSet DynamicSet()
     {
         var key = (VertexBlock is null ? 0 : vertexSlice.Handle.Handle, FragmentBlock is null ? 0 : fragmentSlice.Handle.Handle);
-        if (dynamicSets.TryGetValue(key, out var set)) return set;
-        set = ctx.AllocatePersistentSet(Program.SetLayouts[1]);
+        // The chunks of the last two frames (one 8 MB chunk per frame slot, the usual case): no dictionary.
+        if (key == recentKeys[0] && recentSets[0].Handle != 0) return recentSets[0];
+        if (key == recentKeys[1] && recentSets[1].Handle != 0) return recentSets[1];
+        if (!dynamicSets.TryGetValue(key, out var set)) set = CreateDynamicSet(key);
+        (recentKeys[1], recentSets[1]) = (recentKeys[0], recentSets[0]);
+        (recentKeys[0], recentSets[0]) = (key, set);
+        return set;
+    }
+
+    readonly (ulong, ulong)[] recentKeys = new (ulong, ulong)[2];
+    readonly DescriptorSet[] recentSets = new DescriptorSet[2];
+
+    DescriptorSet CreateDynamicSet((ulong, ulong) key)
+    {
+        var set = ctx.AllocatePersistentSet(Program.SetLayouts[1]);
         var infos = stackalloc DescriptorBufferInfo[2];
         var writes = stackalloc WriteDescriptorSet[2];
         uint n = 0;
@@ -329,6 +344,26 @@ public sealed unsafe class LegacyProgram : IDisposable
     }
 
     VertexLayout? lastLayout;
+
+    /// <summary>
+    /// What <see cref="BindVertices"/> binds for the locations <paramref name="first"/> .. <paramref name="first"/> + <paramref name="count"/> − 1, as
+    /// one array for one <see cref="CommandList.BindVertexBuffers"/> call: each attribute's buffer, GL's disabled-attribute constant where null
+    /// (a location in the range the program does not read gets the float constant; binding it is harmless). Resolve it once per mesh and keep it
+    /// while <see cref="IGlInterop.VertexArray"/> returns the same object.
+    /// </summary>
+    public BufferBinding[] VertexBuffers(ReadOnlySpan<Attribute?> byLocation, int first, int count)
+    {
+        var result = new BufferBinding[count];
+        for (int i = 0; i < count; i++)
+        {
+            int loc = first + i;
+            int input = Array.IndexOf(InputLocations, loc);
+            result[i] = loc < byLocation.Length && byLocation[loc] is { } a
+                ? a.Buffer
+                : new BufferBinding(ctx.Defaults.DummyVertex.Buffer, GlConventions.DummyVertexOffset(input >= 0 ? InputKinds[input] : ScalarKind.Float));
+        }
+        return result;
+    }
 
     /// <summary>Binds each input location's buffer (the dummy constant where null) in one call per run of consecutive locations.</summary>
     public void BindVertices(CommandList cmd, ReadOnlySpan<Attribute?> byLocation)

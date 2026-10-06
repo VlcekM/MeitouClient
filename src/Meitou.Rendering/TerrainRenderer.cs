@@ -378,27 +378,40 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// </summary>
     public int DrawMeshes(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth = false)
     {
-        long t0 = MeshTiming ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        long t0 = MeshTiming > 0 ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         int draws = DrawMeshesCore(meshes, depth);
-        if (MeshTiming)
+        if (MeshTiming > 0)
         {
             long dt = System.Diagnostics.Stopwatch.GetTimestamp() - t0;
-            if (depth) { meshDepthTicks += dt; meshDepthCalls++; } else { meshColourTicks += dt; meshColourCalls++; }
-            meshDraws += draws;
+            int k = depth ? 1 : 0;
+            meshTicks[k] += dt; meshCalls[k]++; meshDraws[k] += draws;
+            if (MeshTiming == 2)
+            {
+                // The same call again at once, timed alone: the cost with this path's code and data warm in the caches (diagnostic only:
+                // the pictures of such a run are not for comparison).
+                long w0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                DrawMeshesCore(meshes, depth);
+                meshWarmTicks[k] += System.Diagnostics.Stopwatch.GetTimestamp() - w0;
+            }
         }
         return draws;
     }
 
-    /// <summary><c>MEITOU_MESH_TIMING=1</c>: the CPU time of <see cref="DrawMeshes"/> (colour and depth), printed when the renderer is disposed.</summary>
-    static readonly bool MeshTiming = Environment.GetEnvironmentVariable("MEITOU_MESH_TIMING") == "1";
-    long meshColourTicks, meshDepthTicks, meshColourCalls, meshDepthCalls, meshDraws;
+    /// <summary>
+    /// <c>MEITOU_MESH_TIMING=1</c>: the CPU time of <see cref="DrawMeshes"/> (colour and depth), printed when the renderer is disposed.
+    /// <c>=2</c> also records each call a second time and reports that one as "warm" (docs/renderer-native.md 7.1, cold and warm cost).
+    /// </summary>
+    static readonly int MeshTiming = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_MESH_TIMING"), out int mode) ? mode : 0;
+    readonly long[] meshTicks = new long[2], meshWarmTicks = new long[2], meshCalls = new long[2], meshDraws = new long[2];
 
     void ReportMeshTiming()
     {
-        if (!MeshTiming) return;
+        if (MeshTiming == 0) return;
         double ms(long t) => t * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-        Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
-            $"terrain meshes  colour {meshColourCalls} calls {ms(meshColourTicks):F2} ms ({(meshColourCalls > 0 ? ms(meshColourTicks) * 1000 / meshColourCalls : 0):F1} us/call), depth {meshDepthCalls} calls {ms(meshDepthTicks):F2} ms ({(meshDepthCalls > 0 ? ms(meshDepthTicks) * 1000 / meshDepthCalls : 0):F1} us/call), {meshDraws} draws"));
+        string Kind(int k) =>
+            FormattableString.Invariant($"{meshCalls[k]} calls {ms(meshTicks[k]):F2} ms ({(meshCalls[k] > 0 ? ms(meshTicks[k]) * 1000 / meshCalls[k] : 0):F1} us/call)") +
+            (MeshTiming == 2 ? FormattableString.Invariant($" warm {(meshCalls[k] > 0 ? ms(meshWarmTicks[k]) * 1000 / meshCalls[k] : 0):F1} us/call") : "");
+        Console.WriteLine($"terrain meshes  colour {Kind(0)}, depth {Kind(1)}, {meshDraws[0] + meshDraws[1]} draws ({meshDraws[0]} colour, {meshDraws[1]} depth)");
     }
 
     int DrawMeshesCore(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool depth)
@@ -412,8 +425,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
         SkyRenderer.Active?.BindUnits();
         BindHeightUnits();
         textures?.Bind();
-        BindUnitSamplers(p);
-        return DrawGroups(p, "terrain meshes");
+        BindUnitSamplers(p, ref meshUnitSamplers);
+        return DrawGroups(p, Colour, "terrain meshes");
     }
 
     // ---- the native port of the TERRAIN-mode meshes (docs/renderer-native.md 7.1, step 7: step P, VkGl's SPIR-V and layout) ----
@@ -422,7 +435,9 @@ public sealed unsafe class TerrainRenderer : IDisposable
     LegacyProgram? nativeMesh, nativeDepth;
     MeshUniforms mu;
     UniformHandle depthViewProjection;
-    Matrix4x4[] instanceData = new Matrix4x4[256];
+    /// <summary>This call's placements (each group's contiguous, <see cref="MeshGroup.Offset"/> instances in), in the frame's constants.</summary>
+    Transient placements;
+    const int Colour = 0, Depth = 1;
 
     /// <summary>The handles of what <see cref="Apply"/> sets, resolved once.</summary>
     readonly record struct MeshUniforms(UniformHandle ViewProjection, UniformHandle HeightNormals, UniformHandle Feature, UniformHandle FeatureBiome,
@@ -488,16 +503,18 @@ public sealed unsafe class TerrainRenderer : IDisposable
         ["uGround"] = TerrainShaders.GroundUnit, ["uWorldColour"] = TerrainShaders.WorldColourUnit,
     };
 
+    /// <summary>The samplers a program reads from GL units (not published as frame globals), resolved once per <see cref="FrameGlobals.Version"/>.</summary>
+    sealed record UnitSamplers(int GlobalsVersion, (SamplerSlot Slot, int Unit, Meitou.Rendering.Vulkan.Shaders.SamplerInfo Info)[] Samplers);
+    UnitSamplers? meshUnitSamplers, depthUnitSamplers;
+
     /// <summary>Each sampler reads what VkGl would sample for the GL program: the texture on its unit now (after the GL binds above).</summary>
-    void BindUnitSamplers(LegacyProgram p)
+    void BindUnitSamplers(LegacyProgram p, ref UnitSamplers? resolved)
     {
         var interop = gpu.Interop!;
-        foreach (var name in p.SamplerNames)
-        {
-            if (gpu.Globals.Texture(name) is not null) continue;
-            var slot = p.Sampler(name);
-            p.Bind(slot, interop.SampledUnit(SamplerUnits.GetValueOrDefault(name, 0), p.SamplerInfo(slot)));
-        }
+        if (resolved is null || resolved.GlobalsVersion != gpu.Globals.Version)
+            resolved = new UnitSamplers(gpu.Globals.Version, [.. p.SamplerNames.Where(n => gpu.Globals.Texture(n) is null)
+                .Select(n => (p.Sampler(n), SamplerUnits.GetValueOrDefault(n, 0), p.SamplerInfo(p.Sampler(n))))]);
+        foreach (var (slot, unit, info) in resolved.Samplers) p.Bind(slot, interop.SampledUnit(unit, info));
     }
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
@@ -553,8 +570,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
         var vp = frame.ViewProjection;
         nativeDepth.Set(depthViewProjection, in vp);
         gl.UseProgram(depthMeshProgram);   // GL state as before: the program in use
-        BindUnitSamplers(nativeDepth);
-        return DrawGroups(nativeDepth, "terrain mesh depth");
+        BindUnitSamplers(nativeDepth, ref depthUnitSamplers);
+        return DrawGroups(nativeDepth, Depth, "terrain mesh depth");
     }
 
     // ---- the TERRAIN-mode meshes, instanced ----
@@ -570,14 +587,44 @@ public sealed unsafe class TerrainRenderer : IDisposable
         public int IndexCount, Count, Offset;
         public bool Mirrored;
         public Matrix4x4[] Models = new Matrix4x4[16];
+        /// <summary>What a native draw of this mesh needs, per program: kept while the interop hands out the same vertex-array export and the
+        /// segment's pipeline state is the same. Inline (no object of its own), so a draw reads what grouping has just touched.</summary>
+        public NativeMesh ColourNative, DepthNative;
+        public ref NativeMesh Native(int kind) => ref kind == Colour ? ref ColourNative : ref DepthNative;
     }
+
+    /// <summary>The pipeline state a segment's draws share (everything of <see cref="GraphicsPipelineDesc"/> but the vertex layout).</summary>
+    readonly record struct SegmentPipeline(LegacyProgram Program, AttachmentFormats Formats, BlendState Blend, Silk.NET.Vulkan.ColorComponentFlags Mask,
+        Silk.NET.Vulkan.PolygonMode Polygon, bool AlphaToCoverage, bool DepthClamp);
+
+    /// <summary>A mesh's own vertex buffers (locations 0 and 1: position, normal), bound with one call.</summary>
+    [System.Runtime.CompilerServices.InlineArray(2)]
+    struct OwnVertices { BufferBinding first; }
+
+    /// <summary>A mesh resolved for one program: the export it came from, its pipeline, its own vertex buffers (locations 0 up to the
+    /// placements) and its indices.</summary>
+    struct NativeMesh
+    {
+        public VertexArrayBindings? Source;
+        public int Segment;                       // the SegmentPipeline it was resolved with, by number (segmentIds)
+        public int VertexCount;
+        public GraphicsPipeline Pipeline;
+        public OwnVertices Vertices;
+        public BufferBinding Elements;
+    }
+
+    // Per program kind: the last segment state and its number (a new number when it changes, so a mesh compares one int per draw).
+    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[2];
+    readonly int[] segmentIds = new int[2];
+    int segmentCount;
 
     readonly Dictionary<(uint, int, bool), MeshGroup> meshGroups = [];
     readonly List<MeshGroup> meshGroupList = [];
 
     /// <summary>
-    /// Sorts the placements into <see cref="meshGroupList"/> and uploads them (each one's matrix as its four rows; with
-    /// <paramref name="biomes"/> row 0's w, which only feeds the position's unused w, carries the biome row). False when there is none.
+    /// Sorts the placements into <see cref="meshGroupList"/> and writes them into this frame's constants (<see cref="placements"/>; each one's
+    /// matrix as its four rows; with <paramref name="biomes"/> row 0's w, which only feeds the position's unused w, carries the biome row).
+    /// False when there is none.
     /// </summary>
     bool GroupMeshes(List<(uint Vao, int IndexCount, Matrix4x4 Model)> meshes, bool biomes)
     {
@@ -598,52 +645,78 @@ public sealed unsafe class TerrainRenderer : IDisposable
         if (meshGroupList.Count == 0) return false;
         int total = 0;
         foreach (var g in meshGroupList) { g.Offset = total; total += g.Count; }
-        if (instanceData.Length < total) Array.Resize(ref instanceData, Math.Max(total, instanceData.Length * 2));
-        foreach (var g in meshGroupList) Array.Copy(g.Models, 0, instanceData, g.Offset, g.Count);
-        instanceCount = total;
+        // One copy: each group's placements straight into the frame's (write-combined) constants, in order.
+        placements = gpu.Frame.Constants.Allocate((ulong)total * 64, 16);
+        var target = new Span<Matrix4x4>(placements.Pointer, total);
+        foreach (var g in meshGroupList) g.Models.AsSpan(0, g.Count).CopyTo(target[g.Offset..]);
         return true;
     }
 
-    int instanceCount;
-
     /// <summary>
-    /// Draws <see cref="meshGroupList"/> natively with <paramref name="p"/> into the pass VkGl is drawing (its targets and GL's state at this
+    /// Draws <see cref="meshGroupList"/> natively with <paramref name="p"/> inside the pass VkGl is drawing (its targets and GL's state at this
     /// point), back faces culled, a mirroring placement turning the winding round; the placements from this frame's constants. Leaves GL's
-    /// state as the GL version did (culling off, counter-clockwise, no vertex array).
+    /// state as the GL version did (culling off with back faces selected, counter-clockwise, no vertex array).
+    /// <para>
+    /// The hot-path pattern (docs/renderer-native.md 7.5): one segment inside VkGl's pass; what all draws share once (dynamic state, sets 0
+    /// and 1, the placements at locations 7 to 10); per draw only what differs, resolved once per mesh (<see cref="NativeMesh"/>): the
+    /// pipeline, the mesh's own vertex buffers, the front face when it flips, the indices, and the draw, whose firstInstance reaches the
+    /// group's placements.
+    /// </para>
     /// </summary>
-    int DrawGroups(LegacyProgram p, string label)
+    int DrawGroups(LegacyProgram p, int kind, string label)
     {
         var interop = gpu.Interop!;
-        gl.Enable(EnableCap.CullFace);
-        gl.CullFace(TriangleFace.Back);
-        gl.FrontFace(FrontFaceDirection.Ccw);
-        var cmd = interop.BeginNative(label);
+        var cmd = interop.BeginNativeInPass(label);
         var targets = interop.CurrentTargets();
         var state = interop.CurrentState();
-        var placements = gpu.Frame.Constants.Write<Matrix4x4>(instanceData.AsSpan(0, instanceCount));
-        cmd.BeginRendering(targets.Rendering);
-        Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
+        var segment = new SegmentPipeline(p, targets.Formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp);
+        if (segmentIds[kind] == 0 || segment != lastSegment[kind]) (lastSegment[kind], segmentIds[kind]) = (segment, ++segmentCount);
+        int segmentId = segmentIds[kind];
+        var ccw = GlConventions.FrontFace(FrontFaceDirection.Ccw);
+        var cw = GlConventions.FrontFace(FrontFaceDirection.CW);
+        cmd.SetViewport(targets.Viewport);
+        cmd.SetScissor(targets.Scissor);
+        cmd.SetRaster(Silk.NET.Vulkan.CullModeFlags.BackBit, ccw);
+        var front = ccw;
+        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+        p.Flush(cmd);
+        // The placement's rows at locations the meshes' vertex arrays leave free (their other programs do not read them).
+        Span<BufferBinding> rows = stackalloc BufferBinding[4];
+        for (int a = 0; a < 4; a++) rows[a] = new BufferBinding(placements.Handle, placements.Offset + (ulong)(16 * a));
+        cmd.BindVertexBuffers(TerrainShaders.MeshInstanceLocation, rows);
         foreach (var g in meshGroupList)
         {
             var va = interop.VertexArray(g.Vao);
-            va.Attributes.AsSpan().CopyTo(attributes);
-            for (int a = 0; a < 4; a++)
-                // The placement's rows at locations the meshes' vertex arrays leave free (their other programs do not read them).
-                attributes[TerrainShaders.MeshInstanceLocation + a] = new LegacyProgram.Attribute(
-                    new BufferBinding(placements.Handle, placements.Offset + (ulong)(g.Offset * 64L + 16 * a)), Silk.NET.Vulkan.Format.R32G32B32A32Sfloat, 64, true);
-            cmd.BindPipeline(gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout(attributes), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, targets.Formats, label)));
-            state.Record(cmd, targets, GlConventions.FrontFace(g.Mirrored ? FrontFaceDirection.CW : FrontFaceDirection.Ccw));
-            p.BindVertices(cmd, attributes);
-            p.Flush(cmd);
-            cmd.BindIndexBuffer(va.Elements, Silk.NET.Vulkan.IndexType.Uint32);
-            cmd.DrawIndexed((uint)g.IndexCount, (uint)g.Count);
+            ref var n = ref g.Native(kind);
+            if (!ReferenceEquals(n.Source, va) || n.Segment != segmentId) Resolve(ref n, p, va, segmentId, state, targets.Formats, label);
+            cmd.BindPipeline(n.Pipeline);
+            var f = g.Mirrored ? cw : ccw;
+            if (f != front) { cmd.SetFrontFace(f); front = f; }
+            cmd.BindVertexBuffers(0, ((ReadOnlySpan<BufferBinding>)n.Vertices)[..n.VertexCount]);
+            cmd.BindIndexBuffer(n.Elements, Silk.NET.Vulkan.IndexType.Uint32);
+            cmd.DrawIndexed((uint)g.IndexCount, (uint)g.Count, 0, 0, (uint)g.Offset);
         }
-        cmd.EndRendering();
         interop.EndNative(cmd);
+        gl.CullFace(TriangleFace.Back);
         gl.FrontFace(FrontFaceDirection.Ccw);
         gl.Disable(EnableCap.CullFace);
         gl.BindVertexArray(0);
         return meshGroupList.Count;
+    }
+
+    /// <summary>A mesh's pipeline and own vertex buffers for <paramref name="p"/>, the placements as per-instance rows of 64 bytes at locations 7 to 10.</summary>
+    void Resolve(ref NativeMesh n, LegacyProgram p, VertexArrayBindings va, int segment, DrawState state, AttachmentFormats formats, string label)
+    {
+        Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
+        va.Attributes.AsSpan().CopyTo(attributes);
+        for (int a = 0; a < 4; a++)
+            attributes[TerrainShaders.MeshInstanceLocation + a] = new LegacyProgram.Attribute(default, Silk.NET.Vulkan.Format.R32G32B32A32Sfloat, 64, true);
+        var pipeline = gpu.Pipelines.Get(state.Pipeline(p.Program, p.VertexLayout(attributes), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, formats, label));
+        int own = p.InputLocations.Where(l => l < TerrainShaders.MeshInstanceLocation).DefaultIfEmpty(-1).Max() + 1;
+        if (own > 2) throw new NotSupportedException($"{p.Name}: more than two own vertex inputs");
+        n = new NativeMesh { Source = va, Segment = segment, Pipeline = pipeline, VertexCount = own, Elements = va.Elements };
+        p.VertexBuffers(attributes, 0, own).CopyTo(n.Vertices);
     }
 
     int U(uint program, string name)
