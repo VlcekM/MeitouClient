@@ -1193,10 +1193,14 @@ moves off it costs about as much as the fork-join that brings it back (6.6).*
   in Prepare. `RenderJobs.AssertNotInJob` enforces this. It throws when called inside a recording job, and it guards `NativeFrame.Prepare`,
   `LinearAllocator.Allocate`, `GpuFrame.AllocateSet`, `BindlessTable.Register/Update/Free` and `ParallelPass.Begin/BeginInline`.
 - `PipelineLibrary.Get` is already locked, so it needs no change; it is called in Prepare. `QueryArena.Allocate` was already interlocked.
-  `SkyRenderer.Active` and `WorldTexture.Id` are read in Prepare only.
+  `SkyRenderer.Active` and `WorldTexture.Id` are read in Prepare only. **Verified** by reading every `RecordJob.Record` body: none
+  touches textures, the bindless table, pipelines or allocators.
 - Counters: a host's secondaries add their `GpuStats` to the frame at `End`. The `MEITOU_PASS_STATS` rows (the `PassMeter`) therefore show
-  a host's native draws in the row where the host ends: the last cascade's for shadows, `water` for the scene. This changes neither the
-  totals nor the render-thread times.
+  a host's native draws in the row where the host ends. This changes neither the totals nor the render-thread times. **Observed**
+  (forest 13:00 still, core validation 0 errors):
+  - the shadows' 325 draws are in the `shadows` row's own line, after the cascades, whose rows show 0;
+  - the reflection's 53 draws are in `reflection/rest`;
+  - the scene's 311 draws are in `water`.
 
 **Still on the render thread**, recorded inline at their place in a host or outside any host:
 - the sky (one draw) and the water (one draw), as inline secondaries;
@@ -1249,7 +1253,8 @@ separately (`jobs` line).
 | Hub, 1 | 6.6 | 3.4 | 1.90 | 0.70 | 0.13 | 0.09 | 0.48 | 0.29 | 3.59 | (on the render thread) 0.32, 0.12, 0.04, 0.04, 0.10 |
 | Hub, 2 | 7.0 | 3.0 | 1.62 | 0.64 | 0.12 | 0.08 | 0.39 | 0.20 | 4.48 | 0.47, 0.14, 0.04, 0.05, 0.13 |
 
-(ms; `water` in modes 1 and 2 includes the scene host's close: the fork-join and `vkCmdExecuteCommands`.)
+(ms; `water` in modes 1 and 2 includes the scene host's close: the fork-join and `vkCmdExecuteCommands`. With an upscaler, a slice's
+host closes before the next slice begins, so that close counts in the next slice's `terrain`; only the last one counts in `water`.)
 
 Reading (**Observed**):
 - Recording moves 0.4 to 0.8 ms of CPU a frame onto the job threads, most of it the cascades'. The render thread does not get faster:
