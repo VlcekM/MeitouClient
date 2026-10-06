@@ -22,6 +22,10 @@ public sealed record TextureDesc(Format Format, int Width, int Height, int Level
 public readonly record struct SampledTexture(Sampler Sampler, ImageView View, Image Image)
 {
     public bool IsNull => View.Handle == 0;
+
+    // By handle: Silk.NET's handle structs are not IEquatable, so the generated equality boxed each of them (on every Bindless call).
+    public bool Equals(SampledTexture other) => Sampler.Handle == other.Sampler.Handle && View.Handle == other.View.Handle && Image.Handle == other.Image.Handle;
+    public override int GetHashCode() => HashCode.Combine(Sampler.Handle, View.Handle, Image.Handle);
 }
 
 /// <summary>

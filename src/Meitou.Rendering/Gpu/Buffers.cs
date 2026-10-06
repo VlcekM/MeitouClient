@@ -13,6 +13,10 @@ public enum BufferUse { Vertex = 1, Index = 2, Uniform = 4, Storage = 8, Indirec
 public readonly record struct BufferBinding(Buffer Buffer, ulong Offset, ulong Size = Vk.WholeSize)
 {
     public bool IsNull => Buffer.Handle == 0;
+
+    // By handle: Silk.NET's handle structs are not IEquatable, so the generated equality boxed the buffer.
+    public bool Equals(BufferBinding other) => Buffer.Handle == other.Buffer.Handle && Offset == other.Offset && Size == other.Size;
+    public override int GetHashCode() => HashCode.Combine(Buffer.Handle, Offset, Size);
 }
 
 /// <summary>
