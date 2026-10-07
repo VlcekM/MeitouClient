@@ -216,7 +216,7 @@ sealed unsafe class NativeFrame : IDisposable
 /// </summary>
 unsafe struct FrameBinding
 {
-    public const int MaxBindings = 8;
+    public const int MaxBindings = 10;
     [System.Runtime.CompilerServices.InlineArray(MaxBindings)]
     public struct InfoArray { DescriptorBufferInfo first; }
     public InfoArray Infos;
