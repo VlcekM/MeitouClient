@@ -220,7 +220,7 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
         var o = measure;
         if (o is null) return (0, 0, 0, 0);
         float width = MathF.Max(26 * o.CharWidth, 4 * (ButtonWidth(o) + 4)) + 2 * Pad;
-        float height = Pad + o.LineHeight * 2 + 4 + o.LineHeight + Pad + 6 + o.LineHeight * (1 + Math.Min(8, SelectedNames().Count));
+        float height = Pad + o.LineHeight * 2 + 4 + o.LineHeight + Pad + 6 + o.LineHeight * (1 + Math.Min(8, SelectedNames().Count) + 6);
         return (Margin, Margin, Margin + width, Margin + height);
     }
 
@@ -315,6 +315,14 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
         o.Text(names.Count == 0 ? "Selected: none" : $"Selected ({names.Count}):", box.X0 + Pad, y, white);
         y += o.LineHeight;
         foreach (var name in names.Take(8)) { o.Text(name, box.X0 + Pad + o.CharWidth, y, green); y += o.LineHeight; }
+        // The first selected character's animation layers (what the pose is blended from).
+        if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Selected) is { } lead)
+            foreach (var layer in lead.Animations.Take(6))
+            {
+                var text = $"{layer.Name} {layer.Weight:0.00}";
+                o.Text(text, box.X0 + Pad + o.CharWidth, y, white);
+                y += o.LineHeight;
+            }
         o.Flush(width, height);
     }
 }

@@ -45,6 +45,10 @@ public sealed class PopulationData
     public IWorldStates States { get; init; } = IWorldStates.None;
     /// <summary>The player's faction (the FACTION named Nameless, 204-gamedata.base), a position in <see cref="Factions"/>; -1 when there is none.</summary>
     public int PlayerFaction { get; init; } = -1;
+    /// <summary>The relations the factions start with (who is hostile to whom: roaming squads avoid hostile towns).</summary>
+    public FactionRelations Relations { get; init; } = FactionRelations.Build([]);
+    /// <summary>The faction of every placed town, a position in <see cref="Factions"/> (-1: none).</summary>
+    public IReadOnlyList<int> SiteFactions { get; init; } = [];
 
     public static PopulationData Create(GameDatabase db, IEnumerable<TownPlacement> placements, IAppearanceSource? appearances = null)
     {
@@ -55,7 +59,12 @@ public sealed class PopulationData
             sites.Add(new TownSite(sites.Count, TownData.From(record), p.Position, WorldLayout.ZoneOf(p.Position.X, p.Position.Z)));
         }
         var factions = FactionData.LoadAll(db);
-        return new PopulationData { Db = db, Sites = sites, Factions = factions, Appearances = appearances, PlayerFaction = factions.FindIndex(f => f.Name == "Nameless") };
+        return new PopulationData
+        {
+            Db = db, Sites = sites, Factions = factions, Appearances = appearances, PlayerFaction = factions.FindIndex(f => f.Name == "Nameless"),
+            Relations = FactionRelations.Build(factions),
+            SiteFactions = [.. sites.Select(s => s.Town.Faction is { } fid ? factions.FindIndex(f => f.Id == fid) : -1)],
+        };
     }
 }
 
@@ -76,6 +85,25 @@ public sealed class PopulationSettings
     public bool Background { get; init; }
     /// <summary>Share of the town radius a resident squad may be placed within (engine choice: home buildings are Unknown).</summary>
     public float PlacementRadiusShare { get; init; } = 0.6f;
+
+    // ---- roaming squads (6.4, 6.3) ----
+    /// <summary>Ticks between looks at the roaming pools (engine choice: 2 game seconds, the original's area tick).</summary>
+    public int RoamCheckTicks { get; init; } = 60;
+    /// <summary>Share of a faction's <c>roaming population</c> a town's roaming pool may hold (0.7 is the nests' floor, 6.3; for towns the cap is <b>Unknown</b>).</summary>
+    public float RoamingShare { get; init; } = 0.7f;
+    /// <summary>The <c>Global population multiplier</c> setting.</summary>
+    public float PopulationMultiplier { get; init; } = 1;
+    /// <summary>Game seconds a loaded roaming squad stays loaded after its zone stopped being active (the original's 4 to 5 s countdown, 6.x of game-loop.md; engine choice 10).</summary>
+    public float RoamUnloadGraceSeconds { get; init; } = 10;
+    /// <summary>A roaming squad has reached a town within this distance of its centre.</summary>
+    public float RoamArrivalRadius { get; init; } = 60;
+    /// <summary>Seconds a roaming squad stays at a town it reached (engine choice).</summary>
+    public float RoamWaitMin { get; init; } = 30;
+    public float RoamWaitMax { get; init; } = 120;
+    /// <summary>Stand-in speeds of an unloaded squad in units per second: 25, or 90 when the way exceeds 25000 (game-loop.md; units not verified).</summary>
+    public float StandInSpeed { get; init; } = 25;
+    public float StandInFarSpeed { get; init; } = 90;
+    public float StandInFarDistance { get; init; } = 25000;
 }
 
 /// <summary>Where a town's residents are in their life.</summary>
@@ -94,7 +122,7 @@ public enum SiteStatus { Unloaded, Loading, Loaded }
 /// <see cref="PopulationSettings.PlacementRadiusShare"/> of the town radius round its placed position, on dry ground: how resident
 /// squads pick a home building is Unknown, so this is an engine choice. Roaming squads, bar squads and default residents come later.</para>
 /// </summary>
-public sealed class PopulationSystem : ITickSystem, IDisposable
+public sealed partial class PopulationSystem : ITickSystem, IDisposable
 {
     readonly PopulationData data;
     readonly PopulationSettings settings;
@@ -148,6 +176,7 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
             state.Status = SiteStatus.Loaded;
             state.UnloadAtTick = -1;
         }
+        DrainRoamers(world);
     }
 
     public void SlowWorld(World world)
@@ -162,7 +191,11 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
                 if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true }) foci.Add(prev[i].Position);
         }
         if (foci.Count == 0 && focus is { } camera) foci.Add(camera);
-        if (foci.Count == 0) return;
+        if (foci.Count == 0)
+        {
+            StepRoaming(world);
+            return;
+        }
         active = [];
         foreach (var f in foci) active.UnionWith(ZoneActivation.ZonesAround(f, settings.FastZoneHopping ? 1 : 0));
         long grace = (long)Math.Ceiling(settings.UnloadGraceSeconds / world.TickSeconds);
@@ -184,6 +217,7 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
                     break;
             }
         }
+        StepRoaming(world);
     }
 
     void Load(World world, TownSite site, SiteState state)
@@ -249,25 +283,53 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
             for (int k = 0; k < entries[e].V0; k++)
             {
                 ulong key = Rng.Mix((ulong)site.Index << 40 ^ (ulong)e << 20 ^ (uint)k);
-                var plan = SquadFactory.Plan(data.Db, template, settings.SquadSizeMultiplier, seed, key, data.States);
-                if (plan.TotalMembers == 0) continue;
-                var position = Place(site, seed, key, walk);
-                // The squad's own faction (its template's) wins over the town's (section 4).
-                int squadFaction = template.Faction is { } tf && data.Factions.ToList().FindIndex(f => f.Id == tf) is var ti and >= 0 ? ti : factionIndex;
-                var members = new List<BuiltMember>();
-                int n = 0;
-                foreach (var m in plan.Members)
-                {
-                    CharacterAppearance? look = null;
-                    if (!m.IsAnimal && data.Appearances is { } source)
-                        look = source.Create(m.RecordId, faction?.Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, 1000UL + (ulong)n) & 0x7FFFFFFF));
-                    members.Add(new BuiltMember(m, look));
-                    n++;
-                }
-                squads.Add(new BuiltSquad(plan, position, squadFaction, members));
+                if (BuildOne(template, factionIndex, faction, key, seed, Place(site, seed, key, walk)) is { } one) squads.Add(one);
+            }
+        }
+        // Bar squads (6.4): the town's own list, plus the faction's for towns of type Town; v0 slots each, present with the chance v1 per cent (0 counts as 100).
+        var bars = BarEntries(town, faction);
+        for (int e = 0; e < bars.Count; e++)
+        {
+            if (data.Db.Find(bars[e].Id) is not { } record || record.Type is not (FcsRecordType.SQUAD_TEMPLATE or FcsRecordType.UNIQUE_SQUAD_TEMPLATE)) continue;
+            var template = SquadTemplate.From(record);
+            for (int k = 0; k < bars[e].V0; k++)
+            {
+                ulong key = Rng.Mix(0xBA45UL ^ (ulong)site.Index << 40 ^ (ulong)e << 20 ^ (uint)k);
+                int chance = bars[e].V1 <= 0 ? 100 : bars[e].V1;
+                if (Rng.Float(Rng.Hash(seed, key, RngPurpose.Spawn, 77)) * 100 >= chance) continue;
+                if (BuildOne(template, factionIndex, faction, key, seed, Place(site, seed, key, walk)) is { } one) squads.Add(one);
             }
         }
         return new BuiltTown(site.Index, loadId, squads);
+    }
+
+    /// <summary>The bar squad entries of a town (6.4, Observed): its own <c>bar squads</c>, plus the faction's default list for towns of type Town. v0 = 0 entries are dropped.</summary>
+    public static List<RecordLink> BarEntries(TownData town, FactionData? faction)
+    {
+        var list = new List<RecordLink>(town.BarSquads);
+        if (town.Type == TownType.Town && faction is not null) list.AddRange(faction.BarSquads);
+        list.RemoveAll(e => e.V0 <= 0);
+        return list;
+    }
+
+    /// <summary>One squad: its plan from the factory and a rolled look for every human member. Pure given its arguments (any thread).</summary>
+    BuiltSquad? BuildOne(SquadTemplate template, int townFactionIndex, FactionData? townFaction, ulong key, ulong seed, Vector2 position)
+    {
+        var plan = SquadFactory.Plan(data.Db, template, settings.SquadSizeMultiplier, seed, key, data.States);
+        if (plan.TotalMembers == 0) return null;
+        // The squad's own faction (its template's) wins over the town's (section 4).
+        int squadFaction = template.Faction is { } tf && data.Factions.ToList().FindIndex(f => f.Id == tf) is var ti and >= 0 ? ti : townFactionIndex;
+        var members = new List<BuiltMember>();
+        int n = 0;
+        foreach (var m in plan.Members)
+        {
+            CharacterAppearance? look = null;
+            if (!m.IsAnimal && data.Appearances is { } source)
+                look = source.Create(m.RecordId, townFaction?.Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, 1000UL + (ulong)n) & 0x7FFFFFFF));
+            members.Add(new BuiltMember(m, look));
+            n++;
+        }
+        return new BuiltSquad(plan, position, squadFaction, members);
     }
 
     Vector2 Place(TownSite site, ulong seed, ulong key, IWalkability walk)
@@ -299,7 +361,7 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
         _ = table;
     }
 
-    Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false)
+    Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false, int platoonId = -1)
     {
         var table = world.Characters;
         var walk = world.Walkability;
@@ -310,6 +372,7 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
             Name = built.Plan.Template.Name,
             Faction = built.Faction,
             Town = site?.Index ?? -1,
+            PlatoonId = platoonId,
             Position = new Vector3(built.Position.X, walk.GroundHeight(built.Position.X, built.Position.Y), built.Position.Y),
             HomeCentre = site is null ? built.Position : new Vector2(site.Position.X, site.Position.Z),
             HomeRadius = Math.Max(radius * 0.8f, 40),

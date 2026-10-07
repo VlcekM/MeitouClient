@@ -20,7 +20,10 @@ static class SyntheticTown
 
     static FcsReference Ref(string id, int v0 = 0, int v1 = 0, int v2 = 0) => new(id, v0, v1, v2);
 
-    public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false)
+    public static readonly Vector3 Far = new(9500, 300, 2000);
+
+    /// <summary><paramref name="roaming"/> adds a second town (<c>31-t</c>, far away), roaming squads and bar squads at the first, and a roaming budget for the faction.</summary>
+    public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false, bool roaming = false)
     {
         var race = Rec("1-t", FcsRecordType.RACE, "Testers");
         race.Ints["speed min skill"] = 70;
@@ -55,6 +58,19 @@ static class SyntheticTown
         town.References["faction"] = [Ref("20-t")];
         town.References["residents"] = [Ref("10-t", residentSquads, 0), Ref("11-t", 1, 0), Ref("13-t", 0, 0)];
 
+        FcsRecord? far = null;
+        if (roaming)
+        {
+            faction.Ints["roaming population"] = 10;
+            town.References["roaming squads"] = [Ref("12-t", 2)];
+            town.References["bar squads"] = [Ref("12-t", 2, 100), Ref("10-t", 1, 100)];
+            far = Rec("31-t", FcsRecordType.TOWN, "Faraway");
+            far.Ints["type"] = 2;
+            far.Floats["size radius"] = 300;
+            far.Floats["town radius mult"] = 1;
+            far.References["faction"] = [Ref("20-t")];
+        }
+
         var nameless = Rec("204-gamedata.base", FcsRecordType.FACTION, "Nameless");
         nameless.Ints["default relation"] = 0;
         var startoff = Rec("40-t", FcsRecordType.NEW_GAME_STARTOFF, "Test start");
@@ -66,13 +82,16 @@ static class SyntheticTown
 
         var file = new FcsFile();
         file.Records.AddRange([race, guard, boss, dog, patrol, gated, factionTemplate, faction, town, nameless, startoff]);
+        if (far is not null) file.Records.Add(far);
         var db = new GameDatabase();
         db.Apply(file, "test.mod");
         return db;
     }
 
     public static PopulationData Data(GameDatabase db) =>
-        PopulationData.Create(db, [new TownPlacement("inst", "30-t", Centre, null)]);
+        PopulationData.Create(db, db.Find("31-t") is null
+            ? [new TownPlacement("inst", "30-t", Centre, null)]
+            : [new TownPlacement("inst", "30-t", Centre, null), new TownPlacement("inst2", "31-t", Far, null)]);
 
     public static float Ground(float x, float z) => 300;
 

@@ -212,6 +212,38 @@ public class GameplayInstallTests
     }
 
     [Fact]
+    public void The_base_games_animation_records_form_a_walk_jog_run_chain_and_weapon_and_idle_variants()
+    {
+        var lib = AnimationLibrary.FromDatabase(Database());
+        string[] Names(AnimationArea area, float speed, AnimationStance s)
+        {
+            var into = new List<(int Index, float Weight)>();
+            lib.Movement(area, speed, s, into);
+            return [.. into.Where(p => p.Weight > 0).Select(p => lib.Definitions[p.Index].Name).Order()];
+        }
+        var plain = new AnimationStance();
+        Assert.Equal(["walk lower"], Names(AnimationArea.Lower, 14, plain));
+        Assert.Equal(["walk upper"], Names(AnimationArea.Upper, 14, plain));
+        Assert.Equal(["jog lower", "walk lower"], Names(AnimationArea.Lower, 30, plain));
+        Assert.Equal(["jog upper"], Names(AnimationArea.Upper, 45, plain));
+        Assert.Equal(["jog lower", "run lower"], Names(AnimationArea.Lower, 60, plain));
+        Assert.Equal(["run lower"], Names(AnimationArea.Lower, 120, plain));
+        var sword = new AnimationStance { Right = new HandHold(WeaponKinds.Katana) };
+        Assert.Contains("walk upper sword", Names(AnimationArea.Upper, 14, sword));
+        Assert.DoesNotContain("walk upper", Names(AnimationArea.Upper, 14, sword));
+        Assert.Contains("run upper sword", Names(AnimationArea.Upper, 120, sword));
+        // Standing: the whole-body idles (the editor's six poses and "stand 1"); the sword idle only with a weapon in hand; squat is an action.
+        var idles = lib.Idles(plain).Select(p => lib.Definitions[p.Index].Name).ToList();
+        Assert.Contains("stand 1", idles);
+        Assert.DoesNotContain("squat", idles);
+        Assert.DoesNotContain("stand 1 sword", idles);
+        Assert.Contains("stand 1 sword", lib.Idles(sword).Select(p => lib.Definitions[p.Index].Name));
+        // A hurt left leg takes the limp clips and drops the plain walk.
+        var limp = new AnimationStance { LeftLeg = 20 };
+        Assert.Contains("limp L lower", Names(AnimationArea.Lower, 14, limp));
+    }
+
+    [Fact]
     public void Squad_templates_have_the_documented_counts()
     {
         var db = Database();

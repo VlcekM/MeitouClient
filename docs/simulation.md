@@ -29,7 +29,7 @@ decides what they leave open (scheduling, threads, data layout).
 - The data layer reads everything a world needs (FCS with the game's merge rules, load order, zone and town placements), and
   `CharacterGenerator` rolls an NPC's appearance and loadout. Typed views exist over CONSTANTS, FACTION (with the initial relations),
   SQUAD_TEMPLATE and TOWN; AI_PACKAGE, AI_TASK and races are still read by field name.
-- Stages 0 to 3 and 6 are done on branch `sim-core`: [time facts](#time-model) (the game's clock, pause, 1/2/5), [Skeleton as built](#skeleton-as-built-stage-1) [Populate and move as built](#populate-and-move-as-built-stages-2-and-3) and [Player as built](#player-as-built-stage-6).
+- Stages 0 to 3 and 6 are done on branch `sim-core`: [time facts](#time-model) (the game's clock, pause, 1/2/5), [Skeleton as built](#skeleton-as-built-stage-1) [Populate and move as built](#populate-and-move-as-built-stages-2-and-3) [Player as built](#player-as-built-stage-6) and [Animation, formation and roaming as built](#animation-formation-and-roaming-as-built-after-stage-6).
 - Missing for a living world: navmesh walkability and collision with buildings, the AI proper, the UI screens, bodies and combat, saves.
 
 ## Principles
@@ -200,13 +200,13 @@ second and stopping on arrival; separation (repulsion proportional to 100 x (1 -
 neighbours; the scale to a speed, 0.15, is an engine choice); movement stays on ground above the water and a blocked character drops its
 path. Paths: Think flags a character that wants one, the next Schedule step asks the `PathService` (a thread of its own in the game, the
 caller in tests), answers are applied in a serial step in request order and a late answer to an older request is ignored. Tasks: `Wander`
-(a random point within the squad's home radius, then a wait of 3 to 10 s), `GoTo` (`MoveOrder`; a group is spread by the formation
-offsets x 2.5; queued orders replace), `Follow` (the formation slot beside the leader, repathing every 0.5 s when more than 14 units away).
+(a random point within the squad's home radius, then a wait of 3 to 10 s), `GoTo` (`MoveOrder`; a group goes to the slots of a block round the click, `Formation.Place`;
+queued orders append), `Follow` (the formation slot beside the leader, repathing every 0.5 s when more than 14 units away).
 Not modelled: water states and swimming, roads for long trips, the formation slot rules (**Unknown**), turn rate, the combat speed
 multiplier, collision with buildings (the navmesh stage).
 
-**Drawing.** The host keeps the last two snapshots, interpolates positions and yaw by `SimulationAlpha`, and fills the `CharacterDrawList`
-of the character renderer ([character-renderer.md](character-renderer.md)); the animation layers come from the movement state
+of the character renderer ([character-renderer.md](character-renderer.md)); the animation layers come from `AnimationSystem` (see "Animation, formation and
+roaming as built"; without that system the older movement-state layers `idle_stand_relax` / `walk lower` + `walk upper` are published). Characters without an appearance get a debug square coloured
 (`AnimationLayers`: `idle_stand_relax`, or `walk lower` + `walk upper`). Characters without an appearance get a debug square coloured
 by faction through the existing `DebugOverlay`. `--no-population` leaves the world empty.
 
@@ -225,6 +225,63 @@ At these counts the barrier cost of the worker pool outweighs the parallel gain;
 (stage 9 measures again with the AI). The determinism tests run the real workload (population, paths, wander, follow, an order) at 1, 4
 and 16 threads, on a synthetic town and on The Hub of the install: identical hashes.
 
+
+## Animation, formation and roaming as built (after stage 6)
+
+**Animation** (`AnimationSystem`, `AnimationLibrary`, `CharacterAnimation`). Every character carries up to 8 weighted clips; each tick
+(the Act phase, after movement) the system picks what it should play, fades the weights, advances the times, and the snapshot carries
+the layers (`AnimationLayer(record name, clip seconds, weight)`; the renderer finds the track masks by the record name).
+
+- *What the data says* (**Verified**, fcs.def and the 124 usable ANIMATION records of the install): `play speed` of a movement clip "is multiplied by
+  movement speed, so should be small like 0.02, tune until feet match ground speed"; `move speed` is "the ideal speed it travels at";
+  `min speed` / `max speed` are "the ideal speed of the next anim below / above"; `synchs` clips of the lower and upper body share a phase;
+  `has weapon L/R`, `is combat mode`, `stealth mode` are the Either enum (0 NO, 1 YES, 2 EITHER); `idle` marks standing clips with an `idle chance`
+  and `idle time min/max`. **Observed** in the data: a leg range of 1000..1000 means "not used" (the limp clips constrain one leg only);
+  the base chain per body layer is walk 14, jog 45, run 90 (`walk lower`, `jog lower`, `run lower` and the `upper` twins);
+  `stand 1` / `stand 1 sword` are the gameplay idles, the six `idle_stand_*` poses come from `chareditor.mod`; `squat` is `is action`.
+  Cross-check of the rule `clip seconds per second = speed x play speed` (Observed, the stride is not in the data): a walk cycle of the 1.4 s clip takes 1.67 s at
+  speed 14 (0.84 clip seconds per second) and covers 2.3 m, a run cycle of the 0.567 s clip takes 0.31 s at speed 90 (1.8) and covers 2.8 m (1 unit = 1 dm): about
+  one stride of a person each, which the other reading (cycles per second = speed x play speed) does not give (1.7 m and 5 m).
+- *Choice* (**Observed / engine choice**, the original's selection code was not traced): a clip is *valid* when its weapon-in-hand flags, combat and
+  stealth modes, crouch / prone, carrying flags and leg ranges fit the character's stance (`AnimationStance`; the weapon kind in the hand
+  is checked against the record's kind flags katanas, sabre, blunt, heavy weapons, hackers, polearm, unarmed). The valid movement clips of a
+  body layer sorted by `move speed` form a chain: at a speed between two of them the two are blended linearly, below the first and above the last
+  one clip alone; clips of one speed (variants) share by `chance`. A character moves from 1 unit per second, else it stands: one of the valid idle clips
+  of the whole body by `idle chance`, kept for a time between `idle time min` and `max` (10 to 40 s) and then drawn again. Not made: turning (the
+  records have none for humans), strafing, overlays (carrying), `is action` clips, injury and weather variants beyond the leg ranges.
+- *Time*: synched movement clips share one phase per character, advanced by `speed x play speed / clip length` cycles per second of the clip that
+  weighs most, and a clip's time is `frac(phase + synch offset) x its length` (lengths from the `*_skeleton.skeleton` files, `AnimationLengths`);
+  other clips advance by their `play speed` (1 when it is 0). Weights move linearly to their targets at the CONSTANTS `animation blend rate`
+  (4 per second: a full cross-fade in a quarter second), the same for every clip (the per-clip speed factor of docs/animation.md was not applied).
+- *Weapons*: the stance holds what is drawn (`CharacterCold.DrawnWeapon`, nothing yet: there is no combat or draw order, so everybody walks with the
+  sheathed variants). `HandHold.OfCategory` maps a WEAPON's `skill category` to the kinds. The sword variants are tested against the synthetic library
+  and the real records.
+- *Host*: the clip time and weight are interpolated between the last two snapshots (a wrapped clip time just shows the new value). The HUD lists the first
+  selected character's layers.
+
+**Formation** (`Formation.Place`). A move order for several characters sends each to a slot of a block centred on the clicked point: a grid
+about as wide as deep (`ceil(sqrt n)` columns), 9 units apart (twice the footprint radius 4 plus a margin), rows across the line from the group's centre to
+the click; the characters nearest the click take the front row, and within a row the left-to-right order they already have is kept so paths do not cross. The
+original's slot rules are **Unknown** (pathfinding.md "Local avoidance and formation"; FACTION `squad formation` RANDOM / CARAVAN / MILITARY is not read).
+Queued orders get their own block. Followers of a squad leader keep the factory's offsets (x 2.5).
+
+**Bar squads** (6.4). The town's `bar squads` plus, for towns of type Town, the faction's: each entry is `v0` squads, each present with a chance of `v1` per cent
+(0 is read as 100), made when the town loads, placed and walking like residents; the bar building is not modelled, so they do not sit.
+
+**Roaming squads and unloaded squads** (`PopulationRoaming.cs`, `Platoon`, `PlatoonRegistry`; 6.4, game-loop.md "Factions and squads", ai.md "Unloaded squads").
+- A loaded town with `roaming squads` draws one squad per look (every 2 game seconds) while its pool is below the cap: 0.7 of the faction's `roaming population`
+  (50 by default: 35 characters; the 0.7 is the nests' rule, for towns **Unknown**) times the population multiplier. The candidate weight is `max(0, v0 - squads of that
+  template the town has)` (6.2's town branch), a squad that would pass the cap is skipped, a spawn within 36 units of a player character is refused. In the base data
+  50 towns have roaming squads; 109 have bar squads.
+- A roaming squad is a `Platoon` (state in `World`, hashed): the town it counts against, the template and key that reproduce its members, a position, a target. It walks
+  out to one of the nearest four settlements (outposts, towns, villages, military) that are not hostile to its faction, waits 30 to 120 s there, goes home, waits, picks again.
+- *Active and unloaded halves*: while a zone near its position is active it has characters (the leader runs to the target and the others follow it; at a town they mill about
+  in it); when none is for 10 s its characters are removed and **a stand-in goes on at 25 units per second (90 beyond 25000), no physics, no paths**, the numbers of the
+  original's `UnloadedPlatoon` (units not verified). When a zone near it becomes active the characters are made again from the key (the same members) at the stand-in's place.
+  A squad that loses all its members leaves the pool (a new one is drawn).
+- Residents are not platoons: a town's residents and bar squads are made when its zone loads and dropped when it has been inactive for 60 s, which makes the town itself the stand-in.
+- Not made: roads for long trips (`road preference`), the AI package jobs (`GoOutOnPatrol` and others), faction campaigns, travel through a danger the squad should flee,
+  nests and the homeless spawns of the area sectors (6.2, 6.3), unique squads.
 
 ## Player as built (stage 6)
 
