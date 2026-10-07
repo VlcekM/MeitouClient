@@ -1,7 +1,10 @@
 # Native renderer API (proposal)
 
-**Status: Proposed** ([../DECISIONS.md](../DECISIONS.md) 22, which would replace 7). Nothing here is built yet. This is the design that the
-wave-2 foundation agent and the six wave-3 port agents implement from, and the owner reviews. It is an engine document: the labels
+**Status: built** (2026-10-07). [../DECISIONS.md](../DECISIONS.md) 22 was adopted on 2026-10-06; waves 2 to 4 and phase 8 are done:
+`IGl`, `VkGl` and the seam are deleted (8.9), and every renderer records through the native API in `src/Meitou.Rendering/Gpu/`. Sections 0
+and 4 describe the starting point and the coexistence seam and are kept as history; the "as built" sections (5.6.1 to 6.6, 8.3 to 8.9)
+say what was done. The rest of this note was written as the proposal: the design that the wave-2 foundation agent and the six wave-3
+port agents implemented from, and the owner reviewed. It is an engine document: the labels
 Verified / Observed / Unknown are for facts about the game, so here claims carry where they come from: *from the code* (a file is named),
 *measured* (how is said), *estimate* (with the reasoning), or *open* (a question for the owner, answered in [Owner decisions](#owner-decisions)).
 
@@ -12,6 +15,9 @@ the brief: goals (1), the API (2), shaders (3), how old and new code share a fra
 ---
 
 ## 0. Where we are, in one page
+
+> **Historical** (as written on 2026-10-06, before the port): none of `IGl`, `VkGl` or `src/Meitou.Rendering.Vulkan` exists any more
+> (8.9).
 
 The world renderers (`src/Meitou.Rendering`) never talk to Vulkan. They make OpenGL-3.3-style calls through `IGl`
 (`src/Meitou.Rendering/Gpu/IGl.cs`), and `VkGl` (`src/Meitou.Rendering.Vulkan/VkGl*.cs`, nine files, 2,806 lines) translates each call
@@ -65,7 +71,7 @@ the Faithful picture while the work happens. Stay on Vulkan 1.3 and Silk.NET, ke
 
 ### Constraints
 
-**Platform.** .NET 10 (`global.json`, SDK 10.0.401 here), Silk.NET 2.23.0 (`Meitou.Rendering.Vulkan.csproj`), warnings are errors, unsafe
+**Platform.** .NET 10 (`global.json`, SDK 10.0.401 here), Silk.NET 2.23.0 (`Meitou.Rendering.Vulkan.csproj` then, `Meitou.Rendering.csproj` now), warnings are errors, unsafe
 code allowed (`Directory.Build.props`). Tiered compilation and PGO are off in the game and the viewer (DECISIONS 11, 19). That matters
 for the native API: hot paths are compiled once and optimised, so small wrapper structs and `[MethodImpl(AggressiveInlining)]` work as
 intended.
@@ -129,6 +135,10 @@ Meitou.Rendering (renderers + Gpu/: native API, Core, Shaders; Silk.NET; also Me
 - **`Meitou.Rendering`** gains the Silk.NET Vulkan references. Renderers use Silk.NET's enums (`Format`, `CompareOp`, `CullModeFlags`,
   `PipelineStageFlags2`...) directly. There is one backend, so duplicating them would only add a translation step.
 - **`Meitou.Rendering.Vulkan`** keeps `VkGl`, `VulkanPresenter` and the upscalers until phase 8 (section 8).
+
+*As built (phase 8 stage 3, 8.9): `Meitou.Rendering.Vulkan` is deleted. `Meitou.Rendering` holds everything above: `Gpu/` (namespace
+`Meitou.Rendering.Gpu`, with `Gpu/Core` and `Gpu/Shaders` renamed to `Meitou.Rendering.Gpu.Core` / `.Shaders`), `Gpu/VulkanPresenter.cs`
+and `Upscalers/` (`Meitou.Rendering.Upscalers`). The chain is `Meitou.Rendering` ← `Meitou.Rendering.Display` ← game / viewer.*
 
 ### 2.2 Device, queues, frame
 
@@ -606,6 +616,10 @@ and no `precise` / `invariant` was needed.
 ---
 
 ## 4. The coexistence seam
+
+> **Historical.** The seam was removed in phase 8 stage 3 (8.9) together with `VkGl`, `IGlInterop` and `GlBridge`. What survives of
+> it is in `GpuContext`: the frame loop, `BeginNative` / `EndNative` with their full barriers, host passes and guests, `Interleave`,
+> `FrameGlobals`. Read this section as the design the port ran on, not as the current code.
 
 *In short: during the port, native passes and VkGl passes record into the same command buffer of the same frame. Whenever control passes
 from one to the other, the side that was drawing closes its pass, a full barrier is placed, and VkGl forgets what it believed was bound.
@@ -2400,48 +2414,51 @@ helpers built around them. This section lists what uses them today, so the delet
 `IGl` declares 90 distinct member names. All 90 are used. DECISIONS 7 counted 88 functions over 957 call sites when it was written. Counted
 here: calls on an `IGl` (`gl.` or `Gl.` followed by an `IGl` member name), excluding VkGl itself:
 
-| File | IGl calls | Owner (7.2) |
-| --- | ---: | --- |
-| `src/Meitou.Rendering/PostProcess.cs` | 181 (88 at `5fcc3e1`; **0** after phase 8 stage 2, 8.7: the GL mirror its guests read moved into `GlBridge`) | E |
-| `src/Meitou.Rendering/ShadowPass.cs` | 123 (101 after F's debug views; 97 at `6f4af19`, **24** after phase 8 stage 1, 8.3) | B (debug views F) |
-| `src/Meitou.Rendering/TerrainRenderer.cs` | 122 (98 at `6f4af19`; 1 after phase 8 stage 1: the globals program, 8.4; **0** after stage 2, 8.6) | B (`DrawMeshes`: foundation pilot) |
-| `src/Meitou.Rendering/FoliageRenderer.cs` | 147 (0 after phase 8 stage 1, `.Grass.cs` too) | A |
-| `tools/Meitou.ModelViewer/Renderer.cs` | 116 | C |
-| `tools/Meitou.ModelViewer/CharacterRenderer.cs` | 93 | C |
-| `src/Meitou.Rendering/SkyRenderer.cs` | 80 (57 at `5fcc3e1`; **0** after phase 8 stage 2, 8.6) | D |
-| `src/Meitou.Rendering/ShadowPass.Meitou.cs` | 78 (61 at `6f4af19`, **9** after stage 1, 8.3) | B |
-| `src/Meitou.Rendering/ReflectionPass.cs` | 60 (50 at `6f4af19`, 27 after stage 1, 8.3; **22** after stage 2: the water's handoff gone, 8.6) | D |
-| `src/Meitou.Rendering/WaterRenderer.cs` | 52 (27 at `5fcc3e1`; **0** after phase 8 stage 2, 8.6) | D |
-| `src/Meitou.Rendering/TerrainTextures.cs` | 52 (**0** after phase 8 stage 1) | B |
-| `src/Meitou.Rendering/TerrainShadowMap.cs` | 48 (33 at `6f4af19`; **4** after phase 8 stage 1: the imported name's sampler state, 8.4) | B |
-| `src/Meitou.Rendering/DebugOverlay.cs` | 42 (16 after step P: the atlas texture, the GL state around the draw) | F |
-| `src/Meitou.Rendering/WorldObjectRenderer.cs` | 39 (0 after phase 8 stage 1) | C |
-| `src/Meitou.Rendering/BuildingLodMesh.cs` | 38 (0 after phase 8 stage 1) | C |
-| `src/Meitou.Rendering/WorldTextureCache.cs` | 34 (0 after phase 8 stage 1) | C |
-| `src/Meitou.Rendering/WorldGl.cs` | 23 | foundation |
-| `tools/Meitou.ModelViewer/Program.cs` | 23 (22) | F |
-| `tools/Meitou.ModelViewer/CharacterApp.cs` | 23 (22) | F |
-| `tools/Meitou.ModelViewer/WorldApp.cs` | 20 (14) | F |
-| `src/Meitou.Rendering/ShadowShaders.cs` | 16 (15 at `6f4af19`; unchanged by stage 1, 8.3) | foundation (`Bind`) |
-| `src/Meitou.Game/Program.cs` | 11 (10) | F |
-| `tools/Meitou.ModelViewer/WorldApp.Benchmark.cs` | 8 (4) | F |
-| `src/Meitou.Rendering/MeitouShadowShaders.cs` | 8 (unchanged by stage 1, 8.3) | foundation (`Bind`) |
-| `src/Meitou.Rendering/WorldFrame.cs` | 7 | the agents of the calls (clears and state around the sky and slices: foundation) |
-| `src/Meitou.Rendering/FrameProfiler.cs` | 6 (0) | F |
-| `src/Meitou.Rendering/FramebufferCapture.cs` | 2 (5: the fallback and the guards) | F |
-| **total** | **1,452** | 1,158 in `src/Meitou.Rendering`, 283 in the viewer, 11 in the game |
+| File | IGl calls | Owner (7.2) | After stage 3 (8.9) |
+| --- | ---: | --- | --- |
+| `src/Meitou.Rendering/PostProcess.cs` | 181 | E | **0** (since stage 2, 8.7) |
+| `src/Meitou.Rendering/ShadowPass.cs` | 123 | B (debug views F) | **0** |
+| `src/Meitou.Rendering/TerrainRenderer.cs` | 122 | B | **0** (since stage 2, 8.6) |
+| `src/Meitou.Rendering/FoliageRenderer.cs` | 147 | A | **0** (since stage 1, `.Grass.cs` too) |
+| `tools/Meitou.ModelViewer/Renderer.cs` | 116 | C | deleted (stage 3 step 1, DECISIONS 23) |
+| `tools/Meitou.ModelViewer/CharacterRenderer.cs` | 93 | C | deleted (stage 3 step 1, DECISIONS 23) |
+| `src/Meitou.Rendering/SkyRenderer.cs` | 80 | D | **0** (since stage 2, 8.6) |
+| `src/Meitou.Rendering/ShadowPass.Meitou.cs` | 78 | B | **0** |
+| `src/Meitou.Rendering/ReflectionPass.cs` | 60 | D | **0** |
+| `src/Meitou.Rendering/WaterRenderer.cs` | 52 | D | **0** (since stage 2, 8.6) |
+| `src/Meitou.Rendering/TerrainTextures.cs` | 52 | B | **0** (since stage 1) |
+| `src/Meitou.Rendering/TerrainShadowMap.cs` | 48 | B | **0** |
+| `src/Meitou.Rendering/DebugOverlay.cs` | 42 | F | **0** |
+| `src/Meitou.Rendering/WorldObjectRenderer.cs` | 39 | C | **0** (since stage 1) |
+| `src/Meitou.Rendering/BuildingLodMesh.cs` | 38 | C | **0** (since stage 1) |
+| `src/Meitou.Rendering/WorldTextureCache.cs` | 34 | C | **0** (since stage 1) |
+| `src/Meitou.Rendering/WorldGl.cs` | 23 | foundation | deleted (stage 3 step 5c) |
+| `tools/Meitou.ModelViewer/Program.cs` | 23 | F | **0** |
+| `tools/Meitou.ModelViewer/CharacterApp.cs` | 23 | F | deleted (stage 3 step 1, DECISIONS 23) |
+| `tools/Meitou.ModelViewer/WorldApp.cs` | 20 | F | **0** |
+| `src/Meitou.Rendering/ShadowShaders.cs` | 16 | foundation (`Bind`) | **0** (`Bind`, `PublishGlobals` deleted, step 5c) |
+| `src/Meitou.Game/Program.cs` | 11 | F | **0** |
+| `tools/Meitou.ModelViewer/WorldApp.Benchmark.cs` | 8 | F | **0** |
+| `src/Meitou.Rendering/MeitouShadowShaders.cs` | 8 | foundation (`Bind`) | **0** (`Bind`, `PublishGlobals` deleted, step 5c) |
+| `src/Meitou.Rendering/WorldFrame.cs` | 7 | the agents of the calls | **0** |
+| `src/Meitou.Rendering/FrameProfiler.cs` | 6 | F | **0** |
+| `src/Meitou.Rendering/FramebufferCapture.cs` | 2 | F | **0** |
+| **total** | **1,452** | 1,158 in `src/Meitou.Rendering`, 283 in the viewer, 11 in the game | **0**: `IGl` itself is deleted |
 
-*Numbers in brackets: agent F's files after step P (2026-10-06, counted as `gl.` / `Gl.` calls in the file, comments excluded; the total above is not recomputed).*
+*The counts are as taken at master `0153744`; the intermediate counts after step P and stages 1 and 2 are in 8.3 to 8.8 and in the history
+of this file. "After stage 3" is **Verified** (2026-10-07): `IGl`, `IGlInterop` and `VkGl` no longer exist, so the tree builds only with no
+call left; a `grep -E '\b[gG]l\.[A-Z]'` over each file that remains finds none.*
 
 Besides `IGl`, code uses **VkGl's own public surface**: `VulkanPresenter.cs` (`BeginFrame`, `EndFrame`, `Backbuffer`, `RecordInFrame`),
 `FsrUpscaler.cs` and `DlssUpscaler.cs` (`ImageOf`, `BeginNative`, `EndNative`, `Device`; they used `BeginExternal` and `EndExternal` until wave 3 agent E), `VulkanDisplay.cs` (constructs it), and the
 game's and viewer's frame loop. **Tests**: `tests/Meitou.Tests/Vulkan/VkGlTests.cs` makes 129 `IGl` calls. The `Vulkan` test folder has 30
-tests in all (`CoreTests`, `ShaderCompilerTests`, `ShaderInterfaceTests`, `ShaderReflectionTests`, `VkGlTests`).
+tests in all (`CoreTests`, `ShaderCompilerTests`, `ShaderInterfaceTests`, `ShaderReflectionTests`, `VkGlTests`). *After stage 3: the
+presenter and the upscalers run on `GpuContext` (8.9); `VkGlTests` and the seam tests are deleted.*
 
 Beyond the draw calls, resource creation also goes through `IGl` in `TerrainTextures`, `WorldTextureCache`, `BuildingLodMesh`, `TerrainShadowMap`,
 the foliage meshes and grass pages, `PostProcess` targets and `SkyRenderer` textures. Phase 8 includes moving those to native `Texture` /
 `DeviceBuffer` creation through the `Uploader`. That is owner work by the same agents (7.2), since step P may leave resource creation on IGl.
-`WorldTextureCache`, `BuildingLodMesh` and the foliage meshes are done (phase 8 stage 1, 8.5); the sky's and the water's in stage 2 (8.6), the `PostProcess` targets too (8.7).
+`WorldTextureCache`, `BuildingLodMesh` and the foliage meshes are done (phase 8 stage 1, 8.5); the sky's and the water's in stage 2 (8.6), the `PostProcess` targets too (8.7); the rest (terrain shadow map, overlay atlas, backbuffer) in stage 3 (8.9): no resource is created through GL any more.
 
 ### 8.2 End state
 
@@ -2464,7 +2481,7 @@ Moved:
 Updated: docs/engine.md "Backend interface" and "Vulkan backend" rewritten for the native API. DECISIONS 7 marked superseded by 22 (if
 adopted), and 18's "the GL-shaped IGl over VkGl stays" sentence amended. The memory note on `IGl` staying is updated by the owner.
 
-The phase-8 gate is the usual one: 0 differing pixels against the last build with VkGl present.
+The phase-8 gate is the usual one: 0 differing pixels against the last build with VkGl present. *Stage 3 (8.9) did all of the above except deleting the legacy shader model, which is still in use. Of the "Updated" items, docs/engine.md is rewritten; DECISIONS 7 and 18 are left to the owner.*
 
 ### 8.3 Stage 1, shadows and reflection: as built (2026-10-06, on master `6f4af19`)
 
@@ -2481,7 +2498,7 @@ Every resource is native now; what is left on GL is the GL mirror the native gue
   current data into a slice of the frame's constants. The casters' bias is set per cascade before the draw callback, and the
   guests take a new slice in their Prepare. A slice never outlives its frame. This is what VkGl's renaming of the GL buffer gave. `ShadowPass` publishes the seven shadow globals itself
   (the blocks, `uShadowMap`, `uShadowNoise`, `uShadowBlocker`, `uShadowTerrain`). They replace `ShadowShaders.PublishGlobals`, which reads
-  units and binding points and stays the source without a `ShadowPass` (`--no-shadows`, the model viewer).
+  units and binding points and stays the source without a `ShadowPass` (`--no-shadows`, the model viewer). *Stage 3: the model viewer was dropped (DECISIONS 23, which replaces owner decision 7) and `PublishGlobals` deleted; without a `ShadowPass` the sky's `ShadowsOffGlobals` (8.6) are the source.*
   - `uShadowTerrain` is `interop.Sampled(TerrainShadowMap.Texture)`: the terrain map is still a GL texture, owned by the terrain agent's file.
   - A texture is published from the point where the GL code bound it to its unit. Before that, readers get the stand-in.
 - *The blocker map* ("shadow blocker map", R32F) is drawn in its own `BeginNative` segment and rendering (`LOAD`), with a `DrawState`
@@ -2515,7 +2532,8 @@ Every resource is native now; what is left on GL is the GL mirror the native gue
     inherits it. **Unknown** whether pixels move without it: kept, not tested.
   - The debug views and the depth copy bind the target framebuffer once each, to name it for `CurrentTargets`.
 - `ShadowShaders.cs` and `MeitouShadowShaders.cs` are unchanged: `Bind` is still called by `WorldGl.Program` and the model viewer's
-  `Renderer`, and their unit-based `PublishGlobals` is the fallback above.
+  `Renderer`, and their unit-based `PublishGlobals` is the fallback above. *Stage 3: both callers are gone (the model viewer by DECISIONS 23,
+  replacing owner decision 7), and `Bind` and `PublishGlobals` with them (8.9).*
 
 **Seam needs (for stage 2 or 3):**
 1. A host that supplies its own targets and state, so that group (a) goes:
@@ -2704,7 +2722,7 @@ for that handoff. 0 px everywhere.*
 - *`TerrainRenderer`'s `globalsProgram`* is removed (its three lines). The terrain file has no GL call left.
 - *`AssignSamplerUnits`* (GL only) moved to `AtmosphereShaders`. `SkyRenderer.AssignSamplerUnits` forwards to it, because `WorldGl.Program`
   (reserved) and the model viewer's `Renderer` call it. Only GL programs need it: the impostor baker and preview (the impostor tool,
-  which has no sky) and the model viewer's own. It no longer publishes unit-based globals.
+  which has no sky) and the model viewer's own. It no longer publishes unit-based globals. *Stage 3: the model viewer is dropped (DECISIONS 23, replacing owner decision 7), the impostor tools are native (8.8), and both `AssignSamplerUnits` are deleted (8.9).*
 - *Sky timer*: `PassTimer` replaces the GL timestamp queries. `Draw` polls each time, because a pair is readable only until its frame's
   query pool comes round again. `Benchmark` (`MEITOU_SKY_BENCH`) now reports recording CPU time: the native API has no `Finish` inside a frame.
 - *Water*: the five maps are `SampledImage`s:
@@ -2739,7 +2757,7 @@ for that handoff. 0 px everywhere.*
 
 **Left, and why** (outside these files):
 1. `SkyRenderer.AssignSamplerUnits` (a forwarder) and `AtmosphereShaders.AssignSamplerUnits` (9 GL calls) stay while `WorldGl.Program` and the
-   model viewer's `Renderer` link GL programs. They go with those programs (stage 3).
+   model viewer's `Renderer` link GL programs. They go with those programs (stage 3). *Done: deleted in stage 3 step 5c (8.9); the model viewer went in step 1 (DECISIONS 23).*
 2. `SkyRenderer.BindUnits()` is an empty method still called by `TerrainRenderer` (3×), `WorldObjectRenderer` and `FoliageRenderer`. The owners
    can drop the calls.
 3. The `IGl` constructor parameters of `SkyRenderer` and `WaterRenderer.Create` (unused) go when `WorldFrame` stops passing them.
@@ -2866,6 +2884,109 @@ the ten views in both modes 0 px against `C:\Temp\base-6f4af19`, tests 472 passe
 (the rest of that work) is kept on the branch `billboards-wip`, not merged (owner, 2026-10-07): it cost 1.1-2.4 GB of VRAM for little frame
 time (forest, measured on that branch), and its VRAM cut was not finished.
 
+### 8.9 Phase 8 stage 3 (no GL-shaped layer) as built
+
+*In short: `IGl`, `VkGl`, the seam, `GlBridge`, `WorldGl` and the project `Meitou.Rendering.Vulkan` are gone. `GpuContext` owns the
+frame, the presenter and the upscalers live in `Meitou.Rendering`, and every picture is unchanged to the pixel. 2026-10-07, on top of
+`668e7a6` (the stage 2 merges); claims below are labelled as in the rest of the docs.*
+
+**Commits, in order** (each built with 0 warnings and passed the full tests with 0 skipped before it was committed):
+
+| Step | Commit | What |
+| --- | --- | --- |
+| 1 | `9a54870` | The mesh and character viewer dropped (DECISIONS 23); [character-viewer.md](character-viewer.md) keeps how it worked, tag `model-viewer-last`. |
+| 2 | `f33e06f` | Hosts hand their guests `PassTargets` and a `DrawState` (`BeginHostPass`); the GL state mirror goes; native meshes (`MeshBindings`), the terrain shadow map's `Sampled`, the LOD bias on `GpuContext`, native upscaler inputs. `ITextureLodBias` deleted. |
+| 4a | `006071e` | `GpuContext` owns the frame loop (`Gpu/FrameLoop.cs`) and the segments (`Gpu/Segments.cs`); the GPU frame time from native timestamps. |
+| 4b | `a9d5a27` | Scene clears as load operations; reflection, shadows, the post target, the overlay (its atlas through the `Uploader`) and the capture native; `GlBridge` deleted. |
+| 4c | `9b3ba7e` | The window path native: `Gpu/VulkanPresenter.cs` with its own RGBA8 backbuffer on `GpuContext` frames. |
+| 5a | `da4eb16` | The renderers, `WorldFrame`, the viewer and the game off `IGl` (constructor parameters, empty `BindUnits`, `Interop` guards, VkGl's stand-ins). |
+| 5b | `aa1fb2d` | FSR, DLSS and Streamline moved to `src/Meitou.Rendering/Upscalers` (namespace `Meitou.Rendering.Upscalers`), on `GpuContext`. |
+| 5c | `2e71aea` | Tests on `GpuContext` alone: `SeamTests` (12) and `VkGlTests` (4) deleted, `NativeHostTests` (4) added; `WorldGl`, both `AssignSamplerUnits`, `ShadowShaders.Bind` / `PublishGlobals`, `MeitouShadowShaders.Bind` / `PublishGlobals` deleted. |
+| 5d | `e771bba` | `src/Meitou.Rendering.Vulkan` deleted (`VkGl`, `VkGlStats`); `IGl.cs`, `IGlInterop.cs`, `GlEnums.cs` deleted; `VulkanDisplay` makes the `GpuContext`; the viewer's `PassMeter` native. |
+| 6 | `c71d21c` | Namespaces `Meitou.Rendering.Vulkan.Core` / `.Shaders` renamed to `Meitou.Rendering.Gpu.Core` / `.Shaders`. |
+| - | `faae05b`, `cd0402c` | `--fly-benchmark` prints every allocator owner (`vram` line, with device-local MB). |
+
+(There is no step 3: its work, the host passes, went into step 2.)
+
+**Deleted** (lines at `668e7a6`): `src/Meitou.Rendering.Vulkan` (`VkGl.cs` and its ten partial files, `VkGlStats.cs`, the project and
+its `AssemblyInfo.cs`: 3,279 lines), `Gpu/IGl.cs` (127), `Gpu/IGlInterop.cs` (146), `Gpu/GlEnums.cs` (343), `Gpu/GlBridge.cs` (140),
+`Gpu/ITextureLodBias.cs` (11), `WorldGl.cs` (54), `tests/.../SeamTests.cs` (756), `tests/.../VkGlTests.cs` (317), and the model
+viewer's `Renderer.cs`, `CharacterRenderer.cs`, `CharacterApp.cs`, `CharacterScene.cs`, `Animator.cs`, `Camera.cs` (1,961). In all, the
+stage changed 121 files under `src`, `tools` and `tests`: 1,852 lines added, 9,024 removed. One project fewer: `MeitouClient.slnx` and the
+game, display, viewer and test projects no longer reference `Meitou.Rendering.Vulkan`.
+
+**How the frame runs now** (from the code):
+- `VulkanDisplay` creates the device, then `new GpuContext(Device)`, then (with a window) `new VulkanPresenter(Context, vsync)`.
+  Disposal runs the other way: presenter, context, `Device.Frames.WaitAll()` (what was released after the frames in flight), Streamline,
+  device.
+- `GpuContext.BeginFrame` / `EndFrame` / `Finish` (`Gpu/FrameLoop.cs`): the frame's command buffer and an upload command buffer submitted
+  ahead of it, each with a full barrier at its start and end; a timestamp at the start and end of the frame gives `GpuFrameMs` a frame
+  ring later. `EnsureFrame` opens a frame where something records with none open (loading, offscreen tools).
+- Segments (`Gpu/Segments.cs`): `BeginNative` / `EndNative` hand out the frame's list between full barriers. `BeginGuest` draws into the
+  open host pass (its list, or with secondaries an inline secondary of its own); **without a host pass it throws** (the path that fell
+  back to VkGl's pass is gone). `Interleave` records into the host's rendering when one is open, else into the frame's list.
+- Host passes (`Gpu/Passes.cs`): `BeginHostPass(cmd, targets, state)`, `SetPassViewport`, `SetPassState`, `EndHostPass`;
+  `CurrentTargets` / `CurrentState` throw when no host pass is open (no fallback any more).
+- The window's backbuffer is a native `Texture` the presenter owns; `display.Backbuffer` is what post-processing writes and
+  `FramebufferCapture` reads.
+- `GpuStats` keeps running totals of its eight counters (`Running`) for meters; the viewer's `PassMeter` (`MEITOU_PASS_STATS=1`) shows
+  those plus fence-wait, submit, acquire and present ticks. Its stamps take their query index inside `Interleave`: the benchmark starts
+  its clock before the frame is open, and an index taken earlier belonged to the previous frame's pool (the GPU column read NaN until
+  this was fixed in 5d). `MEITOU_VKGL_PHASES` is gone with VkGl; `MEITOU_VK_MICRO` stays (`VkCallMicro`, a native segment).
+
+**What is left, and why:**
+1. **`LegacyProgram` and the legacy shader model** (`ShaderLibrary.Legacy`, the default block moved to set 1, the stage binding shift)
+   stay: about 20 files still build programs with it (terrain, objects, foliage and grass, sky, water, shadows, post, overlay, impostors).
+   8.2 deletes it only once unused, and it is not. Its output is pinned by `GpuApiTests`: the SPIR-V of 27 programs against SHA-256
+   hashes recorded from the build that last matched VkGl byte for byte (`aa1fb2d`; the source diff after it only deletes code).
+2. **The GL vocabulary**: ten enumerations (`BlendingFactor`, `DepthFunction`, `FrontFaceDirection`, `GLEnum`, `InternalFormat`,
+   `PrimitiveType`, `TextureMagFilter`, `TextureMinFilter`, `TextureTarget`, `TextureWrapMode`) moved from `GlEnums.cs` to the end of
+   `GlConventions.cs`, with `SamplerDesc.FromGl`. The renderers still describe formats, filters and vertex types in these words, and
+   `GlConventions` is what turns them into the Vulkan values that decide pixels. Replacing them with Vulkan's own types is a rewrite of
+   every resource description for no pixel or time gain, so it was not done here.
+3. **`VertexArrayBindings`** (the vertex input a GL vertex array described) moved from `IGlInterop.cs` to `LegacyProgram.cs`: the sky's
+   and the water's pipeline caches key on it.
+4. **History in comments**: about 110 remarks such as "as VkGl did" stay in `src/Meitou.Rendering`; they explain where a rule came from.
+   Comments that described the current code wrongly (the seam, `IGlInterop` members, VkGl driving the frame) were rewritten.
+5. **Sections 0 and 4** of this note describe the pre-port state and the seam; they are marked historical.
+
+**Gate** (Release, RTX 4070, against `C:\Temp\base-6f4af19` and renders of its viewer; FSR is compared with a tolerance because the base
+viewer against itself differs by up to 27, mean 0.008, no pixel over 12):
+- **Verified** at every step: `dotnet build -c Release` 0 warnings; `dotnet test -c Release` with `KENSHI_PATH` set, 0 skipped (472 tests
+  through 5b; 459 from 5c: 17 seam / VkGl / GL-export tests deleted, 4 native host tests added); the ten views in both modes max 0
+  (mean 0) against the base renders.
+- **Verified** at 5d and again at the end (`cd0402c`): 21 extras against the base viewer, all max 0 except FSR (max 25 at both, within
+  the base's own 27). Forest 13:00 unless named: `--debug-shadows 1` in both modes, `2` (Meitou), `3` (Faithful); `--upscaler dlss`,
+  `taa`, `fsr`; `MEITOU_GPU_CULL=0`; `MEITOU_GPU_GRASS=0`; `--heat-haze 1`; `--no-shadows` in both modes; `--wireframe`; 1280 x 720;
+  `--show-keys`; `MEITOU_RECORD_THREADS=0` and `=1`, and `=0` on Port North `--water-reflection 4 --faithful all`; Port North
+  `--water-reflection 4` in both modes; the rock view at 1001 x 613 with TAA at render scale 0.5.
+- **Verified**: `MEITOU_VK_VALIDATION=sync`, 0 errors on forest and Port North in both modes and on DLSS (5d, 6, end); the interactive
+  viewer 20 s with sync validation, plain and DLSS, 0 errors, and with DLSS while its window is resized twice (984 x 611, 1317 x 732:
+  the swapchain and backbuffer rebuilt) 0 errors; the game (`src/Meitou.Game`) 20 s with sync validation, 0 errors, and its
+  offscreen screenshot as expected; the impostor preview of `BushTree01`, 12 pictures, max 0 against the base viewer.
+
+**Benchmark** (**Observed**, 2026-10-07, RTX 4070, 1600 x 900, `--time 13`, `--fly-benchmark 300`, `MEITOU_PASS_STATS=1
+MEITOU_PASS_STATS_SKIP=80`, base viewer and this build interleaved; medians of three runs, six for the still forest; ms):
+
+| scenario | CPU-only p50 | frame p50 | frame p95 | render-thread CPU p50 | GPU frame |
+| --- | --- | --- | --- | --- | --- |
+| forest, still camera | 1.0 / 0.9 | 8.4 / 8.2 | 10.75 / 10.7 | 1.00 / 0.96 | 7.16 / 7.00 |
+| forest, flying (150 units a frame) | 2.0 / 1.9 | 8.0 / 7.7 | 12.3 / 12.2 | 2.01 / 1.94 | 6.12 / 5.95 |
+| The Hub, still camera | 1.0 / 0.9 | 5.5 / 5.3 | 10.3 / 9.7 | 1.02 / 0.98 | 5.48 / 4.97 |
+
+(base / this.) Per stage the render-thread CPU moved by at most 0.01-0.03 ms (shadows, terrain, objects, reflection 0.01 lower; the
+rest equal), and the GPU stages within the noise. The still forest is **bimodal on both builds**: of six runs each, two base runs and one
+of this build's (a seventh, a trial) ran at 6.0-6.1 ms with 6.2-6.5 ms of GPU, the rest at 7.9-8.6 ms with 6.7-7.3 ms; the GPU clock state,
+not the build. **Observed**: no change beyond the noise; the CPU figures are a little lower on this build in all three scenarios.
+**Unknown** why: the renderers recorded natively before this stage already; VkGl's remaining per-frame work (its frame hooks, barrier
+counting, the GL state mirror) is the likely reason, not measured apart.
+
+**VRAM** (**Observed**, `--fly-benchmark 300` over the forest, the `vram` line): no owner is named `gl ...`; every allocation carries its
+renderer's name. Resident objects and foliage are the same as the base (1288 / 1471 MB at frames 150 / 300); the process's working set
+was 3.0-3.3 GB against the base's 3.8-4.4 GB. The largest owner by bytes is `frame constants` (880 MB in 110 chunks of 8 MB, 0 MB
+device-local): the frame's constants double as the `Uploader`'s staging, and `LinearAllocator.Reset` keeps every chunk of normal size, so
+the peak of the loading frames stays allocated in host memory. That predates this stage (unchanged code) and is noted for later.
+
 ---
 
 ## 9. Expected CPU cost, and how the profiler keeps working
@@ -2977,7 +3098,8 @@ refers to them as "owner decision N".
 6. **API steward** (7.1): the foundation agent stays on through wave 3 and lands API additions. No transfer queue in wave 2 (this also
    answers question 8).
 7. **The viewer's mesh and character modes** (7.2): the character renderer is ported later, by agent C. The plain mesh viewer may be
-   retired later, not by the foundation.
+   retired later, not by the foundation. *Replaced 2026-10-06 by DECISIONS 23: phase 8 dropped the mesh and character viewer (stage 3
+   step 1); [character-viewer.md](character-viewer.md) keeps how it worked for the later native character renderer.*
 8. **Transfer queue** (2.2): not in wave 2 (decision 6).
 9. **Documentation drift** (7.7): "eight" parity views corrected to "ten" in docs/engine.md and DECISIONS 2.
 10. **Step P everywhere?** (3.2): step P stays mandatory for post-processing (E) as for A to D; it is optional for overlays (F).

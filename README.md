@@ -83,8 +83,7 @@ Without them the viewer uses its own TAA. See [docs/engine.md](docs/engine.md) (
 | `src/Meitou.Core` | Shared primitives, game install discovery |
 | `src/Meitou.Data` | Kenshi data: `Fcs/` reads and writes `.mod` / `.base`; `GameDatabase` merges the load order; `Ogre/` reads meshes, skeletons and material scripts; `Textures/` decodes DDS and other images; `World/` reads the heightmap, zones, towns and foliage |
 | `src/Meitou.Engine` | The simulation frame: fixed tick, game clock, input bindings, the Kenshi and free cameras |
-| `src/Meitou.Rendering` | The world renderers (terrain, objects, foliage, water, sky, shadows, post-processing) and streaming; `Gpu/` is the native Vulkan rendering API they record through |
-| `src/Meitou.Rendering.Vulkan` | Device set-up, the presenter, the FSR and DLSS integrations, and `VkGl`, an older GL-shaped layer being retired ([docs/renderer-native.md](docs/renderer-native.md)) |
+| `src/Meitou.Rendering` | The world renderers (terrain, objects, foliage, water, sky, shadows, post-processing) and streaming; `Gpu/` is the native Vulkan rendering API they record through (device set-up and the shader compiler in `Gpu/Core` and `Gpu/Shaders`, the presenter), `Upscalers/` the FSR and DLSS integrations ([docs/renderer-native.md](docs/renderer-native.md)) |
 | `src/Meitou.Rendering.Display` | The window and Vulkan device set up together, shared by the game and the viewer |
 | `src/Meitou.Game` | `meitou`, the game executable |
 | `tools/Meitou.ModelViewer` | `meitou-viewer`: the world viewer and the impostor preview |
