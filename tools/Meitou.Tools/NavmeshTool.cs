@@ -21,6 +21,7 @@ static class NavmeshTool
         var settings = new NavBuildSettings();
         int repeat = 1;
         float[]? box = null, pathArg = null;
+        bool doorsClosed = false; float[]? near = null;
         int around = 0;
         for (int i = 0; i < args.Length; i++)
         {
@@ -34,6 +35,8 @@ static class NavmeshTool
                 case "--geometry": geometryOnly = true; break;
                 case "--cell": settings = settings with { CellSize = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--tile": settings = settings with { TileCells = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                case "--near": near = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
+                case "--closed": doorsClosed = true; break;
                 case "--watershed": settings = settings with { Watershed = true }; break;
                 case "--threads": settings = settings with { Threads = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--around": around = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
@@ -61,12 +64,15 @@ static class NavmeshTool
         using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
         watch.Restart();
         var g = gatherer.Gather(zone.Value);
+        if (Environment.GetEnvironmentVariable("NAV_VERBOSE") is not null) for (int i = 1; i <= 3; i++) { var sw2 = Stopwatch.StartNew(); gatherer.Gather(new ZoneCoordinate(zone.Value.X + i, zone.Value.Y)); Console.WriteLine($"  warm gather {sw2.ElapsedMilliseconds} ms (terrain {gatherer.Phases.Terrain:0}, buildings {gatherer.Phases.Buildings:0}, foliage {gatherer.Phases.Foliage:0})"); }
         var s = g.Stats;
-        Console.WriteLine($"gathered zone {zone} in {watch.ElapsedMilliseconds} ms: {g.TriangleCount} triangles ({s.TerrainTriangles} terrain + {s.WaterTriangles} water, " +
+        Console.WriteLine($"gathered zone {zone} in {watch.ElapsedMilliseconds} ms (terrain {gatherer.Phases.Terrain:0}, buildings {gatherer.Phases.Buildings:0}, foliage {gatherer.Phases.Foliage:0}): {g.TriangleCount} triangles ({s.TerrainTriangles} terrain + {s.WaterTriangles} water, " +
             $"{s.WalkableTriangles} walkable and {s.CuttingTriangles} cutting object triangles), {s.Buildings} buildings, {s.PartsWithCollision} parts with collision, {s.Shapes} shapes, " +
             $"{s.FoliageInstances} foliage objects ({s.FoliageShapes} shapes, {s.FoliageCutters} cutters), {g.Carvers.Count} carvers, {g.Painters.Count} door painters, {g.Seeds.Count} seeds, " +
             $"{s.MissingFiles} missing files, building hash {g.BuildingHash:x8}");
 
+        if (Environment.GetEnvironmentVariable("NAV_VERBOSE") is not null) { foreach (var p in g.Painters) Console.WriteLine($"  painter x {p.Polygon.Min(v => v.X):0}..{p.Polygon.Max(v => v.X):0} z {p.Polygon.Min(v => v.Y):0}..{p.Polygon.Max(v => v.Y):0} y {p.YMin:0}..{p.YMax:0}"); foreach (var sd in g.Seeds) Console.WriteLine($"  seed {sd.X:0},{sd.Y:0},{sd.Z:0}"); }
+        if (near is not null) foreach (var line in gatherer.DescribeNear(zone.Value, near[0], near[1], near[2])) Console.WriteLine("  " + line);
         if (geometryOnly)
         {
             if (obj is not null) WriteGeometryObj(g, obj);
@@ -91,6 +97,7 @@ static class NavmeshTool
                         Console.WriteLine($"  cpu ms summed over tiles: raster {t.CpuRaster:0}, compact+areas {t.CpuCompact:0}, regions {t.CpuRegions:0}, contours {t.CpuContours:0}, polygons {t.CpuMesh:0}");
                 }
                 built.Add((geometry, mesh!));
+                if (dx == 0 && dz == 0 && Environment.GetEnvironmentVariable("NAV_VERBOSE") is not null) foreach (var p in g.Painters) { int n = 0; for (int q = 0; q < mesh!.PolygonCount; q++) { if (mesh.Areas[q] != NavArea.Door) continue; var vv = mesh.Vertices[mesh.Polygons[q][0]]; if (vv.X >= p.Polygon.Min(a => a.X) - 4 && vv.X <= p.Polygon.Max(a => a.X) + 4 && vv.Z >= p.Polygon.Min(a => a.Y) - 4 && vv.Z <= p.Polygon.Max(a => a.Y) + 4) n++; } Console.WriteLine($"  door polygons near painter {p.Polygon.Min(a => a.X):0},{p.Polygon.Min(a => a.Y):0}: {n}"); }
                 world = world.With(mesh!.WithoutPruned());
             }
 
@@ -101,8 +108,9 @@ static class NavmeshTool
             var from = At(pathArg[0], pathArg[1]);
             var to = At(pathArg[2], pathArg[3]);
             var query = new NavQuery(world);
+            var agent = new NavAgent { DoorsClosed = doorsClosed };
             var sw = Stopwatch.StartNew();
-            var result = query.FindPath(from, to);
+            var result = query.FindPath(from, to, agent);
             sw.Stop();
             if (!result.Found) Console.WriteLine($"path {from.X:0},{from.Z:0} -> {to.X:0},{to.Z:0}: none ({sw.Elapsed.TotalMilliseconds:0.0} ms)");
             if (!result.Found)
@@ -129,6 +137,7 @@ static class NavmeshTool
             else
             {
                 path = [.. result.Points];
+                if (Environment.GetEnvironmentVariable("NAV_VERBOSE") is not null) foreach (var pt in path) Console.WriteLine($"  {pt.X:0},{pt.Y:0},{pt.Z:0}");
                 float length = 0;
                 for (int i = 1; i < path.Count; i++) length += Vector3.Distance(path[i - 1], path[i]);
                 Console.WriteLine($"path {from.X:0},{from.Z:0} -> {to.X:0},{to.Z:0}: {path.Count} points, length {length:0} (straight {Vector3.Distance(from, to):0}), {sw.Elapsed.TotalMilliseconds:0.0} ms");

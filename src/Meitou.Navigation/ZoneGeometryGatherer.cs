@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
@@ -32,7 +33,6 @@ public sealed class ZoneGeometryGatherer : IDisposable
     readonly TerrainHeightmap map;
     readonly Dictionary<ZoneCoordinate, List<BuildingPlacement>> buildingsByZone = [];
     readonly List<Vector3>[]? seedsByZone;
-    FoliageWorld? foliage;
 
     public ZoneGeometryGatherer(GameInstall install, GameDatabase db, WorldLevelData levels, CollisionCache collision)
     {
@@ -58,7 +58,7 @@ public sealed class ZoneGeometryGatherer : IDisposable
     public void Dispose()
     {
         map.Dispose();
-        foliage?.Dispose();
+        foreach (var w in foliagePool) w.Dispose();
     }
 
     public float TerrainHeight(double x, double z) => map.HeightAt(x, z);
@@ -66,6 +66,9 @@ public sealed class ZoneGeometryGatherer : IDisposable
     /// <summary>The seed points of a zone from seeds.def (docs: absolute positions, Y −99 when none was authored).</summary>
     public IReadOnlyList<Vector3> FileSeeds(ZoneCoordinate zone) =>
         seedsByZone is not null && zone.IsInsideGrid ? seedsByZone[zone.Y * WorldLayout.ZoneCount + zone.X] : [];
+
+    /// <summary>Milliseconds the last <see cref="Gather"/> spent per phase (debug).</summary>
+    public (double Terrain, double Buildings, double Foliage) Phases;
 
     public ZoneGeometry Gather(ZoneCoordinate zone, float margin = 72)
     {
@@ -77,9 +80,15 @@ public sealed class ZoneGeometryGatherer : IDisposable
             ZoneMax = new((float)ox + WorldLayout.ZoneSize, (float)oz + WorldLayout.ZoneSize),
             Margin = margin,
         };
+        var sw = Stopwatch.StartNew();
+        // Foliage placement is the long pole: it runs on the pool while the terrain and buildings are gathered here.
+        var foliageTask = IncludeFoliage ? Task.Run(() => FoliageOf(FoliageRing(zone))) : null;
         AddTerrain(g);
+        Phases.Terrain = sw.Elapsed.TotalMilliseconds; sw.Restart();
         AddBuildings(g);
-        if (IncludeFoliage) AddFoliage(g);
+        Phases.Buildings = sw.Elapsed.TotalMilliseconds; sw.Restart();
+        if (foliageTask is not null) AddFoliage(g, foliageTask.GetAwaiter().GetResult());
+        Phases.Foliage = sw.Elapsed.TotalMilliseconds; sw.Restart();
         AddSeeds(g);
         g.Stats.MissingFiles = collision.Missing;
         return g;
@@ -181,6 +190,20 @@ public sealed class ZoneGeometryGatherer : IDisposable
         return hash;
     }
 
+    /// <summary>Diagnostics: the buildings within a radius of a point, with how many of their parts have collision (debug tool).</summary>
+    public IEnumerable<string> DescribeNear(ZoneCoordinate zone, float x, float z, float radius)
+    {
+        var (ox, oz) = WorldLayout.ZoneOrigin(zone);
+        var min = new Vector2((float)ox, (float)oz);
+        foreach (var (b, record, position, destroyed) in NearBuildings(zone, min, min + new Vector2(WorldLayout.ZoneSize), 72))
+        {
+            if (Vector2.Distance(new(position.X, position.Z), new(x, z)) > radius) continue;
+            var parts = WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(destroyed));
+            int withCollision = parts.Count(p => p.Source.GetPath("xml collision").Length > 0 && collision.Get(p.Source.GetPath("xml collision")) is not null);
+            yield return $"{record.Name} [{record.StringId}] at {position.X:0},{position.Y:0},{position.Z:0} mode {record.GetInt("path mode", 3)} gateway {record.GetBool("is gateway")} parts {parts.Count} with collision {withCollision} interior masks {record.GetReferences("interior mask").Count()} destroyed {destroyed}";
+        }
+    }
+
     void AddBuildings(ZoneGeometry g)
     {
         foreach (var (b, record, position, destroyed) in NearBuildings(g.Zone, g.ZoneMin, g.ZoneMax, g.Margin))
@@ -217,17 +240,17 @@ public sealed class ZoneGeometryGatherer : IDisposable
             string path = destroyed && part.GetPath("destroyed collision") is { Length: > 0 } dc ? dc : part.GetPath("xml collision");
             if (path.Length == 0) continue;
             bool isDoor = part.GetBool("is door") || mesh.Owner.GetBool("is door");
-            AddPart(g, mesh.Owner, part, path, node, isDoor, interiorMask: false);
+            AddPart(g, mesh.Owner, part, path, node, isDoor, interiorMask: false, instanceId: placementId);
         }
         // The interior mask part is created apart from the parts list; its collision is the indoor hull.
         // Gateways (is gateway: walk underneath) are not shells with an interior: their hull must not close the passage (Observed: the Hub's gates).
         if (!building.GetBool("is gateway"))
         foreach (var r in building.GetReferences("interior mask"))
             if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BUILDING_PART } mask && mask.GetPath("xml collision") is { Length: > 0 } maskPath)
-                AddPart(g, building, mask, maskPath, node, isDoor: false, interiorMask: true);
+                AddPart(g, building, mask, maskPath, node, isDoor: false, interiorMask: true, instanceId: placementId);
     }
 
-    void AddPart(ZoneGeometry g, GameRecord owner, GameRecord part, string path, Matrix4x4 node, bool isDoor, bool interiorMask)
+    void AddPart(ZoneGeometry g, GameRecord owner, GameRecord part, string path, Matrix4x4 node, bool isDoor, bool interiorMask, string instanceId)
     {
         var prepared = collision.Get(path);
         if (prepared is null) return;
@@ -253,7 +276,9 @@ public sealed class ZoneGeometryGatherer : IDisposable
             }
             if (group == 5)
             {
+                int before = g.Painters.Count;
                 AddVolume(g.Painters, shape, node, g.Stats, carver: false);
+                if (g.Painters.Count > before) g.Painters[^1].Owner = instanceId;
                 AddDoorSeeds(g, owner, shape, node);
                 continue;
             }
@@ -387,44 +412,82 @@ public sealed class ZoneGeometryGatherer : IDisposable
 
     // ---- foliage ----
 
-    void AddFoliage(ZoneGeometry g)
+    /// <summary>What the navmesh needs of one placed foliage object: where it stands and its collision file or cutter size.</summary>
+    sealed record FoliageObstacle(Vector3 Position, Matrix4x4 Transform, string? Collision, bool Walkable, float Cutter);
+
+    readonly System.Collections.Concurrent.ConcurrentDictionary<ZoneCoordinate, FoliageObstacle[]> foliageZones = new();
+    readonly System.Collections.Concurrent.ConcurrentBag<FoliageWorld> foliagePool = [];
+    readonly System.Collections.Concurrent.ConcurrentDictionary<(int, int), Lazy<byte[]>> overlayTiles = new();
+    FoliageCatalog? foliageCatalog;
+    const int MaxCachedFoliageZones = 64;
+
+    /// <summary>The obstacle list of a zone's foliage, placed once and kept (neighbouring zones share their rings), placed in parallel for the missing ones.</summary>
+    FoliageObstacle[][] FoliageOf(IReadOnlyList<ZoneCoordinate> zones)
     {
-        foliage ??= new FoliageWorld(install, db, levels);
-        float margin = g.Margin;
-        // Own zone plus the eight neighbours, so objects across the border that reach into the margin are there too.
+        var missing = zones.Where(z => !foliageZones.ContainsKey(z)).ToList();
+        if (missing.Count > 0)
+        {
+            if (foliageZones.Count + missing.Count > MaxCachedFoliageZones) foliageZones.Clear();
+            foliageCatalog ??= FoliageCatalog.Load(db);
+            if (overlayTiles.Count > 6) overlayTiles.Clear();
+            Parallel.ForEach(missing, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Math.Min(missing.Count, Environment.ProcessorCount - 1)) }, z =>
+            {
+                if (!foliagePool.TryTake(out var world)) world = new FoliageWorld(install, db, levels, foliageCatalog, overlayTiles);
+                try
+                {
+                    var list = new List<FoliageObstacle>();
+                    foreach (var inst in world.Zone(z).Instances)
+                    {
+                        var rec = inst.Mesh.Record;
+                        string path = rec.GetPath("collision");
+                        float cutter = rec.GetFloat("navmesh cutter");
+                        if (path.Length == 0) { if (cutter > 0) list.Add(new(inst.Position, inst.Transform, null, false, cutter)); }
+                        else if (path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)) list.Add(new(inst.Position, inst.Transform, path, rec.GetBool("walkable"), 0));
+                    }
+                    foliageZones[z] = [.. list];
+                }
+                finally { foliagePool.Add(world); }
+            });
+        }
+        return [.. zones.Select(z => foliageZones.TryGetValue(z, out var a) ? a : [])];
+    }
+
+    /// <summary>The zone and its eight neighbours inside the grid: objects across the border reach into the margin.</summary>
+    static List<ZoneCoordinate> FoliageRing(ZoneCoordinate zone)
+    {
+        var zones = new List<ZoneCoordinate>();
         for (int dz = -1; dz <= 1; dz++)
             for (int dx = -1; dx <= 1; dx++)
             {
-                var z = new ZoneCoordinate(g.Zone.X + dx, g.Zone.Y + dz);
-                if (!z.IsInsideGrid) continue;
-                var fz = foliage.Zone(z);
-                foreach (var inst in fz.Instances)
+                var z = new ZoneCoordinate(zone.X + dx, zone.Y + dz);
+                if (z.IsInsideGrid) zones.Add(z);
+            }
+        return zones;
+    }
+
+    void AddFoliage(ZoneGeometry g, FoliageObstacle[][] all)
+    {
+        float margin = g.Margin;
+        foreach (var list in all)
+            foreach (var o in list)
+            {
+                var p = o.Position;
+                if (p.X < g.ZoneMin.X - margin - 200 || p.X > g.ZoneMax.X + margin + 200 || p.Z < g.ZoneMin.Y - margin - 200 || p.Z > g.ZoneMax.Y + margin + 200) continue;
+                if (o.Collision is null)
                 {
-                    var p = inst.Position;
-                    if (p.X < g.ZoneMin.X - margin - 200 || p.X > g.ZoneMax.X + margin + 200 || p.Z < g.ZoneMin.Y - margin - 200 || p.Z > g.ZoneMax.Y + margin + 200) continue;
-                    var rec = inst.Mesh.Record;
-                    string path = rec.GetPath("collision");
-                    float cutter = rec.GetFloat("navmesh cutter");
-                    if (path.Length == 0)
-                    {
-                        if (cutter > 0)
-                        {
-                            g.Stats.FoliageCutters++;
-                            g.Carvers.Add(new NavVolume([new(p.X - cutter, p.Z - cutter), new(p.X + cutter, p.Z - cutter), new(p.X + cutter, p.Z + cutter), new(p.X - cutter, p.Z + cutter)],
-                                p.Y - CutterHalfHeight, p.Y + CutterHalfHeight));
-                        }
-                        continue;
-                    }
-                    if (!path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)) continue;
-                    var prepared = collision.Get(path);
-                    if (prepared is null) continue;
-                    g.Stats.FoliageInstances++;
-                    bool walkable = rec.GetBool("walkable");
-                    foreach (var shape in prepared.Shapes)
-                    {
-                        g.Stats.FoliageShapes++;
-                        AddShape(g, shape, inst.Transform, walkable ? TerrainSlopeDegrees : 0, carve: CarveConvexObstacles && !walkable);
-                    }
+                    float cutter = o.Cutter;
+                    g.Stats.FoliageCutters++;
+                    g.Carvers.Add(new NavVolume([new(p.X - cutter, p.Z - cutter), new(p.X + cutter, p.Z - cutter), new(p.X + cutter, p.Z + cutter), new(p.X - cutter, p.Z + cutter)],
+                        p.Y - CutterHalfHeight, p.Y + CutterHalfHeight));
+                    continue;
+                }
+                var prepared = collision.Get(o.Collision);
+                if (prepared is null) continue;
+                g.Stats.FoliageInstances++;
+                foreach (var shape in prepared.Shapes)
+                {
+                    g.Stats.FoliageShapes++;
+                    AddShape(g, shape, o.Transform, o.Walkable ? TerrainSlopeDegrees : 0, carve: CarveConvexObstacles && !o.Walkable);
                 }
             }
     }

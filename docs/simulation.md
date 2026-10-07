@@ -388,3 +388,52 @@ placement, so a cold zone is about 1.5 to 2 s on the worker thread; a cached zon
 **Gaps.** No interiors; linked-wall and neighbour-border seeds and the ray-down seed check are missing; no detail mesh (heights about
 0.5 off); doors are an agent flag (`DoorsClosed`), not live state; cross-zone links only between loaded 4-neighbours; no viewer overlay;
 parts with collision but no `.mesh` are dropped by the layout; `BCTYPE_SHELL_WITH_INTERIOR` is approximated.
+
+### Stage 5, second pass (track D)
+
+- **Closed-door leak: not a leak.** The Hub's west wall has a 150-unit stretch with no wall collision (Defensive Wall IV Short pieces end at
+  z 2626; the Defensive Gate IV at -51562, 2780 is `destroyed` in the world data, so its destroyed collision stands). Paths in through it exist
+  in the data, and the original would find them too (**Observed**: the placements). The three door painters of the zone are a shack door, a
+  second door in the wall and a third one with no cells; none is a town gate. The strict test is therefore a property: a path made with a closed
+  door never stands on a door polygon.
+- **Door painters** are now grown by one cell before they paint (`DoorInflateCells`), so a thin leaf closes its doorway instead of leaving a
+  diagonal slip between cells.
+- **Cold zone cost.** Foliage placement ran 9 times in series (own zone and the ring), 1.2 to 1.7 s. Now the ring is placed in parallel on a pool
+  of `FoliageWorld`s sharing the decoded overlay tiles (`FoliageWorld` takes an optional shared tile cache), concurrently with the terrain and
+  buildings, and kept per zone (64 zones), so the next zone places only its three new neighbours. Gather of The Hub: before 1.2 to 1.9 s;
+  after about 0.55 to 1.0 s cold (JIT included; the machine was loaded by other agents, so the spread is wide) and about 0.15 to 0.25 s for the next
+  zone. Add the 0.25 to 0.3 s build: a first zone is ready in about 1 to 1.3 s, later ones in about 0.5 s, both off the simulation thread.
+- **Live doors.** `NavDoors` (one per `NavmeshWalkability`, `walkability.Doors`): `Close(id)`, `Open(id)`, `Set(id, closed)`, `IsClosed`, `Version`.
+  `id` is the building's placement id (`BuildingPlacement.InstanceId`). Door polygons keep area `Door` and carry the building they belong to
+  (`ZoneNavMesh.DoorIds` / `DoorOf`, cached); a query checks the table when it considers a door polygon, so a flip needs no rebuild and is
+  one volatile write. Doors start open (face data 4). `NavAgent.DoorsClosed` still treats every door as closed for one query. Callers that keep
+  paths should re-query when `Doors.Version` has changed.
+- **Heights.** Mesh heights are the simplified surface (cell 2, about 0.5 off on flat ground, more on slopes). `GroundHeight(x, z)` returns the
+  heightmap's height where the mesh lies within 3 units of the terrain, and the mesh's height elsewhere (floors, wall tops, ramps), and
+  `FindPath` puts its points on the same height. Movement must sample `GroundHeight` every tick instead of interpolating between path points.
+  There is no detail mesh.
+- **Not done:** interiors (a separate mesh per building with an interior mask, joined through doors) and the missing seed rules.
+
+#### Wiring `NavSystem` into the game (track A)
+
+```csharp
+// once, after the game data and WorldLevelData are loaded (not on the simulation thread; it opens the heightmap and the seeds file)
+var nav = new NavSystem(install, db, levels, (x, z) => (float)heightmap.HeightAt(x, z));   // starts the builder thread
+var session = new WorldSession(..., walkability: nav.Walkability);   // the stand-in is Program.cs:196 / WorldSession.cs:33; same IWalkability, nothing else changes
+nav.ZoneReady += z => { /* optional, builder thread: log, or invalidate paths for that zone */ };
+
+// whenever the zone ring changes (the same place that loads residents), any thread, returns at once
+nav.LoadRing(centreZone, 1);             // 3 x 3, nearest first; or nav.LoadZone(zone) (Task completes when live)
+nav.UnloadZone(zone);                    // for zones that left the ring; the cache file stays
+
+// doors (any thread): the building's placement id
+nav.Doors.Close(buildingInstanceId); nav.Doors.Open(buildingInstanceId);
+
+// on shutdown
+nav.Dispose();
+```
+
+Thread-safety: `IsWalkable`, `GroundHeight`, `FindPath` and `Doors` are safe from any thread, always (the loaded meshes are immutable snapshots swapped
+atomically; a query sees a zone only when it is complete). Where a zone (or the start or goal of a path) is not loaded yet, the open-ground
+stand-in answers, so a path made before the build finished can cross a building: re-query when `ZoneReady` fires for the zones it touches.
+`FindPath` costs 20 to 50 ms for a town crossing: call it from the path service's threads, never inside a tick phase.

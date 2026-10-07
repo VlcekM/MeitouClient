@@ -31,6 +31,8 @@ public sealed record NavBuildSettings
     public float SeedDistance { get; init; } = 4f;
     /// <summary>Vertical slack for the seed test (a seed's Y is where it was authored).</summary>
     public float SeedHeightSlack { get; init; } = 18f;
+    /// <summary>How far (in cells) a door hull is grown before it paints cells, so a thin leaf closes its doorway.</summary>
+    public float DoorInflateCells { get; init; } = 1f;
 }
 
 /// <summary>Timings of one build, milliseconds.</summary>
@@ -117,6 +119,7 @@ public static class ZoneNavMeshBuilder
 
         watch.Restart();
         var mesh = Stitch(g, s, meshes, tilesPerSide, tileWorld);
+        AssignDoors(mesh, g, s);
         times.Stitch = watch.Elapsed.TotalMilliseconds;
 
         watch.Restart();
@@ -177,7 +180,7 @@ public static class ZoneNavMeshBuilder
         var chf = RcCompacts.BuildCompactHeightfield(ctx, walkableHeight, walkableClimb, hf);
 
         foreach (int c in carvers) Mark(ctx, g.Carvers[c], NavArea.Null, chf);
-        foreach (int c in painters) Mark(ctx, g.Painters[c], NavArea.Door, chf);
+        foreach (int c in painters) Mark(ctx, g.Painters[c], NavArea.Door, chf, s.CellSize * s.DoorInflateCells);
 
         long t2 = Stopwatch.GetTimestamp();
         if (s.Watershed)
@@ -199,16 +202,88 @@ public static class ZoneNavMeshBuilder
         return result;
     }
 
-    static void Mark(RcContext ctx, NavVolume v, byte area, RcCompactHeightfield chf)
+    static void Mark(RcContext ctx, NavVolume v, byte area, RcCompactHeightfield chf, float inflate = 0)
     {
-        var poly = new float[v.Polygon.Length * 3];
-        for (int i = 0; i < v.Polygon.Length; i++)
+        var outline = inflate > 0 ? Inflate(v.Polygon, inflate) : v.Polygon;
+        var poly = new float[outline.Length * 3];
+        for (int i = 0; i < outline.Length; i++)
         {
-            poly[i * 3] = v.Polygon[i].X;
+            poly[i * 3] = outline[i].X;
             poly[i * 3 + 1] = 0;
-            poly[i * 3 + 2] = v.Polygon[i].Y;
+            poly[i * 3 + 2] = outline[i].Y;
         }
         RcAreas.MarkConvexPolyArea(ctx, poly, v.YMin, v.YMax, new RcAreaModification(area), chf);
+    }
+
+    /// <summary>A convex counter-clockwise polygon with every edge moved outward by <paramref name="d"/> (corners mitred). A thin door leaf must paint a closed band of cells, or a path slips diagonally between them.</summary>
+    static Vector2[] Inflate(Vector2[] p, float d)
+    {
+        int n = p.Length;
+        var result = new Vector2[n];
+        float area = 0;
+        for (int i = 0; i < n; i++) area += p[i].X * p[(i + 1) % n].Y - p[(i + 1) % n].X * p[i].Y;
+        float sign = area >= 0 ? 1 : -1;
+        for (int i = 0; i < n; i++)
+        {
+            var a = p[(i + n - 1) % n]; var b = p[i]; var c = p[(i + 1) % n];
+            var e0 = Vector2.Normalize(b - a); var e1 = Vector2.Normalize(c - b);
+            var n0 = new Vector2(e0.Y, -e0.X) * sign; var n1 = new Vector2(e1.Y, -e1.X) * sign;
+            var m = n0 + n1;
+            float k = 1 + Vector2.Dot(n0, n1);
+            result[i] = k < 1e-3f ? b + n0 * d : b + m * (d / k);
+        }
+        return result;
+    }
+
+    /// <summary>Gives every door polygon the building whose door painter covers it, so a door can be opened and closed at run time (<see cref="NavDoors"/>).</summary>
+    static void AssignDoors(ZoneNavMesh mesh, ZoneGeometry g, NavBuildSettings s)
+    {
+        var owners = g.Painters.Where(p => p.Owner is not null).ToList();
+        if (owners.Count == 0) return;
+        var ids = owners.Select(p => p.Owner!).Distinct().ToList();
+        var doorOf = new int[mesh.PolygonCount];
+        Array.Fill(doorOf, -1);
+        float tolerance = s.CellSize * (s.DoorInflateCells + 1);
+        bool any = false;
+        for (int p = 0; p < mesh.PolygonCount; p++)
+        {
+            if (mesh.Areas[p] != NavArea.Door) continue;
+            var centre = Vector3.Zero;
+            foreach (int i in mesh.Polygons[p]) centre += mesh.Vertices[i];
+            centre /= mesh.Polygons[p].Length;
+            float best = float.MaxValue;
+            foreach (var painter in owners)
+            {
+                if (centre.Y < painter.YMin - 5 || centre.Y > painter.YMax + 5) continue;
+                float d = DistanceOutside(painter.Polygon, new Vector2(centre.X, centre.Z));
+                if (d > tolerance || d >= best) continue;
+                best = d;
+                doorOf[p] = ids.IndexOf(painter.Owner!);
+                any = true;
+            }
+        }
+        if (!any) return;
+        mesh.DoorIds = [.. ids];
+        mesh.DoorOf = doorOf;
+    }
+
+    /// <summary>How far a point is outside a convex polygon (0 inside), either winding.</summary>
+    static float DistanceOutside(Vector2[] polygon, Vector2 point)
+    {
+        float area = 0;
+        for (int i = 0; i < polygon.Length; i++) area += polygon[i].X * polygon[(i + 1) % polygon.Length].Y - polygon[(i + 1) % polygon.Length].X * polygon[i].Y;
+        float sign = area >= 0 ? 1 : -1;
+        float outside = 0;
+        for (int i = 0; i < polygon.Length; i++)
+        {
+            var a = polygon[i]; var b = polygon[(i + 1) % polygon.Length];
+            var e = b - a;
+            float len = e.Length();
+            if (len < 1e-6f) continue;
+            float d = -sign * (e.X * (point.Y - a.Y) - e.Y * (point.X - a.X)) / len;
+            outside = Math.Max(outside, d);
+        }
+        return outside;
     }
 
     // ---- stitching ----

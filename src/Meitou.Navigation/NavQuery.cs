@@ -22,7 +22,7 @@ public sealed record NavAgent
 /// Path queries over a <see cref="NavWorld"/>: A* over the polygons with a portal-width clearance of 2 × radius, the water cost factor and the door
 /// rules, then string pulling with the portals pulled in by the radius (docs/game/pathfinding.md, "Path queries" and "What our builder needs").
 /// </summary>
-public sealed class NavQuery(NavWorld world)
+public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
 {
     /// <summary>Extra cost of an open door (the original's WaterCostModifier adds 5.0 to each cost component, Havok units).</summary>
     public const float OpenDoorCost = 50;
@@ -32,6 +32,11 @@ public sealed class NavQuery(NavWorld world)
     public const float StartSnap = 60, GoalSnap = 30;
 
     public NavWorld World { get; } = world;
+    public NavDoors? Doors { get; } = doors;
+
+    /// <summary>Whether the door a polygon belongs to has been closed at run time.</summary>
+    bool IsDoorClosed(ZoneNavMesh mesh, int polygon) =>
+        Doors is not null && mesh.DoorOf is { } of && of[polygon] is var d and >= 0 && Doors.IsClosed(mesh.DoorIds![d]);
 
     /// <summary>Result of the polygon search before string pulling.</summary>
     public sealed record Corridor(List<NavRef> Polygons, Vector3 Start, Vector3 Goal, int Iterations);
@@ -104,7 +109,7 @@ public sealed class NavQuery(NavWorld world)
             var target = World.Mesh(to.Zone);
             if (!target.Kept[to.Polygon]) return;
             byte area = target.Areas[to.Polygon];
-            if (area == NavArea.Door && agent.DoorsClosed) return;
+            if (area == NavArea.Door && (agent.DoorsClosed || IsDoorClosed(target, to.Polygon))) return;
             if (!Portal(from.Ref, edge, to, out var left, out var right)) return;
             float width = Vector2.Distance(new(left.X, left.Z), new(right.X, right.Z));
             if (width < 2 * agent.Radius) return;

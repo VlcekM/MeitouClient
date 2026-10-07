@@ -21,12 +21,31 @@ public sealed class NavmeshWalkability : IWalkability
         this.fallback = fallback ?? new OpenGroundWalkability(terrainHeight);
     }
 
+    /// <summary>The doors' run-time state; shared with every query made through this object.</summary>
+    public NavDoors Doors { get; } = new();
+
     public NavWorld World => world;
 
     /// <summary>Replaces the loaded meshes.</summary>
     public void SetWorld(NavWorld value) => world = value;
 
-    public float GroundHeight(float x, float z) => world.TryGroundHeight(x, z, out float h) ? h : ground(x, z);
+    /// <summary>
+    /// How close (in height) the mesh has to be to the terrain for the terrain's own height to be used there. The mesh is a simplified surface (cell
+    /// 2, heights about 0.5 off, more on steep slopes); where it lies on the ground the heightmap is exact, and where it is above it (a floor, a wall top,
+    /// a ramp) the mesh height stands.
+    /// </summary>
+    public const float OnTerrainTolerance = 3;
+
+    /// <summary>
+    /// The height a character stands at: the terrain's where the mesh lies on the ground, else the mesh's (floors, wall tops), else the terrain's.
+    /// Movement should sample this every tick rather than interpolate between path points.
+    /// </summary>
+    public float GroundHeight(float x, float z)
+    {
+        if (!world.TryGroundHeight(x, z, out float h)) return ground(x, z);
+        float t = ground(x, z);
+        return MathF.Abs(t - h) <= OnTerrainTolerance && h > WorldWater.Height ? t : h;
+    }
 
     public bool IsWalkable(float x, float z)
     {
@@ -42,6 +61,9 @@ public sealed class NavmeshWalkability : IWalkability
     {
         var w = world;
         if (!w.Contains(WorldLayout.ZoneOf(from.X, from.Z)) || !w.Contains(WorldLayout.ZoneOf(to.X, to.Z))) return fallback.FindPath(from, to);
-        return new NavQuery(w).FindPath(from, to, agent);
+        var path = new NavQuery(w, Doors).FindPath(from, to, agent);
+        if (!path.Found) return path;
+        // Path points are on the simplified surface: put the ones standing on the terrain on the real ground.
+        return new PathResult([.. path.Points.Select(p => new Vector3(p.X, GroundHeight(p.X, p.Z) is var y && MathF.Abs(y - p.Y) <= OnTerrainTolerance ? y : p.Y, p.Z))]);
     }
 }

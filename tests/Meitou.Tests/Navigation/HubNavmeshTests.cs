@@ -96,6 +96,20 @@ public class HubNavmeshTests
     }
 
     [Fact]
+    public void Door_polygons_know_their_building_so_doors_can_flip_at_run_time()
+    {
+        Assert.SkipWhen(Load() is null, "Kenshi install not found");
+        var (g, full) = Zone(West);
+        Assert.NotNull(full.DoorIds);
+        var doorPolygons = Enumerable.Range(0, full.PolygonCount).Where(p => full.Areas[p] == NavArea.Door).ToList();
+        Assert.True(doorPolygons.Count >= 2);
+        Assert.All(doorPolygons.Where(p => full.Kept[p]), p => Assert.True(full.DoorOf![p] >= 0));
+        Assert.All(full.DoorIds!, id => Assert.Contains(g.Painters, v => v.Owner == id));
+        // The ids survive pruning and the cache round trip.
+        Assert.Equal(full.DoorIds, full.WithoutPruned().DoorIds);
+    }
+
+    [Fact]
     public void A_path_crosses_the_hub_through_its_gates_and_around_its_buildings()
     {
         Assert.SkipWhen(Load() is null, "Kenshi install not found");
@@ -130,9 +144,22 @@ public class HubNavmeshTests
                 }
             }
         }
-        // Closed doors never make the way shorter.
-        var shut = query.FindPath(outsideWest, centre, new NavAgent { DoorsClosed = true });
-        Assert.True(!shut.Found || shut.Points.Count >= 2);
+        // The way back out of the Hub passes a gap where its gate was destroyed (the world data says so): closed doors change nothing there, but
+        // a path with closed doors never stands on a door polygon.
+        foreach (var (a, b) in new[] { (outsideWest, centre), (At(-51270, 2640), At(-51235, 2690)), (At(-51270, 3600), At(-51245, 3550)) })
+        {
+            var shut = query.FindPath(a, b, new NavAgent { DoorsClosed = true });
+            if (!shut.Found) continue;
+            for (int i = 1; i < shut.Points.Count; i++)
+            {
+                int steps = (int)(Vector3.Distance(shut.Points[i - 1], shut.Points[i]) / 2) + 1;
+                for (int k = 0; k <= steps; k++)
+                {
+                    var p = Vector3.Lerp(shut.Points[i - 1], shut.Points[i], k / (float)steps);
+                    if (world.TryFindPolygon(p, 6, out var r, out _)) Assert.NotEqual(NavArea.Door, world.Mesh(r.Zone).Areas[r.Polygon]);
+                }
+            }
+        }
     }
 
     [Fact]
@@ -162,8 +189,36 @@ public class HubNavmeshTests
                 Assert.Equal(NavMeshOrigin.Cache, ready.Origin);
                 Assert.True(ready.Milliseconds < 3000, $"{ready.Milliseconds} ms from the cache");
                 Assert.Equal(walk.World.Find(West)!.PolygonCount, walk2.World.Find(West)!.PolygonCount);
+            Assert.Equal(walk.World.Find(West)!.DoorIds, walk2.World.Find(West)!.DoorIds);
             }
             map.Dispose();
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public async Task NavSystem_serves_a_ring_of_zones_and_unloads_them()
+    {
+        Assert.SkipWhen(Load() is null, "Kenshi install not found");
+        var (install, db, levels) = Load()!.Value;
+        var dir = Path.Combine(Path.GetTempPath(), "meitou-nav-sys-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var map = TerrainHeightmap.Open(install);
+            using var nav = new NavSystem(install, db, levels, (x, z) => (float)map.HeightAt(x, z), cache: new NavMeshCache(dir));
+            nav.LoadRing(West, 1);
+            await nav.LoadZone(West);
+            await nav.LoadZone(East);
+            Assert.True(nav.Walkability.World.Contains(West) && nav.Walkability.World.Contains(East));
+            var path = nav.Walkability.FindPath(new(-53500, 900, 2000), new(-49500, 1500, 3500));
+            Assert.True(path.Found);
+            // Points stand on the ground the heightmap gives, within the mesh tolerance.
+            Assert.All(path.Points, p => Assert.InRange(p.Y, nav.Walkability.GroundHeight(p.X, p.Z) - 4, nav.Walkability.GroundHeight(p.X, p.Z) + 4));
+            nav.UnloadZone(East);
+            Assert.False(nav.Walkability.World.Contains(East));
         }
         finally
         {

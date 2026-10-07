@@ -21,6 +21,8 @@ public static class NavArea
 /// <summary>A convex prism: a convex polygon on the XZ plane between two heights. Used for carvers (removes the mesh) and door painters.</summary>
 public sealed class NavVolume(Vector2[] polygon, float yMin, float yMax)
 {
+    /// <summary>For a door painter: the instance id of the building whose door it is (<see cref="NavDoors"/>).</summary>
+    public string? Owner { get; set; }
     /// <summary>Convex polygon on (X, Z), counter-clockwise seen from above (+Y).</summary>
     public Vector2[] Polygon { get; } = polygon;
     public float YMin { get; } = yMin;
