@@ -30,24 +30,38 @@ Env: `MEITOU_CHARACTER_LOG=1` prints one line per built part. On exit a `charact
 
 ## Engine choices
 
-- LOD radius is bounded by the model's real extent (`min(stored radius, model.Radius)`): `human_female.mesh` stores a bounds radius of
-  116 for a body about 20 units tall, which kept it at LOD 0 forever.
-- No root motion: the walk loop's root translation starts and ends in the same place (**Observed** on `walk lower`), so characters walk in place and
-  the simulation moves them.
-- Face poses (morphs) are **not** drawn yet: faces use the neutral mesh.
+- **Generated LOD** (Meitou mode, default; `MEITOU_CHARACTER_LOD=faithful` keeps the files' own levels): every mesh gets four reduced levels by edge collapse
+  (`MeshSimplifier`: quadric error, open edges and skinning-weight changes penalised, no flips), at half, a quarter, an eighth and a twentieth of its triangles,
+  used from 5, 11, 22 and 45 radii of the part (value = distance minus radius, the `distance_sphere` rule). The levels only re-point corners at existing vertices, so one
+  vertex buffer, the weights and the morph slots serve every level. Reason: the files' own levels are few and far (`human_female` has none; the male body's only
+  level starts at 200 units), so 500 characters were 3.5M triangles. Shadow cascades use LOD value x2 (`ShadowLodBias`).
+- **Pose rate by distance**: characters beyond 120, 300 and 600 units are posed every 2nd, 4th and 8th frame (staggered by key); the last palette is reused.
+  State per `Key` (`CharState`) holds the palette, the one before it, bone-attach matrices and last frame's model matrix.
+- **Texture memory**: character textures are loaded on demand (deferred) with the world's mip streaming (`MipStreaming` through `WorldTextureCache.Mips`): a texture
+  loads without the top levels its nearest user cannot show, and finer when something comes near. A governor scales every need up by 1.6x (up to 512x) while the cache
+  is above 90% of its mark (`MarkMb`, which the `VramGuard` budget lowers), back down under 50%. A still waits for everything once the camera is known.
+- LOD radius is bounded by the model's real extent (`min(stored radius, model.Radius)`): `human_female.mesh` stores 116 for a body about 20 units tall.
+- No root motion: the walk loop's root translation starts and ends in the same place (**Observed** on `walk lower`), so characters walk in place and the simulation moves them.
+- **Face poses**: the vertices any pose moves get a slot (1..n, in the vertex's colour X as raw bits; characters use no vertex colours); an appearance's offsets, the poses
+  summed at their weights as Kenshi bakes them (`CharacterShape.BakeWeight`), live in one growing storage buffer (`MorphArena`, binding 8), identical sets stored once
+  (squads share faces). The vertex program adds the offset before skinning; normals are not changed (the poses carry none, **Verified** in ogre-mesh.md). `MEITOU_CHARACTER_MORPH=0` turns it off.
+- **Motion vectors**: `PostProcess.ObjectMotion` (shared with the grass through one hook): the near slice's characters drawn again with last frame's palette (binding 9) and
+  model matrices (instance locations 12 to 15) into the motion target (red, green), where the near depth matches. `MEITOU_CHARACTER_MOTION=0` turns it off.
+  A character not posed this frame has no bone motion.
 
 ## Findings
 
 - **Observed**: `human_male.mesh` has 23 Ogre poses (cheekbones, mouth, nose, brow, eyes, jaw bite), all on the one submesh, none with
   normals, together moving 2986 of its 15504 vertices, largest offset 0.18 units. A GPU morph would need a sparse
   per-vertex slot table and a weight buffer per appearance (`CharacterAppearance.PoseWeights`), not a per-appearance baked mesh (VRAM).
-- **Observed**: `human_female` has no LOD levels; clothing LOD starts at distance 400, body L1 at 200. At 500 characters about 3.5M
-  triangles are drawn per view, nearly all at L0.
-- **Observed** (RTX 4070, shared and noisy): 50 characters cost about 0.25 ms colour pass, 0.15 ms per shadow call, 0.4 ms CPU update; 500 cost 2.7-10 ms
-  colour, 1.8-7 ms per shadow call, 1.3-6 ms CPU update. 500 characters use about 460 MB of textures and 72 MB of meshes: an integrated GPU
-  needs mip streaming and coarser LODs first.
+- **Observed**: `human_male.mesh` has 23 Ogre poses, all on the one submesh, none with normals, together moving 2986 of its 15504 vertices, largest offset 0.18 units.
+- **Observed** (RTX 4070, shared and noisy; `--distance 260 --pitch 30`, 1600x900), before generated LOD: 500 characters 3.5M triangles per view, colour pass 2.7 ms,
+  shadow 1.8 ms per cascade call, CPU update 1.2-1.8 ms (pose 0.65-1.1) and draw 0.4 ms; 459 MB of textures and 72 MB of meshes.
+- **Observed**, after generated LOD, pose rate, morphs and motion: 500 characters 0.6M triangles, colour 0.5-0.8 ms, shadow 0.15-0.25 ms per cascade call, CPU update 0.9-1.5 ms
+  (pose 0.3), draw 0.5 ms; 50 characters colour 0.1-0.5 ms, update 0.2 ms. At a far camera (900 units) textures drop from 461 to 143 MB. With a forced integrated
+  GPU (`MEITOU_FORCE_INTEGRATED=1 MEITOU_VRAM_BUDGET_MB=3300`) the guard stops loading at its budget and the rest draw the stand-in.
 
 ## Left
 
-Face morphs; generated LODs for meshes without them and a coarser shadow LOD; texture mip streaming for characters; motion vectors
-for TAA/FSR/DLSS (previous bones per `Key`, an `ObjectMotion` pass like the grass); GPU culling.
+A coarser or merged shadow caster for far characters; GPU culling; the guard's stand-in textures for characters (a small shared diffuse colour rather than grey);
+normals for the face morph; the original's per-frame animation update budget (docs/game/game-loop.md) instead of the distance-based pose rate.

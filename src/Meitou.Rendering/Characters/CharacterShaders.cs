@@ -13,7 +13,7 @@ namespace Meitou.Rendering.Characters;
 static class CharacterShaders
 {
     /// <summary>The first per-instance input location (the mesh's own inputs, <c>Vertex</c>, are at 0 to 6): four matrix rows, then <see cref="DataLocation"/>.</summary>
-    public const int InstanceLocation = 7, DataLocation = 11;
+    public const int InstanceLocation = 7, DataLocation = 11, PreviousLocation = 12;
     public const uint BonesBinding = 6, MaterialsBinding = 7;
 
     // Material flags (CharacterMaterialRecord.Flags).
@@ -54,7 +54,11 @@ static class CharacterShaders
 
     static string Head(string stage) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + Structs + stage;
 
-    public static string Vertex() => "#version 450\n" + NativeShaders.Prelude(PushMembers) + """
+    public static string Vertex() => VertexSource(false);
+    /// <summary>The vertex program for the motion vectors: also skins with last frame's palette (binding 9) and model matrix (locations 12 to 15).</summary>
+    public static string MotionVertex() => VertexSource(true);
+
+    static string VertexSource(bool motion) => ("#version 450\n" + NativeShaders.Prelude(PushMembers) + """
         layout(location = 0) in vec3 aPosition;
         layout(location = 1) in vec3 aNormal;
         layout(location = 2) in vec2 aUv;
@@ -67,14 +71,17 @@ static class CharacterShaders
         layout(location = 9) in vec4 aInstance2;
         layout(location = 10) in vec4 aInstance3;
         layout(location = 11) in uvec4 aInstanceData;   // x first bone of the palette, y material, z flags
+        //MOTION_IN
         layout(std430, set = 0, binding = 6) readonly buffer Skin { mat4 bones[]; } skin;
         layout(std430, set = 0, binding = 8) readonly buffer Morphs { vec4 deltas[]; } morphs;
+        //MOTION_BUF
 
         out vec3 vWorld;
         out vec3 vNormal;
         out vec4 vTangent;
         out vec2 vUv;
         flat out uint vMaterial;
+        //MOTION_OUT
 
         void main()
         {
@@ -98,7 +105,31 @@ static class CharacterShaders
             vUv = aUv;
             vMaterial = aInstanceData.y;
             gl_Position = view.viewProjection * p;
+            //MOTION_BODY
         }
+        """).Replace("//MOTION_IN", motion ? MotionIn : "").Replace("//MOTION_BUF", motion ? MotionBuf : "")
+          .Replace("//MOTION_OUT", motion ? "out vec4 vNow;\nout vec4 vPrevious;" : "").Replace("//MOTION_BODY", motion ? MotionBody : "");
+
+    const string MotionIn = """
+        layout(location = 12) in vec4 aPrev0;
+        layout(location = 13) in vec4 aPrev1;
+        layout(location = 14) in vec4 aPrev2;
+        layout(location = 15) in vec4 aPrev3;
+        """;
+    const string MotionBuf = """
+        layout(std430, set = 0, binding = 9) readonly buffer PreviousSkin { mat4 bones[]; } previousSkin;
+        """;
+    const string MotionBody = """
+            mat4 previousSk = mat4(1.0);
+            if (dot(aWeights, vec4(1.0)) > 0.0)
+            {
+                uint b = aInstanceData.x;
+                previousSk = previousSkin.bones[b + aBones.x] * aWeights.x + previousSkin.bones[b + aBones.y] * aWeights.y
+                   + previousSkin.bones[b + aBones.z] * aWeights.z + previousSkin.bones[b + aBones.w] * aWeights.w;
+            }
+            mat4 previousModel = mat4(vec4(aPrev0.xyz, 0.0), vec4(aPrev1.xyz, 0.0), vec4(aPrev2.xyz, 0.0), vec4(aPrev3.xyz, 1.0));
+            vNow = gl_Position;
+            vPrevious = view.previousViewProjection * (previousModel * previousSk * vec4(local, 1.0));
         """;
 
     // The texture lookups are non-uniform across a draw (the instances differ in material) but constant over a primitive, so the
@@ -250,6 +281,32 @@ static class CharacterShaders
     }
 
     public static string DepthVertex() => Vertex();
+
+    /// <summary>
+    /// The motion pass (<c>PostProcess.ObjectMotion</c>): the character's own motion, as the grass writes its sway (UV units, this frame minus last, jitter removed), where
+    /// the character is what the near depth shows (<c>pc.wireframe</c> carries the depth texture's bindless index in this pass).
+    /// </summary>
+    public static string MotionFragment() => "#version 450\n" + NativeShaders.Prelude(PushMembers) + Structs + Lookup + """
+        in vec2 vUv;
+        in vec4 vNow;
+        in vec4 vPrevious;
+        flat in uint vMaterial;
+        layout(location = 0) out vec4 fragColour;
+        float viewZ(float d) { float zd = 2.0 * d - 1.0; return view.nearPlanes.x * view.nearPlanes.y / (view.nearPlanes.y - zd * (view.nearPlanes.y - view.nearPlanes.x)); }
+        void main()
+        {
+            CharMaterial m = materials.items[vMaterial];
+            uint f = m.flags;
+            if (m.shading == 2u && (f & 1u) != 0u) { if (dot(tex(m.tex[0], vUv), m.alphaChannel) < m.alphaThreshold) discard; }
+            else if (m.shading == 0u && (f & 512u) != 0u) { if (tex(m.tex[1], vUv).a < 0.6) discard; }
+            float stored = texelFetch(textures2D[nonuniformEXT(pc.wireframe)], ivec2(gl_FragCoord.xy), 0).r;
+            if (stored >= 1.0) discard;
+            float zs = viewZ(stored), zf = viewZ(gl_FragCoord.z);
+            if (abs(zs - zf) > 0.002 * zs + 0.05) discard;
+            vec2 now = vNow.xy / vNow.w - view.jitterNdc, previous = vPrevious.xy / vPrevious.w;
+            fragColour = vec4((now - previous) * 0.5, 0.0, 0.0);
+        }
+        """;
 }
 
 /// <summary>The C# side of <c>CharMaterial</c> (std430, 256 bytes): the part's textures by bindless index and its colours.</summary>
@@ -277,10 +334,12 @@ struct CharacterPush
 
 /// <summary>One instance (80 bytes): the model matrix whose rows the vertex program reads, the palette's first bone, the material's index.</summary>
 [StructLayout(LayoutKind.Sequential)]
-struct CharacterInstance80
+struct CharInstance
 {
     public Matrix4x4 Model;
     public uint BoneBase, Material, Flags, MorphBase;
+    /// <summary>Last frame's model matrix (the motion vectors' pass).</summary>
+    public Matrix4x4 PreviousModel;
 
-    public const int Size = 80;
+    public const int Size = 144;
 }
