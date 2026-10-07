@@ -21,9 +21,12 @@ public static class FcsReader
         return Read(stream);
     }
 
-    public static FcsFile Read(Stream stream)
+    public static FcsFile Read(Stream stream) => Read(stream, lossless: false);
+
+    /// <param name="lossless">Decode strings with <see cref="LosslessUtf8"/> (bytes that are not UTF-8 are kept) instead of failing on them; save files need it.</param>
+    public static FcsFile Read(Stream stream, bool lossless)
     {
-        using var r = new BinaryReader(stream, Encoding, leaveOpen: true);
+        using var r = new FcsBinaryReader(stream, lossless);
         try
         {
             var file = new FcsFile();
@@ -162,6 +165,7 @@ public static class FcsReader
         if (length == 0) return "";
         var bytes = r.ReadBytes(length);
         if (bytes.Length != length) throw new EndOfStreamException();
+        if (r is FcsBinaryReader { Lossless: true }) return LosslessUtf8.GetString(bytes);
         try { return Encoding.GetString(bytes); }
         catch (DecoderFallbackException e) { throw new FcsFormatException("String is not valid UTF-8.", r.BaseStream.Position - length, e); }
     }
@@ -175,6 +179,11 @@ public static class FcsReader
     }
 
     static IEnumerable<string> SplitList(string s) => s.Split(',', StringSplitOptions.RemoveEmptyEntries);
+}
+
+sealed class FcsBinaryReader(Stream stream, bool lossless) : BinaryReader(stream, FcsReader.Encoding, leaveOpen: true)
+{
+    public bool Lossless { get; } = lossless;
 }
 
 public sealed class FcsFormatException(string message, long offset, Exception? inner = null)
