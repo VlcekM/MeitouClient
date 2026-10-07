@@ -20,7 +20,7 @@ public class FoliageSizeTests
         Assert.Equal(FoliageSizeClass.Large, FoliageSizes.Classify(FoliageSizes.LargeFrom));
         Assert.Equal(FoliageSizeClass.Large, FoliageSizes.Classify(5000));
         // The largest small mesh at the end of the small range looks as big as the largest medium one at the end of the medium range.
-        Assert.Equal(FoliageSizes.MediumFrom / FoliageSizes.DefaultSmallRange, FoliageSizes.LargeFrom / FoliageSizes.DefaultMediumRange, 3);
+        Assert.Equal(FoliageSizes.MediumFrom / FoliageSizes.ThresholdSmallRange, FoliageSizes.LargeFrom / FoliageSizes.ThresholdMediumRange, 3);
     }
 
     /// <summary>Named base-game meshes land in the class the owner's examples put them in: litter and small plants small, junk, boulders

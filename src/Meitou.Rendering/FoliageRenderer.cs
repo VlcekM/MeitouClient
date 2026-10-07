@@ -7,6 +7,7 @@ using Meitou.Data.Ogre;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
+using Meitou.Rendering.Impostors;
 
 namespace Meitou.Rendering;
 
@@ -163,12 +164,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public List<string> Messages { get; } = [];
 
     /// <summary>Work in flight: zones being laid out, grass pages, meshes decoding or uploading, textures decoding.</summary>
-    public int Pending => runningWhole + runningFar + zonesWaiting + grassWaiting + decoding.Count + uploads.Count + textures.PendingCount + zones.Values.Sum(z => z.GrassRunning);
+    public int Pending => runningWhole + runningFar + zonesWaiting + grassWaiting + decoding.Count + uploads.Count + textures.PendingCount + zones.Values.Sum(z => z.GrassRunning) + ImpostorPending;
 
     /// <summary>GPU memory held by foliage meshes, textures and grass pages.</summary>
-    public long ResidentBytes => residentMeshBytes + textures.ResidentBytes + GrassBytes();
+    public long ResidentBytes => residentMeshBytes + textures.ResidentBytes + GrassBytes() + impostorBytes;
     public string ResidentDescription =>
-        $"{residentMeshBytes / 1048576.0:0} MB in {assetsByMesh.Values.Count(a => a.Resident)} meshes ({meshUnloads} unloaded, {meshReloads} reloaded), {textures.Describe()}, {GrassBytes() / 1048576.0:0} MB of grass pages";
+        $"{residentMeshBytes / 1048576.0:0} MB in {assetsByMesh.Values.Count(a => a.Resident)} meshes ({meshUnloads} unloaded, {meshReloads} reloaded), {textures.Describe()}, {GrassBytes() / 1048576.0:0} MB of grass pages, {ImpostorDescription}";
     public string Describe() =>
         $"{zones.Values.Count(z => z.Ready)} zones laid out ({zones.Values.Where(z => z.Ready).Sum(z => z.Instances):N0} meshes, " +
         $"{zones.Values.Sum(z => z.Pages.Count):N0} grass pages), {assetsByMesh.Count} foliage meshes ({assetsByMesh.Values.Count(a => a.Resident)} resident), catalog of {catalog.Layers.Count} layers";
@@ -408,6 +409,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             Messages.Clear();
             textures.Messages.Clear();
         }
+        UpdateImpostors(eye, settling);
         double t4 = watch.Elapsed.TotalMilliseconds;
         PollTimers(wait: false);
         if (!settling && watch.Elapsed.TotalMilliseconds > 8 && Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1") Console.WriteLine($"slow foliage update {watch.Elapsed.TotalMilliseconds:0.0}: zones {t0:0.0}, grass {t1 - t0:0.0}, meshes {t2 - t1:0.0}, textures {t3 - t2:0.0}, uploads {t4 - t3:0.0}");
@@ -423,7 +425,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             Update(eye, settling: true);
             if (++rounds > 2 && Pending == 0) return;
-            Thread.Sleep(2);
+            // An impostor bake reads its rows back after the frame they were recorded into, and atlas uploads are spread over frames: end it.
+            if (impostorBake is { NeedsFrame: true } || impostorUploadsWaiting) Gpu.Finish();
+            else Thread.Sleep(2);
         }
         Console.WriteLine($"warning   foliage streaming did not finish in {timeoutMs / 1000} s");
     }
@@ -632,6 +636,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         /// <summary>For a TERRAIN-mode mesh: the work list that last numbered its rock batches, and their numbers among the rock batches
         /// (plain placements, mirroring placements; -1: none in the work list).</summary>
         public int RockStamp, RockPlainIndex, RockMirroredIndex;
+        /// <summary>Its impostor (<see cref="FoliageRenderer.Impostors"/>): null until asked for.</summary>
+        public ImpostorState? Impostor;
     }
 
     sealed class GpuMesh
@@ -878,10 +884,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
 
     /// <summary>An instance in range of the shadow cascades' eye (its group's records and index), kept for the frame's further cascades (see <see cref="Draw"/>).</summary>
-    readonly record struct ShadowCandidate(MeshAsset Asset, FoliageInstanceRecord[] Instances, int Index, float Weight);
+    readonly record struct ShadowCandidate(MeshAsset Asset, FoliageInstanceRecord[] Instances, int Index, float Mesh, float Impostor);
     readonly List<ShadowCandidate> shadowCandidates = [];
     /// <summary>The meshes of the recording pass's work list, in order: the further cascades' batch order (<see cref="CullCandidates"/>).</summary>
-    readonly List<MeshAsset> shadowCandidateOrder = [];
+    readonly List<(MeshAsset Asset, int Parts)> shadowCandidateOrder = [];
     /// <summary>Counts <see cref="Draw"/> calls (<see cref="Batch.Stamp"/>).</summary>
     long drawStamp;
     readonly FoliageCullView cullView = new();
@@ -914,6 +920,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (GpuCullVerify) CheckGrassVerify(all: false);
         int callsBefore = DrawCalls;
         active.Clear();
+        impostorActive.Clear();
         terrainDraws.Clear();
 
         // 1. Cull: each instance by its distance along the ground (the game's pages) and its bounding sphere, the groups (a mesh in a zone)
@@ -952,11 +959,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // 2. The instances: each batch's matrices contiguous, in this frame's constants (one copy; the draws reach a batch by firstInstance).
         int total = 0;
         foreach (var b in active) { b.Offset = total; total += b.Count; }
+        if (!gpu) foreach (var b in impostorActive) { b.Offset = total; total += b.Count; }
         if (total > 0 && !gpu)
         {
             instances = Gpu.Frame.Constants.Allocate((ulong)total * InstanceStride, 16);
             var target = new Span<byte>(instances.Pointer, total * InstanceStride);
             foreach (var b in active)
+                System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
+            foreach (var b in impostorActive)
                 System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
         }
 
@@ -972,8 +982,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // The GPU path's TERRAIN-mode rocks: one draw per part of each rock batch in view, culled by the same dispatch (after the meshes' draws).
         if (gpu) PrepareRocks();
         else rockDraws.Clear();
+        if (!debugNoMeshes) PrepareImpostors(gpu);
+        else impostorDraws.Clear();
         gpuResult = default;
-        if (meshDraws.Count > 0 || rockDraws.Count > 0)
+        if (meshDraws.Count > 0 || rockDraws.Count > 0 || impostorDraws.Count > 0)
         {
             long r0 = FolTiming ? Stopwatch.GetTimestamp() : 0;
             if (gpu)
@@ -981,7 +993,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 gpuResult = DispatchGpuCull(new Vector2(eye.X, eye.Z), terrain);
                 if (FolTiming) { long r1 = Stopwatch.GetTimestamp(); dispatchMs = (r1 - r0) * 1000.0 / Stopwatch.Frequency; r0 = r1; }
             }
-            if (meshDraws.Count > 0)
+            if (meshDraws.Count > 0 || impostorDraws.Count > 0)
             {
                 RecordMeshes(depthPass ? depthMesh : colourMesh, depthPass, viewProjection, eye, light, fogColour, fogDistance, coverage);
                 if (FolTiming) recMeshes = (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
@@ -1092,11 +1104,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         public Matrix4x4[] Visible = new Matrix4x4[64];
         public int Count;
-        public readonly List<(MeshAsset Asset, int Start, int Count)> Runs = [];
+        public readonly List<(MeshAsset Asset, bool Impostor, int Start, int Count)> Runs = [];
     }
 
     /// <summary>The groups a culling pass tests, in order (the batch order follows it), with their range for this view.</summary>
-    readonly List<(Group Group, FoliageGroupRange Range)> cullWork = [];
+    readonly List<(Group Group, FoliageGroupRange Range, int Parts)> cullWork = [];
     readonly List<FoliageCullOutput> cullOutputs = [];
 
     /// <summary>
@@ -1125,6 +1137,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     void CollectWork(Vector3 eye, float maxRange, bool boxTest)
     {
         var frustum = cullView.Planes;
+        // Impostors in colour views, and as casters in the cascades (docs/impostors.md "Shadows").
+        bool impostorView = Impostors && (!depthPass || ImpostorCasters);
         cullWork.Clear();
         foreach (var state in zones.Values)
         {
@@ -1150,7 +1164,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     if (!g.Asset.Failed) NearestMissingMesh = Math.Min(NearestMissingMesh, zoneDistance);
                     continue;
                 }
-                cullWork.Add((g, FoliageGroupRange.Of(range, band)));
+                var (withImpostor, parts) = WithImpostor(FoliageGroupRange.Of(range, band), g.Asset, range, band, state, eye, impostorView);
+                cullWork.Add((g, withImpostor, parts));
             }
         }
     }
@@ -1159,23 +1174,24 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     void CullWork(Vector3 eye, WorldRenderOptions options, bool record)
     {
         // The batch order: each mesh's first group in the work list (TERRAIN-mode rocks have no batch).
-        foreach (var (g, _) in cullWork)
+        foreach (var (g, _, parts) in cullWork)
         {
-            if (record) shadowCandidateOrder.Add(g.Asset);
-            if (!(g.Asset.Terrain && options.Textures)) BatchOf(g.Asset);
+            if (record) shadowCandidateOrder.Add((g.Asset, parts));
+            if ((parts & FoliageCull.MeshPart) != 0 && !(g.Asset.Terrain && options.Textures)) BatchOf(g.Asset);
+            if ((parts & FoliageCull.ImpostorPart) != 0) ImpostorBatchOf(g.Asset);
         }
         while (cullOutputs.Count < cullWork.Count) cullOutputs.Add(new FoliageCullOutput());
         var eyeXz = new Vector2(eye.X, eye.Z);
         var view = cullView;
         RenderJobs.For(cullWork.Count, k =>
         {
-            var (g, range) = cullWork[k];
+            var (g, range, parts) = cullWork[k];
             if (!g.SpheresReady)
             {
                 FoliageCull.FillSpheres(g.Instances, g.Asset.Centre, g.Asset.Radius);   // the mesh's bounds are known once it is resident, and never change
                 g.SpheresReady = true;
             }
-            FoliageCull.CullGroup(g.Instances, range, eyeXz, view, record, cullOutputs[k]);
+            FoliageCull.CullGroup(g.Instances, range, eyeXz, view, record, cullOutputs[k], parts);
         });
         for (int k = 0; k < cullWork.Count; k++)
         {
@@ -1183,16 +1199,20 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             var g = cullWork[k].Group;
             if (record)
                 for (int i = 0; i < output.InRangeCount; i++)
-                    shadowCandidates.Add(new ShadowCandidate(g.Asset, g.Instances, output.InRange[i], output.InRangeFade[i]));
+                    shadowCandidates.Add(new ShadowCandidate(g.Asset, g.Instances, output.InRange[i], output.InRangeMesh[i], output.InRangeImpostor[i]));
             EmitAll(g.Asset, output.Visible.AsSpan(0, output.Count), options);
+            EmitImpostors(g.Asset, output.ImpostorVisible.AsSpan(0, output.ImpostorCount));
         }
     }
 
     /// <summary>A further shadow cascade: the frame's recorded candidates against this cascade's frustum (tested in parallel, emitted in order).</summary>
     void CullCandidates(WorldRenderOptions options)
     {
-        foreach (var a in shadowCandidateOrder)
-            if (!(a.Terrain && options.Textures)) BatchOf(a);
+        foreach (var (a, parts) in shadowCandidateOrder)
+        {
+            if ((parts & FoliageCull.MeshPart) != 0 && !(a.Terrain && options.Textures)) BatchOf(a);
+            if ((parts & FoliageCull.ImpostorPart) != 0) ImpostorBatchOf(a);
+        }
         int count = shadowCandidates.Count, chunks = (count + CandidateChunk - 1) / CandidateChunk;
         while (candidateOutputs.Count < chunks) candidateOutputs.Add(new CandidateOutput());
         var list = shadowCandidates;
@@ -1209,17 +1229,26 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 ref readonly var c = ref span[i];
                 ref readonly var r = ref c.Instances[c.Index];
                 if (!FoliageCull.SphereVisible(view, r.Sphere)) continue;
-                if (output.Runs.Count == 0 || output.Runs[^1].Asset != c.Asset) output.Runs.Add((c.Asset, output.Count, 0));
-                if (output.Count == output.Visible.Length) Array.Resize(ref output.Visible, output.Count * 2);
-                output.Visible[output.Count++] = FoliageCull.Packed(r.Transform, c.Weight);
-                var run = output.Runs[^1];
-                output.Runs[^1] = run with { Count = run.Count + 1 };
+                for (int kind = 0; kind < 2; kind++)
+                {
+                    float packed = kind == 0 ? c.Mesh : c.Impostor;
+                    if (!(packed > FoliageCull.Hidden)) continue;
+                    if (output.Runs.Count == 0 || output.Runs[^1].Asset != c.Asset || output.Runs[^1].Impostor != (kind == 1)) output.Runs.Add((c.Asset, kind == 1, output.Count, 0));
+                    if (output.Count == output.Visible.Length) Array.Resize(ref output.Visible, output.Count * 2);
+                    var t = r.Transform;
+                    t.M14 = packed;
+                    output.Visible[output.Count++] = t;
+                    var run = output.Runs[^1];
+                    output.Runs[^1] = run with { Count = run.Count + 1 };
+                }
             }
         });
         for (int k = 0; k < chunks; k++)
         {
             var output = candidateOutputs[k];
-            foreach (var (asset, start, n) in output.Runs) EmitAll(asset, output.Visible.AsSpan(start, n), options);
+            foreach (var (asset, impostor, start, n) in output.Runs)
+                if (impostor) EmitImpostors(asset, output.Visible.AsSpan(start, n));
+                else EmitAll(asset, output.Visible.AsSpan(start, n), options);
         }
     }
 
@@ -1292,7 +1321,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         do
         {
             placed = true;
-            foreach (var (g, _) in cullWork)
+            foreach (var (g, _, _) in cullWork)
             {
                 if (!g.SpheresReady)
                 {
@@ -1309,9 +1338,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         int stamp = ++gpuWorkStamp;
         gpuOrder.Clear();
         gpuRockOrder.Clear();
-        foreach (var (g, _) in cullWork)
+        gpuImpostorOrder.Clear();
+        foreach (var (g, _, parts) in cullWork)
         {
             var a = g.Asset;
+            if ((parts & FoliageCull.ImpostorPart) != 0 && a.Impostor is { } imp && imp.Stamp != stamp) { (imp.Stamp, imp.Index) = (stamp, gpuImpostorOrder.Count); gpuImpostorOrder.Add(a); }
+            if ((parts & FoliageCull.MeshPart) == 0) continue;
             if (IsRock(a, options))
             {
                 if (a.RockStamp != stamp) (a.RockStamp, a.RockPlainIndex, a.RockMirroredIndex) = (stamp, -1, -1);
@@ -1327,11 +1359,17 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             }
             if (a.WorkStamp != stamp) { (a.WorkStamp, a.WorkIndex) = (stamp, gpuOrder.Count); gpuOrder.Add(a); }
         }
-        int meshBatches = gpuOrder.Count, batches = meshBatches + gpuRockOrder.Count;
+        int meshBatches = gpuOrder.Count, impostorFirst = meshBatches + gpuRockOrder.Count, batches = impostorFirst + gpuImpostorOrder.Count;
         gpuEntries.Clear();
-        foreach (var (g, _) in cullWork)
+        foreach (var (g, _, parts) in cullWork)
         {
             var a = g.Asset;
+            if ((parts & FoliageCull.ImpostorPart) != 0)
+            {
+                if ((parts & FoliageCull.MeshPart) != 0) gpuEntries.Add((a.WorkIndex, g));
+                gpuEntries.Add((impostorFirst + a.Impostor!.Index, g));
+                continue;
+            }
             if (!IsRock(a, options)) { gpuEntries.Add((a.WorkIndex, g)); continue; }
             if (g.RockPlain) gpuEntries.Add((meshBatches + a.RockPlainIndex, g));
             if (g.RockMirrored) gpuEntries.Add((meshBatches + a.RockMirroredIndex, g));
@@ -1348,26 +1386,29 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             int chunks = (g.Instances.Length + Chunk - 1) / Chunk;
             gpuBatchStart[b + 1] += chunks;
             groups++;
-            if (b >= meshBatches) rockCandidates += g.Instances.Length;
+            if (b >= meshBatches && b < impostorFirst) rockCandidates += g.Instances.Length;
         }
         for (int b = 0; b < batches; b++) gpuBatchStart[b + 1] += gpuBatchStart[b];
         int n = gpuBatchStart[batches];
         if (gpuChunks.Length < n) gpuChunks = new FoliageCullChunk[Math.Max(n, gpuChunks.Length * 2)];
         Array.Copy(gpuBatchStart, gpuCursor, batches);
         int entry = 0;
-        foreach (var (g, range) in cullWork)
+        foreach (var (g, range, _) in cullWork)
         {
-            // gpuEntries lists cullWork's groups in order, a rock group once per batch it has.
+            // gpuEntries lists cullWork's groups in order, a rock group once per batch it has, a group with an impostor once per part.
             for (; entry < gpuEntries.Count && ReferenceEquals(gpuEntries[entry].Group, g); entry++)
             {
                 int b = gpuEntries[entry].Batch, length = g.Instances.Length;
-                uint flags = b < meshBatches ? 0 : FoliageCullChunk.Rock | (gpuRockOrder[b - meshBatches].Mirrored ? FoliageCullChunk.Mirrored : 0);
+                uint flags = b < meshBatches ? (range.HasImpostor ? FoliageCullChunk.ImpostorMesh : 0)
+                    : b >= impostorFirst ? FoliageCullChunk.Impostor
+                    : FoliageCullChunk.Rock | (gpuRockOrder[b - meshBatches].Mirrored ? FoliageCullChunk.Mirrored : 0);
                 uint first = FoliageGpuCull.FirstOf(g.Arena);
                 for (int at = 0; at < length; at += Chunk)
                     gpuChunks[gpuCursor[b]++] = new FoliageCullChunk
                     {
                         First = first + (uint)at, Count = (uint)Math.Min(Chunk, length - at),
                         Range = range.Range, RangeSquared = range.RangeSquared, InverseBand = range.InverseBand, Flags = flags,
+                        Transition = range.HasImpostor ? range.Transition : 0, InverseTransitionBand = range.InverseTransitionBand,
                     };
             }
         }
@@ -1393,7 +1434,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     void ShowBatches()
     {
-        int n = gpuOrder.Count + gpuRockOrder.Count;
+        int n = gpuOrder.Count + gpuRockOrder.Count + gpuImpostorOrder.Count;
         if (gpuBatchShown.Length < n) gpuBatchShown = new bool[n * 2];
         Array.Clear(gpuBatchShown, 0, n);
         var planes = cullView.Planes;
@@ -1430,7 +1471,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             gpuChunkData = frame.Constants.Write<FoliageCullChunk>(gpuChunks.AsSpan(0, gpuChunkCount), 256);
             gpuChunkFrame = frame.Number;
         }
-        int meshes = meshDraws.Count, count = meshes + rockDraws.Count;
+        int meshes = meshDraws.Count, rocks = meshes + rockDraws.Count, count = rocks + impostorDraws.Count;
         if (gpuDraws.Length < count) gpuDraws = new FoliageCullDraw[count * 2];
         for (int i = 0; i < meshes; i++)
         {
@@ -1441,6 +1482,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             int b = rockDrawBatch[k];
             gpuDraws[meshes + k] = new FoliageCullDraw { IndexCount = (uint)rockDraws[k].IndexCount, ChunkStart = (uint)gpuBatchStart[b], ChunkEnd = (uint)gpuBatchStart[b + 1] };
+        }
+        for (int k = 0; k < impostorDraws.Count; k++)
+        {
+            int b = impostorDraws[k].Batch;
+            gpuDraws[rocks + k] = new FoliageCullDraw { IndexCount = 6, ChunkStart = (uint)gpuBatchStart[b], ChunkEnd = (uint)gpuBatchStart[b + 1] };
         }
         var draws = frame.Constants.Write<FoliageCullDraw>(gpuDraws.AsSpan(0, count), 256);
         // What the rocks' row 0 w carries, as the terrain's mesh path writes it: the biome row in colour (resident ones, now), 0 in depth.
@@ -1460,7 +1506,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public required ReadbackBuffer Buffer;
         public FoliageCullResult Result;
         public required string Kind;
-        public readonly List<(string Mesh, Matrix4x4[] Expected)> Batches = [];
+        /// <summary>The CPU's instances per batch (the mesh batches, then the impostor batches; rocks are <see cref="RockExpected"/>).</summary>
+        public readonly List<(string Mesh, int Batch, Matrix4x4[] Expected)> Batches = [];
         public int[] BatchStart = [];
         public bool[] Shown = [];
         public FoliageCullDraw[] Draws = [];
@@ -1486,21 +1533,25 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>Keeps the CPU's batches of this view (the A1 cull that ran in this Draw) and copies the GPU's lists for reading a frame ring later.</summary>
     void QueueVerify(in FoliageCullResult r, TerrainRenderer terrain)
     {
-        bool sameOrder = active.Count == gpuOrder.Count;
+        bool sameOrder = active.Count == gpuOrder.Count && impostorActive.Count == gpuImpostorOrder.Count;
         for (int i = 0; sameOrder && i < active.Count; i++) sameOrder = ReferenceEquals(active[i].Asset, gpuOrder[i]);
+        for (int i = 0; sameOrder && i < impostorActive.Count; i++) sameOrder = ReferenceEquals(impostorActive[i].Asset, gpuImpostorOrder[i]);
         if (!sameOrder)
         {
             verifyBatchOrder++;
-            VerifyNote($"frame {Gpu.Frame.Number}: the CPU's batch order differs from the work list's ({active.Count} against {gpuOrder.Count} batches)");
+            VerifyNote($"frame {Gpu.Frame.Number}: the CPU's batch order differs from the work list's ({active.Count} against {gpuOrder.Count} batches, " +
+                $"{impostorActive.Count} against {gpuImpostorOrder.Count} impostor batches)");
             return;
         }
         var v = new VerifyCall { Frame = Gpu.Frame.Number, Result = r, Kind = depthPass ? "depth" : "colour", Buffer = ReadbackBuffer.Create(Gpu, FoliageGpuCull.ReadbackBytes(r), "foliage cull verify") };
-        foreach (var b in active) v.Batches.Add((b.Asset.Mesh.MeshPath, b.Data.AsSpan(0, b.Count).ToArray()));
-        int batches = gpuOrder.Count + gpuRockOrder.Count;
+        int impostorFirst = gpuOrder.Count + gpuRockOrder.Count, batches = impostorFirst + gpuImpostorOrder.Count;
+        for (int i = 0; i < active.Count; i++) v.Batches.Add((active[i].Asset.Mesh.MeshPath, i, active[i].Data.AsSpan(0, active[i].Count).ToArray()));
+        for (int i = 0; i < impostorActive.Count; i++)
+            v.Batches.Add((impostorActive[i].Asset.Mesh.MeshPath + " impostor", impostorFirst + i, impostorActive[i].Data.AsSpan(0, impostorActive[i].Count).ToArray()));
         v.BatchStart = gpuBatchStart.AsSpan(0, batches + 1).ToArray();
         v.Shown = gpuBatchShown.AsSpan(0, batches).ToArray();
-        v.Draws = gpuDraws.AsSpan(0, meshDraws.Count + rockDraws.Count).ToArray();
-        v.DrawBatch = [.. meshDraws.Select(d => d.Batch), .. rockDrawBatch];
+        v.Draws = gpuDraws.AsSpan(0, meshDraws.Count + rockDraws.Count + impostorDraws.Count).ToArray();
+        v.DrawBatch = [.. meshDraws.Select(d => d.Batch), .. rockDrawBatch, .. impostorDraws.Select(d => d.Batch)];
         v.RockDraws = [.. rockDraws];
         v.RockArgs = meshDraws.Count;
         // The CPU's rocks (this Draw's terrainDraws) as DrawMeshes would group and write them.
@@ -1549,9 +1600,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         uint total = offsets[n];
         if ((ulong)total * 64 > r.RowsBytes) { verifySets++; VerifyNote($"frame {v.Frame} {v.Kind}: total {total} beyond the {r.RowsBytes / 64} candidates"); return; }
         var rows = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(v.Buffer.Read(rowsAt, (ulong)total * 64));
-        for (int b = 0; b < v.Batches.Count; b++)
+        foreach (var (mesh, b, expected) in v.Batches)
         {
-            var (mesh, expected) = v.Batches[b];
             uint first = offsets[v.BatchStart[b]], count = offsets[v.BatchStart[b + 1]] - first;
             verifyInstances += expected.Length;
             if (!v.Shown[b] && (count > 0 || expected.Length > 0))
@@ -1921,6 +1971,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             });
             drawIndex++;
         }
+        if (impostorDraws.Count > 0) AddImpostorDraws(job, depth, viewProjection, targets, state, coverage, indirect, meshDraws.Count + rockDraws.Count);
         Gpu.Record(label, job);
     }
 
@@ -1975,7 +2026,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 ref readonly var d = ref Draws[i];
                 if (d.SetRaster) cmd.SetRaster(d.Cull, state.Front);
                 cmd.BindPipeline(d.Pipeline);
-                cmd.BindVertexBuffers(0, d.Vertices);
+                if (d.Vertices.Length > 0) cmd.BindVertexBuffers(0, d.Vertices);
                 cmd.BindIndexBuffer(d.Elements, Silk.NET.Vulkan.IndexType.Uint32);
                 PushTo(cmd, layout, in d.Push, ref last, ref pushed);
                 if (d.Args.Handle != 0) cmd.DrawIndexedIndirect(d.Args, d.ArgsOffset, 1);
@@ -2363,6 +2414,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         grassMotionProgram.Dispose();
         DisposeGrassStore();
         gpuCull?.Dispose();
+        DisposeImpostors();
         nativeFrame.Dispose();
     }
 }

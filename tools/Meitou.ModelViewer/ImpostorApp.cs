@@ -27,20 +27,18 @@ static class ImpostorApp
           --out <dir>        where the pictures go (default C:\Temp\meitou-impostors)
           --size <W>x<H>     the field pictures' size (default 1600x900)
           --rebake           ignore the cache (the new atlas is written to it)
-          --parallax         one depth step per frame when sampling
           --blend            blend the three frames (default: one frame per pixel, ordered dither)
           --debug <n>        unlit impostor: 1 albedo, 2 normal, 3 coverage
-          --depth-write      the impostor writes its blended depth
           --class <medium|large>   force the size class
         Pictures: <name>-sheet-<sun>.png (rows: elevation -8..85 degrees; columns: mesh | impostor at four azimuths, seen from 1500 units),
         <name>-field-{mesh,impostor}.png and -near-{mesh,impostor}.png (random instances 1500-4000 and 1500-2000 units away, field of view 50),
-        <name>-atlas-{albedo,normal,depth}.png (level 0 as stored).
+        <name>-atlas-{albedo,normal}.png (level 0 as stored).
         """;
 
     sealed class Options
     {
         public string? Mesh;
-        public bool BakeAll, Rebake, Parallax, DepthWrite, Blend;
+        public bool BakeAll, Rebake, Blend;
         public int Debug;
         public string Out = @"C:\Temp\meitou-impostors";
         public int Width = 1600, Height = 900;
@@ -67,10 +65,8 @@ static class ImpostorApp
                         o.Height = int.Parse(parts[1], CultureInfo.InvariantCulture);
                         break;
                     case "--rebake": o.Rebake = true; break;
-                    case "--parallax": o.Parallax = true; break;
                     case "--blend": o.Blend = true; break;
                     case "--debug": o.Debug = int.Parse(Next(), CultureInfo.InvariantCulture); break;
-                    case "--depth-write": o.DepthWrite = true; break;
                     case "--class": o.Class = Next(); break;
                     case "--renderer": WorldOptions.IgnoreRenderer(Next()); break;
                     case "-h" or "--help": Console.WriteLine(Usage); return 2;
@@ -226,7 +222,7 @@ static class ImpostorApp
         var t = baker.LastTimes;
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"atlas     {(hit ? "from the cache" : $"baked in {watch.ElapsedMilliseconds} ms (upload {t.Upload:0}, render {t.Render:0}, filter {t.Filter:0}, encode {t.Encode:0})")}: " +
-            $"{atlas.AtlasPixels}² x 3 maps, {atlas.Levels} levels, {atlas.Bytes / 1048576.0:0.0} MB"));
+            $"{atlas.AtlasPixels}² x 2 maps, {atlas.Levels} levels, {atlas.Bytes / 1048576.0:0.0} MB"));
         foreach (var h in new[] { 900, 1080, 2160 })
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
                 $"distance  {h}p: transition at {ImpostorLayout.TransitionDistance(meshes.Radius * mesh.MinScale, atlas.FramePixels, h, 50 * MathF.PI / 180, 0):0} (smallest instance) .. {ImpostorLayout.TransitionDistance(worldRadius, atlas.FramePixels, h, 50 * MathF.PI / 180, 0):0} (largest)"));
@@ -234,7 +230,7 @@ static class ImpostorApp
 
         Directory.CreateDirectory(o.Out);
         string stem = Path.Combine(o.Out, Safe(mesh.Name));
-        foreach (var map in new[] { ImpostorMap.Albedo, ImpostorMap.Normal, ImpostorMap.Depth })
+        foreach (var map in new[] { ImpostorMap.Albedo, ImpostorMap.Normal })
         {
             var texture = atlas[map]!;
             int px = atlas.AtlasPixels;
@@ -250,7 +246,7 @@ static class ImpostorApp
         }
 
         frames.Open();
-        using var preview = new ImpostorPreview(frames.Gpu, assets) { Parallax = o.Parallax, DepthWrite = o.DepthWrite, Blend = o.Blend, Debug = o.Debug };
+        using var preview = new ImpostorPreview(frames.Gpu, assets) { Blend = o.Blend, Debug = o.Debug };
         preview.SetMesh(source, meshes);
         preview.SetAtlas(atlas);
         var suns = new (string Name, Vector3 Direction)[]
@@ -266,6 +262,8 @@ static class ImpostorApp
         Sheet(frames, preview, meshes, $"{stem}-frames2.png", suns[0].Direction, (row, col) => ImpostorLayout.FrameDirection(col, row, g));
         Field(frames, preview, meshes, mesh, $"{stem}-field", o, suns[0].Direction, 1500, 4000, 160);
         Field(frames, preview, meshes, mesh, $"{stem}-near", o, suns[0].Direction, 1500, 2000, 40);
+        // Around the distance the bake's texture detail is matched to (ImpostorClass.ReferenceDistance): where mesh and impostor should look alike.
+        Field(frames, preview, meshes, mesh, $"{stem}-t4k", o, suns[0].Direction, 3500, 4500, 120);
         Console.WriteLine($"saved     {stem}-*.png");
         return 0;
     }

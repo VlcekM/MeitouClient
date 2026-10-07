@@ -1,18 +1,16 @@
-﻿using System.IO.Compression;
+using System.IO.Compression;
 using System.Numerics;
 using System.Text;
 
 namespace Meitou.Rendering.Impostors;
 
-/// <summary>The three maps of an atlas (docs/impostors.md, "Maps").</summary>
+/// <summary>The maps of an atlas (docs/impostors.md, "Maps").</summary>
 public enum ImpostorMap
 {
-    /// <summary>RGB: the albedo the mesh shader lights (texture Ã— vertex colour, dual blend); A: coverage (cut-out, mip-coverage preserved).</summary>
+    /// <summary>RGB: the albedo the mesh shader lights (texture x vertex colour, dual blend), premultiplied by coverage on the GPU (BC1 with a 1-bit alpha: a transparent texel decodes to black); A: the cut-out.</summary>
     Albedo = 0,
-    /// <summary>RG: the shading normal in the frame's basis (x right, y up, z towards the viewer), octahedrally encoded (<see cref="ImpostorLayout.EncodeNormal"/>), Ã— 0.5 + 0.5.</summary>
+    /// <summary>RG: the shading normal in the frame's basis (x right, y up, z towards the viewer), octahedrally encoded (<see cref="ImpostorLayout.EncodeNormal"/>), x 0.5 + 0.5.</summary>
     Normal = 1,
-    /// <summary>R: depth towards the viewer, <c>dot(p âˆ’ c, dir) / r Ã— 0.5 + 0.5</c>; G: gloss Ã— specular (what the mesh passes to the lighting).</summary>
-    Depth = 2,
 }
 
 /// <summary>How a map's levels are stored (and uploaded).</summary>
@@ -24,37 +22,46 @@ public enum ImpostorEncoding
     Bc3 = 1,
     /// <summary>BC5 (RGTC2, two channels), 1 byte a pixel.</summary>
     Bc5 = 2,
+    /// <summary>BC1 (DXT1) in its 1-bit alpha mode, half a byte a pixel: a texel is covered (colour) or transparent (black, alpha 0).</summary>
+    Bc1 = 3,
 }
 
-/// <summary>One map: its encoding and its levels, level 0 first (each <c>Grid Ã— frame / 2^level</c> pixels square, rows bottom first).</summary>
+/// <summary>One map: its encoding and its levels, level 0 first (each <c>Grid x frame / 2^level</c> pixels square, rows bottom first).</summary>
 public sealed class ImpostorTexture
 {
     public required ImpostorMap Map { get; init; }
     public required ImpostorEncoding Encoding { get; init; }
     public required byte[][] Levels { get; init; }
 
-    public static int LevelBytes(ImpostorEncoding encoding, int size) => encoding == ImpostorEncoding.Rgba8 ? size * size * 4 : size / 4 * (size / 4) * 16;
+    public static int LevelBytes(ImpostorEncoding encoding, int size) => encoding switch
+    {
+        ImpostorEncoding.Rgba8 => size * size * 4,
+        ImpostorEncoding.Bc1 => size / 4 * (size / 4) * 8,
+        _ => size / 4 * (size / 4) * 16,
+    };
 }
 
 /// <summary>
 /// A baked impostor atlas and its file format (<c>.mimp</c>, docs/impostors.md "File format"): a small header (magic, versions, grid, frame
-/// size, levels, the bounding sphere in object space, the source's name), the per-map level sizes, then the level data, deflated, with an
-/// FNV-1a checksum of the inflated data. <see cref="Read"/> returns null for anything that does not match (wrong magic, version, sizes,
-/// checksum, truncation): the caller bakes again.
+/// size, levels, the bounding sphere in object space, the gloss, the source's name), the per-map level sizes, then the level data, deflated,
+/// with an FNV-1a checksum of the inflated data. <see cref="Read"/> returns null for anything that does not match (wrong magic, version,
+/// sizes, checksum, truncation): the caller bakes again.
 /// </summary>
 public sealed class ImpostorAtlas
 {
     public const uint Magic = 0x504D494D;   // "MIMP"
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     /// <summary>Bumped whenever the baker's output changes (shader, filtering, layout): part of the cache key and checked on load.</summary>
-    public const int BakerVersion = 4;
+    public const int BakerVersion = 5;
 
     public required int Grid { get; init; }
     public required int FramePixels { get; init; }
     /// <summary>The bounding sphere the frames cover, in the mesh's object space.</summary>
     public required Vector3 Centre { get; init; }
     public required float Radius { get; init; }
+    /// <summary>The coverage-weighted mean of gloss x specular over the baked frames (what the mesh passes to the lighting), 0 to 1.</summary>
+    public float Gloss { get; init; } = 0.3f;
     /// <summary>What was baked (FOLIAGE_MESH name and mesh file), for messages.</summary>
     public string Name { get; init; } = "";
     public required ImpostorTexture[] Textures { get; init; }
@@ -76,6 +83,7 @@ public sealed class ImpostorAtlas
         w.Write(Levels);
         w.Write(Centre.X); w.Write(Centre.Y); w.Write(Centre.Z);
         w.Write(Radius);
+        w.Write(Gloss);
         w.Write(Name);
         w.Write(Textures.Length);
         foreach (var t in Textures)
@@ -104,8 +112,8 @@ public sealed class ImpostorAtlas
             int grid = r.ReadInt32(), frame = r.ReadInt32(), levels = r.ReadInt32();
             if (grid is < 2 or > 64 || frame is < 4 or > 4096 || !BitOperations.IsPow2(frame) || levels < 1 || frame >> (levels - 1) < 4) return null;
             var centre = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
-            float radius = r.ReadSingle();
-            if (!(radius > 0) || !float.IsFinite(centre.X + centre.Y + centre.Z)) return null;
+            float radius = r.ReadSingle(), gloss = r.ReadSingle();
+            if (!(radius > 0) || !float.IsFinite(centre.X + centre.Y + centre.Z) || !float.IsFinite(gloss)) return null;
             string name = r.ReadString();
             int count = r.ReadInt32();
             if (count is < 1 or > 8) return null;
@@ -139,7 +147,7 @@ public sealed class ImpostorAtlas
                 textures[i] = new ImpostorTexture { Map = specs[i].Map, Encoding = specs[i].Encoding, Levels = data };
             }
             if (hash != expected) return null;
-            return new ImpostorAtlas { Grid = grid, FramePixels = frame, Centre = centre, Radius = radius, Name = name, Textures = textures };
+            return new ImpostorAtlas { Grid = grid, FramePixels = frame, Centre = centre, Radius = radius, Gloss = gloss, Name = name, Textures = textures };
         }
         catch (Exception e) when (e is EndOfStreamException or InvalidDataException or IOException or ArgumentException or OverflowException)
         {

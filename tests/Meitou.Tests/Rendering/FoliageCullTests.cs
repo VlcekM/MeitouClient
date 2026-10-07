@@ -189,6 +189,60 @@ public class FoliageCullTests
         }
     }
 
+    /// <summary>
+    /// The impostor split (docs/impostors.md "Drawing"): with a transition T and band B, an instance nearer than T − B is a mesh only, one
+    /// from T on an impostor only (both with the range fade), and one in [T − B, T) both, the mesh with the transition fade m and the impostor
+    /// with −m (the complementary dither); the same set as without a transition, and a part not asked for is never emitted.
+    /// </summary>
+    [Fact]
+    public void Impostor_split_is_complementary()
+    {
+        var random = new Random(7);
+        var eye = new Vector2(1000, -2000);
+        var all = new FoliageCullView().Set([]);
+        var output = new FoliageCullOutput();
+        for (int round = 0; round < 20; round++)
+        {
+            float range = 2000 + (float)random.NextDouble() * 10000, band = range * 0.1f;
+            float t = (range - band) * (0.3f + 0.7f * (float)random.NextDouble()), b = t * 0.1f;
+            var plain = FoliageGroupRange.Of(range, band);
+            var split = plain.WithTransition(t, b);
+            var records = RandomRecords(random, 3000, eye, range * 1.1f);
+            FoliageCull.CullGroup(records, plain, eye, all, record: false, output);
+            var whole = output.Visible.AsSpan(0, output.Count).ToArray();
+            FoliageCull.CullGroup(records, split, eye, all, record: true, output, FoliageCull.MeshPart | FoliageCull.ImpostorPart);
+            var meshes = output.Visible.AsSpan(0, output.Count).ToArray();
+            var impostors = output.ImpostorVisible.AsSpan(0, output.ImpostorCount).ToArray();
+            int mi = 0, ii = 0, both = 0;
+            foreach (var w in whole)
+            {
+                float d = Vector2.Distance(new Vector2(w.M41, w.M43), eye);
+                bool mesh = mi < meshes.Length && meshes[mi].Translation == w.Translation;
+                bool impostor = ii < impostors.Length && impostors[ii].Translation == w.Translation;
+                Assert.True(mesh || impostor, $"an instance at {d} is in neither part");
+                if (mesh && impostor)
+                {
+                    both++;
+                    Assert.True(meshes[mi].M14 > 0 && meshes[mi].M14 < 1, $"in the band at {d}: mesh fade {meshes[mi].M14}");
+                    Assert.Equal(-meshes[mi].M14, impostors[ii].M14);
+                }
+                else if (mesh) Assert.Equal(w.M14, meshes[mi].M14);
+                else Assert.Equal(w.M14, impostors[ii].M14);
+                if (d < t - b - 0.01f) Assert.False(impostor, $"an impostor at {d}, before the band {t - b}");
+                if (d > t + 0.01f) Assert.False(mesh, $"a mesh at {d}, beyond the transition {t}");
+                if (mesh) mi++;
+                if (impostor) ii++;
+            }
+            Assert.Equal(meshes.Length, mi);
+            Assert.Equal(impostors.Length, ii);
+            Assert.True(both > 0, "some instances should be in the band");
+            // One part only: the other is not emitted, the asked one unchanged.
+            FoliageCull.CullGroup(records, split, eye, all, record: false, output, FoliageCull.ImpostorPart);
+            Assert.Equal(0, output.Count);
+            Assert.Equal(impostors.Length, output.ImpostorCount);
+        }
+    }
+
     static FoliageInstanceRecord[] RandomRecords(Random random, int count, Vector2 around, float spread)
     {
         var records = new FoliageInstanceRecord[count];

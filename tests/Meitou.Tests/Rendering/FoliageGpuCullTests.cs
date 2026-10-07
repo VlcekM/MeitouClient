@@ -293,6 +293,120 @@ public class FoliageGpuCullTests
     }
 
     /// <summary>
+    /// The impostor split (docs/impostors.md "Drawing") on the GPU: every group with a transition is culled twice, its mesh chunks (flag
+    /// <see cref="FoliageCullChunk.ImpostorMesh"/>) in one batch and its impostor chunks (<see cref="FoliageCullChunk.Impostor"/>, the same
+    /// instances) in another; each batch's list against <see cref="FoliageCull.CullGroup"/>'s mesh and impostor outputs, bit for bit. A third
+    /// of the instances sit within a few ulps of the transition or of the band's start.
+    /// </summary>
+    [Fact]
+    [Slow]
+    public unsafe void Gpu_impostor_split_matches_FoliageCull()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        var random = new Random(33);
+        using (var ctx = new GpuContext(d!))
+        {
+            using var cull = new FoliageGpuCull(ctx, arenaBytes: 1 << 22);
+            long inBand = 0;
+            for (int viewNumber = 0; viewNumber < 4; viewNumber++)
+            {
+                var eye = new Vector3(random.Next(-200000, 200000), 300 + random.Next(0, 2000), random.Next(-200000, 200000));
+                var planes = Frustum(eye, (float)(random.NextDouble() * 6.28), (float)(random.NextDouble() * 0.8 - 0.6));
+                const int Batches = 4;
+                var groups = Synthetic(random, eye, planes, 30, Batches);
+                var centre = new Vector3(0.25f, 3.5f, -0.75f);
+                for (int k = 0; k < groups.Count; k++)
+                {
+                    var g = groups[k];
+                    float band = 1 / g.Range.InverseBand, t = (g.Range.Range - band) * (0.3f + 0.6f * (float)random.NextDouble()), b = t * 0.1f;
+                    for (int i = 1; i < g.Records.Length; i += 3)
+                    {
+                        float at = (i % 2 == 0 ? t : t - b) * (1 + (float)(random.NextDouble() - 0.5) * 4e-7f), angle = (float)(random.NextDouble() * Math.PI * 2);
+                        ref var r = ref g.Records[i];
+                        var p = new Vector3(eye.X + MathF.Cos(angle) * at, r.Transform.M42, eye.Z + MathF.Sin(angle) * at);
+                        r.Transform.Translation = p;
+                        r.Ground = r.Ground with { X = p.X, Y = p.Z };
+                    }
+                    FoliageCull.FillSpheres(g.Records, centre, 4);
+                    groups[k] = g with { Range = g.Range.WithTransition(t, b) };
+                }
+                var view = new FoliageCullView().Set(planes);
+                var eyeXz = new Vector2(eye.X, eye.Z);
+
+                ctx.BeginFrame();
+                bool placed;
+                do
+                {
+                    placed = true;
+                    foreach (var g in groups)
+                        if (!cull.Place(ref g.Arena, ref g.Generation, g.Records)) { placed = false; break; }
+                } while (!placed);
+                // Batches 0..3 the meshes, 4..7 the impostors of the same groups.
+                var chunks = new List<FoliageCullChunk>();
+                var starts = new int[2 * Batches + 1];
+                for (int b = 0; b < 2 * Batches; b++)
+                {
+                    starts[b] = chunks.Count;
+                    uint flags = b < Batches ? FoliageCullChunk.ImpostorMesh : FoliageCullChunk.Impostor;
+                    foreach (var g in groups.Where(g => g.Batch == b % Batches))
+                        for (int at = 0; at < g.Records.Length; at += FoliageShaders.CullChunk)
+                            chunks.Add(new FoliageCullChunk
+                            {
+                                First = FoliageGpuCull.FirstOf(g.Arena) + (uint)at, Count = (uint)Math.Min(FoliageShaders.CullChunk, g.Records.Length - at),
+                                Range = g.Range.Range, RangeSquared = g.Range.RangeSquared, InverseBand = g.Range.InverseBand, Flags = flags,
+                                Transition = g.Range.Transition, InverseTransitionBand = g.Range.InverseTransitionBand,
+                            });
+                }
+                starts[2 * Batches] = chunks.Count;
+                var draws = new List<FoliageCullDraw>();
+                for (int b = 0; b < 2 * Batches; b++)
+                    draws.Add(new FoliageCullDraw { IndexCount = b < Batches ? (uint)(30 + b) : 6, ChunkStart = (uint)starts[b], ChunkEnd = (uint)starts[b + 1] });
+                var work = cull.Prepare(chunks.ToArray(), draws.ToArray());
+                var result = cull.Dispatch(work, view, eyeXz);
+                using var readback = ReadbackBuffer.Create(ctx, FoliageGpuCull.ReadbackBytes(result), "cull readback");
+                cull.CopyForReadback(result, readback);
+                ctx.EndFrame();
+                d!.Frames.WaitAll();
+
+                var expected = new List<Matrix4x4>[2 * Batches];
+                for (int b = 0; b < 2 * Batches; b++) expected[b] = [];
+                var output = new FoliageCullOutput();
+                for (int b = 0; b < Batches; b++)
+                    foreach (var g in groups.Where(g => g.Batch == b))
+                    {
+                        FoliageCull.CullGroup(g.Records, g.Range, eyeXz, view, record: false, output, FoliageCull.MeshPart | FoliageCull.ImpostorPart);
+                        expected[b].AddRange(output.Visible.AsSpan(0, output.Count));
+                        expected[Batches + b].AddRange(output.ImpostorVisible.AsSpan(0, output.ImpostorCount));
+                        foreach (var m in output.ImpostorVisible.AsSpan(0, output.ImpostorCount)) if (m.M14 < 0) inBand++;
+                    }
+                int n = chunks.Count;
+                var offsets = MemoryMarshal.Cast<byte, uint>(readback.Read(0, (ulong)(n + 1) * 4)).ToArray();
+                ulong argsAt = FoliageGpuCull.Align16((ulong)(n + 1) * 4);
+                var args = MemoryMarshal.Cast<byte, uint>(readback.Read(argsAt, (ulong)draws.Count * 20)).ToArray();
+                ulong rowsAt = argsAt + FoliageGpuCull.Align16((ulong)draws.Count * 20);
+                var rows = MemoryMarshal.Cast<byte, Matrix4x4>(readback.Read(rowsAt, (ulong)offsets[n] * 64)).ToArray();
+                Assert.Equal(expected.Sum(e => e.Count), (int)offsets[n]);
+                for (int b = 0; b < 2 * Batches; b++)
+                {
+                    uint first = offsets[starts[b]], count = offsets[starts[b + 1]] - first;
+                    Assert.Equal(expected[b].Count, (int)count);
+                    for (int j = 0; j < count; j++)
+                    {
+                        var e = expected[b][j];
+                        var got = rows[first + j];
+                        Assert.True(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in e)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in got))),
+                            $"view {viewNumber}, batch {b}, instance {j}: GPU fade {got.M14:R}, CPU {e.M14:R}; translation {got.Translation} against {e.Translation}");
+                    }
+                    Assert.Equal([draws[b].IndexCount, count, 0u, 0u, first], args[(b * 5)..(b * 5 + 5)]);
+                }
+            }
+            Assert.True(inBand > 100, $"{inBand} instances in the crossfade band: the band should be exercised");
+        }
+        ExpectClean(d!);
+    }
+
+    /// <summary>
     /// TERRAIN-mode rocks (5.6.1) in the same dispatch as ordinary foliage batches: per rock batch (a mesh's plain or mirroring placements)
     /// the placements the CPU path hands <see cref="TerrainRenderer.DrawMeshes"/> (the A1 cull, then <c>FoliageRenderer.EmitAll</c>: a fade
     /// of at least 0.5, M14 = 0) as it groups and writes them (by mirroring, in order; row 0 w the biome row when resident, else -1, in

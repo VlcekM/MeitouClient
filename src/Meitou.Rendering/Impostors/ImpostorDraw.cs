@@ -8,15 +8,15 @@ namespace Meitou.Rendering.Impostors;
 /// The impostor program in the native model (<see cref="ImpostorShaders.VertexNative"/>, <see cref="ImpostorShaders.FragmentNative"/>): six
 /// vertices per instance through a shared six-entry index buffer (<see cref="Quad"/>: <c>gl_VertexIndex</c> is the index, 0 to 5, so the quad's
 /// corners are the GL text's <c>gl_VertexID % 6</c>), the instance rows at locations 7 to 10 (the foliage's ABI, row 0 w the fade), the atlas and
-/// sphere in <see cref="ImpostorPush"/>. Pipelines per (depth write, segment state, formats), kept for the last two states as the foliage
+/// sphere in <see cref="ImpostorPush"/>. Pipelines per (program, segment state, formats), kept for the last two states as the foliage
 /// meshes keep theirs. Used by the foliage renderer and the preview.
 /// </summary>
-internal enum ImpostorProgram { Plain, DepthWrite, Caster }
+internal enum ImpostorProgram { Plain, Caster }
 
 internal sealed class ImpostorDraw : IDisposable
 {
     readonly GpuContext gpu;
-    readonly NativeProg plain, depthWrite, caster;
+    readonly NativeProg plain, caster;
     readonly DeviceBuffer quad;
     readonly Dictionary<(ImpostorProgram, DrawStateKey, AttachmentFormats), GraphicsPipeline> pipelines = [];
 
@@ -26,8 +26,7 @@ internal sealed class ImpostorDraw : IDisposable
     public ImpostorDraw(GpuContext gpu, NativeFrame frame)
     {
         this.gpu = gpu;
-        plain = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.FragmentNative(depthWrite: false), "impostors");
-        depthWrite = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.FragmentNative(depthWrite: true), "impostors depth write");
+        plain = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.FragmentNative(), "impostors");
         caster = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.DepthFragmentNative(), "impostor casters");
         quad = DeviceBuffer.Create(gpu, 6 * sizeof(uint), BufferUse.Index, "impostor quad");
         using var batch = gpu.Uploads.Begin();
@@ -45,7 +44,7 @@ internal sealed class ImpostorDraw : IDisposable
     {
         var key = (which, new DrawStateKey(state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp), formats);
         if (pipelines.TryGetValue(key, out var p)) return p;
-        var program = which switch { ImpostorProgram.DepthWrite => depthWrite, ImpostorProgram.Caster => caster, _ => plain };
+        var program = which == ImpostorProgram.Caster ? caster : plain;
         Span<LegacyProgram.Attribute?> rows = new LegacyProgram.Attribute?[FoliageShaders.InstanceLocation + 4];
         for (int a = 0; a < 4; a++)
             rows[FoliageShaders.InstanceLocation + a] = new LegacyProgram.Attribute(default, Format.R32G32B32A32Sfloat, 64, true);
@@ -57,7 +56,6 @@ internal sealed class ImpostorDraw : IDisposable
     public void Dispose()
     {
         plain.Dispose();
-        depthWrite.Dispose();
         caster.Dispose();
         quad.Dispose();
     }

@@ -218,7 +218,7 @@ renderer measures after decoding) times the larger of its record's two scale lim
   (3169) and `Giant_MultiLimbTree` (2020). Unscaled radii run from 1 (skeleton parts) to 3209 (`Jungle_TREE&Branches`, placed at scale
   0.07 to 0.13), so the scale must be part of the measure.
 - **Classes** (`FoliageSizes`): **small** below 40, **medium** 40 to 125, **large** from 125. 205 small, 157 medium, 281 large meshes. The
-  thresholds come from the default class ranges 800 / 2500 / 5000: the largest small mesh at the end of the small range subtends the same
+  thresholds come from the first default class ranges 800 / 2500 / 5000 (`FoliageSizes.Threshold*Range`; the defaults are 800 / 5000 / 12000 since the billboards): the largest small mesh at the end of the small range subtends the same
   angle as the largest medium one at the end of the medium range (40 / 800 = 125 / 2500); the smallest large mesh ends at 5000 at half that.
 - Examples (size): small: skeleton parts (2-6), `Robotics-Junk` (6-25), small boulders (`Bouldersmall*`, 3-8), the `SPARSER` junk pieces
   (9-27), `Bleached_Skull01` (12), cacti trumpets (18-22), `Thorny Plant Singles` (13), motor parts (33-39); medium: `TechJunk04` (64),

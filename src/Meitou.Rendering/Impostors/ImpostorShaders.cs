@@ -16,8 +16,9 @@ public struct ImpostorPush
     /// <summary>The atlas maps' bindless indices (2D float array).</summary>
     [FieldOffset(32)] public uint Albedo;
     [FieldOffset(36)] public uint Normal;
-    [FieldOffset(40)] public uint Depth;
-    [FieldOffset(44)] public uint Parallax;
+    /// <summary>The atlas's gloss x specular (<see cref="ImpostorAtlas.Gloss"/>), what the mesh passes to the lighting.</summary>
+    [FieldOffset(40)] public float Gloss;
+    [FieldOffset(44)] public uint Spare2;
     [FieldOffset(48)] public uint Blend;
     [FieldOffset(52)] public int Debug;
     [FieldOffset(56)] public uint Coverage;
@@ -30,7 +31,7 @@ public struct ImpostorPush
 /// GLSL of the impostors (docs/impostors.md):
 /// <list type="bullet">
 /// <item><see cref="Functions"/>: the sampling API for any impostor shader (the hemi-octahedral map, frame selection, the three-frame blend
-/// with per-pixel frame-plane projection and optional parallax) returning the surface the lighting needs.</item>
+/// with per-pixel frame-plane projection) returning the surface the lighting needs.</item>
 /// <item><see cref="Vertex"/> / <see cref="Fragment"/>: a complete instanced impostor program on the foliage's instance ABI (the per-instance
 /// matrix at locations 7 to 10, the fade in row 0 w), lit exactly as the mesh shader lights a surface: the reference the GPU-driven foliage
 /// path adopts.</item>
@@ -103,16 +104,17 @@ public static class ImpostorShaders
     /// </summary>
     public const string FragmentFunctions = """
 
-        // What the lighting needs. normal and position are in object space; coverage is the cut-out (cut at 0.5); gloss is the
-        // gloss × specular the mesh shader passes to kenshiLight.
-        struct ImpostorSurface { vec3 albedo; float coverage; vec3 normal; float gloss; vec3 position; };
+        // What the lighting needs. normal and position are in object space; coverage is the cut-out (cut at 0.5); the albedo is the colour
+        // of the covered texels (the BC1 atlas is premultiplied by the sampler's filtering: transparent texels decode to black, alpha 0).
+        struct ImpostorSurface { vec3 albedo; float coverage; vec3 normal; vec3 position; };
         // grid: frames per atlas side; centre, radius: the baked bounding sphere (object space); origin: the eye in object space; ray: from the
         // eye to this pixel's point on the billboard (object space, any length); cells and weights from impostorSelect (constant per instance);
-        // pick: a dither value in [0, 1) to use one frame, or < 0 to blend the three; parallax: one depth step per frame before sampling.
-        ImpostorSurface impostorSample(sampler2D albedoMap, sampler2D normalMap, sampler2D depthMap, float grid, vec3 centre, float radius,
-                                       vec3 origin, vec3 ray, vec2 cellA, vec2 cellB, vec2 cellC, vec3 weights, float pick, bool parallax)
+        // pick: a dither value in [0, 1) to use one frame, or < 0 to blend the three. The position is on the frame's plane through the sphere's
+        // centre (the atlas has no depth).
+        ImpostorSurface impostorSample(sampler2D albedoMap, sampler2D normalMap, float grid, vec3 centre, float radius,
+                                       vec3 origin, vec3 ray, vec2 cellA, vec2 cellB, vec2 cellC, vec3 weights, float pick)
         {
-            ImpostorSurface s = ImpostorSurface(vec3(0.0), 0.0, vec3(0.0), 0.0, vec3(0.0));
+            ImpostorSurface s = ImpostorSurface(vec3(0.0), 0.0, vec3(0.0), vec3(0.0));
             vec2 cells[3] = vec2[3](cellA, cellB, cellC);
             // One set of texture gradients for every fetch, from frame A's projection (the frames are a grid step apart, their scales
             // agree): the fetches below are in non-uniform control flow when frames are picked per pixel.
@@ -125,6 +127,7 @@ public static class ImpostorShaders
                 // The frame whose cumulative weight passes the dither value.
                 weights = pick < weights.x ? vec3(1.0, 0.0, 0.0) : pick < weights.x + weights.y ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
             }
+            vec3 colour = vec3(0.0);
             float total = 0.0;
             vec3 fallback = vec3(0.0);
             for (int k = 0; k < 3; k++)
@@ -134,30 +137,21 @@ public static class ImpostorShaders
                 vec3 dir = impostorDecode(cells[k] / (grid - 1.0)), right, up, point;
                 impostorBasis(dir, right, up);
                 vec2 local = impostorFrameUv(dir, right, up, centre, radius, origin, ray, 0.0, point);
-                if (parallax)
-                {
-                    float h = textureGrad(depthMap, (cells[k] + clamp(local, 0.0, 1.0)) / grid, gx, gy).r * 2.0 - 1.0;
-                    local = impostorFrameUv(dir, right, up, centre, radius, origin, ray, h * radius, point);
-                }
                 vec2 uv = (cells[k] + clamp(local, 0.0, 1.0)) / grid;
                 vec4 a = textureGrad(albedoMap, uv, gx, gy);
                 vec3 nf = impostorDecodeNormal(textureGrad(normalMap, uv, gx, gy).rg * 2.0 - 1.0);
-                vec2 dg = textureGrad(depthMap, uv, gx, gy).rg;
                 bool inside = all(greaterThanEqual(local, vec2(0.0))) && all(lessThanEqual(local, vec2(1.0)));
                 float cw = w * (inside ? a.a : 0.0);
-                float t = (dot(centre - origin, dir) + (dg.r * 2.0 - 1.0) * radius) / dot(ray, dir);
                 s.coverage += cw;
-                s.albedo += a.rgb * cw;
+                if (inside) colour += a.rgb * w;
                 s.normal += (right * nf.x + up * nf.y + dir * nf.z) * cw;
-                s.gloss += dg.g * cw;
-                s.position += (origin + ray * t) * cw;
+                s.position += point * cw;
                 fallback += point * w;
                 total += w;
             }
             if (s.coverage > 1e-5)
             {
-                s.albedo /= s.coverage;
-                s.gloss /= s.coverage;
+                s.albedo = colour / s.coverage;
                 s.position /= s.coverage;
                 s.normal = normalize(s.normal);
             }
@@ -232,13 +226,13 @@ public static class ImpostorShaders
         }
         """;
 
-    /// <summary>The fragment shader without a depth write (early depth testing stays on).</summary>
-    public static readonly string Fragment = BuildFragment(depthWrite: false);
 
-    /// <summary>The fragment shader writing the blended surface's depth (depth-correct intersections and shadows; turns early depth testing off).</summary>
-    public static readonly string FragmentWithDepth = BuildFragment(depthWrite: true);
-
-    static string BuildFragment(bool depthWrite) => "#version 330 core\n" + AtmosphereShaders.Functions + Functions + FragmentFunctions + """
+    /// <summary>
+    /// The fragment shader (early depth testing stays on: the quad's own depth is written, the atlas has no depth). The mesh shader's lighting
+    /// on the sampled surface, the same fade dither as the meshes (complementary in the crossfade band), and one frame of the three per pixel by a
+    /// noise independent of the fade's (or the three blended with <c>uImpostorBlend</c>).
+    /// </summary>
+    public static readonly string Fragment = "#version 330 core\n" + AtmosphereShaders.Functions + Functions + FragmentFunctions + """
         in vec3 vObjectPoint;
         flat in vec3 vObjectEye;
         flat in vec2 vCellA;
@@ -252,13 +246,11 @@ public static class ImpostorShaders
         flat in vec4 vModel3;
         uniform sampler2D uImpostorAlbedo;
         uniform sampler2D uImpostorNormal;
-        uniform sampler2D uImpostorDepth;
         uniform vec4 uImpostor;
         uniform float uImpostorGrid;
-        uniform bool uImpostorParallax;
+        uniform float uImpostorGloss;
         uniform bool uImpostorBlend;     // blend the three frames instead of picking one per pixel
         uniform int uImpostorDebug;      // 1: albedo, 2: normal (object space), 3: coverage, unlit
-        uniform mat4 uViewProjection;
         uniform bool uCoverage;          // alpha to coverage (multisampled target), as the foliage meshes
         uniform vec3 uLightDir;
         uniform vec3 uEye;
@@ -266,17 +258,15 @@ public static class ImpostorShaders
         uniform float uFogDistance;
         out vec4 fragColour;
         float foliageDither() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); }
+        float framePick() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.00583715, 0.06711056)))); }
         void main()
         {
             // The fade: as the meshes (a dither threshold, 2 = whole); negative = the complement of the mesh's dither (the crossfade).
             float dither = foliageDither();
             if (vFade < 0.0 ? dither < -vFade : (vFade < 1.0 && dither >= vFade)) discard;
-            // The frame pick: a 4 × 4 ordered dither (independent of the fade's), or blend the three frames.
-            ivec2 q = ivec2(gl_FragCoord.xy) & 3;
-            int bayer[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
-            float pick = uImpostorBlend ? -1.0 : (float(bayer[q.y * 4 + q.x]) + 0.5) / 16.0;
-            ImpostorSurface s = impostorSample(uImpostorAlbedo, uImpostorNormal, uImpostorDepth, uImpostorGrid, uImpostor.xyz, uImpostor.w,
-                vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, pick, uImpostorParallax);
+            float pick = uImpostorBlend ? -1.0 : framePick();
+            ImpostorSurface s = impostorSample(uImpostorAlbedo, uImpostorNormal, uImpostorGrid, uImpostor.xyz, uImpostor.w,
+                vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, pick);
             if (uImpostorDebug == 3) { fragColour = vec4(vec3(s.coverage), 1.0); return; }
             float coverage = 1.0;
             if (uCoverage)
@@ -288,7 +278,7 @@ public static class ImpostorShaders
             mat4 model = mat4(vModel0, vModel1, vModel2, vModel3);
             vec3 world = (model * vec4(s.position, 1.0)).xyz;
             vec3 n = normalize(mat3(model) * s.normal);
-            float gloss = s.gloss;
+            float gloss = uImpostorGloss;
             if (uImpostorDebug == 1) { fragColour = vec4(s.albedo, 1.0); return; }
             if (uImpostorDebug == 2) { fragColour = vec4(n * 0.5 + 0.5, 1.0); return; }
             // The mesh shader's lighting (Shaders.MeshFragment), from the same inputs.
@@ -304,17 +294,13 @@ public static class ImpostorShaders
             if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(s.albedo, n, v, gloss, world);
             if (uFogDistance > 0.0) colour = atmoApply(colour, uEye, world);
             fragColour = vec4(colour, coverage);
-        """ + (depthWrite ? """
-            vec4 clip = uViewProjection * vec4(world, 1.0);
-            gl_FragDepth = clamp(clip.z / clip.w * 0.5 + 0.5, 0.0, 1.0);
-        """ : "") + """
         }
         """;
 
     /// <summary>
     /// The impostor as a shadow caster (a cascade's depth-only pass, <see cref="Vertex"/> with a directional <c>uImpostorView</c>): one frame per
-    /// texel (the ordered pick, no fade: casters ignore the distance fade as the meshes' depth pass does), cut at coverage 0.5, and the depth of
-    /// the reconstructed surface with the game's caster bias (<see cref="ShadowShaders"/>' <c>shadowWriteDepth</c>, on that depth).
+    /// texel (the pick noise, no fade: casters ignore the distance fade as the meshes' depth pass does), cut at coverage 0.5, the depth of the
+    /// frame's plane through the crown's centre with the game's caster bias (<see cref="ShadowShaders"/>' <c>shadowWriteDepth</c>, on that depth).
     /// </summary>
     public static readonly string DepthFragment = "#version 330 core\n" + Functions + FragmentFunctions + $$"""
         in vec3 vObjectPoint;
@@ -330,7 +316,6 @@ public static class ImpostorShaders
         flat in vec4 vModel3;
         uniform sampler2D uImpostorAlbedo;
         uniform sampler2D uImpostorNormal;
-        uniform sampler2D uImpostorDepth;
         uniform vec4 uImpostor;
         uniform float uImpostorGrid;
         uniform mat4 uViewProjection;
@@ -340,11 +325,9 @@ public static class ImpostorShaders
         };
         void main()
         {
-            ivec2 q = ivec2(gl_FragCoord.xy) & 3;
-            int bayer[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
-            float pick = (float(bayer[q.y * 4 + q.x]) + 0.5) / 16.0;
-            ImpostorSurface s = impostorSample(uImpostorAlbedo, uImpostorNormal, uImpostorDepth, uImpostorGrid, uImpostor.xyz, uImpostor.w,
-                vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, pick, false);
+            float pick = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.00583715, 0.06711056))));
+            ImpostorSurface s = impostorSample(uImpostorAlbedo, uImpostorNormal, uImpostorGrid, uImpostor.xyz, uImpostor.w,
+                vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, pick);
             if (s.coverage < 0.5) discard;
             mat4 model = mat4(vModel0, vModel1, vModel2, vModel3);
             vec4 clip = uViewProjection * vec4((model * vec4(s.position, 1.0)).xyz, 1.0);
@@ -411,8 +394,8 @@ public static class ImpostorShaders
             float grid;
             uint albedo;
             uint normal;
-            uint depth;
-            bool parallax;
+            float gloss;
+            uint spare2;
             bool blend;
             int debug;
             bool coverage;
@@ -424,16 +407,16 @@ public static class ImpostorShaders
     static readonly Dictionary<string, string> NativeMap = new()
     {
         ["uImpostor"] = "pc.sphere", ["uCameraUp"] = "pc.cameraUp", ["uImpostorGrid"] = "pc.grid",
-        ["uImpostorAlbedo"] = "textures2D[pc.albedo]", ["uImpostorNormal"] = "textures2D[pc.normal]", ["uImpostorDepth"] = "textures2D[pc.depth]",
-        ["uImpostorParallax"] = "pc.parallax", ["uImpostorBlend"] = "pc.blend", ["uImpostorDebug"] = "pc.debug", ["uCoverage"] = "pc.coverage",
+        ["uImpostorAlbedo"] = "textures2D[pc.albedo]", ["uImpostorNormal"] = "textures2D[pc.normal]", ["uImpostorGloss"] = "pc.gloss",
+        ["uImpostorBlend"] = "pc.blend", ["uImpostorDebug"] = "pc.debug", ["uCoverage"] = "pc.coverage",
         ["uImpostorView"] = "pc.view",
     };
 
     /// <summary><see cref="Vertex"/> in the native model.</summary>
     public static string VertexNative() => NativeShaders.Port(Vertex, NativeShaders.Map(NativeMap), PushMembers);
 
-    /// <summary><see cref="Fragment"/> (with <paramref name="depthWrite"/>: <see cref="FragmentWithDepth"/>) in the native model.</summary>
-    public static string FragmentNative(bool depthWrite) => NativeShaders.Port(depthWrite ? FragmentWithDepth : Fragment, NativeShaders.Map(NativeMap), PushMembers);
+    /// <summary><see cref="Fragment"/> in the native model.</summary>
+    public static string FragmentNative() => NativeShaders.Port(Fragment, NativeShaders.Map(NativeMap), PushMembers);
 
     static string Replace(string source, string pattern, string replacement)
     {

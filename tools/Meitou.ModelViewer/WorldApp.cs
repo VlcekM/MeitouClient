@@ -233,8 +233,17 @@ static partial class WorldApp
         var keyItems = DebugOverlay.KeyItems(WorldOptions.Usage);
         // F1 upwards: the Faithful / Meitou switches (Enhancements), in order.
         var switches = Enhancements.Create(o.Post, () => gpu?.Sky.HazeStrength ?? o.HazeStrength, v => { if (gpu is not null) gpu.Sky.HazeStrength = v; },
-            () => gpu?.Shadow?.Meitou ?? o.MeitouShadows, v => { o.MeitouShadows = v; if (gpu?.Shadow is { } s) s.Meitou = v; },
-            () => gpu?.Foliage?.MeitouRange ?? o.MeitouRange, v => { o.MeitouRange = v; if (gpu?.Foliage is { } f) f.MeitouRange = v; });
+            () => gpu?.Shadow?.Meitou ?? o.MeitouShadows, v =>
+            {
+                // The shadow distance follows the mode's default unless the Tab slider moved it.
+                bool was = o.MeitouShadows;
+                o.MeitouShadows = v;
+                if (gpu?.Shadow is not { } s) return;
+                if (MathF.Abs(s.Settings.Range - o.ShadowRangeFor(was)) < 1) s.Settings = s.Settings with { Range = o.ShadowRangeFor(v) };
+                s.Meitou = v;
+            },
+            () => gpu?.Foliage?.MeitouRange ?? o.MeitouRange, v => { o.MeitouRange = v; if (gpu?.Foliage is { } f) f.MeitouRange = v; },
+            () => gpu?.Foliage?.Impostors ?? o.Impostors, v => { o.Impostors = v; if (gpu?.Foliage is { } f) f.Impostors = v; });
 
         {
             gpu = CreateGpu(display.Context, install, scene, assets, o, interactive: true);

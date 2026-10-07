@@ -2,16 +2,17 @@
 
 Meitou-mode feature (switch name `impostors`, owned and wired by the GPU-driven foliage path, [renderer-native.md](renderer-native.md)
 5.7). Beyond a per-mesh distance, a foliage instance is drawn as one camera-facing quad. The quad samples a pre-rendered atlas of the mesh
-seen from many directions. This doc covers the baker, the file format and cache, the sampling GLSL, and the preview that checks them. The
+seen from many directions. This doc covers the baker, the file format and cache, the sampling GLSL, the preview that checks them, and how
+the foliage path draws them (section 7). The
 original game has no impostors ([formats/foliage.md](formats/foliage.md), "no impostor level was found"), so nothing here is a
 compatibility claim. Faithful mode never draws impostors.
 
-Claims use the labels of renderer-native.md:
+Claims use these labels:
 
 - **from the code**: true of the code as written.
-- **measured**: numbers from a run, with the machine.
-- **estimate**: reasoned, not measured.
-- **open**: not settled.
+- **Verified**: a test or the parity gate checks it.
+- **Observed**: seen or measured in a run, with the machine.
+- **Unknown**: not settled or not tried.
 
 Code: `src/Meitou.Rendering/Impostors/`. Tests: `tests/Meitou.Tests/Rendering/ImpostorTests.cs`. Preview:
 `tools/Meitou.ModelViewer/ImpostorApp.cs`.
@@ -44,274 +45,308 @@ Views below the horizon are clamped onto it.
 - `up = cross(d, right)`
 
 A point `p` lands at frame UV `(dot(p − c, right), dot(p − c, up)) / 2r + 0.5`, where `c` and `r` are the bounding sphere's centre and
-radius. Its depth is `dot(p − c, d) / r · 0.5 + 0.5`.
+radius.
 
 **Bounding sphere (from the code).** The sphere covers the main mesh plus the leaves mesh. Its centre is the vertex box centre, and its
 radius is the farthest vertex × 1.01.
 
 ## 2. Maps and sizes
 
-Three maps share one layout: frame (i, j) occupies cell (i, j) of the atlas. Rows run bottom first (GL order).
+Two maps share one layout: frame (i, j) occupies cell (i, j) of the atlas. Rows run bottom first. Since baker version 5 (format version 2)
+there is no depth map and no BC3: the VRAM of the first version (1.1 to 2.4 GB) was the reason.
 
-| Map | Channels | Encoding |
-| --- | --- | --- |
-| Albedo | RGB albedo (the mesh shader's albedo before lighting), A coverage | BC3 |
-| Normal | Octahedral full-sphere encoding of the normal in the frame's basis (x right, y up, z towards the viewer) | BC5 |
-| Depth | R depth along the frame direction (sphere-relative), G gloss × specular | BC5 |
+| Map | Channels | Encoding | Resident levels |
+| --- | --- | --- | --- |
+| Albedo | RGB albedo (the mesh shader's albedo before lighting); alpha is a 1-bit cut-out | BC1 with punch-through alpha | all but the surface-skipped ones |
+| Normal | Octahedral full-sphere encoding of the normal in the frame's basis (x right, y up, z towards the viewer) | BC5 | one level coarser than the albedo |
 
-The normal map is full-sphere because back-facing double-sided leaves have normals pointing away from the frame. A z ≥ 0 encoding lost
-them (from the code, baker version 2).
+- **Albedo.** A transparent texel decodes to black with alpha 0, so bilinear filtering returns colour x coverage and the shader divides by
+  the coverage (premultiplied sampling, `impostorSample`). **Verified** (`ImpostorTests`, BC1 cut-out test).
+- **Normal.** Full-sphere because back-facing double-sided leaves have normals pointing away from the frame. It is stored at full
+  resolution in the file but uploaded one level coarser (a normal needs less resolution than colour). The file also holds the mean gloss
+  (`Gloss`, the mean of pass 2's G channel), passed as a push constant, replacing the per-texel gloss of the old depth map.
+- **No depth.** The old depth map served parallax and `gl_FragDepth` (`MEITOU_IMPOSTOR_DEPTH`); both are gone. The quad's depth is used,
+  and the shadow casters use the frame plane through the crown's centre.
 
-**Size classes (from the code, `ImpostorClass`).** The class is chosen by the largest instance's radius (mesh radius × the
-FOLIAGE_MESH's maximum scale):
+**Frame size by distance (`ImpostorClass.For`).** With `ScreenDiameter(r) = 2 r / (2 tan(fov/2)) * 1080 / 4000` (the world radius of the
+largest instance, `radius x max scale`, seen at the 4000-unit reference distance, 1080 lines, 50 degrees):
 
-| Radius × max scale | Class | Frame | Grid | Atlas | Levels | GPU, 3 maps with mips |
-| --- | --- | --- | --- | --- | --- | --- |
-| below 48 | none | | | | | |
-| 48 to 160 | medium | 128 | 12 × 12 | 1536² | 6 | 9 MB |
-| 160 and above | large | 256 | 12 × 12 | 3072² | 7 | 36 MB |
+- `F = smallest power of two >= ScreenDiameter / 1.4`, clamped to 64 .. 256. The 1.4 (`MEITOU_IMPOSTOR_MAGNIFY`) lets the impostor be
+  magnified by up to 1.4 at the reference distance. Meshes whose largest instance is smaller than radius 48 (`MinimumRadius`) get no
+  impostor.
+- Grid `G = 12` (`MEITOU_IMPOSTOR_GRID`). Levels = `log2(F) - 1` (the chain stops at 4 x 4 per frame, the smallest BC block).
+- BushTree01 (large): 256 px, 12 x 12, 3072 px per side, 18 MB resident (8.0 MB at 8 x 8).
+- **Observed** (the 267 base-game atlases, all resident, Release, RTX 4070): 68 at 256 px (1224 MB), 56 at 128 px (252 MB), 143 at 64 px
+  (161 MB), 1637 MB in all, against 5669 MB for version 4. Only the atlases a view needs are resident (section 7).
+- **Grid choice (Observed).** Mean difference to the meshes (whole image, forest at `--range-large 12000`): old impostors 3.80; new at 8 x
+  8 2.94, 10 x 10 2.74, 12 x 12 2.56, 16 x 16 2.47. Magnify 2.0: 2.68, 1.4: 2.56, 1.0: 2.50. 12 and 1.4 were taken as the knee.
+- `LevelsToSkip` drops top levels the transition distance never needs (an atlas is never sampled sharper than one texel per pixel).
 
-- Below 48 world units an object is at most a few pixels by the time the transition distance is reached. It is cheaper to let it fade
-  out at its range (estimate).
-- A 12 × 12 grid puts adjacent frames about 8 to 15 degrees apart. The off-frame views in the preview sheets (section 6) keep the
-  crown's shape with the dithered frame pick (section 5). Whether a smaller grid would do is open: no other grid was compared.
-- The mip chain stops at 4 × 4 pixels per frame, the smallest frame that still holds a BC block (from the code: `Levels = log2(frame) −
-  1`).
-
-**Compression decision (from the code):**
-
-- Albedo + coverage is BC3: colour in BC1, coverage in the BC4 alpha block.
-- Normal and depth/gloss are BC5: two independent BC4 channels, which keep the octahedral normal and the depth smooth.
-- The BC3 colour endpoints are fitted along the principal axis of the block's **covered** pixels (`ImpostorEncoder.EncodeBc3`).
-  - The engine's DDS encoder uses bounding-box endpoints, and turns a block of orange leaves and blue-grey twigs into two greys. Frame
-    edges are full of such blocks.
-  - Measured: the image difference against the mesh barely moved (mean 10.21 to 10.22 on BushTree01's near field). The remaining
-    difference is resolution (section 6), not compression.
-- An uncompressed RGBA8 option exists in the format and the baker (`ImpostorBaker.Compress = false`, tests).
-  - Open: through VkGl a 3072² RGBA8 atlas samples with wrong coverage although the CPU data is right (checked against the PNG dump).
-  - The viewer flag was removed.
+**Compression (from the code).** BC1 colour endpoints are fitted along the principal axis of the block's covered pixels
+(`ImpostorEncoder.EncodeBc1`, four-colour mode for fully opaque blocks, three-colour with the transparent code otherwise); the engine's DDS
+encoder uses bounding-box endpoints and turns blocks of orange leaves and blue-grey twigs into two greys. An uncompressed RGBA8 option
+exists in the format and the baker (tests).
 
 ## 3. The bake
 
-**At load, from the code (`ImpostorBaker`):**
+**At load (`ImpostorBaker`, native, no `IGl`).**
 
-1. Each row of N frames is rendered into a target of `2·N·frame × 2·frame` (RGBA8 + 24-bit depth) through `IGl`. Each frame has its own
-   viewport and an orthographic projection fitted to the sphere.
-2. The renderer is the **shared mesh shader** (`Shaders.MeshFragment`) with an output switch inserted before its lighting
-   (`ImpostorShaders.BakeFragment`). The albedo, normal and gloss are therefore exactly what the mesh shader would have lit, including
-   the alpha test, second texture, normal map and triplanar mode.
-3. Three passes per row:
-   - pass 0: albedo
-   - pass 1: normal in the frame basis
-   - pass 2: depth and gloss
-   Each writes alpha 1 on kept samples and 0 elsewhere.
-4. A GPU linear blit halves each pass. That gives a 2 × 2 box filter: alpha becomes coverage and the colour is premultiplied by it. Only
-   the half-size picture is read back.
-5. While the GPU renders row k + 1, the CPU filters row k (`ImpostorAssembler`, in parallel per frame):
-   - un-premultiply
-   - **pull-push fill** of empty texels from the covered ones, so bilinear filtering and mips never pull black or a wrong normal into
-     the silhouette
-   - per-frame mips (coverage-weighted, so frames never bleed into each other)
-   - **coverage scaling**: each level's coverage, level 0's included, is scaled so the share of texels ≥ 0.5 equals the frame's covered
-     area. This is the alpha-test mip fix. Applied to level 0 too, it keeps branches thinner than half a texel, which otherwise had a
-     2 × 2 coverage of 0.25 and vanished (measured: they disappeared in the preview before this was added).
-6. BC encoding (section 2).
+1. Each row of N frames is rendered into a target of `2·N·F x 2·F` (RGBA8 + 32-bit float depth, "impostor bake target"), a viewport and
+   an orthographic projection per frame fitted to the sphere. A row's passes, the halving blit and the copy into a readback buffer are
+   recorded into the frame's pre-frame command list, and the row is read once that frame has completed (`ImpostorBakeJob.Step`, a few rows
+   per frame, so a bake never stalls a frame; `Bake(..., nextFrame)` drives the frames for tools and tests).
+2. The renderer is the shared mesh shader (`Shaders.MeshFragment`) with an output switch before its lighting
+   (`ImpostorShaders.BakeFragment`), so albedo and normal are what the mesh shader would have lit, including the alpha test, second
+   texture, normal map and triplanar mode.
+3. Two passes per row (albedo, normal in the frame basis; gloss is read from a third pass's G channel for the mean only). Each writes
+   alpha 1 on kept samples and 0 elsewhere. A GPU linear blit halves each pass (a 2 x 2 box filter) and only the half-size picture is
+   read back.
+4. **Texture LOD bias (the fix for "fuller and pinker"; Observed, see section 6).** The bake samples the mesh's textures with a bias
+   `log2(2F / ScreenDiameter(radius x mean scale))`, clamped 0..4, where `mean scale = (|min| + |max|) / 2`. At the reference distance the
+   mesh's leaf texture is read at the mip its size selects; its alpha mip thins the leaves and its colour mip averages leaf with twig.
+   Without the bias the bake sampled mip 0 at twice the frame resolution and produced full, pale-pink crowns.
+5. While the GPU renders row k + 1 the CPU filters row k (`ImpostorAssembler`, parallel per frame): un-premultiply, **pull-push fill** of
+   empty texels from covered ones (so bilinear filtering and mips never pull black or a wrong normal into the silhouette), per-frame
+   mips, and the cut-out: the albedo's coverage is scaled per level so the share of texels >= 0.5 equals the frame's covered area, and
+   the alpha is stored as the binary `coverage x scale >= 0.5`.
+6. BC1 / BC5 encoding (section 2).
 
-**Exclusions (from the code, `ImpostorSource.Ineligible`):**
+**Exclusions (`ImpostorSource.Ineligible`):** FOLIAGE_MESH records drawn in TERRAIN mode (MaterialType 2) and EMISSIVE meshes (6): 142
+records in the base game.
 
-- FOLIAGE_MESH records drawn in TERRAIN mode (MaterialType 2, textured by the biome under them) are skipped. One atlas cannot hold every
-  biome's colour.
-- EMISSIVE meshes (6) are skipped.
-
-There are 142 such records in the base game (measured).
-
-**Measured: base game, RTX 4070, Release, `--impostor-bake-all --rebake`:**
-
-| | Value |
-| --- | --- |
-| FOLIAGE_MESH records | 643 |
-| TERRAIN / EMISSIVE (skipped) | 142 |
-| Distinct sources (mesh, material, max scale) | 485 |
-| Too small (no impostor) | 218 |
-| Baked | 267 (121 large, 146 medium) |
-| Bake time | 407 s total; 1.5 s mean, 14.8 s worst per atlas; a large atlas typically 1.2 to 4.6 s, mostly GPU render, ~0.3 s BC encode |
-| Disk cache | 1153 MB (deflated BC data) |
-| Loading all 267 from the cache | 24 s (about 90 ms each: inflate + checksum) |
-| GPU memory if all resident | 5669 MB (large 4356, medium 1314) |
-
-**Consequences for the foliage path (estimate):**
-
-- Baking everything synchronously at load is too slow, and keeping everything resident is too big.
-- Bake or load an atlas **on demand**, when a mesh's instances first come within impostor range, on a background queue.
-- Keep only the atlases of the resident biomes on the GPU.
-- Under memory pressure, drop level 0 of large atlases (9 MB instead of 36). The texture-quality setting's mip skip
-  ([formats/settings.md](formats/settings.md)) is the natural knob.
+**Observed, base game, RTX 4070, Release, `--impostor-bake-all --rebake` (version 5, against version 4 in brackets):** 643 FOLIAGE_MESH
+records, 230 atlases baked at version 5 in 25.8 s in all (267 in 407 s at version 4; the sets differ, version 5's sources also differ by
+mean scale and the size class follows the distance). Disk cache 376 MB (1153 MB).
 
 ## 4. File format and cache
 
-**`.mimp`, from the code (`ImpostorAtlas.Write` / `Read`).** Little-endian, written in this order:
+**`.mimp` (`ImpostorAtlas.Write` / `Read`).** Little-endian, in this order:
 
 1. Header:
 
    | Field | Type |
    | --- | --- |
    | magic | `"MIMP"` (u32) |
-   | format version | i32, 1 |
-   | baker version | i32, 4 |
+   | format version | i32, 2 |
+   | baker version | i32, 5 |
    | grid | i32 |
    | frame pixels | i32 |
    | levels | i32 |
-   | centre | 3 × f32 |
+   | centre | 3 x f32 |
    | radius | f32 |
+   | mean gloss | f32 |
    | name | .NET length-prefixed UTF-8 string |
-   | texture count | i32 |
+   | texture count | i32 (2) |
 
-2. Per texture: map (i32), encoding (i32: 0 RGBA8, 1 BC3, 2 BC5), then each level's byte length (i32).
+2. Per texture: map (i32: 0 albedo, 1 normal), encoding (i32: 0 RGBA8, 1 BC3, 2 BC5, 3 BC1), then each level's byte length (i32).
 3. FNV-1a 64 of all level data.
 4. All levels, map by map and largest first, in one zlib stream.
 
-`Read` returns null on any mismatch: magic, either version, sizes, checksum, or a truncated stream. A damaged or old file is simply
-rebaked.
+`Read` returns null on any mismatch (magic, either version, sizes, checksum, truncated stream): a damaged or old file is rebaked.
 
-**Cache, from the code (`ImpostorCache`):**
+**Cache (`ImpostorCache`).** `%LOCALAPPDATA%\Meitou\impostors\<name>_<key>.mimp`, overridable with `MEITOU_IMPOSTOR_CACHE`; never in the
+repo. The key is the first 24 hex digits of a SHA-256 over the baker and format versions, each source file's path, length and write time,
+both materials' descriptions, the maximum **and mean** scale, the grid, magnify and bias. Files are written under a temporary name, then
+moved. Old files are left in place (**Unknown**: a size cap). Bump `ImpostorAtlas.BakerVersion` when the baker's output changes.
 
-- Location: `%LOCALAPPDATA%\Meitou\impostors\<name>_<key>.mimp`, overridable with `MEITOU_IMPOSTOR_CACHE` or the constructor. Never in
-  the repo.
-- The key is the first 24 hex digits of a SHA-256 over:
-  - the baker and format versions
-  - each source file's path, length and last write time (mesh, leaves mesh, every texture)
-  - both materials' descriptions
-  - the maximum scale
-- A mod that replaces a mesh or texture changes the key. Old files are left in place (open: a size cap / LRU sweep).
-- Files are written to a temporary name, then moved into place, so a crash never leaves a half file under the real name.
-- Bump `ImpostorAtlas.BakerVersion` whenever the baker's output changes.
+## 5. Runtime sampling
 
-## 5. Runtime sampling (for the GPU-driven foliage path)
-
-**GLSL (from the code, `ImpostorShaders`):**
+**GLSL (`ImpostorShaders`).**
 
 | Piece | Contents |
 | --- | --- |
-| `Functions` (any stage) | `impostorEncode(vec3)`, `impostorDecode(vec2)`, `impostorDecodeNormal(vec2)`, `impostorBasis(dir, out right, out up)`, `impostorSelect(view, grid, out a, out b, out c, out weights)`, `impostorFrameUv(dir, right, up, centre, radius, origin, ray, height, out point)` |
-| `FragmentFunctions` (after `Functions`) | `struct ImpostorSurface { vec3 albedo; float coverage; vec3 normal; float gloss; vec3 position; }` and `ImpostorSurface impostorSample(albedoMap, normalMap, depthMap, grid, centre, radius, origin, ray, cellA, cellB, cellC, weights, float pick, bool parallax)` |
-| `Vertex` / `Fragment` / `FragmentWithDepth` | A complete reference program on the foliage instance ABI |
+| `Functions` (any stage) | `impostorEncode`, `impostorDecode`, `impostorDecodeNormal`, `impostorBasis`, `impostorSelect(view, grid, out a, b, c, weights)`, `impostorFrameUv` |
+| `FragmentFunctions` | `struct ImpostorSurface { vec3 albedo; float coverage; vec3 normal; float gloss; vec3 position; }`, `framePick()` and `impostorSample(albedoMap, normalMap, grid, centre, radius, origin, ray, cellA, cellB, cellC, weights, pick)` |
+| `FragmentNative()` | The program on the foliage instance ABI (push constants `ImpostorPush`: sphere, grid, atlas indices, `Gloss` at offset 40) |
 
-The reference program:
+**Per instance (vertex stage).** The eye goes to object space and `impostorSelect` picks the grid triangle (three cells and barycentric
+weights). The quad faces the eye, rolled by the camera's up axis, half-size `r·d / sqrt(d² - r²)`.
 
-- Per-instance matrix rows at locations 7 to 10, row 0 w the fade, 2 meaning whole.
-- Six vertices per instance from `gl_VertexID`, no vertex buffer.
-- Uniforms: `uImpostor` (centre, radius), `uImpostorGrid`, `uImpostorAlbedo/Normal/Depth`, `uImpostorParallax`, `uImpostorBlend`,
-  `uImpostorDebug` (1 albedo, 2 normal, 3 coverage), `uCameraUp`, plus the mesh shader's lighting uniforms.
+**Per pixel.**
 
-**Per instance (vertex stage):**
+1. **Virtual frame-plane projection.** The object-space ray through the pixel is intersected with each frame's plane through the centre,
+   so the frames line up at the centre's depth whatever the view direction.
+2. **Frame pick (default) vs blend.** `pick` in [0, 1) selects the one frame whose cumulative weight passes it. The pick noise is
+   `framePick()`, a transposed-weight interleaved-gradient noise (it replaced the 4 x 4 Bayer matrix, whose regular dot grid showed on
+   large impostors seen steeply; **Observed**, the pattern is gone in the forest views). `pick < 0` blends the three by weight (blending
+   thins leaves and branches that do not line up into a mush, so it is a debug option).
+3. **Texture gradients.** All fetches use frame A's `textureGrad` gradients (the pick makes them non-uniform control flow).
+4. **Cut-out.** Cut at coverage 0.5 (the albedo's punch-through alpha, divided out of the colour); with a multisampled target an
+   alpha-to-coverage ramp over `fwidth(coverage)` is used, as the foliage meshes do.
+5. **Result.** Albedo, object-space normal, mean gloss and the position on the frame plane.
 
-- Transform the eye into object space and pick the grid triangle containing the view direction (`impostorSelect`: three cells and
-  barycentric weights, split on the cell's anti-diagonal).
-- The quad faces the eye, rolled by the camera's up axis. Its half-size is `r·d / sqrt(d² − r²)`, which covers the sphere's silhouette at
-  its centre's plane.
+**Lighting contract.** The surface goes through the same lighting as the mesh (`kenshiLight`, `atmoApply`), with the normal transformed by
+the instance matrix, so a live sun lights the impostor as it lights the mesh; only the albedo is baked.
 
-**Per pixel (fragment stage):**
+**Programs (`ImpostorDraw`, `ImpostorProgram`).** `Plain` for the colour pass (early depth test, the quad's depth) and `Caster` for the
+shadow cascades.
 
-1. **Virtual frame-plane projection.** The object-space ray from the eye through the pixel is intersected with each frame's plane
-   through the centre. This gives that frame's UV, so frames line up at the sphere centre's depth whatever the view direction.
-2. **Optional parallax** (`parallax = true`, estimate: off by default). One step: read the frame's depth at that UV and re-intersect
-   with the plane moved to it.
-3. **Frame pick (default) vs blend.**
-   - Pick: `pick` is a dither value in [0, 1) (the reference uses a 4 × 4 Bayer matrix). It selects the one frame whose cumulative
-     weight passes it, so each pixel shows a crisp single frame and the three interleave. Temporal anti-aliasing averages them.
-   - Blend: `pick < 0` blends all three by weight.
-   - Measured in the preview sheets: blending thins leaves and branches that do not line up between the frames into a soft mush,
-     while picking keeps the crown's density.
-4. **Texture gradients.** Every fetch uses `textureGrad` with frame A's gradients. The pick makes the fetches non-uniform control flow,
-   and the frames are a grid step apart, so their scales agree.
-5. **The cut-out.** Cut at coverage 0.5, the same rule the bake's coverage scaling targets. With a multisampled target and `uCoverage`,
-   an alpha-to-coverage ramp over `fwidth(coverage)` is used, as the foliage meshes do.
-6. **Result.** `ImpostorSurface` returns albedo, object-space normal (the frame basis back to object space), gloss, and the object-space
-   position at the baked depth.
+**Crossfade.** The mesh fades out with its usual dither (`M14 = fade`); the impostor gets `M14 = -fade` and discards the complement, so
+over the band each pixel shows exactly one of the two.
 
-**Lighting contract (from the code).** The impostor's surface goes through the **same lighting as the mesh**: the mesh shader's simple
-sun + hemisphere ambient + specular, then `kenshiLight(albedo, n, v, gloss, world)` and `atmoApply` when the atmosphere is on. The
-normal and position are transformed by the instance matrix, so a live sun lights the impostor as it lights the mesh. Nothing is baked
-into the albedo but the albedo. The preview sheets under three suns (high, low, behind) show matching shading direction and strength
-(measured by eye).
-
-**Depth (from the code).**
-
-- `Fragment` keeps early depth testing and writes the quad's depth.
-- `FragmentWithDepth` writes the depth of the reconstructed surface (`gl_FragDepth`), so impostors intersect each other and the terrain
-  correctly and can cast shadows into a depth-only pass. This costs early-Z.
-- Use it for the shadow pass and where trees stand in clusters (estimate).
-
-**Crossfade (from the code).** The mesh fades out with its usual dither (`M14 = fade`, discard where `dither ≥ fade`). The impostor gets
-`M14 = −fade` and discards the complement (`dither < fade`). Over the fade band each pixel shows exactly one of the two, with no double
-coverage and no gap.
-
-**Transition distance (from the code, `ImpostorLayout.TransitionDistance`).** The impostor shows one atlas texel per screen pixel when the
-instance's projected diameter equals the frame size:
-
-`d = R_world · H / (tan(fov / 2) · framePixels)`
-
-`R_world` is the radius × instance scale and `H` the viewport height in pixels.
-
-- Measured for BushTree01 (radius 126.4, scale 2 to 4, large class), FOV 50:
-
-  | Viewport height | Transition distance |
-  | --- | --- |
-  | 900 | 1906 to 3811 |
-  | 1080 | 2287 to 4574 |
-  | 2160 | 4574 to 9147 |
-
-- Recommendation (estimate): switch at this distance (per instance, from its own scale) or beyond. The fade band is the last 10% before
-  it. Closer than the transition the impostor is magnified and visibly softer than the mesh.
-
-**GPU cost per impostor (estimate):**
-
-- Vertex: 6 vertices, trivial.
-- Fragment, default path (pick, no parallax): 3 fetches (albedo, normal, depth: all BC, 1 byte/texel), plus about 60 ALU ops for 3
-  decode/basis/projection setups, plus the mesh lighting.
-- Parallax adds one fetch. Blending makes it 9 fetches.
-- At the transition a large tree covers at most 256² = 65k pixels, of which roughly 30 to 50% pass the cut. Coverage falls with 1 / d².
-- So a field of a thousand far trees costs on the order of a few million fragment shades: well below one full-screen pass at 1080p for
-  the area beyond 2× the transition distance.
-- Measuring it needs the foliage path's GPU timers (open).
+**Transition distance.** An impostor shows one atlas texel per screen pixel when the instance's projected diameter equals the frame size:
+`d = R_world · H / (tan(fov/2) · F)`. The foliage path uses one adjustable distance (section 7) instead, because a group keeps one range
+and the cull's chunk carries one transition. The frame size of section 2 is chosen so that the default 4000 is about this distance for
+the largest instance of each mesh.
 
 ## 6. Verification: `--impostor-preview`
 
-Command: `meitou-viewer --impostor-preview <FOLIAGE_MESH name, string id or .mesh file> [--out dir] [--size WxH] [--rebake] [--parallax]
-[--blend] [--debug n] [--depth-write] [--class medium|large]`. It renders offscreen (4× MSAA). `--impostor-bake-all [--rebake]` bakes or
-loads every eligible mesh and prints per-mesh and total time and size (section 3).
-
-Outputs in `--out` (default `C:\Temp\meitou-impostors`):
+`meitou-viewer --impostor-preview <FOLIAGE_MESH name, string id or .mesh file> [--out dir] [--size WxH] [--rebake] [--blend] [--debug n]
+[--class medium|large]` renders offscreen (4x MSAA). `--impostor-bake-all [--rebake]` bakes or loads every eligible mesh and prints per-mesh
+and total time and size. (`--parallax` and `--depth-write` were removed with the depth map.)
 
 | File | What it shows |
 | --- | --- |
-| `<name>-atlas-{albedo,normal,depth}.png` | Level 0 as stored (decoded from BC) |
-| `<name>-sheet-{high,low,back}.png` | Mesh / impostor pairs at 1500 units under three suns; rows are camera elevations −8 to 85°, columns four azimuths |
+| `<name>-atlas-{albedo,normal}.png` | Level 0 as stored (decoded from BC) |
+| `<name>-sheet-{high,low,back}.png` | Mesh / impostor pairs at 1500 units under three suns; rows are camera elevations -8 to 85 degrees, columns four azimuths |
 | `<name>-frames.png`, `-frames2.png` | Cameras exactly on frame directions (bake, layout and projection check) |
 | `<name>-field-{mesh,impostor}.png` | 160 random instances 1500 to 4000 units away |
 | `<name>-near-{mesh,impostor}.png` | 40 random instances 1500 to 2000 units away |
+| `<name>-t4k-{mesh,impostor}.png` | 120 random instances 3500 to 4500 units away (the default switch distance) |
 
-The field and near pictures use FOV 50, the eye at height 400. Compare pairs with `meitou-tools image-diff a b`.
+Compare pairs with `meitou-tools image-diff a b`.
 
-**Measured, BushTree01, Release, RTX 4070, 1600 × 900:**
+**Observed (2026-10-07, RTX 4070, 1600 x 900; the pictures are in `C:\Temp\agent-B\shots`, not in the repo):**
 
-- **On frame directions.** The impostor's silhouette matches the mesh's. This verifies the bake, the layout and the projection.
-- **Sheets.** Off-frame views keep the crown shape, trunk and shading direction under all three suns.
-- **Field (1500 to 4000).** Mean difference 8.10 / 255, 14.0% of pixels over 12. Most of it is the leaves' sub-pixel placement, which no
-  billboard reproduces.
-- **Near (1500 to 2000).** Mean 10.22, 16.2% over 12.
-  - These instances are *inside* their transition distance (1906 to 3811 at 900p), so the impostor is magnified. The mesh's individual
-    orange leaves and dark twigs read crisper and more saturated, while the impostor's leaves look paler and more olive (texel
-    averaging of leaf and twig).
-  - The BC3 encoder change did not move this, so the cause is resolution, not compression.
-- At its intended distance (≥ 1906 here) a tree is hard to tell from the mesh. Inside it the difference is visible on close inspection.
+- On frame directions the impostor's silhouette matches the mesh's (verifies the bake, the layout and the projection).
+- Off-frame views keep the crown shape, trunk and shading direction under all three suns.
+- **Colour, density.** Version 4's crowns were fuller and pinker than the meshes at the switch distance. With the bake's LOD bias (section 3)
+  the world crops (`shots\f2_on.png` against `f_off.png`, `s_on.png` against `s_off.png`) match the meshes' colour and density closely;
+  the pale pink blobs are gone. Whole-picture mean difference to the meshes in the forest at large range 12000: 3.80 (version 4) to 2.56.
+- **Crossfade.** The view at 4200 units (`--at -37582,-80684 --yaw -70.5 --pitch 4 --distance 4200`, `shots\x_on.png` against `x_off.png`):
+  mean difference 0.39, 1.3% of pixels over 12, max 163 (the maximum is a few leaf pixels and shadow edges); no visible seam, hole or
+  popping where the band is.
+- **Remaining artifact.** Dotted fringes at the silhouette of trunk bulbs: the stochastic pick across frames with parallax between them
+  (the frames are 8 to 15 degrees apart). A 12 x 12 grid reduces it against 8 x 8, it is not removed. Whether averaging the frames or a
+  depth-aware select would remove it, and at what cost, is **Unknown** (not tried).
 
-**Open:**
+**Not represented (from the code):** triplanar materials are baked in object space; the bake uses the simple specular path; views below
+the horizon are clamped to it; wind sway (the impostor is the rest pose).
 
-- The RGBA8 upload issue (section 2).
-- Triplanar materials are baked in object space (the mesh's world position at bake time), so a rotated instance's triplanar pattern
-  does not follow the world. That is invisible at impostor distances (estimate).
-- The bake uses the simple path's specular input (`gloss × uSpecular`), not a per-material Kenshi BRDF parameter set.
-- Views below the horizon are clamped to it.
-- Wind sway is not represented: the impostor is the rest pose.
-- Cache size cap.
+## 7. In the foliage path (as built; native since phase 8 stage 2, format 2 and the budget since 2026-10-07)
+
+Labels: **Verified** (a test or the parity gate checks it), **Observed** (seen or measured in a run, with the machine), **Unknown**.
+
+Code: `FoliageRenderer.Impostors.cs` (streaming, budget and drawing), `FoliageCull.cs` / `FoliageShaders.cs` / `FoliageGpuCull.cs` (the
+split), `Impostors/ImpostorDraw.cs`. Tests: `FoliageCullTests.Impostor_split_is_complementary`,
+`FoliageGpuCullTests.Gpu_impostor_split_matches_FoliageCull` (Slow), `ImpostorTests`.
+
+### Switch, distance, budget, options
+
+- The `impostors` Enhancement (F7): Meitou (default) draws impostors; Faithful never loads, bakes or draws one. `--faithful impostors`
+  turns it off, `--faithful all` includes it.
+- `ImpostorDistance` (default 4000; `--impostor-distance <u>`; Tab slider "Impostor distance (F7 Meitou)", 500 to 40000): the transition
+  distance T along the ground, for every atlas.
+- `ImpostorBudgetMb` (default 192; `--impostor-budget <MB>`, env `MEITOU_IMPOSTOR_BUDGET_MB`): the most VRAM atlases may hold. See below.
+- `MEITOU_IMPOSTOR_LOG=1` prints one line per atlas made Ready, evicted or refused. `MEITOU_IMPOSTOR_CASTERS=0` keeps the meshes as
+  shadow casters.
+- A group gets an impostor only when its mesh's atlas is Ready and T <= range - band. A mesh without a Ready atlas stays a mesh.
+  **Meitou default ranges** are large 12000, medium 5000, small 800 (docs/viewer.md, "Foliage"), so large meshes are impostors from 3600
+  to 12000 and medium ones from 3600 to 5000.
+
+### Budget and eviction (from the code; Observed numbers)
+
+- An atlas's resident size is known before it is made (`ImpostorTextures.BytesFor`). `UploadImpostor` checks the budget first. If it
+  does not fit, `MakeImpostorRoom` evicts atlases that were not used for more than 1 s, least recently used first; if that is not enough
+  the atlas is refused: its state goes to `None` with a retry in 8 s, and its meshes keep drawing as meshes.
+- Uploads are limited to 6 MB per frame (64 MB while settling), through `GpuFrame.Staging`.
+- **Observed** (RTX 4070, Meitou defaults, still camera, forest close view): 49 atlases, 119 MB (albedo 76.7 + normal 42.2). In a flight over
+  the forest (300 frames, `--fly-benchmark`) 46 to 47 atlases, 200 to 206 MB at the end; the budget (192 MB) holds the refused and evicted
+  ones back. The extra for all of it is under the 500 MB target by a factor of 2.5 to 4.
+
+### The split (Verified)
+
+The crossfade band is [T - B, T) with B = 0.1 T. With the transition fade m = clamp((T - d) / B, 0, 1) and the range fade w:
+
+| Distance | Mesh list (row 0 w) | Impostor list (row 0 w) |
+| --- | --- | --- |
+| d < T - B (m = 1) | `Pack(w)` | not listed |
+| T - B <= d < T (0 < m < 1) | m | -m (the complementary dither) |
+| d >= T (m = 0) | not listed | `Pack(w)` |
+
+- CPU: `FoliageCull.CullGroup(..., parts)` with `PackMesh` / `PackImpostor`; hidden is -2.
+- GPU: a group with an impostor has its mesh chunks flagged `ImpostorMesh` (4) and a second set flagged `Impostor` (8), with `Transition`
+  and `InverseTransitionBand` in the chunk's former padding. Batches are meshes, TERRAIN-mode rocks, then impostors (one
+  `DrawIndexedIndirect` of the six-index quad, bindless atlas indices, `ImpostorPush`).
+- **Verified**: the split test, `Gpu_impostor_split_matches_FoliageCull` (bit for bit), `MEITOU_GPU_CULL_VERIFY=1` in the forest view,
+  and `MEITOU_GPU_CULL=0` / `MEITOU_RECORD_THREADS=0` give pictures 0 px from the default.
+
+### Streaming (from the code)
+
+- Once a second (every update while settling) zones whose far corner is beyond T - B ask for the atlases of their resident, in-range
+  meshes. A worker loads the cache; a miss is baked on the render thread, two rows per frame (all rows per update while settling), then
+  saved on a worker. An atlas uploads one level per frame (all while settling).
+- Offscreen settling (`FoliageRenderer.Settle`) ends the frame with `Gpu.Finish()` while a bake or an upload waits.
+- An atlas unused for `IdleSeconds` (60) is unloaded, and by the budget sooner.
+
+### Shadows
+
+- In the cascades a group with an impostor casts the impostor beyond T (the same split, its own cull per cascade), drawn by the `Caster`
+  program: one frame per texel by the pick (no fade), cut at coverage 0.5, depth on the frame plane through the crown's centre. The quad
+  faces the sun (`uImpostorView` w 1). `MEITOU_IMPOSTOR_CASTERS=0` keeps mesh casters.
+- **Observed** (forest close view, still camera, `--fly-benchmark 300`, RTX 4070, Meitou defaults, GPU timers of the shadow cascades,
+  mean ms; the foliage-caster rows are the "fol meshes" pass inside the cascades):
+
+  | Shadow range, casters | Cascades GPU total | Foliage casters |
+  | --- | ---: | ---: |
+  | 10000, impostor casters | 1.31 | 0.94 |
+  | 10000, mesh casters (`CASTERS=0`) | 2.91 | 2.55 |
+  | 15000, impostor casters | 1.98 | 1.34 |
+  | 15000, mesh casters | 3.69 | 3.28 |
+  | 15000, impostors off (`--faithful impostors`) | 3.58 | 3.17 |
+
+  At 5000 (the game's range) there is no difference. Impostor casters cost about 40% (10000) and 55% (15000) of the mesh casters.
+
+### Meitou pictures against the base Meitou pictures (Observed, ten views, `C:\Temp\base-6f4af19\meitou`)
+
+| View | mean | over 12 | max |
+| --- | ---: | ---: | ---: |
+| forest 13:00 / 02:00 | 7.06 / 0.71 | 21.1% / 1.67% | 223 / 51 |
+| hub 13:00 / 02:00 | 6.97 / 1.57 | 25.8% / 2.56% | 161 / 61 |
+| portnorth 13:00 / 02:00 | 0.147 / 0.012 | 0.405% / 0.101% | 215 / 43 |
+| rock 13:00 / 02:00 | 0.259 / 0.019 | 0.703% / 0.057% | 174 / 30 |
+| zone14_30 13:00 / 02:00 | 3.53 / 0.43 | 13.3% / 0.905% | 104 / 25 |
+
+These differ by design: the new ranges (12000 / 5000 / 800 draw far trees and bushes the base pictures lack), the longer shadow distance
+(10000, more and longer distant shadows) and the billboards. With `--faithful impostors --range-large 5000 --range-medium 2500
+--shadow-range 5000` (the baseline's settings) all ten views are 0 px (**Verified**), and `--faithful all` is 0 px (**Verified**).
+
+### Frame times (Observed, 2026-10-07, RTX 4070, 1600 x 900, forest close view, `--fly-benchmark 300`, three interleaved runs; `nvidia-smi` idle (0-18%) before each)
+
+Still camera (`--fly-speed 0`). Master is 410579b at its defaults (shadow 5000, ranges 5000 / 2500); "new" is the Meitou defaults; "off" is the
+new defaults with `--faithful impostors` (so the new ranges and shadow 10000 with meshes). The GPU "frame" time is bimodal here (GPU clock
+states) and not reliable; the per-pass rows are:
+
+| | Master | New | New, impostors off |
+| --- | ---: | ---: | ---: |
+| CPU frame mean (ms) | 1.19, 1.03, 1.08 | 1.52, 1.34, 1.31 | 1.14, 1.22, 1.37 |
+| Shadow cascades GPU (ms) | 1.35, 1.18, 1.82 | 1.65, 1.65, 1.67 | 3.05, 3.05, 3.04 |
+| Foliage colour GPU (ms) | 0.93, 0.67, 1.25 | 0.74, 0.98, 0.98 | 1.33, 1.35, 1.32 |
+
+So against its own meshes the billboards save about 1.4 ms of shadow and 0.4 ms of colour GPU time at the longer ranges, and cost about
+0.2 ms of CPU (the second set of chunks, and the atlas loading). Against master at its short defaults, the new defaults draw far more
+(12000 / 5000 / shadow 10000) for about the same GPU time and +0.2 ms CPU.
+
+Flying (default `--fly-benchmark` circle, three runs each): CPU frame mean 2.72, 3.42, 3.88 ms for master and 4.33, 3.67, 3.91 for new
+(upd-foliage 0.47 to 0.59 against 0.64 to 0.67: atlas loading, uploads and the second chunk set); shadows GPU 0.67 to 3.47 against 1.43
+to 1.65. The flight numbers vary run to run as much as the difference, so the CPU cost in a flight is about +0.2 to 0.5 ms (**Observed**,
+noisy).
+
+### VRAM per owner (Observed, `vram` line of `--fly-benchmark`)
+
+| Owner | Before (billboards-wip, default ranges) | After, still | After, flight |
+| --- | ---: | ---: | ---: |
+| impostor atlas albedo | 320 | 76.7 | 129.4 |
+| impostor atlas normal | 88 | 42.2 | 71.1 |
+| impostor atlas depth | 88 | 0 | 0 |
+| Total impostor | about 495 (41 atlases) | 119 (49 atlases) | 200 (47 atlases) |
+
+Whole-process device-local use at the end: 2928 MB without impostors at the new ranges, 3120 MB with (still), 3824 MB with (flight, which
+also holds more foliage textures and meshes). Master's viewer has no impostors.
+
+### Open
+
+- The dotted trunk-bulb fringe (section 6).
+- Atlas-load hitches in an extreme fast flight (an atlas bakes on first need, cached on disk afterwards; 25.8 s to bake all).
+- A per-instance transition by projected size (needs a per-instance transition in the cull); a budget slider.
+- The atlas cache has no size cap.

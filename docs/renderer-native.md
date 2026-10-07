@@ -1072,16 +1072,17 @@ These change the picture on purpose, so they are not part of any parity step. Th
   over distance against a pixel threshold), capped by the layer's range × the setting. Large trees go far, small junk stops sooner. This
   is how small things become affordable at several thousand units. The distances are adjustable settings per size class (owner decision 4).
   **Done on the CPU (2026-10-06)** as the `range` switch, by size class per mesh rather than per instance (a group keeps one range, so the
-  ChunkRecord's per-view range carries it unchanged): large / medium / small at 5000 / 2500 / 800 by default, Tab sliders and
+  ChunkRecord's per-view range carries it unchanged): large / medium / small first at 5000 / 2500 / 800 and, since the billboards (8.10), at 12000 / 5000 / 800 by default, Tab sliders and
   `--range-large|medium|small`; FAR layers' large meshes keep the longer of that and 8000 × the setting (docs/viewer.md "Foliage",
   docs/formats/foliage.md "Mesh sizes").
 - **LOD selection on the GPU** (objects, C): `MeshLod.Select` / `Blend` per instance in the cull kernel, with two outputs while blending,
   as the CPU emits them. This is parity-relevant (the LOD rule is the game's), so it follows the A1/A2 pattern.
-- **Impostors** (`impostors`): hemi-octahedral impostor atlases (12 × 12 frames, BC3 albedo + BC5 normal + BC5 depth), baked per mesh
-  through `IGl` and cached in `%LOCALAPPDATA%\Meitou\impostors`. Drawn beyond the per-instance transition distance as one quad per
-  instance from the same cull, crossfaded with the mesh by complementary dither. Needs bindless (step O). The baker, format, cache,
-  sampling GLSL (`ImpostorShaders`) and the `--impostor-preview` check exist (from the code); wiring them into the foliage path and the
-  `Enhancement` switch is the foliage path's step. Details, measurements and the GLSL API are in [impostors.md](impostors.md).
+- **Impostors** (`impostors`): hemi-octahedral impostor atlases (12 × 12 frames sized by distance, BC1 albedo + BC5 normal, no depth), baked per mesh
+  natively and cached in `%LOCALAPPDATA%\Meitou\impostors`. **Done (phase 8 stage 2 and 8.10, 2026-10-07)**: the `impostors` switch (F7, Meitou
+  default), within an atlas VRAM budget (192 MB, LRU), drawn from the impostor distance (default 4000, Tab slider, `--impostor-distance`) as one quad per instance from the same
+  cull (the kernel splits a group's instances into mesh and impostor lists, crossfaded over a 10% band by complementary dither, separate
+  indirect draws, bindless atlases), lit, fogged and shadowed as the meshes, and cast into the shadow cascades as impostors. Atlases load
+  or bake on demand. Details, measurements and the GLSL API are in [impostors.md](impostors.md) (section 7 for the foliage path).
 - **Hi-Z occlusion** (`occlusion`): last frame's depth pyramid reprojected, a two-phase cull. Conservative in theory but float-sensitive in
   practice, so it is a Meitou-mode switch.
 
@@ -2668,11 +2669,12 @@ before and after, `upd-terrain` 0.46-0.49 → 0.49-0.52 ms, render-thread alloca
   array 0) is now the `DrawState` of each draw (`CurrentState() with { ... }`). Alpha to coverage follows the target's sample count.
 - **Foliage GPU timers** are `QueryArena` timestamps recorded through `Interleave`, read without waiting (stale ones dropped after two
   rounds of frames).
-- **Still-GL users** (the impostor baker and preview, reserved, read `WorldTexture.Id`; `TerrainRenderer.DrawMeshes` takes GL vertex arrays
+- **Still-GL users** (at stage 1: the impostor baker and preview, which read `WorldTexture.Id`; `TerrainRenderer.DrawMeshes` takes GL vertex arrays
   for rocks and terrain-placed foliage) get GL names over the native resources through the additive `Gpu/GlBridge.cs` (seam `Import` /
-  `ImportBuffer`, no raw handle sharing). That file is the only GL left on these paths; it goes when the impostors and `DrawMeshes` take
-  native textures and mesh bindings. `FoliageRenderer` and `WorldObjectRenderer` keep an unused `IGl` constructor parameter (`WorldFrame`
-  is reserved), as does the `WorldTextureCache(IGl, AssetLocator)` overload the impostors call. Also added: `CommandList.BlitLevel`.
+  `ImportBuffer`, no raw handle sharing). That file is the only GL left on these paths. Stage 2 (8.6) ported the impostors and removed
+  `GlBridge`'s texture part, `WorldTexture.Id` and the `WorldTextureCache(IGl, AssetLocator)` overload; the vertex arrays and
+  `EnsureFrame` remain for `DrawMeshes`. `WorldObjectRenderer` keeps an unused `IGl` constructor parameter (`WorldFrame` is reserved);
+  `FoliageRenderer` uses its one since stage 2 (8.6). Also added: `CommandList.BlitLevel`.
 
 Facts:
 - **Verified** (`WorldResourceTests`, sync validation): the native vertex attributes equal what VkGl exported for the GL vertex arrays
@@ -2881,8 +2883,31 @@ the upscaler is deterministic.*
 renders its frames natively and the atlases are native textures ("impostor atlas ..."). **Verified** by the agent: the baked atlases are
 byte-identical to the GL baker's. The GL texture names the baker read from `WorldTextureCache` through `GlBridge` are gone. Gate on the merge:
 the ten views in both modes 0 px against `C:\Temp\base-6f4af19`, tests 472 passed, 0 skipped. The drawing of impostors in the foliage path
-(the rest of that work) is kept on the branch `billboards-wip`, not merged (owner, 2026-10-07): it cost 1.1-2.4 GB of VRAM for little frame
-time (forest, measured on that branch), and its VRAM cut was not finished.
+was first kept on the branch `billboards-wip` (1.1-2.4 GB of VRAM for little frame time); it was finished on `billboards-native`, 8.10.
+
+### 8.10 Billboards finished on the native API (branch `billboards-native`, 2026-10-07)
+
+*In short: the far-foliage impostors are drawn in Meitou mode (the default), at a fraction of the first version's VRAM, and the Meitou
+foliage ranges and shadow distance are longer. Faithful is unchanged to the pixel. Details and numbers: [impostors.md](impostors.md).*
+
+- **Port.** The `billboards-wip` commits were cherry-picked onto master 410579b: `IGl.Finish` and `GlBridge.EnsureFrame` became
+  `Gpu.Finish()` / `Gpu.EnsureFrame()`, the cull test uses `GpuContext`, the benchmark's VRAM lines use the device. `billboards-wip` is untouched.
+- **Format 2 (baker 5).** BC1 punch-through albedo + BC5 normal, no depth map; frame size 64-256 by the on-screen size at 4000 units;
+  12 × 12 frames; the bake samples textures with a LOD bias that matches the mesh at that distance (fixes the fuller, pinker crowns);
+  frame-pick noise replaced the Bayer matrix. **Observed**: impostor VRAM 495 MB (41 atlases) to 119 MB (49 atlases) in the forest still view,
+  200 MB in a flight; all 267 base-game atlases would be 1637 MB resident (5669 MB before), bake-all 25.8 s (407 s), disk 376 MB.
+- **Budget.** 192 MB (`--impostor-budget`), LRU eviction of atlases unused for 1 s, a refused atlas retries after 8 s and its mesh keeps drawing.
+- **Meitou defaults.** Foliage ranges large 12000, medium 5000, small 800 (were 5000 / 2500 / 800; the size thresholds 40 / 125 keep their
+  old range constants, `FoliageSizes.Threshold*Range`); impostor distance 4000; shadow range 10000 (the game's 5000 in Faithful; the CLI
+  accepts 1000-15000 in Meitou, 1000-9000 in Faithful). Why (**Observed**, RTX 4070, forest, `--fly-benchmark 300`): with billboards
+  the cascades cost 1.65 ms at shadow 10000 against 3.05 ms with the meshes, and 1.98 ms against 3.58 at 15000, so 10000 with
+  billboards costs about what the game's 5000 costs with meshes (1.35 ms measured on master); 15000 is the owner's hard limit and the top of the
+  Meitou option. 12000 / 5000 were chosen because in a flight they use about the whole 192 MB budget (47 atlases, 200 MB at the end);
+  longer ranges would only evict more (**Unknown**: not measured beyond 12000, by the owner's rule).
+- **Gate.** `--faithful all`, ten views: max 0 against `C:\Temp\base-6f4af19\faithful` (**Verified**). Meitou with `--faithful impostors
+  --range-large 5000 --range-medium 2500 --shadow-range 5000`: 0 px against the Meitou baseline (**Verified**); with the new defaults the
+  views differ by design (impostors.md section 7). Tests 463 passed, 0 failed, 0 skipped. Sync validation: 0 errors in the forest views;
+  the shutdown message about four leaked `VkImageView`s also appears on master (not from this work).
 
 ### 8.9 Phase 8 stage 3 (no GL-shaped layer) as built
 
@@ -2989,6 +3014,27 @@ the peak of the loading frames stays allocated in host memory. That predates thi
 
 ---
 
+### 8.6 Phase 8 stage 2: impostors native and drawn (2026-10-07)
+
+Files: `Impostors/ImpostorBaker.cs`, `ImpostorTextures.cs`, `ImpostorShaders.cs`, `ImpostorPreview.cs`, new `ImpostorDraw.cs`;
+`tools/Meitou.ModelViewer/ImpostorApp.cs`; `NativeProg.cs` (moved out of `FoliageRenderer`); `FoliageRenderer.cs` and new
+`FoliageRenderer.Impostors.cs`, `FoliageCull.cs`, `FoliageShaders.cs`, `FoliageGpuCull.cs`; `Enhancements.cs`, the option, switch and
+slider lines of `WorldFrame.cs` / `WorldApp.cs`; `WorldTextureCache.cs` and `Gpu/GlBridge.cs` (impostor parts removed);
+`WorldApp.Benchmark.cs` (VRAM lines, `MEITOU_BENCH_SHADOW_RANGE`).
+
+- **Ported** (from the code): the baker records each row into the frame's pre-frame list and reads it back after the frame completes
+  (`ImpostorBakeJob`, stepped per frame); the atlas textures are native `Texture`s ("impostor atlas albedo/normal/depth", GENERAL,
+  bindless, trilinear clamp, re-registered on an LOD-bias change); the preview and `--impostor-preview` / `--impostor-bake-all` render
+  with native passes (4× MSAA, resolve, readback). Impostor files no longer use `IGl`.
+- **Verified**: native atlases byte-identical to the base GL baker's (BushTree01), `--impostor-preview` pictures 0 px, `BakerVersion`
+  unchanged; the ten parity views 0 px with `--faithful all` and with Meitou and `--faithful impostors`; the GPU split bit-identical to
+  the CPU (test and verify mode; impostors.md 7); `MEITOU_GPU_CULL=0` and `MEITOU_RECORD_THREADS=0` 0 px from the default; sync
+  validation 0 errors in the forest (13:00, impostors on) and Port North (13:00, `--water-reflection 4`).
+- **IGl count**: `FoliageRenderer.cs` 0 → 1. `Settle` (offscreen loading) waits in a loop without frames, but a bake's rows are read
+  after their frame completes, so it calls `IGl.Finish` (end the frame, wait, begin the next) while a bake needs one. Stage 3 replaces it
+  with the native frame loop's equivalent.
+- **Drawing, shadows, pictures and measurements**: impostors.md section 7.
+
 ## 9. Expected CPU cost, and how the profiler keeps working
 
 *In short: a throwaway measurement on the RTX 4070 recorded the same draws through VkGl and directly. A typical foliage mesh draw costs about
@@ -3092,7 +3138,7 @@ refers to them as "owner decision N".
    log or the cull verifier).
 3. **Switch names** (5.7): `range` (size-based ranges), `impostors`, `occlusion`; separate `Enhancement` switches, Meitou default.
 4. **Draw distances** (1, 5.7): adjustable settings, not fixed numbers. Tab-panel sliders per size class, for example large (ruins,
-   wrecks), medium (junk, rocks) and small (litter, bushes), with defaults around 5000 / 2500 / 800 units, plus command-line options. This
+   wrecks), medium (junk, rocks) and small (litter, bushes), with defaults around 5000 / 2500 / 800 units (12000 / 5000 / 800 since 8.10), plus command-line options. This
    is for agent A's `range` switch in wave 3b; the wave-2 API needs nothing for it (the per-view range cap of 5.3 takes the setting).
 5. **Image layouts** (4.4): stay in GENERAL; revisit after phase 8.
 6. **API steward** (7.1): the foundation agent stays on through wave 3 and lands API additions. No transfer queue in wave 2 (this also
