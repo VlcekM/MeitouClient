@@ -112,7 +112,7 @@ sealed class WorldOptions
           --impostor-budget <MB>   fixes the most video memory the resident impostor atlases may use (default: 8% of the card's budget, 5% on an integrated GPU, 48-1024 MB; docs/impostors.md section 10; atlases that do not fit are held at coarser mips, then stay meshes)
           --impostor-cache-mb <MB> the most the impostor atlas disk cache (%LOCALAPPDATA%\Meitou\impostors) may take (default 512, 0 = no cap; least recently used files go first)
           --object-distance <u>    draw placed objects at full detail up to this distance (the reach switch, F8: default 20000 in Meitou, 12000 in Faithful)
-          --landmark-distance <u>  Meitou only: huge placed objects (world radius 1500 and up: the giant wrecks, skeletons, towers) are drawn up to this distance instead (default 150000; 0 or --faithful reach: none, they use --object-distance; Tab slider)
+          --landmark-distance <u>  Meitou only: huge placed objects (world radius 2000 and up: the giant wrecks, skeletons, towers) are drawn up to this distance instead (default 150000; 0 or --faithful reach: none, they use --object-distance; Tab slider)
           --distant-range <zones>  distant towns (and buildings' distant meshes) up to this many zones (default 10, the game's setting maximum; its default is 6)
           --no-distant             no distant towns: objects beyond --object-distance are simply not drawn
           --layer-size <n>         terrain layer texture size, a power of two up to 2048 (default 2048)

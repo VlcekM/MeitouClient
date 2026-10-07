@@ -3380,7 +3380,9 @@ Files: `Landmarks.cs` (new: `LandmarkClass`), `ObjectStreamer.cs` (`LandmarkZone
   held back until it is done, about 0.7 s), the 90 landmarks are kept in one pseudo-zone (`ObjectStreamer.LandmarkZone`, never unloaded) and left out of the zones by the same test (so nothing is drawn twice). Every
   path then uses one range per instance, `min(range, Limit)`, with `range` = `LandmarkReach` (`max(object distance, landmark distance)` x the VRAM guard's scale) for a landmark and the object distance otherwise:
   `ScanLandmarks` (mesh requests, within the range plus the instance's own radius instead of the guessed 600), `MarkInRange` (keep-alive), `DrawReal` (the CPU cull and fade band, also for the shadow cascades and
-  the reflection, whose clamp to 3000 now applies to the landmark distance too), the mesh LOD levels and texture mips (far forms and mip streaming apply as for any object: a mesh requested at 100 000 holds its coarsest levels).
+  the reflection, whose clamp to 3000 now applies to the landmark distance too), the mesh LOD levels and texture mips (the objects' own rules: far forms by distance, `Rebalance`, mip streaming). **Observed** (`MEITOU_LANDMARK_LOG=1`, which lists each resolved landmark's levels and the finest level held, on the Ribs view at 35 km): all but one of the 26 landmark meshes resolved there have a single LOD level, so
+  there is no coarser form to hold; `Bones_Town_Ribs`, the only one with two, holds level 0 because its nearest placement is 26 000 away. The request passes `distance - radius` as the placement distance and the decode takes six radii off it, which for a mesh with levels and a giant
+  radius would clamp to the finest level until `Rebalance` coarsens it (10 s): **Unknown**, since no landmark mesh of the base game has levels to show it. Texture mip streaming for landmarks was not measured separately.
   The 90 landmarks are walked every frame (`upd-objects` unchanged, 0.15 ms). Faithful (`--faithful reach|all`, or `--landmark-distance 0`) builds no list, so its draw order and pictures do not change.
   Starting without Meitou reach builds no list and no slider; `F8` later moves the distances but not the landmarks.
 - **Pictures, Faithful** (**Verified**): ten parity views with `--faithful all` against `C:\Temp\base-87c7857\faithful`: max 0 in all ten, before the landmark code and after.
@@ -3405,15 +3407,20 @@ Files: `Landmarks.cs` (new: `LandmarkClass`), `ObjectStreamer.cs` (`LandmarkZone
   Reading: the new defaults cost about **+0.5 ms GPU (+28%), +0.6 ms CPU p50 and +1.1-1.2 GB VRAM** on this flight, all of it from the foliage ranges (50000 / 12000: more impostors and meshes resident, foliage textures
   582 to 773 MB, impostor atlases 95 to 176) and the object range (object textures 261 to 593 MB); the new reach alone is cheaper on the GPU than master (1.66 against 1.80, the 16 px terrain) and costs
   +0.55 GB. The landmarks cost no time that shows on the Hub flight (GPU 2.33/2.24 against 2.34/2.29; 8 landmark instances a frame, +4k triangles, `upd-objects` the same) but **+0.24-0.3 GB of video memory**
-  (object meshes 131 to 206 MB, object textures 593 to 752 MB: the huge meshes' textures, held at the mips their distance needs). Around Ashland, where a dozen are in
+  (object meshes 131 to 206 MB, object textures 593 to 752 MB: the huge meshes' textures). Around Ashland, where a dozen are in
   view (`--at 95000,108000 --fly-radius 20000`): 68 against 71 instances, +78k triangles of 445k, 0 unloaded / 0 reloaded either way (the GPU means 3.42 and 4.56 ms are terrain streaming noise there).
   **No reload churn**: 0 object meshes unloaded or reloaded in every run at the default idle time; with `MEITOU_UNLOAD_IDLE=3` on a 40000 circle (every place revisited each 17 s, so unloading is legitimate) landmarks at 150000 /
   400000 / off give 155 / 155 / 179 unloaded and 155 / 131 / 123 reloaded: no landmark-specific reloads (at 400000 every landmark is always in range, and the reloads are the same as without).
 - **Integrated GPU** (owner runs the viewer on an integrated-GPU laptop, about 30 fps at the old defaults): the new defaults cost more there. The measured cost on the RTX 4070 is above; it is the foliage ranges that carry it. Nothing
   integrated-specific was changed (no iGPU defaults); the impostor budget already drops to 5% / 256 MB on an integrated GPU (8.16, **Unknown** on real hardware), and `--faithful range` or `--range-large 12000 --range-medium 5000`
   returns the old foliage cost.
-- **Open**: the 90 landmarks are drawn as full meshes at the coarsest LOD level their distance picks, not as impostors, so a very large one (Skylink, 38 000 radius) has a high triangle count at its coarsest form: not measured
-  separately. VRAM is the driver's budget per process; under other processes' load the run-to-run budget swung 3.4-11.5 GB, and a 95% watch abort (`MEITOU_VRAM_KILL`) hit one default-range run at a 3456 MB budget.
+- **Notes on the numbers**: "master's defaults" is this build's binary with `--faithful reach --range-large 12000 --range-medium 5000` (the Faithful parity at 0 px shows the switch changes nothing else), not master's executable.
+  The benchmark's `sizes` line now reports max 1773, not 38181: the landmarks left the zones and `SizeSurvey` walks the zones only. `WorldObjects.Describe()`'s counters (buildings, features, layouts) also count the one whole-world
+  layout of `Collect`, so the `objects` log line is inflated in Meitou. The collection took 0.7-0.9 s on the workers in quiet runs and 5 s in one run with other viewers using the machine; zone layout waits for it.
+- **Open**: (a) the 90 landmarks are full meshes (most have one LOD level, the biggest, Skylink, 7 MB), not impostors, so a very large one is drawn with all its triangles: not measured separately. (b) Rock landmarks
+  (`Patagonia_RockSlab01`, `FeatureBluff001`, `Mafic_HugeRockSlabs`, `CLiff_Curved`, `ROCK-Arch_Type_01`) are probably terrain-mode map features, drawn through `TerrainRenderer.DrawMeshes` one draw each (not checked per record):
+  that mesh path overlaps what the rock impostor work changes. (c) About 55% of the bounds probes fall back to a whole read; cause not examined (cost is under a second). (d) `F8` at run time moves the distances but never builds or removes the landmark list, so runtime-Faithful is not
+  pixel-identical to a Faithful start; the gate covers the start mode. (e) VRAM is the driver's budget per process; under other processes' load the run-to-run budget swung 3.4-11.5 GB, and a 95% watch abort (`MEITOU_VRAM_KILL`) hit one default-range run at a 3456 MB budget.
 
 ## 9. Expected CPU cost, and how the profiler keeps working
 

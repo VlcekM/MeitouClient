@@ -183,9 +183,16 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>GPU memory held by streamed meshes and textures, for the stats line and the window title.</summary>
     public long ResidentBytes => meshes.Bytes + textureCache.ResidentBytes;
     public string ResidentDescription => $"{meshes.Bytes / 1048576.0:0} MB in {meshes.Resident} meshes ({meshes.Unloads} unloaded, {meshes.Reloads} reloaded, {meshes.Refined} remade finer, {meshes.Coarsened} coarser), {textureCache.Describe()}";
+    /// <summary><c>MEITOU_LANDMARK_LOG=1</c>: one line per resolved landmark, nearest first: its distance, LOD levels, the finest level the mesh holds, its size.</summary>
+    string LandmarkDetail() =>
+        Environment.GetEnvironmentVariable("MEITOU_LANDMARK_LOG") == "1" && streamer.LandmarkZone is { } zone
+            ? "\n" + string.Join("\n", zone.Real.Where(i => i.Gpu is not null).OrderBy(i => Vector3.Distance(eyeNow, i.Centre)).Select(i => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"landmark  {Path.GetFileName(i.Mesh.Key),-40} {Vector3.Distance(eyeNow, i.Centre),8:0} away, radius {i.Radius,6:0}, {i.Gpu!.LevelCount} levels, finest held {i.Gpu.MinLevel}, {i.Mesh.Bytes / 1024} KB")))
+            : "";
+
     public string Describe() =>
         $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved{(streamer.LandmarkZone is { } lz ? $", of them {lz.Real.Count(i => i.Gpu is not null)} of {lz.Real.Count} landmarks" : "")}), {meshes.Resident}/{meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
-        $"{towns.Count(t => t.Mesh.Status == ObjectMesh.State.Resident)}/{towns.Count} distant towns; {objects.Describe()}";
+        $"{towns.Count(t => t.Mesh.Status == ObjectMesh.State.Resident)}/{towns.Count} distant towns; {objects.Describe()}{LandmarkDetail()}";
 
     // ------------------------------------------------------------------ streaming
 
