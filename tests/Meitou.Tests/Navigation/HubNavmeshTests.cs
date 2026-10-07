@@ -4,6 +4,7 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.World;
 using Meitou.Navigation;
+using Meitou.Simulation;
 
 namespace Meitou.Tests.Navigation;
 
@@ -40,6 +41,32 @@ public class HubNavmeshTests
     }
 
     static readonly ZoneCoordinate West = new(20, 32), East = new(21, 32);
+
+
+    static string Pin(PathResult path) =>
+        path.Found ? string.Join("\n", path.Points.Select(p => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{p.X:R},{p.Y:R},{p.Z:R}"))) : "none";
+
+    [Fact]
+    public void The_hub_paths_keep_their_exact_points()
+    {
+        Assert.SkipWhen(Load() is null, "Kenshi install not found");
+        var west = Zone(West).Full;
+        var east = Zone(East).Full;
+        var house = new NavQuery(NavWorld.Empty.With(west.WithoutPruned()), new NavDoors());
+        var street = new Vector3(-51290, 1566, 2625);
+        var floor = new Vector3(-51158, 1579, 2664);
+        Assert.Equal(HubPathPins.StreetToHouseFloor.ReplaceLineEndings("\n"), Pin(house.FindPath(street, floor)));
+        Assert.Equal(HubPathPins.HouseFloorToStreet.ReplaceLineEndings("\n"), Pin(house.FindPath(floor, street)));
+        var query = new NavQuery(NavWorld.Empty.With(west.WithoutPruned()).With(east.WithoutPruned()));
+        Vector3 At(float x, float z) => new(x, 0, z);
+        var outsideWest = At(-53500, 2000);
+        var centre = At(-51000, 2900);
+        var outsideEast = At(-49500, 3500);
+        Assert.Equal(HubPathPins.WestToCentre.ReplaceLineEndings("\n"), Pin(query.FindPath(outsideWest, centre)));
+        Assert.Equal(HubPathPins.CentreToEast.ReplaceLineEndings("\n"), Pin(query.FindPath(centre, outsideEast)));
+        Assert.Equal(HubPathPins.WestToEast.ReplaceLineEndings("\n"), Pin(query.FindPath(outsideWest, outsideEast)));
+        Assert.Equal(HubPathPins.WestToCentreDoorsClosed.ReplaceLineEndings("\n"), Pin(query.FindPath(outsideWest, centre, new NavAgent { DoorsClosed = true })));
+    }
 
     [Fact]
     public void The_hub_zone_gathers_terrain_buildings_doors_and_seeds()

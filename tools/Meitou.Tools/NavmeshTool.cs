@@ -25,6 +25,7 @@ static class NavmeshTool
         float[]? box = null, pathArg = null;
         bool doorsClosed = false, noInteriors = false, noNeighbourSeeds = false; float? toY = null, fromY = null; float[]? near = null;
         int around = 0;
+        bool fingerprint = false;
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -49,6 +50,7 @@ static class NavmeshTool
                 case "--around": around = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--path": pathArg = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
                 case "--repeat": repeat = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                case "--fingerprint": fingerprint = true; break;
                 case "--box": box = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
                 default: Console.Error.WriteLine($"Unknown option {args[i]}"); return 2;
             }
@@ -58,6 +60,7 @@ static class NavmeshTool
         var db = GameDatabase.Load(LoadOrder.FromInstall(install));
         var levels = WorldLevelData.Load(install);
         Console.WriteLine($"game data and levels loaded ({watch.ElapsedMilliseconds} ms)");
+        if (fingerprint) return Fingerprint(install, db, levels, zone is { } only ? [only] : [new ZoneCoordinate(20, 32), new ZoneCoordinate(21, 32)], settings);
         if (zone is null)
         {
             var match = levels.Towns().Select(t => (Place: t, Record: db.Find(t.TownId)))
@@ -156,6 +159,65 @@ static class NavmeshTool
         if (obj is not null) WriteMeshObj(built[0].Mesh, obj);
         if (png is not null) WriteMeshPng(built, png, unitsPerPixel, box, path, interiorMeshes);
         return 0;
+    }
+
+    /// <summary>
+    /// <c>--fingerprint</c>: the refactoring gate. Builds each zone with a fresh gatherer and no neighbours (as <c>--around 0</c> does), prints the
+    /// SHA-256 of the cache file it would save, and, when the Hub's two zones are built, the point lists of the paths <c>HubNavmeshTests</c> pins.
+    /// </summary>
+    static int Fingerprint(GameInstall install, GameDatabase db, WorldLevelData levels, ZoneCoordinate[] zones, NavBuildSettings settings)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "meitou-nav-fingerprint-" + Guid.NewGuid().ToString("N"));
+        var cache = new NavMeshCache(dir);
+        var meshes = new Dictionary<ZoneCoordinate, ZoneNavMesh>();
+        try
+        {
+            foreach (var zone in zones)
+            {
+                using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
+                var g = gatherer.Gather(zone);
+                var mesh = NavMeshPipeline.BuildZone(gatherer, g, settings, out _);
+                cache.Save(mesh, g.BuildingHash, NavMeshCache.SettingsHash(settings));
+                var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(cache.PathOf(zone.X, zone.Y))));
+                Console.WriteLine($"zone {zone}: {mesh.PolygonCount} polygons ({mesh.KeptCount} kept), {mesh.Vertices.Length} vertices, sha256 {hash}");
+                meshes[zone] = mesh;
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+        if (zones.Length == 2 && meshes.TryGetValue(new ZoneCoordinate(20, 32), out var west) && meshes.TryGetValue(new ZoneCoordinate(21, 32), out var east))
+        {
+            foreach (var (name, points) in HubPaths(west, east))
+            {
+                Console.WriteLine($"path {name}:");
+                foreach (var p in points) Console.WriteLine("  " + p);
+            }
+        }
+        return 0;
+    }
+
+    /// <summary>The paths of <c>HubNavmeshTests</c>, as round-trip formatted point lists.</summary>
+    static IEnumerable<(string Name, List<string> Points)> HubPaths(ZoneNavMesh west, ZoneNavMesh east)
+    {
+        static List<string> Format(Meitou.Simulation.PathResult path) => path.Found ? path.Points.Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.X:R},{p.Y:R},{p.Z:R}")).ToList() : ["none"];
+        var house = NavWorld.Empty.With(west.WithoutPruned());
+        var houseQuery = new NavQuery(house, new NavDoors());
+        var street = new Vector3(-51290, 1566, 2625);
+        var floor = new Vector3(-51158, 1579, 2664);
+        yield return ("street to Storm House floor", Format(houseQuery.FindPath(street, floor)));
+        yield return ("Storm House floor to street", Format(houseQuery.FindPath(floor, street)));
+        var hub = NavWorld.Empty.With(west.WithoutPruned()).With(east.WithoutPruned());
+        var query = new NavQuery(hub);
+        Vector3 At(float x, float z) => new(x, 0, z);
+        var outsideWest = At(-53500, 2000);
+        var centre = At(-51000, 2900);
+        var outsideEast = At(-49500, 3500);
+        yield return ("west to centre", Format(query.FindPath(outsideWest, centre)));
+        yield return ("centre to east", Format(query.FindPath(centre, outsideEast)));
+        yield return ("west to east", Format(query.FindPath(outsideWest, outsideEast)));
+        yield return ("west to centre, doors closed", Format(query.FindPath(outsideWest, centre, new NavAgent { DoorsClosed = true })));
     }
 
     static void WriteGeometryObj(ZoneGeometry g, string path)
