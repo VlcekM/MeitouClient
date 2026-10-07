@@ -44,6 +44,8 @@ public sealed class WorldTexture
     internal long Bytes;
     /// <summary>The file size counted as in flight while the texture loads (<see cref="WorldTextureCache.MayStart"/>), 0 when not counted.</summary>
     internal long InFlight;
+    /// <summary>The texture was resident once (a later load is a reload).</summary>
+    internal bool EverResident;
     internal Residency State;
     /// <summary>The image (null until resident), the levels and the swizzle it is sampled with.</summary>
     internal Texture? Native;
@@ -108,14 +110,19 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far)";
 
-    public WorldTexture? Get(string? name, bool border)
+    /// <param name="deferred">The texture is not loaded now: it stays <see cref="WorldTexture.Residency.Unloaded"/> until something reads its
+    /// <see cref="WorldTexture.Key"/> (the foliage makes its meshes' textures this way and reads the keys only of groups within their range).</param>
+    public WorldTexture? Get(string? name, bool border, bool deferred = false)
     {
         if (name is null) return null;
         string key = border ? name + "|border" : name;
         if (cache.TryGetValue(key, out var t))
         {
-            t.LastUsed = Environment.TickCount64;
-            if (t.State == WorldTexture.Residency.Unloaded) Reload(t);
+            if (!deferred)
+            {
+                t.LastUsed = Environment.TickCount64;
+                if (t.State == WorldTexture.Residency.Unloaded) Reload(t);
+            }
             return t;
         }
         cache[key] = t = new WorldTexture { Border = border, Owner = this, Name = name, LastUsed = Environment.TickCount64 };
@@ -129,7 +136,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             Messages.Add($"texture not found: {name}");
             return t;
         }
-        if (!MayStart(t)) { t.State = WorldTexture.Residency.Unloaded; return t; }   // loaded when the pressure ends (reading its key asks again)
+        if (deferred || !MayStart(t)) { t.State = WorldTexture.Residency.Unloaded; return t; }   // loaded when its key is read (and the guard lets it)
         Start(t);
         return t;
     }
@@ -198,7 +205,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     {
         if (t.State != WorldTexture.Residency.Unloaded) return;
         if (!MayStart(t)) return;
-        Reloads++;
+        if (t.EverResident) Reloads++;
         Start(t);
     }
 
@@ -437,6 +444,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     void Resident(WorldTexture t, long bytes)
     {
         Landed(t);
+        t.EverResident = true;
         t.Bytes = bytes;
         t.State = WorldTexture.Residency.Resident;
         t.LastUsed = Environment.TickCount64;

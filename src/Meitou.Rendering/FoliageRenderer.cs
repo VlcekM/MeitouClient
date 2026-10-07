@@ -174,7 +174,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     Vector3? lastEye;
     double lastEyeTime;
     Vector2 velocity;
-    readonly List<(ZoneCoordinate Zone, bool Whole, float Urgency)> wanted = [];
+    readonly List<(ZoneCoordinate Zone, Tier Tier, float Urgency)> wanted = [];
     readonly List<ZoneState> dropping = [];
     public List<string> Messages { get; } = [];
 
@@ -202,13 +202,21 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     // ------------------------------------------------------------------ streaming
 
+    /// <summary>What a zone's layout holds (docs/viewer.md, "Foliage"). <see cref="Far"/>: the FAR layers only (no grass coverage, 9/10 of the cost).
+    /// <see cref="Meshes"/>: every mesh layer, and, with the Meitou <c>range</c> switch, only the large meshes (the zone is farther than the medium
+    /// and small ranges and the grass, so nothing else can be drawn there). <see cref="Whole"/>: every layer and the grass.</summary>
+    enum Tier { Far, Meshes, Whole }
+
     sealed class ZoneState
     {
         public required ZoneCoordinate Zone;
         public float X0, Z0;
         public Task<(FoliageZone Zone, FoliageGround? Ground, PreparedZone Prepared)>? Job;
-        /// <summary>Laid out (at least the far layers); <see cref="Complete"/>: every layer, grass included. <see cref="JobWhole"/>: the job in flight is a whole layout.</summary>
-        public bool Ready, Complete, JobWhole;
+        /// <summary>Laid out (at least the far layers); <see cref="Complete"/>: every layer, grass included, nothing left out. <see cref="MeshLayers"/>: every
+        /// mesh layer was laid out (<see cref="Complete"/> implies it). <see cref="Filtered"/>: the groups that cannot be drawn at this zone's distance
+        /// (a mesh that is not large) were left out. <see cref="JobTier"/>: what the job in flight lays out.</summary>
+        public bool Ready, Complete, MeshLayers, Filtered, NeedsPrune;
+        public Tier JobTier;
         public List<Group> Groups = [];
         public FoliageGround? Ground;
         public List<FoliageGrassPatch> Patches = [];
@@ -328,14 +336,16 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // Two tiers (docs/viewer.md, "Foliage"): within the near reach (the MEDIUM layers and the grass) a zone is laid out whole; beyond it, out
         // to the far reach, only its FAR layers, which skips the grass coverage, nine tenths of a zone's layout. A far zone is laid out whole once
         // it comes within the near reach (its far instances are the same either way, FoliageLayout.Place).
-        float nearReach = NearReach, farReach = FarReach;
+        // With the Meitou range switch a third tier sits between them (Tier.Meshes): beyond the whole reach (the longest of the small, medium and grass
+        // ranges) and within the near reach only the large meshes can be drawn, so such a zone keeps those and nothing else.
+        float nearReach = NearReach, farReach = FarReach, wholeReach = WholeReach;
         foreach (var state in zones.Values)
         {
             if (state.Job is not { IsCompleted: true } job) continue;
-            if (state.JobWhole) runningWhole--; else runningFar--;
+            if (state.JobTier != Tier.Far) runningWhole--; else runningFar--;
             state.Job = null;
-            try { Accept(state, job.Result); }
-            catch (AggregateException e) { Messages.Add($"foliage zone {state.Zone}: {e.InnerException?.Message ?? e.Message}"); state.Ready = state.Complete = true; }
+            try { Accept(state, job.Result, state.JobTier); }
+            catch (AggregateException e) { Messages.Add($"foliage zone {state.Zone}: {e.InnerException?.Message ?? e.Message}"); state.Ready = state.Complete = state.MeshLayers = true; }
         }
         dropping.Clear();
         foreach (var state in zones.Values)
@@ -370,21 +380,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 if (!z.IsInsideGrid) continue;
                 float d = ZoneDistance(z, eye), dp = ZoneDistance(z, predicted), soon = Math.Min(d, dp);
                 if (d > farReach) continue;   // the prediction orders and adds whole layouts, it never adds zones
-                bool whole = soon <= nearReach + PrefetchMargin;
+                bool meitou = MeitouRange;
+                var need = soon <= wholeReach + PrefetchMargin ? Tier.Whole : meitou && soon <= nearReach + PrefetchMargin ? Tier.Meshes : Tier.Far;
                 zones.TryGetValue(z, out var state);
-                if (state is not null && (state.Complete || !whole && state.Ready)) continue;   // has what it needs
-                if (d <= nearReach) NearestIncompleteZone = Math.Min(NearestIncompleteZone, d);
+                if (state is not null && Satisfies(state, need, meitou)) continue;   // has what it needs
+                if (d <= wholeReach) NearestIncompleteZone = Math.Min(NearestIncompleteZone, d);
                 if (state is not { Ready: true }) NearestUnlaidZone = Math.Min(NearestUnlaidZone, d);
                 if (state?.Job is not null) continue;   // on its way
-                // Whole layouts first (what is missing there is in view near the eye), then the far ones, each nearest first (from the eye
-                // or where it will be, whichever is nearer).
-                wanted.Add((z, whole, whole ? soon : farReach + soon));
+                // Whole layouts first (what is missing there is in view near the eye), then the large-only ones, then the far ones, each nearest
+                // first (from the eye or where it will be, whichever is nearer).
+                wanted.Add((z, need, need == Tier.Whole ? soon : need == Tier.Meshes ? nearReach + soon : farReach + soon));
             }
         wanted.Sort((a, b) => a.Urgency.CompareTo(b.Urgency));
         int started = 0;
-        foreach (var (zone, whole, _) in wanted)
+        foreach (var (zone, tier, _) in wanted)
         {
             if (guard is { Streaming: false }) break;   // memory pressure: no new layout is started
+            bool whole = tier != Tier.Far;   // a Meshes layout is a whole one whose far-away groups are left out (Accept)
             if (whole ? runningWhole >= workers : runningFar >= workers) continue;
             if (!zones.TryGetValue(zone, out var state))
             {
@@ -392,7 +404,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 zones[zone] = state = new ZoneState { Zone = zone, X0 = (float)x0, Z0 = (float)z0 };
             }
             if (whole) runningWhole++; else runningFar++;
-            state.JobWhole = whole;
+            state.JobTier = tier;
             started++;
             bool farOnly = !whole;
             Func<(FoliageZone, FoliageGround?, PreparedZone)> job = () =>
@@ -419,6 +431,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         UpdateGrass(eye);
         double t1 = watch.Elapsed.TotalMilliseconds;
         PumpMeshes();
+        Prune();
         TrimResident(eye, force: settling);
         double t2 = watch.Elapsed.TotalMilliseconds;
         textures.Pump(wait: settling, max: settling ? 64 : 1);
@@ -475,14 +488,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
 
     /// <summary>A finished layout: its groups replace the zone's (a whole layout after a far one brings the same far instances back with the rest).</summary>
-    void Accept(ZoneState state, (FoliageZone Zone, FoliageGround? Ground, PreparedZone Prepared) result)
+    void Accept(ZoneState state, (FoliageZone Zone, FoliageGround? Ground, PreparedZone Prepared) result, Tier tier)
     {
         var (zone, ground, prepared) = result;
+        // With the Meitou range switch a zone beyond the whole reach can only show large meshes (the small and medium ranges and the grass end
+        // before it): the other groups would be instances, meshes and textures held for nothing. A group whose mesh is not decoded yet has no
+        // size class; it is kept and the prune pass (TrimResident) drops it when the size is known.
+        bool filter = MeitouRange && tier != Tier.Whole;
         var groups = new List<Group>(prepared.Groups.Count);
+        bool unknown = false;
         foreach (var g in prepared.Groups)
+        {
+            var asset = AssetFor(g.Mesh);
+            if (filter && asset.HasBounds && asset.SizeClass != FoliageSizeClass.Large) continue;
+            if (filter && !asset.HasBounds) unknown = true;
             groups.Add(new Group
             {
-                Asset = AssetFor(g.Mesh),
+                Asset = asset,
                 BaseRange = g.Layer.Range,
                 Transition = g.Layer.Transition,
                 Far = FoliageLayout.IsFarLayer(g.Layer),
@@ -490,13 +512,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 Instances = g.Instances,
                 Zone = state,
             });
+        }
         FreeArena(state.Groups);
         state.Groups = groups;
         state.Instances = zone.Instances.Count;
         state.MinY = prepared.MinY;
         state.MaxY = prepared.MaxY;
         state.Ground = ground;
-        state.Patches = zone.Grass.Where(p => p.Grass.Sprite is not null && p.Density.Any(d => d != 0)).ToList();
+        state.Patches = filter ? [] : zone.Grass.Where(p => p.Grass.Sprite is not null && p.Density.Any(d => d != 0)).ToList();
         state.PatchTextures = new (WorldTexture?, WorldTexture?)[state.Patches.Count];
         for (int i = 0; i < state.Patches.Count; i++)
         {
@@ -504,7 +527,40 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             state.PatchTextures[i] = (textures.Get(p.Grass.Sprite, false), textures.Get(p.Grass.ColourMap, false));   // start decoding now, not at the first draw
         }
         state.Ready = true;
-        state.Complete = zone.Complete;
+        state.Complete = zone.Complete && !filter;
+        state.MeshLayers = zone.Complete || tier != Tier.Far;
+        state.Filtered = filter;
+        state.NeedsPrune = unknown;
+    }
+
+    /// <summary>Whether a zone as laid out already holds what <paramref name="need"/> asks for (nothing to load again).</summary>
+    static bool Satisfies(ZoneState s, Tier need, bool meitou) => need switch
+    {
+        Tier.Whole => s.Complete,
+        Tier.Meshes => s.Complete || s.MeshLayers,
+        _ => s.Ready && (!s.Filtered || meitou),
+    };
+
+    /// <summary>Zones within this ground distance of the eye are laid out whole: with <see cref="MeitouRange"/> the longer of the small and
+    /// medium ranges and the grass range (beyond it only large meshes can be drawn, see <see cref="Tier.Meshes"/>), else <see cref="NearReach"/>.</summary>
+    public float WholeReach => MeitouRange ? Math.Max(Math.Max(ClassRange(FoliageSizeClass.Small), ClassRange(FoliageSizeClass.Medium)), GrassMaxRange * GrassRangeSetting * Scale) : NearReach;
+
+    /// <summary>Drops the groups that cannot be drawn in a filtered zone once their mesh sizes are known (they were kept while the mesh was not decoded).</summary>
+    void Prune()
+    {
+        foreach (var state in zones.Values)
+        {
+            if (!state.NeedsPrune || state.Job is not null) continue;
+            bool unknown = false;
+            foreach (var g in state.Groups) if (!g.Asset.HasBounds && !g.Asset.Failed) { unknown = true; break; }
+            if (unknown) continue;
+            var keep = new List<Group>(state.Groups.Count);
+            var drop = new List<Group>();
+            foreach (var g in state.Groups) (g.Asset.SizeClass == FoliageSizeClass.Large || !g.Asset.HasBounds ? keep : drop).Add(g);
+            FreeArena(drop);
+            if (drop.Count > 0) { state.Groups = keep; state.MarginStamp = -1; }
+            state.NeedsPrune = false;
+        }
     }
 
     /// <summary>The range a group is drawn to at the current <see cref="RangeSetting"/>, and its fade band: the game's transition is 10 units
@@ -699,12 +755,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // docs/formats/runtime-materials.md); FOLIAGE cuts out on the normal map's alpha at "alpha threshold" / 255, double-sided.
         int mode = mesh.MaterialType;
         bool dual = mode is 3 or 5;
-        a.MainMaterial = new FoliageMaterial(textures.Get(mesh.Texture, false), textures.Get(mesh.Normal, false),
-            dual ? textures.Get(mesh.Texture2, false) : null, dual ? textures.Get(mesh.Normal2, false) : null,
+        a.MainMaterial = new FoliageMaterial(textures.Get(mesh.Texture, false, deferred: true), textures.Get(mesh.Normal, false, deferred: true),
+            dual ? textures.Get(mesh.Texture2, false, deferred: true) : null, dual ? textures.Get(mesh.Normal2, false, deferred: true) : null,
             mode == 4 ? mesh.AlphaThreshold / 255f : 0, mode == 4, mode is 1 or 5, new Vector2(mesh.TileX, mesh.TileY), mode == 6, mesh.SpecularMult);
         // The leaves: their own texture pair, transparent and double-sided, cut out at "leaves alpha threshold" / 255.
         if (mesh.LeavesMesh is not null)
-            a.LeavesMaterial = new FoliageMaterial(textures.Get(mesh.LeavesTexture, false), textures.Get(mesh.LeavesNormal, false), null, null,
+            a.LeavesMaterial = new FoliageMaterial(textures.Get(mesh.LeavesTexture, false, deferred: true), textures.Get(mesh.LeavesNormal, false, deferred: true), null, null,
                 mesh.LeavesAlphaThreshold / 255f, true, false, Vector2.One, false, 0);
         string main = mesh.MeshPath, leaves = mesh.LeavesMesh ?? "";
         a.Job = BackgroundWork.Run(() => (Decode(main), leaves.Length > 0 ? Decode(leaves) : null));
@@ -839,7 +895,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 a.LastUsed = now;
                 if (!a.Resident) Reload(a);   // in range but unloaded (or never loaded after an unload): decode it again, wherever the camera looks
                 foreach (var m in (ReadOnlySpan<FoliageMaterial?>)[a.MainMaterial, a.LeavesMaterial])
-                    if (m is not null) _ = (m.Diffuse?.Key, m.Normal?.Key, m.Diffuse2?.Key, m.Normal2?.Key);   // reading a key counts as use (WorldTexture.Key)
+                    if (m is not null && a.HasBounds) _ = (m.Diffuse?.Key, m.Normal?.Key, m.Diffuse2?.Key, m.Normal2?.Key);   // reading a key counts as use (WorldTexture.Key)
             }
         }
         foreach (var a in assetsByMesh.Values)
