@@ -59,6 +59,13 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     public const float MovingSpeed = 1;
 
     public AnimationLibrary Library { get; } = library;
+    /// <summary>The clip a knocked-out or dead character lies in: <c>sleeponfloor</c> (the base skeleton has no unconscious or dead clip; <b>Observed</b>), -1 when the data has none.</summary>
+    int LyingClip { get; } = FindByName(library, "sleeponfloor");
+    static int FindByName(AnimationLibrary library, string name)
+    {
+        for (int i = 0; i < library.Definitions.Count; i++) if (library.Definitions[i].Name == name) return i;
+        return -1;
+    }
     public AnimationLengths Lengths { get; } = lengths;
     /// <summary>The CONSTANTS <c>animation blend rate</c> (fcs.def default 4, "1 is very slow"): weight per second.</summary>
     public float BlendRate { get; } = blendRate;
@@ -90,7 +97,21 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         lower.Clear();
         upper.Clear();
         var stance = new AnimationStance { Right = new HandHold(cold.DrawnWeapon) };
-        bool moving = speed >= MovingSpeed;
+        int lying = -1;
+        if (cold.Medical is { } body)
+        {
+            // Leg health in per cent selects the limp clips; a knocked-out or dead character lies on the floor (stand-in clip until the real ones exist).
+            float left = 100, right = 100;
+            foreach (var part in body.Parts)
+            {
+                if (part.Template.Type != Meitou.Data.Gameplay.Bodies.BodyPartType.Leg) continue;
+                if (part.Template.Side == Meitou.Data.Gameplay.Bodies.BodySide.Left) left = MathF.Min(left, part.Fraction * 100);
+                else right = MathF.Min(right, part.Fraction * 100);
+            }
+            stance = stance with { LeftLeg = left, RightLeg = right };
+            if (body.Incapacitated) lying = LyingClip;
+        }
+        bool moving = lying < 0 && speed >= MovingSpeed;
         if (moving)
         {
             Library.Movement(AnimationArea.Lower, speed, stance, lower);
@@ -99,6 +120,12 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         }
         var wanted = lower;
         if (moving) wanted.AddRange(upper);
+        else if (lying >= 0)
+        {
+            wanted.Clear();
+            wanted.Add((lying, 1));
+            a.Idle = -1;
+        }
         else
         {
             wanted.Clear();

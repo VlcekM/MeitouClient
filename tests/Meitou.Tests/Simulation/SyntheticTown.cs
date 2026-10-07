@@ -23,9 +23,27 @@ static class SyntheticTown
     public static readonly Vector3 Far = new(9500, 300, 2000);
 
     /// <summary><paramref name="roaming"/> adds a second town (<c>31-t</c>, far away), roaming squads and bar squads at the first, and a roaming budget for the faction.</summary>
-    public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false, bool roaming = false)
+    public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false, bool roaming = false, bool anatomy = false)
     {
         var race = Rec("1-t", FcsRecordType.RACE, "Testers");
+        var parts = new List<FcsRecord>();
+        if (anatomy)
+        {
+            race.Floats["water avoidance"] = 3;
+            // A chest (vital) and two legs: enough to be hurt, to limp and to be knocked out.
+            FcsRecord Part(string id, string name, int type, int collapse, bool vital)
+            {
+                var p = Rec(id, FcsRecordType.LOCATIONAL_DAMAGE, name);
+                p.Ints["body part type"] = type;
+                p.Ints["collapse part"] = collapse;
+                p.Bools["death"] = vital;
+                p.Bools["collapses"] = true;
+                p.Bools["severance"] = !vital;
+                return p;
+            }
+            parts.AddRange([Part("60-t", "Chest", 0, 1, true), Part("61-t", "Left Leg", 1, 0x20, false), Part("62-t", "Right Leg", 1, 0x10, false)]);
+            race.References["combat anatomy"] = [Ref("60-t", 140, 100), Ref("61-t", 80, 100), Ref("62-t", 80, 100)];
+        }
         race.Ints["speed min skill"] = 70;
         race.Ints["speed max skill"] = 120;
         race.Floats["walk speed"] = 15;
@@ -81,6 +99,7 @@ static class SyntheticTown
         startoff.References["town"] = [Ref("30-t")];
 
         var file = new FcsFile();
+        file.Records.AddRange(parts);
         file.Records.AddRange([race, guard, boss, dog, patrol, gated, factionTemplate, faction, town, nameless, startoff]);
         if (far is not null) file.Records.Add(far);
         var db = new GameDatabase();
@@ -96,13 +115,17 @@ static class SyntheticTown
     public static float Ground(float x, float z) => 300;
 
     public static SimWorld World(ulong seed, int threads, int residentSquads = 3, PopulationSettings? settings = null, bool synchronousPaths = true,
-        GameDatabase? db = null)
+        GameDatabase? db = null, bool bodies = false, float bodyTimeScale = 1, params ITickSystem[] extra)
     {
         db ??= Database(residentSquads);
         var walk = new OpenGroundWalkability(Ground);
-        var population = new PopulationSystem(Data(db), settings);
+        var data = Data(db);
+        var population = new PopulationSystem(data, settings);
         var movement = new MovementSystem(new PathService(walk, synchronousPaths));
-        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false }, walk, [population, movement]);
+        List<ITickSystem> systems = [population, movement];
+        if (bodies) systems.Add(new BodySystem(data.Bodies.Constants, data.BodyOptions, bodyTimeScale));
+        systems.AddRange(extra);
+        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false }, walk, systems);
         world.Commands.Enqueue(new FocusCommand(Centre) { Tick = 0 });
         return world;
     }

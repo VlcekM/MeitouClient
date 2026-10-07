@@ -220,7 +220,7 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
         var o = measure;
         if (o is null) return (0, 0, 0, 0);
         float width = MathF.Max(26 * o.CharWidth, 4 * (ButtonWidth(o) + 4)) + 2 * Pad;
-        float height = Pad + o.LineHeight * 2 + 4 + o.LineHeight + Pad + 6 + o.LineHeight * (1 + Math.Min(8, SelectedNames().Count) + 6);
+        float height = Pad + o.LineHeight * 2 + 4 + o.LineHeight + Pad + 6 + o.LineHeight * (1 + Math.Min(8, SelectedNames().Count) + 2 + 6);
         return (Margin, Margin, Margin + width, Margin + height);
     }
 
@@ -266,6 +266,7 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
         Height = height;
         var white = DebugOverlay.TextColour;
         var green = new Vector4(0.35f, 1f, 0.45f, 1f);
+        var red = new Vector4(1f, 0.4f, 0.35f, 1f);
 
         // Rings under the selected characters.
         foreach (var c in session.CurrentSnapshot.Characters)
@@ -328,6 +329,14 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
         o.Text(names.Count == 0 ? "Selected: none" : $"Selected ({names.Count}):", box.X0 + Pad, y, white);
         y += o.LineHeight;
         foreach (var name in names.Take(8)) { o.Text(name, box.X0 + Pad + o.CharWidth, y, green); y += o.LineHeight; }
+        if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Selected) is { Body: { } body })
+        {
+            string state = body.Dead ? "dead" : body.Unconscious ? "knocked out" : "ok";
+            o.Text($"Health: blood {body.Blood * 100:0}%  worst part {body.WorstPart * 100:0}%  {state}", box.X0 + Pad + o.CharWidth, y, body.Dead || body.Unconscious ? red : white);
+            y += o.LineHeight;
+            o.Text($"Hunger: {body.Hunger:0.00} of 3", box.X0 + Pad + o.CharWidth, y, body.Hunger < 1 ? red : white);
+            y += o.LineHeight;
+        }
         // The first selected character's animation layers (what the pose is blended from).
         if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Selected) is { } lead)
             foreach (var layer in lead.Animations.Take(6))

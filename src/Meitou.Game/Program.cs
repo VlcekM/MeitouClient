@@ -29,6 +29,8 @@ sealed class GameOptions
     /// <summary>With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.</summary>
     public int Ticks;
     public bool FreeCamera, NoPopulation, NoNavmesh, NewGame, ListStarts, SelectPlayer;
+    /// <summary>Multiplies the time of the body-part and blood rates (<c>MedicalContext.BodyTimeScale</c>, default 1: the documented rates).</summary>
+    public float BodyTimeScale = 1;
     /// <summary>The start to play (null = the default); with <c>--select-player</c>/<c>--move-to</c> the picture shows a selected squad walking.</summary>
     public string? NewGameName;
     public (float X, float Z)? MoveTo;
@@ -45,6 +47,7 @@ sealed class GameOptions
           --seed <n>                 the world seed (default 0)
           --no-population            no town residents or movement (an empty world)
           --no-navmesh               paths on open ground (no buildings), as in the tests; default: the navmesh of the active zones (built on first use, cached)
+          --body-time-scale <x>      multiplies the time of body-part and blood rates (default 1, the documented rates in game hours; see docs/simulation.md "Bodies wired")
           --new-game [start]         a new game as the NEW_GAME_STARTOFF start (default Wanderer): the player squad at its town, camera on it
           --list-starts              print the available starts and exit
           --select-player, --move-to <x> <z>   with --new-game: select the squad / order it to walk (for screenshots)
@@ -78,6 +81,7 @@ sealed class GameOptions
                 case "--free-camera": g.FreeCamera = true; break;
                 case "--no-population": g.NoPopulation = true; break;
                 case "--no-navmesh": g.NoNavmesh = true; break;
+                case "--body-time-scale": g.BodyTimeScale = float.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--new-game":
                     g.NewGame = true;
                     if (i + 1 < args.Length && !args[i + 1].StartsWith('-')) g.NewGameName = args[++i];
@@ -215,6 +219,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             systems.Add(population);
             systems.Add(new Meitou.Simulation.PlayerSystem());
             systems.Add(new Meitou.Simulation.MovementSystem(new Meitou.Simulation.PathService(walkability, synchronous: !interactive)));
+            systems.Add(new Meitou.Simulation.BodySystem(data.Bodies.Constants, data.BodyOptions, g.BodyTimeScale));
             systems.Add(new Meitou.Simulation.AnimationSystem(Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb), Meitou.Data.Gameplay.AnimationLengths.Load(install.Root), Meitou.Data.Gameplay.GameConstants.FromDatabase(gameDb).AnimationBlendRate));
         }
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate,
