@@ -43,15 +43,12 @@ public static class SaveLoader
 
         var camera = save.Camera;
         var loaded = new LoadedSave { Source = save, Clock = new SaveClock(camera.Day, camera.Hour, camera.Minute) };
-        var factionIndex = new Dictionary<string, int>(StringComparer.Ordinal);
-        for (int i = 0; i < data.Factions.Count; i++) factionIndex[data.Factions[i].Id] = i;
-
-        LoadFactions(save, data, options, loaded, factionIndex);
+        LoadFactions(save, data, options, loaded);
         loaded.RelationBaseline = Snapshot(data.Relations);
 
         // The player.
         var playerFaction = save.PlayerFaction;
-        int playerIndex = playerFaction is not null && factionIndex.TryGetValue(playerFaction.Id, out int pi) ? pi : data.PlayerFaction;
+        int playerIndex = playerFaction is not null && data.FactionIndex(playerFaction.Id) is var pi and >= 0 ? pi : data.PlayerFaction;
         world.Player.Faction = playerIndex;
         world.Player.Money = camera.PlayerMoney;
 
@@ -62,9 +59,9 @@ public static class SaveLoader
         {
             bool mine = playerFaction is not null && platoon.FactionId == playerFaction.Id;
             if (mine && platoon.IsLoaded)
-                LoadPlayerPlatoon(world, platoon, data, options, loaded, factionIndex, playerIndex, races, parts, bySource);
+                LoadPlayerPlatoon(world, platoon, data, options, loaded, playerIndex, races, parts, bySource);
             else if (!mine && options.NpcPlatoons)
-                LoadRoamingPlatoon(world, platoon, data, loaded, factionIndex);
+                LoadRoamingPlatoon(world, platoon, data, loaded);
         }
         if (loaded.PlayerPlatoons.Count > 0) world.Player.Squad = loaded.PlayerPlatoons[0].Squad.Id;
 
@@ -87,22 +84,23 @@ public static class SaveLoader
         return all;
     }
 
-    static void LoadFactions(SaveGame save, PopulationData data, SaveLoadOptions options, LoadedSave loaded, Dictionary<string, int> factionIndex)
+    static void LoadFactions(SaveGame save, PopulationData data, SaveLoadOptions options, LoadedSave loaded)
     {
         foreach (var f in save.Factions)
         {
             var state = new FactionState { Id = f.Id, Name = f.Name, Prosperity = f.Prosperity, PlatoonCounter = f.PlatoonCounter, IsPlayer = f.IsPlayer };
             foreach (var r in f.Relations) state.Relations[r.FactionId] = r;
             loaded.Factions.Add(state);
-            if (!options.ApplyRelations || !factionIndex.TryGetValue(f.Id, out int a)) continue;
+            int a = data.FactionIndex(f.Id);
+            if (!options.ApplyRelations || a < 0) continue;
             foreach (var r in f.Relations)
-                if (factionIndex.TryGetValue(r.FactionId, out int b)) data.Relations.Set(a, b, r.Relation);
+                if (data.FactionIndex(r.FactionId) is var b and >= 0) data.Relations.Set(a, b, r.Relation);
         }
         foreach (var f in save.Factions)
-            if (!factionIndex.ContainsKey(f.Id)) loaded.Notes.Add($"Faction {f.Id} ({f.Name}) is not in the game data; its state is kept in the save only.");
+            if (data.FactionIndex(f.Id) < 0) loaded.Notes.Add($"Faction {f.Id} ({f.Name}) is not in the game data; its state is kept in the save only.");
     }
 
-    static void LoadPlayerPlatoon(World world, SavePlatoon platoon, PopulationData data, SaveLoadOptions options, LoadedSave loaded, Dictionary<string, int> factionIndex,
+    static void LoadPlayerPlatoon(World world, SavePlatoon platoon, PopulationData data, SaveLoadOptions options, LoadedSave loaded,
         int playerIndex, Dictionary<string, RaceData?> races, Dictionary<string, BodyPartTemplate?> parts, Dictionary<SaveCharacter, CharacterId> bySource)
     {
         var squad = new Squad
@@ -149,7 +147,7 @@ public static class SaveLoader
                 WalkSpeed = race?.WalkSpeed ?? 15,
             };
             string ownerId = sc.OwnerFactionId;
-            int faction = ownerId.Length > 0 && factionIndex.TryGetValue(ownerId, out int fi) ? fi : playerIndex;
+            int faction = ownerId.Length > 0 && data.FactionIndex(ownerId) is var fi and >= 0 ? fi : playerIndex;
             var handle = sc.Handle;
             CharacterAppearance? look = options.Appearances?.Create(sc.RecordId, ownerId.Length > 0 ? ownerId : null, handle.S & 0x7FFFFFFF);
             var cold = new CharacterCold
@@ -185,7 +183,7 @@ public static class SaveLoader
         loaded.PlayerPlatoons.Add(new LoadedPlatoon(platoon, squad));
     }
 
-    static void LoadRoamingPlatoon(World world, SavePlatoon platoon, PopulationData data, LoadedSave loaded, Dictionary<string, int> factionIndex)
+    static void LoadRoamingPlatoon(World world, SavePlatoon platoon, PopulationData data, LoadedSave loaded)
     {
         string baseTown = platoon.Record.Strings.GetValueOrDefault("basetown", "");
         int origin = -1;
@@ -201,7 +199,7 @@ public static class SaveLoader
             Id = world.Platoons.NextId(),
             Origin = origin,
             TemplateId = platoon.SquadTemplate,
-            Faction = factionIndex.GetValueOrDefault(platoon.FactionId, -1),
+            Faction = data.FactionIndex(platoon.FactionId),
             Key = Rng.Mix(Rng.StableHash(platoon.Name)),
             Size = Math.Max(platoon.CharCount, platoon.Characters.Count),
             Position = new Vector2(platoon.Position.X, platoon.Position.Z),
@@ -214,14 +212,8 @@ public static class SaveLoader
     static RaceData? RaceOf(SaveCharacter sc, GameRecord record, GameDatabase db, Dictionary<string, RaceData?> cache)
     {
         string? id = sc.Appearance is { } a && a.References.TryGetValue("race", out var list) && list.Count > 0 ? list[0].TargetStringId : null;
-        if (id is null)
-            foreach (var r in record.GetReferences("race"))
-                if (r.Values.Value0 > 0) { id = r.TargetStringId; break; }
-        if (id is null) return null;
-        if (cache.TryGetValue(id, out var race)) return race;
-        race = db.Find(id) is { Type: FcsRecordType.RACE } rec ? RaceData.From(rec, db) : null;
-        cache[id] = race;
-        return race;
+        id ??= CharacterAssembly.RaceId(record);
+        return id is null ? null : CharacterAssembly.RaceDataOf(db, id, cache);
     }
 
     static BodyPartTemplate? PartOf(string id, GameDatabase db, Dictionary<string, BodyPartTemplate?> cache)
