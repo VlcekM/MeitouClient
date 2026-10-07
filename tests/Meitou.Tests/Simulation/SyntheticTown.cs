@@ -132,7 +132,7 @@ static class SyntheticTown
     public static float Ground(float x, float z) => 300;
 
     public static SimWorld World(ulong seed, int threads, int residentSquads = 3, PopulationSettings? settings = null, bool synchronousPaths = true,
-        GameDatabase? db = null, bool bodies = false, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null, Meitou.Simulation.Bodies.BodyOptions? bodyOptions = null, params ITickSystem[] extra)
+        GameDatabase? db = null, bool bodies = false, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null, Meitou.Simulation.Bodies.BodyOptions? bodyOptions = null, int minPartition = 16, params ITickSystem[] extra)
     {
         db ??= Database(residentSquads);
         var walk = new OpenGroundWalkability(Ground);
@@ -143,7 +143,7 @@ static class SyntheticTown
         if (bodies) systems.Add(new BodySystem(data.Bodies.Constants, data.BodyOptions, bodyTimeScale));
         if (feed is not null) systems.Add(new Meitou.Simulation.Items.FeedSystem(data.Items, feed));
         systems.AddRange(extra);
-        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false }, walk, systems);
+        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, walk, systems);
         world.Commands.Enqueue(new FocusCommand(Centre) { Tick = 0 });
         return world;
     }
