@@ -1,7 +1,8 @@
 # Builds the Windows release of the game (src/Meitou.Game, meitou.exe) into a zip that runs as is: self-contained .NET, NVIDIA's DLSS
 # runtime and Streamline plugins and AMD's FidelityFX library next to the exe, their licences in licenses\. The NVIDIA and AMD files
 # come from their official GitHub releases (cached in -Cache); none of them is in the repository.
-#   powershell -File tools/scripts/package-release.ps1 -Version 0.1.0 [-Output out] [-Cache C:\Temp\release-cache]
+#   pwsh -File tools/scripts/package-release.ps1 -Version 0.1.0 [-Output out] [-Cache C:\Temp\release-cache]
+# (PowerShell 7: Windows PowerShell 5.1 writes the zip with backslashes in its paths, which some unzippers reject.)
 param(
     [Parameter(Mandatory = $true)] [string] $Version,
     [string] $Output = "out",
