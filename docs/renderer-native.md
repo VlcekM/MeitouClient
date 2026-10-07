@@ -3085,6 +3085,115 @@ holds the use at 80-93% at `all80`; at that budget the cull scratch can be refus
 bounded by the cache's 2048 MB high-water mark), object meshes (273 MB, 800 MB at max; high-water 768 MB, which the cache overshoots while its
 pages are in use), foliage textures (0.57 to 1.05 GB; bounded by the catalog), the foliage instance arena (16 MB to 128 MB, now 71% of that), and the
 shadow cascades' views through the cull scratch. Not range-dependent: terrain textures (1.07 GB), grass blades (160 MB), upload staging.
+The object textures and meshes are cut in 8.12.
+
+### 8.12 Object textures and meshes at large ranges (2026-10-07)
+
+*In short: the two next-largest owners (object textures 1.25 GB at the 20k preset, object meshes 273 MB; 1.7 GB and 800 MB at `max`) were
+held in full for everything within range, because the caches' marks only evict what has been idle, and nothing in range is. Both now hold only
+what the picture can use at the distance things are drawn at: a texture loses the top mips no pixel of it can sample, a mesh keeps only the LOD
+levels its nearest instance can draw. Object textures 1252 -> 788 MB at all20, 1725 -> 1342 MB at `max`; object meshes 273 -> 157 MB at all20,
+813 -> 666 MB at `max`. Pictures unchanged (0 px, ten views, both modes).*
+
+**Causes** (**Verified** in the code, **Observed** in the runs below):
+1. *The meshes do not overshoot their 768 MB mark because of a bookkeeping error.* `ObjectMeshCache.Bytes` equals the allocator's `object meshes`
+   owner (273.1 MB against 273.1 MB at all20; the one buffer kind not counted, the terrain path's `PlainEbo`, is not made in these views).
+   The mark never acts on in-range meshes: `MarkInRange` stamps every instance within its draw range as used once a second, `Trim` only
+   evicts what has been idle for 8 s (under the mark) or 60 s, and at 120k range everything is in range. 813 MB against 768 MB is just
+   what is in range. Evicting in-range meshes would only thrash (the instance un-resolves, the scan asks again). So the mark cannot be made
+   to hold by evicting; what is held has to get smaller. (Same for the textures: 1.7 GB under a 2048 MB mark, nothing idle.)
+2. *Everything in range is held at full detail.* A 4096 x 4096 BC3 texture is 21.3 MB, 75% of it the top mip, and 20 of the 75 resident
+   object textures at the default ranges (43 of 196 at all20) are that size. A mesh keeps one vertex pool and one index list per LOD level
+   (and a mesh per manual level) however far away its nearest instance is.
+
+**1. Maps nothing reads are not loaded** (exact; `MakeMaterials`): the normal map only for a part with tangents (or for a material with the
+emissive flag, which looks at its key), the second diffuse and normal only for a part with vertex colours (the blend weight) and tangents.
+**Observed**: nothing at the default ranges, 3 textures / 8 MB at all20. The textures are made without loading (`deferred`) and loaded by the first read of
+their key in `Resolve`, after being told how near they are used.
+
+**2. Mip streaming of the object textures** (`MipStreaming`, `MeshTexelScale`, `WorldTextureCache.Rebalance`):
+- *The bound.* A sampled mip level is the footprint of a pixel in texels, log2, from the short axis under anisotropic filtering. The footprint
+  of a pixel at distance `d` is at least `d cos^2(a) / f` world units (`f`: the focal length in pixels at the render size, `a`: the angle to the
+  screen's corner; a tilted surface stretches only the long axis). One texel of an `N`-texel texture spans `k / N`, `k` being the world length of
+  a texture-coordinate unit: the part's `MeshTexelScale` (the larger singular value of the texture-to-surface map per triangle, so a stretched
+  triangle, which shows few texels per unit and needs the finest mip first, counts; the value the largest 0.5% of the part's area exceeds, infinity when
+  more than that is collapsed) times the instance's scale over the material's `Tile`. With `need = d / k`, the nearest user's, the level is at
+  least `log2(need * pixelsPerDistance * N) + bias`, and the texture can lose that many top levels less a margin (`MipStreaming.Margin`, 2 levels: up to one for the sampler's tap rounding
+  (long axis divided by a whole number of taps), the rest for the 2x2 derivative estimate, triangles stretched more than the part's value and the time a finer image takes).
+  `bias` is the sampler's: the upscaler's `Gpu.LodBias` and the -0.25 the sampler adds on NVIDIA with anisotropy. A drop leaves the lower levels
+  as they are: the sampler's lod is the same exact shift (a power of two), so the picture is the same.
+- *Not dropped*: triplanar materials (a surface edge-on to a projection axis has a footprint smaller than a pixel on it: no bound), the distant towns' atlas,
+  textures whose top level is 512 or less on the larger side (also keeps the level the normal-map swizzle test reads in the chain), and formats
+  `TextureQuality.DropTopMips` cannot re-slice (not `DXT*`, DX10, no full chain).
+- *Where `need` comes from.* `MarkInRange` (once a second, every instance in its draw range whether seen or not) takes the nearest distance of each material
+  set (over the instance's scale), less the distance the camera covers in half a second (the time to refine); `Resolve` offers a new instance's at once
+  (`WorldTexture.OfferNow`). `CommitNeeds` makes the pass's smallest each texture's `Need`. A load (first, or after an unload) uses the `Need` at that
+  moment: `Load` drops `max(quality setting, streaming)` levels once the file's size is known, on the worker.
+- *Refine and coarsen.* A resident texture whose image has more levels dropped than its `Need` allows is loaded again with fewer; the old image is
+  drawn until the new one is in (`BeginSwap` frees the old image and its bindless entries after the frames in flight; no stand-in frame). One finer than
+  needed for 10 s (at once under the guard's pressure, which also drops one level more) is replaced by a coarser. At most 6 refinements and 2
+  coarsenings load at once (the few worker threads are shared with the foliage's layouts). F11 / the benchmark's `resident` line: `mip streaming: N MB
+  less than every mip, R refined, C coarsened`.
+- `MEITOU_MIP_STREAM=0` switches it off; `MEITOU_MIP_MARGIN=<levels>`, `MEITOU_MIP_TOP=<share>` (the 0.5%), `MEITOU_MIP_SKIP=<name,name>` (keep named textures whole)
+  and `MEITOU_MIP_LOG=1` (a line per image loaded with dropped levels) are for experiments.
+
+**3. Meshes keep only the LOD levels near users draw** (`ObjectMeshCache`, `ObjectMesh.NearPass`, `GpuObjectMesh.MinLevel`):
+- A mesh is decoded for the nearest placement known when it is requested (the scan's distance, less six mesh radii, as the mesh's size is not known
+  before the decode) or, once resident, for its nearest user's LOD value. `LevelFor` is the finest level the viewer's blend (`MeshLod.Blend`, 6% band, taken
+  as 7%) can draw at that value times the LOD bias. The decode keeps only the levels from there on: the vertices they use are compacted
+  (`PreparePart`, indices remapped, triangle order unchanged), the finer levels' indices and the manual meshes of finer levels are not decoded or uploaded.
+  Meshes drawn through the terrain shader (`KeepLevelIndices`), distant meshes and manual (inner) meshes always have every level.
+- A mesh in range is remade (`Retarget`: decoded again, uploaded, then swapped in place into the same `GpuObjectMesh`: instances, batches and materials keep
+  holding it, the old buffers go after the frames in flight) with finer levels when its nearest user gets inside its level boundary (one level more than needed,
+  against the next boundary), and without the finer ones after 10 s (or at once under pressure). An instance that would need a finer level than the mesh holds
+  (its mesh was made for farther ones) is not resolved, and the mesh is remade, until it is (`Resolve` returns false; `heldNear` counts those within 3000); an
+  already resolved one draws the finest level held in the meantime instead of nothing (`Emit`). At most 2 remakes at once.
+  `MEITOU_MESH_STREAM=0` loads every level.
+
+**4. Marks and the guard.** The caches' high-water marks are now the smaller of the old fixed one (768 / 2048 MB) and a share of the driver's budget
+(`HighWaterShare`, the old marks over the 11.4 GB card they were tuned on: 6.7% and 17.9%), and three quarters of that under pressure (`VramGuard.BudgetBytes`,
+`WorldTextureCache.EffectiveMark`). On the 11.4 GB card they are the old marks exactly; on a 6.3 GB budget 1.1 GB and 0.4 GB. The guard also makes the
+streaming itself shed: under pressure the textures' margin is one level less, coarsenings and remakes without finer levels run at once, and refinements and finer remakes
+are not started (`MayStart`, `Streaming`).
+
+**Measured** (**Observed**, `--fly-benchmark 150` over the forest view, device-local MB of the allocator's owners; presets as 8.11; base = master `87c7857`; `max` and the timings
+on an idle GPU):
+
+| owner | base default | now | base all20 | now | base all40 | now | base max | now |
+|---|---|---|---|---|---|---|---|---|
+| object textures | 536 | 500 | 1252 | 788 | 1490 | 984 | 1725 | 1342 |
+| object meshes | 73 | 53 | 273 | 157 | 395 | 265 | 813 | 666 |
+| peak in use (MB, of 11454) | 3353 | 3353 | 4665 | 4025 | 5323 | 4683 | 6909 | 6141 |
+
+(Margin 1.5 levels instead of 2, which gave the faithful portnorth view 31 differing pixels: textures 436 / 687 / 886 MB at default / all20 / all40.)
+Each alone (builds with the margin 1.5): all20 textures 1244 -> 697 MB with the mesh streaming off, meshes 273 -> 157 MB with the texture streaming on; each
+alone gives its share. At `max` the whole map is in range and most textures have a near user somewhere, so the textures only lose 22% and the meshes 18%.
+At a 4400 MB budget at all20 (the guard acting): base peak 4081 MB (93%), ranges x0.60, 796 allocations refused; now 3801 MB (86%), ranges x0.68, 1 refused.
+
+**Timings** (**Observed**, three interleaved runs each, base / now, flying 300 frames and still camera, forest view, idle GPU): default, flying frame p50 6.5 / 6.4 / 6.4 against
+6.6 / 6.7 / 6.5 ms, p95 12.3-12.8 against 12.3-12.6, CPU-only p50 1.9-2.0 against 1.9-2.0 (p99 14-18 against 15-24); still p50 6.3-6.4 against 5.9-6.4. All20 flying: p50 7.7 / 8.3 / 8.4
+against 8.6 / 8.4 / 8.3 ms, p99 15-20 against 15-21, CPU-only p50 2.5-2.6 against 2.6 (p99 8-9 against 9-15); still p50 7.1-7.2 against 7.2. `max`: p50 34.0 against 34.3 ms. No
+change beyond the noise; the refinements add CPU p99 at all20 (a texture's image is made in one step, 4 to 13 ms for a 21 MB image when the allocator takes a new block; the
+base builds the same images at load). On a GPU shared with other processes the noise was larger than any difference (flying p50 +0.6 ms for the new build in one set, none in the
+quiet one).
+
+**Pop-in** (**Observed**; the benchmark's `pop-in    objects` line, new build only; `MEITOU_MIP_STREAM=0 MEITOU_MESH_STREAM=0` is the base's behaviour: 0 in all of them): parts drawn untextured 0 of 150 frames at
+default, all20, all40 and max; textures waiting for a finer image while the old one is drawn in 9 / 22 / 32 / 19 frames (most 6 / 16 / 22 / 6 at once); instances within 3000
+held back for their mesh to be remade 0 frames; remakes for finer levels in flight in 2 / 7 / 9 / 4 frames. The foliage `pop-in` lines vary a great deal from run to run on both builds
+(all40, frames without the whole layout within the near reach, three to seven runs each: base 4, 20, 24, 31, 37, 73, 79; now 14, 21, 23, 28, 84, 92, 118: the 84, 92 and 118 were before the limit on
+refinements and remakes in flight, which keep the worker threads free for the layouts). The picture after a 150-frame flight (`--fly-benchmark --screenshot`, all20, forest) equals
+the base's: 0 px.
+
+**Gate** (**Verified**): ten parity views, `--faithful all` and default, 13:00 and 02:00, max 0 against `87c7857`'s pictures; six far views at all20 (forest, forest at 3000, the Hub at 15000
+and 40000, Port North at 8000, zone 14.30 at 20000) with the streaming off and on: 0 px except the Hub at 40000, 1 level in a few pixels (the 0.5% of triangles `MeshTexelScale` ignores;
+with the share 0 it is 0 px but a third of the saving is left). `MEITOU_VK_VALIDATION=sync` on two views and a flight: 0 errors (the same 4 leaked image views at device destruction as the base).
+Unit tests `ObjectStreamingTests` (the bound, the texel scale, the level, the compaction, the marks); full suite 484 passed, 0 failed, 0 skipped.
+
+**Open** (**Unknown**): the bound ignores the 0.5% most stretched triangles and relies on the 2-level margin for them: a view with a mesh more stretched than that may differ in a few pixels
+(seen: 1 level at the Hub from 40000; the margin 1.5 gave 62 at most in the faithful Port North view on a curved wall before it was raised to 2). The foliage textures (0.57 to 1.05 GB) could use the same
+mechanism (their sets, k per mesh and the atlas are different; out of this change). Textures and meshes of the in-range set could also be skipped by screen coverage (a texture whose every user is a few pixels wide
+needs no top mip whatever its nearest distance), which would help `max` most. Vertex stride: the object vertex keeps unused bone indices and weights (20 of 84 bytes) for the layout the shaders
+share; dropping them would save 24% of the mesh memory with no visual change but needs the program layouts reworked.
 
 ---
 
