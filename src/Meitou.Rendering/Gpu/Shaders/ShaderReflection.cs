@@ -1,4 +1,4 @@
-namespace Meitou.Rendering.Vulkan.Shaders;
+namespace Meitou.Rendering.Gpu.Shaders;
 
 public enum ScalarKind { Float, Int, UInt, Bool }
 

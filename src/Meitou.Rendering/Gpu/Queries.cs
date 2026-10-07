@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 
 namespace Meitou.Rendering.Gpu;
@@ -110,23 +110,34 @@ public sealed unsafe class QueryArena : IDisposable
     }
 }
 
-/// <summary>Per-frame counters of the native API (docs/renderer-native.md 2.10), next to <c>VkGlStats</c> while both exist.</summary>
+/// <summary>Per-frame counters of the native API (docs/renderer-native.md 2.10).</summary>
 public sealed class GpuStats
 {
     public int Draws, IndirectDraws, Dispatches, PipelinesBound, DescriptorPushes, NativeSegments;
     public long ConstantBytes, UploadBytes;
-    /// <summary>Stopwatch ticks spent recording native segments (BeginNative to EndNative).</summary>
-    public long RecordTicks;
 
+    /// <summary>The counters <see cref="Running"/> gives, in its order.</summary>
+    public static readonly string[] CounterNames = ["draws", "indirect", "dispatches", "pipelines", "pushes", "segments", "constantBytes", "uploadBytes"];
+    readonly long[] carried = new long[8];
+
+    /// <summary>Starts the next frame's counts; what this frame counted is kept in the running totals.</summary>
     public void Reset()
     {
+        Span<long> now = stackalloc long[8];
+        Running(now);
+        now.CopyTo(carried);
         Draws = IndirectDraws = Dispatches = PipelinesBound = DescriptorPushes = NativeSegments = 0;
-        ConstantBytes = UploadBytes = RecordTicks = 0;
+        ConstantBytes = UploadBytes = 0;
     }
 
-    public double RecordMs => RecordTicks * 1000.0 / Stopwatch.Frequency;
+    /// <summary>The counters summed over every frame so far, this one included (<see cref="CounterNames"/>): what a meter takes differences of.</summary>
+    public void Running(Span<long> into)
+    {
+        into[0] = carried[0] + Draws; into[1] = carried[1] + IndirectDraws; into[2] = carried[2] + Dispatches; into[3] = carried[3] + PipelinesBound;
+        into[4] = carried[4] + DescriptorPushes; into[5] = carried[5] + NativeSegments; into[6] = carried[6] + ConstantBytes; into[7] = carried[7] + UploadBytes;
+    }
 
     public override string ToString() =>
         $"native: {Draws} draws ({IndirectDraws} indirect), {Dispatches} dispatches, {PipelinesBound} pipeline binds, {DescriptorPushes} pushes, " +
-        $"{NativeSegments} segments, {ConstantBytes / 1024} KB constants, {UploadBytes / 1024} KB uploads, recording {RecordMs:0.00} ms";
+        $"{NativeSegments} segments, {ConstantBytes / 1024} KB constants, {UploadBytes / 1024} KB uploads";
 }

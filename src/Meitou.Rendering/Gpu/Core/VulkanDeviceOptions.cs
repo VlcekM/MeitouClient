@@ -1,6 +1,6 @@
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Vulkan.Core;
+namespace Meitou.Rendering.Gpu.Core;
 
 /// <summary>How to create a <see cref="VulkanDevice"/>.</summary>
 public sealed class VulkanDeviceOptions

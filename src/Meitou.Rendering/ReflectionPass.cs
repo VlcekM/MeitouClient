@@ -16,7 +16,7 @@ namespace Meitou.Rendering;
 /// mirrored (negated) clip X puts right again, so no renderer has to change its culling. Nothing below the water leaks
 /// into the picture: the projection's near plane is replaced by the water plane (oblique near-plane clipping).
 /// </summary>
-public sealed unsafe class ReflectionPass : IDisposable
+public sealed class ReflectionPass : IDisposable
 {
     /// <summary>Draws the scene's other geometry (objects, foliage) with the given matrix, eye and frustum planes of one depth slice.</summary>
     public delegate void SceneDraw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum);
@@ -28,20 +28,13 @@ public sealed unsafe class ReflectionPass : IDisposable
     /// <summary>Samples per texel of the reflection (1 = off). Resolved into the plain texture the water samples.</summary>
     public const int Samples = 4;
 
-    /// <summary>
-    /// GL is left only for what the guests (sky, terrain, objects, foliage: native) read through the seam's GL mirror, the framebuffer binding,
-    /// viewport and fixed-function state (<c>CurrentTargets</c>, <c>CurrentState</c>; docs/renderer-native.md 4.5, 8.1). The targets, the resolve, the
-    /// timing and the water's texture (<see cref="Sampled"/>, phase 8 stage 2) are native.
-    /// </summary>
-    readonly IGl gl;
-    /// <summary>The native GPU API next to <c>gl</c> (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
+    /// <summary>The native GPU API (all native since phase 8 stage 3: the pass is the guests' host, docs/renderer-native.md 8.9).</summary>
     public GpuContext Gpu { get; }
     readonly PassTimer timer;
     readonly WorldRenderOptions options = new();
     // The texture the water samples, and the depth beside it when the scene is drawn without multisampling; else the multisampled twins the
-    // scene is drawn into, resolved into the colour. Each is imported into GL for the framebuffer the guests' CurrentTargets reads.
+    // scene is drawn into, resolved into the colour.
     GpuTexture? colour, depth, msColour, msDepth;
-    uint colourGl, depthGl, msColourGl, msDepthGl, fbo;
     int samples;
     int width, height, skipped, age;
     bool hasImage;
@@ -51,9 +44,8 @@ public sealed unsafe class ReflectionPass : IDisposable
     readonly List<double> gpuSamples = [];
     readonly List<double> cpuSamples = [];
 
-    public ReflectionPass(IGl gl, GpuContext gpu)
+    public ReflectionPass(GpuContext gpu)
     {
-        this.gl = gl;
         Gpu = gpu;
         // Tuning knobs for experiments (MEITOU_REFL_OBJECTS, _FOLIAGE, _LOD, _AGE); the defaults are what the viewer ships with.
         static float Env(string n, float d) => float.TryParse(Environment.GetEnvironmentVariable("MEITOU_REFL_" + n), System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : d;
@@ -88,8 +80,6 @@ public sealed unsafe class ReflectionPass : IDisposable
     public float ObjectLodBias { get; set; } = 3;
     /// <summary>Frames a finished reflection may be reused when the camera has hardly moved (0 = draw every frame).</summary>
     public int MaxAge { get; set; } = 3;
-    /// <summary>The framebuffer (viewport: the whole picture) to go back to afterwards, when the caller knows it; otherwise it is queried.</summary>
-    public uint? RestoreFramebuffer { get; set; }
     /// <summary>Multiplies the terrain LOD's pixel scale for the mirrored terrain (its target is half the picture's size, so 0.5 measures the error in its own pixels; below: coarser).</summary>
     public float TerrainLodScale { get; set; } = 0.5f;
 
@@ -97,9 +87,6 @@ public sealed unsafe class ReflectionPass : IDisposable
     public bool Valid { get; private set; }
     /// <summary>Maps a point on the water to the texture: clip.xy / clip.w * 0.5 + 0.5.</summary>
     public Matrix4x4 ViewProjection { get; private set; }
-    /// <summary>The reflection as a GL name (an imported native texture, GL's default sampler state; for GL code only: the water samples
-    /// <see cref="Sampled"/>).</summary>
-    public uint Texture => colourGl;
     /// <summary>
     /// (Phase 8 stage 2.) The reflection as the water samples it: the native colour with the sampler its GL name was given until then (linear,
     /// clamped to the edge, no mips, so no LOD bias; <see cref="SamplerDesc.FromGl"/>, R at GL's default). Default before the first pass.
@@ -122,10 +109,7 @@ public sealed unsafe class ReflectionPass : IDisposable
         if (w == width && h == height && colour is not null) return;
         Free();
         (width, height) = (w, h);
-        var interop = Gpu.Interop!;
         colour = GpuTexture.Create(Gpu, new TextureDesc(Format.R16G16B16A16Sfloat, w, h, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferDst, Name: "reflection colour"));
-        // The water samples the native colour (Sampled, with the sampler state the GL name had); the GL name is only the guests' framebuffer attachment.
-        colourGl = interop.Import(colour);
 
         // The picture is drawn multisampled and resolved: the mirrored shoreline, fences and rooflines are hard edges, and
         // without it each texel of the half-resolution image is a visible stair step that the wave distortion then smears.
@@ -133,22 +117,13 @@ public sealed unsafe class ReflectionPass : IDisposable
         if (samples <= 1) samples = 0;
         GpuTexture Target(Format format, TextureUse use, int count, string name) =>
             GpuTexture.Create(Gpu, new TextureDesc(format, w, h, Samples: Math.Max(count, 1), Use: use, Name: name));
-        // The guests find the target through GL's framebuffer binding (docs/renderer-native.md 4.5): the native targets imported and attached.
-        fbo = gl.GenFramebuffer();
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
         if (samples == 0)
         {
             depth = Target(Format.D32Sfloat, TextureUse.DepthTarget, 1, "reflection depth");
-            depthGl = interop.Import(depth);
-            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, colourGl, 0);
-            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, depthGl, 0);
             return;
         }
         msColour = Target(Format.R16G16B16A16Sfloat, TextureUse.ColourTarget | TextureUse.TransferSrc, samples, "reflection colour msaa");
         msDepth = Target(Format.D32Sfloat, TextureUse.DepthTarget, samples, "reflection depth msaa");
-        (msColourGl, msDepthGl) = (interop.Import(msColour), interop.Import(msDepth));
-        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, msColourGl, 0);
-        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, msDepthGl, 0);
     }
 
     /// <summary>The most samples a colour and depth target may have on this device (VkGl answered GL's MAX_SAMPLES with 8).</summary>
@@ -164,15 +139,12 @@ public sealed unsafe class ReflectionPass : IDisposable
     void Free()
     {
         if (colour is null) return;
-        gl.DeleteFramebuffer(fbo);
-        // Imported names: GL forgets them, the images are ours (released after the frames in flight).
-        foreach (var name in (ReadOnlySpan<uint>)[colourGl, depthGl, msColourGl, msDepthGl]) if (name != 0) gl.DeleteTexture(name);
+        // Released after the frames in flight.
         colour.Dispose();
         depth?.Dispose();
         msColour?.Dispose();
         msDepth?.Dispose();
         (colour, depth, msColour, msDepth) = (null, null, null, null);
-        (colourGl, depthGl, msColourGl, msDepthGl, fbo) = (0, 0, 0, 0, 0);
     }
 
     /// <summary>Collects finished GPU timings: native timestamps, read once their frame's slot comes round. Nothing waits, also with
@@ -185,7 +157,7 @@ public sealed unsafe class ReflectionPass : IDisposable
 
     /// <summary>
     /// Draws the mirrored scene into the texture. Call after the haze and view distance of the frame are set and before the
-    /// main pass; the framebuffer and viewport that were bound are restored.
+    /// main pass (a native segment of its own).
     /// </summary>
     public void Render(WorldCamera camera, int fullWidth, int fullHeight, SkyRenderer sky, SkyColours colours, WorldLighting light,
         TerrainRenderer terrain, WorldRenderOptions render, SceneDraw? drawObjects)
@@ -204,19 +176,7 @@ public sealed unsafe class ReflectionPass : IDisposable
         lastView = camera.View;
         lastFov = camera.FieldOfView;
 
-        // State queries make the driver wait for its own thread, so the caller that knows where the picture is drawn says so.
-        int drawFbo = 0, readFbo = 0;
-        int* viewport = stackalloc int[4];
-        if (RestoreFramebuffer is { } known) { drawFbo = readFbo = (int)known; viewport[0] = viewport[1] = 0; viewport[2] = fullWidth; viewport[3] = fullHeight; }
-        else
-        {
-            gl.GetInteger(GetPName.DrawFramebufferBinding, out drawFbo);
-            gl.GetInteger(GetPName.ReadFramebufferBinding, out readFbo);
-            gl.GetInteger(GetPName.Viewport, viewport);
-        }
         Resize(Math.Max((int)(fullWidth * Scale), 64), Math.Max((int)(fullHeight * Scale), 64));
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        gl.Viewport(0, 0, (uint)width, (uint)height);
         timer.Begin();
 
         // The world mirrored about the water, seen from the real eye: the same as the unmirrored world seen from the
@@ -228,23 +188,20 @@ public sealed unsafe class ReflectionPass : IDisposable
         // Keep a metre below the surface too, so the waves' troughs do not show a gap at the shore.
         var clip = new Vector4(0, 1, 0, -(plane - 1));
 
-        gl.ColorMask(true, true, true, true);
-        gl.DepthMask(true);
-        gl.Disable(EnableCap.Blend);
-        gl.Disable(EnableCap.ScissorTest);
         // The native host (docs/renderer-native.md 4.5): the multisampled target's rendering instance is opened here, cleared by its load ops,
-        // and the sky, terrain, objects and foliage record into it through BeginNativeInPass. The GL framebuffer binding, viewport and state stay
-        // what the guests read (CurrentTargets, CurrentState, GetInteger(Samples)).
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNative("reflection");
-        var target = interop.CurrentTargets();
-        interop.BeginHostPass(cmd);
+        // and the sky, terrain, objects and foliage record into it through BeginNativeInPass, with the targets and state handed over here
+        // (GpuContext.CurrentTargets, CurrentState).
+        var cmd = Gpu.BeginNative("reflection");
+        var target = msColour is not null ? PassTargets.Of(msColour, msDepth) : PassTargets.Of(colour, depth);
         // Wave 4 (docs/renderer-native.md 6): the guests' segments are secondaries, recorded on the job threads when the pass ends.
         bool secondaries = Recording.Secondaries;
         cmd.BeginRendering(new RenderingDesc(
             target.Colour with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(new ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1)) },
             target.Depth with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(depthStencil: new ClearDepthStencilValue(1f, 0)) },
             target.Width, target.Height), secondaries);
+        // What the guests draw with: the scene's state (depth tested with less-or-equal and written, no culling, blending or clamp, every channel).
+        // The sky turns the depth test off for itself.
+        Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
         if (secondaries) Gpu.Frame.Parallel.Begin(cmd, target.Formats, ReflectionStage);
         Lap(4);
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
@@ -261,8 +218,6 @@ public sealed unsafe class ReflectionPass : IDisposable
         options.TerrainPixelScale = render.TerrainPixelScale * TerrainLodScale;
         options.MaterialDistance = Math.Min(render.MaterialDistance, MaterialDistance);
 
-        gl.Enable(EnableCap.DepthTest);
-        gl.DepthFunc(DepthFunction.Lequal);
         terrain.BeginFrame();
         bool first = true;
         Matrix4x4 mapped = default;
@@ -292,11 +247,8 @@ public sealed unsafe class ReflectionPass : IDisposable
             cmd.Barrier(BarrierBatch.Full);
             cmd.Resolve(msColour, colour!);
         }
-        interop.EndHostPass(cmd);
-        interop.EndNative(cmd);
-        gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, (uint)drawFbo);
-        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, (uint)readFbo);
-        gl.Viewport(viewport[0], viewport[1], (uint)viewport[2], (uint)viewport[3]);
+        Gpu.EndHostPass(cmd);
+        Gpu.EndNative(cmd);
         timer.End();
         CpuMs = watch.Elapsed.TotalMilliseconds;
         cpuSamples.Add(CpuMs);

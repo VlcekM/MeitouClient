@@ -4,7 +4,7 @@ namespace Meitou.Rendering;
 
 /// <summary>
 /// GPU time of a pass from two native timestamps (the frame's <see cref="QueryArena"/>), written where the frame's commands are going
-/// (<see cref="IGlInterop.Interleave"/>: VkGl's pass is not ended). Results arrive when the frame's slot comes round; nothing waits.
+/// (<see cref="GpuContext.Interleave"/>: an open host pass is not ended). Results arrive when the frame's slot comes round; nothing waits.
 /// </summary>
 sealed class PassTimer(GpuContext gpu)
 {
@@ -29,7 +29,7 @@ sealed class PassTimer(GpuContext gpu)
         stamp = arena.Allocate();
         if (!stamp.IsValid) return default;
         write ??= cmd => cmd.Timestamp(gpu.Frame.Timestamps, stamp);
-        gpu.Interop!.Interleave(write);
+        gpu.Interleave(write);
         return stamp;
     }
 

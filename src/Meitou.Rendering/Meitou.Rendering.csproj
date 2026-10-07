@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The world renderers (terrain, objects, foliage, water, sky, shadows, post, overlay), their streaming and the GPU layer under
-       them (Gpu/: the Vulkan device and shader compiler in Core/ and Shaders/, the native API, IGl; docs/renderer-native.md),
-       shared by the game (src/Meitou.Game) and the viewer. -->
+       them (Gpu/: the Vulkan device and shader compiler in Core/ and Shaders/, the native API, the presenter; Upscalers/: FSR and DLSS;
+       docs/renderer-native.md), shared by the game (src/Meitou.Game) and the viewer. -->
 
   <ItemGroup>
     <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
@@ -19,7 +19,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Meitou.Rendering.Vulkan" />
     <InternalsVisibleTo Include="meitou-viewer" />
     <InternalsVisibleTo Include="meitou" />
     <InternalsVisibleTo Include="Meitou.Tests" />

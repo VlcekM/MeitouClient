@@ -44,7 +44,7 @@ public sealed unsafe partial class ShadowPass
     ushort[]? coarse;
     int coarseSize;
     TerrainShadowMap? terrainMap;
-    uint boundTerrain;   // the terrain shadow map (a GL texture) the receivers sample, as the GL code bound it to its unit
+    SampledTexture? boundTerrain;   // the terrain shadow map the receivers sample, as the GL code bound it to its unit (kept while no new one is)
     Texture? blocker;
     SampledTexture blockerSampled;
     bool blockerPublished;
@@ -62,7 +62,7 @@ public sealed unsafe partial class ShadowPass
     public string DescribeMeitou() =>
         $"drawn {string.Join("/", CascadeDraws)} times in {MeitouFrames} frames; terrain shadow rebuilt {terrainMap?.Builds ?? 0} times (cpu {terrainMap?.LastBuildCpuMs ?? 0:0.00} ms)";
 
-    void RenderMeitou(ShadowView view, Vector3 toSun, uint restoreFramebuffer, int restoreWidth, int restoreHeight, CasterDraw draw)
+    void RenderMeitou(ShadowView view, Vector3 toSun, CasterDraw draw)
     {
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
@@ -86,7 +86,6 @@ public sealed unsafe partial class ShadowPass
         }
 
         timer.Begin();
-        BindCasterState();
         // The whole atlas is cleared by the load op when every cascade is drawn; else each drawn tile is cleared inside the pass.
         var host = BeginHost("shadow cascades", clear: drawing == count);
         for (int i = 0; i < count; i++)
@@ -94,8 +93,7 @@ public sealed unsafe partial class ShadowPass
             if (!drawNow[i]) continue;
             var c = MeitouShadowFit.Fit(view, toSun, Settings, splits, i);
             int x = (int)MathF.Round(c.Tile.X * atlasSize), y = (int)MathF.Round(c.Tile.Y * atlasSize), s = Settings.TileSize;
-            gl.Viewport(x, y, (uint)s, (uint)s);
-            gl.Scissor(x, y, (uint)s, (uint)s);
+            SetTile(x, y, s);
             if (drawing != count)   // only this tile: the others keep what they hold
                 ClearTile(host, new Silk.NET.Vulkan.Rect2D(new Silk.NET.Vulkan.Offset2D(x, y), new Silk.NET.Vulkan.Extent2D((uint)s, (uint)s)));
             SetCasterBias(new Vector4(c.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 0));
@@ -107,17 +105,10 @@ public sealed unsafe partial class ShadowPass
         bool blockers = ContactHardening && UpdateBlockers(drawNow, count);
         if (coarse is not null)
         {
-            terrainMap ??= new TerrainShadowMap(gl, Gpu, coarse, coarseSize);
+            terrainMap ??= new TerrainShadowMap(Gpu, coarse, coarseSize);
         }
-        // The GL state as the GL code left it (RestoreState), then the terrain map (TerrainShadowMap's own GL calls, after the state, as before
-        // the framebuffer binding was restored).
-        gl.Disable(EnableCap.ScissorTest);
-        gl.Disable(EnableCap.DepthClamp);
-        gl.ColorMask(true, true, true, true);
-        gl.DepthFunc(DepthFunction.Lequal);
+        // The terrain map (rebuilt when the sun has moved).
         terrainMap?.Update(toSun);
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, restoreFramebuffer);
-        gl.Viewport(0, 0, (uint)restoreWidth, (uint)restoreHeight);
         timer.End();
         if (all) { storedSun = toSun; storedSplits = splits; storedMapSize = Settings.MapSize; }
         meitouValid = true;
@@ -132,7 +123,7 @@ public sealed unsafe partial class ShadowPass
     /// <summary>
     /// Rebuilds the blocker map's tiles of the cascades drawn this frame: one native segment with its own rendering on the map (loaded: the
     /// tiles not drawn keep what they hold), the atlas read raw through a plain sampler (no comparison), per tile its viewport and the
-    /// fullscreen triangle. Leaves GL's culling off, as the GL version did (unported code inherits it).
+    /// fullscreen triangle.
     /// </summary>
     bool UpdateBlockers(ReadOnlySpan<bool> drawn, int count)
     {
@@ -155,7 +146,6 @@ public sealed unsafe partial class ShadowPass
         }
         int tile = Settings.TileSize / 2, grid = Settings.Grid;
         RecordBlockers(drawn, count, fresh, tile, grid, out int tiles);
-        gl.Disable(EnableCap.CullFace);
         StepTiming.Add(StepTiming.Blocker, timing, tiles);
         return true;
     }
@@ -172,8 +162,7 @@ public sealed unsafe partial class ShadowPass
         var map = blocker!;
         p.Set(blockerSizeHandle, (float)atlasSize);
         p.Bind(blockerAtlasSlot, atlasPlain);
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNative("shadow blockers");
+        var cmd = Gpu.BeginNative("shadow blockers");
         var target = new RenderTarget(map.Attachment(), AttachmentLoadOp.Load, default, map.Image);
         var formats = new AttachmentFormats(map.Desc.Format, Format.Undefined, 1);
         int side = map.Desc.Width;
@@ -190,7 +179,7 @@ public sealed unsafe partial class ShadowPass
             tiles++;
         }
         cmd.EndRendering();
-        interop.EndNative(cmd);
+        Gpu.EndNative(cmd);
     }
 
     /// <summary>The blocker search's and the filter's widest radius in a cascade (world units).</summary>
@@ -221,7 +210,7 @@ public sealed unsafe partial class ShadowPass
         Put(data, 136, new Vector4(atlasSize, 0, 0, 1));   // w: the Meitou receiver
         float noise = Temporal ? meitouFrame % 64 * 5.588238f : 0;
         Put(ms, 32, new Vector4(noise, range, range * 0.85f, range * 0.55f));
-        bool terrain = terrainMap?.Texture is > 0;
+        bool terrain = terrainMap?.Sampled is not null;
         float half = WorldLayout.HalfWorldSize;
         if (terrainMap is { } map)
         {
@@ -235,14 +224,14 @@ public sealed unsafe partial class ShadowPass
         Upload(data);
         meitouBlock.Set(ms);
         // The maps the receivers sample from now on (the GL code bound them to their units here; a unit kept what it held).
-        if (terrain) boundTerrain = terrainMap!.Texture;
+        if (terrain) boundTerrain = terrainMap!.Sampled;
         if (blockers) blockerPublished = true;
     }
 
     void DisposeMeitou()
     {
         terrainMap?.Dispose();
-        boundTerrain = 0;
+        boundTerrain = null;
         blocker?.Dispose();
         blockerNative?.Dispose();
     }

@@ -258,10 +258,8 @@ public sealed unsafe class SkyRenderer : IDisposable
     SkyWeather? builtWeather;
     bool builtPhysical;
 
-    /// <param name="gl">Unused since phase 8 stage 2 (kept for the callers that still pass it: <c>WorldFrame</c>).</param>
-    public SkyRenderer(IGl? gl, GpuContext gpu, AssetLocator? assets = null)
+    public SkyRenderer(GpuContext gpu, AssetLocator? assets = null)
     {
-        _ = gl;
         Gpu = gpu;
         simple = new SkyProg(gpu, Vertex, SimpleFragment, "sky simple");
         sky = new SkyProg(gpu, Vertex, SkyFragment, "sky");
@@ -381,13 +379,6 @@ public sealed unsafe class SkyRenderer : IDisposable
         return (state.Colours, state.Light);
     }
 
-    /// <summary>
-    /// For the GL programs that are left (<c>WorldGl.Program</c>: the impostor baker and preview; the model viewer's own): moves the atmosphere's
-    /// sampler uniforms off unit 0 (<see cref="AtmosphereShaders.AssignSamplerUnits"/>). Nothing binds textures there any more: the native draws
-    /// read the atmosphere's textures from the frame globals the sky publishes.
-    /// </summary>
-    public static void AssignSamplerUnits(IGl gl, uint program) => AtmosphereShaders.AssignSamplerUnits(gl, program);
-
     /// <summary>The values of <see cref="AtmosphereShaders.Functions"/>' loose uniforms (what <see cref="Apply"/> sets), by GLSL name minus <c>uAtmo</c>.</summary>
     public readonly record struct AtmosphereUniforms(Vector4 Tau, Vector4 Params, Vector4 Sun, Vector4 Light, Vector3 SunLight, Vector3 Tint, Vector4 Fog,
         Vector3 FogColour, Vector4 Simple, Vector4 Haze, Vector4 HazeCloud, Vector4 Altitude, Vector4 Maps);
@@ -462,13 +453,6 @@ public sealed unsafe class SkyRenderer : IDisposable
     }
 
     /// <summary>
-    /// Nothing since phase 8 stage 2: the atmosphere's textures are frame globals of their own (<see cref="PublishGlobals"/>), no GL unit binds
-    /// them and no GL program of the world view samples them. Kept for the callers in files of other owners (terrain, objects, foliage) until
-    /// they drop the call.
-    /// </summary>
-    public void BindUnits() { }
-
-    /// <summary>
     /// <c>horizonClouds</c>: the pull is the game's (cloud cover); the colour is built the game's way,
     /// <c>saturate(sun (1 − 0.1 (offset + 0.2) · 3) + horizon · sun.g) (1 − darkness) √exposure</c>, from the viewer's sun colour and horizon sky
     /// (the game's own inputs, getColorAt's result for the cloud layer and a floor colour, are partly Unknown). Also the clouds' darkness.
@@ -512,11 +496,10 @@ public sealed unsafe class SkyRenderer : IDisposable
 
     void Record(SkyProg program)
     {
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNativeInPass(program == sky ? "sky" : "sky simple");
-        var targets = interop.CurrentTargets();
+        var cmd = Gpu.BeginGuest(program == sky ? "sky" : "sky simple");
+        var targets = Gpu.CurrentTargets();
         // What the GL code's Disable(DepthTest) and DepthMask(false) made of the pass's state.
-        var drawState = interop.CurrentState() with { DepthTest = false, DepthWrite = false };
+        var drawState = Gpu.CurrentState() with { DepthTest = false, DepthWrite = false };
         cmd.SetViewport(targets.Viewport);
         cmd.SetScissor(targets.Scissor);
         cmd.SetRaster(drawState.Cull, drawState.Front);
@@ -525,7 +508,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         cmd.BindPipeline(program.Segment.Get(drawState, targets.Formats, null));
         program.P.Flush(cmd);
         cmd.Draw(3);
-        interop.EndNative(cmd);
+        Gpu.EndGuest(cmd);
     }
 
     void SetSkyUniforms(SkyProg program)
@@ -650,7 +633,7 @@ sealed class SkyProg : IDisposable
     public readonly UniformHandle InverseViewProjection, Extra, MoonDir, MoonRight, MoonUp, CloudLight, Has;
     public readonly SkyColourHandles Colours;
     public readonly SamplerSlot Stars, Moon, Clouds;
-    public readonly Meitou.Rendering.Vulkan.Shaders.SamplerInfo? StarsInfo, MoonInfo, CloudsInfo;
+    public readonly Meitou.Rendering.Gpu.Shaders.SamplerInfo? StarsInfo, MoonInfo, CloudsInfo;
 
     public SkyProg(GpuContext gpu, string vertex, string fragment, string name)
     {
@@ -702,7 +685,7 @@ internal sealed class SampledImage : IDisposable
     /// <summary>The sampler and view a draw samples it with now (what VkGl's <c>Sampled</c> gave for the GL texture).</summary>
     public SampledTexture Sampled()
     {
-        float bias = ctx.LodBias();
+        float bias = ctx.LodBias;
         if (!(bias == cachedBias))
         {
             var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, wrapR, false, DepthFunction.Lequal, false, 1, false, bias));

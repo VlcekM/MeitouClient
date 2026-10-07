@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Meitou.Rendering.Vulkan.Shaders;
+namespace Meitou.Rendering.Gpu.Shaders;
 
 /// <summary>A small SPIR-V parser: just enough of the word stream to describe a shader's resources and interface.</summary>
 public static class SpirvReflection

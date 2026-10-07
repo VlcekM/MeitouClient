@@ -135,7 +135,8 @@ override bones applied in a second pass). See [ogre-skeleton.md](formats/ogre-sk
 
 ### In Meitou (`Meitou.Data.Characters.AnimationMask`, viewer `Animator`)
 
-The viewer implements the Ogre side of this and the startup preprocessing per layer, without Kenshi's
+(The viewer's `Animator` was removed with the character viewer in phase 8; [character-viewer.md](character-viewer.md) keeps how it
+worked, and the tag `model-viewer-last` has the code.) The viewer implemented the Ogre side of this and the startup preprocessing per layer, without Kenshi's
 per-layer controller (no fades, synching or normalising):
 
 - A layer's deleted tracks and override bones come from its ANIMATION record (tables above; `delete tail`

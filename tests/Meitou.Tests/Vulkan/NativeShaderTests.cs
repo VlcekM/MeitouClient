@@ -2,9 +2,8 @@ using System.Runtime.InteropServices;
 
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
-using Meitou.Rendering.Vulkan.Core;
-using Meitou.Rendering.Vulkan.Shaders;
+using Meitou.Rendering.Gpu.Core;
+using Meitou.Rendering.Gpu.Shaders;
 
 namespace Meitou.Tests.Vulkan;
 
@@ -75,9 +74,9 @@ public class NativeShaderTests
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            using var frame = new NativeFrame(gl.Context);
+            using var frame = new NativeFrame(ctx);
             foreach (var (name, v, f, pushType) in Variants())
             {
                 using var p = frame.Program(v, f, name);

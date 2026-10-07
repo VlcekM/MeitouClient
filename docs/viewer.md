@@ -1,27 +1,20 @@
-# Model viewer (`tools/Meitou.ModelViewer`)
+# Viewer (`tools/Meitou.ModelViewer`)
 
-A standalone viewer for the meshes of the install (FCS lookups follow the full load order, including enabled and workshop mods): Vulkan 1.3 through `VkGl` (the GL-shaped `IGl`; OpenGL was removed, DECISIONS 18), its own GLSL shaders
-(`Shaders.cs`; Kenshi's HLSL is only read for facts), CPU-decoded textures
-([formats/dds.md](formats/dds.md)), GPU skinning and skeletal animation. Status labels as in
-[README.md](README.md).
+`meitou-viewer` is the world viewer (`--world`, [World mode](#world-mode)) and the impostor preview (`--impostor-preview`,
+[impostors.md](impostors.md)), on the renderers of `src/Meitou.Rendering` (FCS lookups follow the full load order, including
+enabled and workshop mods): Vulkan 1.3 (OpenGL was removed, DECISIONS 18), our own GLSL shaders (Kenshi's HLSL is only read for
+facts), CPU-decoded textures ([formats/dds.md](formats/dds.md)). Status labels as in [README.md](README.md).
+
+The standalone **mesh viewer** (`meitou-viewer <mesh>`) and **character viewer** (`meitou-viewer --character <record>`) were
+removed in phase 8 (DECISIONS 23). What they did and how, their options and their verified findings are in
+[character-viewer.md](character-viewer.md); the code is at the git tag `model-viewer-last`.
 
 ## Running
 
-```
-dotnet run --project tools/Meitou.ModelViewer -- <mesh> [options]
-dotnet run --project tools/Meitou.ModelViewer -- human_male --anim ninjarun
-dotnet run --project tools/Meitou.ModelViewer -- bush01 --screenshot out.png --size 800x600 --yaw 35 --pitch 20
-dotnet run --project tools/Meitou.ModelViewer -- mask2 --info
-```
-
-`<mesh>` is a bare file name (`.mesh` optional) or a path (absolute, relative to the install, or relative to the
-working directory). The install comes from `KENSHI_PATH` / `meitou.local.json`. `--help` lists the options and
-keys (orbit / pan / zoom with the mouse, `W` wireframe, `M` next material candidate, `Left`/`Right`
-animations, `Space` pause, `P` screenshot into C:\Temp...). `--screenshot` renders headless (no window) into a 4× multisampled
-framebuffer and writes a PNG; with `--anim` the camera frames the posed mesh. `--quit-after <s>` (any interactive mode) closes the
-window after s seconds and prints the frames drawn (a smoke test); `MEITOU_VK_VALIDATION=1` runs the Vulkan validation layer.
-The interactive mesh and character windows draw straight into the swapchain image, so they are not multisampled (the offscreen
-pictures are). `--renderer vulkan` is accepted and ignored in every mode (`gl` prints a message that OpenGL is gone and is ignored).
+The install comes from `KENSHI_PATH` / `meitou.local.json`. Usage of the world viewer is under [World mode](#world-mode).
+`--quit-after <s>` (any interactive mode) closes the window after s seconds and prints the frames drawn (a smoke test);
+`MEITOU_VK_VALIDATION=1` runs the Vulkan validation layer. `--renderer vulkan` is accepted and ignored in every mode (`gl` prints a
+message that OpenGL is gone and is ignored).
 
 ## Finding files
 
@@ -35,17 +28,17 @@ Bare names are not unique: `katana05.mesh` exists as `data/meshes/katana05.mesh`
 different models. **Answered** ([characters.md](characters.md#meshes-per-item-verified--140537690--1405358a0)):
 the game reduces item mesh paths to the bare name before loading, so the resource index decides, and
 `data/items/weapons/mesh` is registered after `data/meshes` in the same group: the game loads the 12.8-unit
-weapon file. `meitou-viewer katana05` (rule 1 fails for a bare name) gets the same file by rule 2.
+weapon file. `AssetLocator` gets the same file for the bare name `katana05.mesh` (rule 1 fails for a bare name) by rule 2.
 
 ## How mesh textures are resolved
 
 Mesh material names mostly don't name script materials, and `StaticObject` (the most common one) only has
 placeholder textures ([formats/ogre-material.md](formats/ogre-material.md#mesh-materials-verified-2026-10-04)).
 The game builds materials at run time from FCS records ([formats/runtime-materials.md](formats/runtime-materials.md),
-decompiled). The viewer approximates that, best first (`MaterialResolver`):
+decompiled). `MaterialResolver` (`src/Meitou.Rendering`, used by the world's objects; it was written for the removed mesh viewer,
+[character-viewer.md](character-viewer.md)) approximates that, best first:
 
-1. `--texture` (and `--normal`) from the command line.
-2. **FCS records whose filename fields name the mesh** (bare name, case-insensitive), each giving one texture
+1. **FCS records whose filename fields name the mesh** (bare name, case-insensitive), each giving one texture
    set for the whole mesh:
 
    | Record type, field | Textures from | Notes |
@@ -62,11 +55,9 @@ decompiled). The viewer approximates that, best first (`MaterialResolver`):
 
    Found by listing every filename field per record type (all types with `.mesh` fields are covered) and every
    reference list pointing at MATERIAL_SPEC* / HEAD / COLOR_DATA records (scratch probes, 2026-10-04).
-3. The submesh's **script material**, if its first pass names a texture that exists and isn't a placeholder
+2. The submesh's **script material**, if its first pass names a texture that exists and isn't a placeholder
    (`black.dds`, `flat.dds`, `white.dds`...). Covers the exporter leftovers (`01-Default`...).
-4. Otherwise untextured (flat grey).
-
-`M` / `--material n` cycles through the candidates (e.g. the 16 weapon models of a katana).
+3. Otherwise untextured (flat grey).
 
 ### Facts used, and how sure
 
@@ -83,40 +74,22 @@ decompiled). The viewer approximates that, best first (`MaterialResolver`):
   (vertex alpha 1 = first set); `triplanar.hlsl` projects `world position / 5000 × tiling`; the character
   shader samples the head at `uv + (0, 1)` (head UVs sit in v −1..0 of the body mesh) and adds it to the
   body, both with border addressing and a transparent black border (`character.material`), and reads the body
-  normal as `.wy` (X in alpha, Y in green). The viewer does the same. Screenshots of `human_male` show a
-  correct face only with this.
+  normal as `.wy` (X in alpha, Y in green). The removed mesh and character viewers did the same
+  ([character-viewer.md](character-viewer.md)). Screenshots of `human_male` show a correct face only with this.
 - **Observed (viewer heuristic)**: a normal map whose mean blue is below 180 and whose R, G, B means agree is
-  treated as swizzled (catches the character body maps; building/weapon maps have mean blue ≈ 240–255).
+  treated as swizzled (`WorldTextureCache.LooksSwizzled`; catches the character body maps; building/weapon maps have mean blue ≈ 240–255).
 - **Observed (screenshots)**: weapons share a UV layout: MATERIAL_SPECS_WEAPON textures (e.g. `01_HI.dds`,
   `12_HI.dds`) map sensibly onto both `katana05` and `chopper01_bare` (blade steel, edge strip and wrapped grip
   where expected).
 - **Observed (Kenshi HLSL `skin.hlsl`)**: clothing worn on a character (the `Skinned` template, which gets no
   TRANSPARENCY flag) always cuts where the normal map's alpha is below 0.6, whatever its ItemShader
-  ([characters.md](characters.md#worn-clothing-observed-hlsl-skinhlsl-parameters-in-runtime-materialsmd)). The
-  mesh viewer still clips on normal alpha like ground items; `--character` uses the 0.6 rule.
+  ([characters.md](characters.md#worn-clothing-observed-hlsl-skinhlsl-parameters-in-runtime-materialsmd)).
+  Materials from `MaterialResolver` clip on normal alpha like ground items; the removed character viewer used the 0.6 rule.
 - **Verified (decompiled)**: `leaves alpha threshold` is / 255, cut on the leaves normal map's alpha (formats/foliage.md, "Materials"). Leaves whose
-  record names no normal map are drawn opaque by the model viewer.
-- Not followed: ARMOUR shown on the ground uses a temporary record built from `vest texture` / `vest normalmap` (runtime-materials.md); the viewer only follows ARMOUR's `material` references.
-- Not reproduced: TERRAIN-mode features (biome textures), dust, construction scaffold, colour masks / dyes,
-  metalness, the character's hair/beard overlays, skin tone, blood.
-
-## Skinning and animation
-
-- Weights come from bone assignments: per vertex the 4 largest, renormalised (Ogre's rule). Assignments past
-  the skeleton's bone count are dropped with a warning (`whistler.mesh`: 6,917 of them).
-- Skeleton choice: `--skeleton`; else for meshes used by ARMOUR / CONTAINER / ATTACHMENT / LIMB_REPLACEMENT
-  the body skeleton (`male_skeleton`, or `female_skeleton` for a `... female` field), since Kenshi shares the
-  body's skeleton instance with worn items by bone index ([formats/ogre-skeleton.md](formats/ogre-skeleton.md#binding-worn-meshes-to-the-character));
-  else the mesh's link, else `<mesh>.skeleton` beside it. A missing skeleton leaves the mesh in its binding pose.
-- Pose maths follow Kenshi's modified Ogre (ogre-skeleton.md, "Bone maths"): keyframes relative to the
-  binding pose, rotations nlerped along the shortest path, scale not inherited, a child's offset scaled by
-  the Y of its parent's derived scale. Skin matrix = posed derived transform × inverse binding transform.
-- The mesh viewer plays one animation at a time at weight 1, without the ANIMATION record preprocessing
-  ([animation.md](animation.md)), so upper/lower animations (`walk upper`, `walk lower`) move only part of the
-  body. `--character` blends several (see [Characters](#characters)).
-
-Verified with screenshots (2026-10-04): `human_male` binding pose and `ninjarun` at 0.2 s (skeleton lines on
-the skinned mesh), `pack_beast` `walk`, `Iron Clad Jacket_F` on `female_skeleton` (its own link is broken).
+  record names no normal map were drawn opaque by the removed mesh viewer.
+- Not followed: ARMOUR shown on the ground uses a temporary record built from `vest texture` / `vest normalmap` (runtime-materials.md); the resolver only follows ARMOUR's `material` references.
+- Not produced by the resolver: TERRAIN-mode features (biome textures; world mode draws them with the terrain renderer, below), dust,
+  construction scaffold, colour masks / dyes, metalness, the character's hair/beard overlays, skin tone, blood.
 
 ## Conventions (Verified by screenshots)
 
@@ -125,98 +98,23 @@ uploaded as stored (top row first) and UVs used unchanged; text-free proof is th
 hips, feet at the bottom, face on the head). Nothing renders inside out with back-face culling on.
 Kenshi's units: a human is about 19.5 units tall, the katana the game loads 12.8. Weapons are not scaled when
 attached (their node only undoes the body node's scale); the 1.6-unit `data/meshes/katana05.mesh` is a different
-file the game never picks ([Finding files](#finding-files)).
+file the game never picks ([Finding files](#finding-files)). These were checked in the removed mesh and character
+viewers ([character-viewer.md](character-viewer.md)).
 
 ## Limitations
 
+Of the texture resolution above:
+
 - One texture set per mesh from FCS; per-submesh only for script materials.
-- No LOD, shadows, metalness or specular maps beyond diffuse-alpha gloss; poses only in `--character`.
-  No sRGB handling, which matches Kenshi (Observed: it does no sRGB conversion either,
-  [characters.md](characters.md#colour-space-observed)).
+- No metalness or specular maps beyond diffuse-alpha gloss. No sRGB handling, which matches Kenshi (Observed: it
+  does no sRGB conversion either, [characters.md](characters.md#colour-space-observed)).
 - The swizzled-normal decision is a heuristic, not what the game does (the game picks by shader template).
 
 ## Characters
 
-`meitou-viewer --character <CHARACTER or RACE record>` assembles a character from FCS records
-(`Meitou.Data.Characters.CharacterAppearance`; the rules and their evidence are in [characters.md](characters.md))
-and shows it:
-
-```
-dotnet run --project tools/Meitou.ModelViewer -- --character "Dust Bandit"
-dotnet run --project tools/Meitou.ModelViewer -- --character Ruka --screenshot ruka.png --size 900x1000
-dotnet run --project tools/Meitou.ModelViewer -- --character Greenlander --female --equip "Samurai Boots" --equip Katana --drawn
-dotnet run --project tools/Meitou.ModelViewer -- --character "Dust Bandit" --anim "walk lower" --anim "walk upper":0.8
-dotnet run --project tools/Meitou.ModelViewer -- --character "Dust Bandit" --faction "Dust Bandits" --seed 3
-dotnet run --project tools/Meitou.ModelViewer -- --character Ruka --shape height=1.2 --shape "Arm bulk=145;muscle=1"
-dotnet run --project tools/Meitou.ModelViewer -- --character Greenlander --lod 1 --wireframe
-```
-
-A record is found by string id, else by name (CHARACTER before RACE). `--help` lists the options (`--female` /
-`--male`, `--equip` repeatable, `--naked`, `--drawn`, `--seed`, `--faction`, `--anim name[:weight]` repeatable,
-`--bind-pose`, `--no-morphs`, `--no-skin-tone`, `--shape name=value`, `--no-shape`, `--lod n`, `--info`,
-screenshot and camera options).
-
-What it does:
-
-- **Body**: race mesh with its skeleton; face poses from the body file baked into the vertices; body, head,
-  body/head masks, skin tone, the hair's and beard's head overlays and up to three clothing "vest" layers in one
-  shader (`CharacterRenderer`), with the character shader's swizzled normals.
-- **Worn items** (ARMOUR, ATTACHMENT hair/beards, CONTAINER, LIMB_REPLACEMENT): skinned with the body's skin
-  matrices by bone index. Clothing textures from the item's `material` (MATERIAL_SPECS_CLOTHING, highest
-  weight), the 0.6 normal-alpha cut-out of Kenshi's `Skinned` material, and a dye from ARMOUR `color` (else
-  CHARACTER `color`) through the colour map. Hair meshes use the channel-packed texture and the hair colour.
-- **Weapons**: attached to bones at the race's attachment points (`hands` = `Bip01 Prop2`, `hip`, `back`,
-  `back2` from `attachment points`), offset as Kenshi computes it; sheathed = `mesh`, `--drawn` = `bare sword`
-  in the hand plus `sheath` at the hip. Weapon textures via the mesh viewer's resolver (manufacturer models).
-- **Animation blending**: every `--anim` is a layer with a weight. An ANIMATION record name (`run upper
-  stealth`) or an Ogre animation name (`ninjarun`, matched to the first ANIMATION record with that `anim name`)
-  gives the layer that record's track deletions (`delete below waist`...) and override bones, so `walk lower` +
-  `walk upper` animate the whole body. Weights add Ogre-style: average mode scales them down only when they sum
-  above 1; layers with override bones apply in a second pass that first pulls those bones toward the binding
-  rotation (animation.md, ogre-skeleton.md). Layers are not synchronised and have no fades (Kenshi's
-  per-layer controller is not reproduced). Without `--anim` the body file's `idle stance` plays. With a body
-  file, `postures`, `neck set` and `shoulder set` are added as layers held at length × `Posture` / `Neck
-  position` / `Shoulder set` ÷ 100 (animation.md, "Posture sliders"; `--no-postures` leaves them out). With the idle the four layers sum to weight 4, so average mode scales each to 0.25; that is why `--no-postures` visibly changes the idle.
-- **Generated characters** (`--seed n`, `CharacterGenerator`): the character is rolled by the game's spawn rules
-  ([characters.md](characters.md#generating-a-character)): gender, and without a body file a random head, hair,
-  beard, hair colour, skin tone, sliders and one of the race's `morph num` faces from its editor limits; then
-  clothing per slot with quality and material, backpack, crossbow and weapons with manufacturer and model (the
-  model's texture is used). The roll is printed (`loadout` lines). `--faction` names the FACTION the character
-  spawns in (its `hairstyles` limit the hair); the same seed always gives the same character, not the one the
-  game would give.
-- **Body shape** (`CharacterShape`, formulas in [animation.md](animation.md#body-shape-sliders)): on the 30-bone
-  human skeletons the body file's (or rolled) sliders become Kenshi's per-bone sizes and positional sizes, with
-  the skeleton's movement scale; the `Animator` applies them as Kenshi's Ogre does (derived scale = bone size ×
-  own scale, child offset × positional size × the parent's Y scale; binding pose unchanged). Muscle comes from
-  the CHARACTER's `stats` STATS record (strength, weapon/armour smithing; an approximation), starvation is 0,
-  all limbs present, a missing slider counts as 100. `--shape name=value` overrides a slider (Kenshi units,
-  or a fraction when ≤ 3: `height=0.8` = 80; names case-insensitive, spaces optional: `legsbulk=130`) or
-  `muscle=`, `starve=`, `legratio=`, `missing=larm,rarm,lleg,rleg`, `hidestump=0..3`; `--no-shape` turns it off.
-  `shaved` Shek characters get the cut-horn pose rule. Weapons on bones inherit the hand's bone size (Kenshi's
-  behaviour there is Unknown).
-- **LOD** (`CharacterLod`, [formats/ogre-mesh.md](formats/ogre-mesh.md#lod)): every part keeps its mesh's
-  generated LOD levels and picks one per frame with Kenshi's distance_sphere rule (camera distance to the mesh
-  file's bounds centre minus its radius, against the level distances: 200 for bodies and hair, 400 for armour);
-  `--lod n` forces level n (clamped per mesh), `L` cycles auto / 0 / 1. Changes are printed (`lod` lines) and
-  the title shows each part's level.
-- **Keys** (besides the mesh viewer's camera and display keys): `Tab` / `1`–`9` select a layer, `Left` / `Right`
-  change its animation, `+` / `-` its weight, `Insert` adds a layer, `Delete` removes one, `Home` binding pose,
-  `L` LOD level.
-
-Verified with screenshots (2026-10-04): Dust Bandit with `--seed` 1–6 (Samurai Boots, Horse Chopper on the back in
-the Rusting Blade / Rusted Junk texture, or the Junkbow instead; varied skin tones; no beard), Hungry Bandit seeds
-1–4 (men and women, different heads, haircuts, beards, skin; iron club at the hip). Earlier, before the spawn rules
-were traced: Dust Bandit (Greenlander, helmet hides the hair, sandals win the boots
-slot with chance 400, horse chopper at the hip with the handle forward), the same with a katana drawn in the
-right hand, sheath at the hip and a second katana diagonally on the back while blending `walk lower` +
-`walk upper sword`, Ruka (Shek woman: horn and face poses, skin tone, leather shirt as a vest layer), Beep
-(Hive Worker Drone with a stick-people head texture and the rag loincloth). Body shape and LOD: Ruka with and without
-`--no-shape`, Greenlander at Height 80 and 120 (no seams at shoulders or elbows), with `muscle=1`, `starve=1` and
-missing limbs with and without `hidestump`, Dust Bandit at forced LOD 0 and 1 (wireframe) and switching by distance.
-
-Not done: `hide parts` (part map, needs a per-vertex attribute; rules in characters.md), the `muscleBlend` normal
-map blend (rule known), stumps for missing limbs, blood, faction colours; without `--seed` the viewer takes the likeliest choice of each roll (first head, likeliest
-hair, neutral sliders).
+The character viewer (`--character`) was removed in phase 8 (DECISIONS 23). How it assembled, posed, skinned, animated
+and shaded a character, its options and its screenshot findings are in [character-viewer.md](character-viewer.md);
+the rules it followed are in [characters.md](characters.md) and [animation.md](animation.md).
 
 ## World mode
 
@@ -248,8 +146,9 @@ fast key speed and prints the frame times on the way (a streaming test). `MEITOU
 `--fly-benchmark <frames>` is the streaming benchmark (offscreen, no window; see "Streaming cost and unloading" below):
 it flies the camera round a circle (`--fly-radius`, default 12000 units, round the loaded point; `--fly-speed`, default 150 units per
 frame, 9000 per second at the 60 frames per second of wall time it paces itself to) and prints frame-time percentiles, the worst
-frames with the render-thread time of each stage, and the resident memory. With `--screenshot` the picture is taken afterwards,
-back at the start.
+frames with the render-thread time of each stage, the resident memory and (`vram` line) every allocator owner with its MB, device-local
+MB and count. With `--screenshot` the picture is taken afterwards, back at the start. `MEITOU_PASS_STATS=1` adds the per-stage table of
+docs/engine.md "Frame cost breakdown" (native counters since phase 8 stage 3).
 
 Its `jobs` line names the recording mode and thread count and gives the job threads' summed CPU time per stage, as a mean per frame. That
 is the command recording which wave 4 moved off the render thread ([renderer-native.md 6.5](renderer-native.md#65-as-built-wave-4-2026-10-06)).
@@ -268,11 +167,11 @@ Keys: left drag orbits the target, right drag looks
 around, wheel zooms, `W A S D` free fly along the view direction, `Q`/`E` world down/up (speed follows the height above ground; Shift ×4, Ctrl ×0.25), `T` textures, `N` normal
 maps, `O` objects, `G` water, `B` simple sky, `,`/`.` time of day −/+ 1 hour, `X` wireframe, `V` debug view (blend weights,
 layer weights, untextured shading), `H` prints the camera as command-line
-options, `P` screenshot into C:\Temp, `F1` to `F6` the Faithful / Meitou switches (see "Post-processing" below), `F11` toggles the frame statistics at the top left (fps, CPU and GPU frame time, VRAM: the process's device-local usage of the driver's budget through VK_EXT_memory_budget, else our allocator's bytes of the heaps' size, then our allocator's blocks and their used bytes, the eight largest owners by allocation name without its numbers (`GpuAllocator.Breakdown`: GL-era resources show as `gl buffer` and `gl texture`), the foliage and objects resident detail, reflection, sky and post-processing costs, camera position and zone, drawn terrain, objects and foliage, loading counts, resident memory; the window title only names the renderer), `F12` cycles a profiler chart along the bottom (GPU, render thread, off; see "Profiler" below), `F10` a panel listing these keys below them (built from the usage text; drawn after the screenshot readback, so saved pictures never show it; `--show-keys` opens it at start and, with `--screenshot`, draws it into the picture). `Tab` toggles a settings panel (top left, two columns, drawn over the statistics and the profiler) with sliders, dragged with the left mouse button: time of day (00:00 to 23:59, to the minute, the same hour as `--time` and `,` / `.`), object draw distance (1000 to 400000, log scale), distant-town range (0 to 100 zones), object LOD distance (x0.25 to x4: the mesh LOD value is divided by it, Ogre's LOD bias inverted), foliage and grass draw distance (x0.25 to x80, default x4: four times the game's `foliage range` / `grass range` of 1; with the Meitou `range` switch the foliage one only moves the FAR layers' large meshes, see "Foliage"), the large, medium and small foliage ranges of that switch (1000-120000, 400-80000, 200-40000, defaults 5000, 2500, 800) and grass density (x0.1 to x2; applies at once to all loaded grass: pages hold the blades of density x2 and a lower setting draws a prefix of them), terrain detail (the screen-space error `--terrain-error` in rendered pixels, 1 to 32 on a log scale, default 10, less is finer; it also moves a far error set with `--terrain-far-error` in proportion; see [formats/terrain.md](formats/terrain.md#in-the-viewer-terrainquadtree-terrainlod-terrainrenderer-terrainshaders)), shadow distance (the game's `Shadow Range`, 1000 to 200000 on a log scale, the game's own slider stops at 9000), haze strength (0 to 3, default 0.87 so far mountains stay visible, 1 = the game's haze; a viewer option, also `--haze-strength`). A "Reset to defaults" button at its bottom puts every slider back to its value at start (the command-line options and defaults). While the pointer is on a panel the camera ignores the mouse. `--show-keys` with `--screenshot` draws both panels. Its text comes from a system monospace font (Consolas, Cascadia Mono, Courier New, DejaVu Sans Mono or Menlo) rasterised with stb_truetype; with none of them the panel is unavailable.
+options, `P` screenshot into C:\Temp, `F1` to `F6` the Faithful / Meitou switches (see "Post-processing" below), `F11` toggles the frame statistics at the top left (fps, CPU and GPU frame time, VRAM: the process's device-local usage of the driver's budget through VK_EXT_memory_budget, else our allocator's bytes of the heaps' size, then our allocator's blocks and their used bytes, the eight largest owners by allocation name without its numbers (`GpuAllocator.Breakdown`; since phase 8 stage 3 every owner has its own name, no `gl buffer` / `gl texture` is left; `--fly-benchmark` prints them all on its `vram` line, with their device-local MB), the foliage and objects resident detail, reflection, sky and post-processing costs, camera position and zone, drawn terrain, objects and foliage, loading counts, resident memory; the window title only names the renderer), `F12` cycles a profiler chart along the bottom (GPU, render thread, off; see "Profiler" below), `F10` a panel listing these keys below them (built from the usage text; drawn after the screenshot readback, so saved pictures never show it; `--show-keys` opens it at start and, with `--screenshot`, draws it into the picture). `Tab` toggles a settings panel (top left, two columns, drawn over the statistics and the profiler) with sliders, dragged with the left mouse button: time of day (00:00 to 23:59, to the minute, the same hour as `--time` and `,` / `.`), object draw distance (1000 to 400000, log scale), distant-town range (0 to 100 zones), object LOD distance (x0.25 to x4: the mesh LOD value is divided by it, Ogre's LOD bias inverted), foliage and grass draw distance (x0.25 to x80, default x4: four times the game's `foliage range` / `grass range` of 1; with the Meitou `range` switch the foliage one only moves the FAR layers' large meshes, see "Foliage"), the large, medium and small foliage ranges of that switch (1000-120000, 400-80000, 200-40000, defaults 5000, 2500, 800) and grass density (x0.1 to x2; applies at once to all loaded grass: pages hold the blades of density x2 and a lower setting draws a prefix of them), terrain detail (the screen-space error `--terrain-error` in rendered pixels, 1 to 32 on a log scale, default 10, less is finer; it also moves a far error set with `--terrain-far-error` in proportion; see [formats/terrain.md](formats/terrain.md#in-the-viewer-terrainquadtree-terrainlod-terrainrenderer-terrainshaders)), shadow distance (the game's `Shadow Range`, 1000 to 200000 on a log scale, the game's own slider stops at 9000), haze strength (0 to 3, default 0.87 so far mountains stay visible, 1 = the game's haze; a viewer option, also `--haze-strength`). A "Reset to defaults" button at its bottom puts every slider back to its value at start (the command-line options and defaults). While the pointer is on a panel the camera ignores the mouse. `--show-keys` with `--screenshot` draws both panels. Its text comes from a system monospace font (Consolas, Cascadia Mono, Courier New, DejaVu Sans Mono or Menlo) rasterised with stb_truetype; with none of them the panel is unavailable.
 
 Camera codes: `Ctrl+C` copies the world camera to the clipboard as 50 hex digits: byte 1, then the target X, Y and Z, the yaw, the pitch (radians) and the distance, as little-endian floats. `Ctrl+V` moves the camera to the code in the clipboard. The format is fixed, so two viewers (e.g. two builds side by side) can be put at the same spot. `--monitor <n>` opens the window on monitor n (1-based) and maximizes it there.
 
-Profiler (`F12`; `FrameProfiler`): a chart along the bottom of the last 300 frames, one line per `StageClock` stage, first the GPU, then the render thread, then off. Every stage lap writes a GPU timestamp (through the native `QueryArena`, recorded into VkGl's command buffer with `IGlInterop.Interleave`; GL timestamp queries only without the seam), and a stage's GPU time is the gap since the stamp before it, summed when the stage runs once per depth slice (terrain, objects, foliage, water). The results are read a few frames late, without waiting. `other` is the frame's whole GPU time (`VkGlStats.GpuFrameMs`, uploads included) minus the stamped stages, and `present` (render thread only) is the overlay, submit and present after the scene. The wait for a free frame (vsync) is not counted. The header also shows the VRAM (as F11, read every 30 frames), and a pie at the top right splits it: the eight largest device-local owners by allocation name, the rest of ours, the free room in our blocks, and the driver's count beyond our blocks (its own allocations, the swapchain, DLSS). The legend shows the mean of the last 30 frames for both sides. The y axis scales to a round number above the largest value shown. GPU stages `sky-draw` to `post` should add up to about the post `scene` cost in the F11 statistics.
+Profiler (`F12`; `FrameProfiler`): a chart along the bottom of the last 300 frames, one line per `StageClock` stage, first the GPU, then the render thread, then off. Every stage lap writes a GPU timestamp (through the native `QueryArena`, recorded where the frame's commands go with `GpuContext.Interleave`), and a stage's GPU time is the gap since the stamp before it, summed when the stage runs once per depth slice (terrain, objects, foliage, water). The results are read a few frames late, without waiting. `other` is the frame's whole GPU time (`GpuContext.GpuFrameMs`, uploads included) minus the stamped stages, and `present` (render thread only) is the overlay, submit and present after the scene. The wait for a free frame (vsync) is not counted. The header also shows the VRAM (as F11, read every 30 frames), and a pie at the top right splits it: the eight largest device-local owners by allocation name, the rest of ours, the free room in our blocks, and the driver's count beyond our blocks (its own allocations, the swapchain, DLSS). The legend shows the mean of the last 30 frames for both sides. The y axis scales to a round number above the largest value shown. GPU stages `sky-draw` to `post` should add up to about the post `scene` cost in the F11 statistics.
 
 ```
 dotnet run --project tools/Meitou.ModelViewer -- --world --town "Shark" --radius 1.5 --distance 3000 --pitch 20
@@ -403,7 +302,7 @@ How it works (status as in [README.md](README.md)):
   `exterior layout name` also gets that layout's signs and banners (`BuildingLayouts`, from `interiors.level`;
   [formats/zones.md](formats/zones.md#building-layouts)), counted in the `objects` log line; interior layouts (furniture)
   and nest debris are not drawn. Map features (and parts
-  without a chosen material) are textured by the model viewer's `MaterialResolver` (candidate preferred: the one
+  without a chosen material) are textured by `MaterialResolver` ([above](#how-mesh-textures-are-resolved); candidate preferred: the one
   naming the placed record). Draw distance, LOD and streaming are described below ("Object streaming, LOD and distant towns"). The log
   line `objects` counts destroyed buildings and the foliage resource buildings, which the game draws as foliage rocks (drawn by the foliage below).
   TERRAIN-mode map features are drawn with the terrain shader through plain per-level vertex arrays (`TerrainRenderer.DrawMeshes`), with the game's `Feature_Terrain` rules ([formats/foliage.md](formats/foliage.md#terrain-mode-meshes)): the one biome of `biomemap.png` at the mesh's origin (the terrain's blend-map mix while that biome's textures are not resident), slope clamped at 1, per-vertex cliff projection weights, no roads, back faces culled; they pick a mesh LOD level but do not fade.

@@ -3,8 +3,7 @@ using System.Runtime.InteropServices;
 using Meitou.Data.World;
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Rendering;
@@ -81,8 +80,7 @@ public class FoliageGrassGpuTests
         var random = new Random(5);
         const float ex = -37000, ez = -80000;
         int views = 0, draws = 0;
-        using var gl = new VkGl(d!);
-        var ctx = gl.Context;
+        using var ctx = new GpuContext(d!);
         Assert.SkipUnless(FoliageGrassGpu.Supported(ctx), "no indirect count or push descriptors");
         using var store = new FoliageGrassGpu(ctx, 1 << 20, 2048);
         var pages = MakePages(1500, random, ex, ez);
@@ -99,7 +97,7 @@ public class FoliageGrassGpuTests
             }
             planeSets.Add(planes);
         }
-        gl.BeginFrame(4, 4);
+        ctx.BeginFrame();
         var zoneRows = new GrassZoneRow[pages.Length];
         var patchRows = new GrassPatchRow[pages.Length];
         for (int i = 0; i < pages.Length; i++)
@@ -110,18 +108,18 @@ public class FoliageGrassGpuTests
             zoneRows[i] = new GrassZoneRow { PatchBase = (uint)i, PatchCount = 1 };
             patchRows[i] = new GrassPatchRow { Range = pages[i].Range, VertexCount = pages[i].Vertices, Flags = pages[i].Active ? FoliageGrassShaders.FlagActive : 0 };
         }
-        gl.EndFrame();
+        ctx.EndFrame();
         d!.Frames.WaitAll();
         foreach (var fraction in densities)
             foreach (var planes in planeSets)
             {
-                gl.BeginFrame(4, 4);
+                ctx.BeginFrame();
                 var tables = store.Prepare(zoneRows, patchRows);
                 var (index, frac) = FoliageGrassGpu.DensityStep(fraction);
                 var result = store.Dispatch(planes, new Vector2(ex, ez), PageSize, index, frac, in tables);
                 using var readback = ReadbackBuffer.Create(ctx, FoliageGrassGpu.ReadbackBytes(result), "grass test");
                 store.CopyForReadback(result, readback);
-                gl.EndFrame();
+                ctx.EndFrame();
                 d.Frames.WaitAll();
                 var all = MemoryMarshal.Cast<byte, uint>(readback.Read(0, FoliageGrassGpu.ReadbackBytes(result)));
                 var expected = Reference(pages, planes, ex, ez, fraction);

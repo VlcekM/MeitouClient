@@ -386,7 +386,7 @@ The MAP_FEATURES `mesh` (all 1,810 are `.mesh`), scaled by the entry's per-axis 
 `MapFeatureMode`): UV_MAPPED 475, TRIPLANAR 65, TERRAIN 820, DUAL_TEXTURE 409, FOLIAGE 25, DUAL_TRIPLANAR 16.
 TERRAIN mode "uses textures from the current biome": Kenshi's `mapfeature_fs` runs the terrain layer model
 without the road layer (Observed, terrainfp4.hlsl); the viewer draws them with its terrain shader the same way.
-Their materials come from the model viewer's resolver ([../viewer.md](../viewer.md#how-mesh-textures-are-resolved)).
+Their materials come from `MaterialResolver`, written for the (since removed) model viewer ([../viewer.md](../viewer.md#how-mesh-textures-are-resolved)).
 
 What is not drawn (Observed, base game, 2026-10-05):
 - 44 placements are `hidden` (fcs.def: "markers to attach effects"): Volk-Cloud Placer 24, Volc-small-steamers Placer 18,

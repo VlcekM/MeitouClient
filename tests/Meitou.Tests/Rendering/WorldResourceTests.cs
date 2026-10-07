@@ -1,7 +1,6 @@
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 using Texture = Meitou.Rendering.Gpu.Texture;
 
@@ -9,8 +8,8 @@ namespace Meitou.Tests.Rendering;
 
 /// <summary>
 /// Phase 8 stage 1 (docs/renderer-native.md 8): the objects' and foliage's meshes and textures are native resources. These check that what the
-/// native code makes is what VkGl made from the GL calls it replaced: the vertex attributes of the GL vertex arrays (and of the GL names
-/// <see cref="GlBridge"/> still hands to GL code), and the mip levels VkGl's <c>GenerateMipmap</c> blitted. Synchronisation validation on.
+/// native code makes is what VkGl made from the GL calls it replaced (compared with VkGl itself until it was deleted in stage 3): the vertex
+/// attributes of the GL vertex arrays, and the mip levels VkGl's <c>GenerateMipmap</c> blitted. Synchronisation validation on.
 /// </summary>
 public unsafe class WorldResourceTests
 {
@@ -29,84 +28,54 @@ public unsafe class WorldResourceTests
     static void ExpectClean(VulkanDevice d) =>
         Assert.True(d.ValidationErrors == 0, "Validation errors:\n" + string.Join("\n", d.ValidationLog));
 
-    /// <summary>A GL vertex array as the objects' (all seven attributes) or the foliage's (the first five) code made it before phase 8.</summary>
-    static uint GlVertexArray(IGl gl, bool objects, out uint vbo, out uint ebo)
-    {
-        vbo = gl.GenBuffer();
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-        gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)(Vertex.Size * 3), null, BufferUsageARB.StaticDraw);
-        ebo = gl.GenBuffer();
-        uint vao = gl.GenVertexArray();
-        gl.BindVertexArray(vao);
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-        gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, ebo);
-        gl.BufferData(BufferTargetARB.ElementArrayBuffer, 12, null, BufferUsageARB.StaticDraw);
-        uint stride = (uint)Vertex.Size;
-        void Attrib(uint index, int size, int offset)
-        {
-            gl.EnableVertexAttribArray(index);
-            gl.VertexAttribPointer(index, size, VertexAttribPointerType.Float, false, stride, (void*)offset);
-        }
-        Attrib(0, 3, 0);
-        Attrib(1, 3, 12);
-        Attrib(2, 2, 24);
-        Attrib(3, 4, 32);
-        Attrib(4, 4, 48);
-        if (objects)
-        {
-            gl.EnableVertexAttribArray(5);
-            gl.VertexAttribIPointer(5, 4, VertexAttribIType.UnsignedByte, stride, (void*)64);
-            Attrib(6, 4, 68);
-        }
-        gl.BindVertexArray(0);
-        return vao;
-    }
+    /// <summary>
+    /// The attributes VkGl exported for the GL vertex arrays the objects' (all seven) and the foliage's (the first five) code made before
+    /// phase 8: per location the format and the offset into <see cref="Vertex"/> (the stride), per vertex, a static buffer bound at the offset.
+    /// Location 5 was <c>glVertexAttribIPointer</c> of four unsigned bytes.
+    /// </summary>
+    static readonly (Format Format, ulong Offset)[] GlAttributes =
+    [
+        (Format.R32G32B32Sfloat, 0), (Format.R32G32B32Sfloat, 12), (Format.R32G32Sfloat, 24), (Format.R32G32B32A32Sfloat, 32),
+        (Format.R32G32B32A32Sfloat, 48), (Format.R8G8B8A8Uint, 64), (Format.R32G32B32A32Sfloat, 68),
+    ];
 
-    static void SameAttributes(LegacyProgram.Attribute?[] gl, LegacyProgram.Attribute?[] native, Silk.NET.Vulkan.Buffer nativeBuffer, int count)
+    static void SameAttributes(LegacyProgram.Attribute?[] native, Silk.NET.Vulkan.Buffer nativeBuffer, int count)
     {
         for (int loc = 0; loc < count; loc++)
         {
-            var g = Assert.IsType<LegacyProgram.Attribute>(gl[loc]);
             var n = Assert.IsType<LegacyProgram.Attribute>(native[loc]);
-            Assert.Equal(g.Format, n.Format);
-            Assert.Equal(g.Stride, n.Stride);
-            Assert.Equal(g.PerInstance, n.PerInstance);
-            Assert.Equal(g.Buffer.Offset, n.Buffer.Offset);   // VkGl binds a static buffer at offset 0 plus the attribute's
+            Assert.Equal(GlAttributes[loc].Format, n.Format);
+            Assert.Equal((uint)Vertex.Size, n.Stride);
+            Assert.False(n.PerInstance);
+            Assert.Equal(GlAttributes[loc].Offset, n.Buffer.Offset);
             Assert.Equal(nativeBuffer.Handle, n.Buffer.Buffer.Handle);
         }
-        for (int loc = count; loc < gl.Length; loc++) Assert.Null(gl[loc]);
+        for (int loc = count; loc < native.Length; loc++) Assert.Null(native[loc]);
     }
 
     [Fact]
     [Slow]
-    public void Native_mesh_attributes_are_the_GL_vertex_arrays_and_the_bridge_vertex_array_exports_the_same()
+    public void Native_mesh_attributes_are_the_GL_vertex_arrays_and_the_terrain_mesh_path_takes_them()
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            IGlInterop interop = gl;
-            var ctx = gl.Context;
             foreach (bool objects in new[] { true, false })
             {
-                uint vao = GlVertexArray(gl, objects, out _, out _);
-                var export = interop.VertexArray(vao);
                 using var vertices = DeviceBuffer.Create(ctx, (ulong)(Vertex.Size * 3), BufferUse.Vertex, "test meshes");
                 using var indices = DeviceBuffer.Create(ctx, 12, BufferUse.Index, "test meshes");
                 var native = objects ? ObjectMeshCache.VertexAttributes(vertices) : FoliageRenderer.VertexAttributes(vertices);
                 int count = objects ? 7 : 5;
                 Assert.Equal(count, native.Length);
-                SameAttributes(export.Attributes, native, vertices.Handle, count);
+                SameAttributes(native, vertices.Handle, count);
 
-                // The terrain's mesh path takes GL vertex arrays: the bridge's over the native buffers exports those buffers with the same attributes.
-                var names = GlBridge.VertexArray(ctx, vertices, (uint)Vertex.Size, objects ? ObjectMeshCache.Layout : FoliageRenderer.MeshLayout, indices);
-                var bridged = interop.VertexArray(names.Vao);
-                SameAttributes(export.Attributes, bridged.Attributes, vertices.Handle, count);
-                Assert.Equal(indices.Handle.Handle, bridged.Elements.Buffer.Handle);
-                Assert.Equal(0ul, bridged.Elements.Offset);
-                GlBridge.DeleteVertexArray(ctx, names);
+                // The terrain's mesh path takes the same attributes and the whole index buffer.
+                var mesh = MeshBindings.Of(native, indices);
+                SameAttributes(mesh.Attributes, vertices.Handle, count);
+                Assert.Equal(indices.Handle.Handle, mesh.Elements.Buffer.Handle);
+                Assert.Equal(0ul, mesh.Elements.Offset);
             }
-            gl.EndFrame();
         }
         ExpectClean(d!);
     }
@@ -134,6 +103,33 @@ public unsafe class WorldResourceTests
         finally { d.Allocator.Free(buffer); }
     }
 
+    /// <summary>What VkGl's <c>GenerateMipmap</c> recorded: each level a linear blit of the whole previous one (sizes rounded down, at least 1),
+    /// in GENERAL layout, with a full barrier before each.</summary>
+    static void GlMipmaps(VulkanDevice d, Image image, int width, int height, int levels)
+    {
+        var cb = d.BeginImmediate();
+        for (int level = 1; level < levels; level++)
+        {
+            var barrier = new MemoryBarrier2
+            {
+                SType = StructureType.MemoryBarrier2,
+                SrcStageMask = PipelineStageFlags2.AllCommandsBit, SrcAccessMask = AccessFlags2.MemoryWriteBit,
+                DstStageMask = PipelineStageFlags2.AllCommandsBit, DstAccessMask = AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit,
+            };
+            var dep = new DependencyInfo { SType = StructureType.DependencyInfo, MemoryBarrierCount = 1, PMemoryBarriers = &barrier };
+            d.Vk.CmdPipelineBarrier2(cb, &dep);
+            var blit = new ImageBlit
+            {
+                SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, (uint)level - 1, 0, 1),
+                DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, (uint)level, 0, 1),
+            };
+            blit.SrcOffsets[1] = new Offset3D(Math.Max(width >> (level - 1), 1), Math.Max(height >> (level - 1), 1), 1);
+            blit.DstOffsets[1] = new Offset3D(Math.Max(width >> level, 1), Math.Max(height >> level, 1), 1);
+            d.Vk.CmdBlitImage(cb, image, ImageLayout.General, image, ImageLayout.General, 1, &blit, Filter.Linear);
+        }
+        d.EndImmediate(cb);
+    }
+
     [Fact]
     [Slow]
     public void Native_mipmaps_are_the_levels_VkGl_GenerateMipmap_made()
@@ -144,29 +140,23 @@ public unsafe class WorldResourceTests
         var pixels = new byte[W * H * 4];
         new Random(8).NextBytes(pixels);
         int levels = 1 + (int)Math.Floor(Math.Log2(Math.Max(W, H)));
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            IGlInterop interop = gl;
-            var ctx = gl.Context;
-            // The GL way (WorldTextureCache before phase 8): level 0, then GenerateMipmap.
-            uint id = gl.GenTexture();
-            gl.BindTexture(TextureTarget.Texture2D, id);
-            gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
-            gl.TexImage2D<byte>(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, W, H, 0, PixelFormat.Rgba, PixelType.UnsignedByte, pixels);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMaxLevel, 1000);
-            gl.GenerateMipmap(TextureTarget.Texture2D);
+            ctx.EnsureFrame();
+            var desc = new TextureDesc(Format.R8G8B8A8Unorm, W, H, levels, Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.TransferSrc, Name: "test textures");
+            // The GL way (WorldTextureCache before phase 8): level 0, then GenerateMipmap's blits.
+            using var reference = Texture.Create(ctx, desc, ctx.Frame.PreFrame.Handle);
+            ctx.Uploads.Write(reference, 0, 0, new Rect2D(new Offset2D(0, 0), new Extent2D(W, H)), pixels);
             // The native way.
-            GlBridge.EnsureFrame(ctx);
-            using var texture = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, W, H, levels,
-                Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.TransferSrc, Name: "test textures"), ctx.Frame.PreFrame.Handle);
+            using var texture = Texture.Create(ctx, desc, ctx.Frame.PreFrame.Handle);
             ctx.Uploads.Write(texture, 0, 0, new Rect2D(new Offset2D(0, 0), new Extent2D(W, H)), pixels);
             WorldTextureCache.GenerateMipmaps(ctx, texture);
-            gl.EndFrame();
+            ctx.EndFrame();
+            d!.Frames.WaitAll();
+            GlMipmaps(d, reference.Image, W, H, levels);
 
-            var glImage = interop.Texture(id);
-            Assert.Equal(levels, glImage.Desc.Levels);
             for (int level = 0; level < levels; level++)
-                Assert.Equal(ReadLevel(d!, glImage.Image, W, H, level), ReadLevel(d!, texture.Image, W, H, level));
+                Assert.Equal(ReadLevel(d, reference.Image, W, H, level), ReadLevel(d, texture.Image, W, H, level));
         }
         ExpectClean(d!);
     }

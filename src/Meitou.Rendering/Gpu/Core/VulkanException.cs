@@ -1,6 +1,6 @@
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Vulkan.Core;
+namespace Meitou.Rendering.Gpu.Core;
 
 public sealed class VulkanException(string message, Result result = Result.ErrorUnknown) : Exception(message)
 {

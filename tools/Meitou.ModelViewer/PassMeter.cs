@@ -3,22 +3,28 @@ using System.Globalization;
 using System.Text;
 
 using Meitou.Rendering;
+using Meitou.Rendering.Display;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
 
 namespace Meitou.ModelViewer;
 
 /// <summary>
 /// The frame cost breakdown (docs/engine.md "Frame cost breakdown"; <c>MEITOU_PASS_STATS=1</c>, off otherwise): at every stage boundary of the
 /// frame (<see cref="Meitou.Rendering.StageClock"/>: the stage laps, the shadow cascades, the parts of the foliage and post passes) it takes the
-/// render thread's time and the difference of <see cref="VkGlStats"/>'s counters since the previous boundary, and a GPU timestamp, and sums them
-/// per row over the frames after the first <c>MEITOU_PASS_STATS_SKIP</c> (default 60). A stage is a row; its parts are rows under it (their
-/// time is part of the stage's; what is left over is the stage's own row "rest"). Printed at the end by <see cref="Report"/>: a table
-/// of per-frame means and one <c>PASSCSV</c> line per row for scripts. The meter only reads counters and timestamps, no picture changes.
+/// render thread's time, the difference of the native counters since the previous boundary (<see cref="GpuStats.Running"/>, the context's
+/// fence wait and submit, the presenter's acquire and present) and a GPU timestamp, and sums them per row over the frames after the first
+/// <c>MEITOU_PASS_STATS_SKIP</c> (default 60). A stage is a row; its parts are rows under it (their time is part of the stage's; what is left
+/// over is the stage's own row "rest"). Printed at the end by <see cref="Report"/>: a table of per-frame means and one <c>PASSCSV</c> line per
+/// row for scripts. The meter only reads counters and timestamps, no picture changes. (Native since phase 8 stage 3: before, VkGl's counters
+/// and GL timer queries.)
 /// </summary>
 sealed class PassMeter : IDisposable
 {
-    const int Slots = 4, MaxStamps = 192, N = VkGlStats.CounterCount;
+    const int Slots = 4, MaxStamps = 192;
+    static readonly int Native = GpuStats.CounterNames.Length;
+    static readonly int N = Native + 4;
+    // The columns after the native counters: Stopwatch ticks.
+    static readonly int Fence = Native, Submit = Native + 1, Acquire = Native + 2, Present = Native + 3;
     static readonly double TickMs = 1000.0 / Stopwatch.Frequency;
     /// <summary>Label of the lap that ends a frame (StageClock stage 11).</summary>
     const string EndLabel = "gpu-wait";
@@ -32,8 +38,8 @@ sealed class PassMeter : IDisposable
         public long GpuSamples;
     }
 
-    readonly IGl gl;
-    readonly VkGl vk;
+    readonly VulkanDisplay display;
+    readonly GpuContext ctx;
     readonly int skip;
     readonly string tag;
     readonly Dictionary<string, Row> rows = [];
@@ -51,8 +57,8 @@ sealed class PassMeter : IDisposable
     readonly List<double> frameCpu = [], betweenMs = [];
     readonly Row between = new("(between frames)", "(between frames)", null);
 
-    // GPU stamps: a ring of frame slots, read a few frames late without waiting.
-    readonly uint[,] stamps = new uint[Slots, MaxStamps];
+    // GPU stamps: a ring of frame slots in the frames' timestamp arenas, read a few frames late without waiting.
+    readonly QuerySlot[,] stamps = new QuerySlot[Slots, MaxStamps];
     readonly string?[,] stampLabel = new string?[Slots, MaxStamps];
     readonly bool[,] stampSub = new bool[Slots, MaxStamps];
     readonly int[] stampCount = new int[Slots];
@@ -62,26 +68,43 @@ sealed class PassMeter : IDisposable
     double gpuFrameSum;
     long gpuFrames;
 
-    public PassMeter(IGl gl, VkGl vk)
+    PassMeter(VulkanDisplay display)
     {
-        this.gl = gl;
-        this.vk = vk;
+        this.display = display;
+        ctx = display.Context;
         skip = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_PASS_STATS_SKIP"), out int s) ? s : 60;
         tag = Environment.GetEnvironmentVariable("MEITOU_PASS_TAG") ?? "run";
-        for (int i = 0; i < Slots; i++)
-            for (int k = 0; k < MaxStamps; k++) stamps[i, k] = gl.GenQuery();
         StageClock.OnStart = OnStart;
         StageClock.OnClose = OnClose;
     }
 
-    public static PassMeter? TryCreate(IGl gl) =>
-        Environment.GetEnvironmentVariable("MEITOU_PASS_STATS") == "1" && gl is VkGl vk ? new PassMeter(gl, vk) : null;
+    public static PassMeter? TryCreate(VulkanDisplay display) =>
+        Environment.GetEnvironmentVariable("MEITOU_PASS_STATS") == "1" ? new PassMeter(display) : null;
+
+    void Snapshot(long[] into)
+    {
+        ctx.Frame.Stats.Running(into);
+        into[Fence] = ctx.FenceWaitTicks;
+        into[Submit] = ctx.SubmitTicks;
+        into[Acquire] = display.AcquireTicks;
+        into[Present] = display.PresentTicks;
+    }
 
     void Stamp(string label, bool sub)
     {
         int n = stampCount[slot];
         if (n >= MaxStamps) return;
-        gl.QueryCounter(stamps[slot, n], QueryCounterTarget.Timestamp);
+        var arena = ctx.Frame.Timestamps;
+        // Taken inside the callback: Interleave opens the frame when none is (the benchmark starts its clock before), and an index taken
+        // before that would belong to the previous frame's pool.
+        QuerySlot q = default;
+        ctx.Interleave(cmd =>
+        {
+            q = arena.Allocate();
+            if (q.IsValid) cmd.Timestamp(arena, q);
+        });
+        if (!q.IsValid) return;
+        stamps[slot, n] = q;
         stampLabel[slot, n] = label;
         stampSub[slot, n] = sub;
         stampCount[slot] = n + 1;
@@ -90,7 +113,7 @@ sealed class PassMeter : IDisposable
     void OnStart()
     {
         long t = Stopwatch.GetTimestamp();
-        vk.Stats.Snapshot(now);
+        Snapshot(now);
         if (lastEnd != 0 && frameIndex >= skip)
         {
             // Between the end of the last frame and the start of this one: the acquire, the wait for a free frame, the window's events.
@@ -118,7 +141,7 @@ sealed class PassMeter : IDisposable
     {
         if (!inFrame) return;
         long t = Stopwatch.GetTimestamp();
-        vk.Stats.Snapshot(now);
+        Snapshot(now);
         bool end = !sub && label == EndLabel;
         if (sub)
         {
@@ -183,7 +206,7 @@ sealed class PassMeter : IDisposable
             row.Cpu += c;
             for (int i = 0; i < N; i++) row.C[i] += counters[i];
             if (row.Parent is null && row.Name != EndLabel) cpu += c;
-            if (row.Parent is null && row.Name == EndLabel) cpu += counters[27] * TickMs;   // the submit
+            if (row.Parent is null && row.Name == EndLabel) cpu += counters[Submit] * TickMs;   // the submit
         }
         frameCpu.Add(cpu);
     }
@@ -192,18 +215,22 @@ sealed class PassMeter : IDisposable
     {
         if (!pending[s]) return;
         int n = stampCount[s];
-        // The last stamp must be available.
-        gl.GetQueryObject(stamps[s, n - 1], QueryObjectParameterName.ResultAvailable, out int ready);
-        if (ready == 0) return;
+        var arena = ctx.Frame.Timestamps;
+        // The last stamp must be available (its frame's slot has come round); one that never will (its frame long gone) is dropped.
+        if (!arena.TryRead(stamps[s, n - 1], out _))
+        {
+            if (ctx.Frame.Number - stamps[s, n - 1].Frame > 8) pending[s] = false;
+            return;
+        }
         pending[s] = false;
         if (!pendingMeasured[s]) return;
-        gl.GetQueryObject(stamps[s, 0], QueryObjectParameterName.Result, out ulong previous);
+        if (!arena.TryRead(stamps[s, 0], out ulong previous)) return;
         ulong first = previous;
         double majorSum = 0;
         var subGaps = new List<(string Label, double Ms)>();
         for (int i = 1; i < n; i++)
         {
-            gl.GetQueryObject(stamps[s, i], QueryObjectParameterName.Result, out ulong t);
+            if (!arena.TryRead(stamps[s, i], out ulong t)) t = previous;
             double ms = t >= previous ? (t - previous) / 1e6 : 0;
             previous = t;
             majorSum += ms;
@@ -239,12 +266,13 @@ sealed class PassMeter : IDisposable
         double Gpu(Row r) => r.GpuSamples > 0 ? r.Gpu / r.GpuSamples : double.NaN;
         var sb = new StringBuilder();
         sb.AppendLine($"passes    {tag}: means per frame over {measuredFrames} frames (first {skip} skipped), {gpuFrames} with GPU times; Stopwatch CPU ms of the render thread; GPU ms between timestamps");
-        sb.AppendLine($"passes    {"row",-28}{"cpu",7}{"gpu",7}{"prep",6}{"draws",7}{"pbind",6}{"newpl",6}{"uniKB",7}{"ucopy",6}{"push",6}{"dwrit",6}{"tex",6}{"skip",6}{"vbuf",6}{"dyn",6}{"set1",6}{"pass",6}{"bar",5}{"glst",6}{"gluni",6}{"gltex",6}{"glbnd",6}{"glatt",6}{"fence",7}{"submit",7}{"acq",6}{"pres",6}");
+        sb.AppendLine($"passes    {"row",-28}{"cpu",7}{"gpu",7}{"draws",7}{"indir",6}{"disp",6}{"pipes",6}{"push",6}{"segs",6}{"constKB",8}{"uplKB",7}{"fence",7}{"submit",7}{"acq",6}{"pres",6}");
         void Line(Row r, string prefix)
         {
             var c = r.C;
             double g = Gpu(r);
-            sb.AppendLine($"passes    {prefix + r.Name,-28}{Fmt(r.Cpu / f),7}{(double.IsNaN(g) ? "-" : Fmt(g)),7}{Fmt(c[24] * TickMs / f),6}{c[0] / f,7:0}{c[9] / f,6:0}{c[2] / f,6:0.0}{c[8] / 1024.0 / f,7:0.0}{c[12] / f,6:0}{c[7] / f,6:0}{c[13] / f,6:0}{c[14] / f,6:0}{c[15] / f,6:0}{c[16] / f,6:0}{c[10] / f,6:0}{c[11] / f,6:0}{c[1] / f,6:0.0}{c[18] / f,5:0}{c[19] / f,6:0}{c[20] / f,6:0}{c[21] / f,6:0}{c[22] / f,6:0}{c[23] / f,6:0}{Fmt(c[26] * TickMs / f),7}{Fmt(c[27] * TickMs / f),7}{Fmt(c[28] * TickMs / f),6}{Fmt(c[29] * TickMs / f),6}");
+            sb.AppendLine($"passes    {prefix + r.Name,-28}{Fmt(r.Cpu / f),7}{(double.IsNaN(g) ? "-" : Fmt(g)),7}{c[0] / f,7:0}{c[1] / f,6:0}{c[2] / f,6:0}{c[3] / f,6:0}{c[4] / f,6:0}{c[5] / f,6:0}" +
+                $"{c[6] / 1024.0 / f,8:0.0}{c[7] / 1024.0 / f,7:0.0}{Fmt(c[Fence] * TickMs / f),7}{Fmt(c[Submit] * TickMs / f),7}{Fmt(c[Acquire] * TickMs / f),6}{Fmt(c[Present] * TickMs / f),6}");
         }
         foreach (var r in order.Where(r => r.Parent is null))
         {
@@ -260,13 +288,13 @@ sealed class PassMeter : IDisposable
         double gpuFrame = gpuFrames > 0 ? gpuFrameSum / gpuFrames : double.NaN;
         sb.AppendLine($"passes    frame render-thread cpu (rows but {EndLabel}, plus the submit): mean {Fmt(frameCpu.Average())}, p50 {Fmt(sorted[sorted.Count / 2])}, p95 {Fmt(sorted[Math.Min((int)(sorted.Count * 0.95), sorted.Count - 1)])} ms; gpu frame (first to last timestamp) {Fmt(gpuFrame)} ms");
         output.Write(sb.ToString());
-        // For scripts: PASSCSV|tag|row|parent|cpu|gpu|counters... (per-frame means; ticks columns in ms).
-        output.WriteLine($"PASSCSVHEAD|{string.Join("|", VkGlStats.CounterNames)}");
+        // For scripts: PASSCSV|tag|row|parent|cpu|gpu|counters... (per-frame means; the tick columns in ms).
+        output.WriteLine($"PASSCSVHEAD|{string.Join("|", GpuStats.CounterNames)}|fenceMs|submitMs|acquireMs|presentMs");
         void Csv(Row r)
         {
             var parts = new string[N];
             for (int i = 0; i < N; i++)
-                parts[i] = (i >= 24 ? r.C[i] * TickMs / f : r.C[i] / f).ToString("0.###", CultureInfo.InvariantCulture);
+                parts[i] = (i >= Fence ? r.C[i] * TickMs / f : r.C[i] / f).ToString("0.###", CultureInfo.InvariantCulture);
             double g = Gpu(r);
             output.WriteLine($"PASSCSV|{tag}|{r.Key}|{r.Parent}|{r.Cpu / f:0.####}|{(double.IsNaN(g) ? "" : g.ToString("0.####", CultureInfo.InvariantCulture))}|{string.Join("|", parts)}");
         }
@@ -275,38 +303,18 @@ sealed class PassMeter : IDisposable
         output.WriteLine($"PASSFRAME|{tag}|{measuredFrames}|{frameCpu.Average():0.####}|{sorted[sorted.Count / 2]:0.####}|{sorted[Math.Min((int)(sorted.Count * 0.95), sorted.Count - 1)]:0.####}|{gpuFrame:0.####}");
     }
 
-    /// <summary>The per-draw split of <see cref="VkGl.Phases"/> (<c>MEITOU_VKGL_PHASES=1</c>): ticks of each part of the draw preparation over the measured frames, per draw.</summary>
-    public void ReportPhases(TextWriter output, long drawsMeasured)
-    {
-        if (!VkGl.Phases || drawsMeasured == 0) return;
-        double total = 0;
-        long[] ticks = (long[])vk.Stats.PhaseTicks.Clone();
-        ticks[1] -= vk.Stats.PipelineCreateTicks;   // pipeline creation (warm-up) is not the lookup
-        for (int i = 0; i < ticks.Length; i++) total += ticks[i];
-        output.WriteLine($"phases    {tag}: per draw (µs, over {drawsMeasured} draws including the warm-up frames); 'in vkCmd' is the part inside the vkCmd* calls (Silk.NET dispatch + driver); the stopwatch reads add ~0.05 µs each");
-        double native = 0;
-        for (int i = 0; i < VkGlStats.PhaseNames.Length; i++)
-        {
-            double us = ticks[i] * TickMs * 1000.0 / drawsMeasured, nat = vk.Stats.NativeTicks[i] * TickMs * 1000.0 / drawsMeasured;
-            native += nat;
-            output.WriteLine($"phases    {VkGlStats.PhaseNames[i],-26}{us,7:0.000} µs   in vkCmd {nat,7:0.000} µs");
-            output.WriteLine($"PHASECSV|{tag}|{VkGlStats.PhaseNames[i]}|{us:0.0000}|{nat:0.0000}");
-        }
-        output.WriteLine($"phases    {"total",-26}{total * TickMs * 1000.0 / drawsMeasured,7:0.000} µs   in vkCmd {native,7:0.000} µs");
-        output.WriteLine($"PHASECSV|{tag}|total|{total * TickMs * 1000.0 / drawsMeasured:0.0000}|{native:0.0000}");
-    }
-
     /// <summary>
-    /// <c>MEITOU_VK_MICRO=1</c>: what one <c>vkCmd*</c> call costs the render thread, from a loop of 100 000 recorded into the open frame (outside a render
-    /// pass: state-setting commands only): through Silk.NET's wrapper and straight through the driver's function pointer, against an empty loop.
-    /// The difference is Silk.NET's dispatch; the raw call is the driver's recording cost.
+    /// <c>MEITOU_VK_MICRO=1</c>: what one <c>vkCmd*</c> call costs the render thread, from a loop of 100 000 recorded into a native segment of the
+    /// open frame (outside a rendering: state-setting commands only): through Silk.NET's wrapper and straight through the driver's function
+    /// pointer, against an empty loop. The difference is Silk.NET's dispatch; the raw call is the driver's recording cost.
     /// </summary>
-    public static unsafe void VkCallMicro(VkGl gl, TextWriter output)
+    public static unsafe void VkCallMicro(GpuContext ctx, TextWriter output)
     {
-        var vk = gl.Device.Vk;
-        var dev = gl.Device.Device;
+        var vk = ctx.Device.Vk;
+        var dev = ctx.Device.Device;
         const int n = 100_000;
-        var cb = gl.BeginExternal();
+        var list = ctx.BeginNative("vkCmd micro");
+        var cb = list.Handle;
         var rect = new Silk.NET.Vulkan.Rect2D(new Silk.NET.Vulkan.Offset2D(0, 0), new Silk.NET.Vulkan.Extent2D(800, 600));
         var scissor = (delegate* unmanaged[Cdecl]<Silk.NET.Vulkan.CommandBuffer, uint, uint, Silk.NET.Vulkan.Rect2D*, void>)vk.GetDeviceProcAddr(dev, "vkCmdSetScissor").Handle;
         var cull = (delegate* unmanaged[Cdecl]<Silk.NET.Vulkan.CommandBuffer, Silk.NET.Vulkan.CullModeFlags, void>)vk.GetDeviceProcAddr(dev, "vkCmdSetCullMode").Handle;
@@ -321,7 +329,8 @@ sealed class PassMeter : IDisposable
             t0 = Stopwatch.GetTimestamp(); for (int i = 0; i < n; i++) vk.CmdSetCullMode(cb, Silk.NET.Vulkan.CullModeFlags.BackBit); silkCull = Stopwatch.GetTimestamp() - t0;
             t0 = Stopwatch.GetTimestamp(); for (int i = 0; i < n; i++) cull(cb, Silk.NET.Vulkan.CullModeFlags.BackBit); rawCull = Stopwatch.GetTimestamp() - t0;
         }
-        gl.EndExternal();
+        list.Invalidate();   // the segment's own state tracking knows nothing of the raw calls
+        ctx.EndNative(list);
         output.WriteLine($"micro     vkCmd call, ns each over {n} calls (empty loop {Ns(empty):0.0}): vkCmdSetScissor Silk.NET {Ns(silkScissor):0.0}, raw pointer {Ns(rawScissor):0.0}; vkCmdSetCullMode Silk.NET {Ns(silkCull):0.0}, raw {Ns(rawCull):0.0}");
         output.WriteLine($"MICROCSV|{Ns(empty):0.0}|{Ns(silkScissor):0.0}|{Ns(rawScissor):0.0}|{Ns(silkCull):0.0}|{Ns(rawCull):0.0}");
     }

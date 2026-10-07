@@ -126,10 +126,6 @@ public sealed unsafe class TerrainTextures : IDisposable
     public bool Idle => inFlight == 0 && mapJob is null && !mapUploading && needed.All(b => state[b].Pairs.All(p => p.Slot >= 0 || p.Failed)) &&
                         !pairs.Values.Any(p => p.Loading) && (MapState != 1 || mapWindows is null);
 
-    /// <summary>As <see cref="Create(GpuContext, GameInstall, GameDatabase, AssetLocator, int, int)"/>; <paramref name="gl"/> is not used (kept
-    /// for the callers until phase 8 removes IGl from them).</summary>
-    public static TerrainTextures Create(IGl gl, GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, int layerSize = 512, int worldColourSize = 2048) =>
-        Create(gpu, install, db, assets, layerSize, worldColourSize);
 
     /// <param name="layerSize">Edge length every layer texture is brought to (the arrays need one size).</param>
     public static TerrainTextures Create(GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, int layerSize = 512, int worldColourSize = 2048)
@@ -263,7 +259,7 @@ public sealed unsafe class TerrainTextures : IDisposable
             return Make(GlConventions.VkFormat(FormatOf(diffuse)), layerSize, layerSize, levelCount, Math.Max(Capacity, 1), TextureMinFilter.LinearMipmapLinear,
                 TextureMagFilter.Linear, TextureWrapMode.Repeat, diffuse ? "terrain textures diffuse" : "terrain textures normal", anisotropy: 8, kind: TextureKind.Texture2DArray);
         }
-        catch (Meitou.Rendering.Vulkan.Core.VulkanException e)
+        catch (Meitou.Rendering.Gpu.Core.VulkanException e)
         {
             Messages.Add($"terrain layer array allocation: {e.Message}; try a smaller --layer-size");
             return null;
@@ -731,7 +727,7 @@ public sealed unsafe class TerrainTextures : IDisposable
 /// <summary>
 /// A native texture of the terrain's (phase 8, docs/renderer-native.md 8) sampled as it was as a GL texture through VkGl: the GL sampler
 /// state it was given (<see cref="SamplerDesc.FromGl"/>, the upscaler's LOD bias on mipmapped filters, as VkGl's <c>SamplerFor</c>) and the
-/// view of all its levels (it is made with exactly the levels VkGl's view covered). <see cref="Bindless"/> mirrors <c>IGlInterop.Bindless</c>:
+/// view of all its levels (it is made with exactly the levels VkGl's view covered). <see cref="Bindless"/> keeps the former GL layer's rule:
 /// the same index while the sampler is unchanged, a new one (the old freed after the frames in flight) when the LOD bias moved. Render thread only.
 /// </summary>
 internal sealed class TerrainTexture : IDisposable
@@ -761,7 +757,7 @@ internal sealed class TerrainTexture : IDisposable
     /// <summary>The sampler and view a draw samples it with now (what VkGl's <c>Sampled</c> gave for the GL texture).</summary>
     public SampledTexture Sampled()
     {
-        float bias = ctx.LodBias();
+        float bias = ctx.LodBias;
         if (!(bias == cachedBias))
         {
             var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, anisotropy, integer, bias));

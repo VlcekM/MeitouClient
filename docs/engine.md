@@ -11,11 +11,10 @@ interface. Everything here is an **engine choice** unless it cites a fact about 
 | `src/Meitou.Core` | library | The install (`GameInstall`: `KENSHI_PATH` / `meitou.local.json`). |
 | `src/Meitou.Data` | library | Readers for the game's files (FCS, Ogre, DDS, world data) and the facts about the game as code (`KenshiCamera`, `KenshiLighting`, `ShadowCascades`, `TerrainQuadtree`...). No GPU, no windowing. |
 | `src/Meitou.Engine` | library | The simulation frame: `WorldSession` (what is loaded, tick, clock, input, camera), fixed tick, game clock, input actions, the camera rig. No GPU, no windowing (tested headless). |
-| `src/Meitou.Rendering` | library | The world renderers, their streaming and the frame (`WorldFrame`). |
-| `src/Meitou.Rendering.Vulkan` | library | `VkGl` (`IGl` on Vulkan 1.3), the presenter, the FSR and DLSS upscalers. No windowing. |
-| `src/Meitou.Rendering.Display` | library | `VulkanDisplay`: the Silk.NET window with a Vulkan surface, the device, `VkGl`, the presenter and optional Streamline; shared by the game and the viewer. |
+| `src/Meitou.Rendering` | library | The world renderers, their streaming and the frame (`WorldFrame`); the native Vulkan API under them (`Gpu/`, with the device in `Gpu/Core`, the shader compiler in `Gpu/Shaders` and the presenter), the FSR and DLSS upscalers (`Upscalers/`). No windowing. |
+| `src/Meitou.Rendering.Display` | library | `VulkanDisplay`: the Silk.NET window with a Vulkan surface, the device, the `GpuContext`, the presenter and optional Streamline; shared by the game and the viewer. |
 | `src/Meitou.Game` | exe `meitou` | The game: input, the loop; boots into the world. |
-| `tools/Meitou.ModelViewer` | exe `meitou-viewer` | The debug viewer (meshes, characters, `--world`) on the same libraries. |
+| `tools/Meitou.ModelViewer` | exe `meitou-viewer` | The debug viewer (`--world`, `--impostor-preview`) on the same libraries; its mesh and character modes were removed in phase 8 ([character-viewer.md](character-viewer.md)). |
 | `tools/Meitou.Tools` | exe `meitou-tools` | Surveys of the install; `image-diff` for renderer parity checks. |
 
 Dependencies point one way: Core ← Data ← Engine / Rendering ← Game / viewer. The renderers know nothing of the engine
@@ -75,23 +74,23 @@ screenshot (C:\Temp), `Esc` quit.
 
 ## Backend interface
 
-A native Vulkan-shaped API replaces `IGl` renderer by renderer ([renderer-native.md](renderer-native.md), DECISIONS 22, adopted
-2026-10-06). Its foundation is in `src/Meitou.Rendering/Gpu/` (next to `Core/` and `Shaders/`): `GpuContext` (made by VkGl from the
-same device), `GpuFrame` and `CommandList` (recording into VkGl's command buffer of the same frame), `DeviceBuffer` / `Transient` /
-`BufferArena` / `Uploader`, `Texture` / `SamplerCache`, `ShaderLibrary` / `PipelineLibrary`, `BindlessTable`, `ResourceStates`,
-`QueryArena`, and `LegacyProgram` (a GLSL pair with VkGl's SPIR-V and layout, for pixel-identical ports). VkGl and the native API share
-the functions that decide pixels (`GlConventions`, `SamplerDesc.FromGl`, `GpuDefaults`, `PipelineFactory`). The seam is `IGlInterop`
-(on VkGl): `BeginNative` / `EndNative` around native segments (full barriers; VkGl forgets its cached pipeline, dynamic state and
-descriptors; IGl calls that record or flush throw in between), `CurrentTargets`, export of GL textures and buffers (VkGl's own views
-and samplers) and import of native ones. `FrameGlobals` holds the frame-wide textures, blocks and uniform values by GLSL name
-(published by `SkyRenderer`, `ShadowShaders` / `MeitouShadowShaders` and `TerrainRenderer`).
+The renderers record Vulkan directly through the native API in `src/Meitou.Rendering/Gpu/` ([renderer-native.md](renderer-native.md),
+DECISIONS 22, adopted 2026-10-06; the GL-shaped `IGl` and its translation `VkGl` were deleted in phase 8 stage 3, renderer-native.md 8.9).
+`GpuContext` is made by the display (or a test) from the device and owns the frame loop (`BeginFrame` / `EndFrame` / `Finish`) and the
+segments: `BeginNative` / `EndNative` hand a renderer the frame's command list with a full barrier before and after; a host that begins
+a rendering (`BeginHostPass`, with its `PassTargets` and `DrawState`) lets guests draw into it (`BeginGuest` / `EndGuest`, or `Record`
+for a prepared job, possibly on a recording thread); `Interleave` records something that leaves a pass alone (a timestamp). Beside it:
+`GpuFrame` and `CommandList`, `DeviceBuffer` / `Transient` / `BufferArena` / `Uploader`, `Texture` / `SamplerCache`, `ShaderLibrary` /
+`PipelineLibrary`, `BindlessTable`, `ResourceStates`, `QueryArena` / `GpuStats`, and `LegacyProgram` (a GLSL pair with the SPIR-V and
+layout VkGl built, kept for the programs not yet in the native model). `FrameGlobals` holds the frame-wide textures, blocks and uniform
+values by GLSL name. The device and the shader compiler are in `Gpu/Core` and `Gpu/Shaders` (namespaces `Meitou.Rendering.Gpu.Core` /
+`.Shaders`), the presenter in `Gpu/VulkanPresenter.cs`, the upscalers in `src/Meitou.Rendering/Upscalers`.
 
-The renderers call `IGl` (`src/Meitou.Rendering/Gpu/IGl.cs`): the exact subset of OpenGL 3.3 they use, with Silk.NET's former
-signatures. The enumerations it takes (`GLEnum`, `TextureTarget`, `InternalFormat`, ...) are ours, in `Gpu/GlEnums.cs`: the GL
-specification's names and token values, only the members the code uses. There is one implementation, `VkGl`
-(`src/Meitou.Rendering.Vulkan`), which translates the calls onto Vulkan 1.3 as they come. **Vulkan is the only backend**: OpenGL
-was removed ([../DECISIONS.md](../DECISIONS.md) 18; 7 for why the interface is GL-shaped rather than Vulkan-shaped). `--renderer vulkan`
-is accepted and ignored; `--renderer gl` prints a line saying OpenGL is gone and is ignored; an old `renderer` key in
+The renderers still state their resources in GL's vocabulary where that decides pixels: `GlConventions` (formats, blend factors,
+compare functions, wrap modes, swizzles, vertex formats) and `SamplerDesc.FromGl` translate it, and the enumerations they take (`GLEnum`,
+`InternalFormat`, `TextureMinFilter`, ... ten in all) are ours, at the end of `Gpu/GlConventions.cs`: the GL specification's names and
+token values, only the members the code uses. **Vulkan is the only backend**: OpenGL was removed ([../DECISIONS.md](../DECISIONS.md) 18).
+`--renderer vulkan` is accepted and ignored; `--renderer gl` prints a line saying OpenGL is gone and is ignored; an old `renderer` key in
 `meitou.user.json` is ignored.
 
 The window and the device come from `VulkanDisplay` (`Meitou.Rendering.Display`): windowed (swapchain through
@@ -101,7 +100,7 @@ count on exit; `=sync` adds synchronisation validation and `=gpu` GPU-assisted v
 `VK_EXT_layer_settings`. Pipelines are cached on disk in `%LOCALAPPDATA%\Meitou\pipeline-cache.bin` (`MEITOU_PIPELINE_CACHE=<file>`
 elsewhere, `=0` off).
 
-### Vulkan backend (`VkGl`)
+### Vulkan backend
 
 - **Device** (`Core/VulkanDevice`): Vulkan 1.3 with dynamic rendering, synchronization2, timeline semaphores, host query
   reset, scalar/std430 uniform blocks, push descriptors, depth clip control and extended dynamic state; a block allocator
@@ -127,23 +126,22 @@ elsewhere, `=0` off).
   targets, `gl_FragCoord` and texture coordinates mean the same; GL's counter-clockwise front faces are clockwise in Vulkan
   (the sign of the area flips with the y direction); clip depth stays −1..1 (`VK_EXT_depth_clip_control`; without it a remap is
   compiled into the vertex shaders). The picture is flipped once, by the blit into the swapchain image (`VulkanPresenter`).
-- **State.** GL state is tracked as GL defines it and turned into Vulkan at the draw: a pipeline per (program, vertex layout,
-  primitive, attachment formats, blend, colour mask, polygon mode, alpha-to-coverage, depth clamp), created on first use;
-  viewport, scissor, cull mode, front face, depth test/write/compare and depth bias are dynamic state.
-- **Resources.** Set 0 holds the named uniform blocks and the samplers, pushed (`VK_KHR_push_descriptor`) only when they changed
-  for the program; set 1 holds the loose uniforms, copied into a per-frame uniform ring when a `glUniform*` changed them and
-  bound by dynamic offset. Samplers and views are cached on the texture until its parameters change.
-- **Memory and order.** Every image stays in `GENERAL` layout; a full memory barrier before each render pass orders attachment
-  writes, transfers and sampling. Uploads go into a command buffer submitted ahead of the frame's own; a static buffer the frame
-  has already drawn from is renamed (new memory, old contents copied) before it is written, stream/dynamic buffers get a new
-  version in host-visible per-frame memory; textures are written in place (an upload is seen by the whole frame). A second copy into
-  the same image within one upload command buffer waits for the first (a transfer barrier; before 2026-10-06 the two copies raced,
-  which synchronisation validation reported as 10 WRITE_AFTER_WRITE hazards per view and which made a few rock-view pixels differ
-  between runs, docs/viewer.md).
-  `glGenerateMipmap`, blits and readbacks are recorded in order in the frame.
-- **Queries.** GL timestamp and elapsed-time queries are timestamps from a per-frame-slot pool (fresh entries for every issue);
-  unread results are kept when the slot is reused. `VkGlStats` counts draws, passes, new pipelines, uploads, renames, pushes,
-  the CPU time spent preparing draws, and the last frame's GPU time.
+- **State.** A pipeline per (program, vertex layout, primitive, attachment formats, blend, colour mask, polygon mode,
+  alpha-to-coverage, depth clamp) from `PipelineLibrary`, created on first use; viewport, scissor, cull mode, front face, depth
+  test/write/compare and depth bias are dynamic state. A host hands its guests a `DrawState` (the rules VkGl applied to GL's state:
+  depth test and write only with a depth attachment, and so on).
+- **Resources.** For a `LegacyProgram`, set 0 holds the named uniform blocks and the samplers, pushed (`VK_KHR_push_descriptor`) when
+  anything in it changed; set 1 holds the loose uniforms (the default block), written into the frame's constants and bound by dynamic
+  offset. Native-model programs use frame constants, push constants and the bindless table.
+- **Memory and order.** Every image stays in `GENERAL` layout (owner decision 5 of renderer-native.md); native segments are
+  separated by full memory barriers. Uploads (`Uploader`, staged through the frame's constants) go into a command buffer submitted
+  ahead of the frame's own, with a full barrier at its start and end; textures are written in place (an upload is seen by the whole
+  frame). A second copy into the same image within one upload command buffer waits for the first (a transfer barrier; before
+  2026-10-06 the two copies raced, which synchronisation validation reported as 10 WRITE_AFTER_WRITE hazards per view and which made a
+  few rock-view pixels differ between runs, docs/viewer.md). Mip generation, blits and readbacks are recorded in order in the frame.
+- **Queries and counters.** `QueryArena`: timestamps from a per-frame-slot pool, read a frame ring later (`TryRead`), never waited
+  for; `GpuContext.GpuFrameMs` is the last completed frame's GPU time. `GpuStats` counts per frame draws (indirect ones apart),
+  dispatches, pipeline binds, descriptor pushes, native segments, constant and upload bytes, and keeps running totals for meters.
 - **Known differences from OpenGL** (the last OpenGL pictures, master `f127922`, are the parity reference; Vulkan was within 0.08 mean in all eight views of the time; the forest view came later): NVIDIA's GL samples anisotropic textures a quarter mip
   finer, matched with a −0.25 LOD bias on NVIDIA (DECISIONS 9); alpha-to-coverage edges differ slightly (DECISIONS 10);
   `DEPTH_COMPONENT24` is a 32-bit float depth buffer.
@@ -170,7 +168,7 @@ command-line values win). Off draws the scene at the display size and smooths th
 - **TAA** (`UpscaleShaders.Taa`, both backends): each display pixel takes a Gaussian of the 3 × 3 jittered render samples around
   it, the history reprojected with Catmull-Rom and clipped to the neighbourhood's colour spread (YCoCg variance clipping), blended
   in a tone-mapped space; the result (display size, HDR) is the history and the input of the exposure and the composite.
-- **FSR** (`--upscaler fsr`, Vulkan; `Meitou.Rendering.Vulkan/Upscalers/FsrUpscaler`): AMD FSR 3.1.4 through the FidelityFX API
+- **FSR** (`--upscaler fsr`, Vulkan; `Meitou.Rendering/Upscalers/FsrUpscaler`): AMD FSR 3.1.4 through the FidelityFX API
   (`amd_fidelityfx_vk.dll` from FidelityFX SDK v1.1.4, MIT, the newest SDK with a Vulkan DLL; DECISIONS 16), loaded at run time from
   `MEITOU_FFX_PATH` (the DLL or its folder) or next to the executable; never in the repository. Without it, TAA runs
   (one line says so). Inputs: the scene colour (HDR, FSR's auto exposure), the R32F depth, the motion texture with motion-vector scale
@@ -209,7 +207,7 @@ The render thread is above normal priority, the streaming threads below normal (
 run on a few above-normal job threads (`RenderJobs`). The game and the viewer run server GC on four heaps without tiered compilation
 (DECISIONS 19). The flight benchmark (`--fly-benchmark`) prints the stage means, the shadow casters' means, GC totals and the worst frames
 with their stages and GC pauses; `MEITOU_JOB_STATS=1` adds what each streaming call site allocated and cost.
-A draw through `VkGl` costs 1.5-2.3 µs of CPU in Release and 3.9-5.3 µs in Debug (measured, "Frame cost breakdown" below), so draw counts matter more than triangles: meshes that repeat are drawn instanced (the
+A draw through `VkGl` cost 1.5-2.3 µs of CPU in Release and 3.9-5.3 µs in Debug (measured before the native port, "Frame cost breakdown" below; VkGl is gone since phase 8), so draw counts matter more than triangles: meshes that repeat are drawn instanced (the
 TERRAIN-mode rocks were one draw each and cost ~23 ms of shadow pass in a forest; docs/viewer.md, "Shadow pass cost").
 
 ## Frame cost breakdown (2026-10-06)
@@ -229,8 +227,11 @@ compilation in both, see the runtimeconfig). The user runs Debug.
   uniform-ring copies, descriptor writes, pushed textures, skipped pushes, vertex/index buffer binds, barriers, the GL state / uniform / texture-bind /
   bind / attrib calls the renderers made, pipeline-creation, fence-wait, submit, acquire and present ticks) and a GPU timestamp. A stage is a row;
   its parts are rows under it (part times are inside the stage's). Rows are means per frame; `PASSCSV` lines are for scripts.
-- `MEITOU_VKGL_PHASES=1`: Stopwatch around the nine parts of `PrepareDraw` and, separately, around the `vkCmd*` calls themselves
-  (`VkGlStats.PhaseTicks/NativeTicks`; ~0.05 Âµs per read, so the sums read a little high). `MEITOU_VK_MICRO=1`: 100 000 `vkCmdSetScissor` / `vkCmdSetCullMode`
+  **Since phase 8 stage 3** (VkGl deleted, renderer-native.md 8.9) the counter columns are the native API's (`GpuStats.Running`: draws,
+  indirect draws, dispatches, pipeline binds, descriptor pushes, native segments, constant KB, upload KB) plus fence-wait, submit, acquire and
+  present; the tables below were taken with the VkGl columns and are kept as measured.
+- `MEITOU_VKGL_PHASES=1` (removed with VkGl in phase 8 stage 3): Stopwatch around the nine parts of `PrepareDraw` and, separately, around the `vkCmd*` calls themselves
+  (`VkGlStats.PhaseTicks/NativeTicks`; ~0.05 µs per read, so the sums read a little high). `MEITOU_VK_MICRO=1`: 100 000 `vkCmdSetScissor` / `vkCmdSetCullMode`
   recorded through Silk.NET and through the raw function pointer.
 - Benchmark runs: `set KENSHI_PATH=<Kenshi install>`, `set MEITOU_PASS_STATS=1`, `set MEITOU_PASS_STATS_SKIP=80`, then
   `meitou-viewer.exe --world <view> [--faithful shadows] --time 13 --size 1600x900 --fly-benchmark 300 --fly-speed 0` (serialised: the GPU is waited
@@ -386,7 +387,7 @@ shadows (forest, below) put 316 draws and 2.4 ms of GPU into cascade 3 alone aga
 | &nbsp;&nbsp;post/post exposure | 0.03 | 0.04 | 0.14 | 2 | 2 | 0 | 2 | 2 | 3 | 0 | 18 | 2 | 17 |
 | &nbsp;&nbsp;post/post composite | 0.01 | 0.01 | 0.07 | 1 | 1 | 0 | 1 | 1 | 3 | 0 | 9 | 1 | 14 |
 
-### Inside VkGl: one draw
+### Inside VkGl: one draw (historical: VkGl was deleted in phase 8 stage 3)
 
 `MEITOU_VKGL_PHASES=1`, 3 runs each, Meitou shadows, medians. Microseconds **per draw**, averaged over all draws of the run (the mix of
 terrain, foliage, grass and post draws; first number = the part's whole time, second = the part of it spent inside the `vkCmd*` call(s), i.e. Silk.NET's dispatch plus

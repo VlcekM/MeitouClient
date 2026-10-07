@@ -123,10 +123,11 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         return o.Screenshot is not null ? Screenshot() : Interactive();
     }
 
-    void Boot(IGl gl, GpuContext context, bool interactive)
+    void Boot(VulkanDisplay display, bool interactive)
     {
-        gpu = WorldFrame.CreateGpu(gl, context, install, scene, assets, o, interactive);
-        if (gl is Meitou.Rendering.Vulkan.VkGl vkGl && gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Vulkan.Upscalers.VendorUpscalers.Factory(vkGl, streamline);
+        var context = display.Context;
+        gpu = WorldFrame.CreateGpu(context, install, scene, assets, o, interactive);
+        if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Upscalers.VendorUpscalers.Factory(display.Context, streamline);
         (camera, render) = WorldFrame.Setup(scene, o);
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate);
         foreach (var problem in session.Bindings.Apply(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
@@ -141,10 +142,10 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             session.Input.SetKey(FirstKey(InputAction.ToggleFreeCamera), false);
         }
         ApplyCamera(session.Camera.Current);
-        if (interactive) WorldFrame.FinishLoading(gl);
+        if (interactive) WorldFrame.FinishLoading(context);
     }
 
-    Meitou.Rendering.Vulkan.Upscalers.Streamline? streamline;
+    Meitou.Rendering.Upscalers.Streamline? streamline;
 
     /// <summary>DLSS asked for, on the command line or in the saved settings: Streamline must be loaded before the Vulkan device.</summary>
     bool WantsDlss() => o.Post.Upscale.Kind == UpscalerKind.Dlss || !o.Post.Upscale.Explicit && config.Graphics.TryGetValue(WorldFrame.UpscalerSliders[0], out float k) && MathF.Round(k) == (int)UpscalerKind.Dlss;
@@ -159,45 +160,41 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         camera.Distance = s.Distance;
     }
 
-    void DrawWorld(IGl gl, int width, int height)
+    void DrawWorld(int width, int height)
     {
         if (gpu.Foliage is { } foliage && o.Screenshot is null) foliage.SwaySeconds = realTime.Elapsed.TotalSeconds;
         // The heat haze's gameTime: game hours since the start (it stops while paused, as in the game).
         gpu.GameHours = session.Clock.TotalHours - session.Clock.StartHour;
-        WorldFrame.Draw(gl, gpu, scene, camera, render, width, height, (float)session.Clock.HourOfDay, (float)realTime.Elapsed.TotalSeconds / 600f, o.FogDistance);
+        WorldFrame.Draw(gpu, scene, camera, render, width, height, (float)session.Clock.HourOfDay, (float)realTime.Elapsed.TotalSeconds / 600f, o.FogDistance);
     }
 
     unsafe int Screenshot()
     {
         using var display = new VulkanDisplay(null, vsync: false, streamline: WantsDlss());
         streamline = display.Streamline;
-        var gl = display.Gl;
-        Boot(gl, display.VkGl.Context, interactive: false);
+        Boot(display, interactive: false);
         for (int i = 0; i < g.Ticks; i++) session.Tick();
         ApplyCamera(session.Camera.Current);
         gpu.Streamer?.Settle(gpu.Anchor ?? camera.Eye);
         gpu.Objects?.Settle(gpu.Anchor ?? camera.Eye);
         gpu.Foliage?.Settle(gpu.Anchor ?? camera.Eye);
-        WorldFrame.FinishLoading(gl);
+        WorldFrame.FinishLoading(display.Context);
+        var context = display.Context;
         int w = o.Width, h = o.Height;
-        uint fbo = gl.GenFramebuffer(), colour = gl.GenRenderbuffer();
-        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, colour);
-        gl.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.Rgba8, (uint)w, (uint)h);
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, colour);
-        gpu.Post!.Target = fbo;
+        using var target = Meitou.Rendering.Gpu.Texture.Create(context, new TextureDesc(Silk.NET.Vulkan.Format.R8G8B8A8Unorm, w, h,
+            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "offscreen picture"));
+        gpu.Post!.Target = target;
         gpu.Post.InstantAdaptation = true;
-        for (int i = 0; i < gpu.Post.WarmupFrames; i++) { DrawWorld(gl, w, h); display.EndFrame(); }   // a temporal upscaler converges first
-        DrawWorld(gl, w, h);
+        for (int i = 0; i < gpu.Post.WarmupFrames; i++) { DrawWorld(w, h); display.EndFrame(); }   // a temporal upscaler converges first
+        DrawWorld(w, h);
         display.EndFrame();
-        DrawWorld(gl, w, h);
+        DrawWorld(w, h);
         display.EndFrame();
-        gl.Finish();
+        context.Finish();
         var s = session.Camera.Current;
         Console.WriteLine($"camera    {(session.Camera.IsFree ? "free" : "strategy")}: pivot {s.Target.X:0}, {s.Target.Y:0}, {s.Target.Z:0}, eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, " +
             $"yaw {s.Yaw * 180 / MathF.PI:0.#}, pitch {s.Pitch * 180 / MathF.PI:0.#}, boom {s.Distance:0.#}; {session.Ticks.TotalTicks} ticks, game time {session.Clock.HourOfDay:0.00} h");
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        FramebufferCapture.SavePng(gl, o.Screenshot!, w, h);
+        FramebufferCapture.SavePng(context, target, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
         gpu.Dispose();
         return 0;
@@ -217,9 +214,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         }, vsync, streamline: WantsDlss());
         streamline = display.Streamline;
         var window = display.Window!;
-        var gl = display.Gl;
-        Boot(gl, display.VkGl.Context, interactive: true);
-        var overlay = DebugOverlay.TryCreate(gl, display.VkGl.Context);
+        Boot(display, interactive: true);
+        var overlay = DebugOverlay.TryCreate(display.Context);
         var panel = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render);
         if (panel is not null)
             foreach (var slider in panel.Sliders)
@@ -284,14 +280,17 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             if (display.BeginFrame(size.X, size.Y))
             {
                 long t0 = Stopwatch.GetTimestamp();
-                DrawWorld(gl, size.X, size.Y);
+                // The chain and the panel draw into the window's backbuffer (made again when the size changes).
+                var backbuffer = display.Backbuffer!;
+                gpu.Post!.Target = backbuffer;
+                if (overlay is not null) overlay.Target = backbuffer;
+                DrawWorld(size.X, size.Y);
                 cpuSum += Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
                 bool shot = screenshotRequested;
                 screenshotRequested = false;
-                gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
                 panel?.Draw(size.X, size.Y);
                 display.Present();
-                if (shot) SaveScreenshot(gl, size.X, size.Y);
+                if (shot) SaveScreenshot(display.Context, backbuffer, size.X, size.Y);
                 frames++;
             }
             titleTimer += dt;
@@ -320,11 +319,10 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
 
     bool screenshotRequested;
 
-    static void SaveScreenshot(IGl gl, int width, int height)
+    static void SaveScreenshot(GpuContext context, Texture backbuffer, int width, int height)
     {
         var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-{DateTime.Now:yyyyMMdd-HHmmss}.png");
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-        FramebufferCapture.SavePng(gl, file, width, height);
+        FramebufferCapture.SavePng(context, backbuffer, file, width, height);
         Console.WriteLine($"saved     {file}");
     }
 

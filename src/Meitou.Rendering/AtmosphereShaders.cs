@@ -229,28 +229,4 @@ static class AtmosphereShaders
             return atmoPhysicalHaze(colour, eye, d, dist);
         }
         """;
-
-    /// <summary>Texture units of the atmosphere's samplers in a GL program: the top three of the combined units, out of every scene shader's way.</summary>
-    static int irradianceUnit = -1, specularUnit, ambientUnit;
-
-    /// <summary>
-    /// (Moved from <c>SkyRenderer</c> in phase 8 stage 2.) Points the atmosphere's sampler uniforms of a freshly linked GL program at units of
-    /// their own (a cube sampler left on unit 0 would clash with the 2D samplers there). Only the GL programs that are left need it
-    /// (<c>WorldGl.Program</c>: the impostor baker and preview; the model viewer's own); nothing binds a texture on those units any more, so
-    /// they read the stand-in, as they did without a sky. Goes with the GL programs (phase 8 stage 3).
-    /// </summary>
-    public static void AssignSamplerUnits(Gpu.IGl gl, uint program)
-    {
-        if (irradianceUnit < 0)
-        {
-            gl.GetInteger(Gpu.GetPName.MaxCombinedTextureImageUnits, out int combined);
-            irradianceUnit = combined - 1; specularUnit = combined - 2; ambientUnit = combined - 3;
-        }
-        gl.UseProgram(program);
-        int a = gl.GetUniformLocation(program, "uAtmoIrradiance"), b = gl.GetUniformLocation(program, "uAtmoSpecular"), c = gl.GetUniformLocation(program, "uAtmoAmbientMap");
-        if (a >= 0) gl.Uniform1(a, irradianceUnit);
-        if (b >= 0) gl.Uniform1(b, specularUnit);
-        if (c >= 0) gl.Uniform1(c, ambientUnit);
-        gl.UseProgram(0);
-    }
 }

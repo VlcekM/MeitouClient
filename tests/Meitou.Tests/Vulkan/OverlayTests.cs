@@ -1,12 +1,11 @@
 using Meitou.Data.Textures;
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 
 namespace Meitou.Tests.Vulkan;
 
-/// <summary>The overlay, the profiler chart and the screenshot readback (wave 3 agent F, step P: docs/renderer-native.md 7.1), through VkGl with sync validation.</summary>
+/// <summary>The overlay, the profiler chart and the screenshot readback (wave 3 agent F, step P: docs/renderer-native.md 7.1), on the native API with sync validation.</summary>
 [Collection("StageClock")]   // StageClock's statics, as SeamTests' profiler test
 public class OverlayTests
 {
@@ -21,49 +20,53 @@ public class OverlayTests
         }
     }
 
-    static void Target(IGl gl)
+    /// <summary>An RGBA8 target cleared to (0.2, 0.3, 0.4) by a rendering's load op.</summary>
+    static Texture Target(GpuContext ctx)
     {
-        uint fbo = gl.GenFramebuffer(), colour = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, colour);
-        gl.TexImage2D<byte>(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, W, H, 0, PixelFormat.Rgba, PixelType.UnsignedByte, ReadOnlySpan<byte>.Empty);
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, colour, 0);
-        gl.Viewport(0, 0, W, H);
+        var t = Texture.Create(ctx, new TextureDesc(Silk.NET.Vulkan.Format.R8G8B8A8Unorm, W, H,
+            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "test target"));
+        var p = PassTargets.Of(t, null);
+        var cmd = ctx.BeginNative("test clear");
+        cmd.BeginRendering(new RenderingDesc(p.Colour with
+        {
+            Load = Silk.NET.Vulkan.AttachmentLoadOp.Clear, Clear = new Silk.NET.Vulkan.ClearValue(new Silk.NET.Vulkan.ClearColorValue(0.2f, 0.3f, 0.4f, 1f)),
+        }, default, W, H));
+        cmd.EndRendering();
+        ctx.EndNative(cmd);
+        return t;
     }
 
     [Fact]
     [Slow]
-    public void Panels_and_the_profiler_chart_draw_natively_and_the_screenshot_readback_equals_ReadPixels()
+    public void Panels_and_the_profiler_chart_draw_natively_and_the_screenshot_readback_equals_the_texels()
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
         string path = Path.Combine(Path.GetTempPath(), $"meitou-overlay-{Guid.NewGuid():N}.png");
         try
         {
-            using (var gl = new VkGl(d!))
+            using (var ctx = new GpuContext(d!))
             {
-                using var overlay = DebugOverlay.TryCreate(gl, gl.Context);
+                using var overlay = DebugOverlay.TryCreate(ctx);
                 Assert.SkipWhen(overlay is null, "No monospace system font");
-                using var profiler = new FrameProfiler(gl.Context) { Showing = FrameProfiler.Mode.Cpu };
+                using var profiler = new FrameProfiler(ctx) { Showing = FrameProfiler.Mode.Cpu };
                 for (int frame = 0; frame < 3; frame++)
                 {
-                    gl.BeginFrame(W, H);
+                    ctx.BeginFrame();
                     profiler.BeginFrame();
                     StageClock.Lap(0);
                     profiler.EndFrame();
-                    gl.EndFrame();
+                    ctx.EndFrame();
                 }
-                gl.BeginFrame(W, H);
-                Target(gl);
-                gl.ClearColor(0.2f, 0.3f, 0.4f, 1f);
-                gl.Clear(ClearBufferMask.ColorBufferBit);
-                overlay!.Panel(W, H, "Keys", ["T textures", "Esc quit"]);
+                ctx.BeginFrame();
+                using var target = Target(ctx);
+                overlay!.Target = target;
+                overlay.Panel(W, H, "Keys", ["T textures", "Esc quit"]);
                 profiler.Draw(overlay, W, H);
 
-                // The native readback (what the screenshots use) against ReadPixels, which this test reads after it.
-                FramebufferCapture.SavePng(gl, path, W, H);
-                var expected = new byte[W * H * 4];
-                gl.ReadPixels<byte>(0, 0, W, H, PixelFormat.Rgba, PixelType.UnsignedByte, expected.AsSpan());
+                // The screenshot readback against the texture's own texels (GpuContext.ReadBack), read after it.
+                FramebufferCapture.SavePng(ctx, target, path, W, H);
+                var expected = ctx.ReadBack(target, 4);
                 var saved = TextureLoader.LoadFile(path, allMips: false).Levels[0];
                 Assert.Equal((W, H), (saved.Width, saved.Height));
                 int different = 0;
@@ -79,7 +82,7 @@ public class OverlayTests
                 Assert.True(different > W * H / 10, $"only {different} pixels differ from the clear colour");
                 int panel = (24 * W + 24) * 4;   // inside the key panel's top-left (16 px margin), rows from the top
                 Assert.True(saved.Pixels[panel] < 40 && saved.Pixels[panel + 2] < 50, "the panel is not drawn");
-                gl.EndFrame();
+                ctx.EndFrame();
             }
             ExpectClean(d!);
         }

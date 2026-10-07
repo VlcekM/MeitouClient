@@ -5,7 +5,7 @@ using Meitou.Data.Ogre;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
-using SamplerInfo = Meitou.Rendering.Vulkan.Shaders.SamplerInfo;
+using SamplerInfo = Meitou.Rendering.Gpu.Shaders.SamplerInfo;
 
 namespace Meitou.Rendering;
 
@@ -38,7 +38,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     readonly ObjectMaterialSet distantMaterial;
     readonly Dictionary<(GpuObjectMesh, ObjectMaterialSet, int, bool), Batch> batchMap = [];
     readonly List<Batch> active = [];
-    readonly List<(uint, int, Matrix4x4)> terrainMeshes = [];   // the TERRAIN-mode instances of a draw (TerrainRenderer.DrawMeshes)
+    readonly List<(MeshBindings, int, Matrix4x4)> terrainMeshes = [];   // the TERRAIN-mode instances of a draw (TerrainRenderer.DrawMeshes)
     /// <summary>MEITOU_LOD_DEBUG: 1 colours solid surfaces by LOD level, 2 draws wireframe only coloured by level (green 0, yellow 1, orange 2, red 3, magenta manual, blue distant stand-ins).</summary>
     readonly int debugLevels = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_LOD_DEBUG"), out int dl) ? dl : 0;
 
@@ -69,11 +69,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         public bool Resolved;
     }
 
-    /// <param name="gl">Unused since phase 8 stage 1 (meshes, textures and draws are native); kept for the caller (<c>WorldFrame</c>) until
-    /// stage 3 removes IGl.</param>
-    internal WorldObjectRenderer(IGl gl, GpuContext gpu, AssetLocator assets, WorldObjects objects)
+    internal WorldObjectRenderer(GpuContext gpu, AssetLocator assets, WorldObjects objects)
     {
-        _ = gl;
         Gpu = gpu;
         this.objects = objects;
         // Both native programs are made here with every handle resolved, never inside a draw (the GL programs they replace are not made).
@@ -347,7 +344,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                         foreach (var gp in g.Parts)
                             if (gp.Count[lv] > 0)
                             {
-                                terrainMeshes.Add((meshes.PlainVao(gp, lv), gp.Count[lv], inst.Transform));
+                                terrainMeshes.Add((meshes.PlainMesh(gp, lv), gp.Count[lv], inst.Transform));
                                 DrawnTriangles += gp.Count[lv] / 3;
                             }
                         continue;
@@ -419,7 +416,6 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 if (ObjTiming) recordMs += (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
             }
         }
-        SkyRenderer.Active?.BindUnits();   // the atmosphere's texture units, as Apply left them for the GL code that follows
         double tBatches = cpu.Elapsed.TotalMilliseconds;
         int batchDraws = DrawCalls;
         if (terrainMeshes.Count > 0) DrawCalls += terrain.DrawMeshes(terrainMeshes, depthPass);
@@ -538,7 +534,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         readonly GpuContext ctx;
         public readonly ShaderProgram P;
         readonly int[] locations;
-        readonly Meitou.Rendering.Vulkan.Shaders.ScalarKind[] kinds;
+        readonly Meitou.Rendering.Gpu.Shaders.ScalarKind[] kinds;
         /// <summary>The program's own input locations (below the instance rows): 0 .. Own − 1.</summary>
         public readonly int Own;
         VertexLayout? last;
@@ -576,7 +572,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 int input = Array.IndexOf(locations, loc);
                 result[loc] = loc < byLocation.Length && byLocation[loc] is { } a
                     ? a.Buffer
-                    : new BufferBinding(ctx.Defaults.DummyVertex.Buffer, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : Meitou.Rendering.Vulkan.Shaders.ScalarKind.Float));
+                    : new BufferBinding(ctx.Defaults.DummyVertex.Buffer, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : Meitou.Rendering.Gpu.Shaders.ScalarKind.Float));
             }
             return result;
         }
@@ -637,12 +633,10 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     uint textureStandIn;
 
     /// <summary>A new segment: the bias in effect now and the stand-in's bindless index (the 2D float array the shaders index).</summary>
-    void NewTextureSegment(IGlInterop interop)
+    void NewTextureSegment()
     {
-        textureBias = Gpu.LodBias();
-        var h = interop.Bindless(0);
-        if (h.Kind != BindlessKind.Texture2D) throw new InvalidOperationException($"the stand-in texture is in the bindless {h.Kind} array, the shaders read textures2D");
-        textureStandIn = h.Index;
+        textureBias = Gpu.LodBias;
+        textureStandIn = Gpu.StandIn2D;
     }
 
     /// <summary>The bindless index of a texture by its <see cref="WorldTexture.Key"/> (0: the stand-in), as the GL texture was sampled.</summary>
@@ -714,22 +708,21 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     void RecordDraws(ObjProg prog, bool wire, in ViewConstants view, Vector4 fadeRange)
     {
         if (drawCount == 0) return;
-        var interop = Gpu.Interop!;
         string label = depthPass ? "objects depth" : wire ? "objects wire" : "objects";
         int kind = (depthPass ? 1 : 0) + (wire ? 2 : 0);
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the sets, and per draw everything resolved (pipeline, buffers, the push
         // block with its bindless indices), into a job that only records.
-        var targets = interop.CurrentTargets();
+        var targets = Gpu.CurrentTargets();
         // The objects are drawn double-sided (the GL version turned the cull face off); the wireframe as lines pulled forward
         // (GL's PolygonMode LINE with POLYGON_OFFSET_LINE and PolygonOffset(-1, -1)).
-        var state = interop.CurrentState() with { Cull = Silk.NET.Vulkan.CullModeFlags.None };
+        var state = Gpu.CurrentState() with { Cull = Silk.NET.Vulkan.CullModeFlags.None };
         if (wire) state = state with { Polygon = Silk.NET.Vulkan.PolygonMode.Line, BiasEnable = true, BiasConstant = -1, BiasSlope = -1 };
         int segment = SegmentId(kind, prog.P, targets, state);
         var job = drawJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Layout, job.Count) = (this, targets, state, prog.P.Layout, 0);
         job.Frame = nativeFrame.Prepare(in view);
         for (int a = 0; a < 4; a++) job.Rows[a] = new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
-        NewTextureSegment(interop);
+        NewTextureSegment();
         long loop0 = ObjTiming ? Stopwatch.GetTimestamp() : 0;
         if (job.Draws.Length < drawCount) job.Draws = new DrawJob.Draw[Math.Max(drawCount, job.Draws.Length * 2)];
         var list = draws;

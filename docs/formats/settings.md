@@ -377,7 +377,7 @@ is read when textures load, so it needs a restart; it is set from the options be
   each use it as the size at which they unload least-recently-used textures (`HighWaterMb`; before: 1024 always). The game has one manager, so the
   viewer's total can be up to twice that: **Observed** (an approximation).
 - **Not applied**: sky, water, post-processing and heat-haze textures (the game also drops mips of non-cube `SkyX` / `General` group DXT textures; the viewer loads those at
-  full size), the decal compensation (no decals), and per-file group lookups for the model viewer (it keeps level 0).
+  full size), the decal compensation (no decals), and per-file group lookups for the model viewer (it kept level 0; removed in phase 8, [../character-viewer.md](../character-viewer.md)).
 
 ### Viewer: water reflection
 

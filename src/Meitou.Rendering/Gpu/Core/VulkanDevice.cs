@@ -6,7 +6,7 @@ using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 
-namespace Meitou.Rendering.Vulkan.Core;
+namespace Meitou.Rendering.Gpu.Core;
 
 /// <summary>
 /// Instance, physical and logical device, queues, memory allocator, frame ring and pipeline cache. Headless unless

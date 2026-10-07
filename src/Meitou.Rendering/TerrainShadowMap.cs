@@ -14,15 +14,12 @@ namespace Meitou.Rendering;
 /// sun has moved. The receiver reads it with one fetch (<see cref="MeitouShadowShaders.Functions"/>, <c>msTerrain</c>).
 /// <para>
 /// Phase 8 (docs/renderer-native.md 8): the heights and the targets are native textures and the sweep renders into them in one native
-/// segment of its own. The finished map still reaches its consumer (<c>ShadowPass.Meitou</c>, which binds it to a GL unit) as a GL name:
-/// each target is imported into VkGl (<see cref="IGlInterop.Import"/>), and the import has GL's default sampler state, so the name is given
-/// the linear, clamped state the GL texture had. Those few GL calls stay until the seam can import with a sampler state or the consumer takes
-/// <see cref="Sampled"/> (reported in docs/renderer-native.md 8.1).
+/// segment of its own; the consumer (<c>ShadowPass.Meitou</c>) takes the finished map as <see cref="Sampled"/> (linear, clamped, as the GL
+/// texture was).
 /// </para>
 /// </summary>
 sealed unsafe class TerrainShadowMap : IDisposable
 {
-    readonly IGl gl;
     /// <summary>The native GPU API the map is made and drawn with.</summary>
     public GpuContext Gpu { get; }
     readonly int size;
@@ -34,7 +31,6 @@ sealed unsafe class TerrainShadowMap : IDisposable
     readonly UniformHandle uSize, uFirst, uStep, uDrop, uDistance;
     readonly Texture[] targets = new Texture[2];
     readonly SampledTexture[] targetsSampled = new SampledTexture[2];
-    readonly uint[] imported = new uint[2];
 
     Vector3 builtFor;
     int result = -1;
@@ -43,9 +39,8 @@ sealed unsafe class TerrainShadowMap : IDisposable
     public const float RebuildAngle = 0.0017f;
 
     /// <param name="coarse">The whole-world raw heights, <paramref name="size"/>² samples (WorldScene.Coarse).</param>
-    public TerrainShadowMap(IGl gl, GpuContext gpu, ushort[] coarse, int size)
+    public TerrainShadowMap(GpuContext gpu, ushort[] coarse, int size)
     {
-        this.gl = gl;
         Gpu = gpu;
         this.size = size;
         spacing = WorldLayout.WorldSize / (float)(size - 1);
@@ -62,17 +57,7 @@ sealed unsafe class TerrainShadowMap : IDisposable
                     Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "terrain shadow map"));
         }
         heightsSampled = new SampledTexture(linear, heights.View(), heights.Image);
-        var interop = gpu.Interop!;
-        for (int i = 0; i < 2; i++)
-        {
-            targetsSampled[i] = new SampledTexture(linear, targets[i].View(), targets[i].Image);
-            // The consumer's GL name, with the sampler state the GL texture had (an import starts with GL's defaults).
-            imported[i] = interop.Import(targets[i]);
-            gl.BindTexture(TextureTarget.Texture2D, imported[i]);
-            foreach (var (name, value) in GlSampling)
-                gl.TexParameter(TextureTarget.Texture2D, name, value);
-        }
-        gl.BindTexture(TextureTarget.Texture2D, 0);
+        for (int i = 0; i < 2; i++) targetsSampled[i] = new SampledTexture(linear, targets[i].View(), targets[i].Image);
         // Native (docs/renderer-native.md 7.1, wave 3 agent B, step P): VkGl's SPIR-V and layout, made once, never inside a draw.
         sweep = LegacyProgram.Create(gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.SweepFragment, "terrain shadow sweep");
         (sourceSlot, uSize, uFirst, uStep, uDrop, uDistance) = (sweep.Sampler("uSource"), sweep.Uniform("uSize"), sweep.Uniform("uFirst"),
@@ -84,19 +69,12 @@ sealed unsafe class TerrainShadowMap : IDisposable
             Silk.NET.Vulkan.ColorComponentFlags.ABit, Silk.NET.Vulkan.PolygonMode.Fill, false, false);
     }
 
-    static readonly (TextureParameterName Name, int Value)[] GlSampling =
-    [
-        (TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear), (TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear),
-        (TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge), (TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge),
-    ];
-
     readonly AttachmentFormats format;
     readonly DrawState state;
     GraphicsPipeline? pipeline;
 
-    /// <summary>The finished map as a GL name (0 before the first build or when the sun is too high for any terrain shadow).</summary>
-    public uint Texture => result < 0 ? 0 : imported[result];
-    /// <summary>The finished map as a native texture with its sampler (linear, clamped), or null as for <see cref="Texture"/>.</summary>
+    /// <summary>The finished map with its sampler (linear, clamped); null before the first build or when the sun is too high for any terrain
+    /// shadow.</summary>
     public SampledTexture? Sampled => result < 0 ? null : targetsSampled[result];
     public int Size => size;
     public float Spacing => spacing;
@@ -125,12 +103,11 @@ sealed unsafe class TerrainShadowMap : IDisposable
         int passes = 1;
         while ((1 << (passes - 1)) < size) passes++;
         int write = 0;
-        var interop = Gpu.Interop!;
         pipeline ??= Gpu.Pipelines.Get(state.Pipeline(sweep.Program, sweep.VertexLayout([]), Silk.NET.Vulkan.PrimitiveTopology.TriangleList, format, "terrain shadow sweep"));
         var viewport = new Silk.NET.Vulkan.Viewport(0, 0, size, size, 0, 1);
         var scissor = new Silk.NET.Vulkan.Rect2D(default, new((uint)size, (uint)size));
         sweep.Set(uSize, (float)size);
-        var cmd = interop.BeginNative("terrain shadow sweep");
+        var cmd = Gpu.BeginNative("terrain shadow sweep");
         for (int pass = 0; pass < passes; pass++)
         {
             float step = pass == 0 ? 1 : 1 << (pass - 1);   // the first pass reaches one sample, the k-th 2^(k-1) more
@@ -153,7 +130,7 @@ sealed unsafe class TerrainShadowMap : IDisposable
             cmd.Barrier(BarrierBatch.Full);   // the next pass reads what this one wrote (VkGl: a full barrier before each pass)
             write = 1 - write;
         }
-        interop.EndNative(cmd);
+        Gpu.EndNative(cmd);
         result = 1 - write;
         builtFor = toSun;
         StepTiming.Add(StepTiming.Sweep, timing, passes);
@@ -164,7 +141,7 @@ sealed unsafe class TerrainShadowMap : IDisposable
 
     public void Dispose()
     {
-        for (int i = 0; i < 2; i++) { gl.DeleteTexture(imported[i]); targets[i].Dispose(); }
+        for (int i = 0; i < 2; i++) targets[i].Dispose();
         heights.Dispose();
         sweep.Dispose();
     }

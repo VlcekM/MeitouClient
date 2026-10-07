@@ -190,7 +190,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
                 if (!wait && watch.Elapsed.TotalMilliseconds >= budgetMs) break;
                 var step = steps.Dequeue();
                 var one = System.Diagnostics.Stopwatch.StartNew();
-                GlBridge.EnsureFrame(gpu);
+                gpu.EnsureFrame();
                 step();
                 if (StreamLog && one.Elapsed.TotalMilliseconds > 3) Console.WriteLine($"slow texture step {step.Method.Name}: {one.Elapsed.TotalMilliseconds:0.0} ms");
                 continue;

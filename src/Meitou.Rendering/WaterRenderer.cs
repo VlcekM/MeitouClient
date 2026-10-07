@@ -149,9 +149,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly LegacyProgram program;
     readonly NativeSegment segment;
     readonly Handles h;
-    readonly (SamplerSlot Slot, Meitou.Rendering.Vulkan.Shaders.SamplerInfo Info)[] mapSamplers;
+    readonly (SamplerSlot Slot, Meitou.Rendering.Gpu.Shaders.SamplerInfo Info)[] mapSamplers;
     readonly SamplerSlot reflectionSlot;
-    readonly Meitou.Rendering.Vulkan.Shaders.SamplerInfo reflectionInfo;
+    readonly Meitou.Rendering.Gpu.Shaders.SamplerInfo reflectionInfo;
 
     /// <summary>The program's loose uniforms, resolved once.</summary>
     readonly record struct Handles(UniformHandle ViewProjection, UniformHandle WaterHeight, UniformHandle Centre, UniformHandle Extent, UniformHandle Eye,
@@ -187,11 +187,10 @@ public sealed unsafe class WaterRenderer : IDisposable
     internal static LegacyProgram.Attribute QuadAttribute(DeviceBuffer quad) =>
         new(new BufferBinding(quad.Handle, 0), GlConventions.VertexFormat(GLEnum.Float, 2, false, false), 8, false);
 
-    /// <param name="gl">Unused since phase 8 stage 2 (kept for the callers that still pass it: <c>WorldFrame</c>).</param>
     /// <param name="sky">Unused since phase 8 stage 2: the atmosphere comes through the frame globals.</param>
-    public static WaterRenderer Create(IGl? gl, GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky, List<string> messages)
+    public static WaterRenderer Create(GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky, List<string> messages)
     {
-        _ = (gl, sky);
+        _ = sky;
         var colour = Load(install, WorldWater.ColourMap);
         var flow = Load(install, WorldWater.FlowMap);
         var normalPath = assets.Find("water.png");
@@ -301,13 +300,12 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     void Record()
     {
-        var interop = Gpu.Interop!;
-        var cmd = interop.BeginNativeInPass("water");
-        var targets = interop.CurrentTargets();
+        var cmd = Gpu.BeginGuest("water");
+        var targets = Gpu.CurrentTargets();
         // What the GL code's Enable(DepthTest), DepthMask(false), Disable(CullFace), Enable(Blend) and BlendFunc made of the pass's state (the
         // depth test and blending only with the attachment they need, as VkGl's CurrentState).
         bool hasDepth = targets.Formats.Depth != Silk.NET.Vulkan.Format.Undefined, hasColour = targets.Formats.Colour != Silk.NET.Vulkan.Format.Undefined;
-        var state = interop.CurrentState() with
+        var state = Gpu.CurrentState() with
         {
             Cull = Silk.NET.Vulkan.CullModeFlags.None, DepthTest = hasDepth, DepthWrite = false, Blend = hasColour ? AlphaBlend : BlendState.Off,
         };
@@ -321,7 +319,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         cmd.BindVertexBuffers(0, quadVertices);
         program.Flush(cmd);
         cmd.Draw(4);
-        interop.EndNative(cmd);
+        Gpu.EndGuest(cmd);
     }
 
     public void Dispose()

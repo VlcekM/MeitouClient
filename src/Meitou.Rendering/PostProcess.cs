@@ -12,25 +12,22 @@ namespace Meitou.Rendering;
 /// composite pass (exposure, occlusion, clip, dither), then the game's FXAA on the final image when no
 /// temporal upscaler runs, then the game's heat haze when the weather has some, ending in <see cref="Target"/>.
 /// Usage per frame: <see cref="Begin"/>, draw the scene (calling <see cref="SetNearSlice"/> for the near depth slice), <see cref="End"/>.
-/// Anything that draws into another framebuffer in between must rebind the one it found (<see cref="SceneFramebuffer"/>).
+/// The scene's hosts draw into <see cref="SceneTargets"/>.
 /// Facts about the game's own chain: docs/formats/post-processing.md.
 /// </summary>
 /// <remarks>
-/// Native (docs/renderer-native.md 8, phase 8 stage 2): every target and texture is a native <see cref="Texture"/> ("post …"), every pass a
-/// rendering of its own in a native segment, the timings native timestamps. GL names and framebuffers exist only over the targets the
-/// still-GL users take by name (the scene's guests through the bound framebuffer, the reflection's and the shadows' restore, the grass-motion
-/// guest, the vendor upscalers), made and bound through <see cref="GlBridge"/>.
+/// Native (docs/renderer-native.md 8, phase 8 stages 2 and 3): every target and texture is a native <see cref="Texture"/> ("post …"), every
+/// pass a rendering of its own in a native segment, the timings native timestamps; no GL names (stage 3).
 /// </remarks>
 public sealed unsafe class PostProcess : IDisposable
 {
     /// <summary>A native target with the GL sampler state its GL texture had (linear or nearest, clamped; the luminance's mipmapped
-    /// minification), and the GL name and framebuffer a still-GL user needs (0: none).</summary>
+    /// minification).</summary>
     sealed class Target2D(Texture texture, TextureMinFilter min, TextureMagFilter mag)
     {
         public readonly Texture Texture = texture;
         public readonly TextureMinFilter Min = min;
         public readonly TextureMagFilter Mag = mag;
-        public uint Name, Framebuffer;
         public int Width => Texture.Desc.Width;
         public int Height => Texture.Desc.Height;
         public Vk.Format Format => Texture.Desc.Format;
@@ -40,20 +37,21 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>The native GPU API (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.</summary>
     public GpuContext Gpu { get; }
     public PostOptions Options { get; }
-    /// <summary>Framebuffer the final image goes to: 0 for the window, or an RGBA8 framebuffer of the same size.</summary>
-    public uint Target;
-    /// <summary>The framebuffer the scene is drawn into (valid after <see cref="Begin"/>).</summary>
-    public uint SceneFramebuffer { get; private set; }
+    /// <summary>What the final image goes to: an RGBA8 colour target at least the display size (the window's backbuffer, or an offscreen
+    /// texture). Set before <see cref="End"/>.</summary>
+    public Texture? Target;
+    /// <summary>What the scene's slice is drawn into now (valid after <see cref="Begin"/>): the scene colour and the slice's depth, at the render size.</summary>
+    public PassTargets SceneTargets { get; private set; } = null!;
+    /// <summary>The scene's depth (the near slice's; valid after <see cref="Begin"/>).</summary>
+    public Texture SceneDepth => sceneDepth!.Texture;
 
     // width × height is the render size (the scene, SSAO); displayWidth × displayHeight the chain after the upscaler (exposure, composite).
     int width, height, displayWidth, displayHeight;
     float allocatedScale;
     UpscalerKind allocatedKind;
     Target2D? sceneColour, sceneDepth;
-    uint sceneFbo;
     // Temporal upscaling: the far slice's own depth (instead of clearing), the motion and depth targets, the display-size history (ping-pong).
     Target2D? farDepth;
-    uint farFbo;
     Target2D? motion, upscaleDepth, reactive, historyA, historyB;
     bool historyValid, farSliceDrawn, warnedFallback;
     long frameIndex;
@@ -66,8 +64,6 @@ public sealed unsafe class PostProcess : IDisposable
 
     // The native full-screen passes (docs/renderer-native.md 7.1, wave 3 agent E, step P): the same SPIR-V and layout as the GL programs they
     // replaced. Since phase 8 stage 2 each draws in a rendering of its own (8.6). Every handle is resolved once, here.
-    readonly IGlInterop interop;
-    readonly ITextureLodBias? lodBias;
     readonly SsaoPass ssao;
     readonly BlurPass blur;
     readonly LuminancePass luminancePass;
@@ -205,14 +201,10 @@ public sealed unsafe class PostProcess : IDisposable
         false, 0, 0, BlendState.Off, Vk.ColorComponentFlags.RBit | Vk.ColorComponentFlags.GBit | Vk.ColorComponentFlags.BBit | Vk.ColorComponentFlags.ABit,
         Vk.PolygonMode.Fill, false, false);
 
-    /// <param name="gl">Unused since phase 8 stage 2 (the caller is reserved); the LOD bias goes to the seam's <see cref="ITextureLodBias"/>.</param>
-    public PostProcess(IGl gl, GpuContext gpu, PostOptions options)
+    public PostProcess(GpuContext gpu, PostOptions options)
     {
-        _ = gl;
         Gpu = gpu;
         Options = options;
-        interop = gpu.Interop ?? throw new InvalidOperationException("PostProcess needs the native seam (VkGl)");
-        lodBias = interop as ITextureLodBias;
         (ssao, blur, luminancePass, adaptPass) = (new SsaoPass(gpu), new BlurPass(gpu), new LuminancePass(gpu), new AdaptPass(gpu));
         (compositePass, fxaaPass, hazePass) = (new CompositePass(gpu), new FxaaPass(gpu), new HeatHazePass(gpu));
         (velocityPass, taaPass) = (new VelocityPass(gpu), new TaaPass(gpu));
@@ -232,15 +224,7 @@ public sealed unsafe class PostProcess : IDisposable
 
     void Free()
     {
-        GlBridge.DeleteFramebuffer(Gpu, sceneFbo);
-        GlBridge.DeleteFramebuffer(Gpu, farFbo);
-        sceneFbo = farFbo = 0;
-        foreach (var t in Targets())
-        {
-            GlBridge.DeleteFramebuffer(Gpu, t.Framebuffer);
-            GlBridge.DeleteTexture(Gpu, t.Name);
-            t.Texture.Dispose();   // released after the frames in flight
-        }
+        foreach (var t in Targets()) t.Texture.Dispose();   // released after the frames in flight
         sceneColour = sceneDepth = farDepth = motion = upscaleDepth = reactive = historyA = historyB = null;
         aoA = aoB = ldr = ldrFxaa = luminance = adaptA = adaptB = null;
         adaptedValid = historyValid = false;
@@ -268,9 +252,6 @@ public sealed unsafe class PostProcess : IDisposable
         var texture = batch.Create(new TextureDesc(format, w, h, levels, Use: use, Name: name));
         return new Target2D(texture, min, min == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear);
     }
-
-    /// <summary>The GL name of a target for a still-GL user, with the sampler state its GL texture had.</summary>
-    uint Name(Target2D t) => t.Name = GlBridge.Texture(Gpu, t.Texture, t.Min, TextureWrapMode.ClampToEdge);
 
     void Allocate(int displayW, int displayH)
     {
@@ -308,16 +289,6 @@ public sealed unsafe class PostProcess : IDisposable
             adaptA = Make(batch, 1, 1, InternalFormat.RG32f, TextureMinFilter.Linear, "post exposure adapted");
             adaptB = Make(batch, 1, 1, InternalFormat.RG32f, TextureMinFilter.Linear, "post exposure adapted");
         }
-
-        // GL names and framebuffers for the still-GL users: the scene's guests draw into the bound framebuffer (the far slice's shares the
-        // colour), the grass-motion guest into the motion target, and the vendor upscalers take their images by GL name (VkGl.ImageOf).
-        sceneFbo = GlBridge.Framebuffer(Gpu, Name(sceneColour), Name(sceneDepth));
-        if (up.Temporal)
-        {
-            farFbo = GlBridge.Framebuffer(Gpu, sceneColour.Name, Name(farDepth!));
-            motion!.Framebuffer = GlBridge.Framebuffer(Gpu, Name(motion), 0);
-            foreach (var t in new[] { upscaleDepth!, reactive!, historyA!, historyB! }) Name(t);
-        }
     }
 
     // ---- timing ----
@@ -338,7 +309,7 @@ public sealed unsafe class PostProcess : IDisposable
         {
             stampWriter ??= c => { written = Gpu.Frame.Timestamps.Allocate(); c.Timestamp(Gpu.Frame.Timestamps, written); };
             written = default;
-            interop.Interleave(stampWriter);
+            Gpu.Interleave(stampWriter);
             slot = written;
         }
         set.Slots[set.Count] = slot;
@@ -407,9 +378,8 @@ public sealed unsafe class PostProcess : IDisposable
         frameIndex++;
         JitterPixels = Temporal ? Jitter.Offset(frameIndex, JitterPhases) : Vector2.Zero;
         // Textures at the display size's detail: log2 of the scale, and further for the vendor upscalers as they recommend (DECISIONS 15).
-        if (lodBias is not null) lodBias.TextureLodBias = Temporal ? MathF.Log2(width / (float)displayWidth) - (allocatedKind == UpscalerKind.Taa ? 0.5f : 1f) : 0;
-        SceneFramebuffer = sceneFbo;
-        GlBridge.Bind(Gpu, SceneFramebuffer, width, height);
+        Gpu.LodBias = Temporal ? MathF.Log2(width / (float)displayWidth) - (allocatedKind == UpscalerKind.Taa ? 0.5f : 1f) : 0;
+        SceneTargets = PassTargets.Of(sceneColour!.Texture, sceneDepth!.Texture);
     }
 
     // ---- temporal upscaling ----
@@ -427,8 +397,8 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>The vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/>; without one (or on failure) TAA runs.</summary>
     public IUpscaler? External { get; set; }
 
-    /// <summary>What <see cref="ObjectMotion"/> gets: the near slice's depth texture (a GL name) and planes, and the jitter in NDC.</summary>
-    public readonly record struct MotionTargets(uint NearDepth, Vector2 NearPlanes, Vector2 JitterNdc);
+    /// <summary>What <see cref="ObjectMotion"/> gets: the near slice's depth texture (with the sampler the chain reads it with) and planes, and the jitter in NDC.</summary>
+    public readonly record struct MotionTargets(SampledTexture NearDepth, Vector2 NearPlanes, Vector2 JitterNdc);
 
     /// <summary>
     /// Draws motion of moving geometry over the camera motion (the swaying grass), called after the velocity pass with the motion target bound,
@@ -486,14 +456,14 @@ public sealed unsafe class PostProcess : IDisposable
     {
         if (!Temporal) return;
         // The clear GL's Clear(DEPTH) made: a rendering of its own clearing the far depth to 1.
-        var cmd = interop.BeginNative("post far slice clear");
+        var cmd = Gpu.BeginNative("post far slice clear");
         cmd.BeginRendering(new RenderingDesc(default, farDepth!.Attachment with
         {
             Load = Vk.AttachmentLoadOp.Clear, Clear = new Vk.ClearValue(depthStencil: new Vk.ClearDepthStencilValue(1f, 0)),
         }, width, height));
         cmd.EndRendering();
-        interop.EndNative(cmd);
-        GlBridge.Bind(Gpu, farFbo, width, height);
+        Gpu.EndNative(cmd);
+        SceneTargets = PassTargets.Of(sceneColour!.Texture, farDepth!.Texture);
         farToPrevious = ToPrevious(near, far);
         farPlanes = new Vector2(near, far);
         farSliceDrawn = true;
@@ -503,7 +473,7 @@ public sealed unsafe class PostProcess : IDisposable
     public void BeginNearSlice(float near, float far)
     {
         if (!Temporal) return;
-        GlBridge.Bind(Gpu, sceneFbo, width, height);
+        SceneTargets = PassTargets.Of(sceneColour!.Texture, sceneDepth!.Texture);
         nearToPrevious = ToPrevious(near, far);
         nearPlanes = new Vector2(near, far);
     }
@@ -513,13 +483,13 @@ public sealed unsafe class PostProcess : IDisposable
     CommandList? segment;
 
     /// <summary>The open native segment of the chain (one is begun when none is open: VkGl's pass ends, a full barrier is placed).</summary>
-    CommandList Segment() => segment ??= interop.BeginNative("post");
+    CommandList Segment() => segment ??= Gpu.BeginNative("post");
 
     /// <summary>Ends the open segment (before anything that records through VkGl: the vendor upscalers, the grass-motion guest).</summary>
     void CloseSegment()
     {
         if (segment is null) return;
-        interop.EndNative(segment);
+        Gpu.EndNative(segment);
         segment = null;
     }
 
@@ -554,7 +524,7 @@ public sealed unsafe class PostProcess : IDisposable
     SampledTexture Sampled(Target2D t) => Sampled(t.Texture, t.Min, t.Mag, TextureWrapMode.ClampToEdge, 1);
 
     SampledTexture Sampled(Texture t, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, float anisotropy) =>
-        new(Gpu.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, anisotropy, false, Gpu.LodBias())),
+        new(Gpu.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, anisotropy, false, Gpu.LodBias)),
             t.View(), t.Image);
 
     /// <summary>Binds a target (null: the stand-in VkGl bound for nothing). Call where the GL code bound the unit: the sampler depends on the LOD bias then.</summary>
@@ -568,9 +538,8 @@ public sealed unsafe class PostProcess : IDisposable
     {
         var o = Options;
         Stamp("scene");
-        // The final passes draw into Target: its attachment as GL's binding names it (the window's backbuffer, or the caller's framebuffer).
-        GlBridge.Bind(Gpu, Target, displayWidth, displayHeight);
-        var final = interop.CurrentTargets();
+        // The final passes draw into Target (the window's backbuffer, or the caller's texture) with a viewport of the display size.
+        var final = PassTargets.Of(Target ?? throw new InvalidOperationException("PostProcess.Target is not set"), null);
         bool needDepth = o.Ssao && haveNearSlice;
 
         bool ao = needDepth;
@@ -618,11 +587,6 @@ public sealed unsafe class PostProcess : IDisposable
             stamps = null;
         }
         (previousRotation, previousEye, previousFov, previousAspect, previousValid) = (viewRotation, eyeNow, fovNow, aspectNow, Temporal);
-
-        // The GL state the chain leaves for what draws after it (the overlay draws into the bound framebuffer): Target bound at the display
-        // size, depth test and write on, no culling or blending.
-        GlBridge.Bind(Gpu, Target, displayWidth, displayHeight);
-        GlBridge.State(Gpu, depthTest: true, depthWrite: true, cullFace: false, blend: false);
     }
 
     void DrawFinal(LegacyProgram p, PassTargets final) =>
@@ -648,12 +612,17 @@ public sealed unsafe class PostProcess : IDisposable
         Velocity(motion!, 0);
         if (ObjectMotion is { } objectMotion)
         {
-            // A guest drawing into "the bound framebuffer" with GL's state (VkGl's pass): the motion target bound, red and green only.
+            // The guests' host (the grass's motion): the motion target loaded, red and green written, no depth, culling or blending.
             CloseSegment();
-            GlBridge.Bind(Gpu, motion!.Framebuffer, motion.Width, motion.Height);
-            GlBridge.State(Gpu, depthTest: false, depthWrite: false, cullFace: false, blend: false, red: true, green: true, blue: false, alpha: false);
-            objectMotion(new MotionTargets(sceneDepth!.Name, nearPlanes, new Vector2(2 * JitterPixels.X / width, 2 * JitterPixels.Y / height)));
-            GlBridge.State(Gpu, depthTest: false, depthWrite: false, cullFace: false, blend: false);
+            var targets = PassTargets.Of(motion!.Texture, null);
+            var cmd = Gpu.BeginNative("object motion");
+            cmd.BeginRendering(targets.Rendering);
+            Gpu.BeginHostPass(cmd, targets, DrawState.For(targets.Formats, Gpu.Device.DepthClamp,
+                mask: Silk.NET.Vulkan.ColorComponentFlags.RBit | Silk.NET.Vulkan.ColorComponentFlags.GBit));
+            objectMotion(new MotionTargets(Sampled(sceneDepth!), nearPlanes, new Vector2(2 * JitterPixels.X / width, 2 * JitterPixels.Y / height)));
+            cmd.EndRendering();
+            Gpu.EndHostPass(cmd);
+            Gpu.EndNative(cmd);
         }
         (historyA, historyB) = (historyB, historyA);
         var output = historyB!;
@@ -665,7 +634,7 @@ public sealed unsafe class PostProcess : IDisposable
             CloseSegment();   // the vendor upscaler records its own segment
             done = external.Dispatch(new UpscaleInputs
             {
-                Colour = sceneColour!.Name, Depth = upscaleDepth!.Name, Motion = motion!.Name, Output = output.Name, Reactive = WaterHeight is null ? 0 : reactive!.Name,
+                Colour = sceneColour!.Texture, Depth = upscaleDepth!.Texture, Motion = motion!.Texture, Output = output.Texture, Reactive = WaterHeight is null ? null : reactive!.Texture,
                 RenderWidth = width, RenderHeight = height, DisplayWidth = displayWidth, DisplayHeight = displayHeight,
                 JitterPixels = JitterPixels, Near = UpscaleNear, Far = UpscaleFar, FieldOfView = fovNow,
                 DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f), Sharpness = Options.Upscale.Sharpness, Reset = reset,
@@ -826,7 +795,7 @@ public sealed unsafe class PostProcess : IDisposable
     void RunHeatHaze(Target2D source, PassTargets final)
     {
         // The upscaler's mip bias is for the scene's textures; the haze's maps are sampled as the game does.
-        if (lodBias is not null) lodBias.TextureLodBias = 0;
+        Gpu.LodBias = 0;
         var h = hazePass;
         // GL's state for them: trilinear, anisotropy 16 (Ogre's default in the game), repeating.
         if (h.Flow.IsValid) h.P.Bind(h.Flow, Sampled(flowTexture!, TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.Repeat, 16));

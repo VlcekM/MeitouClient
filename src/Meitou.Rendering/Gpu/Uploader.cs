@@ -81,7 +81,7 @@ public sealed unsafe class UploadBatch : IDisposable
 {
     readonly GpuContext ctx;
     readonly bool immediate;
-    readonly List<Meitou.Rendering.Vulkan.Core.GpuBuffer> staging = [];
+    readonly List<Meitou.Rendering.Gpu.Core.GpuBuffer> staging = [];
 
     internal UploadBatch(GpuContext ctx)
     {
@@ -127,7 +127,7 @@ public sealed unsafe class UploadBatch : IDisposable
 
     (Silk.NET.Vulkan.Buffer Buffer, ulong Offset) Stage(ReadOnlySpan<byte> data)
     {
-        var b = ctx.Device.Allocator.CreateBuffer((ulong)data.Length, BufferUsageFlags.TransferSrcBit, Meitou.Rendering.Vulkan.Core.MemoryKind.Upload, "upload staging");
+        var b = ctx.Device.Allocator.CreateBuffer((ulong)data.Length, BufferUsageFlags.TransferSrcBit, Meitou.Rendering.Gpu.Core.MemoryKind.Upload, "upload staging");
         staging.Add(b);
         data.CopyTo(new Span<byte>((void*)b.Mapped, data.Length));
         return (b.Buffer, 0);

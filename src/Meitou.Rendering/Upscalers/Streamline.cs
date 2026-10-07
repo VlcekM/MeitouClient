@@ -1,10 +1,10 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Vulkan.Upscalers;
+namespace Meitou.Rendering.Upscalers;
 
 /// <summary>
 /// NVIDIA Streamline (MIT; the signed <c>sl.interposer.dll</c>, <c>sl.common.dll</c>, <c>sl.dlss.dll</c> and NVIDIA's <c>nvngx_dlss.dll</c>,

@@ -2,8 +2,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Rendering;
@@ -94,15 +93,14 @@ public class FoliageGpuCullTests
         const int N = 1 << 20;
         var inputs = SqrtInputs(N);
         int raw = 0, rawFar = 0;
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             using var program = ctx.Shaders.Compute(SqrtCompute, "sqrt");
             var pipe = ctx.Pipelines.Get(new ComputePipelineDesc(program, "sqrt"));
             using var input = DeviceBuffer.Create(ctx, N * 4, BufferUse.Storage | BufferUse.TransferDst, "sqrt in");
             using var output = DeviceBuffer.Create(ctx, N * 8, BufferUse.Storage | BufferUse.TransferSrc, "sqrt out");
             using var readback = ReadbackBuffer.Create(ctx, N * 8, "sqrt readback");
-            gl.BeginFrame(4, 4);
+            ctx.BeginFrame();
             ctx.Uploads.Write(input, 0, MemoryMarshal.AsBytes(inputs.AsSpan()));
             var cmd = ctx.Frame.PreFrame;
             cmd.Barrier(Full());
@@ -116,7 +114,7 @@ public class FoliageGpuCullTests
             cmd.Dispatch(N / 256);
             cmd.Barrier(Full());
             cmd.CopyBuffer(output.Handle, readback.Handle, new BufferCopy(0, 0, N * 8));
-            gl.EndFrame();
+            ctx.EndFrame();
             d!.Frames.WaitAll();
             var roots = MemoryMarshal.Cast<byte, float>(readback.Read(0, N * 8));
             for (int i = 0; i < N; i++)
@@ -199,9 +197,8 @@ public class FoliageGpuCullTests
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
         var random = new Random(21);
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             using var cull = new FoliageGpuCull(ctx, arenaBytes: 1 << 20);   // small: the views below make it grow
             long totalVisible = 0, totalCandidates = 0;
             for (int viewNumber = 0; viewNumber < 6; viewNumber++)
@@ -214,7 +211,7 @@ public class FoliageGpuCullTests
                 var view = new FoliageCullView().Set(planes);
                 var eyeXz = new Vector2(eye.X, eye.Z);
 
-                gl.BeginFrame(4, 4);
+                ctx.BeginFrame();
                 // Place every group (a grown arena moves them all: place again), then chunks grouped by batch, groups in order.
                 bool placed;
                 do
@@ -246,7 +243,7 @@ public class FoliageGpuCullTests
                 var result = cull.Dispatch(work, view, eyeXz);
                 using var readback = ReadbackBuffer.Create(ctx, FoliageGpuCull.ReadbackBytes(result), "cull readback");
                 cull.CopyForReadback(result, readback);
-                gl.EndFrame();
+                ctx.EndFrame();
                 d!.Frames.WaitAll();
 
                 // The CPU reference, batch by batch, group by group.
@@ -309,9 +306,8 @@ public class FoliageGpuCullTests
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
         var random = new Random(31);
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             using var cull = new FoliageGpuCull(ctx, arenaBytes: 4 << 20);
             long totalRocks = 0, totalMirrored = 0, nearThreshold = 0;
             for (int viewNumber = 0; viewNumber < 6; viewNumber++)
@@ -353,7 +349,7 @@ public class FoliageGpuCullTests
                     rockGroups.Add((random.Next(RockMeshes), new SyntheticGroup(-1, records, fr)));
                 }
 
-                gl.BeginFrame(4, 4);
+                ctx.BeginFrame();
                 bool placed;
                 do
                 {
@@ -394,7 +390,7 @@ public class FoliageGpuCullTests
                 var result = cull.Dispatch(work, view, eyeXz, in rockView);
                 using var readback = ReadbackBuffer.Create(ctx, FoliageGpuCull.ReadbackBytes(result), "cull readback");
                 cull.CopyForReadback(result, readback);
-                gl.EndFrame();
+                ctx.EndFrame();
                 d!.Frames.WaitAll();
 
                 // The CPU reference: the ordinary batches as FoliageCull gives them; the rocks as the terrain's mesh path gets them.

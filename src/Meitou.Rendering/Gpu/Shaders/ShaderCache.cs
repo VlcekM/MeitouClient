@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Meitou.Rendering.Vulkan.Shaders;
+namespace Meitou.Rendering.Gpu.Shaders;
 
 /// <summary>One file per program: magic, version, both SPIR-V blobs, SHA-256 of what precedes it.</summary>
 static class ShaderCache

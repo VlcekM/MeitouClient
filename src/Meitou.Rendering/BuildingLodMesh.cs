@@ -37,9 +37,9 @@ sealed class GpuObjectPart
     public LegacyProgram.Attribute?[] Attributes = [];
     /// <summary>First index and index count of each level in <see cref="Indices"/> (a manual level has none: count 0).</summary>
     public required int[] Offset, Count;
-    /// <summary>For the terrain shader's mesh path (which draws from index 0, and takes GL vertex arrays): a vertex array per level, made when
-    /// first asked for (<see cref="GlBridge"/>), and the index buffers of the reduced levels.</summary>
-    public GlBridge.VertexArrayNames[]? PlainVao;
+    /// <summary>For the terrain shader's mesh path (which draws from index 0): the mesh per level, made when first asked for, and the index
+    /// buffers of the reduced levels.</summary>
+    public MeshBindings?[]? PlainMesh;
     public DeviceBuffer?[]? PlainEbo;
     public uint[][]? LevelIndices;
     /// <summary>What a native draw needs, per program (<see cref="WorldObjectRenderer"/>).</summary>
@@ -274,7 +274,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
             int start = at, length = Math.Min(SlabBytes, vertexBytes - at);
             uploads.Add(() =>
             {
-                GlBridge.EnsureFrame(gpuContext);
+                gpuContext.EnsureFrame();
                 gpuContext.Uploads.Write(gp!.Vertices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(part.Vertices.AsSpan()).Slice(start, length));
             }, label + " (vertices)");
         }
@@ -283,7 +283,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
             int start = at, length = Math.Min(SlabBytes, indexBytes - at);
             uploads.Add(() =>
             {
-                GlBridge.EnsureFrame(gpuContext);
+                gpuContext.EnsureFrame();
                 gpuContext.Uploads.Write(gp!.Indices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(prepared.All.AsSpan()).Slice(start, length));
             }, label + " (indices)");
         }
@@ -297,7 +297,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
     }
 
     /// <summary>The vertex layout of <see cref="Vertex"/> (as <c>Renderer.Upload</c>; bones and weights stay zero: no skinning in the world view).</summary>
-    internal static readonly GlBridge.Attribute[] Layout =
+    internal static readonly MeshAttribute[] Layout =
     [
         new(0, 3, 0), new(1, 3, 12), new(2, 2, 24), new(3, 4, 32), new(4, 4, 48), new(5, 4, 64, Integer: true), new(6, 4, 68),
     ];
@@ -315,28 +315,26 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
     }
 
     /// <summary>
-    /// A GL vertex array for the terrain shader's mesh path, which draws from the first index and takes GL vertex arrays
-    /// (<see cref="GlBridge.VertexArray"/>): level 0 shares the part's buffers, a reduced level gets an index buffer of its own (made on first
-    /// use, from the indices kept for this).
+    /// The part as the terrain shader's mesh path takes it, which draws from the first index: level 0 shares the part's buffers, a reduced level
+    /// gets an index buffer of its own (made on first use, from the indices kept for this).
     /// </summary>
-    public uint PlainVao(GpuObjectPart part, int level)
+    public MeshBindings PlainMesh(GpuObjectPart part, int level)
     {
-        part.PlainVao ??= new GlBridge.VertexArrayNames[part.Count.Length];
+        part.PlainMesh ??= new MeshBindings?[part.Count.Length];
         part.PlainEbo ??= new DeviceBuffer?[part.Count.Length];
-        if (part.PlainVao[level].Vao != 0) return part.PlainVao[level].Vao;
+        if (part.PlainMesh[level] is { } made) return made;
         if (level > 0 && part.LevelIndices is null) level = 0;
-        if (part.PlainVao[level].Vao != 0) return part.PlainVao[level].Vao;
+        if (part.PlainMesh[level] is { } level0) return level0;
         var elements = part.Indices;
         if (level > 0)
         {
             var indices = part.LevelIndices![level];
             elements = DeviceBuffer.Create(gpuContext, (ulong)indices.Length * 4, BufferUse.Index, AllocationName);
-            GlBridge.EnsureFrame(gpuContext);
+            gpuContext.EnsureFrame();
             gpuContext.Uploads.Write(elements, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(indices.AsSpan()));
             part.PlainEbo[level] = elements;
         }
-        part.PlainVao[level] = GlBridge.VertexArray(gpuContext, part.Vertices, (uint)Vertex.Size, Layout, elements);
-        return part.PlainVao[level].Vao;
+        return part.PlainMesh[level] = MeshBindings.Of(VertexAttributes(part.Vertices), elements);
     }
 
     public int Unloads { get; private set; }
@@ -402,8 +400,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
         Unloaded?.Invoke(gpu);
         foreach (var gp in gpu.Parts)
         {
-            // The GL names first (they borrow the buffers), then the buffers (freed after the frames in flight).
-            if (gp.PlainVao is not null) foreach (var v in gp.PlainVao) GlBridge.DeleteVertexArray(gpuContext, v);
+            // The buffers (freed after the frames in flight).
             if (gp.PlainEbo is not null) foreach (var b in gp.PlainEbo) b?.Dispose();
             gp.Vertices.Dispose();
             gp.Indices.Dispose();

@@ -12,9 +12,8 @@ using Silk.NET.Windowing;
 using Meitou.Rendering;
 using Meitou.Rendering.Display;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
-using Meitou.Rendering.Vulkan.Core;
-using Meitou.Rendering.Vulkan.Upscalers;
+using Meitou.Rendering.Gpu.Core;
+using Meitou.Rendering.Upscalers;
 using static Meitou.Rendering.WorldFrame;
 
 namespace Meitou.ModelViewer;
@@ -68,20 +67,18 @@ static partial class WorldApp
     {
         using var display = new VulkanDisplay(null, vsync: false, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
         streamline = display.Streamline;
-        try { return Screenshot(display.Gl, display.VkGl.Context, install, scene, assets, o); }
+        try { return Screenshot(display, install, scene, assets, o); }
         finally { streamline = null; }
     }
 
     /// <summary>Ends the frame (submits it).</summary>
-    static void EndFrame(IGl gl)
-    {
-        if (gl is VkGl vkGl) vkGl.EndFrame();
-    }
+    static void EndFrame(GpuContext context) => context.EndFrame();
 
-    static unsafe int Screenshot(IGl gl, GpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
+    static unsafe int Screenshot(Meitou.Rendering.Display.VulkanDisplay display, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
-        using var gpu = CreateGpu(gl, context, install, scene, assets, o, interactive: false);
-        if (gl is VkGl vkGl && gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(vkGl, streamline);
+        var context = display.Context;
+        using var gpu = CreateGpu(context, install, scene, assets, o, interactive: false);
+        if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, streamline);
         var (camera, render) = Setup(scene, o);
         if (gpu.Streamer is { } streamer)
         {
@@ -101,26 +98,18 @@ static partial class WorldApp
             foliageRenderer.Settle(gpu.Anchor ?? camera.Eye);
             Console.WriteLine($"foliage   {foliageRenderer.Describe()} ({foliageWatch.ElapsedMilliseconds} ms)");
         }
-        FinishLoading(gl);
+        FinishLoading(context);
 
-        // Offscreen: the post-processing chain (HDR scene, resolve, effects) ends in a plain RGBA8 framebuffer that is read back.
+        // Offscreen: the post-processing chain (HDR scene, resolve, effects) ends in a plain RGBA8 texture that is read back.
         int w = o.Width, h = o.Height;
-        uint fbo = gl.GenFramebuffer(), colour = gl.GenRenderbuffer();
-        gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, colour);
-        gl.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.Rgba8, (uint)w, (uint)h);
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, colour);
-        if (gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
-        {
-            Console.Error.WriteLine("Offscreen framebuffer incomplete.");
-            return 1;
-        }
-        gpu.Post!.Target = fbo;
+        using var target = Meitou.Rendering.Gpu.Texture.Create(context, new TextureDesc(Silk.NET.Vulkan.Format.R8G8B8A8Unorm, w, h,
+            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "offscreen picture"));
+        gpu.Post!.Target = target;
         gpu.Post.InstantAdaptation = true;   // a still picture: the exposure settles at once
         Console.WriteLine($"post      {o.Post.Describe()}");
         if (o.FlyBenchmark > 0)
         {
-            int flown = FlyBenchmark(gl, gpu, scene, camera, render, o, w, h);
+            int flown = FlyBenchmark(display, gpu, scene, camera, render, o, w, h);
             if (o.Screenshot is null) return flown;   // with --screenshot the picture is taken afterwards, back at the start (a check that unloaded data comes back right)
         }
         if (o.FlyToX is { } flyX && o.FlyToZ is { } flyZ)
@@ -140,8 +129,8 @@ static partial class WorldApp
                 var p = Vector3.Lerp(start, end, t);
                 camera.Target = new Vector3(p.X, gpu.Terrain.HeightAt(p.X, p.Z), p.Z);
                 frameWatch.Restart();
-                { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
-                gl.Finish();
+                { Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
+                context.Finish();
                 times.Add(frameWatch.Elapsed.TotalMilliseconds);
                 if (frameWatch.Elapsed.TotalMilliseconds > 15 && Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1")
                     Console.WriteLine($"slow frame {i}: {frameWatch.Elapsed.TotalMilliseconds:0.0} ms, streamer update {gpu.Streamer?.LastUpdateMs:0.0} ms [{gpu.Streamer?.LastSteps}], gen2 GCs {GC.CollectionCount(2)}, gen0 {GC.CollectionCount(0)}");
@@ -163,10 +152,10 @@ static partial class WorldApp
         }
         WorldFrame.DetailedStats = true;   // per-cascade and per-step times in the statistics below
         // A temporal upscaler converges over its jitter sequence first (a still camera: the history only sharpens).
-        for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { Step(); Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
+        for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
         var drawWatch = Stopwatch.StartNew();
-        { Step(); Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
-        gl.Finish();
+        { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
+        context.Finish();
         Console.WriteLine($"drawn in {drawWatch.ElapsedMilliseconds} ms: {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
             (gpu.Objects is { } ob ? $", {ob.DrawnInstances} objects ({ob.DrawnTriangles:N0} triangles)" : ""));
         // Steady-state frame time (the first frame includes shader and texture warm-up).
@@ -174,8 +163,8 @@ static partial class WorldApp
         const int timedFrames = 10;
         gpu.Post?.Flush();
         gpu.Post?.TakeCosts(); // drop the warm-up frames
-        for (int i = 0; i < timedFrames; i++) { Step(); Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
-        gl.Finish();
+        for (int i = 0; i < timedFrames; i++) { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
+        context.Finish();
         Console.WriteLine($"frame     {drawWatch.Elapsed.TotalMilliseconds / timedFrames:0.0} ms on average over {timedFrames} more frames");
         if (gpu.Objects is { } objectStats) Console.WriteLine($"objects   draw cpu {objectStats.LastDrawCpuMs:0.00} ms, {objectStats.DrawCalls} draw calls, {objectStats.DrawnInstances} instances, {objectStats.DrawnTriangles:N0} triangles");
         if (gpu.Foliage is { } foliageStats) { foliageStats.PollTimers(wait: true); Console.WriteLine($"foliage   update {foliageStats.LastUpdateMs:0.00} ms, draw cpu {foliageStats.LastDrawCpuMs:0.00} ms, gpu {foliageStats.GpuMs:0.00} ms, {foliageStats.DrawCalls} draw calls, {foliageStats.DrawnInstances} meshes, {foliageStats.DrawnBlades:N0} grass blades;{foliageStats.MainDetail}"); }
@@ -199,9 +188,9 @@ static partial class WorldApp
         if (gpu.Post.AutoExposure is { } band && gpu.Post.ReadExposure() is var (adapted, mean) && float.IsFinite(adapted))
             Console.WriteLine($"exposure  mean luminance {mean:0.000}, band {band.Min:0.###}..{band.Max:0.###}, adapted {adapted:0.000}: x{KenshiLighting.ExposureKey / adapted:0.000}");
         Console.WriteLine($"haze      {(gpu.Sky.KenshiHaze ? "kenshi" : "physical")}, eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {gpu.Sky.EyeClearance:0} above the ground within {KenshiCamera.MaxDistance:0}: altitude weight {gpu.Sky.AltitudeWeight:0.###}, strength {gpu.Sky.HazeStrength:0.##}");
-        if (o.ShowKeys && DebugOverlay.TryCreate(gl, context) is { } keysOverlay)
+        if (o.ShowKeys && DebugOverlay.TryCreate(context) is { } keysOverlay)
         {
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
+            keysOverlay.Target = target;
             keysOverlay.Visible = true;
             keysOverlay.Draw(w, h, "Keys   (F10 hides this)", DebugOverlay.KeyItems(WorldOptions.Usage));
             var settings = CreateSettingsPanel(keysOverlay, gpu, render, () => o.Hour, v => o.Hour = v);
@@ -209,8 +198,7 @@ static partial class WorldApp
             settings.Draw(w, h);
             keysOverlay.Dispose();
         }
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-        FramebufferCapture.SavePng(gl, o.Screenshot!, w, h);
+        FramebufferCapture.SavePng(context, target, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
         if (Environment.GetEnvironmentVariable("MEITOU_SKY_BENCH") == "1")
         {
@@ -227,7 +215,6 @@ static partial class WorldApp
         using var display = new VulkanDisplay(WindowFor(o), vsync: true, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
         streamline = display.Streamline;
         var window = display.Window!;
-        var gl = display.Gl;
         Gpu? gpu = null;
         WorldCamera camera = null!;
         WorldRenderOptions render = null!;
@@ -250,15 +237,15 @@ static partial class WorldApp
             () => gpu?.Foliage?.MeitouRange ?? o.MeitouRange, v => { o.MeitouRange = v; if (gpu?.Foliage is { } f) f.MeitouRange = v; });
 
         {
-            gpu = CreateGpu(gl, display.VkGl.Context, install, scene, assets, o, interactive: true);
-            if (gl is VkGl vkGl && gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(vkGl, streamline);
-            overlay = DebugOverlay.TryCreate(gl, display.VkGl.Context);
+            gpu = CreateGpu(display.Context, install, scene, assets, o, interactive: true);
+            if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, streamline);
+            overlay = DebugOverlay.TryCreate(display.Context);
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
             if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v);
-            profiler = new FrameProfiler(display.VkGl.Context, gl is VkGl statsGl ? () => statsGl.Stats.GpuFrameMs : null);
-            meter = PassMeter.TryCreate(gl);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
+            profiler = new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
+            meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             var input = window.CreateInput();
             keyboard = input.Keyboards.FirstOrDefault();
             foreach (var kb in input.Keyboards) kb.KeyDown += (_, key, _) => OnKey(key);
@@ -399,8 +386,8 @@ static partial class WorldApp
                 string gpuText = gpuSamples > 0 ? $"{gpuMs / gpuSamples:0.00}" : "-";
                 stats.Clear();
                 stats.Add($"{frames / titleTimer:0} fps (vsync), cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms");
-                var (vramUsed, vramBudget) = display.VkGl.Context.Device.VideoMemory();
-                var alloc = display.VkGl.Context.Device.Allocator;
+                var (vramUsed, vramBudget) = display.Context.Device.VideoMemory();
+                var alloc = display.Context.Device.Allocator;
                 stats.Add($"vram        {vramUsed / 1073741824.0:0.00} of {vramBudget / 1073741824.0:0.0} GB; our blocks {alloc.TotalAllocatedBytes / 1073741824.0:0.00} GB, {alloc.TotalUsedBytes / 1073741824.0:0.00} used");
                 // The largest owners (GpuAllocator.Breakdown: names without their numbers), to see what fills the VRAM.
                 foreach (var (name, count, bytes, _) in alloc.Breakdown().Take(8))
@@ -431,7 +418,11 @@ static partial class WorldApp
             if (gpu is null) return;
             var size = window.FramebufferSize;
             if (!display.BeginFrame(size.X, size.Y)) return; // minimized, or not yet shown at its maximized size
-            var context = display.VkGl.Context;
+            var context = display.Context;
+            // The chain and the overlays draw into the window's backbuffer (made again when the size changes).
+            var backbuffer = display.Backbuffer!;
+            if (gpu.Post is { } windowPost) windowPost.Target = backbuffer;
+            if (overlay is not null) overlay.Target = backbuffer;
             var arena = context.Frame.Timestamps;
             // Collect finished GPU timings from earlier frames without waiting for them (one that never comes, its frame long gone, is dropped).
             for (int i = 0; i < timers.Length; i++)
@@ -449,19 +440,19 @@ static partial class WorldApp
             if (timing)
             {
                 var begin = arena.Allocate();
-                if (begin.IsValid) { context.Interop!.Interleave(cmd => cmd.Timestamp(arena, begin)); timers[queryIndex].Begin = begin; }
+                if (begin.IsValid) { context.Interleave(cmd => cmd.Timestamp(arena, begin)); timers[queryIndex].Begin = begin; }
                 else timing = false;
             }
             frameWatch.Restart();
             profiler?.BeginFrame();
-            Draw(gl, gpu, scene, camera, render, size.X, size.Y, hour, (float)clock.Elapsed.TotalSeconds / 600f, o.FogDistance);
+            Draw(gpu, scene, camera, render, size.X, size.Y, hour, (float)clock.Elapsed.TotalSeconds / 600f, o.FogDistance);
             cpuMs += frameWatch.Elapsed.TotalMilliseconds;
             if (timing)
             {
                 var end = arena.Allocate();
                 if (end.IsValid)
                 {
-                    context.Interop!.Interleave(cmd => cmd.Timestamp(arena, end));
+                    context.Interleave(cmd => cmd.Timestamp(arena, end));
                     timers[queryIndex].End = end;
                     timerPending[queryIndex] = true;
                 }
@@ -472,7 +463,6 @@ static partial class WorldApp
             // without the overlay and the panel, so saved pictures never show them.
             bool shot = screenshotRequested;
             screenshotRequested = false;
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
             // The statistics at the top left, the key list below them.
             float panelsBottom = !shot && statsVisible && overlay is not null && stats.Count > 0
                 ? overlay.Panel(size.X, size.Y, $"Meitou world ({RendererName(o)})   (F11 hides this)", stats) : 0;
@@ -494,12 +484,11 @@ static partial class WorldApp
             {
                 // Into C:\Temp (the user's screenshot folder), never the working directory (which may be the repo).
                 var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-world-{DateTime.Now:yyyyMMdd-HHmmss}.png");
-                gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-                FramebufferCapture.SavePng(gl, file, size.X, size.Y);
+                FramebufferCapture.SavePng(display.Context, backbuffer, file, size.X, size.Y);
                 Console.WriteLine($"saved {Path.GetFullPath(file)}");
             }
         };
-        window.Closing += () => { if (meter is not null && gl is VkGl vkStats) { meter.Report(Console.Out); meter.ReportPhases(Console.Out, vkStats.Stats.Draws); meter.Dispose(); } profiler?.Dispose(); overlay?.Dispose(); gpu?.Dispose(); };
+        window.Closing += () => { if (meter is not null) { meter.Report(Console.Out); meter.Dispose(); } profiler?.Dispose(); overlay?.Dispose(); gpu?.Dispose(); };
         window.Run();
         return 0;
     }

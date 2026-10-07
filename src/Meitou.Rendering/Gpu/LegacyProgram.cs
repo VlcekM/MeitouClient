@@ -1,5 +1,5 @@
 using System.Numerics;
-using Meitou.Rendering.Vulkan.Shaders;
+using Meitou.Rendering.Gpu.Shaders;
 using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
@@ -23,6 +23,10 @@ public readonly record struct BlockSlot(int Index)
 {
     public bool IsValid => Index >= 0;
 }
+
+/// <summary>A vertex input as a GL vertex array described it (the pipeline caches' key): per location the attribute (null when disabled)
+/// and the element buffer (null binding when none).</summary>
+public sealed record VertexArrayBindings(LegacyProgram.Attribute?[] Attributes, BufferBinding Elements);
 
 /// <summary>
 /// The program VkGl would build for a GLSL source pair (docs/renderer-native.md 3.2, step P): the same SPIR-V and layout (set 0 the named blocks
@@ -349,7 +353,7 @@ public sealed unsafe class LegacyProgram : IDisposable
     /// What <see cref="BindVertices"/> binds for the locations <paramref name="first"/> .. <paramref name="first"/> + <paramref name="count"/> − 1, as
     /// one array for one <see cref="CommandList.BindVertexBuffers"/> call: each attribute's buffer, GL's disabled-attribute constant where null
     /// (a location in the range the program does not read gets the float constant; binding it is harmless). Resolve it once per mesh and keep it
-    /// while <see cref="IGlInterop.VertexArray"/> returns the same object.
+    /// while the mesh's <see cref="VertexArrayBindings"/> are the same object.
     /// </summary>
     public BufferBinding[] VertexBuffers(ReadOnlySpan<Attribute?> byLocation, int first, int count)
     {

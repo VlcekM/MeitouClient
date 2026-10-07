@@ -24,7 +24,6 @@
     <ProjectReference Include="..\Meitou.Data\Meitou.Data.csproj" />
     <ProjectReference Include="..\Meitou.Engine\Meitou.Engine.csproj" />
     <ProjectReference Include="..\Meitou.Rendering\Meitou.Rendering.csproj" />
-    <ProjectReference Include="..\Meitou.Rendering.Vulkan\Meitou.Rendering.Vulkan.csproj" />
     <ProjectReference Include="..\Meitou.Rendering.Display\Meitou.Rendering.Display.csproj" />
   </ItemGroup>
 
