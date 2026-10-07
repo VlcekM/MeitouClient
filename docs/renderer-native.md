@@ -2906,7 +2906,7 @@ frame, the presenter and the upscalers live in `Meitou.Rendering`, and every pic
 | 6 | `c71d21c` | Namespaces `Meitou.Rendering.Vulkan.Core` / `.Shaders` renamed to `Meitou.Rendering.Gpu.Core` / `.Shaders`. |
 | - | `faae05b`, `cd0402c` | `--fly-benchmark` prints every allocator owner (`vram` line, with device-local MB). |
 
-(There is no step 3: its work, the host passes, went into step 2.)
+(No commit is labelled step 3: that work was folded into step 2.)
 
 **Deleted** (lines at `668e7a6`): `src/Meitou.Rendering.Vulkan` (`VkGl.cs` and its ten partial files, `VkGlStats.cs`, the project and
 its `AssemblyInfo.cs`: 3,279 lines), `Gpu/IGl.cs` (127), `Gpu/IGlInterop.cs` (146), `Gpu/GlEnums.cs` (343), `Gpu/GlBridge.cs` (140),
@@ -2936,7 +2936,7 @@ game, display, viewer and test projects no longer reference `Meitou.Rendering.Vu
 
 **What is left, and why:**
 1. **`LegacyProgram` and the legacy shader model** (`ShaderLibrary.Legacy`, the default block moved to set 1, the stage binding shift)
-   stay: about 20 files still build programs with it (terrain, objects, foliage and grass, sky, water, shadows, post, overlay, impostors).
+   stay: referenced from about 20 files and built in about 15 (terrain, objects, foliage and grass, sky, water, shadows, post, overlay, impostors).
    8.2 deletes it only once unused, and it is not. Its output is pinned by `GpuApiTests`: the SPIR-V of 27 programs against SHA-256
    hashes recorded from the build that last matched VkGl byte for byte (`aa1fb2d`; the source diff after it only deletes code).
 2. **The GL vocabulary**: ten enumerations (`BlendingFactor`, `DepthFunction`, `FrontFaceDirection`, `GLEnum`, `InternalFormat`,
