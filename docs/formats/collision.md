@@ -23,8 +23,8 @@ attachment points use Scythe `.phs` files instead ([phs.md](phs.md)).
 | `physics file` | items | dropped-item physics (not used by the navmesh) |
 
 - **Verified** (probe over the base game's 603 BUILDING records and the 1,019 distinct parts they reach through `parts`
-  and `interior`, recursively): 546 parts name an `xml collision` (12 of them name one of 3 files that are not in the install, with no `.bin` either:
-  two Moor house upper floors and a Vast factory floor trigger), 7 a
+  and `interior`, recursively): 546 parts name an `xml collision` (2 of them name a file that is not in the install, `moorhouse01-upper.xml` and `moorhouse01-upper2.xml`, with no `.bin` either; an earlier scan counted 12 parts and 3 files, probably a case-sensitive lookup, see "Reader" below:
+  the two Moor house upper floors), 7 a
   `destroyed collision`; 1,012 parts name a `.mesh` in `phs or mesh` and 1 a `.phs`. All 59 `interior mask` parts have an
   `xml collision`. FOLIAGE_MESH: 354 of 748 have a `collision` file, all `.xml`.
 - **Verified** (`Zones_PlacePartMesh`, FUN_14055f6e0): only `xml collision` / `destroyed collision` create collision
@@ -46,11 +46,11 @@ attachment points use Scythe `.phs` files instead ([phs.md](phs.md)).
 
 - Root `<NXUSTREAM2>`, one `NxuPhysicsCollection` (`sdkVersion="285"`, `nxuVersion="103"`), written by NVIDIA's 3ds Max
   PhysX plug-in: the 12 `.PxProj` files are that plug-in's project files (`PhysicsExport SDK="2.8.5"`,
-  `LengthUnit Type="centimeters"`), not read by the game. 1,125 NXU XML files in `data/` (outside `gui/` and `editor/`).
+  `LengthUnit Type="centimeters"`), not read by the game. 1,136 NXU XML files in `data/` (outside `gui/` and `editor/`; 52 of the data files have an upper-case `.XML`; **Verified** by `CollisionInstallTests`; an earlier count said 1,125).
 - Content: `NxParameterDesc` lines, `NxConvexMeshDesc` / `NxTriangleMeshDesc` (mesh data, referenced by id), one
   `NxSceneDesc` (gravity `0 0 -981`, i.e. Z up in the exporter) holding materials and `NxActorDesc` entries. Each actor
   has `globalPose` and one or more shapes, each with an `NxShapeDesc` holding `localPose`, `group`, `groupsMask`, flags.
-- Shapes over all 1,125 files: Box 2,026 (`dimensions` = half extents), Convex 1,239, TriangleMesh 376, Capsule 245
+- Shapes over all 1,136 files (**Verified**, the reader): Box 2,066 (`dimensions` = half extents), Convex 1,335, TriangleMesh 376, Capsule 245
   (`radius`, `height`), Plane 91, Sphere 3. No shape has a trigger flag; 55 shapes sit on actors with a body (`hasBody`),
   the rest are static. The files' own `group` and `groupsMask` values are not what the game filters on (the game assigns
   a group per placed object, below).
@@ -58,7 +58,7 @@ attachment points use Scythe `.phs` files instead ([phs.md](phs.md)).
   `globalPose × (localPose × p)` in exporter space (Z up, centimetre-named units that are Kenshi units in practice).
 - **Mesh data is cooked only**: every convex and triangle mesh has empty `<points>` / `<triangles>` and a hex
   `<cookedData>` blob (PhysX 2.8 cooking output). Layouts as far as a builder needs them (**Verified**: the probe decodes
-  all 1,615 meshes, every vertex finite and every triangle index below the vertex count, and the decoded hulls agree with
+  all 1,711 meshes (1,335 convex, 376 triangle), every vertex finite and every triangle index below the vertex count, and the decoded hulls agree with
   the render meshes, see Placement):
   - Triangle mesh `NXS\x01MESH`: int32 version (1), int32 flags, float convex-edge threshold, int32 height-field axis
     (0xFF), float height-field extent, int32 vertex count, int32 triangle count, then the vertices (float32 × 3 each),
@@ -130,6 +130,30 @@ How the navmesh generator turns one shape into triangles (a builder should do th
 
 All vertices are made relative to the generation job's origin and multiplied by 0.1 (Havok space). Each triangle carries
 the material the caller gives (see pathfinding.md).
+
+## Reader (`Meitou.Data.Physics`)
+
+`CollisionFile` (XML, poses composed as `globalPose × localPose`, rows read in order), `CookedMeshReader`, `ConvexHull`,
+`CollisionTriangulator` (outward-facing triangles, box / capsule / hull / mesh as in the table above; `ToWorldAxes` is the
+exporter-to-Ogre map), `CollisionPaths` (record path to file). Tests: `tests/Meitou.Tests/Physics`. Findings from writing it:
+
+- **Verified**: all 1,136 NxuStream files in `data/` parse, with shape counts Box 2,066, Convex 1,335, TriangleMesh 376, Capsule
+  245, Plane 91, Sphere 3 (the earlier probe counts, 1,125 files and Box 2,026 / Convex 1,239, missed upper-case `.XML` names and
+  two files that start with an XML declaration). Those two (the tent collisions, e.g. `Camp_tent1_COL.xml`, sdkVersion 284) are
+  hand-made: shapes without an `NxShapeDesc` (identity local pose, group 0), a minimal `NxSceneDesc`.
+- **Verified**: a cooked convex mesh holds an `ICE\x01CLHL` block *before* `ICE\x01CVHL` (so the hull is found by its tag, not at a
+  fixed offset); one file name carries a bare `&` in an attribute (`Storm_House_03_UpstairsWALLS&ROOF_COL.xml`), which strict XML
+  rejects (the reader escapes it).
+- **Verified** (the reader over the records): of the 1,019 parts, 546 name an `xml collision`, 2 of them a file that does not exist
+  (`moorhouse01-upper.xml`, `moorhouse01-upper2.xml`), 1 an empty file (`StorageCrate_[Lost-Race]_COL.xml`: no shapes). FOLIAGE_MESH:
+  354 name a `collision`, 3 records name 2 files that do not exist (`foliage/rocks/sk.xml`, `Boulder-Star01_COL.xml`), 1 file
+  (`Ghostown_House05_COL.xml`) has no shapes. The earlier "12 parts / 3 files" is not reproduced.
+- **Verified** (placement): the collision AABB (row-major poses, the (x, z, −y) map) against the render mesh's bounds over 530 parts
+  (a mesh, an `xml collision`, no offset): mean IoU 0.60, median 0.67, 343 above 0.5; the identity map scores 0.12 and the
+  (x, −z, y) map 0.08, so the pose order and axis map are the right ones (the test fails if they stop being).
+- **Observed** (PhysX convention, not in the files): a capsule runs along its local Y axis, `height` between the sphere centres.
+- Triangle mesh winding is used as stored; whether it is outward for the walkable building meshes is checked by the navmesh
+  builder ([../game/pathfinding.md](../game/pathfinding.md)).
 
 ## Unknown
 
