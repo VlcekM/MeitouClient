@@ -59,6 +59,8 @@ struct FoliageCullPush
 public readonly record struct FoliageCullWork(Transient Chunks, int ChunkCount, Transient Draws, int DrawCount)
 {
     public int Candidates => ChunkCount * FoliageShaders.CullChunk;
+    /// <summary>The instances the chunks hold (their counts summed; -1: not given, the chunk slots are used): what the rows can need at most.</summary>
+    public int Instances { get; init; } = -1;
 }
 
 /// <summary>What one view's cull wrote: the compacted matrices (bind at locations 7 to 10), the indirect arguments (one per draw, 20 bytes
@@ -80,7 +82,6 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     const ulong Align = 256;
     /// <summary>The kernels' View buffer (<c>ViewData</c>): 8 planes, their normals' lengths, the resident biome bits, the mode.</summary>
     const ulong ViewBytes = 208;
-    const ulong ScratchChunk = 32ul << 20;
     readonly GpuContext ctx;
     readonly ShaderProgram cull, scan, compact;
     readonly ComputePipeline cullPipe, scanPipe, compactPipe;
@@ -89,13 +90,13 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     /// <summary>Bumped whenever the arena is replaced by a larger one: a group placed in an older generation is uploaded again.</summary>
     public int Generation { get; private set; } = 1;
 
-    // Device memory per frame slot for the per-view outputs (fades, counts, offsets, arguments, rows): bump allocated, reset per frame.
-    readonly List<DeviceBuffer>[] scratch;
-    int scratchSlot = -1, scratchIndex;
-    ulong scratchOffset;
+    // Device memory per frame slot for the per-view outputs (fades, counts, offsets, arguments, rows): bump allocated, reset per frame,
+    // sized by what the frames need (FrameScratch), capped.
+    readonly FrameScratch scratch;
     long scratchFrame = -1;
+    int scratchSlot = -1;
 
-    public FoliageGpuCull(GpuContext ctx, ulong arenaBytes = 64ul << 20)
+    public FoliageGpuCull(GpuContext ctx, ulong arenaBytes = 16ul << 20, ulong scratchCap = 512ul << 20)
     {
         this.ctx = ctx;
         cull = ctx.Shaders.Compute(FoliageShaders.CullCompute, "foliage cull");
@@ -108,9 +109,8 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         scanBindings = Bindings(scan);
         compactBindings = Bindings(compact);
         arena = new BufferArena(ctx, arenaBytes, BufferUse.Storage | BufferUse.TransferDst, "foliage instances");
-        scratch = new List<DeviceBuffer>[ctx.Device.Frames.Count];
-        for (int i = 0; i < scratch.Length; i++) scratch[i] = [];
-        visible = new ReadbackBuffer?[ctx.Device.Frames.Count];
+        scratch = new FrameScratch(ctx, "foliage cull scratch", BufferUse.Storage | BufferUse.Vertex | BufferUse.Indirect | BufferUse.TransferSrc, scratchCap, minimum: 4ul << 20);
+        visible =new ReadbackBuffer?[ctx.Device.Frames.Count];
         visibleWritten = new int[ctx.Device.Frames.Count];
     }
 
@@ -124,6 +124,8 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     public ulong ArenaBytes => arena.Buffer.Size;
     public ulong ArenaUsed => arena.Buffer.Size - arena.FreeBytes;
     public int Grows { get; private set; }
+    /// <summary>The per-view outputs' memory: its size, the need of the frames, and what it refused (<see cref="FrameScratch"/>).</summary>
+    public FrameScratch Scratch => scratch;
     public long UploadedInstances { get; private set; }
 
     /// <summary>
@@ -191,29 +193,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         var frame = ctx.Frame;
         if (scratchFrame == frame.Number) return;
         if (scratchSlot >= 0) visibleWritten[scratchSlot] = viewIndex;   // what the slot's buffer holds when it comes round
-        (scratchFrame, scratchSlot, scratchIndex, scratchOffset, viewIndex) = (frame.Number, frame.Slot, 0, 0, 0);
-    }
-
-    (Buffer Buffer, ulong Offset) Scratch(ulong bytes)
-    {
-        NewFrame();
-        var list = scratch[scratchSlot];
-        bytes = (bytes + Align - 1) / Align * Align;
-        while (true)
-        {
-            if (scratchIndex < list.Count && scratchOffset + bytes <= list[scratchIndex].Size)
-            {
-                var at = scratchOffset;
-                scratchOffset += bytes;
-                return (list[scratchIndex].Handle, at);
-            }
-            if (scratchIndex < list.Count && scratchOffset > 0) { scratchIndex++; scratchOffset = 0; continue; }
-            if (scratchIndex < list.Count) { scratchIndex++; continue; }   // empty but too small: try the next
-            list.Add(DeviceBuffer.Create(ctx, Math.Max(ScratchChunk, bytes), BufferUse.Storage | BufferUse.Vertex | BufferUse.Indirect | BufferUse.TransferSrc,
-                $"foliage cull scratch {scratchSlot}"));
-            scratchIndex = list.Count - 1;
-            scratchOffset = 0;
-        }
+        (scratchFrame, scratchSlot, viewIndex) = (frame.Number, frame.Slot, 0);
     }
 
     /// <summary>GPU time of the dispatches (begin and end timestamps per view), read a frame ring later.</summary>
@@ -251,12 +231,20 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         if (view.Planes.Length > 8) throw new ArgumentException("at most 8 planes", nameof(view));
         CollectTimes();
         int n = work.ChunkCount;
-        var fades = Scratch((ulong)work.Candidates * 4);
-        var counts = Scratch((ulong)n * 4);
-        var offsets = Scratch((ulong)(n + 1) * 4);
-        var args = Scratch((ulong)Math.Max(work.DrawCount, 1) * 20);
-        ulong rowsBytes = (ulong)work.Candidates * 64;
-        var rows = Scratch(rowsBytes);
+        NewFrame();
+        // The rows need a slot per instance that can be visible (the chunks' counts summed), not per chunk slot (a chunk of a small group is mostly empty).
+        ulong rowsBytes = (ulong)(work.Instances >= 0 ? work.Instances : work.Candidates) * 64;
+        if (!(scratch.TryAllocate((ulong)work.Candidates * 4, out var fadesBuffer, out var fadesOffset) &&
+              scratch.TryAllocate((ulong)n * 4, out var countsBuffer, out var countsOffset) &&
+              scratch.TryAllocate((ulong)(n + 1) * 4, out var offsetsBuffer, out var offsetsOffset) &&
+              scratch.TryAllocate((ulong)Math.Max(work.DrawCount, 1) * 20, out var argsBuffer, out var argsOffset) &&
+              scratch.TryAllocate(rowsBytes, out var rowsBuffer, out var rowsOffset)))
+            return default;   // over the cap: this view is left out of the frame (FrameScratch); the guard shortens the ranges
+        var fades = (Buffer: fadesBuffer, Offset: fadesOffset);
+        var counts = (Buffer: countsBuffer, Offset: countsOffset);
+        var offsets = (Buffer: offsetsBuffer, Offset: offsetsOffset);
+        var args = (Buffer: argsBuffer, Offset: argsOffset);
+        var rows = (Buffer: rowsBuffer, Offset: rowsOffset);
         var viewData = ctx.Frame.Constants.Allocate(ViewBytes, Align);
         var planes = (Vector4*)viewData.Pointer;
         var lengths = (float*)(viewData.Pointer + 128);
@@ -363,7 +351,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
             p.Dispose();
         }
         arena.Dispose();
-        foreach (var list in scratch) foreach (var d in list) d.Dispose();
+        scratch.Dispose();
         foreach (var v in visible) v?.Dispose();
     }
 }

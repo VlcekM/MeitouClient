@@ -169,6 +169,17 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public long ResidentBytes => residentMeshBytes + textures.ResidentBytes + GrassBytes();
     public string ResidentDescription =>
         $"{residentMeshBytes / 1048576.0:0} MB in {assetsByMesh.Values.Count(a => a.Resident)} meshes ({meshUnloads} unloaded, {meshReloads} reloaded), {textures.Describe()}, {GrassBytes() / 1048576.0:0} MB of grass pages";
+    /// <summary>The GPU cull's and the grass kernels' per-view memory (<see cref="FrameScratch"/>): held now, the need per frame (mean, peak, largest demand), what was refused. For the benchmark and the statistics.</summary>
+    public string ScratchDescription
+    {
+        get
+        {
+            static string One(string name, FrameScratch s) => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{name} {s.AllocatedBytes / 1048576.0:0.0} MB held, need per frame mean {s.MeanNeed / 1048576.0:0.0} / peak {s.PeakNeed / 1048576.0:0.0} MB (demand peak {s.PeakDemand / 1048576.0:0.0}), cap {s.Cap / 1048576.0:0} MB per slot, {s.Overflows} refused in {s.OverflowFrames} frames, {s.Rebuilds} rebuilds");
+            return (gpuCull is { } g ? One("cull", g.Scratch) : "no GPU cull") + "; " + One("grass", grassStore.Scratch);
+        }
+    }
+
     public string Describe() =>
         $"{zones.Values.Count(z => z.Ready)} zones laid out ({zones.Values.Where(z => z.Ready).Sum(z => z.Instances):N0} meshes, " +
         $"{zones.Values.Sum(z => z.Pages.Count):N0} grass pages), {assetsByMesh.Count} foliage meshes ({assetsByMesh.Values.Count(a => a.Resident)} resident), catalog of {catalog.Layers.Count} layers";
@@ -979,6 +990,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             if (gpu)
             {
                 gpuResult = DispatchGpuCull(new Vector2(eye.X, eye.Z), terrain);
+                if (gpuResult.IsEmpty) { meshDraws.Clear(); rockDraws.Clear(); }   // the scratch memory is over its cap: this view has no foliage this frame
                 if (FolTiming) { long r1 = Stopwatch.GetTimestamp(); dispatchMs = (r1 - r0) * 1000.0 / Stopwatch.Frequency; r0 = r1; }
             }
             if (meshDraws.Count > 0)
@@ -1241,7 +1253,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     readonly List<(MeshAsset Asset, bool Mirrored)> gpuRockOrder = [];
     FoliageCullChunk[] gpuChunks = new FoliageCullChunk[1024];
-    int gpuChunkCount;
+    int gpuChunkCount, gpuInstances;
     int[] gpuBatchStart = new int[65], gpuCursor = new int[64];
     /// <summary>The chunks in the frame's constants, written once a frame per work list (<see cref="gpuChunkFrame"/>).</summary>
     Transient gpuChunkData;
@@ -1372,6 +1384,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             }
         }
         gpuChunkCount = n;
+        gpuInstances = 0;
+        foreach (var (_, g) in gpuEntries) gpuInstances += g.Instances.Length;
         gpuChunkFrame = -1;
         gpuWorkBuilds++;
         gpuWorkGroups += groups;
@@ -1446,7 +1460,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // What the rocks' row 0 w carries, as the terrain's mesh path writes it: the biome row in colour (resident ones, now), 0 in depth.
         var rock = new FoliageRockView { BiomeRows = !depthPass };
         if (!depthPass && gpuRockOrder.Count > 0) terrain.FeatureResidentBiomes(rock.Resident);
-        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count), cullView, eye, in rock);
+        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock);
         DrawnInstances += cull.LateVisible;
         if (GpuCullVerify) QueueVerify(result, terrain);
         return result;
