@@ -15,9 +15,10 @@ namespace Meitou.Simulation;
 /// an answer is applied in a serial step, so a path is never read while it is replaced.</item>
 /// </list>
 /// Not modelled yet (Unknown or later): water states and swimming, slopes (the original has no slope penalty), the combat speed
-/// multiplier, road routes for far trips, the formation slot rules (Unknown), queued orders, turning speed.
+/// multiplier, road routes for far trips, the formation slot rules (Unknown), turning speed.
+/// Queued orders (<see cref="CharacterCold.OrderQueue"/>) and the formation (<see cref="Formation"/>) exist.
 /// </summary>
-public sealed class MovementSystem(PathService paths) : ITickSystem
+public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
 {
     /// <summary>Speed gained per second (docs/game/pathfinding.md, the follow steering: "ramps up by 15 per second").</summary>
     public const float Acceleration = 15;
@@ -40,6 +41,9 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
     public const float CatchUpDistance = 60;
 
     public PathService Paths { get; } = paths;
+
+    /// <summary>The system owns its path service (the host hands it over at construction), so disposing the system stops the path thread.</summary>
+    public void Dispose() => Paths.Dispose();
 
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {

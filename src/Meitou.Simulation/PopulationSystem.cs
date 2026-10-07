@@ -558,8 +558,13 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         return (min + (max - min) * standInAthletics * 0.01f, race.GetFloat("walk speed", 15));
     }
 
+    bool disposed;
+
+    /// <summary>Stops the build thread; safe to call twice.</summary>
     public void Dispose()
     {
+        if (disposed) return;
+        disposed = true;
         work?.CompleteAdding();
         worker?.Join();
         work?.Dispose();
