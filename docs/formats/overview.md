@@ -131,12 +131,12 @@ Counts are files under `data/`.
 | `.raw` | 256 | Legacy heightmap tiles (`land/grasssplits`) | **Verified**: 257² uint16 tiles of an older 4097² world, not the current one. See [terrain.md](terrain.md) |
 | `.tif` | 1 | `newland/land/fullmap.tif`, the heightmap | **Verified**: 16385² uint16, height = raw × 9800 / 65535. See [terrain.md](terrain.md) |
 | `.dat` | 3 | `features.dat` (map-feature placements), `fogfeatures.dat`, `blendinfo.dat` | `features.dat` **Verified**, see [zones.md](zones.md); others not decoded |
-| `.xml` | 1158 | GUI, foliage, config | Not analyzed |
-| `.bin` | 857 | Unknown | Not analyzed |
+| `.xml` | 1158 | GUI, config, and 1,125 PhysX NxuStream2 collision files | Collision **Verified**: see [collision.md](collision.md); GUI not analyzed |
+| `.bin` | 862 | Binary NxuStream collision (the game's conversion of a collision `.xml`, scale baked in) | Header **Verified**, see [collision.md](collision.md) |
 | `.layout` | 53 | MyGUI | Not analyzed |
 | `.pu` | 93 | ParticleUniverse scripts | Not analyzed |
 | `.bnk` | 24 | Wwise sound banks | Not analyzed |
-| `.phs`, `.bod2`, `.body`, `.PxProj` | ~200 | Physics / ragdoll | Not analyzed |
+| `.phs`, `.bod2`, `.body`, `.PxProj` | ~200 | Physics / ragdoll; `.PxProj` = 3ds Max PhysX plug-in projects (not loaded) | `.phs` see [phs.md](phs.md); `.PxProj` see [collision.md](collision.md); rest not analyzed |
 
 ## World data (Observed, folder names only)
 

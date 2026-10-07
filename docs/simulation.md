@@ -181,8 +181,12 @@ foliage flags, doors and the water level with Recast-style generation, cached pe
 the zone's buildings; the Havok tiles serve only as a reference to compare against. The alternative is a clean-room reader for
 the Havok tagfile tiles plus the same generator for changed zones.
 
-Open research before that stage: where building collision shapes come from (`.phs` and `.PxProj` are not analysed,
-[formats/overview.md](formats/overview.md)).
+Research for that stage (track C, done): building and foliage collision comes from PhysX NxuStream XML files with cooked
+meshes ([formats/collision.md](formats/collision.md)); the generator's inputs, groups, materials, seeds and settings, and what
+our builder must reproduce, are in [pathfinding.md](game/pathfinding.md#what-our-builder-needs). Three findings shape stage 5:
+the builder needs a reader for cooked PhysX 2.8 convex and triangle meshes (layouts documented), and a seed-based region
+prune after Recast (Havok keeps only regions near seed points), plus a per-query clearance check in our own A* instead of
+Detour's single agent radius. Comparing with the shipped tiles needs a clean-room Havok tagfile reader (test-only).
 
 Until then movement uses a stub: straight lines on the terrain, no obstacles, nobody enters the water. Characters walk through
 walls, which is enough to watch squads move. Movement itself follows `CharMovement` (speed from stat S in decimetres per
@@ -193,7 +197,7 @@ second, the speed-mode caps, acceleration 15/s, its own separation steering).
 A native character renderer is rendering work and can run beside the simulation stages: skinned meshes, attachments,
 appearance and the animation layers as [character-viewer.md](character-viewer.md), [characters.md](characters.md) and
 [animation.md](animation.md) describe, drawing many characters from the snapshot (bone palettes in a buffer, instancing per
-mesh, mesh LOD). Until it exists, the simulation is seen through debug markers.
+mesh, mesh LOD). It exists as `Meitou.Rendering.Characters` (see [character-renderer.md](character-renderer.md)); the simulation fills a `CharacterDrawList` each frame.
 
 ## Stages
 
@@ -207,7 +211,7 @@ milliseconds per tick at 1x and 5x with the character count, in the game's frame
 | **2. Populate** | Squad factory ([factions-squads-towns.md](game/factions-squads-towns.md#51-counts-and-layout-observed-two-functions-share-the-count-rules-see-the-sentinel-note)) with `CharacterGenerator`; town residents for the towns around the camera; zone activation and unloading; debug markers | The Hub shows its residents' markers where the layout puts them; counts follow the template rules (tests) |
 | **3. Move** | Movement on the stub; first tasks (wander in the town radius, go to, follow the leader) | Markers wander; determinism holds; tick time at 1x and 5x recorded |
 | **4. Characters drawn** | Native character renderer (renderer track; may start at any stage) | Residents of The Hub drawn and animated, frame time recorded |
-| **5. Navmesh** | Building collision research; generator (or reader) per decision 3; path queries on their own threads; the stub replaced | Paths around buildings and through gates; generation off the frame |
+| **5. Navmesh** | Collision reader (NxuStream XML, cooked meshes); our generator per decision 3 with the seed prune; path queries on their own threads; the stub replaced | Paths around buildings and through gates; generation off the frame |
 | **6. Player** | New game from NEW_GAME_STARTOFF, the player's squad, selection and move orders ([ui-input.md](game/ui-input.md)), a minimal HUD (clock, speed buttons) | Start a game, select a character, walk it across The Hub |
 | **7. Bodies** | Stats and XP, hunger, blood, body parts, KO and death ([character-stats.md](game/character-stats.md)) | Probe tables as tests |
 | **8. Combat** | Melee per [combat.md](game/combat.md); ranged later | A fight between two squads resolves; formulas tested |
