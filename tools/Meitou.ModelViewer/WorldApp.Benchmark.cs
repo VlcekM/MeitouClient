@@ -49,6 +49,12 @@ static partial class WorldApp
         bool pipelined = o.FlyPipelined;
         var interval = Stopwatch.StartNew();
         var meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
+        // Draw counts over the flight (docs/render-distance-benchmark.md): the objects' totals per kind, the main view's grass blades, foliage
+        // instances and terrain triangles summed per frame, the foliage's indirect draws by view kind (MEITOU_FOLIAGE_TRIS=1).
+        var objectTotals0 = gpu.Objects is { } ot0 ? (long[,])ot0.Totals.Clone() : null;
+        gpu.Foliage?.ResetDrawTally();
+        double bladeSum = 0, foliageSum = 0, terrainTriSum = 0, preFrameSum = 0, gpuFrameSum = 0;
+        int gpuFrames = 0;
         Console.WriteLine($"fly       {(pipelined ? "pipelined, " : "")}{o.FlyBenchmark} frames, circle radius {radius:0} units round {centre.X:0}, {centre.Z:0}, {o.FlySpeed:0} units per frame ({o.FlySpeed * 60:0} per second)");
         for (int i = 1; i <= o.FlyBenchmark; i++)
         {
@@ -61,6 +67,9 @@ static partial class WorldApp
             double cpuMs = frameWatch.Elapsed.TotalMilliseconds;
             if (i % 500 == 0 || i <= 4) Console.WriteLine($"gpu       frame {i}: {context.Frame.Stats}");
             cpu.Add(cpuMs);
+            if (gpu.Foliage is { } counted) { bladeSum += counted.DrawnBlades; foliageSum += counted.DrawnInstances; }
+            terrainTriSum += gpu.Terrain.DrawnTriangles;
+            if (i > 30) { preFrameSum += context.PreFrameGpuMs; gpuFrameSum += context.GpuFrameMs; gpuFrames++; }
             if (gpu.Foliage is { } fol) gaps.Add((fol.NearestIncompleteZone, fol.NearestUnlaidZone, fol.NearestMissingMesh, fol.NearestMissingGrass));
             if (gpu.Objects is { } objs) { var (untextured, refining, held, coarse) = objs.TakePopStats(); objectPop.Add((untextured, refining, held, coarse, objs.MeshesAwaitingDetail)); }
             if (o.Screenshot is not null && FlyShots.Contains(i) && gpu.Post is { Target: { } shotTarget } shotPost)
@@ -126,6 +135,20 @@ static partial class WorldApp
         Console.WriteLine($"vram      {VramWatch.Describe()}");
         if (gpu.Guard is { } vramGuard) Console.WriteLine($"guard     {vramGuard.Status}; entered pressure {vramGuard.Activations} times, lowest range scale x{vramGuard.LowestScale:0.00}");
         if (gpu.Foliage is { } scratchFoliage) Console.WriteLine($"scratch   {scratchFoliage.ScratchDescription}");
+        int frames = Math.Max(o.FlyBenchmark, 1);
+        if (gpuFrames > 0) Console.WriteLine($"gpu       mean over frames 31-{o.FlyBenchmark}: frame {gpuFrameSum / gpuFrames:0.00} ms, pre-frame {preFrameSum / gpuFrames:0.00} ms (uploads, compute culls, grass kernels, bakes; MEITOU_PASS_STATS=1 only)");
+        Console.WriteLine($"counts    per frame (main view, last slice for terrain): grass blades {bladeSum / frames:N0}, foliage instances {foliageSum / frames:N0}, terrain triangles {terrainTriSum / frames:N0}");
+        if (gpu.Objects is { } ot && objectTotals0 is not null)
+        {
+            string Kind(int k, string name) => $"{name} {(ot.Totals[k, 0] - objectTotals0[k, 0]) / (double)frames:0} instances, {(ot.Totals[k, 1] - objectTotals0[k, 1]) / (double)frames / 1e3:0.0}k triangles, {(ot.Totals[k, 2] - objectTotals0[k, 2]) / (double)frames:0} calls, {(ot.Totals[k, 3] - objectTotals0[k, 3]) / (double)frames:0} part-limited in {(ot.Totals[k, 4] - objectTotals0[k, 4]) / (double)frames:0.0} passes";
+            Console.WriteLine($"counts    objects per frame: {Kind(0, "colour (slices + reflection)")}; {Kind(1, "shadow")}");
+            Console.WriteLine($"sizes     objects: {ot.SizeSurvey()}");
+        }
+        if (gpu.Foliage is { } tallied)
+        {
+            Console.WriteLine($"counts    foliage gpu draws per frame: {tallied.DrawTallyDescription}");
+            if (tallied.DrawTallyTop(12) is { Length: > 0 } top) Console.WriteLine($"top       colour {top}");
+        }
         if (meter is not null) ReportPasses(meter, display, gpu, scene, camera, render, o, w, h);
         if (o.Screenshot is not null)
         {
