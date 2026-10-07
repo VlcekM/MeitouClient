@@ -21,6 +21,7 @@
     <ProjectReference Include="..\..\src\Meitou.Data\Meitou.Data.csproj" />
     <ProjectReference Include="..\..\src\Meitou.Engine\Meitou.Engine.csproj" />
     <ProjectReference Include="..\..\src\Meitou.Rendering\Meitou.Rendering.csproj" />
+    <ProjectReference Include="..\..\src\Meitou.Simulation\Meitou.Simulation.csproj" />
   </ItemGroup>
 
 </Project>

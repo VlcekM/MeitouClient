@@ -63,8 +63,8 @@ Status as of 2026-10-05. Details and open questions live in the linked docs.
    (`newland/land/navtiles`). Character animation does not need it (Ogre skeleton animations).
    Research: navmesh manager, tile files, path queries and movement in
    [pathfinding.md](docs/game/pathfinding.md).
-5. **Simulation core** — *planned* ([docs/simulation.md](docs/simulation.md), 2026-10-07: time model,
-   threading, world model, stages; owner decisions open). Game clock, characters, stats, inventory, factions, squads,
+5. **Simulation core** — *started* ([docs/simulation.md](docs/simulation.md), 2026-10-07, branch `sim`: time model,
+   threading, world model, stages, parallel tracks). Game clock, characters, stats, inventory, factions, squads,
    AI packages / tasks, dialogue (`Dialogue.mod`), combat, economy. Headless and deterministic,
    independent of rendering. The character generator is its first piece. Research (2026-10-05, from
    the full decompile): [game-loop.md](docs/game/game-loop.md), [character-stats.md](docs/game/character-stats.md),

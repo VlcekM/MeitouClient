@@ -1,8 +1,8 @@
 # Simulation: the game loop and the plan to build it
 
 Design and plan for phase 5 of the [roadmap](../ROADMAP.md) (the simulation core) and for the pieces of phases 4, 6 and 7 it needs
-first: walkability, characters on screen, saves of the world state. Proposed 2026-10-07; the open choices are listed under
-[Owner decisions](#owner-decisions) and the plan follows the recommended answers until they are settled.
+first: walkability, characters on screen, saves of the world state. Proposed 2026-10-07; the owner settled the open choices
+the same day ([Owner decisions](#owner-decisions)); the work runs in [parallel tracks](#parallel-tracks).
 
 Everything here is an **engine choice**. Facts about the original come from the research in `docs/game/` and are cited, not
 restated: [game-loop.md](game/game-loop.md) (frame, time, speeds, the clock, the update order, budgets, zones),
@@ -168,16 +168,37 @@ milliseconds per tick at 1x and 5x with the character count, in the game's frame
 
 Saves could move earlier (the clock and squads alone round-trip), if keeping test worlds becomes useful.
 
+## Parallel tracks
+
+Started 2026-10-07 on branch `sim` (worktree `../MeitouClient-sim`), so the graphics work on `master` goes on undisturbed. Each
+track runs in its own worktree and branch off `sim` and is merged back into `sim` after the gates (build, quick tests, the
+determinism hash once it exists, one game smoke run). Joins written first, so no track waits on another:
+
+| Join | Where | What |
+|---|---|---|
+| Snapshot | `Meitou.Simulation.WorldSnapshot` | What a tick publishes: per character its id, `CharacterAppearance`, position, yaw, animation layers |
+| Draw list | `Meitou.Rendering.CharacterDrawList` | What the character renderer draws each frame; the host fills it from the last two snapshots, interpolated (the renderers know nothing of the simulation) |
+| Walkability | `Meitou.Simulation.IWalkability`, `OpenGroundWalkability` | Ground height, where one may stand, path queries; the stand-in: terrain above the water, straight paths |
+| Commands | `Meitou.Simulation.CommandQueue`, `SimCommand`, `MoveOrder` | Player orders stamped with the tick they apply at, taken out by tick then queue order |
+
+| Track | Owns | Stages |
+|---|---|---|
+| **A. Simulation core** | `Meitou.Engine`, `Meitou.Game`, `Meitou.Simulation`, the solution and project files | 0, 1, 2, 3 |
+| **B. Character renderer** | new files in `Meitou.Rendering`, a viewer option to place generated characters | 4 |
+| **C. Walkability research** | `docs/` only | building collision shapes, the input to stage 5 |
+
+Next, as tracks free up: the remaining typed data views, relations and the squad factory; the formula libraries of
+[character-stats.md](game/character-stats.md), [combat.md](game/combat.md) and [economy.md](game/economy.md) as pure functions
+with tests; a read-only save reader; the navmesh builder after track C.
+
 ## Owner decisions
 
-Open as of 2026-10-07; the plan assumes the recommended answer.
+Answered by the owner on 2026-10-07; each took the recommendation.
 
-1. **Time model.** Fixed game-time tick (behaviour independent of speed and frame rate; 5x costs 5x the CPU), or the original's
-   model (a real-time tick whose step grows with the speed; constant cost, coarser steps at 5x). *Recommended: fixed game-time tick.*
-2. **Tick length.** 1/30 s of game time (the present default). *Recommended: keep 30 Hz.*
-3. **Walkability.** Our own navmesh generator (Recast-style, e.g. the DotRecast library, zlib licence) with our own cache, or a
-   clean-room Havok tile reader plus our generator for changed zones. *Recommended: own generator.*
-4. **Order of the first visible result.** Simulation stages 0 to 3 with markers first and the character renderer after, or the
-   character renderer first. *Recommended: stages 0 to 3 first, the renderer in parallel when there is capacity.*
-5. **Physics in the first stages.** None (terrain and navmesh only) until ragdolls and thrown bodies are needed, then
-   BepuPhysics2 as the roadmap says. *Recommended: none for now.*
+1. **Time model: a fixed game-time tick.** Small steps at every speed; behaviour independent of the speed and the frame rate; 5x
+   costs 5x the CPU. (The alternative was the original's model: a real-time tick whose step grows with the speed.)
+2. **Tick length: 1/30 s of game time**, the present default.
+3. **Walkability: our own navmesh builder** (Recast-style, e.g. the DotRecast library, zlib licence) with our own cache; the Havok
+   tiles only as a reference. (The alternative was a clean-room Havok tile reader plus our builder for changed zones.)
+4. **Order:** simulation stages 0 to 3 with markers first; the character renderer in parallel.
+5. **Physics: none for now** (terrain and navmesh only); BepuPhysics2 when ragdolls and thrown bodies are needed.
