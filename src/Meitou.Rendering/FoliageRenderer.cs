@@ -1073,6 +1073,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         else rockDraws.Clear();
         if (!debugNoMeshes) PrepareImpostors(gpu);
         else impostorDraws.Clear();
+        if (impostorDraws.Count == 0) WarmImpostorPipeline(depthPass, coverage);
         gpuResult = default;
         if (meshDraws.Count > 0 || rockDraws.Count > 0 || impostorDraws.Count > 0)
         {

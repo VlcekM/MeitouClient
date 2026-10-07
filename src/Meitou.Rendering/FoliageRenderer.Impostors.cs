@@ -148,9 +148,12 @@ public sealed partial class FoliageRenderer
                 impostorCacheChecked = true;
                 impostorCache.MaintainInBackground();
                 // The baker's programs compile here, with the loading, not at the first bake
-                // (the first bake of a cold cache was a 60 ms frame). The drawing program stays lazy: its quad upload needs a frame outside a render pass.
+                // (the first bake of a cold cache was a 60 ms frame). The drawing programs and the quad follow below.
                 Gpu.EnsureFrame();
                 impostorBaker ??= new ImpostorBaker(Gpu, textures);
+                // The drawing programs and the quad too, here in the update (a frame is open, no pass is): not at the first impostor in view
+                // (a 7 ms hitch: both programs and the quad's upload).
+                impostorDraw ??= new ImpostorDraw(Gpu, nativeFrame);
             }
             float shortest = ImpostorDistance * (1 - ImpostorBand);
             // Bakes wait in order of how soon their zones are close: from where the eye is now or will be in a few seconds of its motion.
@@ -451,6 +454,19 @@ public sealed partial class FoliageRenderer
             foreach (var b in impostorActive)
                 if (b.Count > 0) impostorDraws.Add(new ImpostorDrawItem { Asset = b.Asset, Batch = b.Index, FirstInstance = (uint)b.Offset, Instances = (uint)b.Count });
         DrawCalls += impostorDraws.Count;
+    }
+
+    /// <summary>
+    /// Makes the impostor pipeline of the host's current state and formats ahead of the first impostor of a pass (the same key
+    /// <see cref="AddImpostorDraws"/> asks for: the host's state with the foliage's alpha to coverage), so a tree that comes into view does not
+    /// compile one. Called by every foliage pass that draws no impostor; a pipeline is made once per combination. Nothing before the programs
+    /// exist (the switch off, or before the first foliage update).
+    /// </summary>
+    void WarmImpostorPipeline(bool depth, bool coverage)
+    {
+        if (impostorDraw is null || !Impostors) return;
+        var state = Gpu.CurrentState() with { Cull = Silk.NET.Vulkan.CullModeFlags.None, AlphaToCoverage = coverage };
+        impostorDraw.Pipeline(depth ? ImpostorProgram.Caster : ImpostorProgram.Plain, state, Gpu.CurrentTargets().Formats);
     }
 
     /// <summary>The impostor draws appended to a mesh segment's job (after its mesh draws; no culling, the rows already bound): a colour view's
