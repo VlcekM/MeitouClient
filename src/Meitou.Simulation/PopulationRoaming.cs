@@ -177,7 +177,7 @@ public sealed partial class PopulationSystem
         if (table.TryResolveNext(squad.Leader, out int leaderSlot))
         {
             ref var n = ref table.Next[leaderSlot];
-            bool busy = n.Task == (byte)CharacterTask.GoTo && (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath)) != 0;
+            bool busy = n.Task == (byte)CharacterTask.GoTo && (n.Flags & (ushort)MoveFlags.AnyPath) != 0;
             p.OrderCooldown -= dt;
             if (!busy && p.OrderCooldown <= 0)
             {

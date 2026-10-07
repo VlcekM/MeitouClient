@@ -27,6 +27,8 @@ public enum MoveFlags : ushort
     Pending = 2,
     /// <summary>The character is following <see cref="CharacterCold.Path"/>.</summary>
     HasPath = 4,
+    /// <summary>A path is wanted, asked for or being followed.</summary>
+    AnyPath = NeedPath | Pending | HasPath,
 }
 
 /// <summary>Speed modes (docs/game/pathfinding.md "Speed"): 0 caps at the race walk speed, 1 at 55, 2 and 3 do not cap.</summary>

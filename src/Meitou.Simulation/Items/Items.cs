@@ -192,8 +192,8 @@ public sealed class Inventory(int width, int height)
         h.Add(Items.Count);
         foreach (var i in Items)
         {
-            h.Add(Text(i.Record));
-            h.Add(Text(i.Section));
+            h.Add(Rng.StableHash(i.Record));
+            h.Add(Rng.StableHash(i.Section));
             h.Add(i.X);
             h.Add(i.Y);
             h.Add(i.Quantity);
@@ -202,13 +202,6 @@ public sealed class Inventory(int width, int height)
             h.Add(i.Charges);
             i.Contents?.Hash(ref h);
         }
-    }
-
-    static ulong Text(string s)
-    {
-        ulong v = 0xCBF29CE484222325UL;
-        foreach (char c in s) v = (v ^ c) * 0x100000001B3UL;
-        return v;
     }
 }
 

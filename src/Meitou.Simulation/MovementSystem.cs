@@ -71,7 +71,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
                 ref var n = ref table.Next[slot];
                 var cold = table.Cold(slot)!;
                 var target = targets[k];
-                bool busy = n.Task == (byte)CharacterTask.GoTo && (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath)) != 0;
+                bool busy = n.Task == (byte)CharacterTask.GoTo && (n.Flags & (ushort)MoveFlags.AnyPath) != 0;
                 if (order.Queued && busy)
                 {
                     cold.OrderQueue.Add(target);   // after the order in hand (shift + right click)
@@ -100,7 +100,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
     public static void Stop(CharacterTable table, int slot)
     {
         ref var n = ref table.Next[slot];
-        n.Flags = (ushort)(n.Flags & ~(ushort)(MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath));
+        n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
         n.Task = (byte)CharacterTask.Idle;
         n.PathCursor = 0;
         var cold = table.Cold(slot)!;
@@ -162,7 +162,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
             var flags = (MoveFlags)n.Flags;
             var cold = table.Cold(i)!;
             if (cold.Medical is { Incapacitated: true }) continue;
-            bool busy = (flags & (MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath)) != 0;
+            bool busy = (flags & MoveFlags.AnyPath) != 0;
             if (task == CharacterTask.Follow)
             {
                 var squad = cold.SquadId >= 0 ? world.Squads.Find(cold.SquadId) : null;
@@ -196,8 +196,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
                 var centre = squad is not null ? squad.HomeCentre : new Vector2(n.Position.X, n.Position.Z);
                 float radius = squad is not null ? squad.HomeRadius : 100;
                 ulong roll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(i)), RngPurpose.Wander, (ulong)world.Tick);
-                float angle = Rng.Float(roll) * MathF.Tau, r = MathF.Sqrt(Rng.Float(Rng.Mix(roll))) * radius;
-                n.Goal = centre + new Vector2(MathF.Sin(angle), MathF.Cos(angle)) * r;
+                n.Goal = Rng.PointInDisc(roll, centre, radius);
                 n.Flags |= (ushort)MoveFlags.NeedPath;
             }
         }

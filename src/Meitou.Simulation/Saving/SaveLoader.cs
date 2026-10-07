@@ -202,7 +202,7 @@ public static class SaveLoader
             Origin = origin,
             TemplateId = platoon.SquadTemplate,
             Faction = factionIndex.GetValueOrDefault(platoon.FactionId, -1),
-            Key = Rng.Mix(StableHash(platoon.Name)),
+            Key = Rng.Mix(Rng.StableHash(platoon.Name)),
             Size = Math.Max(platoon.CharCount, platoon.Characters.Count),
             Position = new Vector2(platoon.Position.X, platoon.Position.Z),
             State = PlatoonState.Unloaded,
@@ -230,13 +230,5 @@ public static class SaveLoader
         part = db.Find(id) is { } rec ? BodyPartTemplate.From(rec) : null;
         cache[id] = part;
         return part;
-    }
-
-    /// <summary>A string hash that is the same in every process (string.GetHashCode is not).</summary>
-    internal static ulong StableHash(string s)
-    {
-        ulong h = 0xCBF29CE484222325UL;
-        foreach (char c in s) h = (h ^ c) * 0x100000001B3UL;
-        return h;
     }
 }

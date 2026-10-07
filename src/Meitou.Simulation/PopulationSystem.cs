@@ -356,8 +356,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         for (int attempt = 0; attempt < 12; attempt++)
         {
             ulong roll = Rng.Hash(seed, key, RngPurpose.Spawn, (ulong)attempt);
-            float angle = Rng.Float(roll) * MathF.Tau, r = MathF.Sqrt(Rng.Float(Rng.Mix(roll))) * radius;
-            var p = centre + new Vector2(MathF.Sin(angle), MathF.Cos(angle)) * r;
+            var p = Rng.PointInDisc(roll, centre, radius);
             if (walk.IsWalkable(p.X, p.Y)) return p;
         }
         return centre;
@@ -460,13 +459,12 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 radius = town.Town.SizeRadius * town.Town.TownRadiusMult;
             }
         }
-        ulong key = Rng.Mix(0x57A27UL ^ StableHash(start.Id));
+        ulong key = Rng.Mix(0x57A27UL ^ Rng.StableHash(start.Id));
         var at = centre;
         for (int attempt = 0; attempt < 20; attempt++)
         {
             ulong roll = Rng.Hash(world.Seed, key, RngPurpose.Spawn, (ulong)attempt);
-            float angle = Rng.Float(roll) * MathF.Tau, r = MathF.Sqrt(Rng.Float(Rng.Mix(roll))) * radius / 3;
-            var p = centre + new Vector2(MathF.Sin(angle), MathF.Cos(angle)) * r;
+            var p = Rng.PointInDisc(roll, centre, radius, 3);
             if (world.Walkability.IsWalkable(p.X, p.Y)) { at = p; break; }
         }
 
@@ -509,14 +507,6 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         world.Player.Squad = squad.Id;
         world.Player.Selection.Clear();
         return squad;
-    }
-
-    /// <summary>A string hash that is the same in every process (string.GetHashCode is not).</summary>
-    static ulong StableHash(string s)
-    {
-        ulong h = 0xCBF29CE484222325UL;
-        foreach (char c in s) h = (h ^ c) * 0x100000001B3UL;
-        return h;
     }
 
     /// <summary>The speed stat S and the walk speed of a character (docs/game/pathfinding.md "Speed"): S = lerp(race <c>speed min skill</c>, <c>speed max skill</c>, athletics / 100), with a stand-in athletics until stats exist (stage 7).</summary>
