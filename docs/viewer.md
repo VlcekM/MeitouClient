@@ -467,7 +467,7 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   line. The F11 `scratch` line and the benchmark's `scratch` line give the foliage cull's and grass kernels' per-frame memory (held, need, refused).
   Beyond the whole reach (the longest of the small, medium and grass ranges) a zone keeps only large meshes; the instance arena takes 68 bytes
   a record. All pictures unchanged (0 px).
-- **Object textures and meshes at large ranges** (2026-10-07, [renderer-native.md 8.12](renderer-native.md#812-object-textures-and-meshes-at-large-ranges-2026-10-07)):
+- **Object textures and meshes at large ranges** (2026-10-07, [renderer-native.md 8.14](renderer-native.md#814-object-textures-and-meshes-at-large-ranges-2026-10-07)):
   what is in range is no longer held at full detail. An object texture loses the top mips no pixel can sample at the distance of its nearest user (the pixel footprint
   from the field of view, render size and sampler bias, over how large a texel is: the part's `MeshTexelScale`, the instance's scale, the material's tile; two levels of margin;
   not triplanar materials, not the distant towns' atlas, not textures of 512 or less) and is loaded again, the old image drawn until the new one is in, when something comes near; a mesh is

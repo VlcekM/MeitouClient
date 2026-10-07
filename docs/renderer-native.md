@@ -2909,7 +2909,7 @@ foliage ranges and shadow distance are longer. Faithful is unchanged to the pixe
   views differ by design (impostors.md section 7). Tests 463 passed, 0 failed, 0 skipped. Sync validation: 0 errors in the forest views;
   the shutdown message about four leaked `VkImageView`s also appears on master (not from this work).
 
-### 8.12 Billboard fringes, first-flight hitch and cache cap (branch `worktree-agent-a70398f9fca39e0ae`, 2026-10-07)
+### 8.12 Billboard fringes, first-flight hitch and cache cap (2026-10-07)
 
 *In short: the dotted silhouette of tree-trunk bulbs is gone (the cut-out is now a vote of the three frames' coverage), a cold-cache fast
 flight no longer stalls on baking (allocation churn removed, bakes paced and ordered), and the atlas disk cache has a cap with LRU
@@ -3123,9 +3123,9 @@ holds the use at 80-93% at `all80`; at that budget the cull scratch can be refus
 bounded by the cache's 2048 MB high-water mark), object meshes (273 MB, 800 MB at max; high-water 768 MB, which the cache overshoots while its
 pages are in use), foliage textures (0.57 to 1.05 GB; bounded by the catalog), the foliage instance arena (16 MB to 128 MB, now 71% of that), and the
 shadow cascades' views through the cull scratch. Not range-dependent: terrain textures (1.07 GB), grass blades (160 MB), upload staging.
-The object textures and meshes are cut in 8.12.
+The object textures and meshes are cut in 8.14.
 
-### 8.12 Object textures and meshes at large ranges (2026-10-07)
+### 8.14 Object textures and meshes at large ranges (2026-10-07)
 
 *In short: the two next-largest owners (object textures 1.25 GB at the 20k preset, object meshes 273 MB; 1.7 GB and 800 MB at `max`) were
 held in full for everything within range, because the caches' marks only evict what has been idle, and nothing in range is. Both now hold only
