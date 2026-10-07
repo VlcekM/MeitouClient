@@ -65,6 +65,14 @@ public sealed class CharacterCold
     public CharacterAnimation? Animation { get; set; }
     /// <summary>The kind of weapon drawn in the right hand (None while sheathed): the stance animations are chosen for.</summary>
     public Meitou.Data.Gameplay.WeaponKinds DrawnWeapon { get; set; }
+    /// <summary>The character is in a fight (set by the combat system): the animation stance takes the combat clips.</summary>
+    public bool InCombat { get; set; }
+    /// <summary>Stats, body and race (track E, docs/simulation.md "Bodies as built"). Null for a character without a body: it takes no part in combat. Stats and body change only in the serial phases and in the character's own Act.</summary>
+    public Meitou.Simulation.Bodies.CharacterStats? Stats { get; set; }
+    public Meitou.Simulation.Bodies.MedicalState? Medical { get; set; }
+    public Meitou.Data.Gameplay.Bodies.RaceData? Race { get; set; }
+    /// <summary>Weapon and worn armour (track F, docs/simulation.md "Combat as built").</summary>
+    public Meitou.Simulation.Combat.Fighter? Fighter { get; set; }
 }
 
 /// <summary>
@@ -226,6 +234,7 @@ public sealed class CharacterTable
             hasher.Add(k.OrderQueue.Count);
             foreach (var q in k.OrderQueue) hasher.Add(q);
             hasher.Add((int)k.DrawnWeapon);
+            hasher.Add(k.InCombat);
             if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);
             hasher.Add(k.Name.Length);
         }

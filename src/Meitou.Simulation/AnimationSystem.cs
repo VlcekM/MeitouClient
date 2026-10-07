@@ -89,7 +89,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         var upper = upperScratch ?? [];
         lower.Clear();
         upper.Clear();
-        var stance = new AnimationStance { Right = new HandHold(cold.DrawnWeapon) };
+        var stance = new AnimationStance { Right = new HandHold(cold.DrawnWeapon), Combat = cold.InCombat };
         bool moving = speed >= MovingSpeed;
         if (moving)
         {

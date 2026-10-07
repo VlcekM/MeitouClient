@@ -29,6 +29,12 @@ public interface ITickSystem
     void SlowWorld(World world) { }
 }
 
+/// <summary>A system with state of its own that the world's state hash must see (so the determinism tests cover it).</summary>
+public interface IStateHashed
+{
+    void Hash(ref StateHasher hasher);
+}
+
 /// <summary>Settings of a <see cref="World"/>.</summary>
 public sealed record WorldSettings
 {
@@ -203,6 +209,7 @@ public sealed class World : IDisposable
         Squads.Hash(ref h);
         Platoons.Hash(ref h);
         Player.Hash(ref h);
+        foreach (var s in systems) if (s is IStateHashed hashed) hashed.Hash(ref h);
         return h.Value;
     }
 
