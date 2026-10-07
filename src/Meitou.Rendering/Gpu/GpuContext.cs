@@ -132,6 +132,7 @@ public sealed unsafe partial class GpuContext : IDisposable
         Dummy(new SamplerInfo("", 0, 0, SamplerDimension.Dim2D, false, false, false, ScalarKind.Float, 0)));
 
     readonly Dictionary<(int, ScalarKind, bool), SampledTexture> dummies = [];
+    readonly List<Texture> dummyTextures = [];
 
     /// <summary>The stand-in a sampler reads when nothing is bound: (0, 0, 0, 1), or depth 1 for a shadow sampler.</summary>
     public SampledTexture Dummy(SamplerInfo sampler)
@@ -145,6 +146,7 @@ public sealed unsafe partial class GpuContext : IDisposable
         var sampled = new SampledTexture(Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.Repeat, TextureWrapMode.Repeat,
             TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, GlConventions.IsIntegerFormat(d.Format) || d.Format == Format.R32Sint, 0)), t.View(), d.Image.Image);
         dummies[key] = sampled;
+        dummyTextures.Add(t);   // borrowed image, but the view cut on it is ours to destroy
         return sampled;
     }
 
@@ -199,6 +201,8 @@ public sealed unsafe partial class GpuContext : IDisposable
         Bindless.Dispose();
         foreach (var p in persistentPools) Device.Vk.DestroyDescriptorPool(Device.Device, p, null);
         persistentPools.Clear();
+        foreach (var t in dummyTextures) t.Dispose();   // the stand-ins' views, before their images (Defaults) go
+        dummyTextures.Clear();
         Samplers.Dispose();
         Defaults.Dispose();
         Log?.Dispose();
