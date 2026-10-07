@@ -750,6 +750,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         /// <summary><see cref="Centre"/>, <see cref="Radius"/> and <see cref="SizeClass"/> are known (the mesh was decoded once; they never change).</summary>
         public bool HasBounds;
         public FoliageSizeClass SizeClass;
+        /// <summary>The triangles of the mesh and its leaves mesh (known with <see cref="HasBounds"/>): the small impostor class is for meshes with many.</summary>
+        public int Triangles;
+        /// <summary>The impostor class estimated from the mesh's own bounds, once (<see cref="FoliageRenderer.EstimateClass"/>).</summary>
+        public ImpostorClass? EstimatedClass;
+        public bool ClassEstimated;
         /// <summary>The GPU work list that last numbered this mesh's batch (<see cref="BuildGpuWork"/>), and the batch's number in it.</summary>
         public int WorkStamp, WorkIndex;
         /// <summary>For a TERRAIN-mode mesh: the work list that last numbered its rock batches, and their numbers among the rock batches
@@ -834,6 +839,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.Centre = (min + max) / 2;
             a.Radius = Math.Max((max - min).Length() / 2, 1);
             a.SizeClass = FoliageSizes.Classify(FoliageSizes.Size(a.Radius, a.Mesh));
+            a.Triangles = main.Parts.Sum(p => p.Indices.Length / 3) + (leaves?.Parts.Sum(p => p.Indices.Length / 3) ?? 0);
             a.HasBounds = true;
             QueueMesh(a, main, leaves);
         }
@@ -1624,9 +1630,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             var names = new string[count];
             static string State(MeshAsset a) => a.Impostor switch
             {
-                null => "no atlas asked",
+                null => EstimateClass(a) is null ? "no impostor class: too small or too few triangles" : "no atlas asked",
                 { Stage: ImpostorStage.Ready } => "atlas",
-                { Stage: ImpostorStage.None, RetryAt: 0 } => global::Meitou.Rendering.Impostors.ImpostorSource.Ineligible(a.Mesh) is { } why ? $"ineligible: {why}" : "no impostor class (radius < 48) or load failed",
+                { Stage: ImpostorStage.None, RetryAt: 0 } => global::Meitou.Rendering.Impostors.ImpostorSource.Ineligible(a.Mesh) is { } why ? $"ineligible: {why}" : "no impostor class (under radius 2, or under 100 triangles below radius 48) or load failed",
                 { Stage: ImpostorStage.None } => "atlas refused",
                 _ => "atlas pending",
             };

@@ -95,8 +95,30 @@ public static class ImpostorLayout
 /// instance of the mesh is on the screen at the reference transition distance (<see cref="For"/>), so a small bush gets a 64-pixel frame and a
 /// big tree a 256-pixel one; the grid is the same for all (<see cref="DefaultGrid"/>).
 /// </summary>
-public readonly record struct ImpostorClass(string Name, int FramePixels, int Grid)
+public readonly record struct ImpostorClass(string Name, int FramePixels, int Grid, float BakeDistance = ImpostorClass.ReferenceDistance)
 {
+    /// <summary>
+    /// The small class (docs/impostors.md section 11): meshes whose largest instance is under <see cref="MinimumRadius"/> but at least
+    /// <see cref="SmallMinimumRadius"/> and that have at least <see cref="SmallMinimumTriangles"/> triangles (a few triangles cost less than the
+    /// impostor's quad). Small frames (<see cref="SmallFrame"/>), and a transition distance of its own, proportional to the size
+    /// (<see cref="Transition"/>): the largest instance is <c>27.8</c> pixels across at its transition whatever its size, as the smallest
+    /// medium mesh (radius 48) is at 4000. <c>MEITOU_IMPOSTOR_SMALL=0</c> switches the class off (the meshes stay meshes, as before).
+    /// </summary>
+    public static readonly bool SmallEnabled = Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_SMALL") != "0";
+    public static readonly float SmallMinimumRadius = EnvFloat("MEITOU_IMPOSTOR_SMALL_MIN_RADIUS", 2, 0);
+    public static readonly int SmallMinimumTriangles = (int)EnvFloat("MEITOU_IMPOSTOR_SMALL_MIN_TRIANGLES", 100, 0);
+    public static readonly int SmallFrame = (int)EnvFloat("MEITOU_IMPOSTOR_SMALL_FRAME", 32, 8);
+    public static readonly int SmallGrid = (int)EnvFloat("MEITOU_IMPOSTOR_SMALL_GRID", 12, 2);
+
+    /// <summary>The small class.</summary>
+    public bool IsSmall => Name == "small";
+
+    /// <summary>
+    /// The ground distance from which a mesh of this class is its impostor, given the user's impostor distance (<paramref name="impostorDistance"/>, 4000 by
+    /// default) and the radius of its largest instance: that distance for medium and large atlases, and in proportion to the radius for the small class.
+    /// </summary>
+    public float Transition(float worldRadius, float impostorDistance) => IsSmall ? impostorDistance * worldRadius / MinimumRadius : impostorDistance;
+
     /// <summary>Instances smaller than this (radius in world units at the record's largest scale) get no impostor.</summary>
     public const float MinimumRadius = 48;
 
@@ -121,10 +143,16 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     /// <summary>A sphere of <paramref name="worldRadius"/> units seen from <paramref name="distance"/>: its diameter in pixels at <see cref="ReferenceHeight"/>.</summary>
     public static float ScreenDiameter(float worldRadius, float distance = ReferenceDistance) => worldRadius * ReferenceHeight / (HalfFovTan * Math.Max(distance, 1));
 
-    /// <summary>The class for a largest instance radius, or null when the mesh is too small to need an impostor.</summary>
-    public static ImpostorClass? For(float worldRadius)
+    /// <summary>
+    /// The class for a largest instance radius, or null when the mesh is too small to need an impostor: under <see cref="MinimumRadius"/> only the small class
+    /// (<see cref="SmallMinimumRadius"/> and up, and <paramref name="triangles"/> at least <see cref="SmallMinimumTriangles"/>; the count is optional, a caller that
+    /// does not know it gets the class by size alone).
+    /// </summary>
+    public static ImpostorClass? For(float worldRadius, int triangles = int.MaxValue)
     {
-        if (worldRadius < MinimumRadius) return null;
+        if (worldRadius < MinimumRadius)
+            return SmallEnabled && worldRadius >= SmallMinimumRadius && triangles >= SmallMinimumTriangles
+                ? new ImpostorClass("small", SmallFrame, SmallGrid, ReferenceDistance * worldRadius / MinimumRadius) : null;
         float need = ScreenDiameter(worldRadius) / Magnification;
         int frame = MinFrame;
         while (frame < need && frame < MaxFrame) frame *= 2;
@@ -137,7 +165,7 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     /// and the impostor fuller and brighter than the mesh at the same distance. The bias is log2 of the ratio of the bake's texel density to the
     /// screen's at the reference distance for an instance of <paramref name="meanWorldRadius"/> (mesh radius x the mean scale).
     /// </summary>
-    public float LodBias(float meanWorldRadius) => Math.Clamp(MathF.Log2(2 * FramePixels / Math.Max(ScreenDiameter(meanWorldRadius), 1e-3f)), 0, 4) * BiasScale;
+    public float LodBias(float meanWorldRadius) => Math.Clamp(MathF.Log2(2 * FramePixels / Math.Max(ScreenDiameter(meanWorldRadius, BakeDistance), 1e-3f)), 0, 4) * BiasScale;
 
     /// <summary>Mip levels baked per frame: down to 4 x 4 pixels, so every level stays aligned to the 4 x 4 blocks of the compressed formats.</summary>
     public int Levels => BitOperations.Log2((uint)FramePixels) - 1;
