@@ -14,7 +14,7 @@ using Meitou.Rendering.Display;
 using Meitou.Rendering.Gpu;
 using Meitou.Rendering.Vulkan;
 using Meitou.Rendering.Vulkan.Core;
-using Meitou.Rendering.Vulkan.Upscalers;
+using Meitou.Rendering.Upscalers;
 using static Meitou.Rendering.WorldFrame;
 
 namespace Meitou.ModelViewer;
@@ -79,7 +79,7 @@ static partial class WorldApp
     {
         var context = display.Context;
         using var gpu = CreateGpu(context, install, scene, assets, o, interactive: false);
-        if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.VkGl, streamline);
+        if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, streamline);
         var (camera, render) = Setup(scene, o);
         if (gpu.Streamer is { } streamer)
         {
@@ -239,7 +239,7 @@ static partial class WorldApp
 
         {
             gpu = CreateGpu(display.Context, install, scene, assets, o, interactive: true);
-            if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.VkGl, streamline);
+            if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, streamline);
             overlay = DebugOverlay.TryCreate(display.VkGl.Context);
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;

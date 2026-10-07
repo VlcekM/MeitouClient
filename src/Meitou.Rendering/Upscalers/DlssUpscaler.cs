@@ -1,13 +1,15 @@
+using Meitou.Rendering.Gpu;
+using Meitou.Rendering.Vulkan.Core;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Vulkan.Upscalers;
+namespace Meitou.Rendering.Upscalers;
 
 /// <summary>
 /// NVIDIA DLSS Super Resolution through <see cref="Streamline"/> (which must have been initialised before the device and attached to it).
 /// Per frame: a frame token, the camera constants, the four tagged images (depth, motion, colour in, colour out) and the evaluation,
-/// recorded into <see cref="VkGl"/>'s frame. The DLSS mode follows the render scale (DLAA at 1); the render size stays ours.
+/// recorded into the <see cref="GpuContext"/>'s frame. The DLSS mode follows the render scale (DLAA at 1); the render size stays ours.
 /// Conventions as for FSR (<see cref="UpscaleInputs"/>): our images are bottom-up, so the matrices given to DLSS have their y flipped
 /// to describe the picture as stored (row 0 at clip y = +1, as DLSS assumes), and motion is scaled by −1 (DLSS: towards the previous position).
 /// </summary>
@@ -48,7 +50,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
     const int ValidUntilEvaluate = 2;
 
     readonly Streamline sl;
-    readonly VkGl gl;
+    readonly GpuContext ctx;
     readonly ViewportHandle* viewport;
     uint frameIndex;
     (uint Mode, int Width, int Height) options = (uint.MaxValue, 0, 0);
@@ -57,21 +59,21 @@ public sealed unsafe class DlssUpscaler : IUpscaler
     public UpscalerKind Kind => UpscalerKind.Dlss;
     public string Name { get; private set; } = "dlss";
 
-    DlssUpscaler(Streamline sl, VkGl gl)
+    DlssUpscaler(Streamline sl, GpuContext ctx)
     {
         this.sl = sl;
-        this.gl = gl;
+        this.ctx = ctx;
         viewport = (ViewportHandle*)NativeMemory.AllocZeroed((nuint)sizeof(ViewportHandle));
         *viewport = new ViewportHandle { StructType = Streamline.ViewportType, StructVersion = 1, Value = 0 };
     }
 
-    public static DlssUpscaler? TryCreate(Streamline? sl, VkGl gl, out string? reason)
+    public static DlssUpscaler? TryCreate(Streamline? sl, GpuContext ctx, out string? reason)
     {
         if (sl is null) { reason = "DLSS needs Streamline loaded before the device (start with --upscaler dlss and the Streamline DLLs)"; return null; }
         if (!sl.DlssSupported) { reason = "DLSS is not supported on this device (see the streamline lines above)"; return null; }
         reason = null;
         Console.WriteLine($"upscaler  DLSS through Streamline from {sl.Directory}");
-        return new DlssUpscaler(sl, gl);
+        return new DlssUpscaler(sl, ctx);
     }
 
     /// <summary>DLSS's mode for a render scale (its presets: DLAA 1, quality 1/1.5, balanced 1/1.72, performance 1/2, ultra performance 1/3).</summary>
@@ -147,11 +149,11 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         r = sl.SetConstants(&constants, token, viewport);
         if (r != 0) return Fail($"slSetConstants failed ({r})");
 
-        var list = gl.Context.BeginNative("dlss upscale");
+        var list = ctx.BeginNative("dlss upscale");
         var cb = list.Handle;
         try
         {
-            // VkGl keeps every image in GENERAL.
+            // Every native image stays in GENERAL.
             var depth = Resource(i.Depth, (uint)ImageLayout.General);
             var motion = Resource(i.Motion, (uint)ImageLayout.General);
             var colour = Resource(i.Colour, (uint)ImageLayout.General);
@@ -174,7 +176,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         }
         finally
         {
-            gl.Context.EndNative(list);
+            ctx.EndNative(list);
         }
         return true;
     }
@@ -193,7 +195,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
 
     public void Dispose()
     {
-        gl.Device.WaitIdle();
+        ctx.Device.WaitIdle();
         sl.FreeResources(FeatureDlss, viewport);
         NativeMemory.Free(viewport);
     }

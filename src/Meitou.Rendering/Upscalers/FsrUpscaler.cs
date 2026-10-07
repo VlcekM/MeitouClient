@@ -1,14 +1,15 @@
+using Meitou.Rendering.Gpu;
 using System.Runtime.InteropServices;
 using Meitou.Rendering.Vulkan.Core;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Vulkan.Upscalers;
+namespace Meitou.Rendering.Upscalers;
 
 /// <summary>
 /// AMD FSR 3.1 upscaling through the FidelityFX API (<c>amd_fidelityfx_vk.dll</c>, MIT, from the FidelityFX SDK 1.1.x; never in the
 /// repository): loaded at run time from <c>MEITOU_FFX_PATH</c> (the DLL or its folder) or next to the executable. The context is
 /// created for the render and display size of the first dispatch and again when they change; the dispatch is recorded into
-/// <see cref="VkGl"/>'s frame. Inputs follow <see cref="UpscaleInputs"/>: images stay in GENERAL (declared as COMMON, which the
+/// the <see cref="GpuContext"/>'s frame. Inputs follow <see cref="UpscaleInputs"/>: images stay in GENERAL (declared as COMMON, which the
 /// backend reads as GENERAL and returns them to), motion is turned into FSR's convention (render pixels towards the previous
 /// position) by the motion-vector scale. docs/engine.md "Upscaling".
 /// </summary>
@@ -44,7 +45,7 @@ public sealed unsafe class FsrUpscaler : IUpscaler
     }
 
     readonly VulkanDevice device;
-    readonly VkGl gl;
+    readonly GpuContext ctx;
     readonly delegate* unmanaged<nint*, void*, void*, uint> createContext;
     readonly delegate* unmanaged<nint*, void*, uint> destroyContext;
     readonly delegate* unmanaged<nint*, void*, uint> dispatch;
@@ -59,10 +60,10 @@ public sealed unsafe class FsrUpscaler : IUpscaler
     public UpscalerKind Kind => UpscalerKind.Fsr;
     public string Name { get; private set; } = "fsr 3.1";
 
-    FsrUpscaler(VulkanDevice device, VkGl gl, nint library)
+    FsrUpscaler(VulkanDevice device, GpuContext ctx, nint library)
     {
         this.device = device;
-        this.gl = gl;
+        this.ctx = ctx;
         createContext = (delegate* unmanaged<nint*, void*, void*, uint>)NativeLibrary.GetExport(library, "ffxCreateContext");
         destroyContext = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDestroyContext");
         dispatch = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDispatch");
@@ -72,7 +73,7 @@ public sealed unsafe class FsrUpscaler : IUpscaler
     }
 
     /// <summary>The upscaler, or null with the reason when the library is not found or does not load.</summary>
-    public static FsrUpscaler? TryCreate(VkGl gl, out string? reason)
+    public static FsrUpscaler? TryCreate(GpuContext ctx, out string? reason)
     {
         foreach (var path in Candidates())
         {
@@ -80,7 +81,7 @@ public sealed unsafe class FsrUpscaler : IUpscaler
             if (!NativeLibrary.TryLoad(path, out var library)) { reason = $"{path} does not load"; return null; }
             reason = null;
             Console.WriteLine($"upscaler  FSR from {path}");
-            return new FsrUpscaler(gl.Device, gl, library);
+            return new FsrUpscaler(ctx.Device, ctx, library);
         }
         reason = $"{LibraryName} not found (set MEITOU_FFX_PATH or put it next to the executable)";
         return null;
@@ -162,7 +163,7 @@ public sealed unsafe class FsrUpscaler : IUpscaler
                 Type = TypeTexture2D, Format = SurfaceFormat(d.Format), Width = (uint)d.Width, Height = (uint)d.Height,
                 Depth = 1, MipCount = 1, Usage = output ? UsageUav : 0,
             },
-            // VkGl keeps every image in GENERAL: COMMON (inputs) and UNORDERED_ACCESS (output) are both GENERAL to the backend.
+            // Every native image stays in GENERAL: COMMON (inputs) and UNORDERED_ACCESS (output) are both GENERAL to the backend.
             State = output ? StateUnorderedAccess : StateCommon,
         };
     }
@@ -196,12 +197,12 @@ public sealed unsafe class FsrUpscaler : IUpscaler
             Flags = Environment.GetEnvironmentVariable("MEITOU_FFX_DEBUGVIEW") == "1" ? 1u : 0,
             ViewSpaceToMetersFactor = 0.1f,   // Kenshi units taken as decimetres (docs/formats/terrain.md "Unit size"; DECISIONS 16)
         };
-        var list = gl.Context.BeginNative("fsr upscale");
+        var list = ctx.BeginNative("fsr upscale");
         var cb = list.Handle;
         desc.CommandList = cb.Handle;
         nint c = context;
         uint rc = dispatch(&c, &desc);
-        gl.Context.EndNative(list);
+        ctx.EndNative(list);
         if (rc != 0)
         {
             Console.WriteLine($"upscaler  ffxDispatch failed ({rc})");

@@ -127,7 +127,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
     {
         var context = display.Context;
         gpu = WorldFrame.CreateGpu(context, install, scene, assets, o, interactive);
-        if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Vulkan.Upscalers.VendorUpscalers.Factory(display.VkGl, streamline);
+        if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Upscalers.VendorUpscalers.Factory(display.Context, streamline);
         (camera, render) = WorldFrame.Setup(scene, o);
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate);
         foreach (var problem in session.Bindings.Apply(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
@@ -145,7 +145,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         if (interactive) WorldFrame.FinishLoading(context);
     }
 
-    Meitou.Rendering.Vulkan.Upscalers.Streamline? streamline;
+    Meitou.Rendering.Upscalers.Streamline? streamline;
 
     /// <summary>DLSS asked for, on the command line or in the saved settings: Streamline must be loaded before the Vulkan device.</summary>
     bool WantsDlss() => o.Post.Upscale.Kind == UpscalerKind.Dlss || !o.Post.Upscale.Explicit && config.Graphics.TryGetValue(WorldFrame.UpscalerSliders[0], out float k) && MathF.Round(k) == (int)UpscalerKind.Dlss;
