@@ -24,7 +24,7 @@ sealed class GameOptions
     public int? FpsLimit, TickRate, SimThreads;
     public ulong Seed;
     public bool? VSync;
-    /// <summary>With <c>--screenshot</c>: simulation ticks run before the picture (with no input).</summary>
+    /// <summary>With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.</summary>
     public int Ticks;
     public bool FreeCamera;
     /// <summary>Interactive run that closes itself after this many seconds and prints the frame rate (an unattended smoke test).</summary>
@@ -38,7 +38,7 @@ sealed class GameOptions
           --free-camera              start in the free camera (; toggles)
           --sim-threads <n>          worker threads of the simulation (default: half the cores, 1 to 8; the result never depends on it)
           --seed <n>                 the world seed (default 0)
-          --ticks <n>                with --screenshot: run n simulation ticks before the picture
+          --ticks <n>                with --screenshot: run n control ticks (and the same real time of the simulation, at speed 1) before the picture
           --quit-after <s>           close after s seconds and print the frame rate (smoke test)
           --yaw/--pitch/--distance   start view: heading, pitch above the horizon and boom (Kenshi: 30 degrees, boom 150; clamped to 10..2000)
           world options as meitou-viewer --world: --at, --zone, --town, --radius, --time, --screenshot, --size, --no-foliage, ...
@@ -136,6 +136,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Upscalers.VendorUpscalers.Factory(display.Context, streamline);
         (camera, render) = WorldFrame.Setup(scene, o);
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate,
+            clock: GameClockFor(scene.Database, o.Hour),
             simulation: new Meitou.Simulation.WorldSettings { Seed = g.Seed, Threads = Math.Max(1, g.SimThreads ?? config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)) });
         foreach (var problem in session.Bindings.Apply(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
         var rig = session.Camera;
@@ -150,6 +151,14 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         }
         ApplyCamera(session.Camera.Current);
         if (interactive) WorldFrame.FinishLoading(context);
+    }
+
+    /// <summary>The game clock with sunrise, sunset and days per year from the CONSTANTS record (defaults without data).</summary>
+    static GameClock GameClockFor(Meitou.Data.GameDatabase? db, double startHour)
+    {
+        if (db is null) return new GameClock(startHour);
+        var c = Meitou.Data.Gameplay.GameConstants.FromDatabase(db);
+        return new GameClock(startHour, sunrise: c.Sunrise, sunset: c.Sunset, daysPerYear: c.DaysPerYear);
     }
 
     Meitou.Rendering.Upscalers.Streamline? streamline;
