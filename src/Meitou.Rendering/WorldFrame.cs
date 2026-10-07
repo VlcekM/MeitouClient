@@ -642,6 +642,7 @@ static class WorldFrame
         gpu.Streamer?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(0);
         gpu.Objects?.SetView(rw, rh, camera.FieldOfView);   // the object textures' mip streaming measures pixels at the render size
+        gpu.Characters?.SetView(rw, rh, camera.FieldOfView, gpu.Characters.Gpu.LodBias);
         gpu.Objects?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(1);
         gpu.Foliage?.Update(gpu.Anchor ?? eye);

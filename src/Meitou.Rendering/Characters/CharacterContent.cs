@@ -27,6 +27,22 @@ internal sealed class AssetPart
     // This frame's slot in the material table (CharacterRenderer.Update).
     public long MaterialFrame = -1;
     public int MaterialSlot;
+    /// <summary>Nearest distance of a user this frame, for the textures' mip streaming.</summary>
+    public float Near;
+    float uvScale;
+    /// <summary>World length of a texture-coordinate unit on the part (the largest of the mesh's parts; infinity: unknown, every mip kept).</summary>
+    public float UvScale
+    {
+        get
+        {
+            if (uvScale == 0)
+            {
+                uvScale = float.PositiveInfinity;
+                foreach (var p in Mesh.Parts) if (float.IsFinite(p.UvScale)) uvScale = float.IsFinite(uvScale) ? Math.Max(uvScale, p.UvScale) : p.UvScale;
+            }
+            return uvScale;
+        }
+    }
 }
 
 /// <summary>
@@ -265,7 +281,7 @@ internal sealed class CharacterContent
 
     static string? Tex(GameRecord? r, string field) => r?.GetPath(field) is { Length: > 0 } p ? p : null;
 
-    WorldTexture? Texture(string? name, bool border) => name is null ? null : Textures.Get(name, border);
+    WorldTexture? Texture(string? name, bool border) => name is null ? null : Textures.Get(name, border, deferred: true);
 
     PartMaterial BodyMaterial(CharacterAppearance c)
     {
