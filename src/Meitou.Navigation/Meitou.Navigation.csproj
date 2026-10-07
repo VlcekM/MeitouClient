@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Meitou.Core\Meitou.Core.csproj" />
+    <ProjectReference Include="..\Meitou.Data\Meitou.Data.csproj" />
+    <ProjectReference Include="..\Meitou.Simulation\Meitou.Simulation.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DotRecast.Core" Version="2026.3.1" />
+    <PackageReference Include="DotRecast.Recast" Version="2026.3.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Meitou.Tests" />
+  </ItemGroup>
+</Project>

@@ -522,3 +522,12 @@ scripts `MeitouClient-re/probes/walk/tilescan*.js`, **Observed**):
 5. Implement CharMovement from S (decimetres/s) with the speed mode caps, water states, acceleration 15/s, and the own
    separation steering; do not port Havok's avoidance.
 6. Drive off-screen squads with the UnloadedPlatoon stand-in speeds.
+
+## Findings from our builder (`Meitou.Navigation`)
+
+- **Observed** (The Hub): the gate buildings have an interior-mask part; carving it closes the gates, so it is skipped when the building is `is gateway`.
+- **Observed**: the prune needs seeds inside the walls; The Hub's `seeds.def` points alone left the interior pruned until door-painter
+  midpoints were added as seeds (our rule, not known to be the original's).
+- **Observed**: with these rules a path from outside west to outside east passes the town through its gates and around buildings.
+- **Unknown**: the flag at building shape offset +0x1f0 (assumed clear, so only groups 9 and 19 are walkable on WALKABLE buildings), and
+  the exact `BCTYPE_SHELL_WITH_INTERIOR` test (approximated as interior mask present and not a gateway).
