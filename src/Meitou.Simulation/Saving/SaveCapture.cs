@@ -111,13 +111,16 @@ public static class SaveCapture
                 f.Prosperity = state.Prosperity;
                 f.PlatoonCounter = Math.Max(f.PlatoonCounter, state.PlatoonCounter);
             }
-            if (loaded is null || !index.TryGetValue(f.Id, out int a) || f.IsPlayer) continue;
+            if (loaded is null || !index.TryGetValue(f.Id, out int a) || f.IsPlayer || loaded.RelationBaseline.Length != index.Count * index.Count) continue;
             var table = f.Relations;
             var updated = new List<SaveRelation>(table.Count);
             bool changed = false;
             foreach (var r in table)
             {
-                float value = index.TryGetValue(r.FactionId, out int b) ? data.Relations.Get(a, b) : r.Relation;
+                // A value the world changed since loading is written; one it did not touch stays as the save had it.
+                float value = r.Relation;
+                if (index.TryGetValue(r.FactionId, out int b) && data.Relations.Get(a, b) != loaded.RelationBaseline[a * index.Count + b])
+                    value = data.Relations.Get(a, b);
                 changed |= value != r.Relation;
                 updated.Add(r with { Relation = value });
             }
@@ -139,10 +142,7 @@ public static class SaveCapture
         int squads = 0, members = 0;
 
         // Platoons of the loaded save whose characters the world held: those not alive any more are removed.
-        var spawned = new HashSet<(string Platoon, int Slot)>();
-        if (loaded is not null)
-            foreach (var id in loaded.Characters)
-                if (table.Cold(id.Slot)?.Save is { } link) spawned.Add((link.PlatoonName, link.Slot));
+        var spawned = loaded?.SpawnedSlots ?? [];
         var seen = new HashSet<(string Platoon, int Slot)>();
 
         foreach (var squad in world.Squads.All)

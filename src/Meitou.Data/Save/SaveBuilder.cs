@@ -27,6 +27,7 @@ public sealed class SaveBuilder
         Game.Reindex();
         Game.Camera.Version = SaveGame.GameVersion;
         Game.Quick.SlotLists.AddRange([[], [], Enumerable.Range(1, SaveGame.ZoneContainerCount).ToArray(), Enumerable.Range(1, SaveGame.ZoneContainerCount).ToArray()]);
+        Game.Portraits = SavePortraits.Blank();
     }
 
     /// <summary>Adds to an existing save (a loaded one): containers and numbers continue after the highest in use.</summary>

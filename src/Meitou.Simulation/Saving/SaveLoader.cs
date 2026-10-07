@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Save;
 using Meitou.Simulation.Bodies;
@@ -46,6 +47,7 @@ public static class SaveLoader
         for (int i = 0; i < data.Factions.Count; i++) factionIndex[data.Factions[i].Id] = i;
 
         LoadFactions(save, data, options, loaded, factionIndex);
+        loaded.RelationBaseline = Snapshot(data.Relations);
 
         // The player.
         var playerFaction = save.PlayerFaction;
@@ -74,6 +76,15 @@ public static class SaveLoader
             if (!h.IsNull && handles.Character(h) is { } c && bySource.TryGetValue(c, out var id) && !world.Player.Selection.Contains(id))
                 world.Player.Selection.Add(id);
         return loaded;
+    }
+
+    internal static float[] Snapshot(FactionRelations relations)
+    {
+        int n = relations.Count;
+        var all = new float[n * n];
+        for (int a = 0; a < n; a++)
+            for (int b = 0; b < n; b++) all[a * n + b] = relations.Get(a, b);
+        return all;
     }
 
     static void LoadFactions(SaveGame save, PopulationData data, SaveLoadOptions options, LoadedSave loaded, Dictionary<string, int> factionIndex)
@@ -166,6 +177,7 @@ public static class SaveLoader
             squad.Members.Add(id);
             bySource[sc] = id;
             loaded.Characters.Add(id);
+            loaded.SpawnedSlots.Add((platoon.Name, handle.I));
             if (sc.IsLeader && squad.Leader.IsNone) squad.Leader = id;
         }
         if (squad.Leader.IsNone && squad.Members.Count > 0) squad.Leader = squad.Members[0];

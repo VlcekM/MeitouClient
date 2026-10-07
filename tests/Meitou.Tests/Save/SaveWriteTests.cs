@@ -180,6 +180,50 @@ public partial class SaveWriteTests
         Assert.Equal(0u, SaveGame.ChildCountSize(R(FcsRecordType.INVENTORY_STATE, "1--INGAME", 0), "platoon/X.platoon"));
     }
 
+    [Fact]
+    public void The_blank_portrait_atlas_is_a_valid_2048_square_rgba_png()
+    {
+        var png = SavePortraits.Blank();
+        Assert.Equal([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], png[..8]);
+        Assert.Equal(2048, System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(16)));
+        Assert.Equal(2048, System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(20)));
+        Assert.Equal((8, 6), (png[24], png[25]));
+        // Walk the chunks: each CRC must check, the IDAT must inflate to the filtered rows.
+        int at = 8;
+        var idat = new MemoryStream();
+        var types = new List<string>();
+        while (at < png.Length)
+        {
+            int length = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(at));
+            string type = System.Text.Encoding.ASCII.GetString(png, at + 4, 4);
+            types.Add(type);
+            if (type == "IDAT") idat.Write(png, at + 8, length);
+            at += 12 + length;
+        }
+        Assert.Equal(["IHDR", "IDAT", "IEND"], types);
+        Assert.Equal(png.Length, at);
+        idat.Position = 0;
+        using var inflated = new System.IO.Compression.ZLibStream(idat, System.IO.Compression.CompressionMode.Decompress);
+        var sink = new MemoryStream();
+        inflated.CopyTo(sink);
+        Assert.Equal(2048L * (1 + 2048 * 4), sink.Length);
+        Assert.True(png.Length < 100_000);
+    }
+
+    [Fact]
+    public void A_built_save_carries_the_portrait_atlas_to_its_folder()
+    {
+        var game = Small(out _);
+        string folder = Path.Combine(Temp("png"), "slot");
+        try
+        {
+            game.Write(folder);
+            Assert.Equal(SavePortraits.Blank(), File.ReadAllBytes(Path.Combine(folder, "portraits_texture.png")));
+            Assert.Equal(SavePortraits.Blank(), SaveGame.Load(folder).Portraits);
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+    }
+
     // ------------------------------------------------------------------ against the user's saves
 
     [Theory, Trait("Category", "Slow")]

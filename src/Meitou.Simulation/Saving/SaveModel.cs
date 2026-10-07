@@ -57,6 +57,10 @@ public sealed class LoadedSave
     public List<LoadedPlatoon> PlayerPlatoons { get; } = [];
     /// <summary>Every character spawned from the save, in platoon order.</summary>
     public List<CharacterId> Characters { get; } = [];
+    /// <summary>The platoon name and slot of every character that was spawned, kept so that one that has left the world since can be told from one that was never made (a dead one).</summary>
+    public HashSet<(string Platoon, int Slot)> SpawnedSlots { get; } = [];
+    /// <summary>The relation table of the data right after loading (faction by faction, row by row): a value that still equals it was not changed in play, and the save keeps its own.</summary>
+    public float[] RelationBaseline { get; set; } = [];
     /// <summary>The roaming platoons made from the save's NPC platoons: the world's platoon id to the save's platoon name.</summary>
     public Dictionary<int, string> RoamingPlatoons { get; } = [];
     /// <summary>What was left out or changed, one line each (a record that could not be resolved, characters that are dead, platoons without a town...).</summary>
