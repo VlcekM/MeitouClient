@@ -602,3 +602,52 @@ which are the small impostors (`MEITOU_IMPOSTOR_SMALL=0`: 0 px in both); `--fait
 
 **Measured** (**Observed**, CPX, pipelined GPU frame p50): Hub 23.7 (section 10 alone) to 20.6 ms, colour mesh triangles 5.47 M to 22 k (47.9 M on master), 49 of the 311 atlases small, 2.1 MB; forest 19.6 to 15.2 ms (11.7 M on master
 to 0.3 M mesh triangles); medium range 80 000 alone (other options default) 6.6, 6.7, 6.6 to 4.1, 4.0, 3.9 ms. Render thread (paced, cpu-only p50, three runs) forest CPX 8.3, 8.3, 8.2 to 8.6, 9.3, 8.6 ms (+0.3 to +1.0: `upd-foliage`, the reflection cull, more impostor sets); Hub CPX 7.7 to 7.0. At the defaults nothing measurable (section 10).
+
+## 12. The range fade by instance (2026-10-07)
+
+*In short: meshes and billboards already dithered out at their range edge (a tenth of the range, screen-door noise); billboards now thin out instance by instance
+while they are a few pixels across, so they stop winking as they cross pixels. The pops seen with ranges of 50 000 are mostly zones laid out late, not the fade.*
+
+**What each thing does at its far edge** (all **Verified** from the code, 2026-10-07):
+
+- **Foliage meshes** (`FoliageShaders.MeshFragment`): `w = clamp((range - d) / band)`, `band = max(layer transition, 0.1 x range)` (`RangeOf`), the instance's
+  pixels pass where `foliageDither() < w` (interleaved gradient noise of `gl_FragCoord`, the same in Faithful and Meitou). Not changed (it is the Faithful path).
+- **Impostors, colour pass** (`ImpostorShaders.Fragment`): the same `w`, same band, same noise (the cull gives a group's impostors `Pack(w)` beyond the transition,
+  and `-m` in the mesh crossfade band); before this section the same screen door as the meshes.
+- **Objects** (`BuildingLodShaders`, the real-object draw distance and the LOD levels): the same noise on `gl_FragCoord`, with a per-instance lo/hi window, so
+  objects, foliage meshes and billboards used one pixel-noise screen door. Distant towns fade per vertex (`smoothstep` of the eye distance), no dither.
+- **Shadow casters**: meshes and billboards ignored the distance fade (a hard cut at the range; inside the shadow distance only when a class range is shorter than it).
+- **The game** (`formats/foliage.md`): a page transition of 10 units (100 for wind layers) and no impostor level (**Observed**, decompiled), so its foliage
+  appears nearly at once at its range; the viewer's tenth-of-range band is already softer than the game.
+
+**What changed (Meitou only).** Impostors, whose program only runs with the `impostors` switch (Faithful has none: `--faithful all` and `--faithful impostors`
+draw no billboard, pictures 0 px), take their range-fade threshold from the instance:
+
+- `instanceFadeKey` (vertex shader): a PCG-style hash of the instance's world x and z, in [0, 1), constant per instance (`flat` varying `vFadeKey`). No data is
+  added to the instance record (68 bytes) or the chunk: the fade `w` still comes from the cull in row 0 w.
+- Colour pass: the instance is drawn where `fract(key + a x noise) < w`, with `a = smoothstep(3, 12, p)` and `p` the billboard's size in pixels
+  (`2 x radius / length(dFdx(object point))`). A billboard of 3 pixels or less is drawn whole or not at all, by its key: a crowd thins out one tree at a time,
+  and none flickers as it moves over pixels (the screen-door noise decides per pixel, so a 1 to 3 pixel sprite flickered with the camera; **Unknown** by
+  measurement: two views 0.03 degrees apart could not separate the flicker from the shift of the whole picture). From 12 pixels
+  the screen-door noise decides as before, shifted by the key (the same share of pixels, a different pattern per instance, so neighbours do not fade in lockstep).
+  Between, a mix: the crowd's share is exactly `w` for any `a` (the key is uniform), a single sprite's share only for `a = 1`.
+- The mesh crossfade band (negative values) is unchanged: it needs the mesh's own noise's complement.
+- **Shadows**: the impostor casters fade by the key alone (`vFadeKey >= vFade` discards; a cascade texel is far coarser than the picture's pixel), so a billboard's
+  shadow leaves with the billboard. Mesh casters are left as they were (a change there would alter Faithful pictures); for the groups that have billboards the
+  cascades now fade at the range and the others do not. **Unknown**: whether the unfaded mesh casters of small and medium meshes are noticed.
+- Tied to `impostors` (F7), not to `dither` (F2: that is the post-processing banding dither, `post.Dither`) nor to `range` (it changes where meshes end, not how they fade).
+
+**Pictures** (**Observed**, RTX 4070, 1600 x 900, `C:\Temp\agent-dither\shots`): forest view at 10 588 units with `--range-large 9000 --range-medium 9000` (band 8100 to 9000 on the
+horizon): the fringe of trees thins out in both; the difference between base and new is confined to the band (mean 0.0955, 0.34% of pixels over 12, max 112), where the dots of
+a tree are chosen by its key instead of by pixel. At `--range-large 50000` (`edge50000_*`, eye 47 000 from the forest) the band sits in the haze and base and new are
+alike to the eye (mean 0.0034, 0.003% over 12): the fade is not what is seen there. Ten parity views, Meitou, against master: forest 13:00 0.039 (0.13% over 12), hub 13:00 0.040
+(0.11%), zone14_30 13:00 0.015, rock 13:00 0.0005, port north 0; the 02:00 views 0 to 0.009; **Faithful: 0 px in all ten**, against master and against `base-87c7857`.
+
+**Cost** (**Observed**, Hub, `--fly-benchmark 3600 --fly-pipelined --range-large 50000 --range-medium 12000`, guard idle at x1.00, two runs each, other GPU users on the machine):
+GPU frame mean base 2.76 and 3.02 ms, new 2.99 and 2.94; CPU p50 base 2.8 and 3.1, new 3.1 and 3.1. Within the noise between runs of the same build.
+
+**What does pop at 50 000 (Observed, not fixed here).** The same flight prints `not laid out within the far reach (50000) in 3600 frames, nearest 26677`: zones between
+about 27 000 and 50 000 units are never all laid out while flying at 9000 units a second, and a zone that arrives appears whole, at full strength, wherever it is, not at the
+range edge. That is a streaming pop. `admitted but not resident yet (meshes drawn)` (an atlas not yet resident, 1566 to 1707 of 3600 frames) is the other: a group beyond its transition
+with no ready atlas draws meshes until it is, and swaps to billboards without a crossfade. Both want an arrival ramp (a per-zone, per-group time since it first drew, multiplied into
+`w` in the cull, Meitou only), which needs a per-chunk field in the cull (`Chunk`, now 32 bytes) and the CPU reference in step; not built.
