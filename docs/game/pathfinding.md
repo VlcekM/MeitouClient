@@ -4,7 +4,7 @@
 call graph), the FCS data (`fcs.def`, `fcs_enums.def`, probe tables for RACE, BUILDING, FACTION_CAMPAIGN), the shipped
 `data/newland/land/navtiles/*.hkt` files (scanned with a script, not decompiled) and the game's own `Havok.log`. Function
 addresses are image-relative VAs as in the Ghidra dump. Each claim is marked **Verified** (checked against files or
-a consistent pair of functions), **Observed** (read from decompiled code, not run) or **Unknown**. Catalog:
+a consistent pair of functions), **Observed** (read from decompiled code, not run) or **Unknown**. The generator section also uses the Havok reflection tables (hkClassMember / hkClassEnum arrays) embedded in the executable, read with the probe `MeitouClient-re/probes/walk/hkmembers.js`, and the collision-file probe of [../formats/collision.md](../formats/collision.md). Catalog:
 `MeitouClient-re/ghidra/catalog-pathfinding.tsv`. Related docs: [game-loop.md](game-loop.md) (AI thread, character
 update budget, zone activation, unloaded platoons), [character-stats.md](character-stats.md) (speed stat S, encumbrance,
 RACE fields), [../formats/terrain.md](../formats/terrain.md), [../formats/zones.md](../formats/zones.md), [ai.md](ai.md) and [ai-tasks.md](ai-tasks.md) (the `Task_Move` family that asks for paths),
@@ -107,20 +107,143 @@ RACE fields), [../formats/terrain.md](../formats/terrain.md), [../formats/zones.
   otherwise; FUN_1403cb280 stitches with completed tasks and existing or unloaded zones). Job adders: FUN_1403c6820 "Full",
   1403c6a20 "Partial", 1403c6fd0 "Interior", 1403c71c0 "Stitch", 1403c6b60; the log prints "Job added: ...". Which adder
   produces which numeric type is **Unknown**.
-- **Inputs** to a generation job (**Observed**): terrain heights from the heightmap, building physics shapes by the FCS BUILDING
-  `path mode`, building carvers, door painters, foliage mesh flags and a water quad.
-  - BUILDING `path mode` ints: counts 92/84/304/123 for values 0/1/2/3 (**Verified**, probe over the base game's 603 BUILDING
-    records). The names in the FCS tooltip (fcs.def) are IGNORE, PROJECTED, NAVMESH_OBSTACLE (the default, also the most common
-    value 2) and WALKABLE; the number-to-name order follows that listing and sample names (value 0: signs, tents, farms; value 1:
-    tables, barrels; value 3: stairs, walls, shacks), and value 3 is tested explicitly in the generator input pass
-    (FUN_1403cbfa0) (**Observed**). Other BUILDING fields that matter: `destroyed navmesh`, `door navmesh axis`,
-    `max slope`, build threshold (probe table `probes/pathfinding/bld.tsv`).
-  - Buildings whose object kind is 0xc become carvers (FUN_1403c4390, "N building carvers"); doors become painter volumes with a
-    20-unit margin (FUN_1403c4520, "door painters"). FOLIAGE_MESH fields `walkable` and `navmesh cutter` feed the same pass.
-  - A water quad at the water-plane Y (FUN_1403c0250, node DAT_142135c48), triangle material 3.
-- Generation settings (FUN_1403c4a10) are raw constants whose Havok field names are not decoded (**Unknown**): 1.8 at +0x10
-  (very likely character height), 40 degrees as radians (0x3f32b8c3) at +0x34 (max walkable slope), then 0.5, 0.2, 0.02,
-  0.1, 0.9, 1.0, 4.0, 1e8, 0.4 (values re-read **Observed**). The max slope of about 40 degrees is the only slope rule in movement (see Speed below).
+- **Inputs** (the gather pass FUN_1403cbfa0, **Observed** unless marked; collision files, placement and groups in
+  [../formats/collision.md](../formats/collision.md)). The job carries a zone (or, for interiors, a building), an AABB in
+  Kenshi units and an origin; everything is put into one `hkGeometry` (triangles with a material int each) relative to
+  the origin and multiplied by 0.1. The job type (`job+0x58 & 7`) chooses the branch: 3 builds an interior, 0 and 1 an
+  exterior box.
+  - **Terrain** (FUN_1403c16c0): the zone's height grid (FUN_140a08a20) as an N × N vertex grid over the zone, two
+    triangles per cell, material −1. The grid resolution N was not traced (**Unknown**).
+  - **Water** (FUN_1403c0250): one quad over the zone at the water level (from the node DAT_142135c48, 100 in the base game,
+    [../formats/terrain.md](../formats/terrain.md)), material 3, only when the water level is above the lowest terrain
+    vertex of the zone.
+  - **Building and foliage shapes** (FUN_1403c8660): every collision shape in the AABB whose PhysX group is in the mask
+    0x809de40 = groups 6, 9, 10, 11, 12, 14, 15, 16, 19, 27 (**Verified**: mask bits counted). So floor 0..3 parts,
+    stairs on floors 0 and 1, floor-0 furniture, unwalkable roofs, both kinds of foliage collision; not doors (5),
+    interior hulls (13), upper stairs and furniture (17, 18, 20..22), passable / IGNORE / unfinished parts (23..26 and
+    above). Per shape, with the owner found through the shape's handle (only handles of type BUILDING resolve):
+    - no owner: group 14 (walkable foliage) → material −1; group 6 (other foliage collision) with an empty handle →
+      material 0; anything else is skipped.
+    - owner a building with `path mode` IGNORE (0): skipped (and dropped from the list).
+    - `path mode` WALKABLE (3): material 1, except 0 for an `is unwalkable roof` shape (group 27), and 0 for shapes outside
+      groups 9 and 19 when a building sub-object flag (+0x1f0 → +0x2c, meaning **Unknown**) is clear. When that flag is
+      set and the building is neither a child nor a door, its upper-floor contents are added too: shapes in groups 17, 18,
+      20, 21, 22 (mask 0x760000) through the interior collector below.
+    - PROJECTED (1) and OBSTACLE (2): material 0. None of the nine functions that read `path mode` compares it with 1
+      (**Verified** by reading each comparison), so **PROJECTED behaves exactly like OBSTACLE**; the tooltip's "2d
+      projection" has no counterpart in the code.
+    - other owners (not buildings, not doors, not the building's own interior parts) are skipped by flags of the owner
+      (+0x1a0 door flag, +0x1f0 sub-object), not decoded further.
+    - shapes become triangles as in [collision.md](../formats/collision.md#shape-to-triangles-observed-fun_1403c1cf0)
+      (box, capsule as a 16-sided prism, convex hull, triangle mesh; planes and spheres give nothing).
+  - **Carvers** (FUN_1403c4390, "N building carvers"): shapes of group 13 (the `interior mask` trigger hull) whose building
+    has `BuildingClassType` 12 = BCTYPE_SHELL_WITH_INTERIOR (the class at +0x198, virtual slot 0x358; enum order from the
+    FCS) and the +0x1f0 → +0x2c flag clear; each becomes a carver (FUN_1403c1ae0 builds the volume, FUN_140dd9e80 wraps it as an `hkaiCarver`
+    with flags 0, i.e. without CARVER_ERODE_EDGES, the only flag). A carver removes the navmesh inside it, so the exterior navmesh has a hole where a house's interior is; the interior is built separately.
+  - **Door painters** (FUN_1403c4520): door shapes (group 5) of door buildings, searched in the AABB grown by 20 units on
+    every side (the 20 is a search margin, not a painter size); the door shape's hull, its pose shifted by 5 units along
+    one local axis, becomes a convex painter volume with material 4 (open door), so faces under a door get face data 4.
+    Doors are therefore **painted, not obstacles**: group 5 is absent from the shape mask, and material 4 is the face data
+    the door toggle and the cost modifier use (**Verified** as a consistent pair: mask bits, painter material and the
+    toggle's 4/5 test).
+  - **Foliage cutters** (FUN_1403bfa10): every foliage instance with a FOLIAGE_MESH `navmesh cutter` radius r (168 of 748
+    meshes, all without `collision`, **Verified** count) becomes an axis-aligned box carver, centre ± r horizontally and
+    ± 100 units (10 Havok) vertically (FUN_1406cd7f0 collects them as (x, y, z, r)). Square, not round.
+  - **Seeds** (`regionSeedPoints`, Havok space). Exterior jobs:
+    - doors (exterior jobs of both types): for each building in the zone with a door whose outer marker point (door
+      building +0x3bc) is inside the box and not below the water level, that point. `door navmesh axis` (FUN_14029cc90) picks the local axis of the door
+      shape along which two marker points are set on either side of the door and dropped to the ground with a ray: the
+      outer one is this exterior seed, the inner one (+0x3c8) the interior seed (10 BUILDING records use axis 1, the
+      rest 0, **Verified** count).
+    - job type 0 (whole zone): the zone's `seeds.def` points (bucketed per zone when loaded, FUN_1403c5050; 4,585 points
+      in 563 zones, 31 with Y = −99, the rest at Y ≥ 100, **Verified**); each is first tested with a ray down from
+      Y 9000 against floor-0/1 building parts (FUN_1403d4dd0, groups 9 and 10): a point with no height that hits a
+      building is moved onto it; a point with a height that hits a building is dropped; others are kept as stored. A
+      zone with no `seeds.def` points gets a 3 × 3 grid of ground seeds over its box instead. Then the midpoints of the
+      open border edges of each already built neighbour zone (FUN_1403c9820, the four neighbours) so regions connect
+      across zone borders; points of a global list (DAT_14212f470, not identified) inside the box; and linked wall
+      sections (class 9 WALL with `link length` > 0): three seeds on top of WALKABLE walls (ray hits) and, for walls that
+      leave the zone, three ground seeds clamped into the zone box.
+    - job type 1: two ground seeds on each edge of the job's box (corner table DAT_1416ccd30).
+    - ground seeds (FUN_1403d8ac0): terrain height at (x, z), raised to the water level, then a ray down against
+      groups 2, 6, 9, 14, 19 (mask 0x84244); the seed is added only when the ray finds nothing (or a hit of one
+      particular kind, **Unknown**).
+    - interior jobs: the door's inner marker point, else the first node of the building with type 0 or 1; otherwise the
+      log says "Warning: building interior has no seed point".
+  - **Interiors** (FUN_1403c79b0, job type 3): shapes in the building's AABB with mask 0x87fbe00 (groups 9..13, 15..22,
+    27) or 0x82600 (groups 9, 10, 13, 19) when the building is destroyed. The building's own shapes: the points of
+    its group-13 shapes (the `interior mask` hull) become one convex volume with `isInverted` set (hkaiConvexVolume
+    +0x50, **Verified** against the reflection table), added as a carver, so everything **outside** the hull is
+    removed; its other shapes give material 1, or 0 for group 27. Shapes of other buildings that belong to it (furniture: its children or buildings inside it) give material
+    1 for WALKABLE and 0 otherwise; IGNORE ones are skipped. Vertices closer than 0.05 (squared, Havok) are merged. A
+    destroyed building adds the triangle meshes of its `destroyed boundary` XML to the geometry (fcs.def calls it the
+    "Navmesh cutter for destroyed interior"; the material it gets was not traced). 23 of the 68 buildings with `interior` parts have collision on them; `interior terrain` is set on 3
+    (**Verified** counts).
+  - BUILDING `path mode` counts 92/84/304/123 for 0/1/2/3 (**Verified**, 603 records). Enum names (FCS `PathMode`, the
+    editor's enum): 0 NAVMESH_IGNORE, 1 NAVMESH_PROJECTED, 2 NAVMESH_OBSTACLE (default), 3 NAVMESH_WALKABLE (**Verified**).
+    Other fields: `destroyed navmesh` (6 buildings, walls; the "Wall termites" accessibility check FUN_1402ef1f0 reads it),
+    `build threshold` (19 buildings: below it a part is in a +14 group and drops out of the shape mask), `is gateway`
+    (13), `max slope` (placement only, [buildings-production.md](buildings-production.md)).
+- **Generation settings** (FUN_1403c4a10 on an `hkaiNavMeshGenerationSettings`, 0x220 bytes, built by Havok's constructor
+  FUN_140dda8a0). Offsets **Verified** against the Havok reflection tables in the executable (hkClassMember arrays: name,
+  type and offset per member, read with a probe; class `hkaiNavMeshGenerationSettings` and its `EdgeMatchingParameters`,
+  `RegionPruningSettings`, `hkaiNavMeshSimplificationUtils::Settings` and `OverrideSettings`); values re-read from the
+  constants (**Verified**). Havok units (Kenshi units × 0.1):
+
+  | Offset | Field | Kenshi | Havok default | Meaning / Recast counterpart |
+  |---|---|---|---|---|
+  | +0x10 | characterHeight | **1.8** (18 units) | 1.75 | clearance above a walkable face; `walkableHeight` |
+  | +0x20 | up | (0, 1, 0) | (0, 0, 1) | Y up |
+  | +0x34 | maxWalkableSlope | **40°** (0.6981 rad) | 60° | `walkableSlopeAngle` (per-material overrides below) |
+  | +0x4c | edgeMatchingParams.maxStepHeight | **0.5** (5 units) | | step between faces that still connects; ~`walkableClimb` |
+  | +0x50 | edgeMatchingParams.maxSeparation | **0.2** | | max gap between matched edges |
+  | +0x68 | edgeMatchingParams.edgeTraversibilityHorizontalEpsilon | **0.02** | | |
+  | +0x90 | regionPruningSettings.minRegionArea | **1e8** | | every region is "too small", so only seeded regions survive |
+  | +0x94 | regionPruningSettings.minDistanceToSeedPoints | **0.4** (4 units) | | a region is kept if a seed is within 0.4 of it |
+  | +0x98 | regionPruningSettings.borderPreservationTolerance | 0 | | |
+  | +0xa0 | regionPruningSettings.regionSeedPoints | cleared, then filled per job | | the seeds above |
+  | +0xd0 | boundsAabb | the job's box | | |
+  | +0x118 | defaultConstructionProperties | 3 (default kept) | 3 | MATERIAL_WALKABLE_AND_CUTTING for unmapped materials (−1, 3, 4) |
+  | +0x120 | materialMap | 0 → CUTTING (2); 1 → WALKABLE_AND_CUTTING (3); 2 → WALKABLE_AND_CUTTING (3) | empty | material 0 shapes cut holes and are never walkable; material 1 shapes are walkable |
+  | +0x140 | weldInputVertices | true | true | (weldThreshold default 0.01) |
+  | +0x148 | minCharacterWidth | **0.9** (9 units) | 0 | narrowest passage kept |
+  | +0x14c | characterWidthUsage | 1 BLOCK_EDGES | 1 | narrow passages are marked blocked; the mesh is not shrunk (2 = SHRINK_NAV_MESH not used) |
+  | +0x14d | enableSimplification | true | true | |
+  | +0x150 | simplification.maxBorderSimplifyArea | 1.0 | | |
+  | +0x16c | simplification.maxBorderHeightError | (0.1 in job type 1) | | |
+  | +0x170 | simplification.maxBorderDistanceError | 1.0 | | ~`maxSimplificationError` |
+  | +0x178 | simplification.useHeightPartitioning | false | | |
+  | +0x17c | simplification.maxPartitionHeightError | 4.0 | | |
+  | +0x190 | simplification.boundaryEdgeFilterThreshold | 0.1 | | |
+  | +0x208 | overrideSettings | 4 entries, below | | per-material or per-volume overrides |
+
+  Other defaults left unchanged: quantizationGridSize 1/128, triangleWinding CCW, degenerateWidthThreshold 0.005,
+  convexThreshold 0.1, maxNumEdgesPerFace 255, edgeMatchingMetric ORDER_BY_DISTANCE, edgeConnectionIterations 2,
+  fixupOverlappingTriangles true. `overrideSettings` (0xf0 each: volume, material, characterWidthUsage, maxWalkableSlope,
+  edgeMatchingParams, simplificationSettings), all copies of the base settings with edgeMatchingParams.cosPlanarAlignmentAngle
+  0.6 and maxBorderSimplifyArea, maxConcaveBorderSimplifyArea and maxLoopShrinkFraction set to 0:
+  - materials 1 and 2 (walkable building shapes; no pass found produces 2): maxWalkableSlope **60°**,
+    maxBorderDistanceError 0;
+  - material 3 (water): maxWalkableSlope **90°**, maxBorderDistanceError 0.1;
+  - material 4 (door faces): maxWalkableSlope 60°, maxBorderDistanceError 0.1.
+
+  Per job (FUN_1403cbfa0): type 0 adds a fifth override with material −1 (in Havok's OverrideSettings presumably "any
+  material", **Unknown**) for the volume of the zone box shrunk by 1.0 Havok (10 units) on every side: maxBorderSimplifyArea 0.1, maxBorderHeightError 0.1, maxBorderDistanceError 0.3,
+  plus an extra-vertex setting of 0.0003 when the zone's world cell holds a particular object (+0x268 slot, probably a
+  town; **Unknown**). Type 1 sets minCharacterWidth 0.1, maxBorderSimplifyArea 0.1, maxBorderHeightError 0.1,
+  maxBorderDistanceError 0.02 and minDistanceToSeedPoints 0.1. The generation call is FUN_140e0bec0 (Havok).
+- **What the settings mean for walkability** (**Observed**, from the Havok field semantics above):
+  - Terrain is walkable up to 40°; walkable building shapes (WALKABLE path mode) and door faces up to 60°; water faces at
+    any slope. Steeper faces are not part of the mesh.
+  - OBSTACLE / PROJECTED shapes and unwalkable roofs (material 0, CUTTING) cut the terrain and nothing is walkable on them.
+    Being "cutting", every walkable face under or inside them is removed, with no character-radius erosion: Havok cuts
+    the exact footprint, and clearance comes from BLOCK_EDGES (passages narrower than 0.9 = 9 units are blocked) and from
+    the path query's diameter (2 × footprint radius, FindPathInput below).
+  - A face needs 1.8 (18 units) of free height above it (characterHeight), so low overhangs cut the mesh under them.
+  - **Only seeded regions survive**: with minRegionArea 1e8 every connected region is below the area threshold and is
+    discarded unless a seed point lies within 0.4 of it; if none qualifies the generator keeps the largest region (log
+    "All regions are below the area threshold and too far from a seed point. Keeping the largest region."). Rooftops,
+    enclosed yards and plateaus with no seed are therefore not walkable.
 - Result: the navmesh instance is stored in a tile when saved from the FCS/tool path (FUN_1403a6f40). The shipped tiles are
   therefore generator output; at runtime only Partial, Interior and Stitch jobs normally run (Hash mismatch otherwise;
   **Observed**, and the real `Havok.log` shows runtime "Interior" jobs).
@@ -133,6 +256,9 @@ RACE fields), [../formats/terrain.md](../formats/terrain.md), [../formats/zones.
 | 3 | water surface |
 | 4 | open door (cost +5 in WaterCostModifier) |
 | 5 | closed door (blocked by every filter) |
+
+Face data is the generator's triangle material: 3 comes from the water quad and 4 from the door painters, so every door
+is generated open and the toggle below closes it (**Observed**: painter material 4 and the toggle's 4/5 test).
 
 Door toggling (FUN_1403a6a00, **Verified** by the loop plus its consistency with the filters and the cost modifier): for every
 face found in the door's AABB it acts only on faces whose data is 4 or 5 and differs from the wanted state: "open" (message
@@ -282,11 +408,95 @@ updated". FUN_1403a66c0 splits the door AABB across zone cells and calls FUN_140
   (`grep -a -c globalPathing` = 0, **Observed**), so it is probably legacy; the long-distance route is the road network
   above.
 
+## What our builder needs
+
+Decision 3 of [../simulation.md](../simulation.md#owner-decisions) is our own Recast-style builder. To walk where Kenshi
+walks it has to reproduce the generator's input and rules above; Recast's own parameters only approximate Havok's
+(exact-geometry, not voxel) generator, so the mapping below is a recommendation (**Observed** semantics, values **Verified**
+as in the settings table). Units: Havok = Kenshi × 0.1; the Recast values are in Kenshi units.
+
+- **Geometry per zone** (box = the 4608-unit zone, plus a margin for border continuity):
+  - terrain from the heightmap ([../formats/terrain.md](../formats/terrain.md)), walkable up to 40°. The game's own grid
+    resolution N is **Unknown**; the full heightmap (18-unit spacing) is the safe choice.
+  - water: a quad at Y 100 over the zone when any terrain is below it, its own area type (walkable at any slope; the
+    path cost and the ray-cast filter treat it specially).
+  - building and foliage collision from the PhysX XML files, placed and grouped as in
+    [../formats/collision.md](../formats/collision.md), triangulated as the game does (box, 16-sided capsule prism,
+    convex hull, triangle mesh; no planes or spheres). Include exactly the groups of mask 0x809de40; skip IGNORE
+    buildings, passable parts, unfinished parts below `build threshold`, upper-floor stairs and furniture, doors and
+    interior hulls.
+  - per triangle, walkable or not: walkable when its owner is a WALKABLE building (not an unwalkable roof) or it is
+    walkable foliage (`walkable`, group 14); everything else (OBSTACLE and PROJECTED alike, rocks, unwalkable roofs) is
+    a non-walkable obstacle. Slope limit 60° for walkable building triangles, 40° for terrain and walkable foliage.
+    Recast's slope filter is global, so mark walkable triangles ourselves (DotRecast lets us set the area per triangle
+    before rasterising).
+  - carvers, removing the mesh inside: the interior-mask hulls of SHELL_WITH_INTERIOR buildings (exterior), foliage
+    `navmesh cutter` boxes (centre ± r, ± 100 vertically). Recast: mark the convex volume as unwalkable area.
+  - door painters: the door shapes' hulls mark an area type "door" (face data 4), toggled to "closed door" (5) at run
+    time; doors never block in the generator.
+- **Parameters** (Recast, Kenshi units): agent height 18 (characterHeight 1.8); max climb 5 (maxStepHeight 0.5); max slope
+  40° base, 60° on walkable building triangles; agent radius **0 or small**: Havok does not erode the mesh
+  (BLOCK_EDGES, not SHRINK_NAV_MESH), it blocks passages narrower than 9 units (minCharacterWidth 0.9) and every path
+  query passes the character's diameter. So build the mesh unshrunk and check portal widths against 2 × the footprint
+  radius in our own A* (which we write anyway; Detour's single agent radius cannot serve a human (4), a Garru (7) and a
+  Leviathan (40) from one mesh). Cell size and height are ours to choose (Havok has none): about 1 to 1.5 units
+  horizontally keeps 9-unit passages.
+- **Region pruning by seeds** (no Recast counterpart; a post pass on the polygon graph): keep only polygons connected to a
+  region that lies within 4 units (0.4 Havok; how Havok measures the distance was not checked) of a seed point; when no seed qualifies keep the largest region.
+  Seeds as listed above: `seeds.def` per zone (with the building-ray rule), else a 3 × 3 ground grid; neighbour-border
+  midpoints; door outer markers; linked walls. Without this pass rooftops, closed yards and cliff tops become walkable.
+- **Interiors**: a separate mesh per building with an `interior mask`: its own and its furniture's shapes, mask 0x87fbe00,
+  everything outside the mask hull removed, seeded from the door's inner marker; joined to the exterior through the door
+  faces (stitching, below).
+- **Clearance at query time**: the footprint radius is the RACE `pathfind footprint radius` times a per-character size
+  factor (slot 114 = virtual 0x390 of the object at CharMovement +0x3a8, 1.0 for humans, see Water state; FUN_14065dc30,
+  **Observed**): humans 4, Garru 7, Leviathan
+  40 units. FindPathInput gets 2 × the request radius as the diameter (above); whether the
+  request converts it to Havok units was not traced (**Unknown**, though 0.9 ≥ 2 × 0.4 for humans fits).
+- **Doors at run time**: open/close messages flip faces with data 4 and 5 inside the door's AABB (above); the mesh is not
+  rebuilt. Gates (`is wall gate`, "a wall linked building with a door in it") are doors in this sense, and `Gates`
+  ([Gates and base walls](#gates-and-base-walls)) flood-fills the finished mesh; nothing gate-specific is needed in the
+  builder.
+- **Rebuild triggers**: a zone's building hash (above) keys the cache; construction crossing `build threshold`, destroyed
+  walls with `destroyed navmesh`, and player buildings queue Partial jobs (job type 1: a box patch seeded on its own
+  border, minCharacterWidth 0.1, finer simplification) (**Observed** from the settings each type sets; which adder makes
+  which type is still **Unknown**).
+- **Zone borders**: neighbouring zones connect because seeds sit on the open border edges of already built neighbours
+  and Havok stitches instances (stitch jobs). With Recast tiles of one zone each, border vertices match by construction;
+  the seed rule still has to see across the border.
+
+### Comparing with the shipped tiles (feasibility)
+
+The 3,995 `navtiles/tile<X>.<Z>.hkt` are the original generator's output and the natural reference. Findings (probe
+scripts `MeitouClient-re/probes/walk/tilescan*.js`, **Observed**):
+
+- The trivial tile0.0 stores its four vertices as plain float32 triplets in zone-local Havok space ((0, 10, 0) ..
+  (460.75, 10, 460.75); note 460.75, not 460.8, a low-precision float), so a value-pattern scan finds them.
+- Real tiles do not: a scan of tile21.33 and tile30.30 for runs of zone-local float triplets (12- or 16-byte stride) finds
+  nothing longer than a few dozen entries. The binary tagfile writer packs arrays in its own encoding, described by the
+  type section at the start of the file (class and member names are visible there).
+- So a comparison needs a clean-room reader for the 2014 binary tagfile (magic `1E0DB0CA CEFA11D0`): its type section,
+  the object records and the array encodings, enough to read `hkaiNavMesh` `faces`, `edges`, `vertices` and
+  `faceData`. That is a self-contained piece of work for a probe or a test-only helper (Havok's format, so not linked
+  from Havok); it is not needed by the game.
+- A useful test then: for a set of zones (open desert, a town with walls and gates, a cliff area, a lake shore), sample
+  points on a grid in Havok space and compare "on the navmesh" (point within 0.5 vertically of a face) between our mesh
+  and the tile both ways, reporting coverage in % per zone; and compare reachability: for random seed pairs, whether both
+  meshes connect them. Exact face equality is not a goal (different algorithms).
+- Without a reader, cheaper checks remain: the `Hash` strings (our hash of the zone's buildings must equal the tile's,
+  checked against tile0.0's `9e3779b9`), the interior `Info` count and positions per tile, and file size as a rough
+  complexity measure.
+
 ## Unknowns
 
 - How the game uses `InteriorFilter` (its admit test is "uid < 0x10000", the same side the `ExteriorFilter` requires) and the
   composition of interior instance uids.
-- Which numeric job types the five job adders create, and the names of the generation settings (FUN_1403c4a10).
+- Which numeric job types the five job adders create (the settings each type uses are now known: 0 whole zone, 1 box
+  patch, 3 interior).
+- The terrain grid resolution of the generator (FUN_140a08a20); the material of `destroyed boundary` triangles; the
+  building flag at +0x1f0 → +0x2c that gates carvers and part of the WALKABLE rule; the global seed list DAT_14212f470;
+  the ray-hit kind that still allows a ground seed; whether OverrideSettings material −1 means "any material".
+- Whether the path request converts the footprint radius to Havok units.
 - FCS MoveSpeed enum names other than NO_SPEED_CHANGE; steering rules for formation slots and the full avoidance parameters
   (the repulsion's absolute magnitude).
 - Whether face data values other than 3, 4, 5 and the gate nibble exist; how building construction and destruction
@@ -297,8 +507,9 @@ updated". FUN_1403a66c0 splits the door AABB across zone cells and calls FUN_140
 
 ## Implementation outline
 
-1. Parse tagfiles read-only (clean-room) to get faces, edges, face data, mesh/graph/AABB tree; or build our own navmesh from
-   terrain and buildings using the same path-mode rules and treat tiles as an optional cache keyed by the zone hash.
+1. Build our own navmesh (decision 3) from terrain, collision files, carvers, door painters, water and seeds as in
+   [What our builder needs](#what-our-builder-needs), cached per zone and keyed by the zone hash; the shipped tiles only
+   as a test reference.
 2. Keep per-zone navmesh instances at 4608-unit zones at scale 0.1, with a floating origin; load a 3x3 ring around the player.
    Exterior instance uid = (Z << 8) | X.
 3. Implement A* over faces with a pluggable cost modifier (water multiplier f = a + 1 or 1/(1 - a) from RACE `water avoidance`,
