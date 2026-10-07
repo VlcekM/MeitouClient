@@ -164,7 +164,7 @@ public class BodyWiringTests
         Assert.Equal("sleeponfloor", Played(new CharacterCold { Medical = down }));
     }
 
-    static List<ulong> Hashes(ulong seed, int threads, float timeScale)
+    internal static List<ulong> Hashes(ulong seed, int threads, float timeScale)
     {
         using var world = World(seed, threads, timeScale, hit: true);
         var hashes = new List<ulong>();

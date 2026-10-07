@@ -134,7 +134,7 @@ public class PlayerTests
         Assert.Equal(SiteStatus.Loaded, g.Population.StatusOf(0));
     }
 
-    static List<ulong> Scripted(int threads)
+    internal static List<ulong> Scripted(int threads)
     {
         using var g = Start(threads, residents: true, seed: 8);
         var w = g.World;

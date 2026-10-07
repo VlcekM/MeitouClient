@@ -109,7 +109,7 @@ public class RoamingTests
         Assert.True(outAgain, "at home it picks a town again");
     }
 
-    static List<ulong> Scripted(int threads)
+    internal static List<ulong> Scripted(int threads)
     {
         var (w, _) = Start(threads, 9);
         using var world = w;

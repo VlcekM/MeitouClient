@@ -8,7 +8,7 @@ public class DeterminismTests
 {
     static readonly int[] Checkpoints = [1, 5, 30, 90, 200, 300];
 
-    static List<ulong> Hashes(ulong seed, int threads, int characters = 300)
+    internal static List<ulong> Hashes(ulong seed, int threads, int characters = 300)
     {
         using var world = WanderSystem.Create(seed, threads, characters);
         var hashes = new List<ulong>();

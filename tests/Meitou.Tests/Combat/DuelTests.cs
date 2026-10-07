@@ -182,7 +182,7 @@ public class DuelTests(ITestOutputHelper output)
         return world;
     }
 
-    static List<ulong> Hashes(ulong seed, int threads, out int logCount)
+    internal static List<ulong> Hashes(ulong seed, int threads, out int logCount)
     {
         using var world = Crowd(seed, threads, out var combat);
         var hashes = new List<ulong>();

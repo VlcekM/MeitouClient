@@ -79,7 +79,7 @@ public class FightWiringTests
         _ = id;
     }
 
-    static List<ulong> Hashes(int threads)
+    internal static List<ulong> Hashes(int threads)
     {
         var (world, _, _, _, _) = Fight(11, threads, distance: 60);
         using var _w = world;
