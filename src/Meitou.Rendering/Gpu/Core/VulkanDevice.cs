@@ -127,6 +127,9 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     public PhysicalDeviceLimits Limits => Properties.Limits;
 
+    /// <summary>An integrated GPU (shares the system's memory): the budgets that scale with video memory take a smaller share of it (<c>ImpostorBudget</c>).</summary>
+    public bool IsIntegrated => Properties.DeviceType == PhysicalDeviceType.IntegratedGpu;
+
     /// <summary>Whether VK_EXT_memory_budget is enabled (<see cref="VideoMemory"/> then reports the driver's figures).</summary>
     public bool HasMemoryBudget { get; private set; }
 
