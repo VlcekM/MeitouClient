@@ -443,9 +443,19 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   - **GPU cull** (step A2, [renderer-native.md](renderer-native.md#561-as-built-step-a2-2026-10-06-foliagegpucull)): by default the meshes' instances
     are tested by compute kernels per view (main slices, cascades, reflection) and drawn with indirect draws; the TERRAIN-mode rocks too, in the same dispatch, drawn through `TerrainRenderer.DrawMeshesIndirect` with their biome rows and mirroring.
     `MEITOU_GPU_CULL=0` brings back the CPU cull above (for A/B); `MEITOU_GPU_CULL_VERIFY=1` runs both, compares the GPU's lists a frame later
-    with the CPU's (sets, order, every matrix and fade, the draw arguments, every rock placement) and prints a `gpu cull verify` line at exit. Pictures unchanged (0 px);
+    with the CPU's (sets, order, every matrix and fade, the draw arguments, every rock placement) and prints a `gpu cull verify` line at exit. Pictures unchanged (0 px); the instance arena holds 68-byte records (`FoliageInstanceRecord.Pack`, `gpu cull verify` equal);
     the grass too: its pages are picked, thinned and ordered by two kernels per view and drawn with one indirect draw (`MEITOU_GPU_GRASS=0` for the CPU walk; [5.6.2](renderer-native.md#562-as-built-wave-3b-gpu-grass-2026-10-06-foliagegrassgpu));
     `MEITOU_FOLIAGE_TIMING=1` adds the dispatch recording, the rock draws per call and a `foliage gpu cull:` line with the kernels' GPU time per view.
+- **Video memory guard** (2026-10-07, [renderer-native.md 8.10](renderer-native.md#810-video-memory-at-large-ranges-2026-10-07-branch-worktree-agent-a4500bf73767243a3)):
+  at about 90% of the driver's device-local budget (VK_EXT_memory_budget) streaming of new zones, grass pages, textures and meshes stops, idle
+  caches are evicted after 2 s, and the foliage, object and distant-town ranges (and a shadow distance above its default) are multiplied by a
+  falling scale until the use is under 80%; the ranges return slowly under 74%. F11 shows `guard: ok, N% of the M MB budget` or
+  `guard: ranges x0.62, streaming paused, ...`, and the console logs one `vram      guard:` line the first time. It never acts at the default
+  settings. Knobs: `MEITOU_VRAM_GUARD=0` (off), `MEITOU_VRAM_BUDGET_MB=<mb>` (pretend a smaller card, for testing), `MEITOU_VRAM_KILL=<fraction>`
+  (headless runs: exit with code 9 past that share of the budget, default 0.95, 0 = off). `--shadow-range` is capped at 15000 on the command
+  line. The F11 `scratch` line and the benchmark's `scratch` line give the foliage cull's and grass kernels' per-frame memory (held, need, refused).
+  Beyond the whole reach (the longest of the small, medium and grass ranges) a zone keeps only large meshes; the instance arena takes 68 bytes
+  a record. All pictures unchanged (0 px).
 - **Grass**: blades are generated per 576-unit page (8 × 8 a zone) on worker threads when the page comes within
   the grass range (`FoliageGrassField`, the game's candidate rule; seeded per page, so deterministic but not the
   game's exact blades), uploaded as one instance buffer per (page, grass type), and drawn nearest page first with
