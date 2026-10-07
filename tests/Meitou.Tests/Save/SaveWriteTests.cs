@@ -113,6 +113,28 @@ public partial class SaveWriteTests
     }
 
     [Fact]
+    public void A_failed_install_puts_the_old_save_back()
+    {
+        var game = Small(out _);
+        string root = Temp("failinstall");
+        string folder = Path.Combine(root, "slot");
+        try
+        {
+            game.Write(folder);
+            var before = File.ReadAllBytes(Path.Combine(folder, "quick.save"));
+            game.Camera.Day = 99;
+            Assert.Throws<IOException>(() => game.Write(folder, () => throw new IOException("locked")));
+            // Between the two renames the old folder was moved aside; it must be back, whole, and nothing else left.
+            Assert.Equal(before, File.ReadAllBytes(Path.Combine(folder, "quick.save")));
+            Assert.False(Directory.Exists(folder + ".old"));
+            Assert.DoesNotContain(Directory.GetDirectories(root), d => Path.GetFileName(d).StartsWith("_current"));
+            game.Write(folder);
+            Assert.Equal(99, SaveGame.Load(folder).Camera.Day);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public void A_character_can_be_removed_with_everything_it_holds()
     {
         var game = Small(out var platoon);

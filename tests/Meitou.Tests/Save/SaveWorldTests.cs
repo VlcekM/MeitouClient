@@ -172,6 +172,27 @@ public class SaveWorldTests
     }
 
     [Fact]
+    public void A_member_of_a_loaded_platoon_who_is_not_the_players_is_still_written()
+    {
+        using var g = NewGame();
+        var first = SaveCapture.Capture(g.World, g.Data, new SaveClock(1, 13, 0));
+        string folder = Path.Combine(Dir("prisoner"), "slot");
+        try
+        {
+            first.Write(folder);
+            using var world2 = EmptyWorld();
+            var loaded = SaveLoader.Load(world2, SaveGame.Load(folder), g.Data);
+            var squad = world2.Squads.Find(world2.Player.Squad)!;
+            // A prisoner kept in the squad: not the player's character, but in the platoon file.
+            world2.Characters.Cold(squad.Members[2].Slot)!.IsPlayer = false;
+            var second = SaveCapture.Capture(world2, g.Data, loaded.Clock, loaded);
+            Assert.Equal(4, Assert.Single(second.Platoons).Characters.Count);
+            Assert.Equal(first.Platoons[0].File!.ToBytes().Length, second.Platoons[0].File!.ToBytes().Length);
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+    }
+
+    [Fact]
     public void A_character_that_joined_gets_records_of_its_own()
     {
         using var g = NewGame();

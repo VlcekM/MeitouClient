@@ -147,7 +147,9 @@ public static class SaveCapture
 
         foreach (var squad in world.Squads.All)
         {
-            var alive = squad.Members.Where(m => table.IsAlive(m) && table.Cold(m.Slot)!.IsPlayer).ToList();
+            // A member of a loaded platoon is written whoever owns it (a prisoner or slave kept in the squad is not the player's but is in the file); only the
+            // resident squads the population system made, which have no link, are left out by the player test.
+            var alive = squad.Members.Where(m => table.IsAlive(m) && (table.Cold(m.Slot)!.IsPlayer || table.Cold(m.Slot)!.Save is not null)).ToList();
             if (alive.Count == 0) continue;
             squads++;
 

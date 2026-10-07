@@ -256,12 +256,14 @@ public sealed partial class SaveGame
     /// Writes the save into <paramref name="folder"/> the way the game does (docs/formats/save.md "The save file system"): first into a working folder
     /// <c>_current&lt;N&gt;</c> beside it (the first N whose folder does not exist), then the finished folder replaces the old one in two renames, so a crash
     /// leaves either the old save or the new one, never half of one. The old folder's contents are replaced as a whole: files the new save no longer has are gone.
+    /// <paramref name="beforeInstall"/> runs between the two renames (a test uses it to fail there); the old save is then moved back.
     /// </summary>
-    public void Write(string folder)
+    public void Write(string folder, Action? beforeInstall = null)
     {
         folder = Path.GetFullPath(folder);
         var parent = Path.GetDirectoryName(folder) ?? throw new ArgumentException("A save folder needs a parent folder.", nameof(folder));
         Directory.CreateDirectory(parent);
+        string? old = null;
         int n = 1;
         string work;
         while (Directory.Exists(work = Path.Combine(parent, "_current" + n))) n++;
@@ -274,20 +276,26 @@ public sealed partial class SaveGame
                 file.WriteFile(Path.Combine(work, name.Replace('/', Path.DirectorySeparatorChar)));
             if (Portraits is not null) File.WriteAllBytes(Path.Combine(work, SaveFolder.PortraitName), Portraits);
 
-            string? old = null;
             if (Directory.Exists(folder))
             {
                 old = folder + ".old";
                 if (Directory.Exists(old)) Directory.Delete(old, recursive: true);
                 Directory.Move(folder, old);
             }
+            beforeInstall?.Invoke();
             Directory.Move(work, folder);
-            if (old is not null) Directory.Delete(old, recursive: true);
         }
         catch
         {
             if (Directory.Exists(work)) Directory.Delete(work, recursive: true);
+            // The old save goes back if the new one could not be moved in.
+            if (old is not null && !Directory.Exists(folder) && Directory.Exists(old)) Directory.Move(old, folder);
             throw;
+        }
+        if (old is not null)
+        {
+            try { Directory.Delete(old, recursive: true); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { /* a leftover .old folder is removed by the next write */ }
         }
     }
 

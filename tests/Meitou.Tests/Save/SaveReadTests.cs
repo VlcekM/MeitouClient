@@ -126,6 +126,7 @@ public class SaveReadTests
         Assert.Equal(["base", "Newwworld", "Dialogue", "rebirth"], camera.Mods);
         Assert.Equal(103, game.Factions.Count);
         Assert.All(game.Factions, f => Assert.NotNull(f.War));
+        Assert.Equal(103, game.Factions.Select(f => f.War).Distinct().Count());   // one war state each, paired by the faction id
         Assert.Equal("204-gamedata.base", game.PlayerFaction!.Id);
         Assert.Equal("Nameless", game.PlayerFaction.Name);
         Assert.NotEmpty(game.Platoons);
