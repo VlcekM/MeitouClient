@@ -1072,14 +1072,14 @@ These change the picture on purpose, so they are not part of any parity step. Th
   over distance against a pixel threshold), capped by the layer's range × the setting. Large trees go far, small junk stops sooner. This
   is how small things become affordable at several thousand units. The distances are adjustable settings per size class (owner decision 4).
   **Done on the CPU (2026-10-06)** as the `range` switch, by size class per mesh rather than per instance (a group keeps one range, so the
-  ChunkRecord's per-view range carries it unchanged): large / medium / small at 5000 / 2500 / 800 by default, Tab sliders and
+  ChunkRecord's per-view range carries it unchanged): large / medium / small first at 5000 / 2500 / 800 and, since the billboards (8.10), at 12000 / 5000 / 800 by default, Tab sliders and
   `--range-large|medium|small`; FAR layers' large meshes keep the longer of that and 8000 × the setting (docs/viewer.md "Foliage",
   docs/formats/foliage.md "Mesh sizes").
 - **LOD selection on the GPU** (objects, C): `MeshLod.Select` / `Blend` per instance in the cull kernel, with two outputs while blending,
   as the CPU emits them. This is parity-relevant (the LOD rule is the game's), so it follows the A1/A2 pattern.
-- **Impostors** (`impostors`): hemi-octahedral impostor atlases (12 × 12 frames, BC3 albedo + BC5 normal + BC5 depth), baked per mesh
-  natively and cached in `%LOCALAPPDATA%\Meitou\impostors`. **Done (phase 8 stage 2, 2026-10-07)**: the `impostors` switch (F7, Meitou
-  default), drawn from the impostor distance (default 4000, Tab slider, `--impostor-distance`) as one quad per instance from the same
+- **Impostors** (`impostors`): hemi-octahedral impostor atlases (12 × 12 frames sized by distance, BC1 albedo + BC5 normal, no depth), baked per mesh
+  natively and cached in `%LOCALAPPDATA%\Meitou\impostors`. **Done (phase 8 stage 2 and 8.10, 2026-10-07)**: the `impostors` switch (F7, Meitou
+  default), within an atlas VRAM budget (192 MB, LRU), drawn from the impostor distance (default 4000, Tab slider, `--impostor-distance`) as one quad per instance from the same
   cull (the kernel splits a group's instances into mesh and impostor lists, crossfaded over a 10% band by complementary dither, separate
   indirect draws, bindless atlases), lit, fogged and shadowed as the meshes, and cast into the shadow cascades as impostors. Atlases load
   or bake on demand. Details, measurements and the GLSL API are in [impostors.md](impostors.md) (section 7 for the foliage path).
@@ -2883,8 +2883,31 @@ the upscaler is deterministic.*
 renders its frames natively and the atlases are native textures ("impostor atlas ..."). **Verified** by the agent: the baked atlases are
 byte-identical to the GL baker's. The GL texture names the baker read from `WorldTextureCache` through `GlBridge` are gone. Gate on the merge:
 the ten views in both modes 0 px against `C:\Temp\base-6f4af19`, tests 472 passed, 0 skipped. The drawing of impostors in the foliage path
-(the rest of that work) is kept on the branch `billboards-wip`, not merged (owner, 2026-10-07): it cost 1.1-2.4 GB of VRAM for little frame
-time (forest, measured on that branch), and its VRAM cut was not finished.
+was first kept on the branch `billboards-wip` (1.1-2.4 GB of VRAM for little frame time); it was finished on `billboards-native`, 8.10.
+
+### 8.10 Billboards finished on the native API (branch `billboards-native`, 2026-10-07)
+
+*In short: the far-foliage impostors are drawn in Meitou mode (the default), at a fraction of the first version's VRAM, and the Meitou
+foliage ranges and shadow distance are longer. Faithful is unchanged to the pixel. Details and numbers: [impostors.md](impostors.md).*
+
+- **Port.** The `billboards-wip` commits were cherry-picked onto master 410579b: `IGl.Finish` and `GlBridge.EnsureFrame` became
+  `Gpu.Finish()` / `Gpu.EnsureFrame()`, the cull test uses `GpuContext`, the benchmark's VRAM lines use the device. `billboards-wip` is untouched.
+- **Format 2 (baker 5).** BC1 punch-through albedo + BC5 normal, no depth map; frame size 64-256 by the on-screen size at 4000 units;
+  12 × 12 frames; the bake samples textures with a LOD bias that matches the mesh at that distance (fixes the fuller, pinker crowns);
+  frame-pick noise replaced the Bayer matrix. **Observed**: impostor VRAM 495 MB (41 atlases) to 119 MB (49 atlases) in the forest still view,
+  200 MB in a flight; all 267 base-game atlases would be 1637 MB resident (5669 MB before), bake-all 25.8 s (407 s), disk 376 MB.
+- **Budget.** 192 MB (`--impostor-budget`), LRU eviction of atlases unused for 1 s, a refused atlas retries after 8 s and its mesh keeps drawing.
+- **Meitou defaults.** Foliage ranges large 12000, medium 5000, small 800 (were 5000 / 2500 / 800; the size thresholds 40 / 125 keep their
+  old range constants, `FoliageSizes.Threshold*Range`); impostor distance 4000; shadow range 10000 (the game's 5000 in Faithful; the CLI
+  accepts 1000-15000 in Meitou, 1000-9000 in Faithful). Why (**Observed**, RTX 4070, forest, `--fly-benchmark 300`): with billboards
+  the cascades cost 1.65 ms at shadow 10000 against 3.05 ms with the meshes, and 1.98 ms against 3.58 at 15000, so 10000 with
+  billboards costs about what the game's 5000 costs with meshes (1.35 ms measured on master); 15000 is the owner's hard limit and the top of the
+  Meitou option. 12000 / 5000 were chosen because in a flight they use about the whole 192 MB budget (47 atlases, 200 MB at the end);
+  longer ranges would only evict more (**Unknown**: not measured beyond 12000, by the owner's rule).
+- **Gate.** `--faithful all`, ten views: max 0 against `C:\Temp\base-6f4af19\faithful` (**Verified**). Meitou with `--faithful impostors
+  --range-large 5000 --range-medium 2500 --shadow-range 5000`: 0 px against the Meitou baseline (**Verified**); with the new defaults the
+  views differ by design (impostors.md section 7). Tests 463 passed, 0 failed, 0 skipped. Sync validation: 0 errors in the forest views;
+  the shutdown message about four leaked `VkImageView`s also appears on master (not from this work).
 
 ### 8.9 Phase 8 stage 3 (no GL-shaped layer) as built
 
@@ -3115,7 +3138,7 @@ refers to them as "owner decision N".
    log or the cull verifier).
 3. **Switch names** (5.7): `range` (size-based ranges), `impostors`, `occlusion`; separate `Enhancement` switches, Meitou default.
 4. **Draw distances** (1, 5.7): adjustable settings, not fixed numbers. Tab-panel sliders per size class, for example large (ruins,
-   wrecks), medium (junk, rocks) and small (litter, bushes), with defaults around 5000 / 2500 / 800 units, plus command-line options. This
+   wrecks), medium (junk, rocks) and small (litter, bushes), with defaults around 5000 / 2500 / 800 units (12000 / 5000 / 800 since 8.10), plus command-line options. This
    is for agent A's `range` switch in wave 3b; the wave-2 API needs nothing for it (the per-view range cap of 5.3 takes the setting).
 5. **Image layouts** (4.4): stay in GENERAL; revisit after phase 8.
 6. **API steward** (7.1): the foundation agent stays on through wave 3 and lands API additions. No transfer queue in wave 2 (this also

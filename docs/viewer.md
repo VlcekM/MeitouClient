@@ -412,9 +412,9 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
 - **Ranges by size** (the `range` switch, `F6`; Meitou by default, `--faithful range` for the game's): the game ends all of a layer's
   meshes at the layer's range, so at x4 a tree, a ruin wall and a skull of the same MEDIUM layer all stop at 4000. With Meitou ranges each
   mesh is drawn to the range of its size class ([formats/foliage.md](formats/foliage.md#mesh-sizes): bounding radius × largest scale;
-  small below 40, medium to 125, large above): large (trees, ruins, wrecks, rock stacks) 5000, medium (junk, boulders, bushes) 2500, small
+  small below 40, medium to 125, large above): large (trees, ruins, wrecks, rock stacks) 12000, medium (junk, boulders, bushes) 5000, small
   (litter, small plants) 800 by default. The three distances are settings, not constants: Tab sliders "Large / Medium / Small foliage range"
-  (1000-12000, 400-8000, 200-4000, log scale, steps of 50) and `--range-large`, `--range-medium`, `--range-small`. The fade band is the same
+  (1000-12000, 400-8000, 200-4000, log scale, steps of 50; defaults 12000 / 5000 / 800 since the billboards, which draw beyond 4000 as one quad per tree) and `--range-large`, `--range-medium`, `--range-small`. The fade band is the same
   rule as before, a tenth of the range (at least the layer's transition), dithered. How the old sliders fit in:
   - "Foliage draw distance x" (`RangeSetting`, the game's `foliage range`) still scales every layer in Faithful. In Meitou it only matters for
     the large meshes of FAR layers (the landmark rock formations, 8000 × x, 32000 at x4): they keep the longer of that and the large range,
@@ -424,13 +424,20 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   - Until a mesh is decoded its size is unknown; its groups count as the longest class range (for the reload and residency decisions only:
     nothing undecoded is drawn).
   - No pop-in from it: a zone beyond the near reach is laid out with its FAR layers only, so the near reach (`NearReach`, where zones are
-    laid out whole) is the longest class range in Meitou (5000 by default, against 4000 at x4 in Faithful), or the grass reach if longer;
+    laid out whole) is the longest class range in Meitou (12000 by default, against 4000 at x4 in Faithful), or the grass reach if longer;
     the far reach covers the FAR layers' range as before. A longer large range costs layout work on the worker threads (whole layouts,
     70-100 ms a zone, for 1.6 times the area at 5000 against 4000), not render-thread time.
   - Cost (docs/engine.md, "Foliage ranges by size"): at the defaults the dense tree view draws 1 202 meshes instead of 5 034 (most of the
     game's x4 set is litter and bushes), foliage stage 3.5 -> 2.1 ms and culling 4.1 -> 1.2 ms of render-thread CPU (Release); the junk field
     671 -> 377 meshes, 2.8 -> 1.75 ms. Settling a still picture takes about twice as long (more zones laid out whole).
   - `--faithful all` (or `--faithful range`) gives the game's ranges: the parity views are unchanged by the switch (0 differing pixels).
+- **Impostors** (the `impostors` switch, `F7`; Meitou by default, `--faithful impostors` never draws them, [impostors.md](impostors.md)): beyond
+  the impostor distance (default 4000, Tab slider "Impostor distance (F7 Meitou)", `--impostor-distance <u>`) a tree or bush is one
+  camera-facing quad sampling a pre-baked atlas, crossfaded with the mesh over a tenth of the distance, and cast into the sun's shadow cascades
+  the same way. The atlases (baked on first need, cached in `%LOCALAPPDATA%\Meitou\impostors`) are held within a VRAM budget, default 192 MB
+  (`--impostor-budget <MB>`); the least recently used go first, and a mesh that does not fit stays a mesh. `MEITOU_IMPOSTOR_CASTERS=0`
+  keeps mesh casters, `MEITOU_IMPOSTOR_LOG=1` logs atlas loads and evictions. Tuning knobs for the baker: `MEITOU_IMPOSTOR_GRID` (12),
+  `MEITOU_IMPOSTOR_MAGNIFY` (1.4), `MEITOU_IMPOSTOR_BIAS` (1; the caches differ by them).
 - **Culling** (`FoliageCull`, step A1 of the GPU-driven foliage in [renderer-native.md](renderer-native.md#56-parity-what-can-match-exactly-and-what-cannot-be-promised)):
   each zone's instances are records of 96 bytes (`FoliageInstanceRecord`: transform, bounding sphere, ground position, scale, group index:
   the layout a compute shader will read), the spheres filled once when the mesh's bounds are known instead of per frame; a group's range
@@ -514,7 +521,7 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
 ### Shadows
 
 The sun's shadow map as the game's CSM mode draws it ([formats/shadows.md](formats/shadows.md)): four cascades in one atlas
-(`--shadow-quality <0|1|2>`, 1024² / 2048² / 4096², default 2048²; `--shadow-range <u>`, default 5000; `--no-shadows`), drawn
+(`--shadow-quality <0|1|2>`, 1024² / 2048² / 4096², default 2048²; `--shadow-range <u>`, default 5000 in Faithful and 10000 in Meitou (1000-9000 and 1000-15000; the F5 toggle swaps the default if the range was not touched); `--no-shadows`), drawn
 before the reflection and the main pass from the terrain, objects and foliage meshes. `--debug-shadows 1|2|3` shows the cascade
 maps, the term per cascade, or the term over the picture.
 
