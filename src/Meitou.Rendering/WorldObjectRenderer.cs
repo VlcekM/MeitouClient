@@ -72,6 +72,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>The landmarks being collected (all zones laid out once on a worker, about a second), the class that tells them, and what they cost.</summary>
     Task<List<(PlacedMesh Placed, float Radius)>>? landmarkTask;
     readonly LandmarkClass? landmarkClass;
+    double landmarkMs;
 
     /// <param name="landmarks">Collect the world's landmarks (<see cref="LandmarkClass"/>) and keep them apart from the zones, to be drawn to <see cref="LandmarkDistance"/>.
     /// Without it (Faithful) every placement stays in its zone and the object distance rules all.</param>
@@ -93,7 +94,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         {
             landmarkClass = new LandmarkClass(assets);
             streamer.WaitForLandmarks = true;
-            landmarkTask = Task.Run(() => landmarkClass.Collect(objects));
+            var collectWatch = Stopwatch.StartNew();
+            landmarkTask = Task.Run(() => { var found = landmarkClass.Collect(objects); landmarkMs = collectWatch.Elapsed.TotalMilliseconds; return found; });
         }
         var distant = new SurfaceMaterial { Description = "DistantTown (vertex colour x texture x 1.5)", Diffuse = DistantTowns.DiffuseTexture, VertexColours = true, SpecularMult = 0 };
         var distantDiffuse = textureCache.Get(distant.Diffuse, false);
@@ -182,7 +184,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     public long ResidentBytes => meshes.Bytes + textureCache.ResidentBytes;
     public string ResidentDescription => $"{meshes.Bytes / 1048576.0:0} MB in {meshes.Resident} meshes ({meshes.Unloads} unloaded, {meshes.Reloads} reloaded, {meshes.Refined} remade finer, {meshes.Coarsened} coarser), {textureCache.Describe()}";
     public string Describe() =>
-        $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved), {meshes.Resident}/{meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
+        $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved{(streamer.LandmarkZone is { } lz ? $", of them {lz.Real.Count(i => i.Gpu is not null)} of {lz.Real.Count} landmarks" : "")}), {meshes.Resident}/{meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
         $"{towns.Count(t => t.Mesh.Status == ObjectMesh.State.Resident)}/{towns.Count} distant towns; {objects.Describe()}";
 
     // ------------------------------------------------------------------ streaming
@@ -233,7 +235,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             {
                 streamer.Landmarks = landmarkClass;
                 streamer.SetLandmarks(collected.Result);
-                Console.WriteLine($"landmarks {collected.Result.Count} placements of radius {LandmarkClass.MinRadius:0}+ kept apart from the zones ({landmarkClass!.Probes} mesh bounds read, {landmarkClass.WholeReads} whole files)");
+                Console.WriteLine($"landmarks {collected.Result.Count} placements of radius {LandmarkClass.MinRadius:0}+ kept apart from the zones ({landmarkClass!.Probes} mesh bounds read, {landmarkClass.WholeReads} of them whole files; {landmarkMs:0} ms on the workers)");
             }
             else
             {

@@ -3350,6 +3350,71 @@ slider lines of `WorldFrame.cs` / `WorldApp.cs`; `WorldTextureCache.cs` and `Gpu
   parked instead of resolving and being skipped. Faithful ten views 0 px.
 - **Left**: foliage meshes 184 unloaded / 61 reloaded and foliage textures 28 / 25 in the same flight (the 60 s idle rule; not examined).
 
+### 8.19 Farther Meitou defaults and landmarks (2026-10-07)
+
+Files: `Landmarks.cs` (new: `LandmarkClass`), `ObjectStreamer.cs` (`LandmarkZone`, `ScanLandmarks`), `WorldObjectRenderer.cs` (`DrawReal`, `LandmarkReach`), `Enhancements.cs`
+(the `reach` switch), `WorldFrame.cs` (options, help, slider), `WorldApp.cs`, `OgreMeshReader.TryReadBounds`, `FoliageSizes.cs`; tests `LandmarkTests`, `OgreMeshReaderTests`.
+
+- **New Meitou defaults** (**Verified**: `LandmarkTests`, `--help`; Faithful pictures 0 px, below). A new switch `reach` (`F8`, `--faithful reach`) carries the three
+  values that were one number for both modes: objects at full detail to **20000** (Faithful 12000; the depth slices split at 1.1 x that, so 22000), the terrain LOD error **16 px**
+  (Faithful 10) and the landmark distance (below). The foliage class ranges belong to the existing `range` switch, so they were Meitou-only already: large **50000**
+  (was 12000), medium **12000** (was 5000), small 800 (`FoliageSizes.Default*`; `--faithful range` is still the game's per-layer ranges).
+  `--object-distance`, `--terrain-error` and `--landmark-distance` given on the command line win in both modes, in any order with `--faithful`. "Reset to defaults" needed no
+  code: the panel snapshots its sliders when it is made, so it returns to the values of the mode the viewer started in.
+- **Landmarks** (Meitou only): a placement is a landmark when its world bounding radius (mesh bounds radius times the largest scale of its transform) is at least
+  **2000** (`LandmarkClass.MinRadius`). A whole-world survey (`MEITOU_LANDMARK_SURVEY=1`, base game: 26 444 placements in 913 zones, 817 meshes, laid out and measured in 0.7-0.9 s) gives
+  world radius p50 84 / p90 255 / p99 1085 / p99.9 3027 / max 38181; placements at or above 1000: 326 (73 meshes), 1500: 144 (44), 2000: **90 (31)**, 3000: 33 (15), 5000: 1. The largest
+  building part of an ordinary building is the Ancient Factory shed at 1488; every placement from 2000 up is a map feature (**Verified** by the survey). The qualifying meshes
+  (placements at 2000+ of the mesh's total, world radius range): `Ashland_Skylink` 1/1 (38181, the satellite), `Bones_Town_Ribs` 3/3 (2140-4928), `Canyon-Dangler05Z` 3/3 (3479-4288), `AshlandRibs` 14/19
+  (2166-4065), `Ashland_Baselink` 1 (3863), `Vast_Land-Tube002` 1 (3686), `Ashland_Massdev` 1 (3557), `Tower Core RUIN` 2/2 (3506), `Vast_Land-Tube001` 1 (3396), `Canyon-Dangler04Z` 3/3 (2007-3340), `Fin Building` 1 (3230),
+  `Ancient RIG platform01` 2/2 (3047), `GirderGroup_Loose01` 8/10 (3027), `Ashland_Wave-Ring` 1/2 (3012), `Patagonia_RockSlab01` 8/14 (2039-3003), `RottenAshlandTower` 1/2 (2974), `First Civ_ Full_Wreck` 6/6 (2910),
+  `Tarsand_Pipeline01` 7/11 (2638), `FloodedForest_Rotten-Stem03` 6/8 (2604), `Fossil Spine 16K` 2/2 (2593), `BrownCanyon_DropBeams01` 1/5 (2403), `CLiff_Curved` 2/16 (2202-2390), `Bones_Wall_Ribs_Small` 1 (2390),
+  `Bones_Wall_Ribs` 1 (2332), `Turbine_HallDamaged01` 6/6 (2275), `RUINTUBE01` 1/3 (2187), `Canyon-Dangler03Z` 1/3 (2185), `Mafic_HugeRockSlabs` 2/32 (2095-2152), `FeatureBluff001` 1/79 (2121),
+  `ROCK-Arch_Type_01` 1/4 (2092), `Ashland_Mechanok` 1 (2046). No building part qualifies. The density near 2000 is continuous (no gap), so the threshold is a judgement: 1500 would add 54 placements,
+  mostly cliff blocks (`FeatureBluff00x`, 79 + 47 + 51 + 29 placements between 860 and 2100) that are scenery, not skyline. `JunkSat01` / `JunkBall01` (radius 355) are foliage meshes, not placed objects, so
+  the large foliage range (50000) draws them, not the landmarks.
+- **How it works** (**Verified** by the pictures and benchmark below, design **Observed**). The radius must be known before the mesh is loaded or a landmark 100 000 units away could never be asked for: the bounds chunk is read
+  without the geometry (`OgreMeshReader.TryReadBounds` seeks over the sub-chunks by their length fields; on an unknown id, a truncated file or no bounds chunk it gives up and the whole file is read, as `ObjectMeshCache.Decode`
+  does: about 55% of the meshes did, 0.7-0.9 s for all of them in parallel; the probe equalled the decode on the 45 meshes checked). Streaming zones out to the landmark distance was rejected: at 150000 that is
+  about a thousand zones, and `Scan` would walk every unresolved far instance every frame. Instead all populated zones are laid out once on the workers when the renderer starts (`LandmarkClass.Collect`, the zone layout is
+  held back until it is done, about 0.7 s), the 90 landmarks are kept in one pseudo-zone (`ObjectStreamer.LandmarkZone`, never unloaded) and left out of the zones by the same test (so nothing is drawn twice). Every
+  path then uses one range per instance, `min(range, Limit)`, with `range` = `LandmarkReach` (`max(object distance, landmark distance)` x the VRAM guard's scale) for a landmark and the object distance otherwise:
+  `ScanLandmarks` (mesh requests, within the range plus the instance's own radius instead of the guessed 600), `MarkInRange` (keep-alive), `DrawReal` (the CPU cull and fade band, also for the shadow cascades and
+  the reflection, whose clamp to 3000 now applies to the landmark distance too), the mesh LOD levels and texture mips (far forms and mip streaming apply as for any object: a mesh requested at 100 000 holds its coarsest levels).
+  The 90 landmarks are walked every frame (`upd-objects` unchanged, 0.15 ms). Faithful (`--faithful reach|all`, or `--landmark-distance 0`) builds no list, so its draw order and pictures do not change.
+  Starting without Meitou reach builds no list and no slider; `F8` later moves the distances but not the landmarks.
+- **Pictures, Faithful** (**Verified**): ten parity views with `--faithful all` against `C:\Temp\base-87c7857\faithful`: max 0 in all ten, before the landmark code and after.
+- **Pictures, Meitou** (**Observed**; old = this build with `--faithful reach --range-large 12000 --range-medium 5000`, i.e. master's defaults; new = the new defaults; pairs in `C:\Temp\agent-landmark\meitou-old|new`, diffs next to the new ones):
+  mean difference / pixels over 12 / max: forest 13:00 3.24 / 8.7% / 157, hub 13:00 2.89 / 9.8% / 177, zone 14,30 13:00 1.96 / 6.2% / 108, portnorth 13:00 0.15 / 0.3% / 205, rock 13:00 0.09 / 0.1% / 118, and at 02:00
+  forest 0.55, hub 0.48, zone 14,30 0.38, portnorth 0.03, rock 0.03 (all under 0.7%, max 39). What changes: the horizon is populated. Forest: the rock stacks and hoodoos on the far cliff (large foliage meshes
+  between 12000 and 50000, impostors beyond 4000) stand on it where the old picture shows bare terrain; Hub: trees and bushes in the middle distance where there were dark empty flats, and the far ridge carries
+  vegetation; the terrain at 16 px is coarser at a distance (silhouettes of far ridges differ by a texel or two). Close views (rock, port north) differ in the far background only. The ten views show no landmark (none
+  within 150000 of them is in view); a landmark picture (Bones_Town_Ribs from 35 km, `--at -1018,77000 --yaw 20 --pitch 3 --distance 35000`, with and without `--landmark-distance 0`, mean 0.38, max 113) shows
+  the rib cage and a tower on the horizon only with landmarks (`C:\Temp\agent-landmark\try\ribs_lm.png` / `ribs_nolm.png`).
+- **Benchmark** (The Hub, `--radius 2 --fly-benchmark 3600 --fly-pipelined`, `MEITOU_PASS_STATS=1`, RTX 4070, other agents' viewers on the same GPU so the run-to-run spread is about 0.1 ms GPU and 0.3 ms CPU;
+  each configuration twice, the table gives both, then the isolating runs once):
+
+  | Configuration | GPU frame mean (ms) | frame p50 / CPU p50 (ms) | upd-objects (ms) | objects colour: instances, k tri | VRAM peak (MB) | object meshes unloaded / reloaded |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | master's defaults (`--faithful reach --range-large 12000 --range-medium 5000`) | 1.80 / 1.79 | 2.1 / 1.9 (both) | 0.16 / 0.15 | 81 / 62, 85 / 64 | 3080 / 3078 | 0 / 0 |
+  | new defaults, landmarks 150000 | 2.33 / 2.24 | 2.8 / 2.6, 2.7 / 2.5 | 0.15 / 0.15 | 145 / 129 (both) | 4209 / 4273 | 0 / 0 |
+  | new defaults, `--landmark-distance 0` | 2.34 / 2.29 | 3.4 / 3.1, 2.6 / 2.4 | 0.20 / 0.15 | 137 / 125, 140 / 127 | 3974 / 3974 | 0 / 0 |
+  | new reach, old foliage ranges | 1.66 | 2.1 / 1.9 | 0.14 | | 3633 | 0 / 0 |
+  | old reach, new foliage ranges (`--faithful reach`) | 2.33 | 2.8 / 2.6 | 0.15 | | 3654 | 0 / 0 |
+
+  Reading: the new defaults cost about **+0.5 ms GPU (+28%), +0.6 ms CPU p50 and +1.1-1.2 GB VRAM** on this flight, all of it from the foliage ranges (50000 / 12000: more impostors and meshes resident, foliage textures
+  582 to 773 MB, impostor atlases 95 to 176) and the object range (object textures 261 to 593 MB); the new reach alone is cheaper on the GPU than master (1.66 against 1.80, the 16 px terrain) and costs
+  +0.55 GB. The landmarks cost no time that shows on the Hub flight (GPU 2.33/2.24 against 2.34/2.29; 8 landmark instances a frame, +4k triangles, `upd-objects` the same) but **+0.24-0.3 GB of video memory**
+  (object meshes 131 to 206 MB, object textures 593 to 752 MB: the huge meshes' textures, held at the mips their distance needs). Around Ashland, where a dozen are in
+  view (`--at 95000,108000 --fly-radius 20000`): 68 against 71 instances, +78k triangles of 445k, 0 unloaded / 0 reloaded either way (the GPU means 3.42 and 4.56 ms are terrain streaming noise there).
+  **No reload churn**: 0 object meshes unloaded or reloaded in every run at the default idle time; with `MEITOU_UNLOAD_IDLE=3` on a 40000 circle (every place revisited each 17 s, so unloading is legitimate) landmarks at 150000 /
+  400000 / off give 155 / 155 / 179 unloaded and 155 / 131 / 123 reloaded: no landmark-specific reloads (at 400000 every landmark is always in range, and the reloads are the same as without).
+- **Integrated GPU** (owner runs the viewer on an integrated-GPU laptop, about 30 fps at the old defaults): the new defaults cost more there. The measured cost on the RTX 4070 is above; it is the foliage ranges that carry it. Nothing
+  integrated-specific was changed (no iGPU defaults); the impostor budget already drops to 5% / 256 MB on an integrated GPU (8.16, **Unknown** on real hardware), and `--faithful range` or `--range-large 12000 --range-medium 5000`
+  returns the old foliage cost.
+- **Open**: the 90 landmarks are drawn as full meshes at the coarsest LOD level their distance picks, not as impostors, so a very large one (Skylink, 38 000 radius) has a high triangle count at its coarsest form: not measured
+  separately. VRAM is the driver's budget per process; under other processes' load the run-to-run budget swung 3.4-11.5 GB, and a 95% watch abort (`MEITOU_VRAM_KILL`) hit one default-range run at a 3456 MB budget.
+
 ## 9. Expected CPU cost, and how the profiler keeps working
 
 *In short: a throwaway measurement on the RTX 4070 recorded the same draws through VkGl and directly. A typical foliage mesh draw costs about
