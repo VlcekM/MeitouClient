@@ -35,14 +35,10 @@ internal sealed class ImpostorPreview : IDisposable
         impostors = new ImpostorDraw(gpu, frame);
     }
 
-    /// <summary>Parallax step in the impostor sampling.</summary>
-    public bool Parallax { get; set; }
     /// <summary>Blend the three frames instead of picking one per pixel.</summary>
     public bool Blend { get; set; }
     /// <summary>Unlit debug output of the impostor: 1 albedo, 2 normal, 3 coverage (0 lit).</summary>
     public int Debug { get; set; }
-    /// <summary>Write the impostor's blended depth (<see cref="ImpostorShaders.FragmentWithDepth"/>).</summary>
-    public bool DepthWrite { get; set; }
 
     uint StandIn()
     {
@@ -161,10 +157,10 @@ internal sealed class ImpostorPreview : IDisposable
         var pc = new ImpostorPush
         {
             Sphere = new Vector4(a.Centre, a.Radius), CameraUp = cameraUp, Grid = a.Grid,
-            Albedo = atlas.Index(0, 0), Normal = atlas.Index(1, 0), Depth = atlas.Index(2, 0),
-            Parallax = Parallax ? 1u : 0u, Blend = Blend ? 1u : 0u, Debug = Debug, Coverage = coverage ? 1u : 0u,
+            Albedo = atlas.Index(0, 0), Normal = atlas.Index(1, 0), Gloss = a.Gloss,
+            Blend = Blend ? 1u : 0u, Debug = Debug, Coverage = coverage ? 1u : 0u,
         };
-        cmd.BindPipeline(impostors.Pipeline(DepthWrite ? ImpostorProgram.DepthWrite : ImpostorProgram.Plain, state, formats));
+        cmd.BindPipeline(impostors.Pipeline(ImpostorProgram.Plain, state, formats));
         cmd.BindVertexBuffers(FoliageShaders.InstanceLocation, rows);
         cmd.BindIndexBuffer(impostors.Quad, IndexType.Uint32);
         cmd.PushConstants(impostors.Layout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, in pc);

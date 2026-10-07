@@ -103,10 +103,34 @@ public class ImpostorTests
     public void Size_classes_follow_the_largest_instance()
     {
         Assert.Null(ImpostorClass.For(20));
-        Assert.Equal(ImpostorClass.Medium, ImpostorClass.For(100));
-        Assert.Equal(ImpostorClass.Large, ImpostorClass.For(500));
+        // The frame is the smallest power of two that holds the largest instance's size on a 1080-line screen at the reference distance
+        // (within the allowed magnification), from 64 to 256 pixels.
+        Assert.Equal(64, ImpostorClass.For(60)!.Value.FramePixels);
+        Assert.Equal(256, ImpostorClass.For(2000)!.Value.FramePixels);
+        int last = 0;
+        for (float radius = 48; radius < 3000; radius *= 1.2f)
+        {
+            var c = ImpostorClass.For(radius)!.Value;
+            Assert.True(c.FramePixels >= last && BitOperations.IsPow2(c.FramePixels) && c.FramePixels is >= 64 and <= 256, $"{radius}: {c}");
+            Assert.Equal(ImpostorClass.DefaultGrid, c.Grid);
+            if (c.FramePixels < ImpostorClass.MaxFrame) Assert.True(ImpostorClass.ScreenDiameter(radius) / ImpostorClass.Magnification <= c.FramePixels, $"{radius}: {c}");
+            last = c.FramePixels;
+        }
+        Assert.Equal(5, new ImpostorClass("a", 64, 8).Levels);    // 64 .. 4
         Assert.Equal(6, ImpostorClass.Medium.Levels);   // 128 .. 4
         Assert.Equal(7, ImpostorClass.Large.Levels);    // 256 .. 4
+    }
+
+    [Fact]
+    public void Bake_lod_bias_matches_the_texel_density_of_the_screen_at_the_reference_distance()
+    {
+        if (ImpostorClass.BiasScale == 0) return;
+        var c = new ImpostorClass("a", 256, 8);
+        // A sphere that is exactly 2 x 256 pixels across at the reference distance (the bake draws 2 x the frame): no bias; half of that: one level.
+        float radius = 2 * 256 * ImpostorClass.ReferenceDistance * MathF.Tan(25 * MathF.PI / 180) / ImpostorClass.ReferenceHeight;
+        Assert.InRange(c.LodBias(radius) / ImpostorClass.BiasScale, -1e-3f, 1e-3f);
+        Assert.InRange(c.LodBias(radius / 2) / ImpostorClass.BiasScale, 1 - 1e-3f, 1 + 1e-3f);
+        Assert.InRange(c.LodBias(radius / 1e6f), 0, 4 * ImpostorClass.BiasScale + 1e-3f);   // clamped
     }
 
     [Fact]
@@ -139,7 +163,7 @@ public class ImpostorTests
         return new ImpostorAtlas
         {
             Grid = grid, FramePixels = frame, Centre = new Vector3(1, 2, 3), Radius = 4.5f, Name = "test",
-            Textures = [Make(ImpostorMap.Albedo, ImpostorEncoding.Bc3), Make(ImpostorMap.Normal, encoding), Make(ImpostorMap.Depth, ImpostorEncoding.Rgba8)],
+            Gloss = 0.4f, Textures = [Make(ImpostorMap.Albedo, ImpostorEncoding.Bc1), Make(ImpostorMap.Normal, encoding)],
         };
     }
 
@@ -156,8 +180,9 @@ public class ImpostorTests
         Assert.Equal(atlas.FramePixels, read.FramePixels);
         Assert.Equal(atlas.Centre, read.Centre);
         Assert.Equal(atlas.Radius, read.Radius);
+        Assert.Equal(0.4f, read.Gloss);
         Assert.Equal("test", read.Name);
-        for (int m = 0; m < 3; m++)
+        for (int m = 0; m < 2; m++)
         {
             Assert.Equal(atlas.Textures[m].Map, read.Textures[m].Map);
             Assert.Equal(atlas.Textures[m].Encoding, read.Textures[m].Encoding);
@@ -179,9 +204,9 @@ public class ImpostorTests
         var wrongBaker = (byte[])bytes.Clone();
         wrongBaker[8] ^= 0x01;   // the baker version
         Assert.Null(ImpostorAtlas.Read(new MemoryStream(wrongBaker)));
-        // A checksum that does not match the data. The header: magic, format, baker, grid, frame, levels (6 × 4), centre (12), radius (4),
-        // name ("test": 1 + 4), count (4), 3 × (map, encoding, 2 level sizes) (3 × 16), then the 8-byte checksum.
-        int checksum = 24 + 12 + 4 + 5 + 4 + 48;
+        // A checksum that does not match the data. The header: magic, format, baker, grid, frame, levels (6 × 4), centre (12), radius (4), gloss (4),
+        // name ("test": 1 + 4), count (4), 2 × (map, encoding, 2 level sizes) (2 × 16), then the 8-byte checksum.
+        int checksum = 24 + 12 + 4 + 4 + 5 + 4 + 32;
         var tampered = (byte[])bytes.Clone();
         tampered[checksum] ^= 0x01;
         Assert.Null(ImpostorAtlas.Read(new MemoryStream(tampered)));
@@ -224,6 +249,35 @@ public class ImpostorTests
             Assert.InRange(Math.Abs(decoded[i * 4 + 3] - rgba[i * 4 + 3]), 0, 18);   // half a step of the 0..255 eight-value ramp
             if (rgba[i * 4 + 3] == 0) continue;
             for (int c = 0; c < 3; c++) Assert.InRange(Math.Abs(decoded[i * 4 + c] - rgba[i * 4 + c]), 0, 10);
+        }
+    }
+
+    [Fact]
+    public void Bc1_cut_out_keeps_covered_colours_and_transparent_texels()
+    {
+        // 16 x 16: the left half covered with two hues in blocks, the right half uncovered; the block on the border is half and half.
+        const int size = 16;
+        var rgba = new byte[size * size * 4];
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                int o = (y * size + x) * 4;
+                bool covered = x < 6 || (x < 10 && y % 2 == 0);
+                if (!covered) continue;
+                (rgba[o], rgba[o + 1], rgba[o + 2], rgba[o + 3]) = x % 2 == 0 ? ((byte)200, (byte)120, (byte)40, (byte)255) : ((byte)60, (byte)90, (byte)140, (byte)255);
+            }
+        var data = ImpostorEncoder.EncodeBc1(rgba, size);
+        Assert.Equal(ImpostorTexture.LevelBytes(ImpostorEncoding.Bc1, size), data.Length);
+        var decoded = ImpostorEncoder.Decode(ImpostorEncoding.Bc1, data, size);
+        for (int i = 0; i < size * size; i++)
+        {
+            Assert.Equal(rgba[i * 4 + 3], decoded[i * 4 + 3]);   // the cut-out is exact
+            if (rgba[i * 4 + 3] == 0)
+            {
+                Assert.Equal(0, decoded[i * 4] + decoded[i * 4 + 1] + decoded[i * 4 + 2]);   // transparent decodes to black (the sampler premultiplies)
+                continue;
+            }
+            for (int c = 0; c < 3; c++) Assert.InRange(Math.Abs(decoded[i * 4 + c] - rgba[i * 4 + c]), 0, 12);
         }
     }
 
@@ -341,7 +395,6 @@ public class ImpostorTests
             // Frame (3, 3) looks from +X; its pixels are 96..127 in both directions of the 128-pixel level 0.
             var albedo = atlas[ImpostorMap.Albedo]!.Levels[0];
             var normal = atlas[ImpostorMap.Normal]!.Levels[0];
-            var depth = atlas[ImpostorMap.Depth]!.Levels[0];
             int At(float u, float v) => ((96 + (int)(v * 32)) * 128 + 96 + (int)(u * 32)) * 4;
             // The radius is √(0.5² + 1 + 1) × 1.01 ≈ 1.515: z = 0.5 is at u ≈ 0.33, z = −0.5 at u ≈ 0.67.
             int left = At(0.33f, 0.5f), right = At(0.67f, 0.5f), outside = At(0.02f, 0.02f);
@@ -351,7 +404,7 @@ public class ImpostorTests
             Assert.Equal(0, albedo[outside + 3]);
             var n = ImpostorLayout.DecodeNormal(new Vector2(normal[left], normal[left + 1]) / 127.5f - Vector2.One);
             Assert.True(n.Z > 0.95f, $"normal towards the viewer: {n}");
-            Assert.True(depth[left] > depth[right] + 40, $"red (x = 0.5) in front of blue (x = −0.5): {depth[left]} vs {depth[right]}");
+
         }
     }
 }

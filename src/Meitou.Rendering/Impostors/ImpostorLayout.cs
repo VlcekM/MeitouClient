@@ -89,22 +89,57 @@ public static class ImpostorLayout
         MathF.Max(minimum, worldRadius * screenHeight / (MathF.Tan(fieldOfView / 2) * framePixels));
 }
 
+
 /// <summary>
-/// What an atlas is baked at, chosen by the mesh's size class (docs/impostors.md, "Size classes"): frame pixels and grid. The class comes from
-/// the largest instance radius the placer can produce, the mesh's bounding radius × the record's maximum scale.
+/// What an atlas is baked at (docs/impostors.md, "Size classes"): frame pixels and grid. The frame size follows from how big the largest
+/// instance of the mesh is on the screen at the reference transition distance (<see cref="For"/>), so a small bush gets a 64-pixel frame and a
+/// big tree a 256-pixel one; the grid is the same for all (<see cref="DefaultGrid"/>).
 /// </summary>
 public readonly record struct ImpostorClass(string Name, int FramePixels, int Grid)
 {
     /// <summary>Instances smaller than this (radius in world units at the record's largest scale) get no impostor.</summary>
     public const float MinimumRadius = 48;
 
-    public static readonly ImpostorClass Medium = new("medium", 128, 12);
-    public static readonly ImpostorClass Large = new("large", 256, 12);
+    /// <summary>The picture height (pixels) and the transition distance (units) the frame size and the bake's texture detail are chosen for.</summary>
+    public const float ReferenceHeight = 1080, ReferenceDistance = 4000;
+    static readonly float HalfFovTan = MathF.Tan(25 * MathF.PI / 180);
+
+    static float EnvFloat(string name, float fallback, float min) =>
+        float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) && v >= min ? v : fallback;
+
+    /// <summary>Frames per atlas side (<c>MEITOU_IMPOSTOR_GRID</c> overrides, for experiments; it is part of the cache key through the atlas).</summary>
+    public static readonly int DefaultGrid = (int)EnvFloat("MEITOU_IMPOSTOR_GRID", 12, 2);
+    /// <summary>How much larger than its frame an instance may look on the screen at the reference distance (<c>MEITOU_IMPOSTOR_MAGNIFY</c>).</summary>
+    public static readonly float Magnification = EnvFloat("MEITOU_IMPOSTOR_MAGNIFY", 1.4f, 0.5f);
+    /// <summary>Scales the bake's LOD bias (<c>MEITOU_IMPOSTOR_BIAS</c>, 1 by default; 0 turns it off, for comparisons).</summary>
+    public static readonly float BiasScale = EnvFloat("MEITOU_IMPOSTOR_BIAS", 1f, 0f);
+    public const int MinFrame = 64, MaxFrame = 256;
+
+    public static readonly ImpostorClass Medium = new("medium", 128, DefaultGrid);
+    public static readonly ImpostorClass Large = new("large", 256, DefaultGrid);
+
+    /// <summary>A sphere of <paramref name="worldRadius"/> units seen from <paramref name="distance"/>: its diameter in pixels at <see cref="ReferenceHeight"/>.</summary>
+    public static float ScreenDiameter(float worldRadius, float distance = ReferenceDistance) => worldRadius * ReferenceHeight / (HalfFovTan * Math.Max(distance, 1));
 
     /// <summary>The class for a largest instance radius, or null when the mesh is too small to need an impostor.</summary>
-    public static ImpostorClass? For(float worldRadius) => worldRadius < MinimumRadius ? null : worldRadius < 160 ? Medium : Large;
+    public static ImpostorClass? For(float worldRadius)
+    {
+        if (worldRadius < MinimumRadius) return null;
+        float need = ScreenDiameter(worldRadius) / Magnification;
+        int frame = MinFrame;
+        while (frame < need && frame < MaxFrame) frame *= 2;
+        return new ImpostorClass(frame.ToString(System.Globalization.CultureInfo.InvariantCulture), frame, DefaultGrid);
+    }
 
-    /// <summary>Mip levels baked per frame: down to 4 × 4 pixels, so every level stays aligned to the 4 × 4 blocks of the compressed formats.</summary>
+    /// <summary>
+    /// The texture LOD bias the bake uses (docs/impostors.md "Look"): the bake draws the mesh at 2 x the frame size, far finer than the screen
+    /// shows it at the transition, so its cut-out (the leaves' mip alpha) and its colours (the leaf texture's mips) would be those of a near mesh,
+    /// and the impostor fuller and brighter than the mesh at the same distance. The bias is log2 of the ratio of the bake's texel density to the
+    /// screen's at the reference distance for an instance of <paramref name="meanWorldRadius"/> (mesh radius x the mean scale).
+    /// </summary>
+    public float LodBias(float meanWorldRadius) => Math.Clamp(MathF.Log2(2 * FramePixels / Math.Max(ScreenDiameter(meanWorldRadius), 1e-3f)), 0, 4) * BiasScale;
+
+    /// <summary>Mip levels baked per frame: down to 4 x 4 pixels, so every level stays aligned to the 4 x 4 blocks of the compressed formats.</summary>
     public int Levels => BitOperations.Log2((uint)FramePixels) - 1;
 
     public int AtlasPixels => FramePixels * Grid;

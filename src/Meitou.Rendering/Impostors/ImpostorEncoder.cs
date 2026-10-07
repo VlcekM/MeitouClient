@@ -13,6 +13,7 @@ public static class ImpostorEncoder
     {
         ImpostorEncoding.Rgba8 => rgba,
         ImpostorEncoding.Bc3 => EncodeBc3(rgba, size),
+        ImpostorEncoding.Bc1 => EncodeBc1(rgba, size),
         ImpostorEncoding.Bc5 => EncodeBc5(rgba, size),
         _ => throw new ArgumentOutOfRangeException(nameof(encoding)),
     };
@@ -46,8 +47,37 @@ public static class ImpostorEncoder
         return result;
     }
 
-    /// <summary>A BC1 colour block (four-colour mode), endpoints from the principal axis of the pixels with alpha above 0 (or all of them).</summary>
-    static void EncodeColourBlock(ReadOnlySpan<Vector3> colours, ReadOnlySpan<byte> alpha, Span<byte> dst)
+    /// <summary>
+    /// RGBA8 pixels as BC1 blocks with a 1-bit alpha (alpha of 128 and above is covered): a block with every texel covered is a four-colour
+    /// block; any other is a three-colour block whose fourth code is transparent black, so the sampler's filtering returns colour x coverage
+    /// (the shader divides by the alpha). Endpoints are fitted to the covered texels only.
+    /// </summary>
+    public static byte[] EncodeBc1(byte[] rgba, int size)
+    {
+        int blocks = size / 4;
+        var result = new byte[blocks * blocks * 8];
+        Parallel.For(0, blocks, by =>
+        {
+            Span<byte> alpha = stackalloc byte[16];
+            Span<Vector3> colours = stackalloc Vector3[16];
+            for (int bx = 0; bx < blocks; bx++)
+            {
+                bool opaque = true;
+                for (int i = 0; i < 16; i++)
+                {
+                    int o = ((by * 4 + i / 4) * size + bx * 4 + i % 4) * 4;
+                    colours[i] = new Vector3(rgba[o], rgba[o + 1], rgba[o + 2]);
+                    alpha[i] = rgba[o + 3] >= 128 ? (byte)255 : (byte)0;
+                    opaque &= alpha[i] != 0;
+                }
+                EncodeColourBlock(colours, alpha, result.AsSpan((by * blocks + bx) * 8, 8), punch: !opaque);
+            }
+        });
+        return result;
+    }
+
+    /// <summary>A BC1 colour block (four-colour mode, or with <paramref name="punch"/> the three-colour mode with a transparent code), endpoints from the principal axis of the pixels with alpha above 0 (or all of them).</summary>
+    static void EncodeColourBlock(ReadOnlySpan<Vector3> colours, ReadOnlySpan<byte> alpha, Span<byte> dst, bool punch = false)
     {
         bool any = false;
         foreach (byte a in alpha) any |= a > 0;
@@ -83,25 +113,34 @@ public static class ImpostorEncoder
         var c0 = Vector3.Clamp(mean + axis * hi, Vector3.Zero, new Vector3(255));
         var c1 = Vector3.Clamp(mean + axis * lo, Vector3.Zero, new Vector3(255));
         ushort e0 = Pack565(c0), e1 = Pack565(c1);
-        if (e0 < e1) (e0, e1) = (e1, e0);
+        // Four-colour mode needs e0 > e1, the three-colour mode with a transparent code e0 <= e1.
+        if (punch ? e0 > e1 : e0 < e1) (e0, e1) = (e1, e0);
         Span<Vector3> palette = stackalloc Vector3[4];
         palette[0] = Expand565(e0);
         palette[1] = Expand565(e1);
-        palette[2] = (2 * palette[0] + palette[1]) / 3;
-        palette[3] = (palette[0] + 2 * palette[1]) / 3;
+        int colourCodes = punch ? 3 : 4;
+        if (punch) palette[2] = (palette[0] + palette[1]) / 2;
+        else
+        {
+            palette[2] = (2 * palette[0] + palette[1]) / 3;
+            palette[3] = (palette[0] + 2 * palette[1]) / 3;
+        }
         uint indices = 0;
-        if (e0 != e1)
-            for (int i = 0; i < 16; i++)
+        for (int i = 0; i < 16; i++)
+        {
+            int best = 0;
+            if (punch && alpha[i] == 0) best = 3;
+            else if (e0 != e1)
             {
-                int best = 0;
                 float bestDistance = float.MaxValue;
-                for (int p = 0; p < 4; p++)
+                for (int p = 0; p < colourCodes; p++)
                 {
                     float d = Vector3.DistanceSquared(colours[i], palette[p]);
                     if (d < bestDistance) (best, bestDistance) = (p, d);
                 }
-                indices |= (uint)best << (2 * i);
             }
+            indices |= (uint)best << (2 * i);
+        }
         dst[0] = (byte)e0; dst[1] = (byte)(e0 >> 8); dst[2] = (byte)e1; dst[3] = (byte)(e1 >> 8);
         for (int i = 0; i < 4; i++) dst[4 + i] = (byte)(indices >> (8 * i));
     }
@@ -182,30 +221,35 @@ public static class ImpostorEncoder
         for (int i = 0; i < 16; i++) values[i] = (byte)palette[(int)(indices >> (3 * i) & 7)];
     }
 
-    /// <summary>A level back to RGBA8 (BC3 colour decoded with the 4-colour rule BC3 always uses; BC5 into R and G, B 0, A 255).</summary>
+
+    /// <summary>
+    /// A level back to RGBA8 (BC3 colour decoded with the 4-colour rule BC3 always uses; BC1 with its 1-bit alpha: the three-colour mode's
+    /// fourth code is transparent black, alpha 0; BC5 into R and G, B 0, A 255).
+    /// </summary>
     public static byte[] Decode(ImpostorEncoding encoding, byte[] data, int size)
     {
         if (encoding == ImpostorEncoding.Rgba8) return data;
         var rgba = new byte[size * size * 4];
-        int blocks = size / 4;
+        int blocks = size / 4, blockBytes = encoding == ImpostorEncoding.Bc1 ? 8 : 16;
         Span<byte> a = stackalloc byte[16], b = stackalloc byte[16];
         Span<int> colours = stackalloc int[12];
         for (int by = 0; by < blocks; by++)
             for (int bx = 0; bx < blocks; bx++)
             {
-                var block = data.AsSpan((by * blocks + bx) * 16, 16);
-                DecodeBc4Block(block[..8], a);
+                var block = data.AsSpan((by * blocks + bx) * blockBytes, blockBytes);
+                if (encoding != ImpostorEncoding.Bc1) DecodeBc4Block(block[..8], a);
                 if (encoding == ImpostorEncoding.Bc5) DecodeBc4Block(block[8..], b);
                 else
                 {
-                    var c = block[8..];
+                    var c = encoding == ImpostorEncoding.Bc1 ? block : block[8..];
                     ushort c0 = (ushort)(c[0] | c[1] << 8), c1 = (ushort)(c[2] | c[3] << 8);
+                    bool punch = encoding == ImpostorEncoding.Bc1 && c0 <= c1;
                     Expand(c0, colours[..3]);
                     Expand(c1, colours.Slice(3, 3));
                     for (int k = 0; k < 3; k++)
                     {
-                        colours[6 + k] = (2 * colours[k] + colours[3 + k]) / 3;
-                        colours[9 + k] = (colours[k] + 2 * colours[3 + k]) / 3;
+                        colours[6 + k] = punch ? (colours[k] + colours[3 + k]) / 2 : (2 * colours[k] + colours[3 + k]) / 3;
+                        colours[9 + k] = punch ? 0 : (colours[k] + 2 * colours[3 + k]) / 3;
                     }
                     uint idx = (uint)(c[4] | c[5] << 8 | c[6] << 16 | c[7] << 24);
                     for (int i = 0; i < 16; i++)
@@ -215,8 +259,10 @@ public static class ImpostorEncoder
                         rgba[o] = (byte)colours[p * 3];
                         rgba[o + 1] = (byte)colours[p * 3 + 1];
                         rgba[o + 2] = (byte)colours[p * 3 + 2];
+                        if (encoding == ImpostorEncoding.Bc1) rgba[o + 3] = punch && p == 3 ? (byte)0 : (byte)255;
                     }
                 }
+                if (encoding == ImpostorEncoding.Bc1) continue;
                 for (int i = 0; i < 16; i++)
                 {
                     int o = (((by * 4 + i / 4) * size) + bx * 4 + i % 4) * 4;

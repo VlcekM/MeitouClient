@@ -27,6 +27,9 @@ public static class Enhancements
 {
     public const float MeitouHazeStrength = 0.87f;
 
+    /// <summary>The Meitou shadows' default shadow distance (the game's is 5000, its slider ends at 9000), and the most the <c>--shadow-range</c> option takes with them.</summary>
+    public const float MeitouShadowRange = 10000, MeitouShadowRangeMax = 15000;
+
     /// <summary>
     /// The switches, in key order (F1 upwards in the viewer), over the post-processing options and the haze strength
     /// (docs/formats/post-processing.md and sky.md for what the game does).

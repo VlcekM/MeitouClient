@@ -18,18 +18,24 @@ public sealed partial class FoliageRenderer
 {
     /// <summary>The default transition distance of large meshes (units along the ground; the Tab slider "Impostor distance").</summary>
     public const float DefaultImpostorDistance = 4000;
-    /// <summary>Medium-class atlases (128-pixel frames, radius 48 to 160) switch at this share of <see cref="ImpostorDistance"/>: 1, since at 0.5
-    /// (2000) bushes visibly thickened against their meshes (docs/impostors.md "Drawing").</summary>
-    public const float ImpostorMediumShare = 1f;
     /// <summary>The crossfade band before the transition, as a share of it.</summary>
     public const float ImpostorBand = 0.1f;
 
     /// <summary>The <c>impostors</c> switch (Enhancements): Meitou (default) draws far instances as impostors; Faithful never loads or draws one.</summary>
     public bool Impostors { get; set; } = true;
-    /// <summary>The transition distance of large meshes; medium ones at <see cref="ImpostorMediumShare"/> of it.</summary>
+    /// <summary>The transition distance (units along the ground) of every atlas.</summary>
     public float ImpostorDistance { get; set; } = DefaultImpostorDistance;
-    /// <summary><c>MEITOU_IMPOSTOR_DEPTH=1</c>: impostors write the depth of their reconstructed surface (no early depth test).</summary>
-    static readonly bool ImpostorDepthWrite = Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_DEPTH") == "1";
+    /// <summary>
+    /// The most video memory the resident atlases may use, in megabytes (<c>MEITOU_IMPOSTOR_BUDGET_MB</c>): a mesh whose atlas does not fit after the
+    /// ones unused for a second are unloaded stays a mesh (and asks again every <see cref="ImpostorRetrySeconds"/>).
+    /// </summary>
+    public double ImpostorBudgetMb { get; set; } = double.TryParse(Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_BUDGET_MB"), System.Globalization.NumberStyles.Float,
+        System.Globalization.CultureInfo.InvariantCulture, out double budget) && budget > 0 ? budget : DefaultImpostorBudgetMb;
+    /// <summary>The default of <see cref="ImpostorBudgetMb"/>.</summary>
+    public const double DefaultImpostorBudgetMb = 192;
+    const double ImpostorRetrySeconds = 8;
+    /// <summary>MEITOU_IMPOSTOR_LOG=1: a line for every atlas loaded, baked, refused for the budget or unloaded.</summary>
+    static readonly bool ImpostorLog = Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_LOG") == "1";
     /// <summary><c>MEITOU_IMPOSTOR_CASTERS=0</c>: the cascades keep the meshes (no impostor casters).</summary>
     static readonly bool ImpostorCasters = Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_CASTERS") != "0";
 
@@ -45,6 +51,8 @@ public sealed partial class FoliageRenderer
         public ImpostorAtlas? Atlas;
         public ImpostorTextures? Textures;
         public long LastUsed;
+        /// <summary>A refused atlas (<see cref="ImpostorStage.None"/>): the tick from which it may ask again; 0 for one that never can (too small, ineligible).</summary>
+        public long RetryAt;
         /// <summary>The work list that last numbered this mesh's impostor batch, and its number among the impostor batches.</summary>
         public int Stamp, Index;
     }
@@ -53,7 +61,7 @@ public sealed partial class FoliageRenderer
     ImpostorBaker? impostorBaker;
     ImpostorBakeJob? impostorBake;
     /// <summary>Atlas bytes uploaded per frame while settling; <see cref="impostorUploadsWaiting"/>: more wait for the next frame.</summary>
-    const long SettleUploadBytes = 64L << 20, UploadBytesPerFrame = 12L << 20;
+    const long SettleUploadBytes = 64L << 20, UploadBytesPerFrame = 6L << 20;
     bool impostorUploadsWaiting;
     MeshAsset? impostorBakeAsset;
     ImpostorDraw? impostorDraw;
@@ -69,9 +77,7 @@ public sealed partial class FoliageRenderer
         $"({impostorsLoaded} from the cache, {impostorsBaked} baked, {impostorUnloads} unloaded)";
 
     /// <summary>The ground distance from which a mesh is its impostor (infinite without a resident atlas or with the switch off).</summary>
-    float TransitionOf(MeshAsset a) => Impostors && a.Impostor is { Stage: ImpostorStage.Ready } s
-        ? s.Class.FramePixels >= ImpostorClass.Large.FramePixels ? ImpostorDistance : ImpostorDistance * ImpostorMediumShare
-        : float.PositiveInfinity;
+    float TransitionOf(MeshAsset a) => Impostors && a.Impostor is { Stage: ImpostorStage.Ready } ? ImpostorDistance : float.PositiveInfinity;
 
     /// <summary>
     /// A group's range for a view with its impostor, and which parts the view draws (<see cref="FoliageCull.MeshPart"/>,
@@ -109,7 +115,7 @@ public sealed partial class FoliageRenderer
         if (Impostors && (settling || now - lastImpostorScan >= 1000))
         {
             lastImpostorScan = now;
-            float shortest = ImpostorDistance * ImpostorMediumShare * (1 - ImpostorBand);
+            float shortest = ImpostorDistance * (1 - ImpostorBand);
             foreach (var state in zones.Values)
             {
                 if (!state.Ready) continue;
@@ -122,7 +128,13 @@ public sealed partial class FoliageRenderer
                     // fade band, as WithImpostor requires) and this zone has ground from the band on.
                     var (range, band) = RangeOf(g);
                     if (!a.Resident || !a.HasBounds || near > range || range - band < ImpostorDistance) continue;
-                    if (a.Impostor is { } s) { s.LastUsed = now; continue; }
+                    if (a.Impostor is { } s)
+                    {
+                        s.LastUsed = now;
+                        // A refused atlas asks again after a while (something may have been unloaded since).
+                        if (s.Stage == ImpostorStage.None && s.RetryAt != 0 && now >= s.RetryAt) a.Impostor = null;
+                        else continue;
+                    }
                     RequestImpostor(a, now);
                 }
             }
@@ -207,10 +219,22 @@ public sealed partial class FoliageRenderer
     bool UploadImpostor(MeshAsset a, long budget, ref long uploaded)
     {
         var s = a.Impostor!;
+        if (s.Textures is null)
+        {
+            // The normal map one level coarser than the albedo: it shapes the lighting, which varies slowly over a crown.
+            int levels = LevelsToSkip(s.Atlas!, a.Mesh.MaxScale, ImpostorDistance);
+            long need = ImpostorTextures.BytesFor(s.Atlas!, levels, levels + 1);
+            if (!MakeImpostorRoom(need, a))
+            {
+                if (ImpostorLog) Console.WriteLine($"impostor  refused {a.Mesh.Name}: {need / 1048576.0:0.0} MB would pass the budget ({impostorBytes / 1048576.0:0.0} of {ImpostorBudgetMb:0} MB resident)");
+                (s.Stage, s.RetryAt, s.Atlas, s.Meshes) = (ImpostorStage.None, Environment.TickCount64 + (long)(ImpostorRetrySeconds * 1000), null, null);
+                return true;
+            }
+            using var first = Gpu.Uploads.Begin();
+            s.Textures = new ImpostorTextures(Gpu, s.Atlas!, first, levels, levels + 1);
+            impostorBytes += s.Textures.Bytes;
+        }
         using var batch = Gpu.Uploads.Begin();
-        // The normal and depth maps one level coarser than the albedo: they shape the lighting, which varies slowly over a crown.
-        int skip = LevelsToSkip(s.Atlas!, a.Mesh.MaxScale, ImpostorDistance);
-        s.Textures ??= new ImpostorTextures(Gpu, s.Atlas!, batch, skip, skip + 1);
         // At least one step (a level larger than the budget still goes), then while the budget lasts.
         do
         {
@@ -219,9 +243,9 @@ public sealed partial class FoliageRenderer
         } while (!s.Textures.Complete && uploaded + s.Textures.NextStepBytes <= budget);
         if (!s.Textures.Complete) return false;
         s.Stage = ImpostorStage.Ready;
+        if (ImpostorLog) Console.WriteLine($"impostor  ready {a.Mesh.Name}: {s.Atlas!.Grid}x{s.Atlas.Grid} frames of {s.Atlas.FramePixels}, {s.Textures.Bytes / 1048576.0:0.0} MB ({impostorBytes / 1048576.0:0.0} of {ImpostorBudgetMb:0} MB resident)");
         s.Atlas = null;   // the CPU copy is not needed any more (a reload reads the cache again)
         s.Meshes = null;
-        impostorBytes += s.Textures.Bytes;
         residentStamp++;
         return true;
     }
@@ -264,6 +288,27 @@ public sealed partial class FoliageRenderer
         }
         impostorBake.Dispose();
         (impostorBake, impostorBakeAsset) = (null, null);
+    }
+
+    /// <summary>
+    /// Room in the budget for <paramref name="need"/> more bytes of atlas: the resident atlases unused for the last second go, least recently
+    /// used first, until it fits (the ones in use stay: unloading them only to load them again next scan would thrash). False when it does not fit.
+    /// </summary>
+    bool MakeImpostorRoom(long need, MeshAsset except)
+    {
+        long limit = (long)(ImpostorBudgetMb * 1048576);
+        if (impostorBytes + need <= limit) return true;
+        long now = Environment.TickCount64;
+        foreach (var a in assetsByMesh.Values
+            .Where(a => a != except && a.Impostor is { Stage: ImpostorStage.Ready } s && now - s.LastUsed > 1000)
+            .OrderBy(a => a.Impostor!.LastUsed)
+            .ToList())
+        {
+            if (ImpostorLog) Console.WriteLine($"impostor  evict {a.Mesh.Name} ({a.Impostor!.Textures!.Bytes / 1048576.0:0.0} MB, unused {(now - a.Impostor.LastUsed) / 1000.0:0.0} s) for the budget");
+            UnloadImpostor(a);
+            if (impostorBytes + need <= limit) return true;
+        }
+        return false;
     }
 
     void UnloadImpostor(MeshAsset a)
@@ -355,7 +400,7 @@ public sealed partial class FoliageRenderer
     {
         impostorDraw ??= new ImpostorDraw(Gpu, nativeFrame);
         var drawState = state with { Cull = Silk.NET.Vulkan.CullModeFlags.None };
-        var program = depth ? ImpostorProgram.Caster : ImpostorDepthWrite ? ImpostorProgram.DepthWrite : ImpostorProgram.Plain;
+        var program = depth ? ImpostorProgram.Caster : ImpostorProgram.Plain;
         var pipeline = impostorDraw.Pipeline(program, drawState, targets.Formats);
         var up = new Vector3(viewProjection.M12, viewProjection.M22, viewProjection.M32);
         up = up.LengthSquared() > 0 ? Vector3.Normalize(up) : Vector3.UnitY;
@@ -371,7 +416,7 @@ public sealed partial class FoliageRenderer
             var push = new ImpostorPush
             {
                 Sphere = new Vector4(atlas.Centre, atlas.Radius), CameraUp = up, Grid = atlas.Grid,
-                Albedo = t.Index(0, textureBias), Normal = t.Index(1, textureBias), Depth = t.Index(2, textureBias),
+                Albedo = t.Index(0, textureBias), Normal = t.Index(1, textureBias), Gloss = atlas.Gloss,
                 Coverage = coverage ? 1u : 0u, View = view,
             };
             MeshPush bytes = default;

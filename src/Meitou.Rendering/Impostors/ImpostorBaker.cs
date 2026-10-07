@@ -184,7 +184,7 @@ public sealed unsafe class ImpostorBaker : IDisposable
     /// <paramref name="readback"/> at pass × the row's bytes.
     /// </summary>
     internal void RecordRow(CommandList cmd, int row, ImpostorClass size, ImpostorMeshes meshes, Part[] mainParts, Material main, Part[] leavesParts, Material? leaves,
-        Texture large, Texture depth, Texture small, Buffer readback)
+        Texture large, Texture depth, Texture small, Buffer readback, float lodBias)
     {
         int grid = size.Grid, f = size.FramePixels, samples = 2 * f, width = grid * samples, smallWidth = grid * f;
         var c = meshes.Centre;
@@ -216,8 +216,8 @@ public sealed unsafe class ImpostorBaker : IDisposable
                 }], 256);
                 var constants = new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = Vector3.UnitY, FogDistance = 0 };
                 frame.Bind(cmd, program.P.Layout, in constants, [block.Binding]);
-                Draw(cmd, mainParts, main, formats);
-                if (leaves is not null) Draw(cmd, leavesParts, leaves, formats);
+                Draw(cmd, mainParts, main, formats, lodBias);
+                if (leaves is not null) Draw(cmd, leavesParts, leaves, formats, lodBias);
             }
             cmd.EndRendering();
             cmd.Barrier(BarrierBatch.Full);
@@ -237,7 +237,7 @@ public sealed unsafe class ImpostorBaker : IDisposable
     }
 
     /// <summary>The material as the GL baker set it (<c>FoliageRenderer.DrawMesh</c>'s uniforms: textures and normal maps on), one draw per part.</summary>
-    void Draw(CommandList cmd, Part[] parts, Material m, AttachmentFormats formats)
+    void Draw(CommandList cmd, Part[] parts, Material m, AttachmentFormats formats, float lodBias)
     {
         var s = m.Settings;
         uint stand = StandIn();
@@ -246,7 +246,8 @@ public sealed unsafe class ImpostorBaker : IDisposable
         bool normal = textured && normalKey != 0;
         bool dual = textured && diffuse2Key != 0;
         bool cut = normal && s.AlphaThreshold > 0;
-        uint Index(uint key) => key == 0 ? stand : textures.Index(key, 0, stand);
+        // The textures at the detail the screen shows the mesh with at the transition (ImpostorClass.LodBias): its leaf alpha and colours as they thin out.
+        uint Index(uint key) => key == 0 ? stand : textures.Index(key, lodBias, stand);
         var pc = new MeshPush
         {
             Tint = Vector3.One, TriplanarScale = 1f / 5000, AlphaChannel = 3, GreyChannel = -1, HeadDiffuse = stand, HeadNormal = stand,
@@ -310,7 +311,12 @@ public sealed class ImpostorBakeJob : IDisposable
         main = baker.Resolve(source.Main);
         leaves = source.Leaves is { } l && meshes.Leaves is not null ? baker.Resolve(l) : null;
         assembler = new ImpostorAssembler(size.Grid, size.FramePixels, size.Levels);
+        lodBias = size.LodBias(meshes.Radius * source.MeanScale);
     }
+
+    /// <summary>The texture LOD bias the bake draws with (<see cref="ImpostorClass.LodBias"/>).</summary>
+    public float LodBias => lodBias;
+    readonly float lodBias;
 
     /// <summary>Rows recorded per <see cref="Step"/> (frame): 1 in the viewer (a few milliseconds of GPU time a frame), all of them offline.</summary>
     public int RowsPerStep { get; set; } = 1;
@@ -382,7 +388,7 @@ public sealed class ImpostorBakeJob : IDisposable
             {
                 ulong rowBytes = (ulong)(size.Grid * size.FramePixels * size.FramePixels * 4);
                 var buffer = ReadbackBuffer.Create(gpu, 3 * rowBytes, "impostor bake readback");
-                baker.RecordRow(cmd, recorded, size, meshes, mainParts, main, leavesParts, leaves, large!, depth!, small!, buffer.Handle);
+                baker.RecordRow(cmd, recorded, size, meshes, mainParts, main, leavesParts, leaves, large!, depth!, small!, buffer.Handle, lodBias);
                 rows.Add((recorded, gpu.Frame.Number, buffer));
             }
             cmd.EndLabel();

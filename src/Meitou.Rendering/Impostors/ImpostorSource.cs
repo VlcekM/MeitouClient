@@ -30,6 +30,8 @@ public sealed class ImpostorSource
     public ImpostorMaterial? Leaves { get; init; }
     /// <summary>The largest scale the placer gives an instance (<see cref="FoliageMesh.MaxScale"/>).</summary>
     public float MaxScale { get; init; } = 1;
+    /// <summary>The mean of the record's two scale limits: the instance the bake's texture detail is matched to (<see cref="ImpostorClass.LodBias"/>).</summary>
+    public float MeanScale { get; init; } = 1;
     /// <summary>Resolved paths of every texture the materials name (null when not found), for the key.</summary>
     public IReadOnlyList<string?> TexturePaths { get; init; } = [];
 
@@ -66,6 +68,7 @@ public sealed class ImpostorSource
             Main = main,
             Leaves = leaves,
             MaxScale = mesh.MaxScale,
+            MeanScale = (Math.Abs(mesh.MinScale) + Math.Abs(mesh.MaxScale)) / 2,
             TexturePaths = textures,
         };
     }
@@ -90,7 +93,7 @@ public sealed class ImpostorSource
             File(LeavesPath);
             foreach (var t in TexturePaths) File(t);
             sb.Append(Main.Describe()).Append('\n').Append(Leaves?.Describe() ?? "-").Append('\n');
-            sb.Append(MaxScale.ToString("R", CultureInfo.InvariantCulture));
+            sb.Append(CultureInfo.InvariantCulture, $"{MaxScale:R}|{MeanScale:R}|grid {ImpostorClass.DefaultGrid} magnify {ImpostorClass.Magnification:R} bias {ImpostorClass.BiasScale:R}");
             return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
         }
     }
