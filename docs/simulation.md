@@ -31,6 +31,7 @@ decides what they leave open (scheduling, threads, data layout).
   SQUAD_TEMPLATE and TOWN; AI_PACKAGE, AI_TASK and races are still read by field name.
 - Stages 0 to 3 and 6 are done on branch `sim-core`: [time facts](#time-model) (the game's clock, pause, 1/2/5), [Skeleton as built](#skeleton-as-built-stage-1) [Populate and move as built](#populate-and-move-as-built-stages-2-and-3) [Player as built](#player-as-built-stage-6) and [Animation, formation and roaming as built](#animation-formation-and-roaming-as-built-after-stage-6).
 - Missing for a living world: navmesh walkability and collision with buildings, the AI proper, the UI screens, saves; bodies ([stage 7](#bodies-as-built-stage-7)) and melee combat ([stage 8](#combat-as-built-stage-8)) exist as code but are not wired into `World` yet.
+- Missing for a living world: navmesh walkability and collision with buildings, the AI proper, the UI screens, bodies and combat. Saves are written and read ([as built](#saves-as-built-stage-10)); the host does not use them yet.
 
 ## Principles
 
@@ -598,6 +599,35 @@ appearance and the animation layers as [character-viewer.md](character-viewer.md
 [animation.md](animation.md) describe, drawing many characters from the snapshot (bone palettes in a buffer, instancing per
 mesh, mesh LOD). It exists as `Meitou.Rendering.Characters` (see [character-renderer.md](character-renderer.md)); the simulation fills a `CharacterDrawList` each frame.
 
+## Saves as built (stage 10)
+
+Track G, branch `sim-save`: `Meitou.Data.Save` reads and writes the save folder ([save.md](formats/save.md#implementation-as-built-stage-10)) and `Meitou.Simulation.Saving` maps it to and from a `World`. It is an API; the host wires it (`--load <save>`, the quicksave and quickload keys) in track A.
+
+**Loading** (`SaveLoader.Load(world, save, data, options)`, `world` not started and empty, `data` the `PopulationData` of the running game):
+
+| From the save | Into the world |
+|---|---|
+| CAMERA `time day / hour / minute` | `LoadedSave.Clock` (a `SaveClock`); the host sets its `GameClock` from it (`Day`, `HourOfDay`) |
+| CAMERA `player money`, `pfaction name` | `World.Player.Money`, `World.Player.Faction` (the position of the faction with the `known` list, else `204-gamedata.base`) |
+| GAMESTATE_FACTION relation tables | `PopulationData.Relations` (`FactionRelations.Set`; `ApplyRelations`, on by default); prosperity, platoon counters and trust stay in `LoadedSave.Factions` (`FactionState`) |
+| The player's platoons that have a file | One `Squad` each in `World.Squads` (`Squad.Name` = platoon name, `TemplateId` = its squad template, leader = the `is leader` character) and their characters in the table: saved position (including its height), yaw from the rotation quaternion, name, role (`squad mem type`), `IsPlayer`, speed from the race and the saved stats; `World.Player.Squad` is the first platoon |
+| STATS, MEDICAL_STATE of those characters | `CharacterCold.Save` (`SavedCharacterLink`): `Stats` (`CharacterStats.ReadSave`) and `Medical` (`MedicalState.ReadSave`, race from the appearance record or the CHARACTER); the host's body systems take these over. A dead character is not made and stays in the save |
+| CAMERA `selected_character`, `selected_characters<k>` | `World.Player.Selection` |
+| The other platoons (not the player's) with a placed base town and a squad template | A roaming `Platoon` stand-in in `World.Platoons` (state `Unloaded`, saved position, size = character count, template, faction); the population system makes the members again from the template when a zone near it is active. `LoadedSave.RoamingPlatoons` maps the world's platoon id to the save's platoon name |
+
+**Saving** (`SaveCapture.Capture(world, data, clock, loaded, options)` returns a `SaveGame`; `SaveGame.Write(folder)` commits it). With the `LoadedSave` the world came from, the loaded save is copied (`Clone`) and the modelled parts are written over it: the clock, money, relations the world changed since loading (`RelationBaseline`), prosperity and platoon counters, and for every player squad the platoon and its characters:
+position, facing (the saved quaternion is kept while the yaw has not changed), name, leader flag, STATS and MEDICAL_STATE from the host (`SaveCaptureOptions.Bodies`) or the loaded ones, new recruits as a new character (handle in the platoon's container, next slot; records with the real key sets; STATS from `CharacterStats`, MEDICAL from the race, appearance from the generated `Loadout` record), characters that left the world
+removed with their items (only ones the loader made; a dead one that was never made stays), the selection, the CAMERA squad and member counts, the roaming platoons' positions. Everything else is carried through unchanged: towns, nests, war state, weather (BIOMES), research, decals, all zone files, the NPC platoons' own files, the portrait atlas, the CAMERA's unique-character and camera data.
+Without a `LoadedSave` (a new game) a new save is built from the data: all factions with the data's relations (prosperity 1000) and war states at defaults, one default GAMESTATE_TOWN per `SaveCaptureOptions.Placements`, empty BIOMES / RESEARCH / TERRAIN_DECALS, the player's squads as platoons `Nameless_<n>`, no zones.
+The CAMERA `mods` list is `SaveCaptureOptions.DataFiles` (the base game's four by default). Saves go to our own folder while testing; never into the original game's `save` folders.
+
+**Checks.** `SaveWorldTests` (synthetic town, no install): a new game captured, written, loaded into a second world (positions, yaw, names, money, clock, selection, relations equal), saved again byte for byte, changes (moved, turned, killed, recruited, money, clock) reaching the file while a record the world does not hold survives. Against the three real saves (`[Slow]`): each loads (player platoons, characters with saved stats and medical state, 195 to 354 roaming stand-ins), loading and capturing again changes only
+the PLATOON and CAMERA records of `quick.save` and nothing in the player's characters, a change made in the world comes back after writing and reading, and a world loaded from a real save runs 150 ticks with the population system and captures again with the same platoons and characters.
+
+**Not carried yet** (kept as the save had it, or regenerated): the NPC platoons' characters (not made on loading: the population system regenerates the members from the template; their files stay in the written save as they were, only the stand-in's position is updated, so nothing of them is lost but a loaded game plays them anew), towns and their state (the world has no town state), war state, weather and season, research, zone buildings and loose items, inventories and equipment of characters, AI jobs, the saved look of a loaded character (the loader rolls a new one from the saved serial through `IAppearanceSource`), bounties, `5-redirect`. A character's real race, hunger and wounds come back through `SavedCharacterLink.Medical` once the body systems of track E are wired to it.
+**Unknown**: whether the original loads a save written from nothing (see [save.md](formats/save.md#implementation-as-built-stage-10)); the orientation convention of the saved quaternion (the loader reads a rotation about Y as yaw from +Z towards +X and writes it back the same way; an unchanged character keeps its quaternion bit for bit).
+**Integration for track A**: call `SaveLoader.Load` before the first tick on a world built with the same `PopulationData`, keep the returned `LoadedSave`, pass it to `SaveCapture.Capture` together with the host's clock; after loading read each loaded character's `CharacterCold.Save.Stats/Medical` into your body systems and supply them again through `SaveCaptureOptions.Bodies`; the population system should not make residents for a town whose platoons were loaded as stand-ins (not handled).
+
 ## Stages
 
 Each stage ends with tests and something the owner can run. Performance is measured from stage 3 on: the simulation's
@@ -616,6 +646,10 @@ milliseconds per tick at 1x and 5x with the character count, in the game's frame
 | **8. Combat** | Melee per [combat.md](game/combat.md); ranged later | A fight between two squads resolves; formulas tested (done on `sim-combat`, [as built](#combat-as-built-stage-8); wired into the game on `sim-core`, [combat wired](#combat-wired-after-stage-8)) |
 |)| **9. AI proper** | Packages, blackboard, scoring and planner ([ai.md](game/ai.md)), off-screen squads with the stand-in speeds | Towns run their daily routines; squads travel off screen |
 | **10. Saves** | Read and write the world state ([save.md](formats/save.md)) | Round trip of our own saves; reading the original's sample save |
+| **7. Bodies** | Stats and XP, hunger, blood, body parts, KO and death ([character-stats.md](game/character-stats.md)) | Probe tables as tests (done on `sim-body`, [as built](#bodies-as-built-stage-7); not yet wired into `World`) |
+| **8. Combat** | Melee per [combat.md](game/combat.md); ranged later | A fight between two squads resolves; formulas tested |
+| **9. AI proper** | Packages, blackboard, scoring and planner ([ai.md](game/ai.md)), off-screen squads with the stand-in speeds | Towns run their daily routines; squads travel off screen |
+| **10. Saves** | Read and write the world state ([save.md](formats/save.md)) | Round trip of our own saves; reading the original's saves. Done on `sim-save`, [as built](#saves-as-built-stage-10); the host wiring (`--load`, quicksave keys) is track A's |
 | **11+** | Economy and trade, buildings and production, the MyGUI UI screens, audio | Per their docs |
 
 Saves could move earlier (the clock and squads alone round-trip), if keeping test worlds becomes useful.

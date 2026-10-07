@@ -15,14 +15,14 @@ public static class FcsWriter
     /// Write each record's <see cref="FcsRecord.ByteSize"/> as stored instead of its real size. World-state files
     /// (<c>.zone</c>, <c>.level</c>) contain sizes that don't match their records; this keeps them byte-exact.
     /// </param>
-    public static void Write(FcsFile file, Stream stream, bool keepByteSizes = false)
+    public static void Write(FcsFile file, Stream stream, bool keepByteSizes = false, bool lossless = false)
     {
-        using var w = new BinaryWriter(stream, FcsReader.Encoding, leaveOpen: true);
+        using var w = new FcsBinaryWriter(stream, lossless);
         w.Write((int)file.FileType);
         if (file.FileType == FcsFileType.V17)
         {
             var header = new MemoryStream();
-            using (var hw = new BinaryWriter(header, FcsReader.Encoding, leaveOpen: true))
+            using (var hw = new FcsBinaryWriter(header, lossless))
                 WriteHeaderBody(hw, file);
             w.Write(checked((int)header.Length));
             header.WriteTo(stream);
@@ -35,7 +35,7 @@ public static class FcsWriter
         w.Write(file.NextId);
         w.Write(file.Records.Count);
         foreach (var record in file.Records)
-            WriteRecord(w, record, keepByteSizes);
+            WriteRecord(w, record, keepByteSizes, lossless);
     }
 
     static void WriteHeaderBody(BinaryWriter w, FcsFile file)
@@ -74,11 +74,11 @@ public static class FcsWriter
         w.Write(file.HeaderTail);
     }
 
-    static void WriteRecord(BinaryWriter output, FcsRecord record, bool keepByteSize)
+    static void WriteRecord(BinaryWriter output, FcsRecord record, bool keepByteSize, bool lossless)
     {
         // Buffered so the leading size field can hold the record's real size.
         var buffer = new MemoryStream();
-        using (var w = new BinaryWriter(buffer, FcsReader.Encoding, leaveOpen: true))
+        using (var w = new FcsBinaryWriter(buffer, lossless))
             WriteRecordBody(w, record);
         output.Write(keepByteSize || record.ByteSize == 0 ? record.ByteSize : checked((uint)buffer.Length + 4));
         output.Flush();
@@ -155,8 +155,13 @@ public static class FcsWriter
 
     static void WriteString(BinaryWriter w, string s)
     {
-        var bytes = FcsReader.Encoding.GetBytes(s);
+        var bytes = w is FcsBinaryWriter { Lossless: true } ? LosslessUtf8.GetBytes(s) : FcsReader.Encoding.GetBytes(s);
         w.Write(bytes.Length);
         w.Write(bytes);
     }
+}
+
+sealed class FcsBinaryWriter(Stream stream, bool lossless) : BinaryWriter(stream, FcsReader.Encoding, leaveOpen: true)
+{
+    public bool Lossless { get; } = lossless;
 }

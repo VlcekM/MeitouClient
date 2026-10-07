@@ -139,6 +139,9 @@ public sealed class FactionRelations
     /// <summary>The relation of faction <paramref name="a"/> towards <paramref name="b"/>, -100 to 100.</summary>
     public float Get(int a, int b) => relation[a * Count + b];
 
+    /// <summary>Sets the relation of faction <paramref name="a"/> towards <paramref name="b"/> (a loaded save does this; trust and the other state live outside this table).</summary>
+    public void Set(int a, int b, float value) => relation[a * Count + b] = value;
+
     /// <summary>A to B: B is another faction and the relation is at or below <see cref="HostileThreshold"/>.</summary>
     public bool IsHostile(int a, int b) => a != b && Get(a, b) <= HostileThreshold;
 
