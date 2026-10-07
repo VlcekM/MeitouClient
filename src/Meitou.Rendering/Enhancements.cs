@@ -25,7 +25,7 @@ public sealed class Enhancement(string id, string name, string faithful, string 
 
 public static class Enhancements
 {
-    public const float MeitouHazeStrength = 0.87f;
+    public const float MeitouHazeStrength = 0.93f;
 
     /// <summary>The Meitou shadows' default shadow distance (the game's is 5000, its slider ends at 9000), and the most the <c>--shadow-range</c> option takes with them.</summary>
     public const float MeitouShadowRange = 10000, MeitouShadowRangeMax = 15000;
