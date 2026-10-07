@@ -67,6 +67,7 @@ static partial class WorldApp
     {
         using var display = new VulkanDisplay(null, vsync: false, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
         streamline = display.Streamline;
+        using var watch = VramWatch.Start(display.Context.Device);
         try { return Screenshot(display, install, scene, assets, o); }
         finally { streamline = null; }
     }
