@@ -147,7 +147,8 @@ RACE fields), [../formats/terrain.md](../formats/terrain.md), [../formats/zones.
     the door toggle and the cost modifier use (**Verified** as a consistent pair: mask bits, painter material and the
     toggle's 4/5 test).
   - **Foliage cutters** (FUN_1403bfa10): every foliage instance with a FOLIAGE_MESH `navmesh cutter` radius r (168 of 748
-    meshes, all without `collision`, **Verified** count) becomes an axis-aligned box carver, centre ± r horizontally and
+    meshes, **Verified** count; 37 of them also have a `collision` file, and fcs.def says the radius is then unused, which
+    was not traced) becomes an axis-aligned box carver, centre ± r horizontally and
     ± 100 units (10 Havok) vertically (FUN_1406cd7f0 collects them as (x, y, z, r)). Square, not round.
   - **Seeds** (`regionSeedPoints`, Havok space). Exterior jobs:
     - doors (exterior jobs of both types): for each building in the zone with a door whose outer marker point (door
@@ -158,7 +159,8 @@ RACE fields), [../formats/terrain.md](../formats/terrain.md), [../formats/zones.
     - job type 0 (whole zone): the zone's `seeds.def` points (bucketed per zone when loaded, FUN_1403c5050; 4,585 points
       in 563 zones, 31 with Y = −99, the rest at Y ≥ 100, **Verified**); each is first tested with a ray down from
       Y 9000 against floor-0/1 building parts (FUN_1403d4dd0, groups 9 and 10): a point with no height that hits a
-      building is moved onto it; a point with a height that hits a building is dropped; others are kept as stored. A
+      building is moved onto it; a point with a height that hits a building is dropped; others are kept as stored, so a Y = −99 point
+      that hits nothing goes in at Y −9.9 Havok (what Havok makes of it is **Unknown**). A
       zone with no `seeds.def` points gets a 3 × 3 grid of ground seeds over its box instead. Then the midpoints of the
       open border edges of each already built neighbour zone (FUN_1403c9820, the four neighbours) so regions connect
       across zone borders; points of a global list (DAT_14212f470, not identified) inside the box; and linked wall
@@ -178,7 +180,8 @@ RACE fields), [../formats/terrain.md](../formats/terrain.md), [../formats/zones.
     1 for WALKABLE and 0 otherwise; IGNORE ones are skipped. Vertices closer than 0.05 (squared, Havok) are merged. A
     destroyed building adds the triangle meshes of its `destroyed boundary` XML to the geometry (fcs.def calls it the
     "Navmesh cutter for destroyed interior"; the material it gets was not traced). 23 of the 68 buildings with `interior` parts have collision on them; `interior terrain` is set on 3
-    (**Verified** counts).
+    (**Verified** counts); what `interior terrain` ("building interior includes terrain for generating navmesh") changes
+    in the interior pass was not traced (**Unknown**).
   - BUILDING `path mode` counts 92/84/304/123 for 0/1/2/3 (**Verified**, 603 records). Enum names (FCS `PathMode`, the
     editor's enum): 0 NAVMESH_IGNORE, 1 NAVMESH_PROJECTED, 2 NAVMESH_OBSTACLE (default), 3 NAVMESH_WALKABLE (**Verified**).
     Other fields: `destroyed navmesh` (6 buildings, walls; the "Wall termites" accessibility check FUN_1402ef1f0 reads it),

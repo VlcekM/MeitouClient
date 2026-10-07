@@ -23,12 +23,15 @@ attachment points use Scythe `.phs` files instead ([phs.md](phs.md)).
 | `physics file` | items | dropped-item physics (not used by the navmesh) |
 
 - **Verified** (probe over the base game's 603 BUILDING records and the 1,019 distinct parts they reach through `parts`
-  and `interior`, recursively): 546 parts name an `xml collision` (12 of those files are missing from the install), 7 a
+  and `interior`, recursively): 546 parts name an `xml collision` (12 of them name one of 3 files that are not in the install, with no `.bin` either:
+  two Moor house upper floors and a Vast factory floor trigger), 7 a
   `destroyed collision`; 1,012 parts name a `.mesh` in `phs or mesh` and 1 a `.phs`. All 59 `interior mask` parts have an
   `xml collision`. FOLIAGE_MESH: 354 of 748 have a `collision` file, all `.xml`.
 - **Verified** (`Zones_PlacePartMesh`, FUN_14055f6e0): only `xml collision` / `destroyed collision` create collision
-  (a physics loader object, FUN_1400f3ce0). A part without one gets only its render entity, so **parts without
-  `xml collision` are invisible to the navmesh**, whatever the building's `path mode`. The `phs or mesh` file must contain
+  (a physics loader object, FUN_1400f3ce0). A part without one gets only a `PhysicsCollection::StaticEnt` or
+  `RotatingEnt` for its render entity, and none of their virtual functions calls PhysX (checked: they only touch Ogre
+  nodes and materials), so **parts without `xml collision` are invisible to the navmesh**, whatever the building's
+  `path mode`. The `phs or mesh` file must contain
   `.mesh` or nothing is created (as [zones.md](zones.md#placing-a-part) says), so the one `.phs` part draws nothing.
 - Buildings by `path mode` and whether any exterior part has an `xml collision` (**Verified**, probe):
 
