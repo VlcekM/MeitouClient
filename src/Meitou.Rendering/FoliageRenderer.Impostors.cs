@@ -49,7 +49,7 @@ public sealed partial class FoliageRenderer
     static readonly float FarMipMargin = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_MIP_MARGIN"), System.Globalization.NumberStyles.Float,
         System.Globalization.CultureInfo.InvariantCulture, out float marginLevels) && marginLevels >= 0 ? marginLevels : 1f;
     /// <summary>The most levels beyond what an atlas's nearest instance needs the plan takes off an atlas that would not fit (a blurrier far crown instead of a mesh).</summary>
-    const int ImpostorMaxExtraLevels = 2;
+    const int ImpostorMaxExtraLevels = 3;
     /// <summary>A resident atlas counts as this much nearer in the plan's order, so a newcomer must be that much nearer to take its place (hysteresis).</summary>
     const float ImpostorStickiness = 0.8f;
     /// <summary>Seconds an atlas must hold a finer level than needed before it is coarsened without budget pressure (and by at least two levels).</summary>
@@ -291,26 +291,43 @@ public sealed partial class FoliageRenderer
             impostorPlan.Add(new PlanItem { Asset = a, Need = need, Key = need * (s is { Stage: ImpostorStage.Ready } ? ImpostorStickiness : 1f), Frame = frame, Grid = grid, Levels = levels, Radius = radius });
         }
         impostorPlan.Sort((x, y) => x.Key.CompareTo(y.Key));
-        long limit = impostorLimitBytes, cum = 0;
-        int admitted = 0, extras = 0;
+        long limit = impostorLimitBytes, total = 0;
+        int maxExtra = FarMips ? ImpostorMaxExtraLevels : 0;
         for (int i = 0; i < impostorPlan.Count; i++)
         {
             var it = impostorPlan[i];
             it.BaseSkip = SkipFor(it.Frame, it.Levels, it.Radius, it.Need);
-            for (int extra = 0; extra <= (FarMips ? ImpostorMaxExtraLevels : 0); extra++)
-            {
-                int skip = Math.Min(it.BaseSkip + extra, it.Levels - 1);
-                long bytes = AtlasBytes(it.Frame, it.Grid, skip);
-                if (cum + bytes > limit) { if (skip == it.Levels - 1) break; continue; }
-                (it.Admit, it.Extra, it.Bytes) = (true, extra, bytes);
-                cum += bytes;
-                admitted++;
-                if (extra > 0) extras++;
-                break;
-            }
+            (it.Admit, it.Extra, it.Bytes) = (true, 0, AtlasBytes(it.Frame, it.Grid, it.BaseSkip));
+            total += it.Bytes;
             impostorPlan[i] = it;
         }
-        (impostorWantedCount, impostorAdmittedCount, impostorExtraCount, impostorPlannedBytes) = (impostorPlan.Count, admitted, extras, cum);
+        // Over the limit: first the farthest atlases take one level more off (a blurrier far crown costs no frame time; a mesh does), then the next
+        // farthest, and so on, a pass at a time up to the most levels allowed; only then are the farthest left out, one by one.
+        for (int pass = 1; pass <= maxExtra && total > limit; pass++)
+            for (int i = impostorPlan.Count - 1; i >= 0 && total > limit; i--)
+            {
+                var it = impostorPlan[i];
+                if (it.Extra >= pass || it.BaseSkip + it.Extra >= it.Levels - 1) continue;
+                long bytes = AtlasBytes(it.Frame, it.Grid, it.BaseSkip + pass);
+                total += bytes - it.Bytes;
+                (it.Extra, it.Bytes) = (pass, bytes);
+                impostorPlan[i] = it;
+            }
+        for (int i = impostorPlan.Count - 1; i >= 0 && total > limit; i--)
+        {
+            var it = impostorPlan[i];
+            total -= it.Bytes;
+            it.Admit = false;
+            impostorPlan[i] = it;
+        }
+        int admitted = 0, extras = 0;
+        foreach (var it in impostorPlan)
+        {
+            if (!it.Admit) continue;
+            admitted++;
+            if (it.Extra > 0) extras++;
+        }
+        (impostorWantedCount, impostorAdmittedCount, impostorExtraCount, impostorPlannedBytes) = (impostorPlan.Count, admitted, extras, total);
     }
 
     /// <summary>Applies the plan: drops what it left out, makes room by evicting atlases nobody wants when the real use is over the limit, requests the
