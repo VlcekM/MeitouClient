@@ -108,7 +108,7 @@ public class InputTests
     public void Releasing_everything_on_focus_loss_shows_as_releases()
     {
         input.SetKey(Key.W, true);
-        input.SetMouseButton(MouseButton.Right, true);
+        input.SetMouseButton(MouseButton.Middle, true);
         Tick();
         input.ReleaseAll();
         var t = Tick();

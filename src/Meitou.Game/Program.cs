@@ -28,7 +28,10 @@ sealed class GameOptions
     public bool? VSync;
     /// <summary>With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.</summary>
     public int Ticks;
-    public bool FreeCamera, NoPopulation;
+    public bool FreeCamera, NoPopulation, NewGame, ListStarts, SelectPlayer;
+    /// <summary>The start to play (null = the default); with <c>--select-player</c>/<c>--move-to</c> the picture shows a selected squad walking.</summary>
+    public string? NewGameName;
+    public (float X, float Z)? MoveTo;
     /// <summary>Interactive run that closes itself after this many seconds and prints the frame rate (an unattended smoke test).</summary>
     public double? QuitAfter;
 
@@ -41,11 +44,14 @@ sealed class GameOptions
           --sim-threads <n>          worker threads of the simulation (default: half the cores, 1 to 8; the result never depends on it)
           --seed <n>                 the world seed (default 0)
           --no-population            no town residents or movement (an empty world)
+          --new-game [start]         a new game as the NEW_GAME_STARTOFF start (default Wanderer): the player squad at its town, camera on it
+          --list-starts              print the available starts and exit
+          --select-player, --move-to <x> <z>   with --new-game: select the squad / order it to walk (for screenshots)
           --ticks <n>                with --screenshot: run n control ticks (and the same real time of the simulation, at speed 1) before the picture
           --quit-after <s>           close after s seconds and print the frame rate (smoke test)
           --yaw/--pitch/--distance   start view: heading, pitch above the horizon and boom (Kenshi: 30 degrees, boom 150; clamped to 10..2000)
           world options as meitou-viewer --world: --at, --zone, --town, --radius, --time, --screenshot, --size, --no-foliage, ...
-        Keys: W/A/S/D move, Q/E or Left/Right rotate, Up/Down pitch, wheel or PageUp/PageDown zoom, right or middle drag orbit,
+        Keys: W/A/S/D move, Q/E or Left/Right rotate, Up/Down pitch, wheel or PageUp/PageDown zoom, middle drag orbit, left click or drag selects, right click moves (shift queues), 1..9 / ` select, R stops,
           ; free camera (R/F up/down), Space pause, F2/F3/F4 speed 1x/2x/5x (. / , step), Tab settings, F12 screenshot, Esc quit.
         Settings (frame limit, vsync, tick rate, the Tab sliders, key bindings) are kept in meitou.user.json.
         """;
@@ -70,6 +76,13 @@ sealed class GameOptions
                 case "--ticks": g.Ticks = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--free-camera": g.FreeCamera = true; break;
                 case "--no-population": g.NoPopulation = true; break;
+                case "--new-game":
+                    g.NewGame = true;
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith('-')) g.NewGameName = args[++i];
+                    break;
+                case "--list-starts": g.ListStarts = true; break;
+                case "--select-player": g.SelectPlayer = true; break;
+                case "--move-to": g.MoveTo = (float.Parse(Next(), CultureInfo.InvariantCulture), float.Parse(Next(), CultureInfo.InvariantCulture)); break;
                 case "--quit-after": g.QuitAfter = double.Parse(Next(), CultureInfo.InvariantCulture); break;
                 default: rest.Add(a); break;
             }
@@ -108,10 +121,46 @@ static class Program
             return 1;
         }
         var config = UserConfig.Load();
-        using var scene = WorldFrame.Load(install, world);
+        Meitou.Data.GameDatabase? db = null;
+        Meitou.Data.Gameplay.NewGameStart? start = null;
+        if (game.ListStarts || game.NewGame)
+        {
+            db = Meitou.Data.GameDatabase.Load(Meitou.Data.LoadOrder.FromInstall(install));
+            var starts = Meitou.Data.Gameplay.NewGameStart.LoadAll(db);
+            if (game.ListStarts)
+            {
+                foreach (var s in starts.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
+                    Console.WriteLine($"{s.Name,-28} {s.Money,7} cats  {s.Squad.Count} squad links  {(s.ForceStartPos ? "fixed position" : s.Towns.Count + " town(s)")}");
+                return 0;
+            }
+            start = Meitou.Data.Gameplay.NewGameStart.Find(starts, game.NewGameName ?? Meitou.Data.Gameplay.NewGameStart.DefaultName);
+            if (start is null)
+            {
+                Console.Error.WriteLine($"No start '{game.NewGameName ?? Meitou.Data.Gameplay.NewGameStart.DefaultName}'; --list-starts shows them.");
+                return 2;
+            }
+            if (game.NoPopulation)
+            {
+                Console.Error.WriteLine("--new-game needs the population (it is the player's squad); drop --no-population.");
+                return 2;
+            }
+            // Load the world around the start: its first listed town, else the fixed position.
+            Vector2? at = start.ForceStartPos ? start.StartPosition : null;
+            if (at is null)
+            {
+                var towns = Meitou.Data.World.WorldLevelData.Load(install).Towns().ToList();
+                foreach (var link in start.Towns)
+                    if (towns.FirstOrDefault(t => t.TownId == link.Id) is { } placed) { at = new Vector2(placed.Position.X, placed.Position.Z); break; }
+            }
+            at ??= start.StartPosition;
+            (world.X, world.Z) = (at.Value.X, at.Value.Y);
+            world.Town = null;
+            Console.WriteLine($"new game  {start.Name}: {start.Money} cats, {start.Squad.Count} squad link(s), at {at.Value.X:0}, {at.Value.Y:0}");
+        }
+        using var scene = WorldFrame.Load(install, world, db);
         if (scene is null) return 1;
         if (world.Info) return 0;
-        return new GameHost(install, scene, new AssetLocator(install), world, game, config).Run();
+        return new GameHost(install, scene, new AssetLocator(install), world, game, config, start).Run();
     }
 }
 
@@ -119,9 +168,12 @@ static class Program
 /// The game loop: a real-time control tick (<see cref="FixedStepClock"/>, 30 Hz by default) runs the input actions, the camera rig
 /// and pause/speed; a game-time simulation tick (<see cref="SimulationClock"/>) advances the game clock; each displayed frame draws the camera interpolated between the last two ticks at the display rate.
 /// </summary>
-sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config)
+sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config, Meitou.Data.Gameplay.NewGameStart? start)
 {
     WorldSession session = null!;   // disposed with the host (Run)
+    Meitou.Simulation.PopulationSystem? population;
+    PlayerInterface player = null!;
+    Meitou.Simulation.Squad? playerSquad;
     WorldFrame.Gpu gpu = null!;
     WorldCamera camera = null!;
     WorldRenderOptions render = null!;
@@ -147,18 +199,30 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         {
             var levels = scene.Objects?.Levels ?? Meitou.Data.World.WorldLevelData.Load(install);
             var data = Meitou.Simulation.PopulationData.Create(gameDb, levels.Towns(), new Meitou.Simulation.GeneratedAppearances(gameDb, install.Root));
-            systems.Add(new Meitou.Simulation.PopulationSystem(data, new Meitou.Simulation.PopulationSettings { Background = interactive }));
+            population = new Meitou.Simulation.PopulationSystem(data, new Meitou.Simulation.PopulationSettings { Background = interactive });
+            systems.Add(population);
+            systems.Add(new Meitou.Simulation.PlayerSystem());
             systems.Add(new Meitou.Simulation.MovementSystem(new Meitou.Simulation.PathService(walkability, synchronous: !interactive)));
         }
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate,
             clock: GameClockFor(scene.Database, o.Hour),
             simulation: new Meitou.Simulation.WorldSettings { Seed = g.Seed, Threads = Math.Max(1, g.SimThreads ?? config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)) },
             systems: systems, walkability: walkability);
+        var target = camera.Target;
         foreach (var problem in session.Bindings.Apply(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
+        // Right is the command button now; older saved configs bound it to orbit.
+        session.Bindings.Set(InputAction.Orbit, [.. session.Bindings.Get(InputAction.Orbit).Where(b => !(b.IsMouse && b.Button == EngineButton.Right))]);
+        player = new PlayerInterface(session, heights.HeightAt, DrawnPosition);
+        if (start is not null && population is not null)
+        {
+            playerSquad = population.StartPlayer(session.World, start);
+            var lead = session.World.Characters.Previous[playerSquad.Leader.Slot].Position;
+            target = lead;
+            Console.WriteLine($"player    {playerSquad.Members.Count} characters, leader at {lead.X:0}, {lead.Z:0}");
+        }
         if (scene.Database is { } characterDb && !g.NoPopulation && gpu.Characters is null)
             gpu.Characters = new CharacterRenderer(context, install, characterDb, assets) { Source = FillDrawList, Guard = gpu.Guard };
         var rig = session.Camera;
-        var target = camera.Target;
         rig.Place(new Vector2(target.X, target.Z), (o.Yaw ?? 30) * MathF.PI / 180,
             (o.Pitch ?? Meitou.Data.World.KenshiCamera.InitialPitchDegrees) * MathF.PI / 180, o.Distance ?? Meitou.Data.World.KenshiCamera.InitialDistance);
         if (g.FreeCamera)
@@ -195,6 +259,15 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         camera.Distance = s.Distance;
     }
 
+    /// <summary>Gives the player interface the camera it picks with.</summary>
+    void UpdateView(int width, int height)
+    {
+        player.ViewProjection = camera.View * camera.Projection(width / (float)Math.Max(height, 1), camera.Near, camera.ViewDistance);
+        player.Eye = camera.Eye;
+        player.Width = width;
+        player.Height = height;
+    }
+
     void DrawWorld(int width, int height)
     {
         if (gpu.Foliage is { } foliage && o.Screenshot is null) foliage.SwaySeconds = realTime.Elapsed.TotalSeconds;
@@ -208,6 +281,11 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         using var display = new VulkanDisplay(null, vsync: false, streamline: WantsDlss());
         streamline = display.Streamline;
         Boot(display, interactive: false);
+        if (playerSquad is not null && (g.SelectPlayer || g.MoveTo is not null))
+        {
+            session.World.Commands.Enqueue(new Meitou.Simulation.SelectCommand(playerSquad.Members.ToList()) { Tick = session.World.Tick });
+            if (g.MoveTo is { } to) session.World.Commands.Enqueue(new Meitou.Simulation.MoveOrder([], new Vector3(to.X, 0, to.Z)) { Tick = session.World.Tick });
+        }
         for (int i = 0; i < g.Ticks; i++)
         {
             session.Tick();
@@ -229,6 +307,22 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         DrawWorld(w, h);
         display.EndFrame();
         DrawWorld(w, h);
+        if (playerSquad is not null && DebugOverlay.TryCreate(context) is { } overlay)
+        {
+            using (overlay)
+            {
+                overlay.Target = target;
+                UpdateView(w, h);
+                player.Draw(overlay, w, h);
+                if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer) is { } me && player.Project(DrawnPosition(me) + new Vector3(0, 1, 0)) is { } px)
+                {
+                    var picked = player.Pick(px);
+                    var ray = player.Ray(px + new Vector2(0, 60));
+                    var hit = ray is { } r ? player.GroundHit(r.Origin, r.Direction) : null;
+                    Console.WriteLine($"pickcheck pixel {px.X:0}, {px.Y:0} picks {(picked is { } id && id == me.Id ? "the leader" : "NOTHING")}; ground 60 px lower: {(hit is { } gh ? $"{gh.X:0}, {gh.Z:0} (leader at {me.Position.X:0}, {me.Position.Z:0})" : "no hit")}");
+                }
+            }
+        }
         display.EndFrame();
         context.Finish();
         var s = session.Camera.Current;
@@ -264,12 +358,20 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
 
         var silkInput = Silk.NET.Input.InputWindowExtensions.CreateInput(window);
         Vector2? lastMouse = null;
-        bool panelDrag = false;
+        bool panelDrag = false, shiftDown = false;
         Vector2 Pixels(Vector2 p) => p * new Vector2(window.FramebufferSize.X / (float)Math.Max(window.Size.X, 1), window.FramebufferSize.Y / (float)Math.Max(window.Size.Y, 1));
         foreach (var kb in silkInput.Keyboards)
         {
-            kb.KeyDown += (_, k, _) => { if (Map(k) is { } key) session.Input.SetKey(key, true); };
-            kb.KeyUp += (_, k, _) => { if (Map(k) is { } key) session.Input.SetKey(key, false); };
+            kb.KeyDown += (_, k, _) =>
+            {
+                if (k is SilkKey.ShiftLeft or SilkKey.ShiftRight) shiftDown = true;
+                if (Map(k) is { } key) { session.Input.SetKey(key, true); player.Key(key, shiftDown); }
+            };
+            kb.KeyUp += (_, k, _) =>
+            {
+                if (k is SilkKey.ShiftLeft or SilkKey.ShiftRight) shiftDown = false;
+                if (Map(k) is { } key) session.Input.SetKey(key, false);
+            };
         }
         foreach (var mouse in silkInput.Mice)
         {
@@ -277,10 +379,15 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             {
                 if (b == SilkButton.Left && panel?.MouseDown(Pixels(m.Position)) == true) { panelDrag = true; return; }
                 if (panel?.Contains(Pixels(m.Position)) == true) return;
-                if (Map(b) is { } button) session.Input.SetMouseButton(button, true);
+                if (Map(b) is { } button)
+                {
+                    if (player.MouseDown(button, Pixels(m.Position), shiftDown)) return;
+                    session.Input.SetMouseButton(button, true);
+                }
             };
-            mouse.MouseUp += (_, b) =>
+            mouse.MouseUp += (m, b) =>
             {
+                if (Map(b) is { } released) player.MouseUp(released, Pixels(m.Position), shiftDown);
                 panel?.MouseUp();
                 panelDrag = false;
                 if (Map(b) is { } button) session.Input.SetMouseButton(button, false);
@@ -288,6 +395,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             mouse.MouseMove += (_, p) =>
             {
                 session.Input.SetMousePosition(p.X, p.Y);
+                player.MouseMove(Pixels(p));
                 if (panel?.MouseMove(Pixels(p)) == true || panelDrag) { lastMouse = p; return; }
                 if (lastMouse is { } last) session.Input.AddMouseDelta(p.X - last.X, p.Y - last.Y);
                 lastMouse = p;
@@ -318,6 +426,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             SendFocus();
             ApplyCamera(session.CameraAt());
             var size = window.FramebufferSize;
+            UpdateView(size.X, size.Y);
             if (display.BeginFrame(size.X, size.Y))
             {
                 long t0 = Stopwatch.GetTimestamp();
@@ -330,6 +439,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
                 bool shot = screenshotRequested;
                 screenshotRequested = false;
                 if (overlay is not null && !g.NoPopulation) DrawMarkers(overlay, size.X, size.Y);
+                if (overlay is not null && !g.NoPopulation) player.Draw(overlay, size.X, size.Y);
                 panel?.Draw(size.X, size.Y);
                 display.Present();
                 if (shot) SaveScreenshot(display.Context, backbuffer, size.X, size.Y);
@@ -382,17 +492,27 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         sentFocus = true;
     }
 
+    void IndexPrevious()
+    {
+        var previous = session.PreviousSnapshot;
+        if (ReferenceEquals(indexedFor, previous)) return;
+        previousById.Clear();
+        foreach (var c in previous.Characters) previousById[c.Id] = c;
+        indexedFor = previous;
+    }
+
+    /// <summary>Where a character is drawn: between the last two snapshots, by the simulation's alpha.</summary>
+    Vector3 DrawnPosition(CharacterSnapshot c)
+    {
+        IndexPrevious();
+        return previousById.TryGetValue(c.Id, out var before) ? Vector3.Lerp(before.Position, c.Position, session.SimulationAlpha) : c.Position;
+    }
+
     /// <summary>Fills the renderer's list from the last two snapshots, interpolated by the simulation's alpha.</summary>
     void FillDrawList(CharacterDrawList list)
     {
         var current = session.CurrentSnapshot;
-        var previous = session.PreviousSnapshot;
-        if (!ReferenceEquals(indexedFor, previous))
-        {
-            previousById.Clear();
-            foreach (var c in previous.Characters) previousById[c.Id] = c;
-            indexedFor = previous;
-        }
+        IndexPrevious();
         float alpha = session.SimulationAlpha;
         foreach (var c in current.Characters)
         {

@@ -346,14 +346,14 @@ static class WorldFrame
     /// <summary>Heightmap step of the whole-world height grid behind the loaded region (2049² samples, 144 units apart).</summary>
     public const int CoarseStep = 8;
 
-    public static WorldScene? Load(GameInstall install, WorldOptions o)
+    public static WorldScene? Load(GameInstall install, WorldOptions o, GameDatabase? preloaded = null)
     {
         var watch = Stopwatch.StartNew();
         var map = TerrainHeightmap.Open(install);
         GameDatabase? db = null;
         if (o.Town is not null || !o.NoTextures || !o.NoObjects)
         {
-            db = GameDatabase.Load(LoadOrder.FromInstall(install));
+            db = preloaded ?? GameDatabase.Load(LoadOrder.FromInstall(install));
             Console.WriteLine($"game data {db.Records.Count} records ({watch.ElapsedMilliseconds} ms)");
         }
 

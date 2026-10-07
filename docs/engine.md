@@ -73,8 +73,8 @@ pixel; the pivot follows the terrain only (the game also stands it on buildings;
 `toggle_fps_camera`) flies with a smoothed velocity at 1.5 × the height above the ground; leaving it puts the pivot where the
 view meets the ground.
 
-Default keys: `W A S D` move, `Q`/`E` or `Left`/`Right` rotate, `Up`/`Down` pitch, wheel or `PageUp`/`PageDown` zoom, right or
-middle drag orbit, `;` free camera (`R`/`F` up/down in it), `Space` pause, `F2`/`F3`/`F4` speed 1x/2x/5x (`.`/`,` step through them), `Tab` settings panel, `F12`
+Default keys: `W A S D` move, `Q`/`E` or `Left`/`Right` rotate, `Up`/`Down` pitch, wheel or `PageUp`/`PageDown` zoom,
+middle drag orbit (right click is the move command, see [simulation.md](simulation.md#player-as-built-stage-6)), left click or drag selects, `1`..`9`, `` ` ``, `R`; `;` free camera (`R`/`F` up/down in it), `Space` pause, `F2`/`F3`/`F4` speed 1x/2x/5x (`.`/`,` step through them), `Tab` settings panel, `F12`
 screenshot (C:\Temp), `Esc` quit.
 
 ## Rendering (`Meitou.Rendering`)
