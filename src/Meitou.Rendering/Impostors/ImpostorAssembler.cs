@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Numerics;
 
 namespace Meitou.Rendering.Impostors;
@@ -16,6 +17,8 @@ namespace Meitou.Rendering.Impostors;
 /// branches do not vanish: the alpha-test mip correction), then cuts it: a texel is covered or not (BC1's 1-bit alpha).</item>
 /// </list>
 /// Then <see cref="Finish"/> encodes the levels (BC1 albedo with the cut-out, BC5 normal). Frames are independent, so a row is processed in parallel.
+/// The per-frame arrays come from a shared pool (<see cref="Scratch"/>) and the atlas levels are not cleared before they are written: a large
+/// atlas used to allocate about 900 MB of short-lived large arrays, and the collections they caused stalled the render thread's frames.
 /// </summary>
 public sealed class ImpostorAssembler
 {
@@ -27,6 +30,7 @@ public sealed class ImpostorAssembler
     public ImpostorAssembler(int grid, int frame, int levels)
     {
         (this.grid, this.frame, this.levels) = (grid, frame, levels);
+        if (mapPools.GetOrAdd((grid, frame, levels), _ => new()).TryTake(out var pooled)) { maps = pooled; return; }
         maps = new byte[2][][];
         for (int m = 0; m < 2; m++)
         {
@@ -34,9 +38,55 @@ public sealed class ImpostorAssembler
             for (int l = 0; l < levels; l++)
             {
                 int size = grid * (frame >> l);
-                maps[m][l] = new byte[size * size * 4];
+                // Every texel of every level is written by Store, so the memory need not be cleared (it is up to 100 MB for a large atlas).
+                maps[m][l] = GC.AllocateUninitializedArray<byte>(size * size * 4);
             }
         }
+    }
+
+    /// <summary>The RGBA8 levels of finished bakes, kept for the next bake of the same size (a large atlas is two maps of about 50 MB: allocating them
+    /// anew for every bake made the collector stall the render thread).</summary>
+    static readonly ConcurrentDictionary<(int Grid, int Frame, int Levels), ConcurrentBag<byte[][][]>> mapPools = new();
+
+    /// <summary>The arrays of one frame's filtering, reused from frame to frame (and from bake to bake).</summary>
+    sealed class Scratch
+    {
+        public readonly float[] Cov, Alb, Nrm, FillWeight0;
+        /// <summary>The mip levels 1 and up: coverage, albedo, normal.</summary>
+        public readonly float[][] LevelCov, LevelAlb, LevelNrm;
+        /// <summary>The pull pyramid of <see cref="Fill"/> (levels 1 and up): values (3 components) and weights.</summary>
+        public readonly float[][] FillValue, FillWeight;
+
+        public Scratch(int frame, int levels)
+        {
+            int n = frame * frame;
+            (Cov, Alb, Nrm, FillWeight0) = (new float[n], new float[n * 3], new float[n * 3], new float[n]);
+            LevelCov = new float[levels][];
+            LevelAlb = new float[levels][];
+            LevelNrm = new float[levels][];
+            for (int l = 1; l < levels; l++)
+            {
+                int s = frame >> l;
+                (LevelCov[l], LevelAlb[l], LevelNrm[l]) = (new float[s * s], new float[s * s * 3], new float[s * s * 3]);
+            }
+            int count = int.Log2(frame);
+            FillValue = new float[count + 1][];
+            FillWeight = new float[count + 1][];
+            for (int k = 1; k <= count; k++)
+            {
+                int s = frame >> k;
+                (FillValue[k], FillWeight[k]) = (new float[s * s * 3], new float[s * s]);
+            }
+        }
+    }
+
+    static readonly ConcurrentDictionary<(int Frame, int Levels), ConcurrentBag<Scratch>> pools = new();
+
+    /// <summary>Drops the pooled scratch (a few MB per worker for each frame size seen).</summary>
+    public static void ReleasePool()
+    {
+        pools.Clear();
+        mapPools.Clear();
     }
 
     /// <summary>
@@ -44,15 +94,32 @@ public sealed class ImpostorAssembler
     /// by <c>frame</c> pixels, rows bottom first, each the 2 x 2 box average of a picture rendered at twice the size with alpha 1 on covered samples
     /// and 0 elsewhere (the GPU's linear half-size blit): so alpha is the coverage and the colour is premultiplied by it.
     /// </summary>
-    public void AddRow(int row, byte[] albedo, byte[] normal, byte[] depth) =>
-        Parallel.For(0, grid, i => Frame(i, row, albedo, normal, depth));
+    public unsafe void AddRow(int row, byte[] albedo, byte[] normal, byte[] depth)
+    {
+        fixed (byte* a = albedo, n = normal, d = depth) AddRow(row, (nint)a, (nint)n, (nint)d);
+    }
 
-    void Frame(int column, int row, byte[] albedo, byte[] normal, byte[] gloss)
+    /// <summary>As <see cref="AddRow(int, byte[], byte[], byte[])"/>, reading the pictures from memory (the readback buffer's mapping: no copy).</summary>
+    public unsafe void AddRow(int row, nint albedo, nint normal, nint depth) =>
+        Parallel.For(0, grid, i => Frame(i, row, (byte*)albedo, (byte*)normal, (byte*)depth));
+
+    unsafe void Frame(int column, int row, byte* albedo, byte* normal, byte* gloss)
+    {
+        var pool = pools.GetOrAdd((frame, levels), _ => new());
+        if (!pool.TryTake(out var scratch)) scratch = new Scratch(frame, levels);
+        try { Frame(scratch, column, row, albedo, normal, gloss); }
+        finally { if (pool.Count < Environment.ProcessorCount) pool.Add(scratch); }
+    }
+
+    unsafe void Frame(Scratch scratch, int column, int row, byte* albedo, byte* normal, byte* gloss)
     {
         int f = frame, width = grid * f, n = f * f;
-        var cov = new float[n];
-        var alb = new float[n * 3];
-        var nrm = new float[n * 3];
+        var cov = scratch.Cov;
+        var alb = scratch.Alb;
+        var nrm = scratch.Nrm;
+        Array.Clear(cov);
+        Array.Clear(alb);
+        Array.Clear(nrm);
         double glossTotal = 0, glossCover = 0;
         for (int y = 0; y < f; y++)
             for (int x = 0; x < f; x++)
@@ -76,8 +143,8 @@ public sealed class ImpostorAssembler
         foreach (float c in cov) area += c;
         float target = area / n;
 
-        Fill(cov, alb, 3, f);
-        Fill(cov, nrm, 3, f);
+        Fill(scratch, cov, alb, f);
+        Fill(scratch, cov, nrm, f);
         for (int i = 0; i < n; i++)
         {
             var v = Unit(new Vector3(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]));
@@ -87,7 +154,11 @@ public sealed class ImpostorAssembler
         for (int level = 0; level < levels; level++)
         {
             int size = f >> level;
-            if (level > 0) (cov, alb, nrm) = Reduce(cov, alb, nrm, size * 2);
+            if (level > 0)
+            {
+                Reduce(cov, alb, nrm, size * 2, scratch.LevelCov[level], scratch.LevelAlb[level], scratch.LevelNrm[level]);
+                (cov, alb, nrm) = (scratch.LevelCov[level], scratch.LevelAlb[level], scratch.LevelNrm[level]);
+            }
             float scale = CoverageScale(cov, target);
             Store(column, row, level, size, cov, scale, alb, nrm);
         }
@@ -101,17 +172,21 @@ public sealed class ImpostorAssembler
     }
 
     /// <summary>Pull-push: empty pixels (coverage 0) take the coverage-weighted average of the covered pixels around them, from the coarsest level that has some.</summary>
-    static void Fill(float[] cov, float[] values, int components, int size)
+    static void Fill(Scratch scratch, float[] cov, float[] values, int size)
     {
-        var levelValues = new List<float[]> { values };
-        var levelWeights = new List<float[]> { cov.Select(c => c > 0 ? c : 0f).ToArray() };
+        const int components = 3;
+        var w0 = scratch.FillWeight0;
+        for (int i = 0; i < cov.Length; i++) w0[i] = cov[i] > 0 ? cov[i] : 0f;
+        int count = 0;
+        // Pull: level k (size >> k) from level k - 1.
         for (int s = size; s > 1; s /= 2)
         {
-            var v = levelValues[^1];
-            var w = levelWeights[^1];
+            var v = count == 0 ? values : scratch.FillValue[count];
+            var w = count == 0 ? w0 : scratch.FillWeight[count];
             int h = s / 2;
-            var nv = new float[h * h * components];
-            var nw = new float[h * h];
+            var nv = scratch.FillValue[count + 1];
+            var nw = scratch.FillWeight[count + 1];
+            Array.Clear(nv, 0, h * h * components);
             for (int y = 0; y < h; y++)
                 for (int x = 0; x < h; x++)
                 {
@@ -129,15 +204,14 @@ public sealed class ImpostorAssembler
                         for (int c = 0; c < components; c++) nv[(y * h + x) * components + c] /= total;
                     nw[y * h + x] = total;
                 }
-            levelValues.Add(nv);
-            levelWeights.Add(nw);
+            count++;
         }
         // Push: from the coarsest level down, every empty pixel takes its parent's (by then filled) value.
-        for (int k = levelValues.Count - 2; k >= 0; k--)
+        for (int k = count - 1; k >= 0; k--)
         {
-            var v = levelValues[k];
-            var w = levelWeights[k];
-            var parent = levelValues[k + 1];
+            var v = k == 0 ? values : scratch.FillValue[k];
+            var w = k == 0 ? w0 : scratch.FillWeight[k];
+            var parent = scratch.FillValue[k + 1];
             int s = size >> k, half = s / 2;
             for (int y = 0; y < s; y++)
                 for (int x = 0; x < s; x++)
@@ -150,13 +224,10 @@ public sealed class ImpostorAssembler
         }
     }
 
-    /// <summary>The next mip of a frame: coverage the mean of 4, the rest coverage-weighted (a plain mean where nothing is covered).</summary>
-    static (float[] Cov, float[] Alb, float[] Nrm) Reduce(float[] cov, float[] alb, float[] nrm, int size)
+    /// <summary>The next mip of a frame, written to <paramref name="c2"/> / <paramref name="a2"/> / <paramref name="n2"/>: coverage the mean of 4, the rest coverage-weighted (a plain mean where nothing is covered).</summary>
+    static void Reduce(float[] cov, float[] alb, float[] nrm, int size, float[] c2, float[] a2, float[] n2)
     {
         int h = size / 2;
-        var c2 = new float[h * h];
-        var a2 = new float[h * h * 3];
-        var n2 = new float[h * h * 3];
         for (int y = 0; y < h; y++)
             for (int x = 0; x < h; x++)
             {
@@ -181,7 +252,6 @@ public sealed class ImpostorAssembler
                 (a2[q * 3], a2[q * 3 + 1], a2[q * 3 + 2]) = (a.X, a.Y, a.Z);
                 (n2[q * 3], n2[q * 3 + 1], n2[q * 3 + 2]) = (n.X, n.Y, n.Z);
             }
-        return (c2, a2, n2);
     }
 
     /// <summary>The factor that makes the share of <paramref name="cov"/> x factor >= 0.5 closest to <paramref name="target"/> (bisection; 1 when nothing is covered).</summary>
@@ -232,6 +302,8 @@ public sealed class ImpostorAssembler
             for (int l = 0; l < levels; l++) data[l] = ImpostorEncoder.Encode(encodings[m], maps[m][l], grid * (frame >> l));
             textures[m] = new ImpostorTexture { Map = (ImpostorMap)m, Encoding = encodings[m], Levels = data };
         }
+        // The encoded levels are new arrays (the RGBA8 option keeps the maps themselves): the maps go back to the pool.
+        if (compress && mapPools.GetOrAdd((grid, frame, levels), _ => new()) is { Count: < 2 } pool) pool.Add(maps);
         float gloss = glossWeight > 0 ? (float)(glossSum / glossWeight) : 0.3f;
         return new ImpostorAtlas { Grid = grid, FramePixels = frame, Centre = centre, Radius = radius, Gloss = Math.Clamp(gloss, 0, 1), Name = name, Textures = textures };
     }

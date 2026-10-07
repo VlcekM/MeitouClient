@@ -84,8 +84,10 @@ static partial class WorldApp
             int sleep = 16 - (int)ms;
             if (sleep > 0 && !pipelined) Thread.Sleep(sleep);
         }
-        var sorted = times.Skip(1).OrderBy(t => t).ToList();   // the first frame is shader compilation
-        var cpuSorted = cpu.Skip(1).OrderBy(t => t).ToList();
+        // MEITOU_BENCH_SKIP=<n>: leave the first n frames out of the percentiles and the worst list (default 1: shader compilation; the start of a cold run also loads the first zones).
+        int skipFrames = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_BENCH_SKIP"), out int skipValue) && skipValue >= 1 ? skipValue : 1;
+        var sorted = times.Skip(skipFrames).OrderBy(t => t).ToList();
+        var cpuSorted = cpu.Skip(skipFrames).OrderBy(t => t).ToList();
         double P(double q) => sorted[Math.Min((int)(sorted.Count * q), sorted.Count - 1)];
         double C(double q) => cpuSorted[Math.Min((int)(cpuSorted.Count * q), cpuSorted.Count - 1)];
         Console.WriteLine($"flight    p50 {P(0.5):0.0} ms, p95 {P(0.95):0.0} ms, p99 {P(0.99):0.0} ms, max {sorted[^1]:0.0} ms; {sorted.Count(t => t > 20)} frames over 20 ms, {sorted.Count(t => t > 33)} over 33 ms; gen2 GCs {GC.CollectionCount(2) - gc2}");
@@ -99,7 +101,7 @@ static partial class WorldApp
         if (BackgroundWork.ReportJobs) { BackgroundWork.Measure = false; BackgroundWork.Report(); }
         Console.WriteLine($"cpu only  p50 {C(0.5):0.0} ms, p95 {C(0.95):0.0} ms, p99 {C(0.99):0.0} ms, max {cpuSorted[^1]:0.0} ms (commands recorded, GPU not waited for)");
         if (gpu.Reflection is { } reflectionStats && render.Reflections) Console.WriteLine($"reflect   {reflectionStats.DescribeStats()}");
-        foreach (var f in worst.Skip(1).OrderByDescending(f => f.Ms).Take(8))
+        foreach (var f in worst.Skip(skipFrames).OrderByDescending(f => f.Ms).Take(8))
             Console.WriteLine($"  worst   frame {f.Frame}: {f.Ms:0.0} ms ({f.Stages})");
         if (gpu.Foliage is { } foliageGaps && gaps.Count > 0)
         {

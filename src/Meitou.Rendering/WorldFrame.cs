@@ -60,7 +60,7 @@ sealed class WorldOptions
     /// <summary>The impostors switch (Enhancements): far foliage as baked billboards (Meitou, default) or meshes only (the game); the distance (null: the default).</summary>
     public bool Impostors = true;
     public float? ImpostorDistance;
-    public double? ImpostorBudgetMb;
+    public double? ImpostorBudgetMb, ImpostorCacheMb;
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
     public float? HazeDistance;
     public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze switch (default); 1 = the game's haze
@@ -102,6 +102,7 @@ sealed class WorldOptions
           --range-large <u> --range-medium <u> --range-small <u>   foliage draw range by mesh size (the range switch, F6; defaults 12000, 5000, 800; Tab sliders)
           --impostor-distance <u>  foliage meshes with an impostor atlas become baked billboards from here (the impostors switch, F7; default 4000; Tab slider)
           --impostor-budget <MB>   the most video memory the resident impostor atlases may use (default 192; a mesh whose atlas does not fit stays a mesh)
+          --impostor-cache-mb <MB> the most the impostor atlas disk cache (%LOCALAPPDATA%\Meitou\impostors) may take (default 512, 0 = no cap; least recently used files go first)
           --object-distance <u>    draw placed objects at full detail up to this distance (default 12000)
           --distant-range <zones>  distant towns (and buildings' distant meshes) up to this many zones (default 10, the game's setting maximum; its default is 6)
           --no-distant             no distant towns: objects beyond --object-distance are simply not drawn
@@ -197,6 +198,7 @@ sealed class WorldOptions
                 case "--range-large": o.LargeRange = F(); break;
                 case "--impostor-distance": o.ImpostorDistance = F(); break;
                 case "--impostor-budget": o.ImpostorBudgetMb = F(); break;
+                case "--impostor-cache-mb": o.ImpostorCacheMb = F(); break;
                 case "--range-medium": o.MediumRange = F(); break;
                 case "--range-small": o.SmallRange = F(); break;
                 case "--object-distance": o.ObjectDistance = F(); break;
@@ -517,6 +519,7 @@ static class WorldFrame
             var f = gpu.Foliage;
             (f.MeitouRange, f.SmallRange, f.MediumRange, f.LargeRange) = (o.MeitouRange, o.SmallRange ?? f.SmallRange, o.MediumRange ?? f.MediumRange, o.LargeRange ?? f.LargeRange);
             (f.Impostors, f.ImpostorDistance, f.ImpostorBudgetMb) = (o.Impostors, o.ImpostorDistance ?? f.ImpostorDistance, o.ImpostorBudgetMb ?? f.ImpostorBudgetMb);
+            if (o.ImpostorCacheMb is { } cacheMb) f.ImpostorCacheMb = cacheMb;
             Console.WriteLine($"foliage   catalog and shaders ready ({gpu.Foliage.LoadMs:0} ms)");
         }
         if (!o.NoShadows)
