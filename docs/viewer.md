@@ -148,7 +148,14 @@ it flies the camera round a circle (`--fly-radius`, default 12000 units, round t
 frame, 9000 per second at the 60 frames per second of wall time it paces itself to) and prints frame-time percentiles, the worst
 frames with the render-thread time of each stage, the resident memory and (`vram` line) every allocator owner with its MB, device-local
 MB and count. With `--screenshot` the picture is taken afterwards, back at the start. `MEITOU_PASS_STATS=1` adds the per-stage table of
-docs/engine.md "Frame cost breakdown" (native counters since phase 8 stage 3).
+docs/engine.md "Frame cost breakdown" (native counters since phase 8 stage 3; GPU per frame since 2026-10-07) and a `gpu  mean` line with the
+pre-frame's GPU time (uploads, cull and grass kernels, bakes). Its `counts` lines give grass blades, the objects' instances, triangles and calls per
+frame (colour and shadow, and those stopped by the game's part distance) and, with `MEITOU_FOLIAGE_TRIS=1`, the GPU-culled foliage's triangles,
+instance-draws and impostor quads per view kind; the `top` line lists the meshes that drew the most triangles (with their size class and impostor
+state) and the impostors that drew the most quads; `sizes` gives the objects' radii. `MEITOU_OBJECT_PART_RANGE=<u>` replaces the 3000 that small
+building parts stop at. Two cautions ([render-distance-benchmark.md](render-distance-benchmark.md) section 1): the paced flight lets the GPU clock
+down at light load, so take GPU times from `--fly-pipelined` runs; a pipelined run's CPU times include the wait for a frame slot (in
+`upd-terrain/post start`), so take CPU times from paced runs.
 
 Its `jobs` line names the recording mode and thread count and gives the job threads' summed CPU time per stage, as a mean per frame. That
 is the command recording which wave 4 moved off the render thread ([renderer-native.md 6.5](renderer-native.md#65-as-built-wave-4-2026-10-06)).

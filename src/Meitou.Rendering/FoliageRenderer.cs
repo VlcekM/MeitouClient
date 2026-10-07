@@ -197,6 +197,36 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
     }
 
+    /// <summary><c>MEITOU_FOLIAGE_TRIS=1</c>: the GPU cull's indirect draws per frame (means since <see cref="ResetDrawTally"/>) by view kind:
+    /// mesh triangles and instance-draws (one per mesh part), TERRAIN-mode rock triangles and instance-draws, impostor quads, views.</summary>
+    public string DrawTallyDescription
+    {
+        get
+        {
+            if (gpuCull is not { } g || !FoliageGpuCull.DrawTally) return "off (MEITOU_FOLIAGE_TRIS=1)";
+            double n = Math.Max(g.TallyFrames, 1);
+            string One(int k, string name) => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{name}: mesh {g.Tally[k, 0] / n / 1e3:0.0}k tri in {g.Tally[k, 1] / n:0} inst-draws, rocks {g.Tally[k, 2] / n / 1e3:0.0}k tri in {g.Tally[k, 3] / n:0}, impostors {g.Tally[k, 4] / n:0}, views {g.Tally[k, 5] / n:0.0}");
+            return $"{g.TallyFrames} frames; {One(0, "colour")}; {One(1, "shadow")}; {One(2, "reflection")}";
+        }
+    }
+
+    public void ResetDrawTally() => gpuCull?.ResetTally();
+
+    /// <summary><c>MEITOU_FOLIAGE_TRIS=1</c>: the colour views' meshes that drew the most triangles (and the impostors that drew the most quads),
+    /// per frame since <see cref="ResetDrawTally"/>.</summary>
+    public string DrawTallyTop(int n)
+    {
+        if (gpuCull is not { } g || !FoliageGpuCull.DrawTally || g.TallyByName.Count == 0) return "";
+        double f = Math.Max(g.TallyFrames, 1);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var meshes = g.TallyByName.Where(e => !e.Key.EndsWith("(impostor)", StringComparison.Ordinal)).OrderByDescending(e => e.Value.Triangles).Take(n)
+            .Select(e => string.Create(inv, $"{e.Key} {e.Value.Triangles / f / 1e3:0}k tri / {e.Value.Instances / f:0} inst"));
+        var impostors = g.TallyByName.Where(e => e.Key.EndsWith("(impostor)", StringComparison.Ordinal)).OrderByDescending(e => e.Value.Instances).Take(5)
+            .Select(e => string.Create(inv, $"{e.Key} {e.Value.Instances / f:0}"));
+        return $"meshes by triangles: {string.Join("; ", meshes)}\n          impostors by quads: {string.Join("; ", impostors)}";
+    }
+
     public string Describe() =>
         $"{zones.Values.Count(z => z.Ready)} zones laid out ({zones.Values.Where(z => z.Ready).Sum(z => z.Instances):N0} meshes, " +
         $"{zones.Values.Sum(z => z.Pages.Count):N0} grass pages), {assetsByMesh.Count} foliage meshes ({assetsByMesh.Values.Count(a => a.Resident)} resident), catalog of {catalog.Layers.Count} layers";
@@ -1587,6 +1617,24 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // What the rocks' row 0 w carries, as the terrain's mesh path writes it: the biome row in colour (resident ones, now), 0 in depth.
         var rock = new FoliageRockView { BiomeRows = !depthPass };
         if (!depthPass && gpuRockOrder.Count > 0) terrain.FeatureResidentBiomes(rock.Resident);
+        if (FoliageGpuCull.DrawTally)
+        {
+            cull.TallyView = (depthPass ? 1 : Gpu.CurrentTargets().Formats.Samples > 1 ? 2 : 0, meshes, rocks);
+            // Which mesh each draw is, for the per-mesh tally of the colour views (the benchmark's top list).
+            var names = new string[count];
+            static string State(MeshAsset a) => a.Impostor switch
+            {
+                null => "no atlas asked",
+                { Stage: ImpostorStage.Ready } => "atlas",
+                { Stage: ImpostorStage.None, RetryAt: 0 } => global::Meitou.Rendering.Impostors.ImpostorSource.Ineligible(a.Mesh) is { } why ? $"ineligible: {why}" : "no impostor class (radius < 48) or load failed",
+                { Stage: ImpostorStage.None } => "atlas refused",
+                _ => "atlas pending",
+            };
+            for (int i = 0; i < meshes; i++) { var a = gpuOrder[meshDraws[i].Batch]; names[i] = $"{a.Mesh.Name} ({a.SizeClass}, {State(a)})"; }
+            for (int k = 0; k < rockDraws.Count; k++) { var (a, _) = gpuRockOrder[rockDrawBatch[k] - gpuOrder.Count]; names[meshes + k] = $"{a.Mesh.Name} (rock, {a.SizeClass})"; }
+            for (int k = 0; k < impostorDraws.Count; k++) names[rocks + k] = $"{impostorDraws[k].Asset.Mesh.Name} (impostor)";
+            cull.TallyNames = names;
+        }
         var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock);
         DrawnInstances += cull.LateVisible;
         if (GpuCullVerify) QueueVerify(result, terrain);

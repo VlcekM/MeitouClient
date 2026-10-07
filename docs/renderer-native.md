@@ -1085,6 +1085,8 @@ These change the picture on purpose, so they are not part of any parity step. Th
   or bake on demand. Details, measurements and the GLSL API are in [impostors.md](impostors.md) (section 7 for the foliage path).
 - **Hi-Z occlusion** (`occlusion`): last frame's depth pyramid reprojected, a two-phase cull. Conservative in theory but float-sensitive in
   practice, so it is a Meitou-mode switch.
+- **What limits ranges at "1 px"** (2026-10-07, [render-distance-benchmark.md](render-distance-benchmark.md), section 8.15 below): the GPU's
+  primitives, from the impostor budget's refusals, TERRAIN-mode rocks without LOD and meshes without an impostor class; not fill, shadows or VRAM.
 
 ---
 
@@ -1279,6 +1281,10 @@ Reading (**Observed**):
     costs as much as the recording it moves.
 - The frame is GPU-bound in these views (gpu-wait 3.7 to 4.5 ms of 5 to 7 ms), so the frame time follows the GPU.
 - The Hub runs are noisy: the update stages, which this wave does not touch, also move by 0.1 to 0.15 ms between modes.
+
+**Later measurement** (2026-10-07, [render-distance-benchmark.md](render-distance-benchmark.md) section 6.1): mode 0 has the lowest render-thread
+time in every set, at the defaults and at long ranges (C40, CPX), by 0.15-0.45 ms; the render thread's growth at long ranges is preparation, not
+recording. The gpu-wait above is inflated by the paced benchmark's GPU downclocking (same doc, section 1).
 
 **Open** (**Unknown** whether it pays):
 - Overlap instead of fork-join: start a host's jobs while the render thread prepares the next host (the cascades while the reflection
@@ -3264,6 +3270,20 @@ share; dropping them would save 24% of the mesh memory with no visual change but
    squeeze needs pressure. **Unknown**: whether a card whose budget is shared with other applications needs a lower priority ceiling; the
    start-up frames still lose a view or two (the demand there, 150 MB per frame, is before any clamp) and fall back to nothing, not to the last
    frame's rows (that was not built: the rows are exact per frame).
+
+### 8.15 Render distance benchmark (2026-10-07)
+
+Measurement only; the full write-up is [render-distance-benchmark.md](render-distance-benchmark.md). In short (**Observed**, RTX 4070, 1600 x 900):
+- "1 px" (`d = size x f`, `f` = 965 px at 900 lines) is beyond the world for large foliage, medium foliage and buildings, 5 000-77 000 for small
+  foliage and 10 000-19 000 for median grass. At that preset (CPX: large 192 000, medium 80 000, small 12 800, grass x16, objects 400 000) the GPU
+  takes 21.8 ms (forest flight) to 45.8 ms (Hub, Stack) against 2.5-2.7 ms at the defaults; the render thread 7-8 ms; VRAM 51-59 %.
+- Ranked: the 192 MB impostor budget refusing atlases (full tree meshes; −22 ms at the Hub with 2048 MB), TERRAIN-mode rocks without LOD or impostor
+  (21-41 M triangles, 5.6-10.5 ms, primitive-bound), meshes without an impostor class (3.8-5.3 ms), objects at 400 000 (4 ms GPU, 1.3 ms CPU), the
+  CPU's per-view foliage work lists (3.8 ms of the render thread). Fill rate, shadows (the cascades do not grow with the ranges) and VRAM are not limits.
+- Wave 4: `MEITOU_RECORD_THREADS=0` has the lowest render-thread time at the defaults, at C40 and at CPX (0.15-0.45 ms less than mode 2); proposed default 0.
+- Two measurement fixes for this note's earlier tables: the paced benchmark lets the GPU clock down at light load (forest defaults 4.75 ms of GPU paced
+  against 2.52 pipelined, so 6.6's "GPU-bound" reading is mostly clocks), and `PassMeter` divided GPU rows by their runs, not by frames (stages drawn per
+  depth slice and cascades drawn every second or fourth frame were under-counted; fixed).
 
 ---
 

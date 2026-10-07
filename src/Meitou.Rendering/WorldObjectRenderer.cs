@@ -98,6 +98,30 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     public int DrawnInstances { get; private set; }
     public long DrawnTriangles { get; private set; }
     public int DrawCalls { get; private set; }
+    /// <summary>Real instances the last <see cref="Draw"/> left out because of their part distance (<see cref="ObjectRanges.PartRenderingDistance"/>)
+    /// although within the object distance (in or out of view; a benchmark statistic).</summary>
+    public int PartLimited { get; private set; }
+
+    /// <summary>Sums over every <see cref="Draw"/> since the start, [0, ...] colour (scene slices and reflection), [1, ...] depth (shadow cascades):
+    /// instances, triangles, draw calls, part-limited instances, calls of Draw (a benchmark statistic; the caller divides by its frames).</summary>
+    public readonly long[,] Totals = new long[2, 5];
+
+    /// <summary><c>MEITOU_OBJECT_PART_RANGE=&lt;u&gt;</c>: the game's <c>objects view range</c> the small building parts stop at (default 3000,
+    /// <see cref="ObjectRanges.ObjectsViewRange"/>); for benchmarks of longer object ranges (docs/render-distance-benchmark.md).</summary>
+    static readonly float PartViewRange = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_OBJECT_PART_RANGE"), System.Globalization.NumberStyles.Float,
+        System.Globalization.CultureInfo.InvariantCulture, out float partRange) && partRange > 0 ? partRange : ObjectRanges.ObjectsViewRange;
+
+    /// <summary>A benchmark statistic: the resolved real instances' bounding radii (world units, scaled) as percentiles, and how many have the
+    /// part distance of <see cref="ObjectRanges.ObjectsViewRange"/> (small building parts) rather than none.</summary>
+    public string SizeSurvey()
+    {
+        var radii = streamer.AllZones.SelectMany(z => z.Real).Where(i => i.Gpu is not null).Select(i => i.Radius).Order().ToArray();
+        if (radii.Length == 0) return "no resolved instances";
+        int limited = streamer.AllZones.SelectMany(z => z.Real).Count(i => i.Gpu is not null && i.Limit < float.MaxValue / 2);
+        float P(double q) => radii[Math.Min((int)(radii.Length * q), radii.Length - 1)];
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"{radii.Length} resolved real instances, radius p10 {P(0.1):0} / p25 {P(0.25):0} / p50 {P(0.5):0} / p75 {P(0.75):0} / p90 {P(0.9):0} / max {radii[^1]:0}; {limited} with a part distance (<= {PartViewRange:0} units)");
+    }
     public double LastDrawCpuMs { get; private set; }
     public double LastUpdateMs { get; private set; }
 
@@ -358,7 +382,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         inst.Centre = centre;
         inst.Radius = radius;
         inst.Limit = inst.Placed.Kind == PlacedKind.BuildingPart
-            ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"))
+            ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"), PartViewRange)
             : float.MaxValue;
         if (inst.Stand) { inst.Materials = distantMaterial; return true; }
         // A part's look comes from the material the layout chose (which differs per town), else from the resolver's candidates.
@@ -424,6 +448,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         long now = Environment.TickCount64;
         float real = RealRange;
         DrawnInstances = 0;
+        PartLimited = 0;
         untexturedMax = Math.Max(untexturedMax, untexturedDraws);
         untexturedDraws = 0;
         coarseMax = Math.Max(coarseMax, coarseDraws);
@@ -447,7 +472,11 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                     if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); continue; }
                     float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
                     float limit = Math.Min(real, inst.Limit);
-                    if (value >= limit || !SphereVisible(frustum, inst.Centre, inst.Radius)) continue;
+                    if (value >= limit || !SphereVisible(frustum, inst.Centre, inst.Radius))
+                    {
+                        if (value >= inst.Limit && value < real) PartLimited++;   // stopped by the game's part distance, not the object distance (benchmark)
+                        continue;
+                    }
                     float w = ObjectRanges.EdgeWeight(value, limit, Math.Clamp(limit * 0.1f, 50, 1500));
                     if (w <= 0) continue;
                     inst.Mesh.LastUsed = now;
@@ -537,6 +566,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         int batchDraws = DrawCalls;
         if (terrainMeshes.Count > 0) DrawCalls += terrain.DrawMeshes(terrainMeshes, depthPass);
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
+        int kind = depthPass ? 1 : 0;
+        (Totals[kind, 0], Totals[kind, 1], Totals[kind, 2], Totals[kind, 3], Totals[kind, 4]) =
+            (Totals[kind, 0] + DrawnInstances, Totals[kind, 1] + DrawnTriangles, Totals[kind, 2] + DrawCalls, Totals[kind, 3] + PartLimited, Totals[kind, 4] + 1);
         if (ObjTiming) ObjAccount(depthPass ? 1 : 0, tCull, tUpload, tBatches, LastDrawCpuMs, batchDraws, DrawCalls - batchDraws, recordMs);
     }
 

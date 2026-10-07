@@ -19,6 +19,11 @@ public sealed unsafe partial class GpuContext
 
     /// <summary>The last completed frame's GPU time: from the start of its uploads to the end of its last command (a frame ring late).</summary>
     public double GpuFrameMs { get; private set; }
+    /// <summary><c>MEITOU_PASS_STATS=1</c> only (else 0): the last completed frame's pre-frame GPU time, from the start of its uploads to the end of
+    /// the pre-frame command buffer (uploads, compute culls, grass kernels, impostor bakes), a frame ring late.</summary>
+    public double PreFrameGpuMs { get; private set; }
+    static readonly bool PreFrameStamps = Environment.GetEnvironmentVariable("MEITOU_PASS_STATS") == "1";
+    QuerySlot[]? preFrameEnd;
     /// <summary>Stopwatch ticks spent waiting for a free frame slot and submitting, since the context was made.</summary>
     public long FenceWaitTicks { get; private set; }
     public long SubmitTicks { get; private set; }
@@ -60,6 +65,7 @@ public sealed unsafe partial class GpuContext
         // The slot's previous frame has completed and its timestamps were collected (Frame.Begin): its GPU time.
         ref var stamps = ref frameStamps![slot];
         if (Frame.Timestamps.TryRead(stamps.Begin, out ulong b) && Frame.Timestamps.TryRead(stamps.End, out ulong e) && e >= b) GpuFrameMs = (e - b) / 1e6;
+        if (PreFrameStamps && preFrameEnd is not null && Frame.Timestamps.TryRead(stamps.Begin, out ulong pb) && Frame.Timestamps.TryRead(preFrameEnd[slot], out ulong pe) && pe >= pb) PreFrameGpuMs = (pe - pb) / 1e6;
         stamps = (Frame.Timestamps.Allocate(), default);
         if (stamps.Begin.IsValid) Frame.PreFrame.Timestamp(Frame.Timestamps, stamps.Begin, PipelineStageFlags2.TopOfPipeBit);
     }
@@ -81,6 +87,13 @@ public sealed unsafe partial class GpuContext
         {
             Frame.Commands.Timestamp(Frame.Timestamps, end, PipelineStageFlags2.BottomOfPipeBit);
             frameStamps![slot].End = end;
+        }
+        if (PreFrameStamps)
+        {
+            // MEITOU_PASS_STATS=1: the pre-frame's own GPU time (uploads, the culls' and grass kernels, impostor bakes), read a frame ring later.
+            preFrameEnd ??= new QuerySlot[Device.Frames.Count];
+            preFrameEnd[slot] = Frame.Timestamps.Allocate();
+            if (preFrameEnd[slot].IsValid) Frame.PreFrame.Timestamp(Frame.Timestamps, preFrameEnd[slot], PipelineStageFlags2.BottomOfPipeBit);
         }
         Frame.End();
         var upload = uploadBuffers![slot];
