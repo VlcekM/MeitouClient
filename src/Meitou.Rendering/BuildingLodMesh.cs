@@ -142,6 +142,8 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
     public int Upgrading { get; private set; }
     /// <summary>Seconds a mesh must have held finer levels than needed before it is remade without them (under the guard's pressure: no wait).</summary>
     public double CoarsenAfterSeconds { get; set; } = 10;
+    /// <summary>Reshape decodes at once (the worker threads are few and shared with the foliage's layouts).</summary>
+    public int MaxReshapes { get; set; } = 2;
     /// <summary>The LOD bias the renderer draws with (the level a mesh is held at follows the LOD value times it).</summary>
     public float LodBias { get; set; } = 1;
     /// <summary><c>MEITOU_MESH_STREAM=0</c> loads every level of every mesh, for comparisons.</summary>
@@ -178,7 +180,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
     public bool Retarget(ObjectMesh m, float near)
     {
         if (!FarForms || m.Status != ObjectMesh.State.Resident || m.Reshape is not null || m.Distant) return false;
-        if (reshaping.Count >= MaxJobs || Guard is { Streaming: false } && m.Gpu!.MinLevel < LevelFor(m.Gpu.Distances, near * LodBias)) return false;
+        if (reshaping.Count >= MaxReshapes || Guard is { Streaming: false } && m.Gpu!.MinLevel < LevelFor(m.Gpu.Distances, near * LodBias)) return false;
         string key = m.Key;
         float bias = LodBias;
         bool keep = m.KeepLevelIndices;

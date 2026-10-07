@@ -2,20 +2,23 @@ namespace Meitou.Rendering;
 
 /// <summary>
 /// Which top mip levels of a texture the picture can never sample, from how near the texture is used (docs/renderer-native.md 8.12).
-/// A sampled level is the footprint of a pixel in texels, log2, taken from its short axis under anisotropic filtering. The footprint of one
+/// A sampled level is the footprint of a pixel in texels, log2, taken from its short axis under anisotropic filtering (the sampler divides the long
+/// axis by a whole number of taps, which can take up to one level below the short axis). The footprint of one
 /// pixel on a surface at distance <c>d</c> is at least <c>d cos^2(a) / f</c> (<c>f</c> the focal length in pixels, <c>a</c> the angle from the
 /// view axis to the screen's corner; the surface may be tilted, which stretches only the long axis) in world units, and one texel of an
 /// <c>N</c>-texel texture spans <c>k / N</c> of them (<c>k</c>: <see cref="MeshTexelScale"/>, times the instance's scale, over the material's
 /// tiling). So the level is at least <c>log2(d cos^2(a) N / (f k)) + bias</c>: with <c>need = d / k</c> that is
 /// <c>log2(need * <see cref="PixelsPerDistance"/> * N) + bias</c>, and a texture whose use never gets below that can lose that many top levels
-/// (less <see cref="Margin"/>, which also pays for the 2x2 derivative estimate and the time a finer image takes to arrive). The levels below
+/// (less <see cref="Margin"/>, two levels: one for the tap rounding, one for the 2x2 derivative estimate, the triangles stretched more than the part's
+/// <see cref="MeshTexelScale"/> and the time a finer image takes to arrive). The levels below
 /// are sampled as before: the bottom levels of a mip chain do not depend on the top ones, so the picture is the same.
 /// </summary>
 public sealed class MipStreaming
 {
-    /// <summary>Levels held back against the bound: derivative estimates differ from the exact footprint, and an approaching object has to be
+    /// <summary>Levels held back against the bound: the anisotropic tap rounding (up to 1), derivative estimates that differ from the exact footprint, the
+    /// few triangles more stretched than the part's texel scale, and an approaching object has to be
     /// refined before it needs to be.</summary>
-    public static readonly float Margin = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_MIP_MARGIN"), System.Globalization.CultureInfo.InvariantCulture, out float m) ? m : 1.5f;
+    public static readonly float Margin = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_MIP_MARGIN"), System.Globalization.CultureInfo.InvariantCulture, out float m) ? m : 2f;
     /// <summary>Never drop to a top level whose larger side is smaller than this (also keeps the level the normal-map swizzle test reads, the first within 256, in the chain).</summary>
     public const int MinSize = 512;
 

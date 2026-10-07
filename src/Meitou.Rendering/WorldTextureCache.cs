@@ -105,6 +105,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     static readonly bool StreamLog = Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1";
     /// <summary>MEITOU_MIP_LOG=1: a line for every image loaded with more levels dropped than the quality setting's, and for every swap.</summary>
     static readonly bool MipLog = Environment.GetEnvironmentVariable("MEITOU_MIP_LOG") == "1";
+    static readonly string[]? MipSkip = Environment.GetEnvironmentVariable("MEITOU_MIP_SKIP")?.Split(',', StringSplitOptions.RemoveEmptyEntries);
 
     /// <param name="name">The images' allocation name, by owner ("object textures", "foliage textures").</param>
     public WorldTextureCache(GpuContext gpu, AssetLocator assets, string name)
@@ -133,6 +134,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// <summary>Seconds a texture must have been finer than needed before it is replaced by a coarser image (no sooner: a camera that turns back
     /// would have it reloaded at once); under the guard's pressure no wait.</summary>
     public double CoarsenAfterSeconds { get; set; } = 10;
+    /// <summary>Replacements loading at once, finer ones and coarser ones (the worker threads are few and shared with the foliage's layouts).</summary>
+    public int MaxRefines { get; set; } = 6;
+    public int MaxCoarsens { get; set; } = 2;
     /// <summary>What the resident images would hold without streaming's drops (each dropped level counted as four times the one below; an estimate,
     /// taken at <see cref="Rebalance"/>).</summary>
     public long UnstreamedBytes { get; private set; }
@@ -160,7 +164,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public double GuardIdleSeconds { get; set; } = 2;
 
     public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far" +
-        (Mips.Enabled ? $"; mip streaming: {(UnstreamedBytes - ResidentBytes) / 1048576.0:0} MB less than every mip, {Refined} refined, {Coarsened} coarsened)" : ")");
+        (Mips.Enabled ? $"; mip streaming: {Math.Max(UnstreamedBytes - ResidentBytes, 0) / 1048576.0:0} MB less than every mip, {Refined} refined, {Coarsened} coarsened)" : ")");
 
     /// <param name="deferred">The texture is not loaded now: it stays <see cref="WorldTexture.Residency.Unloaded"/> until something reads its
     /// <see cref="WorldTexture.Key"/> (the foliage makes its meshes' textures this way and reads the keys only of groups within their range).</param>
@@ -178,6 +182,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             return t;
         }
         cache[key] = t = new WorldTexture { Border = border, Owner = this, Name = name, LastUsed = Environment.TickCount64 };
+        if (MipSkip is { } skip && skip.Any(s => name.Contains(s, StringComparison.OrdinalIgnoreCase))) t.KeepAllMips = true;
         byNumber.Add(t);
         t.Number = (uint)byNumber.Count;
         // The game reduces texture fields to the bare file name (runtime-materials.md); a path still works.
@@ -356,6 +361,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
         bool pressure = Guard?.Pressure ?? false;
         Mips.Extra = pressure ? 1 : 0;
         long unstreamed = 0;
+        int inFlight = 0;   // replacements being loaded: finer ones are limited so they do not crowd out the other streaming work on the few worker threads
+        foreach (var t in cache.Values) if (t.Replacing) inFlight++;
         foreach (var t in cache.Values)
         {
             if (t.State != WorldTexture.Residency.Resident || t.Native is null) continue;
@@ -364,17 +371,20 @@ public sealed unsafe class WorldTextureCache : IDisposable
             int target = Math.Max(Mips.Drop(t.FileWidth, t.FileHeight, t.Need), t.QualityDrop);
             if (target < t.Dropped)
             {
-                if (!MayStart(t)) continue;
+                if (inFlight >= MaxRefines || !MayStart(t)) continue;
                 Refined++;
                 t.Refine = true; Refining++;
                 Start(t, replacing: true);
+                inFlight++;
             }
             else if (target > t.Dropped)
             {
                 if (t.TooFineSince == 0) t.TooFineSince = now;
                 if (!pressure && now - t.TooFineSince < CoarsenAfterSeconds * 1000) continue;
+                if (inFlight >= MaxCoarsens) continue;
                 Coarsened++;
                 Start(t, replacing: true);
+                inFlight++;
             }
             else t.TooFineSince = 0;
         }
