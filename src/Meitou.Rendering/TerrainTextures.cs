@@ -179,6 +179,35 @@ public sealed unsafe class TerrainTextures : IDisposable
     public int FeatureBiomeRowAny(float x, float z) =>
         biomeMap is not null && rowOf.TryGetValue(biomeMap.At(x, z), out int row) ? row : -1;
 
+    /// <summary>The biome of parameter row <paramref name="row"/> has all its layer textures resident (its parameter row is written).</summary>
+    public bool IsResident(int row) => (uint)row < (uint)state.Length && state[row].Resident;
+
+    /// <summary>
+    /// What makes the biome's material what it is, as text for a cache key (docs/impostors.md section 13): its record's id, the six layers' texture names with
+    /// the length and write time of the files they resolve to, tiling, slope ranges, overlay strengths, brightness, distortion and the layer size the textures
+    /// are brought to. Null for a row outside the table.
+    /// </summary>
+    public string? BiomeKey(int row)
+    {
+        if ((uint)row >= (uint)biomes.Count) return null;
+        var b = biomes[row];
+        var sb = new System.Text.StringBuilder();
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        sb.Append(inv, $"{b.StringId}|{layerSize}|{b.BrightnessFix:R}|{b.DistortWavelength:R}|{b.DistortAmplitude:R}|{b.SlopeMin}|{b.SlopeMax}|{b.SlopeBlend}|{b.OverlayMult}|{b.GroundColour}|{b.FadeDistance:R}\n");
+        for (int l = 0; l < 6; l++)
+        {
+            sb.Append(inv, $"{b.Tiling[l]}");
+            foreach (var name in (ReadOnlySpan<string?>)[b.Diffuse[l], b.Normal[l]])
+            {
+                string? path = name is null ? null : assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
+                var info = path is null ? null : new FileInfo(path);
+                sb.Append(inv, $"|{name}|{(info is { Exists: true } ? info.Length : -1)}|{(info is { Exists: true } ? info.LastWriteTimeUtc.Ticks : 0)}");
+            }
+            sb.Append('\n');
+        }
+        return sb.ToString();
+    }
+
     /// <summary>A bit per resident biome row (row r: word r / 32, bit r % 32); rows beyond the span are left out (there are fewer than 254).</summary>
     public void ResidentBiomeBits(Span<uint> bits)
     {

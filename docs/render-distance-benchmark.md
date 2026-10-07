@@ -303,7 +303,10 @@ small impostor class. Rule, numbers per card size, design and gates: [impostors.
 - Pictures: Faithful ten views 0 px against `C:\Temp\base-87c7857\faithful`; `--faithful impostors` 0 px against master; Meitou defaults nine of ten views 0 px, forest 13:00 and 02:00 differ in
   a few small spots (the small impostors; 0 px with them off). `MEITOU_VK_VALIDATION=sync` 0 errors.
 
-Still open after this (**Observed**): TERRAIN-mode rocks (F2) are untouched (Hub 40.8 M triangles, 5.6-10.5 ms), now the largest single item; the CPU is 0.3-1.0 ms dearer at CPX; the
+**F2 done (2026-10-07, [impostors.md](impostors.md) section 13)**: TERRAIN-mode rocks get billboards baked with the terrain material, per biome. Hub fly benchmark (unpaced, pipelined): colour rock triangles 599 k to 15 k per frame,
+GPU frame mean 2.61 to 2.24 ms (**Observed**; this flight's mean, not the 5.6-10.5 ms long-range views the estimate was for), VRAM peak 4.10 to 4.32 GB. Faithful 0 px, validation 0 errors (**Verified**).
+
+Still open after this (**Observed**): ~~TERRAIN-mode rocks (F2) are untouched (Hub 40.8 M triangles, 5.6-10.5 ms), now the largest single item~~ (done, above); the CPU is 0.3-1.0 ms dearer at CPX; the
 integrated-GPU heap behaviour is **Unknown** (no such card here).
 
 ## 8. Gate for the instrumentation

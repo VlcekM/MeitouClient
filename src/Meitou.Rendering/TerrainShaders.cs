@@ -109,10 +109,12 @@ static class TerrainShaders
         out vec3 vNormal;
         out vec2 vCliffBlend;
         flat out int vFeatureBiome;
+        flat out float vFade;
         void main()
         {
             mat4 model = mat4(vec4(aModel0.xyz, 0.0), aModel1, aModel2, aModel3);   // the placement of the map feature
             vFeatureBiome = int(aModel0.w);
+            vFade = aModel1.w;   // the foliage cull's dither threshold for a rock crossfading with its impostor (0: none; a placement's row 1 w is otherwise 0)
             vWorld = (model * vec4(aPosition, 1.0)).xyz;
             vNormal = transpose(inverse(mat3(model))) * aNormal;
             vec3 n = normalize(vNormal);
@@ -393,7 +395,13 @@ static class TerrainShaders
     {
         const string uniform = "uniform int uFeatureBiome;";
         if (!fragment.Contains(uniform)) throw new InvalidOperationException("TerrainShaders.Fragment no longer declares uFeatureBiome.");
-        return fragment.Replace(uniform, "flat in int vFeatureBiome;\n#define uFeatureBiome vFeatureBiome\n");
+        string f = fragment.Replace(uniform, "flat in int vFeatureBiome;\n#define uFeatureBiome vFeatureBiome\nflat in float vFade;\n");
+        // A rock crossfading with its impostor (docs/impostors.md section 13): the cull's dither threshold in the placement's row 1 w, as the foliage meshes dither
+        // (a threshold in (0, 1) keeps that share of the pixels; 0, what every other placement has, keeps all).
+        const string wireframe = "if (uWireframe) { fragColour = vec4(0.1, 0.1, 0.1, 1.0); return; }";
+        int at = f.IndexOf(wireframe, StringComparison.Ordinal);
+        if (at < 0) throw new InvalidOperationException("TerrainShaders.Fragment no longer starts with the wireframe line.");
+        return f.Insert(at, "if (vFade > 0.0 && vFade < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vFade) discard;\n            ");
     }
 
     // ---- the native model (docs/renderer-native.md 3.3, step O): the texts above through NativeShaders.Port, bodies unchanged ----
@@ -486,10 +494,10 @@ static class TerrainShaders
     /// <see cref="ConstantsBlock"/> after the prelude. Only declarations move: <see cref="Fragment"/>'s <c>#extension</c> line goes up to
     /// right after <c>#version</c> (an extension directive must come before the prelude's declarations).
     /// </summary>
-    static string Native(string legacy)
+    static string Native(string legacy, string pushMembers = PushMembers)
     {
         const string preludeEnd = "#define gl_VertexID gl_VertexIndex\n";
-        string text = NativeShaders.Port(legacy, NativeShaders.Map(NativeMap), PushMembers);
+        string text = NativeShaders.Port(legacy, NativeShaders.Map(NativeMap), pushMembers);
         int at = text.IndexOf(preludeEnd, StringComparison.Ordinal);
         if (at < 0) throw new InvalidOperationException("TerrainShaders.Native: the native prelude no longer ends with the gl_VertexID define.");
         text = text.Insert(at + preludeEnd.Length, ConstantsBlock);
@@ -497,6 +505,52 @@ static class TerrainShaders
             text = text.Replace(DerivativeControl, "", StringComparison.Ordinal).Replace("#version 450\n", "#version 450\n" + DerivativeControl, StringComparison.Ordinal);
         return text;
     }
+
+    /// <summary>The rock bake's extra push members (after <see cref="PushMembers"/>; std430 offsets 32, 48, 64, 80; <see cref="TerrainBakePush"/> is the C# side):
+    /// the frame's direction (towards the viewer; w the distance the material is shaded at), its image axes and the output pass.</summary>
+    public const string RockBakePushMembers = PushMembers + """
+
+            vec4 bakeDir;
+            vec4 bakeRight;
+            vec4 bakeUp;
+            int bakePass;
+        """;
+
+    /// <summary>
+    /// <see cref="MeshFragment"/> for the impostor bake of a TERRAIN-mode rock (docs/impostors.md section 13): the same layer model with the biome of the
+    /// instance's row 0 w, three changes in a copy (the shader the terrain draws with is untouched): the distance the material fades by is the bake's
+    /// (<c>bakeDir.w</c>, the rock's transition distance) instead of the eye's, the material is always fully applied (no window or far fade: those
+    /// are applied per pixel at draw time by the impostor), and an output switch before the lighting writes the albedo (pass 0), the shading normal in
+    /// the frame's basis (pass 1) or the gloss (pass 2), as <see cref="Impostors.ImpostorShaders.BakeFragmentNative"/> does for the mesh shader.
+    /// </summary>
+    public static string RockBakeFragmentNative()
+    {
+        static string Patch(string text, string from, string to)
+        {
+            int at = text.IndexOf(from, StringComparison.Ordinal);
+            if (at < 0) throw new InvalidOperationException($"TerrainShaders.RockBakeFragmentNative: '{from}' not found in the terrain fragment shader; update the patch.");
+            return text.Remove(at, from.Length).Insert(at, to);
+        }
+        string f = MeshFragment;
+        f = Patch(f, "float distance = length(vWorld - uEye);", "float distance = pc.bakeDir.w;");
+        f = Patch(f, "nearWeight *= 1.0 - smoothstep(uFarStart, uFarEnd, distance);", "nearWeight = 1.0;");
+        f = Patch(f, "vec3 l = normalize(uLightDir);", """
+            if (pc.bakePass == 0) { fragColour = vec4(albedo.rgb, 1.0); return; }
+            if (pc.bakePass == 1)
+            {
+                vec3 bn = normalize(shadingNormal);
+                fragColour = vec4(vec3(dot(bn, pc.bakeRight.xyz), dot(bn, pc.bakeUp.xyz), dot(bn, pc.bakeDir.xyz)) * 0.5 + 0.5, 1.0);
+                return;
+            }
+            fragColour = vec4(0.0, clamp(albedo.a, 0.0, 1.0), 0.0, 1.0);
+            return;
+            vec3 l = normalize(uLightDir);
+            """);
+        return Native(f, RockBakePushMembers);
+    }
+
+    /// <summary>The vertex stage of the rock bake: <see cref="MeshVertex"/> with the bake's push block (both stages declare the same members).</summary>
+    public static string RockBakeVertexNative() => Native(MeshVertex, RockBakePushMembers);
 
     public static string PatchVertexNative() => Native(PatchVertex);
     public static string FragmentNative() => Native(Fragment);
@@ -559,4 +613,14 @@ struct TerrainPush
 {
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 Node;
     [System.Runtime.InteropServices.FieldOffset(16)] public System.Numerics.Vector2 Morph;
+}
+
+/// <summary>The C# side of <see cref="TerrainShaders.RockBakePushMembers"/> (std430 push constants, 84 bytes; the node and morph at 0 and 16 are unused): a bake draw's frame.</summary>
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 96)]
+struct TerrainBakePush
+{
+    [System.Runtime.InteropServices.FieldOffset(32)] public System.Numerics.Vector4 Dir;
+    [System.Runtime.InteropServices.FieldOffset(48)] public System.Numerics.Vector4 Right;
+    [System.Runtime.InteropServices.FieldOffset(64)] public System.Numerics.Vector4 Up;
+    [System.Runtime.InteropServices.FieldOffset(80)] public int Pass;
 }

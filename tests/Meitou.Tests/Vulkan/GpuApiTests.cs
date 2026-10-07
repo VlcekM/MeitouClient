@@ -184,7 +184,7 @@ public class GpuApiTests
         ["water"] = "EBCE6E99C47A215E7E266464DEE0FFB4",
         ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",
         ["terrain patch"] = "202A7EA2A01D100753D6D6E78C326B0B",
-        ["terrain mesh"] = "0C0F8CBDCB2DCA7F829FB4FBBCD731E7",
+        ["terrain mesh"] = "76D94074B5108CB22277DAC8CF9DF3B5",
         ["terrain patch depth"] = "838B179AA83BE582C69CC3C2766FA048",
         ["terrain mesh depth"] = "FD249B5F918DBB257C412C7394FD4ABC",
         ["foliage mesh"] = "414834CB6D3D413A898BBDCB68024918",
