@@ -26,7 +26,7 @@ Not there yet: the game itself. AI, combat, the UI, saves and the rest of the si
 ## Download
 
 Pre-built Windows releases are on the [Releases](https://github.com/VlcekM/MeitouClient/releases) page: unzip and run
-`meitou.exe`. No .NET install is needed, and NVIDIA DLSS (Streamline) and AMD FSR are included. A Steam install of Kenshi is
+`meitou.exe` (the game) or `meitou-viewer.exe` (the world viewer). No .NET install is needed, and NVIDIA DLSS (Streamline) and AMD FSR are included. A Steam install of Kenshi is
 found by itself; otherwise the game asks for the Kenshi folder once and keeps it in `meitou.local.json` next to the exe.
 Releases are made by the manual `Release` workflow (`.github/workflows/release.yml`, which runs `tools/scripts/package-release.ps1`;
 run that script with PowerShell 7 to build the same zip locally).

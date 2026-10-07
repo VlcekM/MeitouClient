@@ -34,7 +34,7 @@ static partial class WorldApp
             Console.WriteLine(WorldOptions.Usage);
             return 2;
         }
-        var install = GameInstall.Locate();
+        var install = GameInstall.LocateOrAsk();
         if (install is null)
         {
             Console.Error.WriteLine($"Kenshi install not found: set {GameInstall.EnvironmentVariable} or create {GameInstall.LocalConfigFile}.");

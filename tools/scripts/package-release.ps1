@@ -1,4 +1,4 @@
-# Builds the Windows release of the game (src/Meitou.Game, meitou.exe) into a zip that runs as is: self-contained .NET, NVIDIA's DLSS
+# Builds the Windows release of the game (src/Meitou.Game, meitou.exe) and the world viewer (meitou-viewer.exe) into a zip that runs as is: self-contained .NET, NVIDIA's DLSS
 # runtime and Streamline plugins and AMD's FidelityFX library next to the exe, their licences in licenses\. The NVIDIA and AMD files
 # come from their official GitHub releases (cached in -Cache); none of them is in the repository.
 #   pwsh -File tools/scripts/package-release.ps1 -Version 0.1.0 [-Output out] [-Cache C:\Temp\release-cache]
@@ -17,12 +17,16 @@ $stage = Join-Path $Output $name
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage, $Cache | Out-Null
 
-# The game, self-contained and single-file (no .NET install needed; only the native glfw3 and shaderc libraries beside it).
-# A numeric version goes into the assembly version too.
+# The game (meitou.exe) and the world viewer (meitou-viewer.exe), each self-contained and single-file (no .NET install needed;
+# only the native glfw3 and shaderc libraries beside them, shared). A numeric version goes into the assembly version too.
 $numeric = if ($Version -match '^\d+(\.\d+){1,3}') { $Matches[0] } else { "0.0.0" }
-dotnet publish (Join-Path $root "src\Meitou.Game\Meitou.Game.csproj") -c Release -r win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -o $stage
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
+foreach ($project in @("src\Meitou.Game\Meitou.Game.csproj", "tools\Meitou.ModelViewer\Meitou.ModelViewer.csproj")) {
+    dotnet publish (Join-Path $root $project) -c Release -r win-x64 --self-contained true `
+        -p:PublishSingleFile=true -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -o $stage
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish $project failed" }
+}
+# The viewer loads Streamline only when started with DLSS chosen (the game keeps the choice in meitou.user.json instead).
+Set-Content -Path (Join-Path $stage "meitou-viewer-dlss.bat") -Encoding ASCII -Value "@`"%~dp0meitou-viewer.exe`" --world --town `"The Hub`" --upscaler dlss %*`r`n@if errorlevel 1 pause"
 
 function Get-Archive([string] $url) {
     $file = Join-Path $Cache ([IO.Path]::GetFileName($url))
@@ -67,15 +71,23 @@ Meitou $Version (Windows x64)
 
 A reimplementation of the Kenshi engine. It reads your own Kenshi install; no game files are included.
 
+Two programs
+------------
+meitou.exe          The game: the world with the Kenshi camera.
+meitou-viewer.exe   The world viewer: a free camera over the world, with the Faithful / Meitou switches (F1-F8), frame statistics
+                    (F11), the profiler (F12) and every renderer option (meitou-viewer.exe --world --help lists them).
+                    meitou-viewer-dlss.bat starts it at The Hub with DLSS.
+
 Start
 -----
 1. Unzip anywhere.
-2. Run meitou.exe.
+2. Run meitou.exe or meitou-viewer.exe (both start at The Hub).
    - A Steam install of Kenshi is found by itself.
    - Otherwise the console asks for your Kenshi folder (the one with kenshi_x64.exe and the data folder) once and keeps it in
-     meitou.local.json next to meitou.exe. You can also edit that file, or set the KENSHI_PATH environment variable.
+     meitou.local.json next to the exe. You can also edit that file, or set the KENSHI_PATH environment variable.
 3. Tab opens the settings (draw distances, anti-aliasing: FXAA, TAA, FSR or DLSS). F10 lists the keys.
-   DLSS (NVIDIA RTX cards): pick it on the Tab panel's anti-aliasing slider and restart once; the choice is kept in meitou.user.json.
+   DLSS (NVIDIA RTX cards): in the game, pick it on the Tab panel's anti-aliasing slider and restart once (the choice is kept in
+   meitou.user.json); in the viewer, start meitou-viewer-dlss.bat (or add --upscaler dlss).
 
 Requirements: Windows 10/11 x64, a Vulkan 1.3 GPU with a current driver.
 

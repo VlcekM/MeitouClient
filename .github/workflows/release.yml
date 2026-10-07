@@ -1,5 +1,5 @@
-# Manual release: builds the game (meitou.exe, self-contained, with NVIDIA DLSS/Streamline and AMD FidelityFX next to it; see
-# tools/scripts/package-release.ps1), tags the commit v<version> and publishes a GitHub release with the zip.
+# Manual release: builds the game (meitou.exe) and the world viewer (meitou-viewer.exe), self-contained, with NVIDIA DLSS/Streamline
+# and AMD FidelityFX next to them (tools/scripts/package-release.ps1), tags the commit v<version> and publishes a GitHub release with the zip.
 name: Release
 
 on:
@@ -57,9 +57,10 @@ jobs:
           PRERELEASE: ${{ inputs.prerelease }}
         run: |
           $notes = @"
-          **Download** ``Meitou-$env:VERSION-win-x64.zip``, unzip it and run ``meitou.exe``. A Steam install of Kenshi is found by itself;
+          **Download** ``Meitou-$env:VERSION-win-x64.zip``, unzip it and run ``meitou.exe`` (the game) or ``meitou-viewer.exe`` (the world viewer). A Steam install of Kenshi is found by itself;
           otherwise it asks for your Kenshi folder once. No game files are included. DLSS (NVIDIA RTX) and FSR are included: pick them on
-          the Tab panel's anti-aliasing slider (DLSS takes effect after a restart). See README.txt in the zip.
+          the Tab panel's anti-aliasing slider (in the game DLSS takes effect after a restart; the viewer has meitou-viewer-dlss.bat).
+          See README.txt in the zip.
           "@
           $flags = @()
           if ($env:PRERELEASE -eq 'true') { $flags += '--prerelease' }

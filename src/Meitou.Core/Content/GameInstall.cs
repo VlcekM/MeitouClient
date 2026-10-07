@@ -61,6 +61,39 @@ public sealed class GameInstall
         return null;
     }
 
+    /// <summary>
+    /// <see cref="Locate"/>, else (a release run by hand without Steam) asks for the folder on the console and keeps it in
+    /// <c>meitou.local.json</c> next to the executable, so it is asked once. Null when nothing is found and the input is not a console or
+    /// the answer is empty.
+    /// </summary>
+    public static GameInstall? LocateOrAsk()
+    {
+        if (Locate() is { } found) return found;
+        if (Console.IsInputRedirected) return null;
+        Console.WriteLine("Kenshi was not found. Paste the Kenshi folder (the one with kenshi_x64.exe and data\\), or press Enter to quit.");
+        while (true)
+        {
+            Console.Write("Kenshi folder: ");
+            var line = Console.ReadLine()?.Trim().Trim('"');
+            if (string.IsNullOrEmpty(line)) return null;
+            if (!IsValid(line))
+            {
+                Console.WriteLine($"'{line}' is not a Kenshi folder (data\\gamedata.base not found).");
+                continue;
+            }
+            try
+            {
+                SaveLocalConfig(AppContext.BaseDirectory, line);
+                Console.WriteLine($"Saved to {Path.Combine(AppContext.BaseDirectory, LocalConfigFile)}.");
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Console.WriteLine($"Could not save {LocalConfigFile} ({e.Message}); it will be asked for again next time.");
+            }
+            return Open(line);
+        }
+    }
+
     static IEnumerable<string?> Candidates()
     {
         yield return Environment.GetEnvironmentVariable(EnvironmentVariable);
