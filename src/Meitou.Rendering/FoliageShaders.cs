@@ -320,7 +320,8 @@ static class FoliageShaders
     const string CullCommon = """
         #version 450
         layout(local_size_x = 256) in;
-        struct Instance { vec4 row0; vec4 row1; vec4 row2; vec4 row3; vec4 sphere; vec4 ground; };
+        // 17 floats a record (FoliageInstanceRecord.Pack): rows 1 to 4 xyz at 0..11, the sphere at 12..15, a rock's bits at 16; std430 stride 68.
+        struct Instance { float f[17]; };
         struct Chunk { uint first; uint count; float range; float rangeSquared; float inverseBand; uint flags; uint pad1; uint pad2; };
         // A TERRAIN-mode rock chunk (flags 1; with 2 its group's mirroring placements, else the others): ground.w is 1024 when the placement
         // mirrors, plus its biome map row + 1 (0: none). The view's biome rows switch (mode.x) and the resident biomes (a bit per row).
@@ -350,8 +351,9 @@ static class FoliageShaders
             float packed = -1.0;
             if (i < k.count)
             {
-                vec4 ground = instances[k.first + i].ground;
-                vec4 sphere = instances[k.first + i].sphere;
+                uint at = k.first + i;
+                vec4 ground = vec4(instances[at].f[9], instances[at].f[11], 0.0, instances[at].f[16]);   // x, z of the translation
+                vec4 sphere = vec4(instances[at].f[12], instances[at].f[13], instances[at].f[14], instances[at].f[15]);
                 precise float dx = ground.x - pc.eye.x;
                 precise float dz = ground.y - pc.eye.y;
                 precise float d2 = dx * dx + dz * dz;
@@ -459,14 +461,15 @@ static class FoliageShaders
                 float w = f;
                 if ((chunks[c].flags & 1u) != 0u)
                 {
-                    int row = int(uint(instances[at].ground.w) & 1023u) - 1;
+                    int row = int(uint(instances[at].f[16]) & 1023u) - 1;
                     bool resident = row >= 0 && ((view.resident[row >> 7][(row >> 5) & 3] >> uint(row & 31)) & 1u) != 0u;
                     w = view.mode.x != 0u ? (resident ? float(row) : -1.0) : 0.0;
                 }
-                rows[o] = vec4(instances[at].row0.xyz, w);
-                rows[o + 1u] = instances[at].row1;
-                rows[o + 2u] = instances[at].row2;
-                rows[o + 3u] = instances[at].row3;
+                // The fourth column is 0, 0, 0, 1 (FoliageInstanceRecord.Pack checks it); row 0's w is the fade.
+                rows[o] = vec4(instances[at].f[0], instances[at].f[1], instances[at].f[2], w);
+                rows[o + 1u] = vec4(instances[at].f[3], instances[at].f[4], instances[at].f[5], 0.0);
+                rows[o + 2u] = vec4(instances[at].f[6], instances[at].f[7], instances[at].f[8], 0.0);
+                rows[o + 3u] = vec4(instances[at].f[9], instances[at].f[10], instances[at].f[11], 1.0);
             }
         }
         """;

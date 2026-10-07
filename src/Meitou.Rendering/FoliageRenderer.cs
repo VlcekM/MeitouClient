@@ -192,7 +192,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             static string One(string name, FrameScratch s) => string.Create(System.Globalization.CultureInfo.InvariantCulture,
                 $"{name} {s.AllocatedBytes / 1048576.0:0.0} MB held, need per frame mean {s.MeanNeed / 1048576.0:0.0} / peak {s.PeakNeed / 1048576.0:0.0} MB (demand peak {s.PeakDemand / 1048576.0:0.0}), cap {s.Cap / 1048576.0:0} MB per slot, {s.Overflows} refused in {s.OverflowFrames} frames, {s.Rebuilds} rebuilds");
-            return (gpuCull is { } g ? One("cull", g.Scratch) : "no GPU cull") + "; " + One("grass", grassStore.Scratch);
+            return (gpuCull is { } g ? One("cull", g.Scratch) + $"; arena {g.ArenaUsed / 1048576.0:0.0} of {g.ArenaBytes / 1048576.0:0} MB at {FoliageInstanceRecord.GpuSize} B a record ({g.PackMismatches} not lossless)" : "no GPU cull") + "; " + One("grass", grassStore.Scratch);
         }
     }
 

@@ -138,8 +138,8 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     public bool Place(ref ArenaRange range, ref int generation, ReadOnlySpan<FoliageInstanceRecord> records)
     {
         if (generation == Generation) return true;
-        ulong bytes = (ulong)(records.Length * FoliageInstanceRecord.Size);
-        var r = arena.Allocate(bytes, FoliageInstanceRecord.Size);
+        ulong bytes = (ulong)records.Length * FoliageInstanceRecord.GpuSize;
+        var r = arena.Allocate(bytes, FoliageInstanceRecord.GpuSize);
         if (r.IsEmpty && bytes > 0)
         {
             // A refused growth (the video memory is nearly used up, VramGuard) leaves the range empty: the caller leaves the group out of the frame.
@@ -147,14 +147,28 @@ public sealed unsafe class FoliageGpuCull : IDisposable
             Grow(bytes);
             return false;
         }
-        ctx.Uploads.Write(arena.Buffer, r.Offset, MemoryMarshal.AsBytes(records));
+        // Packed in slices (17 floats a record, FoliageInstanceRecord.Pack) into a reused array, then into the frame's upload buffer.
+        const int Slice = 4096;
+        const int Floats = FoliageInstanceRecord.GpuSize / sizeof(float);
+        packed ??= new float[Slice * Floats];
+        for (int at = 0; at < records.Length; at += Slice)
+        {
+            int n = Math.Min(Slice, records.Length - at);
+            for (int i = 0; i < n; i++)
+                if (!FoliageInstanceRecord.Pack(in records[at + i], packed.AsSpan(i * Floats, Floats))) PackMismatches++;
+            ctx.Uploads.Write(arena.Buffer, r.Offset + (ulong)at * FoliageInstanceRecord.GpuSize, MemoryMarshal.AsBytes(packed.AsSpan(0, n * Floats)));
+        }
         (range, generation) = (r, Generation);
         UploadedInstances += records.Length;
         return true;
     }
 
     /// <summary>The first record of a placed range.</summary>
-    public static uint FirstOf(ArenaRange range) => (uint)(range.Offset / FoliageInstanceRecord.Size);
+    public static uint FirstOf(ArenaRange range) => (uint)(range.Offset / FoliageInstanceRecord.GpuSize);
+
+    float[]? packed;
+    /// <summary>Records whose packing was not lossless (<see cref="FoliageInstanceRecord.Pack"/>); 0 for every placement the game makes.</summary>
+    public long PackMismatches { get; private set; }
 
     /// <summary>Gives a group's range back (after the frames in flight), when it is from the current arena.</summary>
     public void Free(ArenaRange range, int generation)
