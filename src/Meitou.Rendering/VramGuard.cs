@@ -72,7 +72,7 @@ public sealed class VramGuard
 
     /// <summary>The statistics line (F11): idle, or the clamp and what is paused.</summary>
     public string Status =>
-        Active ? $"guard: ranges x{scale:0.00}{(pressure ? ", streaming paused" : ", recovering")}, {Fraction * 100:0}% of the {budget / 1048576} MB budget{(Refusals > 0 ? $", {Refusals} allocations refused" : "")}"
+        Active ? $"guard: ranges x{scale:0.00}{(pressure ? ", streaming paused" : ", recovering")}, {Fraction * 100:0}% of the {budget / 1048576} MB budget{(Refusals > 0 ? $", {Refusals} allocations refused" : "")}{(PriorityGrants > 0 ? $", {PriorityGrants} scratch grants over the ceiling" : "")}"
                : $"guard: ok, {Fraction * 100:0}% of the {budget / 1048576} MB budget";
 
     /// <summary>Once a frame: takes a sample when one is due and moves the state.</summary>
@@ -113,6 +113,58 @@ public sealed class VramGuard
         if (!pressure) Enter(now, (double)wanted / budget);
         return false;
     }
+
+    /// <summary>The most the per-frame scratch may take the use to (<see cref="Allows(ulong)"/> stops at <see cref="Ceiling"/>).</summary>
+    public const double PriorityCeiling = 0.945;
+
+    /// <summary>Scratch allocations granted above <see cref="Ceiling"/> (the use then is the scratch's, not the caches').</summary>
+    public int PriorityGrants { get; private set; }
+
+    /// <summary>
+    /// <see cref="Allows(ulong)"/> for what a frame cannot be drawn without (the foliage cull's and the grass kernels' per-frame scratch: tens of
+    /// MB, against caches of gigabytes): refused only past <see cref="PriorityCeiling"/>, so the streaming and the caches give way first. A grant
+    /// above <see cref="Ceiling"/> enters pressure (the caches evict and the ranges fall, which lowers the next frames' need).
+    /// </summary>
+    public bool AllowsPriority(ulong bytes)
+    {
+        double now = clock();
+        if (now - lastSample >= FreshSeconds) Sample(now);
+        if (budget <= 0) return true;
+        long wanted = used + reserved + (long)bytes;
+        if (wanted > PriorityCeiling * budget)
+        {
+            Refusals++;
+            if (!pressure) Enter(now, (double)wanted / budget);
+            Squeeze(now);
+            return false;
+        }
+        reserved += (long)bytes;
+        if (wanted > Ceiling * budget)
+        {
+            PriorityGrants++;
+            if (!pressure) Enter(now, (double)wanted / budget);
+        }
+        return true;
+    }
+
+    /// <summary>Seconds between two squeezes (a refused scratch asks for a shorter range every frame it is refused; this paces them).</summary>
+    const double SqueezeSeconds = 0.05;
+
+    /// <summary>
+    /// A frame's scratch was refused: the ranges that make it fall one step now instead of waiting for the next regular step (0.75 s), so a view
+    /// is shortened within a few frames rather than left out for seconds. Only under pressure; the regular steps and the recovery go on as before.
+    /// </summary>
+    void Squeeze(double now)
+    {
+        if (!pressure || now - lastSqueeze < SqueezeSeconds) return;
+        lastSqueeze = lastStep = now;
+        scale = Math.Max(MinScale, scale * StepDown);
+        LowestScale = Math.Min(LowestScale, scale);
+        Squeezes++;
+    }
+    double lastSqueeze = double.NegativeInfinity;
+    /// <summary>Range steps taken early because a scratch was refused.</summary>
+    public int Squeezes { get; private set; }
 
     void Enter(double now, double fraction)
     {

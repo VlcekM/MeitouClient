@@ -59,6 +59,8 @@ public sealed class FrameScratch(GpuContext ctx, string name, BufferUse use, ulo
     /// <summary>Whether the current frame has had a request refused.</summary>
     public bool OverflowedThisFrame { get; private set; }
     public long Rebuilds { get; private set; }
+    /// <summary>Rebuilds whose replacement was refused: the slot kept (the largest of) its old buffers.</summary>
+    public long KeptOnRefusal { get; private set; }
     long frames;
     double totalNeed;
 
@@ -78,10 +80,25 @@ public sealed class FrameScratch(GpuContext ctx, string name, BufferUse use, ulo
         want = Math.Min(Math.Max(want, minimum), Cap);
         if (s.Grew || s.Buffers.Count > 1 || s.Capacity > want * 2 || s.Capacity > Cap)
         {
-            foreach (var b in s.Buffers) b.Dispose();   // freed after the frames in flight
+            // The replacement is made before the old buffers go: when it is refused (the driver's memory) the slot keeps what it has, so
+            // a frame never starts with nothing where the last one had room. The old ones are freed after the frames in flight.
+            var old = s.Buffers.ToArray();
             s.Buffers.Clear();
             s.Capacity = 0;
-            if (window > 0 || s.Used > 0) TryAdd(s, want);
+            if ((window > 0 || s.Used > 0) && !TryAdd(s, want) && old.Length > 0)
+            {
+                // Keep the largest old buffer (the slot grows again by pieces if a frame needs more) and give the rest back.
+                int keep = 0;
+                for (int i = 1; i < old.Length; i++) if (old[i].Size > old[keep].Size) keep = i;
+                if (old[keep].Size <= Cap)
+                {
+                    s.Buffers.Add(old[keep]);
+                    s.Capacity = old[keep].Size;
+                    old[keep] = null!;
+                }
+                KeptOnRefusal++;
+            }
+            foreach (var b in old) b?.Dispose();
             Rebuilds++;
         }
         (s.Index, s.Offset, s.Used, s.Grew) = (0, 0, 0, false);
