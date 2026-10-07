@@ -69,6 +69,7 @@ public class HubTests
                 Assert.True(Vector2.Distance(new(s.Position.X, s.Position.Z), centre) <= hub.Town.SizeRadius * hub.Town.TownRadiusMult * 0.6f + 0.1f);
             }
         }
+        expectedSquads += PopulationSystem.BarEntries(hub.Town, faction).Sum(e => e.V0);   // bar squads, each present by its chance
         Assert.True(world.Squads.Count > 0 && world.Squads.Count <= expectedSquads);
         foreach (var c in world.Characters.Previous)
         {

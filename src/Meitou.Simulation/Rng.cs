@@ -12,6 +12,7 @@ public enum RngPurpose : uint
     Spawn = 4,
     Loot = 5,
     Slow = 6,
+    Animation = 7,
 }
 
 /// <summary>

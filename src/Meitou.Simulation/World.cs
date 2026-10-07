@@ -85,6 +85,8 @@ public sealed class World : IDisposable
     public CommandQueue Commands { get; } = new();
     /// <summary>The squads (factory output, kept for the leader and follower logic).</summary>
     public SquadRegistry Squads { get; } = new();
+    /// <summary>Roaming squads that persist across the loading of zones (<see cref="PopulationSystem"/>).</summary>
+    public PlatoonRegistry Platoons { get; } = new();
     /// <summary>The player: faction, money, selection.</summary>
     public PlayerState Player { get; } = new();
     public IReadOnlyList<ITickSystem> Systems => systems;
@@ -173,11 +175,12 @@ public sealed class World : IDisposable
         var table = Characters;
         var list = new List<CharacterSnapshot>(table.Count);
         var state = table.Previous;
+        var animations = systems.OfType<IAnimationSource>().FirstOrDefault();
         for (int i = 0; i < state.Length; i++)
         {
             if (!state[i].Alive) continue;
             var cold = table.Cold(i);
-            list.Add(new CharacterSnapshot(new CharacterId(i, state[i].Generation), cold?.Appearance, state[i].Position, state[i].Yaw, AnimationLayers.For(state[i].Animation, state[i].AnimationTime))
+            list.Add(new CharacterSnapshot(new CharacterId(i, state[i].Generation), cold?.Appearance, state[i].Position, state[i].Yaw, cold?.Animation is { } anim && animations is not null ? animations.Publish(anim) : AnimationLayers.For(state[i].Animation, state[i].AnimationTime))
             {
                 Faction = cold?.Faction ?? -1,
                 Name = cold?.Name ?? "",
@@ -198,6 +201,7 @@ public sealed class World : IDisposable
         h.Add(Tick);
         Characters.Hash(ref h);
         Squads.Hash(ref h);
+        Platoons.Hash(ref h);
         Player.Hash(ref h);
         return h.Value;
     }

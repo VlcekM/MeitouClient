@@ -22,8 +22,10 @@ public sealed class Squad
     /// <summary>Where the squad was created (members stand at offsets from it).</summary>
     public Vector3 Position { get; init; }
     /// <summary>The place and radius the squad wanders in when it has no orders (the town's centre and radius for residents).</summary>
-    public Vector2 HomeCentre { get; init; }
-    public float HomeRadius { get; init; }
+    public Vector2 HomeCentre { get; set; }
+    public float HomeRadius { get; set; }
+    /// <summary>The roaming platoon this loaded squad is the active half of (-1: a resident or other squad).</summary>
+    public int PlatoonId { get; init; } = -1;
     public List<CharacterId> Members { get; } = [];
     /// <summary>The member the others follow (the role-2 leader, else the first member); <see cref="CharacterId.None"/> when none is alive.</summary>
     public CharacterId Leader { get; set; } = CharacterId.None;
@@ -65,6 +67,9 @@ public sealed class SquadRegistry
             hasher.Add(s.Id);
             hasher.Add(s.Faction);
             hasher.Add(s.Town);
+            hasher.Add(s.PlatoonId);
+            hasher.Add(s.HomeCentre);
+            hasher.Add(s.HomeRadius);
             hasher.Add(s.Position);
             hasher.Add(s.Leader.Slot);
             hasher.Add(s.Leader.Generation);

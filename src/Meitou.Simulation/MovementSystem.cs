@@ -50,29 +50,38 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
             if (command is not MoveOrder order) continue;
             // An empty list orders the selection (the UI sends orders for whatever is selected when the click happens).
             var who = order.Characters.Count > 0 ? order.Characters : world.Player.Selection.ToArray();
-            int k = 0;
-            foreach (var id in who)
+            var slots = new List<int>();
+            foreach (var id in who) if (table.TryResolveNext(id, out int found)) slots.Add(found);
+            var targets = Formation.Place([.. slots.Select(s => new Vector2(table.Next[s].Position.X, table.Next[s].Position.Z))], new Vector2(order.Target.X, order.Target.Z));
+            for (int k = 0; k < slots.Count; k++)
             {
-                if (!table.TryResolveNext(id, out int slot)) continue;
+                int slot = slots[k];
                 ref var n = ref table.Next[slot];
                 var cold = table.Cold(slot)!;
-                var offset = SquadFactory.Offset(k++, 3) * FormationScale;
-                var target = new Vector2(order.Target.X + offset.X, order.Target.Z + offset.Y);
+                var target = targets[k];
                 bool busy = n.Task == (byte)CharacterTask.GoTo && (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath)) != 0;
                 if (order.Queued && busy)
                 {
                     cold.OrderQueue.Add(target);   // after the order in hand (shift + right click)
                     continue;
                 }
-                cold.OrderQueue.Clear();
-                n.Task = (byte)CharacterTask.GoTo;
-                n.Goal = target;
-                n.Mode = SpeedMode.Free;
-                n.Flags = (ushort)((n.Flags & ~(ushort)(MoveFlags.Pending | MoveFlags.HasPath)) | (ushort)MoveFlags.NeedPath);
-                n.PathCursor = 0;
-                cold.PathRequest = 0;
+                GoTo(table, slot, target, SpeedMode.Free);
             }
         }
+    }
+
+    /// <summary>Sends a character to a point at a speed mode, dropping its queue and path (serial phases only).</summary>
+    public static void GoTo(CharacterTable table, int slot, Vector2 target, byte mode)
+    {
+        ref var n = ref table.Next[slot];
+        var cold = table.Cold(slot)!;
+        cold.OrderQueue.Clear();
+        n.Task = (byte)CharacterTask.GoTo;
+        n.Goal = target;
+        n.Mode = mode;
+        n.Flags = (ushort)((n.Flags & ~(ushort)(MoveFlags.Pending | MoveFlags.HasPath)) | (ushort)MoveFlags.NeedPath);
+        n.PathCursor = 0;
+        cold.PathRequest = 0;
     }
 
     /// <summary>Drops a character's orders and path and makes it stand (serial phases only).</summary>

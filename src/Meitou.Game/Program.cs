@@ -203,6 +203,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             systems.Add(population);
             systems.Add(new Meitou.Simulation.PlayerSystem());
             systems.Add(new Meitou.Simulation.MovementSystem(new Meitou.Simulation.PathService(walkability, synchronous: !interactive)));
+            systems.Add(new Meitou.Simulation.AnimationSystem(Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb), Meitou.Data.Gameplay.AnimationLengths.Load(install.Root), Meitou.Data.Gameplay.GameConstants.FromDatabase(gameDb).AnimationBlendRate));
         }
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate,
             clock: GameClockFor(scene.Database, o.Hour),
@@ -519,13 +520,29 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             if (c.Appearance is null) continue;
             var position = c.Position;
             float yaw = c.Yaw;
-            if (previousById.TryGetValue(c.Id, out var before))
+            CharacterSnapshot? before = null;
+            if (previousById.TryGetValue(c.Id, out var found))
             {
-                position = Vector3.Lerp(before.Position, c.Position, alpha);
-                yaw = Meitou.Engine.Time.Interp.LerpAngle(before.Yaw, c.Yaw, alpha);
+                before = found;
+                position = Vector3.Lerp(found.Position, c.Position, alpha);
+                yaw = Meitou.Engine.Time.Interp.LerpAngle(found.Yaw, c.Yaw, alpha);
             }
             var poses = new CharacterPose[c.Animations.Count];
-            for (int i = 0; i < poses.Length; i++) poses[i] = new CharacterPose(c.Animations[i].Name, c.Animations[i].Time, c.Animations[i].Weight);
+            for (int i = 0; i < poses.Length; i++)
+            {
+                var layer = c.Animations[i];
+                float time = layer.Time, weight = layer.Weight;
+                // Between ticks the clip time and weight move on from the last snapshot (a wrap of a looping clip just shows the new time).
+                if (before is not null)
+                    foreach (var old in before.Animations)
+                        if (old.Name == layer.Name)
+                        {
+                            if (layer.Time >= old.Time) time = old.Time + (layer.Time - old.Time) * alpha;
+                            weight = old.Weight + (layer.Weight - old.Weight) * alpha;
+                            break;
+                        }
+                poses[i] = new CharacterPose(layer.Name, time, weight);
+            }
             list.Add(new CharacterInstance(((long)c.Id.Slot << 32 | (uint)c.Id.Generation) + 1, c.Appearance, position, yaw, poses));
         }
     }

@@ -61,6 +61,10 @@ public sealed class CharacterCold
     public bool IsPlayer { get; set; }
     /// <summary>Queued move orders (X/Z) after the current one (shift + right click); changed only by the character's own partition or a serial phase.</summary>
     public List<System.Numerics.Vector2> OrderQueue { get; } = [];
+    /// <summary>Animation layers in play (made by <see cref="AnimationSystem"/>; null before the first tick it runs).</summary>
+    public CharacterAnimation? Animation { get; set; }
+    /// <summary>The kind of weapon drawn in the right hand (None while sheathed): the stance animations are chosen for.</summary>
+    public Meitou.Data.Gameplay.WeaponKinds DrawnWeapon { get; set; }
 }
 
 /// <summary>
@@ -221,6 +225,8 @@ public sealed class CharacterTable
             hasher.Add(k.IsPlayer);
             hasher.Add(k.OrderQueue.Count);
             foreach (var q in k.OrderQueue) hasher.Add(q);
+            hasher.Add((int)k.DrawnWeapon);
+            if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);
             hasher.Add(k.Name.Length);
         }
         hasher.Add(free.Count);

@@ -294,7 +294,8 @@ and the sliders above. Hair and beards are ATTACHMENT records worn with a shared
   children of `Bip01 Head` except `Bip01 Jaw` with true. What it is (scale inheritance? manual control?) is
   Unknown.
 - How characters choose between candidate animations (idle chance, speed bands, injury ranges, combat
-  state) beyond the definitions above. Not traced.
+  state) beyond the definitions above. Not traced in the original; our rules (a chain by `move speed`, validity by stance, idles by chance) are in
+  [simulation.md](simulation.md#animation-formation-and-roaming-as-built-after-stage-6), with the data they were read from.
 - Body shape: the nutrition value behind starvation (+0x4b8), the thigh-narrowing leg state, the two
   movement-scale exceptions, the stats field x in the muscle definition, what reads (`Height` − 80) × 0.025,
   and what the game does when a body file lacks a slider (the viewer uses 100).
