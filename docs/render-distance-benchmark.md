@@ -207,7 +207,7 @@ impostor class" (`ImpostorClass.For` gave none: radius x largest scale under `Im
 
 Ranked by what each costs at the target (CPX), worst view first (**Observed**, from the tables above):
 
-1. **Impostor budget (192 MB) refusing atlases at long ranges**: refused trees and junk draw as full meshes. Hub CPX 45.8 → 23.7 ms with
+1. **Impostor budget (192 MB) refusing atlases at long ranges** (fixed by F1, 7.1; this is the state measured before): refused trees and junk draw as full meshes. Hub CPX 45.8 → 23.7 ms with
    a 2048 MB budget (**−22.1 ms**), forest CPX 21.8 → 19.7 (−2.1), forest large 192k 11.2 → 9.9 (−1.3). Cost: atlases 221 → 874 MB (+650 MB,
    57 % of the budget at most). It also thrashes: 1 776 atlas loads in 300 frames at large 192k with 192 MB (`P_L192k`, `resident` line).
 2. **TERRAIN-mode rocks without LOD or impostor**: 10.5 ms at the Hub CPX (40.8 M triangles), 7.8 ms at the Stack, 5.6 ms forest (22.0 M);
@@ -259,9 +259,9 @@ Estimates are from the measured rates and counts (**Unknown** until built); the 
 
 | # | Fix | Tied to | Expected gain at CPX |
 | --- | --- | --- | --- |
-| F1 | **Impostor residency by distance**: a budget that follows the card (the object caches' `HighWaterShare` pattern, about 8 % of the driver's budget ≈ 900 MB here) and far atlases held at lower mips (a tree at 30 000 needs 16-32 px frames; the object textures' mip streaming of 8.14 does exactly this), so far trees never fall back to meshes and the LRU stops thrashing | bottleneck 1 | Hub −22 ms and forest −2.1 (measured with a 2048 MB budget); Stack likely similar to the Hub (the same refused trees and junk, not measured); VRAM +0.2-0.65 GB |
+| F1 | **Done (7.1).** **Impostor residency by distance**: a budget that follows the card (the object caches' `HighWaterShare` pattern, about 8 % of the driver's budget ≈ 900 MB here) and far atlases held at lower mips (a tree at 30 000 needs 16-32 px frames; the object textures' mip streaming of 8.14 does exactly this), so far trees never fall back to meshes and the LRU stops thrashing | bottleneck 1 | Hub −22 ms and forest −2.1 (measured with a 2048 MB budget); Stack likely similar to the Hub (the same refused trees and junk, not measured); VRAM +0.2-0.65 GB |
 | F2 | **LOD for TERRAIN-mode rocks**: decimated levels made at load (quadric simplification, clean-room) chosen per instance in the cull kernel by projected size, the way the kernel already splits mesh / impostor; or depth-and-normal impostors shaded with the biome textures of the instance in the terrain shader | bottleneck 2 | rock triangles ÷10-÷30 beyond ~8 000: Hub 10.5 → ~1 ms, forest 5.6 → ~0.6 ms (−9.5 / −5) |
-| F3 | **Impostors for the smaller meshes** (a 32 px frame class under radius 48) and for medium meshes in general | bottleneck 3 | Hub −4 to −5 ms, forest medium 80k −3.5 ms; VRAM + a few MB an atlas at 32 px |
+| F3 | **Done (7.1).** **Impostors for the smaller meshes** (a 32 px frame class under radius 48) and for medium meshes in general | bottleneck 3 | Hub −4 to −5 ms, forest medium 80k −3.5 ms; VRAM + a few MB an atlas at 32 px |
 | F4 | **The 1 px rule itself in the cull kernel**: drop an instance whose `2 r s f / d` is under ~1 px (sphere from the record, `f` from the view), instead of fixed class ranges; ranges become "the world" and the cost follows what is visible | bottlenecks 2, 3, 7 | impostor quads (`Spore02[Blister]` 430-611 k) −1 to −1.5 ms; also trims the far rocks and meshes before F2/F3 (**Unknown** how much: count first) |
 | F5 | **Far objects**: impostors or decimated far levels for buildings past their last Ogre LOD (their textures already stream, 8.14), and the CPU cull per zone (zone bound first, cached per frame for all views); not a per-instance GPU cull (5.6.3: two instances per work item) | bottleneck 4 | objects GPU 4.0 → ~1 ms (−3), render thread 1.3 → ~0.5 ms |
 | F6 | **One foliage work list per frame**: build the chunk lists per zone once at accept (they depend on the eye only through the range test, which the kernel can do), share them between the slices, the reflection and the cascades, and let the kernel reject far zones | bottleneck 5 | render thread −2.5 to −3.5 ms at CPX (3.8 ms now); then find the shadow spikes |
@@ -275,6 +275,36 @@ Together (rough, **Unknown**): Hub CPX 45.8 → 23.7 (F1) → ~14 (F2) → ~10 (
 Not proposed, with the reason (**Observed**): HiZ occlusion (open vistas and long sight lines; the cost is primitives already behind
 terrain or not, **Unknown** how many are hidden: a count would decide it); compute-rasterised grass (grass is 0.3-1.4 ms); cascade range
 scaling (the cascades do not grow with the ranges); GPU-driven objects (5.6.3).
+
+### 7.1 F1 and F3 done (2026-10-07, branch `impostors-budget-small`)
+
+The budget now follows the card, atlases hold only the mips their nearest instance needs, a plan decides residency nearest first, and meshes under radius 48 have a
+small impostor class. Rule, numbers per card size, design and gates: [impostors.md](impostors.md) sections 10 and 11; code notes [renderer-native.md](renderer-native.md) 8.16.
+
+**Measured** (**Observed**, RTX 4070, CPX preset, `--fly-pipelined` GPU frame p50, three interleaved runs against the viewer built from `0a3614a`):
+
+| Run | master | F1 only (`MEITOU_IMPOSTOR_SMALL=0`) | F1 + F3 |
+| --- | --- | --- | --- |
+| Hub CPX | 46.6, 46.4, 46.4 ms | 23.7 | 20.6, 20.7, 20.6 |
+| forest CPX | 21.6, 21.4, 21.4 | 19.6 | 15.2, 15.1, 15.2 |
+| Stack CPX (one pair) | 45.6 | | 15.7 |
+| medium 80 000 only (forest) | 6.6, 6.7, 6.6 | | 4.0, 4.1, 3.9 |
+
+- Foliage row of the pass table: Hub 39.3 to 13.45 ms, forest 14.1 to 7.97, Stack 39.55 to 9.68. Colour mesh triangles: Hub 47.9 M to 22 k, forest 11.7 M to 0.30 M.
+- Impostor VRAM (allocator): Hub 219 to 413 MB (311 atlases, 100 refined; the same run with far mips off holds 874 MB), forest 212 to 494 MB (293 atlases, 154 refined);
+  whole process peak at the Hub 5 851 to 5 981 MB. Atlas loads in 300 frames: Hub 3 437-3 593 to 311, forest about 2 250 to 293 (the thrash is gone).
+- F1 alone gives -22.7 ms at the Hub and -1.8 at the forest (the estimate was -22.1 and -2.1); F3 adds -3.1 and -4.4 (estimate -4 to -5; forest medium 80 000 alone: -2.6).
+- Render thread (paced, cpu-only p50): forest CPX 8.3, 8.3, 8.2 to 8.6, 9.3, 8.6 ms (+0.3 to +1.0), Hub 7.7 to 7.0. Paced frame p50 forest 30.1, 30.0, 30.0 to 23.8, 24.5, 24.1; Hub 54.4 to 27.8.
+- Defaults (11.4 GB card): unchanged within noise (forest pipelined 2.6 against 2.5-2.6 ms, paced 6.7 against 6.7-7.0, Hub 2.7-2.8 against 2.7); the default forest flight holds 117 atlases / 367 MB
+  against 66 / 204 MB.
+- Small cards (`MEITOU_VRAM_BUDGET_MB`): at 4 096 the limit is 328 MB and the plan fits everything (peak 88% of the budget against 84%); at 3 584 the guard's pressure applies (x0.60, limit 215 MB);
+  at 2 048 both builds cut every range to x0.15 and draw no impostors (and both abort at the default 95% watchdog; the run needed `MEITOU_VRAM_KILL=0.995`). With `MEITOU_FORCE_INTEGRATED=1` at 4 096 the limit is 205 MB,
+  73 admitted, 10 of them coarser than needed. Hub CPX under `--impostor-budget 128` or `256`: 20.6 ms each, against master's 46 ms at 192.
+- Pictures: Faithful ten views 0 px against `C:\Temp\base-87c7857\faithful`; `--faithful impostors` 0 px against master; Meitou defaults nine of ten views 0 px, forest 13:00 and 02:00 differ in
+  a few small spots (the small impostors; 0 px with them off). `MEITOU_VK_VALIDATION=sync` 0 errors.
+
+Still open after this (**Observed**): TERRAIN-mode rocks (F2) are untouched (Hub 40.8 M triangles, 5.6-10.5 ms), now the largest single item; the CPU is 0.3-1.0 ms dearer at CPX; the
+integrated-GPU heap behaviour is **Unknown** (no such card here).
 
 ## 8. Gate for the instrumentation
 

@@ -167,7 +167,13 @@ static class ImpostorApp
             var meshes = decoded[i].Result;
             if (meshes is null) { missing++; continue; }
             float worldRadius = meshes.Radius * mesh.MaxScale;
-            if (ImpostorClass.For(worldRadius) is not { } size) { small++; continue; }
+            if (ImpostorClass.For(worldRadius, meshes.Triangles) is not { } size)
+            {
+                small++;
+                if (Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_SURVEY") == "1")
+                    Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"skipped  r {worldRadius,7:0.0} {meshes.Triangles,7} triangles, scale {mesh.MinScale:0.##}-{mesh.MaxScale:0.##}, mode {mesh.MaterialType}  {source.Name}"));
+                continue;
+            }
             var one = Stopwatch.StartNew();
             var (atlas, hit) = Obtain(frames, baker, cache, source, meshes, size, o);
             double ms = one.Elapsed.TotalMilliseconds;
@@ -211,7 +217,8 @@ static class ImpostorApp
         {
             "medium" => ImpostorClass.Medium,
             "large" => ImpostorClass.Large,
-            _ => ImpostorClass.For(worldRadius) ?? ImpostorClass.Medium,
+            "small" => new ImpostorClass("small", ImpostorClass.SmallFrame, ImpostorClass.SmallGrid, ImpostorClass.ReferenceDistance * worldRadius / ImpostorClass.MinimumRadius),
+            _ => ImpostorClass.For(worldRadius, meshes.Triangles) ?? ImpostorClass.Medium,
         };
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"mesh      {mesh.Name} ({Path.GetFileName(source.MeshPath)}{(source.LeavesPath is null ? "" : " + " + Path.GetFileName(source.LeavesPath))}): radius {meshes.Radius:0.0}, scale {mesh.MinScale:0.##}..{mesh.MaxScale:0.##}, class {size.Name} ({size.Grid}x{size.Grid} frames of {size.FramePixels})"));
@@ -260,10 +267,12 @@ static class ImpostorApp
         int g = atlas.Grid;
         Sheet(frames, preview, meshes, $"{stem}-frames.png", suns[0].Direction, (row, col) => ImpostorLayout.FrameDirection(col * (g - 1) / 3, Math.Min(row, g - 1), g));
         Sheet(frames, preview, meshes, $"{stem}-frames2.png", suns[0].Direction, (row, col) => ImpostorLayout.FrameDirection(col, row, g));
-        Field(frames, preview, meshes, mesh, $"{stem}-field", o, suns[0].Direction, 1500, 4000, 160);
-        Field(frames, preview, meshes, mesh, $"{stem}-near", o, suns[0].Direction, 1500, 2000, 40);
+        float scale = size.Transition(worldRadius, ImpostorClass.ReferenceDistance) / ImpostorClass.ReferenceDistance;   // the small class is seen from nearer
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"scale     transition {size.Transition(worldRadius, ImpostorClass.ReferenceDistance):0} units, pictures scaled by {scale:0.###}"));
+        Field(frames, preview, meshes, mesh, $"{stem}-field", o, suns[0].Direction, 1500 * scale, 4000 * scale, 160, scale);
+        Field(frames, preview, meshes, mesh, $"{stem}-near", o, suns[0].Direction, 1500 * scale, 2000 * scale, 40, scale);
         // Around the distance the bake's texture detail is matched to (ImpostorClass.ReferenceDistance): where mesh and impostor should look alike.
-        Field(frames, preview, meshes, mesh, $"{stem}-t4k", o, suns[0].Direction, 3500, 4500, 120);
+        Field(frames, preview, meshes, mesh, $"{stem}-t4k", o, suns[0].Direction, 3500 * scale, 4500 * scale, 120, scale);
         Console.WriteLine($"saved     {stem}-*.png");
         return 0;
     }
@@ -359,7 +368,7 @@ static class ImpostorApp
     }
 
     /// <summary>Random instances (yaw, scale in the record's range) between <paramref name="near"/> and <paramref name="far"/> units, drawn once as meshes and once as impostors.</summary>
-    static void Field(Frames frames, ImpostorPreview preview, ImpostorMeshes meshes, FoliageMesh mesh, string stem, Options o, Vector3 sun, float near, float far, int count)
+    static void Field(Frames frames, ImpostorPreview preview, ImpostorMeshes meshes, FoliageMesh mesh, string stem, Options o, Vector3 sun, float near, float far, int count, float fieldScale = 1)
     {
         var random = new Random(1234);
         float fov = 50 * MathF.PI / 180, aspect = o.Width / (float)o.Height;
@@ -374,10 +383,10 @@ static class ImpostorApp
             instances.Add((d, Instance(scale, random.NextSingle() * MathF.Tau, p)));
         }
         var ordered = instances.OrderBy(i => i.Distance).Select(i => i.M).ToArray();
-        var eye = new Vector3(0, 400, 0);
-        var target = new Vector3(0, 400 - MathF.Tan(4 * MathF.PI / 180) * 2000, -2000);
+        var eye = new Vector3(0, 400 * fieldScale, 0);
+        var target = new Vector3(0, (400 - MathF.Tan(4 * MathF.PI / 180) * 2000) * fieldScale, -2000 * fieldScale);
         var view = Matrix4x4.CreateLookAt(eye, target, Vector3.UnitY);
-        var projection = Matrix4x4.CreatePerspectiveFieldOfView(fov, aspect, 50, 20000);
+        var projection = Matrix4x4.CreatePerspectiveFieldOfView(fov, aspect, 50 * fieldScale, 20000 * fieldScale);
         var forward = Vector3.Normalize(target - eye);
         var cameraUp = Vector3.Cross(Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY)), forward);
         var all = new Viewport(0, 0, o.Width, o.Height, 0, 1);

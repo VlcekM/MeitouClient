@@ -19,6 +19,19 @@ public sealed class ImpostorMeshes
     public required Vector3 Centre { get; init; }
     public required float Radius { get; init; }
 
+    /// <summary>The triangles of the main mesh and the leaves mesh (the first level of detail, what a foliage instance draws).</summary>
+    public int Triangles
+    {
+        get
+        {
+            long n = 0;
+            foreach (var model in (ReadOnlySpan<Model?>)[Main, Leaves])
+                if (model is not null)
+                    foreach (var part in model.Parts) n += part.Indices.Length / 3;
+            return (int)Math.Min(n, int.MaxValue);
+        }
+    }
+
     /// <summary>Decodes the source's meshes (any thread); null when the main mesh cannot be read.</summary>
     public static ImpostorMeshes? Load(ImpostorSource source, List<string>? messages = null)
     {

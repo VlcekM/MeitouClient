@@ -102,7 +102,12 @@ public class ImpostorTests
     [Fact]
     public void Size_classes_follow_the_largest_instance()
     {
-        Assert.Null(ImpostorClass.For(20));
+        // Under radius 48 only the small class: from radius 2, with enough triangles to beat a quad (a caller without the count gets it by size).
+        Assert.Null(ImpostorClass.For(20, 10));
+        Assert.Null(ImpostorClass.For(1.5f, 5000));
+        var small = ImpostorClass.For(20, 500)!.Value;
+        Assert.Equal(("small", ImpostorClass.SmallFrame, ImpostorClass.SmallGrid), (small.Name, small.FramePixels, small.Grid));
+        Assert.True(small.IsSmall && ImpostorClass.For(20)!.Value.IsSmall && !ImpostorClass.For(60)!.Value.IsSmall);
         // The frame is the smallest power of two that holds the largest instance's size on a 1080-line screen at the reference distance
         // (within the allowed magnification), from 64 to 256 pixels.
         Assert.Equal(64, ImpostorClass.For(60)!.Value.FramePixels);
@@ -131,6 +136,30 @@ public class ImpostorTests
         Assert.InRange(c.LodBias(radius) / ImpostorClass.BiasScale, -1e-3f, 1e-3f);
         Assert.InRange(c.LodBias(radius / 2) / ImpostorClass.BiasScale, 1 - 1e-3f, 1 + 1e-3f);
         Assert.InRange(c.LodBias(radius / 1e6f), 0, 4 * ImpostorClass.BiasScale + 1e-3f);   // clamped
+    }
+
+    [Fact]
+    public void The_small_class_has_its_own_transition_that_keeps_the_screen_size_constant()
+    {
+        var medium = ImpostorClass.For(60)!.Value;
+        Assert.Equal(4000, medium.Transition(60, 4000));
+        Assert.Equal(2000, medium.Transition(1000, 2000));   // medium and large: the user's distance whatever the size
+        float previous = 0;
+        foreach (float radius in new[] { 2f, 5, 10, 20, 40, 47.9f })
+        {
+            var c = ImpostorClass.For(radius, 1000)!.Value;
+            float t = c.Transition(radius, 4000);
+            Assert.True(t > previous && t < 4000, $"{radius}: {t}");
+            previous = t;
+            // The largest instance is the same number of pixels across at its transition, whatever the radius: 27.8 at 1080 lines (the smallest medium mesh's at 4000).
+            Assert.InRange(ImpostorClass.ScreenDiameter(radius, t), 27.6f, 28.0f);
+            Assert.Equal(t, c.BakeDistance, 1e-3f);
+            Assert.Equal(t / 2, c.Transition(radius, 2000), 1e-3f);   // the slider scales it
+        }
+        // The bake's texture bias is matched to the distance the class is shown at (not the reference 4000): a 32 pixel frame, baked at 64, against a 27.8 pixel sphere.
+        var s = ImpostorClass.For(10, 1000)!.Value;
+        float expected = MathF.Log2(2 * s.FramePixels / ImpostorClass.ScreenDiameter(10, s.BakeDistance));
+        Assert.Equal(Math.Clamp(expected, 0, 4) * ImpostorClass.BiasScale, s.LodBias(10), 1e-3f);
     }
 
     [Fact]

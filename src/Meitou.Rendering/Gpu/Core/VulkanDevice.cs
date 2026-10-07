@@ -127,6 +127,12 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     public PhysicalDeviceLimits Limits => Properties.Limits;
 
+    /// <summary>An integrated GPU (shares the system's memory): the budgets that scale with video memory take a smaller share of it (<c>ImpostorBudget</c>).</summary>
+    public bool IsIntegrated => Properties.DeviceType == PhysicalDeviceType.IntegratedGpu || ForceIntegrated;
+
+    /// <summary><c>MEITOU_FORCE_INTEGRATED=1</c> makes <see cref="IsIntegrated"/> true on any GPU (to see the integrated-GPU budgets on a discrete card, with <c>MEITOU_VRAM_BUDGET_MB</c>).</summary>
+    static readonly bool ForceIntegrated = Environment.GetEnvironmentVariable("MEITOU_FORCE_INTEGRATED") == "1";
+
     /// <summary>Whether VK_EXT_memory_budget is enabled (<see cref="VideoMemory"/> then reports the driver's figures).</summary>
     public bool HasMemoryBudget { get; private set; }
 

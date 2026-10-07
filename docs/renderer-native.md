@@ -3285,6 +3285,27 @@ Measurement only; the full write-up is [render-distance-benchmark.md](render-dis
   against 2.52 pipelined, so 6.6's "GPU-bound" reading is mostly clocks), and `PassMeter` divided GPU rows by their runs, not by frames (stages drawn per
   depth slice and cascades drawn every second or fourth frame were under-counted; fixed).
 
+### 8.16 Impostor budget that follows the card, far mips and the small class (2026-10-07)
+
+*In short: the impostor limit is a share of the driver's video-memory budget instead of 192 MB, a plan keeps what fits nearest first and degrades the far atlases by mips before leaving any out,
+and meshes under radius 48 get a 32 px impostor class. CPX Hub 46.4 to 20.6 ms and forest 21.5 to 15.2 ms on the GPU; defaults and the Faithful pictures unchanged. Rule, tables and measurements:
+[impostors.md](impostors.md) sections 10 and 11; [render-distance-benchmark.md](render-distance-benchmark.md) 7.1.*
+
+Files: new `ImpostorBudget.cs`; `FoliageRenderer.Impostors.cs` (plan, refine, `SkipFor`, `AtlasBytes`, `EstimateClass`), `FoliageRenderer.cs` (`MeshAsset.Triangles`, class estimate), `Impostors/ImpostorLayout.cs`
+(`ImpostorClass.For`, `Transition`, `BakeDistance`), `Impostors/ImpostorBaker.cs`, `Gpu/Core/VulkanDevice.cs` (`IsIntegrated`), `WorldFrame.cs`, `WorldApp.Benchmark.cs` (pop-in line),
+`tools/Meitou.ModelViewer/ImpostorApp.cs` (`--class small`); tests `ImpostorBudgetTests`, `ImpostorTests`.
+
+- **Budget** (**Verified**, tests): `clamp(8% x B, 48 MB, 1024 MB)` and at most 12% of `B` on a discrete GPU, 5% and 256 MB on an integrated one, 192 MB when `B` is unknown, x0.75 under `VramGuard` pressure;
+  `B` is the guard's budget (device-local heaps, VK_EXT_memory_budget). 164 / 328 / 655 / 983 / 1024 MB at 2 / 4 / 8 / 12 / 16 GB discrete, 102 / 205 / 256 / 256 / 256 integrated. `--impostor-budget` overrides.
+  Integrated GPUs: **Unknown** (no card; `MEITOU_FORCE_INTEGRATED=1` tests the numbers).
+- **Far mips**: the albedo keeps the levels the nearest wanted instance can sample (one level of margin, `MEITOU_IMPOSTOR_MIP_MARGIN`), the normal map one fewer; refined or coarsened by reloading the atlas from the
+  disk cache on a worker and swapping the textures after the upload (old ones deferred-deleted), 3 at a time. Picture-neutral: 0 px in the ten views (with half a level: max 2, with none: max 17).
+- **Plan** (once a second): wanted atlases sorted by nearest distance (resident ones x0.8), mips, then over the limit the farthest take up to 3 more levels, then are left out; resident ones left out twice
+  (once under pressure) are dropped. Replaces the refuse-and-retry-after-8-s loop that reloaded the same atlases thousands of times.
+- **Small class**: radius 2 to 48 and 100 or more triangles, 32 px frames, grid 12, transition `ImpostorDistance x R / 48`, bake bias at its own distance. Atlases are 0.28 MB; 139 of the base game's 218 small meshes qualify.
+- **Pop-in**: the benchmark prints `pop-in    impostors:` (left out, admitted but not resident, coarser than wanted, refines in flight).
+- **Gate**: `dotnet test -c Release` 513 passed, 0 failed, 0 skipped; Faithful ten views 0 px, `--faithful impostors` 0 px against master, Meitou defaults 0 px in nine views and a few small spots in two (the small class), validation 0 errors.
+
 ---
 
 ### 8.6 Phase 8 stage 2: impostors native and drawn (2026-10-07)
