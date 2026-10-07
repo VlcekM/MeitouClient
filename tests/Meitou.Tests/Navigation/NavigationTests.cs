@@ -201,6 +201,57 @@ public class NavigationTests
     }
 
     [Fact]
+    public void Removing_a_zone_renumbers_the_slots_and_keeps_the_links_between_the_others()
+    {
+        var a = new Scene(new(31, 32));
+        var b = new Scene(new(32, 32));
+        var c = new Scene(new(33, 32));
+        foreach (var s in new[] { a, b, c }) s.G.Seeds.Add(new(s.X0 + 500, 10, s.Z0 + 500));
+        var world = NavWorld.Empty.With(a.Build()).With(b.Build()).With(c.Build());
+        var inA = new Vector3(a.X0 + 3000, 10, a.Z0 + 2000);
+        var inB = new Vector3(b.X0 + 2000, 10, b.Z0 + 2500);
+        var inC = new Vector3(c.X0 + 1000, 10, c.Z0 + 2000);
+        Assert.True(Route(world, inA, inC).Found);
+
+        // The first zone goes: the other two move down one slot and stay linked to each other.
+        var withoutFirst = world.Without(new ZoneCoordinate(31, 32));
+        Assert.Equal(2, withoutFirst.ZoneCount);
+        var path = Route(withoutFirst, inB, inC);
+        Assert.True(path.Found);
+        Assert.InRange(Length(path.Points), Vector3.Distance(inB, inC) - 0.5f, Vector3.Distance(inB, inC) * 1.03f);
+        Assert.False(Route(withoutFirst, inA, inC).Found);
+
+        // The middle one goes: the outer two are no longer connected, each still works alone.
+        var withoutMiddle = world.Without(new ZoneCoordinate(32, 32));
+        Assert.False(Route(withoutMiddle, inA, inC).Found);
+        Assert.True(Route(withoutMiddle, inC, new Vector3(c.X0 + 3000, 10, c.Z0 + 3000)).Found);
+    }
+
+    [Fact]
+    public void TryHighestAt_agrees_with_PolygonsAt_and_HeightAt()
+    {
+        var s = new Scene(new(32, 32));
+        s.Quad(new(s.X0 + 1000, 25, s.Z0 + 1000), new(s.X0 + 1400, 25, s.Z0 + 1400), NavArea.Ground); // a platform over the ground
+        s.G.Seeds.Add(new(s.X0 + 500, 10, s.Z0 + 500));
+        s.G.Seeds.Add(new(s.X0 + 1200, 25, s.Z0 + 1200));
+        var mesh = s.Build();
+        var polygons = new List<int>();
+        int hits = 0;
+        for (float x = s.X0 - 5; x < s.X0 + 4700; x += 97)
+            for (float z = s.Z0 - 5; z < s.Z0 + 4700; z += 89)
+            {
+                polygons.Clear();
+                mesh.PolygonsAt(x, z, polygons);
+                bool found = mesh.TryHighestAt(x, z, out float h);
+                Assert.Equal(polygons.Count > 0, found);
+                if (!found) continue;
+                hits++;
+                Assert.Equal(polygons.Max(p => mesh.HeightAt(p, x, z)), h);
+            }
+        Assert.True(hits > 1000);
+    }
+
+    [Fact]
     public void Water_costs_more_and_a_high_factor_makes_paths_go_round()
     {
         var s = new Scene(new(32, 32));
