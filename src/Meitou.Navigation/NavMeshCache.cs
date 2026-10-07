@@ -10,8 +10,8 @@ namespace Meitou.Navigation;
 public sealed class NavMeshCache
 {
     /// <summary>Bump when the builder's output changes for the same input (a new rule in the gatherer or the pruner).</summary>
-    public const int BuilderVersion = 1;
-    const int FormatVersion = 2;
+    public const int BuilderVersion = 2;
+    const int FormatVersion = 3;
     static readonly byte[] Magic = "MNAV"u8.ToArray();
 
     public string Directory { get; }
@@ -27,7 +27,7 @@ public sealed class NavMeshCache
     public static uint SettingsHash(NavBuildSettings s)
     {
         uint h = BuilderVersion;
-        foreach (var v in new[] { s.CellSize, s.CellHeight, s.AgentHeight, s.MaxClimb, s.MaxSimplificationError, s.SeedDistance, s.SeedHeightSlack })
+        foreach (var v in new[] { s.CellSize, s.CellHeight, s.DoorInflateCells, s.AgentHeight, s.MaxClimb, s.MaxSimplificationError, s.SeedDistance, s.SeedHeightSlack })
             h = (h * 16777619) ^ (uint)BitConverter.SingleToInt32Bits(v);
         foreach (var v in new[] { s.TileCells, s.MaxEdgeLength, s.MinRegionArea, s.MergeRegionArea, s.Watershed ? 1 : 0 })
             h = (h * 16777619) ^ (uint)v;
@@ -48,7 +48,10 @@ public sealed class NavMeshCache
             var boundsMax = new Vector2(r.ReadSingle(), r.ReadSingle());
             var vertices = new Vector3[r.ReadInt32()];
             for (int i = 0; i < vertices.Length; i++) vertices[i] = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+            var doorIds = new string[r.ReadInt32()];
+            for (int i = 0; i < doorIds.Length; i++) doorIds[i] = r.ReadString();
             int count = r.ReadInt32();
+            var doorOf = doorIds.Length > 0 ? new int[count] : null;
             var polygons = new int[count][];
             var neighbours = new int[count][];
             var areas = new byte[count];
@@ -69,9 +72,10 @@ public sealed class NavMeshCache
                     links[p] = new int[linkCount * 2];
                     for (int i = 0; i < links[p]!.Length; i++) links[p]![i] = r.ReadInt32();
                 }
+                if (doorOf is not null) doorOf[p] = r.ReadInt16();
             }
             if (r.ReadInt32() != count) return null; // trailer: truncated writes fail here
-            return new ZoneNavMesh { ZoneX = zoneX, ZoneZ = zoneZ, Vertices = vertices, Polygons = polygons, Neighbours = neighbours, Areas = areas, Links = links, Kept = kept, BoundsMin = boundsMin, BoundsMax = boundsMax };
+            return new ZoneNavMesh { ZoneX = zoneX, ZoneZ = zoneZ, Vertices = vertices, Polygons = polygons, Neighbours = neighbours, Areas = areas, Links = links, Kept = kept, BoundsMin = boundsMin, BoundsMax = boundsMax, DoorIds = doorIds.Length > 0 ? doorIds : null, DoorOf = doorOf };
         }
         catch (Exception e) when (e is IOException or EndOfStreamException or InvalidDataException or OverflowException or OutOfMemoryException)
         {
@@ -92,6 +96,9 @@ public sealed class NavMeshCache
             w.Write(m.BoundsMin.X); w.Write(m.BoundsMin.Y); w.Write(m.BoundsMax.X); w.Write(m.BoundsMax.Y);
             w.Write(m.Vertices.Length);
             foreach (var v in m.Vertices) { w.Write(v.X); w.Write(v.Y); w.Write(v.Z); }
+            var ids = m.DoorIds ?? [];
+            w.Write(ids.Length);
+            foreach (var id in ids) w.Write(id);
             w.Write(m.PolygonCount);
             for (int p = 0; p < m.PolygonCount; p++)
             {
@@ -103,6 +110,7 @@ public sealed class NavMeshCache
                 var l = m.LinksOf(p);
                 w.Write((ushort)(l.Length / 2));
                 foreach (int i in l) w.Write(i);
+                if (ids.Length > 0) w.Write((short)(m.DoorOf?[p] ?? -1));
             }
             w.Write(m.PolygonCount);
         }

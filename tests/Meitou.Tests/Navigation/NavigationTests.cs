@@ -228,7 +228,7 @@ public class NavigationTests
         // A wall across the whole zone with a 40-unit gate painted as a door.
         s.Box(new(s.X0 - 72, 0, cz - 10), new(cx - 20, 80, cz + 10));
         s.Box(new(cx + 20, 0, cz - 10), new(s.G.ZoneMax.X + 72, 80, cz + 10));
-        s.G.Painters.Add(new NavVolume([new(cx - 20, cz - 10), new(cx + 20, cz - 10), new(cx + 20, cz + 10), new(cx - 20, cz + 10)], 0, 40));
+        s.G.Painters.Add(new NavVolume([new(cx - 20, cz - 10), new(cx + 20, cz - 10), new(cx + 20, cz + 10), new(cx - 20, cz + 10)], 0, 40) { Owner = "gate-1" });
         s.G.Seeds.Add(new(s.X0 + 500, 10, s.Z0 + 500));
         var mesh = s.Build();
         Assert.Contains(NavArea.Door, mesh.Areas);
@@ -237,8 +237,28 @@ public class NavigationTests
         var b = new Vector3(cx, 10, cz + 300);
         var open = Route(world, a, b);
         Assert.True(open.Found);
-        Assert.Equal(600, Length(open.Points), 1);
+        Assert.Equal(600, Length(open.Points), 0);
         Assert.False(Route(world, a, b, new NavAgent { DoorsClosed = true }).Found);
+
+        // Live state: the door of one building instance closes and opens without a rebuild, and the cache keeps which polygons belong to it.
+        Assert.Equal(["gate-1"], mesh.DoorIds!);
+        Assert.All(Enumerable.Range(0, mesh.PolygonCount).Where(p => mesh.Areas[p] == NavArea.Door), p => Assert.Equal(0, mesh.DoorOf![p]));
+        var doors = new NavDoors();
+        var query = new NavQuery(world, doors);
+        Assert.True(query.FindPath(a, b).Found);
+        int version = doors.Version;
+        doors.Close("gate-1");
+        Assert.True(doors.Version > version);
+        Assert.False(query.FindPath(a, b).Found);
+        doors.Close("some-other-door");
+        doors.Open("gate-1");
+        Assert.True(query.FindPath(a, b).Found);
+
+        var walk = new NavmeshWalkability((x, z) => 10);
+        walk.SetWorld(world);
+        Assert.True(walk.FindPath(a, b).Found);
+        walk.Doors.Close("gate-1");
+        Assert.False(walk.FindPath(a, b).Found);
     }
 
     [Fact]
@@ -268,6 +288,7 @@ public class NavigationTests
     {
         var s = new Scene(new(32, 32));
         s.Box(new(s.X0 + 2000, 0, s.Z0 + 2000), new(s.X0 + 2100, 80, s.Z0 + 2100));
+        s.G.Painters.Add(new NavVolume([new(s.X0 + 1000, s.Z0 + 1000), new(s.X0 + 1040, s.Z0 + 1000), new(s.X0 + 1040, s.Z0 + 1010), new(s.X0 + 1000, s.Z0 + 1010)], 0, 40) { Owner = "door-7" });
         s.G.Seeds.Add(new(s.X0 + 500, 10, s.Z0 + 500));
         var mesh = s.Build();
         var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "meitou-nav-test-" + Guid.NewGuid().ToString("N"));
@@ -284,6 +305,8 @@ public class NavigationTests
             Assert.Equal(mesh.Polygons, back.Polygons);
             Assert.Equal(mesh.Neighbours, back.Neighbours);
             Assert.Equal(mesh.Links, back.Links);
+            Assert.Equal(["door-7"], back.DoorIds!);
+            Assert.Equal(mesh.DoorOf, back.DoorOf);
             Assert.Null(cache.TryLoad(32, 32, 8, settings));
             Assert.Null(cache.TryLoad(32, 32, 7, settings + 1));
             Assert.Null(cache.TryLoad(31, 32, 7, settings));

@@ -531,3 +531,7 @@ scripts `MeitouClient-re/probes/walk/tilescan*.js`, **Observed**):
 - **Observed**: with these rules a path from outside west to outside east passes the town through its gates and around buildings.
 - **Unknown**: the flag at building shape offset +0x1f0 (assumed clear, so only groups 9 and 19 are walkable on WALKABLE buildings), and
   the exact `BCTYPE_SHELL_WITH_INTERIOR` test (approximated as interior mask present and not a gateway).
+- **Observed** (The Hub, default world): the west wall has no collision between z 2626 and the gate at z 2780 because `Defensive Gate IV` is
+  `destroyed` there; a path into the town exists even with every door closed. Gaps in walls come from the world data, not from the builder.
+- **Observed**: the Hub's three door painters are a shack door, a door in a wall, and one that covers no walkable cell; none is a town gate.
+  A door leaf is thin, so the painter has to be grown by about a cell to paint a closed band of cells.

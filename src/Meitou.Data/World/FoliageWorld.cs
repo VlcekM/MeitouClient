@@ -17,9 +17,12 @@ public sealed class FoliageWorld : IDisposable
     readonly FoliageBiomeMap biomes;
     readonly List<(Vector2 At, float Range)> towns = [];
     readonly Dictionary<(int, int), byte[]> tiles = [];
+    readonly System.Collections.Concurrent.ConcurrentDictionary<(int, int), Lazy<byte[]>>? sharedTiles;
 
-    public FoliageWorld(GameInstall install, GameDatabase db, WorldLevelData world, FoliageCatalog? catalog = null)
+    public FoliageWorld(GameInstall install, GameDatabase db, WorldLevelData world, FoliageCatalog? catalog = null,
+        System.Collections.Concurrent.ConcurrentDictionary<(int, int), Lazy<byte[]>>? sharedTiles = null)
     {
+        this.sharedTiles = sharedTiles;
         this.install = install;
         Catalog = catalog ?? FoliageCatalog.Load(db);
         map = TerrainHeightmap.Open(install);
@@ -71,7 +74,9 @@ public sealed class FoliageWorld : IDisposable
         if (!zone.IsInsideGrid) return (new FoliageZone { Zone = zone }, null);
         int zonesPerTile = WorldLayout.ZoneCount / TerrainMaps.OverlayTiles;
         var key = (zone.X / zonesPerTile, zone.Y / zonesPerTile);
-        if (!tiles.TryGetValue(key, out var tile))
+        byte[] tile;
+        if (sharedTiles is not null) tile = sharedTiles.GetOrAdd(key, _ => new Lazy<byte[]>(() => FoliageOverlay.ReadTile(install, zone))).Value;
+        else if (!tiles.TryGetValue(key, out tile!))
         {
             if (tiles.Count >= 4) tiles.Clear();
             tiles[key] = tile = FoliageOverlay.ReadTile(install, zone);

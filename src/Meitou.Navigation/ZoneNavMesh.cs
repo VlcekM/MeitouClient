@@ -28,6 +28,10 @@ public sealed class ZoneNavMesh
     public required bool[] Kept { get; init; }
     public required Vector2 BoundsMin { get; init; }
     public required Vector2 BoundsMax { get; init; }
+    /// <summary>Instance ids of the buildings whose doors are in this mesh (<see cref="NavDoors"/>); null when there are none.</summary>
+    public string[]? DoorIds { get; set; }
+    /// <summary>Per polygon: the index into <see cref="DoorIds"/> for door polygons, −1 otherwise; null when there are no doors.</summary>
+    public int[]? DoorOf { get; set; }
 
     public int PolygonCount => Polygons.Length;
 
@@ -84,6 +88,7 @@ public sealed class ZoneNavMesh
         var polygons = new int[count][];
         var neighbours = new int[count][];
         var areas = new byte[count];
+        var doorOf = DoorOf is null ? null : new int[count];
         var links = new int[]?[count];
         for (int p = 0; p < PolygonCount; p++)
         {
@@ -96,6 +101,7 @@ public sealed class ZoneNavMesh
             }).ToArray();
             neighbours[n] = Neighbours[p].Select(q => q >= 0 ? map[q] : -1).ToArray();
             areas[n] = Areas[p];
+            if (doorOf is not null) doorOf[n] = DoorOf![p];
             var l = LinksOf(p);
             if (l.Length > 0)
             {
@@ -107,7 +113,7 @@ public sealed class ZoneNavMesh
         return new ZoneNavMesh
         {
             ZoneX = ZoneX, ZoneZ = ZoneZ, Vertices = [.. vertices], Polygons = polygons, Neighbours = neighbours, Areas = areas, Links = links,
-            Kept = Enumerable.Repeat(true, count).ToArray(), BoundsMin = BoundsMin, BoundsMax = BoundsMax,
+            Kept = Enumerable.Repeat(true, count).ToArray(), BoundsMin = BoundsMin, BoundsMax = BoundsMax, DoorIds = DoorIds, DoorOf = doorOf,
         };
     }
 
