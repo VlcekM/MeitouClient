@@ -1,0 +1,67 @@
+# Manual release: builds the game (meitou.exe, self-contained, with NVIDIA DLSS/Streamline and AMD FidelityFX next to it; see
+# tools/scripts/package-release.ps1), tags the commit v<version> and publishes a GitHub release with the zip.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the v, e.g. 0.1.0 (empty: 0.0.<run number>)"
+        required: false
+        default: ""
+      prerelease:
+        description: "Mark as a pre-release"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Version
+        id: version
+        shell: pwsh
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          $v = $env:INPUT_VERSION.Trim().TrimStart('v')
+          if (-not $v) { $v = "0.0.$env:RUN_NUMBER" }
+          if ($v -notmatch '^[0-9A-Za-z.\-]+$') { throw "bad version '$v'" }
+          if (git tag -l "v$v") { throw "tag v$v already exists" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Quick tests
+        run: dotnet test --filter "Category!=Slow" -c Release
+
+      - name: Package
+        shell: pwsh
+        run: ./tools/scripts/package-release.ps1 -Version "${{ steps.version.outputs.version }}" -Output out -Cache "$env:RUNNER_TEMP/release-cache"
+
+      - name: Tag and release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          $notes = @"
+          **Download** ``Meitou-$env:VERSION-win-x64.zip``, unzip it and run ``meitou.exe``. A Steam install of Kenshi is found by itself;
+          otherwise it asks for your Kenshi folder once. No game files are included. DLSS (NVIDIA RTX) and FSR are included: pick them on
+          the Tab panel's anti-aliasing slider (DLSS takes effect after a restart). See README.txt in the zip.
+          "@
+          $flags = @()
+          if ($env:PRERELEASE -eq 'true') { $flags += '--prerelease' }
+          gh release create "v$env:VERSION" "out/Meitou-$env:VERSION-win-x64.zip" --target $env:GITHUB_SHA `
+            --title "Meitou $env:VERSION" --notes $notes --generate-notes @flags

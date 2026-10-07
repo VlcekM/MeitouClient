@@ -92,7 +92,7 @@ static class Program
             return 2;
         }
         if (world.X is null && world.Zone is null && world.Town is null) world.Town = "The Hub";
-        var install = GameInstall.Locate();
+        var install = GameInstall.Locate() ?? AskForInstall();
         if (install is null)
         {
             Console.Error.WriteLine($"Kenshi install not found: set {GameInstall.EnvironmentVariable} or create {GameInstall.LocalConfigFile}.");
@@ -103,6 +103,37 @@ static class Program
         if (scene is null) return 1;
         if (world.Info) return 0;
         return new GameHost(install, scene, new AssetLocator(install), world, game, config).Run();
+    }
+
+    /// <summary>
+    /// No install found (no <c>KENSHI_PATH</c>, <c>meitou.local.json</c> or Steam install): asks for the folder on the console and keeps it in
+    /// <c>meitou.local.json</c> next to the executable, so a release only needs the path once. Null when the input is not a console or is empty.
+    /// </summary>
+    static GameInstall? AskForInstall()
+    {
+        if (Console.IsInputRedirected) return null;
+        Console.WriteLine("Kenshi was not found. Paste the Kenshi folder (the one with kenshi_x64.exe and data\\), or press Enter to quit.");
+        while (true)
+        {
+            Console.Write("Kenshi folder: ");
+            var line = Console.ReadLine()?.Trim().Trim('"');
+            if (string.IsNullOrEmpty(line)) return null;
+            if (!GameInstall.IsValid(line))
+            {
+                Console.WriteLine($"'{line}' is not a Kenshi folder (data\\gamedata.base not found).");
+                continue;
+            }
+            try
+            {
+                GameInstall.SaveLocalConfig(AppContext.BaseDirectory, line);
+                Console.WriteLine($"Saved to {Path.Combine(AppContext.BaseDirectory, GameInstall.LocalConfigFile)}.");
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Console.WriteLine($"Could not save {GameInstall.LocalConfigFile} ({e.Message}); it will be asked for again next time.");
+            }
+            return GameInstall.Open(line);
+        }
     }
 }
 
