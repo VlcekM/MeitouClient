@@ -147,6 +147,11 @@ public sealed partial class FoliageRenderer
             {
                 impostorCacheChecked = true;
                 impostorCache.MaintainInBackground();
+                // The baker's and the drawing's programs compile here, with the loading, not at the first bake or the first impostor in view
+                // (the first bake of a cold cache was a 60 ms frame, the first impostor draw 13 ms).
+                Gpu.EnsureFrame();
+                impostorBaker ??= new ImpostorBaker(Gpu, textures);
+                impostorDraw ??= new ImpostorDraw(Gpu, nativeFrame);
             }
             float shortest = ImpostorDistance * (1 - ImpostorBand);
             // Bakes wait in order of how soon their zones are close: from where the eye is now or will be in a few seconds of its motion.
