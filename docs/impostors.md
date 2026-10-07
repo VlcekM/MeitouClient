@@ -73,7 +73,7 @@ largest instance, `radius x max scale`, seen at the 4000-unit reference distance
 
 - `F = smallest power of two >= ScreenDiameter / 1.4`, clamped to 64 .. 256. The 1.4 (`MEITOU_IMPOSTOR_MAGNIFY`) lets the impostor be
   magnified by up to 1.4 at the reference distance. Meshes whose largest instance is smaller than radius 48 (`MinimumRadius`) get no
-  impostor.
+  medium or large impostor; since 2026-10-07 those with radius 2 or more and 100 or more triangles get the **small class** (section 11).
 - Grid `G = 12` (`MEITOU_IMPOSTOR_GRID`). Levels = `log2(F) - 1` (the chain stops at 4 x 4 per frame, the smallest BC block).
 - BushTree01 (large): 256 px, 12 x 12, 3072 px per side, 18 MB resident (8.0 MB at 8 x 8).
 - **Observed** (the 267 base-game atlases, all resident, Release, RTX 4070): 68 at 256 px (1224 MB), 56 at 128 px (252 MB), 143 at 64 px
@@ -280,14 +280,15 @@ split), `Impostors/ImpostorDraw.cs`. Tests: `FoliageCullTests.Impostor_split_is_
   turns it off, `--faithful all` includes it.
 - `ImpostorDistance` (default 4000; `--impostor-distance <u>`; Tab slider "Impostor distance (F7 Meitou)", 500 to 40000): the transition
   distance T along the ground, for every atlas.
-- `ImpostorBudgetMb` (default 192; `--impostor-budget <MB>`, env `MEITOU_IMPOSTOR_BUDGET_MB`): the most VRAM atlases may hold. See below.
+- `ImpostorBudgetMb` (`--impostor-budget <MB>`, env `MEITOU_IMPOSTOR_BUDGET_MB`): an explicit limit on the VRAM atlases may hold. Without it
+  (the default since 2026-10-07; it was a fixed 192) the limit is a share of the card's budget, section 10.
 - `MEITOU_IMPOSTOR_LOG=1` prints one line per atlas made Ready, evicted or refused. `MEITOU_IMPOSTOR_CASTERS=0` keeps the meshes as
   shadow casters.
 - A group gets an impostor only when its mesh's atlas is Ready and T <= range - band. A mesh without a Ready atlas stays a mesh.
   **Meitou default ranges** are large 12000, medium 5000, small 800 (docs/viewer.md, "Foliage"), so large meshes are impostors from 3600
   to 12000 and medium ones from 3600 to 5000.
 
-### Budget and eviction (from the code; Observed numbers)
+### Budget and eviction (superseded by section 10: kept for the numbers of the fixed 192 MB budget with LRU refusals)
 
 - An atlas's resident size is known before it is made (`ImpostorTextures.BytesFor`). `UploadImpostor` checks the budget first. If it
   does not fit, `MakeImpostorRoom` evicts atlases that were not used for more than 1 s, least recently used first; if that is not enough
@@ -389,7 +390,7 @@ also holds more foliage textures and meshes). Master's viewer has no impostors.
 
 ### Open
 
-- A per-instance transition by projected size (needs a per-instance transition in the cull); a budget slider.
+- A per-instance transition by projected size (needs a per-instance transition in the cull; the small class has a per-mesh one, section 11); a budget slider.
 - Thin branches (1 pixel at the 64 px frame size) are thinned by the vote; at the transition distance they are sub-pixel anyway
   (**Unknown** whether a larger frame for such meshes is worth its VRAM).
 - The cold-cache validation errors and the drawing program's compile at the first impostor: fixed, section 9.
@@ -477,3 +478,127 @@ bake records there too), so the quad upload (`Uploads.Begin`, into `PreFrame`) i
 **Gate (Release, RTX 4070).** `--faithful all`, ten views, against `C:\Temp\base-87c7857\faithful`: max 0. Meitou defaults, ten views with an empty
 impostor cache folder (so every view bakes), against `C:\Temp\mp\meitou` (master cd65d05): max 0. Sync validation on all ten Meitou views and the Hub
 with a cold cache: 0 errors (**Verified**).
+
+## 10. Residency: the budget that follows the card, far mips and the plan (2026-10-07)
+
+*In short: the fixed 192 MB with LRU refusal is gone. The default limit is a share of the card's video-memory budget; each atlas holds only the mip
+levels its nearest instance can sample, and is refined (reloaded from the disk cache and swapped in) when an instance approaches; a plan, redone once
+a second, decides nearest first which atlases fit and, when they do not, degrades the farthest by a level at a time before it leaves any out. At
+the 1 px preset every tree and bush stays an impostor (Hub 46.5 to 23.7 ms, 22.8 ms of it by this alone), the 3 400 refuse-and-reload cycles are
+gone, and the default pictures are unchanged to the pixel.* Code: `ImpostorBudget.cs`, `FoliageRenderer.Impostors.cs` (`PlanImpostors`,
+`ApplyImpostorPlan`, `StepImpostorRefines`). Tests: `ImpostorBudgetTests`.
+
+**What was wrong** (**Observed**, master `0a3614a`, RTX 4070, CPX preset of [render-distance-benchmark.md](render-distance-benchmark.md)): every wanted
+atlas was re-stamped as in use at each scan, so none was ever "unused for a second": `MakeImpostorRoom` could not evict anything, refused the new
+atlas (its mesh stayed a mesh: Hub 46.4 ms, 47.9 M mesh triangles a frame), and the refused one asked again after 8 s, which loaded its atlas from the cache
+only to refuse it again: 3 437-3 593 loads in 300 frames at the Hub for 112 resident atlases, 2 246-2 265 in the forest for 84.
+
+**The limit** (`ImpostorBudget`, **Verified** by `ImpostorBudgetTests`). `B` is the device-local budget the driver reports (`VulkanDevice.VideoMemory()`,
+VK_EXT_memory_budget, the figure `VramGuard` works from, so atlases and everything else give way together; before the guard's first sample the same call).
+
+- default = `clamp(share x B, 48 MB, cap)`, never more than 12% of `B`; share 8% and cap 1024 MB on a discrete GPU, 5% and 256 MB on an integrated one
+  (`Properties.DeviceType`); 192 MB (the old fixed value) while `B` is unknown;
+- x0.75 while the guard is under pressure (the pattern of `WorldTextureCache.EffectiveMark`);
+- `--impostor-budget <MB>` / `MEITOU_IMPOSTOR_BUDGET_MB` replace the default (the pressure factor still applies).
+
+| Budget `B` | 2 GB | 4 GB | 8 GB | 11.2 GB (the RTX 4070's 11 453 MB: 916 MB) | 12 GB | 16 GB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| discrete GPU | 164 MB | 328 MB | 655 MB | 916 MB | 983 MB | 1024 MB (cap; 8% = 1311) |
+| integrated GPU | 102 MB | 205 MB | 256 MB (cap; 5% = 410) | 256 MB | 256 MB | 256 MB |
+| under pressure (x0.75), discrete | 123 MB | 246 MB | 492 MB | 687 MB | 737 MB | 768 MB |
+
+The 8% is the object caches' pattern (textures 17.9%, meshes 6.7% of the card they were tuned on). The cap is the Hub and forest CPX working set with far mips
+(413-494 MB as the allocator counts it, 364-450 MB by the plan: section below) with room to spare; The floor never takes more than 12% of a small budget (a 256 MB budget gets 31 MB). **Integrated GPUs share the system's memory**:
+the device-local heap is system RAM (Intel) or a small carve-out (some AMD APUs, whose other heap is not device-local, where `DeviceLocal` allocations
+cannot go), and `B` is what all of the process's allocations may take, so the share and the cap are smaller there, and the atlases degrade by mips before they
+ever take more. **Unknown** (no integrated GPU to run on): the heap sizes such drivers report and whether 5% is right for them; `MEITOU_FORCE_INTEGRATED=1` with
+`MEITOU_VRAM_BUDGET_MB` shows the integrated numbers on this card (below).
+
+**Far mips** (`SkipFor`, `PlanImpostors`). The albedo keeps the levels whose frames are at least as big as the instance's sphere is on the screen at the
+nearest distance it is drawn as an impostor (`LevelsToSkip` before, which used the transition distance for every atlas); the normal map one level fewer.
+The nearest distance is the nearest ground of any zone that wants the atlas (the scan already computed it for the bake order), less the eye's motion over 3 s,
+never inside the transition. One level is `4x` fewer bytes: a 256 px atlas is 9.0 MB at skip 0 and 2.2 MB at skip 1.
+- **Margin** (**Verified**, gate below). The mip is chosen for the distance divided by `2^margin` (`MEITOU_IMPOSTOR_MIP_MARGIN`, 1 level; plus the upscaler's
+  negative texture bias): a ray off the screen's axis crosses a frame plane at a larger angle, so the sampler's lod at the edge is up to half a level finer than
+  the centre's, and the transition's own level is what the base build clamps to. With no margin the Meitou view `zone14_30` 13:00 differed from the base in a few
+  horizon pixels (max 17; the 02:00 render max 3); half a level gave max 2; one level gave 0 px.
+- **Refine and coarsen.** An atlas whose wanted level is finer than the resident one is reloaded from the cache on a worker (`ImpostorCache.TryLoad`, no CPU
+  copy is kept), its new textures made and uploaded within the frame's 6 MB (64 MB settling) and swapped in; the old ones are drawn until then and freed after the
+  frames in flight (`Bindless.Free`/deferred delete). Three run at once, finer ones first, nearest first, started as slots free up. A coarser one is made only when
+  the plan is over the limit, or by two or more levels after ten seconds of holding more than needed. Under the guard's pressure nothing finer is started.
+  `MEITOU_IMPOSTOR_FARMIP=0` gives the old single level per atlas (no refine, no coarsen).
+
+**The plan** (once a second, every update while settling). `impostorWanted` (the atlases some zone wants as impostors, nearest ground each) is sorted by that
+distance (a resident atlas counts as 20% nearer: a newcomer must be that much nearer to take its place); each gets its mip, the bytes are summed, and when the sum is
+over the limit the farthest atlases take one more level off, a pass at a time up to 3 more levels (a blurrier far crown costs no frame time, a mesh does), and only then
+are the farthest left out one by one (`impostorDropped`, an atlas left out for two scans, or at once under pressure, is unloaded and its meshes draw). Unwanted atlases are evicted
+first (least recently used) when the real use passes the limit. A mesh the bounds already rule out is never loaded; one that is wanted and admitted is loaded
+nearest first. Nothing is refused and retried on a timer any more; an atlas the upload still cannot fit (a refine in flight, the guard) retries after 2 s.
+A first greedy plan (nearest first, each atlas degraded alone, then left out) was measured and dropped: at 128 MB Hub CPX took 59 ms
+(master 46 ms); the plan above runs 20.6 ms there.
+
+**Measured** (**Observed**, RTX 4070, 1600 x 900, CPX preset, `--fly-pipelined`, GPU frame p50, three interleaved runs master / new; branch with the small class of section 11,
+which adds the rest; the F1 share is the run with `MEITOU_IMPOSTOR_SMALL=0`):
+
+| View | master | F1 only | F1 + small class | impostor VRAM, master / new (allocator) | atlas loads in 300 frames, master / new (refines) |
+| --- | --- | --- | --- | --- | --- |
+| Hub, CPX | 46.6, 46.4, 46.4 | 23.7 | 20.6, 20.7, 20.6 | 219 / 413 MB | 3 437-3 593 / 311 (100) |
+| forest, CPX | 21.6, 21.4, 21.4 | 19.6 | 15.2, 15.1, 15.2 | 212 / 494 MB | 2 246-2 265 / 293 (154) |
+| Stack, CPX (one pair) | 45.6 | | 15.7 | | 324 atlases, 452 MB |
+
+Far mips alone, Hub CPX with the small class off: 874 MB with `MEITOU_IMPOSTOR_FARMIP=0`, about half that with them. At the defaults (11.4 GB card) nothing
+measurable changes: forest flight pipelined 2.6 against 2.5-2.6 ms, paced 6.7, 6.8, 6.7 against 6.8, 6.7, 7.0, render thread 2.2 against 2.3;
+Hub 2.7-2.8 against 2.7. The default forest flight now holds the atlases master refused or evicted: 66 atlases 204 MB against 117 atlases 367 MB
+(whole process 3 461 against 3 589 MB; includes up to 20 s of atlases no longer wanted).
+
+**Small budgets** (default forest flight, paced, 300 frames; `MEITOU_VRAM_BUDGET_MB` forces the card's budget; **Observed**):
+
+| Forced budget | limit in force | master | new |
+| --- | --- | --- | --- |
+| 2 048 MB (watchdog raised to 0.995: both builds abort at the default 0.95 at startup) | | guard ranges x0.15, no atlases | the same (the guard has cut every range) |
+| 3 584 MB | 215 MB (pressure) | guard x0.60 | guard x0.60, 74 atlases |
+| 4 096 MB | 328 MB | whole process peak 84% of the budget | plan fits all wanted; peak 88% (closer to the guard's 90%) |
+| 4 096 MB, `MEITOU_FORCE_INTEGRATED=1` | 205 MB | | 73 admitted, 10 of them coarser than their nearest instance wants |
+
+And the 1 px preset under an explicit limit (`--impostor-budget`), Hub CPX: 128 MB 20.6 ms (254 atlases a level or more coarser than needed), 256 MB 20.6 ms
+(162 coarser), 916 MB the same 20.6 (none), against 46.4 ms with master's 192 MB. At 8 GB (655 MB) Hub CPX: master 46.3, new 20.6 ms. **Unknown**: how the far
+crowns look at 128 MB (levels beyond what the instance's size needs; no picture was looked at), and the pop-in on a card whose limit is below the working set
+(the `pop-in    impostors` line counts it: atlases left out, admitted but not resident, coarser than wanted with a refine on its way, refines in flight; the meshes draw meanwhile, as before; the "coarser than wanted" count is high during fast flights).
+
+**Gate** (**Verified**, Release, RTX 4070, ten views at 1600 x 900): Meitou defaults against master's ten views (`C:\Temp\mr\meitou`): 0 px in all ten with
+the far mips and budget alone (small class off; with it, section 11); `--faithful impostors` against master rendered with the same option 0 px; `--faithful all` against `C:\Temp\base-87c7857\faithful` 0 px.
+`MEITOU_VK_VALIDATION=sync`: forest and Hub with an empty cache 0 errors; a flight with `--range-large 48000` that makes refines 0 errors.
+
+## 11. The small impostor class (2026-10-07)
+
+*In short: meshes under radius 48 with enough triangles get impostors too, with 32 px frames and a transition in proportion to their size. The 218 such
+meshes of the base game draw as meshes today; 139 get an atlas (0.28 MB each, 39 MB for all). Hub CPX 23.7 to 20.6 ms and forest CPX 19.6 to 15.2 ms on top of
+section 10; medium range 80 000 in the forest 6.6 to 4.0 ms; the default pictures differ only in a dozen small spots of one view.*
+
+**Survey** (**Observed**, `--impostor-bake-all` with `MEITOU_IMPOSTOR_SURVEY=1`, base game): 218 meshes with a radius under 48, of which 139 qualify (radius and triangle floors below), 39 MB at full detail, about 0.3 MB each. The heavy ones at the Hub CPX
+were `CacTreeTu_03` (1 892 triangles x 1 459 instances) and `TechRustyJunk_*`; before this, "no impostor class" (the old
+`State()` label said radius under 48; the mesh's own radius, a half diagonal, can still differ from the baker's farthest vertex by a few percent, so the class is estimated from
+the bounds times 1.02 and the load decides).
+
+**Design** (`ImpostorClass`, `ImpostorClass.For(radius, triangles)`):
+- **Which meshes**: radius at least 2 (`MEITOU_IMPOSTOR_SMALL_MIN_RADIUS`) and at least 100 triangles (`MEITOU_IMPOSTOR_SMALL_MIN_TRIANGLES`: fewer cost less than the
+  quad). TERRAIN and EMISSIVE meshes stay ineligible as before. `MEITOU_IMPOSTOR_SMALL=0` switches the class off.
+- **Frame and grid**: 32 px, 12 x 12 (`MEITOU_IMPOSTOR_SMALL_FRAME`, `_GRID`): 4 levels, an atlas 384 px a side, 0.28 MB. Grid 8 (0.1 MB) was measured and is worse where it counts
+  (mean difference to the mesh, `--impostor-preview`, field pictures: 0.34-0.52 at grid 8 against 0.30-0.42 at 12) for 0.2 MB an atlas, so "fewer views" is not taken.
+- **Transition** (`ImpostorClass.Transition`): `T = ImpostorDistance x radius / 48`, per mesh (the cull already carries one per group): the largest instance is the
+  same 27.8 px across at its transition whatever its radius (at 1080 lines), as the smallest medium mesh (radius 48) is at 4000, so a 32 px frame is magnified 0.87 there: sharper than the 1.4 the
+  larger classes allow. Radius 2: 167 units; 10: 833; 20: 1 667; 47.9: 3 992. The bake's texture lod bias uses
+  the class's own distance (`BakeDistance`, was always 4000), the crossfade band is a tenth of `T` as before.
+- **Atlases** are made like any (cache `.mimp`, same baker version: medium and large atlases are byte-identical, so existing caches stay valid; small ones are new files, 19 MB more on disk), planned like any (section 10); `--impostor-preview <mesh> --class small` previews one at
+  its own transition (the pictures are scaled by `T / 4000`).
+
+**Look** (**Observed**): `--impostor-preview` mesh against impostor at the transition, whole-picture mean difference
+(the objects are a few hundred pixels of a 1600 x 900 picture, so the numbers are small; a crop of one showed silhouette and shading alike):
+0.13-0.21 for CacTreeTu_03, Cactus_Type01, Human_Skeleton_Part06 and TechRustyJunk_04; the same pictures at 1500-4000 x `T / 4000`
+(`field`) 0.30-0.42.
+
+**Gate** (**Verified**): Meitou defaults, ten views against master's: nine views 0 px; forest 13:00 differs in a dozen small spots (mean 0.0125, 0.033% over 12, max 153) and 02:00 (0.0021, 0.003%, max 20),
+which are the small impostors (`MEITOU_IMPOSTOR_SMALL=0`: 0 px in both); `--faithful impostors` and `--faithful all` 0 px as in section 10.
+
+**Measured** (**Observed**, CPX, pipelined GPU frame p50): Hub 23.7 (section 10 alone) to 20.6 ms, colour mesh triangles 5.47 M to 22 k (47.9 M on master), 49 of the 311 atlases small, 2.1 MB; forest 19.6 to 15.2 ms (11.7 M on master
+to 0.3 M mesh triangles); medium range 80 000 alone (other options default) 6.6, 6.7, 6.6 to 4.1, 4.0, 3.9 ms. Render thread (paced, cpu-only p50, three runs) forest CPX 8.3, 8.3, 8.2 to 8.6, 9.3, 8.6 ms (+0.3 to +1.0: `upd-foliage`, the reflection cull, more impostor sets); Hub CPX 7.7 to 7.0. At the defaults nothing measurable (section 10).
