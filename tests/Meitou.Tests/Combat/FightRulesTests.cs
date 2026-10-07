@@ -134,6 +134,24 @@ public class FightRulesTests
     }
 
     [Fact]
+    public void Movement_and_combat_systems_side_by_side_do_not_fight_over_the_position()
+    {
+        // The movement system comes first (as the integration note says); a fighter ordered to attack from afar closes in by itself, and the two systems agree on where it stands.
+        var walk = new OpenGroundWalkability((_, _) => 150);
+        var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, Lengths, new CombatOptions { RecordLog = true });
+        using var world = new SimWorld(new WorldSettings { Seed = 12, Threads = 4, PublishSnapshots = false, MinPartitionSize = 1 }, walk, [new MovementSystem(new PathService(walk, true)), combat]);
+        var (a, b) = Pair(world, new Combatant(), new Combatant(), distance: 120);
+        world.RunTicks(150);
+        var pa = world.Characters.Previous[a.Slot].Position;
+        var pb = world.Characters.Previous[b.Slot].Position;
+        float gap = Vector3.Distance(pa, pb);
+        Assert.InRange(gap, 4, 30);
+        Assert.Equal(150f, pa.Y);
+        Assert.NotEmpty(combat.Log);
+        Assert.Equal((byte)CharacterTask.Attack, world.Characters.Previous[a.Slot].Task);
+    }
+
+    [Fact]
     public void The_playing_technique_is_exposed_for_the_animation_layer()
     {
         using var world = NewWorld(11, 1, out var combat);

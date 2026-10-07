@@ -158,7 +158,7 @@ public class DuelTests(ITestOutputHelper output)
     /// <summary>40 duels and 20 two-on-one scuffles in a grid: enough characters for the world to cut the slots into several partitions.</summary>
     static SimWorld Crowd(ulong seed, int threads, out CombatSystem combat)
     {
-        var world = NewWorld(seed, threads, out combat);
+        var world = NewWorld(seed, threads, out combat, minPartition: 4);
         int n = 0;
         for (int row = 0; row < 6; row++)
         {

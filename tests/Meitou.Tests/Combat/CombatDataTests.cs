@@ -295,7 +295,7 @@ public class RealDuelTests(ITestOutputHelper output)
         var armour = data.Armours.Where(a => a.Class == ArmourClass.Heavy && a.CoverageOf(chest) >= 90).OrderBy(a => a.StringId, StringComparer.Ordinal).First();
         var constants = GameConstants.FromDatabase(db);
         var combat = new CombatSystem(data.Techniques, data.Constants, constants, BodyOptions.Default, lengths, new CombatOptions { RecordLog = true });
-        var world = new Meitou.Simulation.World(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false },
+        var world = new Meitou.Simulation.World(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = 1 },
             new Meitou.Simulation.OpenGroundWalkability((_, _) => 150), [combat]);
         CharacterId Spawn(string name, float skill, ArmourData? worn, float x)
         {

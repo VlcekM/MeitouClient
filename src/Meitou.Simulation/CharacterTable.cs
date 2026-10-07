@@ -235,6 +235,33 @@ public sealed class CharacterTable
             foreach (var q in k.OrderQueue) hasher.Add(q);
             hasher.Add((int)k.DrawnWeapon);
             hasher.Add(k.InCombat);
+            // The body and the trained stats (track E), so a difference in bleeding, healing or XP between thread counts shows in the hash.
+            if (k.Medical is { } m)
+            {
+                hasher.Add(m.Blood);
+                hasher.Add(m.Bleeding);
+                hasher.Add(m.Hunger);
+                hasher.Add(m.Fed);
+                hasher.Add(m.KoTimer);
+                hasher.Add(m.Unconscious);
+                hasher.Add(m.Dead);
+                hasher.Add(m.Pain);
+                foreach (float w in m.Wounds) hasher.Add(w);
+                foreach (var p in m.Parts)
+                {
+                    hasher.Add(p.Flesh);
+                    hasher.Add(p.Stun);
+                    hasher.Add(p.Bandage);
+                    hasher.Add(p.Rig);
+                    hasher.Add(p.Wear);
+                    hasher.Add(p.HitMult);
+                    hasher.Add((int)p.Limb);
+                }
+            }
+            else hasher.Add(-1);
+            if (k.Stats is { } stats)
+                foreach (float value in stats.ToArray()) hasher.Add(value);
+            else hasher.Add(-1);
             if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);
             hasher.Add(k.Name.Length);
         }

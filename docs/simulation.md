@@ -413,9 +413,9 @@ armour pieces in stacking order, the gear's bonus sums); the body is `CharacterC
 **Results.** 60 duels of two equal katana fighters (all stats 50, katana at quality 0.5, no armour, techniques written out like the install's katana rows): median 13 s of game time (385 ticks, range 4 to
 43 s), 18 blows thrown (5 to 61), 10 hits (3 to 24); every duel ends in a KO (the fight stops there). A much better fighter (80 against 30) wins 24 of 24. Plate over the chest, stomach, arms and head cuts the
 cut damage per hit by two thirds. A duel with the install's records (Greenlander, a Katana of a level-50 model, a heavy armour piece on one side, real clip lengths, all 44 techniques) took 56 s and 43 blows and is
-identical at 1, 4 and 16 threads (state hash and log); a crowd of 100 fighters (40 duels and 20 two-on-one scuffles) hashes the same at 1, 4 and 16 threads at six checkpoints.
+identical at 1, 4 and 16 threads (state hash and log); a crowd of 140 fighters (60 duels and 20 thirds joining in) hashes the same at 1, 4 and 16 threads at six checkpoints. The tests set `MinPartitionSize` to 1 (duels) or 4 (the crowd), because the default of 16 slots per partition would run two fighters in one partition at any thread count; with it the characters are really spread over 2, 8 and 32 partitions. The state hash covers the combat slots, the bodies (blood, parts, KO) and the trained stats.
 
-**Additive changes to other tracks' files** (all small): `CharacterCold` gets `InCombat`, `Stats`, `Medical`, `Race`, `Fighter`; `CharacterTable.Hash` hashes `InCombat`; `CharacterTask.Attack = 4`;
+**Additive changes to other tracks' files** (all small): `CharacterCold` gets `InCombat`, `Stats`, `Medical`, `Race`, `Fighter`; `CharacterTable.Hash` hashes `InCombat`, the body (`Medical`) and the stats (so a divergence in bleeding, healing or XP shows in `StateHash`); `CharacterTask.Attack = 4`;
 `AnimationSystem.Update` builds the stance with `Combat = cold.InCombat`; `World` gets `IStateHashed` and `StateHash` calls it for systems that implement it.
 
 ### Integrating combat (track A)
