@@ -83,6 +83,8 @@ public sealed class World : IDisposable
     public SpatialGrid Grid { get; }
     /// <summary>Player and test commands, applied at the tick they are stamped with.</summary>
     public CommandQueue Commands { get; } = new();
+    /// <summary>The squads (factory output, kept for the leader and follower logic).</summary>
+    public SquadRegistry Squads { get; } = new();
     public IReadOnlyList<ITickSystem> Systems => systems;
     /// <summary>The number of ticks run; during a tick, the number of the tick being run.</summary>
     public long Tick { get; private set; }
@@ -105,15 +107,18 @@ public sealed class World : IDisposable
         table.BeginTick();
 
         // 1. Inputs (serial).
+        table.Phase = TablePhase.Inputs;
         var due = Commands.TakeDue(Tick);
         foreach (var s in systems) s.Inputs(this, due);
 
         // 2. Schedule (serial): the grid of the last tick's positions, then the systems.
+        table.Phase = TablePhase.Schedule;
         Grid.Build(table.Previous);
         MakePartitions();
         foreach (var s in systems) s.Schedule(this);
 
         // 3-5. Think, move, act (parallel; each system's phase is a barrier).
+        table.Phase = TablePhase.Parallel;
         foreach (var s in systems) pool.ForEach(partitions.Length, i => s.Think(this, partitions[i]));
         foreach (var s in systems) pool.ForEach(partitions.Length, i => s.Move(this, partitions[i]));
         foreach (var b in buffers) b.Reset();
@@ -125,16 +130,21 @@ public sealed class World : IDisposable
             pool.ForEach(partitions.Length, i => s.Act(this, partitions[i], buffers[i]));
         }
 
+        table.Phase = TablePhase.Commit;
         // 6. Commit (serial): the effects in an order the partitioning cannot change.
         effects.Clear();
         for (int i = 0; i < partitions.Length; i++) effects.AddRange(buffers[i].Items);
         effects.Sort(EffectBuffer.Order);
         foreach (var e in effects) systems[e.System].Apply(this, e);
 
+        Squads.Refresh(table);
+        table.Phase = TablePhase.SlowWorld;
         // 7. Slow world (serial).
         foreach (var s in systems) s.SlowWorld(this);
 
         // 8. Publish.
+        Squads.Refresh(table);
+        table.Phase = TablePhase.Outside;
         table.EndTick();
         Tick++;
         if (Settings.PublishSnapshots) Publish();
@@ -162,8 +172,12 @@ public sealed class World : IDisposable
         var state = table.Previous;
         for (int i = 0; i < state.Length; i++)
         {
-            if (!state[i].Alive || table.Cold(i)?.Appearance is not { } appearance) continue;
-            list.Add(new CharacterSnapshot(new CharacterId(i, state[i].Generation), appearance, state[i].Position, state[i].Yaw, []));
+            if (!state[i].Alive) continue;
+            var cold = table.Cold(i);
+            list.Add(new CharacterSnapshot(new CharacterId(i, state[i].Generation), cold?.Appearance, state[i].Position, state[i].Yaw, [])
+            {
+                Faction = cold?.Faction ?? -1,
+            });
         }
         PreviousSnapshot = Snapshot;
         Snapshot = new WorldSnapshot(Tick, list);
@@ -176,6 +190,7 @@ public sealed class World : IDisposable
         h.Add(Seed);
         h.Add(Tick);
         Characters.Hash(ref h);
+        Squads.Hash(ref h);
         return h.Value;
     }
 

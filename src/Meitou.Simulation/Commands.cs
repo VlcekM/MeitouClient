@@ -55,3 +55,9 @@ public sealed class CommandQueue
         return due.ConvertAll(p => p.Command);
     }
 }
+
+/// <summary>
+/// Tells the world where the player is looking (the camera focus), which zones to keep active and whose town residents to load
+/// (docs/game/game-loop.md "Zones": the game activates zones around the player's characters; until there is a player, the camera).
+/// </summary>
+public sealed record FocusCommand(Vector3 Position) : SimCommand;

@@ -92,10 +92,11 @@ public class DeterminismTests
         Assert.Same(WorldSnapshot.Empty, world.Snapshot);
         var appearance = (Meitou.Data.Characters.CharacterAppearance)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Meitou.Data.Characters.CharacterAppearance));
         var id = world.Characters.Spawn(new CharacterHot { Position = new(1, 2, 3), Yaw = 0.5f }, new CharacterCold { Appearance = appearance }, 0);
-        world.Characters.Spawn(new CharacterHot(), new CharacterCold(), 0);   // no appearance: simulated, not drawn
+        world.Characters.Spawn(new CharacterHot(), new CharacterCold(), 0);   // no appearance: published, nothing to draw
         world.RunTick();
         Assert.Equal(1, world.Snapshot.Tick);
-        var c = Assert.Single(world.Snapshot.Characters);
+        Assert.Equal(2, world.Snapshot.Characters.Count);
+        var c = world.Snapshot.Characters[0];
         Assert.Equal(id, c.Id);
         Assert.Equal(new Vector3(1, 2, 3), c.Position);
         Assert.Same(WorldSnapshot.Empty, world.PreviousSnapshot);

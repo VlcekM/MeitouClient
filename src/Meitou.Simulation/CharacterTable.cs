@@ -30,6 +30,12 @@ public struct CharacterHot
     public ushort Animation;
     public float AnimationTime;
     public float Health;
+    /// <summary>What the character is doing (a <see cref="CharacterTask"/>) and the time in seconds that task keeps (a wait, a repath cooldown).</summary>
+    public byte Task;
+    public float TaskTime;
+    /// <summary>The speed stat S in world units (decimetres) per second, and the race walk speed (the cap of speed mode 0).</summary>
+    public float MaxSpeed;
+    public float WalkSpeed;
 }
 
 /// <summary>The rest of a character: things few systems touch per tick (stats, body parts, inventory, AI blackboard come here as they are built).</summary>
@@ -41,6 +47,16 @@ public sealed class CharacterCold
     public CharacterAppearance? Appearance { get; set; }
     /// <summary>The tick the character appeared at.</summary>
     public long SpawnedTick { get; set; }
+    /// <summary>The CHARACTER (or ANIMAL_CHARACTER) record it was made from.</summary>
+    public string RecordId { get; set; } = "";
+    /// <summary>The squad it belongs to (-1 for none), its role in it (the editor's SquadMemberType) and where it stands relative to the leader.</summary>
+    public int SquadId { get; set; } = -1;
+    public int Role { get; set; }
+    public System.Numerics.Vector2 FormationOffset { get; set; }
+    /// <summary>The path being followed (world positions, the next one at <c>CharacterHot.PathCursor</c>); replaced whole in a serial phase.</summary>
+    public Vector3[] Path { get; set; } = [];
+    /// <summary>The path request in flight, so an answer to an older one is ignored.</summary>
+    public long PathRequest { get; set; }
 }
 
 /// <summary>
@@ -59,6 +75,7 @@ public sealed class CharacterTable
     readonly Stack<int> free = [];
     int highWater;
     bool inTick;
+    TablePhase phase = TablePhase.Outside;
 
     public CharacterTable(int capacity = 256)
     {
@@ -94,6 +111,12 @@ public sealed class CharacterTable
         return slot >= 0 && slot < highWater && next[slot].Alive && next[slot].Generation == id.Generation;
     }
 
+    internal TablePhase Phase
+    {
+        get => phase;
+        set => phase = value;
+    }
+
     internal void BeginTick()
     {
         Array.Copy(previous, next, highWater);
@@ -113,6 +136,7 @@ public sealed class CharacterTable
     public CharacterId Spawn(CharacterHot state, CharacterCold cold, long tick)
     {
         ArgumentNullException.ThrowIfNull(cold);
+        if (phase == TablePhase.Parallel) throw new InvalidOperationException("characters are spawned in the serial phases only");
         int slot;
         int generation;
         if (free.Count > 0)
@@ -140,6 +164,8 @@ public sealed class CharacterTable
     /// <summary>Removes a character in the state being computed; false when <paramref name="id"/> is not alive there. Serial phases only.</summary>
     public bool Remove(CharacterId id)
     {
+        if (phase is TablePhase.Parallel or TablePhase.Inputs or TablePhase.Schedule)
+            throw new InvalidOperationException("characters are removed in the commit or the slow world only (a phase reads them as alive)");
         if (!TryResolveNext(id, out int slot)) return false;
         next[slot].Alive = false;
         if (!inTick) previous[slot].Alive = false;
@@ -176,12 +202,35 @@ public sealed class CharacterTable
             hasher.Add((int)c.Animation);
             hasher.Add(c.AnimationTime);
             hasher.Add(c.Health);
+            hasher.Add((int)c.Task);
+            hasher.Add(c.TaskTime);
+            hasher.Add(c.MaxSpeed);
+            hasher.Add(c.WalkSpeed);
             var k = cold[i]!;
             hasher.Add(k.Faction);
             hasher.Add(k.SpawnedTick);
+            hasher.Add(k.SquadId);
+            hasher.Add(k.Role);
+            hasher.Add(k.FormationOffset);
+            hasher.Add(k.Path.Length);
+            hasher.Add(k.PathRequest);
             hasher.Add(k.Name.Length);
         }
         hasher.Add(free.Count);
         foreach (int slot in free) hasher.Add(slot);
     }
+}
+
+/// <summary>Where in a tick the table is, so a spawn or removal in the wrong place fails loudly instead of corrupting a tick.</summary>
+public enum TablePhase
+{
+    /// <summary>Between ticks (setup): anything goes.</summary>
+    Outside,
+    /// <summary>Spawns allowed; removals not (the phases that follow read the character as alive).</summary>
+    Inputs,
+    Schedule,
+    /// <summary>Think, move, act: no spawns or removals.</summary>
+    Parallel,
+    Commit,
+    SlowWorld,
 }
