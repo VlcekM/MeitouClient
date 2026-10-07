@@ -727,7 +727,7 @@ public sealed unsafe class TerrainTextures : IDisposable
 /// <summary>
 /// A native texture of the terrain's (phase 8, docs/renderer-native.md 8) sampled as it was as a GL texture through VkGl: the GL sampler
 /// state it was given (<see cref="SamplerDesc.FromGl"/>, the upscaler's LOD bias on mipmapped filters, as VkGl's <c>SamplerFor</c>) and the
-/// view of all its levels (it is made with exactly the levels VkGl's view covered). <see cref="Bindless"/> mirrors <c>IGlInterop.Bindless</c>:
+/// view of all its levels (it is made with exactly the levels VkGl's view covered). <see cref="Bindless"/> keeps the former GL layer's rule:
 /// the same index while the sampler is unchanged, a new one (the old freed after the frames in flight) when the LOD bias moved. Render thread only.
 /// </summary>
 internal sealed class TerrainTexture : IDisposable

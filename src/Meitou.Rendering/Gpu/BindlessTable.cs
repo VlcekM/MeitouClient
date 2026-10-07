@@ -171,7 +171,7 @@ public sealed unsafe class BindlessTable : IDisposable
     public static ScalarKind ScalarOf(Format format) => Scalars.TryGetValue(format, out var s) ? s : ScalarByName(format);
 
     /// <summary><see cref="ScalarByName"/> of every named format, worked out once: <see cref="ScalarOf"/> runs for every
-    /// <c>IGlInterop.Bindless</c> call, and the enum's name is a string allocation and three searches (~0.1 us).</summary>
+    /// texture registered, and the enum's name is a string allocation and three searches (~0.1 us).</summary>
     static readonly System.Collections.Frozen.FrozenDictionary<Format, ScalarKind> Scalars =
         System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(Enum.GetValues<Format>().Distinct(), f => f, ScalarByName);
 

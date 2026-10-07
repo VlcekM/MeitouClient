@@ -215,7 +215,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         streamline = display.Streamline;
         var window = display.Window!;
         Boot(display, interactive: true);
-        var overlay = DebugOverlay.TryCreate(display.VkGl.Context);
+        var overlay = DebugOverlay.TryCreate(display.Context);
         var panel = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render);
         if (panel is not null)
             foreach (var slider in panel.Sliders)
@@ -290,7 +290,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
                 screenshotRequested = false;
                 panel?.Draw(size.X, size.Y);
                 display.Present();
-                if (shot) SaveScreenshot(display.VkGl.Context, backbuffer, size.X, size.Y);
+                if (shot) SaveScreenshot(display.Context, backbuffer, size.X, size.Y);
                 frames++;
             }
             titleTimer += dt;

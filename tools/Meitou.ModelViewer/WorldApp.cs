@@ -12,7 +12,6 @@ using Silk.NET.Windowing;
 using Meitou.Rendering;
 using Meitou.Rendering.Display;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
 using Meitou.Rendering.Vulkan.Core;
 using Meitou.Rendering.Upscalers;
 using static Meitou.Rendering.WorldFrame;
@@ -240,13 +239,13 @@ static partial class WorldApp
         {
             gpu = CreateGpu(display.Context, install, scene, assets, o, interactive: true);
             if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, streamline);
-            overlay = DebugOverlay.TryCreate(display.VkGl.Context);
+            overlay = DebugOverlay.TryCreate(display.Context);
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
             if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v);
             profiler = new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
-            meter = PassMeter.TryCreate(display.Gl);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
+            meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             var input = window.CreateInput();
             keyboard = input.Keyboards.FirstOrDefault();
             foreach (var kb in input.Keyboards) kb.KeyDown += (_, key, _) => OnKey(key);
@@ -387,8 +386,8 @@ static partial class WorldApp
                 string gpuText = gpuSamples > 0 ? $"{gpuMs / gpuSamples:0.00}" : "-";
                 stats.Clear();
                 stats.Add($"{frames / titleTimer:0} fps (vsync), cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms");
-                var (vramUsed, vramBudget) = display.VkGl.Context.Device.VideoMemory();
-                var alloc = display.VkGl.Context.Device.Allocator;
+                var (vramUsed, vramBudget) = display.Context.Device.VideoMemory();
+                var alloc = display.Context.Device.Allocator;
                 stats.Add($"vram        {vramUsed / 1073741824.0:0.00} of {vramBudget / 1073741824.0:0.0} GB; our blocks {alloc.TotalAllocatedBytes / 1073741824.0:0.00} GB, {alloc.TotalUsedBytes / 1073741824.0:0.00} used");
                 // The largest owners (GpuAllocator.Breakdown: names without their numbers), to see what fills the VRAM.
                 foreach (var (name, count, bytes, _) in alloc.Breakdown().Take(8))
@@ -419,7 +418,7 @@ static partial class WorldApp
             if (gpu is null) return;
             var size = window.FramebufferSize;
             if (!display.BeginFrame(size.X, size.Y)) return; // minimized, or not yet shown at its maximized size
-            var context = display.VkGl.Context;
+            var context = display.Context;
             // The chain and the overlays draw into the window's backbuffer (made again when the size changes).
             var backbuffer = display.Backbuffer!;
             if (gpu.Post is { } windowPost) windowPost.Target = backbuffer;
@@ -485,11 +484,11 @@ static partial class WorldApp
             {
                 // Into C:\Temp (the user's screenshot folder), never the working directory (which may be the repo).
                 var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-world-{DateTime.Now:yyyyMMdd-HHmmss}.png");
-                FramebufferCapture.SavePng(display.VkGl.Context, backbuffer, file, size.X, size.Y);
+                FramebufferCapture.SavePng(display.Context, backbuffer, file, size.X, size.Y);
                 Console.WriteLine($"saved {Path.GetFullPath(file)}");
             }
         };
-        window.Closing += () => { if (meter is not null) { meter.Report(Console.Out); meter.ReportPhases(Console.Out, display.VkGl.Stats.Draws); meter.Dispose(); } profiler?.Dispose(); overlay?.Dispose(); gpu?.Dispose(); };
+        window.Closing += () => { if (meter is not null) { meter.Report(Console.Out); meter.Dispose(); } profiler?.Dispose(); overlay?.Dispose(); gpu?.Dispose(); };
         window.Run();
         return 0;
     }

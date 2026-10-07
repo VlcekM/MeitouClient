@@ -103,7 +103,6 @@ public sealed unsafe partial class GpuContext
     public void BeginHostPass(CommandList cmd, PassTargets targets, DrawState state)
     {
         if (passList is not null) throw new InvalidOperationException("a host pass is already open");
-        Interop?.BeginHostPass(cmd);
         (passList, passTargets, passState) = (cmd, targets, state);
     }
 
@@ -124,14 +123,12 @@ public sealed unsafe partial class GpuContext
     public void EndHostPass(CommandList cmd)
     {
         if (passList is null || !ReferenceEquals(cmd, passList)) throw new InvalidOperationException("EndHostPass without a matching BeginHostPass");
-        Interop?.EndHostPass(cmd);
         (passList, passTargets, passState) = (null, null, null);
     }
 
-    /// <summary>What the open pass draws into (its host's targets, viewport and scissor). Without a host pass: VkGl's (a guest a test draws
-    /// outside any host; goes with VkGl).</summary>
-    public PassTargets CurrentTargets() => passTargets ?? Interop?.CurrentTargets() ?? throw new InvalidOperationException("no pass is open");
+    /// <summary>What the open pass draws into (its host's targets, viewport and scissor).</summary>
+    public PassTargets CurrentTargets() => passTargets ?? throw new InvalidOperationException("no pass is open");
 
-    /// <summary>The state the open pass's host hands its guests (without a host pass, as <see cref="CurrentTargets"/>).</summary>
-    public DrawState CurrentState() => passState ?? Interop?.CurrentState() ?? throw new InvalidOperationException("no pass is open");
+    /// <summary>The state the open pass's host hands its guests .</summary>
+    public DrawState CurrentState() => passState ?? throw new InvalidOperationException("no pass is open");
 }

@@ -109,7 +109,7 @@ static class ImpostorApp
     /// </summary>
     sealed class Frames(VulkanDisplay display)
     {
-        public GpuContext Gpu { get; } = display.VkGl.Context;
+        public GpuContext Gpu { get; } = display.Context;
         bool open;
 
         public void Open()

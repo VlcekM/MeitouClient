@@ -106,7 +106,7 @@ public sealed record UpscaleInputs
     public float Aspect;
 }
 
-/// <summary>An upscaler outside the post-processing chain's own TAA, backed by a vendor library (Meitou.Rendering.Vulkan).</summary>
+/// <summary>An upscaler outside the post-processing chain's own TAA, backed by a vendor library (Meitou.Rendering.Upscalers).</summary>
 public interface IUpscaler : IDisposable
 {
     UpscalerKind Kind { get; }

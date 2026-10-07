@@ -62,7 +62,6 @@ public sealed unsafe partial class GpuContext
         if (Frame.Timestamps.TryRead(stamps.Begin, out ulong b) && Frame.Timestamps.TryRead(stamps.End, out ulong e) && e >= b) GpuFrameMs = (e - b) / 1e6;
         stamps = (Frame.Timestamps.Allocate(), default);
         if (stamps.Begin.IsValid) Frame.PreFrame.Timestamp(Frame.Timestamps, stamps.Begin, PipelineStageFlags2.TopOfPipeBit);
-        Interop?.FrameBegun(slot);
     }
 
     /// <summary>Opens a frame where something must record and none is open (loading, uploads before the host began one, offscreen tools).</summary>
@@ -76,7 +75,6 @@ public sealed unsafe partial class GpuContext
     {
         if (!Frame.Open) return;
         if (PassOpen) throw new InvalidOperationException("EndFrame with a host pass open");
-        Interop?.FrameEnding();
         int slot = Device.Frames.Slot;
         var end = Frame.Timestamps.Allocate();
         if (end.IsValid)
@@ -102,7 +100,7 @@ public sealed unsafe partial class GpuContext
         BeginFrame();
     }
 
-    /// <summary>A full memory barrier (all commands, all writes before visible to all reads and writes after): what VkGl placed between passes.</summary>
+    /// <summary>A full memory barrier (all commands, all writes before visible to all reads and writes after), placed around native segments.</summary>
     public void FullBarrier(CommandBuffer cb)
     {
         var barrier = new MemoryBarrier2
@@ -115,7 +113,6 @@ public sealed unsafe partial class GpuContext
         };
         var info = new DependencyInfo { SType = StructureType.DependencyInfo, MemoryBarrierCount = 1, PMemoryBarriers = &barrier };
         Device.Vk.CmdPipelineBarrier2(cb, &info);
-        Interop?.CountBarrier();
     }
 
     void DisposeFrameLoop()

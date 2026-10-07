@@ -35,8 +35,8 @@ public sealed record GpuFeatures(bool Bindless, bool MultiDrawIndirect, bool Dra
 }
 
 /// <summary>
-/// The native renderer API for one device (docs/renderer-native.md 2.2): what every renderer shares. Created next to VkGl from the same
-/// device (VkGl makes it, and drives <see cref="Frame"/> from its own frame begin and end while it exists).
+/// The native renderer API for one device (docs/renderer-native.md 2.2): what every renderer shares. The display (or a test) makes it
+/// from the device and drives its frames (<see cref="BeginFrame"/>, <see cref="EndFrame"/>).
 /// </summary>
 public sealed unsafe partial class GpuContext : IDisposable
 {
@@ -58,14 +58,8 @@ public sealed unsafe partial class GpuContext : IDisposable
         Frame = new GpuFrame(this);
     }
 
-    /// <summary>The context behind an <see cref="IGl"/> (VkGl's), or null for another implementation. For code that only has the GL
-    /// interface until its constructor gets the context.</summary>
-    public static GpuContext? Of(IGl gl) => (gl as IGlInterop)?.Context;
-
     public VulkanDevice Device { get; }
     public GpuFeatures Features { get; }
-    /// <summary>The seam to VkGl while it exists (docs/renderer-native.md 4.2); null without it.</summary>
-    public IGlInterop? Interop { get; set; }
     /// <summary>Frame-global textures, blocks and uniform values by GLSL name (docs/renderer-native.md 4.3).</summary>
     public FrameGlobals Globals { get; } = new();
     public GpuDefaults Defaults { get; }
@@ -81,13 +75,11 @@ public sealed unsafe partial class GpuContext : IDisposable
     public DrawLog? Log { get; internal set; }
     /// <summary>The upscaler's texture LOD bias: added to the mip level of every mipmapped fetch (set by the post-processing chain).</summary>
     public float LodBias { get; set; }
-    /// <summary>What a sampler with nothing bound reads (VkGl's own stand-in while VkGl exists, so both sides bind the same objects).</summary>
-    public Func<SamplerInfo, SampledTexture>? DummyOverride { get; set; }
 
     /// <summary>
     /// Records a prepared guest segment into the pass being drawn now (docs/renderer-native.md 6.2, wave 4): inside a host's rendering with
     /// secondaries (<see cref="GpuFrame.Parallel"/>) it is queued and recorded when the host ends it, in this order, possibly on a job thread;
-    /// otherwise at once into the pass VkGl (or a host) has open, as a native segment (<see cref="IGlInterop.BeginNativeInPass"/>). Either way
+    /// otherwise at once into the host's open pass, as a guest segment (<see cref="BeginGuest"/>). Either way
     /// <see cref="RecordJob.Record"/> runs with <see cref="RenderJobs.InJob"/> set, so a job that reaches for render-thread state throws.
     /// </summary>
     public void Record(string label, RecordJob job)
@@ -111,7 +103,7 @@ public sealed unsafe partial class GpuContext : IDisposable
     /// </summary>
     public void ClearDepth(CommandList host, float value, Rect2D rect) => Clear(host, false, default, true, value, rect);
 
-    /// <summary>As <see cref="ClearDepth"/> for the colour and / or depth attachment (<see cref="CommandList.Clear"/>; VkGl's <c>Clear</c> inside a host).</summary>
+    /// <summary>As <see cref="ClearDepth"/> for the colour and / or depth attachment (<see cref="CommandList.Clear"/>).</summary>
     public void Clear(CommandList host, bool colour, ClearColorValue colourValue, bool depth, float depthValue, Rect2D rect)
     {
         if (!Frame.Parallel.Open) { host.Clear(colour, colourValue, depth, depthValue, rect); return; }
@@ -144,7 +136,6 @@ public sealed unsafe partial class GpuContext : IDisposable
     /// <summary>The stand-in a sampler reads when nothing is bound: (0, 0, 0, 1), or depth 1 for a shadow sampler.</summary>
     public SampledTexture Dummy(SamplerInfo sampler)
     {
-        if (DummyOverride is { } f) return f(sampler);
         int slot = GlConventions.SamplerSlot(sampler);
         var key = (slot, sampler.SampledKind, sampler.Depth);
         if (dummies.TryGetValue(key, out var s)) return s;

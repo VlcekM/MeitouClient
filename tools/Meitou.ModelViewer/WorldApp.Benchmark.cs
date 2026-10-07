@@ -3,7 +3,6 @@ using System.Numerics;
 
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
 using static Meitou.Rendering.WorldFrame;
 
 namespace Meitou.ModelViewer;
@@ -36,10 +35,10 @@ static partial class WorldApp
         // Pop-in: per frame, how near the nearest foliage zone without its whole layout (within the near reach) and without any layout (within
         // the far reach) are, and the nearest group in range whose mesh is not resident.
         var gaps = new List<(float Zone, float Unlaid, float Mesh, float Grass)>(o.FlyBenchmark);
-        // Pipelined: no wait for the GPU after each frame (VkGl keeps its own two frames in flight), as the interactive viewer runs.
+        // Pipelined: no wait for the GPU after each frame (the context keeps its frames in flight), as the interactive viewer runs.
         bool pipelined = o.FlyPipelined;
         var interval = Stopwatch.StartNew();
-        var meter = PassMeter.TryCreate(display.Gl);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
+        var meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
         Console.WriteLine($"fly       {(pipelined ? "pipelined, " : "")}{o.FlyBenchmark} frames, circle radius {radius:0} units round {centre.X:0}, {centre.Z:0}, {o.FlySpeed:0} units per frame ({o.FlySpeed * 60:0} per second)");
         for (int i = 1; i <= o.FlyBenchmark; i++)
         {
@@ -50,7 +49,7 @@ static partial class WorldApp
             frameWatch.Restart();
             { Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
             double cpuMs = frameWatch.Elapsed.TotalMilliseconds;
-            if (i % 500 == 0 || i <= 4) Console.WriteLine($"vkgl      frame {i}: {display.VkGl.Stats}");
+            if (i % 500 == 0 || i <= 4) Console.WriteLine($"gpu       frame {i}: {context.Frame.Stats}");
             cpu.Add(cpuMs);
             if (gpu.Foliage is { } fol) gaps.Add((fol.NearestIncompleteZone, fol.NearestUnlaidZone, fol.NearestMissingMesh, fol.NearestMissingGrass));
             if (o.Screenshot is not null && FlyShots.Contains(i) && gpu.Post is { Target: { } shotTarget } shotPost)
@@ -122,9 +121,8 @@ static partial class WorldApp
     static void ReportPasses(PassMeter meter, Meitou.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
     {
         meter.Report(Console.Out);
-        meter.ReportPhases(Console.Out, display.VkGl.Stats.Draws);
         meter.Dispose();
-        if (Environment.GetEnvironmentVariable("MEITOU_VK_MICRO") == "1") PassMeter.VkCallMicro(display.VkGl, Console.Out);
+        if (Environment.GetEnvironmentVariable("MEITOU_VK_MICRO") == "1") PassMeter.VkCallMicro(display.Context, Console.Out);
         WorldFrame.DetailedStats = true;
         { Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(display.Context); }
         display.Context.Finish();

@@ -5,8 +5,8 @@ namespace Meitou.Rendering.Gpu;
 
 /// <summary>
 /// The GL-to-Vulkan rules that decide pixels: formats, blend factors, compare functions, wrap modes, swizzles, vertex attribute
-/// formats, and the stand-ins GL reads for what is missing. Shared by <c>VkGl</c> and the native API (docs/renderer-native.md 2.4),
-/// so a translated draw and a native one cannot disagree. Moved verbatim from VkGl (wave 2, step 2).
+/// formats, and the stand-ins GL reads for what is missing (docs/renderer-native.md 2.4). Moved verbatim from the former GL translation
+/// layer (wave 2, step 2), which is gone since phase 8 stage 3; the renderers keep stating their resources in this GL vocabulary.
 /// </summary>
 public static class GlConventions
 {
@@ -183,4 +183,144 @@ public static unsafe class GlUniforms
                         *(uint*)(dst + at.Offset + e * elemStride + c * colStride + r * 4) = bits;
                     }
     }
+}
+
+// The OpenGL vocabulary the conventions above (and the renderers' texture and vertex descriptions) are stated in: the names and numeric
+// values of the OpenGL specification's tokens, only the members the code uses. Kept from the GL layer removed in phase 8 stage 3.
+public enum BlendingFactor : int
+{
+    Zero = 0x0,
+    One = 0x1,
+    SrcColor = 0x300,
+    OneMinusSrcColor = 0x301,
+    SrcAlpha = 0x302,
+    OneMinusSrcAlpha = 0x303,
+    DstAlpha = 0x304,
+    OneMinusDstAlpha = 0x305,
+    DstColor = 0x306,
+    OneMinusDstColor = 0x307,
+}
+
+public enum DepthFunction : int
+{
+    Never = 0x200,
+    Less = 0x201,
+    Equal = 0x202,
+    Lequal = 0x203,
+    Greater = 0x204,
+    Notequal = 0x205,
+    Gequal = 0x206,
+}
+
+public enum FrontFaceDirection : int
+{
+    CW = 0x900,
+    Ccw = 0x901,
+}
+
+public enum GLEnum : int
+{
+    NoError = 0x0,
+    Zero = 0x0,
+    One = 0x1,
+    Byte = 0x1400,
+    UnsignedByte = 0x1401,
+    Short = 0x1402,
+    UnsignedShort = 0x1403,
+    Int = 0x1404,
+    UnsignedInt = 0x1405,
+    Float = 0x1406,
+    HalfFloat = 0x140B,
+    DepthComponent = 0x1902,
+    Red = 0x1903,
+    Green = 0x1904,
+    Blue = 0x1905,
+    Alpha = 0x1906,
+    Rgb = 0x1907,
+    Rgba = 0x1908,
+    Rgb8 = 0x8051,
+    Rgba8 = 0x8058,
+    Samples = 0x80A9,
+    DepthComponent24 = 0x81A6,
+    R8 = 0x8229,
+    R16 = 0x822A,
+    RG8 = 0x822B,
+    R16f = 0x822D,
+    R32f = 0x822E,
+    RG16f = 0x822F,
+    RG32f = 0x8230,
+    Rgba32f = 0x8814,
+    Rgba16f = 0x881A,
+    CompareRefToTexture = 0x884E,
+    Depth24Stencil8 = 0x88F0,
+    R11fG11fB10f = 0x8C3A,
+    DepthComponent32f = 0x8CAC,
+    FramebufferComplete = 0x8CD5,
+    MaxSamples = 0x8D57,
+    Rgba8ui = 0x8D7C,
+    CompressedRedRgtc1 = 0x8DBB,
+    CompressedRGRgtc2 = 0x8DBD,
+}
+
+public enum InternalFormat : int
+{
+    Rgba8 = 0x8058,
+    DepthComponent24 = 0x81A6,
+    R8 = 0x8229,
+    R16 = 0x822A,
+    R32f = 0x822E,
+    RG16f = 0x822F,
+    RG32f = 0x8230,
+    CompressedRgbS3TCDxt1Ext = 0x83F0,
+    CompressedRgbaS3TCDxt1Ext = 0x83F1,
+    CompressedRgbaS3TCDxt3Ext = 0x83F2,
+    CompressedRgbaS3TCDxt5Ext = 0x83F3,
+    Rgba32f = 0x8814,
+    Rgba16f = 0x881A,
+    R11fG11fB10f = 0x8C3A,
+    DepthComponent32f = 0x8CAC,
+    Rgba8ui = 0x8D7C,
+}
+
+public enum PrimitiveType : int
+{
+    Points = 0x0,
+    Lines = 0x1,
+    LineStrip = 0x3,
+    Triangles = 0x4,
+    TriangleStrip = 0x5,
+    TriangleFan = 0x6,
+}
+
+public enum TextureMagFilter : int
+{
+    Nearest = 0x2600,
+    Linear = 0x2601,
+}
+
+public enum TextureMinFilter : int
+{
+    Nearest = 0x2600,
+    Linear = 0x2601,
+    NearestMipmapNearest = 0x2700,
+    LinearMipmapNearest = 0x2701,
+    NearestMipmapLinear = 0x2702,
+    LinearMipmapLinear = 0x2703,
+}
+
+public enum TextureTarget : int
+{
+    Texture2D = 0xDE1,
+    TextureCubeMap = 0x8513,
+    TextureCubeMapPositiveX = 0x8515,
+    TextureCubeMapNegativeZ = 0x851A,
+    Texture2DArray = 0x8C1A,
+}
+
+public enum TextureWrapMode : int
+{
+    Repeat = 0x2901,
+    ClampToBorder = 0x812D,
+    ClampToEdge = 0x812F,
+    MirroredRepeat = 0x8370,
 }

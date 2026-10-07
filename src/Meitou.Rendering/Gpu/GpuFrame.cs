@@ -5,8 +5,8 @@ namespace Meitou.Rendering.Gpu;
 
 /// <summary>
 /// The frame being recorded (docs/renderer-native.md 2.2): its number and slot, the primary command list, per-frame constants, timestamps,
-/// resource states and statistics. Begun and ended by the host: while VkGl exists, <c>VkGl.BeginFrame</c> / <c>EndFrame</c> drive it, and its
-/// command list records into VkGl's command buffer (the same buffer, the same order).
+/// resource states and statistics. Begun and ended by the context's frame loop (<see cref="GpuContext.BeginFrame"/> /
+/// <see cref="GpuContext.EndFrame"/>), driven by the display or a test.
 /// </summary>
 public sealed unsafe class GpuFrame : IDisposable
 {

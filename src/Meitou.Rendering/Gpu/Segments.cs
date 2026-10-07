@@ -1,16 +1,16 @@
 namespace Meitou.Rendering.Gpu;
 
 /// <summary>
-/// Segments (phase 8 stage 3, docs/renderer-native.md 8.9): the frame's command list handed to a renderer, with the barriers VkGl placed
-/// around its native segments. <see cref="BeginNative"/> opens one outside any pass (a full barrier before and after); <see cref="BeginGuest"/>
+/// Segments (docs/renderer-native.md 8.9): the frame's command list handed to a renderer, with full barriers around its native
+/// segments. <see cref="BeginNative"/> opens one outside any pass (a full barrier before and after); <see cref="BeginGuest"/>
 /// draws into the open host pass (<see cref="BeginHostPass"/>): its rendering, or with secondaries one of its own in its place.
 /// </summary>
 public sealed unsafe partial class GpuContext
 {
     CommandList? segment;
-    // The guest segment open now: the host's list, an inline secondary, or (no host) VkGl's pass.
+    // The guest segment open now: the host's list or an inline secondary.
     CommandList? guest;
-    enum GuestKind { Host, Inline, Interop }
+    enum GuestKind { Host, Inline }
     GuestKind guestKind;
 
     /// <summary>A native segment is open (<see cref="BeginNative"/> or <see cref="BeginGuest"/>).</summary>
@@ -25,7 +25,6 @@ public sealed unsafe partial class GpuContext
         if (SegmentOpen) throw new InvalidOperationException("BeginNative inside a native segment");
         EnsureFrame();
         var list = Frame.Commands;
-        Interop?.SegmentOpening(list);
         FullBarrier(list.Handle);
         list.Invalidate();
         Frame.States.AssumeFullBarrier();
@@ -43,14 +42,13 @@ public sealed unsafe partial class GpuContext
         cmd.EndLabel();
         FullBarrier(cmd.Handle);
         segment = null;
-        Interop?.SegmentClosed(cmd);
         cmd.Log?.Note("end native");
     }
 
     /// <summary>
     /// A guest's segment in the open host pass: draws only (no rendering, barriers, copies or dispatches), with the host's targets and state
     /// (<see cref="CurrentTargets"/>, <see cref="CurrentState"/>). Inside a rendering with secondaries it is a secondary of its own, executed in
-    /// its place. Without a host pass: VkGl's pass on the bound GL framebuffer (until stage 3 removes that path). Closed by <see cref="EndGuest"/>.
+    /// its place. Without a host pass it throws. Closed by <see cref="EndGuest"/>.
     /// </summary>
     public CommandList BeginGuest(string label)
     {
@@ -69,22 +67,15 @@ public sealed unsafe partial class GpuContext
             guestKind = GuestKind.Host;
             return guest = host;
         }
-        if (segment is not null) throw new InvalidOperationException("BeginGuest inside a native segment without a host pass");
-        var interop = Interop ?? throw new InvalidOperationException("no pass to draw into");
-        guestKind = GuestKind.Interop;
-        return guest = interop.BeginNativeInPass(label);
+        throw new InvalidOperationException("BeginGuest without a host pass");
     }
 
     public void EndGuest(CommandList cmd)
     {
         if (guest is null || !ReferenceEquals(cmd, guest)) throw new InvalidOperationException("EndGuest without a matching BeginGuest");
         guest = null;
-        switch (guestKind)
-        {
-            case GuestKind.Inline: Frame.Parallel.EndInline(cmd); break;
-            case GuestKind.Host: cmd.EndLabel(); cmd.Log?.Note("end native (in host pass)"); break;
-            default: Interop!.EndNative(cmd); break;
-        }
+        if (guestKind == GuestKind.Inline) Frame.Parallel.EndInline(cmd);
+        else { cmd.EndLabel(); cmd.Log?.Note("end native (in host pass)"); }
     }
 
     /// <summary>
@@ -104,7 +95,6 @@ public sealed unsafe partial class GpuContext
             else record(host);
             return;
         }
-        if (Interop is { } interop) { interop.Interleave(record); return; }
         EnsureFrame();
         record(Frame.Commands);
     }
