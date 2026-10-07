@@ -124,8 +124,64 @@ public static class ImpostorShaders
             vec2 gx = dFdx(localA), gy = dFdy(localA);
             if (pick >= 0.0)
             {
-                // The frame whose cumulative weight passes the dither value.
-                weights = pick < weights.x ? vec3(1.0, 0.0, 0.0) : pick < weights.x + weights.y ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
+                // Silhouette from the vote, colour from one frame. The cut-out is the three frames' coverages blended by their weights
+                // (constant over the instance, smooth in space: a clean edge, and no holes where the frame a dither value picked has none
+                // at this point, the dots at the edge of trunks and bulbs whose parts lie far in front of or behind the crown's centre,
+                // where the frames' parallax shifts their edges by pixels). The colour comes from one frame, picked by the dither
+                // value among the frames that cover the point (weights x coverage), so a texel is never shaded black (crisp leaves).
+                vec4 av[3];
+                vec3 dv[3], rv[3], uv3[3], pv[3];
+                vec2 tv[3];
+                float cw[3];
+                float vote = 0.0;
+                for (int k = 0; k < 3; k++)
+                {
+                    cw[k] = 0.0;
+                    float w = weights[k];
+                    dv[k] = impostorDecode(cells[k] / (grid - 1.0));
+                    impostorBasis(dv[k], rv[k], uv3[k]);
+                    vec2 local = impostorFrameUv(dv[k], rv[k], uv3[k], centre, radius, origin, ray, 0.0, pv[k]);
+                    tv[k] = (cells[k] + clamp(local, 0.0, 1.0)) / grid;
+                    av[k] = vec4(0.0);
+                    if (w <= 0.0) continue;
+                    bool inside = all(greaterThanEqual(local, vec2(0.0))) && all(lessThanEqual(local, vec2(1.0)));
+                    if (!inside) continue;
+                    av[k] = textureGrad(albedoMap, tv[k], gx, gy);
+                    cw[k] = w * av[k].a;
+                    vote += cw[k];
+                }
+                s.coverage = vote;
+                if (vote > 1e-5)
+                {
+                    float t = pick * vote;
+                    int chosen = 2;
+                    float acc = 0.0;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        acc += cw[k];
+                        if (cw[k] > 0.0 && t < acc) { chosen = k; break; }
+                        if (cw[k] > 0.0) chosen = k;
+                    }
+                    // The normal and the position are the covering frames' blend: a curved surface seen by frames a few degrees apart
+                    // has different normals at the points they put under this pixel, and picking among them dithered the shading.
+                    vec3 normal = vec3(0.0), position = vec3(0.0);
+                    for (int k = 0; k < 3; k++)
+                    {
+                        if (cw[k] <= 0.0) continue;
+                        vec3 nf = impostorDecodeNormal(textureGrad(normalMap, tv[k], gx, gy).rg * 2.0 - 1.0);
+                        normal += (rv[k] * nf.x + uv3[k] * nf.y + dv[k] * nf.z) * cw[k];
+                        position += pv[k] * cw[k];
+                    }
+                    s.albedo = av[chosen].rgb / max(av[chosen].a, 1e-4);
+                    s.normal = normalize(normal);
+                    s.position = position / vote;
+                }
+                else
+                {
+                    s.normal = -normalize(ray);
+                    s.position = (pv[0] * weights.x + pv[1] * weights.y + pv[2] * weights.z) / max(weights.x + weights.y + weights.z, 1e-5);
+                }
+                return s;
             }
             vec3 colour = vec3(0.0);
             float total = 0.0;
