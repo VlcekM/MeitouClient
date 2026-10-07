@@ -44,6 +44,15 @@ public static class ImpostorShaders
     public const string Functions = """
 
         // ---- impostors (Meitou.Rendering.Impostors.ImpostorShaders, docs/impostors.md) ----
+        // A fixed number in [0, 1) per instance (a hash of its world position): where it stands in the range fade, so a crowd thins out
+        // instance by instance and no instance flickers while it moves over the pixels (docs/impostors.md section 12).
+        float instanceFadeKey(vec3 position)
+        {
+            uint h = floatBitsToUint(position.x) * 747796405u + floatBitsToUint(position.z) * 2891336453u + 277803737u;
+            h = ((h >> ((h >> 28u) + 4u)) ^ h) * 277803737u;
+            h = (h >> 22u) ^ h;
+            return float(h >> 8u) * (1.0 / 16777216.0);
+        }
         // Upper-hemisphere direction (object space, y up; below the horizon clamped to it) to hemi-octahedral UV in [0, 1]².
         vec2 impostorEncode(vec3 d)
         {
@@ -257,11 +266,13 @@ public static class ImpostorShaders
         flat out vec4 vModel1;
         flat out vec4 vModel2;
         flat out vec4 vModel3;
+        flat out float vFadeKey;
         """ + Functions + """
         void main()
         {
             mat4 model = mat4(vec4(aInstance0.xyz, 0.0), vec4(aInstance1.xyz, 0.0), vec4(aInstance2.xyz, 0.0), vec4(aInstance3.xyz, 1.0));
             vFade = aInstance0.w;
+            vFadeKey = instanceFadeKey(aInstance3.xyz);
             mat3 basis = mat3(model);
             float scale = length(basis[0]);
             vec3 translation = model[3].xyz;
@@ -308,6 +319,7 @@ public static class ImpostorShaders
         flat in vec4 vModel1;
         flat in vec4 vModel2;
         flat in vec4 vModel3;
+        flat in float vFadeKey;
         uniform sampler2D uImpostorAlbedo;
         uniform sampler2D uImpostorNormal;
         uniform vec4 uImpostor;
@@ -326,8 +338,15 @@ public static class ImpostorShaders
         void main()
         {
             // The fade: as the meshes (a dither threshold, 2 = whole); negative = the complement of the mesh's dither (the crossfade).
+            // The range fade (0 to 1) takes a threshold that follows the instance (vFadeKey) while the billboard is a few pixels across, and the
+            // screen-door noise, shifted by the key, once it covers many (docs/impostors.md section 12); the crossfade keeps the mesh's own noise.
             float dither = foliageDither();
-            if (vFade < 0.0 ? dither < -vFade : (vFade < 1.0 && dither >= vFade)) discard;
+            if (vFade < 0.0) { if (dither < -vFade) discard; }
+            else if (vFade < 1.0)
+            {
+                float pixels = 2.0 * uImpostor.w / max(length(dFdx(vObjectPoint)), 1e-9);
+                if (fract(vFadeKey + smoothstep(3.0, 12.0, pixels) * dither) >= vFade) discard;
+            }
             float pick = uImpostorBlend ? -1.0 : framePick();
             ImpostorSurface s = impostorSample(uImpostorAlbedo, uImpostorNormal, uImpostorGrid, uImpostor.xyz, uImpostor.w,
                 vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, pick);
@@ -378,6 +397,7 @@ public static class ImpostorShaders
         flat in vec4 vModel1;
         flat in vec4 vModel2;
         flat in vec4 vModel3;
+        flat in float vFadeKey;
         uniform sampler2D uImpostorAlbedo;
         uniform sampler2D uImpostorNormal;
         uniform vec4 uImpostor;
@@ -389,6 +409,8 @@ public static class ImpostorShaders
         };
         void main()
         {
+            // The range fade, by the instance alone (a cascade's texels are far coarser than the picture's): its shadow leaves with the billboard.
+            if (vFade >= 0.0 && vFade < 1.0 && vFadeKey >= vFade) discard;
             float pick = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.00583715, 0.06711056))));
             ImpostorSurface s = impostorSample(uImpostorAlbedo, uImpostorNormal, uImpostorGrid, uImpostor.xyz, uImpostor.w,
                 vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, pick + 2.0);   // + 2: the plain pick, see impostorSample
