@@ -282,7 +282,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             {
                 long t0 = Stopwatch.GetTimestamp();
                 // The chain and the panel draw into the window's backbuffer (made again when the size changes).
-                var backbuffer = display.VkGl.BackbufferTexture;
+                var backbuffer = display.Backbuffer!;
                 gpu.Post!.Target = backbuffer;
                 if (overlay is not null) overlay.Target = backbuffer;
                 DrawWorld(gl, size.X, size.Y);

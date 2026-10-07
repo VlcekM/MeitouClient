@@ -424,7 +424,7 @@ static partial class WorldApp
             if (!display.BeginFrame(size.X, size.Y)) return; // minimized, or not yet shown at its maximized size
             var context = display.VkGl.Context;
             // The chain and the overlays draw into the window's backbuffer (made again when the size changes).
-            var backbuffer = display.VkGl.BackbufferTexture;
+            var backbuffer = display.Backbuffer!;
             if (gpu.Post is { } windowPost) windowPost.Target = backbuffer;
             if (overlay is not null) overlay.Target = backbuffer;
             var arena = context.Frame.Timestamps;

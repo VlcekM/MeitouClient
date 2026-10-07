@@ -20,7 +20,15 @@ public sealed unsafe class VulkanDisplay : IDisposable
     public IGl Gl { get; }
     public VkGl VkGl { get; }
     public VulkanDevice Device { get; }
+    /// <summary>The native GPU API the renderers draw with; its frames are what <see cref="BeginFrame"/> / <see cref="Present"/> begin and submit.</summary>
+    public GpuContext Context => VkGl.Context;
     readonly VulkanPresenter? presenter;
+
+    /// <summary>With a window: what the frame is drawn into (the window's framebuffer size), valid after <see cref="BeginFrame"/>; null when headless.</summary>
+    public Texture? Backbuffer => presenter?.Backbuffer;
+    /// <summary>Stopwatch ticks spent acquiring swapchain images and presenting (0 when headless).</summary>
+    public long AcquireTicks => presenter?.AcquireTicks ?? 0;
+    public long PresentTicks => presenter?.PresentTicks ?? 0;
 
     /// <summary>Streamline (DLSS), when <c>streamline</c> asked for it and it loaded; shut down before the device.</summary>
     public Streamline? Streamline { get; }
@@ -57,7 +65,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
         Console.WriteLine($"vulkan    {Device.DeviceName}");
         VkGl = new VkGl(Device);
         Gl = VkGl;
-        if (options is not null) presenter = new VulkanPresenter(Device, VkGl, vsync) { PresentFunction = Streamline is { DlssSupported: true } s ? s.PresentProxy : null };
+        if (options is not null) presenter = new VulkanPresenter(VkGl.Context, vsync) { PresentFunction = Streamline is { DlssSupported: true } s ? s.PresentProxy : null };
     }
 
     /// <summary>Starts a frame of the given size; false when nothing can be shown (a minimised window): skip drawing.</summary>
@@ -67,11 +75,11 @@ public sealed unsafe class VulkanDisplay : IDisposable
     public void Present()
     {
         if (presenter is not null) presenter.Present();
-        else VkGl.EndFrame();
+        else Context.EndFrame();
     }
 
     /// <summary>Headless: ends the frame (submits it).</summary>
-    public void EndFrame() => VkGl.EndFrame();
+    public void EndFrame() => Context.EndFrame();
 
     public void Dispose()
     {
