@@ -30,7 +30,7 @@ decides what they leave open (scheduling, threads, data layout).
   `CharacterGenerator` rolls an NPC's appearance and loadout. Typed views exist over CONSTANTS, FACTION (with the initial relations),
   SQUAD_TEMPLATE and TOWN; AI_PACKAGE, AI_TASK and races are still read by field name.
 - Stages 0 to 3 and 6 are done on branch `sim-core`: [time facts](#time-model) (the game's clock, pause, 1/2/5), [Skeleton as built](#skeleton-as-built-stage-1) [Populate and move as built](#populate-and-move-as-built-stages-2-and-3) [Player as built](#player-as-built-stage-6) and [Animation, formation and roaming as built](#animation-formation-and-roaming-as-built-after-stage-6).
-- Missing for a living world: navmesh walkability and collision with buildings, the AI proper, the UI screens, bodies and combat, saves.
+- Missing for a living world: navmesh walkability and collision with buildings, the AI proper, the UI screens, saves; bodies ([stage 7](#bodies-as-built-stage-7)) and melee combat ([stage 8](#combat-as-built-stage-8)) exist as code but are not wired into `World` yet.
 
 ## Principles
 
@@ -461,6 +461,113 @@ Track A, `src/Meitou.Simulation/Items/` (`Items.cs`: `ItemInfo`, `ItemInstance`,
 - **Not kept.** An unloaded roaming squad's inventories are lost with its characters (it re-rolls on loading); persisting them is saves/AI work. No item pickup, drop, trade or equipment bonuses yet.
 - **HUD.** The selected player character's inventory is listed under its health (`CharacterSnapshot.Inventory`, up to 9 lines).
 
+## Combat as built (stage 8)
+
+Track F, branch `sim-combat`: melee combat as a `CombatSystem` (`ITickSystem`) plus pure formula code in `src/Meitou.Simulation/Combat/`, typed views over the combat records in
+`src/Meitou.Data/Gameplay/Combat/`. The formulas, constants and the data facts found while reading the install are in [combat.md](game/combat.md); this section is what the engine
+does with them and where it chose. It is wired into the game: [Combat wired](#combat-wired-after-stage-8).
+
+**Data** (`CombatDatabase.From(GameDatabase)`): `CombatConstants` (the CONSTANTS combat rows with the loader's rescaling applied once: cut/blunt 13 and 52, pierce 0.78, stumble 52, block
+1.2 and 1.5 per level; a missing field takes the **base game's** value, unlike `GameConstants`), `WeaponData`, `WeaponManufacturer`, `WeaponMaterial` (MATERIAL_SPECS_WEAPON),
+`ArmourData`, `CombatTechnique` (with `StrikeProgress(blow)`, which turns the frame fields into fractions), `CrossbowData` (+ `At(quality)`) and `GunData`, read only. Install tests
+(`CombatInstallTests`, `[Slow]`) check the doc's counts and the facts listed under "Data facts" in combat.md.
+
+**Pure code** (all with unit tests on the doc's worked numbers: `FormulaTests`, `ReactionTests`): `WeaponStats.Compute(quality, record, manufacturer, model)`; `DamageFormulas` (cut, blunt,
+pierce, fists, stumble threshold, the packet with the target-kind, per-race and gear multipliers); `DefenceFormulas` (block chance, effective defence, skill-against-skill roll and its closed
+form, dodge skill); `ArmourPiece.Create`, `ArmourStack` (coverage test, stacking, penetration); `HitResolver` (toughness resistance, `Resolve`, `Land` = part choice + coverage + resolve +
+`MedicalState.ApplyHit`); `TechniqueChooser` and `HitOutcomes`.
+
+**The system.** State per character is a `CombatSlot` (target, attack technique and timing, reaction technique and timing, ready and stun ticks, counters) in two arrays inside the system
+(last tick's, read by every phase; this tick's, written by the owner), swapped at the end of the tick, like `CharacterTable`. Gear is `CharacterCold.Fighter` (`Fighter`: weapon instance,
+armour pieces in stacking order, the gear's bonus sums); the body is `CharacterCold.Stats`, `Medical`, `Race`. One tick:
+
+| Phase | What |
+|---|---|
+| Inputs (serial) | `AttackOrder` (draws the weapon: `DrawnWeapon`, `InCombat`, task `Attack`, first attack after a 0.15 to 0.6 s pause); `StopCommand` ends a fight |
+| Move (parallel) | face the target; with `SelfApproach` walk up to it in a straight line (no navmesh) |
+| Act (parallel, own slot only) | the medical tick (`TickMedical`); a character that is down or staggered drops its attack and reaction; the fight ends when the target is down; a reaction ends; the swing emits a `BlowEffect` when its animation reaches the blow's `anim blocked frame` and ends at `acceptable end time`; **a free character first looks for blows aimed at it and picks a reaction, then, if still free and its pause is over, picks an attack** |
+| Apply (serial, in the commit's order) | the outcome; for a hit: packet, `ChoosePart`, per-piece coverage rolls, armour, toughness, `ApplyHit`, stagger, XP |
+
+- *Attack choice* (`TechniqueChooser.ChooseAttack`; the original's is **Unknown**): not `disabled`, not a block or dodge, the weapon's type bit among the technique's flags (a record with no flag,
+  "heavy downcut", is never valid; the `1 handed` flag is not tested), the creature kind and the prone flag equal, skill within `min skill` .. `max skill`, and the gap between the bodies
+  (centre distance minus both footprint radii) within the weapon's reach (`length` / 2; fists: unlimited) and the technique's distance: `attack distance min vs static` against a target that
+  stands still, `attack distance` against one that moves, a negative value meaning "not for that case" (the "static" rows have -999 for movers, "Cut left" has -10 for statics). Weighted pick on
+  `chance`. `max encumbrance` and `anim hesitate point` are not used (**Unknown**).
+- *Timing* (engine): an attack lasts the clip's length (`AnimationLengths.Of(anim name)`, from the skeletons) / (`anim speed mult` x the gear's combat speed), in ticks; blow k arrives at `anim
+  blocked frame k`; a blocked blow cuts the swing at its `anim stop frame` and the rest of a combo is not thrown (a hit or a dodge lets the combo go on).
+- *Reaction* (`ChooseReaction`, the doc's `FUN_140887970`): decided once per incoming blow, from the attack's start (engine: the defender perceives it at once). The reaction is **timed to be at its
+  `anim blocked frame` when the blow arrives**, or starts at once and is less far along when there is less lead (a defender busy with another reaction gets less). Block chance from
+  `BlockChance(D, attacker's rating)`, D = melee defence x injury multiplier + weapon defence mod (if it can block) + gear bonus (+20 guarding), the attacker's rating = melee attack x injury multiplier +
+  weapon attack mod + gear bonus (engine: the doc says only "attacker skill"). Success: block techniques of the blow's direction (the base game's "Dodge back" rows are flagged as blocks too, so they are
+  among them); failure: block techniques of another direction in the same class (front 0 to 6, rear 7 to 9), never a dodge. A fist fighter (or a weapon that cannot block) dodges when the roll against the
+  variant chance passes (effective defence of martial arts; the "multiplier term" is **Unknown**, the gear's defence bonus is added instead), among the dodge techniques.
+- *Outcome*: `HitOutcomes.Decide` (block: direction equal and progress > 0.5, dodge: progress in [0.1, 0.98], else hit), after a reach test (engine: the blow misses if the gap is above the
+  reach the attack began with + 6 units). A downed or staggered defender cannot react.
+- *Hit*: part by weight x hitmult (a low-strike technique excludes arms and head, direction 6 uses the weight alone), a coverage roll per piece in the order of the gear, then
+  `HitResolver.Resolve`. A hit whose damage sum exceeds the stumble threshold ("Heavy_Hit") staggers for 0.5 s (**Unknown** length, engine) from the next Act, so blows already thrown in the same
+  tick still land and the result does not depend on the order of the commit. The technique's `power` is not applied (**Unknown**).
+- *XP*: hit: `XpEvent.HitDealt` / `HitTaken`; block: `GlancingHit` / `Defended`; dodge: `GlancingHit` and a small Dodge gain (engine; the dodge XP function was not read); a severed limb: `ToughnessFromLimbLoss`.
+- *The fight ends* when the target is down (KO or dead) or on a `StopCommand`: the winner sheathes (`DrawnWeapon` none, `InCombat` false, task idle). A down fighter keeps being ticked by the medical code
+  (bleeding, waking). Nobody finishes off a downed target.
+- *Randomness*: `CombatRolls` (seed, character key, kind, counter): technique picks by attack number, pauses, block and reaction rolls by (attacker, attack number, blow), coverage rolls by blow and
+  piece. Cross-character effects go through the effect buffer and `Apply`; a defender's decision reads only the attacker's slot of the last tick.
+- *Hash*: `IStateHashed` (new, optional interface on a system) puts the combat slots into `World.StateHash`.
+
+**Results.** 60 duels of two equal katana fighters (all stats 50, katana at quality 0.5, no armour, techniques written out like the install's katana rows): median 13 s of game time (385 ticks, range 4 to
+43 s), 18 blows thrown (5 to 61), 10 hits (3 to 24); every duel ends in a KO (the fight stops there). A much better fighter (80 against 30) wins 24 of 24. Plate over the chest, stomach, arms and head cuts the
+cut damage per hit by two thirds. A duel with the install's records (Greenlander, a Katana of a level-50 model, a heavy armour piece on one side, real clip lengths, all 44 techniques) took 56 s and 43 blows and is
+identical at 1, 4 and 16 threads (state hash and log); a crowd of 140 fighters (60 duels and 20 thirds joining in) hashes the same at 1, 4 and 16 threads at six checkpoints. The tests set `MinPartitionSize` to 1 (duels) or 4 (the crowd), because the default of 16 slots per partition would run two fighters in one partition at any thread count; with it the characters are really spread over 2, 8 and 32 partitions. The state hash covers the combat slots, the bodies (blood, parts, KO) and the trained stats.
+
+**Additive changes to other tracks' files** (all small): `CharacterCold` gets `InCombat`, `Stats`, `Medical`, `Race`, `Fighter`; `CharacterTable.Hash` hashes `InCombat`, the body (`Medical`) and the stats (so a divergence in bleeding, healing or XP shows in `StateHash`); `CharacterTask.Attack = 4`;
+`AnimationSystem.Update` builds the stance with `Combat = cold.InCombat`; `World` gets `IStateHashed` and `StateHash` calls it for systems that implement it.
+
+### Integrating combat (track A)
+
+1. Add the system after movement and before animation: `new CombatSystem(combatDb.Techniques, combatDb.Constants, gameConstants, bodyOptions, animationLengths, new CombatOptions { ... })`. It runs in
+   Inputs (orders), Move, Act and the commit. `SelfApproach` is on by default (a straight walk); turn it off when the AI moves characters to their targets (set `Goal`/`GoTo`; the combat system leaves a character
+   with task `Attack` alone and only turns it to face the target). `TickMedical` is on by default; turn it off once a needs system calls `MedicalState.Tick` for everyone (the two must not both tick).
+2. Every character that fights needs, in `CharacterCold`: `Stats`, `Medical`, `Race` (track E's `CharacterStats.Create`, `MedicalState.Create`, `RaceData.From`) and `Fighter`
+   (`new Fighter(WeaponInstance.Create(quality, weaponRecord, manufacturer, model, combatConstants), armourPieces)`; weapon quality is the model's level x 0.01 from the manufacturer's `weapon models`
+   entry, armour quality is `ArmourPiece.QualityOfGrade(grade)`, docs/characters.md). Characters without them are ignored and cannot be targeted.
+3. Start a fight with `AttackOrder(attackers, target) { Tick = ... }` (what the AI's attack task issues); end it with `StopCommand`. A fight ends by itself when the target is down. An attacked character does not
+   fight back by itself: its reactions (block, dodge) work whatever it is doing, but the AI has to issue its own `AttackOrder` (retaliation, squad targets and attack slots are stage 9).
+4. After the commit the host can read `combat.StateOf(id)` (target, counters, `Down`), `combat.Playing(id, tick)` (the technique playing and its progress, for an animation layer) and, with `RecordLog`,
+   `combat.Log` (every resolved blow: attacker, defender, outcome, part, damage, KO, death) for damage numbers and a combat log. KOs, deaths and severed limbs are in `MedicalState`; limb items are not spawned yet.
+5. The animation system takes `InCombat` and `DrawnWeapon` into the stance, so combat-mode idle and movement records are chosen. **Attack, block and dodge clips are not played yet**: a technique's `anim name` is a
+   skeleton clip, not an ANIMATION record, so the renderer's track masks (found by record name) are missing for it; `combat.Playing` gives the technique (clip name) and progress. A combat-clip layer needs a mask
+   choice per technique (upper body for blocks, the whole body for dodges and martial arts), and "Light_Hit" / "Heavy_Hit" and fall clips are needed too.
+6. Removing a character needs nothing special: the combat arrays resync on the slot's generation, and a fight whose target is gone ends on the next Act.
+
+**Gaps.** Ranged combat and turrets (only the records are read), attack slots (`max num attack slots`), target choice and retaliation (AI), movement around the target beyond a straight walk, fighting while prone,
+finishing off a downed target, prisoners, the hit reaction animations, `power` of techniques, `max encumbrance`, fist injury to the attacker, a stagger coupled to leg loss, mass-combat XP, the death of a character
+removing it from play (the table keeps the body).
+
+### Combat wired (after stage 8)
+
+Track A merged `sim-combat` and wired it (`src/Meitou.Simulation/Fighting.cs`, `PopulationSystem.MakeFighter`, the host in `Program.cs`, `PlayerInterface`):
+
+- **One set of cold fields.** `CharacterCold` has `Race`, `Stats`, `Medical` (the body wiring's, set at spawn by `BodyFactory`) and track F's `Fighter` and `InCombat`; the state hash adds `InCombat`.
+- **Medical tick once.** `BodySystem` ticks `MedicalState`; the game builds the `CombatSystem` with `TickMedical = false` (a test shows two ticking systems drain hunger twice as fast).
+- **System order** (host): `Population`, `Player`, `PursuitSystem`, `MovementSystem`, `BodySystem`, `CombatSystem`, `AnimationSystem`, `FeedSystem`, `RetaliationSystem`.
+- **Fighter at spawn.** The weapon is the first WEAPON item at `hip`, else `back` (quality = its level x 0.01, manufacturer and model from the loadout), the armour is every worn ARMOUR piece (quality / 100); no weapon means fists.
+  A character without a race (an animal) has no body or fighter and takes no part.
+- **Approach through the navmesh.** `CombatOptions.SelfApproach` is off. `PursuitSystem` (Schedule, before the movement system) gives a character with the `Attack` task a path request to its target (new
+  one when the target has moved 12 units from the goal, at most every 0.5 s) at free speed, and drops the path once the target is within `CombatTuning.CloseInGap` or a swing or reaction is on.
+  Combat's Move only turns it to face the target.
+- **Player.** A right click on a living character that is not the player's orders the selection to attack it (`AttackOrder`; hostility is not checked: **engine choice**, the original attacks enemies and
+  the red cursor says so, ui-input.md); a right click on the ground still moves. `R` sends `StopCommand` for the selected characters (the combat system disengages them, the player system stops them).
+- **Retaliation** (`RetaliationSystem`, an **engine rule**, the original's AI is stage 9): every 15 ticks, a character that is targeted by an attacker, awake, armed with a `Fighter`, not the player's and not
+  fighting, issues its own `AttackOrder` against that attacker, and so do its squad mates within 250 units. Hostile relations (<= -30) do not start fights; nothing starts a fight but an order.
+- **Down.** KO and death from combat are `MedicalState` changes: `BodySystem` stops the character the next tick (orders dropped, velocity 0), the animation plays `sleeponfloor`, a corpse is removed after 12 game hours.
+- **HUD.** The first selected character's trained stats are on one line (attack, defence, dodge, toughness, strength, athletics: they rise with combat XP). `--attack-nearest` (with `--new-game --screenshot`) orders
+  the squad to attack the nearest other character, for pictures of a fight.
+- **Not done.** Attack, block and dodge clips (no mask per technique yet: Combat as built, item 5), hit reactions, limb items, ranged combat, auto-aggro by relations, attack slots, player characters
+  defending themselves when idle.
+
+**Navmesh build time** (track D's zone test took 13.9 s in a loaded full run). `meitou-tools navmesh --town "The Hub" --repeat 3`, quiet moment: with interiors total 667 to 761 ms per build (interiors 69 to 158 ms,
+21 of them, 19231 polygons), with `--no-interiors` 506 to 628 ms (17676 polygons). Interiors add about 150 ms (25 %) to a cold build of the zone; nothing near 14 s. The test alone passes (4 s with start-up), so the
+failure was load (other sessions' viewers and the parallel test run), not a regression.
+
 ## Walkability and movement
 
 Facts ([pathfinding.md](game/pathfinding.md)): the original uses a Havok navmesh per zone; the shipped tiles are a cache that
@@ -506,8 +613,8 @@ milliseconds per tick at 1x and 5x with the character count, in the game's frame
 | **5. Navmesh** | Collision reader (NxuStream XML, cooked meshes); our generator per decision 3 with the seed prune; path queries on their own threads; the stub replaced | Paths around buildings and through gates; generation off the frame |
 | **6. Player** | New game from NEW_GAME_STARTOFF, the player's squad, selection and move orders ([ui-input.md](game/ui-input.md)), a minimal HUD (clock, speed buttons) | Start a game, select a character, walk it across The Hub |
 | **7. Bodies** | Stats and XP, hunger, blood, body parts, KO and death ([character-stats.md](game/character-stats.md)) | Probe tables as tests (done on `sim-body`, [as built](#bodies-as-built-stage-7); wired into `World` on `sim-core`, [bodies wired](#bodies-wired-after-stage-7)) |
-| **8. Combat** | Melee per [combat.md](game/combat.md); ranged later | A fight between two squads resolves; formulas tested |
-| **9. AI proper** | Packages, blackboard, scoring and planner ([ai.md](game/ai.md)), off-screen squads with the stand-in speeds | Towns run their daily routines; squads travel off screen |
+| **8. Combat** | Melee per [combat.md](game/combat.md); ranged later | A fight between two squads resolves; formulas tested (done on `sim-combat`, [as built](#combat-as-built-stage-8); wired into the game on `sim-core`, [combat wired](#combat-wired-after-stage-8)) |
+|)| **9. AI proper** | Packages, blackboard, scoring and planner ([ai.md](game/ai.md)), off-screen squads with the stand-in speeds | Towns run their daily routines; squads travel off screen |
 | **10. Saves** | Read and write the world state ([save.md](formats/save.md)) | Round trip of our own saves; reading the original's sample save |
 | **11+** | Economy and trade, buildings and production, the MyGUI UI screens, audio | Per their docs |
 

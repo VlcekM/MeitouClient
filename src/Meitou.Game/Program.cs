@@ -34,6 +34,8 @@ sealed class GameOptions
     /// <summary>The start to play (null = the default); with <c>--select-player</c>/<c>--move-to</c> the picture shows a selected squad walking.</summary>
     public string? NewGameName;
     public (float X, float Z)? MoveTo;
+    /// <summary>With <c>--new-game</c> and <c>--screenshot</c>: the squad attacks the nearest other character as soon as one is loaded (for a picture of a fight).</summary>
+    public bool AttackNearest;
     /// <summary>Interactive run that closes itself after this many seconds and prints the frame rate (an unattended smoke test).</summary>
     public double? QuitAfter;
 
@@ -50,6 +52,7 @@ sealed class GameOptions
           --body-time-scale <x>      multiplies the time of body-part and blood rates (default 1, the documented rates in game hours; see docs/simulation.md "Bodies wired")
           --new-game [start]         a new game as the NEW_GAME_STARTOFF start (default Wanderer): the player squad at its town, camera on it
           --list-starts              print the available starts and exit
+          --attack-nearest           with --new-game and --screenshot: the squad attacks the nearest other character once loaded
           --select-player, --move-to <x> <z>   with --new-game: select the squad / order it to walk (for screenshots)
           --ticks <n>                with --screenshot: run n control ticks (and the same real time of the simulation, at speed 1) before the picture
           --quit-after <s>           close after s seconds and print the frame rate (smoke test)
@@ -88,6 +91,7 @@ sealed class GameOptions
                     break;
                 case "--list-starts": g.ListStarts = true; break;
                 case "--select-player": g.SelectPlayer = true; break;
+                case "--attack-nearest": g.AttackNearest = true; g.SelectPlayer = true; break;
                 case "--move-to": g.MoveTo = (float.Parse(Next(), CultureInfo.InvariantCulture), float.Parse(Next(), CultureInfo.InvariantCulture)); break;
                 case "--quit-after": g.QuitAfter = double.Parse(Next(), CultureInfo.InvariantCulture); break;
                 default: rest.Add(a); break;
@@ -218,10 +222,17 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             if (nav is not null) population.ZoneGate = zone => nav.Walkability.World.Contains(zone);
             systems.Add(population);
             systems.Add(new Meitou.Simulation.PlayerSystem());
+            var animationLengths = Meitou.Data.Gameplay.AnimationLengths.Load(install.Root);
+            // Combat (stage 8): the path service walks attackers to their targets (SelfApproach off), the body system ticks the medical state (TickMedical off).
+            var combat = new Meitou.Simulation.Combat.CombatSystem(data.Combat.Techniques, data.Combat.Constants, data.Bodies.Constants, data.BodyOptions, animationLengths,
+                new Meitou.Simulation.Combat.CombatOptions { SelfApproach = false, TickMedical = false });
+            systems.Add(new Meitou.Simulation.PursuitSystem(combat));
             systems.Add(new Meitou.Simulation.MovementSystem(new Meitou.Simulation.PathService(walkability, synchronous: !interactive)));
             systems.Add(new Meitou.Simulation.BodySystem(data.Bodies.Constants, data.BodyOptions, g.BodyTimeScale));
+            systems.Add(combat);
+            systems.Add(new Meitou.Simulation.AnimationSystem(Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb), animationLengths, Meitou.Data.Gameplay.GameConstants.FromDatabase(gameDb).AnimationBlendRate));
             systems.Add(new Meitou.Simulation.Items.FeedSystem(data.Items));
-            systems.Add(new Meitou.Simulation.AnimationSystem(Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb), Meitou.Data.Gameplay.AnimationLengths.Load(install.Root), Meitou.Data.Gameplay.GameConstants.FromDatabase(gameDb).AnimationBlendRate));
+            systems.Add(new Meitou.Simulation.RetaliationSystem(combat));
         }
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate,
             clock: GameClockFor(scene.Database, o.Hour),
@@ -335,8 +346,19 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             session.World.Commands.Enqueue(new Meitou.Simulation.SelectCommand(playerSquad.Members.ToList()) { Tick = session.World.Tick });
             if (g.MoveTo is { } to) session.World.Commands.Enqueue(new Meitou.Simulation.MoveOrder([], new Vector3(to.X, 0, to.Z)) { Tick = session.World.Tick });
         }
+        bool attacked = false;
         for (int i = 0; i < g.Ticks; i++)
         {
+            if (g.AttackNearest && !attacked && playerSquad is not null && session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == playerSquad.Leader) is { } lead)
+            {
+                var victim = session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && c.Body is { Dead: false }).OrderBy(c => Vector3.DistanceSquared(c.Position, lead.Position)).FirstOrDefault();
+                if (victim is not null)
+                {
+                    session.World.Commands.Enqueue(new Meitou.Simulation.Combat.AttackOrder(playerSquad.Members.ToList(), victim.Id) { Tick = session.World.Tick });
+                    Console.WriteLine($"attack    squad ordered to attack {victim.Name} {Vector3.Distance(victim.Position, lead.Position):0} units away");
+                    attacked = true;
+                }
+            }
             session.Tick();
             session.AdvanceSimulation(session.Ticks.TickSeconds);   // one control tick of real time, at speed 1
             UpdateNav(wait: true);

@@ -79,6 +79,10 @@ public sealed class CharacterCold
     public long DiedTick { get; set; } = -1;
     /// <summary>RACE <c>pathfind footprint radius</c> (0: not known, paths use the default human); what the navmesh keeps clear.</summary>
     public float FootprintRadius { get; set; }
+    /// <summary>The character is in a fight (set by the combat system): the animation stance takes the combat clips.</summary>
+    public bool InCombat { get; set; }
+    /// <summary>Weapon and worn armour (track F, docs/simulation.md "Combat as built").</summary>
+    public Meitou.Simulation.Combat.Fighter? Fighter { get; set; }
 }
 
 /// <summary>
@@ -247,6 +251,7 @@ public sealed class CharacterTable
             if (k.Inventory is null) hasher.Add(-1); else k.Inventory.Hash(ref hasher);
             hasher.Add(k.NextProvisionTick);
             hasher.Add(k.DiedTick);
+            hasher.Add(k.InCombat);
             if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);
             hasher.Add(k.Name.Length);
         }

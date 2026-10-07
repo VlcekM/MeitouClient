@@ -339,6 +339,35 @@ dialog's global damage multiplier (`142133580`).
   character race's per-stat entries) and the global damage multiplier. Mass combat, medic, dodge and
   athletics have their own functions (`1408c5e80`, `1408c6130`, `1408c6360`, `1408c6660`).
 
+## Data facts from the install (stage 8)
+
+Read through the typed views of `Meitou.Data.Gameplay.Combat` and checked by `CombatInstallTests` / `RealDuelTests` (base load order, which includes the Rebirth records the base game ships). **Verified** unless marked.
+
+- **Counts.** 48 WEAPON, 44 COMBAT_TECHNIQUE, 142 ARMOUR, 9 LOCATIONAL_DAMAGE, 7 CROSSBOW, 6 GUN_DATA. Every `part coverage` entry names a LOCATIONAL_DAMAGE record, with a percentage in 0 to 100. Every `weapon models` entry of a
+  manufacturer names a MATERIAL_SPECS_WEAPON record (a model such as "Mk V" or "Edge Type 1", whose only combat fields are `attack mod` and `defence mod`).
+- **CONSTANTS.** The combat rows of the table above, rescaled as the loader does, are the numbers the typed view assumes when a field is missing: stored cut and blunt 13 and 52, pierce 0.78, stumble 52, block 70 / 1.2 / 1.5.
+  `damage multiplier` is 0.65 in the file; the editor's default (8) is not what the game uses.
+- **Technique frames.** `anim blocked frame`, `anim stop frame` and `acceptable end time` are fractions of the animation when `num frames` is 1 (every sword, block, dodge and creature row), and **frame numbers when
+  `num frames` is larger** (the martial-arts rows: "ma Double strike" blocks at frames 18 and 31 of 57). The second value of a one-blow technique is a leftover default (0.8, 0.792) and is not used. The strike of blow k
+  is at `anim blocked frame k`; "Downward combo" (`num techniques` 2) strikes at 0.509 and 0.792 of its animation and stops at 0.527 / 0.846 (**Observed**: the stop frame of the first blow is where a blocked first blow ends the swing; what the original
+  does after a hit is **Unknown**).
+- **Distance fields.** The rows with `attack distance` -999 (the "static" rows) or `attack distance min vs static` -10 ("Cut left") have a negative value in the case they are not meant for: "Cut left static" for a standing
+  target (99), "Cut left" for a moving one (0). **Observed**: this reading fits all human sword rows; the original's use of the two fields is **Unknown**.
+- **Flags.** 4 rows are `disabled` ("Downward cut", "Downward cut static", "ma headbutt", "ma Double punch high"). "heavy downcut" has no weapon-type flag at all, so no weapon matches it. The four "Dodge back" rows (plain, fall, fly, the stumble
+  copy) are flagged **both** `is block` and `is dodge`; "fly" and the copy are `is stumble dodge`. The block rows carry the flags katanas, sabre, blunt, hackers, heavy weapons, polearm and 1 handed; the dodge rows add unarmed. The
+  martial-arts attack rows carry only the unarmed flag, and the plain block rows do not carry it, so a fist fighter fights with the dodge rows. `1 handed` is on every sword row and absent from "heavy swing" and "heavy downcut v2"
+  (**Observed**: probably the one- against two-handed split; how it is tested is **Unknown**).
+- **Weapons.** The katana (`476-gamedata.base`): cut multiplier 1, blunt 0, armour penetration -0.3, bleed 1.2, human 1.1, robot 0.6, attack mod +4, defence mod -4, length 21, 2 kg, can block. Pierce is non-zero on exactly 11 weapons, all creature attacks
+  (skill category 9 or more).
+- **Armour material.** The defence tables are indexed by the ARMOUR's own `class` (0 to 3) and `material type` (0 to 3; 50 / 38 / 17 / 37 of the 142 pieces are cloth / leather / chain / plate). The 150 MATERIAL_SPECS_CLOTHING records that an ARMOUR's `material` list names have
+  only a `material type` (0 for 144, 1 and 2 for three each; role **Unknown**, probably the hit material), two paint factors and a specular multiplier: no combat numbers, so no view is read for them.
+- **Quality.** A weapon's quality fraction is its model's level x 0.01 (`weapon models` value 0, docs/characters.md); an armour piece's is the grade's 5, 20, 40, 60, 80, 95 per cent plus `level bonus` x 0.01.
+
+## As built (stage 8)
+
+Items 1 to 5 of the outline exist: [simulation.md "Combat as built"](../simulation.md#combat-as-built-stage-8) lists what the engine does and where it chose (attack choice, timing, the reaction's alignment to the blow, the stagger, XP for blocks and dodges, the reach
+test). The attacker-side technique choice is no longer a gap of the code but is still **Unknown** in the original. Ranged combat, turrets and the AI's targeting are not built.
+
 ## Unknowns
 
 - KO wake-up, flags `+0x162`/`+0x163`, and the roles of hunger and "fed" in recovery; (the `+0x60`/`+0x64` pair is the hunger level and stomach buffer, [character-stats.md](character-stats.md#hunger-and-starvation)); where the KO point (`140643ae0`) is consumed.
@@ -347,18 +376,19 @@ dialog's global damage multiplier (`142133580`).
 - The role of the class-table columns 4-6 (athletics, combat speed, stealth is an inference) and of the slot-adjusted factor (armour item field index 0x5d) in `140898e90`.
 - Turrets; bow accuracy and range maths and the use of `bow damage 1/99`; the meaning of the weight/price-like armour table fields; the remaining difficulty floats beyond the dialog bindings listed above (their consumers).
 - Whether the +20 guarding state of the block chance is the state the HUD's Block stance sets ([ui-screens.md](ui-screens.md#4-hud-mainbargui)).
+- What the technique fields `power 1/2`, `limb 1/2`, `anim hesitate point`, `max encumbrance` and `max simultaneous hits` do; where `min cut damage mult` x the manufacturer's `min cut damage` is applied (the engine floors the cut at it); the term shapes of the fist damage (the engine takes half the stat each); how a "Heavy_Hit" works (the engine: 0.5 s helpless for a damage sum above the stumble threshold). The engine's answers are in [simulation.md](../simulation.md#combat-as-built-stage-8).
 - Whether the decompiled maths matches in-game numbers: nothing has been compared in play.
 
 ## Implementation outline
 
-1. Read CONSTANTS, WEAPON, WEAPON_MANUFACTURER, MATERIAL_SPECS_WEAPON/CLOTHING, ARMOUR, LOCATIONAL_DAMAGE,
+1. (Done, stage 8.) Read CONSTANTS, WEAPON, WEAPON_MANUFACTURER, MATERIAL_SPECS_WEAPON/CLOTHING, ARMOUR, LOCATIONAL_DAMAGE,
    COMBAT_TECHNIQUE, CROSSBOW and GUN_DATA through the existing record layer, with the stored (rescaled)
    constants exposed once.
-2. Pure functions: weapon stats (q, record, manufacturer), damage packet, block chance, skill roll,
+2. (Done.) Pure functions: weapon stats (q, record, manufacturer), damage packet, block chance, skill roll,
    armour stacking, toughness resistance, part damage. Unit-test each against the formulas above, using the
    game install behind `Assert.SkipWhen`.
-3. A `BodyPartState` per part (`hit`, `hitmult`, flesh, stun, bandage, rig, wear) plus blood, KO timer and flags, saved ([../formats/save.md](../formats/save.md#platoon-files-squads-and-their-characters)) with the
+3. (Done by track E in `MedicalState`; saving is stage 10.) A `BodyPartState` per part (`hit`, `hitmult`, flesh, stun, bandage, rig, wear) plus blood, KO timer and flags, saved ([../formats/save.md](../formats/save.md#platoon-files-squads-and-their-characters)) with the
    same key names as the original.
-4. Defender reaction choice (block roll, wrong-direction block on a failed roll, weighted dodge) and outcome selection from animation state: block direction and progress above 0.5, dodge window 0.1..0.98; the per-part `hitmult` rise and decay.
-5. XP distribution after each resolved blow.
+4. (Done.) Defender reaction choice (block roll, wrong-direction block on a failed roll, weighted dodge) and outcome selection from animation state: block direction and progress above 0.5, dodge window 0.1..0.98; the per-part `hitmult` rise and decay.
+5. (Done.) XP distribution after each resolved blow.
 6. Defer ranged, turrets and AI target choice until the Unknowns are read.

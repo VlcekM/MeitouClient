@@ -25,6 +25,8 @@ public sealed record CharacterSnapshot(CharacterId Id, CharacterAppearance? Appe
     public BodyStatus? Body { get; init; }
     /// <summary>What a selected character carries, one line per item (empty for the others).</summary>
     public IReadOnlyList<string> Inventory { get; init; } = [];
+    /// <summary>A selected character's trained stats on one line (attack, defence, dodge, toughness, strength, athletics); empty for the others.</summary>
+    public string Skills { get; init; } = "";
 }
 
 /// <summary>

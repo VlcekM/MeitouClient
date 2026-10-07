@@ -98,14 +98,19 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
     }
 
     /// <summary>The player's character under the pixel (capsule from the feet up, a little fatter with distance), if any.</summary>
-    public CharacterId? Pick(Vector2 pixel)
+    public CharacterId? Pick(Vector2 pixel) => PickWhere(pixel, c => c.IsPlayer);
+
+    /// <summary>A living character of anyone else's under the pixel: what a right click attacks (hostility is not checked yet).</summary>
+    public CharacterId? PickTarget(Vector2 pixel) => PickWhere(pixel, c => !c.IsPlayer && c.Body is { Dead: false });
+
+    CharacterId? PickWhere(Vector2 pixel, Func<CharacterSnapshot, bool> accept)
     {
         if (Ray(pixel) is not { } ray) return null;
         CharacterId? best = null;
         float bestT = float.MaxValue;
         foreach (var c in session.CurrentSnapshot.Characters)
         {
-            if (!c.IsPlayer) continue;
+            if (!accept(c)) continue;
             var feet = where(c);
             float distance = Vector3.Distance(Eye, feet);
             float radius = MathF.Max(1.0f, distance * 0.012f);
@@ -131,6 +136,8 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
         }
         return list;
     }
+
+    IReadOnlyList<CharacterId> SelectedIds() => [.. session.CurrentSnapshot.Characters.Where(c => c.Selected).Select(c => c.Id)];
 
     IReadOnlyList<CharacterId> PlayerCharacters() =>
         [.. session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).Select(c => c.Id)];
@@ -165,7 +172,9 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
         }
         if (button == MouseButton.Right && !OverHud(p))
         {
-            if (Ray(p) is { } ray && GroundHit(ray.Origin, ray.Direction) is { } hit) Move(hit, shift);
+            if (PickTarget(p) is { } victim && SelectedIds() is { Count: > 0 } attackers)
+                Say(new Meitou.Simulation.Combat.AttackOrder(attackers, victim) { Tick = session.World.Tick });
+            else if (Ray(p) is { } ray && GroundHit(ray.Origin, ray.Direction) is { } hit) Move(hit, shift);
             return true;
         }
         return false;
@@ -203,7 +212,7 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
             if (n < members.Count) Select([members[n]], shift);
         }
         else if (key == Meitou.Engine.Input.Key.Grave) Select(PlayerCharacters(), shift);
-        else if (key == Meitou.Engine.Input.Key.R && !session.Camera.IsFree) Say(new StopCommand([]) { Tick = session.World.Tick });
+        else if (key == Meitou.Engine.Input.Key.R && !session.Camera.IsFree) Say(new StopCommand(SelectedIds()) { Tick = session.World.Tick });
     }
 
     // ---- HUD ----
@@ -220,7 +229,7 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
         var o = measure;
         if (o is null) return (0, 0, 0, 0);
         float width = MathF.Max(26 * o.CharWidth, 4 * (ButtonWidth(o) + 4)) + 2 * Pad;
-        float height = Pad + o.LineHeight * 2 + 4 + o.LineHeight + Pad + 6 + o.LineHeight * (1 + Math.Min(8, SelectedNames().Count) + 2 + 6 + 10);
+        float height = Pad + o.LineHeight * 2 + 4 + o.LineHeight + Pad + 6 + o.LineHeight * (1 + Math.Min(8, SelectedNames().Count) + 3 + 6 + 10);
         return (Margin, Margin, Margin + width, Margin + height);
     }
 
@@ -337,6 +346,7 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
             o.Text($"Hunger: {body.Hunger:0.00} of 3", box.X0 + Pad + o.CharWidth, y, body.Hunger < 1 ? red : white);
             y += o.LineHeight;
         }
+        if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Selected) is { Skills.Length: > 0 } trained) { o.Text(trained.Skills, box.X0 + Pad + o.CharWidth, y, white); y += o.LineHeight; }
         if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Selected) is { } carrier)
             foreach (var line in carrier.Inventory.Take(9)) { o.Text(line, box.X0 + Pad + o.CharWidth, y, white); y += o.LineHeight; }
         // The first selected character's animation layers (what the pose is blended from).

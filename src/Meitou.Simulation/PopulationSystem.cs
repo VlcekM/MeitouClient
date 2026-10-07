@@ -56,6 +56,9 @@ public sealed class PopulationData
     BodyFactory? bodies;
     /// <summary>Makes the stats and medical states of the characters spawned (race data cached).</summary>
     public BodyFactory Bodies => LazyInitializer.EnsureInitialized(ref bodies, () => new BodyFactory(Db) { Options = BodyOptions });
+    Meitou.Data.Gameplay.Combat.CombatDatabase? combat;
+    /// <summary>The weapon, armour and technique data of combat.</summary>
+    public Meitou.Data.Gameplay.Combat.CombatDatabase Combat => LazyInitializer.EnsureInitialized(ref combat, () => Meitou.Data.Gameplay.Combat.CombatDatabase.From(Db));
     ItemFactory? items;
     /// <summary>Makes item instances and the starting inventories (loadout and the CHARACTER's <c>inventory</c> list).</summary>
     public ItemFactory Items => LazyInitializer.EnsureInitialized(ref items, () => new ItemFactory(Db, Bodies.Constants));
@@ -528,6 +531,20 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         return race;
     }
 
+    /// <summary>The weapon in hand (the first weapon: hip, then back; its quality is its level x 0.01) and the worn armour (quality / 100), docs/simulation.md "Combat wired".</summary>
+    Meitou.Simulation.Combat.Fighter MakeFighter(Meitou.Simulation.Items.Inventory inventory)
+    {
+        var combat = data.Combat;
+        Meitou.Simulation.Combat.WeaponInstance? weapon = null;
+        foreach (var section in new[] { "hip", "back" })
+            foreach (var item in inventory.Items.Where(i => i.Section == section && i.Type == Meitou.Data.Fcs.FcsRecordType.WEAPON))
+                if (weapon is null && combat.Weapon(item.Record) is { } w)
+                    weapon = Meitou.Simulation.Combat.WeaponInstance.Create(item.Level * 0.01f, w, combat.Manufacturer(item.CompanyId), combat.WeaponMaterial(item.MaterialId), combat.Constants);
+        var armour = inventory.Items.Where(i => i.Type == Meitou.Data.Fcs.FcsRecordType.ARMOUR && combat.Armour(i.Record) is not null)
+            .Select(i => Meitou.Simulation.Combat.ArmourPiece.Create(combat.Armour(i.Record)!, i.Quality * 0.01f));
+        return new Meitou.Simulation.Combat.Fighter(weapon, armour);
+    }
+
     /// <summary>Gives a character with a race its stats and medical state, and the top speed of the speed chain (stage 7) in place of the stand-in. Animals keep the stand-in.</summary>
     void AttachBody(CharacterId id, CharacterCold cold, ref CharacterHot hot, GameRecord? record, GameRecord? race, ulong seed)
     {
@@ -537,6 +554,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         cold.Stats = stats;
         cold.Medical = medical;
         cold.Inventory = data.Items.Build(record, cold.Appearance?.Loadout);
+        cold.Fighter = MakeFighter(cold.Inventory);
         cold.WaterFactor = raceData.WaterAvoidance * (cold.Faction == data.PlayerFaction && data.PlayerFaction >= 0 ? 0.5f : 1);
         hot.MaxSpeed = Speed.Run(raceData, stats, medical, 1);
     }

@@ -12,6 +12,8 @@ public enum CharacterTask : byte
     GoTo = 2,
     /// <summary>Keeps its formation place beside the squad leader.</summary>
     Follow = 3,
+    /// <summary>Fights the target of an <see cref="Combat.AttackOrder"/> (the combat system owns the character's attacks and reactions; movement leaves it alone).</summary>
+    Attack = 4,
 }
 
 /// <summary>Bits of <see cref="CharacterHot.Flags"/> the movement system uses.</summary>

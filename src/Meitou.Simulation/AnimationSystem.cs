@@ -96,7 +96,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         var upper = upperScratch ?? [];
         lower.Clear();
         upper.Clear();
-        var stance = new AnimationStance { Right = new HandHold(cold.DrawnWeapon) };
+        var stance = new AnimationStance { Right = new HandHold(cold.DrawnWeapon), Combat = cold.InCombat };
         int lying = -1;
         if (cold.Medical is { } body)
         {

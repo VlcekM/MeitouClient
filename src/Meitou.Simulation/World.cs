@@ -29,6 +29,12 @@ public interface ITickSystem
     void SlowWorld(World world) { }
 }
 
+/// <summary>A system with state of its own that the world's state hash must see (so the determinism tests cover it).</summary>
+public interface IStateHashed
+{
+    void Hash(ref StateHasher hasher);
+}
+
 /// <summary>Settings of a <see cref="World"/>.</summary>
 public sealed record WorldSettings
 {
@@ -187,6 +193,7 @@ public sealed class World : IDisposable
                 SquadId = cold?.SquadId ?? -1,
                 IsPlayer = cold?.IsPlayer ?? false,
                 Selected = cold is { IsPlayer: true } && Player.Selection.Contains(new CharacterId(i, state[i].Generation)),
+                Skills = cold is { IsPlayer: true, Stats: { } sk } && Player.Selection.Contains(new CharacterId(i, state[i].Generation)) ? $"Atk {sk[Meitou.Data.Gameplay.Bodies.StatsEnumerated.MeleeAttack]:0.0} Def {sk[Meitou.Data.Gameplay.Bodies.StatsEnumerated.MeleeDefence]:0.0} Dodge {sk[Meitou.Data.Gameplay.Bodies.StatsEnumerated.Dodge]:0.0} Tough {sk.Toughness:0.0} Str {sk.Strength:0.0} Ath {sk.Athletics:0.0}" : "",
                 Inventory = cold is { IsPlayer: true, Inventory: { } carried } && Player.Selection.Contains(new CharacterId(i, state[i].Generation)) ? Items.InventoryText.Lines(carried) : [],
                 Body = cold?.Medical is { } med && cold.Race is { } race ? new BodyStatus(med.Blood / MathF.Max(Bodies.MedicalState.BloodCapacity(race, cold.Stats?.Strength ?? 50), 1), med.Parts.Count == 0 ? 1 : med.Parts.Min(p => p.Fraction), med.Hunger, med.Unconscious, med.Dead) : null,
                 Path = cold is { IsPlayer: true } && (state[i].Flags & (ushort)MoveFlags.HasPath) != 0 && Player.Selection.Contains(new CharacterId(i, state[i].Generation)) ? cold.Path.Skip(state[i].PathCursor).ToArray() : [],
@@ -206,6 +213,7 @@ public sealed class World : IDisposable
         Squads.Hash(ref h);
         Platoons.Hash(ref h);
         Player.Hash(ref h);
+        foreach (var s in systems) if (s is IStateHashed hashed) hashed.Hash(ref h);
         return h.Value;
     }
 
