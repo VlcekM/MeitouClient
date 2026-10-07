@@ -27,6 +27,8 @@ internal sealed class AssetPart
     // This frame's slot in the material table (CharacterRenderer.Update).
     public long MaterialFrame = -1;
     public int MaterialSlot;
+    /// <summary>The body mesh, whose vertices take the asset's morph.</summary>
+    public bool Morphed;
     /// <summary>Nearest distance of a user this frame, for the textures' mip streaming.</summary>
     public float Near;
     float uvScale;
@@ -74,6 +76,8 @@ internal sealed class CharacterAsset
     /// <summary>The posture libraries (<c>postures</c>, <c>neck set</c>, <c>shoulder set</c>) held at the body file's sliders, weight 1.</summary>
     public readonly List<(LayerDef Def, float Time)> Fixed = [];
     public int AttachCount;
+    /// <summary>Where the face's morph offsets start in <see cref="MorphArena"/> (0: none).</summary>
+    public uint MorphBase;
     /// <summary>The default idle: the body file's <c>idle stance</c>.</summary>
     public string Idle = "idle_stand_relax";
     /// <summary>A sphere round the standing character in its own space (centre height, radius) for culling.</summary>
@@ -102,7 +106,7 @@ internal sealed class CharacterContent
     public long MeshBytes { get; private set; }
     public int MeshCount => meshes.Count;
 
-    sealed record LoadedMesh(GpuObjectMesh Gpu, string? SkeletonName, Vector3 Centre, float Radius);
+    sealed record LoadedMesh(GpuObjectMesh Gpu, string? SkeletonName, Vector3 Centre, float Radius, MeshMorphs? Morphs = null);
 
     public CharacterContent(GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets)
     {
@@ -112,9 +116,12 @@ internal sealed class CharacterContent
         installRoot = install.Root;
         resolver = new MaterialResolver(db, OgreMaterialLibrary.LoadConfigured(install, out _), assets);
         Textures = new WorldTextureCache(gpu, assets, "character textures");
+        Morphs = new MorphArena(gpu);
     }
 
     public GameDatabase Database => db;
+
+    public MorphArena Morphs { get; }
 
     /// <summary>Meshes are loaded by bare name (Kenshi reduces the path first), so resources.cfg's last location wins.</summary>
     string? FindMesh(string fcsPath)
@@ -141,6 +148,7 @@ internal sealed class CharacterContent
         {
             var mesh = OgreMeshReader.ReadFile(path);
             var model = Model.Build(mesh, boneCount);
+            var morphs = MeshMorphs.From(mesh, model, Messages, Path.GetFileName(path));
             foreach (var w in model.Warnings) Messages.Add($"{Path.GetFileName(path)}: {w}");
             var centre = mesh.Bounds is { } b ? (b.Min + b.Max) / 2 : model.Center;
             float radius = mesh.Bounds is { } bb ? bb.Radius : model.Radius;
@@ -169,7 +177,7 @@ internal sealed class CharacterContent
                 gpuMesh.Bytes += vertexBytes + indexBytes;
             }
             MeshBytes += gpuMesh.Bytes;
-            result = new LoadedMesh(gpuMesh, mesh.SkeletonName, centre, radius);
+            result = new LoadedMesh(gpuMesh, mesh.SkeletonName, centre, radius, morphs);
         }
         catch (Exception e) when (e is OgreFormatException or IOException or EndOfStreamException or InvalidDataException)
         {
@@ -222,10 +230,16 @@ internal sealed class CharacterContent
 
         var asset = new CharacterAsset { Appearance = c, Rig = rig };
         asset.Shape = Shape(c, rig);
+        if (Environment.GetEnvironmentVariable("MEITOU_CHARACTER_MORPH") != "0" && body.Morphs is { } bodyMorphs && bodyMorphs.Deltas(c.PoseWeights, c.Character?.GetBool("shaved") == true && bodyMorphs.HasCuttableHorns) is { } deltas)
+        {
+            var key = string.Join(';', c.PoseWeights.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => FormattableString.Invariant($"{p.Key}={p.Value}"))) + "@" + bodyPath + (c.Character?.GetBool("shaved") == true);
+            asset.MorphBase = Morphs.Add(key, deltas);
+        }
         asset.Parts.Add(new AssetPart
         {
             Label = $"body {Path.GetFileName(bodyPath)}", Mesh = body.Gpu, Shared = true, Material = BodyMaterial(c),
             BoundsCentre = body.Centre, BoundsRadius = body.Radius,
+            Morphed = asset.MorphBase != 0,
         });
         foreach (var part in c.Parts)
         {

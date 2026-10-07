@@ -59,6 +59,7 @@ static class CharacterShaders
         layout(location = 1) in vec3 aNormal;
         layout(location = 2) in vec2 aUv;
         layout(location = 3) in vec4 aTangent;
+        layout(location = 4) in vec4 aColour;           // x: the vertex's morph slot as raw bits (0: none)
         layout(location = 5) in uvec4 aBones;
         layout(location = 6) in vec4 aWeights;
         layout(location = 7) in vec4 aInstance0;
@@ -67,6 +68,7 @@ static class CharacterShaders
         layout(location = 10) in vec4 aInstance3;
         layout(location = 11) in uvec4 aInstanceData;   // x first bone of the palette, y material, z flags
         layout(std430, set = 0, binding = 6) readonly buffer Skin { mat4 bones[]; } skin;
+        layout(std430, set = 0, binding = 8) readonly buffer Morphs { vec4 deltas[]; } morphs;
 
         out vec3 vWorld;
         out vec3 vNormal;
@@ -85,7 +87,10 @@ static class CharacterShaders
                    + skin.bones[b + aBones.z] * aWeights.z + skin.bones[b + aBones.w] * aWeights.w;
             }
             mat4 world = model * sk;
-            vec4 p = world * vec4(aPosition, 1.0);
+            vec3 local = aPosition;
+            uint slot = floatBitsToUint(aColour.x);
+            if (aInstanceData.w != 0u && slot != 0u && slot < 0x1000000u) local += morphs.deltas[aInstanceData.w + slot].xyz;
+            vec4 p = world * vec4(local, 1.0);
             vWorld = p.xyz;
             mat3 n = mat3(world);
             vNormal = n * aNormal;
@@ -275,7 +280,7 @@ struct CharacterPush
 struct CharacterInstance80
 {
     public Matrix4x4 Model;
-    public uint BoneBase, Material, Flags, Spare;
+    public uint BoneBase, Material, Flags, MorphBase;
 
     public const int Size = 80;
 }

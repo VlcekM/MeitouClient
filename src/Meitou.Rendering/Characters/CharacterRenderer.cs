@@ -120,7 +120,7 @@ internal sealed unsafe class CharacterRenderer : IDisposable
     public CharacterRenderer(GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assetLocator)
     {
         Gpu = gpu;
-        nativeFrame = new NativeFrame(gpu, extraStorage: 2);
+        nativeFrame = new NativeFrame(gpu, extraStorage: 3);
         colourProg = new CharProg(gpu, nativeFrame, CharacterShaders.Vertex(), CharacterShaders.Fragment(), "characters");
         depthProg = new CharProg(gpu, nativeFrame, CharacterShaders.DepthVertex(), CharacterShaders.DepthFragment(), "characters depth");
         content = new CharacterContent(gpu, install, db, assetLocator);
@@ -420,7 +420,7 @@ internal sealed unsafe class CharacterRenderer : IDisposable
                 float value = MeshLod.Value(eye, Vector3.Transform(part.BoundsCentre, model), part.BoundsRadius * model.ScaleLength(), depthPass ? LodBias * ShadowLodBias : LodBias);
                 int level = MeshLod.Select(mesh.Distances, value);
                 bool twoSided = part.Material.DoubleSided;
-                var instance = new CharacterInstance80 { Model = model, BoneBase = (uint)l.BoneBase, Material = (uint)part.MaterialSlot };
+                var instance = new CharacterInstance80 { Model = model, BoneBase = (uint)l.BoneBase, Material = (uint)part.MaterialSlot, MorphBase = part.Morphed ? l.Asset.MorphBase : 0 };
                 DrawnParts++;
                 foreach (var gp in mesh.Parts)
                 {
@@ -453,7 +453,7 @@ internal sealed unsafe class CharacterRenderer : IDisposable
         var state = Gpu.CurrentState() with { Cull = Vk.CullModeFlags.None };
         var job = drawJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Layout, job.Count) = (this, targets, state, prog.P.Layout, 0);
-        job.Frame = nativeFrame.Prepare(in view, [bones.Binding, materials.Binding]);
+        job.Frame = nativeFrame.Prepare(in view, [bones.Binding, materials.Binding, content.Morphs.Binding(Gpu.Frame)]);
         job.Cull = depthPass ? Vk.CullModeFlags.None : Vk.CullModeFlags.BackBit;
         for (int a = 0; a < 5; a++) job.Rows[a] = new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
         if (job.Draws.Length < active.Count) job.Draws = new DrawJob.Draw[Math.Max(active.Count, job.Draws.Length * 2)];
@@ -634,6 +634,7 @@ internal sealed unsafe class CharacterRenderer : IDisposable
         depthProg.Dispose();
         nativeFrame.Dispose();
         content.Textures.Dispose();
+        content.Morphs.Dispose();
     }
 }
 
