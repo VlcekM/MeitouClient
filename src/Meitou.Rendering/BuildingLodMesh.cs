@@ -24,6 +24,8 @@ sealed class PreparedPart
     public required uint[] All;
     public required int[] Offset, Count;
     public uint[][]? Levels;
+    /// <summary>World length per texture-coordinate unit that nearly all of the part's surface is at least as stretched as (<see cref="MeshTexelScale.Of"/>).</summary>
+    public float UvScale = float.PositiveInfinity;
 }
 
 /// <summary>One submesh on the GPU: one vertex buffer, one index buffer holding every LOD level back to back (native buffers, "object meshes").</summary>
@@ -42,6 +44,9 @@ sealed class GpuObjectPart
     public MeshBindings?[]? PlainMesh;
     public DeviceBuffer?[]? PlainEbo;
     public uint[][]? LevelIndices;
+    /// <summary>World length per texture-coordinate unit (<see cref="MeshTexelScale"/>): how large a texel is, which says how far away a
+    /// texture's top mips stop mattering (infinity: unknown, they always matter).</summary>
+    public float UvScale = float.PositiveInfinity;
     /// <summary>What a native draw needs, per program (<see cref="WorldObjectRenderer"/>).</summary>
     public ObjectNativeMesh ColourNative, DepthNative;
 }
@@ -249,7 +254,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
         }
         var all = new uint[total];
         for (int l = 0; l < levelCount; l++) arrays[l].CopyTo(all, offset[l]);
-        return new PreparedPart { Part = part, All = all, Offset = offset, Count = count, Levels = keepLevels ? arrays : null };
+        return new PreparedPart { Part = part, All = all, Offset = offset, Count = count, Levels = keepLevels ? arrays : null, UvScale = MeshTexelScale.Of(part) };
     }
 
     const int SlabBytes = 512 << 10;
@@ -267,7 +272,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
                 SubMeshIndex = part.SubMeshIndex, MaterialName = part.MaterialName, HasTangents = part.HasTangents, HasColours = part.HasColours,
                 Vertices = DeviceBuffer.Create(gpuContext, (ulong)vertexBytes, BufferUse.Vertex, AllocationName),
                 Indices = DeviceBuffer.Create(gpuContext, (ulong)indexBytes, BufferUse.Index, AllocationName),
-                Offset = prepared.Offset, Count = prepared.Count, LevelIndices = prepared.Levels,
+                Offset = prepared.Offset, Count = prepared.Count, LevelIndices = prepared.Levels, UvScale = prepared.UvScale,
             };
         }, label + " (allocate)");
         for (int at = 0; at < vertexBytes; at += SlabBytes)
@@ -415,7 +420,8 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
 }
 
 /// <summary>A part's look: the resolved material and its textures (keys are 0 until decoded and uploaded: <see cref="WorldTexture.Key"/>).</summary>
-sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse, WorldTexture? normal, WorldTexture? diffuse2, WorldTexture? normal2)
+sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse, WorldTexture? normal, WorldTexture? diffuse2, WorldTexture? normal2,
+    float texelScale = float.PositiveInfinity, bool triplanar = false)
 {
     public SurfaceMaterial? Material => material;
     public uint Diffuse => diffuse?.Key ?? 0;
@@ -423,6 +429,35 @@ sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse
     public uint Diffuse2 => diffuse2?.Key ?? 0;
     public uint Normal2 => normal2?.Key ?? 0;
     public bool Swizzled => normal?.Swizzled ?? false;
+
+    /// <summary>World length one unit of the texture coordinates the material samples spans, before the instance's scale (the part's
+    /// <see cref="MeshTexelScale"/> over the material's tiling; for a triplanar material the world's own mapping): how large a texel is.
+    /// Infinity when unknown (the textures keep every mip).</summary>
+    public float TexelScale => texelScale;
+    /// <summary>The coordinates come from the world position, not the mesh: the instance's scale does not enter.</summary>
+    public bool Triplanar => triplanar;
+    /// <summary>The part has a diffuse map (resident or not).</summary>
+    public bool WantsDiffuse => diffuse is not null;
+
+    /// <summary>The textures' need (<see cref="WorldTexture.Offer"/>) for a user at <paramref name="distance"/> (already over the instance's scale unless triplanar).</summary>
+    public void Offer(float distance)
+    {
+        float need = distance / texelScale;
+        diffuse?.Offer(need);
+        normal?.Offer(need);
+        diffuse2?.Offer(need);
+        normal2?.Offer(need);
+    }
+
+    /// <summary>As <see cref="Offer"/> for a user that just appeared.</summary>
+    public void OfferNow(float distance)
+    {
+        float need = distance / texelScale;
+        diffuse?.OfferNow(need);
+        normal?.OfferNow(need);
+        diffuse2?.OfferNow(need);
+        normal2?.OfferNow(need);
+    }
 }
 
 /// <summary>The materials of a mesh's parts for one placement (parts in the mesh's order).</summary>
@@ -430,6 +465,9 @@ sealed class ObjectMaterialSet(ObjectPartMaterial[] parts)
 {
     public ObjectPartMaterial[] Parts => parts;
     public int Stamp;
+    /// <summary>This mark pass's nearest user: its distance, and its distance over its scale (<see cref="ObjectPartMaterial.Triplanar"/> parts take the first).</summary>
+    public float Near, NearScaled;
+    public int NeedStamp;
 
     /// <summary>Reading a texture key counts as using the texture (<see cref="WorldTexture.Key"/>); this keeps all of them from being unloaded.</summary>
     public void Touch()
