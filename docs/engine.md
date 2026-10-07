@@ -29,9 +29,10 @@ Dependencies point one way: Core ← Data ← Engine / Rendering ← Game / view
 - **Interpolated drawing**: the camera keeps its state of the previous and the current tick (`Interpolated<CameraState>`); a frame
   draws `At(alpha)` with `alpha` = the accumulator's fraction of a tick, so motion is smooth at any display rate. Angles take
   the shortest way round; a camera mode switch is a cut.
-- **Game time** (`GameClock`): advanced by ticks only; time scale 1, 2, 3 or 5 (`.` / `,`; Kenshi's speed buttons are 1×, 2×, 3×,
-  5× is a common mod option), pause (`Space`). 150 game seconds per game hour at scale 1 (an engine choice until the game's own
-  rate is traced; Unknown). The hour drives the sun, sky and lighting.
+- **Game time** (`GameClock`): advanced by ticks only; time scale 1, 2, 3 or 5 (`.` / `,`), pause (`Space`), 150 game seconds
+  per game hour at scale 1. Both are placeholders: the game has pause, 1×, 2× and 5× and a game hour of 1200/11 = 109.09 s
+  ([game/game-loop.md](game/game-loop.md#the-clock)); stage 0 of [simulation.md](simulation.md) changes them. The hour drives the
+  sun, sky and lighting.
 - **Input** (`Meitou.Engine.Input`): the host feeds an `InputState` (keys, buttons, mouse movement and wheel) from the
   windowing library's events; each tick consumes it once, so a press is seen by exactly one tick however frames and ticks fall.
   `InputBindings` maps keys and buttons to `InputAction`s; defaults below, overridable in the user config.
