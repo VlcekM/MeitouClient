@@ -322,6 +322,177 @@ public class ImpostorTests
         finally { Directory.Delete(directory, recursive: true); }
     }
 
+    /// <summary>Writes a file with an atlas header of the given versions (the cache only reads the first 12 bytes of it to judge its age) and body of <paramref name="size"/> bytes.</summary>
+    static string FakeAtlas(string folder, string name, int format, int baker, int size, DateTime lastUse)
+    {
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, name);
+        var bytes = new byte[size];
+        BitConverter.GetBytes(ImpostorAtlas.Magic).CopyTo(bytes, 0);
+        BitConverter.GetBytes(format).CopyTo(bytes, 4);
+        BitConverter.GetBytes(baker).CopyTo(bytes, 8);
+        File.WriteAllBytes(path, bytes);
+        File.SetLastWriteTimeUtc(path, lastUse);
+        return path;
+    }
+
+    [Fact]
+    public void Cache_evicts_the_least_recently_used_files_above_the_cap()
+    {
+        var folder = Path.Combine(Directory.CreateTempSubdirectory("meitou-impostor-test").FullName, "cache");
+        try
+        {
+            var now = DateTime.UtcNow;
+            // Ten files of 100 KB, the number in the name the age rank (0 is the oldest); the cap is 750 KB: eviction goes to 90% of it (675 KB).
+            var paths = Enumerable.Range(0, 10).Select(i => FakeAtlas(folder, $"tree{i}_0000.mimp", ImpostorAtlas.FormatVersion, ImpostorAtlas.BakerVersion, 100_000, now.AddHours(i - 20))).ToArray();
+            var cache = new ImpostorCache(folder, 750_000);
+            // The oldest file is used again (a load sets the last write time), so it is the last to go.
+            File.SetLastWriteTimeUtc(paths[0], now);
+            var result = cache.Maintain(now);
+            Assert.Equal(10, result.Files);
+            Assert.Equal(1_000_000, result.Bytes);
+            Assert.Equal(4, result.Evicted);   // 1,000,000 down to at most 675,000: four 100 KB files
+            Assert.Equal(600_000, result.BytesAfter);
+            Assert.True(File.Exists(paths[0]), "the file used last survives");
+            Assert.False(File.Exists(paths[1]));
+            Assert.False(File.Exists(paths[4]));
+            Assert.True(File.Exists(paths[5]));
+            Assert.True(File.Exists(paths[9]));
+            Assert.Equal(0, cache.Maintain(now).Evicted);   // under the cap: nothing more
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+    }
+
+    [Fact]
+    public void Cache_without_a_cap_keeps_everything_and_missing_folders_are_fine()
+    {
+        var folder = Path.Combine(Directory.CreateTempSubdirectory("meitou-impostor-test").FullName, "cache");
+        try
+        {
+            Assert.Equal(default, new ImpostorCache(folder, 1000).Maintain());   // no folder yet
+            for (int i = 0; i < 4; i++) FakeAtlas(folder, $"tree{i}_0000.mimp", ImpostorAtlas.FormatVersion, ImpostorAtlas.BakerVersion, 100_000, DateTime.UtcNow.AddDays(-i));
+            var result = new ImpostorCache(folder, 0).Maintain();
+            Assert.Equal((4, 0, 0), (result.Files, result.Evicted, result.Stale));
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+    }
+
+    [Fact]
+    public void Cache_removes_files_of_older_formats_and_abandoned_temporaries_only()
+    {
+        var folder = Path.Combine(Directory.CreateTempSubdirectory("meitou-impostor-test").FullName, "cache");
+        try
+        {
+            var now = DateTime.UtcNow;
+            string current = FakeAtlas(folder, "current_0000.mimp", ImpostorAtlas.FormatVersion, ImpostorAtlas.BakerVersion, 5000, now);
+            string olderBaker = FakeAtlas(folder, "baker_0000.mimp", ImpostorAtlas.FormatVersion, ImpostorAtlas.BakerVersion - 1, 5000, now);
+            string olderFormat = FakeAtlas(folder, "format_0000.mimp", ImpostorAtlas.FormatVersion - 1, ImpostorAtlas.BakerVersion + 5, 5000, now);
+            string newer = FakeAtlas(folder, "newer_0000.mimp", ImpostorAtlas.FormatVersion, ImpostorAtlas.BakerVersion + 1, 5000, now);
+            string newerFormat = FakeAtlas(folder, "newerformat_0000.mimp", ImpostorAtlas.FormatVersion + 1, 1, 5000, now);
+            string junk = Path.Combine(folder, "junk_0000.mimp");
+            File.WriteAllBytes(junk, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+            string shortFile = Path.Combine(folder, "short_0000.mimp");
+            File.WriteAllBytes(shortFile, [1, 2, 3]);
+            string oldTemporary = Path.Combine(folder, "tree_0000.mimp.4242.tmp");
+            string freshTemporary = Path.Combine(folder, "tree_1111.mimp.4343.tmp");
+            File.WriteAllBytes(oldTemporary, [0]);
+            File.WriteAllBytes(freshTemporary, [0]);
+            File.SetLastWriteTimeUtc(oldTemporary, now.AddHours(-3));
+            string other = Path.Combine(folder, "notes.txt");
+            File.WriteAllText(other, "not ours");
+
+            var result = new ImpostorCache(folder, 0).Maintain(now);
+            Assert.Equal(5, result.Stale);   // older baker, older format, junk, short, old temporary
+            Assert.Equal(3, result.Files);   // current, newer baker, newer format
+            Assert.True(File.Exists(current));
+            Assert.True(File.Exists(newer));
+            Assert.True(File.Exists(newerFormat));
+            Assert.True(File.Exists(freshTemporary));
+            Assert.True(File.Exists(other));
+            foreach (var gone in new[] { olderBaker, olderFormat, junk, shortFile, oldTemporary }) Assert.False(File.Exists(gone), gone);
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+    }
+
+    [Fact]
+    public void Cache_cap_comes_from_the_environment_default_or_the_constructor()
+    {
+        Assert.Equal(7L << 20, new ImpostorCache("x", 7L << 20).MaxBytes);
+        if (Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_CACHE_MB") is null) Assert.Equal(ImpostorCache.DefaultMaxBytes, new ImpostorCache("x").MaxBytes);
+        Assert.Equal(512L << 20, ImpostorCache.DefaultMaxBytes);
+    }
+
+    [Fact]
+    public void Loading_and_saving_an_atlas_count_as_uses()
+    {
+        var directory = Directory.CreateTempSubdirectory("meitou-impostor-test").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "tree.mesh"), "mesh");
+            File.WriteAllText(Path.Combine(directory, "bark.dds"), "bark");
+            var cache = new ImpostorCache(Path.Combine(directory, "cache"), 0);
+            var source = Source(directory);
+            cache.Save(source, Synthetic());
+            var path = cache.PathFor(source);
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-30));
+            Assert.NotNull(cache.TryLoad(source));
+            Assert.True(DateTime.UtcNow - File.GetLastWriteTimeUtc(path) < TimeSpan.FromMinutes(5), "a load sets the last use");
+            // A load of a damaged file is not a use.
+            File.WriteAllBytes(path, [1, 2, 3]);
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-30));
+            Assert.Null(cache.TryLoad(source));
+            Assert.True(DateTime.UtcNow - File.GetLastWriteTimeUtc(path) > TimeSpan.FromDays(29));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    /// <summary>Three pictures of one row (grid 2, frames of 8): premultiplied albedo, normal and gloss, from a seed.</summary>
+    static (byte[] Albedo, byte[] Normal, byte[] Gloss) Row(int seed)
+    {
+        var random = new Random(seed);
+        var albedo = new byte[16 * 8 * 4];
+        var normal = new byte[albedo.Length];
+        var gloss = new byte[albedo.Length];
+        for (int p = 0; p < 16 * 8; p++)
+        {
+            byte alpha = random.Next(3) == 0 ? (byte)0 : (byte)random.Next(120, 256);
+            albedo[p * 4 + 3] = normal[p * 4 + 3] = gloss[p * 4 + 3] = alpha;
+            for (int c = 0; c < 3; c++)
+            {
+                albedo[p * 4 + c] = (byte)(alpha == 0 ? 0 : random.Next(alpha));
+                normal[p * 4 + c] = (byte)(alpha == 0 ? 0 : random.Next(alpha));
+                gloss[p * 4 + c] = (byte)(alpha == 0 ? 0 : random.Next(alpha));
+            }
+        }
+        return (albedo, normal, gloss);
+    }
+
+    static ImpostorAtlas Assemble(int seed)
+    {
+        var assembler = new ImpostorAssembler(2, 8, 2);
+        for (int row = 0; row < 2; row++)
+        {
+            var (a, n, g) = Row(seed * 10 + row);
+            assembler.AddRow(row, a, n, g);
+        }
+        return assembler.Finish("t", Vector3.Zero, 1);
+    }
+
+    [Fact]
+    public void Assembler_output_does_not_depend_on_the_pooled_memory_it_reuses()
+    {
+        ImpostorAssembler.ReleasePool();
+        var first = Assemble(1);
+        var other = Assemble(2);   // takes the first's maps and scratch, fills them with other pictures
+        var again = Assemble(1);   // takes the other's: must equal the first, not carry anything of the other
+        Assert.NotEqual(first.Textures[0].Levels[0], other.Textures[0].Levels[0]);
+        for (int m = 0; m < 2; m++)
+            for (int l = 0; l < first.Levels; l++)
+                Assert.Equal(first.Textures[m].Levels[l], again.Textures[m].Levels[l]);
+        Assert.Equal(first.Gloss, again.Gloss);
+        ImpostorAssembler.ReleasePool();
+    }
+
     [Fact]
     public void Cache_defaults_to_local_app_data()
     {

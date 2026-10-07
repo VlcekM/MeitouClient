@@ -436,7 +436,11 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   camera-facing quad sampling a pre-baked atlas, crossfaded with the mesh over a tenth of the distance, and cast into the sun's shadow cascades
   the same way. The atlases (baked on first need, cached in `%LOCALAPPDATA%\Meitou\impostors`) are held within a VRAM budget, default 192 MB
   (`--impostor-budget <MB>`); the least recently used go first, and a mesh that does not fit stays a mesh. `MEITOU_IMPOSTOR_CASTERS=0`
-  keeps mesh casters, `MEITOU_IMPOSTOR_LOG=1` logs atlas loads and evictions. Tuning knobs for the baker: `MEITOU_IMPOSTOR_GRID` (12),
+  keeps mesh casters, `MEITOU_IMPOSTOR_LOG=1` logs atlas loads and evictions. The disk cache is capped at 512 MB by default
+  (`--impostor-cache-mb <MB>` or `MEITOU_IMPOSTOR_CACHE_MB`, 0 = no cap): older files go first, files of an older format or baker version
+  at once ([impostors.md](impostors.md) section 4). `MEITOU_IMPOSTOR_BAKE_MSAMPLES` (40) is how many million shaded samples of a bake are
+  recorded in a frame (section 8). `--fly-benchmark` leaves the first n frames out of its percentiles with `MEITOU_BENCH_SKIP=<n>` (default 1;
+  a cold run's first 30 frames load the first zones). Tuning knobs for the baker: `MEITOU_IMPOSTOR_GRID` (12),
   `MEITOU_IMPOSTOR_MAGNIFY` (1.4), `MEITOU_IMPOSTOR_BIAS` (1; the caches differ by them).
 - **Culling** (`FoliageCull`, step A1 of the GPU-driven foliage in [renderer-native.md](renderer-native.md#56-parity-what-can-match-exactly-and-what-cannot-be-promised)):
   each zone's instances are records of 96 bytes (`FoliageInstanceRecord`: transform, bounding sphere, ground position, scale, group index:

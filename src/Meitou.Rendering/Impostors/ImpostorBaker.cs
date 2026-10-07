@@ -271,8 +271,29 @@ public sealed unsafe class ImpostorBaker : IDisposable
         }
     }
 
+    // ---- readback buffers: a row's three pictures, reused from row to row and bake to bake (render thread, except ReturnReadback) ----
+
+    readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, System.Collections.Concurrent.ConcurrentBag<ReadbackBuffer>> readbacks = new();
+
+    internal ReadbackBuffer RentReadback(ulong size)
+    {
+        var bag = readbacks.GetOrAdd(size, _ => new());
+        return bag.TryTake(out var buffer) ? buffer : ReadbackBuffer.Create(gpu, size, "impostor bake readback");
+    }
+
+    /// <summary>Hands a buffer whose picture has been read back to the pool (any thread: the GPU is done with it).</summary>
+    internal void ReturnReadback(ReadbackBuffer buffer) => readbacks.GetOrAdd(buffer.Size, _ => new()).Add(buffer);
+
+    /// <summary>Frees the pooled readback buffers (render thread, when no bake is running); the next bake makes new ones.</summary>
+    public void Trim()
+    {
+        foreach (var bag in readbacks.Values)
+            while (bag.TryTake(out var buffer)) buffer.Dispose();
+    }
+
     public void Dispose()
     {
+        Trim();
         if (standIn != 0) gpu.Bindless.Free(BindlessKind.Texture2D, standIn);
         program.Dispose();
         frame.Dispose();
@@ -365,16 +386,21 @@ public sealed class ImpostorBakeJob : IDisposable
             var (row, _, buffer) = rows[0];
             rows.RemoveAt(0);
             int bytes = size.Grid * size.FramePixels * size.FramePixels * 4;
-            var albedo = buffer.Read(0, (ulong)bytes).ToArray();
-            var normal = buffer.Read((ulong)bytes, (ulong)bytes).ToArray();
-            var depthMap = buffer.Read(2ul * (ulong)bytes, (ulong)bytes).ToArray();
-            buffer.Dispose();
+            // The worker reads the readback buffer's mapping in place (no 3 x 3 MB copy a row on the render thread, which also allocated); the
+            // buffer goes back to the baker's pool when the worker is done with it.
+            nint pointer;
+            unsafe
+            {
+                var all = buffer.Read(0, 3ul * (ulong)bytes);   // makes the memory visible to the host
+                pointer = (nint)System.Runtime.CompilerServices.Unsafe.AsPointer(ref System.Runtime.InteropServices.MemoryMarshal.GetReference(all));
+            }
             var previous = chain;
             chain = Task.Run(() =>
             {
                 previous?.Wait();
                 var t = Stopwatch.GetTimestamp();
-                assembler.AddRow(row, albedo, normal, depthMap);
+                assembler.AddRow(row, pointer, pointer + bytes, pointer + 2 * bytes);
+                baker.ReturnReadback(buffer);
                 lock (this) filter += Stopwatch.GetElapsedTime(t).TotalMilliseconds;
             });
             assembled++;
@@ -387,7 +413,7 @@ public sealed class ImpostorBakeJob : IDisposable
             for (int k = 0; k < RowsPerStep && recorded < size.Grid; k++, recorded++)
             {
                 ulong rowBytes = (ulong)(size.Grid * size.FramePixels * size.FramePixels * 4);
-                var buffer = ReadbackBuffer.Create(gpu, 3 * rowBytes, "impostor bake readback");
+                var buffer = baker.RentReadback(3 * rowBytes);
                 baker.RecordRow(cmd, recorded, size, meshes, mainParts, main, leavesParts, leaves, large!, depth!, small!, buffer.Handle, lodBias);
                 rows.Add((recorded, gpu.Frame.Number, buffer));
             }

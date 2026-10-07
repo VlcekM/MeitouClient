@@ -2909,6 +2909,29 @@ foliage ranges and shadow distance are longer. Faithful is unchanged to the pixe
   views differ by design (impostors.md section 7). Tests 463 passed, 0 failed, 0 skipped. Sync validation: 0 errors in the forest views;
   the shutdown message about four leaked `VkImageView`s also appears on master (not from this work).
 
+### 8.12 Billboard fringes, first-flight hitch and cache cap (branch `worktree-agent-a70398f9fca39e0ae`, 2026-10-07)
+
+*In short: the dotted silhouette of tree-trunk bulbs is gone (the cut-out is now a vote of the three frames' coverage), a cold-cache fast
+flight no longer stalls on baking (allocation churn removed, bakes paced and ordered), and the atlas disk cache has a cap with LRU
+eviction and stale-version cleanup. No atlas bytes changed (`BakerVersion` 5), VRAM is the same. Details and numbers: [impostors.md](impostors.md)
+sections 4, 5, 6 and 8.*
+
+- **Fringes.** Cause: the per-pixel frame pick cut on the picked frame's own coverage, and frames 8-15 degrees apart put a far-off-centre bulb's
+  edge pixels apart (not BC1 alpha, not mips, not the fill). Fix in `ImpostorShaders.impostorSample`: cut-out = weighted vote, colour = a covering
+  frame, normal and position blended; casters keep the plain pick (the vote made them cast crown-sized slabs).
+- **Hitch.** The render thread allocated 1.7-2.0 GB (8-9 GB in all) in a cold flight: readback copies, 100 MB of atlas levels a bake, 900 MB of
+  filter arrays. Now 20 MB (2.2-2.7 GB), gen2 GCs 7-8 to 1-2, GC pauses 35-146 to 4-9 ms; cold p99 / max (flight at 600 units a frame, four
+  interleaved runs) base 18.6-29.4 / 20.6-35.3 ms against 15.9-20.4 / 19.7-37.0 ms now, p95 15.1-17.3 against 12.5-14.9 (impostors.md section 8
+  has every run; the shared machine's noise is as large as the difference in max).
+- **Cache.** `ImpostorCache.Maintain`: 512 MB default cap (`--impostor-cache-mb`), LRU by last write time, older format / baker versions
+  and junk and abandoned temporaries removed.
+- **Gate** (Release, RTX 4070, against `C:\Temp\base-87c7857`): `--faithful all` ten views max 0 (**Verified**); `--faithful impostors` ten
+  views 0 px against the base viewer rendered with the same option (**Verified**); Meitou default views differ only where billboards are
+  drawn (impostors.md section 6); `MEITOU_VK_VALIDATION=sync`, forest and Hub 13:00, 0 errors with a warm cache (6 with a cold cache,
+  as in the base build).
+
+---
+
 ### 8.9 Phase 8 stage 3 (no GL-shaped layer) as built
 
 *In short: `IGl`, `VkGl`, the seam, `GlBridge`, `WorldGl` and the project `Meitou.Rendering.Vulkan` are gone. `GpuContext` owns the

@@ -55,9 +55,37 @@ public sealed partial class FoliageRenderer
         public long RetryAt;
         /// <summary>The work list that last numbered this mesh's impostor batch, and its number among the impostor batches.</summary>
         public int Stamp, Index;
+        /// <summary>How soon the nearest zone that wants this atlas is close (units, smaller first) as of the scan at <see cref="PriorityScan"/>: the order bakes run in.</summary>
+        public float Priority;
+        public long PriorityScan;
     }
 
+    /// <summary>The seconds of the eye's motion the order of the waiting bakes looks ahead.</summary>
+    const float ImpostorLookaheadSeconds = 3;
+    /// <summary>
+    /// The most shaded samples of a bake recorded in one frame (<c>MEITOU_IMPOSTOR_BAKE_MSAMPLES</c>, in millions; a row is
+    /// <c>grid x (2 x frame)^2 x 3</c> of them; default 40, docs/impostors.md section 8). A large atlas (256 pixel frames, 9.4 million a row) takes 4 rows
+    /// a frame (three frames in all), a 128 or 64 pixel one its twelve rows in one.
+    /// </summary>
+    static readonly double ImpostorBakeSamplesPerFrame = 1e6 * (double.TryParse(Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_BAKE_MSAMPLES"), System.Globalization.NumberStyles.Float,
+        System.Globalization.CultureInfo.InvariantCulture, out double msamples) && msamples > 0 ? msamples : 40);
+    /// <summary>The pooled bake memory (readback buffers, atlas levels, filtering scratch) is freed this long after the last bake.</summary>
+    const long ImpostorBakeIdleMs = 10000;
+    long impostorLastBake;
+    bool impostorBakeMemoryHeld;
+
     readonly ImpostorCache impostorCache = new();
+    bool impostorCacheChecked;
+    /// <summary>
+    /// The most the atlas disk cache may take, in megabytes (<c>MEITOU_IMPOSTOR_CACHE_MB</c>, <c>--impostor-cache-mb</c>; 0 is no cap): older files go
+    /// first, and files of an old format or baker version at once (<see cref="ImpostorCache.Maintain"/>, which runs on a worker at the first use
+    /// and after every 16 atlases saved).
+    /// </summary>
+    public double ImpostorCacheMb
+    {
+        get => impostorCache.MaxBytes / 1048576.0;
+        set => impostorCache.MaxBytes = (long)(value * 1048576);
+    }
     ImpostorBaker? impostorBaker;
     ImpostorBakeJob? impostorBake;
     /// <summary>Atlas bytes uploaded per frame while settling; <see cref="impostorUploadsWaiting"/>: more wait for the next frame.</summary>
@@ -65,7 +93,7 @@ public sealed partial class FoliageRenderer
     bool impostorUploadsWaiting;
     MeshAsset? impostorBakeAsset;
     ImpostorDraw? impostorDraw;
-    readonly Queue<MeshAsset> impostorBakes = new();
+    readonly List<MeshAsset> impostorBakes = [];
     readonly List<MeshAsset> impostorWork = [];
     long impostorBytes, lastImpostorScan;
     int impostorsBaked, impostorsLoaded, impostorUnloads;
@@ -115,12 +143,26 @@ public sealed partial class FoliageRenderer
         if (Impostors && (settling || now - lastImpostorScan >= 1000))
         {
             lastImpostorScan = now;
+            if (!impostorCacheChecked)
+            {
+                impostorCacheChecked = true;
+                impostorCache.MaintainInBackground();
+                // The baker's programs compile here, with the loading, not at the first bake
+                // (the first bake of a cold cache was a 60 ms frame). The drawing program stays lazy: its quad upload needs a frame outside a render pass.
+                Gpu.EnsureFrame();
+                impostorBaker ??= new ImpostorBaker(Gpu, textures);
+            }
             float shortest = ImpostorDistance * (1 - ImpostorBand);
+            // Bakes wait in order of how soon their zones are close: from where the eye is now or will be in a few seconds of its motion.
+            var lead = settling ? Vector2.Zero : velocity * ImpostorLookaheadSeconds;
+            if (lead.Length() > MaxLookahead) lead = Vector2.Normalize(lead) * MaxLookahead;
+            var soonEye = eye + new Vector3(lead.X, 0, lead.Y);
             foreach (var state in zones.Values)
             {
                 if (!state.Ready) continue;
                 float near = ZoneDistance(state.Zone, eye), far = ZoneFarDistance(state, eye);
                 if (far < shortest) continue;
+                float urgency = Math.Min(near, ZoneDistance(state.Zone, soonEye));
                 foreach (var g in state.Groups)
                 {
                     var a = g.Asset;
@@ -131,17 +173,26 @@ public sealed partial class FoliageRenderer
                     if (a.Impostor is { } s)
                     {
                         s.LastUsed = now;
+                        if (s.PriorityScan != now) (s.Priority, s.PriorityScan) = (urgency, now);
+                        else s.Priority = Math.Min(s.Priority, urgency);
                         // A refused atlas asks again after a while (something may have been unloaded since).
                         if (s.Stage == ImpostorStage.None && s.RetryAt != 0 && now >= s.RetryAt) a.Impostor = null;
                         else continue;
                     }
                     RequestImpostor(a, now);
+                    if (a.Impostor is { } requested) (requested.Priority, requested.PriorityScan) = (urgency, now);
                 }
             }
         }
         if (now - lastImpostorScan < 2000 || settling)
             foreach (var a in assetsByMesh.Values)
                 if (a.Impostor is { Stage: ImpostorStage.Ready } s && (now - s.LastUsed) / 1000.0 > ImpostorIdleSeconds) UnloadImpostor(a);
+        if (impostorBakeMemoryHeld && impostorBake is null && impostorBakes.Count == 0 && now - impostorLastBake > ImpostorBakeIdleMs)
+        {
+            impostorBaker?.Trim();
+            ImpostorAssembler.ReleasePool();
+            impostorBakeMemoryHeld = false;
+        }
         if (impostorWork.Count == 0 && impostorBakes.Count == 0 && impostorBake is null) return;
         Gpu.EnsureFrame();
         long uploaded = 0;
@@ -157,7 +208,7 @@ public sealed partial class FoliageRenderer
                 s.Load = null;
                 if (source is null || meshes is null || cls is not { } c) { s.Stage = ImpostorStage.None; impostorWork.RemoveAt(i--); continue; }
                 (s.Source, s.Meshes, s.Class) = (source, meshes, c);
-                if (atlas is null) { s.Stage = ImpostorStage.Baking; impostorBakes.Enqueue(a); impostorWork.RemoveAt(i--); continue; }
+                if (atlas is null) { s.Stage = ImpostorStage.Baking; impostorBakes.Add(a); impostorWork.RemoveAt(i--); continue; }
                 impostorsLoaded++;
                 s.Atlas = atlas;
                 s.Stage = ImpostorStage.Uploading;
@@ -256,13 +307,21 @@ public sealed partial class FoliageRenderer
         if (impostorBake is null)
         {
             if (impostorBakes.Count == 0) return;
-            var next = impostorBakes.Dequeue();
+            // The one whose zones are closest (now or soon) first.
+            int best = 0;
+            for (int i = 1; i < impostorBakes.Count; i++)
+                if (impostorBakes[i].Impostor!.Priority < impostorBakes[best].Impostor!.Priority) best = i;
+            var next = impostorBakes[best];
+            impostorBakes.RemoveAt(best);
             var s = next.Impostor!;
             impostorBaker ??= new ImpostorBaker(Gpu, textures);
             impostorBake = impostorBaker.Begin(s.Source!, s.Meshes!, s.Class);
             impostorBakeAsset = next;
         }
-        impostorBake.RowsPerStep = settling ? impostorBake.Size.Grid : 2;
+        var size = impostorBake.Size;
+        double rowSamples = size.Grid * 3.0 * (2.0 * size.FramePixels) * (2.0 * size.FramePixels);
+        impostorBake.RowsPerStep = settling ? size.Grid : Math.Clamp((int)(ImpostorBakeSamplesPerFrame / rowSamples), 1, size.Grid);
+        (impostorLastBake, impostorBakeMemoryHeld) = (Environment.TickCount64, true);
         if (!impostorBake.Step()) return;
         var a = impostorBakeAsset!;
         var st = a.Impostor!;
