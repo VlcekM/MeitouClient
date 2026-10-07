@@ -65,7 +65,6 @@ public sealed class ZoneGeometry
     /// <summary>Seed points: regions of the mesh near one stay, the rest is pruned (docs/game/pathfinding.md, "Region pruning by seeds").</summary>
     public List<Vector3> Seeds { get; } = [];
 
-    /// <summary>Hash of the zone's buildings (placement, rotation, record), the cache key of the built mesh.</summary>
     /// <summary>For an interior mesh: the convex hull of the building interior mask; the mesh is clipped to it.</summary>
     public NavVolume? InteriorHull { get; init; }
     /// <summary>For an interior mesh: the building instance it belongs to.</summary>
@@ -73,6 +72,7 @@ public sealed class ZoneGeometry
 
     /// <summary>The range of triangles (in triangle numbers) that came from buildings; for the seed rays.</summary>
     public int BuildingFirstTriangle, BuildingLastTriangle;
+    /// <summary>Hash of the zone's buildings (placement, rotation, record), the cache key of the built mesh (<see cref="ZoneGeometryGatherer.BuildingHash"/>); 0 for an interior mesh.</summary>
     public uint BuildingHash { get; set; }
     public GatherStats Stats { get; } = new();
 

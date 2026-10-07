@@ -19,13 +19,20 @@ public sealed partial class ZoneGeometryGatherer
     /// <summary>How far outside the hull the clipping slabs reach (units); anything of the building beyond is cut away.</summary>
     const float SlabReach = 400;
 
-    static Matrix4x4 NodeMatrix(GameRecord building, Vector3 position, Quaternion rotation)
+    /// <summary>A building's <c>scale</c> (a missing or non-positive one is 1).</summary>
+    static float BuildingScale(GameRecord building)
     {
         float scale = building.GetFloat("scale", 1);
-        if (scale <= 0) scale = 1;
-        var q = rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(rotation);
-        return Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(q) * Matrix4x4.CreateTranslation(position);
+        return scale <= 0 ? 1 : scale;
     }
+
+    /// <summary>The building node's transform: its scale, then its (normalised) rotation, then its position.</summary>
+    static Matrix4x4 NodeMatrix(GameRecord building, Vector3 position, Quaternion rotation) =>
+        WorldObjectLayout.InstanceTransform(position, rotation, new Vector3(BuildingScale(building)));
+
+    /// <summary>A part's collision file: the destroyed one for a destroyed building when it has one, else the intact one (empty when none).</summary>
+    static string CollisionPathOf(GameRecord part, bool destroyed) =>
+        destroyed && part.GetPath("destroyed collision") is { Length: > 0 } dc ? dc : part.GetPath("xml collision");
 
     /// <summary>
     /// The buildings placed in a zone that have an interior to build: an <c>interior mask</c> part with collision, and not a gateway
@@ -105,7 +112,6 @@ public sealed partial class ZoneGeometryGatherer
             if (!float.IsNaN(s.Y)) continue;
             g.Seeds[i] = RayDown(g, s.X, s.Z, highest: false, yMin - 10, 0, g.TriangleCount, out float y) ? new Vector3(s.X, y, s.Z) : new Vector3(s.X, yMin, s.Z);
         }
-        g.BuildingHash = BuildingHash(site.Placement.Zone);
         return g;
     }
 
@@ -148,21 +154,12 @@ public sealed partial class ZoneGeometryGatherer
     /// <summary>The door's inner marker: the one of the two points either side of the door that lies inside the interior hull (height resolved later).</summary>
     void AddInnerDoorSeed(ZoneGeometry g, GameRecord door, PreparedShape shape, Matrix4x4 node)
     {
-        if (shape.Kind != Meitou.Data.Physics.CollisionShapeKind.Box || shape.Vertices.Length != 8 || g.InteriorHull is null) return;
-        var v = shape.Vertices.Select(p => Vector3.Transform(p, node)).ToArray();
-        int axis = Math.Clamp(door.GetInt("door navmesh axis"), 0, 2);
-        var along = axis switch { 0 => v[1] - v[0], 1 => v[2] - v[0], _ => v[4] - v[0] };
-        float half = along.Length() / 2;
-        if (half < 1e-3f) return;
-        var dir = along / (2 * half);
-        var centre = Vector3.Zero;
-        foreach (var p in v) centre += p / 8;
+        if (g.InteriorHull is null || !DoorMarkers(door, shape, node, out var behind, out var ahead)) return;
         var hullCentre = g.InteriorHull.Polygon.Aggregate(Vector2.Zero, (a, p) => a + p) / g.InteriorHull.Polygon.Length;
         Vector3? best = null;
         float bestScore = float.MaxValue;
-        foreach (float side in new[] { -1f, 1f })
+        foreach (var at in new[] { behind, ahead })
         {
-            var at = centre + dir * side * (half + DoorSeedOffset);
             var xz = new Vector2(at.X, at.Z);
             float score = (NavGeometry.InsideConvex(g.InteriorHull.Polygon, xz, 0) ? 0 : 1000) + Vector2.Distance(xz, hullCentre);
             if (score < bestScore) { bestScore = score; best = at; }

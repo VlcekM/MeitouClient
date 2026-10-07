@@ -76,7 +76,7 @@ public sealed class NavMeshService : IDisposable
             var watch = Stopwatch.StartNew();
             try
             {
-                uint hash = gatherer.BuildingHash(zone, 72);
+                uint hash = gatherer.BuildingHash(zone);
                 var mesh = Cache.TryLoad(zone.X, zone.Y, hash, settingsHash);
                 var origin = NavMeshOrigin.Cache;
                 if (mesh is null)

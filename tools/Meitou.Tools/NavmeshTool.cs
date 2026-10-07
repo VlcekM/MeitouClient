@@ -71,7 +71,8 @@ static class NavmeshTool
             Console.WriteLine($"town '{match.Record.Name}' at {match.Place.Position.X:0}, {match.Place.Position.Z:0}: zone {zone}");
         }
 
-        using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
+        var collision = new CollisionCache(install);
+        using var gatherer = new ZoneGeometryGatherer(install, db, levels, collision);
         watch.Restart();
         var g = gatherer.Gather(zone.Value);
         if (NavDebug.Verbose) for (int i = 1; i <= 3; i++) { var sw2 = Stopwatch.StartNew(); gatherer.Gather(new ZoneCoordinate(zone.Value.X + i, zone.Value.Y)); Console.WriteLine($"  warm gather {sw2.ElapsedMilliseconds} ms (terrain {gatherer.Phases.Terrain:0}, buildings {gatherer.Phases.Buildings:0}, foliage {gatherer.Phases.Foliage:0})"); }
@@ -82,7 +83,7 @@ static class NavmeshTool
             $"{s.MissingFiles} missing files, building hash {g.BuildingHash:x8}");
 
         if (NavDebug.Verbose) { foreach (var p in g.Painters) Console.WriteLine($"  painter x {p.Polygon.Min(v => v.X):0}..{p.Polygon.Max(v => v.X):0} z {p.Polygon.Min(v => v.Y):0}..{p.Polygon.Max(v => v.Y):0} y {p.YMin:0}..{p.YMax:0}"); foreach (var sd in g.Seeds) Console.WriteLine($"  seed {sd.X:0},{sd.Y:0},{sd.Z:0}"); }
-        if (near is not null) foreach (var line in gatherer.DescribeNear(zone.Value, near[0], near[1], near[2])) Console.WriteLine("  " + line);
+        if (near is not null) foreach (var line in DescribeNear(gatherer, db, collision, zone.Value, near[0], near[1], near[2])) Console.WriteLine("  " + line);
         if (geometryOnly)
         {
             if (obj is not null) WriteGeometryObj(g, obj);
@@ -159,6 +160,21 @@ static class NavmeshTool
         if (obj is not null) WriteMeshObj(built[0].Mesh, obj);
         if (png is not null) WriteMeshPng(built, png, unitsPerPixel, box, path, interiorMeshes);
         return 0;
+    }
+
+    /// <summary>The buildings within a radius of a point, with how many of their parts have collision (<c>--near x,z,radius</c>).</summary>
+    static IEnumerable<string> DescribeNear(ZoneGeometryGatherer gatherer, GameDatabase db, CollisionCache collision, ZoneCoordinate zone, float x, float z, float radius)
+    {
+        var (ox, oz) = WorldLayout.ZoneOrigin(zone);
+        var min = new Vector2((float)ox, (float)oz);
+        foreach (var (b, record, position, destroyed) in gatherer.NearBuildings(zone, min, min + new Vector2(WorldLayout.ZoneSize), ZoneGeometryGatherer.DefaultMargin))
+        {
+            if (Vector2.Distance(new(position.X, position.Z), new(x, z)) > radius) continue;
+            var parts = WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(destroyed));
+            int withCollision = parts.Count(p => p.Source.GetPath("xml collision").Length > 0 && collision.Get(p.Source.GetPath("xml collision")) is not null);
+            if (NavDebug.Dump) yield return "    fields " + string.Join(", ", record.Ints.Select(kv => $"{kv.Key}={kv.Value}").Concat(record.Floats.Select(kv => $"{kv.Key}={kv.Value}")).Concat(record.Bools.Where(kv => kv.Value).Select(kv => kv.Key)));
+            yield return $"{record.Name} [{record.StringId}] at {position.X:0},{position.Y:0},{position.Z:0} mode {record.GetInt("path mode", (int)PathMode.Obstacle)} gateway {record.GetBool("is gateway")} parts {parts.Count} with collision {withCollision} interior masks {record.GetReferences("interior mask").Count()} destroyed {destroyed}";
+        }
     }
 
     /// <summary>
