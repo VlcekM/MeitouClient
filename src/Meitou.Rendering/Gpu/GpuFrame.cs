@@ -11,7 +11,9 @@ namespace Meitou.Rendering.Gpu;
 public sealed unsafe class GpuFrame : IDisposable
 {
     readonly VulkanDevice device;
-    readonly LinearAllocator[] constants;
+    readonly LinearAllocator[] constants, staging;
+    /// <summary>Regular staging chunks a slot keeps beyond what its last cycle used (32 MB): a loading peak's are freed once it has passed.</summary>
+    const int StagingKeep = 4;
     readonly List<DescriptorPool>[] pools;
     readonly GpuContext ctx;
 
@@ -21,10 +23,12 @@ public sealed unsafe class GpuFrame : IDisposable
         device = ctx.Device;
         int n = device.Frames.Count;
         constants = new LinearAllocator[n];
+        staging = new LinearAllocator[n];
         pools = new List<DescriptorPool>[n];
         for (int i = 0; i < n; i++)
         {
             constants[i] = new LinearAllocator(device, $"frame constants {i}", ctx.HostMemory);
+            staging[i] = new LinearAllocator(device, $"upload staging {i}", ctx.HostMemory);
             pools[i] = [];
         }
         Stats = new GpuStats();
@@ -96,8 +100,10 @@ public sealed unsafe class GpuFrame : IDisposable
     public int Slot { get; private set; }
     public bool Open { get; private set; }
     public CommandList Commands { get; }
-    /// <summary>Host-visible memory for this frame (constants, CPU-written instances and indirect arguments, upload staging).</summary>
+    /// <summary>Host-visible memory for this frame (constants, CPU-written instances and indirect arguments).</summary>
     public LinearAllocator Constants => constants[Slot];
+    /// <summary>Host-visible staging for this frame's uploads (<see cref="Uploader"/>): copy sources only, so its reset trims it.</summary>
+    public LinearAllocator Staging => staging[Slot];
     public QueryArena Timestamps { get; }
     public ResourceStates States { get; }
     public GpuStats Stats { get; }
@@ -124,6 +130,7 @@ public sealed unsafe class GpuFrame : IDisposable
         PreFrame.Handle = uploads;
         PreFrame.Invalidate();
         constants[Slot].Reset();
+        staging[Slot].Reset(StagingKeep);
         foreach (var p in pools[Slot]) device.Vk.ResetDescriptorPool(device.Device, p, 0);
         foreach (var t in threads) t?.Reset(Slot);
         Timestamps.Begin(Slot, Number);
@@ -179,6 +186,7 @@ public sealed unsafe class GpuFrame : IDisposable
     public void Dispose()
     {
         foreach (var c in constants) c.Dispose();
+        foreach (var c in staging) c.Dispose();
         foreach (var list in pools)
             foreach (var p in list) device.Vk.DestroyDescriptorPool(device.Device, p, null);
         Timestamps.Dispose();

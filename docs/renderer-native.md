@@ -2950,7 +2950,7 @@ game, display, viewer and test projects no longer reference `Meitou.Rendering.Vu
    Comments that described the current code wrongly (the seam, `IGlInterop` members, VkGl driving the frame) were rewritten.
 5. **Sections 0 and 4** of this note describe the pre-port state and the seam; they are marked historical.
 
-**Gate** (Release, RTX 4070, against `C:\Temp\base-6f4af19` and renders of its viewer; FSR is compared with a tolerance because the base
+**Gate** (Release, RTX 4070, against `C:\Temp\base-6f4af19` and renders of its viewer; FSR is compared with a tolerance (owner decision 13) because the base
 viewer against itself differs by up to 27, mean 0.008, no pixel over 12):
 - **Verified** at every step: `dotnet build -c Release` 0 warnings; `dotnet test -c Release` with `KENSHI_PATH` set, 0 skipped (472 tests
   through 5b; 459 from 5c: 17 seam / VkGl / GL-export tests deleted, 4 native host tests added); the ten views in both modes max 0
@@ -2985,7 +2985,7 @@ counting, the GL state mirror) is the likely reason, not measured apart.
 renderer's name. Resident objects and foliage are the same as the base (1288 / 1471 MB at frames 150 / 300); the process's working set
 was 3.0-3.3 GB against the base's 3.8-4.4 GB. The largest owner by bytes is `frame constants` (880 MB in 110 chunks of 8 MB, 0 MB
 device-local): the frame's constants double as the `Uploader`'s staging, and `LinearAllocator.Reset` keeps every chunk of normal size, so
-the peak of the loading frames stays allocated in host memory. That predates this stage (unchanged code) and is noted for later.
+the peak of the loading frames stays allocated in host memory. That predates this stage (unchanged code); fixed after it (owner decision 15: 16 MB of frame constants and 56 MB of upload staging, working set 2.6 GB, same benchmark).
 
 ---
 
@@ -3103,3 +3103,13 @@ refers to them as "owner decision N".
 8. **Transfer queue** (2.2): not in wave 2 (decision 6).
 9. **Documentation drift** (7.7): "eight" parity views corrected to "ten" in docs/engine.md and DECISIONS 2.
 10. **Step P everywhere?** (3.2): step P stays mandatory for post-processing (E) as for A to D; it is optional for overlays (F).
+11. **`LegacyProgram` after phase 8** (8.9, "What is left" 1): kept for now; moving its users to the native shader model is a later step.
+12. **The GL vocabulary** (8.9, "What is left" 2): kept in `GlConventions`; no rewrite to Vulkan's own types for now.
+13. **FSR in the parity gate** (8.9, Gate): FSR is not deterministic run to run, so an `--upscaler fsr` view passes when it differs from
+    the base by no more than the base viewer differs from itself (max 27, mean about 0.01, no pixel over 12 when measured); every other
+    view stays at 0.
+14. **DECISIONS 7 and 18**: 7 is marked superseded by 22, and 18's "IGl stays" sentence is marked replaced by 22 and phase 8.
+15. **Retained staging memory** (8.9, VRAM): freed above a limit. The `Uploader` stages through a per-slot allocator of its own
+    (`GpuFrame.Staging`, `upload staging N`) instead of the frame constants; its reset frees the regular chunks beyond 4 (32 MB) and
+    beyond those the slot's last cycle used, which is safe because no descriptor set refers to staging. The frame constants keep their
+    chunks (descriptor sets are made for them).

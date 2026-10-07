@@ -89,7 +89,7 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     chooses anything (`vulkan` is accepted and ignored, `gl` prints that OpenGL is gone and is ignored; so is an old `renderer` key in
     `meitou.user.json`). Vulkan is the only backend, windowed (the game, and the viewer's `--world`, mesh and character modes through
     `Meitou.Rendering.Display.VulkanDisplay`, which also holds the Streamline setup) and headless (`--screenshot`, `--fly-benchmark`).
-    The GL-shaped `IGl` over `VkGl` stays as the renderer API (DECISIONS 7 still holds): the renderers, their 957 call sites and the
+    *Replaced by 22 (phase 8 deleted `IGl` and `VkGl`, 2026-10-07):* the GL-shaped `IGl` over `VkGl` stays as the renderer API (DECISIONS 7 still holds): the renderers, their 957 call sites and the
     GLSL do not change, the shaders are compiled to SPIR-V as before, and a Vulkan-shaped interface remains an option for later
     without a second backend to keep in step. The enumerations `IGl` takes were Silk's; they are now ours (`Gpu/GlEnums.cs`), the
     GL specification's names and token values for the members the code uses, so a renderer's change was its `using`. The parity

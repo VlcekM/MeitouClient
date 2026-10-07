@@ -145,7 +145,7 @@ public sealed unsafe class HostMemory
 
 /// <summary>
 /// Per-frame host-visible memory: a pointer bump in 8 MB chunks (larger requests get a chunk of their own, freed at the next reset).
-/// Regular chunks live as long as the allocator, so descriptor sets made for them stay valid. One per frame slot (and, in wave 4, per
+/// Regular chunks live as long as the allocator (unless <see cref="Reset"/> trims them), so descriptor sets made for them stay valid. One per frame slot (and, in wave 4, per
 /// recording thread); <see cref="Reset"/> when the slot comes round. Not thread-safe.
 /// </summary>
 public sealed unsafe class LinearAllocator : IDisposable
@@ -170,10 +170,15 @@ public sealed unsafe class LinearAllocator : IDisposable
     /// <summary>Bytes handed out since the last reset.</summary>
     public ulong Used { get; private set; }
 
-    public void Reset()
+    /// <summary>
+    /// Starts the slot over. With <paramref name="keepChunks"/>, regular chunks beyond that many and beyond those the last cycle used are
+    /// freed too: only for an allocator no descriptor set refers to (upload staging), so a loading peak does not stay allocated.
+    /// </summary>
+    public void Reset(int keepChunks = int.MaxValue)
     {
+        int keep = Math.Max(keepChunks, current + 1);
         for (int i = chunks.Count - 1; i >= 0; i--)
-            if (chunks[i].Size > ChunkSize)
+            if (chunks[i].Size > ChunkSize || i >= keep)
             {
                 registry?.Forget(chunks[i].Buffer);
                 device.Allocator.Free(chunks[i]);

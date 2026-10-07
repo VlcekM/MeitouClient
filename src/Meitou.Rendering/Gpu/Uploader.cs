@@ -5,7 +5,7 @@ namespace Meitou.Rendering.Gpu;
 /// <summary>
 /// Copies data into device buffers and textures through the frame's upload command buffer, which the host submits ahead of the frame's own
 /// (VkGl: <c>uploadCmd</c>, "before: uploadCmd"). An upload is therefore seen by the whole frame, and native and VkGl uploads keep their call
-/// order. Staging comes from the frame's <see cref="GpuFrame.Constants"/>. Render thread only, while a frame is open.
+/// order. Staging comes from the frame's <see cref="GpuFrame.Staging"/>. Render thread only, while a frame is open.
 /// </summary>
 public sealed unsafe class Uploader
 {
@@ -21,7 +21,7 @@ public sealed unsafe class Uploader
         if (target.UsedFrame == ctx.Frame.Number)
             throw new InvalidOperationException("the frame already drew from this buffer: per-frame data belongs in a Transient (docs/renderer-native.md 2.3)");
         if (offset + (ulong)data.Length > target.Size) throw new ArgumentOutOfRangeException(nameof(data), "write past the end of the buffer");
-        var staging = ctx.Frame.Constants.Write(data);
+        var staging = ctx.Frame.Staging.Write(data);
         var copy = new BufferCopy(staging.Offset, offset, (ulong)data.Length);
         var cmd = Cmd;
         ctx.Device.Vk.CmdCopyBuffer(cmd, staging.Handle, target.Handle, 1, &copy);
@@ -33,7 +33,7 @@ public sealed unsafe class Uploader
     public void Write(Texture target, int level, int layer, in Rect2D region, ReadOnlySpan<byte> data)
     {
         if (data.IsEmpty) return;
-        var staging = ctx.Frame.Constants.Write(data);
+        var staging = ctx.Frame.Staging.Write(data);
         var copy = new BufferImageCopy
         {
             BufferOffset = staging.Offset,
