@@ -365,3 +365,26 @@ Answered by the owner on 2026-10-07; each took the recommendation.
    tiles only as a reference. (The alternative was a clean-room Havok tile reader plus our builder for changed zones.)
 4. **Order:** simulation stages 0 to 3 with markers first; the character renderer in parallel.
 5. **Physics: none for now** (terrain and navmesh only); BepuPhysics2 when ragdolls and thrown bodies are needed.
+
+## Stage 5 status: navmesh (`Meitou.Navigation`, track D)
+
+**Built (Observed, on The Hub zones 20.32 and 21.32, Release, 12 cores).** Collision reader in `Meitou.Data.Physics`
+([collision.md](formats/collision.md#reader-meitoudataphysics)); `ZoneGeometryGatherer` (terrain with the Y 100 water clamp, building
+and foliage collision with the mask and path-mode rules, 60 degree building and 40 degree terrain/foliage slopes, interior-mask carvers
+skipped for `is gateway` buildings, door painters, seeds from `seeds.def`); a tiled DotRecast 2026.3.1 build (cell 2, cell height 1,
+tile 48 cells, agent height 18, max climb 5; areas ground, water, door; monotone regions) with our own tile stitching; the seed prune;
+A* over polygons with portal clearance (2 x radius), water factor, door rules and a funnel; `NavWorld` with cross-zone links;
+`NavmeshWalkability : IWalkability`; `NavMeshService` (worker thread, queue, cache under `%LOCALAPPDATA%\Meitou\navmesh` keyed by building
+hash and settings). `Meitou.Simulation` is unchanged.
+
+**Numbers.** Build about 0.25 to 0.3 s per zone (cell 1.5 / tile 64: 0.55 s; tile 128: 1.4 s). Gathering 1.2 to 1.7 s, mostly foliage
+placement, so a cold zone is about 1.5 to 2 s on the worker thread; a cached zone loads in milliseconds. A Hub crossing west to east
+(about 3500 straight, 4200 walked) takes about 45 ms.
+
+**Tool.** `meitou-tools navmesh --zone x,z | --town name [--geometry] [--obj f] [--png f] [--scale u] [--box x0,z0,x1,z1]
+[--path x0,z0,x1,z1] [--cell c] [--tile n] [--repeat n]`. Output images used for review live outside the repo
+(`R:\VlcekM\MeitouClient-re\probes\nav\out\`).
+
+**Gaps.** No interiors; linked-wall and neighbour-border seeds and the ray-down seed check are missing; no detail mesh (heights about
+0.5 off); doors are an agent flag (`DoorsClosed`), not live state; cross-zone links only between loaded 4-neighbours; no viewer overlay;
+parts with collision but no `.mesh` are dropped by the layout; `BCTYPE_SHELL_WITH_INTERIOR` is approximated.

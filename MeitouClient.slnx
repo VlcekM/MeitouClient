@@ -4,6 +4,7 @@
     <Project Path="src/Meitou.Data/Meitou.Data.csproj" />
     <Project Path="src/Meitou.Engine/Meitou.Engine.csproj" />
     <Project Path="src/Meitou.Game/Meitou.Game.csproj" />
+    <Project Path="src/Meitou.Navigation/Meitou.Navigation.csproj" />
     <Project Path="src/Meitou.Rendering.Display/Meitou.Rendering.Display.csproj" />
     <Project Path="src/Meitou.Rendering/Meitou.Rendering.csproj" />
     <Project Path="src/Meitou.Simulation/Meitou.Simulation.csproj" />
