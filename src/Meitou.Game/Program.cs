@@ -21,7 +21,8 @@ namespace Meitou.Game;
 /// <summary>Game-only options; everything else is the world options shared with the viewer (<see cref="WorldOptions"/>).</summary>
 sealed class GameOptions
 {
-    public int? FpsLimit, TickRate;
+    public int? FpsLimit, TickRate, SimThreads;
+    public ulong Seed;
     public bool? VSync;
     /// <summary>With <c>--screenshot</c>: simulation ticks run before the picture (with no input).</summary>
     public int Ticks;
@@ -35,6 +36,8 @@ sealed class GameOptions
           --vsync / --no-vsync       vsync (default off)
           --tick-rate <hz>           control ticks per second: input actions and camera, in real time (default 30; the world ticks 30 per game second)
           --free-camera              start in the free camera (; toggles)
+          --sim-threads <n>          worker threads of the simulation (default: half the cores, 1 to 8; the result never depends on it)
+          --seed <n>                 the world seed (default 0)
           --ticks <n>                with --screenshot: run n simulation ticks before the picture
           --quit-after <s>           close after s seconds and print the frame rate (smoke test)
           --yaw/--pitch/--distance   start view: heading, pitch above the horizon and boom (Kenshi: 30 degrees, boom 150; clamped to 10..2000)
@@ -57,6 +60,8 @@ sealed class GameOptions
             {
                 case "--fps-limit": g.FpsLimit = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--tick-rate": g.TickRate = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--sim-threads": g.SimThreads = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--seed": g.Seed = ulong.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--vsync": g.VSync = true; break;
                 case "--no-vsync": g.VSync = false; break;
                 case "--ticks": g.Ticks = int.Parse(Next(), CultureInfo.InvariantCulture); break;
@@ -112,7 +117,7 @@ static class Program
 /// </summary>
 sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config)
 {
-    WorldSession session = null!;
+    WorldSession session = null!;   // disposed with the host (Run)
     WorldFrame.Gpu gpu = null!;
     WorldCamera camera = null!;
     WorldRenderOptions render = null!;
@@ -120,7 +125,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
 
     public int Run()
     {
-        return o.Screenshot is not null ? Screenshot() : Interactive();
+        try { return o.Screenshot is not null ? Screenshot() : Interactive(); }
+        finally { session?.Dispose(); }
     }
 
     void Boot(VulkanDisplay display, bool interactive)
@@ -129,7 +135,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         gpu = WorldFrame.CreateGpu(context, install, scene, assets, o, interactive);
         if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Upscalers.VendorUpscalers.Factory(display.Context, streamline);
         (camera, render) = WorldFrame.Setup(scene, o);
-        session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate);
+        session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate,
+            simulation: new Meitou.Simulation.WorldSettings { Seed = g.Seed, Threads = Math.Max(1, g.SimThreads ?? config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)) });
         foreach (var problem in session.Bindings.Apply(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
         var rig = session.Camera;
         var target = camera.Target;

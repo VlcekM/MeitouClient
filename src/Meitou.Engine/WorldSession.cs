@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Engine.Cameras;
 using Meitou.Engine.Input;
 using Meitou.Engine.Time;
+using Meitou.Simulation;
 
 namespace Meitou.Engine;
 
@@ -16,11 +17,11 @@ namespace Meitou.Engine;
 /// simulation ticks the speed they left allows (docs/simulation.md "Time model").</item>
 /// </list>
 /// </summary>
-public sealed class WorldSession
+public sealed class WorldSession : IDisposable
 {
     public WorldSession(Vector3 focus, (double X0, double Z0, double X1, double Z1) region, Func<float, float, float> ground,
         double startHour = GameClock.DefaultStartHour, double tickRate = FixedStepClock.DefaultTickRate, InputBindings? bindings = null,
-        GameClock? clock = null)
+        GameClock? clock = null, WorldSettings? simulation = null, IEnumerable<ITickSystem>? systems = null)
     {
         Focus = focus;
         Region = region;
@@ -28,6 +29,7 @@ public sealed class WorldSession
         Clock = clock ?? new GameClock(startHour);
         Bindings = bindings ?? new InputBindings();
         Camera = new CameraRig(ground);
+        World = new World(simulation ?? new WorldSettings(), new OpenGroundWalkability(ground), systems);
     }
 
     /// <summary>The point the world was loaded around.</summary>
@@ -39,6 +41,13 @@ public sealed class WorldSession
     /// <summary>The game-time simulation tick.</summary>
     public SimulationClock Simulation { get; } = new();
     public GameClock Clock { get; }
+    /// <summary>The simulated world; it ticks with the simulation clock.</summary>
+    public World World { get; }
+    /// <summary>The snapshot the last simulation tick published and the one before it, for interpolating by <see cref="SimulationAlpha"/>.</summary>
+    public WorldSnapshot CurrentSnapshot => World.Snapshot;
+    public WorldSnapshot PreviousSnapshot => World.PreviousSnapshot;
+    /// <summary>Where the frame is between the previous and the current simulation tick (the snapshots' alpha, not the camera's).</summary>
+    public float SimulationAlpha => Simulation.Alpha;
     public InputState Input { get; } = new();
     public InputBindings Bindings { get; }
     public CameraRig Camera { get; }
@@ -67,8 +76,14 @@ public sealed class WorldSession
         return n;
     }
 
-    /// <summary>One simulation tick: the game clock moves by one tick of game time.</summary>
-    void SimulationTick() => Clock.Advance(Simulation.TickSeconds);
+    /// <summary>One simulation tick: the world runs its phases, the game clock moves by one tick of game time.</summary>
+    void SimulationTick()
+    {
+        World.RunTick();
+        Clock.Advance(Simulation.TickSeconds);
+    }
+
+    public void Dispose() => World.Dispose();
 
     /// <summary>One control tick: the actions from the input (pause, speed), then the camera.</summary>
     public ActionState Tick()

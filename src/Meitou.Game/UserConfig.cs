@@ -16,6 +16,8 @@ sealed class UserConfig
     public int FpsLimit { get; set; } = 240;
     public bool VSync { get; set; }
     public int TickRate { get; set; } = 30;
+    /// <summary>Worker threads of the simulation; null = half the cores.</summary>
+    public int? SimThreads { get; set; }
     public Dictionary<string, float> Graphics { get; set; } = [];
     public Dictionary<string, string> Bindings { get; set; } = [];
 

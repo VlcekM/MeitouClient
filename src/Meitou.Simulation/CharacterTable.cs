@@ -1,0 +1,187 @@
+using System.Numerics;
+using Meitou.Data.Characters;
+
+namespace Meitou.Simulation;
+
+/// <summary>
+/// The state every tick touches for one character, in a dense struct array (docs/simulation.md, "World model"). Plain data, no
+/// references, so the table copies it by block and the state hash reads it by value. What the fields mean is up to the systems;
+/// the stand-in movement uses position, velocity and yaw.
+/// </summary>
+public struct CharacterHot
+{
+    /// <summary>The slot holds a character. A dead slot's other fields are stale.</summary>
+    public bool Alive;
+    /// <summary>The slot's generation: raised each time the slot is used again, so an old <see cref="CharacterId"/> never names the new character.</summary>
+    public int Generation;
+    /// <summary>World position: X/Z on the map, Y the height the character stands at.</summary>
+    public Vector3 Position;
+    public Vector3 Velocity;
+    /// <summary>Heading in radians, 0 along +Z, turning towards +X (the renderer's convention: yaw of <c>atan2(x, z)</c>).</summary>
+    public float Yaw;
+    /// <summary>Movement mode (walk, run, ...); the meaning is the movement system's.</summary>
+    public byte Mode;
+    public ushort Flags;
+    /// <summary>Where the character is going (X/Z).</summary>
+    public Vector2 Goal;
+    /// <summary>Cursor into the character's path (the path itself is cold state).</summary>
+    public int PathCursor;
+    /// <summary>Animation state and its time in seconds.</summary>
+    public ushort Animation;
+    public float AnimationTime;
+    public float Health;
+}
+
+/// <summary>The rest of a character: things few systems touch per tick (stats, body parts, inventory, AI blackboard come here as they are built).</summary>
+public sealed class CharacterCold
+{
+    public string Name { get; set; } = "";
+    public int Faction { get; set; }
+    /// <summary>What the renderer needs to draw the character; a character without one is simulated but not published in snapshots.</summary>
+    public CharacterAppearance? Appearance { get; set; }
+    /// <summary>The tick the character appeared at.</summary>
+    public long SpawnedTick { get; set; }
+}
+
+/// <summary>
+/// The characters of a world: <see cref="CharacterHot"/> structs in two dense arrays, <see cref="Previous"/> (the last tick's
+/// result, which every phase reads, other characters' included) and <see cref="Next"/> (the tick being computed, where a phase
+/// writes only its own characters), plus a <see cref="CharacterCold"/> object per slot. A tick starts with <see cref="BeginTick"/>
+/// (Next becomes a copy of Previous) and ends with <see cref="EndTick"/> (the two swap). Slots are reused, the most recently freed
+/// first, with the generation raised; spawning and removing happen only in the serial phases, in the order the commit sorts them,
+/// which is what keeps slot assignment independent of the thread count.
+/// </summary>
+public sealed class CharacterTable
+{
+    CharacterHot[] previous;
+    CharacterHot[] next;
+    CharacterCold?[] cold;
+    readonly Stack<int> free = [];
+    int highWater;
+    bool inTick;
+
+    public CharacterTable(int capacity = 256)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
+        previous = new CharacterHot[capacity];
+        next = new CharacterHot[capacity];
+        cold = new CharacterCold?[capacity];
+    }
+
+    /// <summary>Slots ever used: every character is in 0..HighWater-1.</summary>
+    public int HighWater => highWater;
+    /// <summary>Characters alive.</summary>
+    public int Count => highWater - free.Count;
+
+    /// <summary>The last tick's state of the slots 0..HighWater-1.</summary>
+    public ReadOnlySpan<CharacterHot> Previous => previous.AsSpan(0, highWater);
+    /// <summary>The state being computed, same slots. A phase writes only the slots of its own partition.</summary>
+    public Span<CharacterHot> Next => next.AsSpan(0, highWater);
+
+    public CharacterCold? Cold(int slot) => cold[slot];
+
+    /// <summary>The id of the character in <paramref name="slot"/> as of the last tick.</summary>
+    public CharacterId IdOf(int slot) => new(slot, previous[slot].Generation);
+
+    /// <summary>Whether <paramref name="id"/> names a character alive as of the last tick.</summary>
+    public bool IsAlive(CharacterId id) =>
+        id.Slot >= 0 && id.Slot < highWater && previous[id.Slot].Alive && previous[id.Slot].Generation == id.Generation;
+
+    /// <summary>Finds the slot of <paramref name="id"/> in the state being computed (for the commit, which sees removals and spawns of this tick).</summary>
+    public bool TryResolveNext(CharacterId id, out int slot)
+    {
+        slot = id.Slot;
+        return slot >= 0 && slot < highWater && next[slot].Alive && next[slot].Generation == id.Generation;
+    }
+
+    internal void BeginTick()
+    {
+        Array.Copy(previous, next, highWater);
+        inTick = true;
+    }
+
+    internal void EndTick()
+    {
+        (previous, next) = (next, previous);
+        inTick = false;
+    }
+
+    /// <summary>
+    /// Adds a character; call only from the serial phases (inputs, commit, slow world) or before the first tick. The slot is the
+    /// most recently freed one, else a new one. The generation and <c>Alive</c> in <paramref name="state"/> are set here.
+    /// </summary>
+    public CharacterId Spawn(CharacterHot state, CharacterCold cold, long tick)
+    {
+        ArgumentNullException.ThrowIfNull(cold);
+        int slot;
+        int generation;
+        if (free.Count > 0)
+        {
+            slot = free.Pop();
+            generation = next[slot].Generation + 1;
+        }
+        else
+        {
+            slot = highWater;
+            if (slot == previous.Length) Grow();
+            highWater++;
+            generation = 0;
+        }
+        state.Alive = true;
+        state.Generation = generation;
+        cold.SpawnedTick = tick;
+        next[slot] = state;
+        // Outside a tick there is no "last tick" to keep apart from the new one.
+        if (!inTick) previous[slot] = state;
+        this.cold[slot] = cold;
+        return new CharacterId(slot, generation);
+    }
+
+    /// <summary>Removes a character in the state being computed; false when <paramref name="id"/> is not alive there. Serial phases only.</summary>
+    public bool Remove(CharacterId id)
+    {
+        if (!TryResolveNext(id, out int slot)) return false;
+        next[slot].Alive = false;
+        if (!inTick) previous[slot].Alive = false;
+        cold[slot] = null;
+        free.Push(slot);
+        return true;
+    }
+
+    void Grow()
+    {
+        int size = previous.Length * 2;
+        Array.Resize(ref previous, size);
+        Array.Resize(ref next, size);
+        Array.Resize(ref cold, size);
+    }
+
+    /// <summary>Adds the table's canonical state, in slot order, to <paramref name="hasher"/>: every slot's state, the free list in reuse order and the cold fields that matter.</summary>
+    internal void Hash(ref StateHasher hasher)
+    {
+        hasher.Add(highWater);
+        for (int i = 0; i < highWater; i++)
+        {
+            ref readonly var c = ref previous[i];
+            hasher.Add(c.Alive);
+            hasher.Add(c.Generation);
+            if (!c.Alive) continue;
+            hasher.Add(c.Position);
+            hasher.Add(c.Velocity);
+            hasher.Add(c.Yaw);
+            hasher.Add((int)c.Mode);
+            hasher.Add((int)c.Flags);
+            hasher.Add(c.Goal);
+            hasher.Add(c.PathCursor);
+            hasher.Add((int)c.Animation);
+            hasher.Add(c.AnimationTime);
+            hasher.Add(c.Health);
+            var k = cold[i]!;
+            hasher.Add(k.Faction);
+            hasher.Add(k.SpawnedTick);
+            hasher.Add(k.Name.Length);
+        }
+        hasher.Add(free.Count);
+        foreach (int slot in free) hasher.Add(slot);
+    }
+}

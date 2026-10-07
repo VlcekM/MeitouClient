@@ -22,18 +22,18 @@ decides what they leave open (scheduling, threads, data layout).
 
 ## Where we are
 
-- `meitou` boots into the world: `WorldSession` (`src/Meitou.Engine`) runs a fixed 30 Hz tick of input actions, the camera rig
-  and `GameClock`, and the renderer draws the camera interpolated between ticks ([engine.md](engine.md#the-game-loop-meitou-meitouenginetime)).
-  The renderer is complete enough for play (terrain, buildings, foliage, water, sky, shadows, impostors, upscalers).
+- `meitou` boots into the world: `WorldSession` (`src/Meitou.Engine`) runs a real-time control tick (input actions, camera) and a
+  game-time simulation tick that advances the `GameClock` and a `World`, and the renderer draws the camera interpolated between
+  control ticks ([engine.md](engine.md#the-game-loop-meitou-meitouenginetime)). The renderer is complete enough for play (terrain,
+  buildings, foliage, water, sky, shadows, impostors, upscalers).
 - The data layer reads everything a world needs (FCS with the game's merge rules, load order, zone and town placements), and
-  `CharacterGenerator` rolls an NPC's appearance and loadout. There are no typed views yet over FACTION, SQUAD_TEMPLATE, TOWN,
-  AI_PACKAGE, AI_TASK or the CONSTANTS used by the simulation: code reads `GameRecord` fields by name where it needs one.
-- Stage 0 (time facts) is done on branch `sim-core`: `GameClock` runs at the game's 1200/11 s per game hour and `WorldSession`
-  offers the game's pause, 1, 2 and 5 (F2 to F4), with a real-time control tick and a game-time simulation tick
-  ([engine.md](engine.md#the-game-loop-meitou-meitouenginetime)).
-- Missing for a living world: the world model (factions, squads, characters), movement and walkability, character drawing (the
-  viewer's character renderer was dropped in phase 8, DECISIONS 23; how it worked is in [character-viewer.md](character-viewer.md)),
-  AI, the UI, saves.
+  `CharacterGenerator` rolls an NPC's appearance and loadout. Typed views exist over CONSTANTS, FACTION (with the initial relations),
+  SQUAD_TEMPLATE and TOWN; AI_PACKAGE, AI_TASK and races are still read by field name.
+- Stages 0 (time facts) and 1 (skeleton) are done on branch `sim-core`. Stage 0: `GameClock` runs at the game's 1200/11 s per game
+  hour and `WorldSession` offers the game's pause, 1, 2 and 5 (F2 to F4). Stage 1: [Skeleton as built](#skeleton-as-built-stage-1).
+- Missing for a living world: the populated world (factions, squads, characters in it), real movement and walkability, character
+  drawing (the viewer's character renderer was dropped in phase 8, DECISIONS 23; how it worked is in
+  [character-viewer.md](character-viewer.md)), AI, the UI, saves.
 
 ## Principles
 
@@ -122,10 +122,52 @@ One tick, in order:
   movement mode, path cursor, animation state, flags), an object per character for the rest (stats, body parts, inventory, AI
   blackboard). Slots are reused with a generation number in the id. Squads, factions and towns are plain objects; there are
   few of them.
-- **Static data.** Typed views built once at load over `GameRecord`: `GameConstants` with the loader's rescalings
-  ([character-stats.md](game/character-stats.md#constants-used-by-this-subsystem)), races, factions and the relation table's
-  initial values, squad templates, towns, AI packages and tasks. Probe tables from the research become tests (skipped without
-  the game).
+- **Static data** (stage 1, `src/Meitou.Data/Gameplay/`). Typed views built once at load over `GameRecord`: `GameConstants` (the fields of
+  [game-loop.md](game/game-loop.md#settings-and-constants) and [character-stats.md](game/character-stats.md#constants-used-by-this-subsystem)
+  with the loader's rescalings applied, so a property is the stored value; a missing field takes the editor's default where the doc lists
+  one), `FactionData` + `FactionRelations` (the initial table of [section 3.2](game/factions-squads-towns.md#32-initial-values-verified):
+  explicit entry, else the smaller default, self 100; hostile at -30 or below, ally at 50 or above), `SquadTemplate` (section 4) and
+  `TownData` (section 7, with the setup rules for `town radius mult` and the NEST_MARKER foliage range). Still to come: races, AI
+  packages and tasks. The probe tables are tests (`[Slow]`, skipped without the game): the CONSTANTS values, 103 factions with 10,302
+  NPC pairs of which 3,356 hostile and 62 allied and 221 explicit entries, 959 squad templates, 346 towns by type.
+
+## Skeleton as built (stage 1)
+
+Decisions the plan left open, made while building `Meitou.Simulation`:
+
+- **World and systems.** `World` owns the `CharacterTable`, the `CommandQueue`, a `WorkerPool` and an ordered list of `ITickSystem`s
+  (movement, AI, combat... plug in here). `RunTick` follows the phases above: `Inputs`, `Schedule` (after the neighbour grid is built),
+  `Think`, `Move`, `Act` (each over `Partition`s of slot ranges, a barrier after each system's phase), the effects commit, `SlowWorld`,
+  then the swap and the snapshot. Systems run in the order they were added, in every phase.
+- **Double-buffered hot state.** `CharacterHot` structs live in two arrays: `Previous` (the last tick's result, read by every phase,
+  other characters included) and `Next` (copied from `Previous` at the start of the tick; a phase writes only the slots of its own
+  partition). The arrays swap at the end of the tick. Spawns and removals happen only in the serial phases (a removal only in the
+  commit or the slow world, never in `Inputs`), so a slot freed this tick is reused no earlier than the commit.
+- **Slots.** Reused most-recently-freed first with `CharacterId.Generation` raised; the free list is part of the state hash.
+- **Randomness is stateless.** `Rng.Hash(world seed, entity key, purpose, counter)` (SplitMix64 mixing; the entity key is slot and
+  generation, the counter is usually the tick number): nothing to store, hash or race on, and the same roll whichever thread asks.
+  `RandomStream` is the stateful convenience over the same hash.
+- **Cross-character effects.** The Act phase puts effects into a per-partition `EffectBuffer`; the commit concatenates them and sorts by
+  (target slot, source slot, system, sequence), none of which depends on the partitioning, then calls `Apply` of the emitting system.
+  A source emits all its effects together. Sums over neighbours (separation) use `SpatialGrid`, built each tick from `Previous`,
+  which visits cells in a fixed order: float addition is not associative, so the order must be a function of the state alone.
+- **Partitioning.** `Threads x 2` partitions (at least 16 slots each) over `0..HighWater`; which worker runs which partition is not fixed.
+  One thread means no threads: the caller runs everything. The determinism test runs 1, 4 and 16 threads, so 2, 8 and 32 partitions.
+- **State hash.** `World.StateHash()`: a mixing hash written here (no packages) over the seed, the tick, every slot in order (alive,
+  generation, and for live ones position, velocity, yaw, mode, flags, goal, path cursor, animation, health, faction, spawn tick) and the
+  free list. Floats go in by their bits (-0 as 0). It is a test and debugging tool, not run in play.
+- **Snapshots.** Each tick publishes a `WorldSnapshot` of the characters that have an appearance (a character without one is simulated
+  but not drawn) and keeps the one before; `WorldSession` exposes `CurrentSnapshot`, `PreviousSnapshot` and `SimulationAlpha` (the
+  simulation clock's, not the camera's). The list is rebuilt every tick: cheap at hundreds of characters; at thousands it becomes a
+  double-buffered array, a stage 3 measurement.
+- **WorldSession.** Owns a `World` over `OpenGroundWalkability(terrain height)`; every simulation tick runs `World.RunTick()` then
+  advances the `GameClock`. The host chooses the thread count (`--sim-threads`, `simThreads` in the user config; default half the
+  cores, 1 to 8) and the seed (`--seed`). Nothing is drawn from the snapshots yet.
+- **Determinism tests** (`tests/Meitou.Tests/Simulation`): a dummy workload (`WanderSystem`: seeded wandering, separation steering over
+  the grid, walkability against a synthetic ground that dips under the water, blows on the nearest neighbour, births and deaths that
+  reuse slots) runs 300 ticks with 1, 4 and 16 threads; the hashes at six checkpoints are identical, two runs agree, another seed
+  differs.
+
 
 ## Walkability and movement
 

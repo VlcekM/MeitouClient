@@ -45,13 +45,18 @@ Dependencies point one way: Core ← Data ← Engine / Rendering ← Game / view
   sunset, 1 between; **Observed**), `HH:MM` (`floor(frac x 60)` minutes) and `Day: n` texts. Sunrise, sunset and days per year come
   from the CONSTANTS record (5 / 23 / 100); sunset not after sunrise gives 6 and 20. The window title shows the clock. The hour
   drives the sun, sky and lighting; the heat haze's game time is `HoursSinceStart` and stops while paused.
+- **World** (`Meitou.Simulation.World`, owned by `WorldSession.World`): runs one tick per simulation tick, with the phases, the
+  worker pool, the stateless seeded randomness and the state hash described in [simulation.md](simulation.md#skeleton-as-built-stage-1).
+  After each tick it publishes a `WorldSnapshot`; the session keeps the last two (`PreviousSnapshot`, `CurrentSnapshot`) and
+  `SimulationAlpha` (the simulation clock's fraction of a tick) so the host can interpolate characters like the camera. Worker
+  threads: `--sim-threads` or `simThreads` in the user config (default half the cores, 1 to 8); `--seed` sets the world seed.
 - **Input** (`Meitou.Engine.Input`): the host feeds an `InputState` (keys, buttons, mouse movement and wheel) from the
   windowing library's events; each tick consumes it once, so a press is seen by exactly one tick however frames and ticks fall.
   `InputBindings` maps keys and buttons to `InputAction`s; defaults below, overridable in the user config.
 - **Frames**: vsync off by default with a frame limiter (default 240 fps; sleeps most of the frame and spins the last 1.5 ms);
   `--vsync`, `--fps-limit <n>` (0 = unlimited). The window opens maximized.
 - **User config**: `meitou.user.json` (git-ignored) in the working directory, else next to the executable: `fpsLimit`, `vSync`,
-  `tickRate`, `graphics` (the Tab panel's sliders by label) and `bindings` (action → comma-separated keys, e.g.
+  `tickRate` (the control tick), `simThreads`, `graphics` (the Tab panel's sliders by label) and `bindings` (action → comma-separated keys, e.g.
   `"RotateLeft": "Q,Left"`, buttons as `Mouse:Right`). Written on exit.
 
 ## The camera (`Meitou.Engine.Cameras`)
