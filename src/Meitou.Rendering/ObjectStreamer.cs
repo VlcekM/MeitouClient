@@ -147,7 +147,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// Asks for the meshes of unresolved instances near enough to matter (nearest first, through the mesh cache) and resolves those whose mesh
     /// is resident. Returns how many are still waiting for a mesh.
     /// </summary>
-    public int Scan(Vector3 eye, float objectRange, float distantRange, bool noDistant, Action<Instance> resolve, int maxResolve = int.MaxValue)
+    public int Scan(Vector3 eye, float objectRange, float distantRange, bool noDistant, Func<Instance, bool> resolve, int maxResolve = int.MaxValue)
     {
         int waiting = 0, resolved = 0;
         foreach (var zone in zones.Values)
@@ -174,7 +174,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
                         waiting++;
                         break;
                     case ObjectMesh.State.Resident:
-                        resolve(inst);
+                        if (!resolve(inst)) { waiting++; break; }   // the mesh does not hold the level this instance needs yet (it is being remade)
                         resolved++;
                         list[i] = list[^1];
                         list.RemoveAt(list.Count - 1);

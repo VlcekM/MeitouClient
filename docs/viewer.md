@@ -467,6 +467,16 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   line. The F11 `scratch` line and the benchmark's `scratch` line give the foliage cull's and grass kernels' per-frame memory (held, need, refused).
   Beyond the whole reach (the longest of the small, medium and grass ranges) a zone keeps only large meshes; the instance arena takes 68 bytes
   a record. All pictures unchanged (0 px).
+- **Object textures and meshes at large ranges** (2026-10-07, [renderer-native.md 8.12](renderer-native.md#812-object-textures-and-meshes-at-large-ranges-2026-10-07)):
+  what is in range is no longer held at full detail. An object texture loses the top mips no pixel can sample at the distance of its nearest user (the pixel footprint
+  from the field of view, render size and sampler bias, over how large a texel is: the part's `MeshTexelScale`, the instance's scale, the material's tile; two levels of margin;
+  not triplanar materials, not the distant towns' atlas, not textures of 512 or less) and is loaded again, the old image drawn until the new one is in, when something comes near; a mesh is
+  decoded with only the LOD levels (and vertices) its nearest instance can draw and remade in place when one gets nearer. Object textures at the forest view, default / all20 / all40 / `max`:
+  536 / 1252 / 1490 / 1725 MB become 500 / 788 / 984 / 1342; object meshes 73 / 273 / 395 / 813 become 53 / 157 / 265 / 666. The caches' high-water marks follow the driver's budget (the old
+  fixed marks on the 11.4 GB card) and under the guard's pressure the streaming sheds first. The benchmark's `resident` line shows `mip streaming: N MB less than every mip, R refined, C coarsened`
+  and the meshes `remade finer / coarser`; `pop-in    objects:` counts parts drawn untextured, textures waiting for a finer image, instances held back for a mesh remake. Knobs: `MEITOU_MIP_STREAM=0`,
+  `MEITOU_MESH_STREAM=0` (the old behaviour, for comparisons), `MEITOU_MIP_MARGIN`, `MEITOU_MIP_TOP`, `MEITOU_MIP_SKIP=<names>`, `MEITOU_MIP_LOG=1`, `MEITOU_TEX_STATS=1` (a texture summary at exit).
+  Pictures unchanged: 0 px in the ten views, both modes.
 - **Grass**: blades are generated per 576-unit page (8 × 8 a zone) on worker threads when the page comes within
   the grass range (`FoliageGrassField`, the game's candidate rule; seeded per page, so deterministic but not the
   game's exact blades), uploaded as one instance buffer per (page, grass type), and drawn nearest page first with

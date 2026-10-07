@@ -44,6 +44,7 @@ static partial class WorldApp
         // Pop-in: per frame, how near the nearest foliage zone without its whole layout (within the near reach) and without any layout (within
         // the far reach) are, and the nearest group in range whose mesh is not resident.
         var gaps = new List<(float Zone, float Unlaid, float Mesh, float Grass)>(o.FlyBenchmark);
+        var objectPop = new List<(int Untextured, int Refining, int Held, int Coarse, int Upgrading)>(o.FlyBenchmark);
         // Pipelined: no wait for the GPU after each frame (the context keeps its frames in flight), as the interactive viewer runs.
         bool pipelined = o.FlyPipelined;
         var interval = Stopwatch.StartNew();
@@ -61,6 +62,7 @@ static partial class WorldApp
             if (i % 500 == 0 || i <= 4) Console.WriteLine($"gpu       frame {i}: {context.Frame.Stats}");
             cpu.Add(cpuMs);
             if (gpu.Foliage is { } fol) gaps.Add((fol.NearestIncompleteZone, fol.NearestUnlaidZone, fol.NearestMissingMesh, fol.NearestMissingGrass));
+            if (gpu.Objects is { } objs) { var (untextured, refining, held, coarse) = objs.TakePopStats(); objectPop.Add((untextured, refining, held, coarse, objs.MeshesAwaitingDetail)); }
             if (o.Screenshot is not null && FlyShots.Contains(i) && gpu.Post is { Target: { } shotTarget } shotPost)
             {
                 // MEITOU_FLY_SHOT=<frame>[,<frame>...]: the picture as drawn at that frame of the flight, nothing waited for (what a flying user sees).
@@ -103,6 +105,9 @@ static partial class WorldApp
         if (gpu.Reflection is { } reflectionStats && render.Reflections) Console.WriteLine($"reflect   {reflectionStats.DescribeStats()}");
         foreach (var f in worst.Skip(skipFrames).OrderByDescending(f => f.Ms).Take(8))
             Console.WriteLine($"  worst   frame {f.Frame}: {f.Ms:0.0} ms ({f.Stages})");
+        if (objectPop.Count > 0)
+            Console.WriteLine($"pop-in    objects: parts drawn untextured (diffuse map not resident) in {objectPop.Count(p => p.Untextured > 0)} of {objectPop.Count} frames (most {objectPop.Max(p => p.Untextured)} draws); " +
+                $"textures waiting for a finer image in {objectPop.Count(p => p.Refining > 0)} frames (most {objectPop.Max(p => p.Refining)}); instances within 3000 held back while their mesh is remade with finer levels in {objectPop.Count(p => p.Held > 0)} frames (most {objectPop.Max(p => p.Held)}); instances drawn at a coarser level than their distance picks (mesh not yet remade) in {objectPop.Count(p => p.Coarse > 0)} frames (most {objectPop.Max(p => p.Coarse)}); mesh remakes for finer levels in flight in {objectPop.Count(p => p.Upgrading > 0)} frames (most {objectPop.Max(p => p.Upgrading)})");
         if (gpu.Foliage is { } foliageGaps && gaps.Count > 0)
         {
             float near = foliageGaps.WholeReach, far = foliageGaps.FarReach;

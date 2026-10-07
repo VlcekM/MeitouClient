@@ -60,6 +60,8 @@ public sealed class VramGuard
     public bool Streaming => !pressure;
     /// <summary>The last sample, as a fraction of the budget.</summary>
     public double Fraction => budget == 0 ? 0 : (double)used / budget;
+    /// <summary>The driver's device-local budget at the last sample (0 until one is taken, or when unknown).</summary>
+    public long BudgetBytes => budget;
     /// <summary>Bytes in use above <see cref="Low"/> of the budget while under pressure (what is to be shed), else 0.</summary>
     public long ExcessBytes => pressure ? Math.Max(used - (long)(Low * budget), 0) : 0;
     /// <summary>Times the guard entered pressure, the lowest <see cref="RangeScale"/> it reached, and allocations <see cref="Allows"/> refused.</summary>

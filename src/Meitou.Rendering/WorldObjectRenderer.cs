@@ -84,7 +84,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         meshes.Unloaded = gpu => { unloadedMeshes.Add(gpu); RemoveBatches(gpu); };
         streamer = new ObjectStreamer(objects, meshes);
         var distant = new SurfaceMaterial { Description = "DistantTown (vertex colour x texture x 1.5)", Diffuse = DistantTowns.DiffuseTexture, VertexColours = true, SpecularMult = 0 };
-        distantMaterial = new ObjectMaterialSet([new ObjectPartMaterial(distant, textureCache.Get(distant.Diffuse, false), null, null, null)]);
+        var distantDiffuse = textureCache.Get(distant.Diffuse, false);
+        if (distantDiffuse is not null) distantDiffuse.KeepAllMips = true;   // its coordinates are the towns' own, not the mesh's: mip streaming leaves it
+        distantMaterial = new ObjectMaterialSet([new ObjectPartMaterial(distant, distantDiffuse, null, null, null)]);
         foreach (var t in objects.DistantTowns)
             towns.Add(new TownDraw { Town = t, Mesh = meshes.Get(t.MeshPath, distant: true), Centre = t.Position });
     }
@@ -135,7 +137,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>A line about what is loaded, for the log.</summary>
     /// <summary>GPU memory held by streamed meshes and textures, for the stats line and the window title.</summary>
     public long ResidentBytes => meshes.Bytes + textureCache.ResidentBytes;
-    public string ResidentDescription => $"{meshes.Bytes / 1048576.0:0} MB in {meshes.Resident} meshes ({meshes.Unloads} unloaded, {meshes.Reloads} reloaded), {textureCache.Describe()}";
+    public string ResidentDescription => $"{meshes.Bytes / 1048576.0:0} MB in {meshes.Resident} meshes ({meshes.Unloads} unloaded, {meshes.Reloads} reloaded, {meshes.Refined} remade finer, {meshes.Coarsened} coarser), {textureCache.Describe()}";
     public string Describe() =>
         $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved), {meshes.Resident}/{meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
         $"{towns.Count(t => t.Mesh.Status == ObjectMesh.State.Resident)}/{towns.Count} distant towns; {objects.Describe()}";
@@ -150,9 +152,34 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
     static readonly bool Log = Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1";
 
+    /// <summary>Colour draws of parts whose diffuse map was not resident (drawn grey) and, at the same moment, textures waiting for a finer image,
+    /// the largest of each since <see cref="TakePopStats"/> (the benchmark's pop-in lines).</summary>
+    int untexturedDraws, untexturedMax, heldNear, coarseDraws, coarseMax;
+    /// <summary>Meshes drawn in a reduced form while the full one loads (<see cref="ObjectMeshCache"/>).</summary>
+    public int MeshesAwaitingDetail => meshes.Upgrading;
+    public (int Untextured, int Refining, int Held, int Coarse) TakePopStats()
+    {
+        var result = (Math.Max(untexturedMax, untexturedDraws), textureCache.Refining, heldNear, Math.Max(coarseMax, coarseDraws));
+        untexturedDraws = untexturedMax = heldNear = coarseDraws = coarseMax = 0;
+        return result;
+    }
+
+    /// <summary>Tells the object textures' mip streaming (<see cref="MipStreaming"/>) the camera: the render size in pixels and the vertical field of view.</summary>
+    public void SetView(int width, int height, float fieldOfView) => SetView(width, height, fieldOfView, Gpu.LodBias);
+    public void SetView(int width, int height, float fieldOfView, float lodBias) => textureCache.Mips.SetView(width, height, fieldOfView, lodBias);
+
+    /// <summary>The eye of the last <see cref="Update"/>, and how far ahead of it (distance) the textures are kept ready for (the camera's speed over half a second).</summary>
+    Vector3 eyeNow;
+    float needMargin;
+    /// <summary>How far ahead a mesh is kept ready for: three times <see cref="needMargin"/> (the camera's speed over 1.5 s).</summary>
+    float MeshMargin => needMargin * 3;
+
     void Update(Vector3 eye, double budgetMs)
     {
         var watch = Stopwatch.StartNew();
+        eyeNow = eye;
+        meshes.LodBias = LodBias;
+        meshes.LookAhead = MeshMargin;
         bool unlimited = budgetMs > 1e8;
         float streamRange = (NoDistant ? RealRange : Math.Max(RealRange, DistantReach)) + WorldLayout.ZoneSize * 0.5f;
         streamer.Paused = guard is { Streaming: false };
@@ -187,6 +214,10 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     }
 
     readonly HashSet<GpuObjectMesh> unloadedMeshes = [];
+    readonly List<ObjectMaterialSet> markedSets = [];
+    readonly List<ObjectMesh> markedMeshes = [];
+    Vector3 lastMarkEye;
+    long lastMarkTime;
     long lastMark;
     int markStamp;
 
@@ -198,19 +229,47 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     {
         long now = Environment.TickCount64;
         if (!force && now - lastMark < 1000) return;
+        // How far the camera goes in the half second a finer texture takes to arrive: nearer than that counts as nearer.
+        if (!force && lastMarkTime != 0) needMargin = Math.Min(Vector3.Distance(eye, lastMarkEye) / Math.Max((now - lastMarkTime) / 1000f, 0.05f) * 0.5f, 30000f);
+        else if (force) needMargin = 0;
+        (lastMarkEye, lastMarkTime) = (eye, now);
         lastMark = now;
         markStamp++;
+        markedSets.Clear();
+        markedMeshes.Clear();
         void Mark(ObjectStreamer.Instance inst, float range)
         {
-            if (inst.Gpu is null || Vector3.Distance(eye, inst.Centre) - inst.Radius >= Math.Min(range, inst.Limit)) return;
+            if (inst.Gpu is null) return;
+            float value = Vector3.Distance(eye, inst.Centre) - inst.Radius;
+            if (value >= Math.Min(range, inst.Limit)) return;
             inst.Mesh.LastUsed = now;
-            if (inst.Materials is { } set && set.Stamp != markStamp) { set.Stamp = markStamp; set.Touch(); }
+            if (inst.Materials is not { } set) return;
+            if (set.Stamp != markStamp) { set.Stamp = markStamp; set.Touch(); }
+            if (inst.Stand) return;
+            if (set.NeedStamp != markStamp) { set.NeedStamp = markStamp; set.Near = set.NearScaled = float.PositiveInfinity; markedSets.Add(set); }
+            float near = Math.Max(value - needMargin, 0);
+            if (near < set.Near) set.Near = near;
+            // A mesh is kept ready for where the camera will be by the next pass and the remake (1.5 s of its speed), a texture for half a second (its two levels of margin do the rest).
+            float meshNear = Math.Max(value - MeshMargin, 0);
+            var mesh = inst.Mesh;
+            if (mesh.NearStamp != markStamp) { mesh.NearStamp = markStamp; mesh.NearPass = meshNear; markedMeshes.Add(mesh); }
+            else if (meshNear < mesh.NearPass) mesh.NearPass = meshNear;
+            float scaled = near / Math.Max(inst.Radius / Math.Max(inst.Gpu.Radius, 1e-6f), 1e-6f);
+            if (scaled < set.NearScaled) set.NearScaled = scaled;
         }
         foreach (var zone in streamer.AllZones)
         {
             foreach (var inst in zone.Real) Mark(inst, RealRange);
             if (!NoDistant) foreach (var inst in zone.Stand) Mark(inst, DistantReach);
         }
+        // Mip streaming: each texture's nearest user, over how large a texel is there.
+        foreach (var set in markedSets)
+            foreach (var part in set.Parts)
+                part.Offer(part.Triplanar ? set.Near : set.NearScaled);
+        textureCache.CommitNeeds();
+        textureCache.Rebalance();
+        // Distance-based streaming of the finest LOD level: each mesh in range, remade when its nearest user needs finer levels (or, after a while, no longer needs them).
+        foreach (var mesh in markedMeshes) meshes.Rebalance(mesh, mesh.NearPass);
         if (NoDistant) return;
         foreach (var t in towns)
             if (Vector3.Distance(eye, t.Centre) - t.Radius < DistantReach) t.Mesh.LastUsed = now;
@@ -271,26 +330,51 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
     // ------------------------------------------------------------------ materials
 
-    /// <summary>Makes the instance drawable once its mesh is resident: bounds, draw distance, material set.</summary>
-    void Resolve(ObjectStreamer.Instance inst)
+    /// <summary>Makes the instance drawable once its mesh is resident: bounds, draw distance, material set. False when the mesh holds only coarser
+    /// levels than this instance can need (it was loaded for farther ones): it is asked to be remade and the instance waits.</summary>
+    bool Resolve(ObjectStreamer.Instance inst)
     {
         var gpu = inst.Mesh.Gpu!;
         var t = inst.Placed.Transform;
-        inst.Gpu = gpu;
-        inst.Centre = Vector3.Transform(gpu.Centre, t);
+        var centre = Vector3.Transform(gpu.Centre, t);
         float scale = MathF.Sqrt(Math.Max(new Vector3(t.M11, t.M12, t.M13).LengthSquared(), Math.Max(new Vector3(t.M21, t.M22, t.M23).LengthSquared(), new Vector3(t.M31, t.M32, t.M33).LengthSquared())));
-        inst.Radius = gpu.Radius * scale;
+        float radius = gpu.Radius * scale;
+        if (!inst.Stand && gpu.MinLevel > 0 && inst.TerrainMode)
+        {
+            meshes.Retarget(inst.Mesh, 0);   // the terrain shader wants every level
+            return false;
+        }
+        if (!inst.Stand && gpu.MinLevel > 0)
+        {
+            float value = Math.Max(Vector3.Distance(eyeNow, centre) - radius - MeshMargin, 0);
+            if (ObjectMeshCache.LevelFor(gpu.Distances, value * LodBias) < gpu.MinLevel)
+            {
+                if (value < 3000) heldNear++;   // an instance that close waiting for its mesh to be remade would be seen (the benchmark counts it)
+                meshes.Retarget(inst.Mesh, value * 0.7f);
+                return false;
+            }
+        }
+        inst.Gpu = gpu;
+        inst.Centre = centre;
+        inst.Radius = radius;
         inst.Limit = inst.Placed.Kind == PlacedKind.BuildingPart
             ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"))
             : float.MaxValue;
-        if (inst.Stand) { inst.Materials = distantMaterial; return; }
+        if (inst.Stand) { inst.Materials = distantMaterial; return true; }
         // A part's look comes from the material the layout chose (which differs per town), else from the resolver's candidates.
         var key = inst.Placed.MeshPath;
         var mkey = inst.Placed.Material is { } spec
             ? (key.ToLowerInvariant(), "spec", spec.StringId)
             : (key.ToLowerInvariant(), inst.Placed.Source.StringId, inst.Placed.Owner.StringId);
-        if (!materialSets.TryGetValue(mkey, out var set)) materialSets[mkey] = set = MakeMaterials(inst.Placed, gpu);
-        inst.Materials = set;
+        bool made = !materialSets.TryGetValue(mkey, out var set);
+        if (made) materialSets[mkey] = set = MakeMaterials(inst.Placed, gpu);
+        inst.Materials = set!;
+        // Mip streaming: this instance's distance is a use of the textures from now on (before the pass that would find it), and a new set's
+        // textures are loaded now, knowing it (they were made without loading: deferred).
+        float near = Math.Max(Vector3.Distance(eyeNow, inst.Centre) - inst.Radius - needMargin, 0);
+        foreach (var part in set!.Parts) part.OfferNow(part.Triplanar ? near : near / Math.Max(scale, 1e-6f));
+        if (made) set.Touch();
+        return true;
     }
 
     /// <summary>One material per part: the resolver's candidate that names the placing record (or its building) best.</summary>
@@ -305,8 +389,19 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 .OrderByDescending(c => (c.Description.Contains(owner, StringComparison.Ordinal) ? 2 : 0) + (c.Description.Contains(source, StringComparison.Ordinal) ? 1 : 0))
                 .FirstOrDefault();
             bool border = m?.BorderAddressing ?? false;
-            result[i] = new ObjectPartMaterial(m, textureCache.Get(m?.Diffuse, border), textureCache.Get(m?.Normal, border),
-                textureCache.Get(m?.Diffuse2, border), textureCache.Get(m?.Normal2, border));
+            // A map nothing can read is not loaded (<see cref="Material"/> never reads it): the normal map only with tangents (or for the
+            // emissive flag, which looks at its key), the second set only with vertex colours (its blend weight).
+            var part = gpu.Parts[i];
+            bool wantNormal = part.HasTangents || (m?.Emissive ?? false);
+            bool wantSecond = part.HasColours;
+            // The textures are made without loading (<c>deferred</c>): <see cref="Resolve"/> tells them how near they are used, then reads their keys.
+            var tile = m?.Tile ?? Vector2.One;
+            float minTile = Math.Min(tile.X, tile.Y);
+            bool triplanar = m?.Triplanar ?? false;
+            float texel = minTile > 0 && !triplanar ? part.UvScale / minTile : float.PositiveInfinity;   // triplanar: a surface edge-on to a projection axis has a footprint smaller than a pixel on that axis, so no bound
+            result[i] = new ObjectPartMaterial(m, textureCache.Get(m?.Diffuse, border, deferred: true), wantNormal ? textureCache.Get(m?.Normal, border, deferred: true) : null,
+                wantSecond ? textureCache.Get(m?.Diffuse2, border, deferred: true) : null, wantSecond && part.HasTangents ? textureCache.Get(m?.Normal2, border, deferred: true) : null,
+                texel, triplanar);
         }
         return new ObjectMaterialSet(result);
     }
@@ -329,6 +424,10 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         long now = Environment.TickCount64;
         float real = RealRange;
         DrawnInstances = 0;
+        untexturedMax = Math.Max(untexturedMax, untexturedDraws);
+        untexturedDraws = 0;
+        coarseMax = Math.Max(coarseMax, coarseDraws);
+        coarseDraws = 0;
         DrawnTriangles = 0;
         DrawCalls = 0;
         callLoopMs = 0;
@@ -479,6 +578,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     void Emit(ObjectStreamer.Instance inst, GpuObjectMesh gpu, float value, float weight)
     {
         var blend = MeshLod.Blend(gpu.Distances, value * LodBias);
+        // A mesh held without its finest levels (made for farther users, see ObjectMeshCache.Retarget) draws its finest instead, until it is remade.
+        if (gpu.MinLevel > 0 && blend.Lower < gpu.MinLevel) coarseDraws++;
+        if (gpu.MinLevel > 0) blend = new LodBlend(Math.Max(blend.Lower, gpu.MinLevel), Math.Max(blend.Upper, gpu.MinLevel), blend.T);
         var m = inst.Transform;
         if (!blend.IsBlending)
         {
@@ -682,7 +784,13 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                     d.Push.Wireframe = 1;
                     d.Push.FlatColour = LevelColour(b.Level, b.Manual, ReferenceEquals(b.Materials, distantMaterial));
                 }
-                else Material(ref d, gp, b.Materials.Parts[Math.Min(i, b.Materials.Parts.Length - 1)], options);
+                else
+                {
+                    var pm = b.Materials.Parts[Math.Min(i, b.Materials.Parts.Length - 1)];
+                    Material(ref d, gp, pm, options);
+                    // A part whose diffuse map is not resident yet is drawn plain grey (pop-in the benchmark counts).
+                    if (!depthPass && options.Textures && d.Diffuse == 0 && pm.WantsDiffuse) untexturedDraws++;
+                }
                 DrawCalls++;
                 DrawnTriangles += (long)gp.Count[b.Level] / 3 * b.Count;
             }

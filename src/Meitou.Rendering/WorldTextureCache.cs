@@ -46,6 +46,30 @@ public sealed class WorldTexture
     internal long InFlight;
     /// <summary>The texture was resident once (a later load is a reload).</summary>
     internal bool EverResident;
+    /// <summary>Mip streaming (<see cref="MipStreaming"/>): how near the texture is used, as distance over the world length of a texture-coordinate
+    /// unit, smallest over its users (infinity: unknown); set by the owner of the cache before each <see cref="WorldTextureCache.Rebalance"/>.</summary>
+    public float Need = float.PositiveInfinity;
+    /// <summary>Never loaded with fewer mips than the quality setting's (the distant towns' atlas, whose coordinates are not the mesh's).</summary>
+    public bool KeepAllMips;
+    /// <summary>Top levels the loaded image lacks against its file (the quality setting's and the streaming's), the quality's own share, and
+    /// the file's top size (before either).</summary>
+    internal int Dropped, QualityDrop, FileWidth, FileHeight;
+    /// <summary>A replacement image (another number of top levels) is loading while this one is still drawn.</summary>
+    internal bool Replacing;
+    /// <summary>When the image started being finer than needed, <see cref="Environment.TickCount64"/> (0: it is not).</summary>
+    internal long TooFineSince;
+    /// <summary>The file could not be loaded with the asked number of dropped levels (a format that keeps its top mips): do not ask again.</summary>
+    internal bool CannotDrop;
+    /// <summary>The replacement being loaded is a finer image (something came near): counted in <see cref="WorldTextureCache.Refining"/>.</summary>
+    internal bool Refine;
+    /// <summary>The smallest <see cref="Need"/> offered since the last <see cref="WorldTextureCache.CommitNeeds"/>.</summary>
+    internal float NeedPass = float.PositiveInfinity;
+
+    /// <summary>A user of the texture at <paramref name="need"/> (distance over the world length of a texture-coordinate unit): this pass's smallest counts.</summary>
+    public void Offer(float need) { if (need < NeedPass) NeedPass = need; }
+
+    /// <summary>A user that just appeared (a new instance resolved): the need drops at once, before the pass that would find it.</summary>
+    public void OfferNow(float need) { if (need < Need) Need = need; if (need < NeedPass) NeedPass = need; }
     internal Residency State;
     /// <summary>The image (null until resident), the levels and the swizzle it is sampled with.</summary>
     internal Texture? Native;
@@ -79,6 +103,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
     readonly string allocationName;
     long lastTrim;
     static readonly bool StreamLog = Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1";
+    /// <summary>MEITOU_MIP_LOG=1: a line for every image loaded with more levels dropped than the quality setting's, and for every swap.</summary>
+    static readonly bool MipLog = Environment.GetEnvironmentVariable("MEITOU_MIP_LOG") == "1";
+    static readonly string[]? MipSkip = Environment.GetEnvironmentVariable("MEITOU_MIP_SKIP")?.Split(',', StringSplitOptions.RemoveEmptyEntries);
 
     /// <param name="name">The images' allocation name, by owner ("object textures", "foliage textures").</param>
     public WorldTextureCache(GpuContext gpu, AssetLocator assets, string name)
@@ -96,19 +123,48 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public int ResidentCount { get; private set; }
     public int Unloads { get; private set; }
     public int Reloads { get; private set; }
+    /// <summary>Mip streaming (<see cref="MipStreaming"/>, <see cref="Rebalance"/>): what the owner says about the camera, and the images replaced by
+    /// one with more levels (finer, as something came near) or fewer (what nothing near needed).</summary>
+    public MipStreaming Mips { get; } = new();
+    public int Swaps { get; private set; }
+    public int Refined { get; private set; }
+    public int Coarsened { get; private set; }
+    /// <summary>Resident textures waiting for a finer image (loading, uploading) while their old one is drawn.</summary>
+    public int Refining { get; private set; }
+    /// <summary>Seconds a texture must have been finer than needed before it is replaced by a coarser image (no sooner: a camera that turns back
+    /// would have it reloaded at once); under the guard's pressure no wait.</summary>
+    public double CoarsenAfterSeconds { get; set; } = 10;
+    /// <summary>Replacements loading at once, finer ones and coarser ones (the worker threads are few and shared with the foliage's layouts).</summary>
+    public int MaxRefines { get; set; } = 6;
+    public int MaxCoarsens { get; set; } = 2;
+    /// <summary>What the resident images would hold without streaming's drops (each dropped level counted as four times the one below; an estimate,
+    /// taken at <see cref="Rebalance"/>).</summary>
+    public long UnstreamedBytes { get; private set; }
 
     /// <summary>Unused for this long: unloaded.</summary>
     public double IdleSeconds { get; set; } = StreamingTuning.IdleSeconds;
     /// <summary>Above this the least recently used textures that were unused for <see cref="PressureIdleSeconds"/> go too.</summary>
     public double HighWaterMb { get; set; } = StreamingTuning.IdleSeconds > 1e8 ? double.MaxValue : TextureQuality.MemoryBudgetMb(TextureQuality.Level);
     public double PressureIdleSeconds { get; set; } = 8;
+    /// <summary>The high-water mark as a share of the driver's video memory budget: the mark is the smaller of <see cref="HighWaterMb"/> and this share (the default share is what
+    /// the fixed mark was on the 11.4 GB card it was tuned on), and three quarters of it under the guard's pressure.</summary>
+    public double HighWaterShare { get; set; } = TextureQuality.MemoryBudgetMb(0) / 11453.0;
+    /// <summary>The mark in effect (MB).</summary>
+    public double MarkMb => EffectiveMark(HighWaterMb, HighWaterShare, Guard);
+
+    internal static double EffectiveMark(double highWaterMb, double share, VramGuard? guard)
+    {
+        if (guard is not { BudgetBytes: > 0 } g || double.IsInfinity(highWaterMb) || highWaterMb >= double.MaxValue) return highWaterMb;
+        return Math.Min(highWaterMb, g.BudgetBytes / 1048576.0 * share) * (g.Pressure ? 0.75 : 1);
+    }
     /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): while it is under pressure nothing new is loaded (a texture asked for stays
     /// unloaded, drawn with the stand-in, until it ends) and textures idle for <see cref="GuardIdleSeconds"/> are evicted, least recently used
     /// first, whatever the high-water mark.</summary>
     public VramGuard? Guard { get; set; }
     public double GuardIdleSeconds { get; set; } = 2;
 
-    public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far)";
+    public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far" +
+        (Mips.Enabled ? $"; mip streaming: {Math.Max(UnstreamedBytes - ResidentBytes, 0) / 1048576.0:0} MB less than every mip, {Refined} refined, {Coarsened} coarsened)" : ")");
 
     /// <param name="deferred">The texture is not loaded now: it stays <see cref="WorldTexture.Residency.Unloaded"/> until something reads its
     /// <see cref="WorldTexture.Key"/> (the foliage makes its meshes' textures this way and reads the keys only of groups within their range).</param>
@@ -126,6 +182,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             return t;
         }
         cache[key] = t = new WorldTexture { Border = border, Owner = this, Name = name, LastUsed = Environment.TickCount64 };
+        if (MipSkip is { } skip && skip.Any(s => name.Contains(s, StringComparison.OrdinalIgnoreCase))) t.KeepAllMips = true;
         byNumber.Add(t);
         t.Number = (uint)byNumber.Count;
         // The game reduces texture fields to the bare file name (runtime-materials.md); a path still works.
@@ -185,13 +242,22 @@ public sealed unsafe class WorldTextureCache : IDisposable
         return t.IndexA;
     }
 
-    void Start(WorldTexture t)
+    void Start(WorldTexture t, bool replacing = false)
     {
         string path = t.Path!, name = t.Name;
-        t.State = WorldTexture.Residency.Loading;
+        // The levels dropped on top of the quality setting's are decided on the worker once the file's size is known, from what the owner says
+        // about how near the texture is used now.
+        int quality = TextureQuality.LevelsToDrop(System.IO.Path.GetFileName(path), assets.Configured.GroupOfFile(path));
+        t.QualityDrop = quality;
+        float need = t.KeepAllMips ? float.PositiveInfinity : t.Need;
+        bool enabled = Mips.Enabled;
+        float perDistance = Mips.PixelsPerDistance, bias = Mips.Bias;
+        int extra = Mips.Extra;
+        if (replacing) t.Replacing = true;
+        else t.State = WorldTexture.Residency.Loading;
         t.Pending = BackgroundWork.Run(() =>
         {
-            try { return Load(path, TextureQuality.LevelsToDrop(System.IO.Path.GetFileName(path), assets.Configured.GroupOfFile(path))); }
+            try { return Load(path, quality, need, enabled, perDistance, bias, extra); }
             catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException)
             {
                 lock (Messages) Messages.Add($"texture {name}: {e.Message}");
@@ -233,6 +299,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             var t = pending[found];
             var data = t.Pending!.Result;
             if (data is not null) QueueUpload(t, data);
+            else if (t.Replacing) { if (t.Refine) { t.Refine = false; Refining--; } t.Replacing = false; t.CannotDrop = true; Landed(t); }   // the old image stays
             else { t.State = WorldTexture.Residency.Missing; Landed(t); }
             t.Pending = null;
             pending.RemoveAt(found);
@@ -253,23 +320,75 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (now - lastTrim < 1000) return;
         lastTrim = now;
         bool guarded = Guard?.Pressure ?? false;
-        bool pressure = ResidentBytes > HighWaterMb * 1048576;
+        bool pressure = ResidentBytes > MarkMb * 1048576;
         List<WorldTexture>? victims = null;
         foreach (var t in cache.Values)
         {
-            if (t.State != WorldTexture.Residency.Resident) continue;
+            if (t.State != WorldTexture.Residency.Resident || t.Replacing || t.Pending is not null) continue;
             double idle = (now - t.LastUsed) / 1000.0;
             if (idle > IdleSeconds || pressure && idle > PressureIdleSeconds || guarded && idle > GuardIdleSeconds) (victims ??= []).Add(t);
         }
         if (victims is null) return;
         victims.Sort((a, b) => a.LastUsed.CompareTo(b.LastUsed));
-        long lowWater = (long)(HighWaterMb * 1048576 * 0.75);
+        long lowWater = (long)(MarkMb * 1048576 * 0.75);
         foreach (var t in victims.Take(guarded ? 120 : 40))
         {
             bool old = (now - t.LastUsed) / 1000.0 > IdleSeconds;
             if (!old && !guarded && ResidentBytes <= lowWater) break;
             Unload(t);
         }
+    }
+
+    /// <summary>Takes what the users offered since the last call as the textures' <see cref="WorldTexture.Need"/> (a texture nothing offered keeps its last).</summary>
+    public void CommitNeeds()
+    {
+        foreach (var t in cache.Values)
+        {
+            if (float.IsFinite(t.NeedPass)) t.Need = t.NeedPass;
+            t.NeedPass = float.PositiveInfinity;
+        }
+    }
+
+    /// <summary>
+    /// Mip streaming: after <see cref="CommitNeeds"/>, a resident texture whose image has more top levels dropped than it may now (something came
+    /// near) is loaded again with fewer, and the old image drawn until the new one is in (<see cref="BeginSwap"/>); one that is finer than it needs to be
+    /// for <see cref="CoarsenAfterSeconds"/> (at once under the guard's pressure) is replaced by a coarser. Only the textures this has been told the
+    /// need of are touched (<see cref="WorldTexture.KeepAllMips"/> never).
+    /// </summary>
+    public void Rebalance()
+    {
+        long now = Environment.TickCount64;
+        bool pressure = Guard?.Pressure ?? false;
+        Mips.Extra = pressure ? 1 : 0;
+        long unstreamed = 0;
+        int replacing = 0;   // replacements being loaded: finer ones are limited so they do not crowd out the other streaming work on the few worker threads
+        foreach (var t in cache.Values) if (t.Replacing) replacing++;
+        foreach (var t in cache.Values)
+        {
+            if (t.State != WorldTexture.Residency.Resident || t.Native is null) continue;
+            unstreamed += t.Bytes << (2 * Math.Max(t.Dropped - t.QualityDrop, 0));
+            if (t.Replacing || t.Pending is not null || t.KeepAllMips || t.CannotDrop || t.FileWidth == 0 || !float.IsFinite(t.Need)) continue;
+            int target = Math.Max(Mips.Drop(t.FileWidth, t.FileHeight, t.Need), t.QualityDrop);
+            if (target < t.Dropped)
+            {
+                if (replacing >= MaxRefines || !MayStart(t)) continue;
+                Refined++;
+                t.Refine = true; Refining++;
+                Start(t, replacing: true);
+                replacing++;
+            }
+            else if (target > t.Dropped)
+            {
+                if (t.TooFineSince == 0) t.TooFineSince = now;
+                if (!pressure && now - t.TooFineSince < CoarsenAfterSeconds * 1000) continue;
+                if (replacing >= MaxCoarsens) continue;
+                Coarsened++;
+                Start(t, replacing: true);
+                replacing++;
+            }
+            else t.TooFineSince = 0;
+        }
+        UnstreamedBytes = unstreamed;
     }
 
     void Unload(WorldTexture t)
@@ -301,19 +420,24 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     static readonly bool Uncompressed = Environment.GetEnvironmentVariable("MEITOU_UNCOMPRESSED_TEXTURES") == "1";
 
-    static TextureData Load(string path, int dropMips)
+    static TextureData Load(string path, int dropMips, float need, bool streaming, float perDistance, float bias, int extra)
     {
         var bytes = File.ReadAllBytes(path);
         if (bytes.Length >= 4 && BitConverter.ToUInt32(bytes, 0) == DdsReader.Magic)
         {
-            var dds = TextureQuality.DropTopMips(DdsReader.Read(bytes), dropMips);   // texture quality: the game drops top mips as it loads (docs/formats/settings.md)
+            var whole = DdsReader.Read(bytes);
+            // Texture quality: the game drops top mips as it loads (docs/formats/settings.md); mip streaming drops more where nothing near uses them.
+            int streamed = MipStreaming.Drop(whole.Width, whole.Height, need, streaming, perDistance, bias, extra);
+            var dds = TextureQuality.DropTopMips(whole, Math.Max(dropMips, streamed));
+            int dropped = whole.MipCount - dds.MipCount;
+            bool droppable = TextureQuality.DropTopMips(whole, 1).MipCount < whole.MipCount;
             if (!Uncompressed && CanUploadCompressed(dds))
             {
                 // Only the level the swizzle test looks at is decoded on the CPU.
                 int level = Math.Max(Array.FindIndex(dds.Surfaces.ToArray(), s => s.Width <= 256 && s.Height <= 256), 0);
-                return new TextureData(new LoadedTexture([DdsDecoder.Decode(dds, 0, level)], dds), dds);
+                return new TextureData(new LoadedTexture([DdsDecoder.Decode(dds, 0, level)], dds), dds, dropped, whole.Width, whole.Height, droppable);
             }
-            return new TextureData(TextureLoader.FromDds(dds), null);
+            return new TextureData(TextureLoader.FromDds(dds), null, dropped, whole.Width, whole.Height, droppable);
         }
         return new TextureData(new LoadedTexture([TextureLoader.LoadImage(bytes)], null), null);
     }
@@ -369,6 +493,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         }
         steps.Enqueue(() =>
         {
+            BeginSwap(t, data);
             t.Native = texture;
             t.ViewLevels = Math.Min(dds.MipCount, texture!.Desc.Levels);
             // BC4 is one channel; the decoder (and so the RGBA8 path) shows it as grey with alpha 1.
@@ -383,7 +508,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// a chain down to 1 × 1 the levels are made from level 0 by linear blits, as VkGl's <c>GenerateMipmap</c> made them (so only level 0 is
     /// uploaded: the blits overwrite the others).
     /// </summary>
-    void QueueUpload(WorldTexture t, LoadedTexture tex, bool swizzled)
+    void QueueUpload(WorldTexture t, LoadedTexture tex, bool swizzled, TextureData data)
     {
         t.Swizzled = swizzled;
         var top = tex.Levels[0];
@@ -412,6 +537,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
                 GenerateMipmaps(gpu, texture!);
                 bytes = bytes * 4 / 3;   // the full chain the blits made
             }
+            BeginSwap(t, data);
             t.Native = texture;
             t.ViewLevels = generate ? chain : uploaded;
             t.ViewSwizzle = default;
@@ -455,7 +581,32 @@ public sealed unsafe class WorldTextureCache : IDisposable
     void QueueUpload(WorldTexture t, TextureData data)
     {
         if (data.Compressed is not null) QueueCompressedUpload(t, data);
-        else QueueUpload(t, data.Rgba, data.Swizzled);
+        else QueueUpload(t, data.Rgba, data.Swizzled, data);
+    }
+
+    /// <summary>The new image is about to replace the one the texture has (a reload with another number of top levels, <see cref="Rebalance"/>): the old
+    /// one goes (its bindless entries after the frames in flight, as an unload) and its bytes leave the count; <see cref="Resident"/> adds the new.
+    /// Records the levels the new image lacks.</summary>
+    void BeginSwap(WorldTexture t, TextureData data)
+    {
+        if (t.Native is not null)
+        {
+            Release(t);
+            ResidentBytes -= t.Bytes;
+            ResidentCount--;
+            t.Bytes = 0;
+            if (t.State == WorldTexture.Residency.Resident) Swaps++;
+        }
+        if (t.Replacing && data.Dropped == t.Dropped) t.CannotDrop = true;   // nothing changed: do not ask again
+        t.CannotDrop |= !data.Droppable;
+        if (MipLog && (data.Dropped > t.QualityDrop || t.Dropped > t.QualityDrop))
+            Console.WriteLine($"mips      {allocationName} {t.Name} {data.FileWidth}x{data.FileHeight}: {t.Dropped} -> {data.Dropped} levels dropped (quality {t.QualityDrop}), need {t.Need:0.0}");
+        if (t.Refine) { t.Refine = false; Refining--; }
+        t.Replacing = false;
+        t.TooFineSince = 0;
+        t.Dropped = data.Dropped;
+        t.FileWidth = data.FileWidth;
+        t.FileHeight = data.FileHeight;
     }
 
     internal static bool LooksSwizzled(RgbaImage image)
@@ -469,13 +620,23 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     public void Dispose()
     {
+        if (Environment.GetEnvironmentVariable("MEITOU_TEX_STATS") == "1")
+        {
+            var res = cache.Values.Where(t => t.State == WorldTexture.Residency.Resident).ToList();
+            var byPath = res.GroupBy(t => t.Path!.ToLowerInvariant()).ToList();
+            long dup = byPath.Sum(g => g.Sum(t => t.Bytes) - g.First().Bytes);
+            Console.WriteLine($"texstats  {allocationName}: {res.Count} resident, {byPath.Count} distinct paths, duplicates {dup / 1048576.0:0} MB ({res.Count(t => t.Border)} border variants), keys {cache.Count}");
+            foreach (var t in res.OrderByDescending(t => t.Bytes).Take(12)) Console.WriteLine($"texstats    {t.Bytes / 1048576.0:0.0} MB {t.Name} {t.Native?.Desc.Width}x{t.Native?.Desc.Height}");
+            var hist = res.GroupBy(t => t.Native?.Desc.Width ?? 0).OrderBy(g => g.Key).Select(g => $"{g.Key}:{g.Count()}x{g.Sum(t => t.Bytes) / 1048576.0:0}MB");
+            Console.WriteLine("texstats    by width " + string.Join(", ", hist));
+        }
         foreach (var t in pending) t.Pending?.Wait();
         foreach (var t in cache.Values) Release(t);
     }
 }
 
 /// <summary>A decoded texture file: the RGBA8 levels (all of them, or for a stored S3TC texture only the one the swizzle test needs), and the DDS when its blocks are uploaded as they are.</summary>
-sealed record TextureData(LoadedTexture Rgba, DdsFile? Compressed)
+sealed record TextureData(LoadedTexture Rgba, DdsFile? Compressed, int Dropped = 0, int FileWidth = 0, int FileHeight = 0, bool Droppable = false)
 {
     /// <summary>Whether it looks like a "DXT5 normal" (X in alpha), tested on the worker: the full image can be megabytes.</summary>
     public bool Swizzled { get; } = WorldTextureCache.LooksSwizzled(Rgba.Levels.FirstOrDefault(l => l.Width <= 256 && l.Height <= 256) ?? Rgba.Levels[0]);

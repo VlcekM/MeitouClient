@@ -81,6 +81,7 @@ static partial class WorldApp
         using var gpu = CreateGpu(context, install, scene, assets, o, interactive: false);
         if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, streamline);
         var (camera, render) = Setup(scene, o);
+        { var up = o.Post.Upscale; gpu.Objects?.SetView(o.Width, o.Height, camera.FieldOfView, up.Temporal ? (up.Kind == UpscalerKind.Taa ? -0.5f : -1f) : 0f); }   // before the first settle, so the textures load knowing the picture (the display size, the bias without the render scale: the same level)
         if (gpu.Streamer is { } streamer)
         {
             var streamWatch = Stopwatch.StartNew();
