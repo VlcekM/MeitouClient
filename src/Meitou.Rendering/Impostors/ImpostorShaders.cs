@@ -122,7 +122,10 @@ public static class ImpostorShaders
             impostorBasis(dirA, rightA, upA);
             vec2 localA = impostorFrameUv(dirA, rightA, upA, centre, radius, origin, ray, 0.0, pointA) / grid;
             vec2 gx = dFdx(localA), gy = dFdy(localA);
-            if (pick >= 0.0)
+            // pick >= 2 (the shadow casters) is the plain pick (pick - 2) of one frame per texel, without the vote below.
+            bool plain = pick >= 2.0;
+            if (plain) pick -= 2.0;
+            if (pick >= 0.0 && !plain)
             {
                 // Silhouette from the vote, colour from one frame. The cut-out is the three frames' coverages blended by their weights
                 // (constant over the instance, smooth in space: a clean edge, and no holes where the frame a dither value picked has none
@@ -182,6 +185,11 @@ public static class ImpostorShaders
                     s.position = (pv[0] * weights.x + pv[1] * weights.y + pv[2] * weights.z) / max(weights.x + weights.y + weights.z, 1e-5);
                 }
                 return s;
+            }
+            if (pick >= 0.0)
+            {
+                // The frame whose cumulative weight passes the dither value.
+                weights = pick < weights.x ? vec3(1.0, 0.0, 0.0) : pick < weights.x + weights.y ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
             }
             vec3 colour = vec3(0.0);
             float total = 0.0;
@@ -383,7 +391,7 @@ public static class ImpostorShaders
         {
             float pick = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.00583715, 0.06711056))));
             ImpostorSurface s = impostorSample(uImpostorAlbedo, uImpostorNormal, uImpostorGrid, uImpostor.xyz, uImpostor.w,
-                vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, pick);
+                vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, pick + 2.0);   // + 2: the plain pick, see impostorSample
             if (s.coverage < 0.5) discard;
             mat4 model = mat4(vModel0, vModel1, vModel2, vModel3);
             vec4 clip = uViewProjection * vec4((model * vec4(s.position, 1.0)).xyz, 1.0);

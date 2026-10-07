@@ -147,7 +147,21 @@ mean scale and the size class follows the distance). Disk cache 376 MB (1153 MB)
 **Cache (`ImpostorCache`).** `%LOCALAPPDATA%\Meitou\impostors\<name>_<key>.mimp`, overridable with `MEITOU_IMPOSTOR_CACHE`; never in the
 repo. The key is the first 24 hex digits of a SHA-256 over the baker and format versions, each source file's path, length and write time,
 both materials' descriptions, the maximum **and mean** scale, the grid, magnify and bias. Files are written under a temporary name, then
-moved. Old files are left in place (**Unknown**: a size cap). Bump `ImpostorAtlas.BakerVersion` when the baker's output changes.
+moved. Bump `ImpostorAtlas.BakerVersion` when the baker's output changes.
+
+**Size cap, LRU and stale files (`ImpostorCache.Maintain`, `ImpostorCache.cs`; since 2026-10-07).** A file's last use is its last write time
+(`TryLoad` hits and `Save` set it). `Maintain` runs on a worker at the first foliage update and after every 16 saves, under a lock, and:
+
+1. deletes files that are not atlases (shorter than the 12-byte header, wrong magic) and those of an **older** format or baker version than
+   the build's (their keys can never match again; a newer version is left, since another build sharing the folder may read it);
+2. deletes temporary files (`*.mimp.<pid>.tmp`) an hour old (a crashed writer's);
+3. when the remaining `.mimp` files total more than the cap, deletes the least recently used until the total is under 90% of it.
+
+Other files in the folder are not touched. The cap is `MaxBytes`: default 512 MB (`MEITOU_IMPOSTOR_CACHE_MB`, `--impostor-cache-mb`, 0 = no cap);
+the 267 base-game atlases are 376 MB on disk (**Observed**), so the base game fits with room for mods and re-bakes. **Verified**
+(`ImpostorTests`, a temporary folder, never the user's cache): eviction order and the 90% target, no cap, the stale rules above (older baker,
+older format, junk, short file, old temporary go; current, newer, fresh temporary and foreign files stay), and that loads and saves set the last use.
+**Unknown**: two viewers evicting at once (each deletion tolerates a failure; the worst case is a rebake).
 
 ## 5. Runtime sampling
 
@@ -166,10 +180,16 @@ weights). The quad faces the eye, rolled by the camera's up axis, half-size `r·
 
 1. **Virtual frame-plane projection.** The object-space ray through the pixel is intersected with each frame's plane through the centre,
    so the frames line up at the centre's depth whatever the view direction.
-2. **Frame pick (default) vs blend.** `pick` in [0, 1) selects the one frame whose cumulative weight passes it. The pick noise is
-   `framePick()`, a transposed-weight interleaved-gradient noise (it replaced the 4 x 4 Bayer matrix, whose regular dot grid showed on
-   large impostors seen steeply; **Observed**, the pattern is gone in the forest views). `pick < 0` blends the three by weight (blending
-   thins leaves and branches that do not line up into a mush, so it is a debug option).
+2. **Vote for the cut-out, pick for the colour (default) vs blend.** The cut-out is the three frames' coverages blended by their weights
+   (`vote`, constant weights over the instance, so it is smooth in space), cut at 0.5. The colour comes from one frame, picked by `pick`
+   in [0, 1) among the frames that cover the point (weight x coverage), so a texel is never shaded black; the normal and the position are
+   the covering frames' blend (a curved bulb has different normals at the points the frames put under a pixel, and picking among them
+   dithered the shading). The pick noise is `framePick()`, a transposed-weight interleaved-gradient noise (it replaced the 4 x 4 Bayer
+   matrix, whose regular dot grid showed on large impostors seen steeply). Before 2026-10-07 the frame was picked first and its own
+   coverage cut (see section 6, "Dotted fringes"). `pick < 0` blends the three colours by weight (leaves that do not line up thin out into
+   a mush, so it is a debug option). **The shadow casters keep the plain pick** (`pick + 2` in `DepthFragment`): with the vote their coverage
+   was solid over the whole crown and cast flat slabs with straight edges onto the canopy (**Observed**, the Hub view at 40000 units;
+   gone with the plain pick, 2026-10-07).
 3. **Texture gradients.** All fetches use frame A's `textureGrad` gradients (the pick makes them non-uniform control flow).
 4. **Cut-out.** Cut at coverage 0.5 (the albedo's punch-through alpha, divided out of the colour); with a multisampled target an
    alpha-to-coverage ramp over `fwidth(coverage)` is used, as the foliage meshes do.
@@ -216,9 +236,32 @@ Compare pairs with `meitou-tools image-diff a b`.
 - **Crossfade.** The view at 4200 units (`--at -37582,-80684 --yaw -70.5 --pitch 4 --distance 4200`, `shots\x_on.png` against `x_off.png`):
   mean difference 0.39, 1.3% of pixels over 12, max 163 (the maximum is a few leaf pixels and shadow edges); no visible seam, hole or
   popping where the band is.
-- **Remaining artifact.** Dotted fringes at the silhouette of trunk bulbs: the stochastic pick across frames with parallax between them
-  (the frames are 8 to 15 degrees apart). A 12 x 12 grid reduces it against 8 x 8, it is not removed. Whether averaging the frames or a
-  depth-aware select would remove it, and at what cost, is **Unknown** (not tried).
+- **Dotted fringes at the silhouette of trunk bulbs: cause and fix (2026-10-07).** Test mesh `Baobabesque Tree` (bulb trunks; 64 px frames,
+  `--impostor-preview`, `near` pictures).
+  *Cause* (**Verified** by the pictures below): the per-pixel frame pick. A bulb lies far in front of or behind the crown's centre, where the
+  frame-plane projection lines the frames up; the frames (8 to 15 degrees apart) therefore put the bulb's edge a few pixels apart. Each pixel
+  picked one frame and cut on that frame's own coverage, so at the edge and, where the picked frame had no coverage at that point, inside the
+  bulb, pixels were discarded at random: a dotted edge and a dither of holes. It was not the BC1 1-bit alpha (a bilinear 0/1 alpha is a smooth
+  ramp over one texel and is cut at 0.5), not the mip coverage scale, not the fill or dilation of colour into transparent texels (the fill is
+  there, and the cut-out stays binary), and not the compression: the blended debug mode (`--blend`) with the same atlas has a clean edge.
+  *Fix*: vote for the cut-out, pick for the colour (section 5, item 2). No change to the atlas, so `BakerVersion` stays 5, **VRAM is unchanged**
+  (the format is the same BC1 + BC5; no BC3 / BC7 alpha was needed) and a cache from before is valid. The cost is two more albedo fetches
+  and, for the normal, two more (the normal map is one level coarser and cheap) per impostor pixel.
+  *Numbers* (**Observed**, mean difference of the impostor picture to the mesh picture, `--impostor-preview`, base 87c7857 / new): Baobabesque
+  `t4k` 0.72 / 0.58, `field` 1.98 / 1.56, `near` 1.29 / 1.03 (over-12 share 1.82% / 1.59%); BushTree01 `t4k` 4.09 / 3.65, `field` 8.46 / 7.73,
+  `near` 10.76 / 9.84. Crop: `C:\Temp\agent-B2\crop_baobab_base_new_mesh.png` (base impostor, new impostor, mesh). A cut of the vote at 0.4
+  (coverage x 1.25) or 0.59 (x 0.85) instead of 0.5 was worse on three of the six numbers each; 0.5 stayed.
+  *Whole pictures*: the Meitou ten views against meshes only (`--faithful impostors`) are about equal (mean 3.07 / 3.05 forest 13:00, 4.82 /
+  5.20 Hub 13:00, 1.02 / 1.06 zone14_30): the dotted pixels are few against the crowns' leaf noise, and the Hub's crowns are a little smoother
+  and fuller than the meshes' leaves. The improvement is the silhouettes (crop `C:\Temp\agent-B2\crop_hub_base_new_mesh.png`: base, new,
+  meshes, Hub 13:00 at 40000 units: the base's speckled crown edges are clean).
+
+**Gate pictures, ten views (2026-10-07, new build against the base build's `C:\Temp\base-87c7857\meitou`, warm cache):** `--faithful all` and
+`--faithful impostors` are 0 px (max 0, **Verified**). The default Meitou views differ only where billboards are drawn (mean / share over 12 /
+max): forest 13:00 0.87 / 2.7% / 133, 02:00 0.13 / 0.004% / 18; Hub 1.63 / 5.1% / 114, 0.24 / 0.008% / 21; Port North 0.018 / 0.08% / 144,
+0.003 / 0.01% / 30; rock 0.001 / 0.002% / 120, 0.0003 / 0% / 14; zone14_30 0.32 / 0.74% / 72, 0.07 / 0% / 16. The differences are the crowns'
+edges and the leaf-by-leaf choice of frame (the colour pick is the same noise, but the cut-out is no longer random); the meshes-only
+pictures are the reference (about equal distance, see the fringe item above).
 
 **Not represented (from the code):** triplanar materials are baked in object space; the bake uses the simple specular path; views below
 the horizon are clamped to it; wind sway (the impostor is the rest pose).
@@ -274,8 +317,8 @@ The crossfade band is [T - B, T) with B = 0.1 T. With the transition fade m = cl
 ### Streaming (from the code)
 
 - Once a second (every update while settling) zones whose far corner is beyond T - B ask for the atlases of their resident, in-range
-  meshes. A worker loads the cache; a miss is baked on the render thread, two rows per frame (all rows per update while settling), then
-  saved on a worker. An atlas uploads one level per frame (all while settling).
+  meshes. A worker loads the cache; a miss is baked on the render thread, rows per frame by a sample budget (all rows per update while
+  settling; section 8), then saved on a worker. An atlas uploads one level per frame (all while settling).
 - Offscreen settling (`FoliageRenderer.Settle`) ends the frame with `Gpu.Finish()` while a bake or an upload waits.
 - An atlas unused for `IdleSeconds` (60) is unloaded, and by the budget sooner.
 
@@ -346,7 +389,61 @@ also holds more foliage textures and meshes). Master's viewer has no impostors.
 
 ### Open
 
-- The dotted trunk-bulb fringe (section 6).
-- Atlas-load hitches in an extreme fast flight (an atlas bakes on first need, cached on disk afterwards; 25.8 s to bake all).
 - A per-instance transition by projected size (needs a per-instance transition in the cull); a budget slider.
-- The atlas cache has no size cap.
+- Thin branches (1 pixel at the 64 px frame size) are thinned by the vote; at the transition distance they are sub-pixel anyway
+  (**Unknown** whether a larger frame for such meshes is worth its VRAM).
+- Cold-cache offscreen runs (`--screenshot`, the bake in the settle path) report 6 validation errors under `MEITOU_VK_VALIDATION=sync`
+  (a copy and barriers inside a render pass), on the base build too; with a warm cache 0 (**Observed**). Not fixed here.
+- The drawing program (`ImpostorDraw`) still compiles at the first impostor in view (7 ms program, 6 ms caster pipeline; **Observed**):
+  its quad upload needs a frame outside a render pass.
+
+## 8. Bake pacing and the first fast flight (2026-10-07)
+
+**The hitch, measured** (**Observed**, RTX 4070, 1600 x 900, forest `--at -37582,-80684 --distance 1400 --pitch 10 --time 13
+--fly-benchmark 300 --fly-speed 600`, an empty cache folder per run, `MEITOU_BENCH_SKIP=30` leaves the first 30 frames out of the
+percentiles: the process's first frames cost 60-80 ms of GPU wait with or without impostors). The machine is shared with other agents'
+viewers, so single runs vary by tens of milliseconds of GPU wait; all four interleaved runs, base 87c7857 (with only the benchmark skip
+option added) / this build:
+
+| Run | p95 ms | p99 ms | max ms | gen2 GCs | GC pause ms | allocated MB (render thread) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 17.3 / 14.9 | 29.4 / 20.4 | 35.3 / 37.0 | 7 / 1 | 68 / 5 | 8408 (1705) / 2200 (19) |
+| 2 | 15.1 / 12.5 | 21.3 / 17.2 | 25.6 / 20.7 | 8 / 2 | 37 / 9 | 9492 (1974) / 2378 (19) |
+| 3 | 15.2 / 13.4 | 18.6 / 15.9 | 20.6 / 19.7 | 7 / 2 | 35 / 4 | 9156 (1953) / 2700 (21) |
+| 4 | 16.6 / 14.1 | 19.9 / 18.1 | 25.5 / 26.1 | 7 / 2 | 146 / 7 | 9129 (1900) / 2726 (21) |
+
+(Earlier sets of three on the way, with a quieter or louder machine: base max 28-111, new max 15-59; the new build's p99 was 14-24 against
+base 19-60.) For scale, impostors off (`--faithful impostors`, no bakes at all), three runs: p99 19 / 24 / 29, max 37 / 50 / 62; and warm caches:
+base p99 20 / 15, new 22 / 23, max 42-68. So what is left in a cold flight is the viewer's own outliers (water, terrain, reflection, GC of
+the 2.4 GB managed heap), not the bakes.
+
+**Cause** (**Verified** by the allocation counters, `GC.GetAllocatedBytesForCurrentThread` around the bake step, and the table): not the GPU
+work. Per bake the render thread (1) copied each row's three pictures out of the mapped readback buffer into new arrays (`ToArray`, 9 MB a
+row for a large atlas), (2) allocated the assembler's atlas levels, about 100 MB of zeroed large arrays, and the readback buffers and
+(3) the filtering workers allocated about 6 MB of float arrays per frame (900 MB per large atlas), all on the large object heap. That was 8-9 GB
+allocated in a cold flight (1.7-2.0 GB on the render thread), 5-8 gen2 collections and pauses up to 146 ms. In addition the first bake
+compiled its shaders and pipelines on the render thread (a 60 ms frame).
+
+**Fixes** (`ImpostorAssembler`, `ImpostorBaker`/`ImpostorBakeJob`, `FoliageRenderer.Impostors.cs`):
+
+- the workers read the readback buffer's mapping in place (`AddRow(row, nint, nint, nint)`); buffers are pooled in the baker and freed
+  10 s after the last bake;
+- the assembler's per-frame arrays come from a shared pool, its atlas levels are not cleared (every texel is written) and are reused by the
+  next bake of the same size (a pool of two); `ImpostorAssembler.ReleasePool` frees them with the readback buffers after 10 s idle;
+- the first foliage update with impostors on constructs the baker (its programs compile with the loading);
+- **a bake step records rows by a sample budget** (`MEITOU_IMPOSTOR_BAKE_MSAMPLES`, default 40 million shaded samples a frame; a row is
+  `grid x 3 x (2F)^2`): 256 px atlases 4 rows a frame (3 frames), 128 and 64 px atlases all 12 rows in one frame (it was 2 rows a frame
+  whatever the size: 6 frames for any atlas). The GPU cost of a bake is small: in cold still-camera runs a budget of 100 million (a whole
+  large atlas in one frame) left the frame times at 5-6 ms p50 and no spike above 15 ms that the other budgets did not also have
+  (**Observed**; the flight runs could not separate budgets 10 and 100 from the shared machine's noise, so 40 is a middle value, not a measured optimum);
+- **order**: the waiting bakes run nearest first, by the distance of the nearest zone that wants the atlas from the eye now or from where its
+  motion puts it in 3 s (`velocity x ImpostorLookaheadSeconds`; the zone layouts already look 1.5 s ahead). A mesh without an atlas keeps
+  drawing as a mesh until the atlas is Ready (unchanged, the fallback).
+
+**Verified**: the atlases are byte-identical to the previous build's for all 267 base-game meshes (`--impostor-bake-all`, md5 of every `.mimp`
+against a folder made by the previous baker, with the pooled assembler too), which is why `BakerVersion` stays 5; `--impostor-bake-all` takes
+26 and 30 s with the new baker (43.6 s with the old one in the same session, on a shared machine; 25.8 s in section 3's earlier measurement), and `ImpostorTests` has a test that the
+assembler's output does not depend on the pooled memory it reuses.
+
+**Not done**: pre-baking atlases of zones beyond the foliage layout's reach (the layout itself is the limit), a bake on several workers
+at once, moving the bake's mesh upload (1-8 ms) off the render thread.
