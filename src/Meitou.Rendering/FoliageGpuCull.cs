@@ -117,7 +117,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     static uint[] Bindings(ShaderProgram p)
     {
         if (!p.PushDescriptors) throw new InvalidOperationException($"{p.Name}: the foliage cull pushes its descriptors, the device cannot");
-        return [.. p.ComputeReflection!.Blocks.Where(b => b.Kind == Vulkan.Shaders.BlockKind.StorageBuffer && b.Set == 0).Select(b => (uint)b.Binding).Order()];
+        return [.. p.ComputeReflection!.Blocks.Where(b => b.Kind == Gpu.Shaders.BlockKind.StorageBuffer && b.Set == 0).Select(b => (uint)b.Binding).Order()];
     }
 
     /// <summary>Bytes of the instance arena, and bytes in use.</summary>

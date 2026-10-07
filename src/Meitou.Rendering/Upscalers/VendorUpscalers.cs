@@ -1,5 +1,5 @@
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 namespace Meitou.Rendering.Upscalers;
 
 /// <summary>The vendor upscalers on a <see cref="GpuContext"/>, for <see cref="PostProcess.UpscalerFactory"/>: null (and a note why) when one is not available.</summary>

@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.KHR;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;

@@ -1,4 +1,4 @@
-namespace Meitou.Rendering.Vulkan.Shaders;
+namespace Meitou.Rendering.Gpu.Shaders;
 
 /// <summary>Options for <see cref="GlslProgramCompiler.Compile"/>. They are part of the cache key.</summary>
 public sealed record ShaderCompileOptions

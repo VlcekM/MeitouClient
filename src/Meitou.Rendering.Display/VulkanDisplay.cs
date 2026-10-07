@@ -1,5 +1,5 @@
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Meitou.Rendering.Upscalers;
 using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;

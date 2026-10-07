@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan.Shaders;
+using Meitou.Rendering.Gpu.Shaders;
 using Silk.NET.Vulkan;
 
 namespace Meitou.Rendering;

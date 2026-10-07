@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Rendering;
 using Meitou.Rendering.Impostors;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 
 namespace Meitou.Tests.Rendering;
 

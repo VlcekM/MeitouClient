@@ -1,6 +1,6 @@
 using Meitou.Rendering.Gpu;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 
 namespace Meitou.Rendering.Upscalers;

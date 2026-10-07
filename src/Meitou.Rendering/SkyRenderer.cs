@@ -633,7 +633,7 @@ sealed class SkyProg : IDisposable
     public readonly UniformHandle InverseViewProjection, Extra, MoonDir, MoonRight, MoonUp, CloudLight, Has;
     public readonly SkyColourHandles Colours;
     public readonly SamplerSlot Stars, Moon, Clouds;
-    public readonly Meitou.Rendering.Vulkan.Shaders.SamplerInfo? StarsInfo, MoonInfo, CloudsInfo;
+    public readonly Meitou.Rendering.Gpu.Shaders.SamplerInfo? StarsInfo, MoonInfo, CloudsInfo;
 
     public SkyProg(GpuContext gpu, string vertex, string fragment, string name)
     {

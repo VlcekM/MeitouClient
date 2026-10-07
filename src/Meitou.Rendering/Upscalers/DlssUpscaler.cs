@@ -1,5 +1,5 @@
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Silk.NET.Vulkan;

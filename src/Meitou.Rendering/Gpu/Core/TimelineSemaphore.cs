@@ -1,6 +1,6 @@
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Vulkan.Core;
+namespace Meitou.Rendering.Gpu.Core;
 
 /// <summary>A timeline semaphore (Vulkan 1.2): a counter the GPU and the CPU raise and wait on.</summary>
 public sealed unsafe class TimelineSemaphore : IDisposable

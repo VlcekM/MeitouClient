@@ -1,6 +1,6 @@
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 using Texture = Meitou.Rendering.Gpu.Texture;
 

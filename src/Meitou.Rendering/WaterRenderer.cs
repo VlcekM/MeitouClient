@@ -149,9 +149,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly LegacyProgram program;
     readonly NativeSegment segment;
     readonly Handles h;
-    readonly (SamplerSlot Slot, Meitou.Rendering.Vulkan.Shaders.SamplerInfo Info)[] mapSamplers;
+    readonly (SamplerSlot Slot, Meitou.Rendering.Gpu.Shaders.SamplerInfo Info)[] mapSamplers;
     readonly SamplerSlot reflectionSlot;
-    readonly Meitou.Rendering.Vulkan.Shaders.SamplerInfo reflectionInfo;
+    readonly Meitou.Rendering.Gpu.Shaders.SamplerInfo reflectionInfo;
 
     /// <summary>The program's loose uniforms, resolved once.</summary>
     readonly record struct Handles(UniformHandle ViewProjection, UniformHandle WaterHeight, UniformHandle Centre, UniformHandle Extent, UniformHandle Eye,

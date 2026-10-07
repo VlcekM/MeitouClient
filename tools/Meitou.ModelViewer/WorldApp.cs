@@ -12,7 +12,7 @@ using Silk.NET.Windowing;
 using Meitou.Rendering;
 using Meitou.Rendering.Display;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Meitou.Rendering.Upscalers;
 using static Meitou.Rendering.WorldFrame;
 

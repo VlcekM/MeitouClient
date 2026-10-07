@@ -1,7 +1,7 @@
 using Meitou.Data.Textures;
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 
 namespace Meitou.Tests.Vulkan;
 

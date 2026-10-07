@@ -1,7 +1,7 @@
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan.Core;
-using Meitou.Rendering.Vulkan.Shaders;
+using Meitou.Rendering.Gpu.Core;
+using Meitou.Rendering.Gpu.Shaders;
 using Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Vulkan;

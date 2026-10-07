@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using Meitou.Data.World;
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Rendering;

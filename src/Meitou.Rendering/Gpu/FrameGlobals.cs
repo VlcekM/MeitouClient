@@ -1,6 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using Meitou.Rendering.Vulkan.Shaders;
+using Meitou.Rendering.Gpu.Shaders;
 
 namespace Meitou.Rendering.Gpu;
 

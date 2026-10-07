@@ -1,4 +1,4 @@
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 using Sampler = Silk.NET.Vulkan.Sampler;
 

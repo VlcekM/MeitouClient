@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using Meitou.Rendering.Vulkan.Core;
+using Meitou.Rendering.Gpu.Core;
 using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
 

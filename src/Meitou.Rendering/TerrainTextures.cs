@@ -259,7 +259,7 @@ public sealed unsafe class TerrainTextures : IDisposable
             return Make(GlConventions.VkFormat(FormatOf(diffuse)), layerSize, layerSize, levelCount, Math.Max(Capacity, 1), TextureMinFilter.LinearMipmapLinear,
                 TextureMagFilter.Linear, TextureWrapMode.Repeat, diffuse ? "terrain textures diffuse" : "terrain textures normal", anisotropy: 8, kind: TextureKind.Texture2DArray);
         }
-        catch (Meitou.Rendering.Vulkan.Core.VulkanException e)
+        catch (Meitou.Rendering.Gpu.Core.VulkanException e)
         {
             Messages.Add($"terrain layer array allocation: {e.Message}; try a smaller --layer-size");
             return null;

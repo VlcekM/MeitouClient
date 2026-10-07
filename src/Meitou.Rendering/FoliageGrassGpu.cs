@@ -70,7 +70,7 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
     static uint[] Bindings(ShaderProgram p)
     {
         if (!p.PushDescriptors) throw new InvalidOperationException($"{p.Name}: the grass cull pushes its descriptors, the device cannot");
-        return [.. p.ComputeReflection!.Blocks.Where(b => b.Kind == Vulkan.Shaders.BlockKind.StorageBuffer && b.Set == 0).Select(b => (uint)b.Binding).Order()];
+        return [.. p.ComputeReflection!.Blocks.Where(b => b.Kind == Gpu.Shaders.BlockKind.StorageBuffer && b.Set == 0).Select(b => (uint)b.Binding).Order()];
     }
 
     /// <summary>Whether the device can run the GPU grass (push descriptors, indirect draws with a count and a first instance).</summary>

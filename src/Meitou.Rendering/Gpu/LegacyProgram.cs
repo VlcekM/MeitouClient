@@ -1,5 +1,5 @@
 using System.Numerics;
-using Meitou.Rendering.Vulkan.Shaders;
+using Meitou.Rendering.Gpu.Shaders;
 using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 

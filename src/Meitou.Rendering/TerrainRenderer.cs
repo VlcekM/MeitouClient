@@ -2,7 +2,7 @@ using System.Numerics;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan.Shaders;
+using Meitou.Rendering.Gpu.Shaders;
 
 namespace Meitou.Rendering;
 

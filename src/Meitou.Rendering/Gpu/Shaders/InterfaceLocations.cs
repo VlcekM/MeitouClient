@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Meitou.Rendering.Vulkan.Shaders;
+namespace Meitou.Rendering.Gpu.Shaders;
 
 /// <summary>
 /// GL links the vertex outputs to the fragment inputs by name; Vulkan by location. This adds an explicit <c>layout(location = N)</c>

@@ -11,7 +11,7 @@ internal sealed class NativeProg : IDisposable
     readonly GpuContext ctx;
     public readonly ShaderProgram P;
     readonly int[] locations;
-    readonly Meitou.Rendering.Vulkan.Shaders.ScalarKind[] kinds;
+    readonly Meitou.Rendering.Gpu.Shaders.ScalarKind[] kinds;
     /// <summary>The program's own input locations (below the instance rows): 0 .. Own − 1.</summary>
     public readonly int Own;
     VertexLayout? last;
@@ -49,7 +49,7 @@ internal sealed class NativeProg : IDisposable
             int input = Array.IndexOf(locations, loc);
             result[loc] = loc < byLocation.Length && byLocation[loc] is { } a
                 ? a.Buffer
-                : new BufferBinding(ctx.Defaults.DummyVertex.Buffer, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : Meitou.Rendering.Vulkan.Shaders.ScalarKind.Float));
+                : new BufferBinding(ctx.Defaults.DummyVertex.Buffer, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : Meitou.Rendering.Gpu.Shaders.ScalarKind.Float));
         }
         return result;
     }
