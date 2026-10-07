@@ -105,7 +105,7 @@ public unsafe class SkyWaterNativeTests
         using (var gl = new VkGl(device!))
         {
             var ctx = gl.Context;
-            using var sky = new SkyRenderer(null, ctx);
+            using var sky = new SkyRenderer(ctx);
             var g = ctx.Globals;
             // No GL program linked: the atmosphere's names are there anyway (no texture files here: the stand-in, as an empty GL unit).
             foreach (var name in new[] { "uAtmoIrradiance", "uAtmoSpecular", "uAtmoAmbientMap" })

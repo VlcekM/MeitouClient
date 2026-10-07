@@ -26,7 +26,7 @@ public unsafe class PostProcessNativeTests
             var ctx = gl.Context;
             var options = PostOptions.Create("meitou");
             options.Upscale.Kind = upscaler;
-            using var post = new PostProcess(gl, ctx, options) { AutoExposure = (0.01f, 10f), InstantAdaptation = true };
+            using var post = new PostProcess(ctx, options) { AutoExposure = (0.01f, 10f), InstantAdaptation = true };
             foreach (var (w, h) in new[] { (64, 36), (80, 48) })
             {
                 // The caller's RGBA8 target, as the viewer's offscreen framebuffer.

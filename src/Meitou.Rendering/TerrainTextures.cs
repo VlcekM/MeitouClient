@@ -126,10 +126,6 @@ public sealed unsafe class TerrainTextures : IDisposable
     public bool Idle => inFlight == 0 && mapJob is null && !mapUploading && needed.All(b => state[b].Pairs.All(p => p.Slot >= 0 || p.Failed)) &&
                         !pairs.Values.Any(p => p.Loading) && (MapState != 1 || mapWindows is null);
 
-    /// <summary>As <see cref="Create(GpuContext, GameInstall, GameDatabase, AssetLocator, int, int)"/>; <paramref name="gl"/> is not used (kept
-    /// for the callers until phase 8 removes IGl from them).</summary>
-    public static TerrainTextures Create(IGl gl, GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, int layerSize = 512, int worldColourSize = 2048) =>
-        Create(gpu, install, db, assets, layerSize, worldColourSize);
 
     /// <param name="layerSize">Edge length every layer texture is brought to (the arrays need one size).</param>
     public static TerrainTextures Create(GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, int layerSize = 512, int worldColourSize = 2048)

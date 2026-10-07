@@ -60,11 +60,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>Zone layouts in flight: whole ones and far-only ones, each limited to <see cref="workers"/> at a time.</summary>
     int runningWhole, runningFar;
 
-    /// <param name="gl">Unused since phase 8 stage 1 (meshes, textures, draws and timers are native); kept for the caller (<c>WorldFrame</c>)
-    /// until stage 3 removes IGl.</param>
-    public FoliageRenderer(IGl gl, GpuContext gpu, GameInstall install, GameDatabase db, WorldLevelData levels, AssetLocator assets)
+    public FoliageRenderer(GpuContext gpu, GameInstall install, GameDatabase db, WorldLevelData levels, AssetLocator assets)
     {
-        _ = gl;
         Gpu = gpu;
         this.install = install;
         this.db = db;
@@ -78,7 +75,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         grassProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassVertexNative(), FoliageShaders.GrassFragmentNative(), "foliage grass");
         grassMotionProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(), "foliage grass motion");
         textures = new WorldTextureCache(gpu, assets, "foliage textures");
-        if (gpu.Interop is not null) gpuCull = new FoliageGpuCull(gpu);
+        gpuCull = new FoliageGpuCull(gpu);
         InitGrassStore(gpu);
         workers = Math.Clamp(Environment.ProcessorCount / 4, 1, 3);
         var used = catalog.ByBiome.Values.SelectMany(l => l).Distinct().ToList();
@@ -969,7 +966,6 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         bool coverage = Gpu.CurrentTargets().Formats.Samples > 1;
 
         // 3. Meshes: Prepare reads the textures (WorldTexture.Key) and makes the draw list, Record puts it into a native segment of VkGl's pass.
-        bool drew = false;
         double recMeshes = 0, recGrass = 0, dispatchMs = 0;
         if (active.Count > 0 && !debugNoMeshes) PrepareMeshes(options, gpu);
         else meshDraws.Clear();
@@ -989,7 +985,6 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             {
                 RecordMeshes(depthPass ? depthMesh : colourMesh, depthPass, viewProjection, eye, light, fogColour, fogDistance, coverage);
                 if (FolTiming) recMeshes = (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
-                drew = true;
             }
         }
 
@@ -1002,7 +997,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             if (GpuGrassActive)
             {
                 long r0 = FolTiming ? Stopwatch.GetTimestamp() : 0;
-                if (DrawGrassGpu(viewProjection, eye, frustum, options, light, fogColour, fogDistance, coverage)) drew = true;
+                DrawGrassGpu(viewProjection, eye, frustum, options, light, fogColour, fogDistance, coverage);
                 if (FolTiming) recGrass = (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
             }
             else
@@ -1013,11 +1008,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     long r0 = FolTiming ? Stopwatch.GetTimestamp() : 0;
                     RecordGrass(viewProjection, eye, light, fogColour, fogDistance, coverage);
                     if (FolTiming) recGrass = (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
-                    drew = true;
                 }
             }
         }
-        if (drew) SkyRenderer.Active?.BindUnits();   // the atmosphere's texture units, as Apply leaves them for the GL code that follows
         double tGrass = cpu.Elapsed.TotalMilliseconds;
         int callsGrass = DrawCalls;
         StageClock.Sub("fol grass");
@@ -2314,7 +2307,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     int BeginTimer(bool continuation)
     {
-        if (Gpu.Interop is null || timers.Count >= 64) return -1;
+        if (timers.Count >= 64) return -1;
         Stamp(timerStart = Gpu.Frame.Timestamps.Allocate());
         timerContinuation = continuation;
         return timerStart.IsValid ? 0 : -1;

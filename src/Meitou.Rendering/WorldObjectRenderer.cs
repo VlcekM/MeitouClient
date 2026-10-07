@@ -69,11 +69,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         public bool Resolved;
     }
 
-    /// <param name="gl">Unused since phase 8 stage 1 (meshes, textures and draws are native); kept for the caller (<c>WorldFrame</c>) until
-    /// stage 3 removes IGl.</param>
-    internal WorldObjectRenderer(IGl gl, GpuContext gpu, AssetLocator assets, WorldObjects objects)
+    internal WorldObjectRenderer(GpuContext gpu, AssetLocator assets, WorldObjects objects)
     {
-        _ = gl;
         Gpu = gpu;
         this.objects = objects;
         // Both native programs are made here with every handle resolved, never inside a draw (the GL programs they replace are not made).
@@ -419,7 +416,6 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 if (ObjTiming) recordMs += (Stopwatch.GetTimestamp() - r0) * 1000.0 / Stopwatch.Frequency;
             }
         }
-        SkyRenderer.Active?.BindUnits();   // the atmosphere's texture units, as Apply left them for the GL code that follows
         double tBatches = cpu.Elapsed.TotalMilliseconds;
         int batchDraws = DrawCalls;
         if (terrainMeshes.Count > 0) DrawCalls += terrain.DrawMeshes(terrainMeshes, depthPass);

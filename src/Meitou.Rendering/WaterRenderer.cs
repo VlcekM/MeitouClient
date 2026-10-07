@@ -187,11 +187,10 @@ public sealed unsafe class WaterRenderer : IDisposable
     internal static LegacyProgram.Attribute QuadAttribute(DeviceBuffer quad) =>
         new(new BufferBinding(quad.Handle, 0), GlConventions.VertexFormat(GLEnum.Float, 2, false, false), 8, false);
 
-    /// <param name="gl">Unused since phase 8 stage 2 (kept for the callers that still pass it: <c>WorldFrame</c>).</param>
     /// <param name="sky">Unused since phase 8 stage 2: the atmosphere comes through the frame globals.</param>
-    public static WaterRenderer Create(IGl? gl, GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky, List<string> messages)
+    public static WaterRenderer Create(GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky, List<string> messages)
     {
-        _ = (gl, sky);
+        _ = sky;
         var colour = Load(install, WorldWater.ColourMap);
         var flow = Load(install, WorldWater.FlowMap);
         var normalPath = assets.Find("water.png");

@@ -15,8 +15,9 @@ static partial class WorldApp
     /// loaded point at 60 frames per second of wall time, as the interactive viewer would, and prints frame-time percentiles, the worst frames with the
     /// time each streaming stage took on the render thread, and the resident memory.
     /// </summary>
-    static int FlyBenchmark(IGl gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
+    static int FlyBenchmark(Meitou.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
     {
+        var context = display.Context;
         var centre = camera.Target;
         float radius = Math.Max(o.FlyRadius, 1);
         // Start at angle 0 on the circle's east point so the first frame is where the settled view was not: the flight starts by moving.
@@ -38,7 +39,7 @@ static partial class WorldApp
         // Pipelined: no wait for the GPU after each frame (VkGl keeps its own two frames in flight), as the interactive viewer runs.
         bool pipelined = o.FlyPipelined;
         var interval = Stopwatch.StartNew();
-        var meter = PassMeter.TryCreate(gl);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
+        var meter = PassMeter.TryCreate(display.Gl);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
         Console.WriteLine($"fly       {(pipelined ? "pipelined, " : "")}{o.FlyBenchmark} frames, circle radius {radius:0} units round {centre.X:0}, {centre.Z:0}, {o.FlySpeed:0} units per frame ({o.FlySpeed * 60:0} per second)");
         for (int i = 1; i <= o.FlyBenchmark; i++)
         {
@@ -47,9 +48,9 @@ static partial class WorldApp
             camera.Target = new Vector3(x, gpu.Terrain.HeightAt(x, z), z);
             StageClock.Start();
             frameWatch.Restart();
-            { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
+            { Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
             double cpuMs = frameWatch.Elapsed.TotalMilliseconds;
-            if (gl is Meitou.Rendering.Vulkan.VkGl vkStats && (i % 500 == 0 || i <= 4)) Console.WriteLine($"vkgl      frame {i}: {vkStats.Stats}");
+            if (i % 500 == 0 || i <= 4) Console.WriteLine($"vkgl      frame {i}: {display.VkGl.Stats}");
             cpu.Add(cpuMs);
             if (gpu.Foliage is { } fol) gaps.Add((fol.NearestIncompleteZone, fol.NearestUnlaidZone, fol.NearestMissingMesh, fol.NearestMissingGrass));
             if (o.Screenshot is not null && FlyShots.Contains(i) && gpu.Post is { Target: { } shotTarget } shotPost)
@@ -59,7 +60,7 @@ static partial class WorldApp
                 FramebufferCapture.SavePng(shotPost.Gpu, shotTarget, shot, w, h);
                 Console.WriteLine($"fly shot  frame {i}: eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {shot}");
             }
-            if (!pipelined) gl.Finish();
+            if (!pipelined) context.Finish();
             StageClock.Lap(11);
             double ms = pipelined ? interval.Elapsed.TotalMilliseconds : frameWatch.Elapsed.TotalMilliseconds;
             interval.Restart();
@@ -102,7 +103,7 @@ static partial class WorldApp
         }
         Console.WriteLine($"resident  every 150 frames (objects + foliage, MB): {string.Join(" ", resident)}");
         Console.WriteLine($"resident  {Resident(gpu)}; working set {Environment.WorkingSet / 1048576} MB, managed heap {GC.GetTotalMemory(false) / 1048576} MB");
-        if (meter is not null) ReportPasses(meter, gl, gpu, scene, camera, render, o, w, h);
+        if (meter is not null) ReportPasses(meter, display, gpu, scene, camera, render, o, w, h);
         if (o.Screenshot is not null)
         {
             // Back at the start: everything wanted there is loaded again (what was unloaded meanwhile comes back) before the picture.
@@ -118,15 +119,15 @@ static partial class WorldApp
     /// MEITOU_PASS_STATS=1: the pass meter's table and CSV lines, then one more frame with <see cref="WorldFrame.DetailedStats"/> on for what each
     /// pass drew (instances, calls, per cascade and per foliage step: the same lines the screenshot path prints).
     /// </summary>
-    static void ReportPasses(PassMeter meter, IGl gl, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
+    static void ReportPasses(PassMeter meter, Meitou.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
     {
         meter.Report(Console.Out);
-        if (gl is VkGl vkGl) meter.ReportPhases(Console.Out, vkGl.Stats.Draws);
+        meter.ReportPhases(Console.Out, display.VkGl.Stats.Draws);
         meter.Dispose();
-        if (Environment.GetEnvironmentVariable("MEITOU_VK_MICRO") == "1" && gl is VkGl microGl) PassMeter.VkCallMicro(microGl, Console.Out);
+        if (Environment.GetEnvironmentVariable("MEITOU_VK_MICRO") == "1") PassMeter.VkCallMicro(display.VkGl, Console.Out);
         WorldFrame.DetailedStats = true;
-        { Draw(gl, gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(gl); }
-        gl.Finish();
+        { Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(display.Context); }
+        display.Context.Finish();
         Console.WriteLine($"detail    {gpu.Terrain.DrawnChunks} terrain chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
             (gpu.Objects is { } ob ? $"; objects {ob.DrawnInstances} instances, {ob.DrawCalls} draw calls, {ob.DrawnTriangles:N0} triangles" : ""));
         if (gpu.Foliage is { } fol) { fol.PollTimers(wait: true); Console.WriteLine($"detail    foliage draw cpu {fol.LastDrawCpuMs:0.00} ms, gpu {fol.GpuMs:0.00} ms, {fol.DrawCalls} draw calls, {fol.DrawnInstances} meshes, {fol.DrawnBlades:N0} grass blades;{fol.MainDetail}"); }

@@ -201,10 +201,8 @@ public sealed unsafe class PostProcess : IDisposable
         false, 0, 0, BlendState.Off, Vk.ColorComponentFlags.RBit | Vk.ColorComponentFlags.GBit | Vk.ColorComponentFlags.BBit | Vk.ColorComponentFlags.ABit,
         Vk.PolygonMode.Fill, false, false);
 
-    /// <param name="gl">Unused since phase 8 stage 2 (the caller is reserved); the LOD bias goes to <see cref="GpuContext.LodBias"/>.</param>
-    public PostProcess(IGl gl, GpuContext gpu, PostOptions options)
+    public PostProcess(GpuContext gpu, PostOptions options)
     {
-        _ = gl;
         Gpu = gpu;
         Options = options;
         (ssao, blur, luminancePass, adaptPass) = (new SsaoPass(gpu), new BlurPass(gpu), new LuminancePass(gpu), new AdaptPass(gpu));

@@ -51,7 +51,6 @@ public sealed class FrameProfiler : IDisposable
     /// <param name="gpuFrameMs">The whole frame's GPU time, when the backend measures it (it includes the uploads before the first stage).</param>
     public FrameProfiler(GpuContext gpu, Func<double>? gpuFrameMs = null)
     {
-        if (gpu.Interop is null) throw new InvalidOperationException("The profiler's timestamps go through the seam (GpuContext.Interop).");
         this.gpuFrameMs = gpuFrameMs;
         native = gpu;
         recordStamp = cmd => cmd.Timestamp(native.Frame.Timestamps, pendingStamp);

@@ -258,10 +258,8 @@ public sealed unsafe class SkyRenderer : IDisposable
     SkyWeather? builtWeather;
     bool builtPhysical;
 
-    /// <param name="gl">Unused since phase 8 stage 2 (kept for the callers that still pass it: <c>WorldFrame</c>).</param>
-    public SkyRenderer(IGl? gl, GpuContext gpu, AssetLocator? assets = null)
+    public SkyRenderer(GpuContext gpu, AssetLocator? assets = null)
     {
-        _ = gl;
         Gpu = gpu;
         simple = new SkyProg(gpu, Vertex, SimpleFragment, "sky simple");
         sky = new SkyProg(gpu, Vertex, SkyFragment, "sky");
@@ -460,13 +458,6 @@ public sealed unsafe class SkyRenderer : IDisposable
         if (at != publishedAt) (published, publishedAt) = (Uniforms(), at);
         return published;
     }
-
-    /// <summary>
-    /// Nothing since phase 8 stage 2: the atmosphere's textures are frame globals of their own (<see cref="PublishGlobals"/>), no GL unit binds
-    /// them and no GL program of the world view samples them. Kept for the callers in files of other owners (terrain, objects, foliage) until
-    /// they drop the call.
-    /// </summary>
-    public void BindUnits() { }
 
     /// <summary>
     /// <c>horizonClouds</c>: the pull is the game's (cloud cover); the colour is built the game's way,

@@ -44,7 +44,6 @@ public sealed unsafe partial class VkGl
         // Disabled attributes read GL's default generic value (0, 0, 0, 1): float at offset 0, int at 16 (GpuDefaults.DummyVertex).
         defaults = Context.Defaults;
         samplers = Context.Samplers;
-        Context.DummyOverride = SampledDummy;
     }
 
     void DestroyDummies()

@@ -53,7 +53,6 @@ public readonly record struct WorldLighting(Vector3 SunDirection, Vector3 SunCol
 /// </summary>
 public sealed unsafe class TerrainRenderer : IDisposable
 {
-    readonly IGl gl;
     readonly DeviceBuffer gridVertices, gridIndices;
     readonly TerrainTexture coarseTexture;
     TerrainTexture fineTexture;
@@ -79,9 +78,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     /// <param name="coarse">Whole-world raw heights, (<paramref name="coarseSize"/>)² samples (2^n + 1 per side).</param>
     /// <param name="fine">The loaded region at its own step.</param>
-    public TerrainRenderer(IGl gl, GpuContext gpu, ushort[] coarse, int coarseSize, HeightWindow fine)
+    public TerrainRenderer(GpuContext gpu, ushort[] coarse, int coarseSize, HeightWindow fine)
     {
-        this.gl = gl;
         this.gpu = gpu;
         this.fine = fine;
         this.coarse = coarse;
@@ -270,8 +268,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
             Console.WriteLine($"terrain   frame {frameNumber} nodes per level (whole + quarters): {string.Join(" ", Enumerable.Range(0, current.LevelCount).Select(l => $"{nodes.Count(n => n.Level == l && n.Quadrant < 0)}+{nodes.Count(n => n.Level == l && n.Quadrant >= 0)}"))}");
 
         PreparePatches(current);
-        // The atmosphere's textures on their units: the frame set reads them there (SkyRenderer's GL state, not the terrain's).
-        SkyRenderer.Active?.BindUnits();
         if (nodes.Count > 0)
         {
             if (options.Wireframe != 2)
@@ -731,8 +727,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         long t0 = StepTiming.Now();
         if (!GroupMeshes(meshes, biomes: true)) return 0;
         StepTiming.Group(StepTiming.MeshColour, t0);
-        // The atmosphere's textures on their units: the frame set reads them there (SkyRenderer's GL state, not the terrain's).
-        SkyRenderer.Active?.BindUnits();
         PrepareConstants(material: true, patches: false);
         int draws = DrawGroups(meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
         StepTiming.Add(StepTiming.MeshColour, t0, draws);
@@ -1057,8 +1051,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         }
         else
         {
-            // The atmosphere's textures on their units: the frame set reads them there (SkyRenderer's GL state, not the terrain's).
-            SkyRenderer.Active?.BindUnits();
             PrepareConstants(material: true, patches: false);
             draws = DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
             StepTiming.Add(StepTiming.MeshColour, timing, draws);
