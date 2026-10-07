@@ -264,8 +264,13 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         void Mark(ObjectStreamer.Instance inst, float range)
         {
             if (inst.Gpu is null) return;
-            float value = Vector3.Distance(eye, inst.Centre) - inst.Radius;
-            if (value >= Math.Min(range, inst.Limit)) return;
+            float distance = Vector3.Distance(eye, inst.Centre), value = distance - inst.Radius, limit = Math.Min(range, inst.Limit);
+            if (value >= limit)
+            {
+                // Not drawn, but still within what Scan asks meshes for: kept, or it would be unloaded and asked for again.
+                if (distance - ObjectStreamer.RequestMargin <= limit) inst.Mesh.LastUsed = now;
+                return;
+            }
             inst.Mesh.LastUsed = now;
             if (inst.Materials is not { } set) return;
             if (set.Stamp != markStamp) { set.Stamp = markStamp; set.Touch(); }

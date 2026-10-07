@@ -3329,6 +3329,27 @@ slider lines of `WorldFrame.cs` / `WorldApp.cs`; `WorldTextureCache.cs` and `Gpu
   with the native frame loop's equivalent.
 - **Drawing, shadows, pictures and measurements**: impostors.md section 7.
 
+### 8.17 Object mesh reload churn (2026-10-07)
+
+- **Symptom** (owner, F11 at 400 000 objects after a session of flying): object meshes 5060 unloaded / 5010 reloaded with the VRAM guard
+  at 56%. A 60 s fly benchmark (`--range-large 120000 --range-medium 80000 --object-distance 400000 --fly-benchmark 3600`, The Hub,
+  12 000 circle, every place revisited every ~8 s) reproduced it: 318 unloaded, 294 reloaded.
+- **Cause**: `ObjectStreamer.Scan` asked for the mesh of every unresolved instance within the object distance, but `MarkInRange` keeps a
+  mesh in use only while an instance is within `min(range, Limit)`, and a building part's `Limit` is the game's part distance (3000,
+  `ObjectRanges.PartRenderingDistance`). A part beyond it was loaded, never drawn or marked, unloaded after the idle minute
+  (`StreamingTuning.IdleSeconds`), its instances unresolved, and asked for again at once. Not the caches' high-water marks: lifting them
+  into the free VRAM changed nothing (318 / 306).
+- **Fix**: `Scan` asks only within `min(objectRange, Limit)` (`Limit` is kept on an unload, so after the first load of a part's mesh its
+  distance is known), and `MarkInRange` also keeps a mesh used by an instance that is not drawn but within what `Scan` asks for
+  (`RequestMargin`, 600), so the two agree everywhere. Parts beyond their distance move to the zone's `Parked` list, walked only when the
+  eye comes within the zone's largest part distance: left in `Unresolved` they cost `upd-objects` 0.12 → 0.36 ms at 400 000.
+- **Measured** (same flight, `--fly-pipelined`; the paced benchmark's GPU times swung 4.3-8.1 ms between identical runs as the GPU
+  downclocked, so they are not comparable): reloads 270 → 0; the 270 unloads left are far parts loaded once before their part distance was
+  known. Resident object meshes 866 → 596 (713 → 626 MB). Frame p50 4.1 / 4.1 ms, GPU 2.47 / 2.52 ms, `upd-objects` 0.12 / 0.13 ms. Draws
+  identical (223 instances, 237.8k triangles, 63 calls a frame in colour); "part-limited" falls 463 → 36 because those instances now wait
+  parked instead of resolving and being skipped. Faithful ten views 0 px.
+- **Left**: foliage meshes 184 unloaded / 61 reloaded and foliage textures 28 / 25 in the same flight (the 60 s idle rule; not examined).
+
 ## 9. Expected CPU cost, and how the profiler keeps working
 
 *In short: a throwaway measurement on the RTX 4070 recorded the same draws through VkGl and directly. A typical foliage mesh draw costs about

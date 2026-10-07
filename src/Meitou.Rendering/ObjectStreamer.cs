@@ -11,6 +11,11 @@ namespace Meitou.Rendering;
 /// </summary>
 sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDisposable
 {
+    /// <summary>How much nearer than its placement point an unresolved instance counts (a guess at its size): a mesh is wanted a little before it can be seen.</summary>
+    public const float RequestMargin = 600;
+    /// <summary>How far outside its zone a parked part's centre may be (a part's bounds; generous).</summary>
+    const float ParkedSlack = 1000;
+
     /// <summary>One placed mesh.</summary>
     public sealed class Instance
     {
@@ -20,7 +25,8 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         /// <summary>World bounding sphere (the placement point and a guess until resolved).</summary>
         public Vector3 Centre;
         public float Radius = 400;
-        /// <summary><see cref="MeshLod.Value"/>-like distance beyond which the instance is not drawn (<see cref="ObjectRanges.PartRenderingDistance"/>).</summary>
+        /// <summary><see cref="MeshLod.Value"/>-like distance beyond which the instance is not drawn (<see cref="ObjectRanges.PartRenderingDistance"/>).
+        /// Kept on an unload (<c>WorldObjectRenderer.Unresolve</c>), so <see cref="Scan"/> knows the part distance before the mesh is back.</summary>
         public float Limit = float.MaxValue;
         /// <summary>A map feature drawn with the terrain material.</summary>
         public bool TerrainMode;
@@ -37,6 +43,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         public List<Instance> Real { get; } = [];
         public List<Instance> Stand { get; } = [];
         public List<Instance> Unresolved { get; } = [];
+        /// <summary>Unresolved parts beyond their part distance, out of <see cref="Unresolved"/> until the eye comes near (<see cref="Scan"/>), and the largest of their distances.</summary>
+        public List<Instance> Parked { get; } = [];
+        public float ParkedLimit;
     }
 
     /// <summary>Zones laid out at once.</summary>
@@ -153,14 +162,39 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         foreach (var zone in zones.Values)
         {
             var list = zone.Unresolved;
+            // Parked parts come back once the eye could be within their part distance (the zone's square, less the margin and a part's size).
+            if (zone.Parked.Count > 0 && ZoneDistance(zone.X0, zone.Z0, eye) - RequestMargin - ParkedSlack <= zone.ParkedLimit)
+            {
+                for (int i = zone.Parked.Count - 1; i >= 0; i--)
+                {
+                    var inst = zone.Parked[i];
+                    if (Vector3.Distance(eye, inst.Centre) - RequestMargin > Math.Min(objectRange, inst.Limit)) continue;
+                    list.Add(inst);
+                    zone.Parked[i] = zone.Parked[^1];
+                    zone.Parked.RemoveAt(zone.Parked.Count - 1);
+                }
+            }
             for (int i = list.Count - 1; i >= 0; i--)
             {
                 var inst = list[i];
                 if (inst.Stand && noDistant) continue;
-                float range = inst.Stand ? distantRange : objectRange;
+                // A part beyond its part distance (known once it was resolved) is not drawn, so its mesh is not wanted: asking for it would load
+                // a mesh nothing marks as used, unloaded a minute later and asked for again (docs/renderer-native.md 8.17).
+                float range = inst.Stand ? distantRange : Math.Min(objectRange, inst.Limit);
                 // The placement point, less a guess at the size: a mesh is wanted a little before it can be seen.
-                float d = Vector3.Distance(eye, inst.Centre) - 600;
-                if (d > range) continue;
+                float d = Vector3.Distance(eye, inst.Centre) - RequestMargin;
+                if (d > range)
+                {
+                    // Parked out of the list walked every frame (thousands at long object distances).
+                    if (!inst.Stand && inst.Limit < objectRange)
+                    {
+                        zone.Parked.Add(inst);
+                        zone.ParkedLimit = Math.Max(zone.ParkedLimit, inst.Limit);
+                        list[i] = list[^1];
+                        list.RemoveAt(list.Count - 1);
+                    }
+                    continue;
+                }
                 switch (inst.Mesh.Status)
                 {
                     case ObjectMesh.State.None:
