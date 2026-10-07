@@ -137,7 +137,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>A line about what is loaded, for the log.</summary>
     /// <summary>GPU memory held by streamed meshes and textures, for the stats line and the window title.</summary>
     public long ResidentBytes => meshes.Bytes + textureCache.ResidentBytes;
-    public string ResidentDescription => $"{meshes.Bytes / 1048576.0:0} MB in {meshes.Resident} meshes ({meshes.Unloads} unloaded, {meshes.Reloads} reloaded), {textureCache.Describe()}";
+    public string ResidentDescription => $"{meshes.Bytes / 1048576.0:0} MB in {meshes.Resident} meshes ({meshes.Unloads} unloaded, {meshes.Reloads} reloaded, {meshes.Refined} remade finer, {meshes.Coarsened} coarser), {textureCache.Describe()}";
     public string Describe() =>
         $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved), {meshes.Resident}/{meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
         $"{towns.Count(t => t.Mesh.Status == ObjectMesh.State.Resident)}/{towns.Count} distant towns; {objects.Describe()}";
@@ -154,13 +154,13 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
     /// <summary>Colour draws of parts whose diffuse map was not resident (drawn grey) and, at the same moment, textures waiting for a finer image,
     /// the largest of each since <see cref="TakePopStats"/> (the benchmark's pop-in lines).</summary>
-    int untexturedDraws, untexturedMax;
+    int untexturedDraws, untexturedMax, heldNear;
     /// <summary>Meshes drawn in a reduced form while the full one loads (<see cref="ObjectMeshCache"/>).</summary>
-    public int MeshesAwaitingDetail => 0;
-    public (int Untextured, int Refining) TakePopStats()
+    public int MeshesAwaitingDetail => meshes.Upgrading;
+    public (int Untextured, int Refining, int Held) TakePopStats()
     {
-        var result = (Math.Max(untexturedMax, untexturedDraws), textureCache.Refining);
-        untexturedDraws = untexturedMax = 0;
+        var result = (Math.Max(untexturedMax, untexturedDraws), textureCache.Refining, heldNear);
+        untexturedDraws = untexturedMax = heldNear = 0;
         return result;
     }
 
@@ -176,6 +176,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     {
         var watch = Stopwatch.StartNew();
         eyeNow = eye;
+        meshes.LodBias = LodBias;
         bool unlimited = budgetMs > 1e8;
         float streamRange = (NoDistant ? RealRange : Math.Max(RealRange, DistantReach)) + WorldLayout.ZoneSize * 0.5f;
         streamer.Paused = guard is { Streaming: false };
@@ -211,6 +212,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
     readonly HashSet<GpuObjectMesh> unloadedMeshes = [];
     readonly List<ObjectMaterialSet> markedSets = [];
+    readonly List<ObjectMesh> markedMeshes = [];
     Vector3 lastMarkEye;
     long lastMarkTime;
     long lastMark;
@@ -231,6 +233,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         lastMark = now;
         markStamp++;
         markedSets.Clear();
+        markedMeshes.Clear();
         void Mark(ObjectStreamer.Instance inst, float range)
         {
             if (inst.Gpu is null) return;
@@ -242,6 +245,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             if (inst.Stand) return;
             if (set.NeedStamp != markStamp) { set.NeedStamp = markStamp; set.Near = set.NearScaled = float.PositiveInfinity; markedSets.Add(set); }
             float near = Math.Max(value - needMargin, 0);
+            var mesh = inst.Mesh;
+            if (mesh.NearStamp != markStamp) { mesh.NearStamp = markStamp; mesh.NearPass = near; markedMeshes.Add(mesh); }
+            else if (near < mesh.NearPass) mesh.NearPass = near;
             if (near < set.Near) set.Near = near;
             float scaled = near / Math.Max(inst.Radius / Math.Max(inst.Gpu.Radius, 1e-6f), 1e-6f);
             if (scaled < set.NearScaled) set.NearScaled = scaled;
@@ -257,6 +263,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 part.Offer(part.Triplanar ? set.Near : set.NearScaled);
         textureCache.CommitNeeds();
         textureCache.Rebalance();
+        // Distance-based streaming of the finest LOD level: each mesh in range, remade when its nearest user needs finer levels (or, after a while, no longer needs them).
+        foreach (var mesh in markedMeshes) meshes.Rebalance(mesh, mesh.NearPass);
         if (NoDistant) return;
         foreach (var t in towns)
             if (Vector3.Distance(eye, t.Centre) - t.Radius < DistantReach) t.Mesh.LastUsed = now;
@@ -317,19 +325,37 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
     // ------------------------------------------------------------------ materials
 
-    /// <summary>Makes the instance drawable once its mesh is resident: bounds, draw distance, material set.</summary>
-    void Resolve(ObjectStreamer.Instance inst)
+    /// <summary>Makes the instance drawable once its mesh is resident: bounds, draw distance, material set. False when the mesh holds only coarser
+    /// levels than this instance can need (it was loaded for farther ones): it is asked to be remade and the instance waits.</summary>
+    bool Resolve(ObjectStreamer.Instance inst)
     {
         var gpu = inst.Mesh.Gpu!;
         var t = inst.Placed.Transform;
-        inst.Gpu = gpu;
-        inst.Centre = Vector3.Transform(gpu.Centre, t);
+        var centre = Vector3.Transform(gpu.Centre, t);
         float scale = MathF.Sqrt(Math.Max(new Vector3(t.M11, t.M12, t.M13).LengthSquared(), Math.Max(new Vector3(t.M21, t.M22, t.M23).LengthSquared(), new Vector3(t.M31, t.M32, t.M33).LengthSquared())));
-        inst.Radius = gpu.Radius * scale;
+        float radius = gpu.Radius * scale;
+        if (!inst.Stand && gpu.MinLevel > 0 && inst.TerrainMode)
+        {
+            meshes.Retarget(inst.Mesh, 0);   // the terrain shader wants every level
+            return false;
+        }
+        if (!inst.Stand && gpu.MinLevel > 0)
+        {
+            float value = Math.Max(Vector3.Distance(eyeNow, centre) - radius - needMargin, 0);
+            if (ObjectMeshCache.LevelFor(gpu.Distances, value * LodBias) < gpu.MinLevel)
+            {
+                if (value < 3000) heldNear++;   // an instance that close waiting for its mesh to be remade would be seen (the benchmark counts it)
+                meshes.Retarget(inst.Mesh, value * 0.7f);
+                return false;
+            }
+        }
+        inst.Gpu = gpu;
+        inst.Centre = centre;
+        inst.Radius = radius;
         inst.Limit = inst.Placed.Kind == PlacedKind.BuildingPart
             ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"))
             : float.MaxValue;
-        if (inst.Stand) { inst.Materials = distantMaterial; return; }
+        if (inst.Stand) { inst.Materials = distantMaterial; return true; }
         // A part's look comes from the material the layout chose (which differs per town), else from the resolver's candidates.
         var key = inst.Placed.MeshPath;
         var mkey = inst.Placed.Material is { } spec
@@ -343,6 +369,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         float near = Math.Max(Vector3.Distance(eyeNow, inst.Centre) - inst.Radius - needMargin, 0);
         foreach (var part in set!.Parts) part.OfferNow(part.Triplanar ? near : near / Math.Max(scale, 1e-6f));
         if (made) set.Touch();
+        return true;
     }
 
     /// <summary>One material per part: the resolver's candidate that names the placing record (or its building) best.</summary>
@@ -544,6 +571,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     void Emit(ObjectStreamer.Instance inst, GpuObjectMesh gpu, float value, float weight)
     {
         var blend = MeshLod.Blend(gpu.Distances, value * LodBias);
+        // A mesh held without its finest levels (made for farther users, see ObjectMeshCache.Retarget) draws its finest instead, until it is remade.
+        if (gpu.MinLevel > 0) blend = new LodBlend(Math.Max(blend.Lower, gpu.MinLevel), Math.Max(blend.Upper, gpu.MinLevel), blend.T);
         var m = inst.Transform;
         if (!blend.IsBlending)
         {

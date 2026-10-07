@@ -142,6 +142,17 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// <summary>Above this the least recently used textures that were unused for <see cref="PressureIdleSeconds"/> go too.</summary>
     public double HighWaterMb { get; set; } = StreamingTuning.IdleSeconds > 1e8 ? double.MaxValue : TextureQuality.MemoryBudgetMb(TextureQuality.Level);
     public double PressureIdleSeconds { get; set; } = 8;
+    /// <summary>The high-water mark as a share of the driver's video memory budget: the mark is the smaller of <see cref="HighWaterMb"/> and this share (the default share is what
+    /// the fixed mark was on the 11.4 GB card it was tuned on), and three quarters of it under the guard's pressure.</summary>
+    public double HighWaterShare { get; set; } = TextureQuality.MemoryBudgetMb(0) / 11453.0;
+    /// <summary>The mark in effect (MB).</summary>
+    public double MarkMb => EffectiveMark(HighWaterMb, HighWaterShare, Guard);
+
+    internal static double EffectiveMark(double highWaterMb, double share, VramGuard? guard)
+    {
+        if (guard is not { BudgetBytes: > 0 } g || double.IsInfinity(highWaterMb) || highWaterMb >= double.MaxValue) return highWaterMb;
+        return Math.Min(highWaterMb, g.BudgetBytes / 1048576.0 * share) * (g.Pressure ? 0.75 : 1);
+    }
     /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): while it is under pressure nothing new is loaded (a texture asked for stays
     /// unloaded, drawn with the stand-in, until it ends) and textures idle for <see cref="GuardIdleSeconds"/> are evicted, least recently used
     /// first, whatever the high-water mark.</summary>
@@ -304,7 +315,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (now - lastTrim < 1000) return;
         lastTrim = now;
         bool guarded = Guard?.Pressure ?? false;
-        bool pressure = ResidentBytes > HighWaterMb * 1048576;
+        bool pressure = ResidentBytes > MarkMb * 1048576;
         List<WorldTexture>? victims = null;
         foreach (var t in cache.Values)
         {
@@ -314,7 +325,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         }
         if (victims is null) return;
         victims.Sort((a, b) => a.LastUsed.CompareTo(b.LastUsed));
-        long lowWater = (long)(HighWaterMb * 1048576 * 0.75);
+        long lowWater = (long)(MarkMb * 1048576 * 0.75);
         foreach (var t in victims.Take(guarded ? 120 : 40))
         {
             bool old = (now - t.LastUsed) / 1000.0 > IdleSeconds;
