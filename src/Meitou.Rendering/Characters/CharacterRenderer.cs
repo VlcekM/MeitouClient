@@ -27,6 +27,9 @@ internal sealed unsafe class CharacterRenderer : IDisposable
     readonly NativeFrame nativeFrame;
     readonly CharProg colourProg, depthProg;
     readonly CharacterContent content;
+    readonly PassTimer colourTimer, depthTimer;
+    readonly List<double> colourGpu = [], depthGpu = [], updateCpu = [], poseCpu = [], drawCpu = [];
+    int updateCount;
     readonly Dictionary<CharacterAppearance, CharacterAsset?> assets = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>The characters of this frame: filled by <see cref="Source"/> inside <see cref="Update"/>, or by the host before it.</summary>
@@ -47,6 +50,9 @@ internal sealed unsafe class CharacterRenderer : IDisposable
     public int DrawnParts { get; private set; }
     public long DrawnTriangles { get; private set; }
     public int DrawCalls { get; private set; }
+    /// <summary>Part instances drawn by mesh LOD level in the last view, and their triangles.</summary>
+    public readonly int[] LevelParts = new int[8];
+    public readonly long[] LevelTriangles = new long[8];
     public double LastUpdateMs { get; private set; }
     public double LastPoseMs { get; private set; }
     public double LastDrawCpuMs { get; private set; }
@@ -82,6 +88,8 @@ internal sealed unsafe class CharacterRenderer : IDisposable
         colourProg = new CharProg(gpu, nativeFrame, CharacterShaders.Vertex(), CharacterShaders.Fragment(), "characters");
         depthProg = new CharProg(gpu, nativeFrame, CharacterShaders.DepthVertex(), CharacterShaders.DepthFragment(), "characters depth");
         content = new CharacterContent(gpu, install, db, assetLocator);
+        colourTimer = new PassTimer(gpu);
+        depthTimer = new PassTimer(gpu);
     }
 
     public VramGuard? Guard { get => content.Textures.Guard; set => content.Textures.Guard = value; }
@@ -95,6 +103,8 @@ internal sealed unsafe class CharacterRenderer : IDisposable
     /// </summary>
     public void Update(Vector3 eye)
     {
+        colourTimer.Poll(colourGpu);
+        depthTimer.Poll(depthGpu);
         var watch = Stopwatch.StartNew();
         Draws.Clear();
         Source?.Invoke(Draws);
@@ -176,6 +186,9 @@ internal sealed unsafe class CharacterRenderer : IDisposable
         for (int s = 0; s < slotParts.Count; s++)
             Write(slotParts[s].Material, ref *(CharacterMaterialRecord*)(materials.Pointer + (long)s * CharacterMaterialRecord.Size));
         LastUpdateMs = watch.Elapsed.TotalMilliseconds;
+        updateCount++;
+        updateCpu.Add(LastUpdateMs);
+        poseCpu.Add(LastPoseMs);
     }
 
     void AddLayer(in ActiveLayer layer)
@@ -297,6 +310,8 @@ internal sealed unsafe class CharacterRenderer : IDisposable
         var cpu = Stopwatch.StartNew();
         DrawnCharacters = DrawnParts = DrawCalls = 0;
         DrawnTriangles = 0;
+        Array.Clear(LevelParts);
+        Array.Clear(LevelTriangles);
         foreach (var b in batchMap.Values) b.Count = 0;
         active.Clear();
 
@@ -365,10 +380,16 @@ internal sealed unsafe class CharacterRenderer : IDisposable
             };
             DrawCalls++;
             DrawnTriangles += (long)part.Count[b.Level] / 3 * b.Count;
+            LevelParts[Math.Min(b.Level, 7)] += b.Count;
+            LevelTriangles[Math.Min(b.Level, 7)] += (long)part.Count[b.Level] / 3 * b.Count;
         }
         job.Count = n;
+        var timer = depthPass ? depthTimer : colourTimer;
+        timer.Begin();
         Gpu.Record(label, job);
+        timer.End();
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
+        if (!depthPass) drawCpu.Add(LastDrawCpuMs);
     }
 
     /// <summary>A part's native state for <paramref name="p"/>, made on first use: the vertex layout (the per-instance rows at 7 to 10 and the data at 11 are bound once per segment).</summary>
@@ -502,8 +523,22 @@ internal sealed unsafe class CharacterRenderer : IDisposable
         }
     }
 
+    static double Tail(List<double> samples, int count) =>
+        samples.Count == 0 ? 0 : samples.Skip(Math.Max(samples.Count - count, 0)).Average();
+
+    /// <summary>The last frames' costs (the stills' timed frames): the render thread's milliseconds and the GPU's per pass.</summary>
+    public string Statistics()
+    {
+        colourTimer.Poll(colourGpu);
+        depthTimer.Poll(depthGpu);
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"{Posed} posed, {DrawnCharacters} drawn ({DrawnParts} parts) in {DrawCalls} calls, {DrawnTriangles:N0} triangles in the last view; by level {string.Join(", ", Enumerable.Range(0, 5).Where(l => LevelParts[l] > 0).Select(l => $"L{l} {LevelParts[l]} parts {LevelTriangles[l] / 1000}k"))}; last frames: cpu update {Tail(updateCpu, 10):0.00} ms (pose {Tail(poseCpu, 10):0.00}), " +
+            $"draw {Tail(drawCpu, 10):0.00} ms; gpu colour {Tail(colourGpu, 10):0.00} ms, shadow cascades {Tail(depthGpu, 40):0.00} ms per call ({depthGpu.Count} calls)");
+    }
+
     public void Dispose()
     {
+        if (updateCount > 0) Console.WriteLine($"characters {Statistics()}");
         colourProg.Dispose();
         depthProg.Dispose();
         nativeFrame.Dispose();

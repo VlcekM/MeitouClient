@@ -72,6 +72,8 @@ internal sealed class CharacterAsset
 internal sealed class CharacterContent
 {
     const string AllocationName = "character meshes";
+    /// <summary><c>MEITOU_CHARACTER_LOG=1</c>: a line per part of every appearance built (levels, triangles, material).</summary>
+    static readonly bool Log = Environment.GetEnvironmentVariable("MEITOU_CHARACTER_LOG") == "1";
     readonly GpuContext gpu;
     readonly AssetLocator assets;
     readonly GameDatabase db;
@@ -127,6 +129,9 @@ internal sealed class CharacterContent
             var levels = CharacterLod.Levels(mesh);
             var centre = mesh.Bounds is { } b ? (b.Min + b.Max) / 2 : model.Center;
             float radius = mesh.Bounds is { } bb ? bb.Radius : model.Radius;
+            // The LOD value is distance minus this radius. A few character meshes carry a stored radius many times their size (human_female:
+            // 116 for a 20 unit tall body), which would keep them at full detail for another hundred units: the model's own extent bounds it.
+            radius = Math.Min(radius, Math.Max(model.Radius, 1));
             var decoded = new DecodedObjectMesh { Model = model, Levels = levels, Manual = [], Centre = centre, Radius = radius };
             var gpuMesh = new GpuObjectMesh { Distances = [.. levels.Select(l => l.Distance)], Manual = new GpuObjectMesh?[levels.Count], Centre = centre, Radius = radius };
             gpu.EnsureFrame();
@@ -203,6 +208,9 @@ internal sealed class CharacterContent
             asset.Parts.Add(ap);
         }
 
+        if (Log)
+            foreach (var p in asset.Parts)
+                Console.WriteLine($"character-log  {p.Label}: levels [{string.Join(", ", p.Mesh.Distances.Select(d => d.ToString("0")))}] triangles [{string.Join(", ", Enumerable.Range(0, p.Mesh.Distances.Length).Select(l => p.Mesh.Parts.Sum(g => g.Count[l] / 3)))}] radius {p.BoundsRadius:0.0} {(p.Shared ? "shared" : "bone " + p.Bone)}; {p.Material.Description}");
         // The posture libraries, held at the body file's sliders (docs/animation.md, "Posture sliders").
         if (c.Body is { } bodyFile)
         {
