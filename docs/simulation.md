@@ -283,6 +283,42 @@ Queued orders get their own block. Followers of a squad leader keep the factory'
 - Not made: roads for long trips (`road preference`), the AI package jobs (`GoOutOnPatrol` and others), faction campaigns, travel through a danger the squad should flee,
   nests and the homeless spawns of the area sectors (6.2, 6.3), unique squads.
 
+## Frame rate and the navmesh in the game (after the animation round)
+
+**Where the 186 to 135 fps went** (`--new-game --quit-after 10`; the `profile` line the host prints at the end of a smoke run, and the renderer's own
+`characters` line). Per frame, release build, this PC (timings on a busy machine move by tens of per cent; the figures below are from quiet runs):
+
+| | no population | `--new-game`, 8 sim threads | `--new-game`, 1 sim thread | `--new-game`, `MinPartitionSize` 128 (now) |
+|---|---|---|---|---|
+| fps | 192 | 135 | 162 | 165 to 183 |
+| simulation advance, ms per frame (per tick) | 0.02 (0.08) | 0.41 (2.17) | 0.07 (0.41) | 0.06 to 0.08 (0.40 to 0.48) |
+| host draw-list fill | - | 0.025 | 0.022 | 0.015 |
+| world draw (render thread CPU) | 2.5 | 4.95 | 3.4 | 2.6 to 3.1 |
+
+- **The cost on our side was the worker pool.** 34 characters were cut into 2 partitions (`MinPartitionSize` 16), so every parallel phase of every system
+  (5 systems, 3 phases) woke worker threads and waited at a barrier: 2.2 ms per tick against 0.4 ms for the same tick on one thread, and the stall also showed in
+  the draw time (the render thread competes for cores). The game now passes `MinPartitionSize = 128` (a world under 256 slots runs on the calling thread); the default of
+  16 stays in `WorldSettings` so the determinism tests still cut small worlds into several partitions. A tick of the Hub is 0.4 to 0.5 ms (it was 0.15 before the
+  animation, bar squads, snapshot paths and the 3 layers' publish: about 0.15 ms of that is `Publish` building the snapshot lists, left as is: 1.5 % of a frame at 30 ticks per second).
+- **Host fill / interpolation**: 0.015 to 0.025 ms per frame for about 30 characters; one `CharacterPose[]` and a few small loops per drawn character. Not worth more.
+- **Renderer side** (track B, `src/Meitou.Rendering/Characters/`): with the world loaded, the characters add about 0.1 to 0.2 ms of CPU update (gather 0.04, pose 0.1) and 0.05 to 0.08 ms of
+  draw recording, but the render thread's whole `DrawWorld` is 0.5 to 1 ms above the empty world (2.6 to 3.1 ms against 2.5): mainly the character shadow cascades
+  (about 2700 shadow draw calls per 10 s smoke, 1350 motion-vector passes) and the 70 to 90 draw calls of the 21 to 34 drawn characters. GPU: the colour pass of the characters costs
+  0.04 ms; nothing there is the limit. That residual is the renderer's to look at (instancing the shadow pass per LOD level); nothing local was changed.
+
+**The navmesh in the game** (`--no-navmesh` turns it off). `Meitou.Game/NavAdapter.cs` is the only place that knows `Meitou.Navigation`: it implements the simulation's
+`IAgentWalkability` over `NavSystem.Walkability`; everything else in the game sees `IWalkability`.
+- *Zones*: the host asks for the zones of `PopulationSystem.ActiveZones` each frame (`NavSystem.LoadZone`, idempotent), and drops one that has been inactive for 30 s
+  (`UnloadZone`, the cache file stays). A cold zone is about 1.5 to 2 s on the nav builder thread, a cached one milliseconds, never on the simulation thread.
+- *Stand-in or hold*: where a zone is not loaded, `NavmeshWalkability` answers with the open-ground stand-in, so a query never waits. Two holds keep that from being seen:
+  the population does not load a town until its zone's mesh is ready (`PopulationSystem.ZoneGate`), so residents are placed on the mesh; and a new game (and a screenshot)
+  waits for the zones round the start (2 zones, 3.2 s cold, 75 ms cached) before the squad is placed. A path asked for across a zone not ready yet is straight;
+  when a mesh arrives the host sends a `RepathCommand` (a world command, at the world's tick) and every character with a go-to in hand asks again.
+- *Footprint*: `CharacterCold.FootprintRadius` from the race's `pathfind footprint radius` (0 when unknown: the default human, 4); `PathService.Submit` carries it and the adapter
+  hands it to `NavAgent.Radius`. The water factor (`water avoidance`) and the faction halving are not passed yet.
+- *Tests*: the determinism and the other simulation tests stay on `OpenGroundWalkability` (synchronous). `HubNavigationTests` (Slow): the Wanderer's order across The Hub reaches the goal
+  without leaving the mesh and with a detour of at least 10 % over the straight line (the wall's gate). Doors: nothing opens or closes them yet (no building interaction in the game).
+- *Look*: the selected character's remaining path is drawn as a yellow line (`CharacterSnapshot.Path`).
 ## Player as built (stage 6)
 
 **New game.** `meitou --new-game [start]` (default `Wanderer`; `--list-starts` prints the 13 base-game starts). `NewGameStart`

@@ -187,6 +187,7 @@ public sealed class World : IDisposable
                 SquadId = cold?.SquadId ?? -1,
                 IsPlayer = cold?.IsPlayer ?? false,
                 Selected = cold is { IsPlayer: true } && Player.Selection.Contains(new CharacterId(i, state[i].Generation)),
+                Path = cold is { IsPlayer: true } && (state[i].Flags & (ushort)MoveFlags.HasPath) != 0 && Player.Selection.Contains(new CharacterId(i, state[i].Generation)) ? cold.Path.Skip(state[i].PathCursor).ToArray() : [],
             });
         }
         PreviousSnapshot = Snapshot;
