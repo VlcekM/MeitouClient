@@ -230,6 +230,9 @@ compilation in both, see the runtimeconfig). The user runs Debug.
   **Since phase 8 stage 3** (VkGl deleted, renderer-native.md 8.9) the counter columns are the native API's (`GpuStats.Running`: draws,
   indirect draws, dispatches, pipeline binds, descriptor pushes, native segments, constant KB, upload KB) plus fence-wait, submit, acquire and
   present; the tables below were taken with the VkGl columns and are kept as measured.
+  **Since 2026-10-07** the GPU column is per frame like the others; before, a row's GPU time was divided by the times the row ran, so stages drawn
+  once per depth slice (terrain, objects, foliage, water) and cascades drawn every second or fourth frame showed per run
+  ([render-distance-benchmark.md](render-distance-benchmark.md) section 1).
 - `MEITOU_VKGL_PHASES=1` (removed with VkGl in phase 8 stage 3): Stopwatch around the nine parts of `PrepareDraw` and, separately, around the `vkCmd*` calls themselves
   (`VkGlStats.PhaseTicks/NativeTicks`; ~0.05 µs per read, so the sums read a little high). `MEITOU_VK_MICRO=1`: 100 000 `vkCmdSetScissor` / `vkCmdSetCullMode`
   recorded through Silk.NET and through the raw function pointer.
