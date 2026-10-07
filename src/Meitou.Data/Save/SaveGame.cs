@@ -152,6 +152,22 @@ public sealed partial class SaveGame
         foreach (var z in Zones.Keys.Where(z => !listed.Contains(z))) Problems.Add($"Extra zone file: zone.{z.X}.{z.Y}.zone");
     }
 
+    /// <summary>A deep copy made by writing every file to memory and reading it back: nothing is shared with the original.</summary>
+    public SaveGame Clone()
+    {
+        var copy = new SaveGame(SaveFile.Read(Quick.ToBytes()));
+        foreach (var p in Platoons)
+        {
+            var q = copy.Platoons.First(x => x.Record.StringId == p.Record.StringId);
+            if (p.File is not null) q.File = SaveFile.Read(p.File.ToBytes());
+        }
+        foreach (var z in Zones.Values) copy.Zones[z.Coordinate] = new SaveZone(z.Coordinate, SaveFile.Read(z.File.ToBytes()));
+        copy.Portraits = Portraits?.ToArray();
+        copy.Reindex();
+        copy.Problems.AddRange(Problems);
+        return copy;
+    }
+
     // ------------------------------------------------------------------ handles
 
     /// <summary>An index for resolving handles against this save's platoons, characters, towns and zone buildings (rebuild it after changing them).</summary>
@@ -170,7 +186,6 @@ public sealed partial class SaveGame
         foreach (var p in Platoons)
         {
             p.CharCount = p.Characters.Count;
-            p.Collection?.Ints.Remove("char count");
             if (p.Collection is { } c) c.Ints["char count"] = p.Characters.Count;
             if (p.File is not null && p.FileName is null) p.ContentFile = SaveFolder.PlatoonName(p.Record.StringId);
         }
@@ -199,6 +214,8 @@ public sealed partial class SaveGame
 
         foreach (var (name, file) in AllFiles().Select(f => (f.Name, f.File)))
         {
+            // A file the mod editor saved (type 17, numeric ids 0, real byte sizes) is left as it is.
+            if (file.Data.FileType != FcsFileType.V15) continue;
             file.Data.NextId = file.Records.Count == 0 ? 0 : file.Records.Max(r => r.Id);
             foreach (var r in file.Records) r.ByteSize = ChildCountSize(r, name);
         }

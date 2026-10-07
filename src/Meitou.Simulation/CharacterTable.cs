@@ -65,6 +65,8 @@ public sealed class CharacterCold
     public CharacterAnimation? Animation { get; set; }
     /// <summary>The kind of weapon drawn in the right hand (None while sheathed): the stance animations are chosen for.</summary>
     public Meitou.Data.Gameplay.WeaponKinds DrawnWeapon { get; set; }
+    /// <summary>Where the character came from in a loaded save, with the saved stats and medical state (null for a character the game made itself); see <c>Meitou.Simulation.Saving</c>.</summary>
+    public Saving.SavedCharacterLink? Save { get; set; }
     /// <summary>RACE <c>pathfind footprint radius</c> (0: not known, paths use the default human); what the navmesh keeps clear.</summary>
     public float FootprintRadius { get; set; }
 }
