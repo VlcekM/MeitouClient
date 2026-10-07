@@ -299,3 +299,10 @@ and the sliders above. Hair and beards are ATTACHMENT records worn with a shared
 - Body shape: the nutrition value behind starvation (+0x4b8), the thigh-narrowing leg state, the two
   movement-scale exceptions, the stats field x in the muscle definition, what reads (`Height` − 80) × 0.025,
   and what the game does when a body file lacks a slider (the viewer uses 100).
+
+## Leg health and lying down (wired with the bodies)
+
+**Observed** (engine choice, [simulation.md](simulation.md#bodies-wired-after-stage-7)): the simulation fills `AnimationStance.LeftLeg` and `RightLeg` with the lowest `Fraction x 100`
+of the character's leg parts, so a hurt leg selects the `limp` records by their leg damage ranges (100 healthy, negative past function; 1000..1000 means not used).
+The base data has no unconscious or dead clip (the skeleton has `stealthKO` and `sleeponfloor`), so a knocked-out or dead character plays the `sleeponfloor` record
+until proper clips exist.

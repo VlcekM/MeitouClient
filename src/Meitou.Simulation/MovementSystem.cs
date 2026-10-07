@@ -117,7 +117,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
             if (!next[i].Alive || (next[i].Flags & (ushort)MoveFlags.NeedPath) == 0) continue;
             var cold = table.Cold(i)!;
             var to = new Vector3(next[i].Goal.X, world.Walkability.GroundHeight(next[i].Goal.X, next[i].Goal.Y), next[i].Goal.Y);
-            cold.PathRequest = Paths.Submit(new CharacterId(i, next[i].Generation), next[i].Position, to, cold.FootprintRadius);
+            cold.PathRequest = Paths.Submit(new CharacterId(i, next[i].Generation), next[i].Position, to, cold.FootprintRadius, cold.WaterFactor);
             next[i].Flags = (ushort)((next[i].Flags & ~(ushort)MoveFlags.NeedPath) | (ushort)MoveFlags.Pending);
         }
         // The synchronous service has the answers already.
@@ -161,6 +161,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
             var task = (CharacterTask)n.Task;
             var flags = (MoveFlags)n.Flags;
             var cold = table.Cold(i)!;
+            if (cold.Medical is { Incapacitated: true }) continue;
             bool busy = (flags & (MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath)) != 0;
             if (task == CharacterTask.Follow)
             {
@@ -215,6 +216,13 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
             ref readonly var p = ref prev[i];
             ref var n = ref next[i];
             var cold = table.Cold(i)!;
+            if (cold.Medical is { Incapacitated: true })
+            {
+                // Lying down (knocked out or dead): no steering, no pushing; the body system has already dropped the orders.
+                n.Velocity = Vector3.Zero;
+                n.Animation = 0;
+                continue;
+            }
             float speed = MathF.Sqrt(p.Velocity.X * p.Velocity.X + p.Velocity.Z * p.Velocity.Z);
             var dir = Vector2.Zero;
             float desired = 0;

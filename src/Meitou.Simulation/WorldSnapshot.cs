@@ -7,6 +7,9 @@ namespace Meitou.Simulation;
 public readonly record struct AnimationLayer(string Name, float Time, float Weight);
 
 /// <summary>A character as the renderer needs it after one tick; <c>Appearance</c> is null for one that is simulated but has nothing to draw (an animal, a failed build): the host shows a marker (docs/simulation.md, "Threading", step 8).</summary>
+/// <summary>The health the interface shows: blood (0..1 of capacity), the worst body part (fraction of its maximum HP), hunger (3 fed .. 0 starving) and whether it is out cold or dead.</summary>
+public readonly record struct BodyStatus(float Blood, float WorstPart, float Hunger, bool Unconscious, bool Dead);
+
 public sealed record CharacterSnapshot(CharacterId Id, CharacterAppearance? Appearance, Vector3 Position, float Yaw, IReadOnlyList<AnimationLayer> Animations)
 {
     /// <summary>The owner faction (a position in the world's faction list; -1 none), for debug markers.</summary>
@@ -18,6 +21,8 @@ public sealed record CharacterSnapshot(CharacterId Id, CharacterAppearance? Appe
     public bool Selected { get; init; }
     /// <summary>The path being followed from the next waypoint, for selected characters only (the host draws it).</summary>
     public IReadOnlyList<Vector3> Path { get; init; } = [];
+    /// <summary>Null for a character without a body (an animal).</summary>
+    public BodyStatus? Body { get; init; }
 }
 
 /// <summary>

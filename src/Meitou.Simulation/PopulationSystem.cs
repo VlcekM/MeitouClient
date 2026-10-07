@@ -1,3 +1,4 @@
+using Meitou.Simulation.Bodies;
 using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data;
@@ -49,6 +50,11 @@ public sealed class PopulationData
     public FactionRelations Relations { get; init; } = FactionRelations.Build([]);
     /// <summary>The faction of every placed town, a position in <see cref="Factions"/> (-1: none).</summary>
     public IReadOnlyList<int> SiteFactions { get; init; } = [];
+    /// <summary>The new-game options that change the body mechanics (hunger time, chance of death...).</summary>
+    public BodyOptions BodyOptions { get; init; } = BodyOptions.Default;
+    BodyFactory? bodies;
+    /// <summary>Makes the stats and medical states of the characters spawned (race data cached).</summary>
+    public BodyFactory Bodies => LazyInitializer.EnsureInitialized(ref bodies, () => new BodyFactory(Db) { Options = BodyOptions });
 
     public static PopulationData Create(GameDatabase db, IEnumerable<TownPlacement> placements, IAppearanceSource? appearances = null)
     {
@@ -412,6 +418,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 IsPlayer = player,
                 FootprintRadius = RaceOf(plan.RecordId, member.Appearance)?.GetFloat("pathfind footprint radius") ?? 0,
             };
+            AttachBody(table.PeekNextId(), cold, ref hot, record, RaceOf(plan.RecordId, member.Appearance), world.Seed);
             var id = table.Spawn(hot, cold, world.Tick);
             squad.Members.Add(id);
             if (plan.Role == SquadRole.Leader && squad.Leader.IsNone) squad.Leader = id;
@@ -515,6 +522,18 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             if (refs.Count > 0) race = data.Db.Find(refs[0].TargetStringId);
         }
         return race;
+    }
+
+    /// <summary>Gives a character with a race its stats and medical state, and the top speed of the speed chain (stage 7) in place of the stand-in. Animals keep the stand-in.</summary>
+    void AttachBody(CharacterId id, CharacterCold cold, ref CharacterHot hot, GameRecord? record, GameRecord? race, ulong seed)
+    {
+        if (race is null) return;
+        var (raceData, stats, medical) = data.Bodies.Create(race, record, seed, Rng.Key(id));
+        cold.Race = raceData;
+        cold.Stats = stats;
+        cold.Medical = medical;
+        cold.WaterFactor = raceData.WaterAvoidance * (cold.Faction == data.PlayerFaction && data.PlayerFaction >= 0 ? 0.5f : 1);
+        hot.MaxSpeed = Speed.Run(raceData, stats, medical, 1);
     }
 
     (float Max, float Walk) SpeedStats(string recordId, CharacterAppearance? look)

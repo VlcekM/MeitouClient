@@ -375,7 +375,7 @@ animation yet (renderer track); no formation for several selected characters (al
 
 Track E, branch `sim-body`: stats, XP, medical state, encumbrance and speed as pure code in `src/Meitou.Simulation/Bodies/`, typed views (`RaceData`,
 `BodyPartTemplate`, `LimbReplacement`, `StatsEnumerated`, `StatsData`) in `src/Meitou.Data/Gameplay/Bodies/`. Formulas, units and the engine choices are in
-[character-stats.md](game/character-stats.md#as-built-stage-7-meitousimulationbodies-and-meitoudatagameplaybodies). Nothing is wired into `World` yet. What the
+[character-stats.md](game/character-stats.md#as-built-stage-7-meitousimulationbodies-and-meitoudatagameplaybodies). The wiring into `World` is in [Bodies wired](#bodies-wired-after-stage-7). What the
 core calls:
 
 | When | Call |
@@ -393,6 +393,43 @@ core calls:
 Act phase can run characters in parallel; effects on others stay in the commit queues. The new-game options (Hunger time, Chance of death, Global damage multiplier,
 Dismemberment) are a `BodyOptions` the world passes in. Save keys: `MedicalState.WriteSave` / `ReadSave` and `CharacterStats.WriteSave` / `ReadSave` use the keys of
 [save.md](formats/save.md) (`blood`, `bleeding`, `hung`, `fed`, `KO`, `flesh<k>`..., `strength`, `toughness2`...); limb states and wounds have no key there yet.
+
+### Bodies wired (after stage 7)
+
+Track A wired the bodies into the `World` (`BodyFactory`, `BodySystem`, `BodyHash`, all in `src/Meitou.Simulation/`, outside `Bodies/`):
+
+- **Spawn.** `PopulationSystem` gives every character that has a race a `CharacterCold.Race`, `Stats` and `Medical` (`BodyFactory.Create`): the stats come from the
+  STATS record the CHARACTER names, else from its five group fields (`CharacterStats.FromGroups`), seeded by the world seed and `Rng.Key(id)` (the id is known
+  before the spawn through `CharacterTable.PeekNextId`). Race data is read once per race. **Animals have no race and no body** (the original gives them a stats object
+  without the human rules; not modelled): they keep the stand-in speed of 45/15. Characters hash their stats and medical state in `StateHash`.
+- **Medical tick.** `BodySystem.Act` runs `MedicalState.Tick(dt, ctx, events)` for each living character with `dt = BodySystem.HoursPerTick = 11/36000` game hours (one
+  tick; the brief's figure, **Unknown** against the original) and `BodyTimeScale` (default 1; `--body-time-scale <x>` in the game). Hunger and the KO timer are not scaled.
+  It sets `MaxSpeed = Speed.Run(race, stats, medical, encumbrance 0 until inventory exists -> factor 1)`, replacing the athletics-20 stand-in. `Health` in the hot
+  state is the blood fraction in per cent. The system is added before `AnimationSystem`.
+- **Down.** A knocked-out or dead character is not thought for or moved by `MovementSystem` (velocity 0, no separation push, orders ignored), and `BodySystem` drops
+  its orders. This also works when something outside the tick hurt it (combat will do that). A corpse is removed 12 game hours after death (`CorpseHours`, an engine
+  choice). A knocked-out character wakes when the medical tick says so and wanders again.
+- **Animation.** `AnimationStance.LeftLeg`/`RightLeg` are the lowest `Fraction x 100` of the leg parts, so the `limp` clips (leg ranges) are chosen. The base data has no
+  unconscious or dead clip (**Observed**: the skeleton has `stealthKO` and `sleeponfloor` only), so a down character plays `sleeponfloor` (loops, all layers).
+- **Water.** `CharacterCold.WaterFactor` = race `WaterAvoidance` (a + 1, or 1 / (1 - a)), halved for the player faction. `PathRequest`/`IAgentWalkability.FindPath`
+  carry it and `NavAdapter` puts it in `NavAgent.WaterFactor` (with the footprint radius).
+- **HUD.** The first selected character shows `Health: blood n%  worst part n%  state` and `Hunger: n of 3` (`CharacterSnapshot.Body`, a `BodyStatus`).
+- **Not done.** Encumbrance (needs inventory), eating, resting/beds (`MedicalContext.Resting`), shallow-water speed cap, wounds from combat, XP, healing by
+  first aid. Characters never eat yet, so over many game days they starve (below).
+
+**The `BodyTimeScale` question** (character-stats.md Unknowns), measured with `BodyFactory`/`MedicalState.Tick` on a base-game Greenlander (`dt` 11/36000 h per tick,
+CONSTANTS from the install, unhurt and with one leg hit for 40 cut + 20 blunt; 72 game hours; at 5x the game runs 2.75 game hours per real minute, so 72 h take 26
+real minutes):
+
+| BodyTimeScale | Unhurt | Hit leg |
+|---|---|---|
+| 1 (documented) | hunger 3.00 -> 2.61 after 24 h -> 1.82 after 72 h (speed factor starts to drop once it is below 2: 70.5 -> 65.0); blood and parts unchanged | the leg stays at 40 % for the whole 72 h (no healing, no degeneration); blood 89.4 % -> 88.0 % (bleeding stops after about 40 h) -> 89.6 % after 72 h, a recovery of about 0.03 % per hour |
+| 100 | same (hunger is not scaled) | blood back to 100 % within 3 h; the untreated leg wound degenerates: 40 % -> 37 % at 12 h -> 7 % at 24 h -> down at 25.8 h -> -300 % |
+
+At scale 1 nothing but hunger happens over days: blood and healing rates look far too slow for game hours (**Observed**), and hunger alone starves a character in about
+7 to 8 game days (3 -> 0 at about 0.0164 per hour, extrapolated from 72 h). At scale 100 the numbers read like play (a bleed clots and blood is back in hours, an
+untreated wound rots in about a day). A scale between 1 and 100 is probably right (the original's `dt` is likely not hours); this needs a game session to settle, so the
+default stays 1 and `--body-time-scale` is the knob.
 
 ## Walkability and movement
 
@@ -438,7 +475,7 @@ milliseconds per tick at 1x and 5x with the character count, in the game's frame
 | **4. Characters drawn** | Native character renderer (renderer track; may start at any stage) | Residents of The Hub drawn and animated, frame time recorded |
 | **5. Navmesh** | Collision reader (NxuStream XML, cooked meshes); our generator per decision 3 with the seed prune; path queries on their own threads; the stub replaced | Paths around buildings and through gates; generation off the frame |
 | **6. Player** | New game from NEW_GAME_STARTOFF, the player's squad, selection and move orders ([ui-input.md](game/ui-input.md)), a minimal HUD (clock, speed buttons) | Start a game, select a character, walk it across The Hub |
-| **7. Bodies** | Stats and XP, hunger, blood, body parts, KO and death ([character-stats.md](game/character-stats.md)) | Probe tables as tests (done on `sim-body`, [as built](#bodies-as-built-stage-7); not yet wired into `World`) |
+| **7. Bodies** | Stats and XP, hunger, blood, body parts, KO and death ([character-stats.md](game/character-stats.md)) | Probe tables as tests (done on `sim-body`, [as built](#bodies-as-built-stage-7); wired into `World` on `sim-core`, [bodies wired](#bodies-wired-after-stage-7)) |
 | **8. Combat** | Melee per [combat.md](game/combat.md); ranged later | A fight between two squads resolves; formulas tested |
 | **9. AI proper** | Packages, blackboard, scoring and planner ([ai.md](game/ai.md)), off-screen squads with the stand-in speeds | Towns run their daily routines; squads travel off screen |
 | **10. Saves** | Read and write the world state ([save.md](formats/save.md)) | Round trip of our own saves; reading the original's sample save |

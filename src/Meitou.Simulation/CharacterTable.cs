@@ -65,6 +65,14 @@ public sealed class CharacterCold
     public CharacterAnimation? Animation { get; set; }
     /// <summary>The kind of weapon drawn in the right hand (None while sheathed): the stance animations are chosen for.</summary>
     public Meitou.Data.Gameplay.WeaponKinds DrawnWeapon { get; set; }
+    /// <summary>The race, stats and medical state (null for animals and anything without a race record): see <see cref="BodySystem"/>.</summary>
+    public Meitou.Data.Gameplay.Bodies.RaceData? Race { get; set; }
+    public Meitou.Simulation.Bodies.CharacterStats? Stats { get; set; }
+    public Meitou.Simulation.Bodies.MedicalState? Medical { get; set; }
+    /// <summary>The path cost factor of water for this character (race <c>water avoidance</c>, halved for the player faction; 0: default).</summary>
+    public float WaterFactor { get; set; }
+    /// <summary>The tick it died at (-1: alive); the corpse is removed 12 game hours later.</summary>
+    public long DiedTick { get; set; } = -1;
     /// <summary>RACE <c>pathfind footprint radius</c> (0: not known, paths use the default human); what the navmesh keeps clear.</summary>
     public float FootprintRadius { get; set; }
 }
@@ -171,6 +179,9 @@ public sealed class CharacterTable
         return new CharacterId(slot, generation);
     }
 
+    /// <summary>The id the next <see cref="Spawn"/> will give (serial phases), so a character's seeded body can be made before it is added.</summary>
+    public CharacterId PeekNextId() => free.Count > 0 ? new CharacterId(free.Peek(), next[free.Peek()].Generation + 1) : new CharacterId(highWater, 0);
+
     /// <summary>Removes a character in the state being computed; false when <paramref name="id"/> is not alive there. Serial phases only.</summary>
     public bool Remove(CharacterId id)
     {
@@ -228,6 +239,8 @@ public sealed class CharacterTable
             hasher.Add(k.OrderQueue.Count);
             foreach (var q in k.OrderQueue) hasher.Add(q);
             hasher.Add((int)k.DrawnWeapon);
+            BodyHash.Add(ref hasher, k.Stats, k.Medical);
+            hasher.Add(k.DiedTick);
             if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);
             hasher.Add(k.Name.Length);
         }

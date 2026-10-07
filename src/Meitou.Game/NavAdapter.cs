@@ -15,6 +15,6 @@ sealed class NavAdapter(NavmeshWalkability nav) : IAgentWalkability
     public float GroundHeight(float x, float z) => nav.GroundHeight(x, z);
     public bool IsWalkable(float x, float z) => nav.IsWalkable(x, z);
     public PathResult FindPath(Vector3 from, Vector3 to) => nav.FindPath(from, to);
-    public PathResult FindPath(Vector3 from, Vector3 to, float footprintRadius) =>
-        nav.FindPath(from, to, footprintRadius > 0 ? new NavAgent { Radius = footprintRadius } : NavAgent.Human);
+    public PathResult FindPath(Vector3 from, Vector3 to, float footprintRadius, float waterFactor) =>
+        nav.FindPath(from, to, new NavAgent { Radius = footprintRadius > 0 ? footprintRadius : NavAgent.Human.Radius, WaterFactor = waterFactor > 0 ? waterFactor : NavAgent.Human.WaterFactor });
 }

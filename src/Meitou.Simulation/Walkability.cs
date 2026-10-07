@@ -56,6 +56,6 @@ public sealed class OpenGroundWalkability(Func<float, float, float> ground) : IW
 /// <summary>A walkability that answers paths for a given footprint radius (RACE <c>pathfind footprint radius</c>: the clearance across portals is twice it).</summary>
 public interface IAgentWalkability : IWalkability
 {
-    /// <summary>A path for an agent of <paramref name="footprintRadius"/> units; 0 or less means the default human.</summary>
-    PathResult FindPath(Vector3 from, Vector3 to, float footprintRadius);
+    /// <summary>A path for an agent of <paramref name="footprintRadius"/> units; 0 or less means the default human, and a water cost factor of <paramref name="waterFactor"/> (0 or less: the default).</summary>
+    PathResult FindPath(Vector3 from, Vector3 to, float footprintRadius, float waterFactor);
 }
