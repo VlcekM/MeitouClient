@@ -1,7 +1,6 @@
 using System.Numerics;
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
 using Meitou.Rendering.Vulkan.Core;
 
 namespace Meitou.Tests.Vulkan;
@@ -21,9 +20,8 @@ public unsafe class PostProcessNativeTests
         catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException) { d = null; }
         using var device = d;
         Assert.SkipWhen(device is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(device!))
+        using (var ctx = new GpuContext(device!))
         {
-            var ctx = gl.Context;
             var options = PostOptions.Create("meitou");
             options.Upscale.Kind = upscaler;
             using var post = new PostProcess(ctx, options) { AutoExposure = (0.01f, 10f), InstantAdaptation = true };
@@ -51,7 +49,7 @@ public unsafe class PostProcessNativeTests
                     ctx.EndNative(cmd);
                     post.SetNearSlice(1, 1000, 1, w / (float)h);
                     post.End();
-                    gl.Finish();
+                    ctx.Finish();
                 }
                 Assert.Equal((w, h), (post.RenderWidth, post.RenderHeight));
 

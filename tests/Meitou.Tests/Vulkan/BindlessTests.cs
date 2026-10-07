@@ -1,6 +1,5 @@
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
 using Meitou.Rendering.Vulkan.Core;
 using Meitou.Rendering.Vulkan.Shaders;
 using Silk.NET.Vulkan;
@@ -118,9 +117,8 @@ public class BindlessTests
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             using var cells = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Uint, 2, 1, Name: "cells"));
             using var wide = Texture.Create(ctx, new TextureDesc(Format.R16Uint, 2, 1, Name: "wide"));
             using var signed = Texture.Create(ctx, new TextureDesc(Format.R16Sint, 2, 1, Name: "signed"));
@@ -132,7 +130,7 @@ public class BindlessTests
             Assert.Equal((0, 4, ScalarKind.UInt, -1), (used["utextures2D"].Set, used["utextures2D"].Binding, used["utextures2D"].SampledKind, used["utextures2D"].ArrayLength));
             Assert.Equal((0, 5, ScalarKind.Int, -1), (used["itextures2D"].Set, used["itextures2D"].Binding, used["itextures2D"].SampledKind, used["itextures2D"].ArrayLength));
 
-            gl.BeginFrame(2, 1);
+            ctx.BeginFrame();
             // Registered inside the open frame: usable in it.
             var sampler = Nearest(ctx, integer: true);
             var w = ctx.Bindless.Register(wide, sampler);
@@ -144,73 +142,13 @@ public class BindlessTests
             ctx.Uploads.Write(cells, 0, 0, all, [1, 2, 3, 254, 255, 0, 128, 7]);
             ctx.Uploads.Write(wide, 0, 0, all, Bytes<ushort>(1000, 65535));
             ctx.Uploads.Write(signed, 0, 0, all, Bytes<short>(-5, 32767));
-            gl.BeginExternal();
+            ctx.EnsureFrame();
             ctx.Frame.Commands.Invalidate();
             Draw(ctx, program, Format.R32G32B32A32Uint, target, [c.Index, w.Index, s.Index]);
-            gl.EndExternal();
-            gl.EndFrame();
+            ctx.EndFrame();
 
             var texels = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(ctx.ReadBack(target, 16)).ToArray();
             Assert.Equal([0xFE030201u, 1000u, 99995u, 0xC0FFEEu, 0x0780_00FFu, 65535u, 132767u, 0xC0FFEEu], texels);
-        }
-        ExpectClean(d!);
-    }
-
-    static readonly string CellsFragment = $$"""
-        #version 450
-        {{BindlessTable.GlslDeclarations}}
-        layout(push_constant) uniform Push { uint cells; } pc;
-        layout(location = 0) out uvec4 colour;
-        void main() { colour = texelFetch(utextures2D[nonuniformEXT(pc.cells)], ivec2(gl_FragCoord.xy), 0); }
-        """;
-
-    [Fact]
-    [Slow]
-    public unsafe void A_GL_texture_exports_a_bindless_index_that_follows_its_sampler()
-    {
-        using var d = TryCreate();
-        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
-        {
-            var ctx = gl.Context;
-            IGlInterop interop = gl;
-            using var program = ctx.Shaders.Native(FullScreen, CellsFragment, "bindless cells", [ctx.Bindless.Layout], 4);
-            using var target = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Uint, 2, 1, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "cells target"));
-
-            gl.BeginFrame(2, 1);
-            // As TerrainTextures makes uCells: GL RGBA8UI, nearest.
-            uint tex = gl.GenTexture();
-            gl.BindTexture(TextureTarget.Texture2D, tex);
-            gl.TexImage2D<byte>(TextureTarget.Texture2D, 0, InternalFormat.Rgba8ui, 2, 1, 0, PixelFormat.RgbaInteger, PixelType.UnsignedByte, [9, 8, 7, 6, 250, 251, 252, 253]);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
-            var first = interop.Bindless(tex);
-            Assert.Equal(BindlessKind.UTexture2D, first.Kind);
-            Assert.Equal(first, interop.Bindless(tex));   // unchanged: the same entry
-            var none = interop.Bindless(0);
-            Assert.Equal(BindlessKind.Texture2D, none.Kind);
-            Assert.Equal(none, interop.Bindless(0));
-
-            // A sampler parameter changes: a new index (the old one stays valid for draws recorded before, and is freed later).
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-            var second = interop.Bindless(tex);
-            Assert.Equal(BindlessKind.UTexture2D, second.Kind);
-            Assert.NotEqual(first.Index, second.Index);
-            Assert.Equal(second, interop.Bindless(tex));
-
-            gl.BeginExternal();
-            ctx.Frame.Commands.Invalidate();
-            Draw(ctx, program, Format.R8G8B8A8Uint, target, [second.Index]);
-            gl.EndExternal();
-            gl.EndFrame();
-            Assert.Equal([9, 8, 7, 6, 250, 251, 252, 253], ctx.ReadBack(target, 4));
-
-            // Deleting the texture frees its entry; after the frames in flight the index is handed out again.
-            gl.DeleteTexture(tex);
-            for (int i = 0; i <= d!.Frames.Count; i++) { gl.BeginFrame(2, 1); gl.EndFrame(); }
-            var reused = new HashSet<uint>();
-            for (int i = 0; i < 2; i++) reused.Add(ctx.Bindless.Register(BindlessKind.UTexture2D, interop.Sampled(0, new SamplerInfo("", 0, 0, SamplerDimension.Dim2D, false, false, false, ScalarKind.UInt, 0))));
-            Assert.Equal([first.Index, second.Index], reused.Order());
         }
         ExpectClean(d!);
     }
@@ -221,9 +159,8 @@ public class BindlessTests
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             const string wrong = """
                 #version 450
                 #extension GL_EXT_nonuniform_qualifier : require
@@ -244,9 +181,8 @@ public class BindlessTests
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             byte[][] colours = [[200, 10, 20, 255], [30, 210, 40, 255], [50, 60, 220, 255], [255, 255, 255, 255]];
             var sources = colours.Select((_, i) => Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, 1, 1, Name: $"source {i}"))).ToArray();
             const int Frames = 7;
@@ -261,11 +197,11 @@ public class BindlessTests
             // No waits between frames: two frames in flight, so the slots' sets differ while the journal catches up.
             for (int f = 0; f < Frames; f++)
             {
-                gl.BeginFrame(1, 1);
+                ctx.BeginFrame();
                 if (f == 0)
                     for (int i = 0; i < sources.Length; i++)
                         ctx.Uploads.Write(sources[i], 0, 0, new Rect2D(new Offset2D(0, 0), new Extent2D(1, 1)), colours[i]);
-                gl.BeginExternal();
+                ctx.EnsureFrame();
                 ctx.Frame.Commands.Invalidate();
                 switch (f)
                 {
@@ -300,15 +236,14 @@ public class BindlessTests
                     ctx.Bindless.Update(h, Of(2));
                     expected[f] = 2;
                 }
-                gl.EndExternal();
-                gl.EndFrame();
+                ctx.EndFrame();
             }
 
             for (int f = 0; f < Frames; f++)
                 Assert.Equal(colours[expected[f]], ctx.ReadBack(targets[f], 4));
 
             // The freed index comes back once the frames that could read it are done.
-            for (int i = 0; i <= d!.Frames.Count; i++) { gl.BeginFrame(1, 1); gl.EndFrame(); }
+            for (int i = 0; i <= d!.Frames.Count; i++) { ctx.BeginFrame(); ctx.EndFrame(); }
             Assert.Equal(h.Index, ctx.Bindless.Register(BindlessKind.Texture2D, Of(0)));
 
             foreach (var t in sources.Concat(targets)) t.Dispose();

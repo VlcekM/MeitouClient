@@ -2,13 +2,12 @@ using System.Reflection;
 
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
 using Meitou.Rendering.Vulkan.Core;
 using Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Vulkan;
 
-/// <summary>The native renderer API (docs/renderer-native.md 2 and 3.2) next to VkGl: same pixels, same SPIR-V, its bookkeeping.</summary>
+/// <summary>The native renderer API (docs/renderer-native.md 2 and 3.2): its pixels, the legacy modules VkGl made, its bookkeeping.</summary>
 public class GpuApiTests
 {
     static VulkanDevice? TryCreate(bool sync = false)
@@ -67,47 +66,20 @@ public class GpuApiTests
 
     [Fact]
     [Slow]
-    public unsafe void Legacy_program_draws_the_same_bytes_as_VkGl()
+    public unsafe void Legacy_program_draws_the_interpolated_triangle()
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
-
-            // VkGl: the triangle into an RGBA8 renderbuffer.
-            uint fbo = gl.GenFramebuffer(), colour = gl.GenRenderbuffer();
-            gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, colour);
-            gl.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.Rgba8, W, H);
-            gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
-            gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, colour);
-            gl.Viewport(0, 0, W, H);
-            gl.ClearColor(0, 0, 0, 1);
-            gl.Clear(ClearBufferMask.ColorBufferBit);
-            uint program = WorldGl.Program(gl, Vertex, Fragment);
-            uint vao = gl.GenVertexArray(), vbo = gl.GenBuffer();
-            gl.BindVertexArray(vao);
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-            gl.BufferData<float>(BufferTargetARB.ArrayBuffer, Vertices, BufferUsageARB.StaticDraw);
-            gl.EnableVertexAttribArray(0);
-            gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 20, (void*)0);
-            gl.EnableVertexAttribArray(1);
-            gl.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 20, (void*)8);
-            gl.UseProgram(program);
-            gl.Uniform2(gl.GetUniformLocation(program, "uOffset"), 0.1f, -0.05f);
-            gl.Uniform1(gl.GetUniformLocation(program, "uScale"), 0.75f);
-            gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
-            var expected = new byte[W * H * 4];
-            gl.ReadPixels<byte>(0, 0, W, H, PixelFormat.Rgba, PixelType.UnsignedByte, expected.AsSpan());
-
-            // Native: the same sources through LegacyProgram into a texture of the same format.
+            // The sources through LegacyProgram into an RGBA8 texture (until phase 8 stage 3 compared byte for byte with VkGl's picture).
             using var target = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, W, H, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "golden"));
             using var lp = LegacyProgram.Create(ctx, Vertex, Fragment, "golden triangle");
             Assert.True(lp.Uniform("uMissing") is { IsValid: false });
             lp.Set(lp.Uniform("uOffset"), 0.1f, -0.05f);
             lp.Set(lp.Uniform("uScale"), 0.75f);
 
-            gl.BeginExternal();
+            ctx.EnsureFrame();
             var frame = ctx.Frame;
             var cmd = frame.Commands;
             cmd.Invalidate();
@@ -127,12 +99,40 @@ public class GpuApiTests
             lp.Flush(cmd);
             cmd.Draw(3);
             cmd.EndRendering();
-            gl.EndExternal();
-            gl.Finish();
+            ctx.Finish();
             var actual = ctx.ReadBack(target, 4);
 
-            Assert.Contains(expected, b => b != 0 && b != 255);   // the triangle is there, interpolated
-            Assert.Equal(expected, actual);
+            // Each pixel against the triangle at its centre (row 0 at NDC y = -1): inside, the corners' colours mixed by the barycentric
+            // weights and scaled; outside, the clear colour. Pixels near an edge are left out (rasterisation rules, not this test's subject).
+            var p0 = new System.Numerics.Vector2(Vertices[0] + 0.1f, Vertices[1] - 0.05f);
+            var p1 = new System.Numerics.Vector2(Vertices[5] + 0.1f, Vertices[6] - 0.05f);
+            var p2 = new System.Numerics.Vector2(Vertices[10] + 0.1f, Vertices[11] - 0.05f);
+            float area = (p1.X - p0.X) * (p2.Y - p0.Y) - (p2.X - p0.X) * (p1.Y - p0.Y);
+            int inside = 0, outside = 0;
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    var p = new System.Numerics.Vector2((x + 0.5f) / W * 2 - 1, (y + 0.5f) / H * 2 - 1);
+                    float l1 = ((p.X - p0.X) * (p2.Y - p0.Y) - (p2.X - p0.X) * (p.Y - p0.Y)) / area;
+                    float l2 = ((p1.X - p0.X) * (p.Y - p0.Y) - (p.X - p0.X) * (p1.Y - p0.Y)) / area;
+                    float l0 = 1 - l1 - l2;
+                    int i = (y * W + x) * 4;
+                    var got = (actual[i], actual[i + 1], actual[i + 2], actual[i + 3]);
+                    if (l0 > 0.05f && l1 > 0.05f && l2 > 0.05f)
+                    {
+                        inside++;
+                        Assert.InRange(got.Item1, l0 * 0.75f * 255 - 2, l0 * 0.75f * 255 + 2);
+                        Assert.InRange(got.Item2, l1 * 0.75f * 255 - 2, l1 * 0.75f * 255 + 2);
+                        Assert.InRange(got.Item3, l2 * 0.75f * 255 - 2, l2 * 0.75f * 255 + 2);
+                        Assert.Equal(255, got.Item4);
+                    }
+                    else if (l0 < -0.05f || l1 < -0.05f || l2 < -0.05f)
+                    {
+                        outside++;
+                        Assert.Equal((0, 0, 0, 255), ((int)got.Item1, (int)got.Item2, (int)got.Item3, (int)got.Item4));
+                    }
+                }
+            Assert.True(inside > 300 && outside > 300, $"{inside} pixels inside, {outside} outside");
         }
         ExpectClean(d!);
     }
@@ -172,26 +172,61 @@ public class GpuApiTests
             yield return (name, PostProcessShaders.Vertex, f);
     }
 
+    /// <summary>
+    /// SHA-256 (first 128 bits) of each world program's legacy modules as given to the driver (vertex then fragment code, default blocks moved
+    /// to set 1): recorded on 2026-10-07 from the build in which <c>LegacyProgram</c> was last checked byte for byte against VkGl's modules
+    /// (phase 8 stage 3, before VkGl was deleted), so the legacy programs still get exactly the SPIR-V VkGl gave them.
+    /// </summary>
+    static readonly Dictionary<string, string> LegacyModules = new()
+    {
+        ["sky simple"] = "4C48F27F2EFC495E4B81B6421F095B12",
+        ["sky"] = "9CB87FE494F840061B293D6ECFEB2C49",
+        ["water"] = "EBCE6E99C47A215E7E266464DEE0FFB4",
+        ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",
+        ["terrain patch"] = "202A7EA2A01D100753D6D6E78C326B0B",
+        ["terrain mesh"] = "0C0F8CBDCB2DCA7F829FB4FBBCD731E7",
+        ["terrain patch depth"] = "838B179AA83BE582C69CC3C2766FA048",
+        ["terrain mesh depth"] = "FD249B5F918DBB257C412C7394FD4ABC",
+        ["foliage mesh"] = "414834CB6D3D413A898BBDCB68024918",
+        ["foliage grass"] = "B599D6B89558B6FB030F35E58608DD6E",
+        ["foliage grass motion"] = "A836A4928C20E6352E07004C224C6A92",
+        ["foliage depth"] = "099C2868B7FA91B71BE2ACE3ED5DD997",
+        ["buildings"] = "9C0B9F85981CA1CEF4EEEA34AB964493",
+        ["buildings depth"] = "24B964B69B81036B6258A57BAA9486A8",
+        ["shadow debug"] = "4CE95BBBE80C430B84D04CD1FDFD5D33",
+        ["shadow atlas"] = "7A8BC32D82FC65DBE0B7F1BEE4AFB43A",
+        ["shadow blocker"] = "EF2D9447A695FB305A1FD0097A66C3DA",
+        ["terrain shadow sweep"] = "73B5D1C7C3FAED3EF09B596E0C18CD1F",
+        ["ssao"] = "7ABC5A2D28C4E30D95DB9C5FB88B1A4F",
+        ["ssao blur"] = "EBF4C0B9D76D55C8BA77F6135B802B20",
+        ["composite"] = "D412C01FC7D8E6C088E5E3084E3FB334",
+        ["fxaa"] = "11A560F30D679E1B0E0EB877EBE075F6",
+        ["heat haze"] = "0F4D5CE1E9D6A3E0A18147A23C4E75FE",
+        ["luminance"] = "1D11EE5E842070E8D4801D47B5730D4F",
+        ["adapt"] = "E1201F9895006424E7FE9C1983191734",
+        ["velocity"] = "DD61543F9F99ECD7D4C32252F6CB8473",
+        ["taa"] = "0BF03F6B50AA2B4DC5B30C22868ECC00",
+    };
+
     [Fact]
     [Slow]
-    public void Legacy_programs_get_VkGl_SPIR_V_for_every_world_program()
+    public void Legacy_programs_get_the_modules_VkGl_gave_every_world_program()
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            int n = 0;
+            var actual = new List<string>();
+            var wrong = new List<string>();
             foreach (var (name, v, f) in WorldPrograms())
             {
-                uint program = WorldGl.Program(gl, v, f);
-                var (vkVertex, vkFragment) = gl.ModuleCode(program);
-                using var lp = LegacyProgram.Create(gl.Context, v, f, name);
-                Assert.True(vkVertex.AsSpan().SequenceEqual(lp.Program.VertexCode), $"{name}: vertex SPIR-V differs");
-                Assert.True(vkFragment.AsSpan().SequenceEqual(lp.Program.FragmentCode), $"{name}: fragment SPIR-V differs");
-                gl.DeleteProgram(program);
-                n++;
+                using var lp = LegacyProgram.Create(ctx, v, f, name);
+                string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData([.. lp.Program.VertexCode!, .. lp.Program.FragmentCode!]))[..32];
+                actual.Add($"[\"{name}\"] = \"{hash}\",");
+                if (!LegacyModules.TryGetValue(name, out var expected) || expected != hash) wrong.Add(name);
             }
-            Assert.Equal(27, n);
+            Assert.Equal(27, actual.Count);
+            Assert.True(wrong.Count == 0, $"modules differ for {string.Join(", ", wrong)}; actual:\n{string.Join("\n", actual)}");
         }
         ExpectClean(d!);
     }
@@ -202,9 +237,8 @@ public class GpuApiTests
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             using var lp = LegacyProgram.Create(ctx, Vertex, Fragment, "prepare");
             var layout = lp.VertexLayout([new LegacyProgram.Attribute(default, Format.R32G32Sfloat, 20, false), new LegacyProgram.Attribute(default, Format.R32G32B32Sfloat, 20, false)]);
             var all = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit;
@@ -268,25 +302,23 @@ public class GpuApiTests
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             using var scratch = DeviceBuffer.Create(ctx, 64, BufferUse.TransferDst, "timestamp scratch");
-            gl.BeginFrame(W, H);
-            gl.BeginExternal();
+            ctx.BeginFrame();
+            ctx.EnsureFrame();
             var arena = ctx.Frame.Timestamps;
             QuerySlot a = arena.Allocate(), b = arena.Allocate();
             Assert.Equal(3, arena.Count);   // and the frame's own start (GpuContext.GpuFrameMs)
             ctx.Frame.Commands.Timestamp(arena, a);
             ctx.Frame.Commands.FillBuffer(scratch.Handle, 0, 64, 0);   // something between them
             ctx.Frame.Commands.Timestamp(arena, b);
-            gl.EndExternal();
-            gl.EndFrame();
+            ctx.EndFrame();
             Assert.False(arena.TryRead(a, out _));   // not collected until its slot comes round
             for (int i = 0; i < d!.Frames.Count; i++)
             {
-                gl.BeginFrame(W, H);
-                gl.EndFrame();
+                ctx.BeginFrame();
+                ctx.EndFrame();
             }
             Assert.True(arena.TryRead(a, out ulong ta));
             Assert.True(arena.TryRead(b, out ulong tb));
@@ -302,19 +334,18 @@ public class GpuApiTests
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             using var buffer = DeviceBuffer.Create(ctx, 256, BufferUse.Vertex | BufferUse.TransferDst, "upload test");
-            gl.BeginFrame(W, H);
+            ctx.BeginFrame();
             ctx.Uploads.Write(buffer, 0, new byte[16]);
             Assert.Throws<ArgumentOutOfRangeException>(() => ctx.Uploads.Write(buffer, 250, new byte[16]));
             _ = buffer.Binding(ctx.Frame);
             Assert.Throws<InvalidOperationException>(() => ctx.Uploads.Write(buffer, 16, new byte[16]));
-            gl.EndFrame();
-            gl.BeginFrame(W, H);
+            ctx.EndFrame();
+            ctx.BeginFrame();
             ctx.Uploads.Write(buffer, 16, new byte[16]);   // a new frame may write it again
-            gl.EndFrame();
+            ctx.EndFrame();
         }
         ExpectClean(d!);
     }
@@ -358,9 +389,8 @@ public class GpuApiTests
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             using var source = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, 1, 1, Name: "bindless source"));
             using var target = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, 16, 8, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "bindless target"));
             using var args = DeviceBuffer.Create(ctx, 20, BufferUse.Storage | BufferUse.Indirect, "indirect args");
@@ -373,11 +403,11 @@ public class GpuApiTests
             uint index = ctx.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, source.View(), source.Image));
             Assert.Equal(1u, index);
 
-            gl.BeginFrame(16, 8);   // registered before the frame began: valid in it
+            ctx.BeginFrame();   // registered before the frame began: valid in it
             var frame = ctx.Frame;
             ctx.Uploads.Write(source, 0, 0, new Rect2D(new Offset2D(0, 0), new Extent2D(1, 1)), [10, 200, 30, 255]);
             ctx.Uploads.Write(indices, 0, MemoryMarshalBytes([0u, 1u, 2u]));
-            gl.BeginExternal();
+            ctx.EnsureFrame();
             var cmd = frame.Commands;
             cmd.Invalidate();
 
@@ -408,8 +438,7 @@ public class GpuApiTests
                 cmd.EndRendering();
             }
             Assert.Equal(1, frame.Stats.IndirectDraws);
-            gl.EndExternal();
-            gl.EndFrame();
+            ctx.EndFrame();
             var pixels = ctx.ReadBack(target, 4);
             for (int i = 0; i < pixels.Length; i += 4)
                 Assert.Equal((10, 200, 30, 255), (pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]));
@@ -421,7 +450,7 @@ public class GpuApiTests
 
     /// <summary>
     /// <see cref="GpuFrame.PreFrame"/> (docs/renderer-native.md 5.3 as built): a dispatch recorded into it after the frame's own commands, while a
-    /// native segment holds VkGl's pass open, runs before them: the frame's indirect draw and its copy, recorded earlier, read what it wrote.
+    /// rendering of the frame is open, runs before them: the frame's indirect draw and its copy, recorded earlier, read what it wrote.
     /// The copy lands in a <see cref="ReadbackBuffer"/>, read once the frame has completed. Synchronisation validation is on.
     /// </summary>
     [Fact]
@@ -430,9 +459,8 @@ public class GpuApiTests
     {
         using var d = TryCreate(sync: true);
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             using var source = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, 1, 1, Name: "pre-frame source"));
             using var target = Texture.Create(ctx, new TextureDesc(Format.R8G8B8A8Unorm, 16, 8, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "pre-frame target"));
             using var args = DeviceBuffer.Create(ctx, 20, BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferSrc, "pre-frame args");
@@ -444,12 +472,12 @@ public class GpuApiTests
                 TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
             uint index = ctx.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, source.View(), source.Image));
 
-            gl.BeginFrame(16, 8);
+            ctx.BeginFrame();
             var frame = ctx.Frame;
             ctx.Uploads.Write(source, 0, 0, new Rect2D(new Offset2D(0, 0), new Extent2D(1, 1)), [40, 90, 160, 255]);
             ctx.Uploads.Write(indices, 0, MemoryMarshalBytes([0u, 1u, 2u]));
             // The frame's own commands first (in CPU order): an indirect draw from args, then a copy of args.
-            gl.BeginExternal();
+            ctx.EnsureFrame();
             var cmd = frame.Commands;
             cmd.Invalidate();
             var pipeline = ctx.Pipelines.Get(new GraphicsPipelineDesc(draw, VertexLayout.Empty, PrimitiveTopology.TriangleList,
@@ -482,9 +510,8 @@ public class GpuApiTests
             full.Add(PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryWriteBit, PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit);
             cmd.Barrier(full);
             cmd.CopyBuffer(args.Handle, readback.Handle, new BufferCopy(0, 0, 20));
-            gl.EndExternal();
             long number = frame.Number;
-            gl.EndFrame();
+            ctx.EndFrame();
             Assert.False(ReadbackBuffer.Completed(ctx, number + 1));
             d!.Frames.WaitAll();
             Assert.True(ReadbackBuffer.Completed(ctx, number));
@@ -503,18 +530,18 @@ public class GpuApiTests
     {
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            using var arena = new BufferArena(gl.Context, 1024, BufferUse.Storage, "arena test");
+            using var arena = new BufferArena(ctx, 1024, BufferUse.Storage, "arena test");
             var a = arena.Allocate(256, 64);
             var b = arena.Allocate(256, 64);
             Assert.Equal(0ul, a.Offset);
             Assert.Equal(256ul, b.Offset);
-            gl.BeginFrame(W, H);
+            ctx.BeginFrame();
             arena.Free(a);
             Assert.Equal(512ul, arena.FreeBytes);   // deferred: the frame being recorded may still use a's range
-            gl.EndFrame();
-            for (int i = 0; i <= d!.Frames.Count; i++) { gl.BeginFrame(W, H); gl.EndFrame(); }
+            ctx.EndFrame();
+            for (int i = 0; i <= d!.Frames.Count; i++) { ctx.BeginFrame(); ctx.EndFrame(); }
             Assert.Equal(768ul, arena.FreeBytes);
             Assert.Equal(0ul, arena.Allocate(200, 64).Offset);   // first fit takes a's old range
         }
@@ -543,7 +570,7 @@ public class GpuApiTests
 
     /// <summary>
     /// Wave 4 (docs/renderer-native.md 6): a native host's rendering with secondaries. Eight segments, each painting from its column to the
-    /// right edge in its own colour, are queued in order (one of them recorded at once on this thread through the seam, as an unported guest
+    /// right edge in its own colour, are queued in order (one of them recorded at once on this thread through BeginGuest, as a guest that is not a job
     /// does) and recorded on the job threads; executed in order, column k shows colour k only if the order held. Validation on, 0 errors; and a
     /// job that touches render-thread state throws.
     /// </summary>
@@ -557,10 +584,8 @@ public class GpuApiTests
         (Recording.Mode, Recording.MinThreadedDraws) = (2, 0);   // eight one-draw jobs: on the job threads
         try
         {
-            using (var gl = new VkGl(d!))
+            using (var ctx = new GpuContext(d!))
             {
-                var ctx = gl.Context;
-                IGlInterop interop = gl;
                 const int Columns = 8;
                 var sources = new Texture[Columns];
                 var indices = new uint[Columns];
@@ -577,22 +602,22 @@ public class GpuApiTests
                 var pipeline = ctx.Pipelines.Get(new GraphicsPipelineDesc(draw, VertexLayout.Empty, PrimitiveTopology.TriangleList, formats, BlendState.Off,
                     ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit, Silk.NET.Vulkan.PolygonMode.Fill, false, false, "bindless"));
 
-                gl.BeginFrame(W, H);
+                ctx.BeginFrame();
                 var frame = ctx.Frame;
                 for (int k = 0; k < Columns; k++) ctx.Uploads.Write(sources[k], 0, 0, new Rect2D(new Offset2D(0, 0), new Extent2D(1, 1)), [(byte)(10 + 30 * k), (byte)(200 - 20 * k), (byte)(5 * k), 255]);
-                var cmd = interop.BeginNative("columns host");
+                var cmd = ctx.BeginNative("columns host");
                 cmd.BeginRendering(Target(target), secondaries: true);
                 frame.Parallel.Begin(cmd, formats, 0);
-                interop.BeginHostPass(cmd);
+                ctx.BeginHostPass(cmd, PassTargets.Of(target, null), DrawState.For(formats, d!.DepthClamp));
                 for (int k = 0; k < Columns; k++)
                 {
                     var job = new ColumnJob(pipeline, draw.Layout, ctx.Bindless.Set, indices[k], k * (W / Columns));
                     if (k == 4)
                     {
-                        // An unported guest: records at once into a secondary of its own, in its place.
-                        var inline = interop.BeginNativeInPass("inline column");
+                        // A guest that is not a job: records at once into a secondary of its own, in its place.
+                        var inline = ctx.BeginGuest("inline column");
                         job.Record(inline);
-                        interop.EndNative(inline);
+                        ctx.EndGuest(inline);
                     }
                     else ctx.Record($"column {k}", job);
                 }
@@ -600,11 +625,11 @@ public class GpuApiTests
                 frame.Parallel.End();
                 Assert.Equal(Columns, frame.Parallel.Totals.Draws);
                 cmd.EndRendering();
-                interop.EndHostPass(cmd);
-                interop.EndNative(cmd);
+                ctx.EndHostPass(cmd);
+                ctx.EndNative(cmd);
                 Assert.Throws<InvalidOperationException>(() => ctx.Record("greedy", new GreedyJob()));
                 Assert.False(RenderJobs.InJob);
-                gl.EndFrame();
+                ctx.EndFrame();
 
                 var pixels = ctx.ReadBack(target, 4);
                 for (int y = 0; y < H; y++)

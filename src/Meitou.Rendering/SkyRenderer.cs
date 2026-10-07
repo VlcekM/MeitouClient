@@ -379,13 +379,6 @@ public sealed unsafe class SkyRenderer : IDisposable
         return (state.Colours, state.Light);
     }
 
-    /// <summary>
-    /// For the GL programs that are left (<c>WorldGl.Program</c>: the impostor baker and preview; the model viewer's own): moves the atmosphere's
-    /// sampler uniforms off unit 0 (<see cref="AtmosphereShaders.AssignSamplerUnits"/>). Nothing binds textures there any more: the native draws
-    /// read the atmosphere's textures from the frame globals the sky publishes.
-    /// </summary>
-    public static void AssignSamplerUnits(IGl gl, uint program) => AtmosphereShaders.AssignSamplerUnits(gl, program);
-
     /// <summary>The values of <see cref="AtmosphereShaders.Functions"/>' loose uniforms (what <see cref="Apply"/> sets), by GLSL name minus <c>uAtmo</c>.</summary>
     public readonly record struct AtmosphereUniforms(Vector4 Tau, Vector4 Params, Vector4 Sun, Vector4 Light, Vector3 SunLight, Vector3 Tint, Vector4 Fog,
         Vector3 FogColour, Vector4 Simple, Vector4 Haze, Vector4 HazeCloud, Vector4 Altitude, Vector4 Maps);

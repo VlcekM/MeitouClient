@@ -19,10 +19,6 @@ static class MeitouShadowShaders
     /// <summary>Taps of the filter and of the blocker search.</summary>
     public const int FilterTaps = 16, BlockerTaps = 8;
 
-    /// <summary>Texture units of the terrain shadow map and the blocker map: below the shadow map's and the noise's (<see cref="ShadowShaders.MapUnit"/>, <see cref="ShadowShaders.NoiseUnit"/>).</summary>
-    public static int TerrainUnit => ShadowShaders.MapUnit - 2;
-    public static int BlockerUnit => ShadowShaders.MapUnit - 3;
-
     static string F(float v) => v.ToString("0.#########", CultureInfo.InvariantCulture) + (v == MathF.Floor(v) ? ".0" : "");
 
     /// <summary>
@@ -206,30 +202,4 @@ static class MeitouShadowShaders
             fragColour = vec4(z, 0.0, 0.0, 1.0);
         }
         """;
-
-    /// <summary>The Meitou shadow block and maps as frame globals (from <c>ShadowShaders.PublishGlobals</c>): their binding point and units.</summary>
-    internal static void PublishGlobals(FrameGlobals g, IGlInterop interop)
-    {
-        int terrain = TerrainUnit, blocker = BlockerUnit;
-        var plain = FrameGlobals.Sampler2D("");
-        g.Publish(Block, () => interop.UniformBinding(Binding));
-        g.Publish("uShadowTerrain", () => interop.SampledUnit(terrain, plain));
-        g.Publish("uShadowBlocker", () => interop.SampledUnit(blocker, plain));
-    }
-
-    /// <summary>Points a program's Meitou block and samplers at their binding and units (called from <see cref="ShadowShaders.Bind"/>).</summary>
-    public static void Bind(IGl gl, uint program)
-    {
-        uint block = gl.GetUniformBlockIndex(program, Block);
-        if (block != uint.MaxValue) gl.UniformBlockBinding(program, block, Binding);
-        int terrain = gl.GetUniformLocation(program, "uShadowTerrain");
-        int blocker = gl.GetUniformLocation(program, "uShadowBlocker");
-        if (terrain >= 0 || blocker >= 0)
-        {
-            gl.UseProgram(program);
-            if (terrain >= 0) gl.Uniform1(terrain, TerrainUnit);
-            if (blocker >= 0) gl.Uniform1(blocker, BlockerUnit);
-            gl.UseProgram(0);
-        }
-    }
 }

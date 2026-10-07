@@ -1,14 +1,14 @@
 using System.Numerics;
 using Meitou.Rendering;
 using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Vulkan;
 using Meitou.Rendering.Vulkan.Core;
 
 namespace Meitou.Tests.Vulkan;
 
 /// <summary>
 /// Phase 8 stage 2 (docs/renderer-native.md 8.6): the sky's and the water's resources are native. These check that what the native code makes is
-/// what VkGl made from the GL calls it replaced (the sampler of each GL texture, also under an upscaler's LOD bias; the water quad's vertex input),
+/// what VkGl made from the GL calls it replaced (compared with VkGl itself until it was deleted in stage 3: the sampler of each GL texture, also
+/// under an upscaler's LOD bias; the water quad's vertex input),
 /// and that the sky publishes its globals and the shadows-off blocks without a GL program. Synchronisation validation on.
 /// </summary>
 public unsafe class SkyWaterNativeTests
@@ -22,76 +22,53 @@ public unsafe class SkyWaterNativeTests
     static void ExpectClean(VulkanDevice d) =>
         Assert.True(d.ValidationErrors == 0, "Validation errors:\n" + string.Join("\n", d.ValidationLog));
 
-    /// <summary>The RGBA32F texture <c>WaterRenderer.FloatTexture</c> made before phase 8 stage 2.</summary>
-    static uint GlFloatTexture(IGl gl, Vector4[] data, int width, int height)
-    {
-        uint id = gl.GenTexture();
-        gl.BindTexture(TextureTarget.Texture2D, id);
-        gl.TexImage2D<Vector4>(TextureTarget.Texture2D, 0, InternalFormat.Rgba32f, (uint)width, (uint)height, 0, PixelFormat.Rgba, PixelType.Float, data.AsSpan());
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-        gl.BindTexture(TextureTarget.Texture2D, 0);
-        return id;
-    }
-
+    /// <summary>
+    /// The GL state each texture had (<c>WorldGl.Texture2D</c>: trilinear when mipmapped, else linear; repeat or clamp on S and T, R GL's default
+    /// repeat; <c>WaterRenderer.FloatTexture</c>: linear, clamped), as its sampler (until phase 8 stage 3 checked against VkGl's own sampler for
+    /// the GL texture), with the upscaler's LOD bias on the mipmapped ones only; and the formats and levels.
+    /// </summary>
     [Fact]
     [Slow]
     public void Native_sky_and_water_textures_sample_as_their_GL_versions_did()
     {
         using var device = TryCreate();
         Assert.SkipWhen(device is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(device!))
+        using (var ctx = new GpuContext(device!))
         {
-            var ctx = gl.Context;
-            IGlInterop interop = gl;
-            var plain = FrameGlobals.Sampler2D("t");
             var pixels = new byte[48 * 20 * 4];
             for (int i = 0; i < pixels.Length; i++) pixels[i] = (byte)(i * 7);
             var floats = Enumerable.Range(0, 6 * 5).Select(i => new Vector4(i, -i, 0.5f * i, 1)).ToArray();
-            var native = new List<(string Name, SampledImage Image, uint Gl)>
+            const TextureMinFilter Trilinear = TextureMinFilter.LinearMipmapLinear, Linear = TextureMinFilter.Linear;
+            const TextureWrapMode Clamp = TextureWrapMode.ClampToEdge, Repeat = TextureWrapMode.Repeat;
+            var native = new List<(string Name, SampledImage Image, TextureMinFilter Min, TextureWrapMode Wrap, Silk.NET.Vulkan.Format Format, int Levels)>
             {
-                ("mipmapped clamp", SampledImage.Rgba8(ctx, 48, 20, pixels, repeat: false, mipmaps: true, "sky test a"), WorldGl.Texture2D(gl, 48, 20, pixels, repeat: false)),
-                ("mipmapped repeat", SampledImage.Rgba8(ctx, 48, 20, pixels, repeat: true, mipmaps: true, "sky test b"), WorldGl.Texture2D(gl, 48, 20, pixels, repeat: true)),
-                ("one level", SampledImage.Rgba8(ctx, 48, 20, pixels, repeat: false, mipmaps: false, "sky test c"), WorldGl.Texture2D(gl, 48, 20, pixels, repeat: false, mipmaps: false)),
-                ("1 x 1 stand-in", SampledImage.Rgba8(ctx, 1, 1, [1, 2, 3, 4], repeat: true, mipmaps: true, "water test d"), WorldGl.Texture2D(gl, 1, 1, [1, 2, 3, 4], repeat: true)),
-                ("float", SampledImage.Rgba32F(ctx, floats, 6, 5, "water test e"), GlFloatTexture(gl, floats, 6, 5)),
+                ("mipmapped clamp", SampledImage.Rgba8(ctx, 48, 20, pixels, repeat: false, mipmaps: true, "sky test a"), Trilinear, Clamp, Silk.NET.Vulkan.Format.R8G8B8A8Unorm, 6),
+                ("mipmapped repeat", SampledImage.Rgba8(ctx, 48, 20, pixels, repeat: true, mipmaps: true, "sky test b"), Trilinear, Repeat, Silk.NET.Vulkan.Format.R8G8B8A8Unorm, 6),
+                ("one level", SampledImage.Rgba8(ctx, 48, 20, pixels, repeat: false, mipmaps: false, "sky test c"), Linear, Clamp, Silk.NET.Vulkan.Format.R8G8B8A8Unorm, 1),
+                ("1 x 1 stand-in", SampledImage.Rgba8(ctx, 1, 1, [1, 2, 3, 4], repeat: true, mipmaps: true, "water test d"), Trilinear, Repeat, Silk.NET.Vulkan.Format.R8G8B8A8Unorm, 1),
+                ("float", SampledImage.Rgba32F(ctx, floats, 6, 5, "water test e"), Linear, Clamp, Silk.NET.Vulkan.Format.R32G32B32A32Sfloat, 1),
             };
             foreach (float bias in (ReadOnlySpan<float>)[0f, 0.75f])
             {
-                gl.TextureLodBias = bias;   // the upscaler's bias: on the mipmapped samplers only, in both
-                foreach (var (name, image, glName) in native)
+                ctx.LodBias = bias;   // the upscaler's bias: on the mipmapped samplers only
+                foreach (var (name, image, min, wrap, format, levels) in native)
                 {
-                    var mine = image.Sampled();
-                    var theirs = interop.Sampled(glName, plain);
-                    Assert.True(mine.Sampler.Handle == theirs.Sampler.Handle, $"{name}, bias {bias}: another sampler than VkGl's");
-                    Assert.Equal(interop.Texture(glName).Desc.Format, image.Texture.Desc.Format);
+                    var expected = ctx.Samplers.Get(SamplerDesc.FromGl(min, TextureMagFilter.Linear, wrap, wrap, Repeat, false, DepthFunction.Lequal, false, 1, false, bias));
+                    Assert.True(image.Sampled().Sampler.Handle == expected.Handle, $"{name}, bias {bias}: another sampler than the GL texture's");
+                    Assert.Equal((format, levels), (image.Texture.Desc.Format, image.Texture.Desc.Levels));
                 }
             }
             var names = device!.Allocator.Breakdown().Select(o => o.Name).ToList();
             Assert.Contains("sky test a", names);
             Assert.Contains("water test e", names);
 
-            // The water quad's vertex input is what VkGl exported for the GL vertex array it replaces.
+            // The water quad's vertex input: what VkGl exported for the GL vertex array it replaced (two floats per vertex, location 0).
             using var quad = DeviceBuffer.Create(ctx, 32, BufferUse.Vertex, "water quad");
-            uint vbo = gl.GenBuffer();
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-            gl.BufferData(BufferTargetARB.ArrayBuffer, 32, null, BufferUsageARB.StaticDraw);
-            uint vao = gl.GenVertexArray();
-            gl.BindVertexArray(vao);
-            gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-            gl.EnableVertexAttribArray(0);
-            gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 8, (void*)0);
-            gl.BindVertexArray(0);
-            var exported = interop.VertexArray(vao).Attributes[0]!.Value;
             var built = WaterRenderer.QuadAttribute(quad);
-            Assert.Equal((exported.Format, exported.Stride, exported.PerInstance, exported.Buffer.Offset), (built.Format, built.Stride, built.PerInstance, built.Buffer.Offset));
-            gl.DeleteVertexArray(vao);
-            gl.DeleteBuffer(vbo);
+            Assert.Equal((Silk.NET.Vulkan.Format.R32G32Sfloat, 8u, false, 0ul), (built.Format, built.Stride, built.PerInstance, built.Buffer.Offset));
 
-            foreach (var (_, image, glName) in native) { image.Dispose(); gl.DeleteTexture(glName); }
-            gl.Finish();
+            foreach (var (_, image, _, _, _, _) in native) image.Dispose();
+            ctx.Finish();
         }
         ExpectClean(device!);
     }
@@ -102,9 +79,8 @@ public unsafe class SkyWaterNativeTests
     {
         using var device = TryCreate();
         Assert.SkipWhen(device is null, "No Vulkan 1.3 device");
-        using (var gl = new VkGl(device!))
+        using (var ctx = new GpuContext(device!))
         {
-            var ctx = gl.Context;
             using var sky = new SkyRenderer(ctx);
             var g = ctx.Globals;
             // No GL program linked: the atmosphere's names are there anyway (no texture files here: the stand-in, as an empty GL unit).
@@ -121,7 +97,7 @@ public unsafe class SkyWaterNativeTests
             // A ShadowPass made later publishes its own blocks over them.
             using var shadows = new ShadowPass(ctx);
             Assert.NotSame(receiver, g.Block(ShadowShaders.ReceiverBlock));
-            gl.Finish();
+            ctx.Finish();
         }
         ExpectClean(device!);
     }

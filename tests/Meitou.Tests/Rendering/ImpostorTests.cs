@@ -1,7 +1,6 @@
 using System.Numerics;
 using Meitou.Rendering;
 using Meitou.Rendering.Impostors;
-using Meitou.Rendering.Vulkan;
 using Meitou.Rendering.Vulkan.Core;
 
 namespace Meitou.Tests.Rendering;
@@ -314,14 +313,14 @@ public class ImpostorTests
         Assert.SkipWhen(device is null, "No Vulkan 1.3 device");
         var red = new Vector4(1, 0, 0, 1);
         var blue = new Vector4(0, 0, 1, 1);
-        using var gl = new VkGl(device!);
-        gl.BeginFrame(4, 4);
-        using var baker = new ImpostorBaker(gl.Context, (AssetLocator?)null);
+        using var ctx = new Meitou.Rendering.Gpu.GpuContext(device!);
+        ctx.BeginFrame();
+        using var baker = new ImpostorBaker(ctx, (AssetLocator?)null);
         void NextFrame()
         {
-            gl.EndFrame();
+            ctx.EndFrame();
             device!.Frames.WaitAll();
-            gl.BeginFrame(4, 4);
+            ctx.BeginFrame();
         }
         foreach (bool redFirst in new[] { true, false })
         {
