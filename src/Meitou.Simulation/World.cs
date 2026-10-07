@@ -174,7 +174,7 @@ public sealed class World : IDisposable
         {
             if (!state[i].Alive) continue;
             var cold = table.Cold(i);
-            list.Add(new CharacterSnapshot(new CharacterId(i, state[i].Generation), cold?.Appearance, state[i].Position, state[i].Yaw, [])
+            list.Add(new CharacterSnapshot(new CharacterId(i, state[i].Generation), cold?.Appearance, state[i].Position, state[i].Yaw, AnimationLayers.For(state[i].Animation, state[i].AnimationTime))
             {
                 Faction = cold?.Faction ?? -1,
             });

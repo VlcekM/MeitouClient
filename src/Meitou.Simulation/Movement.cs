@@ -35,3 +35,14 @@ public static class SpeedMode
 
     public static float Cap(byte mode, float walkSpeed) => mode switch { Walk => walkSpeed, Run => RunCap, _ => 999 };
 }
+
+/// <summary>The animation layers a character plays for its movement state (<see cref="CharacterHot.Animation"/>): the names are the skeleton animations of docs/animation.md.</summary>
+public static class AnimationLayers
+{
+    public const string Idle = "idle_stand_relax";
+    public const string WalkLower = "walk lower", WalkUpper = "walk upper";
+
+    public static IReadOnlyList<AnimationLayer> For(ushort animation, float time) => animation == 0
+        ? [new AnimationLayer(Idle, time, 1)]
+        : [new AnimationLayer(WalkLower, time, 1), new AnimationLayer(WalkUpper, time, 1)];
+}

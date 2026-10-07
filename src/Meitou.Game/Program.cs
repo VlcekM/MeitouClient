@@ -7,6 +7,8 @@ using Meitou.Engine.Cameras;
 using Meitou.Engine.Input;
 using Meitou.Engine.Time;
 using Meitou.Rendering;
+using Meitou.Rendering.Characters;
+using Meitou.Simulation;
 using Meitou.Rendering.Gpu;
 using Meitou.Rendering.Display;
 using Silk.NET.Maths;
@@ -26,7 +28,7 @@ sealed class GameOptions
     public bool? VSync;
     /// <summary>With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.</summary>
     public int Ticks;
-    public bool FreeCamera;
+    public bool FreeCamera, NoPopulation;
     /// <summary>Interactive run that closes itself after this many seconds and prints the frame rate (an unattended smoke test).</summary>
     public double? QuitAfter;
 
@@ -38,6 +40,7 @@ sealed class GameOptions
           --free-camera              start in the free camera (; toggles)
           --sim-threads <n>          worker threads of the simulation (default: half the cores, 1 to 8; the result never depends on it)
           --seed <n>                 the world seed (default 0)
+          --no-population            no town residents or movement (an empty world)
           --ticks <n>                with --screenshot: run n control ticks (and the same real time of the simulation, at speed 1) before the picture
           --quit-after <s>           close after s seconds and print the frame rate (smoke test)
           --yaw/--pitch/--distance   start view: heading, pitch above the horizon and boom (Kenshi: 30 degrees, boom 150; clamped to 10..2000)
@@ -66,6 +69,7 @@ sealed class GameOptions
                 case "--no-vsync": g.VSync = false; break;
                 case "--ticks": g.Ticks = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--free-camera": g.FreeCamera = true; break;
+                case "--no-population": g.NoPopulation = true; break;
                 case "--quit-after": g.QuitAfter = double.Parse(Next(), CultureInfo.InvariantCulture); break;
                 default: rest.Add(a); break;
             }
@@ -135,10 +139,24 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         gpu = WorldFrame.CreateGpu(context, install, scene, assets, o, interactive);
         if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Upscalers.VendorUpscalers.Factory(display.Context, streamline);
         (camera, render) = WorldFrame.Setup(scene, o);
+        // The simulation samples the CPU heightmap (immutable, any thread), not the renderer's terrain.
+        var heights = new Meitou.Data.World.GroundHeights(scene.Window, scene.Coarse, scene.CoarseSize, WorldFrame.CoarseStep);
+        var walkability = new Meitou.Simulation.OpenGroundWalkability(heights.HeightAt);
+        var systems = new List<Meitou.Simulation.ITickSystem>();
+        if (!g.NoPopulation && scene.Database is { } gameDb)
+        {
+            var levels = scene.Objects?.Levels ?? Meitou.Data.World.WorldLevelData.Load(install);
+            var data = Meitou.Simulation.PopulationData.Create(gameDb, levels.Towns(), new Meitou.Simulation.GeneratedAppearances(gameDb, install.Root));
+            systems.Add(new Meitou.Simulation.PopulationSystem(data, new Meitou.Simulation.PopulationSettings { Background = interactive }));
+            systems.Add(new Meitou.Simulation.MovementSystem(new Meitou.Simulation.PathService(walkability, synchronous: !interactive)));
+        }
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate,
             clock: GameClockFor(scene.Database, o.Hour),
-            simulation: new Meitou.Simulation.WorldSettings { Seed = g.Seed, Threads = Math.Max(1, g.SimThreads ?? config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)) });
+            simulation: new Meitou.Simulation.WorldSettings { Seed = g.Seed, Threads = Math.Max(1, g.SimThreads ?? config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)) },
+            systems: systems, walkability: walkability);
         foreach (var problem in session.Bindings.Apply(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
+        if (scene.Database is { } characterDb && !g.NoPopulation && gpu.Characters is null)
+            gpu.Characters = new CharacterRenderer(context, install, characterDb, assets) { Source = FillDrawList, Guard = gpu.Guard };
         var rig = session.Camera;
         var target = camera.Target;
         rig.Place(new Vector2(target.X, target.Z), (o.Yaw ?? 30) * MathF.PI / 180,
@@ -149,6 +167,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             session.Tick();
             session.Input.SetKey(FirstKey(InputAction.ToggleFreeCamera), false);
         }
+        SendFocus();
         ApplyCamera(session.Camera.Current);
         if (interactive) WorldFrame.FinishLoading(context);
     }
@@ -198,6 +217,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         gpu.Streamer?.Settle(gpu.Anchor ?? camera.Eye);
         gpu.Objects?.Settle(gpu.Anchor ?? camera.Eye);
         gpu.Foliage?.Settle(gpu.Anchor ?? camera.Eye);
+        gpu.Characters?.Settle(gpu.Anchor ?? camera.Eye);
         WorldFrame.FinishLoading(display.Context);
         var context = display.Context;
         int w = o.Width, h = o.Height;
@@ -295,6 +315,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             double now = frame.Elapsed.TotalSeconds, dt = now - last;
             last = now;
             session.Advance(dt);
+            SendFocus();
             ApplyCamera(session.CameraAt());
             var size = window.FramebufferSize;
             if (display.BeginFrame(size.X, size.Y))
@@ -308,6 +329,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
                 cpuSum += Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
                 bool shot = screenshotRequested;
                 screenshotRequested = false;
+                if (overlay is not null && !g.NoPopulation) DrawMarkers(overlay, size.X, size.Y);
                 panel?.Draw(size.X, size.Y);
                 display.Present();
                 if (shot) SaveScreenshot(display.Context, backbuffer, size.X, size.Y);
@@ -342,6 +364,70 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         return 0;
     }
 
+
+    // ---- characters: the draw list from the snapshots, markers for what has nothing to draw ----
+
+    WorldSnapshot? indexedFor;
+    readonly Dictionary<CharacterId, CharacterSnapshot> previousById = [];
+    Vector3 lastFocus;
+    bool sentFocus;
+
+    /// <summary>Tells the world where the camera looks, when it has moved enough to matter (the zones follow it).</summary>
+    void SendFocus()
+    {
+        var target = session.Camera.Current.Target;
+        if (sentFocus && Vector3.DistanceSquared(target, lastFocus) < 50 * 50) return;
+        session.World.Commands.Enqueue(new Meitou.Simulation.FocusCommand(target) { Tick = session.World.Tick });
+        lastFocus = target;
+        sentFocus = true;
+    }
+
+    /// <summary>Fills the renderer's list from the last two snapshots, interpolated by the simulation's alpha.</summary>
+    void FillDrawList(CharacterDrawList list)
+    {
+        var current = session.CurrentSnapshot;
+        var previous = session.PreviousSnapshot;
+        if (!ReferenceEquals(indexedFor, previous))
+        {
+            previousById.Clear();
+            foreach (var c in previous.Characters) previousById[c.Id] = c;
+            indexedFor = previous;
+        }
+        float alpha = session.SimulationAlpha;
+        foreach (var c in current.Characters)
+        {
+            if (c.Appearance is null) continue;
+            var position = c.Position;
+            float yaw = c.Yaw;
+            if (previousById.TryGetValue(c.Id, out var before))
+            {
+                position = Vector3.Lerp(before.Position, c.Position, alpha);
+                yaw = Meitou.Engine.Time.Interp.LerpAngle(before.Yaw, c.Yaw, alpha);
+            }
+            var poses = new CharacterPose[c.Animations.Count];
+            for (int i = 0; i < poses.Length; i++) poses[i] = new CharacterPose(c.Animations[i].Name, c.Animations[i].Time, c.Animations[i].Weight);
+            list.Add(new CharacterInstance(((long)c.Id.Slot << 32 | (uint)c.Id.Generation) + 1, c.Appearance, position, yaw, poses));
+        }
+    }
+
+    /// <summary>Squares over the characters that have no drawing (animals, failed builds), coloured by faction.</summary>
+    void DrawMarkers(DebugOverlay overlay, int width, int height)
+    {
+        var view = camera.View * camera.Projection(width / (float)Math.Max(height, 1), camera.Near, camera.ViewDistance);
+        var current = session.CurrentSnapshot;
+        foreach (var c in current.Characters)
+        {
+            if (c.Appearance is not null) continue;
+            var clip = Vector4.Transform(new Vector4(c.Position + new Vector3(0, 10, 0), 1), view);
+            if (clip.W <= 0.1f) continue;
+            float x = (clip.X / clip.W * 0.5f + 0.5f) * width, y = (0.5f - clip.Y / clip.W * 0.5f) * height;
+            if (x < -10 || y < -10 || x > width + 10 || y > height + 10) continue;
+            float hue = c.Faction < 0 ? 0 : (c.Faction * 0.618034f) % 1f;
+            var colour = new Vector4(0.5f + 0.5f * MathF.Sin(hue * MathF.Tau), 0.5f + 0.5f * MathF.Sin(hue * MathF.Tau + 2.1f), 0.5f + 0.5f * MathF.Sin(hue * MathF.Tau + 4.2f), 1);
+            overlay.Rect(x - 3, y - 3, x + 3, y + 3, colour);
+        }
+        overlay.Flush(width, height);
+    }
     bool screenshotRequested;
 
     static void SaveScreenshot(GpuContext context, Texture backbuffer, int width, int height)

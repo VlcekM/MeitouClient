@@ -29,11 +29,8 @@ decides what they leave open (scheduling, threads, data layout).
 - The data layer reads everything a world needs (FCS with the game's merge rules, load order, zone and town placements), and
   `CharacterGenerator` rolls an NPC's appearance and loadout. Typed views exist over CONSTANTS, FACTION (with the initial relations),
   SQUAD_TEMPLATE and TOWN; AI_PACKAGE, AI_TASK and races are still read by field name.
-- Stages 0 (time facts) and 1 (skeleton) are done on branch `sim-core`. Stage 0: `GameClock` runs at the game's 1200/11 s per game
-  hour and `WorldSession` offers the game's pause, 1, 2 and 5 (F2 to F4). Stage 1: [Skeleton as built](#skeleton-as-built-stage-1).
-- Missing for a living world: the populated world (factions, squads, characters in it), real movement and walkability, character
-  drawing (the viewer's character renderer was dropped in phase 8, DECISIONS 23; how it worked is in
-  [character-viewer.md](character-viewer.md)), AI, the UI, saves.
+- Stages 0 to 3 are done on branch `sim-core`: [time facts](#time-model) (the game's clock, pause, 1/2/5), [Skeleton as built](#skeleton-as-built-stage-1) and [Populate and move as built](#populate-and-move-as-built-stages-2-and-3).
+- Missing for a living world: navmesh walkability and collision with buildings, the AI proper, the player and the UI, bodies and combat, saves.
 
 ## Principles
 
@@ -167,6 +164,66 @@ Decisions the plan left open, made while building `Meitou.Simulation`:
   the grid, walkability against a synthetic ground that dips under the water, blows on the nearest neighbour, births and deaths that
   reuse slots) runs 300 ticks with 1, 4 and 16 threads; the hashes at six checkpoints are identical, two runs agree, another seed
   differs.
+
+
+## Populate and move as built (stages 2 and 3)
+
+**Ground.** The simulation samples `Meitou.Data.World.GroundHeights` (the CPU heightmap window of the loaded region plus the coarse
+whole-world grid beyond it, immutable, any thread) through `OpenGroundWalkability`; it never calls the renderer. `CharacterTable.Spawn`
+and `Remove` check where in the tick they are (`TablePhase`): no spawns in the parallel phases, no removals before the commit
+(a phase reads the character as alive), and throw otherwise.
+
+**Squad factory** (`SquadFactory.Plan`, pure given template, multiplier, seed and key; docs/game/factions-squads-towns.md 5.1): counts
+(v0 when v1 is 0 or the sentinel 100, else a uniform integer in [v0, v1], v1 below v0 gives v0; trunc(n x M) and at least 1 unless
+`dont multiply`), the creation order and roles (leader 2, `choosefrom` picks weighted with 0 as 100 and gated by world states, `squad`
+role 0, `squad2` role 1, `animals`, `animals2`, `slaves` as squads of their own with role 4), the layout offsets (rows of 8, 3 apart,
+odd ones 1 back; animals2 5 apart) and the animal age. Missing references become messages in `SquadPlan.Problems`. Not made: `prisoners`
+(they need cages), `housemates`, the unique-leader replacement, AI packages. The world states start all false (**Unknown** in the original,
+3.5), so squads and `choosefrom` entries gated by one do not appear.
+
+**Population** (`PopulationSystem`). `FocusCommand` (the camera's target; the host sends it when the camera has moved 50 units) activates
+the zones overlapping the box of +-340 units, plus a ring of one when `Fast zone hopping` is on (`ZoneActivation`, Verified for the ring,
+Observed for the box); the zones are looked at every 15 ticks. A placed town in an active zone gets its residents: the town's `residents`
+plus the faction's, unless the town overrides with a list of its own; an entry is v0 squads, v0 = 0 dropped (6.4). Squads stand at
+seeded spots within 0.6 of the town radius (`size radius` x `town radius mult`) of the placed position; **how the original picks a home
+building is Unknown**, so this is an engine choice, and so is the unload grace of 60 game seconds (the original has three real-time timers
+of Unknown length): a town whose zone is no longer active for that long loses its characters, and comes back (new generations) when the
+zone does. Characters are made by the squad plan, rolled by `CharacterGenerator` through `CharacterAppearance.Build` (seeded from the
+world seed, the town, the squad and the member), on one background thread in the game (`Background`) and inside the tick in tests, and are
+taken in at the first tick after they are ready; animals have no appearance and are shown as markers. `MemberPlan`/speed: S = lerp(race
+`speed min skill`, `speed max skill`, athletics / 100) with a **stand-in athletics of 20** until stats exist, walk speed from the race.
+Resident squads are `Squad` objects in `World.Squads` (leader, members, home); the registry is part of the state hash.
+
+**Movement** (`MovementSystem`, docs/game/pathfinding.md "Movement"). Speed S in units (decimetres) per second capped by the speed mode (0 the
+race walk speed, 1 at 55, 2 none; wanderers walk, followers copy their leader's mode and run to catch up, orders run), accelerating by 15 per
+second and stopping on arrival; separation (repulsion proportional to 100 x (1 - d/R), R = 8 = twice the footprint radius 4, at most 26
+neighbours; the scale to a speed, 0.15, is an engine choice); movement stays on ground above the water and a blocked character drops its
+path. Paths: Think flags a character that wants one, the next Schedule step asks the `PathService` (a thread of its own in the game, the
+caller in tests), answers are applied in a serial step in request order and a late answer to an older request is ignored. Tasks: `Wander`
+(a random point within the squad's home radius, then a wait of 3 to 10 s), `GoTo` (`MoveOrder`; a group is spread by the formation
+offsets x 2.5; queued orders replace), `Follow` (the formation slot beside the leader, repathing every 0.5 s when more than 14 units away).
+Not modelled: water states and swimming, roads for long trips, the formation slot rules (**Unknown**), turn rate, the combat speed
+multiplier, collision with buildings (the navmesh stage).
+
+**Drawing.** The host keeps the last two snapshots, interpolates positions and yaw by `SimulationAlpha`, and fills the `CharacterDrawList`
+of the character renderer ([character-renderer.md](character-renderer.md)); the animation layers come from the movement state
+(`AnimationLayers`: `idle_stand_relax`, or `walk lower` + `walk upper`). Characters without an appearance get a debug square coloured
+by faction through the existing `DebugOverlay`. `--no-population` leaves the world empty.
+
+**Cost** (`HubTests.Tick_cost_of_the_hub_is_recorded`, base-game load order, flat ground, release build, this PC, 600 ticks after the
+town loaded; a tick is the same cost at every speed, so a real second costs 30 ticks at 1x and 150 at 5x):
+
+| Characters (The Hub) | Threads | ms per tick | ms per real second at 1x | at 5x |
+|---|---|---|---|---|
+| 32 (9 squads) | 1 | 0.07 | 2.0 | 10 |
+| 32 | 4 | 0.08 | 2.5 | 12 |
+| 122 (Squad size multiplier 10) | 1 | 0.15 | 4.4 | 22 |
+| 122 | 4 | 0.18 | 5.5 | 27 |
+| 122 | 8 | 0.15 | 4.5 | 23 |
+
+At these counts the barrier cost of the worker pool outweighs the parallel gain; threads pay off from some hundreds of characters on
+(stage 9 measures again with the AI). The determinism tests run the real workload (population, paths, wander, follow, an order) at 1, 4
+and 16 threads, on a synthetic town and on The Hub of the install: identical hashes.
 
 
 ## Walkability and movement

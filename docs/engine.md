@@ -45,6 +45,9 @@ Dependencies point one way: Core ← Data ← Engine / Rendering ← Game / view
   sunset, 1 between; **Observed**), `HH:MM` (`floor(frac x 60)` minutes) and `Day: n` texts. Sunrise, sunset and days per year come
   from the CONSTANTS record (5 / 23 / 100); sunset not after sunrise gives 6 and 20. The window title shows the clock. The hour
   drives the sun, sky and lighting; the heat haze's game time is `HoursSinceStart` and stops while paused.
+- **Population and movement**: the host adds `PopulationSystem` and `MovementSystem` to the world and sends the camera focus as a
+  `FocusCommand`; it fills `CharacterDrawList` from the interpolated snapshots
+  ([simulation.md](simulation.md#populate-and-move-as-built-stages-2-and-3)). `--no-population` leaves the world empty.
 - **World** (`Meitou.Simulation.World`, owned by `WorldSession.World`): runs one tick per simulation tick, with the phases, the
   worker pool, the stateless seeded randomness and the state hash described in [simulation.md](simulation.md#skeleton-as-built-stage-1).
   After each tick it publishes a `WorldSnapshot`; the session keeps the last two (`PreviousSnapshot`, `CurrentSnapshot`) and

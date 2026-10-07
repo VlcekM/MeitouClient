@@ -21,7 +21,8 @@ public sealed class WorldSession : IDisposable
 {
     public WorldSession(Vector3 focus, (double X0, double Z0, double X1, double Z1) region, Func<float, float, float> ground,
         double startHour = GameClock.DefaultStartHour, double tickRate = FixedStepClock.DefaultTickRate, InputBindings? bindings = null,
-        GameClock? clock = null, WorldSettings? simulation = null, IEnumerable<ITickSystem>? systems = null)
+        GameClock? clock = null, WorldSettings? simulation = null, IEnumerable<ITickSystem>? systems = null,
+        IWalkability? walkability = null)
     {
         Focus = focus;
         Region = region;
@@ -29,7 +30,7 @@ public sealed class WorldSession : IDisposable
         Clock = clock ?? new GameClock(startHour);
         Bindings = bindings ?? new InputBindings();
         Camera = new CameraRig(ground);
-        World = new World(simulation ?? new WorldSettings(), new OpenGroundWalkability(ground), systems);
+        World = new World(simulation ?? new WorldSettings(), walkability ?? new OpenGroundWalkability(ground), systems);
     }
 
     /// <summary>The point the world was loaded around.</summary>
@@ -83,7 +84,12 @@ public sealed class WorldSession : IDisposable
         Clock.Advance(Simulation.TickSeconds);
     }
 
-    public void Dispose() => World.Dispose();
+    /// <summary>Called when the session is disposed, for the systems that own threads.</summary>
+    public void Dispose()
+    {
+        World.Dispose();
+        foreach (var s in World.Systems) (s as IDisposable)?.Dispose();
+    }
 
     /// <summary>One control tick: the actions from the input (pause, speed), then the camera.</summary>
     public ActionState Tick()
