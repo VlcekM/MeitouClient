@@ -392,10 +392,7 @@ also holds more foliage textures and meshes). Master's viewer has no impostors.
 - A per-instance transition by projected size (needs a per-instance transition in the cull); a budget slider.
 - Thin branches (1 pixel at the 64 px frame size) are thinned by the vote; at the transition distance they are sub-pixel anyway
   (**Unknown** whether a larger frame for such meshes is worth its VRAM).
-- Cold-cache offscreen runs (`--screenshot`, the bake in the settle path) report 6 validation errors under `MEITOU_VK_VALIDATION=sync`
-  (a copy and barriers inside a render pass), on the base build too; with a warm cache 0 (**Observed**). Not fixed here.
-- The drawing program (`ImpostorDraw`) still compiles at the first impostor in view (7 ms program, 6 ms caster pipeline; **Observed**):
-  its quad upload needs a frame outside a render pass.
+- The cold-cache validation errors and the drawing program's compile at the first impostor: fixed, section 9.
 
 ## 8. Bake pacing and the first fast flight (2026-10-07)
 
@@ -447,3 +444,36 @@ assembler's output does not depend on the pooled memory it reuses.
 
 **Not done**: pre-baking atlases of zones beyond the foliage layout's reach (the layout itself is the limit), a bake on several workers
 at once, moving the bake's mesh upload (1-8 ms) off the render thread.
+
+## 9. Cold-cache validation errors and the drawing warm-up (2026-10-07)
+
+**The 6 sync-validation errors (`MEITOU_VK_VALIDATION=sync`, empty cache, offscreen `--screenshot`).** **Verified** (a stack trace taken where the copy
+was recorded, then 0 errors on the forest view and the Hub, both with an empty cache folder, and in all ten gate views): not the bake's own
+resources and not the atlas upload. `ImpostorBaker.RecordRow` calls `NativeFrame.Bind` for every column of a row, inside the row's
+`BeginRendering`; `Prepare` evaluates the frame globals, and the shadow pass's `uShadowNoise` getter uploads the noise texture on its first
+read (`ShadowPass.UploadNoise`: a `vkCmdCopyBufferToImage` and a transfer barrier into `GpuFrame.PreFrame`). In a run that settles before it draws a
+world frame (offscreen, a cold cache: the bake is the first thing to read the globals) that first read happened inside the bake's rendering: one copy
+plus five barrier complaints (stages, accesses and "in a dynamic rendering instance") = 6. A warm cache has no bake, so the first read was in a normal
+`Prepare`. **Fix**: `ImpostorBaker.PrepareFrameGlobals` calls `frame.Prepare` once before the first row's pass (a throw-away binding), so the lazy
+upload is recorded outside the rendering. The bake's commands and the atlas bytes are unchanged (md5 of all 55 forest-view `.mimp` files from a cold
+bake identical before and after, **Verified**). The same hazard exists for any other lazy global read for the first time inside a pass; none other was seen.
+
+**The drawing warm-up.** Before, `ImpostorDraw` (two programs, the quad's upload) was made, and the pipeline of each (state, formats) combination
+compiled, at the first impostor drawn. **Observed** (RTX 4070, forest view, warm cache, a timer around the setup in `AddImpostorDraws`): 7.5 ms at the
+first caster segment (programs and quad) and 0.65 ms for the colour pipeline. The first foliage update is outside any pass with a frame open (the
+bake records there too), so the quad upload (`Uploads.Begin`, into `PreFrame`) is valid there. Now:
+
+- `ImpostorDraw` is made in the first foliage update with the baker (`UpdateImpostors`): programs and quad at load, not at the first impostor.
+- Every foliage pass that draws no impostor yet asks for the pipeline of its current state and formats (`WarmImpostorPipeline`: the host's
+  `DrawState` with the foliage's alpha to coverage, depth or colour program), so a combination is compiled in a pass without impostors. Pipelines are
+  cached by key as before.
+- **Observed**: with the first twelve foliage passes held back from drawing impostors (a temporary test hook, removed), no impostor setup in a later
+  pass took 0.2 ms or more; before, the first took 7.5 ms. **Verified**: 0 validation errors, ten views in both modes max 0 (below).
+- **Limit (Observed)**: the pass formats are known only inside a pass, so in a run whose first drawn frame already has impostors (offscreen after the
+  settle, the game's first frame after its settle) that frame still compiles the pipelines, now 4.1 to 4.6 ms (caster) plus 0.4 ms (colour) instead of
+  7.5 + 0.65 ms: the programs and the quad are gone from it. **Unknown**: whether warming from the passes' known formats at the first update
+  (reflection, scene, cascades) is worth the coupling to the world frame.
+
+**Gate (Release, RTX 4070).** `--faithful all`, ten views, against `C:\Temp\base-87c7857\faithful`: max 0. Meitou defaults, ten views with an empty
+impostor cache folder (so every view bakes), against `C:\Temp\mp\meitou` (master cd65d05): max 0. Sync validation on all ten Meitou views and the Hub
+with a cold cache: 0 errors (**Verified**).

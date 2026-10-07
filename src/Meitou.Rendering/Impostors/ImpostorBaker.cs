@@ -178,6 +178,21 @@ public sealed unsafe class ImpostorBaker : IDisposable
         return standIn;
     }
 
+    bool globalsPrepared;
+
+    /// <summary>
+    /// Evaluates the frame globals once, outside any rendering, before the first row. The first <see cref="NativeFrame.Prepare"/> of a run that has
+    /// drawn no world frame yet (an offscreen run settling with a cold cache) makes the globals' owners upload their lazy textures (the shadow
+    /// noise): recorded between a row's BeginRendering and EndRendering, that copy and its barrier were invalid commands (6 sync-validation errors).
+    /// </summary>
+    void PrepareFrameGlobals()
+    {
+        if (globalsPrepared) return;
+        globalsPrepared = true;
+        var block = gpu.Frame.Constants.Write<ImpostorShaders.BakeBlock>([default], 256);
+        frame.Prepare(new ViewConstants { LightDir = Vector3.UnitY }, [block.Binding]);
+    }
+
     /// <summary>
     /// Records one row of frames for the three passes into <paramref name="cmd"/>: per pass the row at twice the frame size into
     /// <paramref name="large"/> (and <paramref name="depth"/>), halved into <paramref name="small"/> by a linear blit and copied into
@@ -187,6 +202,7 @@ public sealed unsafe class ImpostorBaker : IDisposable
         Texture large, Texture depth, Texture small, Buffer readback, float lodBias)
     {
         int grid = size.Grid, f = size.FramePixels, samples = 2 * f, width = grid * samples, smallWidth = grid * f;
+        PrepareFrameGlobals();
         var c = meshes.Centre;
         float r = meshes.Radius;
         var formats = new AttachmentFormats(large.Desc.Format, depth.Desc.Format);

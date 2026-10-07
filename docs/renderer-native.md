@@ -2927,8 +2927,23 @@ sections 4, 5, 6 and 8.*
   and junk and abandoned temporaries removed.
 - **Gate** (Release, RTX 4070, against `C:\Temp\base-87c7857`): `--faithful all` ten views max 0 (**Verified**); `--faithful impostors` ten
   views 0 px against the base viewer rendered with the same option (**Verified**); Meitou default views differ only where billboards are
-  drawn (impostors.md section 6); `MEITOU_VK_VALIDATION=sync`, forest and Hub 13:00, 0 errors with a warm cache (6 with a cold cache,
+  drawn (impostors.md section 6); `MEITOU_VK_VALIDATION=sync`, forest and Hub 13:00, 0 errors with a warm cache (6 with a cold cache, fixed in 8.13,
   as in the base build).
+
+### 8.13 Billboards: cold-cache validation and drawing warm-up (2026-10-07)
+
+*In short: the 6 sync-validation errors of a cold impostor cache are gone and the impostor programs and quad are made at load. No atlas byte
+and no pixel changed. Details: [impostors.md](impostors.md) section 9.*
+
+- **Errors.** Cause (**Verified**): the first read of the frame globals happened inside the bake's rendering, where the shadow noise's lazy upload
+  (`ShadowPass.UploadNoise`) recorded a copy and a transfer barrier. Fix: `ImpostorBaker.PrepareFrameGlobals` prepares once before the first row.
+  Forest and Hub with an empty cache, `MEITOU_VK_VALIDATION=sync`: 0 errors (was 6); the ten Meitou views cold: 0.
+- **Warm-up.** `ImpostorDraw` (programs, quad) in the first foliage update; the pipeline of each pass's state and formats in the first pass
+  without impostors (`WarmImpostorPipeline`). First impostor setup 7.5 + 0.65 ms before; programs and quad gone from it, and no setup of 0.2 ms
+  or more when a pass without impostors came first (**Observed**). A run whose first drawn frame has impostors still compiles the pipelines there
+  (4 to 5 ms; formats are known only in a pass).
+- **Gate.** Atlas md5 of a cold forest bake identical (55 files); `--faithful all` ten views max 0 against `C:\Temp\base-87c7857\faithful`; Meitou
+  ten views, cold cache, max 0 against master cd65d05's.
 
 ---
 
