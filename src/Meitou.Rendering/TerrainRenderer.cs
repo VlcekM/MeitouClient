@@ -51,7 +51,7 @@ public readonly record struct WorldLighting(Vector3 SunDirection, Vector3 SunCol
 /// placed per selected quadtree node, heights read in the vertex shader from a coarse whole-world height texture and
 /// the loaded region's fine one, normals from the height field per pixel. Nodes outside the view frustum are skipped.
 /// </summary>
-public sealed unsafe class TerrainRenderer : IDisposable
+public sealed unsafe partial class TerrainRenderer : IDisposable
 {
     readonly DeviceBuffer gridVertices, gridIndices;
     readonly TerrainTexture coarseTexture;
@@ -1125,6 +1125,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         foreach (var r in retired) r.Texture.Dispose();
         textures?.Dispose();
         foreach (var p in new[] { patchColour, patchDepth, meshColour, meshDepth }) p.Dispose();
+        rockBake?.Dispose();
         gpu.Bindless.Free(BindlessKind.Texture2D, standIn2D);
         gpu.Bindless.Free(BindlessKind.Texture2DArray, standInArray);
         gpu.Bindless.Free(BindlessKind.UTexture2D, standInUInt);

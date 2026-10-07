@@ -3306,6 +3306,20 @@ Files: new `ImpostorBudget.cs`; `FoliageRenderer.Impostors.cs` (plan, refine, `S
 - **Pop-in**: the benchmark prints `pop-in    impostors:` (left out, admitted but not resident, coarser than wanted, refines in flight).
 - **Gate**: `dotnet test -c Release` 513 passed, 0 failed, 0 skipped; Faithful ten views 0 px, `--faithful impostors` 0 px against master, Meitou defaults 0 px in nine views and a few small spots in two (the small class), validation 0 errors.
 
+### 8.18 Impostors for TERRAIN-mode rocks (F2, 2026-10-07)
+
+*In short: rocks drawn through the terrain shader get a hemi-octahedral impostor per (rock mesh, biome), baked with the terrain's own mesh material. Colour-view rock triangles in the Hub flight
+599 k to 15 k per frame, GPU frame mean 2.61 to 2.24 ms (unpaced fly benchmark). Meitou mode only; Faithful pictures 0 px. Design, numbers and limits: [impostors.md](impostors.md) section 12.*
+
+Files: new `TerrainRenderer.RockBake.cs`; `TerrainShaders.cs` (`RockBakeFragmentNative` / `RockBakeVertexNative`, `TerrainBakePush`, the mesh shader's crossfade dither `vFade`), `TerrainTextures.cs`
+(`IsResident`, `BiomeKey`), `Impostors/ImpostorShaders.cs` (`RockFragmentNative`, `ImpostorRockPush`), `Impostors/ImpostorLayout.cs` (`ForRock`, `Knee`), `Impostors/ImpostorSource.cs` (rock key),
+`Impostors/ImpostorBaker.cs`, `Impostors/ImpostorDraw.cs`, `FoliageRenderer.cs` / `.Impostors.cs` (variants per biome row, segments, work list), `FoliageShaders.cs` (cull and compact: biome row, dither lane), `WorldFrame.cs` (one line, `f.Terrain`).
+
+- **Verified** (Faithful ten views 0 px against `C:\Temp\base-87c7857\faithful`; `--faithful impostors` 0 px against the base viewer with the same flag): the terrain mesh shader's new `vFade` input is 0 unless a rock is in its crossfade band, so nothing changes outside Meitou rocks. The golden SPIR-V hashes of "terrain mesh" were updated (`GpuApiTests`, `LegacySpirvGoldenTests`).
+- **Verified**: `MEITOU_IMPOSTOR_ROCKS=0` gives 0 px in all ten Meitou views against `C:\Temp\mi\meitou`; with it on, the differing views are the far rocks only (forest, rock, zone14_30 at 13:00: mean 0.67-0.73, max 95-219; Hub 0.018; Port North 0).
+- **Verified**: `MEITOU_VK_VALIDATION=sync`, empty cache (canyon view and a 900-frame Hub flight): 0 errors.
+- Gate: `dotnet build` 0 warnings; `dotnet test` all passed.
+
 ---
 
 ### 8.6 Phase 8 stage 2: impostors native and drawn (2026-10-07)

@@ -311,6 +311,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         /// made with the terrain's biome source <see cref="RockBiomes"/> (<see cref="TerrainRenderer.FeatureBiomes"/>); whether it has plain and
         /// mirroring placements, and whether its first one mirrors (the order its two batches are numbered in).</summary>
         public bool RockReady, RockPlain, RockMirrored, RockFirstMirrored;
+        /// <summary>With rock impostors on (<see cref="FoliageRenderer.RockImpostorsActive"/>): the records are sorted by biome row (stable) and <see cref="RockSegments"/> are
+        /// the runs of one row (<c>Row</c> -1: no biome), in order; the rows are what the impostor atlases are made for (docs/impostors.md section 12).</summary>
+        public bool RockSorted;
+        public (int Row, int Start, int Length)[] RockSegments = [];
         public object? RockBiomes;
 
         public void ComputeBounds()
@@ -762,6 +766,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public int RockStamp, RockPlainIndex, RockMirroredIndex;
         /// <summary>Its impostor (<see cref="FoliageRenderer.Impostors"/>): null until asked for.</summary>
         public ImpostorState? Impostor;
+        /// <summary>
+        /// A TERRAIN-mode rock's impostors are per biome (the terrain material is the biome's at each instance, docs/impostors.md section 12). The rock's own asset has
+        /// <see cref="RockVariants"/>, one holder per biome row; a holder (<see cref="RockOf"/> the rock's asset, <see cref="RockRow"/> the row) carries only the
+        /// <see cref="Impostor"/> state and a copy of the bounds, and is never in <c>assetsByMesh</c>.
+        /// </summary>
+        public MeshAsset? RockOf;
+        public int RockRow = -1;
+        public Dictionary<int, MeshAsset>? RockVariants;
     }
 
     sealed class GpuMesh
@@ -1038,6 +1050,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         if (!continuation) { DrawnInstances = 0; DrawnBlades = 0; DrawCalls = 0; if (!depthPass) MainDetail = ""; }
         if (!Enabled) return;
+        (rockTerrain, drawTextures, drawMaterialDistance) = (terrain, options.Textures, options.MaterialDistance);
         int timer = grass ? BeginTimer(continuation) : -1;
         var cpu = Stopwatch.StartNew();
         drawStamp++;
@@ -1426,7 +1439,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     void PrepareRock(Group g, TerrainRenderer terrain)
     {
         var source = terrain.FeatureBiomes;
-        if (g.RockReady && ReferenceEquals(g.RockBiomes, source)) return;
+        bool sorted = RockImpostorsActive;
+        if (g.RockReady && ReferenceEquals(g.RockBiomes, source) && (g.RockSorted || !sorted)) return;
         bool plain = false, mirrored = false;
         foreach (ref var r in g.Instances.AsSpan())
         {
@@ -1434,6 +1448,32 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             (plain, mirrored) = (plain | !m, mirrored | m);
             r.Ground.W = FoliageCull.RockBits(r.Transform, terrain.FeatureBiomeRowAny(r.Transform.M41, r.Transform.M43));
         }
+        if (sorted)
+        {
+            // Rock impostors are per biome: the records are put in order of their biome row (stable), so each row is one run, which the cull
+            // handles as a chunk range of its own (docs/impostors.md section 12). Only with the switch on: Faithful keeps the placement order.
+            var instances = g.Instances;
+            static int Row(in FoliageInstanceRecord r) => (int)((uint)r.Ground.W & 1023u) - 1;
+            bool ordered = true;
+            for (int i = 1; i < instances.Length && ordered; i++) ordered = Row(instances[i - 1]) <= Row(instances[i]);
+            if (!ordered)
+            {
+                var order = Enumerable.Range(0, instances.Length).OrderBy(i => Row(instances[i])).ToArray();
+                var copy = (FoliageInstanceRecord[])instances.Clone();
+                for (int i = 0; i < order.Length; i++) instances[i] = copy[order[i]];
+            }
+            var segments = new List<(int, int, int)>();
+            for (int i = 0; i < instances.Length;)
+            {
+                int row = Row(instances[i]), end = i + 1;
+                while (end < instances.Length && Row(instances[end]) == row) end++;
+                segments.Add((row, i, end - i));
+                i = end;
+            }
+            g.RockSegments = [.. segments];
+        }
+        else g.RockSegments = [];
+        g.RockSorted = sorted;
         g.RockFirstMirrored = g.Instances.Length > 0 && FoliageCull.Mirrors(g.Instances[0].Transform);
         (g.RockPlain, g.RockMirrored, g.RockBiomes, g.RockReady) = (plain, mirrored, source, true);
         gpuCull!.Free(g.Arena, g.ArenaGeneration);
@@ -1471,8 +1511,19 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (var (g, _, parts) in cullWork)
         {
             var a = g.Asset;
-            if ((parts & FoliageCull.ImpostorPart) != 0 && a.Impostor is { } imp && imp.Stamp != stamp) { (imp.Stamp, imp.Index) = (stamp, gpuImpostorOrder.Count); gpuImpostorOrder.Add(a); }
-            if ((parts & FoliageCull.MeshPart) == 0) continue;
+            bool rockSegments = IsRock(a, options) && g.RockSorted;
+            if ((parts & FoliageCull.ImpostorPart) != 0)
+            {
+                if (rockSegments)
+                {
+                    // A rock's impostor batches are those of the biome rows its segments have an atlas for.
+                    foreach (var (row, _, _) in g.RockSegments)
+                        if (ReadyRock(a, row) is { } v && v.Impostor!.Stamp != stamp) { (v.Impostor.Stamp, v.Impostor.Index) = (stamp, gpuImpostorOrder.Count); gpuImpostorOrder.Add(v); }
+                }
+                else if (a.Impostor is { } imp && imp.Stamp != stamp) { (imp.Stamp, imp.Index) = (stamp, gpuImpostorOrder.Count); gpuImpostorOrder.Add(a); }
+            }
+            // A rock's segment without an atlas is a mesh whatever the parts say (its group's other rows may be impostors).
+            if ((parts & FoliageCull.MeshPart) == 0 && !(rockSegments && RockMeshWanted(g, parts))) continue;
             if (IsRock(a, options))
             {
                 if (a.RockStamp != stamp) (a.RockStamp, a.RockPlainIndex, a.RockMirroredIndex) = (stamp, -1, -1);
@@ -1493,15 +1544,30 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (var (g, _, parts) in cullWork)
         {
             var a = g.Asset;
-            if ((parts & FoliageCull.ImpostorPart) != 0)
+            if (IsRock(a, options) && g.RockSorted && (parts & FoliageCull.ImpostorPart) != 0)
             {
-                if ((parts & FoliageCull.MeshPart) != 0) gpuEntries.Add((a.WorkIndex, g));
-                gpuEntries.Add((impostorFirst + a.Impostor!.Index, g));
+                // Per biome row: the rock's mesh chunks (flagged for the transition when the row has an atlas) and, for a row with one, its impostor chunks.
+                foreach (var (row, start, length) in g.RockSegments)
+                {
+                    var v = ReadyRock(a, row);
+                    if (v is null || (parts & FoliageCull.MeshPart) != 0)
+                    {
+                        if (g.RockPlain) gpuEntries.Add(new GpuEntry(meshBatches + a.RockPlainIndex, g, start, length, v is not null));
+                        if (g.RockMirrored) gpuEntries.Add(new GpuEntry(meshBatches + a.RockMirroredIndex, g, start, length, v is not null));
+                    }
+                    if (v is not null) gpuEntries.Add(new GpuEntry(impostorFirst + v.Impostor!.Index, g, start, length, false));
+                }
                 continue;
             }
-            if (!IsRock(a, options)) { gpuEntries.Add((a.WorkIndex, g)); continue; }
-            if (g.RockPlain) gpuEntries.Add((meshBatches + a.RockPlainIndex, g));
-            if (g.RockMirrored) gpuEntries.Add((meshBatches + a.RockMirroredIndex, g));
+            if ((parts & FoliageCull.ImpostorPart) != 0)
+            {
+                if ((parts & FoliageCull.MeshPart) != 0) gpuEntries.Add(new GpuEntry(a.WorkIndex, g, 0, g.Instances.Length, false));
+                gpuEntries.Add(new GpuEntry(impostorFirst + a.Impostor!.Index, g, 0, g.Instances.Length, false));
+                continue;
+            }
+            if (!IsRock(a, options)) { gpuEntries.Add(new GpuEntry(a.WorkIndex, g, 0, g.Instances.Length, false)); continue; }
+            if (g.RockPlain) gpuEntries.Add(new GpuEntry(meshBatches + a.RockPlainIndex, g, 0, g.Instances.Length, false));
+            if (g.RockMirrored) gpuEntries.Add(new GpuEntry(meshBatches + a.RockMirroredIndex, g, 0, g.Instances.Length, false));
         }
         if (gpuBatchStart.Length < batches + 1) { gpuBatchStart = new int[batches * 2 + 1]; gpuCursor = new int[batches * 2]; }
         Array.Clear(gpuBatchStart, 0, batches + 1);
@@ -1510,12 +1576,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         long rockCandidates = 0;
         // Chunks per batch: a mesh group's instances once; a rock group's once per batch it has (a group with both kinds of placement is
         // tested twice, each run keeping only its own kind).
-        foreach (var (b, g) in gpuEntries)
+        foreach (var e in gpuEntries)
         {
-            int chunks = (g.Instances.Length + Chunk - 1) / Chunk;
-            gpuBatchStart[b + 1] += chunks;
+            int chunks = (e.Length + Chunk - 1) / Chunk;
+            gpuBatchStart[e.Batch + 1] += chunks;
             groups++;
-            if (b >= meshBatches && b < impostorFirst) rockCandidates += g.Instances.Length;
+            if (e.Batch >= meshBatches && e.Batch < impostorFirst) rockCandidates += e.Length;
         }
         for (int b = 0; b < batches; b++) gpuBatchStart[b + 1] += gpuBatchStart[b];
         int n = gpuBatchStart[batches];
@@ -1527,11 +1593,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             // gpuEntries lists cullWork's groups in order, a rock group once per batch it has, a group with an impostor once per part.
             for (; entry < gpuEntries.Count && ReferenceEquals(gpuEntries[entry].Group, g); entry++)
             {
-                int b = gpuEntries[entry].Batch, length = g.Instances.Length;
+                var e = gpuEntries[entry];
+                int b = e.Batch, length = e.Length;
                 uint flags = b < meshBatches ? (range.HasImpostor ? FoliageCullChunk.ImpostorMesh : 0)
                     : b >= impostorFirst ? FoliageCullChunk.Impostor
-                    : FoliageCullChunk.Rock | (gpuRockOrder[b - meshBatches].Mirrored ? FoliageCullChunk.Mirrored : 0);
-                uint first = FoliageGpuCull.FirstOf(g.Arena);
+                    : FoliageCullChunk.Rock | (gpuRockOrder[b - meshBatches].Mirrored ? FoliageCullChunk.Mirrored : 0) | (e.ImpostorMesh ? FoliageCullChunk.ImpostorMesh : 0);
+                uint first = FoliageGpuCull.FirstOf(g.Arena) + (uint)e.Start;
                 for (int at = 0; at < length; at += Chunk)
                     gpuChunks[gpuCursor[b]++] = new FoliageCullChunk
                     {
@@ -1543,7 +1610,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
         gpuChunkCount = n;
         gpuInstances = 0;
-        foreach (var (_, g) in gpuEntries) gpuInstances += g.Instances.Length;
+        foreach (var e in gpuEntries) gpuInstances += e.Length;
         gpuChunkFrame = -1;
         gpuWorkBuilds++;
         gpuWorkGroups += groups;
@@ -1553,8 +1620,21 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>The work list's groups as (batch, group), in work-list order (a rock group once per batch it has), and per batch whether this
     /// view draws it (<see cref="ShowBatches"/>).</summary>
-    readonly List<(int Batch, Group Group)> gpuEntries = [];
+    readonly List<GpuEntry> gpuEntries = [];
     bool[] gpuBatchShown = new bool[64];
+
+    /// <summary>One group's records (<c>Start</c> and <c>Length</c> in <c>Group.Instances</c>: all of them, or a rock's run of one biome row) in a batch; <c>ImpostorMesh</c>:
+    /// a rock's mesh run whose row has an atlas (its chunks carry the transition).</summary>
+    readonly record struct GpuEntry(int Batch, Group Group, int Start, int Length, bool ImpostorMesh);
+
+    /// <summary>A rock group whose work list has impostors needs its mesh chunks too when some of its rows have no atlas (those stay meshes whatever the zone's distance).</summary>
+    static bool RockMeshWanted(Group g, int parts)
+    {
+        // (the caller knows the group is a sorted rock group with an impostor part)
+        foreach (var (row, _, _) in g.RockSegments)
+            if (ReadyRock(g.Asset, row) is null) return true;
+        return false;
+    }
 
     /// <summary>
     /// Which batches this view draws. Every candidate batch is drawn indirect, an empty one with 0 instances, so a cascade (whose work list,
@@ -1569,8 +1649,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (gpuBatchShown.Length < n) gpuBatchShown = new bool[n * 2];
         Array.Clear(gpuBatchShown, 0, n);
         var planes = cullView.Planes;
-        foreach (var (b, g) in gpuEntries)
-            if (!gpuBatchShown[b] && WorldCamera.Intersects(planes, g.BoundMin, g.BoundMax)) gpuBatchShown[b] = true;
+        foreach (var e in gpuEntries)
+            if (!gpuBatchShown[e.Batch] && WorldCamera.Intersects(planes, e.Group.BoundMin, e.Group.BoundMax)) gpuBatchShown[e.Batch] = true;
     }
 
     /// <summary>The rock draws of this view: per rock batch shown, one draw per part of its mesh (<see cref="Emit"/>'s placements, one per part).</summary>

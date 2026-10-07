@@ -602,3 +602,50 @@ which are the small impostors (`MEITOU_IMPOSTOR_SMALL=0`: 0 px in both); `--fait
 
 **Measured** (**Observed**, CPX, pipelined GPU frame p50): Hub 23.7 (section 10 alone) to 20.6 ms, colour mesh triangles 5.47 M to 22 k (47.9 M on master), 49 of the 311 atlases small, 2.1 MB; forest 19.6 to 15.2 ms (11.7 M on master
 to 0.3 M mesh triangles); medium range 80 000 alone (other options default) 6.6, 6.7, 6.6 to 4.1, 4.0, 3.9 ms. Render thread (paced, cpu-only p50, three runs) forest CPX 8.3, 8.3, 8.2 to 8.6, 9.3, 8.6 ms (+0.3 to +1.0: `upd-foliage`, the reflection cull, more impostor sets); Hub CPX 7.7 to 7.0. At the defaults nothing measurable (section 10).
+
+## 12. TERRAIN-mode rocks (F2, 2026-10-07)
+
+*In short: rocks drawn through the terrain shader (triplanar biome material) get an impostor per (rock mesh, biome row), baked with that material, lit and shadowed at run time like any other.
+Hub flight, colour-view rock triangles 599 k to 15 k per frame, GPU frame mean 2.61 to 2.24 ms, impostor atlases 176 (452 MB) to 241 (710 MB), VRAM peak 4.10 to 4.32 GB. Meitou mode only.*
+
+**Why per biome** (**Verified**, code): a TERRAIN mesh's colour comes from the terrain's parameter row of the biome under the rock (`FoliageCull.RockBits`: biome row + 1 in the record, mirror bit 1024), the
+material uv is `world.xz / 5000`, and past `MaterialDistance` x 0.8 it fades to the ground map times the whole-world colour map x 1.2. One atlas therefore holds one rock mesh in one biome's material.
+In the code the atlases are "variant" `MeshAsset` holders (`RockOf`, `RockRow`); the group's records are stable-sorted by biome row (`Group.RockSorted`, `RockSegments`), and the GPU cull gets one chunk per segment.
+A row whose atlas is not resident keeps drawing the mesh whatever the parts say.
+
+**Bake** (`TerrainRenderer.RockBake.cs`): a copy of the terrain mesh fragment shader with the distance taken from the push constants (the class's bake distance), full near weight, and an output switch (albedo, normal in the
+frame basis, gloss = albedo alpha), drawn with the rock at its mean record scale and the biome row in the placement. The bake needs the biome's textures resident (`CanBakeRock`) and waits up to 3 s for it.
+Format as for trees: 12 x 12 frames, BC1 albedo, BC5 normal, disk cache. **Cache key** (`ImpostorSource.Key`, only for rocks): `rock <RockBakerVersion> <biome key>` and the frame cap; the biome key
+(`TerrainTextures.BiomeKey`) is the record id, layer size, parameters and the texture names with file length and time, so a different biome, mod or texture file bakes again. Tree keys and `BakerVersion` are unchanged.
+
+**Run time** (`RockFragmentNative`): lit and shadowed by the impostor shader as trees are. To match the mesh at the transition it applies the terrain's far fade per pixel (to the ground map times the whole-world colour map) and the
+colour-map tint (`texture(colour) * 1.2` inside the window) that the mesh shader applies; without the tint the billboards looked whitish and too bright (**Observed**). `MEITOU_IMPOSTOR_ROCK_TINT=0` turns the tint off.
+**Crossfade**: the impostor dithers in over the mesh as for trees, and the rock mesh dithers out by the complementary threshold (the cull writes it into row 1 w, the terrain mesh shader discards on it); without the mesh side
+the solid mesh showed through a crosshatch (**Observed**).
+
+**Size rule for big rocks** (`ImpostorClass.ForRock`): the same classes, with the frame capped at 256 (`MEITOU_IMPOSTOR_ROCK_MAX_FRAME`). A rock too big for its frame (radius over the knee, about 620 units) keeps the frame magnified no
+more than the usual 1.4 by switching to its impostor further out: `transition = ImpostorDistance x R / knee`. A 512 frame cap was tried and dropped: 36 MB per atlas and 575 MB of host read-back buffers (**Observed**).
+Small rocks use the small class.
+
+**Filter** (`MEITOU_IMPOSTOR_ROCK_MIN_SURFACE`, 0.06): a mesh whose triangle area over the area of its bounding sphere is under 0.06 gets none (thin sticks make poor billboards). **Observed**: `FOLIAGE_Plant_Swamp-TwigLarger`
+0.029, the other TERRAIN meshes 0.107 or more.
+
+**Measured** (**Observed**, RTX 4070, 1600 x 900, `--world --town "The Hub" --radius 2 --range-large 50000 --range-medium 12000 --object-distance 20000 --fly-benchmark 3600 --fly-pipelined`, `MEITOU_FOLIAGE_TRIS=1`, GPU idle before; base `87c7857`, cache warm for both):
+
+| | base | rock impostors |
+|---|---|---|
+| GPU frame mean (frames 31-3600) | 2.61 ms | 2.24 ms |
+| colour rocks, triangles per frame | 599.3 k | 14.9 k |
+| shadow rocks, triangles per frame | 262.1 k | 93.1 k |
+| impostor atlases | 176 (452 MB) | 241 (710 MB; 185 from cache, 56 baked) |
+| VRAM peak | 4102 MB | 4319 MB |
+
+(Earlier runs while another process used the GPU gave 2.5 and 5.5 ms and are not comparable.) Pictures: canyon mesh against billboard near the transition, `C:\Temp\agent-rocks\shots\final_canyon_rocks0.png` and `final_canyon_rocks1.png`;
+a crop against the untinted version had a mean difference of 1.14, tinted 0.82 (**Observed**; the rest is texture detail).
+
+**Gate** (**Verified**): Faithful ten views 0 px (`--faithful all`; `--faithful impostors` against the base viewer too); Meitou ten views against `C:\Temp\mi\meitou`: Port North 0, Hub 0.018 / 0.006, the others 0.15-0.73 mean (rock
+billboards and their crossfade dither), `MEITOU_IMPOSTOR_ROCKS=0` 0 px in all; `MEITOU_VK_VALIDATION=sync` with an empty cache 0 errors.
+
+**Limits** (**Observed** / **Unknown**): rock impostors exist only with the GPU cull (not verify mode, not the CPU path), with textures on and the impostors switch on; when a biome's textures are not resident the mesh keeps drawing.
+A rock is baked in its biome of record, so a rock whose drawn pixels come from a different biome than its record (**Unknown** how often) matches less. Mirrored placements are checked by eye only. Thin sticks stay meshes.
+`MEITOU_IMPOSTOR_ROCKS=0` switches the whole thing off.

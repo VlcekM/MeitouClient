@@ -36,6 +36,17 @@ public sealed class ImpostorSource
     public IReadOnlyList<string?> TexturePaths { get; init; } = [];
 
     /// <summary>
+    /// For a TERRAIN-mode rock (docs/impostors.md section 12): the terrain's parameter row of the biome whose material it is baked with (-1: not a rock; the
+    /// source is an ordinary mesh) and the text that identifies that material (<c>TerrainTextures.BiomeKey</c>), part of the cache key. The rock is baked with the
+    /// terrain's mesh material, so the textures its record names (none are used in TERRAIN mode) are not part of it.
+    /// </summary>
+    public int RockBiome { get; init; } = -1;
+    public string? RockMaterial { get; init; }
+    public bool IsRock => RockBiome >= 0;
+    /// <summary>Changes with the rock bake (its shader, frame rule or placement); in the cache key of rock atlases only, so the tree atlases stay valid.</summary>
+    public const int RockBakerVersion = 1;
+
+    /// <summary>
     /// Why a FOLIAGE_MESH gets no impostor, or null when it can have one: TERRAIN-mode meshes are textured by the biome under each instance
     /// (one atlas per mesh cannot be right) and EMISSIVE ones glow (not baked).
     /// </summary>
@@ -47,7 +58,15 @@ public sealed class ImpostorSource
     };
 
     /// <summary>The source for a FOLIAGE_MESH (null when the mesh file is missing), with the material rules of <see cref="FoliageRenderer"/>.</summary>
-    public static ImpostorSource? From(FoliageMesh mesh, AssetLocator assets)
+    public static ImpostorSource? From(FoliageMesh mesh, AssetLocator assets) => From(mesh, assets, -1, null);
+
+    /// <summary>
+    /// The source of a TERRAIN-mode rock for the biome of terrain row <paramref name="rockBiome"/> (<paramref name="rockMaterial"/>: its identity): the mesh and its
+    /// scales, no textures of its own (the material is the biome's). <see cref="Ineligible"/> still says no for the tools, which have no terrain to bake with.
+    /// </summary>
+    public static ImpostorSource? ForRock(FoliageMesh mesh, AssetLocator assets, int rockBiome, string rockMaterial) => From(mesh, assets, rockBiome, rockMaterial);
+
+    static ImpostorSource? From(FoliageMesh mesh, AssetLocator assets, int rockBiome, string? rockMaterial)
     {
         string? Find(string? name) => name is null ? null : assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
         string? Texture(string? name) => name is null ? null : assets.Find(Path.GetFileName(name.Replace('\\', '/'))) ?? assets.Find(name);
@@ -59,9 +78,17 @@ public sealed class ImpostorSource
             mode == 4 ? mesh.AlphaThreshold / 255f : 0, mode == 4, mode is 1 or 5, new Vector2(mesh.TileX, mesh.TileY), mesh.SpecularMult);
         ImpostorMaterial? leaves = mesh.LeavesMesh is null ? null
             : new ImpostorMaterial(mesh.LeavesTexture, mesh.LeavesNormal, null, null, mesh.LeavesAlphaThreshold / 255f, true, false, Vector2.One, 0);
+        if (rockBiome >= 0)
+        {
+            // A TERRAIN-mode rock: the biome's material, none of the record's own.
+            main = new ImpostorMaterial(null, null, null, null, 0, false, false, Vector2.One, mesh.SpecularMult);
+            leaves = null;
+        }
         var textures = new[] { main.Diffuse, main.Normal, main.Diffuse2, main.Normal2, leaves?.Diffuse, leaves?.Normal }.Select(Texture).ToList();
         return new ImpostorSource
         {
+            RockBiome = rockBiome,
+            RockMaterial = rockMaterial,
             Name = mesh.Name,
             MeshPath = meshPath,
             LeavesPath = Find(mesh.LeavesMesh),
@@ -94,6 +121,8 @@ public sealed class ImpostorSource
             foreach (var t in TexturePaths) File(t);
             sb.Append(Main.Describe()).Append('\n').Append(Leaves?.Describe() ?? "-").Append('\n');
             sb.Append(CultureInfo.InvariantCulture, $"{MaxScale:R}|{MeanScale:R}|grid {ImpostorClass.DefaultGrid} magnify {ImpostorClass.Magnification:R} bias {ImpostorClass.BiasScale:R}");
+            // Appended only for rocks: the tree atlases' keys (and so their cache files) stay what they were.
+            if (IsRock) sb.Append(CultureInfo.InvariantCulture, $"\nrock {RockBakerVersion} {RockMaterial}\nrock frame {ImpostorClass.RockMaxFrame}");
             return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
         }
     }

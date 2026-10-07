@@ -27,6 +27,34 @@ public struct ImpostorPush
     [FieldOffset(64)] public Vector4 View;
 }
 
+/// <summary>The C# side of <see cref="ImpostorShaders.RockPushMembers"/> (std430 push constants, 128 bytes): <see cref="ImpostorPush"/> and the terrain's far-fade inputs.</summary>
+[StructLayout(LayoutKind.Explicit, Size = 128)]
+public struct ImpostorRockPush
+{
+    [FieldOffset(0)] public Vector4 Sphere;
+    [FieldOffset(16)] public Vector3 CameraUp;
+    [FieldOffset(28)] public float Grid;
+    [FieldOffset(32)] public uint Albedo;
+    [FieldOffset(36)] public uint Normal;
+    [FieldOffset(40)] public float Gloss;
+    [FieldOffset(44)] public uint Spare2;
+    [FieldOffset(48)] public uint Blend;
+    [FieldOffset(52)] public int Debug;
+    [FieldOffset(56)] public uint Coverage;
+    [FieldOffset(60)] public uint Spare;
+    [FieldOffset(64)] public Vector4 View;
+    /// <summary>The colour-map window (x0, z0, 1/width, 1/depth), the bindless indices of the ground, whole-world colour and colour maps.</summary>
+    [FieldOffset(80)] public Vector4 Region;
+    [FieldOffset(96)] public uint Ground;
+    [FieldOffset(100)] public uint WorldColour;
+    [FieldOffset(104)] public uint Colour;
+    [FieldOffset(108)] public float HalfWorld;
+    [FieldOffset(112)] public float FarStart;
+    [FieldOffset(116)] public float FarEnd;
+    /// <summary>Bit 0 ground map, 1 whole-world colour map, 2 colour map, 3 apply the colour map's tint.</summary>
+    [FieldOffset(120)] public uint Flags;
+}
+
 /// <summary>
 /// GLSL of the impostors (docs/impostors.md):
 /// <list type="bullet">
@@ -481,6 +509,75 @@ public static class ImpostorShaders
 
     /// <summary><see cref="Fragment"/> in the native model.</summary>
     public static string FragmentNative() => NativeShaders.Port(Fragment, NativeShaders.Map(NativeMap), PushMembers);
+
+    // ---- TERRAIN-mode rocks (docs/impostors.md section 12) ----
+
+    /// <summary><see cref="PushMembers"/> and what a rock's impostor needs of the terrain (<see cref="ImpostorRockPush"/> is the C# side; offsets 80 to 123): the
+    /// colour-map window, the bindless indices of the ground, whole-world colour and colour maps, the world's half size, the distances the material fades to the
+    /// ground colour between, and which maps exist (bit 0 ground, 1 whole-world colour, 2 colour map).</summary>
+    public const string RockPushMembers = PushMembers + """
+
+            vec4 rockRegion;
+            uint rockGround;
+            uint rockWorldColour;
+            uint rockColour;
+            float rockHalfWorld;
+            float rockFarStart;
+            float rockFarEnd;
+            uint rockFlags;
+        """;
+
+    static readonly Dictionary<string, string> RockNativeMap = new(NativeMap)
+    {
+        ["uRockGround"] = "textures2D[pc.rockGround]", ["uRockWorldColour"] = "textures2D[pc.rockWorldColour]", ["uRockColour"] = "textures2D[pc.rockColour]",
+        ["uRockRegion"] = "pc.rockRegion", ["uRockHalfWorld"] = "pc.rockHalfWorld", ["uRockFarStart"] = "pc.rockFarStart", ["uRockFarEnd"] = "pc.rockFarEnd",
+        ["uRockFlags"] = "pc.rockFlags",
+    };
+
+    /// <summary>
+    /// <see cref="Fragment"/> for a TERRAIN-mode rock: what the terrain's mesh shader does with distance that the atlas (baked with the material fully applied, at the
+    /// transition distance) does not hold. The material fades to the biomes' ground colour between the material distance's 80% and 100% (the ground and
+    /// whole-world colour maps, as <c>TerrainShaders.Fragment</c> does it), per pixel from the eye's distance, before the lighting.
+    /// </summary>
+    public static string RockFragmentNative()
+    {
+        string f = Fragment;
+        f = Replace(f, @"uniform\s+vec3\s+uLightDir\s*;", """
+            uniform vec3 uLightDir;
+            uniform sampler2D uRockGround;
+            uniform sampler2D uRockWorldColour;
+            uniform sampler2D uRockColour;
+            uniform vec4 uRockRegion;
+            uniform float uRockHalfWorld;
+            uniform float uRockFarStart;
+            uniform float uRockFarEnd;
+            uniform uint uRockFlags;
+            """);
+        f = Replace(f, @"float\s+gloss\s*=\s*uImpostorGloss\s*;", """
+            float gloss = uImpostorGloss;
+            {
+                vec2 world01 = (world.xz + uRockHalfWorld) / (2.0 * uRockHalfWorld);
+                vec2 gx = dFdx(world01), gy = dFdy(world01);
+                float nw = 1.0 - smoothstep(uRockFarStart, uRockFarEnd, length(world - uEye));
+                if ((uRockFlags & 4u) != 0u && (uRockFlags & 8u) != 0u && nw > 0.0)
+                {
+                    vec2 cuv = fract((world.xz + uRockHalfWorld) * uRockRegion.zw);
+                    s.albedo *= textureGrad(uRockColour, cuv, gx * uRockRegion.zw * 2.0 * uRockHalfWorld, gy * uRockRegion.zw * 2.0 * uRockHalfWorld).rgb * 1.2;
+                }
+                if (nw < 1.0 && (uRockFlags & 1u) != 0u)
+                {
+                    vec3 far = textureGrad(uRockGround, world01, gx, gy).rgb;
+                    if ((uRockFlags & 2u) != 0u) far *= textureGrad(uRockWorldColour, world01, gx, gy).rgb * 1.2;
+                    s.albedo = mix(far, s.albedo, nw);
+                    gloss = mix(0.2, gloss, nw);
+                }
+            }
+            """);
+        return NativeShaders.Port(f, NativeShaders.Map(RockNativeMap), RockPushMembers);
+    }
+
+    /// <summary>The rock program's vertex stage: the impostor quad (only <see cref="PushMembers"/> are read; the fragment stage's block is the larger one).</summary>
+    public static string RockVertexNative() => VertexNative();
 
     static string Replace(string source, string pattern, string replacement)
     {

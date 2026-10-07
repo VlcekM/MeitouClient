@@ -378,6 +378,7 @@ static class FoliageShaders
                     {
                         precise float m = clamp((k.transition - d) * k.inverseTransitionBand, 0.0, 1.0);
                         if ((k.flags & 8u) != 0u) packed = m < 1.0 ? (m > 0.0 ? -m : packed) : -2.0;
+                        else if ((k.flags & 1u) != 0u) packed = m > 0.0 ? (m < 1.0 ? m : 2.0) : -2.0;   // a rock: no range dither, the fade is the transition band's alone
                         else packed = m > 0.0 ? (m < 1.0 ? m : packed) : -2.0;
                     }
                 }
@@ -468,15 +469,18 @@ static class FoliageShaders
                 uint o = (offsets[c] + rank[i] - 1u) * 4u;
                 uint at = chunks[c].first + i;
                 float w = f;
+                float lane = 0.0;
                 if ((chunks[c].flags & 1u) != 0u)
                 {
                     int row = int(uint(instances[at].f[16]) & 1023u) - 1;
                     bool resident = row >= 0 && ((view.resident[row >> 7][(row >> 5) & 3] >> uint(row & 31)) & 1u) != 0u;
                     w = view.mode.x != 0u ? (resident ? float(row) : -1.0) : 0.0;
+                    // A rock with an impostor (flag 4) in its transition band: row 1's w, which the terrain's mesh vertex program passes on as the dither threshold.
+                    if ((chunks[c].flags & 4u) != 0u && f < 1.0) lane = f;
                 }
                 // The fourth column is 0, 0, 0, 1 (FoliageInstanceRecord.Pack checks it); row 0's w is the fade.
                 rows[o] = vec4(instances[at].f[0], instances[at].f[1], instances[at].f[2], w);
-                rows[o + 1u] = vec4(instances[at].f[3], instances[at].f[4], instances[at].f[5], 0.0);
+                rows[o + 1u] = vec4(instances[at].f[3], instances[at].f[4], instances[at].f[5], lane);
                 rows[o + 2u] = vec4(instances[at].f[6], instances[at].f[7], instances[at].f[8], 0.0);
                 rows[o + 3u] = vec4(instances[at].f[9], instances[at].f[10], instances[at].f[11], 1.0);
             }

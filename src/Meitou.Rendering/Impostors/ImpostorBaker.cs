@@ -32,6 +32,25 @@ public sealed class ImpostorMeshes
         }
     }
 
+    /// <summary>
+    /// The area of the main mesh's triangles as a share of the bounding sphere's surface (4 pi r²): about 0.05 to 1 for a rock, a few thousandths for a stick
+    /// that is a hundred times longer than thick, which no impostor can show (a billboard of thin parts loses them; docs/impostors.md section 12).
+    /// </summary>
+    public float SurfaceShare
+    {
+        get
+        {
+            double area = 0;
+            foreach (var part in Main.Parts)
+                for (int i = 0; i + 2 < part.Indices.Length; i += 3)
+                {
+                    var a = part.Vertices[part.Indices[i]].Position;
+                    area += 0.5 * Vector3.Cross(part.Vertices[part.Indices[i + 1]].Position - a, part.Vertices[part.Indices[i + 2]].Position - a).Length();
+                }
+            return (float)(area / (4 * Math.PI * (double)Radius * Radius));
+        }
+    }
+
     /// <summary>Decodes the source's meshes (any thread); null when the main mesh cannot be read.</summary>
     public static ImpostorMeshes? Load(ImpostorSource source, List<string>? messages = null)
     {
@@ -113,6 +132,9 @@ public sealed unsafe class ImpostorBaker : IDisposable
         program = new NativeProg(gpu, frame, ImpostorShaders.BakeVertexNative(), ImpostorShaders.BakeFragmentNative(), "impostor bake");
     }
 
+    /// <summary>The terrain whose mesh material TERRAIN-mode rocks are baked with (<see cref="ImpostorSource.IsRock"/>; docs/impostors.md section 12); null in the tools.</summary>
+    public TerrainRenderer? RockTerrain { get; set; }
+
     public List<string> Messages => textures.Messages;
     internal WorldTextureCache Textures => textures;
     internal GpuContext Gpu => gpu;
@@ -161,7 +183,7 @@ public sealed unsafe class ImpostorBaker : IDisposable
         new(textures.Get(m.Diffuse, false), textures.Get(m.Normal, false), textures.Get(m.Diffuse2, false), textures.Get(m.Normal2, false), m);
 
     /// <summary>A model's parts in device buffers, written through the open frame's uploads.</summary>
-    internal Part[] Upload(Model model)
+    internal Part[] Upload(Model model, bool rock = false)
     {
         var parts = new List<Part>();
         foreach (var mp in model.Parts)
@@ -171,6 +193,13 @@ public sealed unsafe class ImpostorBaker : IDisposable
             var indices = DeviceBuffer.Create(gpu, (ulong)(mp.Indices.Length * sizeof(uint)), BufferUse.Index, "impostor bake meshes");
             gpu.Uploads.Write(vertices, 0, MemoryMarshal.AsBytes(mp.Vertices.AsSpan()));
             gpu.Uploads.Write(indices, 0, MemoryMarshal.AsBytes(mp.Indices.AsSpan()));
+            if (rock)
+            {
+                // A rock is drawn by the terrain's mesh program: its own vertex layout and buffers.
+                var (rockLayout, rockBindings) = RockTerrain!.RockBakeVertices(vertices);
+                parts.Add(new Part { Vertices = vertices, Indices = indices, Count = mp.Indices.Length, HasColours = mp.HasColours, Layout = rockLayout, Bindings = rockBindings });
+                continue;
+            }
             var attributes = FoliageRenderer.VertexAttributes(vertices);
             parts.Add(new Part
             {
@@ -212,12 +241,16 @@ public sealed unsafe class ImpostorBaker : IDisposable
     /// <paramref name="readback"/> at pass × the row's bytes.
     /// </summary>
     internal void RecordRow(CommandList cmd, int row, ImpostorClass size, ImpostorMeshes meshes, Part[] mainParts, Material main, Part[] leavesParts, Material? leaves,
-        Texture large, Texture depth, Texture small, Buffer readback, float lodBias)
+        Texture large, Texture depth, Texture small, Buffer readback, float lodBias, ImpostorSource? rock = null)
     {
         int grid = size.Grid, f = size.FramePixels, samples = 2 * f, width = grid * samples, smallWidth = grid * f;
         PrepareFrameGlobals();
         var c = meshes.Centre;
         float r = meshes.Radius;
+        // A rock is baked at the mean scale of its instances (the terrain's material is mapped in world units, so its texture density follows the scale):
+        // the cameras cover the scaled sphere; the atlas keeps the unscaled one (the runtime applies the instance's matrix).
+        float rockScale = rock is null ? 1 : rock.MeanScale;
+        (c, r) = (c * rockScale, r * rockScale);
         var formats = new AttachmentFormats(large.Desc.Format, depth.Desc.Format);
         var full = new Rect2D(default, new Extent2D((uint)width, (uint)samples));
         ulong rowBytes = (ulong)(smallWidth * f * 4);
@@ -239,6 +272,11 @@ public sealed unsafe class ImpostorBaker : IDisposable
                 var view = Matrix4x4.CreateLookAt(eye, c, up);
                 var projection = Matrix4x4.CreateOrthographic(2 * r, 2 * r, 0.5f * r, 3.5f * r);
                 cmd.SetViewport(new Viewport(column * samples, 0, samples, samples, 0, 1));
+                if (rock is not null)
+                {
+                    RockTerrain!.RecordRockBake(cmd, formats, BakeState, rock.RockBiome, rockScale, size.BakeDistance, view * projection, eye, d, right, up, pass, mainParts);
+                    continue;
+                }
                 var block = gpu.Frame.Constants.Write<ImpostorShaders.BakeBlock>([new ImpostorShaders.BakeBlock
                 {
                     Sphere = new Vector4(c, r), Dir = new Vector4(d, 0), Right = new Vector4(right, 0), Up = new Vector4(up, 0), Pass = pass,
@@ -354,6 +392,7 @@ public sealed class ImpostorBakeJob : IDisposable
     Task<ImpostorAtlas>? finish;
     double upload, render, filter, encode;
     bool started, disposed;
+    long rockWaitSince;
 
     internal ImpostorBakeJob(ImpostorBaker baker, ImpostorSource source, ImpostorMeshes meshes, ImpostorClass size)
     {
@@ -395,11 +434,26 @@ public sealed class ImpostorBakeJob : IDisposable
     {
         if (Result is not null || Error is not null) return true;
         var gpu = baker.Gpu;
+        if (source.IsRock && recorded < size.Grid)
+        {
+            // A rock is baked with the terrain's material of its biome: no terrain, no atlas. Every row needs the biome resident, and a slot of the terrain's
+            // layer arrays can be given to another biome meanwhile: the bake waits a moment for it and then gives up (the caller asks again later), so a
+            // biome that is gone does not hold the one bake slot.
+            if (baker.RockTerrain is null) { Error = new InvalidOperationException("no terrain to bake a TERRAIN-mode rock with"); return true; }
+            if (!baker.RockTerrain.CanBakeRock(source.RockBiome))
+            {
+                long now = Environment.TickCount64;
+                if (rockWaitSince == 0) rockWaitSince = now;
+                if (now - rockWaitSince > 3000) { Error = new InvalidOperationException($"the biome of terrain row {source.RockBiome} is not resident"); return true; }
+                return false;
+            }
+            rockWaitSince = 0;
+        }
         if (!started)
         {
             if (!TexturesReady()) return false;
             var t0 = watch.Elapsed.TotalMilliseconds;
-            mainParts = baker.Upload(meshes.Main);
+            mainParts = baker.Upload(meshes.Main, source.IsRock);
             leavesParts = leaves is not null ? baker.Upload(meshes.Leaves!) : [];
             int f = size.FramePixels, samples = 2 * f, width = size.Grid * samples;
             var pre = gpu.Frame.PreFrame.Handle;
@@ -443,7 +497,7 @@ public sealed class ImpostorBakeJob : IDisposable
             {
                 ulong rowBytes = (ulong)(size.Grid * size.FramePixels * size.FramePixels * 4);
                 var buffer = baker.RentReadback(3 * rowBytes);
-                baker.RecordRow(cmd, recorded, size, meshes, mainParts, main, leavesParts, leaves, large!, depth!, small!, buffer.Handle, lodBias);
+                baker.RecordRow(cmd, recorded, size, meshes, mainParts, main, leavesParts, leaves, large!, depth!, small!, buffer.Handle, lodBias, source.IsRock ? source : null);
                 rows.Add((recorded, gpu.Frame.Number, buffer));
             }
             cmd.EndLabel();
