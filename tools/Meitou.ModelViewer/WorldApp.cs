@@ -254,7 +254,7 @@ static partial class WorldApp
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
-            if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v);
+            if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v, () => display.VSync, v => display.VSync = v);
             profiler = new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
             meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             var input = window.CreateInput();
@@ -392,11 +392,11 @@ static partial class WorldApp
             if (titleTimer > 0.25 && gpu is not null)
             {
                 var t = camera.Eye;
-                // fps is capped by vsync; cpu is the time to record a frame, gpu the time the GPU spent on it (timer
+                // fps is capped by vsync when it is on (Tab panel); cpu is the time to record a frame, gpu the time the GPU spent on it (timer
                 // queries), so they show the real cost under the cap.
                 string gpuText = gpuSamples > 0 ? $"{gpuMs / gpuSamples:0.00}" : "-";
                 stats.Clear();
-                stats.Add($"{frames / titleTimer:0} fps (vsync), cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms");
+                stats.Add($"{frames / titleTimer:0} fps ({(display.VSync ? "vsync" : "uncapped")}), cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms");
                 var (vramUsed, vramBudget) = display.Context.Device.VideoMemory();
                 var alloc = display.Context.Device.Allocator;
                 stats.Add($"vram        {vramUsed / 1073741824.0:0.00} of {vramBudget / 1073741824.0:0.0} GB; our blocks {alloc.TotalAllocatedBytes / 1073741824.0:0.00} GB, {alloc.TotalUsedBytes / 1073741824.0:0.00} used");

@@ -26,6 +26,8 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// <summary>Stopwatch ticks spent acquiring swapchain images and presenting (0 when headless).</summary>
     public long AcquireTicks => presenter?.AcquireTicks ?? 0;
     public long PresentTicks => presenter?.PresentTicks ?? 0;
+    /// <summary>The window's vsync (<see cref="VulkanPresenter.VSync"/>; the swapchain is remade at the next frame). Always off without a window.</summary>
+    public bool VSync { get => presenter?.VSync ?? false; set { if (presenter is not null) presenter.VSync = value; } }
 
     /// <summary>Streamline (DLSS), when <c>streamline</c> asked for it and it loaded; shut down before the device.</summary>
     public Streamline? Streamline { get; }
