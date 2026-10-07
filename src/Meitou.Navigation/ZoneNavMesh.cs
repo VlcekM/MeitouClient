@@ -38,12 +38,8 @@ public sealed class ZoneNavMesh
     /// <summary>The (edge, polygon) pairs of a polygon's <see cref="Links"/>, flattened.</summary>
     public ReadOnlySpan<int> LinksOf(int polygon) => Links is { } l && l[polygon] is { } a ? a : [];
 
-    bool HasLink(int polygon, int edge)
-    {
-        var l = LinksOf(polygon);
-        for (int i = 0; i < l.Length; i += 2) if (l[i] == edge) return true;
-        return false;
-    }
+    /// <summary>Whether the edge of a polygon is one of its <see cref="Links"/>.</summary>
+    internal bool HasLink(int polygon, int edge) => NavGeometry.HasLink(LinksOf(polygon), edge);
 
     bool[]? wallVertices;
 
@@ -65,8 +61,8 @@ public sealed class ZoneNavMesh
                     if (Neighbours[p][k] >= 0 || HasLink(p, k)) continue;
                     var a = Vertices[poly[k]];
                     var b = Vertices[poly[(k + 1) % poly.Length]];
-                    bool onBorder = (Math.Abs(a.X - BoundsMin.X) < 0.05f && Math.Abs(b.X - BoundsMin.X) < 0.05f) || (Math.Abs(a.X - BoundsMax.X) < 0.05f && Math.Abs(b.X - BoundsMax.X) < 0.05f)
-                        || (Math.Abs(a.Z - BoundsMin.Y) < 0.05f && Math.Abs(b.Z - BoundsMin.Y) < 0.05f) || (Math.Abs(a.Z - BoundsMax.Y) < 0.05f && Math.Abs(b.Z - BoundsMax.Y) < 0.05f);
+                    bool onBorder = NavGeometry.OnLine(a.X, b.X, BoundsMin.X) || NavGeometry.OnLine(a.X, b.X, BoundsMax.X)
+                        || NavGeometry.OnLine(a.Z, b.Z, BoundsMin.Y) || NavGeometry.OnLine(a.Z, b.Z, BoundsMax.Y);
                     if (onBorder) continue;
                     w[poly[k]] = true;
                     w[poly[(k + 1) % poly.Length]] = true;
@@ -121,9 +117,12 @@ public sealed class ZoneNavMesh
 
     readonly Lazy<PointIndex> index;
 
+    /// <summary>The grid over the polygons' XZ boxes (64 units a cell, ascending polygon order in a cell); built on first use, independent of <see cref="Kept"/>.</summary>
+    internal PointIndex Index => index.Value;
+
     public ZoneNavMesh() => index = new Lazy<PointIndex>(() => new PointIndex(this), LazyThreadSafetyMode.ExecutionAndPublication);
 
-    sealed class PointIndex
+    internal sealed class PointIndex
     {
         public const float Cell = 64;
         public readonly int Columns, Rows;
@@ -157,12 +156,38 @@ public sealed class ZoneNavMesh
     /// <summary>Appends the kept polygons that contain (x, z) seen from above.</summary>
     public void PolygonsAt(float x, float z, List<int> result)
     {
-        var ix = index.Value;
-        if (x < BoundsMin.X - 1 || x > BoundsMax.X + 1 || z < BoundsMin.Y - 1 || z > BoundsMax.Y + 1) return;
-        foreach (int p in ix.Cells[ix.Row(z - BoundsMin.Y) * ix.Columns + ix.Col(x - BoundsMin.X)])
-            if (Kept[p] && x >= ix.Min[p].X - 1e-3f && x <= ix.Max[p].X + 1e-3f && z >= ix.Min[p].Y - 1e-3f && z <= ix.Max[p].Y + 1e-3f && Contains(p, x, z))
+        if (!TryCell(x, z, out var ix, out var cell)) return;
+        foreach (int p in cell)
+            if (Covers(ix, p, x, z))
                 result.Add(p);
     }
+
+    /// <summary>The height of the highest kept surface at (x, z); false when no kept polygon contains the point. <see cref="PolygonsAt"/> and <see cref="HeightAt"/> without the list.</summary>
+    public bool TryHighestAt(float x, float z, out float height)
+    {
+        height = float.MinValue;
+        if (!TryCell(x, z, out var ix, out var cell)) return false;
+        bool any = false;
+        foreach (int p in cell)
+            if (Covers(ix, p, x, z))
+            {
+                height = Math.Max(height, HeightAt(p, x, z));
+                any = true;
+            }
+        return any;
+    }
+
+    bool TryCell(float x, float z, out PointIndex ix, out int[] cell)
+    {
+        ix = index.Value;
+        cell = [];
+        if (x < BoundsMin.X - 1 || x > BoundsMax.X + 1 || z < BoundsMin.Y - 1 || z > BoundsMax.Y + 1) return false;
+        cell = ix.Cells[ix.Row(z - BoundsMin.Y) * ix.Columns + ix.Col(x - BoundsMin.X)];
+        return true;
+    }
+
+    bool Covers(PointIndex ix, int p, float x, float z) =>
+        Kept[p] && x >= ix.Min[p].X - 1e-3f && x <= ix.Max[p].X + 1e-3f && z >= ix.Min[p].Y - 1e-3f && z <= ix.Max[p].Y + 1e-3f && Contains(p, x, z);
 
     /// <summary>The kept polygon nearest to (x, y, z) in XZ distance (ties and containing polygons by height), within <paramref name="maxDistance"/>; −1 when none.</summary>
     public int Nearest(float x, float y, float z, float maxDistance, out float distance)
@@ -179,7 +204,7 @@ public sealed class ZoneNavMesh
                 {
                     if (!Kept[p]) continue;
                     if (x < ix.Min[p].X - maxDistance || x > ix.Max[p].X + maxDistance || z < ix.Min[p].Y - maxDistance || z > ix.Max[p].Y + maxDistance) continue;
-                    float d = SeedPruner.DistanceXZ(this, p, x, z);
+                    float d = DistanceXZ(p, x, z);
                     if (d > maxDistance) continue;
                     float py = HeightAt(p, Math.Clamp(x, ix.Min[p].X, ix.Max[p].X), Math.Clamp(z, ix.Min[p].Y, ix.Max[p].Y));
                     // XZ distance first, then how far the surface is from the wanted height.
@@ -217,7 +242,7 @@ public sealed class ZoneNavMesh
         {
             var b = Vertices[p[k]];
             var c = Vertices[p[k + 1]];
-            if (Barycentric(x, z, a, b, c, out float u, out float v, out float w) && u >= -1e-4f && v >= -1e-4f && w >= -1e-4f)
+            if (NavGeometry.Barycentric(x, z, a, b, c, out float u, out float v, out float w) && u >= -1e-4f && v >= -1e-4f && w >= -1e-4f)
                 return u * a.Y + v * b.Y + w * c.Y;
         }
         // Outside every fan triangle (a point just beyond an edge): the nearest vertex height.
@@ -228,16 +253,6 @@ public sealed class ZoneNavMesh
             if (d < best) { best = d; y = Vertices[i].Y; }
         }
         return y;
-    }
-
-    public static bool Barycentric(float x, float z, Vector3 a, Vector3 b, Vector3 c, out float u, out float v, out float w)
-    {
-        float det = (b.Z - c.Z) * (a.X - c.X) + (c.X - b.X) * (a.Z - c.Z);
-        if (MathF.Abs(det) < 1e-9f) { u = v = w = 0; return false; }
-        u = ((b.Z - c.Z) * (x - c.X) + (c.X - b.X) * (z - c.Z)) / det;
-        v = ((c.Z - a.Z) * (x - c.X) + (a.X - c.X) * (z - c.Z)) / det;
-        w = 1 - u - v;
-        return true;
     }
 
     /// <summary>Whether (x, z) lies inside the polygon seen from above.</summary>
@@ -251,5 +266,52 @@ public sealed class ZoneNavMesh
             if ((b.X - a.X) * (z - a.Z) - (b.Z - a.Z) * (x - a.X) < -1e-4f) return false;
         }
         return true;
+    }
+
+    /// <summary>Distance on the XZ plane from the point to the polygon (0 inside).</summary>
+    internal float DistanceXZ(int polygon, float x, float z)
+    {
+        if (Contains(polygon, x, z)) return 0;
+        var poly = Polygons[polygon];
+        float best = float.MaxValue;
+        for (int k = 0; k < poly.Length; k++)
+        {
+            var a = Vertices[poly[k]];
+            var b = Vertices[poly[(k + 1) % poly.Length]];
+            best = Math.Min(best, NavGeometry.SegmentDistanceXZ(x, z, a.X, a.Z, b.X, b.Z));
+        }
+        return best;
+    }
+
+    /// <summary>The polygons a polygon leads to inside this mesh: behind its edges, then across its <see cref="Links"/>.</summary>
+    public IEnumerable<int> NeighboursOf(int polygon)
+    {
+        foreach (int q in Neighbours[polygon]) if (q >= 0) yield return q;
+        var l = Links is { } links && links[polygon] is { } own ? own : [];
+        for (int i = 1; i < l.Length; i += 2) yield return l[i];
+    }
+
+    /// <summary>
+    /// The edges of kept polygons that lie on the border line of this zone facing the direction (<paramref name="dx"/>, <paramref name="dz"/>) and lead nowhere
+    /// inside the mesh (edges that have a link are left out when <paramref name="skipLinked"/>).
+    /// </summary>
+    internal List<(int Polygon, int Edge)> BorderEdges(int dx, int dz, bool skipLinked)
+    {
+        var result = new List<(int, int)>();
+        float line = dx > 0 ? BoundsMax.X : dx < 0 ? BoundsMin.X : dz > 0 ? BoundsMax.Y : BoundsMin.Y;
+        for (int p = 0; p < PolygonCount; p++)
+        {
+            if (!Kept[p]) continue;
+            var poly = Polygons[p];
+            for (int k = 0; k < poly.Length; k++)
+            {
+                if (Neighbours[p][k] >= 0 || (skipLinked && HasLink(p, k))) continue;
+                var va = Vertices[poly[k]];
+                var vb = Vertices[poly[(k + 1) % poly.Length]];
+                float ca = dx != 0 ? va.X : va.Z, cb = dx != 0 ? vb.X : vb.Z;
+                if (NavGeometry.OnLine(ca, cb, line)) result.Add((p, k));
+            }
+        }
+        return result;
     }
 }

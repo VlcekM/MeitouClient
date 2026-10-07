@@ -71,7 +71,7 @@ public sealed partial class ZoneGeometryGatherer
         }
         if (points.Count < 4) return null;
         float yMin = points.Min(p => p.Y), yMax = points.Max(p => p.Y);
-        var hull = Footprint(points, yMin, yMax, 0);
+        var hull = NavGeometry.Footprint(points, yMin, yMax, 0);
         if (hull.Polygon.Length < 3) return null;
 
         var lo = new Vector2(hull.Polygon.Min(p => p.X), hull.Polygon.Min(p => p.Y)) - new Vector2(pad);
@@ -88,7 +88,7 @@ public sealed partial class ZoneGeometryGatherer
         foreach (var (b, record, position, destroyed) in NearBuildings(site.Placement.Zone, zmin, zmin + new Vector2(WorldLayout.ZoneSize), 0))
         {
             if (b.InstanceId == site.Placement.InstanceId || position.Y < yMin - 30 || position.Y > yMax + 30) continue;
-            if (!InsideConvex(hull.Polygon, new Vector2(position.X, position.Z), 5)) continue;
+            if (!NavGeometry.InsideConvex(hull.Polygon, new Vector2(position.X, position.Z), 5)) continue;
             AddBuilding(g, record, b.InstanceId, position, b.Rotation, destroyed, new InteriorContext(site.Placement.InstanceId, destroyed, mask, Own: false));
         }
 
@@ -112,7 +112,7 @@ public sealed partial class ZoneGeometryGatherer
     /// <summary>The inverted hull of an interior: one slab beyond every edge of the convex polygon, together removing everything outside it.</summary>
     public static void AddOutsideCarvers(ZoneGeometry g, Vector2[] poly)
     {
-        float orientation = HullArea(poly) >= 0 ? 1 : -1;
+        float orientation = NavGeometry.SignedArea(poly) >= 0 ? 1 : -1;
         for (int i = 0; i < poly.Length; i++)
         {
             var a = poly[i];
@@ -164,32 +164,10 @@ public sealed partial class ZoneGeometryGatherer
         {
             var at = centre + dir * side * (half + DoorSeedOffset);
             var xz = new Vector2(at.X, at.Z);
-            float score = (InsideConvex(g.InteriorHull.Polygon, xz, 0) ? 0 : 1000) + Vector2.Distance(xz, hullCentre);
+            float score = (NavGeometry.InsideConvex(g.InteriorHull.Polygon, xz, 0) ? 0 : 1000) + Vector2.Distance(xz, hullCentre);
             if (score < bestScore) { bestScore = score; best = at; }
         }
         if (best is { } p2) { g.Seeds.Add(new Vector3(p2.X, float.NaN, p2.Z)); g.Stats.DoorSeeds++; }
-    }
-
-    static float HullArea(Vector2[] p)
-    {
-        float area = 0;
-        for (int i = 0; i < p.Length; i++) area += p[i].X * p[(i + 1) % p.Length].Y - p[(i + 1) % p.Length].X * p[i].Y;
-        return area;
-    }
-
-    /// <summary>Whether a point lies inside a convex polygon (either winding), allowing <paramref name="tolerance"/> outside it.</summary>
-    public static bool InsideConvex(Vector2[] polygon, Vector2 point, float tolerance)
-    {
-        float sign = HullArea(polygon) >= 0 ? 1 : -1;
-        for (int i = 0; i < polygon.Length; i++)
-        {
-            var a = polygon[i];
-            var e = polygon[(i + 1) % polygon.Length] - a;
-            float len = e.Length();
-            if (len < 1e-6f) continue;
-            if (-sign * (e.X * (point.Y - a.Y) - e.Y * (point.X - a.X)) / len > tolerance) return false;
-        }
-        return true;
     }
 
     /// <summary>
@@ -204,12 +182,7 @@ public sealed partial class ZoneGeometryGatherer
         {
             if (!anyArea && g.Areas[t] != NavArea.Ground) continue;
             int ia = g.Indices[t * 3] * 3, ib = g.Indices[t * 3 + 1] * 3, ic = g.Indices[t * 3 + 2] * 3;
-            float ax = v[ia], az = v[ia + 2], bx = v[ib], bz = v[ib + 2], cx = v[ic], cz = v[ic + 2];
-            float d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
-            if (MathF.Abs(d) < 1e-9f) continue;
-            float l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d;
-            float l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
-            float l3 = 1 - l1 - l2;
+            if (!NavGeometry.Barycentric(x, z, new Vector3(v[ia], v[ia + 1], v[ia + 2]), new Vector3(v[ib], v[ib + 1], v[ib + 2]), new Vector3(v[ic], v[ic + 1], v[ic + 2]), out float l1, out float l2, out float l3)) continue;
             if (l1 < -1e-4f || l2 < -1e-4f || l3 < -1e-4f) continue;
             float h = l1 * v[ia + 1] + l2 * v[ib + 1] + l3 * v[ic + 1];
             if (h < minY) continue;

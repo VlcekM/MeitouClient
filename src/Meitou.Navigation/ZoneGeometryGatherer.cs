@@ -343,7 +343,7 @@ public sealed partial class ZoneGeometryGatherer : IDisposable
         }
         if (hi.X < g.ZoneMin.X - g.Margin || lo.X > g.ZoneMax.X + g.Margin || hi.Z < g.ZoneMin.Y - g.Margin || lo.Z > g.ZoneMax.Y + g.Margin) return;
         EmitTriangles(g, pts, shape.Indices, walkableSlope);
-        if (carve && shape.IsConvex) g.Carvers.Add(Footprint(pts, lo.Y, hi.Y, 0));
+        if (carve && shape.IsConvex) g.Carvers.Add(NavGeometry.Footprint(pts, lo.Y, hi.Y, 0));
         if (carve && shape.IsConvex) g.Stats.Carvers++;
     }
 
@@ -375,48 +375,9 @@ public sealed partial class ZoneGeometryGatherer : IDisposable
             yMax = Math.Max(yMax, pts[i].Y);
         }
         // A door painter needs some thickness to catch cells; a door's hull is only a few units deep.
-        target.Add(Footprint(pts, carver ? yMin : yMin - 10, yMax, carver ? 0 : 3));
+        target.Add(NavGeometry.Footprint(pts, carver ? yMin : yMin - 10, yMax, carver ? 0 : 3));
         if (carver) stats.Carvers++; else stats.Painters++;
     }
-
-    /// <summary>The convex footprint of the points on the XZ plane (grown by <paramref name="grow"/> on each side), counter-clockwise from above.</summary>
-    public static NavVolume Footprint(IReadOnlyList<Vector3> points, float yMin, float yMax, float grow)
-    {
-        var list = new List<Vector2>(points.Count * (grow > 0 ? 4 : 1));
-        foreach (var p in points)
-        {
-            if (grow > 0)
-            {
-                list.Add(new(p.X - grow, p.Z - grow)); list.Add(new(p.X + grow, p.Z - grow));
-                list.Add(new(p.X - grow, p.Z + grow)); list.Add(new(p.X + grow, p.Z + grow));
-            }
-            else list.Add(new(p.X, p.Z));
-        }
-        return new NavVolume(ConvexHull2D(list), yMin, yMax);
-    }
-
-    /// <summary>Andrew's monotone chain; counter-clockwise on (X, Z) with X right and Z up in the plane's own axes.</summary>
-    public static Vector2[] ConvexHull2D(List<Vector2> pts)
-    {
-        pts.Sort((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y));
-        if (pts.Count < 3) return [.. pts];
-        var hull = new List<Vector2>();
-        foreach (var p in pts)
-        {
-            while (hull.Count >= 2 && Cross(hull[^2], hull[^1], p) <= 0) hull.RemoveAt(hull.Count - 1);
-            hull.Add(p);
-        }
-        int lower = hull.Count + 1;
-        for (int i = pts.Count - 2; i >= 0; i--)
-        {
-            while (hull.Count >= lower && Cross(hull[^2], hull[^1], pts[i]) <= 0) hull.RemoveAt(hull.Count - 1);
-            hull.Add(pts[i]);
-        }
-        hull.RemoveAt(hull.Count - 1);
-        return [.. hull];
-    }
-
-    static float Cross(Vector2 o, Vector2 a, Vector2 b) => (a.X - o.X) * (b.Y - o.Y) - (a.Y - o.Y) * (b.X - o.X);
 
     // ---- foliage ----
 
@@ -555,7 +516,7 @@ public sealed partial class ZoneGeometryGatherer : IDisposable
             }
             if (points.Count < 2) continue;
             // The two farthest footprint points are the wall's ends.
-            var hull = Footprint(points, 0, 0, 0).Polygon;
+            var hull = NavGeometry.Footprint(points, 0, 0, 0).Polygon;
             Vector2 a = hull[0], c = hull[0];
             float best = -1;
             foreach (var p in hull) foreach (var q in hull) { float d = Vector2.DistanceSquared(p, q); if (d > best) { best = d; a = p; c = q; } }

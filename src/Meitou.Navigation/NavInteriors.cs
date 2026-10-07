@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Numerics;
 
 namespace Meitou.Navigation;
@@ -14,7 +14,7 @@ public static class NavInteriors
     public const float JoinDistance = 6, JoinHeight = 12;
 
     /// <summary>The zone's exterior mesh with the interior meshes appended and joined; both kept and pruned polygons are carried over.</summary>
-    public static ZoneNavMesh Combine(ZoneNavMesh exterior, IReadOnlyList<ZoneNavMesh> interiors)
+    public static ZoneNavMesh Combine(ZoneNavMesh exterior, IReadOnlyList<ZoneNavMesh> interiors, Action<string>? log = null)
     {
         if (interiors.Count == 0) return exterior;
         var vertices = new List<Vector3>(exterior.Vertices);
@@ -57,7 +57,7 @@ public static class NavInteriors
 
         int exteriorCount = exterior.PolygonCount;
         for (int k = 0; k < interiors.Count; k++)
-            Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].PolygonCount);
+            Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].PolygonCount, log);
 
         return new ZoneNavMesh
         {
@@ -69,9 +69,9 @@ public static class NavInteriors
 
     /// <summary>Links the door polygons of one interior (polygons [first, first + count)) to the exterior's door polygons of the same door.</summary>
     static void Join(List<Vector3> v, List<int[]> polygons, List<int[]> neighbours, List<byte> areas, List<bool> kept, List<List<int>?> links, List<int> doorOf, List<string> doorIds,
-        int exteriorCount, int first, int count)
+        int exteriorCount, int first, int count, Action<string>? log)
     {
-        bool Free(int p, int e) => neighbours[p][e] < 0 && !HasLink(links[p], e);
+        bool Free(int p, int e) => neighbours[p][e] < 0 && !NavGeometry.HasLink(CollectionsMarshal.AsSpan(links[p]), e);
         for (int door = 0; door < doorIds.Count; door++)
         {
             var inside = Enumerable.Range(first, count).Where(p => kept[p] && areas[p] == NavArea.Door && doorOf[p] == door).ToList();
@@ -82,24 +82,15 @@ public static class NavInteriors
             var openOutside = outside.SelectMany(q => Enumerable.Range(0, polygons[q].Length).Where(f => Free(q, f)).Select(f => (q, f))).ToList();
             foreach (var (p, e) in openInside)
                 foreach (var (q, f) in openOutside)
-                    {
-                        var a0 = v[polygons[p][e]]; var a1 = v[polygons[p][(e + 1) % polygons[p].Length]];
-                        {
-                            var b0 = v[polygons[q][f]]; var b1 = v[polygons[q][(f + 1) % polygons[q].Length]];
-                            if (!Facing(a0, a1, b0, b1)) continue;
-                            if (Environment.GetEnvironmentVariable("NAV_VERBOSE") is not null) Console.WriteLine($"    door join {doorIds[door]}: interior polygon {p - first} edge {e} to exterior {q} edge {f}");
-                            (links[p] ??= []).AddRange([e, q]);
-                            (links[q] ??= []).AddRange([f, p]);
-                        }
-                    }
+                {
+                    var a0 = v[polygons[p][e]]; var a1 = v[polygons[p][(e + 1) % polygons[p].Length]];
+                    var b0 = v[polygons[q][f]]; var b1 = v[polygons[q][(f + 1) % polygons[q].Length]];
+                    if (!Facing(a0, a1, b0, b1)) continue;
+                    log?.Invoke($"    door join {doorIds[door]}: interior polygon {p - first} edge {e} to exterior {q} edge {f}");
+                    (links[p] ??= []).AddRange([e, q]);
+                    (links[q] ??= []).AddRange([f, p]);
+                }
         }
-    }
-
-    static bool HasLink(List<int>? l, int edge)
-    {
-        if (l is null) return false;
-        for (int i = 0; i < l.Count; i += 2) if (l[i] == edge) return true;
-        return false;
     }
 
     /// <summary>Two edges that run along each other: their midpoints and both ends within <see cref="JoinDistance"/> in plan and <see cref="JoinHeight"/> in height, overlapping.</summary>
@@ -119,38 +110,3 @@ public static class NavInteriors
     }
 }
 
-/// <summary>Builds a zone's complete mesh: the exterior, then every building interior, joined.</summary>
-public static class NavMeshPipeline
-{
-    /// <summary>The zone's mesh with its interiors (pruned polygons still present; use <see cref="ZoneNavMesh.WithoutPruned"/> for what is kept).</summary>
-    public static ZoneNavMesh BuildZone(ZoneGeometryGatherer gatherer, ZoneGeometry geometry, NavBuildSettings settings, out NavBuildTimes times, bool interiors = true)
-        => BuildZone(gatherer, geometry, settings, out times, out _, interiors);
-
-    /// <summary>As above, also returning the separately built interior meshes (for the debug images).</summary>
-    public static ZoneNavMesh BuildZone(ZoneGeometryGatherer gatherer, ZoneGeometry geometry, NavBuildSettings settings, out NavBuildTimes times, out IReadOnlyList<ZoneNavMesh> interiorMeshes, bool interiors = true)
-    {
-        interiorMeshes = [];
-        var exterior = ZoneNavMeshBuilder.Build(geometry, settings, out times);
-        if (!interiors) return exterior;
-        var watch = Stopwatch.StartNew();
-        float tileWorld = settings.TileCells * settings.CellSize;
-        var geometries = gatherer.InteriorSites(geometry.Zone).Select(s => gatherer.GatherInterior(s, tileWorld)).Where(g => g is not null).Select(g => g!).ToList();
-        var single = settings with { Threads = 1 };
-        var built = new ZoneNavMesh[geometries.Count];
-        Parallel.For(0, geometries.Count, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) }, i =>
-            built[i] = ZoneNavMeshBuilder.Build(geometries[i], single, out _));
-        if (Environment.GetEnvironmentVariable("NAV_VERBOSE") is not null)
-            for (int i = 0; i < built.Length; i++) {
-                Console.WriteLine($"  interior {geometries[i].InteriorOf}: {built[i].PolygonCount} polygons, {built[i].KeptCount} kept, {geometries[i].Seeds.Count} seeds ({string.Join(" ", geometries[i].Seeds.Select(s => $"{s.X:0},{s.Y:0},{s.Z:0}"))}), {built[i].Areas.Count(a => a == NavArea.Door)} door polygons, {geometries[i].Painters.Count} painters, hull y {geometries[i].InteriorHull!.YMin:0}..{geometries[i].InteriorHull!.YMax:0}");
-                if (built[i].DoorIds is not null) for (int p = 0; p < built[i].PolygonCount; p++) if (built[i].Kept[p]) { var c = built[i].Centre(p); Console.WriteLine($"    kept {p}: {c.X:0},{c.Y:0},{c.Z:0} area {built[i].Areas[p]} door {built[i].DoorOf?[p]}"); } }
-        interiorMeshes = [.. built.Where(m => m.PolygonCount > 0)];
-        var combined = NavInteriors.Combine(exterior, [.. built.Where(m => m.PolygonCount > 0)]);
-        times.Interiors = watch.Elapsed.TotalMilliseconds;
-        times.InteriorCount = built.Length;
-        times.Total += times.Interiors;
-        times.Polygons = combined.PolygonCount;
-        times.KeptPolygons = combined.KeptCount;
-        times.Vertices = combined.Vertices.Length;
-        return combined;
-    }
-}

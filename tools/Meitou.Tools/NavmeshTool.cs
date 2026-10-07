@@ -103,7 +103,7 @@ static class NavmeshTool
                 ZoneNavMesh? mesh = null;
                 for (int i = 0; i < (dx == 0 && dz == 0 ? repeat : 1); i++)
                 {
-                    mesh = NavMeshPipeline.BuildZone(gatherer, geometry, settings, out var t, out var inner, interiors: !noInteriors); interiorMeshes.AddRange(inner);
+                    mesh = NavMeshPipeline.BuildZone(gatherer, geometry, settings, out var t, out var inner, interiors: !noInteriors, log: NavDebug.Verbose ? line => Console.WriteLine(line) : null); interiorMeshes.AddRange(inner);
                     Console.WriteLine($"built {c}: {t.TileCount} tiles in {t.Tiles:0} ms, stitch {t.Stitch:0} ms, prune {t.Prune:0} ms, interiors {t.Interiors:0} ms ({t.InteriorCount}), total {t.Total:0} ms; {t.Polygons} polygons ({t.KeptPolygons} kept), {t.Vertices} vertices");
                     if (dx == 0 && dz == 0)
                         Console.WriteLine($"  cpu ms summed over tiles: raster {t.CpuRaster:0}, compact+areas {t.CpuCompact:0}, regions {t.CpuRegions:0}, contours {t.CpuContours:0}, polygons {t.CpuMesh:0}");
