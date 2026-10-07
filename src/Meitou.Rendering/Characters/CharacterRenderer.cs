@@ -315,7 +315,7 @@ internal sealed unsafe class CharacterRenderer : IDisposable
         r = default;
         Span<bool> has = stackalloc bool[CharacterShaders.Slots];
         for (int i = 0; i < CharacterShaders.Slots; i++) r.Tex[i] = Index(m.Tex[i], out has[i]);
-        for (int i = CharacterShaders.Slots; i < 20; i++) r.Tex[i] = textureStandIn;
+        for (int i = CharacterShaders.Slots; i < CharacterShaders.TextureSlotCount; i++) r.Tex[i] = textureStandIn;
         uint flags = 0;
         if (has[CharacterShaders.SlotDiffuse]) flags |= CharacterShaders.HasDiffuse;
         if (has[CharacterShaders.SlotNormal]) flags |= CharacterShaders.HasNormal;
@@ -512,7 +512,7 @@ internal sealed unsafe class CharacterRenderer : IDisposable
         job.Frame = nativeFrame.Prepare(in view, [bones.Binding, materials.Binding, content.Morphs.Binding(Gpu.Frame), previousBones.Binding]);
         job.Cull = depthPass ? Vk.CullModeFlags.None : Vk.CullModeFlags.BackBit;
         for (int a = 0; a < 9; a++) job.Rows[a] = new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
-        job.Push = new CharacterPush { Wireframe = motionPass ? motionDepth : 0 };
+        job.Push = new CharacterPush { DepthIndex = motionPass ? motionDepth : 0 };
         job.RowCount = motionPass ? 9 : 5;
         if (job.Draws.Length < active.Count) job.Draws = new DrawJob.Draw[Math.Max(active.Count, job.Draws.Length * 2)];
         int n = 0;

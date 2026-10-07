@@ -14,7 +14,10 @@ static class CharacterShaders
 {
     /// <summary>The first per-instance input location (the mesh's own inputs, <c>Vertex</c>, are at 0 to 6): four matrix rows, then <see cref="DataLocation"/>.</summary>
     public const int InstanceLocation = 7, DataLocation = 11, PreviousLocation = 12;
-    public const uint BonesBinding = 6, MaterialsBinding = 7;
+    /// <summary>The storage buffers of set 0 after the frame's own (the order of the extra list given to <c>NativeFrame.Prepare</c>): the bone palettes, the materials, the face morph offsets, last frame's palettes (motion pass).</summary>
+    public const uint BonesBinding = 6, MaterialsBinding = 7, MorphsBinding = 8, PreviousBonesBinding = 9;
+    /// <summary>The texture slots of a material (<c>uint tex[]</c> in the shader, <see cref="TextureSlots"/>): <see cref="Slots"/> used, the rest hold the stand-in.</summary>
+    public const int TextureSlotCount = 20;
 
     // Material flags (CharacterMaterialRecord.Flags).
     public const uint HasDiffuse = 1 << 0, HasNormal = 1 << 1, NormalSwizzled = 1 << 2, HasHead = 1 << 3, HasHeadNormal = 1 << 4, HasHeadMask = 1 << 5,
@@ -27,17 +30,17 @@ static class CharacterShaders
 
     const string PushMembers = """
             vec3 flatColour;
-            uint wireframe;
+            uint depthIndex;
         """;
 
-    const string Structs = """
+    static readonly string Structs = $$"""
         struct CharMaterial
         {
             uint shading;        // 0 item, 1 body, 2 hair
             uint flags;
             uint vestCount;
             float alphaThreshold;
-            uint tex[20];
+            uint tex[{{TextureSlotCount}}];
             vec4 shirtColour;
             vec4 skinTone;
             vec4 hairColour;
@@ -49,7 +52,7 @@ static class CharacterShaders
             vec4 colour1;
             vec4 colour2;
         };
-        layout(std430, set = 0, binding = 7) readonly buffer Materials { CharMaterial items[]; } materials;
+        layout(std430, set = 0, binding = {{MaterialsBinding}}) readonly buffer Materials { CharMaterial items[]; } materials;
         """;
 
     static string Head(string stage) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + Structs + stage;
@@ -58,7 +61,7 @@ static class CharacterShaders
     /// <summary>The vertex program for the motion vectors: also skins with last frame's palette (binding 9) and model matrix (locations 12 to 15).</summary>
     public static string MotionVertex() => VertexSource(true);
 
-    static string VertexSource(bool motion) => ("#version 450\n" + NativeShaders.Prelude(PushMembers) + """
+    static string VertexSource(bool motion) => ("#version 450\n" + NativeShaders.Prelude(PushMembers) + $$"""
         layout(location = 0) in vec3 aPosition;
         layout(location = 1) in vec3 aNormal;
         layout(location = 2) in vec2 aUv;
@@ -72,8 +75,8 @@ static class CharacterShaders
         layout(location = 10) in vec4 aInstance3;
         layout(location = 11) in uvec4 aInstanceData;   // x first bone of the palette, y material, z flags
         //MOTION_IN
-        layout(std430, set = 0, binding = 6) readonly buffer Skin { mat4 bones[]; } skin;
-        layout(std430, set = 0, binding = 8) readonly buffer Morphs { vec4 deltas[]; } morphs;
+        layout(std430, set = 0, binding = {{BonesBinding}}) readonly buffer Skin { mat4 bones[]; } skin;
+        layout(std430, set = 0, binding = {{MorphsBinding}}) readonly buffer Morphs { vec4 deltas[]; } morphs;
         //MOTION_BUF
 
         out vec3 vWorld;
@@ -116,8 +119,8 @@ static class CharacterShaders
         layout(location = 14) in vec4 aPrev2;
         layout(location = 15) in vec4 aPrev3;
         """;
-    const string MotionBuf = """
-        layout(std430, set = 0, binding = 9) readonly buffer PreviousSkin { mat4 bones[]; } previousSkin;
+    static readonly string MotionBuf = $$"""
+        layout(std430, set = 0, binding = {{PreviousBonesBinding}}) readonly buffer PreviousSkin { mat4 bones[]; } previousSkin;
         """;
     const string MotionBody = """
             mat4 previousSk = mat4(1.0);
@@ -161,7 +164,7 @@ static class CharacterShaders
 
         void main()
         {
-            if (pc.wireframe != 0u) { fragColour = vec4(pc.flatColour, 1.0); return; }
+            if (pc.depthIndex != 0u) { fragColour = vec4(pc.flatColour, 1.0); return; }
             CharMaterial m = materials.items[vMaterial];
             uint f = m.flags;
             vec3 n = normalize(vNormal);
@@ -284,7 +287,7 @@ static class CharacterShaders
 
     /// <summary>
     /// The motion pass (<c>PostProcess.ObjectMotion</c>): the character's own motion, as the grass writes its sway (UV units, this frame minus last, jitter removed), where
-    /// the character is what the near depth shows (<c>pc.wireframe</c> carries the depth texture's bindless index in this pass).
+    /// the character is what the near depth shows (<c>pc.depthIndex</c> carries the depth texture's bindless index in this pass).
     /// </summary>
     public static string MotionFragment() => "#version 450\n" + NativeShaders.Prelude(PushMembers) + Structs + Lookup + """
         in vec2 vUv;
@@ -299,7 +302,7 @@ static class CharacterShaders
             uint f = m.flags;
             if (m.shading == 2u && (f & 1u) != 0u) { if (dot(tex(m.tex[0], vUv), m.alphaChannel) < m.alphaThreshold) discard; }
             else if (m.shading == 0u && (f & 512u) != 0u) { if (tex(m.tex[1], vUv).a < 0.6) discard; }
-            float stored = texelFetch(textures2D[nonuniformEXT(pc.wireframe)], ivec2(gl_FragCoord.xy), 0).r;
+            float stored = texelFetch(textures2D[nonuniformEXT(pc.depthIndex)], ivec2(gl_FragCoord.xy), 0).r;
             if (stored >= 1.0) discard;
             float zs = viewZ(stored), zf = viewZ(gl_FragCoord.z);
             if (abs(zs - zf) > 0.002 * zs + 0.05) discard;
@@ -321,18 +324,18 @@ struct CharacterMaterialRecord
     public const int Size = 256;
 }
 
-[InlineArray(20)]
+[InlineArray(CharacterShaders.TextureSlotCount)]
 struct TextureSlots { uint first; }
 
-/// <summary>The C# side of the push block (<c>flatColour</c>, <c>wireframe</c>): 16 bytes.</summary>
+/// <summary>The C# side of the push block (<c>flatColour</c>, <c>depthIndex</c>): 16 bytes. <c>DepthIndex</c> is the near depth texture's bindless index in the motion pass and 0 otherwise.</summary>
 [StructLayout(LayoutKind.Sequential)]
 struct CharacterPush
 {
     public Vector3 FlatColour;
-    public uint Wireframe;
+    public uint DepthIndex;
 }
 
-/// <summary>One instance (80 bytes): the model matrix whose rows the vertex program reads, the palette's first bone, the material's index.</summary>
+/// <summary>One instance (144 bytes): the model matrix whose rows the vertex program reads, the palette's first bone, the material's index, the morph base and last frame's matrix.</summary>
 [StructLayout(LayoutKind.Sequential)]
 struct CharInstance
 {
