@@ -60,15 +60,13 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
 
     public AnimationLibrary Library { get; } = library;
     /// <summary>The clip a knocked-out or dead character lies in: <c>sleeponfloor</c> (the base skeleton has no unconscious or dead clip; <b>Observed</b>), -1 when the data has none.</summary>
-    int LyingClip { get; } = FindByName(library, "sleeponfloor");
-    static int FindByName(AnimationLibrary library, string name)
-    {
-        for (int i = 0; i < library.Definitions.Count; i++) if (library.Definitions[i].Name == name) return i;
-        return -1;
-    }
+    int LyingClip { get; } = library.IndexOf("sleeponfloor");
     public AnimationLengths Lengths { get; } = lengths;
     /// <summary>The CONSTANTS <c>animation blend rate</c> (fcs.def default 4, "1 is very slow"): weight per second.</summary>
     public float BlendRate { get; } = blendRate;
+
+    // Scratch lists of the thread running a partition, kept between ticks (Update clears them on entry).
+    [ThreadStatic] static List<(int Index, float Weight)>? lowerScratch, upperScratch;
 
     public void Act(World world, Partition part, EffectBuffer effects)
     {
@@ -76,8 +74,8 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         var prev = table.Previous;
         var next = table.Next;
         float dt = world.TickSeconds;
-        var wantedLower = new List<(int Index, float Weight)>();
-        var wantedUpper = new List<(int Index, float Weight)>();
+        var wantedLower = lowerScratch ??= [];
+        var wantedUpper = upperScratch ??= [];
         for (int i = part.Start; i < part.End; i++)
         {
             if (!prev[i].Alive) continue;
@@ -221,7 +219,11 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     /// <summary>The layers to publish for a snapshot: the record name (the renderer finds its track masks by it), the clip time in seconds and the weight.</summary>
     public IReadOnlyList<AnimationLayer> Publish(CharacterAnimation a)
     {
-        var list = new List<AnimationLayer>(a.Count);
+        int visible = 0;
+        for (int k = 0; k < a.Count; k++) if (!(a.Layers[k].Weight <= 0)) visible++;
+        if (visible == 0) return [];
+        var list = new AnimationLayer[visible];   // the snapshot keeps its own copy, sized exactly
+        int n = 0;
         for (int k = 0; k < a.Count; k++)
         {
             var layer = a.Layers[k];
@@ -230,7 +232,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             float time = d.Synchs && d.MoveSpeed > 0
                 ? (a.Phase + d.SynchOffset - MathF.Floor(a.Phase + d.SynchOffset)) * Lengths.Of(d.Clip)
                 : layer.Time;
-            list.Add(new AnimationLayer(d.Name, time, layer.Weight));
+            list[n++] = new AnimationLayer(d.Name, time, layer.Weight);
         }
         return list;
     }
