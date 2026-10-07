@@ -29,8 +29,8 @@ decides what they leave open (scheduling, threads, data layout).
 - The data layer reads everything a world needs (FCS with the game's merge rules, load order, zone and town placements), and
   `CharacterGenerator` rolls an NPC's appearance and loadout. Typed views exist over CONSTANTS, FACTION (with the initial relations),
   SQUAD_TEMPLATE and TOWN; AI_PACKAGE, AI_TASK and races are still read by field name.
-- Stages 0 to 3 are done on branch `sim-core`: [time facts](#time-model) (the game's clock, pause, 1/2/5), [Skeleton as built](#skeleton-as-built-stage-1) and [Populate and move as built](#populate-and-move-as-built-stages-2-and-3).
-- Missing for a living world: navmesh walkability and collision with buildings, the AI proper, the player and the UI, bodies and combat, saves.
+- Stages 0 to 3 and 6 are done on branch `sim-core`: [time facts](#time-model) (the game's clock, pause, 1/2/5), [Skeleton as built](#skeleton-as-built-stage-1) [Populate and move as built](#populate-and-move-as-built-stages-2-and-3) and [Player as built](#player-as-built-stage-6).
+- Missing for a living world: navmesh walkability and collision with buildings, the AI proper, the UI screens, bodies and combat, saves.
 
 ## Principles
 
@@ -225,6 +225,59 @@ At these counts the barrier cost of the worker pool outweighs the parallel gain;
 (stage 9 measures again with the AI). The determinism tests run the real workload (population, paths, wander, follow, an order) at 1, 4
 and 16 threads, on a synthetic town and on The Hub of the install: identical hashes.
 
+
+## Player as built (stage 6)
+
+**New game.** `meitou --new-game [start]` (default `Wanderer`; `--list-starts` prints the 13 base-game starts). `NewGameStart`
+(`Meitou.Data.Gameplay`) reads the NEW_GAME_STARTOFF record: money, start position and its `force pos` flag, squad, towns,
+faction relations, research, `force race` (**Verified** against the base records, `New_game_starts_match_the_documented_records`).
+`PopulationSystem.StartPlayer` builds the player's squad:
+
+- *Location* (decision, the plan left it open): the first listed town that is placed in the world; its centre, else the record's
+  `StartPosition` when `force pos` is set (Rock Bottom). A seeded walkable spot within a third of the town radius. The host loads
+  the world around that point (`--at` is overridden) and puts the camera on the squad leader.
+- *Members*: every squad link of the start in one squad: SQUAD_TEMPLATE links go through `SquadFactory`, CHARACTER links are single
+  members; the first member leads when no template names one. Appearances come from the generator as for residents. The Wanderer
+  start is one character. The faction is `Nameless` (the player's), money from the record.
+- *Not applied yet* (**Unknown** how the original applies them at start): the faction relation overrides, research, `force race`,
+  the characters' inventories (inventory stage).
+
+**Player state is world state.** `PlayerState` (faction, money, squad, **selection**) is hashed and lives in `World`, so a recorded
+command stream replays exactly. Characters of the player are flagged `IsPlayer` (hashed). `SelectCommand` (additive or replacing;
+non-player characters are dropped) and `StopCommand` are processed by `PlayerSystem` in the commands phase; dead or removed
+characters leave the selection after the commit. `MoveOrder` with an empty character list orders the current selection (what the
+UI sends, so it never needs the ids at click time). Zone activation follows the player's characters when the player exists; the
+camera focus only drives it without a player.
+
+**Orders.** A plain move order replaces the character's current order and queue; `Queued` (shift + right click) appends to the
+character's `OrderQueue` (a go-to chain); on arrival the next target is popped. A blocked or failed path drops the queue.
+`Stop` ends the go-to and clears the queue. Queued orders and stop are hashed.
+
+**Interface** (`Meitou.Game/PlayerInterface.cs`, host side only; it reads the published snapshot and enqueues commands at the
+world's tick):
+
+| Input | Effect |
+|---|---|
+| left click | select the character under the cursor (ray against a capsule, 2.2 units tall, radius 1 or 1.2 % of the distance); click on nothing deselects |
+| left drag | box select: player characters whose chest projects inside the rectangle and lie within 7500 of the camera |
+| shift | adds to the selection (click, box, digit, grave) |
+| right click | `MoveOrder` to the ground under the cursor (ray marched against the CPU heightmap, then bisected); shift queues |
+| `1`..`9` / `` ` `` | select the n-th player character / the whole squad |
+| `R` | stop (not in the free camera, where `R` is up) |
+
+Right mouse is the command button, so **Orbit is the middle button only** now; saved configs that bound `Mouse:Right` to orbit lose
+that entry on load. The HUD (`DebugOverlay` text and quads, top-left): the game clock and day, money, clickable speed buttons
+(pause, 1x, 2x, 5x; the active one lit), the selected characters' names. Selected characters have a green ring on the ground; a
+click on the HUD never selects. Characters without a drawing keep their debug squares. The screenshot options `--select-player`
+and `--move-to <x> <z>` select the squad / order it to walk, for pictures; a `pickcheck` line in the log checks that the leader's
+own pixel picks it and a ray 60 px lower lands near it.
+
+Tests (`PlayerTests`): the new-game squad, selection rules, an order with no ids plus queued orders, plain order and stop, zones
+following the player, and a scripted select / move / stop game that hashes the same at 1, 4 and 16 threads. Not covered by tests
+(needs a window): the mouse picking, checked by the `pickcheck` line and by hand.
+
+Open: orders are straight go-tos on the stub walkability (through walls) until the navmesh (stage 5) lands; characters have no walk
+animation yet (renderer track); no formation for several selected characters (all walk to the same point and separate).
 
 ## Walkability and movement
 

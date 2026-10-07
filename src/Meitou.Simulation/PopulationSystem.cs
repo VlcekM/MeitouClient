@@ -43,6 +43,8 @@ public sealed class PopulationData
     /// <summary>Rolls the characters' looks; null leaves them without (headless tests, markers only).</summary>
     public IAppearanceSource? Appearances { get; init; }
     public IWorldStates States { get; init; } = IWorldStates.None;
+    /// <summary>The player's faction (the FACTION named Nameless, 204-gamedata.base), a position in <see cref="Factions"/>; -1 when there is none.</summary>
+    public int PlayerFaction { get; init; } = -1;
 
     public static PopulationData Create(GameDatabase db, IEnumerable<TownPlacement> placements, IAppearanceSource? appearances = null)
     {
@@ -52,7 +54,8 @@ public sealed class PopulationData
             if (db.Find(p.TownId) is not { Type: FcsRecordType.TOWN } record) continue;
             sites.Add(new TownSite(sites.Count, TownData.From(record), p.Position, WorldLayout.ZoneOf(p.Position.X, p.Position.Z)));
         }
-        return new PopulationData { Db = db, Sites = sites, Factions = FactionData.LoadAll(db), Appearances = appearances };
+        var factions = FactionData.LoadAll(db);
+        return new PopulationData { Db = db, Sites = sites, Factions = factions, Appearances = appearances, PlayerFaction = factions.FindIndex(f => f.Name == "Nameless") };
     }
 }
 
@@ -149,8 +152,19 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
 
     public void SlowWorld(World world)
     {
-        if (world.Tick % settings.CheckEveryTicks != 0 || focus is not { } at) return;
-        active = ZoneActivation.ZonesAround(at, settings.FastZoneHopping ? 1 : 0);
+        if (world.Tick % settings.CheckEveryTicks != 0) return;
+        // The player's characters activate the zones round them (game-loop.md "Zones": the player's faction); the camera focus does only without a player.
+        var foci = new List<Vector3>();
+        if (world.Player.Exists)
+        {
+            var prev = world.Characters.Previous;
+            for (int i = 0; i < prev.Length; i++)
+                if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true }) foci.Add(prev[i].Position);
+        }
+        if (foci.Count == 0 && focus is { } camera) foci.Add(camera);
+        if (foci.Count == 0) return;
+        active = [];
+        foreach (var f in foci) active.UnionWith(ZoneActivation.ZonesAround(f, settings.FastZoneHopping ? 1 : 0));
         long grace = (long)Math.Ceiling(settings.UnloadGraceSeconds / world.TickSeconds);
         foreach (var site in data.Sites)
         {
@@ -217,8 +231,8 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
 
     // ---- building (pure given the seed; safe on another thread) ----
 
-    sealed record BuiltMember(MemberPlan Plan, CharacterAppearance? Appearance);
-    sealed record BuiltSquad(SquadPlan Plan, Vector2 Position, int Faction, List<BuiltMember> Members);
+    internal sealed record BuiltMember(MemberPlan Plan, CharacterAppearance? Appearance);
+    internal sealed record BuiltSquad(SquadPlan Plan, Vector2 Position, int Faction, List<BuiltMember> Members);
     sealed record BuiltTown(int Site, long LoadId, List<BuiltSquad> Squads);
 
     BuiltTown BuildTown(TownSite site, long loadId, ulong seed, IWalkability walk)
@@ -278,14 +292,14 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
         float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
         foreach (var built in town.Squads)
         {
-            var squad = SpawnSquad(world, built, site, radius, parentRole: null);
+            var squad = SpawnSquad(world, built, site, radius);
             state.Squads.Add(squad.Id);
             foreach (var slave in built.Plan.Slaves) _ = slave;   // slave squads: not placed yet (roles in the plan only)
         }
         _ = table;
     }
 
-    Squad SpawnSquad(World world, BuiltSquad built, TownSite site, float radius, SquadRole? parentRole)
+    Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false)
     {
         var table = world.Characters;
         var walk = world.Walkability;
@@ -295,9 +309,9 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
             TemplateId = built.Plan.Template.Id,
             Name = built.Plan.Template.Name,
             Faction = built.Faction,
-            Town = site.Index,
+            Town = site?.Index ?? -1,
             Position = new Vector3(built.Position.X, walk.GroundHeight(built.Position.X, built.Position.Y), built.Position.Y),
-            HomeCentre = new Vector2(site.Position.X, site.Position.Z),
+            HomeCentre = site is null ? built.Position : new Vector2(site.Position.X, site.Position.Z),
             HomeRadius = Math.Max(radius * 0.8f, 40),
         };
         var leaderPlan = built.Members.FirstOrDefault(m => m.Plan.Role == SquadRole.Leader)?.Plan;
@@ -313,8 +327,8 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
             {
                 Position = new Vector3(x, walk.GroundHeight(x, z), z),
                 Health = 100,
-                Task = (byte)(plan.Role == SquadRole.Leader || !hasLeader ? CharacterTask.Wander : CharacterTask.Follow),
-                Mode = SpeedMode.Walk,
+                Task = (byte)(player ? CharacterTask.Idle : plan.Role == SquadRole.Leader || !hasLeader ? CharacterTask.Wander : CharacterTask.Follow),
+                Mode = player ? SpeedMode.Free : SpeedMode.Walk,
                 MaxSpeed = maxSpeed,
                 WalkSpeed = walkSpeed,
                 TaskTime = 0.5f + Rng.Float(Rng.Hash(world.Seed, (ulong)squad.Id << 8 | (uint)plan.Index, RngPurpose.Think)) * 3,
@@ -328,6 +342,7 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
                 SquadId = squad.Id,
                 Role = (int)plan.Role,
                 FormationOffset = plan.Offset - (leaderPlan?.Offset ?? Vector2.Zero),
+                IsPlayer = player,
             };
             var id = table.Spawn(hot, cold, world.Tick);
             squad.Members.Add(id);
@@ -336,6 +351,90 @@ public sealed class PopulationSystem : ITickSystem, IDisposable
         if (squad.Leader.IsNone && squad.Members.Count > 0) squad.Leader = squad.Members[0];
         world.Squads.Add(squad);
         return squad;
+    }
+
+    /// <summary>
+    /// Starts the player (a new game, before the first tick): their faction, their money and their squad at the start town, made from the
+    /// start-off's <c>squad</c> list (a SQUAD_TEMPLATE is planned by the squad factory, a CHARACTER is one member) as one squad of the
+    /// player's faction, standing idle, selected for them. Where: <see cref="NewGameStart.ForceStartPos"/> gives the place itself,
+    /// otherwise the first listed town that is placed in the world (the new-game map's own choice of start town is not modelled), at a
+    /// seeded spot within a third of its radius. Faction relation overrides, research and <c>force race</c> are not applied yet (the first
+    /// two are <b>Unknown</b> in the original, docs/game/factions-squads-towns.md 3.2). The characters' items are what the generator rolls
+    /// for their look; the inventory of the record comes with the inventory stage.
+    /// </summary>
+    public Squad StartPlayer(World world, NewGameStart start)
+    {
+        if (data.PlayerFaction < 0) throw new InvalidOperationException("the game data has no player faction (Nameless)");
+        var centre = start.StartPosition;
+        float radius = 100;
+        TownSite? town = null;
+        if (!start.ForceStartPos)
+        {
+            foreach (var link in start.Towns)
+                if (data.Sites.FirstOrDefault(s => s.Town.Id == link.Id) is { } site) { town = site; break; }
+            if (town is not null)
+            {
+                centre = new Vector2(town.Position.X, town.Position.Z);
+                radius = town.Town.SizeRadius * town.Town.TownRadiusMult;
+            }
+        }
+        ulong key = Rng.Mix(0x57A27UL ^ StableHash(start.Id));
+        var at = centre;
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            ulong roll = Rng.Hash(world.Seed, key, RngPurpose.Spawn, (ulong)attempt);
+            float angle = Rng.Float(roll) * MathF.Tau, r = MathF.Sqrt(Rng.Float(Rng.Mix(roll))) * radius / 3;
+            var p = centre + new Vector2(MathF.Sin(angle), MathF.Cos(angle)) * r;
+            if (world.Walkability.IsWalkable(p.X, p.Y)) { at = p; break; }
+        }
+
+        // One squad of everything the start lists.
+        var members = new List<BuiltMember>();
+        var first = new List<MemberPlan>();
+        SquadTemplate? template = null;
+        foreach (var link in start.Squad)
+        {
+            var record = data.Db.Find(link.Id);
+            if (record is null) continue;
+            if (record.Type is FcsRecordType.SQUAD_TEMPLATE or FcsRecordType.UNIQUE_SQUAD_TEMPLATE)
+            {
+                var t = SquadTemplate.From(record);
+                template ??= t;
+                first.AddRange(SquadFactory.Plan(data.Db, t, settings.SquadSizeMultiplier, world.Seed, Rng.Mix(key ^ (uint)first.Count), data.States).Members);
+            }
+            else
+            {
+                first.Add(new MemberPlan(link.Id, SquadRole.Squad1, first.Count, default, false, 1));
+            }
+        }
+        // Renumber in creation order (the layout counts every member) and make the first the leader when none is.
+        bool hasLeader = first.Any(m => m.Role == SquadRole.Leader);
+        for (int i = 0; i < first.Count; i++)
+            first[i] = first[i] with { Index = i, Offset = SquadFactory.Offset(i), Role = !hasLeader && i == 0 ? SquadRole.Leader : first[i].Role };
+        var factionId = data.Factions[data.PlayerFaction].Id;
+        foreach (var m in first)
+        {
+            CharacterAppearance? look = null;
+            if (!m.IsAnimal && data.Appearances is { } source)
+                look = source.Create(m.RecordId, factionId, (int)(Rng.Hash(world.Seed, key, RngPurpose.Spawn, 5000UL + (ulong)m.Index) & 0x7FFFFFFF));
+            members.Add(new BuiltMember(m, look));
+        }
+        var plan = new SquadPlan(template ?? new SquadTemplate { Id = start.Id, Name = start.Name }, first, [], []);
+        var built = new BuiltSquad(plan, at, data.PlayerFaction, members);
+        var squad = SpawnSquad(world, built, null, radius, player: true);
+        world.Player.Faction = data.PlayerFaction;
+        world.Player.Money = start.Money;
+        world.Player.Squad = squad.Id;
+        world.Player.Selection.Clear();
+        return squad;
+    }
+
+    /// <summary>A string hash that is the same in every process (string.GetHashCode is not).</summary>
+    static ulong StableHash(string s)
+    {
+        ulong h = 0xCBF29CE484222325UL;
+        foreach (char c in s) h = (h ^ c) * 0x100000001B3UL;
+        return h;
     }
 
     /// <summary>The speed stat S and the walk speed of a character (docs/game/pathfinding.md "Speed"): S = lerp(race <c>speed min skill</c>, <c>speed max skill</c>, athletics / 100), with a stand-in athletics until stats exist (stage 7).</summary>

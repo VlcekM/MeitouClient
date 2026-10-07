@@ -80,7 +80,7 @@ public sealed class InputBindings
         Set(InputAction.PitchDown, Key.Down);
         Set(InputAction.ZoomIn, Key.PageUp);
         Set(InputAction.ZoomOut, Key.PageDown);
-        Set(InputAction.Orbit, MouseButton.Middle, MouseButton.Right);
+        Set(InputAction.Orbit, MouseButton.Middle);   // right is the command button (move order)
         Set(InputAction.ToggleFreeCamera, Key.Semicolon);
         Set(InputAction.Pause, Key.Space);
         Set(InputAction.TimeFaster, Key.Period);

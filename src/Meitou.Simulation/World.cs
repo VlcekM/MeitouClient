@@ -85,6 +85,8 @@ public sealed class World : IDisposable
     public CommandQueue Commands { get; } = new();
     /// <summary>The squads (factory output, kept for the leader and follower logic).</summary>
     public SquadRegistry Squads { get; } = new();
+    /// <summary>The player: faction, money, selection.</summary>
+    public PlayerState Player { get; } = new();
     public IReadOnlyList<ITickSystem> Systems => systems;
     /// <summary>The number of ticks run; during a tick, the number of the tick being run.</summary>
     public long Tick { get; private set; }
@@ -144,6 +146,7 @@ public sealed class World : IDisposable
 
         // 8. Publish.
         Squads.Refresh(table);
+        Player.Prune(table);
         table.Phase = TablePhase.Outside;
         table.EndTick();
         Tick++;
@@ -177,6 +180,10 @@ public sealed class World : IDisposable
             list.Add(new CharacterSnapshot(new CharacterId(i, state[i].Generation), cold?.Appearance, state[i].Position, state[i].Yaw, AnimationLayers.For(state[i].Animation, state[i].AnimationTime))
             {
                 Faction = cold?.Faction ?? -1,
+                Name = cold?.Name ?? "",
+                SquadId = cold?.SquadId ?? -1,
+                IsPlayer = cold?.IsPlayer ?? false,
+                Selected = cold is { IsPlayer: true } && Player.Selection.Contains(new CharacterId(i, state[i].Generation)),
             });
         }
         PreviousSnapshot = Snapshot;
@@ -191,6 +198,7 @@ public sealed class World : IDisposable
         h.Add(Tick);
         Characters.Hash(ref h);
         Squads.Hash(ref h);
+        Player.Hash(ref h);
         return h.Value;
     }
 

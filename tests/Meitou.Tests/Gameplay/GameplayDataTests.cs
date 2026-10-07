@@ -227,6 +227,27 @@ public class GameplayInstallTests
         Assert.All(templates, t => Assert.NotEmpty(t.Id));
     }
 
+
+    [Fact]
+    public void New_game_starts_match_the_documented_records()
+    {
+        var starts = NewGameStart.LoadAll(Database());
+        Assert.Equal(13, starts.Count);
+        var wanderer = NewGameStart.Find(starts, NewGameStart.DefaultName)!;
+        Assert.Equal((1000, "Default", "RPG"), (wanderer.Money, wanderer.Difficulty, wanderer.Style));
+        Assert.Equal(new System.Numerics.Vector2(4000, 4000), wanderer.StartPosition);
+        Assert.False(wanderer.ForceStartPos);
+        Assert.Single(wanderer.Squad);
+        Assert.Contains(wanderer.Towns, t => Database().Find(t.Id)?.Name == "The Hub");
+        var bottom = NewGameStart.Find(starts, "rock bottom")!;
+        Assert.True(bottom.ForceStartPos);
+        Assert.Equal(new System.Numerics.Vector2(66484, -90000), bottom.StartPosition);
+        Assert.Equal(1, starts.Count(s => s.ForceStartPos));
+        Assert.Equal(3, starts.Count(s => s.ForceRace.Count > 0));
+        Assert.Equal(4, starts.Count(s => s.FactionRelations.Count > 0));
+        Assert.Equal(4000, NewGameStart.Find(starts, "The Freedom Seekers")!.Money);
+        Assert.Equal(8, starts.Count(s => s.Id.EndsWith("gamedata.base")));
+    }
     [Fact]
     public void Towns_have_the_documented_type_histogram_and_the_hub_is_a_town()
     {

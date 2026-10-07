@@ -55,8 +55,17 @@ static class SyntheticTown
         town.References["faction"] = [Ref("20-t")];
         town.References["residents"] = [Ref("10-t", residentSquads, 0), Ref("11-t", 1, 0), Ref("13-t", 0, 0)];
 
+        var nameless = Rec("204-gamedata.base", FcsRecordType.FACTION, "Nameless");
+        nameless.Ints["default relation"] = 0;
+        var startoff = Rec("40-t", FcsRecordType.NEW_GAME_STARTOFF, "Test start");
+        startoff.Ints["money"] = 500;
+        startoff.Ints["start pos X"] = 4000;
+        startoff.Ints["start pos Z"] = 4000;
+        startoff.References["squad"] = [Ref("3-t"), Ref("12-t")];
+        startoff.References["town"] = [Ref("30-t")];
+
         var file = new FcsFile();
-        file.Records.AddRange([race, guard, boss, dog, patrol, gated, factionTemplate, faction, town]);
+        file.Records.AddRange([race, guard, boss, dog, patrol, gated, factionTemplate, faction, town, nameless, startoff]);
         var db = new GameDatabase();
         db.Apply(file, "test.mod");
         return db;

@@ -48,21 +48,43 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
         foreach (var command in commands)
         {
             if (command is not MoveOrder order) continue;
-            // Queued orders are not modelled: a queued order replaces like any other.
+            // An empty list orders the selection (the UI sends orders for whatever is selected when the click happens).
+            var who = order.Characters.Count > 0 ? order.Characters : world.Player.Selection.ToArray();
             int k = 0;
-            foreach (var id in order.Characters)
+            foreach (var id in who)
             {
                 if (!table.TryResolveNext(id, out int slot)) continue;
                 ref var n = ref table.Next[slot];
+                var cold = table.Cold(slot)!;
                 var offset = SquadFactory.Offset(k++, 3) * FormationScale;
+                var target = new Vector2(order.Target.X + offset.X, order.Target.Z + offset.Y);
+                bool busy = n.Task == (byte)CharacterTask.GoTo && (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath)) != 0;
+                if (order.Queued && busy)
+                {
+                    cold.OrderQueue.Add(target);   // after the order in hand (shift + right click)
+                    continue;
+                }
+                cold.OrderQueue.Clear();
                 n.Task = (byte)CharacterTask.GoTo;
-                n.Goal = new Vector2(order.Target.X + offset.X, order.Target.Z + offset.Y);
+                n.Goal = target;
                 n.Mode = SpeedMode.Free;
                 n.Flags = (ushort)((n.Flags & ~(ushort)(MoveFlags.Pending | MoveFlags.HasPath)) | (ushort)MoveFlags.NeedPath);
                 n.PathCursor = 0;
-                table.Cold(slot)!.PathRequest = 0;
+                cold.PathRequest = 0;
             }
         }
+    }
+
+    /// <summary>Drops a character's orders and path and makes it stand (serial phases only).</summary>
+    public static void Stop(CharacterTable table, int slot)
+    {
+        ref var n = ref table.Next[slot];
+        n.Flags = (ushort)(n.Flags & ~(ushort)(MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath));
+        n.Task = (byte)CharacterTask.Idle;
+        n.PathCursor = 0;
+        var cold = table.Cold(slot)!;
+        cold.OrderQueue.Clear();
+        cold.PathRequest = 0;
     }
 
     public void Schedule(World world)
@@ -100,7 +122,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
             else
             {
                 n.TaskTime = FailedPathWait;
-                if (n.Task == (byte)CharacterTask.GoTo) n.Task = (byte)CharacterTask.Idle;
+                if (n.Task == (byte)CharacterTask.GoTo) { n.Task = (byte)CharacterTask.Idle; cold.OrderQueue.Clear(); }
             }
         }
     }
@@ -204,7 +226,17 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
                 n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
                 n.PathCursor = 0;
                 speed = 0;
-                if (n.Task == (byte)CharacterTask.GoTo) n.Task = (byte)CharacterTask.Idle;
+                if (n.Task == (byte)CharacterTask.GoTo)
+                {
+                    if (cold.OrderQueue.Count > 0)
+                    {
+                        // The next queued order (shift + right click): a path to it is asked for next tick.
+                        n.Goal = cold.OrderQueue[0];
+                        cold.OrderQueue.RemoveAt(0);
+                        n.Flags |= (ushort)MoveFlags.NeedPath;
+                    }
+                    else n.Task = (byte)CharacterTask.Idle;
+                }
                 else
                 {
                     ulong roll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(i)), RngPurpose.Think, (ulong)world.Tick);
@@ -245,7 +277,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
                     speed = 0;
                     n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
                     n.TaskTime = FailedPathWait;
-                    if (n.Task == (byte)CharacterTask.GoTo) n.Task = (byte)CharacterTask.Idle;
+                    if (n.Task == (byte)CharacterTask.GoTo) { n.Task = (byte)CharacterTask.Idle; cold.OrderQueue.Clear(); }
                 }
             }
             n.Velocity = new Vector3(dir.X * speed, 0, dir.Y * speed);
