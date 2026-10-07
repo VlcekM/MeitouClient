@@ -131,7 +131,7 @@ public sealed partial class FoliageRenderer
             foreach (var a in assetsByMesh.Values)
                 if (a.Impostor is { Stage: ImpostorStage.Ready } s && (now - s.LastUsed) / 1000.0 > ImpostorIdleSeconds) UnloadImpostor(a);
         if (impostorWork.Count == 0 && impostorBakes.Count == 0 && impostorBake is null) return;
-        GlBridge.EnsureFrame(Gpu);
+        Gpu.EnsureFrame();
         long uploaded = 0;
         impostorUploadsWaiting = false;
         for (int i = 0; i < impostorWork.Count; i++)

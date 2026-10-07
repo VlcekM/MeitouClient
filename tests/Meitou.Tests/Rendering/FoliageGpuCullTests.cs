@@ -305,9 +305,8 @@ public class FoliageGpuCullTests
         using var d = TryCreate();
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
         var random = new Random(33);
-        using (var gl = new VkGl(d!))
+        using (var ctx = new GpuContext(d!))
         {
-            var ctx = gl.Context;
             using var cull = new FoliageGpuCull(ctx, arenaBytes: 1 << 22);
             long inBand = 0;
             for (int viewNumber = 0; viewNumber < 4; viewNumber++)
@@ -335,7 +334,7 @@ public class FoliageGpuCullTests
                 var view = new FoliageCullView().Set(planes);
                 var eyeXz = new Vector2(eye.X, eye.Z);
 
-                gl.BeginFrame(4, 4);
+                ctx.BeginFrame();
                 bool placed;
                 do
                 {
@@ -367,7 +366,7 @@ public class FoliageGpuCullTests
                 var result = cull.Dispatch(work, view, eyeXz);
                 using var readback = ReadbackBuffer.Create(ctx, FoliageGpuCull.ReadbackBytes(result), "cull readback");
                 cull.CopyForReadback(result, readback);
-                gl.EndFrame();
+                ctx.EndFrame();
                 d!.Frames.WaitAll();
 
                 var expected = new List<Matrix4x4>[2 * Batches];

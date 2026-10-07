@@ -74,7 +74,7 @@ static partial class WorldApp
             interval.Restart();
             times.Add(ms);
             if (i % 150 == 0) resident.Add($"{(((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576)}");
-            if (i % 30 == 0 && device is not null) vramPeak = Math.Max(vramPeak, device.VideoMemory().Used);
+            if (i % 30 == 0) vramPeak = Math.Max(vramPeak, device.VideoMemory().Used);
             for (int k = 0; k < stageSums.Length; k++) { stageSums[k] += StageClock.Ms[k]; jobSums[k] += StageClock.JobMs[k]; }
             if (gpu.Shadow is { } shadowStats) for (int k = 0; k < 3; k++) shadowSums[k] += shadowStats.PhaseMs[k];
             long gcNow = GC.CollectionCount(2);
