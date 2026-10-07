@@ -228,7 +228,7 @@ resolution-aware screen-space error (`TerrainLod`), one rule for all of its Fait
 - **Metric**: a level-l node is split while `P × E / distance > T`. `P` is the true projection scale of the picture **actually
   rendered**: render height / (2 tan(fov / 2)), the render height after the upscaler's render scale (so DLSS / FSR at 0.67 draw about
   half the triangles, and the Tab render-scale slider re-tessellates the terrain). `E = 2 × vertex spacing of level l + 1` is the
-  height error of the coarser grid, in the game's sense (above). `T` is `--terrain-error` (default **10 px**; Tab slider "Terrain
+  height error of the coarser grid, in the game's sense (above). `T` is `--terrain-error` (default **16 px** in Meitou, **10 px** in Faithful, the `reach` switch; Tab slider "Terrain
   detail"). Optionally `T` grows like the game's ramp to `--terrain-far-error` between `--terrain-ramp` (7500) and twice it; the
   default has no ramp (see "Choosing the defaults").
 - **Why one error per level** (`TerrainLod.Roughness` = 2): CDLOD needs one range per level, not per node (neighbouring nodes of a
