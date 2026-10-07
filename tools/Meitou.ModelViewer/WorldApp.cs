@@ -390,6 +390,7 @@ static partial class WorldApp
                 var (vramUsed, vramBudget) = display.Context.Device.VideoMemory();
                 var alloc = display.Context.Device.Allocator;
                 stats.Add($"vram        {vramUsed / 1073741824.0:0.00} of {vramBudget / 1073741824.0:0.0} GB; our blocks {alloc.TotalAllocatedBytes / 1073741824.0:0.00} GB, {alloc.TotalUsedBytes / 1073741824.0:0.00} used");
+                if (gpu.Guard is { } vramGuard) stats.Add($"  {vramGuard.Status}");
                 // The largest owners (GpuAllocator.Breakdown: names without their numbers), to see what fills the VRAM.
                 foreach (var (name, count, bytes, _) in alloc.Breakdown().Take(8))
                     stats.Add($"  {name,-26} {bytes / 1048576.0,7:0} MB  x{count}");
@@ -407,6 +408,7 @@ static partial class WorldApp
                     stats.Add($"foliage     {fo.DrawnInstances} + {fo.DrawnBlades / 1000}k grass, {fo.DrawCalls} calls, cpu {fo.LastDrawCpuMs:0.00} ms, gpu {fo.GpuMs:0.00} ms" + (fo.Pending > 0 ? $", loading {fo.Pending}" : ""));
                 stats.Add($"resident    {((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576} MB");
                 if (gpu.Foliage is { } fr) stats.Add($"  foliage   {fr.ResidentDescription}; {fr.Describe()}");
+                if (gpu.Foliage is { } fs) stats.Add($"  scratch   {fs.ScratchDescription}");
                 if (gpu.Objects is { } orr) stats.Add($"  objects   {orr.ResidentDescription}");
                 titleTimer = 0;
                 frames = 0;

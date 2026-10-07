@@ -142,6 +142,8 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         var r = arena.Allocate(bytes, FoliageInstanceRecord.Size);
         if (r.IsEmpty && bytes > 0)
         {
+            // A refused growth (the video memory is nearly used up, VramGuard) leaves the range empty: the caller leaves the group out of the frame.
+            if (MayGrow is { } may && !may(GrowSize(bytes))) { GrowRefusals++; (range, generation) = (default, 0); return true; }
             Grow(bytes);
             return false;
         }
@@ -160,10 +162,26 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         if (generation == Generation && !range.IsEmpty) arena.Free(range);
     }
 
-    void Grow(ulong atLeast)
+    /// <summary>Asked before the arena or the scratch memory grows: false refuses (<c>VramGuard.Allows</c>). Also given to <see cref="Scratch"/>.</summary>
+    public Func<ulong, bool>? MayGrow
+    {
+        get => mayGrow;
+        set { mayGrow = value; scratch.MayGrow = value; }
+    }
+    Func<ulong, bool>? mayGrow;
+    /// <summary>Times the arena could not grow for the memory (the group was left out of the frame).</summary>
+    public int GrowRefusals { get; private set; }
+
+    ulong GrowSize(ulong atLeast)
     {
         ulong size = arena.Buffer.Size * 2;
         while (size < atLeast * 2) size *= 2;
+        return size;
+    }
+
+    void Grow(ulong atLeast)
+    {
+        ulong size = GrowSize(atLeast);
         arena.Dispose();   // deferred: this frame's earlier dispatches may read it
         arena = new BufferArena(ctx, size, BufferUse.Storage | BufferUse.TransferDst, "foliage instances");
         Generation++;

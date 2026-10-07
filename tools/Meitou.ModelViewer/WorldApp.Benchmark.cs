@@ -105,6 +105,7 @@ static partial class WorldApp
         // Every allocator owner (names without their numbers, GpuAllocator.Breakdown), largest first: what fills the VRAM.
         Console.WriteLine($"vram      owners (MB, device-local MB, count): {string.Join(", ", context.Device.Allocator.Breakdown().OrderByDescending(b => b.Bytes).Select(b => $"{b.Name} {b.Bytes / 1048576.0:0.0} ({b.DeviceLocal / 1048576.0:0.0}) x{b.Count}"))}");
         Console.WriteLine($"vram      {VramWatch.Describe()}");
+        if (gpu.Guard is { } vramGuard) Console.WriteLine($"guard     {vramGuard.Status}; entered pressure {vramGuard.Activations} times, lowest range scale x{vramGuard.LowestScale:0.00}");
         if (gpu.Foliage is { } scratchFoliage) Console.WriteLine($"scratch   {scratchFoliage.ScratchDescription}");
         if (meter is not null) ReportPasses(meter, display, gpu, scene, camera, render, o, w, h);
         if (o.Screenshot is not null)

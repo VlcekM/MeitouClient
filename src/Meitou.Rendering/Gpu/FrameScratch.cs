@@ -101,9 +101,13 @@ public sealed class FrameScratch(GpuContext ctx, string name, BufferUse use, ulo
 
     static ulong Round(ulong bytes) => (bytes + Megabyte - 1) / Megabyte * Megabyte;
 
+    /// <summary>Asked before a buffer is made: false refuses it (the memory-pressure guard, <c>VramGuard.Allows</c>).</summary>
+    public Func<ulong, bool>? MayGrow { get; set; }
+
     bool TryAdd(Slot s, ulong size)
     {
         if (s.Capacity + size > Cap) return false;
+        if (MayGrow is { } may && !may(size)) return false;
         try { s.Buffers.Add(DeviceBuffer.Create(ctx, size, use, $"{name} {slot}")); }
         catch (Meitou.Rendering.Gpu.Core.VulkanException) { return false; }
         s.Capacity += size;

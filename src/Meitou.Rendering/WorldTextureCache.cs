@@ -42,6 +42,8 @@ public sealed class WorldTexture
     internal string? Path;
     internal long LastUsed;
     internal long Bytes;
+    /// <summary>The file size counted as in flight while the texture loads (<see cref="WorldTextureCache.MayStart"/>), 0 when not counted.</summary>
+    internal long InFlight;
     internal Residency State;
     /// <summary>The image (null until resident), the levels and the swizzle it is sampled with.</summary>
     internal Texture? Native;
@@ -98,6 +100,11 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// <summary>Above this the least recently used textures that were unused for <see cref="PressureIdleSeconds"/> go too.</summary>
     public double HighWaterMb { get; set; } = StreamingTuning.IdleSeconds > 1e8 ? double.MaxValue : TextureQuality.MemoryBudgetMb(TextureQuality.Level);
     public double PressureIdleSeconds { get; set; } = 8;
+    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): while it is under pressure nothing new is loaded (a texture asked for stays
+    /// unloaded, drawn with the stand-in, until it ends) and textures idle for <see cref="GuardIdleSeconds"/> are evicted, least recently used
+    /// first, whatever the high-water mark.</summary>
+    public VramGuard? Guard { get; set; }
+    public double GuardIdleSeconds { get; set; } = 2;
 
     public string Describe() => $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far)";
 
@@ -122,9 +129,25 @@ public sealed unsafe class WorldTextureCache : IDisposable
             Messages.Add($"texture not found: {name}");
             return t;
         }
+        if (!MayStart(t)) { t.State = WorldTexture.Residency.Unloaded; return t; }   // loaded when the pressure ends (reading its key asks again)
         Start(t);
         return t;
     }
+
+    /// <summary>Whether the guard lets this texture's image be made now: not under pressure, and the file's size (the image is no larger) fits the room left (<see cref="VramGuard.Allows"/>).</summary>
+    bool MayStart(WorldTexture t)
+    {
+        if (Guard is not { } guard) return true;
+        if (!guard.Streaming) return false;
+        long bytes;
+        try { bytes = new FileInfo(t.Path!).Length; }
+        catch (IOException) { bytes = 4 << 20; }
+        // What is loading is not in the guard's sample yet (the image is made when its decode lands): it counts against the room too.
+        if (!guard.Allows((ulong)bytes, (ulong)inFlight)) return false;
+        (t.InFlight, inFlight) = (bytes, inFlight + bytes);
+        return true;
+    }
+    long inFlight;
 
     /// <summary>
     /// The bindless index (in the 2D float array) of the texture whose <see cref="WorldTexture.Key"/> is <paramref name="key"/>, sampled as the
@@ -174,6 +197,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     internal void Reload(WorldTexture t)
     {
         if (t.State != WorldTexture.Residency.Unloaded) return;
+        if (!MayStart(t)) return;
         Reloads++;
         Start(t);
     }
@@ -202,7 +226,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             var t = pending[found];
             var data = t.Pending!.Result;
             if (data is not null) QueueUpload(t, data);
-            else t.State = WorldTexture.Residency.Missing;
+            else { t.State = WorldTexture.Residency.Missing; Landed(t); }
             t.Pending = null;
             pending.RemoveAt(found);
             started++;
@@ -221,21 +245,22 @@ public sealed unsafe class WorldTextureCache : IDisposable
         long now = Environment.TickCount64;
         if (now - lastTrim < 1000) return;
         lastTrim = now;
+        bool guarded = Guard?.Pressure ?? false;
         bool pressure = ResidentBytes > HighWaterMb * 1048576;
         List<WorldTexture>? victims = null;
         foreach (var t in cache.Values)
         {
             if (t.State != WorldTexture.Residency.Resident) continue;
             double idle = (now - t.LastUsed) / 1000.0;
-            if (idle > IdleSeconds || pressure && idle > PressureIdleSeconds) (victims ??= []).Add(t);
+            if (idle > IdleSeconds || pressure && idle > PressureIdleSeconds || guarded && idle > GuardIdleSeconds) (victims ??= []).Add(t);
         }
         if (victims is null) return;
         victims.Sort((a, b) => a.LastUsed.CompareTo(b.LastUsed));
         long lowWater = (long)(HighWaterMb * 1048576 * 0.75);
-        foreach (var t in victims.Take(40))
+        foreach (var t in victims.Take(guarded ? 120 : 40))
         {
             bool old = (now - t.LastUsed) / 1000.0 > IdleSeconds;
-            if (!old && ResidentBytes <= lowWater) break;
+            if (!old && !guarded && ResidentBytes <= lowWater) break;
             Unload(t);
         }
     }
@@ -402,8 +427,16 @@ public sealed unsafe class WorldTextureCache : IDisposable
         cmd.Barrier(BarrierBatch.Full);
     }
 
+    /// <summary>A texture left the loading state: its file size is no longer counted as in flight.</summary>
+    void Landed(WorldTexture t)
+    {
+        inFlight -= t.InFlight;
+        t.InFlight = 0;
+    }
+
     void Resident(WorldTexture t, long bytes)
     {
+        Landed(t);
         t.Bytes = bytes;
         t.State = WorldTexture.Residency.Resident;
         t.LastUsed = Environment.TickCount64;

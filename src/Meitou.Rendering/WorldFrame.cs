@@ -410,6 +410,8 @@ static class WorldFrame
         public WorldObjectRenderer? Objects;
         public FoliageRenderer? Foliage;
         public TerrainStreamer? Streamer;
+        /// <summary>Keeps the video memory under the budget by clamping the ranges and pausing the streaming (null with <c>MEITOU_VRAM_GUARD=0</c>).</summary>
+        public VramGuard? Guard;
         /// <summary>The scene's native host (wave 4), made at the first frame.</summary>
         public SceneHost? Scene;
         /// <summary>With <c>--no-stream</c>: where the streamer is kept, instead of at the eye.</summary>
@@ -507,6 +509,14 @@ static class WorldFrame
             Console.WriteLine($"shadows   {gpu.Shadow.Settings.MapSize}² atlas, {gpu.Shadow.Settings.Cascades} cascades of {gpu.Shadow.Settings.TileSize}², range {o.ShadowRange:0}");
         }
         gpu.DebugShadows = o.DebugShadows;
+        // The memory-pressure guard (VramGuard): MEITOU_VRAM_GUARD=0 leaves it off.
+        if (Environment.GetEnvironmentVariable("MEITOU_VRAM_GUARD") != "0")
+        {
+            var guard = gpu.Guard = new VramGuard(context.Device.VideoMemory);
+            if (gpu.Objects is not null) gpu.Objects.Guard = guard;
+            if (gpu.Foliage is not null) gpu.Foliage.Guard = guard;
+            if (gpu.Shadow is not null) gpu.Shadow.Guard = guard;
+        }
         return gpu;
     }
 
@@ -589,6 +599,7 @@ static class WorldFrame
         render.TerrainPixelScale = TerrainLod.ProjectionScale(rh, camera.FieldOfView);
         var jitter = gpu.Post?.JitterPixels ?? Vector2.Zero;
         var eye = camera.Eye;
+        gpu.Guard?.Tick();
         gpu.Streamer?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(0);
         gpu.Objects?.Update(gpu.Anchor ?? eye);
@@ -746,7 +757,7 @@ static class WorldFrame
             if (render.Objects && gpu.Objects is { } o) { o.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain); objects += o.DrawnInstances; (oi, oc) = (o.DrawnInstances, o.DrawCalls); }
             StageClock.Sub("objects");
             long t2 = Stopwatch.GetTimestamp();
-            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.Settings.Range * 1.2f); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
+            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.EffectiveRange * 1.2f); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
             StageClock.Phase(CascadeLabels[cascade.Index & 3]);
             long t3 = Stopwatch.GetTimestamp();
             double ms = 1000.0 / Stopwatch.Frequency;

@@ -143,6 +143,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
             QueueUpload(m, decoded);
         }
         if (wanted.Count == 0) return;
+        if (Guard is { Streaming: false }) { wanted.Clear(); return; }   // memory pressure: nothing new is decoded (the scan asks again)
         var order = wanted.OrderBy(p => p.Value).Select(p => p.Key).ToList();
         wanted.Clear();
         foreach (var m in order)
@@ -344,6 +345,9 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
     /// <summary>Above this the least recently used meshes unused for <see cref="PressureIdleSeconds"/> go too, down to three quarters of it.</summary>
     public double HighWaterMb { get; set; } = StreamingTuning.IdleSeconds > 1e8 ? double.MaxValue : 768;
     public double PressureIdleSeconds { get; set; } = 8;
+    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): under pressure nothing new is decoded and meshes idle for <see cref="GuardIdleSeconds"/> go.</summary>
+    public VramGuard? Guard { get; set; }
+    public double GuardIdleSeconds { get; set; } = 2;
     /// <summary>Called with every GPU mesh (manual levels included) that was deleted, so users of it can forget it.</summary>
     public Action<GpuObjectMesh>? Unloaded { get; set; }
     long lastTrim;
@@ -358,20 +362,21 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
         long now = Environment.TickCount64;
         if (now - lastTrim < 1000) return;
         lastTrim = now;
+        bool guarded = Guard?.Pressure ?? false;
         bool pressure = Bytes > HighWaterMb * 1048576;
         List<ObjectMesh>? victims = null;
         foreach (var m in meshes.Values)
         {
             if (m.Status != ObjectMesh.State.Resident) continue;
             double idle = (now - m.LastUsed) / 1000.0;
-            if (idle > IdleSeconds || pressure && idle > PressureIdleSeconds) (victims ??= []).Add(m);
+            if (idle > IdleSeconds || pressure && idle > PressureIdleSeconds || guarded && idle > GuardIdleSeconds) (victims ??= []).Add(m);
         }
         if (victims is null) return;
         victims.Sort((a, b) => a.LastUsed.CompareTo(b.LastUsed));
         long lowWater = (long)(HighWaterMb * 1048576 * 0.75);
-        foreach (var m in victims.Take(24))
+        foreach (var m in victims.Take(guarded ? 72 : 24))
         {
-            if ((now - m.LastUsed) / 1000.0 <= IdleSeconds && Bytes <= lowWater) break;
+            if ((now - m.LastUsed) / 1000.0 <= IdleSeconds && !guarded && Bytes <= lowWater) break;
             var gpu = m.Gpu!;
             Delete(gpu);
             Bytes -= m.Bytes;
