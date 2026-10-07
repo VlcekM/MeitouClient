@@ -57,6 +57,10 @@ public sealed class CharacterCold
     public Vector3[] Path { get; set; } = [];
     /// <summary>The path request in flight, so an answer to an older one is ignored.</summary>
     public long PathRequest { get; set; }
+    /// <summary>Belongs to the player's faction: can be selected and ordered.</summary>
+    public bool IsPlayer { get; set; }
+    /// <summary>Queued move orders (X/Z) after the current one (shift + right click); changed only by the character's own partition or a serial phase.</summary>
+    public List<System.Numerics.Vector2> OrderQueue { get; } = [];
 }
 
 /// <summary>
@@ -214,6 +218,9 @@ public sealed class CharacterTable
             hasher.Add(k.FormationOffset);
             hasher.Add(k.Path.Length);
             hasher.Add(k.PathRequest);
+            hasher.Add(k.IsPlayer);
+            hasher.Add(k.OrderQueue.Count);
+            foreach (var q in k.OrderQueue) hasher.Add(q);
             hasher.Add(k.Name.Length);
         }
         hasher.Add(free.Count);

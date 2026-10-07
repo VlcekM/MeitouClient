@@ -11,6 +11,11 @@ public sealed record CharacterSnapshot(CharacterId Id, CharacterAppearance? Appe
 {
     /// <summary>The owner faction (a position in the world's faction list; -1 none), for debug markers.</summary>
     public int Faction { get; init; } = -1;
+    public string Name { get; init; } = "";
+    public int SquadId { get; init; } = -1;
+    /// <summary>One of the player's characters, and whether it is selected.</summary>
+    public bool IsPlayer { get; init; }
+    public bool Selected { get; init; }
 }
 
 /// <summary>

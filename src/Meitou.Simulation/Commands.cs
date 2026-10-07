@@ -61,3 +61,9 @@ public sealed class CommandQueue
 /// (docs/game/game-loop.md "Zones": the game activates zones around the player's characters; until there is a player, the camera).
 /// </summary>
 public sealed record FocusCommand(Vector3 Position) : SimCommand;
+
+/// <summary>Selects characters (the player's own only; others are ignored). Not additive replaces the selection; additive (shift) adds to it.</summary>
+public sealed record SelectCommand(IReadOnlyList<CharacterId> Characters, bool Additive = false) : SimCommand;
+
+/// <summary>Stop: the characters (the selection when the list is empty) drop their orders and stand.</summary>
+public sealed record StopCommand(IReadOnlyList<CharacterId> Characters) : SimCommand;
