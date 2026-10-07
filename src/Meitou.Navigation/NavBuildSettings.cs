@@ -30,7 +30,7 @@ public sealed record NavBuildSettings
 }
 
 /// <summary>Timings of one build, milliseconds.</summary>
-public sealed class NavBuildTimes
+internal sealed class NavBuildTimes
 {
     public double Tiles, Stitch, Prune, Total;
     /// <summary>CPU milliseconds summed over the tiles: rasterise and filter, compact and areas, regions, contours, polygons.</summary>

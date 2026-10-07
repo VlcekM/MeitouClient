@@ -6,7 +6,7 @@ using Meitou.Data.Physics;
 namespace Meitou.Navigation;
 
 /// <summary>One shape of a collision file, triangulated once in Kenshi's Y-up axes (the exporter-to-Ogre map applied, the shape's pose applied).</summary>
-public sealed class PreparedShape(CollisionShapeKind kind, Vector3[] vertices, int[] indices, bool isConvex)
+internal sealed class PreparedShape(CollisionShapeKind kind, Vector3[] vertices, int[] indices, bool isConvex)
 {
     public CollisionShapeKind Kind { get; } = kind;
     public Vector3[] Vertices { get; } = vertices;
@@ -17,13 +17,13 @@ public sealed class PreparedShape(CollisionShapeKind kind, Vector3[] vertices, i
 }
 
 /// <summary>A collision file ready for placement: the triangles of every shape that gives any.</summary>
-public sealed class PreparedCollision(PreparedShape[] shapes)
+internal sealed class PreparedCollision(PreparedShape[] shapes)
 {
     public PreparedShape[] Shapes { get; } = shapes;
 }
 
 /// <summary>Loads and triangulates collision files by record path, once each; safe from several threads.</summary>
-public sealed class CollisionCache(GameInstall install)
+internal sealed class CollisionCache(GameInstall install)
 {
     readonly ConcurrentDictionary<string, PreparedCollision?> files = new(StringComparer.OrdinalIgnoreCase);
     int missing;

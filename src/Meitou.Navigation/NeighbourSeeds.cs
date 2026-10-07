@@ -8,7 +8,7 @@ namespace Meitou.Navigation;
 /// "Seeds": FUN_1403c9820, the four neighbours), so that regions reaching across a zone border stay even where this zone has no seed of its own in them.
 /// As in the original the result depends on which neighbours were loaded first, and a cached mesh keeps what it was built with.
 /// </summary>
-public static class NeighbourSeeds
+internal static class NeighbourSeeds
 {
     public static List<Vector3> Collect(NavWorld world, ZoneCoordinate zone, ZoneGeometry g)
     {

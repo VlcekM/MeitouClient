@@ -8,14 +8,14 @@ using Meitou.Data.World;
 namespace Meitou.Navigation;
 
 /// <summary>BUILDING <c>path mode</c> (FCS PathMode).</summary>
-public enum PathMode { Ignore = 0, Projected = 1, Obstacle = 2, Walkable = 3 }
+internal enum PathMode { Ignore = 0, Projected = 1, Obstacle = 2, Walkable = 3 }
 
 /// <summary>
 /// Gathers the navmesh input of one zone from the game data as the original's generator does (docs/game/pathfinding.md, "Inputs"; collision files and
 /// groups in docs/formats/collision.md): terrain triangles with the water clamp, building and foliage collision placed and filtered by collision group,
 /// per-triangle walkable areas, carvers, door painters and seed points. One instance per thread (it owns a heightmap handle); the collision cache may be shared.
 /// </summary>
-public sealed partial class ZoneGeometryGatherer : IDisposable
+internal sealed partial class ZoneGeometryGatherer : IDisposable
 {
     /// <summary>Collision groups the original's generator includes (mask 0x809de40): foliage 6 and 14, building parts 9..12, stairs 15 and 16, furniture 19, unwalkable roofs 27.</summary>
     public const uint IncludedGroupMask = 0x809de40;

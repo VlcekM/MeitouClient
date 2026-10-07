@@ -19,7 +19,7 @@ public static class NavArea
 }
 
 /// <summary>A convex prism: a convex polygon on the XZ plane between two heights. Used for carvers (removes the mesh) and door painters.</summary>
-public sealed class NavVolume(Vector2[] polygon, float yMin, float yMax)
+internal sealed class NavVolume(Vector2[] polygon, float yMin, float yMax)
 {
     /// <summary>For a door painter: the instance id of the building whose door it is (<see cref="NavDoors"/>).</summary>
     public string? Owner { get; set; }
@@ -30,7 +30,7 @@ public sealed class NavVolume(Vector2[] polygon, float yMin, float yMax)
 }
 
 /// <summary>Counters of what a gather found, for logs and the debug tool.</summary>
-public sealed class GatherStats
+internal sealed class GatherStats
 {
     public int Buildings, PartsWithCollision, Shapes, FoliageInstances, FoliageShapes, FoliageCutters, MissingFiles;
     public int WalkableTriangles, CuttingTriangles, TerrainTriangles, WaterTriangles;
@@ -41,7 +41,7 @@ public sealed class GatherStats
 /// Everything the navmesh builder needs for one zone (docs/game/pathfinding.md, "What our builder needs"): triangles in world space (Y up,
 /// counter-clockwise seen from outside, so Recast's normal test works) with a per-triangle area, carvers, door painters and seed points.
 /// </summary>
-public sealed class ZoneGeometry
+internal sealed class ZoneGeometry
 {
     public required ZoneCoordinate Zone { get; init; }
     /// <summary>World box of the zone (X and Z); triangles reach <see cref="Margin"/> beyond it.</summary>

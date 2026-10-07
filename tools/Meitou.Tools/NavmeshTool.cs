@@ -7,7 +7,7 @@ using Meitou.Data.World;
 using Meitou.Navigation;
 
 /// <summary>
-/// <c>meitou-tools navmesh</c>: gathers one zone's navmesh input (and, as the builder lands, builds the mesh) and writes debug files
+/// <c>meitou-tools navmesh</c>: gathers one zone's navmesh input, builds the mesh (exterior and building interiors) and writes debug files
 /// (OBJ for a 3D viewer, a top-down PNG). Output goes where the user says, never into the repository.
 /// </summary>
 static class NavmeshTool
@@ -140,9 +140,7 @@ static class NavmeshTool
                     {
                         var c = queue2.Dequeue();
                         var m = world.Mesh(c.Zone);
-                        foreach (int q in m.Neighbours[c.Polygon]) if (q >= 0 && seen.Add(new NavRef(c.Zone, q).Key)) queue2.Enqueue(new NavRef(c.Zone, q));
-                        var tl = m.LinksOf(c.Polygon);
-                        for (int i = 1; i < tl.Length; i += 2) if (seen.Add(new NavRef(c.Zone, tl[i]).Key)) queue2.Enqueue(new NavRef(c.Zone, tl[i]));
+                        foreach (int q in m.NeighboursOf(c.Polygon)) if (seen.Add(new NavRef(c.Zone, q).Key)) queue2.Enqueue(new NavRef(c.Zone, q));
                         foreach (var l in world.LinksOf(c)) if (seen.Add(l.To.Key)) queue2.Enqueue(l.To);
                     }
                     Console.WriteLine($"  {seen.Count} polygons reachable from the start without clearance; goal reachable: {okGoal && seen.Contains(gref.Key)}");

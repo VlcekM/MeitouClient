@@ -5,7 +5,7 @@ using Meitou.Data.World;
 
 namespace Meitou.Navigation;
 
-public sealed partial class ZoneGeometryGatherer
+internal sealed partial class ZoneGeometryGatherer
 {
     // ---- foliage ----
 

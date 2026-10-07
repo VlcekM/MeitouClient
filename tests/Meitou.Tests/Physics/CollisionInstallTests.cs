@@ -11,14 +11,6 @@ namespace Meitou.Tests.Physics;
 [Slow]
 public class CollisionInstallTests
 {
-    static readonly object Gate = new();
-    static GameDatabase? database;
-
-    static GameDatabase Database(GameInstall install)
-    {
-        lock (Gate) return database ??= GameDatabase.Load(LoadOrder.BaseGame(install));
-    }
-
     /// <summary>The BUILDING_PART records reachable from the base game's BUILDING records through parts, interior, interior mask and doors.</summary>
     static List<GameRecord> Parts(GameDatabase db)
     {
@@ -41,7 +33,7 @@ public class CollisionInstallTests
     [Fact]
     public void Every_xml_collision_file_in_the_install_parses_with_the_documented_counts()
     {
-        var install = GameInstall.Locate();
+        var install = InstallData.Install;
         Assert.SkipWhen(install is null, "Kenshi install not found");
         var files = Directory.EnumerateFiles(install!.DataDirectory, "*.xml", SearchOption.AllDirectories)
             .Where(f => Path.GetExtension(f).Equals(".xml", StringComparison.OrdinalIgnoreCase)).Where(f => !f.Contains($"{Path.DirectorySeparatorChar}gui{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}editor{Path.DirectorySeparatorChar}"))
@@ -84,9 +76,9 @@ public class CollisionInstallTests
     [Fact]
     public void Records_name_546_building_parts_with_collision_and_354_foliage_meshes()
     {
-        var install = GameInstall.Locate();
+        var install = InstallData.Install;
         Assert.SkipWhen(install is null, "Kenshi install not found");
-        var db = Database(install!);
+        var db = InstallData.BaseGame!;
         var parts = Parts(db);
         Assert.Equal(1019, parts.Count);
         var named = parts.Where(p => p.GetPath("xml collision").Length > 0).ToList();
@@ -114,7 +106,7 @@ public class CollisionInstallTests
     [Fact]
     public void Collision_boxes_overlap_their_render_meshes_under_the_documented_axis_map()
     {
-        var install = GameInstall.Locate();
+        var install = InstallData.Install;
         Assert.SkipWhen(install is null, "Kenshi install not found");
         var documented = MeshOverlap(install!, CollisionTriangulator.ToWorldAxes);
         Assert.True(documented.Count >= 380, $"only {documented.Count} parts compared");
@@ -134,7 +126,7 @@ public class CollisionInstallTests
     /// <summary>IoU of each part's collision AABB (under <paramref name="axes"/>) with its render mesh's bounds, sorted ascending; parts with a mesh, a collision file and no offset.</summary>
     static List<float> MeshOverlap(GameInstall install, Func<Vector3, Vector3> axes)
     {
-        var db = Database(install);
+        var db = InstallData.BaseGame!;
         var meshIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var f in Directory.EnumerateFiles(install.DataDirectory, "*.mesh", SearchOption.AllDirectories)) meshIndex.TryAdd(Path.GetFileName(f), f);
 

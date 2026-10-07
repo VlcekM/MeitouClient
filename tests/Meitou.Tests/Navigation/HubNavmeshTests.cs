@@ -10,22 +10,30 @@ namespace Meitou.Tests.Navigation;
 
 /// <summary>The navmesh pipeline on The Hub (zones 20.32 and 21.32) against the Kenshi install.</summary>
 [Slow]
-public class HubNavmeshTests
+public class HubNavmeshTests(ITestOutputHelper output)
 {
+    /// <summary>
+    /// Runs <paramref name="work"/> three times and returns the fastest time in milliseconds, writing all three to the test output. A bound on a single run flakes
+    /// when other processes load the machine (a zone build measured 0.7 s quiet and 13.9 s in a loaded full run); all three runs being slowed is rare.
+    /// </summary>
+    double BestOfThree(string what, Action work)
+    {
+        var times = new double[3];
+        for (int i = 0; i < times.Length; i++)
+        {
+            var watch = Stopwatch.StartNew();
+            work();
+            times[i] = watch.Elapsed.TotalMilliseconds;
+        }
+        output.WriteLine($"{what}: {string.Join(", ", times.Select(t => $"{t:0} ms"))}");
+        return times.Min();
+    }
+
     static readonly object Gate = new();
-    static (GameInstall Install, GameDatabase Db, WorldLevelData Levels)? loaded;
     static readonly Dictionary<ZoneCoordinate, (ZoneGeometry Geometry, ZoneNavMesh Full)> built = [];
 
-    static (GameInstall Install, GameDatabase Db, WorldLevelData Levels)? Load()
-    {
-        lock (Gate)
-        {
-            if (loaded is not null) return loaded;
-            var install = GameInstall.Locate();
-            if (install is null) return null;
-            return loaded = (install, GameDatabase.Load(LoadOrder.FromInstall(install)), WorldLevelData.Load(install));
-        }
-    }
+    static (GameInstall Install, GameDatabase Db, WorldLevelData Levels)? Load() =>
+        InstallData.Install is { } install ? (install, InstallData.FullLoadOrder!, InstallData.Levels!) : null;
 
     static (ZoneGeometry Geometry, ZoneNavMesh Full) Zone(ZoneCoordinate zone)
     {
@@ -100,11 +108,17 @@ public class HubNavmeshTests
         var kept = full.WithoutPruned();
         // Seeds and open ground are walkable; the middle of every solid building volume carved for an interior is not.
         var l = new List<int>();
+        int seedsOnMesh = 0, seedsTried = 0;
         foreach (var seed in g.Seeds.Take(13))
         {
             l.Clear();
             kept.PolygonsAt(seed.X, seed.Z, l);
+            seedsTried++;
+            if (l.Count > 0) seedsOnMesh++;
         }
+        // A seed claims a region within 4 units, not necessarily the polygon under it, but most of them stand on the mesh.
+        output.WriteLine($"{seedsOnMesh} of {seedsTried} seeds stand on a kept polygon");
+        Assert.True(seedsOnMesh * 2 > seedsTried, $"only {seedsOnMesh} of {seedsTried} seeds stand on the mesh");
         int checkedHulls = 0;
         foreach (var carver in g.Carvers.Where(c => c.Polygon.Length >= 4 && c.YMax - c.YMin > 50).Take(40))
         {
@@ -194,14 +208,13 @@ public class HubNavmeshTests
         var outsideEast = At(-49500, 3500);
         foreach (var (a, b) in new[] { (outsideWest, centre), (centre, outsideEast), (outsideWest, outsideEast) })
         {
-            var watch = Stopwatch.StartNew();
-            var path = query.FindPath(a, b);
-            watch.Stop();
+            PathResult path = PathResult.NotFound;
+            double best = BestOfThree($"path {a} to {b}", () => path = query.FindPath(a, b));
             Assert.True(path.Found, $"no path {a} to {b}");
             float length = 0;
             for (int i = 1; i < path.Points.Count; i++) length += Vector3.Distance(path.Points[i - 1], path.Points[i]);
             Assert.InRange(length, Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z)) - 1, Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z)) * 1.8f);
-            Assert.True(watch.ElapsedMilliseconds < 1500, $"{watch.ElapsedMilliseconds} ms");
+            Assert.True(best < 1500, $"{best:0} ms");
             // Every point along the path stands on the mesh.
             for (int i = 1; i < path.Points.Count; i++)
             {
@@ -249,17 +262,24 @@ public class HubNavmeshTests
                 Assert.True(walk.World.Contains(West));
                 // A building's footprint is no longer walkable; the stand-in would have said yes.
                 var carved = Zone(West).Geometry.Carvers.First(c => c.Polygon.Length >= 4 && c.YMax - c.YMin > 50);
+                var centre = carved.Polygon.Aggregate(Vector2.Zero, (a, p) => a + p) / carved.Polygon.Length;
+                Assert.False(walk.IsWalkable(centre.X, centre.Y), $"{centre} inside a carved volume is walkable");
                 Assert.True(File.Exists(service.Cache.PathOf(West.X, West.Y)));
             }
-            var walk2 = new NavmeshWalkability((x, z) => (float)map.HeightAt(x, z));
-            using (var service = new NavMeshService(install, db, levels, walk2, cache: new NavMeshCache(dir)))
+            // Three services in turn load it from the cache; the bound is on the fastest (see BestOfThree).
+            var cacheTimes = new List<double>();
+            for (int i = 0; i < 3; i++)
             {
+                var walk2 = new NavmeshWalkability((x, z) => (float)map.HeightAt(x, z));
+                using var service = new NavMeshService(install, db, levels, walk2, cache: new NavMeshCache(dir));
                 var ready = await service.Request(West);
                 Assert.Equal(NavMeshOrigin.Cache, ready.Origin);
-                Assert.True(ready.Milliseconds < 3000, $"{ready.Milliseconds} ms from the cache");
+                cacheTimes.Add(ready.Milliseconds);
                 Assert.Equal(walk.World.Find(West)!.PolygonCount, walk2.World.Find(West)!.PolygonCount);
-            Assert.Equal(walk.World.Find(West)!.DoorIds, walk2.World.Find(West)!.DoorIds);
+                Assert.Equal(walk.World.Find(West)!.DoorIds, walk2.World.Find(West)!.DoorIds);
             }
+            output.WriteLine($"load from the cache: {string.Join(", ", cacheTimes.Select(t => $"{t:0} ms"))}");
+            Assert.True(cacheTimes.Min() < 3000, $"{cacheTimes.Min():0} ms from the cache");
             map.Dispose();
         }
         finally
@@ -304,10 +324,14 @@ public class HubNavmeshTests
         var settings = new NavBuildSettings();
         using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
         NavMeshPipeline.BuildZone(gatherer, g, settings, out _); // warm
-        var second = NavMeshPipeline.BuildZone(gatherer, g, settings, out var times);
-        Assert.Equal(first.PolygonCount, second.PolygonCount);
-        Assert.Equal(first.Vertices, second.Vertices);
-        Assert.Equal(first.Kept, second.Kept);
-        Assert.True(times.Total < 3000, $"build took {times.Total:0} ms");
+        // Each rebuild must give the same mesh; the time is the fastest of three (see BestOfThree).
+        double best = BestOfThree("zone build", () =>
+        {
+            var again = NavMeshPipeline.BuildZone(gatherer, g, settings, out _);
+            Assert.Equal(first.PolygonCount, again.PolygonCount);
+            Assert.Equal(first.Vertices, again.Vertices);
+            Assert.Equal(first.Kept, again.Kept);
+        });
+        Assert.True(best < 3000, $"build took {best:0} ms");
     }
 }

@@ -5,7 +5,7 @@ using Meitou.Data.World;
 
 namespace Meitou.Navigation;
 
-public sealed partial class ZoneGeometryGatherer
+internal sealed partial class ZoneGeometryGatherer
 {
     /// <summary>
     /// The seed points either side of a door: the door shape's centre moved along its local axis <c>door navmesh axis</c> past its faces, then dropped to the ground

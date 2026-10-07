@@ -42,7 +42,10 @@ public sealed class NavWorld
     /// <summary>The links of a polygon across zone borders (empty for nearly all).</summary>
     public ReadOnlySpan<NavLink> LinksOf(NavRef p) => links.TryGetValue(p.Key, out var l) ? l : [];
 
-    /// <summary>A new world with <paramref name="mesh"/> added (or replacing the zone's), linked to its loaded neighbours.</summary>
+    /// <summary>
+    /// A new world with <paramref name="mesh"/> added (or replacing the zone's), linked to its loaded neighbours where the borders' heights differ by at most
+    /// <paramref name="maxStep"/> (engine choice: the builder's <c>MaxClimb</c> 5 plus half a unit, as between tiles).
+    /// </summary>
     public NavWorld With(ZoneNavMesh mesh, float maxStep = 5.5f)
     {
         var zone = new ZoneCoordinate(mesh.ZoneX, mesh.ZoneZ);

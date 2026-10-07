@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace Meitou.Navigation;
 
-public static partial class ZoneNavMeshBuilder
+internal static partial class ZoneNavMeshBuilder
 {
     /// <summary>A convex counter-clockwise polygon with every edge moved outward by <paramref name="d"/> (corners mitred). A thin door leaf must paint a closed band of cells, or a path slips diagonally between them.</summary>
     static Vector2[] Inflate(Vector2[] p, float d)

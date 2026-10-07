@@ -11,7 +11,7 @@ namespace Meitou.Navigation;
 /// paint doors, partition, contour and triangulate; then stitch the tiles, and keep only the regions near a seed
 /// (docs/game/pathfinding.md, "Region pruning by seeds"). Radius 0: clearance is a query-time check.
 /// </summary>
-public static partial class ZoneNavMeshBuilder
+internal static partial class ZoneNavMeshBuilder
 {
     public static ZoneNavMesh Build(ZoneGeometry g, NavBuildSettings s, out NavBuildTimes times)
     {

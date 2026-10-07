@@ -3,7 +3,7 @@ using DotRecast.Recast;
 
 namespace Meitou.Navigation;
 
-public static partial class ZoneNavMeshBuilder
+internal static partial class ZoneNavMeshBuilder
 {
     // ---- stitching ----
 

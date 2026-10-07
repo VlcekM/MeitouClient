@@ -5,7 +5,7 @@ using Meitou.Data.World;
 namespace Meitou.Navigation;
 
 /// <summary><c>navtiles/seeds.def</c>: float3 records, absolute positions (Kenshi units), bucketed by zone.</summary>
-public static class NavSeeds
+internal static class NavSeeds
 {
     public const string RelativePath = "newland/land/navtiles/seeds.def";
 

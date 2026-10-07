@@ -34,7 +34,10 @@ static int Usage()
         meitou-tools materials     compile every material script and cross-check mesh materials and textures
         meitou-tools fcs-types     match record type numbers to fcs.def type names
         meitou-tools fcs-records N show the fields of the first records of type N in the base game
-        meitou-tools navmesh [--zone x,z | --town name] [--geometry] [--obj f.obj] [--png f.png] [--scale u] [--box x0,z0,x1,z1] [--around n] [--path x0,z0,x1,z1]  gather and build a zone's navmesh, write debug files
+        meitou-tools navmesh [--zone x,z | --town name] [--around n] [--geometry] [--obj f.obj] [--png f.png] [--scale u] [--box x0,z0,x1,z1] [--hide-pruned]
+                           [--path x0,z0,x1,z1 [--from-y y] [--to-y y] [--closed]] [--near x,z,radius] [--no-interiors] [--no-neighbour-seeds]
+                           [--cell u] [--tile cells] [--watershed] [--threads n] [--repeat n] [--fingerprint]
+                           gather and build a zone's navmesh, write debug files; --fingerprint prints SHA-256 of the cache files of The Hub (or --zone) and the Hub path points
         meitou-tools world         read the heightmap, zone/level files and features.dat and cross-check them
         meitou-tools image-diff <a.png> <b.png> [diff.png]  compare two screenshots: mean difference, share of pixels over 12/255
         meitou-tools draw-log-diff <a> <b> [--keep-handles]  compare two MEITOU_DRAW_LOG files draw by draw (handles renamed by first use)

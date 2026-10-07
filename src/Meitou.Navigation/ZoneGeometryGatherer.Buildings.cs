@@ -5,7 +5,7 @@ using Meitou.Data.World;
 
 namespace Meitou.Navigation;
 
-public sealed partial class ZoneGeometryGatherer
+internal sealed partial class ZoneGeometryGatherer
 {
     /// <summary>How far (units) a building reaches past the zone box: placements this near are gathered (engine choice).</summary>
     const float BuildingReach = 600;

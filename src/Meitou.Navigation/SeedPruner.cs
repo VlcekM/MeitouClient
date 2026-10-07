@@ -5,7 +5,7 @@ namespace Meitou.Navigation;
 /// and the largest region when none qualifies. This is that pass over the polygon graph: roofs, closed yards and cliff tops without a seed are dropped
 /// (docs/game/pathfinding.md, "Region pruning by seeds").
 /// </summary>
-public static class SeedPruner
+internal static class SeedPruner
 {
     /// <summary>Marks the polygons not connected to any seed as not kept. Returns how many seeds found a polygon.</summary>
     public static int Prune(ZoneNavMesh mesh, ZoneGeometry g, NavBuildSettings s)
@@ -21,6 +21,7 @@ public static class SeedPruner
         foreach (var seed in g.Seeds)
         {
             bool found = false;
+            // Engine choice: a seed that finds nothing within the slack is retried with three times the slack (a seed's Y is where it was authored).
             foreach (float slack in new[] { s.SeedHeightSlack, 3 * s.SeedHeightSlack })
             {
                 float reach = s.SeedDistance;

@@ -29,9 +29,9 @@ public sealed class ZoneNavMesh
     public required Vector2 BoundsMin { get; init; }
     public required Vector2 BoundsMax { get; init; }
     /// <summary>Instance ids of the buildings whose doors are in this mesh (<see cref="NavDoors"/>); null when there are none.</summary>
-    public string[]? DoorIds { get; set; }
+    public string[]? DoorIds { get; internal set; }
     /// <summary>Per polygon: the index into <see cref="DoorIds"/> for door polygons, −1 otherwise; null when there are no doors.</summary>
-    public int[]? DoorOf { get; set; }
+    public int[]? DoorOf { get; internal set; }
 
     public int PolygonCount => Polygons.Length;
 

@@ -6,12 +6,12 @@ using Meitou.Data.World;
 namespace Meitou.Navigation;
 
 /// <summary>A building of a zone with an interior to build: its placement and record.</summary>
-public sealed record InteriorSite(BuildingPlacement Placement, GameRecord Record, Vector3 Position, bool Destroyed);
+internal sealed record InteriorSite(BuildingPlacement Placement, GameRecord Record, Vector3 Position, bool Destroyed);
 
 /// <summary>How a building's shapes are taken for its interior mesh (docs/game/pathfinding.md, "Interiors").</summary>
 sealed record InteriorContext(string InstanceId, bool Destroyed, uint Mask, bool Own);
 
-public sealed partial class ZoneGeometryGatherer
+internal sealed partial class ZoneGeometryGatherer
 {
     /// <summary>Shape groups of an interior job: 9..13, 15..22 and 27; for a destroyed building only 9, 10, 13 and 19 (FUN_1403c79b0).</summary>
     public const uint InteriorGroupMask = 0x87fbe00, DestroyedInteriorGroupMask = 0x82600;

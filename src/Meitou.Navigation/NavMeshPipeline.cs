@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace Meitou.Navigation;
 
 /// <summary>Builds a zone's complete mesh: the exterior, then every building interior, joined.</summary>
-public static class NavMeshPipeline
+internal static class NavMeshPipeline
 {
     /// <summary>The zone's mesh with its interiors (pruned polygons still present; use <see cref="ZoneNavMesh.WithoutPruned"/> for what is kept).</summary>
     public static ZoneNavMesh BuildZone(ZoneGeometryGatherer gatherer, ZoneGeometry geometry, NavBuildSettings settings, out NavBuildTimes times, bool interiors = true, Action<string>? log = null)

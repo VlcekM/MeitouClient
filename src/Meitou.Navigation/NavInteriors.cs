@@ -8,9 +8,9 @@ namespace Meitou.Navigation;
 /// the zone's mesh as extra polygons, joined to the exterior along the door polygons (docs/game/pathfinding.md, "Interiors"). To the queries an interior
 /// is part of the zone: the door is an ordinary link.
 /// </summary>
-public static class NavInteriors
+internal static class NavInteriors
 {
-    /// <summary>How close (units) two door edges have to be to be joined, and how far apart in height.</summary>
+    /// <summary>How close (units) two door edges have to be to be joined, and how far apart in height (engine choices).</summary>
     public const float JoinDistance = 6, JoinHeight = 12;
 
     /// <summary>The zone's exterior mesh with the interior meshes appended and joined; both kept and pruned polygons are carried over.</summary>
