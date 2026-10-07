@@ -23,6 +23,8 @@ namespace Meitou.Simulation;
 public sealed partial class PopulationSystem
 {
     readonly ConcurrentQueue<BuiltRoamer> builtRoamers = new();
+    readonly List<Platoon> platoonBuffer = [];   // StepRoaming's copy of the registry (a step may remove a platoon)
+    readonly List<Vector2> playerPositions = [];
 
     sealed record BuiltRoamer(int Platoon, BuiltSquad Squad);
 
@@ -35,7 +37,9 @@ public sealed partial class PopulationSystem
     void StepRoaming(World world)
     {
         float dt = settings.CheckEveryTicks * world.TickSeconds;
-        foreach (var p in world.Platoons.All.ToList())
+        platoonBuffer.Clear();
+        platoonBuffer.AddRange(world.Platoons.All);
+        foreach (var p in platoonBuffer)
         {
             switch (p.State)
             {
@@ -106,7 +110,7 @@ public sealed partial class PopulationSystem
             return;
         }
         int n = Math.Min(4, candidates.Count);
-        ulong roll = Rng.Hash(world.Seed, (ulong)p.Id, RngPurpose.Wander, (ulong)world.Tick ^ 0x7A6E7UL);
+        ulong roll = Rng.Hash(world.Seed, (ulong)p.Id, RngPurpose.Wander, (ulong)world.Tick ^ SeedSalts.RoamNext);
         p.Target = candidates[(int)(Rng.Float(roll) * n) % n].Site;
         p.GoingHome = false;
     }
@@ -199,7 +203,6 @@ public sealed partial class PopulationSystem
     {
         p.State = PlatoonState.Activating;
         ulong seed = world.Seed;
-        var walk = world.Walkability;
         var position = p.Position;
         int id = p.Id;
         if (work is null) FinishRoamer(world, new BuiltRoamer(id, BuildRoamer(p.TemplateId, p.Faction, p.Key, seed, position)));
@@ -210,7 +213,6 @@ public sealed partial class PopulationSystem
             ulong key = p.Key;
             work.Add(() => builtRoamers.Enqueue(new BuiltRoamer(id, BuildRoamer(template, faction, key, seed, position))));
         }
-        _ = walk;
     }
 
     BuiltSquad BuildRoamer(string templateId, int faction, ulong key, ulong seed, Vector2 position)
@@ -247,6 +249,7 @@ public sealed partial class PopulationSystem
     void FillPools(World world)
     {
         var table = world.Characters;
+        bool playersListed = false;   // the player's characters, scanned once per look and only when a town gets as far as placing a squad
         foreach (var site in data.Sites)
         {
             if (states[site.Index].Status != SiteStatus.Loaded || site.Town.RoamingSquads.Count == 0) continue;
@@ -261,8 +264,9 @@ public sealed partial class PopulationSystem
             float total = 0;
             foreach (var entry in site.Town.RoamingSquads)
             {
-                if (entry.V0 <= 0 || data.Db.Find(entry.Id) is not { Type: FcsRecordType.SQUAD_TEMPLATE or FcsRecordType.UNIQUE_SQUAD_TEMPLATE }) continue;
-                int existing = world.Platoons.All.Count(p => p.Origin == site.Index && p.TemplateId == entry.Id);
+                if (entry.V0 <= 0 || !SquadFactory.IsTemplate(data.Db.Find(entry.Id))) continue;
+                int existing = 0;
+                foreach (var p in world.Platoons.All) if (p.Origin == site.Index && p.TemplateId == entry.Id) existing++;
                 float w = MathF.Max(0, entry.V0 - existing);
                 if (w <= 0) continue;
                 weights.Add((entry, w));
@@ -270,8 +274,8 @@ public sealed partial class PopulationSystem
             }
             if (total <= 0) continue;
             int id = world.Platoons.NextId();
-            ulong key = Rng.Mix(0x20A4UL ^ (ulong)id << 8 ^ (ulong)site.Index << 40);
-            float pick = Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Spawn, 5)) * total;
+            ulong key = Rng.Mix(SeedSalts.RoamingPool ^ (ulong)id << 8 ^ (ulong)site.Index << 40);
+            float pick = Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.RoamingPick)) * total;
             var chosen = weights[^1].Entry;
             foreach (var (entry, w) in weights)
             {
@@ -282,11 +286,18 @@ public sealed partial class PopulationSystem
             if (plan.TotalMembers == 0 || members + plan.TotalMembers > cap) continue;
             var position = Place(site, world.Seed, key, world.Walkability);
             // Not on top of the player (6.3: within 35.4 of the view point).
+            if (!playersListed)
+            {
+                playersListed = true;
+                playerPositions.Clear();
+                for (int i = 0; i < table.Previous.Length; i++)
+                    if (table.Previous[i].Alive && table.Cold(i) is { IsPlayer: true }) playerPositions.Add(new Vector2(table.Previous[i].Position.X, table.Previous[i].Position.Z));
+            }
             bool crowded = false;
-            for (int i = 0; i < table.Previous.Length && !crowded; i++)
-                if (table.Previous[i].Alive && table.Cold(i) is { IsPlayer: true } && Vector2.Distance(new Vector2(table.Previous[i].Position.X, table.Previous[i].Position.Z), position) < 36) crowded = true;
+            foreach (var at in playerPositions)
+                if (Vector2.Distance(at, position) < 36) { crowded = true; break; }
             if (crowded) continue;
-            int squadFaction = template.Faction is { } tf && data.Factions.ToList().FindIndex(f => f.Id == tf) is var ti and >= 0 ? ti : factionIndex;
+            int squadFaction = template.Faction is { } tf && data.FactionIndex(tf) is var ti and >= 0 ? ti : factionIndex;
             var platoon = new Platoon
             {
                 Id = id, Origin = site.Index, TemplateId = chosen.Id, Faction = squadFaction, Key = key, Size = plan.TotalMembers,

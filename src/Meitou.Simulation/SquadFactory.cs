@@ -48,6 +48,9 @@ public sealed record SquadPlan(SquadTemplate Template, IReadOnlyList<MemberPlan>
 /// </summary>
 public static class SquadFactory
 {
+    /// <summary>Whether a record is something a squad is made from: a SQUAD_TEMPLATE or a UNIQUE_SQUAD_TEMPLATE (null: no).</summary>
+    public static bool IsTemplate(GameRecord? record) => record is { Type: FcsRecordType.SQUAD_TEMPLATE or FcsRecordType.UNIQUE_SQUAD_TEMPLATE };
+
     /// <summary>The count of one member list entry (section 5.1): the range rule, then the multiplier.</summary>
     public static int Count(int v0, int v1, float multiplier, bool dontMultiply, ulong roll)
     {
@@ -130,12 +133,12 @@ public static class SquadFactory
 
         foreach (var slave in template.Slaves)
         {
-            if (db.Find(slave.Id) is not { } record || record.Type is not (FcsRecordType.SQUAD_TEMPLATE or FcsRecordType.UNIQUE_SQUAD_TEMPLATE))
+            if (db.Find(slave.Id) is not { } record || !IsTemplate(record))
             {
                 problems.Add($"Missing squad slaves data reference ({slave.Id}) for squad '{template.Name}'");
                 continue;
             }
-            slaves.Add(Plan(db, SquadTemplate.From(record), multiplier, seed, Rng.Mix(key ^ (ulong)slaves.Count + 0x5A1AUL), states));
+            slaves.Add(Plan(db, SquadTemplate.From(record), multiplier, seed, Rng.Mix(key ^ (ulong)slaves.Count + SeedSalts.SlaveSquad), states));
         }
         return new SquadPlan(template, members, slaves, problems);
     }
