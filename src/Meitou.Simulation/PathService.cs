@@ -4,7 +4,7 @@ using System.Numerics;
 namespace Meitou.Simulation;
 
 /// <summary>A path wanted by one character.</summary>
-public readonly record struct PathRequest(long Id, CharacterId Character, Vector3 From, Vector3 To);
+public readonly record struct PathRequest(long Id, CharacterId Character, Vector3 From, Vector3 To, float Radius = 0);
 
 /// <summary>The answer to a <see cref="PathRequest"/>: the path (empty when none).</summary>
 public readonly record struct PathAnswer(long Id, CharacterId Character, PathResult Path);
@@ -39,16 +39,16 @@ public sealed class PathService : IDisposable
     public long Submitted => Interlocked.Read(ref nextId);
 
     /// <summary>Asks for a path; returns the request id.</summary>
-    public long Submit(CharacterId character, Vector3 from, Vector3 to)
+    public long Submit(CharacterId character, Vector3 from, Vector3 to, float radius = 0)
     {
         long id = Interlocked.Increment(ref nextId);
-        var request = new PathRequest(id, character, from, to);
+        var request = new PathRequest(id, character, from, to, radius);
         if (IsSynchronous) answers.Enqueue(Answer(request));
         else requests!.Add(request);
         return id;
     }
 
-    PathAnswer Answer(PathRequest r) => new(r.Id, r.Character, walkability.FindPath(r.From, r.To));
+    PathAnswer Answer(PathRequest r) => new(r.Id, r.Character, r.Radius > 0 && walkability is IAgentWalkability agent ? agent.FindPath(r.From, r.To, r.Radius) : walkability.FindPath(r.From, r.To));
 
     void Work()
     {

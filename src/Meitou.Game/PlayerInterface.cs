@@ -285,6 +285,19 @@ sealed class PlayerInterface(WorldSession session, Func<float, float, float> gro
             }
         }
 
+        // The way the selected characters are going (the leg to the next waypoint, then the rest).
+        foreach (var c in session.CurrentSnapshot.Characters)
+        {
+            if (!c.Selected || c.Path.Count == 0) continue;
+            Vector2? last = Project(where(c) + new Vector3(0, 0.3f, 0));
+            foreach (var point in c.Path)
+            {
+                var s = Project(point + new Vector3(0, 0.3f, 0));
+                if (s is not null && last is { } l) o.Line(l.X, l.Y, s.Value.X, s.Value.Y, 2, new Vector4(1f, 0.85f, 0.2f, 0.9f));
+                last = s;
+            }
+        }
+
         // The box.
         if (dragging && dragFrom is { } from)
         {

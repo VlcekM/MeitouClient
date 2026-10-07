@@ -28,7 +28,7 @@ sealed class GameOptions
     public bool? VSync;
     /// <summary>With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.</summary>
     public int Ticks;
-    public bool FreeCamera, NoPopulation, NewGame, ListStarts, SelectPlayer;
+    public bool FreeCamera, NoPopulation, NoNavmesh, NewGame, ListStarts, SelectPlayer;
     /// <summary>The start to play (null = the default); with <c>--select-player</c>/<c>--move-to</c> the picture shows a selected squad walking.</summary>
     public string? NewGameName;
     public (float X, float Z)? MoveTo;
@@ -44,6 +44,7 @@ sealed class GameOptions
           --sim-threads <n>          worker threads of the simulation (default: half the cores, 1 to 8; the result never depends on it)
           --seed <n>                 the world seed (default 0)
           --no-population            no town residents or movement (an empty world)
+          --no-navmesh               paths on open ground (no buildings), as in the tests; default: the navmesh of the active zones (built on first use, cached)
           --new-game [start]         a new game as the NEW_GAME_STARTOFF start (default Wanderer): the player squad at its town, camera on it
           --list-starts              print the available starts and exit
           --select-player, --move-to <x> <z>   with --new-game: select the squad / order it to walk (for screenshots)
@@ -76,6 +77,7 @@ sealed class GameOptions
                 case "--ticks": g.Ticks = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--free-camera": g.FreeCamera = true; break;
                 case "--no-population": g.NoPopulation = true; break;
+                case "--no-navmesh": g.NoNavmesh = true; break;
                 case "--new-game":
                     g.NewGame = true;
                     if (i + 1 < args.Length && !args[i + 1].StartsWith('-')) g.NewGameName = args[++i];
@@ -172,6 +174,9 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
 {
     WorldSession session = null!;   // disposed with the host (Run)
     Meitou.Simulation.PopulationSystem? population;
+    Meitou.Navigation.NavSystem? nav;
+    volatile bool navChanged;
+    readonly Dictionary<Meitou.Data.World.ZoneCoordinate, long> navZones = [];
     PlayerInterface player = null!;
     Meitou.Simulation.Squad? playerSquad;
     WorldFrame.Gpu gpu = null!;
@@ -182,7 +187,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
     public int Run()
     {
         try { return o.Screenshot is not null ? Screenshot() : Interactive(); }
-        finally { session?.Dispose(); }
+        finally { session?.Dispose(); nav?.Dispose(); }
     }
 
     void Boot(VulkanDisplay display, bool interactive)
@@ -193,13 +198,20 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         (camera, render) = WorldFrame.Setup(scene, o);
         // The simulation samples the CPU heightmap (immutable, any thread), not the renderer's terrain.
         var heights = new Meitou.Data.World.GroundHeights(scene.Window, scene.Coarse, scene.CoarseSize, WorldFrame.CoarseStep);
-        var walkability = new Meitou.Simulation.OpenGroundWalkability(heights.HeightAt);
+        Meitou.Simulation.IWalkability walkability = new Meitou.Simulation.OpenGroundWalkability(heights.HeightAt);
         var systems = new List<Meitou.Simulation.ITickSystem>();
         if (!g.NoPopulation && scene.Database is { } gameDb)
         {
             var levels = scene.Objects?.Levels ?? Meitou.Data.World.WorldLevelData.Load(install);
+            if (!g.NoNavmesh)
+            {
+                nav = new Meitou.Navigation.NavSystem(install, gameDb, levels, heights.HeightAt);
+                nav.ZoneReady += _ => navChanged = true;
+                walkability = new NavAdapter(nav.Walkability);
+            }
             var data = Meitou.Simulation.PopulationData.Create(gameDb, levels.Towns(), new Meitou.Simulation.GeneratedAppearances(gameDb, install.Root));
             population = new Meitou.Simulation.PopulationSystem(data, new Meitou.Simulation.PopulationSettings { Background = interactive });
+            if (nav is not null) population.ZoneGate = zone => nav.Walkability.World.Contains(zone);
             systems.Add(population);
             systems.Add(new Meitou.Simulation.PlayerSystem());
             systems.Add(new Meitou.Simulation.MovementSystem(new Meitou.Simulation.PathService(walkability, synchronous: !interactive)));
@@ -207,13 +219,22 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         }
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate,
             clock: GameClockFor(scene.Database, o.Hour),
-            simulation: new Meitou.Simulation.WorldSettings { Seed = g.Seed, Threads = Math.Max(1, g.SimThreads ?? config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)) },
+            simulation: new Meitou.Simulation.WorldSettings { Seed = g.Seed, MinPartitionSize = 128, Threads = Math.Max(1, g.SimThreads ?? config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)) },
             systems: systems, walkability: walkability);
         var target = camera.Target;
         foreach (var problem in session.Bindings.Apply(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
         // Right is the command button now; older saved configs bound it to orbit.
         session.Bindings.Set(InputAction.Orbit, [.. session.Bindings.Get(InputAction.Orbit).Where(b => !(b.IsMouse && b.Button == EngineButton.Right))]);
         player = new PlayerInterface(session, heights.HeightAt, DrawnPosition);
+        if (nav is not null && (start is not null || !interactive))
+        {
+            // The squad is placed on the mesh, and a still has its town at once: wait for the zones round the start (a cold build is about 2 s, then cached).
+            var watch = Stopwatch.StartNew();
+            var zones = Meitou.Simulation.ZoneActivation.ZonesAround(scene.Focus, 0);
+            Task.WaitAll([.. zones.Select(z => (Task)nav.LoadZone(z))]);
+            foreach (var z in zones) navZones[z] = Stopwatch.GetTimestamp();
+            Console.WriteLine($"navmesh   {zones.Count} zone(s) round the start ready in {watch.ElapsedMilliseconds} ms");
+        }
         if (start is not null && population is not null)
         {
             playerSquad = population.StartPlayer(session.World, start);
@@ -260,6 +281,27 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         camera.Distance = s.Distance;
     }
 
+    /// <summary>Keeps the navmesh on the zones the population has active (built on the nav thread, cached), drops the ones idle for 30 s, and has characters ask for their paths again when a mesh arrived (their first path may have crossed a building).</summary>
+    void UpdateNav(bool wait = false)
+    {
+        if (nav is null || population is null) return;
+        long now = Stopwatch.GetTimestamp();
+        var pending = new List<Task>();
+        foreach (var z in population.ActiveZones)
+        {
+            if (!navZones.ContainsKey(z)) pending.Add(nav.LoadZone(z));
+            navZones[z] = now;
+        }
+        foreach (var (z, seen) in navZones.ToList())
+            if (Stopwatch.GetElapsedTime(seen, now).TotalSeconds > 30) { nav.UnloadZone(z); navZones.Remove(z); }
+        if (wait) Task.WaitAll([.. pending]);
+        if (navChanged || wait && pending.Count > 0)
+        {
+            navChanged = false;
+            session.World.Commands.Enqueue(new Meitou.Simulation.RepathCommand { Tick = session.World.Tick });
+        }
+    }
+
     /// <summary>Gives the player interface the camera it picks with.</summary>
     void UpdateView(int width, int height)
     {
@@ -291,6 +333,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         {
             session.Tick();
             session.AdvanceSimulation(session.Ticks.TickSeconds);   // one control tick of real time, at speed 1
+            UpdateNav(wait: true);
         }
         ApplyCamera(session.Camera.Current);
         gpu.Streamer?.Settle(gpu.Anchor ?? camera.Eye);
@@ -417,13 +460,17 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             if (actions.Pressed(InputAction.Screenshot)) screenshotRequested = true;
         };
         long windowRan = 0, windowDropped = 0;
+        double drawTotal = 0;
         while (!window.IsClosing && !quit)
         {
             window.DoEvents();
             if (window.IsClosing) break;
             double now = frame.Elapsed.TotalSeconds, dt = now - last;
             last = now;
+            long a0 = Stopwatch.GetTimestamp();
             session.Advance(dt);
+            advanceTotal += Stopwatch.GetElapsedTime(a0).TotalMilliseconds;
+            UpdateNav();
             SendFocus();
             ApplyCamera(session.CameraAt());
             var size = window.FramebufferSize;
@@ -437,6 +484,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
                 if (overlay is not null) overlay.Target = backbuffer;
                 DrawWorld(size.X, size.Y);
                 cpuSum += Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
+                drawTotal += Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
                 bool shot = screenshotRequested;
                 screenshotRequested = false;
                 if (overlay is not null && !g.NoPopulation) DrawMarkers(overlay, size.X, size.Y);
@@ -462,7 +510,8 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
                 frames = 0;
             }
             totalFrames++;
-            if (g.QuitAfter is { } quitAfter && now >= quitAfter) { Console.WriteLine($"smoke     {totalFrames} frames in {now:0.0} s: {totalFrames / now:0} fps on average, {session.Ticks.TotalTicks} control ticks, {session.Simulation.TotalTicks} simulation ticks, game time {session.Clock.TimeText}"); quit = true; }
+            if (g.QuitAfter is { } quitAfter && now >= quitAfter) { Console.WriteLine($"profile   {session.CurrentSnapshot.Characters.Count} characters in the snapshot, {session.CurrentSnapshot.Characters.Count(c => c.Appearance is not null)} drawable; per frame: simulation advance {advanceTotal / Math.Max(totalFrames, 1):0.000} ms ({session.Simulation.TotalTicks} ticks, {advanceTotal / Math.Max(session.Simulation.TotalTicks, 1):0.000} ms per tick), host draw-list fill {fillTotal / Math.Max(fillCalls, 1):0.000} ms, world draw cpu {drawTotal / Math.Max(totalFrames, 1):0.00} ms, {(gpu.Characters is { } chars ? chars.Statistics() : "no characters")}");
+                Console.WriteLine($"smoke     {totalFrames} frames in {now:0.0} s: {totalFrames / now:0} fps on average, {session.Ticks.TotalTicks} control ticks, {session.Simulation.TotalTicks} simulation ticks, game time {session.Clock.TimeText}"); quit = true; }
             if (!vsync && fpsLimit > 0) Limit(frame, now, 1.0 / fpsLimit);
         }
         if (panel is not null)
@@ -511,6 +560,16 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
 
     /// <summary>Fills the renderer's list from the last two snapshots, interpolated by the simulation's alpha.</summary>
     void FillDrawList(CharacterDrawList list)
+    {
+        long f0 = Stopwatch.GetTimestamp();
+        try { FillDrawListCore(list); }
+        finally { fillTotal += Stopwatch.GetElapsedTime(f0).TotalMilliseconds; fillCalls++; }
+    }
+
+    double advanceTotal, fillTotal;
+    long fillCalls;
+
+    void FillDrawListCore(CharacterDrawList list)
     {
         var current = session.CurrentSnapshot;
         IndexPrevious();

@@ -220,8 +220,12 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         StepRoaming(world);
     }
 
+    /// <summary>Whether a zone may be loaded now: the host holds a town back until its navmesh is ready, so residents are not placed inside buildings of an open-ground stand-in (null: always).</summary>
+    public Func<ZoneCoordinate, bool>? ZoneGate { get; set; }
+
     void Load(World world, TownSite site, SiteState state)
     {
+        if (ZoneGate is { } gate && !gate(site.Zone)) return;   // retried at the next look
         state.Status = SiteStatus.Loading;
         state.LoadId++;
         long loadId = state.LoadId;
@@ -406,6 +410,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 Role = (int)plan.Role,
                 FormationOffset = plan.Offset - (leaderPlan?.Offset ?? Vector2.Zero),
                 IsPlayer = player,
+                FootprintRadius = RaceOf(plan.RecordId, member.Appearance)?.GetFloat("pathfind footprint radius") ?? 0,
             };
             var id = table.Spawn(hot, cold, world.Tick);
             squad.Members.Add(id);
@@ -501,15 +506,21 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>The speed stat S and the walk speed of a character (docs/game/pathfinding.md "Speed"): S = lerp(race <c>speed min skill</c>, <c>speed max skill</c>, athletics / 100), with a stand-in athletics until stats exist (stage 7).</summary>
-    (float Max, float Walk) SpeedStats(string recordId, CharacterAppearance? look)
+    GameRecord? RaceOf(string recordId, CharacterAppearance? look)
     {
-        const float standInAthletics = 20;
         var race = look?.Race;
         if (race is null && data.Db.Find(recordId) is { } rec)
         {
             var refs = rec.GetReferences("race").Where(r => r.Values.Value0 > 0).ToList();
             if (refs.Count > 0) race = data.Db.Find(refs[0].TargetStringId);
         }
+        return race;
+    }
+
+    (float Max, float Walk) SpeedStats(string recordId, CharacterAppearance? look)
+    {
+        const float standInAthletics = 20;
+        var race = RaceOf(recordId, look);
         if (race is null) return (45, 15);
         float min = race.GetInt("speed min skill", 70), max = race.GetInt("speed max skill", 120);
         return (min + (max - min) * standInAthletics * 0.01f, race.GetFloat("walk speed", 15));

@@ -47,6 +47,18 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
         var table = world.Characters;
         foreach (var command in commands)
         {
+            if (command is RepathCommand)
+            {
+                for (int s = 0; s < table.Next.Length; s++)
+                {
+                    ref var c = ref table.Next[s];
+                    if (!c.Alive || c.Task != (byte)CharacterTask.GoTo || (c.Flags & (ushort)(MoveFlags.Pending | MoveFlags.HasPath)) == 0) continue;
+                    c.Flags = (ushort)((c.Flags & ~(ushort)(MoveFlags.Pending | MoveFlags.HasPath)) | (ushort)MoveFlags.NeedPath);
+                    c.PathCursor = 0;
+                    table.Cold(s)!.PathRequest = 0;
+                }
+                continue;
+            }
             if (command is not MoveOrder order) continue;
             // An empty list orders the selection (the UI sends orders for whatever is selected when the click happens).
             var who = order.Characters.Count > 0 ? order.Characters : world.Player.Selection.ToArray();
@@ -105,7 +117,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
             if (!next[i].Alive || (next[i].Flags & (ushort)MoveFlags.NeedPath) == 0) continue;
             var cold = table.Cold(i)!;
             var to = new Vector3(next[i].Goal.X, world.Walkability.GroundHeight(next[i].Goal.X, next[i].Goal.Y), next[i].Goal.Y);
-            cold.PathRequest = Paths.Submit(new CharacterId(i, next[i].Generation), next[i].Position, to);
+            cold.PathRequest = Paths.Submit(new CharacterId(i, next[i].Generation), next[i].Position, to, cold.FootprintRadius);
             next[i].Flags = (ushort)((next[i].Flags & ~(ushort)MoveFlags.NeedPath) | (ushort)MoveFlags.Pending);
         }
         // The synchronous service has the answers already.

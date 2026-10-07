@@ -16,6 +16,8 @@ public sealed record CharacterSnapshot(CharacterId Id, CharacterAppearance? Appe
     /// <summary>One of the player's characters, and whether it is selected.</summary>
     public bool IsPlayer { get; init; }
     public bool Selected { get; init; }
+    /// <summary>The path being followed from the next waypoint, for selected characters only (the host draws it).</summary>
+    public IReadOnlyList<Vector3> Path { get; init; } = [];
 }
 
 /// <summary>

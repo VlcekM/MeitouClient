@@ -67,3 +67,9 @@ public sealed record SelectCommand(IReadOnlyList<CharacterId> Characters, bool A
 
 /// <summary>Stop: the characters (the selection when the list is empty) drop their orders and stand.</summary>
 public sealed record StopCommand(IReadOnlyList<CharacterId> Characters) : SimCommand;
+
+/// <summary>
+/// The navmesh changed (a zone became ready, a door moved): characters on the way ask for their path again (those with a go-to in hand).
+/// Paths made while a zone was still building came from the open-ground stand-in and may cross buildings.
+/// </summary>
+public sealed record RepathCommand : SimCommand;
