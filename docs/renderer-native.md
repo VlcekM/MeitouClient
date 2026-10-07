@@ -3079,12 +3079,40 @@ image views the validation layer reports at device destruction are in the base b
 **Ranges reached** (**Observed**, shadow distance 15000 at most; the driver resets above): `max` = large 120000, medium 80000, small 40000,
 object distance 400000, distant 100: the run completes, peak 60% of the budget, 78 ms a frame (the load is real; the guard did not act).
 The base build is aborted by the watchdog at `all80` (95% in the first seconds). With `MEITOU_VRAM_BUDGET_MB=6144` (a smaller card) the guard
-holds the use at 80-93% at `all80`; at that budget the cull scratch can be refused and foliage drops out for seconds (**Observed**; open).
+holds the use at 80-93% at `all80`; at that budget the cull scratch can be refused and foliage drops out for seconds (**Observed**; fixed, see the addendum below).
 
 **Other owners that grow with range** (**Observed**, `GpuAllocator.Breakdown`, the F12 pie): object textures (1.25 GB at all20, 1.7 GB at max;
 bounded by the cache's 2048 MB high-water mark), object meshes (273 MB, 800 MB at max; high-water 768 MB, which the cache overshoots while its
 pages are in use), foliage textures (0.57 to 1.05 GB; bounded by the catalog), the foliage instance arena (16 MB to 128 MB, now 71% of that), and the
 shadow cascades' views through the cull scratch. Not range-dependent: terrain textures (1.07 GB), grass blades (160 MB), upload staging.
+
+**Addendum: the four leaked image views, and the scratch under the guard** (2026-10-07)
+
+1. **The leak** (**Verified**: `MEITOU_VK_VALIDATION=sync`, offscreen `--screenshot` of Port North, a temporary live-texture registry that named the
+   owners, then the same run clean). `GpuContext.Dummy` makes one stand-in texture per sampler slot (2D, array, cube, and one more kind) as a
+   `Texture.Borrow` over an image that `Defaults` owns and cuts a view on it; `Texture.Dispose` is the only thing that destroys a texture's views,
+   and nothing called it for the borrowed wrappers, so each kept its view: four `VkImageView`s (VUID-vkDestroyDevice-device-05137). They are now
+   kept in a list and disposed in `GpuContext.Dispose`, before `Defaults`. **Verified**: after the change the offscreen viewer, the interactive
+   viewer (`--quit-after 20`, a clean close) and the game (`--quit-after 15`) with sync validation print no leak message and 0 errors. The
+   statement in the list above that the base build has the same four views is true for the base and no longer for this branch.
+2. **Scratch under the guard** (`MEITOU_VRAM_BUDGET_MB=6144`, forest view, `all80` = large 80000 / medium 40000 / small 16000, objects 200000,
+   distant 100, shadows 15000, `--fly-benchmark 600`). **Observed** before: the cull scratch refused 1853 times in 388 of 600 frames (the
+   guard sits at 91-93%, so every scratch buffer was refused by `Allows`; each slot's rebuild also freed its old buffers first, leaving the frame
+   with none). Three changes, in the order of how much they gave:
+   - *Scratch asks for priority*: `VramGuard.AllowsPriority` refuses only past 94.5% (`PriorityCeiling`, under the watchdog's 95%), against 92% for
+     caches and streaming, and a grant above 92% enters pressure (caches evict, ranges fall). `GpuAllocator.FitsInFreeSpace` lets a buffer that
+     the allocator can carve from free space in blocks it already holds skip the guard (it takes nothing from the budget; 2.4 GB of 6 GB held by
+     the allocator was free at the time).
+   - *Squeeze*: a refused scratch steps the range scale down at once (at most every 50 ms, only under pressure) instead of waiting for the next
+     0.75 s step, so a view is shortened within a few frames instead of being left out for seconds.
+   - *A rebuild keeps what it has*: `FrameScratch` makes the replacement before freeing the old buffers and keeps the largest old one when the
+     replacement is refused (`KeptOnRefusal`).
+   **Observed** after: 4-6 frames of 600 with a refused scratch (the first 50 frames, before the guard has a reading; two runs: 6 and 4 frames,
+   12 and 10 requests), against 388; allocations refused for everything 6729-10342 (before) against 44-46; peak 94.8% of the budget (no
+   watchdog abort). With the guard idle (default settings, default budget) nothing changes: `AllowsPriority` equals `Allows` below 92% and the
+   squeeze needs pressure. **Unknown**: whether a card whose budget is shared with other applications needs a lower priority ceiling; the
+   start-up frames still lose a view or two (the demand there, 150 MB per frame, is before any clamp) and fall back to nothing, not to the last
+   frame's rows (that was not built: the rows are exact per frame).
 
 ---
 

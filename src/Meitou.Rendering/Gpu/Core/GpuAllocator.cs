@@ -232,6 +232,29 @@ public sealed unsafe class GpuAllocator : IDisposable
         throw last ?? new VulkanException("Allocation failed");
     }
 
+    /// <summary>
+    /// Whether a buffer of <paramref name="size"/> bytes in device-local memory would be carved from free space in blocks the driver already
+    /// holds (so it takes nothing from the video memory budget): it is not a dedicated allocation and some device-local buffer block has
+    /// a free range of that size plus 64 KB for alignment.
+    /// </summary>
+    public bool FitsInFreeSpace(ulong size)
+    {
+        if (size > blockSize / 2) return false;
+        lock (gate)
+        {
+            foreach (var ((type, optimal), blocks) in pools)
+            {
+                if (optimal || (memProps.MemoryTypes[(int)type].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) == 0) continue;
+                foreach (var b in blocks)
+                {
+                    if (b.Dedicated) continue;
+                    foreach (var (_, len) in b.Free) if (len >= size + 65536) return true;
+                }
+            }
+        }
+        return false;
+    }
+
     Allocation AllocateFrom(uint type, ulong size, ulong alignment, bool optimal)
     {
         if (!pools.TryGetValue((type, optimal), out var blocks))
