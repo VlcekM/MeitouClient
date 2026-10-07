@@ -19,6 +19,29 @@ public struct FoliageInstanceRecord
     public Vector4 Ground;
 
     public const int Size = 96;
+
+    /// <summary>Bytes a record takes in the GPU's instance arena (<see cref="Pack"/>): 17 floats, 71% of <see cref="Size"/>.</summary>
+    public const int GpuSize = 68;
+
+    /// <summary>
+    /// The arena's layout, lossless for what the kernels read: the transform's 12 rotation and translation floats (rows 1 to 4, xyz; the fourth
+    /// column is 0, 0, 0, 1 for a placement and the kernels write those back), the sphere (4), and <c>Ground.W</c> (a rock's bits). <c>Ground.X</c> and
+    /// <c>Ground.Y</c> are the translation's x and z (the position the range is measured from, the very same floats), and <c>Ground.Z</c> (the scale)
+    /// only feeds the sphere's radius on the CPU, so none of the three is stored. Returns false when a record breaks that (a fourth column that is
+    /// not exactly 0, 0, 0, 1, or a ground position that is not the translation's): the arena would then not hold what the CPU cull reads.
+    /// </summary>
+    public static bool Pack(in FoliageInstanceRecord r, Span<float> d)
+    {
+        var t = r.Transform;
+        d[0] = t.M11; d[1] = t.M12; d[2] = t.M13;
+        d[3] = t.M21; d[4] = t.M22; d[5] = t.M23;
+        d[6] = t.M31; d[7] = t.M32; d[8] = t.M33;
+        d[9] = t.M41; d[10] = t.M42; d[11] = t.M43;
+        d[12] = r.Sphere.X; d[13] = r.Sphere.Y; d[14] = r.Sphere.Z; d[15] = r.Sphere.W;
+        d[16] = r.Ground.W;
+        static int Bits(float f) => BitConverter.SingleToInt32Bits(f);
+        return Bits(t.M14) == 0 && Bits(t.M24) == 0 && Bits(t.M34) == 0 && t.M44 == 1f && Bits(r.Ground.X) == Bits(t.M41) && Bits(r.Ground.Y) == Bits(t.M43);
+    }
 }
 
 /// <summary>A view the cull tests spheres against: its frustum planes (xyz normal, w offset) and their normals' lengths, computed once per view.</summary>

@@ -82,6 +82,9 @@ sealed class WorldOptions
     /// <summary>Offscreen pictures: the grass sway's starting time in seconds (0 by default).</summary>
     public float SwayStart;
 
+    /// <summary>The longest <c>--shadow-range</c> the command line takes (the game stops at 9000; larger ranges cost VRAM and above this the driver has been seen to reset).</summary>
+    public const float CommandLineMaxShadowRange = 15000;
+
     public const string Usage = """
         meitou-viewer --world [where] [options]
           where (default: the world's centre):
@@ -211,7 +214,7 @@ sealed class WorldOptions
                 case "--texture-quality": o.TextureQuality = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, Meitou.Data.Textures.TextureQuality.Maximum); break;
                 case "--no-shadows": o.NoShadows = true; break;
                 case "--shadow-quality": o.ShadowQuality = int.Parse(Next(), CultureInfo.InvariantCulture); break;
-                case "--shadow-range": o.ShadowRange = F(); break;
+                case "--shadow-range": o.ShadowRange = Math.Clamp(F(), KenshiShadows.MinRange, CommandLineMaxShadowRange); break;
                 case "--debug-shadows": o.DebugShadows = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--simple-sky": o.SimpleSky = true; break;
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
@@ -425,6 +428,8 @@ static class WorldFrame
         public WorldObjectRenderer? Objects;
         public FoliageRenderer? Foliage;
         public TerrainStreamer? Streamer;
+        /// <summary>Keeps the video memory under the budget by clamping the ranges and pausing the streaming (null with <c>MEITOU_VRAM_GUARD=0</c>).</summary>
+        public VramGuard? Guard;
         /// <summary>The scene's native host (wave 4), made at the first frame.</summary>
         public SceneHost? Scene;
         /// <summary>With <c>--no-stream</c>: where the streamer is kept, instead of at the eye.</summary>
@@ -523,6 +528,14 @@ static class WorldFrame
             Console.WriteLine($"shadows   {gpu.Shadow.Settings.MapSize}² atlas, {gpu.Shadow.Settings.Cascades} cascades of {gpu.Shadow.Settings.TileSize}², range {gpu.Shadow.Settings.Range:0}");
         }
         gpu.DebugShadows = o.DebugShadows;
+        // The memory-pressure guard (VramGuard): MEITOU_VRAM_GUARD=0 leaves it off.
+        if (Environment.GetEnvironmentVariable("MEITOU_VRAM_GUARD") != "0")
+        {
+            var guard = gpu.Guard = new VramGuard(context.Device.VideoMemory);
+            if (gpu.Objects is not null) gpu.Objects.Guard = guard;
+            if (gpu.Foliage is not null) gpu.Foliage.Guard = guard;
+            if (gpu.Shadow is not null) gpu.Shadow.Guard = guard;
+        }
         return gpu;
     }
 
@@ -606,6 +619,7 @@ static class WorldFrame
         render.TerrainPixelScale = TerrainLod.ProjectionScale(rh, camera.FieldOfView);
         var jitter = gpu.Post?.JitterPixels ?? Vector2.Zero;
         var eye = camera.Eye;
+        gpu.Guard?.Tick();
         gpu.Streamer?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(0);
         gpu.Objects?.Update(gpu.Anchor ?? eye);
@@ -763,7 +777,7 @@ static class WorldFrame
             if (render.Objects && gpu.Objects is { } o) { o.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain); objects += o.DrawnInstances; (oi, oc) = (o.DrawnInstances, o.DrawCalls); }
             StageClock.Sub("objects");
             long t2 = Stopwatch.GetTimestamp();
-            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.Settings.Range * 1.2f); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
+            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.EffectiveRange * 1.2f); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
             StageClock.Phase(CascadeLabels[cascade.Index & 3]);
             long t3 = Stopwatch.GetTimestamp();
             double ms = 1000.0 / Stopwatch.Frequency;

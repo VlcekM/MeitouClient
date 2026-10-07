@@ -141,14 +141,30 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public float SmallRange { get; set; } = FoliageSizes.DefaultSmallRange;
     public float MediumRange { get; set; } = FoliageSizes.DefaultMediumRange;
     public float LargeRange { get; set; } = FoliageSizes.DefaultLargeRange;
-    float LongestClassRange => Math.Max(Math.Max(SmallRange, MediumRange), LargeRange);
-    float ClassRange(FoliageSizeClass c) => c switch { FoliageSizeClass.Small => SmallRange, FoliageSizeClass.Medium => MediumRange, _ => LargeRange };
+    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): every range here (and the reaches that decide which zones are laid out) is
+    /// multiplied by its scale, nothing new is started while it is under pressure, and idle meshes are evicted sooner. Null: no clamp.</summary>
+    public VramGuard? Guard
+    {
+        get => guard;
+        set
+        {
+            guard = value;
+            textures.Guard = value;
+            if (gpuCull is not null) gpuCull.MayGrow = value is null ? null : value.Allows;
+        }
+    }
+    VramGuard? guard;
+    float Scale => guard?.RangeScale ?? 1f;
+    /// <summary>Seconds an unused mesh stays under pressure (instead of <see cref="IdleSeconds"/>).</summary>
+    public double GuardIdleSeconds { get; set; } = 2;
+    float LongestClassRange => Math.Max(Math.Max(SmallRange, MediumRange), LargeRange) * Scale;
+    float ClassRange(FoliageSizeClass c) => (c switch { FoliageSizeClass.Small => SmallRange, FoliageSizeClass.Medium => MediumRange, _ => LargeRange }) * Scale;
 
     /// <summary>Zones within this ground distance of the eye are laid out whole: the longest MEDIUM / CLOSE mesh layer range (with
     /// <see cref="MeitouRange"/>: the longest class range, as any class can be in a MEDIUM layer) or grass range at the current settings.</summary>
-    public float NearReach => Math.Max(MeitouRange ? LongestClassRange : NearMeshRange * RangeSetting, GrassMaxRange * GrassRangeSetting);
+    public float NearReach => Math.Max(MeitouRange ? LongestClassRange : NearMeshRange * RangeSetting * Scale, GrassMaxRange * GrassRangeSetting * Scale);
     /// <summary>Zones within this distance are laid out at least for their far layers (FAR, 8000 x the setting).</summary>
-    public float FarReach => Math.Max(MeshRange * RangeSetting, NearReach);
+    public float FarReach => Math.Max(MeshRange * RangeSetting * Scale, NearReach);
     /// <summary>The longest range of a mesh layer that is not a far layer (<see cref="FoliageLayout.IsFarLayer"/>), at setting 1.</summary>
     public float NearMeshRange { get; }
     /// <summary>How far ahead (seconds of the eye's current motion) the layout looks; <see cref="MaxLookahead"/> caps the distance.</summary>
@@ -159,7 +175,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     Vector3? lastEye;
     double lastEyeTime;
     Vector2 velocity;
-    readonly List<(ZoneCoordinate Zone, bool Whole, float Urgency)> wanted = [];
+    readonly List<(ZoneCoordinate Zone, Tier Tier, float Urgency)> wanted = [];
     readonly List<ZoneState> dropping = [];
     public List<string> Messages { get; } = [];
 
@@ -170,19 +186,38 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public long ResidentBytes => residentMeshBytes + textures.ResidentBytes + GrassBytes() + impostorBytes;
     public string ResidentDescription =>
         $"{residentMeshBytes / 1048576.0:0} MB in {assetsByMesh.Values.Count(a => a.Resident)} meshes ({meshUnloads} unloaded, {meshReloads} reloaded), {textures.Describe()}, {GrassBytes() / 1048576.0:0} MB of grass pages, {ImpostorDescription}";
+    /// <summary>The GPU cull's and the grass kernels' per-view memory (<see cref="FrameScratch"/>): held now, the need per frame (mean, peak, largest demand), what was refused. For the benchmark and the statistics.</summary>
+    public string ScratchDescription
+    {
+        get
+        {
+            static string One(string name, FrameScratch s) => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{name} {s.AllocatedBytes / 1048576.0:0.0} MB held, need per frame mean {s.MeanNeed / 1048576.0:0.0} / peak {s.PeakNeed / 1048576.0:0.0} MB (demand peak {s.PeakDemand / 1048576.0:0.0}), cap {s.Cap / 1048576.0:0} MB per slot, {s.Overflows} refused in {s.OverflowFrames} frames, {s.Rebuilds} rebuilds");
+            return (gpuCull is { } g ? One("cull", g.Scratch) + $"; arena {g.ArenaUsed / 1048576.0:0.0} of {g.ArenaBytes / 1048576.0:0} MB at {FoliageInstanceRecord.GpuSize} B a record ({g.PackMismatches} not lossless)" : "no GPU cull") + "; " + One("grass", grassStore.Scratch);
+        }
+    }
+
     public string Describe() =>
         $"{zones.Values.Count(z => z.Ready)} zones laid out ({zones.Values.Where(z => z.Ready).Sum(z => z.Instances):N0} meshes, " +
         $"{zones.Values.Sum(z => z.Pages.Count):N0} grass pages), {assetsByMesh.Count} foliage meshes ({assetsByMesh.Values.Count(a => a.Resident)} resident), catalog of {catalog.Layers.Count} layers";
 
     // ------------------------------------------------------------------ streaming
 
+    /// <summary>What a zone's layout holds (docs/viewer.md, "Foliage"). <see cref="Far"/>: the FAR layers only (no grass coverage, 9/10 of the cost).
+    /// <see cref="Meshes"/>: every mesh layer, and, with the Meitou <c>range</c> switch, only the large meshes (the zone is farther than the medium
+    /// and small ranges and the grass, so nothing else can be drawn there). <see cref="Whole"/>: every layer and the grass.</summary>
+    enum Tier { Far, Meshes, Whole }
+
     sealed class ZoneState
     {
         public required ZoneCoordinate Zone;
         public float X0, Z0;
         public Task<(FoliageZone Zone, FoliageGround? Ground, PreparedZone Prepared)>? Job;
-        /// <summary>Laid out (at least the far layers); <see cref="Complete"/>: every layer, grass included. <see cref="JobWhole"/>: the job in flight is a whole layout.</summary>
-        public bool Ready, Complete, JobWhole;
+        /// <summary>Laid out (at least the far layers); <see cref="Complete"/>: every layer, grass included, nothing left out. <see cref="MeshLayers"/>: every
+        /// mesh layer was laid out (<see cref="Complete"/> implies it). <see cref="Filtered"/>: the groups that cannot be drawn at this zone's distance
+        /// (a mesh that is not large) were left out. <see cref="JobTier"/>: what the job in flight lays out.</summary>
+        public bool Ready, Complete, MeshLayers, Filtered, NeedsPrune;
+        public Tier JobTier;
         public List<Group> Groups = [];
         public FoliageGround? Ground;
         public List<FoliageGrassPatch> Patches = [];
@@ -302,14 +337,16 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // Two tiers (docs/viewer.md, "Foliage"): within the near reach (the MEDIUM layers and the grass) a zone is laid out whole; beyond it, out
         // to the far reach, only its FAR layers, which skips the grass coverage, nine tenths of a zone's layout. A far zone is laid out whole once
         // it comes within the near reach (its far instances are the same either way, FoliageLayout.Place).
-        float nearReach = NearReach, farReach = FarReach;
+        // With the Meitou range switch a third tier sits between them (Tier.Meshes): beyond the whole reach (the longest of the small, medium and grass
+        // ranges) and within the near reach only the large meshes can be drawn, so such a zone keeps those and nothing else.
+        float nearReach = NearReach, farReach = FarReach, wholeReach = WholeReach;
         foreach (var state in zones.Values)
         {
             if (state.Job is not { IsCompleted: true } job) continue;
-            if (state.JobWhole) runningWhole--; else runningFar--;
+            if (state.JobTier != Tier.Far) runningWhole--; else runningFar--;
             state.Job = null;
-            try { Accept(state, job.Result); }
-            catch (AggregateException e) { Messages.Add($"foliage zone {state.Zone}: {e.InnerException?.Message ?? e.Message}"); state.Ready = state.Complete = true; }
+            try { Accept(state, job.Result, state.JobTier); }
+            catch (AggregateException e) { Messages.Add($"foliage zone {state.Zone}: {e.InnerException?.Message ?? e.Message}"); state.Ready = state.Complete = state.MeshLayers = true; }
         }
         dropping.Clear();
         foreach (var state in zones.Values)
@@ -344,20 +381,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 if (!z.IsInsideGrid) continue;
                 float d = ZoneDistance(z, eye), dp = ZoneDistance(z, predicted), soon = Math.Min(d, dp);
                 if (d > farReach) continue;   // the prediction orders and adds whole layouts, it never adds zones
-                bool whole = soon <= nearReach + PrefetchMargin;
+                bool meitou = MeitouRange;
+                var need = soon <= wholeReach + PrefetchMargin ? Tier.Whole : meitou && soon <= nearReach + PrefetchMargin ? Tier.Meshes : Tier.Far;
                 zones.TryGetValue(z, out var state);
-                if (state is not null && (state.Complete || !whole && state.Ready)) continue;   // has what it needs
-                if (d <= nearReach) NearestIncompleteZone = Math.Min(NearestIncompleteZone, d);
+                if (state is not null && Satisfies(state, need, meitou)) continue;   // has what it needs
+                if (d <= wholeReach) NearestIncompleteZone = Math.Min(NearestIncompleteZone, d);
                 if (state is not { Ready: true }) NearestUnlaidZone = Math.Min(NearestUnlaidZone, d);
                 if (state?.Job is not null) continue;   // on its way
-                // Whole layouts first (what is missing there is in view near the eye), then the far ones, each nearest first (from the eye
-                // or where it will be, whichever is nearer).
-                wanted.Add((z, whole, whole ? soon : farReach + soon));
+                // Whole layouts first (what is missing there is in view near the eye), then the large-only ones, then the far ones, each nearest
+                // first (from the eye or where it will be, whichever is nearer).
+                wanted.Add((z, need, need == Tier.Whole ? soon : need == Tier.Meshes ? nearReach + soon : farReach + soon));
             }
         wanted.Sort((a, b) => a.Urgency.CompareTo(b.Urgency));
         int started = 0;
-        foreach (var (zone, whole, _) in wanted)
+        foreach (var (zone, tier, _) in wanted)
         {
+            if (guard is { Streaming: false }) break;   // memory pressure: no new layout is started
+            bool whole = tier != Tier.Far;   // a Meshes layout is a whole one whose far-away groups are left out (Accept)
             if (whole ? runningWhole >= workers : runningFar >= workers) continue;
             if (!zones.TryGetValue(zone, out var state))
             {
@@ -365,7 +405,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 zones[zone] = state = new ZoneState { Zone = zone, X0 = (float)x0, Z0 = (float)z0 };
             }
             if (whole) runningWhole++; else runningFar++;
-            state.JobWhole = whole;
+            state.JobTier = tier;
             started++;
             bool farOnly = !whole;
             Func<(FoliageZone, FoliageGround?, PreparedZone)> job = () =>
@@ -392,6 +432,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         UpdateGrass(eye);
         double t1 = watch.Elapsed.TotalMilliseconds;
         PumpMeshes();
+        Prune();
         TrimResident(eye, force: settling);
         double t2 = watch.Elapsed.TotalMilliseconds;
         textures.Pump(wait: settling, max: settling ? 64 : 1);
@@ -421,10 +462,15 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         var watch = Stopwatch.StartNew();
         int rounds = 0;
+        double? pressureSince = null;
         while (watch.ElapsedMilliseconds < timeoutMs)
         {
+            guard?.Tick();
             Update(eye, settling: true);
             if (++rounds > 2 && Pending == 0) return;
+            // Under memory pressure the guard holds the loading back: what is missing will not come until it ends, so do not wait for it.
+            pressureSince = guard is { Pressure: true } ? pressureSince ?? watch.Elapsed.TotalSeconds : null;
+            if (pressureSince is { } since && watch.Elapsed.TotalSeconds - since > 5) { Console.WriteLine("warning   foliage streaming stopped waiting: memory pressure (VramGuard)"); return; }
             // An impostor bake reads its rows back after the frame they were recorded into, and atlas uploads are spread over frames: end it.
             if (impostorBake is { NeedsFrame: true } || impostorUploadsWaiting) Gpu.Finish();
             else Thread.Sleep(2);
@@ -446,14 +492,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
 
     /// <summary>A finished layout: its groups replace the zone's (a whole layout after a far one brings the same far instances back with the rest).</summary>
-    void Accept(ZoneState state, (FoliageZone Zone, FoliageGround? Ground, PreparedZone Prepared) result)
+    void Accept(ZoneState state, (FoliageZone Zone, FoliageGround? Ground, PreparedZone Prepared) result, Tier tier)
     {
         var (zone, ground, prepared) = result;
+        // With the Meitou range switch a zone beyond the whole reach can only show large meshes (the small and medium ranges and the grass end
+        // before it): the other groups would be instances, meshes and textures held for nothing. A group whose mesh is not decoded yet has no
+        // size class; it is kept and the prune pass (TrimResident) drops it when the size is known.
+        bool filter = MeitouRange && tier != Tier.Whole;
         var groups = new List<Group>(prepared.Groups.Count);
+        bool unknown = false;
         foreach (var g in prepared.Groups)
+        {
+            var asset = AssetFor(g.Mesh);
+            if (filter && asset.HasBounds && asset.SizeClass != FoliageSizeClass.Large) continue;
+            if (filter && !asset.HasBounds) unknown = true;
             groups.Add(new Group
             {
-                Asset = AssetFor(g.Mesh),
+                Asset = asset,
                 BaseRange = g.Layer.Range,
                 Transition = g.Layer.Transition,
                 Far = FoliageLayout.IsFarLayer(g.Layer),
@@ -461,13 +516,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 Instances = g.Instances,
                 Zone = state,
             });
+        }
         FreeArena(state.Groups);
         state.Groups = groups;
         state.Instances = zone.Instances.Count;
         state.MinY = prepared.MinY;
         state.MaxY = prepared.MaxY;
         state.Ground = ground;
-        state.Patches = zone.Grass.Where(p => p.Grass.Sprite is not null && p.Density.Any(d => d != 0)).ToList();
+        state.Patches = filter ? [] : zone.Grass.Where(p => p.Grass.Sprite is not null && p.Density.Any(d => d != 0)).ToList();
         state.PatchTextures = new (WorldTexture?, WorldTexture?)[state.Patches.Count];
         for (int i = 0; i < state.Patches.Count; i++)
         {
@@ -475,7 +531,40 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             state.PatchTextures[i] = (textures.Get(p.Grass.Sprite, false), textures.Get(p.Grass.ColourMap, false));   // start decoding now, not at the first draw
         }
         state.Ready = true;
-        state.Complete = zone.Complete;
+        state.Complete = zone.Complete && !filter;
+        state.MeshLayers = zone.Complete || tier != Tier.Far;
+        state.Filtered = filter;
+        state.NeedsPrune = unknown;
+    }
+
+    /// <summary>Whether a zone as laid out already holds what <paramref name="need"/> asks for (nothing to load again).</summary>
+    static bool Satisfies(ZoneState s, Tier need, bool meitou) => need switch
+    {
+        Tier.Whole => s.Complete,
+        Tier.Meshes => s.Complete || s.MeshLayers,
+        _ => s.Ready && (!s.Filtered || meitou),
+    };
+
+    /// <summary>Zones within this ground distance of the eye are laid out whole: with <see cref="MeitouRange"/> the longer of the small and
+    /// medium ranges and the grass range (beyond it only large meshes can be drawn, see <see cref="Tier.Meshes"/>), else <see cref="NearReach"/>.</summary>
+    public float WholeReach => MeitouRange ? Math.Max(Math.Max(ClassRange(FoliageSizeClass.Small), ClassRange(FoliageSizeClass.Medium)), GrassMaxRange * GrassRangeSetting * Scale) : NearReach;
+
+    /// <summary>Drops the groups that cannot be drawn in a filtered zone once their mesh sizes are known (they were kept while the mesh was not decoded).</summary>
+    void Prune()
+    {
+        foreach (var state in zones.Values)
+        {
+            if (!state.NeedsPrune || state.Job is not null) continue;
+            bool unknown = false;
+            foreach (var g in state.Groups) if (!g.Asset.HasBounds && !g.Asset.Failed) { unknown = true; break; }
+            if (unknown) continue;
+            var keep = new List<Group>(state.Groups.Count);
+            var drop = new List<Group>();
+            foreach (var g in state.Groups) (g.Asset.SizeClass == FoliageSizeClass.Large || !g.Asset.HasBounds ? keep : drop).Add(g);
+            FreeArena(drop);
+            if (drop.Count > 0) { state.Groups = keep; state.MarginStamp = -1; }
+            state.NeedsPrune = false;
+        }
     }
 
     /// <summary>The range a group is drawn to at the current <see cref="RangeSetting"/>, and its fade band: the game's transition is 10 units
@@ -484,7 +573,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// or for a large mesh of a FAR layer the longer of that and the layer's; the band is the same rule.</summary>
     (float Range, float Band) RangeOf(Group g)
     {
-        float range = g.BaseRange * RangeSetting;
+        float range = g.BaseRange * RangeSetting * Scale;
         if (MeitouRange)
         {
             var a = g.Asset;
@@ -537,7 +626,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
     }
 
-    float GrassRange(FoliageGrassPatch patch) => patch.Layer.Range * GrassRangeSetting;
+    float GrassRange(FoliageGrassPatch patch) => patch.Layer.Range * GrassRangeSetting * Scale;
 
     /// <summary>The highest "Grass density x" the pages are generated for (the settings slider's top): lower settings draw a prefix of the blades.</summary>
     public const float MaxGrassDensity = 2f;
@@ -591,7 +680,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         grassWaiting = grassWanted.Count;
         foreach (var (_, state, key) in grassWanted)
         {
-            if (inFlight >= MaxGrassJobs) break;
+            if (inFlight >= MaxGrassJobs || guard is { Streaming: false }) break;
             float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
             var page = state.Pages[key] = new GrassPage();
             var patches = state.Patches;
@@ -672,12 +761,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // docs/formats/runtime-materials.md); FOLIAGE cuts out on the normal map's alpha at "alpha threshold" / 255, double-sided.
         int mode = mesh.MaterialType;
         bool dual = mode is 3 or 5;
-        a.MainMaterial = new FoliageMaterial(textures.Get(mesh.Texture, false), textures.Get(mesh.Normal, false),
-            dual ? textures.Get(mesh.Texture2, false) : null, dual ? textures.Get(mesh.Normal2, false) : null,
+        a.MainMaterial = new FoliageMaterial(textures.Get(mesh.Texture, false, deferred: true), textures.Get(mesh.Normal, false, deferred: true),
+            dual ? textures.Get(mesh.Texture2, false, deferred: true) : null, dual ? textures.Get(mesh.Normal2, false, deferred: true) : null,
             mode == 4 ? mesh.AlphaThreshold / 255f : 0, mode == 4, mode is 1 or 5, new Vector2(mesh.TileX, mesh.TileY), mode == 6, mesh.SpecularMult);
         // The leaves: their own texture pair, transparent and double-sided, cut out at "leaves alpha threshold" / 255.
         if (mesh.LeavesMesh is not null)
-            a.LeavesMaterial = new FoliageMaterial(textures.Get(mesh.LeavesTexture, false), textures.Get(mesh.LeavesNormal, false), null, null,
+            a.LeavesMaterial = new FoliageMaterial(textures.Get(mesh.LeavesTexture, false, deferred: true), textures.Get(mesh.LeavesNormal, false, deferred: true), null, null,
                 mesh.LeavesAlphaThreshold / 255f, true, false, Vector2.One, false, 0);
         string main = mesh.MeshPath, leaves = mesh.LeavesMesh ?? "";
         a.Job = BackgroundWork.Run(() => (Decode(main), leaves.Length > 0 ? Decode(leaves) : null));
@@ -812,12 +901,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 a.LastUsed = now;
                 if (!a.Resident) Reload(a);   // in range but unloaded (or never loaded after an unload): decode it again, wherever the camera looks
                 foreach (var m in (ReadOnlySpan<FoliageMaterial?>)[a.MainMaterial, a.LeavesMaterial])
-                    if (m is not null) _ = (m.Diffuse?.Key, m.Normal?.Key, m.Diffuse2?.Key, m.Normal2?.Key);   // reading a key counts as use (WorldTexture.Key)
+                    if (m is not null && a.HasBounds) _ = (m.Diffuse?.Key, m.Normal?.Key, m.Diffuse2?.Key, m.Normal2?.Key);   // reading a key counts as use (WorldTexture.Key)
             }
         }
         foreach (var a in assetsByMesh.Values)
         {
-            if (!a.Resident || (now - a.LastUsed) / 1000.0 <= IdleSeconds) continue;
+            if (!a.Resident || (now - a.LastUsed) / 1000.0 <= (guard is { Pressure: true } ? Math.Min(IdleSeconds, GuardIdleSeconds) : IdleSeconds)) continue;
             foreach (var m in new[] { a.Main, a.Leaves })
                 if (m is not null) DeleteMesh(m);
             a.Main = a.Leaves = null;
@@ -840,7 +929,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>Decodes an unloaded mesh again (from <see cref="Draw"/>, when something in range needs it).</summary>
     void Reload(MeshAsset a)
     {
-        if (a.Resident || a.Failed || a.Job is not null || a.Uploading) return;
+        if (a.Resident || a.Failed || a.Job is not null || a.Uploading || guard is { Streaming: false }) return;
         string main = a.Mesh.MeshPath, leaves = a.Mesh.LeavesMesh ?? "";
         a.LastUsed = Environment.TickCount64;
         a.Job = BackgroundWork.Run(() => (Decode(main), leaves.Length > 0 ? Decode(leaves) : null));
@@ -991,6 +1080,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             if (gpu)
             {
                 gpuResult = DispatchGpuCull(new Vector2(eye.X, eye.Z), terrain);
+                if (gpuResult.IsEmpty) { meshDraws.Clear(); rockDraws.Clear(); }   // the scratch memory is over its cap: this view has no foliage this frame
                 if (FolTiming) { long r1 = Stopwatch.GetTimestamp(); dispatchMs = (r1 - r0) * 1000.0 / Stopwatch.Frequency; r0 = r1; }
             }
             if (meshDraws.Count > 0 || impostorDraws.Count > 0)
@@ -1270,7 +1360,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     readonly List<(MeshAsset Asset, bool Mirrored)> gpuRockOrder = [];
     FoliageCullChunk[] gpuChunks = new FoliageCullChunk[1024];
-    int gpuChunkCount;
+    int gpuChunkCount, gpuInstances;
     int[] gpuBatchStart = new int[65], gpuCursor = new int[64];
     /// <summary>The chunks in the frame's constants, written once a frame per work list (<see cref="gpuChunkFrame"/>).</summary>
     Transient gpuChunkData;
@@ -1321,8 +1411,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         do
         {
             placed = true;
-            foreach (var (g, _, _) in cullWork)
+            for (int k = 0; k < cullWork.Count; k++)
             {
+                var g = cullWork[k].Group;
                 if (!g.SpheresReady)
                 {
                     FoliageCull.FillSpheres(g.Instances, g.Asset.Centre, g.Asset.Radius);   // as CullWork does: the mesh is resident, its bounds known
@@ -1332,6 +1423,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 if (IsRock(g.Asset, options)) PrepareRock(g, terrain);
                 // A grown arena (full) moved every group: place them all again before a chunk names one.
                 if (!cull.Place(ref g.Arena, ref g.ArenaGeneration, g.Instances)) { placed = false; break; }
+                if (g.Arena.IsEmpty && g.Instances.Length > 0) cullWork.RemoveAt(k--);   // the arena is full and the memory is short (VramGuard): left out of this frame
             }
         } while (!placed);
 
@@ -1413,6 +1505,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             }
         }
         gpuChunkCount = n;
+        gpuInstances = 0;
+        foreach (var (_, g) in gpuEntries) gpuInstances += g.Instances.Length;
         gpuChunkFrame = -1;
         gpuWorkBuilds++;
         gpuWorkGroups += groups;
@@ -1492,7 +1586,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // What the rocks' row 0 w carries, as the terrain's mesh path writes it: the biome row in colour (resident ones, now), 0 in depth.
         var rock = new FoliageRockView { BiomeRows = !depthPass };
         if (!depthPass && gpuRockOrder.Count > 0) terrain.FeatureResidentBiomes(rock.Resident);
-        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count), cullView, eye, in rock);
+        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock);
         DrawnInstances += cull.LateVisible;
         if (GpuCullVerify) QueueVerify(result, terrain);
         return result;

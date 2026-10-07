@@ -103,7 +103,7 @@ static partial class WorldApp
             Console.WriteLine($"  worst   frame {f.Frame}: {f.Ms:0.0} ms ({f.Stages})");
         if (gpu.Foliage is { } foliageGaps && gaps.Count > 0)
         {
-            float near = foliageGaps.NearReach, far = foliageGaps.FarReach;
+            float near = foliageGaps.WholeReach, far = foliageGaps.FarReach;
             Console.WriteLine($"pop-in    foliage zones without their whole layout within the near reach ({near:0}) in {gaps.Count(g => g.Zone < near)} of {gaps.Count} frames " +
                 $"(within 1500: {gaps.Count(g => g.Zone < 1500)}), nearest {gaps.Min(g => g.Zone):0}; not laid out within the far reach ({far:0}) in {gaps.Count(g => g.Unlaid < far)} frames, " +
                 $"nearest {gaps.Min(g => g.Unlaid):0}; meshes in range not resident in {gaps.Count(g => g.Mesh < near)} frames, nearest {gaps.Min(g => g.Mesh):0}; " +
@@ -116,6 +116,9 @@ static partial class WorldApp
         var (vramUsed, vramBudget) = device.VideoMemory();
         Console.WriteLine($"vram      {vramUsed / 1048576.0:0} MB of {vramBudget / 1048576.0:0} MB budget at the end, peak {Math.Max(vramPeak, vramUsed) / 1048576.0:0} MB; our blocks {device.Allocator.TotalAllocatedBytes / 1048576.0:0} MB, {device.Allocator.TotalUsedBytes / 1048576.0:0} used");
         Console.WriteLine($"vram      owners (MB, device-local MB, count): {string.Join(", ", device.Allocator.Breakdown().OrderByDescending(b => b.Bytes).Select(b => $"{b.Name} {b.Bytes / 1048576.0:0.0} ({b.DeviceLocal / 1048576.0:0.0}) x{b.Count}"))}");
+        Console.WriteLine($"vram      {VramWatch.Describe()}");
+        if (gpu.Guard is { } vramGuard) Console.WriteLine($"guard     {vramGuard.Status}; entered pressure {vramGuard.Activations} times, lowest range scale x{vramGuard.LowestScale:0.00}");
+        if (gpu.Foliage is { } scratchFoliage) Console.WriteLine($"scratch   {scratchFoliage.ScratchDescription}");
         if (meter is not null) ReportPasses(meter, display, gpu, scene, camera, render, o, w, h);
         if (o.Screenshot is not null)
         {

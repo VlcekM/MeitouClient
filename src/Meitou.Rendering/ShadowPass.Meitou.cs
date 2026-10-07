@@ -69,7 +69,7 @@ public sealed unsafe partial class ShadowPass
         Resize(Settings.MapSize);
         int count = Math.Min(Settings.Cascades, 4);
         float near = MeitouShadowFit.QuantizedNear(view.Near);
-        var splits = MeitouShadowFit.Splits(near, Math.Max(Settings.Range, near * 4), count);
+        var splits = MeitouShadowFit.Splits(near, Math.Max(EffectiveRange, near * 4), count);
         bool all = !meitouValid || storedSplits is null || !splits.AsSpan().SequenceEqual(storedSplits) || storedMapSize != Settings.MapSize
             || Vector3.Dot(toSun, storedSun) < MathF.Cos(SunJump);
         int frame = meitouFrame++;
@@ -91,7 +91,7 @@ public sealed unsafe partial class ShadowPass
         for (int i = 0; i < count; i++)
         {
             if (!drawNow[i]) continue;
-            var c = MeitouShadowFit.Fit(view, toSun, Settings, splits, i);
+            var c = MeitouShadowFit.Fit(view, toSun, Effective, splits, i);
             int x = (int)MathF.Round(c.Tile.X * atlasSize), y = (int)MathF.Round(c.Tile.Y * atlasSize), s = Settings.TileSize;
             SetTile(x, y, s);
             if (drawing != count)   // only this tile: the others keep what they hold

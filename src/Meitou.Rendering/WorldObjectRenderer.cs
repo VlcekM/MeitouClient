@@ -111,6 +111,18 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>Distant towns and buildings' distant meshes are drawn up to this distance (the game: its <c>distant town range</c> in zones).</summary>
     public float DistantRange { get; set; } = ObjectRanges.MaxDistantTownRangeZones * WorldLayout.ZoneSize;
 
+    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): its range scale shortens <see cref="ObjectDistance"/> and <see cref="DistantRange"/>
+    /// while the video memory is nearly used up, and the caches stop loading and evict. Null: no clamp.</summary>
+    public VramGuard? Guard
+    {
+        get => guard;
+        set { guard = value; textureCache.Guard = value; meshes.Guard = value; }
+    }
+    VramGuard? guard;
+    /// <summary>The ranges as drawn and streamed: the settings times the guard's scale (exactly the settings while it is 1).</summary>
+    float RealRange => ObjectDistance * (guard?.RangeScale ?? 1f);
+    float DistantReach => DistantRange * (guard?.RangeScale ?? 1f);
+
     /// <summary>Draw nothing but the real objects (no distant meshes): the game with distant towns off.</summary>
     public bool NoDistant { get; set; }
 
@@ -142,11 +154,12 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     {
         var watch = Stopwatch.StartNew();
         bool unlimited = budgetMs > 1e8;
-        float streamRange = (NoDistant ? ObjectDistance : Math.Max(ObjectDistance, DistantRange)) + WorldLayout.ZoneSize * 0.5f;
+        float streamRange = (NoDistant ? RealRange : Math.Max(RealRange, DistantReach)) + WorldLayout.ZoneSize * 0.5f;
+        streamer.Paused = guard is { Streaming: false };
         streamer.Update(eye, streamRange, unlimited ? 64 : 1);
         double tZones = watch.Elapsed.TotalMilliseconds;
         ResolveTowns(eye);
-        unresolvedInRange = streamer.Scan(eye, ObjectDistance, DistantRange, NoDistant, Resolve, unlimited ? int.MaxValue : 40);
+        unresolvedInRange = streamer.Scan(eye, RealRange, DistantReach, NoDistant, Resolve, unlimited ? int.MaxValue : 40);
         double tScan = watch.Elapsed.TotalMilliseconds;
         meshes.Pump();
         MarkInRange(eye, force: unlimited);
@@ -195,12 +208,12 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         }
         foreach (var zone in streamer.AllZones)
         {
-            foreach (var inst in zone.Real) Mark(inst, ObjectDistance);
-            if (!NoDistant) foreach (var inst in zone.Stand) Mark(inst, DistantRange);
+            foreach (var inst in zone.Real) Mark(inst, RealRange);
+            if (!NoDistant) foreach (var inst in zone.Stand) Mark(inst, DistantReach);
         }
         if (NoDistant) return;
         foreach (var t in towns)
-            if (Vector3.Distance(eye, t.Centre) - t.Radius < DistantRange) t.Mesh.LastUsed = now;
+            if (Vector3.Distance(eye, t.Centre) - t.Radius < DistantReach) t.Mesh.LastUsed = now;
         _ = distantMaterial.Parts[0].Diffuse;
     }
 
@@ -233,7 +246,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 t.Resolved = true;
             }
             float d = Vector3.Distance(eye, t.Centre);
-            if (t.Mesh.Status == ObjectMesh.State.None && d - t.Radius < DistantRange) meshes.Request(t.Mesh, d);
+            if (t.Mesh.Status == ObjectMesh.State.None && d - t.Radius < DistantReach) meshes.Request(t.Mesh, d);
         }
     }
 
@@ -242,10 +255,15 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     {
         var watch = Stopwatch.StartNew();
         int rounds = 0;
+        double? pressureSince = null;
         while (watch.ElapsedMilliseconds < timeoutMs)
         {
+            guard?.Tick();
             Update(eye, 1e9);
             if (++rounds > 2 && Pending == 0) return;
+            // Under memory pressure the guard holds the loading back: what is missing will not come until it ends, so do not wait for it.
+            pressureSince = guard is { Pressure: true } ? pressureSince ?? watch.Elapsed.TotalSeconds : null;
+            if (pressureSince is { } since && watch.Elapsed.TotalSeconds - since > 5) { Console.WriteLine("warning   object streaming stopped waiting: memory pressure (VramGuard)"); return; }
             Thread.Sleep(1);
         }
         Console.WriteLine($"warning   object streaming did not finish in {timeoutMs / 1000} s");
@@ -309,7 +327,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     {
         var cpu = Stopwatch.StartNew();
         long now = Environment.TickCount64;
-        float real = ObjectDistance;
+        float real = RealRange;
         DrawnInstances = 0;
         DrawnTriangles = 0;
         DrawCalls = 0;
@@ -320,8 +338,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
         // 1. Cull and choose levels: every instance into the batch of its (mesh, materials, level) with its dither range.
         float realBand = Math.Clamp(real * 0.1f, 50, 1500);
-        float distantBand = Math.Clamp(DistantRange * 0.15f, 500, 4000);
-        foreach (var zone in streamer.ZonesNear(eye, Math.Max(real, NoDistant ? 0 : DistantRange), frustum))
+        float distantBand = Math.Clamp(DistantReach * 0.15f, 500, 4000);
+        foreach (var zone in streamer.ZonesNear(eye, Math.Max(real, NoDistant ? 0 : DistantReach), frustum))
         {
             if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) <= real)
                 foreach (var inst in zone.Real)
@@ -357,8 +375,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 if (inst.Gpu is not { } gpu) continue;
                 if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); continue; }
                 float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
-                if (value >= DistantRange || !SphereVisible(frustum, inst.Centre, inst.Radius)) continue;
-                float w = ObjectRanges.RiseWeight(value, real - realBand, realBand) * ObjectRanges.EdgeWeight(value, DistantRange, distantBand);
+                if (value >= DistantReach || !SphereVisible(frustum, inst.Centre, inst.Radius)) continue;
+                float w = ObjectRanges.RiseWeight(value, real - realBand, realBand) * ObjectRanges.EdgeWeight(value, DistantReach, distantBand);
                 if (w <= 0) continue;
                 inst.Mesh.LastUsed = now;
                 DrawnInstances++;
@@ -370,7 +388,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             {
                 if (t.Mesh.Gpu is not { } gpu) continue;
                 float value = Vector3.Distance(t.Centre, eye) - t.Radius;
-                if (value >= DistantRange || !SphereVisible(frustum, t.Centre, t.Radius)) continue;
+                if (value >= DistantReach || !SphereVisible(frustum, t.Centre, t.Radius)) continue;
                 t.Mesh.LastUsed = now;
                 var batch = BatchFor(gpu, distantMaterial, 0, town: true);
                 if (batch.Count == 0) active.Add(batch);
@@ -400,7 +418,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         if (active.Count > 0)
         {
             var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance };
-            var fadeRange = new Vector4(real - realBand, real, DistantRange - distantBand, DistantRange);
+            var fadeRange = new Vector4(real - realBand, real, DistantReach - distantBand, DistantReach);
             if (wireMode != 2)
             {
                 PrepareDraws(options, wire: false);

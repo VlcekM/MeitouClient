@@ -30,7 +30,6 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
     /// <summary>Bytes of a blade (<see cref="FoliageGrassField.Stride"/> floats).</summary>
     public const int BladeBytes = FoliageGrassField.Stride * 4;
     const ulong Align = 256;
-    const ulong ScratchChunk = 16ul << 20;
     const int MaxViews = 64;
 
     readonly GpuContext ctx;
@@ -61,9 +60,8 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         arena = new BufferArena(ctx, arenaBytes, BufferUse.Vertex | BufferUse.TransferDst, "foliage grass blades");
         slots = DeviceBuffer.Create(ctx, (ulong)slotCapacity * GrassSlot.Size, BufferUse.Storage | BufferUse.TransferDst, "foliage grass slots");
         prefixes = DeviceBuffer.Create(ctx, (ulong)slotCapacity * PrefixStride * 4, BufferUse.Storage | BufferUse.TransferDst, "foliage grass prefixes");
-        scratch = new List<DeviceBuffer>[ctx.Device.Frames.Count];
-        for (int i = 0; i < scratch.Length; i++) scratch[i] = [];
-        counted = new ReadbackBuffer?[ctx.Device.Frames.Count];
+        scratch = new FrameScratch(ctx, "foliage grass scratch", BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferSrc | BufferUse.TransferDst, 64ul << 20);
+        counted =new ReadbackBuffer?[ctx.Device.Frames.Count];
         countedWritten = new int[ctx.Device.Frames.Count];
     }
 
@@ -165,9 +163,8 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         return new GrassTables(z, zones.Length, p, patches.Length);
     }
 
-    readonly List<DeviceBuffer>[] scratch;
-    int scratchSlot = -1, scratchIndex;
-    ulong scratchOffset;
+    readonly FrameScratch scratch;
+    int scratchSlot = -1;
     long scratchFrame = -1;
     int viewIndex;
     readonly ReadbackBuffer?[] counted;
@@ -182,30 +179,11 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         var frame = ctx.Frame;
         if (scratchFrame == frame.Number) return;
         if (scratchSlot >= 0) countedWritten[scratchSlot] = viewIndex;
-        (scratchFrame, scratchSlot, scratchIndex, scratchOffset, viewIndex) = (frame.Number, frame.Slot, 0, 0, 0);
+        (scratchFrame, scratchSlot, viewIndex) = (frame.Number, frame.Slot, 0);
     }
 
-    (Buffer Buffer, ulong Offset) Scratch(ulong bytes)
-    {
-        NewFrame();
-        var list = scratch[scratchSlot];
-        bytes = (bytes + Align - 1) / Align * Align;
-        while (true)
-        {
-            if (scratchIndex < list.Count && scratchOffset + bytes <= list[scratchIndex].Size)
-            {
-                var at = scratchOffset;
-                scratchOffset += bytes;
-                return (list[scratchIndex].Handle, at);
-            }
-            if (scratchIndex < list.Count && scratchOffset > 0) { scratchIndex++; scratchOffset = 0; continue; }
-            if (scratchIndex < list.Count) { scratchIndex++; continue; }
-            list.Add(DeviceBuffer.Create(ctx, Math.Max(ScratchChunk, bytes), BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferSrc | BufferUse.TransferDst,
-                $"foliage grass scratch {scratchSlot}"));
-            scratchIndex = list.Count - 1;
-            scratchOffset = 0;
-        }
-    }
+    /// <summary>The per-view lists' memory (<see cref="FrameScratch"/>).</summary>
+    public FrameScratch Scratch => scratch;
 
     readonly List<(QuerySlot Begin, QuerySlot End)> pendingTimes = [];
     public double GpuMicroseconds { get; private set; }
@@ -237,9 +215,13 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         if (planes.Length > 8) throw new ArgumentException("at most 8 planes", nameof(planes));
         Initialise();
         CollectTimes();
-        var keys = Scratch((ulong)n * 16);
-        var draws = Scratch((ulong)n * 16);
-        var counters = Scratch(16);
+        NewFrame();
+        if (!(scratch.TryAllocate((ulong)n * 16, out var keysBuffer, out var keysOffset) && scratch.TryAllocate((ulong)n * 16, out var drawsBuffer, out var drawsOffset) &&
+              scratch.TryAllocate(16, out var countersBuffer, out var countersOffset)))
+            return default;
+        var keys = (Buffer: keysBuffer, Offset: keysOffset);
+        var draws = (Buffer: drawsBuffer, Offset: drawsOffset);
+        var counters = (Buffer: countersBuffer, Offset: countersOffset);
         var viewData = ctx.Frame.Constants.Allocate(160, Align);
         var p = (Vector4*)viewData.Pointer;
         for (int i = 0; i < 8; i++) p[i] = i < planes.Length ? planes[i] : default;
@@ -350,7 +332,7 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         arena.Dispose();
         slots.Dispose();
         prefixes.Dispose();
-        foreach (var list in scratch) foreach (var d in list) d.Dispose();
+        scratch.Dispose();
         foreach (var c in counted) c?.Dispose();
     }
 }

@@ -3012,6 +3012,80 @@ was 3.0-3.3 GB against the base's 3.8-4.4 GB. The largest owner by bytes is `fra
 device-local): the frame's constants double as the `Uploader`'s staging, and `LinearAllocator.Reset` keeps every chunk of normal size, so
 the peak of the loading frames stays allocated in host memory. That predates this stage (unchanged code); fixed after it (owner decision 15: 16 MB of frame constants and 56 MB of upload staging, working set 2.6 GB, same benchmark).
 
+### 8.11 Video memory at large ranges (2026-10-07)
+
+*In short: with the range sliders raised tenfold the GPU ran out of device-local memory and the driver reset the device (a TDR). The
+largest owner by far was the foliage cull's per-view scratch (2.0 GB at 20k, 3.8 GB at 40k large range, in the base build); it is now
+sized by need (330 MB at 40k). A guard on the driver's memory budget clamps the ranges before the card is full. Pictures at the default
+settings are unchanged (0 px, ten views, both modes).*
+
+**Cause** (**Verified**, base build, `MEITOU_VRAM_KILL` watchdog, RTX 4070 with an 11.4 GB budget): the cull wrote each view's fades, counts and
+compacted rows into scratch sized for 256 instances of every chunk slot of the work list, so it followed the number of chunk *slots*
+(partly empty chunks, one per group and view) instead of the instances: 2.0 GB at all ranges x2 (`--range-large 20000 ...`), 3.8 GB at x4,
+and the run at x8 passed 95% of the budget in the first seconds (`base_all80`). The shadow distance multiplies it (every cascade is a view).
+
+**Fixes, with the owner they act on** (**Observed**, `--fly-benchmark 150` over the forest view; device-local MB; ranges `all20` = large 20000 /
+medium 10000 / small 4000, object distance 40000, distant 30, shadow 15000; `all40` = 40000 / 20000 / 8000, 100000, 50, shadow 15000):
+
+| owner | base default | now default | base all20 | now all20 | base all40 | now all40 | now max (large 120k) |
+|---|---|---|---|---|---|---|---|
+| foliage cull scratch | 128 | 20 | 2007 | 248 | 3834 | 330 | 614 |
+| foliage instances (arena) | 64 | 16 | 64 | 32 | 128 | 64 | 128 |
+| foliage grass scratch | 32 | 2 | 32 | 2 | 32 | 2 | 2 |
+| foliage textures | 730 | 667 | 738 | 638 | 826 | 739 | 1052 |
+| peak in use (of 11453 MB) | 3504 (31%) | 3248 (28%) | 6250 (55%) | 4394 (38%) | 8621 (77%) | 5052 (44%) | 6857 (60%) |
+
+1. **Scratch by need** (`FrameScratch`): one buffer per frame slot, the largest need of the trailing 120 frames plus 25%, rebuilt when a frame
+   overflowed into extra buffers (grow on demand) and made smaller when more than twice the window's need (shrink after about two seconds);
+   a cap per slot (cull 512 MB, grass 64 MB). A request beyond the cap leaves that view out of the frame (counted, shown in F11 and the
+   benchmark's `scratch` line) and the guard shortens the ranges. The rows are exact now (the sum of the chunks' instance counts, not 256
+   per chunk). The pixels do not change (the kernels write the same values to the same places; **Verified**, gate and
+   `FoliageGpuCullTests`).
+2. **Far zones keep only what can be drawn** (`FoliageRenderer`, `Tier`): with the Meitou `range` switch a zone farther than the longest of the
+   small range, the medium range and the grass range holds only its large-class groups (`Tier.Meshes`; its grass is not made), and beyond the
+   near reach only the far layers' large groups (`Tier.Far`). A group whose mesh is not decoded has no size yet: it is kept and dropped by
+   a prune pass when the size is known. Mesh textures are made lazily: a texture is loaded when its mesh is decoded and first used, not
+   when the group is created (dropped groups never load theirs). Faithful mode is untouched (`Tier.Meshes` does not exist there).
+   **Observed**: foliage textures 9-13% lower at the same ranges (default 730 -> 667, all20 738 -> 638, all40 826 -> 739 MB), because the large-only far
+   groups share the textures of the near ones; the saving is small since most of the foliage's catalog is large-class at some distance.
+   **Unknown**: how much more a Data-layer scope (loading only large groups from the .mod records) would save in managed memory; the layout
+   still builds every group on the worker before the filter.
+3. **Instance records of 68 bytes** (`FoliageInstanceRecord.Pack`, 96 before; **Verified**: 0 px in both modes, ten views, and `0 not lossless`
+   records in every run): the arena holds the transform's 12 floats (the fourth column is exactly 0, 0, 0, 1 for a placement and the kernel writes
+   it back), the sphere (4) and the rock bits (1). `Ground.X/Y` are the translation's x and z (the same floats, checked per record by bit
+   comparison; a record that breaks it is counted in `PackMismatches`) and `Ground.Z` only feeds the sphere's radius on the CPU. A smaller
+   encoding (a quaternion and a scale, or half precision) is **not** bit-exact: the GPU's matrix from a quaternion differs in the last bit, and
+   the driver's square root is not correctly rounded, so it was not used. The CPU side keeps the 96-byte record.
+4. **Budget guard** (`VramGuard`, from `VulkanDevice.VideoMemory()`, VK_EXT_memory_budget, sampled four times a second; **Verified** with
+   `VramGuardTests` and runs with `MEITOU_VRAM_BUDGET_MB` set below the card's budget): at 90% of the budget it enters pressure: new zone layouts,
+   grass pages, textures and mesh decodes are not started, the caches evict what has been idle for 2 s (instead of 60), and the effective ranges
+   (foliage, objects, distant towns, shadow distance when above its default) are multiplied by a scale that falls 12% every 0.75 s down to 0.15
+   while the use stays above 80%. It leaves pressure under 80%, and the scale comes back 4% a second after four seconds under 74%. Allocations
+   that can be large (a texture's image, scratch growth, an arena growth) ask `Allows` first and are refused past 92%, which also enters pressure
+   at once. It logs once (`vram      guard: ...`) and the F11 statistics show the state (`guard: ...`). At the default settings and at `max` on the
+   11.4 GB card the use stays under 60%, so it never leaves idle (**Observed**; its scale is exactly 1, so it cannot change a picture then).
+   `MEITOU_VRAM_GUARD=0` switches it off.
+5. **Headless watchdog** (`VramWatch`, `--screenshot` and the benchmark): a thread that polls the budget every 100 ms and exits the process with
+   code 9 when the use passes `MEITOU_VRAM_KILL` (default 0.95, 0 = off), so a test never takes the driver down.
+
+**Timing against the base build** (**Observed**, `--fly-benchmark 300` over the forest view, three interleaved runs each, base / this): flying,
+frame p50 7.9 / 8.0 / 8.5 against 7.2 / 7.2 / 8.0 ms, p95 12.6-12.8 against 12.3-12.7, CPU-only p50 1.9-2.1 against 2.0, p95 4.5-4.8 against
+4.2-4.3; still camera (`--fly-speed 0`) p50 7.7 / 8.3 / 4.6 against 8.1 / 6.0 / 4.6 ms (the GPU is bimodal on both builds, as in 8.9), CPU-only p50
+0.9-1.3 against 0.9-1.4. No change beyond the noise; the CPU figures are a little lower (cause **Unknown**).
+At the default the managed heap is 1349 / 1335 MB. At `all40` flying: p50 24 ms (the work is the range's), peak 5.05 GB against 8.6 GB.
+Gate: ten views in both modes, max 0 against `6f4af19`'s pictures; `MEITOU_VK_VALIDATION=sync` on two views, 0 errors (the 4 leaked
+image views the validation layer reports at device destruction are in the base build too); full test suite 467 passed, 0 failed, 0 skipped.
+
+**Ranges reached** (**Observed**, shadow distance 15000 at most; the driver resets above): `max` = large 120000, medium 80000, small 40000,
+object distance 400000, distant 100: the run completes, peak 60% of the budget, 78 ms a frame (the load is real; the guard did not act).
+The base build is aborted by the watchdog at `all80` (95% in the first seconds). With `MEITOU_VRAM_BUDGET_MB=6144` (a smaller card) the guard
+holds the use at 80-93% at `all80`; at that budget the cull scratch can be refused and foliage drops out for seconds (**Observed**; open).
+
+**Other owners that grow with range** (**Observed**, `GpuAllocator.Breakdown`, the F12 pie): object textures (1.25 GB at all20, 1.7 GB at max;
+bounded by the cache's 2048 MB high-water mark), object meshes (273 MB, 800 MB at max; high-water 768 MB, which the cache overshoots while its
+pages are in use), foliage textures (0.57 to 1.05 GB; bounded by the catalog), the foliage instance arena (16 MB to 128 MB, now 71% of that), and the
+shadow cascades' views through the cull scratch. Not range-dependent: terrain textures (1.07 GB), grass blades (160 MB), upload staging.
+
 ---
 
 ### 8.6 Phase 8 stage 2: impostors native and drawn (2026-10-07)

@@ -78,6 +78,19 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     /// <summary>The atlas side, the range and the number of cascades (the game's <c>shadow quality</c> and <c>Shadow Range</c>).</summary>
     public ShadowSettings Settings { get; set; } = new();
+    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): its range scale shortens the shadow range (never below the game's default, or
+    /// the setting when that is shorter) while the video memory is nearly used up. Null: no clamp.</summary>
+    public VramGuard? Guard { get; set; }
+    /// <summary>The range the cascades are fitted to and the casters are culled by: <see cref="Settings"/>' range, clamped by the guard.</summary>
+    public float EffectiveRange
+    {
+        get
+        {
+            float range = Settings.Range, scale = Guard?.RangeScale ?? 1f;
+            return scale >= 1f ? range : Math.Max(Math.Min(range, KenshiShadows.DefaultRange), range * scale);
+        }
+    }
+    ShadowSettings Effective => EffectiveRange is var range && range == Settings.Range ? Settings : Settings with { Range = range };
     public bool Enabled { get; set; } = true;
     /// <summary>
     /// Below this height of the real sun there is no shadow map. As the game: it keeps drawing the map along the lighting direction (whose
@@ -116,7 +129,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
         Resize(Settings.MapSize);
-        var cascades = ShadowCascades.Fit(view, Vector3.Normalize(toSun), Settings);
+        var cascades = ShadowCascades.Fit(view, Vector3.Normalize(toSun), Effective);
         timer.Begin();
 
         var host = BeginHost("shadow atlas", clear: true);

@@ -51,6 +51,26 @@ public class FoliageCullTests
     }
 
     [Fact]
+    public void Arena_packing_is_68_bytes_and_lossless_for_placements()
+    {
+        Assert.Equal(68, FoliageInstanceRecord.GpuSize);
+        var rng = new Random(7);
+        var packed = new float[17];
+        for (int i = 0; i < 1000; i++)
+        {
+            var t = Matrix4x4.CreateScale(0.5f + (float)rng.NextDouble()) * Matrix4x4.CreateFromYawPitchRoll((float)rng.NextDouble() * 6, (float)rng.NextDouble(), (float)rng.NextDouble())
+                    * Matrix4x4.CreateTranslation(rng.Next(-90000, 90000) + (float)rng.NextDouble(), (float)rng.NextDouble() * 900, rng.Next(-90000, 90000) + (float)rng.NextDouble());
+            var r = new FoliageInstanceRecord { Transform = t, Sphere = new Vector4(t.M41, t.M42, t.M43, 3), Ground = new Vector4(t.M41, t.M43, 1, i % 1024) };
+            Assert.True(FoliageInstanceRecord.Pack(in r, packed));
+            Assert.Equal(t.M11, packed[0]); Assert.Equal(t.M33, packed[8]); Assert.Equal(t.M41, packed[9]); Assert.Equal(t.M43, packed[11]);
+            Assert.Equal(r.Ground.W, packed[16]);
+        }
+        // A fourth column that is not 0, 0, 0, 1, or a ground position that is not the translation, is reported.
+        var odd = new FoliageInstanceRecord { Transform = Matrix4x4.Identity, Ground = new Vector4(1, 0, 1, 0) };
+        Assert.False(FoliageInstanceRecord.Pack(in odd, packed));
+    }
+
+    [Fact]
     [Slow]
     public void Scalar_ground_distance_is_bit_identical_to_Vector2_Distance()
     {

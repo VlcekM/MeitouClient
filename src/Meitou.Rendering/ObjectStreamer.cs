@@ -41,6 +41,8 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
 
     /// <summary>Zones laid out at once.</summary>
     public int MaxJobs { get; set; } = 3;
+    /// <summary>No new zone layouts are started (memory pressure, <see cref="VramGuard"/>); the ones in flight are taken in.</summary>
+    public bool Paused { get; set; }
 
     readonly Dictionary<ZoneCoordinate, Zone> zones = [];
     readonly Dictionary<ZoneCoordinate, Task<ZoneObjects>> jobs = [];
@@ -85,7 +87,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         }
         foreach (var (coordinate, _) in wanted.OrderBy(w => w.Distance))
         {
-            if (jobs.Count >= MaxJobs) break;
+            if (jobs.Count >= MaxJobs || Paused) break;
             jobs[coordinate] = BackgroundWork.Run(() => objects.BuildZone(coordinate));
         }
         Wanted = wanted.Count(w => !jobs.ContainsKey(w.Coordinate));

@@ -147,8 +147,12 @@ public sealed unsafe class VulkanDevice : IDisposable
             used += HasMemoryBudget ? budget.HeapUsage[i] : 0;
             total += HasMemoryBudget ? budget.HeapBudget[i] : heap.Size;
         }
-        return (HasMemoryBudget ? used : Allocator.TotalAllocatedBytes, total);
+        return (HasMemoryBudget ? used : Allocator.TotalAllocatedBytes, Math.Min(total, BudgetOverride));
     }
+
+    /// <summary><c>MEITOU_VRAM_BUDGET_MB</c> makes <see cref="VideoMemory"/> report at most that budget (a card with less memory, for testing the
+    /// memory-pressure guard, <c>VramGuard</c>, and the viewer's watch on a bigger one).</summary>
+    static readonly ulong BudgetOverride = ulong.TryParse(Environment.GetEnvironmentVariable("MEITOU_VRAM_BUDGET_MB"), out var mb) && mb > 0 ? mb << 20 : ulong.MaxValue;
 
     /// <summary>One line per feature, for logs and test output.</summary>
     public string DescribeFeatures()
