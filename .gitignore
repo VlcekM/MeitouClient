@@ -505,3 +505,6 @@ meitou.user.json
 *.bod2
 *.phs
 *.layout
+
+# Claude Code agent worktrees
+.claude/worktrees/
