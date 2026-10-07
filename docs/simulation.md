@@ -226,6 +226,29 @@ At these counts the barrier cost of the worker pool outweighs the parallel gain;
 and 16 threads, on a synthetic town and on The Hub of the install: identical hashes.
 
 
+## Bodies as built (stage 7)
+
+Track E, branch `sim-body`: stats, XP, medical state, encumbrance and speed as pure code in `src/Meitou.Simulation/Bodies/`, typed views (`RaceData`,
+`BodyPartTemplate`, `LimbReplacement`, `StatsEnumerated`, `StatsData`) in `src/Meitou.Data/Gameplay/Bodies/`. Formulas, units and the engine choices are in
+[character-stats.md](game/character-stats.md#as-built-stage-7-meitousimulationbodies-and-meitoudatagameplaybodies). Nothing is wired into `World` yet. What the
+core calls:
+
+| When | Call |
+|---|---|
+| Static data, once per race | `RaceData.From(record, db)` (stat map, anatomy, blood, hunger, speed, footprint radius `PathfindFootprintRadius`, water avoidance); `LimbReplacement.From`, `BodyPartTemplate.From` |
+| Spawn | `CharacterStats.Create(StatsData.Read(statsRecord) or CharacterStats.FromGroups(...), race, stats randomise, world seed, Rng.Key(id))`, `MedicalState.Create(race, stats.Strength)` |
+| Act phase, per character | build a `MedicalContext(constants, options, race) { Toughness, Strength, Resting, EncumbranceFactor, Seed, CharacterKey ... }`, then `medical.Tick(dtHours, ctx, events)`; `dtHours` = ticks x 11/36000 (a far character passes its elapsed time); `events` is a per-partition list (KO, woke, part down, severed, died) that the commit phase acts on |
+| Commit, on a hit | `medical.ChoosePart(ctx)` then `ApplyHit(part, new HitDamage(cut, blunt, pierce), ctx, events)`; on `PartSevered` call `XpService.ToughnessFromLimbLoss` and spawn the limb item |
+| Any stat read that should feel injuries and hunger | `medical.StatMultiplier(stat, StatUse...)` (the table of `FUN_1406457e0`) |
+| Movement | `Speed.Run(race, stats, medical, encumbranceFactor, shallowWater)` replaces the stand-in athletics of 20 at `PopulationSystem` (`Speed.RunUnhurt(race, stats.Athletics)` when no medical state exists); `Encumbrance.Factor(constants, inventoryWeight, carryingPerson, strength, strengthInjuryMultiplier)` |
+| XP | one shared `new XpService(constants, options)`: `Combat`, `Continuous`, `StrengthFromCarrying`, `AthleticsFromRunning`, `Lockpicking`, `Medic`... |
+| Eating, first aid | `medical.Feed(amount)`; `medical.Treat(dt, skill, kitQuality, robotKit, ctx)` and `MedicalState.KitDrain` |
+
+`CharacterStats` and `MedicalState` belong to one character, hold no references to shared mutable state and draw their random numbers from the seeded hash, so the
+Act phase can run characters in parallel; effects on others stay in the commit queues. The new-game options (Hunger time, Chance of death, Global damage multiplier,
+Dismemberment) are a `BodyOptions` the world passes in. Save keys: `MedicalState.WriteSave` / `ReadSave` and `CharacterStats.WriteSave` / `ReadSave` use the keys of
+[save.md](formats/save.md) (`blood`, `bleeding`, `hung`, `fed`, `KO`, `flesh<k>`..., `strength`, `toughness2`...); limb states and wounds have no key there yet.
+
 ## Walkability and movement
 
 Facts ([pathfinding.md](game/pathfinding.md)): the original uses a Havok navmesh per zone; the shipped tiles are a cache that
@@ -270,7 +293,7 @@ milliseconds per tick at 1x and 5x with the character count, in the game's frame
 | **4. Characters drawn** | Native character renderer (renderer track; may start at any stage) | Residents of The Hub drawn and animated, frame time recorded |
 | **5. Navmesh** | Collision reader (NxuStream XML, cooked meshes); our generator per decision 3 with the seed prune; path queries on their own threads; the stub replaced | Paths around buildings and through gates; generation off the frame |
 | **6. Player** | New game from NEW_GAME_STARTOFF, the player's squad, selection and move orders ([ui-input.md](game/ui-input.md)), a minimal HUD (clock, speed buttons) | Start a game, select a character, walk it across The Hub |
-| **7. Bodies** | Stats and XP, hunger, blood, body parts, KO and death ([character-stats.md](game/character-stats.md)) | Probe tables as tests |
+| **7. Bodies** | Stats and XP, hunger, blood, body parts, KO and death ([character-stats.md](game/character-stats.md)) | Probe tables as tests (done on `sim-body`, [as built](#bodies-as-built-stage-7); not yet wired into `World`) |
 | **8. Combat** | Melee per [combat.md](game/combat.md); ranged later | A fight between two squads resolves; formulas tested |
 | **9. AI proper** | Packages, blackboard, scoring and planner ([ai.md](game/ai.md)), off-screen squads with the stand-in speeds | Towns run their daily routines; squads travel off screen |
 | **10. Saves** | Read and write the world state ([save.md](formats/save.md)) | Round trip of our own saves; reading the original's sample save |
