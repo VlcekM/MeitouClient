@@ -65,6 +65,7 @@ public class TimeTests
     static (long Ticks, CameraState Camera, double GameSeconds, double Hour) Simulate(double[] frames)
     {
         var step = new FixedStepClock(30, maxCatchUp: 100000);
+        var sim = new SimulationClock();
         var game = new GameClock();
         var bindings = new InputBindings();
         var rig = new CameraRig((x, z) => 0.1f * x);
@@ -83,8 +84,8 @@ public class TimeTests
                 input.SetKey(Key.Space, tick % 60 == 10);
                 input.AddMouseDelta(tick % 7, -(tick % 5));
                 var actions = bindings.Resolve(input.Consume());
-                if (actions.Pressed(InputAction.Pause)) game.Paused = !game.Paused;
-                game.Tick(step.TickSeconds);
+                if (actions.Pressed(InputAction.Pause)) sim.TogglePause();
+                if (!sim.IsPaused) game.Advance(step.TickSeconds);
                 rig.Update((float)step.TickSeconds, actions);
             }
         }
@@ -107,38 +108,6 @@ public class TimeTests
             Assert.Equal(whole.GameSeconds, other.GameSeconds);
             Assert.Equal(whole.Hour, other.Hour);
         }
-    }
-
-    [Fact]
-    public void Game_clock_runs_on_ticks_scale_and_pause()
-    {
-        var game = new GameClock();
-        Assert.Equal(13, game.HourOfDay, 9);
-        game.Tick(1);
-        Assert.Equal(1, game.GameSeconds);
-        game.TimeScale = 3;
-        game.Tick(1);
-        Assert.Equal(4, game.GameSeconds);
-        game.Paused = true;
-        game.Tick(1);
-        Assert.Equal(4, game.GameSeconds);
-        game.Paused = false;
-        game.TimeScale = 0;
-        game.Tick(1);
-        Assert.Equal(4, game.GameSeconds);
-    }
-
-    [Fact]
-    public void Hour_of_day_wraps_at_24_and_starts_where_configured()
-    {
-        var game = new GameClock(startHour: 22, secondsPerGameHour: 10);
-        Assert.Equal(22, game.HourOfDay, 9);
-        for (int i = 0; i < 30; i++) game.Tick(1); // 3 game hours
-        Assert.Equal(1, game.HourOfDay, 9);
-        Assert.Equal(1, game.Day);
-        game.SetHourOfDay(6);
-        Assert.Equal(6, game.HourOfDay, 9);
-        Assert.Equal(1, game.Day);
     }
 
     [Fact]

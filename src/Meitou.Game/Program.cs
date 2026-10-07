@@ -33,14 +33,14 @@ sealed class GameOptions
         meitou [where] [options]     boots into the world with the Kenshi camera (default --town "The Hub")
           --fps-limit <n>            frame limit when vsync is off (default 240 from meitou.user.json; 0 = unlimited)
           --vsync / --no-vsync       vsync (default off)
-          --tick-rate <hz>           simulation ticks per second (default 30)
+          --tick-rate <hz>           control ticks per second: input actions and camera, in real time (default 30; the world ticks 30 per game second)
           --free-camera              start in the free camera (; toggles)
           --ticks <n>                with --screenshot: run n simulation ticks before the picture
           --quit-after <s>           close after s seconds and print the frame rate (smoke test)
           --yaw/--pitch/--distance   start view: heading, pitch above the horizon and boom (Kenshi: 30 degrees, boom 150; clamped to 10..2000)
           world options as meitou-viewer --world: --at, --zone, --town, --radius, --time, --screenshot, --size, --no-foliage, ...
         Keys: W/A/S/D move, Q/E or Left/Right rotate, Up/Down pitch, wheel or PageUp/PageDown zoom, right or middle drag orbit,
-          ; free camera (R/F up/down), Space pause, . / , time faster/slower, Tab settings, F12 screenshot, Esc quit.
+          ; free camera (R/F up/down), Space pause, F2/F3/F4 speed 1x/2x/5x (. / , step), Tab settings, F12 screenshot, Esc quit.
         Settings (frame limit, vsync, tick rate, the Tab sliders, key bindings) are kept in meitou.user.json.
         """;
 
@@ -107,8 +107,8 @@ static class Program
 }
 
 /// <summary>
-/// The game loop: a fixed simulation tick (<see cref="FixedStepClock"/>, 30 Hz by default) runs the input actions, the camera rig
-/// and the game clock; each displayed frame draws the camera interpolated between the last two ticks at the display rate.
+/// The game loop: a real-time control tick (<see cref="FixedStepClock"/>, 30 Hz by default) runs the input actions, the camera rig
+/// and pause/speed; a game-time simulation tick (<see cref="SimulationClock"/>) advances the game clock; each displayed frame draws the camera interpolated between the last two ticks at the display rate.
 /// </summary>
 sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config)
 {
@@ -164,7 +164,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
     {
         if (gpu.Foliage is { } foliage && o.Screenshot is null) foliage.SwaySeconds = realTime.Elapsed.TotalSeconds;
         // The heat haze's gameTime: game hours since the start (it stops while paused, as in the game).
-        gpu.GameHours = session.Clock.TotalHours - session.Clock.StartHour;
+        gpu.GameHours = session.Clock.HoursSinceStart;
         WorldFrame.Draw(gpu, scene, camera, render, width, height, (float)session.Clock.HourOfDay, (float)realTime.Elapsed.TotalSeconds / 600f, o.FogDistance);
     }
 
@@ -173,7 +173,11 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         using var display = new VulkanDisplay(null, vsync: false, streamline: WantsDlss());
         streamline = display.Streamline;
         Boot(display, interactive: false);
-        for (int i = 0; i < g.Ticks; i++) session.Tick();
+        for (int i = 0; i < g.Ticks; i++)
+        {
+            session.Tick();
+            session.AdvanceSimulation(session.Ticks.TickSeconds);   // one control tick of real time, at speed 1
+        }
         ApplyCamera(session.Camera.Current);
         gpu.Streamer?.Settle(gpu.Anchor ?? camera.Eye);
         gpu.Objects?.Settle(gpu.Anchor ?? camera.Eye);
@@ -193,7 +197,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
         context.Finish();
         var s = session.Camera.Current;
         Console.WriteLine($"camera    {(session.Camera.IsFree ? "free" : "strategy")}: pivot {s.Target.X:0}, {s.Target.Y:0}, {s.Target.Z:0}, eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, " +
-            $"yaw {s.Yaw * 180 / MathF.PI:0.#}, pitch {s.Pitch * 180 / MathF.PI:0.#}, boom {s.Distance:0.#}; {session.Ticks.TotalTicks} ticks, game time {session.Clock.HourOfDay:0.00} h");
+            $"yaw {s.Yaw * 180 / MathF.PI:0.#}, pitch {s.Pitch * 180 / MathF.PI:0.#}, boom {s.Distance:0.#}; {session.Ticks.TotalTicks} control ticks, {session.Simulation.TotalTicks} simulation ticks, game time {session.Clock.TimeText} ({session.Clock.DayText})");
         FramebufferCapture.SavePng(context, target, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
         gpu.Dispose();
@@ -255,26 +259,26 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             mouse.Scroll += (m, wheel) => { if (panel?.Contains(Pixels(m.Position)) != true) session.Input.AddWheel(wheel.Y); };
         }
         Console.WriteLine(GameOptions.Usage[GameOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
-        Console.WriteLine($"display   vsync {(vsync ? "on" : "off")}, frame limit {(vsync || fpsLimit <= 0 ? "none" : fpsLimit + " fps")}, simulation {session.Ticks.TickRate:0} Hz; settings in {config.Path}");
+        Console.WriteLine($"display   vsync {(vsync ? "on" : "off")}, frame limit {(vsync || fpsLimit <= 0 ? "none" : fpsLimit + " fps")}, control tick {session.Ticks.TickRate:0} Hz, world tick {SimulationClock.TickRate:0} per game second; settings in {config.Path}");
 
         var frame = Stopwatch.StartNew();
         double last = 0, titleTimer = 0, cpuSum = 0;
         int frames = 0, totalFrames = 0;
         bool quit = false;
+        session.Ticked += actions =>
+        {
+            if (actions.Pressed(InputAction.Quit)) quit = true;
+            if (actions.Pressed(InputAction.ToggleSettings) && panel is not null) panel.Visible = !panel.Visible;
+            if (actions.Pressed(InputAction.Screenshot)) screenshotRequested = true;
+        };
+        long windowRan = 0, windowDropped = 0;
         while (!window.IsClosing && !quit)
         {
             window.DoEvents();
             if (window.IsClosing) break;
             double now = frame.Elapsed.TotalSeconds, dt = now - last;
             last = now;
-            int n = session.Ticks.Advance(dt);
-            for (int i = 0; i < n; i++)
-            {
-                var actions = session.Tick();
-                if (actions.Pressed(InputAction.Quit)) quit = true;
-                if (actions.Pressed(InputAction.ToggleSettings) && panel is not null) panel.Visible = !panel.Visible;
-                if (actions.Pressed(InputAction.Screenshot)) screenshotRequested = true;
-            }
+            session.Advance(dt);
             ApplyCamera(session.CameraAt());
             var size = window.FramebufferSize;
             if (display.BeginFrame(size.X, size.Y))
@@ -297,14 +301,19 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             if (titleTimer >= 0.5)
             {
                 var s = session.Camera.Current;
-                int minutes = (int)(session.Clock.HourOfDay * 60);
+                // The achieved speed over this window: the asked speed scaled by the share of the owed ticks that ran.
+                long ran = session.Simulation.TotalTicks - windowRan, dropped = session.Simulation.DroppedTicks - windowDropped;
+                windowRan = session.Simulation.TotalTicks;
+                windowDropped = session.Simulation.DroppedTicks;
+                double achieved = ran + dropped == 0 ? session.TimeScale : session.TimeScale * ran / (ran + dropped);
+                string speedText = session.Simulation.IsPaused ? "paused" + (session.Simulation.RequestedPause ? "" : $" (x{session.Simulation.LastNonZeroSpeed:0})") : $"x{session.TimeScale:0}" + (achieved < session.TimeScale - 0.05 ? $" (running x{achieved:0.0})" : "");
                 window.Title = $"Meitou | {frames / titleTimer:0} fps, cpu {cpuSum / Math.Max(frames, 1):0.00} ms | {(session.Camera.IsFree ? "free camera" : $"boom {s.Distance:0}")} | " +
-                    $"{minutes / 60:00}:{minutes % 60:00} x{session.TimeScale:0}{(session.Clock.Paused ? " paused" : "")} | {s.Target.X:0}, {s.Target.Z:0}{(gpu.Post is { Temporal: true } p ? $" | {p.ActiveUpscaler}" : "")}";
+                    $"{session.Clock.TimeText} {session.Clock.DayText} {speedText} | {s.Target.X:0}, {s.Target.Z:0}{(gpu.Post is { Temporal: true } p ? $" | {p.ActiveUpscaler}" : "")}";
                 titleTimer = cpuSum = 0;
                 frames = 0;
             }
             totalFrames++;
-            if (g.QuitAfter is { } quitAfter && now >= quitAfter) { Console.WriteLine($"smoke     {totalFrames} frames in {now:0.0} s: {totalFrames / now:0} fps on average, {session.Ticks.TotalTicks} ticks"); quit = true; }
+            if (g.QuitAfter is { } quitAfter && now >= quitAfter) { Console.WriteLine($"smoke     {totalFrames} frames in {now:0.0} s: {totalFrames / now:0} fps on average, {session.Ticks.TotalTicks} control ticks, {session.Simulation.TotalTicks} simulation ticks, game time {session.Clock.TimeText}"); quit = true; }
             if (!vsync && fpsLimit > 0) Limit(frame, now, 1.0 / fpsLimit);
         }
         if (panel is not null)

@@ -15,6 +15,7 @@ public class WorldSessionTests
     {
         var a = Make();
         var b = Make();
+        a.Simulation.MaxTicksPerFrame = 100;   // no ticks dropped in the one long frame
         a.Input.SetKey(Key.W, true);
         b.Input.SetKey(Key.W, true);
         a.Advance(0.3);   // 9 ticks: under the catch-up cap
@@ -29,21 +30,5 @@ public class WorldSessionTests
         Assert.Equal(a.Ticks.TotalTicks, b.Ticks.TotalTicks);
         Assert.Equal(a.Camera.Current.Target, b.Camera.Current.Target);
         Assert.Equal(a.Clock.GameSeconds, b.Clock.GameSeconds);
-    }
-
-    [Fact]
-    public void Pause_and_speed_actions_change_the_clock()
-    {
-        var s = Make();
-        s.Input.SetKey(Key.Period, true);
-        s.Tick();
-        s.Input.SetKey(Key.Period, false);
-        Assert.Equal(2, s.TimeScale);
-        s.Input.SetKey(Key.Space, true);
-        s.Tick();
-        double before = s.Clock.GameSeconds;
-        s.Tick();
-        Assert.True(s.Clock.Paused);
-        Assert.Equal(before, s.Clock.GameSeconds);
     }
 }

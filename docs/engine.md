@@ -22,17 +22,29 @@ Dependencies point one way: Core ← Data ← Engine / Rendering ← Game / view
 
 ## The game loop (`meitou`, `Meitou.Engine.Time`)
 
-- **Fixed simulation tick** (`FixedStepClock`): 30 Hz by default (`--tick-rate`, or `tickRate` in the user config). Each
-  displayed frame adds the real time since the last one to an accumulator and runs as many ticks as it holds, at most 10 (a long
-  stall drops the rest instead of spiralling; `DroppedTicks` counts them). The tick count depends only on the summed time, not on
-  how it was split into frames (tests `TimeTests`).
-- **Interpolated drawing**: the camera keeps its state of the previous and the current tick (`Interpolated<CameraState>`); a frame
-  draws `At(alpha)` with `alpha` = the accumulator's fraction of a tick, so motion is smooth at any display rate. Angles take
-  the shortest way round; a camera mode switch is a cut.
-- **Game time** (`GameClock`): advanced by ticks only; time scale 1, 2, 3 or 5 (`.` / `,`), pause (`Space`), 150 game seconds
-  per game hour at scale 1. Both are placeholders: the game has pause, 1×, 2× and 5× and a game hour of 1200/11 = 109.09 s
-  ([game/game-loop.md](game/game-loop.md#the-clock)); stage 0 of [simulation.md](simulation.md) changes them. The hour drives the
-  sun, sky and lighting.
+- **Two clocks** (stage 0 of [simulation.md](simulation.md)). The **control tick** (`FixedStepClock`, 30 Hz of real time by default,
+  `--tick-rate` or `tickRate` in the user config) consumes the input, handles pause and speed and moves the camera, so the camera
+  keeps moving while the game is paused and at every speed. Each displayed frame adds the real time since the last one to an
+  accumulator and runs as many control ticks as it holds, at most 10 (a long stall drops the rest; `DroppedTicks` counts them). The
+  tick count depends only on the summed time, not on how it was split into frames (tests `TimeTests`).
+- **Simulation tick** (`SimulationClock`): one tick is 1/30 s of **game** time at every speed. Its accumulator is fed `real dt x speed`,
+  so speeds 1, 2 and 5 run 30, 60 and 150 ticks per real second and a pause runs none. A frame runs at most 6 x speed ticks
+  (`MaxTicksPerFrame`); the rest are dropped and the game runs slower than asked (`AchievedSpeed`; the window title shows
+  `(running x0.4)` when it does). Within a frame all control ticks run first (they may change the speed), then the simulation ticks
+  the resulting speed allows (`WorldSession.Advance`). A speed change therefore applies to the whole frame it is made in.
+- **Speed and pause** (Verified, [game/game-loop.md](game/game-loop.md#speed-and-pause)): the speeds are 1, 2 and 5 (no 3x); pause sets
+  the speed to 0 and remembers the last non-zero one, and the next pause press returns to it; `RequestedPause` stops the world for
+  menus and loading without touching the speed (paused = requested OR speed 0). Keys: the game's defaults, Space pause, F2/F3/F4 speed
+  1x/2x/5x (`Speed1`..`Speed3`); `.` and `,` step through 1, 2, 5 as an extra. A new world runs at 1 (the original is at 0 until its start routine).
+- **Interpolated drawing**: the camera keeps its state of the previous and the current control tick (`Interpolated<CameraState>`); a
+  frame draws `At(alpha)` with `alpha` = the accumulator's fraction of a tick, so motion is smooth at any display rate. Angles take
+  the shortest way round; a camera mode switch is a cut. The character snapshots will be interpolated by `SimulationClock.Alpha` the same way.
+- **Game time** (`GameClock`): advanced by simulation ticks only (`Advance(gameSeconds)`); **Verified** 1200/11 = 109.09 game seconds
+  per game hour, 24 hours a day, the day count (a new game starts on day 1, **Observed** in the sample save, at 13:00, an engine
+  choice), `IsDaytime` (strict `sunrise < hour < sunset`), `DaylightFactor` (0 at night, linear 2-hour ramps after sunrise and before
+  sunset, 1 between; **Observed**), `HH:MM` (`floor(frac x 60)` minutes) and `Day: n` texts. Sunrise, sunset and days per year come
+  from the CONSTANTS record (5 / 23 / 100); sunset not after sunrise gives 6 and 20. The window title shows the clock. The hour
+  drives the sun, sky and lighting; the heat haze's game time is `HoursSinceStart` and stops while paused.
 - **Input** (`Meitou.Engine.Input`): the host feeds an `InputState` (keys, buttons, mouse movement and wheel) from the
   windowing library's events; each tick consumes it once, so a press is seen by exactly one tick however frames and ticks fall.
   `InputBindings` maps keys and buttons to `InputAction`s; defaults below, overridable in the user config.
@@ -54,7 +66,7 @@ pixel; the pivot follows the terrain only (the game also stands it on buildings;
 view meets the ground.
 
 Default keys: `W A S D` move, `Q`/`E` or `Left`/`Right` rotate, `Up`/`Down` pitch, wheel or `PageUp`/`PageDown` zoom, right or
-middle drag orbit, `;` free camera (`R`/`F` up/down in it), `Space` pause, `.`/`,` time scale, `Tab` settings panel, `F12`
+middle drag orbit, `;` free camera (`R`/`F` up/down in it), `Space` pause, `F2`/`F3`/`F4` speed 1x/2x/5x (`.`/`,` step through them), `Tab` settings panel, `F12`
 screenshot (C:\Temp), `Esc` quit.
 
 ## Rendering (`Meitou.Rendering`)

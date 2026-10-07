@@ -1,4 +1,11 @@
 # Simulation: the game loop and the plan to build it
+  Decided in stage 0: a frame may run `6 x speed` ticks (0.2 s of game time per frame at every speed, so 5 fps is the floor at
+  which the game still runs at the asked speed); `SimulationClock.AchievedSpeed` is the asked speed times the share of the owed
+  ticks that ran, and the title shows it when lower. The budget counts ticks, not milliseconds: a budget in CPU time would make
+  the tick count depend on the machine, so it can only be added later as a second limit, not in the determinism tests.
+- **Frame order.** `WorldSession.Advance(real dt)` runs all control ticks the frame holds first (input, pause, speed, camera),
+  then feeds `real dt` to the simulation clock at the speed they left. A speed change thus applies to the whole frame it is made in
+  (at most one frame of error); the simulation never sees the input.
 
 Design and plan for phase 5 of the [roadmap](../ROADMAP.md) (the simulation core) and for the pieces of phases 4, 6 and 7 it needs
 first: walkability, characters on screen, saves of the world state. Proposed 2026-10-07; the owner settled the open choices
@@ -21,9 +28,9 @@ decides what they leave open (scheduling, threads, data layout).
 - The data layer reads everything a world needs (FCS with the game's merge rules, load order, zone and town placements), and
   `CharacterGenerator` rolls an NPC's appearance and loadout. There are no typed views yet over FACTION, SQUAD_TEMPLATE, TOWN,
   AI_PACKAGE, AI_TASK or the CONSTANTS used by the simulation: code reads `GameRecord` fields by name where it needs one.
-- Two facts in the running code are stale against the research: `GameClock` uses 150 game seconds per game hour, and the game's
-  rate is 1200/11 = 109.09 s ([game-loop.md](game/game-loop.md#the-clock), Verified); `WorldSession.TimeScales` offers 1, 2, 3, 5,
-  and the game has pause, 1, 2 and 5 only ([game-loop.md](game/game-loop.md#speed-and-pause), Verified). Stage 0 fixes both.
+- Stage 0 (time facts) is done on branch `sim-core`: `GameClock` runs at the game's 1200/11 s per game hour and `WorldSession`
+  offers the game's pause, 1, 2 and 5 (F2 to F4), with a real-time control tick and a game-time simulation tick
+  ([engine.md](engine.md#the-game-loop-meitou-meitouenginetime)).
 - Missing for a living world: the world model (factions, squads, characters), movement and walkability, character drawing (the
   viewer's character renderer was dropped in phase 8, DECISIONS 23; how it worked is in [character-viewer.md](character-viewer.md)),
   AI, the UI, saves.
@@ -66,7 +73,7 @@ Proposal (owner decision 1):
 - **Clock.** `GameClock` advances with simulation ticks: 1200/11 game seconds per game hour, 24 hours a day, `days per year` from
   CONSTANTS; it keeps the day, the time of day and the total game hours (double), the daylight factor with its 2-hour ramps, the
   day/night flag and the `HH:MM` / `Day n` texts ([game-loop.md](game/game-loop.md#the-clock)). Saves store day, hour and minute.
-- **Speed and pause.** Speeds {0, 1, 2, 5}; pause remembers the last non-zero speed; a separate paused flag lets menus stop the
+- **Speed and pause** (done in stage 0). Speeds {0, 1, 2, 5}; pause remembers the last non-zero speed; a separate paused flag lets menus stop the
   world without touching the speed; the bindings are the game's (`pause` Space, `speed_1..3` F2 to F4, [ui-input.md](game/ui-input.md)).
 - **Real-time things stay real-time**, as in the original: the autosave timer and zone unload timers run on the host's real
   clock. Physics is the exception: the original steps it in real time at every speed; here it would step with the simulation.

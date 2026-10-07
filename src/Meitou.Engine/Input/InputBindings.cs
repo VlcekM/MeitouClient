@@ -14,6 +14,8 @@ public enum InputAction
     /// <summary>The game's <c>toggle_fps_camera</c> (docs/formats/camera.md).</summary>
     ToggleFreeCamera,
     Pause, TimeFaster, TimeSlower,
+    /// <summary>The game speed_1, speed_2, speed_3 actions: 1x, 2x, 5x.</summary>
+    Speed1, Speed2, Speed3,
     Screenshot, ToggleSettings, Quit,
 }
 
@@ -50,7 +52,7 @@ public sealed class ActionState
 
 /// <summary>
 /// Maps actions to keys and mouse buttons: each action has any number of bindings and counts as held while any is down. The
-/// defaults are an engine choice (the game's own are in <c>controls.cfg</c>; only <c>;</c> for the free camera is taken from it).
+/// defaults are an engine choice except the time controls and <c>;</c> for the free camera, which are the game's (docs/game/ui-input.md: pause Space, speed_1..3 F2..F4; the keys . and , step through the speeds as well).
 /// A config file can override them through <see cref="Apply"/> with strings such as <c>"W,Up"</c> or <c>"Mouse:Middle"</c>.
 /// </summary>
 public sealed class InputBindings
@@ -83,6 +85,9 @@ public sealed class InputBindings
         Set(InputAction.Pause, Key.Space);
         Set(InputAction.TimeFaster, Key.Period);
         Set(InputAction.TimeSlower, Key.Comma);
+        Set(InputAction.Speed1, Key.F2);
+        Set(InputAction.Speed2, Key.F3);
+        Set(InputAction.Speed3, Key.F4);
         Set(InputAction.Screenshot, Key.F12);
         Set(InputAction.ToggleSettings, Key.Tab);
         Set(InputAction.Quit, Key.Escape);
