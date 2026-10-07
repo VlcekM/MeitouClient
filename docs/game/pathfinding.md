@@ -535,3 +535,10 @@ scripts `MeitouClient-re/probes/walk/tilescan*.js`, **Observed**):
   `destroyed` there; a path into the town exists even with every door closed. Gaps in walls come from the world data, not from the builder.
 - **Observed**: the Hub's three door painters are a shack door, a door in a wall, and one that covers no walkable cell; none is a town gate.
   A door leaf is thin, so the painter has to be grown by about a cell to paint a closed band of cells.
+- **Observed** (Storm House, The Hub): a building's interior built as in "Interiors" (own shapes in mask 0x87fbe00, hull complement removed, seed at the
+  door's inner marker) gives a floor at the building's floor height (here 27 units above the terrain beneath the building, which stays walkable ground
+  under it: the hull carver is only as tall as the hull), joined to the street by the door polygons. A door painter has to be grown by a cell to close its
+  doorway; an edge of the interior's door polygon faces several exterior polygons, so a join links one edge to all of them.
+- **Observed**: 21 of the 128 buildings of The Hub's zone are `destroyed` in the world data; only two have an intact door.
+- **Unknown**: the positions of the three linked-wall seeds along a wall; whether the building rays of the seed rule see walls and roofs (groups 11 and 12)
+  and not only floors (9 and 10); what `interior terrain` changes.

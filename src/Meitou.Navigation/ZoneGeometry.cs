@@ -34,7 +34,7 @@ public sealed class GatherStats
 {
     public int Buildings, PartsWithCollision, Shapes, FoliageInstances, FoliageShapes, FoliageCutters, MissingFiles;
     public int WalkableTriangles, CuttingTriangles, TerrainTriangles, WaterTriangles;
-    public int Carvers, Painters, DoorSeeds;
+    public int Carvers, Painters, DoorSeeds, SeedsDropped, WallSeeds;
 }
 
 /// <summary>
@@ -66,6 +66,13 @@ public sealed class ZoneGeometry
     public List<Vector3> Seeds { get; } = [];
 
     /// <summary>Hash of the zone's buildings (placement, rotation, record), the cache key of the built mesh.</summary>
+    /// <summary>For an interior mesh: the convex hull of the building interior mask; the mesh is clipped to it.</summary>
+    public NavVolume? InteriorHull { get; init; }
+    /// <summary>For an interior mesh: the building instance it belongs to.</summary>
+    public string? InteriorOf { get; init; }
+
+    /// <summary>The range of triangles (in triangle numbers) that came from buildings; for the seed rays.</summary>
+    public int BuildingFirstTriangle, BuildingLastTriangle;
     public uint BuildingHash { get; set; }
     public GatherStats Stats { get; } = new();
 

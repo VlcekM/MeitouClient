@@ -15,7 +15,7 @@ public enum PathMode { Ignore = 0, Projected = 1, Obstacle = 2, Walkable = 3 }
 /// groups in docs/formats/collision.md): terrain triangles with the water clamp, building and foliage collision placed and filtered by collision group,
 /// per-triangle walkable areas, carvers, door painters and seed points. One instance per thread (it owns a heightmap handle); the collision cache may be shared.
 /// </summary>
-public sealed class ZoneGeometryGatherer : IDisposable
+public sealed partial class ZoneGeometryGatherer : IDisposable
 {
     /// <summary>Collision groups the original's generator includes (mask 0x809de40): foliage 6 and 14, building parts 9..12, stairs 15 and 16, furniture 19, unwalkable roofs 27.</summary>
     public const uint IncludedGroupMask = 0x809de40;
@@ -200,17 +200,20 @@ public sealed class ZoneGeometryGatherer : IDisposable
             if (Vector2.Distance(new(position.X, position.Z), new(x, z)) > radius) continue;
             var parts = WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(destroyed));
             int withCollision = parts.Count(p => p.Source.GetPath("xml collision").Length > 0 && collision.Get(p.Source.GetPath("xml collision")) is not null);
+            if (Environment.GetEnvironmentVariable("NAV_DUMP") is not null) yield return "    fields " + string.Join(", ", record.Ints.Select(kv => $"{kv.Key}={kv.Value}").Concat(record.Floats.Select(kv => $"{kv.Key}={kv.Value}")).Concat(record.Bools.Where(kv => kv.Value).Select(kv => kv.Key)));
             yield return $"{record.Name} [{record.StringId}] at {position.X:0},{position.Y:0},{position.Z:0} mode {record.GetInt("path mode", 3)} gateway {record.GetBool("is gateway")} parts {parts.Count} with collision {withCollision} interior masks {record.GetReferences("interior mask").Count()} destroyed {destroyed}";
         }
     }
 
     void AddBuildings(ZoneGeometry g)
     {
+        g.BuildingFirstTriangle = g.TriangleCount;
         foreach (var (b, record, position, destroyed) in NearBuildings(g.Zone, g.ZoneMin, g.ZoneMax, g.Margin))
         {
             g.Stats.Buildings++;
             AddBuilding(g, record, b.InstanceId, position, b.Rotation, destroyed);
         }
+        g.BuildingLastTriangle = g.TriangleCount;
         g.BuildingHash = BuildingHash(g.Zone, g.Margin);
     }
 
@@ -226,7 +229,7 @@ public sealed class ZoneGeometryGatherer : IDisposable
         }
     }
 
-    void AddBuilding(ZoneGeometry g, GameRecord building, string placementId, Vector3 position, Quaternion rotation, bool destroyed)
+    void AddBuilding(ZoneGeometry g, GameRecord building, string placementId, Vector3 position, Quaternion rotation, bool destroyed, InteriorContext? interior = null)
     {
         float scale = building.GetFloat("scale", 1);
         if (scale <= 0) scale = 1;
@@ -240,17 +243,17 @@ public sealed class ZoneGeometryGatherer : IDisposable
             string path = destroyed && part.GetPath("destroyed collision") is { Length: > 0 } dc ? dc : part.GetPath("xml collision");
             if (path.Length == 0) continue;
             bool isDoor = part.GetBool("is door") || mesh.Owner.GetBool("is door");
-            AddPart(g, mesh.Owner, part, path, node, isDoor, interiorMask: false, instanceId: placementId);
+            AddPart(g, mesh.Owner, part, path, node, isDoor, interiorMask: false, instanceId: placementId, interior);
         }
         // The interior mask part is created apart from the parts list; its collision is the indoor hull.
         // Gateways (is gateway: walk underneath) are not shells with an interior: their hull must not close the passage (Observed: the Hub's gates).
-        if (!building.GetBool("is gateway"))
+        if (interior is null && !building.GetBool("is gateway"))
         foreach (var r in building.GetReferences("interior mask"))
             if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BUILDING_PART } mask && mask.GetPath("xml collision") is { Length: > 0 } maskPath)
                 AddPart(g, building, mask, maskPath, node, isDoor: false, interiorMask: true, instanceId: placementId);
     }
 
-    void AddPart(ZoneGeometry g, GameRecord owner, GameRecord part, string path, Matrix4x4 node, bool isDoor, bool interiorMask, string instanceId)
+    void AddPart(ZoneGeometry g, GameRecord owner, GameRecord part, string path, Matrix4x4 node, bool isDoor, bool interiorMask, string instanceId, InteriorContext? interior = null)
     {
         var prepared = collision.Get(path);
         if (prepared is null) return;
@@ -268,6 +271,11 @@ public sealed class ZoneGeometryGatherer : IDisposable
 
         foreach (var shape in prepared.Shapes)
         {
+            if (interior is not null)
+            {
+                AddInteriorShape(g, owner, group, mode, shape, node, instanceId, interior);
+                continue;
+            }
             if (group == 13)
             {
                 // Hull of an interior mask on a building that has one (the original: SHELL_WITH_INTERIOR buildings): cut the exterior mesh.
@@ -497,23 +505,76 @@ public sealed class ZoneGeometryGatherer : IDisposable
     void AddSeeds(ZoneGeometry g)
     {
         float water = WorldWater.Height;
+        // The original's ray rule (FUN_1403d4dd0): a seed.def point without a height (Y -99) that a ray from above hits on a building floor is moved onto it,
+        // one with a height that hits a building is dropped. Our building triangles are all the zone's building shapes of the mask, not only groups 9 and 10 (approximation).
+        bool HitsBuilding(float x, float z, out float y) => RayDown(g, x, z, highest: true, float.MinValue, g.BuildingFirstTriangle, g.BuildingLastTriangle, out y, anyArea: true);
         var fileSeeds = FileSeeds(g.Zone);
         foreach (var s in fileSeeds)
         {
-            float y = s.Y < -50 ? Math.Max(map.HeightAt(s.X, s.Z), water) : s.Y;
+            bool noHeight = s.Y < -50;
+            bool hit = HitsBuilding(s.X, s.Z, out float top);
+            if (hit && !noHeight) { g.Stats.SeedsDropped++; continue; }
+            float y = noHeight ? (hit ? top : Math.Max(map.HeightAt(s.X, s.Z), water)) : s.Y;
             g.Seeds.Add(new Vector3(s.X, y, s.Z));
         }
         if (fileSeeds.Count == 0)
         {
-            // A zone with no seeds.def points gets a 3 x 3 grid of ground seeds.
+            // A zone with no seeds.def points gets a 3 x 3 grid of ground seeds (a ground seed is only added where nothing is hit).
             for (int j = 0; j < 3; j++)
                 for (int i = 0; i < 3; i++)
                 {
                     float x = g.ZoneMin.X + WorldLayout.ZoneSize * (2 * i + 1) / 6f, z = g.ZoneMin.Y + WorldLayout.ZoneSize * (2 * j + 1) / 6f;
+                    if (HitsBuilding(x, z, out _)) continue;
                     g.Seeds.Add(new Vector3(x, Math.Max(map.HeightAt(x, z), water), z));
                 }
         }
+        AddLinkedWallSeeds(g, HitsBuilding);
     }
+
+    delegate bool BuildingRay(float x, float z, out float y);
+
+    /// <summary>
+    /// Linked wall sections (BUILDING with <c>link length</c> above 0): three seeds on top of a WALKABLE wall where the ray down hits it, and for walls that leave
+    /// the zone three ground seeds clamped into the zone box. The three positions along the wall are our choice (0.15, 0.5 and 0.85 of its length, the length
+    /// taken from the collision footprint); the original's are Unknown.
+    /// </summary>
+    void AddLinkedWallSeeds(ZoneGeometry g, BuildingRay hits)
+    {
+        float water = WorldWater.Height;
+        foreach (var (b, record, position, destroyed) in NearBuildings(g.Zone, g.ZoneMin, g.ZoneMax, 0))
+        {
+            if (record.GetFloat("link length") <= 0) continue;
+            if (position.X < g.ZoneMin.X - 400 || position.X > g.ZoneMax.X + 400 || position.Z < g.ZoneMin.Y - 400 || position.Z > g.ZoneMax.Y + 400) continue;
+            var node = NodeMatrix(record, position, b.Rotation);
+            var points = new List<Vector3>();
+            foreach (var mesh in WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(destroyed)))
+            {
+                string path = destroyed && mesh.Source.GetPath("destroyed collision") is { Length: > 0 } dc ? dc : mesh.Source.GetPath("xml collision");
+                if (path.Length == 0 || collision.Get(path) is not { } prepared) continue;
+                foreach (var shape in prepared.Shapes) foreach (var v in shape.Vertices) points.Add(Vector3.Transform(v, node));
+            }
+            if (points.Count < 2) continue;
+            // The two farthest footprint points are the wall's ends.
+            var hull = Footprint(points, 0, 0, 0).Polygon;
+            Vector2 a = hull[0], c = hull[0];
+            float best = -1;
+            foreach (var p in hull) foreach (var q in hull) { float d = Vector2.DistanceSquared(p, q); if (d > best) { best = d; a = p; c = q; } }
+            bool walkable = (PathMode)record.GetInt("path mode", (int)PathMode.Obstacle) == PathMode.Walkable;
+            bool leaves = !(InsideBox(g, a) && InsideBox(g, c));
+            foreach (float t in new[] { 0.15f, 0.5f, 0.85f })
+            {
+                var at = Vector2.Lerp(a, c, t);
+                if (walkable && InsideBox(g, at) && hits(at.X, at.Y, out float top)) { g.Seeds.Add(new Vector3(at.X, top, at.Y)); g.Stats.WallSeeds++; }
+                if (leaves)
+                {
+                    var clamped = Vector2.Clamp(at, g.ZoneMin, g.ZoneMax);
+                    if (!hits(clamped.X, clamped.Y, out _)) { g.Seeds.Add(new Vector3(clamped.X, Math.Max(map.HeightAt(clamped.X, clamped.Y), water), clamped.Y)); g.Stats.WallSeeds++; }
+                }
+            }
+        }
+    }
+
+    static bool InsideBox(ZoneGeometry g, Vector2 p) => p.X >= g.ZoneMin.X && p.X <= g.ZoneMax.X && p.Y >= g.ZoneMin.Y && p.Y <= g.ZoneMax.Y;
 }
 
 /// <summary><c>navtiles/seeds.def</c>: float3 records, absolute positions (Kenshi units), bucketed by zone.</summary>

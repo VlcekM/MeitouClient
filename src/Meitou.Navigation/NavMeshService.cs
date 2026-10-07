@@ -82,7 +82,8 @@ public sealed class NavMeshService : IDisposable
                 if (mesh is null)
                 {
                     var geometry = gatherer.Gather(zone);
-                    mesh = ZoneNavMeshBuilder.Build(geometry, Settings, out _).WithoutPruned();
+                    geometry.Seeds.AddRange(NeighbourSeeds.Collect(Walkability.World, zone, geometry));
+                    mesh = NavMeshPipeline.BuildZone(gatherer, geometry, Settings, out _).WithoutPruned();
                     origin = NavMeshOrigin.Built;
                     try { Cache.Save(mesh, hash, settingsHash); }
                     catch (IOException) { /* a read-only or full disk only costs the next build */ }

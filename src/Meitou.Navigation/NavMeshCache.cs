@@ -10,7 +10,7 @@ namespace Meitou.Navigation;
 public sealed class NavMeshCache
 {
     /// <summary>Bump when the builder's output changes for the same input (a new rule in the gatherer or the pruner).</summary>
-    public const int BuilderVersion = 2;
+    public const int BuilderVersion = 3;
     const int FormatVersion = 3;
     static readonly byte[] Magic = "MNAV"u8.ToArray();
 
