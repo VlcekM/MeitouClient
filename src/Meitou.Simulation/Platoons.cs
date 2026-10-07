@@ -36,6 +36,8 @@ public sealed class Platoon
     public bool GoingHome { get; set; }
     /// <summary>Seconds still to wait at the town it reached.</summary>
     public float WaitLeft { get; set; }
+    /// <summary>The purse while the squad is not loaded (<see cref="Squad.Money"/> while it is; save key <c>money</c>).</summary>
+    public long Money { get; set; }
     public PlatoonState State { get; set; }
     /// <summary>The squad object while loaded (-1 otherwise).</summary>
     public int SquadId { get; set; } = -1;
@@ -69,6 +71,7 @@ public sealed class PlatoonRegistry
             h.Add(p.Faction);
             h.Add(p.Key);
             h.Add(p.Size);
+            h.Add(p.Money);
             h.Add(p.Position);
             h.Add(p.Target);
             h.Add(p.GoingHome);

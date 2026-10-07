@@ -187,6 +187,7 @@ public sealed class World : IDisposable
                 SquadId = cold?.SquadId ?? -1,
                 IsPlayer = cold?.IsPlayer ?? false,
                 Selected = cold is { IsPlayer: true } && Player.Selection.Contains(new CharacterId(i, state[i].Generation)),
+                Inventory = cold is { IsPlayer: true, Inventory: { } carried } && Player.Selection.Contains(new CharacterId(i, state[i].Generation)) ? Items.InventoryText.Lines(carried) : [],
                 Body = cold?.Medical is { } med && cold.Race is { } race ? new BodyStatus(med.Blood / MathF.Max(Bodies.MedicalState.BloodCapacity(race, cold.Stats?.Strength ?? 50), 1), med.Parts.Count == 0 ? 1 : med.Parts.Min(p => p.Fraction), med.Hunger, med.Unconscious, med.Dead) : null,
                 Path = cold is { IsPlayer: true } && (state[i].Flags & (ushort)MoveFlags.HasPath) != 0 && Player.Selection.Contains(new CharacterId(i, state[i].Generation)) ? cold.Path.Skip(state[i].PathCursor).ToArray() : [],
             });

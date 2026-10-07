@@ -1,3 +1,4 @@
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Bodies;
 using System.Collections.Concurrent;
 using System.Numerics;
@@ -55,8 +56,11 @@ public sealed class PopulationData
     BodyFactory? bodies;
     /// <summary>Makes the stats and medical states of the characters spawned (race data cached).</summary>
     public BodyFactory Bodies => LazyInitializer.EnsureInitialized(ref bodies, () => new BodyFactory(Db) { Options = BodyOptions });
+    ItemFactory? items;
+    /// <summary>Makes item instances and the starting inventories (loadout and the CHARACTER's <c>inventory</c> list).</summary>
+    public ItemFactory Items => LazyInitializer.EnsureInitialized(ref items, () => new ItemFactory(Db, Bodies.Constants));
 
-    public static PopulationData Create(GameDatabase db, IEnumerable<TownPlacement> placements, IAppearanceSource? appearances = null)
+    public static PopulationData Create(GameDatabase db, IEnumerable<TownPlacement> placements, IAppearanceSource? appearances = null, BodyOptions? bodyOptions = null)
     {
         var sites = new List<TownSite>();
         foreach (var p in placements)
@@ -67,7 +71,7 @@ public sealed class PopulationData
         var factions = FactionData.LoadAll(db);
         return new PopulationData
         {
-            Db = db, Sites = sites, Factions = factions, Appearances = appearances, PlayerFaction = factions.FindIndex(f => f.Name == "Nameless"),
+            Db = db, Sites = sites, Factions = factions, Appearances = appearances, BodyOptions = bodyOptions ?? BodyOptions.Default, PlayerFaction = factions.FindIndex(f => f.Name == "Nameless"),
             Relations = FactionRelations.Build(factions),
             SiteFactions = [.. sites.Select(s => s.Town.Faction is { } fid ? factions.FindIndex(f => f.Id == fid) : -1)],
         };
@@ -532,6 +536,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         cold.Race = raceData;
         cold.Stats = stats;
         cold.Medical = medical;
+        cold.Inventory = data.Items.Build(record, cold.Appearance?.Loadout);
         cold.WaterFactor = raceData.WaterAvoidance * (cold.Faction == data.PlayerFaction && data.PlayerFaction >= 0 ? 0.5f : 1);
         hot.MaxSpeed = Speed.Run(raceData, stats, medical, 1);
     }

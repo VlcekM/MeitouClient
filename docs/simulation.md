@@ -414,7 +414,7 @@ Track A wired the bodies into the `World` (`BodyFactory`, `BodySystem`, `BodyHas
 - **Water.** `CharacterCold.WaterFactor` = race `WaterAvoidance` (a + 1, or 1 / (1 - a)), halved for the player faction. `PathRequest`/`IAgentWalkability.FindPath`
   carry it and `NavAdapter` puts it in `NavAgent.WaterFactor` (with the footprint radius).
 - **HUD.** The first selected character shows `Health: blood n%  worst part n%  state` and `Hunger: n of 3` (`CharacterSnapshot.Body`, a `BodyStatus`).
-- **Not done.** Encumbrance (needs inventory), eating, resting/beds (`MedicalContext.Resting`), shallow-water speed cap, wounds from combat, XP, healing by
+- **Not done.** (Encumbrance and eating came with [Inventory and eating](#inventory-and-eating-after-bodies).) Resting/beds (`MedicalContext.Resting`), shallow-water speed cap, wounds from combat, XP, healing by
   first aid. Characters never eat yet, so over many game days they starve (below).
 
 **The `BodyTimeScale` question** (character-stats.md Unknowns), measured with `BodyFactory`/`MedicalState.Tick` on a base-game Greenlander (`dt` 11/36000 h per tick,
@@ -430,6 +430,36 @@ At scale 1 nothing but hunger happens over days: blood and healing rates look fa
 7 to 8 game days (3 -> 0 at about 0.0164 per hour, extrapolated from 72 h). At scale 100 the numbers read like play (a bleed clots and blood is back in hours, an
 untreated wound rots in about a day). A scale between 1 and 100 is probably right (the original's `dt` is likely not hours); this needs a game session to settle, so the
 default stays 1 and `--body-time-scale` is the knob.
+
+### Inventory and eating (after bodies)
+
+Track A, `src/Meitou.Simulation/Items/` (`Items.cs`: `ItemInfo`, `ItemInstance`, `Inventory`, `ItemFactory`, `InventoryText`; `FeedSystem.cs`).
+
+- **Item instances.** `ItemInstance` keeps the names of the save's INVENTORY_ITEM_STATE ([save.md](formats/save.md)) so track G can map it one to one: `Record` = `base data sid`, `MaterialId` = `material sid`,
+  `CompanyId` = `company sid`, `Section` = `section`, `X`/`Y` = `inventory x`/`inventory y`, `Quantity`, `Level`, `ItemFunction`, `Quality`, `Charges`; a worn backpack (section `backpack_attach`) holds an
+  `Inventory` whose items are in `backpack_content`. Unit weight is `weight kg` (weapons times `weapon inventory weight mult`, 0.5); the weight of a bag's contents is multiplied by its
+  `encumbrance effect`. The load of a character is `Inventory.ContentWeight()`; `BodySystem` turns it into `Encumbrance.Factor(constants, load, false, strength, strength injury multiplier)` for the
+  speed chain and the hunger rate (it was 1 before).
+- **Grids.** Footprints are `inventory footprint width x height`; a backpack's grid is its `storage size width x height`. Items take the first free cell (`Inventory.FindCell`); stackables join a stack of
+  the same record and quality. The character's own `main` grid is 8 x 6 cells: an engine choice (the real size is **Unknown**). An item that does not fit is dropped (not created).
+- **Starting inventory** (`ItemFactory.Build`): what `CharacterGenerator` rolled (`Loadout`): clothing in the section of its ARMOUR `slot` (`shirt`, `head`, `boots`, `armour` for body, `legs`; belt has no verified
+  section name and goes to `main`), the backpack, crossbow and weapons at `hip`/`back` (row in `inventory y`, level and manufacturer kept); then the CHARACTER's `inventory` list: each ITEM entry
+  with a first value above 0 is that many items (**Observed**: 29 of 639 base characters carry food this way, e.g. Gohan x2, Rice Bowl x12; entries with 0 never spawn). The start-off records have no item
+  list of their own (**Verified**, probe over the 13 NEW_GAME_STARTOFF records: only `squad`, `town`, `money`, `research`, `force race`, `faction relations`), so the player's squad gets what its CHARACTER records list.
+  Headless worlds without appearances only get the record list. Animals have no inventory.
+- **Food.** An ITEM with `item function` 3 is food (rice, bread, fish, dried meat, vegetables). Its charges are the record's `charges` times CONSTANTS `food quality mult` (0.5; the constructor `FUN_14075faf0`
+  does that, character-stats.md), and eating it adds **charges / 100** to the stomach, i.e. in hunger levels (the UI shows level x 100): Gohan 0.75, Bread 0.30, Rice Bowl 0.25, Dustwich 0.70.
+  The unit is an **engine choice**: the nutrition value is **Unknown** in the original (character-stats.md). Raw meat (function 15) is not eaten by this rule.
+- **Eating rule** (`FeedSystem`, slow-world step every 30 ticks, serial in slot order, engine choice): a living, conscious character with a hunger rate, hunger below 2 ("Hungry") and an empty stomach eats one food
+  item: its own, else a squad mate's within 60 units. The item is the one that fills the missing hunger best without overshooting (else the smallest). Eating is instant. The player's characters follow
+  the same rule: the original's auto-eat is **Unknown** (nothing in ui-input.md or ui-screens.md covers it).
+- **Provisions.** What the original's NPCs eat from is **Unknown**. As a stand-in, a hungry NPC (never the player's characters) with no food in reach is given the cheapest food in the data (`value` per charge: Gohan)
+  at most every 12 game hours. `FeedSettings.ProvisionNpcs` turns this off. With it on nobody NPC starves (test: hunger time 0.02, 12 game hours); without it they die of `Starvation`. The player's
+  characters starve unless they carry or buy food.
+- **Money.** `Squad.Money` is the squad's purse (0 at start, hashed) and `Platoon.Money` holds it while the platoon is unloaded (save key `money`); the squad copies it over loading and unloading.
+  How money is earned or spent is the economy stage.
+- **Not kept.** An unloaded roaming squad's inventories are lost with its characters (it re-rolls on loading); persisting them is saves/AI work. No item pickup, drop, trade or equipment bonuses yet.
+- **HUD.** The selected player character's inventory is listed under its health (`CharacterSnapshot.Inventory`, up to 9 lines).
 
 ## Walkability and movement
 

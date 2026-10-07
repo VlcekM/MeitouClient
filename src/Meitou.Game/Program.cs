@@ -220,6 +220,7 @@ sealed class GameHost(GameInstall install, WorldScene scene, AssetLocator assets
             systems.Add(new Meitou.Simulation.PlayerSystem());
             systems.Add(new Meitou.Simulation.MovementSystem(new Meitou.Simulation.PathService(walkability, synchronous: !interactive)));
             systems.Add(new Meitou.Simulation.BodySystem(data.Bodies.Constants, data.BodyOptions, g.BodyTimeScale));
+            systems.Add(new Meitou.Simulation.Items.FeedSystem(data.Items));
             systems.Add(new Meitou.Simulation.AnimationSystem(Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb), Meitou.Data.Gameplay.AnimationLengths.Load(install.Root), Meitou.Data.Gameplay.GameConstants.FromDatabase(gameDb).AnimationBlendRate));
         }
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate,

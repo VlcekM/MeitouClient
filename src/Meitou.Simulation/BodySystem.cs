@@ -47,8 +47,12 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
                 n.Velocity = Vector3.Zero;
             }
             if (medical.Dead) continue;
+            // The load: the inventory weight against the strength the injuries leave (character-stats.md "Encumbrance and carrying").
+            float load = cold.Inventory?.ContentWeight() ?? 0;
+            float encumbrance = load <= 0 ? 1 : Encumbrance.Factor(Constants, load, false, stats.Strength, medical.StatMultiplier(Meitou.Data.Gameplay.Bodies.StatsEnumerated.Strength));
             var ctx = new MedicalContext(Constants, Options, race)
             {
+                EncumbranceFactor = encumbrance,
                 Toughness = stats.Toughness,
                 Strength = stats.Strength,
                 Seed = world.Seed,
@@ -58,7 +62,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             events ??= [];
             events.Clear();
             medical.Tick(HoursPerTick, ctx, events);
-            n.MaxSpeed = Speed.Run(race, stats, medical, 1);
+            n.MaxSpeed = Speed.Run(race, stats, medical, encumbrance);
             n.Health = Math.Clamp(medical.Blood / MathF.Max(MedicalState.BloodCapacity(race, stats.Strength), 1) * 100, 0, 100);
             foreach (var e in events)
             {

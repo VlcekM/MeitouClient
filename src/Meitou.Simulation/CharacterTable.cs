@@ -71,6 +71,10 @@ public sealed class CharacterCold
     public Meitou.Simulation.Bodies.MedicalState? Medical { get; set; }
     /// <summary>The path cost factor of water for this character (race <c>water avoidance</c>, halved for the player faction; 0: default).</summary>
     public float WaterFactor { get; set; }
+    /// <summary>What it carries (null for animals and anything without a race): <see cref="Meitou.Simulation.Items.FeedSystem"/> eats from it, <see cref="BodySystem"/> weighs it.</summary>
+    public Meitou.Simulation.Items.Inventory? Inventory { get; set; }
+    /// <summary>The tick from which a hungry NPC without food may be given a ration again.</summary>
+    public long NextProvisionTick { get; set; }
     /// <summary>The tick it died at (-1: alive); the corpse is removed 12 game hours later.</summary>
     public long DiedTick { get; set; } = -1;
     /// <summary>RACE <c>pathfind footprint radius</c> (0: not known, paths use the default human); what the navmesh keeps clear.</summary>
@@ -240,6 +244,8 @@ public sealed class CharacterTable
             foreach (var q in k.OrderQueue) hasher.Add(q);
             hasher.Add((int)k.DrawnWeapon);
             BodyHash.Add(ref hasher, k.Stats, k.Medical);
+            if (k.Inventory is null) hasher.Add(-1); else k.Inventory.Hash(ref hasher);
+            hasher.Add(k.NextProvisionTick);
             hasher.Add(k.DiedTick);
             if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);
             hasher.Add(k.Name.Length);

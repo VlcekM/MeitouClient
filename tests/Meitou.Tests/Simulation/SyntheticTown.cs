@@ -23,7 +23,7 @@ static class SyntheticTown
     public static readonly Vector3 Far = new(9500, 300, 2000);
 
     /// <summary><paramref name="roaming"/> adds a second town (<c>31-t</c>, far away), roaming squads and bar squads at the first, and a roaming budget for the faction.</summary>
-    public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false, bool roaming = false, bool anatomy = false)
+    public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false, bool roaming = false, bool anatomy = false, bool items = false)
     {
         var race = Rec("1-t", FcsRecordType.RACE, "Testers");
         var parts = new List<FcsRecord>();
@@ -49,6 +49,22 @@ static class SyntheticTown
         race.Floats["walk speed"] = 15;
         var guard = Rec("2-t", FcsRecordType.CHARACTER, "Guard");
         guard.References["race"] = [Ref("1-t", 100)];
+        var itemRecords = new List<FcsRecord>();
+        if (items)
+        {
+            var ration = Rec("70-t", FcsRecordType.ITEM, "Ration");
+            ration.Ints["item function"] = 3;
+            ration.Floats["charges"] = 100;
+            ration.Floats["weight kg"] = 1;
+            ration.Ints["value"] = 10;
+            var snack = Rec("71-t", FcsRecordType.ITEM, "Snack");
+            snack.Ints["item function"] = 3;
+            snack.Floats["charges"] = 30;
+            snack.Floats["weight kg"] = 0.5f;
+            snack.Ints["value"] = 5;
+            itemRecords.AddRange([ration, snack]);
+            guard.References["inventory"] = [Ref("70-t", 2)];
+        }
         var boss = Rec("3-t", FcsRecordType.CHARACTER, "Boss");
         boss.References["race"] = [Ref("1-t", 100)];
         var dog = Rec("4-t", FcsRecordType.ANIMAL_CHARACTER, "Dog");
@@ -100,6 +116,7 @@ static class SyntheticTown
 
         var file = new FcsFile();
         file.Records.AddRange(parts);
+        file.Records.AddRange(itemRecords);
         file.Records.AddRange([race, guard, boss, dog, patrol, gated, factionTemplate, faction, town, nameless, startoff]);
         if (far is not null) file.Records.Add(far);
         var db = new GameDatabase();
@@ -107,23 +124,24 @@ static class SyntheticTown
         return db;
     }
 
-    public static PopulationData Data(GameDatabase db) =>
+    public static PopulationData Data(GameDatabase db, Meitou.Simulation.Bodies.BodyOptions? options = null) =>
         PopulationData.Create(db, db.Find("31-t") is null
             ? [new TownPlacement("inst", "30-t", Centre, null)]
-            : [new TownPlacement("inst", "30-t", Centre, null), new TownPlacement("inst2", "31-t", Far, null)]);
+            : [new TownPlacement("inst", "30-t", Centre, null), new TownPlacement("inst2", "31-t", Far, null)], bodyOptions: options);
 
     public static float Ground(float x, float z) => 300;
 
     public static SimWorld World(ulong seed, int threads, int residentSquads = 3, PopulationSettings? settings = null, bool synchronousPaths = true,
-        GameDatabase? db = null, bool bodies = false, float bodyTimeScale = 1, params ITickSystem[] extra)
+        GameDatabase? db = null, bool bodies = false, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null, Meitou.Simulation.Bodies.BodyOptions? bodyOptions = null, params ITickSystem[] extra)
     {
         db ??= Database(residentSquads);
         var walk = new OpenGroundWalkability(Ground);
-        var data = Data(db);
+        var data = Data(db, bodyOptions);
         var population = new PopulationSystem(data, settings);
         var movement = new MovementSystem(new PathService(walk, synchronousPaths));
         List<ITickSystem> systems = [population, movement];
         if (bodies) systems.Add(new BodySystem(data.Bodies.Constants, data.BodyOptions, bodyTimeScale));
+        if (feed is not null) systems.Add(new Meitou.Simulation.Items.FeedSystem(data.Items, feed));
         systems.AddRange(extra);
         var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false }, walk, systems);
         world.Commands.Enqueue(new FocusCommand(Centre) { Tick = 0 });

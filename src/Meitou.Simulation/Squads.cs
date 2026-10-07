@@ -29,6 +29,8 @@ public sealed class Squad
     public List<CharacterId> Members { get; } = [];
     /// <summary>The member the others follow (the role-2 leader, else the first member); <see cref="CharacterId.None"/> when none is alive.</summary>
     public CharacterId Leader { get; set; } = CharacterId.None;
+    /// <summary>The squad's purse in cats (save key <c>money</c> of the platoon; a roaming squad carries it over its unloading). The economy stage spends it.</summary>
+    public long Money { get; set; }
 }
 
 /// <summary>The squads of a world, by id. Ids are never reused.</summary>
@@ -68,6 +70,7 @@ public sealed class SquadRegistry
             hasher.Add(s.Faction);
             hasher.Add(s.Town);
             hasher.Add(s.PlatoonId);
+            hasher.Add(s.Money);
             hasher.Add(s.HomeCentre);
             hasher.Add(s.HomeRadius);
             hasher.Add(s.Position);

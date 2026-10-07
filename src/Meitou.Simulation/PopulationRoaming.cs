@@ -132,6 +132,7 @@ public sealed partial class PopulationSystem
         else if (p.UnloadAtTick < 0) p.UnloadAtTick = world.Tick + (long)Math.Ceiling(settings.RoamUnloadGraceSeconds / world.TickSeconds);
         else if (world.Tick >= p.UnloadAtTick)
         {
+            p.Money = squad.Money;
             foreach (var m in squad.Members) table.Remove(m);
             world.Squads.Remove(squad.Id);
             p.State = PlatoonState.Unloaded;
@@ -233,6 +234,7 @@ public sealed partial class PopulationSystem
         if (p is null || p.State != PlatoonState.Activating) return;
         var site = data.Sites[p.Origin];
         var squad = SpawnSquad(world, b.Squad, site, site.Town.SizeRadius * site.Town.TownRadiusMult, platoonId: p.Id);
+        squad.Money = p.Money;
         p.State = PlatoonState.Loaded;
         p.SquadId = squad.Id;
         p.UnloadAtTick = -1;

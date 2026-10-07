@@ -23,6 +23,8 @@ public sealed record CharacterSnapshot(CharacterId Id, CharacterAppearance? Appe
     public IReadOnlyList<Vector3> Path { get; init; } = [];
     /// <summary>Null for a character without a body (an animal).</summary>
     public BodyStatus? Body { get; init; }
+    /// <summary>What a selected character carries, one line per item (empty for the others).</summary>
+    public IReadOnlyList<string> Inventory { get; init; } = [];
 }
 
 /// <summary>
