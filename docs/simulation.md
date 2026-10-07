@@ -197,7 +197,7 @@ second, the speed-mode caps, acceleration 15/s, its own separation steering).
 A native character renderer is rendering work and can run beside the simulation stages: skinned meshes, attachments,
 appearance and the animation layers as [character-viewer.md](character-viewer.md), [characters.md](characters.md) and
 [animation.md](animation.md) describe, drawing many characters from the snapshot (bone palettes in a buffer, instancing per
-mesh, mesh LOD). Until it exists, the simulation is seen through debug markers.
+mesh, mesh LOD). It exists as `Meitou.Rendering.Characters` (see [character-renderer.md](character-renderer.md)); the simulation fills a `CharacterDrawList` each frame.
 
 ## Stages
 
