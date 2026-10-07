@@ -211,7 +211,7 @@ speeds, crafting). For every stat it has the same shape:
 - m = H x L
 - when p0 < 1 and `usePain`: m = m x lerp(p0, 1, clamp(2.5 x P, 0, 1)), where P is a pain value held on the owning
   `Character` (+0xd8; its source was not traced, this doc earlier called it "stun"), and the character is flagged "in
-  pain" (+0xdc)
+  pain" (+0xdc). Read literally the formula gives the full penalty p0 at P = 0 and none at P >= 0.4, so P behaves like a "pain tolerance" (1 = unhurt) rather than an amount of pain; its source is **Unknown** (the engine keeps it at 1)
 - for the perception-like rows (24, 36, marked in the table) and `useStun`: m = m x `FUN_1406439f0`, a factor
   lerp(1, 0.5, v) that is 1 unless a value v > 0 at CharStats-owner +0x14c is set while the state flag at +0x148 is 1
 - result = lerp(f0, 1, m), clamped to [0, 1]; with `useDamageState` times the limb-item factor (below); finally
@@ -469,11 +469,11 @@ degeneration multiplier and the wear-repair rate. Let `D` = the untreated damage
 
 - **Degeneration** (only while `h > -3M`): `h` falls by `dt * 0.05 * bodypart degeneration rate (1.5) * ChanceOfDeath *
   degMult * D * 1.2`, `degMult = lerp(degeneration mult 1 (1.7), degeneration mult 99 (0.03), toughness / 100)`: a
-  toughness-1 character deteriorates about 57 times faster than a toughness-99 one. `degMult` is 0 for non-vital
+  toughness-0 character deteriorates about 57 times faster than a toughness-100 one (the ratio of the two constants 1.7 and 0.03; at toughness 1 against 99, with the lerp running over toughness / 100, the ratio is about 36 - an earlier draft said 57 for 1 against 99). `degMult` is 0 for non-vital
   robotic/replaced parts ("skeleton limbs don't degenerate") and while resting on a bed-like object.
 - **Healing of treated damage**: while `b > 0` and `h < M`: `heal = min(b, dt * 0.05 * heal rate mult (0.25) * R)`,
   `b` falls by `heal`, `h` rises by `heal`, `h <= M`. `R = (M / 100) * A` with A the race `heal rate` x bed factor for organic
-  parts, or `(M / 100) * B` for robotic/replaced parts; x250 for those too; a stump has base HP 5 and heals at
+  parts, or `(M / 100) * B` for robotic/replaced parts (the decompile also shows a factor 250 attached to the robotic branch; where it applies is **Unknown** and the engine leaves it out); a stump has base HP 5 and heals at
   twice A. Nothing heals a part that has not been bandaged first (first aid fills `b`).
 - **Self healing** (RACE `self healing`; animals and a few robots): when `h - s < M - b` and the owner is
   conscious and alive, `b` rises by `dt * 0.05 * heal rate mult * R * 0.4`: untreated damage turns into treated damage at
@@ -734,6 +734,31 @@ to two other UI controls in `FUN_1409151d0` (not traced).
 - What the Hive Queen and Crimper (`is robot` races that eat and have blood) are meant to be in the flag semantics:
   whether `is robot` alone selects wear and robotic healing for them (it does in the part code, **Observed**).
 - Damage kinds 1, 5 and 6 passed to `FUN_140666780` / `FUN_1408c68e0`.
+
+## As built (stage 7, `Meitou.Simulation.Bodies` and `Meitou.Data.Gameplay.Bodies`)
+
+Items 1 to 3 and 5 of the outline below exist as pure, deterministic code; the typed views are tested against the install
+(`BodyInstallTests`, **Verified**: the CONSTANTS rows of the table above, all 9 LOCATIONAL_DAMAGE records, 28 LIMB_REPLACEMENT records, the Greenlander,
+Scorchlander, Shek, Garru, Leviathan and Skeleton rows). Engine choices where the research stops, all labelled in the code:
+
+- **Randomness.** `BodyRolls` hashes (world seed, character key XOR a module constant, counter) through `Rng`; the medical state keeps its own counter, so a
+  character's rolls never depend on thread or order. The `RngPurpose` enum of the core was not extended.
+- **Starting stats.** `CharacterStats.Create`: STATS record (or `FromGroups`), `stats randomise` n as a uniform offset in [-n, n] on the 33 record stats
+  (floored at 0; the original's "about 30" is **Unknown**), then the race map over stat numbers 1 to 38 (Medic's storage takes the product of the entries
+  of 9, 14 and 15). The `combat stats` / `unarmed stats` / `stealth stats` / `ranged stats` / `strength` fan-out groups are **Unknown**: `FromGroups` is a guess.
+- **Units.** `dt` is game hours for the medical tick (one 1/30 s simulation tick is 11/36000 h); the KO timer counts game minutes (the starvation code multiplies
+  hours by 60, **Observed**); the XP continuous gains take seconds. The documented part, stun and blood rates, run on `dt` in hours, are very slow (a stun of 30
+  takes about 2400 hours to clear, blood recovers 0.04 per hour), so `MedicalContext.BodyTimeScale` multiplies `dt` for parts and blood (default 1, as documented) until a
+  game session settles the unit.
+- **Wounds from cuts.** A cut adds a wound of strength cut x `bleed rate` x scale (the editor text "cutDamage * this * TIME"; the real conversion is **Unknown**).
+  A severed limb keeps its flesh value and becomes a stump of base HP 5 (**Unknown** whether the original resets it).
+- **Starvation KO.** Below the passing-out threshold the character is knocked out for the normal KO time; after waking, a random grace of 0.5 to 2 game hours
+  prevents an immediate repeat (the original's transition was not traced).
+- **Prosthetics.** `LimbReplacement` takes its quality as t in [0, 1] (the item quality to grade mapping is **Unknown**); fitting restores the part to full at the
+  new maximum. Only arms' entries count for arm stats, legs' also for stealth, athletics and swimming.
+- **Health fractions** used by the stat multiplier are clamped to [0, 1]; a race without a head part has Hd = 1; the pain value P is held at 1 (no penalty).
+- **Not built:** the new-game option defaults (1 = neutral), `Care` beds beyond the two multipliers, item nutrition, the dodge skill's leg term, stealth XP,
+  the legacy STATS keys (`endurance`, `xp`...), and the situational hunger factors beyond machine use.
 
 ## Implementation outline
 
