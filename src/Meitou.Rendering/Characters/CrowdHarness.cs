@@ -93,7 +93,7 @@ internal sealed class CrowdHarness
         }
         var clock = Stopwatch.StartNew();
         float fixedTime = o.CrowdTime ?? 0.35f;
-        var harness = new CrowdHarness(chosen, positions, yaws, phases, poseLists, interactive || Environment.GetEnvironmentVariable("MEITOU_CROWD_ANIMATE") == "1" ? () => (float)clock.Elapsed.TotalSeconds : () => fixedTime);
+        var harness = new CrowdHarness(chosen, positions, yaws, phases, poseLists, interactive || CharacterSwitches.CrowdAnimate ? () => (float)clock.Elapsed.TotalSeconds : () => fixedTime);
         var renderer = new CharacterRenderer(context, install, db, assets) { Source = harness.Fill, LoadBudget = interactive ? 4 : 0 };
         renderer.SettleFirst = !interactive;   // a still waits for everything at its first frame, once the camera is known (the textures' mip streaming needs it)
         return renderer;

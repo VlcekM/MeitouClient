@@ -25,7 +25,7 @@ internal sealed unsafe class CharacterRenderer : IDisposable
 {
     public GpuContext Gpu { get; }
     readonly NativeFrame nativeFrame;
-    readonly CharProg colourProg, depthProg, motionProg;
+    readonly ReflectedProgram colourProg, depthProg, motionProg;
     readonly CharacterContent content;
     readonly PassTimer colourTimer, depthTimer;
     readonly List<double> colourGpu = [], depthGpu = [], updateCpu = [], poseCpu = [], drawCpu = [], gatherCpu = [];
@@ -123,9 +123,9 @@ internal sealed unsafe class CharacterRenderer : IDisposable
     {
         Gpu = gpu;
         nativeFrame = new NativeFrame(gpu, extraStorage: 4);
-        colourProg = new CharProg(gpu, nativeFrame, CharacterShaders.Vertex(), CharacterShaders.Fragment(), "characters");
-        depthProg = new CharProg(gpu, nativeFrame, CharacterShaders.DepthVertex(), CharacterShaders.DepthFragment(), "characters depth");
-        motionProg = new CharProg(gpu, nativeFrame, CharacterShaders.MotionVertex(), CharacterShaders.MotionFragment(), "characters motion");
+        colourProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.Vertex(), CharacterShaders.Fragment(), "characters", CharacterShaders.InstanceLocation);
+        depthProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.DepthVertex(), CharacterShaders.DepthFragment(), "characters depth", CharacterShaders.InstanceLocation);
+        motionProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.MotionVertex(), CharacterShaders.MotionFragment(), "characters motion", CharacterShaders.InstanceLocation);
         content = new CharacterContent(gpu, install, db, assetLocator);
         colourTimer = new PassTimer(gpu);
         depthTimer = new PassTimer(gpu);
@@ -435,7 +435,7 @@ internal sealed unsafe class CharacterRenderer : IDisposable
         motionCamera = false;
         var previous = havePreviousCamera ? previousUnjittered : motionUnjittered;
         (previousUnjittered, havePreviousCamera) = (motionUnjittered, true);
-        if (liveCount == 0 || Environment.GetEnvironmentVariable("MEITOU_CHARACTER_MOTION") == "0") return;
+        if (liveCount == 0 || !CharacterSwitches.MotionVectors) return;
         motionCalls++;
         if (motionDepthIndex is { } known && known.Texture == targets.NearDepth) motionDepth = known.Index;
         else
@@ -449,13 +449,6 @@ internal sealed unsafe class CharacterRenderer : IDisposable
             DrawView(new ViewConstants { ViewProjection = motionViewProjection, PreviousViewProjection = previous, Eye = motionEye, NearPlanes = targets.NearPlanes, JitterNdc = targets.JitterNdc }, motionEye, motionFrustum);
         }
         finally { motionPass = false; }
-    }
-
-    static bool SphereVisible(Vector4[] planes, Vector3 centre, float radius)
-    {
-        foreach (var p in planes)
-            if (p.X * centre.X + p.Y * centre.Y + p.Z * centre.Z + p.W < -radius * MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z)) return false;
-        return true;
     }
 
     void DrawView(in ViewConstants view, Vector3 eye, Vector4[] frustum)
@@ -472,7 +465,7 @@ internal sealed unsafe class CharacterRenderer : IDisposable
         for (int i = 0; i < liveCount; i++)
         {
             ref var l = ref live[i];
-            if (!SphereVisible(frustum, l.Centre, l.Radius)) continue;
+            if (!FrustumTests.SphereVisible(frustum, l.Centre, l.Radius)) continue;
             DrawnCharacters++;
             foreach (var part in l.Asset.Parts)
             {
@@ -557,7 +550,7 @@ internal sealed unsafe class CharacterRenderer : IDisposable
     }
 
     /// <summary>A part's native state for <paramref name="p"/>, made on first use: the vertex layout (the per-instance rows at 7 to 10 and the data at 11 are bound once per segment).</summary>
-    static void Current(ref ObjectNativeMesh n, GpuObjectPart part, CharProg p)
+    static void Current(ref ObjectNativeMesh n, GpuObjectPart part, ReflectedProgram p)
     {
         if (n.Layout is not null) return;
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
@@ -633,61 +626,6 @@ internal sealed unsafe class CharacterRenderer : IDisposable
             Array.Clear(Draws, 0, Count);
             Count = 0;
             Owner.drawJobs.Return(this);
-        }
-    }
-
-    /// <summary>A native program with its vertex inputs from the reflection (as the objects' <c>ObjProg</c>): a disabled attribute reads GL's constant through a stride-0 binding.</summary>
-    sealed class CharProg : IDisposable
-    {
-        readonly GpuContext ctx;
-        public readonly ShaderProgram P;
-        readonly int[] locations;
-        readonly Meitou.Rendering.Gpu.Shaders.ScalarKind[] kinds;
-        /// <summary>The program's own input locations (below the instance rows): 0 .. Own − 1.</summary>
-        public readonly int Own;
-        VertexLayout? last;
-
-        public CharProg(GpuContext ctx, NativeFrame frame, string vertex, string fragment, string name)
-        {
-            this.ctx = ctx;
-            P = frame.Program(vertex, fragment, name);
-            var inputs = P.VertexReflection!.Inputs;
-            locations = [.. inputs.SelectMany(i => Enumerable.Range(i.Location, i.Slots))];
-            kinds = [.. inputs.SelectMany(i => Enumerable.Repeat(i.Kind, i.Slots))];
-            Own = locations.Where(l => l < CharacterShaders.InstanceLocation).DefaultIfEmpty(-1).Max() + 1;
-        }
-
-        public VertexLayout Layout(ReadOnlySpan<LegacyProgram.Attribute?> byLocation)
-        {
-            Span<VertexInput> inputs = stackalloc VertexInput[locations.Length];
-            for (int i = 0; i < inputs.Length; i++)
-            {
-                int loc = locations[i];
-                inputs[i] = loc < byLocation.Length && byLocation[loc] is { } a
-                    ? new VertexInput((uint)loc, a.Format, a.Stride, a.PerInstance)
-                    : new VertexInput((uint)loc, GlConventions.DummyVertexFormat(kinds[i]), 0, false);
-            }
-            if (last is { } l && inputs.SequenceEqual(l.Inputs)) return l;
-            return last = new VertexLayout(inputs.ToArray());
-        }
-
-        public BufferBinding[] Buffers(ReadOnlySpan<LegacyProgram.Attribute?> byLocation, int count)
-        {
-            var result = new BufferBinding[count];
-            for (int loc = 0; loc < count; loc++)
-            {
-                int input = Array.IndexOf(locations, loc);
-                result[loc] = loc < byLocation.Length && byLocation[loc] is { } a
-                    ? a.Buffer
-                    : new BufferBinding(ctx.Defaults.DummyVertex.Buffer, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : Meitou.Rendering.Gpu.Shaders.ScalarKind.Float));
-            }
-            return result;
-        }
-
-        public void Dispose()
-        {
-            ctx.Pipelines.Forget(P);
-            P.Dispose();
         }
     }
 
