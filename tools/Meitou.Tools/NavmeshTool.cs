@@ -12,6 +12,8 @@ using Meitou.Navigation;
 /// </summary>
 static class NavmeshTool
 {
+    static bool hidePruned;
+
     public static int Run(GameInstall install, string[] args)
     {
         ZoneCoordinate? zone = null;
@@ -21,7 +23,7 @@ static class NavmeshTool
         var settings = new NavBuildSettings();
         int repeat = 1;
         float[]? box = null, pathArg = null;
-        bool doorsClosed = false; float[]? near = null;
+        bool doorsClosed = false, noInteriors = false, noNeighbourSeeds = false; float? toY = null, fromY = null; float[]? near = null;
         int around = 0;
         for (int i = 0; i < args.Length; i++)
         {
@@ -36,6 +38,11 @@ static class NavmeshTool
                 case "--cell": settings = settings with { CellSize = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--tile": settings = settings with { TileCells = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--near": near = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
+                case "--no-interiors": noInteriors = true; break;
+                case "--to-y": toY = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                case "--from-y": fromY = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                case "--hide-pruned": hidePruned = true; break;
+                case "--no-neighbour-seeds": noNeighbourSeeds = true; break;
                 case "--closed": doorsClosed = true; break;
                 case "--watershed": settings = settings with { Watershed = true }; break;
                 case "--threads": settings = settings with { Threads = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
@@ -68,7 +75,7 @@ static class NavmeshTool
         var s = g.Stats;
         Console.WriteLine($"gathered zone {zone} in {watch.ElapsedMilliseconds} ms (terrain {gatherer.Phases.Terrain:0}, buildings {gatherer.Phases.Buildings:0}, foliage {gatherer.Phases.Foliage:0}): {g.TriangleCount} triangles ({s.TerrainTriangles} terrain + {s.WaterTriangles} water, " +
             $"{s.WalkableTriangles} walkable and {s.CuttingTriangles} cutting object triangles), {s.Buildings} buildings, {s.PartsWithCollision} parts with collision, {s.Shapes} shapes, " +
-            $"{s.FoliageInstances} foliage objects ({s.FoliageShapes} shapes, {s.FoliageCutters} cutters), {g.Carvers.Count} carvers, {g.Painters.Count} door painters, {g.Seeds.Count} seeds, " +
+            $"{s.FoliageInstances} foliage objects ({s.FoliageShapes} shapes, {s.FoliageCutters} cutters), {g.Carvers.Count} carvers, {g.Painters.Count} door painters, {g.Seeds.Count} seeds ({s.SeedsDropped} dropped by the ray rule, {s.WallSeeds} wall, {s.DoorSeeds} door), " +
             $"{s.MissingFiles} missing files, building hash {g.BuildingHash:x8}");
 
         if (Environment.GetEnvironmentVariable("NAV_VERBOSE") is not null) { foreach (var p in g.Painters) Console.WriteLine($"  painter x {p.Polygon.Min(v => v.X):0}..{p.Polygon.Max(v => v.X):0} z {p.Polygon.Min(v => v.Y):0}..{p.Polygon.Max(v => v.Y):0} y {p.YMin:0}..{p.YMax:0}"); foreach (var sd in g.Seeds) Console.WriteLine($"  seed {sd.X:0},{sd.Y:0},{sd.Z:0}"); }
@@ -81,6 +88,7 @@ static class NavmeshTool
         }
 
         var built = new List<(ZoneGeometry? Geometry, ZoneNavMesh Mesh)>();
+        var interiorMeshes = new List<ZoneNavMesh>();
         NavWorld world = NavWorld.Empty;
         for (int dz = -around; dz <= around; dz++)
             for (int dx = -around; dx <= around; dx++)
@@ -88,11 +96,12 @@ static class NavmeshTool
                 var c = new ZoneCoordinate(zone.Value.X + dx, zone.Value.Y + dz);
                 if (!c.IsInsideGrid) continue;
                 var geometry = dx == 0 && dz == 0 ? g : gatherer.Gather(c);
+                if (!noNeighbourSeeds) geometry.Seeds.AddRange(NeighbourSeeds.Collect(world, c, geometry));
                 ZoneNavMesh? mesh = null;
                 for (int i = 0; i < (dx == 0 && dz == 0 ? repeat : 1); i++)
                 {
-                    mesh = ZoneNavMeshBuilder.Build(geometry, settings, out var t);
-                    Console.WriteLine($"built {c}: {t.TileCount} tiles in {t.Tiles:0} ms, stitch {t.Stitch:0} ms, prune {t.Prune:0} ms, total {t.Total:0} ms; {t.Polygons} polygons ({t.KeptPolygons} kept), {t.Vertices} vertices");
+                    mesh = NavMeshPipeline.BuildZone(gatherer, geometry, settings, out var t, out var inner, interiors: !noInteriors); interiorMeshes.AddRange(inner);
+                    Console.WriteLine($"built {c}: {t.TileCount} tiles in {t.Tiles:0} ms, stitch {t.Stitch:0} ms, prune {t.Prune:0} ms, interiors {t.Interiors:0} ms ({t.InteriorCount}), total {t.Total:0} ms; {t.Polygons} polygons ({t.KeptPolygons} kept), {t.Vertices} vertices");
                     if (dx == 0 && dz == 0)
                         Console.WriteLine($"  cpu ms summed over tiles: raster {t.CpuRaster:0}, compact+areas {t.CpuCompact:0}, regions {t.CpuRegions:0}, contours {t.CpuContours:0}, polygons {t.CpuMesh:0}");
                 }
@@ -105,8 +114,8 @@ static class NavmeshTool
         if (pathArg is not null)
         {
             Vector3 At(float x, float z) => new(x, Math.Max(gatherer.TerrainHeight(x, z), WorldWater.Height), z);
-            var from = At(pathArg[0], pathArg[1]);
-            var to = At(pathArg[2], pathArg[3]);
+            var from = At(pathArg[0], pathArg[1]); if (fromY is { } fy) from = new Vector3(from.X, fy, from.Z);
+            var to = At(pathArg[2], pathArg[3]); if (toY is { } ty) to = new Vector3(to.X, ty, to.Z);
             var query = new NavQuery(world);
             var agent = new NavAgent { DoorsClosed = doorsClosed };
             var sw = Stopwatch.StartNew();
@@ -117,6 +126,7 @@ static class NavmeshTool
             {
                 bool okStart = world.TryFindPolygon(from, NavQuery.StartSnap, out var sref, out var sp), okGoal = world.TryFindPolygon(to, NavQuery.GoalSnap, out var gref, out var gp);
                 Console.WriteLine($"  start polygon {(okStart ? sref.ToString() : "none")}, goal polygon {(okGoal ? gref.ToString() : "none")}");
+                if (okGoal) { var gm = world.Mesh(gref.Zone); var gc = gm.Centre(gref.Polygon); Console.WriteLine($"  goal polygon at {gc.X:0},{gc.Y:0},{gc.Z:0} area {gm.Areas[gref.Polygon]}, mesh has {gm.PolygonCount} polygons, goal point {to.X:0},{to.Y:0},{to.Z:0}"); }
                 if (okStart)
                 {
                     var seen = new HashSet<long> { sref.Key };
@@ -144,7 +154,7 @@ static class NavmeshTool
             }
         }
         if (obj is not null) WriteMeshObj(built[0].Mesh, obj);
-        if (png is not null) WriteMeshPng(built, png, unitsPerPixel, box, path);
+        if (png is not null) WriteMeshPng(built, png, unitsPerPixel, box, path, interiorMeshes);
         return 0;
     }
 
@@ -223,13 +233,13 @@ static class NavmeshTool
     }
 
     /// <summary>Top-down image: the gathered geometry dimmed underneath, the kept polygons in colour, pruned ones in red, the path in cyan.</summary>
-    static void WriteMeshPng(List<(ZoneGeometry? Geometry, ZoneNavMesh Mesh)> zones, string path, float unitsPerPixel, float[]? box, List<Vector3>? route)
+    static void WriteMeshPng(List<(ZoneGeometry? Geometry, ZoneNavMesh Mesh)> zones, string path, float unitsPerPixel, float[]? box, List<Vector3>? route, List<ZoneNavMesh> interiors)
     {
         float x0 = zones.Min(z => z.Mesh.BoundsMin.X), z0 = zones.Min(z => z.Mesh.BoundsMin.Y), x1 = zones.Max(z => z.Mesh.BoundsMax.X), z1 = zones.Max(z => z.Mesh.BoundsMax.Y);
         var r = new TopDownRenderer(box?[0] ?? x0, box?[1] ?? z0, box?[2] ?? x1, box?[3] ?? z1, unitsPerPixel, (20, 20, 24));
         foreach (var (g, m) in zones)
         {
-            if (g is not null)
+            if (g is not null && !hidePruned)
             {
                 var v = g.Vertices;
                 for (int t = 0; t < g.TriangleCount; t++)
@@ -242,6 +252,7 @@ static class NavmeshTool
             for (int p = 0; p < m.PolygonCount; p++)
             {
                 var poly = m.Polygons[p];
+                if (hidePruned && !m.Kept[p]) continue;
                 var colour = !m.Kept[p] ? ((byte)200, (byte)60, (byte)60) : m.Areas[p] switch
                 {
                     NavArea.Water => ((byte)80, (byte)130, (byte)230),
@@ -260,6 +271,18 @@ static class NavmeshTool
                 }
             if (g is not null) foreach (var s in g.Seeds) r.Pixel(s.X, s.Z, (255, 255, 255), 2);
         }
+        // Building interiors on top, in teal (their polygons lie over the ground under the house).
+        foreach (var m in interiors)
+            for (int p = 0; p < m.PolygonCount; p++)
+            {
+                if (!m.Kept[p]) continue;
+                var poly = m.Polygons[p];
+                var colour = m.Areas[p] == NavArea.Door ? ((byte)255, (byte)170, (byte)40) : ((byte)60, (byte)200, (byte)190);
+                for (int k = 1; k + 1 < poly.Length; k++)
+                    r.Triangle(m.Vertices[poly[0]] + Vector3.UnitY * 2f, m.Vertices[poly[k]] + Vector3.UnitY * 2f, m.Vertices[poly[k + 1]] + Vector3.UnitY * 2f, colour, 1000);
+                if (unitsPerPixel <= 2)
+                    for (int k = 0; k < poly.Length; k++) r.Line(m.Vertices[poly[k]], m.Vertices[poly[(k + 1) % poly.Length]], (20, 90, 85));
+            }
         if (route is not null)
         {
             for (int i = 1; i < route.Count; i++)

@@ -34,7 +34,7 @@ public class HubNavmeshTests
             if (built.TryGetValue(zone, out var b)) return b;
             using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
             var g = gatherer.Gather(zone);
-            var mesh = ZoneNavMeshBuilder.Build(g, new NavBuildSettings(), out _);
+            var mesh = NavMeshPipeline.BuildZone(gatherer, g, new NavBuildSettings(), out _);
             return built[zone] = (g, mesh);
         }
     }
@@ -64,7 +64,8 @@ public class HubNavmeshTests
     public void Buildings_are_cut_out_and_roofs_and_closed_yards_are_pruned()
     {
         Assert.SkipWhen(Load() is null, "Kenshi install not found");
-        var (g, full) = Zone(West);
+        var g = Zone(West).Geometry;
+        var full = ZoneNavMeshBuilder.Build(g, new NavBuildSettings(), out _); // the street side alone: interiors stand in the carved volumes
         Assert.True(full.PolygonCount > 5000);
         int pruned = full.Kept.Count(k => !k);
         Assert.True(pruned > 200, $"{pruned} pruned polygons");
@@ -107,6 +108,47 @@ public class HubNavmeshTests
         Assert.All(full.DoorIds!, id => Assert.Contains(g.Painters, v => v.Owner == id));
         // The ids survive pruning and the cache round trip.
         Assert.Equal(full.DoorIds, full.WithoutPruned().DoorIds);
+    }
+
+    [Fact]
+    public void A_path_leads_from_the_street_into_a_house_through_its_door_and_back()
+    {
+        Assert.SkipWhen(Load() is null, "Kenshi install not found");
+        var (_, west) = Zone(West);
+        var world = NavWorld.Empty.With(west.WithoutPruned());
+        var doors = new NavDoors();
+        var query = new NavQuery(world, doors);
+        // The Storm House by the Hub's west wall (placement 4933): street outside its door, a point on its floor.
+        var street = new Vector3(-51290, 1566, 2625);
+        var floor = new Vector3(-51158, 1579, 2664);
+        var inward = query.FindPath(street, floor);
+        Assert.True(inward.Found, "no way in");
+        var outward = query.FindPath(floor, street);
+        Assert.True(outward.Found, "no way out");
+        foreach (var path in new[] { inward, outward })
+        {
+            float length = 0;
+            for (int i = 1; i < path.Points.Count; i++) length += Vector3.Distance(path.Points[i - 1], path.Points[i]);
+            Assert.InRange(length, 130, 400);
+            // It stands on the floor at the end, 25 above the ground outside, and crosses a door polygon on the way.
+            Assert.Contains(path.Points, p => p.Y > 1575);
+            bool crossedDoor = false;
+            for (int i = 1; i < path.Points.Count; i++)
+            {
+                int steps = (int)(Vector3.Distance(path.Points[i - 1], path.Points[i]) / 1.5f) + 1;
+                for (int k = 0; k <= steps; k++)
+                {
+                    var p = Vector3.Lerp(path.Points[i - 1], path.Points[i], k / (float)steps);
+                    if (world.TryFindPolygon(p, 2, out var r, out _) && world.Mesh(r.Zone).Areas[r.Polygon] == NavArea.Door) crossedDoor = true;
+                }
+            }
+            Assert.True(crossedDoor, "the way does not cross the door");
+        }
+        // With that door closed the room is shut (its walls are solid).
+        doors.Close("4933-Newwworld-INGAME");
+        Assert.False(query.FindPath(street, floor).Found);
+        doors.Open("4933-Newwworld-INGAME");
+        Assert.True(query.FindPath(street, floor).Found);
     }
 
     [Fact]
@@ -230,10 +272,12 @@ public class HubNavmeshTests
     public void Building_a_zone_is_repeatable_and_fast_enough()
     {
         Assert.SkipWhen(Load() is null, "Kenshi install not found");
+        var (install, db, levels) = Load()!.Value;
         var (g, first) = Zone(West);
         var settings = new NavBuildSettings();
-        ZoneNavMeshBuilder.Build(g, settings, out _); // warm
-        var second = ZoneNavMeshBuilder.Build(g, settings, out var times);
+        using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
+        NavMeshPipeline.BuildZone(gatherer, g, settings, out _); // warm
+        var second = NavMeshPipeline.BuildZone(gatherer, g, settings, out var times);
         Assert.Equal(first.PolygonCount, second.PolygonCount);
         Assert.Equal(first.Vertices, second.Vertices);
         Assert.Equal(first.Kept, second.Kept);

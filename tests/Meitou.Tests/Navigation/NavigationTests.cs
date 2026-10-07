@@ -262,6 +262,76 @@ public class NavigationTests
     }
 
     [Fact]
+    public void An_interior_is_a_separate_mesh_joined_to_the_street_through_its_door()
+    {
+        var s = new Scene(new(32, 32));
+        float cx = s.X0 + 2300, cz = s.Z0 + 2300;
+        Vector2[] hull = [new(cx - 60, cz - 40), new(cx + 60, cz - 40), new(cx + 60, cz + 40), new(cx - 60, cz + 40)];
+        // The street side: the hull is a hole, walled all round except a doorway in the west wall, which is painted as the house's door.
+        s.G.Carvers.Add(new NavVolume(hull, 0, 60));
+        s.Box(new(cx - 66, 0, cz - 46), new(cx + 66, 60, cz - 40));
+        s.Box(new(cx - 66, 0, cz + 40), new(cx + 66, 60, cz + 46));
+        s.Box(new(cx + 60, 0, cz - 40), new(cx + 66, 60, cz + 40));
+        s.Box(new(cx - 66, 0, cz - 40), new(cx - 60, 60, cz - 8));
+        s.Box(new(cx - 66, 0, cz + 8), new(cx - 60, 60, cz + 40));
+        s.G.Painters.Add(new NavVolume([new(cx - 72, cz - 8), new(cx - 54, cz - 8), new(cx - 54, cz + 8), new(cx - 72, cz + 8)], 0, 40) { Owner = "house" });
+        s.G.Seeds.Add(new(s.X0 + 500, 10, s.Z0 + 500));
+        var exterior = ZoneNavMeshBuilder.Build(s.G, Settings, out _);
+
+        // The inside: its own floor, clipped to the hull, seeded at its inner door marker.
+        var lo = new Vector2(cx - 72, cz - 52);
+        var interior = new ZoneGeometry { Zone = new(32, 32), ZoneMin = lo, ZoneMax = lo + new Vector2(192), Margin = 8, InteriorHull = new NavVolume(hull, 0, 60), InteriorOf = "house" };
+        int a = interior.AddVertex(new(lo.X - 8, 10, lo.Y - 8)), b = interior.AddVertex(new(lo.X + 200, 10, lo.Y - 8));
+        int c = interior.AddVertex(new(lo.X + 200, 10, lo.Y + 200)), d = interior.AddVertex(new(lo.X - 8, 10, lo.Y + 200));
+        interior.AddTriangle(a, d, c, NavArea.Ground);
+        interior.AddTriangle(a, c, b, NavArea.Ground);
+        ZoneGeometryGatherer.AddOutsideCarvers(interior, hull);
+        interior.Painters.Add(new NavVolume([new(cx - 72, cz - 8), new(cx - 54, cz - 8), new(cx - 54, cz + 8), new(cx - 72, cz + 8)], 0, 40) { Owner = "house" });
+        interior.Seeds.Add(new(cx, 10, cz));
+        var inside = ZoneNavMeshBuilder.Build(interior, Settings, out _);
+        Assert.Contains(NavArea.Door, inside.Areas);
+
+        var combined = NavInteriors.Combine(exterior, [inside]);
+        Assert.True(combined.PolygonCount > exterior.PolygonCount);
+        var world = NavWorld.Empty.With(combined.WithoutPruned());
+        var street = new Vector3(cx - 200, 10, cz);
+        var room = new Vector3(cx + 30, 10, cz + 10);
+        var doors = new NavDoors();
+        var query = new NavQuery(world, doors);
+
+        var inward = query.FindPath(street, room);
+        Assert.True(inward.Found, "no way in");
+        // Straight through the doorway, not through the walls, and the way back is the same.
+        Assert.InRange(Length(inward.Points), 230, 260);
+        Assert.All(inward.Points.Where(p => p.X > cx - 66 && p.X < cx - 60), p => Assert.InRange(p.Z, cz - 8, cz + 8));
+        var outward = query.FindPath(room, street);
+        Assert.True(outward.Found, "no way out");
+        Assert.InRange(Length(outward.Points), 230, 260);
+
+        // The room is not reachable over the walls, and closing the door shuts it.
+        doors.Close("house");
+        Assert.False(query.FindPath(street, room).Found);
+        doors.Open("house");
+        Assert.True(query.FindPath(street, room).Found);
+
+        // Cache round trip keeps the polygons and the door links.
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "meitou-nav-int-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var cache = new NavMeshCache(dir);
+            uint settings = NavMeshCache.SettingsHash(Settings);
+            var pruned = combined.WithoutPruned();
+            cache.Save(pruned, 5, settings);
+            var back = NavWorld.Empty.With(cache.TryLoad(32, 32, 5, settings)!);
+            Assert.True(new NavQuery(back, doors).FindPath(street, room).Found);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
     public void Walkability_answers_from_the_mesh_and_falls_back_where_a_zone_is_missing()
     {
         var s = new Scene(new(32, 32));

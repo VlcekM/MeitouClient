@@ -552,3 +552,32 @@ Thread-safety: `IsWalkable`, `GroundHeight`, `FindPath` and `Doors` are safe fro
 atomically; a query sees a zone only when it is complete). Where a zone (or the start or goal of a path) is not loaded yet, the open-ground
 stand-in answers, so a path made before the build finished can cross a building: re-query when `ZoneReady` fires for the zones it touches.
 `FindPath` costs 20 to 50 ms for a town crossing: call it from the path service's threads, never inside a tick phase.
+
+### Stage 5, third pass (track D): interiors and the missing seed rules
+
+- **Interiors.** Every building of a zone with an `interior mask` part that has collision (and is not `is gateway`, the same approximation of
+  SHELL_WITH_INTERIOR as the exterior carvers) gets its own small mesh (`ZoneGeometryGatherer.GatherInterior`, `NavInteriors`): the building's own
+  shapes in the interior mask 0x87fbe00 (groups 9 to 13, 15 to 22, 27; a destroyed building 0x82600 plus its `destroyed boundary` as cutter), walkable
+  by slope (60 degrees) except group 27, furniture buildings standing inside the hull (walkable ones give floor), the door painters, and the inverted
+  interior hull: one clipping slab beyond every edge of the hull removes everything outside it. It is seeded from the door's inner marker (the marker
+  inside the hull, dropped on the floor). The mesh is a square of whole tiles around the hull, built with the same tiled Recast pipeline, then appended to the
+  zone's mesh as extra polygons (pruned ones included) and joined to the exterior along the door polygons of the same door (edges of the interior's
+  door polygons facing the exterior's, within 6 units in plan and 12 in height, become links). To queries an interior is part of the zone; its door is
+  an ordinary door polygon, so `NavDoors` closes it. The street side already had the hole (the exterior carver). `NavMeshPipeline.BuildZone` does
+  exterior + interiors; `NavMeshService` and the tool use it; the cache version went to 3.
+- **Gate** (The Hub, zone 20.32; the Hub has no bar in its default state: 21 of its buildings are destroyed, only two have an intact door, a shack and the
+  Storm House by the west wall, placement 4933): a path from the street outside the Storm House's door goes round the wall end, through the door and across
+  its floor (220 long for 138 straight, 30 ms) and the way back is the same. With that door closed the room is shut. Images:
+  `R:\VlcekM\MeitouClient-re\probes\nav\out\house-in.png` and `house-out.png` (teal: interior floor, orange: door polygons, cyan: the path).
+- **Cost.** 21 interiors of the Hub zone build in 80 to 400 ms on the worker threads (gather, build and join together); a zone is about 0.3 s more than before at worst.
+- **Seed rules.** (1) The ray rule on `seeds.def` points: a point without a height (Y -99) that a ray from above hits on a building is moved onto it, one
+  with a height that hits a building is dropped (the original rays groups 9 and 10 only; ours all the zone's building triangles, an approximation); ground
+  seeds (the 3 x 3 fallback) are only added where nothing is hit. (2) Linked walls (`link length` above 0): three seeds on a WALKABLE wall where the ray hits
+  it, and three ground seeds clamped into the zone for walls that leave it; the three positions (0.15, 0.5, 0.85 along the wall's longest footprint
+  extent) are our choice. (3) Neighbour-border midpoints: `NeighbourSeeds` adds the midpoints of the open border edges of the loaded 4-neighbours' kept
+  polygons; as in the original the result depends on which neighbours were there first (a cached mesh keeps what it was built with). The Hub's 3 x 3 gains
+  30 to 40 kept polygons from it.
+- **Not done.** Cross-zone links beyond the four neighbours: zones that meet only at a corner share a point, so a link would have zero width and no agent fits
+  through it; every passable border is already linked. Exterior layouts and furniture that the placements do not list (the Storm House floor is one empty
+  room: no furniture was placed, only the parts with collision count); `interior terrain` buildings; a seed for interiors without a door (the first node
+  of the building); upper floors are in the mask but untested; an interior poking past its zone's border keeps the zone's bounds (its polygons still index).

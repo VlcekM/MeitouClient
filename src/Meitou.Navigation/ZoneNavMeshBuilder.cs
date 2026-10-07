@@ -41,7 +41,9 @@ public sealed class NavBuildTimes
     public double Tiles, Stitch, Prune, Total;
     /// <summary>CPU milliseconds summed over the tiles: rasterise and filter, compact and areas, regions, contours, polygons.</summary>
     public double CpuRaster, CpuCompact, CpuRegions, CpuContours, CpuMesh;
-    public int TileCount, Polygons, KeptPolygons, Vertices;
+    public int TileCount, Polygons, KeptPolygons, Vertices, InteriorCount;
+    /// <summary>Milliseconds spent on the building interiors (gather, build, join); included in <see cref="Total"/>.</summary>
+    public double Interiors;
 }
 
 /// <summary>
