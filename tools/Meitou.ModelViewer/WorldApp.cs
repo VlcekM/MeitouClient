@@ -45,6 +45,12 @@ static partial class WorldApp
         if (options.Info) return 0;
         RenderJobs.RaiseRenderThread();
         var assets = new AssetLocator(install);
+        if (Environment.GetEnvironmentVariable("MEITOU_LANDMARK_SURVEY") == "1" && scene.Objects is not null)
+        {
+            // The whole world's placements by world bounding radius (docs/renderer-native.md 8.19): picks the landmark threshold.
+            LandmarkClass.Survey(scene.Objects, assets, Console.Out);
+            return 0;
+        }
         return options.Screenshot is not null || options.FlyBenchmark > 0 ? Screenshot(install, scene, assets, options) : Interactive(install, scene, assets, options);
     }
 
@@ -245,7 +251,24 @@ static partial class WorldApp
                 s.Meitou = v;
             },
             () => gpu?.Foliage?.MeitouRange ?? o.MeitouRange, v => { o.MeitouRange = v; if (gpu?.Foliage is { } f) f.MeitouRange = v; },
-            () => gpu?.Foliage?.Impostors ?? o.Impostors, v => { o.Impostors = v; if (gpu?.Foliage is { } f) f.Impostors = v; });
+            () => gpu?.Foliage?.Impostors ?? o.Impostors, v => { o.Impostors = v; if (gpu?.Foliage is { } f) f.Impostors = v; },
+            () => o.MeitouReach, v =>
+            {
+                // The draw distances follow the mode's defaults unless a Tab slider (or an option) moved them.
+                bool was = o.MeitouReach;
+                o.MeitouReach = v;
+                if (gpu?.Objects is { } ob)
+                {
+                    if (MathF.Abs(ob.ObjectDistance - o.ObjectDistanceFor(was)) < 1) ob.ObjectDistance = o.ObjectDistanceFor(v);
+                    if (MathF.Abs(ob.LandmarkDistance - o.LandmarkDistanceFor(was)) < 1) ob.LandmarkDistance = o.LandmarkDistanceFor(v);
+                    if (camera is not null && MathF.Abs(camera.SplitDistance - Math.Max(20000, o.ObjectDistanceFor(was) * 1.1f)) < 1) camera.SplitDistance = Math.Max(20000, o.ObjectDistanceFor(v) * 1.1f);
+                }
+                if (render is not null && MathF.Abs(render.TerrainPixelError - o.TerrainErrorFor(was)) < 1e-3f)
+                {
+                    float scale = render.TerrainFarPixelError / render.TerrainPixelError;
+                    (render.TerrainPixelError, render.TerrainFarPixelError) = (o.TerrainErrorFor(v), o.TerrainErrorFor(v) * scale);
+                }
+            });
 
         {
             gpu = CreateGpu(display.Context, install, scene, assets, o, interactive: true);

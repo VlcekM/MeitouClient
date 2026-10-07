@@ -348,7 +348,7 @@ options screen reads `Full Screen` and `Border` from the render system's current
 | `shadow quality`, `Shadow Range` | Honoured as options: `--shadow-quality` (index into the same table), `--shadow-range` (clamped 1000 … 9000 in Faithful; Meitou shadows default to 10000 and accept 1000 … 15000); `--no-shadows` |
 | `shadow mode` | Not honoured: the viewer always runs its CSM-style pass (Faithful or Meitou), never RTW |
 | `foliage range`, `grass range`, `grass density` | Emulated with sliders / environment variables (`MEITOU_FOLIAGE_RANGE`, `MEITOU_GRASS_RANGE`, `MEITOU_GRASS_DENSITY`); default ranges ×4, not the game's 1 |
-| `objects view range`, `feature range`, `distant town range` | Constants in `ObjectRanges`; the viewer's own `--object-distance` (default 12000) and `--distant-range` replace them |
+| `objects view range`, `feature range`, `distant town range` | Constants in `ObjectRanges`; the viewer's own `--object-distance` (default 20000 in Meitou, 12000 in Faithful), `--landmark-distance` (Meitou) and `--distant-range` replace them |
 | `FXAA`, `HeatHaze` | Honoured as options (`--fxaa` / `--no-fxaa`, `--heat-haze` / `--no-heat-haze`; Faithful switches) |
 | `camera speed`, `camera zoom` | Constants in `KenshiCamera` / `CameraSettings` (500, 125) |
 | `water reflection`, `reflection range` | Honoured as options (2026-10-06): `--water-reflection <0..4>` (viewer default 4; the game's missing-key default is 2) and `--reflection-range <x>` (viewer default 3; the game's 0.6), Tab sliders for both; `--no-reflections` / `R` stay as the on/off switch. See "Viewer: water reflection" below |

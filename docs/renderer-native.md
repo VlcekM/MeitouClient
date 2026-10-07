@@ -3453,7 +3453,7 @@ refers to them as "owner decision N".
    log or the cull verifier).
 3. **Switch names** (5.7): `range` (size-based ranges), `impostors`, `occlusion`; separate `Enhancement` switches, Meitou default.
 4. **Draw distances** (1, 5.7): adjustable settings, not fixed numbers. Tab-panel sliders per size class, for example large (ruins,
-   wrecks), medium (junk, rocks) and small (litter, bushes), with defaults around 5000 / 2500 / 800 units (12000 / 5000 / 800 since 8.10), plus command-line options. This
+   wrecks), medium (junk, rocks) and small (litter, bushes), with defaults around 5000 / 2500 / 800 units (12000 / 5000 / 800 since 8.10, 50000 / 12000 / 800 since 8.19), plus command-line options. This
    is for agent A's `range` switch in wave 3b; the wave-2 API needs nothing for it (the per-view range cap of 5.3 takes the setting).
 5. **Image layouts** (4.4): stay in GENERAL; revisit after phase 8.
 6. **API steward** (7.1): the foundation agent stays on through wave 3 and lands API additions. No transfer queue in wave 2 (this also
