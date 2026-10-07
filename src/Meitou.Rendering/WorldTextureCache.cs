@@ -361,8 +361,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
         bool pressure = Guard?.Pressure ?? false;
         Mips.Extra = pressure ? 1 : 0;
         long unstreamed = 0;
-        int inFlight = 0;   // replacements being loaded: finer ones are limited so they do not crowd out the other streaming work on the few worker threads
-        foreach (var t in cache.Values) if (t.Replacing) inFlight++;
+        int replacing = 0;   // replacements being loaded: finer ones are limited so they do not crowd out the other streaming work on the few worker threads
+        foreach (var t in cache.Values) if (t.Replacing) replacing++;
         foreach (var t in cache.Values)
         {
             if (t.State != WorldTexture.Residency.Resident || t.Native is null) continue;
@@ -371,20 +371,20 @@ public sealed unsafe class WorldTextureCache : IDisposable
             int target = Math.Max(Mips.Drop(t.FileWidth, t.FileHeight, t.Need), t.QualityDrop);
             if (target < t.Dropped)
             {
-                if (inFlight >= MaxRefines || !MayStart(t)) continue;
+                if (replacing >= MaxRefines || !MayStart(t)) continue;
                 Refined++;
                 t.Refine = true; Refining++;
                 Start(t, replacing: true);
-                inFlight++;
+                replacing++;
             }
             else if (target > t.Dropped)
             {
                 if (t.TooFineSince == 0) t.TooFineSince = now;
                 if (!pressure && now - t.TooFineSince < CoarsenAfterSeconds * 1000) continue;
-                if (inFlight >= MaxCoarsens) continue;
+                if (replacing >= MaxCoarsens) continue;
                 Coarsened++;
                 Start(t, replacing: true);
-                inFlight++;
+                replacing++;
             }
             else t.TooFineSince = 0;
         }

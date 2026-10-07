@@ -154,13 +154,13 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
     /// <summary>Colour draws of parts whose diffuse map was not resident (drawn grey) and, at the same moment, textures waiting for a finer image,
     /// the largest of each since <see cref="TakePopStats"/> (the benchmark's pop-in lines).</summary>
-    int untexturedDraws, untexturedMax, heldNear;
+    int untexturedDraws, untexturedMax, heldNear, coarseDraws, coarseMax;
     /// <summary>Meshes drawn in a reduced form while the full one loads (<see cref="ObjectMeshCache"/>).</summary>
     public int MeshesAwaitingDetail => meshes.Upgrading;
-    public (int Untextured, int Refining, int Held) TakePopStats()
+    public (int Untextured, int Refining, int Held, int Coarse) TakePopStats()
     {
-        var result = (Math.Max(untexturedMax, untexturedDraws), textureCache.Refining, heldNear);
-        untexturedDraws = untexturedMax = heldNear = 0;
+        var result = (Math.Max(untexturedMax, untexturedDraws), textureCache.Refining, heldNear, Math.Max(coarseMax, coarseDraws));
+        untexturedDraws = untexturedMax = heldNear = coarseDraws = coarseMax = 0;
         return result;
     }
 
@@ -171,12 +171,15 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>The eye of the last <see cref="Update"/>, and how far ahead of it (distance) the textures are kept ready for (the camera's speed over half a second).</summary>
     Vector3 eyeNow;
     float needMargin;
+    /// <summary>How far ahead a mesh is kept ready for: three times <see cref="needMargin"/> (the camera's speed over 1.5 s).</summary>
+    float MeshMargin => needMargin * 3;
 
     void Update(Vector3 eye, double budgetMs)
     {
         var watch = Stopwatch.StartNew();
         eyeNow = eye;
         meshes.LodBias = LodBias;
+        meshes.LookAhead = MeshMargin;
         bool unlimited = budgetMs > 1e8;
         float streamRange = (NoDistant ? RealRange : Math.Max(RealRange, DistantReach)) + WorldLayout.ZoneSize * 0.5f;
         streamer.Paused = guard is { Streaming: false };
@@ -245,10 +248,12 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             if (inst.Stand) return;
             if (set.NeedStamp != markStamp) { set.NeedStamp = markStamp; set.Near = set.NearScaled = float.PositiveInfinity; markedSets.Add(set); }
             float near = Math.Max(value - needMargin, 0);
-            var mesh = inst.Mesh;
-            if (mesh.NearStamp != markStamp) { mesh.NearStamp = markStamp; mesh.NearPass = near; markedMeshes.Add(mesh); }
-            else if (near < mesh.NearPass) mesh.NearPass = near;
             if (near < set.Near) set.Near = near;
+            // A mesh is kept ready for where the camera will be by the next pass and the remake (1.5 s of its speed), a texture for half a second (its two levels of margin do the rest).
+            float meshNear = Math.Max(value - MeshMargin, 0);
+            var mesh = inst.Mesh;
+            if (mesh.NearStamp != markStamp) { mesh.NearStamp = markStamp; mesh.NearPass = meshNear; markedMeshes.Add(mesh); }
+            else if (meshNear < mesh.NearPass) mesh.NearPass = meshNear;
             float scaled = near / Math.Max(inst.Radius / Math.Max(inst.Gpu.Radius, 1e-6f), 1e-6f);
             if (scaled < set.NearScaled) set.NearScaled = scaled;
         }
@@ -341,7 +346,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         }
         if (!inst.Stand && gpu.MinLevel > 0)
         {
-            float value = Math.Max(Vector3.Distance(eyeNow, centre) - radius - needMargin, 0);
+            float value = Math.Max(Vector3.Distance(eyeNow, centre) - radius - MeshMargin, 0);
             if (ObjectMeshCache.LevelFor(gpu.Distances, value * LodBias) < gpu.MinLevel)
             {
                 if (value < 3000) heldNear++;   // an instance that close waiting for its mesh to be remade would be seen (the benchmark counts it)
@@ -421,6 +426,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         DrawnInstances = 0;
         untexturedMax = Math.Max(untexturedMax, untexturedDraws);
         untexturedDraws = 0;
+        coarseMax = Math.Max(coarseMax, coarseDraws);
+        coarseDraws = 0;
         DrawnTriangles = 0;
         DrawCalls = 0;
         callLoopMs = 0;
@@ -572,6 +579,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     {
         var blend = MeshLod.Blend(gpu.Distances, value * LodBias);
         // A mesh held without its finest levels (made for farther users, see ObjectMeshCache.Retarget) draws its finest instead, until it is remade.
+        if (gpu.MinLevel > 0 && blend.Lower < gpu.MinLevel) coarseDraws++;
         if (gpu.MinLevel > 0) blend = new LodBlend(Math.Max(blend.Lower, gpu.MinLevel), Math.Max(blend.Upper, gpu.MinLevel), blend.T);
         var m = inst.Transform;
         if (!blend.IsBlending)

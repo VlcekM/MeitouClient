@@ -3092,7 +3092,7 @@ The object textures and meshes are cut in 8.12.
 *In short: the two next-largest owners (object textures 1.25 GB at the 20k preset, object meshes 273 MB; 1.7 GB and 800 MB at `max`) were
 held in full for everything within range, because the caches' marks only evict what has been idle, and nothing in range is. Both now hold only
 what the picture can use at the distance things are drawn at: a texture loses the top mips no pixel of it can sample, a mesh keeps only the LOD
-levels its nearest instance can draw. Object textures 1252 -> 788 MB at all20, 1725 -> 1342 MB at `max`; object meshes 273 -> 157 MB at all20,
+levels its nearest instance can draw. Object textures 1252 -> 797 MB at all20, 1725 -> 1342 MB at `max`; object meshes 273 -> 157 MB at all20,
 813 -> 666 MB at `max`. Pictures unchanged (0 px, ten views, both modes).*
 
 **Causes** (**Verified** in the code, **Observed** in the runs below):
@@ -3161,11 +3161,11 @@ on an idle GPU):
 
 | owner | base default | now | base all20 | now | base all40 | now | base max | now |
 |---|---|---|---|---|---|---|---|---|
-| object textures | 536 | 500 | 1252 | 788 | 1490 | 984 | 1725 | 1342 |
-| object meshes | 73 | 53 | 273 | 157 | 395 | 265 | 813 | 666 |
+| object textures | 536 | 468 | 1252 | 797 | 1490 | 984 | 1725 | 1342 |
+| object meshes | 73 | 59 | 273 | 157 | 395 | 265 | 813 | 666 |
 | peak in use (MB, of 11454) | 3353 | 3353 | 4665 | 4025 | 5323 | 4683 | 6909 | 6141 |
 
-(Margin 1.5 levels instead of 2, which gave the faithful portnorth view 31 differing pixels: textures 436 / 687 / 886 MB at default / all20 / all40.)
+(Default and all20 rows: the final build, which also makes meshes for 1.5 s of the camera speed ahead of it; peaks 3289 and 4025 MB. Margin 1.5 levels instead of 2, which gave the faithful portnorth view 31 differing pixels: textures 436 / 687 / 886 MB at default / all20 / all40.)
 Each alone (builds with the margin 1.5): all20 textures 1244 -> 697 MB with the mesh streaming off, meshes 273 -> 157 MB with the texture streaming on; each
 alone gives its share. At `max` the whole map is in range and most textures have a near user somewhere, so the textures only lose 22% and the meshes 18%.
 At a 4400 MB budget at all20 (the guard acting): base peak 4081 MB (93%), ranges x0.60, 796 allocations refused; now 3801 MB (86%), ranges x0.68, 1 refused.
@@ -3176,6 +3176,8 @@ against 8.6 / 8.4 / 8.3 ms, p99 15-20 against 15-21, CPU-only p50 2.5-2.6 agains
 change beyond the noise; the refinements add CPU p99 at all20 (a texture's image is made in one step, 4 to 13 ms for a 21 MB image when the allocator takes a new block; the
 base builds the same images at load). On a GPU shared with other processes the noise was larger than any difference (flying p50 +0.6 ms for the new build in one set, none in the
 quiet one).
+All40 (three interleaved runs, final build, idle GPU): flying p50 9.6 / 9.8 / 9.8 ms base against 10.0 / 10.1 / 10.1 now, p95 12.2-12.6 against 13.0, p99 15-18 against 23-24, CPU-only p50 2.9 against 3.0, CPU p99 9-10 against 13-16; still p50 8.5 against 8.7 (p99 14-15 against 14). About 0.3 ms at p50 and a few ms at p99 in flight, from the refinements' and remakes' CPU work; the max (230 against 170-185 ms) is the first frames' loading and is shorter with the streaming.
+
 
 **Pop-in** (**Observed**; the benchmark's `pop-in    objects` line, new build only; `MEITOU_MIP_STREAM=0 MEITOU_MESH_STREAM=0` is the base's behaviour: 0 in all of them): parts drawn untextured 0 of 150 frames at
 default, all20, all40 and max; textures waiting for a finer image while the old one is drawn in 9 / 22 / 32 / 19 frames (most 6 / 16 / 22 / 6 at once); instances within 3000
@@ -3183,6 +3185,8 @@ held back for their mesh to be remade 0 frames; remakes for finer levels in flig
 (all40, frames without the whole layout within the near reach, three to seven runs each: base 4, 20, 24, 31, 37, 73, 79; now 14, 21, 23, 28, 84, 92, 118: the 84, 92 and 118 were before the limit on
 refinements and remakes in flight, which keep the worker threads free for the layouts). The picture after a 150-frame flight (`--fly-benchmark --screenshot`, all20, forest) equals
 the base's: 0 px.
+The `pop-in    objects` line also counts instances drawn at a coarser level than their distance picks because the mesh they use had not been remade yet: 30 frames at default and 26 at all20 (most 4 instances at once, in the 7% blend band of a level boundary, drawing the held level instead of blending it with the next finer; seen in the sun's shadow pass, whose cascade frustum reaches instances that the once-a-second mark had not counted near). It is the flying camera outrunning the one-second mark; not seen as a difference in the pictures (0 px). The streaming also runs under `--faithful`, and the faithful ten views are among the gates.
+
 
 **Gate** (**Verified**): ten parity views, `--faithful all` and default, 13:00 and 02:00, max 0 against `87c7857`'s pictures; six far views at all20 (forest, forest at 3000, the Hub at 15000
 and 40000, Port North at 8000, zone 14.30 at 20000) with the streaming off and on: 0 px except the Hub at 40000, 1 level in a few pixels (the 0.5% of triangles `MeshTexelScale` ignores;

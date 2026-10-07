@@ -146,6 +146,8 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
     public int MaxReshapes { get; set; } = 2;
     /// <summary>The LOD bias the renderer draws with (the level a mesh is held at follows the LOD value times it).</summary>
     public float LodBias { get; set; } = 1;
+    /// <summary>How far ahead of the camera a mesh is kept ready for (the renderer's <c>MeshMargin</c>: the camera's speed over 1.5 s), taken off the distance a new mesh is made for.</summary>
+    public float LookAhead { get; set; }
     /// <summary><c>MEITOU_MESH_STREAM=0</c> loads every level of every mesh, for comparisons.</summary>
     public static readonly bool FarForms = Environment.GetEnvironmentVariable("MEITOU_MESH_STREAM") != "0";
 
@@ -255,7 +257,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
             string key = m.Key;
             bool distant = m.Distant;
             bool keep = m.KeepLevelIndices;
-            float near = FarForms ? m.WantedNear : float.PositiveInfinity, bias = LodBias;
+            float near = FarForms ? Math.Max(m.WantedNear - LookAhead, 0) : float.PositiveInfinity, bias = LodBias;
             m.WantedNear = float.PositiveInfinity;
             m.Job = BackgroundWork.Run(() => Decode(key, distant, 0, keep, near, true, bias));
             running.Add(m);
