@@ -81,6 +81,9 @@ sealed class WorldOptions
     public float SwayStep;
     /// <summary>Offscreen pictures: the grass sway's starting time in seconds (0 by default).</summary>
     public float SwayStart;
+    /// <summary>The character renderer's test harness (<c>--crowd N</c>, <see cref="Characters.CrowdHarness"/>): N generated characters round the start point; the seed and the pose time of stills.</summary>
+    public int Crowd, CrowdSeed = 1;
+    public float? CrowdTime;
 
     /// <summary>The longest <c>--shadow-range</c> the command line takes (the game stops at 9000; larger ranges cost VRAM and above this the driver has been seen to reset).</summary>
     public const float CommandLineMaxShadowRange = 15000;
@@ -130,6 +133,7 @@ sealed class WorldOptions
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
                                    percentiles, the worst frames with their stage times and resident memory   --fly-radius <u> (12000)   --fly-speed <u per frame> (150)
                                    --fly-pipelined: no GPU wait per frame and no pacing, two frames in flight; reports the interval between frames
+          --crowd <n> [--crowd-seed <s>] [--crowd-time <s>]   place n generated characters of the start town round the start point (the character renderer's test; stills pose them at --crowd-time, default 0.35)
           --orbit-step <degrees>   with --screenshot: the camera orbits this much every frame (checks the upscaler's motion vectors)
           --sway-step <seconds>    with --screenshot: the grass sway advances this much every frame (checks the grass motion)
           --sway-start <seconds>   with --screenshot: the grass sway's time at the start (default 0)
@@ -240,6 +244,9 @@ sealed class WorldOptions
                 case "--monitor": o.Monitor = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--sway-step": o.SwayStep = F(); break;
                 case "--sway-start": o.SwayStart = F(); break;
+                case "--crowd": o.Crowd = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--crowd-seed": o.CrowdSeed = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--crowd-time": o.CrowdTime = F(); break;
                 case "--view-distance": o.ViewDistance = F(); break;
                 case "--fog": o.FogDistance = F(); break;
                 case "--material-distance": o.MaterialDistance = F(); break;
@@ -429,6 +436,8 @@ static class WorldFrame
         public PostProcess? Post;
         public WorldObjectRenderer? Objects;
         public FoliageRenderer? Foliage;
+        /// <summary>The characters (null without <c>--crowd</c> or a host that feeds them).</summary>
+        public Characters.CharacterRenderer? Characters;
         public TerrainStreamer? Streamer;
         /// <summary>Keeps the video memory under the budget by clamping the ranges and pausing the streaming (null with <c>MEITOU_VRAM_GUARD=0</c>).</summary>
         public VramGuard? Guard;
@@ -446,6 +455,7 @@ static class WorldFrame
         {
             Streamer?.Dispose();
             Foliage?.Dispose();
+            Characters?.Dispose();
             Objects?.Dispose();
             Water?.Dispose();
             Reflection?.Dispose();
@@ -530,6 +540,7 @@ static class WorldFrame
             gpu.Shadow.SetTerrain(scene.Coarse, scene.CoarseSize);   // the Meitou shadows' terrain shadow beyond the range
             Console.WriteLine($"shadows   {gpu.Shadow.Settings.MapSize}² atlas, {gpu.Shadow.Settings.Cascades} cascades of {gpu.Shadow.Settings.TileSize}², range {gpu.Shadow.Settings.Range:0}");
         }
+        if (o.Crowd > 0 && scene.Database is not null) gpu.Characters = Characters.CrowdHarness.Create(context, install, scene, assets, o, interactive);
         gpu.DebugShadows = o.DebugShadows;
         // The memory-pressure guard (VramGuard): MEITOU_VRAM_GUARD=0 leaves it off.
         if (Environment.GetEnvironmentVariable("MEITOU_VRAM_GUARD") != "0")
@@ -538,6 +549,7 @@ static class WorldFrame
             if (gpu.Objects is not null) gpu.Objects.Guard = guard;
             if (gpu.Foliage is not null) gpu.Foliage.Guard = guard;
             if (gpu.Shadow is not null) gpu.Shadow.Guard = guard;
+            if (gpu.Characters is not null) gpu.Characters.Guard = guard;
         }
         return gpu;
     }
@@ -633,6 +645,7 @@ static class WorldFrame
         gpu.Objects?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(1);
         gpu.Foliage?.Update(gpu.Anchor ?? eye);
+        gpu.Characters?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(2);
         float floor = gpu.Terrain.HeightAt(eye.X, eye.Z);
         if (render.Water) floor = Math.Max(floor, WorldWater.Height);
@@ -720,6 +733,7 @@ static class WorldFrame
             StageClock.Lap(6);
             host.Stage(7);
             if (render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+            if (nearSlice) gpu.Characters?.Draw(viewProjection, eye, frustum, light.SunDirection, light.FogColour, light.FogDistance);
             StageClock.Lap(7);
             // Foliage in every depth slice (it reaches 32000+ units at the default x4), counted as one draw.
             host.Stage(8);
@@ -784,6 +798,7 @@ static class WorldFrame
             int oi = 0, oc = 0, fi = 0, fc = 0;
             if (render.Objects && gpu.Objects is { } o) { o.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain); objects += o.DrawnInstances; (oi, oc) = (o.DrawnInstances, o.DrawCalls); }
             StageClock.Sub("objects");
+            gpu.Characters?.DrawDepth(worldToClip, lodEye, planes);
             long t2 = Stopwatch.GetTimestamp();
             if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.EffectiveRange * 1.2f); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
             StageClock.Phase(CascadeLabels[cascade.Index & 3]);
