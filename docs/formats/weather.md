@@ -458,9 +458,12 @@ replace them. `WeatherState` replaces this in the hookup (`WeatherSurfaces.Wetne
   (a rock's impostor with `1 − gloss + 0.4`, **Observed**: the atlas holds no biome).
 - **Not done**: the water-line term on objects, foliage and grass (they have no water height; it would change the ten views at Default, the game
   darkens them); `makeWet` of building **interiors** (wetness 0, dust = `dustAmount.y`: the shader has the bit, nothing in the viewer says which parts are
-  interiors yet, so every part uses x); the dust of `distant_town` stand-ins and the characters (the game's skin and character shaders have no wet or
-  dust code, **Verified** by searching every shader in `data/materials` for `dustAmount` / `makeWet`: only `objects.hlsl`, `triplanar.hlsl`,
-  `terrainfp4.hlsl` and `foliage.hlsl` use them).
+  interiors yet, so every part uses x); the dust of `distant_town` stand-ins; and the **characters and creatures**. Searching every shader in
+  `data/materials` (**Verified**): `dustAmount` / `dustColour` appear only in `objects.hlsl` and `triplanar.hlsl`; `makeWet` is called by
+  `terrainfp4.hlsl`, `objects.hlsl`, `foliage.hlsl`, `character.hlsl`, `creature.hlsl` and `skin.hlsl`. The last three take their wetness from a
+  per-vertex value (`skin.hlsl`: `max(waterLine.z, saturate(waterLine.x − y) · waterLine.y)`, the character's own wet state, not the shared `wetness`)
+  with the absorbance `1 − 2 · gloss` (characters: also `× (0.2 + 0.8 · clothing)`) and the 0.5 edge. Whether `waterLine.z` follows the weather is
+  **Unknown** (not traced), so the viewer's characters stay dry.
 - **makeWet below wetness 0.3** (**Verified** from `common/wet.hlsl`): the game's `(1 − 1/(wet + 0.7)) · absorbance` is negative until `wet = 0.3`, so
   the game *brightens* dry, absorbent surfaces by up to `0.5 · 0.43 · absorbance` (about 11 % at absorbance 0.5, 25 % at 1.2). The viewer clamps the
   darkening at 0 (`max(darken, 0)`): its dry look is unchanged and the Default views stay 0 px, but under a light rain ground gets darker than dry only

@@ -220,6 +220,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         var rainPath = assets.Find("rain-ripples.png");
         var rain = rainPath is not null ? TextureLoader.LoadFile(rainPath, allMips: false).Levels[0] : null;
         if (normal is null) messages.Add("water.png not found: flat water");
+        if (rain is null) messages.Add("rain-ripples.png not found: no rain ripples");
 
         // Biome water parameters blended per blend-map pixel.
         var info = BlendInfoFile.Open(install);
