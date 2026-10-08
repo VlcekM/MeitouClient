@@ -17,7 +17,7 @@ namespace Meitou.Simulation;
 /// </remarks>
 public sealed class BodySystem(GameConstants constants, BodyOptions? options = null, float bodyTimeScale = 1) : ITickSystem
 {
-    /// <summary>Game hours in one tick (11/36000, the stage 7 brief; Unknown against the original).</summary>
+    /// <summary>Game hours in one tick: 11/36000 h is 1/30 game s at the Verified 1200/11 s per game hour (<c>GameClock</c>). Whether the original's medical dt is in game hours is Unknown (that is what <see cref="BodyTimeScale"/> covers).</summary>
     public const float HoursPerTick = 11f / 36000;
     /// <summary>How long a corpse lies before it is removed, in game hours.</summary>
     public const float CorpseHours = 12;
@@ -41,7 +41,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             if (cold.Medical is not { } medical || cold.Race is not { } race || cold.Stats is not { } stats) continue;
             ref var n = ref next[i];
             if (medical.Dead && cold.DiedTick < 0) cold.DiedTick = world.Tick;   // also when something outside the tick killed it (a hit)
-            if (medical.Incapacitated && (n.Task != (byte)CharacterTask.Idle || (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath)) != 0))
+            if (medical.Incapacitated && (n.Task != (byte)CharacterTask.Idle || (n.Flags & (ushort)MoveFlags.AnyPath) != 0))
             {
                 MovementSystem.Stop(table, i);
                 n.Velocity = Vector3.Zero;

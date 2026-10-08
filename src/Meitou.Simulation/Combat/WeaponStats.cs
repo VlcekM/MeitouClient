@@ -62,14 +62,5 @@ public sealed class WeaponInstance(WeaponData data, WeaponStats stats)
     };
 
     /// <summary>The weapon type bit of a category, what a technique's validity flags are matched with (a technique's "1 handed" flag is not tested: how it splits one- and two-handed weapons is <b>Unknown</b>).</summary>
-    public static WeaponKinds KindOf(int category) => category switch
-    {
-        (int)WeaponCategory.Katanas => WeaponKinds.Katana,
-        (int)WeaponCategory.Sabres => WeaponKinds.Sabre,
-        (int)WeaponCategory.Blunt => WeaponKinds.Blunt,
-        (int)WeaponCategory.Heavy => WeaponKinds.Heavy,
-        (int)WeaponCategory.Hackers => WeaponKinds.Hacker,
-        (int)WeaponCategory.Polearms => WeaponKinds.Polearm,
-        _ => WeaponKinds.Unarmed,
-    };
+    public static WeaponKinds KindOf(int category) => WeaponCategories.TechniqueKind(category);
 }
