@@ -53,7 +53,7 @@ public sealed unsafe partial class ShadowPass
     /// <summary>
     /// Frames between the redraws of each cascade when nothing makes it stale (Meitou): the nearest every frame, the others less often the
     /// farther they are, since a far cascade's casters hardly move and its texels are big. <c>MEITOU_SHADOW_CADENCE=1,2,4,4</c> sets them (A/B tests;
-    /// 1,2,4,4 was the schedule before 2026-10-08). Each is a multiple of the one before at most, and the phases below keep the redraws on different frames.
+    /// 1,2,4,4 was the schedule before 2026-10-08). The phases below put the default redraws on different frames (the override may collide).
     /// </summary>
     public static readonly int[] Cadence = ParseCadence(Environment.GetEnvironmentVariable("MEITOU_SHADOW_CADENCE"));
     static readonly int[] Phase = Enumerable.Range(0, 4).Select(i => i * 5 % Cadence[i]).ToArray();
@@ -69,6 +69,8 @@ public sealed unsafe partial class ShadowPass
     /// <summary>How far (radians) the sun may turn before a cascade is redrawn: a caster 150 units tall shifts its shadow by half a texel; at most 2°, at least 0.25°.</summary>
     static float SunTolerance(ShadowCascade c) => (float)Math.Clamp(0.5 * c.Texel / 150, 0.25 * Math.PI / 180, 2 * Math.PI / 180);
     float[]? storedSplits;
+    /// <summary>How far the shadow range may drift (share of the drawn one) before every cascade is drawn again.</summary>
+    const float RangeTolerance = 0.1f;
     Vector3 storedSun;
     int storedMapSize, meitouFrame;
     bool meitouValid;
@@ -160,9 +162,10 @@ public sealed unsafe partial class ShadowPass
         int count = Math.Min(Settings.Cascades, 4);
         float near = MeitouShadowFit.QuantizedNear(view.Near);
         var splits = MeitouShadowFit.Splits(near, Math.Max(EffectiveRange, near * 4), count);
+        // (A range that varies from frame to frame, as the memory guard's or a fog clamp makes it, redraws them all only past RangeTolerance.)
         // The splits move with the camera's near plane; a cascade drawn with other splits keeps its own slice (the receiver reads each one's) and is drawn again when the
         // new slice no longer fits it (Covers below), so only a change of the range or of the number of cascades redraws them all.
-        bool splitsChanged = storedSplits is null || storedSplits.Length != splits.Length || storedSplits[^1] != splits[^1];
+        bool splitsChanged = storedSplits is null || storedSplits.Length != splits.Length || Math.Abs(splits[^1] - storedSplits[^1]) > RangeTolerance * storedSplits[^1];
         bool sunJumped = Vector3.Dot(toSun, storedSun) < MathF.Cos(SunJump);
         bool all = !meitouValid || splitsChanged || storedMapSize != Settings.MapSize || sunJumped;
         if (meitouValid && all) { if (splitsChanged) AllReasons[0]++; if (sunJumped) AllReasons[1]++; }

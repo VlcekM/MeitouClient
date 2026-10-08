@@ -109,11 +109,12 @@ public sealed partial class FoliageRenderer
     const float ImpostorLookaheadSeconds = 3;
     /// <summary>
     /// The most shaded samples of a bake recorded in one frame (<c>MEITOU_IMPOSTOR_BAKE_MSAMPLES</c>, in millions; a row is
-    /// <c>grid x (2 x frame)^2 x 3</c> of them; default 40, docs/impostors.md section 8). A large atlas (256 pixel frames, 9.4 million a row) takes 4 rows
-    /// a frame (three frames in all), a 128 or 64 pixel one its twelve rows in one.
+    /// <c>grid x (2 x frame)^2 x 3</c> of them; default 4 since 2026-10-08 (it was 40, which cost 3 to 6 ms of GPU time in every frame with a bake step: the "other" spikes), docs/impostors.md
+    /// section 8). A row is the least a step records: a large atlas (256 pixel frames, 9.4 million a row) takes one row a frame (twelve frames), a 128 pixel one (2.4 million) one row (twelve
+    /// frames), a 64 pixel one (0.6 million) six rows (two frames).
     /// </summary>
     static readonly double ImpostorBakeSamplesPerFrame = 1e6 * (double.TryParse(Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_BAKE_MSAMPLES"), System.Globalization.NumberStyles.Float,
-        System.Globalization.CultureInfo.InvariantCulture, out double msamples) && msamples > 0 ? msamples : 40);
+        System.Globalization.CultureInfo.InvariantCulture, out double msamples) && msamples > 0 ? msamples : 4);
     /// <summary>The pooled bake memory (readback buffers, atlas levels, filtering scratch) is freed this long after the last bake.</summary>
     const long ImpostorBakeIdleMs = 10000;
     long impostorLastBake;
