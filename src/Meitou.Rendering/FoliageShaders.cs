@@ -336,9 +336,26 @@ static class FoliageShaders
         // mirrors, plus its biome map row + 1 (0: none). The view's biome rows switch (mode.x) and the resident biomes (a bit per row).
         // A mesh chunk of a group with an impostor (flags 4) keeps the instances before the transition, the group's impostor chunk (flags 8,
         // the same instances) those from the crossfade band on (docs/impostors.md "Drawing"). Not drawn: -2 (visible values are above -1.5).
-        struct ViewData { vec4 planes[8]; vec4 lengths[2]; uvec4 resident[2]; uvec4 mode; };
+        // mode.y: the fog cull is on (main colour pass; FogVolumes.WriteCull): fog[0] box min, fog[1] box max, fog[2] eye + hide distance squared, fog[3..9] the block's planes.
+        struct ViewData { vec4 planes[8]; vec4 lengths[2]; uvec4 resident[2]; uvec4 mode; vec4 fog[10]; };
         layout(push_constant) uniform Push { vec2 eye; uint planeCount; uint chunkCount; uint drawCount; float fullThreshold; } pc;
         uint ChunkIndex() { return gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x; }
+        // FogVolumes.Covers: the box wholly inside the eye's fog block (its box and seven planes) and its nearest point at least the hide distance away.
+        bool FogHidden(ViewData v, vec3 mn, vec3 mx)
+        {
+            vec3 eye = v.fog[2].xyz;
+            precise vec3 q = clamp(eye, mn, mx) - eye;
+            precise float d2 = q.x * q.x + q.y * q.y + q.z * q.z;
+            if (d2 < v.fog[2].w) return false;
+            if (any(lessThan(mn, v.fog[0].xyz)) || any(greaterThan(mx, v.fog[1].xyz))) return false;
+            for (int k = 0; k < 7; k++)
+            {
+                vec4 p = v.fog[3 + k];
+                precise float top = (p.x >= 0.0 ? p.x * mx.x : p.x * mn.x) + (p.y >= 0.0 ? p.y * mx.y : p.y * mn.y) + (p.z >= 0.0 ? p.z * mx.z : p.z * mn.z);
+                if (top >= p.w - 1.0) return false;
+            }
+            return true;
+        }
         """;
 
     /// <summary>Kernel 1: per chunk (one workgroup), each instance's packed fade (-1: not drawn) and the chunk's visible count. A rock chunk
@@ -350,16 +367,17 @@ static class FoliageShaders
         layout(std430, set = 0, binding = 2) readonly buffer Chunks { Chunk chunks[]; };
         layout(std430, set = 0, binding = 3) writeonly buffer Fades { float fades[]; };
         layout(std430, set = 0, binding = 4) writeonly buffer Counts { uint counts[]; };
-        shared uint visibleCount;
+        shared uint visibleCount, foggedCount;
         void main()
         {
             uint c = ChunkIndex();
             if (c >= pc.chunkCount) return;
             uint i = gl_LocalInvocationID.x;
-            if (i == 0u) visibleCount = 0u;
+            if (i == 0u) { visibleCount = 0u; foggedCount = 0u; }
             barrier();
             Chunk k = chunks[c];
             float packed = -2.0;
+            uint fogged = 0u;
             if (i < k.count)
             {
                 uint at = k.first + i;
@@ -390,12 +408,15 @@ static class FoliageShaders
                         else if ((k.flags & 1u) != 0u) packed = m > 0.0 ? (m < 1.0 ? m : 2.0) : -2.0;   // a rock: no range dither, the fade is the transition band's alone
                         else packed = m > 0.0 ? (m < 1.0 ? m : packed) : -2.0;
                     }
+                    // The fog cull last, so it counts only what would have been drawn: the sphere's box (FoliageCull.CullGroup).
+                    if (packed > -1.5 && view.mode.y != 0u && FogHidden(view, sphere.xyz - vec3(sphere.w), sphere.xyz + vec3(sphere.w))) { packed = -2.0; fogged = 1u; }
                 }
             }
             fades[c * 256u + i] = packed;
             if (packed > -1.5) atomicAdd(visibleCount, 1u);
+            if (fogged != 0u) atomicAdd(foggedCount, 1u);
             barrier();
-            if (i == 0u) counts[c] = visibleCount;
+            if (i == 0u) { counts[c] = visibleCount; counts[pc.chunkCount + c] = foggedCount; }
         }
         """;
 
@@ -404,11 +425,12 @@ static class FoliageShaders
     public static readonly string ScanCompute = CullCommon + """
         struct Draw { uint indexCount; uint chunkStart; uint chunkEnd; uint pad; };
         struct Args { uint indexCount; uint instanceCount; uint firstIndex; int vertexOffset; uint firstInstance; };
-        layout(std430, set = 0, binding = 4) readonly buffer Counts { uint counts[]; };
+        layout(std430, set = 0, binding = 4) readonly buffer Counts { uint counts[]; };   // [0, n) the visible, [n, 2n) the fog cull's
         layout(std430, set = 0, binding = 5) writeonly buffer Offsets { uint offsets[]; };
         layout(std430, set = 0, binding = 6) readonly buffer Draws { Draw draws[]; };
         layout(std430, set = 0, binding = 7) writeonly buffer ArgsBuffer { Args args[]; };
         shared uint partial[256];
+        shared uint foggedTotal;
         uint per;
         uint OffsetOf(uint c)
         {
@@ -421,10 +443,14 @@ static class FoliageShaders
         void main()
         {
             uint t = gl_LocalInvocationID.x, n = pc.chunkCount;
+            if (t == 0u) foggedTotal = 0u;
+            barrier();
             per = max((n + 255u) / 256u, 1u);
             uint begin = min(t * per, n), end = min(begin + per, n);
             uint sum = 0u;
-            for (uint c = begin; c < end; c++) sum += counts[c];
+            uint fogSum = 0u;
+            for (uint c = begin; c < end; c++) { sum += counts[c]; fogSum += counts[n + c]; }
+            atomicAdd(foggedTotal, fogSum);
             partial[t] = sum;
             barrier();
             for (uint s = 1u; s < 256u; s <<= 1)
@@ -437,6 +463,7 @@ static class FoliageShaders
             uint base = partial[t] - sum;
             for (uint c = begin; c < end; c++) { offsets[c] = base; base += counts[c]; }
             if (t == 255u) offsets[n] = partial[255];
+            if (t == 0u) offsets[n + 1u] = foggedTotal;   // the fog cull's total, after the barriers above
             for (uint d = t; d < pc.drawCount; d += 256u)
             {
                 Draw draw = draws[d];

@@ -299,9 +299,9 @@ internal sealed class FogVolumes
     }
 
     /// <summary>What <see cref="Hidden(Vector3, Vector3, CullKind)"/> can leave out, for the statistics.</summary>
-    public enum CullKind { Terrain, Objects, Foliage, Characters, Other }
+    public enum CullKind { Terrain, Objects, Foliage, Characters, FoliageInstances, Other }
 
-    public const int CullKinds = 5;
+    public const int CullKinds = 6;
 
     /// <summary>The ease-in-out curve's input at which the block's alpha is 0.9998 (1 - 2 (1 - a)^2): below it a hidden thing could still show by a level.</summary>
     public const float CullAlpha = 0.99f;
@@ -382,6 +382,34 @@ internal sealed class FogVolumes
     /// </summary>
     public bool Hidden(Vector3 min, Vector3 max, CullKind kind)
     {
+        if (!Covers(min, max)) return false;
+        Interlocked.Increment(ref Culled[(int)kind]);
+        return true;
+    }
+
+    /// <summary>Vec4s of <see cref="WriteCull"/>: the block's box (min, max), the eye with the hide distance squared in w, and its seven planes.</summary>
+    public const int CullVectors = 10;
+
+    /// <summary>
+    /// The state <see cref="Covers"/> tests against, for a GPU kernel (<c>FogHidden</c> in <see cref="FoliageShaders"/>): [0] box min, [1] box max,
+    /// [2] the eye (xyz) and R squared (w), [3..9] the block's seven planes (xyz normal, w offset). False (nothing written) when the cull is off.
+    /// </summary>
+    public bool WriteCull(Span<Vector4> into)
+    {
+        if (occluder is not { } v) return false;
+        into[0] = new Vector4(v.BoxMin, 0);
+        into[1] = new Vector4(v.BoxMax, 0);
+        into[2] = new Vector4(cullEye, hideRadiusSquared);
+        for (int k = 0; k < 7; k++) into[3 + k] = v.Data[3 + k];
+        return true;
+    }
+
+    /// <summary>Adds what a GPU cull left out (read back a few frames late) to the statistics.</summary>
+    public void AddCulled(CullKind kind, int count) => Interlocked.Add(ref Culled[(int)kind], count);
+
+    /// <summary><see cref="Hidden(Vector3, Vector3, CullKind)"/> without the statistics (for a caller that counts its own, per instance).</summary>
+    public bool Covers(Vector3 min, Vector3 max)
+    {
         if (occluder is not { } v) return false;
         if (Vector3.DistanceSquared(Vector3.Clamp(cullEye, min, max), cullEye) < hideRadiusSquared) return false;
         if (min.X < v.BoxMin.X || min.Y < v.BoxMin.Y || min.Z < v.BoxMin.Z || max.X > v.BoxMax.X || max.Y > v.BoxMax.Y || max.Z > v.BoxMax.Z) return false;
@@ -391,7 +419,6 @@ internal sealed class FogVolumes
             float top = (p.X >= 0 ? p.X * max.X : p.X * min.X) + (p.Y >= 0 ? p.Y * max.Y : p.Y * min.Y) + (p.Z >= 0 ? p.Z * max.Z : p.Z * min.Z);
             if (top >= p.W - 1f) return false;   // a corner reaches the plane: the box is not inside the block
         }
-        Interlocked.Increment(ref Culled[(int)kind]);
         return true;
     }
 

@@ -243,8 +243,8 @@ thousand units is fully hidden, so the main camera does not draw it. Each frame 
 (nearest by its node, so everything sorted before it is covered by it) and, if that is a block the eye is inside (all seven planes with a
 margin, and its box), computes a *hide distance* R. `FogVolumes.Hidden(min, max, kind)` then says a box is hidden when it lies wholly inside
 that block (the 7 plane tests of its extreme corners, plus its box; the block is convex) and its nearest point is at least R from the eye.
-Terrain nodes, object instances (and distant towns), characters (colour and motion passes) and foliage zones ask it (grass is range-limited
-well inside R and is not asked). Not asked: the shadow cascades (a hidden caster can still throw its shadow on visible ground) and the
+Terrain nodes, object instances (and distant towns), characters (colour and motion passes), foliage zones and each foliage instance
+(below) ask it (grass is range-limited well inside R and is not asked). Not asked: the shadow cascades (a hidden caster can still throw its shadow on visible ground) and the
 water reflection (a different camera); effect spheres and beams are ignored (they only add fog); the sky is not culled (see below). It is a
 per-frame decision and is off the moment the eye leaves the block or a different volume is drawn last.
 
@@ -262,6 +262,27 @@ changes nothing: the pixel shows the sky, water or terrain behind it, whose own 
 drawn last, as a volume drawn after it would see a different path for the (now missing) fragment and for the one behind it. Volumes drawn before
 it cannot show through 0.9998. At Shark inside "Swamp[SOUTH]" (density distance 4500, ceiling about 2900) R is about 4455 units in a clear eye;
 with the eye near a ceiling or a wall, or the far clip over 50000 shrinking the soft edges, R grows (up to "no cull").
+
+Foliage per instance (**Verified** by `Gpu_cull_leaves_out_what_the_fog_hides_as_the_CPU_does`, which runs the kernel against the C# test bit for bit
+on random blocks, eyes and spheres, a seventh of them within a dozen units of R). A swamp's foliage zone is big, and the zone test (its box with
+the margin of its largest mesh) almost never lies wholly inside the block, so it culled none at Shark; the instances are what matter (trees,
+leaves and rocks, the largest GPU cost of that view). The foliage cull kernel (`FoliageShaders.CullCompute`) now also runs `FogHidden` on each
+instance that survived its range, frustum and fade tests: a port of `FogVolumes.Covers` on the instance's bounding sphere's box (centre ± radius,
+the one the frustum test uses). The main colour views' dispatches (every depth slice) get the block's box, its 7 planes, the eye and R squared in
+the `View` buffer (`FogVolumes.WriteCull`, 10 vec4s, `mode.y` = on); the shadow cascades' and the reflection's do not (`mode.y` = 0, and
+`FogCull` is only set around the main camera's draw). It is the same test for the meshes, the TERRAIN-mode rocks and the impostors (distant trees:
+same instance, same sphere; the quad's silhouette is the sphere's out here). An instance the test drops writes -2 as any other not drawn, so the
+compaction and the indirect arguments need no change. The kernel counts those it dropped per chunk, the scan sums them into an extra entry of the
+offsets, and the total is read back a frame ring late (summed over the frame's fog dispatches, whose number varies with the cascades) into the
+`fog cull` line's "foliage instances"; the CPU path (`MEITOU_GPU_CULL=0`) tests the same in `FoliageCull.CullGroup` and counts the same way.
+Measured (**Observed**, 2026-10-08, `--fly-benchmark 300 --fly-radius 1 --fly-speed 0` with `MEITOU_FOLIAGE_TRIS=1 MEITOU_PASS_STATS=1`, on / off
+`--no-fog-cull` as interleaved pairs, RTX 4070 shared with other viewers): Shark in swamp rain `--distance 400 --pitch 4`: 3953 of 20357 foliage
+instances left out of the main view (4453 of 20500 at `--distance 1500 --pitch 8`), colour-view triangles drawn meshes 727k / 1015k, rocks 2651k /
+2968k, impostors 19.6k / 24.8k; the foliage pass's GPU time 2.62-2.69 / 2.92-2.93 ms (three pairs, 0.3 ms), the frame's GPU time 6.2-6.5 / 6.57 ms.
+At `--distance 1500 --pitch 8` (a busier GPU: only the pairs compare) 6.0-6.3 / 6.8-7.0 ms for the foliage pass, a tenth of the pass and a larger
+share of the frame. Images: identical to at most 4 levels on 7 pixels (thin grass blades near the camera; 3921 pixels differ by 1 from the exposure
+and the TAA history seeing a different set of hidden fragments), where the zone-level cull alone differed by at most 1; the views without the block
+are unchanged (the ten parity views against `weather`: 0, except The Hub at 13:00, whose own runs differ by up to 7 between two renders).
 
 Measured (**Observed**, 2026-10-08, RTX 4070 shared with other viewers, so only the pairs are comparable, `--screenshot` "post cost" scene GPU
 ms with / without `--no-fog-cull`; images identical to at most 3 levels on 3 pixels): Shark `--distance 400 --pitch 4` 6.6 / 10.0 (11 terrain

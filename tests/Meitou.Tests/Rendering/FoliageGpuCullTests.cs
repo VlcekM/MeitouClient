@@ -292,6 +292,127 @@ public class FoliageGpuCullTests
         ExpectClean(d!);
     }
 
+    /// <summary>A wide low fog block (as FogCullTests): x and z within 50000, floor at -2000, ceiling at 3000; density distance 4500, edge 800.</summary>
+    static Meitou.Data.World.FogFeature FogBlock() => new("wide", Meitou.Data.World.FogFeatureType.Block, new Vector3(0.6f, 0.55f, 0.5f), 1, 4500, 800, Vector3.Zero, Vector3.Zero, 0,
+    [
+        new Vector4(0, 1, 0, 3000), new Vector4(1, 0, 0, 50000), new Vector4(-1, 0, 0, 50000), new Vector4(0, 0, 1, 50000), new Vector4(0, 0, -1, 50000),
+        new Vector4(0.0f, 0.1f, 0.995f, 60000), new Vector4(0, -1, 0, 2000),
+    ]);
+
+    /// <summary>
+    /// The fog cull in the kernel (FogHidden in <see cref="FoliageShaders"/>) against <see cref="FogVolumes.Covers"/>: with the fog's state in the view,
+    /// the same instances survive as <see cref="FoliageCull.CullGroup"/> keeps with the fog, bit for bit, and the count of those it left out
+    /// (the offsets' extra entry) equals the CPU's. A seventh of the spheres sit within a few units of the hide distance.
+    /// </summary>
+    [Fact]
+    [Slow]
+    public unsafe void Gpu_cull_leaves_out_what_the_fog_hides_as_the_CPU_does()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        var random = new Random(41);
+        long hiddenTotal = 0, keptTotal = 0;
+        using (var ctx = new GpuContext(d!))
+        {
+            using var cull = new FoliageGpuCull(ctx, arenaBytes: 4 << 20);
+            for (int viewNumber = 0; viewNumber < 6; viewNumber++)
+            {
+                var eye = new Vector3(random.Next(-10000, 10000), 300 + random.Next(0, 1200), random.Next(-10000, 10000));
+                float yaw = (float)(random.NextDouble() * 6.28), pitch = (float)(random.NextDouble() * 0.4 - 0.2);
+                var planes = Frustum(eye, yaw, pitch);
+                var forward = new Vector3(MathF.Sin(yaw) * MathF.Cos(pitch), MathF.Sin(pitch), MathF.Cos(yaw) * MathF.Cos(pitch));
+                var fog = new FogVolumes([FogBlock()]);
+                fog.Update(eye, forward, 50 * MathF.PI / 180, 16f / 9, 50000, 0.5f, on: true);
+                Assert.NotNull(fog.CullBlock);
+                var fogData = new Vector4[FogVolumes.CullVectors];
+                Assert.True(fog.WriteCull(fogData));
+                var view = new FoliageCullView().Set(planes);
+                var eyeXz = new Vector2(eye.X, eye.Z);
+                const int Batches = 3;
+                var groups = Synthetic(random, eye, planes, 60, Batches);
+                foreach (var g in groups)
+                    for (int i = 3; i < g.Records.Length; i += 7)
+                    {
+                        // Onto the hide distance (the nearest point of the sphere's box about that far), up to a few units either side.
+                        ref var sp = ref g.Records[i].Sphere;
+                        var dir = Vector3.Normalize(new Vector3(sp.X, sp.Y, sp.Z) - eye);
+                        var c = eye + dir * (fog.CullRadius + 4 + (float)(random.NextDouble() * 24 - 12));
+                        sp = new Vector4(c, sp.W);
+                    }
+                ctx.BeginFrame();
+                bool placed;
+                do
+                {
+                    placed = true;
+                    foreach (var g in groups)
+                        if (!cull.Place(ref g.Arena, ref g.Generation, g.Records)) { placed = false; break; }
+                } while (!placed);
+                var chunks = new List<FoliageCullChunk>();
+                var starts = new int[Batches + 1];
+                for (int b = 0; b < Batches; b++)
+                {
+                    starts[b] = chunks.Count;
+                    foreach (var g in groups.Where(g => g.Batch == b))
+                        for (int at = 0; at < g.Records.Length; at += FoliageShaders.CullChunk)
+                            chunks.Add(new FoliageCullChunk
+                            {
+                                First = FoliageGpuCull.FirstOf(g.Arena) + (uint)at, Count = (uint)Math.Min(FoliageShaders.CullChunk, g.Records.Length - at),
+                                Range = g.Range.Range, RangeSquared = g.Range.RangeSquared, InverseBand = g.Range.InverseBand,
+                            });
+                }
+                starts[Batches] = chunks.Count;
+                var draws = new List<FoliageCullDraw>();
+                for (int b = 0; b < Batches; b++)
+                    draws.Add(new FoliageCullDraw { IndexCount = (uint)(100 * b + 3), ChunkStart = (uint)starts[b], ChunkEnd = (uint)starts[b + 1] });
+                var work = cull.Prepare(chunks.ToArray(), draws.ToArray());
+                var result = cull.Dispatch(work, view, eyeXz, default, 0.999f, fogData);
+                int n = chunks.Count;
+                using var readback = ReadbackBuffer.Create(ctx, FoliageGpuCull.ReadbackBytes(result), "cull readback");
+                cull.CopyForReadback(result, readback);
+                using var total = ReadbackBuffer.Create(ctx, 8, "fog total");
+                ctx.Frame.PreFrame.CopyBuffer(result.Offsets, total.Handle, new BufferCopy(result.OffsetsOffset + (ulong)n * 4, 0, 8));
+                ctx.EndFrame();
+                d!.Frames.WaitAll();
+
+                var expected = new List<Matrix4x4>[Batches];
+                var output = new FoliageCullOutput();
+                int expectedFogged = 0;
+                for (int b = 0; b < Batches; b++)
+                {
+                    expected[b] = [];
+                    foreach (var g in groups.Where(g => g.Batch == b))
+                    {
+                        FoliageCull.CullGroup(g.Records, g.Range, eyeXz, view, record: false, output, fog: fog);
+                        expected[b].AddRange(output.Visible.AsSpan(0, output.Count));
+                        expectedFogged += output.FogCulled;
+                    }
+                }
+                var offsets = MemoryMarshal.Cast<byte, uint>(readback.Read(0, (ulong)(n + 1) * 4)).ToArray();
+                var tail = MemoryMarshal.Cast<byte, uint>(total.Read(0, 8)).ToArray();
+                ulong rowsAt = FoliageGpuCull.Align16((ulong)(n + 1) * 4) + FoliageGpuCull.Align16((ulong)draws.Count * 20);
+                var rows = MemoryMarshal.Cast<byte, Matrix4x4>(readback.Read(rowsAt, (ulong)offsets[n] * 64)).ToArray();
+                Assert.Equal(expected.Sum(e => e.Count), (int)offsets[n]);
+                Assert.Equal(expectedFogged, (int)tail[1]);
+                for (int b = 0; b < Batches; b++)
+                {
+                    uint first = offsets[starts[b]], count = offsets[starts[b + 1]] - first;
+                    Assert.Equal(expected[b].Count, (int)count);
+                    for (int j = 0; j < count; j++)
+                    {
+                        var e = expected[b][j];
+                        var got = rows[first + j];
+                        Assert.True(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in e)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in got))),
+                            $"view {viewNumber}, batch {b}, instance {j}: GPU fade {got.M14:R}, CPU {e.M14:R}; translation {got.Translation} against {e.Translation}");
+                    }
+                }
+                hiddenTotal += expectedFogged;
+                keptTotal += offsets[n];
+            }
+        }
+        Assert.True(hiddenTotal > 100 && keptTotal > 100, $"{hiddenTotal} left out by the fog, {keptTotal} drawn: the views should have both");
+        ExpectClean(d!);
+    }
+
     /// <summary>
     /// The impostor split (docs/impostors.md "Drawing") on the GPU: every group with a transition is culled twice, its mesh chunks (flag
     /// <see cref="FoliageCullChunk.ImpostorMesh"/>) in one batch and its impostor chunks (<see cref="FoliageCullChunk.Impostor"/>, the same
