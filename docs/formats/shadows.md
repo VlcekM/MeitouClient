@@ -277,7 +277,14 @@ Not the game's: the remaster's choice, on by default (F5 / `--faithful shadows` 
   instead of 3200 / 1716 / 979 / 982). Where the time went (still camera, all four drawn every frame, `MEITOU_PASS_STATS=1`, GPU ms per
   draw): cascade 0 0.12, cascade 1 0.30, cascade 2 0.73, cascade 3 1.14, of which objects 0.33, foliage meshes 0.51 and TERRAIN-mode rocks
   0.27 in cascade 3 (13,135 foliage meshes, 388 objects, 751k terrain triangles) and the same kinds 0.23 / 0.40 / 0.08 in cascade 2.
-  The far cascades are the cost, and they hardly change, hence the cache. **Observed** image difference of the new schedule against
+  The far cascades are the cost, and they hardly change, hence the cache.
+  The same at `--radius 2` (the user's benchmark view, one run each, the other schedule being `MEITOU_SHADOW_CADENCE=1,2,4,4`): GPU
+  time of the stage, mean without the card's outliers / p95 / max, still camera 0.33 / 1.16 / 4.06 ms (0.75 / 1.50 / 2.06 before),
+  orbit 0.36 / 1.09 / 2.96 (1.08 / 3.11 / 8.75), slow flight 0.49 / 1.19 / 2.06 (1.00 / 1.85 / 4.32), fast flight (17 units a frame)
+  0.37 / 1.06 / 2.79 (0.81 / 1.66 / 2.60); cascade 1, 2 and 3 drawn 876 / 220 / 110 times in 3500 frames still (1751 / 876 / 876 before).
+  The render thread's `shadows` stage barely moved (flight 0.78-1.04 against 0.95-1.35 ms; the first cascade drawn each frame still
+  collects the foliage candidates, 0.5-0.75 ms): the saving is GPU time.
+  **Observed** image difference of the new schedule against
   every cascade drawn every frame (`--faithful aa`, the orbit above, frames 900 / 1500 / 2100, `meitou-tools image-diff`): mean 0.0009 /
   0.0166 / 0.0115 of 255, 0.001 / 0.026 / 0.010 % of the pixels over 12, largest 24 / 63 / 58; the differences are thin edges of the
   tree shadows in the lower right (the old 1/2/4/4 schedule differed by at most 2 in the same pictures). Not done: a cascade drawn
