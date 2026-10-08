@@ -203,6 +203,7 @@ static partial class WorldApp
         if (gpu.Particles is { } described && Environment.GetEnvironmentVariable("MEITOU_PARTICLE_LIST") == "1") foreach (var line in described.Describe(camera.Eye, 100000)) Console.WriteLine(line);
         Console.WriteLine($"haze      {(gpu.Sky.KenshiHaze ? "kenshi" : "physical")}, eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {gpu.Sky.EyeClearance:0} above the ground within {KenshiCamera.MaxDistance:0}: altitude weight {gpu.Sky.AltitudeWeight:0.###}, strength {gpu.Sky.HazeStrength:0.##}");
         if (gpu.FogVolumes is { } fogVolumes) Console.WriteLine($"fog vols  {fogVolumes.Active.Count} in view ({fogVolumes.EffectVolumesDrawn} of {fogVolumes.EffectVolumes} weather effect volumes), {fogVolumes.UsedData} of {FogVolumeShaders.MaxData} vec4s{(fogVolumes.Dropped > 0 ? $", {fogVolumes.Dropped} left out" : "")}, farthest first: {(fogVolumes.Active.Count == 0 ? "none" : string.Join("; ", fogVolumes.Active))}{(fogVolumes.Enabled ? "" : " (off: --no-fog-volumes)")}");
+        if (gpu.FogVolumes is { } fogCulled) Console.WriteLine($"fog cull  {(fogCulled.CullBlock is { } cullBlock ? $"{cullBlock} beyond {fogCulled.CullRadius:0}: {fogCulled.Culled[0]} terrain nodes, {fogCulled.Culled[1]} objects, {fogCulled.Culled[2]} foliage zones, {fogCulled.Culled[3]} characters left out" : "off for this view")}{(fogCulled.CullEnabled ? "" : " (off: --no-fog-cull)")}");
         if (o.ShowKeys && DebugOverlay.TryCreate(context) is { } keysOverlay)
         {
             keysOverlay.Target = target;

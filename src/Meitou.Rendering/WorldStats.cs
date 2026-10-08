@@ -39,6 +39,7 @@ static class WorldStats
             stats.Add($"heat haze   {hazy.HeatHazeAmount:0.00} (target {gpu.HeatHazeTarget:0.00}, weather {WorldStats.WeatherName(gpu)})" + (hazy.HeatHazeRuns ? "" : hazy.HasHeatHaze ? ", off" : ", no textures"));
         AddWeather(stats, gpu);
         stats.Add($"camera      {camera.X:0}, {camera.Y:0}, {camera.Z:0}, zone {WorldLayout.ZoneOf(camera.X, camera.Z)}");
+        if (gpu.FogVolumes is { CullBlock: not null } fogCull) stats.Add($"fog cull    {fogCull.CullBlock} beyond {fogCull.CullRadius:0}: {fogCull.Culled[0]} terrain nodes, {fogCull.Culled[1]} objects, {fogCull.Culled[2]} foliage zones, {fogCull.Culled[3]} characters left out");
         stats.Add($"terrain     {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" + (gpu.Streamer is { Pending: > 0 } st ? $", loading {st.Pending}" : ""));
         if (gpu.Objects is { } ob && render.Objects)
             stats.Add($"objects     {ob.DrawnInstances}, {ob.DrawCalls} calls, draw cpu {ob.LastDrawCpuMs:0.00} ms" + (ob.Pending > 0 ? $", loading {ob.Pending}" : ""));
