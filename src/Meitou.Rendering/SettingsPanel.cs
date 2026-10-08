@@ -25,12 +25,16 @@ public sealed record Slider(string Label, float Min, float Max, Func<float> Get,
     }
 }
 
+/// <summary>One checkbox: on or off, read and written through the callbacks; <see cref="Text"/> describes the state beside it.</summary>
+public sealed record Toggle(string Label, Func<bool> Get, Action<bool> Set, Func<string>? Text = null);
+
 /// <summary>
 /// A panel of sliders drawn with the <see cref="DebugOverlay"/> in two columns in the top-left corner, over the other panels. Drag a slider with the left mouse
 /// button; while the pointer is on the panel, the camera ignores the mouse. The button at the bottom puts every slider back to
-/// the value it had when the panel was made (before a saved config or a drag changed it).
+/// the value it had when the panel was made (before a saved config or a drag changed it). Below the sliders, optional checkboxes under their own
+/// heading (the Faithful / Meitou switches), toggled with a click and reset with the sliders.
 /// </summary>
-public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyList<Slider> sliders)
+public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyList<Slider> sliders, IReadOnlyList<Toggle>? toggles = null, string togglesTitle = "")
 {
     const float Margin = 16, Pad = 12, TrackHeight = 6, RowGap = 10, ColumnGap = 28, MinTrackWidth = 220;
     const int Columns = 2;
@@ -39,18 +43,30 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     const string ResetLabel = "Reset to defaults";
 
     readonly float[] defaults = sliders.Select(s => s.Get()).ToArray();
+    readonly IReadOnlyList<Toggle> toggles = toggles ?? [];
+    readonly bool[] toggleDefaults = (toggles ?? []).Select(t => t.Get()).ToArray();
 
     public bool Visible { get; set; }
     /// <summary>The sliders (the game saves their values in its user config, by label).</summary>
     public IReadOnlyList<Slider> Sliders => sliders;
+    /// <summary>The checkboxes (saved like the sliders, by label).</summary>
+    public IReadOnlyList<Toggle> Toggles => toggles;
 
     /// <summary>Sets every slider back to its value when the panel was made.</summary>
     public void Reset()
     {
         for (int i = 0; i < sliders.Count; i++) sliders[i].Set(defaults[i]);
+        for (int i = 0; i < toggles.Count; i++) if (toggles[i].Get() != toggleDefaults[i]) toggles[i].Set(toggleDefaults[i]);
     }
 
-    float ButtonTop => panelY0 + Pad + overlay.LineHeight * 1.5f + Rows * rowHeight;
+    float TogglesTop => panelY0 + Pad + overlay.LineHeight * 1.5f + Rows * rowHeight;
+    /// <summary>The checkboxes' heading, then their rows (down the first column, then the second, as the sliders).</summary>
+    int ToggleRows => (toggles.Count + Columns - 1) / Columns;
+    float ToggleHeight => overlay.LineHeight + 8;
+    float TogglesHeight => toggles.Count == 0 ? 0 : overlay.LineHeight * 1.5f + ToggleRows * ToggleHeight + RowGap;
+    float ToggleTop(int i) => TogglesTop + overlay.LineHeight * 1.5f + i % ToggleRows * ToggleHeight;
+    float ToggleX(int i) => panelX0 + Pad + i / ToggleRows * (columnWidth + ColumnGap);
+    float ButtonTop => TogglesTop + TogglesHeight;
     float ButtonBottom => ButtonTop + overlay.LineHeight + 8;
 
     int dragging = -1;
@@ -59,7 +75,7 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
 
     float ButtonWidth => ResetLabel.Length * overlay.CharWidth + 16;
 
-    float LabelWidth => sliders.Max(s => s.Label.Length + 9) * overlay.CharWidth;
+    float LabelWidth => Math.Max(sliders.Max(s => s.Label.Length + 9), toggles.Count == 0 ? 0 : toggles.Max(t => t.Label.Length + 4 + (t.Text?.Invoke().Length ?? 0) + 2)) * overlay.CharWidth;
 
     /// <summary>The sliders run down the first column, then the second.</summary>
     int Rows => (sliders.Count + Columns - 1) / Columns;
@@ -70,7 +86,7 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
         panelX0 = Margin;
         panelX1 = panelX0 + 2 * Pad + Columns * columnWidth + (Columns - 1) * ColumnGap;
         panelY0 = Margin;
-        panelY1 = panelY0 + Pad + overlay.LineHeight * 1.5f + Rows * rowHeight + overlay.LineHeight + 8 + Pad;
+        panelY1 = ButtonBottom + Pad;
     }
 
     float TrackX(int i) => panelX0 + Pad + i / Rows * (columnWidth + ColumnGap);
@@ -87,6 +103,15 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
         {
             Reset();
             return true;
+        }
+        for (int i = 0; i < toggles.Count; i++)
+        {
+            float top = ToggleTop(i), x = ToggleX(i);
+            if (p.Y >= top - 2 && p.Y < top + ToggleHeight - 2 && p.X >= x - Pad / 2 && p.X <= x + columnWidth + Pad / 2)
+            {
+                toggles[i].Set(!toggles[i].Get());
+                return true;
+            }
         }
         for (int i = 0; i < sliders.Count; i++)
         {
@@ -136,6 +161,16 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
             overlay.Rect(x, top, x + columnWidth * t, top + TrackHeight, fill);
             float knob = x + columnWidth * t;
             overlay.Rect(knob - 3, top - 4, knob + 3, top + TrackHeight + 4, DebugOverlay.TextColour);
+        }
+        if (toggles.Count > 0) overlay.Text(togglesTitle, panelX0 + Pad, TogglesTop, DebugOverlay.TextColour);
+        for (int i = 0; i < toggles.Count; i++)
+        {
+            var t = toggles[i];
+            float top = ToggleTop(i), x = ToggleX(i), box = overlay.LineHeight - 2;
+            overlay.Rect(x, top, x + box, top + box, track);
+            if (t.Get()) overlay.Rect(x + 3, top + 3, x + box - 3, top + box - 3, fill);
+            overlay.Text(t.Label, x + box + overlay.CharWidth, top, DebugOverlay.TextColour);
+            if (t.Text?.Invoke() is { } text) overlay.Text(text, x + columnWidth - text.Length * overlay.CharWidth, top, dim);
         }
         overlay.Rect(panelX0 + Pad, ButtonTop, panelX0 + Pad + ButtonWidth, ButtonBottom, track);
         overlay.Text(ResetLabel, panelX0 + Pad + 8, ButtonTop + 4, DebugOverlay.TextColour);

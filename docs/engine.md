@@ -101,7 +101,8 @@ Default keys: `W A S D` move, `Q`/`E` or `Left`/`Right` rotate, `Up`/`Down` pitc
 middle drag orbit (right click is the move command, see [simulation.md](simulation.md#player)), left click or drag selects, `1`..`9`, `` ` ``, `R`; `;` free camera (`R`/`F` up/down in it), `Space` pause, `F2`/`F3`/`F4` speed 1x/2x/5x (`.`/`,` step through them), `Tab` settings panel, `F8` or
 `PrintScreen` screenshot (C:\Temp; Kenshi's own keys), `F10` key list, `F11` frame statistics, `F12` profiler chart (gpu, cpu, off),
 `Esc` quit. The three debug overlays are the viewer's, and as there they are left out of screenshots. `Shift+F1` upwards
-toggle the Faithful / Meitou switches (the viewer's `F1` upwards; plain `F2`..`F4` and `F8` keep the game's meaning).
+toggle the Faithful / Meitou switches (the viewer's `F1` upwards; plain `F2`..`F4` and `F8` keep the game's meaning). They are also checkboxes at the bottom of the `Tab` panel (ticked: Meitou), saved in meitou.user.json
+unless `--meitou` / `--faithful` is given; the viewer's panel has them too.
 
 ## Rendering (`Meitou.Rendering`)
 

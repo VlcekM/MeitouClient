@@ -38,11 +38,6 @@ sealed partial class GameHost
         var window = display.Window!;
         Boot(display, interactive: true);
         var overlay = DebugOverlay.TryCreate(display.Context);
-        var panel = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render);
-        if (panel is not null)
-            foreach (var slider in panel.Sliders)
-                if (config.Graphics.TryGetValue(slider.Label, out float v) && !(o.Post.Upscale.Explicit && WorldFrame.UpscalerSliders.Contains(slider.Label)))
-                    slider.Set(Math.Clamp(v, slider.Min, slider.Max));
         // The viewer's debug overlays (docs/engine.md): F10 the key list, F11 the frame statistics, F12 the profiler chart.
         var profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
         // Shift+F1 upwards: the viewer's Faithful / Meitou switches (its F1 upwards; plain F2..F4 and F8 are the game's speed and screenshot keys).
@@ -58,6 +53,15 @@ sealed partial class GameHost
             },
             () => gpu.Foliage?.MeitouRange ?? o.MeitouRange, v => { o.MeitouRange = v; if (gpu.Foliage is { } f) f.MeitouRange = v; },
             () => gpu.Foliage?.Impostors ?? o.Impostors, v => { o.Impostors = v; if (gpu.Foliage is { } f) f.Impostors = v; });
+        var panel = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render, switches: switches);
+        if (panel is not null)
+            foreach (var slider in panel.Sliders)
+                if (config.Graphics.TryGetValue(slider.Label, out float v) && !(o.Post.Upscale.Explicit && WorldFrame.UpscalerSliders.Contains(slider.Label)))
+                    slider.Set(Math.Clamp(v, slider.Min, slider.Max));
+        // The switches as saved, unless the command line chose them (--meitou / --faithful).
+        if (panel is not null && !Environment.GetCommandLineArgs().Any(a => a is "--meitou" or "--faithful"))
+            foreach (var toggle in panel.Toggles)
+                if (config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
         var keyItems = DebugOverlay.KeyItems(GameOptions.Usage);
         keyItems.RemoveAll(i => i.StartsWith("Shift+F1..", StringComparison.Ordinal));   // listed one by one instead
         keyItems.AddRange(switches.Select((e, i) => $"Shift+F{i + 1} {e.Name.ToLowerInvariant()}"));
@@ -225,6 +229,8 @@ sealed partial class GameHost
         }
         if (panel is not null)
             foreach (var slider in panel.Sliders) config.Graphics[slider.Label] = slider.Get();
+        if (panel is not null)
+            foreach (var toggle in panel.Toggles) config.Graphics[SwitchKey(toggle.Label)] = toggle.Get() ? 1 : 0;
         profiler?.Dispose();
         config.Bindings = session.Bindings.ToDictionary();
         config.Save();
@@ -232,6 +238,8 @@ sealed partial class GameHost
         gpu.Dispose();
         silkInput.Dispose();
         return 0;
+
+        static string SwitchKey(string label) => "Meitou: " + label;
 
         // The state shown beside a key in the F10 list, by the item's first word.
         string? KeyState(string key)

@@ -195,7 +195,7 @@ static partial class WorldApp
             keysOverlay.Target = target;
             keysOverlay.Visible = true;
             keysOverlay.Draw(w, h, "Keys   (F10 hides this)", DebugOverlay.KeyItems(WorldOptions.Usage));
-            var settings = CreateSettingsPanel(keysOverlay, gpu, render, () => o.Hour, v => o.Hour = v);
+            var settings = CreateSettingsPanel(keysOverlay, gpu, render, () => o.Hour, v => o.Hour = v, switches: WorldOptions.Switches(o));
             settings.Visible = true;
             settings.Draw(w, h);
             keysOverlay.Dispose();
@@ -254,7 +254,7 @@ static partial class WorldApp
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
-            if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v, () => display.VSync, v => display.VSync = v);
+            if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v, () => display.VSync, v => display.VSync = v, switches);
             profiler = new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
             meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             var input = window.CreateInput();

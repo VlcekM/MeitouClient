@@ -162,7 +162,7 @@ sealed class WorldOptions
     }
 
     /// <summary>The Faithful / Meitou switches over the options (for <c>--meitou</c> / <c>--faithful</c>).</summary>
-    static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
+    internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
         () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v);
 
     public static WorldOptions? Parse(string[] args)
@@ -560,7 +560,7 @@ static class WorldFrame
     public static readonly string[] UpscalerSliders = ["Anti-aliasing: 0 FXAA 1 TAA 2 FSR 3 DLSS", "Render scale (upscaler)", "Upscaler sharpness"];
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
-        Func<bool>? getVSync = null, Action<bool>? setVSync = null)
+        Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null)
     {
         var sliders = new List<Slider>();
         // The viewer's time of day (the `--time` option and the , / . keys), to the minute. The game passes none: its clock runs on its own.
@@ -612,7 +612,9 @@ static class WorldFrame
             sliders.Add(new Slider(UpscalerSliders[1], 0.33f, 1, () => up.EffectiveScale, v => up.Scale = MathF.Round(v * 100) / 100, "0.00"));
             sliders.Add(new Slider(UpscalerSliders[2], 0, 1, () => up.Sharpness, v => up.Sharpness = v, "0.00"));
         }
-        return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders);
+        // The Faithful / Meitou switches as checkboxes (ticked: Meitou), the F-key toggles' state.
+        var toggles = switches?.Select(e => new Toggle(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful)).ToList();
+        return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders, toggles, "Meitou improvements (unticked: as the game)");
     }
 
     /// <summary>An hour as <c>HH:MM</c>.</summary>
