@@ -40,6 +40,15 @@ jobs:
           if (-not $v) { $v = "0.0.$env:RUN_NUMBER" }
           if ($v -notmatch '^[0-9A-Za-z.\-]+$') { throw "bad version '$v'" }
           if (git tag -l "v$v") { throw "tag v$v already exists" }
+          # The version's CHANGELOG.md section (from its "## v<version>" heading to the next "## "): required.
+          $lines = Get-Content CHANGELOG.md
+          $start = [Array]::IndexOf($lines, "## v$v")
+          if ($start -lt 0) { throw "CHANGELOG.md has no '## v$v' section" }
+          $end = $start + 1
+          while ($end -lt $lines.Count -and -not $lines[$end].StartsWith('## ')) { $end++ }
+          $section = if ($end -gt $start + 1) { ($lines[($start + 1)..($end - 1)] -join "`n").Trim() } else { '' }
+          if (-not $section) { throw "CHANGELOG.md's '## v$v' section is empty" }
+          Set-Content -Path "$env:RUNNER_TEMP/changes.md" -Value "## v$v`n`n$section" -Encoding utf8
           "version=$v" >> $env:GITHUB_OUTPUT
 
       - name: Quick tests
@@ -56,12 +65,17 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          $notes = @"
-          **Download** ``Meitou-$env:VERSION-win-x64.zip``, unzip it and run ``meitou.exe`` (the game) or ``meitou-viewer.exe`` (the world viewer). A Steam install of Kenshi is found by itself;
-          otherwise it asks for your Kenshi folder once. No game files are included. DLSS (NVIDIA RTX) and FSR are included: pick them on
-          the Tab panel's anti-aliasing slider (in the game DLSS takes effect after a restart; the viewer has meitou-viewer-dlss.bat).
-          See README.txt in the zip.
+          $changes = Get-Content -Raw "$env:RUNNER_TEMP/changes.md"
+          $download = @"
+          ## Download
+
+          Download ``Meitou-$env:VERSION-win-x64.zip``, unzip it anywhere and run ``meitou.exe`` (the game) or ``meitou-viewer.exe`` (the world viewer).
+          You need Kenshi installed: a Steam install is found by itself, otherwise Meitou asks for your Kenshi folder once. No game files are included.
+
+          DLSS (NVIDIA RTX) and FSR are included: pick them on the Tab panel's anti-aliasing slider. In the game DLSS takes effect after a restart;
+          for the viewer, start ``meitou-viewer-dlss.bat``. See README.txt in the zip for the keys and options.
           "@
+          $notes = $changes.Trim() + "`n`n" + $download
           $flags = @()
           if ($env:PRERELEASE -eq 'true') { $flags += '--prerelease' }
           gh release create "v$env:VERSION" "out/Meitou-$env:VERSION-win-x64.zip" --target $env:GITHUB_SHA `
