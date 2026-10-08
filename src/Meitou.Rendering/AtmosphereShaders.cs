@@ -242,7 +242,7 @@ static class AtmosphereShaders
         // The colour of a lit surface point seen from the eye through the air. With the game's haze, an eye above the game's camera
         // heights (uAtmoAltitude.x > 0, a viewer choice: the game's haze measures from a fixed eye near the ground) blends towards the
         // physical haze; the weight is the same for the whole frame, so only the branch in use is evaluated.
-        vec3 atmoApply(vec3 colour, vec3 eye, vec3 position)
+        vec3 atmoApplyHaze(vec3 colour, vec3 eye, vec3 position)
         {
             vec3 ray = position - eye;
             float dist = length(ray);
@@ -260,6 +260,15 @@ static class AtmosphereShaders
                 return mix(kenshi, atmoPhysicalHaze(colour, eye, d, dist), uAtmoAltitude.x);
             }
             return atmoPhysicalHaze(colour, eye, d, dist);
+        }
+        {{FogVolumeShaders.Functions}}
+        // The haze, then the placed fog volumes over it (FogVolumeShaders).
+        vec3 atmoApply(vec3 colour, vec3 eye, vec3 position)
+        {
+            vec3 hazed = atmoApplyHaze(colour, eye, position);
+            vec3 ray = position - eye;
+            float dist = length(ray);
+            return dist < 1.0 ? hazed : fogVolumesApply(hazed, eye, ray / dist, dist);
         }
         """;
 }

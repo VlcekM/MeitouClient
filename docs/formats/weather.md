@@ -376,8 +376,13 @@ textures in `data/particles/textures` (PNG/DDS), four meshes. Examples:
 ### Fog volumes
 
 EFFECT_FOG_VOLUME (8 records): coloured spheres attached to twister effects ("Twister-Chuff01 DustBall" radius 500, "Grey
-Sphere" 661, ...), with alpha and density distance. The static ones on the map are `fogfeatures.dat` ([sky.md](sky.md)
-"Not there"). How they are drawn (the fog volume pass after the haze in `main.compositor`) is **Unknown** in detail.
+Sphere" 661, ...), with alpha and density distance. The static ones on the map are `fogfeatures.dat`, all of it in
+[fogfeatures.md](fogfeatures.md): they, not the weather, make the swamp's fog (the Swamp's weathers have `fog enabled` off), the Fog
+Islands', the Vain's red haze and a few others, always on whatever the weather (**Verified**: the file and its loader; **Observed**: no
+weather or region value reaches them). They are drawn in the scene pass after the haze (queue 82) with post/fog.hlsl's `fog_planes_fs` /
+`fog_sphere_fs` / `fog_beam_fs` (**Verified**: the shipped shaders). How the twisters' EFFECT_FOG_VOLUME spheres are placed and faded at
+run time (`FogController::FogFadeSphere` / `FogFadeCylinder`) was not traced: **Unknown**; they presumably use the same `FogSphere` class and
+`fog_sphere_fs` (**Unknown**: only the class names are known, from the RTTI).
 
 In Meitou (**Observed**, a stand-in): an EFFECT's `fog volumes` (type 0 = sphere; the cylinder type is not in the base game's records) are
 read as `EffectFogVolume` (radius, density distance, alpha, colour, offsets `pos`/`pos2`, `ground`) and attached to every unit of that effect:
