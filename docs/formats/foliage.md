@@ -230,6 +230,32 @@ renderer measures after decoding) times the larger of its record's two scale lim
 - Near the large threshold (where the choice is a judgement): medium `Baobabesque Tree` and `FruitBall_Tree` (121), `SpindleTree05` (112),
   `PalmType OASIS` (106), `Rod-Tree` (89-91); large swamp ferns (126-151), `BigGrassClump` (136), `TreeFall01` (134), `Skin_Cliff_Ridge`
   (148-151). Test: `Base_game_meshes_fall_into_the_expected_classes`.
+- **Trees are medium, not large** (2026-10-08, `FoliageSizes.Classify(radius, mesh)`, the owner's request: the conifers were billboards of the large class).
+  **Observed** (scratch survey of the 643 catalog meshes, the folder of each mesh file against its size class): the game keeps its meshes in
+  folders by kind, and of the 283 large meshes `Assets/Rocks` holds 131 (rocks, boulders, pillars, hoodoos, rock stacks, cliffs, resource rocks),
+  `Assets/Things` 49 (ruins, wrecks, junk, bones, scaffolds, towers), `Assets/Buildings` 14 (houses, walls) and `Assets/Plants` plus `foliage/Trees` 89
+  (trees, palms, ferns, grass clumps, spores). **Rule**: a mesh in `Assets/Plants` or `foliage/Trees` (`FoliageSizes.IsVegetation`, from the record's
+  mesh path) that would be large is medium instead, unless its size is 1000 or more (`GiantFrom`: such a plant is a landmark). Size, the small and
+  medium bounds and every other mesh are unchanged. **Unknown** for mods: a mesh outside those folders keeps the size rule, so a mod's trees in
+  their own folder stay large.
+  Other signals were checked and **do not** separate trees from the rest: the material mode (FOLIAGE alpha cut, mode 4, covers 44 large meshes but
+  also wreck pieces, cables, scaffolds and `Vast_Cluster_Piece*`, and misses the dead pines, `CraggyTree` and `Roaming_Tree*`, which are UV mapped),
+  a leaves mesh (only 33), the layer's visibility (`Deep-Fir` is a plain MEDIUM layer like most rocks) and wind flag (30 large meshes with palms,
+  wrecks and towers), the surface share (sparse trees 0.01 to 0.04 sit among ruins at 0.08 to 0.12), the box shape (the dead pines are 6.5 times taller
+  than wide but `Deep-Fir` is 1.4, and a slenderness rule moved a hoodoo and a ruin tower), the record's keep-upright / slope-align / wind fields. The
+  folder is the game's own classification, not a name list.
+  **Moved from large to medium** (85 meshes, **Observed**, none is a rock, ruin, building or cliff): the conifers `FOLIAGE_Plant_Deep-Fir 01` (341),
+  `Foliage_PINE_SCRAGGY01` (217), `Thin Craggy Tree` (259), `Foliage_CYPRUS-TYPE` and its two variants (429, 258, 258), `FOLIAGE_DeadPineType` and `-red`
+  (133, 166); other trees `Baobabesque Tree`, `BigTree01 [Lush]`, `BigTree02 [Lush]`, `BushTree01`, `CanyonLandCrater_Tree`, `Cascade Tree01` and
+  `- Higher`, `CraggyTree` and `Feather Leaves`, `FanTree LightBlue`, `Foliage_GungeTree`, `FOLIAGE_Plant_FineTree01` and `01A`, `FullTree` and
+  `CLiff Type`, `Jungle_TREE&Branches`, `Roaming_Tree01-03`, `SKulTree` and `02`, `SpindleTree01-04`, `TerrainTree`, `Thin Tree [Wide]` (four variants),
+  `TreeFall01/03/04/05`, `Yucka01` and `OASIS`; palms and plants `FOLIAGE_Plant_BananaStyle01-03-BLUE`, `FOLIAGE_Plant_FanPalm01-06-RED`,
+  `FOLIAGE_Plant_HorsetailType` and `Lower`, `FOLIAGE_Plant_Monster-Style01` and `-LIGHT`, `FOLIAGE_Plant_Swamp-beard_Frame`, the swamp ferns
+  (`FOLIAGE_Swamp Fern-Stalked` x3, `FOLIAGE_Swamp Ferngrey green`, `Foliage_Swamp-Tall_Leafy`), `HydraPlant01`, `LeafyPlant_`, `SageBrush_DESERT-OASIS`,
+  `Spore01`, `Spore02` and `[Blister]`, `Swamp_Head_Clump`, `TallSpikeyCactus`, `Urchin_Like`, `YuccaSpiderBush`; the grass clumps `BigGrassClump` and
+  `Pale_BigGrass01-11`. **Kept large** (size 1000 and up): `Giant_MultiLimbTree` (2020), `Giant_BigWood` (1801), `Jungle_LargeScale_plant` (1339),
+  `FOLIAGE_Plant_Swamp-TwigLarger` (3169). Test: `Base_game_meshes_fall_into_the_expected_classes` (conifers medium; `Barkworm_Pillar01`,
+  `Crumble-Building_Corner01`, `ResourceRock-IRON01`, a hoodoo, a rock stack and `Giant_MultiLimbTree` large), `Vegetation_is_told_by_the_games_asset_folder`.
 - The FAR layers (13 of the 257 the biomes use) are mostly large formations: `Barkworm_Pillars`, `BlackRocks`, `Canyon_NewBlocksides`,
   `Rusty Land Extrusions`, `MoltenCliffStrings`, `Ejecta-Boulder01`, `Foliage_1K_RockStacks KenshiBowl`. Small and medium meshes in them are
   children (`SageBrush` and `Cactus_Type03` under `BlackRocks`). The trees are MEDIUM layers.

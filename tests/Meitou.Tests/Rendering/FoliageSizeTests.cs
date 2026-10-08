@@ -24,7 +24,7 @@ public class FoliageSizeTests
     }
 
     /// <summary>Named base-game meshes land in the class the owner's examples put them in: litter and small plants small, junk, boulders
-    /// and bushes medium, trees, ruins, wrecks and rock stacks large (sizes as the renderer measures them, from the decoded meshes).</summary>
+    /// and bushes medium, trees (any size under 1000) medium, ruins, wrecks, rocks, pillars, hoodoos and rock stacks large (sizes as the renderer measures them, from the decoded meshes).</summary>
     [Fact]
     [Slow]
     public void Base_game_meshes_fall_into_the_expected_classes()
@@ -41,16 +41,31 @@ public class FoliageSizeTests
             ("TechJunk04", FoliageSizeClass.Medium), ("TechRustyJunk_05", FoliageSizeClass.Medium), ("FOLIAGE_Boulder_GREY-01", FoliageSizeClass.Medium),
             ("SageBrush", FoliageSizeClass.Medium), ("RuinBlocks_01", FoliageSizeClass.Medium), ("CacTreeTu_01", FoliageSizeClass.Medium),
             ("HugeRuinWall04", FoliageSizeClass.Large), ("Crumble-Building_Corner01", FoliageSizeClass.Large), ("JunkSat01", FoliageSizeClass.Large),
-            ("Rock01 Foliage-Rockstack01", FoliageSizeClass.Large), ("Foliage_CYPRUS-TYPE", FoliageSizeClass.Large), ("CraggyTree", FoliageSizeClass.Large),
-            ("Thin Tree [Wide]", FoliageSizeClass.Large), ("FlatTop_Hoodoo04", FoliageSizeClass.Large),
+            ("Rock01 Foliage-Rockstack01", FoliageSizeClass.Large), ("Foliage_CYPRUS-TYPE", FoliageSizeClass.Medium), ("CraggyTree", FoliageSizeClass.Medium),
+            ("Thin Tree [Wide]", FoliageSizeClass.Medium), ("FlatTop_Hoodoo04", FoliageSizeClass.Large),
+            ("FOLIAGE_Plant_Deep-Fir 01", FoliageSizeClass.Medium), ("Foliage_PINE_SCRAGGY01", FoliageSizeClass.Medium), ("Thin Craggy Tree", FoliageSizeClass.Medium),
+            ("FOLIAGE_DeadPineType", FoliageSizeClass.Medium), ("Roaming_Tree01", FoliageSizeClass.Medium), ("Barkworm_Pillar01", FoliageSizeClass.Large),
+            ("Crumble-Building_Corner01", FoliageSizeClass.Large), ("ResourceRock-IRON01", FoliageSizeClass.Large), ("Giant_MultiLimbTree", FoliageSizeClass.Large),
         };
         foreach (var (name, cls) in expected)
         {
             var mesh = catalog.Meshes.Values.FirstOrDefault(m => m.Name == name);
             Assert.SkipWhen(mesh is null, $"{name} is not in this game's foliage (a mod or another version)");
-            float size = FoliageSizes.Size(Radius(assets, mesh!), mesh!);
-            Assert.True(FoliageSizes.Classify(size) == cls, $"{name}: size {size:0} is {FoliageSizes.Classify(size)}, expected {cls}");
+            float radius = Radius(assets, mesh!);
+            var got = FoliageSizes.Classify(radius, mesh!);
+            Assert.True(got == cls, $"{name}: size {FoliageSizes.Size(radius, mesh!):0} is {got}, expected {cls}");
         }
+    }
+
+    [Fact]
+    public void Vegetation_is_told_by_the_games_asset_folder()
+    {
+        Assert.True(FoliageSizes.IsVegetation(@".\data\newland\Assets\Plants\DeepFir01.mesh"));
+        Assert.True(FoliageSizes.IsVegetation(@".\data\foliage\Trees\ThinTree01_Trunk.mesh"));
+        Assert.True(FoliageSizes.IsVegetation("./DATA/newland/assets/plants/x.mesh"));
+        Assert.False(FoliageSizes.IsVegetation(@".\data\newland\Assets\Rocks\FlatTop_Hoodoo01.mesh"));
+        Assert.False(FoliageSizes.IsVegetation(@".\data\newland\Assets\Things\RUIN-RefineryHead04.mesh"));
+        Assert.False(FoliageSizes.IsVegetation(@".\data\newland\Assets\Buildings\HugeRuinWall01.mesh"));
     }
 
     /// <summary>The renderer's bounding radius (FoliageRenderer.PumpMeshes): half the diagonal of the main and leaves meshes' box, at least 1.</summary>

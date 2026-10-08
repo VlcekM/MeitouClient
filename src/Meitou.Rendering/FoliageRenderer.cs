@@ -853,7 +853,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.Centre = (min + max) / 2;
             a.Radius = Math.Max((max - min).Length() / 2, 1);
             a.Size = FoliageSizes.Size(a.Radius, a.Mesh);
-            a.SizeClass = FoliageSizes.Classify(a.Size);
+            a.SizeClass = FoliageSizes.Classify(a.Radius, a.Mesh);
             a.Triangles = main.Parts.Sum(p => p.Indices.Length / 3) + (leaves?.Parts.Sum(p => p.Indices.Length / 3) ?? 0);
             a.HasBounds = true;
             QueueMesh(a, main, leaves);
