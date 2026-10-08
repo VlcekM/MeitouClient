@@ -18,8 +18,8 @@ public class LegacySpirvGoldenTests
         ["sky"] = ("F571E5549913901BD4AB6E124EC65F3F", "780B03069841750E05223FA709329F56"),   // the SkyX cloud pass
         ["water"] = ("B26305EB7095A6AEA50BC0F5E32B11B6", "516EEFBCB20A6AD06E9EA03B71A9FC97"),
         ["debug overlay"] = ("2967439E6B38320ED5326B2EF7EA984C", "FFCCCC151047230FD630483A92FEA9E2"),
-        ["terrain patch"] = ("EB80E08F934036E97F7A0CFB43F1CCC3", "4BD6B49523B1DE91356926924277D47A"),   // the layer skip (0 px)
-        ["terrain mesh"] = ("909292AD9F4A917A0E8B2C3E078AD2D3", "B20463F1969CD5F30A1873EA3A2CFC3B"),   // the rock crossfade dither (docs/impostors.md section 13; 0 px in Faithful)
+        ["terrain patch"] = ("D68158C270DBE5189F2168B32FB25756", "D59A8BF6D99684353A3D178B1A1311C2"),   // the layer skip (0 px); the sandbox grid (off outside --sandbox)
+        ["terrain mesh"] = ("2AD3B8DCF0A2F3F94959BB914BF97DDE", "20DA341A92B0CA5E8FFE58C1326213F8"),   // the rock crossfade dither (docs/impostors.md section 13; 0 px in Faithful)
         ["terrain patch depth"] = ("3F75081D1AD1F9384233BA473F9CB880", "2059EF6FA02D6613FE9E36BFFC10F05B"),
         ["terrain mesh depth"] = ("8B86D769A1F25EE902EB1B02FB188E92", "A05EBA696FB834240023646D8D10EE21"),
         ["foliage mesh"] = ("955C52ABF8575B8DE9D2E66F622958E1", "2C47E005791CD694B7747A773AA14970"),

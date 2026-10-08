@@ -183,8 +183,8 @@ public class GpuApiTests
         ["sky"] = "2D58DAFEB0B45CB22851C334D9B89E77",   // the SkyX cloud pass
         ["water"] = "35E690A16022E3248081AB723D5B6260",
         ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",
-        ["terrain patch"] = "5A55C703CD80CD7E0378EAF1EE4F5A82",
-        ["terrain mesh"] = "302497E7ECF80D3C6FD4E1B29D47B46B",
+        ["terrain patch"] = "4F87F742FBE9D228EA707327F58627CF",
+        ["terrain mesh"] = "B969AE9864F34378A76C659D6E919727",
         ["terrain patch depth"] = "838B179AA83BE582C69CC3C2766FA048",
         ["terrain mesh depth"] = "FD249B5F918DBB257C412C7394FD4ABC",
         ["foliage mesh"] = "4A1CFD586C226D23311AD63E06EB2D5D",
