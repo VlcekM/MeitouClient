@@ -399,6 +399,16 @@ public sealed unsafe class WaterRenderer : IDisposable
             }
         }
 
+        // The foam lit as the land is lit (kenshiLight's diffuse terms, the sun by the biome's ambient map and the sun shadow, and the irradiance cube
+        // by the ambient map's colour and the environment factor; no specular), with the ambient map read at level 0 as the shader runs in a branch.
+        vec3 foamLight(vec3 albedo, vec3 n, vec3 world, float shadow)
+        {
+            vec4 am = uAtmoMaps.z < 0.5 ? vec4(1.0, 1.0, 1.0, 0.5) : textureLod(uAtmoAmbientMap, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w), 0.0);
+            vec3 sun = uAtmoSunLight * am.a * 2.0 * shadow;
+            vec3 diffuse = ATMO_PI * clamp(dot(n, uAtmoLight.xyz), 0.0, 1.0) * sun * 0.96;
+            return albedo * (diffuse + atmoIrradiance(n) * 0.96 * am.rgb * uAtmoLight.w);
+        }
+
         void main()
         {
             vec2 p = vBase;
@@ -531,13 +541,23 @@ public sealed unsafe class WaterRenderer : IDisposable
                 reflected = mix(reflected, min(texture(uReflection, uv).rgb, vec3(3.0)), inside.x * inside.y);
             }
             vec3 light = max(dot(n, l), 0.0) * uSunColour * 0.6 + uSkyZenith * 0.5 + 0.03;
+            // What the biome's water colour says: its brightness, hue (the strongest channel 1), how coloured it is, and `clean`: bright,
+            // blue-green water, the only kind that glows through its crests and foams white (black, rusty or olive water does neither).
+            float wLuma = dot(waterColour, vec3(0.299, 0.587, 0.114));
+            vec3 hue = waterColour / max(max(waterColour.r, waterColour.g), max(waterColour.b, 1e-3));
+            float saturation = 1.0 - min(hue.r, min(hue.g, hue.b));
+            float warm = clamp((waterColour.r - waterColour.b) / (wLuma + 0.02), 0.0, 1.0);
+            float clean = smoothstep(0.06, 0.3, wLuma) * (1.0 - 0.75 * warm);
+            float overcast = 1.0 - 0.8 * uWeatherWet.y;   // rain: no sun to shine through crests or to focus on the floor
+            float deepWater = smoothstep(6.0, 40.0, s.depth);   // over sand, a few units deep, there is nothing to glow
             // The light the water scatters back out of its body, and the light through the crests: with the sun behind a wave its thin top
-            // glows green-blue (stronger the higher the crest and the more the eye looks towards the sun).
+            // glows in the water's own colour (a faint blue-green only in clear water; stronger the higher the crest and the more the eye looks
+            // towards the sun), and not at all in the shallows.
             vec3 body = waterColour * light;
             float crest = smoothstep(1.0, 6.0, oceanHeight * open);
             vec2 towardsSun = normalize(l.xz + vec2(1e-5)), looking = normalize(-view.xz + vec2(1e-5));
             float back = pow(clamp(dot(looking, towardsSun), 0.0, 1.0), 3.0) * smoothstep(-0.05, 0.2, l.y);
-            body += mix(vec3(0.08, 0.38, 0.33), waterColour * 2.0, 0.3) * uSunColour * crest * (back * 0.7 + 0.04) * (1.0 - 0.6 * view.y) * (1.0 - far);
+            body += (waterColour * 1.2 + vec3(0.02, 0.1, 0.09) * clean) * uSunColour * crest * deepWater * overcast * (back * 0.7 + 0.04) * (1.0 - 0.6 * view.y) * (1.0 - far);
 
             // The water's depth along the view (the swash: its own thin sheet).
             float floorDepth = max(0.0, vWorld.y - terrainHeight(p));
@@ -556,15 +576,16 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // texture's cell rims, multiplied).
                 vec2 floorP = p - view.xz / max(view.y, 0.05) * floorDepth * 0.75;
                 float tc = uTime * 30.0;
-                float c1 = texture(uFoamMap, floorP * 0.011 + vec2(tc * 0.011, tc * 0.006)).r;
-                float c2 = texture(uFoamMap, mat2(0.8, 0.6, -0.6, 0.8) * floorP * 0.0147 - vec2(tc * 0.008, -tc * 0.01)).r;
-                float caustic = (c1 * c2 * 1.6 + (c1 + c2) * 0.1) * max(l.y, 0.0) * smoothstep(0.3, 3.0, floorDepth) * exp(-floorDepth / 25.0) * (1.0 - far);
+                // Softer with the depth (the web blurs a few units down, as the real one does), weaker than a bright sand would show, and gone in
+                // the shallows, far away and in rain.
+                float blur = 1.0 + clamp(floorDepth * 0.15, 0.0, 3.0);
+                float c1 = textureLod(uFoamMap, floorP * 0.011 + vec2(tc * 0.011, tc * 0.006), blur).r;
+                float c2 = textureLod(uFoamMap, mat2(0.8, 0.6, -0.6, 0.8) * floorP * 0.0147 - vec2(tc * 0.008, -tc * 0.01), blur).r;
+                float caustic = (c1 * c2 * 0.8 + (c1 + c2) * 0.04) * 0.5 * max(l.y, 0.0) * smoothstep(1.5, 7.0, floorDepth) * exp(-floorDepth / 18.0) * (1.0 - smoothstep(500.0, 2500.0, dist)) * overcast;
                 under *= 1.0 + caustic * uSunColour;
                 // Absorption: in clear water red goes first, then green, so the shallows over sand are turquoise and the deep water dark; a
                 // strongly coloured biome water (a swamp's olive, a red lake) filters towards its own colour instead. The biome's opacity (the
                 // game's alpha per unit of depth) sets how fast. Beyond 4000 units the floor is gone, as in the game.
-                vec3 hue = waterColour / max(max(waterColour.r, waterColour.g), max(waterColour.b, 1e-3));
-                float saturation = 1.0 - min(hue.r, min(hue.g, hue.b));
                 vec3 sigma = mix(vec3(4.5, 1.6, 1.1), 1.0 + 3.0 * (1.0 - hue), smoothstep(0.15, 0.5, saturation));
                 vec3 transmit = exp(-depth * max(pa.w, 0.002) * sigma) * clamp((4400.0 - dist) / 400.0, 0.0, 1.0);
                 colour = mix(under * transmit + body * (1.0 - transmit), reflected, schlick * gloss);
@@ -572,9 +593,10 @@ public sealed unsafe class WaterRenderer : IDisposable
             else colour = mix(body, reflected, schlick * gloss);
             colour += min(spec, 4.0) * uSunColour * 0.25 + pb.y * waterColour;
 
-            // A breaker's face: light comes through its thin lip, so it is brighter and greener than the water, and less see-through.
-            float lip = smoothstep(0.22, 0.45, s.g) * (1.0 - smoothstep(0.46, 0.51, s.g)) * clamp(breaker / max(uShore.w, 0.1), 0.0, 1.0) * smoothstep(3.0, 20.0, s.depth);
-            colour = mix(colour, (waterColour * 1.6 + vec3(0.02, 0.07, 0.06)) * (uSunColour * 0.7 + uSkyZenith * 0.6), lip * 0.6 * near);
+            // A breaker's face: light comes through its thin lip, so it is brighter than the water (in its colour), and less see-through.
+            float lip = smoothstep(0.22, 0.45, s.g) * (1.0 - smoothstep(0.46, 0.51, s.g)) * clamp(breaker / max(uShore.w, 0.1), 0.0, 1.0) * smoothstep(4.0, 24.0, s.depth);
+            vec3 lipColour = (waterColour * 1.8 + vec3(0.01, 0.04, 0.035) * clean) * (uSunColour * 0.7 * overcast + uSkyZenith * 0.6);
+            colour = mix(colour, max(colour, lipColour), lip * 0.6 * near);   // it only brightens: dark water has no light to show through its lip
             // and the trough in front of it is darker.
             float trough = smoothstep(0.05, 0.2, s.g) * (1.0 - smoothstep(0.2, 0.3, s.g)) * clamp(breakerHeight(behind) / max(uShore.w, 0.1), 0.0, 1.0) * (1.0 - smoothstep(s.breakAt, s.breakAt - 30.0, s.dist));
             colour *= 1.0 - 0.25 * trough * near;
@@ -611,10 +633,24 @@ public sealed unsafe class WaterRenderer : IDisposable
             }
             float bubbles = texture(uFoamMap, p * 0.06 - drift * 2.0).b * (1.0 - smoothstep(150.0, 600.0, dist));
             float pattern = (a1.g * 0.6 + a2.g * 0.4) * 0.7 + max(a1.r, a2.r) * 0.45 + bubbles * 0.08;
-            float foam = smoothstep(0.95 - amount, 1.25 - amount, pattern);
-            vec3 foamColour = vec3(0.72) * (max(dot(n, l), 0.0) * uSunColour * 0.9 + uSkyZenith * 0.8 + 0.04) * (0.84 + 0.2 * bubbles);
-            foam *= 0.92;
-            colour = mix(colour, foamColour, foam);
+            // Dark and coloured water foams less (a thinner, more broken lace), and the foam takes its colour: white only on clear water, a dirty
+            // grey-brown on black water, rust on red.
+            amount *= mix(0.7, 1.0, clean);
+            float foam = smoothstep(0.95 - amount, 1.25 - amount, pattern) * mix(0.8, 0.92, clean);
+            // The shadow receiver takes derivatives (defined only in uniform control flow), so it runs here and not inside the foam's branch, and
+            // only where the cascades reach.
+            vec3 foamN = normalize(mix(n, vec3(0.0, 1.0, 0.0), 0.6));   // up, a little tilted by the waves
+            float foamShadow = dist < 8000.0 ? kenshiShadow(vWorld, foamN) : 1.0;
+            if (foam > 0.004)
+            {
+                vec3 dirt = mix(vec3(0.8), hue, 0.5) * mix(0.42, 0.6, smoothstep(0.02, 0.25, wLuma));
+                vec3 foamAlbedo = mix(dirt, vec3(0.72) * mix(vec3(1.0), hue, 0.12), clean);
+                // Lit as the land is (the sun through the sun shadows and the biome's ambient map, and the environment light), so it falls
+                // into shadow and dims at night and in dark biomes; in the simple sky, by its old formula times the shadow.
+                vec3 foamLit = uAtmoParams.x > 0.5 ? foamLight(foamAlbedo, foamN, vWorld, foamShadow)
+                    : foamAlbedo * (max(dot(foamN, l), 0.0) * uSunColour * 0.9 * foamShadow + uSkyZenith * 0.8 + 0.04);
+                colour = mix(colour, foamLit * (0.84 + 0.2 * bubbles), foam);
+            }
 
             float a;
             if (refract)
