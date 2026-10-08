@@ -167,12 +167,13 @@ public sealed unsafe class PostProcess : IDisposable
     sealed class SsaoPass : FullscreenProgram
     {
         public readonly SamplerSlot Depth;
-        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd;
+        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye;
         public SsaoPass(GpuContext gpu) : base(gpu, PostProcessShaders.Ssao, "post ssao")
         {
             Depth = P.Sampler("uDepth");
             (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
                 P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
+            (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
         }
     }
 
@@ -745,6 +746,13 @@ public sealed unsafe class PostProcess : IDisposable
         // Fade out with distance: the occlusion is a detail effect, and far geometry is hazy and has little depth precision.
         s.P.Set(s.FadeStart, 3000f);
         s.P.Set(s.FadeEnd, 10000f);
+        // The air in front of each surface (haze, weather fog, fog volumes) hides its occlusion: the shader evaluates it at the world position rebuilt from depth.
+        var r = viewRotation;
+        s.P.Set(s.Right, r.M11, r.M21, r.M31);
+        s.P.Set(s.Up, r.M12, r.M22, r.M32);
+        s.P.Set(s.Back, r.M13, r.M23, r.M33);
+        s.P.Set(s.Eye, eyeNow.X, eyeNow.Y, eyeNow.Z);
+        s.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
         Draw(s.P, a);
 
         var bl = blur;

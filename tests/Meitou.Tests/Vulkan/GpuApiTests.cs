@@ -197,7 +197,7 @@ public class GpuApiTests
         ["shadow atlas"] = "7A8BC32D82FC65DBE0B7F1BEE4AFB43A",
         ["shadow blocker"] = "EF2D9447A695FB305A1FD0097A66C3DA",
         ["terrain shadow sweep"] = "73B5D1C7C3FAED3EF09B596E0C18CD1F",
-        ["ssao"] = "7ABC5A2D28C4E30D95DB9C5FB88B1A4F",
+        ["ssao"] = "EF34E7425A607BB215E2E877ED40E50E",
         ["ssao blur"] = "EBF4C0B9D76D55C8BA77F6135B802B20",
         ["composite"] = "3E0A0AAEB542919802C21BE1FEABBD7B",
         ["fxaa"] = "11A560F30D679E1B0E0EB877EBE075F6",

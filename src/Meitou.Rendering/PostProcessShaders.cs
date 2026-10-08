@@ -23,9 +23,11 @@ static class PostProcessShaders
     /// <summary>
     /// Screen-space ambient occlusion at half resolution, from depth alone (normals from depth differences). Alchemy-style:
     /// each of 12 spiral taps adds the cosine of the sample direction against the normal over its distance, ignoring
-    /// samples further than twice the radius. Writes R = occlusion factor (1 = open), G = view depth for the blur.
+    /// samples further than twice the radius. Writes R = occlusion factor (1 = open), G = view depth for the blur.  The occlusion is scaled by how much of the
+    /// surface is still visible through the air in front of it (haze, weather fog, fog volumes: the world position is rebuilt from depth and the
+    /// frame globals' own <c>atmoApply</c> evaluated), <c>ao = 1 - (1 - ao) * visibility</c>.
     /// </summary>
-    public const string Ssao = "#version 330 core\n" + Noise + """
+    public static readonly string Ssao = "#version 330 core\n" + Noise + AtmosphereShaders.Functions + """
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -34,6 +36,17 @@ static class PostProcessShaders
         uniform vec2 uNearFar;  // of the near depth slice
         uniform vec2 uSize;     // full-resolution size
         uniform float uRadius, uStrength, uFadeStart, uFadeEnd;
+        uniform vec3 uRight, uUp, uBack;   // the camera's axes in the world (view space to world offsets)
+        uniform vec3 uSsaoEye;
+
+        // The share of a surface's own light that reaches the eye through the air. atmoApply is linear in the colour it is given (the haze and
+        // the volumes blend it; an additive volume only adds), so apply(1) - apply(0) is the transmittance, as the grass uses it.
+        float airVisibility(vec3 offset)
+        {
+            vec3 position = uSsaoEye + offset;
+            vec3 t = atmoApply(vec3(1.0), uSsaoEye, position) - atmoApply(vec3(0.0), uSsaoEye, position);
+            return clamp(dot(t, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
+        }
 
         float viewZ(float d)
         {
@@ -78,6 +91,7 @@ static class PostProcessShaders
             }
             float ao = 1.0 - clamp(uStrength * sum / float(N), 0.0, 1.0);
             ao = mix(ao, 1.0, smoothstep(uFadeStart, uFadeEnd, z));
+            if (ao < 0.999) ao = mix(1.0, ao, airVisibility(p.x * uRight + p.y * uUp + p.z * uBack));   // 1 - (1 - ao) * visibility
             fragColour = vec4(ao, z, 0.0, 1.0);
         }
         """;
