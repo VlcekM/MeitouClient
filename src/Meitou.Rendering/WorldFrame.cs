@@ -1050,9 +1050,24 @@ static class WorldFrame
         // Then the particles, blended over it and tested against the near slice's depth (they are not fogged; docs/formats/fogfeatures.md).
         if (gpu.Particles is { } particleDraw && particleNear > 0)
         {
-            host.Open(13, post.SceneTargets);
-            particleDraw.Draw(particleViewProjection, particleNearProjection, particleNear, view, eye, sun);
-            host.Close();
+            particleDraw.Prepare(particleViewProjection, particleNearProjection, particleNear, view, eye, sun, post.ParticlePixelsPerUnit(camera.Projection(aspect, 1, 10).M22), post.Options.ParticleDivisor);
+            if (particleDraw.FullCount > 0)
+            {
+                host.Open(13, post.SceneTargets);
+                particleDraw.Record(1);
+                host.Close();
+            }
+            // Meitou: the alpha and additive sprites that are big on screen into low-resolution targets (half, then quarter size), each over the scene with a depth-aware upsample.
+            foreach (int divisor in (ReadOnlySpan<int>)[2, 4])
+            {
+                if (particleDraw.CountFor(divisor) == 0) continue;
+                post.BeginParticlesLow(divisor);
+                host.Open(13, post.ParticleTargets(divisor));
+                particleDraw.Record(divisor);
+                host.Close();
+                post.MarkParticleDraws();
+                post.CompositeParticlesLow(divisor);
+            }
             StageClock.Lap(13);
         }
         post.MarkParticles();

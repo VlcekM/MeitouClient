@@ -74,6 +74,9 @@ public sealed unsafe class PostProcess : IDisposable
     readonly VelocityPass velocityPass;
     readonly TaaPass taaPass;
     readonly FogPass fogPass;
+    readonly ParticleDepthPass particleDepthPass;
+    readonly ParticleCompositePass particleCompositePass;
+    readonly ParticleCoveragePass particleCoveragePass;
 
 
     /// <summary>One native full-screen program: the shared vertex shader with a fragment shader, and its resolved handles.</summary>
@@ -192,6 +195,35 @@ public sealed unsafe class PostProcess : IDisposable
         }
     }
 
+    /// <summary>The low-resolution particles' depth-only downsample of the scene depth (<see cref="PostProcessShaders.ParticleDepth"/>).</summary>
+    sealed class ParticleDepthPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Depth;
+        public readonly UniformHandle FullSize, Div;
+        public ParticleDepthPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleDepth, "post particle depth") =>
+            (Depth, FullSize, Div) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"));
+    }
+
+    /// <summary>The low-resolution particles over the scene (<see cref="PostProcessShaders.ParticleComposite"/>).</summary>
+    sealed class ParticleCompositePass : FullscreenProgram
+    {
+        public readonly SamplerSlot Accum, LowDepth, Depth;
+        public readonly UniformHandle LowSize, NearPlanes, Div;
+        public ParticleCompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleComposite, "post particle composite")
+        {
+            (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
+            (LowSize, NearPlanes, Div) = (P.Uniform("uLowSize"), P.Uniform("uNearPlanes"), P.Uniform("uDiv"));
+        }
+    }
+
+    /// <summary>The low-resolution particles' coverage for the upscalers' reactive mask (<see cref="PostProcessShaders.ParticleCoverage"/>).</summary>
+    sealed class ParticleCoveragePass : FullscreenProgram
+    {
+        public readonly SamplerSlot Accum;
+        public readonly UniformHandle Limit;
+        public ParticleCoveragePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleCoverage, "post particle coverage") => (Accum, Limit) = (P.Sampler("uAccum"), P.Uniform("uLimit"));
+    }
+
     float nearPlane = 1, farPlane = 1000, fovY = 0.87f, aspect = 1;
     bool haveNearSlice;
 
@@ -224,6 +256,7 @@ public sealed unsafe class PostProcess : IDisposable
         (ssao, blur, luminancePass, adaptPass) = (new SsaoPass(gpu), new BlurPass(gpu), new LuminancePass(gpu), new AdaptPass(gpu));
         (compositePass, fxaaPass, hazePass) = (new CompositePass(gpu), new FxaaPass(gpu), new HeatHazePass(gpu));
         (velocityPass, taaPass, fogPass) = (new VelocityPass(gpu), new TaaPass(gpu), new FogPass(gpu));
+        (particleDepthPass, particleCompositePass, particleCoveragePass) = (new ParticleDepthPass(gpu), new ParticleCompositePass(gpu), new ParticleCoveragePass(gpu));
     }
 
     /// <summary>The near depth slice's planes and the projection: what the depth buffer at the end of the frame holds (the far slice's depth is cleared).</summary>
@@ -236,13 +269,14 @@ public sealed unsafe class PostProcess : IDisposable
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB }.OfType<Target2D>();
+        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[1].Accum, lowTargets[1].Depth }.OfType<Target2D>();
 
     void Free()
     {
         foreach (var t in Targets()) t.Texture.Dispose();   // released after the frames in flight
         sceneColour = sceneDepth = farDepth = motion = upscaleDepth = reactive = historyA = historyB = null;
         aoA = aoB = ldr = ldrFxaa = luminance = adaptA = adaptB = null;
+        foreach (var l in lowTargets) l.Accum = l.Depth = null;
         adaptedValid = historyValid = false;
     }
 
@@ -391,6 +425,7 @@ public sealed unsafe class PostProcess : IDisposable
         stamps = freeStamps.Count > 0 ? freeStamps.Pop() : new StampSet();
         stamps.Count = 0;
         haveNearSlice = farSliceDrawn = false;
+        foreach (var l in lowTargets) l.Drawn = false;
         sceneMarked = false;
         Stamp("start");
         frameIndex++;
@@ -517,8 +552,14 @@ public sealed unsafe class PostProcess : IDisposable
 
     void Draw(LegacyProgram p, RenderTarget colour, Vk.Format format, int targetWidth, int targetHeight, int viewportWidth, int viewportHeight, DrawState? state = null)
     {
+        DrawPass(p, colour, format, default, Vk.Format.Undefined, targetWidth, targetHeight, viewportWidth, viewportHeight, state);
+    }
+
+    /// <summary>As <see cref="Draw(LegacyProgram, RenderTarget, Vk.Format, int, int, int, int, DrawState?)"/>, with an optional depth attachment (the pipeline is cached per program and attachment formats: one state each).</summary>
+    void DrawPass(LegacyProgram p, RenderTarget colour, Vk.Format format, RenderTarget depth, Vk.Format depthFormat, int targetWidth, int targetHeight, int viewportWidth, int viewportHeight, DrawState? state)
+    {
         var cmd = Segment();
-        cmd.BeginRendering(new RenderingDesc(colour, default, targetWidth, targetHeight));
+        cmd.BeginRendering(new RenderingDesc(colour, depth, targetWidth, targetHeight));
         var s = state ?? PassState;
         cmd.SetViewport(new Vk.Viewport(0, 0, viewportWidth, viewportHeight, 0, 1));
         cmd.SetScissor(new Vk.Rect2D(default, new Vk.Extent2D((uint)targetWidth, (uint)targetHeight)));
@@ -527,7 +568,7 @@ public sealed unsafe class PostProcess : IDisposable
         cmd.SetDepthBias(s.BiasEnable, s.BiasConstant, s.BiasSlope);
         if (!pipelines.TryGetValue((p, format), out var pipeline))
             pipelines[(p, format)] = pipeline = Gpu.Pipelines.Get(s.Pipeline(p.Program, p.VertexLayout([]), Vk.PrimitiveTopology.TriangleList,
-                new AttachmentFormats(format, Vk.Format.Undefined), p.Name));
+                new AttachmentFormats(format, depthFormat), p.Name));
         cmd.BindPipeline(pipeline);
         p.Flush(cmd);
         cmd.Draw(3);
@@ -624,6 +665,9 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>Stamps the end of the particles drawn after the fog volumes (the caller's, between <see cref="RunFogVolumes"/> and <see cref="End"/>).</summary>
     public void MarkParticles() => Stamp("particles");
 
+    /// <summary>Stamps the end of the low-resolution particles' own draws (before their composite), so the cost of the draws and of the composite are told apart.</summary>
+    public void MarkParticleDraws() => Stamp("particle draws");
+
     /// <summary>Blends the volumes' accumulated (colour, transmittance) over the scene: source one, destination the source alpha; red, green and
     /// blue only, so the alpha (the characters' SSAO mask) stays.</summary>
     static readonly DrawState FogState = PassState with { Blend = new BlendState(true, Vk.BlendFactor.One, Vk.BlendFactor.SrcAlpha), ColourMask = DrawState.Rgb };
@@ -656,6 +700,80 @@ public sealed unsafe class PostProcess : IDisposable
         Stamp("fog");
         CloseSegment();
     }
+
+    // ---- low-resolution particles (Meitou) ----
+
+    /// <summary>One low-resolution size's accumulation target (RGBA16F: colour added, opacity) and depth, at 1/<see cref="Divisor"/> of the render size.</summary>
+    sealed class LowTarget(int divisor)
+    {
+        public readonly int Divisor = divisor;
+        public Target2D? Accum, Depth;
+        public bool Drawn;
+        public PassTargets Targets = null!;
+    }
+
+    readonly LowTarget[] lowTargets = [new(2), new(4)];
+
+    LowTarget LowFor(int divisor) => divisor >= 4 ? lowTargets[1] : lowTargets[0];
+
+    /// <summary>The render size in pixels of one world unit at distance 1 (vertical): what the particles use to tell big sprites from small ones; 0 when the Meitou <c>particles</c> switch is off.</summary>
+    public float ParticlePixelsPerUnit(float projectionM22) => LowResParticles ? projectionM22 * height * 0.5f : 0;
+
+    /// <summary>Whether the weather's alpha and additive particles are drawn at a fraction of the render size (the Meitou <c>particles</c> switch).</summary>
+    public bool LowResParticles => Options.LowResParticles && haveNearSlice;
+
+    /// <summary>What the low-resolution particles of one size are drawn into (valid after <see cref="BeginParticlesLow"/>): the accumulation target, cleared, and its depth.</summary>
+    public PassTargets ParticleTargets(int divisor) => LowFor(divisor).Targets;
+
+    /// <summary>
+    /// Prepares one low-resolution particle pass (docs/formats/particle-universe.md "Low-resolution particles"): the target pair at 1/<paramref name="divisor"/>
+    /// of the render size (made or remade when the size changed), the scene's depth reduced to it (farthest of each block, as the depth of a depth-only rendering).
+    /// Call after <see cref="RunFogVolumes"/> and before opening the host on <see cref="ParticleTargets"/>.
+    /// </summary>
+    public void BeginParticlesLow(int divisor)
+    {
+        var low = LowFor(divisor);
+        int div = low.Divisor;
+        int lw = Math.Max((width + div - 1) / div, 1), lh = Math.Max((height + div - 1) / div, 1);
+        if (low.Accum is null || low.Accum.Width != lw || low.Accum.Height != lh)
+        {
+            low.Accum?.Texture.Dispose();
+            low.Depth?.Texture.Dispose();
+            using var batch = Gpu.Uploads.Begin();
+            low.Accum = Make(batch, lw, lh, InternalFormat.Rgba16f, TextureMinFilter.Linear, $"post particle accumulation 1/{div}");
+            low.Depth = Make(batch, lw, lh, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, $"post particle depth 1/{div}");
+        }
+        CloseSegment();
+        var d = particleDepthPass;
+        Bind(d.P, d.Depth, sceneDepth);
+        d.P.Set(d.FullSize, (float)width, (float)height);
+        d.P.Set(d.Div, (float)div);
+        DrawPass(d.P, default, Vk.Format.Undefined, low.Depth!.Attachment with { Load = Vk.AttachmentLoadOp.Clear, Clear = new Vk.ClearValue(depthStencil: new Vk.ClearDepthStencilValue(1f, 0)) },
+            low.Depth.Format, lw, lh, lw, lh, PassState with { DepthTest = true, DepthWrite = true, Compare = Vk.CompareOp.Always });
+        CloseSegment();
+        Stamp("particle depth");
+        var targets = PassTargets.Of(low.Accum.Texture, low.Depth.Texture);
+        low.Targets = targets with { Colour = targets.Colour with { Load = Vk.AttachmentLoadOp.Clear, Clear = default } };
+    }
+
+    /// <summary>The accumulation of one size over the scene colour (<see cref="PostProcessShaders.ParticleComposite"/>), after the host drew into <see cref="ParticleTargets"/>.</summary>
+    public void CompositeParticlesLow(int divisor)
+    {
+        var low = LowFor(divisor);
+        var c = particleCompositePass;
+        Bind(c.P, c.Accum, low.Accum);
+        Bind(c.P, c.LowDepth, low.Depth);
+        Bind(c.P, c.Depth, sceneDepth);
+        c.P.Set(c.LowSize, (float)low.Accum!.Width, (float)low.Accum.Height);
+        c.P.Set(c.NearPlanes, nearPlanes.X, nearPlanes.Y);
+        c.P.Set(c.Div, (float)low.Divisor);
+        Draw(c.P, sceneColour!.Attachment, sceneColour.Format, width, height, width, height, ParticleLowState);
+        CloseSegment();
+        low.Drawn = true;
+    }
+
+    /// <summary>Premultiplied "over": the accumulation's colour added, the scene kept by one minus its opacity; red, green and blue only (the alpha is the characters' mask).</summary>
+    static readonly DrawState ParticleLowState = PassState with { Blend = new BlendState(true, Vk.BlendFactor.One, Vk.BlendFactor.OneMinusSrcAlpha), ColourMask = DrawState.Rgb };
 
     void DrawFinal(LegacyProgram p, PassTargets final) =>
         Draw(p, final.Colour, final.Formats.Colour, final.Width, final.Height, displayWidth, displayHeight);
@@ -793,6 +911,17 @@ public sealed unsafe class PostProcess : IDisposable
         cmd.EndRendering();
         Gpu.EndHostPass(cmd);
         Gpu.EndNative(cmd);
+        foreach (var low in lowTargets)
+        {
+            if (!low.Drawn) continue;
+            // The low-resolution particles' share: from their accumulation, added to what is there (the full-size ones drew theirs above).
+            var c = particleCoveragePass;
+            Bind(c.P, c.Accum, low.Accum);
+            c.P.Set(c.Limit, mask == Vk.ColorComponentFlags.ABit ? 2f : 1f);   // the TAA takes half the motion target's alpha, so 2 is "all current frame"
+            Draw(c.P, target.Attachment, target.Format, target.Width, target.Height, target.Width, target.Height,
+                PassState with { Blend = new BlendState(true, Vk.BlendFactor.One, Vk.BlendFactor.One), ColourMask = mask });
+        }
+        CloseSegment();
     }
 
     void RunSsao()
@@ -962,7 +1091,7 @@ public sealed unsafe class PostProcess : IDisposable
     {
         External?.Dispose();
         Free();
-        foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass }) p.P.Dispose();
+        foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         flowTexture?.Dispose();
         perturbationTexture?.Dispose();
     }

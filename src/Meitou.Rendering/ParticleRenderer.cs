@@ -81,7 +81,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         out vec4 fragColour;
         uniform sampler2D uTexture;
         uniform float uCoverageMax;
-        uniform int uCoverage;                      // 0: colour; 1: the particle's alpha, 2: its brightest channel (the upscalers' reactive mask)
+        uniform int uCoverage;                      // 0: colour; 1: the particle's alpha, 2: its brightest channel (the upscalers' reactive mask); 3 / 4: the low-resolution target's premultiplied alpha / additive
         void main()
         {
             // basic.hlsl: texture * colour * vertex colour
@@ -89,6 +89,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
             // Thin streaks have a small alpha per pixel: any visible particle pixel counts as mostly "new" (30x, saturating; Observed choice).
             if (uCoverage == 1) c = vec4(clamp(max(c.a, max(c.r, max(c.g, c.b))) * 30.0, 0.0, uCoverageMax));
             else if (uCoverage == 2) c = vec4(clamp(max(c.r, max(c.g, c.b)) * c.a * 30.0, 0.0, uCoverageMax));
+            else if (uCoverage == 3) c = vec4(c.rgb * c.a, c.a);   // premultiplied "over": rgb = colour added, a = opacity (1 - transmittance); blend (one, 1 - src alpha)
+            else if (uCoverage == 4) c = vec4(c.rgb, 0.0);          // additive: the same blend adds rgb and leaves the opacity
             fragColour = c;
         }
         """;
@@ -154,6 +156,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
         public PuTechniqueDef Technique;
         public ParticleMaterial Material;
         public SampledImage Texture;
+        /// <summary>1: drawn into the scene at full size; 2 or 4: into the low-resolution accumulation target of 1/2 or 1/4 the render size (Meitou).</summary>
+        public int Divisor;
     }
 
     ParticleRenderer(GpuContext gpu, string texturesDirectory, ParticleLibrary library)
@@ -334,18 +338,46 @@ public sealed unsafe class ParticleRenderer : IDisposable
     }
 
     /// <summary>
-    /// Writes this frame's instances into the frame's constants and records the draws into the open pass. Called in the near depth slice
+    /// Writes this frame's instances into the frame's constants (the CPU half; <see cref="Record"/> draws them). Called in the near depth slice
     /// only (units beyond <see cref="DrawRange"/> are not drawn). The viewer's near plane grows with the camera's height (to 200), the game's is a few
     /// units: a particle nearer than the slice's near plane (<paramref name="nearPlane"/>) is drawn with
     /// <paramref name="closeViewProjection"/> (a projection with a near plane of 0.5) and no depth test, which is right because nothing of
     /// the scene is nearer than that plane; the others as usual, tested against the scene's depth. Units are drawn far to near.
     /// </summary>
-    public void Draw(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection)
+    /// <param name="pixelsPerUnit">Meitou: the render size in pixels of one world unit at distance 1 (0: everything full size). Alpha and additive draws whose sprites are big on screen go to a low-resolution target, the biggest to a quarter-size one (<see cref="QuarterPixels"/>, <see cref="HalfPixels"/>); small ones (rain) stay full size.</param>
+    /// <param name="forcedDivisor">0: by sprite size; 1, 2 or 4: every eligible draw there (for measuring).</param>
+    public void Prepare(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, int forcedDivisor = 0)
     {
         long start = Stopwatch.GetTimestamp();
-        DrawInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection);
+        PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, forcedDivisor);
         drawTotal += Stopwatch.GetTimestamp() - start;
         drawFrames++;
+    }
+
+    /// <summary>Draws prepared this frame for the scene target (full size) and for the low-resolution target.</summary>
+    /// <summary>Mean screen size (the square root of the mean sprite area, in render pixels) from which a draw goes to the half-size and to the quarter-size target.</summary>
+    public const float HalfPixels = 20, QuarterPixels = 80;
+    readonly int[] divisorCounts = new int[5];
+    /// <summary>The draws prepared for each size: 1 the scene's, 2 and 4 the low-resolution targets'.</summary>
+    public int CountFor(int divisor) => divisorCounts[divisor];
+    public int FullCount => divisorCounts[1];
+    public int LowCount => divisorCounts[2] + divisorCounts[4];
+
+    /// <summary>Records the draws of the last <see cref="Prepare"/> into the open pass: the full-size ones (colour into the scene) or the low-resolution ones (premultiplied into the accumulation target, whose pass the caller opened).</summary>
+    public void Record(int divisor)
+    {
+        if (divisorCounts[divisor] == 0) return;
+        bool low = divisor > 1;
+        var cmd = gpu.BeginGuest(low ? "particles low" : "particles");
+        var targets = gpu.CurrentTargets();
+        bool hasDepth = targets.Formats.Depth != Silk.NET.Vulkan.Format.Undefined, hasColour = targets.Formats.Colour != Silk.NET.Vulkan.Format.Undefined;
+        var baseState = gpu.CurrentState();
+        cmd.SetViewport(targets.Viewport);
+        cmd.SetScissor(targets.Scissor);
+        // The alpha channel of the scene target carries the characters' mask: particles write colour only (the low-resolution target uses all four).
+        const Silk.NET.Vulkan.ColorComponentFlags rgb = Silk.NET.Vulkan.ColorComponentFlags.RBit | Silk.NET.Vulkan.ColorComponentFlags.GBit | Silk.NET.Vulkan.ColorComponentFlags.BBit;
+        RecordDraws(cmd, in baseState, in targets, hasDepth, hasColour, low ? rgb | Silk.NET.Vulkan.ColorComponentFlags.ABit : rgb, low ? Kind.Low : Kind.Colour, divisor);
+        gpu.EndGuest(cmd);
     }
 
     ParticleInstance[] scratch = new ParticleInstance[4096];
@@ -355,9 +387,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>Mean main-thread cost of Update and Draw (draw includes the wait for the simulation) per frame, in ms (for the benchmarks).</summary>
     public (double Update, double Draw) MeanMainThreadMilliseconds => (updateFrames == 0 ? 0 : updateTotal * 1000.0 / Stopwatch.Frequency / updateFrames, drawFrames == 0 ? 0 : drawTotal * 1000.0 / Stopwatch.Frequency / drawFrames);
 
-    void DrawInner(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection)
+    void PrepareInner(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, int forcedDivisor)
     {
         Sync();
+        Array.Clear(divisorCounts);
         drawnParticles = 0;
         drawnUnits = 0;
         coveragePending = false;
@@ -400,30 +433,22 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 var instances = constants.Allocate((ulong)(written * InstanceBytes), 16);
                 scratch.AsSpan(0, written).CopyTo(new Span<ParticleInstance>(instances.Pointer, written));
                 collectTotal += Stopwatch.GetTimestamp() - collectStart;
-                draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material, Texture = TextureFor(material) });
+                int divisor = pixelsPerUnit > 0 && (material.Blend == ParticleBlend.Alpha || material.Blend == ParticleBlend.Add) ? DivisorFor(scratch.AsSpan(0, written), forward, nearPlane, pixelsPerUnit, forcedDivisor) : 1;
+                draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material, Texture = TextureFor(material), Divisor = divisor });
+                divisorCounts[divisor]++;
                 drawnParticles += written;
             }
         }
         if (draws.Count == 0) return;
 
-        var cmd = gpu.BeginGuest("particles");
-        var targets = gpu.CurrentTargets();
-        bool hasDepth = targets.Formats.Depth != Silk.NET.Vulkan.Format.Undefined, hasColour = targets.Formats.Colour != Silk.NET.Vulkan.Format.Undefined;
-        var baseState = gpu.CurrentState();
         // Camera-relative positions: the matrix takes the eye back out (view and projection were built for world positions).
         var vp = Matrix4x4.CreateTranslation(eye) * viewProjectionMatrix;
         var closeVp = Matrix4x4.CreateTranslation(eye) * closeViewProjection;
         var right = new Vector3(view.M11, view.M21, view.M31);
         var up = new Vector3(view.M12, view.M22, view.M32);
-        cmd.SetViewport(targets.Viewport);
-        cmd.SetScissor(targets.Scissor);
-        // The alpha channel of the scene target carries the characters' mask: particles write colour only.
-        const Silk.NET.Vulkan.ColorComponentFlags rgb = Silk.NET.Vulkan.ColorComponentFlags.RBit | Silk.NET.Vulkan.ColorComponentFlags.GBit | Silk.NET.Vulkan.ColorComponentFlags.BBit;
         float ambient = Math.Clamp(sunDirection.Y * 5 + 0.2f, 0.1f, 1f);
         (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient) = (vp, closeVp, right, up, ambient);
-        RecordDraws(cmd, in baseState, in targets, hasDepth, hasColour, forward, rgb, coverage: 0);
         coveragePending = true;
-        gpu.EndGuest(cmd);
     }
 
     Matrix4x4 frameVp, frameCloseVp;
@@ -442,23 +467,45 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// </summary>
     public void DrawCoverage(Silk.NET.Vulkan.ColorComponentFlags mask)
     {
-        if (!HasCoverage) return;
+        if (!HasCoverage || FullCount == 0) return;
         if (Environment.GetEnvironmentVariable("MEITOU_COVERAGE_LOG") == "1") Console.WriteLine($"coverage  {draws.Count} draws, mask {mask}");
         var cmd = gpu.BeginGuest("particle coverage");
         var targets = gpu.CurrentTargets();
         var baseState = gpu.CurrentState();
         cmd.SetViewport(targets.Viewport);
         cmd.SetScissor(targets.Scissor);
-        RecordDraws(cmd, in baseState, in targets, false, true, default, mask, coverage: 1);
+        RecordDraws(cmd, in baseState, in targets, false, true, mask, Kind.Coverage);
         gpu.EndGuest(cmd);
     }
 
-    void RecordDraws(CommandList cmd, in DrawState baseState, in PassTargets targets, bool hasDepth, bool hasColour, Vector3 forward,
-        Silk.NET.Vulkan.ColorComponentFlags rgb, int coverage)
+    /// <summary>What a draw records: colour into the scene, coverage for the upscalers' reactive mask, or into the low-resolution accumulation target.</summary>
+    enum Kind { Colour, Coverage, Low }
+
+    /// <summary>Whether the last <see cref="Prepare"/> has low-resolution draws, whose coverage the post chain derives from the accumulation target (<see cref="PostProcess"/>).</summary>
+    public bool HasLowCoverage => coveragePending && LowCount > 0;
+
+    /// <summary>The size a draw of these particles gets: the larger their mean screen size, the smaller the target (soft big sprites lose nothing at a fraction of the pixels; thin streaks keep their full size).</summary>
+    static int DivisorFor(ReadOnlySpan<ParticleInstance> instances, Vector3 forward, float nearPlane, float pixelsPerUnit, int forced)
     {
+        if (forced > 0) return forced >= 3 ? 4 : forced;
+        double area = 0;
+        foreach (ref readonly var p in instances)
+        {
+            float scale = pixelsPerUnit / Math.Max(Vector3.Dot(p.Position, forward), nearPlane);
+            area += (double)p.Width * p.Height * scale * scale;
+        }
+        double size = Math.Sqrt(area / instances.Length);
+        return size >= QuarterPixels ? 4 : size >= HalfPixels ? 2 : 1;
+    }
+
+    void RecordDraws(CommandList cmd, in DrawState baseState, in PassTargets targets, bool hasDepth, bool hasColour,
+        Silk.NET.Vulkan.ColorComponentFlags rgb, Kind kind, int divisor = 1)
+    {
+        int coverage = kind == Kind.Coverage ? 1 : 0;
         var (vp, closeVp, right, up, ambient) = (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient);
         foreach (var d in draws)
         {
+            if (d.Divisor != divisor) continue;
             var m = d.Material;
             var r = d.Technique.Renderer;
             // The far particles first (tested against the scene's depth), then the ones nearer than the slice's near plane (no depth test).
@@ -470,9 +517,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 var state = baseState with
                 {
                     Cull = Silk.NET.Vulkan.CullModeFlags.None, DepthTest = hasDepth && m.DepthCheck && !close, DepthWrite = false, ColourMask = rgb,
-                    Blend = coverage != 0 ? new BlendState(true, Silk.NET.Vulkan.BlendFactor.One, Silk.NET.Vulkan.BlendFactor.One) : hasColour ? BlendFor(m.Blend) : BlendState.Off,
+                    Blend = kind == Kind.Low ? new BlendState(true, Silk.NET.Vulkan.BlendFactor.One, Silk.NET.Vulkan.BlendFactor.OneMinusSrcAlpha)
+                        : coverage != 0 ? new BlendState(true, Silk.NET.Vulkan.BlendFactor.One, Silk.NET.Vulkan.BlendFactor.One) : hasColour ? BlendFor(m.Blend) : BlendState.Off,
                 };
-                program.Set(coverageMode, coverage == 0 ? 0 : m.Blend == ParticleBlend.Alpha ? 1 : 2);
+                program.Set(coverageMode, kind == Kind.Low ? (m.Blend == ParticleBlend.Alpha ? 3 : 4) : coverage == 0 ? 0 : m.Blend == ParticleBlend.Alpha ? 1 : 2);
                 program.Set(coverageLimit, rgb == Silk.NET.Vulkan.ColorComponentFlags.ABit ? 2f : 1f);   // the TAA takes half the motion target's alpha, so 2 is "all current frame"
                 var matrix = close ? closeVp : vp;
                 program.Set(this.viewProjection, in matrix);
