@@ -651,18 +651,32 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Outside the break point the swell only feathers at its crest; at the break it bursts white; inside it a bore of whitewater runs
             // to the shore with lace trailing behind it.
             float surfZone = smoothstep(-2.0, 10.0, s.dist) * smoothstep(250.0, 120.0, s.depth) * fade * s.open * min(uShore.w, 1.0);
-            float broken = smoothstep(s.breakAt + 15.0, s.breakAt - 15.0, s.dist);
-            float burst = (1.0 - smoothstep(0.0, 45.0, abs(s.dist - s.breakAt + 10.0))) * smoothstep(0.42, 0.5, s.g) * (1.0 - smoothstep(0.62, 0.8, s.g));
-            float bore = broken * smoothstep(0.43, 0.5, s.g) * (1.0 - smoothstep(0.54, 0.68, s.g));
-            float trail = broken * smoothstep(0.56, 0.66, s.g) * (1.0 - smoothstep(0.66, 0.95, s.g)) * 0.8;
-            float feather = (1.0 - broken) * smoothstep(0.47, 0.5, s.g) * (1.0 - smoothstep(0.5, 0.53, s.g)) * smoothstep(s.breakAt + 120.0, s.breakAt + 20.0, s.dist);
+            // The surf's foam is read from the lace in the wave's own frame: q is the point's nearest shore point (where the wave front it
+            // sits on crosses the shore) shifted along the normal by the phase g, so a point carried by the wave keeps its q and the foam
+            // drifts in with it instead of swimming through a fixed pattern. A slow clump noise ragged-edges the band's front and back.
+            vec2 q = p + s.dir * (s.dist - uShore.z * s.g);
+            float clump = textureGrad(uFoamMap, q * 0.0037 + vec2(0.21, 0.63), dpx * 0.0037, dpy * 0.0037).g;
+            vec2 b1 = vec2(0.5), b2 = vec2(0.5);
+            if (fade > 0.0) { b1 = textureGrad(uFoamMap, q * 0.009, dpx * 0.009, dpy * 0.009).rg; b2 = textureGrad(uFoamMap, q * 0.027 + 0.37, dpx * 0.027, dpy * 0.027).rg; }
+            float gw = s.g + (clump - 0.5) * 0.22, dw = s.dist + (clump - 0.5) * 36.0;
+            float crestAt = dw - uShore.z * (gw - 0.5);   // the distance of the crest this point trails (or leads)
+            float broken = smoothstep(s.breakAt + 15.0, s.breakAt - 15.0, crestAt);   // the wave has broken: its foam follows the crest back out to the break point
+            float burst = (1.0 - smoothstep(0.0, 45.0, abs(dw - s.breakAt + 10.0))) * smoothstep(0.42, 0.5, gw) * (1.0 - smoothstep(0.62, 0.8, gw));
+            float bore = broken * smoothstep(0.43, 0.5, gw) * (1.0 - smoothstep(0.54, 0.68, gw));
+            float trail = broken * smoothstep(0.56, 0.66, gw) * (1.0 - smoothstep(0.66, 0.95, gw)) * 0.8;
+            float feather = (1.0 - broken) * smoothstep(0.47, 0.5, gw) * (1.0 - smoothstep(0.5, 0.53, gw)) * smoothstep(s.breakAt + 120.0, s.breakAt + 20.0, dw);
             float amount = max(clamp((0.7 - jacobian) * 2.5, 0.0, 1.0), clamp(oceanFoam * open, 0.0, 1.0) * 0.75);
             // Along the shore the breakers break harder in some stretches than others, and not at all in a few.
             float stretch = smoothstep(0.2, 0.75, texture(uFoamMap, p * 0.0011).g);
-            float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 0.5, feather * 0.6)) * min(s.size * 1.1, 1.3) * mix(0.2, 1.0, s.brk);
-            amount = max(amount, min(surfFoam * surfZone * (0.45 + 0.75 * stretch), 0.8));   // capped: the lace shows through even the thickest whitewater
+            float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 1.1, feather * 0.6)) * min(s.size * 1.1, 1.3) * mix(0.2, 1.0, s.brk);
+            float surfAmount = min(surfFoam * surfZone * (0.45 + 0.75 * stretch) * (0.8 + 0.4 * clump), 0.8);   // capped: the lace shows through even the thickest whitewater
             amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * (0.15 + 0.25 * s.open) * fade);
-            if (swash && sheet > 0.0) amount = max(amount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.12, sheet)), 0.35 * (1.0 - sinceCrest)));
+            // The swash: its front is dense, the sheet behind it thins out.
+            if (swash && sheet > 0.0) surfAmount = max(surfAmount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.2, sheet + (b1.g - 0.5) * runup * 0.3)), 0.35 * (1.0 - sinceCrest)));
+            // Foam wears away as it ages: fresh at the break, and the further the wave has run in since (travel, from the break point to the
+            // waterline) and the further behind its crest, the more of it is lace with holes (on the swash too: the sheet thins as it recedes).
+            float travel = clamp((s.breakAt - (s.dist - uShore.z * (s.g - 0.5))) / max(s.breakAt + 10.0, 40.0), 0.0, 1.0);
+            float age = clamp(0.6 * travel + 0.5 * smoothstep(0.5, 0.95, s.g) + (0.5 - clump) * 0.5, 0.0, 1.0);
             vec2 drift = direction * speed * uTime * 0.2;
             // Blotches (the multi-octave noise at two scales) with bubble rims in them; the more foam, the lower the threshold. Up close the
             // foam shows its bubbles (B: fine cell walls), lit on their walls and darker inside.
@@ -680,7 +694,16 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Dark and coloured water foams less (a thinner, more broken lace), and the foam takes its colour: white only on clear water, a dirty
             // grey-brown on black water, rust on red.
             amount *= mix(0.7, 1.0, clean);
-            float foam = smoothstep(0.95 - amount, 1.25 - amount, pattern) * mix(0.8, 0.92, clean);
+            float foam = smoothstep(0.95 - amount, 1.25 - amount, pattern);
+            if (surfAmount > 0.0)
+            {
+                // The same lace in three scales (clumps, blotches, rims) in the wave's frame, its threshold rising with the foam's age.
+                float lace = (smoothstep(0.15, 0.9, clump) * 0.4 + b1.g * 0.3 + b2.g * 0.3) * 0.7 + max(b1.r, b2.r) * 0.45 + bubbles * 0.08;
+                float wear = 0.1 + age * 0.55;
+                float surf = surfAmount * mix(0.7, 1.0, clean);
+                foam = max(foam, smoothstep(0.95 - surf + wear, 1.3 - surf + wear + 0.2 * age, lace));
+            }
+            foam *= mix(0.8, 0.92, clean);
             // The shadow receiver takes derivatives, so it runs here and not inside the foam's branch, and only within 8000 units (where it is
             // about uniform per quad: the cascades end well before).
 
