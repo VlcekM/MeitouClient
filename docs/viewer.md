@@ -561,7 +561,8 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
   falling scale until the use is under 80%; the ranges return slowly under 74%. F11 shows `guard: ok, N% of the M MB budget` or
   `guard: ranges x0.62, streaming paused, ...`, and the console logs one `vram      guard:` line the first time. It never acts at the default
   settings. Knobs: `MEITOU_VRAM_GUARD=0` (off), `MEITOU_VRAM_BUDGET_MB=<mb>` (pretend a smaller card, for testing), `MEITOU_VRAM_KILL=<fraction>`
-  (headless runs: exit with code 9 past that share of the budget, default 0.95, 0 = off). `--shadow-range` is capped at 15000 on the command
+  (headless runs: exit with code 9 past that share of the budget, default 0.95, 0 = off; the process is terminated outright, without
+  unloading the driver, so it can't hang on the way out and keep holding its video memory). `--shadow-range` is capped at 15000 on the command
   line. The F11 `scratch` line and the benchmark's `scratch` line give the foliage cull's and grass kernels' per-frame memory (held, need, refused).
   Beyond the whole reach (the longest of the small, medium and grass ranges) a zone keeps only large meshes; the instance arena takes 68 bytes
   a record. All pictures unchanged (0 px).
