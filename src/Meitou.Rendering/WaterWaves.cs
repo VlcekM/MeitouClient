@@ -37,7 +37,7 @@ public sealed class WaveSet
     /// <summary>The wind factor: 0 calm, 1 at 60 units per second (a stiff breeze), at most 1.5.</summary>
     public static float WindFactor(float windSpeed) => Math.Clamp(windSpeed / 60f, 0f, 1.5f);
 
-    public WaveSet() => Step(0, Vector2.UnitX, 0);
+    public WaveSet() { Step(0, Vector2.UnitX, 0); lastHours = null; }   // usable values before the first frame, which then takes its wind at once
 
     public void Step(double gameHours, Vector2 windDirection, float windSpeed)
     {

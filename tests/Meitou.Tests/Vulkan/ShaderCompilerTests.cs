@@ -29,6 +29,7 @@ public class ShaderCompilerTests
         yield return ("sky simple", Private(typeof(SkyRenderer), "Vertex"), Private(typeof(SkyRenderer), "SimpleFragment"));
         yield return ("sky", Private(typeof(SkyRenderer), "Vertex"), Private(typeof(SkyRenderer), "SkyFragment"));
         yield return ("water", Private(typeof(WaterRenderer), "Vertex"), Private(typeof(WaterRenderer), "Fragment"));
+        yield return ("water meitou", Private(typeof(WaterRenderer), "MeitouVertex"), Private(typeof(WaterRenderer), "MeitouFragment"));
         yield return ("debug overlay", Private(typeof(DebugOverlay), "Vertex"), Private(typeof(DebugOverlay), "Fragment"));
         yield return ("foliage mesh", FoliageShaders.MeshVertex(), FoliageShaders.MeshFragment());
         yield return ("foliage mesh depth", FoliageShaders.MeshVertex(), ShadowShaders.MeshDepthFragment);

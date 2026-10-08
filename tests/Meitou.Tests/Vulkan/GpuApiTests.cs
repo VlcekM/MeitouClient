@@ -148,6 +148,7 @@ public class GpuApiTests
         yield return ("sky simple", sky, Field(typeof(SkyRenderer), "SimpleFragment"));
         yield return ("sky", sky, Field(typeof(SkyRenderer), "SkyFragment"));
         yield return ("water", Field(typeof(WaterRenderer), "Vertex"), Field(typeof(WaterRenderer), "Fragment"));
+        yield return ("water meitou", Field(typeof(WaterRenderer), "MeitouVertex"), Field(typeof(WaterRenderer), "MeitouFragment"));
         yield return ("debug overlay", Field(typeof(DebugOverlay), "Vertex"), Field(typeof(DebugOverlay), "Fragment"));
         yield return ("terrain patch", TerrainShaders.PatchVertex, TerrainShaders.Fragment);
         yield return ("terrain mesh", TerrainShaders.MeshVertex, TerrainShaders.MeshFragment);
@@ -182,6 +183,7 @@ public class GpuApiTests
         ["sky simple"] = "4C48F27F2EFC495E4B81B6421F095B12",
         ["sky"] = "2D58DAFEB0B45CB22851C334D9B89E77",   // the SkyX cloud pass
         ["water"] = "35E690A16022E3248081AB723D5B6260",
+        ["water meitou"] = "35E5E33D1A92CCF0E25880C9C9FD089B",   // the Meitou water (meitou-water branch, 2026-10-08): new, no VkGl module to match
         ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",
         ["terrain patch"] = "4F87F742FBE9D228EA707327F58627CF",
         ["terrain mesh"] = "B969AE9864F34378A76C659D6E919727",
@@ -225,7 +227,7 @@ public class GpuApiTests
                 actual.Add($"[\"{name}\"] = \"{hash}\",");
                 if (!LegacyModules.TryGetValue(name, out var expected) || expected != hash) wrong.Add(name);
             }
-            Assert.Equal(27, actual.Count);
+            Assert.Equal(28, actual.Count);
             Assert.True(wrong.Count == 0, $"modules differ for {string.Join(", ", wrong)}; actual:\n{string.Join("\n", actual)}");
         }
         ExpectClean(d!);

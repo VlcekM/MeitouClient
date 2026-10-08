@@ -329,6 +329,14 @@ generates at 128² from each cell's biome if the file is missing. Observed: the 
 `water color` at pixel centres on 9433 of 16384 pixels exactly (median difference 0); the rest differ near
 biome borders. `flowmap.png` gives the flow direction. Tested in `WaterTests`.
 
+**Observed** (2026-10-08, looking at the base-game `flowmap.png`, 2048², and at the Meitou water's debug view, docs/viewer.md
+"Meitou water"): RG is a broad, smooth field over most of the map with sharper, painted detail along the rivers and
+channels (the river north-west of the centre, the red-blue channels in the south-west); B, read by the shader as the scum
+amount, is high along nearly every coastline, sea coasts included, not only in the swamps, so it cannot tell a swamp
+from a beach. Whether RG really runs along the river channels is **Unknown** (milestone 2 of the Meitou water checks it).
+The ground under the water near most shores is steep: off Port South and Port North the water is 40 units (4 m) deep
+within some tens of units of the waterline, so a surf zone measured by depth would be a thin strip.
+
 ### Shading (Observed, water.hlsl)
 
 Three samples of the normal map, scrolled along the flow with shifted phases, blend into the surface normal

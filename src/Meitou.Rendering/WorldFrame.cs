@@ -31,6 +31,8 @@ sealed class WorldOptions
     /// <summary>The water switch (Enhancements): waves, breakers and foam (Meitou, default) or the game's flat water; <c>--water-seconds</c> starts its clock there (pictures).</summary>
     public bool MeitouWater = true;
     public double WaterSeconds;
+    /// <summary><c>--water-grid</c>: the Meitou water grid's segments round the eye (64 to 1024; fewer for integrated GPUs).</summary>
+    public int WaterGrid = WaterRenderer.DefaultGridSegments;
     public float? ObjectDistance, LandmarkDistance;
     public float ObjectDistanceFor(bool meitou) => ObjectDistance ?? (meitou ? Enhancements.MeitouObjectDistance : Enhancements.FaithfulObjectDistance);
     /// <summary>The landmark distance (units; 0: no landmarks, the huge objects stay with the others): Meitou's default in Meitou, none in Faithful.</summary>
@@ -145,6 +147,7 @@ sealed class WorldOptions
           --time <hour>            time of day for the sun (default 13; sunrise and sunset from the CONSTANTS record)
           --no-water               leave out the water
           --water-seconds <s>      start the Meitou water's clock at s game seconds (pictures of the waves at a moment; default 0)
+          --water-grid <n>         the Meitou water grid's segments round the eye (default 256; 128 for integrated GPUs, 512 finer)
           --no-reflections         the water reflects only the sky colour, not the mirrored scene (R toggles; the same as --water-reflection 0)
           --water-reflection <0..4> the game's `water reflection`: what the water mirrors: 0 nothing (sky colour), 1 sky and terrain, 2 the same (the characters' level; none yet), 3 + buildings and features, 4 + trees, bushes and rocks (default 2; Tab slider)
           --reflection-range <x>   the game's `reflection range`: the mirrored scene is drawn out to haze distance x this (default 0.6, with the default haze distance 30000)
@@ -257,6 +260,7 @@ sealed class WorldOptions
                 case "--time": o.Hour = F(); break;
                 case "--no-water": o.NoWater = true; break;
                 case "--water-seconds": o.WaterSeconds = double.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--water-grid": o.WaterGrid = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 64, 1024); break;
                 case "--no-reflections": o.NoReflections = true; break;
                 case "--water-reflection": o.WaterReflection = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, 4); break;
                 case "--reflection-range": o.ReflectionRange = F(); break;
@@ -686,7 +690,7 @@ static class WorldFrame
         if (!o.NoWater && scene.Database is not null)
         {
             var messages = new List<string>();
-            gpu.Water = WaterRenderer.Create(context, install, scene.Database, assets, gpu.Sky, messages);
+            gpu.Water = WaterRenderer.Create(context, install, scene.Database, assets, gpu.Sky, messages, o.WaterGrid);
             gpu.Water.Meitou = o.MeitouWater;
             gpu.WaterClockHours = o.WaterSeconds / WaveSet.SecondsPerGameHour;
             gpu.Reflection = new ReflectionPass(context) { Level = o.WaterReflection, Range = o.ReflectionRange };
