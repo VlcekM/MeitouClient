@@ -348,7 +348,7 @@ swimming; clothing has `weather protection0` (a `WeatherAffecting`) and `weather
 ## Base-game data (Verified: merged base records, 2026-10-05)
 
 53 WEATHER, 48 SEASON, 74 BIOME_GROUP, 74 EFFECT, 8 EFFECT_FOG_VOLUME. The weathers, with the fields that drive rendering and
-scheduling (empty = 0 / white / none; fog distance after the loader's rule; affects = `affect type` and strength):
+scheduling (empty = 0, i.e. black for the two colours: the loader reads a missing colour as 0, [sky.md](sky.md#weather-tint); none; fog distance after the loader's rule; affects = `affect type` and strength):
 
 | Weather | clouds | sky mult | fog (colour, distance) | wind speed min-max (update every N game min / limit °) | rain | wetness | dust (inside, slope) | heat haze | affects | effects [count, respawn s] |
 |---|---|---|---|---|---|---|---|---|---|---|
