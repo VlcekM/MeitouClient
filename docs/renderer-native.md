@@ -1083,8 +1083,8 @@ These change the picture on purpose, so they are not part of any parity step. Th
   cull (the kernel splits a group's instances into mesh and impostor lists, crossfaded over a 10% band by complementary dither, separate
   indirect draws, bindless atlases), lit, fogged and shadowed as the meshes, and cast into the shadow cascades as impostors. Atlases load
   or bake on demand. Details, measurements and the GLSL API are in [impostors.md](impostors.md) (section 7 for the foliage path).
-- **Hi-Z occlusion** (`occlusion`): last frame's depth pyramid reprojected, a two-phase cull. Conservative in theory but float-sensitive in
-  practice, so it is a Meitou-mode switch.
+- **Hi-Z occlusion** (`occlusion`): last frame's depth pyramid reprojected. Built for foliage on 2026-10-08 with an exact parallax margin (no pixel differences in
+  fly/turn tests); see [formats/foliage.md](formats/foliage.md#occlusion-culling-in-the-viewer-meitou-2026-10-08). Switch `--no-occlusion-cull`.
 - **What limits ranges at "1 px"** (2026-10-07, [render-distance-benchmark.md](render-distance-benchmark.md), section 8.15 below): the GPU's
   primitives, from the impostor budget's refusals, TERRAIN-mode rocks without LOD and meshes without an impostor class; not fill, shadows or VRAM.
 

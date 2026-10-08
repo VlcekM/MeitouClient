@@ -702,4 +702,112 @@ public class FoliageGpuCullTests
         }
         ExpectClean(d!);
     }
+
+    /// <summary>
+    /// The occlusion cull in the kernel (<c>HizOccluded</c>) against the CPU rule of <see cref="OcclusionCullTests"/>: a pyramid drawn from a synthetic scene (spheres and a
+    /// ground plane), the instances behind it in random places and the eye moved by 0 to 40 units; the instances the kernel keeps are the ones the rule does not hide, and the
+    /// count it left out (the offsets' third extra entry) equals the rule's.
+    /// </summary>
+    [Fact]
+    [Slow]
+    public unsafe void Gpu_cull_leaves_out_what_the_depth_pyramid_hides_as_the_rule_does()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        var random = new Random(5);
+        long hiddenTotal = 0, keptTotal = 0;
+        using (var ctx = new GpuContext(d!))
+        {
+            using var cull = new FoliageGpuCull(ctx, arenaBytes: 4 << 20);
+            for (int viewNumber = 0; viewNumber < 8; viewNumber++)
+            {
+                var scene = new List<OcclusionCullTests.Occluder>();
+                for (int i = random.Next(2, 9); i > 0; i--)
+                    scene.Add(new OcclusionCullTests.Occluder(new Vector3(random.Next(-600, 600), random.Next(20, 400), random.Next(150, 1500)), random.Next(40, 500)));
+                var eye = new Vector3(random.Next(-5000, 5000), random.Next(20, 120), random.Next(-5000, 5000));
+                var local = OcclusionCullTests.Camera.Look(Vector3.Zero, (float)(random.NextDouble() * 0.2 - 0.1), (float)(random.NextDouble() * 0.2 - 0.1));
+                var cam = local with { Eye = eye };
+                const int W = OcclusionCullTests.W, H = OcclusionCullTests.H;
+                var z = new float[H, W];
+                // The scene lies round the origin; the camera is offset to a far position by moving the scene with it.
+                var moved = scene.Select(o => o with { Centre = o.Centre + eye }).ToList();
+                float jx = (float)random.NextDouble() - 0.5f, jy = (float)random.NextDouble() - 0.5f;
+                for (int y = 0; y < H; y++)
+                    for (int x = 0; x < W; x++)
+                        z[y, x] = OcclusionCullTests.DepthAt(moved, cam, x, y, jx, jy);
+                var pyramid = new OcclusionCullTests.Pyramid(z);
+                var sizes = pyramid.Sizes;
+                var offsets = new uint[HizPyramid.MaxLevels];
+                uint at = 0;
+                var data = new List<float>();
+                for (int l = 0; l < sizes.Count; l++)
+                {
+                    offsets[l] = at;
+                    at += (uint)(sizes[l].W * sizes[l].H);
+                    foreach (var (least, most) in pyramid.Levels[l]) { data.Add(least); data.Add(most); }
+                }
+                float delta = new[] { 0f, 0.5f, 3f, 12f, 40f }[random.Next(5)];
+                var current = eye + OcclusionCullTests.RandomUnit(random) * delta;
+                // Instances: behind the blockers mostly (in the camera's frame), some anywhere.
+                var records = new List<FoliageInstanceRecord>();
+                var spheres = new List<Vector4>();
+                for (int i = 0; i < 700; i++)
+                {
+                    var c = eye + cam.Right * random.Next(-900, 900) + cam.Up * random.Next(-40, 500) - cam.Back * random.Next(60, 5000);
+                    float r = random.Next(2, 80);
+                    var t = Matrix4x4.CreateTranslation(c);
+                    records.Add(new FoliageInstanceRecord { Transform = t, Ground = new Vector4(c.X, c.Z, 1, 0) });
+                    spheres.Add(new Vector4(c, r));
+                }
+                var recordArray = records.ToArray();
+                for (int i = 0; i < recordArray.Length; i++) recordArray[i].Sphere = spheres[i];
+                var group = new SyntheticGroup(0, recordArray, FoliageGroupRange.Of(1e6f, 1e5f));
+
+                ctx.BeginFrame();
+                while (!cull.Place(ref group.Arena, ref group.Generation, group.Records)) { }
+                var chunks = new List<FoliageCullChunk>();
+                for (int at2 = 0; at2 < group.Records.Length; at2 += FoliageShaders.CullChunk)
+                    chunks.Add(new FoliageCullChunk
+                    {
+                        First = FoliageGpuCull.FirstOf(group.Arena) + (uint)at2, Count = (uint)Math.Min(FoliageShaders.CullChunk, group.Records.Length - at2),
+                        Range = group.Range.Range, RangeSquared = group.Range.RangeSquared, InverseBand = group.Range.InverseBand,
+                    });
+                var draws = new[] { new FoliageCullDraw { IndexCount = 3, ChunkStart = 0, ChunkEnd = (uint)chunks.Count } };
+                var work = cull.Prepare(chunks.ToArray(), draws);
+                using var pyramidBuffer = DeviceBuffer.Create(ctx, (ulong)data.Count * 4, BufferUse.Storage | BufferUse.TransferDst, "pyramid test");
+                ctx.Uploads.Write(pyramidBuffer, 0, MemoryMarshal.AsBytes(data.ToArray().AsSpan()));
+                var vectors = HizPyramid.Vectors(eye, Vector3.Distance(current, eye), cam.Right, cam.Up, cam.Back, OcclusionCullTests.TanX, OcclusionCullTests.TanY, W, H, sizes.Count, sizes[0].W, sizes[0].H, offsets);
+                var occlusion = new OcclusionView(new BufferBinding(pyramidBuffer.Handle, 0, pyramidBuffer.Size), vectors);
+                var view = new FoliageCullView().Set([]);
+                var result = cull.Dispatch(work, view, new Vector2(current.X, current.Z), default, 0.999f, default, occlusion);
+                int n = chunks.Count;
+                using var readback = ReadbackBuffer.Create(ctx, FoliageGpuCull.ReadbackBytes(result), "cull readback");
+                cull.CopyForReadback(result, readback);
+                using var total = ReadbackBuffer.Create(ctx, 12, "occlusion total");
+                ctx.Frame.PreFrame.CopyBuffer(result.Offsets, total.Handle, new BufferCopy(result.OffsetsOffset + (ulong)n * 4, 0, 12));
+                ctx.EndFrame();
+                d!.Frames.WaitAll();
+
+                var expected = new HashSet<Vector3>();
+                int expectedHidden = 0;
+                for (int i = 0; i < recordArray.Length; i++)
+                {
+                    var s = spheres[i];
+                    if (pyramid.Occluded(cam, new Vector3(s.X, s.Y, s.Z), s.W, Vector3.Distance(current, eye))) expectedHidden++;
+                    else expected.Add(new Vector3(s.X, s.Y, s.Z));
+                }
+                var counts = MemoryMarshal.Cast<byte, uint>(readback.Read(0, (ulong)(n + 1) * 4)).ToArray();
+                var tail = MemoryMarshal.Cast<byte, uint>(total.Read(0, 12)).ToArray();
+                ulong rowsAt = FoliageGpuCull.Align16((ulong)(n + 1) * 4) + FoliageGpuCull.Align16(20);
+                var rows = MemoryMarshal.Cast<byte, Matrix4x4>(readback.Read(rowsAt, (ulong)counts[n] * 64)).ToArray();
+                Assert.Equal(expected.Count, (int)counts[n]);
+                Assert.Equal(expectedHidden, (int)tail[2]);
+                foreach (var row in rows) Assert.Contains(row.Translation, expected);
+                hiddenTotal += expectedHidden;
+                keptTotal += expected.Count;
+            }
+        }
+        Assert.True(hiddenTotal > 100 && keptTotal > 100, $"{hiddenTotal} hidden, {keptTotal} kept: the views should have both");
+        ExpectClean(d!);
+    }
 }

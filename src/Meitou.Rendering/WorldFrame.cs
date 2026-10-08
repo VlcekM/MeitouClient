@@ -75,6 +75,8 @@ sealed class WorldOptions
     public float? SmallRange, MediumRange, LargeRange;
     /// <summary>The impostors switch (Enhancements): far foliage as baked billboards (Meitou, default) or meshes only (the game); the distance (null: the default).</summary>
     public bool Impostors = true;
+    /// <summary>The Meitou <c>lod</c> switch: generated mesh levels for TERRAIN-mode foliage meshes (<see cref="FoliageRenderer.Lod"/>).</summary>
+    public bool FoliageLod = true;
     public float? ImpostorDistance, LargeImpostorDistance;
     public double? ImpostorBudgetMb, ImpostorCacheMb;
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
@@ -95,6 +97,8 @@ sealed class WorldOptions
     public bool NoFogVolumes;
     /// <summary><c>--no-fog-cull</c>: everything the fog hides is drawn anyway (comparison; docs/formats/fogfeatures.md "In Meitou").</summary>
     public bool NoFogCull;
+    /// <summary><c>--no-occlusion-cull</c>: foliage hidden behind the previous frame's depth is drawn anyway (comparison; docs/formats/foliage.md "Occlusion culling").</summary>
+    public bool NoOcclusionCull;
     public float? ParticlePrewarm;
     /// <summary><c>--particle-area &lt;radius&gt;</c> (test): weather effects are placed in a disc of this radius round the start point instead of the weather region; <c>--particle-seed</c> seeds their random choices.</summary>
     public float? ParticleArea;
@@ -217,7 +221,7 @@ sealed class WorldOptions
     /// <summary>The Faithful / Meitou switches over the options (for <c>--meitou</c> / <c>--faithful</c>).</summary>
     internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
         () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v,
-        () => o.MeitouWater, v => o.MeitouWater = v);
+        () => o.MeitouWater, v => o.MeitouWater = v, () => o.FoliageLod, v => o.FoliageLod = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -305,6 +309,7 @@ sealed class WorldOptions
                 case "--no-particles": o.NoParticles = true; break;
                 case "--no-fog-volumes": o.NoFogVolumes = true; break;
                 case "--no-fog-cull": o.NoFogCull = true; break;
+                case "--no-occlusion-cull": o.NoOcclusionCull = true; break;
                 case "--particle-prewarm": o.ParticlePrewarm = Math.Max(F(), 0); break;
                 case "--particle-area": o.ParticleArea = Math.Max(F(), 1); break;
                 case "--particle-seed": o.ParticleSeed = (int)F(); break;
@@ -672,6 +677,7 @@ static class WorldFrame
         // The placed fog volumes (docs/formats/fogfeatures.md): the swamp's fog and the like, part of the game's look.
         // Always made: the weather's fog spheres go through it too, with or without a fogfeatures.dat.
         gpu.FogVolumes = new FogVolumes(context, FogFeatures.Load(install)) { Enabled = !o.NoFogVolumes, CullEnabled = !o.NoFogCull };
+        gpu.Post.OcclusionCull = !o.NoOcclusionCull;
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
         if (scene.Database is { } skyDb)
@@ -735,6 +741,7 @@ static class WorldFrame
             var f = gpu.Foliage;
             f.Terrain = terrain;
             (f.MeitouRange, f.SmallRange, f.MediumRange, f.LargeRange) = (o.MeitouRange, o.SmallRange ?? f.SmallRange, o.MediumRange ?? f.MediumRange, o.LargeRange ?? f.LargeRange);
+            f.Lod = o.FoliageLod;
             (f.Impostors, f.ImpostorDistance, f.ImpostorBudgetMb) = (o.Impostors, o.ImpostorDistance ?? f.ImpostorDistance, o.ImpostorBudgetMb ?? f.ImpostorBudgetMb);
             if (o.LargeImpostorDistance is { } largeImpostor) f.LargeImpostorDistance = largeImpostor;
             if (o.ImpostorCacheMb is { } cacheMb) f.ImpostorCacheMb = cacheMb;
@@ -801,7 +808,8 @@ static class WorldFrame
                     (r.TerrainPixelError, r.TerrainFarPixelError) = (o.TerrainErrorFor(v), o.TerrainErrorFor(v) * scale);
                 }
             },
-            () => gpu()?.Water?.Meitou ?? o.MeitouWater, v => { o.MeitouWater = v; if (gpu()?.Water is { } w) w.Meitou = v; });
+            () => gpu()?.Water?.Meitou ?? o.MeitouWater, v => { o.MeitouWater = v; if (gpu()?.Water is { } w) w.Meitou = v; },
+            () => gpu()?.Foliage?.Lod ?? o.FoliageLod, v => { o.FoliageLod = v; if (gpu()?.Foliage is { } f) f.Lod = v; });
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null)
@@ -921,6 +929,7 @@ static class WorldFrame
         gpu.Characters?.SetView(rw, rh, camera.FieldOfView);
         gpu.Objects?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(1);
+        if (gpu.Foliage is { } lodFoliage) lodFoliage.LodPixelsPerRadian = render.TerrainPixelScale;   // the generated mesh levels measure their deviation in rendered pixels
         gpu.Foliage?.Update(gpu.Anchor ?? eye);
         gpu.Characters?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(2);
@@ -958,9 +967,10 @@ static class WorldFrame
         if (gpu.FogVolumes is { } fogVolumes)
         {
             gpu.Particles?.CollectFogVolumes(gpu.EffectFogs);
-            fogVolumes.Update(eye, camera.Forward, camera.FieldOfView, rw / (float)Math.Max(rh, 1), gpu.Sky.HazeDistance, sun.Y, gpu.Sky.Physical, gpu.EffectFogs);
+            fogVolumes.Update(eye, camera.Forward, camera.FieldOfView, rw / (float)Math.Max(rh, 1), gpu.Sky.HazeDistance, sun.Y, gpu.Sky.Physical, gpu.EffectFogs, gpu.Sky.FogCullDistance);
         }
         StageClock.Lap(13);
+        if (gpu.Shadow is not null) gpu.Shadow.RangeCap = gpu.FogVolumes?.AtmosphereDistance;   // the cascades end where the weather fog hides everything
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, sun.Y); }
         StageClock.Lap(12);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
@@ -1042,9 +1052,9 @@ static class WorldFrame
             StageClock.Lap(7);
             // Foliage in every depth slice (it reaches 32000+ units at the default x4), counted as one draw.
             host.Stage(8);
-            if (gpu.Foliage is { } fogFoliage) fogFoliage.FogCull = fogCull;
+            if (gpu.Foliage is { } fogFoliage) { fogFoliage.FogCull = fogCull; fogFoliage.Occlusion = OcclusionAlternate && (fogFoliage.Gpu.Frame.Number & 1) == 1 ? default : post.OcclusionFor(eye); }
             gpu.Foliage?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, continuation: foliageDrawn);
-            if (gpu.Foliage is { } fogFoliageDone) fogFoliageDone.FogCull = null;
+            if (gpu.Foliage is { } fogFoliageDone) { fogFoliageDone.FogCull = null; fogFoliageDone.Occlusion = default; }
             foliageDrawn = true;
             StageClock.Lap(8);
             // Characters after the opaque geometry: they alone write the scene's alpha (SSAO's character mask), so nothing drawn later may cover them but water.
@@ -1135,6 +1145,10 @@ static class WorldFrame
         post.HeatHazeFarClip = KenshiHaze.FarDistance(post.Options.HeatHazeViewDistance);   // the heat haze's D follows the install's `view distance`, not the sky haze's constant
     }
 
+    /// <summary><c>MEITOU_OCC_ALT=1</c> (measurement): the occlusion cull works on even frames only, and the foliage stages of those frames are named <c>fol meshes+occ</c> and <c>fol rocks+occ</c>, so one run
+    /// with <c>MEITOU_PASS_STATS=1</c> compares both with the same load on the card.</summary>
+    internal static readonly bool OcclusionAlternate = Environment.GetEnvironmentVariable("MEITOU_OCC_ALT") == "1";
+
     /// <summary>
     /// The sun's shadow cascades (ShadowPass, docs/formats/shadows.md): fitted to this camera, their casters drawn by the renderers'
     /// depth-only paths (terrain, objects, foliage meshes; detail chosen from the camera's eye), before the reflection and the main pass.
@@ -1160,7 +1174,7 @@ static class WorldFrame
             StageClock.Sub("objects");
             gpu.Characters?.DrawDepth(worldToClip, lodEye, planes);
             long t2 = Stopwatch.GetTimestamp();
-            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.EffectiveRange * 1.2f, minSize: shadow.MinFoliageCaster(cascade)); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
+            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.EffectiveRange * 1.2f, minSize: shadow.MinFoliageCaster(cascade), texel: (float)cascade.Texel); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
             StageClock.Phase(CascadeLabels[cascade.Index & 3]);
             long t3 = Stopwatch.GetTimestamp();
             double ms = 1000.0 / Stopwatch.Frequency;

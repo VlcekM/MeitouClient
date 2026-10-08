@@ -64,7 +64,8 @@ static partial class WorldApp
         {
             float a = i * angleStep;
             float x = centre.X + radius * (MathF.Cos(a) - 1), z = centre.Z + radius * MathF.Sin(a);
-            camera.Target = new Vector3(x, gpu.Terrain.HeightAt(x, z), z);
+            if (FlyTurn != 0) camera.Look(FlyTurn / 0.004f, 0);   // a pure turn about the eye (the circle's radius is ignored)
+            else camera.Target = new Vector3(x, gpu.Terrain.HeightAt(x, z), z);
             if (benchOrbit != 0) camera.Orbit(benchOrbit, 0);
             if (spikeProfiler is not null) { context.EnsureFrame(); spikeProfiler.BeginFrame(); } else StageClock.Start();
             frameWatch.Restart();
@@ -196,6 +197,9 @@ static partial class WorldApp
         if (gpu.Shadow is { } shadow) { shadow.Poll(wait: true); Console.WriteLine($"detail    shadows cpu {shadow.CpuMs:0.00} ms, gpu {shadow.GpuMs:0.00} ms; {shadow.CasterStats}"); }
         WorldFrame.DetailedStats = false;
     }
+
+    /// <summary><c>MEITOU_FLY_TURN=&lt;radians&gt;</c>: the fly benchmark turns the camera by that much each frame about its eye instead of flying (the occlusion cull's turn test).</summary>
+    static readonly float FlyTurn = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_FLY_TURN"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float turn) ? turn : 0;
 
     /// <summary>MEITOU_FLY_SHOT: frames of the fly benchmark saved as pictures (with <c>--screenshot</c>, next to it).</summary>
     static readonly HashSet<int> FlyShots = [.. (Environment.GetEnvironmentVariable("MEITOU_FLY_SHOT") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => int.TryParse(s, out int f) ? f : -1)];
