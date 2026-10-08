@@ -27,8 +27,9 @@ public class SaveWorldTests
         var db = SyntheticTown.Database();
         var data = SyntheticTown.Data(db);
         var walk = new OpenGroundWalkability(SyntheticTown.Ground);
-        var population = new PopulationSystem(data, new PopulationSettings { CheckEveryTicks = 1 });
-        var world = new SimWorld(new WorldSettings { Seed = seed, PublishSnapshots = false }, walk, [population, new PlayerSystem(), new MovementSystem(new PathService(walk, true))]);
+        var systems = SyntheticTown.Standard(data, walk, StandardParts.Population | StandardParts.Player | StandardParts.Movement, new PopulationSettings { CheckEveryTicks = 1 });
+        var population = systems.Population!;
+        var world = new SimWorld(new WorldSettings { Seed = seed, PublishSnapshots = false }, walk, systems.Systems);
         var squad = population.StartPlayer(world, NewGameStart.From(db.Find("40-t")!));
         world.Commands.Enqueue(new FocusCommand(new Vector3(-90000, 0, -90000)) { Tick = 0 });
         return new Game(world, data, squad);
@@ -376,8 +377,8 @@ public class SaveWorldTests
         var data = Data();
         var save = Load(folder);
         var walk = new OpenGroundWalkability((x, z) => 300);
-        var population = new PopulationSystem(data, new PopulationSettings { CheckEveryTicks = 5 });
-        using var world = new SimWorld(new WorldSettings { Seed = 3, Threads = 2, PublishSnapshots = false }, walk, [population, new PlayerSystem(), new MovementSystem(new PathService(walk, true))]);
+        var systems = SyntheticTown.Standard(data, walk, StandardParts.Population | StandardParts.Player | StandardParts.Movement, new PopulationSettings { CheckEveryTicks = 5 });
+        using var world = new SimWorld(new WorldSettings { Seed = 3, Threads = 2, PublishSnapshots = false }, walk, systems.Systems);
         var loaded = SaveLoader.Load(world, save, data, new SaveLoadOptions { ApplyRelations = false });
         var player = loaded.Characters[0];
         var at = world.Characters.Previous[player.Slot].Position;

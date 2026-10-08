@@ -138,9 +138,13 @@ public class AnimationTests
         var db = SyntheticTown.Database();
         var data = SyntheticTown.Data(db);
         var walk = new OpenGroundWalkability(SyntheticTown.Ground);
-        var population = new PopulationSystem(data, new PopulationSettings { CheckEveryTicks = 1, UnloadGraceSeconds = 5 });
-        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = true }, walk,
-            [population, new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new AnimationSystem(Library(), Lengths())]);
+        var systems = StandardSystems.Build(data, walk, new StandardSystemOptions
+        {
+            Parts = StandardParts.Population | StandardParts.Player | StandardParts.Movement | StandardParts.Animation,
+            Population = new PopulationSettings { CheckEveryTicks = 1, UnloadGraceSeconds = 5 }, SynchronousPaths = true, AnimationLibrary = Library(), AnimationLengths = Lengths(),
+        });
+        var population = systems.Population!;
+        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = true }, walk, systems.Systems);
         var squad = population.StartPlayer(world, NewGameStart.From(db.Find("40-t")!));
         world.Commands.Enqueue(new FocusCommand(new Vector3(-90000, 0, -90000)) { Tick = 0 });
         return (world, squad);

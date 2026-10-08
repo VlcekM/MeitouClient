@@ -19,9 +19,9 @@ public class PlayerTests
         var db = SyntheticTown.Database();
         var data = SyntheticTown.Data(db);
         var walk = new OpenGroundWalkability(SyntheticTown.Ground);
-        var population = new PopulationSystem(data, new PopulationSettings { CheckEveryTicks = 1, UnloadGraceSeconds = 5 });
-        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false }, walk,
-            [population, new PlayerSystem(), new MovementSystem(new PathService(walk, true))]);
+        var systems = SyntheticTown.Standard(data, walk, StandardParts.Population | StandardParts.Player | StandardParts.Movement, new PopulationSettings { CheckEveryTicks = 1, UnloadGraceSeconds = 5 });
+        var population = systems.Population!;
+        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false }, walk, systems.Systems);
         var squad = population.StartPlayer(world, NewGameStart.From(db.Find("40-t")!));
         if (!residents) world.Commands.Enqueue(new FocusCommand(new Vector3(-90000, 0, -90000)) { Tick = 0 });   // no town in reach
         return new Game(world, population, squad);

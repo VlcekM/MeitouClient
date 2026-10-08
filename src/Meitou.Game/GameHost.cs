@@ -63,7 +63,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         // The simulation samples the CPU heightmap (immutable, any thread), not the renderer's terrain.
         var heights = new Meitou.Data.World.GroundHeights(scene.Window, scene.Coarse, scene.CoarseSize, WorldFrame.CoarseStep);
         Meitou.Simulation.IWalkability walkability = new Meitou.Simulation.OpenGroundWalkability(heights.HeightAt);
-        var systems = new List<Meitou.Simulation.ITickSystem>();
+        IReadOnlyList<Meitou.Simulation.ITickSystem> systems = [];
+        Meitou.Data.Gameplay.GameConstants? constants = null;   // parsed once: the body factory's, else for the clock alone
         if (!g.NoPopulation && scene.Database is { } gameDb)
         {
             var levels = scene.Objects?.Levels ?? Meitou.Data.World.WorldLevelData.Load(install);
@@ -74,24 +75,24 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 walkability = new NavAdapter(nav.Walkability);
             }
             var data = Meitou.Simulation.PopulationData.Create(gameDb, levels.Towns(), new Meitou.Simulation.GeneratedAppearances(gameDb, install.Root));
-            population = new Meitou.Simulation.PopulationSystem(data, new Meitou.Simulation.PopulationSettings { Background = interactive });
-            if (nav is not null) population.ZoneGate = zone => nav.Walkability.World.Contains(zone);
-            systems.Add(population);
-            systems.Add(new Meitou.Simulation.PlayerSystem());
-            var animationLengths = Meitou.Data.Gameplay.AnimationLengths.Load(install.Root);
-            // Combat (stage 8): the path service walks attackers to their targets (SelfApproach off), the body system ticks the medical state (TickMedical off).
-            var combat = new Meitou.Simulation.Combat.CombatSystem(data.Combat.Techniques, data.Combat.Constants, data.Bodies.Constants, data.BodyOptions, animationLengths,
-                new Meitou.Simulation.Combat.CombatOptions { SelfApproach = false, TickMedical = false });
-            systems.Add(new Meitou.Simulation.PursuitSystem(combat));
-            systems.Add(new Meitou.Simulation.MovementSystem(new Meitou.Simulation.PathService(walkability, synchronous: !interactive)));
-            systems.Add(new Meitou.Simulation.BodySystem(data.Bodies.Constants, data.BodyOptions, g.BodyTimeScale));
-            systems.Add(combat);
-            systems.Add(new Meitou.Simulation.AnimationSystem(Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb), animationLengths, Meitou.Data.Gameplay.GameConstants.FromDatabase(gameDb).AnimationBlendRate));
-            systems.Add(new Meitou.Simulation.Items.FeedSystem(data.Items));
-            systems.Add(new Meitou.Simulation.RetaliationSystem(combat));
+            // The system list and its order are StandardSystems'. Combat: the path service walks attackers to their targets (SelfApproach off),
+            // the body system ticks the medical state (TickMedical off), the defaults of StandardSystemOptions.
+            var built = Meitou.Simulation.StandardSystems.Build(data, walkability, new Meitou.Simulation.StandardSystemOptions
+            {
+                Population = new Meitou.Simulation.PopulationSettings { Background = interactive },
+                SynchronousPaths = !interactive,
+                BodyTimeScale = g.BodyTimeScale,
+                AnimationLengths = Meitou.Data.Gameplay.AnimationLengths.Load(install.Root),
+                AnimationLibrary = Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb),
+                AnimationBlendRate = data.Bodies.Constants.AnimationBlendRate,
+            });
+            population = built.Population;
+            if (nav is not null) population!.ZoneGate = zone => nav.Walkability.World.Contains(zone);
+            systems = built.Systems;
+            constants = data.Bodies.Constants;
         }
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate,
-            clock: GameClockFor(scene.Database, o.Hour),
+            clock: GameClockFor(constants ??= scene.Database is { } clockDb ? Meitou.Data.Gameplay.GameConstants.FromDatabase(clockDb) : null, o.Hour),
             simulation: new Meitou.Simulation.WorldSettings { Seed = g.Seed, MinPartitionSize = 128, Threads = Math.Max(1, g.SimThreads ?? config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)) },
             systems: systems, walkability: walkability);
         var target = camera.Target;
@@ -132,10 +133,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     }
 
     /// <summary>The game clock with sunrise, sunset and days per year from the CONSTANTS record (defaults without data).</summary>
-    static GameClock GameClockFor(Meitou.Data.GameDatabase? db, double startHour)
+    static GameClock GameClockFor(Meitou.Data.Gameplay.GameConstants? c, double startHour)
     {
-        if (db is null) return new GameClock(startHour);
-        var c = Meitou.Data.Gameplay.GameConstants.FromDatabase(db);
+        if (c is null) return new GameClock(startHour);
         return new GameClock(startHour, sunrise: c.Sunrise, sunset: c.Sunset, daysPerYear: c.DaysPerYear);
     }
 

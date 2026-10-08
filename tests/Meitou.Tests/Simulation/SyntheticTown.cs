@@ -131,18 +131,18 @@ static class SyntheticTown
 
     public static float Ground(float x, float z) => 300;
 
+    /// <summary>The game's system order (<see cref="StandardSystems"/>) for the parts a test needs; path requests are answered inside the tick unless asked otherwise.</summary>
+    public static StandardSystemSet Standard(PopulationData data, IWalkability walk, StandardParts parts, PopulationSettings? population = null, bool synchronousPaths = true, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null) =>
+        StandardSystems.Build(data, walk, new StandardSystemOptions { Parts = parts, Population = population, SynchronousPaths = synchronousPaths, BodyTimeScale = bodyTimeScale, Feed = feed });
+
     public static SimWorld World(ulong seed, int threads, int residentSquads = 3, PopulationSettings? settings = null, bool synchronousPaths = true,
         GameDatabase? db = null, bool bodies = false, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null, Meitou.Simulation.Bodies.BodyOptions? bodyOptions = null, int minPartition = 16, params ITickSystem[] extra)
     {
         db ??= Database(residentSquads);
         var walk = new OpenGroundWalkability(Ground);
         var data = Data(db, bodyOptions);
-        var population = new PopulationSystem(data, settings);
-        var movement = new MovementSystem(new PathService(walk, synchronousPaths));
-        List<ITickSystem> systems = [population, movement];
-        if (bodies) systems.Add(new BodySystem(data.Bodies.Constants, data.BodyOptions, bodyTimeScale));
-        if (feed is not null) systems.Add(new Meitou.Simulation.Items.FeedSystem(data.Items, feed));
-        systems.AddRange(extra);
+        var parts = StandardParts.Population | StandardParts.Movement | (bodies ? StandardParts.Body : 0) | (feed is not null ? StandardParts.Feed : 0);
+        var systems = Standard(data, walk, parts, settings, synchronousPaths, bodyTimeScale, feed).Systems.Concat(extra);
         var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, walk, systems);
         world.Commands.Enqueue(new FocusCommand(Centre) { Tick = 0 });
         return world;
