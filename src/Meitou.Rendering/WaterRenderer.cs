@@ -637,8 +637,9 @@ public sealed unsafe class WaterRenderer : IDisposable
             // grey-brown on black water, rust on red.
             amount *= mix(0.7, 1.0, clean);
             float foam = smoothstep(0.95 - amount, 1.25 - amount, pattern) * mix(0.8, 0.92, clean);
-            // The shadow receiver takes derivatives (defined only in uniform control flow), so it runs here and not inside the foam's branch, and
-            // only where the cascades reach.
+            // The shadow receiver takes derivatives, so it runs here and not inside the foam's branch, and only within 8000 units (where it is
+            // about uniform per quad: the cascades end well before).
+
             vec3 foamN = normalize(mix(n, vec3(0.0, 1.0, 0.0), 0.6));   // up, a little tilted by the waves
             float foamShadow = dist < 8000.0 ? kenshiShadow(vWorld, foamN) : 1.0;
             if (foam > 0.004)

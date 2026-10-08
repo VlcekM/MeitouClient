@@ -253,8 +253,10 @@ How it works (status as in [README.md](README.md)):
     on red water); dark water also foams less (the foam amount to 0.7, the opacity from 0.92 to 0.8). The foam is lit as the land is: in the
     game's sky mode by `foamLight` (the diffuse terms of `kenshiLight`: the sun colour times the biome's ambient map alpha times
     `kenshiShadow`, the irradiance cube times the ambient map's colour and the environment factor, no specular; a normal tilted 60 % to
-    straight up), so the foam falls into the shadow of cliffs and buildings and dims at night and in dark biomes; in the simple sky by its
-    old formula times the shadow. It was lit by the sun colour and a fixed share of the sky's zenith colour with no shadow, and its albedo
+    straight up). It dims at night (**Observed**: at 1:00 on the west coast the foam outlines are gone, where before they stayed as a faint
+    outline; the dark water's lower amount and albedo contribute) and follows the biome's ambient map; that it falls into the shadow of cliffs and buildings is wired in (the same `kenshiShadow` as the land)
+    but **Unknown** in a picture: the shadow term read 1 on every water pixel of the west-coast view at 16:00 (a debug view), and
+    in the pictures at Port South (7 and 18) and the west coast (11 and 16) no cast shadow crosses surf. In the simple sky it is the old formula times the shadow. It was lit by the sun colour and a fixed share of the sky's zenith colour with no shadow, and its albedo
     was a fixed 0.72, which against black water and a dark biome glared. The weather does not dim the sun in the viewer's lighting model
     (the game's own lighting has no weather term, [formats/lighting.md](formats/lighting.md)); what dims the land under rain is its
     wetness, the haze and the biome's ambient map, so the foam is as bright as land of the same albedo. The shadow is looked up for all
