@@ -651,7 +651,8 @@ public sealed unsafe class TerrainTextures : IDisposable
         }
         if (mapJob is not null || mapUploading) return;
         var (px, pz) = mapWindows.DesiredOrigin(eye.X, eye.Z);
-        bool far = Math.Abs(px - validPx) > mapWindows.RecentreOverlayPixels || Math.Abs(pz - validPz) > mapWindows.RecentreOverlayPixels;
+        // In 64 bits: the unset origin is int.MinValue, and 0 - int.MinValue wraps back to it in 32 (Math.Abs then throws).
+        bool far = Math.Abs((long)px - validPx) > mapWindows.RecentreOverlayPixels || Math.Abs((long)pz - validPz) > mapWindows.RecentreOverlayPixels;
         if (MapState == 2 && !far) return;
         (int, int)? old = MapState == 2 ? (validPx, validPz) : null;
         mapJob = BackgroundWork.Run(() => mapWindows.Compose(px, pz, old));
