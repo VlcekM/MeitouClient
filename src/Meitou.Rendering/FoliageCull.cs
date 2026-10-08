@@ -91,6 +91,8 @@ public sealed class FoliageCullOutput
     /// (negative in the crossfade band: the complement of the mesh's dither).</summary>
     public Matrix4x4[] ImpostorVisible = new Matrix4x4[64];
     public int ImpostorCount;
+    /// <summary>Instances the fog cull left out (<see cref="FoliageCull.CullGroup"/> with a fog).</summary>
+    public int FogCulled;
     /// <summary>With record: each in-range instance's packed mesh and impostor values (<see cref="FoliageCull.Hidden"/> where that part is not drawn).</summary>
     public float[] InRangeMesh = new float[64], InRangeImpostor = new float[64];
 }
@@ -167,9 +169,9 @@ public static class FoliageCull
     /// <summary>Culls one group's instances for one view. With <paramref name="record"/>, every instance in range is also listed (index and fade) for later views that share the range (the shadow cascades).
     /// <paramref name="parts"/>: <see cref="MeshPart"/> and / or <see cref="ImpostorPart"/>; with a transition (<see cref="FoliageGroupRange.HasImpostor"/>) the
     /// meshes keep only the instances before it (<see cref="PackMesh"/>) and the impostors only those from its band on (<see cref="PackImpostor"/>).</summary>
-    public static void CullGroup(ReadOnlySpan<FoliageInstanceRecord> instances, in FoliageGroupRange range, Vector2 eye, FoliageCullView view, bool record, FoliageCullOutput output, int parts = MeshPart)
+    internal static void CullGroup(ReadOnlySpan<FoliageInstanceRecord> instances, in FoliageGroupRange range, Vector2 eye, FoliageCullView view, bool record, FoliageCullOutput output, int parts = MeshPart, FogVolumes? fog = null)
     {
-        output.Count = output.InRangeCount = output.ImpostorCount = 0;
+        output.Count = output.InRangeCount = output.ImpostorCount = output.FogCulled = 0;
         bool split = range.HasImpostor;
         for (int i = 0; i < instances.Length; i++)
         {
@@ -201,6 +203,12 @@ public static class FoliageCull
                 output.InRangeFade[output.InRangeCount++] = w;
             }
             if (!SphereVisible(view, r.Sphere)) continue;
+            // The fog cull (the main colour pass only): the sphere's box wholly inside the eye's drawn-last fog block and beyond the hide distance.
+            if (fog is not null && (mesh > Hidden || impostor > Hidden))
+            {
+                var s = r.Sphere;
+                if (fog.Covers(new Vector3(s.X - s.W, s.Y - s.W, s.Z - s.W), new Vector3(s.X + s.W, s.Y + s.W, s.Z + s.W))) { output.FogCulled++; continue; }
+            }
             if (mesh > Hidden)
             {
                 if (output.Count == output.Visible.Length) Array.Resize(ref output.Visible, output.Count * 2);

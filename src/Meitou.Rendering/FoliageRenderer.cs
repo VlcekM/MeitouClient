@@ -1342,7 +1342,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 FoliageCull.FillSpheres(g.Instances, g.Asset.Centre, g.Asset.Radius);   // the mesh's bounds are known once it is resident, and never change
                 g.SpheresReady = true;
             }
-            FoliageCull.CullGroup(g.Instances, range, eyeXz, view, record, cullOutputs[k], parts);
+            FoliageCull.CullGroup(g.Instances, range, eyeXz, view, record, cullOutputs[k], parts, record ? null : FogCull);
         });
         for (int k = 0; k < cullWork.Count; k++)
         {
@@ -1353,6 +1353,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     shadowCandidates.Add(new ShadowCandidate(g.Asset, g.Instances, output.InRange[i], output.InRangeMesh[i], output.InRangeImpostor[i]));
             EmitAll(g.Asset, output.Visible.AsSpan(0, output.Count), options);
             EmitImpostors(g.Asset, output.ImpostorVisible.AsSpan(0, output.ImpostorCount));
+            if (output.FogCulled > 0) FogCull?.AddCulled(FogVolumes.CullKind.FoliageInstances, output.FogCulled);
         }
     }
 
@@ -1732,8 +1733,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             for (int k = 0; k < impostorDraws.Count; k++) names[rocks + k] = $"{impostorDraws[k].Asset.Mesh.Name} (impostor)";
             cull.TallyNames = names;
         }
-        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock);
+        // The fog cull rides in the main colour view's dispatch only (FogCull is set around that draw alone): per instance, in the cull kernel.
+        Span<Vector4> fog = stackalloc Vector4[FogVolumes.CullVectors];
+        bool fogOn = !depthPass && FogCull is { } fogCull && fogCull.WriteCull(fog);
+        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock, 0.999f, fogOn ? fog : default);
         DrawnInstances += cull.LateVisible;
+        if (fogOn && cull.LateFogCulled > 0) FogCull!.AddCulled(FogVolumes.CullKind.FoliageInstances, cull.LateFogCulled);
         if (GpuCullVerify) QueueVerify(result, terrain);
         return result;
     }

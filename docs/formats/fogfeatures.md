@@ -221,8 +221,8 @@ thousand units is fully hidden, so the main camera does not draw it. Each frame 
 (nearest by its node, so everything sorted before it is covered by it) and, if that is a block the eye is inside (all seven planes with a
 margin, and its box), computes a *hide distance* R. `FogVolumes.Hidden(min, max, kind)` then says a box is hidden when it lies wholly inside
 that block (the 7 plane tests of its extreme corners, plus its box; the block is convex) and its nearest point is at least R from the eye.
-Terrain nodes, object instances (and distant towns), characters (colour and motion passes) and foliage zones ask it (grass is range-limited
-well inside R and is not asked). Not asked: the shadow cascades (a hidden caster can still throw its shadow on visible ground) and the
+Terrain nodes, object instances (and distant towns), characters (colour and motion passes), foliage zones and each foliage instance
+(below) ask it (grass is range-limited well inside R and is not asked). Not asked: the shadow cascades (a hidden caster can still throw its shadow on visible ground) and the
 water reflection (a different camera); effect spheres and beams are ignored (they only add fog); the sky is not culled (see below). It is a
 per-frame decision and is off the moment the eye leaves the block or a different volume is drawn last.
 
@@ -240,6 +240,20 @@ changes nothing: the pixel shows the sky, water or terrain behind it, whose own 
 drawn last, as a volume drawn after it would see a different path for the (now missing) fragment and for the one behind it. Volumes drawn before
 it cannot show through 0.9998. At Shark inside "Swamp[SOUTH]" (density distance 4500, ceiling about 2900) R is about 4455 units in a clear eye;
 with the eye near a ceiling or a wall, or the far clip over 50000 shrinking the soft edges, R grows (up to "no cull").
+
+Foliage per instance (**Verified** by `Gpu_cull_leaves_out_what_the_fog_hides_as_the_CPU_does`, which runs the kernel against the C# test bit for bit
+on random blocks, eyes and spheres, a seventh of them within a dozen units of R). A swamp's foliage zone is big, and the zone test (its box with
+the margin of its largest mesh) almost never lies wholly inside the block, so it culled none at Shark; the instances are what matter (trees,
+leaves and rocks, the largest GPU cost of that view). The foliage cull kernel (`FoliageShaders.CullCompute`) now also runs `FogHidden` on each
+instance that survived its range, frustum and fade tests: a port of `FogVolumes.Covers` on the instance's bounding sphere's box (centre ± radius,
+the one the frustum test uses). The main colour views' dispatches (every depth slice) get the block's box, its 7 planes, the eye and R squared in
+the `View` buffer (`FogVolumes.WriteCull`, 10 vec4s, `mode.y` = on); the shadow cascades' and the reflection's do not (`mode.y` = 0, and
+`FogCull` is only set around the main camera's draw). It is the same test for the meshes, the TERRAIN-mode rocks and the impostors (distant trees:
+same instance, same sphere; the quad's silhouette is the sphere's out here). An instance the test drops writes -2 as any other not drawn, so the
+compaction and the indirect arguments need no change. The kernel counts those it dropped per chunk, the scan sums them into an extra entry of the
+offsets, and the total is read back a frame ring late (summed over the frame's fog dispatches, whose number varies with the cascades) into the
+`fog cull` line's "foliage instances"; the CPU path (`MEITOU_GPU_CULL=0`) tests the same in `FoliageCull.CullGroup` and counts the same way.
+Pairs at `--town Shark --distance 1500 --pitch 8` (**Observed**): see the numbers below.
 
 Measured (**Observed**, 2026-10-08, RTX 4070 shared with other viewers, so only the pairs are comparable, `--screenshot` "post cost" scene GPU
 ms with / without `--no-fog-cull`; images identical to at most 3 levels on 3 pixels): Shark `--distance 400 --pitch 4` 6.6 / 10.0 (11 terrain
