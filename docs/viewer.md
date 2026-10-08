@@ -216,7 +216,7 @@ How it works (status as in [README.md](README.md)):
     differences of the terrain heights over 1.5 height cells), the direction to the shore as the slope's. Breakers (every 7 s, 80
     units apart) run along that distance, so their crests follow the depth contours; within 280 units of the waterline they break
     (a foam line at the crest, lace behind it), stronger in some stretches than others; at the beach they run up as a thin sheet to
-    where the ground is 1.4-3.2 units above the water (the run-up height grows with the wind) and back, leaving wet sand that dries
+    where the ground is 1.4-3.2 units above the water (the run-up height grows with the wind), at most about 120 units inland so low flats behind a beach stay dry, and back, leaving wet sand that dries
     until the next one. The grid is lifted to the run-up's top along the beach and the fragment cuts the sheet's edge. Only exposed
     shores get surf: four samples seawards (400 and 1200 units, and 900 at 35 degrees each side) must be deeper than 5-25 units, so
     ponds, swamp channels (Shark) and sheltered bays stay calm. The shore fades out from 7000 to 10000 units from the eye.
@@ -225,8 +225,10 @@ How it works (status as in [README.md](README.md)):
   - *Clock.* Everything runs on the game clock (`GameHours`; the viewer's heat-haze hours, still for a picture): paused water stands
     still, game speed speeds it up. `--water-seconds <s>` starts it at s game seconds, for pictures of a moment. `MEITOU_WATER_DEBUG=1`
     shows the shore fields (red distance / 400, green breaker phase, blue depth / 40).
-  - *Cost* (2026-10-08, 1920 × 1080, `--fly-benchmark 150` over Port South's beach with `MEITOU_PASS_STATS=1`): the water's GPU time
-    0.13 ms against 0.01 ms for the Faithful water. The reflection pass is unchanged (the mirror stays the plane at Y = 100).
+  - *Cost* (2026-10-08, 1920 × 1080, `--fly-benchmark 150` with `MEITOU_PASS_STATS=1`, one run each, so noisy): the water row's GPU
+    time over Port South's beach (distance 900 and 350) 0.06 and 0.10 ms, against 0.03 and 0.05 ms for the Faithful water; with
+    `--water-grid 128` 0.10 and 0.04 ms, so on this GPU the grid's size is lost in the noise and the per-pixel shore work is what
+    costs (an integrated GPU is not measured yet). The reflection pass is unchanged (the mirror stays the plane at Y = 100).
 - **Sky, light and atmosphere** (`SkyRenderer`, `AtmosphereShaders`, `SkyClock`, `SkyXModel`, `KenshiHaze`, `KenshiLighting`,
   `AmbientMap`; facts in [formats/sky.md](formats/sky.md) and [formats/lighting.md](formats/lighting.md)): the sun follows the
   game's formula for the hour (latitude 54, sunrise 5, sunset 23). In game-sky mode (default) everything is in the game's own HDR

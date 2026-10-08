@@ -257,7 +257,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // The breaker's hump where the water shoals, and a flat top over the run-up band (the fragment cuts the swash's edge there).
                 float hump = uShore.w * s.open * breakerProfile(s.g) * smoothstep(420.0, 200.0, s.dist) * smoothstep(-5.0, 25.0, s.dist)
                     * smoothstep(250.0, 120.0, s.depth);
-                float lift = uShore.y * s.open * (1.0 - smoothstep(10.0, 60.0, s.dist));
+                float lift = uShore.y * s.open * (1.0 - smoothstep(10.0, 60.0, s.dist)) * smoothstep(-140.0, -60.0, s.dist);
                 vec3 d = waveDisplace(p, smoothstep(0.5, 20.0, s.depth) * fade);
                 w += vec3(d.x, d.y + max(hump, lift) * shoreFade, d.z);
             }
@@ -335,7 +335,7 @@ public sealed unsafe class WaterRenderer : IDisposable
 
             // The swash: a breaker that reached the shore runs up the beach (to where the ground is `level` above the still water) and back,
             // leaving the sand wet behind it; above both the water is not there.
-            float runup = uShore.y * s.open * fade;
+            float runup = uShore.y * s.open * fade * smoothstep(-120.0, -40.0, s.dist);   // at most about 10 m up the beach: low flats further in stay dry
             float above = -s.depth;
             float sinceCrest = fract(s.g - 0.5);
             float level = runup * breakerProfile(s.g);
