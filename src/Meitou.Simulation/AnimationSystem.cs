@@ -44,7 +44,7 @@ public sealed class CharacterAnimation
 
 /// <summary>
 /// Picks each character's animation layers from its movement and stance and advances their times in game time (docs/simulation.md
-/// "Animation as built"). Runs after movement, in the Act phase, and writes only its own characters' cold animation state.
+/// "Animation"). Runs after movement, in the Act phase, and writes only its own characters' cold animation state.
 /// <list type="bullet">
 /// <item><b>Verified</b> (fcs.def): <c>play speed</c> of a movement clip is multiplied by the movement speed ("tune until feet match ground speed"); <c>synchs</c> clips
 /// of the lower and upper body share a phase; <c>normalise</c> clips total 1; weights move linearly towards their targets at the blend rate (docs/animation.md).</item>

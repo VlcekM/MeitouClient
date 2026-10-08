@@ -26,7 +26,7 @@ public sealed class SaveLoadOptions
 }
 
 /// <summary>
-/// Loads a <see cref="SaveGame"/> into a <see cref="World"/> (docs/simulation.md "Saves as built"): the clock, the factions' state and relations, the player's money and
+/// Loads a <see cref="SaveGame"/> into a <see cref="World"/> (docs/simulation.md "Saves"): the clock, the factions' state and relations, the player's money and
 /// platoons with their characters (positions, stats, medical state), the camera's selection, and the other platoons as roaming stand-ins. Everything else a save
 /// holds (towns, war state, weather, research, zone buildings, items, appearance sliders) stays in <see cref="LoadedSave.Source"/> for <see cref="SaveCapture"/> to carry on.
 /// Call it on a world that has not run a tick yet and holds no characters.

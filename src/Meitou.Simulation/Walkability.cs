@@ -11,7 +11,7 @@ public sealed record PathResult(IReadOnlyList<Vector3> Points)
 }
 
 /// <summary>
-/// Where characters can stand and walk (docs/simulation.md, "Walkability and movement"). The open-ground stand-in comes first;
+/// Where characters can stand and walk (docs/simulation.md, "Movement and paths"). The open-ground stand-in comes first;
 /// the navmesh replaces it. <see cref="GroundHeight"/> and <see cref="IsWalkable"/> are cheap and safe from any thread;
 /// <see cref="FindPath"/> may be slow and is only called from the path service's threads, never inside a tick's phases.
 /// </summary>

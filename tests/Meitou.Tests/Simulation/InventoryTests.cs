@@ -5,7 +5,7 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>Inventories, weight and eating (docs/simulation.md "Inventory and eating").</summary>
+/// <summary>Inventories, weight and eating (docs/simulation.md "Items and eating").</summary>
 public class InventoryTests
 {
     static SimWorld World(ulong seed = 3, int threads = 1, FeedSettings? feed = null, BodyOptions? options = null)

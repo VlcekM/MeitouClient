@@ -11,7 +11,7 @@ namespace Meitou.Simulation;
 
 /// <summary>
 /// The spawn-time assembly of a character: from its CHARACTER record and race it gets <c>Race</c>, <c>Stats</c>, <c>Medical</c>, <c>Inventory</c>,
-/// <c>Fighter</c>, <c>WaterFactor</c> and the top speed of the speed chain (docs/simulation.md "Bodies wired", "Combat wired"). The population
+/// <c>Fighter</c>, <c>WaterFactor</c> and the top speed of the speed chain (docs/simulation.md "Bodies", "Combat"). The population
 /// system uses the instance; the race lookups are static so the save code reads the same record the same way.
 /// </summary>
 sealed class CharacterAssembly(PopulationData data)
@@ -53,7 +53,7 @@ sealed class CharacterAssembly(PopulationData data)
     /// <summary>The walk speed of a character: the race's <c>walk speed</c>, 15 without a race.</summary>
     public static float WalkSpeed(GameRecord? race) => race?.GetFloat("walk speed", 15) ?? 15;
 
-    /// <summary>The weapon in hand (the first weapon: hip, then back; its quality is its level x 0.01) and the worn armour (quality / 100), docs/simulation.md "Combat wired".</summary>
+    /// <summary>The weapon in hand (the first weapon: hip, then back; its quality is its level x 0.01) and the worn armour (quality / 100), docs/simulation.md "Combat".</summary>
     Fighter MakeFighter(Inventory inventory)
     {
         var combat = data.Combat;

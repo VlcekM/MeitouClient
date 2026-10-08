@@ -3,7 +3,7 @@ using Meitou.Simulation.Bodies;
 
 namespace Meitou.Simulation.Items;
 
-/// <summary>Settings of <see cref="FeedSystem"/>; all engine choices (the original's eating rules are <b>Unknown</b>, docs/simulation.md "Inventory and eating").</summary>
+/// <summary>Settings of <see cref="FeedSystem"/>; all engine choices (the original's eating rules are <b>Unknown</b>, docs/simulation.md "Items and eating").</summary>
 public sealed class FeedSettings
 {
     /// <summary>A character eats when its hunger level is below this (2: the "Hungry" line of character-stats.md) and its stomach is empty.</summary>

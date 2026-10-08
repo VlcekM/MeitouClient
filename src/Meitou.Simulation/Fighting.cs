@@ -4,7 +4,7 @@ using Meitou.Simulation.Combat;
 namespace Meitou.Simulation;
 
 /// <summary>
-/// Walks an attacker to its target through the path service (docs/simulation.md "Combat wired"). The combat system is run with <c>SelfApproach</c> off, so a character with the
+/// Walks an attacker to its target through the path service (docs/simulation.md "Combat"). The combat system is run with <c>SelfApproach</c> off, so a character with the
 /// <see cref="CharacterTask.Attack"/> task would stand still; this system, placed before the movement system, asks for a path to the target (a new one when the target has moved
 /// more than <see cref="RepathDistance"/> from the goal, at most every <see cref="RepathSeconds"/>) and drops the path once the target is in reach or a swing is on.
 /// </summary>

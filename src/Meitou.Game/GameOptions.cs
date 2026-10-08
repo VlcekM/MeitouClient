@@ -31,7 +31,7 @@ sealed class GameOptions
           --seed <n>                 the world seed (default 0)
           --no-population            no town residents or movement (an empty world)
           --no-navmesh               paths on open ground (no buildings), as in the tests; default: the navmesh of the active zones (built on first use, cached)
-          --body-time-scale <x>      multiplies the time of body-part and blood rates (default 1, the documented rates in game hours; see docs/simulation.md "Bodies wired")
+          --body-time-scale <x>      multiplies the time of body-part and blood rates (default 1, the documented rates in game hours; see docs/simulation.md "Bodies")
           --new-game [start]         a new game as the NEW_GAME_STARTOFF start (default Wanderer): the player squad at its town, camera on it
           --list-starts              print the available starts and exit
           --attack-nearest           with --new-game and --screenshot: the squad attacks the nearest other character once loaded

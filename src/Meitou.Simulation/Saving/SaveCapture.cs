@@ -27,7 +27,7 @@ public sealed class SaveCaptureOptions
 }
 
 /// <summary>
-/// Turns a <see cref="World"/> into a <see cref="SaveGame"/> (docs/simulation.md "Saves as built"). With the <see cref="LoadedSave"/> the world was loaded from, the save it came
+/// Turns a <see cref="World"/> into a <see cref="SaveGame"/> (docs/simulation.md "Saves"). With the <see cref="LoadedSave"/> the world was loaded from, the save it came
 /// from is copied and the parts the world models are written over it: clock, money, the factions' relations and prosperity, the player's platoons and their characters (position,
 /// facing, stats, medical state, new recruits, removals), the selection and the roaming platoons' positions; everything else is carried through unchanged. Without one a new save
 /// is made from the game data: all factions with their relations, the player's platoons, a default state per placed town, and empty weather, research and decals.

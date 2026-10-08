@@ -13,7 +13,7 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Save;
 
-/// <summary>Saves and worlds: loading a save into a <see cref="SimWorld"/> and capturing a world into a save (docs/simulation.md "Saves as built").</summary>
+/// <summary>Saves and worlds: loading a save into a <see cref="SimWorld"/> and capturing a world into a save (docs/simulation.md "Saves").</summary>
 public class SaveWorldTests
 {
     sealed record Game(SimWorld World, PopulationData Data, Squad Squad) : IDisposable

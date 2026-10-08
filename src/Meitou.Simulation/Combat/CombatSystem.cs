@@ -7,7 +7,7 @@ using Meitou.Simulation.Bodies;
 namespace Meitou.Simulation.Combat;
 
 /// <summary>
-/// Melee combat (docs/simulation.md "Combat as built (stage 8)", docs/game/combat.md). One system, three parts per tick:
+/// Melee combat (docs/simulation.md "Combat", docs/game/combat.md). One system, three parts per tick:
 /// <list type="bullet">
 /// <item><b>Act</b> (parallel, per character, reading the last tick's <see cref="CombatSlot"/> array and the table's previous state, writing only its own): the medical tick; a
 /// defender looks for blows coming at it and picks a reaction (block roll, wrong-direction block on a failure, dodge for fists); an attacker keeps its swing going and, when

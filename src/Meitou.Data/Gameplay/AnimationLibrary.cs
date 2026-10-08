@@ -162,7 +162,7 @@ public sealed record AnimationDefinition
 /// <summary>
 /// The usable ANIMATION records of a game database (normal category, not disabled, no weather overlays; docs/animation.md
 /// "Animation definitions"), and the choices a character makes from them. <b>Observed</b>, not traced in the original (docs/simulation.md
-/// "Animation as built"): movement clips of a layer form a chain by <c>move speed</c> and a character blends the two around its
+/// "Animation"): movement clips of a layer form a chain by <c>move speed</c> and a character blends the two around its
 /// speed; a standing character plays one of the valid idles, another after <c>idle time</c> seconds.
 /// </summary>
 public sealed class AnimationLibrary

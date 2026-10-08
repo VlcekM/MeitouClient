@@ -1,6 +1,6 @@
 namespace Meitou.Simulation.Combat;
 
-/// <summary>Engine choices of the duel loop where the research stops (each is labelled <b>Unknown</b> in docs/simulation.md "Combat as built").</summary>
+/// <summary>Engine choices of the duel loop where the research stops (each is labelled <b>Unknown</b> in docs/simulation.md "Combat").</summary>
 public static class CombatTuning
 {
     /// <summary>Seconds a fighter waits before an attack after being ordered, and between attacks (a uniform draw between the two).</summary>
