@@ -210,8 +210,9 @@ public sealed unsafe class WaterRenderer : IDisposable
             r.dist = 1.0e6; r.dir = vec2(0.0); r.open = 0.0; r.flow = vec2(0.0); r.speed = 0.0;
             // Rivers (the baked map, 144 units a texel): the weight, the coarse direction downstream and the width.
             vec4 rv = textureLod(uRiverMap, (p + uHalfWorld) / (2.0 * uHalfWorld), 0.0);
-            r.river = rv.a;
             vec2 coarse = rv.rg * 2.0 - 1.0;
+            // Between texels whose directions differ the filtered vector shortens: the river fades there instead of snapping round.
+            r.river = rv.a * smoothstep(0.2, 0.6, length(coarse));
             coarse = length(coarse) > 0.05 ? normalize(coarse) : vec2(1.0, 0.0);
             r.flow = coarse;
             vec2 extent = uShoreRect.zw - uShoreRect.xy;
@@ -230,9 +231,16 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // In a river the bank's isolines give the channel's axis at the shore field's resolution; the map says which way is down.
                 if (r.river > 0.0)
                 {
-                    vec2 axis = vec2(-r.dir.y, r.dir.x);
+                    // Over 40 units each way: the 12-unit difference follows every kink of the bank and showed as facets in the flow.
+                    vec2 w = vec2(40.0) / extent;
+                    vec2 wide = vec2(shoreField(uv + vec2(w.x, 0.0)).r - shoreField(uv - vec2(w.x, 0.0)).r,
+                                     shoreField(uv + vec2(0.0, w.y)).r - shoreField(uv - vec2(0.0, w.y)).r);
+                    vec2 toShore = length(wide) > 1e-6 ? -normalize(wide) : vec2(0.0);
+                    vec2 axis = vec2(-toShore.y, toShore.x);
                     float along = dot(axis, coarse);
-                    float trust = smoothstep(4.0, 16.0, length(grad)) * smoothstep(0.6, 0.85, abs(along));
+                    // Only a small correction (within about 25 degrees of the map), and only in a narrow channel: round a pond the isolines circle,
+                    // and following them made the water spin in a pinwheel.
+                    float trust = smoothstep(12.0, 48.0, length(wide)) * smoothstep(0.85, 0.95, abs(along)) * (1.0 - smoothstep(2.0, 4.0, rv.b * 8.0));
                     r.flow = normalize(mix(coarse, axis * (along < 0.0 ? -1.0 : 1.0), trust));
                 }
             }

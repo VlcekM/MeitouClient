@@ -36,6 +36,12 @@ public static class RiverFlowBake
     /// <summary>The most one texel counts for in the vote on a river's sense: a bank slope of this many height units a texel.</summary>
     public const float VoteCap = 2f;
 
+    /// <summary>Passes of 3 × 3 weighted averaging over the fitted directions.</summary>
+    public const int SmoothPasses = 4;
+
+    /// <summary>Below this agreement of the directions within 2 texels (the length of their weighted mean, 0..1) a river fades out to still water.</summary>
+    public const float MinCoherence = 0.55f;
+
     /// <param name="heights">Heights at the texel corners ((size + 1)², row-major), raw 16-bit, as the whole-world grid at every eighth sample.</param>
     /// <param name="size">Texels per side of the map to bake (the corner grid is size + 1 per side).</param>
     /// <param name="waterRaw">The water level in the same raw units.</param>
@@ -182,6 +188,50 @@ public static class RiverFlowBake
                 weight[k] *= keep;
             }
         }
+
+        // Smooth the directions: each texel's axis was fitted on its own, so neighbours (and neighbouring rivers, each with its own vote) can
+        // differ by a lot, which showed as hard seams along the texel grid. A few passes of weighted averaging over 3 × 3 river texels; then
+        // the weight fades where the directions within 2 texels still disagree (a pond or junction where the fitted axes fan out radially,
+        // two rivers voting head-on into each other): there the water is still rather than spinning.
+        for (int pass = 0; pass < SmoothPasses; pass++)
+        {
+            var sx = new float[n * n];
+            var sz = new float[n * n];
+            for (int y = 1; y < n - 1; y++)
+                for (int x = 1; x < n - 1; x++)
+                {
+                    int k = y * n + x;
+                    if (weight[k] <= 0) continue;
+                    float ax = fx[k] * weight[k], az = fz[k] * weight[k];
+                    foreach (var (ox, oy) in around)
+                    {
+                        int q = (y + oy) * n + x + ox;
+                        ax += fx[q] * weight[q]; az += fz[q] * weight[q];
+                    }
+                    float len = MathF.Sqrt(ax * ax + az * az);
+                    (sx[k], sz[k]) = len > 1e-4f ? (ax / len, az / len) : (fx[k], fz[k]);
+                }
+            for (int k = 0; k < n * n; k++)
+                if (weight[k] > 0) (fx[k], fz[k]) = (sx[k], sz[k]);
+        }
+        var agreed = (float[])weight.Clone();
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                int k = y * n + x;
+                if (weight[k] <= 0) continue;
+                float ax = 0, az = 0, sw = 0;
+                for (int oy = -2; oy <= 2; oy++)
+                    for (int ox = -2; ox <= 2; ox++)
+                    {
+                        int xx = x + ox, yy = y + oy;
+                        if (xx < 0 || yy < 0 || xx >= n || yy >= n) continue;
+                        int q = yy * n + xx;
+                        ax += fx[q] * weight[q]; az += fz[q] * weight[q]; sw += weight[q];
+                    }
+                agreed[k] = weight[k] * Smooth(MinCoherence, MinCoherence + 0.3f, sw > 0 ? MathF.Sqrt(ax * ax + az * az) / sw : 0);
+            }
+        weight = agreed;
 
         // Dilate onto the neighbouring texels (the banks), each step weakening the weight.
         for (int step = 0; step < Dilate; step++)
