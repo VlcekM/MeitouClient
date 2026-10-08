@@ -1,9 +1,7 @@
 using System.Numerics;
 
-namespace Meitou.Navigation;
-
 /// <summary>A tiny CPU rasteriser for debug images: triangles seen from above (+Y), the highest surface wins, shaded by slope.</summary>
-public sealed class TopDownRenderer
+sealed class TopDownRenderer
 {
     readonly float minX, minZ, unitsPerPixel;
     readonly float[] depth;

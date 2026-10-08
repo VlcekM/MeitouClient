@@ -14,11 +14,12 @@ public sealed record NavZoneReady(ZoneCoordinate Zone, NavMeshOrigin Origin, dou
 
 /// <summary>
 /// Builds zone meshes off the simulation thread and publishes them to a <see cref="NavmeshWalkability"/> (docs/simulation.md: path queries and navmesh
-/// building run on their own threads; results are taken in at tick boundaries because the walkability's world is swapped atomically).
+/// building run on their own threads). A finished mesh goes live at once, whenever that is: the walkability's world is swapped atomically, so a query
+/// sees the old world or the new one, and the simulation can see a zone appear in the middle of a tick.
 /// <see cref="Request"/> queues a zone; a worker takes it from the cache (keyed by the zone's building hash and the settings) or gathers, builds,
 /// prunes and caches it. Several zones queued together are built one after another, each using all cores.
 /// </summary>
-public sealed class NavMeshService : IDisposable
+internal sealed class NavMeshService : IDisposable
 {
     readonly GameInstall install;
     readonly GameDatabase db;
@@ -53,7 +54,7 @@ public sealed class NavMeshService : IDisposable
     /// <summary>Queues a zone (once); the task completes when its mesh is published.</summary>
     public Task<NavZoneReady> Request(ZoneCoordinate zone)
     {
-        if (Walkability.World.Contains(zone)) return Task.FromResult(new NavZoneReady(zone, NavMeshOrigin.Cache, 0, Walkability.World.Find(zone)!.PolygonCount));
+        if (Walkability.World.Find(zone) is { } loaded) return Task.FromResult(new NavZoneReady(zone, NavMeshOrigin.Cache, 0, loaded.PolygonCount));
         var tcs = new TaskCompletionSource<NavZoneReady>(TaskCreationOptions.RunContinuationsAsynchronously);
         var existing = pending.GetOrAdd(zone, tcs);
         if (ReferenceEquals(existing, tcs)) queue.Add(zone);
@@ -76,12 +77,12 @@ public sealed class NavMeshService : IDisposable
             var watch = Stopwatch.StartNew();
             try
             {
-                uint hash = gatherer.BuildingHash(zone, 72);
+                uint hash = gatherer.BuildingHash(zone);
                 var mesh = Cache.TryLoad(zone.X, zone.Y, hash, settingsHash);
                 var origin = NavMeshOrigin.Cache;
                 if (mesh is null)
                 {
-                    var geometry = gatherer.Gather(zone);
+                    var geometry = gatherer.Gather(zone, buildingHash: hash);
                     geometry.Seeds.AddRange(NeighbourSeeds.Collect(Walkability.World, zone, geometry));
                     mesh = NavMeshPipeline.BuildZone(gatherer, geometry, Settings, out _).WithoutPruned();
                     origin = NavMeshOrigin.Built;

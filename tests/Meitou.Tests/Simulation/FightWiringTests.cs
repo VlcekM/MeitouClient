@@ -23,9 +23,9 @@ public class FightWiringTests
         world.Squads.Add(squad);
         CharacterId Make(string name, Vector3 at, bool player)
         {
-            var c = new Combatant { Name = name };
-            var stats = c.MakeStats();
-            var cold = new CharacterCold { Name = name, Stats = stats, Race = Human, Medical = MedicalState.Create(Human, stats.Strength), Fighter = c.MakeFighter(), IsPlayer = player, SquadId = player ? -1 : squad.Id };
+            var cold = new Combatant { Name = name }.MakeCold();
+            cold.IsPlayer = player;
+            cold.SquadId = player ? -1 : squad.Id;
             return world.Characters.Spawn(new CharacterHot { Position = at, Health = 100, MaxSpeed = 60, WalkSpeed = 15, Mode = SpeedMode.Free }, cold, 0);
         }
         var a = Make("player", new Vector3(1000, 150, 1000), true);
@@ -71,8 +71,7 @@ public class FightWiringTests
         var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths, new CombatOptions { SelfApproach = false, TickMedical = true });
         var walk = new OpenGroundWalkability((_, _) => 150);
         using var twice = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, walk, [new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat]);
-        var stats = new Combatant().MakeStats();
-        var cold = new CharacterCold { Stats = stats, Race = Human, Medical = MedicalState.Create(Human, stats.Strength), Fighter = new Combatant().MakeFighter() };
+        var cold = new Combatant().MakeCold();
         var id = twice.Characters.Spawn(new CharacterHot { Position = new Vector3(1000, 150, 1000), Health = 100 }, cold, 0);
         twice.RunTicks(1000);
         Assert.True(hunger - cold.Medical!.Hunger > once * 1.5f, "two systems ticking the same body drain it twice as fast (why the game sets TickMedical = false)");

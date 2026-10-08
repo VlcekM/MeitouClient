@@ -4,8 +4,8 @@ namespace Meitou.Simulation.Bodies;
 
 /// <summary>
 /// The run-speed chain (docs/game/character-stats.md "Derived values", <c>FUN_140883db0</c>, <c>FUN_140886460</c>, <c>FUN_140884970</c>, <c>FUN_140644d30</c>): the
-/// stat S that movement turns into units per second (docs/game/pathfinding.md "Movement"). The population code used a stand-in athletics of 20; it should call
-/// <see cref="Run"/> with the character's stats and medical state instead.
+/// stat S that movement turns into units per second (docs/game/pathfinding.md "Movement"). <c>BodySystem</c> and the population code call
+/// <see cref="Run"/> with the character's stats and medical state.
 /// </summary>
 public static class Speed
 {

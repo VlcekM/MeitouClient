@@ -6,25 +6,6 @@ using Meitou.Simulation.Bodies;
 
 namespace Meitou.Simulation.Combat;
 
-/// <summary>Orders the characters to fight <see cref="Target"/> (the AI's "attack" task, a player's attack command): they draw their weapon, close in and attack until one of them is down.</summary>
-public sealed record AttackOrder(IReadOnlyList<CharacterId> Attackers, CharacterId Target) : SimCommand;
-
-/// <summary>What a resolved blow did, for the log (a combat log, damage numbers, tests).</summary>
-public readonly record struct CombatLogEntry(long Tick, int Attacker, int Defender, int Blow, BlowOutcome Outcome, int Part, float Cut, float Blunt, float Pierce, float Stun, bool Knockout, bool Death);
-
-/// <summary>Settings of the <see cref="CombatSystem"/> that are the host's choice rather than the game's.</summary>
-public sealed record CombatOptions
-{
-    /// <summary>The system closes the distance to the target itself, in a straight line (no navmesh). Off when a movement system does it.</summary>
-    public bool SelfApproach { get; init; } = true;
-    /// <summary>The system runs the medical tick (bleeding, healing, waking) of the characters that have a body. Off when a needs system does it.</summary>
-    public bool TickMedical { get; init; } = true;
-    /// <summary>Keep a <see cref="CombatSystem.Log"/> of every resolved blow.</summary>
-    public bool RecordLog { get; init; }
-    /// <summary>The speed (units per second) a character closes in at when it has no speed stat set.</summary>
-    public float ApproachSpeed { get; init; } = 30;
-}
-
 /// <summary>
 /// Melee combat (docs/simulation.md "Combat as built (stage 8)", docs/game/combat.md). One system, three parts per tick:
 /// <list type="bullet">
@@ -38,7 +19,7 @@ public sealed record CombatOptions
 /// Everything random is a function of (seed, character, kind, counter) so the result does not depend on the thread count. Stats, bodies and gear change only here in the commit and in
 /// the owner's own Act (the medical tick); other characters only read the <see cref="CombatSlot"/> copy.
 /// </summary>
-public sealed class CombatSystem : ITickSystem, IStateHashed
+public sealed partial class CombatSystem : ITickSystem, IStateHashed
 {
     /// <summary>The <see cref="Effect.Kind"/> of a blow: <c>Arg</c> is the blow (1 or 2) and <c>Amount</c> the attacker's attack number.</summary>
     public const int BlowEffect = 1;
@@ -52,6 +33,7 @@ public sealed class CombatSystem : ITickSystem, IStateHashed
     readonly AnimationLengths lengths;
     readonly XpService xp;
     readonly List<CombatLogEntry> log = [];
+    readonly List<MedicalEvent> hitEvents = [];
     CombatSlot[] read = [];
     CombatSlot[] write = [];
 
@@ -198,7 +180,7 @@ public sealed class CombatSystem : ITickSystem, IStateHashed
             n.Yaw = MathF.Atan2(dir.X, dir.Y);
             if (!Settings.SelfApproach) continue;
             bool busy = s.Down || s.AttackTech >= 0 || s.ReactTech >= 0 || now < s.StunUntil;
-            float gap = distance - Radius(cold) - Radius(table.Cold(t)!);
+            float gap = distance - CombatTuning.Footprint(cold) - CombatTuning.Footprint(table.Cold(t));
             if (busy || gap <= CombatTuning.CloseInGap)
             {
                 n.Velocity = default;
@@ -216,208 +198,6 @@ public sealed class CombatSystem : ITickSystem, IStateHashed
         }
     }
 
-    static float Radius(CharacterCold c) => c.Race?.PathfindFootprintRadius ?? 4;
-
-    // ------------------------------------------------------------------ act
-
-    static float Eff(CharacterCold c, StatsEnumerated stat) => c.Stats![stat] * c.Medical!.StatMultiplier(stat);
-
-    int PauseTicks(World world, int slot, int counter)
-    {
-        float u = CombatRolls.Float(world.Seed, Rng.Key(world.Characters.IdOf(slot)), CombatRoll.Pause, (ulong)(uint)counter ^ ((ulong)(uint)world.Tick << 20));
-        return Math.Max(1, (int)MathF.Ceiling((CombatTuning.PauseMin + u * (CombatTuning.PauseMax - CombatTuning.PauseMin)) / world.TickSeconds));
-    }
-
-    int Ticks(CombatTechnique t, float combatSpeed, float dt)
-    {
-        float clip = lengths.Of(t.AnimName);
-        if (clip <= 0) clip = CombatTuning.DefaultClipSeconds;
-        return Math.Max(2, (int)MathF.Ceiling(clip / (MathF.Max(t.AnimSpeedMult, 0.1f) * MathF.Max(combatSpeed, 0.1f)) / dt));
-    }
-
-    public void Act(World world, Partition part, EffectBuffer effects)
-    {
-        var table = world.Characters;
-        var prev = table.Previous;
-        var next = table.Next;
-        int now = (int)world.Tick;
-        float dt = world.TickSeconds;
-        List<MedicalEvent>? events = null;
-        for (int i = part.Start; i < part.End; i++)
-        {
-            if (!prev[i].Alive) continue;
-            var cold = table.Cold(i)!;
-            if (cold.Fighter is null || cold.Stats is null || cold.Medical is null || cold.Race is null) continue;
-            ref var s = ref write[i];
-            ulong key = Rng.Key(table.IdOf(i));
-
-            // 1. The body: bleeding, healing, waking.
-            if (Settings.TickMedical)
-            {
-                events ??= [];
-                events.Clear();
-                cold.Medical.Tick(dt * HoursPerSecond, MakeContext(world, i, cold), events);
-            }
-            s.Down = cold.Medical.Incapacitated;
-            if (s.Down)
-            {
-                s.AttackTech = -1;
-                s.NextBlow = 0;
-                s.ReactTech = -1;
-                s.TargetSlot = -1;
-                if (cold.InCombat) EndFight(table, i);
-                continue;
-            }
-
-            // 2. Helpless after a heavy hit.
-            if (now < s.StunUntil)
-            {
-                s.AttackTech = -1;
-                s.NextBlow = 0;
-                s.ReactTech = -1;
-                continue;
-            }
-
-            // 3. The target.
-            bool fighting = s.TargetSlot >= 0;
-            if (fighting && !(s.TargetSlot < prev.Length && prev[s.TargetSlot].Alive && prev[s.TargetSlot].Generation == s.TargetGeneration && !read[s.TargetSlot].Down))
-            {
-                fighting = false;
-                s.TargetSlot = -1;
-                s.AttackTech = -1;
-                s.NextBlow = 0;
-                EndFight(table, i);
-            }
-
-            // 4. The reaction and the attack in progress.
-            if (s.ReactTech >= 0 && now >= s.ReactStart + s.ReactTicks) s.ReactTech = -1;
-            if (s.AttackTech >= 0)
-            {
-                var tech = techniques[s.AttackTech];
-                if (s.NextBlow > 0 && fighting && now >= s.AttackStart + (int)MathF.Ceiling(tech.StrikeProgress(s.NextBlow) * s.AttackTicks))
-                {
-                    effects.Emit(i, s.TargetSlot, BlowEffect, s.AttackSeq, default, s.NextBlow);
-                    s.Thrown++;
-                    s.NextBlow = s.NextBlow < tech.Blows ? s.NextBlow + 1 : 0;
-                }
-                if (now >= s.AttackEnd)
-                {
-                    s.AttackTech = -1;
-                    s.NextBlow = 0;
-                    s.ReadyTick = now + PauseTicks(world, i, s.AttackSeq);
-                }
-            }
-
-            // 5. Reacting comes before attacking: a free character looks for blows coming at it.
-            if (s.ReactTech < 0 && s.AttackTech < 0) React(world, i, ref s, cold, key, now, dt);
-
-            // 6. A free attacker in reach starts a technique.
-            if (fighting && s.AttackTech < 0 && s.ReactTech < 0 && now >= s.ReadyTick) StartAttack(world, i, ref s, cold, key, now, dt);
-        }
-    }
-
-    void StartAttack(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt)
-    {
-        var table = world.Characters;
-        var prev = table.Previous;
-        int t = s.TargetSlot;
-        var fighter = cold.Fighter!;
-        var tc = table.Cold(t)!;
-        float gap = Vector2.Distance(new(prev[i].Position.X, prev[i].Position.Z), new(prev[t].Position.X, prev[t].Position.Z)) - Radius(cold) - Radius(tc);
-        bool moving = new Vector2(prev[t].Velocity.X, prev[t].Velocity.Z).Length() >= 1;
-        float weaponReach = fighter.Unarmed ? 99 : fighter.Weapon!.Data.Length * 0.5f;
-        float skill = Eff(cold, fighter.WeaponSkill);
-        float roll = CombatRolls.Float(world.Seed, key, CombatRoll.Technique, (ulong)(s.AttackSeq + 1));
-        int pick = TechniqueChooser.ChooseAttack(techniques, fighter.Kind, 0, false, skill, gap, moving, weaponReach, roll);
-        if (pick < 0) return;
-        var tech = techniques[pick];
-        s.AttackSeq++;
-        s.AttackTech = pick;
-        s.AttackStart = now;
-        s.AttackTicks = Ticks(tech, fighter.CombatSpeed, dt);
-        s.AttackEnd = now + Math.Max(1, (int)MathF.Ceiling(tech.EndProgress * s.AttackTicks));
-        s.NextBlow = 1;
-        s.AttackReach = TechniqueChooser.ReachOf(tech, moving, weaponReach);
-        s.AttackSkill = Eff(cold, fighter.Unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack) + (fighter.Unarmed ? fighter.UnarmedBonus : fighter.AttackBonus + (fighter.Weapon?.Stats.AttackMod ?? 0));
-    }
-
-    struct Scan
-    {
-        public CombatSlot[] Read;
-        public CombatTechnique[] Techniques;
-        public int Self, SelfGeneration, Now;
-        public CombatSlot Me;
-        public int Attacker, Blow, Strike;
-    }
-
-    void React(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt)
-    {
-        var table = world.Characters;
-        var prev = table.Previous;
-        var scan = new Scan { Read = read, Techniques = techniques, Self = i, SelfGeneration = prev[i].Generation, Now = now, Me = s, Attacker = -1, Strike = int.MaxValue };
-        world.Grid.Query(prev[i].Position.X, prev[i].Position.Z, CombatTuning.ReactionScanRadius, ref scan, static (int other, ref Scan st) =>
-        {
-            if (other == st.Self) return;
-            ref readonly var a = ref st.Read[other];
-            if (a.AttackTech < 0 || a.NextBlow == 0 || a.TargetSlot != st.Self || a.TargetGeneration != st.SelfGeneration) return;
-            var tech = st.Techniques[a.AttackTech];
-            int strike = a.AttackStart + (int)MathF.Ceiling(tech.StrikeProgress(a.NextBlow) * a.AttackTicks);
-            if (strike <= st.Now) return;
-            if (st.Me.ReactedSlot == other && st.Me.ReactedSeq == a.AttackSeq && st.Me.ReactedBlow == a.NextBlow) return;
-            if (strike < st.Strike) { st.Strike = strike; st.Attacker = other; st.Blow = a.NextBlow; }
-        });
-        if (scan.Attacker < 0) return;
-
-        var attack = read[scan.Attacker];
-        var atkTech = techniques[attack.AttackTech];
-        int direction = atkTech.DirectionOf(scan.Blow);
-        s.ReactedSlot = scan.Attacker;
-        s.ReactedSeq = attack.AttackSeq;
-        s.ReactedBlow = scan.Blow;
-
-        var fighter = cold.Fighter!;
-        float meleeDefence = Eff(cold, StatsEnumerated.MeleeDefence);
-        ulong counter = CombatRolls.BlowCounter(scan.Attacker, attack.AttackSeq, scan.Blow, 0);
-        float chanceRoll = CombatRolls.Float(world.Seed, key, CombatRoll.Block, counter);
-        float pickRoll = CombatRolls.Float(world.Seed, key, CombatRoll.Reaction, counter);
-        float block, dodge = 0;
-        if (fighter.CanBlock)
-        {
-            float d = DefenceFormulas.Defence(meleeDefence, fighter.Weapon!.Stats.DefenceMod, true, fighter.DefenceBonus, fighter.Guarding);
-            block = DefenceFormulas.BlockChance(d, attack.AttackSkill, combat);
-        }
-        else
-        {
-            block = 0;
-            float effective = DefenceFormulas.EffectiveDefence(Eff(cold, StatsEnumerated.MartialArts), fighter.EncumbranceFactor, LegFactor(cold.Medical!), fighter.DefenceBonus, fighter.Guarding);
-            dodge = DefenceFormulas.BlockChance(effective, attack.AttackSkill, combat, 0, 95);
-        }
-        int pick = TechniqueChooser.ChooseReaction(techniques, fighter.Kind, 0, false, fighter.CanBlock, direction, block, dodge, chanceRoll, pickRoll);
-        if (pick < 0) return;
-        var reaction = techniques[pick];
-        int ticks = Ticks(reaction, fighter.CombatSpeed, dt);
-        // The reaction is timed so that it is at its "blocked frame" when the blow arrives; with less lead time it starts at once and is less far along.
-        int strike = scan.Strike;
-        int start = Math.Max(now, strike - (int)MathF.Round(reaction.StrikeProgress(1) * ticks));
-        s.ReactTech = pick;
-        s.ReactStart = start;
-        s.ReactTicks = ticks;
-    }
-
-    /// <summary>The worse leg's health fraction x 1.8 clamped to [0, 1] (<c>FUN_140884970</c>); 1 for a body without legs.</summary>
-    static float LegFactor(MedicalState medical)
-    {
-        float worst = 1;
-        bool any = false;
-        foreach (var p in medical.Parts)
-        {
-            if (p.Template.Type != BodyPartType.Leg) continue;
-            any = true;
-            worst = MathF.Min(worst, p.Fraction);
-        }
-        return any ? Math.Clamp(worst * 1.8f, 0, 1) : 1;
-    }
-
     MedicalContext MakeContext(World world, int slot, CharacterCold cold) =>
         new(constants, options, cold.Race!)
         {
@@ -427,137 +207,6 @@ public sealed class CombatSystem : ITickSystem, IStateHashed
             Seed = world.Seed,
             CharacterKey = Rng.Key(world.Characters.IdOf(slot)),
         };
-
-    // ------------------------------------------------------------------ commit
-
-    public void Apply(World world, in Effect e)
-    {
-        if (e.Kind != BlowEffect) return;
-        var table = world.Characters;
-        int a = e.Source, d = e.Target, blow = e.Arg, seq = (int)e.Amount, now = (int)world.Tick;
-        ref var A = ref write[a];
-        ref var D = ref write[d];
-        if (A.AttackSeq != seq || A.AttackTech < 0) return;
-        var ac = table.Cold(a);
-        var dc = table.Cold(d);
-        if (ac is null || dc is null || ac.Fighter is null || dc.Fighter is null || ac.Stats is null || dc.Stats is null || ac.Medical is null || dc.Medical is null || ac.Race is null || dc.Race is null) return;
-        var tech = techniques[A.AttackTech];
-        var prev = table.Previous;
-        int direction = tech.DirectionOf(blow);
-
-        // Reach: the blow arrives only if the target is still within the reach the attack started with.
-        float gap = Vector2.Distance(new(prev[a].Position.X, prev[a].Position.Z), new(prev[d].Position.X, prev[d].Position.Z)) - Radius(ac) - Radius(dc);
-        BlowOutcome outcome;
-        float progress = 0;
-        if (gap > A.AttackReach + CombatTuning.ReachSlack) outcome = BlowOutcome.Missed;
-        else
-        {
-            CombatTechnique? reaction = D.ReactTech >= 0 && !D.Down && now >= D.StunUntil ? techniques[D.ReactTech] : null;
-            if (reaction is not null) progress = Math.Clamp((now - D.ReactStart) / (float)D.ReactTicks, 0, 1);
-            outcome = HitOutcomes.Decide(reaction, progress, direction);
-        }
-
-        switch (outcome)
-        {
-            case BlowOutcome.Missed:
-                Record(now, a, d, blow, outcome, -1, default, false, false);
-                return;
-            case BlowOutcome.Blocked:
-                A.Parried++;
-                D.Blocks++;
-                GainCombatXp(ac, dc, XpEvent.GlancingHit, XpEvent.Defended);
-                Stop(ref A, tech, blow);
-                Record(now, a, d, blow, outcome, -1, default, false, false);
-                return;
-            case BlowOutcome.Dodged:
-                A.Evaded++;
-                D.Dodges++;
-                GainCombatXp(ac, dc, XpEvent.GlancingHit, null);
-                var dodgeStats = dc.Stats;
-                xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge, 0.25f * xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)));
-                Record(now, a, d, blow, outcome, -1, default, false, false);
-                return;
-        }
-
-        // A hit.
-        var fighter = ac.Fighter;
-        var target = dc.Fighter;
-        float toughness = Eff(dc, StatsEnumerated.Toughness);
-        TargetKind kind = dc.Race.IsRobot ? TargetKind.Robot : target.IsAnimal ? TargetKind.Animal : TargetKind.Human;
-        float skill = Eff(ac, fighter.WeaponSkill);
-        float dex = Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult;
-        float str = Eff(ac, StatsEnumerated.Strength);
-        var packet = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(skill, Eff(ac, StatsEnumerated.Toughness), str, fighter.Weapon, kind, dc.Race.StringId, fighter.DamageOutput, combat)
-            : DamageFormulas.Packet(skill, dex, str, fighter.Weapon!, kind, dc.Race.StringId, fighter.DamageOutput, combat);
-
-        var ctx = MakeContext(world, d, dc);
-        var events = new List<MedicalEvent>();
-        ulong defenderKey = Rng.Key(table.IdOf(d));
-        var armour = target.Armour;
-        var armourSpan = armour is ArmourPiece[] array ? array.AsSpan() : [.. armour];
-        var (part, damage) = HitResolver.Land(dc.Medical, ctx, packet, armourSpan,
-            piece => CombatRolls.Float(world.Seed, defenderKey, CombatRoll.Cover, CombatRolls.BlowCounter(a, seq, blow, piece)),
-            toughness, tech.LowStrike, direction == 6, combat, events);
-
-        A.Landed++;
-        D.Taken++;
-        bool knockout = false, death = false;
-        foreach (var ev in events)
-        {
-            switch (ev.Kind)
-            {
-                case MedicalEventKind.KnockedOut: knockout = true; break;
-                case MedicalEventKind.Died: death = true; break;
-                case MedicalEventKind.PartSevered: xp.ToughnessFromLimbLoss(dc.Stats, dc.Race); break;
-            }
-        }
-        if (dc.Medical.Incapacitated)
-        {
-            D.Down = true;
-            D.AttackTech = -1;
-            D.NextBlow = 0;
-            D.ReactTech = -1;
-        }
-        else if (damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, combat))
-        {
-            // A heavy hit ("Heavy_Hit" instead of "Light_Hit"): the target is helpless for a moment. It takes effect at the next Act, so the blows already thrown this tick still land.
-            D.StunUntil = Math.Max(D.StunUntil, now + (int)MathF.Ceiling(CombatTuning.HeavyHitStun / world.TickSeconds));
-        }
-        GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken);
-        Record(now, a, d, blow, outcome, part, damage, knockout, death);
-    }
-
-    static void Stop(ref CombatSlot attacker, CombatTechnique tech, int blow)
-    {
-        // A blocked blow stops the swing at its "stop frame": the rest of the combo is not thrown.
-        float stop = tech.StopProgress(blow);
-        if (stop < 1) attacker.AttackEnd = Math.Min(attacker.AttackEnd, attacker.AttackStart + (int)MathF.Ceiling(stop * attacker.AttackTicks));
-        attacker.NextBlow = 0;
-    }
-
-    void GainCombatXp(CharacterCold attacker, CharacterCold defender, XpEvent attackerEvent, XpEvent? defenderEvent)
-    {
-        var af = attacker.Fighter!;
-        var df = defender.Fighter!;
-        float aStrength = StrengthFactor(attacker, af);
-        xp.Combat(attacker.Stats!, attacker.Race!, attackerEvent, af.Unarmed, af.Unarmed ? StatsEnumerated.None : af.Weapon!.Skill, Eff(defender, StatsEnumerated.MeleeDefence), aStrength);
-        if (defenderEvent is { } ev)
-        {
-            float dStrength = StrengthFactor(defender, df);
-            var weaponStat = df.Unarmed || ev == XpEvent.HitTaken ? StatsEnumerated.None : df.Weapon!.Skill;
-            xp.Combat(defender.Stats!, defender.Race!, ev, df.Unarmed, weaponStat, Eff(attacker, af.Unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack), dStrength);
-        }
-    }
-
-    float StrengthFactor(CharacterCold c, Fighter f) => f.Unarmed
-        ? 1 - f.EncumbranceFactor
-        : xp.WeaponWeightStrengthFactor(f.Weapon!.Stats.Weight, c.Stats![StatsEnumerated.Strength], c.Medical!.StatMultiplier(StatsEnumerated.Strength));
-
-    void Record(int now, int a, int d, int blow, BlowOutcome outcome, int part, in HitDamage damage, bool knockout, bool death)
-    {
-        if (Settings.RecordLog) log.Add(new CombatLogEntry(now, a, d, blow, outcome, part, damage.Cut, damage.Blunt, damage.Pierce, damage.ExtraStun, knockout, death));
-    }
 
     // ------------------------------------------------------------------ end of tick
 

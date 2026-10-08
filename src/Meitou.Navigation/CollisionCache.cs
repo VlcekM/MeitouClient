@@ -6,7 +6,7 @@ using Meitou.Data.Physics;
 namespace Meitou.Navigation;
 
 /// <summary>One shape of a collision file, triangulated once in Kenshi's Y-up axes (the exporter-to-Ogre map applied, the shape's pose applied).</summary>
-public sealed class PreparedShape(CollisionShapeKind kind, Vector3[] vertices, int[] indices, bool isConvex)
+internal sealed class PreparedShape(CollisionShapeKind kind, Vector3[] vertices, int[] indices, bool isConvex)
 {
     public CollisionShapeKind Kind { get; } = kind;
     public Vector3[] Vertices { get; } = vertices;
@@ -17,13 +17,13 @@ public sealed class PreparedShape(CollisionShapeKind kind, Vector3[] vertices, i
 }
 
 /// <summary>A collision file ready for placement: the triangles of every shape that gives any.</summary>
-public sealed class PreparedCollision(PreparedShape[] shapes)
+internal sealed class PreparedCollision(PreparedShape[] shapes)
 {
     public PreparedShape[] Shapes { get; } = shapes;
 }
 
 /// <summary>Loads and triangulates collision files by record path, once each; safe from several threads.</summary>
-public sealed class CollisionCache(GameInstall install)
+internal sealed class CollisionCache(GameInstall install)
 {
     readonly ConcurrentDictionary<string, PreparedCollision?> files = new(StringComparer.OrdinalIgnoreCase);
     int missing;
@@ -65,8 +65,14 @@ public sealed class CollisionCache(GameInstall install)
         return new PreparedCollision([.. shapes]);
     }
 
-    /// <summary>A closed triangle mesh with negative volume is inside out: flip it so that its faces point outward.</summary>
-    static void FixClosedWinding(Vector3[] v, int[] idx)
+    /// <summary>What <see cref="FixClosedWinding"/> found.</summary>
+    internal enum Winding { Open, Outward, Flipped }
+
+    /// <summary>
+    /// A closed triangle mesh (every edge has its reverse) with negative signed volume is inside out: flip it so that its faces point outward. An open mesh
+    /// is kept as stored. Our own rule (docs/formats/collision.md, "Findings").
+    /// </summary>
+    internal static Winding FixClosedWinding(Vector3[] v, int[] idx)
     {
         var edges = new Dictionary<(int, int), int>();
         for (int t = 0; t < idx.Length; t += 3)
@@ -76,11 +82,12 @@ public sealed class CollisionCache(GameInstall install)
                 edges[e] = edges.GetValueOrDefault(e) + 1;
             }
         foreach (var (a, b) in edges.Keys)
-            if (!edges.ContainsKey((b, a))) return; // open mesh: keep as stored
+            if (!edges.ContainsKey((b, a))) return Winding.Open; // open mesh: keep as stored
         float volume = 0;
         for (int t = 0; t < idx.Length; t += 3)
             volume += Vector3.Dot(v[idx[t]], Vector3.Cross(v[idx[t + 1]], v[idx[t + 2]]));
-        if (volume >= 0) return;
+        if (volume >= 0) return Winding.Outward;
         for (int t = 0; t < idx.Length; t += 3) (idx[t + 1], idx[t + 2]) = (idx[t + 2], idx[t + 1]);
+        return Winding.Flipped;
     }
 }

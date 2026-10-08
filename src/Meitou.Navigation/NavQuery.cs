@@ -28,7 +28,10 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     public const float OpenDoorCost = 50;
     /// <summary>The original's iteration limit.</summary>
     public const int MaxIterations = 100000;
-    /// <summary>How far from the start / the goal a polygon may be and still count (the original: 500 and about 30 Havok units × 0.1 ... engine choice).</summary>
+    /// <summary>
+    /// How far (units) from the start / the goal a polygon may be and still count. Engine choice: the original looks for the start face within 500 Havok units
+    /// (5000 Kenshi units) and the goal face within about 30 (Observed, docs/game/pathfinding.md, "Path queries").
+    /// </summary>
     public const float StartSnap = 60, GoalSnap = 30;
 
     public NavWorld World { get; } = world;

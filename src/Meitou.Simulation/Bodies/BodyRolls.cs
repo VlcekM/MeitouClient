@@ -15,5 +15,5 @@ public static class BodyRolls
 
     /// <summary>A roll in [0, 1) for a (seed, key, domain, counter).</summary>
     public static float Float(ulong seed, ulong characterKey, ulong domain, ulong counter) =>
-        Rng.Float(Rng.Hash(seed, characterKey ^ domain, RngPurpose.Test, counter));
+        Rng.Float(Rng.Hash(seed, characterKey ^ domain, RngPurpose.Body, counter));
 }

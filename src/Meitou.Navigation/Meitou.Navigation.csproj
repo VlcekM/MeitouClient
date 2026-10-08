@@ -10,5 +10,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Meitou.Tests" />
+    <InternalsVisibleTo Include="meitou-tools" />
   </ItemGroup>
 </Project>

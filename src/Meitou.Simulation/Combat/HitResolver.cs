@@ -40,16 +40,32 @@ public static class HitResolver
     /// that part with a roll from <paramref name="coverRoll"/> (called per piece, in order), resolves the damage and applies it to the part. Returns the part hit and the damage applied.
     /// </summary>
     public static (int Part, HitDamage Damage) Land(MedicalState medical, in MedicalContext ctx, in DamagePacket packet, ReadOnlySpan<ArmourPiece> armour,
-        Func<int, float> coverRoll, float toughness, bool lowStrike, bool directionSix, CombatConstants c, List<MedicalEvent>? events)
+        Func<int, float> coverRoll, float toughness, bool lowStrike, bool directionSix, CombatConstants c, List<MedicalEvent>? events) =>
+        Land(medical, ctx, packet, armour, new FuncCover(coverRoll), toughness, lowStrike, directionSix, c, events);
+
+    /// <summary>The same as the delegate overload, with the cover roll as a struct so that a hit allocates nothing.</summary>
+    public static (int Part, HitDamage Damage) Land<TCover>(MedicalState medical, in MedicalContext ctx, in DamagePacket packet, ReadOnlySpan<ArmourPiece> armour,
+        TCover coverRoll, float toughness, bool lowStrike, bool directionSix, CombatConstants c, List<MedicalEvent>? events) where TCover : struct, ICoverRoll
     {
         int part = medical.ChoosePart(ctx, lowStrike, directionSix);
         if (part < 0) return (-1, default);
         string partId = medical.Parts[part].Template.StringId;
         Span<bool> covering = armour.Length <= 32 ? stackalloc bool[armour.Length] : new bool[armour.Length];
-        for (int i = 0; i < armour.Length; i++) covering[i] = ArmourStack.Covers(armour[i].Data, partId, coverRoll(i));
+        for (int i = 0; i < armour.Length; i++) covering[i] = ArmourStack.Covers(armour[i].Data, partId, coverRoll.Roll(i));
         var effect = ArmourStack.Stack(armour, covering, packet.ArmourPenetration);
         var damage = Resolve(packet, effect, toughness, ctx.Options.GlobalDamageMultiplier, c);
         medical.ApplyHit(part, damage, ctx, events);
         return (part, damage);
     }
+
+    readonly struct FuncCover(Func<int, float> roll) : ICoverRoll
+    {
+        public float Roll(int piece) => roll(piece);
+    }
+}
+
+/// <summary>Whether the armour piece at an index covers the part a blow hit: a roll in [0, 1).</summary>
+public interface ICoverRoll
+{
+    float Roll(int piece);
 }
