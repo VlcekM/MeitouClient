@@ -26,13 +26,18 @@ internal sealed class AnimationClip(string name, float length, BoneTrack?[] trac
 /// An animation as a layer of a pose: the clip with the tracks its ANIMATION record deletes and the bones it overrides
 /// (docs/animation.md, "Startup preprocessing"). Immutable, one per (skeleton, record or animation name).
 /// </summary>
-internal sealed class LayerDef(AnimationClip clip, bool[]? excluded, int[] overrides, string label)
+internal sealed class LayerDef(AnimationClip clip, bool[]? excluded, int[] overrides, string label, int rootMotionBone = -1)
 {
     public readonly AnimationClip Clip = clip;
     /// <summary>By bone handle: tracks ignored while sampling (null: none).</summary>
     public readonly bool[]? Excluded = excluded;
     public readonly int[] Override = overrides;
     public readonly string Label = label;
+    /// <summary>
+    /// The handle of <c>Bip01</c> when the clip moves the character (<see cref="AnimationMask.Relocates"/>), else -1: that track keeps only its height, as a
+    /// state with translation disabled in Kenshi's Ogre (docs/formats/ogre-skeleton.md), and the simulation moves the character by the rest.
+    /// </summary>
+    public readonly int RootMotionBone = rootMotionBone;
 }
 
 /// <summary>One animation of a pose: its definition, the time in seconds (looped over the length) and the blend weight.</summary>
@@ -61,6 +66,10 @@ internal sealed class SkeletonRig
     public readonly int[] Order;
     /// <summary>Parent handle per handle, -1 for roots.</summary>
     public readonly int[] Parent;
+    /// <summary>
+    /// The blend mode the file stores (average in every base-game file). Kenshi switches every character's skeleton instance to cumulative when it
+    /// attaches its animation controller (docs/formats/ogre-skeleton.md, <b>Verified</b>), so posing never uses it.
+    /// </summary>
     public readonly bool AverageBlend;
     readonly Dictionary<string, int> handles = new(StringComparer.Ordinal);
     readonly Dictionary<string, AnimationClip?> clips = new(StringComparer.OrdinalIgnoreCase);
@@ -150,7 +159,8 @@ internal sealed class SkeletonRig
             foreach (var bone in mask.DeletedBones)
                 if (Handle(bone) is { } h) (excluded ??= new bool[BoneCount])[h] = true;
             int[] overrides = [.. mask.OverrideBones.Select(Handle).OfType<int>()];
-            def = new LayerDef(clip, excluded, overrides, mask.RecordName is { } r && r != clip.Name ? $"{r} ({clip.Name})" : clip.Name);
+            def = new LayerDef(clip, excluded, overrides, mask.RecordName is { } r && r != clip.Name ? $"{r} ({clip.Name})" : clip.Name,
+                mask.Relocates && Handle("Bip01") is { } root ? root : -1);
         }
         return layers[name] = def;
     }
@@ -217,17 +227,15 @@ internal sealed class PoseScratch
         }
         float movement = shape?.MovementScale ?? 1;
 
-        // Average blend mode (all base-game skeletons): weights are scaled down only when they add up to more than 1.
-        float total = 0;
-        foreach (var l in layers) total += Math.Max(l.Weight, 0);
-        float norm = rig.AverageBlend && total > 1 ? 1 / total : 1;
+        // Cumulative blending (Kenshi sets it on every character's skeleton): each layer adds its weighted keys; the simulation keeps each body
+        // half's weights at a total of 1 (AnimationSystem.Publish), and the posture libraries add on top.
         for (int pass = 0; pass < 2; pass++)
         {
             bool overridePass = pass == 1;
             foreach (var layer in layers)
             {
                 if ((layer.Def.Override.Length > 0) != overridePass) continue;
-                float w = Math.Max(layer.Weight, 0) * norm;
+                float w = Math.Max(layer.Weight, 0);
                 if (w <= 0) continue;
                 if (overridePass)
                     foreach (int h in layer.Def.Override)
@@ -245,6 +253,7 @@ internal sealed class PoseScratch
                     var track = clip.Tracks[h];
                     if (track is null || excluded is not null && excluded[h]) continue;
                     Sample(track, time, out var t, out var r, out var s);
+                    if (h == layer.Def.RootMotionBone) t = new Vector3(0, t.Y, 0);
                     pos[h] += t * (w * movement);
                     rot[h] = Quaternion.Normalize(rot[h] * Nlerp(Quaternion.Identity, r, w));   // Node::rotate, local space
                     if (s != Vector3.One) scale[h] *= Vector3.One + (s - Vector3.One) * w;

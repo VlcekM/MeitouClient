@@ -7,26 +7,27 @@ namespace Meitou.Tests.Simulation;
 
 public class AnimationTests
 {
-    static AnimationDefinition Def(string name, AnimationArea area, float move = 0, float play = 0, bool idle = false, int right = 2, WeaponKinds kinds = WeaponKinds.All, bool synch = false) => new()
+    static AnimationDefinition Def(string name, AnimationArea area, float move = 0, float play = 0, bool idle = false, int right = 2, WeaponKinds kinds = WeaponKinds.All, bool synch = false,
+        float min = 0, float max = 0) => new()
     {
-        Id = name, Name = name, Clip = name, Area = area, MoveSpeed = move, PlaySpeed = play, Idle = idle, Synchs = synch,
+        Id = name, Name = name, Clip = name, Area = area, MoveSpeed = move, PlaySpeed = play, Idle = idle, Synchs = synch, MinSpeed = min, MaxSpeed = max,
         IdleChance = 100, IdleTimeMin = 10, IdleTimeMax = 40, Chance = 100, WeaponLeft = 0, WeaponRight = right, CombatMode = 0, StealthMode = 0,
         Kinds = kinds, LeftLegMin = 0, LeftLegMax = 100, RightLegMin = 0, RightLegMax = 100,
     };
 
-    /// <summary>The shape of the base game's records: idles, a walk (14), a jog (45) and a run (90) chain of the lower and upper body, and a sword-hand variant.</summary>
+    /// <summary>The base game's records: idles, a walk (14), a jog (45) and a run (90) of the lower and upper body with their min / max speeds, and sword-hand variants.</summary>
     static AnimationLibrary Library() => new(
     [
         Def("stand 1", AnimationArea.All, idle: true, right: 0),
         Def("stand 1 sword", AnimationArea.All, idle: true, right: 1),
-        Def("walk lower", AnimationArea.Lower, 14, 0.06f, synch: true),
-        Def("walk upper", AnimationArea.Upper, 14, 0.06f, right: 0, synch: true),
-        Def("walk upper sword", AnimationArea.Upper, 14, 0.06f, right: 1, synch: true),
-        Def("jog lower", AnimationArea.Lower, 45, 0.026f, synch: true),
-        Def("jog upper", AnimationArea.Upper, 45, 0.026f, right: 0, synch: true),
-        Def("run lower", AnimationArea.Lower, 90, 0.02f, synch: true),
-        Def("run upper", AnimationArea.Upper, 90, 0.02f, right: 0, synch: true),
-        Def("run upper sword", AnimationArea.Upper, 90, 0.02f, right: 1, synch: true),
+        Def("walk lower", AnimationArea.Lower, 14, 0.06f, synch: true, min: -50, max: 40),
+        Def("walk upper", AnimationArea.Upper, 14, 0.06f, right: 0, synch: true, min: -50, max: 45),
+        Def("walk upper sword", AnimationArea.Upper, 14, 0.06f, right: 1, synch: true, min: 0, max: 45),
+        Def("jog lower", AnimationArea.Lower, 45, 0.026f, synch: true, min: 18, max: 74),
+        Def("jog upper", AnimationArea.Upper, 45, 0.026f, right: 0, synch: true, min: 14, max: 74),
+        Def("run lower", AnimationArea.Lower, 90, 0.02f, synch: true, min: 45, max: 99999),
+        Def("run upper", AnimationArea.Upper, 90, 0.02f, right: 0, synch: true, min: 45, max: 99999),
+        Def("run upper sword", AnimationArea.Upper, 74, 0.02f, right: 1, synch: true, min: 45, max: 999),
     ]);
 
     static AnimationLengths Lengths() => new AnimationLengths().Add("walk lower", 1.4f).Add("walk upper", 1.4f).Add("jog lower", 0.9f).Add("jog upper", 0.9f).Add("run lower", 0.5667f).Add("run upper", 0.5667f);
@@ -34,7 +35,7 @@ public class AnimationTests
     static Dictionary<string, float> Weights(AnimationSystem system, CharacterAnimation a) => system.Publish(a).ToDictionary(l => l.Name, l => l.Weight);
 
     [Fact]
-    public void The_movement_chain_blends_the_two_clips_around_the_speed_and_uses_one_beyond_the_ends()
+    public void Every_movement_clip_weighs_the_sigmoid_of_its_speed_ramp_normalised_per_body_half()
     {
         var lib = Library();
         float W(float speed, AnimationStance s, string name)
@@ -44,13 +45,21 @@ public class AnimationTests
             return into.Where(p => lib.Definitions[p.Item1].Name == name).Sum(p => p.Item2);
         }
         var plain = new AnimationStance();
+        // Under move speed a clip whose min speed is under 1 weighs fully; nothing else fits at a stroll.
         Assert.Equal(1, W(5, plain, "walk lower"), 3);
         Assert.Equal(1, W(14, plain, "walk lower"), 3);
-        Assert.Equal(0.5, W(29.5f, plain, "walk lower"), 3);
-        Assert.Equal(0.5, W(29.5f, plain, "jog lower"), 3);
+        // At 29.5 the walk has fallen to r = 10.5 / 26 and the jog risen to r = 11.5 / 27: sigmoids 0.1275 and 0.1852, normalised.
+        Assert.Equal(0.4078, W(29.5f, plain, "walk lower"), 3);
+        Assert.Equal(0.5922, W(29.5f, plain, "jog lower"), 3);
         Assert.Equal(1, W(45, plain, "jog lower"), 3);
-        Assert.Equal(0.25, W(45 + 11.25f, plain, "run lower"), 3);
+        Assert.Equal(0.0767, W(60, plain, "run lower"), 3);
         Assert.Equal(1, W(300, plain, "run lower"), 3);
+        var walk = new AnimationDefinition { Id = "w", Name = "w", Clip = "w", MoveSpeed = 14, MinSpeed = -50, MaxSpeed = 40, LeftLegMin = 60, LeftLegIdeal = 90, LeftLegMax = 100, RightLegMin = 60, RightLegIdeal = 90, RightLegMax = 100 };
+        // The leg ramp over the worse leg, a max over 99 read as 101: 1 at the ideal 90, 1 / 11 at full health, 0 under 60.
+        Assert.Equal(1, walk.LegWeight(90, 100), 4);
+        Assert.Equal(1 / 11f, walk.LegWeight(100, 100), 4);
+        Assert.Equal(0.5, walk.LegWeight(100, 75), 4);
+        Assert.Equal(0, walk.LegWeight(59, 100));
     }
 
     [Fact]
@@ -82,7 +91,7 @@ public class AnimationTests
         var idle = Weights(system, a);
         Assert.Equal(["stand 1"], idle.Keys);
         Assert.Equal(1, idle["stand 1"], 3);
-        // Walking at 14: a quarter second (blend rate 4) takes the idle out and the walk in.
+        // Walking at 14: a quarter second (blend rate 4) takes the idle out and the walk in. (The first clips started at full weight.)
         int ticks = 0;
         while (Weights(system, a).GetValueOrDefault("stand 1") > 0 && ticks < 100) { system.Update(a, cold, 14, dt, 1, 1, 100 + ticks); ticks++; }
         Assert.InRange(ticks, 7, 9);
@@ -92,15 +101,15 @@ public class AnimationTests
     }
 
     [Fact]
-    public void The_synched_phase_advances_by_speed_times_play_speed_over_the_clip_length_and_keeps_both_bodies_in_step()
+    public void The_synched_phase_advances_by_speed_times_play_speed_in_cycles_and_keeps_both_bodies_in_step()
     {
         var system = new AnimationSystem(Library(), Lengths());
         var a = new CharacterAnimation();
         var cold = new CharacterCold();
         const float dt = 1 / 30f;
         for (int i = 0; i < 290; i++) system.Update(a, cold, 14, dt, 1, 1, i);
-        // 9.67 s at 14 * 0.06 clip seconds per second over 1.4 s clips: 5.8 cycles.
-        float expected = 290 / 30f * 14 * 0.06f / 1.4f;
+        // 9.67 s at 14 * 0.06 cycles per second (F = 1 without a body file): 8.12 cycles, whatever the clip's length.
+        float expected = 290 / 30f * 14 * 0.06f;
         Assert.Equal(expected - MathF.Floor(expected), a.Phase, 2);
         var layers = system.Publish(a);
         var lower = layers.Single(l => l.Name == "walk lower");
@@ -129,6 +138,84 @@ public class AnimationTests
         int first = still.Idle;
         for (int i = 1; i < 300; i++) system.Update(still, new CharacterCold(), 0, dt, 1, 1, i);
         Assert.Equal(first, still.Idle);
+    }
+
+    // ---- combat ----
+
+    static AnimationDefinition Stumble(string name, bool big, int from, params string[] parts) => Def(name, AnimationArea.All) with
+    {
+        IsAction = true, Relocates = true, PlaySpeed = 1, Stumbles = parts, BigStumble = big, StumbleFrom = from, Chance = 0, WeaponRight = 2,
+    };
+
+    static AnimationDefinition Technique(string name, AnimationArea area, bool relocates) => Def(name, AnimationArea.All) with
+    {
+        Area = area, IsAction = true, Technique = true, Relocates = relocates, WeaponRight = 2, CombatMode = 2, StealthMode = 2,
+    };
+
+    static AnimationLibrary CombatLibrary() => new(
+    [
+        Def("stand 1", AnimationArea.All, idle: true, right: 0),
+        Def("walk lower", AnimationArea.Lower, 14, 0.06f, synch: true, min: -50, max: 40),
+        Def("walk upper", AnimationArea.Upper, 14, 0.06f, right: 0, synch: true, min: -50, max: 45),
+        Stumble("mid blow light", false, 0, "chest", "head"),
+        Stumble("mid blow", true, 0, "chest", "head"),
+        Stumble("back blow light", false, 1, "chest", "head"),
+        Stumble("back blow low", true, 1, "chest"),
+        Technique("Cut left", AnimationArea.All, true),
+        Technique("Block up", AnimationArea.Upper, false),
+    ]);
+
+    [Fact]
+    public void A_hit_picks_the_stumbles_of_its_body_part_by_heaviness_and_side()
+    {
+        var lib = CombatLibrary();
+        string[] Names(string part, bool big, int side)
+        {
+            var into = new List<(int, float)>();
+            lib.Stumbles(part, big, side, new AnimationStance(), -1, into);
+            return [.. into.Select(p => lib.Definitions[p.Item1].Name)];
+        }
+        Assert.Equal(["mid blow light"], Names("chest", false, 0));
+        Assert.Equal(["mid blow"], Names("head", true, 0));
+        Assert.Equal(["back blow light"], Names("head", false, 1));
+        Assert.Empty(Names("head", true, 1));   // no heavy rear clip lists the head
+        Assert.Equal(["back blow low"], Names("chest", true, 1));
+    }
+
+    [Fact]
+    public void A_technique_follows_the_combat_timing_and_a_hit_plays_its_reaction_that_moves_the_character()
+    {
+        var lengths = Lengths().Add("Cut left", 1.0f).Add("mid blow", 2.0f)
+            .AddRoot("Cut left", [0, 1], [Vector2.Zero, new Vector2(0, 7)])
+            .AddRoot("mid blow", [0, 2], [Vector2.Zero, new Vector2(0, -10)]);
+        var lib = CombatLibrary();
+        var system = new AnimationSystem(lib, lengths);
+        var a = new CharacterAnimation();
+        var cold = new CharacterCold();
+        const float dt = 1 / 30f;
+        for (int i = 0; i < 10; i++) system.Update(a, cold, 0, dt, 1, 1, i);
+        // An attack at 40 % plays its clip at 40 % of its length, alone (it is the whole body), and steps forward with its root track.
+        int cut = lib.IndexOfAny("Cut left");
+        var forward = Vector2.Zero;
+        for (int i = 0; i < 12; i++) forward += system.Update(a, cold, 0, dt, 1, 1, 10 + i, combatView: CombatView.None with { Technique = cut, Progress = (i + 1) / 30f });
+        var layers = system.Publish(a);
+        Assert.Equal(0.4f, layers.Single(l => l.Name == "Cut left").Time, 3);
+        Assert.DoesNotContain(layers, l => l.Name == "stand 1" && l.Weight > 0.01f);
+        Assert.True(forward.Y > 0, $"the cut moved the character {forward}");
+        // A heavy hit to the chest from the front: "mid blow" plays from its start and pushes the character back.
+        var back = Vector2.Zero;
+        for (int i = 0; i < 15; i++) back += system.Update(a, cold, 0, dt, 1, 1, 30 + i, combatView: CombatView.None with { HitTick = 29, HitHeavy = true, HitPart = "chest" });
+        Assert.Equal(lib.IndexOfAny("mid blow"), a.Action);
+        Assert.Equal(0.5f, a.ActionTime, 3);
+        Assert.True(back.Y < 0, $"the hit moved the character {back}");
+        // A block plays on the upper body and does not move the character.
+        int block = lib.IndexOfAny("Block up");
+        var still = Vector2.Zero;
+        system.Update(a, cold, 0, dt, 1, 1, 50, combatView: CombatView.None with { Technique = block, Progress = 0 });
+        Assert.Equal(-1, a.Action);   // the technique cut the reaction short (it fades out over a quarter second, still moving the character, as in Kenshi)
+        for (int i = 1; i < 10; i++) system.Update(a, cold, 0, dt, 1, 1, 50 + i, combatView: CombatView.None with { Technique = block, Progress = i / 30f });
+        for (int i = 10; i < 20; i++) still += system.Update(a, cold, 0, dt, 1, 1, 50 + i, combatView: CombatView.None with { Technique = block, Progress = i / 30f });
+        Assert.Equal(Vector2.Zero, still);
     }
 
     // ---- in a world ----

@@ -79,6 +79,12 @@ public sealed partial class CombatSystem
 
         A.Landed++;
         D.Taken++;
+        D.HitTick = now;
+        D.HitPart = part;
+        D.HitHeavy = false;
+        // From behind (docs/animation.md "Hit reactions"): the attacker is more than 90 degrees off the defender's heading (yaw 0 along +Z, towards +X).
+        var toAttacker = new Vector2(prev[a].Position.X - prev[d].Position.X, prev[a].Position.Z - prev[d].Position.Z);
+        D.HitBehind = toAttacker.X * MathF.Sin(prev[d].Yaw) + toAttacker.Y * MathF.Cos(prev[d].Yaw) < 0;
         bool knockout = false, death = false;
         foreach (var ev in events)
         {
@@ -100,6 +106,7 @@ public sealed partial class CombatSystem
         {
             // A heavy hit ("Heavy_Hit" instead of "Light_Hit"): the target is helpless for a moment. It takes effect at the next Act, so the blows already thrown this tick still land.
             D.StunUntil = Math.Max(D.StunUntil, now + (int)MathF.Ceiling(CombatTuning.HeavyHitStun / world.TickSeconds));
+            D.HitHeavy = true;
         }
         GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken);
         Record(now, a, d, blow, outcome, part, damage, knockout, death);

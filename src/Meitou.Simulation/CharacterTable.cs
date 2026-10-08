@@ -69,6 +69,9 @@ public sealed class CharacterCold
     public Meitou.Data.Gameplay.Bodies.RaceData? Race { get; set; }
     public Meitou.Simulation.Bodies.CharacterStats? Stats { get; set; }
     public Meitou.Simulation.Bodies.MedicalState? Medical { get; set; }
+    /// <summary>Sandbox only (the animation sandbox of the game host): replaces the movement mode of every order, and the speed the character walks at (0: the speed chain's). Not hashed; the normal game never sets them.</summary>
+    public byte? ModeOverride { get; set; }
+    public float SpeedOverride { get; set; }
     /// <summary>The path cost factor of water for this character (race <c>water avoidance</c>, halved for the player faction; 0: default).</summary>
     public float WaterFactor { get; set; }
     /// <summary>What it carries (null for animals and anything without a race): <see cref="Meitou.Simulation.Items.FeedSystem"/> eats from it, <see cref="BodySystem"/> weighs it.</summary>

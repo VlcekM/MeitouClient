@@ -379,7 +379,9 @@ sealed class SceneHost(GpuContext ctx)
 /// <summary>The loaded world region: heights (the region fine, the whole world coarse), and where the camera starts.</summary>
 sealed class WorldScene : IDisposable
 {
-    public required TerrainHeightmap Heightmap;
+    /// <summary>The world heightmap file; null for the flat floor of the game's animation sandbox (<see cref="FlatHeight"/>).</summary>
+    public TerrainHeightmap? Heightmap;
+    public float FlatHeight;
     public required HeightWindow Window;
     /// <summary>Whole-world heights every <see cref="WorldFrame.CoarseStep"/>-th sample, (CoarseSize)² raw values.</summary>
     public required ushort[] Coarse;
@@ -390,9 +392,9 @@ sealed class WorldScene : IDisposable
     public GameDatabase? Database;
     public WorldObjects? Objects;
 
-    public float GroundAt(float x, float z) => Heightmap.HeightAt(x, z);
+    public float GroundAt(float x, float z) => Heightmap?.HeightAt(x, z) ?? FlatHeight;
 
-    public void Dispose() => Heightmap.Dispose();
+    public void Dispose() => Heightmap?.Dispose();
 }
 
 /// <summary>
@@ -465,6 +467,26 @@ static class WorldFrame
         Console.WriteLine($"loaded in {watch.ElapsedMilliseconds} ms");
         return scene;
     }
+    /// <summary>
+    /// A flat world for the game's animation sandbox: the whole terrain at one height (a 256² window of heights round the origin and a flat whole-world grid),
+    /// no heightmap file, no objects. The caller turns textures, objects, foliage and water off in <paramref name="o"/>.
+    /// </summary>
+    public static WorldScene LoadFlat(WorldOptions o, GameDatabase db, ushort raw = 3344)
+    {
+        const int cells = 256;   // 4608 units: one zone
+        var (c0, r0) = ((int)Math.Round(WorldLayout.ToSample(0, 0).Column) - cells / 2, (int)Math.Round(WorldLayout.ToSample(0, 0).Row) - cells / 2);
+        var flat = new ushort[(cells + 1) * (cells + 1)];
+        Array.Fill(flat, raw);
+        var window = new HeightWindow(c0, r0, 1, cells + 1, cells + 1, flat);
+        int coarseSize = (WorldLayout.HeightmapSize - 1) / CoarseStep + 1;
+        var coarse = new ushort[coarseSize * coarseSize];
+        Array.Fill(coarse, raw);
+        var (x0, z0) = window.WorldOf(0, 0);
+        var (x1, z1) = window.WorldOf(cells, cells);
+        float height = WorldLayout.RawToHeight(raw);
+        return new WorldScene { Window = window, Coarse = coarse, CoarseSize = coarseSize, FlatHeight = height, Focus = new Vector3(0, height, 0), X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Database = db, Clock = SkyClock.FromDatabase(db) };
+    }
+
     public static (WorldCamera, WorldRenderOptions) Setup(WorldScene scene, WorldOptions o)
     {
         float radius = o.Radius * WorldLayout.ZoneSize;
@@ -653,7 +675,7 @@ static class WorldFrame
             gpu.MakeParticles = () => particles;
             Console.WriteLine($"particles {particles.Library.Systems.Count} systems read; {placers.Count} map placers in {particles.PlacerGroups.Count} groups ({particleWatch.ElapsedMilliseconds} ms)");
         }
-        gpu.Streamer = new TerrainStreamer(install, terrain, textures, scene.Window.Step) { MaterialDistance = o.MaterialDistance };
+        if (scene.Heightmap is not null) gpu.Streamer = new TerrainStreamer(install, terrain, textures, scene.Window.Step) { MaterialDistance = o.MaterialDistance };
         if (o.NoStream) gpu.Anchor = scene.Focus;
         if (!o.NoWater && scene.Database is not null)
         {

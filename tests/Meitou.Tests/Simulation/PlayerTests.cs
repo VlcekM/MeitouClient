@@ -88,7 +88,7 @@ public class PlayerTests
         w.Commands.Enqueue(new MoveOrder([], a) { Tick = 1 });
         w.Commands.Enqueue(new MoveOrder([], b) { Tick = 1, Queued = true });
         var otherStart = g.Where(other);
-        w.RunTicks(30 * 4);
+        w.RunTicks(30 * 2);   // a path is followed at full speed at once: 140 of the 200 units at 70
         Assert.InRange(g.Where(me).X - start.X, 20, 200);
         Assert.Single(w.Characters.Cold(me.Slot)!.OrderQueue);   // still on the first leg
         w.RunTicks(30 * 20);

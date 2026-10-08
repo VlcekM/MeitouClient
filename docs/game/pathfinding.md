@@ -376,6 +376,11 @@ updated". FUN_1403a66c0 splits the door AABB across zone cells and calls FUN_140
   steering object and the character's stat value at CharStats +0x17c, 55 for a forced waypoint. Other caps in that function:
   18 when close to the target or turning, 16 when moving backwards. Arrival hysteresis thresholds 70 and 90, and 160 for
   mode 6 (**Observed**).
+- **No ramp on a path** (**Observed**, `@ 140148ac0`, `@ 140147ca0`): the path-following nav agent sets its velocity to its top
+  speed × the direction at once; the top speed is min(S, the mode cap), S the speed stat (+0x17c), the mode cap from
+  `@ 140665150` (mode 0 the constant 15 set in the constructor `@ 140664ec0`, the race `walk speed` not read there; 1 55; 2 and 3
+  999). The race `pathfind acceleration` (20) only brakes before corners (a v² / 2a test, `@ 140147fd0`). The 15 per second ramp
+  above is the combat / follow steering's alone. S of a human at athletics 0, unencumbered, is 70 (speed min / max skill 70 / 120).
 - **RACE fields** (**Verified**, probe table `probes/pathfinding/race_table.tsv` re-read with an independent probe):
   `swims`, `pathfind acceleration` (20 for humanoids, 4 Garru and bulls, 3 Leviathan), `pathfind footprint radius`
   (4 humans, 7 Garru, 40 Leviathan), `hull size` (5/17/5 humans), `water avoidance` (-10..10, human Greenlander 6),

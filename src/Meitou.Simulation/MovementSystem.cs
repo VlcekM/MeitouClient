@@ -7,7 +7,8 @@ namespace Meitou.Simulation;
 /// radius, go to (move orders), follow the squad leader.
 /// <list type="bullet">
 /// <item>Speed: the stat S in decimetres (world units) per second, capped by the speed mode (walk speed, 55, none); the character
-/// speeds up by 15 units/s per second (<see cref="Acceleration"/>, Observed in the follow steering) and stops at once on arrival.</item>
+/// follows a path at that speed at once (the nav agent, Observed), speeds up by 15 units/s per second only in combat (<see cref="Acceleration"/>, the combat
+/// steering), and stops at once on arrival.</item>
 /// <item>Separation: the repulsion along self-other is nonzero only closer than R and proportional to 100 x (1 - d/R), over at most
 /// 26 neighbours (Observed); R is twice the footprint radius 4 of a human (<see cref="SeparationRadius"/>), and the scale from that
 /// proportionality to a speed is an engine choice (<see cref="SeparationStrength"/>).</item>
@@ -20,7 +21,7 @@ namespace Meitou.Simulation;
 /// </summary>
 public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
 {
-    /// <summary>Speed gained per second (docs/game/pathfinding.md, the follow steering: "ramps up by 15 per second").</summary>
+    /// <summary>Speed gained per second in combat (docs/game/pathfinding.md, the combat / follow steering: "ramps up by 15 per second").</summary>
     public const float Acceleration = 15;
     /// <summary>R of the separation steering: neighbour radius plus margin; a human's footprint radius is 4.</summary>
     public const float SeparationRadius = 8;
@@ -60,6 +61,16 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                     c.Flags = (ushort)((c.Flags & ~(ushort)(MoveFlags.Pending | MoveFlags.HasPath)) | (ushort)MoveFlags.NeedPath);
                     c.PathCursor = 0;
                     table.Cold(s)!.PathRequest = 0;
+                }
+                continue;
+            }
+            if (command is SandboxMovement sandbox)
+            {
+                if (table.TryResolveNext(sandbox.Character, out int target))
+                {
+                    var tc = table.Cold(target)!;
+                    if (sandbox.Mode is { } mode) tc.ModeOverride = mode;
+                    if (sandbox.Speed is { } fixedSpeed) tc.SpeedOverride = MathF.Max(fixedSpeed, 0);
                 }
                 continue;
             }
@@ -245,7 +256,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 else
                 {
                     dir = to / dist;
-                    desired = MathF.Min(n.MaxSpeed, SpeedMode.Cap(n.Mode, n.WalkSpeed));
+                    desired = cold.SpeedOverride > 0 ? cold.SpeedOverride : MathF.Min(n.MaxSpeed, SpeedMode.Cap(cold.ModeOverride ?? n.Mode, n.WalkSpeed));
                 }
             }
             else if (((MoveFlags)n.Flags & MoveFlags.HasPath) != 0)
@@ -277,7 +288,8 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
             }
             else
             {
-                speed = desired > speed ? MathF.Min(speed + Acceleration * dt, desired) : desired;
+                // A path is followed at the top speed at once (the nav agent sets its velocity to top speed x direction); the 15 / s ramp is the combat steering's.
+                speed = cold.InCombat && desired > speed ? MathF.Min(speed + Acceleration * dt, desired) : desired;
             }
 
             // Separation from the neighbours of the last tick, visited in the grid's fixed order.

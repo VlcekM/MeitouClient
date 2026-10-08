@@ -39,14 +39,13 @@ public class MovementTests
     }
 
     [Fact]
-    public void Speed_ramps_at_15_per_second_and_is_capped_by_the_stat()
+    public void A_path_is_followed_at_the_stat_speed_at_once()
     {
         using var w = Flat();
         var id = Add(w, new(0, 300, 0), max: 40);
         w.Commands.Enqueue(new MoveOrder([id], new Vector3(3000, 0, 0)) { Tick = 0 });
-        w.RunTicks(31);   // the first tick only asks for the path: a second of walking
-        float v1 = w.Characters.Previous[id.Slot].Velocity.Length();
-        Assert.InRange(v1, 13, 16);
+        w.RunTicks(4);   // the first tick only asks for the path; no ramp outside combat
+        Assert.Equal(40f, w.Characters.Previous[id.Slot].Velocity.Length(), 3);
         w.RunTicks(90);
         Assert.Equal(40f, w.Characters.Previous[id.Slot].Velocity.Length(), 3);
     }

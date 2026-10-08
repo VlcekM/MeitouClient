@@ -314,7 +314,7 @@ types in `Movement.cs`: `CharacterTask`, `MoveFlags` with `AnyPath`, `SpeedMode`
 
 - **Speed.** Top speed S in units (dm) per second is `MaxSpeed` (set by the body system from `Speed.Run`), capped by the speed mode: 0 the
   race walk speed, 1 at 55, 2 none. Wanderers walk, followers copy their leader's mode and run to catch up beyond 60 units, orders run.
-  Acceleration 15 per second; arrival within 10 units.
+  A path is followed at that speed at once (the nav agent; docs/game/pathfinding.md); the 15 per second ramp only in combat; arrival within 10 units.
 - **Separation.** Repulsion proportional to 100 x (1 - d/R), R = 8 (twice the footprint radius 4), at most 26 neighbours, over the last tick's
   positions; the scale to a speed (0.15) is an engine choice.
 - **Ground.** Every tick a character samples `IWalkability.GroundHeight` (on the navmesh that is the mesh where it is off the terrain, so it
@@ -399,30 +399,44 @@ generator in any case).
 
 ## Animation
 
-Data facts about ANIMATION records, the stance flags and the selection data are in [animation.md](animation.md#selection-data-used-by-the-simulation).
-`AnimationSystem` (Act, after movement, own characters only), `CharacterAnimation` (cold, hashed), `AnimationLibrary` / `AnimationStance` /
-`HandHold` / `AnimationLengths` in `Meitou.Data/Gameplay/AnimationLibrary.cs`.
+The original's rules (decompilation) are in [animation.md](animation.md#run-time-blending); the data facts in
+[animation.md](animation.md#selection-data-used-by-the-simulation). `AnimationSystem` (Act, after movement and combat, own characters only),
+`CharacterAnimation` (cold, hashed), `AnimationLibrary` / `AnimationDefinition` / `AnimationStance` / `HandHold` / `AnimationLengths` in
+`Meitou.Data/Gameplay/AnimationLibrary.cs`; the renderer's masks in `Meitou.Data/Characters/AnimationMask.cs`.
 
-- **Layers.** Up to 8 weighted clips per character (`AnimationSystem.MaxLayers`). Each tick the system picks what should play, fades the
-  weights, advances the times; the snapshot carries `AnimationLayer`s and the renderer finds the track masks by record name. Without the
-  system the older movement layers are published (`idle_stand_relax`, or `walk lower` + `walk upper`).
-- **Choice** (**Observed / engine choice**, the original's selection code was not traced). A clip is valid when its weapon-in-hand flags,
-  combat and stealth modes, crouch and prone, carrying flags and leg ranges fit the stance; the weapon kind in hand is checked against the
-  record's kind flags (`AnimationKind`, from the WEAPON's `skill category` through `WeaponCategories` in
-  `Meitou.Data/Gameplay/Combat/WeaponData.cs`). The valid movement clips of a body layer sorted by `move speed` form a chain: between two
-  speeds the two are blended linearly, below the first and above the last one clip alone; clips of one speed share by `chance`. From 1 unit
-  per second a character moves, else it stands: one of the valid idle clips of the whole body by `idle chance`, kept between `idle time min`
-  and `max` and then drawn again. `AnimationLibrary` caches the chains by stance, with the leg health in intervals.
-- **Time.** Synched movement clips share one phase per character, advanced by `speed x play speed / clip length` cycles per second of the
-  clip that weighs most; a clip's time is `frac(phase + synch offset) x its length` (lengths from the `*_skeleton.skeleton` files,
-  `AnimationLengths`); other clips advance by their `play speed` (1 when it is 0). Weights move linearly at the CONSTANTS `animation blend rate`
-  (4 per second, a full cross-fade in a quarter second), the same for every clip (the per-clip factor of animation.md is not applied).
-- **Stance.** `CharacterCold.DrawnWeapon` and `InCombat` (set by combat) select the combat-mode and armed variants; `AnimationStance.LeftLeg` /
-  `RightLeg` are the lowest `Fraction x 100` of the leg parts, so the `limp` clips are chosen. A knocked-out or dead character plays
-  `sleeponfloor` (loops, all layers): the base data has no unconscious or dead clip (**Observed**).
+- **Layers.** Up to 8 weighted clips per character (`CharacterAnimation.MaxLayers`). Each tick the system picks what should play, fades the
+  weights linearly at the CONSTANTS `animation blend rate` (4 per second, the same for every clip: engine choice), advances the times; the
+  first clips a character plays start at full weight. `Publish` normalises as Kenshi's layers do: the upper body (upper and whole-body clips)
+  to at most 1, the lower body to at most 1 minus the whole-body clips (`all` clips and actions; a block keeps the legs' clips); overlays alone.
+  The renderer blends **cumulatively** (Kenshi sets it on every character's skeleton; the posture libraries add on top at weight 1).
+- **Movement** (**Verified**). Every movement clip of a body half that fits the stance plays, weighted by the sigmoid of its speed ramp
+  (`min speed` / `move speed` / `max speed`) times its leg ramp (the worse leg against that side's damage min / ideal / max), normalised
+  (`AnimationDefinition.SpeedWeight`, `LegWeight`, `AnimationLibrary.Movement`). Synched clips share one phase per character advancing
+  F x v x the weighted `play speed` of the lower clips **cycles** per second; unsynched movement clips run F x `play speed` x v clip seconds
+  per second; F = 2 - H, H the body's movement scale (`CharacterShape.MovementScaleOf`). In combat v is signed along the facing, so backing off
+  picks the `... combat shuffle long BK` clips. From 1 unit per second a character moves, else it stands (engine). The speed the animations see is the 3D velocity's length through Kenshi's 8-sample trimmed median (`CharacterAnimation.SmoothSpeed`; sampled per tick, not per frame: engine).
+- **Idles.** Out of combat one of the whole-body idles by `idle chance`, kept for `idle time min` .. `max` seconds. In combat (engine
+  choice after the original's footwork): the lower movement blend at the current speed (`walk lower combat shuffle short` at rest) under an
+  upper-body guard idle (`AnimationLibrary.CombatIdles`: the `guard` records by the weapon kind in hand, `MA idle1` for fists; the hands'
+  YES / NO fields are not tested because the original's arm check was not decoded).
+- **Techniques.** COMBAT_TECHNIQUE records of humanoids (`animal` 8 or less) are definitions too (`AnimationDefinition.FromTechnique`,
+  published by record name; the renderer's mask comes from `AnimationMask.FromTechnique`: a block that is not a dodge loses its lower-body
+  tracks). The combat system's attack or reaction (`CombatSystem.Playing`, the last finished tick's state) sets the clip's time to progress x
+  length, so the blow lands at its `anim blocked frame`. Attacks and dodges replace everything; a block plays over the legs' clips.
+- **Hit reactions** (**Verified** rules): a hit records its tick, body part, heaviness (above the stumble threshold) and side on the combat slot
+  (`CombatSlot.HitTick`, `HitPart`, `HitHeavy`, `HitBehind`). Unless the hit is light while a reaction is playing, one of the part's
+  `stumbles` clips with `big stumble` = heavy-and-free and `stumble from` = the side plays to its end (`AnimationLibrary.Stumbles`;
+  every base-game stumble has `chance` 0, so they are equally likely: engine choice). A technique cuts it short (engine).
+- **Root motion** (**Verified** selection): `relocates` clips, attacks and dodges (not pure blocks) move the character by their `Bip01`
+  track's ground part (`AnimationLengths.Root`, read from the skeletons) turned by its heading, onto walkable ground only; the renderer keeps
+  only the height of that track. Fading one-shot clips keep advancing, so they keep moving the character, as in Kenshi.
+- **Down and up.** A character that goes down falls with the `Dodge back fall` technique's clip and lies in `sleeponfloor` (the original
+  switches to its ragdoll: engine stand-in); coming round plays `standing up 3` to 86 % (**Verified**), cut short by walking or a technique.
+- **Stance.** `CharacterCold.DrawnWeapon` and `InCombat` (set by combat) select the combat-mode and armed variants; the leg ramps use the lowest
+  `Fraction x 100` of each side's leg parts.
 - **Host.** Clip time and weight are interpolated between the two snapshots (a wrapped clip time shows the new value).
-- **Not made:** turning (the records have none for humans), strafing, overlays (carrying), `is action` clips, injury and weather variants
-  beyond the leg ranges, and the attack, block, dodge, hit and fall clips of combat ([Combat](#combat)).
+- **Not made:** strafing (`strafe lower` by the sideways speed), overlays (breathing, wound `pain anim`s, carrying), `head turning`, other
+  `is action` clips, weather variants, the ragdoll, and the right-arm override clone of blocks.
 
 ## Bodies
 
@@ -520,8 +534,8 @@ retaliation systems are in `Fighting.cs`.
   `CombatTuning.DefaultFootprint` 4) within the weapon's reach (`length` / 2; fists unlimited) and the technique's distance (`attack distance min
   vs static` against a target standing still, `attack distance` against a mover, a negative value meaning "not for that case"). Weighted pick on
   `chance`. `max encumbrance` and `anim hesitate point` are not used (**Unknown**).
-- **Timing.** An attack lasts the clip's length (`AnimationLengths`, from the skeletons; 1 s when unknown) / (`anim speed mult` x the gear's combat
-  speed), in ticks; blow k arrives at `anim blocked frame k`; a blocked blow cuts the swing at its `anim stop frame` and the rest of a combo is not
+- **Timing.** An attack lasts the clip's length (`AnimationLengths`, from the skeletons; 1 s when unknown) / (`anim speed mult` x the play rate,
+  docs/game/combat.md "Animation speed", `CombatSystem.PlayRate`), in ticks; a block's play rate is its own, a dodge's 1; blow k arrives at `anim blocked frame k`; a blocked blow cuts the swing at its `anim stop frame` and the rest of a combo is not
   thrown (a hit or a dodge lets it go on).
 - **Reaction** (`ChooseReaction`, the doc's `FUN_140887970`). Decided once per incoming blow from the attack's start (the defender perceives it at
   once), and **timed to be at its `anim blocked frame` when the blow arrives**, or started at once and less far along when there is less lead.
@@ -551,9 +565,7 @@ retaliation systems are in `Fighting.cs`.
   units. Hostile relations do not start fights; nothing starts a fight but an order.
 - **Host API.** `CombatSystem.StateOf(id)` (target, counters, `Down`), `Playing(id, tick)` (the technique playing and its progress) and, with
   `CombatOptions.RecordLog`, `Log` (every resolved blow: attacker, defender, outcome, part, damage, KO, death).
-- **Gaps.** Attack, block and dodge clips are not played: a technique's `anim name` is a skeleton clip, not an ANIMATION record, so the
-  renderer's track masks (found by record name) are missing; a combat layer needs a mask choice per technique (upper body for blocks, the whole
-  body for dodges and martial arts) and the "Light_Hit" / "Heavy_Hit" and fall clips. Also not built: ranged combat and turrets (only the records
+- **Gaps.** The clips are played by the animation system ([Animation](#animation)). Also not built: ranged combat and turrets (only the records
   are read), attack slots (`max num attack slots`), target choice, movement round the target beyond the path, fighting while prone, finishing off,
   prisoners, fist injury to the attacker, a stagger coupled to leg loss, mass-combat XP, auto-aggro by relations, player characters defending
   themselves when idle.
@@ -603,6 +615,32 @@ quaternion bit for bit).
 **Wiring still to do** (host): call `SaveLoader.Load` before the first tick on a world built with the same `PopulationData`, keep the
 `LoadedSave` for `SaveCapture.Capture` with the host's clock; hand the loaded `CharacterCold.Save.Stats/Medical` to the body systems and back
 through `SaveCaptureOptions.Bodies`; keep the population system from making residents for a town whose platoons were loaded as stand-ins.
+
+## Sandbox
+
+`meitou --sandbox [n]` is a debug map for character animations: the real simulation (`StandardSystems`: movement, combat, animation) and the real
+`CharacterRenderer`, but no world. It exists to compare a character's motion with the original game at a known speed, without a town in the way.
+
+- **Floor.** `WorldFrame.LoadFlat` builds a `WorldScene` with no heightmap file: every height is the same (500 units, above the water at 100), terrain
+  textures, objects, foliage, water and the streamer are off, the sky and sun are the usual. The 1000 x 1000 floor around the origin is drawn as
+  screen-space overlay lines (`GameHost.Sandbox.cs`): a line every 10 units, a stronger one every 100, the X axis red and the Z axis blue. They have no
+  depth test, so they also cross the characters. SSAO is off by default (it bands a perfectly flat floor).
+- **Characters.** `PopulationSystem.SpawnSandbox` makes one idle character (the first member of the default new-game start, or `--sandbox-character <name>`
+  with the loadout the generator gives it, so combat works): the hero, the player's, selected, at the origin facing +X. With `n = 2` a second one of
+  a faction hostile to the player's stands 30 units away facing it. No navmesh, no towns: paths are straight lines on open ground.
+- **Speed.** The movement system has two sandbox-only overrides in `CharacterCold` (`ModeOverride`, `SpeedOverride`, set by `SandboxMovement`; they are not
+  hashed and nothing in the game sets them). The mode replaces the one of every order (the game's right click is mode 2, free); a fixed speed replaces the
+  whole speed chain, so the character walks at exactly that many units per second after the usual 15 units/s per second ramp.
+- **Keys** (besides the game's: right click moves, R stops, Space and F2..F4 pause and slow or speed time).
+  Z walk (cap = race walk speed), X run (cap 55), C free (no cap, the default); `[` / `]` fixed speed -5 / +5 units/s (0 is off, and Z/X/C also clear it);
+  P patrols the hero along the line x = -200 .. 200 (z = 0), the next leg ordered on arrival (it stops at once at each end, as characters do);
+  G makes the two fight (both attack each other); Y toggles the camera following the hero (the middle of the pair with a foe).
+- **Panel** (bottom right): for the hero and the foe the speed v (the velocity the movement system set) and the speed measured between the last two
+  snapshots, the speed chain's top speed, the mode with its cap, the fixed speed, the position and yaw, `CharacterAnimation.Phase` and `Rate`
+  (the synch phase and the playback factor F), and every published layer as `name  t time/length  w weight` (lengths from `AnimationLengths`).
+- **Command line.** `--sandbox-mode walk|run|free`, `--sandbox-speed <u/s>` and `--sandbox-patrol` start the hero in a state; with `--screenshot --ticks n`
+  the picture is taken after n ticks of it (`--move-to x z`, `--select-player` and `--attack-nearest` work as in a new game). The start camera is boom 70, pitch 22,
+  yaw 35 (`--distance`, `--pitch`, `--yaw`).
 
 ## The game host
 

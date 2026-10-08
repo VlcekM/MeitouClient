@@ -36,6 +36,18 @@ static class Program
         var config = UserConfig.Load();
         Meitou.Data.GameDatabase? db = null;
         Meitou.Data.Gameplay.NewGameStart? start = null;
+        if (game.Sandbox > 0)
+        {
+            // The animation sandbox: no world, a flat floor (docs/simulation.md "Sandbox"). The real game data is still loaded for the characters and animations.
+            db = Meitou.Data.GameDatabase.Load(Meitou.Data.LoadOrder.FromInstall(install));
+            (world.NoTextures, world.NoObjects, world.NoFoliage, world.NoWater, world.NoReflections, world.NoDistant) = (true, true, true, true, true, true);
+            world.Post.Ssao = false;   // SSAO bands a perfectly flat floor; the Tab panel can turn it back on
+            world.Distance ??= 70;
+            world.Pitch ??= 22;
+            world.Yaw ??= 35;
+            using var flat = WorldFrame.LoadFlat(world, db);
+            return new GameHost(install, flat, new AssetLocator(install), world, game, config, null).Run();
+        }
         if (game.ListStarts || game.NewGame)
         {
             db = Meitou.Data.GameDatabase.Load(Meitou.Data.LoadOrder.FromInstall(install));

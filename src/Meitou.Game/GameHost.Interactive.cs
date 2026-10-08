@@ -77,6 +77,7 @@ sealed partial class GameHost
                     }
                     session.Input.SetKey(key, true);
                     player.Key(key, shiftDown);
+                    SandboxKey(key);
                 }
             };
             kb.KeyUp += (_, k, _) =>
@@ -146,6 +147,7 @@ sealed partial class GameHost
             UpdateNav();
             SendFocus();
             ApplyCamera(session.CameraAt());
+            SandboxFollowCamera();
             var size = window.FramebufferSize;
             UpdateView(size.X, size.Y);
             if (display.BeginFrame(size.X, size.Y))
@@ -162,6 +164,7 @@ sealed partial class GameHost
                 bool shot = screenshotRequested;
                 screenshotRequested = false;
                 if (overlay is not null && !g.NoPopulation) DrawMarkers(overlay, size.X, size.Y);
+                if (overlay is not null && IsSandbox) DrawSandbox(overlay, size.X, size.Y);
                 if (overlay is not null && !g.NoPopulation) player.Draw(overlay, size.X, size.Y);
                 // The debug overlays are left out of saved pictures: the statistics at the top left, the key list below them, the profiler.
                 if (overlay is not null && !shot)

@@ -213,6 +213,22 @@ s2 - s1), B = 1 + F·max(0, s1 - s2); true when r1·A < r2·B for two uniform ra
 with k = B/A, P = 1 - 1/(2k) for k ≥ 1, else k/2 (the closed form is derived by hand from the comparison).
 **Observed**. Dodge skill (`140885ce0`) = 0.01·(0.6·equipment dodge + 0.4·dexterity·m).
 
+## Animation speed
+
+**Verified** (decompilation; constants from rdata). A technique's clip plays at `anim speed mult` × a rate:
+
+- **Attacks** (`@ 1402b4570` → `@ 1405b7800`): A (CharStats +0x188, built by `@ 1408866b0` / `@ 140883a80`) = min(1.2,
+  lerp(t, 0.8, 1.2) × G), t = 0.01 × (0.6 × dexterity × the gear's dexterity mult × dexterity injury mult + 0.4 × (melee attack
+  + the weapon's attack mod − a medical penalty)); martial arts instead for fists. In deep water A is ×0.8.
+- **Blocks** (`@ 140609290`, CombatClass slot 12): D = min(4, lerp(t′, 0.6, 4.0) × G), t′ with melee defence and its bonuses (+20
+  guarding) in place of attack. **Dodges** play at 1 while held; a released block runs back at −0.3 (`@ 140609200`).
+- G (CharStats +0x180, `@ 1408839a0`) = (0.5 + 0.5 × min(1, u + 0.5) × (1 − f)) × the gear's `combat speed mult` product, with
+  f = clamp(`min strength xp mult` + clamp((weapon weight − strength × injury) / `weight strength diff 1x`, 0, `weight strength diff
+  max`), 0, 1) (the strength XP's factor; the CONSTANTS fields matched by offset, **Observed**) and u the encumbrance factor
+  (`carry weight mult`, `encumbrance base`, by offset, **Observed**).
+- A typical fighter (dexterity and attack 10, a light weapon, no armour penalty): A = 0.84 × 0.95 ≈ 0.80; at 50 it is 0.95, at 100
+  1.14. The attack lasts clip length / (`anim speed mult` × A).
+
 ## Armour
 
 Per piece (loader `140898e90`, **Observed**; class and material tables from the constructor `1408a8f90`,

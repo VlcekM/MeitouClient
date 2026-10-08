@@ -207,6 +207,18 @@ public static class CharacterShape
     }
 
     /// <summary>
+    /// The skeleton's movement scale H = <c>Height</c> + <c>Leg length</c> - 1 (sliders / 100, a missing one 100) of a character's body file
+    /// (docs/animation.md "Body shape sliders"); 1 without one. Animation playback divides by about this (docs/animation.md "Movement").
+    /// </summary>
+    public static float MovementScaleOf(CharacterAppearance c)
+    {
+        if (c.Body is not { } body) return 1;
+        float h = body.Floats.TryGetValue("Height", out var height) ? height : 100;
+        float l = body.Floats.TryGetValue("Leg length", out var leg) ? leg : 100;
+        return h * 0.01f + l * 0.01f - 1;
+    }
+
+    /// <summary>
     /// The shape inputs of an assembled character: the body file's sliders (or none), its gender, and muscle from the
     /// CHARACTER's first <c>stats</c> STATS record (an approximation: the game uses the live stats; without a record the
     /// muscle is 0).

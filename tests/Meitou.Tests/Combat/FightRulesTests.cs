@@ -51,7 +51,7 @@ public class FightRulesTests
             var a = Spawn(world, new Combatant { Strength = skill, WeaponSkill = skill, Dexterity = skill, Attack = skill, Quality = 1 }, new Vector3(1000, 150, 1000));
             var b = Spawn(world, new Combatant { Toughness = toughness, Defence = 0, Weapon = null }, new Vector3(1014, 150, 1000));
             world.Commands.Enqueue(new AttackOrder([a], b) { Tick = 0 });
-            for (int i = 0; i < 400 && !combat.Log.Any(e => e.Outcome == BlowOutcome.Hit); i++) world.RunTick();
+            for (int i = 0; i < 1200 && !combat.Log.Any(e => e.Outcome == BlowOutcome.Hit); i++) world.RunTick();
             Assert.Contains(combat.Log, e => e.Outcome == BlowOutcome.Hit);
             Assert.Equal(expectStagger, combat.StateOf(b).StunUntil > world.Tick);
         }
