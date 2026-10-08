@@ -35,7 +35,7 @@ static class MeitouShadowShaders
             vec4 uMsParams;        // x: noise offset (changes per frame under a temporal upscaler), y: shadow range, z: fade start, w: terrain term fade start
             vec4 uMsTerrain;       // xy: world x, z of the first sample, z: samples per world unit, w: 1 when the terrain term is on
             vec4 uMsTerrain2;      // x: samples per side, y: height bias, z: minimum softness (height), w: softness per unit of occluder distance
-            vec4 uMsFlags;         // x: 1 when the blocker map is valid (contact-hardening penumbrae), y: terrain term fade end
+            vec4 uMsFlags;         // x: 1 when the blocker map is valid (contact-hardening penumbrae), y: terrain term fade end, z: cascades filtered in full (the filter tier)
             mat4 uMsLandmarkTile;  // (world - origin) -> (u, v, depth) in the landmark map (ShadowPass.Meitou, "landmark shadows")
             vec4 uMsLandmark;      // x: filter radius (UV), y: normal offset (world), w: 1 when the landmark map is on
         };
@@ -82,8 +82,11 @@ static class MeitouShadowShaders
             vec2 slope = vec2(nl.x, nl.y) * (uMsBox[c].x / (nz * uMsBox[c].y));
             float angle = noise * 6.2831853;
             vec2 rot = vec2(cos(angle), sin(angle));
+            // The filter tier: the nearest cascades in full, the others half the taps at the least radius (no blocker search).
+            bool full = float(c) < uMsFlags.z;
+            int taps = full ? {{FilterTaps}} : {{FilterTaps / 2}};
             #ifndef MS_NO_BLOCKER_SEARCH
-            if (uMsFlags.x > 0.5)
+            if (full && uMsFlags.x > 0.5)
             {
                 // Blocker search: the mean depth of what lies nearer the sun than the point, within the widest penumbra.
                 float search = uMsBox[c].z, sum = 0.0, found = 0.0;
@@ -103,15 +106,15 @@ static class MeitouShadowShaders
             }
             #endif
             float lit = 0.0;
-            for (int k = 0; k < {{FilterTaps}}; k++)
+            for (int k = 0; k < taps; k++)
             {
-                float r = sqrt((float(k) + 0.5) / {{F(FilterTaps)}});
+                float r = sqrt((float(k) + 0.5) / float(taps));
                 float a = float(k) * 2.3999632;
                 vec2 o = r * vec2(rot.x * cos(a) - rot.y * sin(a), rot.y * cos(a) + rot.x * sin(a)) * radius;
                 vec2 uv = t.xy + o;
                 lit += textureLod(uShadowMap, vec3(rect.xy + uv * rect.zw, t.z + dot(o, slope)), 0.0);
             }
-            return lit / {{F(FilterTaps)}};
+            return lit / float(taps);
         }
 
         // The landmarks' shadow beyond the cascades (they draw the near ones): one map along the sun around every landmark drawn, read with

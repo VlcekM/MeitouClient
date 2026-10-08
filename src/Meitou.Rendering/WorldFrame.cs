@@ -49,7 +49,7 @@ sealed class WorldOptions
     public float ReflectionRange = 3;
     /// <summary>Sun shadows (docs/formats/shadows.md): off, the game's <c>shadow quality</c> index, <c>Shadow Range</c>, the debug view.</summary>
     public bool NoShadows;
-    public int ShadowQuality = 1, DebugShadows;
+    public int ShadowQuality = 1, DebugShadows, ShadowFilter = 2;
     public float? ShadowRange;   // --shadow-range as given (null: the default of the shadows switch's mode, see ShadowRangeFor)
     public bool MeitouShadows = true;   // the shadows switch (Enhancements): Meitou by default, false the game's CSM
 
@@ -128,6 +128,7 @@ sealed class WorldOptions
           --reflection-range <x>   the game's `reflection range`: the mirrored scene is drawn out to haze distance x this (default 0.6, with the default haze distance 30000)
           --texture-quality <0..4> the game's `texture resolution gimping`: 0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly; each step drops the top mip of compressed textures as they load (default 1; 0 restores full size)
           --no-shadows             no sun shadow map   --shadow-quality <0|1|2> map side 1024/2048/4096 (default 1)   --shadow-range <u> (1000..9000, default 5000; with the Meitou shadows 1000..15000, default 10000)
+          --shadow-filter <0|1|2>  Meitou shadow filter: 2 full (default), 1 the far cascades cheaper, 0 cheapest everywhere (low-end GPUs)
           --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture
           (the shadows switch, F5: Meitou by default, view-fitted cascades with soft contact-hardening penumbrae and the terrain's shadow out to the horizon; --faithful shadows the game's CSM)
           --simple-sky             the old colour-model sky and squared-distance fog instead of the atmosphere (B toggles)
@@ -233,6 +234,7 @@ sealed class WorldOptions
                 case "--texture-quality": o.TextureQuality = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, Meitou.Data.Textures.TextureQuality.Maximum); break;
                 case "--no-shadows": o.NoShadows = true; break;
                 case "--shadow-quality": o.ShadowQuality = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--shadow-filter": o.ShadowFilter = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, 2); break;
                 case "--shadow-range": o.ShadowRange = Math.Clamp(F(), KenshiShadows.MinRange, CommandLineMaxShadowRange); break;
                 case "--debug-shadows": o.DebugShadows = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--simple-sky": o.SimpleSky = true; break;
@@ -553,7 +555,7 @@ static class WorldFrame
         if (!o.NoShadows)
         {
             // The game's CSM mode (docs/formats/shadows.md): four cascades in one atlas of the `shadow quality` side, out to `Shadow Range`.
-            gpu.Shadow = new ShadowPass(context, assets) { Settings = new ShadowSettings(KenshiShadows.MapSize(o.ShadowQuality), o.ShadowRangeFor(o.MeitouShadows)), Meitou = o.MeitouShadows };
+            gpu.Shadow = new ShadowPass(context, assets) { Settings = new ShadowSettings(KenshiShadows.MapSize(o.ShadowQuality), o.ShadowRangeFor(o.MeitouShadows)), Meitou = o.MeitouShadows, FilterQuality = o.ShadowFilter };
             if (!gpu.Shadow.HasNoise) Console.WriteLine($"warning   shadows: {KenshiShadows.NoiseTexture} not found, the receiver's jitter is a hash");
             gpu.Shadow.SetTerrain(scene.Coarse, scene.CoarseSize);   // the Meitou shadows' terrain shadow beyond the range
             Console.WriteLine($"shadows   {gpu.Shadow.Settings.MapSize}² atlas, {gpu.Shadow.Settings.Cascades} cascades of {gpu.Shadow.Settings.TileSize}², range {gpu.Shadow.Settings.Range:0}");
@@ -650,10 +652,18 @@ static class WorldFrame
             sliders.Add(new Slider("Reflection range x (game 0.6)", 0.1f, 50, () => reflection.Range, v => reflection.Range = v, "0.00", Logarithmic: true));
         }
         sliders.Add(new Slider("Terrain detail: error px (less = finer)", 1, 32, () => r.TerrainPixelError, v => (r.TerrainPixelError, r.TerrainFarPixelError) = (v, v * r.TerrainFarPixelError / r.TerrainPixelError), "0.0", Logarithmic: true));
-        // The game's `Shadow Range` slider goes 1000 to 9000; the viewer allows more (the cascades stretch over it).
+        // The game's `Shadow Range` slider goes 1000 to 9000; the viewer allows more (the cascades stretch over it), and its left end (0) turns the
+        // shadows off (low-end GPUs).
         if (g.Shadow is { } shadow)
-            sliders.Add(new Slider("Shadow distance (game 1k-9k)", KenshiShadows.MinRange, 200000, () => shadow.Settings.Range,
-                v => shadow.Settings = shadow.Settings with { Range = MathF.Round(v / 100) * 100 }, "0", Logarithmic: true));
+        {
+            const float off = KenshiShadows.MinRange * 0.9f;
+            sliders.Add(new Slider("Shadow distance (game 1k-9k, 0 off)", off, 200000, () => shadow.Enabled ? shadow.Settings.Range : off, v =>
+            {
+                shadow.Enabled = v >= KenshiShadows.MinRange;
+                if (shadow.Enabled) shadow.Settings = shadow.Settings with { Range = MathF.Round(v / 100) * 100 };
+            }, "0", Logarithmic: true, Text: v => shadow.Enabled ? v.ToString("0", CultureInfo.InvariantCulture) : "0 (off)"));
+            if (shadow.Meitou) sliders.Add(new Slider("Shadow filter 0-2 (Meitou; 0 low-end)", 0, 2, () => shadow.FilterQuality, v => shadow.FilterQuality = (int)MathF.Round(v), "0"));
+        }
         // A viewer option, not the game's: 1 is the game's haze (docs/formats/sky.md).
         sliders.Add(new Slider("Haze strength (1 = game)", 0, 3, () => g.Sky.HazeStrength, v => g.Sky.HazeStrength = v, "0.00"));
         if (g.Post is { } post)

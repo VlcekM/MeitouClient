@@ -22,6 +22,14 @@ public sealed unsafe partial class ShadowPass
     public bool Temporal { get; set; }
     /// <summary>Contact-hardening penumbrae (the blocker search); off: a fixed small filter.</summary>
     public bool ContactHardening { get; set; } = true;
+    /// <summary>
+    /// The receiver's filter tier (<c>--shadow-filter</c>, Tab): 2 every cascade with the blocker search and 16 taps; 1 the two nearest so, the far ones
+    /// 8 taps at the least radius; 0 every cascade 8 taps at the least radius, no blocker map (low-end GPUs).
+    /// </summary>
+    public int FilterQuality { get => filterQuality; set => filterQuality = Math.Clamp(value, 0, 2); }
+    int filterQuality = 2;
+    /// <summary>How many cascades, nearest first, filter in full (blocker search, 16 taps) at the <see cref="FilterQuality"/>.</summary>
+    int FullFilterCascades => filterQuality switch { 0 => 0, 1 => 2, _ => 4 };
     /// <summary>The sun's angular diameter the penumbrae are made for (radians): a little more than the real sun's 0.53°.</summary>
     public float SunAngle { get; set; } = 0.7f * MathF.PI / 180;
     /// <summary>Filter radius without a blocker search, and the least with one, in texels of the cascade.</summary>
@@ -157,7 +165,7 @@ public sealed unsafe partial class ShadowPass
             CascadeDraws[i]++;
         }
         EndHost(host);
-        bool blockers = ContactHardening && UpdateBlockers(drawNow, count);
+        bool blockers = ContactHardening && filterQuality > 0 && UpdateBlockers(drawNow, count);
         if (coarse is not null)
         {
             terrainMap ??= new TerrainShadowMap(Gpu, coarse, coarseSize);
@@ -276,7 +284,7 @@ public sealed unsafe partial class ShadowPass
             // The penumbra's height across: occluder distance × the sun's angular radius over the cosine of its height.
             Put(ms, 40, new Vector4(map.Size, 20, 6, sunTan / cosElevation));
         }
-        Put(ms, 44, new Vector4(blockers ? 1 : 0, range * 0.9f, 0, 0));
+        Put(ms, 44, new Vector4(blockers ? 1 : 0, range * 0.9f, FullFilterCascades, 0));
         if (landmarkBox is { } box)
         {
             // The landmark map: (p - origin) -> (u, v, depth); its filter radius (UV) and normal offset (world: one and a half texels).
