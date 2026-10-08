@@ -158,6 +158,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
         public SampledImage Texture;
         /// <summary>1: drawn into the scene at full size; 2 or 4: into the low-resolution accumulation target of 1/2 or 1/4 the render size (Meitou).</summary>
         public int Divisor;
+        /// <summary>The sprites' total area in screens (layers of overdraw, before clipping and the depth test).</summary>
+        public float Fill;
     }
 
     ParticleRenderer(GpuContext gpu, string texturesDirectory, ParticleLibrary library)
@@ -346,10 +348,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// </summary>
     /// <param name="pixelsPerUnit">Meitou: the render size in pixels of one world unit at distance 1 (0: everything full size). Alpha and additive draws whose sprites are big on screen go to a low-resolution target, the biggest to a quarter-size one (<see cref="QuarterPixels"/>, <see cref="HalfPixels"/>); small ones (rain) stay full size.</param>
     /// <param name="forcedDivisor">0: by sprite size; 1, 2 or 4: every eligible draw there (for measuring).</param>
-    public void Prepare(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, int forcedDivisor = 0)
+    public void Prepare(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor = 0)
     {
         long start = Stopwatch.GetTimestamp();
-        PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, forcedDivisor);
+        PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, screenPixels, forcedDivisor);
         drawTotal += Stopwatch.GetTimestamp() - start;
         drawFrames++;
     }
@@ -357,6 +359,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>Draws prepared this frame for the scene target (full size) and for the low-resolution target.</summary>
     /// <summary>Mean screen size (the square root of the mean sprite area, in render pixels) from which a draw goes to the half-size and to the quarter-size target.</summary>
     public const float HalfPixels = 20, QuarterPixels = 80;
+    /// <summary>The overdraw (sprite area in screens) a size needs before it is used at all: the two extra passes cost about as much as 10 million pixels of blending.</summary>
+    public const float MinLayers = 6;
     readonly int[] divisorCounts = new int[5];
     /// <summary>The draws prepared for each size: 1 the scene's, 2 and 4 the low-resolution targets'.</summary>
     public int CountFor(int divisor) => divisorCounts[divisor];
@@ -387,7 +391,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>Mean main-thread cost of Update and Draw (draw includes the wait for the simulation) per frame, in ms (for the benchmarks).</summary>
     public (double Update, double Draw) MeanMainThreadMilliseconds => (updateFrames == 0 ? 0 : updateTotal * 1000.0 / Stopwatch.Frequency / updateFrames, drawFrames == 0 ? 0 : drawTotal * 1000.0 / Stopwatch.Frequency / drawFrames);
 
-    void PrepareInner(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, int forcedDivisor)
+    void PrepareInner(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor)
     {
         Sync();
         Array.Clear(divisorCounts);
@@ -433,12 +437,25 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 var instances = constants.Allocate((ulong)(written * InstanceBytes), 16);
                 scratch.AsSpan(0, written).CopyTo(new Span<ParticleInstance>(instances.Pointer, written));
                 collectTotal += Stopwatch.GetTimestamp() - collectStart;
-                int divisor = pixelsPerUnit > 0 && (material.Blend == ParticleBlend.Alpha || material.Blend == ParticleBlend.Add) ? DivisorFor(scratch.AsSpan(0, written), forward, nearPlane, pixelsPerUnit, forcedDivisor) : 1;
-                draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material, Texture = TextureFor(material), Divisor = divisor });
-                divisorCounts[divisor]++;
+                int divisor = 1;
+                float fill = 0;
+                if (pixelsPerUnit > 0 && (material.Blend == ParticleBlend.Alpha || material.Blend == ParticleBlend.Add))
+                    (divisor, fill) = DivisorFor(scratch.AsSpan(0, written), forward, nearPlane, pixelsPerUnit, screenPixels, forcedDivisor);
+                draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material, Texture = TextureFor(material), Divisor = divisor, Fill = fill });
                 drawnParticles += written;
             }
         }
+        // A size is worth its two extra passes (the depth reduction, the composite) only when it saves enough fill: below MinLayers it stays full size.
+        if (forcedDivisor == 0)
+            foreach (int size in (ReadOnlySpan<int>)[2, 4])
+            {
+                float layers = 0;
+                foreach (var d in draws) if (d.Divisor == size) layers += d.Fill;
+                if (layers >= MinLayers) continue;
+                for (int i = 0; i < draws.Count; i++)
+                    if (draws[i].Divisor == size) { var d = draws[i]; d.Divisor = 1; draws[i] = d; }
+            }
+        for (int i = 0; i < draws.Count; i++) divisorCounts[draws[i].Divisor]++;
         if (draws.Count == 0) return;
 
         // Camera-relative positions: the matrix takes the eye back out (view and projection were built for world positions).
@@ -485,17 +502,18 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public bool HasLowCoverage => coveragePending && LowCount > 0;
 
     /// <summary>The size a draw of these particles gets: the larger their mean screen size, the smaller the target (soft big sprites lose nothing at a fraction of the pixels; thin streaks keep their full size).</summary>
-    static int DivisorFor(ReadOnlySpan<ParticleInstance> instances, Vector3 forward, float nearPlane, float pixelsPerUnit, int forced)
+    static (int Divisor, float Fill) DivisorFor(ReadOnlySpan<ParticleInstance> instances, Vector3 forward, float nearPlane, float pixelsPerUnit, float screenPixels, int forced)
     {
-        if (forced > 0) return forced >= 3 ? 4 : forced;
         double area = 0;
         foreach (ref readonly var p in instances)
         {
             float scale = pixelsPerUnit / Math.Max(Vector3.Dot(p.Position, forward), nearPlane);
             area += (double)p.Width * p.Height * scale * scale;
         }
+        float fill = (float)(area / screenPixels);
+        if (forced > 0) return (forced >= 3 ? 4 : forced, fill);
         double size = Math.Sqrt(area / instances.Length);
-        return size >= QuarterPixels ? 4 : size >= HalfPixels ? 2 : 1;
+        return (size >= QuarterPixels ? 4 : size >= HalfPixels ? 2 : 1, fill);
     }
 
     void RecordDraws(CommandList cmd, in DrawState baseState, in PassTargets targets, bool hasDepth, bool hasColour,

@@ -228,7 +228,7 @@ public sealed unsafe class PostProcess : IDisposable
     bool haveNearSlice;
 
     // GPU timestamps (the frame's QueryArena): a set per frame, section k lasting from stamp k-1 to stamp k, read once its frame has been collected.
-    const int MaxStamps = 12;
+    const int MaxStamps = 16;
     sealed class StampSet
     {
         public readonly QuerySlot[] Slots = new QuerySlot[MaxStamps];
@@ -818,8 +818,10 @@ public sealed unsafe class PostProcess : IDisposable
             Velocity(upscaleDepth!, 1);
             if (WaterHeight is not null) Velocity(reactive!, 2);
             bool covered = Particles is { HasCoverage: true };
+            if (covered) Stamp("velocity");
             if (covered) RunCoverage(reactive!, Vk.ColorComponentFlags.RBit, clear: WaterHeight is null);
             CloseSegment();   // the vendor upscaler records its own segment
+            if (covered) Stamp("particle coverage");
             done = external.Dispatch(new UpscaleInputs
             {
                 Colour = sceneColour!.Texture, Depth = upscaleDepth!.Texture, Motion = motion!.Texture, Output = output.Texture, Reactive = WaterHeight is null && !covered ? null : reactive!.Texture,
