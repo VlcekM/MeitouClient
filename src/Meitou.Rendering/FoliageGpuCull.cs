@@ -262,7 +262,11 @@ public sealed unsafe class FoliageGpuCull : IDisposable
 
     /// <summary><c>MEITOU_FOLIAGE_TRIS=1</c>: tally each view's indirect arguments (triangles and instances of the meshes, the TERRAIN-mode rocks
     /// and the impostors) into <see cref="Tally"/>, read a frame ring later (docs/render-distance-benchmark.md).</summary>
-    public static readonly bool DrawTally = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_TRIS") == "1";
+    public static readonly bool NamedTally = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_TRIS") == "1";
+    /// <summary>The viewer's F11 statistics: the same tally without the per-mesh names, for the total triangles (set while they are shown).</summary>
+    public static bool CountTriangles { get; set; }
+    /// <summary>Whether the dispatches copy their indirect arguments for <see cref="Tally"/>: <see cref="NamedTally"/> or <see cref="CountTriangles"/>.</summary>
+    public static bool DrawTally => NamedTally || CountTriangles;
 
     /// <summary>What the next <see cref="Dispatch(in FoliageCullWork, FoliageCullView, Vector2, in FoliageRockView, float)"/> is, for the tally:
     /// the view kind (0 colour, 1 shadow cascade, 2 reflection) and where the rock draws and the impostor draws begin among its draws.</summary>

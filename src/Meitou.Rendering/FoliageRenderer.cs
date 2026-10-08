@@ -213,6 +213,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     public void ResetDrawTally() => gpuCull?.ResetTally();
 
+    /// <summary>The main colour views' foliage triangles per frame since <see cref="ResetDrawTally"/> (meshes, TERRAIN-mode rocks, impostor quads as two),
+    /// from the GPU cull's indirect arguments (<see cref="FoliageGpuCull.DrawTally"/>); null before a tallied frame has been read back.</summary>
+    public double? ColourTrianglesPerFrame => gpuCull is { TallyFrames: > 0 } g ? (g.Tally[0, 0] + g.Tally[0, 2] + 2.0 * g.Tally[0, 4]) / g.TallyFrames : null;
+
     /// <summary><c>MEITOU_FOLIAGE_TRIS=1</c>: the colour views' meshes that drew the most triangles (and the impostors that drew the most quads),
     /// per frame since <see cref="ResetDrawTally"/>.</summary>
     public string DrawTallyTop(int n)
@@ -1770,6 +1774,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (FoliageGpuCull.DrawTally)
         {
             cull.TallyView = (depthPass ? 1 : Gpu.CurrentTargets().Formats.Samples > 1 ? 2 : 0, meshes, rocks);
+        }
+        if (FoliageGpuCull.NamedTally)
+        {
             // Which mesh each draw is, for the per-mesh tally of the colour views (the benchmark's top list).
             var names = new string[count];
             static string State(MeshAsset a) => a.Impostor switch

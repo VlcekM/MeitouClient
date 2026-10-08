@@ -381,12 +381,14 @@ static partial class WorldApp
                 case Key.P: screenshotRequested = true; break;
                 case Key.Tab when panel is not null: panel.Visible = !panel.Visible; break;
                 case Key.F10 when overlay is not null: overlay.Visible = !overlay.Visible; break;
-                case Key.F11 when overlay is not null: statsVisible = !statsVisible; break;
+                case Key.F11 when overlay is not null: statsVisible = !statsVisible; FoliageGpuCull.CountTriangles = statsVisible; break;
                 case Key.F12 when profiler is not null && overlay is not null: profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3); break;
             }
         }
 
-        double titleTimer = 0, cpuMs = 0, gpuMs = 0;
+        double titleTimer = 0, cpuMs = 0, gpuMs = 0, frameMaxMs = 0;
+        var frameClock = Stopwatch.StartNew();
+        long lastObjectTris = 0;
         int frames = 0, gpuSamples = 0, queryIndex = 0;
         // The GPU time of a frame: a native timestamp before and after it (QueryArena), read a frame ring later without waiting.
         var timers = new (QuerySlot Begin, QuerySlot End)[4];
@@ -416,7 +418,10 @@ static partial class WorldApp
                 // queries), so they show the real cost under the cap.
                 string gpuText = gpuSamples > 0 ? $"{gpuMs / gpuSamples:0.00}" : "-";
                 stats.Clear();
-                stats.Add($"{frames / titleTimer:0} fps ({(display.VSync ? "vsync" : "uncapped")}), cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms");
+                // frame: the wall time from one frame to the next (mean and the longest since the last update), what the fps is made of.
+                stats.Add($"{frames / titleTimer:0} fps ({(display.VSync ? "vsync" : "uncapped")}), frame {titleTimer * 1000 / Math.Max(frames, 1):0.00} ms (max {frameMaxMs:0.0}), " +
+                    $"cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms");
+                frameMaxMs = 0;
                 // The window title carries the frame rate too.
                 window.Title = $"Meitou world ({RendererName(o)}) | {frames / titleTimer:0} fps";
                 var (vramUsed, vramBudget) = display.Context.Device.VideoMemory();
@@ -439,10 +444,16 @@ static partial class WorldApp
                     stats.Add($"objects     {ob.DrawnInstances}, {ob.DrawCalls} calls, draw cpu {ob.LastDrawCpuMs:0.00} ms" + (ob.Pending > 0 ? $", loading {ob.Pending}" : ""));
                 if (gpu.Foliage is { Enabled: true } fo)
                     stats.Add($"foliage     {fo.DrawnInstances} + {fo.DrawnBlades / 1000}k grass, {fo.DrawCalls} calls, cpu {fo.LastDrawCpuMs:0.00} ms, gpu {fo.GpuMs:0.00} ms" + (fo.Pending > 0 ? $", loading {fo.Pending}" : ""));
-                stats.Add($"resident    {((gpu.Objects?.ResidentBytes ?? 0) + (gpu.Foliage?.ResidentBytes ?? 0)) / 1048576} MB");
-                if (gpu.Foliage is { } fr) stats.Add($"  foliage   {fr.ResidentDescription}; {fr.Describe()}");
-                if (gpu.Foliage is { } fs) stats.Add($"  scratch   {fs.ScratchDescription}");
-                if (gpu.Objects is { } orr) stats.Add($"  objects   {orr.ResidentDescription}");
+                // Triangles of the main view (both depth slices; not the shadows or the reflection). Foliage comes from the GPU cull's indirect
+                // arguments, read back while the statistics are shown; grass counts two per blade (cross-quad grass has four, so it is a lower bound).
+                long terrainTris = gpu.Terrain.DrawnTriangles, objectTotal = gpu.Objects?.Totals[0, 1] ?? 0, objectTris = (objectTotal - lastObjectTris) / Math.Max(frames, 1), characterTris = gpu.Characters?.DrawnTriangles ?? 0;
+                double? foliageTris = gpu.Foliage is { Enabled: true } ft ? ft.ColourTrianglesPerFrame : 0;
+                long grassTris = gpu.Foliage is { Enabled: true } fg ? 2L * fg.DrawnBlades : 0;
+                gpu.Foliage?.ResetDrawTally();
+                lastObjectTris = objectTotal;
+                static string M(double n) => n >= 1e6 ? $"{n / 1e6:0.00}M" : $"{n / 1e3:0}k";
+                stats.Add($"triangles   {M(terrainTris + objectTris + characterTris + (foliageTris ?? 0) + grassTris)}{(foliageTris is null ? " (foliage pending)" : "")}: " +
+                    $"terrain {M(terrainTris)}, objects {M(objectTris)}, foliage {(foliageTris is { } fv ? M(fv) : "-")}, grass ~{M(grassTris)}, characters {M(characterTris)}");
                 titleTimer = 0;
                 frames = 0;
                 cpuMs = gpuMs = 0;
@@ -496,6 +507,8 @@ static partial class WorldApp
             }
             queryIndex = (queryIndex + 1) % timers.Length;
             frames++;
+            frameMaxMs = Math.Max(frameMaxMs, frameClock.Elapsed.TotalMilliseconds);
+            frameClock.Restart();
             // The picture is read after the present (framebuffer 0 stays intact until the next frame); the frame that is saved is drawn
             // without the overlay and the panel, so saved pictures never show them.
             bool shot = screenshotRequested;
