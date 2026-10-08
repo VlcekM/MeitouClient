@@ -288,7 +288,7 @@ list, with the entry's count and respawn times and the weather's effect strength
 
 | `type` | Group | Behaviour (fcs.def, **Observed**) |
 |---|---|---|
-| CAMERA (1), CAMERA_RAIN (5), CAMERA_ACID_RAIN (6) | camera group | in front of the camera, moving with it; affects the whole region. The particles are kept in a cube centred at a point `d` ahead of the camera and wrapped modulo it (**Verified (decompiled)**, FUN_140100dc0 / FUN_140101a20: edge `2d / 1.5`; `d` is a camera value at offset 0x7c, **Unknown** which) |
+| CAMERA (1), CAMERA_RAIN (5), CAMERA_ACID_RAIN (6) | camera group | in front of the camera, moving with it; affects the whole region. The system sits at the camera node and the particles are kept in a cube centred `d` ahead of the camera along its view direction and wrapped modulo it (**Verified (decompiled)**, FUN_140101800 / FUN_140100dc0 / FUN_140101a20: edge `2d / 1.5`; `d` is the float at offset 0x7c of the effect data, the **size** the EFFECT loader computes: 0.75 × the largest Box extent (× scale), so the cube is the emitter box; details in [particle-universe.md](particle-universe.md#the-camera-effects-cameraeffectgroup)) |
 | POINT (2), POINT_LIGHTING (7) | point group | spawned at random places in the area; POINT_LIGHTING "based on the amount of metal", hits once |
 | WANDERING (3), WANDERING_STORM (8), WANDERING_GAS (9) | wandering group | random place, then moves at `wandering speed` (particles that get too far from their anchor are put back near it: **Observed**, FUN_140101be0, its group not confirmed) |
 | GLOBAL (4) | global group | on the ground at the camera centre; whole region |
@@ -303,7 +303,7 @@ islands`, `purple desert`), storms and twisters WANDERING (`DesertCloudStorm`, `
 `Twister-of-fire01`), lightning POINT_LIGHTING (`Lightning_Bolt`, `weather_lightning1`), local swirls GLOBAL_POINT
 (`DesertDetritus01`, `Drifting-foliage`, `rising steam slow`).
 
-### The particle scripts (Observed: `data/particles/scripts/*.pu`)
+### The particle scripts (Observed: `data/particles/scripts/*.pu`; the format, the survey and the implementation: [particle-universe.md](particle-universe.md))
 
 93 ParticleUniverse scripts (`Plugin_ParticleUniverse_x64.dll`), 93 particle materials in `data/particles/materials`,
 textures in `data/particles/textures` (PNG/DDS), four meshes. Examples:
@@ -432,7 +432,7 @@ Drifting-foliage), Venge (venge), Desert (Desert Blasts 900 + Desert Summer 300)
 
 ## In Meitou
 
-Step 2 of the plan below is done, in `src/Meitou.Data/World/`, with no renderer or viewer change (the hookup is step 3).
+Step 2 of the plan below is done, in `src/Meitou.Data/World/`; step 3 (the hookup, see "In the viewer" below) is done too.
 
 | Class | Role |
 |---|---|
@@ -443,7 +443,7 @@ Step 2 of the plan below is done, in `src/Meitou.Data/World/`, with no renderer 
 | `WeatherState` | The frame's output, as listed in the shared design: weather record and strength, wind (xz direction, speed), sky colour multiplier and cloud density after the 30 s transition, cloud drift (direction × speed), blended fog (`FogEnabled` weight, colour, distance), `Rain`, `Wetness`, `DustAmount` (x, y inside, z slope), `HeatHaze`, and `Effects` (EFFECT, count, respawn) with `EffectStrength`. |
 | `WeatherTime`, `FrameTimes`, `WeatherRamps` | Game time (day count + hours), the three frame times (`FrameTimes.FromClock(realDt, gameSpeed, paused)`), the wetness and dust ramps (`HeatHaze` is reused for the haze). |
 
-`meitou-tools weather [--region <name> | --at x,z] [--days d0 d1] [--seed n] [--list]` prints a region's season and weather chain (start, name,
+`meitou-tools weather [--region <name> | --at x,z] [--days d0 d1] [--seed n] [--list] [--cells]` (`--cells`: the centres of the region's areas-map cells, to place the viewer) prints a region's season and weather chain (start, name,
 strength, duration, wind, fog); `--list` prints every region's calendar. Every timer runs on the frame times the caller passes in and on
 the game time it passes in; nothing reads a clock, so a seed and a call sequence give the same weather.
 
@@ -468,6 +468,39 @@ the game time it passes in; nothing reads a clock, so a seed and a call sequence
 - *Wetness* and *dust* clamp on the target instead of overshooting by one step.
 - *Region switch* uses the strict 500-unit rule from the current cell, also after a teleport.
 
+## In the viewer and the game (step 3)
+
+`WorldWeather` (`src/Meitou.Rendering/WorldWeather.cs`) owns the `WeatherWorld` of a `Gpu` (`gpu.Weather`; `gpu.WeatherState` is the frame's
+`WeatherState` for the renderers that read it later) and is called by `WorldFrame.Draw` after the sun is known and before the sky is prepared.
+
+- **Inputs per frame**: the eye position, the game day and time of day (the viewer: `--day`, default 0, and `--time`; the game: its clock), the
+  frame times (`FrameTimes.FromClock`: real time measured by the weather, at most 0.25 s a frame; the game passes its speed and paused flag, the viewer
+  is at speed 1 and never paused) and the sun height. A held frame (`--screenshot`, `PostProcess.InstantAdaptation`) has dt 0, and the first
+  frame is a teleport, so a picture shows the settled state (sky, clouds, fog, wetness and haze snapped).
+- **Schedule from day 0**: the world is created at day 0, 00:00 and the regions run in game minutes up to the shown time, so `--day 52 --time 14`
+  shows what `meitou-tools weather --region <r> --days 0 100 --seed 1` lists at that time (same seed, default 1; `--weather-seed`). A step
+  forward in time (the `]` key, the time slider) replays the schedule through the jump, and a jump of more than an hour snaps everything. **Observed**:
+  this makes every region's season calendar count from day 0 (the game's own start is Unknown, see "Choices" above); the schedule never runs backwards.
+- **Mapping**: `SkyColourMultiplier` and `CloudDensity` into `SkyRenderer.SkyColourMultiplierInput` / `CloudDensityInput`; `CloudDrift` into
+  `CloudWind` (`--cloud-wind` wins, `--clouds` still wins over the density); the fog into `SkyRenderer.FogInput` (weight, colour, distance): the
+  shader's fog term (`uAtmoFog.z`) is now the blended weight, the game's `fogColour.a`, so a half-faded fog is half-strength; the heat haze
+  into the post effect (`state.HeatHaze`, already ramped on the settling time; `--heat-haze <x>` replaces the weather's field and ramps in the
+  viewer, with the state's strength); the particle effect list, strength s and wind into `ParticleRenderer.SetWeather` (`WorldWeather.EffectInput`;
+  the camera effect groups are kept while the weather stays, rebuilt and prewarmed when it changes).
+- **Forcing**: `--weather <name>` is `ForceWeather(name)` (strength 1, wind speed at its maximum along +x); `--weather auto` or no option is the
+  scheduler. `--weather Default` is clear with no fog, clouds, haze or particles, which `tools/scripts/parity.sh` uses so the ten views stay
+  comparable with the pre-weather baseline.
+- **Statistics, log, keys**: the F11 lines `weather` (camera region, its season, the weather, strength, wind speed and heading, time left in
+  the weather, day) and the sky multiplier, cloud density, fog, rain and wetness; the console prints a `weather` line when the camera region's weather
+  changes (or a weather is forced). Keys: `,` / `.` change the hour (the day follows midnight), `[` / `]` the day, `\` cycles the forced weather
+  (auto, then each WEATHER record), see [../viewer.md](../viewer.md).
+- **Game**: `GameHost` passes the clock's day, the simulation's speed (the last non-zero one while paused) and the paused flag, so cloud drift,
+  fog fades and the sky transition stop with the pause while wetness and haze still settle (factor 0.01). The schedule's state is not saved:
+  **TODO**, `WeatherWorld.Snapshot()` / `Restore()` exist but the save format has no place for them, so a loaded game rolls its weather anew.
+  The game's start day follows the clock (`--day`, default 1).
+- **Unknown / approximate**: the effect groups take the weather strength s, not `WeatherDef.EffectStrength` (the doc says the weather's effect strength: compare
+  once a way to see it turns up); a Tab-panel weather control does not exist (keys only).
+
 ## Implementation plan
 
 What the viewer (and later the game) needs, in build order. Each step is testable on its own.
@@ -487,9 +520,10 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
    cannot be reproduced and does not need to be). Expose, for a position and a game time: the camera region's weather, its
    strength, wind, the 30 s sky transition state and the four-region fog blend with the 2.5 % fade. Tests: season lengths for
    Desert and Skinner's Roam, the fog-distance rule for every base weather, weighted-pick frequencies, wind bounds.
-3. **Hook the viewer to it**: `--weather` keeps forcing one record; otherwise the scheduler runs from the camera position and a
-   time-of-day / day control, feeding `sky color mult`, `c`, the cloud drift and the weather fog (the haze already takes a fog
-   colour and distance).
+3. **Hook the viewer to it**: **done** 2026-10-08, see "In the viewer" below. `--weather` keeps forcing one record (through
+   `WeatherWorld.ForceWeather`, the same code path); the default is the scheduler (`--weather auto`), from the camera position, `--day`
+   and the viewer's time of day, feeding `sky color mult`, `c`, the cloud drift, the weather fog, the heat haze and the particle
+   effect list.
 4. **Wetness, dust and rain ripples** (shader-only): add `makeWet` with the per-surface absorbance (terrain layers' `absorbance`
    fields, objects from gloss and metalness, foliage 0.9) and the wetness ramp (+0.01/s, −0.005/s); the dust term on DUST objects
    with the biome `ground colour` and the noise texture; the water's three ripple layers from `rainAmount = saturate(rain / 50)`.
@@ -497,9 +531,12 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
    emitters, billboard renderer types, Colour / Scale / TextureRotator / LinearForce / Vortex affectors, `dyn_random` /
    `dyn_curved_*` attributes) and a CPU billboard renderer; then the effect groups by `type`: camera box with wrapping for rain
    and ash first (most visible), then the map-feature placers (volcano plumes, steamers, the permanent dust storm: static
-   positions, always on), then wandering storms and twisters with their fog-volume spheres, lightning last.
+   positions, always on), then wandering storms and twisters with their fog-volume spheres, lightning last. **Done (part one):** the
+   reader, the CPU simulation, the billboard pass and the camera groups for rain and ash ([particle-universe.md](particle-universe.md),
+   `--weather Heavy_Rain`, `--weather Kenshi_Ash-Flakes`, `--no-particles`); the rest of this step is open (point, wandering and global
+   groups, the placers, fog volumes, lightning).
 6. **Heat haze**: done in the post-processing (`PostProcess.RunHeatHaze`, `Meitou.Data.World.HeatHaze`); it takes the forced
-   weather at strength 1 until step 3 feeds it `WeatherState.HeatHaze` (step 2 computes it). **Not planned here**: sounds, gameplay
+   weather at strength 1 until step 3 feeds it `WeatherState.HeatHaze` (step 2 computes it): **done** with step 3. **Not planned here**: sounds, gameplay
    effects.
 
 ## Unknowns
@@ -509,7 +546,7 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
 - The season order for equal order values; the new-game start of the first season; the special case for a season with one
   weather in the SEASON loader (a ceiling of a scaled value, not decoded).
 - `sunlight color` of SEASON and `sky colour multiplier` / `colour multiplier` of EFFECT: loaded, their use not traced.
-- How effect groups use the wind fields, emission-rate scaling and `maximum view distance`; the camera box's exact distance
-  source (a camera value at offset 0x7c).
+- How effect groups use `maximum view distance`, `sky colour multiplier` and the strength (the wind fields and the emission-rate scaling are used as
+  [particle-universe.md](particle-universe.md#the-camera-effects-cameraeffectgroup) says, **Observed**).
 - How fog volumes are drawn.
 - The full gameplay effect of each `WeatherAffecting` value.

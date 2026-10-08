@@ -101,7 +101,7 @@ Others (`rain intensity`, `wetness`, `dust`, `dust inside`, `dust slope`, `heat 
 are for rain, dust and wind effects and the weather's own schedule; not read by the viewer. The "Default" weather
 (`5460-weather.mod`) is clear: fog off, clouds 0, both colours white. Which weather applies where and when (regions from
 `areasmap.tga`, seasons, weighted random weathers, wind) is in [weather.md](weather.md); `SkyWeather` reads a record, the viewer
-uses "Default" unless `--weather` names another.
+uses "Default" unless `--weather` names another (the viewer's default is now the scheduler, `--weather auto`: [weather.md](weather.md#in-the-viewer-and-the-game-step-3); the sky colour multiplier, cloud density and fog come from its state).
 
 
 ### Haze (distance fog): how vanilla does it
@@ -194,7 +194,7 @@ checked 2026-10-04):
   own expression, in the same HDR units as the sky and the lit scene, so the exposure treats them alike. At night the integral
   vanishes and the haze is black, as in the game. Then `horizonClouds`: its pull is the game's (0 in clear weather); its colour is the game's
   (`CloudLayer.HorizonColour`: the same `sunColour.rgb` and `zenithLight` as the cloud pass, [clouds.md](clouds.md)), from the same cloud density c as
-  the layer. The weather's fog (`--weather`, when enabled): `fog color · sunColour.w`, the game's
+  the layer. The weather fog (the scheduler's blend, or `--weather <name>`; weight 0..1 = the game's `fogColour.a`, which scales the alpha): `fog color · sunColour.w`, the game's
   ease-in-out curve over `distance / fog distance max` (the viewer has no wind; the game uses the same distance for every base weather, see the WEATHER table above),
   alphas added. A consequence that looks odd but is the game's rule: at night distant terrain goes black against the night sky.
   Not reproduced: the water being fogged by the depth of what is under it.

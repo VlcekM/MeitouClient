@@ -174,6 +174,11 @@ coverage table is recomputed from the shipped textures and must match the one ab
 - **Seen** (`--world --town "The Hub" --pitch 15 --time 13 --size 1600x900`): "Clear Times SHORT hot 0.5" (c 0.1) one wisp;
   "light rain" (c 0.6) broken thin cloud with blue gaps; "Dust Storm Approach" (c 1) an overcast sky, the wall of fog hiding the clouds
   near the horizon; "light rain" at 19:00 the same layer in the warmer light.
+- **Horizon sparkle (fixed 2026-10-08, Observed)**: with `--weather "light rain"` a row of small white ticks ran along the horizon line. It was the cloud
+  pass (gone with `--clouds 0`, absent on a build without the pass): below `d.y` 0.05 the alpha is the uniform horizon value, but the colour still followed
+  the texture lookups, whose uv is `height · xz / d.y`, hundreds of units at `d.y` 0.0005 to 0.01, so the minified lookups sparkle. Now the cloud colour
+  fades to the plain density-0 value from `d.y` 0.05 down to 0.01 (above 0.05 the layer is untouched). A viewer choice; the game's SkyX shader has no such fade.
+  The weather system now drives the layer (`--weather auto`): see [weather.md](weather.md#in-the-viewer-and-the-game-step-3).
 
 ## Unknowns
 

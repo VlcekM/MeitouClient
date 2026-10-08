@@ -18,7 +18,10 @@ public sealed class WorldWeather
     int lastSerial = -1;
     string lastForced = "";
 
-    public WorldWeather(WeatherWorld world) => World = world;
+    readonly Meitou.Data.GameDatabase? database;
+    readonly Dictionary<WeatherDef, IReadOnlyList<Meitou.Data.Particles.WeatherEffectEntry>> effectLists = new(ReferenceEqualityComparer.Instance);
+
+    public WorldWeather(WeatherWorld world, Meitou.Data.GameDatabase? database = null) => (World, this.database) = (world, database);
 
     public WeatherWorld World { get; }
     /// <summary>The state of the last <see cref="Update"/>.</summary>
@@ -71,6 +74,26 @@ public sealed class WorldWeather
         sky.CloudDensityInput = s.CloudDensity;
         sky.CloudWind = CloudWindOverride ?? s.CloudDrift;
         sky.FogInput = (s.FogEnabled, s.FogColour, s.FogDistance);
+    }
+
+    /// <summary>
+    /// The particle effect groups' input from the state: the camera region's effect list (EFFECT, count, respawn; the same list object while the weather
+    /// stays, so the groups are kept), the weather strength s and the wind velocity. Empty without a database.
+    /// </summary>
+    public Meitou.Data.Particles.WeatherEffectInput EffectInput()
+    {
+        var s = State;
+        if (database is null) return Meitou.Data.Particles.WeatherEffectInput.None;
+        if (!effectLists.TryGetValue(s.Weather, out var list))
+        {
+            var entries = new List<Meitou.Data.Particles.WeatherEffectEntry>();
+            foreach (var e in s.Effects)
+                if (database.Find(e.Effect.StringId) is { } record)
+                    entries.Add(new(Meitou.Data.Particles.EffectRecord.From(record), e.MaxCount, (int)e.RespawnMin, (int)e.RespawnMax));
+            effectLists[s.Weather] = list = entries;
+        }
+        // TODO(effects): the game gives each group the weather's effect strength (WeatherDef.EffectStrength); the groups take the strength s, as the forced adapter did.
+        return new Meitou.Data.Particles.WeatherEffectInput { Effects = list, Strength = s.Strength, Wind = s.WindDirection * s.WindSpeed };
     }
 
     void LogChange(WeatherState s)

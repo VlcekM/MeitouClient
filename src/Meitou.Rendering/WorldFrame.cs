@@ -4,6 +4,7 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Fcs;
+using Meitou.Data.Particles;
 using Meitou.Data.World;
 
 using Meitou.Rendering.Gpu;
@@ -78,6 +79,9 @@ sealed class WorldOptions
     public int? Day;
     public int WeatherSeed = 1;
     public bool AutoWeather => Weather is null || Weather.Equals("auto", StringComparison.OrdinalIgnoreCase);
+    /// <summary>The weather particle effects (docs/formats/particle-universe.md): <c>--no-particles</c> turns the pass off, <c>--particle-prewarm</c> is the seconds simulated before the first picture (null: each system's longest particle life).</summary>
+    public bool NoParticles;
+    public float? ParticlePrewarm;
     public float? Clouds;
     public Vector2 CloudWind;
     public PostOptions Post = PostOptions.Create("meitou");
@@ -140,10 +144,11 @@ sealed class WorldOptions
           --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral
           --haze-distance <u>      the game's far distance D (view distance x 10) for its haze, which ramps in from 0.06 D to 0.6 D (default 50000: view distance 5000)
           --haze-strength <x>      the viewer's haze strength: scales how far the haze is blended in (default 0.93: far mountains stay visible; 1 is the game's; also a Tab slider)
-          --weather <name|auto>    auto (default): the weather scheduler (regions, seasons, wind) at the camera, from --day and --time; a WEATHER record's name forces that one (sky colour, fog, clouds, wind, heat haze; "Default" is clear)
+          --weather <name|auto>    auto (default): the weather scheduler (regions, seasons, wind) at the camera, from --day and --time; a WEATHER record's name forces that one (sky colour, fog, clouds, wind, heat haze, particles; "Default" is clear)
           --day <n>                the game day the weather schedule starts at (default 0)   --weather-seed <n> the scheduler's random seed (default 1, as meitou-tools weather)
           --clouds <0..1>          cloud density c (test override)
           --cloud-wind <x>,<z>     the clouds' drift velocity in world units per second (test; the drift is held still in --screenshot)
+          --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
@@ -253,6 +258,8 @@ sealed class WorldOptions
                 case "--weather": o.Weather = Next(); break;
                 case "--day": o.Day = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--weather-seed": o.WeatherSeed = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--no-particles": o.NoParticles = true; break;
+                case "--particle-prewarm": o.ParticlePrewarm = Math.Max(F(), 0); break;
                 case "--clouds": o.Clouds = F(); break;
                 case "--cloud-wind": { var (wx, wz) = Pair(); o.CloudWind = new Vector2((float)wx, (float)wz); break; }
                 case "--no-stream": o.NoStream = true; break;
@@ -456,6 +463,10 @@ static class WorldFrame
         public required TerrainRenderer Terrain;
         public required SkyRenderer Sky;
         public WaterRenderer? Water;
+        /// <summary>The weather's particle effects (null while there are none: a clear weather, or <c>--no-particles</c>); <see cref="EnsureParticles"/> makes it.</summary>
+        public ParticleRenderer? Particles;
+        /// <summary>Makes the particle renderer on demand (null with <c>--no-particles</c>).</summary>
+        public Func<ParticleRenderer>? MakeParticles;
         public ReflectionPass? Reflection;
         public ShadowPass? Shadow;
         public int DebugShadows;
@@ -487,6 +498,7 @@ static class WorldFrame
             Foliage?.Dispose();
             Characters?.Dispose();
             Objects?.Dispose();
+            Particles?.Dispose();
             Water?.Dispose();
             Reflection?.Dispose();
             Shadow?.Dispose();
@@ -508,6 +520,25 @@ static class WorldFrame
         GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
         GC.WaitForPendingFinalizers();
         System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency;
+    }
+
+    /// <summary>
+    /// Feeds the particle renderer the weather state's effect list, strength and wind (the renderer is made the first time a weather has effects; a weather
+    /// without any empties it again). The effect groups are rebuilt only when the weather's list changes.
+    /// </summary>
+    static void UpdateParticles(Gpu gpu)
+    {
+        if (gpu.Weather is not { } weather || gpu.MakeParticles is null) return;
+        var input = weather.EffectInput();
+        if (input.Effects.Count == 0 && gpu.Particles is null) return;
+        (gpu.Particles ??= gpu.MakeParticles()).SetWeather(input);
+    }
+
+    /// <summary>The particle renderer (reads the scripts and materials, makes the pass's program) if there is none yet; for whoever feeds it a weather's effect list.</summary>
+    public static ParticleRenderer EnsureParticles(Gpu gpu, GpuContext context, GameInstall install)
+    {
+        if (gpu.Particles is { } existing) return existing;
+        return gpu.Particles = ParticleRenderer.Create(context, install);
     }
 
     public static Gpu CreateGpu(GpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive)
@@ -537,7 +568,7 @@ static class WorldFrame
             gpu.Sky.LoadWorld(install, skyDb);   // the ambient map and the CONSTANTS exposure band (docs/formats/lighting.md)
             // The weather scheduler (docs/formats/weather.md): auto, or one forced record through the same path.
             var world = WeatherWorld.Create(skyDb, install, o.WeatherSeed, WeatherTime.At(0));   // created on day 0; WorldWeather replays the schedule up to --day
-            gpu.Weather = new WorldWeather(world) { Day = o.Day ?? 0, CloudWindOverride = o.CloudWind != Vector2.Zero ? o.CloudWind : null };
+            gpu.Weather = new WorldWeather(world, skyDb) { Day = o.Day ?? 0, CloudWindOverride = o.CloudWind != Vector2.Zero ? o.CloudWind : null };
             if (!o.AutoWeather)
             {
                 if (!world.ForceWeather(o.Weather))
@@ -546,6 +577,15 @@ static class WorldFrame
             }
             Console.WriteLine($"weather   {(o.AutoWeather ? $"scheduler, seed {o.WeatherSeed}, from day {o.Day ?? 0}" : $"forced {o.Weather}")}");
         }
+        // The weather's particle effects (rain, ash...) follow the weather state: the renderer is made when a weather first has effects (UpdateParticles).
+        if (!o.NoParticles) gpu.MakeParticles = () =>
+        {
+            var particleWatch = Stopwatch.StartNew();
+            var particles = EnsureParticles(gpu, context, install);
+            particles.PrewarmSeconds = o.ParticlePrewarm;
+            Console.WriteLine($"particles {particles.Library.Systems.Count} systems read ({particleWatch.ElapsedMilliseconds} ms)");
+            return particles;
+        };
         gpu.Streamer = new TerrainStreamer(install, terrain, textures, scene.Window.Step) { MaterialDistance = o.MaterialDistance };
         if (o.NoStream) gpu.Anchor = scene.Focus;
         if (!o.NoWater && scene.Database is not null)
@@ -719,6 +759,9 @@ static class WorldFrame
     }
 
     /// <summary>The swaying grass's own motion for the upscalers (MEITOU_GRASS_MOTION=0 turns it off, for comparisons).</summary>
+    /// <summary>The unit of <c>Draw</c>'s <c>time</c> argument: both callers pass the real seconds divided by 600.</summary>
+    const double SecondsPerTimeUnit = 600;
+
     static readonly bool GrassMotion = Environment.GetEnvironmentVariable("MEITOU_GRASS_MOTION") != "0";
     /// <summary>Per-cascade and per-step CPU times in the stats strings (ShadowPass.CasterStats, FoliageRenderer's details); the viewer's screenshots and benchmarks turn it on.</summary>
     public static bool DetailedStats;
@@ -765,6 +808,9 @@ static class WorldFrame
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
+        // The weather's camera particles step on the frame clock (the caller's time, 1/600 s units; constant, so still, in pictures).
+        UpdateParticles(gpu);
+        gpu.Particles?.Update(time * SecondsPerTimeUnit, camera);
         StageClock.Lap(3);
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, sun.Y); }
         StageClock.Lap(12);
@@ -848,6 +894,8 @@ static class WorldFrame
             StageClock.Lap(8);
             host.Stage(9);
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
+            if (nearSlice && gpu.Particles is { } particleDraw)   // weather particles last: blended over the water, tested against the depth
+                particleDraw.Draw(viewProjection, view * Jitter.Apply(camera.Projection(aspect, Math.Min(0.5f, near * 0.5f), near), jitter, rw, rh), near, view, eye, sun);
             StageClock.Lap(9);
         }
         // Records the last slice's jobs and executes them: the render thread's share (the fork-join) counts as "water", the last stage of the host.
