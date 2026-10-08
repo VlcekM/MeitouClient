@@ -256,6 +256,12 @@ public class WeatherTests
         Assert.Equal(snapshot, second.Snapshot());
         Assert.Equal(first.Weather, second.Weather);
         Assert.Equal(first.Strength, second.Strength);
+        Assert.Equal(("s", first.Weather.StringId), (snapshot.SeasonId, snapshot.WeatherId));
+
+        // A mod that reorders the season's weathers does not shift the restored one: the ids find it.
+        var reordered = OneRegion(Season("s", 0, 1, Entry(b, 1, 60, 300), Entry(a, 1, 60, 300)), seed: 7);
+        reordered.Restore(snapshot, WeatherTime.At(1, 9.3f));
+        Assert.Equal(first.Weather.Name, reordered.Weather.Name);
     }
 
     // ---- wind ----

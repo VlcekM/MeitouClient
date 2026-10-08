@@ -22,8 +22,8 @@ public readonly record struct WindInterpolation(double StartMinute, double Durat
 }
 
 /// <summary>Everything a region needs to continue from a saved game (the random source is not part of it: a restored region draws from a fresh seeded sequence).</summary>
-public sealed record WeatherRegionSnapshot(string RegionId, int SeasonIndex, int SeasonEndDay, int WeatherEntryIndex, double WeatherStartMinute, double WeatherEndMinute,
-    float Strength, WindInterpolation Wind, double NextWindUpdateMinute, RegionFog FogFrom, double FogFadeMinutes);
+public sealed record WeatherRegionSnapshot(string RegionId, string SeasonId, int SeasonIndex, int SeasonEndDay, string WeatherId, int WeatherEntryIndex,
+    double WeatherStartMinute, double WeatherEndMinute, float Strength, WindInterpolation Wind, double NextWindUpdateMinute, RegionFog FogFrom, double FogFadeMinutes);
 
 /// <summary>
 /// One weather region's schedule (docs/formats/weather.md "Seasons", "Choosing a weather", "Wind", "Fog"): the season calendar, the chain of weathers by
@@ -232,15 +232,21 @@ public sealed class WeatherRegion
 
     // ---- saving ----
 
-    public WeatherRegionSnapshot Snapshot() => new(Def.StringId, SeasonIndex, SeasonEndDay, WeatherEntryIndex, WeatherStartMinute, WeatherEndMinute, Strength, wind,
-        NextWindUpdateMinute, fogFrom, fogFadeMinutes);
+    public WeatherRegionSnapshot Snapshot() => new(Def.StringId, Season.Season.StringId, SeasonIndex, SeasonEndDay, Weather.StringId, WeatherEntryIndex, WeatherStartMinute,
+        WeatherEndMinute, Strength, wind, NextWindUpdateMinute, fogFrom, fogFadeMinutes);
 
-    /// <summary>Continues from a snapshot of this region; indexes outside the region's current seasons are clamped (a mod may have changed them).</summary>
+    /// <summary>
+    /// Continues from a snapshot of this region. The season and the weather are found by their StringIds (so a mod that reorders a list does not
+    /// shift them), else by the saved index, clamped into the current lists.
+    /// </summary>
     public void Restore(WeatherRegionSnapshot s, WeatherTime now)
     {
-        SeasonIndex = Math.Clamp(s.SeasonIndex, 0, Def.Seasons.Count - 1);
+        int season = s.SeasonId.Length == 0 ? -1 : Def.Seasons.ToList().FindIndex(x => x.Season.StringId == s.SeasonId);
+        SeasonIndex = season >= 0 ? season : Math.Clamp(s.SeasonIndex, 0, Def.Seasons.Count - 1);
         SeasonEndDay = s.SeasonEndDay;
-        WeatherEntryIndex = Math.Clamp(s.WeatherEntryIndex, 0, Season.Season.Weathers.Count - 1);
+        var weathers = Season.Season.Weathers;
+        int weather = s.WeatherId.Length == 0 ? -1 : weathers.ToList().FindIndex(x => x.Weather.StringId == s.WeatherId);
+        WeatherEntryIndex = weather >= 0 ? weather : Math.Clamp(s.WeatherEntryIndex, 0, weathers.Count - 1);
         WeatherStartMinute = s.WeatherStartMinute;
         WeatherEndMinute = s.WeatherEndMinute;
         Strength = s.Strength;
