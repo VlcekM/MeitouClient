@@ -114,6 +114,8 @@ static partial class WorldApp
             var foliageWatch = Stopwatch.StartNew();
             foliageRenderer.Settle(gpu.Anchor ?? camera.Eye);
             Console.WriteLine($"foliage   {foliageRenderer.Describe()} ({foliageWatch.ElapsedMilliseconds} ms)");
+            Console.WriteLine(foliageRenderer.LayoutCache is { } layoutCache ? $"foliage   {layoutCache.Stats.Describe()} (key {layoutCache.KeyName})" : "foliage   layout cache off (--no-load-cache)");
+            Console.WriteLine($"foliage   {foliageRenderer.SettleTimeline}");
         }
         FinishLoading(context);
 
