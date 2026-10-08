@@ -3436,6 +3436,16 @@ Files: `Landmarks.cs` (new: `LandmarkClass`), `ObjectStreamer.cs` (`LandmarkZone
   that mesh path overlaps what the rock impostor work changes. (c) About 55% of the bounds probes fall back to a whole read; cause not examined (cost is under a second). (d) `F8` at run time moves the distances but never builds or removes the landmark list, so runtime-Faithful is not
   pixel-identical to a Faithful start; the gate covers the start mode. (e) VRAM is the driver's budget per process; under other processes' load the run-to-run budget swung 3.4-11.5 GB, and a 95% watch abort (`MEITOU_VRAM_KILL`) hit one default-range run at a 3456 MB budget.
 
+### 8.20 Weather particles (2026-10-08)
+
+`ParticleRenderer` ([formats/particle-universe.md](formats/particle-universe.md)) is a plain `LegacyProgram` pass in the style of the water: one
+instanced quad strip per technique, the instances (64 bytes: four vec4 at vertex locations 1 to 4, per-instance rate) written by the CPU
+simulation straight into `ctx.Frame.Constants` (a `Transient`: no stall, no persistent buffer) and bound with `BindVertexBuffers`; blend,
+texture and depth flags from the particle material per draw; a guest segment recorded after the water in the near depth slice, only when some
+group has a particle (so a clear weather records nothing and the parity views stay at 0 px). Particles nearer than the slice's near plane
+are drawn with a projection of their own and no depth test (`WorldFrame.Draw`). Colour writes only: the scene target's alpha is the
+characters' mask.
+
 ## 9. Expected CPU cost, and how the profiler keeps working
 
 *In short: a throwaway measurement on the RTX 4070 recorded the same draws through VkGl and directly. A typical foliage mesh draw costs about

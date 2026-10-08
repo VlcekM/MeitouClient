@@ -267,7 +267,7 @@ list, with the entry's count and respawn times and the weather's effect strength
 
 | `type` | Group | Behaviour (fcs.def, **Observed**) |
 |---|---|---|
-| CAMERA (1), CAMERA_RAIN (5), CAMERA_ACID_RAIN (6) | camera group | in front of the camera, moving with it; affects the whole region. The particles are kept in a cube centred at a point `d` ahead of the camera and wrapped modulo it (**Verified (decompiled)**, FUN_140100dc0 / FUN_140101a20: edge `2d / 1.5`; `d` is a camera value at offset 0x7c, **Unknown** which) |
+| CAMERA (1), CAMERA_RAIN (5), CAMERA_ACID_RAIN (6) | camera group | in front of the camera, moving with it; affects the whole region. The system sits at the camera node and the particles are kept in a cube centred `d` ahead of the camera along its view direction and wrapped modulo it (**Verified (decompiled)**, FUN_140101800 / FUN_140100dc0 / FUN_140101a20: edge `2d / 1.5`; `d` is the float at offset 0x7c of the effect data, the **size** the EFFECT loader computes: 0.75 × the largest Box extent (× scale), so the cube is the emitter box; details in [particle-universe.md](particle-universe.md#the-camera-effects-cameraeffectgroup)) |
 | POINT (2), POINT_LIGHTING (7) | point group | spawned at random places in the area; POINT_LIGHTING "based on the amount of metal", hits once |
 | WANDERING (3), WANDERING_STORM (8), WANDERING_GAS (9) | wandering group | random place, then moves at `wandering speed` (particles that get too far from their anchor are put back near it: **Observed**, FUN_140101be0, its group not confirmed) |
 | GLOBAL (4) | global group | on the ground at the camera centre; whole region |
@@ -282,7 +282,7 @@ islands`, `purple desert`), storms and twisters WANDERING (`DesertCloudStorm`, `
 `Twister-of-fire01`), lightning POINT_LIGHTING (`Lightning_Bolt`, `weather_lightning1`), local swirls GLOBAL_POINT
 (`DesertDetritus01`, `Drifting-foliage`, `rising steam slow`).
 
-### The particle scripts (Observed: `data/particles/scripts/*.pu`)
+### The particle scripts (Observed: `data/particles/scripts/*.pu`; the format, the survey and the implementation: [particle-universe.md](particle-universe.md))
 
 93 ParticleUniverse scripts (`Plugin_ParticleUniverse_x64.dll`), 93 particle materials in `data/particles/materials`,
 textures in `data/particles/textures` (PNG/DDS), four meshes. Examples:
@@ -437,7 +437,10 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
    emitters, billboard renderer types, Colour / Scale / TextureRotator / LinearForce / Vortex affectors, `dyn_random` /
    `dyn_curved_*` attributes) and a CPU billboard renderer; then the effect groups by `type`: camera box with wrapping for rain
    and ash first (most visible), then the map-feature placers (volcano plumes, steamers, the permanent dust storm: static
-   positions, always on), then wandering storms and twisters with their fog-volume spheres, lightning last.
+   positions, always on), then wandering storms and twisters with their fog-volume spheres, lightning last. **Done (part one):** the
+   reader, the CPU simulation, the billboard pass and the camera groups for rain and ash ([particle-universe.md](particle-universe.md),
+   `--weather Heavy_Rain`, `--weather Kenshi_Ash-Flakes`, `--no-particles`); the rest of this step is open (point, wandering and global
+   groups, the placers, fog volumes, lightning).
 6. **Heat haze**: done in the post-processing (`PostProcess.RunHeatHaze`, `Meitou.Data.World.HeatHaze`); it takes the forced
    weather at strength 1 until step 2 gives the camera region's weather and strength. **Not planned here**: sounds, gameplay
    effects.
@@ -449,7 +452,7 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
 - The season order for equal order values; the new-game start of the first season; the special case for a season with one
   weather in the SEASON loader (a ceiling of a scaled value, not decoded).
 - `sunlight color` of SEASON and `sky colour multiplier` / `colour multiplier` of EFFECT: loaded, their use not traced.
-- How effect groups use the wind fields, emission-rate scaling and `maximum view distance`; the camera box's exact distance
-  source (a camera value at offset 0x7c).
+- How effect groups use `maximum view distance`, `sky colour multiplier` and the strength (the wind fields and the emission-rate scaling are used as
+  [particle-universe.md](particle-universe.md#the-camera-effects-cameraeffectgroup) says, **Observed**).
 - How fog volumes are drawn.
 - The full gameplay effect of each `WeatherAffecting` value.
