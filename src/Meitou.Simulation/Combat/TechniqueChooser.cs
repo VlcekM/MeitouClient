@@ -21,7 +21,17 @@ public static class TechniqueChooser
         float total = 0;
         for (int i = 0; i < all.Count; i++) total += Weight(all[i], weaponKind, animalCategory, prone, skill, gap, targetMoving, weaponReach);
         if (total <= 0) return -1;
-        return Pick(all, roll * total, t => Weight(t, weaponKind, animalCategory, prone, skill, gap, targetMoving, weaponReach));
+        float target = roll * total;
+        int last = -1;
+        for (int i = 0; i < all.Count; i++)
+        {
+            float w = Weight(all[i], weaponKind, animalCategory, prone, skill, gap, targetMoving, weaponReach);
+            if (w <= 0) continue;
+            last = i;
+            if (target < w) return i;
+            target -= w;
+        }
+        return last;
     }
 
     static float Weight(CombatTechnique t, WeaponKinds kind, int animal, bool prone, float skill, float gap, bool moving, float weaponReach)
@@ -52,38 +62,46 @@ public static class TechniqueChooser
     public static int ChooseReaction(IReadOnlyList<CombatTechnique> all, WeaponKinds weaponKind, int animalCategory, bool prone, bool canBlock, int blowDirection,
         float blockChancePercent, float dodgeChancePercent, float chanceRoll, float pickRoll)
     {
-        Func<CombatTechnique, bool> pool;
-        if (canBlock)
-        {
-            bool blocks = chanceRoll * 100 < blockChancePercent;
-            pool = blocks
-                ? t => t.IsBlock && t.AttackDirection1 == blowDirection
-                : t => t.IsBlock && !t.IsDodge && t.AttackDirection1 != blowDirection && SameClass(t.AttackDirection1, blowDirection);
-        }
-        else
-        {
-            if (!(chanceRoll * 100 < dodgeChancePercent)) return -1;
-            pool = t => t.IsDodge;
-        }
-        float W(CombatTechnique t) =>
-            t.Disabled || t.IsStumbleDodge || !(t.IsBlock || t.IsDodge) || !FitsKind(t, weaponKind) || t.Animal != animalCategory || t.IsProne != prone || !pool(t) ? 0 : MathF.Max(t.Chance, 0);
+        ReactionPool pool;
+        if (canBlock) pool = chanceRoll * 100 < blockChancePercent ? ReactionPool.Facing : ReactionPool.WrongDirection;
+        else if (chanceRoll * 100 < dodgeChancePercent) pool = ReactionPool.Dodges;
+        else return -1;
         float total = 0;
-        for (int i = 0; i < all.Count; i++) total += W(all[i]);
+        for (int i = 0; i < all.Count; i++) total += ReactionWeight(all[i], weaponKind, animalCategory, prone, pool, blowDirection);
         if (total <= 0) return -1;
-        return Pick(all, pickRoll * total, W);
-    }
-
-    static int Pick(IReadOnlyList<CombatTechnique> all, float target, Func<CombatTechnique, float> weight)
-    {
+        float target = pickRoll * total;
         int last = -1;
         for (int i = 0; i < all.Count; i++)
         {
-            float w = weight(all[i]);
+            float w = ReactionWeight(all[i], weaponKind, animalCategory, prone, pool, blowDirection);
             if (w <= 0) continue;
             last = i;
             if (target < w) return i;
             target -= w;
         }
         return last;
+    }
+
+    /// <summary>Which techniques a reaction is picked from.</summary>
+    enum ReactionPool
+    {
+        /// <summary>A block roll that succeeded: the block techniques whose direction is the blow's.</summary>
+        Facing,
+        /// <summary>A block roll that failed: block techniques of another direction in the blow's class, never a dodge.</summary>
+        WrongDirection,
+        /// <summary>A fighter without a blocking weapon that rolled a dodge: the dodge techniques.</summary>
+        Dodges,
+    }
+
+    static float ReactionWeight(CombatTechnique t, WeaponKinds kind, int animal, bool prone, ReactionPool pool, int blowDirection)
+    {
+        if (t.Disabled || t.IsStumbleDodge || !(t.IsBlock || t.IsDodge) || !FitsKind(t, kind) || t.Animal != animal || t.IsProne != prone) return 0;
+        bool inPool = pool switch
+        {
+            ReactionPool.Facing => t.IsBlock && t.AttackDirection1 == blowDirection,
+            ReactionPool.WrongDirection => t.IsBlock && !t.IsDodge && t.AttackDirection1 != blowDirection && SameClass(t.AttackDirection1, blowDirection),
+            _ => t.IsDodge,
+        };
+        return inPool ? MathF.Max(t.Chance, 0) : 0;
     }
 }
