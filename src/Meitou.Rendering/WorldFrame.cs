@@ -73,6 +73,9 @@ sealed class WorldOptions
     public float? HazeDistance;
     public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze switch (default); 1 = the game's haze
     public string? Weather;
+    /// <summary>Test overrides of the weather's surface values (<c>--wetness</c>, <c>--dust</c>, <c>--rain</c>); null: the forced weather's.</summary>
+    public float? Wetness, Rain;
+    public Vector3? Dust;
     public float? Clouds;
     public PostOptions Post = PostOptions.Create("meitou");
     public double? CameraX, CameraZ, FlyToX, FlyToZ;
@@ -135,6 +138,7 @@ sealed class WorldOptions
           --haze-distance <u>      the game's far distance D (view distance x 10) for its haze, which ramps in from 0.06 D to 0.6 D (default 50000: view distance 5000)
           --haze-strength <x>      the viewer's haze strength: scales how far the haze is blended in (default 0.93: far mountains stay visible; 1 is the game's; also a Tab slider)
           --weather <name>         a WEATHER record's sky colour, fog, clouds and heat haze (default "Default": clear, no fog, no clouds, no heat haze)   --clouds <0..1> cloud coverage
+          --wetness <0..1> / --rain <0..100> / --dust <x[,inside,slope]>   the weather's wet surfaces, rain ripples on water and dust on objects; the forced weather's settled values by default, these replace them (testing)
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
@@ -242,6 +246,16 @@ sealed class WorldOptions
                 case "--meitou": Enhancements.Apply(Switches(o), Next(), meitou: true); break;
                 case "--faithful": Enhancements.Apply(Switches(o), Next(), meitou: false); break;
                 case "--weather": o.Weather = Next(); break;
+                case "--wetness": o.Wetness = F(); break;
+                case "--rain": o.Rain = F(); break;
+                case "--dust":
+                {
+                    // x[,inside,slope]: the current dust, the dust inside buildings and the slope value (the forced weather's inside share and slope when omitted).
+                    var dustParts = Next().Split(',');
+                    float P(int i, float d) => i < dustParts.Length ? float.Parse(dustParts[i], CultureInfo.InvariantCulture) : d;
+                    o.Dust = new Vector3(P(0, 0), P(1, float.NaN), P(2, float.NaN));
+                    break;
+                }
                 case "--clouds": o.Clouds = F(); break;
                 case "--no-stream": o.NoStream = true; break;
                 case "--show-keys": o.ShowKeys = true; break;
@@ -444,6 +458,8 @@ static class WorldFrame
         public required TerrainRenderer Terrain;
         public required SkyRenderer Sky;
         public WaterRenderer? Water;
+        /// <summary>The weather's wetness, dust and rain for every surface shader (null without a game database).</summary>
+        public WeatherSurfaces? Surfaces;
         public ReflectionPass? Reflection;
         public ShadowPass? Shadow;
         public int DebugShadows;
@@ -472,6 +488,7 @@ static class WorldFrame
             Characters?.Dispose();
             Objects?.Dispose();
             Water?.Dispose();
+            Surfaces?.Dispose();
             Reflection?.Dispose();
             Shadow?.Dispose();
             Post?.Dispose();
@@ -520,6 +537,14 @@ static class WorldFrame
         {
             gpu.Sky.LoadWorld(install, skyDb);   // the ambient map and the CONSTANTS exposure band (docs/formats/lighting.md)
             gpu.Sky.Weather = SkyWeather.Find(skyDb, o.Weather) ?? throw new ArgumentException($"no weather named '{o.Weather}'; known: {string.Join(", ", SkyWeather.Names(skyDb).Distinct().Take(12))} ...");
+            // The surface values of the forced weather at strength 1, as if settled (the scheduler's WeatherState replaces this in the hookup); the test options override them.
+            var surfaces = gpu.Surfaces = new WeatherSurfaces(context, assets);
+            if (skyDb.OfType(Meitou.Data.Fcs.FcsRecordType.WEATHER).FirstOrDefault(r => r.Name == gpu.Sky.Weather.Name) is { } weatherRecord) surfaces.SetSettled(weatherRecord);
+            if (o.Wetness is { } wetness) surfaces.Wetness = wetness;
+            if (o.Rain is { } rain) surfaces.Rain = rain;
+            if (o.Dust is { } dust) surfaces.Dust = new Vector3(dust.X, float.IsNaN(dust.Y) ? surfaces.Dust.Y : dust.Y, float.IsNaN(dust.Z) ? surfaces.Dust.Z : dust.Z);
+            if (surfaces.Wetness != 0 || surfaces.Rain != 0 || surfaces.Dust != Vector3.Zero)
+                Console.WriteLine($"weather   wetness {surfaces.Wetness:0.##}, rain {surfaces.Rain:0.##}, dust {surfaces.Dust.X:0.##} inside {surfaces.Dust.Y:0.##} slope {surfaces.Dust.Z:0.##}");
         }
         gpu.Streamer = new TerrainStreamer(install, terrain, textures, scene.Window.Step) { MaterialDistance = o.MaterialDistance };
         if (o.NoStream) gpu.Anchor = scene.Focus;
@@ -701,6 +726,7 @@ static class WorldFrame
 
     public static void Draw(Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time, float fogDistance)
     {
+        if (gpu.Surfaces is { } surfaces) surfaces.GameTime = time;
         // Everything is drawn into the post-processing chain's HDR framebuffer (before the reflection pass, which restores whatever is bound).
         gpu.Post?.Begin(width, height);
         // The scene is drawn at the render size (smaller than the display with an upscaler), its projection jittered by the upscaler.

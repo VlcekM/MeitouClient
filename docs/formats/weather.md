@@ -434,6 +434,55 @@ Drifting-foliage), Venge (venge), Desert (Desert Blasts 900 + Desert Summer 300)
 
 Step 2 of the plan below is done, in `src/Meitou.Data/World/`, with no renderer or viewer change (the hookup is step 3).
 
+### Wet surfaces, dust and rain ripples in the viewer (step 4)
+
+Done in the shaders (`AtmosphereShaders.Functions` holds `makeWet`, `dustCover`, `dustColour`) and `WeatherSurfaces` (`src/Meitou.Rendering`).
+The shared values are frame globals, so every program of the frame reads them: `uWeatherWet` = (wetness, `rainAmount` = `saturate(rain / 50)`,
+`gameTime`) and `uWeatherDust` = (x, inside, slope) in the native `FrameConstants` block (offsets 240 and 256), the dust noise and the ground
+colour map as two more frame textures. They are 0 until the viewer sets them, and at 0 every shader draws what it drew before. Until the hookup
+the viewer takes them from `--weather <name>` at strength 1 as if settled (wetness = the record's `wetness`, dust = its `dust`, inside = dust ×
+`dust inside`, slope = `dust slope`, rain = `rain intensity`); the test options `--wetness x`, `--rain x` (0..100) and `--dust x[,inside,slope]`
+replace them. `WeatherState` replaces this in the hookup (`WeatherSurfaces.Wetness`, `.Dust`, `.Rain`, `.GameTime`).
+
+- **Terrain** (`TerrainShaders.Fragment`, also the TERRAIN-mode rock meshes): `makeWet(albedo, wetness, 1 − gloss + absorbance, waterHeight − y, 2)`
+  with the layers' `absorbance` blended exactly like the textures (`biome()`: base → grass by the overlay → slope → dirt → road → cliff; two more
+  texels in the biome parameter row, `ParamTexels` 13) and averaged over the pixel's biomes by their weights. The far ground colour and the untextured
+  fallback take the old fixed 0.5 (**Observed**: the game's distant terrain is another material, not traced). This replaces the earlier stand-in
+  ("the game's wetness rule", absorbance 0.5 everywhere); at wetness 0 only the water-line band differs, where the real absorbance (1 − gloss + layers,
+  about 0.8 to 1.3 on sand) darkens the underwater edge a little more: 0.137 % of Port North's pixels at 13:00 (max 53 of 255), 0.011 % of the Hub's,
+  nothing else of the ten views. A rock bake (`uWaterHeight` far below the world) gets no weather, so an impostor never keeps a rain.
+- **Objects and foliage meshes** (`Shaders.MeshFragment`; the push constants' spare word, `MeshSurface`, carries the draw's bits: 1 DUST, 2 foliage shader,
+  4 no weather for impostor bakes, 8 interior): absorbance `(1 − gloss)(1 − metalness)` with the viewer's gloss × `specular mult` (no metalness map: 0),
+  foliage (FOLIAGE-mode map features, leaves) 0.9, `edge` 0.5. The gloss that reaches the lighting is the wet one. The grass (`GrassFragment`) starts from
+  gloss 0 and writes `0.6 ×` the wet gloss, as `foliage.hlsl` does. Distant trees' impostors (the atlas is baked dry) are wetted at run time with 0.9
+  (a rock's impostor with `1 − gloss + 0.4`, **Observed**: the atlas holds no biome).
+- **Not done**: the water-line term on objects, foliage and grass (they have no water height; it would change the ten views at Default, the game
+  darkens them); `makeWet` of building **interiors** (wetness 0, dust = `dustAmount.y`: the shader has the bit, nothing in the viewer says which parts are
+  interiors yet, so every part uses x); the dust of `distant_town` stand-ins and the characters (the game's skin and character shaders have no wet or
+  dust code, **Verified** by searching every shader in `data/materials` for `dustAmount` / `makeWet`: only `objects.hlsl`, `triplanar.hlsl`,
+  `terrainfp4.hlsl` and `foliage.hlsl` use them).
+- **makeWet below wetness 0.3** (**Verified** from `common/wet.hlsl`): the game's `(1 − 1/(wet + 0.7)) · absorbance` is negative until `wet = 0.3`, so
+  the game *brightens* dry, absorbent surfaces by up to `0.5 · 0.43 · absorbance` (about 11 % at absorbance 0.5, 25 % at 1.2). The viewer clamps the
+  darkening at 0 (`max(darken, 0)`): its dry look is unchanged and the Default views stay 0 px, but under a light rain ground gets darker than dry only
+  from wetness 0.3. **Unknown** whether the game's gbuffer encoding or the lighting pass compensates; compare a dry and a wet game screenshot before
+  removing the clamp. The old terrain stand-in had the same clamp.
+- **Dust** (`dustCover`): exactly the formula above. Applied to the building parts (every part, DUST is always on for them, `PlacedKind.BuildingPart`)
+  and to TRIPLANAR / DUAL_TRIPLANAR map features (`SurfaceMaterial.Dust`, foliage-layer meshes of those modes), as the plan asked, because
+  `triplanar.hlsl` has the branch. **Unknown** whether the game ever reaches it: the caller table in [runtime-materials.md](runtime-materials.md)
+  gives map features only CLIP_INTERIOR, never DUST, and no script sets the define; if the game does not, the triplanar dust is a viewer addition and
+  belongs behind an Enhancements switch (`MapFeatureMode` 1 and 5 in `FoliageRenderer.AssetFor` and `MaterialResolver.MapFeature`). Not applied to
+  UV-mapped, TERRAIN-mode and FOLIAGE map features, items or characters (no DUST in the game), so e.g. the red rocks round the Hub (TERRAIN mode) and
+  wrecks that are UV-mapped features stay clean. The noise is `Turbulent.dds` (the `dust` texture unit; 512²
+  DXT1, repeating, mipmapped; `.x` is read) at `world.xz · 0.002`. The gloss is the diffuse alpha before `specular mult` (the viewer's 0.3 for a
+  cut-out material). The colour is read per pixel from the terrain's whole-world ground colour map (the BIOMES `ground colour` blended by the blend map,
+  × `brightness fix`) at the surface's world position, not the one biome at the object's origin the game's material holds (**Observed**: the game builds
+  one material per biome and object; the difference shows at biome borders and where `brightness fix` is not 1). A normal map is flattened by half the
+  coverage (objects only). The coverage is mostly where the surface's gloss is low: `−6 · gloss` outweighs the slope term, so a glossy part
+  (`diffuse.a` 0.3 or more) stays clean even at dust 2.
+- **Water** (`WaterRenderer`): the three ripple layers as in the formula above, `rain-ripples.png` (repeating, mipmapped) at `world.xz · 0.01 · 6`,
+  `· 6` with x and z swapped, and `· 2`; the time is the shader's own (`uTime × distortion`, the water's `gameTime`), so a still repeats exactly.
+  `rainAmount` fades with `saturate(2 · view.y − dist · 0.0001)`.
+
 | Class | Role |
 |---|---|
 | `WeatherData` (`WeatherData.cs`) | Reads WEATHER / SEASON / BIOME_GROUP / EFFECT / EFFECT_FOG_VOLUME from a `GameDatabase` into plain records (`WeatherDef`, `SeasonDef`, `RegionDef`, `EffectDef`, `FogVolumeDef`) with the loader rules: wind update time 0 → `WeatherDef.NeverMinutes` (1,000,000), fog distance min := max when the fog wind values match, Default for a season without weathers (limits 0..1), Default appended with weight 0 when a weather has a time window, region multipliers, `days per year` from GLOBAL CONSTANTS (`GameConstants`). Definitions can also be built by hand (`WeatherData.FromDefinitions`), which the quick tests do. `SeasonCalendar.Lengths` cuts the year. |
@@ -489,7 +538,7 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
 3. **Hook the viewer to it**: `--weather` keeps forcing one record; otherwise the scheduler runs from the camera position and a
    time-of-day / day control, feeding `sky color mult`, `c`, the cloud drift and the weather fog (the haze already takes a fog
    colour and distance).
-4. **Wetness, dust and rain ripples** (shader-only): add `makeWet` with the per-surface absorbance (terrain layers' `absorbance`
+4. **Wetness, dust and rain ripples** (shader-only; **done**, see "In Meitou"): add `makeWet` with the per-surface absorbance (terrain layers' `absorbance`
    fields, objects from gloss and metalness, foliage 0.9) and the wetness ramp (+0.01/s, −0.005/s); the dust term on DUST objects
    with the biome `ground colour` and the noise texture; the water's three ripple layers from `rainAmount = saturate(rain / 50)`.
 5. **Particle effects** (the big one): a reader for ParticleUniverse `.pu` scripts (systems, techniques, Box / Circle / Point

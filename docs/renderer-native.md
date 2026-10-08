@@ -291,7 +291,7 @@ only for parity ports (wave 3a).**
 
 | Set / range | Contents | Bound |
 | --- | --- | --- |
-| set 0 `Frame` (push-descriptor set) | binding 0 `FrameConstants` (the 13 atmosphere values and the bindless indices of the 7 frame textures, 240 B), 1 `KenshiShadowReceiver`, 2 `KenshiShadowCaster`, 3 `MeitouShadowReceiver` (the GL buffers as bound now), 4 `ViewConstants` (192 B), 5 `MeshBones` (8 KB, allocated once a frame, unread until a consumer skins) | once per native segment (`NativeFrame.Bind`) |
+| set 0 `Frame` (push-descriptor set) | binding 0 `FrameConstants` (the 13 atmosphere values, the weather's wetness and dust, and the bindless indices of the 9 frame textures, 288 B), 1 `KenshiShadowReceiver`, 2 `KenshiShadowCaster`, 3 `MeitouShadowReceiver` (the GL buffers as bound now), 4 `ViewConstants` (192 B), 5 `MeshBones` (8 KB, allocated once a frame, unread until a consumer skins) | once per native segment (`NativeFrame.Bind`) |
 | set 1 `Bindless` | the table above (`BindlessTable.Declarations(1)`) | once per native segment |
 | push constants, 128 B, vertex + fragment, the same range in every native program | `MeshPush` (tint, material values, the bindless indices of the 2 to 6 textures) or a consumer's own (`GrassPush`, 72 B) | per draw, only when the bytes differ |
 
@@ -595,7 +595,7 @@ gl_VertexIndex`); every loose `uniform T a, b;` becomes one `#define` per name f
 compiles through `NativeFrame` with strict rules, its `FrameConstants`, `ViewConstants` and `Push` members sit at the C# structs' offsets,
 every sampler is in the table's set). The variants: `MeshVertex(own)` (the consumer maps `uModel`, e.g. to its instance rows),
 `MeshFragment()`, `MeshDepthFragment()`, `DepthFragment`, `AtmosphereFunctions`, `ShadowFunctions`, `PostProcessVertex`. The C# sides:
-`FrameConstants` (240 B, with `Uniforms` and `Textures` tables naming the frame globals), `ViewConstants` (192 B), `MeshPush` (128 B). The
+`FrameConstants` (288 B since the weather values, with `Uniforms` and `Textures` tables naming the frame globals), `ViewConstants` (192 B), `MeshPush` (128 B). The
 first consumer, the foliage (7.1), drew **0 differing pixels** on every gate picture, so the 1/255 allowance of owner decision 2 was not used
 and no `precise` / `invariant` was needed.
 

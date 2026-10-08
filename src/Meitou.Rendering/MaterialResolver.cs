@@ -29,6 +29,10 @@ public sealed record SurfaceMaterial
     public bool Emissive { get; init; }
     /// <summary>World-space planar projection instead of UVs (MapFeatureMode.TRIPLANAR / DUAL_TRIPLANAR).</summary>
     public bool Triplanar { get; init; }
+    /// <summary>The DUST define: the weather's dust covers the material (building parts; triplanar map features, docs/formats/weather.md "Dust").</summary>
+    public bool Dust { get; init; }
+    /// <summary>The foliage shader (FOLIAGE map features, leaves): wetness with a fixed absorbance.</summary>
+    public bool Foliage { get; init; }
     public Vector2 Tile { get; init; } = Vector2.One;
     public float SpecularMult { get; init; } = 1;
     /// <summary>Multiply the diffuse by the vertex colour when the mesh has one (the COLOURING define; docs/formats/runtime-materials.md).</summary>
@@ -116,7 +120,7 @@ public sealed class MaterialResolver
                 yield return new SurfaceMaterial
                 {
                     Description = via + " (leaves texture)", Diffuse = Tex(record, "leaves texture"), Normal = Tex(record, "leaves normal"),
-                    Alpha = AlphaSource.NormalAlpha, AlphaThreshold = record.GetInt("leaves alpha threshold", 80) / 255f, DoubleSided = true,
+                    Alpha = AlphaSource.NormalAlpha, AlphaThreshold = record.GetInt("leaves alpha threshold", 80) / 255f, DoubleSided = true, Foliage = true,
                 };
                 yield break;
             case FcsRecordType.FOLIAGE_MESH:
@@ -183,6 +187,8 @@ public sealed class MaterialResolver
             Diffuse = Tex(record, "texture map"), Normal = Tex(record, "normal map"),
             Diffuse2 = dual ? Tex(record, "texture map 2") : null, Normal2 = dual ? Tex(record, "normal map 2") : null,
             Triplanar = mode is 1 or 5,
+            Dust = mode is 1 or 5,
+            Foliage = mode == 4,
             Alpha = mode == 4 && alphaThreshold > 0 ? AlphaSource.NormalAlpha : AlphaSource.None, // the cut-out mask is the normal map's alpha
             AlphaThreshold = mode == 4 ? alphaThreshold / 255f : 0,
             DoubleSided = mode == 4,

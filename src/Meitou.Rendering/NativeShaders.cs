@@ -63,6 +63,10 @@ static partial class NativeShaders
             uint shadowTerrain;
             uint shadowBlocker;
             uint shadowLandmark;
+            vec4 weatherWet;
+            vec4 weatherDust;
+            uint weatherGround;
+            uint weatherDustNoise;
         } frame;
 
         """;
@@ -149,6 +153,8 @@ static partial class NativeShaders
         ["uShadowMap"] = "shadowTextures[frame.shadowMap]", ["uShadowNoise"] = "textures2D[frame.shadowNoise]",
         ["uShadowTerrain"] = "textures2D[frame.shadowTerrain]", ["uShadowBlocker"] = "textures2D[frame.shadowBlocker]",
         ["uShadowLandmark"] = "shadowTextures[frame.shadowLandmark]",
+        ["uWeatherWet"] = "frame.weatherWet", ["uWeatherDust"] = "frame.weatherDust",
+        ["uWeatherGround"] = "textures2D[frame.weatherGround]", ["uWeatherDustNoise"] = "textures2D[frame.weatherDustNoise]",
     };
 
     /// <summary>The per-view uniforms the world shaders share: <see cref="ViewConstants"/> members.</summary>
@@ -171,7 +177,7 @@ static partial class NativeShaders
         ["uHasDual"] = "pc.hasDual", ["uTriplanar"] = "pc.triplanar", ["uTriplanarScale"] = "pc.triplanarScale", ["uTile"] = "pc.tile",
         ["uAlphaSource"] = "pc.alphaSource", ["uAlphaChannel"] = "pc.alphaChannel", ["uGreyChannel"] = "pc.greyChannel", ["uTint"] = "pc.tint",
         ["uAlphaThreshold"] = "pc.alphaThreshold", ["uEmissive"] = "pc.emissive", ["uUseVertexColour"] = "pc.useVertexColour",
-        ["uSpecular"] = "pc.specular", ["uWireframe"] = "pc.wireframe", ["uFlatColour"] = "pc.flatColour", ["uCoverage"] = "pc.coverage",
+        ["uSurface"] = "pc.spare", ["uSpecular"] = "pc.specular", ["uWireframe"] = "pc.wireframe", ["uFlatColour"] = "pc.flatColour", ["uCoverage"] = "pc.coverage",
     };
 
     /// <summary>The shadow blocks' bindings in set 0.</summary>
@@ -255,7 +261,7 @@ static partial class NativeShaders
 }
 
 /// <summary>The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).</summary>
-[StructLayout(LayoutKind.Explicit, Size = 240)]
+[StructLayout(LayoutKind.Explicit, Size = 288)]
 struct FrameConstants
 {
     [FieldOffset(0)] public Vector4 AtmoSun;
@@ -279,13 +285,17 @@ struct FrameConstants
     [FieldOffset(228)] public uint ShadowTerrain;
     [FieldOffset(232)] public uint ShadowBlocker;
     [FieldOffset(236)] public uint ShadowLandmark;
+    [FieldOffset(240)] public Vector4 WeatherWet;
+    [FieldOffset(256)] public Vector4 WeatherDust;
+    [FieldOffset(272)] public uint WeatherGround;
+    [FieldOffset(276)] public uint WeatherDustNoise;
 
     /// <summary>The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.</summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
     [
         ("uAtmoSun", 0, 16), ("uAtmoLight", 16, 16), ("uAtmoSunLight", 32, 12), ("uAtmoParams", 48, 16), ("uAtmoTau", 64, 16),
         ("uAtmoTint", 80, 12), ("uAtmoFog", 96, 16), ("uAtmoFogColour", 112, 12), ("uAtmoSimple", 128, 16), ("uAtmoHaze", 144, 16),
-        ("uAtmoHazeCloud", 160, 16), ("uAtmoAltitude", 176, 16), ("uAtmoMaps", 192, 16),
+        ("uAtmoHazeCloud", 160, 16), ("uAtmoAltitude", 176, 16), ("uAtmoMaps", 192, 16), ("uWeatherWet", 240, 16), ("uWeatherDust", 256, 16),
     ];
 
     /// <summary>The frame-global textures, the array each is registered in and the member that holds its index.</summary>
@@ -294,6 +304,7 @@ struct FrameConstants
         ("uAtmoIrradiance", BindlessKind.Cube, 208), ("uAtmoSpecular", BindlessKind.Cube, 212), ("uAtmoAmbientMap", BindlessKind.Texture2D, 216),
         ("uShadowMap", BindlessKind.Shadow2D, 220), ("uShadowNoise", BindlessKind.Texture2D, 224), ("uShadowTerrain", BindlessKind.Texture2D, 228),
         ("uShadowBlocker", BindlessKind.Texture2D, 232), ("uShadowLandmark", BindlessKind.Shadow2D, 236),
+        ("uWeatherGround", BindlessKind.Texture2D, 272), ("uWeatherDustNoise", BindlessKind.Texture2D, 276),
     ];
 }
 

@@ -150,6 +150,8 @@ public sealed record BiomeTerrain
     public required float BrightnessFix { get; init; }
     public required float DistortWavelength { get; init; }
     public required float DistortAmplitude { get; init; }
+    /// <summary>Per layer in the order base, slope, cliff, grass, dirt, road (the `absorbance 0`, `1`, `2`, `grass`, `dirt`, `road` fields, fcs.def defaults 0.55, 0.2, 0.5, 0.44, 0.3, 0.25): how much rain darkens and shines the layer (docs/formats/weather.md "Rain and wetness").</summary>
+    public required float[] Absorbance { get; init; }
 
     /// <summary>Factor the game applies to the FCS slope values before handing them to the shader (Verified, kenshi_x64.exe).</summary>
     public const float SlopeScale = 0.01f;
@@ -183,6 +185,7 @@ public sealed record BiomeTerrain
             BrightnessFix = brightness == 0 ? 1 : brightness, // the game replaces 0 with 1
             DistortWavelength = r.GetFloat("distort wavelength", 1000),
             DistortAmplitude = r.GetFloat("distort amplitude", 0),
+            Absorbance = [r.GetFloat("absorbance 0", 0.55f), r.GetFloat("absorbance 1", 0.2f), r.GetFloat("absorbance 2", 0.5f), r.GetFloat("absorbance grass", 0.44f), r.GetFloat("absorbance dirt", 0.3f), r.GetFloat("absorbance road", 0.25f)],
         };
     }
 
