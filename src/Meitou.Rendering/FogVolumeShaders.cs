@@ -2,11 +2,12 @@ namespace Meitou.Rendering;
 
 /// <summary>
 /// GLSL of the placed fog volumes (docs/formats/fogfeatures.md "How the game draws them"): the game's <c>fog_planes_fs</c>, <c>fog_sphere_fs</c>
-/// and <c>fog_beam_fs</c> (post/fog.hlsl) evaluated per pixel in every world shader, after the haze, as the game blends its volumes over the
-/// hazed scene. The game rasterises each volume's hull and reads the G-buffer depth; here each shader passes its own point's distance, and the
-/// sky the haze's far distance. <see cref="AtmosphereShaders.Functions"/> embeds this text (it uses <c>hazeColour</c> and the atmosphere's
-/// uniforms) and calls <c>fogVolumesApply</c> from <c>atmoApply</c>. The data come from <see cref="FogVolumes"/>: every volume in view, packed
-/// into <c>uFogVolumeData</c> farthest first, each starting with a vec4 whose w is its type.
+/// and <c>fog_beam_fs</c> (post/fog.hlsl). The game draws each volume's hull once after the opaque scene, the water and the haze, reading the
+/// G-buffer depth; Meitou does the same in one full-screen pass (<see cref="PostProcessShaders.FogVolumes"/>, run by <c>PostProcess.RunFogVolumes</c>)
+/// that rebuilds each pixel's distance from the depth (the haze's far distance D for the sky, the water plane where it covers the pixel), and in
+/// SSAO's air visibility. Not in the world shaders. This text uses <c>hazeColour</c> and the atmosphere's uniforms (so follows
+/// <see cref="AtmosphereShaders.Functions"/>). The data come from <see cref="FogVolumes"/>: every volume in view, packed into <c>uFogVolumeData</c>
+/// farthest first, each starting with a vec4 whose w is its type.
 /// </summary>
 static class FogVolumeShaders
 {
@@ -147,9 +148,12 @@ static class FogVolumeShaders
             return vec4(colourDensity.rgb * uFogVolumeInfo.y, fogVolumeCurve((t1 - t0) * colourDensity.a * edge) * shape.z);
         }
 
-        // Every volume in view over the colour of a point dist away along d, farthest first (each blended as the game's pass: alpha, or added).
-        vec3 fogVolumesApply(vec3 colour, vec3 eye, vec3 d, float dist)
+        // Every volume in view along d to a point dist away, farthest first, as one affine map of the colour behind them: each blend (alpha,
+        // or added) is colour * (1 - a) + fog * a, so the whole list is colour * trans + add. The pass blends it with (one, src alpha).
+        void fogVolumesAccumulate(vec3 eye, vec3 d, float dist, out vec3 add, out float trans)
         {
+            add = vec3(0.0);
+            trans = 1.0;
             int used = int(uFogVolumeInfo.x);
             int o = 0;
             // The game's depth never exceeds its far clip D (the sky is at D): so a volume beyond D adds nothing (FogVolumes leaves those out).
@@ -160,7 +164,8 @@ static class FogVolumeShaders
                 if (type == 1)
                 {
                     vec4 f = fogVolumeBlock(o, eye, d, dist);
-                    colour = mix(colour, f.rgb, f.a);
+                    add = add * (1.0 - f.a) + f.rgb * f.a;
+                    trans *= 1.0 - f.a;
                     o += 10;
                     continue;
                 }
@@ -169,9 +174,17 @@ static class FogVolumeShaders
                 if (type == 2) { f = fogVolumeSphere(o, eye, d, dist); additive = uFogVolumeData[o + 1].w; o += 3; }
                 else if (type == 3) { f = fogVolumeBeam(o, eye, d, dist); additive = uFogVolumeData[o + 2].w; o += 4; }
                 else break;
-                colour = additive > 0.5 ? colour + f.rgb * f.a : mix(colour, f.rgb, f.a);
+                if (additive > 0.5) add += f.rgb * f.a;
+                else { add = add * (1.0 - f.a) + f.rgb * f.a; trans *= 1.0 - f.a; }
             }
-            return colour;
+        }
+        // The share of what is behind the volumes that shows through them (SSAO's air visibility).
+        float fogVolumesTransmittance(vec3 eye, vec3 d, float dist)
+        {
+            vec3 add;
+            float trans;
+            fogVolumesAccumulate(eye, d, dist, add, trans);
+            return trans;
         }
         """;
 }

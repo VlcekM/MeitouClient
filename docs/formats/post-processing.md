@@ -86,10 +86,10 @@ the result **multiplies the finished (LDR) scene**. The node is **commented out 
 settings key for it: not part of the shipped look (the material is called `SSAO_Test`).
 
 **Meitou: the occlusion fades with the air in front of the surface** (a Meitou choice, no game counterpart; the game draws no AO). The game's
-haze, weather fog and fog volumes are applied inside every world shader, before the post chain, so a depth-only SSAO would draw dark contact
-shadows through them (seen in the Shark swamp). The SSAO pass rebuilds the world position from depth and evaluates the same `atmoApply`
-(haze, weather fog, volumes) as the world shaders, twice (white and black: the difference is the transmittance, since the blend is linear in
-the colour; additive volumes add and do not hide), takes its luminance as the visibility and writes `ao = 1 - (1 - ao) * visibility`. The old
+haze and weather fog are applied inside every world shader and the fog volumes by a pass over the scene, all before the post chain, so a depth-only SSAO would draw dark contact
+shadows through them (seen in the Shark swamp). The SSAO pass rebuilds the world position from depth and evaluates the haze's `atmoApply`
+twice (white and black: the difference is the transmittance, since the blend is linear in the colour) and multiplies the fog volumes' transmittance
+(`fogVolumesTransmittance`; additive volumes add and do not hide; the volumes themselves are drawn by one full-screen pass after the scene, [fogfeatures.md](fogfeatures.md#in-meitou)), takes its luminance as the visibility and writes `ao = 1 - (1 - ao) * visibility`. The old
 distance fade (3000 to 10000) stays on top. **Observed** (Shark swamp, `--post-debug ao`, before and after): the occlusion on rocks and trees in
 the fog is gone, the foreground is unchanged. Costs the SSAO pass (half resolution) one more atmosphere evaluation per pixel with some occlusion.
 

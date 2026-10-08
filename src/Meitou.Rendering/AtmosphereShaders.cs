@@ -261,14 +261,8 @@ static class AtmosphereShaders
             }
             return atmoPhysicalHaze(colour, eye, d, dist);
         }
-        {{FogVolumeShaders.Functions}}
-        // The haze, then the placed fog volumes over it (FogVolumeShaders).
-        vec3 atmoApply(vec3 colour, vec3 eye, vec3 position)
-        {
-            vec3 hazed = atmoApplyHaze(colour, eye, position);
-            vec3 ray = position - eye;
-            float dist = length(ray);
-            return dist < 1.0 ? hazed : fogVolumesApply(hazed, eye, ray / dist, dist);
-        }
+        // The haze (and the weather's fog) every world shader ends with. The placed fog volumes are not here: the game draws them over the finished,
+        // hazed scene, so Meitou does in one full-screen pass (FogVolumeShaders, PostProcessShaders.FogVolumes), not once per fragment.
+        vec3 atmoApply(vec3 colour, vec3 eye, vec3 position) { return atmoApplyHaze(colour, eye, position); }
         """;
 }

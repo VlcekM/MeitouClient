@@ -73,6 +73,7 @@ public sealed unsafe class PostProcess : IDisposable
     readonly HeatHazePass hazePass;
     readonly VelocityPass velocityPass;
     readonly TaaPass taaPass;
+    readonly FogPass fogPass;
 
 
     /// <summary>One native full-screen program: the shared vertex shader with a fragment shader, and its resolved handles.</summary>
@@ -178,11 +179,24 @@ public sealed unsafe class PostProcess : IDisposable
     }
 
 
+    /// <summary>The placed fog volumes in one full-screen pass over the scene (<see cref="PostProcessShaders.FogVolumes"/>).</summary>
+    sealed class FogPass : FullscreenProgram
+    {
+        public readonly SamplerSlot NearDepth, FarDepth;
+        public readonly UniformHandle NearPlanes, FarPlanes, Tan, Right, Up, Back, WaterY, HasFar;
+        public FogPass(GpuContext gpu) : base(gpu, PostProcessShaders.FogVolumes, "post fog volumes")
+        {
+            (NearDepth, FarDepth) = (P.Sampler("uNearDepth"), P.Sampler("uFarDepth"));
+            (NearPlanes, FarPlanes, Tan, Right, Up, Back, WaterY, HasFar) = (P.Uniform("uNearPlanes"), P.Uniform("uFarPlanes"), P.Uniform("uTan"),
+                P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uWaterY"), P.Uniform("uHasFar"));
+        }
+    }
+
     float nearPlane = 1, farPlane = 1000, fovY = 0.87f, aspect = 1;
     bool haveNearSlice;
 
     // GPU timestamps (the frame's QueryArena): a set per frame, section k lasting from stamp k-1 to stamp k, read once its frame has been collected.
-    const int MaxStamps = 10;
+    const int MaxStamps = 12;
     sealed class StampSet
     {
         public readonly QuerySlot[] Slots = new QuerySlot[MaxStamps];
@@ -209,7 +223,7 @@ public sealed unsafe class PostProcess : IDisposable
         Options = options;
         (ssao, blur, luminancePass, adaptPass) = (new SsaoPass(gpu), new BlurPass(gpu), new LuminancePass(gpu), new AdaptPass(gpu));
         (compositePass, fxaaPass, hazePass) = (new CompositePass(gpu), new FxaaPass(gpu), new HeatHazePass(gpu));
-        (velocityPass, taaPass) = (new VelocityPass(gpu), new TaaPass(gpu));
+        (velocityPass, taaPass, fogPass) = (new VelocityPass(gpu), new TaaPass(gpu), new FogPass(gpu));
     }
 
     /// <summary>The near depth slice's planes and the projection: what the depth buffer at the end of the frame holds (the far slice's depth is cleared).</summary>
@@ -269,9 +283,10 @@ public sealed unsafe class PostProcess : IDisposable
             // Colour (RGBA16F) and depth (GL's 24 bit, a 32-bit float buffer) the scene is drawn into.
             sceneColour = Make(batch, w, h, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post scene colour");
             sceneDepth = Make(batch, w, h, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, "post scene depth");
+            // The far slice has a depth buffer of its own (kept for the fog volumes pass, and the motion vectors with an upscaler).
+            farDepth = Make(batch, w, h, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, "post far slice depth");
             if (up.Temporal)
             {
-                farDepth = Make(batch, w, h, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, "post far slice depth");
                 motion = Make(batch, w, h, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post motion");
                 upscaleDepth = Make(batch, w, h, InternalFormat.R32f, TextureMinFilter.Nearest, "post upscale depth");
                 // R32F, not R8: Streamline cannot size an R8_UNORM resource and drops it (DLSS's hint), FSR takes either.
@@ -376,6 +391,7 @@ public sealed unsafe class PostProcess : IDisposable
         stamps = freeStamps.Count > 0 ? freeStamps.Pop() : new StampSet();
         stamps.Count = 0;
         haveNearSlice = farSliceDrawn = false;
+        sceneMarked = false;
         Stamp("start");
         frameIndex++;
         JitterPixels = Temporal ? Jitter.Offset(frameIndex, JitterPhases) : Vector2.Zero;
@@ -456,7 +472,6 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>Before drawing the far depth slice: with an upscaler it gets its own depth buffer (cleared here) so its depth survives for the motion vectors.</summary>
     public void BeginFarSlice(float near, float far)
     {
-        if (!Temporal) return;
         // The clear GL's Clear(DEPTH) made: a rendering of its own clearing the far depth to 1.
         var cmd = Gpu.BeginNative("post far slice clear");
         cmd.BeginRendering(new RenderingDesc(default, farDepth!.Attachment with
@@ -466,7 +481,7 @@ public sealed unsafe class PostProcess : IDisposable
         cmd.EndRendering();
         Gpu.EndNative(cmd);
         SceneTargets = PassTargets.Of(sceneColour!.Texture, farDepth!.Texture);
-        farToPrevious = ToPrevious(near, far);
+        if (Temporal) farToPrevious = ToPrevious(near, far);
         farPlanes = new Vector2(near, far);
         farSliceDrawn = true;
     }
@@ -474,9 +489,8 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>Before drawing the near depth slice (the caller clears the depth after this).</summary>
     public void BeginNearSlice(float near, float far)
     {
-        if (!Temporal) return;
         SceneTargets = PassTargets.Of(sceneColour!.Texture, sceneDepth!.Texture);
-        nearToPrevious = ToPrevious(near, far);
+        if (Temporal) nearToPrevious = ToPrevious(near, far);
         nearPlanes = new Vector2(near, far);
     }
 
@@ -501,11 +515,11 @@ public sealed unsafe class PostProcess : IDisposable
 
     void Draw(LegacyProgram p, Target2D target) => Draw(p, target.Attachment, target.Format, target.Width, target.Height, target.Width, target.Height);
 
-    void Draw(LegacyProgram p, RenderTarget colour, Vk.Format format, int targetWidth, int targetHeight, int viewportWidth, int viewportHeight)
+    void Draw(LegacyProgram p, RenderTarget colour, Vk.Format format, int targetWidth, int targetHeight, int viewportWidth, int viewportHeight, DrawState? state = null)
     {
         var cmd = Segment();
         cmd.BeginRendering(new RenderingDesc(colour, default, targetWidth, targetHeight));
-        var s = PassState;
+        var s = state ?? PassState;
         cmd.SetViewport(new Vk.Viewport(0, 0, viewportWidth, viewportHeight, 0, 1));
         cmd.SetScissor(new Vk.Rect2D(default, new Vk.Extent2D((uint)targetWidth, (uint)targetHeight)));
         cmd.SetRaster(s.Cull, s.Front);
@@ -539,7 +553,7 @@ public sealed unsafe class PostProcess : IDisposable
     public void End()
     {
         var o = Options;
-        Stamp("scene");
+        MarkScene();
         // The final passes draw into Target (the window's backbuffer, or the caller's texture) with a viewport of the display size.
         var final = PassTargets.Of(Target ?? throw new InvalidOperationException("PostProcess.Target is not set"), null);
         bool needDepth = o.Ssao && haveNearSlice;
@@ -592,6 +606,55 @@ public sealed unsafe class PostProcess : IDisposable
             stamps = null;
         }
         (previousRotation, previousEye, previousFov, previousAspect, previousValid) = (viewRotation, eyeNow, fovNow, aspectNow, Temporal);
+    }
+
+    // ---- fog volumes ----
+
+    bool sceneMarked;
+
+    /// <summary>Stamps the end of the scene's own passes (the opaque geometry, the water): once a frame, by the caller before <see cref="RunFogVolumes"/>
+    /// and the particles, else by <see cref="End"/>. Not inside an open scene rendering.</summary>
+    public void MarkScene()
+    {
+        if (sceneMarked) return;
+        sceneMarked = true;
+        Stamp("scene");
+    }
+
+    /// <summary>Stamps the end of the particles drawn after the fog volumes (the caller's, between <see cref="RunFogVolumes"/> and <see cref="End"/>).</summary>
+    public void MarkParticles() => Stamp("particles");
+
+    /// <summary>Blends the volumes' accumulated (colour, transmittance) over the scene: source one, destination the source alpha; red, green and
+    /// blue only, so the alpha (the characters' SSAO mask) stays.</summary>
+    static readonly DrawState FogState = PassState with { Blend = new BlendState(true, Vk.BlendFactor.One, Vk.BlendFactor.SrcAlpha), ColourMask = DrawState.Rgb };
+
+    /// <summary>
+    /// The placed fog volumes (docs/formats/fogfeatures.md), in one full-screen pass over the finished scene: after the opaque geometry, the water and
+    /// the sky, before the particles, as the game draws them (queue 82, reading the G-buffer depth). Each pixel's distance is rebuilt from the near
+    /// slice's depth, else the far slice's, else it is the sky (the far clip D); where the water plane lies in front of it, the water's. Call after
+    /// the scene's slices are drawn (the host closed), before <see cref="End"/>. Does nothing when no volume is in view.
+    /// </summary>
+    public void RunFogVolumes(bool volumes)
+    {
+        MarkScene();
+        if (!volumes || sceneColour is null || !haveNearSlice) return;
+        var f = fogPass;
+        Bind(f.P, f.NearDepth, sceneDepth);
+        Bind(f.P, f.FarDepth, farSliceDrawn ? farDepth : null);
+        f.P.Set(f.NearPlanes, nearPlanes.X, nearPlanes.Y);
+        f.P.Set(f.FarPlanes, farPlanes.X, farPlanes.Y);
+        float tanY = MathF.Tan(fovNow * 0.5f);
+        f.P.Set(f.Tan, tanY * aspectNow, tanY);
+        var r = viewRotation;
+        f.P.Set(f.Right, r.M11, r.M21, r.M31);
+        f.P.Set(f.Up, r.M12, r.M22, r.M32);
+        f.P.Set(f.Back, r.M13, r.M23, r.M33);
+        f.P.Set(f.WaterY, WaterHeight ?? float.MinValue);
+        f.P.Set(f.HasFar, farSliceDrawn ? 1 : 0);
+        f.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
+        Draw(f.P, sceneColour.Attachment, sceneColour.Format, width, height, width, height, FogState);
+        Stamp("fog");
+        CloseSegment();
     }
 
     void DrawFinal(LegacyProgram p, PassTargets final) =>
@@ -899,7 +962,7 @@ public sealed unsafe class PostProcess : IDisposable
     {
         External?.Dispose();
         Free();
-        foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass }) p.P.Dispose();
+        foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass }) p.P.Dispose();
         flowTexture?.Dispose();
         perturbationTexture?.Dispose();
     }

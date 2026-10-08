@@ -973,7 +973,6 @@ static class WorldFrame
         // The scene starts cleared to the fog colour and depth 1 (the rendering's load ops).
         var post = gpu.Post ?? throw new InvalidOperationException("the world frame needs the post-processing chain");
         var host = gpu.Scene ??= new SceneHost(post.Gpu);
-        bool temporal = post.Temporal;
         host.Open(5, post.SceneTargets, new Vk.ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 0), clearDepth: true);   // alpha 0: no character (the SSAO mask)
         float aspect = width / (float)Math.Max(height, 1);
         var view = camera.View;
@@ -985,11 +984,13 @@ static class WorldFrame
         gpu.Post?.SetCamera(eye, view, camera.FieldOfView, aspect);
         gpu.Terrain.BeginFrame();
         bool first = true, foliageDrawn = false;
+        Matrix4x4 particleViewProjection = default, particleNearProjection = default;
+        float particleNear = 0;
         foreach (var (near, far) in camera.Slices())
         {
             bool nearSlice = near <= camera.Near;
-            // With an upscaler the slices draw into different framebuffers (the far slice's own depth): one host per slice then.
-            if (temporal) host.Close();
+            // The slices draw into different framebuffers (the far slice has a depth of its own, which the fog volumes pass reads): one host per slice.
+            host.Close();
             if (!first || nearSlice) post.BeginNearSlice(near, far); else post.BeginFarSlice(near, far);
             // A later slice starts on a cleared depth: in its place among the segments while the host stays open, else by the load op.
             if (!first && host.IsOpen) host.ClearDepth();
@@ -1033,16 +1034,28 @@ static class WorldFrame
             host.Stage(9);
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
             StageClock.Lap(9);
-            if (nearSlice && gpu.Particles is { } particleDraw)   // weather particles last: blended over the water, tested against the depth
+            if (nearSlice)   // the weather particles come last, after the fog volumes (below): the game draws them in queue 84, the volumes in 82
             {
-                host.Stage(13);
-                particleDraw.Draw(viewProjection, view * Jitter.Apply(camera.Projection(aspect, Math.Min(0.5f, near * 0.5f), near), jitter, rw, rh), near, view, eye, sun);
-                StageClock.Lap(13);
+                particleViewProjection = viewProjection;
+                particleNearProjection = view * Jitter.Apply(camera.Projection(aspect, Math.Min(0.5f, near * 0.5f), near), jitter, rw, rh);
+                particleNear = near;
             }
         }
         // Records the last slice's jobs and executes them: the render thread's share (the fork-join) counts as "water", the last stage of the host.
         if (host.IsOpen) { host.Close(); StageClock.Lap(9); }
         if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneDepth, rw, rh);
+        // The placed fog volumes over the finished scene (opaque, water, sky; the haze is in the shaders), one pass reading the depth, as the game's queue 82 does.
+        gpu.Post!.RunFogVolumes(gpu.FogVolumes is { UsedData: > 0 });
+        StageClock.Phase("fog volumes");
+        // Then the particles, blended over it and tested against the near slice's depth (they are not fogged; docs/formats/fogfeatures.md).
+        if (gpu.Particles is { } particleDraw && particleNear > 0)
+        {
+            host.Open(13, post.SceneTargets);
+            particleDraw.Draw(particleViewProjection, particleNearProjection, particleNear, view, eye, sun);
+            host.Close();
+            StageClock.Lap(13);
+        }
+        post.MarkParticles();
         if (gpu.Post is { } coverageTarget) coverageTarget.Particles = gpu.Particles;
         gpu.Post?.End(); // SSAO, upscaler, exposure, tone map, FXAA into gpu.Post.Target
         if (gpu.DebugShadows > 0 && gpu.Shadow is not null)

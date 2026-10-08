@@ -167,7 +167,7 @@ public class GpuApiTests
         {
             ("ssao", PostProcessShaders.Ssao), ("ssao blur", PostProcessShaders.SsaoBlur), ("composite", PostProcessShaders.Composite),
             ("fxaa", PostProcessShaders.Fxaa), ("heat haze", PostProcessShaders.HeatHaze), ("luminance", PostProcessShaders.Luminance),
-            ("adapt", PostProcessShaders.Adapt), ("velocity", UpscaleShaders.Velocity), ("taa", UpscaleShaders.Taa),
+            ("adapt", PostProcessShaders.Adapt), ("velocity", UpscaleShaders.Velocity), ("taa", UpscaleShaders.Taa), ("fog volumes", PostProcessShaders.FogVolumes),
         })
             yield return (name, PostProcessShaders.Vertex, f);
     }
@@ -180,24 +180,24 @@ public class GpuApiTests
     static readonly Dictionary<string, string> LegacyModules = new()
     {
         ["sky simple"] = "4C48F27F2EFC495E4B81B6421F095B12",
-        ["sky"] = "5095A586F125651C8C74B2AFB66388CE",   // the SkyX cloud pass
-        ["water"] = "A0A4CBC25B0DEC8CA4CA476A519AE177",
+        ["sky"] = "C805B8C8EBBAA9C9F561D41DE9D3D761",   // the SkyX cloud pass
+        ["water"] = "1175B43DC88DBFC4C014759B379EF40C",
         ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",
-        ["terrain patch"] = "2690B7B8FBFB7E1D6A486B87F70877B5",
-        ["terrain mesh"] = "446D5B9FBC51CE60579BF938AEA25C50",
+        ["terrain patch"] = "0FBA8205D979AB7F3038719AF993D4E9",
+        ["terrain mesh"] = "BDAD27843C0449EA19E6C6970644298E",
         ["terrain patch depth"] = "838B179AA83BE582C69CC3C2766FA048",
         ["terrain mesh depth"] = "FD249B5F918DBB257C412C7394FD4ABC",
-        ["foliage mesh"] = "23D9D68F0E42134CFEDAE9ECE298F21C",
-        ["foliage grass"] = "B8A96698AA7819DE934B42097CBDB8C0",
+        ["foliage mesh"] = "8D6AFC2607744943E87DB5D5AD362CDB",
+        ["foliage grass"] = "B2BD1079D2D980F83239F97AA186D9A1",
         ["foliage grass motion"] = "A836A4928C20E6352E07004C224C6A92",
         ["foliage depth"] = "099C2868B7FA91B71BE2ACE3ED5DD997",
-        ["buildings"] = "8BB86CFD90DF264C8116FD6FB1971798",
+        ["buildings"] = "EEE2C6CE5EB59C84E1F333D8F02E4B13",
         ["buildings depth"] = "24B964B69B81036B6258A57BAA9486A8",
         ["shadow debug"] = "2091245F0878665BDB1170BA5CE19B3B",
         ["shadow atlas"] = "7A8BC32D82FC65DBE0B7F1BEE4AFB43A",
         ["shadow blocker"] = "EF2D9447A695FB305A1FD0097A66C3DA",
         ["terrain shadow sweep"] = "73B5D1C7C3FAED3EF09B596E0C18CD1F",
-        ["ssao"] = "EF34E7425A607BB215E2E877ED40E50E",
+        ["ssao"] = "18252AB5279A3D3F38815CDD67BFE6B5",
         ["ssao blur"] = "EBF4C0B9D76D55C8BA77F6135B802B20",
         ["composite"] = "3E0A0AAEB542919802C21BE1FEABBD7B",
         ["fxaa"] = "11A560F30D679E1B0E0EB877EBE075F6",
@@ -206,6 +206,7 @@ public class GpuApiTests
         ["adapt"] = "E1201F9895006424E7FE9C1983191734",
         ["velocity"] = "DD61543F9F99ECD7D4C32252F6CB8473",
         ["taa"] = "0BF03F6B50AA2B4DC5B30C22868ECC00",
+        ["fog volumes"] = "2AFA716199F37318728FCDD31B0F91D5",
     };
 
     [Fact]
@@ -225,7 +226,7 @@ public class GpuApiTests
                 actual.Add($"[\"{name}\"] = \"{hash}\",");
                 if (!LegacyModules.TryGetValue(name, out var expected) || expected != hash) wrong.Add(name);
             }
-            Assert.Equal(27, actual.Count);
+            Assert.Equal(28, actual.Count);
             Assert.True(wrong.Count == 0, $"modules differ for {string.Join(", ", wrong)}; actual:\n{string.Join("\n", actual)}");
         }
         ExpectClean(d!);

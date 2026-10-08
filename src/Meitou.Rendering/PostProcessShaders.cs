@@ -27,7 +27,7 @@ static class PostProcessShaders
     /// surface is still visible through the air in front of it (haze, weather fog, fog volumes: the world position is rebuilt from depth and the
     /// frame globals' own <c>atmoApply</c> evaluated), <c>ao = 1 - (1 - ao) * visibility</c>.
     /// </summary>
-    public static readonly string Ssao = "#version 330 core\n" + Noise + AtmosphereShaders.Functions + """
+    public static readonly string Ssao = "#version 330 core\n" + Noise + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -39,13 +39,15 @@ static class PostProcessShaders
         uniform vec3 uRight, uUp, uBack;   // the camera's axes in the world (view space to world offsets)
         uniform vec3 uSsaoEye;
 
-        // The share of a surface's own light that reaches the eye through the air. atmoApply is linear in the colour it is given (the haze and
-        // the volumes blend it; an additive volume only adds), so apply(1) - apply(0) is the transmittance, as the grass uses it.
+        // The share of a surface's own light that reaches the eye through the air. atmoApply (the haze) is linear in the colour it is given, so
+        // apply(1) - apply(0) is its transmittance, as the grass uses it; the fog volumes (drawn by the fog pass, not atmoApply) add theirs.
         float airVisibility(vec3 offset)
         {
             vec3 position = uSsaoEye + offset;
             vec3 t = atmoApply(vec3(1.0), uSsaoEye, position) - atmoApply(vec3(0.0), uSsaoEye, position);
-            return clamp(dot(t, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
+            float visible = clamp(dot(t, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
+            float dist = length(offset);
+            return dist < 1.0 ? visible : visible * fogVolumesTransmittance(uSsaoEye, offset / dist, dist);
         }
 
         float viewZ(float d)
@@ -93,6 +95,54 @@ static class PostProcessShaders
             ao = mix(ao, 1.0, smoothstep(uFadeStart, uFadeEnd, z));
             if (ao < 0.999) ao = mix(1.0, ao, airVisibility(p.x * uRight + p.y * uUp + p.z * uBack));   // 1 - (1 - ao) * visibility
             fragColour = vec4(ao, z, 0.0, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// The placed fog volumes (docs/formats/fogfeatures.md), one pass over the whole scene instead of a term in every world shader. The pixel's
+    /// world offset is rebuilt from the depth as SSAO does (the near slice's, else the far slice's; none: the sky, at the far clip D), pulled in to
+    /// the water plane where that lies in front (the water writes no depth; its own surface is what the game's G-buffer reads, and the water
+    /// shader used to fog it there). The shader accumulates every volume, farthest first, into (colour, transmittance), which the hardware blends
+    /// as <c>scene * transmittance + colour</c> (blend one, source alpha; alpha of the scene untouched).
+    /// </summary>
+    public static readonly string FogVolumes = "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
+
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uNearDepth, uFarDepth;
+        uniform vec2 uNearPlanes, uFarPlanes;   // near, far of each depth slice
+        uniform vec2 uTan;                      // tan(fov/2) * aspect, tan(fov/2)
+        uniform vec3 uRight, uUp, uBack;        // the camera's axes in the world
+        uniform float uWaterY;                  // the water plane's height (float min: no water)
+        uniform int uHasFar;
+
+        // Distance along the view axis from a depth-buffer value (clip depth 0..1 stored as 0.5..1, as the velocity pass reads it).
+        float viewZ(float d, vec2 nf) { float zd = 2.0 * d - 1.0; return nf.x * nf.y / (nf.y - zd * (nf.y - nf.x)); }
+
+        void main()
+        {
+            float d = textureLod(uNearDepth, vUv, 0.0).r;
+            vec2 planes = uNearPlanes;
+            if (d >= 1.0 && uHasFar != 0)
+            {
+                d = textureLod(uFarDepth, vUv, 0.0).r;
+                planes = uFarPlanes;
+            }
+            vec2 ndc = vUv * 2.0 - 1.0;
+            vec3 perZ = uRight * ndc.x * uTan.x + uUp * ndc.y * uTan.y - uBack;   // the offset per unit of view depth
+            float len = length(perZ);
+            vec3 dir = perZ / len;
+            vec3 eye = uFogVolumeEye.xyz;
+            float dist = d >= 1.0 ? 1e9 : viewZ(d, planes) * len;   // the sky: the volumes cap it at the far clip D
+            if (uWaterY > -1e30 && abs(dir.y) > 1e-6)
+            {
+                float tw = (uWaterY - eye.y) / dir.y;
+                if (tw > 0.0 && tw < dist) dist = tw;
+            }
+            vec3 add;
+            float trans;
+            fogVolumesAccumulate(eye, dir, dist, add, trans);
+            fragColour = vec4(add, trans);
         }
         """;
 

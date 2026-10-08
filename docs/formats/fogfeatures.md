@@ -206,13 +206,35 @@ density, `FogVolumes.Faded`, and an effect's sphere left out while the eye is in
 their game node (above), and packs them farthest first into `uFogVolumeData` (512 vec4s in the frame block: 51 blocks, so all 28 of the base
 game and dozens of effect spheres fit; if more are in view the farthest are left out and counted). `uFogVolumeEye` holds the eye and the
 blocks' light, `uFogVolumeInfo` the vec4s in use and `sunColour.w` for the spheres and beams. `FogVolumeShaders` holds the three shaders'
-formulas as GLSL; `atmoApply` (the haze every world shader ends with) applies them after the haze with the shader's own point and distance,
-and the sky pass with the haze's far distance D, each volume alpha-blended (or added) in order. The distance is capped at D, as the game's G-buffer depth is (Meitou draws terrain beyond D; the game does not), so a volume beyond D adds nothing and is left out exactly. The data are uniform-buffer reads, the same for
-every pixel; a block whose box the pixel's ray misses costs one box test. The viewer prints the volumes drawn (`fog vols` line) with
-`--screenshot`; `--no-fog-volumes` turns them off. Particles are drawn after the scene with no fog, as the game.
+formulas as GLSL, and `fogVolumesAccumulate`, which runs the list farthest first and returns it as one affine map of whatever is behind
+(`colour * transmittance + add`: an alpha blend is `c (1 - a) + fog a`, an additive one `c + fog a`, and a chain of those composes).
 
-Cost (**Observed**, 2026-10-08, RTX 4070, 1600 × 900, `--screenshot` "post cost" scene GPU ms; without volumes / the earlier 8-block
-texture version / this list): Shark in swamp rain 6.34 / 8.22 / 7.80, Shark from above 5.64 / 7.38 / 7.27, The Hub 2.62 / 3.82 / 3.35, the Vain
+**One full-screen pass, as the game** (changed 2026-10-08; before, `atmoApply` in every world shader evaluated the list per fragment, so
+overdrawn foliage paid it several times and the water reflection paid it again). The volumes are no longer in the world shaders: `atmoApply`
+is the haze and the weather's fog alone, the sky shader has no volume line, and the reflection pass draws none (the game's `Water_Reflection`
+draws render queues up to 60 and the volumes are queue 82, [post-processing.md](post-processing.md)). `PostProcess.RunFogVolumes` runs
+`PostProcessShaders.FogVolumes` once, after the opaque scene, the water and the sky (the haze is still in the shaders, so the volumes go over
+the hazed colour, the game's order) and before the particles (which `WorldFrame` now draws after it, in their own scene rendering, still
+depth-tested against the near slice). Each pixel's offset is rebuilt from the depth as SSAO does (view depth from the near slice's depth,
+else the far slice's, along the pixel's ray; no depth: the sky, distance D). The far slice has a depth buffer of its own in every mode now
+(it was only kept with an upscaler), because the single pass needs it; the slices are separate scene renderings (they were one without an
+upscaler). The shader writes (add, transmittance) and the hardware blends `scene * transmittance + add` (blend factors one and source
+alpha), with the colour mask red, green and blue, so the scene colour's alpha (the characters' SSAO mask) is untouched. The distance is capped at D, as the game's G-buffer depth is (Meitou draws terrain beyond D; the game does not), so a volume beyond D adds nothing and is left out exactly.
+**Water**: Meitou's water is blended without writing depth (the same fact the velocity pass uses), so the depth under it is the seabed's. The pass
+pulls the pixel in to the water plane when the ray crosses it before the scene point (`uWaterY`, the water's height, none when the water is
+off), which is where the water shader fogged its own surface; so a pixel is fogged once, at the water's distance, the seabed behind
+translucent shallow water included (before, the water layer was fogged at the plane and the seabed behind it at its own distance and the two blended
+by the water's alpha; the two agree except in shallow water where the distances differ). The pass sees no edge of the water quad (it reaches past the far clip).
+**SSAO** still fades with the volumes: `airVisibility` is the haze's transmittance (`atmoApply(1) - atmoApply(0)`) times `fogVolumesTransmittance`.
+**Upscalers**: the pass runs on the render-size scene before TAA / FSR / DLSS, so the volumes are in the colour they resolve; it ignores the
+projection's sub-pixel jitter (its ray is the pixel's centre; the fog is smooth, the depth edges are what the upscaler's history handles), and
+touches neither the motion vectors, the depth nor the reactive mask. The fog cull is unchanged (`FogVolumes.Hidden` is asked by the same draws).
+The data are uniform-buffer reads, the same for every pixel; a block whose box the pixel's ray misses costs one box test. The viewer prints the volumes drawn (`fog vols` line) with
+`--screenshot`; `--no-fog-volumes` turns them off (the pass is skipped when no volume is in view). The "post cost" line has `scene` (up to the
+water), `fog` (this pass) and `particles`.
+
+Cost: see the table below the cull. Before the pass, with per-fragment volumes (**Observed**, 2026-10-08, RTX 4070, 1600 × 900, `--screenshot` "post cost" scene GPU ms; without volumes / the earlier 8-block
+texture version / the per-fragment list): Shark in swamp rain 6.34 / 8.22 / 7.80, Shark from above 5.64 / 7.38 / 7.27, The Hub 2.62 / 3.82 / 3.35, the Vain
 3.43 / 4.83 / 4.28, inside the Skinner's Roam dome 2.80 / 3.82 / 3.64. So drawing every volume (and the sphere and beams) costs less than the
 capped version: the far-clip cull drops what cannot show, and the data are uniform reads instead of texture fetches.
 

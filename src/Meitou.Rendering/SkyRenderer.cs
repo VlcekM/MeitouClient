@@ -199,7 +199,6 @@ public sealed unsafe class SkyRenderer : IDisposable
                 float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
                 col = mix(col, uAtmoFogColour, curve);
             }
-            col = fogVolumesApply(col, uFogVolumeEye.xyz, dir, uAtmoFog.w);   // the placed fog volumes, the sky at the far clip (docs/formats/fogfeatures.md)
             fragColour = vec4(col, 1.0);
         }
         """;
