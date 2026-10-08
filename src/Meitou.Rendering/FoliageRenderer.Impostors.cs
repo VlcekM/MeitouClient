@@ -23,15 +23,19 @@ namespace Meitou.Rendering;
 /// </summary>
 public sealed partial class FoliageRenderer
 {
-    /// <summary>The default transition distance of large meshes (units along the ground; the Tab slider "Impostor distance").</summary>
+    /// <summary>The default transition distance of small and medium meshes (units along the ground; the Tab slider "Impostor distance").</summary>
     public const float DefaultImpostorDistance = 4000;
+    /// <summary>The default transition distance of the large size class (trees, rock stacks, hoodoos; the Tab slider "Large impostor distance"): their billboards look flat up close.</summary>
+    public const float DefaultLargeImpostorDistance = 12000;
     /// <summary>The crossfade band before the transition, as a share of it.</summary>
     public const float ImpostorBand = 0.1f;
 
     /// <summary>The <c>impostors</c> switch (Enhancements): Meitou (default) draws far instances as impostors; Faithful never loads or draws one.</summary>
     public bool Impostors { get; set; } = true;
-    /// <summary>The transition distance (units along the ground) of the medium and large atlases.</summary>
+    /// <summary>The transition distance (units along the ground) of meshes below the large size class (the small impostor class scales it by size).</summary>
     public float ImpostorDistance { get; set; } = DefaultImpostorDistance;
+    /// <summary>The transition distance of meshes of the large size class (<see cref="FoliageSizes.LargeFrom"/> and up), instead of <see cref="ImpostorDistance"/>.</summary>
+    public float LargeImpostorDistance { get; set; } = DefaultLargeImpostorDistance;
     /// <summary>
     /// An explicit limit on the video memory the resident atlases may use, in megabytes (<c>--impostor-budget</c>, <c>MEITOU_IMPOSTOR_BUDGET_MB</c>);
     /// null: the default rule, a share of the card's budget (<see cref="ImpostorBudget"/>, <see cref="ImpostorLimitMb"/>).
@@ -225,10 +229,13 @@ public sealed partial class FoliageRenderer
 
     /// <summary>The ground distance from which a mesh would be its impostor, for an atlas of class <paramref name="cls"/> (exact once loaded): the impostor
     /// distance for medium and large atlases, in proportion to the size for the small class.</summary>
-    float TransitionFor(in ImpostorClass cls, float worldRadius) => cls.Transition(worldRadius, ImpostorDistance);
+    float TransitionFor(MeshAsset a, in ImpostorClass cls, float worldRadius) => cls.Transition(worldRadius, DistanceFor(a));
+
+    /// <summary>The impostor distance of a mesh: <see cref="LargeImpostorDistance"/> for the large size class (trees, rock stacks, hoodoos), else <see cref="ImpostorDistance"/>.</summary>
+    float DistanceFor(MeshAsset a) => a.HasBounds && a.SizeClass == FoliageSizeClass.Large ? LargeImpostorDistance : ImpostorDistance;
 
     /// <summary>The transition of an atlas not made yet, from the class estimated from the mesh's bounds (infinite when it has none).</summary>
-    float EstimatedTransition(MeshAsset a) => EstimateClass(a) is { } c ? TransitionFor(c, a.Radius * a.Mesh.MaxScale) : float.PositiveInfinity;
+    float EstimatedTransition(MeshAsset a) => EstimateClass(a) is { } c ? TransitionFor(a, c, a.Radius * a.Mesh.MaxScale) : float.PositiveInfinity;
 
     /// <summary>The ground distance from which a mesh is its impostor (infinite without a resident atlas or with the switch off).</summary>
     float TransitionOf(MeshAsset a)
@@ -239,10 +246,10 @@ public sealed partial class FoliageRenderer
         {
             if (!RockImpostorsActive || a.RockVariants is not { } variants) return float.PositiveInfinity;
             foreach (var v in variants.Values)
-                if (v.Impostor is { Stage: ImpostorStage.Ready } r) return TransitionFor(r.Class, r.WorldRadius);
+                if (v.Impostor is { Stage: ImpostorStage.Ready } r) return TransitionFor(a, r.Class, r.WorldRadius);
             return float.PositiveInfinity;
         }
-        return a.Impostor is { Stage: ImpostorStage.Ready } s ? TransitionFor(s.Class, s.WorldRadius) : float.PositiveInfinity;
+        return a.Impostor is { Stage: ImpostorStage.Ready } s ? TransitionFor(a, s.Class, s.WorldRadius) : float.PositiveInfinity;
     }
 
     /// <summary>
@@ -342,13 +349,13 @@ public sealed partial class FoliageRenderer
             if (s is { FramePixels: > 0 })
             {
                 (frame, grid, levels, radius) = (s.FramePixels, s.Grid, s.Levels, s.WorldRadius);
-                t = TransitionFor(s.Class, s.WorldRadius);
+                t = TransitionFor(a, s.Class, s.WorldRadius);
             }
             else
             {
                 if (EstimateClass(a) is not { } est) continue;
                 (frame, grid, levels, radius) = (est.FramePixels, est.Grid, est.Levels, a.Radius * a.Mesh.MaxScale);
-                t = TransitionFor(est, radius);
+                t = TransitionFor(a, est, radius);
             }
             // Far mips: the nearest instance's ground distance, never inside the transition (an impostor is not drawn nearer); without them the transition itself, as before.
             float need = FarMips ? Math.Max(raw * margin, t) : t;
@@ -590,7 +597,7 @@ public sealed partial class FoliageRenderer
             }
             UpdateImpostorLimit();
             // The nearest any transition is: the small class's smallest (a zone ending before it has no impostor ground for any mesh).
-            float shortest = ImpostorDistance * (ImpostorClass.SmallEnabled ? Math.Min(1, ImpostorClass.SmallMinimumRadius / ImpostorClass.MinimumRadius) : 1) * (1 - ImpostorBand);
+            float shortest = Math.Min(ImpostorDistance, LargeImpostorDistance) * (ImpostorClass.SmallEnabled ? Math.Min(1, ImpostorClass.SmallMinimumRadius / ImpostorClass.MinimumRadius) : 1) * (1 - ImpostorBand);
             // Bakes wait in order of how soon their zones are close: from where the eye is now or will be in a few seconds of its motion.
             var lead = settling ? Vector2.Zero : velocity * ImpostorLookaheadSeconds;
             if (lead.Length() > MaxLookahead) lead = Vector2.Normalize(lead) * MaxLookahead;
@@ -629,7 +636,7 @@ public sealed partial class FoliageRenderer
                     if (a.Impostor is { Stage: ImpostorStage.None, RetryAt: 0 }) continue;
                     // Its own transition (the exact one once the atlas is loaded; before that estimated from the mesh's bounds, which also rules out
                     // a mesh that could never have an atlas: the load would only find that out).
-                    float t = a.Impostor is { FramePixels: > 0 } loaded ? TransitionFor(loaded.Class, loaded.WorldRadius) : EstimatedTransition(a);
+                    float t = a.Impostor is { FramePixels: > 0 } loaded ? TransitionFor(a, loaded.Class, loaded.WorldRadius) : EstimatedTransition(a);
                     if (range - band < t || far < t * (1 - ImpostorBand)) continue;
                     impostorWanted[a] = impostorWanted.TryGetValue(a, out float known) ? Math.Min(known, urgency) : urgency;
                 }
@@ -734,7 +741,7 @@ public sealed partial class FoliageRenderer
         {
             // The albedo's top levels its nearest instance never samples are left out, and the normal map's one level more: it shapes the lighting,
             // which varies slowly over a crown.
-            int levels = Math.Clamp(SkipFor(s.Atlas!.FramePixels, s.Atlas.Levels, s.Atlas.Radius * a.Mesh.MaxScale, FarMips ? Math.Max(s.Need, TransitionFor(s.Class, s.WorldRadius)) : TransitionFor(s.Class, s.WorldRadius))
+            int levels = Math.Clamp(SkipFor(s.Atlas!.FramePixels, s.Atlas.Levels, s.Atlas.Radius * a.Mesh.MaxScale, FarMips ? Math.Max(s.Need, TransitionFor(a, s.Class, s.WorldRadius)) : TransitionFor(a, s.Class, s.WorldRadius))
                 + (FarMips ? s.Extra : 0), 0, s.Atlas.Levels - 1);
             long need = ImpostorTextures.BytesFor(s.Atlas!, levels, levels + 1);
             if (!MakeImpostorRoom(need, a) || guard is { } g && !g.Allows((ulong)need))

@@ -67,7 +67,7 @@ sealed class WorldOptions
     public float? SmallRange, MediumRange, LargeRange;
     /// <summary>The impostors switch (Enhancements): far foliage as baked billboards (Meitou, default) or meshes only (the game); the distance (null: the default).</summary>
     public bool Impostors = true;
-    public float? ImpostorDistance;
+    public float? ImpostorDistance, LargeImpostorDistance;
     public double? ImpostorBudgetMb, ImpostorCacheMb;
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
     public float? HazeDistance;
@@ -112,6 +112,7 @@ sealed class WorldOptions
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
           --range-large <u> --range-medium <u> --range-small <u>   foliage draw range by mesh size (the range switch, F6; defaults 50000, 12000, 3500; Tab sliders)
           --impostor-distance <u>  foliage meshes with an impostor atlas become baked billboards from here (the impostors switch, F7; default 4000; Tab slider)
+          --large-impostor-distance <u>  the same for the large size class: trees, rock stacks, hoodoos (default 12000; Tab slider)
           --impostor-budget <MB>   fixes the most video memory the resident impostor atlases may use (default: 8% of the card's budget, 5% on an integrated GPU, 48-1024 MB; docs/impostors.md section 10; atlases that do not fit are held at coarser mips, then stay meshes)
           --impostor-cache-mb <MB> the most the impostor atlas disk cache (%LOCALAPPDATA%\Meitou\impostors) may take (default 512, 0 = no cap; least recently used files go first)
           --object-distance <u>    draw placed objects at full detail up to this distance (the reach switch, F8: default 20000 in Meitou, 12000 in Faithful)
@@ -210,6 +211,7 @@ sealed class WorldOptions
                 case "--no-foliage": o.NoFoliage = true; break;
                 case "--range-large": o.LargeRange = F(); break;
                 case "--impostor-distance": o.ImpostorDistance = F(); break;
+                case "--large-impostor-distance": o.LargeImpostorDistance = F(); break;
                 case "--impostor-budget": o.ImpostorBudgetMb = F(); break;
                 case "--impostor-cache-mb": o.ImpostorCacheMb = F(); break;
                 case "--range-medium": o.MediumRange = F(); break;
@@ -543,6 +545,7 @@ static class WorldFrame
             f.Terrain = terrain;
             (f.MeitouRange, f.SmallRange, f.MediumRange, f.LargeRange) = (o.MeitouRange, o.SmallRange ?? f.SmallRange, o.MediumRange ?? f.MediumRange, o.LargeRange ?? f.LargeRange);
             (f.Impostors, f.ImpostorDistance, f.ImpostorBudgetMb) = (o.Impostors, o.ImpostorDistance ?? f.ImpostorDistance, o.ImpostorBudgetMb ?? f.ImpostorBudgetMb);
+            if (o.LargeImpostorDistance is { } largeImpostor) f.LargeImpostorDistance = largeImpostor;
             if (o.ImpostorCacheMb is { } cacheMb) f.ImpostorCacheMb = cacheMb;
             Console.WriteLine($"foliage   catalog and shaders ready ({gpu.Foliage.LoadMs:0} ms)");
         }
@@ -633,6 +636,7 @@ static class WorldFrame
             // The range switch's class ranges (Meitou; the slider above then only moves the FAR layers' large meshes).
             sliders.Add(new Slider("Large foliage range (F6 Meitou)", 1000, 120000, () => foliage.LargeRange, v => foliage.LargeRange = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
             sliders.Add(new Slider("Impostor distance (F7 Meitou)", 500, 40000, () => foliage.ImpostorDistance, v => foliage.ImpostorDistance = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
+            sliders.Add(new Slider("Large impostor distance (F7 Meitou)", 500, 40000, () => foliage.LargeImpostorDistance, v => foliage.LargeImpostorDistance = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
             sliders.Add(new Slider("Medium foliage range", 400, 80000, () => foliage.MediumRange, v => foliage.MediumRange = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
             sliders.Add(new Slider("Small foliage range", 200, 40000, () => foliage.SmallRange, v => foliage.SmallRange = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
             sliders.Add(new Slider("Grass draw distance x", 0.25f, 80, () => foliage.GrassRangeSetting, v => foliage.GrassRangeSetting = v, "0.00", Logarithmic: true));

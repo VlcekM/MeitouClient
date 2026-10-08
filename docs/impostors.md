@@ -721,3 +721,12 @@ in its place), blending the frames instead of the per-pixel vote −0.28 ms (not
 **Result** (three interleaved runs each, with the terrain's patch order of [formats/terrain.md](formats/terrain.md)): foliage meshes row
 1.25-1.26 to 0.77 ms at the overview, 1.44-1.54 to 1.04-1.06 at ground level (`--distance 1500 --pitch 12`). Faithful draws no impostors
 (0 px). Meitou pictures: see [render-distance-benchmark.md](render-distance-benchmark.md) section 10.
+
+## 15. A separate distance for the large size class (2026-10-08)
+
+Meshes of the large size class (`FoliageSizes.LargeFrom`, 125 units and up: trees, rock stacks, hoodoos, TERRAIN-mode rocks included) become
+impostors at `LargeImpostorDistance` (default 12000; Tab slider "Large impostor distance", `--large-impostor-distance`) instead of
+`ImpostorDistance` (4000), which now covers the smaller meshes only (`FoliageRenderer.DistanceFor`). **Observed** (the owner's screenshots, Okran's
+Pride forests and rock stacks): at 4000 these billboards looked flat and dithered at close range. The rock knee rule (section 13) scales from the
+class's distance. The atlases are still sized for the 4000 reference, so at 12000 they have more texels than needed. The cost of drawing these
+meshes as meshes out to 12000 was not measured.
