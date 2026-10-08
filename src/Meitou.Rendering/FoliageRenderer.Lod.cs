@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Rendering.Gpu;
 
@@ -175,6 +176,42 @@ public sealed unsafe partial class FoliageRenderer
         }
         a.LodDone = false;
     }
+
+    /// <summary>
+    /// Whether a work-list entry can have instances in this view: always for an ordinary one; for a generated level's, only when some instance of the group can pick that level
+    /// (a coarser level needs a far enough instance or, in a cascade, a small enough one), and when not all of them pick a still coarser one. Each test is made with the group's
+    /// box and radii and a 1 % margin the safe way, so it never leaves out a level that has an instance; a draw it saves costs the GPU a little even with no instance.
+    /// </summary>
+    bool LevelNeeded(in GpuEntry e, Vector3 eye)
+    {
+        if (e.Group.Asset.WorkLod is not { } lod || !e.Group.Asset.Terrain || !IsRockBatch(e.Batch)) return true;
+        if (!lodActive) return e.Level == 0;
+        var g = e.Group;
+        float tolerance = lodView.Tolerance, scale = lodView.Scale;
+        // The size at which level k stops being allowed: the largest (radius over distance, or over texel) it takes.
+        float far = float.MaxValue, near = 0;
+        if (!lodView.Ortho)
+        {
+            near = Vector3.Distance(eye, Vector3.Clamp(eye, g.BoundMin, g.BoundMax));
+            var farthest = Vector3.Max(Vector3.Abs(eye - g.BoundMin), Vector3.Abs(eye - g.BoundMax));
+            far = farthest.Length();
+        }
+        bool Allowed(int level)   // some instance may pick a level at least this coarse
+        {
+            if (level == 0) return true;
+            float need = lod.Relative[level] * scale / tolerance;   // radii per radius of the mesh: allowed when distance >= r (1 + need), or in a cascade when r <= tolerance texel / error
+            return lodView.Ortho ? g.MinRadius * lod.Relative[level] * scale <= tolerance * 1.01f : far >= g.MinRadius * (1 + need) * 0.99f;
+        }
+        bool Surpassed(int level)   // every instance picks a coarser level
+        {
+            if (level + 1 >= lod.Levels) return false;
+            float need = lod.Relative[level + 1] * scale / tolerance;
+            return lodView.Ortho ? g.MaxRadius * lod.Relative[level + 1] * scale <= tolerance * 0.99f : near >= g.MaxRadius * (1 + need) * 1.01f;
+        }
+        return Allowed(e.Level) && !Surpassed(e.Level);
+    }
+
+    bool IsRockBatch(int batch) => batch >= gpuOrder.Count && batch < gpuOrder.Count + gpuRockOrder.Count;
 
     /// <summary>The work lists of this frame have generated levels (the switch, the GPU cull, not its verify mode; with <see cref="LodAlternate"/> every other frame).</summary>
     bool LodWanted => Lod && GpuCull && !GpuCullVerify && !(LodAlternate && (Gpu.Frame.Number & 1) == 1);

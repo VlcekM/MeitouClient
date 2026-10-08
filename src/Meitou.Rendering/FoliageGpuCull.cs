@@ -271,13 +271,15 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     public string[]? TallyNames;
     /// <summary>The colour views' triangles and instance-draws (impostors: quads) per drawn mesh name, summed since <see cref="ResetTally"/>.</summary>
     public readonly Dictionary<string, (long Triangles, long Instances)> TallyByName = [];
+    /// <summary>The same for the shadow cascades (all cascades summed).</summary>
+    public readonly Dictionary<string, (long Triangles, long Instances)> TallyShadowByName = [];
 
     /// <summary>Per view kind (0 colour, 1 shadow, 2 reflection): mesh triangles, mesh instance-draws (one per part), rock triangles, rock
     /// instance-draws, impostor quads, views; summed since the start (or <see cref="ResetTally"/>).</summary>
     public readonly long[,] Tally = new long[3, 6];
     public long TallyFrames { get; private set; }
 
-    public void ResetTally() { Array.Clear(Tally); TallyByName.Clear(); TallyFrames = 0; }
+    public void ResetTally() { Array.Clear(Tally); TallyByName.Clear(); TallyShadowByName.Clear(); TallyFrames = 0; }
 
     const ulong TallyBytes = 4ul << 20;
     ReadbackBuffer?[]? tallyBuffers;
@@ -302,10 +304,11 @@ public sealed unsafe class FoliageGpuCull : IDisposable
                 for (int i = 0; i < count; i++)
                 {
                     long indices = args[i * 5], instances = args[i * 5 + 1];
-                    if (kind == 0 && names is not null && i < names.Length && instances > 0)
+                    if (kind <= 1 && names is not null && i < names.Length && instances > 0)
                     {
-                        TallyByName.TryGetValue(names[i], out var t);
-                        TallyByName[names[i]] = (t.Triangles + indices / 3 * instances, t.Instances + instances);
+                        var byName = kind == 0 ? TallyByName : TallyShadowByName;
+                        byName.TryGetValue(names[i], out var t);
+                        byName[names[i]] = (t.Triangles + indices / 3 * instances, t.Instances + instances);
                     }
                     if (i < rocks) { Tally[kind, 0] += indices / 3 * instances; Tally[kind, 1] += instances; }
                     else if (i < impostors) { Tally[kind, 2] += indices / 3 * instances; Tally[kind, 3] += instances; }

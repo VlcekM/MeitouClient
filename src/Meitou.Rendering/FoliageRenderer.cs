@@ -224,7 +224,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             .Select(e => string.Create(inv, $"{e.Key} {e.Value.Triangles / f / 1e3:0}k tri / {e.Value.Instances / f:0} inst"));
         var impostors = g.TallyByName.Where(e => e.Key.EndsWith("(impostor)", StringComparison.Ordinal)).OrderByDescending(e => e.Value.Instances).Take(5)
             .Select(e => string.Create(inv, $"{e.Key} {e.Value.Instances / f:0}"));
-        return $"meshes by triangles: {string.Join("; ", meshes)}\n          impostors by quads: {string.Join("; ", impostors)}";
+        var shadows = g.TallyShadowByName.OrderByDescending(e => e.Value.Triangles).Take(n)
+            .Select(e => string.Create(inv, $"{e.Key} {e.Value.Triangles / f / 1e3:0}k tri / {e.Value.Instances / f:0} inst"));
+        return $"meshes by triangles: {string.Join("; ", meshes)}\n          impostors by quads: {string.Join("; ", impostors)}\n          shadow casters by triangles (cascades summed): {string.Join("; ", shadows)}";
     }
 
     public string Describe() =>
@@ -307,6 +309,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         /// draws a batch in a view only when one of its groups' boxes meets the frustum (<see cref="ShowBatches"/>).</summary>
         public Vector3 BoundMin, BoundMax;
         public bool BoundsReady;
+        /// <summary>The smallest and largest bounding radius among the instances (set with <see cref="BoundMin"/>): which generated levels a view can pick in the group.</summary>
+        public float MinRadius, MaxRadius;
         /// <summary>A TERRAIN-mode rock group on the GPU cull: <see cref="Instances"/>' <c>Ground.W</c> holds <see cref="FoliageCull.RockBits"/>,
         /// made with the terrain's biome source <see cref="RockBiomes"/> (<see cref="TerrainRenderer.FeatureBiomes"/>); whether it has plain and
         /// mirroring placements, and whether its first one mirrors (the order its two batches are numbered in).</summary>
@@ -321,8 +325,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             var min = new Vector3(float.MaxValue);
             var max = new Vector3(float.MinValue);
+            (MinRadius, MaxRadius) = (float.MaxValue, 0);
             foreach (ref readonly var r in Instances.AsSpan())
             {
+                (MinRadius, MaxRadius) = (Math.Min(MinRadius, r.Sphere.W), Math.Max(MaxRadius, r.Sphere.W));
                 var c = new Vector3(r.Sphere.X, r.Sphere.Y, r.Sphere.Z);
                 min = Vector3.Min(min, c - new Vector3(r.Sphere.W + 1));
                 max = Vector3.Max(max, c + new Vector3(r.Sphere.W + 1));
@@ -1110,7 +1116,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             else if (!reuseWork) BuildGpuWork(options, terrain);   // the verify mode: the GPU's work from the list the CPU just culled
         }
         if (gpu && !reuseWork) (gpuWorkFrame, gpuWorkEye, gpuWorkRange) = depthPass ? (Gpu.Frame.Number, eye, maxRange) : (-1, default, 0);
-        if (gpu) ShowBatches();
+        lodView = gpu ? CurrentLodView(eye.Y) : default;
+        if (gpu) ShowBatches(eye);
         double tCull = cpu.Elapsed.TotalMilliseconds;
         StageClock.Sub("fol cull");
 
@@ -1138,7 +1145,6 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (active.Count > 0 && !debugNoMeshes) PrepareMeshes(options, gpu);
         else meshDraws.Clear();
         // The GPU path's TERRAIN-mode rocks: one draw per part of each rock batch in view, culled by the same dispatch (after the meshes' draws).
-        lodView = gpu ? CurrentLodView(eye.Y) : default;
         if (gpu) PrepareRocks();
         else rockDraws.Clear();
         if (!debugNoMeshes) PrepareImpostors(gpu);
@@ -1693,14 +1699,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// visible instance (every sphere of its groups is outside a plane), so the picture is the same; the GPU still culls its groups, and the
     /// verify mode checks that it found none there.
     /// </summary>
-    void ShowBatches()
+    void ShowBatches(Vector3 eye)
     {
         int n = gpuOrder.Count + gpuRockOrder.Count + gpuImpostorOrder.Count;
         if (gpuBatchShown.Length < n) gpuBatchShown = new bool[n * 2];
         Array.Clear(gpuBatchShown, 0, n);
         var planes = cullView.Planes;
         foreach (var e in gpuEntries)
-            if (!gpuBatchShown[e.Batch] && WorldCamera.Intersects(planes, e.Group.BoundMin, e.Group.BoundMax)) gpuBatchShown[e.Batch] = true;
+            if (!gpuBatchShown[e.Batch] && WorldCamera.Intersects(planes, e.Group.BoundMin, e.Group.BoundMax) && LevelNeeded(e, eye)) gpuBatchShown[e.Batch] = true;
     }
 
     /// <summary>The rock draws of this view: per rock batch shown, one draw per part of its mesh (<see cref="Emit"/>'s placements, one per part).</summary>
