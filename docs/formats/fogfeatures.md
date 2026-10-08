@@ -233,7 +233,7 @@ The data are uniform-buffer reads, the same for every pixel; a block whose box t
 `--screenshot`; `--no-fog-volumes` turns them off (the pass is skipped when no volume is in view). The "post cost" line has `scene` (up to the
 water), `fog` (this pass) and `particles`.
 
-Cost: see the table below the cull. Before the pass, with per-fragment volumes (**Observed**, 2026-10-08, RTX 4070, 1600 × 900, `--screenshot` "post cost" scene GPU ms; without volumes / the earlier 8-block
+Cost of the pass (**Observed**, 2026-10-08, same card, best of several runs because other sessions share the GPU, interleaved with a build from before the change): the pass is 0.14 ms at Shark in swamp rain and 0.11 ms at The Hub; Shark scene 7.54 to 5.87 + 0.14 (+ 0.02 particles), foliage 4.51 to 3.47, the sky pass 0.17 to 0.05 ms, the reflection 0.32 to 0.25 ms; the Hub scene 3.32 to 3.13 + 0.11. Before it, with per-fragment volumes (**Observed**, 2026-10-08, RTX 4070, 1600 × 900, `--screenshot` "post cost" scene GPU ms; without volumes / the earlier 8-block
 texture version / the per-fragment list): Shark in swamp rain 6.34 / 8.22 / 7.80, Shark from above 5.64 / 7.38 / 7.27, The Hub 2.62 / 3.82 / 3.35, the Vain
 3.43 / 4.83 / 4.28, inside the Skinner's Roam dome 2.80 / 3.82 / 3.64. So drawing every volume (and the sphere and beams) costs less than the
 capped version: the far-clip cull drops what cannot show, and the data are uniform reads instead of texture fetches.
