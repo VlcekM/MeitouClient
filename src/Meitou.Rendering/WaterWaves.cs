@@ -21,7 +21,10 @@ public sealed class WaveSet
     float wind;   // the smoothed wind factor
     double shorePhase;
 
-    /// <summary>x the breakers' phase (cycles), y the run-up height, z the breakers' wavelength, w their height (units).</summary>
+    /// <summary>The wave count wraps here; the shader's per-wave noise and drift are periodic in it (a wave's number is the count at its place).</summary>
+    public const double PhaseWrap = 4096;
+
+    /// <summary>x the breakers' wave count (cycles since the start, below <see cref="PhaseWrap"/>; the shader takes its fraction as the phase), y the run-up height, z the breakers' wavelength, w their height (units).</summary>
     public Vector4 Shore;
     /// <summary>The game-clock time for the normal maps' scrolling, in the unit the Faithful water's time has (seconds / 600).</summary>
     public float NormalTime;
@@ -42,7 +45,7 @@ public sealed class WaveSet
         float target = WindFactor(windSpeed);
         wind = first ? target : wind + (target - wind) * (float)(1 - Math.Exp(-dt / 10));
         // The first frame starts from the clock itself (so a picture at --water-seconds shows that moment), later ones integrate.
-        shorePhase = (first ? seconds / BreakerPeriod : shorePhase + dt / BreakerPeriod) % 1.0;
+        shorePhase = (first ? seconds / BreakerPeriod : shorePhase + dt / BreakerPeriod) % PhaseWrap;
         float swell = 0.6f + 0.6f * MathF.Min(wind, 1.5f);
         Shore = new Vector4((float)shorePhase, 2.2f * swell, BreakerLength, 3.5f * swell);
     }

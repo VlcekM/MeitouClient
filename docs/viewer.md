@@ -228,15 +228,36 @@ How it works (status as in [README.md](README.md)):
   - *Shore.* Per pixel (and vertex) the distance to the waterline and its exposure come from the shore distance field below (until
     2026-10-08 the distance was estimated as depth / bottom slope, which bent and branched the crests in small bays), the direction to the
     shore as the field's gradient. Breakers (every 8 s, 110
-    units apart, in sets: each one 0.6-1.4 times the height of 3.5-5.3 units) run along that distance, so their crests follow the depth
+    units apart, in sets: each one about 0.3-1.9 times the height of 3.5-5.3 units) run along that distance, so their crests follow the depth
     contours. They build from 460 units out, steepen (a brighter, greener, less see-through face, a darker trough ahead) and break at
     35-120 units from the waterline (varying along the shore and with the size), bursting white, then run in as a low bore of whitewater
-    with lace trailing behind it, stronger in some stretches than others; at the beach they run up as a thin sheet to
+    with lace trailing behind it, stronger in some stretches than others (a foam-texture noise); at the beach they run up as a thin sheet to
     where the ground is 1.4-3.2 units above the water (the run-up height grows with the wind), at most about 120 units inland so low flats behind a beach stay dry, and back, leaving wet sand that dries
     until the next one. The grid is lifted to the run-up's top along the beach and the fragment cuts the sheet's edge. Only exposed
     shores get surf (the field's exposure), so ponds, swamp channels (Shark) and sheltered bays stay calm. The geometry gets only a smooth
     hump per breaker (none where the vertices are more than a fifth of a breaker apart); the steep front, lip and trough are shading, so no
-    vertex shows. The sets' sizes vary smoothly from one breaker to the next. The shore fades out from 7000 to 10000 units from the eye.
+    vertex shows. Sizes, timing and whether a wave breaks vary along the shore (below). The shore fades out from 7000 to 10000 units from the eye.
+  - *Surf in sections* (2026-10-08, `shoreAt`'s `waveAt`, **Observed** in pictures at several `--water-seconds`; the numbers are tuned by eye).
+    The breakers used to be one unbroken line at one distance from the waterline, all breaking at once, so the surf read as an
+    outline drawn round the coast. Now each wave has a number (the wave count, `uShore.x`, which runs on and wraps at 4096; the wave at a
+    place keeps its number as it travels in) and slow, coarse value noise on the *shore point* it is heading for (the pixel moved along
+    the shore distance field's gradient by its distance, so the noise is constant across the wave and varies only along the shore;
+    its pattern drifts about 1 unit a second on a loop periodic in the wrap, so there is no jump when the count wraps) decides three things.
+    **Phase**: an offset of up to about ±1 cycle with features of 200-500 units (plus the old 3000-unit term) bends the crests against the
+    shore by up to some 15 degrees, so the break point, which is at a fixed distance, travels along the crest (peeling). **Size**: sets of about
+    seven waves (a sine of the wave number, irregular, shifted along the shore) take each wave from 0.55 to 1.6 times the
+    breaker height. **Breaking**: a noise of about 620 units per wave (more breaking for the bigger waves) gives stretches a few hundred
+    units long where the wave rolls in without breaking (lower, its break point moved to the waterline, no collapse into a bore, foam
+    and bore scaled to 0.2), so there are gaps between the pieces of whitewater. The same `Shore` values (size, `brk`, `breakAt`, the
+    phase) feed the vertex hump, the lip, burst, bore, trail, feather, the run-up and the sand's wetness, so geometry and foam agree.
+    The offsets fade out (with the shore field's gradient length) on the axis between two shores, where the nearest shore jumps, so an
+    inlet shows no seam (**Observed** in `MEITOU_WATER_DEBUG=1` at Port North's inlet: the bands bend there as the distance does).
+    Per-wave values change at the troughs (where the breaker profile is nil) and are blended over the trough ahead of the next wave's front, so they
+    are continuous in space and time; the sand's wetness (a jump at each crest by design) remembers the size of the last crest to pass.
+    Outside the surf zone (more than 700 units out) the extra noise is not evaluated. **Unknown / not done**: tying the heights to the FFT
+    ocean's own swell. A wave's height would have to be read where and when it was offshore, and the ocean has no memory of that (its
+    height at a point oscillates with the swell, so reading it at the break would make a wave grow and shrink on its way in); the set
+    envelope above stands in for it.
   - *Foam.* `WaterFoam` bakes a tileable 256² texture at load: R a lace of bubble rims (cellular noise, F2 − F1), G a five-octave
     value noise, B fine bubble walls (96 cells, about 17 units a repeat as the shader uses it). The shader blends R and G at two scales
     (about 110 and 37 units a repeat) and lets more through the more foam there is; within 150-600 units of the eye the bubbles show in
