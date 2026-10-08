@@ -116,6 +116,8 @@ public sealed partial class FoliageRenderer
     bool impostorBakeMemoryHeld;
 
     readonly ImpostorCache impostorCache = new();
+    /// <summary>The atlas disk cache (the Tab panel's delete button). Deleting its files leaves the resident atlases: they are baked again when next needed.</summary>
+    public ImpostorCache ImpostorDiskCache => impostorCache;
     bool impostorCacheChecked;
     /// <summary>
     /// The most the atlas disk cache may take, in megabytes (<c>MEITOU_IMPOSTOR_CACHE_MB</c>, <c>--impostor-cache-mb</c>; 0 is no cap): older files go

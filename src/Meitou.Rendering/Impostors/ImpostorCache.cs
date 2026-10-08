@@ -138,6 +138,37 @@ public sealed class ImpostorCache
         }
     }
 
+    /// <summary>The atlas files in the folder and their total size (the Tab panel's question before <see cref="Clear"/>).</summary>
+    public (int Files, long Bytes) Measure()
+    {
+        lock (gate)
+        {
+            if (!Directory.Exists(Root)) return default;
+            var files = new DirectoryInfo(Root).EnumerateFiles("*.mimp").ToList();
+            return (files.Count, files.Sum(f => f.Length));
+        }
+    }
+
+    /// <summary>
+    /// Deletes every atlas file (the Tab panel's button): each is baked again the next time it is needed and not resident. Temporary files
+    /// are left to the save that is writing them; a file another process holds stays. Returns what was deleted.
+    /// </summary>
+    public (int Files, long Bytes) Clear()
+    {
+        lock (gate)
+        {
+            if (!Directory.Exists(Root)) return default;
+            int files = 0;
+            long bytes = 0;
+            foreach (var info in new DirectoryInfo(Root).EnumerateFiles("*.mimp"))
+            {
+                long length = info.Length;
+                if (Delete(info)) { files++; bytes += length; }
+            }
+            return (files, bytes);
+        }
+    }
+
     /// <summary>
     /// Whether the file is dead weight: not an atlas (short, wrong magic) or one of an older format or baker version than this build's (its
     /// key can never match again). A newer version is left, since another build sharing the folder may still read it (the least-recently-used

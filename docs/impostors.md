@@ -163,6 +163,11 @@ the 267 base-game atlases are 376 MB on disk (**Observed**), so the base game fi
 older format, junk, short file, old temporary go; current, newer, fresh temporary and foreign files stay), and that loads and saves set the last use.
 **Unknown**: two viewers evicting at once (each deletion tolerates a failure; the worst case is a rebake).
 
+**Deleting the cache (`ImpostorCache.Clear`, the Tab panel's "Delete billboard cache" button; since 2026-10-08).** Deletes every `.mimp` in the folder after a
+Yes / No question that names the count and size (`Measure`); temporary files and foreign files stay, a file another process holds stays. Resident
+atlases are not dropped: they are baked again when next needed and not resident. **Verified** (`ImpostorTests`, a temporary folder): the count and
+bytes, and that temporary and foreign files survive.
+
 ## 5. Runtime sampling
 
 **GLSL (`ImpostorShaders`).**

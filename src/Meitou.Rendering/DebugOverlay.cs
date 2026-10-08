@@ -152,7 +152,16 @@ public sealed unsafe class DebugOverlay : IDisposable
         const float margin = 16, pad = 12, gap = 28;
         float y = top + margin;
         int rowsFit = Math.Max((int)((height - y - margin - 2 * pad - LineHeight * 1.5f) / LineHeight), 1);
+        // Lines wider than the window wrap (the resident memory lines run long); with more than one column, to the column's share of it.
+        float usable = width - 2 * margin - 2 * pad;
+        var source = lines;
+        lines = Wrap(source, (int)(usable / CharWidth));
         int columns = (lines.Count + rowsFit - 1) / rowsFit;
+        for (int pass = 0; pass < 2 && columns > 1; pass++)
+        {
+            lines = Wrap(source, (int)((usable - (columns - 1) * gap) / columns / CharWidth));
+            columns = (lines.Count + rowsFit - 1) / rowsFit;
+        }
         int rows = (lines.Count + columns - 1) / Math.Max(columns, 1);
         float columnWidth = (lines.Count == 0 ? 0 : lines.Max(l => l.Length)) * CharWidth;
         float panelW = Math.Max(columns * columnWidth + (columns - 1) * gap, title.Length * CharWidth) + 2 * pad;
@@ -164,6 +173,34 @@ public sealed unsafe class DebugOverlay : IDisposable
             Text(lines[i], margin + pad + i / rows * (columnWidth + gap), y + pad + (i % rows + 1.5f) * LineHeight, TextColour);
         Flush(width, height);
         return y + panelH;
+    }
+
+    /// <summary>
+    /// The lines broken to at most <paramref name="maxChars"/> characters, after a space where there is one in the line's second half (else hard);
+    /// a continuation is indented four characters past its line's own indent.
+    /// </summary>
+    public static IReadOnlyList<string> Wrap(IReadOnlyList<string> lines, int maxChars)
+    {
+        maxChars = Math.Max(maxChars, 16);
+        if (lines.All(l => l.Length <= maxChars)) return lines;
+        var result = new List<string>(lines.Count + 4);
+        foreach (var line in lines)
+        {
+            string indent = new(' ', Math.Min(line.Length - line.TrimStart(' ').Length + 4, maxChars / 2));
+            string rest = line;
+            bool first = true;
+            while (true)
+            {
+                string piece = first ? rest : indent + rest;
+                if (piece.Length <= maxChars) { result.Add(piece); break; }
+                int cut = piece.LastIndexOf(' ', maxChars);
+                if (cut <= maxChars / 2) cut = maxChars;
+                result.Add(piece[..cut].TrimEnd());
+                rest = piece[cut..].TrimStart();
+                first = false;
+            }
+        }
+        return result;
     }
 
     /// <summary>Queues a solid rectangle (pixels, top-left origin) for the next <see cref="Flush"/>.</summary>

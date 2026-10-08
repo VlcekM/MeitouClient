@@ -30,7 +30,7 @@ public static class FoliageSizes
     /// thresholds' ranges because beyond the impostor distance (4000) they are billboards, which cost a quad per tree instead of its
     /// triangles, in the colour pass and in the shadow cascades (docs/impostors.md, section 8).
     /// </summary>
-    public const float DefaultSmallRange = 800, DefaultMediumRange = 12000, DefaultLargeRange = 50000;
+    public const float DefaultSmallRange = 3500, DefaultMediumRange = 12000, DefaultLargeRange = 50000;
 
     /// <summary>A mesh's size: its bounding radius (unscaled) times the larger of its record's two scale limits (some records have them swapped).</summary>
     public static float Size(float boundsRadius, FoliageMesh mesh) => boundsRadius * Math.Max(mesh.MinScale, mesh.MaxScale);

@@ -110,7 +110,7 @@ sealed class WorldOptions
           --no-textures            height-tinted terrain without biome textures (faster start)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
-          --range-large <u> --range-medium <u> --range-small <u>   foliage draw range by mesh size (the range switch, F6; defaults 50000, 12000, 800; Tab sliders)
+          --range-large <u> --range-medium <u> --range-small <u>   foliage draw range by mesh size (the range switch, F6; defaults 50000, 12000, 3500; Tab sliders)
           --impostor-distance <u>  foliage meshes with an impostor atlas become baked billboards from here (the impostors switch, F7; default 4000; Tab slider)
           --impostor-budget <MB>   fixes the most video memory the resident impostor atlases may use (default: 8% of the card's budget, 5% on an integrated GPU, 48-1024 MB; docs/impostors.md section 10; atlases that do not fit are held at coarser mips, then stay meshes)
           --impostor-cache-mb <MB> the most the impostor atlas disk cache (%LOCALAPPDATA%\Meitou\impostors) may take (default 512, 0 = no cap; least recently used files go first)
@@ -665,7 +665,20 @@ static class WorldFrame
         }
         // The Faithful / Meitou switches as checkboxes (ticked: Meitou), the F-key toggles' state.
         var toggles = switches?.Select(e => new Toggle(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful)).ToList();
-        return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders, toggles, "Meitou improvements (unticked: as the game)");
+        // The billboard (impostor atlas) disk cache: deleted files are baked again when next needed; the resident atlases stay until evicted.
+        var actions = new List<PanelAction>();
+        if (g.Foliage?.ImpostorDiskCache is { } cache)
+            actions.Add(new PanelAction("Delete billboard cache", () =>
+            {
+                var (files, bytes) = cache.Measure();
+                return $"Delete {files} billboard atlases ({bytes / 1048576.0:0} MB) in {cache.Root}?";
+            }, () =>
+            {
+                var (files, bytes) = cache.Clear();
+                Console.WriteLine($"impostors deleted {files} cached atlases ({bytes / 1048576.0:0} MB) from {cache.Root}");
+                return $"Deleted {files} atlases ({bytes / 1048576.0:0} MB); they are baked again when next needed.";
+            }));
+        return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders, toggles, "Meitou improvements (unticked: as the game)", actions);
     }
 
     /// <summary>An hour as <c>HH:MM</c>.</summary>

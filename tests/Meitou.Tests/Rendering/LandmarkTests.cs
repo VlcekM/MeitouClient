@@ -53,7 +53,7 @@ public class LandmarkTests
     {
         Assert.Equal(50000, FoliageSizes.DefaultLargeRange);
         Assert.Equal(12000, FoliageSizes.DefaultMediumRange);
-        Assert.Equal(800, FoliageSizes.DefaultSmallRange);
+        Assert.Equal(3500, FoliageSizes.DefaultSmallRange);
         Assert.Equal(125, FoliageSizes.LargeFrom);
     }
 

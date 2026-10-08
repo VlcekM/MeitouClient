@@ -28,13 +28,18 @@ public sealed record Slider(string Label, float Min, float Max, Func<float> Get,
 /// <summary>One checkbox: on or off, read and written through the callbacks; <see cref="Text"/> describes the state beside it.</summary>
 public sealed record Toggle(string Label, Func<bool> Get, Action<bool> Set, Func<string>? Text = null);
 
+/// <summary>A button beside the reset one that asks first: <see cref="Question"/> is shown with Yes / No, Yes runs <see cref="Run"/>, whose text is shown after.</summary>
+public sealed record PanelAction(string Label, Func<string> Question, Func<string> Run);
+
 /// <summary>
 /// A panel of sliders drawn with the <see cref="DebugOverlay"/> in two columns in the top-left corner, over the other panels. Drag a slider with the left mouse
 /// button; while the pointer is on the panel, the camera ignores the mouse. The button at the bottom puts every slider back to
 /// the value it had when the panel was made (before a saved config or a drag changed it). Below the sliders, optional checkboxes under their own
-/// heading (the Faithful / Meitou switches), toggled with a click and reset with the sliders.
+/// heading (the Faithful / Meitou switches), toggled with a click and reset with the sliders. Beside the reset button, optional
+/// <see cref="PanelAction"/> buttons: a click shows the action's question with Yes / No on a row below, and the result there after Yes.
 /// </summary>
-public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyList<Slider> sliders, IReadOnlyList<Toggle>? toggles = null, string togglesTitle = "")
+public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyList<Slider> sliders, IReadOnlyList<Toggle>? toggles = null, string togglesTitle = "",
+    IReadOnlyList<PanelAction>? actions = null)
 {
     const float Margin = 16, Pad = 12, TrackHeight = 6, RowGap = 10, ColumnGap = 28, MinTrackWidth = 220;
     const int Columns = 2;
@@ -46,7 +51,19 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     readonly IReadOnlyList<Toggle> toggles = toggles ?? [];
     readonly bool[] toggleDefaults = (toggles ?? []).Select(t => t.Get()).ToArray();
 
-    public bool Visible { get; set; }
+    readonly IReadOnlyList<PanelAction> actions = actions ?? [];
+    /// <summary>The action waiting for Yes / No (-1 none), its question, and the last action's result (shown until the next click on the panel).</summary>
+    int confirming = -1;
+    string? question, message;
+
+    /// <summary>Hiding the panel drops a pending question and the last result.</summary>
+    public bool Visible
+    {
+        get => visible;
+        set { visible = value; if (!value) { confirming = -1; question = message = null; } }
+    }
+    bool visible;
+    public IReadOnlyList<PanelAction> Actions => actions;
     /// <summary>The sliders (the game saves their values in its user config, by label).</summary>
     public IReadOnlyList<Slider> Sliders => sliders;
     /// <summary>The checkboxes (saved like the sliders, by label).</summary>
@@ -68,6 +85,16 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     float ToggleX(int i) => panelX0 + Pad + i / ToggleRows * (columnWidth + ColumnGap);
     float ButtonTop => TogglesTop + TogglesHeight;
     float ButtonBottom => ButtonTop + overlay.LineHeight + 8;
+    /// <summary>The question with Yes / No, or the last result: a row under the buttons while there is one.</summary>
+    string? Notice => confirming >= 0 ? question : message;
+    float NoticeTop => ButtonBottom + RowGap;
+    float NoticeBottom => Notice is null ? ButtonBottom : NoticeTop + overlay.LineHeight + 8;
+    const string Yes = "Yes", No = "No";
+    float BoxWidth(string label) => label.Length * overlay.CharWidth + 16;
+    float ActionX(int i) => panelX0 + Pad + ButtonWidth + 8 + actions.Take(i).Sum(a => BoxWidth(a.Label) + 8);
+    float YesX => panelX0 + Pad + (question?.Length ?? 0) * overlay.CharWidth + 16;
+    float NoX => YesX + BoxWidth(Yes) + 8;
+    static bool In(Vector2 p, float x0, float y0, float x1, float y1) => p.X >= x0 && p.X <= x1 && p.Y >= y0 && p.Y <= y1;
 
     int dragging = -1;
     float panelX0, panelY0, panelX1, panelY1, columnWidth;
@@ -86,7 +113,9 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
         panelX0 = Margin;
         panelX1 = panelX0 + 2 * Pad + Columns * columnWidth + (Columns - 1) * ColumnGap;
         panelY0 = Margin;
-        panelY1 = ButtonBottom + Pad;
+        panelY1 = NoticeBottom + Pad;
+        // A long question or result widens the panel.
+        if (Notice is { } notice) panelX1 = Math.Max(panelX1, (confirming >= 0 ? NoX + BoxWidth(No) : panelX0 + Pad + notice.Length * overlay.CharWidth) + Pad);
     }
 
     float TrackX(int i) => panelX0 + Pad + i / Rows * (columnWidth + ColumnGap);
@@ -99,11 +128,26 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     public bool MouseDown(Vector2 p)
     {
         if (!Contains(p)) return false;
+        if (confirming >= 0)
+        {
+            // Only Yes runs the action; any other click on the panel answers No.
+            if (In(p, YesX, NoticeTop, YesX + BoxWidth(Yes), NoticeBottom)) message = actions[confirming].Run();
+            confirming = -1;
+            question = null;
+            return true;
+        }
+        message = null;
         if (p.Y >= ButtonTop && p.Y <= ButtonBottom && p.X >= panelX0 + Pad && p.X <= panelX0 + Pad + ButtonWidth)
         {
             Reset();
             return true;
         }
+        for (int i = 0; i < actions.Count; i++)
+            if (In(p, ActionX(i), ButtonTop, ActionX(i) + BoxWidth(actions[i].Label), ButtonBottom))
+            {
+                (confirming, question) = (i, actions[i].Question());
+                return true;
+            }
         for (int i = 0; i < toggles.Count; i++)
         {
             float top = ToggleTop(i), x = ToggleX(i);
@@ -174,6 +218,23 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
         }
         overlay.Rect(panelX0 + Pad, ButtonTop, panelX0 + Pad + ButtonWidth, ButtonBottom, track);
         overlay.Text(ResetLabel, panelX0 + Pad + 8, ButtonTop + 4, DebugOverlay.TextColour);
+        for (int i = 0; i < actions.Count; i++)
+        {
+            float x = ActionX(i);
+            overlay.Rect(x, ButtonTop, x + BoxWidth(actions[i].Label), ButtonBottom, i == confirming ? fill * new Vector4(0.6f, 0.6f, 0.6f, 1) : track);
+            overlay.Text(actions[i].Label, x + 8, ButtonTop + 4, DebugOverlay.TextColour);
+        }
+        if (Notice is { } notice)
+        {
+            overlay.Text(notice, panelX0 + Pad, NoticeTop + 4, confirming >= 0 ? fill : dim);
+            if (confirming >= 0)
+            {
+                overlay.Rect(YesX, NoticeTop, YesX + BoxWidth(Yes), NoticeBottom, track);
+                overlay.Text(Yes, YesX + 8, NoticeTop + 4, DebugOverlay.TextColour);
+                overlay.Rect(NoX, NoticeTop, NoX + BoxWidth(No), NoticeBottom, track);
+                overlay.Text(No, NoX + 8, NoticeTop + 4, DebugOverlay.TextColour);
+            }
+        }
         overlay.Flush(width, height);
     }
 }

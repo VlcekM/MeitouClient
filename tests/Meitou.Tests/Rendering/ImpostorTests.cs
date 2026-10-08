@@ -422,6 +422,28 @@ public class ImpostorTests
     }
 
     [Fact]
+    public void Cache_clear_deletes_the_atlases_only()
+    {
+        var folder = Path.Combine(Directory.CreateTempSubdirectory("meitou-impostor-test").FullName, "cache");
+        try
+        {
+            var cache = new ImpostorCache(folder);
+            Assert.Equal(default, cache.Clear());   // no folder yet
+            for (int i = 0; i < 3; i++) FakeAtlas(folder, $"tree{i}_0000.mimp", ImpostorAtlas.FormatVersion, ImpostorAtlas.BakerVersion, 100_000, DateTime.UtcNow);
+            var temporary = Path.Combine(folder, "tree0_0000.mimp.1.tmp");
+            var other = Path.Combine(folder, "notes.txt");
+            File.WriteAllText(temporary, "saving");
+            File.WriteAllText(other, "mine");
+            Assert.Equal((3, 300_000L), cache.Measure());
+            Assert.Equal((3, 300_000L), cache.Clear());
+            Assert.Equal((0, 0L), cache.Measure());
+            Assert.True(File.Exists(temporary), "a save in progress keeps its temporary file");
+            Assert.True(File.Exists(other));
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+    }
+
+    [Fact]
     public void Cache_removes_files_of_older_formats_and_abandoned_temporaries_only()
     {
         var folder = Path.Combine(Directory.CreateTempSubdirectory("meitou-impostor-test").FullName, "cache");
