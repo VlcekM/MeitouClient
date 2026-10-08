@@ -697,3 +697,22 @@ billboards and their crossfade dither), `MEITOU_IMPOSTOR_ROCKS=0` 0 px in all; `
 **Limits** (**Observed** / **Unknown**): rock impostors exist only with the GPU cull (not verify mode, not the CPU path), with textures on and the impostors switch on; when a biome's textures are not resident the mesh keeps drawing.
 A rock is baked in its biome of record, so a rock whose drawn pixels come from a different biome than its record (**Unknown** how often) matches less. Mirrored placements are checked by eye only. Thin sticks stay meshes.
 `MEITOU_IMPOSTOR_ROCKS=0` switches the whole thing off.
+
+## 14. Shadow receiver without the blocker search (2026-10-08)
+
+Impostors use the Meitou shadow receiver ([formats/shadows.md](formats/shadows.md), "Meitou shadows") **without its blocker search**: the
+16-tap filter at the cascade's minimum radius, no contact-hardening penumbra (`#define MS_NO_BLOCKER_SEARCH` in
+`ImpostorShaders.Fragment`, which the TERRAIN-mode rock impostors share). They stand 4000 units or more from the eye, a crown is a few
+pixels to a few dozen across, and the penumbra's width there is below a pixel.
+
+**Why** (**Observed**, RTX 4070, 1920 x 1080, `--fly-pipelined`, Blister Hill overview `--town "Blister Hill" --fly-speed 0`, Meitou
+defaults, about 55 500 impostor quads a frame): the foliage meshes row (meshes and impostors) is 1.16 ms, of which the impostors' lighting
+call is 0.45 ms, and that is almost all the receiver's: without the blocker search 0.80 ms, with also only 8 or 4 filter taps 0.77-0.79
+(the taps cost little). Removing the blocker search from the terrain's receiver changes nothing measurable (1.12-1.14 ms either way), so it
+is specific to the impostors (**Unknown** why; likely the per-pixel world positions on the frames' planes scattering the search over the
+map). Other parts of the impostor pixel shader, for reference (same view): the three-frame sampling and vote 0.43 ms (a constant surface
+in its place), blending the frames instead of the per-pixel vote −0.28 ms (not taken: leaves thin out, section 5), the haze 0.
+
+**Result** (three interleaved runs each, with the terrain's patch order of [formats/terrain.md](formats/terrain.md)): foliage meshes row
+1.25-1.26 to 0.77 ms at the overview, 1.44-1.54 to 1.04-1.06 at ground level (`--distance 1500 --pitch 12`). Faithful draws no impostors
+(0 px). Meitou pictures: see [render-distance-benchmark.md](render-distance-benchmark.md) section 10.

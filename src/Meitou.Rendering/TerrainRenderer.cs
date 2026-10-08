@@ -267,6 +267,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         if (LodLog && !secondary && (frameNumber < 4 || frameNumber % 60 == 1))
             Console.WriteLine($"terrain   frame {frameNumber} nodes per level (whole + quarters): {string.Join(" ", Enumerable.Range(0, current.LevelCount).Select(l => $"{nodes.Count(n => n.Level == l && n.Quadrant < 0)}+{nodes.Count(n => n.Level == l && n.Quadrant >= 0)}"))}");
 
+        SortNearestFirst(eye);
         PreparePatches(current);
         if (nodes.Count > 0)
         {
@@ -286,6 +287,30 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             }
         }
         StepTiming.Add(StepTiming.PatchColour, timing, nodes.Count);
+    }
+
+    double[] nodeKeys = [];
+
+    /// <summary>
+    /// Orders <see cref="nodes"/> nearest first (by the horizontal distance from the eye to the patch's square), so nearer hills fill the depth
+    /// buffer before the land behind them is shaded: the material's pixels behind a hill fail the early depth test. Patches do not overlap, so
+    /// the picture does not depend on the order (docs/formats/terrain.md, "In the viewer").
+    /// </summary>
+    void SortNearestFirst(Vector3 eye)
+    {
+        int n = nodes.Count;
+        if (nodeKeys.Length < n) nodeKeys = new double[Math.Max(n, nodeKeys.Length * 2)];
+        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(nodes);
+        for (int i = 0; i < n; i++)
+        {
+            var node = span[i];
+            // A quadrant node draws one quarter of its square (TerrainQuadtree.Select).
+            double s = node.Quadrant < 0 ? node.Size : node.Size / 2;
+            double x0 = node.X0 + (node.Quadrant < 0 ? 0 : (node.Quadrant & 1) * s), z0 = node.Z0 + (node.Quadrant < 0 ? 0 : (node.Quadrant >> 1) * s);
+            double dx = Math.Max(Math.Max(x0 - eye.X, eye.X - (x0 + s)), 0), dz = Math.Max(Math.Max(z0 - eye.Z, eye.Z - (z0 + s)), 0);
+            nodeKeys[i] = dx * dx + dz * dz;
+        }
+        nodeKeys.AsSpan(0, n).Sort(span);
     }
 
     /// <summary>How <see cref="RecordPatches"/> draws: filled (colour or depth), or the debug outline.</summary>
