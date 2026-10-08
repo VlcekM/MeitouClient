@@ -152,8 +152,12 @@ exporter-to-Ogre map), `CollisionPaths` (record path to file). Tests: `tests/Mei
   (a mesh, an `xml collision`, no offset): mean IoU 0.60, median 0.67, 343 above 0.5; the identity map scores 0.12 and the
   (x, −z, y) map 0.08, so the pose order and axis map are the right ones (the test fails if they stop being).
 - **Observed** (PhysX convention, not in the files): a capsule runs along its local Y axis, `height` between the sphere centres.
-- Triangle mesh winding is used as stored; whether it is outward for the walkable building meshes is checked by the navmesh
-  builder ([../game/pathfinding.md](../game/pathfinding.md)).
+- Triangle mesh winding is used as stored by the reader. Our navmesh builder (`CollisionCache`) then applies one rule of its own: a mesh that is
+  closed (every edge also occurs reversed) and has a negative signed volume is inside out, so its triangles are flipped; an open mesh stays as
+  stored. **Verified** (test `Closed_triangle_meshes_are_counted_by_winding`, all 376 triangle-mesh shapes of the 1,136 files, the shape's pose and
+  axis map applied): 146 are open, 229 closed with outward faces already, and 1 closed and flipped. Which file the one flip is, is not recorded.
+  The rule is our choice, not the game's (**Unknown** whether the game or Havok corrects winding); see
+  [../game/pathfinding.md](../game/pathfinding.md) for the builder.
 
 ## Unknown
 

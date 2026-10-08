@@ -6,12 +6,12 @@ using Meitou.Data.World;
 namespace Meitou.Navigation;
 
 /// <summary>A building of a zone with an interior to build: its placement and record.</summary>
-public sealed record InteriorSite(BuildingPlacement Placement, GameRecord Record, Vector3 Position, bool Destroyed);
+internal sealed record InteriorSite(BuildingPlacement Placement, GameRecord Record, Vector3 Position, bool Destroyed);
 
 /// <summary>How a building's shapes are taken for its interior mesh (docs/game/pathfinding.md, "Interiors").</summary>
 sealed record InteriorContext(string InstanceId, bool Destroyed, uint Mask, bool Own);
 
-public sealed partial class ZoneGeometryGatherer
+internal sealed partial class ZoneGeometryGatherer
 {
     /// <summary>Shape groups of an interior job: 9..13, 15..22 and 27; for a destroyed building only 9, 10, 13 and 19 (FUN_1403c79b0).</summary>
     public const uint InteriorGroupMask = 0x87fbe00, DestroyedInteriorGroupMask = 0x82600;
@@ -19,13 +19,20 @@ public sealed partial class ZoneGeometryGatherer
     /// <summary>How far outside the hull the clipping slabs reach (units); anything of the building beyond is cut away.</summary>
     const float SlabReach = 400;
 
-    static Matrix4x4 NodeMatrix(GameRecord building, Vector3 position, Quaternion rotation)
+    /// <summary>A building's <c>scale</c> (a missing or non-positive one is 1).</summary>
+    static float BuildingScale(GameRecord building)
     {
         float scale = building.GetFloat("scale", 1);
-        if (scale <= 0) scale = 1;
-        var q = rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(rotation);
-        return Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(q) * Matrix4x4.CreateTranslation(position);
+        return scale <= 0 ? 1 : scale;
     }
+
+    /// <summary>The building node's transform: its scale, then its (normalised) rotation, then its position.</summary>
+    static Matrix4x4 NodeMatrix(GameRecord building, Vector3 position, Quaternion rotation) =>
+        WorldObjectLayout.InstanceTransform(position, rotation, new Vector3(BuildingScale(building)));
+
+    /// <summary>A part's collision file: the destroyed one for a destroyed building when it has one, else the intact one (empty when none).</summary>
+    static string CollisionPathOf(GameRecord part, bool destroyed) =>
+        destroyed && part.GetPath("destroyed collision") is { Length: > 0 } dc ? dc : part.GetPath("xml collision");
 
     /// <summary>
     /// The buildings placed in a zone that have an interior to build: an <c>interior mask</c> part with collision, and not a gateway
@@ -71,7 +78,7 @@ public sealed partial class ZoneGeometryGatherer
         }
         if (points.Count < 4) return null;
         float yMin = points.Min(p => p.Y), yMax = points.Max(p => p.Y);
-        var hull = Footprint(points, yMin, yMax, 0);
+        var hull = NavGeometry.Footprint(points, yMin, yMax, 0);
         if (hull.Polygon.Length < 3) return null;
 
         var lo = new Vector2(hull.Polygon.Min(p => p.X), hull.Polygon.Min(p => p.Y)) - new Vector2(pad);
@@ -88,7 +95,7 @@ public sealed partial class ZoneGeometryGatherer
         foreach (var (b, record, position, destroyed) in NearBuildings(site.Placement.Zone, zmin, zmin + new Vector2(WorldLayout.ZoneSize), 0))
         {
             if (b.InstanceId == site.Placement.InstanceId || position.Y < yMin - 30 || position.Y > yMax + 30) continue;
-            if (!InsideConvex(hull.Polygon, new Vector2(position.X, position.Z), 5)) continue;
+            if (!NavGeometry.InsideConvex(hull.Polygon, new Vector2(position.X, position.Z), 5)) continue;
             AddBuilding(g, record, b.InstanceId, position, b.Rotation, destroyed, new InteriorContext(site.Placement.InstanceId, destroyed, mask, Own: false));
         }
 
@@ -105,14 +112,13 @@ public sealed partial class ZoneGeometryGatherer
             if (!float.IsNaN(s.Y)) continue;
             g.Seeds[i] = RayDown(g, s.X, s.Z, highest: false, yMin - 10, 0, g.TriangleCount, out float y) ? new Vector3(s.X, y, s.Z) : new Vector3(s.X, yMin, s.Z);
         }
-        g.BuildingHash = BuildingHash(site.Placement.Zone);
         return g;
     }
 
     /// <summary>The inverted hull of an interior: one slab beyond every edge of the convex polygon, together removing everything outside it.</summary>
     public static void AddOutsideCarvers(ZoneGeometry g, Vector2[] poly)
     {
-        float orientation = HullArea(poly) >= 0 ? 1 : -1;
+        float orientation = NavGeometry.SignedArea(poly) >= 0 ? 1 : -1;
         for (int i = 0; i < poly.Length; i++)
         {
             var a = poly[i];
@@ -148,48 +154,17 @@ public sealed partial class ZoneGeometryGatherer
     /// <summary>The door's inner marker: the one of the two points either side of the door that lies inside the interior hull (height resolved later).</summary>
     void AddInnerDoorSeed(ZoneGeometry g, GameRecord door, PreparedShape shape, Matrix4x4 node)
     {
-        if (shape.Kind != Meitou.Data.Physics.CollisionShapeKind.Box || shape.Vertices.Length != 8 || g.InteriorHull is null) return;
-        var v = shape.Vertices.Select(p => Vector3.Transform(p, node)).ToArray();
-        int axis = Math.Clamp(door.GetInt("door navmesh axis"), 0, 2);
-        var along = axis switch { 0 => v[1] - v[0], 1 => v[2] - v[0], _ => v[4] - v[0] };
-        float half = along.Length() / 2;
-        if (half < 1e-3f) return;
-        var dir = along / (2 * half);
-        var centre = Vector3.Zero;
-        foreach (var p in v) centre += p / 8;
+        if (g.InteriorHull is null || !DoorMarkers(door, shape, node, out var behind, out var ahead)) return;
         var hullCentre = g.InteriorHull.Polygon.Aggregate(Vector2.Zero, (a, p) => a + p) / g.InteriorHull.Polygon.Length;
         Vector3? best = null;
         float bestScore = float.MaxValue;
-        foreach (float side in new[] { -1f, 1f })
+        foreach (var at in new[] { behind, ahead })
         {
-            var at = centre + dir * side * (half + DoorSeedOffset);
             var xz = new Vector2(at.X, at.Z);
-            float score = (InsideConvex(g.InteriorHull.Polygon, xz, 0) ? 0 : 1000) + Vector2.Distance(xz, hullCentre);
+            float score = (NavGeometry.InsideConvex(g.InteriorHull.Polygon, xz, 0) ? 0 : 1000) + Vector2.Distance(xz, hullCentre);
             if (score < bestScore) { bestScore = score; best = at; }
         }
         if (best is { } p2) { g.Seeds.Add(new Vector3(p2.X, float.NaN, p2.Z)); g.Stats.DoorSeeds++; }
-    }
-
-    static float HullArea(Vector2[] p)
-    {
-        float area = 0;
-        for (int i = 0; i < p.Length; i++) area += p[i].X * p[(i + 1) % p.Length].Y - p[(i + 1) % p.Length].X * p[i].Y;
-        return area;
-    }
-
-    /// <summary>Whether a point lies inside a convex polygon (either winding), allowing <paramref name="tolerance"/> outside it.</summary>
-    public static bool InsideConvex(Vector2[] polygon, Vector2 point, float tolerance)
-    {
-        float sign = HullArea(polygon) >= 0 ? 1 : -1;
-        for (int i = 0; i < polygon.Length; i++)
-        {
-            var a = polygon[i];
-            var e = polygon[(i + 1) % polygon.Length] - a;
-            float len = e.Length();
-            if (len < 1e-6f) continue;
-            if (-sign * (e.X * (point.Y - a.Y) - e.Y * (point.X - a.X)) / len > tolerance) return false;
-        }
-        return true;
     }
 
     /// <summary>
@@ -204,12 +179,7 @@ public sealed partial class ZoneGeometryGatherer
         {
             if (!anyArea && g.Areas[t] != NavArea.Ground) continue;
             int ia = g.Indices[t * 3] * 3, ib = g.Indices[t * 3 + 1] * 3, ic = g.Indices[t * 3 + 2] * 3;
-            float ax = v[ia], az = v[ia + 2], bx = v[ib], bz = v[ib + 2], cx = v[ic], cz = v[ic + 2];
-            float d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
-            if (MathF.Abs(d) < 1e-9f) continue;
-            float l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d;
-            float l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
-            float l3 = 1 - l1 - l2;
+            if (!NavGeometry.Barycentric(x, z, new Vector3(v[ia], v[ia + 1], v[ia + 2]), new Vector3(v[ib], v[ib + 1], v[ib + 2]), new Vector3(v[ic], v[ic + 1], v[ic + 2]), out float l1, out float l2, out float l3)) continue;
             if (l1 < -1e-4f || l2 < -1e-4f || l3 < -1e-4f) continue;
             float h = l1 * v[ia + 1] + l2 * v[ib + 1] + l3 * v[ic + 1];
             if (h < minY) continue;

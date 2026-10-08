@@ -26,11 +26,11 @@ public sealed class NavmeshWalkability : IWalkability
 
     public NavWorld World => world;
 
-    /// <summary>Replaces the loaded meshes.</summary>
-    public void SetWorld(NavWorld value) => world = value;
+    /// <summary>Replaces the loaded meshes; only <see cref="NavMeshService"/> calls it, under its publish lock.</summary>
+    internal void SetWorld(NavWorld value) => world = value;
 
     /// <summary>
-    /// How close (in height) the mesh has to be to the terrain for the terrain's own height to be used there. The mesh is a simplified surface (cell
+    /// How close (in height) the mesh has to be to the terrain (engine choice) for the terrain's own height to be used there. The mesh is a simplified surface (cell
     /// 2, heights about 0.5 off, more on steep slopes); where it lies on the ground the heightmap is exact, and where it is above it (a floor, a wall top,
     /// a ramp) the mesh height stands.
     /// </summary>

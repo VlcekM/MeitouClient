@@ -42,7 +42,10 @@ public sealed class NavWorld
     /// <summary>The links of a polygon across zone borders (empty for nearly all).</summary>
     public ReadOnlySpan<NavLink> LinksOf(NavRef p) => links.TryGetValue(p.Key, out var l) ? l : [];
 
-    /// <summary>A new world with <paramref name="mesh"/> added (or replacing the zone's), linked to its loaded neighbours.</summary>
+    /// <summary>
+    /// A new world with <paramref name="mesh"/> added (or replacing the zone's), linked to its loaded neighbours where the borders' heights differ by at most
+    /// <paramref name="maxStep"/> (engine choice: the builder's <c>MaxClimb</c> 5 plus half a unit, as between tiles).
+    /// </summary>
     public NavWorld With(ZoneNavMesh mesh, float maxStep = 5.5f)
     {
         var zone = new ZoneCoordinate(mesh.ZoneX, mesh.ZoneZ);
@@ -93,55 +96,23 @@ public sealed class NavWorld
     {
         var ma = meshes[a];
         var mb = meshes[b];
-        var edgesA = BorderEdges(ma, dx, dz);
-        var edgesB = BorderEdges(mb, -dx, -dz);
+        var edgesA = ma.BorderEdges(dx, dz, skipLinked: false);
+        var edgesB = mb.BorderEdges(-dx, -dz, skipLinked: false);
         bool alongX = dz != 0; // the shared border line runs along X when the zones are stacked in Z
         foreach (var ea in edgesA)
             foreach (var eb in edgesB)
             {
-                var (a0, a1, ay0, ay1) = Span(ma, ea, alongX);
-                var (b0, b1, by0, by1) = Span(mb, eb, alongX);
-                float lo = Math.Max(a0, b0), hi = Math.Min(a1, b1);
-                if (hi - lo < 0.01f) continue;
-                float mid = (lo + hi) / 2;
-                if (Math.Abs(Lerp(a0, a1, ay0, ay1, mid) - Lerp(b0, b1, by0, by1, mid)) > maxStep) continue;
+                if (!NavGeometry.SpansMeet(Span(ma, ea, alongX), Span(mb, eb, alongX), maxStep)) continue;
                 Add(new NavRef(a, ea.Polygon), new NavLink(ea.Edge, new NavRef(b, eb.Polygon)));
                 Add(new NavRef(b, eb.Polygon), new NavLink(eb.Edge, new NavRef(a, ea.Polygon)));
             }
     }
 
-    readonly record struct BorderEdge(int Polygon, int Edge);
-
-    static List<BorderEdge> BorderEdges(ZoneNavMesh m, int dx, int dz)
-    {
-        var result = new List<BorderEdge>();
-        float line = dx > 0 ? m.BoundsMax.X : dx < 0 ? m.BoundsMin.X : dz > 0 ? m.BoundsMax.Y : m.BoundsMin.Y;
-        for (int p = 0; p < m.PolygonCount; p++)
-        {
-            if (!m.Kept[p]) continue;
-            var poly = m.Polygons[p];
-            for (int k = 0; k < poly.Length; k++)
-            {
-                if (m.Neighbours[p][k] >= 0) continue;
-                var va = m.Vertices[poly[k]];
-                var vb = m.Vertices[poly[(k + 1) % poly.Length]];
-                float ca = dx != 0 ? va.X : va.Z, cb = dx != 0 ? vb.X : vb.Z;
-                if (Math.Abs(ca - line) < 0.05f && Math.Abs(cb - line) < 0.05f) result.Add(new BorderEdge(p, k));
-            }
-        }
-        return result;
-    }
-
-    static (float, float, float, float) Span(ZoneNavMesh m, BorderEdge e, bool alongX)
+    static (float From, float To, float YFrom, float YTo) Span(ZoneNavMesh m, (int Polygon, int Edge) e, bool alongX)
     {
         var poly = m.Polygons[e.Polygon];
-        var a = m.Vertices[poly[e.Edge]];
-        var b = m.Vertices[poly[(e.Edge + 1) % poly.Length]];
-        float ta = alongX ? a.X : a.Z, tb = alongX ? b.X : b.Z;
-        return ta <= tb ? (ta, tb, a.Y, b.Y) : (tb, ta, b.Y, a.Y);
+        return NavGeometry.Span(m.Vertices[poly[e.Edge]], m.Vertices[poly[(e.Edge + 1) % poly.Length]], alongX);
     }
-
-    static float Lerp(float a0, float a1, float y0, float y1, float at) => a1 - a0 < 1e-5f ? y0 : y0 + (y1 - y0) * (at - a0) / (a1 - a0);
 
     void Add(NavRef from, NavLink link)
     {
@@ -157,11 +128,7 @@ public sealed class NavWorld
         height = float.MinValue;
         var zone = WorldLayout.ZoneOf(x, z);
         if (!slots.TryGetValue(zone, out int slot)) return false;
-        var polys = new List<int>(4);
-        meshes[slot].PolygonsAt(x, z, polys);
-        if (polys.Count == 0) return false;
-        foreach (int p in polys) height = Math.Max(height, meshes[slot].HeightAt(p, x, z));
-        return true;
+        return meshes[slot].TryHighestAt(x, z, out height);
     }
 
     /// <summary>The polygon under or nearest to the point (nearest within <paramref name="maxDistance"/> on the XZ plane, height as the tie-break).</summary>
