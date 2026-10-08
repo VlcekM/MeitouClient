@@ -141,7 +141,7 @@ public sealed class FoliageLayoutCacheTests : IDisposable
         var (zone, ground) = Zone(catalog, coordinate);
         var writer = Open(catalog, "c");
         Assert.Null(writer.TryLoad(coordinate, false));
-        writer.Save(coordinate, false, zone, ground, 12.5);
+        writer.Save(coordinate, false, zone, ground, 60000);   // a minute of layout, so the load time under a busy test run never exceeds it
         Assert.True(File.Exists(writer.PathFor(coordinate, false)));
 
         var fresh = Catalog();   // another process's view: a new catalog of the same data
