@@ -37,6 +37,28 @@ public sealed class CharacterAnimation
     public bool WasDown;
     /// <summary>The body's playback factor F = 2 - H (H the skeleton's movement scale; docs/animation.md "Movement"); 0 until the first tick sets it.</summary>
     public float Rate;
+    /// <summary>The last <see cref="SpeedWindow"/> speeds, oldest overwritten first (<see cref="SmoothSpeed"/>).</summary>
+    public readonly float[] Speeds = new float[SpeedWindow];
+    public int SpeedCount;
+    public const int SpeedWindow = 8, SpeedTrim = 3;
+
+    /// <summary>
+    /// The speed the animations see (docs/animation.md "Movement", <b>Verified</b>): of the last 8 samples, sorted, the 3 lowest and 3 highest dropped and the
+    /// middle two averaged (fewer samples at the start: the trimmed middle of those there are). Kenshi samples every frame; here every tick (engine).
+    /// </summary>
+    public float SmoothSpeed(float raw)
+    {
+        Speeds[SpeedCount++ % SpeedWindow] = raw;
+        int n = Math.Min(SpeedCount, SpeedWindow);
+        Span<float> sorted = stackalloc float[SpeedWindow];
+        Speeds.AsSpan(0, n).CopyTo(sorted);
+        sorted = sorted[..n];
+        sorted.Sort();
+        int trim = Math.Min(SpeedTrim, (n - 1) / 2);
+        float sum = 0;
+        for (int i = trim; i < n - trim; i++) sum += sorted[i];
+        return sum / (n - 2 * trim);
+    }
 
     internal void Hash(ref StateHasher h)
     {
@@ -57,6 +79,8 @@ public sealed class CharacterAnimation
         h.Add(SeenHit);
         h.Add(WasDown);
         h.Add(Rate);
+        h.Add(SpeedCount);
+        foreach (float s in Speeds) h.Add(s);
     }
 }
 
@@ -109,9 +133,10 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             var cold = table.Cold(i)!;
             var a = cold.Animation ??= new CharacterAnimation();
             var v = next[i].Velocity;
-            float speed = MathF.Sqrt(v.X * v.X + v.Z * v.Z);
+            float speed = v.Length();
             // In combat the speed is signed along the facing: backing off is negative and picks the clips with a negative move speed.
             if (cold.InCombat) speed = v.X * MathF.Sin(next[i].Yaw) + v.Z * MathF.Cos(next[i].Yaw);
+            speed = a.SmoothSpeed(speed);
             var id = table.IdOf(i);
             var root = Update(a, cold, speed, dt, world.Seed, Rng.Key(id), world.Tick, wantedLower, wantedUpper, ViewOf(id, world.Tick, cold));
             if (root != Vector2.Zero) Relocate(world, ref next[i], root);

@@ -18,11 +18,32 @@ public sealed partial class CombatSystem
         return Math.Max(1, (int)MathF.Ceiling((CombatTuning.PauseMin + u * (CombatTuning.PauseMax - CombatTuning.PauseMin)) / world.TickSeconds));
     }
 
-    int Ticks(CombatTechnique t, float combatSpeed, float dt)
+    /// <summary>The ticks a technique's clip takes at <c>anim speed mult</c> x <paramref name="rate"/> clip seconds per second.</summary>
+    int Ticks(CombatTechnique t, float rate, float dt)
     {
         float clip = lengths.Of(t.AnimName);
         if (clip <= 0) clip = CombatTuning.DefaultClipSeconds;
-        return Math.Max(2, (int)MathF.Ceiling(clip / (MathF.Max(t.AnimSpeedMult, 0.1f) * MathF.Max(combatSpeed, 0.1f)) / dt));
+        return Math.Max(2, (int)MathF.Ceiling(clip / (MathF.Max(t.AnimSpeedMult, 0.1f) * MathF.Max(rate, 0.05f)) / dt));
+    }
+
+    /// <summary>
+    /// The playback rate of a technique (docs/game/combat.md "Animation speed", <b>Verified</b>): attacks lerp(t, 0.8, 1.2) x G capped at 1.2, blocks lerp(t, 0.6, 4) x G
+    /// capped at 4, with t = 0.01 (0.6 dexterity + 0.4 skill) (attack, or defence with the bonuses); dodges 1. G = (0.5 + 0.5 min(1, e + 0.5) (1 - f)) x the gear's
+    /// <c>combat speed mult</c>, e the encumbrance factor and f the weapon-weight-over-strength factor of the strength XP.
+    /// </summary>
+    float PlayRate(CharacterCold cold, CombatTechnique tech, bool attack)
+    {
+        var fighter = cold.Fighter!;
+        if (!attack && (tech.IsDodge || !tech.IsBlock)) return 1;
+        float weight = fighter.Unarmed ? 0 : fighter.Weapon!.Stats.Weight;
+        float f = Math.Clamp(xp.WeaponWeightStrengthFactor(weight, cold.Stats![StatsEnumerated.Strength], cold.Medical!.StatMultiplier(StatsEnumerated.Strength)), 0, 1);
+        float g = (0.5f + 0.5f * MathF.Min(1, fighter.EncumbranceFactor + 0.5f) * (1 - f)) * fighter.CombatSpeed;
+        float dex = Eff(cold, StatsEnumerated.Dexterity) * fighter.DexterityMult;
+        float skill = attack
+            ? fighter.Unarmed ? Eff(cold, StatsEnumerated.MartialArts) : Eff(cold, StatsEnumerated.MeleeAttack) + fighter.Weapon!.Stats.AttackMod
+            : Eff(cold, StatsEnumerated.MeleeDefence) + fighter.DefenceBonus + (fighter.Weapon?.Stats.DefenceMod ?? 0) + (fighter.Guarding ? 20 : 0);
+        float t = 0.01f * (0.6f * dex + 0.4f * skill);
+        return attack ? MathF.Min(1.2f, WeaponStats.Lerp(t, 0.8f, 1.2f) * g) : MathF.Min(4f, WeaponStats.Lerp(t, 0.6f, 4f) * g);
     }
 
     public void Act(World world, Partition part, EffectBuffer effects)
@@ -124,7 +145,7 @@ public sealed partial class CombatSystem
         s.AttackSeq++;
         s.AttackTech = pick;
         s.AttackStart = now;
-        s.AttackTicks = Ticks(tech, fighter.CombatSpeed, dt);
+        s.AttackTicks = Ticks(tech, PlayRate(cold, tech, attack: true), dt);
         s.AttackEnd = now + Math.Max(1, (int)MathF.Ceiling(tech.EndProgress * s.AttackTicks));
         s.NextBlow = 1;
         s.AttackReach = TechniqueChooser.ReachOf(tech, moving, weaponReach);
@@ -185,7 +206,7 @@ public sealed partial class CombatSystem
         int pick = TechniqueChooser.ChooseReaction(techniques, fighter.Kind, 0, false, fighter.CanBlock, direction, block, dodge, chanceRoll, pickRoll);
         if (pick < 0) return;
         var reaction = techniques[pick];
-        int ticks = Ticks(reaction, fighter.CombatSpeed, dt);
+        int ticks = Ticks(reaction, PlayRate(cold, reaction, attack: false), dt);
         // The reaction is timed so that it is at its "blocked frame" when the blow arrives; with less lead time it starts at once and is less far along.
         int strike = scan.Strike;
         int start = Math.Max(now, strike - (int)MathF.Round(reaction.StrikeProgress(1) * ticks));

@@ -314,7 +314,7 @@ types in `Movement.cs`: `CharacterTask`, `MoveFlags` with `AnyPath`, `SpeedMode`
 
 - **Speed.** Top speed S in units (dm) per second is `MaxSpeed` (set by the body system from `Speed.Run`), capped by the speed mode: 0 the
   race walk speed, 1 at 55, 2 none. Wanderers walk, followers copy their leader's mode and run to catch up beyond 60 units, orders run.
-  Acceleration 15 per second; arrival within 10 units.
+  A path is followed at that speed at once (the nav agent; docs/game/pathfinding.md); the 15 per second ramp only in combat; arrival within 10 units.
 - **Separation.** Repulsion proportional to 100 x (1 - d/R), R = 8 (twice the footprint radius 4), at most 26 neighbours, over the last tick's
   positions; the scale to a speed (0.15) is an engine choice.
 - **Ground.** Every tick a character samples `IWalkability.GroundHeight` (on the navmesh that is the mesh where it is off the terrain, so it
@@ -414,7 +414,7 @@ The original's rules (decompilation) are in [animation.md](animation.md#run-time
   (`AnimationDefinition.SpeedWeight`, `LegWeight`, `AnimationLibrary.Movement`). Synched clips share one phase per character advancing
   F x v x the weighted `play speed` of the lower clips **cycles** per second; unsynched movement clips run F x `play speed` x v clip seconds
   per second; F = 2 - H, H the body's movement scale (`CharacterShape.MovementScaleOf`). In combat v is signed along the facing, so backing off
-  picks the `... combat shuffle long BK` clips. From 1 unit per second a character moves, else it stands (engine).
+  picks the `... combat shuffle long BK` clips. From 1 unit per second a character moves, else it stands (engine). The speed the animations see is the 3D velocity's length through Kenshi's 8-sample trimmed median (`CharacterAnimation.SmoothSpeed`; sampled per tick, not per frame: engine).
 - **Idles.** Out of combat one of the whole-body idles by `idle chance`, kept for `idle time min` .. `max` seconds. In combat (engine
   choice after the original's footwork): the lower movement blend at the current speed (`walk lower combat shuffle short` at rest) under an
   upper-body guard idle (`AnimationLibrary.CombatIdles`: the `guard` records by the weapon kind in hand, `MA idle1` for fists; the hands'
@@ -534,8 +534,8 @@ retaliation systems are in `Fighting.cs`.
   `CombatTuning.DefaultFootprint` 4) within the weapon's reach (`length` / 2; fists unlimited) and the technique's distance (`attack distance min
   vs static` against a target standing still, `attack distance` against a mover, a negative value meaning "not for that case"). Weighted pick on
   `chance`. `max encumbrance` and `anim hesitate point` are not used (**Unknown**).
-- **Timing.** An attack lasts the clip's length (`AnimationLengths`, from the skeletons; 1 s when unknown) / (`anim speed mult` x the gear's combat
-  speed), in ticks; blow k arrives at `anim blocked frame k`; a blocked blow cuts the swing at its `anim stop frame` and the rest of a combo is not
+- **Timing.** An attack lasts the clip's length (`AnimationLengths`, from the skeletons; 1 s when unknown) / (`anim speed mult` x the play rate,
+  docs/game/combat.md "Animation speed", `CombatSystem.PlayRate`), in ticks; a block's play rate is its own, a dodge's 1; blow k arrives at `anim blocked frame k`; a blocked blow cuts the swing at its `anim stop frame` and the rest of a combo is not
   thrown (a hit or a dodge lets it go on).
 - **Reaction** (`ChooseReaction`, the doc's `FUN_140887970`). Decided once per incoming blow from the attack's start (the defender perceives it at
   once), and **timed to be at its `anim blocked frame` when the blow arrives**, or started at once and less far along when there is less lead.

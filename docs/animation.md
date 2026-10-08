@@ -213,6 +213,18 @@ Verified (decompilation; `@ 14051d8e0`, `@ 14051d000`, `@ 14052bad0`, `@ 14052e6
 - v is in world units (decimetres) per second, as the controller measures it: the movement code divides the
   physics controller's displacement by the frame time (`CharMovement` vtable slot 11, `@ 14065ffa0`), and
   caps it at a medical limit (+0x19c, set by `@ 14051c960` from the medical system).
+- **Verified** (decompilation; re-traced): v has **no scale** (the nav agent works in metres internally, ×0.1, but hands
+  positions back ×10, `@ 14014b280`), no game-speed factor, and the definitions' speeds are only multiplied by the race
+  scale g (1 for humans). It is the **actual** velocity, the length of the whole 3D displacement over dt, not the target
+  speed. It is **smoothed**: `@ 14051f3b0` stores the raw value at +0x178 and filters +0x180 through `@ 14052a8c0`: of
+  the last 8 samples, sorted, the 3 lowest and 3 highest are dropped and the middle two averaged (window and trim set in
+  `@ 14051fa90`; one sample per frame). The strafe speed +0x184 has the same filter (`@ 14051f3f0`).
+- F = +0x188 / g, the shape code writing +0x188 = 3 − Height − Leg length = 2 − H: **F = 1** with default sliders.
+  Expected rates for a default human (unhurt, unencumbered): walking (speed mode 0, v 15) the walk alone, **0.90 cycles
+  per second** (15 × 0.06); speed mode 1 (v 55) jog 0.996 + run 0.004, 1.43 c/s; running (mode 2, athletics 0, v = S =
+  70) run 0.999, 1.40 c/s. With equal ramps the walk hands over to the jog at v ≈ 29.2 and the jog to the run at ≈ 62.6.
+- Characters reach their top speed at once on a path (see [pathfinding.md](game/pathfinding.md#movement)), so the run clip
+  takes over within the filter's 4 to 5 frames of starting, not after a ramp.
 
 ### Combat footwork and strafing (`AnimationClassHuman` slots 28 and 29, `@ 14051fc60`, `@ 14051de70`)
 

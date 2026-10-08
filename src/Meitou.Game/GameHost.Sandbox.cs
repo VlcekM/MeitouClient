@@ -183,7 +183,9 @@ sealed partial class GameHost
         if (cold.Animation is { } a) add($"synch phase {a.Phase:0.000}   rate F {a.Rate:0.000}   state {snapshot.Animations.Count} layer(s)", null);
         foreach (var layer in snapshot.Animations)
         {
-            float length = animationLengths?.Of(layer.Name) ?? 1;
+            // Published by record name; the length is the clip's (a technique's record name differs from its clip).
+            string clip = animationLibrary is { } lib && lib.IndexOfAny(layer.Name) is var at and >= 0 ? lib.Definitions[at].Clip : layer.Name;
+            float length = animationLengths?.Of(clip) ?? 1;
             add($"  {layer.Name,-28} t {layer.Time,5:0.00}/{length,5:0.00}  w {layer.Weight:0.00}", null);
         }
     }

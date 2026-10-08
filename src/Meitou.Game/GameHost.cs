@@ -43,6 +43,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     WorldSnapshot? indexedFor;
     readonly Dictionary<CharacterId, CharacterSnapshot> previousById = [];
     Meitou.Data.Gameplay.AnimationLengths? animationLengths;
+    Meitou.Data.Gameplay.AnimationLibrary? animationLibrary;
     Vector3 lastFocus;
     bool sentFocus;
     // Profile of the interactive run (printed by --quit-after).
@@ -85,7 +86,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 SynchronousPaths = !interactive,
                 BodyTimeScale = g.BodyTimeScale,
                 AnimationLengths = animationLengths = Meitou.Data.Gameplay.AnimationLengths.Load(install.Root),
-                AnimationLibrary = Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb),
+                AnimationLibrary = animationLibrary = Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb),
                 AnimationBlendRate = data.Bodies.Constants.AnimationBlendRate,
             });
             population = built.Population;
