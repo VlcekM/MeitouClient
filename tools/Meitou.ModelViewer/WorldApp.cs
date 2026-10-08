@@ -218,6 +218,15 @@ static partial class WorldApp
         return 0;
     }
 
+    /// <summary>The <c>\</c> key: the scheduler, then each WEATHER record forced in turn (back to the scheduler after the last).</summary>
+    static void CycleWeather(WeatherWorld world)
+    {
+        var all = world.Data.Weathers;
+        int next = world.ForcedWeather is { } current ? all.ToList().FindIndex(w => ReferenceEquals(w, current)) + 1 : 0;
+        if (next >= all.Count) { world.ForceWeather((WeatherDef?)null); Console.WriteLine("weather   auto (the scheduler)"); }
+        else world.ForceWeather(all[next]);
+    }
+
     static int Interactive(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
         using var display = new VulkanDisplay(WindowFor(o), vsync: true, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
@@ -229,6 +238,7 @@ static partial class WorldApp
         IKeyboard? keyboard = null;
         bool screenshotRequested = false;
         float hour = o.Hour;
+        int day = o.Day ?? 0;
         var clock = Stopwatch.StartNew();
         Vector2? lastMouse = null;
         MouseButton? dragging = null;
@@ -307,6 +317,8 @@ static partial class WorldApp
                 "R" => OnOff(render.Reflections),
                 "B" => gpu is null ? null : gpu.Sky.Physical ? "atmosphere" : "simple",
                 "," => TimeText(hour),
+                "[" => $"day {day}",
+                "\\" => gpu?.Weather is { } w ? (w.World.ForcedWeather is { } forced ? forced.Name : "auto") : null,
                 ['F', >= '1' and <= '9'] when key[1] - '1' < switches.Count => switches[key[1] - '1'].State,
                 "-" => $"{o.Post.Exposure:0.00}",
                 "F10" => "on",
@@ -346,8 +358,12 @@ static partial class WorldApp
                 case Key.G: render.Water = !render.Water; break;
                 case Key.R: render.Reflections = !render.Reflections; break;
                 case Key.B when gpu is not null: gpu.Sky.Physical = !gpu.Sky.Physical; Console.WriteLine(gpu.Sky.Physical ? "sky      atmosphere" : "sky      simple colour model"); break;
-                case Key.Comma: hour = (hour + 23) % 24; Console.WriteLine($"time {TimeText(hour)}"); break;
-                case Key.Period: hour = (hour + 1) % 24; Console.WriteLine($"time {TimeText(hour)}"); break;
+                case Key.Comma: if (hour < 1) day = Math.Max(day - 1, 0); hour = (hour + 23) % 24; Console.WriteLine($"time {TimeText(hour)}, day {day}"); break;
+                case Key.Period: if (hour + 1 >= 24) day++; hour = (hour + 1) % 24; Console.WriteLine($"time {TimeText(hour)}, day {day}"); break;
+                // The weather schedule only moves forward (it catches up through a jump hour by hour); going back changes the clock, not the weather already rolled.
+                case Key.LeftBracket: day = Math.Max(day - 1, 0); Console.WriteLine($"time {TimeText(hour)}, day {day}"); break;
+                case Key.RightBracket: day++; Console.WriteLine($"time {TimeText(hour)}, day {day}"); break;
+                case Key.BackSlash when gpu?.Weather is { } weather: CycleWeather(weather.World); break;
                 case Key.H:
                     Console.WriteLine($"camera target {camera.Target.X:0}, {camera.Target.Y:0}, {camera.Target.Z:0} (zone {WorldLayout.ZoneOf(camera.Target.X, camera.Target.Z)}), " +
                         $"yaw {camera.Yaw * 180 / MathF.PI:0}, pitch {camera.Pitch * 180 / MathF.PI:0}, distance {camera.Distance:0}; " +
@@ -406,7 +422,8 @@ static partial class WorldApp
                 stats.Add(gpu.Sky.Physical ? $"sky         cpu {gpu.Sky.PrepareMs:0.00} ms, gpu {gpu.Sky.GpuMs:0.00} ms" : "sky         simple");
                 if (gpu.Post is { } post) stats.Add($"post gpu    {post.DescribeCosts()}");
                 if (gpu.Post is { } hazy && (hazy.HeatHazeAmount > 0 || gpu.HeatHazeTarget > 0))
-                    stats.Add($"heat haze   {hazy.HeatHazeAmount:0.00} (target {gpu.HeatHazeTarget:0.00}, weather {gpu.Sky.Weather.Name})" + (hazy.HeatHazeRuns ? "" : hazy.HasHeatHaze ? ", off" : ", no textures"));
+                    stats.Add($"heat haze   {hazy.HeatHazeAmount:0.00} (target {gpu.HeatHazeTarget:0.00}, weather {WorldStats.WeatherName(gpu)})" + (hazy.HeatHazeRuns ? "" : hazy.HasHeatHaze ? ", off" : ", no textures"));
+                WorldStats.AddWeather(stats, gpu);
                 stats.Add($"camera      {t.X:0}, {t.Y:0}, {t.Z:0}, zone {WorldLayout.ZoneOf(t.X, t.Z)}");
                 stats.Add($"terrain     {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" + (gpu.Streamer is { Pending: > 0 } st ? $", loading {st.Pending}" : ""));
                 if (gpu.Objects is { } ob && render.Objects)
@@ -455,6 +472,7 @@ static partial class WorldApp
             }
             frameWatch.Restart();
             profiler?.BeginFrame();
+            if (gpu.Weather is { } clockWeather) clockWeather.Day = day;   // game speed 1, never paused: the viewer's time is the day and the hour set here
             Draw(gpu, scene, camera, render, size.X, size.Y, hour, (float)clock.Elapsed.TotalSeconds / 600f, o.FogDistance);
             cpuMs += frameWatch.Elapsed.TotalMilliseconds;
             if (timing)

@@ -179,10 +179,10 @@ static class AtmosphereShaders
             level = min(level * uAtmoAltitude.y, 1.0);
             vec3 rgb = mix(hazeColour(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
             float alpha = level;
-            if (uAtmoFog.z > 0.5)
+            if (uAtmoFog.z > 0.0)
             {
                 float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
-                float curve = amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0);
+                float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
                 rgb = mix(rgb, uAtmoFogColour, curve);
                 alpha = clamp(alpha + curve, 0.0, 1.0);
             }
@@ -201,8 +201,8 @@ static class AtmosphereShaders
             float far = smoothstep(0.55, 1.0, dist / uAtmoParams.y);   // closes before the far plane and the end of the water
             haze = 1.0 - (1.0 - haze) * (1.0 - far);
             vec3 result = mix(colour, atmoSky(d), haze);
-            if (uAtmoFog.z > 0.5)
-                result = mix(result, uAtmoFogColour, clamp((dist - uAtmoFog.x) / max(uAtmoFog.y - uAtmoFog.x, 1.0), 0.0, 1.0));
+            if (uAtmoFog.z > 0.0)
+                result = mix(result, uAtmoFogColour, clamp((dist - uAtmoFog.x) / max(uAtmoFog.y - uAtmoFog.x, 1.0), 0.0, 1.0) * uAtmoFog.z);
             return result;
         }
 

@@ -57,6 +57,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     void Boot(VulkanDisplay display, bool interactive)
     {
         var context = display.Context;
+        o.Day ??= (int)GameClock.DefaultStartDay;   // the weather schedule starts on the clock's first day (--day moves both)
         gpu = WorldFrame.CreateGpu(context, install, scene, assets, o, interactive);
         if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Upscalers.VendorUpscalers.Factory(display.Context, streamline);
         (camera, render) = WorldFrame.Setup(scene, o);
@@ -92,7 +93,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             constants = data.Bodies.Constants;
         }
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, g.TickRate ?? config.TickRate,
-            clock: GameClockFor(constants ??= scene.Database is { } clockDb ? Meitou.Data.Gameplay.GameConstants.FromDatabase(clockDb) : null, o.Hour),
+            clock: GameClockFor(constants ??= scene.Database is { } clockDb ? Meitou.Data.Gameplay.GameConstants.FromDatabase(clockDb) : null, o.Hour, o.Day ?? GameClock.DefaultStartDay),
             simulation: new Meitou.Simulation.WorldSettings { Seed = g.Seed, MinPartitionSize = 128, Threads = Math.Max(1, g.SimThreads ?? config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)) },
             systems: systems, walkability: walkability);
         var target = camera.Target;
@@ -135,10 +136,10 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     }
 
     /// <summary>The game clock with sunrise, sunset and days per year from the CONSTANTS record (defaults without data).</summary>
-    static GameClock GameClockFor(Meitou.Data.Gameplay.GameConstants? c, double startHour)
+    static GameClock GameClockFor(Meitou.Data.Gameplay.GameConstants? c, double startHour, long startDay)
     {
-        if (c is null) return new GameClock(startHour);
-        return new GameClock(startHour, sunrise: c.Sunrise, sunset: c.Sunset, daysPerYear: c.DaysPerYear);
+        if (c is null) return new GameClock(startHour, startDay);
+        return new GameClock(startHour, startDay, sunrise: c.Sunrise, sunset: c.Sunset, daysPerYear: c.DaysPerYear);
     }
 
     /// <summary>DLSS asked for, on the command line or in the saved settings: Streamline must be loaded before the Vulkan device.</summary>
@@ -189,6 +190,15 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         if (gpu.Foliage is { } foliage && o.Screenshot is null) foliage.SwaySeconds = realTime.Elapsed.TotalSeconds;
         // The heat haze's gameTime: game hours since the start (it stops while paused, as in the game).
         gpu.GameHours = session.Clock.HoursSinceStart;
+        // The weather's three time bases: the game day and time of day (the hour below), the game speed (the last non-zero one while paused) and the paused flag.
+        // TODO(save): the regions' schedules are not saved yet (WeatherWorld.Snapshot() / Restore() exist; the save format has no place for them), so a loaded game rolls the weather anew.
+        if (gpu.Weather is { } weather)
+        {
+            var sim = session.Simulation;
+            weather.Day = (int)session.Clock.Day;
+            weather.Paused = sim.IsPaused;
+            weather.GameSpeed = (float)(sim.Speed > 0 ? sim.Speed : sim.LastNonZeroSpeed);
+        }
         WorldFrame.Draw(gpu, scene, camera, render, width, height, (float)session.Clock.HourOfDay, (float)realTime.Elapsed.TotalSeconds / 600f, o.FogDistance);
     }
 
