@@ -17,6 +17,8 @@ public sealed class WorldRenderOptions
     public bool Reflections { get; set; } = true;
     /// <summary>0 solid, 1 solid + wireframe, 2 wireframe only.</summary>
     public int Wireframe { get; set; }
+    /// <summary>The sandbox's floor grid drawn into the terrain (depth-tested, so characters hide it).</summary>
+    public bool Grid { get; set; }
     /// <summary>0 normal, 1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass), 3 plain shading.</summary>
     public int Debug { get; set; }
     /// <summary>
@@ -457,6 +459,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             c.WaterHeight = options.Water ? WorldWater.Height : -1e6f;
             c.HalfWorld = (float)WorldLayout.HalfWorldSize;
             c.Debug = options.Debug;
+            c.Grid = options.Grid ? 1u : 0u;
             c.FarStart = options.MaterialDistance * 0.8f;
             c.FarEnd = options.MaterialDistance;
             var t = textures;

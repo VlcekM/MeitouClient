@@ -14,7 +14,7 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
-    /// <summary>Half the side of the drawn floor, the grid spacing and the stronger line's, in world units.</summary>
+    /// <summary>Half the side of the drawn floor, the grid spacing and the stronger line's, in world units (the terrain shader's grid).</summary>
     const float SandboxHalf = 500, SandboxMinor = 10, SandboxMajor = 100;
     /// <summary>The patrol runs along X between -200 and 200 (a 400-unit leg).</summary>
     const float PatrolHalf = 200;
@@ -138,10 +138,9 @@ sealed partial class GameHost
         camera.Target = p;
     }
 
-    /// <summary>The floor's grid and the debug panel, over the finished picture.</summary>
+    /// <summary>The debug panel, over the finished picture (the floor's grid is the terrain's: <see cref="WorldRenderOptions.Grid"/>).</summary>
     void DrawSandbox(DebugOverlay o, int width, int height)
     {
-        DrawSandboxGrid(o, width, height);
         var white = DebugOverlay.TextColour;
         var lines = new List<(string Text, Vector4 Colour)>();
         void Add(string text, Vector4? colour = null) => lines.Add((text, colour ?? white));
@@ -187,40 +186,5 @@ sealed partial class GameHost
             float length = animationLengths?.Of(layer.Name) ?? 1;
             add($"  {layer.Name,-28} t {layer.Time,5:0.00}/{length,5:0.00}  w {layer.Weight:0.00}", null);
         }
-    }
-
-    /// <summary>The floor's lines, projected through the camera: every 10 units, stronger every 100 (screen-space lines: no depth test, so they also cross the characters).</summary>
-    void DrawSandboxGrid(DebugOverlay o, int width, int height)
-    {
-        var view = camera.View * camera.Projection(width / (float)Math.Max(height, 1), camera.Near, camera.ViewDistance);
-        float y = scene.FlatHeight + 0.1f;
-        var minor = new Vector4(0.1f, 0.12f, 0.2f, 0.3f);
-        var major = new Vector4(0.05f, 0.07f, 0.15f, 0.75f);
-        var axisX = new Vector4(1f, 0.45f, 0.4f, 0.8f);
-        var axisZ = new Vector4(0.45f, 0.6f, 1f, 0.8f);
-        for (float t = -SandboxHalf; t <= SandboxHalf + 0.01f; t += SandboxMinor)
-        {
-            bool isMajor = MathF.Abs(MathF.IEEERemainder(t, SandboxMajor)) < 0.01f;
-            bool origin = MathF.Abs(t) < 0.01f;
-            float thickness = isMajor ? 2 : 1;
-            Segment(o, view, width, height, new Vector3(-SandboxHalf, y, t), new Vector3(SandboxHalf, y, t), thickness, origin ? axisX : isMajor ? major : minor);
-            Segment(o, view, width, height, new Vector3(t, y, -SandboxHalf), new Vector3(t, y, SandboxHalf), thickness, origin ? axisZ : isMajor ? major : minor);
-        }
-        o.Flush(width, height);
-    }
-
-    static void Segment(DebugOverlay o, Matrix4x4 view, int width, int height, Vector3 a, Vector3 b, float thickness, Vector4 colour)
-    {
-        const float near = 0.5f;
-        var ca = Vector4.Transform(new Vector4(a, 1), view);
-        var cb = Vector4.Transform(new Vector4(b, 1), view);
-        if (ca.W < near && cb.W < near) return;
-        if (ca.W < near) ca = Vector4.Lerp(ca, cb, (near - ca.W) / (cb.W - ca.W));
-        else if (cb.W < near) cb = Vector4.Lerp(cb, ca, (near - cb.W) / (ca.W - cb.W));
-        float x0 = (ca.X / ca.W * 0.5f + 0.5f) * width, y0 = (0.5f - ca.Y / ca.W * 0.5f) * height;
-        float x1 = (cb.X / cb.W * 0.5f + 0.5f) * width, y1 = (0.5f - cb.Y / cb.W * 0.5f) * height;
-        // Both ends far off screen on the same side: nothing to see.
-        if (x0 < -width && x1 < -width || x0 > 2 * width && x1 > 2 * width || y0 < -height && y1 < -height || y0 > 2 * height && y1 > 2 * height) return;
-        o.Line(x0, y0, x1, y1, thickness, colour);
     }
 }

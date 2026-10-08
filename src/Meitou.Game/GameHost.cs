@@ -61,6 +61,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         gpu = WorldFrame.CreateGpu(context, install, scene, assets, o, interactive);
         if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Upscalers.VendorUpscalers.Factory(display.Context, streamline);
         (camera, render) = WorldFrame.Setup(scene, o);
+        render.Grid = IsSandbox;
         // The simulation samples the CPU heightmap (immutable, any thread), not the renderer's terrain.
         var heights = new Meitou.Data.World.GroundHeights(scene.Window, scene.Coarse, scene.CoarseSize, WorldFrame.CoarseStep);
         Meitou.Simulation.IWalkability walkability = new Meitou.Simulation.OpenGroundWalkability(heights.HeightAt);

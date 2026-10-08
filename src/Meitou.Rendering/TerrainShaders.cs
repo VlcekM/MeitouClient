@@ -167,6 +167,7 @@ static class TerrainShaders
         uniform bool uWireframe;
         uniform bool uHeightNormals;   // terrain patches: normal from the height field; meshes: from the vertices
         uniform float uWaterHeight;    // underwater ground is darkened (the game's wetness rule)
+        uniform bool uGrid;            // the sandbox's floor grid: lines every 10 units, stronger every 100, within 1000 of the origin
 
         uniform bool uTextured;        // biome layers available
         uniform bool uNormalMaps;
@@ -384,6 +385,20 @@ static class TerrainShaders
             if (uAtmoParams.x > 0.5) colourOut = kenshiLight(albedo.rgb, shadingNormal, v, gloss, vWorld);
             if (uDebug == 3) colourOut = vec3(0.5) * (0.3 + 0.7 * diff);
             colourOut = atmoApply(colourOut, uEye, vWorld);   // aerial perspective (AtmosphereShaders)
+            if (uGrid && max(abs(vWorld.x), abs(vWorld.z)) <= 500.0)
+            {
+                // Anti-aliased lines a pixel wide (two on the hundreds), by the distance to the nearest line in screen derivatives.
+                vec2 w = fwidth(vWorld.xz);
+                vec2 m10 = abs(fract(vWorld.xz / 10.0 + 0.5) - 0.5) * 10.0 / w;
+                vec2 m100 = abs(fract(vWorld.xz / 100.0 + 0.5) - 0.5) * 100.0 / w;
+                float minor = 1.0 - clamp(min(m10.x, m10.y), 0.0, 1.0);
+                float major = 1.0 - clamp(min(m100.x, m100.y) - 0.5, 0.0, 1.0);
+                vec2 axis = 1.0 - clamp(abs(vWorld.xz) / w - 0.5, 0.0, 1.0);
+                colourOut = mix(colourOut, vec3(0.1, 0.12, 0.2), 0.3 * minor);
+                colourOut = mix(colourOut, vec3(0.05, 0.07, 0.15), 0.75 * major);
+                colourOut = mix(colourOut, vec3(1.0, 0.45, 0.4), 0.8 * axis.y);   // the X axis (z = 0) red
+                colourOut = mix(colourOut, vec3(0.45, 0.6, 1.0), 0.8 * axis.x);   // the Z axis (x = 0) blue
+            }
             fragColour = vec4(colourOut, 1.0);
         }
         """;
@@ -454,7 +469,7 @@ static class TerrainShaders
             uint colour;
             uint ground;
             uint worldColour;
-            uint spare;
+            bool grid;
         } terrain;
 
         """;
@@ -475,7 +490,7 @@ static class TerrainShaders
         ["uFineCells"] = "terrain.fineCells", ["uFineBand"] = "terrain.fineBand", ["uHasFine"] = "terrain.hasFine",
         ["uNode"] = "pc.node", ["uMorph"] = "pc.morph",
         ["uSunColour"] = "terrain.sunColour", ["uAmbientSky"] = "terrain.ambientSky", ["uAmbientGround"] = "terrain.ambientGround",
-        ["uWireframe"] = "terrain.wireframe", ["uHeightNormals"] = "terrain.heightNormals", ["uWaterHeight"] = "terrain.waterHeight",
+        ["uWireframe"] = "terrain.wireframe", ["uGrid"] = "terrain.grid", ["uHeightNormals"] = "terrain.heightNormals", ["uWaterHeight"] = "terrain.waterHeight",
         ["uTextured"] = "terrain.textured", ["uNormalMaps"] = "terrain.normalMaps", ["uHasMaps"] = "terrain.hasMaps",
         ["uMapState"] = "terrain.mapState", ["uDebug"] = "terrain.debug", ["uFeature"] = "terrain.feature",
         ["uFeatureBiome"] = "terrain.featureBiome", ["uFarStart"] = "terrain.farStart", ["uFarEnd"] = "terrain.farEnd",
@@ -604,7 +619,7 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(208)] public uint Colour;
     [System.Runtime.InteropServices.FieldOffset(212)] public uint Ground;
     [System.Runtime.InteropServices.FieldOffset(216)] public uint WorldColour;
-    [System.Runtime.InteropServices.FieldOffset(220)] public uint Spare;
+    [System.Runtime.InteropServices.FieldOffset(220)] public uint Grid;
 }
 
 /// <summary>The C# side of <see cref="TerrainShaders.PushMembers"/> (std430 push constants): a patch's <c>uNode</c> and <c>uMorph</c>.</summary>
