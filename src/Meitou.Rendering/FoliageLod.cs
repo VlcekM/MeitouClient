@@ -17,6 +17,8 @@ public sealed class FoliageLodSet
     /// <summary>The deviation of each level, in mesh units (<c>Errors[0]</c> is 0): the largest distance between the original surface and the level's, both ways,
     /// over all parts, never decreasing with the level.</summary>
     public required float[] Errors { get; init; }
+    /// <summary>The shading deviation of each level in radians (<c>NormalAngles[0]</c> is 0): the angle between the interpolated normals of the level and of the original (97th percentile over samples; <see cref="FoliageLodBuilder.Measure"/>), over all parts, never decreasing.</summary>
+    public required float[] NormalAngles { get; init; }
     /// <summary>Triangles per level, summed over the parts.</summary>
     public required int[] Triangles { get; init; }
     /// <summary>Levels including level 0.</summary>
@@ -33,12 +35,16 @@ public sealed class FoliageLodSet
 public static class FoliageLodBuilder
 {
     /// <summary>Bumped when the simplifier, the fractions or the error measure change: it is part of the disk cache's key.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
     public static readonly float[] Fractions = [0.5f, 0.25f, 0.1f];
     /// <summary>The fewest triangles a level reduces a part to; a part with fewer than twice this is not reduced.</summary>
     public const int Floor = 48;
+    /// <summary>Meshes with fewer triangles get no levels: the few triangles a level would save cost more in shading changes (low-poly cliffs and boulders) than they gain.</summary>
+    public const int MinTriangles = 500;
     /// <summary>A level whose deviation is more than this share of the mesh's radius is not kept (it could only ever show far away, where the level before is cheap enough).</summary>
     public const float MaxRelativeError = 0.25f;
+    /// <summary>A level whose shading deviates more than this many radians (34 degrees) is not kept.</summary>
+    public const float MaxNormalAngle = 0.6f;
     /// <summary>A level must have at most this share of the triangles of the level before it.</summary>
     public const float MinGain = 0.8f;
     const int MaxSamples = 1500;
@@ -50,6 +56,7 @@ public static class FoliageLodBuilder
         int steps = Fractions.Length;
         var chains = new uint[parts.Count][][];
         var errors = new float[parts.Count][];
+        var angles = new float[parts.Count][];
         for (int p = 0; p < parts.Count; p++)
         {
             var part = parts[p];
@@ -57,12 +64,14 @@ public static class FoliageLodBuilder
             {
                 chains[p] = [.. Enumerable.Repeat(part.Indices, steps)];
                 errors[p] = new float[steps];
+                angles[p] = new float[steps];
                 continue;
             }
             chains[p] = MeshSimplifier.Chain(part.Vertices, part.Indices, Fractions, Floor);
             errors[p] = new float[steps];
+            angles[p] = new float[steps];
             for (int k = 0; k < steps; k++)
-                errors[p][k] = ReferenceEquals(chains[p][k], part.Indices) || chains[p][k].Length == part.Indices.Length ? 0 : Deviation(part.Vertices, part.Indices, chains[p][k]);
+                if (chains[p][k].Length != part.Indices.Length) (errors[p][k], angles[p][k]) = Measure(part.Vertices, part.Indices, chains[p][k]);
         }
 
         // Which of the steps become levels.
@@ -71,9 +80,9 @@ public static class FoliageLodBuilder
         for (int k = 0; k < steps; k++)
         {
             long triangles = 0;
-            float error = 0;
-            for (int p = 0; p < parts.Count; p++) { triangles += chains[p][k].Length / 3; error = Math.Max(error, errors[p][k]); }
-            if (error > MaxRelativeError * radius) break;
+            float error = 0, angle = 0;
+            for (int p = 0; p < parts.Count; p++) { triangles += chains[p][k].Length / 3; error = Math.Max(error, errors[p][k]); angle = Math.Max(angle, angles[p][k]); }
+            if (error > MaxRelativeError * radius || angle > MaxNormalAngle) break;
             if (triangles > previous * MinGain) continue;
             kept.Add(k);
             previous = triangles;
@@ -82,136 +91,158 @@ public static class FoliageLodBuilder
 
         var indices = new uint[parts.Count][][];
         var levelErrors = new float[kept.Count + 1];
+        var levelAngles = new float[kept.Count + 1];
         var levelTriangles = new int[kept.Count + 1];
         levelTriangles[0] = parts.Sum(p => p.Indices.Length / 3);
         for (int p = 0; p < parts.Count; p++) indices[p] = new uint[kept.Count][];
-        float monotone = 0;
+        float monotone = 0, monotoneAngle = 0;
         for (int i = 0; i < kept.Count; i++)
         {
             int k = kept[i];
-            float error = 0;
+            float error = 0, angle = 0;
             for (int p = 0; p < parts.Count; p++)
             {
                 indices[p][i] = chains[p][k];
                 levelTriangles[i + 1] += chains[p][k].Length / 3;
                 error = Math.Max(error, errors[p][k]);
+                angle = Math.Max(angle, angles[p][k]);
             }
             monotone = Math.Max(monotone, error);
+            monotoneAngle = Math.Max(monotoneAngle, angle);
             levelErrors[i + 1] = monotone;
+            levelAngles[i + 1] = monotoneAngle;
         }
-        return new FoliageLodSet { Indices = indices, Errors = levelErrors, Triangles = levelTriangles };
+        return new FoliageLodSet { Indices = indices, Errors = levelErrors, NormalAngles = levelAngles, Triangles = levelTriangles };
     }
 
     // ---- the deviation of a level from the original surface ----
 
+    /// <summary>The geometric deviation of <see cref="Measure"/> alone.</summary>
+    internal static float Deviation(Vertex[] vertices, uint[] original, uint[] level) => Measure(vertices, original, level).Distance;
+
     /// <summary>
-    /// The largest distance, both ways, between the surface of <paramref name="original"/> and of <paramref name="level"/>: from sampled points of the original
-    /// (its used vertices and triangle centres) to the level's triangles, and from sampled points of the level (centres and edge midpoints) to the original's.
-    /// A thin part that the level loses shows as a large distance from the first, a bridge it makes over a gap from the second.
+    /// How far a level is from the original, both ways: <c>Distance</c>, the largest distance between the two surfaces (from sampled points of the original, its used vertices and triangle
+    /// centres, to the level's triangles, and from points of the level, centres and edge midpoints, to the original's; a thin part the level loses shows in the first, a bridge over a gap in the
+    /// second), and <c>Angle</c>, the angle in radians between the interpolated vertex normals at triangle centres of one surface and at the nearest point of the other, the 97th percentile
+    /// (a collapse moves corners onto vertices that keep their own normals, so the shading of a flat-shaded or hard-edged mesh changes where the shape hardly does).
     /// </summary>
-    internal static float Deviation(Vertex[] vertices, uint[] original, uint[] level)
+    internal static (float Distance, float Angle) Measure(Vertex[] vertices, uint[] original, uint[] level)
     {
         var originalTriangles = Triangles(vertices, original);
         var levelTriangles = Triangles(vertices, level);
-        if (levelTriangles.Length == 0) return float.MaxValue;
-        var fromOriginal = new List<Vector3>();
+        if (levelTriangles.Length == 0) return (float.MaxValue, MathF.PI);
+        var fromOriginal = new List<(Vector3, Vector3)>();
         var used = new HashSet<uint>();
-        foreach (uint i in original) if (used.Add(i)) fromOriginal.Add(vertices[i].Position);
-        foreach (var t in originalTriangles) fromOriginal.Add((t.A + t.B + t.C) / 3);
-        var fromLevel = new List<Vector3>();
+        foreach (uint i in original) if (used.Add(i)) fromOriginal.Add((vertices[i].Position, Vector3.Zero));
+        foreach (var t in originalTriangles) fromOriginal.Add(((t.A + t.B + t.C) / 3, Normalized(t.NA + t.NB + t.NC)));
+        var fromLevel = new List<(Vector3, Vector3)>();
         foreach (var t in levelTriangles)
         {
-            fromLevel.Add((t.A + t.B + t.C) / 3);
-            fromLevel.Add((t.A + t.B) / 2);
-            fromLevel.Add((t.B + t.C) / 2);
-            fromLevel.Add((t.C + t.A) / 2);
+            fromLevel.Add(((t.A + t.B + t.C) / 3, Normalized(t.NA + t.NB + t.NC)));
+            fromLevel.Add(((t.A + t.B) / 2, Vector3.Zero));
+            fromLevel.Add(((t.B + t.C) / 2, Vector3.Zero));
+            fromLevel.Add(((t.C + t.A) / 2, Vector3.Zero));
         }
-        float a = Farthest(Subsample(fromOriginal), levelTriangles);
-        float b = Farthest(Subsample(fromLevel), originalTriangles);
-        return Math.Max(a, b);
+        var angles = new List<float>();
+        float a = Farthest(Subsample(fromOriginal), levelTriangles, angles);
+        float b = Farthest(Subsample(fromLevel), originalTriangles, angles);
+        angles.Sort();
+        float angle = angles.Count == 0 ? 0 : angles[Math.Min(angles.Count - 1, (int)(angles.Count * 0.97))];
+        return (Math.Max(a, b), angle);
     }
 
-    static List<Vector3> Subsample(List<Vector3> points)
+    static Vector3 Normalized(Vector3 v) => v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
+
+    static List<(Vector3, Vector3)> Subsample(List<(Vector3, Vector3)> points)
     {
         if (points.Count <= MaxSamples) return points;
-        var result = new List<Vector3>(MaxSamples);
+        var result = new List<(Vector3, Vector3)>(MaxSamples);
         for (int i = 0; i < MaxSamples; i++) result.Add(points[(int)((long)i * points.Count / MaxSamples)]);
         return result;
     }
 
-    readonly record struct Tri(Vector3 A, Vector3 B, Vector3 C, Vector3 Min, Vector3 Max);
+    readonly record struct Tri(Vector3 A, Vector3 B, Vector3 C, Vector3 NA, Vector3 NB, Vector3 NC, Vector3 Min, Vector3 Max);
 
     static Tri[] Triangles(Vertex[] vertices, uint[] indices)
     {
         var result = new Tri[indices.Length / 3];
         for (int t = 0; t < result.Length; t++)
         {
-            Vector3 a = vertices[indices[t * 3]].Position, b = vertices[indices[t * 3 + 1]].Position, c = vertices[indices[t * 3 + 2]].Position;
-            result[t] = new Tri(a, b, c, Vector3.Min(a, Vector3.Min(b, c)), Vector3.Max(a, Vector3.Max(b, c)));
+            ref readonly var va = ref vertices[indices[t * 3]];
+            ref readonly var vb = ref vertices[indices[t * 3 + 1]];
+            ref readonly var vc = ref vertices[indices[t * 3 + 2]];
+            result[t] = new Tri(va.Position, vb.Position, vc.Position, va.Normal, vb.Normal, vc.Normal,
+                Vector3.Min(va.Position, Vector3.Min(vb.Position, vc.Position)), Vector3.Max(va.Position, Vector3.Max(vb.Position, vc.Position)));
         }
         return result;
     }
 
-    /// <summary>The largest over <paramref name="points"/> of the distance to the nearest of <paramref name="triangles"/>.</summary>
-    static float Farthest(List<Vector3> points, Tri[] triangles)
+    /// <summary>The largest over <paramref name="points"/> of the distance to the nearest of <paramref name="triangles"/>; for a point with a normal, the angle to the nearest triangle's normal there is added to <paramref name="angles"/>.</summary>
+    static float Farthest(List<(Vector3 P, Vector3 N)> points, Tri[] triangles, List<float> angles)
     {
         float worst = 0;
-        foreach (var p in points)
+        foreach (var (p, n) in points)
         {
             float best = float.MaxValue;
-            foreach (ref readonly var t in triangles.AsSpan())
+            int bestTriangle = -1;
+            for (int i = 0; i < triangles.Length; i++)
             {
+                ref readonly var t = ref triangles[i];
                 var q = Vector3.Max(Vector3.Zero, Vector3.Max(t.Min - p, p - t.Max));
                 if (q.LengthSquared() >= best) continue;
                 float d = DistanceSquared(p, t.A, t.B, t.C);
-                if (d < best) best = d;
+                if (d < best) { best = d; bestTriangle = i; }
             }
             if (best > worst) worst = best;
+            if (n != Vector3.Zero && bestTriangle >= 0)
+            {
+                ref readonly var t = ref triangles[bestTriangle];
+                var (u, v, w) = Barycentric(ClosestPoint(p, t.A, t.B, t.C), t.A, t.B, t.C);
+                var other = Normalized(t.NA * u + t.NB * v + t.NC * w);
+                if (other != Vector3.Zero) angles.Add(MathF.Acos(Math.Clamp(Vector3.Dot(n, other), -1f, 1f)));
+            }
         }
         return MathF.Sqrt(worst);
     }
 
-    /// <summary>The squared distance from <paramref name="p"/> to a triangle (the closest point by the regions of its Voronoi diagram).</summary>
-    internal static float DistanceSquared(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
+    static (float, float, float) Barycentric(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
+    {
+        Vector3 v0 = b - a, v1 = c - a, v2 = p - a;
+        float d00 = Vector3.Dot(v0, v0), d01 = Vector3.Dot(v0, v1), d11 = Vector3.Dot(v1, v1), d20 = Vector3.Dot(v2, v0), d21 = Vector3.Dot(v2, v1);
+        float denominator = d00 * d11 - d01 * d01;
+        if (MathF.Abs(denominator) < 1e-20f) return (1, 0, 0);
+        float v = (d11 * d20 - d01 * d21) / denominator, w = (d00 * d21 - d01 * d20) / denominator;
+        return (1 - v - w, v, w);
+    }
+
+    /// <summary>The squared distance from <paramref name="p"/> to a triangle.</summary>
+    internal static float DistanceSquared(Vector3 p, Vector3 a, Vector3 b, Vector3 c) => (p - ClosestPoint(p, a, b, c)).LengthSquared();
+
+    /// <summary>The point of a triangle nearest <paramref name="p"/> (by the regions of its Voronoi diagram).</summary>
+    internal static Vector3 ClosestPoint(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
     {
         var ab = b - a;
         var ac = c - a;
         var ap = p - a;
         float d1 = Vector3.Dot(ab, ap), d2 = Vector3.Dot(ac, ap);
-        if (d1 <= 0 && d2 <= 0) return ap.LengthSquared();
+        if (d1 <= 0 && d2 <= 0) return a;
         var bp = p - b;
         float d3 = Vector3.Dot(ab, bp), d4 = Vector3.Dot(ac, bp);
-        if (d3 >= 0 && d4 <= d3) return bp.LengthSquared();
+        if (d3 >= 0 && d4 <= d3) return b;
         float vc = d1 * d4 - d3 * d2;
-        if (vc <= 0 && d1 >= 0 && d3 <= 0)
-        {
-            float v = d1 / (d1 - d3);
-            return (p - (a + v * ab)).LengthSquared();
-        }
+        if (vc <= 0 && d1 >= 0 && d3 <= 0) return a + d1 / (d1 - d3) * ab;
         var cp = p - c;
         float d5 = Vector3.Dot(ab, cp), d6 = Vector3.Dot(ac, cp);
-        if (d6 >= 0 && d5 <= d6) return cp.LengthSquared();
+        if (d6 >= 0 && d5 <= d6) return c;
         float vb = d5 * d2 - d1 * d6;
-        if (vb <= 0 && d2 >= 0 && d6 <= 0)
-        {
-            float w = d2 / (d2 - d6);
-            return (p - (a + w * ac)).LengthSquared();
-        }
+        if (vb <= 0 && d2 >= 0 && d6 <= 0) return a + d2 / (d2 - d6) * ac;
         float va = d3 * d6 - d5 * d4;
-        if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0)
-        {
-            float w = (d4 - d3) / (d4 - d3 + (d5 - d6));
-            return (p - (b + w * (c - b))).LengthSquared();
-        }
+        if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) return b + (d4 - d3) / (d4 - d3 + (d5 - d6)) * (c - b);
         float denominator = 1 / (va + vb + vc);
-        float vv = vb * denominator, ww = vc * denominator;
-        return (p - (a + ab * vv + ac * ww)).LengthSquared();
+        return a + ab * (vb * denominator) + ac * (vc * denominator);
     }
 }
 
-/// <summary>
-/// The disk cache of generated levels: <c>%LOCALAPPDATA%\Meitou\lods\&lt;name&gt;_&lt;key&gt;.mlod</c> (overridden by <c>MEITOU_LOD_CACHE</c>; never inside the
-/// repository), keyed by the mesh file's content hash and <see cref="FoliageLodBuilder.Version"/>. Written to a temporary name and moved into place. A mesh that
 /// gets no level is cached too (an empty set), so it is not worked out again.
 /// </summary>
 public static class FoliageLodCache
@@ -243,6 +274,8 @@ public static class FoliageLodCache
             var errors = new float[levels];
             var triangles = new int[levels];
             for (int i = 0; i < levels; i++) errors[i] = reader.ReadSingle();
+            var normals = new float[levels];
+            for (int i = 0; i < levels; i++) normals[i] = reader.ReadSingle();
             for (int i = 0; i < levels; i++) triangles[i] = reader.ReadInt32();
             var indices = new uint[parts][][];
             for (int p = 0; p < parts; p++)
@@ -256,7 +289,7 @@ public static class FoliageLodCache
                     indices[p][l] = list;
                 }
             }
-            return (true, new FoliageLodSet { Indices = indices, Errors = errors, Triangles = triangles });
+            return (true, new FoliageLodSet { Indices = indices, Errors = errors, NormalAngles = normals, Triangles = triangles });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or EndOfStreamException or OverflowException or OutOfMemoryException) { return (false, null); }
     }
@@ -276,6 +309,7 @@ public static class FoliageLodCache
                 if (set is not null)
                 {
                     foreach (float e in set.Errors) writer.Write(e);
+                    foreach (float e in set.NormalAngles) writer.Write(e);
                     foreach (int t in set.Triangles) writer.Write(t);
                     foreach (var part in set.Indices)
                     {

@@ -23,6 +23,16 @@ public sealed unsafe partial class FoliageRenderer
     /// <summary>How many pixels (of the render, before the upscaler) a generated level may deviate from the original surface; <c>MEITOU_LOD_PIXELS</c>.</summary>
     public float LodTolerance { get; set; } = Env("MEITOU_LOD_PIXELS", 4f);
 
+    /// <summary>How many radii of the mesh one radian of shading deviation (<see cref="FoliageLodSet.NormalAngles"/>) counts as in a level's deviation; <c>MEITOU_LOD_NORMAL</c>.</summary>
+    public float LodNormalWeight { get; set; } = Env("MEITOU_LOD_NORMAL", 0.02f);
+
+    float[] RelativeErrors(FoliageLodSet set, float radius)
+    {
+        var result = new float[set.Levels];
+        for (int i = 1; i < result.Length; i++) result[i] = Math.Max(result[i - 1], Math.Max(set.Errors[i] / radius, LodNormalWeight * set.NormalAngles[i]));
+        return result;
+    }
+
     /// <summary>How many shadow texels a level may deviate in a cascade; <c>MEITOU_LOD_TEXELS</c>.</summary>
     public float LodShadowTolerance { get; set; } = Env("MEITOU_LOD_TEXELS", 2f);
 
@@ -84,7 +94,7 @@ public sealed unsafe partial class FoliageRenderer
         if (!Lod || !GpuCull || GpuCullVerify) return;
         foreach (var a in assetsByMesh.Values)
         {
-            if (!a.Terrain || a.LodDone || !a.Resident || a.Main is null || a.Triangles < 2 * FoliageLodBuilder.Floor) continue;
+            if (!a.Terrain || a.LodDone || !a.Resident || a.Main is null || a.Triangles < FoliageLodBuilder.MinTriangles) continue;
             string name = a.Mesh.MeshPath;
             if (!lodTasks.TryGetValue(name, out var task))
             {
@@ -129,7 +139,7 @@ public sealed unsafe partial class FoliageRenderer
         if (LodLog)
             Console.WriteLine(set is null
                 ? $"lod       {label} ({name}): no level ({model.Parts.Sum(p => p.Indices.Length / 3)} triangles, {(hit ? "cached" : $"built in {ms:0} ms")})"
-                : $"lod       {label} ({name}): {string.Join(" > ", set.Triangles.Select((t, i) => i == 0 ? $"{t}" : $"{t} (dev {set.Errors[i] / radius * 100:0.00}% of r {radius:0})"))} ({(hit ? "cached" : $"built in {ms:0} ms, {bytes / 1024} KB")})");
+                : $"lod       {label} ({name}): {string.Join(" > ", set.Triangles.Select((t, i) => i == 0 ? $"{t}" : $"{t} (dev {set.Errors[i] / radius * 100:0.00}% of r {radius:0}, normals {set.NormalAngles[i] * 57.3f:0}°)"))} ({(hit ? "cached" : $"built in {ms:0} ms, {bytes / 1024} KB")})");
         return new LodResult(set, hit, ms, bytes);
     }
 
@@ -161,7 +171,7 @@ public sealed unsafe partial class FoliageRenderer
                 bytes += (long)total * sizeof(uint);
                 parts[p] = new PartLod { Indices = indices, Bindings = MeshBindings.Of(VertexAttributes(main.Parts[p].Vertices), indices), First = first, Count = count };
             }
-            a.Lod = new RockLod { Levels = set.Levels, Relative = [.. set.Errors.Select(e => e / a.Radius)], Parts = parts, Set = set, Bytes = bytes };
+            a.Lod = new RockLod { Levels = set.Levels, Relative = RelativeErrors(set, a.Radius), Parts = parts, Set = set, Bytes = bytes };
             a.Bytes += bytes;
             residentMeshBytes += bytes;
         });
