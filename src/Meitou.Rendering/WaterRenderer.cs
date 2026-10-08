@@ -195,7 +195,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
 
         // river: how much p is in a river (0 none, 1 a river's channel), flow: its unit direction (x, z), speed: how fast it runs (units a second).
-        struct Shore { float depth; float dist; float g; vec2 dir; float open; float size; float breakAt; float river; vec2 flow; float speed; float sizeWet; float brk; };
+        // wave: the number of the breaker whose crest is in p's cycle (at g 0.5; it changes in the trough at g 0/1), wrapping at 4096.
+        struct Shore { float depth; float dist; float g; float wave; vec2 dir; float open; float size; float breakAt; float river; vec2 flow; float speed; float sizeWet; float brk; };
 
         // Waves arrive in pieces, not as one line round the coast. Each wave has a number (the wave count at its place, which it keeps as it
         // travels in), and slow, coarse noise on the shore point it is heading for (constant across the wave, varying along the shore, drifting
@@ -295,6 +296,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 r.sizeWet = mix(1.0, fract(x) >= 0.5 ? s0 : s1, trust);   // the wet sand remembers the last crest that passed
             }
             r.g = fract(x);
+            r.wave = mod(floor(x), 4096.0);
             // A wave that does not break here runs on to the shore (its break point is at the waterline).
             r.breakAt = mix(-40.0, base * (0.7 + 0.5 * r.size), r.brk);
             return r;
@@ -453,6 +455,27 @@ public sealed unsafe class WaterRenderer : IDisposable
             return albedo * (diffuse + atmoIrradiance(n) * 0.96 * am.rgb * uAtmoLight.w);
         }
 
+        // The surf's cells: a cellular pattern (the 3 by 3 neighbouring cells) whose points wander slowly with the clock (cycles of 10 and
+        // 20 s). x: the distance to the cell wall (F2 - F1, 0 on a wall, up to about 0.5 in a cell's middle); y: the nearest cell's lifetime
+        // (0.25 to 1: the foam age at which it bursts).
+        vec2 popCells(vec2 x)
+        {
+            vec2 i = floor(x), f = fract(x);
+            vec2 a = 6.2831853 * vec2(fract(uTime * 60.0), fract(uTime * 30.0));
+            float d1 = 8.0, d2 = 8.0, life = 0.0;
+            for (int j = -1; j <= 1; j++)
+                for (int k = -1; k <= 1; k++)
+                {
+                    vec2 c = vec2(float(k), float(j)), h = i + c;
+                    vec2 hv = vec2(wHash(h), wHash(h + 17.3));
+                    vec2 pt = c + 0.15 + 0.7 * hv + 0.15 * sin(a + 6.2831853 * hv.yx);
+                    float d = distance(pt, f);
+                    if (d < d1) { d2 = d1; d1 = d; life = wHash(h + 71.9); }
+                    else d2 = min(d2, d);
+                }
+            return vec2(d2 - d1, mix(0.25, 1.0, life));
+        }
+
         void main()
         {
             vec2 p = vBase;
@@ -487,7 +510,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             // The motion fades with the eye distance; beyond it (and past the world's edge) this is the game's flat water.
             float fade = outside <= 0.0 ? 1.0 - smoothstep(uWaveFade.z, uWaveFade.w, dist) : 0.0;
             Shore s;
-            s.depth = 1.0e4; s.dist = 1.0e6; s.g = 0.0; s.dir = vec2(0.0); s.open = 0.0; s.size = 1.0; s.breakAt = 0.0; s.river = 0.0; s.flow = vec2(1.0, 0.0); s.speed = 0.0; s.sizeWet = 1.0; s.brk = 1.0;
+            s.depth = 1.0e4; s.dist = 1.0e6; s.g = 0.0; s.wave = 0.0; s.dir = vec2(0.0); s.open = 0.0; s.size = 1.0; s.breakAt = 0.0; s.river = 0.0; s.flow = vec2(1.0, 0.0); s.speed = 0.0; s.sizeWet = 1.0; s.brk = 1.0;
             if (fade > 0.0) s = shoreAt(p);
             else if (outside <= 0.0) s.depth = uWaterHeight - terrainHeight(p);
 
@@ -651,13 +674,23 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Outside the break point the swell only feathers at its crest; at the break it bursts white; inside it a bore of whitewater runs
             // to the shore with lace trailing behind it.
             float surfZone = smoothstep(-2.0, 10.0, s.dist) * smoothstep(250.0, 120.0, s.depth) * fade * s.open * min(uShore.w, 1.0);
-            // The surf's foam is read from the lace in the wave's own frame: q is the point's nearest shore point (where the wave front it
-            // sits on crosses the shore) shifted along the normal by the phase g, so a point carried by the wave keeps its q and the foam
+            // The surf's foam is read from the lace in the wave's own frame: q0 is the point's nearest shore point (where the wave front it
+            // sits on crosses the shore) shifted along the normal by the phase g, so a point carried by the wave keeps its q0 and the foam
             // drifts in with it instead of swimming through a fixed pattern. A slow clump noise ragged-edges the band's front and back.
-            vec2 q = p + s.dir * (s.dist - uShore.z * s.g);
-            float clump = textureGrad(uFoamMap, q * 0.0037 + vec2(0.21, 0.63), dpx * 0.0037, dpy * 0.0037).g;
+            // Every wave reads its own part of the lace: q0 is offset by a hash of the wave's number (which changes in the trough, g 0/1,
+            // where there is no foam), so the next wave is not a copy of this one.
+            // As the foam ages (ageS below: the way run in since the break, and the distance behind the crest) the lace is stretched along
+            // the direction of travel about the crest, up to 2.1 times (the lookup's along-shore-normal scale shrinks): the bore's round
+            // blobs run out into streaks in its wake. The clump (the bands' envelope) is not stretched.
+            float travel = clamp((s.breakAt - (s.dist - uShore.z * (s.g - 0.5))) / max(s.breakAt + 10.0, 40.0), 0.0, 1.0);
+            float ageS = clamp(0.6 * travel + 0.5 * smoothstep(0.5, 0.95, s.g), 0.0, 1.0);
+            float squeeze = 1.0 - 1.0 / (1.0 + 1.1 * ageS * ageS);
+            vec2 q0 = p + s.dir * (s.dist - uShore.z * s.g) + vec2(wHash(vec2(s.wave, 21.7)), wHash(vec2(s.wave, 5.3))) * 997.0;
+            vec2 q = q0 + s.dir * (uShore.z * (s.g - 0.5) * squeeze);
+            vec2 gx = dpx - s.dir * (dot(s.dir, dpx) * squeeze), gy = dpy - s.dir * (dot(s.dir, dpy) * squeeze);
+            float clump = textureGrad(uFoamMap, q0 * 0.0037 + vec2(0.21, 0.63), dpx * 0.0037, dpy * 0.0037).g;
             vec2 b1 = vec2(0.5), b2 = vec2(0.5);
-            if (fade > 0.0) { b1 = textureGrad(uFoamMap, q * 0.009, dpx * 0.009, dpy * 0.009).rg; b2 = textureGrad(uFoamMap, q * 0.027 + 0.37, dpx * 0.027, dpy * 0.027).rg; }
+            if (fade > 0.0) { b1 = textureGrad(uFoamMap, q * 0.009, gx * 0.009, gy * 0.009).rg; b2 = textureGrad(uFoamMap, q * 0.027 + 0.37, gx * 0.027, gy * 0.027).rg; }
             float gw = s.g + (clump - 0.5) * 0.22, dw = s.dist + (clump - 0.5) * 36.0;
             float crestAt = dw - uShore.z * (gw - 0.5);   // the distance of the crest this point trails (or leads)
             float broken = smoothstep(s.breakAt + 15.0, s.breakAt - 15.0, crestAt);   // the wave has broken: its foam follows the crest back out to the break point
@@ -675,8 +708,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             if (swash && sheet > 0.0) surfAmount = max(surfAmount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.2, sheet + (b1.g - 0.5) * runup * 0.3)), 0.35 * (1.0 - sinceCrest)));
             // Foam wears away as it ages: fresh at the break, and the further the wave has run in since (travel, from the break point to the
             // waterline) and the further behind its crest, the more of it is lace with holes (on the swash too: the sheet thins as it recedes).
-            float travel = clamp((s.breakAt - (s.dist - uShore.z * (s.g - 0.5))) / max(s.breakAt + 10.0, 40.0), 0.0, 1.0);
-            float age = clamp(0.6 * travel + 0.5 * smoothstep(0.5, 0.95, s.g) + (0.5 - clump) * 0.5, 0.0, 1.0);
+            float age = clamp(ageS + (0.5 - clump) * 0.5, 0.0, 1.0);
             vec2 drift = direction * speed * uTime * 0.2;
             // Blotches (the multi-octave noise at two scales) with bubble rims in them; the more foam, the lower the threshold. Up close the
             // foam shows its bubbles (B: fine cell walls), lit on their walls and darker inside.
@@ -699,7 +731,12 @@ public sealed unsafe class WaterRenderer : IDisposable
             {
                 // The same lace in three scales (clumps, blotches, rims) in the wave's frame, its threshold rising with the foam's age.
                 float lace = (smoothstep(0.15, 0.9, clump) * 0.4 + b1.g * 0.3 + b2.g * 0.3) * 0.7 + max(b1.r, b2.r) * 0.45 + bubbles * 0.08;
-                float wear = 0.075 + age * 0.475;
+                // It wears cell by cell (cells of about 22 units, in the same stretched frame): each bursts at its own age, a hole opening
+                // from its middle while the walls between the cells stay as lace; the threshold itself rises only a little with the age.
+                vec2 cell = popCells(q * 0.045);
+                float popped = smoothstep(cell.y, cell.y + 0.12, age);
+                lace -= popped * 0.45 * smoothstep(0.04, 0.3, cell.x);
+                float wear = 0.075 + age * 0.3;
                 float surf = surfAmount * mix(0.7, 1.0, clean);
                 foam = max(foam, smoothstep(0.95 - surf + wear, 1.3 - surf + wear + 0.2 * age, lace));
             }
