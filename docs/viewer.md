@@ -248,7 +248,9 @@ How it works (status as in [README.md](README.md)):
     seven waves (a sine of the wave number, irregular, shifted along the shore) take each wave from 0.55 to 1.6 times the
     breaker height. **Breaking**: a noise of about 620 units per wave (more breaking for the bigger waves) gives stretches a few hundred
     units long where the wave rolls in without breaking (lower, its break point moved to the waterline, no collapse into a bore, foam
-    and bore scaled to 0.2), so there are gaps between the pieces of whitewater. The same `Shore` values (size, `brk`, `breakAt`, the
+    and bore scaled to 0.35), so there are gaps between the pieces of whitewater. Raised on the user's "more foam" (2026-10-08): most
+    waves now break (the noise's offset 0.62 to 0.8), the surf's coverage is thicker (cap 0.8 to 0.9) and it wears more slowly (the
+    erosion threshold 0.1 + 0.55 × age to 0.05 + 0.4 × age); a quiet set of small waves still leaves stretches without whitewater. The same `Shore` values (size, `brk`, `breakAt`, the
     phase) feed the vertex hump, the lip, burst, bore, trail, feather, the run-up and the sand's wetness, so geometry and foam agree.
     The offsets fade out (with the shore field's gradient length) on the axis between two shores, where the nearest shore jumps, so an
     inlet shows no seam (**Observed** in `MEITOU_WATER_DEBUG=1` at Port North's inlet: the bands bend there as the distance does).

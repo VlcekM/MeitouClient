@@ -217,7 +217,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             vec2 o = vec2(wHash(vec2(id, 3.7)), wHash(vec2(id, 9.1))) * 173.0;
             float arg = id * (606.0 * 6.2831853 / 4096.0) + 1.1 * sin(id * (261.0 * 6.2831853 / 4096.0) + 0.7) + 3.0 * (wNoise(q / 1500.0 + 3.3) - 0.5);
             float group = smoothstep(0.2, 0.85, 0.5 + 0.5 * sin(arg));
-            float n = (wNoise(q / 620.0 + o) - 0.5) * 1.6 + 0.62 + 0.3 * (group - 0.5);
+            float n = (wNoise(q / 620.0 + o) - 0.5) * 1.6 + 0.8 + 0.3 * (group - 0.5);
             brk = smoothstep(0.2, 0.6, n);
             size = mix(0.55, 1.6, group) * (0.8 + 0.4 * wNoise(q / 800.0 + o + 40.0)) * mix(0.7, 1.0, brk);
         }
@@ -668,8 +668,8 @@ public sealed unsafe class WaterRenderer : IDisposable
             float amount = max(clamp((0.7 - jacobian) * 2.5, 0.0, 1.0), clamp(oceanFoam * open, 0.0, 1.0) * 0.75);
             // Along the shore the breakers break harder in some stretches than others, and not at all in a few.
             float stretch = smoothstep(0.2, 0.75, texture(uFoamMap, p * 0.0011).g);
-            float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 1.1, feather * 0.6)) * min(s.size * 1.1, 1.3) * mix(0.2, 1.0, s.brk);
-            float surfAmount = min(surfFoam * surfZone * (0.45 + 0.75 * stretch) * (0.8 + 0.4 * clump), 0.8);   // capped: the lace shows through even the thickest whitewater
+            float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 1.1, feather * 0.6)) * min(s.size * 1.1, 1.3) * mix(0.35, 1.0, s.brk);
+            float surfAmount = min(surfFoam * surfZone * (0.6 + 0.7 * stretch) * (0.85 + 0.4 * clump), 0.9);   // capped: the lace shows through even the thickest whitewater
             amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * (0.15 + 0.25 * s.open) * fade);
             // The swash: its front is dense, the sheet behind it thins out.
             if (swash && sheet > 0.0) surfAmount = max(surfAmount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.2, sheet + (b1.g - 0.5) * runup * 0.3)), 0.35 * (1.0 - sinceCrest)));
@@ -699,7 +699,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             {
                 // The same lace in three scales (clumps, blotches, rims) in the wave's frame, its threshold rising with the foam's age.
                 float lace = (smoothstep(0.15, 0.9, clump) * 0.4 + b1.g * 0.3 + b2.g * 0.3) * 0.7 + max(b1.r, b2.r) * 0.45 + bubbles * 0.08;
-                float wear = 0.1 + age * 0.55;
+                float wear = 0.05 + age * 0.4;
                 float surf = surfAmount * mix(0.7, 1.0, clean);
                 foam = max(foam, smoothstep(0.95 - surf + wear, 1.3 - surf + wear + 0.2 * age, lace));
             }
