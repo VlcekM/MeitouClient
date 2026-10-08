@@ -56,6 +56,7 @@ public sealed unsafe class PostProcess : IDisposable
     bool historyValid, farSliceDrawn, warnedFallback;
     long frameIndex;
     Target2D? aoA, aoB;
+    Target2D? characterMask;   // R8 at the render size: 1 on the characters' own pixels (SSAO keeps only SsaoCharacterStrength of its occlusion there)
     Target2D? ldr, ldrFxaa;   // the composite's LDR picture that FXAA or the heat haze reads, and FXAA's when the heat haze follows it
     Texture? flowTexture, perturbationTexture;   // the heat haze's FlowHAZE.dds and Perturber.dds (null: not found, no heat haze)
     Target2D? luminance, adaptA, adaptB;   // Kenshi's exposure: the luminance measure (mipmapped) and the adapted value (1 × 1, ping-pong)
@@ -109,11 +110,12 @@ public sealed unsafe class PostProcess : IDisposable
 
     sealed class CompositePass : FullscreenProgram
     {
-        public readonly SamplerSlot Scene, Ao, Adapted;
-        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug;
+        public readonly SamplerSlot Scene, Ao, Adapted, Mask;
+        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug, CharacterAo;
         public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
         {
-            (Scene, Ao, Adapted) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"));
+            (Scene, Ao, Adapted, Mask) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"), P.Sampler("uMask"));
+            CharacterAo = P.Uniform("uCharacterAo");
             (Auto, Exposure, UseAo, Dither, Debug) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"), P.Uniform("uDebug"));
         }
     }
@@ -180,7 +182,7 @@ public sealed unsafe class PostProcess : IDisposable
     bool haveNearSlice;
 
     // GPU timestamps (the frame's QueryArena): a set per frame, section k lasting from stamp k-1 to stamp k, read once its frame has been collected.
-    const int MaxStamps = 10;
+    const int MaxStamps = 12;
     sealed class StampSet
     {
         public readonly QuerySlot[] Slots = new QuerySlot[MaxStamps];
@@ -220,13 +222,13 @@ public sealed unsafe class PostProcess : IDisposable
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB }.OfType<Target2D>();
+        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, characterMask, ldr, ldrFxaa, luminance, adaptA, adaptB }.OfType<Target2D>();
 
     void Free()
     {
         foreach (var t in Targets()) t.Texture.Dispose();   // released after the frames in flight
         sceneColour = sceneDepth = farDepth = motion = upscaleDepth = reactive = historyA = historyB = null;
-        aoA = aoB = ldr = ldrFxaa = luminance = adaptA = adaptB = null;
+        aoA = aoB = characterMask = ldr = ldrFxaa = luminance = adaptA = adaptB = null;
         adaptedValid = historyValid = false;
     }
 
@@ -284,6 +286,7 @@ public sealed unsafe class PostProcess : IDisposable
             int hw = Math.Max((w + 1) / 2, 1), hh = Math.Max((h + 1) / 2, 1);
             aoA = Make(batch, hw, hh, InternalFormat.RG16f, TextureMinFilter.Linear, "post ssao");
             aoB = Make(batch, hw, hh, InternalFormat.RG16f, TextureMinFilter.Linear, "post ssao");
+            characterMask = Make(batch, w, h, InternalFormat.R8, TextureMinFilter.Linear, "post character mask");
             // Exposure runs after the upscaler, at the display size: the luminance's whole mip chain (GL's, defined by GenerateMipmap), read mipmapped.
             luminance = Make(batch, LuminanceSize, LuminanceSize, InternalFormat.R32f, TextureMinFilter.LinearMipmapNearest, "post luminance", LuminanceLevels);
             adaptA = Make(batch, 1, 1, InternalFormat.RG32f, TextureMinFilter.Linear, "post exposure adapted");
@@ -545,6 +548,8 @@ public sealed unsafe class PostProcess : IDisposable
         bool ao = needDepth;
         if (ao) RunSsao();
         if (ao) Stamp("ssao");
+        bool mask = ao && Options.SsaoCharacterStrength < 1 && ObjectMask is not null && characterMask is not null;
+        if (mask) { RunMask(); Stamp("char mask"); }
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
         postColour = sceneColour!;
         if (Temporal) { postColour = RunUpscale(); Stamp("upscale"); }
@@ -560,6 +565,8 @@ public sealed unsafe class PostProcess : IDisposable
         Bind(c.P, c.Scene, postColour);
         Bind(c.P, c.Ao, aoB);
         Bind(c.P, c.Adapted, auto ? adaptB : null);
+        Bind(c.P, c.Mask, mask ? characterMask : null);
+        c.P.Set(c.CharacterAo, mask ? Options.SsaoCharacterStrength : 1f);
         c.P.Set(c.Auto, auto ? 1 : 0);
         c.P.Set(c.Exposure, o.Exposure);
         c.P.Set(c.UseAo, ao ? 1 : 0);
@@ -703,6 +710,26 @@ public sealed unsafe class PostProcess : IDisposable
         v.P.Set(v.WaterY, WaterHeight ?? float.MinValue);
         v.P.Set(v.WaterReactive, WaterReactive);
         Draw(v.P, target);
+    }
+
+    /// <summary>
+    /// Draws the characters' own pixels into the character mask (Meitou's SSAO fade on characters): called inside <see cref="End"/> with the mask bound,
+    /// cleared to 0, no depth attachment; the guest writes 1 where its character is what the near depth shows. Unset: no mask, SSAO the same everywhere.
+    /// </summary>
+    public Action<MotionTargets>? ObjectMask { get; set; }
+
+    void RunMask()
+    {
+        CloseSegment();
+        var targets = PassTargets.Of(characterMask!.Texture, null);
+        targets = targets with { Colour = targets.Colour with { Load = Vk.AttachmentLoadOp.Clear, Clear = default } };
+        var cmd = Gpu.BeginNative("character mask");
+        cmd.BeginRendering(targets.Rendering);
+        Gpu.BeginHostPass(cmd, targets, DrawState.For(targets.Formats, Gpu.Device.DepthClamp, mask: Vk.ColorComponentFlags.RBit));
+        ObjectMask!(new MotionTargets(Sampled(sceneDepth!), new Vector2(nearPlane, farPlane), new Vector2(2 * JitterPixels.X / width, 2 * JitterPixels.Y / height)));
+        cmd.EndRendering();
+        Gpu.EndHostPass(cmd);
+        Gpu.EndNative(cmd);
     }
 
     void RunSsao()

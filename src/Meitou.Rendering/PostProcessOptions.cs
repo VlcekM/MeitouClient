@@ -18,6 +18,8 @@ public sealed class PostOptions
     public float Exposure = 1;
     /// <summary>World units: how far from a point occluders count.</summary>
     public float SsaoRadius = 12, SsaoStrength = 4;
+    /// <summary>How much of the occlusion stays on the characters' own pixels (Meitou): 0 none, 1 the same as everywhere else. They still darken the ground round them.</summary>
+    public float SsaoCharacterStrength = 0.25f;
     /// <summary>The upscaler (render scale, TAA / FSR / DLSS); not part of the presets.</summary>
     public readonly UpscaleOptions Upscale = new();
     /// <summary>0 none, 1 shows the occlusion.</summary>
@@ -44,7 +46,7 @@ public sealed class PostOptions
     {
         Preset = other.Preset; Fxaa = other.Fxaa; HeatHaze = other.HeatHaze; Debug = other.Debug; Ssao = other.Ssao;
         Dither = other.Dither; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
-        SsaoStrength = other.SsaoStrength;
+        SsaoStrength = other.SsaoStrength; SsaoCharacterStrength = other.SsaoCharacterStrength;
     }
 
     public const string Usage = """
@@ -55,6 +57,7 @@ public sealed class PostOptions
           --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with FXAA; FSR and DLSS need the vendor library, else TAA)
           --render-scale <0.25..1|native|quality|balanced|performance|ultra>   render size per axis with an upscaler (default 1)  --sharpness <0..1>
           --exposure <x>   --ssao-radius <units>   --ssao-strength <x>
+          --ssao-character-strength <0..1>   occlusion kept on characters' own pixels (default 0.25; 1 = as the rest)
         """;
 
     /// <summary>Handles one command-line option; false when it is not a post-processing one.</summary>
@@ -83,6 +86,7 @@ public sealed class PostOptions
             case "--exposure": Exposure = F(); return true;
             case "--ssao-radius": SsaoRadius = F(); return true;
             case "--ssao-strength": SsaoStrength = F(); return true;
+            case "--ssao-character-strength": SsaoCharacterStrength = Math.Clamp(F(), 0f, 1f); return true;
             default: return false;
         }
     }

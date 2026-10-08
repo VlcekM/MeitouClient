@@ -158,6 +158,7 @@ sealed class WorldOptions
           --ssao / --no-ssao, --dither / --no-dither   --no-fxaa
           --no-heat-haze           no heat haze (the game's HeatHaze setting, default on: strength from the weather's `heat haze`)   --heat-haze <x> replaces that field (testing)
           --exposure <x>  --ssao-radius <units>  --ssao-strength <x>
+          --ssao-character-strength <0..1>  occlusion kept on characters' own pixels (default 0.25)
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
           G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, Ctrl+C copy camera code, Ctrl+V go to camera code, P save screenshot, Tab settings sliders, Esc quit.
@@ -802,6 +803,7 @@ static class WorldFrame
                 swaying.SetMotionCamera(viewProjection, view * camera.Projection(aspect, near, far), eye, frustum);
             }
             if (nearSlice) gpu.Characters?.AttachMotion(gpu.Post, gpu.Foliage, viewProjection, view * camera.Projection(aspect, near, far), eye, frustum);
+            if (nearSlice) gpu.Characters?.AttachMask(gpu.Post, viewProjection, eye, frustum);
             host.Stage(6);
             gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
             StageClock.Lap(6);

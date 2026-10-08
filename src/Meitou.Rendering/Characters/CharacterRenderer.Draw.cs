@@ -30,7 +30,7 @@ internal sealed unsafe partial class CharacterRenderer
     readonly Dictionary<(GpuObjectPart, int, bool), Batch> batchMap = [];
     readonly List<Batch> active = [];
     Transient instances;
-    bool depthPass, motionPass;
+    bool depthPass, motionPass, maskPass;
 
     /// <summary>Draws the characters seen from <paramref name="eye"/> through <paramref name="frustum"/> into the open pass.</summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, Vector3 light, Vector3 fogColour, float fogDistance) =>
@@ -96,8 +96,8 @@ internal sealed unsafe partial class CharacterRenderer
             MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * CharInstance.Size)..]);
 
         // 3. One draw per batch.
-        var prog = motionPass ? motionProg : depthPass ? depthProg : colourProg;
-        string label = motionPass ? "characters motion" : depthPass ? "characters depth" : "characters";
+        var prog = maskPass ? maskProg : motionPass ? motionProg : depthPass ? depthProg : colourProg;
+        string label = maskPass ? "characters mask" : motionPass ? "characters motion" : depthPass ? "characters depth" : "characters";
         var targets = Gpu.CurrentTargets();
         var state = Gpu.CurrentState() with { Cull = Vk.CullModeFlags.None };
         var job = drawJobs.Rent();
@@ -105,14 +105,14 @@ internal sealed unsafe partial class CharacterRenderer
         job.Frame = nativeFrame.Prepare(in view, [bones.Binding, materials.Binding, content.Morphs.Binding(Gpu.Frame), previousBones.Binding]);
         job.Cull = depthPass ? Vk.CullModeFlags.None : Vk.CullModeFlags.BackBit;
         for (int a = 0; a < 9; a++) job.Rows[a] = new BufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
-        job.Push = new CharacterPush { DepthIndex = motionPass ? motionDepth : 0 };
+        job.Push = new CharacterPush { DepthIndex = maskPass ? maskDepth : motionPass ? motionDepth : 0 };
         job.RowCount = motionPass ? 9 : 5;
         if (job.Draws.Length < active.Count) job.Draws = new DrawJob.Draw[Math.Max(active.Count, job.Draws.Length * 2)];
         int n = 0;
         foreach (var b in active)
         {
             var part = b.Part;
-            ref var native = ref (motionPass ? ref MotionNative(part) : ref depthPass ? ref part.DepthNative : ref part.ColourNative);
+            ref var native = ref (maskPass ? ref MaskNative(part) : ref motionPass ? ref MotionNative(part) : ref depthPass ? ref part.DepthNative : ref part.ColourNative);
             Current(ref native, part, prog);
             job.Draws[n++] = new DrawJob.Draw
             {
@@ -131,7 +131,7 @@ internal sealed unsafe partial class CharacterRenderer
         Gpu.Record(label, job);
         timer.End();
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
-        if (!depthPass) drawCpu.Add(LastDrawCpuMs);
+        if (!depthPass && !maskPass) drawCpu.Add(LastDrawCpuMs);
     }
 
     readonly Dictionary<GpuObjectPart, MotionHolder> motionNatives = [];
@@ -139,6 +139,13 @@ internal sealed unsafe partial class CharacterRenderer
     ref ObjectNativeMesh MotionNative(GpuObjectPart part)
     {
         if (!motionNatives.TryGetValue(part, out var h)) motionNatives[part] = h = new MotionHolder();
+        return ref h.Native;
+    }
+
+    readonly Dictionary<GpuObjectPart, MotionHolder> maskNatives = [];
+    ref ObjectNativeMesh MaskNative(GpuObjectPart part)
+    {
+        if (!maskNatives.TryGetValue(part, out var h)) maskNatives[part] = h = new MotionHolder();
         return ref h.Native;
     }
 
