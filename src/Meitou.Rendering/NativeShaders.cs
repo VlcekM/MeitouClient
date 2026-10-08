@@ -67,10 +67,9 @@ static partial class NativeShaders
             vec4 weatherDust;
             uint weatherGround;
             uint weatherDustNoise;
-            uint fogVolumes;
             vec4 fogVolumeEye;
-            vec4 fogVolumeSelect0;
-            vec4 fogVolumeSelect1;
+            vec4 fogVolumeInfo;
+            vec4 fogVolumeData[512];
         } frame;
 
         """;
@@ -159,8 +158,7 @@ static partial class NativeShaders
         ["uShadowLandmark"] = "shadowTextures[frame.shadowLandmark]",
         ["uWeatherWet"] = "frame.weatherWet", ["uWeatherDust"] = "frame.weatherDust",
         ["uWeatherGround"] = "textures2D[frame.weatherGround]", ["uWeatherDustNoise"] = "textures2D[frame.weatherDustNoise]",
-        ["uFogVolumes"] = "textures2D[frame.fogVolumes]", ["uFogVolumeEye"] = "frame.fogVolumeEye",
-        ["uFogVolumeSelect0"] = "frame.fogVolumeSelect0", ["uFogVolumeSelect1"] = "frame.fogVolumeSelect1",
+        ["uFogVolumeEye"] = "frame.fogVolumeEye", ["uFogVolumeInfo"] = "frame.fogVolumeInfo", ["uFogVolumeData"] = "frame.fogVolumeData",
     };
 
     /// <summary>The per-view uniforms the world shaders share: <see cref="ViewConstants"/> members.</summary>
@@ -267,8 +265,8 @@ static partial class NativeShaders
 }
 
 /// <summary>The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).</summary>
-[StructLayout(LayoutKind.Explicit, Size = 336)]
-struct FrameConstants
+[StructLayout(LayoutKind.Explicit, Size = 8512)]
+unsafe struct FrameConstants
 {
     [FieldOffset(0)] public Vector4 AtmoSun;
     [FieldOffset(16)] public Vector4 AtmoLight;
@@ -295,10 +293,10 @@ struct FrameConstants
     [FieldOffset(256)] public Vector4 WeatherDust;
     [FieldOffset(272)] public uint WeatherGround;
     [FieldOffset(276)] public uint WeatherDustNoise;
-    [FieldOffset(280)] public uint FogVolumes;
     [FieldOffset(288)] public Vector4 FogVolumeEye;
-    [FieldOffset(304)] public Vector4 FogVolumeSelect0;
-    [FieldOffset(320)] public Vector4 FogVolumeSelect1;
+    [FieldOffset(304)] public Vector4 FogVolumeInfo;
+    /// <summary>The placed fog volumes in view, packed (<see cref="FogVolumeShaders"/>): <see cref="FogVolumeShaders.MaxData"/> vec4s.</summary>
+    [FieldOffset(320)] public fixed float FogVolumeData[FogVolumeShaders.MaxData * 4];
 
     /// <summary>The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.</summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
@@ -306,7 +304,7 @@ struct FrameConstants
         ("uAtmoSun", 0, 16), ("uAtmoLight", 16, 16), ("uAtmoSunLight", 32, 12), ("uAtmoParams", 48, 16), ("uAtmoTau", 64, 16),
         ("uAtmoTint", 80, 12), ("uAtmoFog", 96, 16), ("uAtmoFogColour", 112, 12), ("uAtmoSimple", 128, 16), ("uAtmoHaze", 144, 16),
         ("uAtmoHazeCloud", 160, 16), ("uAtmoAltitude", 176, 16), ("uAtmoMaps", 192, 16), ("uWeatherWet", 240, 16), ("uWeatherDust", 256, 16),
-        ("uFogVolumeEye", 288, 16), ("uFogVolumeSelect0", 304, 16), ("uFogVolumeSelect1", 320, 16),
+        ("uFogVolumeEye", 288, 16), ("uFogVolumeInfo", 304, 16), ("uFogVolumeData", 320, FogVolumeShaders.MaxData * 16),
     ];
 
     /// <summary>The frame-global textures, the array each is registered in and the member that holds its index.</summary>
@@ -316,7 +314,6 @@ struct FrameConstants
         ("uShadowMap", BindlessKind.Shadow2D, 220), ("uShadowNoise", BindlessKind.Texture2D, 224), ("uShadowTerrain", BindlessKind.Texture2D, 228),
         ("uShadowBlocker", BindlessKind.Texture2D, 232), ("uShadowLandmark", BindlessKind.Shadow2D, 236),
         ("uWeatherGround", BindlessKind.Texture2D, 272), ("uWeatherDustNoise", BindlessKind.Texture2D, 276),
-        ("uFogVolumes", BindlessKind.Texture2D, 280),
     ];
 }
 

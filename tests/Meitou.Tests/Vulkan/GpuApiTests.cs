@@ -180,18 +180,18 @@ public class GpuApiTests
     static readonly Dictionary<string, string> LegacyModules = new()
     {
         ["sky simple"] = "4C48F27F2EFC495E4B81B6421F095B12",
-        ["sky"] = "8E1A75C6BA7DF9E2163456A32AF94D62",   // the SkyX cloud pass
-        ["water"] = "16B7BD38599BB3340E2367610E8F7D11",
+        ["sky"] = "5095A586F125651C8C74B2AFB66388CE",   // the SkyX cloud pass
+        ["water"] = "A0A4CBC25B0DEC8CA4CA476A519AE177",
         ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",
-        ["terrain patch"] = "95B7690764797D0D0B0CEB215081BCCB",
-        ["terrain mesh"] = "2198FF61A357E2284994FA15905693F9",
+        ["terrain patch"] = "2690B7B8FBFB7E1D6A486B87F70877B5",
+        ["terrain mesh"] = "446D5B9FBC51CE60579BF938AEA25C50",
         ["terrain patch depth"] = "838B179AA83BE582C69CC3C2766FA048",
         ["terrain mesh depth"] = "FD249B5F918DBB257C412C7394FD4ABC",
-        ["foliage mesh"] = "BDFDD9F3DE14125F9E216119F27BA967",
-        ["foliage grass"] = "03BE41174D646E5C08D1EB9DD8487B37",
+        ["foliage mesh"] = "23D9D68F0E42134CFEDAE9ECE298F21C",
+        ["foliage grass"] = "B8A96698AA7819DE934B42097CBDB8C0",
         ["foliage grass motion"] = "A836A4928C20E6352E07004C224C6A92",
         ["foliage depth"] = "099C2868B7FA91B71BE2ACE3ED5DD997",
-        ["buildings"] = "49780E20AFE4DFB3D631A4D379138A46",
+        ["buildings"] = "8BB86CFD90DF264C8116FD6FB1971798",
         ["buildings depth"] = "24B964B69B81036B6258A57BAA9486A8",
         ["shadow debug"] = "2091245F0878665BDB1170BA5CE19B3B",
         ["shadow atlas"] = "7A8BC32D82FC65DBE0B7F1BEE4AFB43A",

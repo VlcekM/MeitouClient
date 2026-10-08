@@ -563,7 +563,6 @@ static class WorldFrame
             Particles?.Dispose();
             Water?.Dispose();
             Surfaces?.Dispose();
-            FogVolumes?.Dispose();
             Reflection?.Dispose();
             Shadow?.Dispose();
             Post?.Dispose();
@@ -647,7 +646,8 @@ static class WorldFrame
         var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(context, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, CloudWind = o.CloudWind, KenshiHaze = !o.PhysicalHaze }, Post = new PostProcess(context, o.Post) };
         gpu.Post.LoadHeatHaze(assets);
         // The placed fog volumes (docs/formats/fogfeatures.md): the swamp's fog and the like, part of the game's look.
-        if (FogFeatures.Load(install) is { Count: > 0 } fogFeatures) gpu.FogVolumes = new FogVolumes(context, fogFeatures) { Enabled = !o.NoFogVolumes };
+        // Always made: the weather's fog spheres go through it too, with or without a fogfeatures.dat.
+        gpu.FogVolumes = new FogVolumes(context, FogFeatures.Load(install)) { Enabled = !o.NoFogVolumes };
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
         if (scene.Database is { } skyDb)
@@ -909,7 +909,6 @@ static class WorldFrame
         bool held = gpu.Post?.InstantAdaptation ?? true;
         if (gpu.Weather is { } weather) { weather.Update(eye, hour, sun.Y, held); weather.Apply(gpu.Sky); }
         gpu.Surfaces?.Apply(gpu.WeatherState);
-        gpu.FogVolumes?.Update(eye, sun.Y, gpu.Sky.Physical);
         var (colours, light) = gpu.Sky.Prepare(sun, eye.Y, fogDistance + 3 * Math.Max(eye.Y, 0));
         // The game's exposure (0.55 over the mean luminance, clamped to its band) goes with the game's sky and light; the simple sky keeps a plain scale.
         if (gpu.Post is { } exposed) exposed.AutoExposure = gpu.Sky.Physical ? (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance) : null;
@@ -925,6 +924,11 @@ static class WorldFrame
         // They count as their own stage (the profiler's "particles", with their draw below).
         UpdateParticles(gpu, camera);
         gpu.Particles?.Update(time * SecondsPerTimeUnit, camera);
+        // The placed fog volumes in view, for every world shader (FogVolumes).
+        if (gpu.FogVolumes is { } fogVolumes)
+        {
+            fogVolumes.Update(eye, camera.Forward, camera.FieldOfView, rw / (float)Math.Max(rh, 1), gpu.Sky.HazeDistance, sun.Y, gpu.Sky.Physical);
+        }
         StageClock.Lap(13);
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, sun.Y); }
         StageClock.Lap(12);

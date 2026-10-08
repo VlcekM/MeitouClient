@@ -10,7 +10,11 @@ Sources: the install's `fogfeatures.dat` (4501 bytes), `data/materials/post/fog.
 `gui/layout/Fog_Editor.layout`, and the exe functions: loader FUN_14010f060 (called with "fogfeatures.dat" by the world load
 FUN_14086db80), level-editor save FUN_140777ce0 (writes it with FUN_14010c760), `FogVolume` base constructor FUN_14010ac90, the setters
 FUN_14010aea0 (density), FUN_14010b100 (colour), FUN_14010afd0 (edge), the block constructor FUN_14010d370, the sphere FUN_14010e500, the
-beam FUN_14010e840, the hull builder FUN_14010b6a0, the per-frame inside test FUN_140109720 with FUN_140109370 / FUN_140109ad0.
+beam FUN_14010e840 with its placement FUN_140109130, the hull builder FUN_14010b6a0, the per-frame inside test FUN_140109720 with FUN_140109370 /
+FUN_140109ad0 (setInside) and the `contains` of the sphere FUN_1401090c0 and the cylinder FUN_140109260, the alpha setter FUN_140108f50, the
+additive switch FUN_140109a60, the weather effects' volumes FUN_1400fb070 and their fades (`FogController::FogFadeSphere` FUN_140109410 /
+FUN_140109500, `FogFadeCylinder` FUN_140109590 / FUN_140109680, started by FUN_140109f20 / FUN_14010a050 from FUN_1400f8ed0 / FUN_1400f8f60), the
+particle systems' wrapper `ParticleSystemHandler` FUN_1404079c0, and in `OgreMain_x64.dll` `Pass::setSceneBlending` (both forms).
 
 ## File layout (Verified: FUN_14010f060, and a scratch parser that consumes the install's file exactly, 2026-10-08)
 
@@ -78,22 +82,43 @@ Swamp[SOUTH], Swamp_N-W-Mid (ceiling 285 there) and Swamp-W-Small (499) (**Verif
 pale-blue block over the Great Desert; The Hub's ground (about 325) lies under Central Forestland, Swamp[SOUTH] and SwampDesertpool
 (ceilings about 1140 to 1240 there). The Fog Islands' fog comes from these volumes too (the `fog islands` weather lists an effect with count 0).
 
+The sphere and the two beams (**Verified**: the install's file; positions rounded):
+
+| Name (as stored) | Type | Colour | Distance (edge) | Shape |
+|---|---|---|---|---|
+| Skinners Fog Wall Extra#140805Sphere#140805 dome (-10159, -24…) | sphere | 1.00, 0.84, 0.72 | 13500 | centre (-13125, -3698, -24794), radius 10000 |
+| Quarry (-47001, -56232) | beam | 1, 1, 1 | 2000 (1000) | (-46550, 1095, -56004) to (-46598, 1794, -56003), radius 7502.5: a flat disc |
+| Hellish Cylinder (-113904, 62140) | beam | 1, 1, 1 | 7500 (1000) | (-113904, -3161, 62140) to (-113904, 2476, 62140), radius 10000: upright |
+
 ## How the game draws them
 
 - **Objects** (Verified (decompiled)): class `FogVolume` (vtable: destructor, setDensity, setColour, setInside, contains), with
   `FogSphere`, `FogCylinder` (the beam) and `FogPlaneVolume`; `MainFog` (the weather fog's shared parameters) derives from it too. A
-  `FogController` singleton keeps them. Each volume gets a material clone of `FogSphere` / `FogBeam` / `FogPlaneVolume` (post/fog.material,
-  `scene_blend alpha_blend`, `depth_write off`), and the editor's ones a visibility flag 0x1000 (**Observed**: whether the main camera's mask
-  includes it was not checked; the volumes are visible in game).
+  `FogController` singleton keeps them (the constructors append themselves to its list). Each volume gets a material clone of `FogSphere` /
+  `FogBeam` / `FogPlaneVolume` (post/fog.material, `scene_blend alpha_blend`, `depth_write off`), and the editor's ones a visibility flag
+  0x1000 (**Observed**: whether the main camera's mask includes it was not checked; the volumes are visible in game).
 - **Block mesh** (Verified (decompiled), FUN_14010b6a0): the corners where three planes meet inside the other four, one polygon per plane
-  through its corners, render queue 82 (**Observed**: the call is through a vtable slot read as `setRenderQueueGroup`). Queue 82 is drawn by
-  the "Fog volumes and Particles" scene pass after the atmosphere haze quad (`main.compositor`: water 81 to 82, then the haze, then 82 to
-  85; with Ogre 2.x's exclusive `rq_last` the volumes are drawn once, after the haze; **Observed**).
-- **Inside test every frame** (Verified (decompiled), FUN_140109720): for each volume, `contains(sphere(camera position, r + 0.1))` with r
-  a camera value (**Observed**: presumably the near clip distance), then `setInside`: inside, the pass culls the other faces and turns the
-  depth check off (so the back faces cover the screen); outside, front faces with the depth test. Nothing else per frame changes a volume:
-  the setters are called only by the constructors, the loader and the editor (**Observed**, direct calls in the call graph; virtual calls
-  from the editor). No weather, season, region or time-of-day value reaches them, except the light below.
+  through its corners, render queue 82 (the vtable call at offset 0x50, `setRenderQueueGroup`, the slot the particle wrapper also calls,
+  below). Queue 82 is drawn by the "Fog volumes and Particles" scene pass after the atmosphere haze quad (`main.compositor`: water 81 to 82,
+  then the haze, then 82 to 85; with Ogre 2.x's exclusive `rq_last` the volumes are drawn once, after the haze; **Observed**).
+- **Sphere mesh** (Verified (decompiled), FUN_14010e500; the mesh's bounds Verified with Meitou's mesh reader on the install's file):
+  `unit_sphere.mesh` (radius 0.5) on a node at the centre scaled by 2 × radius, so the hull has the stored radius; queue 82 goes with the mesh
+  name into the creation call (**Observed**: the 0x52 stored next to the name). `fog_sphere_vs` measures the sphere as 0.48 of the unscaled
+  mesh, so the shader's sphere is **0.96 × the stored radius**, just inside the hull.
+- **Beam mesh** (Verified (decompiled), FUN_14010e840, FUN_140109130): `cylinder.mesh` (a hexagonal prism: x ±0.5, z ±0.433, y 0 to 1) on a
+  node at the start, turned so that its local y points at the end, scaled (2 × radius, length, 2 × radius). The constructor sets edge 300, which
+  the loader then replaces with the file's. `fog_beam_vs` takes the node's y axis as the axis (its length the beam's) and 0.4 of the unscaled
+  mesh across, so the shader's cylinder has **0.8 × the stored radius**.
+- **Inside test every frame** (Verified (decompiled), FUN_140109720): for each volume, `contains(camera position, r + 0.1)` with r a camera
+  value (**Observed**: presumably the near clip distance), then `setInside` (FUN_140109ad0): inside, culling mode 3 (`CULL_ANTICLOCKWISE`: the
+  front faces are culled, the back faces drawn) and the depth check off, so the back faces cover the screen; outside, mode 2 (`CULL_CLOCKWISE`,
+  the usual back-face culling) with the depth check (the numbers are Ogre's enum, **Observed** from the Ogre source). The sphere's `contains`
+  (FUN_1401090c0) is `|camera − node position| < radius + r` with the node's *local* position (`Node::getPosition`): right for the file's
+  spheres, whose nodes hang from the root, but not for an effect's (below). The cylinder's (FUN_140109260) checks that the camera projects onto
+  the axis within r of its ends and lies within radius + r of it (**Observed**: the decompiler lost two operands; read as the nearest point on
+  the axis). Nothing else per frame changes a volume: the setters are called only by the constructors, the loader, the editor and the effect
+  fades below (**Observed**, direct calls in the call graph; virtual calls from the editor). No weather, season, region or time-of-day value
+  reaches the file's volumes, except the light below.
 - **Block shader** (`fog_planes_fs`, Verified: the shipped HLSL): per pixel, the ray from the eye and the G-buffer distance D (the far clip
   for the sky). For each plane the ray's crossing; planes facing the eye raise `near` (from 0), the others lower `far` (from D); `near` is
   capped at D. Edge softening: `edgeBlur × saturate(1 / (far × 0.00006))` (softer far away), and at the midpoint of the path the product over
@@ -103,41 +128,94 @@ pale-blue block over the Great Desert; The Hub's ground (about 325) lies under C
   scene, and at night it keeps 0.08 of it: faintly visible, unlike the haze, which goes black. With the eye inside (`near` 0) that is the
   result. With the eye outside, the volume's colour moves towards the haze colour at its near side (weight `saturate((near − 12000) ×
   0.0001)`: from 12000 to 22000 away), the haze's alpha scaled by the volume's, then the weather fog of `near` is laid over it, alpha
-  `saturate(a + weather a) × volume a`. The result is alpha-blended over the hazed scene.
-- **Sphere and beam shaders** (`fog_sphere_fs`, `fog_beam_fs`, Verified: the shipped HLSL): the path through the sphere (its far end pulled
-  in by a slow sine pattern once the near side is beyond 10000) or the capped cylinder with an end fade, same curve and colour × `sunColour.w` (no 1.6,
-  no 0.08 floor, no haze blending).
+  `saturate(a + weather a) × volume a`. The result is alpha-blended over the hazed scene. A volume wholly beyond D adds nothing (`near`
+  reaches D before `far` does).
+- **Sphere shader** (`fog_sphere_fs`, Verified: the shipped HLSL): the ray's two crossings of the sphere (radius 0.96 r), each clamped to
+  0..D. Beyond 10000 the far crossing is pulled in by `1000 × saturate(near / 10000 − 1) × (sin(0.004 y) + 1 − cos(0.0008 z) cos(0.0008 x) + 1)`,
+  with x, y, z the world position of the pixel's hull fragment (the hull's near side when the eye is outside), which breaks a far sphere up.
+  Alpha: the same curve of `saturate(path × density)`, times the colour's alpha; colour `colour × sunColour.w` (no 1.6, no 0.08 floor, no haze
+  blending: the shader's own "ToDo"). A ray that misses the sphere has a zero (beyond 10000 a negative) path.
+- **Beam shader** (`fog_beam_fs`, Verified: the shipped HLSL): the ray's two crossings of the infinite cylinder (radius 0.8 r round the axis),
+  clamped to 0..D, then cut by the two end planes (perpendicular to the axis through the start and the end). End fade: at the middle of the
+  path, its distance along the axis from the start and from the end, each times edgeBlur and saturated, multiplied, then `1 − (1 − e)²`.
+  Alpha: the curve of `saturate(path × density × fade)` times the colour's alpha; colour `colour × sunColour.w`, as the sphere. The HLSL divides
+  by `1 − (ray · axis)²` and by `ray · axis` unguarded.
+- **Blending** (Verified (decompiled), FUN_140108f50, FUN_140109a60 and Ogre's `Pass::setSceneBlending`): the file's volumes keep colour alpha 1
+  and the material's alpha blend (`SBT_TRANSPARENT_ALPHA`: source alpha, one minus source alpha). The effects' volumes below take the record's
+  alpha (clamped to 0..1) as the colour's alpha, a volume at alpha 0 is hidden, and `additive colour` switches the pass to (source alpha, one).
+- **Order** (**Observed**): all queue-82 volumes are transparent objects sorted back to front by Ogre, which measures the camera's distance to
+  the centre of an object's world bounds (`MovableObject::cullFrustum` computes that distance; that the transparent sort uses it was not traced).
+  For a sphere that is its centre, for a beam the middle of the hull, for a block the middle of its corners' box.
 - **Why the swamp looks the way it does** (from the above): standing in Shark, the eye is inside Swamp[SOUTH] (density distance 4500) and
   usually Swamp_N-W-Mid (2000): things 2000 to 4000 away are mostly fog, the sky (D = 50000 but the path ends at the ceiling, ~2600 above,
   lengthened by `1 + |ray.y| × 0.9`) is covered, and the colour is the volumes' grey-brown × 1.6, desaturating everything behind it.
 
+## The weather effects' fog volumes (Verified (decompiled), FUN_1400fb070 and the fades)
+
+An EFFECT's `fog volumes` (EFFECT_FOG_VOLUME, [weather.md](weather.md#fog-volumes)) are the same objects: `type` 0 makes a `FogSphere` (the
+constructor above: `unit_sphere.mesh`, queue 82, `fog_sphere_fs`) at `position x/y/z` with `radius` and the density from `distance`; `type` 1 a
+`FogCylinder` from `position` to `position 2` with `radius` (edge 300, the constructor's). Then `colour` (ARGB, alpha forced to 1), `alpha` and
+`additive colour` as above. The volume's node becomes a child of the effect's node, so it moves with the effect. Because the sphere's
+`contains` reads that node's position relative to its parent, the camera is practically never "inside" an effect's sphere: its hull stays in the
+outside state (back faces culled, depth tested), so **from inside a twister's dust ball the ball is not drawn** (Verified (decompiled) as code;
+not seen in game).
+
+Fades: when the effect starts, if its `fog fade in duration` is above 0, `FogFadeSphere` grows the sphere's radius linearly from 0 to its own and
+brings the density distance linearly from 10 × the radius down to its own over that time; when the effect stops, `fog fade out duration` runs
+the same backwards (from the current values). `FogFadeCylinder` does the same with the radius and from 4 × the density distance (the length
+kept). The alpha does not fade. A fade of 0 seconds is skipped (the volume appears and goes at once).
+
+## Particles are not fogged (Verified (decompiled) and the shipped materials)
+
+The particle systems' wrapper (`ParticleSystemHandler`, constructor FUN_1404079c0) puts every effect's particle system in render queue 84
+(`MOV DL, 0x54` before the call through vtable offset 0x50, `setRenderQueueGroup`, at 0x140407a9e). The fog volumes are in queue 82, so the
+"Fog volumes and Particles" pass draws all volumes first and then all particles. The particle materials (`data/particles/materials`) use
+`Basic_Coloured_Ambient_VP` / `Basic_Coloured_Texture_VP` with `Basic_Texture_FP` / `Basic_Texture_Clipped_FP_HLSL` (one uses
+`Particle_Blend_Depth`), from `materials/forward/basic.hlsl` and `particles.hlsl`, which have no fog or haze term: texture × colour × vertex
+colour, the vertex colour darkened by the sun's height. Particles are not in the G-buffer either, so no volume measures them. So rain, ash or
+smoke inside or behind a fog volume are drawn over it unfogged, hidden only where the scene's depth is in front of them.
+
+## Mods
+
+The loader is called once, with the name `fogfeatures.dat`, and builds the whole list from the one file `openResource` returns from the
+"Landscape" group (Verified (decompiled), FUN_14010f060 and its caller FUN_14086db80): a mod's file **replaces** the base list, it is never
+added to it. Which copy wins follows Ogre's index for that group ([ogre-material.md](ogre-material.md#resource-locations)): the last-added
+location in "Landscape" that has the name. A mod folder joins the group of the base folder with the same path, and for `newland/land` that
+record ends as "Overlaymaps" (the folder is listed in both sections), so a mod's `newland/land/fogfeatures.dat` would be indexed in Overlaymaps
+and the Landscape lookup would still find the base file (**Observed**: inferred from the documented rules, not tried in game). A copy in a folder
+that maps to Landscape alone (such as the mod's `newland/land/textures`) would win. Where the level editor writes the file (FUN_14010c760 calls
+`createResource` in "Landscape") was not traced: **Unknown**.
+
 ## Not known
 
-- Whether a mod's `fogfeatures.dat` replaces the base file or adds to it (**Unknown**: the loader opens one resource by name from the
-  "Landscape" group; how that group orders mod folders was not traced). The level editor saves the whole list into the active mod.
-- The camera value used for the inside test's sphere (above), and which faces the game culls in each state (the mode numbers were not
-  mapped to Ogre's enum).
+- The camera value used for the inside test (above).
 - Version 1 files (no names) were not seen.
+- Where the level editor saves the file (above).
 
 ## In Meitou
 
 `FogFeatures` (`Meitou.Data.World`) reads the file into `FogFeature` records (all three types; `Contains`, `Corners`, `SectionBounds` for
-blocks). `FogVolumes` (`Meitou.Rendering`) uploads every block as one row of an 11-texel-wide RGBA32F texture (`uFogVolumes`: the seven
-planes as (normal, w), (colour, density), (edgeBlur, 0, 0, 0), and a box round the block between heights -1000 and its top, which the
-shader tests first so that rays missing the block cost two fetches), and each frame picks up to 8 blocks whose box lies within 30000 of
-the eye in x, z, nearest first, drawn farthest first (`uFogVolumeSelect0/1`, 1 + the row, 0 ends the list), with the eye and the light
-(`uFogVolumeEye`). Past that range a volume's near side is beyond 30000, where the game's formula gives it the haze's colour with the
-haze's alpha and the haze is already complete, so leaving it out changes almost nothing. `FogVolumeShaders` holds the block shader's formula as GLSL; `atmoApply` (the haze every world shader
-ends with) now applies it after the haze with the shader's own point and distance, and the sky pass with the haze's far distance D. The
-viewer prints the picked volumes (`fog vols` line) with `--screenshot`; `--no-fog-volumes` turns them off.
+blocks). `FogVolumes` (`Meitou.Rendering`) turns every volume into a few vec4s: a block (10) its box between heights -1000 and its top,
+edgeBlur, colour and density and the seven planes; a sphere (3) its centre, the shader radius 0.96 r and the hull radius r, alpha, additive,
+colour and density; a beam (4) its start, unit axis and length, the shader radius 0.8 r, edgeBlur, alpha, additive, colour and density. Each
+frame (`Update`, after the particles moved) it keeps every volume whose box lies within the game's far clip D (the haze's far distance, `uAtmoFog.w`) and inside a wedge round the
+camera's horizontal direction as wide as the view's corner rays (the same in x, z for the water reflection's mirrored camera; off when the
+camera looks nearly straight down), adds the weather effects' volumes (`ParticleRenderer.CollectFogVolumes`, with the game's fades as size and
+density, `FogVolumes.Faded`, and an effect's sphere left out while the eye is inside it, as the game), sorts them by the distance to the centre
+of their hull's bounds, and packs them farthest first into `uFogVolumeData` (512 vec4s in the frame block: 51 blocks, so all 28 of the base
+game and dozens of effect spheres fit; if more are in view the farthest are left out and counted). `uFogVolumeEye` holds the eye and the
+blocks' light, `uFogVolumeInfo` the vec4s in use and `sunColour.w` for the spheres and beams. `FogVolumeShaders` holds the three shaders'
+formulas as GLSL; `atmoApply` (the haze every world shader ends with) applies them after the haze with the shader's own point and distance,
+and the sky pass with the haze's far distance D, each volume alpha-blended (or added) in order. The distance is capped at D, as the game's G-buffer depth is (Meitou draws terrain beyond D; the game does not), so a volume beyond D adds nothing and is left out exactly. The data are uniform-buffer reads, the same for
+every pixel; a block whose box the pixel's ray misses costs one box test. The viewer prints the volumes drawn (`fog vols` line) with
+`--screenshot`; `--no-fog-volumes` turns them off. Particles are drawn after the scene with no fog, as the game.
 
 Differences from the game (**Observed**, viewer choices):
-- Evaluated per pixel in each shader instead of rasterising the block's hull over the G-buffer. Opaque surfaces get the same result, but
-  the game only fogs rays that hit the hull (the corners' convex shape), while Meitou fogs the whole region inside the planes; they differ
-  only for rays that cross the region outside the hull, which in the base game is underground (the blocks are open below).
-- The selection (at most 8, within 30000) and the box test are the viewer's; the game draws all of them, sorted by Ogre's transparent order (distance to the
-  node, which sits at the corners' mean; Meitou sorts by the cross-section's centre).
-- Spheres and beams are not drawn (none in the swamp). The EFFECT fog volumes of twisters ([weather.md](weather.md#fog-volumes)) keep
-  their own stand-in in the particle pass; the game draws them with `fog_sphere_fs` too.
-- Particles are not fogged by the volumes (in the game they share queue 82 to 85 with them; their order is Unknown).
+- Evaluated per pixel in each shader instead of rasterising each hull over the G-buffer. Opaque surfaces get the same result, but the game
+  only fogs rays that hit a block's hull (the corners' convex shape), while Meitou fogs the whole region inside the planes; they differ only for
+  rays that cross the region outside the hull, which in the base game is underground (the blocks are open below). The sphere's break-up
+  pattern samples the hull's near side computed from the ray (the game's rasterised fragment).
+- The view culling (D, wedge) and the 512-vec4 list are the viewer's; the game submits every volume and lets Ogre cull it. A volume
+  outside the view adds nothing, so the result is the same while the list is not full.
+- The game's beam formula divides by zero for a ray along the axis; Meitou clamps those divisors.
 - With the simple sky (`--simple-sky`, `B`) the volumes are off.
