@@ -257,6 +257,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         return v * (WorldLayout.MaxHeight / ushort.MaxValue);
     }
 
+    /// <summary>The fog cull (set by the world frame around the main camera's draw only): nodes wholly hidden by the fog the eye is in are skipped.</summary>
+    internal FogVolumes? FogCull { get; set; }
+
     /// <summary>Draws the terrain; nodes whose highest point is under <paramref name="cullBelow"/> are skipped (the reflection pass clips everything below the water). <paramref name="secondary"/>: the reflection's call, with its own quadtree for its own LOD distance.</summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity, bool secondary = false)
     {
@@ -265,7 +268,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         if (current.SetRanges(options.TerrainLod) && LodLog)
             Console.WriteLine($"terrain   lod {(secondary ? "reflection" : "main")} {options.TerrainLod}: ranges {string.Join(" ", current.Ranges.SkipLast(1).Select(r => r.ToString("0")))}");
         frame = new Frame(viewProjection, eye, options, light);
-        current.Select(eye, bounds, (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max), nodes);
+        var fog = FogCull;
+        current.Select(eye, bounds, (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max) && (fog is null || !fog.Hidden(min, max, FogVolumes.CullKind.Terrain)), nodes);
         if (LodLog && !secondary && (frameNumber < 4 || frameNumber % 60 == 1))
             Console.WriteLine($"terrain   frame {frameNumber} nodes per level (whole + quarters): {string.Join(" ", Enumerable.Range(0, current.LevelCount).Select(l => $"{nodes.Count(n => n.Level == l && n.Quadrant < 0)}+{nodes.Count(n => n.Level == l && n.Quadrant >= 0)}"))}");
 

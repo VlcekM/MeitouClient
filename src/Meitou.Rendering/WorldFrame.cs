@@ -88,6 +88,8 @@ sealed class WorldOptions
     public bool NoParticles;
     /// <summary><c>--no-fog-volumes</c>: the placed fog volumes of <c>fogfeatures.dat</c> are not drawn (comparison; docs/formats/fogfeatures.md).</summary>
     public bool NoFogVolumes;
+    /// <summary><c>--no-fog-cull</c>: everything the fog hides is drawn anyway (comparison; docs/formats/fogfeatures.md "In Meitou").</summary>
+    public bool NoFogCull;
     public float? ParticlePrewarm;
     /// <summary><c>--particle-area &lt;radius&gt;</c> (test): weather effects are placed in a disc of this radius round the start point instead of the weather region; <c>--particle-seed</c> seeds their random choices.</summary>
     public float? ParticleArea;
@@ -163,6 +165,7 @@ sealed class WorldOptions
           --clouds <0..1>          cloud density c (test override)
           --cloud-wind <x>,<z>     the clouds' drift velocity in world units per second (test; the drift is held still in --screenshot)
           --no-fog-volumes         leave out the placed fog volumes (fogfeatures.dat: the swamp's fog, the Fog Islands', the Vain's)
+          --no-fog-cull            draw what the fog in front of the camera completely hides (comparison; the image is the same)
           --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-area <r> place weather effects within r units of the start point (test)   --particle-seed <n>   --particle-only <a,b> keep only the weather effects with these in their names (test)
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
@@ -286,6 +289,7 @@ sealed class WorldOptions
                 case "--weather-seed": o.WeatherSeed = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--no-particles": o.NoParticles = true; break;
                 case "--no-fog-volumes": o.NoFogVolumes = true; break;
+                case "--no-fog-cull": o.NoFogCull = true; break;
                 case "--particle-prewarm": o.ParticlePrewarm = Math.Max(F(), 0); break;
                 case "--particle-area": o.ParticleArea = Math.Max(F(), 1); break;
                 case "--particle-seed": o.ParticleSeed = (int)F(); break;
@@ -649,7 +653,7 @@ static class WorldFrame
         gpu.Post.LoadHeatHaze(assets);
         // The placed fog volumes (docs/formats/fogfeatures.md): the swamp's fog and the like, part of the game's look.
         // Always made: the weather's fog spheres go through it too, with or without a fogfeatures.dat.
-        gpu.FogVolumes = new FogVolumes(context, FogFeatures.Load(install)) { Enabled = !o.NoFogVolumes };
+        gpu.FogVolumes = new FogVolumes(context, FogFeatures.Load(install)) { Enabled = !o.NoFogVolumes, CullEnabled = !o.NoFogCull };
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
         if (scene.Database is { } skyDb)
@@ -1001,17 +1005,25 @@ static class WorldFrame
             }
             if (nearSlice) gpu.Characters?.AttachMotion(gpu.Post, gpu.Foliage, viewProjection, view * camera.Projection(aspect, near, far), eye, frustum);
             host.Stage(6);
+            var fogCull = gpu.FogVolumes;
+            gpu.Terrain.FogCull = fogCull;
             gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
+            gpu.Terrain.FogCull = null;
             StageClock.Lap(6);
             host.Stage(7);
+            if (gpu.Objects is { } fogObjects) fogObjects.FogCull = fogCull;
             if (render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+            if (gpu.Objects is { } fogObjectsDone) fogObjectsDone.FogCull = null;
             StageClock.Lap(7);
             // Foliage in every depth slice (it reaches 32000+ units at the default x4), counted as one draw.
             host.Stage(8);
+            if (gpu.Foliage is { } fogFoliage) fogFoliage.FogCull = fogCull;
             gpu.Foliage?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, continuation: foliageDrawn);
+            if (gpu.Foliage is { } fogFoliageDone) fogFoliageDone.FogCull = null;
             foliageDrawn = true;
             StageClock.Lap(8);
             // Characters after the opaque geometry: they alone write the scene's alpha (SSAO's character mask), so nothing drawn later may cover them but water.
+            if (gpu.Characters is { } fogCharacters) fogCharacters.FogCull = fogCull;
             if (nearSlice && gpu.Characters is { } characters)
             {
                 host.Stage(7);

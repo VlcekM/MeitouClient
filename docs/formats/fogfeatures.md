@@ -216,6 +216,39 @@ texture version / this list): Shark in swamp rain 6.34 / 8.22 / 7.80, Shark from
 3.43 / 4.83 / 4.28, inside the Skinner's Roam dome 2.80 / 3.82 / 3.64. So drawing every volume (and the sphere and beams) costs less than the
 capped version: the far-clip cull drops what cannot show, and the data are uniform reads instead of texture fetches.
 
+**Fog cull** (Meitou's own optimisation; the image does not change; `--no-fog-cull` turns it off). In dense fog, everything beyond a few
+thousand units is fully hidden, so the main camera does not draw it. Each frame `FogVolumes.Update` takes the volume the game draws last
+(nearest by its node, so everything sorted before it is covered by it) and, if that is a block the eye is inside (all seven planes with a
+margin, and its box), computes a *hide distance* R. `FogVolumes.Hidden(min, max, kind)` then says a box is hidden when it lies wholly inside
+that block (the 7 plane tests of its extreme corners, plus its box; the block is convex) and its nearest point is at least R from the eye.
+Terrain nodes, object instances (and distant towns), characters (colour and motion passes) and foliage zones ask it (grass is range-limited
+well inside R and is not asked). Not asked: the shadow cascades (a hidden caster can still throw its shadow on visible ground) and the
+water reflection (a different camera); effect spheres and beams are ignored (they only add fog); the sky is not culled (see below). It is a
+per-frame decision and is off the moment the eye leaves the block or a different volume is drawn last.
+
+The bound (**Verified** by `FogCullTests`, which draws random eyes and boxes and checks the shader's own formula for rays to points of every box it
+hides, to the far clip and to points behind it). Eye E inside the block, a ray from E to a point X inside the block (a point of the hidden box,
+or the exit point of a ray that runs on to terrain, water or the sky behind it), path L = |X - E| at least the box's distance. The shader's near
+is 0 (the eye is inside), far = L. Its alpha is the ease-in-out curve of `L * density * edge`, and edge is at least the product over the planes of
+`saturate(blur(L) * inside_i / 2)`: dist_i is linear along the ray, dist_i(X) is at least 0 (X is in the block), so at the midpoint it is at least
+`(inside_i + 0) / 2` with inside_i the eye's distance inside plane i; blur(L) = edgeBlur * saturate(1 / (L * 0.00006)); and the `1 + |ray.y| 0.9` factor
+is at least 1. F(L) = L * density * that product is a power of L between its breakpoints (L = 16667, where the blur clamp ends, and
+`edgeBlur * inside_i / 2 / 0.00006`, where plane i's saturate leaves 1), so its least value over [R, D] is at R, at D or at a breakpoint; R is the
+least value for which that reaches 0.99 (curve 0.9998), by bisection, and no cull when it is not below the far clip D (the sky behind is drawn at
+D). Everything behind a hidden box, along the same ray, is therefore covered by the same fog colour at 0.9998 alpha, which is why leaving it out
+changes nothing: the pixel shows the sky, water or terrain behind it, whose own fog is the same block's colour. This needs the block to be the one
+drawn last, as a volume drawn after it would see a different path for the (now missing) fragment and for the one behind it. Volumes drawn before
+it cannot show through 0.9998. At Shark inside "Swamp[SOUTH]" (density distance 4500, ceiling about 2900) R is about 4455 units in a clear eye;
+with the eye near a ceiling or a wall, or the far clip over 50000 shrinking the soft edges, R grows (up to "no cull").
+
+Measured (**Observed**, 2026-10-08, RTX 4070 shared with other viewers, so only the pairs are comparable, `--screenshot` "post cost" scene GPU
+ms with / without `--no-fog-cull`; images identical to at most 3 levels on 3 pixels): Shark `--distance 400 --pitch 4` 6.6 / 10.0 (11 terrain
+nodes and 35 objects left out; object triangles 273k / 403k), the same in swamp rain 10.8 / 13.9, a flat view south 7.4 / 8.1, west 6.6 / 7.7 (95
+objects left out). The streamed terrain around a `--town` focus is only about 7000 units wide, so the saving in the real game, which loads a
+larger area, would be larger. The Fog Islands, the Vain and Skinner's Roam inner wall: no cull (the drawn-last block is thinner than the far clip
+allows, or the objects there are not wholly inside it), so no change. The sky is not culled: its rays go up through a ceiling a few thousand units
+over the eye, so their path is shorter than R except near the horizon.
+
 Differences from the game (**Observed**, viewer choices):
 - Evaluated per pixel in each shader instead of rasterising each hull over the G-buffer. Opaque surfaces get the same result, but the game
   only fogs rays that hit a block's hull (the corners' convex shape), while Meitou fogs the whole region inside the planes; they differ only for

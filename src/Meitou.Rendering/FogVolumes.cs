@@ -46,6 +46,16 @@ internal sealed class FogVolumes
 
     /// <summary>Off: no volume is drawn (<c>--no-fog-volumes</c>; also while the simple sky is on).</summary>
     public bool Enabled { get; set; } = true;
+    /// <summary>Off: nothing is left out for being hidden by the fog (<c>--no-fog-cull</c>; see <see cref="Hidden(Vector3, Vector3, CullKind)"/>).</summary>
+    public bool CullEnabled { get; set; } = true;
+    /// <summary>What <see cref="Hidden(Vector3, Vector3, CullKind)"/> left out since the last <see cref="Update"/>, by <see cref="CullKind"/> (statistics).</summary>
+    public int[] Culled { get; } = new int[CullKinds];
+    /// <summary>The block the fog cull works from this frame (null: the cull is off), and the distance from the eye beyond which a box inside it is hidden.</summary>
+    public string? CullBlock => occluder?.Name;
+    public float CullRadius => occluder is null ? 0 : MathF.Sqrt(hideRadiusSquared);
+    Volume? occluder;
+    float hideRadiusSquared;
+    Vector3 cullEye;
     /// <summary>The volumes drawn in the last <see cref="Update"/>, farthest first (statistics, tests).</summary>
     public List<string> Active { get; } = [];
     /// <summary>The volumes in view that did not fit <c>uFogVolumeData</c> in the last <see cref="Update"/> (the farthest ones; none in the base game).</summary>
@@ -175,6 +185,8 @@ internal sealed class FogVolumes
     {
         Active.Clear();
         picked.Clear();
+        occluder = null;
+        Array.Clear(Culled);
         used = 0;
         Dropped = 0;
         EffectVolumes = effectFogs?.Count ?? 0;
@@ -221,6 +233,7 @@ internal sealed class FogVolumes
                 if (effects.Contains(v)) EffectVolumesDrawn++;
             }
         }
+        if (on && Enabled && CullEnabled && used > 0 && picked.Count > 0) PrepareCull(picked[0].V, eye, far);
         eyeLight = new Vector4(eye, Light(sunY));
         info = new Vector4(used, KenshiLighting.Daylight(sunY), 0, 0);
     }
@@ -284,4 +297,104 @@ internal sealed class FogVolumes
             return !outLeft && !outRight;
         }
     }
+
+    /// <summary>What <see cref="Hidden(Vector3, Vector3, CullKind)"/> can leave out, for the statistics.</summary>
+    public enum CullKind { Terrain, Objects, Foliage, Characters, Other }
+
+    public const int CullKinds = 5;
+
+    /// <summary>The ease-in-out curve's input at which the block's alpha is 0.9998 (1 - 2 (1 - a)^2): below it a hidden thing could still show by a level.</summary>
+    public const float CullAlpha = 0.99f;
+
+    /// <summary>
+    /// Fog cull, per frame. <paramref name="last"/> is the volume the game draws last (nearest by its node); it counts only when it is a block
+    /// the eye is inside. See <see cref="HideDistance"/> for the bound.
+    /// </summary>
+    void PrepareCull(Volume last, Vector3 eye, float far)
+    {
+        if (last.Type != FogVolumeShaders.BlockType || far <= 0) return;
+        // The eye inside the block's box (the shader's early-out box) and inside all seven planes, with a margin.
+        if (eye.X < last.BoxMin.X || eye.Y < last.BoxMin.Y || eye.Z < last.BoxMin.Z || eye.X > last.BoxMax.X || eye.Y > last.BoxMax.Y || eye.Z > last.BoxMax.Z) return;
+        var inside = new float[7];
+        for (int k = 0; k < 7; k++)
+        {
+            var p = last.Data[3 + k];
+            inside[k] = p.W - (p.X * eye.X + p.Y * eye.Y + p.Z * eye.Z);   // the shader's distance inside this plane
+            if (inside[k] <= 1f) return;
+        }
+        if (HideDistance(last.Data[1].W, last.Data[2].W, inside, far) is not { } radius) return;
+        occluder = last;
+        hideRadiusSquared = radius * radius;
+        cullEye = eye;
+    }
+
+    /// <summary>
+    /// The distance from the eye beyond which a block the eye is inside is opaque (alpha at least 0.9998) along every ray that is inside the block
+    /// out to a point at least that far, or to the block's exit if that is farther, up to the far clip <paramref name="far"/> (the sky is drawn at
+    /// the far clip, so it is covered too); null when there is none. <paramref name="edgeBlur"/> and <paramref name="density"/> are the block's,
+    /// <paramref name="inside"/> the eye's distance inside each of the seven planes (the shader's own units).
+    /// <para>Proof sketch (docs/formats/fogfeatures.md "In Meitou"). Eye E inside the convex block, a ray from E ends at X inside it (a hidden box's
+    /// point, or the exit when a farther fragment is drawn), path L = |X - E| at least the cull distance. The shader's near is 0. Its soft-edge
+    /// term is the product over the planes of saturate(blur(L) * dist_i(M)), M the midpoint of the path, blur(L) = edgeBlur * saturate(1 / (L *
+    /// 0.00006)); dist_i is linear along the ray and dist_i(X) &gt;= 0 (X is in the block), so dist_i(M) = (inside_i + dist_i(X)) / 2 &gt;= inside_i / 2.
+    /// The (1 + |ray.y| 0.9) factor is at least 1, the curve is increasing, and so alpha &gt;= curve(F(L)) with F(L) = L * density * product of
+    /// saturate(blur(L) * inside_i / 2). F is a power of L between its breakpoints (where blur's clamp or a saturate changes), so its minimum
+    /// over [R, far] lies at R, at far or at a breakpoint; the result is the least R for which that minimum reaches <see cref="CullAlpha"/>
+    /// (curve 0.9998), found by bisection.</para>
+    /// </summary>
+    public static float? HideDistance(float edgeBlur, float density, float[] inside, float far)
+    {
+        if (!(density > 0) || !(edgeBlur > 0) || far <= 0) return null;
+        float F(float length)
+        {
+            float blur = edgeBlur * Math.Clamp(1f / (length * 0.00006f), 0f, 1f);
+            float product = 1f;
+            foreach (float e in inside) product *= Math.Clamp(blur * e * 0.5f, 0f, 1f);
+            return length * density * product;
+        }
+        var breaks = new float[8];
+        int n = 0;
+        breaks[n++] = 1f / 0.00006f;
+        foreach (float e in inside) breaks[n++] = edgeBlur * e * 0.5f / 0.00006f;   // above it, plane i's saturate drops below 1
+        // The least F over [from, far].
+        float Least(float from)
+        {
+            float least = Math.Min(F(from), F(far));
+            for (int i = 0; i < n; i++)
+                if (breaks[i] > from && breaks[i] < far) least = Math.Min(least, F(breaks[i]));
+            return least;
+        }
+        if (Least(far) < CullAlpha) return null;
+        float lo = 0f, hi = far;
+        for (int i = 0; i < 40; i++)
+        {
+            float mid = (lo + hi) * 0.5f;
+            if (Least(mid) >= CullAlpha) hi = mid; else lo = mid;
+        }
+        return hi;
+    }
+
+    /// <summary>
+    /// True when everything inside the box <paramref name="min"/>..<paramref name="max"/> is hidden by the fog of the block the eye is in, so the main
+    /// camera need not draw it (the sky, water or terrain behind it show the same fog colour). Conservative: the box must lie wholly inside the
+    /// block drawn last (convex, so every ray to it runs in the block for its whole length) and be at least the hide distance from the eye. Only
+    /// the main camera's colour pass may ask (not the shadow cascades or the reflection). Safe from several threads.
+    /// </summary>
+    public bool Hidden(Vector3 min, Vector3 max, CullKind kind)
+    {
+        if (occluder is not { } v) return false;
+        if (Vector3.DistanceSquared(Vector3.Clamp(cullEye, min, max), cullEye) < hideRadiusSquared) return false;
+        if (min.X < v.BoxMin.X || min.Y < v.BoxMin.Y || min.Z < v.BoxMin.Z || max.X > v.BoxMax.X || max.Y > v.BoxMax.Y || max.Z > v.BoxMax.Z) return false;
+        for (int k = 0; k < 7; k++)
+        {
+            var p = v.Data[3 + k];
+            float top = (p.X >= 0 ? p.X * max.X : p.X * min.X) + (p.Y >= 0 ? p.Y * max.Y : p.Y * min.Y) + (p.Z >= 0 ? p.Z * max.Z : p.Z * min.Z);
+            if (top >= p.W - 1f) return false;   // a corner reaches the plane: the box is not inside the block
+        }
+        Interlocked.Increment(ref Culled[(int)kind]);
+        return true;
+    }
+
+    /// <summary><see cref="Hidden(Vector3, Vector3, CullKind)"/> for a bounding sphere.</summary>
+    public bool Hidden(Vector3 centre, float radius, CullKind kind) => Hidden(centre - new Vector3(radius), centre + new Vector3(radius), kind);
 }

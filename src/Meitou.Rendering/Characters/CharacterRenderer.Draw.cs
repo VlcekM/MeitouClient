@@ -32,6 +32,9 @@ internal sealed unsafe partial class CharacterRenderer
     Transient instances;
     bool depthPass, motionPass;
 
+    /// <summary>The fog cull (set once by the world frame; the colour and motion passes use it, not the shadow cascades): characters wholly hidden by the fog the eye is in are skipped.</summary>
+    internal FogVolumes? FogCull { get; set; }
+
     /// <summary>Draws the characters seen from <paramref name="eye"/> through <paramref name="frustum"/> into the open pass.</summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, Vector3 light, Vector3 fogColour, float fogDistance) =>
         DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance }, eye, frustum);
@@ -59,6 +62,7 @@ internal sealed unsafe partial class CharacterRenderer
         {
             ref var l = ref live[i];
             if (!FrustumTests.SphereVisible(frustum, l.Centre, l.Radius)) continue;
+            if (!depthPass && FogCull?.Hidden(l.Centre, l.Radius, FogVolumes.CullKind.Characters) == true) continue;
             DrawnCharacters++;
             foreach (var part in l.Asset.Parts)
             {
