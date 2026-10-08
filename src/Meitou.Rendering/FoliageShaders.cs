@@ -338,7 +338,8 @@ static class FoliageShaders
         // the same instances) those from the crossfade band on (docs/impostors.md "Drawing"). Not drawn: -2 (visible values are above -1.5).
         // mode.y: the fog cull is on (main colour pass; FogVolumes.WriteCull): fog[0] box min and in w the weather fog's distance squared (0: none), fog[1] box max and in w 1 when the eye's block
         // is there, fog[2] eye + hide distance squared, fog[3..9] the block's planes.
-        struct ViewData { vec4 planes[8]; vec4 lengths[2]; uvec4 resident[2]; uvec4 mode; vec4 fog[10]; };
+        // mode.z: the occlusion cull is on (main colour pass; HizPyramid.ViewFor): hz and hzOff as OcclusionView.Vectors says.
+        struct ViewData { vec4 planes[8]; vec4 lengths[2]; uvec4 resident[2]; uvec4 mode; vec4 fog[10]; vec4 hz[6]; uvec4 hzOff[3]; };
         layout(push_constant) uniform Push { vec2 eye; uint planeCount; uint chunkCount; uint drawCount; float fullThreshold; } pc;
         uint ChunkIndex() { return gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x; }
         // FogVolumes.Covers: the box wholly inside the eye's fog block (its box and seven planes) and its nearest point at least the hide distance away.
@@ -369,17 +370,68 @@ static class FoliageShaders
         layout(std430, set = 0, binding = 2) readonly buffer Chunks { Chunk chunks[]; };
         layout(std430, set = 0, binding = 3) writeonly buffer Fades { float fades[]; };
         layout(std430, set = 0, binding = 4) writeonly buffer Counts { uint counts[]; };
-        shared uint visibleCount, foggedCount;
+        layout(std430, set = 0, binding = 9) readonly buffer Hiz { vec2 hiz[]; };
+        // The occlusion cull (HizPyramid, docs/formats/foliage.md "Occlusion culling"): the sphere seen from the previous frame's eye, against that frame's nearest and
+        // farthest view distance per block of pixels. view.hz[0] the previous eye and the eye's step, [1..3] its right, up and back axes, [4] tan x, tan y, width, height,
+        // [5] pixels per unit of tangent, level count, level 0's width and height; view.hzOff the levels' offsets.
+        // The texels covering the pixel rectangle r (x0, y0, x1, y1): the level where it spans at most 2 x 2 texels; false when it leaves the picture.
+        bool HizRegion(vec4 r, out float least, out float most)
+        {
+            least = 3.0e38; most = 0.0;
+            if (r.x < 0.0 || r.y < 0.0 || r.z >= view.hz[4].z || r.w >= view.hz[4].w) return false;
+            int bw = int(view.hz[5].z), bh = int(view.hz[5].w), levels = int(view.hz[5].y);
+            int x0 = int(r.x) >> 2, y0 = int(r.y) >> 2, x1 = min(int(r.z) >> 2, bw - 1), y1 = min(int(r.w) >> 2, bh - 1);
+            int l = 0;
+            while (l < levels - 1 && (((x1 >> l) - (x0 >> l)) > 1 || ((y1 >> l) - (y0 >> l)) > 1)) l++;
+            int w = (bw + (1 << l) - 1) >> l;
+            uint off = view.hzOff[l >> 2][l & 3];
+            for (int y = y0 >> l; y <= (y1 >> l); y++)
+                for (int x = x0 >> l; x <= (x1 >> l); x++)
+                {
+                    vec2 t = hiz[off + uint(y * w + x)];
+                    least = min(least, t.x);
+                    most = max(most, t.y);
+                }
+            return true;
+        }
+        // True when every ray from the eye to the sphere is stopped by the surfaces of the previous frame: the pixel rectangle the sphere's box covers there, grown by
+        // a pixel (the depth was drawn with a jitter) and by the parallax of the eye's step against the nearest surface in it, holds nothing but surfaces nearer than the
+        // sphere by a margin. The step's parallax: a ray from the new eye to a point of the sphere crosses the old view's picture within delta * f / z pixels of that
+        // point's, at the depth z where it passes the surface it hits; so the rectangle must cover delta * f / (the nearest surface in it).
+        bool HizOccluded(vec4 sphere)
+        {
+            vec3 d = sphere.xyz - view.hz[0].xyz;
+            float zc = -dot(view.hz[3].xyz, d), xc = dot(view.hz[1].xyz, d), yc = dot(view.hz[2].xyz, d), r = sphere.w;
+            float zn = zc - r, zf = zc + r;
+            if (zn < 40.0) return false;   // near the eye (or behind it): drawn
+            float tx0 = min(min((xc - r) / zn, (xc - r) / zf), min((xc + r) / zn, (xc + r) / zf));
+            float tx1 = max(max((xc - r) / zn, (xc - r) / zf), max((xc + r) / zn, (xc + r) / zf));
+            float ty0 = min(min((yc - r) / zn, (yc - r) / zf), min((yc + r) / zn, (yc + r) / zf));
+            float ty1 = max(max((yc - r) / zn, (yc - r) / zf), max((yc + r) / zn, (yc + r) / zf));
+            vec2 size = view.hz[4].zw, tn = view.hz[4].xy;
+            vec4 rect = vec4((0.5 + 0.5 * tx0 / tn.x) * size.x - 1.0, (0.5 + 0.5 * ty0 / tn.y) * size.y - 1.0,
+                             (0.5 + 0.5 * tx1 / tn.x) * size.x + 1.0, (0.5 + 0.5 * ty1 / tn.y) * size.y + 1.0);
+            float delta = view.hz[0].w, f = view.hz[5].x, pad = 0.0, least, most;
+            for (int i = 0; i < 3; i++)
+            {
+                if (!HizRegion(rect + vec4(-pad, -pad, pad, pad), least, most)) return false;
+                float need = delta * f / max(least, 1.0);
+                if (need <= pad + 0.5) return most + 0.01 * zn + 3.0 < zn;
+                pad = need;
+            }
+            return false;
+        }
+        shared uint visibleCount, foggedCount, occludedCount;
         void main()
         {
             uint c = ChunkIndex();
             if (c >= pc.chunkCount) return;
             uint i = gl_LocalInvocationID.x;
-            if (i == 0u) { visibleCount = 0u; foggedCount = 0u; }
+            if (i == 0u) { visibleCount = 0u; foggedCount = 0u; occludedCount = 0u; }
             barrier();
             Chunk k = chunks[c];
             float packed = -2.0;
-            uint fogged = 0u;
+            uint fogged = 0u, occluded = 0u;
             if (i < k.count)
             {
                 uint at = k.first + i;
@@ -412,13 +464,15 @@ static class FoliageShaders
                     }
                     // The fog cull last, so it counts only what would have been drawn: the sphere's box (FoliageCull.CullGroup).
                     if (packed > -1.5 && view.mode.y != 0u && FogHidden(view, sphere.xyz - vec3(sphere.w), sphere.xyz + vec3(sphere.w))) { packed = -2.0; fogged = 1u; }
+                    if (packed > -1.5 && view.mode.z != 0u && HizOccluded(sphere)) { packed = -2.0; occluded = 1u; }
                 }
             }
             fades[c * 256u + i] = packed;
             if (packed > -1.5) atomicAdd(visibleCount, 1u);
             if (fogged != 0u) atomicAdd(foggedCount, 1u);
+            if (occluded != 0u) atomicAdd(occludedCount, 1u);
             barrier();
-            if (i == 0u) { counts[c] = visibleCount; counts[pc.chunkCount + c] = foggedCount; }
+            if (i == 0u) { counts[c] = visibleCount; counts[pc.chunkCount + c] = foggedCount; counts[2u * pc.chunkCount + c] = occludedCount; }
         }
         """;
 
@@ -427,12 +481,12 @@ static class FoliageShaders
     public static readonly string ScanCompute = CullCommon + """
         struct Draw { uint indexCount; uint chunkStart; uint chunkEnd; uint pad; };
         struct Args { uint indexCount; uint instanceCount; uint firstIndex; int vertexOffset; uint firstInstance; };
-        layout(std430, set = 0, binding = 4) readonly buffer Counts { uint counts[]; };   // [0, n) the visible, [n, 2n) the fog cull's
+        layout(std430, set = 0, binding = 4) readonly buffer Counts { uint counts[]; };   // [0, n) the visible, [n, 2n) the fog cull's, [2n, 3n) the occlusion cull's
         layout(std430, set = 0, binding = 5) writeonly buffer Offsets { uint offsets[]; };
         layout(std430, set = 0, binding = 6) readonly buffer Draws { Draw draws[]; };
         layout(std430, set = 0, binding = 7) writeonly buffer ArgsBuffer { Args args[]; };
         shared uint partial[256];
-        shared uint foggedTotal;
+        shared uint foggedTotal, occludedTotal;
         uint per;
         uint OffsetOf(uint c)
         {
@@ -445,14 +499,15 @@ static class FoliageShaders
         void main()
         {
             uint t = gl_LocalInvocationID.x, n = pc.chunkCount;
-            if (t == 0u) foggedTotal = 0u;
+            if (t == 0u) { foggedTotal = 0u; occludedTotal = 0u; }
             barrier();
             per = max((n + 255u) / 256u, 1u);
             uint begin = min(t * per, n), end = min(begin + per, n);
             uint sum = 0u;
-            uint fogSum = 0u;
-            for (uint c = begin; c < end; c++) { sum += counts[c]; fogSum += counts[n + c]; }
+            uint fogSum = 0u, occSum = 0u;
+            for (uint c = begin; c < end; c++) { sum += counts[c]; fogSum += counts[n + c]; occSum += counts[2u * n + c]; }
             atomicAdd(foggedTotal, fogSum);
+            atomicAdd(occludedTotal, occSum);
             partial[t] = sum;
             barrier();
             for (uint s = 1u; s < 256u; s <<= 1)
@@ -466,6 +521,7 @@ static class FoliageShaders
             for (uint c = begin; c < end; c++) { offsets[c] = base; base += counts[c]; }
             if (t == 255u) offsets[n] = partial[255];
             if (t == 0u) offsets[n + 1u] = foggedTotal;   // the fog cull's total, after the barriers above
+            if (t == 1u) offsets[n + 2u] = occludedTotal;
             for (uint d = t; d < pc.drawCount; d += 256u)
             {
                 Draw draw = draws[d];

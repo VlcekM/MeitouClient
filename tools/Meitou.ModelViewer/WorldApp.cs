@@ -204,6 +204,7 @@ static partial class WorldApp
         Console.WriteLine($"haze      {(gpu.Sky.KenshiHaze ? "kenshi" : "physical")}, eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {gpu.Sky.EyeClearance:0} above the ground within {KenshiCamera.MaxDistance:0}: altitude weight {gpu.Sky.AltitudeWeight:0.###}, strength {gpu.Sky.HazeStrength:0.##}");
         if (gpu.FogVolumes is { } fogVolumes) Console.WriteLine($"fog vols  {fogVolumes.Active.Count} in view ({fogVolumes.EffectVolumesDrawn} of {fogVolumes.EffectVolumes} weather effect volumes), {fogVolumes.UsedData} of {FogVolumeShaders.MaxData} vec4s{(fogVolumes.Dropped > 0 ? $", {fogVolumes.Dropped} left out" : "")}, farthest first: {(fogVolumes.Active.Count == 0 ? "none" : string.Join("; ", fogVolumes.Active))}{(fogVolumes.Enabled ? "" : " (off: --no-fog-volumes)")}");
         if (gpu.FogVolumes is { } fogCulled) Console.WriteLine($"fog cull  {(fogCulled.DescribeCull() ?? "off for this view")}{(fogCulled.CullEnabled ? "" : " (off: --no-fog-cull)")}");
+        if (gpu.Post is { } occlusionPost && gpu.Foliage is { } occlusionFoliage) Console.WriteLine($"occlusion  {(occlusionPost.OcclusionCull ? $"depth pyramid {occlusionPost.Hiz?.Describe ?? "none"}: {occlusionFoliage.OccludedInstances} foliage instances left out of the main view" : "off (--no-occlusion-cull)")}");
         if (o.ShowKeys && DebugOverlay.TryCreate(context) is { } keysOverlay)
         {
             keysOverlay.Target = target;

@@ -90,6 +90,8 @@ sealed class WorldOptions
     public bool NoFogVolumes;
     /// <summary><c>--no-fog-cull</c>: everything the fog hides is drawn anyway (comparison; docs/formats/fogfeatures.md "In Meitou").</summary>
     public bool NoFogCull;
+    /// <summary><c>--no-occlusion-cull</c>: foliage hidden behind the previous frame's depth is drawn anyway (comparison; docs/formats/foliage.md "Occlusion culling").</summary>
+    public bool NoOcclusionCull;
     public float? ParticlePrewarm;
     /// <summary><c>--particle-area &lt;radius&gt;</c> (test): weather effects are placed in a disc of this radius round the start point instead of the weather region; <c>--particle-seed</c> seeds their random choices.</summary>
     public float? ParticleArea;
@@ -290,6 +292,7 @@ sealed class WorldOptions
                 case "--no-particles": o.NoParticles = true; break;
                 case "--no-fog-volumes": o.NoFogVolumes = true; break;
                 case "--no-fog-cull": o.NoFogCull = true; break;
+                case "--no-occlusion-cull": o.NoOcclusionCull = true; break;
                 case "--particle-prewarm": o.ParticlePrewarm = Math.Max(F(), 0); break;
                 case "--particle-area": o.ParticleArea = Math.Max(F(), 1); break;
                 case "--particle-seed": o.ParticleSeed = (int)F(); break;
@@ -654,6 +657,7 @@ static class WorldFrame
         // The placed fog volumes (docs/formats/fogfeatures.md): the swamp's fog and the like, part of the game's look.
         // Always made: the weather's fog spheres go through it too, with or without a fogfeatures.dat.
         gpu.FogVolumes = new FogVolumes(context, FogFeatures.Load(install)) { Enabled = !o.NoFogVolumes, CullEnabled = !o.NoFogCull };
+        gpu.Post.OcclusionCull = !o.NoOcclusionCull;
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
         if (scene.Database is { } skyDb)
@@ -1019,9 +1023,9 @@ static class WorldFrame
             StageClock.Lap(7);
             // Foliage in every depth slice (it reaches 32000+ units at the default x4), counted as one draw.
             host.Stage(8);
-            if (gpu.Foliage is { } fogFoliage) fogFoliage.FogCull = fogCull;
+            if (gpu.Foliage is { } fogFoliage) { fogFoliage.FogCull = fogCull; fogFoliage.Occlusion = OcclusionAlternate && (fogFoliage.Gpu.Frame.Number & 1) == 1 ? default : post.OcclusionFor(eye); }
             gpu.Foliage?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, continuation: foliageDrawn);
-            if (gpu.Foliage is { } fogFoliageDone) fogFoliageDone.FogCull = null;
+            if (gpu.Foliage is { } fogFoliageDone) { fogFoliageDone.FogCull = null; fogFoliageDone.Occlusion = default; }
             foliageDrawn = true;
             StageClock.Lap(8);
             // Characters after the opaque geometry: they alone write the scene's alpha (SSAO's character mask), so nothing drawn later may cover them but water.
@@ -1089,6 +1093,10 @@ static class WorldFrame
         post.HeatHazeHours = gpu.GameHours ?? gpu.HeatHazeHours;
         post.HeatHazeFarClip = KenshiHaze.FarDistance(post.Options.HeatHazeViewDistance);   // the heat haze's D follows the install's `view distance`, not the sky haze's constant
     }
+
+    /// <summary><c>MEITOU_OCC_ALT=1</c> (measurement): the occlusion cull works on even frames only, and the foliage stages of those frames are named <c>fol meshes+occ</c> and <c>fol rocks+occ</c>, so one run
+    /// with <c>MEITOU_PASS_STATS=1</c> compares both with the same load on the card.</summary>
+    internal static readonly bool OcclusionAlternate = Environment.GetEnvironmentVariable("MEITOU_OCC_ALT") == "1";
 
     /// <summary>
     /// The sun's shadow cascades (ShadowPass, docs/formats/shadows.md): fitted to this camera, their casters drawn by the renderers'

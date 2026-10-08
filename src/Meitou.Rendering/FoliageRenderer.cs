@@ -1053,6 +1053,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
     /// <summary>The fog cull (set by the world frame around the main camera's draw only): zones wholly hidden by the fog the eye is in are skipped (meshes and impostors; the grass is range-limited well inside the hide distance).</summary>
     internal FogVolumes? FogCull { get; set; }
+    /// <summary>The last frame's depth pyramid for the occlusion cull (empty: none; set by the world frame around the main camera's draw only, like <see cref="FogCull"/>).</summary>
+    internal OcclusionView Occlusion { get; set; }
+    /// <summary>Foliage instances the occlusion cull left out of the main colour views (a frame ring late, summed over the frame's views).</summary>
+    public int OccludedInstances { get; private set; }
 
     /// <summary>Draws the foliage seen from <paramref name="eye"/> through <paramref name="frustum"/>. Without <paramref name="grass"/> only the meshes (e.g. for a reflection).
     /// <paramref name="continuation"/>: a further depth slice of the same frame, adding to the counts and the GPU time. <paramref name="maxRange"/> caps every layer's range (the reflection).</summary>
@@ -1152,7 +1156,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
         double tMeshes = cpu.Elapsed.TotalMilliseconds;
         int callsMeshes = DrawCalls;
-        StageClock.Sub("fol meshes");
+        StageClock.Sub(WorldFrame.OcclusionAlternate && !Occlusion.IsEmpty && !depthPass ? "fol meshes+occ" : "fol meshes");
         // 4. Grass.
         if (grass && !debugNoGrass)
         {
@@ -1189,7 +1193,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             DrawCalls += terrain.DrawMeshes(terrainDraws, depthPass);
         }
-        StageClock.Sub("fol rocks");
+        StageClock.Sub(WorldFrame.OcclusionAlternate && !Occlusion.IsEmpty && !depthPass ? "fol rocks+occ" : "fol rocks");
         int rocks = gpu ? rockDraws.Count : terrainDraws.Count;
         if (FolTiming) FolAccount(depthPass ? 1 : 0, tCull, tUpload, tMeshes, tGrass, cpu.Elapsed.TotalMilliseconds, callsMeshes - callsBefore, callsGrass - callsMeshes, rocks, recMeshes, recGrass, dispatchMs);
         if (WorldFrame.DetailedStats)
@@ -1243,6 +1247,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (gpuCull is { } g)
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
                 $"foliage gpu cull: {g.Dispatched} views, gpu us per view {(g.GpuTimedViews > 0 ? g.GpuMicroseconds / g.GpuTimedViews : 0):F1} ({g.GpuTimedViews} timed), " +
+                $"main colour views gpu us: without the occlusion cull {(g.MainViews[0] > 0 ? g.MainMicroseconds[0] / g.MainViews[0] : 0):F1} ({g.MainViews[0]} timed), with {(g.MainViews[1] > 0 ? g.MainMicroseconds[1] / g.MainViews[1] : 0):F1} ({g.MainViews[1]} timed); " +
                 $"arena {g.ArenaUsed / 1048576.0:F1} of {g.ArenaBytes / 1048576.0:F0} MB ({g.Grows} grown), {g.UploadedInstances:N0} instances uploaded; work lists: {gpuWorkBuilds} built, {gpuWorkGroups / Math.Max(gpuWorkBuilds, 1):F0} groups and {gpuWorkCandidates / Math.Max(gpuWorkBuilds, 1):F0} candidates (chunk slots; {gpuWorkRockCandidates / Math.Max(gpuWorkBuilds, 1):F0} rock instances) each on average"));
     }
 
@@ -1736,7 +1741,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // The fog cull rides in the main colour view's dispatch only (FogCull is set around that draw alone): per instance, in the cull kernel.
         Span<Vector4> fog = stackalloc Vector4[FogVolumes.CullVectors];
         bool fogOn = !depthPass && FogCull is { } fogCull && fogCull.WriteCull(fog);
-        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock, 0.999f, fogOn ? fog : default);
+        bool occlusionOn = !depthPass && !Occlusion.IsEmpty && !GpuCullVerify;
+        cull.TimingClass = depthPass || Gpu.CurrentTargets().Formats.Samples > 1 ? 0 : occlusionOn ? 2 : 1;
+        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock, 0.999f, fogOn ? fog : default, occlusionOn ? Occlusion : default);
+        if (occlusionOn && cull.OccludedIsFresh) OccludedInstances = cull.LateOccluded;
         DrawnInstances += cull.LateVisible;
         if (fogOn && cull.LateFogCulled > 0) FogCull!.AddCulled(FogVolumes.CullKind.FoliageInstances, cull.LateFogCulled);
         if (GpuCullVerify) QueueVerify(result, terrain);

@@ -40,6 +40,7 @@ static class WorldStats
         AddWeather(stats, gpu);
         stats.Add($"camera      {camera.X:0}, {camera.Y:0}, {camera.Z:0}, zone {WorldLayout.ZoneOf(camera.X, camera.Z)}");
         if (gpu.FogVolumes?.DescribeCull() is { } fogCull) stats.Add($"fog cull    {fogCull}");
+        if (gpu.Post is { OcclusionCull: true } occlusionPost && gpu.Foliage is { } occlusionFoliage) stats.Add($"occlusion   {occlusionFoliage.OccludedInstances} foliage instances left out (pyramid {occlusionPost.Hiz?.Describe ?? "none"})");
         stats.Add($"terrain     {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" + (gpu.Streamer is { Pending: > 0 } st ? $", loading {st.Pending}" : ""));
         if (gpu.Objects is { } ob && render.Objects)
             stats.Add($"objects     {ob.DrawnInstances}, {ob.DrawCalls} calls, draw cpu {ob.LastDrawCpuMs:0.00} ms" + (ob.Pending > 0 ? $", loading {ob.Pending}" : ""));

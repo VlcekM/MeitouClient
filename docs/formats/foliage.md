@@ -360,6 +360,58 @@ FUN_140843920, its TERRAIN branch, and the functions it calls; decompiled output
   units), and a big boulder (FOLIAGE_Boulderbig08) at 975 units: a viewer shot from (-50583, -11613) now shows the
   wreck in front of the arch as in the game shot (**Observed**, agreement in layout only, not measured).
 
+
+## Occlusion culling in the viewer (Meitou, 2026-10-08)
+
+Meitou's own cull (the game has none for foliage); the picture does not change, `--no-occlusion-cull` turns it off. Foliage instances (meshes, TERRAIN-mode
+rocks, impostors) that the previous frame's depth hides are left out of the main camera's colour views by the GPU cull kernel; the shadow cascades and the
+water reflection are not touched (a hidden caster still shadows what is seen).
+
+**The pyramid** (`HizPyramid`, built at the end of `PostProcess.End`, nothing else reads it). One compute dispatch per level over the scene's depth: level 0
+takes 4 x 4 pixels a texel, each next level 2 x 2 texels, to 1 x 1 (10 levels at 1280 x 720). A texel holds the **least and the greatest view distance** (z along the
+view axis, rebuilt from the near slice's depth, else the far slice's, as the velocity pass does; a cleared pixel is 1e9) in a `vec2` of a storage buffer (levels
+concatenated). It is the previous frame's: the cull of frame N reads what frame N-1 left, with that frame's eye and view axes
+(`OcclusionView`, in the cull's `ViewData` as `hz` / `hzOff`). Not used (the view's `mode.z` 0) on the first frame, when the last build is not the frame just
+before, when the eye has moved over 5000 units (the `RunUpscale` reset rule), for the shadow and reflection views, and with the CPU cull or the verify mode.
+
+**The rule** (`HizOccluded` in `FoliageShaders.CullCompute`, after the range, frustum, fade and fog tests; **Verified** by `OcclusionCullTests`, which writes it out on
+the CPU, draws random scenes of spheres and a ground plane with a sub-pixel jitter, and checks that every ray from the drawing eye and from eyes up to the step away
+to points of a sphere the rule calls hidden hits the scene first; with the parallax term set to 0 the test fails, so it does bite). The instance's bounding sphere is
+taken into the previous view; its nearest distance is `zn = z - r`. Skipped (drawn) when `zn < 40` or the rectangle leaves the picture. The pixel rectangle of the
+sphere's view-space box, grown by 1 pixel for the depth's jitter, selects the pyramid level where it spans at most 2 x 2 texels; the greatest distance in those texels
+plus a margin (1 % of `zn` and 3 units, for terrain LOD changes and the depth's precision) must be less than `zn`. That alone is right for a still camera only. For an
+eye that has moved by `delta` since the depth was drawn the rectangle is also grown by the parallax: a ray from the new eye to a point of the sphere crosses the old
+picture within `delta * f / z` pixels of that point at the depth `z` where it passes a surface (`f` = pixels per unit of tangent), so it needs `delta * f / z_least`
+with `z_least` the nearest surface in the grown rectangle; three rounds of growing, else drawn. Argument that this is conservative: in the old picture the grown rectangle
+holds only surfaces nearer than the sphere and at least `z_least` away; a ray from the new eye enters the rectangle (in front of all of them, because at the
+depth where its offset is the padding it is nearer than `z_least`) and ends at the sphere (behind all of them), so it crosses a surface or passes a nearer one's edge
+and is stopped. A pure turn needs no growing (a rotation about the eye reprojects exactly). What it does not cover: surfaces that moved (characters, swaying
+foliage: a character that has just walked away from an instance that lay wholly behind it can leave that instance out for one frame), and terrain or objects that
+changed detail by more than the margin.
+
+**Cost and effect** (**Observed**, 2026-10-08, RTX 4070 shared with other viewers, 1280 x 960 at DLSS, Shark swamp rain `--radius 1 --distance 3000 --pitch 10 --yaw 300 --time 12`,
+`MEITOU_OCC_ALT=1 MEITOU_PASS_STATS=1 --fly-benchmark 800 --fly-speed 0`, which runs the cull on even frames only and names those frames' stages `+occ`, so both
+come from one run under the same load): the foliage mesh draws take 0.89 ms without it and 0.66 ms with it, the TERRAIN-mode rocks 0.36 / 0.36 ms (they are near the
+eye, inside the 40-unit skip or in plain view), the cull kernel's own time per main view 48.4 / 47.7 us, and the pyramid costs 0.04 ms a frame (`post cost ... hiz`; two dispatches).
+Net about 0.2 ms of an 8 ms frame. 22213 foliage instances are left out of the two main colour views (the stat line `occlusion`, F11 and `--screenshot`; a frame ring late).
+The Hub in clear weather (`--radius 1 --distance 3000 --pitch 15 --yaw 300`): meshes 0.30 / 0.22 ms, rocks 0.135 / 0.121, 9521 instances left out; the pyramid costs about what it
+saves there. Image: the swamp view with and without it is byte-identical (`cmp`; two runs of either are too).
+
+**Turning and flying** (**Observed**, see the end of this section): pixel differences against `--no-occlusion-cull`.
+
+**A depth prepass for the foliage meshes does not pay** (**Observed**, 2026-10-08, same view, tried and removed): alpha-tested leaves disable early depth rejection, so the
+colour shader (lighting, shadow filter, haze) could run on hidden fragments. A prepass with the cut-out and dither tests only (the colour shader with its lighting cut away, so the same
+fragments are left out; depth bias 4 + slope 1, the colour pass then testing less-or-equal) and the images were identical (0 differing pixels), but the foliage mesh draws
+took 0.89 ms against 0.78 ms with it (same run, alternating frames: `fol meshes+pre`) at `--distance 3000`, and 0.76 against 0.61 ms at `--distance 400 --pitch 4`. With the colour
+shader replaced by the prepass's trivial one the mesh draws did not get cheaper either (0.96 ms against 0.78-0.90), so they are bound by vertices and triangle setup, not fragments.
+The expensive part of the foliage is the TERRAIN-mode rocks (about 2.0-2.2 million triangles a frame in the colour views, 0.4-1.2 ms, the plant `FOLIAGE_Plant_Swamp-TwigLarger` at about
+5000 triangles an instance, 437 of them); fewer triangles (a mesh LOD or an impostor class for them) would pay, not a prepass.
+
+**Verification of motion** (**Verified**, 2026-10-08): the Shark swamp view with `--fly-benchmark 170 --fly-radius 300 --fly-speed 6` (flying) and with `MEITOU_FLY_TURN=0.02` (turning
+0.02 rad a frame about the eye), screenshots at frames 40, 80, 120 and 160, with and without `--no-occlusion-cull`: all eight pairs are byte-identical (max difference 0, as between two runs
+without it), with 20 000 to 25 000 instances left out of the main view. Known limit (**Unknown**, not seen): an occluder that moves away (a character) can leave an instance out for one frame,
+as the depth is last frame's; the margin covers a camera moving up to 5000 units a frame, a larger step skips the cull for that frame.
+
 ## How the viewer draws it
 
 See docs/viewer.md, "Foliage".

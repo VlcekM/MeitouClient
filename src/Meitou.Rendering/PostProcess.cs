@@ -44,6 +44,12 @@ public sealed unsafe class PostProcess : IDisposable
     public PassTargets SceneTargets { get; private set; } = null!;
     /// <summary>The scene's depth (the near slice's; valid after <see cref="Begin"/>).</summary>
     public Texture SceneDepth => sceneDepth!.Texture;
+    /// <summary>The previous frame's depth pyramid for the foliage occlusion cull (<see cref="HizPyramid"/>); built at the end of each frame while <see cref="OcclusionCull"/> is on.</summary>
+    public HizPyramid? Hiz { get; private set; }
+    /// <summary>On (default): <see cref="End"/> builds the pyramid (<c>--no-occlusion-cull</c> turns it off).</summary>
+    public bool OcclusionCull { get; set; } = true;
+    /// <summary>What this frame's foliage cull may test against (empty when off, on the first frame, after a camera cut).</summary>
+    public OcclusionView OcclusionFor(Vector3 eye) => OcclusionCull && Hiz is { } hiz ? hiz.ViewFor(eye) : default;
 
     // width × height is the render size (the scene, SSAO); displayWidth × displayHeight the chain after the upscaler (exposure, composite).
     int width, height, displayWidth, displayHeight;
@@ -240,6 +246,7 @@ public sealed unsafe class PostProcess : IDisposable
 
     void Free()
     {
+        Hiz?.Invalidate();
         foreach (var t in Targets()) t.Texture.Dispose();   // released after the frames in flight
         sceneColour = sceneDepth = farDepth = motion = upscaleDepth = reactive = historyA = historyB = null;
         aoA = aoB = ldr = ldrFxaa = luminance = adaptA = adaptB = null;
@@ -598,6 +605,17 @@ public sealed unsafe class PostProcess : IDisposable
         }
         if (haze) RunHeatHaze(picture!, final);
         CloseSegment();
+
+        // The depth pyramid of this frame, for the next frame's foliage cull (nothing else reads it).
+        if (OcclusionCull && haveNearSlice && sceneDepth is not null && farDepth is not null)
+        {
+            Hiz ??= new HizPyramid(Gpu);
+            var hizCmd = Gpu.BeginNative("hiz");
+            Hiz.Build(hizCmd, sceneDepth.Texture, farSliceDrawn ? farDepth.Texture : null, nearPlanes, farPlanes, width, height, eyeNow, viewRotation, fovNow, aspectNow);
+            Gpu.EndNative(hizCmd);
+            Stamp("hiz");
+        }
+        else Hiz?.Invalidate();
 
         if (stamps is { } set)
         {
@@ -962,6 +980,7 @@ public sealed unsafe class PostProcess : IDisposable
     {
         External?.Dispose();
         Free();
+        Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass }) p.P.Dispose();
         flowTexture?.Dispose();
         perturbationTexture?.Dispose();
