@@ -614,7 +614,8 @@ public sealed class GlobalPointEffectGroup : EffectGroup
         foreach (var u in units)
         {
             Tick(u, dt, camera, env, alwaysActive: true);
-            float d2 = Vector3.DistanceSquared(u.Position, camera.Eye);
+            // Horizontal distance (Observed choice): the unit sits on the ground and the eye may be hundreds of units up, which a 50-unit ring would never reach.
+            float dx = u.Position.X - camera.Eye.X, dz = u.Position.Z - camera.Eye.Z, d2 = dx * dx + dz * dz;
             if (d2 >= far2) u.Stopped = true;
             else if (d2 <= r2) inner++;
             else if (d2 <= 4 * r2) middle++;

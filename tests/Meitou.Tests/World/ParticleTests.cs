@@ -316,6 +316,19 @@ public class ParticleTests
 
     [Fact]
     [Slow]
+    public void Drifting_foliage_emits_in_the_wind()
+    {
+        var install = GameInstall.Locate();
+        Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
+        var library = ParticleLibrary.Load(install!);
+        var sim = new ParticleSimulation(library.FindSystem("Drifting-foliage")!, 1);
+        var env = new ParticleEnvironment(new Vector2(60, 0), 1, 1, true, false);
+        sim.Prewarm(5, env);
+        Assert.True(sim.ParticleCount > 100, $"{sim.ParticleCount} particles");
+    }
+
+    [Fact]
+    [Slow]
     public void Forced_weather_gives_its_camera_effects()
     {
         var install = GameInstall.Locate();
