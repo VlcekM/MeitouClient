@@ -2,6 +2,9 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Particles;
+using Meitou.Data.World;
+using EffectType = Meitou.Data.Particles.EffectType;
+using WeatherEffectEntry = Meitou.Data.Particles.WeatherEffectEntry;
 
 namespace Meitou.Tests.World;
 
@@ -249,6 +252,143 @@ public class ParticleTests
         float f = age / 4;
         Assert.Equal(f / 0.5f, buffer[0].Colour.X, 2);
         Assert.Equal(10 + 5 * age, buffer[0].Width, 2);   // 5 units per second added
+    }
+
+    const string Puff = """
+        system test_puff
+        {
+            technique t
+            {
+                visual_particle_quota 200
+                emitter Box
+                {
+                    emission_rate 50
+                    time_to_live 5
+                    velocity 1
+                    direction 0 1 0
+                    box_width 10
+                    box_height 10
+                }
+            }
+        }
+        """;
+
+    static EffectRecord Record(EffectType type, float view = 0, float min = 0, float max = 0) =>
+        new("e", type, "test_puff", false, false, 1, 0, 0, Vector3.One, 1, false, view, 0, min, max, 10) { MinAltitude = 0, MaxAltitude = 0 };
+
+    [Fact]
+    public void Region_area_picks_inside_the_middle_80_percent_of_a_cell()
+    {
+        var area = new RegionArea([(0f, 0f, 1000f, 1000f), (5000f, 0f, 6000f, 1000f)]);
+        var random = new Random(3);
+        for (int i = 0; i < 200; i++)
+        {
+            Assert.True(area.TryPick(random, out float x, out float z));
+            Assert.InRange(z, 100f, 900f);
+            Assert.True(x is >= 100 and <= 900 or >= 5100 and <= 5900, $"x {x}");
+        }
+        Assert.False(new RegionArea([]).TryPick(random, out _, out _));
+    }
+
+    [Fact]
+    public void Placement_looks_for_the_altitude_window()
+    {
+        var world = new EffectWorld { GroundHeight = (x, _) => x > 0 ? 500 : 50, Area = new DiscArea(0, 0, 1000) };
+        var effect = Record(EffectType.Point) with { MinAltitude = 200, MaxAltitude = 1000 };
+        var random = new Random(5);
+        int high = 0;
+        for (int i = 0; i < 100; i++) if (world.Place(effect, random, new EffectCamera(Vector3.Zero, Vector3.UnitZ)).Y == 500) high++;
+        Assert.True(high >= 98, $"{high} of 100 in the window");   // 10 tries, each half likely
+        // Both limits 0: any height.
+        Assert.Contains(Enumerable.Range(0, 50).Select(_ => world.Place(Record(EffectType.Point), random, default).Y), y => y == 50);
+    }
+
+    [Fact]
+    public void Respawning_group_keeps_to_its_count_and_global_group_makes_all_at_once()
+    {
+        var system = System(Puff);
+        var world = new EffectWorld { Area = new DiscArea(0, 0, 500) };
+        var camera = new EffectCamera(new Vector3(0, 200, 0), Vector3.UnitZ);
+        var input = new WeatherEffectInput();
+        var point = new RespawningEffectGroup(new WeatherEffectEntry(Record(EffectType.Point, min: 0, max: 0), 3, 0, 0), system, 1, world);
+        for (int i = 0; i < 10; i++) point.Update(0.5f, camera, input);
+        Assert.Equal(3, point.Units.Count);
+        var unlimited = new RespawningEffectGroup(new WeatherEffectEntry(Record(EffectType.Point), 0, 1, 1), system, 1, world);
+        for (int i = 0; i < 20; i++) unlimited.Update(1f, camera, input);
+        Assert.InRange(unlimited.Units.Count, 15, 21);   // count 0: no limit, one a second
+        var global = new GlobalEffectGroup(new WeatherEffectEntry(Record(EffectType.Global, view: 300, min: 5, max: 10), 4, 100, 200), system, 1, world);
+        global.Update(0.1f, camera, input);
+        Assert.Equal(4, global.Units.Count);
+        Assert.All(global.Units, u => Assert.True(float.IsPositiveInfinity(u.Life)));
+        var none = new GlobalEffectGroup(new WeatherEffectEntry(Record(EffectType.Global), 0, 1, 1), system, 1, world);
+        none.Update(1f, camera, input);
+        Assert.Empty(none.Units);
+    }
+
+    [Fact]
+    public void Global_point_group_rings_use_horizontal_distance_and_emit_with_the_eye_high()
+    {
+        var system = System(Puff);
+        var world = new EffectWorld { GroundHeight = (_, _) => 0, Area = new DiscArea(0, 0, 500) };
+        var camera = new EffectCamera(new Vector3(0, 400, 0), Vector3.UnitZ);   // 400 up, the effect's ring only 50 wide
+        var group = new GlobalPointEffectGroup(new WeatherEffectEntry(Record(EffectType.GlobalPoint, view: 50, min: 40, max: 60), 1, 0, 0), system, 1, world);
+        group.Prewarm(5, camera, new WeatherEffectInput());
+        Assert.InRange(group.Units.Count, 1, 3);
+        Assert.All(group.Units, u => Assert.True(Math.Sqrt(u.Position.X * u.Position.X + u.Position.Z * u.Position.Z) <= 100));
+        Assert.True(group.ParticleCount > 50, $"{group.ParticleCount} particles");
+    }
+
+    [Fact]
+    public void Map_placers_make_one_static_immortal_unit_per_placement()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "meitou-puff-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(path, "scripts"));
+        Directory.CreateDirectory(Path.Combine(path, "materials"));
+        try
+        {
+            File.WriteAllText(Path.Combine(path, "scripts", "test_puff.pu"), Puff);
+            var library = ParticleLibrary.Load(path);
+            var effect = Record(EffectType.Point, view: 200);
+            var placements = new[] { new Vector3(100, 5, 100), new Vector3(9000, 5, 100) }.Select(p => new MapEffectPlacement(effect, p, "placer")).ToList();
+            var world = new EffectWorld();
+            var group = Assert.Single(MapEffectPlacers.Groups(placements, library, world, 1));
+            Assert.Equal(2, group.Units.Count);
+            Assert.All(group.Units, u => Assert.True(float.IsPositiveInfinity(u.Life)));
+            group.Update(0.5f, new EffectCamera(new Vector3(0, 50, 0), Vector3.UnitZ), new WeatherEffectInput());
+            Assert.True(group.Units[0].Active);    // in range
+            Assert.False(group.Units[1].Active);   // 9000 away: past the active radius plus 200
+        }
+        finally { Directory.Delete(path, true); }
+    }
+
+    [Fact]
+    public void Backlog_is_caught_up_over_several_frames()
+    {
+        var unit = new EffectUnit(Record(EffectType.Point), System(Puff), 1) { Position = Vector3.Zero, Anchor = Vector3.Zero };
+        unit.Activate();
+        unit.Pending = 30;
+        unit.Advance();
+        Assert.True(unit.Pending > 0 && unit.Pending < 30);   // at most 40 steps a call
+        Assert.True(unit.CatchingUp || unit.Pending < 1);
+        for (int i = 0; i < 20 && unit.Pending > 0; i++) unit.Advance();
+        Assert.Equal(0, unit.Pending, 4);
+        Assert.True(unit.Simulation!.ParticleCount > 100);
+    }
+
+    [Fact]
+    [Slow]
+    public void Twister_effects_carry_their_fog_volumes_and_placers_read_the_map()
+    {
+        var install = GameInstall.Locate();
+        Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
+        var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
+        var storm = WeatherEffectAdapter.FromName(db, "Twister Storm");
+        var twister = storm.Effects.Select(e => e.Effect).First(e => e.FogVolumes.Count > 0);
+        Assert.All(twister.FogVolumes, f => Assert.InRange(f.Radius, 100f, 3000f));
+        var placements = MapEffectPlacers.Find(db, MapFeatureFile.Open(install!));
+        Assert.Equal(24, placements.Count(p => p.Effect.Name == "Volk-Cloud"));
+        Assert.Equal(18, placements.Count(p => p.Effect.Name == "Volc-small-steamers"));
+        Assert.Equal(1, placements.Count(p => p.Effect.Name == "Permanent-dust-storm"));
     }
 
     [Fact]
