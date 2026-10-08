@@ -40,7 +40,7 @@ public static class Enhancements
     /// (docs/formats/post-processing.md and sky.md for what the game does).
     /// </summary>
     public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<float> hazeStrength, Action<float> setHazeStrength, Func<bool> meitouShadows, Action<bool> setMeitouShadows,
-        Func<bool> meitouRange, Action<bool> setMeitouRange, Func<bool> impostors, Action<bool> setImpostors, Func<bool> meitouReach, Action<bool> setMeitouReach, Func<bool> triplanarDust, Action<bool> setTriplanarDust) =>
+        Func<bool> meitouRange, Action<bool> setMeitouRange, Func<bool> impostors, Action<bool> setImpostors, Func<bool> meitouReach, Action<bool> setMeitouReach, Func<bool> triplanarDust, Action<bool> setTriplanarDust, Func<bool> foliageLod, Action<bool> setFoliageLod) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -67,6 +67,9 @@ public static class Enhancements
         new("reach", "Draw distances", "game-like", "farther",
             meitouReach, setMeitouReach,
             $"Faithful keeps the viewer's old defaults (objects at full detail to {FaithfulObjectDistance:0}, terrain error {WorldRenderOptions.DefaultTerrainPixelError:0} px); Meitou draws objects to {MeitouObjectDistance:0}, lets the terrain be coarser ({MeitouTerrainPixelError:0} px) and draws huge landmarks (giant wrecks, skeletons, towers) out to {MeitouLandmarkDistance:0} (Tab sliders; the landmarks need Meitou at start)"),
+        new("lod", "Foliage levels", "full detail", "generated levels",
+            foliageLod, setFoliageLod,
+            "the game draws every foliage mesh at full detail, and TERRAIN-mode rocks and plants (some thousands of triangles each) have no LOD levels; Meitou makes coarser levels at load (quadric edge collapse, kept in a disk cache) and picks one per instance by how many pixels (shadow texels) its deviation would show"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

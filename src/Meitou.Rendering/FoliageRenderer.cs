@@ -180,7 +180,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public List<string> Messages { get; } = [];
 
     /// <summary>Work in flight: zones being laid out, grass pages, meshes decoding or uploading, textures decoding.</summary>
-    public int Pending => runningWhole + runningFar + zonesWaiting + grassWaiting + decoding.Count + uploads.Count + textures.PendingCount + zones.Values.Sum(z => z.GrassRunning) + ImpostorPending;
+    public int Pending => runningWhole + runningFar + zonesWaiting + grassWaiting + decoding.Count + uploads.Count + lodRunning + lodWaiting + textures.PendingCount + zones.Values.Sum(z => z.GrassRunning) + ImpostorPending;
 
     /// <summary>GPU memory held by foliage meshes, textures and grass pages.</summary>
     public long ResidentBytes => residentMeshBytes + textures.ResidentBytes + GrassBytes() + impostorBytes;
@@ -466,6 +466,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         UpdateGrass(eye);
         double t1 = watch.Elapsed.TotalMilliseconds;
         PumpMeshes();
+        PumpLods();
         Prune();
         TrimResident(eye, force: settling);
         double t2 = watch.Elapsed.TotalMilliseconds;
@@ -768,6 +769,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         /// <summary>For a TERRAIN-mode mesh: the work list that last numbered its rock batches, and their numbers among the rock batches
         /// (plain placements, mirroring placements; -1: none in the work list).</summary>
         public int RockStamp, RockPlainIndex, RockMirroredIndex;
+        /// <summary>Generated levels (<see cref="RockLod"/>, TERRAIN-mode meshes only): uploaded, the job making them (or reading the cache), whether it ran for the current residency, and the set the current GPU work list was built with.</summary>
+        public RockLod? Lod, WorkLod;
+        public Task<LodResult>? LodJob;
+        public bool LodDone;
         /// <summary>Its impostor (<see cref="FoliageRenderer.Impostors"/>): null until asked for.</summary>
         public ImpostorState? Impostor;
         /// <summary>
@@ -965,6 +970,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             foreach (var m in new[] { a.Main, a.Leaves })
                 if (m is not null) DeleteMesh(m);
             a.Main = a.Leaves = null;
+            DropLods(a);
             a.Resident = false;
             residentMeshBytes -= a.Bytes;
             a.Bytes = 0;
@@ -1132,6 +1138,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (active.Count > 0 && !debugNoMeshes) PrepareMeshes(options, gpu);
         else meshDraws.Clear();
         // The GPU path's TERRAIN-mode rocks: one draw per part of each rock batch in view, culled by the same dispatch (after the meshes' draws).
+        lodView = gpu ? CurrentLodView(eye.Y) : default;
         if (gpu) PrepareRocks();
         else rockDraws.Clear();
         if (!debugNoMeshes) PrepareImpostors(gpu);
@@ -1193,7 +1200,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             DrawCalls += terrain.DrawMeshes(terrainDraws, depthPass);
         }
-        StageClock.Sub(WorldFrame.OcclusionAlternate && !Occlusion.IsEmpty && !depthPass ? "fol rocks+occ" : "fol rocks");
+        StageClock.Sub(LodAlternate && LodWanted ? "fol rocks+lod" : WorldFrame.OcclusionAlternate && !Occlusion.IsEmpty && !depthPass ? "fol rocks+occ" : "fol rocks");
         int rocks = gpu ? rockDraws.Count : terrainDraws.Count;
         if (FolTiming) FolAccount(depthPass ? 1 : 0, tCull, tUpload, tMeshes, tGrass, cpu.Elapsed.TotalMilliseconds, callsMeshes - callsBefore, callsGrass - callsMeshes, rocks, recMeshes, recGrass, dispatchMs);
         if (WorldFrame.DetailedStats)
@@ -1425,7 +1432,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// The CPU's terrain path orders its groups by their first visible placement instead; the order only matters between two different
     /// rocks at exactly the same depth in colour (depth passes keep the nearest whatever the order), as for A1's foliage batches.
     /// </summary>
-    readonly List<(MeshAsset Asset, bool Mirrored)> gpuRockOrder = [];
+    readonly List<(MeshAsset Asset, bool Mirrored, int Level)> gpuRockOrder = [];
     FoliageCullChunk[] gpuChunks = new FoliageCullChunk[1024];
     int gpuChunkCount, gpuInstances;
     int[] gpuBatchStart = new int[65], gpuCursor = new int[64];
@@ -1445,6 +1452,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// the mesh draws' (<see cref="DispatchGpuCull"/>).</summary>
     readonly List<TerrainRenderer.IndirectMesh> rockDraws = [];
     readonly List<int> rockDrawBatch = [];
+    /// <summary>Each rock draw's first index (a generated level's place in its part's level buffer; 0 for the original).</summary>
+    readonly List<int> rockDrawFirst = [];
 
     static bool IsRock(MeshAsset a, WorldRenderOptions options) => a.Terrain && options.Textures;
 
@@ -1521,6 +1530,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             }
         } while (!placed);
 
+        bool wantLods = LodWanted;
         int stamp = ++gpuWorkStamp;
         gpuOrder.Clear();
         gpuRockOrder.Clear();
@@ -1543,14 +1553,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             if ((parts & FoliageCull.MeshPart) == 0 && !(rockSegments && RockMeshWanted(g, parts))) continue;
             if (IsRock(a, options))
             {
-                if (a.RockStamp != stamp) (a.RockStamp, a.RockPlainIndex, a.RockMirroredIndex) = (stamp, -1, -1);
+                if (a.RockStamp != stamp)
+                {
+                    (a.RockStamp, a.RockPlainIndex, a.RockMirroredIndex) = (stamp, -1, -1);
+                    // The levels this work list uses are fixed here: every view of the frame that shares it draws the batches it numbers.
+                    a.WorkLod = wantLods && a.Lod is { } lod && a.Main is { } lodMain && lodMain.Parts.Count == lod.Parts.Length ? lod : null;
+                }
                 // The group's first placement's batch first (the order its runs are emitted in).
                 for (int pass = 0; pass < 2; pass++)
                 {
                     bool m = pass == 0 ? g.RockFirstMirrored : !g.RockFirstMirrored;
                     if (!(m ? g.RockMirrored : g.RockPlain)) continue;
                     ref int index = ref m ? ref a.RockMirroredIndex : ref a.RockPlainIndex;
-                    if (index < 0) { index = gpuRockOrder.Count; gpuRockOrder.Add((a, m)); }
+                    if (index < 0)
+                    {
+                        index = gpuRockOrder.Count;
+                        for (int level = 0; level < (a.WorkLod?.Levels ?? 1); level++) gpuRockOrder.Add((a, m, level));
+                    }
                 }
                 continue;
             }
@@ -1569,8 +1588,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     var v = ReadyRock(a, row);
                     if (v is null || (parts & FoliageCull.MeshPart) != 0)
                     {
-                        if (g.RockPlain) gpuEntries.Add(new GpuEntry(meshBatches + a.RockPlainIndex, g, start, length, v is not null));
-                        if (g.RockMirrored) gpuEntries.Add(new GpuEntry(meshBatches + a.RockMirroredIndex, g, start, length, v is not null));
+                        if (g.RockPlain) AddRockEntries(meshBatches + a.RockPlainIndex, a, g, start, length, v is not null);
+                        if (g.RockMirrored) AddRockEntries(meshBatches + a.RockMirroredIndex, a, g, start, length, v is not null);
                     }
                     if (v is not null) gpuEntries.Add(new GpuEntry(impostorFirst + v.Impostor!.Index, g, start, length, false));
                 }
@@ -1583,8 +1602,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 continue;
             }
             if (!IsRock(a, options)) { gpuEntries.Add(new GpuEntry(a.WorkIndex, g, 0, g.Instances.Length, false)); continue; }
-            if (g.RockPlain) gpuEntries.Add(new GpuEntry(meshBatches + a.RockPlainIndex, g, 0, g.Instances.Length, false));
-            if (g.RockMirrored) gpuEntries.Add(new GpuEntry(meshBatches + a.RockMirroredIndex, g, 0, g.Instances.Length, false));
+            if (g.RockPlain) AddRockEntries(meshBatches + a.RockPlainIndex, a, g, 0, g.Instances.Length, false);
+            if (g.RockMirrored) AddRockEntries(meshBatches + a.RockMirroredIndex, a, g, 0, g.Instances.Length, false);
         }
         if (gpuBatchStart.Length < batches + 1) { gpuBatchStart = new int[batches * 2 + 1]; gpuCursor = new int[batches * 2]; }
         Array.Clear(gpuBatchStart, 0, batches + 1);
@@ -1615,6 +1634,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 uint flags = b < meshBatches ? (range.HasImpostor ? FoliageCullChunk.ImpostorMesh : 0)
                     : b >= impostorFirst ? FoliageCullChunk.Impostor
                     : FoliageCullChunk.Rock | (gpuRockOrder[b - meshBatches].Mirrored ? FoliageCullChunk.Mirrored : 0) | (e.ImpostorMesh ? FoliageCullChunk.ImpostorMesh : 0);
+                float lodError = 0, lodNext = float.PositiveInfinity;
+                if (b >= meshBatches && b < impostorFirst && gpuRockOrder[b - meshBatches].Asset.WorkLod is { } workLod)
+                {
+                    flags |= FoliageCullChunk.Lod;
+                    lodError = workLod.Relative[e.Level];
+                    lodNext = e.Level + 1 < workLod.Levels ? workLod.Relative[e.Level + 1] : float.PositiveInfinity;
+                }
                 uint first = FoliageGpuCull.FirstOf(g.Arena) + (uint)e.Start;
                 for (int at = 0; at < length; at += Chunk)
                     gpuChunks[gpuCursor[b]++] = new FoliageCullChunk
@@ -1622,12 +1648,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                         First = first + (uint)at, Count = (uint)Math.Min(Chunk, length - at),
                         Range = range.Range, RangeSquared = range.RangeSquared, InverseBand = range.InverseBand, Flags = flags,
                         Transition = range.HasImpostor ? range.Transition : 0, InverseTransitionBand = range.InverseTransitionBand,
+                        LodError = lodError, LodNextError = lodNext,
                     };
             }
         }
         gpuChunkCount = n;
         gpuInstances = 0;
-        foreach (var e in gpuEntries) gpuInstances += e.Length;
+        foreach (var e in gpuEntries) if (e.Level == 0) gpuInstances += e.Length;   // a generated level's entry repeats the instances; each is drawn at one level
         gpuChunkFrame = -1;
         gpuWorkBuilds++;
         gpuWorkGroups += groups;
@@ -1642,7 +1669,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>One group's records (<c>Start</c> and <c>Length</c> in <c>Group.Instances</c>: all of them, or a rock's run of one biome row) in a batch; <c>ImpostorMesh</c>:
     /// a rock's mesh run whose row has an atlas (its chunks carry the transition).</summary>
-    readonly record struct GpuEntry(int Batch, Group Group, int Start, int Length, bool ImpostorMesh);
+    readonly record struct GpuEntry(int Batch, Group Group, int Start, int Length, bool ImpostorMesh, int Level = 0);
+
+    /// <summary>A rock run's entries: one per generated level in use (<see cref="MeshAsset.WorkLod"/>), the batches of the levels consecutive from <paramref name="batch"/>.</summary>
+    void AddRockEntries(int batch, MeshAsset a, Group g, int start, int length, bool impostorMesh)
+    {
+        for (int level = 0; level < (a.WorkLod?.Levels ?? 1); level++) gpuEntries.Add(new GpuEntry(batch + level, g, start, length, impostorMesh, level));
+    }
 
     /// <summary>A rock group whose work list has impostors needs its mesh chunks too when some of its rows have no atlas (those stay meshes whatever the zone's distance).</summary>
     static bool RockMeshWanted(Group g, int parts)
@@ -1675,14 +1708,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         rockDraws.Clear();
         rockDrawBatch.Clear();
+        rockDrawFirst.Clear();
         int meshBatches = gpuOrder.Count;
         for (int r = 0; r < gpuRockOrder.Count; r++)
         {
             if (!gpuBatchShown[meshBatches + r]) continue;
-            var (a, mirrored) = gpuRockOrder[r];
-            foreach (var gp in a.Main!.Parts)
+            var (a, mirrored, level) = gpuRockOrder[r];
+            if (level > 0 && !lodActive) continue;   // this view picks no generated level (a shadow cascade of unknown texel): the batch would draw nothing
+            for (int p = 0; p < a.Main!.Parts.Count; p++)
             {
-                rockDraws.Add(new TerrainRenderer.IndirectMesh(PlainMesh(gp), gp.Count, mirrored));
+                var gp = a.Main.Parts[p];
+                if (level == 0) { rockDraws.Add(new TerrainRenderer.IndirectMesh(PlainMesh(gp), gp.Count, mirrored)); rockDrawFirst.Add(0); }
+                else
+                {
+                    var pl = a.WorkLod!.Parts[p];
+                    rockDraws.Add(new TerrainRenderer.IndirectMesh(pl.Bindings, pl.Count[level], mirrored));
+                    rockDrawFirst.Add(pl.First[level]);
+                }
                 rockDrawBatch.Add(meshBatches + r);
             }
         }
@@ -1709,7 +1751,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         for (int k = 0; k < rockDraws.Count; k++)
         {
             int b = rockDrawBatch[k];
-            gpuDraws[meshes + k] = new FoliageCullDraw { IndexCount = (uint)rockDraws[k].IndexCount, ChunkStart = (uint)gpuBatchStart[b], ChunkEnd = (uint)gpuBatchStart[b + 1] };
+            gpuDraws[meshes + k] = new FoliageCullDraw { IndexCount = (uint)rockDraws[k].IndexCount, FirstIndex = (uint)rockDrawFirst[k], ChunkStart = (uint)gpuBatchStart[b], ChunkEnd = (uint)gpuBatchStart[b + 1] };
         }
         for (int k = 0; k < impostorDraws.Count; k++)
         {
@@ -1734,7 +1776,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 _ => "atlas pending",
             };
             for (int i = 0; i < meshes; i++) { var a = gpuOrder[meshDraws[i].Batch]; names[i] = $"{a.Mesh.Name} ({a.SizeClass}, {State(a)})"; }
-            for (int k = 0; k < rockDraws.Count; k++) { var (a, _) = gpuRockOrder[rockDrawBatch[k] - gpuOrder.Count]; names[meshes + k] = $"{a.Mesh.Name} (rock, {a.SizeClass})"; }
+            for (int k = 0; k < rockDraws.Count; k++) { var (a, _, level) = gpuRockOrder[rockDrawBatch[k] - gpuOrder.Count]; names[meshes + k] = $"{a.Mesh.Name} (rock{(level > 0 ? $" level {level}" : "")}, {a.SizeClass})"; }
             for (int k = 0; k < impostorDraws.Count; k++) names[rocks + k] = $"{impostorDraws[k].Asset.Mesh.Name} (impostor)";
             cull.TallyNames = names;
         }
@@ -1743,7 +1785,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         bool fogOn = !depthPass && FogCull is { } fogCull && fogCull.WriteCull(fog);
         bool occlusionOn = !depthPass && !Occlusion.IsEmpty && !GpuCullVerify;
         cull.TimingClass = depthPass || Gpu.CurrentTargets().Formats.Samples > 1 ? 0 : occlusionOn ? 2 : 1;
-        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock, 0.999f, fogOn ? fog : default, occlusionOn ? Occlusion : default);
+        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock, 0.999f, fogOn ? fog : default, occlusionOn ? Occlusion : default, lodView);
         if (occlusionOn && cull.OccludedIsFresh) OccludedInstances = cull.LateOccluded;
         DrawnInstances += cull.LateVisible;
         if (fogOn && cull.LateFogCulled > 0) FogCull!.AddCulled(FogVolumes.CullKind.FoliageInstances, cull.LateFogCulled);
@@ -1987,14 +2029,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>
     /// Draws the foliage meshes' depth for a shadow cascade: <see cref="Draw"/>'s culling and ranges (measured from the camera's
-    /// <paramref name="eye"/>) with <see cref="ShadowShaders.MeshDepthFragment"/>, so the leaves' cut-out holds; no grass, no mesh smaller than <paramref name="minSize"/>. Leaves the draw
+    /// <paramref name="eye"/>) with <see cref="ShadowShaders.MeshDepthFragment"/>, so the leaves' cut-out holds; no grass, no mesh smaller than <paramref name="minSize"/>. <paramref name="texel"/> is the cascade's texel (world units; 0: unknown) for the generated levels. Leaves the draw
     /// counters describing this call.
     /// </summary>
-    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float maxRange = float.PositiveInfinity, float minSize = 0)
+    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float maxRange = float.PositiveInfinity, float minSize = 0, float texel = 0)
     {
-        (depthPass, depthMinSize) = (true, minSize);
+        (depthPass, depthMinSize, lodTexel) = (true, minSize, texel);
         try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain, grass: false, maxRange: maxRange); }
-        finally { (depthPass, depthMinSize) = (false, 0); }
+        finally { (depthPass, depthMinSize, lodTexel) = (false, 0, 0); }
     }
 
     // ------------------------------------------------------------------ native recording
@@ -2660,6 +2702,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (var a in assetsByMesh.Values)
         {
             try { a.Job?.Wait(); } catch (AggregateException) { }
+            try { a.LodJob?.Wait(); } catch (AggregateException) { }
+            a.Lod?.Dispose();
             foreach (var m in new[] { a.Main, a.Leaves })
                 if (m is not null) DeleteMesh(m);
         }

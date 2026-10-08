@@ -331,7 +331,7 @@ static class FoliageShaders
         layout(local_size_x = 256) in;
         // 17 floats a record (FoliageInstanceRecord.Pack): rows 1 to 4 xyz at 0..11, the sphere at 12..15, a rock's bits at 16; std430 stride 68.
         struct Instance { float f[17]; };
-        struct Chunk { uint first; uint count; float range; float rangeSquared; float inverseBand; uint flags; float transition; float inverseTransitionBand; };
+        struct Chunk { uint first; uint count; float range; float rangeSquared; float inverseBand; uint flags; float transition; float inverseTransitionBand; float lodError; float lodNextError; };
         // A TERRAIN-mode rock chunk (flags 1; with 2 its group's mirroring placements, else the others): ground.w is 1024 when the placement
         // mirrors, plus its biome map row + 1 (0: none). The view's biome rows switch (mode.x) and the resident biomes (a bit per row).
         // A mesh chunk of a group with an impostor (flags 4) keeps the instances before the transition, the group's impostor chunk (flags 8,
@@ -339,7 +339,7 @@ static class FoliageShaders
         // mode.y: the fog cull is on (main colour pass; FogVolumes.WriteCull): fog[0] box min and in w the weather fog's distance squared (0: none), fog[1] box max and in w 1 when the eye's block
         // is there, fog[2] eye + hide distance squared, fog[3..9] the block's planes.
         // mode.z: the occlusion cull is on (main colour pass; HizPyramid.ViewFor): hz and hzOff as OcclusionView.Vectors says.
-        struct ViewData { vec4 planes[8]; vec4 lengths[2]; uvec4 resident[2]; uvec4 mode; vec4 fog[10]; vec4 hz[6]; uvec4 hzOff[3]; };
+        struct ViewData { vec4 planes[8]; vec4 lengths[2]; uvec4 resident[2]; uvec4 mode; vec4 fog[10]; vec4 hz[6]; uvec4 hzOff[3]; vec4 lod; };
         layout(push_constant) uniform Push { vec2 eye; uint planeCount; uint chunkCount; uint drawCount; float fullThreshold; } pc;
         uint ChunkIndex() { return gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x; }
         // FogVolumes.Covers: the box wholly inside the eye's fog block (its box and seven planes) and its nearest point at least the hide distance away.
@@ -421,6 +421,17 @@ static class FoliageShaders
             }
             return false;
         }
+        // Generated mesh levels (flag 16, FoliageLod): a chunk holds the instances of one level, whose deviation from the original (lodError, in radii of the mesh) is
+        // below view.lod.z pixels (shadow cascades: texels) while the next level's (lodNextError, infinite for the last) is not. view.lod: the eye's height, the
+        // pixels per radian (ortho views: 1 / the texel), the tolerance, 1 for an ortho view. The distance is to the nearest point of the sphere.
+        bool LodSelected(Chunk k, vec4 sphere)
+        {
+            float s;
+            if (view.lod.w > 0.5) s = sphere.w * view.lod.y;
+            else s = sphere.w * view.lod.y / max(length(sphere.xyz - vec3(pc.eye.x, view.lod.x, pc.eye.y)) - sphere.w, 1.0);
+            float tau = view.lod.z;
+            return k.lodError * s <= tau && !(k.lodNextError * s <= tau);
+        }
         shared uint visibleCount, foggedCount, occludedCount;
         void main()
         {
@@ -454,6 +465,7 @@ static class FoliageShaders
                     }
                     if (visible && (k.flags & 1u) != 0u)
                         visible = !(w < 0.5) && ((uint(ground.w) >= 1024u) == ((k.flags & 2u) != 0u));
+                    if (visible && (k.flags & 16u) != 0u) visible = LodSelected(k, sphere);
                     if (visible) packed = w >= pc.fullThreshold ? 2.0 : w;
                     if (visible && (k.flags & 12u) != 0u)
                     {
@@ -479,7 +491,7 @@ static class FoliageShaders
     /// <summary>Kernel 2: one workgroup. Each chunk's output offset (an exclusive prefix of the counts in chunk order; the chunks of a batch
     /// are consecutive, so a batch's instances are too), the total at the end, and each draw's instance count and first instance.</summary>
     public static readonly string ScanCompute = CullCommon + """
-        struct Draw { uint indexCount; uint chunkStart; uint chunkEnd; uint pad; };
+        struct Draw { uint indexCount; uint chunkStart; uint chunkEnd; uint firstIndex; };
         struct Args { uint indexCount; uint instanceCount; uint firstIndex; int vertexOffset; uint firstInstance; };
         layout(std430, set = 0, binding = 4) readonly buffer Counts { uint counts[]; };   // [0, n) the visible, [n, 2n) the fog cull's, [2n, 3n) the occlusion cull's
         layout(std430, set = 0, binding = 5) writeonly buffer Offsets { uint offsets[]; };
@@ -526,7 +538,7 @@ static class FoliageShaders
             {
                 Draw draw = draws[d];
                 uint first = OffsetOf(draw.chunkStart);
-                args[d] = Args(draw.indexCount, OffsetOf(draw.chunkEnd) - first, 0u, 0, first);
+                args[d] = Args(draw.indexCount, OffsetOf(draw.chunkEnd) - first, draw.firstIndex, 0, first);
             }
         }
         """;

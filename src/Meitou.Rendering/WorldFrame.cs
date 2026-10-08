@@ -68,6 +68,8 @@ sealed class WorldOptions
     public float? SmallRange, MediumRange, LargeRange;
     /// <summary>The impostors switch (Enhancements): far foliage as baked billboards (Meitou, default) or meshes only (the game); the distance (null: the default).</summary>
     public bool Impostors = true;
+    /// <summary>The Meitou <c>lod</c> switch: generated mesh levels for TERRAIN-mode foliage meshes (<see cref="FoliageRenderer.Lod"/>).</summary>
+    public bool FoliageLod = true;
     /// <summary>The dust switch (Enhancements): dust on triplanar map features (Meitou, default) or only on building parts (the game).</summary>
     public bool TriplanarDust = true;
     public float? ImpostorDistance, LargeImpostorDistance;
@@ -208,7 +210,7 @@ sealed class WorldOptions
 
     /// <summary>The Faithful / Meitou switches over the options (for <c>--meitou</c> / <c>--faithful</c>).</summary>
     internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
-        () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v, () => o.TriplanarDust, v => o.TriplanarDust = v);
+        () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v, () => o.TriplanarDust, v => o.TriplanarDust = v, () => o.FoliageLod, v => o.FoliageLod = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -718,6 +720,7 @@ static class WorldFrame
             var f = gpu.Foliage;
             f.Terrain = terrain;
             (f.MeitouRange, f.SmallRange, f.MediumRange, f.LargeRange) = (o.MeitouRange, o.SmallRange ?? f.SmallRange, o.MediumRange ?? f.MediumRange, o.LargeRange ?? f.LargeRange);
+            f.Lod = o.FoliageLod;
             (f.Impostors, f.ImpostorDistance, f.ImpostorBudgetMb) = (o.Impostors, o.ImpostorDistance ?? f.ImpostorDistance, o.ImpostorBudgetMb ?? f.ImpostorBudgetMb);
             if (o.LargeImpostorDistance is { } largeImpostor) f.LargeImpostorDistance = largeImpostor;
             if (o.ImpostorCacheMb is { } cacheMb) f.ImpostorCacheMb = cacheMb;
@@ -784,7 +787,8 @@ static class WorldFrame
                     (r.TerrainPixelError, r.TerrainFarPixelError) = (o.TerrainErrorFor(v), o.TerrainErrorFor(v) * scale);
                 }
             },
-            () => gpu()?.Surfaces?.TriplanarDust ?? o.TriplanarDust, v => { o.TriplanarDust = v; if (gpu()?.Surfaces is { } s) s.TriplanarDust = v; });
+            () => gpu()?.Surfaces?.TriplanarDust ?? o.TriplanarDust, v => { o.TriplanarDust = v; if (gpu()?.Surfaces is { } s) s.TriplanarDust = v; },
+            () => gpu()?.Foliage?.Lod ?? o.FoliageLod, v => { o.FoliageLod = v; if (gpu()?.Foliage is { } f) f.Lod = v; });
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null)
@@ -904,6 +908,7 @@ static class WorldFrame
         gpu.Characters?.SetView(rw, rh, camera.FieldOfView);
         gpu.Objects?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(1);
+        if (gpu.Foliage is { } lodFoliage) lodFoliage.LodPixelsPerRadian = render.TerrainPixelScale;   // the generated mesh levels measure their deviation in rendered pixels
         gpu.Foliage?.Update(gpu.Anchor ?? eye);
         gpu.Characters?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(2);
@@ -1123,7 +1128,7 @@ static class WorldFrame
             StageClock.Sub("objects");
             gpu.Characters?.DrawDepth(worldToClip, lodEye, planes);
             long t2 = Stopwatch.GetTimestamp();
-            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.EffectiveRange * 1.2f, minSize: shadow.MinFoliageCaster(cascade)); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
+            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.EffectiveRange * 1.2f, minSize: shadow.MinFoliageCaster(cascade), texel: (float)cascade.Texel); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
             StageClock.Phase(CascadeLabels[cascade.Index & 3]);
             long t3 = Stopwatch.GetTimestamp();
             double ms = 1000.0 / Stopwatch.Frequency;

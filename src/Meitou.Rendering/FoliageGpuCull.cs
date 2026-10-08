@@ -18,10 +18,14 @@ public struct FoliageCullChunk
     public uint Flags;
     /// <summary>With <see cref="ImpostorMesh"/> or <see cref="Impostor"/>: the group's transition and the crossfade band's reciprocal (<see cref="FoliageGroupRange"/>).</summary>
     public float Transition, InverseTransitionBand;
+    /// <summary>With <see cref="Lod"/>: the deviation, in radii of the mesh, of the level this chunk holds and of the next coarser one (infinite for the last).</summary>
+    public float LodError, LodNextError;
 
-    public const int Size = 32;
+    public const int Size = 40;
     /// <summary><see cref="ImpostorMesh"/>: the meshes of a group with an impostor (before its transition); <see cref="Impostor"/>: its impostors.</summary>
     public const uint Rock = 1, Mirrored = 2, ImpostorMesh = 4, Impostor = 8;
+    /// <summary>A generated mesh level's chunk: its instances are those the view picks this level for (<see cref="FoliageLodView"/>).</summary>
+    public const uint Lod = 16;
 }
 
 /// <summary>What a view's rock chunks write into row 0 w (<see cref="FoliageShaders.CompactCompute"/>): with <see cref="BiomeRows"/> (the
@@ -37,12 +41,16 @@ public struct FoliageRockView
     public struct ResidentBits { uint first; }
 }
 
-/// <summary>An indirect draw the scan fills (std430, 16 bytes): the part's index count and the chunks [ChunkStart, ChunkEnd) of its batch.</summary>
+/// <summary>What a view tells the cull about generated mesh levels (<see cref="FoliageCullChunk.Lod"/>): a level is used while its deviation shows less than
+/// <see cref="Tolerance"/>. A perspective view measures it in pixels, <see cref="Scale"/> the pixels per radian of the render and <see cref="EyeY"/> the eye's height
+/// (the cull has only its ground position); an orthographic one (a shadow cascade) in texels, <see cref="Scale"/> being 1 / the texel. Tolerance 0 uses the original everywhere.</summary>
+public readonly record struct FoliageLodView(float EyeY, float Scale, float Tolerance, bool Ortho);
+
+/// <summary>An indirect draw the scan fills (std430, 16 bytes): the part's index count (from <see cref="FirstIndex"/>, a generated level's place in the index buffer) and the chunks [ChunkStart, ChunkEnd) of its batch.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct FoliageCullDraw
 {
-    public uint IndexCount, ChunkStart, ChunkEnd;
-    uint pad;
+    public uint IndexCount, ChunkStart, ChunkEnd, FirstIndex;
 
     public const int Size = 16;
 }
@@ -83,7 +91,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
 {
     const ulong Align = 256;
     /// <summary>The kernels' View buffer (<c>ViewData</c>): 8 planes, their normals' lengths, the resident biome bits, the mode, the fog cull (<see cref="FogVolumes.CullVectors"/> vec4s), the occlusion cull (<see cref="HizPyramid.ViewVectors"/> vec4s).</summary>
-    const ulong ViewBytes = 208 + FogVolumes.CullVectors * 16 + HizPyramid.ViewVectors * 16;
+    const ulong ViewBytes = 208 + FogVolumes.CullVectors * 16 + HizPyramid.ViewVectors * 16 + 16;
     readonly GpuContext ctx;
     readonly ShaderProgram cull, scan, compact;
     readonly ComputePipeline cullPipe, scanPipe, compactPipe;
@@ -360,7 +368,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         Dispatch(work, view, eye, default, fullThreshold);
 
     /// <summary><see cref="Dispatch(in FoliageCullWork, FoliageCullView, Vector2, float)"/> with what the view's rock chunks write (<see cref="FoliageRockView"/>).</summary>
-    public FoliageCullResult Dispatch(in FoliageCullWork work, FoliageCullView view, Vector2 eye, in FoliageRockView rock, float fullThreshold = 0.999f, ReadOnlySpan<Vector4> fogCull = default, in OcclusionView occlusion = default)
+    public FoliageCullResult Dispatch(in FoliageCullWork work, FoliageCullView view, Vector2 eye, in FoliageRockView rock, float fullThreshold = 0.999f, ReadOnlySpan<Vector4> fogCull = default, in OcclusionView occlusion = default, FoliageLodView lod = default)
     {
         if (work.ChunkCount == 0) return default;
         if (view.Planes.Length > 8) throw new ArgumentException("at most 8 planes", nameof(view));
@@ -393,6 +401,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         for (int i = 0; i < FogVolumes.CullVectors; i++) fogData[i] = fogCull.Length == FogVolumes.CullVectors ? fogCull[i] : default;
         var hzData = fogData + FogVolumes.CullVectors;
         for (int i = 0; i < HizPyramid.ViewVectors; i++) hzData[i] = occlusion.IsEmpty ? default : occlusion.Vectors[i];
+        hzData[HizPyramid.ViewVectors] = new Vector4(lod.EyeY, lod.Scale, lod.Tolerance, lod.Ortho ? 1 : 0);
 
         Span<BufferBinding> b = stackalloc BufferBinding[10];
         b[0] = new BufferBinding(viewData.Handle, viewData.Offset, ViewBytes);
