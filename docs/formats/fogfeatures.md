@@ -143,9 +143,10 @@ The sphere and the two beams (**Verified**: the install's file; positions rounde
 - **Blending** (Verified (decompiled), FUN_140108f50, FUN_140109a60 and Ogre's `Pass::setSceneBlending`): the file's volumes keep colour alpha 1
   and the material's alpha blend (`SBT_TRANSPARENT_ALPHA`: source alpha, one minus source alpha). The effects' volumes below take the record's
   alpha (clamped to 0..1) as the colour's alpha, a volume at alpha 0 is hidden, and `additive colour` switches the pass to (source alpha, one).
-- **Order** (**Observed**): all queue-82 volumes are transparent objects sorted back to front by Ogre, which measures the camera's distance to
-  the centre of an object's world bounds (`MovableObject::cullFrustum` computes that distance; that the transparent sort uses it was not traced).
-  For a sphere that is its centre, for a beam the middle of the hull, for a block the middle of its corners' box.
+- **Order** (Verified (decompiled), FUN_14010b6a0 and in `OgreMain_x64.dll` `SubEntity::getSquaredViewDepth` and `Node::getSquaredViewDepth`): all
+  queue-82 volumes are transparent objects sorted back to front by the squared distance from the camera to their node (a sub-entity without
+  extremity points asks its node): a sphere's centre, a beam's start, a block's corners' mean (the hull builder averages the corners and puts
+  the node there), an effect's volume the effect's position plus the offset.
 - **Why the swamp looks the way it does** (from the above): standing in Shark, the eye is inside Swamp[SOUTH] (density distance 4500) and
   usually Swamp_N-W-Mid (2000): things 2000 to 4000 away are mostly fog, the sky (D = 50000 but the path ends at the ceiling, ~2600 above,
   lengthened by `1 + |ray.y| × 0.9`) is covered, and the colour is the volumes' grey-brown × 1.6, desaturating everything behind it.
@@ -201,8 +202,8 @@ colour and density; a beam (4) its start, unit axis and length, the shader radiu
 frame (`Update`, after the particles moved) it keeps every volume whose box lies within the game's far clip D (the haze's far distance, `uAtmoFog.w`) and inside a wedge round the
 camera's horizontal direction as wide as the view's corner rays (the same in x, z for the water reflection's mirrored camera; off when the
 camera looks nearly straight down), adds the weather effects' volumes (`ParticleRenderer.CollectFogVolumes`, with the game's fades as size and
-density, `FogVolumes.Faded`, and an effect's sphere left out while the eye is inside it, as the game), sorts them by the distance to the centre
-of their hull's bounds, and packs them farthest first into `uFogVolumeData` (512 vec4s in the frame block: 51 blocks, so all 28 of the base
+density, `FogVolumes.Faded`, and an effect's sphere left out while the eye is inside it, as the game), sorts them by the distance to
+their game node (above), and packs them farthest first into `uFogVolumeData` (512 vec4s in the frame block: 51 blocks, so all 28 of the base
 game and dozens of effect spheres fit; if more are in view the farthest are left out and counted). `uFogVolumeEye` holds the eye and the
 blocks' light, `uFogVolumeInfo` the vec4s in use and `sunColour.w` for the spheres and beams. `FogVolumeShaders` holds the three shaders'
 formulas as GLSL; `atmoApply` (the haze every world shader ends with) applies them after the haze with the shader's own point and distance,
@@ -223,4 +224,6 @@ Differences from the game (**Observed**, viewer choices):
 - The view culling (D, wedge) and the 512-vec4 list are the viewer's; the game submits every volume and lets Ogre cull it. A volume
   outside the view adds nothing, so the result is the same while the list is not full.
 - The game's beam formula divides by zero for a ray along the axis; Meitou clamps those divisors.
+- An effect's fade-out starts from full size in Meitou (the fraction is fade-in × fade-out), where the game starts it from the current values; they
+  differ only for an effect stopped while still fading in.
 - With the simple sky (`--simple-sky`, `B`) the volumes are off.

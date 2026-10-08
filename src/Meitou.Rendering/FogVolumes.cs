@@ -20,7 +20,7 @@ internal sealed class FogVolumes
     /// <summary>The highest height the box reaches for a block open upwards (far above the game's camera).</summary>
     public const float HighHeight = 30000f;
 
-    /// <summary>One volume: its packed vec4s, the box a ray must cross (culling) and the point the game's queue sorts it by (its hull's bounds centre).</summary>
+    /// <summary>One volume: its packed vec4s, the box a ray must cross (culling) and the point the game's queue sorts it by (its node).</summary>
     internal sealed class Volume(string name, int type)
     {
         public string Name { get; set; } = name;
@@ -100,9 +100,8 @@ internal sealed class FogVolumes
                     BoxMin = new Vector3(min.X, SectionHeight, min.Y),
                     BoxMax = new Vector3(max.X, MathF.Max(top, SectionHeight), max.Y),
                 };
-                // The game's node sits at the hull's corners; Ogre sorts by its bounds' centre (docs: Observed).
-                v.SortCentre = corners.Count > 0 ? (corners.Aggregate(new Vector3(float.MaxValue), Vector3.Min) + corners.Aggregate(new Vector3(float.MinValue), Vector3.Max)) * 0.5f
-                    : (v.BoxMin + v.BoxMax) * 0.5f;
+                // The game's node sits at the corners' mean (FUN_14010b6a0), and Ogre sorts transparent objects by the node's distance.
+                v.SortCentre = corners.Count > 0 ? corners.Aggregate(Vector3.Zero, (a, c) => a + c) / corners.Count : (v.BoxMin + v.BoxMax) * 0.5f;
                 v.Data[0] = new Vector4(v.BoxMin, FogVolumeShaders.BlockType);
                 v.Data[1] = new Vector4(v.BoxMax, f.EdgeBlur);
                 v.Data[2] = new Vector4(f.Colour, f.Density);
@@ -145,7 +144,7 @@ internal sealed class FogVolumes
         var unit = length > 0 ? axis / length : Vector3.UnitY;
         v.BoxMin = Vector3.Min(start, end) - new Vector3(radius);
         v.BoxMax = Vector3.Max(start, end) + new Vector3(radius);
-        v.SortCentre = (start + end) * 0.5f;
+        v.SortCentre = start;   // the node sits at the start
         v.Data[0] = new Vector4(start, FogVolumeShaders.BeamType);
         v.Data[1] = new Vector4(unit, length);
         v.Data[2] = new Vector4(radius * FogVolumeShaders.BeamShaderRadius, edgeBlur, alpha, additive ? 1 : 0);
