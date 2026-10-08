@@ -28,6 +28,9 @@ sealed class WorldOptions
     /// <summary>The reach switch (Enhancements): Meitou by default (objects to 20000, landmarks to 150000, terrain error 16 px) or the viewer's old values (12000, none, 10 px).
     /// <c>--object-distance</c>, <c>--landmark-distance</c> and <c>--terrain-error</c> as given (null: the mode's default, see the <c>...For</c> methods).</summary>
     public bool MeitouReach = true;
+    /// <summary>The water switch (Enhancements): waves, breakers and foam (Meitou, default) or the game's flat water; <c>--water-seconds</c> starts its clock there (pictures).</summary>
+    public bool MeitouWater = true;
+    public double WaterSeconds;
     public float? ObjectDistance, LandmarkDistance;
     public float ObjectDistanceFor(bool meitou) => ObjectDistance ?? (meitou ? Enhancements.MeitouObjectDistance : Enhancements.FaithfulObjectDistance);
     /// <summary>The landmark distance (units; 0: no landmarks, the huge objects stay with the others): Meitou's default in Meitou, none in Faithful.</summary>
@@ -141,6 +144,7 @@ sealed class WorldOptions
           --debug <n>              1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass)
           --time <hour>            time of day for the sun (default 13; sunrise and sunset from the CONSTANTS record)
           --no-water               leave out the water
+          --water-seconds <s>      start the Meitou water's clock at s game seconds (pictures of the waves at a moment; default 0)
           --no-reflections         the water reflects only the sky colour, not the mirrored scene (R toggles; the same as --water-reflection 0)
           --water-reflection <0..4> the game's `water reflection`: what the water mirrors: 0 nothing (sky colour), 1 sky and terrain, 2 the same (the characters' level; none yet), 3 + buildings and features, 4 + trees, bushes and rocks (default 2; Tab slider)
           --reflection-range <x>   the game's `reflection range`: the mirrored scene is drawn out to haze distance x this (default 0.6, with the default haze distance 30000)
@@ -198,7 +202,8 @@ sealed class WorldOptions
 
     /// <summary>The Faithful / Meitou switches over the options (for <c>--meitou</c> / <c>--faithful</c>).</summary>
     internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
-        () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v);
+        () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v,
+        () => o.MeitouWater, v => o.MeitouWater = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -251,6 +256,7 @@ sealed class WorldOptions
                 case "--info": o.Info = true; break;
                 case "--time": o.Hour = F(); break;
                 case "--no-water": o.NoWater = true; break;
+                case "--water-seconds": o.WaterSeconds = double.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--no-reflections": o.NoReflections = true; break;
                 case "--water-reflection": o.WaterReflection = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, 4); break;
                 case "--reflection-range": o.ReflectionRange = F(); break;
@@ -546,6 +552,8 @@ static class WorldFrame
         public WeatherState WeatherState => Weather?.State ?? WeatherState.Clear;
         internal readonly Stopwatch HeatHazeClock = new();
         internal double HeatHazeHours;
+        /// <summary><c>--water-seconds</c> in game hours: added to the water's clock.</summary>
+        public double WaterClockHours;
         public void Dispose()
         {
             Streamer?.Dispose();
@@ -679,6 +687,8 @@ static class WorldFrame
         {
             var messages = new List<string>();
             gpu.Water = WaterRenderer.Create(context, install, scene.Database, assets, gpu.Sky, messages);
+            gpu.Water.Meitou = o.MeitouWater;
+            gpu.WaterClockHours = o.WaterSeconds / WaveSet.SecondsPerGameHour;
             gpu.Reflection = new ReflectionPass(context) { Level = o.WaterReflection, Range = o.ReflectionRange };
             foreach (var m in messages) Console.WriteLine($"warning   {m}");
             Console.WriteLine($"water     at height {WorldWater.Height} ({watch.ElapsedMilliseconds} ms)");
@@ -762,7 +772,8 @@ static class WorldFrame
                     float scale = r.TerrainFarPixelError / r.TerrainPixelError;
                     (r.TerrainPixelError, r.TerrainFarPixelError) = (o.TerrainErrorFor(v), o.TerrainErrorFor(v) * scale);
                 }
-            });
+            },
+            () => gpu()?.Water?.Meitou ?? o.MeitouWater, v => { o.MeitouWater = v; if (gpu()?.Water is { } w) w.Meitou = v; });
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null)
@@ -902,6 +913,8 @@ static class WorldFrame
         if (gpu.Post is { } exposed) exposed.AutoExposure = gpu.Sky.Physical ? (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance) : null;
         if (gpu.Post is { } upscaling) upscaling.WaterHeight = render.Water && gpu.Water is not null ? WorldWater.Height : null;
         if (gpu.Post is { } hazy) UpdateHeatHaze(gpu, hazy, sun.Y);
+        // The Meitou water's waves on the game clock (the heat haze's, held still for a still picture), led by the wind at the camera.
+        gpu.Water?.Animate((gpu.GameHours ?? gpu.HeatHazeHours) + gpu.WaterClockHours, gpu.WeatherState.WindDirection, gpu.WeatherState.WindSpeed);
         // The clouds drift on the frame clock (game-speed seconds, 0 while paused), held still for a still picture.
         if (gpu.Weather is { } drift) gpu.Sky.StepClouds(drift.Times.Game); else gpu.Sky.StepClouds(held);
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
