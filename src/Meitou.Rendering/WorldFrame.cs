@@ -86,6 +86,8 @@ sealed class WorldOptions
     public bool AutoWeather => Weather is null || Weather.Equals("auto", StringComparison.OrdinalIgnoreCase);
     /// <summary>The weather particle effects (docs/formats/particle-universe.md): <c>--no-particles</c> turns the pass off, <c>--particle-prewarm</c> is the seconds simulated before the first picture (null: each system's longest particle life).</summary>
     public bool NoParticles;
+    /// <summary><c>--no-fog-volumes</c>: the placed fog volumes of <c>fogfeatures.dat</c> are not drawn (comparison; docs/formats/fogfeatures.md).</summary>
+    public bool NoFogVolumes;
     public float? ParticlePrewarm;
     /// <summary><c>--particle-area &lt;radius&gt;</c> (test): weather effects are placed in a disc of this radius round the start point instead of the weather region; <c>--particle-seed</c> seeds their random choices.</summary>
     public float? ParticleArea;
@@ -160,6 +162,7 @@ sealed class WorldOptions
           --day <n>                the game day the weather schedule starts at (default 0)   --weather-seed <n> the scheduler's random seed (default 1, as meitou-tools weather)
           --clouds <0..1>          cloud density c (test override)
           --cloud-wind <x>,<z>     the clouds' drift velocity in world units per second (test; the drift is held still in --screenshot)
+          --no-fog-volumes         leave out the placed fog volumes (fogfeatures.dat: the swamp's fog, the Fog Islands', the Vain's)
           --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-area <r> place weather effects within r units of the start point (test)   --particle-seed <n>   --particle-only <a,b> keep only the weather effects with these in their names (test)
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
@@ -282,6 +285,7 @@ sealed class WorldOptions
                 case "--day": o.Day = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--weather-seed": o.WeatherSeed = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--no-particles": o.NoParticles = true; break;
+                case "--no-fog-volumes": o.NoFogVolumes = true; break;
                 case "--particle-prewarm": o.ParticlePrewarm = Math.Max(F(), 0); break;
                 case "--particle-area": o.ParticleArea = Math.Max(F(), 1); break;
                 case "--particle-seed": o.ParticleSeed = (int)F(); break;
@@ -513,6 +517,8 @@ static class WorldFrame
         public WaterRenderer? Water;
         /// <summary>The weather's wetness, dust and rain for every surface shader (null without a game database).</summary>
         public WeatherSurfaces? Surfaces;
+        /// <summary>The placed fog volumes of <c>fogfeatures.dat</c> (null when the install has none).</summary>
+        public FogVolumes? FogVolumes;
         /// <summary>The weather's particle effects (null while there are none: a clear weather, or <c>--no-particles</c>); <see cref="EnsureParticles"/> makes it.</summary>
         public ParticleRenderer? Particles;
         /// <summary>Makes the particle renderer on demand (null with <c>--no-particles</c>).</summary>
@@ -557,6 +563,7 @@ static class WorldFrame
             Particles?.Dispose();
             Water?.Dispose();
             Surfaces?.Dispose();
+            FogVolumes?.Dispose();
             Reflection?.Dispose();
             Shadow?.Dispose();
             Post?.Dispose();
@@ -639,6 +646,8 @@ static class WorldFrame
         }
         var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(context, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, CloudWind = o.CloudWind, KenshiHaze = !o.PhysicalHaze }, Post = new PostProcess(context, o.Post) };
         gpu.Post.LoadHeatHaze(assets);
+        // The placed fog volumes (docs/formats/fogfeatures.md): the swamp's fog and the like, part of the game's look.
+        if (FogFeatures.Load(install) is { Count: > 0 } fogFeatures) gpu.FogVolumes = new FogVolumes(context, fogFeatures) { Enabled = !o.NoFogVolumes };
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
         if (scene.Database is { } skyDb)
@@ -900,6 +909,7 @@ static class WorldFrame
         bool held = gpu.Post?.InstantAdaptation ?? true;
         if (gpu.Weather is { } weather) { weather.Update(eye, hour, sun.Y, held); weather.Apply(gpu.Sky); }
         gpu.Surfaces?.Apply(gpu.WeatherState);
+        gpu.FogVolumes?.Update(eye, sun.Y, gpu.Sky.Physical);
         var (colours, light) = gpu.Sky.Prepare(sun, eye.Y, fogDistance + 3 * Math.Max(eye.Y, 0));
         // The game's exposure (0.55 over the mean luminance, clamped to its band) goes with the game's sky and light; the simple sky keeps a plain scale.
         if (gpu.Post is { } exposed) exposed.AutoExposure = gpu.Sky.Physical ? (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance) : null;

@@ -175,7 +175,9 @@ checked 2026-10-04):
   whole sky, clouds and stars with one **flat** fog colour; farther fogs only tint it. So the dust storm sky is flat sand × daylight
   (brown-orange after the exposure), the Ashlands' flat light grey. The distant terrain's mid-range haze is a different matter: it is the
   atmosphere term (SkyX blue, pulled to the dark `horizonClouds` colour at high cloud density, `darkness` 0.81 at c = 1) mixed with the fog.
-- It does **not** differ per biome (**Observed**: no biome field is read by the shaders or the sky controller's fog code).
+- It does **not** differ per biome (**Observed**: no biome field is read by the shaders or the sky controller's fog code). Local fog
+  (the swamp's grey-brown fog, the Fog Islands', the Vain's red haze) comes from the placed fog volumes of `fogfeatures.dat`, drawn after
+  this pass: [fogfeatures.md](fogfeatures.md).
 - **Made for an eye near the ground.** The fog's ray always starts at SkyX's fixed camera, so the formula ignores the eye's
   height; the game's camera never gets more than 1840 above its pivot on the ground ([camera.md](camera.md), **Verified**), and
   there it behaves. From far higher up it breaks down (**Verified by computation**: `KenshiHaze.Colour`, the viewer's transcription
@@ -187,7 +189,8 @@ checked 2026-10-04):
   the haze is complete past 30000 from any height, but above ~20000 the colour also runs away.) Within the game's range the
   optical depth never goes below −0.26 per sample (eye up to 15000, every distance and hour), the skydome's never below 0.35.
 - **Not there**: no exponential or height-based haze in the main chain (`SkyX_Fog*.hlsl` and ground fog are separate features:
-  ground fog is deprecated, fog planes/spheres/beams are the placed "fog volumes", `fogfeatures.dat`).
+  ground fog is deprecated, fog planes/spheres/beams are the placed "fog volumes", `fogfeatures.dat`, [fogfeatures.md](fogfeatures.md):
+  their blocks are height-limited, but they are separate objects drawn after the haze, not part of it).
 
 ### In the viewer: `--haze kenshi` (default) and `physical`
 
