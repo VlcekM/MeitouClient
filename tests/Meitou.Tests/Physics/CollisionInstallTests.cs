@@ -4,12 +4,13 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Ogre;
 using Meitou.Data.Physics;
+using Meitou.Navigation;
 
 namespace Meitou.Tests.Physics;
 
 /// <summary>The collision reader against the Kenshi install (docs/formats/collision.md): counts, decoding and the placement convention.</summary>
 [Slow]
-public class CollisionInstallTests
+public class CollisionInstallTests(ITestOutputHelper output)
 {
     /// <summary>The BUILDING_PART records reachable from the base game's BUILDING records through parts, interior, interior mask and doors.</summary>
     static List<GameRecord> Parts(GameDatabase db)
@@ -71,6 +72,26 @@ public class CollisionInstallTests
         Assert.Equal(245, kinds[(int)CollisionShapeKind.Capsule]);
         Assert.Equal(91, kinds[(int)CollisionShapeKind.Plane]);
         Assert.Equal(3, kinds[(int)CollisionShapeKind.Sphere]);
+    }
+
+    [Fact]
+    public void Closed_triangle_meshes_are_counted_by_winding()
+    {
+        var install = InstallData.Install;
+        Assert.SkipWhen(install is null, "Kenshi install not found");
+        var counts = new int[3];
+        foreach (var f in Directory.EnumerateFiles(install!.DataDirectory, "*.xml", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}gui{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}editor{Path.DirectorySeparatorChar}"))
+                     .Where(f => File.ReadLines(f).Take(3).Any(l => l.Contains("<NXUSTREAM2>", StringComparison.Ordinal))))
+            foreach (var s in CollisionFile.ReadFile(f).Shapes.Where(s => s.Kind == CollisionShapeKind.TriangleMesh))
+            {
+                var v = new List<Vector3>();
+                var idx = new List<int>();
+                CollisionTriangulator.Triangulate(s, v, idx);
+                counts[(int)CollisionCache.FixClosedWinding(v.Select(CollisionTriangulator.ToWorldAxes).ToArray(), idx.ToArray())]++;
+            }
+        output.WriteLine($"triangle meshes: {counts[0]} open, {counts[1]} closed and outward, {counts[2]} closed and flipped");
+        Assert.Equal([146, 229, 1], counts);
     }
 
     [Fact]

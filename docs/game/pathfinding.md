@@ -542,3 +542,40 @@ scripts `MeitouClient-re/probes/walk/tilescan*.js`, **Observed**):
 - **Observed**: 21 of the 128 buildings of The Hub's zone are `destroyed` in the world data; only two have an intact door.
 - **Unknown**: the positions of the three linked-wall seeds along a wall; whether the building rays of the seed rule see walls and roofs (groups 11 and 12)
   and not only floors (9 and 10); what `interior terrain` changes.
+
+### Builder constants (engine choices)
+
+None of these is the original's (the original's own values are in the sections above where they are known). They live in `Meitou.Navigation`; a change
+to one that alters a mesh needs `NavMeshCache.BuilderVersion` bumped.
+
+| Constant | Value | Where | Meaning |
+|---|---|---|---|
+| Cell size / height | 2 / 1 | `NavBuildSettings` | Recast grid; keeps the 9-unit minimum passage at 4 to 5 cells |
+| Tile | 48 cells (96 units) | `NavBuildSettings.TileCells` | one Recast tile; a zone is 48 × 48 tiles |
+| Agent height / max climb | 18 / 5 | `NavBuildSettings` | the original's `characterHeight` 1.8 and `maxStepHeight` 0.5 in Kenshi units |
+| Contour error, longest edge, region areas | 1.3 cells, 24 cells, 4 and 40 | `NavBuildSettings` | Recast simplification and region merging |
+| Gather margin | 72 | `ZoneGeometryGatherer.DefaultMargin` | terrain, shapes and foliage reach this far past the zone box |
+| Building reach | 600 | `ZoneGeometryGatherer.BuildingReach` | placements this far past box and margin are gathered (a building's shape reaches into the zone) |
+| Foliage reach | 200 | `FoliageReach` | objects this far past box and margin are used |
+| Linked-wall reach | 400 | `WallReach` | a linked wall placed this far outside the box still gives seeds |
+| Convex-obstacle carvers | on | `CarveConvexObstacles` | a prism carver around every convex obstacle, so the ground inside a closed volume goes too (the original's cutting materials, approximated) |
+| Door painter | grown 3 each side, 10 below the hull, then inflated 1 cell | `DoorPainterGrow`, `DoorPainterDrop`, `DoorInflateCells` | a thin door leaf has to paint a closed band of cells |
+| Door seed offset | 10 | `DoorSeedOffset` | the markers either side of a door sit this far past its faces |
+| Linked-wall seeds | at 0.15, 0.5 and 0.85 of the wall | `AddLinkedWallSeeds` | **Unknown** in the original |
+| Seed distance / height slack | 4 / 18, retried with 3 × 18 | `SeedDistance`, `SeedHeightSlack`, `SeedPruner` | a seed claims regions within 4 units horizontally; one that finds nothing is retried with three times the slack |
+| Door join | 6 plan, 12 height | `NavInteriors.JoinDistance`, `JoinHeight` | door edges of an interior and the exterior this close are linked |
+| Interior pad / margin / slab | 12 / 8 / 400 | `GatherInterior`, `SlabReach` | the interior's box around its hull, and how far the complement slabs reach |
+| Cross-zone step | 5.5 | `NavWorld.With`, and `MaxClimb + 0.5` between tiles | border edges of neighbouring zones (or tiles) link when their heights at the middle of the overlap differ by at most this |
+| Start / goal snap | 60 / 30 | `NavQuery.StartSnap`, `GoalSnap` | how far a path end may be from the mesh (the original: 500 Havok units for the start, about 30 for the goal, **Observed**) |
+| On-terrain tolerance | 3 | `NavmeshWalkability.OnTerrainTolerance` | within this the heightmap's height is used instead of the mesh's |
+| Closed-mesh winding | flip when the volume is negative | `CollisionCache` | see [../formats/collision.md](../formats/collision.md) |
+
+- The cache key of a built mesh (`NavMeshCache`) is **our own hash**, not the original's: `BuildingHash` only borrows the fold (`hash_combine`, seed
+  `0x9e3779b9`); its inputs (truncated positions xor `0xdeadbeef`, our string hash of the id, two quaternion components, the destroyed flag) are ours, so it
+  can never equal a shipped tile's `Hash` string. The check proposed under "Comparing with the shipped tiles" stays a proposal for a real port of FUN_1403a1cb0.
+  **Observed** (not in the key): the gatherer's `IncludeFoliage` and `CarveConvexObstacles`, the foliage data, the BUILDING and BUILDING_PART records'
+  contents (a mod changing a part under the same id keeps the old mesh), `seeds.def`, the collision files and the DotRecast version.
+- Debug aids of `meitou-tools navmesh`: `NAV_VERBOSE` (painters, seeds, interior listings, door joins, path points) and `NAV_DUMP` (`--near` lists every
+  field of a building record) are read once at start; `--fingerprint` builds The Hub's two zones (or `--zone`) with fresh state, prints the SHA-256 of the
+  cache file each would save and the point lists of the Hub paths pinned by `HubNavmeshTests`. Two builds give the same hash (**Verified**), so a refactor of
+  the builder is checked by it, by the OBJ the tool writes, and by the pinned paths.
