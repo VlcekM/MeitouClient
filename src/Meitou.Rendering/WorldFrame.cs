@@ -877,6 +877,7 @@ static class WorldFrame
         // Records the last slice's jobs and executes them: the render thread's share (the fork-join) counts as "water", the last stage of the host.
         if (host.IsOpen) { host.Close(); StageClock.Lap(9); }
         if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneDepth, rw, rh);
+        if (gpu.Post is { } coverageTarget) coverageTarget.Particles = gpu.Particles;
         gpu.Post?.End(); // SSAO, upscaler, exposure, tone map, FXAA into gpu.Post.Target
         if (gpu.DebugShadows > 0 && gpu.Shadow is not null)
         {

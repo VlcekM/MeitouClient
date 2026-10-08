@@ -153,16 +153,20 @@ static partial class WorldApp
             gpu.Foliage?.Settle(camera.Eye);
         }
 
+        // With --orbit-step and weather particles the frame clock runs at 1/60 s a frame (the draw's time unit is 600 s), so they move as in play.
+        int orbitFrames = 0;
+        float Clock() => o.OrbitStep != 0 && gpu.Particles is { Groups.Count: > 0 } ? (float)(orbitFrames / 60.0 / 600) : 0;
         void Step()
         {
+            orbitFrames++;
             camera.Yaw += o.OrbitStep;
             if (o.SwayStep > 0 && gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep;
         }
         WorldFrame.DetailedStats = true;   // per-cascade and per-step times in the statistics below
         // A temporal upscaler converges over its jitter sequence first (a still camera: the history only sharpens).
-        for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
+        for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance); EndFrame(context); }
         var drawWatch = Stopwatch.StartNew();
-        { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
+        { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance); EndFrame(context); }
         context.Finish();
         Console.WriteLine($"drawn in {drawWatch.ElapsedMilliseconds} ms: {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
             (gpu.Objects is { } ob ? $", {ob.DrawnInstances} objects ({ob.DrawnTriangles:N0} triangles)" : ""));

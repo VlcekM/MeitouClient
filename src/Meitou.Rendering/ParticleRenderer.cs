@@ -79,10 +79,16 @@ public sealed unsafe class ParticleRenderer : IDisposable
         in vec4 vColour;
         out vec4 fragColour;
         uniform sampler2D uTexture;
+        uniform float uCoverageMax;
+        uniform int uCoverage;                      // 0: colour; 1: the particle's alpha, 2: its brightest channel (the upscalers' reactive mask)
         void main()
         {
             // basic.hlsl: texture * colour * vertex colour
-            fragColour = texture(uTexture, vUv) * vColour;
+            vec4 c = texture(uTexture, vUv) * vColour;
+            // Thin streaks have a small alpha per pixel: any visible particle pixel counts as mostly "new" (30x, saturating; Observed choice).
+            if (uCoverage == 1) c = vec4(clamp(max(c.a, max(c.r, max(c.g, c.b))) * 30.0, 0.0, uCoverageMax));
+            else if (uCoverage == 2) c = vec4(clamp(max(c.r, max(c.g, c.b)) * c.a * 30.0, 0.0, uCoverageMax));
+            fragColour = c;
         }
         """;
 
@@ -140,7 +146,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     readonly VertexArrayBindings vertexSource, fogVertexSource;
     readonly BufferBinding[] bindings = new BufferBinding[5];
     readonly BufferBinding[] fogBindings = new BufferBinding[1];
-    readonly UniformHandle viewProjection, cameraRight, cameraUp, mode, anchor, commonDirection, commonUp, colourScale;
+    readonly UniformHandle viewProjection, cameraRight, cameraUp, mode, anchor, commonDirection, commonUp, colourScale, coverageMode, coverageLimit;
     readonly UniformHandle fogViewProjection, fogQuad, fogRight, fogUp, fogSphere, fogColour, fogDensity;
     readonly SamplerSlot textureSlot;
     readonly SampledImage white;
@@ -214,6 +220,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
         commonDirection = program.Uniform("uCommonDirection");
         commonUp = program.Uniform("uCommonUp");
         colourScale = program.Uniform("uColourScale");
+        coverageMode = program.Uniform("uCoverage");
+        coverageLimit = program.Uniform("uCoverageMax");
         textureSlot = program.Sampler("uTexture");
         fogProgram = LegacyProgram.Create(gpu, FogVertex, FogFragment, "particle fog volumes");
         fogSegment = new NativeSegment(gpu, fogProgram, Silk.NET.Vulkan.PrimitiveTopology.TriangleStrip, "particle fog volumes");
@@ -287,6 +295,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     void UpdateInner(double seconds, WorldCamera camera)
     {
         Sync();
+        coveragePending = false;   // the last frame's quads live in its constants: only a Draw in this frame makes coverage
         if (!Enabled || (groups.Count == 0 && placerGroups.Count == 0)) { lastSeconds = seconds; return; }
         float dt = double.IsNaN(lastSeconds) ? 0 : (float)Math.Clamp(seconds - lastSeconds, 0, 0.25);
         lastSeconds = seconds;
@@ -389,6 +398,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         drawnParticles = 0;
         drawnUnits = 0;
         drawnFog = 0;
+        coveragePending = false;
         if (!Enabled || (groups.Count == 0 && placerGroups.Count == 0)) return;
         draws.Clear();
         var constants = gpu.Frame.Constants;
@@ -457,9 +467,46 @@ public sealed unsafe class ParticleRenderer : IDisposable
         // The alpha channel of the scene target carries the characters' mask: particles write colour only.
         const Silk.NET.Vulkan.ColorComponentFlags rgb = Silk.NET.Vulkan.ColorComponentFlags.RBit | Silk.NET.Vulkan.ColorComponentFlags.GBit | Silk.NET.Vulkan.ColorComponentFlags.BBit;
         float ambient = Math.Clamp(sunDirection.Y * 5 + 0.2f, 0.1f, 1f);
+        (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient) = (vp, closeVp, right, up, ambient);
+        RecordDraws(cmd, in baseState, in targets, hasDepth, hasColour, forward, rgb, coverage: 0);
+        coveragePending = true;
+        gpu.EndGuest(cmd);
+    }
+
+    Matrix4x4 frameVp, frameCloseVp;
+    Vector3 frameRight, frameUp;
+    float frameAmbient;
+    bool coveragePending;
+
+    /// <summary>Whether this frame drew particles that <see cref="DrawCoverage"/> has not yet written into the upscalers' reactive mask.</summary>
+    public bool HasCoverage => coveragePending && draws.Any(d => !d.IsFog);
+
+    /// <summary>
+    /// The frame's particles again into the upscalers' reactive mask (docs/renderer-native.md 8.20): the same quads and matrices as the colour draw, adding
+    /// their alpha (or brightness, for additive ones) into <paramref name="mask"/>'s channels. Without it the temporal history keeps about 90% of what was
+    /// behind a fast, thin particle (rain), which then barely shows. No depth test (a hidden particle only makes its pixels a little less stable).
+    /// Called by the post chain with the target bound (cleared or loaded as it wants), once per frame after <c>Draw</c>.
+    /// </summary>
+    public void DrawCoverage(Silk.NET.Vulkan.ColorComponentFlags mask)
+    {
+        if (!HasCoverage) return;
+        if (Environment.GetEnvironmentVariable("MEITOU_COVERAGE_LOG") == "1") Console.WriteLine($"coverage  {draws.Count} draws, mask {mask}");
+        var cmd = gpu.BeginGuest("particle coverage");
+        var targets = gpu.CurrentTargets();
+        var baseState = gpu.CurrentState();
+        cmd.SetViewport(targets.Viewport);
+        cmd.SetScissor(targets.Scissor);
+        RecordDraws(cmd, in baseState, in targets, false, true, default, mask, coverage: 1);
+        gpu.EndGuest(cmd);
+    }
+
+    void RecordDraws(CommandList cmd, in DrawState baseState, in PassTargets targets, bool hasDepth, bool hasColour, Vector3 forward,
+        Silk.NET.Vulkan.ColorComponentFlags rgb, int coverage)
+    {
+        var (vp, closeVp, right, up, ambient) = (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient);
         foreach (var d in draws)
         {
-            if (d.IsFog) { drawnFog++; DrawFog(cmd, d, in baseState, in targets, hasDepth, hasColour, vp, closeVp, right, up, forward, ambient, rgb); continue; }
+            if (d.IsFog) { if (coverage == 0) { drawnFog++; DrawFog(cmd, d, in baseState, in targets, hasDepth, hasColour, vp, closeVp, right, up, forward, ambient, rgb); } continue; }
             var m = d.Material;
             var r = d.Technique.Renderer;
             // The far particles first (tested against the scene's depth), then the ones nearer than the slice's near plane (no depth test).
@@ -471,8 +518,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 var state = baseState with
                 {
                     Cull = Silk.NET.Vulkan.CullModeFlags.None, DepthTest = hasDepth && m.DepthCheck && !close, DepthWrite = false, ColourMask = rgb,
-                    Blend = hasColour ? BlendFor(m.Blend) : BlendState.Off,
+                    Blend = coverage != 0 ? new BlendState(true, Silk.NET.Vulkan.BlendFactor.One, Silk.NET.Vulkan.BlendFactor.One) : hasColour ? BlendFor(m.Blend) : BlendState.Off,
                 };
+                program.Set(coverageMode, coverage == 0 ? 0 : m.Blend == ParticleBlend.Alpha ? 1 : 2);
+                program.Set(coverageLimit, rgb == Silk.NET.Vulkan.ColorComponentFlags.ABit ? 2f : 1f);   // the TAA takes half the motion target's alpha, so 2 is "all current frame"
                 var matrix = close ? closeVp : vp;
                 program.Set(this.viewProjection, in matrix);
                 program.Set(cameraRight, right);
@@ -495,7 +544,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 cmd.Draw(4, (uint)count, 0, (uint)first);
             }
         }
-        gpu.EndGuest(cmd);
     }
 
     /// <summary>One fog volume: a quad at the sphere's nearest point, or a screen-filling one (no depth test) when the eye is inside the sphere.</summary>
