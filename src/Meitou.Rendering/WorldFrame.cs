@@ -910,10 +910,12 @@ static class WorldFrame
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
+        StageClock.Lap(3);
         // The weather's camera particles step on the frame clock (the caller's time, 1/600 s units; constant, so still, in pictures).
+        // They count as their own stage (the profiler's "particles", with their draw below).
         UpdateParticles(gpu, camera);
         gpu.Particles?.Update(time * SecondsPerTimeUnit, camera);
-        StageClock.Lap(3);
+        StageClock.Lap(13);
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, sun.Y); }
         StageClock.Lap(12);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
@@ -1001,9 +1003,13 @@ static class WorldFrame
             }
             host.Stage(9);
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
-            if (nearSlice && gpu.Particles is { } particleDraw)   // weather particles last: blended over the water, tested against the depth
-                particleDraw.Draw(viewProjection, view * Jitter.Apply(camera.Projection(aspect, Math.Min(0.5f, near * 0.5f), near), jitter, rw, rh), near, view, eye, sun);
             StageClock.Lap(9);
+            if (nearSlice && gpu.Particles is { } particleDraw)   // weather particles last: blended over the water, tested against the depth
+            {
+                host.Stage(13);
+                particleDraw.Draw(viewProjection, view * Jitter.Apply(camera.Projection(aspect, Math.Min(0.5f, near * 0.5f), near), jitter, rw, rh), near, view, eye, sun);
+                StageClock.Lap(13);
+            }
         }
         // Records the last slice's jobs and executes them: the render thread's share (the fork-join) counts as "water", the last stage of the host.
         if (host.IsOpen) { host.Close(); StageClock.Lap(9); }
