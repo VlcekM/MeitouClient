@@ -12,7 +12,17 @@ start point, even indices idling (`idle_stand_relax`) and odd ones walking in pl
 time (default 0.35 s); the interactive viewer uses a clock. Without `--crowd` nothing of the renderer is created and the world image is
 unchanged (image-diff 0 px against the pre-change baseline, `--upscaler off`).
 
-Env: `MEITOU_CHARACTER_LOG=1` prints one line per built part. On exit a `characters ...` line gives counts per LOD level and timings.
+Env (all read once at start, in `Characters/CharacterSwitches.cs`):
+
+| Variable | Effect |
+|---|---|
+| `MEITOU_CHARACTER_LOG=1` | one line per part of every appearance built (levels, triangles, material) |
+| `MEITOU_CHARACTER_LOD=faithful` | keep the mesh files' own LOD levels instead of the generated ones (Meitou mode, default; see Engine choices) |
+| `MEITOU_CHARACTER_MORPH=0` | no face poses (the GPU morph of the body mesh) |
+| `MEITOU_CHARACTER_MOTION=0` | leave the characters out of the temporal upscalers' motion vectors |
+| `MEITOU_CROWD_ANIMATE=1` | the `--crowd` harness animates with a real-time clock even for stills (otherwise they hold `--crowd-time`) |
+
+On exit a `characters ...` line gives counts per LOD level and timings (means of the last 10 frames, 40 for the shadow cascades; kept in rings of 64 samples).
 
 ## Design
 
@@ -52,9 +62,7 @@ Env: `MEITOU_CHARACTER_LOG=1` prints one line per built part. On exit a `charact
 ## Findings
 
 - **Observed**: `human_male.mesh` has 23 Ogre poses (cheekbones, mouth, nose, brow, eyes, jaw bite), all on the one submesh, none with
-  normals, together moving 2986 of its 15504 vertices, largest offset 0.18 units. A GPU morph would need a sparse
-  per-vertex slot table and a weight buffer per appearance (`CharacterAppearance.PoseWeights`), not a per-appearance baked mesh (VRAM).
-- **Observed**: `human_male.mesh` has 23 Ogre poses, all on the one submesh, none with normals, together moving 2986 of its 15504 vertices, largest offset 0.18 units.
+  normals, together moving 2986 of its 15504 vertices, largest offset 0.18 units.
 - **Observed** (RTX 4070, shared and noisy; `--distance 260 --pitch 30`, 1600x900), before generated LOD: 500 characters 3.5M triangles per view, colour pass 2.7 ms,
   shadow 1.8 ms per cascade call, CPU update 1.2-1.8 ms (pose 0.65-1.1) and draw 0.4 ms; 459 MB of textures and 72 MB of meshes.
 - **Observed**, after generated LOD, pose rate, morphs and motion: 500 characters 0.6M triangles, colour 0.5-0.8 ms, shadow 0.15-0.25 ms per cascade call, CPU update 0.9-1.5 ms
@@ -64,4 +72,13 @@ Env: `MEITOU_CHARACTER_LOG=1` prints one line per built part. On exit a `charact
 ## Left
 
 A coarser or merged shadow caster for far characters; GPU culling; the guard's stand-in textures for characters (a small shared diffuse colour rather than grey);
-normals for the face morph; the original's per-frame animation update budget (docs/game/game-loop.md) instead of the distance-based pose rate.
+generated LOD as a Faithful/Meitou switch (`Enhancements`, `--faithful`) instead of `MEITOU_CHARACTER_LOD` (needs the shared `Enhancements.cs` / `WorldFrame.cs` after the merge); normals for the face morph; the original's per-frame animation update budget (docs/game/game-loop.md) instead of the distance-based pose rate.
+
+## Code layout
+
+`CharacterRenderer` is a partial class: `CharacterRenderer.cs` (fields, `Update`, materials, `Settle`, teardown), `.Draw.cs` (culling, LOD choice, batches, the recorded draw job), `.Motion.cs`
+(`AttachMotion`: the near slice's hook into the post chain, called once per frame by `WorldFrame`; `DrawMotion`), `.Stats.cs` (timing rings, the `characters ...` line). The texture
+governor is `CharacterTextureBudget`. `CharacterContent` is disposable and owns the mesh buffers, textures and the morph arena. The program wrapper and the sphere test are
+shared (`ReflectedProgram.cs`; the objects renderer still has its own copy of both). `CharacterShaders` names the set 0 bindings (bones 6, materials 7, morphs 8, last frame's bones 9) and
+the material's texture slot count (20) and builds the GLSL from them; the push block's `depthIndex` is the near depth texture's bindless index in the motion pass and 0 otherwise
+(the colour fragment's flat-colour branch on it is unreachable and kept as it is). `CharacterLayoutTests` pins the sizes of the structs the shaders read.
