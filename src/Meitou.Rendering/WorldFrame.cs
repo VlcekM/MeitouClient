@@ -24,14 +24,22 @@ sealed class WorldOptions
     public bool NoTextures, NoObjects, Wireframe, Info;
     public int LayerSize = 2048;
     public int Debug;
-    public float ObjectDistance = 12000;
+    /// <summary>The reach switch (Enhancements): Meitou by default (objects to 20000, landmarks to 150000, terrain error 16 px) or the viewer's old values (12000, none, 10 px).
+    /// <c>--object-distance</c>, <c>--landmark-distance</c> and <c>--terrain-error</c> as given (null: the mode's default, see the <c>...For</c> methods).</summary>
+    public bool MeitouReach = true;
+    public float? ObjectDistance, LandmarkDistance;
+    public float ObjectDistanceFor(bool meitou) => ObjectDistance ?? (meitou ? Enhancements.MeitouObjectDistance : Enhancements.FaithfulObjectDistance);
+    /// <summary>The landmark distance (units; 0: no landmarks, the huge objects stay with the others): Meitou's default in Meitou, none in Faithful.</summary>
+    public float LandmarkDistanceFor(bool meitou) => meitou ? Math.Max(LandmarkDistance ?? Enhancements.MeitouLandmarkDistance, 0) : 0;
+    public float TerrainErrorFor(bool meitou) => TerrainError ?? (meitou ? Enhancements.MeitouTerrainPixelError : WorldRenderOptions.DefaultTerrainPixelError);
     public float DistantZones = ObjectRanges.MaxDistantTownRangeZones;
     public bool NoDistant;
     public bool NoFoliage;
     public float Hour = 13;
     public float ViewDistance = 450000, FogDistance = 250000, MaterialDistance = 30000;
     /// <summary>Terrain LOD (<see cref="TerrainLod"/>): the screen-space error in render pixels near the eye, far (null: in proportion to the defaults) and where the ramp between them starts.</summary>
-    public float TerrainError = WorldRenderOptions.DefaultTerrainPixelError, TerrainRamp = WorldRenderOptions.DefaultTerrainRampStart;
+    public float? TerrainError;
+    public float TerrainRamp = WorldRenderOptions.DefaultTerrainRampStart;
     public float? TerrainFarError;
     public bool NoWater, NoStream, NoReflections, SimpleSky, ShowKeys;
     /// <summary>The game's <c>texture resolution gimping</c> (0..4; missing key: 1) and <c>water reflection</c> (0..4; missing: 2) / <c>reflection range</c> (missing: 0.6) settings (docs/formats/settings.md).</summary>
@@ -102,11 +110,12 @@ sealed class WorldOptions
           --no-textures            height-tinted terrain without biome textures (faster start)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
-          --range-large <u> --range-medium <u> --range-small <u>   foliage draw range by mesh size (the range switch, F6; defaults 12000, 5000, 800; Tab sliders)
+          --range-large <u> --range-medium <u> --range-small <u>   foliage draw range by mesh size (the range switch, F6; defaults 50000, 12000, 800; Tab sliders)
           --impostor-distance <u>  foliage meshes with an impostor atlas become baked billboards from here (the impostors switch, F7; default 4000; Tab slider)
           --impostor-budget <MB>   fixes the most video memory the resident impostor atlases may use (default: 8% of the card's budget, 5% on an integrated GPU, 48-1024 MB; docs/impostors.md section 10; atlases that do not fit are held at coarser mips, then stay meshes)
           --impostor-cache-mb <MB> the most the impostor atlas disk cache (%LOCALAPPDATA%\Meitou\impostors) may take (default 512, 0 = no cap; least recently used files go first)
-          --object-distance <u>    draw placed objects at full detail up to this distance (default 12000)
+          --object-distance <u>    draw placed objects at full detail up to this distance (the reach switch, F8: default 20000 in Meitou, 12000 in Faithful)
+          --landmark-distance <u>  Meitou only: huge placed objects (world radius 2000 and up: the giant wrecks, skeletons, towers) are drawn up to this distance instead (default 150000; 0 or --faithful reach: none, they use --object-distance; Tab slider)
           --distant-range <zones>  distant towns (and buildings' distant meshes) up to this many zones (default 10, the game's setting maximum; its default is 6)
           --no-distant             no distant towns: objects beyond --object-distance are simply not drawn
           --layer-size <n>         terrain layer texture size, a power of two up to 2048 (default 2048)
@@ -127,7 +136,7 @@ sealed class WorldOptions
           --weather <name>         a WEATHER record's sky colour, fog, clouds and heat haze (default "Default": clear, no fog, no clouds, no heat haze)   --clouds <0..1> cloud coverage
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
-          --faithful <all|ao,dither,haze,aa,shadows,range,impostors>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
+          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
           --show-keys              start with the key list overlay open (toggle with F10)
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
@@ -141,8 +150,8 @@ sealed class WorldOptions
           --view-distance <u>      furthest terrain drawn (default 450000: the whole world)
           --fog <u>                distance where the haze is complete (default 250000)
           --material-distance <u>  beyond it the terrain shows the biomes' ground colour (default 30000, as the game)
-          --terrain-error <px>     terrain LOD: the height error allowed near the eye, in pixels of the rendered picture (default 10; Tab slider)
-          --terrain-far-error <px> --terrain-ramp <u>   the error grows to the far one between the ramp distance and twice it (defaults 10: no ramp, 7500)
+          --terrain-error <px>     terrain LOD: the height error allowed near the eye, in pixels of the rendered picture (the reach switch, F8: default 16 in Meitou, 10 in Faithful; Tab slider)
+          --terrain-far-error <px> --terrain-ramp <u>   the error grows to the far one between the ramp distance and twice it (defaults: the near error, so no ramp; 7500)
           --wireframe --info
           --post <meitou|kenshi|off>   post-processing preset (default meitou), before the options below: HDR scene, SSAO
           --ssao / --no-ssao, --dither / --no-dither   --no-fxaa
@@ -151,7 +160,7 @@ sealed class WorldOptions
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
           G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour, H print camera, Ctrl+C copy camera code, Ctrl+V go to camera code, P save screenshot, Tab settings sliders, Esc quit.
-          F1 ambient occlusion, F2 dithering, F3 haze, F4 anti-aliasing, F5 shadows, F6 foliage ranges, F7 far impostors;
+          F1 ambient occlusion, F2 dithering, F3 haze, F4 anti-aliasing, F5 shadows, F6 foliage ranges, F7 far impostors, F8 draw distances (reach);
           - / = exposure; F10 key list, F11 frame statistics, F12 profiler (gpu, cpu, off).
         """;
 
@@ -163,7 +172,7 @@ sealed class WorldOptions
 
     /// <summary>The Faithful / Meitou switches over the options (for <c>--meitou</c> / <c>--faithful</c>).</summary>
     internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
-        () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v);
+        () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -206,6 +215,7 @@ sealed class WorldOptions
                 case "--range-medium": o.MediumRange = F(); break;
                 case "--range-small": o.SmallRange = F(); break;
                 case "--object-distance": o.ObjectDistance = F(); break;
+                case "--landmark-distance": o.LandmarkDistance = F(); break;
                 case "--distant-range": o.DistantZones = F(); break;
                 case "--no-distant": o.NoDistant = true; break;
                 case "--layer-size": o.LayerSize = int.Parse(Next(), CultureInfo.InvariantCulture); break;
@@ -418,10 +428,11 @@ static class WorldFrame
             Distance = o.Distance ?? radius,
             ViewDistance = o.ViewDistance,
             MinViewDistance = o.ViewDistance,
-            SplitDistance = Math.Max(20000, o.ObjectDistance * 1.1f),
+            SplitDistance = Math.Max(20000, o.ObjectDistanceFor(o.MeitouReach) * 1.1f),
         };
+        float terrainError = o.TerrainErrorFor(o.MeitouReach);
         var render = new WorldRenderOptions { Textures = !o.NoTextures, Objects = !o.NoObjects, Water = !o.NoWater, Reflections = !o.NoReflections, Wireframe = o.Wireframe ? 1 : 0, Debug = o.Debug, MaterialDistance = o.MaterialDistance,
-            TerrainPixelError = o.TerrainError, TerrainFarPixelError = o.TerrainFarError ?? WorldRenderOptions.DefaultTerrainFarPixelError * o.TerrainError / WorldRenderOptions.DefaultTerrainPixelError, TerrainRampStart = o.TerrainRamp };
+            TerrainPixelError = terrainError, TerrainFarPixelError = o.TerrainFarError ?? WorldRenderOptions.DefaultTerrainFarPixelError * terrainError / WorldRenderOptions.DefaultTerrainPixelError, TerrainRampStart = o.TerrainRamp };
         return (camera, render);
     }
 
@@ -519,7 +530,9 @@ static class WorldFrame
         }
         if (scene.Objects is not null)
         {
-            gpu.Objects = new WorldObjectRenderer(context, assets, scene.Objects) { ObjectDistance = o.ObjectDistance, DistantRange = o.DistantZones * WorldLayout.ZoneSize, NoDistant = o.NoDistant, LoadBudget = interactive ? 8 : 0 };
+            // Landmarks (huge objects, drawn to their own distance) are kept apart from the zones only when the viewer starts with them (Meitou reach, distance above 0).
+            gpu.Objects = new WorldObjectRenderer(context, assets, scene.Objects, landmarks: o.LandmarkDistanceFor(o.MeitouReach) > 0)
+            { ObjectDistance = o.ObjectDistanceFor(o.MeitouReach), LandmarkDistance = o.LandmarkDistanceFor(o.MeitouReach), DistantRange = o.DistantZones * WorldLayout.ZoneSize, NoDistant = o.NoDistant, LoadBudget = interactive ? 8 : 0 };
             Console.WriteLine($"objects   GPU ready ({watch.ElapsedMilliseconds} ms)");
         }
         if (!o.NoFoliage && scene.Database is not null)
@@ -527,6 +540,7 @@ static class WorldFrame
             gpu.Foliage = new FoliageRenderer(context, install, scene.Database, scene.Objects?.Levels ?? WorldLevelData.Load(install), assets);
             if (!interactive) gpu.Foliage.SwaySeconds = o.SwayStart;   // offscreen pictures and benchmarks: the grass holds still, so a picture repeats exactly
             var f = gpu.Foliage;
+            f.Terrain = terrain;
             (f.MeitouRange, f.SmallRange, f.MediumRange, f.LargeRange) = (o.MeitouRange, o.SmallRange ?? f.SmallRange, o.MediumRange ?? f.MediumRange, o.LargeRange ?? f.LargeRange);
             (f.Impostors, f.ImpostorDistance, f.ImpostorBudgetMb) = (o.Impostors, o.ImpostorDistance ?? f.ImpostorDistance, o.ImpostorBudgetMb ?? f.ImpostorBudgetMb);
             if (o.ImpostorCacheMb is { } cacheMb) f.ImpostorCacheMb = cacheMb;
@@ -559,6 +573,41 @@ static class WorldFrame
     /// <summary>The upscaler sliders' labels (the game keeps command-line upscaler options over the saved ones).</summary>
     public static readonly string[] UpscalerSliders = ["Anti-aliasing: 0 FXAA 1 TAA 2 FSR 3 DLSS", "Render scale (upscaler)", "Upscaler sharpness"];
 
+    /// <summary>
+    /// The Faithful / Meitou switches over the live renderer (the game's Shift+F keys, the viewer's F keys, the Tab checkboxes): they change the
+    /// options and, once made, the renderer's parts; the distances follow the mode's defaults unless a Tab slider moved them.
+    /// </summary>
+    internal static IReadOnlyList<Enhancement> LiveSwitches(WorldOptions o, Func<Gpu?> gpu, Func<WorldCamera?> camera, Func<WorldRenderOptions?> render) =>
+        Enhancements.Create(o.Post, () => gpu()?.Sky.HazeStrength ?? o.HazeStrength, v => { if (gpu() is { } g) g.Sky.HazeStrength = v; },
+            () => gpu()?.Shadow?.Meitou ?? o.MeitouShadows, v =>
+            {
+                // The shadow distance follows the mode's default unless the Tab slider moved it.
+                bool was = o.MeitouShadows;
+                o.MeitouShadows = v;
+                if (gpu()?.Shadow is not { } s) return;
+                if (MathF.Abs(s.Settings.Range - o.ShadowRangeFor(was)) < 1) s.Settings = s.Settings with { Range = o.ShadowRangeFor(v) };
+                s.Meitou = v;
+            },
+            () => gpu()?.Foliage?.MeitouRange ?? o.MeitouRange, v => { o.MeitouRange = v; if (gpu()?.Foliage is { } f) f.MeitouRange = v; },
+            () => gpu()?.Foliage?.Impostors ?? o.Impostors, v => { o.Impostors = v; if (gpu()?.Foliage is { } f) f.Impostors = v; },
+            () => o.MeitouReach, v =>
+            {
+                // The draw distances follow the mode's defaults unless a Tab slider (or an option) moved them.
+                bool was = o.MeitouReach;
+                o.MeitouReach = v;
+                if (gpu()?.Objects is { } ob)
+                {
+                    if (MathF.Abs(ob.ObjectDistance - o.ObjectDistanceFor(was)) < 1) ob.ObjectDistance = o.ObjectDistanceFor(v);
+                    if (MathF.Abs(ob.LandmarkDistance - o.LandmarkDistanceFor(was)) < 1) ob.LandmarkDistance = o.LandmarkDistanceFor(v);
+                    if (camera() is { } cam && MathF.Abs(cam.SplitDistance - Math.Max(20000, o.ObjectDistanceFor(was) * 1.1f)) < 1) cam.SplitDistance = Math.Max(20000, o.ObjectDistanceFor(v) * 1.1f);
+                }
+                if (render() is { } r && MathF.Abs(r.TerrainPixelError - o.TerrainErrorFor(was)) < 1e-3f)
+                {
+                    float scale = r.TerrainFarPixelError / r.TerrainPixelError;
+                    (r.TerrainPixelError, r.TerrainFarPixelError) = (o.TerrainErrorFor(v), o.TerrainErrorFor(v) * scale);
+                }
+            });
+
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null)
     {
@@ -572,6 +621,8 @@ static class WorldFrame
         if (g.Objects is { } objects)
         {
             sliders.Add(new Slider("Object draw distance", 1000, 400000, () => objects.ObjectDistance, v => objects.ObjectDistance = v, "0", Logarithmic: true));
+            if (objects.HasLandmarks)
+                sliders.Add(new Slider("Landmark distance (Meitou)", 1000, 400000, () => objects.LandmarkDistance, v => objects.LandmarkDistance = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
             sliders.Add(new Slider("Distant towns (zones)", 0, ObjectRanges.MaxDistantTownRangeZones * 10,
                 () => objects.DistantRange / WorldLayout.ZoneSize, v => objects.DistantRange = MathF.Round(v) * WorldLayout.ZoneSize, "0"));
             sliders.Add(new Slider("Object LOD distance x", 0.25f, 4, () => 1 / objects.LodBias, v => objects.LodBias = 1 / v, "0.00", Logarithmic: true));
@@ -680,14 +731,16 @@ static class WorldFrame
                 // The level (docs/formats/settings.md): 3 adds buildings (and the map features, which are not told apart), 4 everything else (foliage).
                 if (reflection.Level >= 3)
                 {
-                    float distance = objects.ObjectDistance;
+                    float distance = objects.ObjectDistance, landmarks = objects.LandmarkDistance;
                     float bias = objects.LodBias;
                     objects.LodBias = bias * reflection.ObjectLodBias;
                     objects.ObjectDistance = Math.Min(distance, gpu.Reflection.ObjectDistance);
+                    objects.LandmarkDistance = Math.Min(landmarks, gpu.Reflection.ObjectDistance);   // the mirrored scene has no landmarks beyond the reflection's own object range
                     objects.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
                     reflection.Lap(2);
                     StageClock.Sub("refl up to objects");
                     objects.ObjectDistance = distance;
+                    objects.LandmarkDistance = landmarks;
                     objects.LodBias = bias;
                 }
                 if (reflection.Level >= 4) gpu.Foliage?.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, grass: false, maxRange: reflection.FoliageDistance);

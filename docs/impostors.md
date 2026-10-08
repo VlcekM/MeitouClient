@@ -602,3 +602,117 @@ which are the small impostors (`MEITOU_IMPOSTOR_SMALL=0`: 0 px in both); `--fait
 
 **Measured** (**Observed**, CPX, pipelined GPU frame p50): Hub 23.7 (section 10 alone) to 20.6 ms, colour mesh triangles 5.47 M to 22 k (47.9 M on master), 49 of the 311 atlases small, 2.1 MB; forest 19.6 to 15.2 ms (11.7 M on master
 to 0.3 M mesh triangles); medium range 80 000 alone (other options default) 6.6, 6.7, 6.6 to 4.1, 4.0, 3.9 ms. Render thread (paced, cpu-only p50, three runs) forest CPX 8.3, 8.3, 8.2 to 8.6, 9.3, 8.6 ms (+0.3 to +1.0: `upd-foliage`, the reflection cull, more impostor sets); Hub CPX 7.7 to 7.0. At the defaults nothing measurable (section 10).
+
+## 12. The range fade by instance (2026-10-07)
+
+*In short: meshes and billboards already dithered out at their range edge (a tenth of the range, screen-door noise); billboards now thin out instance by instance
+while they are a few pixels across, so they stop winking as they cross pixels. The pops seen with ranges of 50 000 are mostly zones laid out late, not the fade.*
+
+**What each thing does at its far edge** (all **Verified** from the code, 2026-10-07):
+
+- **Foliage meshes** (`FoliageShaders.MeshFragment`): `w = clamp((range - d) / band)`, `band = max(layer transition, 0.1 x range)` (`RangeOf`), the instance's
+  pixels pass where `foliageDither() < w` (interleaved gradient noise of `gl_FragCoord`, the same in Faithful and Meitou). Not changed (it is the Faithful path).
+- **Impostors, colour pass** (`ImpostorShaders.Fragment`): the same `w`, same band, same noise (the cull gives a group's impostors `Pack(w)` beyond the transition,
+  and `-m` in the mesh crossfade band); before this section the same screen door as the meshes.
+- **Objects** (`BuildingLodShaders`, the real-object draw distance and the LOD levels): the same noise on `gl_FragCoord`, with a per-instance lo/hi window, so
+  objects, foliage meshes and billboards used one pixel-noise screen door. Distant towns fade per vertex (`smoothstep` of the eye distance), no dither.
+- **Shadow casters**: meshes and billboards ignored the distance fade (a hard cut at the range; inside the shadow distance only when a class range is shorter than it).
+- **The game** (`formats/foliage.md`): a page transition of 10 units (100 for wind layers) and no impostor level (**Observed**, decompiled), so its foliage
+  appears nearly at once at its range; the viewer's tenth-of-range band is already softer than the game.
+
+**What changed (Meitou only).** Impostors, whose program only runs with the `impostors` switch (Faithful has none: `--faithful all` and `--faithful impostors`
+draw no billboard, pictures 0 px), take their range-fade threshold from the instance:
+
+- `instanceFadeKey` (vertex shader): a PCG-style hash of the instance's world x and z, in [0, 1), constant per instance (`flat` varying `vFadeKey`). No data is
+  added to the instance record (68 bytes) or the chunk: the fade `w` still comes from the cull in row 0 w.
+- Colour pass: the instance is drawn where `fract(key + a x noise) < w`, with `a = smoothstep(3, 12, p)` and `p` the billboard's size in pixels
+  (`2 x radius / length(dFdx(object point))`). A billboard of 3 pixels or less is drawn whole or not at all, by its key: a crowd thins out one tree at a time,
+  and none flickers as it moves over pixels (the screen-door noise decides per pixel, so a 1 to 3 pixel sprite flickered with the camera; **Unknown** by
+  measurement: two views 0.03 degrees apart could not separate the flicker from the shift of the whole picture). From 12 pixels
+  the screen-door noise decides as before, shifted by the key (the same share of pixels, a different pattern per instance, so neighbours do not fade in lockstep).
+  Between, a mix: the crowd's share is exactly `w` for any `a` (the key is uniform), a single sprite's share only for `a = 1`.
+- The mesh crossfade band (negative values) is unchanged: it needs the mesh's own noise's complement.
+- **Shadows**: the impostor casters fade by the key alone (`vFadeKey >= vFade` discards; a cascade texel is far coarser than the picture's pixel), so a billboard's
+  shadow leaves with the billboard. Mesh casters are left as they were (a change there would alter Faithful pictures); for the groups that have billboards the
+  cascades now fade at the range and the others do not. **Unknown**: whether the unfaded mesh casters of small and medium meshes are noticed.
+- Tied to `impostors` (F7), not to `dither` (F2: that is the post-processing banding dither, `post.Dither`) nor to `range` (it changes where meshes end, not how they fade).
+
+**Pictures** (**Observed**, RTX 4070, 1600 x 900, `C:\Temp\agent-dither\shots`): forest view at 10 588 units with `--range-large 9000 --range-medium 9000` (band 8100 to 9000 on the
+horizon): the fringe of trees thins out in both; the difference between base and new is confined to the band (mean 0.0955, 0.34% of pixels over 12, max 112), where the dots of
+a tree are chosen by its key instead of by pixel. At `--range-large 50000` (`edge50000_*`, eye 47 000 from the forest) the band sits in the haze and base and new are
+alike to the eye (mean 0.0034, 0.003% over 12): the fade is not what is seen there. Ten parity views, Meitou, against master: forest 13:00 0.039 (0.13% over 12), hub 13:00 0.040
+(0.11%), zone14_30 13:00 0.015, rock 13:00 0.0005, port north 0; the 02:00 views 0 to 0.009; **Faithful: 0 px in all ten**, against master and against `base-87c7857`.
+
+**Cost** (**Observed**, Hub, `--fly-benchmark 3600 --fly-pipelined --range-large 50000 --range-medium 12000`, guard idle at x1.00, two runs each, other GPU users on the machine):
+GPU frame mean base 2.76 and 3.02 ms, new 2.99 and 2.94; CPU p50 base 2.8 and 3.1, new 3.1 and 3.1. Within the noise between runs of the same build.
+
+**What does pop at 50 000 (Observed, not fixed here).** The same flight prints `not laid out within the far reach (50000) in 3600 frames, nearest 26677`: zones between
+about 27 000 and 50 000 units are never all laid out while flying at 9000 units a second, and a zone that arrives appears whole, at full strength, wherever it is, not at the
+range edge. That is a streaming pop. `admitted but not resident yet (meshes drawn)` (an atlas not yet resident, 1566 to 1707 of 3600 frames) is the other: a group beyond its transition
+with no ready atlas draws meshes until it is, and swaps to billboards without a crossfade. Both want an arrival ramp (a per-zone, per-group time since it first drew, multiplied into
+`w` in the cull, Meitou only), which needs a per-chunk field in the cull (`Chunk`, now 32 bytes) and the CPU reference in step; not built.
+## 13. TERRAIN-mode rocks (F2, 2026-10-07)
+
+*In short: rocks drawn through the terrain shader (triplanar biome material) get an impostor per (rock mesh, biome row), baked with that material, lit and shadowed at run time like any other.
+Hub flight, colour-view rock triangles 599 k to 15 k per frame, GPU frame mean 2.61 to 2.24 ms, impostor atlases 176 (452 MB) to 241 (710 MB), VRAM peak 4.10 to 4.32 GB. Meitou mode only.*
+
+**Why per biome** (**Verified**, code): a TERRAIN mesh's colour comes from the terrain's parameter row of the biome under the rock (`FoliageCull.RockBits`: biome row + 1 in the record, mirror bit 1024), the
+material uv is `world.xz / 5000`, and past `MaterialDistance` x 0.8 it fades to the ground map times the whole-world colour map x 1.2. One atlas therefore holds one rock mesh in one biome's material.
+In the code the atlases are "variant" `MeshAsset` holders (`RockOf`, `RockRow`); the group's records are stable-sorted by biome row (`Group.RockSorted`, `RockSegments`), and the GPU cull gets one chunk per segment.
+A row whose atlas is not resident keeps drawing the mesh whatever the parts say.
+
+**Bake** (`TerrainRenderer.RockBake.cs`): a copy of the terrain mesh fragment shader with the distance taken from the push constants (the class's bake distance), full near weight, and an output switch (albedo, normal in the
+frame basis, gloss = albedo alpha), drawn with the rock at its mean record scale and the biome row in the placement. The bake needs the biome's textures resident (`CanBakeRock`) and waits up to 3 s for it.
+Format as for trees: 12 x 12 frames, BC1 albedo, BC5 normal, disk cache. **Cache key** (`ImpostorSource.Key`, only for rocks): `rock <RockBakerVersion> <biome key>` and the frame cap; the biome key
+(`TerrainTextures.BiomeKey`) is the record id, layer size, parameters and the texture names with file length and time, so a different biome, mod or texture file bakes again. Tree keys and `BakerVersion` are unchanged.
+
+**Run time** (`RockFragmentNative`): lit and shadowed by the impostor shader as trees are. To match the mesh at the transition it applies the terrain's far fade per pixel (to the ground map times the whole-world colour map) and the
+colour-map tint (`texture(colour) * 1.2` inside the window) that the mesh shader applies; without the tint the billboards looked whitish and too bright (**Observed**). `MEITOU_IMPOSTOR_ROCK_TINT=0` turns the tint off.
+**Crossfade**: the impostor dithers in over the mesh as for trees, and the rock mesh dithers out by the complementary threshold (the cull writes it into row 1 w, the terrain mesh shader discards on it); without the mesh side
+the solid mesh showed through a crosshatch (**Observed**).
+
+**Size rule for big rocks** (`ImpostorClass.ForRock`): the same classes, with the frame capped at 256 (`MEITOU_IMPOSTOR_ROCK_MAX_FRAME`). A rock too big for its frame (radius over the knee, about 620 units) keeps the frame magnified no
+more than the usual 1.4 by switching to its impostor further out: `transition = ImpostorDistance x R / knee`. A 512 frame cap was tried and dropped: 36 MB per atlas and 575 MB of host read-back buffers (**Observed**).
+Small rocks use the small class.
+
+**Filter** (`MEITOU_IMPOSTOR_ROCK_MIN_SURFACE`, 0.06): a mesh whose triangle area over the area of its bounding sphere is under 0.06 gets none (thin sticks make poor billboards). **Observed**: `FOLIAGE_Plant_Swamp-TwigLarger`
+0.029, the other TERRAIN meshes 0.107 or more.
+
+**Measured** (**Observed**, RTX 4070, 1600 x 900, `--world --town "The Hub" --radius 2 --range-large 50000 --range-medium 12000 --object-distance 20000 --fly-benchmark 3600 --fly-pipelined`, `MEITOU_FOLIAGE_TRIS=1`, GPU idle before; base `87c7857`, cache warm for both):
+
+| | base | rock impostors |
+|---|---|---|
+| GPU frame mean (frames 31-3600) | 2.61 ms | 2.24 ms |
+| colour rocks, triangles per frame | 599.3 k | 14.9 k |
+| shadow rocks, triangles per frame | 262.1 k | 93.1 k |
+| impostor atlases | 176 (452 MB) | 241 (710 MB; 185 from cache, 56 baked) |
+| VRAM peak | 4102 MB | 4319 MB |
+
+(Earlier runs while another process used the GPU gave 2.5 and 5.5 ms and are not comparable.) Pictures: canyon mesh against billboard near the transition, `C:\Temp\agent-rocks\shots\final_canyon_rocks0.png` and `final_canyon_rocks1.png`;
+a crop against the untinted version had a mean difference of 1.14, tinted 0.82 (**Observed**; the rest is texture detail).
+
+**Gate** (**Verified**): Faithful ten views 0 px (`--faithful all`; `--faithful impostors` against the base viewer too); Meitou ten views against `C:\Temp\mi\meitou`: Port North 0, Hub 0.018 / 0.006, the others 0.15-0.73 mean (rock
+billboards and their crossfade dither), `MEITOU_IMPOSTOR_ROCKS=0` 0 px in all; `MEITOU_VK_VALIDATION=sync` with an empty cache 0 errors.
+
+**Limits** (**Observed** / **Unknown**): rock impostors exist only with the GPU cull (not verify mode, not the CPU path), with textures on and the impostors switch on; when a biome's textures are not resident the mesh keeps drawing.
+A rock is baked in its biome of record, so a rock whose drawn pixels come from a different biome than its record (**Unknown** how often) matches less. Mirrored placements are checked by eye only. Thin sticks stay meshes.
+`MEITOU_IMPOSTOR_ROCKS=0` switches the whole thing off.
+
+## 14. Shadow receiver without the blocker search (2026-10-08)
+
+Impostors use the Meitou shadow receiver ([formats/shadows.md](formats/shadows.md), "Meitou shadows") **without its blocker search**: the
+16-tap filter at the cascade's minimum radius, no contact-hardening penumbra (`#define MS_NO_BLOCKER_SEARCH` in
+`ImpostorShaders.Fragment`, which the TERRAIN-mode rock impostors share). They stand 4000 units or more from the eye, a crown is a few
+pixels to a few dozen across, and the penumbra's width there is below a pixel.
+
+**Why** (**Observed**, RTX 4070, 1920 x 1080, `--fly-pipelined`, Blister Hill overview `--town "Blister Hill" --fly-speed 0`, Meitou
+defaults, about 55 500 impostor quads a frame): the foliage meshes row (meshes and impostors) is 1.16 ms, of which the impostors' lighting
+call is 0.45 ms, and that is almost all the receiver's: without the blocker search 0.80 ms, with also only 8 or 4 filter taps 0.77-0.79
+(the taps cost little). Removing the blocker search from the terrain's receiver changes nothing measurable (1.12-1.14 ms either way), so it
+is specific to the impostors (**Unknown** why; likely the per-pixel world positions on the frames' planes scattering the search over the
+map). Other parts of the impostor pixel shader, for reference (same view): the three-frame sampling and vote 0.43 ms (a constant surface
+in its place), blending the frames instead of the per-pixel vote −0.28 ms (not taken: leaves thin out, section 5), the haze 0.
+
+**Result** (three interleaved runs each, with the terrain's patch order of [formats/terrain.md](formats/terrain.md)): foliage meshes row
+1.25-1.26 to 0.77 ms at the overview, 1.44-1.54 to 1.04-1.06 at ground level (`--distance 1500 --pitch 12`). Faithful draws no impostors
+(0 px). Meitou pictures: see [render-distance-benchmark.md](render-distance-benchmark.md) section 10.

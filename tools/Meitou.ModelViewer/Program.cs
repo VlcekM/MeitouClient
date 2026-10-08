@@ -6,6 +6,8 @@ using Silk.NET.Windowing;
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 args = SmokeTest.Strip(args);
+// Started without options (a double-click on the release's exe): the world at The Hub.
+if (args.Length == 0) args = ["--world", "--town", "The Hub"];
 if (args.Contains("--world")) return WorldApp.Run(args);
 if (args.Contains("--impostor-preview") || args.Contains("--impostor-bake-all")) return ImpostorApp.Run(args);
 // The mesh and character viewers were removed in phase 8 (DECISIONS 23; docs/character-viewer.md, the tag model-viewer-last has them).

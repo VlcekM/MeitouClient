@@ -155,9 +155,58 @@ public sealed partial class FoliageRenderer
     /// <summary>Atlases loading, waiting to bake, baking or uploading (part of <see cref="Pending"/>).</summary>
     int ImpostorPending => impostorWork.Count + impostorBakes.Count + (impostorBake is null ? 0 : 1);
 
-    string ImpostorDescription => $"{assetsByMesh.Values.Count(a => a.Impostor?.Stage == ImpostorStage.Ready)} impostor atlases {impostorBytes / 1048576.0:0} MB of {ImpostorLimitMb:0} MB " +
+    string ImpostorDescription => $"{ImpostorAssets().Count(a => a.Impostor?.Stage == ImpostorStage.Ready)} impostor atlases {impostorBytes / 1048576.0:0} MB of {ImpostorLimitMb:0} MB " +
         $"({impostorsLoaded} from the cache, {impostorsBaked} baked, {impostorUnloads} unloaded, {impostorRefined} refined, {impostorCoarsened} coarsened, {impostorDropped} dropped by the plan, {impostorRefused} refused; " +
         $"plan {impostorAdmittedCount} of {impostorWantedCount} wanted, {impostorMissingCount} not resident, {impostorExtraCount} blurrier than needed, {impostorPlannedBytes / 1048576.0:0} MB planned)";
+
+    // ---- TERRAIN-mode rocks (docs/impostors.md section 13) ----
+
+    /// <summary><c>MEITOU_IMPOSTOR_ROCKS=0</c>: TERRAIN-mode rocks stay meshes (no atlases for them), as before this feature; for A/B comparisons.</summary>
+    static readonly bool RockImpostorsEnabled = Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_ROCKS") != "0";
+    /// <summary>A TERRAIN-mode mesh whose triangles cover less than this share of its bounding sphere's surface gets no impostor (<c>MEITOU_IMPOSTOR_ROCK_MIN_SURFACE</c>).</summary>
+    static readonly float RockMinSurface = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_ROCK_MIN_SURFACE"), System.Globalization.NumberStyles.Float,
+        System.Globalization.CultureInfo.InvariantCulture, out float minSurface) ? minSurface : 0.06f;
+    /// <summary>The terrain of the last <see cref="Draw"/> (the rock bake's material; null before the first), and whether it draws textured (rocks are TERRAIN-mode only then).</summary>
+    TerrainRenderer? rockTerrain;
+    bool drawTextures = true;
+    float drawMaterialDistance = 30000;
+    /// <summary><c>MEITOU_IMPOSTOR_ROCK_TINT=0</c> turns off: a rock's impostor takes the colour map's tint at its position, as the mesh does (docs/impostors.md section 13).</summary>
+    static readonly bool RockTint = Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_ROCK_TINT") != "0";
+    /// <summary>The terrain the TERRAIN-mode rocks are textured by and baked with; set by the world frame (so the offscreen settle, which updates before it draws, has it), and by every <see cref="Draw"/>.</summary>
+    public TerrainRenderer? Terrain { get => rockTerrain; set => rockTerrain = value; }
+    /// <summary>Rock impostors are on: the switch, the impostors Enhancement, the GPU cull (the CPU cull has no rock impostors; the verify mode compares the CPU's lists, which have none) and textures.</summary>
+    bool RockImpostorsActive => RockImpostorsEnabled && Impostors && GpuCull && gpuCull is not null && !GpuCullVerify && drawTextures && rockTerrain is not null;
+    /// <summary>The holders of the rocks' per-biome impostors (see <see cref="MeshAsset.RockVariants"/>), for the loops that go over every atlas.</summary>
+    readonly List<MeshAsset> rockHolders = [];
+
+    /// <summary>Every asset that can hold an atlas: the meshes and the rocks' per-biome holders.</summary>
+    IEnumerable<MeshAsset> ImpostorAssets() => assetsByMesh.Values.Concat(rockHolders);
+
+    /// <summary>The holder of a rock's impostor for the biome of terrain row <paramref name="row"/> (made on first ask).</summary>
+    MeshAsset RockVariant(MeshAsset rock, int row)
+    {
+        rock.RockVariants ??= [];
+        if (!rock.RockVariants.TryGetValue(row, out var v))
+        {
+            rock.RockVariants[row] = v = new MeshAsset
+            {
+                Mesh = rock.Mesh, RockOf = rock, RockRow = row, Centre = rock.Centre, Radius = rock.Radius, HasBounds = rock.HasBounds, SizeClass = rock.SizeClass,
+                Triangles = rock.Triangles, Resident = true,
+            };
+            rockHolders.Add(v);
+        }
+        return v;
+    }
+
+    /// <summary>The holder of a rock's impostor for terrain row <paramref name="row"/> when its atlas is resident, else null.</summary>
+    static MeshAsset? ReadyRock(MeshAsset rock, int row) =>
+        row >= 0 && rock.RockVariants is { } vs && vs.TryGetValue(row, out var v) && v.Impostor is { Stage: ImpostorStage.Ready } ? v : null;
+
+    /// <summary>A mesh's name for the log; a rock's per-biome holder adds its terrain row.</summary>
+    static string Label(MeshAsset a) => a.RockOf is null ? a.Mesh.Name : $"{a.Mesh.Name} [biome row {a.RockRow}]";
+
+    /// <summary>The class of a mesh's atlas from its largest instance's radius: TERRAIN-mode rocks have their own largest frame.</summary>
+    static ImpostorClass? ClassFor(MeshAsset a, float worldRadius, int triangles) => a.Terrain ? ImpostorClass.ForRock(worldRadius, triangles) : ImpostorClass.For(worldRadius, triangles);
 
     /// <summary>The class of an atlas that is not loaded yet, estimated from the mesh's own bounds (the exact one comes with the load).</summary>
     static ImpostorClass? EstimateClass(MeshAsset a)
@@ -166,7 +215,7 @@ public sealed partial class FoliageRenderer
         {
             // The mesh's half-diagonal is never less than the farthest vertex from the box's centre (what the baker measures), so this is the class's
             // upper bound: a mesh it rejects can never get one, and one it accepts may still be rejected by the load.
-            a.EstimatedClass = ImpostorClass.For(a.Radius * a.Mesh.MaxScale * 1.02f, a.Triangles);
+            a.EstimatedClass = ClassFor(a, a.Radius * a.Mesh.MaxScale * 1.02f, a.Triangles);
             a.ClassEstimated = true;
         }
         return a.EstimatedClass;
@@ -180,7 +229,19 @@ public sealed partial class FoliageRenderer
     float EstimatedTransition(MeshAsset a) => EstimateClass(a) is { } c ? TransitionFor(c, a.Radius * a.Mesh.MaxScale) : float.PositiveInfinity;
 
     /// <summary>The ground distance from which a mesh is its impostor (infinite without a resident atlas or with the switch off).</summary>
-    float TransitionOf(MeshAsset a) => Impostors && a.Impostor is { Stage: ImpostorStage.Ready } s ? TransitionFor(s.Class, s.WorldRadius) : float.PositiveInfinity;
+    float TransitionOf(MeshAsset a)
+    {
+        if (!Impostors) return float.PositiveInfinity;
+        // A rock has atlases per biome, one class for all of them (it follows from the mesh): the transition of any that is resident.
+        if (a.Terrain)
+        {
+            if (!RockImpostorsActive || a.RockVariants is not { } variants) return float.PositiveInfinity;
+            foreach (var v in variants.Values)
+                if (v.Impostor is { Stage: ImpostorStage.Ready } r) return TransitionFor(r.Class, r.WorldRadius);
+            return float.PositiveInfinity;
+        }
+        return a.Impostor is { Stage: ImpostorStage.Ready } s ? TransitionFor(s.Class, s.WorldRadius) : float.PositiveInfinity;
+    }
 
     /// <summary>
     /// A group's range for a view with its impostor, and which parts the view draws (<see cref="FoliageCull.MeshPart"/>,
@@ -191,6 +252,7 @@ public sealed partial class FoliageRenderer
     (FoliageGroupRange Range, int Parts) WithImpostor(FoliageGroupRange r, MeshAsset a, float range, float band, ZoneState zone, Vector3 eye, bool view)
     {
         if (!view) return (r, FoliageCull.MeshPart);
+        if (a.Terrain && !RockImpostorsActive) return (r, FoliageCull.MeshPart);
         float t = TransitionOf(a);
         if (!(t <= range - band)) return (r, FoliageCull.MeshPart);
         float b = t * ImpostorBand;
@@ -344,12 +406,12 @@ public sealed partial class FoliageRenderer
         // Atlases nobody wanted this scan go first (least recently used first) when the real use plus what is coming passes the limit.
         if (impostorBytes + pending > limit)
         {
-            foreach (var a in assetsByMesh.Values
+            foreach (var a in ImpostorAssets()
                 .Where(a => a.Impostor is { Stage: ImpostorStage.Ready } s && now - s.LastUsed > 1000 && !impostorWanted.ContainsKey(a))
                 .OrderBy(a => a.Impostor!.LastUsed)
                 .ToList())
             {
-                if (ImpostorLog) Console.WriteLine($"impostor  evict {a.Mesh.Name} ({a.Impostor!.Textures!.Bytes / 1048576.0:0.0} MB, unused {(now - a.Impostor.LastUsed) / 1000.0:0.0} s) for the budget");
+                if (ImpostorLog) Console.WriteLine($"impostor  evict {Label(a)} ({a.Impostor!.Textures!.Bytes / 1048576.0:0.0} MB, unused {(now - a.Impostor.LastUsed) / 1000.0:0.0} s) for the budget");
                 UnloadImpostor(a);
                 if (impostorBytes + pending <= limit) break;
             }
@@ -364,7 +426,7 @@ public sealed partial class FoliageRenderer
             {
                 if (s is { Stage: ImpostorStage.Ready } && (++s.DropScans >= 2 || pressure))
                 {
-                    if (ImpostorLog) Console.WriteLine($"impostor  drop {a.Mesh.Name} ({s.Textures!.Bytes / 1048576.0:0.0} MB, needed from {it.Need:0} units) over the limit of {limit / 1048576.0:0} MB");
+                    if (ImpostorLog) Console.WriteLine($"impostor  drop {Label(a)} ({s.Textures!.Bytes / 1048576.0:0.0} MB, needed from {it.Need:0} units) over the limit of {limit / 1048576.0:0} MB");
                     impostorDropped++;
                     UnloadImpostor(a);
                 }
@@ -486,7 +548,7 @@ public sealed partial class FoliageRenderer
             impostorBytes -= old.Bytes;
             old.Dispose();
             if (s.RefineSkip < s.Skip) impostorRefined++; else impostorCoarsened++;
-            if (ImpostorLog) Console.WriteLine($"impostor  {(s.RefineSkip < s.Skip ? "refined" : "coarsened")} {a.Mesh.Name}: skip {s.Skip} -> {s.RefineSkip}, {s.Textures.Bytes / 1048576.0:0.0} MB ({impostorBytes / 1048576.0:0.0} of {ImpostorLimitMb:0} MB resident)");
+            if (ImpostorLog) Console.WriteLine($"impostor  {(s.RefineSkip < s.Skip ? "refined" : "coarsened")} {Label(a)}: skip {s.Skip} -> {s.RefineSkip}, {s.Textures.Bytes / 1048576.0:0.0} MB ({impostorBytes / 1048576.0:0.0} of {ImpostorLimitMb:0} MB resident)");
             s.Skip = s.RefineSkip;
             (s.RefineAtlas, s.FinerSince) = (null, 0);
             impostorRefining.RemoveAt(i--);
@@ -545,6 +607,23 @@ public sealed partial class FoliageRenderer
                     // fade band, as WithImpostor requires) and this zone has ground from the band on.
                     var (range, band) = RangeOf(g);
                     if (!a.Resident || !a.HasBounds || near > range) continue;
+                    if (a.Terrain)
+                    {
+                        // A TERRAIN-mode rock: one atlas per biome row its instances have here (docs/impostors.md section 13).
+                        if (!RockImpostorsActive) continue;
+                        float rt = EstimatedTransition(a);
+                        if (range - band < rt || far < rt * (1 - ImpostorBand)) continue;
+                        PrepareRock(g, rockTerrain!);   // returns at once when its records are already sorted and numbered for this terrain
+                        foreach (var (row, _, _) in g.RockSegments)
+                        {
+                            if (row < 0) continue;
+                            var holder = RockVariant(a, row);
+                            if (holder.Impostor is { Stage: ImpostorStage.None, RetryAt: 0 }) continue;
+                            if (holder.Impostor is null && !rockTerrain!.CanBakeRock(row)) continue;   // its biome's textures are not resident: nothing to bake with
+                            impostorWanted[holder] = impostorWanted.TryGetValue(holder, out float seen) ? Math.Min(seen, urgency) : urgency;
+                        }
+                        continue;
+                    }
                     if (a.Impostor is { Stage: ImpostorStage.None, RetryAt: 0 }) continue;
                     // Its own transition (the exact one once the atlas is loaded; before that estimated from the mesh's bounds, which also rules out
                     // a mesh that could never have an atlas: the load would only find that out).
@@ -557,7 +636,7 @@ public sealed partial class FoliageRenderer
             ApplyImpostorPlan(now);
         }
         if (now - lastImpostorScan < 2000 || settling)
-            foreach (var a in assetsByMesh.Values)
+            foreach (var a in ImpostorAssets())
                 if (a.Impostor is { Stage: ImpostorStage.Ready } s && (now - s.LastUsed) / 1000.0 > ImpostorIdleSeconds) UnloadImpostor(a);
         if (impostorBakeMemoryHeld && impostorBake is null && impostorBakes.Count == 0 && now - impostorLastBake > ImpostorBakeIdleMs)
         {
@@ -602,19 +681,33 @@ public sealed partial class FoliageRenderer
     void RequestImpostor(MeshAsset a, long now)
     {
         if (a.Impostor is not null) return;
-        if (a.Terrain || ImpostorSource.Ineligible(a.Mesh) is not null) { a.Impostor = new ImpostorState { Stage = ImpostorStage.None }; return; }
+        // A TERRAIN-mode rock's atlas (a holder of one biome: MeshAsset.RockOf) is baked with that biome's terrain material; the mesh itself is never asked.
+        bool rock = a.RockOf is not null;
+        string? material = rock ? rockTerrain?.RockBiomeKey(a.RockRow) : null;
+        if (rock ? material is null : a.Terrain || ImpostorSource.Ineligible(a.Mesh) is not null)
+        {
+            a.Impostor = new ImpostorState { Stage = ImpostorStage.None, RetryAt = rock ? now + 5000 : 0 };
+            return;
+        }
         var mesh = a.Mesh;
         var locator = assets;
         var cache = impostorCache;
         var s = a.Impostor = new ImpostorState { Stage = ImpostorStage.Loading, LastUsed = now };
         var messages = Messages;
+        int rockRow = a.RockRow;
         s.Load = BackgroundWork.Run<(ImpostorSource?, ImpostorMeshes?, ImpostorClass?, ImpostorAtlas?)>(() =>
         {
-            var source = ImpostorSource.From(mesh, locator);
+            var source = rock ? ImpostorSource.ForRock(mesh, locator, rockRow, material!) : ImpostorSource.From(mesh, locator);
             if (source is null) return default;
             var meshes = ImpostorMeshes.Load(source, messages);
             if (meshes is null) return (source, null, null, null);
-            var cls = ImpostorClass.For(meshes.Radius * mesh.MaxScale, meshes.Triangles);
+            var cls = rock ? ImpostorClass.ForRock(meshes.Radius * mesh.MaxScale, meshes.Triangles) : ImpostorClass.For(meshes.Radius * mesh.MaxScale, meshes.Triangles);
+            if (rock && cls is not null)
+            {
+                float share = meshes.SurfaceShare;
+                if (ImpostorLog) Console.WriteLine($"impostor  rock {mesh.Name}: surface {share:0.000} of its bounding sphere, radius {meshes.Radius * mesh.MaxScale:0}, {meshes.Triangles} triangles");
+                if (share < RockMinSurface) cls = null;   // sticks and the like: parts a billboard cannot hold, they stay meshes
+            }
             if (cls is not { } c) return (source, meshes, null, null);
             var atlas = cache.TryLoad(source);
             if (atlas is not null && (atlas.FramePixels != c.FramePixels || atlas.Grid != c.Grid)) atlas = null;
@@ -645,7 +738,7 @@ public sealed partial class FoliageRenderer
             if (!MakeImpostorRoom(need, a) || guard is { } g && !g.Allows((ulong)need))
             {
                 impostorRefused++;
-                if (ImpostorLog) Console.WriteLine($"impostor  refused {a.Mesh.Name}: {need / 1048576.0:0.0} MB would pass the budget ({impostorBytes / 1048576.0:0.0} of {ImpostorLimitMb:0} MB resident)");
+                if (ImpostorLog) Console.WriteLine($"impostor  refused {Label(a)}: {need / 1048576.0:0.0} MB would pass the budget ({impostorBytes / 1048576.0:0.0} of {ImpostorLimitMb:0} MB resident)");
                 (s.Stage, s.RetryAt, s.Atlas, s.Meshes) = (ImpostorStage.None, Environment.TickCount64 + (long)(ImpostorRetrySeconds * 1000), null, null);
                 return true;
             }
@@ -663,7 +756,7 @@ public sealed partial class FoliageRenderer
         } while (!s.Textures.Complete && uploaded + s.Textures.NextStepBytes <= budget);
         if (!s.Textures.Complete) return false;
         s.Stage = ImpostorStage.Ready;
-        if (ImpostorLog) Console.WriteLine($"impostor  ready {a.Mesh.Name}: {s.Atlas!.Grid}x{s.Atlas.Grid} frames of {s.Atlas.FramePixels}, skip {s.Skip}, {s.Textures.Bytes / 1048576.0:0.0} MB ({impostorBytes / 1048576.0:0.0} of {ImpostorLimitMb:0} MB resident)");
+        if (ImpostorLog) Console.WriteLine($"impostor  ready {Label(a)}: {s.Atlas!.Grid}x{s.Atlas.Grid} frames of {s.Atlas.FramePixels}, skip {s.Skip}, {s.Textures.Bytes / 1048576.0:0.0} MB ({impostorBytes / 1048576.0:0.0} of {ImpostorLimitMb:0} MB resident)");
         s.Atlas = null;   // the CPU copy is not needed any more (a reload reads the cache again)
         s.Meshes = null;
         residentStamp++;
@@ -684,6 +777,7 @@ public sealed partial class FoliageRenderer
             impostorBakes.RemoveAt(best);
             var s = next.Impostor!;
             impostorBaker ??= new ImpostorBaker(Gpu, textures);
+            impostorBaker.RockTerrain = rockTerrain;
             impostorBake = impostorBaker.Begin(s.Source!, s.Meshes!, s.Class);
             impostorBakeAsset = next;
         }
@@ -711,8 +805,9 @@ public sealed partial class FoliageRenderer
         }
         else
         {
-            Messages.Add($"impostor {a.Mesh.Name}: {impostorBake.Error?.Message}");
+            Messages.Add($"impostor {Label(a)}: {impostorBake.Error?.Message}");
             st.Stage = ImpostorStage.None;
+            if (a.RockOf is not null) st.RetryAt = Environment.TickCount64 + 10000;   // a rock's biome that was not there: asked again once it is wanted again
         }
         impostorBake.Dispose();
         (impostorBake, impostorBakeAsset) = (null, null);
@@ -728,12 +823,12 @@ public sealed partial class FoliageRenderer
         long limit = (long)(impostorLimitBytes * ImpostorTransientShare);
         if (impostorBytes + need <= limit) return true;
         long now = Environment.TickCount64;
-        foreach (var a in assetsByMesh.Values
+        foreach (var a in ImpostorAssets()
             .Where(a => a != except && a.Impostor is { Stage: ImpostorStage.Ready } s && now - s.LastUsed > 3000)
             .OrderBy(a => a.Impostor!.LastUsed)
             .ToList())
         {
-            if (ImpostorLog) Console.WriteLine($"impostor  evict {a.Mesh.Name} ({a.Impostor!.Textures!.Bytes / 1048576.0:0.0} MB, unused {(now - a.Impostor.LastUsed) / 1000.0:0.0} s) for the budget");
+            if (ImpostorLog) Console.WriteLine($"impostor  evict {Label(a)} ({a.Impostor!.Textures!.Bytes / 1048576.0:0.0} MB, unused {(now - a.Impostor.LastUsed) / 1000.0:0.0} s) for the budget");
             UnloadImpostor(a);
             if (impostorBytes + need <= limit) return true;
         }
@@ -763,7 +858,7 @@ public sealed partial class FoliageRenderer
     void DisposeImpostors()
     {
         impostorBake?.Dispose();
-        foreach (var a in assetsByMesh.Values)
+        foreach (var a in ImpostorAssets())
         {
             if (a.Impostor is not { } s) continue;
             try { s.Load?.Wait(); } catch (AggregateException) { }
@@ -843,6 +938,7 @@ public sealed partial class FoliageRenderer
         if (impostorDraw is null || !Impostors) return;
         var state = Gpu.CurrentState() with { Cull = Silk.NET.Vulkan.CullModeFlags.None, AlphaToCoverage = coverage };
         impostorDraw.Pipeline(depth ? ImpostorProgram.Caster : ImpostorProgram.Plain, state, Gpu.CurrentTargets().Formats);
+        if (!depth && RockImpostorsActive) impostorDraw.Pipeline(ImpostorProgram.Rock, state, Gpu.CurrentTargets().Formats);
     }
 
     /// <summary>The impostor draws appended to a mesh segment's job (after its mesh draws; no culling, the rows already bound): a colour view's
@@ -859,6 +955,9 @@ public sealed partial class FoliageRenderer
         var view = depth && forward.LengthSquared() > 0 ? new Vector4(-Vector3.Normalize(forward), 1) : Vector4.Zero;
         var quad = impostorDraw.Quad;
         BufferBinding[] none = [];
+        // A TERRAIN-mode rock's colour draws fade to the ground colour with distance as the terrain's mesh shader does (its own program, the terrain's maps in the push).
+        GraphicsPipeline? rockPipeline = null;
+        (Vector4 Region, uint Ground, uint WorldColour, uint Colour, float HalfWorld, float FarStart, float FarEnd, uint Flags) far = default;
         for (int k = 0; k < impostorDraws.Count; k++)
         {
             var d = impostorDraws[k];
@@ -871,10 +970,23 @@ public sealed partial class FoliageRenderer
                 Coverage = coverage ? 1u : 0u, View = view,
             };
             MeshPush bytes = default;
-            System.Runtime.CompilerServices.Unsafe.As<MeshPush, ImpostorPush>(ref bytes) = push;
+            var drawPipeline = pipeline;
+            if (d.Asset.RockOf is not null && !depth && rockTerrain is not null)
+            {
+                if (rockPipeline is null) { rockPipeline = impostorDraw.Pipeline(ImpostorProgram.Rock, drawState, targets.Formats); far = rockTerrain.RockFarView(drawMaterialDistance); }
+                var rockPush = new ImpostorRockPush
+                {
+                    Sphere = push.Sphere, CameraUp = push.CameraUp, Grid = push.Grid, Albedo = push.Albedo, Normal = push.Normal, Gloss = push.Gloss, Coverage = push.Coverage, View = push.View,
+                    Region = far.Region, Ground = far.Ground, WorldColour = far.WorldColour, Colour = far.Colour, HalfWorld = far.HalfWorld, FarStart = far.FarStart, FarEnd = far.FarEnd,
+                    Flags = far.Flags | (RockTint ? 8u : 0),
+                };
+                System.Runtime.CompilerServices.Unsafe.As<MeshPush, ImpostorRockPush>(ref bytes) = rockPush;
+                drawPipeline = rockPipeline;
+            }
+            else System.Runtime.CompilerServices.Unsafe.As<MeshPush, ImpostorPush>(ref bytes) = push;
             job.Add(new MeshJob.Draw
             {
-                SetRaster = k == 0, Cull = drawState.Cull, Pipeline = pipeline, Vertices = none, Elements = quad, Push = bytes,
+                SetRaster = k == 0, Cull = drawState.Cull, Pipeline = drawPipeline, Vertices = none, Elements = quad, Push = bytes,
                 Args = indirect ? gpuResult.Args : default, ArgsOffset = gpuResult.ArgsOffset + (ulong)(argsFirst + k) * 20,
                 IndexCount = 6, Instances = d.Instances, FirstInstance = d.FirstInstance,
             });

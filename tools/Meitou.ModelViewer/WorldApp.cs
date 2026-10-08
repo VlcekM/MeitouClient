@@ -34,7 +34,7 @@ static partial class WorldApp
             Console.WriteLine(WorldOptions.Usage);
             return 2;
         }
-        var install = GameInstall.Locate();
+        var install = GameInstall.LocateOrAsk();
         if (install is null)
         {
             Console.Error.WriteLine($"Kenshi install not found: set {GameInstall.EnvironmentVariable} or create {GameInstall.LocalConfigFile}.");
@@ -45,6 +45,12 @@ static partial class WorldApp
         if (options.Info) return 0;
         RenderJobs.RaiseRenderThread();
         var assets = new AssetLocator(install);
+        if (Environment.GetEnvironmentVariable("MEITOU_LANDMARK_SURVEY") == "1" && scene.Objects is not null)
+        {
+            // The whole world's placements by world bounding radius (docs/renderer-native.md 8.19): picks the landmark threshold.
+            LandmarkClass.Survey(scene.Objects, assets, Console.Out);
+            return 0;
+        }
         return options.Screenshot is not null || options.FlyBenchmark > 0 ? Screenshot(install, scene, assets, options) : Interactive(install, scene, assets, options);
     }
 
@@ -234,18 +240,7 @@ static partial class WorldApp
         var stats = new List<string>();
         var keyItems = DebugOverlay.KeyItems(WorldOptions.Usage);
         // F1 upwards: the Faithful / Meitou switches (Enhancements), in order.
-        var switches = Enhancements.Create(o.Post, () => gpu?.Sky.HazeStrength ?? o.HazeStrength, v => { if (gpu is not null) gpu.Sky.HazeStrength = v; },
-            () => gpu?.Shadow?.Meitou ?? o.MeitouShadows, v =>
-            {
-                // The shadow distance follows the mode's default unless the Tab slider moved it.
-                bool was = o.MeitouShadows;
-                o.MeitouShadows = v;
-                if (gpu?.Shadow is not { } s) return;
-                if (MathF.Abs(s.Settings.Range - o.ShadowRangeFor(was)) < 1) s.Settings = s.Settings with { Range = o.ShadowRangeFor(v) };
-                s.Meitou = v;
-            },
-            () => gpu?.Foliage?.MeitouRange ?? o.MeitouRange, v => { o.MeitouRange = v; if (gpu?.Foliage is { } f) f.MeitouRange = v; },
-            () => gpu?.Foliage?.Impostors ?? o.Impostors, v => { o.Impostors = v; if (gpu?.Foliage is { } f) f.Impostors = v; });
+        var switches = LiveSwitches(o, () => gpu, () => camera, () => render);
 
         {
             gpu = CreateGpu(display.Context, install, scene, assets, o, interactive: true);

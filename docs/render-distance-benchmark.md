@@ -303,7 +303,10 @@ small impostor class. Rule, numbers per card size, design and gates: [impostors.
 - Pictures: Faithful ten views 0 px against `C:\Temp\base-87c7857\faithful`; `--faithful impostors` 0 px against master; Meitou defaults nine of ten views 0 px, forest 13:00 and 02:00 differ in
   a few small spots (the small impostors; 0 px with them off). `MEITOU_VK_VALIDATION=sync` 0 errors.
 
-Still open after this (**Observed**): TERRAIN-mode rocks (F2) are untouched (Hub 40.8 M triangles, 5.6-10.5 ms), now the largest single item; the CPU is 0.3-1.0 ms dearer at CPX; the
+**F2 done (2026-10-07, [impostors.md](impostors.md) section 13)**: TERRAIN-mode rocks get billboards baked with the terrain material, per biome. Hub fly benchmark (unpaced, pipelined): colour rock triangles 599 k to 15 k per frame,
+GPU frame mean 2.61 to 2.24 ms (**Observed**; this flight's mean, not the 5.6-10.5 ms long-range views the estimate was for), VRAM peak 4.10 to 4.32 GB. Faithful 0 px, validation 0 errors (**Verified**).
+
+Still open after this (**Observed**): ~~TERRAIN-mode rocks (F2) are untouched (Hub 40.8 M triangles, 5.6-10.5 ms), now the largest single item~~ (done, above); the CPU is 0.3-1.0 ms dearer at CPX; the
 integrated-GPU heap behaviour is **Unknown** (no such card here).
 
 ## 8. Gate for the instrumentation
@@ -319,3 +322,63 @@ the part range only with `MEITOU_OBJECT_PART_RANGE`; the object counters and the
 - **Unknown**: the cause of the 10-14.5 ms `shadows` frames at CPX.
 - **Unknown**: for each "no impostor class" mesh, whether its radius is under 48 or its source failed.
 - **Unknown**: other cards. Every number is one RTX 4070; on an 8 GB card the guard would cut the ranges before the GPU limit.
+
+## 10. Terrain and foliage pixel cost at the Meitou defaults (2026-10-08)
+
+*In short: at the Meitou defaults the terrain and the impostors are most of the GPU frame, and both are pixel cost (half the render
+scale cuts them about 2.5-3x; fewer terrain triangles change nothing). Two changes: terrain patches drawn nearest first (exact,
+0 px), and impostors without the shadow receiver's blocker search (Meitou only). The frame drops 3.92 → 3.28 ms at the Blister Hill
+overview and 6.52 → 5.62 ms at ground level there. What is left in the terrain is mostly not the layer material.*
+
+**Setup** (**Observed**): RTX 4070, 1920 x 1080, Release, `--fly-pipelined --fly-benchmark 300 --time 13`, Meitou defaults, GPU idle
+(an earlier set while another viewer held the GPU gave terrain 3.2-4.2 ms and is discarded). "Okran's Pride" is a region, not a town;
+the views are in it at Blister Hill: overview `--town "Blister Hill" --fly-speed 0` and ground level the same with `--distance 1500
+--pitch 12`. Numbers are the pass table's GPU column for the main view; repeated runs agree within 0.02 ms unless stated. Experiments
+patched the shader text through a temporary environment hook (not in the repository).
+
+**Where the time goes** (master, overview / ground level): frame 3.92 / 6.52, terrain 1.29 / 1.66, foliage meshes and impostors
+1.26 / 1.49 (about 55 500 impostor quads and 97 k mesh triangles a frame; Faithful draws 0.31 ms of meshes there), objects 0.40 / 1.67, post 0.39.
+
+**Terrain** (overview after the sort, 1.13-1.16 ms; differences are what each change saves):
+
+| Experiment | Terrain ms | Reading |
+| --- | ---: | --- |
+| render scale 0.5 | 0.45 | about 70 % of it follows pixels |
+| `--terrain-error` 8 / 32 / 64 (2.14 M / 0.46 M / 0.46 M triangles, ground level) | 1.22 / 1.17 / 1.16 | geometry is not the cost on this card |
+| `--material-distance` 1000 / 2000 / 4000 / 8000 / 16000 (ground level, full 1.16) | 0.73 / 0.84 / 1.06 / 1.09 / 1.12 | the material beyond 1000 units costs about 0.43 ms (the whole material is nearer the "no biome surfaces" row below) |
+| normal from screen derivatives instead of 4 height lookups (up to 8 fetches) | 0.88-0.93 | the height-field normal costs about 0.25 |
+| no `kenshiLight` | 0.83 | lighting about 0.3, of which shadows (receiver off) about 0.12 |
+| no normal maps / normal maps only within 3000 | 0.80 / 1.09 | |
+| no biome surfaces at all / one biome slot | 0.65 / 1.13 | extra biome slots cost little here |
+| no cliff layer | 1.06 | |
+| biome parameter fetches doubled (same values) | 1.16 | parameter fetches are free (cached) |
+| `textureGrad` replaced by implicit derivatives | 1.16 | explicit gradients cost nothing |
+| no haze | 1.12 | |
+| terrain drawn after objects and foliage | moves the cost to foliage, frame unchanged | the terrain is not shaded much under objects |
+| patches nearest first | 1.13 (from 1.29); ground level 1.16 (from 1.66) | **taken** |
+
+A cached, pre-composed material (a clipmap of albedo, normal and gloss around the eye, the owner's idea) could replace only the layer
+part beyond the distance where a cache's texels are fine enough: at most about 0.3 ms of 1.16 at ground level beyond 2000 units (the
+`--material-distance` rows), and nothing near the eye, where the layers' texel density (about 0.05 units) cannot be cached. The
+per-pixel height normal (about 0.25), the lighting and the shadows (about 0.3) stay either way.
+
+**Impostors**: [impostors.md](impostors.md) section 14 (the receiver's blocker search was 0.36 of the 1.16 ms).
+
+**Result** (three interleaved runs each, master `6d7b258` against the branch):
+
+| View | master frame / terrain / foliage | branch frame / terrain / foliage |
+| --- | --- | --- |
+| overview | 3.90-3.93 / 1.29-1.30 / 1.32-1.34 | 3.27-3.28 / 1.13 / 0.85 |
+| ground level | 6.37-6.76 / 1.63-1.72 / 1.53-1.64 | 5.60-5.66 / 1.16-1.17 / 1.13-1.15 |
+
+**Gate** (**Verified**): `--faithful all` ten parity views 0 px against master; Meitou ten views: the five night views 0 px (max 1 at the
+Hub), day views mean 0.001-0.09, at most 0.094 % of pixels over 12 (the Hub; max 81), all on far impostor trees' shadow edges.
+
+**Integrated GPUs** (**Unknown**, nothing measured on one): an iGPU about 10-15x slower than this card gives 12-25 ms of terrain at
+1080p, as reported (25 ms). On this card the cost is pixels and the triangle count did not matter; an integrated GPU has weaker
+geometry throughput relative to fill, so both the render scale (an upscaler at 0.67 shades 44 % of the pixels) and `--terrain-error`
+need measuring there.
+
+Scripts: `C:\Temp\perf\run.sh <name> <view> <frames> [options]` (views `okran` = the Blister Hill overview, `low` = ground level;
+`EXE=` picks another viewer), `C:\Temp\perf\rows.sh <logs>` prints the main view's GPU rows; logs in `C:\Temp\perf\logs`, pictures in
+`C:\Temp\perf\gate`.

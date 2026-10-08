@@ -27,7 +27,7 @@ static class Program
             return 2;
         }
         if (world.X is null && world.Zone is null && world.Town is null) world.Town = "The Hub";
-        var install = GameInstall.Locate();
+        var install = GameInstall.LocateOrAsk();
         if (install is null)
         {
             Console.Error.WriteLine($"Kenshi install not found: set {GameInstall.EnvironmentVariable} or create {GameInstall.LocalConfigFile}.");

@@ -219,7 +219,11 @@ a band at its border. A 64 × 64 grid patch is drawn per selected node. Bounds c
 are computed per pixel from the height textures, so shading does not depend on the LOD; only silhouettes, occlusion and where the
 water meets the ground do. Beyond the material distance (30000, as in the game), the terrain is shaded with the biome
 ground colour × the colour map (2048², box-filtered from the 64 tiles), fading over a band. The scene is drawn in
-two depth slices (far: 20000 to 450000, then near), so a 24-bit depth buffer reaches the horizon.
+two depth slices (far: 20000 to 450000, then near), so a 24-bit depth buffer reaches the horizon. The selected patches are drawn
+nearest first (horizontal distance from the eye to each patch's square, `TerrainRenderer.SortNearestFirst`): the material's pixels
+on land behind a nearer hill then fail the early depth test. Patches do not overlap, so the picture is the same in any order
+(**Verified**: ten parity views 0 px against the unsorted build, Faithful and Meitou). It saves 0.16 ms of 1.29 at the Blister Hill
+overview and 0.5 of 1.66 at ground level there (RTX 4070, 1080p; [../render-distance-benchmark.md](../render-distance-benchmark.md) section 10).
 
 **The viewer does not replicate the game's LOD rule** (decided 2026-10-06): the game's thresholds are in viewport-height units
 without the field of view, its error is per node, and its far threshold (35) visibly rounds ridgelines. The viewer uses its own
@@ -228,7 +232,7 @@ resolution-aware screen-space error (`TerrainLod`), one rule for all of its Fait
 - **Metric**: a level-l node is split while `P × E / distance > T`. `P` is the true projection scale of the picture **actually
   rendered**: render height / (2 tan(fov / 2)), the render height after the upscaler's render scale (so DLSS / FSR at 0.67 draw about
   half the triangles, and the Tab render-scale slider re-tessellates the terrain). `E = 2 × vertex spacing of level l + 1` is the
-  height error of the coarser grid, in the game's sense (above). `T` is `--terrain-error` (default **10 px**; Tab slider "Terrain
+  height error of the coarser grid, in the game's sense (above). `T` is `--terrain-error` (default **16 px** in Meitou, **10 px** in Faithful, the `reach` switch; Tab slider "Terrain
   detail"). Optionally `T` grows like the game's ramp to `--terrain-far-error` between `--terrain-ramp` (7500) and twice it; the
   default has no ramp (see "Choosing the defaults").
 - **Why one error per level** (`TerrainLod.Roughness` = 2): CDLOD needs one range per level, not per node (neighbouring nodes of a

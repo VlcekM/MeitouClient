@@ -32,6 +32,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         public bool TerrainMode;
         /// <summary>A building's distant mesh standing in for a town without a baked one.</summary>
         public bool Stand;
+        /// <summary>A landmark (<see cref="LandmarkClass"/>): kept in <see cref="LandmarkZone"/>, drawn to the landmark distance. Its <see cref="Radius"/> is
+        /// the true world radius from the start, so <see cref="ScanLandmarks"/> asks for its mesh as soon as its bounds could be in range.</summary>
+        public bool Landmark;
         public GpuObjectMesh? Gpu;
         public ObjectMaterialSet? Materials;
     }
@@ -53,6 +56,31 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// <summary>No new zone layouts are started (memory pressure, <see cref="VramGuard"/>); the ones in flight are taken in.</summary>
     public bool Paused { get; set; }
 
+    /// <summary>
+    /// The world's landmarks as one pseudo-zone (null: landmarks are off, they stay in their zones). Placements that are landmarks are left out of the
+    /// zones' instances (<see cref="Landmarks"/> decides, the same test that made the list) and kept here for good: a few hundred, walked every frame.
+    /// </summary>
+    public Zone? LandmarkZone { get; private set; }
+    /// <summary>Set before the zones are laid out: from then on <see cref="Update"/> leaves landmark placements out of them.</summary>
+    public LandmarkClass? Landmarks { get; set; }
+    /// <summary>No zone is laid out until the landmarks are collected (<see cref="SetLandmarks"/>), or a zone laid out before would hold them too.</summary>
+    public bool WaitForLandmarks { get; set; }
+
+    /// <summary>Makes the landmark pseudo-zone from the collected placements (the render thread, once) and lets the zones be laid out without them.</summary>
+    public void SetLandmarks(List<(PlacedMesh Placed, float Radius)> placements)
+    {
+        WaitForLandmarks = false;
+        var zone = new Zone { Coordinate = new ZoneCoordinate(-1, -1) };
+        foreach (var (placed, radius) in placements)
+        {
+            var inst = Make(placed, stand: false, zone);
+            inst.Landmark = true;
+            inst.Radius = radius;
+            zone.Real.Add(inst);
+        }
+        LandmarkZone = zone;
+    }
+
     readonly Dictionary<ZoneCoordinate, Zone> zones = [];
     readonly Dictionary<ZoneCoordinate, Task<ZoneObjects>> jobs = [];
     readonly List<(ZoneCoordinate Coordinate, double X0, double Z0)> populated =
@@ -64,8 +92,8 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// <summary>Zones in range not laid out yet, and those being laid out.</summary>
     public int Pending => jobs.Count + Wanted + fills.Count;
     public int Wanted { get; private set; }
-    public int Instances => zones.Values.Sum(z => z.Real.Count + z.Stand.Count);
-    public int Resolved => zones.Values.Sum(z => z.Real.Count(i => i.Gpu is not null) + z.Stand.Count(i => i.Gpu is not null));
+    public int Instances => zones.Values.Sum(z => z.Real.Count + z.Stand.Count) + (LandmarkZone?.Real.Count ?? 0);
+    public int Resolved => zones.Values.Sum(z => z.Real.Count(i => i.Gpu is not null) + z.Stand.Count(i => i.Gpu is not null)) + (LandmarkZone?.Real.Count(i => i.Gpu is not null) ?? 0);
 
     /// <summary>Distance on the ground plane from <paramref name="eye"/> to a zone's square.</summary>
     public static float ZoneDistance(double x0, double z0, Vector3 eye)
@@ -96,8 +124,14 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         }
         foreach (var (coordinate, _) in wanted.OrderBy(w => w.Distance))
         {
-            if (jobs.Count >= MaxJobs || Paused) break;
-            jobs[coordinate] = BackgroundWork.Run(() => objects.BuildZone(coordinate));
+            if (jobs.Count >= MaxJobs || Paused || WaitForLandmarks) break;
+            var landmarkClass = Landmarks;
+            jobs[coordinate] = BackgroundWork.Run(() =>
+            {
+                var laid = objects.BuildZone(coordinate);
+                if (landmarkClass is not null) laid.Items.RemoveAll(landmarkClass.IsLandmark);   // they live in LandmarkZone
+                return laid;
+            });
         }
         Wanted = wanted.Count(w => !jobs.ContainsKey(w.Coordinate));
         foreach (var zone in zones.Values.ToArray())
@@ -218,6 +252,49 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
                         list.RemoveAt(list.Count - 1);
                         break;
                 }
+            }
+        }
+        return waiting;
+    }
+
+    /// <summary>
+    /// <see cref="Scan"/> for the landmarks: <paramref name="reach"/> is how far they are drawn (the instance's own range is the smaller of that and its part
+    /// distance, as in <see cref="Scan"/>). A landmark's radius is known, so its mesh is asked for once its bounds could be in range, however big it is.
+    /// There are a few hundred: the whole list is walked every frame. Returns how many are waiting for a mesh.
+    /// </summary>
+    public int ScanLandmarks(Vector3 eye, float reach, Func<Instance, bool> resolve, int maxResolve = int.MaxValue)
+    {
+        if (LandmarkZone is not { } zone) return 0;
+        int waiting = 0, resolved = 0;
+        var list = zone.Unresolved;
+        for (int i = list.Count - 1; i >= 0; i--)
+        {
+            var inst = list[i];
+            float range = Math.Min(reach, inst.Limit);
+            float d = Vector3.Distance(eye, inst.Centre) - Math.Max(RequestMargin, inst.Radius);
+            if (d > range) continue;
+            switch (inst.Mesh.Status)
+            {
+                case ObjectMesh.State.None:
+                    meshes.Request(inst.Mesh, d);
+                    waiting++;
+                    break;
+                case ObjectMesh.State.Loading or ObjectMesh.State.Uploading:
+                    waiting++;
+                    break;
+                case ObjectMesh.State.Resident when resolved >= maxResolve:
+                    waiting++;
+                    break;
+                case ObjectMesh.State.Resident:
+                    if (!resolve(inst)) { waiting++; break; }
+                    resolved++;
+                    list[i] = list[^1];
+                    list.RemoveAt(list.Count - 1);
+                    break;
+                default:
+                    list[i] = list[^1];
+                    list.RemoveAt(list.Count - 1);
+                    break;
             }
         }
         return waiting;

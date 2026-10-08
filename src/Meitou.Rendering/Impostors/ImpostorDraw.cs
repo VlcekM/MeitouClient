@@ -11,12 +11,12 @@ namespace Meitou.Rendering.Impostors;
 /// sphere in <see cref="ImpostorPush"/>. Pipelines per (program, segment state, formats), kept for the last two states as the foliage
 /// meshes keep theirs. Used by the foliage renderer and the preview.
 /// </summary>
-internal enum ImpostorProgram { Plain, Caster }
+internal enum ImpostorProgram { Plain, Caster, Rock }
 
 internal sealed class ImpostorDraw : IDisposable
 {
     readonly GpuContext gpu;
-    readonly NativeProg plain, caster;
+    readonly NativeProg plain, caster, rock;
     readonly DeviceBuffer quad;
     readonly Dictionary<(ImpostorProgram, DrawStateKey, AttachmentFormats), GraphicsPipeline> pipelines = [];
 
@@ -28,6 +28,7 @@ internal sealed class ImpostorDraw : IDisposable
         this.gpu = gpu;
         plain = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.FragmentNative(), "impostors");
         caster = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.DepthFragmentNative(), "impostor casters");
+        rock = new NativeProg(gpu, frame, ImpostorShaders.RockVertexNative(), ImpostorShaders.RockFragmentNative(), "impostors of rocks");
         quad = DeviceBuffer.Create(gpu, 6 * sizeof(uint), BufferUse.Index, "impostor quad");
         using var batch = gpu.Uploads.Begin();
         batch.Write(quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes<uint>([0, 1, 2, 3, 4, 5]));
@@ -44,7 +45,7 @@ internal sealed class ImpostorDraw : IDisposable
     {
         var key = (which, new DrawStateKey(state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp), formats);
         if (pipelines.TryGetValue(key, out var p)) return p;
-        var program = which == ImpostorProgram.Caster ? caster : plain;
+        var program = which == ImpostorProgram.Caster ? caster : which == ImpostorProgram.Rock ? rock : plain;
         Span<LegacyProgram.Attribute?> rows = new LegacyProgram.Attribute?[FoliageShaders.InstanceLocation + 4];
         for (int a = 0; a < 4; a++)
             rows[FoliageShaders.InstanceLocation + a] = new LegacyProgram.Attribute(default, Format.R32G32B32A32Sfloat, 64, true);
@@ -57,6 +58,7 @@ internal sealed class ImpostorDraw : IDisposable
     {
         plain.Dispose();
         caster.Dispose();
+        rock.Dispose();
         quad.Dispose();
     }
 }

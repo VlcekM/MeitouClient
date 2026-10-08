@@ -69,7 +69,14 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         public bool Resolved;
     }
 
-    internal WorldObjectRenderer(GpuContext gpu, AssetLocator assets, WorldObjects objects)
+    /// <summary>The landmarks being collected (all zones laid out once on a worker, about a second), the class that tells them, and what they cost.</summary>
+    Task<List<(PlacedMesh Placed, float Radius)>>? landmarkTask;
+    readonly LandmarkClass? landmarkClass;
+    double landmarkMs;
+
+    /// <param name="landmarks">Collect the world's landmarks (<see cref="LandmarkClass"/>) and keep them apart from the zones, to be drawn to <see cref="LandmarkDistance"/>.
+    /// Without it (Faithful) every placement stays in its zone and the object distance rules all.</param>
+    internal WorldObjectRenderer(GpuContext gpu, AssetLocator assets, WorldObjects objects, bool landmarks = false)
     {
         Gpu = gpu;
         this.objects = objects;
@@ -83,6 +90,13 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         meshes = new ObjectMeshCache(gpu, assets, uploads);
         meshes.Unloaded = gpu => { unloadedMeshes.Add(gpu); RemoveBatches(gpu); };
         streamer = new ObjectStreamer(objects, meshes);
+        if (landmarks)
+        {
+            landmarkClass = new LandmarkClass(assets);
+            streamer.WaitForLandmarks = true;
+            var collectWatch = Stopwatch.StartNew();
+            landmarkTask = Task.Run(() => { var found = landmarkClass.Collect(objects); landmarkMs = collectWatch.Elapsed.TotalMilliseconds; return found; });
+        }
         var distant = new SurfaceMaterial { Description = "DistantTown (vertex colour x texture x 1.5)", Diffuse = DistantTowns.DiffuseTexture, VertexColours = true, SpecularMult = 0 };
         var distantDiffuse = textureCache.Get(distant.Diffuse, false);
         if (distantDiffuse is not null) distantDiffuse.KeepAllMips = true;   // its coordinates are the towns' own, not the mesh's: mip streaming leaves it
@@ -131,6 +145,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// </summary>
     public float ObjectDistance { get; set; } = 12000;
 
+    /// <summary>Landmarks (<see cref="LandmarkClass"/>) are drawn up to this distance instead of <see cref="ObjectDistance"/> (0: none, they use the object distance).</summary>
+    public float LandmarkDistance { get; set; }
+
     /// <summary>Ogre's camera LOD bias as a distance factor: the LOD value is multiplied by it, so above 1 coarser levels come sooner, below 1 later.</summary>
     public float LodBias { get; set; } = 1;
 
@@ -147,13 +164,17 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     VramGuard? guard;
     /// <summary>The ranges as drawn and streamed: the settings times the guard's scale (exactly the settings while it is 1).</summary>
     float RealRange => ObjectDistance * (guard?.RangeScale ?? 1f);
+    /// <summary>How far a landmark is drawn and streamed: <see cref="LandmarkDistance"/> times the guard's scale, never less than <see cref="RealRange"/> (0: the object distance).</summary>
+    float LandmarkReach => Math.Max(RealRange, LandmarkDistance * (guard?.RangeScale ?? 1f));
+    /// <summary>Whether the landmarks are kept apart from the zones (the renderer was made with them).</summary>
+    public bool HasLandmarks => landmarkClass is not null;
     float DistantReach => DistantRange * (guard?.RangeScale ?? 1f);
 
     /// <summary>Draw nothing but the real objects (no distant meshes): the game with distant towns off.</summary>
     public bool NoDistant { get; set; }
 
     /// <summary>Work in flight: zones being laid out, meshes decoding or uploading, textures decoding.</summary>
-    public int Pending => streamer.Pending + meshes.Pending + uploads.Count + textureCache.PendingCount + unresolvedInRange;
+    public int Pending => streamer.Pending + meshes.Pending + uploads.Count + textureCache.PendingCount + unresolvedInRange + (landmarkTask is not null ? 1 : 0);
 
     int unresolvedInRange;
     public List<string> Messages { get; } = [];
@@ -162,9 +183,16 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>GPU memory held by streamed meshes and textures, for the stats line and the window title.</summary>
     public long ResidentBytes => meshes.Bytes + textureCache.ResidentBytes;
     public string ResidentDescription => $"{meshes.Bytes / 1048576.0:0} MB in {meshes.Resident} meshes ({meshes.Unloads} unloaded, {meshes.Reloads} reloaded, {meshes.Refined} remade finer, {meshes.Coarsened} coarser), {textureCache.Describe()}";
+    /// <summary><c>MEITOU_LANDMARK_LOG=1</c>: one line per resolved landmark, nearest first: its distance, LOD levels, the finest level the mesh holds, its size.</summary>
+    string LandmarkDetail() =>
+        Environment.GetEnvironmentVariable("MEITOU_LANDMARK_LOG") == "1" && streamer.LandmarkZone is { } zone
+            ? "\n" + string.Join("\n", zone.Real.Where(i => i.Gpu is not null).OrderBy(i => Vector3.Distance(eyeNow, i.Centre)).Select(i => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"landmark  {Path.GetFileName(i.Mesh.Key),-40} {Vector3.Distance(eyeNow, i.Centre),8:0} away, radius {i.Radius,6:0}, {i.Gpu!.LevelCount} levels, finest held {i.Gpu.MinLevel}, {i.Mesh.Bytes / 1024} KB")))
+            : "";
+
     public string Describe() =>
-        $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved), {meshes.Resident}/{meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
-        $"{towns.Count(t => t.Mesh.Status == ObjectMesh.State.Resident)}/{towns.Count} distant towns; {objects.Describe()}";
+        $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved{(streamer.LandmarkZone is { } lz ? $", of them {lz.Real.Count(i => i.Gpu is not null)} of {lz.Real.Count} landmarks" : "")}), {meshes.Resident}/{meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
+        $"{towns.Count(t => t.Mesh.Status == ObjectMesh.State.Resident)}/{towns.Count} distant towns; {objects.Describe()}{LandmarkDetail()}";
 
     // ------------------------------------------------------------------ streaming
 
@@ -207,10 +235,26 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         bool unlimited = budgetMs > 1e8;
         float streamRange = (NoDistant ? RealRange : Math.Max(RealRange, DistantReach)) + WorldLayout.ZoneSize * 0.5f;
         streamer.Paused = guard is { Streaming: false };
+        if (landmarkTask is { IsCompleted: true } collected)
+        {
+            landmarkTask = null;
+            if (collected.IsCompletedSuccessfully)
+            {
+                streamer.Landmarks = landmarkClass;
+                streamer.SetLandmarks(collected.Result);
+                Console.WriteLine($"landmarks {collected.Result.Count} placements of radius {LandmarkClass.MinRadius:0}+ kept apart from the zones ({landmarkClass!.Probes} mesh bounds read, {landmarkClass.WholeReads} of them whole files; {landmarkMs:0} ms on the workers)");
+            }
+            else
+            {
+                streamer.WaitForLandmarks = false;   // the zones keep them: drawn to the object distance
+                Console.WriteLine($"warning   landmarks: {collected.Exception?.GetBaseException().Message}");
+            }
+        }
         streamer.Update(eye, streamRange, unlimited ? 64 : 1);
         double tZones = watch.Elapsed.TotalMilliseconds;
         ResolveTowns(eye);
         unresolvedInRange = streamer.Scan(eye, RealRange, DistantReach, NoDistant, Resolve, unlimited ? int.MaxValue : 40);
+        unresolvedInRange += streamer.ScanLandmarks(eye, LandmarkReach, Resolve, unlimited ? int.MaxValue : 10);
         double tScan = watch.Elapsed.TotalMilliseconds;
         meshes.Pump();
         MarkInRange(eye, force: unlimited);
@@ -221,6 +265,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             foreach (var zone in streamer.AllZones)
                 foreach (var inst in zone.Real.Concat(zone.Stand))
                     if (inst.Gpu is { } resolved && unloadedMeshes.Contains(resolved)) Unresolve(zone, inst);
+            if (streamer.LandmarkZone is { } landmarkZone)
+                foreach (var inst in landmarkZone.Real)
+                    if (inst.Gpu is { } resolved && unloadedMeshes.Contains(resolved)) Unresolve(landmarkZone, inst);
             unloadedMeshes.Clear();
         }
         textureCache.Pump(wait: unlimited, max: unlimited ? 16 : 8, budgetMs: Math.Max(budgetMs * 0.5, 0.5));
@@ -290,6 +337,11 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         {
             foreach (var inst in zone.Real) Mark(inst, RealRange);
             if (!NoDistant) foreach (var inst in zone.Stand) Mark(inst, DistantReach);
+        }
+        if (streamer.LandmarkZone is { } landmarkZone)
+        {
+            float reach = LandmarkReach;
+            foreach (var inst in landmarkZone.Real) Mark(inst, reach);
         }
         // Mip streaming: each texture's nearest user, over how large a texel is there.
         foreach (var set in markedSets)
@@ -471,37 +523,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         foreach (var zone in streamer.ZonesNear(eye, Math.Max(real, NoDistant ? 0 : DistantReach), frustum))
         {
             if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) <= real)
-                foreach (var inst in zone.Real)
-                {
-                    if (inst.Gpu is not { } gpu) continue;
-                    if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); continue; }
-                    float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
-                    float limit = Math.Min(real, inst.Limit);
-                    if (value >= limit || !SphereVisible(frustum, inst.Centre, inst.Radius))
-                    {
-                        if (value >= inst.Limit && value < real) PartLimited++;   // stopped by the game's part distance, not the object distance (benchmark)
-                        continue;
-                    }
-                    float w = ObjectRanges.EdgeWeight(value, limit, Math.Clamp(limit * 0.1f, 50, 1500));
-                    if (w <= 0) continue;
-                    inst.Mesh.LastUsed = now;
-                    DrawnInstances++;
-                    if (inst.TerrainMode && options.Textures)
-                    {
-                        // The terrain shader's path: one draw each, no fading, the level the game would pick.
-                        int level = MeshLod.Select(gpu.Distances, value * LodBias);
-                        var g = gpu.Manual[level] ?? gpu;
-                        int lv = gpu.Manual[level] is null ? level : 0;
-                        foreach (var gp in g.Parts)
-                            if (gp.Count[lv] > 0)
-                            {
-                                terrainMeshes.Add((meshes.PlainMesh(gp, lv), gp.Count[lv], inst.Transform));
-                                DrawnTriangles += gp.Count[lv] / 3;
-                            }
-                        continue;
-                    }
-                    Emit(inst, gpu, value, w);
-                }
+                foreach (var inst in zone.Real) DrawReal(zone, inst, real, eye, frustum, options, now);
             if (NoDistant) continue;
             foreach (var inst in zone.Stand)
             {
@@ -515,6 +537,12 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 DrawnInstances++;
                 Emit(inst, gpu, value, w);
             }
+        }
+        // The landmarks (a few hundred, kept apart from the zones): the same test with their own reach, the part distance still applying.
+        if (streamer.LandmarkZone is { } landmarkZone)
+        {
+            float reach = LandmarkReach;
+            foreach (var inst in landmarkZone.Real) DrawReal(landmarkZone, inst, reach, eye, frustum, options, now);
         }
         if (!NoDistant)
             foreach (var t in towns)
@@ -577,6 +605,42 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         if (ObjTiming) ObjAccount(depthPass ? 1 : 0, tCull, tUpload, tBatches, LastDrawCpuMs, batchDraws, DrawCalls - batchDraws, recordMs);
     }
 
+
+    /// <summary>
+    /// One real instance of <see cref="Draw"/>: culled by its range (<paramref name="range"/>, the object distance or, for a landmark, the landmark reach,
+    /// and its part distance) and the frustum, then its LOD level and batches. The range is the one <see cref="MarkInRange"/> and the streamer's scans use.
+    /// </summary>
+    void DrawReal(ObjectStreamer.Zone zone, ObjectStreamer.Instance inst, float range, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, long now)
+    {
+        if (inst.Gpu is not { } gpu) return;
+        if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); return; }
+        float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
+        float limit = Math.Min(range, inst.Limit);
+        if (value >= limit || !SphereVisible(frustum, inst.Centre, inst.Radius))
+        {
+            if (value >= inst.Limit && value < range) PartLimited++;   // stopped by the game's part distance, not the object distance (benchmark)
+            return;
+        }
+        float w = ObjectRanges.EdgeWeight(value, limit, Math.Clamp(limit * 0.1f, 50, 1500));
+        if (w <= 0) return;
+        inst.Mesh.LastUsed = now;
+        DrawnInstances++;
+        if (inst.TerrainMode && options.Textures)
+        {
+            // The terrain shader's path: one draw each, no fading, the level the game would pick.
+            int level = MeshLod.Select(gpu.Distances, value * LodBias);
+            var g = gpu.Manual[level] ?? gpu;
+            int lv = gpu.Manual[level] is null ? level : 0;
+            foreach (var gp in g.Parts)
+                if (gp.Count[lv] > 0)
+                {
+                    terrainMeshes.Add((meshes.PlainMesh(gp, lv), gp.Count[lv], inst.Transform));
+                    DrawnTriangles += gp.Count[lv] / 3;
+                }
+            return;
+        }
+        Emit(inst, gpu, value, w);
+    }
 
     /// <summary><c>MEITOU_OBJECT_TIMING=1</c>: the CPU time of <see cref="Draw"/>'s steps summed over the run by kind (colour or depth), with the
     /// draws each issued, printed when the renderer is disposed (docs/renderer-native.md 7.1, wave 3 objects).</summary>

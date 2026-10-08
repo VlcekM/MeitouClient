@@ -95,7 +95,7 @@ public static class ImpostorLayout
 /// instance of the mesh is on the screen at the reference transition distance (<see cref="For"/>), so a small bush gets a 64-pixel frame and a
 /// big tree a 256-pixel one; the grid is the same for all (<see cref="DefaultGrid"/>).
 /// </summary>
-public readonly record struct ImpostorClass(string Name, int FramePixels, int Grid, float BakeDistance = ImpostorClass.ReferenceDistance)
+public readonly record struct ImpostorClass(string Name, int FramePixels, int Grid, float BakeDistance = ImpostorClass.ReferenceDistance, float Knee = 0)
 {
     /// <summary>
     /// The small class (docs/impostors.md section 11): meshes whose largest instance is under <see cref="MinimumRadius"/> but at least
@@ -117,7 +117,10 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     /// The ground distance from which a mesh of this class is its impostor, given the user's impostor distance (<paramref name="impostorDistance"/>, 4000 by
     /// default) and the radius of its largest instance: that distance for medium and large atlases, and in proportion to the radius for the small class.
     /// </summary>
-    public float Transition(float worldRadius, float impostorDistance) => IsSmall ? impostorDistance * worldRadius / MinimumRadius : impostorDistance;
+    public float Transition(float worldRadius, float impostorDistance) =>
+        IsSmall ? impostorDistance * worldRadius / MinimumRadius
+        : Knee > 0 && worldRadius > Knee ? impostorDistance * worldRadius / Knee   // a TERRAIN-mode rock larger than its frame is magnified by (see ForRock)
+        : impostorDistance;
 
     /// <summary>Instances smaller than this (radius in world units at the record's largest scale) get no impostor.</summary>
     public const float MinimumRadius = 48;
@@ -148,15 +151,33 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     /// (<see cref="SmallMinimumRadius"/> and up, and <paramref name="triangles"/> at least <see cref="SmallMinimumTriangles"/>; the count is optional, a caller that
     /// does not know it gets the class by size alone).
     /// </summary>
-    public static ImpostorClass? For(float worldRadius, int triangles = int.MaxValue)
+    public static ImpostorClass? For(float worldRadius, int triangles = int.MaxValue) => For(worldRadius, triangles, MaxFrame);
+
+    /// <summary>The largest frame of a TERRAIN-mode rock's atlas (<c>MEITOU_IMPOSTOR_ROCK_MAX_FRAME</c>, 256 by default; docs/impostors.md section 13): the rocks that
+    /// are mountains define the skyline, and at the transition distance a radius of 600 to 1000 units is 350 to 580 pixels across, more than a 256 pixel frame magnifies well.</summary>
+    public static readonly int RockMaxFrame = (int)EnvFloat("MEITOU_IMPOSTOR_ROCK_MAX_FRAME", 256, 64);
+
+    /// <summary>
+    /// <see cref="For"/> for a TERRAIN-mode rock (docs/impostors.md section 13): the same size rule, except that a rock too large for <see cref="RockMaxFrame"/>
+    /// (a radius of about 620 units and more at the reference distance) is not magnified more than the rule allows but switches to its impostor further out, in
+    /// proportion to its radius (<see cref="Knee"/>): the owner's rule of one atlas texel per pixel at the transition, the one the small class has the other way round.
+    /// </summary>
+    public static ImpostorClass? ForRock(float worldRadius, int triangles = int.MaxValue) => For(worldRadius, triangles, RockMaxFrame, rock: true);
+
+    static ImpostorClass? For(float worldRadius, int triangles, int maxFrame, bool rock = false)
     {
         if (worldRadius < MinimumRadius)
             return SmallEnabled && worldRadius >= SmallMinimumRadius && triangles >= SmallMinimumTriangles
                 ? new ImpostorClass("small", SmallFrame, SmallGrid, ReferenceDistance * worldRadius / MinimumRadius) : null;
         float need = ScreenDiameter(worldRadius) / Magnification;
         int frame = MinFrame;
-        while (frame < need && frame < MaxFrame) frame *= 2;
-        return new ImpostorClass(frame.ToString(System.Globalization.CultureInfo.InvariantCulture), frame, DefaultGrid);
+        while (frame < need && frame < maxFrame) frame *= 2;
+        string name = frame.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (!rock || need <= frame) return new ImpostorClass(name, frame, DefaultGrid);
+        // The radius at which this frame is magnified exactly as much as allowed at the reference distance: beyond it the transition (and the distance the bake's
+        // texture detail is matched to) grows with the radius.
+        float knee = ScreenDiameter(1) > 0 ? frame * Magnification / ScreenDiameter(1) : float.MaxValue;
+        return new ImpostorClass(name, frame, DefaultGrid, ReferenceDistance * worldRadius / knee, knee);
     }
 
     /// <summary>

@@ -41,18 +41,7 @@ sealed partial class GameHost
         // The viewer's debug overlays (docs/engine.md): F10 the key list, F11 the frame statistics, F12 the profiler chart.
         var profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
         // Shift+F1 upwards: the viewer's Faithful / Meitou switches (its F1 upwards; plain F2..F4 and F8 are the game's speed and screenshot keys).
-        var switches = Enhancements.Create(o.Post, () => gpu.Sky.HazeStrength, v => gpu.Sky.HazeStrength = v,
-            () => gpu.Shadow?.Meitou ?? o.MeitouShadows, v =>
-            {
-                // The shadow distance follows the mode's default unless the Tab slider moved it.
-                bool was = o.MeitouShadows;
-                o.MeitouShadows = v;
-                if (gpu.Shadow is not { } s) return;
-                if (MathF.Abs(s.Settings.Range - o.ShadowRangeFor(was)) < 1) s.Settings = s.Settings with { Range = o.ShadowRangeFor(v) };
-                s.Meitou = v;
-            },
-            () => gpu.Foliage?.MeitouRange ?? o.MeitouRange, v => { o.MeitouRange = v; if (gpu.Foliage is { } f) f.MeitouRange = v; },
-            () => gpu.Foliage?.Impostors ?? o.Impostors, v => { o.Impostors = v; if (gpu.Foliage is { } f) f.Impostors = v; });
+        var switches = WorldFrame.LiveSwitches(o, () => gpu, () => camera, () => render);
         var panel = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render, switches: switches);
         if (panel is not null)
             foreach (var slider in panel.Sliders)

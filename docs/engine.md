@@ -508,7 +508,7 @@ Meitou ranges draw a quarter of the trees view's meshes while reaching 1000 unit
 number of instances in range (Faithful's 4.1 ms of culling in the trees view against 1.2). The longer near reach (the longest class range,
 5000, against 4000) lays out 1.5 times the meshes on the worker threads and doubles the settle time of a still picture; at 8000 it is 2.5 times.
 The low and default rows differ by less than the noise. GPU frame times were 3.7-5.7 ms in all rows.
-*Later (2026-10-07): the Meitou defaults became 12000 / 5000 / 800 with billboards beyond 4000, so the "default" row above is the old default; see renderer-native.md 8.10.*
+*Later (2026-10-07): the Meitou defaults became 12000 / 5000 / 800 with billboards beyond 4000, so the "default" row above is the old default; see renderer-native.md 8.10.* *Then 50000 / 12000 / 800 (renderer-native.md 8.19).*
 
 ### Reading
 

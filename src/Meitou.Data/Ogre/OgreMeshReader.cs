@@ -16,6 +16,56 @@ public static class OgreMeshReader
 
     public static OgreMesh ReadFile(string path) => Read(File.ReadAllBytes(path));
 
+    /// <summary>
+    /// The mesh's bounds box without reading its geometry: walks the <c>M_MESH</c> sub-chunks by their length fields (seeking over the vertex and index
+    /// data) to <c>M_MESH_BOUNDS</c>. False when the walk meets a chunk it does not know, runs off the file, or the file has no bounds: the lengths of
+    /// old exporters can be wrong (see the class comment), so the caller then reads the whole file with <see cref="ReadFile"/>.
+    /// </summary>
+    public static bool TryReadBounds(string path, out OgreBounds bounds)
+    {
+        bounds = default;
+        try
+        {
+            using var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan);
+            Span<byte> head = stackalloc byte[6];
+            if (f.Read(head) < 6 || BitConverter.ToUInt16(head) != 0x1000) return false;
+            // The version line: "[MeshSerializer_v1.x]" and a newline; its bytes sit between the id and the first chunk.
+            f.Position = 2;
+            var line = new byte[40];
+            int n = f.Read(line, 0, line.Length);
+            int end = Array.IndexOf(line, (byte)'\n', 0, n);
+            if (end < 0) return false;
+            string version = System.Text.Encoding.ASCII.GetString(line, 0, end).TrimEnd('\r');
+            if (version is not (Version1_100 or Version1_8 or Version1_41)) return false;
+            f.Position = 2 + end + 1;
+            Span<byte> chunk = stackalloc byte[6];
+            if (f.Read(chunk) < 6 || BitConverter.ToUInt16(chunk) != (ushort)Mesh) return false;
+            if (f.ReadByte() < 0) return false;   // skeletally animated
+            while (f.Position + 6 <= f.Length)
+            {
+                if (f.Read(chunk) < 6) return false;
+                ushort id = BitConverter.ToUInt16(chunk);
+                long length = BitConverter.ToUInt32(chunk[2..]);
+                if (id == (ushort)MeshBounds)
+                {
+                    Span<byte> box = stackalloc byte[28];
+                    if (f.Read(box) < 28) return false;
+                    var min = new Vector3(BitConverter.ToSingle(box), BitConverter.ToSingle(box[4..]), BitConverter.ToSingle(box[8..]));
+                    var max = new Vector3(BitConverter.ToSingle(box[12..]), BitConverter.ToSingle(box[16..]), BitConverter.ToSingle(box[20..]));
+                    bounds = new OgreBounds(min, max, BitConverter.ToSingle(box[24..]));
+                    return float.IsFinite(min.X + min.Y + min.Z + max.X + max.Y + max.Z);
+                }
+                if (id is not ((ushort)Geometry or (ushort)SubMesh or (ushort)MeshSkeletonLink or (ushort)MeshBoneAssignment or (ushort)OgreMeshChunk.MeshLodLevel
+                    or (ushort)SubMeshNameTable or (ushort)EdgeLists or (ushort)Poses or (ushort)Animations or (ushort)TableExtremes)) return false;
+                long next = f.Position + length - 6;
+                if (length < 6 || next > f.Length) return false;
+                f.Position = next;
+            }
+            return false;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return false; }
+    }
+
     public static OgreMesh Read(byte[] data)
     {
         var s = new OgreStream(data);

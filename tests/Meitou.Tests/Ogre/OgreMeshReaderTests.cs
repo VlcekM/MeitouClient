@@ -87,6 +87,31 @@ public class OgreMeshReaderTests
     }
 
     [Fact]
+    public void Reads_the_bounds_without_the_geometry_and_gives_up_on_anything_odd()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"meitou-bounds-{Guid.NewGuid():N}.mesh");
+        try
+        {
+            foreach (var version in new[] { OgreMeshReader.Version1_100, OgreMeshReader.Version1_8, OgreMeshReader.Version1_41 })
+            {
+                var bytes = Triangle(version).End().ToArray();
+                File.WriteAllBytes(path, bytes);
+                Assert.True(OgreMeshReader.TryReadBounds(path, out var bounds));
+                Assert.Equal(OgreMeshReader.Read(bytes).Bounds, bounds);
+            }
+            var whole = Triangle(OgreMeshReader.Version1_100).End().ToArray();
+            File.WriteAllBytes(path, whole[..^40]);   // the bounds chunk is cut off
+            Assert.False(OgreMeshReader.TryReadBounds(path, out _));
+            // A chunk id the walk does not know ends it: the caller reads the whole file.
+            var unknown = new Builder(OgreMeshReader.Version1_100).Begin(OgreMeshChunk.Mesh).Bool(true).Begin((OgreMeshChunk)0x7777).End().End().ToArray();
+            File.WriteAllBytes(path, unknown);
+            Assert.False(OgreMeshReader.TryReadBounds(path, out _));
+            Assert.False(OgreMeshReader.TryReadBounds(Path.Combine(Path.GetTempPath(), "meitou-no-such-file.mesh"), out _));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void Reads_generated_lod_in_both_layouts()
     {
         var v1100 = OgreMeshReader.Read(Triangle(OgreMeshReader.Version1_100)

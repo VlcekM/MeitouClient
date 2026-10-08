@@ -54,6 +54,8 @@ static class MeitouShadowShaders
             return mix(1.0, lit, w);
         }
 
+        // A program may define MS_NO_BLOCKER_SEARCH before including this: its receivers then filter at the minimum radius without the
+        // blocker search (the impostors: far, a few pixels per crown, and the search was 30 % of their cost; docs/impostors.md section 14).
         #ifdef MEITOU_FRAGMENT
         // Interleaved gradient noise (Jimenez 2014): a per-pixel angle whose neighbours differ, so a few taps look like many.
         float msNoise(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
@@ -77,6 +79,7 @@ static class MeitouShadowShaders
             vec2 slope = vec2(nl.x, nl.y) * (uMsBox[c].x / (nz * uMsBox[c].y));
             float angle = noise * 6.2831853;
             vec2 rot = vec2(cos(angle), sin(angle));
+            #ifndef MS_NO_BLOCKER_SEARCH
             if (uMsFlags.x > 0.5)
             {
                 // Blocker search: the mean depth of what lies nearer the sun than the point, within the widest penumbra.
@@ -95,6 +98,7 @@ static class MeitouShadowShaders
                 float blocker = sum / found;
                 radius = clamp(radius + (t.z - blocker) * uMsBox[c].y * uMsBox[c].w, radius, uMsBox[c].z);
             }
+            #endif
             float lit = 0.0;
             for (int k = 0; k < {{FilterTaps}}; k++)
             {

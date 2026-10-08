@@ -44,6 +44,21 @@ public class ImpostorTests
     }
 
     [Fact]
+    public void Rock_class_caps_the_frame_and_moves_the_transition_out_for_huge_rocks()
+    {
+        var ordinary = ImpostorClass.ForRock(300)!.Value;
+        Assert.Equal(ImpostorClass.For(300)!.Value, ordinary);
+        Assert.Equal(ImpostorClass.ReferenceDistance, ordinary.Transition(300, ImpostorClass.ReferenceDistance));
+        var huge = ImpostorClass.ForRock(2400)!.Value;
+        Assert.True(huge.FramePixels <= ImpostorClass.RockMaxFrame);
+        Assert.True(huge.Knee > 0 && huge.Knee < 2400);
+        Assert.True(huge.Transition(2400, 4000) > 4000);
+        Assert.Equal(4000f * 2400 / huge.Knee, huge.Transition(2400, 4000), 1);
+        // Trees (For) keep their transition whatever the radius.
+        Assert.Equal(4000f, ImpostorClass.For(2400)!.Value.Transition(2400, 4000));
+    }
+
+    [Fact]
     public void Frame_basis_is_orthonormal_and_right_handed()
     {
         for (int i = 0; i < 12; i++)
