@@ -133,7 +133,6 @@ public sealed class ZoneNavMesh
         {
             Columns = (int)MathF.Ceiling((m.BoundsMax.X - m.BoundsMin.X) / Cell) + 1;
             Rows = (int)MathF.Ceiling((m.BoundsMax.Y - m.BoundsMin.Y) / Cell) + 1;
-            var lists = new List<int>?[Columns * Rows];
             Min = new Vector2[m.PolygonCount];
             Max = new Vector2[m.PolygonCount];
             for (int p = 0; p < m.PolygonCount; p++)
@@ -142,12 +141,28 @@ public sealed class ZoneNavMesh
                 var hi = new Vector2(float.MinValue);
                 foreach (int i in m.Polygons[p]) { var v = m.Vertices[i]; lo = Vector2.Min(lo, new(v.X, v.Z)); hi = Vector2.Max(hi, new(v.X, v.Z)); }
                 Min[p] = lo; Max[p] = hi;
-                int x0 = Col(lo.X - m.BoundsMin.X), x1 = Col(hi.X - m.BoundsMin.X), z0 = Row(lo.Y - m.BoundsMin.Y), z1 = Row(hi.Y - m.BoundsMin.Y);
-                for (int z = z0; z <= z1; z++)
-                    for (int x = x0; x <= x1; x++) (lists[z * Columns + x] ??= []).Add(p);
             }
-            Cells = lists.Select(l => l?.ToArray() ?? []).ToArray();
+            // Two passes over the boxes: count the polygons per cell, then fill exact arrays (ascending polygon order in every cell).
+            var counts = new int[Columns * Rows];
+            for (int p = 0; p < m.PolygonCount; p++)
+            {
+                var (x0, x1, z0, z1) = CellRange(m, p);
+                for (int z = z0; z <= z1; z++)
+                    for (int x = x0; x <= x1; x++) counts[z * Columns + x]++;
+            }
+            Cells = new int[counts.Length][];
+            for (int c = 0; c < counts.Length; c++) Cells[c] = counts[c] == 0 ? [] : new int[counts[c]];
+            Array.Clear(counts);
+            for (int p = 0; p < m.PolygonCount; p++)
+            {
+                var (x0, x1, z0, z1) = CellRange(m, p);
+                for (int z = z0; z <= z1; z++)
+                    for (int x = x0; x <= x1; x++) { int c = z * Columns + x; Cells[c][counts[c]++] = p; }
+            }
         }
+
+        (int X0, int X1, int Z0, int Z1) CellRange(ZoneNavMesh m, int p) =>
+            (Col(Min[p].X - m.BoundsMin.X), Col(Max[p].X - m.BoundsMin.X), Row(Min[p].Y - m.BoundsMin.Y), Row(Max[p].Y - m.BoundsMin.Y));
 
         public int Col(float v) => Math.Clamp((int)(v / Cell), 0, Columns - 1);
         public int Row(float v) => Math.Clamp((int)(v / Cell), 0, Rows - 1);
