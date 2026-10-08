@@ -17,6 +17,10 @@ public sealed class WorldWeather
     WeatherTime? last;
     int lastSerial = -1;
     string lastForced = "";
+    Vector3? eye;   // the camera of the last update
+
+    /// <summary>The zone the camera of the last update is in (as <c>--zone</c> names it), null before the first.</summary>
+    public ZoneCoordinate? CameraZone => eye is { } e ? WorldLayout.ZoneOf(e.X, e.Z) : null;
 
     readonly Meitou.Data.GameDatabase? database;
     readonly Dictionary<WeatherDef, IReadOnlyList<Meitou.Data.Particles.WeatherEffectEntry>> effectLists = new(ReferenceEqualityComparer.Instance);
@@ -46,6 +50,7 @@ public sealed class WorldWeather
     /// </summary>
     public WeatherState Update(Vector3 eye, double hour, float sunHeight, bool held)
     {
+        this.eye = eye;
         float real = held || !clock.IsRunning ? 0 : (float)Math.Min(clock.Elapsed.TotalSeconds, 0.25);
         clock.Restart();
         var times = FrameTimes.FromClock(real, GameSpeed, Paused);
@@ -65,6 +70,26 @@ public sealed class WorldWeather
         LogChange(state);
         return state;
     }
+
+    /// <summary>
+    /// The Tab panel's "Reroll weather": the camera region starts a different weather of its season now (a forced weather is released first), and the sky,
+    /// fog and ramps snap to it. Returns the line the panel shows.
+    /// </summary>
+    public string Reroll()
+    {
+        World.ForceWeather((WeatherDef?)null, snap: true);
+        if ((World.CameraRegion ?? (eye is { } e ? World.RegionAt(e.X, e.Z) : null)) is not { } region) return "No weather region at the camera yet.";
+        string before = region.Weather.Name;
+        if (!region.Reroll(World.Time)) return $"{region.Def.Name} ({region.Season.Season.Name}) has no other weather than {before}.";
+        World.Snap();
+        Console.WriteLine($"weather   rerolled {region.Def.Name}: {before} -> {region.Weather.Name}");
+        return $"{region.Def.Name}: {before} -> {region.Weather.Name}, strength {region.Strength:0.00}, for {FormatMinutes(region.WeatherEndMinute - World.Time.Minutes)}.";
+    }
+
+    /// <summary>The question the panel asks before <see cref="Reroll"/>.</summary>
+    public string RerollQuestion() => (World.CameraRegion ?? (eye is { } e ? World.RegionAt(e.X, e.Z) : null)) is { } region
+        ? World.ForcedWeather is { } f ? $"Release the forced {f.Name} and reroll the weather of {region.Def.Name}?" : $"Reroll the weather of {region.Def.Name} (now {region.Weather.Name})?"
+        : "Reroll the weather?";
 
     /// <summary>Maps the state onto the sky renderer's weather inputs.</summary>
     public void Apply(SkyRenderer sky)

@@ -150,6 +150,23 @@ public class WeatherTests
     }
 
     [Fact]
+    public void Reroll_starts_a_different_weather_of_the_season_and_fails_without_one()
+    {
+        var a = Weather("A"); var b = Weather("B"); var c = Weather("C");
+        var region = OneRegion(Season("s", 0, 1, Entry(a, 1, 500, 500), Entry(b, 1, 500, 500), Entry(c, 0, 500, 500)));
+        for (int i = 0; i < 50; i++)
+        {
+            string before = region.Weather.Name;
+            var now = WeatherTime.At(0, i * 0.1);
+            Assert.True(region.Reroll(now));
+            Assert.NotEqual(before, region.Weather.Name);
+            Assert.NotEqual("C", region.Weather.Name);                                  // weight 0 stays out
+            Assert.Equal(now.Minutes, region.WeatherStartMinute);
+        }
+        Assert.False(OneRegion(Season("one", 0, 1, Entry(a, 1, 500, 500))).Reroll(WeatherTime.At(0, 1)));
+    }
+
+    [Fact]
     public void Time_limited_weathers_only_count_inside_their_hours_and_end_at_the_end_time()
     {
         var plain = Weather("plain");

@@ -604,6 +604,8 @@ the game time it passes in; nothing reads a clock, so a seed and a call sequence
   frame times (`FrameTimes.FromClock`: real time measured by the weather, at most 0.25 s a frame; the game passes its speed and paused flag, the viewer
   is at speed 1 and never paused) and the sun height. A held frame (`--screenshot`, `PostProcess.InstantAdaptation`) has dt 0, and the first
   frame is a teleport, so a picture shows the settled state (sky, clouds, fog, wetness and haze snapped).
+- **Reroll** (Tab panel, a viewer tool, not the game's): `WorldWeather.Reroll` releases a forced weather and calls `WeatherRegion.Reroll` on the camera region, which starts a
+  different weather of the current season now (weighted pick without the current weather and weight-0 entries; new duration and strength), then snaps.
 - **Schedule from day 0**: the world is created at day 0, 00:00 and the regions run in game minutes up to the shown time, so `--day 52 --time 14`
   shows what `meitou-tools weather --region <r> --days 0 100 --seed 1` lists at that time (same seed, default 1; `--weather-seed`). A step
   forward in time (the `]` key, the time slider) replays the schedule through the jump, and a jump of more than an hour snaps everything. **Observed**:

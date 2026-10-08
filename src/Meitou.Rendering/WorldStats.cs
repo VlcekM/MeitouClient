@@ -18,7 +18,7 @@ static class WorldStats
     {
         if (gpu.Weather is not { } w) return;
         var s = w.State;
-        stats.Add($"weather     {w.Describe()}");
+        stats.Add($"weather     zone {(w.CameraZone is { } z ? $"{z.X},{z.Y}" : "-")}; {w.Describe()}");
         stats.Add($"  sky x {s.SkyColourMultiplier.X:0.00} {s.SkyColourMultiplier.Y:0.00} {s.SkyColourMultiplier.Z:0.00}, clouds {s.CloudDensity:0.00}, fog {(s.FogEnabled > 0 ? $"{s.FogEnabled:0.00} to {s.FogDistance:0}" : "off")}, rain {s.Rain:0}, wet {s.Wetness:0.00}");
     }
 

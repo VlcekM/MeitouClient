@@ -803,6 +803,8 @@ static class WorldFrame
         var toggles = switches?.Select(e => new Toggle(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful)).ToList();
         // The billboard (impostor atlas) disk cache: deleted files are baked again when next needed; the resident atlases stay until evicted.
         var actions = new List<PanelAction>();
+        if (g.Weather is { } weather)
+            actions.Add(new PanelAction("Reroll weather", weather.RerollQuestion, weather.Reroll));
         if (g.Foliage?.ImpostorDiskCache is { } cache)
             actions.Add(new PanelAction("Delete billboard cache", () =>
             {

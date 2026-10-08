@@ -126,12 +126,24 @@ public sealed class WeatherRegion
 
     // ---- choosing ----
 
-    void StartWeather(WeatherTime now, bool first, RegionFog previousFog = default)
+    /// <summary>
+    /// The viewer's "reroll weather" (not the game's): starts a different weather of the current season now, by the same weighted pick among the
+    /// candidates other than the current one, with a new duration and strength. False when the season has no other candidate.
+    /// </summary>
+    public bool Reroll(WeatherTime now)
+    {
+        if (Choose(Season.Season, now.WholeHour, exclude: WeatherEntryIndex) < 0) return false;
+        StartWeather(now, first: false, FogAt(now.Minutes), reroll: true);
+        SyncWind(now.Minutes);
+        return true;
+    }
+
+    void StartWeather(WeatherTime now, bool first, RegionFog previousFog = default, bool reroll = false)
     {
         double t = now.Minutes;
         var season = Season.Season;
 
-        int entry = Choose(season, now.WholeHour);
+        int entry = reroll ? Choose(season, now.WholeHour, exclude: WeatherEntryIndex) : Choose(season, now.WholeHour);
         var chosen = season.Weathers[entry];
         int minutes = RollMinutes(chosen.MinMinutes, chosen.MaxMinutes);
         double end = t + minutes;
@@ -171,18 +183,20 @@ public sealed class WeatherRegion
 
     /// <summary>
     /// The index of the season's next weather: a weighted pick among the weathers with weight above 0 that are not out of their time window (the
-    /// controller's whole hour in [start, end]); a single candidate is taken as is, none gives the season's last weather.
+    /// controller's whole hour in [start, end]); a single candidate is taken as is, none gives the season's last weather. With <paramref name="exclude"/>
+    /// (the reroll) that entry and entries of the same weather are no candidates, and none gives −1.
     /// </summary>
-    int Choose(SeasonDef season, int hour)
+    int Choose(SeasonDef season, int hour, int exclude = -1)
     {
         var candidates = new List<int>(season.Weathers.Count);
         long sum = 0;
         for (int i = 0; i < season.Weathers.Count; i++)
         {
             var w = season.Weathers[i];
+            if (exclude >= 0 && ReferenceEquals(w.Weather, season.Weathers[exclude].Weather)) continue;
             if (w.Weight > 0 && w.Weather.IsInWindow(hour)) { candidates.Add(i); sum += w.Weight; }
         }
-        if (candidates.Count == 0) return season.Weathers.Count - 1;
+        if (candidates.Count == 0) return exclude >= 0 ? -1 : season.Weathers.Count - 1;
         if (candidates.Count == 1) return candidates[0];
         double r = random.NextDouble() * sum;
         long running = 0;
