@@ -173,8 +173,10 @@ public sealed unsafe class SkyRenderer : IDisposable
                 pixel *= 1.0 - clamp(density, 0.0, 1.0) * uCloudLight.a;
                 // Below d.y = 0.05 the alpha is the uniform horizon value, but the colour above still followed the texture lookups, whose uv runs to hundreds of units
                 // there (height / d.y): minified to a few texels they sparkle (a row of white ticks along the horizon). The colour gives way to the plain
-                // density-0 value below d.y = 0.05 (from 0.01 up; above 0.05 the layer is untouched).
-                pixel = mix(uCloudLight.rgb + uCloudSun.rgb, pixel, clamp((d.y - 0.01) / 0.04, 0.0, 1.0));
+                // horizonClouds colour below d.y = 0.05 (from 0.01 up; above 0.05 the layer is untouched): the game's own horizon cloud colour, darkened
+                // like the layer (an undarkened target drew a white band at c = 1, docs/formats/sky.md), and the colour the haze is pulled to.
+                vec3 plain = clamp(uCloudLight.rgb + uCloudSun.rgb * (1.0 - 0.1 * (o + 0.2) * MULT), 0.0, 1.0) * (1.0 - uCloudLight.a);
+                pixel = mix(plain, pixel, clamp((d.y - 0.01) / 0.04, 0.0, 1.0));
                 float alpha = density * clamp(1.0 - tile + o, 0.0, 1.0);
                 alpha = mix(o + 0.5, alpha, band);
                 col = mix(col, clamp(pixel, 0.0, 1.0) * sqrt(SKYX_EXPOSURE), clamp(alpha, 0.0, 1.0));

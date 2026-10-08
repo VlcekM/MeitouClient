@@ -15,7 +15,7 @@ public class LegacySpirvGoldenTests
     static readonly Dictionary<string, (string Plain, string Remap)> Golden = new()
     {
         ["sky simple"] = ("8CFB64AEBF8222327737BB1CBFE25C83", "4FA13EF63843235F949CF456477373F1"),
-        ["sky"] = ("F571E5549913901BD4AB6E124EC65F3F", "780B03069841750E05223FA709329F56"),   // the SkyX cloud pass
+        ["sky"] = ("EECA10F7D14E9F7D73315F5B375E4D62", "2A88B1820A089F99D4A46EFE6A40D58B"),   // the SkyX cloud pass
         ["water"] = ("B26305EB7095A6AEA50BC0F5E32B11B6", "516EEFBCB20A6AD06E9EA03B71A9FC97"),
         ["debug overlay"] = ("2967439E6B38320ED5326B2EF7EA984C", "FFCCCC151047230FD630483A92FEA9E2"),
         ["terrain patch"] = ("D68158C270DBE5189F2168B32FB25756", "D59A8BF6D99684353A3D178B1A1311C2"),   // the layer skip (0 px); the sandbox grid (off outside --sandbox)
