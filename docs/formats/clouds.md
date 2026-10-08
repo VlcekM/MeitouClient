@@ -139,12 +139,52 @@ taken in such a weather is **Observed** (the weather was not logged).
 
 ## In the viewer
 
-Today `SkyRenderer` draws a flat layer of `Clouds.dds`'s red channel with a stand-in light ([sky.md](sky.md#in-the-viewer)).
-What a faithful pass needs is in the plan at the end of [weather.md](weather.md#implementation-plan).
+Implemented 2026-10-08 (step 1 of the plan in [weather.md](weather.md#implementation-plan)): `SkyRenderer`'s sky fragment shader runs the
+pass above per pixel (the dome direction is the view ray), `Meitou.Data.World.CloudLayer` holds the numbers (options, `DensityOffset`,
+`Darkness`, `zenithLight`, the `horizonClouds` colour, the coverage computation, the drift offset), pinned by `CloudLayerTests` (the
+coverage table is recomputed from the shipped textures and must match the one above).
+
+- **Order**: sky, stars, **clouds**, moon, all in the one sky pass; the clouds are alpha-blended in HDR (`mix(sky, cloud, alpha)`).
+- **Inputs on `SkyRenderer`**: cloud density c (`CloudDensityInput`, else the forced `--weather` record's; `--clouds <0..1>` overrides
+  both, a test flag), sky colour multiplier (`SkyColourMultiplierInput`, else the record's), cloud wind velocity xz (`CloudWind`,
+  `--cloud-wind <x>,<z>`). c is clamped to 0..1. The same c gives `horizonClouds` (colour and pull), so the band and the haze meet.
+- **Light**: `sunColour.rgb` = `KenshiLighting.SunColour(sun)` and `zenithLight = max(getColorAt(+Z) · skyMult, floor) · sunColour.g`
+  with `getColorAt` = `SkyXModel.Colour(+Z, sun, skydome: false)` (the HDR scattering colour, without the dome's night factor); both
+  computed on the CPU when the sun or the multiplier changes.
+- **Drift**: `StepClouds` adds `velocity × dt` to a double offset every frame on the viewer's frame clock (real time, at most 0.25 s,
+  as the heat haze's); it is held at dt = 0 in `--screenshot`. The shader gets `offset × 0.00005` wrapped to 0..1 (the textures repeat
+  with period 1, so this is the same picture with the float precision kept). Checked once with a temporary offset (4000 units): the
+  pattern shifts by the expected 0.2 of a texture.
+- **Clear sky**: with c = 0 the pass is skipped. That differs from the game only by filtering noise: the table says no texel has any
+  alpha at c = 0, so the game's layer is invisible too; skipping makes the ten parity views identical to a build without clouds.
+- **Choices where the notes were Unknown or open (Observed; compare against the game's own screenshots in a known weather)**:
+  - *Below the horizon*: the direction is evaluated at `d.y = 0.0005`, so the pixel gets the horizon value `alpha = o + 0.5` and the
+    colour of the band's edge; the lower half is only visible from high above the world (sky pass backdrop), where it shows the same
+    colour the haze is pulled to.
+  - *Mipmaps*: the game's DDS files have no mip chain, so its layer aliases towards the horizon; the viewer samples `Clouds.dds`,
+    `CloudsNormal.dds` and `CloudsTile.dds` with a generated mip chain (bilinear, repeat), which averages the squeezed detail instead.
+    Above the 8.6 degree band the pattern is the game's; below 15 degrees it is smoother than the game's.
+  - *Weather fog*: the viewer's own fog on the sky (`sky.md`, "the sky near the horizon fades to the fog colour", a viewer choice, the
+    game's sky is not fogged) also fades the clouds: their alpha is multiplied by the same `smoothstep(0, 0.45, d.y)`; without it
+    a c = 1 dust storm would draw a dark cloud wall above a light fog band.
+  - *The moon over the clouds*: the moon is drawn after the layer, as the task order says; whether SkyX's moon queue is above the
+    cloud queue (6) stays Unknown, so a moon behind a full overcast shows as in a clear sky (a c = 1 night shows the moon through it).
+  - *Sky colour multiplier*: it multiplies the whole sky in the viewer already (a stand-in, see [sky.md](sky.md)); the clouds take
+    it only through `zenithLight`, as in the game.
+- **Seen** (`--world --town "The Hub" --pitch 15 --time 13 --size 1600x900`): "Clear Times SHORT hot 0.5" (c 0.1) one wisp;
+  "light rain" (c 0.6) broken thin cloud with blue gaps; "Dust Storm Approach" (c 1) an overcast sky, the wall of fog hiding the clouds
+  near the horizon; "light rain" at 19:00 the same layer in the warmer light.
+- **Horizon sparkle (fixed 2026-10-08, Observed)**: with `--weather "light rain"` a row of small white ticks ran along the horizon line. It was the cloud
+  pass (gone with `--clouds 0`, absent on a build without the pass): below `d.y` 0.05 the alpha is the uniform horizon value, but the colour still followed
+  the texture lookups, whose uv is `height · xz / d.y`, hundreds of units at `d.y` 0.0005 to 0.01, so the minified lookups sparkle. Now the cloud colour
+  fades to the plain density-0 value from `d.y` 0.05 down to 0.01 (above 0.05 the layer is untouched). A viewer choice; the game's SkyX shader has no such fade.
+  The weather system now drives the layer (`--weather auto`): see [weather.md](weather.md#in-the-viewer-and-the-game-step-3).
 
 ## Unknowns
 
 - The dome mesh's texcoord layout (taken as the unit direction from the shader's use) and the dome's lower half (below the
   horizon the shader gives `alpha = o + 0.5`, hidden by terrain in practice).
 - The exact render queue (6 from SkyX's struct order) and where the cloud pass lands in the compositor relative to the moon
-  and the planet meshes.
+  and the planet meshes (the viewer draws the clouds before the moon).
+- Whether the game's mip-less sampling looks noticeably different from the viewer's mipmapped one near the horizon (needs a game
+  screenshot in a cloudy weather at a low pitch).

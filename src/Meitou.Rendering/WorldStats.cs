@@ -10,6 +10,18 @@ namespace Meitou.Rendering;
 /// </summary>
 static class WorldStats
 {
+    /// <summary>The weather's name for the heat-haze line: the camera's weather (the scheduler's or the forced one).</summary>
+    public static string WeatherName(WorldFrame.Gpu gpu) => gpu.Weather is { } w ? w.State.Weather.Name : gpu.Sky.Weather.Name;
+
+    /// <summary>The weather lines: camera region, season, the weather with strength, wind and the time left; then the sky, fog and rain values it feeds.</summary>
+    public static void AddWeather(List<string> stats, WorldFrame.Gpu gpu)
+    {
+        if (gpu.Weather is not { } w) return;
+        var s = w.State;
+        stats.Add($"weather     {w.Describe()}");
+        stats.Add($"  sky x {s.SkyColourMultiplier.X:0.00} {s.SkyColourMultiplier.Y:0.00} {s.SkyColourMultiplier.Z:0.00}, clouds {s.CloudDensity:0.00}, fog {(s.FogEnabled > 0 ? $"{s.FogEnabled:0.00} to {s.FogDistance:0}" : "off")}, rain {s.Rain:0}, wet {s.Wetness:0.00}");
+    }
+
     public static void Add(List<string> stats, GpuContext context, WorldFrame.Gpu gpu, WorldRenderOptions render, Vector3 camera)
     {
         var (vramUsed, vramBudget) = context.Device.VideoMemory();
@@ -24,7 +36,8 @@ static class WorldStats
         stats.Add(gpu.Sky.Physical ? $"sky         cpu {gpu.Sky.PrepareMs:0.00} ms, gpu {gpu.Sky.GpuMs:0.00} ms" : "sky         simple");
         if (gpu.Post is { } post) stats.Add($"post gpu    {post.DescribeCosts()}");
         if (gpu.Post is { } hazy && (hazy.HeatHazeAmount > 0 || gpu.HeatHazeTarget > 0))
-            stats.Add($"heat haze   {hazy.HeatHazeAmount:0.00} (target {gpu.HeatHazeTarget:0.00}, weather {gpu.Sky.Weather.Name})" + (hazy.HeatHazeRuns ? "" : hazy.HasHeatHaze ? ", off" : ", no textures"));
+            stats.Add($"heat haze   {hazy.HeatHazeAmount:0.00} (target {gpu.HeatHazeTarget:0.00}, weather {WorldStats.WeatherName(gpu)})" + (hazy.HeatHazeRuns ? "" : hazy.HasHeatHaze ? ", off" : ", no textures"));
+        AddWeather(stats, gpu);
         stats.Add($"camera      {camera.X:0}, {camera.Y:0}, {camera.Z:0}, zone {WorldLayout.ZoneOf(camera.X, camera.Z)}");
         stats.Add($"terrain     {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles / 1000}k tris" + (gpu.Streamer is { Pending: > 0 } st ? $", loading {st.Pending}" : ""));
         if (gpu.Objects is { } ob && render.Objects)

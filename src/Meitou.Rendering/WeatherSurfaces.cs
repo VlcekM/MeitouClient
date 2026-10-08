@@ -38,20 +38,24 @@ internal sealed class WeatherSurfaces : IDisposable
             noise = SampledImage.Rgba8(gpu, TextureLoader.LoadFile(path, allMips: false).Levels[0], repeat: true, mipmaps: true, "weather dust noise");
         var g = gpu.Globals;
         g.PublishUniform("uWeatherWet", () => new Vector4(Wetness, RainAmount(Rain), GameTime, 0));
-        g.PublishUniform("uWeatherDust", () => new Vector4(Dust, 0));
+        g.PublishUniform("uWeatherDust", () => new Vector4(Dust, TriplanarDust ? 1 : 0));
         g.Publish("uWeatherDustNoise", () => noise is { } n ? n.Sampled() : default);
     }
 
-    /// <summary>
-    /// The values the viewer shows for a forced weather at strength 1, as if settled: wetness and dust at their targets, rain at the weather's
-    /// intensity, the inside dust the weather's share of it, the slope value its field.
-    /// </summary>
-    public void SetSettled(GameRecord weather)
+    /// <summary>Test overrides (<c>--wetness</c>, <c>--rain</c>, <c>--dust</c>; a NaN dust component keeps the weather's): they win over the weather state.</summary>
+    public float? WetnessOverride, RainOverride;
+    /// <summary>The Enhancements switch <c>dust</c> (Meitou, default): triplanar map features get dust too. The game's caller table gives them no DUST.</summary>
+    public bool TriplanarDust = true;
+    public Vector3? DustOverride;
+
+    /// <summary>Takes the frame's weather at the camera (the scheduler's ramps, or a forced record snapped to its targets), then the overrides.</summary>
+    public void Apply(Meitou.Data.World.WeatherState state)
     {
-        Wetness = weather.GetFloat("wetness");
-        float dust = weather.GetFloat("dust");
-        Dust = new Vector3(dust, dust * weather.GetFloat("dust inside"), weather.GetFloat("dust slope"));
-        Rain = weather.GetFloat("rain intensity");
+        Wetness = WetnessOverride ?? state.Wetness;
+        Rain = RainOverride ?? state.Rain;
+        var d = state.DustAmount;
+        if (DustOverride is { } o) d = new Vector3(o.X, float.IsNaN(o.Y) ? d.Y : o.Y, float.IsNaN(o.Z) ? d.Z : o.Z);
+        Dust = d;
     }
 
     public void Dispose() => noise?.Dispose();
@@ -69,4 +73,6 @@ static class MeshSurface
     public const uint NoWeather = 4;
     /// <summary>A building interior: <c>dustAmount.y</c> instead of x, and no rain (nothing marks an interior in the viewer yet).</summary>
     public const uint Interior = 8;
+    /// <summary>A triplanar map feature: dust only while the Enhancements switch <c>dust</c> is Meitou (<c>uWeatherDust.w</c> is 1).</summary>
+    public const uint TriplanarDust = 16;
 }

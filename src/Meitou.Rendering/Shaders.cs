@@ -146,7 +146,7 @@ static class Shaders
             {
                 bool inside = (uSurface & 8u) != 0u;
                 float dustAmount = inside ? uWeatherDust.y : uWeatherDust.x;
-                if ((uSurface & 1u) != 0u && dustAmount > 0.0)
+                if (((uSurface & 1u) != 0u || ((uSurface & 16u) != 0u && uWeatherDust.w > 0.5)) && dustAmount > 0.0)
                 {
                     float dust = dustCover(n, gloss, vWorld, dustAmount);
                     albedo = mix(albedo, dustColour(vWorld), dust);
