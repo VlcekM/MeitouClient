@@ -333,9 +333,10 @@ public static class ImpostorShaders
     /// <summary>
     /// The fragment shader (early depth testing stays on: the quad's own depth is written, the atlas has no depth). The mesh shader's lighting
     /// on the sampled surface, the same fade dither as the meshes (complementary in the crossfade band), and one frame of the three per pixel by a
-    /// noise independent of the fade's (or the three blended with <c>uImpostorBlend</c>).
+    /// noise independent of the fade's (or the three blended with <c>uImpostorBlend</c>). The Meitou shadow receiver without its blocker search
+    /// (docs/impostors.md section 14).
     /// </summary>
-    public static readonly string Fragment = "#version 330 core\n" + AtmosphereShaders.Functions + Functions + FragmentFunctions + """
+    public static readonly string Fragment = "#version 330 core\n#define MS_NO_BLOCKER_SEARCH\n" + AtmosphereShaders.Functions + Functions + FragmentFunctions + """
         in vec3 vObjectPoint;
         flat in vec3 vObjectEye;
         flat in vec2 vCellA;
