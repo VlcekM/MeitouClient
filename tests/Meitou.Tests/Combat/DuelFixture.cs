@@ -45,6 +45,13 @@ sealed record Combatant
 
     public Fighter MakeFighter() => new(Weapon is null ? null : WeaponInstance.Create(Quality, Weapon, null, null, Constants),
         Armour.Select(a => ArmourPiece.Create(a, ArmourQuality)));
+
+    /// <summary>The character record of a fighter: stats, a Greenlander body and the fighter.</summary>
+    public CharacterCold MakeCold(string? name = null)
+    {
+        var stats = MakeStats();
+        return new CharacterCold { Name = name ?? Name, Stats = stats, Race = Human, Medical = MedicalState.Create(Human, stats.Strength), Fighter = MakeFighter() };
+    }
 }
 
 /// <summary>Builds worlds with the combat system alone: flat ground, a Greenlander body, base-game constants and the synthetic katana techniques.</summary>
@@ -62,11 +69,7 @@ static class DuelFixture
 
     public static CharacterId Spawn(SimWorld world, Combatant c, Vector3 position)
     {
-        var stats = c.MakeStats();
-        var cold = new CharacterCold
-        {
-            Name = c.Name, Stats = stats, Race = Human, Medical = MedicalState.Create(Human, stats.Strength), Fighter = c.MakeFighter(),
-        };
+        var cold = c.MakeCold();
         return world.Characters.Spawn(new CharacterHot { Position = position, Health = 100 }, cold, 0);
     }
 
