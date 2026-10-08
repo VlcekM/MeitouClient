@@ -124,7 +124,10 @@ public class BenchHarnessTests
     [Fact]
     public async Task GpuLockQueuesAndTakesOverAStaleOne()
     {
-        string path = GpuLock.FilePath;
+        string path = Path.Combine(Path.GetTempPath(), "meitou-gpu-test-" + Guid.NewGuid().ToString("N") + ".lock");
+        GpuLock.PathOverride = path;
+        try
+        {
         File.Delete(path);
         File.WriteAllText(path, "2147483000");   // a PID that is not running
         using (var first = GpuLock.Acquire(TextWriter.Null))
@@ -140,6 +143,8 @@ public class BenchHarnessTests
             Assert.True(taken.Waited >= TimeSpan.FromMilliseconds(400));
         }
         Assert.False(File.Exists(path));
+        }
+        finally { GpuLock.PathOverride = null; }
     }
 
     static string ReadHolder(string path)

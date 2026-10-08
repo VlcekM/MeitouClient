@@ -11,7 +11,10 @@ public sealed class GpuLock : IDisposable
 {
     FileStream? stream;
 
-    public static string FilePath => Path.Combine(Path.GetTempPath(), "meitou-gpu.lock");
+    /// <summary>Tests point the lock at a file of their own so they never touch a real run's.</summary>
+    internal static string? PathOverride;
+
+    public static string FilePath => PathOverride ?? Path.Combine(Path.GetTempPath(), "meitou-gpu.lock");
 
     /// <summary>How long <see cref="Acquire"/> waited.</summary>
     public TimeSpan Waited { get; private set; }

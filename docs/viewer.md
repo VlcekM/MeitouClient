@@ -783,8 +783,8 @@ meitou-viewer --bench-compare master.json perf.json
 - **GPU lock**: while measuring (not while loading) a run holds `%TEMP%\meitou-gpu.lock` (the file is held open without write sharing and holds the PID, so a crashed holder frees it by itself; a PID left in
   it is reported as a stale lock when the next run takes it over); other bench runs queue and print who they wait for; the wait is printed (`gpu-lock waited`) and kept in the JSON. `--no-gpu-lock` skips it. Programs that do not take the lock
   (the interactive viewer, other tools) still disturb the numbers: keep them closed, or read the paired difference, which is built to survive that.
-- **Measured** (2026-10-09, RTX 4070, 1280x960, TAA, master e9dc2c7 plus the harness; each run took 51 s end to end including the cold load):
-  `--view swamp --ab shadows --ab-period 64`: GPU total 3.85 ms (Meitou) against 4.35 (CSM), -0.49 +-0.10; the shadows stage 0.30 against 1.07 ms; 74 445 pixels differ by 1/255 or more, 12 952 by 12 or more.
+- **Measured** (2026-10-09, RTX 4070, 1280x960, TAA, master e9dc2c7 plus the harness; each run took 44-51 s end to end including the cold load):
+  `--view swamp --ab shadows --ab-period 64`: GPU total 3.59 ms (Meitou) against 4.29 (CSM), -0.69 +-0.04; the shadows stage 0.29 against 1.05 ms; 243 846 pixels differ by 1/255 or more, 15 054 by 12 or more.
   `--view dust --ab particles`: GPU total 3.05 ms (low resolution) against 40.1 ms (full size), -37.1 +-0.05; 14 534 pixels differ by 12 or more.
   `--view swamp --bench-motion turn --bench-frames 600`: GPU total mean 4.19, p95 5.40, p99 6.25, max 6.35; frame wall time mean 6.81, p99 9.06.
 - **Known gaps**: a GPU stage's time is the gap between its timestamps, so work the driver defers lands in the stage after it (full-size particles show up as `upscale` in the post sections; the totals are right);
