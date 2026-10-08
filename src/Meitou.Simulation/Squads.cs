@@ -74,13 +74,11 @@ public sealed class SquadRegistry
             hasher.Add(s.HomeCentre);
             hasher.Add(s.HomeRadius);
             hasher.Add(s.Position);
-            hasher.Add(s.Leader.Slot);
-            hasher.Add(s.Leader.Generation);
+            hasher.Add(s.Leader);
             hasher.Add(s.Members.Count);
             foreach (var m in s.Members)
             {
-                hasher.Add(m.Slot);
-                hasher.Add(m.Generation);
+                hasher.Add(m);
             }
         }
     }

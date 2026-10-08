@@ -6,7 +6,7 @@ namespace Meitou.Simulation;
 /// <summary>
 /// The state every tick touches for one character, in a dense struct array (docs/simulation.md, "World model"). Plain data, no
 /// references, so the table copies it by block and the state hash reads it by value. What the fields mean is up to the systems;
-/// the stand-in movement uses position, velocity and yaw.
+/// the movement system uses position, velocity, yaw, goal, task and flags.
 /// </summary>
 public struct CharacterHot
 {
@@ -38,7 +38,7 @@ public struct CharacterHot
     public float WalkSpeed;
 }
 
-/// <summary>The rest of a character: things few systems touch per tick (stats, body parts, inventory, AI blackboard come here as they are built).</summary>
+/// <summary>The rest of a character: things few systems touch per tick (identity, squad, path, body, inventory, combat state; the AI blackboard is still to come).</summary>
 public sealed class CharacterCold
 {
     public string Name { get; set; } = "";

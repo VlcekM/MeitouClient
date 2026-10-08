@@ -22,17 +22,7 @@ public readonly record struct HandHold(WeaponKinds Weapon)
     public bool Holds => Weapon != WeaponKinds.None;
 
     /// <summary>The kind of a WEAPON's <c>skill category</c> (WeaponCategory: 0 katanas, 1 sabres, 2 blunt, 3 heavy, 4 hackers, 8 polearms; docs/game/combat.md).</summary>
-    public static HandHold OfCategory(int skillCategory) => new(skillCategory switch
-    {
-        0 => WeaponKinds.Katana,
-        1 => WeaponKinds.Sabre,
-        2 => WeaponKinds.Blunt,
-        3 => WeaponKinds.Heavy,
-        4 => WeaponKinds.Hacker,
-        8 => WeaponKinds.Polearm,
-        5 => WeaponKinds.Unarmed,
-        _ => WeaponKinds.OneHanded,
-    });
+    public static HandHold OfCategory(int skillCategory) => new(Combat.WeaponCategories.AnimationKind(skillCategory));
 }
 
 /// <summary>
@@ -179,7 +169,37 @@ public sealed class AnimationLibrary
 {
     readonly List<AnimationDefinition> all;
 
-    public AnimationLibrary(IEnumerable<AnimationDefinition> definitions) => all = [.. definitions];
+    // The leg health values the records' ranges are cut at (sorted, distinct), per leg. A stance is cached by the interval of these its leg values fall
+    // in, not by the values: they change every tick of an injury that heals or rots, and a key per value would grow the caches without bound.
+    readonly float[] leftBounds, rightBounds;
+
+    public AnimationLibrary(IEnumerable<AnimationDefinition> definitions)
+    {
+        all = [.. definitions];
+        leftBounds = Bounds(all.SelectMany(d => new[] { d.LeftLegMin, d.LeftLegMax }));
+        rightBounds = Bounds(all.SelectMany(d => new[] { d.RightLegMin, d.RightLegMax }));
+    }
+
+    static float[] Bounds(IEnumerable<float> values) => [.. values.Where(v => !float.IsNaN(v)).Distinct().Order()];
+
+    /// <summary>
+    /// A leg health standing for every value that compares the same with each bound (below, equal to, above): the bound itself when it is one, else the
+    /// nearest float inside the interval. <see cref="AnimationDefinition.Fits"/> only compares, so the clips chosen for the stand-in are the clips for the value.
+    /// </summary>
+    static float Representative(float health, float[] bounds)
+    {
+        if (bounds.Length == 0) return 100;
+        int at = Array.BinarySearch(bounds, health);
+        if (at >= 0) return bounds[at];
+        int above = ~at;   // the first bound over the value (a NaN sorts first, and fits nothing, like a value under every bound)
+        if (above == 0) return MathF.BitDecrement(bounds[0]);
+        return MathF.BitIncrement(bounds[above - 1]);
+    }
+
+    AnimationStance Canonical(in AnimationStance s) => s with { LeftLeg = Representative(s.LeftLeg, leftBounds), RightLeg = Representative(s.RightLeg, rightBounds) };
+
+    /// <summary>Entries in the movement and idle caches (it stays small however the legs' health varies; for tests).</summary>
+    public int CachedChoices => chains.Count + idles.Count;
 
     public IReadOnlyList<AnimationDefinition> Definitions => all;
 
@@ -201,7 +221,7 @@ public sealed class AnimationLibrary
         public required (int Index, float Weight)[][] Groups;   // per distinct speed: the variants with their share (by chance)
     }
 
-    Chain ChainFor(AnimationArea area, in AnimationStance stance) => chains.GetOrAdd((area, stance), static (key, self) =>
+    Chain ChainFor(AnimationArea area, in AnimationStance stance) => chains.GetOrAdd((area, Canonical(stance)), static (key, self) =>
     {
         var valid = new List<int>();
         for (int i = 0; i < self.all.Count; i++)
@@ -230,23 +250,25 @@ public sealed class AnimationLibrary
         var chain = ChainFor(area, stance);
         var speeds = chain.Speeds;
         if (speeds.Length == 0) return;
-        void Add(int group, float weight)
-        {
-            foreach (var (index, share) in chain.Groups[group]) into.Add((index, weight * share));
-        }
-        if (speed <= speeds[0]) Add(0, 1);
-        else if (speed >= speeds[^1]) Add(speeds.Length - 1, 1);
+        if (speed <= speeds[0]) AddGroup(chain, 0, 1, into);
+        else if (speed >= speeds[^1]) AddGroup(chain, speeds.Length - 1, 1, into);
         else
         {
-            int k = Array.FindLastIndex(speeds, s => s <= speed);
+            int k = speeds.Length - 1;
+            while (speeds[k] > speed) k--;   // the last speed at or under the speed (the first is under it, so k >= 0)
             float t = (speed - speeds[k]) / (speeds[k + 1] - speeds[k]);
-            Add(k, 1 - t);
-            Add(k + 1, t);
+            AddGroup(chain, k, 1 - t, into);
+            AddGroup(chain, k + 1, t, into);
         }
     }
 
+    static void AddGroup(Chain chain, int group, float weight, List<(int Index, float Weight)> into)
+    {
+        foreach (var (index, share) in chain.Groups[group]) into.Add((index, weight * share));
+    }
+
     /// <summary>The standing animations valid for the stance: <c>idle</c> clips of the whole body (not actions, not carry overlays) with their <c>idle chance</c>.</summary>
-    public IReadOnlyList<(int Index, float Weight)> Idles(in AnimationStance stance) => idles.GetOrAdd(stance, static (s, self) =>
+    public IReadOnlyList<(int Index, float Weight)> Idles(in AnimationStance stance) => idles.GetOrAdd(Canonical(stance), static (s, self) =>
     {
         var list = new List<(int, float)>();
         for (int i = 0; i < self.all.Count; i++)

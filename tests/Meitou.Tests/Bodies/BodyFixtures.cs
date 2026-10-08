@@ -55,7 +55,6 @@ static class BodyFixtures
         CarryWeightMult = 1.2f,
         CarryPersonWeight = 30,
         WeaponInventoryWeightMult = 0.5f,
-        DamageMultiplier = 0.65f,
     };
 
     public static BodyPartTemplate Head { get; } = new() { StringId = "32-t", Name = "Head", Type = BodyPartType.Head, Collapses = true, Vital = true, Severance = true, CollapsePart = 1, AffectsSkills = 0.6f, KoMult = 2 };

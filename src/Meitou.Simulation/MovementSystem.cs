@@ -15,9 +15,10 @@ namespace Meitou.Simulation;
 /// an answer is applied in a serial step, so a path is never read while it is replaced.</item>
 /// </list>
 /// Not modelled yet (Unknown or later): water states and swimming, slopes (the original has no slope penalty), the combat speed
-/// multiplier, road routes for far trips, the formation slot rules (Unknown), queued orders, turning speed.
+/// multiplier, road routes for far trips, the formation slot rules (Unknown), turning speed.
+/// Queued orders (<see cref="CharacterCold.OrderQueue"/>) and the formation (<see cref="Formation"/>) exist.
 /// </summary>
-public sealed class MovementSystem(PathService paths) : ITickSystem
+public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
 {
     /// <summary>Speed gained per second (docs/game/pathfinding.md, the follow steering: "ramps up by 15 per second").</summary>
     public const float Acceleration = 15;
@@ -40,6 +41,9 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
     public const float CatchUpDistance = 60;
 
     public PathService Paths { get; } = paths;
+
+    /// <summary>The system owns its path service (the host hands it over at construction), so disposing the system stops the path thread.</summary>
+    public void Dispose() => Paths.Dispose();
 
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
@@ -71,7 +75,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
                 ref var n = ref table.Next[slot];
                 var cold = table.Cold(slot)!;
                 var target = targets[k];
-                bool busy = n.Task == (byte)CharacterTask.GoTo && (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath)) != 0;
+                bool busy = n.Task == (byte)CharacterTask.GoTo && (n.Flags & (ushort)MoveFlags.AnyPath) != 0;
                 if (order.Queued && busy)
                 {
                     cold.OrderQueue.Add(target);   // after the order in hand (shift + right click)
@@ -100,7 +104,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
     public static void Stop(CharacterTable table, int slot)
     {
         ref var n = ref table.Next[slot];
-        n.Flags = (ushort)(n.Flags & ~(ushort)(MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath));
+        n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
         n.Task = (byte)CharacterTask.Idle;
         n.PathCursor = 0;
         var cold = table.Cold(slot)!;
@@ -162,7 +166,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
             var flags = (MoveFlags)n.Flags;
             var cold = table.Cold(i)!;
             if (cold.Medical is { Incapacitated: true }) continue;
-            bool busy = (flags & (MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath)) != 0;
+            bool busy = (flags & MoveFlags.AnyPath) != 0;
             if (task == CharacterTask.Follow)
             {
                 var squad = cold.SquadId >= 0 ? world.Squads.Find(cold.SquadId) : null;
@@ -196,8 +200,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem
                 var centre = squad is not null ? squad.HomeCentre : new Vector2(n.Position.X, n.Position.Z);
                 float radius = squad is not null ? squad.HomeRadius : 100;
                 ulong roll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(i)), RngPurpose.Wander, (ulong)world.Tick);
-                float angle = Rng.Float(roll) * MathF.Tau, r = MathF.Sqrt(Rng.Float(Rng.Mix(roll))) * radius;
-                n.Goal = centre + new Vector2(MathF.Sin(angle), MathF.Cos(angle)) * r;
+                n.Goal = Rng.PointInDisc(roll, centre, radius);
                 n.Flags |= (ushort)MoveFlags.NeedPath;
             }
         }

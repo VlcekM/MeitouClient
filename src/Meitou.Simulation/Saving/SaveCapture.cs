@@ -233,16 +233,8 @@ public static class SaveCapture
 
     static RaceData? RaceOf(string recordId, GameDatabase db, Dictionary<string, RaceData?> cache)
     {
-        if (db.Find(recordId) is not { } record) return null;
-        foreach (var r in record.GetReferences("race"))
-        {
-            if (r.Values.Value0 <= 0) continue;
-            if (cache.TryGetValue(r.TargetStringId, out var cached)) return cached;
-            var race = db.Find(r.TargetStringId) is { Type: FcsRecordType.RACE } rec ? RaceData.From(rec, db) : null;
-            cache[r.TargetStringId] = race;
-            return race;
-        }
-        return null;
+        if (db.Find(recordId) is not { } record || CharacterAssembly.RaceId(record) is not { } id) return null;
+        return CharacterAssembly.RaceDataOf(db, id, cache);
     }
 
     /// <summary>

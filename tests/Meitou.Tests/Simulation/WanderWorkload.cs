@@ -17,9 +17,9 @@ sealed class WanderSystem : ITickSystem
 
     public static float Ground(float x, float z) => 90 + 40 * (1 + MathF.Sin(x * 0.01f) * MathF.Cos(z * 0.013f));
 
-    public static SimWorld Create(ulong seed, int threads, int characters, bool publish = false)
+    public static SimWorld Create(ulong seed, int threads, int characters, bool publish = false, int minPartition = 16)
     {
-        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = publish },
+        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = publish, MinPartitionSize = minPartition },
             new OpenGroundWalkability(Ground), [new WanderSystem()]);
         Populate(world, characters);
         return world;
