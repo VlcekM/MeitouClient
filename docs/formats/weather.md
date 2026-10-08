@@ -66,6 +66,10 @@ min` by `max(fog distance min, fog distance max)`, so the fog distance is the la
 limit min/max` (0..1); `sunlight color` (loaded, its use was not traced: **Unknown**). A season without weathers gets the
 "Default" weather (`5460-weather.mod`, clear) with limits 0..1 and logs "Warning: Season ... has no weather". If any of its
 weathers has a time window (`start time` ≠ `end time`), the "Default" weather is appended with weight 0 as the fallback.
+**Verified** against the merged records (`WeatherTests.Base_game_seasons_and_regions_follow_the_calendar_and_fallback_rules`): every
+season of the base game without weathers becomes Default with limits 0..1; the only windowed weathers are "Desert Calm hot 0.6" and
+"venge beams", and every season that lists one ends with Default at weight 0. The duration given to the Default of an empty season (and
+to a region without seasons) is **Observed**: not read from the game, 120..720 minutes (the wind update time is 360).
 
 ### BIOME_GROUP (type 95; Verified: fcs.def, FUN_1409df8d0, FUN_1408fd6e0)
 
@@ -91,9 +95,22 @@ colour`, offsets, `ground movement`.
 
 The game keeps a 64 × 64 grid of zone cells (4608 units, the zone grid of [terrain.md](terrain.md#world-coordinates)). Each
 cell's region is the BIOME_GROUP whose `index` equals the colour of `areasmap.tga` (256 × 256, 24-bit, so 4 × 4 pixels per
-zone) at the cell's centre (**Observed**: the two cell fields used are taken to be the centre); a cell whose colour matches no record goes to "NONE" (`18003-gamedata.base`, no seasons, so Default
-weather). How the map's pixels map onto world coordinates (its origin and size fields in the terrain object) was not pinned
-down: **Observed** that it is a 4 px-per-zone map of the whole world.
+zone) at the cell's centre (**Observed**: the two cell fields used are taken to be the centre; 3051 of the 4096 4 × 4 blocks are one
+colour, the rest lie on region borders); a cell whose colour matches no record goes to "NONE" (`18003-gamedata.base`, no seasons, so
+Default weather).
+
+**Placement in the world (Verified, `WeatherTests.Areas_map_places_known_towns_in_their_regions`, 2026-10-08)**: the map is the
+whole 64 × 64 zone grid with no offset and no flip. Decode the TGA to rows top to bottom (its descriptor byte is 0, a bottom-left
+origin, so the file stores the last row first); zone cell `(cx, cz) = (floor(x / 4608) + 32, floor(z / 4608) + 32)` reads pixel
+`(4 cx + 2, 4 cz + 2)`, the colour taken as `R << 16 | G << 8 | B` and compared with `index` (71 of the 71 colours in the map match a
+record that way, 12 the other way round). Checked against the placed towns, all of which land in the region of the same name or an
+expected neighbour: The Hub, Squin → Border Zone; Rebirth → Rebirth; Heng → Heng; Bast → Bast; Flats Lagoon → Flats Lagoon; Mongrel →
+Fog Islands; Ashland Dome I–III → Ashlands; Tower of Abuse → Venge; Heft, Stoat → The Great Desert; Shark and the Swamp Villages → The
+Swamp; Admag → Stenn Desert. The mirrored map (z flipped) puts Rebirth in the swamp, so the match is not a symmetry accident. All 71
+colours match a BIOME_GROUP, so "NONE" only serves the cells outside the map and records a mod adds. Two records are called "NONE"
+(`18003-gamedata.base`, index 000000, 21,368 pixels, no seasons; `56123`, index 329999, the "crabby island" season), so regions are
+matched by StringId and colour, never by name. Painted by no pixel: Central, Desert (the weather region "Desert" with its 75/25-day
+calendar is reachable only through its record), Empire.
 
 Base game: 74 BIOME_GROUP records; 66 list seasons. Several groups share a SEASON ("coastal" is used by 9, "Desert mild" by 5).
 Regions without seasons, so always clear: Central, Arm of Okran, Berserker Country, Empire, Obedience, Rebirth, Watcher's Rim
@@ -161,7 +178,11 @@ fading.
   1300²)` with `d` the distance from the camera to that cell's rectangle (0 inside it); weights of the same region add, up to four
   regions, then they are normalised. Each region contributes its current weather's fog: on/off (as 1/0), the **distance**, and
   the colour. The blended values feed `MainFog` ([sky.md](sky.md#haze-distance-fog-how-vanilla-does-it)). (The colour sum
-  uses the same weights: **Observed**, the decompiler shows one fixed weight there.)
+  uses the same weights: **Observed**, the decompiler shows one fixed weight there.) **Observed** in Meitou: the four points are
+  the corners `(x ± 1300, z ± 1300)` (the other reading of "± 1300 in x and z" is the four axis points; compare the fog at a region
+  border in the game with `WeatherWorld.FogWeights`), and the blended colour and distance average only over the regions whose fog is
+  on, weighted by their weights, so a region without fog (whose record distance is meaningless) does not pull them towards zero;
+  the blended on/off weight is the plain weighted mean.
 - **Distance**: `lerp(fog distance min, fog distance max, saturate((wind − fog wind min) / (fog wind max − fog wind min)))`
   with the region's current wind speed, or `fog distance min` when the two wind values are equal, which after the loader's rule
   above is `max(min, max)`. In the base game only "misty rain" has different wind values (40 / 20, with both distances 20000),
@@ -409,6 +430,44 @@ acid), Floodlands (floodland), Fog Islands (fog islands), Gut (nothing, bit of r
 Desert (stenn desert), The Black Desert (poison gas), The Great Desert (great desert), The Shrieking Forest (wet forest -main +
 Drifting-foliage), Venge (venge), Desert (Desert Blasts 900 + Desert Summer 300), Skinner's Roam (see Seasons).
 
+## In Meitou
+
+Step 2 of the plan below is done, in `src/Meitou.Data/World/`, with no renderer or viewer change (the hookup is step 3).
+
+| Class | Role |
+|---|---|
+| `WeatherData` (`WeatherData.cs`) | Reads WEATHER / SEASON / BIOME_GROUP / EFFECT / EFFECT_FOG_VOLUME from a `GameDatabase` into plain records (`WeatherDef`, `SeasonDef`, `RegionDef`, `EffectDef`, `FogVolumeDef`) with the loader rules: wind update time 0 → `WeatherDef.NeverMinutes` (1,000,000), fog distance min := max when the fog wind values match, Default for a season without weathers (limits 0..1), Default appended with weight 0 when a weather has a time window, region multipliers, `days per year` from GLOBAL CONSTANTS (`GameConstants`). Definitions can also be built by hand (`WeatherData.FromDefinitions`), which the quick tests do. `SeasonCalendar.Lengths` cuts the year. |
+| `WeatherAreas` | The 64 × 64 cell map from `areasmap.tga` (`TgaReader` in `Meitou.Data.Textures`), cell rectangles and distances. |
+| `WeatherRegion` | One region's schedule: season calendar, weighted pick with time windows, duration roll, strength, the wind model and its interpolation, the 2.5 % fog fade. Own `System.Random` seeded from the world's seed and the region's index. `Snapshot()` / `Restore()` expose season index and end day, weather entry and its start/end minute, strength, wind interpolation and fog fade for a later save format. |
+| `WeatherWorld` | All regions plus the camera side: `Update(camera, WeatherTime, FrameTimes, sunHeight)` returns the `WeatherState` of the frame (also `Current`). `ForceWeather(name or WeatherDef, strength, snap)` is `--weather`. `WeatherWorld.Create(db, install, seed, start)` builds it from a database and the install; `FogWeights(x, z)` exposes the four-sample weights; `Snapshot()` / `Restore()` cover every region. |
+| `WeatherState` | The frame's output, as listed in the shared design: weather record and strength, wind (xz direction, speed), sky colour multiplier and cloud density after the 30 s transition, cloud drift (direction × speed), blended fog (`FogEnabled` weight, colour, distance), `Rain`, `Wetness`, `DustAmount` (x, y inside, z slope), `HeatHaze`, and `Effects` (EFFECT, count, respawn) with `EffectStrength`. |
+| `WeatherTime`, `FrameTimes`, `WeatherRamps` | Game time (day count + hours), the three frame times (`FrameTimes.FromClock(realDt, gameSpeed, paused)`), the wetness and dust ramps (`HeatHaze` is reused for the haze). |
+
+`meitou-tools weather [--region <name> | --at x,z] [--days d0 d1] [--seed n] [--list]` prints a region's season and weather chain (start, name,
+strength, duration, wind, fog); `--list` prints every region's calendar. Every timer runs on the frame times the caller passes in and on
+the game time it passes in; nothing reads a clock, so a seed and a call sequence give the same weather.
+
+**Choices where the game is Unknown or the doc says Observed** (compare these against the game when a way to see it turns up):
+
+- *Start*: all regions start their first season (by `val0`) on the creation day, with the first weather chosen at once; the new-game
+  path and what saves keep were not traced.
+- *Time-window cut*: `end = min(start + duration, today's end time)` as the doc says; when that end time is already past (the window's
+  last hour, accepted by the inclusive test) it is not applied and the rolled duration stands, instead of re-choosing every frame.
+- *Season changes* happen at the first update whose day count has reached the end day, then end = that day + length; weather changes
+  at the first update past the end minute, with the new end = now + duration (so a coarse frame step shifts the chain slightly).
+- *Wind heading*: the read-back is the unsigned angle 0..π, as the doc says, and the interpolation starts from it, so the direction
+  mirrors across the x axis at an update when it pointed to the other side (the timeline tool shows this as −38° becoming 38°).
+  Interpolation of the angle takes the shorter way round.
+- *Fog fade*: while a region's fog fades in from "off" (or out to "off") the colour and distance are already the new (or still the
+  old) weather's; only the on/off weight lerps. Forced weathers have no fade.
+- *Fog samples and blend*: see "Fog" above (corners; colour and distance weighted by regions with fog on).
+- *Time bases*: "0.01 when paused" is the factor that replaces the game speed in the settling time (`dt × 0.01`), not a fixed step.
+- *Forced weather*: strength 1 (settable), wind speed `lerp(min, max, s)` along `ForcedWindDirection` (default +X), fog undelayed;
+  sky, clouds, wetness, dust and haze snap to it unless `snap: false`.
+- *Sky transition* restarts whenever the camera's weather record changes, including by crossing into a region with another weather.
+- *Wetness* and *dust* clamp on the target instead of overshooting by one step.
+- *Region switch* uses the strict 500-unit rule from the current cell, also after a teleport.
+
 ## Implementation plan
 
 What the viewer (and later the game) needs, in build order. Each step is testable on its own.
@@ -420,7 +479,7 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
    max(getColorAt(+Z) · skyMult, (0.001, 0.001, 0.0015)) · sunColour.g`, the horizon band and alpha rule, output × sqrt(1.4),
    alpha-blended in HDR. Drift: an accumulated offset += wind velocity × dt, × 0.00005. Use the same `c` for `horizonClouds`
    (replacing the stand-in). A test pins `DensityOffset`/`Darkness` and the coverage table.
-2. **Weather data and scheduler in Meitou.Data** (`World/Weather*.cs`): read WEATHER / SEASON / BIOME_GROUP / EFFECT with the
+2. **Weather data and scheduler in Meitou.Data** (`World/Weather*.cs`; **done**, see "In Meitou"): read WEATHER / SEASON / BIOME_GROUP / EFFECT with the
    loader rules (fog min := max when wind values match, update time 0 → 1e6, Default fallbacks, appended Default for time
    windows); map zones to regions from `areasmap.tga`; season lengths from shares × `days per year`; the weighted pick, the
    duration roll, strength, the wind model and its interpolation, all on a seedable random source (the game's own `rand()` order
@@ -439,13 +498,13 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
    and ash first (most visible), then the map-feature placers (volcano plumes, steamers, the permanent dust storm: static
    positions, always on), then wandering storms and twisters with their fog-volume spheres, lightning last.
 6. **Heat haze**: done in the post-processing (`PostProcess.RunHeatHaze`, `Meitou.Data.World.HeatHaze`); it takes the forced
-   weather at strength 1 until step 2 gives the camera region's weather and strength. **Not planned here**: sounds, gameplay
+   weather at strength 1 until step 3 feeds it `WeatherState.HeatHaze` (step 2 computes it). **Not planned here**: sounds, gameplay
    effects.
 
 ## Unknowns
 
-- How the areas map's pixels are placed in world coordinates (origin and size fields of the terrain object); taken as 4 px per
-  zone over the whole world.
+- The areas map's own origin and size fields in the terrain object (the placement itself is **Verified**, see "Where"); whether a
+  cell reads its centre pixel or another of its 16 (they differ on 1045 border blocks).
 - The season order for equal order values; the new-game start of the first season; the special case for a season with one
   weather in the SEASON loader (a ceiling of a scaled value, not decoded).
 - `sunlight color` of SEASON and `sky colour multiplier` / `colour multiplier` of EFFECT: loaded, their use not traced.

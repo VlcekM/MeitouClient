@@ -69,7 +69,7 @@ The texturing ones are explained in [How the terrain is textured](#how-the-terra
 | --- | --- | --- |
 | `biomemap.png` | 1024², RGBA | Biome regions as flat colours, one BIOMES `index` colour per pixel (288 units). Same orientation as the heightmap (**Verified**, below) |
 | `blendmap.png` | 1024², RGBA | Per-pixel weights of the biomes listed in `blendinfo.dat` (**Verified**, below) |
-| `areasmap.tga` | 256², 24-bit uncompressed (18-byte header + 196,608) | Not analyzed; if it covers the world, 4 × 4 pixels per zone. Same size as `data/land/areasmap.tga` |
+| `areasmap.tga` | 256², 24-bit uncompressed (18-byte header + 196,608) | BIOME_GROUP colour per zone: 4 × 4 pixels per zone over the whole world, no flip (**Verified**, [weather.md](weather.md#where-regions-from-the-areas-map-verified-decompiled-fun_1408fd6e0-and-fun_1408f4eb0)). Same size as `data/land/areasmap.tga` |
 | `blendinfo.dat` | 1,364,352 | Magic `KBI1`: the biomes of each 2 × 2-zone cell, then a quadtree of slot masks per cell (**Verified**, below) |
 | `fogfeatures.dat`, `features.dat` | | See [zones.md](zones.md#other-placement-files) |
 | `overlaymaps/colour.X.Y.png` | 64 files, 2048² each, X, Y = 0..7 | 8 × 8 tiles = 16384² ground tint, 18 units per pixel (below) |
@@ -358,8 +358,8 @@ see [sky.md](sky.md#haze-distance-fog-how-vanilla-does-it)). `atmospherefog.hlsl
 and uses it for the sky, the sun colour and the haze: see [sky.md](sky.md), which also has the SkyX shaders'
 derived parameters, the night glow, the textures and the WEATHER records.
 
-Observed: `areasmap.tga` (256², 71 colours) is described in `fcs.def` as holding BIOME_GROUP colour indices;
-not yet matched to records.
+`areasmap.tga` (256², 71 colours) holds BIOME_GROUP colour indices (`fcs.def`); all 71 colours match a record's `index` and the map
+places on the zone grid without offset (**Verified**, [weather.md](weather.md)).
 
 ## Legacy terrain: `data/land/` (Observed)
 
@@ -381,7 +381,7 @@ An older world, kept in the install. Probably unused by the Newland game, but `r
 - World unit in metres (decimetres most likely).
 - How the game interpolates heights between samples, and the details of its terrain paging (page sizes, when
   pages load; the known constants are under [Terrain LOD](#terrain-lod)).
-- Meaning of `areasmap.tga`, and which blend slot the game treats as a page's first biome.
+- Which blend slot the game treats as a page's first biome.
 - Wetness after rain, the scum layer, the unit of the water shader's time, and the fog distances (runtime
   settings).
 - Whether anything still reads `data/land/grasssplits`.

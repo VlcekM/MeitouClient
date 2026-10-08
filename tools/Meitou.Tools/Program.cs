@@ -14,7 +14,8 @@ return args switch
     ["fcs-records", var type] => WithInstall(i => FcsRecordDump.Run(i, int.Parse(type), 3)),
     ["world"] => WithInstall(WorldSurvey.Run),
     ["navmesh", .. var navArgs] => WithInstall(i => NavmeshTool.Run(i, navArgs)),
-    ["image-diff", var a, var b] => ImageDiff.Run(a, b, null),
+    ["weather", .. var weatherArgs] => WithInstall(i => WeatherTool.Run(i, weatherArgs)),
+    ["image-diff", var a, var b] =>ImageDiff.Run(a, b, null),
     ["image-diff", var a, var b, var d] => ImageDiff.Run(a, b, d),
     ["draw-log-diff", var a, var b] => DrawLogDiff.Run(a, b),
     ["draw-log-diff", var a, var b, "--keep-handles"] => DrawLogDiff.Run(a, b, keepHandles: true),
@@ -39,6 +40,7 @@ static int Usage()
                            [--cell u] [--tile cells] [--watershed] [--threads n] [--repeat n] [--fingerprint]
                            gather and build a zone's navmesh, write debug files; --fingerprint prints SHA-256 of the cache files of The Hub (or --zone) and the Hub path points
         meitou-tools world         read the heightmap, zone/level files and features.dat and cross-check them
+        meitou-tools weather [--region name | --at x,z] [--days d0 d1] [--seed n] [--list]  print a region's season and weather timeline (--list: the regions and their calendars)
         meitou-tools image-diff <a.png> <b.png> [diff.png]  compare two screenshots: mean difference, share of pixels over 12/255
         meitou-tools draw-log-diff <a> <b> [--keep-handles]  compare two MEITOU_DRAW_LOG files draw by draw (handles renamed by first use)
         meitou-tools world-map <png> [step]  render a top-down world map (every step-th height sample, default 16)
