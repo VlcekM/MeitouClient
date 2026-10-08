@@ -45,7 +45,22 @@ sealed partial class GameHost
                     slider.Set(Math.Clamp(v, slider.Min, slider.Max));
         // The viewer's debug overlays (docs/engine.md): F10 the key list, F11 the frame statistics, F12 the profiler chart.
         var profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
+        // Shift+F1 upwards: the viewer's Faithful / Meitou switches (its F1 upwards; plain F2..F4 and F8 are the game's speed and screenshot keys).
+        var switches = Enhancements.Create(o.Post, () => gpu.Sky.HazeStrength, v => gpu.Sky.HazeStrength = v,
+            () => gpu.Shadow?.Meitou ?? o.MeitouShadows, v =>
+            {
+                // The shadow distance follows the mode's default unless the Tab slider moved it.
+                bool was = o.MeitouShadows;
+                o.MeitouShadows = v;
+                if (gpu.Shadow is not { } s) return;
+                if (MathF.Abs(s.Settings.Range - o.ShadowRangeFor(was)) < 1) s.Settings = s.Settings with { Range = o.ShadowRangeFor(v) };
+                s.Meitou = v;
+            },
+            () => gpu.Foliage?.MeitouRange ?? o.MeitouRange, v => { o.MeitouRange = v; if (gpu.Foliage is { } f) f.MeitouRange = v; },
+            () => gpu.Foliage?.Impostors ?? o.Impostors, v => { o.Impostors = v; if (gpu.Foliage is { } f) f.Impostors = v; });
         var keyItems = DebugOverlay.KeyItems(GameOptions.Usage);
+        keyItems.RemoveAll(i => i.StartsWith("Shift+F1..", StringComparison.Ordinal));   // listed one by one instead
+        keyItems.AddRange(switches.Select((e, i) => $"Shift+F{i + 1} {e.Name.ToLowerInvariant()}"));
         var stats = new List<string>();
         bool statsVisible = false;
 
@@ -58,7 +73,18 @@ sealed partial class GameHost
             kb.KeyDown += (_, k, _) =>
             {
                 if (k is SilkKey.ShiftLeft or SilkKey.ShiftRight) shiftDown = true;
-                if (KeyMap.Map(k) is { } key) { session.Input.SetKey(key, true); player.Key(key, shiftDown); }
+                if (KeyMap.Map(k) is { } key)
+                {
+                    if (shiftDown && key - EngineKey.F1 is >= 0 and < 9 && key - EngineKey.F1 < switches.Count)
+                    {
+                        var e = switches[key - EngineKey.F1];
+                        e.IsMeitou = !e.IsMeitou;
+                        Console.WriteLine($"{e.Name,-18}{e.State}: {e.Note}");
+                        return;
+                    }
+                    session.Input.SetKey(key, true);
+                    player.Key(key, shiftDown);
+                }
             };
             kb.KeyUp += (_, k, _) =>
             {
@@ -218,6 +244,7 @@ sealed partial class GameHost
                 "F2/F3/F4" => $"x{session.TimeScale:0}",
                 "Tab" => OnOff(panel?.Visible == true),
                 "F12" => profiler?.Showing.ToString().ToLowerInvariant(),
+                ['S', 'h', 'i', 'f', 't', '+', 'F', >= '1' and <= '9'] when key[^1] - '1' < switches.Count => switches[key[^1] - '1'].State,
                 _ => null,
             };
         }
