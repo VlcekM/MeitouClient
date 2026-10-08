@@ -540,7 +540,7 @@ them. The water's ripple phase uses the water's own time (`uTime`), the clock th
   and to TRIPLANAR / DUAL_TRIPLANAR map features (`SurfaceMaterial.Dust`, foliage-layer meshes of those modes), as the plan asked, because
   `triplanar.hlsl` has the branch. **Unknown** whether the game ever reaches it: the caller table in [runtime-materials.md](runtime-materials.md)
   gives map features only CLIP_INTERIOR, never DUST, and no script sets the define; if the game does not, the triplanar dust is a viewer addition and
-  is a viewer addition: it is the Enhancements switch `dust` (Meitou, default on; Faithful off = building parts only; `uWeatherDust.w` carries it, surface bit 16). Not applied to
+  it stays on in both modes (it was the Enhancements switch `dust` until it was removed on 2026-10-08; `uWeatherDust.w` is always 1, surface bit 16). Not applied to
   UV-mapped, TERRAIN-mode and FOLIAGE map features, items or characters (no DUST in the game), so e.g. the red rocks round the Hub (TERRAIN mode) and
   wrecks that are UV-mapped features stay clean. The noise is `Turbulent.dds` (the `dust` texture unit; 512²
   DXT1, repeating, mipmapped; `.x` is read) at `world.xz · 0.002`. The gloss is the diffuse alpha before `specular mult` (the viewer's 0.3 for a

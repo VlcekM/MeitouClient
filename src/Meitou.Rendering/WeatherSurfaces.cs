@@ -38,14 +38,12 @@ internal sealed class WeatherSurfaces : IDisposable
             noise = SampledImage.Rgba8(gpu, TextureLoader.LoadFile(path, allMips: false).Levels[0], repeat: true, mipmaps: true, "weather dust noise");
         var g = gpu.Globals;
         g.PublishUniform("uWeatherWet", () => new Vector4(Wetness, RainAmount(Rain), GameTime, 0));
-        g.PublishUniform("uWeatherDust", () => new Vector4(Dust, TriplanarDust ? 1 : 0));
+        g.PublishUniform("uWeatherDust", () => new Vector4(Dust, 1));   // w 1: triplanar map features get dust too (always on)
         g.Publish("uWeatherDustNoise", () => noise is { } n ? n.Sampled() : default);
     }
 
     /// <summary>Test overrides (<c>--wetness</c>, <c>--rain</c>, <c>--dust</c>; a NaN dust component keeps the weather's): they win over the weather state.</summary>
     public float? WetnessOverride, RainOverride;
-    /// <summary>The Enhancements switch <c>dust</c> (Meitou, default): triplanar map features get dust too. The game's caller table gives them no DUST.</summary>
-    public bool TriplanarDust = true;
     public Vector3? DustOverride;
 
     /// <summary>Takes the frame's weather at the camera (the scheduler's ramps, or a forced record snapped to its targets), then the overrides.</summary>
@@ -73,6 +71,6 @@ static class MeshSurface
     public const uint NoWeather = 4;
     /// <summary>A building interior: <c>dustAmount.y</c> instead of x, and no rain (nothing marks an interior in the viewer yet).</summary>
     public const uint Interior = 8;
-    /// <summary>A triplanar map feature: dust only while the Enhancements switch <c>dust</c> is Meitou (<c>uWeatherDust.w</c> is 1).</summary>
+    /// <summary>A triplanar map feature: dust as well (<c>uWeatherDust.w</c> is always 1; the game's caller table gives them no DUST).</summary>
     public const uint TriplanarDust = 16;
 }

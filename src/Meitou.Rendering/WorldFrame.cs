@@ -68,8 +68,6 @@ sealed class WorldOptions
     public float? SmallRange, MediumRange, LargeRange;
     /// <summary>The impostors switch (Enhancements): far foliage as baked billboards (Meitou, default) or meshes only (the game); the distance (null: the default).</summary>
     public bool Impostors = true;
-    /// <summary>The dust switch (Enhancements): dust on triplanar map features (Meitou, default) or only on building parts (the game).</summary>
-    public bool TriplanarDust = true;
     public float? ImpostorDistance, LargeImpostorDistance;
     public double? ImpostorBudgetMb, ImpostorCacheMb;
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
@@ -200,7 +198,7 @@ sealed class WorldOptions
 
     /// <summary>The Faithful / Meitou switches over the options (for <c>--meitou</c> / <c>--faithful</c>).</summary>
     internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
-        () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v, () => o.TriplanarDust, v => o.TriplanarDust = v);
+        () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -655,7 +653,7 @@ static class WorldFrame
             }
             Console.WriteLine($"weather   {(o.AutoWeather ? $"scheduler, seed {o.WeatherSeed}, from day {o.Day ?? 0}" : $"forced {o.Weather}")}");
             // Wetness, dust and rain for the surface shaders come from the weather state every frame (Draw); the test options replace them.
-            gpu.Surfaces = new WeatherSurfaces(context, assets) { TriplanarDust = o.TriplanarDust, WetnessOverride = o.Wetness, RainOverride = o.Rain, DustOverride = o.Dust };
+            gpu.Surfaces = new WeatherSurfaces(context, assets) { WetnessOverride = o.Wetness, RainOverride = o.Rain, DustOverride = o.Dust };
         }
         // The weather's particle effects (rain, ash...) follow the weather state (UpdateParticles); the map's effect placers are always on
         // (docs/formats/weather.md "Effect placers on the map"), so the particle renderer exists from the start whatever the weather.
@@ -764,8 +762,7 @@ static class WorldFrame
                     float scale = r.TerrainFarPixelError / r.TerrainPixelError;
                     (r.TerrainPixelError, r.TerrainFarPixelError) = (o.TerrainErrorFor(v), o.TerrainErrorFor(v) * scale);
                 }
-            },
-            () => gpu()?.Surfaces?.TriplanarDust ?? o.TriplanarDust, v => { o.TriplanarDust = v; if (gpu()?.Surfaces is { } s) s.TriplanarDust = v; });
+            });
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null)
