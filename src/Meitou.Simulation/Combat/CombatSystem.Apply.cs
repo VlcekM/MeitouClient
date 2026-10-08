@@ -26,7 +26,7 @@ public sealed partial class CombatSystem
         int direction = tech.DirectionOf(blow);
 
         // Reach: the blow arrives only if the target is still within the reach the attack started with.
-        float gap = Vector2.Distance(new(prev[a].Position.X, prev[a].Position.Z), new(prev[d].Position.X, prev[d].Position.Z)) - Radius(ac) - Radius(dc);
+        float gap = Vector2.Distance(new(prev[a].Position.X, prev[a].Position.Z), new(prev[d].Position.X, prev[d].Position.Z)) - CombatTuning.Footprint(ac) - CombatTuning.Footprint(dc);
         BlowOutcome outcome;
         float progress = 0;
         if (gap > A.AttackReach + CombatTuning.ReachSlack) outcome = BlowOutcome.Missed;
@@ -72,13 +72,10 @@ public sealed partial class CombatSystem
             : DamageFormulas.Packet(skill, dex, str, fighter.Weapon!, kind, dc.Race.StringId, fighter.DamageOutput, combat);
 
         var ctx = MakeContext(world, d, dc);
-        var events = new List<MedicalEvent>();
-        ulong defenderKey = Rng.Key(table.IdOf(d));
-        var armour = target.Armour;
-        var armourSpan = armour is ArmourPiece[] array ? array.AsSpan() : [.. armour];
-        var (part, damage) = HitResolver.Land(dc.Medical, ctx, packet, armourSpan,
-            piece => CombatRolls.Float(world.Seed, defenderKey, CombatRoll.Cover, CombatRolls.BlowCounter(a, seq, blow, piece)),
-            toughness, tech.LowStrike, direction == 6, combat, events);
+        var events = hitEvents;   // Apply is serial, so one list serves every hit
+        events.Clear();
+        var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, seq, blow);
+        var (part, damage) = HitResolver.Land(dc.Medical, ctx, packet, target.Armour, cover, toughness, tech.LowStrike, direction == 6, combat, events);
 
         A.Landed++;
         D.Taken++;
@@ -106,6 +103,12 @@ public sealed partial class CombatSystem
         }
         GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken);
         Record(now, a, d, blow, outcome, part, damage, knockout, death);
+    }
+
+    /// <summary>The cover roll of one blow: a function of the defender, the blow and the armour piece.</summary>
+    readonly struct CoverRoll(ulong seed, ulong defenderKey, int attacker, int attackSeq, int blow) : ICoverRoll
+    {
+        public float Roll(int piece) => CombatRolls.Float(seed, defenderKey, CombatRoll.Cover, CombatRolls.BlowCounter(attacker, attackSeq, blow, piece));
     }
 
     static void Stop(ref CombatSlot attacker, CombatTechnique tech, int blow)

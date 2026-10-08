@@ -12,7 +12,9 @@ namespace Meitou.Simulation.Combat;
 public sealed class Fighter
 {
     public WeaponInstance? Weapon { get; }
-    public IReadOnlyList<ArmourPiece> Armour { get; }
+    /// <summary>The worn pieces, in the order they are stacked in.</summary>
+    public ReadOnlySpan<ArmourPiece> Armour => armour;
+    readonly ArmourPiece[] armour;
     /// <summary>A creature (an ANIMAL_CHARACTER): the target kind for the weapon multipliers, and the techniques of its own weapon category apply.</summary>
     public bool IsAnimal { get; init; }
     /// <summary>The guarding state (+20 melee defence in the block chance).</summary>
@@ -37,9 +39,9 @@ public sealed class Fighter
     public Fighter(WeaponInstance? weapon, IEnumerable<ArmourPiece>? armour = null)
     {
         Weapon = weapon;
-        Armour = armour is null ? [] : [.. armour];
+        this.armour = armour is null ? [] : [.. armour];
         float def = 0, atk = 0, unarmed = 0, output = 1, dex = 1, dodge = 1, speed = 1;
-        foreach (var p in Armour)
+        foreach (var p in this.armour)
         {
             def += p.Data.CombatDefenceBonus;
             atk += p.Data.CombatAttackBonus;

@@ -113,7 +113,7 @@ public sealed partial class CombatSystem
         int t = s.TargetSlot;
         var fighter = cold.Fighter!;
         var tc = table.Cold(t)!;
-        float gap = Vector2.Distance(new(prev[i].Position.X, prev[i].Position.Z), new(prev[t].Position.X, prev[t].Position.Z)) - Radius(cold) - Radius(tc);
+        float gap = Vector2.Distance(new(prev[i].Position.X, prev[i].Position.Z), new(prev[t].Position.X, prev[t].Position.Z)) - CombatTuning.Footprint(cold) - CombatTuning.Footprint(tc);
         bool moving = new Vector2(prev[t].Velocity.X, prev[t].Velocity.Z).Length() >= 1;
         float weaponReach = fighter.Unarmed ? 99 : fighter.Weapon!.Data.Length * 0.5f;
         float skill = Eff(cold, fighter.WeaponSkill);
@@ -179,7 +179,7 @@ public sealed partial class CombatSystem
         else
         {
             block = 0;
-            float effective = DefenceFormulas.EffectiveDefence(Eff(cold, StatsEnumerated.MartialArts), fighter.EncumbranceFactor, LegFactor(cold.Medical!), fighter.DefenceBonus, fighter.Guarding);
+            float effective = DefenceFormulas.EffectiveDefence(Eff(cold, StatsEnumerated.MartialArts), fighter.EncumbranceFactor, Speed.LegFactor(cold.Medical!), fighter.DefenceBonus, fighter.Guarding);
             dodge = DefenceFormulas.BlockChance(effective, attack.AttackSkill, combat, 0, 95);
         }
         int pick = TechniqueChooser.ChooseReaction(techniques, fighter.Kind, 0, false, fighter.CanBlock, direction, block, dodge, chanceRoll, pickRoll);
@@ -192,19 +192,5 @@ public sealed partial class CombatSystem
         s.ReactTech = pick;
         s.ReactStart = start;
         s.ReactTicks = ticks;
-    }
-
-    /// <summary>The worse leg's health fraction x 1.8 clamped to [0, 1] (<c>FUN_140884970</c>); 1 for a body without legs.</summary>
-    static float LegFactor(MedicalState medical)
-    {
-        float worst = 1;
-        bool any = false;
-        foreach (var p in medical.Parts)
-        {
-            if (p.Template.Type != BodyPartType.Leg) continue;
-            any = true;
-            worst = MathF.Min(worst, p.Fraction);
-        }
-        return any ? Math.Clamp(worst * 1.8f, 0, 1) : 1;
     }
 }

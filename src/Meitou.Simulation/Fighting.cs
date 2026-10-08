@@ -26,7 +26,7 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
             if (t < 0 || t >= table.HighWater || !next[t].Alive || next[t].Generation != st.TargetGeneration) continue;
             const ushort Path = (ushort)(MoveFlags.NeedPath | MoveFlags.Pending | MoveFlags.HasPath);
             var d = next[t].Position - n.Position;
-            float gap = MathF.Sqrt(d.X * d.X + d.Z * d.Z) - Radius(table.Cold(i)) - Radius(table.Cold(t));
+            float gap = MathF.Sqrt(d.X * d.X + d.Z * d.Z) - CombatTuning.Footprint(table.Cold(i)) - CombatTuning.Footprint(table.Cold(t));
             n.TaskTime -= dt;
             if (st.Down || st.AttackTech >= 0 || st.ReactTech >= 0 || gap <= CombatTuning.CloseInGap)
             {
@@ -49,9 +49,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
             n.TaskTime = RepathSeconds;
         }
     }
-
-    static float Radius(CharacterCold? c) => c?.Race?.PathfindFootprintRadius ?? 4;
 }
+
 
 /// <summary>
 /// A minimal answer to being attacked (an <b>engine rule</b>, the original's AI is stage 9): every <see cref="CheckEveryTicks"/> ticks, a character that is awake, armed with a

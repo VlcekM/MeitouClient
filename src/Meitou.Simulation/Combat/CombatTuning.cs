@@ -15,4 +15,10 @@ public static class CombatTuning
     public const float DefaultClipSeconds = 1;
     /// <summary>A fighter closes in until the gap between bodies is this (units), when it moves by itself.</summary>
     public const float CloseInGap = 3;
+
+    /// <summary>The footprint radius of a human, used when a character has no race data.</summary>
+    public const float DefaultFootprint = 4;
+
+    /// <summary>The radius a body counts with when the gap between two bodies is taken: the race's <c>pathfind footprint radius</c>.</summary>
+    internal static float Footprint(CharacterCold? c) => c?.Race?.PathfindFootprintRadius ?? DefaultFootprint;
 }

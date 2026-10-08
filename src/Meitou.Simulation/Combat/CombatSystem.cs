@@ -33,6 +33,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed
     readonly AnimationLengths lengths;
     readonly XpService xp;
     readonly List<CombatLogEntry> log = [];
+    readonly List<MedicalEvent> hitEvents = [];
     CombatSlot[] read = [];
     CombatSlot[] write = [];
 
@@ -179,7 +180,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed
             n.Yaw = MathF.Atan2(dir.X, dir.Y);
             if (!Settings.SelfApproach) continue;
             bool busy = s.Down || s.AttackTech >= 0 || s.ReactTech >= 0 || now < s.StunUntil;
-            float gap = distance - Radius(cold) - Radius(table.Cold(t)!);
+            float gap = distance - CombatTuning.Footprint(cold) - CombatTuning.Footprint(table.Cold(t));
             if (busy || gap <= CombatTuning.CloseInGap)
             {
                 n.Velocity = default;
@@ -196,8 +197,6 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed
             else n.Velocity = default;
         }
     }
-
-    static float Radius(CharacterCold c) => c.Race?.PathfindFootprintRadius ?? 4;
 
     MedicalContext MakeContext(World world, int slot, CharacterCold cold) =>
         new(constants, options, cold.Race!)
