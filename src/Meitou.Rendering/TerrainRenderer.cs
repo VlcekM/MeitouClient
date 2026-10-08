@@ -236,26 +236,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     }
 
     /// <summary>Height at a world point from the same grids the shaders read (bilinear, blended at the region's edge).</summary>
-    public float HeightAt(float x, float z)
-    {
-        float h = WorldLayout.HalfWorldSize;
-        float c = Bilinear(coarse, coarseSize, coarseSize, x + h, z + h, WorldLayout.WorldSize / (float)(coarseSize - 1));
-        var (x0, z0) = fine.WorldOf(0, 0);
-        float x1 = (float)x0 + (fine.Columns - 1) * fine.Spacing, z1 = (float)z0 + (fine.Rows - 1) * fine.Spacing;
-        float w = Math.Clamp(Math.Min(Math.Min(x - (float)x0, x1 - x), Math.Min(z - (float)z0, z1 - z)) / fineBand, 0, 1);
-        if (w <= 0) return c;
-        return c + (Bilinear(fine.Raw, fine.Columns, fine.Rows, x - (float)x0, z - (float)z0, fine.Spacing) - c) * w;
-    }
+    public float HeightAt(float x, float z) => Snapshot().HeightAt(x, z);
 
-    static float Bilinear(ushort[] raw, int cols, int rows, float x, float z, float spacing)
-    {
-        float fx = Math.Clamp(x / spacing, 0, cols - 1), fz = Math.Clamp(z / spacing, 0, rows - 1);
-        int i = Math.Clamp((int)fx, 0, Math.Max(cols - 2, 0)), j = Math.Clamp((int)fz, 0, Math.Max(rows - 2, 0));
-        int i1 = Math.Min(i + 1, cols - 1), j1 = Math.Min(j + 1, rows - 1);
-        float tx = fx - i, tz = fz - j;
-        float v = raw[j * cols + i] * (1 - tx) * (1 - tz) + raw[j * cols + i1] * tx * (1 - tz) + raw[j1 * cols + i] * (1 - tx) * tz + raw[j1 * cols + i1] * tx * tz;
-        return v * (WorldLayout.MaxHeight / ushort.MaxValue);
-    }
+    /// <summary>The height sources as they are now, for a worker thread (render thread only: the fine window is swapped there).</summary>
+    internal HeightSnapshot Snapshot() => new(coarse, coarseSize, fine, fineBand);
 
     /// <summary>Draws the terrain; nodes whose highest point is under <paramref name="cullBelow"/> are skipped (the reflection pass clips everything below the water). <paramref name="secondary"/>: the reflection's call, with its own quadtree for its own LOD distance.</summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity, bool secondary = false)

@@ -232,6 +232,25 @@ How it works (status as in [README.md](README.md)):
     time over Port South's beach (distance 900 and 350) 0.06 and 0.10 ms, against 0.03 and 0.05 ms for the Faithful water; with
     `--water-grid 128` 0.10 and 0.04 ms, so on this GPU the grid's size is lost in the noise and the per-pixel shore work is what
     costs (an integrated GPU is not measured yet). The reflection pass is unchanged (the mirror stays the plane at Y = 100).
+  - *Shore distance field* (`ShoreField`, `ShoreBake`; not yet read by the water shader, which still uses the depth / slope estimate above; the
+    replacement for it). A 1024² grid of 10-unit texels (±5120 units round the eye) holding (signed distance to the waterline, exposure). The
+    waterline is where 100 − height changes sign between neighbouring texels, placed by linear interpolation of that difference, so it is
+    sub-texel; the distance is to those points (8SSEDT: two sweeps carrying the nearest crossing point, O(N²)), positive over water and
+    negative over land, clamped to ±4000, then one 3×3 binomial Gaussian so the gradient has no kinks. **Exposure** is
+    smoothstep(200, 450, reach), reach = the largest distance-to-shore of any water within 500 units (measured on 8-texel blocks, a disc
+    dilation over them, bilinearly upsampled): a pond, swamp channel or narrow bay whose water is never more than about 200 units from a
+    shore within 500 units is 0, open sea (450 units of open water within 500) is 1. Past the grid's edge the water counts as open sea (reach =
+    max) when the nearest edge block is water, else as land. The bake runs on a worker thread from a `HeightSnapshot` (an immutable copy of
+    the terrain's coarse grid, fine window and band, taken on the render thread by `TerrainRenderer.Snapshot()`; `HeightAt` is defined
+    through it); `ShoreField.Update(eye, snapshot)` starts a bake when nothing is baked yet or the eye is more than 2560 units (a quarter of
+    the width) from the centre in X or Z, the centre snapped to whole texels so the field does not swim, and uploads the finished grid
+    as an RG32F texture (8 MB, linear, clamped) on the render thread; the old texture is released four frames later. **Verified** (unit tests
+    on synthetic terrain, `ShoreFieldTests`): on a straight beach at three angles and on a circular island the distance is within 3 units
+    (0.3 texel) of the true one with the right sign; a 150-unit pond and the inside of a 300-unit-wide channel have exposure under 0.05,
+    open sea more than 0.95; the gradient direction turns less than 30 degrees between neighbouring water texels near a straight shore.
+    **Observed** (2026-10-08, desktop CPU with 12 logical cores, Release, 1024², a height function of two sines and a plane): the bake
+    took about 63 ms per grid (mean of 5; the height sampling alone about 10 ms; the sweeps ran 35 ms with managed arrays, before they were
+    made pointer-based on one packed array). The rebake rule means one bake per 2560 units flown. The GPU upload was not measured (no GPU test).
 - **Sky, light and atmosphere** (`SkyRenderer`, `AtmosphereShaders`, `SkyClock`, `SkyXModel`, `KenshiHaze`, `KenshiLighting`,
   `AmbientMap`; facts in [formats/sky.md](formats/sky.md) and [formats/lighting.md](formats/lighting.md)): the sun follows the
   game's formula for the hour (latitude 54, sunrise 5, sunset 23). In game-sky mode (default) everything is in the game's own HDR
