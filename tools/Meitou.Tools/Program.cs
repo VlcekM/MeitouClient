@@ -15,6 +15,7 @@ return args switch
     ["world"] => WithInstall(WorldSurvey.Run),
     ["particles"] => WithInstall(i => ParticleSurvey.Run(i, effects: false)),
     ["particles", "effects"] => WithInstall(i => ParticleSurvey.Run(i, effects: true)),
+    ["particles", "weathers"] => WithInstall(i => ParticleSurvey.Run(i, effects: false, weathers: true)),
     ["navmesh", .. var navArgs] => WithInstall(i => NavmeshTool.Run(i, navArgs)),
     ["weather", .. var weatherArgs] => WithInstall(i => WeatherTool.Run(i, weatherArgs)),
     ["image-diff", var a, var b] =>ImageDiff.Run(a, b, null),

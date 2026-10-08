@@ -179,6 +179,44 @@ public sealed class PuSystemDef
         }
     }
 
+    /// <summary>
+    /// A bound on how far from the system's node a particle can get (Observed, a viewer measure for culling): the emitter's extent, plus the
+    /// speed times the life, plus the linear forces' reach, plus the particle's largest size (with the scale affectors' growth), times the scale.
+    /// The camera and global groups (wrapped round the camera) do not use it.
+    /// </summary>
+    public float BoundingRadius
+    {
+        get
+        {
+            float radius = 0;
+            float scale = Math.Max(Scale.X, Math.Max(Scale.Y, Scale.Z));
+            foreach (var t in Techniques)
+            {
+                if (!t.Enabled) continue;
+                float growth = 0;
+                foreach (var a in t.Affectors.Where(a => a.Type == PuAffectorType.Scale))
+                    growth += new[] { a.ScaleX, a.ScaleY, a.ScaleZ, a.ScaleXyz }.Where(d => d is not null).Select(d => Math.Max(Math.Abs(d!.Range.Min), Math.Abs(d.Range.Max))).DefaultIfEmpty(0).Max();
+                float force = t.Affectors.Where(a => a.Type == PuAffectorType.LinearForce).Select(a => a.Force.Length()).DefaultIfEmpty(0).Sum();
+                foreach (var e in t.Emitters)
+                {
+                    float life = e.Life.Range.Max;
+                    float extent = e.Type switch
+                    {
+                        PuEmitterType.Box => e.BoxSize.Length() * 0.5f * scale,
+                        PuEmitterType.Circle or PuEmitterType.SphereSurface => e.Radius * scale,
+                        PuEmitterType.Line => e.End.Length() * scale,
+                        _ => 0,
+                    };
+                    float speed = Math.Max(Math.Abs(e.Velocity.Range.Min), Math.Abs(e.Velocity.Range.Max)) * ScaleVelocity;
+                    float size = new[] { e.Width, e.Height, e.AllDimensions }.Where(d => d is not null).Select(d => d!.Range.Max).DefaultIfEmpty(Math.Max(t.DefaultWidth, t.DefaultHeight)).Max() * scale;
+                    float reach = (t.Position + e.Position * Scale).Length() + extent + speed * life + 0.5f * force * life * life + size + growth * life;
+                    radius = Math.Max(radius, reach);
+                }
+            }
+            return Math.Min(radius, 30000);
+        }
+    }
+
     /// <summary>Builds the typed system from a parsed <c>system</c> block.</summary>
     public static PuSystemDef From(PuNode system, string file = "")
     {

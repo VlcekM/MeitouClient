@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data.Particles;
@@ -7,10 +8,11 @@ using Meitou.Rendering.Gpu;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// ParticleUniverse particles as instanced billboards (docs/formats/particle-universe.md "Drawing"): the weather's effect groups are
-/// simulated on the CPU (<see cref="EffectGroup"/>), each technique's particles are written into the frame's constants (a ring per frame
-/// slot, no stall) and drawn as one instanced quad strip with its material's texture and blend, after the opaque scene, depth tested and
-/// never written. Nothing is recorded while no group has a particle, so a clear weather draws exactly what it did.
+/// ParticleUniverse particles as instanced billboards (docs/formats/particle-universe.md "Drawing"): the weather's effect groups and the map's
+/// effect placers are simulated on the CPU (<see cref="EffectGroup"/>), each technique's particles are written into the frame's constants (a ring
+/// per frame slot, no stall) and drawn as one instanced quad strip with its material's texture and blend, after the opaque scene, depth tested and
+/// never written. Fog volumes (the twisters' dust balls) are drawn as analytic soft spheres. Nothing is recorded while no unit has a particle, so
+/// a clear weather with no placer in sight draws exactly what it did.
 /// </summary>
 public sealed unsafe class ParticleRenderer : IDisposable
 {
@@ -84,29 +86,80 @@ public sealed unsafe class ParticleRenderer : IDisposable
         }
         """;
 
+    // The fog volumes (docs/formats/weather.md "Fog volumes", Observed: how the game draws them is unknown): a quad facing the eye at the sphere's
+    // nearest point (so the scene's depth hides it where something is in front of the sphere), each pixel's ray cut by the sphere analytically; the
+    // alpha follows the chord's length through the sphere over the volume's density distance.
+    const string FogVertex = """
+        #version 330 core
+        layout(location = 0) in vec2 aCorner;
+        uniform mat4 uViewProjection;
+        uniform vec4 uQuad;                         // camera-relative centre of the quad, half extent
+        uniform vec3 uRight;
+        uniform vec3 uUp;
+        out vec3 vRay;
+        void main()
+        {
+            vec3 p = uQuad.xyz + (uRight * aCorner.x + uUp * aCorner.y) * (2.0 * uQuad.w);
+            gl_Position = uViewProjection * vec4(p, 1.0);
+            vRay = p;
+        }
+        """;
+
+    const string FogFragment = """
+        #version 330 core
+        in vec3 vRay;
+        out vec4 fragColour;
+        uniform vec4 uSphere;                       // camera-relative centre, radius
+        uniform vec4 uColour;                       // rgb, alpha of the volume (with the fade)
+        uniform vec4 uDensity;                      // the density distance
+        void main()
+        {
+            vec3 d = normalize(vRay);
+            float b = dot(d, uSphere.xyz);
+            float h = b * b - (dot(uSphere.xyz, uSphere.xyz) - uSphere.w * uSphere.w);
+            if (h <= 0.0) discard;
+            float s = sqrt(h);
+            float t0 = max(b - s, 0.0), t1 = b + s;
+            if (t1 <= 0.0) discard;
+            float a = uColour.a * (1.0 - exp(-2.0 * (t1 - t0) / uDensity.x));
+            fragColour = vec4(uColour.rgb, a);
+        }
+        """;
+
     const int InstanceBytes = 64;
+    /// <summary>The farthest a unit is drawn (the near depth slice's far plane is about this).</summary>
+    public const float DrawRange = 20400;
 
     readonly GpuContext gpu;
     readonly string texturesDirectory;
     readonly LegacyProgram program;
     readonly NativeSegment segment;
+    readonly LegacyProgram fogProgram;
+    readonly NativeSegment fogSegment;
     readonly DeviceBuffer quad;
-    readonly VertexArrayBindings vertexSource;
+    readonly VertexArrayBindings vertexSource, fogVertexSource;
     readonly BufferBinding[] bindings = new BufferBinding[5];
+    readonly BufferBinding[] fogBindings = new BufferBinding[1];
     readonly UniformHandle viewProjection, cameraRight, cameraUp, mode, anchor, commonDirection, commonUp, colourScale;
+    readonly UniformHandle fogViewProjection, fogQuad, fogRight, fogUp, fogSphere, fogColour, fogDensity;
     readonly SamplerSlot textureSlot;
     readonly SampledImage white;
     readonly Dictionary<string, SampledImage?> textures = new(StringComparer.OrdinalIgnoreCase);
     readonly List<EffectGroup> groups = [];
+    readonly List<EffectGroup> placerGroups = [];
+    readonly List<EffectGroup> toWarm = [];
     readonly List<DrawItem> draws = [];
     WeatherEffectInput input = WeatherEffectInput.None;
     object? inputIdentity;
     int inputVersion = -1;
-    bool needsPrewarm;
     double lastSeconds = double.NaN;
-    int drawnParticles;
+    int drawnParticles, drawnUnits, activeUnits, drawnFog;
+    Task? simulation;
+    long simulationTicks, waitTicks;
 
     public ParticleLibrary Library { get; }
+    /// <summary>What the groups need of the world: the ground height, the area effects are placed in. The viewer fills it once; the scheduler's hookup can change <see cref="EffectWorld.Area"/> with the region.</summary>
+    public EffectWorld World { get; } = new();
     /// <summary>The viewer's <c>--no-particles</c>: nothing is simulated or drawn.</summary>
     public bool Enabled { get; set; } = true;
     /// <summary>Seconds simulated before the first picture, for the new groups: null (the default) is each system's longest particle life, capped at <see cref="MaxAutoPrewarm"/>; 0 starts empty.</summary>
@@ -116,9 +169,17 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public int Seed { get; set; } = 1;
     /// <summary>Particles drawn in the last frame, for the statistics.</summary>
     public int DrawnParticles => drawnParticles;
-    public int ParticleCount => groups.Sum(g => g.Simulation.ParticleCount);
+    public int DrawnUnits => drawnUnits;
+    public int DrawnFogVolumes => drawnFog;
+    public int ActiveUnits => activeUnits;
+    /// <summary>The last frame's simulation time (summed over its threads' work: the wall time of the background task) and how long the main thread waited for it, in milliseconds.</summary>
+    public double SimulationMilliseconds => simulationTicks * 1000.0 / Stopwatch.Frequency;
+    public double WaitMilliseconds => waitTicks * 1000.0 / Stopwatch.Frequency;
+    public int ParticleCount { get { Sync(); return groups.Concat(placerGroups).Sum(g => g.ParticleCount); } }
+    /// <summary>The weather's groups (not the map placers').</summary>
     public IReadOnlyList<EffectGroup> Groups => groups;
-    /// <summary>The entries of the weather's effect list that have no group yet (the point, wandering and global types; or an unknown particle system).</summary>
+    public IReadOnlyList<EffectGroup> PlacerGroups => placerGroups;
+    /// <summary>The entries of the weather's effect list that have no group (a type that is not a weather effect, or an unknown particle system).</summary>
     public IReadOnlyList<WeatherEffectEntry> Skipped => skipped;
     readonly List<WeatherEffectEntry> skipped = [];
 
@@ -129,6 +190,11 @@ public sealed unsafe class ParticleRenderer : IDisposable
         public PuTechniqueDef Technique;
         public ParticleMaterial Material;
         public SampledImage Texture;
+        // a fog volume instead of particles (Technique is null then)
+        public bool IsFog;
+        public Vector3 FogCentre;
+        public float FogRadius, FogDensity, FogAlpha;
+        public Vector3 FogColour;
     }
 
     ParticleRenderer(GpuContext gpu, string texturesDirectory, ParticleLibrary library)
@@ -147,6 +213,15 @@ public sealed unsafe class ParticleRenderer : IDisposable
         commonUp = program.Uniform("uCommonUp");
         colourScale = program.Uniform("uColourScale");
         textureSlot = program.Sampler("uTexture");
+        fogProgram = LegacyProgram.Create(gpu, FogVertex, FogFragment, "particle fog volumes");
+        fogSegment = new NativeSegment(gpu, fogProgram, Silk.NET.Vulkan.PrimitiveTopology.TriangleStrip, "particle fog volumes");
+        fogViewProjection = fogProgram.Uniform("uViewProjection");
+        fogQuad = fogProgram.Uniform("uQuad");
+        fogRight = fogProgram.Uniform("uRight");
+        fogUp = fogProgram.Uniform("uUp");
+        fogSphere = fogProgram.Uniform("uSphere");
+        fogColour = fogProgram.Uniform("uColour");
+        fogDensity = fogProgram.Uniform("uDensity");
         float[] corners = [-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, -0.5f, 0.5f, 0.5f];   // triangle strip
         quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "particle quad");
         using (var batch = gpu.Uploads.Begin()) batch.Write(quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(corners.AsSpan()));
@@ -155,6 +230,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         for (int a = 0; a < 4; a++)
             attributes[1 + a] = new LegacyProgram.Attribute(default, Silk.NET.Vulkan.Format.R32G32B32A32Sfloat, InstanceBytes, true);
         vertexSource = new VertexArrayBindings(attributes, default);
+        fogVertexSource = new VertexArrayBindings([WaterRenderer.QuadAttribute(quad)], default);
         white = SampledImage.Rgba8(gpu, 1, 1, [255, 255, 255, 255], repeat: false, mipmaps: false, "particle white");
     }
 
@@ -162,64 +238,157 @@ public sealed unsafe class ParticleRenderer : IDisposable
         new(gpu, Path.Combine(install.DataDirectory, "particles", "textures"), library ?? ParticleLibrary.Load(install));
 
     /// <summary>
-    /// Sets the weather's effect list. Groups are rebuilt when the list object or its <see cref="WeatherEffectInput.Version"/> changed; a
-    /// group whose type has none yet (everything but the camera effects, in this part) is skipped.
+    /// Sets the weather's effect list. Groups are rebuilt when the list object or its <see cref="WeatherEffectInput.Version"/> changed; an entry whose
+    /// type is not a weather effect (NONE) or whose particle system is unknown is skipped.
     /// </summary>
     public void SetWeather(WeatherEffectInput weather)
     {
+        Sync();
         if (ReferenceEquals(weather, inputIdentity) && weather.Version == inputVersion) { input = weather; return; }
         (input, inputIdentity, inputVersion) = (weather, weather, weather.Version);
+        toWarm.RemoveAll(groups.Contains);
         groups.Clear();
         skipped.Clear();
         int i = 0;
         foreach (var entry in weather.Effects)
         {
-            if (EffectGroups.Create(entry, Library, Seed + i++) is { } group) groups.Add(group);
+            if (EffectGroups.Create(entry, Library, Seed + i++, World) is { } group) { groups.Add(group); toWarm.Add(group); }
             else skipped.Add(entry);
         }
-        needsPrewarm = groups.Count > 0;
+    }
+
+    /// <summary>
+    /// The map's effect placers (docs/formats/weather.md "Effect placers on the map"): always on, whatever the weather. Replaces the previous list.
+    /// </summary>
+    public void SetPlacers(IReadOnlyList<MapEffectPlacement> placements)
+    {
+        Sync();
+        toWarm.RemoveAll(placerGroups.Contains);
+        placerGroups.Clear();
+        placerGroups.AddRange(MapEffectPlacers.Groups(placements, Library, World, Seed));
+        toWarm.AddRange(placerGroups);
     }
 
     /// <summary>
     /// Steps the groups to <paramref name="seconds"/> on the frame clock (the first call only sets the clock, so a held-still frame
-    /// advances nothing) and, once after a weather change, runs the start-up so particles are present at the first picture.
+    /// advances nothing) and, once after a weather change, runs the start-up so particles are present at the first picture. The simulation of the
+    /// units (the particles) then runs on the thread pool, one unit per task, while the caller does the rest of its frame; <see cref="Draw"/> waits for it.
     /// </summary>
     public void Update(double seconds, WorldCamera camera)
     {
-        if (!Enabled || groups.Count == 0) { lastSeconds = seconds; return; }
+        Sync();
+        if (!Enabled || (groups.Count == 0 && placerGroups.Count == 0)) { lastSeconds = seconds; return; }
         float dt = double.IsNaN(lastSeconds) ? 0 : (float)Math.Clamp(seconds - lastSeconds, 0, 0.25);
         lastSeconds = seconds;
         var view = new EffectCamera(camera.Eye, camera.Forward);
-        if (needsPrewarm)
+        if (toWarm.Count > 0)
         {
-            needsPrewarm = false;
-            foreach (var g in groups)
+            foreach (var g in toWarm.ToArray())
             {
-                float warm = PrewarmSeconds ?? Math.Min(ParticleSimulation.LongestLife(g.Simulation.Definition), MaxAutoPrewarm);
-                if (warm > 0) g.Prewarm(warm, view, input);
+                float warm = PrewarmSeconds ?? Math.Min(ParticleSimulation.LongestLife(g.System), MaxAutoPrewarm);
+                if (g is CameraEffectGroup || warm > 0 || g.Entry is not null) g.Prewarm(warm, view, input);
+                else g.Prewarm(0, view, input);
             }
+            toWarm.Clear();
         }
         foreach (var g in groups) g.Update(dt, view, input);
+        foreach (var g in placerGroups) g.Update(dt, view, input);
+        StartSimulation();
+    }
+
+    void StartSimulation()
+    {
+        var work = new List<EffectUnit>();
+        activeUnits = 0;
+        foreach (var g in groups.Concat(placerGroups))
+            foreach (var u in g.Units)
+            {
+                if (!u.Active) continue;
+                activeUnits++;
+                if (u.Pending > 0) work.Add(u);
+            }
+        if (work.Count == 0) { simulationTicks = 0; return; }
+        // Heavier units first, so the pool's last task is a short one.
+        work.Sort((a, b) => b.Pending.CompareTo(a.Pending));
+        var array = work.ToArray();
+        simulation = Task.Run(() =>
+        {
+            long start = Stopwatch.GetTimestamp();
+            if (array.Length == 1) array[0].Advance();
+            else Parallel.ForEach(array, u => u.Advance());
+            simulationTicks = Stopwatch.GetTimestamp() - start;
+        });
+    }
+
+    /// <summary>One line per effect unit with its place relative to the eye (for the viewer's log): which effects exist, how far and in which direction, whether simulated.</summary>
+    public IEnumerable<string> Describe(Vector3 eye, int max = 60)
+    {
+        Sync();
+        int n = 0;
+        foreach (var g in groups.Concat(placerGroups))
+            foreach (var u in g.Units)
+            {
+                if (g is CameraEffectGroup) continue;
+                if (n++ >= max) { yield return "  ..."; yield break; }
+                var d = u.Position - eye;
+                yield return $"  {u.Effect.Name,-26} [{u.Effect.Type}] {(u.Active ? "sim " : "idle")} {u.Simulation?.ParticleCount ?? 0,6} particles  at {u.DistanceToCamera,7:0} ({d.X:+0;-0}, {d.Y:+0;-0}, {d.Z:+0;-0}) = world ({u.Position.X:0}, {u.Position.Y:0}, {u.Position.Z:0})  life {(float.IsPositiveInfinity(u.Life) ? "inf" : u.Life.ToString("0"))}  radius {u.Radius:0}";
+            }
+    }
+
+    /// <summary>Waits for the frame's particle simulation.</summary>
+    void Sync()
+    {
+        if (simulation is null) return;
+        long start = Stopwatch.GetTimestamp();
+        simulation.Wait();
+        waitTicks = Stopwatch.GetTimestamp() - start;
+        simulation = null;
     }
 
     /// <summary>
     /// Writes this frame's instances into the frame's constants and records the draws into the open pass. Called in the near depth slice
-    /// only (the camera groups' particles are within a few hundred units of the eye). The viewer's near plane grows with the camera's
-    /// height (to 200), the game's is a few units: a particle nearer than the slice's near plane (<paramref name="nearPlane"/>) is drawn with
+    /// only (units beyond <see cref="DrawRange"/> are not drawn). The viewer's near plane grows with the camera's height (to 200), the game's is a few
+    /// units: a particle nearer than the slice's near plane (<paramref name="nearPlane"/>) is drawn with
     /// <paramref name="closeViewProjection"/> (a projection with a near plane of 0.5) and no depth test, which is right because nothing of
-    /// the scene is nearer than that plane; the others as usual, tested against the scene's depth.
+    /// the scene is nearer than that plane; the others as usual, tested against the scene's depth. Units are drawn far to near.
     /// </summary>
     public void Draw(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection)
     {
+        Sync();
         drawnParticles = 0;
-        if (!Enabled || groups.Count == 0) return;
+        drawnUnits = 0;
+        drawnFog = 0;
+        if (!Enabled || (groups.Count == 0 && placerGroups.Count == 0)) return;
         draws.Clear();
         var constants = gpu.Frame.Constants;
         var forward = -new Vector3(view.M13, view.M23, view.M33);   // the view's -Z axis in the world
-        foreach (var g in groups)
+        var planes = WorldCamera.FrustumPlanes(viewProjectionMatrix);
+        var units = new List<EffectUnit>();
+        foreach (var g in groups.Concat(placerGroups))
+            foreach (var u in g.Units)
+            {
+                if (u.Radius != float.PositiveInfinity)
+                {
+                    if (u.DistanceToCamera - u.Radius > DrawRange) continue;
+                    if (!InFrustum(planes, u.Position, u.Radius)) continue;
+                }
+                units.Add(u);
+            }
+        units.Sort((a, b) => b.DistanceToCamera.CompareTo(a.DistanceToCamera));
+        foreach (var u in units)
         {
-            var sim = g.Simulation;
-            var offset = g.Anchor - eye;
+            var offset = u.Anchor - eye;
+            // Fog volumes first (behind the unit's own particles).
+            float fade = u.FogFade;
+            if (fade > 0)
+                foreach (var f in u.Effect.FogVolumes)
+                    draws.Add(new DrawItem
+                    {
+                        IsFog = true, FogCentre = u.Position + f.Offset - eye, FogRadius = f.Radius, FogDensity = Math.Max(f.Distance, 1), FogAlpha = f.Alpha * fade,
+                        FogColour = f.Colour,
+                    });
+            if (u.Simulation is not { } sim) continue;
+            drawnUnits++;
             for (int t = 0; t < sim.Techniques.Count; t++)
             {
                 int n = sim.TechniqueParticleCount(t);
@@ -228,7 +397,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 var material = Library.FindMaterial(def.Material);
                 if (material is null) continue;
                 var instances = constants.Allocate((ulong)(n * InstanceBytes), 16);
-                int written = sim.Collect(t, new Span<ParticleInstance>(instances.Pointer, n), g.Tint, g.Alpha, offset);
+                int written = sim.Collect(t, new Span<ParticleInstance>(instances.Pointer, n), u.Tint, u.Alpha, offset);
                 if (written == 0) continue;
                 int close = PartitionByDepth(new Span<ParticleInstance>(instances.Pointer, written), forward, nearPlane);
                 draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material, Texture = TextureFor(material) });
@@ -253,6 +422,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         float ambient = Math.Clamp(sunDirection.Y * 5 + 0.2f, 0.1f, 1f);
         foreach (var d in draws)
         {
+            if (d.IsFog) { drawnFog++; DrawFog(cmd, d, in baseState, in targets, hasDepth, hasColour, vp, closeVp, right, up, forward, ambient, rgb); continue; }
             var m = d.Material;
             var r = d.Technique.Renderer;
             // The far particles first (tested against the scene's depth), then the ones nearer than the slice's near plane (no depth test).
@@ -289,6 +459,61 @@ public sealed unsafe class ParticleRenderer : IDisposable
             }
         }
         gpu.EndGuest(cmd);
+    }
+
+    /// <summary>One fog volume: a quad at the sphere's nearest point, or a screen-filling one (no depth test) when the eye is inside the sphere.</summary>
+    void DrawFog(CommandList cmd, in DrawItem d, in DrawState baseState, in PassTargets targets, bool hasDepth, bool hasColour, Matrix4x4 vp, Matrix4x4 closeVp,
+        Vector3 cameraRightAxis, Vector3 cameraUpAxis, Vector3 forward, float ambient, Silk.NET.Vulkan.ColorComponentFlags rgb)
+    {
+        float dist = d.FogCentre.Length();
+        bool inside = dist <= d.FogRadius * 1.02f;
+        Vector4 quadData;
+        Vector3 axisRight, axisUp;
+        if (inside)
+        {
+            // Close to the eye on the view axis, wide enough for any field of view (the close projection's near plane is 0.5).
+            quadData = new Vector4(forward * 1.0f, 4);
+            axisRight = cameraRightAxis;
+            axisUp = cameraUpAxis;
+        }
+        else
+        {
+            var n = d.FogCentre / dist;
+            float nearest = dist - d.FogRadius;
+            float half = nearest * d.FogRadius / MathF.Sqrt(Math.Max(dist * dist - d.FogRadius * d.FogRadius, 1)) * 1.06f;
+            var helper = MathF.Abs(n.Y) < 0.99f ? Vector3.UnitY : Vector3.UnitX;
+            axisRight = Vector3.Normalize(Vector3.Cross(helper, n));
+            axisUp = Vector3.Cross(n, axisRight);
+            quadData = new Vector4(n * nearest, half);
+        }
+        var state = baseState with
+        {
+            Cull = Silk.NET.Vulkan.CullModeFlags.None, DepthTest = hasDepth && !inside, DepthWrite = false, ColourMask = rgb,
+            Blend = hasColour ? BlendFor(ParticleBlend.Alpha) : BlendState.Off,
+        };
+        var matrix = inside ? closeVp : vp;
+        fogProgram.Set(fogViewProjection, in matrix);
+        fogProgram.Set(fogQuad, quadData);
+        fogProgram.Set(fogRight, axisRight);
+        fogProgram.Set(fogUp, axisUp);
+        fogProgram.Set(fogSphere, d.FogCentre.X, d.FogCentre.Y, d.FogCentre.Z, d.FogRadius);
+        fogProgram.Set(fogColour, d.FogColour.X * ambient, d.FogColour.Y * ambient, d.FogColour.Z * ambient, d.FogAlpha);
+        fogProgram.Set(fogDensity, d.FogDensity, 0, 0, 0);
+        cmd.SetRaster(state.Cull, state.Front);
+        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+        cmd.BindPipeline(fogSegment.Get(state, targets.Formats, fogVertexSource));
+        fogBindings[0] = new BufferBinding(quad.Handle, 0);
+        cmd.BindVertexBuffers(0, fogBindings);
+        fogProgram.Flush(cmd);
+        cmd.Draw(4, 1, 0, 0);
+    }
+
+    static bool InFrustum(Vector4[] planes, Vector3 centre, float radius)
+    {
+        foreach (var p in planes)
+            if (p.X * centre.X + p.Y * centre.Y + p.Z * centre.Z + p.W < -radius * new Vector3(p.X, p.Y, p.Z).Length()) return false;
+        return true;
     }
 
     /// <summary>Moves the particles whose depth along <paramref name="forward"/> (positions are camera-relative) is under <paramref name="nearPlane"/> to the front; returns how many there are.</summary>
@@ -360,9 +585,11 @@ public sealed unsafe class ParticleRenderer : IDisposable
 
     public void Dispose()
     {
+        Sync();
         foreach (var t in textures.Values) t?.Dispose();
         white.Dispose();
         quad.Dispose();
         program.Dispose();
+        fogProgram.Dispose();
     }
 }

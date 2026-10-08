@@ -77,6 +77,11 @@ sealed class WorldOptions
     /// <summary>The weather particle effects (docs/formats/particle-universe.md): <c>--no-particles</c> turns the pass off, <c>--particle-prewarm</c> is the seconds simulated before the first picture (null: each system's longest particle life).</summary>
     public bool NoParticles;
     public float? ParticlePrewarm;
+    /// <summary><c>--particle-area &lt;radius&gt;</c> (test): weather effects are placed in a disc of this radius round the start point instead of the weather region; <c>--particle-seed</c> seeds their random choices.</summary>
+    public float? ParticleArea;
+    public int ParticleSeed = 1;
+    /// <summary><c>--particle-only a,b</c> (test): only the weather effects whose name contains one of these.</summary>
+    public string[]? ParticleOnly;
     public float? Clouds;
     public Vector2 CloudWind;
     public PostOptions Post = PostOptions.Create("meitou");
@@ -141,7 +146,7 @@ sealed class WorldOptions
           --haze-strength <x>      the viewer's haze strength: scales how far the haze is blended in (default 0.93: far mountains stay visible; 1 is the game's; also a Tab slider)
           --weather <name>         a WEATHER record's sky colour, fog, clouds, heat haze and camera particle effects (rain, ash) (default "Default": clear, no fog, no clouds, no heat haze, no particles)   --clouds <0..1> cloud density c (test override)
           --cloud-wind <x>,<z>     the clouds' drift velocity in world units per second (test; the drift is held still in --screenshot)
-          --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)
+          --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-area <r> place weather effects within r units of the start point (test)   --particle-seed <n>   --particle-only <a,b> keep only the weather effects with these in their names (test)
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
@@ -251,6 +256,9 @@ sealed class WorldOptions
                 case "--weather": o.Weather = Next(); break;
                 case "--no-particles": o.NoParticles = true; break;
                 case "--particle-prewarm": o.ParticlePrewarm = Math.Max(F(), 0); break;
+                case "--particle-area": o.ParticleArea = Math.Max(F(), 1); break;
+                case "--particle-seed": o.ParticleSeed = (int)F(); break;
+                case "--particle-only": o.ParticleOnly = Next().Split(','); break;
                 case "--clouds": o.Clouds = F(); break;
                 case "--cloud-wind": { var (wx, wz) = Pair(); o.CloudWind = new Vector2((float)wx, (float)wz); break; }
                 case "--no-stream": o.NoStream = true; break;
@@ -542,16 +550,22 @@ static class WorldFrame
             gpu.Sky.Weather = SkyWeather.Find(skyDb, o.Weather) ?? throw new ArgumentException($"no weather named '{o.Weather}'; known: {string.Join(", ", SkyWeather.Names(skyDb).Distinct().Take(12))} ...");
         }
         // A forced weather's camera particle effects (the scheduler will feed the same input later: ParticleRenderer.SetWeather).
-        if (!o.NoParticles && scene.Database is { } effectsDb && o.Weather is not null)
+        // The map's effect placers are always on (docs/formats/weather.md "Effect placers on the map"), so the particle renderer exists whatever the weather.
+        if (!o.NoParticles && scene.Database is { } effectsDb)
         {
-            var effects = WeatherEffectAdapter.FromName(effectsDb, o.Weather);
-            if (effects.Effects.Count > 0)
-            {
-                EnsureParticles(gpu, context, install).PrewarmSeconds = o.ParticlePrewarm;
-                var particles = gpu.Particles!;
-                particles.SetWeather(effects);
-                Console.WriteLine($"particles {string.Join(", ", effects.Effects.Select(e => e.Effect.Name))} ({particles.Groups.Count} groups, {particles.Library.Systems.Count} systems read{(particles.Skipped.Count > 0 ? "; not yet: " + string.Join(", ", particles.Skipped.Select(s => $"{s.Effect.Name} [{s.Effect.Type}]")) : "")}) ({watch.ElapsedMilliseconds} ms)");
-            }
+            var effects = o.Weather is not null ? WeatherEffectAdapter.FromName(effectsDb, o.Weather) : WeatherEffectInput.None;
+            if (o.ParticleOnly is { } only)
+                effects = new WeatherEffectInput { Effects = [.. effects.Effects.Where(e => only.Any(n => e.Effect.Name.Contains(n, StringComparison.OrdinalIgnoreCase)))], Strength = effects.Strength, Wind = effects.Wind };
+            var particles = EnsureParticles(gpu, context, install);
+            particles.PrewarmSeconds = o.ParticlePrewarm;
+            particles.Seed = o.ParticleSeed;
+            particles.World.GroundHeight = terrain.HeightAt;   // main thread only: the height grid swaps as the terrain streams
+            float startX = o.CameraX is { } px ? (float)px : scene.Focus.X, startZ = o.CameraZ is { } pz ? (float)pz : scene.Focus.Z;
+            particles.World.Area = o.ParticleArea is { } areaRadius ? new DiscArea(startX, startZ, areaRadius) : RegionArea.At(WeatherAreas.Load(install), startX, startZ);
+            particles.SetWeather(effects);
+            var placers = MapEffectPlacers.Find(effectsDb, MapFeatureFile.Open(install));
+            particles.SetPlacers(placers);
+            Console.WriteLine($"particles {string.Join(", ", effects.Effects.Select(e => e.Effect.Name))} ({particles.Groups.Count} groups, {particles.Library.Systems.Count} systems read{(particles.Skipped.Count > 0 ? "; not made: " + string.Join(", ", particles.Skipped.Select(s => $"{s.Effect.Name} [{s.Effect.Type}]")) : "")}; {placers.Count} map placers in {particles.PlacerGroups.Count} groups) ({watch.ElapsedMilliseconds} ms)");
         }
         gpu.Streamer = new TerrainStreamer(install, terrain, textures, scene.Window.Step) { MaterialDistance = o.MaterialDistance };
         if (o.NoStream) gpu.Anchor = scene.Focus;

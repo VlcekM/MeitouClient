@@ -15,7 +15,7 @@ static class WeatherTool
         string? regionName = null;
         (float X, float Z)? at = null;
         int from = 0, to = 100, seed = 1;
-        bool list = false;
+        bool list = false, extents = false;
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -28,6 +28,7 @@ static class WeatherTool
                 case "--days" when i + 2 < args.Length: from = int.Parse(args[++i], CultureInfo.InvariantCulture); to = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--seed" when i + 1 < args.Length: seed = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--list": list = true; break;
+                case "--extents": extents = true; break;
                 default:
                     Console.Error.WriteLine($"Unknown or incomplete option {args[i]}.");
                     return 2;
@@ -38,6 +39,26 @@ static class WeatherTool
         var data = WeatherData.Load(db);
         var areas = WeatherAreas.Load(install);
         Console.WriteLine($"{data.Weathers.Count} weathers, {data.Seasons.Count} seasons, {data.Regions.Count} regions, {data.DaysPerYear} days per year");
+        if (extents)
+        {
+            // Each region's cells: how many, the bounding box and the cell nearest the mean in world units (for placing a camera in a region).
+            var cells = new Dictionary<string, List<(int X, int Z)>>();
+            for (int cz = 0; cz < WeatherAreas.Cells; cz++)
+                for (int cx = 0; cx < WeatherAreas.Cells; cx++)
+                {
+                    var r = areas.RegionOf(data, cx, cz);
+                    if (!cells.TryGetValue(r.Name, out var l)) cells[r.Name] = l = [];
+                    l.Add((cx, cz));
+                }
+            foreach (var (name, l) in cells.OrderByDescending(c => c.Value.Count))
+            {
+                float mx = (float)l.Average(c => c.X), mz = (float)l.Average(c => c.Z);
+                var nearest = l.OrderBy(c => (c.X - mx) * (c.X - mx) + (c.Z - mz) * (c.Z - mz)).First();
+                var (x0, z0, x1, z1) = WeatherAreas.CellRect(nearest.X, nearest.Z);
+                Console.WriteLine($"  {name,-24} {l.Count,4} cells  x {l.Min(c => c.X) - WeatherAreas.Origin}..{l.Max(c => c.X) - WeatherAreas.Origin}  z {l.Min(c => c.Z) - WeatherAreas.Origin}..{l.Max(c => c.Z) - WeatherAreas.Origin}  central cell centre at {(x0 + x1) / 2:0},{(z0 + z1) / 2:0}");
+            }
+            return 0;
+        }
         if (list)
         {
             foreach (var r in data.Regions)

@@ -333,7 +333,7 @@ public class ParticleTests
         Assert.Equal((1, 60, 600), (entry.Count, entry.RespawnMin, entry.RespawnMax));
         Assert.Equal("rain_light", WeatherEffectAdapter.FromName(db, "light rain").Effects.Single().Effect.Name);
 
-        var group = EffectGroups.Create(rain.Effects[0], library, 1)!;
+        var group = (CameraEffectGroup)EffectGroups.Create(rain.Effects[0], library, 1)!;
         var camera = new EffectCamera(new Vector3(0, 100, 0), -Vector3.UnitZ);
         group.Prewarm(2, camera, rain);
         Assert.InRange(group.Simulation.ParticleCount, 500, 5000);   // 6400 a second and a life of 0.3..1 s: about 4000 (the observer plane, world y -5.85, is far below the eye)

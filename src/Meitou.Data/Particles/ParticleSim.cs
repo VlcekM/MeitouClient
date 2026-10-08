@@ -36,6 +36,8 @@ public sealed class ParticleSimulation
 {
     /// <summary>Particles above which an affector pass splits over the thread pool.</summary>
     const int ParallelThreshold = 4096;
+    /// <summary>Slots a technique's pool starts with.</summary>
+    const int InitialPool = 128;
     /// <summary>The longest step a single <see cref="Advance"/> takes; a longer interval is split.</summary>
     public const float MaxStep = 1f / 20;
 
@@ -47,6 +49,8 @@ public sealed class ParticleSimulation
     public Vector3 Origin { get; set; }
     /// <summary>Where the coordinates of the simulation are in the world (added to a particle's position for the observers, which compare world positions). Zero when the simulation is in world coordinates itself.</summary>
     public Vector3 WorldOffset { get; set; }
+    /// <summary>The system was stopped (an effect whose life is over): the emitters make nothing more and the particles live out.</summary>
+    public bool EmissionStopped { get; set; }
     /// <summary>Seconds since the system started.</summary>
     public float Time { get; private set; }
     public int ParticleCount => techniques.Sum(t => t.Count);
@@ -90,11 +94,25 @@ public sealed class ParticleSimulation
             Emitters = [.. def.Emitters.Select(_ => new EmitterState())];
             RandomiserClock = new float[def.Affectors.Count];
             Capacity = Math.Max(def.VisualQuota, 0);
-            int n = Capacity;
-            X = new float[n]; Y = new float[n]; Z = new float[n]; Vx = new float[n]; Vy = new float[n]; Vz = new float[n];
-            Age = new float[n]; Life = new float[n]; Width = new float[n]; Height = new float[n]; Depth = new float[n]; Rotation = new float[n]; RotationSpeed = new float[n];
-            R = new float[n]; G = new float[n]; B = new float[n]; A = new float[n]; ER = new float[n]; EG = new float[n]; EB = new float[n]; EA = new float[n];
-            Seed = new uint[n]; Emitter = new byte[n];
+            Resize(Math.Min(Capacity, InitialPool));
+        }
+
+        /// <summary>The pool grows with the particles that exist (a quota of 3000 for a system that holds a few hundred costs a few hundred slots), up to the quota.</summary>
+        public void Resize(int n)
+        {
+            Array.Resize(ref X, n); Array.Resize(ref Y, n); Array.Resize(ref Z, n); Array.Resize(ref Vx, n); Array.Resize(ref Vy, n); Array.Resize(ref Vz, n);
+            Array.Resize(ref Age, n); Array.Resize(ref Life, n); Array.Resize(ref Width, n); Array.Resize(ref Height, n); Array.Resize(ref Depth, n);
+            Array.Resize(ref Rotation, n); Array.Resize(ref RotationSpeed, n);
+            Array.Resize(ref R, n); Array.Resize(ref G, n); Array.Resize(ref B, n); Array.Resize(ref A, n);
+            Array.Resize(ref ER, n); Array.Resize(ref EG, n); Array.Resize(ref EB, n); Array.Resize(ref EA, n);
+            Array.Resize(ref Seed, n); Array.Resize(ref Emitter, n);
+        }
+
+        /// <summary>Makes room for one more particle (the caller checked the quota).</summary>
+        public void Grow()
+        {
+            if (Count < X.Length) return;
+            Resize(Math.Min(Capacity, Math.Max(X.Length * 2, InitialPool)));
         }
 
         public void Remove(int i)
@@ -137,7 +155,7 @@ public sealed class ParticleSimulation
         {
             if (!t.Def.Enabled) continue;
             t.Step++;
-            Emit(t, dt, env);
+            if (!EmissionStopped) Emit(t, dt, env);
             Age(t, dt);
             Affect(t, dt, env);
             Move(t, dt, env);
@@ -238,6 +256,7 @@ public sealed class ParticleSimulation
             colour = Vector4.Lerp(a, b, random.NextSingle());
         }
 
+        t.Grow();
         int i = t.Count++;
         var local = t.Def.Position + e.Position * scale + offset;
         var p = t.Def.KeepLocal ? local : Origin + local;
@@ -544,6 +563,33 @@ public sealed class ParticleSimulation
                 t.X[i] = WrapAxis(t.X[i] - centre.X, halfExtent, edge) + centre.X;
                 t.Y[i] = WrapAxis(t.Y[i] - centre.Y, halfExtent, edge) + centre.Y;
                 t.Z[i] = WrapAxis(t.Z[i] - centre.Z, halfExtent, edge) + centre.Z;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The global effect's wrap (docs/formats/weather.md "Global"; Verified (decompiled), FUN_140101be0, in part): a particle farther than
+    /// <paramref name="radius"/> from <paramref name="centre"/> is put at a random place within ±<paramref name="radius"/> of the centre in x and z, at
+    /// the centre's height; no particle stays above <paramref name="maxHeight"/> (infinity: no limit). The game also first pushes the particle back by
+    /// 1.5 radius along a direction it keeps in a global (Unknown: not modelled).
+    /// </summary>
+    public void WrapSphere(Vector3 centre, float radius, float maxHeight, int salt)
+    {
+        float r2 = radius * radius;
+        foreach (var t in techniques)
+        {
+            if (t.Def.KeepLocal) continue;
+            for (int i = 0; i < t.Count; i++)
+            {
+                float dx = t.X[i] - centre.X, dy = t.Y[i] - centre.Y, dz = t.Z[i] - centre.Z;
+                if (dx * dx + dy * dy + dz * dz > r2)
+                {
+                    uint s = t.Seed[i] ^ (uint)salt * 2246822519u ^ t.Step * 3266489917u;
+                    t.X[i] = centre.X + (Hash01(s * 3 + 1) * 2 - 1) * radius;
+                    t.Y[i] = centre.Y;
+                    t.Z[i] = centre.Z + (Hash01(s * 3 + 2) * 2 - 1) * radius;
+                }
+                if (t.Y[i] > maxHeight) t.Y[i] = maxHeight;
             }
         }
     }
