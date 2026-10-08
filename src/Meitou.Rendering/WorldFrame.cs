@@ -919,6 +919,7 @@ static class WorldFrame
         if (gpu.Post is { } hazy) UpdateHeatHaze(gpu, hazy, sun.Y);
         // The Meitou water's waves on the game clock (the heat haze's, held still for a still picture), led by the wind at the camera.
         gpu.Water?.Animate((gpu.GameHours ?? gpu.HeatHazeHours) + gpu.WaterClockHours, gpu.WeatherState.WindDirection, gpu.WeatherState.WindSpeed);
+        gpu.Water?.Track(eye, gpu.Terrain.Snapshot());
         // The clouds drift on the frame clock (game-speed seconds, 0 while paused), held still for a still picture.
         if (gpu.Weather is { } drift) gpu.Sky.StepClouds(drift.Times.Game); else gpu.Sky.StepClouds(held);
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,

@@ -206,34 +206,47 @@ How it works (status as in [README.md](README.md)):
   `WaterRenderer` with `WaveSet`, `WaterFoam`; branch `meitou-water`, 2026-10-08). Visual only: the water the game uses stays a plane at Y = 100.
   - *Mesh.* A polar grid round the eye instead of the quad (`--water-grid <n>` segments, default 256, 128 for integrated GPUs): rings
     from 1 unit out to 6000 spaced as finely across as along (about 84000 vertices at 256), then one ring at the plane's extent. One draw.
-  - *Open water.* Four Gerstner waves (`WaveSet`): wavelengths 52 / 31 / 19 / 11 units (×1.6 in a full wind), at 0 / +26 / −34 / +69
-    degrees off the weather's wind at the camera (followed over about ten seconds), amplitude (0.004 + 0.011 w) × wavelength with the
-    wind factor w = wind speed / 60 (at most 1.5), steepness so the four stay below folding (Σ q k a ≤ 0.8), phases integrated with
-    the deep-water dispersion ω = √(98.1 k). They move the grid out to 1500-3500 units from the eye and add their slopes to the game's
-    scrolled normal map; each wave swells and fades in groups along and across its crest, so the four never settle into stripes, and the
-    normal map's second and third samples are rotated and rescaled so its 250-unit tile does not show as a grid; where the surface compresses (the Jacobian below 0.72, a stiff wind) the crests foam. They die out in water
-    shallower than 20 units.
-  - *Shore.* Per pixel (and vertex) the distance to the waterline is estimated as depth / bottom slope (the slope from central
-    differences of the terrain heights over 1.5 height cells), the direction to the shore as the slope's. Breakers (every 8 s, 110
+  - *Open water.* Tessendorf's FFT ocean (`OceanSpectrum`, `OceanWaves`, since 2026-10-08; it replaced four Gerstner waves whose
+    wavelength and speed changed with the wind, which made a change of weather look like a change of game speed). A fetch-limited JONSWAP
+    spectrum (fetch 30 km, wind U = weather wind speed / 10 m/s, 1.5 to 20) spread round the wind by Q(s) |cos(θ/2)|^2s (s after
+    Mitsuyasu, narrowest at the peak, normalised with Γ) gives each wave vector its amplitude, with random phases from a hash of the texel,
+    so a new wind keeps the pattern. Three cascades of 256² wave vectors over tiles of 250, 47 and 9 m (ratios that are not whole numbers,
+    so the tiles never line up), each keeping its own band of wave numbers (a cascade starts at 6 times its own fundamental). On the GPU each
+    frame: evolve to the game clock (ω = √(g k) quantised to multiples of 2π / 600 s, so the clock is taken modulo 600 s and float phases
+    stay small), an inverse FFT over rows and then columns (Stockham radix 2 in shared memory, four complex fields packing the eight real
+    ones: displacement x, y, z, the height's two slopes and the horizontal displacement's three derivatives), then two RGBA16F texture arrays
+    with mips. The vertices take the displacement at the mip whose texels are as far apart as the grid's vertices (finer waves would alias
+    into facets), out to 3000-5500 units; the fragment takes the slopes per pixel, so the shading never shows the grid. Foam where the
+    Jacobian of the horizontal displacement falls below 0.7 (folding crests in a wind). A change of wind of more than 10 degrees or 12 %
+    builds a new spectrum on a worker thread and blends it in over 10 game seconds; nothing is computed while the clock stands still. The
+    game's scrolled normal map stays, at a third of its strength near the eye and full beyond 6000 units (its second and third samples
+    rotated and rescaled against its 250-unit tile). The waves die out in water shallower than 20 units and towards the shore (the breakers
+    take over), and are weaker in sheltered water. **Verified** (`OceanTests`): the spectrum pairs each wave with its mirror's conjugate,
+    is empty at k = 0, on the Nyquist row and column and outside each band; the spreading integrates to 1; the GPU's transform of one wave
+    per cascade gives Dy = 2A cos(k·x − ωt) and D = −2A k̂ sin(k·x − ωt) at every texel tested, at two times, under synchronisation
+    validation.
+  - *Shore.* Per pixel (and vertex) the distance to the waterline and its exposure come from the shore distance field below (until
+    2026-10-08 the distance was estimated as depth / bottom slope, which bent and branched the crests in small bays), the direction to the
+    shore as the field's gradient. Breakers (every 8 s, 110
     units apart, in sets: each one 0.6-1.4 times the height of 3.5-5.3 units) run along that distance, so their crests follow the depth
     contours. They build from 460 units out, steepen (a brighter, greener, less see-through face, a darker trough ahead) and break at
     35-120 units from the waterline (varying along the shore and with the size), bursting white, then run in as a low bore of whitewater
     with lace trailing behind it, stronger in some stretches than others; at the beach they run up as a thin sheet to
     where the ground is 1.4-3.2 units above the water (the run-up height grows with the wind), at most about 120 units inland so low flats behind a beach stay dry, and back, leaving wet sand that dries
     until the next one. The grid is lifted to the run-up's top along the beach and the fragment cuts the sheet's edge. Only exposed
-    shores get surf: four samples seawards (400 and 1200 units, and 900 at 35 degrees each side) must be deeper than 5-25 units, so
-    ponds, swamp channels (Shark) and sheltered bays stay calm. The shore fades out from 7000 to 10000 units from the eye.
+    shores get surf (the field's exposure), so ponds, swamp channels (Shark) and sheltered bays stay calm. The geometry gets only a smooth
+    hump per breaker (none where the vertices are more than a fifth of a breaker apart); the steep front, lip and trough are shading, so no
+    vertex shows. The sets' sizes vary smoothly from one breaker to the next. The shore fades out from 7000 to 10000 units from the eye.
   - *Foam.* `WaterFoam` bakes a tileable 256² texture at load: R a lace of bubble rims (cellular noise, F2 − F1), G a five-octave
     value noise. The shader blends both at two scales (about 110 and 37 units a repeat) and lets more through the more foam there is.
   - *Clock.* Everything runs on the game clock (`GameHours`; the viewer's heat-haze hours, still for a picture): paused water stands
     still, game speed speeds it up. `--water-seconds <s>` starts it at s game seconds, for pictures of a moment. `MEITOU_WATER_DEBUG=1`
-    shows the shore fields (red distance / 400, green breaker phase, blue depth / 40).
-  - *Cost* (2026-10-08, 1920 × 1080, `--fly-benchmark 150` with `MEITOU_PASS_STATS=1`, one run each, so noisy): the water row's GPU
-    time over Port South's beach (distance 900 and 350) 0.06 and 0.10 ms, against 0.03 and 0.05 ms for the Faithful water; with
-    `--water-grid 128` 0.10 and 0.04 ms, so on this GPU the grid's size is lost in the noise and the per-pixel shore work is what
-    costs (an integrated GPU is not measured yet). The reflection pass is unchanged (the mirror stays the plane at Y = 100).
-  - *Shore distance field* (`ShoreField`, `ShoreBake`; not yet read by the water shader, which still uses the depth / slope estimate above; the
-    replacement for it). A 1024² grid of 10-unit texels (±5120 units round the eye) holding (signed distance to the waterline, exposure). The
+    shows the shore fields (red distance / 400, green breaker phase, blue exposure).
+  - *Cost* (**Observed** 2026-10-08, 1920 × 1080, Port South's beach at distance 900, `--fly-benchmark 300` with `MEITOU_PASS_STATS=1` and
+    the clock running, one run each, so noisy): the ocean's compute pass 0.21 ms GPU (256², timestamps round it), the water draw 0.25 ms
+    against 0.14 ms for the Faithful water; the shore bake 40-95 ms on a worker thread. Memory: about 21 MB (spectrum 6, work buffers 9,
+    textures 4) plus the 8 MB shore field. The reflection pass is unchanged (the mirror stays the plane at Y = 100).
+  - *Shore distance field* (`ShoreField`, `ShoreBake`; read by the water shader since 2026-10-08). A 1024² grid of 10-unit texels (±5120 units round the eye) holding (signed distance to the waterline, exposure). The
     waterline is where 100 − height changes sign between neighbouring texels, placed by linear interpolation of that difference, so it is
     sub-texel; the distance is to those points (8SSEDT: two sweeps carrying the nearest crossing point, O(N²)), positive over water and
     negative over land, clamped to ±4000, then one 3×3 binomial Gaussian so the gradient has no kinks. **Exposure** is

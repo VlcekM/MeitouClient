@@ -380,6 +380,19 @@ public sealed unsafe class CommandList
         fixed (BufferCopy* p = &region) vk.CmdCopyBuffer(Handle, src, dst, 1, p);
     }
 
+    /// <summary>(Added for the Meitou water's ocean.) Copies tightly packed texels from <paramref name="src"/> at <paramref name="offset"/> over a
+    /// whole level and layer of <paramref name="dst"/> (GENERAL layout). The caller orders it against the writes before and the reads after.</summary>
+    public void CopyBufferToImage(Buffer src, ulong offset, Texture dst, int level, int layer)
+    {
+        var copy = new BufferImageCopy
+        {
+            BufferOffset = offset,
+            ImageSubresource = new ImageSubresourceLayers(dst.Desc.Aspect, (uint)level, (uint)layer, 1),
+            ImageExtent = new Extent3D((uint)Math.Max(dst.Desc.Width >> level, 1), (uint)Math.Max(dst.Desc.Height >> level, 1), 1),
+        };
+        vk.CmdCopyBufferToImage(Handle, src, dst.Image, ImageLayout.General, 1, &copy);
+    }
+
     /// <summary>Resolves level 0 / layer 0 of a multisampled colour texture into a single-sampled one (the reflection's 4× target).</summary>
     public void Resolve(Texture src, Texture dst)
     {

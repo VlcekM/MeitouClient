@@ -94,9 +94,9 @@ adds visual-only motion (gameplay water stays flat at Y = 100). On the game cloc
 at most +0.5 ms GPU in the F12 `water` stage on the same views; a quality setting scales it down for integrated GPUs.
 
 1. **Waves and surf** — a camera-centred polar grid instead of the quad (fine near, coarse far, flat at the edge);
-   a few summed Gerstner waves led by the weather's wind, fading into the normal maps with distance; breakers that run
-   towards the shore along the depth (distance to shore ≈ depth / terrain slope), steepen, break into foam and run up
-   the beach and back; crest foam. One draw, no extra pass. Then a checkpoint for the owner to play it.
+   an FFT ocean (three cascades, JONSWAP spectrum led by the weather's wind; first four Gerstner waves, replaced on
+   2026-10-08); breakers that run towards the shore along a baked shore distance field (gated by its exposure), steepen, break into foam and run up
+   the beach and back; crest foam. One draw plus a 0.2 ms compute pass. Then a checkpoint for the owner to play it.
 2. **Rivers and scum** — check that `flowmap.png` RG runs along the river channels (docs/formats/terrain.md); if so,
    faster flow, foam streaks and rapids where the channel is narrow and shallow; the biomes' scum (the B channel), which
    the game draws and the viewer never has.

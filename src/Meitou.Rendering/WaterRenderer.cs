@@ -161,104 +161,95 @@ public sealed unsafe class WaterRenderer : IDisposable
         """;
 
     /// <summary>
-    /// The Meitou water's motion, shared by both stages (docs/viewer.md "Water"): the open water's Gerstner waves (four, led by the wind; the CPU
-    /// advances their phases on the game clock) and the shore's breakers. A breaker's phase runs along the distance to the shore, estimated as
-    /// the water depth over the bottom's slope, so its crests follow the depth contours as real waves turn to do.
+    /// The Meitou water's motion, shared by both stages (docs/viewer.md "Water"): the open water's FFT ocean (<see cref="OceanWaves"/>: three
+    /// cascades of displacement and slopes on the game clock) and the shore's breakers. A breaker's phase runs along the signed distance to the
+    /// waterline from the <see cref="ShoreField"/>, so its crests follow the shore as real waves turn to do; the field's exposure keeps surf
+    /// off ponds and sheltered bays.
     /// </summary>
     const string MeitouMotion = """
 
         uniform float uWaterHeight;
         uniform float uHalfWorld;
-        uniform vec4 uWaveDirX;         // the four waves' unit directions, x components
-        uniform vec4 uWaveDirZ;         // and z components
-        uniform vec4 uWaveK;            // wave numbers (2 pi / wavelength)
-        uniform vec4 uWaveAmp;          // amplitudes (units)
-        uniform vec4 uWavePhase;        // phases (radians, advanced on the CPU)
-        uniform vec4 uWaveSteep;        // Gerstner steepness per wave
-        uniform vec4 uShore;            // x breaker phase (cycles), y run-up height, z breaker wavelength, w breaker height
-        uniform vec4 uWaveFade;         // eye distances over which the open waves (x to y) and the shore's breakers and foam (z to w) fade out
-        uniform float uWaterDebug;      // 1: show the shore fields (MEITOU_WATER_DEBUG=1)
+        uniform sampler2DArray uOceanDisp;  // OceanWaves, per cascade: displacement x, y, z and dDx/dz
+        uniform sampler2DArray uOceanSlope; // dDy/dx, dDy/dz, dDx/dx, dDz/dz
+        uniform vec4 uOcean;                // xyz the cascades' tile sizes, w texels per side (0: no ocean yet)
+        uniform sampler2D uShoreField;      // ShoreField: R the signed distance to the waterline (positive over water), G the exposure
+        uniform vec4 uShoreRect;            // the field's x0, z0, x1, z1 (x1 <= x0: none yet)
+        uniform vec4 uShore;                // x breaker phase (cycles), y run-up height, z breaker wavelength, w breaker height
+        uniform vec4 uWaveFade;             // eye distances over which the open waves' heights (x to y) and the shore's breakers and foam (z to w) fade out
+        uniform float uWaterDebug;          // 1: show the shore fields (MEITOU_WATER_DEBUG=1)
 
-        // The waves come in groups: each one's amplitude swells and fades slowly along its crest and across it, so crests have ends
-        // and the four do not settle into a regular pattern.
-        vec4 waveGroups(vec2 p)
+        // The ocean's displacement at p, each cascade read at the mip whose texels are as far apart as the vertices sampling it (finer
+        // waves would alias into the grid's facets; the fragment's normals carry them instead).
+        vec4 oceanDisplace(vec2 p, float spacing)
         {
-            vec4 along = uWaveK * (uWaveDirZ * p.x - uWaveDirX * p.y) * 0.13, across = uWaveK * (uWaveDirX * p.x + uWaveDirZ * p.y) * 0.07;
-            return 0.55 + 0.45 * sin(along + vec4(0.0, 1.7, 3.1, 4.6)) * sin(across - uWavePhase * 0.07 + vec4(2.3, 0.4, 5.1, 1.2));
-        }
-
-        vec3 waveDisplace(vec2 p, float scale)
-        {
-            vec4 theta = uWaveK * (uWaveDirX * p.x + uWaveDirZ * p.y) - uWavePhase;
-            vec4 c = cos(theta);
-            vec4 amp = uWaveAmp * waveGroups(p) * scale;
-            vec4 qa = uWaveSteep * amp;
-            return vec3(dot(qa * uWaveDirX, c), dot(amp, sin(theta)), dot(qa * uWaveDirZ, c));
-        }
-
-        // xyz: the waves' normal at p; w: the surface's compression (below about 0.7 the crests are sharp enough to foam).
-        vec4 waveNormal(vec2 p, float scale)
-        {
-            vec4 theta = uWaveK * (uWaveDirX * p.x + uWaveDirZ * p.y) - uWavePhase;
-            vec4 c = cos(theta);
-            vec4 ka = uWaveK * uWaveAmp * waveGroups(p) * scale;
-            float ny = 1.0 - dot(uWaveSteep * ka, sin(theta));
-            return vec4(normalize(vec3(-dot(uWaveDirX * ka, c), ny, -dot(uWaveDirZ * ka, c))), ny);
+            vec4 d = vec4(0.0);
+            if (uOcean.w <= 0.0) return d;
+            for (int c = 0; c < 3; c++)
+            {
+                float l = uOcean[c];
+                d += textureLod(uOceanDisp, vec3(p / l, float(c)), max(log2(spacing * uOcean.w / l) + 0.5, 0.0));
+            }
+            return d;
         }
 
         struct Shore { float depth; float dist; float g; vec2 dir; float open; float size; float breakAt; };
 
-        // depth: still water over the ground (negative on land); dist: horizontal distance to the waterline (depth / slope, negative inland);
-        // g: the breaker phase in [0, 1), the crest at 0.5 with its steep front towards the shore; dir: the unit direction towards the shore (up the bottom).
-        // open: how exposed the shore is (0 a pond or a swamp channel, 1 open water out to 1200 units seawards): only exposed shores get surf.
-        // size: this breaker's height factor (they come in sets, 0.6 to 1.4); breakAt: the distance from the waterline where it breaks.
+        vec2 shoreField(vec2 uv) { return textureLod(uShoreField, uv, 0.0).rg; }
+
+        // depth: still water over the ground (negative on land); dist: the distance to the waterline (negative inland); g: the breaker phase
+        // in [0, 1), the crest at 0.5 with its steep front towards the shore; dir: the unit direction towards the shore; open: how exposed the
+        // shore is (0 a pond or a sheltered bay, 1 open water): only exposed shores get surf. size: this breaker's height factor (they come in
+        // sets, 0.6 to 1.4, varying smoothly from one to the next); breakAt: the distance from the waterline where it breaks.
         Shore shoreAt(vec2 p)
         {
             Shore r;
-            // A wide stencil (three height cells each way): a narrow one follows every underwater ripple and the breakers' crests branch at the kinks.
-            float e = max(terrainSpacing(p), 4.0) * 3.0;
-            vec2 grad = vec2(terrainHeight(p + vec2(e, 0.0)) - terrainHeight(p - vec2(e, 0.0)),
-                             terrainHeight(p + vec2(0.0, e)) - terrainHeight(p - vec2(0.0, e))) / (2.0 * e);
             r.depth = uWaterHeight - terrainHeight(p);
-            float slope = length(grad);
-            r.dist = r.depth / max(slope, 0.015);
-            r.dir = slope > 1e-5 ? grad / slope : vec2(0.0);
-            r.open = 0.0;
-            if (r.dist < 450.0 && slope > 1e-5)
+            r.dist = 1.0e6; r.dir = vec2(0.0); r.open = 0.0;
+            vec2 extent = uShoreRect.zw - uShoreRect.xy;
+            if (extent.x > 0.0)
             {
-                // Seawards (and 35 degrees to each side) the water should stay deep for the waves to have room to build.
-                vec2 sea = -r.dir, side = vec2(-sea.y, sea.x);
-                float deep = 0.0;
-                deep += clamp((uWaterHeight - terrainHeight(p + sea * 400.0) - 5.0) / 20.0, 0.0, 1.0);
-                deep += clamp((uWaterHeight - terrainHeight(p + sea * 1200.0) - 5.0) / 20.0, 0.0, 1.0);
-                deep += clamp((uWaterHeight - terrainHeight(p + (sea * 0.82 + side * 0.57) * 900.0) - 5.0) / 20.0, 0.0, 1.0);
-                deep += clamp((uWaterHeight - terrainHeight(p + (sea * 0.82 - side * 0.57) * 900.0) - 5.0) / 20.0, 0.0, 1.0);
-                r.open = smoothstep(1.5, 3.5, deep);
+                vec2 uv = (p - uShoreRect.xy) / extent;
+                vec2 f = shoreField(uv);
+                vec2 e = vec2(12.0) / extent;
+                vec2 grad = vec2(shoreField(uv + vec2(e.x, 0.0)).r - shoreField(uv - vec2(e.x, 0.0)).r,
+                                 shoreField(uv + vec2(0.0, e.y)).r - shoreField(uv - vec2(0.0, e.y)).r);
+                r.dist = f.r;
+                r.dir = length(grad) > 1e-6 ? -normalize(grad) : vec2(0.0);
+                // Fade out towards the field's edge (it follows the eye; beyond it nothing is known).
+                vec2 inside = min(uv, 1.0 - uv) * extent;
+                r.open = f.g * smoothstep(0.0, 600.0, min(inside.x, inside.y));
             }
-            // Along the shore the waves arrive at different times; each breaker has its own size (a hash of its number), so they come in sets.
+            // Along the shore the waves arrive at different times, and the sets swell and fade smoothly from one breaker to the next.
             float along = sin(p.x * 0.0021 + sin(p.y * 0.0013) * 2.0) + sin(p.y * 0.0017 + p.x * 0.0009);
             float x = r.dist / uShore.z + uShore.x + along * 0.6;
             r.g = fract(x);
-            float wave = floor(x);
-            r.size = 0.6 + 0.8 * fract(sin(wave * 12.9898) * 43758.5453);
+            r.size = 0.6 + 0.8 * (0.5 + 0.5 * sin(x * 1.37 + 0.4) * sin(x * 0.53 + 1.9));
             r.breakAt = (70.0 + 35.0 * sin(p.x * 0.0031 + p.y * 0.0023)) * (0.7 + 0.5 * r.size);
             return r;
+        }
+
+        // How much of the open sea's waves reach p: none in the shallows and on the shore (the breakers take over), fewer in sheltered water.
+        float oceanScale(Shore s)
+        {
+            return smoothstep(0.5, 20.0, s.depth) * smoothstep(-10.0, 150.0, s.dist) * mix(0.3, 1.0, max(s.open, smoothstep(400.0, 1500.0, s.dist)));
         }
 
         // A breaker's height over its phase: a front (g below 0.5, the shore side) that steepens as it nears the break, and a long back.
         float breakerProfile(float g, float steep) { return g < 0.5 ? smoothstep(0.5 - mix(0.2, 0.05, steep), 0.5, g) : 1.0 - smoothstep(0.5, 0.97, g); }
         float breakerProfile(float g) { return breakerProfile(g, 0.0); }
 
-        // The breaker's height (units): it builds as the water shoals, peaks and steepens just before its break point, collapses into a low
-        // bore of whitewater after it, and is gone at the waterline (the run-up takes over).
-        float breakerHeight(Shore s)
+        // The breaker's size (units) before its profile: it builds as the water shoals, peaks just before its break point, collapses into a
+        // low bore of whitewater after it, and is gone at the waterline (the run-up takes over).
+        float breakerScale(Shore s)
         {
             float build = smoothstep(460.0, 160.0, s.dist) * (1.0 + 0.9 * smoothstep(s.breakAt + 140.0, s.breakAt + 10.0, s.dist));
             float collapse = mix(0.3, 1.0, smoothstep(s.breakAt - 30.0, s.breakAt + 5.0, s.dist));
-            float steep = smoothstep(s.breakAt + 160.0, s.breakAt, s.dist);
-            return uShore.w * s.open * s.size * build * collapse * smoothstep(-5.0, 20.0, s.dist) * smoothstep(250.0, 120.0, s.depth)
-                * breakerProfile(s.g, steep);
+            return uShore.w * s.open * s.size * build * collapse * smoothstep(-5.0, 20.0, s.dist) * smoothstep(250.0, 120.0, s.depth);
         }
+
+        // The steep profile the fragment shades with.
+        float breakerHeight(Shore s) { return breakerScale(s) * breakerProfile(s.g, smoothstep(s.breakAt + 160.0, s.breakAt, s.dist)); }
         """;
 
     const string MeitouVertex = "#version 330 core\n" + TerrainShaders.HeightFunctions + MeitouMotion + """
@@ -268,6 +259,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform vec2 uCentre;
         uniform float uExtent;
         uniform vec3 uEye;
+        uniform float uGridStep;            // the grid's spacing over its radius
         out vec3 vWorld;
         out vec2 vBase;                     // the undisplaced position: the fragment's waves and shore are evaluated there
         void main()
@@ -277,14 +269,16 @@ public sealed unsafe class WaterRenderer : IDisposable
             vec3 w = vec3(p.x, uWaterHeight, p.y);
             float dist = distance(w, uEye);
             bool inside = max(abs(p.x), abs(p.y)) < uHalfWorld;
-            if (dist < uWaveFade.w && inside)
+            if (dist < uWaveFade.w && inside && r < 1.0e5)
             {
+                float spacing = max(r, 1.0) * uGridStep;
                 float fade = 1.0 - smoothstep(uWaveFade.x, uWaveFade.y, dist), shoreFade = 1.0 - smoothstep(uWaveFade.z, uWaveFade.w, dist);
                 Shore s = shoreAt(p);
-                // The breaker's hump where the water shoals, and a flat top over the run-up band (the fragment cuts the swash's edge there).
-                float hump = breakerHeight(s);
+                // The geometry gets a smooth hump only (the steep front a few units wide would fall between the vertices and facet; the
+                // fragment shades it), and none where the vertices are too far apart for it.
+                float hump = breakerScale(s) * pow(0.5 - 0.5 * cos(6.2831853 * s.g), 1.5) * smoothstep(0.45, 0.2, spacing / uShore.z);
                 float lift = uShore.y * s.open * s.size * (1.0 - smoothstep(10.0, 60.0, s.dist)) * smoothstep(-140.0, -60.0, s.dist);
-                vec3 d = waveDisplace(p, smoothstep(0.5, 20.0, s.depth) * fade);
+                vec3 d = oceanDisplace(p, spacing).xyz * oceanScale(s) * fade;
                 w += vec3(d.x, d.y + max(hump, lift) * shoreFade, d.z);
             }
             vBase = p;
@@ -358,9 +352,19 @@ public sealed unsafe class WaterRenderer : IDisposable
             float dist = length(toEye);
             vec3 view = toEye / dist;
 
+            // The ocean's slopes and crest compression, per pixel (with the hardware's mips: out of uniform control flow they would be undefined).
+            vec4 oceanSlope = vec4(0.0);
+            float oceanShear = 0.0;
+            if (uOcean.w > 0.0)
+                for (int c = 0; c < 3; c++)
+                {
+                    vec3 uvw = vec3(p / uOcean[c], float(c));
+                    oceanSlope += texture(uOceanSlope, uvw);
+                    oceanShear += texture(uOceanDisp, uvw).w;
+                }
+
             // The motion fades with the eye distance; beyond it (and past the world's edge) this is the game's flat water.
             float fade = outside <= 0.0 ? 1.0 - smoothstep(uWaveFade.z, uWaveFade.w, dist) : 0.0;
-            float waveFade = outside <= 0.0 ? 1.0 - smoothstep(uWaveFade.x, uWaveFade.y, dist) : 0.0;
             Shore s;
             s.depth = 1.0e4; s.dist = 1.0e6; s.g = 0.0; s.dir = vec2(0.0); s.open = 0.0; s.size = 1.0; s.breakAt = 0.0;
             if (fade > 0.0) s = shoreAt(p);
@@ -392,7 +396,8 @@ public sealed unsafe class WaterRenderer : IDisposable
             nm += rotatedNormal(tex * 0.71 + vec2(0.1, 0.3), direction, speed, time + 0.33, mat2(0.36, 0.93, -0.93, 0.36));
             nm += rotatedNormal(tex * 1.37 + vec2(0.4, 0.7), direction, speed, time + 0.66, mat2(-0.74, 0.67, -0.67, -0.74));
             float rough = texture(uFoamMap, p * 0.00035 + vec2(uTime * 0.02, 0.0)).g;
-            nm.xz *= 0.55 + 0.9 * rough;
+            // Near the eye the ocean's own slopes carry the detail; the game's map takes over with the distance.
+            nm.xz *= (0.55 + 0.9 * rough) * mix(0.35, 1.0, smoothstep(1500.0, 6000.0, dist));
             nm.y *= pa.z;
             float rain = uWeatherWet.y * clamp(view.y * 2.0 - dist * 0.0001, 0.0, 1.0);
             if (rain > 0.0)
@@ -403,9 +408,13 @@ public sealed unsafe class WaterRenderer : IDisposable
                 nm += rainRipple(rainCoord * 2.0, time + 0.3, rain * 0.8);
             }
             nm = normalize(nm);
-            float open = smoothstep(0.5, 20.0, s.depth) * waveFade;
-            vec4 wn = waveNormal(p, open);
-            vec2 slope = nm.xz / max(nm.y, 0.05) + wn.xz / max(wn.y, 0.05);
+            // The ocean: its height's slopes over the stretch of its horizontal displacement, and the Jacobian (below about 0.7 the crests
+            // fold enough to foam).
+            float open = oceanScale(s) * (1.0 - smoothstep(9000.0, 14000.0, dist));
+            vec4 os = oceanSlope * open;
+            vec2 spread = max(vec2(1.0) + os.zw, vec2(0.25));
+            float jacobian = spread.x * spread.y - oceanShear * oceanShear * open * open;
+            vec2 slope = nm.xz / max(nm.y, 0.05) - os.xy / spread;
             // The breaker's hump tilts the surface: its height falls towards the shore on the front and rises on the back.
             Shore ahead = s, behind = s;
             ahead.g = fract(s.g - 0.01); ahead.dist -= 0.01 * uShore.z;
@@ -453,11 +462,11 @@ public sealed unsafe class WaterRenderer : IDisposable
             float bore = broken * smoothstep(0.42, 0.5, s.g) * (1.0 - smoothstep(0.68, 0.9, s.g)) * mix(1.0, 0.5, smoothstep(0.5, 0.85, s.g));
             float trail = broken * smoothstep(0.6, 0.7, s.g) * (1.0 - smoothstep(0.7, 0.99, s.g));
             float feather = (1.0 - broken) * smoothstep(0.47, 0.5, s.g) * (1.0 - smoothstep(0.5, 0.53, s.g)) * smoothstep(s.breakAt + 120.0, s.breakAt + 20.0, s.dist);
-            float amount = clamp((0.72 - wn.w) * 2.5, 0.0, 1.0);
+            float amount = clamp((0.7 - jacobian) * 2.5, 0.0, 1.0);
             // Along the shore the breakers break harder in some stretches than others, and not at all in a few.
             float stretch = smoothstep(0.2, 0.75, texture(uFoamMap, p * 0.0011).g);
             float surfFoam = max(max(burst * 1.4, bore * 1.15), max(trail * 0.5, feather * 0.6)) * min(s.size * 1.1, 1.3);
-            amount = max(amount, surfFoam * surfZone * (0.45 + 0.75 * stretch));
+            amount = max(amount, min(surfFoam * surfZone * (0.45 + 0.75 * stretch), 0.8));   // capped: the lace shows through even the thickest whitewater
             amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * (0.15 + 0.25 * s.open) * fade);
             if (swash && sheet > 0.0) amount = max(amount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.12, sheet)), 0.35 * (1.0 - sinceCrest)));
             vec2 drift = direction * speed * uTime * 0.2;
@@ -488,7 +497,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             }
             a = mix(1.0, a, clamp((4000.0 - dist) / 400.0, 0.0, 1.0));
 
-            if (uWaterDebug > 0.5) { fragColour = vec4(clamp(s.dist / 400.0, 0.0, 1.0), s.g, clamp(s.depth / 40.0, 0.0, 1.0), 1.0); return; }   // MEITOU_WATER_DEBUG=1
+            if (uWaterDebug > 0.5) { fragColour = vec4(clamp(s.dist / 400.0, 0.0, 1.0), s.g, s.open, 1.0); return; }   // MEITOU_WATER_DEBUG=1
             fragColour = vec4(atmoApply(colour, uEye, vWorld), a);
         }
         """;
@@ -504,6 +513,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly Vector3 seaColour;
     readonly WaterProgram faithful, meitou;
     readonly WaveSet waves = new();
+    readonly OceanWaves ocean;
+    readonly ShoreField shore;
+    readonly float gridStep;
 
     /// <summary>The Enhancements switch <c>water</c>: the game's flat water (Faithful) or Meitou's waves, breakers and foam (the default).</summary>
     public bool Meitou { get; set; } = true;
@@ -518,10 +530,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         public readonly LegacyProgram P;
         public readonly NativeSegment Segment;
         public readonly UniformHandle ViewProjection, WaterHeight, Centre, Extent, Eye, HalfWorld, SeaA, SeaB, SeaColour, Time, SunDir, SunColour,
-            FogColour, FogDistance, Reflect, ReflectionViewProjection, WaveDirX, WaveDirZ, WaveK, WaveAmp, WavePhase, WaveSteep, Shore, WaveFade, Debug;
+            FogColour, FogDistance, Reflect, ReflectionViewProjection, Ocean, ShoreRect, GridStep, Shore, WaveFade, Debug;
         public readonly SkyColourHandles Sky;
         public readonly SamplerSlot[] Maps;
-        public readonly SamplerSlot Reflection;
+        public readonly SamplerSlot Reflection, OceanDisp, OceanSlope, ShoreField;
 
         public WaterProgram(GpuContext gpu, string vertex, string fragment, string name, Silk.NET.Vulkan.PrimitiveTopology topology)
         {
@@ -533,8 +545,9 @@ public sealed unsafe class WaterRenderer : IDisposable
                 P.Uniform("uSunDir"), P.Uniform("uSunColour"));
             (FogColour, FogDistance, Reflect, ReflectionViewProjection) = (P.Uniform("uFogColour"), P.Uniform("uFogDistance"), P.Uniform("uReflect"),
                 P.Uniform("uReflectionViewProjection"));
-            (WaveDirX, WaveDirZ, WaveK, WaveAmp, WavePhase, WaveSteep, Shore, WaveFade) = (P.Uniform("uWaveDirX"), P.Uniform("uWaveDirZ"), P.Uniform("uWaveK"),
-                P.Uniform("uWaveAmp"), P.Uniform("uWavePhase"), P.Uniform("uWaveSteep"), P.Uniform("uShore"), P.Uniform("uWaveFade"));
+            (Ocean, ShoreRect, GridStep, Shore, WaveFade) = (P.Uniform("uOcean"), P.Uniform("uShoreRect"), P.Uniform("uGridStep"), P.Uniform("uShore"),
+                P.Uniform("uWaveFade"));
+            (OceanDisp, OceanSlope, ShoreField) = (P.Sampler("uOceanDisp"), P.Sampler("uOceanSlope"), P.Sampler("uShoreField"));
             Debug = P.Uniform("uWaterDebug");
             Sky = SkyColourHandles.Resolve(P);
             Maps = MapNames.Select(P.Sampler).ToArray();
@@ -544,8 +557,11 @@ public sealed unsafe class WaterRenderer : IDisposable
         public void Dispose() => P.Dispose();
     }
 
-    WaterRenderer(GpuContext gpu, SampledImage[] maps, Vector4 seaA, Vector4 seaB, Vector3 seaColour, int gridSegments)
+    WaterRenderer(GpuContext gpu, SampledImage[] maps, Vector4 seaA, Vector4 seaB, Vector3 seaColour, int gridSegments, int oceanSize)
     {
+        ocean = new OceanWaves(gpu, oceanSize);
+        shore = new ShoreField(gpu);
+        gridStep = (float)(2 * Math.PI / gridSegments);
         (this.seaA, this.seaB, this.seaColour) = (seaA, seaB, seaColour);
         Gpu = gpu;
         this.maps = maps;
@@ -610,7 +626,7 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     /// <param name="sky">Unused since phase 8 stage 2: the atmosphere comes through the frame globals.</param>
     public static WaterRenderer Create(GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky, List<string> messages,
-        int gridSegments = DefaultGridSegments)
+        int gridSegments = DefaultGridSegments, int oceanSize = OceanWaves.DefaultSize)
     {
         _ = sky;
         var colour = Load(install, WorldWater.ColourMap);
@@ -644,7 +660,7 @@ public sealed unsafe class WaterRenderer : IDisposable
              SampledImage.Rgba32F(gpu, a, blend.Width, blend.Height, "water parameters a"), SampledImage.Rgba32F(gpu, b, blend.Width, blend.Height, "water parameters b"),
              Rgba(rain, true, [0, 0, 0, 0], "water rain ripples"),
              SampledImage.Rgba8(gpu, WaterFoam.Size, WaterFoam.Size, WaterFoam.Bake(), repeat: true, mipmaps: true, "water foam")],
-            sea.A, sea.B, sea.Colour, gridSegments);
+            sea.A, sea.B, sea.Colour, gridSegments, oceanSize);
     }
 
     /// <summary>
@@ -684,7 +700,21 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// Steps the Meitou water's motion once per frame: <paramref name="gameHours"/> is the game clock (hours since the load; it stands still while
     /// paused), the wind is the weather's at the camera. Each wave's phase is integrated, so a change of wind changes the waves smoothly.
     /// </summary>
-    public void Animate(double gameHours, Vector2 windDirection, float windSpeed) => waves.Step(gameHours, windDirection, windSpeed);
+    public void Animate(double gameHours, Vector2 windDirection, float windSpeed)
+    {
+        waves.Step(gameHours, windDirection, windSpeed);
+        if (Meitou) ocean.Update(gameHours, windDirection, windSpeed);
+    }
+
+    /// <summary>Keeps the Meitou water's shore field (<see cref="ShoreField"/>) round the eye: once a frame on the render thread, with the
+    /// terrain's heights of this frame. Nothing while the water is Faithful.</summary>
+    internal void Track(Vector3 eye, HeightSnapshot heights)
+    {
+        if (Meitou) shore.Update(eye, heights);
+    }
+
+    /// <summary>The open waves (for the viewer's statistics and tests).</summary>
+    public OceanWaves Ocean => ocean;
 
     /// <summary>
     /// The water surface: one draw, blended, into the pass VkGl has open. Prepare sets the uniforms and the textures the shader reads (the height
@@ -697,6 +727,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent, ReflectionPass? reflection = null)
     {
         var p = Meitou ? meitou : faithful;
+        if (Meitou) ocean.Record();
         Prepare(p, viewProjection, eye, light, colours, Meitou ? waves.NormalTime : time, extent, reflection);
         if (Meitou) Record(p, gridSource, gridVertices, gridIndexCount);
         else Record(p, quadSource, quadVertices, 0);
@@ -721,15 +752,14 @@ public sealed unsafe class WaterRenderer : IDisposable
         p.Set(h.FogDistance, light.FogDistance);
         if (h == meitou)
         {
-            p.Set(h.WaveDirX, waves.DirX);
-            p.Set(h.WaveDirZ, waves.DirZ);
-            p.Set(h.WaveK, waves.K);
-            p.Set(h.WaveAmp, waves.Amplitude);
-            p.Set(h.WavePhase, waves.Phase);
-            p.Set(h.WaveSteep, waves.Steepness);
+            p.Set(h.Ocean, ocean.Lengths.X, ocean.Lengths.Y, ocean.Lengths.Z, ocean.Ready ? ocean.Size : 0);
+            p.Set(h.ShoreRect, shore.Ready ? shore.Rect : Vector4.Zero);
+            p.Set(h.GridStep, gridStep);
             p.Set(h.Shore, waves.Shore);
             p.Set(h.WaveFade, WaveFadeStart, WaveFadeEnd, ShoreFadeStart, ShoreFadeEnd);
             p.Set(h.Debug, DebugView ? 1f : 0f);
+            if (ocean.Ready) { p.Bind(h.OceanDisp, ocean.Displacement); p.Bind(h.OceanSlope, ocean.Slopes); }
+            if (shore.Ready) p.Bind(h.ShoreField, shore.Sampled());
         }
         h.Sky.Set(p, colours);
         p.ApplyGlobals();   // the atmosphere's and the heights' uniforms and textures, through the frame globals
@@ -745,9 +775,9 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     /// <summary>The eye distances over which the Meitou open waves fade into the flat water (the grid coarsens with the distance), and over which
     /// the shore's breakers and foam fade (they read from much further).</summary>
-    public const float WaveFadeStart = 1500, WaveFadeEnd = 3500, ShoreFadeStart = 7000, ShoreFadeEnd = 10000;
+    public const float WaveFadeStart = 3000, WaveFadeEnd = 5500, ShoreFadeStart = 7000, ShoreFadeEnd = 10000;
 
-    /// <summary><c>MEITOU_WATER_DEBUG=1</c>: the Meitou water shows its shore fields (red the distance to the shore over 400, green the breaker phase, blue the depth over 40).</summary>
+    /// <summary><c>MEITOU_WATER_DEBUG=1</c>: the Meitou water shows its shore fields (red the distance to the shore over 400, green the breaker phase, blue the exposure).</summary>
     static readonly bool DebugView = Environment.GetEnvironmentVariable("MEITOU_WATER_DEBUG") == "1";
 
     static readonly BlendState AlphaBlend = new(true, Silk.NET.Vulkan.BlendFactor.SrcAlpha, Silk.NET.Vulkan.BlendFactor.OneMinusSrcAlpha);
@@ -782,11 +812,16 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     public void Dispose()
     {
+        if (ocean.Dispatched > 0)
+            Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"water     ocean: {ocean.Dispatched} passes ({ocean.Size}²), gpu us per pass {(ocean.GpuTimed > 0 ? ocean.GpuMicroseconds / ocean.GpuTimed : 0):F1} ({ocean.GpuTimed} timed); shore bake {shore.LastBakeMs:F0} ms"));
         quad.Dispose();
         grid.Dispose();
         gridIndices.Dispose();
         foreach (var t in maps) t.Dispose();
         faithful.Dispose();
         meitou.Dispose();
+        ocean.Dispose();
+        shore.Dispose();
     }
 }
