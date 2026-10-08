@@ -318,6 +318,10 @@ branch of `FUN_14064f300` (where its result gates the KO); the starvation-to-KO 
 the return meaning of `FUN_140644320` is **Unknown**. Death at hunger <= 0 is in `FUN_140652000`. Food item
 nutrition values and the effect of `food quality mult` (0.5 in the base game, `FUN_14075faf0`) are **Unknown**.
 
+Food in the data (**Observed**, read for the simulation's eating rule): an ITEM with `item function` 3 is food (rice, bread, fish, dried meat,
+vegetables); raw meat is function 15. NPCs carry food through the CHARACTER `inventory` list, an ITEM entry with a first value above 0 being
+that many items: 29 of 639 base characters do (e.g. Gohan x2, Rice Bowl x12); entries with 0 never spawn.
+
 ### Sleep, beds and resting
 
 - A character in the resting state (`Character+0x2f8 == 1`) uses `bed hunger rate` and heals blood at
@@ -742,7 +746,7 @@ Items 1 to 3 and 5 of the outline below exist as pure, deterministic code; the t
 Scorchlander, Shek, Garru, Leviathan and Skeleton rows). Engine choices where the research stops, all labelled in the code:
 
 - **Randomness.** `BodyRolls` hashes (world seed, character key XOR a module constant, counter) through `Rng`; the medical state keeps its own counter, so a
-  character's rolls never depend on thread or order. The `RngPurpose` enum of the core was not extended.
+  character's rolls never depend on thread or order. The purpose is `RngPurpose.Body`, an alias of value 0 (`Test`), so the rolls did not change when it was named.
 - **Starting stats.** `CharacterStats.Create`: STATS record (or `FromGroups`), `stats randomise` n as a uniform offset in [-n, n] on the 33 record stats
   (floored at 0; the original's "about 30" is **Unknown**), then the race map over stat numbers 1 to 38 (Medic's storage takes the product of the entries
   of 9, 14 and 15). The `combat stats` / `unarmed stats` / `stealth stats` / `ranged stats` / `strength` fan-out groups are **Unknown**: `FromGroups` is a guess.

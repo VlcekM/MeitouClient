@@ -365,7 +365,7 @@ Read through the typed views of `Meitou.Data.Gameplay.Combat` and checked by `Co
 
 ## As built (stage 8)
 
-Items 1 to 5 of the outline exist: [simulation.md "Combat as built"](../simulation.md#combat-as-built-stage-8) lists what the engine does and where it chose (attack choice, timing, the reaction's alignment to the blow, the stagger, XP for blocks and dodges, the reach
+Items 1 to 5 of the outline exist: [simulation.md "Combat"](../simulation.md#combat) lists what the engine does and where it chose (attack choice, timing, the reaction's alignment to the blow, the stagger, XP for blocks and dodges, the reach
 test). The attacker-side technique choice is no longer a gap of the code but is still **Unknown** in the original. Ranged combat, turrets and the AI's targeting are not built.
 
 ## Unknowns
@@ -376,7 +376,7 @@ test). The attacker-side technique choice is no longer a gap of the code but is 
 - The role of the class-table columns 4-6 (athletics, combat speed, stealth is an inference) and of the slot-adjusted factor (armour item field index 0x5d) in `140898e90`.
 - Turrets; bow accuracy and range maths and the use of `bow damage 1/99`; the meaning of the weight/price-like armour table fields; the remaining difficulty floats beyond the dialog bindings listed above (their consumers).
 - Whether the +20 guarding state of the block chance is the state the HUD's Block stance sets ([ui-screens.md](ui-screens.md#4-hud-mainbargui)).
-- What the technique fields `power 1/2`, `limb 1/2`, `anim hesitate point`, `max encumbrance` and `max simultaneous hits` do; where `min cut damage mult` x the manufacturer's `min cut damage` is applied (the engine floors the cut at it); the term shapes of the fist damage (the engine takes half the stat each); how a "Heavy_Hit" works (the engine: 0.5 s helpless for a damage sum above the stumble threshold). The engine's answers are in [simulation.md](../simulation.md#combat-as-built-stage-8).
+- What the technique fields `power 1/2`, `limb 1/2`, `anim hesitate point`, `max encumbrance` and `max simultaneous hits` do; where `min cut damage mult` x the manufacturer's `min cut damage` is applied (the engine floors the cut at it); the term shapes of the fist damage (the engine takes half the stat each); how a "Heavy_Hit" works (the engine: 0.5 s helpless for a damage sum above the stumble threshold). The engine's answers are in [simulation.md](../simulation.md#combat).
 - Whether the decompiled maths matches in-game numbers: nothing has been compared in play.
 
 ## Implementation outline

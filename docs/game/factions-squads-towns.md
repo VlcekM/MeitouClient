@@ -372,7 +372,8 @@ How and when the initial resident squads of a town are created at zone load, and
 building, is **Unknown** (the building-assignment code was not traced). Roaming squads leave and come back (the walking is in [pathfinding.md](pathfinding.md)); their AI
 packages (`GoOutOnPatrol`, `Task_PatrolTown`, `Task_TravelToTargetTown`, ...) are not decoded; the destination chooser
 `FUN_14092c5e0` (**Observed**) sorts the candidate towns by distance, skips towns hostile to the squad's faction (3.3), and
-picks one of the nearest 4 at random.
+picks one of the nearest 4 at random. **Observed** (base data, counted while building the simulation's roaming squads): 50 towns have
+`roaming squads`, 109 have `bar squads`.
 
 ### 6.5 Unique squads and campaigns (survey only)
 

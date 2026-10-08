@@ -87,6 +87,9 @@ SpeechPanel (Dialog), MessagePanel (Popup), MessageBox (Info), CharacterEditor (
   start pos`; `force race` appears on three rebirth records: The Slaves, Holy Nation Citizen and The Hive Exile
   (reference lists present: squad on all, town on all but Rock Bottom, faction relations on
   Son of a Captain, The Holy Sword, The Wandering Trader and Holy Nation Citizen, research on The Freedom Seekers).
+- **Verified** (probe over the 13 records, made for the simulation's new game): a start-off record has no item list of its own; its references
+  are only `squad`, `town`, `money`, `research`, `force race` and `faction relations` (the simulation therefore gives the starting squad
+  what its CHARACTER records list, [simulation.md](../simulation.md#items-and-eating)).
 - Advanced options (the nine floats they set are explained in [character-stats.md](character-stats.md#new-game-advanced-options-that-change-these-mechanics)): Hunger time, Chance of death, Global damage multiplier, Production / Research / Building
   speed, Number of nests multiplier, Bandits loot the player, Easy prospecting.
 - Load window: multi-column list of saves, info panel from FUN_14047e390 / FUN_14047e780 (labels File version,

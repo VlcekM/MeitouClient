@@ -37,4 +37,5 @@ drop-in replacement that runs original content and mods unchanged. Plan in [ROAD
 ## Build
 
 `dotnet build`, `dotnet test`, `dotnet run --project tools/Meitou.Tools`. Warnings are errors. Tests that need the game, a GPU or
-long runs are marked `[Slow]`: `dotnet test --filter "Category!=Slow"` is the quick run while iterating; the full run before committing.
+long runs are marked `[Slow]`; tests that assert a timing are marked `[Bench]` (they fail on a loaded machine). The quick run while
+iterating is `dotnet test --filter "Category!=Slow&Category!=Bench"`; the full run before committing.

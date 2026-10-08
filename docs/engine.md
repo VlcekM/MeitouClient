@@ -38,18 +38,18 @@ Dependencies point one way: Core ← Data ← Engine / Rendering ← Game / view
   1x/2x/5x (`Speed1`..`Speed3`); `.` and `,` step through 1, 2, 5 as an extra. A new world runs at 1 (the original is at 0 until its start routine).
 - **Interpolated drawing**: the camera keeps its state of the previous and the current control tick (`Interpolated<CameraState>`); a
   frame draws `At(alpha)` with `alpha` = the accumulator's fraction of a tick, so motion is smooth at any display rate. Angles take
-  the shortest way round; a camera mode switch is a cut. The character snapshots will be interpolated by `SimulationClock.Alpha` the same way.
+  the shortest way round; a camera mode switch is a cut. The character snapshots are interpolated by `SimulationClock.Alpha` the same way.
 - **Game time** (`GameClock`): advanced by simulation ticks only (`Advance(gameSeconds)`); **Verified** 1200/11 = 109.09 game seconds
   per game hour, 24 hours a day, the day count (a new game starts on day 1, **Observed** in the sample save, at 13:00, an engine
   choice), `IsDaytime` (strict `sunrise < hour < sunset`), `DaylightFactor` (0 at night, linear 2-hour ramps after sunrise and before
   sunset, 1 between; **Observed**), `HH:MM` (`floor(frac x 60)` minutes) and `Day: n` texts. Sunrise, sunset and days per year come
   from the CONSTANTS record (5 / 23 / 100); sunset not after sunrise gives 6 and 20. The window title shows the clock. The hour
   drives the sun, sky and lighting; the heat haze's game time is `HoursSinceStart` and stops while paused.
-- **Population and movement**: the host adds `PopulationSystem` and `MovementSystem` to the world and sends the camera focus as a
+- **Systems**: the host adds the game's systems through `StandardSystems` ([simulation.md](simulation.md#systems-and-their-order)) and sends the camera focus as a
   `FocusCommand`; it fills `CharacterDrawList` from the interpolated snapshots
-  ([simulation.md](simulation.md#populate-and-move-as-built-stages-2-and-3)). `--no-population` leaves the world empty.
+  ([simulation.md](simulation.md#population)). `--no-population` leaves the world empty.
 - **World** (`Meitou.Simulation.World`, owned by `WorldSession.World`): runs one tick per simulation tick, with the phases, the
-  worker pool, the stateless seeded randomness and the state hash described in [simulation.md](simulation.md#skeleton-as-built-stage-1).
+  worker pool, the stateless seeded randomness and the state hash described in [simulation.md](simulation.md#threading).
   After each tick it publishes a `WorldSnapshot`; the session keeps the last two (`PreviousSnapshot`, `CurrentSnapshot`) and
   `SimulationAlpha` (the simulation clock's fraction of a tick) so the host can interpolate characters like the camera. Worker
   threads: `--sim-threads` or `simThreads` in the user config (default half the cores, 1 to 8); `--seed` sets the world seed.
@@ -98,7 +98,7 @@ pixel; the pivot follows the terrain only (the game also stands it on buildings;
 view meets the ground.
 
 Default keys: `W A S D` move, `Q`/`E` or `Left`/`Right` rotate, `Up`/`Down` pitch, wheel or `PageUp`/`PageDown` zoom,
-middle drag orbit (right click is the move command, see [simulation.md](simulation.md#player-as-built-stage-6)), left click or drag selects, `1`..`9`, `` ` ``, `R`; `;` free camera (`R`/`F` up/down in it), `Space` pause, `F2`/`F3`/`F4` speed 1x/2x/5x (`.`/`,` step through them), `Tab` settings panel, `F12`
+middle drag orbit (right click is the move command, see [simulation.md](simulation.md#player)), left click or drag selects, `1`..`9`, `` ` ``, `R`; `;` free camera (`R`/`F` up/down in it), `Space` pause, `F2`/`F3`/`F4` speed 1x/2x/5x (`.`/`,` step through them), `Tab` settings panel, `F12`
 screenshot (C:\Temp), `Esc` quit.
 
 ## Rendering (`Meitou.Rendering`)

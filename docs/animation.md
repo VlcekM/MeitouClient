@@ -295,14 +295,30 @@ and the sliders above. Hair and beards are ATTACHMENT records worn with a shared
   Unknown.
 - How characters choose between candidate animations (idle chance, speed bands, injury ranges, combat
   state) beyond the definitions above. Not traced in the original; our rules (a chain by `move speed`, validity by stance, idles by chance) are in
-  [simulation.md](simulation.md#animation-formation-and-roaming-as-built-after-stage-6), with the data they were read from.
+  [simulation.md](simulation.md#animation); the data they were read from is under [Selection data used by the simulation](#selection-data-used-by-the-simulation).
 - Body shape: the nutrition value behind starvation (+0x4b8), the thigh-narrowing leg state, the two
   movement-scale exceptions, the stats field x in the muscle definition, what reads (`Height` − 80) × 0.025,
   and what the game does when a body file lacks a slider (the viewer uses 100).
 
 ## Leg health and lying down (wired with the bodies)
 
-**Observed** (engine choice, [simulation.md](simulation.md#bodies-wired-after-stage-7)): the simulation fills `AnimationStance.LeftLeg` and `RightLeg` with the lowest `Fraction x 100`
+**Observed** (engine choice, [simulation.md](simulation.md#animation)): the simulation fills `AnimationStance.LeftLeg` and `RightLeg` with the lowest `Fraction x 100`
 of the character's leg parts, so a hurt leg selects the `limp` records by their leg damage ranges (100 healthy, negative past function; 1000..1000 means not used).
 The base data has no unconscious or dead clip (the skeleton has `stealthKO` and `sleeponfloor`), so a knocked-out or dead character plays the `sleeponfloor` record
 until proper clips exist.
+
+## Selection data used by the simulation
+
+What the simulation's animation system ([simulation.md](simulation.md#animation)) reads from the ANIMATION records, found while building it:
+
+- **Verified** (fcs.def and the 124 usable ANIMATION records of the install): `play speed` of a movement clip "is multiplied by movement speed, so
+  should be small like 0.02, tune until feet match ground speed"; `move speed` is "the ideal speed it travels at"; `min speed` / `max speed` are
+  "the ideal speed of the next anim below / above"; `synchs` clips of the lower and upper body share a phase; `has weapon L/R`, `is combat mode`
+  and `stealth mode` are the Either enum (0 NO, 1 YES, 2 EITHER); `idle` marks standing clips with an `idle chance` and `idle time min/max`.
+- **Observed** in the data: a leg range of 1000..1000 means "not used" (the limp clips constrain one leg only); the base movement chain per body
+  layer is walk 14, jog 45, run 90 (`walk lower`, `jog lower`, `run lower` and the `upper` twins); `stand 1` / `stand 1 sword` are the gameplay
+  idles, the six `idle_stand_*` poses come from `chareditor.mod`; `squat` is `is action`.
+- **Observed** (a cross-check, the stride is not in the data): reading the rule as `clip seconds per second = speed x play speed`, a walk cycle of the
+  1.4 s clip takes 1.67 s at speed 14 (0.84 clip seconds per second) and covers 2.3 m, a run cycle of the 0.567 s clip takes 0.31 s at speed 90 (1.8)
+  and covers 2.8 m (1 unit = 1 dm): about one stride of a person each, which the other reading (cycles per second = speed x play speed) does not
+  give (1.7 m and 5 m).
