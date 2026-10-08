@@ -17,7 +17,7 @@ public class LegacySpirvGoldenTests
         ["sky simple"] = ("8CFB64AEBF8222327737BB1CBFE25C83", "4FA13EF63843235F949CF456477373F1"),
         ["sky"] = ("EECA10F7D14E9F7D73315F5B375E4D62", "2A88B1820A089F99D4A46EFE6A40D58B"),   // the SkyX cloud pass
         ["water"] = ("30597048B9507F978C7876DA6A23C136", "A181233BB70F3C8DD6B429C146BC4540"),
-        ["water meitou"] = ("51EDD7B5F6F19775CBD4AEE71C582FB6", "CE5490A3071BB7F62A3987F9F8A616AF"),   // the Meitou water (2026-10-08)
+        ["water meitou"] = ("8A0EC6308AF7E8DD87C5429D3AE400FB", "1F824389AE38151167AF6BDD9794BC7E"),   // the Meitou water (2026-10-08)
         ["debug overlay"] = ("2967439E6B38320ED5326B2EF7EA984C", "FFCCCC151047230FD630483A92FEA9E2"),
         ["terrain patch"] = ("A6DF80FA9A18D020192B1ACCFEE17BCF", "BF9958A4D5349310D94BF29727C73D98"),   // the layer skip (0 px); the sandbox grid (off outside --sandbox)
         ["terrain mesh"] = ("310A6B5D645A0DB11BE4F1121BBB5844", "EC83766047C0E1B19020BD055EB6EBD1"),   // the rock crossfade dither (docs/impostors.md section 13; 0 px in Faithful)

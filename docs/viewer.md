@@ -251,7 +251,8 @@ How it works (status as in [README.md](README.md)):
     and bore scaled to 0.35), so there are gaps between the pieces of whitewater. The amount was raised on the
     user's "more foam" and then set halfway back (2026-10-08): the noise's offset 0.71 (0.62 at first), foam in the gaps 0.275 (0.2), the
     surf's coverage capped at 0.85 (0.8) and the erosion threshold 0.075 + 0.475 × age (0.1 + 0.55 × age); a quiet set of small waves
-    still leaves stretches without whitewater. The same `Shore` values (size, `brk`, `breakAt`, the
+    still leaves stretches without whitewater. Then all foam ×1.5 on the user's word (2026-10-08): the surf's coverage (its cap 0.95)
+    and the open water's (the Jacobian's ramp 2.5 to 3.75, the lingering foam ×1.5). The same `Shore` values (size, `brk`, `breakAt`, the
     phase) feed the vertex hump, the lip, burst, bore, trail, feather, the run-up and the sand's wetness, so geometry and foam agree.
     The offsets fade out (with the shore field's gradient length) on the axis between two shores, where the nearest shore jumps, so an
     inlet shows no seam (**Observed** in `MEITOU_WATER_DEBUG=1` at Port North's inlet: the bands bend there as the distance does).
