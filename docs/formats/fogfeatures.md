@@ -253,7 +253,14 @@ same instance, same sphere; the quad's silhouette is the sphere's out here). An 
 compaction and the indirect arguments need no change. The kernel counts those it dropped per chunk, the scan sums them into an extra entry of the
 offsets, and the total is read back a frame ring late (summed over the frame's fog dispatches, whose number varies with the cascades) into the
 `fog cull` line's "foliage instances"; the CPU path (`MEITOU_GPU_CULL=0`) tests the same in `FoliageCull.CullGroup` and counts the same way.
-Pairs at `--town Shark --distance 1500 --pitch 8` (**Observed**): see the numbers below.
+Measured (**Observed**, 2026-10-08, `--fly-benchmark 300 --fly-radius 1 --fly-speed 0` with `MEITOU_FOLIAGE_TRIS=1 MEITOU_PASS_STATS=1`, on / off
+`--no-fog-cull` as interleaved pairs, RTX 4070 shared with other viewers): Shark in swamp rain `--distance 400 --pitch 4`: 3953 of 20357 foliage
+instances left out of the main view (4453 of 20500 at `--distance 1500 --pitch 8`), colour-view triangles drawn meshes 727k / 1015k, rocks 2651k /
+2968k, impostors 19.6k / 24.8k; the foliage pass's GPU time 2.62-2.69 / 2.92-2.93 ms (three pairs, 0.3 ms), the frame's GPU time 6.2-6.5 / 6.57 ms.
+At `--distance 1500 --pitch 8` (a busier GPU: only the pairs compare) 6.0-6.3 / 6.8-7.0 ms for the foliage pass, a tenth of the pass and a larger
+share of the frame. Images: identical to at most 4 levels on 7 pixels (thin grass blades near the camera; 3921 pixels differ by 1 from the exposure
+and the TAA history seeing a different set of hidden fragments), where the zone-level cull alone differed by at most 1; the views without the block
+are unchanged (the ten parity views against `weather`: 0, except The Hub at 13:00, whose own runs differ by up to 7 between two renders).
 
 Measured (**Observed**, 2026-10-08, RTX 4070 shared with other viewers, so only the pairs are comparable, `--screenshot` "post cost" scene GPU
 ms with / without `--no-fog-cull`; images identical to at most 3 levels on 3 pixels): Shark `--distance 400 --pitch 4` 6.6 / 10.0 (11 terrain
