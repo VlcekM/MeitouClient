@@ -545,14 +545,14 @@ scripts `MeitouClient-re/probes/walk/tilescan*.js`, **Observed**):
 
 ### Builder constants (engine choices)
 
-None of these is the original's (the original's own values are in the sections above where they are known). They live in `Meitou.Navigation`; a change
+These are our choices (the original's own values, where known, are in the sections above; a row says when it is derived from one). They live in `Meitou.Navigation`; a change
 to one that alters a mesh needs `NavMeshCache.BuilderVersion` bumped.
 
 | Constant | Value | Where | Meaning |
 |---|---|---|---|
 | Cell size / height | 2 / 1 | `NavBuildSettings` | Recast grid; keeps the 9-unit minimum passage at 4 to 5 cells |
 | Tile | 48 cells (96 units) | `NavBuildSettings.TileCells` | one Recast tile; a zone is 48 × 48 tiles |
-| Agent height / max climb | 18 / 5 | `NavBuildSettings` | the original's `characterHeight` 1.8 and `maxStepHeight` 0.5 in Kenshi units |
+| Agent height / max climb | 18 / 5 | `NavBuildSettings` | derived from the original's `characterHeight` 1.8 and `maxStepHeight` 0.5 Havok units (Havok = Kenshi × 0.1) |
 | Contour error, longest edge, region areas | 1.3 cells, 24 cells, 4 and 40 | `NavBuildSettings` | Recast simplification and region merging |
 | Gather margin | 72 | `ZoneGeometryGatherer.DefaultMargin` | terrain, shapes and foliage reach this far past the zone box |
 | Building reach | 600 | `ZoneGeometryGatherer.BuildingReach` | placements this far past box and margin are gathered (a building's shape reaches into the zone) |
