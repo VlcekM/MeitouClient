@@ -289,6 +289,7 @@ Not the game's: the remaster's choice, on by default (F5 / `--faithful shadows` 
   0.0166 / 0.0115 of 255, 0.001 / 0.026 / 0.010 % of the pixels over 12, largest 24 / 63 / 58; the differences are thin edges of the
   tree shadows in the lower right (the old 1/2/4/4 schedule differed by at most 2 in the same pictures). Not done: a cascade drawn
   piece by piece over several frames, and drawing only what moved (the world has no moving casters but characters, which are small there).
+  **Verified** (2026-10-08): a still picture (`--screenshot`, Shark, `--faithful aa`) is identical to the build before the change with the Meitou shadows (0 differing pixels) and with `--faithful shadows,aa` (0 pixels; the Faithful path is untouched).
 - **Receiver.** The point is moved off its triangle by a normal offset of 0.5-2 texels (more at grazing light; the triangle's normal
   from screen derivatives, not the shading normal), then a blocker search (8 taps in a half-resolution map of the nearest depths,
   rebuilt for the tiles drawn) gives the penumbra: the blocker's distance × tan(0.35°) (a sun of 0.7°), at least 1 texel, at most 3
