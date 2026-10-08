@@ -96,7 +96,7 @@ at most +0.5 ms GPU in the F12 `water` stage on the same views; a quality settin
 1. **Waves and surf** — a camera-centred polar grid instead of the quad (fine near, coarse far, flat at the edge);
    an FFT ocean (three cascades, JONSWAP spectrum led by the weather's wind; first four Gerstner waves, replaced on
    2026-10-08); breakers that run towards the shore along a baked shore distance field (gated by its exposure), steepen, break into foam and run up
-   the beach and back; crest foam. One draw plus a 0.2 ms compute pass. Then a checkpoint for the owner to play it.
+   the beach and back; crest foam. One draw plus a 0.2-0.4 ms compute pass; refraction (a half-size copy of the scene), absorption by depth, caustics, crest light, glitter and lingering foam (2026-10-08). Then a checkpoint for the owner to play it.
 2. **Rivers and scum** — check that `flowmap.png` RG runs along the river channels (docs/formats/terrain.md); if so,
    faster flow, foam streaks and rapids where the channel is narrow and shallow; the biomes' scum (the B channel), which
    the game draws and the viewer never has.

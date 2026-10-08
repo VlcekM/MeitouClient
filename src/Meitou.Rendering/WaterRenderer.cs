@@ -309,6 +309,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform sampler2D uReflection;
         uniform mat4 uReflectionViewProjection;
         uniform float uReflect;
+        uniform sampler2D uRefraction;  // the scene under the water, copied at half size before it (CaptureRefraction)
+        uniform float uRefract;         // 1: refract it and composite here; 0: blend over the scene as the game's water
+        uniform vec2 uScreen;           // 1 / the target's size: gl_FragCoord to the copy's coordinates
 
         vec3 sampleNormal(vec2 coord, vec2 direction, float speed, float time)
         {
@@ -352,15 +355,17 @@ public sealed unsafe class WaterRenderer : IDisposable
             float dist = length(toEye);
             vec3 view = toEye / dist;
 
-            // The ocean's slopes and crest compression, per pixel (with the hardware's mips: out of uniform control flow they would be undefined).
+            // The ocean's slopes, height and lingering foam, per pixel (with the hardware's mips: out of uniform control flow they would be undefined).
             vec4 oceanSlope = vec4(0.0);
-            float oceanShear = 0.0;
+            float oceanHeight = 0.0, oceanFoam = 0.0;
             if (uOcean.w > 0.0)
                 for (int c = 0; c < 3; c++)
                 {
                     vec3 uvw = vec3(p / uOcean[c], float(c));
                     oceanSlope += texture(uOceanSlope, uvw);
-                    oceanShear += texture(uOceanDisp, uvw).w;
+                    vec4 d = texture(uOceanDisp, uvw);
+                    oceanHeight += d.y;
+                    oceanFoam += d.w * (1.0 - 0.3 * float(c));
                 }
 
             // The motion fades with the eye distance; beyond it (and past the world's edge) this is the game's flat water.
@@ -413,7 +418,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             float open = oceanScale(s) * (1.0 - smoothstep(9000.0, 14000.0, dist));
             vec4 os = oceanSlope * open;
             vec2 spread = max(vec2(1.0) + os.zw, vec2(0.25));
-            float jacobian = spread.x * spread.y - oceanShear * oceanShear * open * open;
+            float jacobian = spread.x * spread.y;
             vec2 slope = nm.xz / max(nm.y, 0.05) - os.xy / spread;
             // The breaker's hump tilts the surface: its height falls towards the shore on the front and rises on the back.
             Shore ahead = s, behind = s;
@@ -429,7 +434,13 @@ public sealed unsafe class WaterRenderer : IDisposable
             vec3 l = normalize(uSunDir);
             vec3 h = normalize(l + view);
             float power = max(exp2(gloss * 11.0 + 1.0) / (1.0 + dist / 6000.0), 12.0);
-            float spec = pow(max(dot(n, h), 0.0), power) * (power + 8.0) / 25.0 * gloss;
+            float nh = max(dot(n, h), 0.0);
+            float spec = pow(nh, power) * (power + 8.0) / 25.0 * gloss;
+            // Glitter: far away the waves are smaller than a pixel, so the sun's glint spreads into a band of sparkles, a broader lobe let
+            // through where a fine, moving pattern peaks.
+            float far = smoothstep(800.0, 4000.0, dist);
+            float sparkle = smoothstep(0.55, 0.95, textureLod(uFoamMap, p * 0.0023 + n.xz * 0.35 + vec2(uTime * 1.7, uTime * 1.1), 0.0).r);
+            spec += pow(nh, power * 0.12) * (power * 0.12 + 8.0) / 25.0 * gloss * sparkle * far * 2.5;
             float lh = clamp(dot(l, h), 0.0, 1.0);
             spec *= mix(1.0, 0.04 + 0.96 * exp2((-5.55473 * lh - 6.98316) * lh), uAtmoAltitude.z);
             float cosv = max(dot(view, n), 0.0);
@@ -445,7 +456,42 @@ public sealed unsafe class WaterRenderer : IDisposable
                 reflected = mix(reflected, min(texture(uReflection, uv).rgb, vec3(3.0)), inside.x * inside.y);
             }
             vec3 light = max(dot(n, l), 0.0) * uSunColour * 0.6 + uSkyZenith * 0.5 + 0.03;
-            vec3 colour = mix(waterColour * light, reflected, schlick * gloss) + min(spec, 4.0) * uSunColour * 0.25 + pb.y * waterColour;
+            // The light the water scatters back out of its body, and the light through the crests: with the sun behind a wave its thin top
+            // glows green-blue (stronger the higher the crest and the more the eye looks towards the sun).
+            vec3 body = waterColour * light;
+            float crest = smoothstep(1.0, 6.0, oceanHeight * open);
+            vec2 towardsSun = normalize(l.xz + vec2(1e-5)), looking = normalize(-view.xz + vec2(1e-5));
+            float back = pow(clamp(dot(looking, towardsSun), 0.0, 1.0), 3.0) * smoothstep(-0.05, 0.2, l.y);
+            body += mix(vec3(0.08, 0.38, 0.33), waterColour * 2.0, 0.3) * uSunColour * crest * (back * 0.7 + 0.04) * (1.0 - 0.6 * view.y) * (1.0 - far);
+
+            // The water's depth along the view (the swash: its own thin sheet).
+            float floorDepth = max(0.0, vWorld.y - terrainHeight(p));
+            float depth = (swash ? max(sheet, 0.0) : floorDepth) / max(view.y, 0.05);
+            if (outside > 0.0) depth = 1e4;
+            bool refract = uRefract > 0.5;
+            vec3 under = vec3(0.0);
+            vec3 colour;
+            if (refract)
+            {
+                // What lies under the water, seen through the waves: the scene copied before the water, its lookup bent by the surface's slope
+                // (less in thin water and far away).
+                vec2 bend = n.xz * 0.06 * clamp(depth / 30.0, 0.0, 1.0) / (1.0 + dist / 600.0);
+                under = texture(uRefraction, gl_FragCoord.xy * uScreen + bend).rgb;
+                // Caustics: the waves focus the sun into a moving web of light on the floor of shallow water (two drifting webs of the foam
+                // texture's cell rims, multiplied).
+                vec2 floorP = p - view.xz / max(view.y, 0.05) * floorDepth * 0.75;
+                float tc = uTime * 30.0;
+                float c1 = texture(uFoamMap, floorP * 0.011 + vec2(tc * 0.011, tc * 0.006)).r;
+                float c2 = texture(uFoamMap, mat2(0.8, 0.6, -0.6, 0.8) * floorP * 0.0147 - vec2(tc * 0.008, -tc * 0.01)).r;
+                float caustic = (c1 * c2 * 1.6 + (c1 + c2) * 0.1) * max(l.y, 0.0) * smoothstep(0.3, 3.0, floorDepth) * exp(-floorDepth / 25.0) * (1.0 - far);
+                under *= 1.0 + caustic * uSunColour;
+                // Absorption: red goes first, then green, so the shallows over sand are turquoise and the deep water dark; the biome's
+                // opacity (the game's alpha per unit of depth) sets how fast. Beyond 4000 units the floor is gone, as in the game.
+                vec3 transmit = exp(-depth * max(pa.w, 0.002) * vec3(4.5, 1.6, 1.1)) * clamp((4400.0 - dist) / 400.0, 0.0, 1.0);
+                colour = mix(under * transmit + body * (1.0 - transmit), reflected, schlick * gloss);
+            }
+            else colour = mix(body, reflected, schlick * gloss);
+            colour += min(spec, 4.0) * uSunColour * 0.25 + pb.y * waterColour;
 
             // A breaker's face: light comes through its thin lip, so it is brighter and greener than the water, and less see-through.
             float lip = smoothstep(0.22, 0.45, s.g) * (1.0 - smoothstep(0.46, 0.51, s.g)) * clamp(breaker / max(uShore.w, 0.1), 0.0, 1.0) * smoothstep(3.0, 20.0, s.depth);
@@ -454,8 +500,9 @@ public sealed unsafe class WaterRenderer : IDisposable
             float trough = smoothstep(0.05, 0.2, s.g) * (1.0 - smoothstep(0.2, 0.3, s.g)) * clamp(breakerHeight(behind) / max(uShore.w, 0.1), 0.0, 1.0) * (1.0 - smoothstep(s.breakAt, s.breakAt - 30.0, s.dist));
             colour *= 1.0 - 0.25 * trough * near;
 
-            // Foam (WaterFoam's lace, let through the more the more foam there is): sharp open-water crests in a wind; the breaking crest as a line
-            // and the foam it leaves behind; a thin edge at the waterline; the swash's front and the lace in its sheet.
+            // Foam (WaterFoam's lace, let through the more the more foam there is): sharp open-water crests in a wind and the foam they leave
+            // behind (OceanWaves keeps it a few seconds); the breaking crest as a line and the foam it leaves behind; a thin edge at the
+            // waterline; the swash's front and the lace in its sheet.
             // Outside the break point the swell only feathers at its crest; at the break it bursts white; inside it a bore of whitewater runs
             // to the shore with lace trailing behind it.
             float surfZone = smoothstep(-2.0, 10.0, s.dist) * smoothstep(250.0, 120.0, s.depth) * fade * s.open * min(uShore.w, 1.0);
@@ -464,7 +511,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             float bore = broken * smoothstep(0.43, 0.5, s.g) * (1.0 - smoothstep(0.54, 0.68, s.g));
             float trail = broken * smoothstep(0.56, 0.66, s.g) * (1.0 - smoothstep(0.66, 0.95, s.g)) * 0.8;
             float feather = (1.0 - broken) * smoothstep(0.47, 0.5, s.g) * (1.0 - smoothstep(0.5, 0.53, s.g)) * smoothstep(s.breakAt + 120.0, s.breakAt + 20.0, s.dist);
-            float amount = clamp((0.7 - jacobian) * 2.5, 0.0, 1.0);
+            float amount = max(clamp((0.7 - jacobian) * 2.5, 0.0, 1.0), clamp(oceanFoam * open, 0.0, 1.0) * 0.75);
             // Along the shore the breakers break harder in some stretches than others, and not at all in a few.
             float stretch = smoothstep(0.2, 0.75, texture(uFoamMap, p * 0.0011).g);
             float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 0.5, feather * 0.6)) * min(s.size * 1.1, 1.3);
@@ -472,34 +519,48 @@ public sealed unsafe class WaterRenderer : IDisposable
             amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * (0.15 + 0.25 * s.open) * fade);
             if (swash && sheet > 0.0) amount = max(amount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.12, sheet)), 0.35 * (1.0 - sinceCrest)));
             vec2 drift = direction * speed * uTime * 0.2;
-            // Blotches (the multi-octave noise at two scales) with bubble rims in them; the more foam, the lower the threshold.
+            // Blotches (the multi-octave noise at two scales) with bubble rims in them; the more foam, the lower the threshold. Up close the
+            // foam shows its bubbles (B: fine cell walls), lit on their walls and darker inside.
             vec2 a1 = texture(uFoamMap, p * 0.009 + drift).rg, a2 = texture(uFoamMap, p * 0.027 - drift * 1.3).rg;
-            float pattern = (a1.g * 0.6 + a2.g * 0.4) * 0.7 + max(a1.r, a2.r) * 0.45;
+            float bubbles = texture(uFoamMap, p * 0.06 - drift * 2.0).b * (1.0 - smoothstep(150.0, 600.0, dist));
+            float pattern = (a1.g * 0.6 + a2.g * 0.4) * 0.7 + max(a1.r, a2.r) * 0.45 + bubbles * 0.08;
             float foam = smoothstep(0.95 - amount, 1.25 - amount, pattern);
-            vec3 foamColour = vec3(0.72) * (max(dot(n, l), 0.0) * uSunColour * 0.9 + uSkyZenith * 0.8 + 0.04);
+            vec3 foamColour = vec3(0.72) * (max(dot(n, l), 0.0) * uSunColour * 0.9 + uSkyZenith * 0.8 + 0.04) * (0.84 + 0.2 * bubbles);
             foam *= 0.92;
             colour = mix(colour, foamColour, foam);
 
-            // Alpha as the game's water from its depth (the swash: its own thin sheet), then the foam over it.
-            float depth = (swash ? max(sheet, 0.0) : max(0.0, vWorld.y - terrainHeight(p))) / max(view.y, 0.05);
-            if (outside > 0.0) depth = 1e4;
-            float fresnel = 1.0 - pow(1.0 - cosv, 2.0);
-            float a = clamp(1.0 - (dist - 4000.0) / 1000.0, 0.0, 1.0);
-            a *= mix(1.0, clamp(depth * pa.w, 0.0, 1.0), fresnel);
-            a *= clamp(depth / 2.0, 0.0, 1.0);
-            // The lip (only where the water is deep enough for it, else an opaque stroke) is less see-through.
-            a = max(a, lip * 0.6 * near);
-            // The swash thins out to its edge instead of ending in a line.
-            if (swash) a = max(a, 0.3 * smoothstep(0.0, 0.8, sheet));
-            a = max(a, foam);
-            if (swash && sheet <= 0.0)
+            float a;
+            if (refract)
             {
-                // Wet sand: darker and glossy, drying out until the next wave.
-                float wet = (1.0 - sinceCrest) * 0.6;
-                colour = reflected * schlick * gloss + min(spec, 4.0) * uSunColour * 0.15;
-                a = wet * 0.45;
+                // Composited here (the scene behind was copied): opaque, except that wet sand darkens and glosses what is under it.
+                a = 1.0;
+                if (swash && sheet <= 0.0)
+                {
+                    float wet = (1.0 - sinceCrest) * 0.6;
+                    colour = under * (1.0 - 0.35 * wet) + (reflected * schlick * gloss + min(spec, 4.0) * uSunColour * 0.15) * wet;
+                }
             }
-            a = mix(1.0, a, clamp((4000.0 - dist) / 400.0, 0.0, 1.0));
+            else
+            {
+                // Alpha as the game's water from its depth (the swash: its own thin sheet), then the foam over it.
+                float fresnel = 1.0 - pow(1.0 - cosv, 2.0);
+                a = clamp(1.0 - (dist - 4000.0) / 1000.0, 0.0, 1.0);
+                a *= mix(1.0, clamp(depth * pa.w, 0.0, 1.0), fresnel);
+                a *= clamp(depth / 2.0, 0.0, 1.0);
+                // The lip (only where the water is deep enough for it, else an opaque stroke) is less see-through.
+                a = max(a, lip * 0.6 * near);
+                // The swash thins out to its edge instead of ending in a line.
+                if (swash) a = max(a, 0.3 * smoothstep(0.0, 0.8, sheet));
+                a = max(a, foam);
+                if (swash && sheet <= 0.0)
+                {
+                    // Wet sand: darker and glossy, drying out until the next wave.
+                    float wet = (1.0 - sinceCrest) * 0.6;
+                    colour = reflected * schlick * gloss + min(spec, 4.0) * uSunColour * 0.15;
+                    a = wet * 0.45;
+                }
+                a = mix(1.0, a, clamp((4000.0 - dist) / 400.0, 0.0, 1.0));
+            }
 
             if (uWaterDebug > 0.5) { fragColour = vec4(clamp(s.dist / 400.0, 0.0, 1.0), s.g, s.open, 1.0); return; }   // MEITOU_WATER_DEBUG=1
             fragColour = vec4(atmoApply(colour, uEye, vWorld), a);
@@ -520,6 +581,8 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly OceanWaves ocean;
     readonly ShoreField shore;
     readonly float gridStep;
+    Texture? refraction;
+    long refractionFrame = -1;
 
     /// <summary>The Enhancements switch <c>water</c>: the game's flat water (Faithful) or Meitou's waves, breakers and foam (the default).</summary>
     public bool Meitou { get; set; } = true;
@@ -534,10 +597,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         public readonly LegacyProgram P;
         public readonly NativeSegment Segment;
         public readonly UniformHandle ViewProjection, WaterHeight, Centre, Extent, Eye, HalfWorld, SeaA, SeaB, SeaColour, Time, SunDir, SunColour,
-            FogColour, FogDistance, Reflect, ReflectionViewProjection, Ocean, ShoreRect, GridStep, Shore, WaveFade, Debug;
+            FogColour, FogDistance, Reflect, ReflectionViewProjection, Ocean, ShoreRect, GridStep, Shore, WaveFade, Debug, Refract, Screen;
         public readonly SkyColourHandles Sky;
         public readonly SamplerSlot[] Maps;
-        public readonly SamplerSlot Reflection, OceanDisp, OceanSlope, ShoreField;
+        public readonly SamplerSlot Reflection, OceanDisp, OceanSlope, ShoreField, Refraction;
 
         public WaterProgram(GpuContext gpu, string vertex, string fragment, string name, Silk.NET.Vulkan.PrimitiveTopology topology)
         {
@@ -552,6 +615,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             (Ocean, ShoreRect, GridStep, Shore, WaveFade) = (P.Uniform("uOcean"), P.Uniform("uShoreRect"), P.Uniform("uGridStep"), P.Uniform("uShore"),
                 P.Uniform("uWaveFade"));
             (OceanDisp, OceanSlope, ShoreField) = (P.Sampler("uOceanDisp"), P.Sampler("uOceanSlope"), P.Sampler("uShoreField"));
+            (Refract, Screen, Refraction) = (P.Uniform("uRefract"), P.Uniform("uScreen"), P.Sampler("uRefraction"));
             Debug = P.Uniform("uWaterDebug");
             Sky = SkyColourHandles.Resolve(P);
             Maps = MapNames.Select(P.Sampler).ToArray();
@@ -717,6 +781,29 @@ public sealed unsafe class WaterRenderer : IDisposable
         if (Meitou) shore.Update(eye, heights);
     }
 
+    /// <summary>The Meitou water refracts what lies under it (<see cref="CaptureRefraction"/> before each of its draws); off: it blends over it as
+    /// the game's water does (`--no-water-refraction`, for integrated GPUs).</summary>
+    public bool Refraction { get; set; } = true;
+
+    /// <summary>
+    /// Copies the scene drawn so far (the slice's opaque geometry, with no pass open) at half the size into the texture the Meitou water refracts:
+    /// the floor and whatever stands in the water, seen through the waves. One native segment (a full barrier on each side) and one blit.
+    /// </summary>
+    public void CaptureRefraction(Texture sceneColour)
+    {
+        if (!Meitou || !Refraction) return;
+        var cmd = Gpu.BeginNative("water refraction");
+        int w = Math.Max(sceneColour.Desc.Width / 2, 1), h = Math.Max(sceneColour.Desc.Height / 2, 1);
+        if (refraction is not { } r || r.Desc.Width != w || r.Desc.Height != h || r.Desc.Format != sceneColour.Desc.Format)
+        {
+            refraction?.Dispose();
+            refraction = Texture.Create(Gpu, new TextureDesc(sceneColour.Desc.Format, w, h, Name: "water refraction"), cmd.Handle);
+        }
+        cmd.Blit(sceneColour, refraction, Silk.NET.Vulkan.Filter.Linear);
+        Gpu.EndNative(cmd);
+        refractionFrame = Gpu.Frame.Number;
+    }
+
     /// <summary>The open waves (for the viewer's statistics and tests).</summary>
     public OceanWaves Ocean => ocean;
 
@@ -764,6 +851,14 @@ public sealed unsafe class WaterRenderer : IDisposable
             p.Set(h.Debug, DebugView ? 1f : 0f);
             if (ocean.Ready) { p.Bind(h.OceanDisp, ocean.Displacement); p.Bind(h.OceanSlope, ocean.Slopes); }
             if (shore.Ready) p.Bind(h.ShoreField, shore.Sampled());
+            bool refract = Refraction && refraction is not null && refractionFrame == Gpu.Frame.Number;
+            p.Set(h.Refract, refract ? 1f : 0f);
+            if (refract)
+            {
+                var t = Gpu.CurrentTargets();
+                p.Set(h.Screen, 1f / t.Width, 1f / t.Height);
+                p.Bind(h.Refraction, new SampledTexture(Gpu.Samplers.Get(ClampLinear), refraction!.View(), refraction.Image));
+            }
         }
         h.Sky.Set(p, colours);
         p.ApplyGlobals();   // the atmosphere's and the heights' uniforms and textures, through the frame globals
@@ -783,6 +878,10 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     /// <summary><c>MEITOU_WATER_DEBUG=1</c>: the Meitou water shows its shore fields (red the distance to the shore over 400, green the breaker phase, blue the exposure).</summary>
     static readonly bool DebugView = Environment.GetEnvironmentVariable("MEITOU_WATER_DEBUG") == "1";
+
+    static readonly SamplerDesc ClampLinear = new(Silk.NET.Vulkan.Filter.Linear, Silk.NET.Vulkan.Filter.Linear, Silk.NET.Vulkan.SamplerMipmapMode.Nearest, false,
+        Silk.NET.Vulkan.SamplerAddressMode.ClampToEdge, Silk.NET.Vulkan.SamplerAddressMode.ClampToEdge, Silk.NET.Vulkan.SamplerAddressMode.ClampToEdge, false,
+        Silk.NET.Vulkan.CompareOp.Always, false, false, 1, 0);
 
     static readonly BlendState AlphaBlend = new(true, Silk.NET.Vulkan.BlendFactor.SrcAlpha, Silk.NET.Vulkan.BlendFactor.OneMinusSrcAlpha);
 
@@ -827,5 +926,6 @@ public sealed unsafe class WaterRenderer : IDisposable
         meitou.Dispose();
         ocean.Dispose();
         shore.Dispose();
+        refraction?.Dispose();
     }
 }

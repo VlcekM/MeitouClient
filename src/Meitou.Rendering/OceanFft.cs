@@ -15,7 +15,8 @@ struct OceanPush
     public uint From, To;
     public uint Pass;           // the FFT: 0 rows, 1 columns
     public float Choppiness;
-    public uint Pad0, Pad1;
+    public float Dt;           // game seconds since the last pass (the foam's decay)
+    public uint Pad1;
 }
 
 /// <summary>
@@ -31,6 +32,8 @@ public sealed unsafe class OceanWaves : IDisposable
     public const int DefaultSize = 256;
     /// <summary>Game seconds over which a new spectrum replaces the old one.</summary>
     public const float BlendSeconds = 10;
+    /// <summary>Game seconds over which the foam left by a folding crest fades to a third.</summary>
+    public const float FoamSeconds = 4;
     /// <summary>How far the wind must turn (radians) or change (a fraction of its speed) before the spectrum is rebuilt.</summary>
     public const float RebuildAngle = 0.17f, RebuildChange = 0.12f;
 
@@ -38,7 +41,7 @@ public sealed unsafe class OceanWaves : IDisposable
     readonly GpuContext ctx;
     readonly ShaderProgram evolve, fft, assemble;
     readonly ComputePipeline evolvePipe, fftPipe, assemblePipe;
-    readonly DeviceBuffer spectrum, fieldsA, fieldsB, output;
+    readonly DeviceBuffer spectrum, fieldsA, fieldsB, output, foam;
     readonly Texture displacement, slopes;
     readonly Sampler sampler;
     readonly ulong texels;
@@ -53,6 +56,8 @@ public sealed unsafe class OceanWaves : IDisposable
     bool uploadBoth;
     double seconds;
     (double Time, float Blend)? recorded;
+    double? lastPass;
+    bool foamCleared;
 
     public OceanWaves(GpuContext ctx, int size = DefaultSize)
     {
@@ -70,6 +75,7 @@ public sealed unsafe class OceanWaves : IDisposable
         fieldsA = DeviceBuffer.Create(ctx, Cascades * texels * 16, BufferUse.Storage, "ocean fields a");
         fieldsB = DeviceBuffer.Create(ctx, Cascades * texels * 16, BufferUse.Storage, "ocean fields b");
         output = DeviceBuffer.Create(ctx, 2 * Cascades * texels * 8, BufferUse.Storage | BufferUse.TransferSrc, "ocean output");
+        foam = DeviceBuffer.Create(ctx, Cascades * texels * 4, BufferUse.Storage | BufferUse.TransferDst, "ocean foam");
         int levels = 1 + (int)Math.Log2(size);
         using (var batch = ctx.Uploads.Begin())
         {
@@ -88,7 +94,8 @@ public sealed unsafe class OceanWaves : IDisposable
     public float Choppiness { get; set; } = 1.0f;
     /// <summary>The cascades' tile sizes (units), w unused.</summary>
     public Vector4 Lengths => new(OceanSpectrum.Lengths[0], OceanSpectrum.Lengths[1], OceanSpectrum.Lengths[2], 0);
-    /// <summary>Per cascade (layer): displacement x, y, z and ∂Dx/∂z (units; the horizontal ones and the derivative times the choppiness).</summary>
+    /// <summary>Per cascade (layer): displacement x, y, z (units; the horizontal ones times the choppiness) and the foam (0..1): where the crests
+    /// fold it is renewed, elsewhere it fades over <see cref="FoamSeconds"/>, so foam lingers behind a crest.</summary>
     public SampledTexture Displacement => new(sampler, displacement.View(), displacement.Image);
     /// <summary>Per cascade (layer): ∂Dy/∂x, ∂Dy/∂z, ∂Dx/∂x, ∂Dz/∂z (the last two times the choppiness).</summary>
     public SampledTexture Slopes => new(sampler, slopes.View(), slopes.Image);
@@ -156,16 +163,20 @@ public sealed unsafe class OceanWaves : IDisposable
         if (!uploaded && recorded is { } r && r.Time == time && r.Blend == blend) return;
         recorded = (time, blend);
 
+        float dt = lastPass is { } last ? (float)Math.Clamp(seconds - last, 0, 1) : 0;
+        lastPass = seconds;
         var push = new OceanPush
         {
-            Lengths = Lengths, Time = (float)time, Blend = blend, From = from, To = to, Choppiness = Choppiness,
+            Lengths = Lengths, Time = (float)time, Blend = blend, From = from, To = to, Choppiness = Choppiness, Dt = dt,
         };
         Span<BufferBinding> b =
         [
             new(spectrum.Handle, 0, spectrum.Size), new(fieldsA.Handle, 0, fieldsA.Size), new(fieldsB.Handle, 0, fieldsB.Size), new(output.Handle, 0, output.Size),
+            new(foam.Handle, 0, foam.Size),
         ];
         cmd.BeginLabel("ocean");
         // The last frame's draws sampled the textures, its passes used the buffers, and the spectrum may just have been written.
+        if (!foamCleared) { cmd.FillBuffer(foam.Handle, 0, foam.Size, 0); foamCleared = true; }
         cmd.Barrier(BarrierBatch.Full);
         var stamps = (ctx.Frame.Timestamps.Allocate(), ctx.Frame.Timestamps.Allocate());
         cmd.Timestamp(ctx.Frame.Timestamps, stamps.Item1, PipelineStageFlags2.ComputeShaderBit);
@@ -245,7 +256,7 @@ public sealed unsafe class OceanWaves : IDisposable
     static string Kernel(string body, int n) => $"#version 450\n#define N {n}u\n" + Common + body;
 
     const string Common = """
-        layout(push_constant) uniform Push { vec4 lengths; float time; float blend; uint from; uint to; uint pass; float choppiness; uint pad0; uint pad1; } pc;
+        layout(push_constant) uniform Push { vec4 lengths; float time; float blend; uint from; uint to; uint pass; float choppiness; float dt; uint pad1; } pc;
         const float PI = 3.14159265358979;
         vec2 cmul(vec2 a, vec2 b) { return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }
 
@@ -318,12 +329,14 @@ public sealed unsafe class OceanWaves : IDisposable
         }
         """;
 
-    // The centred wave numbers put a (-1)^(x+y) on the transform; then the fields go out as halves for the copy into the textures.
+    // The centred wave numbers put a (-1)^(x+y) on the transform; then the fields go out as halves for the copy into the textures. Where a
+    // cascade's surface folds (its Jacobian below 0.75) foam is renewed; elsewhere it decays, so it lingers behind the crests.
     const string AssembleSource = """
         layout(local_size_x = 16, local_size_y = 16) in;
         layout(std430, set = 0, binding = 1) readonly buffer FieldsA { vec4 fa[]; };
         layout(std430, set = 0, binding = 2) readonly buffer FieldsB { vec4 fb[]; };
         layout(std430, set = 0, binding = 3) writeonly buffer Output { uvec2 texels[]; };
+        layout(std430, set = 0, binding = 4) buffer Foam { float foam[]; };
         void main()
         {
             uvec3 id = gl_GlobalInvocationID;
@@ -331,7 +344,10 @@ public sealed unsafe class OceanWaves : IDisposable
             float sign = ((id.x + id.y) & 1u) == 0u ? 1.0 : -1.0;
             vec4 a = fa[c * N * N + i] * sign, b = fb[c * N * N + i] * sign;
             float l = pc.choppiness;
-            texels[c * N * N + i] = uvec2(packHalf2x16(vec2(a.x * l, a.z)), packHalf2x16(vec2(a.y * l, a.w * l)));
+            float jacobian = (1.0 + b.z * l) * (1.0 + b.w * l) - a.w * a.w * l * l;
+            float f = max(foam[c * N * N + i] * exp(-pc.dt * 1.1 / 4.0), clamp((0.75 - jacobian) * 2.5, 0.0, 1.0));
+            foam[c * N * N + i] = f;
+            texels[c * N * N + i] = uvec2(packHalf2x16(vec2(a.x * l, a.z)), packHalf2x16(vec2(a.y * l, f)));
             texels[(3u + c) * N * N + i] = uvec2(packHalf2x16(vec2(b.x, b.y)), packHalf2x16(vec2(b.z * l, b.w * l)));
         }
         """;
@@ -343,6 +359,7 @@ public sealed unsafe class OceanWaves : IDisposable
         fieldsA.Dispose();
         fieldsB.Dispose();
         output.Dispose();
+        foam.Dispose();
         displacement.Dispose();
         slopes.Dispose();
         evolve.Dispose();

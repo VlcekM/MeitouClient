@@ -238,13 +238,29 @@ How it works (status as in [README.md](README.md)):
     hump per breaker (none where the vertices are more than a fifth of a breaker apart); the steep front, lip and trough are shading, so no
     vertex shows. The sets' sizes vary smoothly from one breaker to the next. The shore fades out from 7000 to 10000 units from the eye.
   - *Foam.* `WaterFoam` bakes a tileable 256² texture at load: R a lace of bubble rims (cellular noise, F2 − F1), G a five-octave
-    value noise. The shader blends both at two scales (about 110 and 37 units a repeat) and lets more through the more foam there is.
+    value noise, B fine bubble walls (96 cells, about 17 units a repeat as the shader uses it). The shader blends R and G at two scales
+    (about 110 and 37 units a repeat) and lets more through the more foam there is; within 150-600 units of the eye the bubbles show in
+    it, lit on their walls. Foam on the open water lingers: the ocean's assemble kernel keeps a foam value per texel and cascade, renewed
+    where that cascade's surface folds (its Jacobian below 0.75) and fading to a third in 4 game seconds elsewhere, so a crest leaves foam
+    behind it (in the displacement texture's fourth channel; **Observed** in pictures, no test). No texture is downloaded: all are baked.
+  - *Light and colour* (2026-10-08). **Refraction**: before each of its draws (one per depth slice) the scene pass ends, the slice's colour
+    is copied at half size (`CaptureRefraction`, one blit), and the pass opens again; the water looks the copy up bent by its normal (less
+    in thin water and far off) and composites itself opaque, instead of blending over the scene. `--no-water-refraction` keeps the
+    blending (the game's alpha from depth). **Absorption**: what is under the water is dimmed per channel by exp(−σ L), σ = the biome's
+    opacity (its parameter map's alpha, the game's alpha per unit of depth) × (4.5, 1.6, 1.1), L the path through the water to the terrain
+    (so red goes first: turquoise shallows over sand, dark deep water), and the water's own colour scatters in for what is absorbed; the
+    floor fades out by 4400 units, as the game's water turns opaque at 4000. **Caustics**: on the floor seen through shallow water, two
+    drifting copies of the foam lace (cell rims) multiplied, brightest at 0.3-3 units of depth, fading over 25. **Crest light**: where an
+    ocean crest stands more than about 1 unit high and the eye looks towards the sun, a green-blue glow (light through the thin top).
+    **Glitter**: beyond 800-4000 units a broader glint lobe let through where a fine moving pattern peaks, so the far sea sparkles in a
+    band instead of fading flat. All of it in the Meitou shader only.
   - *Clock.* Everything runs on the game clock (`GameHours`; the viewer's heat-haze hours, still for a picture): paused water stands
     still, game speed speeds it up. `--water-seconds <s>` starts it at s game seconds, for pictures of a moment. `MEITOU_WATER_DEBUG=1`
     shows the shore fields (red distance / 400, green breaker phase, blue exposure).
   - *Cost* (**Observed** 2026-10-08, 1920 × 1080, Port South's beach at distance 900, `--fly-benchmark 300` with `MEITOU_PASS_STATS=1` and
-    the clock running, one run each, so noisy): the ocean's compute pass 0.21 ms GPU (256², timestamps round it), the water draw 0.25 ms
-    against 0.14 ms for the Faithful water; the shore bake 40-95 ms on a worker thread. Memory: about 21 MB (spectrum 6, work buffers 9,
+    the clock running, one run each, so noisy): the ocean's compute pass 0.21-0.37 ms GPU (256², timestamps round it; `--water-ocean 128`
+    is a quarter of the transform), the water pass 0.30 ms GPU with refraction (the copies included), 0.12 ms without, against 0.03 ms for
+    the Faithful water; the shore bake 40-95 ms on a worker thread. Memory: about 21 MB (spectrum 6, work buffers 9,
     textures 4) plus the 8 MB shore field. The reflection pass is unchanged (the mirror stays the plane at Y = 100).
   - *Shore distance field* (`ShoreField`, `ShoreBake`; read by the water shader since 2026-10-08). A 1024² grid of 10-unit texels (±5120 units round the eye) holding (signed distance to the waterline, exposure). The
     waterline is where 100 − height changes sign between neighbouring texels, placed by linear interpolation of that difference, so it is

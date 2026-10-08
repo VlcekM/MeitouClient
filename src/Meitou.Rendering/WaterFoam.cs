@@ -3,13 +3,14 @@ namespace Meitou.Rendering;
 /// <summary>
 /// The Meitou water's foam pattern (<see cref="WaterRenderer"/>): a tileable lace of bubble rims, baked at load. Two octaves of cellular noise
 /// (one jittered point per cell; the rim is where the nearest two points are about as near, F2 − F1 small). R holds the lace (0..1), G a smooth
-/// value noise for patches; the shader lets more of the lace through the more foam there is, in clumps where G is high.
+/// value noise for patches, B fine bubble walls (96 cells across, cellular noise again) for foam seen up close. The shader lets more of the
+/// lace through the more foam there is, in clumps where G is high.
 /// </summary>
 public static class WaterFoam
 {
     public const int Size = 256;
 
-    /// <summary>RGBA8 pixels, <see cref="Size"/>², the lace in R, the patches in G (B 0, A 255). Deterministic and tileable.</summary>
+    /// <summary>RGBA8 pixels, <see cref="Size"/>², the lace in R, the patches in G, the bubbles in B (A 255). Deterministic and tileable.</summary>
     public static byte[] Bake()
     {
         var pixels = new byte[Size * Size * 4];
@@ -21,7 +22,7 @@ public static class WaterFoam
                 float patches = (0.4f * Value(u, v, 4, 0x77u) + 0.25f * Value(u, v, 8, 0x1234u) + 0.17f * Value(u, v, 16, 0x9E37u)
                     + 0.11f * Value(u, v, 32, 0x51EDu) + 0.07f * Value(u, v, 64, 0xA3C5u));
                 int o = (y * Size + x) * 4;
-                (pixels[o], pixels[o + 1], pixels[o + 2], pixels[o + 3]) = (Byte(lace), Byte(patches), 0, 255);
+                (pixels[o], pixels[o + 1], pixels[o + 2], pixels[o + 3]) = (Byte(lace), Byte(patches), Byte(Rim(u, v, 96, 0x5EEDu)), 255);
             }
         return pixels;
     }
