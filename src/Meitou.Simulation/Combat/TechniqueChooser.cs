@@ -44,13 +44,13 @@ public static class TechniqueChooser
     }
 
     /// <summary>The weapon types a technique is valid for, matched on the type bits (the "1 handed" flag is not tested).</summary>
-    public static bool FitsKind(CombatTechnique t, WeaponKinds kind) => (t.Kinds & kind & ~WeaponKinds.OneHanded) != 0;
+    internal static bool FitsKind(CombatTechnique t, WeaponKinds kind) => (t.Kinds & kind & ~WeaponKinds.OneHanded) != 0;
 
     /// <summary>The distance the technique can strike at (gap between bodies), for the reach the attack is chosen at.</summary>
     public static float ReachOf(CombatTechnique t, bool targetMoving, float weaponReach) => MathF.Min(targetMoving ? t.AttackDistance : t.AttackDistanceMinVsStatic, weaponReach);
 
     /// <summary>The front directions (1 down, 2 left, 3 right, 4 thrust, 5 up, 6 pierced, 0 default) and the rear ones (7 to 9) are two classes; a wrong-direction block stays in the blow's class.</summary>
-    public static bool SameClass(int a, int b) => (a >= 7) == (b >= 7);
+    internal static bool SameClass(int a, int b) => (a >= 7) == (b >= 7);
 
     /// <summary>
     /// The defender's reaction (<c>FUN_140887970</c>, <b>Observed</b>), given the block roll and the pick roll. Candidates are the block or dodge techniques of the defender's weapon type,
