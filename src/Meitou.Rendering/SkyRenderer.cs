@@ -135,8 +135,6 @@ public sealed unsafe class SkyRenderer : IDisposable
             float night;
             vec3 col = atmoSky(dir, night);
             float aboveHorizon = smoothstep(-0.02, 0.06, dir.y);
-            // Weather fog hides the sky near the horizon too (the terrain beyond its far distance is plain fog colour).
-            if (uAtmoFog.z > 0.0) col = mix(col, uAtmoFogColour, (1.0 - smoothstep(0.0, 0.45, dir.y)) * uAtmoFog.z);
 
             // Stars: SkyX_Starfield.dds (SkyX's HDR form: nightmult · texture · (0.35 + saturate(−sunY · 0.45)) · 2), laid over the upper
             // hemisphere stereographically and turning with the night (the dome's own UV layout is not reproduced).
@@ -179,9 +177,7 @@ public sealed unsafe class SkyRenderer : IDisposable
                 pixel = mix(uCloudLight.rgb + uCloudSun.rgb, pixel, clamp((d.y - 0.01) / 0.04, 0.0, 1.0));
                 float alpha = density * clamp(1.0 - tile + o, 0.0, 1.0);
                 alpha = mix(o + 0.5, alpha, band);
-                // The viewer's weather fog hides the sky near the horizon (above); the clouds fade out with it, as they did before.
-                float fogKeep = uAtmoFog.z > 0.0 ? mix(1.0, smoothstep(0.0, 0.45, dir.y), uAtmoFog.z) : 1.0;
-                col = mix(col, clamp(pixel, 0.0, 1.0) * sqrt(SKYX_EXPOSURE), clamp(alpha, 0.0, 1.0) * fogKeep);
+                col = mix(col, clamp(pixel, 0.0, 1.0) * sqrt(SKYX_EXPOSURE), clamp(alpha, 0.0, 1.0));
             }
             // Moon: SkyX_Moon.png on a disc opposite the sun (always full; SkyX_Moon.hlsl saturates its colour and blends by alpha).
             float md = dot(dir, uMoonDir);
@@ -191,6 +187,15 @@ public sealed unsafe class SkyRenderer : IDisposable
                 vec4 m = texture(uMoon, vec2(p.x, -p.y) * 0.195 + 0.5);
                 if (abs(p.x) < 2.6 && abs(p.y) < 2.6)
                     col = mix(col, clamp(m.rgb, 0.0, 1.0), m.a * night * aboveHorizon * smoothstep(0.0, 0.1, uMoonDir.y));
+            }
+            // The game's fog pass runs over the sky too (post/fog.hlsl atmosphere_fog_fs): a pixel with no geometry has distance = farClip, its atmosphere term is
+            // dropped and the weather's term alone remains, alpha = ease-in-out(saturate(farClip / fog distance)) x fogColour.a, colour = fog colour x sunColour.w
+            // (uAtmoFogColour). So a weather whose fog completes before the far clip (dust storms 25000, Ashlands 35000, farClip 50000) replaces the whole sky with a flat fog colour.
+            if (uAtmoFog.z > 0.0 && uAtmoHaze.w > 0.0)
+            {
+                float amount = clamp(uAtmoFog.w * uAtmoHaze.w, 0.0, 1.0);
+                float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
+                col = mix(col, uAtmoFogColour, curve);
             }
             fragColour = vec4(col, 1.0);
         }
@@ -429,7 +434,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             var sunLight = KenshiLighting.SunLight(sun);
             var lightDir = KenshiLighting.LightDirection(sun);
             float env = KenshiLighting.EnvironmentFactor(lightDir);
-            var tint = SkyColourMultiplier;
+            var tint = Vector3.One;   // the game tints only the cloud light (zenithLight, below), never the skydome (docs/formats/sky.md)
             var zenith = SkyXModel.Colour(Vector3.UnitY, sun) * tint;
             var flat = new Vector2(sun.X, sun.Z);
             flat = flat.LengthSquared() > 1e-8f ? Vector2.Normalize(flat) : Vector2.UnitX;
@@ -443,7 +448,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             state = new State
             {
                 Sun = sun, SunLight = sunLight, LightDirection = lightDir, Environment = env, FogDistance = fogDistance,
-                CloudSun = KenshiLighting.SunColour(sun), CloudZenith = CloudLayer.ZenithLight(sun, tint),
+                CloudSun = KenshiLighting.SunColour(sun), CloudZenith = CloudLayer.ZenithLight(sun, SkyColourMultiplier),
                 MinLuminance = KenshiLighting.MinLuminance(sun.Y, Exposure.Min, Exposure.NightDarkness),
                 Colours = new SkyColours(sun, zenith, horizon, sunRadiance, twilight),
                 Light = new WorldLighting(lightDir, sunRadiance, ambientSky, ambientGround, horizon, fogDistance), Valid = true,
@@ -467,7 +472,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     {
         var s = state;
         var tau = SkyAtmosphere.RayleighZenithDepth;
-        var tint = SkyColourMultiplier;
+        var tint = Vector3.One;   // uAtmoTint: the skydome is not tinted in the game
         var w = Weather;
         // The fog the weather system gives (weight, colour, distance), else the forced record's (on or off, complete at fog distance max).
         var (fogWeight, fogRgb, fogDistance) = FogInput ?? (w.FogEnabled ? 1f : 0f, w.FogColour, w.FogMax);
@@ -485,7 +490,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             new Vector4(s.LightDirection.X, s.LightDirection.Y, s.LightDirection.Z, s.Environment),
             new Vector3(s.SunLight.X, s.SunLight.Y, s.SunLight.Z),
             new Vector3(tint.X, tint.Y, tint.Z),
-            new Vector4(fogStart, fogDistance, fogWeight, 0),
+            new Vector4(fogStart, fogDistance, fogWeight, HazeDistance),   // w: the far clip D, the distance of a pixel with no geometry (the sky)
             new Vector3(fog.X, fog.Y, fog.Z),
             new Vector4(hc.X, hc.Y, hc.Z, MathF.Max(s.FogDistance, 1)),
             // The weather fog is complete at a distance between `fog distance min` and `max` by the wind; the viewer has no wind and takes max.

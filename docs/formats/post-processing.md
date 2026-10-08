@@ -142,6 +142,13 @@ the value at load (FUN_14066f190; [game-loop.md](../game/game-loop.md)), so it s
 weather's `heat haze` × its strength × the sun factor, moving at 1/3 per second); which weathers and regions have it is listed
 there.
 
+**Checked against the shader 2026-10-08** (Ashlands, heat haze 0.9, [weather.md](weather.md)): the viewer's pass matches `heathaze.hlsl` (amplitude,
+scales, taps, depth falloff, textures; the mips are used: sampling at a fixed level 3 gave the same picture). At 0.9 the offset is up to 3
+pixels with a direction that changes every few pixels, so thin lattices and edges **farther than about 5000 units** from the eye are torn;
+within a few thousand units the falloff `saturate(6 · distance / farClip)` leaves them clean (500 units: 0.06 px). This is the game's own
+look from a high camera over fine geometry, not a viewer fault (**Observed**: no game picture to compare; `HeatHaze=1` in the install's
+`settings.cfg`). `--heat-haze 0.3` or `--no-heat-haze` show it off.
+
 **The viewer** (`PostProcess.RunHeatHaze`, `PostProcessShaders.HeatHaze`, written from the facts above): the same pass with the
 two maps loaded from the install at start (BC1 uploaded with the files' own 12 mips; trilinear, anisotropy 16, repeat), run last,
 after FXAA (when no temporal upscaler runs) or after the composite (with TAA / FSR / DLSS: on the upscaled, exposed LDR picture,

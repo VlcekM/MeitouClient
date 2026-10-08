@@ -164,9 +164,8 @@ coverage table is recomputed from the shipped textures and must match the one ab
   - *Mipmaps*: the game's DDS files have no mip chain, so its layer aliases towards the horizon; the viewer samples `Clouds.dds`,
     `CloudsNormal.dds` and `CloudsTile.dds` with a generated mip chain (bilinear, repeat), which averages the squeezed detail instead.
     Above the 8.6 degree band the pattern is the game's; below 15 degrees it is smoother than the game's.
-  - *Weather fog*: the viewer's own fog on the sky (`sky.md`, "the sky near the horizon fades to the fog colour", a viewer choice, the
-    game's sky is not fogged) also fades the clouds: their alpha is multiplied by the same `smoothstep(0, 0.45, d.y)`; without it
-    a c = 1 dust storm would draw a dark cloud wall above a light fog band.
+  - *Weather fog* (corrected 2026-10-08): the game's fog pass covers the sky too (`sky.md`, "Haze"), so a weather whose fog is complete
+    before the far clip hides the clouds entirely; the viewer's earlier elevation-based fade of the sky and clouds (a stand-in) is gone.
   - *The moon over the clouds*: the moon is drawn after the layer, as the task order says; whether SkyX's moon queue is above the
     cloud queue (6) stays Unknown, so a moon behind a full overcast shows as in a clear sky (a c = 1 night shows the moon through it).
   - *Sky colour multiplier*: it multiplies the whole sky in the viewer already (a stand-in, see [sky.md](sky.md)); the clouds take

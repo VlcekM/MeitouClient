@@ -168,6 +168,13 @@ checked 2026-10-04):
   distance min` when the two wind values are equal, which the WEATHER loader has already replaced by `max(min, max)`), the
   current wind being the region's. `fogDensity = 1 / d` (1 when d is 0, where
   `fogColour.a` is 0 anyway). So the weather fog is complete at d. The "Default" weather has `fog enabled` false: no weather fog.
+- **The sky is fogged by the global term** (**Verified**, `fog.hlsl` `atmosphere_fog_fs`; this pass runs over every pixel incl. the sky): a pixel
+  with no geometry has `distance = farClip`; its atmosphere term is zeroed, the global term remains: alpha = ease-in-out(saturate(farClip /
+  fog distance)) × `fogColour.a`, colour `fogColour.rgb · sunColour.w` (the shader's final `rgb / a` undoes the premultiply). With
+  farClip = D = 50000, a weather whose fog distance is 50000 or less (dust storms 25000, Ashlands 35000, sand stream 20000) replaces the
+  whole sky, clouds and stars with one **flat** fog colour; farther fogs only tint it. So the dust storm sky is flat sand × daylight
+  (brown-orange after the exposure), the Ashlands' flat light grey. The distant terrain's mid-range haze is a different matter: it is the
+  atmosphere term (SkyX blue, pulled to the dark `horizonClouds` colour at high cloud density, `darkness` 0.81 at c = 1) mixed with the fog.
 - It does **not** differ per biome (**Observed**: no biome field is read by the shaders or the sky controller's fog code).
 - **Made for an eye near the ground.** The fog's ray always starts at SkyX's fixed camera, so the formula ignores the eye's
   height; the game's camera never gets more than 1840 above its pivot on the ground ([camera.md](camera.md), **Verified**), and
@@ -243,9 +250,11 @@ and sky-view tables, the 0.36° sun disc) is gone, with `AtmosphereModel.cs`.
   planar layer, drawn in the sky pass after the stars and before the moon, alpha-blended in HDR ([clouds.md](clouds.md#in-the-viewer)).
   `SkyRenderer` takes the density (`CloudDensityInput`), the sky colour multiplier (`SkyColourMultiplierInput`) and the wind velocity
   (`CloudWind`, advanced by `StepClouds`) as inputs; the same density drives `horizonClouds`.
-- **Weather tint**: the sky is multiplied by the weather's `sky color mult`. In the game the sky update applies it only to the
-  `zenithLight` / `nadirLight` colours (clouds and `horizonClouds`), see the WEATHER table above; white in the "Default" weather,
-  so the default views do not depend on it. With weather fog the sky near the horizon fades to the fog colour (a viewer choice).
+- **Weather tint** (corrected 2026-10-08): the game applies `sky color mult` only to the `zenithLight` / `nadirLight` colours (clouds and
+  `horizonClouds`), see the WEATHER table above; the skydome is **not** tinted (the viewer used to multiply it: a blue dome times the
+  dust storm's orange gave an olive sky; removed). A WEATHER record without the field reads **black** (0), not white (**Verified
+  (decompiled)**, FUN_1409de7b0: the colour is `setAsARGB` of a map `operator[]` lookup that inserts 0; same for `fog color`), which only
+  changes the cloud light's zenith part (floored). The sky pixels are fogged by the weather's fog like everything else (Haze below).
 - **Light**: the deferred lighting pass's model ([lighting.md](lighting.md)): `kenshiLight` in the mesh, terrain and grass shaders.
   The water still takes a sun colour and an ambient (`WorldLighting`): `π · 0.96 · sunColour.rgb · w` and the irradiance cube's up
   and down faces times the environment factor.
