@@ -131,8 +131,8 @@ the value at load (FUN_14066f190; [game-loop.md](../game/game-loop.md)), so it s
   maps, only its direction does. (A zero sum would normalise a zero vector, undefined; the maps make that practically impossible.)
 - Length: `0.002 · heatHaze · saturate(6 · depth)` in screen units (0.2 % of the width and of the height, so 3.2 × 1.8 pixels at
   1600 × 900 with `heatHaze` 1), where `depth` is the G-buffer's: **distance from the eye / `farClip`** (`writeDepth(length(worldPos
-  − cameraPos) / farClip)` in every deferred shader; `farClip` = 50000 by default, the camera's far plane, [sky.md](sky.md)), with 0
-  (nothing drawn: the sky, the clear value) replaced by 1. So the shimmer grows linearly up to full at **8333 units** and is full on
+  − cameraPos) / farClip)` in every deferred shader; `farClip` = `far_clip_distance` (**Verified**, `deferred/*.material`) = **the camera's far clip D = 10 × the `view distance` setting**, [sky.md](sky.md), [settings.md](settings.md): 50000 at 5000, **120000 at the install's present 12000**), with 0
+  (nothing drawn: the sky, the clear value) replaced by 1. So the shimmer grows linearly up to full at **D / 6** (8333 units at 5000, **20000 at 12000**) and is full on
   the sky. Water and particles are forward-drawn and not in the G-buffer, so over water the amplitude is that of the ground beneath
   (or full where none was drawn) (**Observed**, from the pass order).
 - Output: `mix(image(uv + o), image(uv + 0.7 · o), 0.5)`: the mean of the taps at **1 and 0.7** of the offset (the earlier reading
@@ -142,18 +142,36 @@ the value at load (FUN_14066f190; [game-loop.md](../game/game-loop.md)), so it s
 weather's `heat haze` × its strength × the sun factor, moving at 1/3 per second); which weathers and regions have it is listed
 there.
 
-**Checked against the shader 2026-10-08** (Ashlands, heat haze 0.9, [weather.md](weather.md)): the viewer's pass matches `heathaze.hlsl` (amplitude,
-scales, taps, depth falloff, textures; the mips are used: sampling at a fixed level 3 gave the same picture). At 0.9 the offset is up to 3
-pixels with a direction that changes every few pixels, so thin lattices and edges **farther than about 5000 units** from the eye are torn;
-within a few thousand units the falloff `saturate(6 · distance / farClip)` leaves them clean (500 units: 0.06 px). This is the game's own
-look from a high camera over fine geometry, not a viewer fault (**Observed**: no game picture to compare; `HeatHaze=1` in the install's
-`settings.cfg`). `--heat-haze 0.3` or `--no-heat-haze` show it off.
+**Checked against the shader and the game's pictures 2026-10-08** (Ashlands, heat haze 0.9, [weather.md](weather.md)):
+
+- **Verified** (`heathaze.hlsl` read line by line against the viewer's GLSL): scales (3.341, 7.341, the (0.1, 0.3) and (0.4, 0.7)
+  offsets), the layer phases and triangle weights, the `xzy` swizzle and the dropped middle component, the normalisation, the two taps at
+  1 and 0.7, `depth == 0 → 1`, `saturate(6 · depth) · 0.002 · heatHaze`. Textures, **Observed** with a debug view of the viewer's own
+  pass: the flow map decodes as a smooth swirl, the perturbation map (`Perturber.dds`) as a field of domes about 130 texels across
+  (BC1 header and block data checked), so its red/green gradients change direction every few pixels at 7.341 tiles per screen. Sampling
+  does not change this: anisotropy 1 vs 16, a fixed level 3 and a fixed level 6 gave the same tearing, and with the flow set to zero
+  it stays. **So the shader itself tears fine detail wherever the amplitude is a few tenths of a pixel or more**; the game's own
+  picture does too at its edges against the sky (the sky counts as depth 1, full amplitude): a game screenshot of the Ashlands by day
+  (`images/4.webp`) shows ragged silhouettes of about 3 pixels at 1920 × 1080, the size of 0.2 % of the width.
+- **The discrepancy found: the depth scale.** The viewer fed the pass the sky haze's constant D = 50000 (`view distance` 5000), but the
+  game's `farClip` is the camera's far clip, 10 × the *current* `view distance`, and the install's `settings.cfg` has **12000** since
+  2026-10-06 ([settings.md](settings.md)), so D = 120000: the amplitude reaches full at **20000** units instead of 8333, and at 5000 it
+  is 0.25 instead of 0.6. Everything in the 2000 to 15000 range, which is all that a normal camera sees of a settlement, shimmers
+  2.4 times less. (The sky haze still uses 5000, which keeps the parity baseline; its own D is a separate, unchanged question, see
+  [sky.md](sky.md).) `--heat-haze-view-distance 5000` brings the earlier look back.
+- **Unknown**: the game's `heatHaze` in its own screenshots. At the edge against the sky the amplitude is `0.002 · heatHaze` whatever D is
+  (the sky counts as depth 1): image 4 shows about 3 px of tearing there (so `heatHaze` near 1), image 5 (Ashlands, a floating rock and
+  pillars against the sky) shows none. The two disagree at the same claimed weather, so either the in-game hour or the weather differed
+  (`saturate(6 · sunY)`, a weather change settling at 1/3 per second) or something else scales it down: the hour and the active weather
+  of image 5 are needed. Also checked and ruled out: the `base` and `depth` units' filtering (the viewer's LDR picture is bilinear, as
+  `filtering bilinear`), the node (`post.compositor` `HeatHaze`: full size, one quad, no blur), no mod or second copy of
+  `Perturber.dds` / `FlowHAZE.dds` in the install. `HeatHaze=1` in the install's `settings.cfg`.
 
 **The viewer** (`PostProcess.RunHeatHaze`, `PostProcessShaders.HeatHaze`, written from the facts above): the same pass with the
 two maps loaded from the install at start (BC1 uploaded with the files' own 12 mips; trilinear, anisotropy 16, repeat), run last,
 after FXAA (when no temporal upscaler runs) or after the composite (with TAA / FSR / DLSS: on the upscaled, exposed LDR picture,
 the game's input; before the upscaler its history would reject or smear the shimmer, and the game has no such stage). Depth: the
-near depth slice's depth buffer, linearised and turned into the distance along the view ray, over D (`--haze-distance`, 50000);
+near depth slice's depth buffer, linearised and turned into the distance along the view ray, over D (10 × `--heat-haze-view-distance`, default 12000, so 120000);
 beyond the near slice (20000+) and on the sky the amplitude is 1, as in the game (8333 < 20000, so the clear hides no ramp). The
 lookups use the game's screen orientation (v from the top), the offset is flipped back. Differences: a zero direction sum leaves
 the pixel in place, and the viewer's water writes depth, so over water the amplitude follows the water surface's distance, not the

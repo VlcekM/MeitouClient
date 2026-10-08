@@ -271,7 +271,8 @@ case is Venge by day (`heatHaze` 0.5–1) and the Ashlands (0.7–1); the Great 
 saturate(6 · sunY) is the target; the value moves towards it at 1/3 per real second (game speed 1, never paused) and jumps to it
 for screenshots. `gameTime` is real time × 11/1200 hours per second from the viewer's start, held still for screenshots; the game
 build (`meitou`) passes its own clock's hours instead. `--heat-haze <x>` replaces the weather's field (testing),
-`--no-heat-haze` turns the pass off (the game's `HeatHaze=0`).
+`--no-heat-haze` turns the pass off (the game's `HeatHaze=0`). The pass's depth falloff uses D = 10 × the install's `view distance`
+(12000 → 120000; `--heat-haze-view-distance`), see [post-processing.md](post-processing.md#heat-haze-verified).
 
 ### Sounds (Verified (decompiled), FUN_1409e8f70; names only)
 

@@ -12,6 +12,8 @@ public sealed class PostOptions
     public bool HeatHaze = true;
     /// <summary>Replaces the weather's <c>heat haze</c> field (the sun factor still applies), for testing in a weather without it; null: the weather's.</summary>
     public float? HeatHazeOverride;
+    /// <summary>The game's <c>view distance</c> setting as the haze pass sees it: its depth scale is D = 10 × this (<see cref="Meitou.Data.World.HeatHaze.ViewDistanceSetting"/>).</summary>
+    public float HeatHazeViewDistance = Meitou.Data.World.HeatHaze.ViewDistanceSetting;
     /// <summary>Meitou switches (Enhancements), on by default; the <c>kenshi</c> preset turns them off.</summary>
     public bool Ssao = true, Dither = true;
     /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness.</summary>
@@ -54,6 +56,7 @@ public sealed class PostOptions
           --ssao / --no-ssao, --dither / --no-dither
           --fxaa / --no-fxaa       the game's FXAA when no upscaler runs (default on)
           --heat-haze <x> / --no-heat-haze   the game's heat haze (default on; strength from the weather's `heat haze`); x replaces that field
+          --heat-haze-view-distance <u>   the game's `view distance` setting for the haze's depth falloff (default 12000, the install's; amplitude is full from 1.67 x this units)
           --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with FXAA; FSR and DLSS need the vendor library, else TAA)
           --render-scale <0.25..1|native|quality|balanced|performance|ultra>   render size per axis with an upscaler (default 1)  --sharpness <0..1>
           --exposure <x>   --ssao-radius <units>   --ssao-strength <x>
@@ -75,6 +78,7 @@ public sealed class PostOptions
             case "--no-fxaa": Fxaa = false; return true;
             case "--heat-haze": HeatHaze = true; HeatHazeOverride = Math.Max(F(), 0); return true;
             case "--no-heat-haze": HeatHaze = false; return true;
+            case "--heat-haze-view-distance": HeatHazeViewDistance = Math.Max(F(), 1); return true;
             case "--post-debug": Debug = next() switch { "ao" => 1, _ => 0 }; return true;
             case "--upscaler":
                 Upscale.Explicit = true;

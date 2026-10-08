@@ -954,7 +954,7 @@ static class WorldFrame
         else post.HeatHazeAmount = first || post.InstantAdaptation ? gpu.HeatHazeTarget : HeatHaze.Step(post.HeatHazeAmount, gpu.HeatHazeTarget, weather?.Times.Settling ?? dt);
         if (!post.InstantAdaptation) gpu.HeatHazeHours += dt * HeatHaze.HoursPerSecond;
         post.HeatHazeHours = gpu.GameHours ?? gpu.HeatHazeHours;
-        post.HeatHazeFarClip = gpu.Sky.HazeDistance;
+        post.HeatHazeFarClip = KenshiHaze.FarDistance(post.Options.HeatHazeViewDistance);   // the heat haze's D follows the install's `view distance`, not the sky haze's constant
     }
 
     /// <summary>

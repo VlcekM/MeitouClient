@@ -344,7 +344,7 @@ options screen reads `Full Screen` and `Border` from the render system's current
 
 | Setting | Viewer |
 | --- | --- |
-| `view distance` | Emulated: the haze uses the constant 5000 (`KenshiHaze.ViewDistanceSetting`); the camera's far plane is the viewer's own (`--view-distance`, raised with the haze at height) |
+| `view distance` | Emulated: the sky haze uses the constant 5000 (`KenshiHaze.ViewDistanceSetting`); the heat haze's depth scale uses 12000 (`HeatHaze.ViewDistanceSetting`, the install's value since 2026-10-06, `--heat-haze-view-distance`); the camera's far plane is the viewer's own (`--view-distance`, raised with the haze at height) |
 | `shadow quality`, `Shadow Range` | Honoured as options: `--shadow-quality` (index into the same table), `--shadow-range` (clamped 1000 … 9000 in Faithful; Meitou shadows default to 10000 and accept 1000 … 15000); `--no-shadows` |
 | `shadow mode` | Not honoured: the viewer always runs its CSM-style pass (Faithful or Meitou), never RTW |
 | `foliage range`, `grass range`, `grass density` | Emulated with sliders / environment variables (`MEITOU_FOLIAGE_RANGE`, `MEITOU_GRASS_RANGE`, `MEITOU_GRASS_DENSITY`); default ranges ×4, not the game's 1 |

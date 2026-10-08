@@ -766,7 +766,7 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>The game's <c>gameTime</c>: game hours since the load, which the haze's layers cycle on (× 100).</summary>
     public double HeatHazeHours { get; set; }
     /// <summary>The game's far clip D, which its G-buffer depth is divided by (view distance × 10 = 50000; docs/formats/sky.md).</summary>
-    public float HeatHazeFarClip { get; set; } = 50000;
+    public float HeatHazeFarClip { get; set; } = 10 * Meitou.Data.World.HeatHaze.ViewDistanceSetting;
     /// <summary>Whether the heat-haze textures were found (else the pass never runs).</summary>
     public bool HasHeatHaze => flowTexture is not null && perturbationTexture is not null;
     /// <summary>Whether this frame ends with the heat haze: it is on, has its textures and an amount.</summary>
