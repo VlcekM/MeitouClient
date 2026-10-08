@@ -434,11 +434,18 @@ compiled its shaders and pipelines on the render thread (a 60 ms frame).
 - the assembler's per-frame arrays come from a shared pool, its atlas levels are not cleared (every texel is written) and are reused by the
   next bake of the same size (a pool of two); `ImpostorAssembler.ReleasePool` frees them with the readback buffers after 10 s idle;
 - the first foliage update with impostors on constructs the baker (its programs compile with the loading);
-- **a bake step records rows by a sample budget** (`MEITOU_IMPOSTOR_BAKE_MSAMPLES`, default 40 million shaded samples a frame; a row is
-  `grid x 3 x (2F)^2`): 256 px atlases 4 rows a frame (3 frames), 128 and 64 px atlases all 12 rows in one frame (it was 2 rows a frame
-  whatever the size: 6 frames for any atlas). The GPU cost of a bake is small: in cold still-camera runs a budget of 100 million (a whole
-  large atlas in one frame) left the frame times at 5-6 ms p50 and no spike above 15 ms that the other budgets did not also have
-  (**Observed**; the flight runs could not separate budgets 10 and 100 from the shared machine's noise, so 40 is a middle value, not a measured optimum);
+- **a bake step records rows by a sample budget** (`MEITOU_IMPOSTOR_BAKE_MSAMPLES`, default 4 million shaded samples a frame since
+  2026-10-08, 40 before; a row is `grid x 3 x (2F)^2`, and a step records at least one): 256 and 128 px atlases one row a frame (twelve
+  frames), 64 px atlases six rows (two frames); it was 2 rows a frame whatever the size, then 4 / 12 / 12 rows with the budget of 40.
+  **Correction (2026-10-08).** The sentence that stood here, "the GPU cost of a bake is small", was measured by frame time on a shared
+  machine and is **disproved** by the timestamps of the profiler's `pre-frame` (`--log-spikes`): with an empty cache (`MEITOU_IMPOSTOR_CACHE`
+  on a scratch folder, interactive swamp view at Shark, still camera, 90 s after 150 frames, 237 atlases made) a frame with a bake step of
+  the old budget cost 3 to 6 ms of GPU time in the pre-frame commands (`other` in the F12 profiler; median frame 5.4 ms, so frames of 8 to
+  12 ms), 201 frames over 2 ms and 11.4 ms at most (**Observed**, RTX 4070, Release); with a budget of 12 million 17 such frames (3.5 ms at
+  most), with 4 million 2 (3.4 ms at most; the one row of a large atlas is the least a step can do). The bake still takes the same GPU time
+  in all, spread over more frames (a large atlas twelve instead of three, a 128 px one twelve instead of one), and a mesh keeps drawing
+  as a mesh until its atlas is Ready, so the cost is a later billboard, not a frame. Rock atlases are made per biome and a flight into a
+  new biome makes them with a warm cache too (`impostor bake start ... [biome row 34]` in the spike log);
 - **order**: the waiting bakes run nearest first, by the distance of the nearest zone that wants the atlas from the eye now or from where its
   motion puts it in 3 s (`velocity x ImpostorLookaheadSeconds`; the zone layouts already look 1.5 s ahead). A mesh without an atlas keeps
   drawing as a mesh until the atlas is Ready (unchanged, the fallback).

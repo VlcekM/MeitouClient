@@ -41,10 +41,36 @@ public sealed unsafe partial class ShadowPass
 
     /// <summary>How often each cascade was drawn (Meitou), for the log.</summary>
     public readonly int[] CascadeDraws = new int[4];
+    /// <summary>Per cascade why it was drawn (Meitou): the camera moved so it no longer covers the view, the sun turned, its cadence came, the splits or a sun jump redrew all.</summary>
+    public readonly int[,] RedrawReasons = new int[4, 4];
+    /// <summary>How often every cascade was redrawn at once because the splits changed (index 0) or the sun jumped (1).</summary>
+    public readonly int[] AllReasons = new int[2];
     public int MeitouFrames { get; private set; }
 
     readonly ShadowCascade?[] stored = new ShadowCascade?[4];
+    readonly Vector3[] storedSunDir = new Vector3[4];
+
+    /// <summary>
+    /// Frames between the redraws of each cascade when nothing makes it stale (Meitou): the nearest every frame, the others less often the
+    /// farther they are, since a far cascade's casters hardly move and its texels are big. <c>MEITOU_SHADOW_CADENCE=1,2,4,4</c> sets them (A/B tests;
+    /// 1,2,4,4 was the schedule before 2026-10-08). The phases below put the default redraws on different frames (the override may collide).
+    /// </summary>
+    public static readonly int[] Cadence = ParseCadence(Environment.GetEnvironmentVariable("MEITOU_SHADOW_CADENCE"));
+    static readonly int[] Phase = Enumerable.Range(0, 4).Select(i => i * 5 % Cadence[i]).ToArray();
+
+    static int[] ParseCadence(string? text)
+    {
+        int[] fallback = [1, 4, 16, 32];
+        if (text?.Split(',') is not { Length: 4 } parts) return fallback;
+        var values = parts.Select(p => int.TryParse(p, out int v) && v >= 1 ? v : 0).ToArray();
+        return values.Contains(0) ? fallback : values;
+    }
+
+    /// <summary>How far (radians) the sun may turn before a cascade is redrawn: a caster 150 units tall shifts its shadow by half a texel; at most 2°, at least 0.25°.</summary>
+    static float SunTolerance(ShadowCascade c) => (float)Math.Clamp(0.5 * c.Texel / 150, 0.25 * Math.PI / 180, 2 * Math.PI / 180);
     float[]? storedSplits;
+    /// <summary>How far the shadow range may drift (share of the drawn one) before every cascade is drawn again.</summary>
+    const float RangeTolerance = 0.1f;
     Vector3 storedSun;
     int storedMapSize, meitouFrame;
     bool meitouValid;
@@ -75,7 +101,9 @@ public sealed unsafe partial class ShadowPass
 
     /// <summary>One line on the schedule: how often each cascade was drawn, and the terrain map's rebuilds.</summary>
     public string DescribeMeitou() =>
-        $"drawn {string.Join("/", CascadeDraws)} times in {MeitouFrames} frames; terrain shadow rebuilt {terrainMap?.Builds ?? 0} times (cpu {terrainMap?.LastBuildCpuMs ?? 0:0.00} ms); " +
+        $"drawn {string.Join("/", CascadeDraws)} times in {MeitouFrames} frames (because the view left the box / the sun turned / the cadence / all at once: {string.Join(" ", Enumerable.Range(0, 4).Select(i => $"c{i} {RedrawReasons[i, 0]}/{RedrawReasons[i, 1]}/{RedrawReasons[i, 2]}/{RedrawReasons[i, 3]}"))}); " +
+        $"all at once: splits changed {AllReasons[0]}, sun jumped {AllReasons[1]}; " +
+        $"terrain shadow rebuilt {terrainMap?.Builds ?? 0} times (cpu {terrainMap?.LastBuildCpuMs ?? 0:0.00} ms); " +
         $"landmark shadow map drawn {LandmarkDraws} times ({LandmarkCount} landmarks, {(landmarkBox is { } b ? $"{b.Texel:0} units per texel" : "off")})";
 
 
@@ -125,6 +153,7 @@ public sealed unsafe partial class ShadowPass
         LandmarkDraws++;
         LandmarkCount = landmarkSpheres.Count;
     }
+
     void RenderMeitou(ShadowView view, Vector3 toSun, CasterDraw draw, LandmarkCasters? landmarks)
     {
         var watch = Stopwatch.StartNew();
@@ -133,18 +162,30 @@ public sealed unsafe partial class ShadowPass
         int count = Math.Min(Settings.Cascades, 4);
         float near = MeitouShadowFit.QuantizedNear(view.Near);
         var splits = MeitouShadowFit.Splits(near, Math.Max(EffectiveRange, near * 4), count);
-        bool all = !meitouValid || storedSplits is null || !splits.AsSpan().SequenceEqual(storedSplits) || storedMapSize != Settings.MapSize
-            || Vector3.Dot(toSun, storedSun) < MathF.Cos(SunJump);
+        // (A range that varies from frame to frame, as the memory guard's or a fog clamp makes it, redraws them all only past RangeTolerance.)
+        // The splits move with the camera's near plane; a cascade drawn with other splits keeps its own slice (the receiver reads each one's) and is drawn again when the
+        // new slice no longer fits it (Covers below), so only a change of the range or of the number of cascades redraws them all.
+        bool splitsChanged = storedSplits is null || storedSplits.Length != splits.Length || Math.Abs(splits[^1] - storedSplits[^1]) > RangeTolerance * storedSplits[^1];
+        bool sunJumped = Vector3.Dot(toSun, storedSun) < MathF.Cos(SunJump);
+        bool all = !meitouValid || splitsChanged || storedMapSize != Settings.MapSize || sunJumped;
+        if (meitouValid && all) { if (splitsChanged) AllReasons[0]++; if (sunJumped) AllReasons[1]++; }
         int frame = meitouFrame++;
         MeitouFrames++;
         Span<bool> drawNow = stackalloc bool[4];
         int drawing = 0;
         for (int i = 0; i < count; i++)
         {
-            // The first cascade every frame, the second every other, the third and fourth every fourth frame on alternate frames.
-            bool due = i == 0 || (i == 1 ? frame % 2 == 0 : frame % 4 == (i == 2 ? 1 : 3));
-            drawNow[i] = all || stored[i] is null || due
-                || !MeitouShadowFit.Covers(stored[i]!, view, splits, SearchRadius(stored[i]!) + 2 * stored[i]!.Texel);
+            // A cascade is drawn again when its slice no longer fits its box (the camera moved or turned), when the sun has turned further than
+            // its texels allow, and at the latest after its cadence (casters stream in and move; docs/formats/shadows.md "Cached far cascades").
+            bool due = frame % Cadence[i] == Phase[i];
+            bool stale = stored[i] is not null && !all && !due;
+            bool uncovered = stored[i] is not null && !MeitouShadowFit.Covers(stored[i]!, view, splits, SearchRadius(stored[i]!) + 2 * stored[i]!.Texel);
+            bool sunTurned = stored[i] is not null && Vector3.Dot(toSun, storedSunDir[i]) < MathF.Cos(SunTolerance(stored[i]!));
+            drawNow[i] = all || stored[i] is null || due || uncovered || sunTurned;
+            if (stale && uncovered) RedrawReasons[i, 0]++;
+            if (stale && !uncovered && sunTurned) RedrawReasons[i, 1]++;
+            if (due && !all) RedrawReasons[i, 2]++;
+            if (all) RedrawReasons[i, 3]++;
             if (drawNow[i]) drawing++;
         }
 
@@ -162,6 +203,7 @@ public sealed unsafe partial class ShadowPass
             SetCasterBias(new Vector4(c.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 0));
             draw(c, c.WorldToClip(), c.CullPlanes(), view.Eye);
             stored[i] = c;
+            storedSunDir[i] = toSun;
             CascadeDraws[i]++;
         }
         EndHost(host);

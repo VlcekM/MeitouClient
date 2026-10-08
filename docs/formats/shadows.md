@@ -257,11 +257,39 @@ Not the game's: the remaster's choice, on by default (F5 / `--faithful shadows` 
   the sphere as slack for the schedule, its depth reaching two radii further towards the sun so casters there keep their depth.
   Example (The Hub from 300 units): texels 0.64 / 1.58 / 3.71 / 10.0 units against the game's 0.09 / 0.24 / 0.94 / 12.4 of which
   only the last two are on screen.
-- **Schedule.** Cascade 0 every frame, 1 every other frame, 2 and 3 every fourth frame on alternating frames (at most two a frame),
-  each kept with the matrices it was drawn with (the receiver uses each cascade's own), only its tile cleared. A cascade is redrawn at
-  once when the current slice's sphere (plus the filter's reach) no longer fits its box, when the splits or the map size change, or
-  when the sun jumps by more than 2°. A point outside a stale box falls through to the next cascade. Newly streamed casters reach the
-  far cascades up to three frames late.
+- **Schedule** (changed 2026-10-08: cached far cascades). Cascade 0 every frame, 1 every 4th, 2 every 16th, 3 every 32nd frame
+  (`ShadowPass.Cadence`, `MEITOU_SHADOW_CADENCE=1,4,16,32` overrides it for A/B runs; the default's phases put the redraws on different
+  frames; it was 1 / 2 / 4 / 4 before). Each cascade is kept with the matrices it was drawn with (the receiver uses each cascade's own) and
+  only its tile is cleared. That is only the longest a cascade goes unchanged: it is redrawn at once when the current slice's sphere
+  (plus the filter's reach) no longer fits its box (the camera moved or turned: `MeitouShadowFit.Covers`), when the sun has turned further
+  than half a texel at a 150 units tall caster allows (`SunTolerance`: 0.25° to 2°, so about 0.6° for cascade 1 and 2° for the far
+  two), and for all of them at once when the map size or the number of cascades changes, the shadow range moves by more than 10 %
+  (`RangeTolerance`; the memory guard moves it by small steps), or the sun jumps by more than 2°. The camera's near plane, which moves the
+  splits, no longer redraws every cascade: each keeps the slice it was drawn for (the receiver reads each cascade's own range) and goes
+  through the same `Covers` test against the new slice (before, every step of the near plane, which follows the camera's height above the
+  ground, redrew all four: 224 times in 3200 frames of a slow orbit over uneven ground). A point outside a stale box falls through to the
+  next cascade. Newly streamed casters reach the far cascades up to 32 frames late (half a second at 60 fps).
+  **Observed** (2026-10-08, RTX 4070 alone on the card, Release, 1280x720 DLSS, Shark `--distance 3000 --pitch 10 --yaw 300 --time 12`,
+  swamp rain, `--fly-pipelined --log-spikes`, GPU time of the `shadows` stage from the profiler's stamps, mean of the frames after the
+  first 1200, two runs each): still camera 0.72 / 0.73 ms before, 0.30 / 0.29 after (p95 1.17 against 0.85; the cascades are drawn 3200 /
+  800 / 200 / 100 times instead of 3200 / 1600 / 800 / 800 in 3200 frames); slow flight (3 units a frame) 0.94 against 0.49; orbit
+  (the view turning 0.14° a frame) 0.92 against 0.34 to 0.46 (p95 2.24 against 1.05; cascades drawn 3200 / 840 / 229 / 101 times
+  instead of 3200 / 1716 / 979 / 982). Where the time went (still camera, all four drawn every frame, `MEITOU_PASS_STATS=1`, GPU ms per
+  draw): cascade 0 0.12, cascade 1 0.30, cascade 2 0.73, cascade 3 1.14, of which objects 0.33, foliage meshes 0.51 and TERRAIN-mode rocks
+  0.27 in cascade 3 (13,135 foliage meshes, 388 objects, 751k terrain triangles) and the same kinds 0.23 / 0.40 / 0.08 in cascade 2.
+  The far cascades are the cost, and they hardly change, hence the cache.
+  The same at `--radius 2` (the user's benchmark view, one run each, the other schedule being `MEITOU_SHADOW_CADENCE=1,2,4,4`): GPU
+  time of the stage, mean without the card's outliers / p95 / max, still camera 0.33 / 1.16 / 4.06 ms (0.75 / 1.50 / 2.06 before),
+  orbit 0.36 / 1.09 / 2.96 (1.08 / 3.11 / 8.75), slow flight 0.49 / 1.19 / 2.06 (1.00 / 1.85 / 4.32), fast flight (17 units a frame)
+  0.37 / 1.06 / 2.79 (0.81 / 1.66 / 2.60); cascade 1, 2 and 3 drawn 876 / 220 / 110 times in 3500 frames still (1751 / 876 / 876 before).
+  The render thread's `shadows` stage barely moved (flight 0.78-1.04 against 0.95-1.35 ms; the first cascade drawn each frame still
+  collects the foliage candidates, 0.5-0.75 ms): the saving is GPU time.
+  **Observed** image difference of the new schedule against
+  every cascade drawn every frame (`--faithful aa`, the orbit above, frames 900 / 1500 / 2100, `meitou-tools image-diff`): mean 0.0009 /
+  0.0166 / 0.0115 of 255, 0.001 / 0.026 / 0.010 % of the pixels over 12, largest 24 / 63 / 58; the differences are thin edges of the
+  tree shadows in the lower right (the old 1/2/4/4 schedule differed by at most 2 in the same pictures). Not done: a cascade drawn
+  piece by piece over several frames, and drawing only what moved (the world has no moving casters but characters, which are small there).
+  **Verified** (2026-10-08): a still picture (`--screenshot`, Shark, `--faithful aa`) is identical to the build before the change with the Meitou shadows (0 differing pixels) and with `--faithful shadows,aa` (0 pixels; the Faithful path is untouched).
 - **Receiver.** The point is moved off its triangle by a normal offset of 0.5-2 texels (more at grazing light; the triangle's normal
   from screen derivatives, not the shading normal), then a blocker search (8 taps in a half-resolution map of the nearest depths,
   rebuilt for the tiles drawn) gives the penumbra: the blocker's distance × tan(0.35°) (a sun of 0.7°), at least 1 texel, at most 3

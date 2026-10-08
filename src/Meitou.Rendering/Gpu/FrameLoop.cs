@@ -22,7 +22,11 @@ public sealed unsafe partial class GpuContext
     /// <summary><c>MEITOU_PASS_STATS=1</c> only (else 0): the last completed frame's pre-frame GPU time, from the start of its uploads to the end of
     /// the pre-frame command buffer (uploads, compute culls, grass kernels, impostor bakes), a frame ring late.</summary>
     public double PreFrameGpuMs { get; private set; }
-    static readonly bool PreFrameStamps = Environment.GetEnvironmentVariable("MEITOU_PASS_STATS") == "1";
+    static bool PreFrameStamps => PassStats || SpikeLog.Enabled;
+    static readonly bool PassStats = Environment.GetEnvironmentVariable("MEITOU_PASS_STATS") == "1";
+
+    /// <summary>The first and the pre-frame-end timestamps of the frame submitted last (--log-spikes or MEITOU_PASS_STATS=1 only; the profiler keeps them to read the pre-frame GPU time when the frame has completed).</summary>
+    internal (QuerySlot Begin, QuerySlot PreEnd) LastFrameStamps { get; private set; }
     QuerySlot[]? preFrameEnd;
     /// <summary>Stopwatch ticks spent waiting for a free frame slot and submitting, since the context was made.</summary>
     public long FenceWaitTicks { get; private set; }
@@ -95,6 +99,7 @@ public sealed unsafe partial class GpuContext
             preFrameEnd[slot] = Frame.Timestamps.Allocate();
             if (preFrameEnd[slot].IsValid) Frame.PreFrame.Timestamp(Frame.Timestamps, preFrameEnd[slot], PipelineStageFlags2.BottomOfPipeBit);
         }
+        if (PreFrameStamps) LastFrameStamps = (frameStamps![slot].Begin, preFrameEnd![slot]);
         Frame.End();
         var upload = uploadBuffers![slot];
         FullBarrier(upload);

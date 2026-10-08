@@ -27,6 +27,7 @@ public sealed unsafe class Uploader
         ctx.Device.Vk.CmdCopyBuffer(cmd, staging.Handle, target.Handle, 1, &copy);
         TransferBarrier(cmd);
         ctx.Frame.Stats.UploadBytes += data.Length;
+        if (SpikeLog.Enabled) SpikeLog.Note("upload " + target.Underlying.Name, data.Length);
     }
 
     /// <summary>Writes texels of one level and layer (tightly packed, in the texture's format; for block-compressed formats whole blocks).</summary>
@@ -45,6 +46,7 @@ public sealed unsafe class Uploader
         ctx.Device.Vk.CmdCopyBufferToImage(cmd, staging.Handle, target.Image, ImageLayout.General, 1, &copy);
         TransferBarrier(cmd);
         ctx.Frame.Stats.UploadBytes += data.Length;
+        if (SpikeLog.Enabled) SpikeLog.Note("upload " + target.Desc.Name + (level > 0 ? " mip" : ""), data.Length);
     }
 
     /// <summary>

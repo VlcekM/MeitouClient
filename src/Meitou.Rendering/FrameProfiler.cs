@@ -40,6 +40,14 @@ public sealed class FrameProfiler : IDisposable
     int cpuHead, cpuCount, gpuHead, gpuCount;
     readonly double[] gpuFrame = new double[Series];
 
+    // --log-spikes (SpikeLog): per slot the frame number, its notes and its render-thread stages, kept until the GPU times arrive.
+    readonly long[] slotFrame = new long[Slots];
+    readonly string?[] slotNotes = new string?[Slots], slotCpu = new string?[Slots];
+    readonly double[] slotCpuTotal = new double[Slots];
+    readonly (QuerySlot Begin, QuerySlot PreEnd)[] slotStamps = new (QuerySlot, QuerySlot)[Slots];
+    long frameCounter;
+    readonly List<double> medianScratch = new(History);
+
     public Mode Showing { get; set; }
 
     /// <summary>Frames whose GPU stage times have been read (at most <see cref="History"/>).</summary>
@@ -93,6 +101,15 @@ public sealed class FrameProfiler : IDisposable
         }
         cpu[Other][cpuHead] = 0;
         cpu[Total][cpuHead] = (float)sum;
+        if (SpikeLog.Enabled)
+        {
+            slotFrame[slot] = ++frameCounter;
+            slotStamps[slot] = native.LastFrameStamps;
+            slotCpuTotal[slot] = sum;
+            slotCpu[slot] = StageList(StageClock.Ms, 0.5);
+            long uploaded = native.Frame.Stats.UploadBytes;
+            slotNotes[slot] = (uploaded > 0 ? $"uploads total {uploaded / 1048576.0:0.00} MB; " : "") + SpikeLog.TakeFrame();
+        }
         cpuHead = (cpuHead + 1) % History;
         cpuCount = Math.Min(cpuCount + 1, History);
     }
@@ -202,9 +219,55 @@ public sealed class FrameProfiler : IDisposable
         for (int k = 0; k < Stages; k++) gpu[k][gpuHead] = (float)gpuFrame[k];
         gpu[Other][gpuHead] = (float)(total - sum);
         gpu[Total][gpuHead] = (float)total;
+        if (SpikeLog.Enabled && slotFrame[s] > SpikeLog.SkipFrames)
+        {
+            for (int k = 0; k < Stages; k++) runGpu[k].Add((float)gpuFrame[k]);
+            runGpu[Stages].Add((float)(total - sum));
+            runGpu[Stages + 1].Add((float)total);
+            SpikeLog.OnSummary ??= PrintRunSummary;
+        }
+        if (SpikeLog.Enabled && slotNotes[s] is { } notes)
+        {
+            medianScratch.Clear();
+            int have = Math.Min(gpuCount + 1, History);
+            for (int i = 0; i < have; i++) medianScratch.Add(gpu[Total][i]);
+            medianScratch.Sort();
+            double median = have >= 30 ? medianScratch[have / 2] : 0;
+            double pre = native.Frame.Timestamps.TryRead(slotStamps[s].Begin, out ulong pb) && native.Frame.Timestamps.TryRead(slotStamps[s].PreEnd, out ulong pe) && pe >= pb ? (pe - pb) / 1e6 : -1;
+            SpikeLog.Report(slotFrame[s], total, median, (pre >= 0 ? $"pre-frame {pre:0.0}, " : "") + StageList(gpuFrame, 0.3) + (total - sum >= 0.3 ? $", other {total - sum:0.0}" : ""), slotCpu[s] ?? "", notes, slotCpuTotal[s]);
+            slotNotes[s] = null;
+        }
         gpuHead = (gpuHead + 1) % History;
         gpuCount = Math.Min(gpuCount + 1, History);
         pending[s] = false;
+    }
+
+    readonly List<float>[] runGpu = Enumerable.Range(0, Series).Select(_ => new List<float>()).ToArray();
+
+    /// <summary>--log-spikes: per stage over the run (after the skipped frames), the GPU time's mean without the frames over 2.5 x the median (the shared card's outliers), the median, p95 and max.</summary>
+    void PrintRunSummary()
+    {
+        var total = runGpu[Total];
+        if (total.Count < 10) return;
+        var sortedTotal = total.OrderBy(v => v).ToArray();
+        float median = sortedTotal[sortedTotal.Length / 2];
+        var keep = Enumerable.Range(0, total.Count).Where(i => total[i] <= 2.5f * median).ToArray();
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"gpu-run   {total.Count} frames, {total.Count - keep.Length} over 2.5 x the median {median:0.00} ms left out of the trimmed mean; per stage ms: trimmed mean / p50 / p95 / max"));
+        foreach (int s in Order)
+        {
+            var v = runGpu[s];
+            if (v.Count == 0) continue;
+            var sorted = v.OrderBy(x => x).ToArray();
+            double mean = keep.Length == 0 ? 0 : keep.Average(i => v[i]);
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"gpu-run     {Label(s),-12} {mean,6:0.00} {sorted[sorted.Length / 2],6:0.00} {sorted[(int)(sorted.Length * 0.95)],6:0.00} {sorted[^1],7:0.00}"));
+        }
+    }
+
+    static string StageList(double[] ms, double least)
+    {
+        var parts = new List<string>();
+        for (int k = 0; k < Stages; k++) if (ms[k] >= least) parts.Add(string.Create(CultureInfo.InvariantCulture, $"{Label(k)} {ms[k]:0.0}"));
+        return string.Join(", ", parts);
     }
 
     /// <summary>Mean of the last <paramref name="frames"/> entries of a series.</summary>

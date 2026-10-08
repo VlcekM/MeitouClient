@@ -50,6 +50,9 @@ static partial class WorldApp
         bool pipelined = o.FlyPipelined;
         var interval = Stopwatch.StartNew();
         var meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
+        // MEITOU_BENCH_ORBIT=<pixels per frame>: the camera also turns round its target by this much a frame (0.005 rad per pixel), as a user dragging the view.
+        float benchOrbit = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_BENCH_ORBIT"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float orbit) ? orbit : 0;
+        var spikeProfiler = SpikeLog.Enabled ? new FrameProfiler(context, () => context.GpuFrameMs) : null;   // --log-spikes: the stage times the spike lines print
         // Draw counts over the flight (docs/render-distance-benchmark.md): the objects' totals per kind, the main view's grass blades, foliage
         // instances and terrain triangles summed per frame, the foliage's indirect draws by view kind (MEITOU_FOLIAGE_TRIS=1).
         var objectTotals0 = gpu.Objects is { } ot0 ? (long[,])ot0.Totals.Clone() : null;
@@ -62,7 +65,8 @@ static partial class WorldApp
             float a = i * angleStep;
             float x = centre.X + radius * (MathF.Cos(a) - 1), z = centre.Z + radius * MathF.Sin(a);
             camera.Target = new Vector3(x, gpu.Terrain.HeightAt(x, z), z);
-            StageClock.Start();
+            if (benchOrbit != 0) camera.Orbit(benchOrbit, 0);
+            if (spikeProfiler is not null) { context.EnsureFrame(); spikeProfiler.BeginFrame(); } else StageClock.Start();
             frameWatch.Restart();
             // With weather particles the frame clock runs (1/60 s a frame, in the draw's time units of 600 s) so they simulate; without, it stays 0 as before.
             float clock = gpu.Particles is { Groups.Count: > 0 } ? (float)(i / 60.0 / 600) : 0;
@@ -83,7 +87,8 @@ static partial class WorldApp
                 Console.WriteLine($"fly shot  frame {i}: eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {shot}");
             }
             if (!pipelined) context.Finish();
-            StageClock.Lap(11);
+            if (spikeProfiler is null) StageClock.Lap(11);
+            spikeProfiler?.EndFrame();
             double ms = pipelined ? interval.Elapsed.TotalMilliseconds : frameWatch.Elapsed.TotalMilliseconds;
             interval.Restart();
             times.Add(ms);
@@ -108,6 +113,7 @@ static partial class WorldApp
         Console.WriteLine($"gc        gen0 {GC.CollectionCount(0) - gc0}, gen1 {GC.CollectionCount(1) - gc1}, pauses {(GC.GetTotalPauseDuration() - pause0).TotalMilliseconds:0} ms; allocated {(GC.GetTotalAllocatedBytes() - allocated) / 1048576} MB (render thread {(GC.GetAllocatedBytesForCurrentThread() - renderAllocated) / 1048576} MB)");
         Console.WriteLine($"stages    mean ms: {string.Join(", ", StageClock.Names.Select((n, k) => $"{n} {stageSums[k] / o.FlyBenchmark:0.00}"))}");
         Console.WriteLine($"stages    shadow casters mean ms: terrain {shadowSums[0] / o.FlyBenchmark:0.00}, objects {shadowSums[1] / o.FlyBenchmark:0.00}, foliage {shadowSums[2] / o.FlyBenchmark:0.00}");
+        if (gpu.Shadow is { Meitou: true } meitouShadow) Console.WriteLine($"shadows   meitou schedule (cascade redraws over the {meitouShadow.MeitouFrames} frames): {meitouShadow.DescribeMeitou()}");
         // Wave 4 (docs/renderer-native.md 9.3): the recording jobs' own CPU time per stage, summed over the threads that ran them; the stage
         // times above are the render thread's wall time (including any wait for the jobs), so the two do not add up.
         Console.WriteLine($"jobs      record mode {Meitou.Rendering.Gpu.Recording.Mode} ({RenderJobs.Threads} threads); summed cpu mean ms: " +
@@ -145,6 +151,7 @@ static partial class WorldApp
         if (gpu.Guard is { } vramGuard) Console.WriteLine($"guard     {vramGuard.Status}; entered pressure {vramGuard.Activations} times, lowest range scale x{vramGuard.LowestScale:0.00}");
         if (gpu.Foliage is { } scratchFoliage) Console.WriteLine($"scratch   {scratchFoliage.ScratchDescription}");
         int frames = Math.Max(o.FlyBenchmark, 1);
+        SpikeLog.PrintSummary();
         if (gpuFrames > 0) Console.WriteLine($"gpu       mean over frames 31-{o.FlyBenchmark}: frame {gpuFrameSum / gpuFrames:0.00} ms, pre-frame {preFrameSum / gpuFrames:0.00} ms (uploads, compute culls, grass kernels, bakes; MEITOU_PASS_STATS=1 only)");
         Console.WriteLine($"counts    per frame (main view, last slice for terrain): grass blades {bladeSum / frames:N0}, foliage instances {foliageSum / frames:N0}, terrain triangles {terrainTriSum / frames:N0}");
         if (gpu.Objects is { } ot && objectTotals0 is not null)
