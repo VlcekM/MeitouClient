@@ -275,6 +275,7 @@ Not the game's: the remaster's choice, on by default (F5 / `--faithful shadows` 
   It fades in from 55 % to 90 % of the range and combines with the cascades by the minimum, so it agrees with them where both apply
   (Observed: the same picture at range 5000 and 9000 at 07:00). This is where the two modes differ most at a low sun: at the
   forest view at 07:00 the valley beyond the range is shadowed by the cliffs here and lit with `--faithful shadows`, as in the game.
+- **Small foliage casters** (2026-10-08). A cascade skips foliage meshes whose size (radius × largest scale, `FoliageSizes.Size`) is under 2 of its texels (`ShadowPass.MinFoliageCasterTexels`): their shadow there would be a blur of a few texels under the soft filter. With the default 2048² atlas the texels are about 1.7 / 4 / 9 / 20 units, so the last cascades lose the litter and small plants only. Meitou only. **Observed** (`--at -26640,-68976 --distance 2500 --pitch 12`): pixel-identical picture, 7 of 73 cascade draw calls fewer in the nearer cascades; the GPU gain there is within noise (the small class reaches 3500, mostly inside the first two cascades).
 - **Landmark shadows** (2026-10-08). The landmarks (placements of world radius 2000+, drawn to the landmark distance, 150000 by
   default; [../renderer-native.md](../renderer-native.md) 8.19) cast shadows however far they are. Every landmark drawn (resolved,
   within its reach and part distance) goes into one more depth map along the sun, 4096² D32 (64 MB), a light-space square fitted

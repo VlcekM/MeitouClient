@@ -751,6 +751,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public bool Terrain => Mesh.MaterialType == 2;
         public Vector3 Centre;
         public float Radius = 1;
+        /// <summary>Radius × largest scale (<see cref="FoliageSizes.Size"/>), known with <see cref="HasBounds"/>: the shadow cascades skip meshes too small for their texels.</summary>
+        public float Size;
         /// <summary><see cref="Centre"/>, <see cref="Radius"/> and <see cref="SizeClass"/> are known (the mesh was decoded once; they never change).</summary>
         public bool HasBounds;
         public FoliageSizeClass SizeClass;
@@ -850,7 +852,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             if (leaves is not null) { min = Vector3.Min(min, leaves.Min); max = Vector3.Max(max, leaves.Max); }
             a.Centre = (min + max) / 2;
             a.Radius = Math.Max((max - min).Length() / 2, 1);
-            a.SizeClass = FoliageSizes.Classify(FoliageSizes.Size(a.Radius, a.Mesh));
+            a.Size = FoliageSizes.Size(a.Radius, a.Mesh);
+            a.SizeClass = FoliageSizes.Classify(a.Size);
             a.Triangles = main.Parts.Sum(p => p.Indices.Length / 3) + (leaves?.Parts.Sum(p => p.Indices.Length / 3) ?? 0);
             a.HasBounds = true;
             QueueMesh(a, main, leaves);
@@ -1958,17 +1961,19 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
     bool depthPass;
+    /// <summary>The cascade being drawn skips meshes smaller than this (world units, <see cref="MeshAsset.Size"/>): their shadow would cover a few texels.</summary>
+    float depthMinSize;
 
     /// <summary>
     /// Draws the foliage meshes' depth for a shadow cascade: <see cref="Draw"/>'s culling and ranges (measured from the camera's
-    /// <paramref name="eye"/>) with <see cref="ShadowShaders.MeshDepthFragment"/>, so the leaves' cut-out holds; no grass. Leaves the draw
+    /// <paramref name="eye"/>) with <see cref="ShadowShaders.MeshDepthFragment"/>, so the leaves' cut-out holds; no grass, no mesh smaller than <paramref name="minSize"/>. Leaves the draw
     /// counters describing this call.
     /// </summary>
-    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float maxRange = float.PositiveInfinity)
+    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float maxRange = float.PositiveInfinity, float minSize = 0)
     {
-        depthPass = true;
+        (depthPass, depthMinSize) = (true, minSize);
         try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain, grass: false, maxRange: maxRange); }
-        finally { depthPass = false; }
+        finally { (depthPass, depthMinSize) = (false, 0); }
     }
 
     // ------------------------------------------------------------------ native recording
@@ -2106,6 +2111,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             if (gpu && !gpuBatchShown[b.Index]) continue;   // the GPU cull: no group of the batch can be in view (ShowBatches)
             var a = b.Asset;
+            if (depthPass && a.HasBounds && a.Size < depthMinSize) continue;   // too small for this cascade's texels
             AddMesh(a.Main!, a.MainMaterial!, b, options);
             if (a.Leaves is not null) AddMesh(a.Leaves, a.LeavesMaterial!, b, options);
         }

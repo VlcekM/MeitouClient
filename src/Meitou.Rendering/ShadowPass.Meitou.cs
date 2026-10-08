@@ -58,6 +58,13 @@ public sealed unsafe partial class ShadowPass
     /// <summary>The whole-world height grid (WorldScene.Coarse) for the terrain shadow beyond the range; uploaded when first needed.</summary>
     public void SetTerrain(ushort[] heights, int size) => (coarse, coarseSize) = (heights, size);
 
+    /// <summary>Foliage meshes smaller than this many texels of a cascade (radius × largest scale) cast nothing into it (Meitou): their shadow would be a
+    /// blur of a few texels under the soft filter, at the price of their triangles and cut-out fragments.</summary>
+    public const float MinFoliageCasterTexels = 2;
+
+    /// <summary>The smallest foliage mesh <paramref name="cascade"/> draws (world units; 0 with the faithful shadows: every mesh).</summary>
+    public float MinFoliageCaster(ShadowCascade cascade) => Meitou ? (float)cascade.Texel * MinFoliageCasterTexels : 0;
+
     /// <summary>One line on the schedule: how often each cascade was drawn, and the terrain map's rebuilds.</summary>
     public string DescribeMeitou() =>
         $"drawn {string.Join("/", CascadeDraws)} times in {MeitouFrames} frames; terrain shadow rebuilt {terrainMap?.Builds ?? 0} times (cpu {terrainMap?.LastBuildCpuMs ?? 0:0.00} ms); " +
