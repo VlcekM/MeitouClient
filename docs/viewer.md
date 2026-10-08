@@ -210,12 +210,15 @@ How it works (status as in [README.md](README.md)):
     degrees off the weather's wind at the camera (followed over about ten seconds), amplitude (0.004 + 0.011 w) × wavelength with the
     wind factor w = wind speed / 60 (at most 1.5), steepness so the four stay below folding (Σ q k a ≤ 0.8), phases integrated with
     the deep-water dispersion ω = √(98.1 k). They move the grid out to 1500-3500 units from the eye and add their slopes to the game's
-    scrolled normal map; where the surface compresses (the Jacobian below 0.72, a stiff wind) the crests foam. They die out in water
+    scrolled normal map; each wave swells and fades in groups along and across its crest, so the four never settle into stripes, and the
+    normal map's second and third samples are rotated and rescaled so its 250-unit tile does not show as a grid; where the surface compresses (the Jacobian below 0.72, a stiff wind) the crests foam. They die out in water
     shallower than 20 units.
   - *Shore.* Per pixel (and vertex) the distance to the waterline is estimated as depth / bottom slope (the slope from central
-    differences of the terrain heights over 1.5 height cells), the direction to the shore as the slope's. Breakers (every 7 s, 80
-    units apart) run along that distance, so their crests follow the depth contours; within 280 units of the waterline they break
-    (a foam line at the crest, lace behind it), stronger in some stretches than others; at the beach they run up as a thin sheet to
+    differences of the terrain heights over 1.5 height cells), the direction to the shore as the slope's. Breakers (every 8 s, 110
+    units apart, in sets: each one 0.6-1.4 times the height of 3.5-5.3 units) run along that distance, so their crests follow the depth
+    contours. They build from 460 units out, steepen (a brighter, greener, less see-through face, a darker trough ahead) and break at
+    35-120 units from the waterline (varying along the shore and with the size), bursting white, then run in as a low bore of whitewater
+    with lace trailing behind it, stronger in some stretches than others; at the beach they run up as a thin sheet to
     where the ground is 1.4-3.2 units above the water (the run-up height grows with the wind), at most about 120 units inland so low flats behind a beach stay dry, and back, leaving wet sand that dries
     until the next one. The grid is lifted to the run-up's top along the beach and the fragment cuts the sheet's edge. Only exposed
     shores get surf: four samples seawards (400 and 1200 units, and 900 at 35 degrees each side) must be deeper than 5-25 units, so

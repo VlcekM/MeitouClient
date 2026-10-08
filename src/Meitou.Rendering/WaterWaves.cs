@@ -21,7 +21,7 @@ public sealed class WaveSet
     static readonly float[] Angle = [0, 0.45f, -0.6f, 1.2f];
 
     /// <summary>The breakers: one every <see cref="BreakerPeriod"/> seconds, <see cref="BreakerLength"/> units apart.</summary>
-    public const float BreakerPeriod = 7, BreakerLength = 80;
+    public const float BreakerPeriod = 8, BreakerLength = 110;
 
     double? lastHours;
     Vector2 wind = Vector2.UnitX;   // smoothed direction × factor
@@ -63,13 +63,15 @@ public sealed class WaveSet
             a[i] = length * (0.004f + 0.011f * w);
             // Steepness so the four together stay below folding (Σ q k a ≤ 0.8).
             q[i] = Math.Clamp(0.8f / (4 * k[i] * a[i]), 0, 1);
-            phase[i] = (phase[i] + Math.Sqrt(Gravity * k[i]) * dt) % (2 * Math.PI);
+            // The first frame starts from the clock itself (so a picture at --water-seconds shows that moment), later ones integrate.
+            double omega = Math.Sqrt(Gravity * k[i]);
+            phase[i] = (first ? omega * seconds : phase[i] + omega * dt) % (2 * Math.PI);
             ph[i] = (float)phase[i];
         }
         (DirX, DirZ, K, Amplitude, Steepness, Phase) = (new(dx), new(dz), new(k), new(a), new(q), new(ph));
 
-        shorePhase = (shorePhase + dt / BreakerPeriod) % 1.0;
+        shorePhase = (first ? seconds / BreakerPeriod : shorePhase + dt / BreakerPeriod) % 1.0;
         float swell = 0.6f + 0.6f * MathF.Min(w, 1.5f);
-        Shore = new Vector4((float)shorePhase, 1.4f * swell, BreakerLength, 1.6f * swell);
+        Shore = new Vector4((float)shorePhase, 2.2f * swell, BreakerLength, 3.5f * swell);
     }
 }
