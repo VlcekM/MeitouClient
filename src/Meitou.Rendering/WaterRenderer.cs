@@ -236,7 +236,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
 
         // A breaker's height over its phase: a front (g below 0.5, the shore side) that steepens as it nears the break, and a long back.
-        float breakerProfile(float g, float steep) { return g < 0.5 ? smoothstep(0.5 - mix(0.2, 0.05, steep), 0.5, g) : 1.0 - smoothstep(0.5, 0.97, g); }
+        float breakerProfile(float g, float steep) { return g < 0.5 ? smoothstep(0.5 - mix(0.22, 0.1, steep), 0.5, g) : 1.0 - smoothstep(0.5, 0.97, g); }
         float breakerProfile(float g) { return breakerProfile(g, 0.0); }
 
         // The breaker's size (units) before its profile: it builds as the water shoals, peaks just before its break point, collapses into a
@@ -420,7 +420,9 @@ public sealed unsafe class WaterRenderer : IDisposable
             ahead.g = fract(s.g - 0.01); ahead.dist -= 0.01 * uShore.z;
             behind.g = fract(s.g + 0.01); behind.dist += 0.01 * uShore.z;
             float breaker = breakerHeight(s) * fade;
-            slope += s.dir * ((breakerHeight(behind) - breakerHeight(ahead)) * fade / (0.02 * uShore.z));
+            // The breaker's shading fades with the distance: a few pixels across its steep front only read as a dark streak.
+            float near = 1.0 - smoothstep(700.0, 2500.0, dist);
+            slope += s.dir * ((breakerHeight(behind) - breakerHeight(ahead)) * fade * near * 0.7 / (0.02 * uShore.z));
             vec3 n = normalize(vec3(slope.x, 1.0, slope.y));
 
             float gloss = clamp(pb.x, 0.0, 1.0);
@@ -446,11 +448,11 @@ public sealed unsafe class WaterRenderer : IDisposable
             vec3 colour = mix(waterColour * light, reflected, schlick * gloss) + min(spec, 4.0) * uSunColour * 0.25 + pb.y * waterColour;
 
             // A breaker's face: light comes through its thin lip, so it is brighter and greener than the water, and less see-through.
-            float lip = smoothstep(0.22, 0.45, s.g) * (1.0 - smoothstep(0.46, 0.51, s.g)) * clamp(breaker / max(uShore.w, 0.1), 0.0, 1.0);
-            colour = mix(colour, (waterColour * 1.6 + vec3(0.02, 0.07, 0.06)) * (uSunColour * 0.7 + uSkyZenith * 0.6), lip * 0.6);
+            float lip = smoothstep(0.22, 0.45, s.g) * (1.0 - smoothstep(0.46, 0.51, s.g)) * clamp(breaker / max(uShore.w, 0.1), 0.0, 1.0) * smoothstep(3.0, 20.0, s.depth);
+            colour = mix(colour, (waterColour * 1.6 + vec3(0.02, 0.07, 0.06)) * (uSunColour * 0.7 + uSkyZenith * 0.6), lip * 0.6 * near);
             // and the trough in front of it is darker.
             float trough = smoothstep(0.05, 0.2, s.g) * (1.0 - smoothstep(0.2, 0.3, s.g)) * clamp(breakerHeight(behind) / max(uShore.w, 0.1), 0.0, 1.0) * (1.0 - smoothstep(s.breakAt, s.breakAt - 30.0, s.dist));
-            colour *= 1.0 - 0.25 * trough;
+            colour *= 1.0 - 0.25 * trough * near;
 
             // Foam (WaterFoam's lace, let through the more the more foam there is): sharp open-water crests in a wind; the breaking crest as a line
             // and the foam it leaves behind; a thin edge at the waterline; the swash's front and the lace in its sheet.
@@ -459,13 +461,13 @@ public sealed unsafe class WaterRenderer : IDisposable
             float surfZone = smoothstep(-2.0, 10.0, s.dist) * smoothstep(250.0, 120.0, s.depth) * fade * s.open * min(uShore.w, 1.0);
             float broken = smoothstep(s.breakAt + 15.0, s.breakAt - 15.0, s.dist);
             float burst = (1.0 - smoothstep(0.0, 45.0, abs(s.dist - s.breakAt + 10.0))) * smoothstep(0.42, 0.5, s.g) * (1.0 - smoothstep(0.62, 0.8, s.g));
-            float bore = broken * smoothstep(0.42, 0.5, s.g) * (1.0 - smoothstep(0.68, 0.9, s.g)) * mix(1.0, 0.5, smoothstep(0.5, 0.85, s.g));
-            float trail = broken * smoothstep(0.6, 0.7, s.g) * (1.0 - smoothstep(0.7, 0.99, s.g));
+            float bore = broken * smoothstep(0.43, 0.5, s.g) * (1.0 - smoothstep(0.54, 0.68, s.g));
+            float trail = broken * smoothstep(0.56, 0.66, s.g) * (1.0 - smoothstep(0.66, 0.95, s.g)) * 0.8;
             float feather = (1.0 - broken) * smoothstep(0.47, 0.5, s.g) * (1.0 - smoothstep(0.5, 0.53, s.g)) * smoothstep(s.breakAt + 120.0, s.breakAt + 20.0, s.dist);
             float amount = clamp((0.7 - jacobian) * 2.5, 0.0, 1.0);
             // Along the shore the breakers break harder in some stretches than others, and not at all in a few.
             float stretch = smoothstep(0.2, 0.75, texture(uFoamMap, p * 0.0011).g);
-            float surfFoam = max(max(burst * 1.4, bore * 1.15), max(trail * 0.5, feather * 0.6)) * min(s.size * 1.1, 1.3);
+            float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 0.5, feather * 0.6)) * min(s.size * 1.1, 1.3);
             amount = max(amount, min(surfFoam * surfZone * (0.45 + 0.75 * stretch), 0.8));   // capped: the lace shows through even the thickest whitewater
             amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * (0.15 + 0.25 * s.open) * fade);
             if (swash && sheet > 0.0) amount = max(amount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.12, sheet)), 0.35 * (1.0 - sinceCrest)));
@@ -485,8 +487,10 @@ public sealed unsafe class WaterRenderer : IDisposable
             float a = clamp(1.0 - (dist - 4000.0) / 1000.0, 0.0, 1.0);
             a *= mix(1.0, clamp(depth * pa.w, 0.0, 1.0), fresnel);
             a *= clamp(depth / 2.0, 0.0, 1.0);
-            a = max(a, lip * 0.75);
-            if (swash) a = max(a, sheet > 0.0 ? 0.3 : 0.0);
+            // The lip (only where the water is deep enough for it, else an opaque stroke) is less see-through.
+            a = max(a, lip * 0.6 * near);
+            // The swash thins out to its edge instead of ending in a line.
+            if (swash) a = max(a, 0.3 * smoothstep(0.0, 0.8, sheet));
             a = max(a, foam);
             if (swash && sheet <= 0.0)
             {
