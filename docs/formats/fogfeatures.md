@@ -210,6 +210,11 @@ and the sky pass with the haze's far distance D, each volume alpha-blended (or a
 every pixel; a block whose box the pixel's ray misses costs one box test. The viewer prints the volumes drawn (`fog vols` line) with
 `--screenshot`; `--no-fog-volumes` turns them off. Particles are drawn after the scene with no fog, as the game.
 
+Cost (**Observed**, 2026-10-08, RTX 4070, 1600 × 900, `--screenshot` "post cost" scene GPU ms; without volumes / the earlier 8-block
+texture version / this list): Shark in swamp rain 6.34 / 8.22 / 7.80, Shark from above 5.64 / 7.38 / 7.27, The Hub 2.62 / 3.82 / 3.35, the Vain
+3.43 / 4.83 / 4.28, inside the Skinner's Roam dome 2.80 / 3.82 / 3.64. So drawing every volume (and the sphere and beams) costs less than the
+capped version: the far-clip cull drops what cannot show, and the data are uniform reads instead of texture fetches.
+
 Differences from the game (**Observed**, viewer choices):
 - Evaluated per pixel in each shader instead of rasterising each hull over the G-buffer. Opaque surfaces get the same result, but the game
   only fogs rays that hit a block's hull (the corners' convex shape), while Meitou fogs the whole region inside the planes; they differ only for
