@@ -413,7 +413,8 @@ Drifting-foliage), Venge (venge), Desert (Desert Blasts 900 + Desert Summer 300)
 
 What the viewer (and later the game) needs, in build order. Each step is testable on its own.
 
-1. **Cloud layer pass** (viewer, small; everything it needs is in the sky inputs already). Draw the dome-direction pass of
+1. **Cloud layer pass** (viewer, small; everything it needs is in the sky inputs already). **Done** 2026-10-08, see
+   [clouds.md](clouds.md#in-the-viewer); the spec follows. Draw the dome-direction pass of
    [clouds.md](clouds.md) after the sky and before the moon: plane hit with height 100 and scale 0.001, the two `Clouds.dds`
    lookups with the displacement from `CloudsNormal.dds`, `CloudsTile.dds` at −wind, `DensityOffset = 1.4c − 0.8`, multiplier 3,
    `Darkness = pow(clamp(c − 0.5, 0, 1), 0.3)`, colour `zenithLight + sunColour.rgb (1 − 0.1 D)` with `zenithLight =
