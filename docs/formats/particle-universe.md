@@ -183,6 +183,49 @@ Nothing is recorded when no group has a particle.
   plane). Camera rain is then visible at every zoom, as in the game.
 - Not done: the interior mask clip, the `sorting` order, the mesh (Sphere) renderer, `oriented_shape`, soft particles.
 
+### Low-resolution particles (Meitou `particles` switch)
+
+**Why the dust storm cost 5.6 ms (Observed, 2026-10-08, RTX 4070, Release, `--world --town Heft --radius 1|2 --distance 3000 --pitch 10 --yaw 300
+--upscaler dlss --weather "Dust Storm Approach" --time 12`, 1280 x 960):** 16396 particles, all of one material (`Sand-Wisp`, alpha blend, depth
+checked), sprites about 600 units wide, mean alpha 0.09, a quarter of them nearer than the slice's near plane (no depth test). The shader is one
+texture read times a colour, so the cost is blending fill, not shader work, vertices or sorting: a render scale of 0.5 (a quarter of the pixels) took the
+pass from 5.98 to 1.52 ms, and with the scissor cut to one pixel (all vertex work kept) the draws cost 0.18 ms. The sprites overlap on the order of a hundred
+layers per pixel.
+
+**What Meitou does** (`PostOptions.LowResParticles`, default on; `--faithful particles` / `--no-particles-low` draw everything at full size, byte-identical to before):
+
+- `ParticleRenderer.Prepare` collects as before and tags each draw (one technique of one unit) with a size: only `alpha_blend` and `add` materials qualify;
+  the mean screen size of the draw's sprites (square root of the mean area in render pixels) picks the size, from 80 px up a quarter-size target (1/4 per
+  axis), from 20 px up a half-size one (1/2), below that full size (rain streaks and flecks stay sharp and cost almost nothing). A size is used only when its draws
+  add up to at least 6 screens of sprite area (`MinLayers`), since its two extra passes cost about as much as 10 million pixels of blending; otherwise they go back to full size.
+  `colour_blend`, `modulate` and opaque materials always draw at full size (see the caveat below). `--particle-divisor 1|2|4` forces one size for measuring.
+- A low-resolution size needs `PostProcess.BeginParticlesLow`: the scene's depth reduced to the target's size by a depth-only pass (`PostProcessShaders.ParticleDepth`,
+  the farthest depth of each block, written as the target's depth so the hardware depth test and early-Z still reject hidden sprites). The draws then go into an RGBA16F
+  accumulation target cleared to 0 with the blend (one, one minus source alpha): an alpha particle writes (rgb x a, a), an additive one (rgb, 0), so rgb is the colour added and
+  alpha the opacity (1 minus the transmittance). Every blend of the two kinds is an affine map of what is behind (`dst * (1 - a) + c`), so they compose **exactly** in draw order.
+  The nearer-than-the-near-plane draws keep their own projection and no depth test.
+- `CompositeParticlesLow` blends the target over the scene (`scene * (1 - a) + rgb`, red, green and blue only: the alpha is the characters' SSAO mask) with an
+  upsample (`PostProcessShaders.ParticleComposite`) that weights the four nearest texels by their bilinear weight over (0.01 + the relative difference of their linear
+  depth to this pixel's), so a sprite behind a near edge does not bleed over it. Pixels whose four texels are empty skip the depth reads.
+- The DLSS / FSR / TAA reactive mask: the full-size draws are redrawn into it as before; the low-resolution ones add 30 x max(opacity, brightest channel) from their accumulation
+  target (`ParticleCoverage`, bilinear) instead of being drawn again at full size.
+
+**Measured** (same view, GPU ms per frame from the post chain's timestamps, several runs each because the card is shared; one run in ten is disturbed by another process):
+
+| | Faithful (full size) | Meitou (auto: quarter size here) |
+| --- | --- | --- |
+| particle draws and composites | 5.6 to 6.2 ms | 0.03 depth + 0.96 to 1.03 draws + 0.03 to 0.08 composite = about 1.1 ms |
+| reactive-mask coverage (the DLSS run, "particle coverage" stamp; it was inside the old `upscale` number) | **62.7 ms** | 0.04 ms |
+| forced half size (`--particle-divisor 2`) | | 2.6 ms |
+| forced full size through the same path (`--particle-divisor 1`) | | 8.1 ms (premultiplied RGBA writes cost more than the colour-only blend) |
+
+Against the full-size picture of the same frame (`meitou-tools image-diff`): mean difference 0.17 of 255, largest 8, no pixel over 12 (quarter size, the dust view);
+0.08 mean, largest 2 for a view inside the dust at 500 units; Heavy_Rain (4041 small sprites) draws at full size in both modes (0.05 ms; mean 0.001, largest 2: run to run noise of the weather).
+Faithful (`--faithful particles`) against the picture before the change: 0 differing pixels. **Known differences**: the upsample can leave a faint soft edge of dust where a sprite
+meets a thin foreground silhouette; draws of other blends drawn at full size come before the low-resolution composite, so a `colour_blend` or `modulate` draw that overlaps a low-resolution
+one in screen space is ordered differently from the game's far-to-near order (none of the 93 base-game weather systems mixes them with big sprites; **Unknown** for mods); the
+reactive mask for the low-resolution draws is derived from the accumulated opacity, not summed per particle (**Observed** equivalent for dust).
+
 ## The camera effects (`CameraEffectGroup`)
 
 For an EFFECT of type CAMERA, CAMERA_RAIN or CAMERA_ACID_RAIN ([weather.md](weather.md#spawning-verified-decompiled-fun_1409dcaf0-fun_140103210-behaviour-from-fcsdef-where-marked)):

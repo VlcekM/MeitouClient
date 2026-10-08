@@ -93,6 +93,15 @@ twice (white and black: the difference is the transmittance, since the blend is 
 distance fade (3000 to 10000) stays on top. **Observed** (Shark swamp, `--post-debug ao`, before and after): the occlusion on rocks and trees in
 the fog is gone, the foreground is unchanged. Costs the SSAO pass (half resolution) one more atmosphere evaluation per pixel with some occlusion.
 
+**Reusing the fog pass's transmittance in SSAO: tried, not kept** (**Observed**, 2026-10-08, Shark swamp, 6 volumes in view, Release, RTX 4070). The idea: the fog pass already computes
+each pixel's transmittance, so SSAO could sample it instead of calling `fogVolumesTransmittance` for every occluded pixel. The render graph has no multiple render targets (`RenderingDesc`
+has one colour attachment), so the fog pass had to draw unblended into its own render-size RGBA16F target and a second pass blend that over the scene. Measured at 2560 x 1440 (three runs
+each, GPU ms from the post chain's timestamps): fog 0.28 and SSAO 0.32 before; fog 0.36 and SSAO 0.34 after, so the sum went from 0.60 to 0.70. At 1280 x 960: fog 0.10 to 0.12 or 0.14, SSAO
+0.07 to 0.06 or 0.07. SSAO's fog loop is only run on pixels with some occlusion at half resolution and was already about 0.01 ms; the extra blit costs more than that. The occlusion also
+changed (`--post-debug ao`, mean 0.05 of 255, 0.02% of pixels over 12, largest 42 to 69, specks on thin silhouettes where the bilinear fetch mixes a sky pixel, and the water pixels now see the
+transmittance to the water plane, which the fog pass clamps to, instead of to the sea floor). Reverted; SSAO still loops the volumes. It would pay only with multiple render targets (the fog
+pass writing the transmittance for free) or with many more volumes in view than the 5 or 6 of the swamp (**Unknown**: no base-game view has been measured with more).
+
 ## Heat haze (Verified)
 
 A screen-space shimmer over the finished LDR picture. Sources: `post/heathaze.hlsl` and `post/heathaze.compositor` (the
