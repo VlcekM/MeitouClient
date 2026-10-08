@@ -24,7 +24,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 {
     GpuContext Gpu { get; }
     readonly NativeFrame nativeFrame;
-    readonly ReflectedProgram colourProg, depthProg, motionProg, maskProg;
+    readonly ReflectedProgram colourProg, depthProg, motionProg;
     readonly CharacterContent content;
     readonly PassTimer colourTimer, depthTimer;
     readonly Dictionary<CharacterAppearance, CharacterAsset?> assets = new(ReferenceEqualityComparer.Instance);
@@ -122,7 +122,6 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         colourProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.Vertex(), CharacterShaders.Fragment(), "characters", CharacterShaders.InstanceLocation);
         depthProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.DepthVertex(), CharacterShaders.DepthFragment(), "characters depth", CharacterShaders.InstanceLocation);
         motionProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.MotionVertex(), CharacterShaders.MotionFragment(), "characters motion", CharacterShaders.InstanceLocation);
-        maskProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.Vertex(), CharacterShaders.MaskFragment(), "characters mask", CharacterShaders.InstanceLocation);
         content = new CharacterContent(gpu, install, db, assetLocator);
         colourTimer = new PassTimer(gpu);
         depthTimer = new PassTimer(gpu);
@@ -370,7 +369,6 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         colourProg.Dispose();
         depthProg.Dispose();
         motionProg.Dispose();
-        maskProg.Dispose();
         nativeFrame.Dispose();
         content.Dispose();
     }

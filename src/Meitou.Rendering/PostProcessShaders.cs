@@ -152,8 +152,8 @@ static class PostProcessShaders
 
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uScene, uAo, uAdapted, uMask;
-        uniform float uExposure, uCharacterAo;   // uCharacterAo: the share of the occlusion kept on the characters' own pixels (uMask)
+        uniform sampler2D uScene, uAo, uAdapted, uMask;   // uMask: the scene colour at the render size, whose alpha is 1 on characters (only they write it)
+        uniform float uExposure, uCharacterAo;   // uCharacterAo: the share of the occlusion kept on the characters' own pixels
         uniform int uUseAo, uDither, uDebug, uAuto;
         const float EXPOSURE_KEY = 0.55;   // hdr.material's EXPOSURE_KEY
 
@@ -163,7 +163,7 @@ static class PostProcessShaders
             if (uAuto != 0) exposure *= max(EXPOSURE_KEY / texture(uAdapted, vec2(0.5)).r, 0.001);   // Kenshi's exposure: key over the adapted luminance
             vec3 c = max(texture(uScene, vUv).rgb, 0.0) * exposure;
             float ao = texture(uAo, vUv).r;
-            if (uCharacterAo < 1.0) ao = mix(ao, 1.0, texture(uMask, vUv).r * (1.0 - uCharacterAo));
+            if (uCharacterAo < 1.0) ao = mix(ao, 1.0, texture(uMask, vUv).a * (1.0 - uCharacterAo));
             if (uUseAo != 0) c *= ao;
             c = clamp(c, 0.0, 1.0);   // Kenshi has no tone curve: values over 1 clip (docs/formats/post-processing.md)
             if (uDebug == 1) c = vec3(ao);

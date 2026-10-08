@@ -44,6 +44,8 @@ public sealed record DrawState(CullModeFlags Cull, FrontFace Front, bool DepthTe
     bool AlphaToCoverage, bool DepthClamp)
 {
     public const ColorComponentFlags Rgba = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit;
+    /// <summary>Colour without alpha: the main scene's guests leave the alpha to the characters (the SSAO character mask, <c>PostProcess</c>).</summary>
+    public const ColorComponentFlags Rgb = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit;
 
     /// <summary>
     /// The state for a draw into <paramref name="targets"/>, from the state the host means (GL's counter-clockwise front faces, which are Vulkan's
@@ -62,9 +64,9 @@ public sealed record DrawState(CullModeFlags Cull, FrontFace Front, bool DepthTe
     }
 
     /// <summary>The scene's state (the main view's and the reflection's slices): depth tested with less-or-equal and written, no culling,
-    /// blending or clamp, every channel. Each guest puts in its own culling, blending and depth changes.</summary>
-    public static DrawState Scene(in AttachmentFormats targets) =>
-        For(targets, false, depthTest: true, depthWrite: true, compare: CompareOp.LessOrEqual);
+    /// blending or clamp, the channels in <paramref name="mask"/> (default every one). Each guest puts in its own culling, blending and depth changes.</summary>
+    public static DrawState Scene(in AttachmentFormats targets, ColorComponentFlags mask = Rgba) =>
+        For(targets, false, depthTest: true, depthWrite: true, compare: CompareOp.LessOrEqual, mask: mask);
 
     /// <summary>The pipeline for <paramref name="program"/> with this state.</summary>
     public GraphicsPipelineDesc Pipeline(ShaderProgram program, VertexLayout vertex, PrimitiveTopology topology, AttachmentFormats targets, string name = "") =>

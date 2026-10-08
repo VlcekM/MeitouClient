@@ -301,7 +301,7 @@ sealed class SceneHost(GpuContext ctx)
         var depth = clearDepth ? targets.Depth with { Load = Vk.AttachmentLoadOp.Clear, Clear = new Vk.ClearValue(depthStencil: new Vk.ClearDepthStencilValue(1f, 0)) } : targets.Depth;
         list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height), secondaries);
         this.targets = targets;
-        ctx.BeginHostPass(list, targets, DrawState.Scene(targets.Formats));
+        ctx.BeginHostPass(list, targets, DrawState.Scene(targets.Formats, DrawState.Rgb));   // alpha: the characters only (the SSAO character mask)
         if (secondaries) ctx.Frame.Parallel.Begin(list, targets.Formats, stage);
         cmd = list;
     }
@@ -773,7 +773,7 @@ static class WorldFrame
         var post = gpu.Post ?? throw new InvalidOperationException("the world frame needs the post-processing chain");
         var host = gpu.Scene ??= new SceneHost(post.Gpu);
         bool temporal = post.Temporal;
-        host.Open(5, post.SceneTargets, new Vk.ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 1), clearDepth: true);
+        host.Open(5, post.SceneTargets, new Vk.ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 0), clearDepth: true);   // alpha 0: no character (the SSAO mask)
         float aspect = width / (float)Math.Max(height, 1);
         var view = camera.View;
         // Rotation only: with the eye's world position in the matrix, the directions rebuilt from it lose float
@@ -803,19 +803,24 @@ static class WorldFrame
                 swaying.SetMotionCamera(viewProjection, view * camera.Projection(aspect, near, far), eye, frustum);
             }
             if (nearSlice) gpu.Characters?.AttachMotion(gpu.Post, gpu.Foliage, viewProjection, view * camera.Projection(aspect, near, far), eye, frustum);
-            if (nearSlice) gpu.Characters?.AttachMask(gpu.Post, viewProjection, eye, frustum);
             host.Stage(6);
             gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
             StageClock.Lap(6);
             host.Stage(7);
             if (render.Objects) gpu.Objects?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
-            if (nearSlice) gpu.Characters?.Draw(viewProjection, eye, frustum, light.SunDirection, light.FogColour, light.FogDistance);
             StageClock.Lap(7);
             // Foliage in every depth slice (it reaches 32000+ units at the default x4), counted as one draw.
             host.Stage(8);
             gpu.Foliage?.Draw(viewProjection, eye, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, continuation: foliageDrawn);
             foliageDrawn = true;
             StageClock.Lap(8);
+            // Characters after the opaque geometry: they alone write the scene's alpha (SSAO's character mask), so nothing drawn later may cover them but water.
+            if (nearSlice && gpu.Characters is { } characters)
+            {
+                host.Stage(7);
+                characters.Draw(viewProjection, eye, frustum, light.SunDirection, light.FogColour, light.FogDistance);
+                StageClock.Lap(7);
+            }
             host.Stage(9);
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
             StageClock.Lap(9);
