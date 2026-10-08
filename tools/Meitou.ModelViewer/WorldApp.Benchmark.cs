@@ -64,7 +64,9 @@ static partial class WorldApp
             camera.Target = new Vector3(x, gpu.Terrain.HeightAt(x, z), z);
             StageClock.Start();
             frameWatch.Restart();
-            { Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
+            // With weather particles the frame clock runs (1/60 s a frame, in the draw's time units of 600 s) so they simulate; without, it stays 0 as before.
+            float clock = gpu.Particles is { Groups.Count: > 0 } ? (float)(i / 60.0 / 600) : 0;
+            { Draw(gpu, scene, camera, render, w, h, o.Hour, clock, o.FogDistance); EndFrame(context); }
             double cpuMs = frameWatch.Elapsed.TotalMilliseconds;
             if (i % 500 == 0 || i <= 4) Console.WriteLine($"gpu       frame {i}: {context.Frame.Stats}");
             cpu.Add(cpuMs);
@@ -111,6 +113,8 @@ static partial class WorldApp
         Console.WriteLine($"jobs      record mode {Meitou.Rendering.Gpu.Recording.Mode} ({RenderJobs.Threads} threads); summed cpu mean ms: " +
             string.Join(", ", StageClock.Names.Select((n, k) => (n, k)).Where(x => jobSums[x.k] > 0).Select(x => $"{x.n} {jobSums[x.k] / o.FlyBenchmark:0.00}")));
         if (BackgroundWork.ReportJobs) { BackgroundWork.Measure = false; BackgroundWork.Report(); }
+        if (gpu.Particles is { } fx)
+            Console.WriteLine($"particles per frame over the flight: simulation {fx.MeanMilliseconds.Simulation:0.00} ms (background threads), main thread waited {fx.MeanMilliseconds.Wait:0.00} ms; update {fx.MeanMainThreadMilliseconds.Update:0.00} ms, draw {fx.MeanMainThreadMilliseconds.Draw:0.00} ms (waiting included, of which filling instance buffers {fx.CollectMilliseconds:0.00} ms); {fx.ActiveUnits} units simulated, {fx.DrawnUnits} drawn");
         Console.WriteLine($"cpu only  p50 {C(0.5):0.0} ms, p95 {C(0.95):0.0} ms, p99 {C(0.99):0.0} ms, max {cpuSorted[^1]:0.0} ms (commands recorded, GPU not waited for)");
         if (gpu.Reflection is { } reflectionStats && render.Reflections) Console.WriteLine($"reflect   {reflectionStats.DescribeStats()}");
         foreach (var f in worst.Skip(skipFrames).OrderByDescending(f => f.Ms).Take(8))

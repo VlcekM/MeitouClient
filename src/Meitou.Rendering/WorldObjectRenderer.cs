@@ -482,7 +482,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             float texel = minTile > 0 && !triplanar ? part.UvScale / minTile : float.PositiveInfinity;   // triplanar: a surface edge-on to a projection axis has a footprint smaller than a pixel on that axis, so no bound
             result[i] = new ObjectPartMaterial(m, textureCache.Get(m?.Diffuse, border, deferred: true), wantNormal ? textureCache.Get(m?.Normal, border, deferred: true) : null,
                 wantSecond ? textureCache.Get(m?.Diffuse2, border, deferred: true) : null, wantSecond && part.HasTangents ? textureCache.Get(m?.Normal2, border, deferred: true) : null,
-                texel, triplanar);
+                texel, triplanar) { Dust = placed.Kind == PlacedKind.BuildingPart };
         }
         return new ObjectMaterialSet(result);
     }
@@ -929,6 +929,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         pc.Emissive = textured && normalId != 0 && (m?.Emissive ?? false) ? 1u : 0u;
         pc.UseVertexColour = gp.HasColours && (m?.VertexColours ?? false) ? 1u : 0u;
         pc.Specular = textured ? m?.SpecularMult ?? 1 : 0.3f;
+        pc.Spare = (pm.Dust ? MeshSurface.Dust : 0u) | (m?.Foliage ?? false ? MeshSurface.Foliage : 0u) | (m?.Dust ?? false ? MeshSurface.TriplanarDust : 0u);
     }
 
     /// <summary>The draw list in one native segment of VkGl's open pass (colour or depth, solid or wireframe).</summary>

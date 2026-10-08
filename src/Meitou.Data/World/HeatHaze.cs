@@ -10,6 +10,9 @@ public static class HeatHaze
     /// <summary>Per second (of the game-speed-scaled frame time) that <c>heatHaze</c> moves towards its target.</summary>
     public const float Rate = 1f / 3f;
 
+    /// <summary>The <c>view distance</c> in the install's <c>settings.cfg</c> (Observed 2026-10-08: 12000, the options slider's top; it read 5000 before 2026-10-06). The haze pass's depth is distance / D with D = 10 × this.</summary>
+    public const float ViewDistanceSetting = 12000;
+
     /// <summary>Game hours per real second at game speed 1 (SkyX's time multiplier 0.0091666…; docs/game/game-loop.md).</summary>
     public const double HoursPerSecond = 11.0 / 1200.0;
 

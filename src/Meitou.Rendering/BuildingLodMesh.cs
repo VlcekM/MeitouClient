@@ -629,6 +629,8 @@ sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse
     float texelScale = float.PositiveInfinity, bool triplanar = false)
 {
     public SurfaceMaterial? Material => material;
+    /// <summary>The DUST define: a building part always has it (docs/formats/runtime-materials.md), a map feature when its material says so.</summary>
+    public bool Dust { get; init; }
     public uint Diffuse => diffuse?.Key ?? 0;
     public uint Normal => normal?.Key ?? 0;
     public uint Diffuse2 => diffuse2?.Key ?? 0;

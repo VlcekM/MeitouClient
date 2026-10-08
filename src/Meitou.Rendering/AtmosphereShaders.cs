@@ -33,6 +33,39 @@ static class AtmosphereShaders
         uniform vec4 uAtmoMaps;       // x irradiance cube, y specular cube, z ambient map present; w half the world's width
         uniform samplerCube uAtmoIrradiance, uAtmoSpecular;
         uniform sampler2D uAtmoAmbientMap;
+        uniform vec4 uWeatherWet;     // the weather's shared surface values (WeatherSurfaces): x wetness, y rainAmount = saturate(rain / 50), z gameTime (hours)
+        uniform vec4 uWeatherDust;    // xyz: dustAmount (current, inside, slope; docs/formats/weather.md "Dust")
+        uniform sampler2D uWeatherDustNoise;   // the dust noise (Turbulent.dds), sampled at world.xz * 0.002
+        uniform sampler2D uWeatherGround;      // the terrain's whole-world ground colour map: the dust colour (the BIOMES `ground colour` where the object is)
+
+        // ---- the weather's surfaces (docs/formats/weather.md "Rain and wetness", "Dust") ----
+        // common/wet.hlsl makeWet: waterRel = the water's height minus the pixel's, edge the width of the water-line band (0.5 objects and foliage, 2 terrain).
+        // The game's darkening term is negative below wet = 0.3 (it would brighten dry ground by up to 0.2 absorbance); the viewer keeps the dry look, so it is clamped at 0.
+        void makeWet(inout vec4 frag, float amount, float absorbance, float waterRel, float edge)
+        {
+            float underwater = clamp((waterRel + edge) / edge, 0.0, 1.0);
+            float wet = min(amount + underwater, 1.0);
+            float darken = (1.0 - 1.0 / (wet + 0.7)) * absorbance;
+            float shine = 2.0 * pow(max(0.0, wet - 0.15 * absorbance), 1.0 + 4.0 * absorbance);
+            darken = min(darken + underwater * 0.2, 0.4);
+            shine *= clamp((1.0 - underwater) * 100.0, 0.0, 1.0);   // underwater things do not go shiny
+            frag.rgb *= 1.0 - max(darken, 0.0) * 0.5;
+            frag.a = mix(frag.a, 0.5, clamp(shine, 0.0, 1.0));
+        }
+        // objects.hlsl / triplanar.hlsl: how far a surface is covered by dust (0..1). n: its normal, gloss: the diffuse alpha before `specular mult`, amount: dustAmount.x (.y inside).
+        float dustCover(vec3 n, float gloss, vec3 world, float amount)
+        {
+            float noiseEffect = 2.2 - texture(uWeatherDustNoise, world.xz * 0.002).x * 6.0;
+            float slopeEffect = clamp((n.y - 0.7 + uWeatherDust.z) * 4.0, 0.0, 1.0);
+            float dust = slopeEffect - gloss * 6.0 + noiseEffect;
+            dust = dust * 2.0 + amount - 1.0;
+            dust *= min(1.0, amount * 8.0);   // completely gone at amount 0
+            return clamp(dust, 0.0, 1.0);
+        }
+        vec3 dustColour(vec3 world)
+        {
+            return texture(uWeatherGround, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w)).rgb;
+        }
 
         // ---- SkyX (Meitou.Data SkyXModel) ----
         const float SKYX_INNER = {{F(SkyAtmosphere.InnerRadius)}};
@@ -179,10 +212,10 @@ static class AtmosphereShaders
             level = min(level * uAtmoAltitude.y, 1.0);
             vec3 rgb = mix(hazeColour(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
             float alpha = level;
-            if (uAtmoFog.z > 0.5)
+            if (uAtmoFog.z > 0.0)
             {
                 float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
-                float curve = amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0);
+                float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
                 rgb = mix(rgb, uAtmoFogColour, curve);
                 alpha = clamp(alpha + curve, 0.0, 1.0);
             }
@@ -201,8 +234,8 @@ static class AtmosphereShaders
             float far = smoothstep(0.55, 1.0, dist / uAtmoParams.y);   // closes before the far plane and the end of the water
             haze = 1.0 - (1.0 - haze) * (1.0 - far);
             vec3 result = mix(colour, atmoSky(d), haze);
-            if (uAtmoFog.z > 0.5)
-                result = mix(result, uAtmoFogColour, clamp((dist - uAtmoFog.x) / max(uAtmoFog.y - uAtmoFog.x, 1.0), 0.0, 1.0));
+            if (uAtmoFog.z > 0.0)
+                result = mix(result, uAtmoFogColour, clamp((dist - uAtmoFog.x) / max(uAtmoFog.y - uAtmoFog.x, 1.0), 0.0, 1.0) * uAtmoFog.z);
             return result;
         }
 

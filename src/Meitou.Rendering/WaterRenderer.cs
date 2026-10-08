@@ -48,6 +48,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform sampler2D uColourMap;   // watercolourmap.png: the biomes' water colour, whole world
         uniform sampler2D uFlowMap;     // flowmap.png: RG flow direction, B scum amount
         uniform sampler2D uNormalMap;   // water.png
+        uniform sampler2D uRainMap;     // rain-ripples.png: R the ring's size, G B its normal, A the drop's phase
         uniform sampler2D uParamsA;     // per pixel, blended over biomes: scale X, scale Y (repeats per unit), invStrength, invOpacity
         uniform sampler2D uParamsB;     // gloss, glow, distortion, -
         uniform vec4 uSeaA;             // the open sea past the world's edge: parameters as in the two maps above, and colour
@@ -62,6 +63,18 @@ public sealed unsafe class WaterRenderer : IDisposable
             float t = fract(time);
             vec3 n = texture(uNormalMap, coord + direction * speed * t).rgb * 2.0 - 1.0;
             return n.xzy * (1.0 - abs(t * 2.0 - 1.0));
+        }
+
+        // forward/water.hlsl rainRipple: a ring per texel, its phase scrolling with the time, the normal's xz scaled by the ring's profile.
+        vec3 rainRipple(vec2 coord, float time, float weight)
+        {
+            vec4 ripple = texture(uRainMap, coord);
+            float dropTime = fract(ripple.a + time * 0.5);
+            float dropFrac = dropTime - 1.0 + ripple.r * 0.5 + 0.5;
+            float s = -sin(clamp(dropFrac * 16.0, 0.0, 2.0) * 3.14159);
+            vec3 rainNormal = ripple.grb;
+            rainNormal.xz *= s;
+            return rainNormal * weight * ripple.r;
         }
 
         void main()
@@ -95,6 +108,15 @@ public sealed unsafe class WaterRenderer : IDisposable
             n += sampleNormal(tex + vec2(0.1, 0.3), direction, speed, time + 0.33);
             n += sampleNormal(tex + vec2(0.4, 0.7), direction, speed, time + 0.66);
             n.y *= pa.z;
+            // Rain ripples (docs/formats/weather.md): three layers weighted by rainAmount, faded out at grazing view and with distance.
+            float rain = uWeatherWet.y * clamp(view.y * 2.0 - dist * 0.0001, 0.0, 1.0);
+            if (rain > 0.0)
+            {
+                vec2 rainCoord = vWorld.xz * 0.01;
+                n += rainRipple(rainCoord * 6.0, time * 1.5, rain * 2.0);
+                n += rainRipple(rainCoord.yx * 6.0, time * 1.5 + 0.5, rain * 2.0);
+                n += rainRipple(rainCoord * 2.0, time + 0.3, rain * 0.8);
+            }
             n = normalize(n);
 
             // Lighting: sun specular, sky reflection, a little diffuse for the water colour.
@@ -143,7 +165,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly DeviceBuffer quad;
     readonly VertexArrayBindings quadSource;   // the quad's vertex input, as the GL vertex array was exported (the pipeline cache's key)
     readonly BufferBinding[] quadVertices;
-    readonly SampledImage[] maps;   // colour, flow, normal, parameters A and B, in the order of mapSamplers
+    readonly SampledImage[] maps;   // colour, flow, normal, parameters A and B, rain ripples, in the order of mapSamplers
     readonly Vector4 seaA, seaB;
     readonly Vector3 seaColour;
     readonly LegacyProgram program;
@@ -170,7 +192,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             program.Uniform("uEye"), program.Uniform("uHalfWorld"), program.Uniform("uSeaA"), program.Uniform("uSeaB"), program.Uniform("uSeaColour"),
             program.Uniform("uTime"), program.Uniform("uSunDir"), program.Uniform("uSunColour"), program.Uniform("uFogColour"), program.Uniform("uFogDistance"),
             program.Uniform("uReflect"), program.Uniform("uReflectionViewProjection"), SkyColourHandles.Resolve(program));
-        mapSamplers = new[] { "uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB" }
+        mapSamplers = new[] { "uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB", "uRainMap" }
             .Select(n => { var slot = program.Sampler(n); return (slot, program.SamplerInfo(slot)); }).ToArray();
         reflectionSlot = program.Sampler("uReflection");
         reflectionInfo = program.SamplerInfo(reflectionSlot);
@@ -195,7 +217,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         var flow = Load(install, WorldWater.FlowMap);
         var normalPath = assets.Find("water.png");
         var normal = normalPath is not null ? TextureLoader.LoadFile(normalPath, allMips: false).Levels[0] : null;
+        var rainPath = assets.Find("rain-ripples.png");
+        var rain = rainPath is not null ? TextureLoader.LoadFile(rainPath, allMips: false).Levels[0] : null;
         if (normal is null) messages.Add("water.png not found: flat water");
+        if (rain is null) messages.Add("rain-ripples.png not found: no rain ripples");
 
         // Biome water parameters blended per blend-map pixel.
         var info = BlendInfoFile.Open(install);
@@ -216,7 +241,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         return new WaterRenderer(gpu,
             [Rgba(colour, false, [0, 32, 64, 255], "water colour map"), Rgba(flow, false, [128, 128, 0, 255], "water flow map"),
              Rgba(normal, true, [128, 255, 128, 255], "water normal map"),
-             SampledImage.Rgba32F(gpu, a, blend.Width, blend.Height, "water parameters a"), SampledImage.Rgba32F(gpu, b, blend.Width, blend.Height, "water parameters b")],
+             SampledImage.Rgba32F(gpu, a, blend.Width, blend.Height, "water parameters a"), SampledImage.Rgba32F(gpu, b, blend.Width, blend.Height, "water parameters b"),
+             Rgba(rain, true, [0, 0, 0, 0], "water rain ripples")],
             sea.A, sea.B, sea.Colour);
     }
 

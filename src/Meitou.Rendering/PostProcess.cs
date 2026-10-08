@@ -635,10 +635,12 @@ public sealed unsafe class PostProcess : IDisposable
         {
             Velocity(upscaleDepth!, 1);
             if (WaterHeight is not null) Velocity(reactive!, 2);
+            bool covered = Particles is { HasCoverage: true };
+            if (covered) RunCoverage(reactive!, Vk.ColorComponentFlags.RBit, clear: WaterHeight is null);
             CloseSegment();   // the vendor upscaler records its own segment
             done = external.Dispatch(new UpscaleInputs
             {
-                Colour = sceneColour!.Texture, Depth = upscaleDepth!.Texture, Motion = motion!.Texture, Output = output.Texture, Reactive = WaterHeight is null ? null : reactive!.Texture,
+                Colour = sceneColour!.Texture, Depth = upscaleDepth!.Texture, Motion = motion!.Texture, Output = output.Texture, Reactive = WaterHeight is null && !covered ? null : reactive!.Texture,
                 RenderWidth = width, RenderHeight = height, DisplayWidth = displayWidth, DisplayHeight = displayHeight,
                 JitterPixels = JitterPixels, Near = UpscaleNear, Far = UpscaleFar, FieldOfView = fovNow,
                 DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f), Sharpness = Options.Upscale.Sharpness, Reset = reset,
@@ -663,6 +665,8 @@ public sealed unsafe class PostProcess : IDisposable
                 Console.WriteLine($"upscaler  {Options.Upscale.Kind.ToString().ToUpperInvariant()} is not available here; using TAA");
                 warnedFallback = true;
             }
+            // The particles' coverage into the motion target's alpha (the TAA's reactive channel; the water's analytic value is there already).
+            if (Particles is { HasCoverage: true }) RunCoverage(motion!, Vk.ColorComponentFlags.ABit, clear: false);
             var t = taaPass;
             Bind(t.P, t.Colour, sceneColour);
             Bind(t.P, t.Motion, motion);
@@ -709,6 +713,24 @@ public sealed unsafe class PostProcess : IDisposable
         Draw(v.P, target);
     }
 
+    /// <summary>The weather's particles, which add their coverage to the upscalers' reactive mask (<see cref="ParticleRenderer.DrawCoverage"/>) so thin fast ones (rain) keep their strength under the temporal history.</summary>
+    public ParticleRenderer? Particles { get; set; }
+
+    /// <summary>The particles' coverage into <paramref name="target"/>'s channels <paramref name="mask"/>, added to what is there (or onto zero when <paramref name="clear"/>).</summary>
+    void RunCoverage(Target2D target, Vk.ColorComponentFlags mask, bool clear)
+    {
+        CloseSegment();
+        var targets = PassTargets.Of(target.Texture, null);
+        if (clear) targets = targets with { Colour = targets.Colour with { Load = Vk.AttachmentLoadOp.Clear, Clear = default } };
+        var cmd = Gpu.BeginNative("particle coverage");
+        cmd.BeginRendering(targets.Rendering);
+        Gpu.BeginHostPass(cmd, targets, DrawState.For(targets.Formats, Gpu.Device.DepthClamp, mask: mask));
+        Particles!.DrawCoverage(mask);
+        cmd.EndRendering();
+        Gpu.EndHostPass(cmd);
+        Gpu.EndNative(cmd);
+    }
+
     void RunSsao()
     {
         var a = aoA!; var b = aoB!;
@@ -743,7 +765,7 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>The game's <c>gameTime</c>: game hours since the load, which the haze's layers cycle on (× 100).</summary>
     public double HeatHazeHours { get; set; }
     /// <summary>The game's far clip D, which its G-buffer depth is divided by (view distance × 10 = 50000; docs/formats/sky.md).</summary>
-    public float HeatHazeFarClip { get; set; } = 50000;
+    public float HeatHazeFarClip { get; set; } = 10 * Meitou.Data.World.HeatHaze.ViewDistanceSetting;
     /// <summary>Whether the heat-haze textures were found (else the pass never runs).</summary>
     public bool HasHeatHaze => flowTexture is not null && perturbationTexture is not null;
     /// <summary>Whether this frame ends with the heat haze: it is on, has its textures and an amount.</summary>

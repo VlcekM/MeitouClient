@@ -66,6 +66,10 @@ min` by `max(fog distance min, fog distance max)`, so the fog distance is the la
 limit min/max` (0..1); `sunlight color` (loaded, its use was not traced: **Unknown**). A season without weathers gets the
 "Default" weather (`5460-weather.mod`, clear) with limits 0..1 and logs "Warning: Season ... has no weather". If any of its
 weathers has a time window (`start time` ≠ `end time`), the "Default" weather is appended with weight 0 as the fallback.
+**Verified** against the merged records (`WeatherTests.Base_game_seasons_and_regions_follow_the_calendar_and_fallback_rules`): every
+season of the base game without weathers becomes Default with limits 0..1; the only windowed weathers are "Desert Calm hot 0.6" and
+"venge beams", and every season that lists one ends with Default at weight 0. The duration given to the Default of an empty season (and
+to a region without seasons) is **Observed**: not read from the game, 120..720 minutes (the wind update time is 360).
 
 ### BIOME_GROUP (type 95; Verified: fcs.def, FUN_1409df8d0, FUN_1408fd6e0)
 
@@ -91,9 +95,22 @@ colour`, offsets, `ground movement`.
 
 The game keeps a 64 × 64 grid of zone cells (4608 units, the zone grid of [terrain.md](terrain.md#world-coordinates)). Each
 cell's region is the BIOME_GROUP whose `index` equals the colour of `areasmap.tga` (256 × 256, 24-bit, so 4 × 4 pixels per
-zone) at the cell's centre (**Observed**: the two cell fields used are taken to be the centre); a cell whose colour matches no record goes to "NONE" (`18003-gamedata.base`, no seasons, so Default
-weather). How the map's pixels map onto world coordinates (its origin and size fields in the terrain object) was not pinned
-down: **Observed** that it is a 4 px-per-zone map of the whole world.
+zone) at the cell's centre (**Observed**: the two cell fields used are taken to be the centre; 3051 of the 4096 4 × 4 blocks are one
+colour, the rest lie on region borders); a cell whose colour matches no record goes to "NONE" (`18003-gamedata.base`, no seasons, so
+Default weather).
+
+**Placement in the world (Verified, `WeatherTests.Areas_map_places_known_towns_in_their_regions`, 2026-10-08)**: the map is the
+whole 64 × 64 zone grid with no offset and no flip. Decode the TGA to rows top to bottom (its descriptor byte is 0, a bottom-left
+origin, so the file stores the last row first); zone cell `(cx, cz) = (floor(x / 4608) + 32, floor(z / 4608) + 32)` reads pixel
+`(4 cx + 2, 4 cz + 2)`, the colour taken as `R << 16 | G << 8 | B` and compared with `index` (71 of the 71 colours in the map match a
+record that way, 12 the other way round). Checked against the placed towns, all of which land in the region of the same name or an
+expected neighbour: The Hub, Squin → Border Zone; Rebirth → Rebirth; Heng → Heng; Bast → Bast; Flats Lagoon → Flats Lagoon; Mongrel →
+Fog Islands; Ashland Dome I–III → Ashlands; Tower of Abuse → Venge; Heft, Stoat → The Great Desert; Shark and the Swamp Villages → The
+Swamp; Admag → Stenn Desert. The mirrored map (z flipped) puts Rebirth in the swamp, so the match is not a symmetry accident. All 71
+colours match a BIOME_GROUP, so "NONE" only serves the cells outside the map and records a mod adds. Two records are called "NONE"
+(`18003-gamedata.base`, index 000000, 21,368 pixels, no seasons; `56123`, index 329999, the "crabby island" season), so regions are
+matched by StringId and colour, never by name. Painted by no pixel: Central, Desert (the weather region "Desert" with its 75/25-day
+calendar is reachable only through its record), Empire.
 
 Base game: 74 BIOME_GROUP records; 66 list seasons. Several groups share a SEASON ("coastal" is used by 9, "Desert mild" by 5).
 Regions without seasons, so always clear: Central, Arm of Okran, Berserker Country, Empire, Obedience, Rebirth, Watcher's Rim
@@ -161,7 +178,11 @@ fading.
   1300²)` with `d` the distance from the camera to that cell's rectangle (0 inside it); weights of the same region add, up to four
   regions, then they are normalised. Each region contributes its current weather's fog: on/off (as 1/0), the **distance**, and
   the colour. The blended values feed `MainFog` ([sky.md](sky.md#haze-distance-fog-how-vanilla-does-it)). (The colour sum
-  uses the same weights: **Observed**, the decompiler shows one fixed weight there.)
+  uses the same weights: **Observed**, the decompiler shows one fixed weight there.) **Observed** in Meitou: the four points are
+  the corners `(x ± 1300, z ± 1300)` (the other reading of "± 1300 in x and z" is the four axis points; compare the fog at a region
+  border in the game with `WeatherWorld.FogWeights`), and the blended colour and distance average only over the regions whose fog is
+  on, weighted by their weights, so a region without fog (whose record distance is meaningless) does not pull them towards zero;
+  the blended on/off weight is the plain weighted mean.
 - **Distance**: `lerp(fog distance min, fog distance max, saturate((wind − fog wind min) / (fog wind max − fog wind min)))`
   with the region's current wind speed, or `fog distance min` when the two wind values are equal, which after the loader's rule
   above is `max(min, max)`. In the base game only "misty rain" has different wind values (40 / 20, with both distances 20000),
@@ -250,7 +271,8 @@ case is Venge by day (`heatHaze` 0.5–1) and the Ashlands (0.7–1); the Great 
 saturate(6 · sunY) is the target; the value moves towards it at 1/3 per real second (game speed 1, never paused) and jumps to it
 for screenshots. `gameTime` is real time × 11/1200 hours per second from the viewer's start, held still for screenshots; the game
 build (`meitou`) passes its own clock's hours instead. `--heat-haze <x>` replaces the weather's field (testing),
-`--no-heat-haze` turns the pass off (the game's `HeatHaze=0`).
+`--no-heat-haze` turns the pass off (the game's `HeatHaze=0`). The pass's depth falloff uses D = 10 × the install's `view distance`
+(12000 → 120000; `--heat-haze-view-distance`), see [post-processing.md](post-processing.md#heat-haze-verified).
 
 ### Sounds (Verified (decompiled), FUN_1409e8f70; names only)
 
@@ -267,7 +289,7 @@ list, with the entry's count and respawn times and the weather's effect strength
 
 | `type` | Group | Behaviour (fcs.def, **Observed**) |
 |---|---|---|
-| CAMERA (1), CAMERA_RAIN (5), CAMERA_ACID_RAIN (6) | camera group | in front of the camera, moving with it; affects the whole region. The particles are kept in a cube centred at a point `d` ahead of the camera and wrapped modulo it (**Verified (decompiled)**, FUN_140100dc0 / FUN_140101a20: edge `2d / 1.5`; `d` is a camera value at offset 0x7c, **Unknown** which) |
+| CAMERA (1), CAMERA_RAIN (5), CAMERA_ACID_RAIN (6) | camera group | in front of the camera, moving with it; affects the whole region. The system sits at the camera node and the particles are kept in a cube centred `d` ahead of the camera along its view direction and wrapped modulo it (**Verified (decompiled)**, FUN_140101800 / FUN_140100dc0 / FUN_140101a20: edge `2d / 1.5`; `d` is the float at offset 0x7c of the effect data, the **size** the EFFECT loader computes: 0.75 × the largest Box extent (× scale), so the cube is the emitter box; details in [particle-universe.md](particle-universe.md#the-camera-effects-cameraeffectgroup)) |
 | POINT (2), POINT_LIGHTING (7) | point group | spawned at random places in the area; POINT_LIGHTING "based on the amount of metal", hits once |
 | WANDERING (3), WANDERING_STORM (8), WANDERING_GAS (9) | wandering group | random place, then moves at `wandering speed` (particles that get too far from their anchor are put back near it: **Observed**, FUN_140101be0, its group not confirmed) |
 | GLOBAL (4) | global group | on the ground at the camera centre; whole region |
@@ -282,7 +304,59 @@ islands`, `purple desert`), storms and twisters WANDERING (`DesertCloudStorm`, `
 `Twister-of-fire01`), lightning POINT_LIGHTING (`Lightning_Bolt`, `weather_lightning1`), local swirls GLOBAL_POINT
 (`DesertDetritus01`, `Drifting-foliage`, `rising steam slow`).
 
-### The particle scripts (Observed: `data/particles/scripts/*.pu`)
+### The groups in detail (Verified (decompiled) where marked; the rest Observed)
+
+All built by `EffectGroups.Create` (`src/Meitou.Data/Particles/EffectGroups.cs`); a *unit* is the game's effect handler (a particle system at a
+place) and exists as a cheap record all the time, holding a simulation only while the camera is near (Observed: the game simulates the 3 × 3
+active zones of 4608 units and, outside them, only within the effect's `maximum view distance`; Meitou: within 6912 + view distance of the unit's
+bounds, deactivated beyond 1.15 × that).
+
+- **Placing** (**Verified (decompiled)**, FUN_1408fc3c0): a random cell of the region (cells of the same colour as the camera's in `areasmap.tga`),
+  a random point in the middle 80 % of it, the ground height there; up to 10 tries for `min/max altitude` (skipped when both are 0; the altitude
+  is the absolute world y, water is 100) and terrain normal y within `min/max slope`; after 10 tries the last point stands.
+  The z margin's sign is not resolved in the decompile (both axes use the same). The normal comes from finite differences of the height (step 12).
+- **Life** (**Verified (decompiled)**, FUN_1401034f0): random between `min` and `max time to live`; none (immortal) when the maximum is 0. When it
+  is over the emitters stop and the particles live out; the unit is removed when they are gone.
+- **POINT, POINT_LIGHTING, WANDERING*** (**Verified (decompiled)**, FUN_140102370 schedule, FUN_1401039a0 / FUN_140103ca0 spawns): a timer
+  starts at the entry's minimum respawn time, runs down on the frame clock; at 0, and while fewer than `count` units exist (`count` 0: no limit),
+  one is made and a random time between the entry's respawn min and max is added (0 / 0: all at once). The viewer caps units at 256.
+  *Observed*: lightning is placed in a 3000 disc round the camera at ground + 10 (the game snaps to metal objects within ±2000 of a random
+  point; the viewer has none); wandering units walk their heading at `wandering speed`, are carried by the wind when wind affected, follow the
+  ground (re-grounded every 0.5 s) and turn at random (the decompile's arithmetic is not resolved).
+- **GLOBAL** (**Verified (decompiled)**, FUN_140102040, FUN_140103f50, FUN_140101dc0): `count` units, all at once whatever the respawn times
+  (`count` 0 makes none: `fog islands` never appears in the base game), immortal; each sits at the camera's x, z, ground + 100 (limited to
+  `min/max altitude` when either is non-zero); its particles are kept within `d` of the node (a sphere wrap, not the camera cube).
+- **GLOBAL_POINT** (**Verified (decompiled)**, FUN_140103160, FUN_1401048b0, FUN_140104610): `R` = `maximum view distance` (1000 when 0); `count` units
+  within R of the camera and `count` between R and 2R (3 × `count` at most), each at a sqrt-uniform distance in its ring on the ground; units
+  beyond 4R stop. Respawn times unused. **Observed (deviation)**: distances are horizontal (the unit is on the ground and the eye may be
+  hundreds up; `Drifting-foliage` and the swirls have R = 50, and with 3D distances the first unit was 212 away and stopped at once, so nothing was
+  ever emitted: found by a screenshot, fixed, a test covers the emission).
+- **Camera effects**: one unit whatever `count` ([particle-universe.md](particle-universe.md#the-camera-effects-cameraeffectgroup)).
+- **Map-feature placers**: static immortal POINT units at the placements ([below](#effect-placers-on-the-map-verified-records-and-featuresdat));
+  `MapEffectPlacers.Find` / `Groups`. Observed: the game's handler lives min..max time to live and is made again; the viewer keeps one.
+- **Wind** (**Observed**, the decompile of the wind use is not traced): `wind affected` adds wind × `wind speed mult` to the particles' motion; `wind
+  direction emission` turns the emitted horizontal direction to the wind; `min/max wind span rate` scales the emission rate 0..1 over that wind
+  range (with only a minimum: 0 below it).
+- **Fade times** (`particle fade out delay`, `fog fade in/out`): the fog volume's alpha is faded by them (see Fog volumes); the particles' own
+  fade is the scripts' colour affectors (Observed).
+
+**Density (checked 2026-10-08; no bug found, cause Unknown).** The Ashlands ash is `Ash-Flakes_Light`, 1550 flakes by its techniques' quotas (the
+quota column of `meitou-tools particles effects`), in the camera cube of edge 120 wrapped round the view axis, so the flakes are always within
+about 150 units of the eye and a picture shows about 1500 of them. Nothing else scales that number: the camera group is one unit whatever the
+entry's `count` (**Verified (decompiled)**, FUN_140102ff0), the system scale is 1, and the weather strength is not used by the groups
+(**Unknown**), and prewarm fills the cube within a few seconds. `Kenshi_Heavy_Rain` the same: 5000 quota in a 120 × 120 box, 6400/s × life
+0.3..1 s, about 4000 streaks alive. Every number the data gives is in use, so denser flakes in the game would come from something not read:
+candidates are the plugin's per-technique default quota where a script sets none (taken 500, **Unknown**), `sky colour multiplier` and the
+strength. The flakes are 0.4 to 0.7 units, so only the nearest few are big on screen (**Observed**).
+
+**Lights** (Observed): `EFFECT.light` references (`Lightning_Bolt` has one) exist in the records (`EffectRecord.Lights`); the renderer has no point
+light path, so they are read and not used.
+
+**Textures** (Observed, by `meitou-tools particles`): `Haboob_Finger.png`, `TwisterDust_Large.png`, `EX-DustMite`, `SteamRise01.png` and the
+material `SandBlown_Streaks` are not in the install; the particle pass draws a 1 × 1 white texture for them (a plain soft quad), so
+those systems are approximate.
+
+### The particle scripts (Observed: `data/particles/scripts/*.pu`; the format, the survey and the implementation: [particle-universe.md](particle-universe.md))
 
 93 ParticleUniverse scripts (`Plugin_ParticleUniverse_x64.dll`), 93 particle materials in `data/particles/materials`,
 textures in `data/particles/textures` (PNG/DDS), four meshes. Examples:
@@ -305,6 +379,13 @@ EFFECT_FOG_VOLUME (8 records): coloured spheres attached to twister effects ("Tw
 Sphere" 661, ...), with alpha and density distance. The static ones on the map are `fogfeatures.dat` ([sky.md](sky.md)
 "Not there"). How they are drawn (the fog volume pass after the haze in `main.compositor`) is **Unknown** in detail.
 
+In Meitou (**Observed**, a stand-in): an EFFECT's `fog volumes` (type 0 = sphere; the cylinder type is not in the base game's records) are
+read as `EffectFogVolume` (radius, density distance, alpha, colour, offsets `pos`/`pos2`, `ground`) and attached to every unit of that effect:
+a sphere at the unit's position + offset, drawn before the unit's particles as a quad at the sphere's nearest point with the analytic chord
+of each pixel's ray through the sphere, alpha = volume alpha × (1 − exp(−2 · chord / density distance)) × the effect's fade (`fog fade in/out`
+over the unit's life); with the eye inside, a full-screen quad without depth test. Depth-tested against the scene, no particles' sorting.
+`pos2` (the second position of a column) is read and unused. Cost: a few quads per twister.
+
 ## Effect placers on the map (Verified: records and `features.dat`)
 
 MAP_FEATURES with `hidden` true draw no mesh; their EFFECT is attached as an **instance** of the feature record (not a
@@ -315,6 +396,13 @@ and "Marker-Attractor" (a bird attractor, `athene.mesh`; 1). These effects belon
 are always on. Placement counts are from [zones.md](zones.md#map-features). The placer effects have life 800..5500 s, `wind
 affected`, `ground colour` and view distances 200..1000 (EFFECT fields), so they drift with the wind and take the biome's ground
 colour (**Observed**: the use of these fields for feature effects was not traced).
+
+In Meitou (`MapEffectPlacers`, **Verified**: the placements; **Observed**: the rest): each placement in `features.dat` of such a feature makes a
+static, immortal POINT unit at the placement's position plus the instance's offset (rotated by the placement's rotation; all 0 in the base
+game); 43 units in 3 groups. A unit is simulated while the camera is within 6912 + its view distance of its bounds (plume radius 10700 for
+`Volk-Cloud`, so it is awake from far off). They are drawn whatever the weather, also `Default`: a view over the Ashlands volcanoes has
+smoke columns now (`--no-particles` removes them). The "Volk-Cloud" plume is a column of dark smoke with a trail of dark puffs
+(**Observed**: the second technique's colour ramp; unconfirmed against the game).
 
 ## Gameplay effects (facts only)
 
@@ -327,7 +415,7 @@ swimming; clothing has `weather protection0` (a `WeatherAffecting`) and `weather
 ## Base-game data (Verified: merged base records, 2026-10-05)
 
 53 WEATHER, 48 SEASON, 74 BIOME_GROUP, 74 EFFECT, 8 EFFECT_FOG_VOLUME. The weathers, with the fields that drive rendering and
-scheduling (empty = 0 / white / none; fog distance after the loader's rule; affects = `affect type` and strength):
+scheduling (empty = 0, i.e. black for the two colours: the loader reads a missing colour as 0, [sky.md](sky.md#weather-tint); none; fog distance after the loader's rule; affects = `affect type` and strength):
 
 | Weather | clouds | sky mult | fog (colour, distance) | wind speed min-max (update every N game min / limit °) | rain | wetness | dust (inside, slope) | heat haze | affects | effects [count, respawn s] |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -409,47 +497,191 @@ acid), Floodlands (floodland), Fog Islands (fog islands), Gut (nothing, bit of r
 Desert (stenn desert), The Black Desert (poison gas), The Great Desert (great desert), The Shrieking Forest (wet forest -main +
 Drifting-foliage), Venge (venge), Desert (Desert Blasts 900 + Desert Summer 300), Skinner's Roam (see Seasons).
 
+## In Meitou
+
+Step 2 of the plan below is done, in `src/Meitou.Data/World/`; step 3 (the hookup, see "In the viewer" below) is done too.
+
+### Wet surfaces, dust and rain ripples in the viewer (step 4)
+
+Done in the shaders (`AtmosphereShaders.Functions` holds `makeWet`, `dustCover`, `dustColour`) and `WeatherSurfaces` (`src/Meitou.Rendering`).
+The shared values are frame globals, so every program of the frame reads them: `uWeatherWet` = (wetness, `rainAmount` = `saturate(rain / 50)`,
+`gameTime`) and `uWeatherDust` = (x, inside, slope) in the native `FrameConstants` block (offsets 240 and 256), the dust noise and the ground
+colour map as two more frame textures. They are 0 until the viewer sets them, and at 0 every shader draws what it drew before. Since the hookup
+`WeatherSurfaces.Apply` takes wetness, `dustAmount` (x, inside, slope) and rain from `gpu.WeatherState` every frame, so the scheduler's ramps drive them and
+`--weather <name>` (a snapped forced record) goes through the same path; `--wetness x`, `--rain x` (0..100) and `--dust x[,inside,slope]` replace
+them. The water's ripple phase uses the water's own time (`uTime`), the clock the frame passes to `WaterRenderer.Draw`.
+
+- **Terrain** (`TerrainShaders.Fragment`, also the TERRAIN-mode rock meshes): `makeWet(albedo, wetness, 1 − gloss + absorbance, waterHeight − y, 2)`
+  with the layers' `absorbance` blended exactly like the textures (`biome()`: base → grass by the overlay → slope → dirt → road → cliff; two more
+  texels in the biome parameter row, `ParamTexels` 13) and averaged over the pixel's biomes by their weights. The far ground colour and the untextured
+  fallback take the old fixed 0.5 (**Observed**: the game's distant terrain is another material, not traced). This replaces the earlier stand-in
+  ("the game's wetness rule", absorbance 0.5 everywhere); at wetness 0 only the water-line band differs, where the real absorbance (1 − gloss + layers,
+  about 0.8 to 1.3 on sand) darkens the underwater edge a little more: 0.137 % of Port North's pixels at 13:00 (max 53 of 255), 0.011 % of the Hub's,
+  nothing else of the ten views. A rock bake (`uWaterHeight` far below the world) gets no weather, so an impostor never keeps a rain.
+- **Objects and foliage meshes** (`Shaders.MeshFragment`; the push constants' spare word, `MeshSurface`, carries the draw's bits: 1 DUST, 2 foliage shader,
+  4 no weather for impostor bakes, 8 interior): absorbance `(1 − gloss)(1 − metalness)` with the viewer's gloss × `specular mult` (no metalness map: 0),
+  foliage (FOLIAGE-mode map features, leaves) 0.9, `edge` 0.5. The gloss that reaches the lighting is the wet one. The grass (`GrassFragment`) starts from
+  gloss 0 and writes `0.6 ×` the wet gloss, as `foliage.hlsl` does. Distant trees' impostors (the atlas is baked dry) are wetted at run time with 0.9
+  (a rock's impostor with `1 − gloss + 0.4`, **Observed**: the atlas holds no biome).
+- **Not done**: the water-line term on objects, foliage and grass (they have no water height; it would change the ten views at Default, the game
+  darkens them); `makeWet` of building **interiors** (wetness 0, dust = `dustAmount.y`: the shader has the bit, nothing in the viewer says which parts are
+  interiors yet, so every part uses x); the dust of `distant_town` stand-ins; and the **characters and creatures**. Searching every shader in
+  `data/materials` (**Verified**): `dustAmount` / `dustColour` appear only in `objects.hlsl` and `triplanar.hlsl`; `makeWet` is called by
+  `terrainfp4.hlsl`, `objects.hlsl`, `foliage.hlsl`, `character.hlsl`, `creature.hlsl` and `skin.hlsl`. The last three take their wetness from a
+  per-vertex value (`skin.hlsl`: `max(waterLine.z, saturate(waterLine.x − y) · waterLine.y)`, the character's own wet state, not the shared `wetness`)
+  with the absorbance `1 − 2 · gloss` (characters: also `× (0.2 + 0.8 · clothing)`) and the 0.5 edge. Whether `waterLine.z` follows the weather is
+  **Unknown** (not traced), so the viewer's characters stay dry.
+- **makeWet below wetness 0.3** (**Verified** from `common/wet.hlsl`): the game's `(1 − 1/(wet + 0.7)) · absorbance` is negative until `wet = 0.3`, so
+  the game *brightens* dry, absorbent surfaces by up to `0.5 · 0.43 · absorbance` (about 11 % at absorbance 0.5, 25 % at 1.2). The viewer clamps the
+  darkening at 0 (`max(darken, 0)`): its dry look is unchanged and the Default views stay 0 px, but under a light rain ground gets darker than dry only
+  from wetness 0.3. **Unknown** whether the game's gbuffer encoding or the lighting pass compensates; compare a dry and a wet game screenshot before
+  removing the clamp. The old terrain stand-in had the same clamp.
+- **Dust** (`dustCover`): exactly the formula above. Applied to the building parts (every part, DUST is always on for them, `PlacedKind.BuildingPart`)
+  and to TRIPLANAR / DUAL_TRIPLANAR map features (`SurfaceMaterial.Dust`, foliage-layer meshes of those modes), as the plan asked, because
+  `triplanar.hlsl` has the branch. **Unknown** whether the game ever reaches it: the caller table in [runtime-materials.md](runtime-materials.md)
+  gives map features only CLIP_INTERIOR, never DUST, and no script sets the define; if the game does not, the triplanar dust is a viewer addition and
+  is a viewer addition: it is the Enhancements switch `dust` (Meitou, default on; Faithful off = building parts only; `uWeatherDust.w` carries it, surface bit 16). Not applied to
+  UV-mapped, TERRAIN-mode and FOLIAGE map features, items or characters (no DUST in the game), so e.g. the red rocks round the Hub (TERRAIN mode) and
+  wrecks that are UV-mapped features stay clean. The noise is `Turbulent.dds` (the `dust` texture unit; 512²
+  DXT1, repeating, mipmapped; `.x` is read) at `world.xz · 0.002`. The gloss is the diffuse alpha before `specular mult` (the viewer's 0.3 for a
+  cut-out material). The colour is read per pixel from the terrain's whole-world ground colour map (the BIOMES `ground colour` blended by the blend map,
+  × `brightness fix`) at the surface's world position, not the one biome at the object's origin the game's material holds (**Observed**: the game builds
+  one material per biome and object; the difference shows at biome borders and where `brightness fix` is not 1). A normal map is flattened by half the
+  coverage (objects only). The coverage is mostly where the surface's gloss is low: `−6 · gloss` outweighs the slope term, so a glossy part
+  (`diffuse.a` 0.3 or more) stays clean even at dust 2.
+- **White caps in the game's Ashlands (the owner's reference shots), rocks and pillars included** (**Observed**, not traced to a cause): the only dust code
+  is in `objects.hlsl` / `triplanar.hlsl`, and TERRAIN-mode map features use the terrain material, so they cannot be dusted by `dustAmount`. The likely
+  source is the ground itself: a TERRAIN-mode feature takes its textures from the biome at its origin (terrain.md, "TERRAIN-mode meshes"), and the
+  Ashlands biomes' slope and cliff layers are ash textures (`land/textures/Ashland_Ash_DIF.dds`, `Ashland-snow_DIF.dds`, `Ashland_AshNoise_DIF.dds`),
+  so rocks look capped without any dust. The install also has Ashlands-specific object textures (`Assets/Things/Ashland_*`, `AshlandRottenTower_*`,
+  `Assets/Buildings/AshDome*`), which may be baked ash. **Unknown**: whether the shots were taken in Kenshi_Ash-Flakes weather (dust would then also
+  cap building parts), and whether the viewer's Ashlands rocks and pillars already show the ash layers (they do in the viewer's clean render of Ashland
+  Dome Ruin). Compare a game shot in clear Ashlands weather with one in ash flakes before adding any dust to TERRAIN-mode features.
+- **Water** (`WaterRenderer`): the three ripple layers as in the formula above, `rain-ripples.png` (repeating, mipmapped) at `world.xz · 0.01 · 6`,
+  `· 6` with x and z swapped, and `· 2`; the time is the shader's own (`uTime × distortion`, the water's `gameTime`), so a still repeats exactly.
+  `rainAmount` fades with `saturate(2 · view.y − dist · 0.0001)`.
+
+| Class | Role |
+|---|---|
+| `WeatherData` (`WeatherData.cs`) | Reads WEATHER / SEASON / BIOME_GROUP / EFFECT / EFFECT_FOG_VOLUME from a `GameDatabase` into plain records (`WeatherDef`, `SeasonDef`, `RegionDef`, `EffectDef`, `FogVolumeDef`) with the loader rules: wind update time 0 → `WeatherDef.NeverMinutes` (1,000,000), fog distance min := max when the fog wind values match, Default for a season without weathers (limits 0..1), Default appended with weight 0 when a weather has a time window, region multipliers, `days per year` from GLOBAL CONSTANTS (`GameConstants`). Definitions can also be built by hand (`WeatherData.FromDefinitions`), which the quick tests do. `SeasonCalendar.Lengths` cuts the year. |
+| `WeatherAreas` | The 64 × 64 cell map from `areasmap.tga` (`TgaReader` in `Meitou.Data.Textures`), cell rectangles and distances. |
+| `WeatherRegion` | One region's schedule: season calendar, weighted pick with time windows, duration roll, strength, the wind model and its interpolation, the 2.5 % fog fade. Own `System.Random` seeded from the world's seed and the region's index. `Snapshot()` / `Restore()` expose season index and end day, weather entry and its start/end minute, strength, wind interpolation and fog fade for a later save format. |
+| `WeatherWorld` | All regions plus the camera side: `Update(camera, WeatherTime, FrameTimes, sunHeight)` returns the `WeatherState` of the frame (also `Current`). `ForceWeather(name or WeatherDef, strength, snap)` is `--weather`. `WeatherWorld.Create(db, install, seed, start)` builds it from a database and the install; `FogWeights(x, z)` exposes the four-sample weights; `Snapshot()` / `Restore()` cover every region. |
+| `WeatherState` | The frame's output, as listed in the shared design: weather record and strength, wind (xz direction, speed), sky colour multiplier and cloud density after the 30 s transition, cloud drift (direction × speed), blended fog (`FogEnabled` weight, colour, distance), `Rain`, `Wetness`, `DustAmount` (x, y inside, z slope), `HeatHaze`, and `Effects` (EFFECT, count, respawn) with `EffectStrength`. |
+| `WeatherTime`, `FrameTimes`, `WeatherRamps` | Game time (day count + hours), the three frame times (`FrameTimes.FromClock(realDt, gameSpeed, paused)`), the wetness and dust ramps (`HeatHaze` is reused for the haze). |
+
+`meitou-tools weather [--region <name> | --at x,z] [--days d0 d1] [--seed n] [--list] [--cells]` (`--cells`: the centres of the region's areas-map cells, to place the viewer) prints a region's season and weather chain (start, name,
+strength, duration, wind, fog); `--list` prints every region's calendar. Every timer runs on the frame times the caller passes in and on
+the game time it passes in; nothing reads a clock, so a seed and a call sequence give the same weather.
+
+**Choices where the game is Unknown or the doc says Observed** (compare these against the game when a way to see it turns up):
+
+- *Start*: all regions start their first season (by `val0`) on the creation day, with the first weather chosen at once; the new-game
+  path and what saves keep were not traced.
+- *Time-window cut*: `end = min(start + duration, today's end time)` as the doc says; when that end time is already past (the window's
+  last hour, accepted by the inclusive test) it is not applied and the rolled duration stands, instead of re-choosing every frame.
+- *Season changes* happen at the first update whose day count has reached the end day, then end = that day + length; weather changes
+  at the first update past the end minute, with the new end = now + duration (so a coarse frame step shifts the chain slightly).
+- *Wind heading*: the read-back is the unsigned angle 0..π, as the doc says, and the interpolation starts from it, so the direction
+  mirrors across the x axis at an update when it pointed to the other side (the timeline tool shows this as −38° becoming 38°).
+  Interpolation of the angle takes the shorter way round.
+- *Fog fade*: while a region's fog fades in from "off" (or out to "off") the colour and distance are already the new (or still the
+  old) weather's; only the on/off weight lerps. Forced weathers have no fade.
+- *Fog samples and blend*: see "Fog" above (corners; colour and distance weighted by regions with fog on).
+- *Time bases*: "0.01 when paused" is the factor that replaces the game speed in the settling time (`dt × 0.01`), not a fixed step.
+- *Forced weather*: strength 1 (settable), wind speed `lerp(min, max, s)` along `ForcedWindDirection` (default +X), fog undelayed;
+  sky, clouds, wetness, dust and haze snap to it unless `snap: false`.
+- *Sky transition* restarts whenever the camera's weather record changes, including by crossing into a region with another weather.
+- *Wetness* and *dust* clamp on the target instead of overshooting by one step.
+- *Region switch* uses the strict 500-unit rule from the current cell, also after a teleport.
+
+## In the viewer and the game (step 3)
+
+`WorldWeather` (`src/Meitou.Rendering/WorldWeather.cs`) owns the `WeatherWorld` of a `Gpu` (`gpu.Weather`; `gpu.WeatherState` is the frame's
+`WeatherState` for the renderers that read it later) and is called by `WorldFrame.Draw` after the sun is known and before the sky is prepared.
+
+- **Inputs per frame**: the eye position, the game day and time of day (the viewer: `--day`, default 0, and `--time`; the game: its clock), the
+  frame times (`FrameTimes.FromClock`: real time measured by the weather, at most 0.25 s a frame; the game passes its speed and paused flag, the viewer
+  is at speed 1 and never paused) and the sun height. A held frame (`--screenshot`, `PostProcess.InstantAdaptation`) has dt 0, and the first
+  frame is a teleport, so a picture shows the settled state (sky, clouds, fog, wetness and haze snapped).
+- **Reroll** (Tab panel, a viewer tool, not the game's): `WorldWeather.Reroll` releases a forced weather and calls `WeatherRegion.Reroll` on the camera region, which starts a
+  different weather of the current season now (weighted pick without the current weather and weight-0 entries; new duration and strength), then snaps.
+- **Schedule from day 0**: the world is created at day 0, 00:00 and the regions run in game minutes up to the shown time, so `--day 52 --time 14`
+  shows what `meitou-tools weather --region <r> --days 0 100 --seed 1` lists at that time (same seed, default 1; `--weather-seed`). A step
+  forward in time (the `]` key, the time slider) replays the schedule through the jump, and a jump of more than an hour snaps everything. **Observed**:
+  this makes every region's season calendar count from day 0 (the game's own start is Unknown, see "Choices" above); the schedule never runs backwards.
+- **Mapping**: `SkyColourMultiplier` and `CloudDensity` into `SkyRenderer.SkyColourMultiplierInput` / `CloudDensityInput`; `CloudDrift` into
+  `CloudWind` (`--cloud-wind` wins, `--clouds` still wins over the density); the fog into `SkyRenderer.FogInput` (weight, colour, distance): the
+  shader's fog term (`uAtmoFog.z`) is now the blended weight, the game's `fogColour.a`, so a half-faded fog is half-strength; the heat haze
+  into the post effect (`state.HeatHaze`, already ramped on the settling time; `--heat-haze <x>` replaces the weather's field and ramps in the
+  viewer, with the state's strength); the particle effect list, strength s and wind into `ParticleRenderer.SetWeather` (`WorldWeather.EffectInput`;
+  the camera effect groups are kept while the weather stays, rebuilt and prewarmed when it changes).
+- **Forcing**: `--weather <name>` is `ForceWeather(name)` (strength 1, wind speed at its maximum along +x); `--weather auto` or no option is the
+  scheduler. `--weather Default` is clear with no fog, clouds, haze or particles, which `tools/scripts/parity.sh` uses so the ten views stay
+  comparable with the pre-weather baseline.
+- **Statistics, log, keys**: the F11 lines `weather` (camera region, its season, the weather, strength, wind speed and heading, time left in
+  the weather, day) and the sky multiplier, cloud density, fog, rain and wetness; the console prints a `weather` line when the camera region's weather
+  changes (or a weather is forced). Keys: `,` / `.` change the hour (the day follows midnight), `[` / `]` the day, `\` cycles the forced weather
+  (auto, then each WEATHER record), see [../viewer.md](../viewer.md).
+- **Game**: `GameHost` passes the clock's day, the simulation's speed (the last non-zero one while paused) and the paused flag, so cloud drift,
+  fog fades and the sky transition stop with the pause while wetness and haze still settle (factor 0.01). The schedule's state is not saved:
+  **TODO**, `WeatherWorld.Snapshot()` / `Restore()` exist but the save format has no place for them, so a loaded game rolls its weather anew.
+  The game's start day follows the clock (`--day`, default 1).
+- **Unknown / approximate**: the effect groups take the weather strength s, not `WeatherDef.EffectStrength` (the doc says the weather's effect strength: compare
+  once a way to see it turns up); a Tab-panel weather control does not exist (keys only).
+
 ## Implementation plan
 
 What the viewer (and later the game) needs, in build order. Each step is testable on its own.
 
-1. **Cloud layer pass** (viewer, small; everything it needs is in the sky inputs already). Draw the dome-direction pass of
+1. **Cloud layer pass** (viewer, small; everything it needs is in the sky inputs already). **Done** 2026-10-08, see
+   [clouds.md](clouds.md#in-the-viewer); the spec follows. Draw the dome-direction pass of
    [clouds.md](clouds.md) after the sky and before the moon: plane hit with height 100 and scale 0.001, the two `Clouds.dds`
    lookups with the displacement from `CloudsNormal.dds`, `CloudsTile.dds` at −wind, `DensityOffset = 1.4c − 0.8`, multiplier 3,
    `Darkness = pow(clamp(c − 0.5, 0, 1), 0.3)`, colour `zenithLight + sunColour.rgb (1 − 0.1 D)` with `zenithLight =
    max(getColorAt(+Z) · skyMult, (0.001, 0.001, 0.0015)) · sunColour.g`, the horizon band and alpha rule, output × sqrt(1.4),
    alpha-blended in HDR. Drift: an accumulated offset += wind velocity × dt, × 0.00005. Use the same `c` for `horizonClouds`
    (replacing the stand-in). A test pins `DensityOffset`/`Darkness` and the coverage table.
-2. **Weather data and scheduler in Meitou.Data** (`World/Weather*.cs`): read WEATHER / SEASON / BIOME_GROUP / EFFECT with the
+2. **Weather data and scheduler in Meitou.Data** (`World/Weather*.cs`; **done**, see "In Meitou"): read WEATHER / SEASON / BIOME_GROUP / EFFECT with the
    loader rules (fog min := max when wind values match, update time 0 → 1e6, Default fallbacks, appended Default for time
    windows); map zones to regions from `areasmap.tga`; season lengths from shares × `days per year`; the weighted pick, the
    duration roll, strength, the wind model and its interpolation, all on a seedable random source (the game's own `rand()` order
    cannot be reproduced and does not need to be). Expose, for a position and a game time: the camera region's weather, its
    strength, wind, the 30 s sky transition state and the four-region fog blend with the 2.5 % fade. Tests: season lengths for
    Desert and Skinner's Roam, the fog-distance rule for every base weather, weighted-pick frequencies, wind bounds.
-3. **Hook the viewer to it**: `--weather` keeps forcing one record; otherwise the scheduler runs from the camera position and a
-   time-of-day / day control, feeding `sky color mult`, `c`, the cloud drift and the weather fog (the haze already takes a fog
-   colour and distance).
-4. **Wetness, dust and rain ripples** (shader-only): add `makeWet` with the per-surface absorbance (terrain layers' `absorbance`
+3. **Hook the viewer to it**: **done** 2026-10-08, see "In the viewer" below. `--weather` keeps forcing one record (through
+   `WeatherWorld.ForceWeather`, the same code path); the default is the scheduler (`--weather auto`), from the camera position, `--day`
+   and the viewer's time of day, feeding `sky color mult`, `c`, the cloud drift, the weather fog, the heat haze and the particle
+   effect list.
+4. **Wetness, dust and rain ripples** (shader-only; **done**, see "In Meitou"): add `makeWet` with the per-surface absorbance (terrain layers' `absorbance`
    fields, objects from gloss and metalness, foliage 0.9) and the wetness ramp (+0.01/s, −0.005/s); the dust term on DUST objects
    with the biome `ground colour` and the noise texture; the water's three ripple layers from `rainAmount = saturate(rain / 50)`.
 5. **Particle effects** (the big one): a reader for ParticleUniverse `.pu` scripts (systems, techniques, Box / Circle / Point
    emitters, billboard renderer types, Colour / Scale / TextureRotator / LinearForce / Vortex affectors, `dyn_random` /
    `dyn_curved_*` attributes) and a CPU billboard renderer; then the effect groups by `type`: camera box with wrapping for rain
    and ash first (most visible), then the map-feature placers (volcano plumes, steamers, the permanent dust storm: static
-   positions, always on), then wandering storms and twisters with their fog-volume spheres, lightning last.
+   positions, always on), then wandering storms and twisters with their fog-volume spheres, lightning last. **Done (part one):** the
+   reader, the CPU simulation, the billboard pass and the camera groups for rain and ash ([particle-universe.md](particle-universe.md),
+   `--weather Heavy_Rain`, `--weather Kenshi_Ash-Flakes`, `--no-particles`); the rest of this step is open (point, wandering and global
+   groups, the placers, fog volumes, lightning). **Done (part two, 2026-10-08):** the point, wandering, global and global-point groups, the
+   placers, fog volumes and lightning, all as "The groups in detail" above; the simulation runs on a background task (one unit per pool
+   thread) while the frame is recorded; the particles add their coverage to the upscalers' reactive mask ([renderer-native.md](../renderer-native.md) 8.20).
+   Still open: the scheduler's wind and strength (the forced weather's wind max along +x is used), `ground colour` per biome, the point light of
+   a lightning bolt, particles beyond the near depth slice (nothing is drawn past about 20400 units).
 6. **Heat haze**: done in the post-processing (`PostProcess.RunHeatHaze`, `Meitou.Data.World.HeatHaze`); it takes the forced
-   weather at strength 1 until step 2 gives the camera region's weather and strength. **Not planned here**: sounds, gameplay
+   weather at strength 1 until step 3 feeds it `WeatherState.HeatHaze` (step 2 computes it): **done** with step 3. **Not planned here**: sounds, gameplay
    effects.
 
 ## Unknowns
 
-- How the areas map's pixels are placed in world coordinates (origin and size fields of the terrain object); taken as 4 px per
-  zone over the whole world.
+- The areas map's own origin and size fields in the terrain object (the placement itself is **Verified**, see "Where"); whether a
+  cell reads its centre pixel or another of its 16 (they differ on 1045 border blocks).
 - The season order for equal order values; the new-game start of the first season; the special case for a season with one
   weather in the SEASON loader (a ceiling of a scaled value, not decoded).
 - `sunlight color` of SEASON and `sky colour multiplier` / `colour multiplier` of EFFECT: loaded, their use not traced.
-- How effect groups use the wind fields, emission-rate scaling and `maximum view distance`; the camera box's exact distance
-  source (a camera value at offset 0x7c).
-- How fog volumes are drawn.
+- How effect groups use `maximum view distance`, `sky colour multiplier` and the strength (the wind fields and the emission-rate scaling are used as
+  [particle-universe.md](particle-universe.md#the-camera-effects-cameraeffectgroup) says, **Observed**).
+- How fog volumes are drawn (Meitou's chord-through-a-sphere quad is a stand-in); `pos2` and the cylinder type.
+- Whether the game's ash is denser than the data says (see "Density"); the plugin's default quota; the lights of effects.
+- The wandering units' exact walk and turn rules, and where the game places lightning (it snaps to metal objects).
 - The full gameplay effect of each `WeatherAffecting` value.

@@ -291,7 +291,7 @@ only for parity ports (wave 3a).**
 
 | Set / range | Contents | Bound |
 | --- | --- | --- |
-| set 0 `Frame` (push-descriptor set) | binding 0 `FrameConstants` (the 13 atmosphere values and the bindless indices of the 7 frame textures, 240 B), 1 `KenshiShadowReceiver`, 2 `KenshiShadowCaster`, 3 `MeitouShadowReceiver` (the GL buffers as bound now), 4 `ViewConstants` (192 B), 5 `MeshBones` (8 KB, allocated once a frame, unread until a consumer skins) | once per native segment (`NativeFrame.Bind`) |
+| set 0 `Frame` (push-descriptor set) | binding 0 `FrameConstants` (the 13 atmosphere values, the weather's wetness and dust, and the bindless indices of the 9 frame textures, 288 B), 1 `KenshiShadowReceiver`, 2 `KenshiShadowCaster`, 3 `MeitouShadowReceiver` (the GL buffers as bound now), 4 `ViewConstants` (192 B), 5 `MeshBones` (8 KB, allocated once a frame, unread until a consumer skins) | once per native segment (`NativeFrame.Bind`) |
 | set 1 `Bindless` | the table above (`BindlessTable.Declarations(1)`) | once per native segment |
 | push constants, 128 B, vertex + fragment, the same range in every native program | `MeshPush` (tint, material values, the bindless indices of the 2 to 6 textures) or a consumer's own (`GrassPush`, 72 B) | per draw, only when the bytes differ |
 
@@ -595,7 +595,7 @@ gl_VertexIndex`); every loose `uniform T a, b;` becomes one `#define` per name f
 compiles through `NativeFrame` with strict rules, its `FrameConstants`, `ViewConstants` and `Push` members sit at the C# structs' offsets,
 every sampler is in the table's set). The variants: `MeshVertex(own)` (the consumer maps `uModel`, e.g. to its instance rows),
 `MeshFragment()`, `MeshDepthFragment()`, `DepthFragment`, `AtmosphereFunctions`, `ShadowFunctions`, `PostProcessVertex`. The C# sides:
-`FrameConstants` (240 B, with `Uniforms` and `Textures` tables naming the frame globals), `ViewConstants` (192 B), `MeshPush` (128 B). The
+`FrameConstants` (288 B since the weather values, with `Uniforms` and `Textures` tables naming the frame globals), `ViewConstants` (192 B), `MeshPush` (128 B). The
 first consumer, the foliage (7.1), drew **0 differing pixels** on every gate picture, so the 1/255 allowance of owner decision 2 was not used
 and no `precise` / `invariant` was needed.
 
@@ -3435,6 +3435,31 @@ Files: `Landmarks.cs` (new: `LandmarkClass`), `ObjectStreamer.cs` (`LandmarkZone
   (`Patagonia_RockSlab01`, `FeatureBluff001`, `Mafic_HugeRockSlabs`, `CLiff_Curved`, `ROCK-Arch_Type_01`) are probably terrain-mode map features, drawn through `TerrainRenderer.DrawMeshes` one draw each (not checked per record):
   that mesh path overlaps what the rock impostor work changes. (c) About 55% of the bounds probes fall back to a whole read; cause not examined (cost is under a second). (d) `F8` at run time moves the distances but never builds or removes the landmark list, so runtime-Faithful is not
   pixel-identical to a Faithful start; the gate covers the start mode. (e) VRAM is the driver's budget per process; under other processes' load the run-to-run budget swung 3.4-11.5 GB, and a 95% watch abort (`MEITOU_VRAM_KILL`) hit one default-range run at a 3456 MB budget.
+
+### 8.20 Weather particles (2026-10-08)
+
+`ParticleRenderer` ([formats/particle-universe.md](formats/particle-universe.md)) is a plain `LegacyProgram` pass in the style of the water: one
+instanced quad strip per technique, the instances (64 bytes: four vec4 at vertex locations 1 to 4, per-instance rate) written by the CPU
+simulation straight into `ctx.Frame.Constants` (a `Transient`: no stall, no persistent buffer) and bound with `BindVertexBuffers`; blend,
+texture and depth flags from the particle material per draw; a guest segment recorded after the water in the near depth slice, only when some
+group has a particle (so a clear weather records nothing and the parity views stay at 0 px). Particles nearer than the slice's near plane
+are drawn with a projection of their own and no depth test (`WorldFrame.Draw`). Colour writes only: the scene target's alpha is the
+characters' mask.
+
+Part two (2026-10-08): the pass draws every unit of every group (weather groups and the map placers, culled by distance and frustum, sorted far
+to near) and, before a unit's particles, its fog volumes (a second small program: a quad at the sphere's nearest point, the ray-sphere chord in
+the fragment shader, depth-tested; a full-screen quad without depth test when the eye is inside). The simulation of the units runs on the thread
+pool from the end of `Update` to the start of `Draw`. Instances are built in a managed array and copied once into the transient constants.
+The placers draw whatever the weather, so a clear-weather picture over an Ashlands volcano is no longer 0 px against the old reference; elsewhere
+(no placer in the active range) nothing is recorded, as before.
+
+**Reactive mask (TAA and FSR/DLSS).** Particles write no motion vectors and the history keeps ~90 % of the pixel behind a thin streak, so rain
+nearly vanished on a moving camera (checked with `--orbit-step 0.4` on `Heavy_Rain deadlands`). `PostProcess.RunUpscale` draws the frame's
+particle quads again (`ParticleRenderer.DrawCoverage`, the same buffers and matrices, additive, no depth test) into the motion target's alpha
+(the TAA's reactive channel; the shader takes half of it) or, with a vendor upscaler, into the `post reactive` R32F target (cleared when there is
+no water); the fragment writes `clamp(30 · alpha, 0, max)` (max 2 for the TAA, 1 for the reactive texture), brightness × alpha for non-alpha
+blends. **Observed**: the streaks are clearly stronger than without it but still a little softer than with no temporal pass. Hidden particles also
+mark their pixels (no depth test): those pixels are a little less stable. The same pass in `--faithful` (no upscaler) does not run.
 
 ## 9. Expected CPU cost, and how the profiler keeps working
 

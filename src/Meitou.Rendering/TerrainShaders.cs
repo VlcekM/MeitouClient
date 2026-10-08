@@ -10,7 +10,7 @@ namespace Meitou.Rendering;
 static class TerrainShaders
 {
     /// <summary>Rows of the per-biome parameter texture (RGBA32F, one row per biome).</summary>
-    public const int ParamTexels = 11;
+    public const int ParamTexels = 13;
 
     /// <summary>Texture units of the world-wide maps (TerrainTextures binds units 0..6 for the region).</summary>
     public const int HeightCoarseUnit = 7, HeightFineUnit = 8, GroundUnit = 9, WorldColourUnit = 10;
@@ -195,7 +195,7 @@ static class TerrainShaders
 
         vec4 P(int biome, int k) { return texelFetch(uParams, ivec2(k, biome), 0); }
 
-        struct Surface { vec4 albedo; vec4 normal; };
+        struct Surface { vec4 albedo; vec4 normal; float absorb; };
 
         vec4 tex(sampler2DArray s, vec2 uv, float layer) { return texture(s, vec3(uv, layer)); }
 
@@ -267,6 +267,13 @@ static class TerrainShaders
             }
             else s.normal = vec4(0.5, 0.5, 1.0, 1.0);
             if (uDebug == 2) { s.albedo = vec4(w.y, w.x, map.r, 1.0); }
+            // The rain absorbance of the layers, blended like the textures (terrainfp4.hlsl computeBiome).
+            vec4 ab0 = P(b, 11), ab1 = P(b, 12);
+            float absorb = mix(ab0.x, ab0.w, map.r);
+            absorb = mix(absorb, ab0.y, w.x);
+            absorb = mix(absorb, ab1.x, map.b);
+            absorb = mix(absorb, ab1.y, map.a);
+            s.absorb = mix(absorb, ab0.z, w.y);
             return s;
         }
 
@@ -299,6 +306,7 @@ static class TerrainShaders
             nearWeight *= 1.0 - smoothstep(uFarStart, uFarEnd, distance);
 
             vec4 albedo = vec4(0.0);
+            float absorbance = 0.5;   // the layers' rain absorbance; the ground colour (far, untextured) takes the old fixed 0.5
             vec3 shadingNormal = n;
             if (nearWeight > 0.0)
             {
@@ -319,12 +327,13 @@ static class TerrainShaders
                     vec4 weights = texture(uBlendMap, world01);
                     float rest = max(0.0, 1.0 - dot(weights, vec4(1.0)));
                     vec4 sumA = vec4(0.0), sumN = vec4(0.0);
+                    float sumAbsorb = 0.0;
                     float total = 0.0, pending = 0.0;
                     if (uFeatureBiome >= 0)
                     {
                         // A map feature has one biome for its whole surface (the game builds its material for the biome at its origin).
                         Surface s = biome(uFeatureBiome, n, slope, map, colour, distance);
-                        sumA = s.albedo; sumN = s.normal; total = 1.0;
+                        sumA = s.albedo; sumN = s.normal; sumAbsorb = s.absorb; total = 1.0;
                     }
                     else for (int k = 0; k < 5; k++)
                     {
@@ -335,15 +344,16 @@ static class TerrainShaders
                         Surface s = biome(int(b), n, slope, map, colour, distance);
                         sumA += s.albedo * wk;
                         sumN += s.normal * wk;
+                        sumAbsorb += s.absorb * wk;
                         total += wk;
                     }
                     uint fallback = slot4 < 254u ? slot4 : slots.x;
                     if (total <= 0.0 && pending <= 0.0 && fallback < 254u)
                     {
                         Surface s = biome(int(fallback), n, slope, map, colour, distance);
-                        sumA = s.albedo; sumN = s.normal; total = 1.0;
+                        sumA = s.albedo; sumN = s.normal; sumAbsorb = s.absorb; total = 1.0;
                     }
-                    if (total > 0.0) { albedo = sumA / total; sumN /= total; }
+                    if (total > 0.0) { albedo = sumA / total; sumN /= total; absorbance = sumAbsorb / total; }
                     else { albedo = vec4(0.6, 0.55, 0.45, 0.2); sumN = vec4(0.5, 0.5, 1.0, 1.0); }
                     // Biomes still loading show the ground colour in their share.
                     if (total > 0.0) nearWeight *= total / (total + pending);
@@ -366,12 +376,13 @@ static class TerrainShaders
                 vec3 far = uHasGround && uTextured ? texture(uGround, world01).rgb : heightTint(vWorld.y);
                 if (uHasWorldColour && uTextured) far *= texture(uWorldColour, world01).rgb * 1.2;
                 albedo = mix(vec4(far, 0.2), albedo, nearWeight);
+                absorbance = mix(0.5, absorbance, nearWeight);
             }
 
-            // Underwater ground looks wet and darker (the game's wetness rule with a 2-unit edge, absorbance 0.5).
-            float under = clamp((uWaterHeight + 2.0 - vWorld.y) / 2.0, 0.0, 1.0);
-            float darken = min((1.0 - 1.0 / (under + 0.7)) * 0.5 + under * 0.2, 0.4);
-            albedo.rgb *= 1.0 - max(darken, 0.0) * 0.5;
+            // The game's wetness (common/wet.hlsl, terrainfp4.hlsl): the rain's wetness plus the water line (a 2-unit edge) on an absorbance of 1 - gloss plus
+            // the layers'. A rock bake (uWaterHeight far below the world) is without weather, so its impostor does not keep a rain.
+            float wetAmount = uWaterHeight > -1.0e5 ? uWeatherWet.x : 0.0;
+            makeWet(albedo, wetAmount, 1.0 - albedo.a + absorbance, uWaterHeight - vWorld.y, 2.0);
 
             vec3 l = normalize(uLightDir);
             float diff = max(dot(shadingNormal, l), 0.0);
