@@ -5,9 +5,9 @@ public enum FoliageSizeClass
 {
     /// <summary>Litter and small plants: skeleton parts, small boulders, junk pieces, skulls, cacti, small leaves.</summary>
     Small,
-    /// <summary>Junk, boulders, bushes, ruin blocks, palms and other plants up to a few metres, and all trees under 1000 (conifers, palms, ferns, grass clumps).</summary>
+    /// <summary>Junk, boulders, bushes, ruin blocks, palms and other plants up to a few metres.</summary>
     Medium,
-    /// <summary>Rocks, cliffs, pillars, rock stacks, hoodoos, resource rocks, ruins, wrecks, houses and walls, and giant trees (1000 and up).</summary>
+    /// <summary>Trees, rocks, cliffs, pillars, rock stacks, hoodoos, resource rocks, ruins, wrecks, houses and walls (trees take the normal impostor distance: <see cref="FoliageSizes.LargeBillboard"/>).</summary>
     Large,
 }
 
@@ -37,7 +37,7 @@ public static class FoliageSizes
 
     public static FoliageSizeClass Classify(float size) => size >= LargeFrom ? FoliageSizeClass.Large : size >= MediumFrom ? FoliageSizeClass.Medium : FoliageSizeClass.Small;
 
-    /// <summary>Vegetation at least this big (sizes of the giant trees and swamp canopies, 1339 to 3169) stays large: it is a landmark, seen from further than the medium range.</summary>
+    /// <summary>Vegetation at least this big (sizes of the giant trees and swamp canopies, 1339 to 3169) keeps the large impostor distance: it is a landmark.</summary>
     public const float GiantFrom = 1000;
 
     /// <summary>
@@ -51,14 +51,14 @@ public static class FoliageSizes
     }
 
     /// <summary>
-    /// The class of a mesh from its bounding radius and record: <see cref="Classify(float)"/> of its <see cref="Size"/>, except that vegetation
-    /// (<see cref="IsVegetation"/>) is never large unless it is a giant (<see cref="GiantFrom"/>). Large is for rocks, cliffs, ruins, pillars and
-    /// the like, whose billboards hold up (docs/impostors.md, section 15); a tree's sparse branches do not, so trees are medium.
+    /// Whether a mesh becomes a billboard at the large impostor distance (FoliageRenderer.LargeImpostorDistance, 12000) rather than the
+    /// normal one (4000): large meshes, except vegetation (<see cref="IsVegetation"/>) under <see cref="GiantFrom"/>. Rocks, cliffs, ruins and
+    /// pillars keep their mesh longer because their flat billboards showed up close (docs/impostors.md, section 15); a tree's sparse crown
+    /// reads as a billboard at 4000. The trees stay in the large size class, so they are still drawn to the large range (50000).
     /// </summary>
-    public static FoliageSizeClass Classify(float boundsRadius, FoliageMesh mesh)
+    public static bool LargeBillboard(float boundsRadius, FoliageMesh mesh)
     {
         float size = Size(boundsRadius, mesh);
-        var cls = Classify(size);
-        return cls == FoliageSizeClass.Large && size < GiantFrom && IsVegetation(mesh.MeshPath) ? FoliageSizeClass.Medium : cls;
+        return Classify(size) == FoliageSizeClass.Large && !(size < GiantFrom && IsVegetation(mesh.MeshPath));
     }
 }

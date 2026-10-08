@@ -24,7 +24,8 @@ public class FoliageSizeTests
     }
 
     /// <summary>Named base-game meshes land in the class the owner's examples put them in: litter and small plants small, junk, boulders
-    /// and bushes medium, trees (any size under 1000) medium, ruins, wrecks, rocks, pillars, hoodoos and rock stacks large (sizes as the renderer measures them, from the decoded meshes).</summary>
+    /// and bushes medium, trees, ruins, wrecks, rocks, pillars, hoodoos and rock stacks large (sizes as the renderer measures them, from the decoded meshes);
+    /// of the large ones only the trees under 1000 take the normal impostor distance (<see cref="FoliageSizes.LargeBillboard"/> false).</summary>
     [Fact]
     [Slow]
     public void Base_game_meshes_fall_into_the_expected_classes()
@@ -34,26 +35,28 @@ public class FoliageSizeTests
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var catalog = FoliageCatalog.Load(db);
         var assets = new AssetLocator(install!);
-        var expected = new (string Name, FoliageSizeClass Class)[]
+        const FoliageSizeClass S = FoliageSizeClass.Small, M = FoliageSizeClass.Medium, L = FoliageSizeClass.Large;
+        var expected = new (string Name, FoliageSizeClass Class, bool LargeBillboard)[]
         {
-            ("Human_Skeleton_Part01", FoliageSizeClass.Small), ("Robotics-Junk12", FoliageSizeClass.Small), ("Bleached_Skull01", FoliageSizeClass.Small),
-            ("FOLIAGE_Bouldersmall19", FoliageSizeClass.Small), ("CactiTrumpet01", FoliageSizeClass.Small), ("Thorny Plant Singles", FoliageSizeClass.Small),
-            ("TechJunk04", FoliageSizeClass.Medium), ("TechRustyJunk_05", FoliageSizeClass.Medium), ("FOLIAGE_Boulder_GREY-01", FoliageSizeClass.Medium),
-            ("SageBrush", FoliageSizeClass.Medium), ("RuinBlocks_01", FoliageSizeClass.Medium), ("CacTreeTu_01", FoliageSizeClass.Medium),
-            ("HugeRuinWall04", FoliageSizeClass.Large), ("Crumble-Building_Corner01", FoliageSizeClass.Large), ("JunkSat01", FoliageSizeClass.Large),
-            ("Rock01 Foliage-Rockstack01", FoliageSizeClass.Large), ("Foliage_CYPRUS-TYPE", FoliageSizeClass.Medium), ("CraggyTree", FoliageSizeClass.Medium),
-            ("Thin Tree [Wide]", FoliageSizeClass.Medium), ("FlatTop_Hoodoo04", FoliageSizeClass.Large),
-            ("FOLIAGE_Plant_Deep-Fir 01", FoliageSizeClass.Medium), ("Foliage_PINE_SCRAGGY01", FoliageSizeClass.Medium), ("Thin Craggy Tree", FoliageSizeClass.Medium),
-            ("FOLIAGE_DeadPineType", FoliageSizeClass.Medium), ("Roaming_Tree01", FoliageSizeClass.Medium), ("Barkworm_Pillar01", FoliageSizeClass.Large),
-            ("Crumble-Building_Corner01", FoliageSizeClass.Large), ("ResourceRock-IRON01", FoliageSizeClass.Large), ("Giant_MultiLimbTree", FoliageSizeClass.Large),
+            ("Human_Skeleton_Part01", S, false), ("Robotics-Junk12", S, false), ("Bleached_Skull01", S, false),
+            ("FOLIAGE_Bouldersmall19", S, false), ("CactiTrumpet01", S, false), ("Thorny Plant Singles", S, false),
+            ("TechJunk04", M, false), ("TechRustyJunk_05", M, false), ("FOLIAGE_Boulder_GREY-01", M, false),
+            ("SageBrush", M, false), ("RuinBlocks_01", M, false), ("CacTreeTu_01", M, false),
+            ("HugeRuinWall04", L, true), ("Crumble-Building_Corner01", L, true), ("JunkSat01", L, true),
+            ("Rock01 Foliage-Rockstack01", L, true), ("FlatTop_Hoodoo04", L, true), ("Barkworm_Pillar01", L, true), ("ResourceRock-IRON01", L, true),
+            ("Foliage_CYPRUS-TYPE", L, false), ("CraggyTree", L, false), ("Thin Tree [Wide]", L, false), ("Roaming_Tree01", L, false),
+            ("FOLIAGE_Plant_Deep-Fir 01", L, false), ("Foliage_PINE_SCRAGGY01", L, false), ("Thin Craggy Tree", L, false),
+            ("FOLIAGE_DeadPineType", L, false), ("Giant_MultiLimbTree", L, true),
         };
-        foreach (var (name, cls) in expected)
+        foreach (var (name, cls, large) in expected)
         {
             var mesh = catalog.Meshes.Values.FirstOrDefault(m => m.Name == name);
             Assert.SkipWhen(mesh is null, $"{name} is not in this game's foliage (a mod or another version)");
             float radius = Radius(assets, mesh!);
-            var got = FoliageSizes.Classify(radius, mesh!);
-            Assert.True(got == cls, $"{name}: size {FoliageSizes.Size(radius, mesh!):0} is {got}, expected {cls}");
+            float size = FoliageSizes.Size(radius, mesh!);
+            var got = FoliageSizes.Classify(size);
+            Assert.True(got == cls, $"{name}: size {size:0} is {got}, expected {cls}");
+            Assert.True(FoliageSizes.LargeBillboard(radius, mesh!) == large, $"{name}: large billboard should be {large}");
         }
     }
 

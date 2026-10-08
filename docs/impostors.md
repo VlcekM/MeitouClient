@@ -724,21 +724,19 @@ in its place), blending the frames instead of the per-pixel vote −0.28 ms (not
 
 ## 15. A separate distance for the large size class (2026-10-08)
 
-Meshes of the large size class (`FoliageSizes.LargeFrom`, 125 units and up: rocks, rock stacks, hoodoos, cliffs, ruins, wrecks, houses, TERRAIN-mode rocks included, and giant trees; since 2026-10-08 the other trees are medium, see the end of this section) become
+Meshes of the large size class (`FoliageSizes.LargeFrom`, 125 units and up: rocks, rock stacks, hoodoos, cliffs, ruins, wrecks, houses, TERRAIN-mode rocks included, and trees; since 2026-10-08 the trees other than giants take the normal distance, see the end of this section) become
 impostors at `LargeImpostorDistance` (default 12000; Tab slider "Large impostor distance", `--large-impostor-distance`) instead of
 `ImpostorDistance` (4000), which now covers the smaller meshes only (`FoliageRenderer.DistanceFor`). **Observed** (the owner's screenshots, Okran's
 Pride forests and rock stacks): at 4000 these billboards looked flat and dithered at close range. The rock knee rule (section 13) scales from the
 class's distance. The atlases are still sized for the 4000 reference, so at 12000 they have more texels than needed. The cost of drawing these
 meshes as meshes out to 12000 was not measured.
 
-**Trees are medium (2026-10-08).** Trees, palms, ferns and grass clumps (meshes in the game's `Assets/Plants` and `foliage/Trees` folders) are not
-in the large class unless 1000 units or bigger (`FoliageSizes.Classify`, rule, evidence and the 85 moved meshes in docs/formats/foliage.md, "Mesh
-sizes"). **Observed** (the owner's screenshot of dark conifers, `FOLIAGE_Plant_Deep-Fir 01` and the pines, as large-class billboards). **Consequence**:
-they follow the medium rules: meshes to 12000 (`MediumRange`) and billboards from 4000 (`ImpostorDistance`), where large meshes were meshes to 12000
-(`LargeImpostorDistance`) and billboards to 50000, so the 4000 to 12000 band shows a billboard where it showed the mesh, and past 12000 trees are not
-drawn. Pictures (**Observed**, `--world --at -26640,-68976 --radius 1.5 --yaw 120 --no-reflections --no-water`, 1600 x 900, RTX 4070, headless,
-one run each, other GPU users on the machine): at 8000 (pitch 8) 9.4 % of the pixels differ by over 12/255 (mean 2.6), at 20000 (pitch 15) 6.7 %
-(mean 2.3); rocks, cliffs and hoodoos did not change. The foliage GPU time on the printed frame fell from 2.11 to 1.10 ms at 8000 and from 5.40 to
-0.92 ms at 20000, and the meshes drawn from 405 000 to 32 000 and from 469 000 to 21 000 (the cost for iGPUs falls; the cost is more quads and
-atlases between 4000 and 12000, **not measured** apart from this). Where the large class's flat-billboard complaint (above) comes back: at 4000 to
-12000 trees are billboards again.
+**Trees take the normal distance (2026-10-08).** Large trees, palms, ferns and grass clumps (meshes in the game's `Assets/Plants` and
+`foliage/Trees` folders) under 1000 units become impostors at `ImpostorDistance` (4000), not `LargeImpostorDistance` (`FoliageSizes.LargeBillboard`,
+`MeshAsset.LargeBillboard`; rule and evidence in docs/formats/foliage.md, "Mesh sizes"). They stay in the large size class, so they are still drawn,
+as billboards, to the large range (50000). **Observed** (the owner's screenshot of dark conifers, `FOLIAGE_Plant_Deep-Fir 01` and the pines, as
+billboards of the large distance; the owner wants them as normal billboards). A first version the same day made them medium, which also stopped
+drawing them beyond 12000 (forests vanished in the distance); this one keeps the range. Foliage GPU time on the printed frame (**Observed**,
+`--world --at -26640,-68976 --radius 1.5 --yaw 120 --no-reflections --no-water`, 1600 x 900, RTX 4070, one run each, other GPU users on the
+machine): at 20000 (pitch 15) 2.08 ms, against 5.40 with the trees meshes to 12000 and 0.92 with them medium (not drawn past 12000); at 8000
+(pitch 8) 1.65 ms.

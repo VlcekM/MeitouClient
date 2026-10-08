@@ -230,21 +230,21 @@ renderer measures after decoding) times the larger of its record's two scale lim
 - Near the large threshold (where the choice is a judgement): medium `Baobabesque Tree` and `FruitBall_Tree` (121), `SpindleTree05` (112),
   `PalmType OASIS` (106), `Rod-Tree` (89-91); large swamp ferns (126-151), `BigGrassClump` (136), `TreeFall01` (134), `Skin_Cliff_Ridge`
   (148-151). Test: `Base_game_meshes_fall_into_the_expected_classes`.
-- **Trees are medium, not large** (2026-10-08, `FoliageSizes.Classify(radius, mesh)`, the owner's request: the conifers were billboards of the large class).
+- **Trees take the normal billboard distance** (2026-10-08, `FoliageSizes.LargeBillboard`, the owner's request: the conifers were billboards of the large class's distance; the same day first done by making them medium, which also cut their draw range to 12000, then changed to this).
   **Observed** (scratch survey of the 643 catalog meshes, the folder of each mesh file against its size class): the game keeps its meshes in
   folders by kind, and of the 283 large meshes `Assets/Rocks` holds 131 (rocks, boulders, pillars, hoodoos, rock stacks, cliffs, resource rocks),
   `Assets/Things` 49 (ruins, wrecks, junk, bones, scaffolds, towers), `Assets/Buildings` 14 (houses, walls) and `Assets/Plants` plus `foliage/Trees` 89
-  (trees, palms, ferns, grass clumps, spores). **Rule**: a mesh in `Assets/Plants` or `foliage/Trees` (`FoliageSizes.IsVegetation`, from the record's
-  mesh path) that would be large is medium instead, unless its size is 1000 or more (`GiantFrom`: such a plant is a landmark). Size, the small and
-  medium bounds and every other mesh are unchanged. **Unknown** for mods: a mesh outside those folders keeps the size rule, so a mod's trees in
-  their own folder stay large.
+  (trees, palms, ferns, grass clumps, spores). **Rule**: a large mesh in `Assets/Plants` or `foliage/Trees` (`FoliageSizes.IsVegetation`, from the record's
+  mesh path) stays in the large size class (drawn to the large range, 50000) but becomes a billboard at the normal impostor distance (4000), not the
+  large one (12000), unless its size is 1000 or more (`GiantFrom`: such a plant is a landmark). The size classes themselves are unchanged. **Unknown** for mods: a mesh outside those folders keeps the size rule, so a mod's trees in
+  their own folder keep the large impostor distance.
   Other signals were checked and **do not** separate trees from the rest: the material mode (FOLIAGE alpha cut, mode 4, covers 44 large meshes but
   also wreck pieces, cables, scaffolds and `Vast_Cluster_Piece*`, and misses the dead pines, `CraggyTree` and `Roaming_Tree*`, which are UV mapped),
   a leaves mesh (only 33), the layer's visibility (`Deep-Fir` is a plain MEDIUM layer like most rocks) and wind flag (30 large meshes with palms,
   wrecks and towers), the surface share (sparse trees 0.01 to 0.04 sit among ruins at 0.08 to 0.12), the box shape (the dead pines are 6.5 times taller
   than wide but `Deep-Fir` is 1.4, and a slenderness rule moved a hoodoo and a ruin tower), the record's keep-upright / slope-align / wind fields. The
   folder is the game's own classification, not a name list.
-  **Moved from large to medium** (85 meshes, **Observed**, none is a rock, ruin, building or cliff): the conifers `FOLIAGE_Plant_Deep-Fir 01` (341),
+  **Large meshes on the normal billboard distance** (85 meshes, **Observed**, none is a rock, ruin, building or cliff): the conifers `FOLIAGE_Plant_Deep-Fir 01` (341),
   `Foliage_PINE_SCRAGGY01` (217), `Thin Craggy Tree` (259), `Foliage_CYPRUS-TYPE` and its two variants (429, 258, 258), `FOLIAGE_DeadPineType` and `-red`
   (133, 166); other trees `Baobabesque Tree`, `BigTree01 [Lush]`, `BigTree02 [Lush]`, `BushTree01`, `CanyonLandCrater_Tree`, `Cascade Tree01` and
   `- Higher`, `CraggyTree` and `Feather Leaves`, `FanTree LightBlue`, `Foliage_GungeTree`, `FOLIAGE_Plant_FineTree01` and `01A`, `FullTree` and

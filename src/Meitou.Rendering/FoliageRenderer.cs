@@ -756,6 +756,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         /// <summary><see cref="Centre"/>, <see cref="Radius"/> and <see cref="SizeClass"/> are known (the mesh was decoded once; they never change).</summary>
         public bool HasBounds;
         public FoliageSizeClass SizeClass;
+        /// <summary>Billboarded from <see cref="LargeImpostorDistance"/> rather than <see cref="ImpostorDistance"/> (<see cref="FoliageSizes.LargeBillboard"/>; trees are not).</summary>
+        public bool LargeBillboard;
         /// <summary>The triangles of the mesh and its leaves mesh (known with <see cref="HasBounds"/>): the small impostor class is for meshes with many.</summary>
         public int Triangles;
         /// <summary>The impostor class estimated from the mesh's own bounds, once (<see cref="FoliageRenderer.EstimateClass"/>).</summary>
@@ -853,7 +855,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.Centre = (min + max) / 2;
             a.Radius = Math.Max((max - min).Length() / 2, 1);
             a.Size = FoliageSizes.Size(a.Radius, a.Mesh);
-            a.SizeClass = FoliageSizes.Classify(a.Radius, a.Mesh);
+            a.SizeClass = FoliageSizes.Classify(a.Size);
+            a.LargeBillboard = FoliageSizes.LargeBillboard(a.Radius, a.Mesh);
             a.Triangles = main.Parts.Sum(p => p.Indices.Length / 3) + (leaves?.Parts.Sum(p => p.Indices.Length / 3) ?? 0);
             a.HasBounds = true;
             QueueMesh(a, main, leaves);

@@ -231,8 +231,8 @@ public sealed partial class FoliageRenderer
     /// distance for medium and large atlases, in proportion to the size for the small class.</summary>
     float TransitionFor(MeshAsset a, in ImpostorClass cls, float worldRadius) => cls.Transition(worldRadius, DistanceFor(a));
 
-    /// <summary>The impostor distance of a mesh: <see cref="LargeImpostorDistance"/> for the large size class (trees, rock stacks, hoodoos), else <see cref="ImpostorDistance"/>.</summary>
-    float DistanceFor(MeshAsset a) => a.HasBounds && a.SizeClass == FoliageSizeClass.Large ? LargeImpostorDistance : ImpostorDistance;
+    /// <summary>The impostor distance of a mesh: <see cref="LargeImpostorDistance"/> for large meshes other than trees (rocks, rock stacks, hoodoos, ruins; <see cref="FoliageSizes.LargeBillboard"/>), else <see cref="ImpostorDistance"/>.</summary>
+    float DistanceFor(MeshAsset a) => a.HasBounds && a.LargeBillboard ? LargeImpostorDistance : ImpostorDistance;
 
     /// <summary>The transition of an atlas not made yet, from the class estimated from the mesh's bounds (infinite when it has none).</summary>
     float EstimatedTransition(MeshAsset a) => EstimateClass(a) is { } c ? TransitionFor(a, c, a.Radius * a.Mesh.MaxScale) : float.PositiveInfinity;
