@@ -13,6 +13,8 @@ return args switch
     ["fcs-types"] => WithInstall(FcsTypeMatcher.Run),
     ["fcs-records", var type] => WithInstall(i => FcsRecordDump.Run(i, int.Parse(type), 3)),
     ["world"] => WithInstall(WorldSurvey.Run),
+    ["particles"] => WithInstall(i => ParticleSurvey.Run(i, effects: false)),
+    ["particles", "effects"] => WithInstall(i => ParticleSurvey.Run(i, effects: true)),
     ["navmesh", .. var navArgs] => WithInstall(i => NavmeshTool.Run(i, navArgs)),
     ["image-diff", var a, var b] => ImageDiff.Run(a, b, null),
     ["image-diff", var a, var b, var d] => ImageDiff.Run(a, b, d),
@@ -38,6 +40,7 @@ static int Usage()
                            [--path x0,z0,x1,z1 [--from-y y] [--to-y y] [--closed]] [--near x,z,radius] [--no-interiors] [--no-neighbour-seeds]
                            [--cell u] [--tile cells] [--watershed] [--threads n] [--repeat n] [--fingerprint]
                            gather and build a zone's navmesh, write debug files; --fingerprint prints SHA-256 of the cache files of The Hub (or --zone) and the Hub path points
+        meitou-tools particles [effects]  read every ParticleUniverse script and particle material and count what they use; "effects" lists the EFFECT records with their systems
         meitou-tools world         read the heightmap, zone/level files and features.dat and cross-check them
         meitou-tools image-diff <a.png> <b.png> [diff.png]  compare two screenshots: mean difference, share of pixels over 12/255
         meitou-tools draw-log-diff <a> <b> [--keep-handles]  compare two MEITOU_DRAW_LOG files draw by draw (handles renamed by first use)
