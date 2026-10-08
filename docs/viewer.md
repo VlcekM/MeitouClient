@@ -248,7 +248,8 @@ How it works (status as in [README.md](README.md)):
     in thin water and far off) and composites itself opaque, instead of blending over the scene. `--no-water-refraction` keeps the
     blending (the game's alpha from depth). **Absorption**: what is under the water is dimmed per channel by exp(−σ L), σ = the biome's
     opacity (its parameter map's alpha, the game's alpha per unit of depth) × (4.5, 1.6, 1.1), L the path through the water to the terrain
-    (so red goes first: turquoise shallows over sand, dark deep water), and the water's own colour scatters in for what is absorbed; the
+    (so in clear water red goes first: turquoise shallows over sand, dark deep water; a strongly coloured biome water, by the saturation
+    of its colour map, filters towards its own colour instead: olive swamps, red lakes), and the water's own colour scatters in for what is absorbed; the
     floor fades out by 4400 units, as the game's water turns opaque at 4000. **Caustics**: on the floor seen through shallow water, two
     drifting copies of the foam lace (cell rims) multiplied, brightest at 0.3-3 units of depth, fading over 25. **Crest light**: where an
     ocean crest stands more than about 1 unit high and the eye looks towards the sun, a green-blue glow (light through the thin top).
@@ -266,9 +267,10 @@ How it works (status as in [README.md](README.md)):
     waterline is where 100 − height changes sign between neighbouring texels, placed by linear interpolation of that difference, so it is
     sub-texel; the distance is to those points (8SSEDT: two sweeps carrying the nearest crossing point, O(N²)), positive over water and
     negative over land, clamped to ±4000, then one 3×3 binomial Gaussian so the gradient has no kinks. **Exposure** is
-    smoothstep(200, 450, reach), reach = the largest distance-to-shore of any water within 500 units (measured on 8-texel blocks, a disc
-    dilation over them, bilinearly upsampled): a pond, swamp channel or narrow bay whose water is never more than about 200 units from a
-    shore within 500 units is 0, open sea (450 units of open water within 500) is 1. Past the grid's edge the water counts as open sea (reach =
+    smoothstep(600, 1200, reach), reach = the largest distance-to-shore of any water within 1500 units (measured on 8-texel blocks, a disc
+    dilation over them, bilinearly upsampled): a pond, swamp channel or narrow bay whose water is never more than about 600 units from a
+    shore within 1500 units is 0, open sea (1200 units of open water within 1500) is 1 (until 2026-10-08 200 / 450 within 500, which let
+    Shark's town pond, about 400 units from shore at its middle, get surf; **Observed** in a picture). Past the grid's edge the water counts as open sea (reach =
     max) when the nearest edge block is water, else as land. The bake runs on a worker thread from a `HeightSnapshot` (an immutable copy of
     the terrain's coarse grid, fine window and band, taken on the render thread by `TerrainRenderer.Snapshot()`; `HeightAt` is defined
     through it); `ShoreField.Update(eye, snapshot)` starts a bake when nothing is baked yet or the eye is more than 2560 units (a quarter of

@@ -183,7 +183,7 @@ public class GpuApiTests
         ["sky simple"] = "4C48F27F2EFC495E4B81B6421F095B12",
         ["sky"] = "2D58DAFEB0B45CB22851C334D9B89E77",   // the SkyX cloud pass
         ["water"] = "35E690A16022E3248081AB723D5B6260",
-        ["water meitou"] = "167BA760F6F43227FD1FF8B09FD0F727",   // the Meitou water (meitou-water branch, 2026-10-08): new, no VkGl module to match
+        ["water meitou"] = "047E17CACFD0B70BDB960BA4D3729807",   // the Meitou water (meitou-water branch, 2026-10-08): new, no VkGl module to match
         ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",
         ["terrain patch"] = "4F87F742FBE9D228EA707327F58627CF",
         ["terrain mesh"] = "B969AE9864F34378A76C659D6E919727",

@@ -485,9 +485,13 @@ public sealed unsafe class WaterRenderer : IDisposable
                 float c2 = texture(uFoamMap, mat2(0.8, 0.6, -0.6, 0.8) * floorP * 0.0147 - vec2(tc * 0.008, -tc * 0.01)).r;
                 float caustic = (c1 * c2 * 1.6 + (c1 + c2) * 0.1) * max(l.y, 0.0) * smoothstep(0.3, 3.0, floorDepth) * exp(-floorDepth / 25.0) * (1.0 - far);
                 under *= 1.0 + caustic * uSunColour;
-                // Absorption: red goes first, then green, so the shallows over sand are turquoise and the deep water dark; the biome's
-                // opacity (the game's alpha per unit of depth) sets how fast. Beyond 4000 units the floor is gone, as in the game.
-                vec3 transmit = exp(-depth * max(pa.w, 0.002) * vec3(4.5, 1.6, 1.1)) * clamp((4400.0 - dist) / 400.0, 0.0, 1.0);
+                // Absorption: in clear water red goes first, then green, so the shallows over sand are turquoise and the deep water dark; a
+                // strongly coloured biome water (a swamp's olive, a red lake) filters towards its own colour instead. The biome's opacity (the
+                // game's alpha per unit of depth) sets how fast. Beyond 4000 units the floor is gone, as in the game.
+                vec3 hue = waterColour / max(max(waterColour.r, waterColour.g), max(waterColour.b, 1e-3));
+                float saturation = 1.0 - min(hue.r, min(hue.g, hue.b));
+                vec3 sigma = mix(vec3(4.5, 1.6, 1.1), 1.0 + 3.0 * (1.0 - hue), smoothstep(0.15, 0.5, saturation));
+                vec3 transmit = exp(-depth * max(pa.w, 0.002) * sigma) * clamp((4400.0 - dist) / 400.0, 0.0, 1.0);
                 colour = mix(under * transmit + body * (1.0 - transmit), reflected, schlick * gloss);
             }
             else colour = mix(body, reflected, schlick * gloss);

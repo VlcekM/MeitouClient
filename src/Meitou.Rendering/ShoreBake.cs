@@ -21,11 +21,12 @@ internal sealed class ShoreGrid
     /// <summary>
     /// Exposure rule (the "reach" of a water texel is the largest distance-to-shore of any water within <see cref="ReachRadius"/> units of it,
     /// measured on 8-texel blocks): exposure = smoothstep(<see cref="ReachLow"/>, <see cref="ReachHigh"/>, reach). A pond or bay whose water
-    /// never lies more than ~200 units from a shore within 500 units of the point is 0; anywhere with 450+ units of open water within 500 is 1.
+    /// never lies more than ~600 units from a shore within 1500 units of the point is 0 (a town pond in the swamps reaches about 400); anywhere with
+    /// 1200+ units of open water within 1500 is 1 (surf needs a long stretch of open water to build over).
     /// Beyond the grid's edge the water counts as open sea (reach = max) when the nearest edge block is water, else as land.
     /// </summary>
-    public const float ReachRadius = 500f, ReachLow = 200f, ReachHigh = 450f;
-    public const string ExposureRule = "smoothstep(200, 450, max distance-to-shore of water within 500 units)";
+    public const float ReachRadius = 1500f, ReachLow = 600f, ReachHigh = 1200f;
+    public const string ExposureRule = "smoothstep(600, 1200, max distance-to-shore of water within 1500 units)";
 
     public ShoreGrid(int size, float texel, float x0, float z0, float maxDistance, float[] distance, float[] exposure)
     {
@@ -208,6 +209,19 @@ internal static class ShoreBake
         float blockSize = Block * texel;
         int r = (int)MathF.Ceiling(ShoreGrid.ReachRadius / blockSize);
         float reachBlocks = ShoreGrid.ReachRadius / blockSize + 0.5f;
+        // The blocks padded by r on every side, outside the grid open sea where the edge block there is water; then the disc as one span of
+        // columns per row.
+        int np = nb + 2 * r;
+        var padded = new float[np * np];
+        for (int pj = 0; pj < np; pj++)
+            for (int pi = 0; pi < np; pi++)
+            {
+                int ci = pi - r, cj = pj - r;
+                padded[pj * np + pi] = (uint)ci < (uint)nb && (uint)cj < (uint)nb ? reachBlock[cj * nb + ci]
+                    : reachBlock[Math.Clamp(cj, 0, nb - 1) * nb + Math.Clamp(ci, 0, nb - 1)] > 0 ? maxDistance : 0;
+            }
+        var span = new int[2 * r + 1];
+        for (int dj = -r; dj <= r; dj++) span[dj + r] = (int)MathF.Floor(MathF.Sqrt(MathF.Max(reachBlocks * reachBlocks - dj * dj, 0)));
         var coarse = new float[nb * nb];
         Parallel.For(0, nb, bj =>
         {
@@ -215,20 +229,10 @@ internal static class ShoreBake
             {
                 float m = 0;
                 for (int dj = -r; dj <= r; dj++)
-                    for (int di = -r; di <= r; di++)
-                    {
-                        if (di * di + dj * dj > reachBlocks * reachBlocks) continue;
-                        int ci = bi + di, cj = bj + dj;
-                        float v;
-                        if ((uint)ci < (uint)nb && (uint)cj < (uint)nb) v = reachBlock[cj * nb + ci];
-                        else
-                        {
-                            // Outside the grid: open sea if the edge block there is water.
-                            float edge = reachBlock[Math.Clamp(cj, 0, nb - 1) * nb + Math.Clamp(ci, 0, nb - 1)];
-                            v = edge > 0 ? maxDistance : 0;
-                        }
-                        if (v > m) m = v;
-                    }
+                {
+                    int w = Math.Min(span[dj + r], r), row = (bj + dj + r) * np + bi + r;
+                    for (int di = -w; di <= w; di++) m = MathF.Max(m, padded[row + di]);
+                }
                 coarse[bj * nb + bi] = SmoothStep(ShoreGrid.ReachLow, ShoreGrid.ReachHigh, m);
             }
         });
