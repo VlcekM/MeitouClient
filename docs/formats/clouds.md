@@ -176,7 +176,12 @@ coverage table is recomputed from the shipped textures and must match the one ab
 - **Horizon sparkle (fixed 2026-10-08, Observed)**: with `--weather "light rain"` a row of small white ticks ran along the horizon line. It was the cloud
   pass (gone with `--clouds 0`, absent on a build without the pass): below `d.y` 0.05 the alpha is the uniform horizon value, but the colour still followed
   the texture lookups, whose uv is `height · xz / d.y`, hundreds of units at `d.y` 0.0005 to 0.01, so the minified lookups sparkle. Now the cloud colour
-  fades to the plain density-0 value from `d.y` 0.05 down to 0.01 (above 0.05 the layer is untouched). A viewer choice; the game's SkyX shader has no such fade.
+  fades to a plain value from `d.y` 0.05 down to 0.01 (above 0.05 the layer is untouched). A viewer choice; the game's SkyX shader has no such fade.
+  The plain value is the `horizonClouds` colour before the √exposure, `saturate(zenithLight + sunColour.rgb · (1 − 0.1 (o + 0.2) · 3)) · (1 − Darkness)`
+  (corrected 2026-10-08: it first was `zenithLight + sunColour.rgb` with no darkening, which in an overcast weather drew a **white band** between the
+  far terrain and the clouds, e.g. the Vain's `Kenshi_red_rain`, c = 1; see [sky.md](sky.md), "Weather tint"). Below `d.y` 0.05 the game's own pixel
+  keeps step 6's darkening (`h` = 0, so `D' = D`; at c = 1, o = 0.6 and `D ≥ 1.8`, so `saturate(D')` = 1 and the colour is × (1 − 0.81)), **Verified**
+  from `SkyX_Clouds.hlsl`; `horizonClouds` is the same form with the texture's part of `D` taken as 0.2, so the band now meets the haze in one colour.
   The weather system now drives the layer (`--weather auto`): see [weather.md](weather.md#in-the-viewer-and-the-game-step-3).
 
 ## Unknowns

@@ -255,6 +255,14 @@ and sky-view tables, the 0.36° sun disc) is gone, with `AtmosphereModel.cs`.
   dust storm's orange gave an olive sky; removed). A WEATHER record without the field reads **black** (0), not white (**Verified
   (decompiled)**, FUN_1409de7b0: the colour is `setAsARGB` of a map `operator[]` lookup that inserts 0; same for `fog color`), which only
   changes the cloud light's zenith part (floored). The sky pixels are fogged by the weather's fog like everything else (Haze below).
+- **Overcast horizon** (fixed 2026-10-08): in the Vain (regions Vain and Arach, season "Vain": `Kenshi_red_rain` ×60, c = 1, sky multiplier
+  white, no fog; `clear nothing` ×10, c = 0) the viewer drew a white band between the far terrain and the clouds; the game's horizon is
+  the dark grey of the overcast. Not the fog, the sky multiplier or the haze pull: it was the cloud pass's horizon fade (the sparkle fix,
+  [clouds.md](clouds.md#in-the-viewer)), whose target colour `zenithLight + sunColour.rgb` lacked the layer's darkening; the band's alpha there
+  is `o + 0.5` = 1, so it covered the sky fully, about five times brighter than the clouds above. In the game the pixel below 2.9° keeps the
+  darkening `1 − saturate(D) · Darkness` (**Verified**, `SkyX_Clouds.hlsl`: × 0.19 at c = 1). The fade's target is now the `horizonClouds`
+  colour (a viewer choice, **Observed** to match: the band and the hazed far terrain meet in one dark grey; screenshots `--at -94464,-11520
+  --yaw 90 --pitch 6 --distance 1800 --time 13 --weather Kenshi_red_rain`). Clear weathers skip the cloud pass and are unchanged.
 - **Light**: the deferred lighting pass's model ([lighting.md](lighting.md)): `kenshiLight` in the mesh, terrain and grass shaders.
   The water still takes a sun colour and an ambient (`WorldLighting`): `π · 0.96 · sunColour.rgb · w` and the irradiance cube's up
   and down faces times the environment factor.
