@@ -175,7 +175,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform vec4 uOcean;                // xyz the cascades' tile sizes, w texels per side (0: no ocean yet)
         uniform sampler2D uShoreField;      // ShoreField: R the signed distance to the waterline (positive over water), G the exposure
         uniform vec4 uShoreRect;            // the field's x0, z0, x1, z1 (x1 <= x0: none yet)
-        uniform vec4 uShore;                // x breaker phase (cycles), y run-up height, z breaker wavelength, w breaker height
+        uniform vec4 uShore;                // x the breakers' wave count (cycles since the start, wrapping at 4096), y run-up height, z breaker wavelength, w breaker height
         uniform vec4 uWaveFade;             // eye distances over which the open waves' heights (x to y) and the shore's breakers and foam (z to w) fade out
         uniform float uWaterDebug;          // 1: show the shore fields (MEITOU_WATER_DEBUG=1)
         uniform sampler2D uRiverMap;        // RiverFlowBake: RG the flow direction (x, z), B the half-width over 8 texels, A the river weight; world bounds
@@ -195,7 +195,32 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
 
         // river: how much p is in a river (0 none, 1 a river's channel), flow: its unit direction (x, z), speed: how fast it runs (units a second).
-        struct Shore { float depth; float dist; float g; vec2 dir; float open; float size; float breakAt; float river; vec2 flow; float speed; };
+        struct Shore { float depth; float dist; float g; vec2 dir; float open; float size; float breakAt; float river; vec2 flow; float speed; float sizeWet; float brk; };
+
+        // Waves arrive in pieces, not as one line round the coast. Each wave has a number (the wave count at its place, which it keeps as it
+        // travels in), and slow, coarse noise on the shore point it is heading for (constant across the wave, varying along the shore, drifting
+        // with the clock) decides its height, whether it breaks at all, and (as a phase offset) where along its crest it breaks first.
+        float wHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+        float wNoise(vec2 p)
+        {
+            vec2 i = floor(p), f = fract(p);
+            f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+            return mix(mix(wHash(i), wHash(i + vec2(1.0, 0.0)), f.x), mix(wHash(i + vec2(0.0, 1.0)), wHash(i + vec2(1.0, 1.0)), f.x), f.y);
+        }
+
+        // Wave number k at the shore point q: size, its height factor (0.2 to 1.7: they come in sets of about seven, the sets reaching
+        // different stretches of the shore at different times), and brk, 0 where it rolls in without breaking and 1 where it breaks (a gap
+        // is a few hundred units long, the more so for small waves). The numbers wrap at 4096 with the clock, so every term is periodic in it.
+        void waveAt(float k, vec2 q, out float size, out float brk)
+        {
+            float id = mod(k, 4096.0);
+            vec2 o = vec2(wHash(vec2(id, 3.7)), wHash(vec2(id, 9.1))) * 173.0;
+            float arg = id * (606.0 * 6.2831853 / 4096.0) + 1.1 * sin(id * (261.0 * 6.2831853 / 4096.0) + 0.7) + 3.0 * (wNoise(q / 1500.0 + 3.3) - 0.5);
+            float group = smoothstep(0.2, 0.85, 0.5 + 0.5 * sin(arg));
+            float n = (wNoise(q / 620.0 + o) - 0.5) * 1.6 + 0.62 + 0.3 * (group - 0.5);
+            brk = smoothstep(0.2, 0.6, n);
+            size = mix(0.55, 1.6, group) * (0.8 + 0.4 * wNoise(q / 800.0 + o + 40.0)) * mix(0.7, 1.0, brk);
+        }
 
         vec2 shoreField(vec2 uv) { return textureLod(uShoreField, uv, 0.0).rg; }
 
@@ -206,6 +231,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         Shore shoreAt(vec2 p)
         {
             Shore r;
+            float trust = 0.0;   // how well the field gives the direction to the shore (it fades to nil on the axis between two shores, where the nearest shore jumps)
             r.depth = uWaterHeight - terrainHeight(p);
             r.dist = 1.0e6; r.dir = vec2(0.0); r.open = 0.0; r.flow = vec2(0.0); r.speed = 0.0;
             // Rivers (the baked map, 144 units a texel): the weight, the coarse direction downstream and the width.
@@ -224,6 +250,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 vec2 grad = vec2(shoreField(uv + vec2(e.x, 0.0)).r - shoreField(uv - vec2(e.x, 0.0)).r,
                                  shoreField(uv + vec2(0.0, e.y)).r - shoreField(uv - vec2(0.0, e.y)).r);
                 r.dist = f.r;
+                trust = smoothstep(10.0, 20.0, length(grad));
                 r.dir = length(grad) > 1e-6 ? -normalize(grad) : vec2(0.0);
                 // Fade out towards the field's edge (it follows the eye; beyond it nothing is known).
                 vec2 inside = min(uv, 1.0 - uv) * extent;
@@ -247,12 +274,29 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Rivers have no open water: no surf, and (oceanScale) no waves. They run faster where narrow and shallow.
             r.open *= 1.0 - r.river;
             r.speed = mix(30.0, 14.0, smoothstep(1.0, 5.0, rv.b * 8.0)) * mix(1.5, 0.8, smoothstep(5.0, 60.0, r.depth));
-            // Along the shore the waves arrive at different times, and the sets swell and fade smoothly from one breaker to the next.
-            float along = sin(p.x * 0.0021 + sin(p.y * 0.0013) * 2.0) + sin(p.y * 0.0017 + p.x * 0.0009);
-            float x = r.dist / uShore.z + uShore.x + along * 0.6;
+            // The breakers: phase from the distance to the shore and the wave count; in the surf zone the pieces of the shore (above) offset it
+            // (so the crests slant against the shore and the break peels along them), and give each wave its size and whether it breaks.
+            float x = r.dist / uShore.z + uShore.x;
+            r.size = 1.0; r.sizeWet = 1.0; r.brk = 1.0;
+            float base = 70.0 + 35.0 * sin(p.x * 0.0031 + p.y * 0.0023);
+            if (r.open > 0.0 && r.dist > -150.0 && r.dist < 700.0)
+            {
+                vec2 q = p + r.dir * r.dist + 260.0 * vec2(sin(uShore.x * (23.0 * 6.2831853 / 4096.0) + 1.0), cos(uShore.x * (17.0 * 6.2831853 / 4096.0)));
+                x += trust * (0.6 * (sin(q.x * 0.0021 + sin(q.y * 0.0013) * 2.0) + sin(q.y * 0.0017 + q.x * 0.0009))
+                   + 1.4 * (wNoise(q / 480.0 + 11.3) - 0.5) + 0.7 * (wNoise(q / 210.0 + 5.1) - 0.5));
+                float k = floor(x);
+                float s0, b0, s1, b1;
+                waveAt(k, q, s0, b0);
+                waveAt(k - 1.0, q, s1, b1);
+                // Continuous across the troughs between waves (the breakers' profile is nil there): the new wave's values take over at its front.
+                float t = smoothstep(0.0, 0.25, fract(x));
+                r.size = mix(1.0, mix(s1, s0, t), trust);
+                r.brk = mix(1.0, mix(b1, b0, t), trust);
+                r.sizeWet = mix(1.0, fract(x) >= 0.5 ? s0 : s1, trust);   // the wet sand remembers the last crest that passed
+            }
             r.g = fract(x);
-            r.size = 0.6 + 0.8 * (0.5 + 0.5 * sin(x * 1.37 + 0.4) * sin(x * 0.53 + 1.9));
-            r.breakAt = (70.0 + 35.0 * sin(p.x * 0.0031 + p.y * 0.0023)) * (0.7 + 0.5 * r.size);
+            // A wave that does not break here runs on to the shore (its break point is at the waterline).
+            r.breakAt = mix(-40.0, base * (0.7 + 0.5 * r.size), r.brk);
             return r;
         }
 
@@ -270,7 +314,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         // low bore of whitewater after it, and is gone at the waterline (the run-up takes over).
         float breakerScale(Shore s)
         {
-            float build = smoothstep(460.0, 160.0, s.dist) * (1.0 + 0.9 * smoothstep(s.breakAt + 140.0, s.breakAt + 10.0, s.dist));
+            float build = smoothstep(460.0, 160.0, s.dist) * (1.0 + 0.9 * s.brk * smoothstep(s.breakAt + 140.0, s.breakAt + 10.0, s.dist));
             float collapse = mix(0.3, 1.0, smoothstep(s.breakAt - 30.0, s.breakAt + 5.0, s.dist));
             return uShore.w * s.open * s.size * build * collapse * smoothstep(-5.0, 20.0, s.dist) * smoothstep(250.0, 120.0, s.depth);
         }
@@ -304,7 +348,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // The geometry gets a smooth hump only (the steep front a few units wide would fall between the vertices and facet; the
                 // fragment shades it), and none where the vertices are too far apart for it.
                 float hump = breakerScale(s) * pow(0.5 - 0.5 * cos(6.2831853 * s.g), 1.5) * smoothstep(0.45, 0.2, spacing / uShore.z);
-                float lift = uShore.y * s.open * s.size * (1.0 - smoothstep(10.0, 60.0, s.dist)) * smoothstep(-140.0, -60.0, s.dist);
+                float lift = uShore.y * s.open * max(s.size, s.sizeWet) * (1.0 - smoothstep(10.0, 60.0, s.dist)) * smoothstep(-140.0, -60.0, s.dist);
                 vec3 d = oceanDisplace(p, spacing).xyz * oceanScale(s) * fade;
                 w += vec3(d.x, d.y + max(hump, lift) * shoreFade, d.z);
             }
@@ -443,7 +487,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             // The motion fades with the eye distance; beyond it (and past the world's edge) this is the game's flat water.
             float fade = outside <= 0.0 ? 1.0 - smoothstep(uWaveFade.z, uWaveFade.w, dist) : 0.0;
             Shore s;
-            s.depth = 1.0e4; s.dist = 1.0e6; s.g = 0.0; s.dir = vec2(0.0); s.open = 0.0; s.size = 1.0; s.breakAt = 0.0; s.river = 0.0; s.flow = vec2(1.0, 0.0); s.speed = 0.0;
+            s.depth = 1.0e4; s.dist = 1.0e6; s.g = 0.0; s.dir = vec2(0.0); s.open = 0.0; s.size = 1.0; s.breakAt = 0.0; s.river = 0.0; s.flow = vec2(1.0, 0.0); s.speed = 0.0; s.sizeWet = 1.0; s.brk = 1.0;
             if (fade > 0.0) s = shoreAt(p);
             else if (outside <= 0.0) s.depth = uWaterHeight - terrainHeight(p);
 
@@ -453,7 +497,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             float above = -s.depth;
             float sinceCrest = fract(s.g - 0.5);
             float level = runup * breakerProfile(s.g);
-            float wetLevel = runup * (1.0 - 0.8 * sinceCrest);
+            float wetLevel = uShore.y * s.open * s.sizeWet * fade * smoothstep(-120.0, -40.0, s.dist) * (1.0 - 0.8 * sinceCrest);
             if (above > 0.0 && above >= max(level, wetLevel)) discard;
             bool swash = above > 0.0;
             float sheet = swash ? level - above : 0.0;   // the swash's thickness (negative: wet sand only)
@@ -615,7 +659,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             float amount = max(clamp((0.7 - jacobian) * 2.5, 0.0, 1.0), clamp(oceanFoam * open, 0.0, 1.0) * 0.75);
             // Along the shore the breakers break harder in some stretches than others, and not at all in a few.
             float stretch = smoothstep(0.2, 0.75, texture(uFoamMap, p * 0.0011).g);
-            float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 0.5, feather * 0.6)) * min(s.size * 1.1, 1.3);
+            float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 0.5, feather * 0.6)) * min(s.size * 1.1, 1.3) * mix(0.2, 1.0, s.brk);
             amount = max(amount, min(surfFoam * surfZone * (0.45 + 0.75 * stretch), 0.8));   // capped: the lace shows through even the thickest whitewater
             amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * (0.15 + 0.25 * s.open) * fade);
             if (swash && sheet > 0.0) amount = max(amount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.12, sheet)), 0.35 * (1.0 - sinceCrest)));
