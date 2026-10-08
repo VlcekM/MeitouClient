@@ -345,7 +345,7 @@ patched the shader text through a temporary environment hook (not in the reposit
 | --- | ---: | --- |
 | render scale 0.5 | 0.45 | about 70 % of it follows pixels |
 | `--terrain-error` 8 / 32 / 64 (2.14 M / 0.46 M / 0.46 M triangles, ground level) | 1.22 / 1.17 / 1.16 | geometry is not the cost on this card |
-| `--material-distance` 1000 / 2000 / 4000 / 8000 / 16000 (ground level, full 1.16) | 0.73 / 0.84 / 1.06 / 1.09 / 1.12 | the layer material adds only about 0.43 ms; the rest is the base shading |
+| `--material-distance` 1000 / 2000 / 4000 / 8000 / 16000 (ground level, full 1.16) | 0.73 / 0.84 / 1.06 / 1.09 / 1.12 | the material beyond 1000 units costs about 0.43 ms (the whole material is nearer the "no biome surfaces" row below) |
 | normal from screen derivatives instead of 4 height lookups (up to 8 fetches) | 0.88-0.93 | the height-field normal costs about 0.25 |
 | no `kenshiLight` | 0.83 | lighting about 0.3, of which shadows (receiver off) about 0.12 |
 | no normal maps / normal maps only within 3000 | 0.80 / 1.09 | |
@@ -357,10 +357,10 @@ patched the shader text through a temporary environment hook (not in the reposit
 | terrain drawn after objects and foliage | moves the cost to foliage, frame unchanged | the terrain is not shaded much under objects |
 | patches nearest first | 1.13 (from 1.29); ground level 1.16 (from 1.66) | **taken** |
 
-A cached, pre-composed material (a clipmap of albedo, normal and gloss around the eye, the user's idea) could replace only the layer
-part: at most about 0.3 ms of 1.16 at ground level beyond 2000 units (the `--material-distance` rows), less near the eye where the
-layers' texel density (about 0.05 units) cannot be cached. The larger remainder is the per-pixel height normal, the lighting and the
-shadows.
+A cached, pre-composed material (a clipmap of albedo, normal and gloss around the eye, the owner's idea) could replace only the layer
+part beyond the distance where a cache's texels are fine enough: at most about 0.3 ms of 1.16 at ground level beyond 2000 units (the
+`--material-distance` rows), and nothing near the eye, where the layers' texel density (about 0.05 units) cannot be cached. The
+per-pixel height normal (about 0.25), the lighting and the shadows (about 0.3) stay either way.
 
 **Impostors**: [impostors.md](impostors.md) section 14 (the receiver's blocker search was 0.36 of the 1.16 ms).
 
@@ -375,5 +375,10 @@ shadows.
 Hub), day views mean 0.001-0.09, at most 0.094 % of pixels over 12 (the Hub; max 81), all on far impostor trees' shadow edges.
 
 **Integrated GPUs** (**Unknown**, nothing measured on one): an iGPU about 10-15x slower than this card gives 12-25 ms of terrain at
-1080p, as reported (25 ms). Since the cost is pixels, the render scale (an upscaler at 0.67 shades 44 % of the pixels) is the
-lever there, not the triangle count.
+1080p, as reported (25 ms). On this card the cost is pixels and the triangle count did not matter; an integrated GPU has weaker
+geometry throughput relative to fill, so both the render scale (an upscaler at 0.67 shades 44 % of the pixels) and `--terrain-error`
+need measuring there.
+
+Scripts: `C:\Temp\perf\run.sh <name> <view> <frames> [options]` (views `okran` = the Blister Hill overview, `low` = ground level;
+`EXE=` picks another viewer), `C:\Temp\perf\rows.sh <logs>` prints the main view's GPU rows; logs in `C:\Temp\perf\logs`, pictures in
+`C:\Temp\perf\gate`.
