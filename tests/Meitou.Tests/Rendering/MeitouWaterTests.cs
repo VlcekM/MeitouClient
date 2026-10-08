@@ -34,6 +34,21 @@ public class MeitouWaterTests
     }
 
     [Fact]
+    public void Wave_count_runs_on_past_one_cycle_and_wraps_at_the_period_the_shader_noise_repeats_in()
+    {
+        var w = new WaveSet();
+        w.Step(0, Vector2.UnitX, 0);
+        float before = w.Shore.X;   // later frames add at most a second each
+        for (int s = 1; s <= 40; s++) w.Step(s / WaveSet.SecondsPerGameHour, Vector2.UnitX, 0);
+        Assert.True(w.Shore.X > before + 4, "40 seconds are five more waves, not a fraction of one");
+        // Starting the clock at a time (--water-seconds) lands on the count that moment has, modulo the wrap.
+        double seconds = (WaveSet.PhaseWrap + 12.5) * WaveSet.BreakerPeriod;
+        var late = new WaveSet();
+        late.Step(seconds / WaveSet.SecondsPerGameHour, Vector2.UnitX, 0);
+        Assert.Equal(12.5f, late.Shore.X, 2);
+        Assert.InRange(late.Shore.X, 0f, (float)WaveSet.PhaseWrap);
+    }
+    [Fact]
     public void Polar_grid_covers_the_disc_with_valid_triangles()
     {
         foreach (int segments in new[] { 128, 256 })

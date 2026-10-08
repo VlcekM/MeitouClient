@@ -28,6 +28,14 @@ internal sealed class ShoreGrid
     public const float ReachRadius = 1500f, ReachLow = 600f, ReachHigh = 1200f;
     public const string ExposureRule = "smoothstep(600, 1200, max distance-to-shore of water within 1500 units)";
 
+    /// <summary>
+    /// Islets get no surf: the exposure is multiplied by smoothstep(<see cref="IsletAreaLow"/>, <see cref="IsletAreaHigh"/>, the area of the
+    /// land mass of the nearest shore), discs of radius 250 to 450 units. A rock or outcrop in open water is as exposed as the coast, and
+    /// without this breakers ringed it on every side and met in the middle.
+    /// </summary>
+    public const float IsletAreaLow = MathF.PI * 250f * 250f, IsletAreaHigh = MathF.PI * 450f * 450f;
+    public const string IsletRule = "x smoothstep(pi 250^2, pi 450^2, area of the nearest shore's land mass)";
+
     public ShoreGrid(int size, float texel, float x0, float z0, float maxDistance, float[] distance, float[] exposure)
     {
         (Size, Texel, X0, Z0, MaxDistance, Distance, Exposure) = (size, texel, x0, z0, maxDistance, distance, exposure);
@@ -132,8 +140,83 @@ internal static class ShoreBake
 
         var tmp = new float[n * n];
         Smooth(dist, tmp, n);
-        var exposure = Exposure(dist, n, texel, maxDistance);
+        var exposure = Exposure(dist, n, texel, maxDistance, IsletBlocks(s, seeds, n, texel));
         return new ShoreGrid(n, texel, x0, z0, maxDistance, dist, exposure);
+    }
+
+    /// <summary>
+    /// The <see cref="ShoreGrid.IsletRule"/> per exposure block: the area of the land mass each texel's nearest shore belongs to (4-connected
+    /// land texels, by a flood fill; one touching the grid's edge counts as large, it may go on beyond), ramped, averaged over the block and
+    /// then over its 3×3 neighbours, so the surf fades over a few hundred units where the nearest shore switches from an islet to the coast
+    /// behind it instead of cutting off.
+    /// </summary>
+    static float[] IsletBlocks(float[] s, Seed[] seeds, int n, float texel)
+    {
+        var label = new int[n * n];
+        var area = new List<float> { 0 };
+        var stack = new int[n * n];
+        for (int k0 = 0; k0 < n * n; k0++)
+        {
+            if (s[k0] > 0 || label[k0] != 0) continue;
+            int id = area.Count, top = 0, count = 0;
+            bool edge = false;
+            label[k0] = id;
+            stack[top++] = k0;
+            while (top > 0)
+            {
+                int k = stack[--top], i = k % n;
+                count++;
+                if (i == 0 || i == n - 1 || k < n || k >= n * n - n) { edge = true; }
+                if (i > 0 && label[k - 1] == 0 && s[k - 1] <= 0) { label[k - 1] = id; stack[top++] = k - 1; }
+                if (i < n - 1 && label[k + 1] == 0 && s[k + 1] <= 0) { label[k + 1] = id; stack[top++] = k + 1; }
+                if (k >= n && label[k - n] == 0 && s[k - n] <= 0) { label[k - n] = id; stack[top++] = k - n; }
+                if (k < n * n - n && label[k + n] == 0 && s[k + n] <= 0) { label[k + n] = id; stack[top++] = k + n; }
+            }
+            area.Add(edge ? float.MaxValue : count * texel * texel);
+        }
+        var ramp = area.Select(a => SmoothStep(ShoreGrid.IsletAreaLow, ShoreGrid.IsletAreaHigh, a)).ToArray();
+        if (ramp.All(r => r >= 1)) return [];   // no islets: nothing to scale
+
+        int nb = (n + Block - 1) / Block;
+        var blocks = new float[nb * nb];
+        Parallel.For(0, nb, bj =>
+        {
+            for (int bi = 0; bi < nb; bi++)
+            {
+                float sum = 0;
+                int count = 0;
+                for (int j = bj * Block; j < Math.Min(n, (bj + 1) * Block); j++)
+                    for (int i = bi * Block; i < Math.Min(n, (bi + 1) * Block); i++, count++)
+                    {
+                        int k = j * n + i, land = k;
+                        if (s[k] > 0)
+                        {
+                            // The nearest crossing lies on the edge between two texel centres: the land one of them.
+                            var seed = seeds[k];
+                            if (seed.D >= None * 0.5f) { sum += 1; continue; }
+                            int ax = Math.Clamp((int)MathF.Floor(seed.X), 0, n - 1), az = Math.Clamp((int)MathF.Floor(seed.Z), 0, n - 1);
+                            land = s[az * n + ax] <= 0 ? az * n + ax
+                                : Math.Clamp((int)MathF.Ceiling(seed.Z), 0, n - 1) * n + Math.Clamp((int)MathF.Ceiling(seed.X), 0, n - 1);
+                            if (s[land] > 0) { sum += 1; continue; }
+                        }
+                        sum += ramp[label[land]];
+                    }
+                blocks[bj * nb + bi] = sum / count;
+            }
+        });
+        var blurred = new float[nb * nb];
+        Parallel.For(0, nb, bj =>
+        {
+            for (int bi = 0; bi < nb; bi++)
+            {
+                float sum = 0;
+                for (int dj = -1; dj <= 1; dj++)
+                    for (int di = -1; di <= 1; di++)
+                        sum += blocks[Math.Clamp(bj + dj, 0, nb - 1) * nb + Math.Clamp(bi + di, 0, nb - 1)];
+                blurred[bj * nb + bi] = sum / 9;
+            }
+        });
+        return blurred;
     }
 
     struct Seed { public float D, X, Z; }
@@ -190,7 +273,7 @@ internal static class ShoreBake
     }
 
     /// <summary>The <see cref="ShoreGrid.ExposureRule"/>: block maxima of the water's distance, a disc dilation over them, the ramp, a bilinear upsample.</summary>
-    static float[] Exposure(float[] dist, int n, float texel, float maxDistance)
+    static float[] Exposure(float[] dist, int n, float texel, float maxDistance, float[] islets)
     {
         int nb = (n + Block - 1) / Block;
         var reachBlock = new float[nb * nb];
@@ -233,7 +316,7 @@ internal static class ShoreBake
                     int w = Math.Min(span[dj + r], r), row = (bj + dj + r) * np + bi + r;
                     for (int di = -w; di <= w; di++) m = MathF.Max(m, padded[row + di]);
                 }
-                coarse[bj * nb + bi] = SmoothStep(ShoreGrid.ReachLow, ShoreGrid.ReachHigh, m);
+                coarse[bj * nb + bi] = SmoothStep(ShoreGrid.ReachLow, ShoreGrid.ReachHigh, m) * (islets.Length > 0 ? islets[bj * nb + bi] : 1);
             }
         });
 

@@ -175,7 +175,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform vec4 uOcean;                // xyz the cascades' tile sizes, w texels per side (0: no ocean yet)
         uniform sampler2D uShoreField;      // ShoreField: R the signed distance to the waterline (positive over water), G the exposure
         uniform vec4 uShoreRect;            // the field's x0, z0, x1, z1 (x1 <= x0: none yet)
-        uniform vec4 uShore;                // x breaker phase (cycles), y run-up height, z breaker wavelength, w breaker height
+        uniform vec4 uShore;                // x the breakers' wave count (cycles since the start, wrapping at 4096), y run-up height, z breaker wavelength, w breaker height
         uniform vec4 uWaveFade;             // eye distances over which the open waves' heights (x to y) and the shore's breakers and foam (z to w) fade out
         uniform float uWaterDebug;          // 1: show the shore fields (MEITOU_WATER_DEBUG=1)
         uniform sampler2D uRiverMap;        // RiverFlowBake: RG the flow direction (x, z), B the half-width over 8 texels, A the river weight; world bounds
@@ -195,7 +195,33 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
 
         // river: how much p is in a river (0 none, 1 a river's channel), flow: its unit direction (x, z), speed: how fast it runs (units a second).
-        struct Shore { float depth; float dist; float g; vec2 dir; float open; float size; float breakAt; float river; vec2 flow; float speed; };
+        // wave: the number of the breaker whose crest is in p's cycle (at g 0.5; it changes in the trough at g 0/1), wrapping at 4096.
+        struct Shore { float depth; float dist; float g; float wave; vec2 dir; float open; float size; float breakAt; float river; vec2 flow; float speed; float sizeWet; float brk; };
+
+        // Waves arrive in pieces, not as one line round the coast. Each wave has a number (the wave count at its place, which it keeps as it
+        // travels in), and slow, coarse noise on the shore point it is heading for (constant across the wave, varying along the shore, drifting
+        // with the clock) decides its height, whether it breaks at all, and (as a phase offset) where along its crest it breaks first.
+        float wHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+        float wNoise(vec2 p)
+        {
+            vec2 i = floor(p), f = fract(p);
+            f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+            return mix(mix(wHash(i), wHash(i + vec2(1.0, 0.0)), f.x), mix(wHash(i + vec2(0.0, 1.0)), wHash(i + vec2(1.0, 1.0)), f.x), f.y);
+        }
+
+        // Wave number k at the shore point q: size, its height factor (0.2 to 1.7: they come in sets of about seven, the sets reaching
+        // different stretches of the shore at different times), and brk, 0 where it rolls in without breaking and 1 where it breaks (a gap
+        // is a few hundred units long, the more so for small waves). The numbers wrap at 4096 with the clock, so every term is periodic in it.
+        void waveAt(float k, vec2 q, out float size, out float brk)
+        {
+            float id = mod(k, 4096.0);
+            vec2 o = vec2(wHash(vec2(id, 3.7)), wHash(vec2(id, 9.1))) * 173.0;
+            float arg = id * (606.0 * 6.2831853 / 4096.0) + 1.1 * sin(id * (261.0 * 6.2831853 / 4096.0) + 0.7) + 3.0 * (wNoise(q / 1500.0 + 3.3) - 0.5);
+            float group = smoothstep(0.2, 0.85, 0.5 + 0.5 * sin(arg));
+            float n = (wNoise(q / 620.0 + o) - 0.5) * 1.6 + 0.71 + 0.3 * (group - 0.5);
+            brk = smoothstep(0.2, 0.6, n);
+            size = mix(0.55, 1.6, group) * (0.8 + 0.4 * wNoise(q / 800.0 + o + 40.0)) * mix(0.7, 1.0, brk);
+        }
 
         vec2 shoreField(vec2 uv) { return textureLod(uShoreField, uv, 0.0).rg; }
 
@@ -206,6 +232,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         Shore shoreAt(vec2 p)
         {
             Shore r;
+            float trust = 0.0;   // how well the field gives the direction to the shore (it fades to nil on the axis between two shores, where the nearest shore jumps)
             r.depth = uWaterHeight - terrainHeight(p);
             r.dist = 1.0e6; r.dir = vec2(0.0); r.open = 0.0; r.flow = vec2(0.0); r.speed = 0.0;
             // Rivers (the baked map, 144 units a texel): the weight, the coarse direction downstream and the width.
@@ -224,6 +251,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 vec2 grad = vec2(shoreField(uv + vec2(e.x, 0.0)).r - shoreField(uv - vec2(e.x, 0.0)).r,
                                  shoreField(uv + vec2(0.0, e.y)).r - shoreField(uv - vec2(0.0, e.y)).r);
                 r.dist = f.r;
+                trust = smoothstep(10.0, 20.0, length(grad));
                 r.dir = length(grad) > 1e-6 ? -normalize(grad) : vec2(0.0);
                 // Fade out towards the field's edge (it follows the eye; beyond it nothing is known).
                 vec2 inside = min(uv, 1.0 - uv) * extent;
@@ -247,12 +275,30 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Rivers have no open water: no surf, and (oceanScale) no waves. They run faster where narrow and shallow.
             r.open *= 1.0 - r.river;
             r.speed = mix(30.0, 14.0, smoothstep(1.0, 5.0, rv.b * 8.0)) * mix(1.5, 0.8, smoothstep(5.0, 60.0, r.depth));
-            // Along the shore the waves arrive at different times, and the sets swell and fade smoothly from one breaker to the next.
-            float along = sin(p.x * 0.0021 + sin(p.y * 0.0013) * 2.0) + sin(p.y * 0.0017 + p.x * 0.0009);
-            float x = r.dist / uShore.z + uShore.x + along * 0.6;
+            // The breakers: phase from the distance to the shore and the wave count; in the surf zone the pieces of the shore (above) offset it
+            // (so the crests slant against the shore and the break peels along them), and give each wave its size and whether it breaks.
+            float x = r.dist / uShore.z + uShore.x;
+            r.size = 1.0; r.sizeWet = 1.0; r.brk = 1.0;
+            float base = 70.0 + 35.0 * sin(p.x * 0.0031 + p.y * 0.0023);
+            if (r.open > 0.0 && r.dist > -150.0 && r.dist < 700.0)
+            {
+                vec2 q = p + r.dir * r.dist + 260.0 * vec2(sin(uShore.x * (23.0 * 6.2831853 / 4096.0) + 1.0), cos(uShore.x * (17.0 * 6.2831853 / 4096.0)));
+                x += trust * (0.6 * (sin(q.x * 0.0021 + sin(q.y * 0.0013) * 2.0) + sin(q.y * 0.0017 + q.x * 0.0009))
+                   + 1.4 * (wNoise(q / 480.0 + 11.3) - 0.5) + 0.7 * (wNoise(q / 210.0 + 5.1) - 0.5));
+                float k = floor(x);
+                float s0, b0, s1, b1;
+                waveAt(k, q, s0, b0);
+                waveAt(k - 1.0, q, s1, b1);
+                // Continuous across the troughs between waves (the breakers' profile is nil there): the new wave's values take over at its front.
+                float t = smoothstep(0.0, 0.25, fract(x));
+                r.size = mix(1.0, mix(s1, s0, t), trust);
+                r.brk = mix(1.0, mix(b1, b0, t), trust);
+                r.sizeWet = mix(1.0, fract(x) >= 0.5 ? s0 : s1, trust);   // the wet sand remembers the last crest that passed
+            }
             r.g = fract(x);
-            r.size = 0.6 + 0.8 * (0.5 + 0.5 * sin(x * 1.37 + 0.4) * sin(x * 0.53 + 1.9));
-            r.breakAt = (70.0 + 35.0 * sin(p.x * 0.0031 + p.y * 0.0023)) * (0.7 + 0.5 * r.size);
+            r.wave = mod(floor(x), 4096.0);
+            // A wave that does not break here runs on to the shore (its break point is at the waterline).
+            r.breakAt = mix(-40.0, base * (0.7 + 0.5 * r.size), r.brk);
             return r;
         }
 
@@ -270,7 +316,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         // low bore of whitewater after it, and is gone at the waterline (the run-up takes over).
         float breakerScale(Shore s)
         {
-            float build = smoothstep(460.0, 160.0, s.dist) * (1.0 + 0.9 * smoothstep(s.breakAt + 140.0, s.breakAt + 10.0, s.dist));
+            float build = smoothstep(460.0, 160.0, s.dist) * (1.0 + 0.9 * s.brk * smoothstep(s.breakAt + 140.0, s.breakAt + 10.0, s.dist));
             float collapse = mix(0.3, 1.0, smoothstep(s.breakAt - 30.0, s.breakAt + 5.0, s.dist));
             return uShore.w * s.open * s.size * build * collapse * smoothstep(-5.0, 20.0, s.dist) * smoothstep(250.0, 120.0, s.depth);
         }
@@ -304,7 +350,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // The geometry gets a smooth hump only (the steep front a few units wide would fall between the vertices and facet; the
                 // fragment shades it), and none where the vertices are too far apart for it.
                 float hump = breakerScale(s) * pow(0.5 - 0.5 * cos(6.2831853 * s.g), 1.5) * smoothstep(0.45, 0.2, spacing / uShore.z);
-                float lift = uShore.y * s.open * s.size * (1.0 - smoothstep(10.0, 60.0, s.dist)) * smoothstep(-140.0, -60.0, s.dist);
+                float lift = uShore.y * s.open * max(s.size, s.sizeWet) * (1.0 - smoothstep(10.0, 60.0, s.dist)) * smoothstep(-140.0, -60.0, s.dist);
                 vec3 d = oceanDisplace(p, spacing).xyz * oceanScale(s) * fade;
                 w += vec3(d.x, d.y + max(hump, lift) * shoreFade, d.z);
             }
@@ -399,6 +445,37 @@ public sealed unsafe class WaterRenderer : IDisposable
             }
         }
 
+        // The foam lit as the land is lit (kenshiLight's diffuse terms, the sun by the biome's ambient map and the sun shadow, and the irradiance cube
+        // by the ambient map's colour and the environment factor; no specular), with the ambient map read at level 0 as the shader runs in a branch.
+        vec3 foamLight(vec3 albedo, vec3 n, vec3 world, float shadow)
+        {
+            vec4 am = uAtmoMaps.z < 0.5 ? vec4(1.0, 1.0, 1.0, 0.5) : textureLod(uAtmoAmbientMap, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w), 0.0);
+            vec3 sun = uAtmoSunLight * am.a * 2.0 * shadow;
+            vec3 diffuse = ATMO_PI * clamp(dot(n, uAtmoLight.xyz), 0.0, 1.0) * sun * 0.96;
+            return albedo * (diffuse + atmoIrradiance(n) * 0.96 * am.rgb * uAtmoLight.w);
+        }
+
+        // The surf's cells: a cellular pattern (the 3 by 3 neighbouring cells) whose points wander slowly with the clock (cycles of 10 and
+        // 20 s). x: the distance to the cell wall (F2 - F1, 0 on a wall, up to about 0.5 in a cell's middle); y: the nearest cell's lifetime
+        // (0.25 to 1: the foam age at which it bursts).
+        vec2 popCells(vec2 x)
+        {
+            vec2 i = floor(x), f = fract(x);
+            vec2 a = 6.2831853 * vec2(fract(uTime * 60.0), fract(uTime * 30.0));
+            float d1 = 8.0, d2 = 8.0, life = 0.0;
+            for (int j = -1; j <= 1; j++)
+                for (int k = -1; k <= 1; k++)
+                {
+                    vec2 c = vec2(float(k), float(j)), h = i + c;
+                    vec2 hv = vec2(wHash(h), wHash(h + 17.3));
+                    vec2 pt = c + 0.15 + 0.7 * hv + 0.15 * sin(a + 6.2831853 * hv.yx);
+                    float d = distance(pt, f);
+                    if (d < d1) { d2 = d1; d1 = d; life = wHash(h + 71.9); }
+                    else d2 = min(d2, d);
+                }
+            return vec2(d2 - d1, mix(0.25, 1.0, life));
+        }
+
         void main()
         {
             vec2 p = vBase;
@@ -433,7 +510,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             // The motion fades with the eye distance; beyond it (and past the world's edge) this is the game's flat water.
             float fade = outside <= 0.0 ? 1.0 - smoothstep(uWaveFade.z, uWaveFade.w, dist) : 0.0;
             Shore s;
-            s.depth = 1.0e4; s.dist = 1.0e6; s.g = 0.0; s.dir = vec2(0.0); s.open = 0.0; s.size = 1.0; s.breakAt = 0.0; s.river = 0.0; s.flow = vec2(1.0, 0.0); s.speed = 0.0;
+            s.depth = 1.0e4; s.dist = 1.0e6; s.g = 0.0; s.wave = 0.0; s.dir = vec2(0.0); s.open = 0.0; s.size = 1.0; s.breakAt = 0.0; s.river = 0.0; s.flow = vec2(1.0, 0.0); s.speed = 0.0; s.sizeWet = 1.0; s.brk = 1.0;
             if (fade > 0.0) s = shoreAt(p);
             else if (outside <= 0.0) s.depth = uWaterHeight - terrainHeight(p);
 
@@ -443,7 +520,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             float above = -s.depth;
             float sinceCrest = fract(s.g - 0.5);
             float level = runup * breakerProfile(s.g);
-            float wetLevel = runup * (1.0 - 0.8 * sinceCrest);
+            float wetLevel = uShore.y * s.open * s.sizeWet * fade * smoothstep(-120.0, -40.0, s.dist) * (1.0 - 0.8 * sinceCrest);
             if (above > 0.0 && above >= max(level, wetLevel)) discard;
             bool swash = above > 0.0;
             float sheet = swash ? level - above : 0.0;   // the swash's thickness (negative: wet sand only)
@@ -531,13 +608,23 @@ public sealed unsafe class WaterRenderer : IDisposable
                 reflected = mix(reflected, min(texture(uReflection, uv).rgb, vec3(3.0)), inside.x * inside.y);
             }
             vec3 light = max(dot(n, l), 0.0) * uSunColour * 0.6 + uSkyZenith * 0.5 + 0.03;
+            // What the biome's water colour says: its brightness, hue (the strongest channel 1), how coloured it is, and `clean`: bright,
+            // blue-green water, the only kind that glows through its crests and foams white (black, rusty or olive water does neither).
+            float wLuma = dot(waterColour, vec3(0.299, 0.587, 0.114));
+            vec3 hue = waterColour / max(max(waterColour.r, waterColour.g), max(waterColour.b, 1e-3));
+            float saturation = 1.0 - min(hue.r, min(hue.g, hue.b));
+            float warm = clamp((waterColour.r - waterColour.b) / (wLuma + 0.02), 0.0, 1.0);
+            float clean = smoothstep(0.06, 0.3, wLuma) * (1.0 - 0.75 * warm);
+            float overcast = 1.0 - 0.8 * uWeatherWet.y;   // rain: no sun to shine through crests or to focus on the floor
+            float deepWater = smoothstep(6.0, 40.0, s.depth);   // over sand, a few units deep, there is nothing to glow
             // The light the water scatters back out of its body, and the light through the crests: with the sun behind a wave its thin top
-            // glows green-blue (stronger the higher the crest and the more the eye looks towards the sun).
+            // glows in the water's own colour (a faint blue-green only in clear water; stronger the higher the crest and the more the eye looks
+            // towards the sun), and not at all in the shallows.
             vec3 body = waterColour * light;
             float crest = smoothstep(1.0, 6.0, oceanHeight * open);
             vec2 towardsSun = normalize(l.xz + vec2(1e-5)), looking = normalize(-view.xz + vec2(1e-5));
             float back = pow(clamp(dot(looking, towardsSun), 0.0, 1.0), 3.0) * smoothstep(-0.05, 0.2, l.y);
-            body += mix(vec3(0.08, 0.38, 0.33), waterColour * 2.0, 0.3) * uSunColour * crest * (back * 0.7 + 0.04) * (1.0 - 0.6 * view.y) * (1.0 - far);
+            body += (waterColour * 1.2 + vec3(0.02, 0.1, 0.09) * clean) * uSunColour * crest * deepWater * overcast * (back * 0.7 + 0.04) * (1.0 - 0.6 * view.y) * (1.0 - far);
 
             // The water's depth along the view (the swash: its own thin sheet).
             float floorDepth = max(0.0, vWorld.y - terrainHeight(p));
@@ -556,15 +643,16 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // texture's cell rims, multiplied).
                 vec2 floorP = p - view.xz / max(view.y, 0.05) * floorDepth * 0.75;
                 float tc = uTime * 30.0;
-                float c1 = texture(uFoamMap, floorP * 0.011 + vec2(tc * 0.011, tc * 0.006)).r;
-                float c2 = texture(uFoamMap, mat2(0.8, 0.6, -0.6, 0.8) * floorP * 0.0147 - vec2(tc * 0.008, -tc * 0.01)).r;
-                float caustic = (c1 * c2 * 1.6 + (c1 + c2) * 0.1) * max(l.y, 0.0) * smoothstep(0.3, 3.0, floorDepth) * exp(-floorDepth / 25.0) * (1.0 - far);
+                // Softer with the depth (the web blurs a few units down, as the real one does), weaker than a bright sand would show, and gone in
+                // the shallows, far away and in rain.
+                float blur = 1.0 + clamp(floorDepth * 0.15, 0.0, 3.0);
+                float c1 = textureLod(uFoamMap, floorP * 0.011 + vec2(tc * 0.011, tc * 0.006), blur).r;
+                float c2 = textureLod(uFoamMap, mat2(0.8, 0.6, -0.6, 0.8) * floorP * 0.0147 - vec2(tc * 0.008, -tc * 0.01), blur).r;
+                float caustic = (c1 * c2 * 0.8 + (c1 + c2) * 0.04) * 0.5 * max(l.y, 0.0) * smoothstep(1.5, 7.0, floorDepth) * exp(-floorDepth / 18.0) * (1.0 - smoothstep(500.0, 2500.0, dist)) * overcast;
                 under *= 1.0 + caustic * uSunColour;
                 // Absorption: in clear water red goes first, then green, so the shallows over sand are turquoise and the deep water dark; a
                 // strongly coloured biome water (a swamp's olive, a red lake) filters towards its own colour instead. The biome's opacity (the
                 // game's alpha per unit of depth) sets how fast. Beyond 4000 units the floor is gone, as in the game.
-                vec3 hue = waterColour / max(max(waterColour.r, waterColour.g), max(waterColour.b, 1e-3));
-                float saturation = 1.0 - min(hue.r, min(hue.g, hue.b));
                 vec3 sigma = mix(vec3(4.5, 1.6, 1.1), 1.0 + 3.0 * (1.0 - hue), smoothstep(0.15, 0.5, saturation));
                 vec3 transmit = exp(-depth * max(pa.w, 0.002) * sigma) * clamp((4400.0 - dist) / 400.0, 0.0, 1.0);
                 colour = mix(under * transmit + body * (1.0 - transmit), reflected, schlick * gloss);
@@ -572,9 +660,10 @@ public sealed unsafe class WaterRenderer : IDisposable
             else colour = mix(body, reflected, schlick * gloss);
             colour += min(spec, 4.0) * uSunColour * 0.25 + pb.y * waterColour;
 
-            // A breaker's face: light comes through its thin lip, so it is brighter and greener than the water, and less see-through.
-            float lip = smoothstep(0.22, 0.45, s.g) * (1.0 - smoothstep(0.46, 0.51, s.g)) * clamp(breaker / max(uShore.w, 0.1), 0.0, 1.0) * smoothstep(3.0, 20.0, s.depth);
-            colour = mix(colour, (waterColour * 1.6 + vec3(0.02, 0.07, 0.06)) * (uSunColour * 0.7 + uSkyZenith * 0.6), lip * 0.6 * near);
+            // A breaker's face: light comes through its thin lip, so it is brighter than the water (in its colour), and less see-through.
+            float lip = smoothstep(0.22, 0.45, s.g) * (1.0 - smoothstep(0.46, 0.51, s.g)) * clamp(breaker / max(uShore.w, 0.1), 0.0, 1.0) * smoothstep(4.0, 24.0, s.depth);
+            vec3 lipColour = (waterColour * 1.8 + vec3(0.01, 0.04, 0.035) * clean) * (uSunColour * 0.7 * overcast + uSkyZenith * 0.6);
+            colour = mix(colour, max(colour, lipColour), lip * 0.6 * near);   // it only brightens: dark water has no light to show through its lip
             // and the trough in front of it is darker.
             float trough = smoothstep(0.05, 0.2, s.g) * (1.0 - smoothstep(0.2, 0.3, s.g)) * clamp(breakerHeight(behind) / max(uShore.w, 0.1), 0.0, 1.0) * (1.0 - smoothstep(s.breakAt, s.breakAt - 30.0, s.dist));
             colour *= 1.0 - 0.25 * trough * near;
@@ -585,18 +674,41 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Outside the break point the swell only feathers at its crest; at the break it bursts white; inside it a bore of whitewater runs
             // to the shore with lace trailing behind it.
             float surfZone = smoothstep(-2.0, 10.0, s.dist) * smoothstep(250.0, 120.0, s.depth) * fade * s.open * min(uShore.w, 1.0);
-            float broken = smoothstep(s.breakAt + 15.0, s.breakAt - 15.0, s.dist);
-            float burst = (1.0 - smoothstep(0.0, 45.0, abs(s.dist - s.breakAt + 10.0))) * smoothstep(0.42, 0.5, s.g) * (1.0 - smoothstep(0.62, 0.8, s.g));
-            float bore = broken * smoothstep(0.43, 0.5, s.g) * (1.0 - smoothstep(0.54, 0.68, s.g));
-            float trail = broken * smoothstep(0.56, 0.66, s.g) * (1.0 - smoothstep(0.66, 0.95, s.g)) * 0.8;
-            float feather = (1.0 - broken) * smoothstep(0.47, 0.5, s.g) * (1.0 - smoothstep(0.5, 0.53, s.g)) * smoothstep(s.breakAt + 120.0, s.breakAt + 20.0, s.dist);
-            float amount = max(clamp((0.7 - jacobian) * 2.5, 0.0, 1.0), clamp(oceanFoam * open, 0.0, 1.0) * 0.75);
+            // The surf's foam is read from the lace in the wave's own frame: q0 is the point's nearest shore point (where the wave front it
+            // sits on crosses the shore) shifted along the normal by the phase g, so a point carried by the wave keeps its q0 and the foam
+            // drifts in with it instead of swimming through a fixed pattern. A slow clump noise ragged-edges the band's front and back.
+            // Every wave reads its own part of the lace: q0 is offset by a hash of the wave's number (which changes in the trough, g 0/1,
+            // where there is no foam), so the next wave is not a copy of this one.
+            // As the foam ages (ageS below: the way run in since the break, and the distance behind the crest) the lace is stretched along
+            // the direction of travel about the crest, up to 2.1 times (the lookup's along-shore-normal scale shrinks): the bore's round
+            // blobs run out into streaks in its wake. The clump (the bands' envelope) is not stretched.
+            float travel = clamp((s.breakAt - (s.dist - uShore.z * (s.g - 0.5))) / max(s.breakAt + 10.0, 40.0), 0.0, 1.0);
+            float ageS = clamp(0.6 * travel + 0.5 * smoothstep(0.5, 0.95, s.g), 0.0, 1.0);
+            float squeeze = 1.0 - 1.0 / (1.0 + 1.1 * ageS * ageS);
+            vec2 q0 = p + s.dir * (s.dist - uShore.z * s.g) + vec2(wHash(vec2(s.wave, 21.7)), wHash(vec2(s.wave, 5.3))) * 997.0;
+            vec2 q = q0 + s.dir * (uShore.z * (s.g - 0.5) * squeeze);
+            vec2 gx = dpx - s.dir * (dot(s.dir, dpx) * squeeze), gy = dpy - s.dir * (dot(s.dir, dpy) * squeeze);
+            float clump = textureGrad(uFoamMap, q0 * 0.0037 + vec2(0.21, 0.63), dpx * 0.0037, dpy * 0.0037).g;
+            vec2 b1 = vec2(0.5), b2 = vec2(0.5);
+            if (fade > 0.0) { b1 = textureGrad(uFoamMap, q * 0.009, gx * 0.009, gy * 0.009).rg; b2 = textureGrad(uFoamMap, q * 0.027 + 0.37, gx * 0.027, gy * 0.027).rg; }
+            float gw = s.g + (clump - 0.5) * 0.22, dw = s.dist + (clump - 0.5) * 36.0;
+            float crestAt = dw - uShore.z * (gw - 0.5);   // the distance of the crest this point trails (or leads)
+            float broken = smoothstep(s.breakAt + 15.0, s.breakAt - 15.0, crestAt);   // the wave has broken: its foam follows the crest back out to the break point
+            float burst = (1.0 - smoothstep(0.0, 45.0, abs(dw - s.breakAt + 10.0))) * smoothstep(0.42, 0.5, gw) * (1.0 - smoothstep(0.62, 0.8, gw));
+            float bore = broken * smoothstep(0.43, 0.5, gw) * (1.0 - smoothstep(0.54, 0.68, gw));
+            float trail = broken * smoothstep(0.56, 0.66, gw) * (1.0 - smoothstep(0.66, 0.95, gw)) * 0.8;
+            float feather = (1.0 - broken) * smoothstep(0.47, 0.5, gw) * (1.0 - smoothstep(0.5, 0.53, gw)) * smoothstep(s.breakAt + 120.0, s.breakAt + 20.0, dw);
+            float amount = max(clamp((0.7 - jacobian) * 3.75, 0.0, 1.0), clamp(oceanFoam * open * 1.5, 0.0, 1.0) * 0.75);
             // Along the shore the breakers break harder in some stretches than others, and not at all in a few.
             float stretch = smoothstep(0.2, 0.75, texture(uFoamMap, p * 0.0011).g);
-            float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 0.5, feather * 0.6)) * min(s.size * 1.1, 1.3);
-            amount = max(amount, min(surfFoam * surfZone * (0.45 + 0.75 * stretch), 0.8));   // capped: the lace shows through even the thickest whitewater
+            float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 1.1, feather * 0.6)) * min(s.size * 1.1, 1.3) * mix(0.275, 1.0, s.brk);
+            float surfAmount = min(surfFoam * surfZone * (0.525 + 0.725 * stretch) * (0.825 + 0.4 * clump) * 1.5, 0.95);   // capped: the lace shows through even the thickest whitewater
             amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * (0.15 + 0.25 * s.open) * fade);
-            if (swash && sheet > 0.0) amount = max(amount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.12, sheet)), 0.35 * (1.0 - sinceCrest)));
+            // The swash: its front is dense, the sheet behind it thins out.
+            if (swash && sheet > 0.0) surfAmount = max(surfAmount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.2, sheet + (b1.g - 0.5) * runup * 0.3)), 0.35 * (1.0 - sinceCrest)));
+            // Foam wears away as it ages: fresh at the break, and the further the wave has run in since (travel, from the break point to the
+            // waterline) and the further behind its crest, the more of it is lace with holes (on the swash too: the sheet thins as it recedes).
+            float age = clamp(ageS + (0.5 - clump) * 0.5, 0.0, 1.0);
             vec2 drift = direction * speed * uTime * 0.2;
             // Blotches (the multi-octave noise at two scales) with bubble rims in them; the more foam, the lower the threshold. Up close the
             // foam shows its bubbles (B: fine cell walls), lit on their walls and darker inside.
@@ -611,10 +723,39 @@ public sealed unsafe class WaterRenderer : IDisposable
             }
             float bubbles = texture(uFoamMap, p * 0.06 - drift * 2.0).b * (1.0 - smoothstep(150.0, 600.0, dist));
             float pattern = (a1.g * 0.6 + a2.g * 0.4) * 0.7 + max(a1.r, a2.r) * 0.45 + bubbles * 0.08;
+            // Dark and coloured water foams less (a thinner, more broken lace), and the foam takes its colour: white only on clear water, a dirty
+            // grey-brown on black water, rust on red.
+            amount *= mix(0.7, 1.0, clean);
             float foam = smoothstep(0.95 - amount, 1.25 - amount, pattern);
-            vec3 foamColour = vec3(0.72) * (max(dot(n, l), 0.0) * uSunColour * 0.9 + uSkyZenith * 0.8 + 0.04) * (0.84 + 0.2 * bubbles);
-            foam *= 0.92;
-            colour = mix(colour, foamColour, foam);
+            if (surfAmount > 0.0)
+            {
+                // The same lace in three scales (clumps, blotches, rims) in the wave's frame, its threshold rising with the foam's age.
+                float lace = (smoothstep(0.15, 0.9, clump) * 0.4 + b1.g * 0.3 + b2.g * 0.3) * 0.7 + max(b1.r, b2.r) * 0.45 + bubbles * 0.08;
+                // It wears cell by cell (cells of about 22 units, in the same stretched frame): each bursts at its own age, a hole opening
+                // from its middle while the walls between the cells stay as lace; the threshold itself rises only a little with the age.
+                vec2 cell = popCells(q * 0.045);
+                float popped = smoothstep(cell.y, cell.y + 0.12, age);
+                lace -= popped * 0.45 * smoothstep(0.04, 0.3, cell.x);
+                float wear = 0.075 + age * 0.3;
+                float surf = surfAmount * mix(0.7, 1.0, clean);
+                foam = max(foam, smoothstep(0.95 - surf + wear, 1.3 - surf + wear + 0.2 * age, lace));
+            }
+            foam *= mix(0.8, 0.92, clean);
+            // The shadow receiver takes derivatives, so it runs here and not inside the foam's branch, and only within 8000 units (where it is
+            // about uniform per quad: the cascades end well before).
+
+            vec3 foamN = normalize(mix(n, vec3(0.0, 1.0, 0.0), 0.6));   // up, a little tilted by the waves
+            float foamShadow = dist < 8000.0 ? kenshiShadow(vWorld, foamN) : 1.0;
+            if (foam > 0.004)
+            {
+                vec3 dirt = mix(vec3(0.8), hue, 0.5) * mix(0.42, 0.6, smoothstep(0.02, 0.25, wLuma));
+                vec3 foamAlbedo = mix(dirt, vec3(0.72) * mix(vec3(1.0), hue, 0.12), clean);
+                // Lit as the land is (the sun through the sun shadows and the biome's ambient map, and the environment light), so it falls
+                // into shadow and dims at night and in dark biomes; in the simple sky, by its old formula times the shadow.
+                vec3 foamLit = uAtmoParams.x > 0.5 ? foamLight(foamAlbedo, foamN, vWorld, foamShadow)
+                    : foamAlbedo * (max(dot(foamN, l), 0.0) * uSunColour * 0.9 * foamShadow + uSkyZenith * 0.8 + 0.04);
+                colour = mix(colour, foamLit * (0.84 + 0.2 * bubbles), foam);
+            }
 
             float a;
             if (refract)
