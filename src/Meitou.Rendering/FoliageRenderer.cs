@@ -44,6 +44,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly NativeProg colourMesh, depthMesh, grassProgram, grassMotionProgram;
     readonly WorldTextureCache textures;
     readonly ConcurrentBag<FoliageWorld> worlds = [];
+    /// <summary>The zone layout cache (null with <c>--no-load-cache</c>); see <see cref="FoliageLayoutCache"/>.</summary>
+    public FoliageLayoutCache? LayoutCache { get; }
     readonly List<FoliageWorld> allWorlds = [];
     readonly Dictionary<ZoneCoordinate, ZoneState> zones = [];
     readonly Dictionary<FoliageMesh, MeshAsset> assetsByMesh = [];
@@ -70,6 +72,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         this.assets = assets;
         var watch = Stopwatch.StartNew();
         catalog = FoliageCatalog.Load(db);
+        if (!LoadCaches.Disabled)
+        {
+            try { LayoutCache = new FoliageLayoutCache(install, catalog, FoliageWorld.ReadTowns(db, levels)); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { LayoutCache = null; }
+        }
         nativeFrame = new NativeFrame(gpu);
         colourMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(), "foliage meshes");
         depthMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshDepthNative(), "foliage mesh depth");
@@ -456,7 +463,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             {
                 if (!worlds.TryTake(out var world))
                 {
-                    world = new FoliageWorld(install, db, levels, catalog);
+                    world = new FoliageWorld(install, db, levels, catalog, cache: LayoutCache);
                     lock (allWorlds) allWorlds.Add(world);
                 }
                 try
@@ -502,17 +509,31 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         LastUpdateMs = watch.Elapsed.TotalMilliseconds;
     }
 
+    /// <summary>The last <see cref="Settle"/> in numbers: when each kind of work was last still going.</summary>
+    public string SettleTimeline { get; private set; } = "";
+
     /// <summary>Waits until everything wanted around <paramref name="eye"/> is laid out, decoded, uploaded and textured (offscreen rendering).</summary>
     public void Settle(Vector3 eye, int timeoutMs = 300000)
     {
         var watch = Stopwatch.StartNew();
         int rounds = 0;
         double? pressureSince = null;
+        var busyUntil = new double[6];
+        void Timeline() => SettleTimeline = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"busy until (ms): zone layouts {busyUntil[0]:0}, grass pages {busyUntil[1]:0}, mesh decode and upload {busyUntil[2]:0}, textures {busyUntil[3]:0}, impostors and generated levels {busyUntil[4]:0}");
         while (watch.ElapsedMilliseconds < timeoutMs)
         {
             guard?.Tick();
             Update(eye, settling: true);
-            if (++rounds > 2 && Pending == 0) return;
+            {
+                double t = watch.Elapsed.TotalMilliseconds;
+                if (runningWhole + runningFar + zonesWaiting > 0) busyUntil[0] = t;
+                if (grassWaiting > 0 || zones.Values.Sum(z => z.GrassRunning) > 0) busyUntil[1] = t;
+                if (decoding.Count + uploads.Count > 0) busyUntil[2] = t;
+                if (textures.PendingCount > 0) busyUntil[3] = t;
+                if (ImpostorPending + lodRunning + lodWaiting > 0) busyUntil[4] = t;
+            }
+            if (++rounds > 2 && Pending == 0) { Timeline(); return; }
             // Under memory pressure the guard holds the loading back: what is missing will not come until it ends, so do not wait for it.
             pressureSince = guard is { Pressure: true } ? pressureSince ?? watch.Elapsed.TotalSeconds : null;
             if (pressureSince is { } since && watch.Elapsed.TotalSeconds - since > 5) { Console.WriteLine("warning   foliage streaming stopped waiting: memory pressure (VramGuard)"); return; }

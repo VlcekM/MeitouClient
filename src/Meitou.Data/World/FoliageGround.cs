@@ -26,6 +26,9 @@ public sealed class FoliageGround
     public float X0 { get; }
     public float Z0 { get; }
 
+    /// <summary>The 129 x 129 grid, row = +Z (for the layout cache).</summary>
+    internal ReadOnlySpan<float> Heights => heights;
+
     /// <summary>The zone's grid from the heightmap (reads 129 rows of the file).</summary>
     public static FoliageGround Read(TerrainHeightmap map, ZoneCoordinate zone)
     {

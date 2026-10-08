@@ -736,6 +736,30 @@ only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. MSAA was removed:
   depth slice and has no normal buffer (curved surfaces show faint banding, thin objects can halo); the auto exposure measures a
   scene without shadows, so its mean runs higher and its exposure lower than the game's in sunlit views; colour LUTs and depth of field are not implemented (the game has neither).
 
+### Start-up time and the load caches
+
+Where a start spends its time (2026-10-09, `--view swamp --screenshot`, RTX 4070, 12 cores; stage times are the viewer's own log lines):
+
+| Stage | Cold (no foliage cache) | Warm (foliage layout cache) |
+|---|---|---|
+| Whole start to the saved picture (wall clock) | 36.0 s (a run without the cache, 36.0 s again on the run that filled it) | 12.2 s |
+| Game data, terrain, objects ("loaded in") | 1.8 s | 1.8 s |
+| GPU set-up (biome textures 2.2 s, rivers 0.7 s, water; cumulative) | 4.0 s | 4.0 s |
+| Terrain streamer settle | 1.1 s | 1.1 s |
+| Objects settle | 0.6 s | 0.6 s |
+| Foliage settle | 25.2 s | 1.4 s |
+| Rest (runtime start, device, first frames, read-back, PNG) | about 3 s | about 3 s |
+
+- The stages run one after the other on the main thread; only the foliage settle overlaps work (three worker threads). In the cold foliage settle the zone layouts are the critical
+  path: the workers spent 72.8 s of placement (3 workers: 24 s) and the last layout finished at 25.2 s, while grass pages ended at 1.0 s and mesh decode, textures and generated levels
+  kept up with the layouts (last busy at 24.7 s, 0 s and 23.7 s). Warm, everything is done by 1.4 s: 414 hits loaded in 311 ms of worker time (89 MB).
+- Two cold runs in a row differ by under 2% in every stage (game data 418 / 409 ms, biomes 2258 / 2177 ms), so the OS file cache is not what matters here (the game files were already
+  cached; a true first start after a reboot was not measured: **Unknown**).
+- **Foliage layout cache**: [formats/foliage.md](formats/foliage.md#layout-cache-in-the-viewer-meitou-2026-10-09). `--no-load-cache` (or `MEITOU_NO_LOAD_CACHE=1`) bypasses it (reads and writes); the log shows
+  `foliage   layout cache <hits> hits, <misses> misses ...` and the settle's `busy until` line.
+- Next biggest item: GPU set-up, 4.0 s of the 12.2 s warm start: 2.2 s loading the 133 biome texture pairs (1064 MB of BC3 / BC1 read and uploaded in one go before anything else), then the
+  river flow map bake (0.7 s) and water. Then the 3 s fixed rest, the terrain streamer (1.1 s) and the game data and objects load (1.8 s).
+
 ### Benchmark harness
 
 One run answers "what does switch X cost or save, and does it change the picture" on a fixed camera, with numbers that can be trusted on a

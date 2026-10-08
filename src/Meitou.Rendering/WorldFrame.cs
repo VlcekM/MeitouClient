@@ -156,6 +156,7 @@ sealed class WorldOptions
           --no-textures            height-tinted terrain without biome textures (faster start)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
+          --no-load-cache          do not read or write the load caches (the foliage layout cache); MEITOU_NO_LOAD_CACHE=1 too
           --range-large <u> --range-medium <u> --range-small <u>   foliage draw range by mesh size (the range switch, F6; defaults 50000, 12000, 3500; Tab sliders)
           --impostor-distance <u>  foliage meshes with an impostor atlas become baked billboards from here (the impostors switch, F7; default 4000; Tab slider)
           --large-impostor-distance <u>  the same for the large size class: trees, rock stacks, hoodoos (default 12000; Tab slider)
@@ -280,6 +281,7 @@ sealed class WorldOptions
                 case "--no-textures": o.NoTextures = true; break;
                 case "--no-objects": o.NoObjects = true; break;
                 case "--no-foliage": o.NoFoliage = true; break;
+                case "--no-load-cache": Meitou.Data.World.LoadCaches.Disabled = true; break;
                 case "--range-large": o.LargeRange = F(); break;
                 case "--impostor-distance": o.ImpostorDistance = F(); break;
                 case "--large-impostor-distance": o.LargeImpostorDistance = F(); break;

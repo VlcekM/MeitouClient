@@ -412,6 +412,35 @@ The expensive part of the foliage is the TERRAIN-mode rocks (about 2.0-2.2 milli
 without it), with 20 000 to 25 000 instances left out of the main view. Known limit (**Unknown**, not seen): an occluder that moves away (a character) can leave an instance out for one frame,
 as the depth is last frame's; the margin covers a camera moving up to 5000 units a frame, a larger step skips the cull for that frame.
 
+## Layout cache in the viewer (Meitou, 2026-10-09)
+
+The layout above is a pure function of the game data, so the viewer keeps each laid-out zone on disk (`FoliageLayoutCache`, `src/Meitou.Data/World/FoliageLayoutCache.cs`) and a later
+start reads it back instead of placing it again. In the Shark swamp view (`--view swamp`, 414 zones, 1,047,128 meshes, 208 grass pages) the foliage stage went from 25.2 s to 1.4 s.
+
+- **What is stored**: per zone and kind (`w` whole, `f` far layers only: they are separate entries, the far kind is not cut from the whole one) the placed instances (mesh and layer by record
+  id, position, scale, yaw, orientation: 40 bytes each, bulk-read), the grass patches (layer, which of the layer's grass types, channel, bounds, and the 129² coverage map, stored once
+  when patches share it), the zone's flags (`Complete`, `Resources`), the 129² ground heights the grass blades are built from, and the milliseconds the placement took (for the saving
+  reported at start-up). Meshes, layers and grass types are looked up by id in the catalog of the start that reads the file; an id the catalog does not have makes the entry unusable.
+  The zone's overlay tile, blend file, biome map and heightmap are not opened at all for a hit.
+- **Where**: `%LOCALAPPDATA%\Meitou\foliage\<key>\z<X>.<Y>.<w|f>.mfl` (`MEITOU_FOLIAGE_CACHE` overrides the folder; never in the repository). 89 MB for the 414 zones above (about 215 KB a zone).
+  Capped at 2 GB (`MEITOU_FOLIAGE_CACHE_MB`, 0 = no cap): over it, the folders of other keys go whole, least recently used first, then this key's oldest files, down to 90%; keys unused
+  for 30 days and temporary files an hour old are deleted. A pass runs once per start (in the background, on the first hit or write).
+- **Key** (SHA-256, 16 hex digits in the folder name, all 32 bytes echoed in each file): the format version; the module version id of Meitou.Data and of every Meitou assembly it references
+  (so any change to the layout code, the random numbers or the readers it uses makes a new key, with no constant to remember to bump); every field of every record reachable from the
+  biomes' foliage lists (layers, meshes with children, grass types, building type ids); the towns (position and `no-foliage range`); size and write time of `fullmap.tif`, `blendinfo.dat`,
+  `biomemap.png` and every `new_overlay.*.png`. The game files are keyed by size and write time, not content. Not in the key, because the layout does not read them (**Verified** by
+  reading `FoliageLayout.Place`: its inputs are the zone, ground, overlay, biomes, biome map and towns): foliage range, grass range, grass density, the Faithful / Meitou switches. They
+  decide which zones get which kind and how many blades a page makes, not what the layout holds.
+- **Safety**: a file is written under a temporary name and moved into place, so a killed viewer leaves no half file. A file carries magic, format version, key, zone, kind, counts and a
+  64-bit checksum, and is read whole; anything that fails any check (truncated, flipped byte, another key, zone or kind, an unknown id) counts as a miss and the zone is placed again
+  and the entry rewritten. The checksum is for damage, not tampering.
+- **Switch**: `--no-load-cache` (or `MEITOU_NO_LOAD_CACHE=1`) neither reads nor writes it. The start-up log has a line `foliage   layout cache N hits, M misses ...; saved about X s of
+  worker time` (the stored placement times of the hits less the time to load them) and a `busy until` line: when each kind of work (layouts, grass pages, mesh decode and upload, textures,
+  impostors) was last still going during the foliage settle.
+- **Pictures**: **Verified** (2026-10-09): `--view swamp --screenshot` is byte-identical (`cmp`) before the change, on the cold start that fills the cache, and on the warm start that reads it.
+  The layout is independent of the order zones are placed in (three workers place them in a different order every start): **Observed**, same comparison.
+- Tests: `FoliageLayoutCacheTests` (round trip, key changes, truncated and damaged files, other key / zone / kind, `--no-load-cache`, upkeep; one `[Slow]` test with real zones of the game).
+
 ## Generated mesh levels in the viewer (Meitou, 2026-10-08)
 
 The game ships no LOD levels for foliage meshes (**Observed**, the probe above for the TERRAIN-mode rocks; `FoliageMesh` has no LOD fields), so Meitou's own are a deviation from the
