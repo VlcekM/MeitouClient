@@ -370,7 +370,6 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         depthProg.Dispose();
         motionProg.Dispose();
         nativeFrame.Dispose();
-        content.Textures.Dispose();
-        content.Morphs.Dispose();
+        content.Dispose();
     }
 }

@@ -89,13 +89,12 @@ internal sealed class CharacterAsset
 /// (shared between appearances; hair, armour and weapons share naturally), skeleton rigs by file, textures through one cache.
 /// Render thread only; uploads need an open frame (<see cref="GpuContext.EnsureFrame"/>).
 /// </summary>
-internal sealed class CharacterContent
+internal sealed class CharacterContent : IDisposable
 {
     const string AllocationName = "character meshes";
     readonly GpuContext gpu;
     readonly AssetLocator assets;
     readonly GameDatabase db;
-    readonly string installRoot;
     readonly MaterialResolver resolver;
     public WorldTextureCache Textures { get; }
     readonly Dictionary<string, SkeletonRig> rigs = new(StringComparer.OrdinalIgnoreCase);
@@ -104,14 +103,14 @@ internal sealed class CharacterContent
     public long MeshBytes { get; private set; }
     public int MeshCount => meshes.Count;
 
-    sealed record LoadedMesh(GpuObjectMesh Gpu, string? SkeletonName, Vector3 Centre, float Radius, MeshMorphs? Morphs = null);
+    /// <param name="FirstMaterialName">The first submesh's material (script) name, which is all the material resolver takes of a submesh; null: no submesh.</param>
+    sealed record LoadedMesh(GpuObjectMesh Gpu, string? FirstMaterialName, Vector3 Centre, float Radius, MeshMorphs? Morphs = null);
 
     public CharacterContent(GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets)
     {
         this.gpu = gpu;
         this.assets = assets;
         this.db = db;
-        installRoot = install.Root;
         resolver = new MaterialResolver(db, OgreMaterialLibrary.LoadConfigured(install, out _), assets);
         Textures = new WorldTextureCache(gpu, assets, "character textures");
         Morphs = new MorphArena(gpu);
@@ -120,6 +119,22 @@ internal sealed class CharacterContent
     public GameDatabase Database => db;
 
     public MorphArena Morphs { get; }
+
+    /// <summary>Frees every mesh's buffers, the textures and the morph arena. The meshes' parts must not be drawn afterwards.</summary>
+    public void Dispose()
+    {
+        foreach (var mesh in meshes.Values)
+            if (mesh is not null)
+                foreach (var part in mesh.Gpu.Parts)
+                {
+                    part.Vertices.Dispose();
+                    part.Indices.Dispose();
+                }
+        meshes.Clear();
+        MeshBytes = 0;
+        Textures.Dispose();
+        Morphs.Dispose();
+    }
 
     /// <summary>Meshes are loaded by bare name (Kenshi reduces the path first), so resources.cfg's last location wins.</summary>
     string? FindMesh(string fcsPath)
@@ -136,6 +151,19 @@ internal sealed class CharacterContent
         return rigs[path] = new SkeletonRig(OgreSkeletonReader.ReadFile(path));
     }
 
+    readonly Dictionary<string, string?> skeletonNames = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The body mesh as <see cref="BodySkeletonName"/> parsed it, for <see cref="Mesh"/> to take instead of reading the file again (cleared by <see cref="Build"/>).</summary>
+    (string Path, OgreMesh Mesh)? parsed;
+
+    /// <summary>The skeleton a body mesh file links, read from the file once per path; throws what the reader throws.</summary>
+    string? BodySkeletonName(string path)
+    {
+        if (skeletonNames.TryGetValue(path, out var name)) return name;
+        var mesh = OgreMeshReader.ReadFile(path);
+        parsed = (path, mesh);
+        return skeletonNames[path] = mesh.SkeletonName;
+    }
+
     /// <summary>Reads and uploads a mesh file, with its skinning weights for a skeleton of <paramref name="boneCount"/> bones (null: unskinned).</summary>
     LoadedMesh? Mesh(string path, int? boneCount)
     {
@@ -144,7 +172,8 @@ internal sealed class CharacterContent
         LoadedMesh? result = null;
         try
         {
-            var mesh = OgreMeshReader.ReadFile(path);
+            var mesh = parsed is { } p && p.Path == path ? p.Mesh : OgreMeshReader.ReadFile(path);
+            parsed = null;
             var model = Model.Build(mesh, boneCount);
             var morphs = MeshMorphs.From(mesh, model, Messages, Path.GetFileName(path));
             foreach (var w in model.Warnings) Messages.Add($"{Path.GetFileName(path)}: {w}");
@@ -175,7 +204,7 @@ internal sealed class CharacterContent
                 gpuMesh.Bytes += vertexBytes + indexBytes;
             }
             MeshBytes += gpuMesh.Bytes;
-            result = new LoadedMesh(gpuMesh, mesh.SkeletonName, centre, radius, morphs);
+            result = new LoadedMesh(gpuMesh, mesh.SubMeshes.FirstOrDefault()?.MaterialName, centre, radius, morphs);
         }
         catch (Exception e) when (e is OgreFormatException or IOException or EndOfStreamException or InvalidDataException)
         {
@@ -217,11 +246,12 @@ internal sealed class CharacterContent
         if (bodyPath is null) { Messages.Add($"body mesh not found: {c.BodyMesh}"); return null; }
         // The body's own skeleton link (Kenshi shares that instance with worn items); the rig's bone count decides the weights kept.
         string? skeletonName;
-        try { skeletonName = OgreMeshReader.ReadFile(bodyPath).SkeletonName; }
+        try { skeletonName = BodySkeletonName(bodyPath); }
         catch (Exception e) when (e is OgreFormatException or IOException or EndOfStreamException or InvalidDataException) { Messages.Add($"{c.BodyMesh}: {e.Message}"); return null; }
         var rig = skeletonName is null ? null : Rig(skeletonName);
-        if (rig is null) { Messages.Add($"{c.BodyMesh} has no skeleton ({skeletonName})"); return null; }
+        if (rig is null) { parsed = null; Messages.Add($"{c.BodyMesh} has no skeleton ({skeletonName})"); return null; }
         var body = Mesh(bodyPath, rig.BoneCount);
+        parsed = null;
         if (body is null) return null;
 
         var asset = new CharacterAsset { Appearance = c, Rig = rig };
@@ -386,10 +416,7 @@ internal sealed class CharacterContent
             return m;
         }
         // Weapons and anything else: the resolver (weapon models of the manufacturers, own textures, script material).
-        OgreSubMesh? first = null;
-        try { first = OgreMeshReader.ReadFile(path).SubMeshes.FirstOrDefault(); }
-        catch (Exception e) when (e is OgreFormatException or IOException or EndOfStreamException or InvalidDataException) { }
-        var candidate = first is null ? null : resolver.Candidates(path, first).FirstOrDefault();
+        var candidate = loaded.FirstMaterialName is null ? null : resolver.Candidates(path, new OgreSubMesh { MaterialName = loaded.FirstMaterialName }).FirstOrDefault();
         m.Description = candidate?.Description ?? "untextured";
         m.Tex[CharacterShaders.SlotDiffuse] = Texture(candidate?.Diffuse, false);
         m.Tex[CharacterShaders.SlotNormal] = Texture(candidate?.Normal, false);
