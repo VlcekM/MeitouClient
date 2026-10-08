@@ -48,14 +48,7 @@ public static class SaveSamples
         }
     }
 
-    static GameDatabase? database;
-
-    public static GameDatabase? BaseDatabase()
-    {
-        var install = GameInstall.Locate();
-        if (install is null) return null;
-        lock (gate) return database ??= GameDatabase.Load(LoadOrder.BaseGame(install));
-    }
+    public static GameDatabase? BaseDatabase() => InstallData.BaseGame;
 
     public static string Temp(string name)
     {

@@ -24,8 +24,8 @@ public class HubTests
         lock (gate)
         {
             if (cached is { } c) return c;
-            var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
-            var levels = WorldLevelData.Load(install!);
+            var db = InstallData.BaseGame!;
+            var levels = InstallData.Levels!;
             var data = PopulationData.Create(db, levels.Towns());
             var hub = data.Sites.Single(s => s.Town.Name == "The Hub");
             return (cached = (db, data, hub)).Value;
@@ -108,6 +108,7 @@ public class HubTests
     }
 
     [Fact]
+    [Bench]
     public void Tick_cost_of_the_hub_is_recorded()
     {
         var (_, data, hub) = Load();

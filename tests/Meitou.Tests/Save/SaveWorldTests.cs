@@ -263,8 +263,8 @@ public class SaveWorldTests
 
     static (GameDatabase, PopulationData) Make(GameInstall install)
     {
-        var db = GameDatabase.Load(LoadOrder.BaseGame(install));
-        var level = WorldLevelData.Load(install);
+        var db = InstallData.BaseGame!;
+        var level = InstallData.Levels!;
         return (db, PopulationData.Create(db, level.Towns()));
     }
 

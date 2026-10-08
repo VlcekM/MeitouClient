@@ -146,7 +146,7 @@ sealed partial class GameHost
                 long ran = session.Simulation.TotalTicks - windowRan, dropped = session.Simulation.DroppedTicks - windowDropped;
                 windowRan = session.Simulation.TotalTicks;
                 windowDropped = session.Simulation.DroppedTicks;
-                double achieved = ran + dropped == 0 ? session.TimeScale : session.TimeScale * ran / (ran + dropped);
+                double achieved = SimulationClock.AchievedSpeedOver(session.TimeScale, ran, dropped);
                 string speedText = session.Simulation.IsPaused ? "paused" + (session.Simulation.RequestedPause ? "" : $" (x{session.Simulation.LastNonZeroSpeed:0})") : $"x{session.TimeScale:0}" + (achieved < session.TimeScale - 0.05 ? $" (running x{achieved:0.0})" : "");
                 window.Title = $"Meitou | {frames / titleTimer:0} fps, cpu {cpuSum / Math.Max(frames, 1):0.00} ms | {(session.Camera.IsFree ? "free camera" : $"boom {s.Distance:0}")} | " +
                     $"{session.Clock.TimeText} {session.Clock.DayText} {speedText} | {s.Target.X:0}, {s.Target.Z:0}{(gpu.Post is { Temporal: true } p ? $" | {p.ActiveUpscaler}" : "")}";

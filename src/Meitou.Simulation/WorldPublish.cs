@@ -27,7 +27,7 @@ public sealed partial class World
                 SquadId = cold?.SquadId ?? -1,
                 IsPlayer = cold?.IsPlayer ?? false,
                 Selected = selected,
-                Skills = selected && cold!.Stats is { } sk ? $"Atk {sk[StatsEnumerated.MeleeAttack]:0.0} Def {sk[StatsEnumerated.MeleeDefence]:0.0} Dodge {sk[StatsEnumerated.Dodge]:0.0} Tough {sk.Toughness:0.0} Str {sk.Strength:0.0} Ath {sk.Athletics:0.0}" : "",
+                Skills = selected && cold!.Stats is { } sk ? new SkillSummary(sk[StatsEnumerated.MeleeAttack], sk[StatsEnumerated.MeleeDefence], sk[StatsEnumerated.Dodge], sk.Toughness, sk.Strength, sk.Athletics) : null,
                 Inventory = selected && cold!.Inventory is { } carried ? Items.InventoryText.Lines(carried) : [],
                 Body = cold?.Medical is { } med && cold.Race is { } race ? new BodyStatus(med.Blood / MathF.Max(Bodies.MedicalState.BloodCapacity(race, cold.Stats?.Strength ?? 50), 1), WorstPart(med), med.Hunger, med.Unconscious, med.Dead) : null,
                 Path = selected && (state[i].Flags & (ushort)MoveFlags.HasPath) != 0 ? cold!.Path.Skip(state[i].PathCursor).ToArray() : [],

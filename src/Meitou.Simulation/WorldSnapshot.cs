@@ -25,9 +25,12 @@ public sealed record CharacterSnapshot(CharacterId Id, CharacterAppearance? Appe
     public BodyStatus? Body { get; init; }
     /// <summary>What a selected character carries, one line per item (empty for the others).</summary>
     public IReadOnlyList<string> Inventory { get; init; } = [];
-    /// <summary>A selected character's trained stats on one line (attack, defence, dodge, toughness, strength, athletics); empty for the others.</summary>
-    public string Skills { get; init; } = "";
+    /// <summary>A selected character's trained stats (the host formats them); null for the others and for a character without stats.</summary>
+    public SkillSummary? Skills { get; init; }
 }
+
+/// <summary>The trained stats the HUD shows for the selection.</summary>
+public readonly record struct SkillSummary(float Attack, float Defence, float Dodge, float Toughness, float Strength, float Athletics);
 
 /// <summary>
 /// What a tick publishes for drawing. Immutable once published: the host keeps the last two and interpolates between them by the

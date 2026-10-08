@@ -165,11 +165,7 @@ public class MovementTests
         using var w = Flat(synchronous: false);
         var id = Add(w, new(0, 300, 0));
         w.Commands.Enqueue(new MoveOrder([id], new Vector3(200, 0, 0)) { Tick = 0 });
-        for (int i = 0; i < 600; i++)
-        {
-            w.RunTick();
-            Thread.Sleep(1);
-        }
+        Assert.True(TestWaits.TickUntil(w, () => Where(w, id).X >= 190), "the character never arrived");
         Assert.InRange(Where(w, id).X, 190, 210);
     }
 

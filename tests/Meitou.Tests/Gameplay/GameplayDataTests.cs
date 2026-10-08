@@ -124,15 +124,11 @@ public class GameplayDataTests
 [Slow]
 public class GameplayInstallTests
 {
-    static GameDatabase? cached;
-    static readonly Lock gate = new();
-
     // The base game load order: the numbers of the docs' probes (factions-squads-towns.md, game-loop.md) hold for it and for the full order.
     static GameDatabase Database()
     {
-        var install = GameInstall.Locate();
-        Assert.SkipWhen(install is null, "Kenshi install not found");
-        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.BaseGame(install!));
+        Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
+        return InstallData.BaseGame!;
     }
 
     [Fact]

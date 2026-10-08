@@ -76,6 +76,9 @@ public sealed class SimulationClock
     /// <summary>The speed the last <see cref="Advance"/> achieved: the asked speed scaled by the share of the owed ticks that ran.</summary>
     public double AchievedSpeed { get; private set; } = 1;
 
+    /// <summary>The achieved speed over any span of time: the asked <paramref name="speed"/> scaled by the share of the owed ticks that ran (the speed itself when none were owed).</summary>
+    public static double AchievedSpeedOver(double speed, long ran, long dropped) => ran + dropped == 0 ? speed : speed * ran / (ran + dropped);
+
     /// <summary>Adds a frame's real time and returns how many simulation ticks to run now.</summary>
     public int Advance(double realSeconds)
     {
@@ -89,7 +92,7 @@ public sealed class SimulationClock
         long droppedBefore = steps.DroppedTicks;
         int run = steps.Advance(realSeconds * speed, (int)Math.Min((long)maxTicksPerFrame * (long)speed, int.MaxValue));
         long dropped = steps.DroppedTicks - droppedBefore;
-        AchievedSpeed = run + dropped == 0 ? speed : speed * run / (run + dropped);
+        AchievedSpeed = AchievedSpeedOver(speed, run, dropped);
         return run;
     }
 }

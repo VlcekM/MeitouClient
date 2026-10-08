@@ -24,13 +24,17 @@ public sealed class WorldSession : IDisposable
         GameClock? clock = null, WorldSettings? simulation = null, IEnumerable<ITickSystem>? systems = null,
         IWalkability? walkability = null)
     {
+        // The game clock advances by the simulation clock's tick and the world by its own: they must be the same length.
+        var settings = simulation ?? new WorldSettings();
+        if (Math.Abs(settings.TickSeconds - Simulation.TickSeconds) > 1e-6)
+            throw new ArgumentException($"the world ticks {settings.TickSeconds} s but the simulation clock {Simulation.TickSeconds} s", nameof(simulation));
         Focus = focus;
         Region = region;
         Ticks = new FixedStepClock(tickRate);
         Clock = clock ?? new GameClock(startHour);
         Bindings = bindings ?? new InputBindings();
         Camera = new CameraRig(ground);
-        World = new World(simulation ?? new WorldSettings(), walkability ?? new OpenGroundWalkability(ground), systems);
+        World = new World(settings, walkability ?? new OpenGroundWalkability(ground), systems);
     }
 
     /// <summary>The point the world was loaded around.</summary>

@@ -19,8 +19,8 @@ public class HubNavigationTests
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install!));
-        var levels = WorldLevelData.Load(install!);
+        var db = InstallData.FullLoadOrder!;
+        var levels = InstallData.Levels!;
         var dir = Path.Combine(Path.GetTempPath(), "meitou-hubnav-" + Guid.NewGuid().ToString("N"));
         try
         {

@@ -187,11 +187,7 @@ public class PopulationTests
         sync.RunTick();
         var settings = new PopulationSettings { Background = true };
         using var async = SyntheticTown.World(11, 1, 3, settings);
-        for (int i = 0; i < 400 && async.Characters.Count == 0; i++)
-        {
-            async.RunTick();
-            Thread.Sleep(2);
-        }
+        Assert.True(TestWaits.TickUntil(async, () => async.Characters.Count > 0), "the background build never finished");
         Assert.Equal(sync.Characters.Count, async.Characters.Count);
         var a = sync.Squads.All.Select(s => (s.TemplateId, s.Position.X, s.Position.Z, s.Members.Count)).ToList();
         var b = async.Squads.All.Select(s => (s.TemplateId, s.Position.X, s.Position.Z, s.Members.Count)).ToList();
