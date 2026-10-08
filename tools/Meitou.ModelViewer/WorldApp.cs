@@ -393,7 +393,7 @@ static partial class WorldApp
                 stats.Clear();
                 stats.Add($"{frames / titleTimer:0} fps ({(display.VSync ? "vsync" : "uncapped")}), cpu {cpuMs / Math.Max(frames, 1):0.00} ms, gpu {gpuText} ms");
                 // The window title carries the frame rate too.
-                window.Title = $"Meitou world ({RendererName(o)}) | {frames / titleTimer:0} fps, gpu {gpuText} ms";
+                window.Title = $"Meitou world ({RendererName(o)}) | {frames / titleTimer:0} fps";
                 var (vramUsed, vramBudget) = display.Context.Device.VideoMemory();
                 var alloc = display.Context.Device.Allocator;
                 stats.Add($"vram        {vramUsed / 1073741824.0:0.00} of {vramBudget / 1073741824.0:0.0} GB; our blocks {alloc.TotalAllocatedBytes / 1073741824.0:0.00} GB, {alloc.TotalUsedBytes / 1073741824.0:0.00} used");
