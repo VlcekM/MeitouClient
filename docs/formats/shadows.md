@@ -275,6 +275,16 @@ Not the game's: the remaster's choice, on by default (F5 / `--faithful shadows` 
   It fades in from 55 % to 90 % of the range and combines with the cascades by the minimum, so it agrees with them where both apply
   (Observed: the same picture at range 5000 and 9000 at 07:00). This is where the two modes differ most at a low sun: at the
   forest view at 07:00 the valley beyond the range is shadowed by the cliffs here and lit with `--faithful shadows`, as in the game.
+- **Landmark shadows** (2026-10-08). The landmarks (placements of world radius 2000+, drawn to the landmark distance, 150000 by
+  default; [../renderer-native.md](../renderer-native.md) 8.19) cast shadows however far they are. Every landmark drawn (resolved,
+  within its reach and part distance) goes into one more depth map along the sun, 4096² D32 (64 MB), a light-space square fitted
+  around all their bounding spheres (`MeitouShadowFit.FitLandmarks`; about 60 units per texel with the 70-75 landmarks around the Ribs),
+  drawn by the objects' depth path at the camera's LOD choice, again only when the set of landmarks changes or the sun turns by more
+  than 0.1°. The receiver reads it like the terrain term (faded in from 55 % to 90 % of the range, combined by the minimum; nearer,
+  the cascades draw the landmarks): a normal offset of 1.5 texels, 8 comparisons on a rotated disk of 1.5 texels; a point outside the
+  map is lit. **Observed**: looking down on the Ribs from 25000 units at 16:00 (`--at -1018,77000 --pitch 45 --distance 25000`),
+  the rib cages now shade the ground and themselves and the wreck cages their insides; before, nothing beyond 10000 had a shadow
+  but the terrain's. Faithful shadows have none (the game draws nothing past its range).
 - **Costs** (**Observed**, 2026-10-05, the same machine and caveats as the measurements in [../viewer.md](../viewer.md#shadows),
   Meitou against `--faithful shadows` on the same build): The Hub `--fly-benchmark 1000`, three interleaved pairs, shadow stage CPU
   mean 2.43 ms against 3.31 ms (casters: terrain 0.36 / 0.80, objects 0.29 / 0.44, foliage 1.66 / 2.00), flight p50 21.6-22.0 ms

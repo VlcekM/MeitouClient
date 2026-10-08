@@ -15,7 +15,7 @@ static class MeitouShadowShaders
     public const uint Binding = 8;
     public const string Block = "MeitouShadowReceiver";
     /// <summary>Size of <see cref="Block"/> (std140).</summary>
-    public const int BlockBytes = 192;
+    public const int BlockBytes = 272;
     /// <summary>Taps of the filter and of the blocker search.</summary>
     public const int FilterTaps = 16, BlockerTaps = 8;
 
@@ -36,9 +36,12 @@ static class MeitouShadowShaders
             vec4 uMsTerrain;       // xy: world x, z of the first sample, z: samples per world unit, w: 1 when the terrain term is on
             vec4 uMsTerrain2;      // x: samples per side, y: height bias, z: minimum softness (height), w: softness per unit of occluder distance
             vec4 uMsFlags;         // x: 1 when the blocker map is valid (contact-hardening penumbrae), y: terrain term fade end
+            mat4 uMsLandmarkTile;  // (world - origin) -> (u, v, depth) in the landmark map (ShadowPass.Meitou, "landmark shadows")
+            vec4 uMsLandmark;      // x: filter radius (UV), y: normal offset (world), w: 1 when the landmark map is on
         };
         uniform sampler2D uShadowTerrain;   // per world grid sample: (height of the shadow's top, distance to the occluder)
         uniform sampler2D uShadowBlocker;   // the atlas's depth at half resolution, nearest of each 2 × 2 (raw, for the blocker search)
+        uniform sampler2DShadow uShadowLandmark;   // the landmarks' depth along the sun (comparison)
 
         // The terrain's own shadow beyond the cascades: a world point is shadowed by the land towards the sun when it lies below the
         // top of that land's shadow (precomputed per sun direction, TerrainShadowMap), softened by the occluder's distance.
@@ -111,6 +114,28 @@ static class MeitouShadowShaders
             return lit / {{F(FilterTaps)}};
         }
 
+        // The landmarks' shadow beyond the cascades (they draw the near ones): one map along the sun around every landmark drawn, read with
+        // the terrain term's fade, the point moved off its surface by the normal offset, a rotated 8-tap disk. Outside the map: lit.
+        float msLandmark(vec3 world, vec3 ng, float depth, float noise)
+        {
+            if (uMsLandmark.w < 0.5) return 1.0;
+            float w = smoothstep(uMsParams.w, uMsFlags.y, depth);
+            if (w <= 0.0) return 1.0;
+            vec3 t = (uMsLandmarkTile * vec4(world - uShadowOrigin.xyz + ng * uMsLandmark.y, 1.0)).xyz;
+            if (any(lessThan(t.xy, vec2(0.0))) || any(greaterThan(t.xy, vec2(1.0))) || t.z <= 0.0) return 1.0;
+            float angle = noise * 6.2831853;
+            vec2 rot = vec2(cos(angle), sin(angle));
+            float lit = 0.0;
+            for (int k = 0; k < 8; k++)
+            {
+                float r = sqrt((float(k) + 0.5) / 8.0);
+                float a = float(k) * 2.3999632;
+                vec2 o = r * vec2(rot.x * cos(a) - rot.y * sin(a), rot.y * cos(a) + rot.x * sin(a)) * uMsLandmark.x;
+                lit += textureLod(uShadowLandmark, vec3(t.xy + o, min(t.z, 1.0)), 0.0);
+            }
+            return mix(1.0, lit / 8.0, w);
+        }
+
         float kenshiShadowMeitou(vec3 world, vec3 n)
         {
             if (uShadowOrigin.w < 0.5) return 1.0;
@@ -147,7 +172,7 @@ static class MeitouShadowShaders
                 }
                 csm = mix(csm, 1.0, smoothstep(uMsParams.z, uMsParams.y, depth));   // no hard edge where the range ends
             }
-            return min(csm, msTerrain(world, depth));
+            return min(csm, min(msTerrain(world, depth), msLandmark(world, ng, depth, noise)));
         }
         #else
         float kenshiShadowMeitou(vec3 world, vec3 n) { return kenshiShadowFaithful(world, n); }

@@ -62,6 +62,7 @@ static partial class NativeShaders
             uint shadowNoise;
             uint shadowTerrain;
             uint shadowBlocker;
+            uint shadowLandmark;
         } frame;
 
         """;
@@ -147,6 +148,7 @@ static partial class NativeShaders
         ["uAtmoAmbientMap"] = "textures2D[frame.atmoAmbientMap]",
         ["uShadowMap"] = "shadowTextures[frame.shadowMap]", ["uShadowNoise"] = "textures2D[frame.shadowNoise]",
         ["uShadowTerrain"] = "textures2D[frame.shadowTerrain]", ["uShadowBlocker"] = "textures2D[frame.shadowBlocker]",
+        ["uShadowLandmark"] = "shadowTextures[frame.shadowLandmark]",
     };
 
     /// <summary>The per-view uniforms the world shaders share: <see cref="ViewConstants"/> members.</summary>
@@ -276,6 +278,7 @@ struct FrameConstants
     [FieldOffset(224)] public uint ShadowNoise;
     [FieldOffset(228)] public uint ShadowTerrain;
     [FieldOffset(232)] public uint ShadowBlocker;
+    [FieldOffset(236)] public uint ShadowLandmark;
 
     /// <summary>The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.</summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
@@ -290,7 +293,7 @@ struct FrameConstants
     [
         ("uAtmoIrradiance", BindlessKind.Cube, 208), ("uAtmoSpecular", BindlessKind.Cube, 212), ("uAtmoAmbientMap", BindlessKind.Texture2D, 216),
         ("uShadowMap", BindlessKind.Shadow2D, 220), ("uShadowNoise", BindlessKind.Texture2D, 224), ("uShadowTerrain", BindlessKind.Texture2D, 228),
-        ("uShadowBlocker", BindlessKind.Texture2D, 232),
+        ("uShadowBlocker", BindlessKind.Texture2D, 232), ("uShadowLandmark", BindlessKind.Shadow2D, 236),
     ];
 }
 

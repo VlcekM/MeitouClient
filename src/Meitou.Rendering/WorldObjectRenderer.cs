@@ -520,7 +520,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         // 1. Cull and choose levels: every instance into the batch of its (mesh, materials, level) with its dither range.
         float realBand = Math.Clamp(real * 0.1f, 50, 1500);
         float distantBand = Math.Clamp(DistantReach * 0.15f, 500, 4000);
-        foreach (var zone in streamer.ZonesNear(eye, Math.Max(real, NoDistant ? 0 : DistantReach), frustum))
+        foreach (var zone in landmarksOnly ? [] : streamer.ZonesNear(eye, Math.Max(real, NoDistant ? 0 : DistantReach), frustum))
         {
             if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) <= real)
                 foreach (var inst in zone.Real) DrawReal(zone, inst, real, eye, frustum, options, now);
@@ -544,7 +544,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             float reach = LandmarkReach;
             foreach (var inst in landmarkZone.Real) DrawReal(landmarkZone, inst, reach, eye, frustum, options, now);
         }
-        if (!NoDistant)
+        if (!NoDistant && !landmarksOnly)
             foreach (var t in towns)
             {
                 if (t.Mesh.Gpu is not { } gpu) continue;
@@ -1051,6 +1051,37 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         depthPass = true;
         try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain); }
         finally { depthPass = false; }
+    }
+
+    bool landmarksOnly;
+
+    /// <summary><see cref="DrawDepth"/> for the landmarks alone (the landmark shadow map, ShadowPass.Meitou): the same reach, levels and batches.</summary>
+    public void DrawLandmarksDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain)
+    {
+        landmarksOnly = true;
+        try { DrawDepth(viewProjection, eye, frustum, options, terrain); }
+        finally { landmarksOnly = false; }
+    }
+
+    /// <summary>
+    /// The landmarks <see cref="Draw"/> would draw from <paramref name="eye"/> looking any way (resolved, within the landmark reach and their part
+    /// distance): their bounding spheres (xyz centre, w radius) into <paramref name="spheres"/>. Returns a key that changes when that set does.
+    /// </summary>
+    public long LandmarkCasters(Vector3 eye, List<Vector4> spheres)
+    {
+        spheres.Clear();
+        if (streamer.LandmarkZone is not { } zone) return 0;
+        float reach = LandmarkReach;
+        long key = 17;
+        for (int i = 0; i < zone.Real.Count; i++)
+        {
+            var inst = zone.Real[i];
+            if (inst.Gpu is not { } gpu || !ReferenceEquals(inst.Mesh.Gpu, gpu)) continue;
+            if (Vector3.Distance(inst.Centre, eye) - inst.Radius >= Math.Min(reach, inst.Limit)) continue;
+            spheres.Add(new Vector4(inst.Centre, inst.Radius));
+            key = key * 31 + i + 1;
+        }
+        return key;
     }
 
     public void Dispose()

@@ -111,4 +111,38 @@ public static class MeitouShadowFit
         var (ex, ey, _) = cascade.Extent;
         return Math.Abs(cx + tx) + radius + border <= ex * 0.5 && Math.Abs(cy + ty) + radius + border <= ey * 0.5;
     }
+
+    /// <summary>
+    /// The landmark shadow map's box (Meitou; docs/formats/shadows.md, "Landmark shadows"): one square light-space box around the bounding
+    /// spheres (xyz centre, w radius) of every landmark drawn, so that each casts its shadow however far it is from the camera. A receiver
+    /// outside the box is lit (no landmark lies towards the sun from it). Null without spheres. <see cref="ShadowCascade.Index"/> is 4,
+    /// <see cref="ShadowCascade.Tile"/> the whole map.
+    /// </summary>
+    public static ShadowCascade? FitLandmarks(Vector3 toSun, IReadOnlyList<Vector4> spheres, int mapSize)
+    {
+        if (spheres.Count == 0) return null;
+        var rotation = ShadowCascades.LightRotation(toSun);
+        double x0 = double.MaxValue, y0 = double.MaxValue, z0 = double.MaxValue, x1 = double.MinValue, y1 = double.MinValue, z1 = double.MinValue;
+        foreach (var s in spheres)
+        {
+            double x = rotation.M11 * (double)s.X + rotation.M21 * (double)s.Y + rotation.M31 * (double)s.Z;
+            double y = rotation.M12 * (double)s.X + rotation.M22 * (double)s.Y + rotation.M32 * (double)s.Z;
+            double z = rotation.M13 * (double)s.X + rotation.M23 * (double)s.Y + rotation.M33 * (double)s.Z;
+            (x0, x1, y0, y1, z0, z1) = (Math.Min(x0, x - s.W), Math.Max(x1, x + s.W), Math.Min(y0, y - s.W), Math.Max(y1, y + s.W), Math.Min(z0, z - s.W), Math.Max(z1, z + s.W));
+        }
+        double size = Math.Max(Math.Max(x1 - x0, y1 - y0), 1) * 1.02, texel = size / mapSize;
+        double depth = Math.Max(z1 - z0, 1) * 1.02;
+        return new ShadowCascade
+        {
+            Index = 4,
+            Rotation = rotation,
+            Translation = (-(x0 + x1) * 0.5, -(y0 + y1) * 0.5, -(z0 + z1) * 0.5),
+            Extent = (size, size, depth),
+            Texel = texel,
+            // Half a texel's slope at 45° plus the usual fixed bias, in depth units.
+            FixedBias = (float)Math.Max(KenshiShadows.FixedBiasFactor * 2.0 / depth, texel * 0.5 / depth),
+            FilterRadius = 1.5f / mapSize,
+            Tile = new Vector4(0, 0, 1, 1),
+        };
+    }
 }

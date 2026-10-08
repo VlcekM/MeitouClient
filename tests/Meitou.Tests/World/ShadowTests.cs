@@ -200,4 +200,27 @@ public class ShadowTests
         double expected = Math.Max(Math.Sqrt(Math.Pow(100 + 35, 2) * k + Math.Pow(100 - 35, 2)), 2 * 100 * Math.Sqrt(k));
         Assert.Equal(expected, ShadowCascades.StableSize(35, 100, 50 * Math.PI / 180, aspect), 6);
     }
+
+    [Fact]
+    public void Landmark_box_holds_every_landmark_and_its_sunward_side_is_nearer()
+    {
+        Assert.Null(MeitouShadowFit.FitLandmarks(Sun, [], 4096));
+        Vector4[] spheres = [new(-120000, 3000, 80000, 2500), new(90000, 6000, -100000, 9000), new(5000, 1500, 2000, 2000)];
+        var box = MeitouShadowFit.FitLandmarks(Sun, spheres, 4096)!;
+        foreach (var s in spheres)
+            foreach (var d in new[] { Vector3.UnitX, -Vector3.UnitX, Vector3.UnitY, -Vector3.UnitY, Vector3.UnitZ, -Vector3.UnitZ })
+            {
+                var p = box.Project(new Vector3(s.X, s.Y, s.Z) + d * s.W);
+                Assert.InRange(p.X, 0f, 1f);
+                Assert.InRange(p.Y, 0f, 1f);
+                Assert.InRange(p.Z, 0f, 1f);
+            }
+        // Depth grows away from the sun: a point towards the sun is nearer, and the matrices agree with Project.
+        var c = new Vector3(5000, 1500, 2000);
+        Assert.True(box.Project(c + Sun * 1000).Z < box.Project(c).Z);
+        var clip = Vector4.Transform(new Vector4(c, 1), box.WorldToClip());
+        Assert.Equal(box.Project(c).X * 2 - 1, clip.X, 3);
+        Assert.Equal(box.Project(c).Z, clip.Z, 3);
+        Assert.Equal(box.Size.X / 4096, box.Texel, 3);
+    }
 }

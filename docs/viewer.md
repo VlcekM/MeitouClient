@@ -336,6 +336,8 @@ How it works (status as in [README.md](README.md)):
     distance, and still capped by the game's part distance for building parts. Their meshes use the far LOD forms and mip streaming like any object. Faithful
     (`--faithful reach` or `all`, or `--landmark-distance 0`) builds no list: every placement stays in its zone and the object distance rules, so the
     pictures do not change. Without Meitou at the start there is no list (and no slider); `F8` later moves the distances, not the landmarks.
+    With the Meitou shadows every landmark drawn also casts its shadow however far it is (a landmark shadow map along the sun beyond the cascades;
+    [formats/shadows.md](formats/shadows.md), "Landmark shadows").
   - **Distant towns**: for a town with a baked mesh (`data/meshes/distant/distant_<handle>.mesh`, `DistantTowns.Find`) the baked mesh
     rises in as the real buildings fade out, with per-vertex fade from the eye distance (no dither cost); it falls off at
     `--distant-range` zones (default 10, the game's setting maximum; the game's default is 6; `--no-distant` disables). A town without one

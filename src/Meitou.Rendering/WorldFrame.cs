@@ -882,7 +882,10 @@ static class WorldFrame
             shadow.PhaseMs[1] += (t2 - t1) * ms;
             shadow.PhaseMs[2] += (t3 - t2) * ms;
             cascades?.Append($" [c{cascade.Index}: terrain {(gpu.Terrain.DepthTriangles - tri) / 1000}k tri {(t1 - t0) * ms:0.00} ms, objects {oi} in {oc} calls {(t2 - t1) * ms:0.00} ms, foliage {fi} in {fc} calls {(t3 - t2) * ms:0.00} ms ({gpu.Foliage?.DepthDetail})]");
-        }, sunHeight);
+        }, sunHeight, render.Objects && gpu.Objects is { HasLandmarks: true } lo
+            ? new ShadowPass.LandmarkCasters(spheres => lo.LandmarkCasters(camera.Eye, spheres),
+                (_, worldToClip, planes, lodEye) => lo.DrawLandmarksDepth(worldToClip, lodEye, planes, render, gpu.Terrain))
+            : null);
         shadow.CasterStats = $"{gpu.Terrain.DepthTriangles:N0} terrain triangles, {objects} objects, {foliage} foliage meshes (over the cascades); cpu terrain {shadow.PhaseMs[0]:0.00}, objects {shadow.PhaseMs[1]:0.00}, foliage {shadow.PhaseMs[2]:0.00} ms;{cascades}"
             + (shadow.Meitou ? $"; meitou: {shadow.DescribeMeitou()}" : "");
     }

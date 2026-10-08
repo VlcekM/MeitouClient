@@ -69,6 +69,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
         // The terrain shadow map with its own sampler (linear, clamped; TerrainShadowMap).
         g.Publish("uShadowTerrain", () => boundTerrain ?? default);
         g.Publish("uShadowBlocker", () => blockerPublished ? blockerSampled : default);
+        g.Publish("uShadowLandmark", () => landmarkPublished ? landmarkSampled : default);   // the landmark shadow map (comparison, linear, clamped)
     }
 
     /// <summary>A texture with the sampler VkGl made from these GL parameters (the same rule, <see cref="SamplerDesc.FromGl"/>). None of these
@@ -117,14 +118,15 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// Draws the cascades for this camera and light, then publishes them to the receivers.
     /// <paramref name="toSun"/> is the lighting direction (towards the sun, height clamped to 0 under the horizon), <paramref name="sunHeight"/>
     /// the real sun's height (the map is drawn while it is at least <see cref="MinSunHeight"/>; by default the lighting direction's).
+    /// <paramref name="landmarks"/>: the landmarks for the Meitou shadows' landmark map (they cast shadows however far they are).
     /// </summary>
-    public void Render(ShadowView view, Vector3 toSun, CasterDraw draw, float? sunHeight = null)
+    public void Render(ShadowView view, Vector3 toSun, CasterDraw draw, float? sunHeight = null, LandmarkCasters? landmarks = null)
     {
         Poll();
         UploadNoise();
         Cascades = null;
         if (!Enabled || (sunHeight ?? toSun.Y) < MinSunHeight || toSun.LengthSquared() < 1e-8f) { Disable(); return; }
-        if (Meitou) { RenderMeitou(view, Vector3.Normalize(toSun), draw); return; }
+        if (Meitou) { RenderMeitou(view, Vector3.Normalize(toSun), draw, landmarks); return; }
         meitouValid = false;
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
@@ -158,10 +160,10 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// guests read set, and the guests (terrain, objects, foliage, all native) record into the returned list's rendering instance through
     /// <c>BeginNativeInPass</c>, which finds the host. <paramref name="clear"/>: the whole atlas is cleared by the load op (else it is loaded).
     /// </summary>
-    CommandList BeginHost(string label, bool clear)
+    CommandList BeginHost(string label, bool clear, Texture? target = null)
     {
         var cmd = Gpu.BeginNative(label);
-        var t = PassTargets.Of(null, atlas!);
+        var t = PassTargets.Of(null, target ?? atlas!);
         var depth = clear ? t.Depth with { Load = AttachmentLoadOp.Clear, Clear = new ClearValue(depthStencil: new ClearDepthStencilValue(1f, 0)) } : t.Depth;
         // Wave 4 (docs/renderer-native.md 6): the cascades' segments are secondaries, recorded on the job threads when the host ends.
         bool secondaries = Recording.Secondaries;

@@ -12,7 +12,7 @@ namespace Meitou.Rendering;
 /// game's CSM, but cascades fitted over the visible depths (<see cref="MeitouShadowFit"/>), drawn on a staggered schedule (the first every
 /// frame, the second every other frame, the last two every fourth, each kept with the matrices it was drawn with), a soft receiver with
 /// cascade blending and a fade at the range's end, contact-hardening penumbrae from a half-resolution blocker map, and the terrain's own
-/// shadow over the whole world beyond the range (<see cref="TerrainShadowMap"/>).
+/// shadow over the whole world beyond the range (<see cref="TerrainShadowMap"/>), and the landmarks' beyond it however far they are (the landmark map).
 /// </summary>
 public sealed unsafe partial class ShadowPass
 {
@@ -60,9 +60,57 @@ public sealed unsafe partial class ShadowPass
 
     /// <summary>One line on the schedule: how often each cascade was drawn, and the terrain map's rebuilds.</summary>
     public string DescribeMeitou() =>
-        $"drawn {string.Join("/", CascadeDraws)} times in {MeitouFrames} frames; terrain shadow rebuilt {terrainMap?.Builds ?? 0} times (cpu {terrainMap?.LastBuildCpuMs ?? 0:0.00} ms)";
+        $"drawn {string.Join("/", CascadeDraws)} times in {MeitouFrames} frames; terrain shadow rebuilt {terrainMap?.Builds ?? 0} times (cpu {terrainMap?.LastBuildCpuMs ?? 0:0.00} ms); " +
+        $"landmark shadow map drawn {LandmarkDraws} times ({LandmarkCount} landmarks, {(landmarkBox is { } b ? $"{b.Texel:0} units per texel" : "off")})";
 
-    void RenderMeitou(ShadowView view, Vector3 toSun, CasterDraw draw)
+
+    /// <summary>Collects the landmarks to cast into the landmark map: their bounding spheres (xyz centre, w radius) into the list, and a key
+    /// that changes when that set does (WorldObjectRenderer.LandmarkCasters).</summary>
+    public delegate long LandmarkCollect(List<Vector4> spheres);
+    /// <summary>The landmarks for <see cref="Render"/>: how to collect them and how to draw their depth.</summary>
+    public readonly record struct LandmarkCasters(LandmarkCollect Collect, CasterDraw Draw);
+
+    /// <summary>The landmark shadow map's side (texels). Over the landmarks of the default reach (150000 around the camera) a texel is about 75 units;
+    /// a landmark is 2000 or more in radius.</summary>
+    public const int LandmarkMapSize = 4096;
+    Texture? landmarkMap;
+    SampledTexture landmarkSampled;
+    bool landmarkPublished;
+    ShadowCascade? landmarkBox;
+    long landmarkKey;
+    Vector3 landmarkSun;
+    readonly List<Vector4> landmarkSpheres = [];
+    /// <summary>How often the landmark map was drawn, and the landmarks in it the last time (for the log).</summary>
+    public int LandmarkDraws { get; private set; }
+    public int LandmarkCount { get; private set; }
+
+    /// <summary>
+    /// The landmark shadow map (docs/formats/shadows.md, "Landmark shadows"): every landmark drawn (resolved, within the landmark reach) into one
+    /// depth map along the sun, fitted around them all (<see cref="MeitouShadowFit.FitLandmarks"/>), so a landmark casts its shadow however far it
+    /// is; the receivers read it beyond the cascades. Drawn again only when the set of landmarks changes or the sun has turned (as the terrain map).
+    /// </summary>
+    void UpdateLandmarks(ShadowView view, Vector3 toSun, LandmarkCasters? landmarks)
+    {
+        if (landmarks is not { } l) { landmarkBox = null; return; }
+        long key = l.Collect(landmarkSpheres);
+        if (landmarkSpheres.Count == 0) { landmarkBox = null; return; }
+        if (landmarkBox is not null && key == landmarkKey && Vector3.Dot(toSun, landmarkSun) > MathF.Cos(TerrainShadowMap.RebuildAngle)) return;
+        var box = MeitouShadowFit.FitLandmarks(toSun, landmarkSpheres, LandmarkMapSize)!;
+        if (landmarkMap is null)
+        {
+            landmarkMap = Texture.Create(Gpu, new TextureDesc(Format.D32Sfloat, LandmarkMapSize, LandmarkMapSize, Use: TextureUse.Sampled | TextureUse.DepthTarget, Name: "landmark shadow map"));
+            landmarkSampled = Sampled(landmarkMap, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, compare: true);
+        }
+        var host = BeginHost("landmark shadows", clear: true, landmarkMap);
+        SetTile(0, 0, LandmarkMapSize);
+        SetCasterBias(new Vector4(box.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 0));
+        l.Draw(box, box.WorldToClip(), box.CullPlanes(), view.Eye);
+        EndHost(host);
+        (landmarkBox, landmarkKey, landmarkSun) = (box, key, toSun);
+        LandmarkDraws++;
+        LandmarkCount = landmarkSpheres.Count;
+    }
+    void RenderMeitou(ShadowView view, Vector3 toSun, CasterDraw draw, LandmarkCasters? landmarks)
     {
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
@@ -109,6 +157,7 @@ public sealed unsafe partial class ShadowPass
         }
         // The terrain map (rebuilt when the sun has moved).
         terrainMap?.Update(toSun);
+        UpdateLandmarks(view, toSun, landmarks);
         timer.End();
         if (all) { storedSun = toSun; storedSplits = splits; storedMapSize = Settings.MapSize; }
         meitouValid = true;
@@ -221,6 +270,13 @@ public sealed unsafe partial class ShadowPass
             Put(ms, 40, new Vector4(map.Size, 20, 6, sunTan / cosElevation));
         }
         Put(ms, 44, new Vector4(blockers ? 1 : 0, range * 0.9f, 0, 0));
+        if (landmarkBox is { } box)
+        {
+            // The landmark map: (p - origin) -> (u, v, depth); its filter radius (UV) and normal offset (world: one and a half texels).
+            Put(ms, 48, box.OriginToTile(origin));
+            Put(ms, 64, new Vector4(box.FilterRadius, (float)(box.Texel * 1.5), 0, 1));
+            landmarkPublished = true;
+        }
         Upload(data);
         meitouBlock.Set(ms);
         // The maps the receivers sample from now on (the GL code bound them to their units here; a unit kept what it held).
@@ -234,5 +290,7 @@ public sealed unsafe partial class ShadowPass
         boundTerrain = null;
         blocker?.Dispose();
         blockerNative?.Dispose();
+        landmarkPublished = false;
+        landmarkMap?.Dispose();
     }
 }
