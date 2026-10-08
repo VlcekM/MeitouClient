@@ -3,7 +3,7 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
-## v0.0.3
+## v0.3.0
 
 - Weather: the game's weather schedule per region and season drives the sky, clouds, fog and heat haze; Tab panel button rerolls the weather
 - Weather effects: rain, ash and other weather particles, fog banks, wet ground, objects and plants in the rain, dust on buildings and rocks, rain ripples on water
