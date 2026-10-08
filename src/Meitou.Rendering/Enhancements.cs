@@ -68,6 +68,9 @@ public static class Enhancements
         new("water", "Water", "flat", "waves and surf",
             meitouWater, setMeitouWater,
             "the game's water is a flat plane with scrolled normal maps; Meitou adds wind-driven waves, breakers that roll in along the depth, break into foam and run up the beach, and foam on the crests (visual only: the water stays at its height for the game)"),
+        new("particles", "Weather particles", "full size", "low resolution",
+            () => post.LowResParticles, v => post.LowResParticles = v,
+            "the game draws every dust, ash and rain sprite at the full picture size, which is a fill-rate cost when big sprites pile up (a dust storm); Meitou draws the alpha and additive ones into a quarter-area (half per axis) target and blends it back, depth-aware, for a fraction of the cost"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

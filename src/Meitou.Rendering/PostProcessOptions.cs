@@ -16,6 +16,10 @@ public sealed class PostOptions
     public float HeatHazeViewDistance = Meitou.Data.World.HeatHaze.ViewDistanceSetting;
     /// <summary>Meitou switches (Enhancements), on by default; the <c>kenshi</c> preset turns them off.</summary>
     public bool Ssao = true, Dither = true;
+    /// <summary>Meitou switch (<c>particles</c>): the weather's alpha and additive particles with big sprites are drawn at half or a quarter of the render size and composited over the scene; Faithful draws every one at full size.</summary>
+    public bool LowResParticles = true;
+    /// <summary>0: each draw's size follows its sprites' mean screen size; 1, 2 or 4: every alpha and additive draw at that divisor (for measuring).</summary>
+    public int ParticleDivisor;
     /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness.</summary>
     public float Exposure = 1;
     /// <summary>World units: how far from a point occluders count.</summary>
@@ -33,9 +37,9 @@ public sealed class PostOptions
         switch (preset)
         {
             case "meitou": break;
-            case "off": o.Fxaa = o.HeatHaze = false; o.Ssao = o.Dither = false; break;
+            case "off": o.Fxaa = o.HeatHaze = false; o.Ssao = o.Dither = o.LowResParticles = false; break;
             case "kenshi":
-                o.Ssao = o.Dither = false;
+                o.Ssao = o.Dither = o.LowResParticles = false;
                 // Kenshi's chain with the shipped settings: exposure only (no curve, bloom magnitude 0, SSAO commented
                 // out), and FXAA then the heat haze on the final image.
                 break;
@@ -47,13 +51,14 @@ public sealed class PostOptions
     public void CopyFrom(PostOptions other)
     {
         Preset = other.Preset; Fxaa = other.Fxaa; HeatHaze = other.HeatHaze; Debug = other.Debug; Ssao = other.Ssao;
-        Dither = other.Dither; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
+        Dither = other.Dither; LowResParticles = other.LowResParticles; ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
         SsaoStrength = other.SsaoStrength; SsaoCharacterStrength = other.SsaoCharacterStrength;
     }
 
     public const string Usage = """
           --post <meitou|kenshi|off>   post-processing preset (default meitou; kenshi = the game's chain); give it before the options below
           --ssao / --no-ssao, --dither / --no-dither
+          --particles-low / --no-particles-low   the weather's alpha and additive particles at a fraction of the render size (default on in Meitou; the `particles` switch)  --particle-divisor <0|1|2|4> (0, the default: by sprite size)
           --fxaa / --no-fxaa       the game's FXAA when no upscaler runs (default on)
           --heat-haze <x> / --no-heat-haze   the game's heat haze (default on; strength from the weather's `heat haze`); x replaces that field
           --heat-haze-view-distance <u>   the game's `view distance` setting for the haze's depth falloff (default 12000, the install's; amplitude is full from 1.67 x this units)
@@ -74,6 +79,9 @@ public sealed class PostOptions
             case "--no-ssao": Ssao = false; return true;
             case "--dither": Dither = true; return true;
             case "--no-dither": Dither = false; return true;
+            case "--particles-low": LowResParticles = true; return true;
+            case "--no-particles-low": LowResParticles = false; return true;
+            case "--particle-divisor": ParticleDivisor = Math.Clamp(int.Parse(next(), CultureInfo.InvariantCulture), 0, 4); return true;
             case "--fxaa": Fxaa = true; return true;
             case "--no-fxaa": Fxaa = false; return true;
             case "--heat-haze": HeatHaze = true; HeatHazeOverride = Math.Max(F(), 0); return true;
