@@ -616,6 +616,32 @@ quaternion bit for bit).
 `LoadedSave` for `SaveCapture.Capture` with the host's clock; hand the loaded `CharacterCold.Save.Stats/Medical` to the body systems and back
 through `SaveCaptureOptions.Bodies`; keep the population system from making residents for a town whose platoons were loaded as stand-ins.
 
+## Sandbox
+
+`meitou --sandbox [n]` is a debug map for character animations: the real simulation (`StandardSystems`: movement, combat, animation) and the real
+`CharacterRenderer`, but no world. It exists to compare a character's motion with the original game at a known speed, without a town in the way.
+
+- **Floor.** `WorldFrame.LoadFlat` builds a `WorldScene` with no heightmap file: every height is the same (500 units, above the water at 100), terrain
+  textures, objects, foliage, water and the streamer are off, the sky and sun are the usual. The 1000 x 1000 floor around the origin is drawn as
+  screen-space overlay lines (`GameHost.Sandbox.cs`): a line every 10 units, a stronger one every 100, the X axis red and the Z axis blue. They have no
+  depth test, so they also cross the characters. SSAO is off by default (it bands a perfectly flat floor).
+- **Characters.** `PopulationSystem.SpawnSandbox` makes one idle character (the first member of the default new-game start, or `--sandbox-character <name>`
+  with the loadout the generator gives it, so combat works): the hero, the player's, selected, at the origin facing +X. With `n = 2` a second one of
+  a faction hostile to the player's stands 30 units away facing it. No navmesh, no towns: paths are straight lines on open ground.
+- **Speed.** The movement system has two sandbox-only overrides in `CharacterCold` (`ModeOverride`, `SpeedOverride`, set by `SandboxMovement`; they are not
+  hashed and nothing in the game sets them). The mode replaces the one of every order (the game's right click is mode 2, free); a fixed speed replaces the
+  whole speed chain, so the character walks at exactly that many units per second after the usual 15 units/s per second ramp.
+- **Keys** (besides the game's: right click moves, R stops, Space and F2..F4 pause and slow or speed time).
+  Z walk (cap = race walk speed), X run (cap 55), C free (no cap, the default); `[` / `]` fixed speed -5 / +5 units/s (0 is off, and Z/X/C also clear it);
+  P patrols the hero along the line x = -200 .. 200 (z = 0), the next leg ordered on arrival (it stops at once at each end, as characters do);
+  G makes the two fight (both attack each other); Y toggles the camera following the hero (the middle of the pair with a foe).
+- **Panel** (bottom right): for the hero and the foe the speed v (the velocity the movement system set) and the speed measured between the last two
+  snapshots, the speed chain's top speed, the mode with its cap, the fixed speed, the position and yaw, `CharacterAnimation.Phase` and `Rate`
+  (the synch phase and the playback factor F), and every published layer as `name  t time/length  w weight` (lengths from `AnimationLengths`).
+- **Command line.** `--sandbox-mode walk|run|free`, `--sandbox-speed <u/s>` and `--sandbox-patrol` start the hero in a state; with `--screenshot --ticks n`
+  the picture is taken after n ticks of it (`--move-to x z`, `--select-player` and `--attack-nearest` work as in a new game). The start camera is boom 70, pitch 22,
+  yaw 35 (`--distance`, `--pitch`, `--yaw`).
+
 ## The game host
 
 `src/Meitou.Game` (file layout in [engine.md](engine.md#the-game-host-srcmeitougame)). `GameHost.Boot` builds the `PopulationData`, the

@@ -11,6 +11,14 @@ sealed class GameOptions
     /// <summary>With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.</summary>
     public int Ticks;
     public bool FreeCamera, NoPopulation, NoNavmesh, NewGame, ListStarts, SelectPlayer;
+    /// <summary>The animation sandbox (<c>--sandbox [n]</c>): 0 off, else the number of characters (1 or 2) on a flat wireframe floor.</summary>
+    public int Sandbox;
+    /// <summary>The CHARACTER record (name or id) the sandbox spawns (null: the default new-game start's first squad member).</summary>
+    public string? SandboxCharacter;
+    /// <summary>The sandbox hero's start state (walk, run or free; a fixed speed in units/s, 0 off; patrolling a 400-unit line), for pictures.</summary>
+    public string? SandboxMode;
+    public float SandboxSpeed;
+    public bool SandboxPatrol;
     /// <summary>Multiplies the time of the body-part and blood rates (<c>MedicalContext.BodyTimeScale</c>, default 1: the documented rates).</summary>
     public float BodyTimeScale = 1;
     /// <summary>The start to play (null = the default); with <c>--select-player</c>/<c>--move-to</c> the picture shows a selected squad walking.</summary>
@@ -34,6 +42,9 @@ sealed class GameOptions
           --body-time-scale <x>      multiplies the time of body-part and blood rates (default 1, the documented rates in game hours; see docs/simulation.md "Bodies")
           --new-game [start]         a new game as the NEW_GAME_STARTOFF start (default Wanderer): the player squad at its town, camera on it
           --list-starts              print the available starts and exit
+          --sandbox [n]              animation sandbox: no world, a flat 1000x1000 wireframe floor (lines every 10, bold every 100) with 1 character (n = 2: two facing each other 30 units apart); Z/X/C walk/run/free, [ ] fixed speed, P patrol, G fight, Y follow; works with --screenshot --ticks
+          --sandbox-character <name> the CHARACTER record the sandbox spawns (default: the first member of the default new-game start)
+          --sandbox-mode walk|run|free, --sandbox-speed <u/s>, --sandbox-patrol   the sandbox hero's speed mode, fixed speed and the 400-unit patrol, from the start (with --move-to or --screenshot)
           --attack-nearest           with --new-game and --screenshot: the squad attacks the nearest other character once loaded
           --select-player, --move-to <x> <z>   with --new-game: select the squad / order it to walk (for screenshots)
           --ticks <n>                with --screenshot: run n control ticks (and the same real time of the simulation, at speed 1) before the picture
@@ -73,6 +84,14 @@ sealed class GameOptions
                     if (i + 1 < args.Length && !args[i + 1].StartsWith('-')) g.NewGameName = args[++i];
                     break;
                 case "--list-starts": g.ListStarts = true; break;
+                case "--sandbox":
+                    g.Sandbox = i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int count) ? Math.Clamp(count, 1, 2) : 1;
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out _)) i++;
+                    break;
+                case "--sandbox-character": g.SandboxCharacter = Next(); break;
+                case "--sandbox-mode": g.SandboxMode = Next(); break;
+                case "--sandbox-speed": g.SandboxSpeed = float.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--sandbox-patrol": g.SandboxPatrol = true; break;
                 case "--select-player": g.SelectPlayer = true; break;
                 case "--attack-nearest": g.AttackNearest = true; g.SelectPlayer = true; break;
                 case "--move-to": g.MoveTo = (float.Parse(Next(), CultureInfo.InvariantCulture), float.Parse(Next(), CultureInfo.InvariantCulture)); break;

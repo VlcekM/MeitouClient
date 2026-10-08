@@ -49,6 +49,7 @@ sealed partial class GameHost
             session.AdvanceSimulation(session.Ticks.TickSeconds);   // one control tick of real time, at speed 1
             UpdateNav(wait: true);
         }
+        SandboxFollowCamera();
         ApplyCamera(session.Camera.Current);
         gpu.Streamer?.Settle(gpu.Anchor ?? camera.Eye);
         gpu.Objects?.Settle(gpu.Anchor ?? camera.Eye);
@@ -71,6 +72,7 @@ sealed partial class GameHost
             {
                 overlay.Target = target;
                 UpdateView(w, h);
+                if (IsSandbox) DrawSandbox(overlay, w, h);
                 player.Draw(overlay, w, h);
                 if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer) is { } me && player.Project(DrawnPosition(me) + new Vector3(0, 1, 0)) is { } px)
                 {

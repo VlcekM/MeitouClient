@@ -20,6 +20,9 @@ public sealed record MoveOrder(IReadOnlyList<CharacterId> Characters, Vector3 Ta
     public bool Queued { get; init; }
 }
 
+/// <summary>Sandbox only: fixes a character's speed mode (null: leave) and/or its walking speed in units per second (null: leave; 0: the speed chain's again). The animation sandbox sends it, the game never does.</summary>
+public sealed record SandboxMovement(CharacterId Character, byte? Mode, float? Speed) : SimCommand;
+
 /// <summary>
 /// Commands waiting for their tick. Any thread may <see cref="Enqueue"/> (the UI runs on the host's thread); the simulation takes
 /// the due ones with <see cref="TakeDue"/> in a fixed order: by tick, then in the order they were queued.

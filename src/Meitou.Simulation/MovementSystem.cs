@@ -63,6 +63,16 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 }
                 continue;
             }
+            if (command is SandboxMovement sandbox)
+            {
+                if (table.TryResolveNext(sandbox.Character, out int target))
+                {
+                    var tc = table.Cold(target)!;
+                    if (sandbox.Mode is { } mode) tc.ModeOverride = mode;
+                    if (sandbox.Speed is { } fixedSpeed) tc.SpeedOverride = MathF.Max(fixedSpeed, 0);
+                }
+                continue;
+            }
             if (command is not MoveOrder order) continue;
             // An empty list orders the selection (the UI sends orders for whatever is selected when the click happens).
             var who = order.Characters.Count > 0 ? order.Characters : world.Player.Selection.ToArray();
@@ -245,7 +255,7 @@ public sealed class MovementSystem(PathService paths) : ITickSystem, IDisposable
                 else
                 {
                     dir = to / dist;
-                    desired = MathF.Min(n.MaxSpeed, SpeedMode.Cap(n.Mode, n.WalkSpeed));
+                    desired = cold.SpeedOverride > 0 ? cold.SpeedOverride : MathF.Min(n.MaxSpeed, SpeedMode.Cap(cold.ModeOverride ?? n.Mode, n.WalkSpeed));
                 }
             }
             else if (((MoveFlags)n.Flags & MoveFlags.HasPath) != 0)

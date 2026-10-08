@@ -178,7 +178,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         }
     }
 
-    Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false, int platoonId = -1)
+    Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false, int platoonId = -1, bool idle = false, float yaw = 0)
     {
         var table = world.Characters;
         var walk = world.Walkability;
@@ -206,8 +206,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             var hot = new CharacterHot
             {
                 Position = new Vector3(x, walk.GroundHeight(x, z), z),
+                Yaw = yaw,
                 Health = 100,
-                Task = (byte)(player ? CharacterTask.Idle : plan.Role == SquadRole.Leader || !hasLeader ? CharacterTask.Wander : CharacterTask.Follow),
+                Task = (byte)(player || idle ? CharacterTask.Idle : plan.Role == SquadRole.Leader || !hasLeader ? CharacterTask.Wander : CharacterTask.Follow),
                 Mode = player ? SpeedMode.Free : SpeedMode.Walk,
                 MaxSpeed = CharacterAssembly.StandInMaxSpeed,
                 WalkSpeed = CharacterAssembly.WalkSpeed(race),

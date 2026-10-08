@@ -42,6 +42,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     // Draw-list state (GameHost.Characters.cs): the previous snapshot indexed by id, and the last camera focus sent to the world.
     WorldSnapshot? indexedFor;
     readonly Dictionary<CharacterId, CharacterSnapshot> previousById = [];
+    Meitou.Data.Gameplay.AnimationLengths? animationLengths;
     Vector3 lastFocus;
     bool sentFocus;
     // Profile of the interactive run (printed by --quit-after).
@@ -67,14 +68,14 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         Meitou.Data.Gameplay.GameConstants? constants = null;   // parsed once: the body factory's, else for the clock alone
         if (!g.NoPopulation && scene.Database is { } gameDb)
         {
-            var levels = scene.Objects?.Levels ?? Meitou.Data.World.WorldLevelData.Load(install);
-            if (!g.NoNavmesh)
+            var levels = IsSandbox ? null : scene.Objects?.Levels ?? Meitou.Data.World.WorldLevelData.Load(install);
+            if (!g.NoNavmesh && !IsSandbox)
             {
-                nav = new Meitou.Navigation.NavSystem(install, gameDb, levels, heights.HeightAt);
+                nav = new Meitou.Navigation.NavSystem(install, gameDb, levels!, heights.HeightAt);
                 nav.ZoneReady += _ => navChanged = true;
                 walkability = new NavAdapter(nav.Walkability);
             }
-            var data = Meitou.Simulation.PopulationData.Create(gameDb, levels.Towns(), new Meitou.Simulation.GeneratedAppearances(gameDb, install.Root));
+            var data = Meitou.Simulation.PopulationData.Create(gameDb, levels is null ? [] : levels.Towns(), new Meitou.Simulation.GeneratedAppearances(gameDb, install.Root));
             // The system list and its order are StandardSystems'. Combat: the path service walks attackers to their targets (SelfApproach off),
             // the body system ticks the medical state (TickMedical off), the defaults of StandardSystemOptions.
             var built = Meitou.Simulation.StandardSystems.Build(data, walkability, new Meitou.Simulation.StandardSystemOptions
@@ -82,7 +83,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 Population = new Meitou.Simulation.PopulationSettings { Background = interactive },
                 SynchronousPaths = !interactive,
                 BodyTimeScale = g.BodyTimeScale,
-                AnimationLengths = Meitou.Data.Gameplay.AnimationLengths.Load(install.Root),
+                AnimationLengths = animationLengths = Meitou.Data.Gameplay.AnimationLengths.Load(install.Root),
                 AnimationLibrary = Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb),
                 AnimationBlendRate = data.Bodies.Constants.AnimationBlendRate,
             });
@@ -118,6 +119,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             target = lead;
             Console.WriteLine($"player    {playerSquad.Members.Count} characters, leader at {lead.X:0}, {lead.Z:0}");
         }
+        if (IsSandbox && population is not null) target = SandboxSpawn();
         if (scene.Database is { } characterDb && !g.NoPopulation && gpu.Characters is null)
             gpu.Characters = new CharacterRenderer(context, install, characterDb, assets) { Source = FillDrawList, Guard = gpu.Guard };
         var rig = session.Camera;
