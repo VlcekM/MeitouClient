@@ -405,7 +405,7 @@ fragments are left out; depth bias 4 + slope 1, the colour pass then testing les
 took 0.89 ms against 0.78 ms with it (same run, alternating frames: `fol meshes+pre`) at `--distance 3000`, and 0.76 against 0.61 ms at `--distance 400 --pitch 4`. With the colour
 shader replaced by the prepass's trivial one the mesh draws did not get cheaper either (0.96 ms against 0.78-0.90), so they are bound by vertices and triangle setup, not fragments.
 The expensive part of the foliage is the TERRAIN-mode rocks (about 2.0-2.2 million triangles a frame in the colour views, 0.4-1.2 ms, the plant `FOLIAGE_Plant_Swamp-TwigLarger` at about
-5000 triangles an instance, 437 of them); fewer triangles (a mesh LOD or an impostor class for them) would pay, not a prepass.
+5000 triangles an instance, 437 of them); fewer triangles would pay, not a prepass: see "Generated mesh levels" below.
 
 **Verification of motion** (**Verified**, 2026-10-08): the Shark swamp view with `--fly-benchmark 170 --fly-radius 300 --fly-speed 6` (flying) and with `MEITOU_FLY_TURN=0.02` (turning
 0.02 rad a frame about the eye), screenshots at frames 40, 80, 120 and 160, with and without `--no-occlusion-cull`: all eight pairs are byte-identical (max difference 0, as between two runs

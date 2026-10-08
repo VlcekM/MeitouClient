@@ -21,7 +21,7 @@ public sealed unsafe partial class FoliageRenderer
     public float LodPixelsPerRadian { get; set; }
 
     /// <summary>How many pixels (of the render, before the upscaler) a generated level may deviate from the original surface; <c>MEITOU_LOD_PIXELS</c>.</summary>
-    public float LodTolerance { get; set; } = Env("MEITOU_LOD_PIXELS", 3f);
+    public float LodTolerance { get; set; } = Env("MEITOU_LOD_PIXELS", 4f);
 
     /// <summary>How many shadow texels a level may deviate in a cascade; <c>MEITOU_LOD_TEXELS</c>.</summary>
     public float LodShadowTolerance { get; set; } = Env("MEITOU_LOD_TEXELS", 2f);
@@ -65,38 +65,41 @@ public sealed unsafe partial class FoliageRenderer
     sealed record LodResult(FoliageLodSet? Set, bool Cached, double Ms, long FileBytes);
 
     int lodRunning, lodWaiting;
+    /// <summary>The level jobs by mesh file (kept when done).</summary>
+    readonly Dictionary<string, Task<LodResult>> lodTasks = [];
     long lodBuilt, lodCacheHits, lodNone, lodFileBytes;
     double lodBuildMs, lodLoadMs;
 
     /// <summary>Generated levels: the meshes built, read from the cache, found to need none; the cache bytes written; CPU time on the workers (building, reading).</summary>
     public string LodSummary => $"{lodBuilt} built ({lodBuildMs:0} ms), {lodCacheHits} from the cache ({lodLoadMs:0} ms), {lodNone} without a level; {lodFileBytes / 1024} KB written";
 
-    /// <summary>Starts, collects and uploads the level jobs of the resident TERRAIN-mode meshes (once a frame, from <see cref="Update"/>).</summary>
+    /// <summary>
+    /// Starts, collects and uploads the level jobs of the resident TERRAIN-mode meshes (once a frame, from <see cref="Update"/>). One job per mesh file, however many mesh records
+    /// name it; a finished job's result stays, so a mesh that is unloaded and loaded again gets its levels at once.
+    /// </summary>
     void PumpLods()
     {
-        lodWaiting = 0;
+        lodWaiting = lodRunning = 0;
+        foreach (var t in lodTasks.Values) if (!t.IsCompleted) lodRunning++;
         if (!Lod || !GpuCull || GpuCullVerify) return;
         foreach (var a in assetsByMesh.Values)
         {
-            if (!a.Terrain) continue;
-            if (a.LodJob is { IsCompleted: true } job)
-            {
-                a.LodJob = null;
-                LodResult? result = null;
-                try { result = job.Result; }
-                catch (AggregateException e) { Messages.Add($"foliage levels {a.Mesh.MeshPath}: {e.InnerException?.Message ?? e.Message}"); }
-                lodRunning--;
-                a.LodDone = a.Resident;   // an unloaded mesh makes them again with its next residency
-                if (result?.Set is { } set && a.Resident && a.Main is { } main && main.Parts.Count == set.Indices.Length) QueueLodUpload(a, main, set);
-            }
-            else if (a.LodJob is null && !a.LodDone && a.Resident && a.Main is not null && a.Triangles >= 2 * FoliageLodBuilder.Floor)
+            if (!a.Terrain || a.LodDone || !a.Resident || a.Main is null || a.Triangles < 2 * FoliageLodBuilder.Floor) continue;
+            string name = a.Mesh.MeshPath;
+            if (!lodTasks.TryGetValue(name, out var task))
             {
                 if (lodRunning >= 3) { lodWaiting++; continue; }
-                string name = a.Mesh.MeshPath;
-                float radius = a.Radius;
                 lodRunning++;
-                a.LodJob = BackgroundWork.Run(() => MakeLods(name, radius, a.Mesh.Name));
+                float radius = a.Radius;
+                string label = a.Mesh.Name;
+                lodTasks[name] = task = BackgroundWork.Run(() => MakeLods(name, radius, label));
             }
+            if (!task.IsCompleted) continue;
+            a.LodDone = true;   // an unloaded mesh makes them again with its next residency
+            LodResult? result = null;
+            try { result = task.Result; }
+            catch (AggregateException e) { Messages.Add($"foliage levels {name}: {e.InnerException?.Message ?? e.Message}"); }
+            if (result?.Set is { } set && a.Main is { } main && main.Parts.Count == set.Indices.Length) QueueLodUpload(a, main, set);
         }
     }
 

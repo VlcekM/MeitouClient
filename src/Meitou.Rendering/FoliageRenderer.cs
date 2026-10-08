@@ -231,7 +231,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     public string Describe() =>
         $"{zones.Values.Count(z => z.Ready)} zones laid out ({zones.Values.Where(z => z.Ready).Sum(z => z.Instances):N0} meshes, " +
-        $"{zones.Values.Sum(z => z.Pages.Count):N0} grass pages), {assetsByMesh.Count} foliage meshes ({assetsByMesh.Values.Count(a => a.Resident)} resident), catalog of {catalog.Layers.Count} layers";
+        $"{zones.Values.Sum(z => z.Pages.Count):N0} grass pages), {assetsByMesh.Count} foliage meshes ({assetsByMesh.Values.Count(a => a.Resident)} resident), catalog of {catalog.Layers.Count} layers" + (Lod && lodBuilt + lodCacheHits > 0 ? $"; generated levels: {LodSummary}" : "");
 
     // ------------------------------------------------------------------ streaming
 
@@ -777,7 +777,6 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public int RockStamp, RockPlainIndex, RockMirroredIndex;
         /// <summary>Generated levels (<see cref="RockLod"/>, TERRAIN-mode meshes only): uploaded, the job making them (or reading the cache), whether it ran for the current residency, and the set the current GPU work list was built with.</summary>
         public RockLod? Lod, WorkLod;
-        public Task<LodResult>? LodJob;
         public bool LodDone;
         /// <summary>Its impostor (<see cref="FoliageRenderer.Impostors"/>): null until asked for.</summary>
         public ImpostorState? Impostor;
@@ -2705,10 +2704,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         ReportVerify();
         ReportGrassVerify();
         foreach (var z in zones.Values) { try { z.Job?.Wait(); } catch (AggregateException) { } foreach (var p in z.Pages.Values) { try { p.Job?.Wait(); } catch (AggregateException) { } FreePage(p); } }
+        foreach (var t in lodTasks.Values) { try { t.Wait(); } catch (AggregateException) { } }
         foreach (var a in assetsByMesh.Values)
         {
             try { a.Job?.Wait(); } catch (AggregateException) { }
-            try { a.LodJob?.Wait(); } catch (AggregateException) { }
             a.Lod?.Dispose();
             foreach (var m in new[] { a.Main, a.Leaves })
                 if (m is not null) DeleteMesh(m);
