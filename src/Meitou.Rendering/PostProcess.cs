@@ -44,6 +44,8 @@ public sealed unsafe class PostProcess : IDisposable
     public PassTargets SceneTargets { get; private set; } = null!;
     /// <summary>The scene's depth (the near slice's; valid after <see cref="Begin"/>).</summary>
     public Texture SceneDepth => sceneDepth!.Texture;
+    /// <summary>The scene's colour at the render size (valid after <see cref="Begin"/>; the Meitou water copies it for its refraction).</summary>
+    public Texture SceneColour => sceneColour!.Texture;
 
     // width × height is the render size (the scene, SSAO); displayWidth × displayHeight the chain after the upscaler (exposure, composite).
     int width, height, displayWidth, displayHeight;

@@ -87,6 +87,22 @@ Status as of 2026-10-05. Details and open questions live in the linked docs.
 8. **Parity** — *not started.* Side-by-side comparison against the original, mod compatibility
    test suite.
 
+## Meitou water (branch `meitou-water`, since 2026-10-08)
+
+A Faithful / Meitou switch `water`: Faithful keeps today's water (the game's shading, one flat quad) unchanged; Meitou
+adds visual-only motion (gameplay water stays flat at Y = 100). On the game clock (`GameHours`, paused = still). Budget:
+at most +0.5 ms GPU in the F12 `water` stage on the same views; a quality setting scales it down for integrated GPUs.
+
+1. **Waves and surf** — a camera-centred polar grid instead of the quad (fine near, coarse far, flat at the edge);
+   an FFT ocean (three cascades, JONSWAP spectrum led by the weather's wind; first four Gerstner waves, replaced on
+   2026-10-08); breakers that run towards the shore along a baked shore distance field (gated by its exposure), steepen, break into foam and run up
+   the beach and back; crest foam. One draw plus a 0.2-0.4 ms compute pass; refraction (a half-size copy of the scene), absorption by depth, caustics, crest light, glitter and lingering foam (2026-10-08). Then a checkpoint for the owner to play it.
+2. **Rivers and scum** — `flowmap.png` RG does not follow the river channels (checked 2026-10-08, docs/formats/terrain.md), so a river
+   map is derived from the heights (`RiverFlowBake`): flow carried along the channel, faster where narrow and shallow, foam streaks
+   and rapids, no ocean waves or breakers in rivers (done, 2026-10-08, partial coverage, see docs/viewer.md). Still to do: the biomes' scum (the B channel), which
+   the game draws and the viewer never has.
+3. Foam against objects (stilts, piers) needs the scene depth: optional, later.
+
 ## Open questions
 
 - How far to support script-extender mods (RE_Kenshi / KenshiLib plugins hook native code and
