@@ -98,8 +98,9 @@ pixel; the pivot follows the terrain only (the game also stands it on buildings;
 view meets the ground.
 
 Default keys: `W A S D` move, `Q`/`E` or `Left`/`Right` rotate, `Up`/`Down` pitch, wheel or `PageUp`/`PageDown` zoom,
-middle drag orbit (right click is the move command, see [simulation.md](simulation.md#player)), left click or drag selects, `1`..`9`, `` ` ``, `R`; `;` free camera (`R`/`F` up/down in it), `Space` pause, `F2`/`F3`/`F4` speed 1x/2x/5x (`.`/`,` step through them), `Tab` settings panel, `F12`
-screenshot (C:\Temp), `Esc` quit.
+middle drag orbit (right click is the move command, see [simulation.md](simulation.md#player)), left click or drag selects, `1`..`9`, `` ` ``, `R`; `;` free camera (`R`/`F` up/down in it), `Space` pause, `F2`/`F3`/`F4` speed 1x/2x/5x (`.`/`,` step through them), `Tab` settings panel, `F8` or
+`PrintScreen` screenshot (C:\Temp; Kenshi's own keys), `F10` key list, `F11` frame statistics, `F12` profiler chart (gpu, cpu, off),
+`Esc` quit. The three debug overlays are the viewer's, and as there they are left out of screenshots.
 
 ## Rendering (`Meitou.Rendering`)
 

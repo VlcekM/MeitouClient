@@ -31,6 +31,7 @@ static class KeyMap
         SilkKey.Enter => EngineKey.Enter,
         SilkKey.Escape => EngineKey.Escape,
         SilkKey.Tab => EngineKey.Tab,
+        SilkKey.PrintScreen => EngineKey.PrintScreen,
         SilkKey.Backspace => EngineKey.Backspace,
         SilkKey.PageUp => EngineKey.PageUp,
         SilkKey.PageDown => EngineKey.PageDown,

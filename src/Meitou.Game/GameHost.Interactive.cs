@@ -43,6 +43,11 @@ sealed partial class GameHost
             foreach (var slider in panel.Sliders)
                 if (config.Graphics.TryGetValue(slider.Label, out float v) && !(o.Post.Upscale.Explicit && WorldFrame.UpscalerSliders.Contains(slider.Label)))
                     slider.Set(Math.Clamp(v, slider.Min, slider.Max));
+        // The viewer's debug overlays (docs/engine.md): F10 the key list, F11 the frame statistics, F12 the profiler chart.
+        var profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
+        var keyItems = DebugOverlay.KeyItems(GameOptions.Usage);
+        var stats = new List<string>();
+        bool statsVisible = false;
 
         var silkInput = Silk.NET.Input.InputWindowExtensions.CreateInput(window);
         Vector2? lastMouse = null;
@@ -102,9 +107,14 @@ sealed partial class GameHost
             if (actions.Pressed(InputAction.Quit)) quit = true;
             if (actions.Pressed(InputAction.ToggleSettings) && panel is not null) panel.Visible = !panel.Visible;
             if (actions.Pressed(InputAction.Screenshot)) screenshotRequested = true;
+            if (actions.Pressed(InputAction.ToggleKeys) && overlay is not null) overlay.Visible = !overlay.Visible;
+            if (actions.Pressed(InputAction.ToggleStats)) statsVisible = !statsVisible;
+            if (actions.Pressed(InputAction.CycleProfiler) && profiler is not null) profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3);
         };
         long windowRan = 0, windowDropped = 0;
-        double drawTotal = 0;
+        double drawTotal = 0, gpuSum = 0, statsTimer = 0;
+        int gpuSamples = 0, statsFrames = 0;
+        long statsTicks = 0;
         while (!window.IsClosing && !quit)
         {
             window.DoEvents();
@@ -126,6 +136,7 @@ sealed partial class GameHost
                 var backbuffer = display.Backbuffer!;
                 gpu.Post!.Target = backbuffer;
                 if (overlay is not null) overlay.Target = backbuffer;
+                profiler?.BeginFrame();
                 DrawWorld(size.X, size.Y);
                 cpuSum += Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
                 drawTotal += Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
@@ -133,12 +144,40 @@ sealed partial class GameHost
                 screenshotRequested = false;
                 if (overlay is not null && !g.NoPopulation) DrawMarkers(overlay, size.X, size.Y);
                 if (overlay is not null && !g.NoPopulation) player.Draw(overlay, size.X, size.Y);
+                // The debug overlays are left out of saved pictures: the statistics at the top left, the key list below them, the profiler.
+                if (overlay is not null && !shot)
+                {
+                    float panelsBottom = statsVisible && stats.Count > 0 ? overlay.Panel(size.X, size.Y, "Meitou   (F11 hides this)", stats) : 0;
+                    if (overlay.Visible)
+                    {
+                        int width = keyItems.Max(i => i.Length) + 2;
+                        var lines = keyItems.Select(item => KeyState(item.Split(' ')[0]) is { } state ? item.PadRight(width) + state : item).ToList();
+                        overlay.Draw(size.X, size.Y, "Keys   (F10 hides this)", lines, panelsBottom);
+                    }
+                    profiler?.Draw(overlay, size.X, size.Y);
+                }
                 panel?.Draw(size.X, size.Y);
                 display.Present();
+                profiler?.EndFrame();
+                if (display.Context.GpuFrameMs > 0) { gpuSum += display.Context.GpuFrameMs; gpuSamples++; }
+                statsFrames++;
                 if (shot) SaveScreenshot(display.Context, backbuffer, size.X, size.Y);
                 frames++;
             }
             titleTimer += dt;
+            statsTimer += dt;
+            if (statsTimer >= 1)
+            {
+                // Once a second: the frame, the simulation, then the renderer's lines.
+                stats.Clear();
+                stats.Add($"{statsFrames / statsTimer:0} fps ({(vsync ? "vsync" : fpsLimit > 0 ? $"limit {fpsLimit}" : "uncapped")}), gpu {(gpuSamples > 0 ? $"{gpuSum / gpuSamples:0.00}" : "-")} ms");
+                long ticks = session.Simulation.TotalTicks - statsTicks;
+                statsTicks = session.Simulation.TotalTicks;
+                stats.Add($"simulation  {ticks / statsTimer:0} ticks/s, {session.CurrentSnapshot.Characters.Count} characters, dropped {session.Simulation.DroppedTicks} ticks in all");
+                WorldStats.Add(stats, display.Context, gpu, render, camera.Eye);
+                statsTimer = gpuSum = 0;
+                statsFrames = gpuSamples = 0;
+            }
             if (titleTimer >= 0.5)
             {
                 var s = session.Camera.Current;
@@ -160,12 +199,28 @@ sealed partial class GameHost
         }
         if (panel is not null)
             foreach (var slider in panel.Sliders) config.Graphics[slider.Label] = slider.Get();
+        profiler?.Dispose();
         config.Bindings = session.Bindings.ToDictionary();
         config.Save();
         overlay?.Dispose();
         gpu.Dispose();
         silkInput.Dispose();
         return 0;
+
+        // The state shown beside a key in the F10 list, by the item's first word.
+        string? KeyState(string key)
+        {
+            static string OnOff(bool on) => on ? "on" : "off";
+            return key switch
+            {
+                ";" => OnOff(session.Camera.IsFree),
+                "Space" => session.Simulation.IsPaused ? "paused" : "running",
+                "F2/F3/F4" => $"x{session.TimeScale:0}",
+                "Tab" => OnOff(panel?.Visible == true),
+                "F12" => profiler?.Showing.ToString().ToLowerInvariant(),
+                _ => null,
+            };
+        }
     }
 
     static void SaveScreenshot(GpuContext context, Texture backbuffer, int width, int height)

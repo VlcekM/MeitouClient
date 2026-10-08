@@ -99,6 +99,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         foreach (var problem in session.Bindings.Apply(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
         // Right is the command button now; older saved configs bound it to orbit.
         session.Bindings.Set(InputAction.Orbit, [.. session.Bindings.Get(InputAction.Orbit).Where(b => !(b.IsMouse && b.Button == EngineButton.Right))]);
+        // F12 is the profiler now (as in the viewer); older saved configs took it for the screenshot.
+        if (session.Bindings.Get(InputAction.Screenshot).SequenceEqual([Binding.Of(EngineKey.F12)])) session.Bindings.Set(InputAction.Screenshot, EngineKey.F8, EngineKey.PrintScreen);
         player = new PlayerInterface(session, heights.HeightAt, DrawnPosition);
         if (nav is not null && (start is not null || !interactive))
         {

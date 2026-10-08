@@ -16,7 +16,10 @@ public enum InputAction
     Pause, TimeFaster, TimeSlower,
     /// <summary>The game speed_1, speed_2, speed_3 actions: 1x, 2x, 5x.</summary>
     Speed1, Speed2, Speed3,
-    Screenshot, ToggleSettings, Quit,
+    Screenshot, ToggleSettings,
+    /// <summary>The debug overlays: the key list, the frame statistics, the profiler chart (gpu, cpu, off).</summary>
+    ToggleKeys, ToggleStats, CycleProfiler,
+    Quit,
 }
 
 /// <summary>The actions of one tick: for each, held, pressed or released this tick, plus the mouse movement and wheel.</summary>
@@ -88,8 +91,11 @@ public sealed class InputBindings
         Set(InputAction.Speed1, Key.F2);
         Set(InputAction.Speed2, Key.F3);
         Set(InputAction.Speed3, Key.F4);
-        Set(InputAction.Screenshot, Key.F12);
+        Set(InputAction.Screenshot, Key.F8, Key.PrintScreen);   // the game's own screenshot keys (docs/game/ui-input.md)
         Set(InputAction.ToggleSettings, Key.Tab);
+        Set(InputAction.ToggleKeys, Key.F10);
+        Set(InputAction.ToggleStats, Key.F11);
+        Set(InputAction.CycleProfiler, Key.F12);
         Set(InputAction.Quit, Key.Escape);
     }
 

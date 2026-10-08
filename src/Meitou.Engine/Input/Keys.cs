@@ -12,6 +12,8 @@ public enum Key
     LeftShift, RightShift, LeftControl, RightControl, LeftAlt, RightAlt,
     Semicolon, Comma, Period, Minus, Equal, Slash, Backslash, Grave,
     LeftBracket, RightBracket, Apostrophe,
+    /// <summary>Print Screen (SYSRQ in Kenshi's key names).</summary>
+    PrintScreen,
 }
 
 /// <summary>Mouse buttons.</summary>

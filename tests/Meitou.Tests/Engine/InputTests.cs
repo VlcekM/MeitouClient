@@ -140,7 +140,7 @@ public class InputTests
         Assert.Equal([Binding.Of(Key.I), Binding.Of(Key.Up)], bindings.Get(InputAction.MoveForward));
         Assert.Equal([Binding.Of(MouseButton.Left)], bindings.Get(InputAction.Orbit));
         Assert.Empty(bindings.Get(InputAction.Pause));
-        Assert.Equal([Binding.Of(Key.F12)], bindings.Get(InputAction.Screenshot)); // unchanged: the entry was invalid
+        Assert.Equal([Binding.Of(Key.F8), Binding.Of(Key.PrintScreen)], bindings.Get(InputAction.Screenshot)); // unchanged: the entry was invalid
 
         input.SetKey(Key.I, true);
         Assert.True(Tick().Held(InputAction.MoveForward));
