@@ -53,6 +53,25 @@ public sealed class FrameGlobals
         }
     }
 
+    /// <summary>A loose <c>vec4</c> array: the first <c>count()</c> elements of <paramref name="storage"/> (the rest is never read by its shaders).</summary>
+    sealed class ArrayUniform(Vector4[] storage, Func<int> count) : Uniform
+    {
+        internal override void Write(LegacyProgram program, UniformHandle handle)
+        {
+            int n = Math.Clamp(count(), 0, storage.Length);
+            if (n > 0) program.Set(handle, System.Runtime.InteropServices.MemoryMarshal.Cast<Vector4, float>(storage.AsSpan(0, n)), 4);
+        }
+
+        internal override bool TryRead(Span<byte> destination)
+        {
+            if (destination.Length != storage.Length * 16)
+                throw new ArgumentException($"frame-global vec4[{storage.Length}] is {storage.Length * 16} bytes, not {destination.Length}");
+            int n = Math.Clamp(count(), 0, storage.Length);
+            System.Runtime.InteropServices.MemoryMarshal.AsBytes(storage.AsSpan(0, n)).CopyTo(destination);
+            return true;
+        }
+    }
+
     /// <summary>
     /// Counts <see cref="LegacyProgram.ApplyGlobals"/> calls. Nothing an owner reads changes during one call, so an owner whose getters share
     /// one computation (<c>SkyRenderer</c>'s atmosphere values) may keep its result for as long as this number stays the same.
@@ -72,6 +91,14 @@ public sealed class FrameGlobals
             typeof(T) != typeof(Vector4) && typeof(T) != typeof(Matrix4x4))
             throw new NotSupportedException($"frame-global uniform of type {typeof(T).Name}");
         uniforms[name] = new Uniform<T>(value, when);
+        Version++;
+    }
+
+    /// <summary>A loose <c>vec4</c> array uniform (<c>uniform vec4 name[storage.Length]</c>): its first <paramref name="count"/>() elements are
+    /// written, the rest keeps whatever it held (the shaders read only the used part).</summary>
+    public void PublishUniformArray(string name, Vector4[] storage, Func<int> count)
+    {
+        uniforms[name] = new ArrayUniform(storage, count);
         Version++;
     }
 
