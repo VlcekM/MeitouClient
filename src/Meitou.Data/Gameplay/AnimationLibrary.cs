@@ -22,17 +22,7 @@ public readonly record struct HandHold(WeaponKinds Weapon)
     public bool Holds => Weapon != WeaponKinds.None;
 
     /// <summary>The kind of a WEAPON's <c>skill category</c> (WeaponCategory: 0 katanas, 1 sabres, 2 blunt, 3 heavy, 4 hackers, 8 polearms; docs/game/combat.md).</summary>
-    public static HandHold OfCategory(int skillCategory) => new(skillCategory switch
-    {
-        0 => WeaponKinds.Katana,
-        1 => WeaponKinds.Sabre,
-        2 => WeaponKinds.Blunt,
-        3 => WeaponKinds.Heavy,
-        4 => WeaponKinds.Hacker,
-        8 => WeaponKinds.Polearm,
-        5 => WeaponKinds.Unarmed,
-        _ => WeaponKinds.OneHanded,
-    });
+    public static HandHold OfCategory(int skillCategory) => new(Combat.WeaponCategories.AnimationKind(skillCategory));
 }
 
 /// <summary>

@@ -54,14 +54,13 @@ public sealed record CombatConstants
 
     public static CombatConstants FromDatabase(GameDatabase db)
     {
-        var record = db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault(r => r.Name == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault();
-        return From(record);
+        return From(ConstantsRecord.Find(db));
     }
 
     /// <summary>Reads a CONSTANTS record (null reads as an empty one) and applies the loader's rescalings.</summary>
     public static CombatConstants From(GameRecord? c)
     {
-        float F(string key, float fallback) => c is null ? fallback : c.Floats.TryGetValue(key, out float v) ? v : c.Ints.TryGetValue(key, out int n) ? n : fallback;
+        float F(string key, float fallback) => RecordReading.Float(c, key, fallback);
         float d = F("damage multiplier", 0.65f);
         return new CombatConstants
         {
