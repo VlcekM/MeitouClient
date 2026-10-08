@@ -3446,6 +3446,21 @@ group has a particle (so a clear weather records nothing and the parity views st
 are drawn with a projection of their own and no depth test (`WorldFrame.Draw`). Colour writes only: the scene target's alpha is the
 characters' mask.
 
+Part two (2026-10-08): the pass draws every unit of every group (weather groups and the map placers, culled by distance and frustum, sorted far
+to near) and, before a unit's particles, its fog volumes (a second small program: a quad at the sphere's nearest point, the ray-sphere chord in
+the fragment shader, depth-tested; a full-screen quad without depth test when the eye is inside). The simulation of the units runs on the thread
+pool from the end of `Update` to the start of `Draw`. Instances are built in a managed array and copied once into the transient constants.
+The placers draw whatever the weather, so a clear-weather picture over an Ashlands volcano is no longer 0 px against the old reference; elsewhere
+(no placer in the active range) nothing is recorded, as before.
+
+**Reactive mask (TAA and FSR/DLSS).** Particles write no motion vectors and the history keeps ~90 % of the pixel behind a thin streak, so rain
+nearly vanished on a moving camera (checked with `--orbit-step 0.4` on `Heavy_Rain deadlands`). `PostProcess.RunUpscale` draws the frame's
+particle quads again (`ParticleRenderer.DrawCoverage`, the same buffers and matrices, additive, no depth test) into the motion target's alpha
+(the TAA's reactive channel; the shader takes half of it) or, with a vendor upscaler, into the `post reactive` R32F target (cleared when there is
+no water); the fragment writes `clamp(30 · alpha, 0, max)` (max 2 for the TAA, 1 for the reactive texture), brightness × alpha for non-alpha
+blends. **Observed**: the streaks are clearly stronger than without it but still a little softer than with no temporal pass. Hidden particles also
+mark their pixels (no depth test): those pixels are a little less stable. The same pass in `--faithful` (no upscaler) does not run.
+
 ## 9. Expected CPU cost, and how the profiler keeps working
 
 *In short: a throwaway measurement on the RTX 4070 recorded the same draws through VkGl and directly. A typical foliage mesh draw costs about

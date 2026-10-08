@@ -303,6 +303,58 @@ islands`, `purple desert`), storms and twisters WANDERING (`DesertCloudStorm`, `
 `Twister-of-fire01`), lightning POINT_LIGHTING (`Lightning_Bolt`, `weather_lightning1`), local swirls GLOBAL_POINT
 (`DesertDetritus01`, `Drifting-foliage`, `rising steam slow`).
 
+### The groups in detail (Verified (decompiled) where marked; the rest Observed)
+
+All built by `EffectGroups.Create` (`src/Meitou.Data/Particles/EffectGroups.cs`); a *unit* is the game's effect handler (a particle system at a
+place) and exists as a cheap record all the time, holding a simulation only while the camera is near (Observed: the game simulates the 3 × 3
+active zones of 4608 units and, outside them, only within the effect's `maximum view distance`; Meitou: within 6912 + view distance of the unit's
+bounds, deactivated beyond 1.15 × that).
+
+- **Placing** (**Verified (decompiled)**, FUN_1408fc3c0): a random cell of the region (cells of the same colour as the camera's in `areasmap.tga`),
+  a random point in the middle 80 % of it, the ground height there; up to 10 tries for `min/max altitude` (skipped when both are 0; the altitude
+  is the absolute world y, water is 100) and terrain normal y within `min/max slope`; after 10 tries the last point stands.
+  The z margin's sign is not resolved in the decompile (both axes use the same). The normal comes from finite differences of the height (step 12).
+- **Life** (**Verified (decompiled)**, FUN_1401034f0): random between `min` and `max time to live`; none (immortal) when the maximum is 0. When it
+  is over the emitters stop and the particles live out; the unit is removed when they are gone.
+- **POINT, POINT_LIGHTING, WANDERING*** (**Verified (decompiled)**, FUN_140102370 schedule, FUN_1401039a0 / FUN_140103ca0 spawns): a timer
+  starts at the entry's minimum respawn time, runs down on the frame clock; at 0, and while fewer than `count` units exist (`count` 0: no limit),
+  one is made and a random time between the entry's respawn min and max is added (0 / 0: all at once). The viewer caps units at 256.
+  *Observed*: lightning is placed in a 3000 disc round the camera at ground + 10 (the game snaps to metal objects within ±2000 of a random
+  point; the viewer has none); wandering units walk their heading at `wandering speed`, are carried by the wind when wind affected, follow the
+  ground (re-grounded every 0.5 s) and turn at random (the decompile's arithmetic is not resolved).
+- **GLOBAL** (**Verified (decompiled)**, FUN_140102040, FUN_140103f50, FUN_140101dc0): `count` units, all at once whatever the respawn times
+  (`count` 0 makes none: `fog islands` never appears in the base game), immortal; each sits at the camera's x, z, ground + 100 (limited to
+  `min/max altitude` when either is non-zero); its particles are kept within `d` of the node (a sphere wrap, not the camera cube).
+- **GLOBAL_POINT** (**Verified (decompiled)**, FUN_140103160, FUN_1401048b0, FUN_140104610): `R` = `maximum view distance` (1000 when 0); `count` units
+  within R of the camera and `count` between R and 2R (3 × `count` at most), each at a sqrt-uniform distance in its ring on the ground; units
+  beyond 4R stop. Respawn times unused. **Observed (deviation)**: distances are horizontal (the unit is on the ground and the eye may be
+  hundreds up; `Drifting-foliage` and the swirls have R = 50, and with 3D distances the first unit was 212 away and stopped at once, so nothing was
+  ever emitted: found by a screenshot, fixed, a test covers the emission).
+- **Camera effects**: one unit whatever `count` ([particle-universe.md](particle-universe.md#the-camera-effects-cameraeffectgroup)).
+- **Map-feature placers**: static immortal POINT units at the placements ([below](#effect-placers-on-the-map-verified-records-and-featuresdat));
+  `MapEffectPlacers.Find` / `Groups`. Observed: the game's handler lives min..max time to live and is made again; the viewer keeps one.
+- **Wind** (**Observed**, the decompile of the wind use is not traced): `wind affected` adds wind × `wind speed mult` to the particles' motion; `wind
+  direction emission` turns the emitted horizontal direction to the wind; `min/max wind span rate` scales the emission rate 0..1 over that wind
+  range (with only a minimum: 0 below it).
+- **Fade times** (`particle fade out delay`, `fog fade in/out`): the fog volume's alpha is faded by them (see Fog volumes); the particles' own
+  fade is the scripts' colour affectors (Observed).
+
+**Density (checked 2026-10-08; no bug found, cause Unknown).** The Ashlands ash is `Ash-Flakes_Light`, 1550 flakes by its techniques' quotas (the
+quota column of `meitou-tools particles effects`), in the camera cube of edge 120 wrapped round the view axis, so the flakes are always within
+about 150 units of the eye and a picture shows about 1500 of them. Nothing else scales that number: the camera group is one unit whatever the
+entry's `count` (**Verified (decompiled)**, FUN_140102ff0), the system scale is 1, and the weather strength is not used by the groups
+(**Unknown**), and prewarm fills the cube within a few seconds. `Kenshi_Heavy_Rain` the same: 5000 quota in a 120 × 120 box, 6400/s × life
+0.3..1 s, about 4000 streaks alive. Every number the data gives is in use, so denser flakes in the game would come from something not read:
+candidates are the plugin's per-technique default quota where a script sets none (taken 500, **Unknown**), `sky colour multiplier` and the
+strength. The flakes are 0.4 to 0.7 units, so only the nearest few are big on screen (**Observed**).
+
+**Lights** (Observed): `EFFECT.light` references (`Lightning_Bolt` has one) exist in the records (`EffectRecord.Lights`); the renderer has no point
+light path, so they are read and not used.
+
+**Textures** (Observed, by `meitou-tools particles`): `Haboob_Finger.png`, `TwisterDust_Large.png`, `EX-DustMite`, `SteamRise01.png` and the
+material `SandBlown_Streaks` are not in the install; the particle pass draws a 1 × 1 white texture for them (a plain soft quad), so
+those systems are approximate.
+
 ### The particle scripts (Observed: `data/particles/scripts/*.pu`; the format, the survey and the implementation: [particle-universe.md](particle-universe.md))
 
 93 ParticleUniverse scripts (`Plugin_ParticleUniverse_x64.dll`), 93 particle materials in `data/particles/materials`,
@@ -326,6 +378,13 @@ EFFECT_FOG_VOLUME (8 records): coloured spheres attached to twister effects ("Tw
 Sphere" 661, ...), with alpha and density distance. The static ones on the map are `fogfeatures.dat` ([sky.md](sky.md)
 "Not there"). How they are drawn (the fog volume pass after the haze in `main.compositor`) is **Unknown** in detail.
 
+In Meitou (**Observed**, a stand-in): an EFFECT's `fog volumes` (type 0 = sphere; the cylinder type is not in the base game's records) are
+read as `EffectFogVolume` (radius, density distance, alpha, colour, offsets `pos`/`pos2`, `ground`) and attached to every unit of that effect:
+a sphere at the unit's position + offset, drawn before the unit's particles as a quad at the sphere's nearest point with the analytic chord
+of each pixel's ray through the sphere, alpha = volume alpha × (1 − exp(−2 · chord / density distance)) × the effect's fade (`fog fade in/out`
+over the unit's life); with the eye inside, a full-screen quad without depth test. Depth-tested against the scene, no particles' sorting.
+`pos2` (the second position of a column) is read and unused. Cost: a few quads per twister.
+
 ## Effect placers on the map (Verified: records and `features.dat`)
 
 MAP_FEATURES with `hidden` true draw no mesh; their EFFECT is attached as an **instance** of the feature record (not a
@@ -336,6 +395,13 @@ and "Marker-Attractor" (a bird attractor, `athene.mesh`; 1). These effects belon
 are always on. Placement counts are from [zones.md](zones.md#map-features). The placer effects have life 800..5500 s, `wind
 affected`, `ground colour` and view distances 200..1000 (EFFECT fields), so they drift with the wind and take the biome's ground
 colour (**Observed**: the use of these fields for feature effects was not traced).
+
+In Meitou (`MapEffectPlacers`, **Verified**: the placements; **Observed**: the rest): each placement in `features.dat` of such a feature makes a
+static, immortal POINT unit at the placement's position plus the instance's offset (rotated by the placement's rotation; all 0 in the base
+game); 43 units in 3 groups. A unit is simulated while the camera is within 6912 + its view distance of its bounds (plume radius 10700 for
+`Volk-Cloud`, so it is awake from far off). They are drawn whatever the weather, also `Default`: a view over the Ashlands volcanoes has
+smoke columns now (`--no-particles` removes them). The "Volk-Cloud" plume is a column of dark smoke with a trail of dark puffs
+(**Observed**: the second technique's colour ramp; unconfirmed against the game).
 
 ## Gameplay effects (facts only)
 
@@ -500,7 +566,11 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
    positions, always on), then wandering storms and twisters with their fog-volume spheres, lightning last. **Done (part one):** the
    reader, the CPU simulation, the billboard pass and the camera groups for rain and ash ([particle-universe.md](particle-universe.md),
    `--weather Heavy_Rain`, `--weather Kenshi_Ash-Flakes`, `--no-particles`); the rest of this step is open (point, wandering and global
-   groups, the placers, fog volumes, lightning).
+   groups, the placers, fog volumes, lightning). **Done (part two, 2026-10-08):** the point, wandering, global and global-point groups, the
+   placers, fog volumes and lightning, all as "The groups in detail" above; the simulation runs on a background task (one unit per pool
+   thread) while the frame is recorded; the particles add their coverage to the upscalers' reactive mask ([renderer-native.md](../renderer-native.md) 8.20).
+   Still open: the scheduler's wind and strength (the forced weather's wind max along +x is used), `ground colour` per biome, the point light of
+   a lightning bolt, particles beyond the near depth slice (nothing is drawn past about 20400 units).
 6. **Heat haze**: done in the post-processing (`PostProcess.RunHeatHaze`, `Meitou.Data.World.HeatHaze`); it takes the forced
    weather at strength 1 until step 3 feeds it `WeatherState.HeatHaze` (step 2 computes it). **Not planned here**: sounds, gameplay
    effects.
@@ -514,5 +584,7 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
 - `sunlight color` of SEASON and `sky colour multiplier` / `colour multiplier` of EFFECT: loaded, their use not traced.
 - How effect groups use `maximum view distance`, `sky colour multiplier` and the strength (the wind fields and the emission-rate scaling are used as
   [particle-universe.md](particle-universe.md#the-camera-effects-cameraeffectgroup) says, **Observed**).
-- How fog volumes are drawn.
+- How fog volumes are drawn (Meitou's chord-through-a-sphere quad is a stand-in); `pos2` and the cylinder type.
+- Whether the game's ash is denser than the data says (see "Density"); the plugin's default quota; the lights of effects.
+- The wandering units' exact walk and turn rules, and where the game places lightning (it snaps to metal objects).
 - The full gameplay effect of each `WeatherAffecting` value.

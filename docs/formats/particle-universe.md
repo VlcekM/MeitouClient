@@ -211,8 +211,26 @@ For an EFFECT of type CAMERA, CAMERA_RAIN or CAMERA_ACID_RAIN ([weather.md](weat
   life: a forced weather keeps its group), the weather's strength and the `count` / respawn times (one group per entry; **Observed**: for a
   camera group the count says how many may exist at once and the respawn times how soon a replaced one starts, which only the scheduler needs).
 - The weather's wind: a forced weather has no scheduler, so the adapter uses the weather's `wind speed max` along +x (**Observed**, to be
-  replaced by the scheduler's wind). Other group types (point, wandering, global; the map-feature placers; fog volumes; lightning) are not
-  built: a weather's entry of such a type is listed as "not yet" in the viewer's start-up message.
+  replaced by the scheduler's wind). The other group types, the placers, fog volumes and lightning are built since part two
+  ([weather.md](weather.md#the-groups-in-detail-verified-decompiled-where-marked-the-rest-observed)).
+
+## Pools, threads and cost (Observed: measured 2026-10-08, Release, `--fly-benchmark 150`)
+
+- **Lazy pools**: a technique's arrays start at 128 particles and double up to its quota (`ParticleSimulation.InitialPool`), so the 43 placers
+  and a dozen systems cost memory only for what is alive. `EmissionStopped` skips emission for a unit whose life is over.
+- **Units**: one `EffectUnit` per handler, each with its own simulation; `Advance()` runs a unit's queued time in steps of 1/30 s (1/10 s while a
+  backlog of more than 3 s is caught up, at most 40 steps a frame; a unit with more than 1 s left is not drawn). Units farther than 4000 units
+  step at 20 Hz, beyond 9000 at 10 Hz (the time queues up). **Background**: after the light phase (schedule, place, move, queue time) the main
+  thread starts `Parallel.ForEach` over the units on the pool and goes on recording; `Draw` waits (`Sync`). The wait is what the render
+  thread pays: 0.15 ms for Heavy_Rain (one unit), about 0.9 ms for the Great Desert streamers (19 units, 2 ms of simulation on the pool).
+- **Instances are built in ordinary memory** (`ParticleSimulation.Collect` into a reused array, depth partition there) and copied once into
+  the frame's write-combined constants: filling them field by field and partitioning in place cost 5.5 ms for 18000 particles, 0.3 ms now.
+- **Measured main-thread cost** per frame (update + draw, wait included): Heavy_Rain 0.5 ms, great desert streamers about 2 ms (1.2 ms
+  update: the groups' light phase and placers); GPU mean with versus without particles (`--no-particles`) 4.4 versus 4.5 ms (rain) and 5.6
+  versus 4.9 ms (streamers). The benchmark and `--orbit-step` runs advance the frame clock when weather particles exist (1/60 s a frame), so
+  the particles move.
+- **TAA**: particles have no motion vectors; under the history blend a thin fast streak keeps about 10 % of its strength once the camera
+  moves. The pass is drawn again into the upscalers' reactive mask (`ParticleRenderer.DrawCoverage`, [renderer-native.md](../renderer-native.md) 8.20).
 
 ## What a weather gives (Verified: `meitou-tools particles effects`, merged base records)
 
