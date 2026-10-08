@@ -139,25 +139,7 @@ public sealed record GameConstants
     /// <summary><c>weapon inventory weight mult</c>.</summary>
     public float WeaponInventoryWeightMult { get; init; }
 
-    // Combat tuning (combat.md owns the formulas).
-    /// <summary><c>damage multiplier</c>.</summary>
-    public float DamageMultiplier { get; init; }
-    /// <summary><c>max num attack slots</c>.</summary>
-    public int MaxNumAttackSlots { get; init; }
-    /// <summary><c>unarmed damage mult</c>.</summary>
-    public float UnarmedDamageMult { get; init; }
-    /// <summary><c>damage resistance min</c>.</summary>
-    public float DamageResistanceMin { get; init; }
-    /// <summary><c>damage resistance max</c>.</summary>
-    public float DamageResistanceMax { get; init; }
-    /// <summary><c>base block chance</c>.</summary>
-    public float BaseBlockChance { get; init; }
-    /// <summary><c>block chance increase per 10levels</c>, stored x0.1.</summary>
-    public float BlockChanceIncreasePer10Levels { get; init; }
-    /// <summary><c>block chance reduction per 10levels</c>, stored x0.1.</summary>
-    public float BlockChanceReductionPer10Levels { get; init; }
-    /// <summary><c>attack chance factor</c>.</summary>
-    public float AttackChanceFactor { get; init; }
+    // The combat rows of CONSTANTS (damage multiplier, block chances, attack slots...) are read by CombatConstants, the one the combat code uses.
     /// <summary><c>minimum lockpick chance</c>, stored x0.01.</summary>
     public float MinimumLockpickChance { get; init; }
 
@@ -170,19 +152,16 @@ public sealed record GameConstants
     /// <summary>The record named <c>GLOBAL CONSTANTS</c>, else the first CONSTANTS record, else <see cref="Default"/>.</summary>
     public static GameConstants FromDatabase(GameDatabase db)
     {
-        var record = db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault(r => r.Name == "GLOBAL CONSTANTS")
-            ?? db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault();
+        var record = ConstantsRecord.Find(db);
         return record is null ? Default : From(record);
     }
 
     /// <summary>Reads a CONSTANTS record (null reads as an empty one) and applies the loader's rescalings.</summary>
     public static GameConstants From(GameRecord? c)
     {
-        // A few fields are stored as ints in the data (weight strength diff 1x, max num attack slots...), the rest as floats: read either.
-        float F(string key, float fallback, float scale = 1) =>
-            (c is not null && c.Floats.TryGetValue(key, out float v) ? v : c is not null && c.Ints.TryGetValue(key, out int n) ? n : fallback) * scale;
-        int I(string key, int fallback) =>
-            c is not null && c.Ints.TryGetValue(key, out int v) ? v : c is not null && c.Floats.TryGetValue(key, out float x) ? (int)MathF.Round(x) : fallback;
+        // A few fields are stored as ints in the data (weight strength diff 1x...), the rest as floats: read either (RecordReading).
+        float F(string key, float fallback, float scale = 1) => RecordReading.Float(c, key, fallback) * scale;
+        int I(string key, int fallback) => RecordReading.Int(c, key, fallback);
         return new GameConstants
         {
             DaysPerYear = I("days per year", 100),
@@ -248,15 +227,6 @@ public sealed record GameConstants
             CarryPersonWeight = F("carry person weight", 40),
             WeaponInventoryWeightMult = F("weapon inventory weight mult", 0.5f),
 
-            DamageMultiplier = F("damage multiplier", 8),
-            MaxNumAttackSlots = I("max num attack slots", 1),
-            UnarmedDamageMult = F("unarmed damage mult", 1.5f),
-            DamageResistanceMin = F("damage resistance min", -0.65f),
-            DamageResistanceMax = F("damage resistance max", 0.65f),
-            BaseBlockChance = F("base block chance", 70),
-            BlockChanceIncreasePer10Levels = F("block chance increase per 10levels", 12, 0.1f),
-            BlockChanceReductionPer10Levels = F("block chance reduction per 10levels", 15, 0.1f),
-            AttackChanceFactor = F("attack chance factor", 0.05f),
             MinimumLockpickChance = F("minimum lockpick chance", 5, 0.01f),
 
             AnimationBlendRate = F("animation blend rate", 4),

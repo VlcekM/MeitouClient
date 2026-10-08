@@ -6,6 +6,8 @@ namespace Meitou.Simulation;
 public enum RngPurpose : uint
 {
     Test = 0,
+    /// <summary>The body rolls (production stats, medical rolls, hits) use this; it has the value of <see cref="Test"/> on purpose, as a distinct value would re-roll every body (changes every state hash).</summary>
+    Body = 0,
     Wander = 1,
     Think = 2,
     Combat = 3,
@@ -53,6 +55,24 @@ public static class Rng
     /// <summary>An integer in [0, <paramref name="bound"/>) from a roll (the tiny modulo bias is irrelevant at these bounds).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Int(ulong roll, int bound) => (int)((roll >> 11) % (ulong)bound);
+
+    /// <summary>A stable 64 bit hash of a string (FNV-1a over its UTF-16 chars, the same basis and prime as <see cref="StateHasher"/>), for keys made from record ids and names.</summary>
+    public static ulong StableHash(string s)
+    {
+        ulong h = 0xCBF29CE484222325UL;
+        foreach (char c in s) h = (h ^ c) * 0x100000001B3UL;
+        return h;
+    }
+
+    /// <summary>
+    /// A point in the disc around <paramref name="centre"/>, uniform in area, from one roll: the angle from the roll, the radius from its mix.
+    /// The radius is <c>sqrt(u) * radius / divisor</c>, multiplied and then divided in that order (the player's start spot uses a divisor of 3).
+    /// </summary>
+    public static System.Numerics.Vector2 PointInDisc(ulong roll, System.Numerics.Vector2 centre, float radius, float divisor = 1)
+    {
+        float angle = Float(roll) * MathF.Tau, r = MathF.Sqrt(Float(Mix(roll))) * radius / divisor;
+        return centre + new System.Numerics.Vector2(MathF.Sin(angle), MathF.Cos(angle)) * r;
+    }
 }
 
 /// <summary>
@@ -84,6 +104,7 @@ public struct StateHasher
     public void Add(double v) => Add((ulong)BitConverter.DoubleToInt64Bits(v == 0 ? 0d : v));
     public void Add(System.Numerics.Vector2 v) { Add(v.X); Add(v.Y); }
     public void Add(System.Numerics.Vector3 v) { Add(v.X); Add(v.Y); Add(v.Z); }
+    public void Add(CharacterId id) { Add(id.Slot); Add(id.Generation); }
 
     public readonly ulong Value => Rng.Mix(h);
 }

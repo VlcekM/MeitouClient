@@ -42,17 +42,26 @@ public sealed class CommandQueue
     }
 
     /// <summary>Removes and returns the commands whose tick is at or before <paramref name="tick"/>, oldest tick first, then queue order.</summary>
-    public List<SimCommand> TakeDue(long tick)
+    public IReadOnlyList<SimCommand> TakeDue(long tick)
     {
-        List<(SimCommand Command, long Sequence)> due;
+        List<(SimCommand Command, long Sequence)>? due = null;
         lock (gate)
         {
-            due = pending.FindAll(p => p.Command.Tick <= tick);
-            if (due.Count == 0) return [];
-            pending.RemoveAll(p => p.Command.Tick <= tick);
+            if (pending.Count == 0) return [];
+            int kept = 0;
+            for (int k = 0; k < pending.Count; k++)
+            {
+                var p = pending[k];
+                if (p.Command.Tick <= tick) (due ??= []).Add(p);
+                else pending[kept++] = p;
+            }
+            if (due is null) return [];
+            pending.RemoveRange(kept, pending.Count - kept);
         }
-        due.Sort((a, b) => a.Command.Tick != b.Command.Tick ? a.Command.Tick.CompareTo(b.Command.Tick) : a.Sequence.CompareTo(b.Sequence));
-        return due.ConvertAll(p => p.Command);
+        due.Sort(static (a, b) => a.Command.Tick != b.Command.Tick ? a.Command.Tick.CompareTo(b.Command.Tick) : a.Sequence.CompareTo(b.Sequence));
+        var commands = new SimCommand[due.Count];
+        for (int k = 0; k < commands.Length; k++) commands[k] = due[k].Command;
+        return commands;
     }
 }
 

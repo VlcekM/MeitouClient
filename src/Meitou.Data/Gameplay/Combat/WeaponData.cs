@@ -19,6 +19,39 @@ public enum WeaponCategory
 }
 
 /// <summary>
+/// Which <see cref="WeaponKinds"/> bit a weapon category stands for. There are two mappings, which agree on the six skill weapons (0 to 4 and 8) and on unarmed (5) and
+/// differ for the rest (Bow, Turret and the creature attacks, 6, 7 and 9 and up): the animations treat those as a one-handed weapon, the techniques as unarmed. Whether they
+/// should be one mapping is <b>Unknown</b> (it would change which clip a character with such a weapon in hand plays); both are kept as they were.
+/// </summary>
+public static class WeaponCategories
+{
+    /// <summary>The kind the animation records are matched with (<see cref="HandHold.OfCategory"/>): a category that is not a skill weapon or unarmed counts as one-handed.</summary>
+    public static WeaponKinds AnimationKind(int category) => category switch
+    {
+        (int)WeaponCategory.Katanas => WeaponKinds.Katana,
+        (int)WeaponCategory.Sabres => WeaponKinds.Sabre,
+        (int)WeaponCategory.Blunt => WeaponKinds.Blunt,
+        (int)WeaponCategory.Heavy => WeaponKinds.Heavy,
+        (int)WeaponCategory.Hackers => WeaponKinds.Hacker,
+        (int)WeaponCategory.Polearms => WeaponKinds.Polearm,
+        (int)WeaponCategory.Unarmed => WeaponKinds.Unarmed,
+        _ => WeaponKinds.OneHanded,
+    };
+
+    /// <summary>The kind the techniques' validity flags are matched with: a category that is not a skill weapon counts as unarmed.</summary>
+    public static WeaponKinds TechniqueKind(int category) => category switch
+    {
+        (int)WeaponCategory.Katanas => WeaponKinds.Katana,
+        (int)WeaponCategory.Sabres => WeaponKinds.Sabre,
+        (int)WeaponCategory.Blunt => WeaponKinds.Blunt,
+        (int)WeaponCategory.Heavy => WeaponKinds.Heavy,
+        (int)WeaponCategory.Hackers => WeaponKinds.Hacker,
+        (int)WeaponCategory.Polearms => WeaponKinds.Polearm,
+        _ => WeaponKinds.Unarmed,
+    };
+}
+
+/// <summary>
 /// A WEAPON record (docs/game/combat.md "Weapons"; field names <b>Verified</b> against the 48 base records). Damage multipliers against robots, humans and animals,
 /// and per-race damage (percent), are copied to the wielder when the weapon is equipped.
 /// </summary>

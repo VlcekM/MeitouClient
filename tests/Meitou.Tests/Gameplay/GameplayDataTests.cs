@@ -91,7 +91,6 @@ public class GameplayDataTests
         Assert.Equal(0.75f, c.ExpGainMultiplier, 6);
         Assert.Equal(0.5f, c.XpRateAthletics, 6);
         Assert.Equal(0.05f, c.MinimumLockpickChance, 6);
-        Assert.Equal(1.2f, c.BlockChanceIncreasePer10Levels, 6);
         Assert.Equal(0.6f, c.MinDismantleMaterialsFraction, 6);
         Assert.Equal(0.2f, c.AppearanceRandomDeviation, 6);
         Assert.Equal(20, c.WeightStrengthDiff1x);
@@ -166,10 +165,7 @@ public class GameplayInstallTests
         Assert.Equal(0.05f, c.MinimumLockpickChance, 6);
         Assert.Equal(0.6f, c.MinDismantleMaterialsFraction, 6);
         Assert.Equal(0.2f, c.AppearanceRandomDeviation, 6);
-        Assert.Equal(1.2f, c.BlockChanceIncreasePer10Levels, 6);
-        Assert.Equal(1.5f, c.BlockChanceReductionPer10Levels, 6);
         Assert.Equal(2f, c.MedkitDrain1, 6);
-        Assert.Equal(0.65f, c.DamageMultiplier, 6);
         Assert.Equal(20, c.WeightStrengthDiff1x);
         Assert.Equal(3, c.MedicSpeedMult);
     }

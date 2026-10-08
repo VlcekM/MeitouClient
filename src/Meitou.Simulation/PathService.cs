@@ -64,8 +64,13 @@ public sealed class PathService : IDisposable
         return list;
     }
 
+    bool disposed;
+
+    /// <summary>Stops the thread; safe to call twice (the owning system and the host may both dispose it).</summary>
     public void Dispose()
     {
+        if (disposed) return;
+        disposed = true;
         requests?.CompleteAdding();
         thread?.Join();
         requests?.Dispose();

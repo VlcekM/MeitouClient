@@ -81,7 +81,6 @@ public class BodyInstallTests
         Assert.Equal(f.CarryWeightMult, c.CarryWeightMult, 6);
         Assert.Equal(f.CarryPersonWeight, c.CarryPersonWeight);
         Assert.Equal(f.WeaponInventoryWeightMult, c.WeaponInventoryWeightMult, 6);
-        Assert.Equal(f.DamageMultiplier, c.DamageMultiplier, 6);
     }
 
     [Fact]

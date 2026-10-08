@@ -59,13 +59,16 @@ public sealed record WorldSettings
 /// deterministic: the same settings, systems, setup, commands and tick count give the same <see cref="StateHash"/> at any
 /// <see cref="WorldSettings.Threads"/>. A tick is, in order: inputs, schedule, think, move, act (parallel), commit, slow world, publish.
 /// </summary>
-public sealed class World : IDisposable
+public sealed partial class World : IDisposable
 {
     readonly List<ITickSystem> systems;
     readonly WorkerPool pool;
     readonly EffectBuffer[] buffers;
     readonly List<Effect> effects = [];
     Partition[] partitions = [];
+    // Per system, built once when it is added: which parallel phases it implements and the delegates that run them (no closure per tick).
+    readonly List<SystemPhases> phases = [];
+    IAnimationSource? animations;
 
     public World(WorldSettings settings, IWalkability walkability, IEnumerable<ITickSystem>? systems = null, CharacterTable? characters = null)
     {
@@ -74,6 +77,8 @@ public sealed class World : IDisposable
         Settings = settings;
         Walkability = walkability;
         this.systems = [.. systems ?? []];
+        for (int k = 0; k < this.systems.Count; k++) phases.Add(new SystemPhases(this, this.systems[k], k));
+        animations = this.systems.OfType<IAnimationSource>().FirstOrDefault();
         Characters = characters ?? new CharacterTable();
         Grid = new SpatialGrid(settings.GridCellSize);
         pool = new WorkerPool(settings.Threads);
@@ -108,6 +113,8 @@ public sealed class World : IDisposable
     {
         if (Tick != 0) throw new InvalidOperationException("systems are added before the first tick");
         systems.Add(system);
+        phases.Add(new SystemPhases(this, system, systems.Count - 1));
+        animations ??= system as IAnimationSource;
     }
 
     /// <summary>Runs one simulation tick.</summary>
@@ -129,15 +136,15 @@ public sealed class World : IDisposable
 
         // 3-5. Think, move, act (parallel; each system's phase is a barrier).
         table.Phase = TablePhase.Parallel;
-        foreach (var s in systems) pool.ForEach(partitions.Length, i => s.Think(this, partitions[i]));
-        foreach (var s in systems) pool.ForEach(partitions.Length, i => s.Move(this, partitions[i]));
+        // A system that leaves a phase at its empty default is skipped there: a barrier costs more than the nothing it would wait for.
+        foreach (var p in phases) if (p.Think is { } think) pool.ForEach(partitions.Length, think);
+        foreach (var p in phases) if (p.Move is { } move) pool.ForEach(partitions.Length, move);
         foreach (var b in buffers) b.Reset();
-        for (int k = 0; k < systems.Count; k++)
+        foreach (var p in phases)
         {
-            var s = systems[k];
-            int system = k;
-            foreach (var b in buffers) b.BeginSystem(system);
-            pool.ForEach(partitions.Length, i => s.Act(this, partitions[i], buffers[i]));
+            if (p.Act is not { } act) continue;
+            foreach (var b in buffers) b.BeginSystem(p.Index);   // Effect.System is the system's real index, so the commit order does not depend on which systems act
+            pool.ForEach(partitions.Length, act);
         }
 
         table.Phase = TablePhase.Commit;
@@ -174,33 +181,6 @@ public sealed class World : IDisposable
         if (partitions.Length != wanted) partitions = new Partition[wanted];
         for (int i = 0; i < wanted; i++)
             partitions[i] = new Partition(i, (int)((long)slots * i / wanted), (int)((long)slots * (i + 1) / wanted));
-    }
-
-    void Publish()
-    {
-        var table = Characters;
-        var list = new List<CharacterSnapshot>(table.Count);
-        var state = table.Previous;
-        var animations = systems.OfType<IAnimationSource>().FirstOrDefault();
-        for (int i = 0; i < state.Length; i++)
-        {
-            if (!state[i].Alive) continue;
-            var cold = table.Cold(i);
-            list.Add(new CharacterSnapshot(new CharacterId(i, state[i].Generation), cold?.Appearance, state[i].Position, state[i].Yaw, cold?.Animation is { } anim && animations is not null ? animations.Publish(anim) : AnimationLayers.For(state[i].Animation, state[i].AnimationTime))
-            {
-                Faction = cold?.Faction ?? -1,
-                Name = cold?.Name ?? "",
-                SquadId = cold?.SquadId ?? -1,
-                IsPlayer = cold?.IsPlayer ?? false,
-                Selected = cold is { IsPlayer: true } && Player.Selection.Contains(new CharacterId(i, state[i].Generation)),
-                Skills = cold is { IsPlayer: true, Stats: { } sk } && Player.Selection.Contains(new CharacterId(i, state[i].Generation)) ? $"Atk {sk[Meitou.Data.Gameplay.Bodies.StatsEnumerated.MeleeAttack]:0.0} Def {sk[Meitou.Data.Gameplay.Bodies.StatsEnumerated.MeleeDefence]:0.0} Dodge {sk[Meitou.Data.Gameplay.Bodies.StatsEnumerated.Dodge]:0.0} Tough {sk.Toughness:0.0} Str {sk.Strength:0.0} Ath {sk.Athletics:0.0}" : "",
-                Inventory = cold is { IsPlayer: true, Inventory: { } carried } && Player.Selection.Contains(new CharacterId(i, state[i].Generation)) ? Items.InventoryText.Lines(carried) : [],
-                Body = cold?.Medical is { } med && cold.Race is { } race ? new BodyStatus(med.Blood / MathF.Max(Bodies.MedicalState.BloodCapacity(race, cold.Stats?.Strength ?? 50), 1), med.Parts.Count == 0 ? 1 : med.Parts.Min(p => p.Fraction), med.Hunger, med.Unconscious, med.Dead) : null,
-                Path = cold is { IsPlayer: true } && (state[i].Flags & (ushort)MoveFlags.HasPath) != 0 && Player.Selection.Contains(new CharacterId(i, state[i].Generation)) ? cold.Path.Skip(state[i].PathCursor).ToArray() : [],
-            });
-        }
-        PreviousSnapshot = Snapshot;
-        Snapshot = new WorldSnapshot(Tick, list);
     }
 
     /// <summary>A hash of the canonical state after the last tick: the tick number, every character's state in slot order and the free list. Equal worlds give equal hashes at any thread count.</summary>

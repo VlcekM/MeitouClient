@@ -28,8 +28,7 @@ public sealed class PlayerState
         h.Add(Selection.Count);
         foreach (var c in Selection)
         {
-            h.Add(c.Slot);
-            h.Add(c.Generation);
+            h.Add(c);
         }
     }
 }
