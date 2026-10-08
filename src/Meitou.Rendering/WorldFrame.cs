@@ -74,6 +74,7 @@ sealed class WorldOptions
     public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze switch (default); 1 = the game's haze
     public string? Weather;
     public float? Clouds;
+    public Vector2 CloudWind;
     public PostOptions Post = PostOptions.Create("meitou");
     public double? CameraX, CameraZ, FlyToX, FlyToZ;
     /// <summary>Frames of the offscreen benchmark flight (0: none), the circle's radius and the speed per frame.</summary>
@@ -134,7 +135,8 @@ sealed class WorldOptions
           --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral
           --haze-distance <u>      the game's far distance D (view distance x 10) for its haze, which ramps in from 0.06 D to 0.6 D (default 50000: view distance 5000)
           --haze-strength <x>      the viewer's haze strength: scales how far the haze is blended in (default 0.93: far mountains stay visible; 1 is the game's; also a Tab slider)
-          --weather <name>         a WEATHER record's sky colour, fog, clouds and heat haze (default "Default": clear, no fog, no clouds, no heat haze)   --clouds <0..1> cloud coverage
+          --weather <name>         a WEATHER record's sky colour, fog, clouds and heat haze (default "Default": clear, no fog, no clouds, no heat haze)   --clouds <0..1> cloud density c (test override)
+          --cloud-wind <x>,<z>     the clouds' drift velocity in world units per second (test; the drift is held still in --screenshot)
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
@@ -243,6 +245,7 @@ sealed class WorldOptions
                 case "--faithful": Enhancements.Apply(Switches(o), Next(), meitou: false); break;
                 case "--weather": o.Weather = Next(); break;
                 case "--clouds": o.Clouds = F(); break;
+                case "--cloud-wind": { var (wx, wz) = Pair(); o.CloudWind = new Vector2((float)wx, (float)wz); break; }
                 case "--no-stream": o.NoStream = true; break;
                 case "--show-keys": o.ShowKeys = true; break;
                 case var post when o.Post.TryParse(post, Next): break;
@@ -512,7 +515,7 @@ static class WorldFrame
             Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} slots of {layerSize}² BC3+BC1, {textures.ArrayBytes / 1048576} MB ({watch.ElapsedMilliseconds} ms)");
             terrain.SetTextures(textures);
         }
-        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(context, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, KenshiHaze = !o.PhysicalHaze }, Post = new PostProcess(context, o.Post) };
+        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(context, assets) { Physical = !o.SimpleSky, CloudCoverage = o.Clouds, CloudWind = o.CloudWind, KenshiHaze = !o.PhysicalHaze }, Post = new PostProcess(context, o.Post) };
         gpu.Post.LoadHeatHaze(assets);
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
@@ -732,6 +735,7 @@ static class WorldFrame
         if (gpu.Post is { } exposed) exposed.AutoExposure = gpu.Sky.Physical ? (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance) : null;
         if (gpu.Post is { } upscaling) upscaling.WaterHeight = render.Water && gpu.Water is not null ? WorldWater.Height : null;
         if (gpu.Post is { } hazy) UpdateHeatHaze(gpu, hazy, sun.Y);
+        gpu.Sky.StepClouds(gpu.Post?.InstantAdaptation ?? true);   // the clouds drift on the frame clock, held still for a still picture
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
         camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);

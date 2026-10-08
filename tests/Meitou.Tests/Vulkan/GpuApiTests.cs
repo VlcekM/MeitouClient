@@ -180,7 +180,7 @@ public class GpuApiTests
     static readonly Dictionary<string, string> LegacyModules = new()
     {
         ["sky simple"] = "4C48F27F2EFC495E4B81B6421F095B12",
-        ["sky"] = "9CB87FE494F840061B293D6ECFEB2C49",
+        ["sky"] = "9BAA37FFBD6DA1BE2E58E3EA9ECEF122",   // the SkyX cloud pass
         ["water"] = "EBCE6E99C47A215E7E266464DEE0FFB4",
         ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",
         ["terrain patch"] = "202A7EA2A01D100753D6D6E78C326B0B",

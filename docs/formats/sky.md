@@ -192,9 +192,9 @@ checked 2026-10-04):
   on. Colour: `KenshiHaze.Colour` / GLSL `hazeColour`, SkyX's exposure × Rayleigh phase × `invλ⁴ · Kr · sun` × the 4-sample
   in-scattering from SkyX's camera to the point mapped by the dome radius 70000, with the game's lift and -0.3 clamp: the game's
   own expression, in the same HDR units as the sky and the lit scene, so the exposure treats them alike. At night the integral
-  vanishes and the haze is black, as in the game. Then `horizonClouds`: its pull is the game's (0 in clear weather); its colour is a
-  **stand-in** built the game's way from the viewer's sun colour and horizon colour (the game's `getColorAt` input for the cloud layer
-  and its floor colour are Unknown, above). The weather's fog (`--weather`, when enabled): `fog color · sunColour.w`, the game's
+  vanishes and the haze is black, as in the game. Then `horizonClouds`: its pull is the game's (0 in clear weather); its colour is the game's
+  (`CloudLayer.HorizonColour`: the same `sunColour.rgb` and `zenithLight` as the cloud pass, [clouds.md](clouds.md)), from the same cloud density c as
+  the layer. The weather's fog (`--weather`, when enabled): `fog color · sunColour.w`, the game's
   ease-in-out curve over `distance / fog distance max` (the viewer has no wind; the game uses the same distance for every base weather, see the WEATHER table above),
   alphas added. A consequence that looks odd but is the game's rule: at night distant terrain goes black against the night sky.
   Not reproduced: the water being fogged by the depth of what is under it.
@@ -239,8 +239,10 @@ and sky-view tables, the 0.36° sun disc) is gone, with `AtmosphereModel.cs`.
   which the viewer does not reproduce (a **stand-in** placement; the brightness formula is the shader's).
 - **Moon**: `SkyX_Moon.png`, always full, opposite the sun, saturated and alpha-blended as `SkyX_Moon.hlsl` does; its size (0.016
   rad) and placement are **stand-ins** (the game's moon position is Unknown).
-- **Clouds** (`--clouds` or the weather's density): a flat layer of `Clouds.dds`'s red channel; the colour follows the cloud shader's
-  form with a **stand-in** zenith light (the game's inputs are now known: [clouds.md](clouds.md)).
+- **Clouds** (the weather's density, or `--clouds <0..1>` as a test override; `--cloud-wind <x>,<z>` for the drift): the game's
+  planar layer, drawn in the sky pass after the stars and before the moon, alpha-blended in HDR ([clouds.md](clouds.md#in-the-viewer)).
+  `SkyRenderer` takes the density (`CloudDensityInput`), the sky colour multiplier (`SkyColourMultiplierInput`) and the wind velocity
+  (`CloudWind`, advanced by `StepClouds`) as inputs; the same density drives `horizonClouds`.
 - **Weather tint**: the sky is multiplied by the weather's `sky color mult`. In the game the sky update applies it only to the
   `zenithLight` / `nadirLight` colours (clouds and `horizonClouds`), see the WEATHER table above; white in the "Default" weather,
   so the default views do not depend on it. With weather fog the sky near the horizon fades to the fog colour (a viewer choice).
@@ -264,5 +266,5 @@ HDR in the game's units; the post-processing's exposure brings them to the scree
 
 ### Not reproduced
 
-Volumetric clouds, lightning, cloud lighting from the sun's direction and drifting, the moon's phase and halo, the planet mesh,
+Volumetric clouds, lightning, cloud lighting from the sun's direction (the game has none), the moon's phase and halo, the planet mesh,
 SkyX's ground fog, the weather schedule, the starfield's dome mapping, and SkyX's per-vertex evaluation (the viewer's is per pixel).
