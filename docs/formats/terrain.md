@@ -333,7 +333,13 @@ biome borders. `flowmap.png` gives the flow direction. Tested in `WaterTests`.
 "Meitou water"): RG is a broad, smooth field over most of the map with sharper, painted detail along the rivers and
 channels (the river north-west of the centre, the red-blue channels in the south-west); B, read by the shader as the scum
 amount, is high along nearly every coastline, sea coasts included, not only in the swamps, so it cannot tell a swamp
-from a beach. Whether RG really runs along the river channels is **Unknown** (milestone 2 of the Meitou water checks it).
+from a beach.
+
+**Verified** (2026-10-08, `FlowMapTests`, base game, `flowmap.png` against `fullmap.tif` averaged to the flow map's 2048² grid, 144 units a texel; water = under Y 100; "river" = water whose half-width, the largest distance to land within 5 texels, is at most 3 texels, 23985 texels; the channel axis is the principal direction of the water mask's structure tensor over 5 × 5 texels): **RG does not follow the river channels**. In the rivers |cos(angle between RG and the channel axis)| averages 0.65 against 0.64 for random directions (0.62 in open water, 0.70 on land); the same with R and G swapped (0.65) or either one flipped (0.63, 0.63); the cosine between RG and the downhill of the bed averages 0.00 (half the river texels point downhill). RG is a smooth, slowly varying field with |RG| (the vector from the 0..1 colours, 0.5 neutral) about 0.2-0.25 everywhere (median 0.18 in rivers, 0.27 in open water, 0.24 on land, 90th percentile 0.3-0.4), and its direction is unrelated to the water's shape; the game scrolls its normal map along it at that low speed. B is much higher in narrow water (mean 0.30) than in open sea (0.03) and 0.15 on land (checked by the same test).
+
+**Observed** (2026-10-08, same maps, looking at the pictures): the real rivers are 1-4 texels wide, reach lakes or simply end inland, and the bed under the flat water has no usable slope (the NW river's bed height under the water is 4..99 along its length, non-monotonic), so a route to the sea does not exist for them either. What does fall downstream is the land beside the river (the valley floor). The Meitou water derives its own river map from it, see [viewer.md](../viewer.md) "Meitou water" (`RiverFlowBake`).
+
+Places with strong, long river stretches in that map (world X, Z; found with the same test): (-65016, 87768), (-99144, 97416), (-123768, 83160), the SW channels near (-50000, 70000) to (-35000, 100000) and the NW river's stretches round (-46000, -70000), (-40000, -66000), (-43992, -29304).
 The ground under the water near most shores is steep: off Port South and Port North the water is 40 units (4 m) deep
 within some tens of units of the waterline, so a surf zone measured by depth would be a thin strip.
 

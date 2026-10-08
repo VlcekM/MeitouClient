@@ -696,7 +696,7 @@ static class WorldFrame
         if (!o.NoWater && scene.Database is not null)
         {
             var messages = new List<string>();
-            gpu.Water = WaterRenderer.Create(context, install, scene.Database, assets, gpu.Sky, messages, o.WaterGrid, o.WaterOcean);
+            gpu.Water = WaterRenderer.Create(context, install, scene.Database, assets, gpu.Sky, messages, scene.Coarse, o.WaterGrid, o.WaterOcean);
             gpu.Water.Refraction = o.WaterRefraction;
             gpu.Water.Meitou = o.MeitouWater;
             gpu.WaterClockHours = o.WaterSeconds / WaveSet.SecondsPerGameHour;

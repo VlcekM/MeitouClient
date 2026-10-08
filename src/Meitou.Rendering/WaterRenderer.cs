@@ -178,6 +178,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform vec4 uShore;                // x breaker phase (cycles), y run-up height, z breaker wavelength, w breaker height
         uniform vec4 uWaveFade;             // eye distances over which the open waves' heights (x to y) and the shore's breakers and foam (z to w) fade out
         uniform float uWaterDebug;          // 1: show the shore fields (MEITOU_WATER_DEBUG=1)
+        uniform sampler2D uRiverMap;        // RiverFlowBake: RG the flow direction (x, z), B the half-width over 8 texels, A the river weight; world bounds
 
         // The ocean's displacement at p, each cascade read at the mip whose texels are as far apart as the vertices sampling it (finer
         // waves would alias into the grid's facets; the fragment's normals carry them instead).
@@ -193,7 +194,8 @@ public sealed unsafe class WaterRenderer : IDisposable
             return d;
         }
 
-        struct Shore { float depth; float dist; float g; vec2 dir; float open; float size; float breakAt; };
+        // river: how much p is in a river (0 none, 1 a river's channel), flow: its unit direction (x, z), speed: how fast it runs (units a second).
+        struct Shore { float depth; float dist; float g; vec2 dir; float open; float size; float breakAt; float river; vec2 flow; float speed; };
 
         vec2 shoreField(vec2 uv) { return textureLod(uShoreField, uv, 0.0).rg; }
 
@@ -205,7 +207,13 @@ public sealed unsafe class WaterRenderer : IDisposable
         {
             Shore r;
             r.depth = uWaterHeight - terrainHeight(p);
-            r.dist = 1.0e6; r.dir = vec2(0.0); r.open = 0.0;
+            r.dist = 1.0e6; r.dir = vec2(0.0); r.open = 0.0; r.flow = vec2(0.0); r.speed = 0.0;
+            // Rivers (the baked map, 144 units a texel): the weight, the coarse direction downstream and the width.
+            vec4 rv = textureLod(uRiverMap, (p + uHalfWorld) / (2.0 * uHalfWorld), 0.0);
+            r.river = rv.a;
+            vec2 coarse = rv.rg * 2.0 - 1.0;
+            coarse = length(coarse) > 0.05 ? normalize(coarse) : vec2(1.0, 0.0);
+            r.flow = coarse;
             vec2 extent = uShoreRect.zw - uShoreRect.xy;
             if (extent.x > 0.0)
             {
@@ -219,7 +227,18 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // Fade out towards the field's edge (it follows the eye; beyond it nothing is known).
                 vec2 inside = min(uv, 1.0 - uv) * extent;
                 r.open = f.g * smoothstep(0.0, 600.0, min(inside.x, inside.y));
+                // In a river the bank's isolines give the channel's axis at the shore field's resolution; the map says which way is down.
+                if (r.river > 0.0)
+                {
+                    vec2 axis = vec2(-r.dir.y, r.dir.x);
+                    float along = dot(axis, coarse);
+                    float trust = smoothstep(4.0, 16.0, length(grad)) * smoothstep(0.6, 0.85, abs(along));
+                    r.flow = normalize(mix(coarse, axis * (along < 0.0 ? -1.0 : 1.0), trust));
+                }
             }
+            // Rivers have no open water: no surf, and (oceanScale) no waves. They run faster where narrow and shallow.
+            r.open *= 1.0 - r.river;
+            r.speed = mix(30.0, 14.0, smoothstep(1.0, 5.0, rv.b * 8.0)) * mix(1.5, 0.8, smoothstep(5.0, 60.0, r.depth));
             // Along the shore the waves arrive at different times, and the sets swell and fade smoothly from one breaker to the next.
             float along = sin(p.x * 0.0021 + sin(p.y * 0.0013) * 2.0) + sin(p.y * 0.0017 + p.x * 0.0009);
             float x = r.dist / uShore.z + uShore.x + along * 0.6;
@@ -232,7 +251,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         // How much of the open sea's waves reach p: none in the shallows and on the shore (the breakers take over), fewer in sheltered water.
         float oceanScale(Shore s)
         {
-            return smoothstep(0.5, 20.0, s.depth) * smoothstep(-10.0, 150.0, s.dist) * mix(0.3, 1.0, max(s.open, smoothstep(400.0, 1500.0, s.dist)));
+            return smoothstep(0.5, 20.0, s.depth) * smoothstep(-10.0, 150.0, s.dist) * mix(0.3, 1.0, max(s.open, smoothstep(400.0, 1500.0, s.dist))) * (1.0 - s.river);
         }
 
         // A breaker's height over its phase: a front (g below 0.5, the shore side) that steepens as it nears the break, and a long back.
@@ -338,9 +357,44 @@ public sealed unsafe class WaterRenderer : IDisposable
             return n;
         }
 
+        // A river's moving normals: the game's normal map carried along the flow at its speed, as two samples half a cycle apart cross-faded
+        // (each is renewed where its weight is zero, so the pattern does not stretch where the flow turns). The map's coordinates are rotated and
+        // rescaled per layer so the layers do not line up; dp: the pixel's footprint (the samples are in a branch, so they take explicit gradients).
+        vec3 riverLayer(vec2 p, vec2 flow, float speed, vec2 scale, mat2 r, float phase, vec2 dpx, vec2 dpy)
+        {
+            vec3 sum = vec3(0.0);
+            for (int i = 0; i < 2; i++)
+            {
+                float t = fract(uTime * 240.0 + phase + 0.5 * float(i));   // a cycle of 2.5 s
+                vec2 q = p - flow * speed * 2.5 * (t - 0.5);
+                vec3 n = textureGrad(uNormalMap, r * q * scale, r * dpx * scale, r * dpy * scale).rgb * 2.0 - 1.0;
+                n = n.xzy;
+                n.xz = transpose(r) * n.xz;
+                sum += n * (1.0 - abs(t * 2.0 - 1.0));
+            }
+            return sum;
+        }
+
+        // The foam's two blotch scales (R: lace, G: noise) stretched along the flow into streaks and carried with it, cross-faded the same way.
+        void riverFoam(vec2 p, vec2 flow, float speed, vec2 dpx, vec2 dpy, out vec2 a1, out vec2 a2)
+        {
+            a1 = vec2(0.0); a2 = vec2(0.0);
+            mat2 frame = mat2(flow.x, -flow.y, flow.y, flow.x);   // world to (along, across)
+            vec2 s1 = vec2(0.0024, 0.009), s2 = vec2(0.0072, 0.027);
+            for (int i = 0; i < 2; i++)
+            {
+                float t = fract(uTime * 240.0 + 0.5 * float(i));
+                float w = 1.0 - abs(t * 2.0 - 1.0);
+                vec2 q = frame * (p - flow * speed * 2.5 * (t - 0.5));
+                a1 += textureGrad(uFoamMap, q * s1, frame * dpx * s1, frame * dpy * s1).rg * w;
+                a2 += textureGrad(uFoamMap, q * s2 + 0.37, frame * dpx * s2, frame * dpy * s2).rg * w;
+            }
+        }
+
         void main()
         {
             vec2 p = vBase;
+            vec2 dpx = dFdx(p), dpy = dFdy(p);
             vec2 map = (p + uHalfWorld) / (2.0 * uHalfWorld);
             vec4 pa = texture(uParamsA, map);
             vec4 pb = texture(uParamsB, map);
@@ -371,7 +425,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             // The motion fades with the eye distance; beyond it (and past the world's edge) this is the game's flat water.
             float fade = outside <= 0.0 ? 1.0 - smoothstep(uWaveFade.z, uWaveFade.w, dist) : 0.0;
             Shore s;
-            s.depth = 1.0e4; s.dist = 1.0e6; s.g = 0.0; s.dir = vec2(0.0); s.open = 0.0; s.size = 1.0; s.breakAt = 0.0;
+            s.depth = 1.0e4; s.dist = 1.0e6; s.g = 0.0; s.dir = vec2(0.0); s.open = 0.0; s.size = 1.0; s.breakAt = 0.0; s.river = 0.0; s.flow = vec2(1.0, 0.0); s.speed = 0.0;
             if (fade > 0.0) s = shoreAt(p);
             else if (outside <= 0.0) s.depth = uWaterHeight - terrainHeight(p);
 
@@ -400,6 +454,19 @@ public sealed unsafe class WaterRenderer : IDisposable
             nm += sampleNormal(tex, direction, speed, time);
             nm += rotatedNormal(tex * 0.71 + vec2(0.1, 0.3), direction, speed, time + 0.33, mat2(0.36, 0.93, -0.93, 0.36));
             nm += rotatedNormal(tex * 1.37 + vec2(0.4, 0.7), direction, speed, time + 0.66, mat2(-0.74, 0.67, -0.67, -0.74));
+            // Rivers: the normals run with the current instead (faster where it is narrow and shallow), rougher where it rushes.
+            float rw = s.river * fade;
+            float blotch = texture(uFoamMap, p * 0.0013 + vec2(0.31, 0.17)).g;
+            float rapid = rw * smoothstep(32.0, 46.0, s.speed) * smoothstep(0.35, 0.7, blotch);   // fast, shallow stretches, in patches
+            if (rw > 0.01)
+            {
+                vec3 rn = vec3(0.0, 1.0, 0.0);
+                rn += riverLayer(p, s.flow, s.speed, pa.xy, mat2(1.0, 0.0, 0.0, 1.0), 0.0, dpx, dpy) * 0.5;
+                rn += riverLayer(p, s.flow, s.speed, pa.xy * 0.71, mat2(0.36, 0.93, -0.93, 0.36), 0.33, dpx, dpy) * 0.5;
+                rn += riverLayer(p, s.flow, s.speed, pa.xy * 1.37, mat2(-0.74, 0.67, -0.67, -0.74), 0.66, dpx, dpy) * 0.5;
+                rn.xz *= 1.0 + 1.3 * rapid;
+                nm = mix(nm, rn, rw);
+            }
             float rough = texture(uFoamMap, p * 0.00035 + vec2(uTime * 0.02, 0.0)).g;
             // Near the eye the ocean's own slopes carry the detail; the game's map takes over with the distance.
             nm.xz *= (0.55 + 0.9 * rough) * mix(0.35, 1.0, smoothstep(1500.0, 6000.0, dist));
@@ -526,6 +593,14 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Blotches (the multi-octave noise at two scales) with bubble rims in them; the more foam, the lower the threshold. Up close the
             // foam shows its bubbles (B: fine cell walls), lit on their walls and darker inside.
             vec2 a1 = texture(uFoamMap, p * 0.009 + drift).rg, a2 = texture(uFoamMap, p * 0.027 - drift * 1.3).rg;
+            if (rw > 0.01)
+            {
+                // A river's foam: streaks along the current, a thin trace everywhere in it and a white rush in its rapids.
+                vec2 r1, r2;
+                riverFoam(p, s.flow, s.speed, dpx, dpy, r1, r2);
+                a1 = mix(a1, r1, rw); a2 = mix(a2, r2, rw);
+                amount = max(amount, rw * (0.02 + 0.55 * rapid));
+            }
             float bubbles = texture(uFoamMap, p * 0.06 - drift * 2.0).b * (1.0 - smoothstep(150.0, 600.0, dist));
             float pattern = (a1.g * 0.6 + a2.g * 0.4) * 0.7 + max(a1.r, a2.r) * 0.45 + bubbles * 0.08;
             float foam = smoothstep(0.95 - amount, 1.25 - amount, pattern);
@@ -566,6 +641,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 a = mix(1.0, a, clamp((4000.0 - dist) / 400.0, 0.0, 1.0));
             }
 
+            if (uWaterDebug > 1.5) { fragColour = vec4(s.river * fade, s.flow * 0.5 + 0.5, 1.0); return; }   // MEITOU_WATER_DEBUG=2: the river weight and flow direction
             if (uWaterDebug > 0.5) { fragColour = vec4(clamp(s.dist / 400.0, 0.0, 1.0), s.g, s.open, 1.0); return; }   // MEITOU_WATER_DEBUG=1
             fragColour = vec4(atmoApply(colour, uEye, vWorld), a);
         }
@@ -597,7 +673,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// <summary>One water program with its handles resolved at load (the Faithful one has no motion uniforms: those handles are inactive).</summary>
     sealed class WaterProgram : IDisposable
     {
-        public static readonly string[] MapNames = ["uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB", "uRainMap", "uFoamMap"];
+        public static readonly string[] MapNames = ["uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB", "uRainMap", "uFoamMap", "uRiverMap"];
         public readonly LegacyProgram P;
         public readonly NativeSegment Segment;
         public readonly UniformHandle ViewProjection, WaterHeight, Centre, Extent, Eye, HalfWorld, SeaA, SeaB, SeaColour, Time, SunDir, SunColour,
@@ -697,7 +773,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     public const float GridDetailRadius = 6000;
 
     /// <param name="sky">Unused since phase 8 stage 2: the atmosphere comes through the frame globals.</param>
-    public static WaterRenderer Create(GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky, List<string> messages,
+    public static WaterRenderer Create(GpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky, List<string> messages, ushort[]? coarseHeights = null,
         int gridSegments = DefaultGridSegments, int oceanSize = OceanWaves.DefaultSize)
     {
         _ = sky;
@@ -726,12 +802,20 @@ public sealed unsafe class WaterRenderer : IDisposable
         // always had its (single-level) chain and a trilinear filter.
         SampledImage Rgba(RgbaImage? img, bool repeat, byte[] flat, string name) =>
             img is null ? SampledImage.Rgba8(gpu, 1, 1, flat, repeat, mipmaps: true, name) : SampledImage.Rgba8(gpu, img, repeat, mipmaps: repeat, name);
+        // The river map: baked from the whole-world heights at the flow map's size (the game's flow map does not follow the rivers); none without them.
+        var riverWatch = System.Diagnostics.Stopwatch.StartNew();
+        int riverSize = flow?.Width ?? 0;
+        bool rivers = Environment.GetEnvironmentVariable("MEITOU_RIVERS") != "0" && coarseHeights is not null && riverSize > 0 && coarseHeights.Length == (riverSize + 1) * (riverSize + 1);
+        SampledImage riverMap = rivers
+            ? SampledImage.Rgba8(gpu, riverSize, riverSize, RiverFlowBake.Bake(coarseHeights!, riverSize, (ushort)Math.Ceiling(WorldWater.Height * ushort.MaxValue / WorldLayout.MaxHeight)), repeat: false, mipmaps: false, "water river map")
+            : SampledImage.Rgba8(gpu, 1, 1, [128, 128, 0, 0], repeat: false, mipmaps: false, "water river map");
+        if (rivers) Console.WriteLine($"rivers    flow map baked at {riverSize}² ({riverWatch.ElapsedMilliseconds} ms)");
         return new WaterRenderer(gpu,
             [Rgba(colour, false, [0, 32, 64, 255], "water colour map"), Rgba(flow, false, [128, 128, 0, 255], "water flow map"),
              Rgba(normal, true, [128, 255, 128, 255], "water normal map"),
              SampledImage.Rgba32F(gpu, a, blend.Width, blend.Height, "water parameters a"), SampledImage.Rgba32F(gpu, b, blend.Width, blend.Height, "water parameters b"),
              Rgba(rain, true, [0, 0, 0, 0], "water rain ripples"),
-             SampledImage.Rgba8(gpu, WaterFoam.Size, WaterFoam.Size, WaterFoam.Bake(), repeat: true, mipmaps: true, "water foam")],
+             SampledImage.Rgba8(gpu, WaterFoam.Size, WaterFoam.Size, WaterFoam.Bake(), repeat: true, mipmaps: true, "water foam"), riverMap],
             sea.A, sea.B, sea.Colour, gridSegments, oceanSize);
     }
 
@@ -852,7 +936,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             p.Set(h.GridStep, gridStep);
             p.Set(h.Shore, waves.Shore);
             p.Set(h.WaveFade, WaveFadeStart, WaveFadeEnd, ShoreFadeStart, ShoreFadeEnd);
-            p.Set(h.Debug, DebugView ? 1f : 0f);
+            p.Set(h.Debug, DebugView);
             if (ocean.Ready) { p.Bind(h.OceanDisp, ocean.Displacement); p.Bind(h.OceanSlope, ocean.Slopes); }
             if (shore.Ready) p.Bind(h.ShoreField, shore.Sampled());
             bool refract = Refraction && refraction is not null && refractionFrame == Gpu.Frame.Number;
@@ -881,7 +965,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     public const float WaveFadeStart = 3000, WaveFadeEnd = 5500, ShoreFadeStart = 7000, ShoreFadeEnd = 10000;
 
     /// <summary><c>MEITOU_WATER_DEBUG=1</c>: the Meitou water shows its shore fields (red the distance to the shore over 400, green the breaker phase, blue the exposure).</summary>
-    static readonly bool DebugView = Environment.GetEnvironmentVariable("MEITOU_WATER_DEBUG") == "1";
+    static readonly float DebugView = Environment.GetEnvironmentVariable("MEITOU_WATER_DEBUG") switch { "1" => 1f, "2" => 2f, _ => 0f };
 
     static readonly SamplerDesc ClampLinear = new(Silk.NET.Vulkan.Filter.Linear, Silk.NET.Vulkan.Filter.Linear, Silk.NET.Vulkan.SamplerMipmapMode.Nearest, false,
         Silk.NET.Vulkan.SamplerAddressMode.ClampToEdge, Silk.NET.Vulkan.SamplerAddressMode.ClampToEdge, Silk.NET.Vulkan.SamplerAddressMode.ClampToEdge, false,
