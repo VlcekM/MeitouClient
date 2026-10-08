@@ -3448,7 +3448,8 @@ characters' mask.
 
 Part two (2026-10-08): the pass draws every unit of every group (weather groups and the map placers, culled by distance and frustum, sorted far
 to near) and, before a unit's particles, its fog volumes (a second small program: a quad at the sphere's nearest point, the ray-sphere chord in
-the fragment shader, depth-tested; a full-screen quad without depth test when the eye is inside). The simulation of the units runs on the thread
+the fragment shader, depth-tested; a full-screen quad without depth test when the eye is inside; since 2026-10-08 replaced by the game's
+sphere formula in every world shader, docs/formats/fogfeatures.md). The simulation of the units runs on the thread
 pool from the end of `Update` to the start of `Draw`. Instances are built in a managed array and copied once into the transient constants.
 The placers draw whatever the weather, so a clear-weather picture over an Ashlands volcano is no longer 0 px against the old reference; elsewhere
 (no placer in the active range) nothing is recorded, as before.

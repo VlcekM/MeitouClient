@@ -519,6 +519,8 @@ static class WorldFrame
         public WeatherSurfaces? Surfaces;
         /// <summary>The placed fog volumes of <c>fogfeatures.dat</c> (null when the install has none).</summary>
         public FogVolumes? FogVolumes;
+        /// <summary>This frame's weather fog spheres (<see cref="ParticleRenderer.CollectFogVolumes"/>), reused.</summary>
+        public readonly List<FogVolumes.EffectFog> EffectFogs = [];
         /// <summary>The weather's particle effects (null while there are none: a clear weather, or <c>--no-particles</c>); <see cref="EnsureParticles"/> makes it.</summary>
         public ParticleRenderer? Particles;
         /// <summary>Makes the particle renderer on demand (null with <c>--no-particles</c>).</summary>
@@ -924,10 +926,11 @@ static class WorldFrame
         // They count as their own stage (the profiler's "particles", with their draw below).
         UpdateParticles(gpu, camera);
         gpu.Particles?.Update(time * SecondsPerTimeUnit, camera);
-        // The placed fog volumes in view, for every world shader (FogVolumes).
+        // The placed fog volumes in view and the effects' fog spheres (after the particles moved), for every world shader (FogVolumes).
         if (gpu.FogVolumes is { } fogVolumes)
         {
-            fogVolumes.Update(eye, camera.Forward, camera.FieldOfView, rw / (float)Math.Max(rh, 1), gpu.Sky.HazeDistance, sun.Y, gpu.Sky.Physical);
+            gpu.Particles?.CollectFogVolumes(gpu.EffectFogs);
+            fogVolumes.Update(eye, camera.Forward, camera.FieldOfView, rw / (float)Math.Max(rh, 1), gpu.Sky.HazeDistance, sun.Y, gpu.Sky.Physical, gpu.EffectFogs);
         }
         StageClock.Lap(13);
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, sun.Y); }

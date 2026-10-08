@@ -380,16 +380,16 @@ Sphere" 661, ...), with alpha and density distance. The static ones on the map a
 [fogfeatures.md](fogfeatures.md): they, not the weather, make the swamp's fog (the Swamp's weathers have `fog enabled` off), the Fog
 Islands', the Vain's red haze and a few others, always on whatever the weather (**Verified**: the file and its loader; **Observed**: no
 weather or region value reaches them). They are drawn in the scene pass after the haze (queue 82) with post/fog.hlsl's `fog_planes_fs` /
-`fog_sphere_fs` / `fog_beam_fs` (**Verified**: the shipped shaders). How the twisters' EFFECT_FOG_VOLUME spheres are placed and faded at
-run time (`FogController::FogFadeSphere` / `FogFadeCylinder`) was not traced: **Unknown**; they presumably use the same `FogSphere` class and
-`fog_sphere_fs` (**Unknown**: only the class names are known, from the RTTI).
+`fog_sphere_fs` / `fog_beam_fs` (**Verified**: the shipped shaders). The twisters' EFFECT_FOG_VOLUME spheres are the same `FogSphere` objects
+(type 1 a `FogCylinder` from `position` to `position 2`), drawn with `fog_sphere_fs` among the placed volumes, with the record's alpha and
+`additive colour`; their fade grows the radius from 0 and brings the density distance down from 10 radii (a cylinder: from 4 × its own),
+the alpha unchanged; and from inside its own sphere the camera does not see it. All of it, with the functions, in
+[fogfeatures.md](fogfeatures.md#the-weather-effects-fog-volumes-verified-decompiled-fun_1400fb070-and-the-fades) (**Verified (decompiled)**).
 
-In Meitou (**Observed**, a stand-in): an EFFECT's `fog volumes` (type 0 = sphere; the cylinder type is not in the base game's records) are
-read as `EffectFogVolume` (radius, density distance, alpha, colour, offsets `pos`/`pos2`, `ground`) and attached to every unit of that effect:
-a sphere at the unit's position + offset, drawn before the unit's particles as a quad at the sphere's nearest point with the analytic chord
-of each pixel's ray through the sphere, alpha = volume alpha × (1 − exp(−2 · chord / density distance)) × the effect's fade (`fog fade in/out`
-over the unit's life); with the eye inside, a full-screen quad without depth test. Depth-tested against the scene, no particles' sorting.
-`pos2` (the second position of a column) is read and unused. Cost: a few quads per twister.
+In Meitou: an EFFECT's `fog volumes` are read as `EffectFogVolume` (type, radius, density distance, alpha, colour, additive, offsets `pos` /
+`pos2`, `ground`) and every unit of that effect hands one per record to `FogVolumes` (`ParticleRenderer.CollectFogVolumes`): a sphere at the
+unit's position + offset (a cylinder to the unit's position + `pos2`), with the unit's fade (`fog fade in/out` over its life) applied as the
+game does, drawn per pixel with the placed volumes by the game's formula, sorted with them. `ground movement` is read and unused.
 
 ## Effect placers on the map (Verified: records and `features.dat`)
 
@@ -686,7 +686,7 @@ What the viewer (and later the game) needs, in build order. Each step is testabl
 - `sunlight color` of SEASON and `sky colour multiplier` / `colour multiplier` of EFFECT: loaded, their use not traced.
 - How effect groups use `maximum view distance`, `sky colour multiplier` and the strength (the wind fields and the emission-rate scaling are used as
   [particle-universe.md](particle-universe.md#the-camera-effects-cameraeffectgroup) says, **Observed**).
-- How fog volumes are drawn (Meitou's chord-through-a-sphere quad is a stand-in); `pos2` and the cylinder type.
+- `ground movement` of EFFECT_FOG_VOLUME (read by the game into the volume's holder; its use was not traced).
 - Whether the game's ash is denser than the data says (see "Density"); the plugin's default quota; the lights of effects.
 - The wandering units' exact walk and turn rules, and where the game places lightning (it snaps to metal objects).
 - The full gameplay effect of each `WeatherAffecting` value.

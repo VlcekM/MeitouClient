@@ -165,7 +165,9 @@ public sealed class EffectUnit
     public bool Active => Simulation is not null;
     public bool Done => Stopped && (Simulation is null || Simulation.ParticleCount == 0);
 
-    /// <summary>The fog volumes' opacity factor: in over <c>fog fade in duration</c> from the unit's start, out over <c>fog fade out duration</c> from its stop (0 = no fade).</summary>
+    /// <summary>The fog volumes' fade fraction: up over <c>fog fade in duration</c> from the unit's start, down over <c>fog fade out duration</c> from its stop
+    /// (0 = no fade). The game scales the volume with it, not its opacity: the radius from 0 and the density distance from 10 radii (a cylinder: 4 times
+    /// its own) linearly (FogController's FogFadeSphere / FogFadeCylinder; <c>FogVolumes.Faded</c>).</summary>
     public float FogFade
     {
         get

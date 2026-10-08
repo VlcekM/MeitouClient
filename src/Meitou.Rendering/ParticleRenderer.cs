@@ -11,8 +11,9 @@ namespace Meitou.Rendering;
 /// ParticleUniverse particles as instanced billboards (docs/formats/particle-universe.md "Drawing"): the weather's effect groups and the map's
 /// effect placers are simulated on the CPU (<see cref="EffectGroup"/>), each technique's particles are written into the frame's constants (a ring
 /// per frame slot, no stall) and drawn as one instanced quad strip with its material's texture and blend, after the opaque scene, depth tested and
-/// never written. Fog volumes (the twisters' dust balls) are drawn as analytic soft spheres. Nothing is recorded while no unit has a particle, so
-/// a clear weather with no placer in sight draws exactly what it did.
+/// never written, and not fogged: the game draws them in queue 84, after the haze and every fog volume (queue 82), with materials that apply no fog
+/// (docs/formats/fogfeatures.md). The effects' fog volumes (the twisters' dust balls) are handed to <see cref="FogVolumes"/> (<see cref="CollectFogVolumes"/>).
+/// Nothing is recorded while no unit has a particle, so a clear weather with no placer in sight draws exactly what it did.
 /// </summary>
 public sealed unsafe class ParticleRenderer : IDisposable
 {
@@ -92,46 +93,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
         }
         """;
 
-    // The fog volumes (docs/formats/weather.md "Fog volumes", Observed: how the game draws them is unknown): a quad facing the eye at the sphere's
-    // nearest point (so the scene's depth hides it where something is in front of the sphere), each pixel's ray cut by the sphere analytically; the
-    // alpha follows the chord's length through the sphere over the volume's density distance.
-    const string FogVertex = """
-        #version 330 core
-        layout(location = 0) in vec2 aCorner;
-        uniform mat4 uViewProjection;
-        uniform vec4 uQuad;                         // camera-relative centre of the quad, half extent
-        uniform vec3 uRight;
-        uniform vec3 uUp;
-        out vec3 vRay;
-        void main()
-        {
-            vec3 p = uQuad.xyz + (uRight * aCorner.x + uUp * aCorner.y) * (2.0 * uQuad.w);
-            gl_Position = uViewProjection * vec4(p, 1.0);
-            vRay = p;
-        }
-        """;
-
-    const string FogFragment = """
-        #version 330 core
-        in vec3 vRay;
-        out vec4 fragColour;
-        uniform vec4 uSphere;                       // camera-relative centre, radius
-        uniform vec4 uColour;                       // rgb, alpha of the volume (with the fade)
-        uniform vec4 uDensity;                      // the density distance
-        void main()
-        {
-            vec3 d = normalize(vRay);
-            float b = dot(d, uSphere.xyz);
-            float h = b * b - (dot(uSphere.xyz, uSphere.xyz) - uSphere.w * uSphere.w);
-            if (h <= 0.0) discard;
-            float s = sqrt(h);
-            float t0 = max(b - s, 0.0), t1 = b + s;
-            if (t1 <= 0.0) discard;
-            float a = uColour.a * (1.0 - exp(-2.0 * (t1 - t0) / uDensity.x));
-            fragColour = vec4(uColour.rgb, a);
-        }
-        """;
-
     const int InstanceBytes = 64;
     /// <summary>The farthest a unit is drawn (the near depth slice's far plane is about this).</summary>
     public const float DrawRange = 20400;
@@ -140,14 +101,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
     readonly string texturesDirectory;
     readonly LegacyProgram program;
     readonly NativeSegment segment;
-    readonly LegacyProgram fogProgram;
-    readonly NativeSegment fogSegment;
     readonly DeviceBuffer quad;
-    readonly VertexArrayBindings vertexSource, fogVertexSource;
+    readonly VertexArrayBindings vertexSource;
     readonly BufferBinding[] bindings = new BufferBinding[5];
-    readonly BufferBinding[] fogBindings = new BufferBinding[1];
     readonly UniformHandle viewProjection, cameraRight, cameraUp, mode, anchor, commonDirection, commonUp, colourScale, coverageMode, coverageLimit;
-    readonly UniformHandle fogViewProjection, fogQuad, fogRight, fogUp, fogSphere, fogColour, fogDensity;
     readonly SamplerSlot textureSlot;
     readonly SampledImage white;
     readonly Dictionary<string, SampledImage?> textures = new(StringComparer.OrdinalIgnoreCase);
@@ -159,7 +116,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     object? inputIdentity;
     int inputVersion = -1;
     double lastSeconds = double.NaN;
-    int drawnParticles, drawnUnits, activeUnits, drawnFog;
+    int drawnParticles, drawnUnits, activeUnits;
     Task? simulation;
     long simulationTicks, waitTicks, simulationTotal, waitTotal, simulationFrames;
     /// <summary>Mean simulation and main-thread wait per simulated frame since the start (for the benchmarks).</summary>
@@ -178,7 +135,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>Particles drawn in the last frame, for the statistics.</summary>
     public int DrawnParticles => drawnParticles;
     public int DrawnUnits => drawnUnits;
-    public int DrawnFogVolumes => drawnFog;
     public int ActiveUnits => activeUnits;
     /// <summary>The last frame's simulation time (summed over its threads' work: the wall time of the background task) and how long the main thread waited for it, in milliseconds.</summary>
     public double SimulationMilliseconds => simulationTicks * 1000.0 / Stopwatch.Frequency;
@@ -198,11 +154,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
         public PuTechniqueDef Technique;
         public ParticleMaterial Material;
         public SampledImage Texture;
-        // a fog volume instead of particles (Technique is null then)
-        public bool IsFog;
-        public Vector3 FogCentre;
-        public float FogRadius, FogDensity, FogAlpha;
-        public Vector3 FogColour;
     }
 
     ParticleRenderer(GpuContext gpu, string texturesDirectory, ParticleLibrary library)
@@ -223,15 +174,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
         coverageMode = program.Uniform("uCoverage");
         coverageLimit = program.Uniform("uCoverageMax");
         textureSlot = program.Sampler("uTexture");
-        fogProgram = LegacyProgram.Create(gpu, FogVertex, FogFragment, "particle fog volumes");
-        fogSegment = new NativeSegment(gpu, fogProgram, Silk.NET.Vulkan.PrimitiveTopology.TriangleStrip, "particle fog volumes");
-        fogViewProjection = fogProgram.Uniform("uViewProjection");
-        fogQuad = fogProgram.Uniform("uQuad");
-        fogRight = fogProgram.Uniform("uRight");
-        fogUp = fogProgram.Uniform("uUp");
-        fogSphere = fogProgram.Uniform("uSphere");
-        fogColour = fogProgram.Uniform("uColour");
-        fogDensity = fogProgram.Uniform("uDensity");
         float[] corners = [-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, -0.5f, 0.5f, 0.5f];   // triangle strip
         quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "particle quad");
         using (var batch = gpu.Uploads.Begin()) batch.Write(quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(corners.AsSpan()));
@@ -240,7 +182,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
         for (int a = 0; a < 4; a++)
             attributes[1 + a] = new LegacyProgram.Attribute(default, Silk.NET.Vulkan.Format.R32G32B32A32Sfloat, InstanceBytes, true);
         vertexSource = new VertexArrayBindings(attributes, default);
-        fogVertexSource = new VertexArrayBindings([WaterRenderer.QuadAttribute(quad)], default);
         white = SampledImage.Rgba8(gpu, 1, 1, [255, 255, 255, 255], repeat: false, mipmaps: false, "particle white");
     }
 
@@ -285,6 +226,27 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// advances nothing) and, once after a weather change, runs the start-up so particles are present at the first picture. The simulation of the
     /// units (the particles) then runs on the thread pool, one unit per task, while the caller does the rest of its frame; <see cref="Draw"/> waits for it.
     /// </summary>
+    /// <summary>
+    /// The effects' fog volumes as they stand after the last <see cref="Update"/> (main thread), into <paramref name="into"/> (cleared first): one per
+    /// EFFECT_FOG_VOLUME of each unit, at the unit's position plus the record's offset, with the unit's fade. <see cref="FogVolumes"/> draws them
+    /// with the placed volumes (the game's <c>FogSphere</c> / <c>FogCylinder</c>, docs/formats/weather.md "Fog volumes").
+    /// </summary>
+    internal void CollectFogVolumes(List<FogVolumes.EffectFog> into)
+    {
+        into.Clear();
+        if (!Enabled) return;
+        foreach (var g in groups.Concat(placerGroups))
+            foreach (var u in g.Units)
+            {
+                if (u.Effect.FogVolumes.Count == 0) continue;
+                float fade = u.FogFade;
+                if (fade <= 0) continue;
+                foreach (var f in u.Effect.FogVolumes)
+                    into.Add(new FogVolumes.EffectFog(f.Name, f.Cylinder, u.Position + f.Offset, u.Position + f.Offset2, f.Radius, f.Distance, f.Colour,
+                        Math.Clamp(f.Alpha, 0, 1), f.Additive, fade));
+            }
+    }
+
     public void Update(double seconds, WorldCamera camera)
     {
         long start = Stopwatch.GetTimestamp();
@@ -398,7 +360,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
         Sync();
         drawnParticles = 0;
         drawnUnits = 0;
-        drawnFog = 0;
         coveragePending = false;
         if (!Enabled || (groups.Count == 0 && placerGroups.Count == 0)) return;
         draws.Clear();
@@ -420,15 +381,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
         foreach (var u in units)
         {
             var offset = u.Anchor - eye;
-            // Fog volumes first (behind the unit's own particles).
-            float fade = u.FogFade;
-            if (fade > 0)
-                foreach (var f in u.Effect.FogVolumes)
-                    draws.Add(new DrawItem
-                    {
-                        IsFog = true, FogCentre = u.Position + f.Offset - eye, FogRadius = f.Radius, FogDensity = Math.Max(f.Distance, 1), FogAlpha = f.Alpha * fade,
-                        FogColour = f.Colour,
-                    });
             if (u.Simulation is not { } sim || u.CatchingUp) continue;
             drawnUnits++;
             for (int t = 0; t < sim.Techniques.Count; t++)
@@ -480,7 +432,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     bool coveragePending;
 
     /// <summary>Whether this frame drew particles that <see cref="DrawCoverage"/> has not yet written into the upscalers' reactive mask.</summary>
-    public bool HasCoverage => coveragePending && draws.Any(d => !d.IsFog);
+    public bool HasCoverage => coveragePending && draws.Count > 0;
 
     /// <summary>
     /// The frame's particles again into the upscalers' reactive mask (docs/renderer-native.md 8.20): the same quads and matrices as the colour draw, adding
@@ -507,7 +459,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
         var (vp, closeVp, right, up, ambient) = (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient);
         foreach (var d in draws)
         {
-            if (d.IsFog) { if (coverage == 0) { drawnFog++; DrawFog(cmd, d, in baseState, in targets, hasDepth, hasColour, vp, closeVp, right, up, forward, ambient, rgb); } continue; }
             var m = d.Material;
             var r = d.Technique.Renderer;
             // The far particles first (tested against the scene's depth), then the ones nearer than the slice's near plane (no depth test).
@@ -545,54 +496,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 cmd.Draw(4, (uint)count, 0, (uint)first);
             }
         }
-    }
-
-    /// <summary>One fog volume: a quad at the sphere's nearest point, or a screen-filling one (no depth test) when the eye is inside the sphere.</summary>
-    void DrawFog(CommandList cmd, in DrawItem d, in DrawState baseState, in PassTargets targets, bool hasDepth, bool hasColour, Matrix4x4 vp, Matrix4x4 closeVp,
-        Vector3 cameraRightAxis, Vector3 cameraUpAxis, Vector3 forward, float ambient, Silk.NET.Vulkan.ColorComponentFlags rgb)
-    {
-        float dist = d.FogCentre.Length();
-        bool inside = dist <= d.FogRadius * 1.02f;
-        Vector4 quadData;
-        Vector3 axisRight, axisUp;
-        if (inside)
-        {
-            // Close to the eye on the view axis, wide enough for any field of view (the close projection's near plane is 0.5).
-            quadData = new Vector4(forward * 1.0f, 4);
-            axisRight = cameraRightAxis;
-            axisUp = cameraUpAxis;
-        }
-        else
-        {
-            var n = d.FogCentre / dist;
-            float nearest = dist - d.FogRadius;
-            float half = nearest * d.FogRadius / MathF.Sqrt(Math.Max(dist * dist - d.FogRadius * d.FogRadius, 1)) * 1.06f;
-            var helper = MathF.Abs(n.Y) < 0.99f ? Vector3.UnitY : Vector3.UnitX;
-            axisRight = Vector3.Normalize(Vector3.Cross(helper, n));
-            axisUp = Vector3.Cross(n, axisRight);
-            quadData = new Vector4(n * nearest, half);
-        }
-        var state = baseState with
-        {
-            Cull = Silk.NET.Vulkan.CullModeFlags.None, DepthTest = hasDepth && !inside, DepthWrite = false, ColourMask = rgb,
-            Blend = hasColour ? BlendFor(ParticleBlend.Alpha) : BlendState.Off,
-        };
-        var matrix = inside ? closeVp : vp;
-        fogProgram.Set(fogViewProjection, in matrix);
-        fogProgram.Set(fogQuad, quadData);
-        fogProgram.Set(fogRight, axisRight);
-        fogProgram.Set(fogUp, axisUp);
-        fogProgram.Set(fogSphere, d.FogCentre.X, d.FogCentre.Y, d.FogCentre.Z, d.FogRadius);
-        fogProgram.Set(fogColour, d.FogColour.X * ambient, d.FogColour.Y * ambient, d.FogColour.Z * ambient, d.FogAlpha);
-        fogProgram.Set(fogDensity, d.FogDensity, 0, 0, 0);
-        cmd.SetRaster(state.Cull, state.Front);
-        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
-        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
-        cmd.BindPipeline(fogSegment.Get(state, targets.Formats, fogVertexSource));
-        fogBindings[0] = new BufferBinding(quad.Handle, 0);
-        cmd.BindVertexBuffers(0, fogBindings);
-        fogProgram.Flush(cmd);
-        cmd.Draw(4, 1, 0, 0);
     }
 
     static bool InFrustum(Vector4[] planes, Vector3 centre, float radius)
@@ -676,6 +579,5 @@ public sealed unsafe class ParticleRenderer : IDisposable
         white.Dispose();
         quad.Dispose();
         program.Dispose();
-        fogProgram.Dispose();
     }
 }
