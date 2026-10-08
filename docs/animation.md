@@ -125,13 +125,212 @@ definition's `loop`, `synchs` and `synch offset`.
   ones wrap, others stop at the end (or 0 when playing backwards) and report that they finished. A synched
   animation instead sits at length × fractional part of (layer phase + `synch offset`), so a lower-body
   walk and an upper-body walk stay in step.
-- **Root motion** (Observed): for animations flagged to move the character, Kenshi turns off the state's
+- **Root motion**: for animations flagged to move the character, Kenshi turns off the state's
   translation (Kenshi's Ogre then drops X and Z, keeping Y) and reads the `Bip01` translation itself with
-  `Animation::getTranslation` to move the character (`@ 1405b5c30`). Which record field sets the flag
-  (`relocates` is the obvious candidate) wasn't traced.
+  `Animation::getTranslation` to move the character (`@ 1405b5c30`). The flag and how the motion is
+  applied: [Root motion](#root-motion) below.
 
-The Ogre side then sums the enabled states (average mode: weights scaled down only if they sum above 1;
-override bones applied in a second pass). See [ogre-skeleton.md](formats/ogre-skeleton.md#blending-in-kenshis-ogre).
+The skeleton instance is in **cumulative** blend mode (Kenshi sets it when it attaches its controller to
+the body, `@ 1405b93a0`; Verified, details in
+[ogre-skeleton.md](formats/ogre-skeleton.md#blending-in-kenshis-ogre)), so Ogre never divides the weights by
+their sum: the layer totals below are the whole story, and the posture libraries add on top at weight 1.
+
+The Ogre side then sums the enabled states (cumulative, as above; override bones applied in a second pass).
+See [ogre-skeleton.md](formats/ogre-skeleton.md#blending-in-kenshis-ogre).
+
+### The three layers each frame (`AnimationClass` vtable slot 6, `@ 1405b68c0`)
+
+Verified (decompilation). The controller keeps one layer object per index: 0 lower, 1 upper, 2 overlay
+(3 tail and 4 ears exist for animals). Each frame:
+
+1. The **synch phase** (one value per character, +0xc8) advances by frame time × the phase rate (+0xcc) and
+   wraps to 0..1. The rate is set by the movement blend (below).
+2. Layer 1 (upper) is updated with total 1, normalising on.
+3. Layer 0 (lower) is updated with total **1 − Σ weights of the upper layer's "full-body" animations**,
+   normalising on. A running animation is full-body when its definition is `is action` **or** its `layer` is
+   `all` (`@ 1405b5270` sets the running animation's byte +0x5c from definition +0x8d `is action` or +0x8b
+   "all"). So a full-body action on the upper layer fades the legs' own animations out as it fades in.
+4. Layer 2 (overlay) is updated with total 1, normalising off.
+5. The three layers' root translations are summed (see [Root motion](#root-motion)).
+
+Per running animation, besides the start/weight/time rules above (`@ 1405b5c30`):
+
+- The weight rate is the animation's playback speed clamped to 0.5..10, × the layer's rate (layer +0x40);
+  999,999 (instant) in the mode passed as the controller's sixth argument.
+- Normalising (Verified): with W = Σ active weights and T = total − Σ fading-out weights, every active
+  animation **without** the full-body flag is scaled by T / W (full-body ones only when T / W > 1). After the
+  per-frame step, if Σ active > total, all active weights are scaled to the total; the fading-out
+  animations then share total − Σ active (equally if they were all 0, else in proportion).
+- A fading-out animation that doesn't loop keeps advancing in time; if it was started as a block (below) it
+  runs **backwards** while it fades.
+
+### Choosing candidates (`@ 14051d660`)
+
+Verified (decompilation). Every selection (movement blend, idles, stumbles) runs the same filter over a list
+of definitions and gives each a weight; zero-weight ones are dropped:
+
+- `category` must equal the character's current category (CharacterAnimCategory: 0 ANIM_NORMAL,
+  1 IMPRISONED, 2 SLEEPING, 3 CARRIED, 4 SWIMMING, 5 GROUNDED, 6 COMBAT, 7 ATTACKS, 8 RANGED, enum names
+  from the FCS editor).
+- `is combat mode` and `stealth mode`: EITHER (2) or equal to the character's combat / stealth state.
+- Arms (`@ 14051d240`): an upper or overlay animation must fit what the hands hold (`has weapon L/R`
+  against the character's state); details not decoded.
+- **Speed weight** (`@ 14051d100`): with the current speed v (the character's forward speed, signed, below)
+  and the definition's speeds times the race's scale g (vtable 0x390 on the character, 1 for humans):
+  a ramp `r(v)` = 0 below `min speed`; rising linearly from 0 at `min speed` to 1 at `move speed` (just 1 when
+  `min speed` < 1); falling linearly from 1 at `move speed` to 0 at `max speed` (stays 1 above `move speed`
+  when `max speed` < 0.5, i.e. the fastest clip); 0 above. If both v and `min speed` are below −40 the weight
+  is 1. A positive r is then sharpened: **w = 1 / (1 + e^(−10 (2r − 1)))** (so r = 0.5 → 0.5, r = 1 → 0.99995).
+- **Leg weight**: the same ramp (without the sigmoid) over the health of the *more hurt* leg against
+  `L/R leg damage min / ideal / max` of that side (left values if the left leg is worse). The loader forces
+  min < 1 to −101 and max > 99 to 101, so a healthy-leg clip covers the whole range.
+- Only for idle picks (layer upper or overlay): `being carried` / `carrying left` / `carrying right` must
+  match the character, and the weapon-type flags must include the equipped weapon's type; for unarmed (type 5)
+  a clip that `has weapon L` or `R` YES gets weight 0.1 instead.
+- Finally the weights are **normalised per layer** (each layer's weights divided by that layer's sum,
+  `@ 14051cde0`).
+
+### Movement: which clips and how fast
+
+Verified (decompilation; `@ 14051d8e0`, `@ 14051d000`, `@ 14052bad0`, `@ 14052e6c0`):
+
+- The lower-body movement list is every non-overlay, non-weather, non-idle ANIMATION with a non-zero
+  `move speed` whose layer isn't `upper`; the upper movement list holds the `upper` ones (`@ 1405bbd40`).
+  All candidates of the list that pass the filter **play at once**, each at weight (layer total available ×
+  its normalised weight). So between `walk lower` (14) and `jog lower` (45) both play, cross-faded by the
+  sigmoid ramps.
+- **Playback speed** of each movement clip = **F × `play speed` × v**, with v the character's current speed
+  (animation controller +0x180, set every frame by the movement code from the velocity) and
+  **F = (2 − H) / g**, where H is the skeleton's movement scale (H = *Height* × g + *Leg length* − 1, see
+  "Body shape sliders") and g the race scale (1 for humans). F ≈ 1 / H to first order: a taller body
+  plays its walk slower. (For skeletons without 30 bones F stays at its initial value, Unknown, probably 1.)
+- That speed is in **clip seconds per real second** for a clip without `synchs` (time += dt × speed).
+- A clip with `synchs` ignores its own speed for time: it sits at length × frac(phase + `synch offset`), and
+  the **phase advances by F × v × Σ (wᵢ × `play speed`ᵢ) cycles per second**, the sum over the lower
+  movement candidates with their normalised weights (`@ 14051d000` stores it at +0xcc). So for synched
+  clips the rule is **cycles per second = F × v × play speed**, independent of the clip's length.
+  (The base walk, jog and run records are all `synchs`, Verified against the install, so this is their rule.)
+- v is in world units (decimetres) per second, as the controller measures it: the movement code divides the
+  physics controller's displacement by the frame time (`CharMovement` vtable slot 11, `@ 14065ffa0`), and
+  caps it at a medical limit (+0x19c, set by `@ 14051c960` from the medical system).
+
+### Combat footwork and strafing (`AnimationClassHuman` slots 28 and 29, `@ 14051fc60`, `@ 14051de70`)
+
+Verified (decompilation), except where marked:
+
+- In combat, the movement code (`@ 1402ae1b0`) rotates the velocity into the character's frame (facing =
+  +Z): the forward component (signed, **negative when backing off**) becomes v, the sideways component
+  (negated X) becomes the strafe speed s (+0x184, only when strafing is allowed for the movement, else 0);
+  when |forward| > 1 and |sideways| < 0.5, sideways is zeroed. It also sets the character's combat state for
+  the filter.
+- Slot 28 (the human lower-body update) runs only when the combat state is on. Its category is 0
+  (ANIM_NORMAL), or 5 (GROUNDED) when the character can't stand (a flag at character +0x5b8, or the leg
+  state vtable 0x368 returning 1 or 2). Unless an action holds the lower layer, the remaining lower weight
+  goes to slot 29:
+- Slot 29 splits it: strafe share = |s| / (|v| + |s|) (kept from the last frame when |v| + |s| ≤ 1). The
+  normal movement blend (above) gets the rest; the record **`strafe lower`** (looked up by name) gets the
+  strafe share at playback speed F × its `play speed` × s, so moving to the other side plays it
+  **backwards**. Backing off uses the movement blend with negative v, which only clips with a negative
+  `move speed` (the `... combat shuffle long BK` records) can match.
+- Idle in combat (`@ 14051da80`): from the idle list (non-overlay records with `idle`), filtered as above
+  with the carry and weapon-type checks, overlay-layer ones removed, one is picked by weighted chance and
+  played at its `play speed`; a new pick happens when its timer runs out (reset to 5 + 60 × random, units
+  not traced) or the combat state toggles. The guard records (`guard 1h`, `guard polearm`, `guard4 main` ...)
+  are, by their flags, candidates of this pick (Observed: not checked against the data).
+- `combatstance` is referenced by name only by the turret task (`Task_UseTurret`, `@ 1403474f0`).
+  Observed: no other code names it, so it is not the generic combat overlay.
+
+### Hit reactions (stumbles)
+
+Verified (decompilation of the hit handler `@ 1404391f0`, chooser `@ 14051f420`, start `@ 140520490`):
+
+- `stumbles` is a list of LOCATIONAL_DAMAGE references on an ANIMATION ("uses this animation as the stumble
+  when this bodypart is hit"). The animation set builds a map from body part to its stumble animations
+  (`@ 1405bbd40`). The record names are not in the executable.
+- On a hit to body part P (damage packet d = cut, blunt, pierce, stun):
+  - **Heavy** = Σd > the stumble threshold (toughness × stats multiplier × 0.01 × `stumble damage max` ×
+    `damage multiplier`, `@ 140884020`; numbers in [game/combat.md](game/combat.md)).
+  - **Free** = no stumble is currently playing.
+  - If neither, no new stumble. Otherwise the candidates are P's stumble animations that pass the filter
+    above, have **`big stumble` = (Heavy and Free)**, and **`stumble from` = the side the blow came from**.
+    The side (`@ 140435600`) is FRONT (0) or REAR (1) only: REAR when the attacker's position lies behind
+    the defender's facing (dot product of minus the facing with the direction to the attacker > 0; the
+    facing vector's identity is Observed). LEFTSIDE / RIGHTSIDE are never produced.
+  - Each candidate weighs its `chance` / 100; the one already playing weighs a quarter of that. One is drawn by
+    weighted chance.
+  - The sound is "Heavy_Hit" when a stumble was found and Heavy and Free, else "Light_Hit".
+  - It starts only if the character isn't ragdolled / being carried (`@ 1407d1440`), isn't in two other
+    states (+0x5b9, +0x5bc), and its leg state (vtable 0x368) is below 1. It replaces any running stumble and
+    plays as an action at speed 1, i.e. playback rate = `play speed` (`@ 1405203b0` → `@ 14051eab0`).
+- So the light/heavy split is `big stumble`, front/back is `stumble from`, and high/low/mid is the body part
+  list in `stumbles` (head vs. legs ...). `category` and the record names play no role.
+- Observed: before all this, if the character has an item in inventory section 9 or 5 that answers a
+  virtual check (`@ 1405c8a10`), 25 % of hits are swallowed (no reaction, a tiny KO-time nudge via
+  `@ 140644980`); what those items are (shields? armour?) is Unknown.
+- While a stumble plays, the character's movement is locked and driven by root motion (below).
+
+### Root motion
+
+Verified (decompilation):
+
+- The flag on a running animation (+0x68) comes from the definition's **`relocates`** (def +0x88) whenever an
+  ANIMATION is played (`@ 1405b7ac0`). For COMBAT_TECHNIQUE definitions +0x88 is **`gains ground`**, but
+  attacks are not played through that path: the combat code plays them by name (`@ 1405b7600`, from
+  `CombatClass` slot 12) with root motion **on for attacks and dodges and off for pure blocks** (`is block`
+  without `is dodge`), regardless of `gains ground`. Attacks there play at combat speed × `anim speed mult`
+  (dodges at 1 × `anim speed mult`), weight 1, not looping, and blocks rewind when released (above).
+- Playing an action (`@ 14051eab0`) also puts the character's movement into "animation drives me" mode when
+  the action `relocates` (`@ 14065e240`, movement +0x37c), and leaves it when the action ends
+  (`@ 14051e880`). The movement is also animation-driven while a stumble plays, during a ragdoll-to-clip
+  blend, or while the current action has `disables movement` (`@ 14051c870`). Entering combat sets the same
+  mode (`CombatClass` slots 10/11, `@ 14060cf60`, `@ 14060a590`) and leaving it clears it
+  (`CombatClassAI` slot 9); how the footwork then moves the body was not traced (Unknown).
+- Each frame the three layers' `Bip01` translations (from `Animation::getTranslation` at the root-motion
+  animation's current time) are summed. If the sum's length didn't drop by more than 1 unit since last frame
+  (a loop wrap or restart), the **difference to last frame's sum, rotated by the scene node's orientation**,
+  is handed to the movement (+0x380). Otherwise nothing moves this frame.
+- In animation-driven mode the movement code sets the physics character controller's velocity to that delta
+  divided by a time value (min of two movement fields, +0xb4 / +0xbc, Unknown) and moves it **through the
+  PhysX character controller, so collisions apply**; the animation speed v is set to 0 meanwhile.
+
+### Turning and head look
+
+- Verified (`@ 1405b18f0`): the body's scene node is oriented every frame straight from the movement's
+  direction vector (horizontal part, `Quaternion::FromAxes`), no turn clip and no rate limit in the animation
+  code; how fast the movement direction itself turns was not traced (Unknown; ANIMAL_CHARACTER `turn rate`
+  exists for animals). The node's Y is the character's Y minus (anim +0x2c8 − anim +0x2cc), a vertical
+  offset whose source is Unknown.
+- Verified (`AnimationClassHuman` slot 23, `@ 1405b8430`): the record **`head turning`** is a pose library
+  on its layer: for a look target within ±90° of the facing it plays at weight 1 and its time is set to
+  ((angle + 90°) / 180°) × 0.07 s; beyond ±90° it fades out.
+
+### Knockout, lying down and getting up
+
+- Observed (`@ 140649320`, the medical update; `@ 1405cbd60`): a character that falls unconscious or dies
+  is switched to its **ragdoll** (reason bit 1, or 0x800 in a case tied to character +0x3d4); dying also says
+  "VO_Creature_Die". No KO or death clip is played; the ragdoll is the pose while down.
+- Verified (`Task_GetUp`, `@ 14033ca10`, `@ 140334a20`): getting up picks the clip with slot 27
+  (`@ 14051e3d0`): **`standing up 3`**, or **`crawl idle down`** when the character can't stand (flag
+  +0x5b8 or leg state 1/2); in deep water (water state 3, `@ 1405c7fd0`) slot 26 instead, **`swim idle`**.
+  It is started by a **ragdoll-to-animation blend** (`RagdollAnimation`, `@ 1407d36e0`, parameter 0.75,
+  presumably seconds) that takes the ragdoll's current bone pose into the clip and zeroes all fading
+  weights. The task ends when the clip is **86 %** through (or at once when the character stays down to
+  crawl). The playback rate of the get-up clip was not traced (no speed argument in this path; Unknown).
+- `knockout` (clip `stealthKO`) is named only by `Task_StealthKO` (`@ 140345eb0`, `@ 14034cd80`), i.e. the
+  sneaking attacker's move; `sleeponfloor` only by `Task_SleepOnFloor` (`@ 140348170`). `foetal`,
+  `sitting dazed` and `knockout training` are not named in the executable (chosen through `category` /
+  idles, Unknown which).
+
+### Overlays: breathing and wounds
+
+- Verified (`AnimationClassHuman` slot 32, `@ 14051e150`): `breathing` + `" noarms"` (the record
+  `breathing noarms`) plays on the overlay layer at weight 0.95, looping, at a speed fixed once per run to
+  0.35 + 0.1 × random, when a character value (+0x180, which is the current speed v) is ≤ 22 and the
+  character is in none of three states (one of them the leg state 1).
+- The wound overlays (`hand2head` ...) are the LOCATIONAL_DAMAGE `pain anim` references: a part's overlay
+  plays when its health is below the threshold given with the reference (`@ 14064a100`, see
+  [game/character-stats.md](game/character-stats.md)). Observed: the hit handler also stores the hit part's
+  `pain anim` name on the character (+0x288).
 
 ### In Meitou (`Meitou.Data.Characters.AnimationMask`, viewer `Animator`)
 
@@ -159,7 +358,7 @@ per-layer controller (no fades, synching or normalising):
 Verified, `@ 14052cf80`, called from `@ 1405338f0`.
 
 Three skeleton animations are used as one-frame pose libraries: each is enabled, looping, at weight 1, and
-**held at time = length × slider ÷ 100**:
+**held at time = length × slider ÷ 100** (they add on top of everything else because the skeleton is in cumulative mode, see [Run-time blending](#run-time-blending)):
 
 | Animation | Slider (appearance value) |
 | --- | --- |
@@ -289,13 +488,18 @@ and the sliders above. Hair and beards are ATTACHMENT records worn with a shared
 - The order of ANIMATION_FILE sources (comparator `@ 14052ba90`) and which file wins on a name clash.
 - The suffix of the block-animation clones, and which COMBAT_TECHNIQUE `animal` values exist.
 - The per-character blend rate and the normalising rules in detail (`@ 1405b5c30`).
-- Which record field turns on root-motion extraction.
+- ~~Which record field turns on root-motion extraction~~: `relocates` for ANIMATION records; combat techniques
+  by their own rule ([Root motion](#root-motion)). Still open: the time divisor of the root-motion velocity,
+  and how combat footwork moves the body while combat sets animation-driven movement.
 - Per-bone call in `@ 140539020`: Kenshi calls one virtual method on every bone with false, and on the
   children of `Bip01 Head` except `Bip01 Jaw` with true. What it is (scale inheritance? manual control?) is
   Unknown.
-- How characters choose between candidate animations (idle chance, speed bands, injury ranges, combat
-  state) beyond the definitions above. Not traced in the original; our rules (a chain by `move speed`, validity by stance, idles by chance) are in
-  [simulation.md](simulation.md#animation); the data they were read from is under [Selection data used by the simulation](#selection-data-used-by-the-simulation).
+- How characters choose between candidate animations: largely answered ([Choosing candidates](#choosing-candidates-14051d660),
+  [Movement](#movement-which-clips-and-how-fast), [Hit reactions](#hit-reactions-stumbles)). Still open: the
+  non-combat lower-body update (slot 28 runs only in combat; the out-of-combat path, probably the same
+  movement blend, was not traced), how the idle timer's units work, the arm check `@ 14051d240` in detail,
+  the get-up clip's playback rate, how fast the movement direction turns, and which of `foetal` /
+  `sitting dazed` / `knockout training` play when. Our engine's rules are in [simulation.md](simulation.md#animation).
 - Body shape: the nutrition value behind starvation (+0x4b8), the thigh-narrowing leg state, the two
   movement-scale exceptions, the stats field x in the muscle definition, what reads (`Height` − 80) × 0.025,
   and what the game does when a body file lacks a slider (the viewer uses 100).
@@ -305,7 +509,7 @@ and the sliders above. Hair and beards are ATTACHMENT records worn with a shared
 **Observed** (engine choice, [simulation.md](simulation.md#animation)): the simulation fills `AnimationStance.LeftLeg` and `RightLeg` with the lowest `Fraction x 100`
 of the character's leg parts, so a hurt leg selects the `limp` records by their leg damage ranges (100 healthy, negative past function; 1000..1000 means not used).
 The base data has no unconscious or dead clip (the skeleton has `stealthKO` and `sleeponfloor`), so a knocked-out or dead character plays the `sleeponfloor` record
-until proper clips exist.
+until proper clips exist. (The original uses the ragdoll while down and blends from it into `standing up 3`: [Knockout, lying down and getting up](#knockout-lying-down-and-getting-up).)
 
 ## Selection data used by the simulation
 
@@ -322,3 +526,7 @@ What the simulation's animation system ([simulation.md](simulation.md#animation)
   1.4 s clip takes 1.67 s at speed 14 (0.84 clip seconds per second) and covers 2.3 m, a run cycle of the 0.567 s clip takes 0.31 s at speed 90 (1.8)
   and covers 2.8 m (1 unit = 1 dm): about one stride of a person each, which the other reading (cycles per second = speed x play speed) does not
   give (1.7 m and 5 m).
+- **Correction** (decompilation, [Movement](#movement-which-clips-and-how-fast)): the original uses **both** readings, by `synchs`. An
+  unsynched clip runs at F × `play speed` × v clip seconds per second; a synched clip's phase advances at F × v × (weighted) `play speed`
+  **cycles** per second, F = (2 − H) / g ≈ 1 / H. The stride argument above is not evidence either way (a run cycle of 5 m at 9 m/s is
+  1.8 cycles, 3.6 steps per second, which is plausible), so which applies to the walk and run records depends on their `synchs` flag. **Verified** (data, the install): every base-game walk, jog, run, limp, crouch and combat shuffle record has `synchs` set, so their cycles per second are F x v x `play speed` (a walk at 14 goes round 0.84 times a second, a run at 90 1.8 times; the engine had read them as clip seconds before, which made walks slide and runs flail).

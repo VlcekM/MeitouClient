@@ -223,8 +223,20 @@ body stays closed).
 
 Verified, `OgreMain_x64.dll @ 180343200`, `@ 180017ee0`, `@ 180031260`.
 
-- Blend mode average (every base-game skeleton): if the enabled animations' weights sum to more than 1,
+- Blend mode average (the skeleton files' default): if the enabled animations' weights sum to more than 1,
   every weight is divided by the sum; otherwise weights are used as they are. Cumulative: never scaled.
+- **Kenshi switches character skeletons to cumulative.** Verified: when the animation controller is
+  attached to a body entity (`kenshi_x64.exe @ 1405b93a0`, reached from the body build `@ 140539020`
+  and the appearance rebuilds), it calls vtable slot 65 (offset 0x208) of the entity's skeleton
+  instance with 1. Slot 65 of both skeleton vtables in OgreMain (`.rdata` RVAs 0x690e88 and 0x6a51b8;
+  checked by scanning the DLL for the function pointer) is `Skeleton::setBlendMode` (`@ 180344f20`,
+  writes +0x170), and 1 is `ANIMBLEND_CUMULATIVE`. The portrait renderer (`@ 14084b890`) does the same on
+  its copy. So weights are **never divided by their sum**: the posture libraries (`postures`,
+  `neck set`, `shoulder set`, weight 1 each, see animation.md) add their pose on top of the walk at full
+  weight, and keeping each body part at a sensible total is Kenshi's own job: its per-layer controller
+  normalises each layer (animation.md, "Run-time blending"), and the masks (deleted tracks) keep the
+  upper and lower layers apart. In the same call it sets Ogre's default interpolation to linear and
+  rotation interpolation to linear (both `setDefault...InterpolationMode(0)`).
 - Animations are applied in two passes: first those without override bones, then those with any
   (`Animation::setOverrideBone`). On an override bone, the animation first pulls the bone's accumulated
   rotation back toward its binding orientation by its weight (fully reset at weight ≥ 0.99), then adds

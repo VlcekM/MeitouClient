@@ -399,30 +399,44 @@ generator in any case).
 
 ## Animation
 
-Data facts about ANIMATION records, the stance flags and the selection data are in [animation.md](animation.md#selection-data-used-by-the-simulation).
-`AnimationSystem` (Act, after movement, own characters only), `CharacterAnimation` (cold, hashed), `AnimationLibrary` / `AnimationStance` /
-`HandHold` / `AnimationLengths` in `Meitou.Data/Gameplay/AnimationLibrary.cs`.
+The original's rules (decompilation) are in [animation.md](animation.md#run-time-blending); the data facts in
+[animation.md](animation.md#selection-data-used-by-the-simulation). `AnimationSystem` (Act, after movement and combat, own characters only),
+`CharacterAnimation` (cold, hashed), `AnimationLibrary` / `AnimationDefinition` / `AnimationStance` / `HandHold` / `AnimationLengths` in
+`Meitou.Data/Gameplay/AnimationLibrary.cs`; the renderer's masks in `Meitou.Data/Characters/AnimationMask.cs`.
 
-- **Layers.** Up to 8 weighted clips per character (`AnimationSystem.MaxLayers`). Each tick the system picks what should play, fades the
-  weights, advances the times; the snapshot carries `AnimationLayer`s and the renderer finds the track masks by record name. Without the
-  system the older movement layers are published (`idle_stand_relax`, or `walk lower` + `walk upper`).
-- **Choice** (**Observed / engine choice**, the original's selection code was not traced). A clip is valid when its weapon-in-hand flags,
-  combat and stealth modes, crouch and prone, carrying flags and leg ranges fit the stance; the weapon kind in hand is checked against the
-  record's kind flags (`AnimationKind`, from the WEAPON's `skill category` through `WeaponCategories` in
-  `Meitou.Data/Gameplay/Combat/WeaponData.cs`). The valid movement clips of a body layer sorted by `move speed` form a chain: between two
-  speeds the two are blended linearly, below the first and above the last one clip alone; clips of one speed share by `chance`. From 1 unit
-  per second a character moves, else it stands: one of the valid idle clips of the whole body by `idle chance`, kept between `idle time min`
-  and `max` and then drawn again. `AnimationLibrary` caches the chains by stance, with the leg health in intervals.
-- **Time.** Synched movement clips share one phase per character, advanced by `speed x play speed / clip length` cycles per second of the
-  clip that weighs most; a clip's time is `frac(phase + synch offset) x its length` (lengths from the `*_skeleton.skeleton` files,
-  `AnimationLengths`); other clips advance by their `play speed` (1 when it is 0). Weights move linearly at the CONSTANTS `animation blend rate`
-  (4 per second, a full cross-fade in a quarter second), the same for every clip (the per-clip factor of animation.md is not applied).
-- **Stance.** `CharacterCold.DrawnWeapon` and `InCombat` (set by combat) select the combat-mode and armed variants; `AnimationStance.LeftLeg` /
-  `RightLeg` are the lowest `Fraction x 100` of the leg parts, so the `limp` clips are chosen. A knocked-out or dead character plays
-  `sleeponfloor` (loops, all layers): the base data has no unconscious or dead clip (**Observed**).
+- **Layers.** Up to 8 weighted clips per character (`CharacterAnimation.MaxLayers`). Each tick the system picks what should play, fades the
+  weights linearly at the CONSTANTS `animation blend rate` (4 per second, the same for every clip: engine choice), advances the times; the
+  first clips a character plays start at full weight. `Publish` normalises as Kenshi's layers do: the upper body (upper and whole-body clips)
+  to at most 1, the lower body to at most 1 minus the whole-body clips (`all` clips and actions; a block keeps the legs' clips); overlays alone.
+  The renderer blends **cumulatively** (Kenshi sets it on every character's skeleton; the posture libraries add on top at weight 1).
+- **Movement** (**Verified**). Every movement clip of a body half that fits the stance plays, weighted by the sigmoid of its speed ramp
+  (`min speed` / `move speed` / `max speed`) times its leg ramp (the worse leg against that side's damage min / ideal / max), normalised
+  (`AnimationDefinition.SpeedWeight`, `LegWeight`, `AnimationLibrary.Movement`). Synched clips share one phase per character advancing
+  F x v x the weighted `play speed` of the lower clips **cycles** per second; unsynched movement clips run F x `play speed` x v clip seconds
+  per second; F = 2 - H, H the body's movement scale (`CharacterShape.MovementScaleOf`). In combat v is signed along the facing, so backing off
+  picks the `... combat shuffle long BK` clips. From 1 unit per second a character moves, else it stands (engine).
+- **Idles.** Out of combat one of the whole-body idles by `idle chance`, kept for `idle time min` .. `max` seconds. In combat (engine
+  choice after the original's footwork): the lower movement blend at the current speed (`walk lower combat shuffle short` at rest) under an
+  upper-body guard idle (`AnimationLibrary.CombatIdles`: the `guard` records by the weapon kind in hand, `MA idle1` for fists; the hands'
+  YES / NO fields are not tested because the original's arm check was not decoded).
+- **Techniques.** COMBAT_TECHNIQUE records of humanoids (`animal` 8 or less) are definitions too (`AnimationDefinition.FromTechnique`,
+  published by record name; the renderer's mask comes from `AnimationMask.FromTechnique`: a block that is not a dodge loses its lower-body
+  tracks). The combat system's attack or reaction (`CombatSystem.Playing`, the last finished tick's state) sets the clip's time to progress x
+  length, so the blow lands at its `anim blocked frame`. Attacks and dodges replace everything; a block plays over the legs' clips.
+- **Hit reactions** (**Verified** rules): a hit records its tick, body part, heaviness (above the stumble threshold) and side on the combat slot
+  (`CombatSlot.HitTick`, `HitPart`, `HitHeavy`, `HitBehind`). Unless the hit is light while a reaction is playing, one of the part's
+  `stumbles` clips with `big stumble` = heavy-and-free and `stumble from` = the side plays to its end (`AnimationLibrary.Stumbles`;
+  every base-game stumble has `chance` 0, so they are equally likely: engine choice). A technique cuts it short (engine).
+- **Root motion** (**Verified** selection): `relocates` clips, attacks and dodges (not pure blocks) move the character by their `Bip01`
+  track's ground part (`AnimationLengths.Root`, read from the skeletons) turned by its heading, onto walkable ground only; the renderer keeps
+  only the height of that track. Fading one-shot clips keep advancing, so they keep moving the character, as in Kenshi.
+- **Down and up.** A character that goes down falls with the `Dodge back fall` technique's clip and lies in `sleeponfloor` (the original
+  switches to its ragdoll: engine stand-in); coming round plays `standing up 3` to 86 % (**Verified**), cut short by walking or a technique.
+- **Stance.** `CharacterCold.DrawnWeapon` and `InCombat` (set by combat) select the combat-mode and armed variants; the leg ramps use the lowest
+  `Fraction x 100` of each side's leg parts.
 - **Host.** Clip time and weight are interpolated between the two snapshots (a wrapped clip time shows the new value).
-- **Not made:** turning (the records have none for humans), strafing, overlays (carrying), `is action` clips, injury and weather variants
-  beyond the leg ranges, and the attack, block, dodge, hit and fall clips of combat ([Combat](#combat)).
+- **Not made:** strafing (`strafe lower` by the sideways speed), overlays (breathing, wound `pain anim`s, carrying), `head turning`, other
+  `is action` clips, weather variants, the ragdoll, and the right-arm override clone of blocks.
 
 ## Bodies
 
@@ -551,9 +565,7 @@ retaliation systems are in `Fighting.cs`.
   units. Hostile relations do not start fights; nothing starts a fight but an order.
 - **Host API.** `CombatSystem.StateOf(id)` (target, counters, `Down`), `Playing(id, tick)` (the technique playing and its progress) and, with
   `CombatOptions.RecordLog`, `Log` (every resolved blow: attacker, defender, outcome, part, damage, KO, death).
-- **Gaps.** Attack, block and dodge clips are not played: a technique's `anim name` is a skeleton clip, not an ANIMATION record, so the
-  renderer's track masks (found by record name) are missing; a combat layer needs a mask choice per technique (upper body for blocks, the whole
-  body for dodges and martial arts) and the "Light_Hit" / "Heavy_Hit" and fall clips. Also not built: ranged combat and turrets (only the records
+- **Gaps.** The clips are played by the animation system ([Animation](#animation)). Also not built: ranged combat and turrets (only the records
   are read), attack slots (`max num attack slots`), target choice, movement round the target beyond the path, fighting while prone, finishing off,
   prisoners, fist injury to the attacker, a stagger coupled to leg loss, mass-combat XP, auto-aggro by relations, player characters defending
   themselves when idle.

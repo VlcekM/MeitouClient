@@ -9,6 +9,17 @@ namespace Meitou.Data.Characters;
 /// </summary>
 public sealed record AnimationMask(string AnimationName, string? RecordName, string Layer, IReadOnlySet<string> DeletedBones, IReadOnlySet<string> OverrideBones)
 {
+    /// <summary>The clip moves the character instead of its root bone (<see cref="MovesCharacter"/>): only the height of the <c>Bip01</c> track is posed.</summary>
+    public bool Relocates { get; init; }
+
+    /// <summary>
+    /// Whether a record's clip moves the character (<b>Verified</b>, docs/animation.md "Root motion"): an ANIMATION with <c>relocates</c>; a
+    /// COMBAT_TECHNIQUE unless it is a block that is not a dodge (the combat code plays attacks and dodges with root motion whatever <c>gains ground</c> says).
+    /// </summary>
+    public static bool MovesCharacter(GameRecord record) => record.Type == FcsRecordType.COMBAT_TECHNIQUE
+        ? !(record.GetBool("is block") && !record.GetBool("is dodge"))
+        : record.GetBool("relocates");
+
     static readonly string[] LeftArm = ["Bip01 L Clavicle", "Bip01 L UpperArm", "Bip01 L Forearm", "Bip01 L Hand"];
     static readonly string[] RightArm = ["Bip01 R Clavicle", "Bip01 R UpperArm", "Bip01 R Forearm", "Bip01 R Hand"];
     static readonly string[] BelowWaist =
@@ -46,11 +57,26 @@ public sealed record AnimationMask(string AnimationName, string? RecordName, str
             if (record.GetBool("delete tail", true)) deleted.UnionWith(Tail);
         }
         if (animation is "postures" or "shoulder set" or "neck set") deleted.UnionWith(HandsAndProps);
-        return new AnimationMask(animation, record.Name, record.GetString("layer", "upper"), deleted, overrides);
+        return new AnimationMask(animation, record.Name, record.GetString("layer", "upper"), deleted, overrides) { Relocates = MovesCharacter(record) };
     }
 
     /// <summary>
-    /// The mask for <paramref name="name"/>: an ANIMATION record of that name, else the first ANIMATION record whose
+    /// The mask of a COMBAT_TECHNIQUE (docs/animation.md "Startup preprocessing", <b>Verified</b>): a block that is not a dodge loses its lower-body tracks
+    /// (the <c>delete below waist</c> set) and plays on the upper body; attacks and dodges keep every track. Kenshi also adds a clone of each block with
+    /// override bones on the right arm; which of the two plays is <b>Unknown</b>, this is the one without.
+    /// </summary>
+    public static AnimationMask FromTechnique(GameRecord record)
+    {
+        bool block = record.GetBool("is block") && !record.GetBool("is dodge");
+        var deleted = new HashSet<string>(block ? BelowWaist : [], StringComparer.Ordinal);
+        return new AnimationMask(record.GetString("anim name", record.Name), record.Name, block ? "upper" : "all", deleted, new HashSet<string>(StringComparer.Ordinal))
+        {
+            Relocates = MovesCharacter(record),
+        };
+    }
+
+    /// <summary>
+    /// The mask for <paramref name="name"/>: an ANIMATION record of that name, else a COMBAT_TECHNIQUE of that name, else the first ANIMATION record whose
     /// <c>anim name</c> is it (the one that keeps the name when duplicates are renamed), else <see cref="Plain"/>.
     /// </summary>
     public static AnimationMask Find(GameDatabase? db, string name)
@@ -59,6 +85,8 @@ public sealed record AnimationMask(string AnimationName, string? RecordName, str
         var records = db.OfType(FcsRecordType.ANIMATION).ToList();
         var byName = records.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
         if (byName is not null) return FromRecord(byName);
+        var technique = db.OfType(FcsRecordType.COMBAT_TECHNIQUE).FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (technique is not null) return FromTechnique(technique);
         var byAnimation = records.FirstOrDefault(r => string.Equals(r.GetString("anim name"), name, StringComparison.OrdinalIgnoreCase));
         return byAnimation is not null ? FromRecord(byAnimation) : Plain(name);
     }

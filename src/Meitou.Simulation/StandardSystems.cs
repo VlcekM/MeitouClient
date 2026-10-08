@@ -94,7 +94,7 @@ public static class StandardSystems
         {
             var library = o.AnimationLibrary ?? AnimationLibrary.FromDatabase(data.Db);
             var lengths = o.AnimationLengths ?? new AnimationLengths();
-            systems.Add(o.AnimationBlendRate is { } rate ? new AnimationSystem(library, lengths, rate) : new AnimationSystem(library, lengths));
+            systems.Add(new AnimationSystem(library, lengths, o.AnimationBlendRate ?? 4, combat));
         }
         if (Has(StandardParts.Feed)) systems.Add(new FeedSystem(data.Items, o.Feed));
         if (Has(StandardParts.Retaliation)) systems.Add(new RetaliationSystem(combat!));

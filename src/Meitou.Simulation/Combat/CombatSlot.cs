@@ -30,10 +30,13 @@ public struct CombatSlot
     public bool Down;
     /// <summary>Counters: blows thrown, hits landed, blows blocked or dodged by the target, hits taken, blocks, dodges made.</summary>
     public int Thrown, Landed, Parried, Evaded, Taken, Blocks, Dodges;
+    /// <summary>The last hit taken, for the hit reaction clip: its tick (-1: none yet), the body part (index into the medical state's parts), whether it was heavy (above the stumble threshold) and came from behind.</summary>
+    public int HitTick, HitPart;
+    public bool HitHeavy, HitBehind;
 
     public static CombatSlot Fresh(int generation) => new()
     {
-        Generation = generation, TargetSlot = -1, TargetGeneration = 0, AttackTech = -1, ReactTech = -1, ReactedSlot = -1, ReactedSeq = -1,
+        Generation = generation, TargetSlot = -1, TargetGeneration = 0, AttackTech = -1, ReactTech = -1, ReactedSlot = -1, ReactedSeq = -1, HitTick = -1, HitPart = -1,
     };
 
     public readonly bool Fighting => TargetSlot >= 0;
@@ -67,5 +70,9 @@ public struct CombatSlot
         h.Add(Taken);
         h.Add(Blocks);
         h.Add(Dodges);
+        h.Add(HitTick);
+        h.Add(HitPart);
+        h.Add(HitHeavy);
+        h.Add(HitBehind);
     }
 }

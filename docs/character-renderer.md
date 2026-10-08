@@ -29,8 +29,9 @@ On exit a `characters ...` line gives counts per LOD level and timings (means of
 - **Per appearance** (by reference): a `CharacterAsset` with the rig, body shape, parts (body, head, hair, beard, clothing, armour,
   weapons) and their materials. Meshes are cached by (path, bone count) and shared; textures through one `WorldTextureCache`.
 - **Pose**: CPU, in parallel over characters, straight into the mapped bone storage buffer (binding 6; 64 B per bone skin matrix). Layers
-  are averaged per the animation rules; override bones in a second pass; body-shape scales and the posture libraries applied
-  as in the removed viewer. Bone-attached items (weapons) take the bone's world matrix times the part offset.
+  are added **cumulatively** (Kenshi switches every character skeleton to cumulative, [ogre-skeleton.md](formats/ogre-skeleton.md#blending-in-kenshis-ogre); the
+  simulation keeps each body half at a total of 1); override bones in a second pass; a relocating clip's `Bip01` track keeps only its height
+  (the simulation moves the character by the rest); body-shape scales and the posture libraries (at weight 1, on top) applied as in the removed viewer. Bone-attached items (weapons) take the bone's world matrix times the part offset.
 - **Draw**: instanced per (mesh part, LOD level, sidedness). Per instance: a 4x4 matrix (vertex inputs 7-10) and a `uvec4`
   (bone base, material slot, flags). Materials are a table in an SSBO (binding 7, 256 B records, bindless texture indices), so one
   instance buffer and few draws cover a whole crowd. Sphere culling and LOD selection (`MeshLod`) on the CPU, per view.
