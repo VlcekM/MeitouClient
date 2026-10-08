@@ -118,4 +118,78 @@ public class FogCullTests
         Assert.Null(FogVolumes.HideDistance(1f / 800, 1f / 50000, inside, 20000));   // thinner than the far clip can cover
         Assert.Null(FogVolumes.HideDistance(1f / 800, 1f / 2000, [1, 50000, 50000, 50000, 50000, 50000, 50000], 50000));   // the eye on a plane's edge
     }
+
+    // ---- the weather fog's cull (SkyRenderer.FogCullDistance, FogVolumes.AtmosphereDistance) ----
+
+    /// <summary>The uniforms the distance reads: sky mode, weather fog (weight, start, end), the far clip D, the Kenshi haze on, the altitude weight.</summary>
+    static SkyRenderer.AtmosphereUniforms Atmosphere(float weight = 1, float fogStart = 0, float fogEnd = 3000, float far = 50000, bool game = true, bool kenshi = true, float altitude = 0) =>
+        new(default, new Vector4(game ? 1 : 0, 50000, 1, 0), default, default, default, Vector3.One, new Vector4(fogStart, fogEnd, weight, far), Vector3.One, new Vector4(0, 0, 0, 5000),
+            new Vector4(kenshi ? 1 : 0, 3000, 30000, weight > 0 && fogEnd > 1 ? 1f / fogEnd : 0), default, new Vector4(kenshi ? altitude : 1, 0.93f, altitude, 0), default);
+
+    /// <summary>The shader's weather term: ease-in-out of dist / fog distance, times the weight (atmoKenshiHaze).</summary>
+    static float FogCurve(float dist, float fogDistance, float weight)
+    {
+        float a = Math.Clamp(dist / fogDistance, 0, 1);
+        return (a < 0.5f ? 2 * a * a : 1 - 2 * (a - 1) * (a - 1)) * weight;
+    }
+
+    [Fact]
+    public void The_weather_fog_distance_is_where_the_fog_term_is_complete()
+    {
+        float d = SkyRenderer.FogCullDistanceOf(Atmosphere())!.Value;
+        Assert.InRange(d, 2960f, 2975f);   // 0.99 of the fog distance
+        Assert.True(FogCurve(d, 3000, 1) >= 0.9998f - 1e-5f);
+        Assert.True(FogCurve(d * 0.995f, 3000, 1) < 0.9998f);   // and it is the least such distance
+        foreach (float fog in new[] { 500f, 3000f, 25000f })
+        {
+            float far = SkyRenderer.FogCullDistanceOf(Atmosphere(fogEnd: fog, far: 50000))!.Value;
+            Assert.True(FogCurve(far, fog, 1) >= 0.9998f - 1e-5f, $"fog {fog}");
+        }
+    }
+
+    [Fact]
+    public void There_is_no_weather_fog_distance_without_a_complete_fog_over_the_sky_too()
+    {
+        Assert.Null(SkyRenderer.FogCullDistanceOf(Atmosphere(weight: 0)));              // fog off
+        Assert.Null(SkyRenderer.FogCullDistanceOf(Atmosphere(weight: 0.5f)));           // half a fog leaves half the surface
+        Assert.Null(SkyRenderer.FogCullDistanceOf(Atmosphere(weight: 0.9990f)));
+        Assert.Null(SkyRenderer.FogCullDistanceOf(Atmosphere(game: false)));            // the simple sky
+        Assert.Null(SkyRenderer.FogCullDistanceOf(Atmosphere(fogEnd: 190000)));         // the sky pass reaches only part of the way at the far clip
+        Assert.NotNull(SkyRenderer.FogCullDistanceOf(Atmosphere(fogEnd: 50000)));
+    }
+
+    [Fact]
+    public void The_physical_haze_ends_at_its_linear_ramp_and_a_blend_takes_the_larger()
+    {
+        float physical = SkyRenderer.FogCullDistanceOf(Atmosphere(kenshi: false, fogStart: 1000, fogEnd: 3000))!.Value;
+        Assert.InRange(physical, 2999f, 3000f);
+        float kenshi = SkyRenderer.FogCullDistanceOf(Atmosphere(fogStart: 1000, fogEnd: 3000))!.Value;
+        Assert.True(kenshi < physical);
+        Assert.Equal(physical, SkyRenderer.FogCullDistanceOf(Atmosphere(fogStart: 1000, fogEnd: 3000, altitude: 0.4f))!.Value);
+    }
+
+    [Fact]
+    public void The_weather_fog_hides_boxes_by_the_nearest_point_but_not_next_to_a_placed_volume_or_when_off()
+    {
+        float distance = SkyRenderer.FogCullDistanceOf(Atmosphere())!.Value;
+        var open = new FogVolumes([]) { CullEnabled = true };
+        open.Update(Vector3.Zero, Vector3.UnitX, 50 * MathF.PI / 180, 16f / 9, 50000, 0.5f, on: true, atmosphereCull: distance);
+        Assert.Equal(distance, open.AtmosphereDistance);
+        var k = FogVolumes.CullKind.Objects;
+        Assert.True(open.Hidden(B(distance + 1, 0, 0), B(distance + 500, 100, 100), k));
+        Assert.False(open.Hidden(B(distance - 1, 0, 0), B(distance + 500, 100, 100), k));   // its nearest point is inside the distance
+        Assert.True(open.Hidden(B(distance * 0.75f, distance * 0.75f, 0), B(distance, distance, 50), k));   // diagonal: the Euclidean distance counts
+        var buffer = new Vector4[FogVolumes.CullVectors];
+        Assert.True(open.WriteCull(buffer));
+        Assert.Equal(distance * distance, buffer[0].W);
+        Assert.Equal(0f, buffer[1].W);   // no block
+        var off = new FogVolumes([]) { CullEnabled = false };
+        off.Update(Vector3.Zero, Vector3.UnitX, 50 * MathF.PI / 180, 16f / 9, 50000, 0.5f, on: true, atmosphereCull: distance);
+        Assert.Null(off.AtmosphereDistance);
+        Assert.False(off.Hidden(B(distance + 1, 0, 0), B(distance + 500, 100, 100), k));
+        // A placed volume in view: the fog volumes pass reads the depth, so nothing is left out.
+        var withBlock = new FogVolumes([Block()]) { CullEnabled = true };
+        withBlock.Update(B(0, 150, 0), Vector3.UnitX, 50 * MathF.PI / 180, 16f / 9, 50000, 0.5f, on: true, atmosphereCull: distance);
+        Assert.Null(withBlock.AtmosphereDistance);
+    }
 }

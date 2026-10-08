@@ -292,6 +292,33 @@ larger area, would be larger. The Fog Islands, the Vain and Skinner's Roam inner
 allows, or the objects there are not wholly inside it), so no change. The sky is not culled: its rays go up through a ceiling a few thousand units
 over the eye, so their path is shorter than R except near the horizon.
 
+**Weather fog cull** (Meitou's own, 2026-10-08; the image does not change to within a few levels; `--no-fog-cull` turns it off with the block cull). The same
+`Hidden` / `Covers` also ask a second, simpler question: is the box's nearest point at least `D` from the eye, where `D` is the distance past which the
+*weather's* fog (`SkyRenderer.FogCullDistance`, from the uniforms `atmoApply` reads) makes the pixel its own colour. Terrain nodes, objects, characters, foliage
+zones and the foliage cull kernel (`FogHidden`: `fog[0].w` = D squared, `fog[1].w` = 1 when the eye's block is there too) use it in the main camera's
+colour pass; the sea, the particles and the reflection do not. **Verified** (reading `AtmosphereShaders.atmoKenshiHaze` / `atmoPhysicalHaze` and the sky
+pass's fog term, `FogCullTests`): the Kenshi haze returns `mix(colour, rgb, alpha)` with `alpha = saturate(level + curve)`, where `level` (the haze ramp)
+and `curve` (the weather's ease-in-out of `dist / fog distance`, times its weight) depend on the distance alone, so there is no vertical dependence; the
+ray direction only enters `rgb`. `alpha = 1` alone (the haze, complete at 0.6 of the far clip) is **not** enough to leave a surface out: what stays is the
+haze colour `rgb`, which varies with the distance below the dome radius (70000) and is not the sky pass's colour, so a revealed sky pixel would differ. Only
+the weather's own term at `curve = 1` makes `rgb` the fog colour and `alpha = 1`; the sky pass applies the same curve at the far clip (its distance, since a
+pixel with no geometry is that far), so the pixel is the fog colour whether the surface is drawn or not. That needs: the game's sky and light (the simple
+sky's fog never exceeds 0.9), the fog on at weight at least 0.9998 (a smaller weight leaves part of the surface, and `FogInput` blends in and out), and the
+sky pass's curve complete at the far clip (fog distance at most about the far clip D = 50000; the base weathers with 190000 give none). D is where the
+curve reaches 0.9998 (0.99 of the fog distance, which also gives a transmittance of 0.0002, under 1/255 in every channel); with the physical haze (a viewer
+choice, `Altitude.X` = 1) where the linear ramp is complete, and the larger of the two when they are blended. A *placed* fog volume in view that is not wholly
+inside D (`FogVolumes.VolumesWithin`) switches it off: the volumes pass reads the scene's depth, and a surface left out (the sky at the far clip in its
+place) would change the length of the ray's path through the volume. So it works in the open, where the base game has weather fog: the swamp's weathers have
+the fog off (their fog is the placed volumes, the block cull above), so the Shark swamp benchmark is unchanged by it. The F11 / `--screenshot` `fog cull` line
+names it ("weather fog beyond 14850: ...").
+In Meitou shadows the cascades' far distance is clamped to D (`ShadowPass.RangeCap`, one line in `EffectiveRange`; nothing beyond D shows, so the receivers
+there are not needed): it moves the cascade splits, so shadows near the camera change slightly (finer texels); that makes it Meitou's `shadows` switch only
+(`--faithful shadows` keeps the game's cascades whole). Measured (**Observed**, 2026-10-08, RTX 4070 shared, 1280 x 720 with DLSS, `--world --town "The Hub"
+--radius 2 --distance 9000 --pitch 10 --yaw 300 --weather "shek desert storm" --time 12 --no-fog-volumes --faithful shadows`; fog distance 15000, so D = 14850): 20
+terrain nodes, 111 objects, 95 foliage zones and 1181 foliage instances left out; the picture differs from the `--no-fog-cull` one by at most 4 levels (mean 0.005 of 255), where two
+runs of the same setting are identical. With Meitou's shadows the pictures differ near the camera (mean 0.17, 0.33 % of the pixels over 12 levels, in the
+shadow edges only).
+
 Differences from the game (**Observed**, viewer choices):
 - Evaluated per pixel in each shader instead of rasterising each hull over the G-buffer. Opaque surfaces get the same result, but the game
   only fogs rays that hit a block's hull (the corners' convex shape), while Meitou fogs the whole region inside the planes; they differ only for

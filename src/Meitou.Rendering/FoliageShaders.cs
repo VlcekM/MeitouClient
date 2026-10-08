@@ -336,7 +336,8 @@ static class FoliageShaders
         // mirrors, plus its biome map row + 1 (0: none). The view's biome rows switch (mode.x) and the resident biomes (a bit per row).
         // A mesh chunk of a group with an impostor (flags 4) keeps the instances before the transition, the group's impostor chunk (flags 8,
         // the same instances) those from the crossfade band on (docs/impostors.md "Drawing"). Not drawn: -2 (visible values are above -1.5).
-        // mode.y: the fog cull is on (main colour pass; FogVolumes.WriteCull): fog[0] box min, fog[1] box max, fog[2] eye + hide distance squared, fog[3..9] the block's planes.
+        // mode.y: the fog cull is on (main colour pass; FogVolumes.WriteCull): fog[0] box min and in w the weather fog's distance squared (0: none), fog[1] box max and in w 1 when the eye's block
+        // is there, fog[2] eye + hide distance squared, fog[3..9] the block's planes.
         struct ViewData { vec4 planes[8]; vec4 lengths[2]; uvec4 resident[2]; uvec4 mode; vec4 fog[10]; };
         layout(push_constant) uniform Push { vec2 eye; uint planeCount; uint chunkCount; uint drawCount; float fullThreshold; } pc;
         uint ChunkIndex() { return gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x; }
@@ -346,7 +347,8 @@ static class FoliageShaders
             vec3 eye = v.fog[2].xyz;
             precise vec3 q = clamp(eye, mn, mx) - eye;
             precise float d2 = q.x * q.x + q.y * q.y + q.z * q.z;
-            if (d2 < v.fog[2].w) return false;
+            if (v.fog[0].w > 0.0 && d2 >= v.fog[0].w) return true;   // the weather fog alone hides it (FogVolumes.Covers)
+            if (v.fog[1].w < 0.5 || d2 < v.fog[2].w) return false;
             if (any(lessThan(mn, v.fog[0].xyz)) || any(greaterThan(mx, v.fog[1].xyz))) return false;
             for (int k = 0; k < 7; k++)
             {

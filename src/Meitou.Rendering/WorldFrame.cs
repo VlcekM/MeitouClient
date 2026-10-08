@@ -934,9 +934,10 @@ static class WorldFrame
         if (gpu.FogVolumes is { } fogVolumes)
         {
             gpu.Particles?.CollectFogVolumes(gpu.EffectFogs);
-            fogVolumes.Update(eye, camera.Forward, camera.FieldOfView, rw / (float)Math.Max(rh, 1), gpu.Sky.HazeDistance, sun.Y, gpu.Sky.Physical, gpu.EffectFogs);
+            fogVolumes.Update(eye, camera.Forward, camera.FieldOfView, rw / (float)Math.Max(rh, 1), gpu.Sky.HazeDistance, sun.Y, gpu.Sky.Physical, gpu.EffectFogs, gpu.Sky.FogCullDistance);
         }
         StageClock.Lap(13);
+        if (gpu.Shadow is not null) gpu.Shadow.RangeCap = gpu.FogVolumes?.AtmosphereDistance;   // the cascades end where the weather fog hides everything
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, sun.Y); }
         StageClock.Lap(12);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.

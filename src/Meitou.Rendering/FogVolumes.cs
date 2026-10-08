@@ -42,6 +42,7 @@ internal sealed class FogVolumes
     readonly List<(Volume V, float Distance)> picked = [];
     readonly Vector4[] data = new Vector4[FogVolumeShaders.MaxData];
     int used;
+    int kept;
     Vector4 eyeLight, info;
 
     /// <summary>Off: no volume is drawn (<c>--no-fog-volumes</c>; also while the simple sky is on).</summary>
@@ -56,6 +57,20 @@ internal sealed class FogVolumes
     Volume? occluder;
     float hideRadiusSquared;
     Vector3 cullEye;
+    float atmosphereRadiusSquared;
+    /// <summary>The distance beyond which the weather's fog (with the haze) hides everything this frame (<see cref="SkyRenderer.FogCullDistance"/>), shown by the statistics; null: none, or the cull is off or a placed fog volume is in view.
+    /// The shadow cascades' far distance is clamped to it (<see cref="ShadowPass.RangeCap"/>).</summary>
+    public float? AtmosphereDistance => atmosphereRadiusSquared > 0 ? MathF.Sqrt(atmosphereRadiusSquared) : null;
+
+    /// <summary>The F11 / log text of the cull (null when it is off for this view): what hides things and from how far, and the counts left out.</summary>
+    public string? DescribeCull()
+    {
+        if (CullBlock is null && AtmosphereDistance is null) return null;
+        var reasons = new List<string>();
+        if (CullBlock is not null) reasons.Add($"{CullBlock} beyond {CullRadius:0}");
+        if (AtmosphereDistance is { } weather) reasons.Add($"weather fog beyond {weather:0}");
+        return $"{string.Join(", ", reasons)}: {Culled[0]} terrain nodes, {Culled[1]} objects, {Culled[2]} foliage zones, {Culled[4]} foliage instances, {Culled[3]} characters left out";
+    }
     /// <summary>The volumes drawn in the last <see cref="Update"/>, farthest first (statistics, tests).</summary>
     public List<string> Active { get; } = [];
     /// <summary>The volumes in view that did not fit <c>uFogVolumeData</c> in the last <see cref="Update"/> (the farthest ones; none in the base game).</summary>
@@ -181,14 +196,17 @@ internal sealed class FogVolumes
     /// with the weather's <paramref name="effectFogs"/>, sorted farthest first and packed. <paramref name="far"/> is the game's far clip D, at which the
     /// shaders cap every distance (so a volume beyond it adds nothing). <paramref name="on"/> false draws none.
     /// </summary>
-    public void Update(Vector3 eye, Vector3 forward, float fieldOfView, float aspect, float far, float sunY, bool on, IReadOnlyList<EffectFog>? effectFogs = null)
+    public void Update(Vector3 eye, Vector3 forward, float fieldOfView, float aspect, float far, float sunY, bool on, IReadOnlyList<EffectFog>? effectFogs = null, float? atmosphereCull = null)
     {
         Active.Clear();
+        atmosphereRadiusSquared = 0;
+        cullEye = eye;
         picked.Clear();
         occluder = null;
         Array.Clear(Culled);
         used = 0;
         Dropped = 0;
+        kept = 0;
         EffectVolumes = effectFogs?.Count ?? 0;
         EffectVolumesDrawn = 0;
         if (on && Enabled)
@@ -223,6 +241,7 @@ internal sealed class FogVolumes
                 used += length;
             }
             Dropped = picked.Count - keep;
+            kept = keep;
             int at = 0;
             for (int i = keep - 1; i >= 0; i--)
             {
@@ -234,8 +253,23 @@ internal sealed class FogVolumes
             }
         }
         if (on && Enabled && CullEnabled && used > 0 && picked.Count > 0) PrepareCull(picked[0].V, eye, far);
+        // A placed volume that reaches past the distance reads the scene's depth along rays that end there: a left-out surface (the sky at the far clip in its place) would change
+        // the length of its path. One wholly inside the distance is behind nothing that is left out.
+        if (CullEnabled && atmosphereCull is { } atmosphere && atmosphere > 0 && VolumesWithin(atmosphere * atmosphere, eye)) atmosphereRadiusSquared = atmosphere * atmosphere;
         eyeLight = new Vector4(eye, Light(sunY));
         info = new Vector4(used, KenshiLighting.Daylight(sunY), 0, 0);
+    }
+
+    /// <summary>True when every volume written for the shaders (the first <c>kept</c> of <c>picked</c>) lies wholly within the distance <paramref name="radiusSquared"/> of the eye (its farthest box corner).</summary>
+    bool VolumesWithin(float radiusSquared, Vector3 eye)
+    {
+        for (int i = 0; i < kept; i++)
+        {
+            var v = picked[i].V;
+            var far = Vector3.Max(Vector3.Abs(v.BoxMin - eye), Vector3.Abs(v.BoxMax - eye));
+            if (far.LengthSquared() >= radiusSquared) return false;
+        }
+        return true;
     }
 
     void Consider(Volume v, Vector3 eye, float far, in Wedge wedge)
@@ -396,10 +430,14 @@ internal sealed class FogVolumes
     /// </summary>
     public bool WriteCull(Span<Vector4> into)
     {
-        if (occluder is not { } v) return false;
-        into[0] = new Vector4(v.BoxMin, 0);
-        into[1] = new Vector4(v.BoxMax, 0);
+        if (occluder is null && atmosphereRadiusSquared <= 0) return false;
+        into.Clear();
+        // [0].w: the weather fog's distance squared (0: none); [1].w: 1 when the eye's block is there (box, planes and [2].w are then set).
+        into[0].W = atmosphereRadiusSquared;
         into[2] = new Vector4(cullEye, hideRadiusSquared);
+        if (occluder is not { } v) return true;
+        into[0] = new Vector4(v.BoxMin, atmosphereRadiusSquared);
+        into[1] = new Vector4(v.BoxMax, 1);
         for (int k = 0; k < 7; k++) into[3 + k] = v.Data[3 + k];
         return true;
     }
@@ -410,6 +448,8 @@ internal sealed class FogVolumes
     /// <summary><see cref="Hidden(Vector3, Vector3, CullKind)"/> without the statistics (for a caller that counts its own, per instance).</summary>
     public bool Covers(Vector3 min, Vector3 max)
     {
+        // The weather fog: the nearest point of the box is past the distance where the fog alone makes the pixel (a sphere about the eye, the shader's length(position - eye)).
+        if (atmosphereRadiusSquared > 0 && Vector3.DistanceSquared(Vector3.Clamp(cullEye, min, max), cullEye) >= atmosphereRadiusSquared) return true;
         if (occluder is not { } v) return false;
         if (Vector3.DistanceSquared(Vector3.Clamp(cullEye, min, max), cullEye) < hideRadiusSquared) return false;
         if (min.X < v.BoxMin.X || min.Y < v.BoxMin.Y || min.Z < v.BoxMin.Z || max.X > v.BoxMax.X || max.Y > v.BoxMax.Y || max.Z > v.BoxMax.Z) return false;

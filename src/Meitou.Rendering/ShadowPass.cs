@@ -82,12 +82,15 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): its range scale shortens the shadow range (never below the game's default, or
     /// the setting when that is shorter) while the video memory is nearly used up. Null: no clamp.</summary>
     public VramGuard? Guard { get; set; }
+    /// <summary>The distance past which the weather fog hides everything (<see cref="FogVolumes.AtmosphereDistance"/>), set each frame by the caller; shortens the range in Meitou mode.</summary>
+    public float? RangeCap { get; set; }
     /// <summary>The range the cascades are fitted to and the casters are culled by: <see cref="Settings"/>' range, clamped by the guard.</summary>
     public float EffectiveRange
     {
         get
         {
             float range = Settings.Range, scale = Guard?.RangeScale ?? 1f;
+            if (Meitou && RangeCap is { } cap) range = MathF.Min(range, cap);   // beyond the weather fog's distance nothing shows (FogVolumes.AtmosphereDistance)
             return scale >= 1f ? range : Math.Max(Math.Min(range, KenshiShadows.DefaultRange), range * scale);
         }
     }

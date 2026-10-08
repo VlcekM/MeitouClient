@@ -469,6 +469,43 @@ public sealed unsafe class SkyRenderer : IDisposable
     public readonly record struct AtmosphereUniforms(Vector4 Tau, Vector4 Params, Vector4 Sun, Vector4 Light, Vector3 SunLight, Vector3 Tint, Vector4 Fog,
         Vector3 FogColour, Vector4 Simple, Vector4 Haze, Vector4 HazeCloud, Vector4 Altitude, Vector4 Maps);
 
+    /// <summary>The weather fog's own ease-in-out term (<c>1 - 2 (1 - a)^2</c>) counts as complete from 0.9998, as <see cref="FogVolumes.CullAlpha"/> does.</summary>
+    const float FogComplete = 0.9998f;
+
+    /// <summary>
+    /// The distance from the eye beyond which the weather's fog replaces what a world shader's <c>atmoApply</c> would show by the fog colour, so a
+    /// surface (and the sky behind it) there adds nothing; null when no distance does (<see cref="FogCullDistanceOf"/>).
+    /// </summary>
+    public float? FogCullDistance => state.Valid ? FogCullDistanceOf(Uniforms()) : null;
+
+    /// <summary>
+    /// The least distance <c>D</c> such that every surface at <c>dist &gt;= D</c> comes out of <c>atmoApply</c> as the weather's fog colour (to 0.0002 of the
+    /// difference), whatever it is, and the sky pass (the pixel's alternative when the surface is not drawn) gives the same colour; null when there is none.
+    /// <para>Why the fog term and not the haze's transmittance: the Kenshi haze returns <c>mix(colour, rgb, alpha)</c>; <c>alpha = 1</c> removes the
+    /// surface but leaves <c>rgb</c>, the haze colour, which depends on the distance below the dome radius and differs from the sky pass's colour. Only
+    /// the weather fog (<c>rgb = mix(hazeRgb, fogColour, curve)</c>) at <c>curve = 1</c> makes the pixel independent of what is drawn. It also makes
+    /// <c>alpha &gt;= 0.9998</c>, so the transmittance is below 1/255 in every channel. Verified from <see cref="AtmosphereShaders.Functions"/>:
+    /// in the Kenshi branch alpha, curve and the weather term depend on the distance alone (the ray direction enters only <c>rgb</c>), so there is no
+    /// vertical dependence to bound; the physical branch's column of air only lowers the transmittance, and its fog ramp is applied after it.</para>
+    /// Null when: the simple sky is on (it never fogs fully); the fog is off or its weight is under 0.9998 (a partial weight leaves part of the
+    /// surface); or the sky pass's own fog is not complete at the far clip (<c>Fog.W</c>, the distance of a pixel with no geometry). With the Kenshi
+    /// haze in use the distance is where its curve reaches 0.9998 (0.99 of the fog distance); with the physical haze where the linear ramp reaches
+    /// 0.9998 of the way; when both are blended (<c>Altitude.X</c> between 0 and 1) the larger.
+    /// </summary>
+    public static float? FogCullDistanceOf(in AtmosphereUniforms u)
+    {
+        if (u.Params.X < 0.5f || u.Fog.Z < FogComplete || !(u.Haze.W > 0)) return null;
+        float curveStart = 1f - MathF.Sqrt((1f - FogComplete) / 2f);   // the curve's input at which it reaches FogComplete: 0.99
+        if (u.Fog.W * u.Haze.W < curveStart) return null;
+        float fogDistance = 1f / u.Haze.W;
+        bool kenshi = u.Haze.X > 0.5f && u.Altitude.X < 1f;
+        bool physical = !kenshi || u.Altitude.X > 0f;
+        float distance = 0;
+        if (kenshi) distance = fogDistance * curveStart;
+        if (physical) distance = MathF.Max(distance, u.Fog.X + FogComplete * MathF.Max(u.Fog.Y - u.Fog.X, 1f));
+        return distance;
+    }
+
     /// <summary>The atmosphere uniforms for the current state (valid only while <c>state.Valid</c>).</summary>
     AtmosphereUniforms Uniforms()
     {
