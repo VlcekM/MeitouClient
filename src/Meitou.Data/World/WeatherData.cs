@@ -354,8 +354,8 @@ public sealed class WeatherData
         {
             StringId = w.StringId, Name = w.Name,
             CloudsDensity = w.GetFloat("clouds density"),
-            SkyColourMultiplier = SkyWeather.Unpack(w.GetInt("sky color mult", 0xFFFFFF)),
-            FogEnabled = w.GetBool("fog enabled"), FogColour = SkyWeather.Unpack(w.GetInt("fog color", 0xFFFFFF)),
+            SkyColourMultiplier = SkyWeather.Unpack(w.GetInt("sky color mult", 0)),
+            FogEnabled = w.GetBool("fog enabled"), FogColour = SkyWeather.Unpack(w.GetInt("fog color", 0)),
             FogDistanceMin = fogMin, FogDistanceMax = fogMax, FogWindMin = fogWindMin, FogWindMax = fogWindMax,
             WindSpeedMin = w.GetFloat("wind speed min"), WindSpeedMax = w.GetFloat("wind speed max"),
             WindUpdateMinutes = updateTime == 0 ? WeatherDef.NeverMinutes : updateTime, WindUpdateLimit = w.GetInt("wind update limit"),

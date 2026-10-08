@@ -171,8 +171,13 @@ Per pixel, with `slope = 1 − normal.y` and world position `p`:
 - Up to four biomes per terrain page (defines `BLEND1..3` name blend-map channels); the first gets
   `1 − (sum of the others)`. Which slot the game treats as the first is **Unknown**; the viewer weights all five
   slots as above, which is equivalent when the weights sum to 1.
-- Not reproduced in the viewer: wetness after rain (absorbance; only a fixed darkening below the water), the
-  interior clip mask, and the game's own distant material (the viewer's far terrain is under
+- Rain wetness (**Verified**: `terrainfp4.hlsl` `computeBiome` and its call sites; fcs.def defaults): the layer absorbances (`absorbance 0`
+  base 0.55, `1` slope 0.2, `2` cliff 0.5, `grass` 0.44, `dirt` 0.3, `road` 0.25) are blended per pixel in the order of the albedo blend
+  (base → grass by the overlay → slope → dirt → road → cliff; the distance fade does not touch it) and by the biome weights, then
+  `makeWet(albedo, wetness, 1 − albedo.a + absorbance, waterHeight − y)` with a 2-unit water-line edge
+  ([weather.md](weather.md)).
+  Reproduced in the viewer ("In Meitou" of weather.md); the viewer's parameter row has two more texels for them.
+- Not reproduced in the viewer: the interior clip mask, and the game's own distant material (the viewer's far terrain is under
   [Terrain LOD](#terrain-lod)).
 
 ### Why some sea areas in the north-east have other tones (Observed)

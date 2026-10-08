@@ -248,14 +248,15 @@ public sealed unsafe class ParticleRenderer : IDisposable
         new(gpu, Path.Combine(install.DataDirectory, "particles", "textures"), library ?? ParticleLibrary.Load(install));
 
     /// <summary>
-    /// Sets the weather's effect list. Groups are rebuilt when the list object or its <see cref="WeatherEffectInput.Version"/> changed; an entry whose
-    /// type is not a weather effect (NONE) or whose particle system is unknown is skipped.
+    /// Sets the weather's effect list, strength and wind. Groups are rebuilt when the list object (<c>Effects</c>, so a caller may pass a fresh input every
+    /// frame for the strength and wind) or its <see cref="WeatherEffectInput.Version"/> changed; an entry whose type is not a weather effect (NONE) or
+    /// whose particle system is unknown is skipped.
     /// </summary>
     public void SetWeather(WeatherEffectInput weather)
     {
+        if (ReferenceEquals(weather.Effects, inputIdentity) && weather.Version == inputVersion) { input = weather; return; }
         Sync();
-        if (ReferenceEquals(weather, inputIdentity) && weather.Version == inputVersion) { input = weather; return; }
-        (input, inputIdentity, inputVersion) = (weather, weather, weather.Version);
+        (input, inputIdentity, inputVersion) = (weather, weather.Effects, weather.Version);
         toWarm.RemoveAll(groups.Contains);
         groups.Clear();
         skipped.Clear();

@@ -77,6 +77,7 @@ static class Shaders
         uniform vec3 uEye;
         uniform bool uWireframe;
         uniform vec3 uFlatColour;
+        uniform uint uSurface;         // weather bits of the draw (below)
         uniform vec3 uFogColour;       // world view: distance haze (off while uFogDistance is 0)
         uniform float uFogDistance;
 
@@ -129,12 +130,36 @@ static class Shaders
             vec3 albedo = uGreyChannel >= 0 ? vec3(base[uGreyChannel]) * uTint : base.rgb;
             if (uUseVertexColour) albedo *= vColour.rgb;
 
+            vec3 geometricNormal = n;
             if (uHasNormal && !uTriplanar && dot(vTangent.xyz, vTangent.xyz) > 1e-8)
             {
                 vec3 t = normalize(vTangent.xyz - n * dot(n, vTangent.xyz));
                 vec3 b = cross(n, t) * vTangent.w;
                 vec3 tn = decodeNormal(nm);
                 n = normalize(t * tn.x + b * tn.y + n * tn.z);
+            }
+
+            // The weather's dust and wetness (objects.hlsl, triplanar.hlsl, foliage.hlsl; docs/formats/weather.md). uSurface: 1 DUST, 2 foliage shader (a fixed
+            // absorbance), 4 no weather (an impostor bake), 8 interior (the dust of inside, no rain).
+            float glossLit = gloss * uSpecular;
+            if ((uSurface & 4u) == 0u)
+            {
+                bool inside = (uSurface & 8u) != 0u;
+                float dustAmount = inside ? uWeatherDust.y : uWeatherDust.x;
+                if (((uSurface & 1u) != 0u || ((uSurface & 16u) != 0u && uWeatherDust.w > 0.5)) && dustAmount > 0.0)
+                {
+                    float dust = dustCover(n, gloss, vWorld, dustAmount);
+                    albedo = mix(albedo, dustColour(vWorld), dust);
+                    n = normalize(mix(n, geometricNormal, clamp(dust * 0.5, 0.0, 1.0)));   // flatten the normal map
+                }
+                if (!inside && uWeatherWet.x > 0.0)
+                {
+                    // Absorbance (1 - gloss)(1 - metalness) for objects (the viewer has no metalness map), 0.9 for foliage; the water line is not drawn here.
+                    vec4 wetSurface = vec4(albedo, glossLit);
+                    makeWet(wetSurface, uWeatherWet.x, (uSurface & 2u) != 0u ? 0.9 : 1.0 - glossLit, -1.0e4, 0.5);
+                    albedo = wetSurface.rgb;
+                    glossLit = wetSurface.a;
+                }
             }
 
             vec3 l = normalize(uLightDir);
@@ -147,7 +172,7 @@ static class Shaders
             vec3 sunLight = vec3(1.0, 0.97, 0.92);
             vec3 colour = albedo * (ambient + diff * sunLight) + spec * diff * sunLight;
             // World view, game sky: the game's deferred lighting (docs/formats/lighting.md); its gloss is diffuse alpha times `specular mult`.
-            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, gloss * uSpecular, vWorld);
+            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, glossLit, vWorld);
             if (uEmissive) colour += albedo * nm.a;
             if (uFogDistance > 0.0) colour = atmoApply(colour, uEye, vWorld);   // aerial perspective (AtmosphereShaders)
             fragColour = vec4(colour, 1.0);

@@ -798,7 +798,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
 
     sealed record FoliageMaterial(WorldTexture? Diffuse, WorldTexture? Normal, WorldTexture? Diffuse2, WorldTexture? Normal2,
-        float AlphaThreshold, bool DoubleSided, bool Triplanar, Vector2 Tile, bool Emissive, float Specular);
+        float AlphaThreshold, bool DoubleSided, bool Triplanar, Vector2 Tile, bool Emissive, float Specular, uint Surface);
 
     MeshAsset AssetFor(FoliageMesh mesh)
     {
@@ -810,11 +810,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         bool dual = mode is 3 or 5;
         a.MainMaterial = new FoliageMaterial(textures.Get(mesh.Texture, false, deferred: true), textures.Get(mesh.Normal, false, deferred: true),
             dual ? textures.Get(mesh.Texture2, false, deferred: true) : null, dual ? textures.Get(mesh.Normal2, false, deferred: true) : null,
-            mode == 4 ? mesh.AlphaThreshold / 255f : 0, mode == 4, mode is 1 or 5, new Vector2(mesh.TileX, mesh.TileY), mode == 6, mesh.SpecularMult);
+            mode == 4 ? mesh.AlphaThreshold / 255f : 0, mode == 4, mode is 1 or 5, new Vector2(mesh.TileX, mesh.TileY), mode == 6, mesh.SpecularMult,
+            (mode is 1 or 5 ? MeshSurface.TriplanarDust : 0u) | (mode == 4 ? MeshSurface.Foliage : 0u));
         // The leaves: their own texture pair, transparent and double-sided, cut out at "leaves alpha threshold" / 255.
         if (mesh.LeavesMesh is not null)
             a.LeavesMaterial = new FoliageMaterial(textures.Get(mesh.LeavesTexture, false, deferred: true), textures.Get(mesh.LeavesNormal, false, deferred: true), null, null,
-                mesh.LeavesAlphaThreshold / 255f, true, false, Vector2.One, false, 0);
+                mesh.LeavesAlphaThreshold / 255f, true, false, Vector2.One, false, 0, MeshSurface.Foliage);
         string main = mesh.MeshPath, leaves = mesh.LeavesMesh ?? "";
         a.Job = BackgroundWork.Run(() => (Decode(main), leaves.Length > 0 ? Decode(leaves) : null));
         decoding.Add(a);
@@ -2064,7 +2065,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     // ---- meshes ----
 
     /// <summary>What a mesh draw sets besides its textures.</summary>
-    readonly record struct MaterialKey(bool Swizzled, bool HasDiffuse, bool Triplanar, float TileX, float TileY, int AlphaSource, float AlphaThreshold, bool Emissive, float Specular);
+    readonly record struct MaterialKey(bool Swizzled, bool HasDiffuse, bool Triplanar, float TileX, float TileY, int AlphaSource, float AlphaThreshold, bool Emissive, float Specular, uint Surface);
 
     struct MeshDraw
     {
@@ -2123,7 +2124,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // The cut-out mask is the normal map's alpha: sampled whenever the map exists (the lighting checks for tangents itself).
         bool cut = normal && m.AlphaThreshold > 0;
         var key = new MaterialKey(normal && m.Normal!.Swizzled, textured, textured && m.Triplanar, m.Tile.X, m.Tile.Y, cut ? 2 : 0,
-            cut ? m.AlphaThreshold : 0f, textured && normal && m.Emissive, textured ? m.Specular : 0.3f);
+            cut ? m.AlphaThreshold : 0f, textured && normal && m.Emissive, textured ? m.Specular : 0.3f, m.Surface);
         foreach (var gp in mesh.Parts)
         {
             int bits = (normal && options.NormalMaps || cut ? 1 : 0) | (dual && gp.HasColours ? 2 : 0) | (gp.HasColours ? 4 : 0);
@@ -2178,6 +2179,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             pc.AlphaThreshold = k.AlphaThreshold;
             pc.Emissive = k.Emissive ? 1u : 0u;
             pc.Specular = k.Specular;
+            pc.Spare = k.Surface;
             pc.HasNormal = (d.PartBits & 1) != 0 ? 1u : 0u;
             pc.HasDual = (d.PartBits & 2) != 0 ? 1u : 0u;
             pc.UseVertexColour = (d.PartBits & 4) != 0 ? 1u : 0u;

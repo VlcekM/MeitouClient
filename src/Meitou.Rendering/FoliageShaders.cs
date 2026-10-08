@@ -151,6 +151,15 @@ static class FoliageShaders
                 vec2 cuv = (vWorld.xz - uColourBounds.xy) / (uColourBounds.zw - uColourBounds.xy);
                 albedo *= texture(uColourMap, cuv).rgb;
             }
+            // The weather's wetness (foliage.hlsl: gloss 0, then makeWet with the absorbance 0.9; the gloss is written × 0.6).
+            float grassGloss = 0.0;
+            if (uWeatherWet.x > 0.0)
+            {
+                vec4 wetSurface = vec4(albedo, 0.0);
+                makeWet(wetSurface, uWeatherWet.x, 0.9, -1.0e4, 0.5);
+                albedo = wetSurface.rgb;
+                grassGloss = wetSurface.a * 0.6;
+            }
             // Lit as the shared mesh shader lights a surface facing straight up (foliage.hlsl writes the normal (0, 1, 0)).
             vec3 l = normalize(uLightDir);
             float diff = max(l.y, 0.0);
@@ -159,7 +168,7 @@ static class FoliageShaders
             vec3 colour = albedo * (ambient + diff * sunLight);
             // World view, game sky: the game's deferred lighting of what foliage.hlsl writes for grass: normal straight up, gloss 0 (grass_fs zeroes the
             // diffuse alpha before writing it × 0.6; only rain would raise it).
-            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, vec3(0.0, 1.0, 0.0), normalize(uEye - vWorld), 0.0, vWorld);
+            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, vec3(0.0, 1.0, 0.0), normalize(uEye - vWorld), grassGloss, vWorld);
             colour = colour * vHazeMul + vHazeAdd;
             fragColour = vec4(colour, coverage);
         }

@@ -135,8 +135,6 @@ public sealed unsafe class SkyRenderer : IDisposable
             float night;
             vec3 col = atmoSky(dir, night);
             float aboveHorizon = smoothstep(-0.02, 0.06, dir.y);
-            // Weather fog hides the sky near the horizon too (the terrain beyond its far distance is plain fog colour).
-            if (uAtmoFog.z > 0.5) col = mix(col, uAtmoFogColour, 1.0 - smoothstep(0.0, 0.45, dir.y));
 
             // Stars: SkyX_Starfield.dds (SkyX's HDR form: nightmult · texture · (0.35 + saturate(−sunY · 0.45)) · 2), laid over the upper
             // hemisphere stereographically and turning with the night (the dome's own UV layout is not reproduced).
@@ -173,11 +171,13 @@ public sealed unsafe class SkyRenderer : IDisposable
                 float band = clamp(10.0 * clamp(d.y - {{F(CloudLayer.DistanceAttenuation)}}, 0.0, 1.0), 0.0, 1.0);
                 density += band;
                 pixel *= 1.0 - clamp(density, 0.0, 1.0) * uCloudLight.a;
+                // Below d.y = 0.05 the alpha is the uniform horizon value, but the colour above still followed the texture lookups, whose uv runs to hundreds of units
+                // there (height / d.y): minified to a few texels they sparkle (a row of white ticks along the horizon). The colour gives way to the plain
+                // density-0 value below d.y = 0.05 (from 0.01 up; above 0.05 the layer is untouched).
+                pixel = mix(uCloudLight.rgb + uCloudSun.rgb, pixel, clamp((d.y - 0.01) / 0.04, 0.0, 1.0));
                 float alpha = density * clamp(1.0 - tile + o, 0.0, 1.0);
                 alpha = mix(o + 0.5, alpha, band);
-                // The viewer's weather fog hides the sky near the horizon (above); the clouds fade out with it, as they did before.
-                float fogKeep = uAtmoFog.z > 0.5 ? smoothstep(0.0, 0.45, dir.y) : 1.0;
-                col = mix(col, clamp(pixel, 0.0, 1.0) * sqrt(SKYX_EXPOSURE), clamp(alpha, 0.0, 1.0) * fogKeep);
+                col = mix(col, clamp(pixel, 0.0, 1.0) * sqrt(SKYX_EXPOSURE), clamp(alpha, 0.0, 1.0));
             }
             // Moon: SkyX_Moon.png on a disc opposite the sun (always full; SkyX_Moon.hlsl saturates its colour and blends by alpha).
             float md = dot(dir, uMoonDir);
@@ -187,6 +187,15 @@ public sealed unsafe class SkyRenderer : IDisposable
                 vec4 m = texture(uMoon, vec2(p.x, -p.y) * 0.195 + 0.5);
                 if (abs(p.x) < 2.6 && abs(p.y) < 2.6)
                     col = mix(col, clamp(m.rgb, 0.0, 1.0), m.a * night * aboveHorizon * smoothstep(0.0, 0.1, uMoonDir.y));
+            }
+            // The game's fog pass runs over the sky too (post/fog.hlsl atmosphere_fog_fs): a pixel with no geometry has distance = farClip, its atmosphere term is
+            // dropped and the weather's term alone remains, alpha = ease-in-out(saturate(farClip / fog distance)) x fogColour.a, colour = fog colour x sunColour.w
+            // (uAtmoFogColour). So a weather whose fog completes before the far clip (dust storms 25000, Ashlands 35000, farClip 50000) replaces the whole sky with a flat fog colour.
+            if (uAtmoFog.z > 0.0 && uAtmoHaze.w > 0.0)
+            {
+                float amount = clamp(uAtmoFog.w * uAtmoHaze.w, 0.0, 1.0);
+                float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
+                col = mix(col, uAtmoFogColour, curve);
             }
             fragColour = vec4(col, 1.0);
         }
@@ -272,6 +281,11 @@ public sealed unsafe class SkyRenderer : IDisposable
     public float CloudDensity => Math.Clamp(CloudCoverage ?? CloudDensityInput ?? Weather.CloudDensity, 0, 1);
     /// <summary>The sky colour multiplier in use.</summary>
     public Vector3 SkyColourMultiplier => SkyColourMultiplierInput ?? Weather.SkyColourMultiplier;
+    /// <summary>
+    /// The weather fog the weather system gives (the camera's blend over up to four regions, <see cref="Meitou.Data.World.WeatherState"/>): the weight 0..1 (the game's
+    /// <c>fogColour.a</c>), the colour and the distance where it is complete; null takes the forced <see cref="Weather"/> record's.
+    /// </summary>
+    public (float Weight, Vector3 Colour, float Distance)? FogInput { get; set; }
 
     (double X, double Z) cloudOffset;
     readonly Stopwatch cloudClock = new();
@@ -420,7 +434,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             var sunLight = KenshiLighting.SunLight(sun);
             var lightDir = KenshiLighting.LightDirection(sun);
             float env = KenshiLighting.EnvironmentFactor(lightDir);
-            var tint = SkyColourMultiplier;
+            var tint = Vector3.One;   // the game tints only the cloud light (zenithLight, below), never the skydome (docs/formats/sky.md)
             var zenith = SkyXModel.Colour(Vector3.UnitY, sun) * tint;
             var flat = new Vector2(sun.X, sun.Z);
             flat = flat.LengthSquared() > 1e-8f ? Vector2.Normalize(flat) : Vector2.UnitX;
@@ -434,7 +448,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             state = new State
             {
                 Sun = sun, SunLight = sunLight, LightDirection = lightDir, Environment = env, FogDistance = fogDistance,
-                CloudSun = KenshiLighting.SunColour(sun), CloudZenith = CloudLayer.ZenithLight(sun, tint),
+                CloudSun = KenshiLighting.SunColour(sun), CloudZenith = CloudLayer.ZenithLight(sun, SkyColourMultiplier),
                 MinLuminance = KenshiLighting.MinLuminance(sun.Y, Exposure.Min, Exposure.NightDarkness),
                 Colours = new SkyColours(sun, zenith, horizon, sunRadiance, twilight),
                 Light = new WorldLighting(lightDir, sunRadiance, ambientSky, ambientGround, horizon, fogDistance), Valid = true,
@@ -458,10 +472,13 @@ public sealed unsafe class SkyRenderer : IDisposable
     {
         var s = state;
         var tau = SkyAtmosphere.RayleighZenithDepth;
-        var tint = SkyColourMultiplier;
+        var tint = Vector3.One;   // uAtmoTint: the skydome is not tinted in the game
         var w = Weather;
+        // The fog the weather system gives (weight, colour, distance), else the forced record's (on or off, complete at fog distance max).
+        var (fogWeight, fogRgb, fogDistance) = FogInput ?? (w.FogEnabled ? 1f : 0f, w.FogColour, w.FogMax);
+        float fogStart = FogInput is null ? w.FogMin : (w.FogMax > 0 ? fogDistance * w.FogMin / w.FogMax : 0f);
         // The weather fog's colour times sunColour.w, the daylight scale (the game's global fog term).
-        var fog = w.FogColour * (Physical ? KenshiLighting.Daylight(s.Sun.Y) : 1f);
+        var fog = fogRgb * (Physical ? KenshiLighting.Daylight(s.Sun.Y) : 1f);
         var hc = s.Colours.Horizon;
         float hazeStart = HazeDistance * Meitou.Data.World.KenshiHaze.StartFraction;
         float hazeEnd = MathF.Min(HazeDistance, HazeDistance * Meitou.Data.World.KenshiHaze.EndFraction);
@@ -473,11 +490,11 @@ public sealed unsafe class SkyRenderer : IDisposable
             new Vector4(s.LightDirection.X, s.LightDirection.Y, s.LightDirection.Z, s.Environment),
             new Vector3(s.SunLight.X, s.SunLight.Y, s.SunLight.Z),
             new Vector3(tint.X, tint.Y, tint.Z),
-            new Vector4(w.FogMin, w.FogMax, w.FogEnabled ? 1f : 0f, 0),
+            new Vector4(fogStart, fogDistance, fogWeight, HazeDistance),   // w: the far clip D, the distance of a pixel with no geometry (the sky)
             new Vector3(fog.X, fog.Y, fog.Z),
             new Vector4(hc.X, hc.Y, hc.Z, MathF.Max(s.FogDistance, 1)),
             // The weather fog is complete at a distance between `fog distance min` and `max` by the wind; the viewer has no wind and takes max.
-            new Vector4(KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, w.FogEnabled && w.FogMax > 1 ? 1f / w.FogMax : 0f),
+            new Vector4(KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, fogWeight > 0 && fogDistance > 1 ? 1f / fogDistance : 0f),
             new Vector4(cloud.X, cloud.Y, cloud.Z, pull),
             new Vector4(KenshiHaze ? AltitudeWeight : 1f, MathF.Max(HazeStrength, 0), AltitudeWeight, 0),
             new Vector4(irradianceCube is not null ? 1f : 0f, specularCube is not null ? 1f : 0f, ambientMap is not null ? 1f : 0f, AmbientMap.HalfWorld));

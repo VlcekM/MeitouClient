@@ -44,7 +44,7 @@ static int Usage()
                            gather and build a zone's navmesh, write debug files; --fingerprint prints SHA-256 of the cache files of The Hub (or --zone) and the Hub path points
         meitou-tools particles [effects]  read every ParticleUniverse script and particle material and count what they use; "effects" lists the EFFECT records with their systems
         meitou-tools world         read the heightmap, zone/level files and features.dat and cross-check them
-        meitou-tools weather [--region name | --at x,z] [--days d0 d1] [--seed n] [--list]  print a region's season and weather timeline (--list: the regions and their calendars)
+        meitou-tools weather [--region name | --at x,z] [--days d0 d1] [--seed n] [--list] [--cells]  print a region's season and weather timeline (--list: the regions and their calendars)
         meitou-tools image-diff <a.png> <b.png> [diff.png]  compare two screenshots: mean difference, share of pixels over 12/255
         meitou-tools draw-log-diff <a> <b> [--keep-handles]  compare two MEITOU_DRAW_LOG files draw by draw (handles renamed by first use)
         meitou-tools world-map <png> [step]  render a top-down world map (every step-th height sample, default 16)

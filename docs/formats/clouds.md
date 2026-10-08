@@ -164,9 +164,8 @@ coverage table is recomputed from the shipped textures and must match the one ab
   - *Mipmaps*: the game's DDS files have no mip chain, so its layer aliases towards the horizon; the viewer samples `Clouds.dds`,
     `CloudsNormal.dds` and `CloudsTile.dds` with a generated mip chain (bilinear, repeat), which averages the squeezed detail instead.
     Above the 8.6 degree band the pattern is the game's; below 15 degrees it is smoother than the game's.
-  - *Weather fog*: the viewer's own fog on the sky (`sky.md`, "the sky near the horizon fades to the fog colour", a viewer choice, the
-    game's sky is not fogged) also fades the clouds: their alpha is multiplied by the same `smoothstep(0, 0.45, d.y)`; without it
-    a c = 1 dust storm would draw a dark cloud wall above a light fog band.
+  - *Weather fog* (corrected 2026-10-08): the game's fog pass covers the sky too (`sky.md`, "Haze"), so a weather whose fog is complete
+    before the far clip hides the clouds entirely; the viewer's earlier elevation-based fade of the sky and clouds (a stand-in) is gone.
   - *The moon over the clouds*: the moon is drawn after the layer, as the task order says; whether SkyX's moon queue is above the
     cloud queue (6) stays Unknown, so a moon behind a full overcast shows as in a clear sky (a c = 1 night shows the moon through it).
   - *Sky colour multiplier*: it multiplies the whole sky in the viewer already (a stand-in, see [sky.md](sky.md)); the clouds take
@@ -174,6 +173,11 @@ coverage table is recomputed from the shipped textures and must match the one ab
 - **Seen** (`--world --town "The Hub" --pitch 15 --time 13 --size 1600x900`): "Clear Times SHORT hot 0.5" (c 0.1) one wisp;
   "light rain" (c 0.6) broken thin cloud with blue gaps; "Dust Storm Approach" (c 1) an overcast sky, the wall of fog hiding the clouds
   near the horizon; "light rain" at 19:00 the same layer in the warmer light.
+- **Horizon sparkle (fixed 2026-10-08, Observed)**: with `--weather "light rain"` a row of small white ticks ran along the horizon line. It was the cloud
+  pass (gone with `--clouds 0`, absent on a build without the pass): below `d.y` 0.05 the alpha is the uniform horizon value, but the colour still followed
+  the texture lookups, whose uv is `height · xz / d.y`, hundreds of units at `d.y` 0.0005 to 0.01, so the minified lookups sparkle. Now the cloud colour
+  fades to the plain density-0 value from `d.y` 0.05 down to 0.01 (above 0.05 the layer is untouched). A viewer choice; the game's SkyX shader has no such fade.
+  The weather system now drives the layer (`--weather auto`): see [weather.md](weather.md#in-the-viewer-and-the-game-step-3).
 
 ## Unknowns
 

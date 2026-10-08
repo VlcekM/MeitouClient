@@ -123,7 +123,7 @@ internal sealed class ImpostorPreview : IDisposable
                 Diffuse2 = dual ? Index(diffuse2Key) : stand, Normal2 = dual && normal2Key != 0 ? Index(normal2Key) : stand,
                 NormalSwizzled = normal && m.Normal!.Swizzled ? 1u : 0u, HasDiffuse = textured ? 1u : 0u, Triplanar = textured && s.Triplanar ? 1u : 0u,
                 Tile = s.Tile, AlphaSource = cut ? 2 : 0, AlphaThreshold = cut ? s.AlphaThreshold : 0f, Specular = textured ? s.Specular : 0.3f,
-                HasNormal = normal || cut ? 1u : 0u, Coverage = coverage ? 1u : 0u,
+                HasNormal = normal || cut ? 1u : 0u, Coverage = coverage ? 1u : 0u, Spare = MeshSurface.NoWeather,
             };
             var state = MeshState with { Cull = s.DoubleSided ? CullModeFlags.None : CullModeFlags.BackBit, AlphaToCoverage = coverage };
             cmd.SetRaster(state.Cull, state.Front);

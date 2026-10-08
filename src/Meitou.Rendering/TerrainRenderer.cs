@@ -697,6 +697,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         g.PublishUniform("uFineCells", () => new Vector2(fine.Columns - 1f, fine.Rows - 1f));
         g.PublishUniform("uFineBand", () => fineBand);
         g.PublishUniform("uHasFine", () => 1);
+        // The whole-world ground colour: the weather's dust takes its colour from it (docs/formats/weather.md "Dust").
+        g.Publish("uWeatherGround", () => textures?.Textures.Ground is { } ground ? ground.Sampled() : default);
     }
 
     /// <summary>

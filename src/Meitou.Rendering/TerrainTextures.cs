@@ -464,6 +464,8 @@ public sealed unsafe class TerrainTextures : IDisposable
             bt.SlopeMin, bt.SlopeMax, bt.SlopeBlend, bt.OverlayMult,
             new(bt.GroundColour, bt.FadeDistance > 0 ? 1 / bt.FadeDistance : 0),
             new(k, bt.DistortAmplitude * 0.01f, 0, 0),
+            new(bt.Absorbance[0], bt.Absorbance[1], bt.Absorbance[2], bt.Absorbance[3]),   // base, slope, cliff, grass
+            new(bt.Absorbance[4], bt.Absorbance[5], 0, 0),                                 // dirt, road
         ];
         var data = new float[row.Length * 4];
         for (int i = 0; i < row.Length; i++) (data[i * 4], data[i * 4 + 1], data[i * 4 + 2], data[i * 4 + 3]) = (row[i].X, row[i].Y, row[i].Z, row[i].W);

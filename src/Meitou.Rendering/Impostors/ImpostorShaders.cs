@@ -393,6 +393,16 @@ public static class ImpostorShaders
             float gloss = uImpostorGloss;
             if (uImpostorDebug == 1) { fragColour = vec4(s.albedo, 1.0); return; }
             if (uImpostorDebug == 2) { fragColour = vec4(n * 0.5 + 0.5, 1.0); return; }
+            // The weather's wetness (the atlas is baked dry): the far tree's absorbance is the foliage shader's 0.9 (a rock's, RockFragmentNative: the terrain's rule).
+            vec3 albedo = s.albedo;
+            if (uWeatherWet.x > 0.0)
+            {
+                float absorbance = 0.9;
+                vec4 wetSurface = vec4(albedo, gloss);
+                makeWet(wetSurface, uWeatherWet.x, absorbance, -1.0e4, 0.5);
+                albedo = wetSurface.rgb;
+                gloss = wetSurface.a;
+            }
             // The mesh shader's lighting (Shaders.MeshFragment), from the same inputs.
             vec3 l = normalize(uLightDir);
             vec3 v = normalize(uEye - world);
@@ -402,8 +412,8 @@ public static class ImpostorShaders
             vec3 h = normalize(l + v);
             float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.5;
             vec3 sunLight = vec3(1.0, 0.97, 0.92);
-            vec3 colour = s.albedo * (ambient + diff * sunLight) + spec * diff * sunLight;
-            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(s.albedo, n, v, gloss, world);
+            vec3 colour = albedo * (ambient + diff * sunLight) + spec * diff * sunLight;
+            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, gloss, world);
             if (uFogDistance > 0.0) colour = atmoApply(colour, uEye, world);
             fragColour = vec4(colour, coverage);
         }
@@ -596,6 +606,8 @@ public static class ImpostorShaders
                 }
             }
             """);
+        // The terrain's wetness rule: 1 - gloss plus the layers' absorbance (a mean of the base game's biomes, Observed: the atlas holds no biome).
+        f = Replace(f, @"float\s+absorbance\s*=\s*0\.9\s*;", "float absorbance = 1.0 - gloss + 0.4;");
         return NativeShaders.Port(f, NativeShaders.Map(RockNativeMap), RockPushMembers);
     }
 

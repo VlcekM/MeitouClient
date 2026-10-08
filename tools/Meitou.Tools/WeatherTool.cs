@@ -15,7 +15,7 @@ static class WeatherTool
         string? regionName = null;
         (float X, float Z)? at = null;
         int from = 0, to = 100, seed = 1;
-        bool list = false, extents = false;
+        bool list = false, extents = false, cells = false;
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -29,6 +29,7 @@ static class WeatherTool
                 case "--seed" when i + 1 < args.Length: seed = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--list": list = true; break;
                 case "--extents": extents = true; break;
+                case "--cells": cells = true; break;
                 default:
                     Console.Error.WriteLine($"Unknown or incomplete option {args[i]}.");
                     return 2;
@@ -42,15 +43,15 @@ static class WeatherTool
         if (extents)
         {
             // Each region's cells: how many, the bounding box and the cell nearest the mean in world units (for placing a camera in a region).
-            var cells = new Dictionary<string, List<(int X, int Z)>>();
+            var byRegion = new Dictionary<string, List<(int X, int Z)>>();
             for (int cz = 0; cz < WeatherAreas.Cells; cz++)
                 for (int cx = 0; cx < WeatherAreas.Cells; cx++)
                 {
                     var r = areas.RegionOf(data, cx, cz);
-                    if (!cells.TryGetValue(r.Name, out var l)) cells[r.Name] = l = [];
+                    if (!byRegion.TryGetValue(r.Name, out var l)) byRegion[r.Name] = l = [];
                     l.Add((cx, cz));
                 }
-            foreach (var (name, l) in cells.OrderByDescending(c => c.Value.Count))
+            foreach (var (name, l) in byRegion.OrderByDescending(c => c.Value.Count))
             {
                 float mx = (float)l.Average(c => c.X), mz = (float)l.Average(c => c.Z);
                 var nearest = l.OrderBy(c => (c.X - mx) * (c.X - mx) + (c.Z - mz) * (c.Z - mz)).First();
@@ -71,6 +72,15 @@ static class WeatherTool
         {
             Console.Error.WriteLine("Give --region <name> or --at x,z (see --list).");
             return 2;
+        }
+        if (cells)
+        {
+            // Where the region is: the centre of each of its 4608-unit cells, for placing the viewer (--at x,z).
+            for (int cz = 0; cz < WeatherAreas.Cells; cz++)
+                for (int cx = 0; cx < WeatherAreas.Cells; cx++)
+                    if (areas.RegionOf(data, cx, cz) == region)
+                        Console.WriteLine($"cell {cx},{cz}  centre {(cx - WeatherAreas.Origin + 0.5f) * WeatherAreas.CellSize:0},{(cz - WeatherAreas.Origin + 0.5f) * WeatherAreas.CellSize:0}");
+            return 0;
         }
         Console.WriteLine($"Region {region.Name}, seed {seed}, days {from}..{to}");
         foreach (var s in region.Seasons)
