@@ -735,3 +735,58 @@ only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. MSAA was removed:
 - **Limits**: SSAO sees only the near
   depth slice and has no normal buffer (curved surfaces show faint banding, thin objects can halo); the auto exposure measures a
   scene without shadows, so its mean runs higher and its exposure lower than the game's in sunlit views; colour LUTs and depth of field are not implemented (the game has neither).
+
+### Benchmark harness
+
+One run answers "what does switch X cost or save, and does it change the picture" on a fixed camera, with numbers that can be trusted on a
+shared GPU (2026-10-09; `WorldApp.Bench.cs`, `src/Meitou.Rendering/Bench/`, `BenchHarnessTests`). The runs are offscreen, as `--screenshot`:
+the world loads (cold start, about 35 s), settles as the screenshot path does, then the harness draws frames, one at a time, each waited for.
+
+```
+meitou-viewer --view swamp --ab shadows --ab-period 64 --bench-frames 600     # A/B of one switch
+meitou-viewer --view dust --ab particles                                      # per-frame alternation (the default period 1)
+meitou-viewer --view swamp --bench-motion turn --bench-frames 600             # one configuration, camera turning
+meitou-viewer --view hub --bench-frames 600 --bench-out master.json           # run each build, then:
+meitou-viewer --bench-compare master.json perf.json
+```
+
+- **Named views** (`--view <name>`, `NamedViews.Table`, the one table; expanded in place into options, so options after it override it):
+  `swamp` = `--world --town Shark --radius 2 --distance 3000 --pitch 10 --yaw 300 --time 12`; `swamp-rain` = the same with
+  `--weather "swamp rain no wind"` (the swamp's rain weather, [formats/weather.md](formats/weather.md); with the default seed 1 the scheduler
+  already picks that weather at day 0 in `swamp`, so the two currently draw the same, and `swamp-rain` is the one that stays rainy if the scheduler
+  changes); `dust` = `--world --town Heft --radius 2 --distance 3000 --pitch 10 --yaw 300 --weather "Dust Storm Approach" --time 12`;
+  `hub` = `--world --town "The Hub" --radius 2 --distance 9000 --pitch 10 --yaw 300`. Size and upscaler are the usual options (`--size`, default 1280x960; `--upscaler`).
+- **A/B** (`--ab <name>`, `--bench-frames <n>` total measured frames over both sides, default 600): side A is Meitou / on, side B Faithful / off.
+  The registry `AbToggles` (`Register(name, get, set)`; `--ab` with an unknown name lists them) holds the Faithful / Meitou switches under their ids (`ao`, `dither`, `haze`,
+  `aa`, `shadows`, `range`, `impostors`, `reach`, `water`, `particles`, `lod`; `aa` reallocates the targets, so it is for long periods only), and `occlusion`
+  (the Hi-Z foliage cull), `fog-cull`, `fog-volumes`, `shadow-pass`, `foliage-draw`, `objects-draw`, `water-draw`, `reflections`. A new switch that can flip at run time is one `Register` call.
+  Sides alternate every frame, or every `--ab-period k` frames; with k > 1 the first `--ab-drop n` frames after each switch (default min(k/4, 16)) are left out.
+  **A feature with history needs a period longer than its history**: the Meitou shadows' cached cascades redraw on a schedule of up to 64 frames, so `--ab shadows` needs
+  `--ab-period 64` or more (at period 1 each side sees the other's cache state). Before the numbers count, both sides run four warm-up blocks (pipelines, caches).
+  The old measurement env vars still work (`MEITOU_OCC_ALT`, `MEITOU_LOD_ALT`, `MEITOU_SHADOW_CADENCE`, and the fly benchmark's `MEITOU_FLY_TURN`, `MEITOU_BENCH_ORBIT`); `--ab occlusion`, `--ab lod`
+  and `--bench-motion turn|orbit` do the same without them (`MEITOU_SHADOW_CADENCE` sets the schedule being measured, not a side, so it stays).
+- **Output**: a table per kind and `--bench-out <file>` JSON (default `%TEMP%\meitou-bench-<view>-<ab|single>-<time>.json`): frame wall time, GPU ms per stage (timestamps,
+  `FrameProfiler.OnGpuFrame`, read a few frames late and matched to their frame by a tag) with `other` and `total`, the post-processing sections (`PostProcess.OnCost`), and the render thread's ms per stage
+  (`cpu:*`; `gpu-wait` is the wait for the GPU, not work, and is left out of `cpu:total`; recording jobs on other threads are not in it), each with mean, median, p95, p99, max for each side. A/B adds the
+  difference A - B with its 95% interval: frames are grouped in blocks (one frame at period 1), each A block's mean is paired with the next B block's, and the interval is 1.96 standard errors of those pair
+  differences, so slow drifts of a shared GPU cancel; `*` marks an interval that excludes zero with a difference of at least 0.005 ms; `med` is the median of the pair differences. Also per side the main view's
+  counts per frame (terrain, objects incl. the reflection pass, foliage triangles and draws, grass blades, characters), taken in 36 extra frames after the timing so the read-backs cost nothing there. Metadata: view, command line,
+  `git describe` (`-dirty` when the tree has changes), GPU name, resolution, upscaler and render scale, motion, `MEITOU_*` variables set.
+- **One configuration** (`--bench-frames` without `--ab`): the same JSON with side A only; `--bench-compare a.json b.json` prints the first side of each next to each other with B - A and an interval from the spreads
+  (frames treated as independent, so it is optimistic against drift; it warns when the view, resolution, upscaler, motion or GPU differ). For master against a branch, run each build with the same options.
+- **Picture** (A/B): after the timing, one still of each side from the start camera with the frame clock frozen and the same number of frames drawn (at least 70) for each, so the upscaler's jitter phase and the
+  caches agree. Reported: pixels whose largest channel difference reaches 1, 4 and 12 of 255, the mean difference per channel and the maximum; `<out>-A.png`, `-B.png` and `-diff.png` (a heat map: black equal, blue at 1/255 through
+  cyan, yellow, red to white at 32/255 and over). Weather particles are not frozen exactly (rain streaks differ a little between the two stills), so for a pure picture comparison add `--no-particles`.
+- **Motion** (`--bench-motion still|orbit|fly|turn`, default still; `CameraMotion`, shared with `--fly-benchmark`): `orbit` turns round the target by `--bench-orbit` mouse pixels a frame (default 3, 0.005 rad each), `fly` flies the
+  circle of `--fly-radius` / `--fly-speed` per frame (streaming then loads while it is measured), `turn` rotates about the eye `--bench-turn` degrees a frame (default 0.5, the camera-rotation case for the shadows and the reflection).
+  The p95, p99 and max columns are what to read for spikes. The motion runs through the warm-up too, and the picture is taken back at the start camera.
+- **GPU lock**: while measuring (not while loading) a run holds `%TEMP%\meitou-gpu.lock` (the file is held open without write sharing and holds the PID, so a crashed holder frees it by itself; a PID left in
+  it is reported as a stale lock when the next run takes it over); other bench runs queue and print who they wait for; the wait is printed (`gpu-lock waited`) and kept in the JSON. `--no-gpu-lock` skips it. Programs that do not take the lock
+  (the interactive viewer, other tools) still disturb the numbers: keep them closed, or read the paired difference, which is built to survive that.
+- **Measured** (2026-10-09, RTX 4070, 1280x960, TAA, master e9dc2c7 plus the harness; each run took 51 s end to end including the cold load):
+  `--view swamp --ab shadows --ab-period 64`: GPU total 3.85 ms (Meitou) against 4.35 (CSM), -0.49 +-0.10; the shadows stage 0.30 against 1.07 ms; 74 445 pixels differ by 1/255 or more, 12 952 by 12 or more.
+  `--view dust --ab particles`: GPU total 3.05 ms (low resolution) against 40.1 ms (full size), -37.1 +-0.05; 14 534 pixels differ by 12 or more.
+  `--view swamp --bench-motion turn --bench-frames 600`: GPU total mean 4.19, p95 5.40, p99 6.25, max 6.35; frame wall time mean 6.81, p99 9.06.
+- **Known gaps**: a GPU stage's time is the gap between its timestamps, so work the driver defers lands in the stage after it (full-size particles show up as `upscale` in the post sections; the totals are right);
+  the picture diff is not exact with weather particles (above); each frame is waited for (like the non-pipelined fly benchmark), so a stall hidden by two frames in flight does not show; one view and one resolution per run;
+  `--ab` needs the switch to be flippable at run time without a reload (all listed ones are).

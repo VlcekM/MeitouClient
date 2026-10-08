@@ -34,6 +34,15 @@ static partial class WorldApp
             Console.WriteLine(WorldOptions.Usage);
             return 2;
         }
+        if (options.BenchCompare is { } compare)
+        {
+            try { BenchResult.Compare(compare.A, compare.B, Console.Out); return 0; }
+            catch (Exception e) when (e is IOException or System.Text.Json.JsonException or InvalidDataException)
+            {
+                Console.Error.WriteLine($"--bench-compare: {e.Message}");
+                return 2;
+            }
+        }
         var install = GameInstall.LocateOrAsk();
         if (install is null)
         {
@@ -51,7 +60,7 @@ static partial class WorldApp
             LandmarkClass.Survey(scene.Objects, assets, Console.Out);
             return 0;
         }
-        return options.Screenshot is not null || options.FlyBenchmark > 0 ? Screenshot(install, scene, assets, options) : Interactive(install, scene, assets, options);
+        return options.Screenshot is not null || options.FlyBenchmark > 0 || options.BenchFrames > 0 || options.Ab is not null ? Screenshot(install, scene, assets, options) : Interactive(install, scene, assets, options);
     }
 
     /// <summary>Streamline for DLSS, loaded before the Vulkan device when <c>--upscaler dlss</c> asks for it.</summary>
@@ -115,6 +124,7 @@ static partial class WorldApp
         gpu.Post!.Target = target;
         gpu.Post.InstantAdaptation = true;   // a still picture: the exposure settles at once
         Console.WriteLine($"post      {o.Post.Describe()}");
+        if (o.BenchFrames > 0 || o.Ab is not null) return Bench(display, gpu, scene, camera, render, o, w, h);
         if (o.FlyBenchmark > 0)
         {
             int flown = FlyBenchmark(display, gpu, scene, camera, render, o, w, h);

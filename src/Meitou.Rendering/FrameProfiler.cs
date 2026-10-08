@@ -46,9 +46,19 @@ public sealed class FrameProfiler : IDisposable
     readonly double[] slotCpuTotal = new double[Slots];
     readonly (QuerySlot Begin, QuerySlot PreEnd)[] slotStamps = new (QuerySlot, QuerySlot)[Slots];
     long frameCounter;
+    readonly long[] slotTag = new long[Slots];
     readonly List<double> medianScratch = new(History);
 
     public Mode Showing { get; set; }
+
+    /// <summary>The benchmark harness's frame number: copied at <see cref="BeginFrame"/> and handed back with the frame's GPU times by <see cref="OnGpuFrame"/>, which arrive a few frames later.</summary>
+    public long Tag { get; set; }
+
+    /// <summary>Called when a frame's GPU times have been read: its <see cref="Tag"/>, the ms per <see cref="StageClock"/> stage (do not keep the array), and the whole frame's GPU ms.</summary>
+    public Action<long, double[], double>? OnGpuFrame { get; set; }
+
+    /// <summary>Reads every GPU timing that is ready now (after the last frame of a run has been waited for).</summary>
+    public void Flush() { for (int s = 0; s < Slots; s++) Collect(s); }
 
     /// <summary>Frames whose GPU stage times have been read (at most <see cref="History"/>).</summary>
     public int GpuFrames => gpuCount;
@@ -80,6 +90,7 @@ public sealed class FrameProfiler : IDisposable
         slot = (slot + 1) % Slots;
         pending[slot] = false;   // still not ready after a full round: dropped
         stampCount[slot] = 0;
+        slotTag[slot] = Tag;
         StageClock.Start();
         StageClock.Profiler = this;
         Stamp(-1);
@@ -219,6 +230,7 @@ public sealed class FrameProfiler : IDisposable
         for (int k = 0; k < Stages; k++) gpu[k][gpuHead] = (float)gpuFrame[k];
         gpu[Other][gpuHead] = (float)(total - sum);
         gpu[Total][gpuHead] = (float)total;
+        OnGpuFrame?.Invoke(slotTag[s], gpuFrame, total);
         if (SpikeLog.Enabled && slotFrame[s] > SpikeLog.SkipFrames)
         {
             for (int k = 0; k < Stages; k++) runGpu[k].Add((float)gpuFrame[k]);

@@ -114,6 +114,19 @@ sealed class WorldOptions
     public float FlyRadius = 12000, FlySpeed = 150;
     /// <summary>The benchmark without a wait for the GPU each frame and without the 60 fps pacing: up to two frames in flight (both backends), frame time = the interval between frames.</summary>
     public bool FlyPipelined;
+    /// <summary>
+    /// The benchmark harness (docs/viewer.md "Benchmark harness"): <c>--view</c> the named view, <c>--ab</c> the switch to alternate (<see cref="AbToggles"/>) with
+    /// <c>--ab-period</c> frames per side, <c>--bench-frames</c> measured frames (default 600 with <c>--ab</c>), <c>--bench-out</c> the JSON, <c>--bench-motion</c>
+    /// still / orbit / fly / turn, <c>--no-gpu-lock</c>, <c>--bench-compare</c> two JSON files.
+    /// </summary>
+    public string? View, Ab, BenchOut;
+    public int AbPeriod = 1, BenchFrames;
+    public int? AbDrop;
+    public string BenchMotion = "still";
+    /// <summary><c>--bench-turn</c> degrees a frame of the turn motion, <c>--bench-orbit</c> pixels of mouse drag a frame of the orbit motion.</summary>
+    public float BenchTurn = 0.5f, BenchOrbit = 3;
+    public bool NoGpuLock;
+    public (string A, string B)? BenchCompare;
     /// <summary>Offscreen pictures: radians the camera orbits by every frame (tests the motion vectors under a temporal upscaler).</summary>
     public float OrbitStep;
     /// <summary>Interactive window: the monitor it opens on (1-based; <c>--monitor</c>).</summary>
@@ -189,6 +202,13 @@ sealed class WorldOptions
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
                                    percentiles, the worst frames with their stage times and resident memory   --fly-radius <u> (12000)   --fly-speed <u per frame> (150)
                                    --fly-pipelined: no GPU wait per frame and no pacing, two frames in flight; reports the interval between frames
+          --view <name>            a named camera/world/weather (swamp, swamp-rain, dust, hub): options after it override its own
+          --bench-frames <n>       offscreen: measure n frames after warm-up and write per-stage statistics as JSON (--bench-out, default in %TEMP%)
+          --ab <name>              with it: alternate side A (Meitou, on) and side B (Faithful, off) of a switch (ao, shadows, lod, particles, ... or occlusion, fog-cull), per frame
+                                   or --ab-period <k> frames (--ab-drop <n> frames dropped after each switch), then compare one still picture of each
+          --bench-motion <m>       still (default), orbit (--bench-orbit px a frame), fly (--fly-radius, --fly-speed) or turn in place (--bench-turn degrees a frame)
+          --no-gpu-lock            do not queue on %TEMP%\meitou-gpu.lock while measuring
+          --bench-compare <a.json> <b.json>   print two bench results side by side and exit
           --crowd <n> [--crowd-seed <s>] [--crowd-time <s>]   place n generated characters of the start town round the start point (the character renderer's test; stills pose them at --crowd-time, default 0.35)
           --orbit-step <degrees>   with --screenshot: the camera orbits this much every frame (checks the upscaler's motion vectors)
           --sway-step <seconds>    with --screenshot: the grass sway advances this much every frame (checks the grass motion)
@@ -226,6 +246,9 @@ sealed class WorldOptions
     public static WorldOptions? Parse(string[] args)
     {
         var o = new WorldOptions();
+        int viewAt = Array.LastIndexOf(args, "--view");
+        if (viewAt >= 0 && viewAt + 1 < args.Length) o.View = args[viewAt + 1];
+        args = NamedViews.Expand(args);   // --view <name> becomes its options, in place: the ones after it win
         for (int i = 0; i < args.Length; i++)
         {
             string a = args[i];
@@ -326,6 +349,16 @@ sealed class WorldOptions
                 case "--fly-radius": o.FlyRadius = F(); break;
                 case "--fly-speed": o.FlySpeed = F(); break;
                 case "--fly-pipelined": o.FlyPipelined = true; break;
+                case "--ab": o.Ab = Next(); break;
+                case "--ab-period": o.AbPeriod = Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1); break;
+                case "--ab-drop": o.AbDrop = Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 0); break;
+                case "--bench-frames": o.BenchFrames = Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1); break;
+                case "--bench-out": o.BenchOut = Next(); break;
+                case "--bench-motion": o.BenchMotion = Next() is var motion && motion is "still" or "orbit" or "fly" or "turn" ? motion : throw new ArgumentException("--bench-motion: still, orbit, fly or turn"); break;
+                case "--bench-turn": o.BenchTurn = F(); break;
+                case "--bench-orbit": o.BenchOrbit = F(); break;
+                case "--no-gpu-lock": o.NoGpuLock = true; break;
+                case "--bench-compare": o.BenchCompare = (Next(), Next()); break;
                 case "--log-spikes": SpikeLog.Enabled = true; break;
                 case "--orbit-step": o.OrbitStep = F() * MathF.PI / 180; break;
                 case "--monitor": o.Monitor = int.Parse(Next(), CultureInfo.InvariantCulture); break;

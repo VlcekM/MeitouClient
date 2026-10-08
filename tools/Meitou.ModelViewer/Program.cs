@@ -8,7 +8,7 @@ System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureIn
 args = SmokeTest.Strip(args);
 // Started without options (a double-click on the release's exe): the world at The Hub.
 if (args.Length == 0) args = ["--world", "--town", "The Hub"];
-if (args.Contains("--world")) return WorldApp.Run(args);
+if (args.Contains("--world") || args.Contains("--view") || args.Contains("--bench-compare")) return WorldApp.Run(args);
 if (args.Contains("--impostor-preview") || args.Contains("--impostor-bake-all")) return ImpostorApp.Run(args);
 // The mesh and character viewers were removed in phase 8 (DECISIONS 23; docs/character-viewer.md, the tag model-viewer-last has them).
 Console.WriteLine("meitou-viewer --world [options]   (meitou-viewer --world --help lists the options)");

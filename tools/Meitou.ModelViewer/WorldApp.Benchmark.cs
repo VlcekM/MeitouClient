@@ -28,8 +28,6 @@ static partial class WorldApp
         var device = context.Device;
         ulong vramPeak = 0;
         float radius = Math.Max(o.FlyRadius, 1);
-        // Start at angle 0 on the circle's east point so the first frame is where the settled view was not: the flight starts by moving.
-        float angleStep = o.FlySpeed / radius;
         var times = new List<double>(o.FlyBenchmark);
         var cpu = new List<double>(o.FlyBenchmark);   // up to the end of the commands, before waiting for the GPU: the render thread's own work
         var worst = new List<(double Ms, int Frame, string Stages)>();
@@ -52,6 +50,7 @@ static partial class WorldApp
         var meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
         // MEITOU_BENCH_ORBIT=<pixels per frame>: the camera also turns round its target by this much a frame (0.005 rad per pixel), as a user dragging the view.
         float benchOrbit = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_BENCH_ORBIT"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float orbit) ? orbit : 0;
+        var motion = CameraMotion.Fly(o, camera, gpu, FlyTurn, benchOrbit);
         var spikeProfiler = SpikeLog.Enabled ? new FrameProfiler(context, () => context.GpuFrameMs) : null;   // --log-spikes: the stage times the spike lines print
         // Draw counts over the flight (docs/render-distance-benchmark.md): the objects' totals per kind, the main view's grass blades, foliage
         // instances and terrain triangles summed per frame, the foliage's indirect draws by view kind (MEITOU_FOLIAGE_TRIS=1).
@@ -62,11 +61,7 @@ static partial class WorldApp
         Console.WriteLine($"fly       {(pipelined ? "pipelined, " : "")}{o.FlyBenchmark} frames, circle radius {radius:0} units round {centre.X:0}, {centre.Z:0}, {o.FlySpeed:0} units per frame ({o.FlySpeed * 60:0} per second)");
         for (int i = 1; i <= o.FlyBenchmark; i++)
         {
-            float a = i * angleStep;
-            float x = centre.X + radius * (MathF.Cos(a) - 1), z = centre.Z + radius * MathF.Sin(a);
-            if (FlyTurn != 0) camera.Look(FlyTurn / 0.004f, 0);   // a pure turn about the eye (the circle's radius is ignored)
-            else camera.Target = new Vector3(x, gpu.Terrain.HeightAt(x, z), z);
-            if (benchOrbit != 0) camera.Orbit(benchOrbit, 0);
+            motion.Step(i);
             if (spikeProfiler is not null) { context.EnsureFrame(); spikeProfiler.BeginFrame(); } else StageClock.Start();
             frameWatch.Restart();
             // With weather particles the frame clock runs (1/60 s a frame, in the draw's time units of 600 s) so they simulate; without, it stays 0 as before.

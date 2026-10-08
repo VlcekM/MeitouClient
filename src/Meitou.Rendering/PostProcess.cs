@@ -243,6 +243,7 @@ public sealed unsafe class PostProcess : IDisposable
         public readonly string[] Names = new string[MaxStamps];
         public int Count;
         public long Frame;
+        public long Tag;
     }
     readonly Queue<StampSet> pendingStamps = new();
     readonly Stack<StampSet> freeStamps = new();
@@ -250,6 +251,10 @@ public sealed unsafe class PostProcess : IDisposable
     Action<CommandList>? stampWriter;
     QuerySlot written;
     readonly Dictionary<string, (double Sum, int Count)> costs = [];
+
+    /// <summary>The benchmark harness's frame number for the frame begun next; <see cref="OnCost"/> hands it back with each section's GPU ms once the frame's timestamps have been read.</summary>
+    public long CostTag { get; set; }
+    public Action<long, string, double>? OnCost { get; set; }
 
     /// <summary>What every pass draws with: what VkGl made of the GL state the chain set (no culling, depth test or write, bias or blending; all
     /// channels; filled; one sample).</summary>
@@ -394,6 +399,7 @@ public sealed unsafe class PostProcess : IDisposable
                     string name = set.Names[i];
                     costs.TryGetValue(name, out var c);
                     costs[name] = (c.Sum + (now - previous) / 1e6, c.Count + 1);
+                    OnCost?.Invoke(set.Tag, name, (now - previous) / 1e6);
                     previous = now;
                 }
             }
@@ -433,6 +439,7 @@ public sealed unsafe class PostProcess : IDisposable
         Collect();
         stamps = freeStamps.Count > 0 ? freeStamps.Pop() : new StampSet();
         stamps.Count = 0;
+        stamps.Tag = CostTag;
         haveNearSlice = farSliceDrawn = false;
         foreach (var l in lowTargets) l.Drawn = false;
         sceneMarked = false;
