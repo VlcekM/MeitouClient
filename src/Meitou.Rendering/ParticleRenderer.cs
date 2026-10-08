@@ -155,7 +155,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
     double lastSeconds = double.NaN;
     int drawnParticles, drawnUnits, activeUnits, drawnFog;
     Task? simulation;
-    long simulationTicks, waitTicks;
+    long simulationTicks, waitTicks, simulationTotal, waitTotal, simulationFrames;
+    /// <summary>Mean simulation and main-thread wait per simulated frame since the start (for the benchmarks).</summary>
+    public (double Simulation, double Wait) MeanMilliseconds => simulationFrames == 0 ? (0, 0) : (simulationTotal * 1000.0 / Stopwatch.Frequency / simulationFrames, waitTotal * 1000.0 / Stopwatch.Frequency / simulationFrames);
 
     public ParticleLibrary Library { get; }
     /// <summary>What the groups need of the world: the ground height, the area effects are placed in. The viewer fills it once; the scheduler's hookup can change <see cref="EffectWorld.Area"/> with the region.</summary>
@@ -276,6 +278,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// </summary>
     public void Update(double seconds, WorldCamera camera)
     {
+        long start = Stopwatch.GetTimestamp();
+        UpdateInner(seconds, camera);
+        updateTotal += Stopwatch.GetTimestamp() - start;
+        updateFrames++;
+    }
+
+    void UpdateInner(double seconds, WorldCamera camera)
+    {
         Sync();
         if (!Enabled || (groups.Count == 0 && placerGroups.Count == 0)) { lastSeconds = seconds; return; }
         float dt = double.IsNaN(lastSeconds) ? 0 : (float)Math.Clamp(seconds - lastSeconds, 0, 0.25);
@@ -305,7 +315,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
             {
                 if (!u.Active) continue;
                 activeUnits++;
-                if (u.Pending > 0) work.Add(u);
+                // Distant units step at a lower rate (the time queues up until a step is due): 20 Hz beyond 4000 units, 10 Hz beyond 9000
+                // (Observed choice for the cost; a particle moves about a pixel per step at that range).
+                float due = u.DistanceToCamera > 9000 ? 0.1f : u.DistanceToCamera > 4000 ? 0.05f : 0;
+                if (u.Pending > 0 && u.Pending >= due) work.Add(u);
             }
         if (work.Count == 0) { simulationTicks = 0; return; }
         // Heavier units first, so the pool's last task is a short one.
@@ -317,6 +330,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
             if (array.Length == 1) array[0].Advance();
             else Parallel.ForEach(array, u => u.Advance());
             simulationTicks = Stopwatch.GetTimestamp() - start;
+            Interlocked.Add(ref simulationTotal, simulationTicks);
+            Interlocked.Increment(ref simulationFrames);
         });
     }
 
@@ -342,6 +357,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         long start = Stopwatch.GetTimestamp();
         simulation.Wait();
         waitTicks = Stopwatch.GetTimestamp() - start;
+        waitTotal += waitTicks;
         simulation = null;
     }
 
@@ -353,6 +369,21 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// the scene is nearer than that plane; the others as usual, tested against the scene's depth. Units are drawn far to near.
     /// </summary>
     public void Draw(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection)
+    {
+        long start = Stopwatch.GetTimestamp();
+        DrawInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection);
+        drawTotal += Stopwatch.GetTimestamp() - start;
+        drawFrames++;
+    }
+
+    ParticleInstance[] scratch = new ParticleInstance[4096];
+    long drawTotal, drawFrames, updateTotal, updateFrames, collectTotal;
+    /// <summary>Mean per-frame cost of filling the instance buffers (inside Draw), in ms.</summary>
+    public double CollectMilliseconds => drawFrames == 0 ? 0 : collectTotal * 1000.0 / Stopwatch.Frequency / drawFrames;
+    /// <summary>Mean main-thread cost of Update and Draw (draw includes the wait for the simulation) per frame, in ms (for the benchmarks).</summary>
+    public (double Update, double Draw) MeanMainThreadMilliseconds => (updateFrames == 0 ? 0 : updateTotal * 1000.0 / Stopwatch.Frequency / updateFrames, drawFrames == 0 ? 0 : drawTotal * 1000.0 / Stopwatch.Frequency / drawFrames);
+
+    void DrawInner(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection)
     {
         Sync();
         drawnParticles = 0;
@@ -387,7 +418,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                         IsFog = true, FogCentre = u.Position + f.Offset - eye, FogRadius = f.Radius, FogDensity = Math.Max(f.Distance, 1), FogAlpha = f.Alpha * fade,
                         FogColour = f.Colour,
                     });
-            if (u.Simulation is not { } sim) continue;
+            if (u.Simulation is not { } sim || u.CatchingUp) continue;
             drawnUnits++;
             for (int t = 0; t < sim.Techniques.Count; t++)
             {
@@ -396,10 +427,16 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 if (n == 0 || !def.Enabled || !def.Renderer.IsBillboard) continue;
                 var material = Library.FindMaterial(def.Material);
                 if (material is null) continue;
-                var instances = constants.Allocate((ulong)(n * InstanceBytes), 16);
-                int written = sim.Collect(t, new Span<ParticleInstance>(instances.Pointer, n), u.Tint, u.Alpha, offset);
+                long collectStart = Stopwatch.GetTimestamp();
+                // Built in ordinary memory and copied over in one go: the frame constants are write-combined upload memory, where per-field
+                // writes and the partition's reads are slow (this was 5 ms for 18000 particles).
+                if (scratch.Length < n) scratch = new ParticleInstance[Math.Max(n, scratch.Length * 2)];
+                int written = sim.Collect(t, scratch.AsSpan(0, n), u.Tint, u.Alpha, offset);
                 if (written == 0) continue;
-                int close = PartitionByDepth(new Span<ParticleInstance>(instances.Pointer, written), forward, nearPlane);
+                int close = PartitionByDepth(scratch.AsSpan(0, written), forward, nearPlane);
+                var instances = constants.Allocate((ulong)(written * InstanceBytes), 16);
+                scratch.AsSpan(0, written).CopyTo(new Span<ParticleInstance>(instances.Pointer, written));
+                collectTotal += Stopwatch.GetTimestamp() - collectStart;
                 draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material, Texture = TextureFor(material) });
                 drawnParticles += written;
             }

@@ -201,15 +201,24 @@ public sealed class EffectUnit
         sim.EmissionStopped = Stopped;
         float left = Pending;
         Pending = 0;
+        // A backlog (a unit just woken, or a frame hitch) is caught up in coarser steps (1/10 s) and over several frames: at most MaxStepsPerFrame
+        // steps per call, the rest stays in Pending. Observed choice; the game simulates what it activates at once.
         const float substep = 1f / 30;
-        while (left > 1e-5f)
+        for (int steps = 0; left > 1e-5f; steps++)
         {
-            float s = Math.Min(left, substep);
+            if (steps >= MaxStepsPerFrame) { Pending = left; break; }
+            float s = Math.Min(left, left > 3f ? 0.1f : substep);
             left -= s;
             sim.Advance(s, Environment);
             ApplyWrap(sim);
         }
     }
+
+    /// <summary>Simulation steps one <see cref="Advance"/> call runs at most.</summary>
+    public const int MaxStepsPerFrame = 40;
+
+    /// <summary>True while the unit is still catching up on a backlog of more than a second (it is not drawn until it has).</summary>
+    public bool CatchingUp => Pending > 1f;
 
     void ApplyWrap(ParticleSimulation sim)
     {
@@ -267,9 +276,13 @@ public abstract class EffectGroup
     /// <summary>Runs every unit's queued time (the units are independent: in parallel when there are several).</summary>
     public void Simulate()
     {
-        var active = units.Where(u => u.Active && u.Pending > 0).ToArray();
-        if (active.Length > 1) Parallel.ForEach(active, u => u.Advance());
-        else foreach (var u in active) u.Advance();
+        while (true)
+        {
+            var active = units.Where(u => u.Active && u.Pending > 0).ToArray();
+            if (active.Length == 0) return;
+            if (active.Length > 1) Parallel.ForEach(active, u => u.Advance());
+            else foreach (var u in active) u.Advance();   // a backlog is run in full here (start-up), unlike the per-frame path
+        }
     }
 
     /// <summary>The emission multiplier from the wind: <c>min wind span rate</c> is the wind speed needed for any particles, <c>max wind span rate</c> for all of them.</summary>
