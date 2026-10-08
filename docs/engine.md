@@ -62,6 +62,30 @@ Dependencies point one way: Core ← Data ← Engine / Rendering ← Game / view
   `tickRate` (the control tick), `simThreads`, `graphics` (the Tab panel's sliders by label) and `bindings` (action → comma-separated keys, e.g.
   `"RotateLeft": "Q,Left"`, buttons as `Mouse:Right`). Written on exit.
 
+## The game host (`src/Meitou.Game`)
+
+Code layout (engine choices; behaviour is the game loop above):
+
+| File | Holds |
+| --- | --- |
+| `Program.cs` | `Main`: options, the install, the optional new-game start, the scene; hands over to `GameHost`. |
+| `GameOptions.cs` | The game's own command-line options and the usage text. |
+| `GameHost.cs` | Fields, `Boot` (GPU, camera, the simulation through `StandardSystems`, the session, the player interface), the nav zone upkeep. |
+| `GameHost.Screenshot.cs`, `GameHost.Interactive.cs` | The unattended `--screenshot` run; the window loop, input wiring, title, `--quit-after` profile. |
+| `GameHost.Characters.cs` | The renderer's draw list from the two snapshots, markers, the camera focus command. |
+| `KeyMap.cs` | Silk key and button to the engine's. |
+| `PlayerInterface*.cs` | Events and commands; picking (`.Picking`); the HUD (`.Hud`). The HUD formats the snapshot's numbers (`SkillSummary`) itself. |
+| `NavAdapter.cs` | The navmesh as the simulation's `IAgentWalkability`. |
+
+- **System order**: the host does not list systems; it calls `StandardSystems.Build` (`src/Meitou.Simulation/StandardSystems.cs`), which
+  holds the order and the reasons for it. Tests that mean the game's wiring ask it for the parts they need (`SyntheticTown.Standard`).
+- **Tick length**: `WorldSession` refuses a `WorldSettings.TickSeconds` that differs from the simulation clock's tick (the game clock
+  advances by one, the world by the other).
+- `PopulationSystem.ActiveZones` is double-buffered: the host reads it within the frame, right after the ticks, never across one.
+  `WorldSession.Dispose` disposes the world and every `IDisposable` system (the movement system joins its path thread).
+- Tests: `[Slow]` needs the install or a GPU; `[Bench]` asserts a timing (`--filter "Category!=Slow&Category!=Bench"` for a quiet quick run);
+  the base game and the install's load order are loaded once per run by `InstallData`; waiting on helper threads goes through `TestWaits.TickUntil`.
+
 ## The camera (`Meitou.Engine.Cameras`)
 
 The strategy camera follows [formats/camera.md](formats/camera.md) (Verified facts in `KenshiCamera`): a pivot on the ground, a
