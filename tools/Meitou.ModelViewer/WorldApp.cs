@@ -524,7 +524,7 @@ static partial class WorldApp
                 Console.WriteLine($"saved {Path.GetFullPath(file)}");
             }
         };
-        window.Closing += () => { if (meter is not null) { meter.Report(Console.Out); meter.Dispose(); } profiler?.Dispose(); overlay?.Dispose(); gpu?.Dispose(); };
+        window.Closing += () => { SpikeLog.PrintSummary(); if (meter is not null) { meter.Report(Console.Out); meter.Dispose(); } profiler?.Dispose(); overlay?.Dispose(); gpu?.Dispose(); };
         window.Run();
         return 0;
     }

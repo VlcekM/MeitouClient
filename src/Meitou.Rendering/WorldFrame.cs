@@ -171,6 +171,7 @@ sealed class WorldOptions
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,dust,reach>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
           --show-keys              start with the key list overlay open (toggle with F10)
+          --log-spikes             print a line for every frame whose GPU time is over 1.5 x the median: stage times (GPU, render thread) and what it uploaded or rebuilt (MEITOU_LOG_SPIKES=1)
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
                                    percentiles, the worst frames with their stage times and resident memory   --fly-radius <u> (12000)   --fly-speed <u per frame> (150)
@@ -306,6 +307,7 @@ sealed class WorldOptions
                 case "--fly-radius": o.FlyRadius = F(); break;
                 case "--fly-speed": o.FlySpeed = F(); break;
                 case "--fly-pipelined": o.FlyPipelined = true; break;
+                case "--log-spikes": SpikeLog.Enabled = true; break;
                 case "--orbit-step": o.OrbitStep = F() * MathF.PI / 180; break;
                 case "--monitor": o.Monitor = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--sway-step": o.SwayStep = F(); break;

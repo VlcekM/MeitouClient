@@ -412,6 +412,7 @@ public sealed partial class FoliageRenderer
         foreach (var it in impostorPlan)
             if (it.Admit && it.Asset.Impostor is not { Stage: ImpostorStage.Ready }) pending += it.Bytes;
         bool pressure = guard is { Pressure: true };
+        if (pressure && SpikeLog.Enabled) SpikeLog.Note("vram guard pressure (impostor plan)");
         // Atlases nobody wanted this scan go first (least recently used first) when the real use plus what is coming passes the limit.
         if (impostorBytes + pending > limit)
         {
@@ -557,6 +558,7 @@ public sealed partial class FoliageRenderer
             impostorBytes -= old.Bytes;
             old.Dispose();
             if (s.RefineSkip < s.Skip) impostorRefined++; else impostorCoarsened++;
+            if (SpikeLog.Enabled) SpikeLog.Note($"impostor {(s.RefineSkip < s.Skip ? "refined" : "coarsened")} {Label(a)} skip {s.Skip}->{s.RefineSkip}");
             if (ImpostorLog) Console.WriteLine($"impostor  {(s.RefineSkip < s.Skip ? "refined" : "coarsened")} {Label(a)}: skip {s.Skip} -> {s.RefineSkip}, {s.Textures.Bytes / 1048576.0:0.0} MB ({impostorBytes / 1048576.0:0.0} of {ImpostorLimitMb:0} MB resident)");
             s.Skip = s.RefineSkip;
             (s.RefineAtlas, s.FinerSince) = (null, 0);
@@ -672,6 +674,7 @@ public sealed partial class FoliageRenderer
                 (s.FramePixels, s.Grid, s.Levels, s.WorldRadius) = (c.FramePixels, c.Grid, c.Levels, meshes.Radius * a.Mesh.MaxScale);
                 if (atlas is null) { s.Stage = ImpostorStage.Baking; impostorBakes.Add(a); impostorWork.RemoveAt(i--); continue; }
                 impostorsLoaded++;
+                if (SpikeLog.Enabled) SpikeLog.Note($"impostor cache hit {Label(a)}");
                 s.Atlas = atlas;
                 s.Stage = ImpostorStage.Uploading;
             }
@@ -765,6 +768,7 @@ public sealed partial class FoliageRenderer
         } while (!s.Textures.Complete && uploaded + s.Textures.NextStepBytes <= budget);
         if (!s.Textures.Complete) return false;
         s.Stage = ImpostorStage.Ready;
+        if (SpikeLog.Enabled) SpikeLog.Note($"impostor ready {Label(a)} skip {s.Skip}");
         if (ImpostorLog) Console.WriteLine($"impostor  ready {Label(a)}: {s.Atlas!.Grid}x{s.Atlas.Grid} frames of {s.Atlas.FramePixels}, skip {s.Skip}, {s.Textures.Bytes / 1048576.0:0.0} MB ({impostorBytes / 1048576.0:0.0} of {ImpostorLimitMb:0} MB resident)");
         s.Atlas = null;   // the CPU copy is not needed any more (a reload reads the cache again)
         s.Meshes = null;
@@ -789,11 +793,13 @@ public sealed partial class FoliageRenderer
             impostorBaker.RockTerrain = rockTerrain;
             impostorBake = impostorBaker.Begin(s.Source!, s.Meshes!, s.Class);
             impostorBakeAsset = next;
+            if (SpikeLog.Enabled) SpikeLog.Note($"impostor bake start {Label(next)} ({s.Class.FramePixels} px, grid {s.Class.Grid})");
         }
         var size = impostorBake.Size;
         double rowSamples = size.Grid * 3.0 * (2.0 * size.FramePixels) * (2.0 * size.FramePixels);
         impostorBake.RowsPerStep = settling ? size.Grid : Math.Clamp((int)(ImpostorBakeSamplesPerFrame / rowSamples), 1, size.Grid);
         (impostorLastBake, impostorBakeMemoryHeld) = (Environment.TickCount64, true);
+        if (SpikeLog.Enabled) SpikeLog.Note("impostor bake step");
         if (!impostorBake.Step()) return;
         var a = impostorBakeAsset!;
         var st = a.Impostor!;
@@ -859,6 +865,7 @@ public sealed partial class FoliageRenderer
             impostorBytes -= s.Textures.Bytes;
             s.Textures.Dispose();
         }
+        if (SpikeLog.Enabled) SpikeLog.Note($"impostor unload {Label(a)}");
         a.Impostor = null;   // asked for again (from the cache) when needed
         impostorUnloads++;
         residentStamp++;
