@@ -89,6 +89,23 @@ public class ShoreFieldTests(Xunit.ITestOutputHelper output)
     }
 
     [Fact]
+    public void An_islet_has_no_surf_round_it_and_an_island_does()
+    {
+        // Open sea everywhere, a 150-unit islet at (-1200, 0) and a 700-unit island at (1200, 0).
+        float Height(float x, float z)
+        {
+            float islet = 100f + (150f - MathF.Sqrt((x + 1200) * (x + 1200) + z * z)) * 0.1f;
+            float island = 100f + (700f - MathF.Sqrt((x - 1200) * (x - 1200) + z * z)) * 0.1f;
+            return Math.Max(islet, island);
+        }
+        var g = Bake(Height);
+        foreach (var (x, z) in new[] { (-1200f + 200, 0f), (-1200f, -220f), (-1200f - 190, 60f) })
+            Assert.True(g.Sample(x, z).Y < 0.05f, $"islet exposure at ({x},{z}) = {g.Sample(x, z).Y}");
+        foreach (var (x, z) in new[] { (1200f + 760, 0f), (1200f, 780f), (1200f - 760, 100f) })
+            Assert.True(g.Sample(x, z).Y > 0.95f, $"island exposure at ({x},{z}) = {g.Sample(x, z).Y}");
+    }
+
+    [Fact]
     public void Narrow_bay_has_low_exposure_inside_and_full_at_the_mouth_in_the_sea()
     {
         // Sea for x > 1500; a 300-wide channel |z| < 150 from x = -1800 to the sea; land elsewhere.

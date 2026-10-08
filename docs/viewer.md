@@ -248,9 +248,10 @@ How it works (status as in [README.md](README.md)):
     seven waves (a sine of the wave number, irregular, shifted along the shore) take each wave from 0.55 to 1.6 times the
     breaker height. **Breaking**: a noise of about 620 units per wave (more breaking for the bigger waves) gives stretches a few hundred
     units long where the wave rolls in without breaking (lower, its break point moved to the waterline, no collapse into a bore, foam
-    and bore scaled to 0.35), so there are gaps between the pieces of whitewater. Raised on the user's "more foam" (2026-10-08): most
-    waves now break (the noise's offset 0.62 to 0.8), the surf's coverage is thicker (cap 0.8 to 0.9) and it wears more slowly (the
-    erosion threshold 0.1 + 0.55 × age to 0.05 + 0.4 × age); a quiet set of small waves still leaves stretches without whitewater. The same `Shore` values (size, `brk`, `breakAt`, the
+    and bore scaled to 0.35), so there are gaps between the pieces of whitewater. The amount was raised on the
+    user's "more foam" and then set halfway back (2026-10-08): the noise's offset 0.71 (0.62 at first), foam in the gaps 0.275 (0.2), the
+    surf's coverage capped at 0.85 (0.8) and the erosion threshold 0.075 + 0.475 × age (0.1 + 0.55 × age); a quiet set of small waves
+    still leaves stretches without whitewater. The same `Shore` values (size, `brk`, `breakAt`, the
     phase) feed the vertex hump, the lip, burst, bore, trail, feather, the run-up and the sand's wetness, so geometry and foam agree.
     The offsets fade out (with the shore field's gradient length) on the axis between two shores, where the nearest shore jumps, so an
     inlet shows no seam (**Observed** in `MEITOU_WATER_DEBUG=1` at Port North's inlet: the bands bend there as the distance does).
@@ -335,7 +336,14 @@ How it works (status as in [README.md](README.md)):
     smoothstep(600, 1200, reach), reach = the largest distance-to-shore of any water within 1500 units (measured on 8-texel blocks, a disc
     dilation over them, bilinearly upsampled): a pond, swamp channel or narrow bay whose water is never more than about 600 units from a
     shore within 1500 units is 0, open sea (1200 units of open water within 1500) is 1 (until 2026-10-08 200 / 450 within 500, which let
-    Shark's town pond, about 400 units from shore at its middle, get surf; **Observed** in a picture). Past the grid's edge the water counts as open sea (reach =
+    Shark's town pond, about 400 units from shore at its middle, get surf; **Observed** in a picture). **Islets** get no surf: the exposure is multiplied by smoothstep(π·250², π·450², area of the
+    land mass of the nearest shore), the land masses found by a flood fill of the land texels (4-connected; one touching the grid's edge
+    counts as large), averaged per 8-texel block and over the 3×3 blocks round it before the upsample, so the surf fades over a few hundred
+    units where the nearest shore switches from an islet to the coast behind it. A rock in open sea is as exposed as the coast, and until
+    then breakers ringed it on every side and met in the middle (**Observed**, the user's picture, and at an islet of about 150 units
+    off Port South at (89750, −93430): a ring before, no surf after, the mainland's surf beside it kept). `ShoreFieldTests` checks a
+    150-unit islet (exposure under 0.05 round it) against a 700-unit island (over 0.95). It adds about 15 ms to the bake (70-77 ms against
+    56-81, **Observed**, the bench test). Past the grid's edge the water counts as open sea (reach =
     max) when the nearest edge block is water, else as land. The bake runs on a worker thread from a `HeightSnapshot` (an immutable copy of
     the terrain's coarse grid, fine window and band, taken on the render thread by `TerrainRenderer.Snapshot()`; `HeightAt` is defined
     through it); `ShoreField.Update(eye, snapshot)` starts a bake when nothing is baked yet or the eye is more than 2560 units (a quarter of
