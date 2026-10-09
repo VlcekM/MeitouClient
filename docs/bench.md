@@ -17,7 +17,7 @@ meitou-viewer --bench-compare master.json perf.json
 ```
 
 - **Named views** (`--view <name>`, `NamedViews.Table`, the one table; expanded in place into options, so options after it override it):
-  `swamp` = `--world --town Shark --radius 2 --distance 3000 --pitch 10 --yaw 300 --time 12`; `swamp-rain` = the same with
+  `swamp` = `--world --town Shark --radius 2 --distance 2000 --pitch 30 --yaw 300 --time 12 --bench-motion orbit` (Shark from above as in play, orbiting the town; until 2026-10-09 it was `--distance 3000 --pitch 10` and still, which put the eye between two big rocks that filled most of the picture, so numbers from before are not comparable); `swamp-rain` = the same with
   `--weather "swamp rain no wind"` (the swamp's rain weather, [formats/weather.md](formats/weather.md); with the default seed 1 the scheduler
   already picks that weather at day 0 in `swamp`, so the two currently draw the same, and `swamp-rain` is the one that stays rainy if the scheduler
   changes); `dust` = `--world --town Heft --radius 2 --distance 3000 --pitch 10 --yaw 300 --weather "Dust Storm Approach" --time 12`;

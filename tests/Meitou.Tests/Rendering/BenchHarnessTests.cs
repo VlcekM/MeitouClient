@@ -15,6 +15,7 @@ public class BenchHarnessTests
         Assert.Equal(500f, o.Distance);
         Assert.Equal("swamp", o.View);
         Assert.Equal(2f, o.Radius);
+        Assert.Equal("orbit", o.BenchMotion);
         var dust = WorldOptions.Parse(["--view", "dust"])!;
         Assert.Equal("Dust Storm Approach", dust.Weather);
         Assert.Equal("The Hub", WorldOptions.Parse(["--view", "hub"])!.Town);
