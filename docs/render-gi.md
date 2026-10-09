@@ -202,7 +202,22 @@ So keeping the structures up to date costs well under a tenth of a millisecond p
   that runs `kenshiLight`. The foliage pays for its overdraw, and the water reflection pays for a second view of the scene.
 - The blend is large for what it does (64 rays into 8 × 8 and 16 × 16 tiles); the distance tile is most of it.
 
-**Cheaper reads and updates** (2026-10-09, *from the code*; costs still to be measured on an idle GPU):
+**Cheaper reads and updates** (2026-10-09). **Measured** (idle GPU, same swamp command, 512 paired frames each):
+
+| | Before | After |
+| --- | --- | --- |
+| Whole GI (`gi-scene`), frame | +1.47 ms, 138.6 / 173.6 fps | +0.94 ms (±0.11), 158.7 / 186.6 fps |
+| Probe update (`gi` stage) | 0.71 | 0.47 |
+| of it, sleeping probes (`gi-sleep`) | | −0.16 |
+| Shading reads (`gi-shade`) | +0.74 | +0.37 (±0.09) |
+| of it, water reflection (`gi-reflection`) | +0.16 to +0.21 | 0 (the switch: −0.14) |
+| of it, foliage | +0.27 to +0.32 | +0.13 |
+| of it, terrain / objects | +0.15 / +0.15 | +0.15 / +0.17 |
+
+- The rest of the update's saving (about 0.08 ms) is the inner-texel blend.
+- With GI the p99 frame is still worse than without (104 against 127 fps in the `gi-scene` run).
+
+*From the code:*
 - **No probes in the water reflection.** The reflection's draws keep the sky's flat ambient: `GiProbes.InReflection` is set around the
   reflection pass, and the frame block is re-read per native segment, so `uGiParams.x` is 0 there. The bench's `gi-reflection` switch
   (side B) reads the probes in the reflection again.
