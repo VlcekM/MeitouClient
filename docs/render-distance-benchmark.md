@@ -236,7 +236,7 @@ Ranked by what each costs at the target (CPX), worst view first (**Observed**, f
 owners at CPX: object textures 1.4 GB, terrain 1.1 GB, foliage textures 1.1 GB, impostor atlases 0.9 GB, object meshes 0.67 GB; on an 8 GB
 card the guard would act); fill rate and fragment shading (section 3); the cull scratch (0 refused); command recording (section 6.1).
 
-### 6.1 Wave 4: is multithreaded recording worth keeping on?
+## 6.1 Wave 4: is multithreaded recording worth keeping on?
 
 `MEITOU_RECORD_THREADS` 0 / 1 / 2, three interleaved runs each (two each at CPX), paced; render-thread ms p50 (frame p50):
 
@@ -276,7 +276,7 @@ Not proposed, with the reason (**Observed**): HiZ occlusion (open vistas and lon
 terrain or not, **Unknown** how many are hidden: a count would decide it); compute-rasterised grass (grass is 0.3-1.4 ms); cascade range
 scaling (the cascades do not grow with the ranges); GPU-driven objects (5.6.3).
 
-### 7.1 F1 and F3 done (2026-10-07, branch `impostors-budget-small`)
+## 7.1 F1 and F3 done (2026-10-07, branch `impostors-budget-small`)
 
 The budget now follows the card, atlases hold only the mips their nearest instance needs, a plan decides residency nearest first, and meshes under radius 48 have a
 small impostor class. Rule, numbers per card size, design and gates: [impostors.md](impostors.md) sections 10 and 11; code notes [renderer-native.md](renderer-native.md) 8.16.

@@ -12,7 +12,7 @@ using Meitou.Rendering.Impostors;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// Kenshi's foliage around the camera (docs/viewer.md, "Foliage"; the rules in docs/formats/foliage.md): trees, bushes, rocks
+/// Kenshi's foliage around the camera (docs/render-foliage.md; the rules in docs/formats/foliage.md): trees, bushes, rocks
 /// (mineable resource rocks too) and grass, placed per zone by <see cref="FoliageLayout"/> on worker threads.
 /// <list type="bullet">
 /// <item>Meshes: one instanced draw per (mesh part, material) with the shared mesh shader (<see cref="FoliageShaders"/>);
@@ -255,7 +255,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     // ------------------------------------------------------------------ streaming
 
-    /// <summary>What a zone's layout holds (docs/viewer.md, "Foliage"). <see cref="Far"/>: the FAR layers only (no grass coverage, 9/10 of the cost).
+    /// <summary>What a zone's layout holds (docs/render-foliage.md). <see cref="Far"/>: the FAR layers only (no grass coverage, 9/10 of the cost).
     /// <see cref="Meshes"/>: every mesh layer, and, with the Meitou <c>range</c> switch, only the large meshes (the zone is farther than the medium
     /// and small ranges and the grass, so nothing else can be drawn there). <see cref="Whole"/>: every layer and the grass.</summary>
     enum Tier { Far, Meshes, Whole }
@@ -394,7 +394,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         var watch = Stopwatch.StartNew();
         // Uploads get 2 ms a frame (texture decodes are never waited for) except while settling for a screenshot.
         double budget = settling ? 1e9 : 2.0;
-        // Two tiers (docs/viewer.md, "Foliage"): within the near reach (the MEDIUM layers and the grass) a zone is laid out whole; beyond it, out
+        // Two tiers (docs/render-foliage.md): within the near reach (the MEDIUM layers and the grass) a zone is laid out whole; beyond it, out
         // to the far reach, only its FAR layers, which skips the grass coverage, nine tenths of a zone's layout. A far zone is laid out whole once
         // it comes within the near reach (its far instances are the same either way, FoliageLayout.Place).
         // With the Meitou range switch a third tier sits between them (Tier.Meshes): beyond the whole reach (the longest of the small, medium and grass

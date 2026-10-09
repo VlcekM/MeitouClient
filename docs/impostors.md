@@ -290,7 +290,7 @@ split), `Impostors/ImpostorDraw.cs`. Tests: `FoliageCullTests.Impostor_split_is_
 - `MEITOU_IMPOSTOR_LOG=1` prints one line per atlas made Ready, evicted or refused. `MEITOU_IMPOSTOR_CASTERS=0` keeps the meshes as
   shadow casters.
 - A group gets an impostor only when its mesh's atlas is Ready and T <= range - band. A mesh without a Ready atlas stays a mesh.
-  **Meitou default ranges** are large 12000, medium 5000, small 800 (docs/viewer.md, "Foliage"), so large meshes are impostors from 3600
+  **Meitou default ranges** are large 12000, medium 5000, small 800 (docs/render-foliage.md), so large meshes are impostors from 3600
   to 12000 and medium ones from 3600 to 5000.
 
 ### Budget and eviction (superseded by section 10: kept for the numbers of the fixed 192 MB budget with LRU refusals)

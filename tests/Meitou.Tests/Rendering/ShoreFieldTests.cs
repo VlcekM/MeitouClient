@@ -5,7 +5,7 @@ using Meitou.Rendering;
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The shore distance field's CPU bake on synthetic terrain (docs/viewer.md "Shore distance field"); no game and no GPU.</summary>
+/// <summary>The shore distance field's CPU bake on synthetic terrain (docs/render-water.md "Shore distance field"); no game and no GPU.</summary>
 public class ShoreFieldTests(Xunit.ITestOutputHelper output)
 {
     const int N = 512;

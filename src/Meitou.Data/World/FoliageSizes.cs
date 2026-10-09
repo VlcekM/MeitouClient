@@ -1,6 +1,6 @@
 namespace Meitou.Data.World;
 
-/// <summary>How big a foliage mesh is, for the Meitou <c>range</c> switch (docs/viewer.md, "Foliage"; not a game concept).</summary>
+/// <summary>How big a foliage mesh is, for the Meitou <c>range</c> switch (docs/render-foliage.md; not a game concept).</summary>
 public enum FoliageSizeClass
 {
     /// <summary>Litter and small plants: skeleton parts, small boulders, junk pieces, skulls, cacti, small leaves.</summary>

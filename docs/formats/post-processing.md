@@ -1,7 +1,7 @@
 # Post-processing
 
 What Kenshi does to the lit scene before it reaches the screen, and what `meitou-viewer --world` does
-([viewer.md](../viewer.md#post-processing)). Sources are the shipped scripts in `data/materials/compositors/` and
+([render-post.md](../render-post.md)). Sources are the shipped scripts in `data/materials/compositors/` and
 `data/materials/post/` (read for facts only; none of their code is used), `settings.cfg`, `kenshi.cfg` and the
 strings of `kenshi_x64.exe`. Labels as in [../README.md](../README.md).
 
@@ -193,7 +193,7 @@ beyond the near slice (20000+) and on the sky the amplitude is 1, as in the game
 lookups use the game's screen orientation (v from the top), the offset is flipped back. Differences: a zero direction sum leaves
 the pixel in place, and the viewer's water writes depth, so over water the amplitude follows the water surface's distance, not the
 sea floor's. When `heatHaze` is 0 (or `--no-heat-haze`) the pass is skipped, which equals the game's
-pass at 0 (both taps then land on texel centres). Options and costs: [viewer.md](../viewer.md#post-processing).
+pass at 0 (both taps then land on texel centres). Options and costs: [render-post.md](../render-post.md).
 
 ## Absent (Verified against everything in `data/materials/post` and `compositors`)
 
@@ -215,7 +215,7 @@ The band is the game's at every camera height; the viewer adds no guard of its o
 game's camera heights were not the exposure's doing: the game's haze formula gave values in the thousands there (a mean luminance
 of 715, the band then holds the scale at its floor ×0.46), fixed at the source ([sky.md](sky.md#haze-distance-fog-how-vanilla-does-it));
 the same views now measure 0.65 to 0.88 by day and stay finite at dawn, sunset, dusk and night.
-Details, options and costs: [viewer.md](../viewer.md#post-processing).
+Details, options and costs: [render-post.md](../render-post.md).
 
 | Stage | Faithful (`--post kenshi`, `--faithful all`) | Meitou (the default) | Basis |
 | --- | --- | --- | --- |

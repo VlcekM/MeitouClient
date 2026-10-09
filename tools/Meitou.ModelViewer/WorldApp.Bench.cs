@@ -11,7 +11,7 @@ namespace Meitou.ModelViewer;
 static partial class WorldApp
 {
     /// <summary>
-    /// The benchmark harness (<c>--bench-frames</c>, <c>--ab</c>; docs/viewer.md "Benchmark harness"): measures a fixed view, alternating the two sides of one
+    /// The benchmark harness (<c>--bench-frames</c>, <c>--ab</c>; docs/bench.md "Benchmark harness"): measures a fixed view, alternating the two sides of one
     /// switch when asked, and writes per-stage statistics (mean, median, p95, p99, max for each side and the paired difference) as a table and JSON.
     /// </summary>
     static int Bench(Meitou.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)

@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// The Meitou water's clock-driven parameters besides the open waves (<see cref="OceanWaves"/>; <see cref="WaterRenderer"/>, docs/viewer.md
+/// The Meitou water's clock-driven parameters besides the open waves (<see cref="OceanWaves"/>; <see cref="WaterRenderer"/>, docs/render-water.md
 /// "Meitou water"): the shore's breakers and the normal maps' scrolling. Visual only: the game's water stays a flat plane at Y = 100.
 /// Everything runs on the game clock, so it stands still while paused and speeds up with the game speed. The breakers' phase is integrated
 /// frame by frame and their size follows the wind over about ten seconds, so a change of weather never makes them jump.

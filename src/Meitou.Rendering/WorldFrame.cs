@@ -22,6 +22,8 @@ sealed class WorldOptions
     public float? Yaw, Pitch, Distance;
     public string? Screenshot;
     public int Width = 1280, Height = 960;
+    /// <summary>The size of a bench run (<c>--bench-frames</c> or <c>--ab</c>) without <c>--size</c>: smaller, so the runs are quicker.</summary>
+    public static readonly (int Width, int Height) BenchSize = (1280, 720);
     public bool NoTextures, NoObjects, Wireframe, Info;
     public int LayerSize = 2048;
     public int Debug;
@@ -115,7 +117,7 @@ sealed class WorldOptions
     /// <summary>The benchmark without a wait for the GPU each frame and without the 60 fps pacing: up to two frames in flight (both backends), frame time = the interval between frames.</summary>
     public bool FlyPipelined;
     /// <summary>
-    /// The benchmark harness (docs/viewer.md "Benchmark harness"): <c>--view</c> the named view, <c>--ab</c> the switch to alternate (<see cref="AbToggles"/>) with
+    /// The benchmark harness (docs/bench.md "Benchmark harness"): <c>--view</c> the named view, <c>--ab</c> the switch to alternate (<see cref="AbToggles"/>) with
     /// <c>--ab-period</c> frames per side, <c>--bench-frames</c> measured frames (default 600 with <c>--ab</c>), <c>--bench-out</c> the JSON, <c>--bench-motion</c>
     /// still / orbit / fly / turn, <c>--no-gpu-lock</c>, <c>--bench-compare</c> two JSON files.
     /// </summary>
@@ -253,6 +255,7 @@ sealed class WorldOptions
         int viewAt = Array.LastIndexOf(args, "--view");
         if (viewAt >= 0 && viewAt + 1 < args.Length) o.View = args[viewAt + 1];
         args = NamedViews.Expand(args);   // --view <name> becomes its options, in place: the ones after it win
+        bool sizeGiven = args.Contains("--size");
         for (int i = 0; i < args.Length; i++)
         {
             string a = args[i];
@@ -384,6 +387,7 @@ sealed class WorldOptions
             }
         }
         if (o.Radius <= 0) throw new ArgumentException("--radius must be positive");
+        if (!sizeGiven && (o.BenchFrames > 0 || o.Ab is not null)) (o.Width, o.Height) = BenchSize;
         return o;
     }
 }

@@ -113,7 +113,7 @@ unless `--meitou` / `--faithful` is given; the viewer's panel has them too.
 - **Renderers**: `TerrainRenderer` (+ `TerrainTextures`, `TerrainStreamer`), `WorldObjectRenderer` (+ `ObjectStreamer`,
   `BuildingLodMesh`), `FoliageRenderer`, `WaterRenderer` + `ReflectionPass`, `SkyRenderer` (+ `AtmosphereShaders`), `ShadowPass`,
   `PostProcess`, `DebugOverlay` + `SettingsPanel`, `WorldTextureCache`, `BackgroundWork` / `UploadQueue` for streaming. What
-  each draws and why: [viewer.md](viewer.md) ("World mode").
+  each draws and why: [viewer.md](viewer.md) ("World mode", which links the render-*.md docs).
 - **Scene logic is backend-independent** and mostly lives in `Meitou.Data.World`: the terrain quadtree and LOD, cascade fitting
   (`ShadowCascades`), haze and lighting parameters (`Sky`, `KenshiLighting`), object LOD and ranges (`MeshLod`, `ObjectRanges`),
   foliage placement (`FoliageLayout`, `FoliageGrassField`), zone layouts (`WorldObjectLayout`).
@@ -186,7 +186,7 @@ elsewhere, `=0` off).
   ahead of the frame's own, with a full barrier at its start and end; textures are written in place (an upload is seen by the whole
   frame). A second copy into the same image within one upload command buffer waits for the first (a transfer barrier; before
   2026-10-06 the two copies raced, which synchronisation validation reported as 10 WRITE_AFTER_WRITE hazards per view and which made a
-  few rock-view pixels differ between runs, docs/viewer.md). Mip generation, blits and readbacks are recorded in order in the frame.
+  few rock-view pixels differ between runs, docs/render-shadows.md). Mip generation, blits and readbacks are recorded in order in the frame.
 - **Queries and counters.** `QueryArena`: timestamps from a per-frame-slot pool, read a frame ring later (`TryRead`), never waited
   for; `GpuContext.GpuFrameMs` is the last completed frame's GPU time. `GpuStats` counts per frame draws (indirect ones apart),
   dispatches, pipeline binds, descriptor pushes, native segments, constant and upload bytes, and keeps running totals for meters.
@@ -256,7 +256,7 @@ run on a few above-normal job threads (`RenderJobs`). The game and the viewer ru
 (DECISIONS 19). The flight benchmark (`--fly-benchmark`) prints the stage means, the shadow casters' means, GC totals and the worst frames
 with their stages and GC pauses; `MEITOU_JOB_STATS=1` adds what each streaming call site allocated and cost.
 A draw through `VkGl` cost 1.5-2.3 µs of CPU in Release and 3.9-5.3 µs in Debug (measured before the native port, "Frame cost breakdown" below; VkGl is gone since phase 8), so draw counts matter more than triangles: meshes that repeat are drawn instanced (the
-TERRAIN-mode rocks were one draw each and cost ~23 ms of shadow pass in a forest; docs/viewer.md, "Shadow pass cost").
+TERRAIN-mode rocks were one draw each and cost ~23 ms of shadow pass in a forest; docs/render-shadows.md, "Shadow pass cost").
 
 ## Frame cost breakdown (2026-10-06)
 

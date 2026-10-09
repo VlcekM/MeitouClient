@@ -315,7 +315,7 @@ Not the game's: the remaster's choice, on by default (F5 / `--faithful shadows` 
   map is lit. **Observed**: looking down on the Ribs from 25000 units at 16:00 (`--at -1018,77000 --pitch 45 --distance 25000`),
   the rib cages now shade the ground and themselves and the wreck cages their insides; before, nothing beyond 10000 had a shadow
   but the terrain's. Faithful shadows have none (the game draws nothing past its range).
-- **Costs** (**Observed**, 2026-10-05, the same machine and caveats as the measurements in [../viewer.md](../viewer.md#shadows),
+- **Costs** (**Observed**, 2026-10-05, the same machine and caveats as the measurements in [../render-shadows.md](../render-shadows.md),
   Meitou against `--faithful shadows` on the same build): The Hub `--fly-benchmark 1000`, three interleaved pairs, shadow stage CPU
   mean 2.43 ms against 3.31 ms (casters: terrain 0.36 / 0.80, objects 0.29 / 0.44, foliage 1.66 / 2.00), flight p50 21.6-22.0 ms
   against 23.2-24.3 ms. Forest camera, 13:00: shadow CPU mean 2.1-2.3 ms (p95 3.3-3.8, on the frames that draw cascade 3) against

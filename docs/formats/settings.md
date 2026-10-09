@@ -383,7 +383,7 @@ is read when textures load, so it needs a restart; it is set from the options be
 
 `--water-reflection <0..4>` (default **2**, the game's value for a missing key; Tab slider "Water reflection 0-4 (game)") and `--reflection-range <x>`
 (default 0.6; Tab slider). `ReflectionPass.Level` / `Range`. What the levels draw, in the viewer's terms (the sky and terrain always come first; the
-viewer's own cut-downs from [viewer.md](../viewer.md#world-mode) "Reflections" stay and say *how much*, the level says *what*):
+viewer's own cut-downs from [render-foliage.md](../render-foliage.md) "Reflections" stay and say *how much*, the level says *what*):
 
 | Level | Game | Viewer |
 | --- | --- | --- |

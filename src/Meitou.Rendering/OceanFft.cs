@@ -20,7 +20,7 @@ struct OceanPush
 }
 
 /// <summary>
-/// The Meitou water's open waves (docs/viewer.md "Meitou water"): Tessendorf's FFT ocean on the GPU. <see cref="OceanSpectrum"/> gives the
+/// The Meitou water's open waves (docs/render-water.md "Meitou water"): Tessendorf's FFT ocean on the GPU. <see cref="OceanSpectrum"/> gives the
 /// initial amplitudes (rebuilt on a worker thread when the wind turns or changes strength, and blended in over <see cref="BlendSeconds"/>);
 /// each frame a compute pass evolves them to the game clock, runs an inverse FFT over rows and then columns (Stockham, radix 2, in shared
 /// memory, four complex fields per texel packing eight real ones) and writes per cascade the displacement and the slopes into two RGBA16F

@@ -2,7 +2,7 @@ using Meitou.Rendering;
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The benchmark harness's pure parts (docs/viewer.md "Benchmark harness"): views, statistics, picture diff, toggles, lock, result files.</summary>
+/// <summary>The benchmark harness's pure parts (docs/bench.md "Benchmark harness"): views, statistics, picture diff, toggles, lock, result files.</summary>
 public class BenchHarnessTests
 {
     [Fact]
@@ -30,6 +30,19 @@ public class BenchHarnessTests
         Assert.Equal(("shadows", 64, 300, "turn", true, "x.json"), (o.Ab, o.AbPeriod, o.BenchFrames, o.BenchMotion, o.NoGpuLock, o.BenchOut));
         Assert.Throws<ArgumentException>(() => WorldOptions.Parse(["--bench-motion", "spin"]));
         Assert.Equal(("a.json", "b.json"), WorldOptions.Parse(["--bench-compare", "a.json", "b.json"])!.BenchCompare);
+    }
+
+    [Fact]
+    public void BenchSizeDefaultsSmaller()
+    {
+        var bench = WorldOptions.Parse(["--view", "swamp", "--bench-frames", "300"])!;
+        Assert.Equal((1280, 720), (bench.Width, bench.Height));
+        var ab = WorldOptions.Parse(["--view", "swamp", "--ab", "shadows"])!;
+        Assert.Equal((1280, 720), (ab.Width, ab.Height));
+        var sized = WorldOptions.Parse(["--view", "swamp", "--bench-frames", "300", "--size", "2560x1440"])!;
+        Assert.Equal((2560, 1440), (sized.Width, sized.Height));
+        var shot = WorldOptions.Parse(["--view", "swamp", "--screenshot", "x.png"])!;
+        Assert.Equal((1280, 960), (shot.Width, shot.Height));
     }
 
     [Fact]

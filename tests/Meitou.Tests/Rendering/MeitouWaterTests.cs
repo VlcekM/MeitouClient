@@ -3,7 +3,7 @@ using Meitou.Rendering;
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The Meitou water's CPU side (docs/viewer.md "Water"): the breakers on the game clock, the polar grid and the foam bake.</summary>
+/// <summary>The Meitou water's CPU side (docs/render-water.md): the breakers on the game clock, the polar grid and the foam bake.</summary>
 public class MeitouWaterTests
 {
     [Fact]

@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// The foliage shaders (docs/viewer.md, "Foliage").
+/// The foliage shaders (docs/render-foliage.md).
 /// <list type="bullet">
 /// <item>Meshes (trees, bushes, rocks): the viewer's shared mesh shaders (<see cref="Shaders"/>, so lighting and the atmosphere
 /// follow whatever is added there) given a per-instance model matrix (attributes 7 to 10, divisor 1) whose row 0 w carries the

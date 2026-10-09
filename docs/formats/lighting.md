@@ -119,7 +119,7 @@ The exe sets both: `MAX_LUMINANCE` = CONSTANTS `exposure max` (1.2 in GLOBAL CON
 
 ## What the viewer does
 
-See [viewer.md](../viewer.md#atmosphere): the world view lights in these units (sun, irradiance cube, ambient map, the same
+See [render-sky.md](../render-sky.md): the world view lights in these units (sun, irradiance cube, ambient map, the same
 GGX and environment terms with the viewer's gloss), draws the sky with SkyX's own formula, and applies the game's exposure from
 the measured mean luminance. The sun term (diffuse and specular, not the ambient or environment light) is multiplied by the
 shadow term of the game's CSM mode ([shadows.md](shadows.md)), on by default (`--no-shadows`). Not reproduced: the temporal

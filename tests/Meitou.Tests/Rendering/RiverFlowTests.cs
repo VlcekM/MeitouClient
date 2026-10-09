@@ -2,7 +2,7 @@ using Meitou.Rendering;
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The river map's CPU bake on synthetic heights (docs/viewer.md "Meitou water"); no game and no GPU.</summary>
+/// <summary>The river map's CPU bake on synthetic heights (docs/render-water.md "Meitou water"); no game and no GPU.</summary>
 public class RiverFlowTests
 {
     const int N = 160;

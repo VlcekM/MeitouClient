@@ -6,7 +6,7 @@ using Meitou.Rendering.Gpu.Core;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// The shore distance field round the camera (docs/viewer.md "Shore distance field"): a <see cref="Size"/>² RG32F texture of
+/// The shore distance field round the camera (docs/render-water.md "Shore distance field"): a <see cref="Size"/>² RG32F texture of
 /// (signed distance to the waterline, exposure), baked on a worker thread by <see cref="ShoreBake"/> from a <see cref="HeightSnapshot"/> and
 /// rebaked when the eye has moved more than a quarter of the field's width from its centre. Sampled with linear filtering, clamped to the
 /// edge, at uv = (p.xz − Rect.xy) / (Rect.zw − Rect.xy). Render thread only (<see cref="Update"/>, <see cref="Sampled"/>, <see cref="Dispose"/>).

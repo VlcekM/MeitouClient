@@ -3,7 +3,7 @@ namespace Meitou.Data.Textures;
 /// <summary>
 /// Block-compressed (BC1 / BC3) texture data without decoding it: conversions between the two colour layouts and a small
 /// encoder. Used where one GPU array must hold textures that were stored in different formats (the terrain layer arrays,
-/// docs/viewer.md). Block layouts are in docs/formats/dds.md.
+/// docs/render-terrain.md). Block layouts are in docs/formats/dds.md.
 /// </summary>
 public static class BlockCompression
 {

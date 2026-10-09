@@ -161,7 +161,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         """;
 
     /// <summary>
-    /// The Meitou water's motion, shared by both stages (docs/viewer.md "Water"): the open water's FFT ocean (<see cref="OceanWaves"/>: three
+    /// The Meitou water's motion, shared by both stages (docs/render-water.md): the open water's FFT ocean (<see cref="OceanWaves"/>: three
     /// cascades of displacement and slopes on the game clock) and the shore's breakers. A breaker's phase runs along the signed distance to the
     /// waterline from the <see cref="ShoreField"/>, so its crests follow the shore as real waves turn to do; the field's exposure keeps surf
     /// off ponds and sheltered bays.

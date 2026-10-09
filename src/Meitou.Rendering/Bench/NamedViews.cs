@@ -2,7 +2,7 @@ namespace Meitou.Rendering;
 
 /// <summary>
 /// <c>--view &lt;name&gt;</c>: a fixed camera, world window and weather for benchmarks and A/B pictures, expanded in place into the options it stands
-/// for, so any option after <c>--view</c> overrides it. The one table of the views (docs/viewer.md "Benchmark harness" lists it).
+/// for, so any option after <c>--view</c> overrides it. The one table of the views (docs/bench.md "Benchmark harness" lists it).
 /// </summary>
 public static class NamedViews
 {

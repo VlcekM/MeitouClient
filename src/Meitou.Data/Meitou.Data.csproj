@@ -2,7 +2,7 @@
   <!--
     Optimised in Debug builds too: this library does the world streaming's heavy work on worker threads (foliage layout and its grass
     coverage noise, terrain and texture decoding), which the unoptimised JIT made about 8 times slower (a foliage zone 0.6 s instead of
-    75 ms), too slow to keep up with a flying camera (docs/viewer.md, "Foliage"). Build with -p:MeitouDebugData=true to step through it.
+    75 ms), too slow to keep up with a flying camera (docs/render-foliage.md). Build with -p:MeitouDebugData=true to step through it.
   -->
   <PropertyGroup Condition="'$(MeitouDebugData)' != 'true'">
     <Optimize>true</Optimize>

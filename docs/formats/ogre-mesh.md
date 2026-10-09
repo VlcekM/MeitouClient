@@ -186,7 +186,7 @@ They are face (and horn) shape morphs, not expressions or animation. Verified by
 - **World objects** use the same rule and the same files' levels (`Meitou.Data.Ogre.MeshLod`, which `CharacterLod` now forwards to):
   the viewer takes the mesh file's bounds (centre and radius) per instance, selects a level per instance (not per submesh, since all
   submeshes of one mesh share the levels' distances in the survey) and cross-fades with a dither
-  ([../viewer.md](../viewer.md)). The fade band (6% of the level distance) is the viewer's own, not the game's (Ogre switches hard).
+  ([../render-objects.md](../render-objects.md)). The fade band (6% of the level distance) is the viewer's own, not the game's (Ogre switches hard).
   Building meshes: levels are reduced index lists with ascending distances (`ObjectLodTests`, install-gated). Manual levels name another
   mesh file and are drawn instead of the main mesh.
 

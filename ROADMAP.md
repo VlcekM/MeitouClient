@@ -99,7 +99,7 @@ at most +0.5 ms GPU in the F12 `water` stage on the same views; a quality settin
    the beach and back; crest foam. One draw plus a 0.2-0.4 ms compute pass; refraction (a half-size copy of the scene), absorption by depth, caustics, crest light, glitter and lingering foam (2026-10-08). Then a checkpoint for the owner to play it.
 2. **Rivers and scum** — `flowmap.png` RG does not follow the river channels (checked 2026-10-08, docs/formats/terrain.md), so a river
    map is derived from the heights (`RiverFlowBake`): flow carried along the channel, faster where narrow and shallow, foam streaks
-   and rapids, no ocean waves or breakers in rivers (done, 2026-10-08, partial coverage, see docs/viewer.md). Still to do: the biomes' scum (the B channel), which
+   and rapids, no ocean waves or breakers in rivers (done, 2026-10-08, partial coverage, see docs/render-water.md). Still to do: the biomes' scum (the B channel), which
    the game draws and the viewer never has.
 3. Foam against objects (stilts, piers) needs the scene depth: optional, later.
 

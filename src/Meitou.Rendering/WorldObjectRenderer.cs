@@ -10,7 +10,7 @@ using SamplerInfo = Meitou.Rendering.Gpu.Shaders.SamplerInfo;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// Draws the world's placed objects (docs/viewer.md, "Objects"): buildings, map features and distant towns.
+/// Draws the world's placed objects (docs/render-objects.md): buildings, map features and distant towns.
 /// <list type="bullet">
 /// <item>Zones around the camera are laid out on worker threads (<see cref="ObjectStreamer"/>); meshes decode on workers and upload in
 /// steps (<see cref="ObjectMeshCache"/>); textures decode on workers (<see cref="WorldTextureCache"/>). <see cref="Update"/> drives it all.</item>

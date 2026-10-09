@@ -266,7 +266,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         return new TerrainTexture(Gpu, t, mipmaps ? TextureMinFilter.LinearMipmapLinear : TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge);
     }
 
-    /// <summary>Diffuse layers are stored as BC3 (colour + gloss in alpha), normal layers as BC1 (their alpha is not used): see docs/viewer.md.</summary>
+    /// <summary>Diffuse layers are stored as BC3 (colour + gloss in alpha), normal layers as BC1 (their alpha is not used): see docs/render-terrain.md.</summary>
     static InternalFormat FormatOf(bool diffuse) => diffuse ? InternalFormat.CompressedRgbaS3TCDxt5Ext : InternalFormat.CompressedRgbS3TCDxt1Ext;
     static int BlockBytes(bool diffuse) => diffuse ? 16 : 8;
 

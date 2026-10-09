@@ -30,7 +30,7 @@ public static class Enhancements
     /// <summary>The Meitou shadows' default shadow distance (the game's is 5000, its slider ends at 9000), and the most the <c>--shadow-range</c> option takes with them.</summary>
     public const float MeitouShadowRange = 10000, MeitouShadowRangeMax = 15000;
 
-    /// <summary>The Meitou <c>reach</c> switch's defaults (docs/viewer.md, "Draw distances"): objects at full detail out to 20000, huge landmarks out to 150000,
+    /// <summary>The Meitou <c>reach</c> switch's defaults (docs/render-objects.md, "Draw distance"): objects at full detail out to 20000, huge landmarks out to 150000,
     /// and the terrain LOD's pixel error 16 (Faithful: 12000 and <see cref="WorldRenderOptions.DefaultTerrainPixelError"/>, 10, what the viewer drew before the switch).</summary>
     public const float MeitouObjectDistance = 20000, MeitouLandmarkDistance = 150000, MeitouTerrainPixelError = 16;
     public const float FaithfulObjectDistance = 12000;

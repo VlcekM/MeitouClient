@@ -799,7 +799,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     // One instanced draw per (vertex array, index count, winding) instead of one draw per placement (a draw costs ~4 µs of CPU
     // through VkGl, and a forest has hundreds of TERRAIN-mode rocks on screen and thousands in a shadow cascade). The placements keep
     // their order within a group; the groups follow the first placement of each. The pictures are the same as with one draw each
-    // (docs/viewer.md, "Shadow pass cost"): the shaders do the uniform form's arithmetic, a depth-only pass keeps the nearest fragment
+    // (docs/render-shadows.md, "Shadow pass cost"): the shaders do the uniform form's arithmetic, a depth-only pass keeps the nearest fragment
     // whatever the order, and in colour only exactly equal depths of two different placements could tell the order apart.
 
     sealed class MeshGroup

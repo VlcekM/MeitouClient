@@ -4,7 +4,7 @@ using Meitou.Data.World;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// The shore distance field's CPU bake (no GPU; docs/viewer.md "Shore distance field"). A square grid of <see cref="Size"/>² texels of
+/// The shore distance field's CPU bake (no GPU; docs/render-water.md "Shore distance field"). A square grid of <see cref="Size"/>² texels of
 /// <see cref="Texel"/> world units, centred on a point snapped to whole texels, holds
 /// <list type="bullet">
 /// <item><b>Distance</b>: the signed distance to the waterline in world units, positive over water (terrain under

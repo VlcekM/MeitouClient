@@ -47,7 +47,15 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [game/buildings-production.md](game/buildings-production.md) | Buildings: construction, production and crafting, power, storage, farming, research and tech |
 | [game/ui-input.md](game/ui-input.md) | Input: the binding encoding, `controls.cfg`, the action table, key and mouse handling, selection, pointer modes, camera input, `settings.cfg` and the options window |
 | [game/ui-screens.md](game/ui-screens.md) | UI screens: MyGUI stack and resources, the screen catalog, main menu and new game flow, HUD, overview, inventory, trade, dialogue, build, tutorials |
-| [viewer.md](viewer.md) | `meitou-viewer`: usage, how textures are resolved from FCS records, world mode (terrain + placed objects), the benchmark harness (`--view`, `--ab`, `--bench-frames`), start-up time and the load caches (`--no-load-cache`), known gaps |
+| [viewer.md](viewer.md) | `meitou-viewer`: usage and options, how textures are resolved from FCS records, the world mode's keys, profiler and spike log, known gaps; links the render docs below |
+| [render-terrain.md](render-terrain.md) | World view terrain: CDLOD, texturing, streaming of heights, textures and meshes, upload and unloading, frame times |
+| [render-water.md](render-water.md) | World view water: the game's flat water and Meitou water (FFT ocean, shore distance field, breakers, foam, river map) |
+| [render-sky.md](render-sky.md) | World view sky, sun, light and atmosphere |
+| [render-objects.md](render-objects.md) | World view buildings and map features: assembly, object streaming, LOD, draw distance (`reach`), distant towns |
+| [render-foliage.md](render-foliage.md) | World view foliage: paging, GPU cull, ranges, impostors, reflections, measurements |
+| [render-shadows.md](render-shadows.md) | World view shadows: the game's CSM, Meitou shadows, the shadow pass cost |
+| [render-post.md](render-post.md) | World view post-processing: the HDR framebuffer, SSAO, fog, exposure, upscalers |
+| [bench.md](bench.md) | The benchmark harness (`--view`, `--ab`, `--bench-frames`), start-up time and the load caches (`--no-load-cache`), `--tiered-jit` / `--pgo` |
 | [character-renderer.md](character-renderer.md) | The native character renderer: `--crowd` harness, per-instance bone and material buffers, instancing per mesh part, LOD and shadow choices, measurements, what is left |
 | [character-viewer.md](character-viewer.md) | The removed mesh and character viewer (DECISIONS 23, tag `model-viewer-last`): options, mesh and skeleton loading, skinning and the bone block, animation blending, body shape, character shading inputs, LOD, camera, lighting, verified findings, gaps; for the later native character renderer |
 | [engine.md](engine.md) | Engine architecture: projects, the game loop (fixed tick, interpolation, game time, input bindings), the Kenshi and free cameras, the renderers and the backend interface, how to check renderer changes |

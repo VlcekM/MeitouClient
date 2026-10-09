@@ -3,7 +3,7 @@ using Meitou.Data.World;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// The Meitou water's river map, baked at load from the whole-world heights (docs/formats/terrain.md "Flow map", docs/viewer.md "Meitou water").
+/// The Meitou water's river map, baked at load from the whole-world heights (docs/formats/terrain.md "Flow map", docs/render-water.md "Meitou water").
 /// The game's <c>flowmap.png</c> does not follow the river channels, and the water stands flat at Y = 100 over a bed with no usable slope, so the
 /// direction is derived: water whose half-width is a few texels at most is a river; along each stretch of it (the principal axis of the river
 /// texels within <see cref="Reach"/> texels, which must be clearly elongated: ponds and marsh are not rivers) the water runs towards the lower

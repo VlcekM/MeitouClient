@@ -27,7 +27,7 @@ The price is CPU time. At every draw `VkGl` rebuilds what the draw needs from tr
 the vertex layout into a 20-field `PipelineKey`, looks it up in a dictionary, re-sends the changed dynamic state, copies each dirty
 loose-uniform block into a ring, pushes the descriptor set, and binds a vertex buffer for every input location. The renderers add their own
 GL-shaped cost on top: uniforms looked up by `(program, name)` dictionary keys, one call per uniform, four `VertexAttribPointer` calls per
-instanced draw. docs/viewer.md ("Shadow pass cost") measured about 4 µs per draw in real frames. The owner's dense-forest numbers are
+instanced draw. docs/render-shadows.md ("Shadow pass cost") measured about 4 µs per draw in real frames. The owner's dense-forest numbers are
 foliage 8.7 ms and shadows 6.1 ms of CPU against 7 ms of GPU, so the frame is CPU-bound.
 
 The plan, which the owner approved in waves:
@@ -876,7 +876,7 @@ sums, so atomics (if a variant uses them) do not affect the result.
 - **Draws**: per view, per batch, per part, the CPU records the material (step P: `LegacyProgram` slots; step O: a push constant), binds
   the part's vertex and index buffers and the view's instance buffer, and records `DrawIndexedIndirect(args, offset, 1)`. A batch with
   nothing visible draws 0 instances, at ~0.06-0.10 µs (measured). The forest view had 64 instanced batches in its far cascade
-  (docs/viewer.md), so a view costs on the order of 100-300 indirect draws.
+  (docs/render-shadows.md), so a view costs on the order of 100-300 indirect draws.
 - **Later (wave 3b+)**: meshes in one shared vertex and index arena, one `DrawIndexedIndirectCount` per (view, pipeline), the material from
   a per-draw table indexed by `gl_DrawID`. That needs step O's bindless materials.
 - **TERRAIN-mode rocks** stay CPU-culled until agent B provides an instanced main-pass TERRAIN-mode path. Today only the depth path is
@@ -893,11 +893,11 @@ sums, so atomics (if a variant uses them) do not affect the result.
 - Each cascade is a view. The candidate set ("in range of the camera eye, within 1.2 × the shadow range") is the view's range cap, measured
   from the camera eye exactly as `DrawDepth` passes `view.Eye`. There is no separate candidate pass.
 - In the atlas the casters are drawn depth-only with `LESS` (`ShadowPass.Render`), so the result is the minimum depth and **does not depend
-  on draw order** (docs/viewer.md makes the same argument for the instanced TERRAIN-mode fix). Cascades are the safest place to start
+  on draw order** (docs/render-shadows.md makes the same argument for the instanced TERRAIN-mode fix). Cascades are the safest place to start
   GPU-driven drawing.
 - The reflection target is 4× multisampled (`ReflectionPass.Samples`), so the foliage there draws **with alpha-to-coverage**
   (`FoliageRenderer.Draw` keys it on `GLEnum.Samples > 1`). The native path must take the sample count from the target, not assume 1. In
-  the main scene it is off: the scene is single-sampled (docs/viewer.md, "Post-processing").
+  the main scene it is off: the scene is single-sampled (docs/render-post.md).
 
 ### 5.6 Parity: what can match exactly, and what cannot be promised
 
@@ -925,7 +925,7 @@ contraction into FMA) and the C#'s operation order, the GPU reproduces scalar C#
   too); scalar `sqrt(dx² + dz²)` measured bit-identical to `Vector2.Distance` (2M samples), the reciprocal fade within 1 ulp (tests
   `FoliageCullTests`). Gate: 0 differing pixels in all ten views (`--faithful all` in Debug, Meitou with `--faithful range` in Release), except the rock view, which differs between
   two runs of the base build itself (21 pixels at 13:00, 6 at 02:00, one spot at (717-724, 315-323)); A1's rock pictures equal one of the
-  base runs' exactly (docs/viewer.md, "Foliage").
+  base runs' exactly (docs/render-foliage.md).
 - **A2, GPU port.** The same formulas on the GPU. The remaining divergence is the square root inside the fade (`d` for w). A **cull
   verification mode** (`MEITOU_GPU_CULL_VERIFY=1`) runs the A1 CPU cull as well, reads the GPU's per-view lists back a frame later, and
   reports any difference in visible sets (must be none), order (must be none) and fade (each difference with its ulp distance). The pixel
@@ -1073,7 +1073,7 @@ These change the picture on purpose, so they are not part of any parity step. Th
   is how small things become affordable at several thousand units. The distances are adjustable settings per size class (owner decision 4).
   **Done on the CPU (2026-10-06)** as the `range` switch, by size class per mesh rather than per instance (a group keeps one range, so the
   ChunkRecord's per-view range carries it unchanged): large / medium / small first at 5000 / 2500 / 800 and, since the billboards (8.10), at 12000 / 5000 / 800 by default, Tab sliders and
-  `--range-large|medium|small`; FAR layers' large meshes keep the longer of that and 8000 × the setting (docs/viewer.md "Foliage",
+  `--range-large|medium|small`; FAR layers' large meshes keep the longer of that and 8000 × the setting (docs/render-foliage.md,
   docs/formats/foliage.md "Mesh sizes").
 - **LOD selection on the GPU** (objects, C): `MeshLod.Select` / `Blend` per instance in the cull kernel, with two outputs while blending,
   as the CPU emits them. This is parity-relevant (the LOD rule is the game's), so it follows the A1/A2 pattern.
@@ -2361,7 +2361,7 @@ stage and pass label, the program (source hash and name), the pipeline state (Vk
 state values, the attachment images, the descriptor handles (textures as image and sampler handles, which are the same objects on both
 sides through export), vertex and index buffer handles and offsets, the counts, and a hash of each default block's bytes.
 `MEITOU_DRAW_LOG=<file>` writes it for one frame of a `--screenshot` run. `meitou-tools draw-log-diff a b` compares two logs after mapping
-GL names to handles. This turns "20 pixels differ" into "draw 1,812 has another sampler". docs/viewer.md records exactly such an
+GL names to handles. This turns "20 pixels differ" into "draw 1,812 has another sampler". docs/render-shadows.md records exactly such an
 unexplained case.
 
 ### 7.7 The parity gate procedure
@@ -2370,7 +2370,7 @@ For every step that claims parity (foundation steps, 3a ports, A1, A2, C1, C2, s
 
 1. **Pre-port build**: master (or the step's base) in Release. Run `tools/scripts/parity.sh <viewer> <dir1> --faithful all` **twice**
    (`dir1`, `dir2`) and compare them with `parity-compare.sh`. Every view must show maximum difference 0. A view that is not deterministic
-   is reported and rerun, and the step cannot be judged on it until it is explained. docs/viewer.md has one unexplained rock-view run with
+   is reported and rerun, and the step cannot be judged on it until it is explained. docs/render-shadows.md has one unexplained rock-view run with
    20 differing pixels. The script renders **five views at 13:00 and 02:00, ten pictures** (docs/engine.md and DECISIONS 2 say the
    same; older entries that say eight views date from before the forest view).
 2. **Port build**: the same command into `dir3`. Compared to `dir1`: **maximum 0 and mean 0.0000 in all ten**. "0 differing pixels"
@@ -3494,7 +3494,7 @@ The foliage program's vertex default block is **8,272 bytes** (`uBones[128]` fro
 direction "VkGl draws, then a native segment records into the same frame" (0 validation errors) and the stale-pipeline hazard of 4.1
 (also 0 errors: the hazard is invisible to validation).
 
-docs/viewer.md's ~4 µs per draw was measured in real frames. There each draw touches different objects with cold caches, the vertex block
+docs/render-shadows.md's ~4 µs per draw was measured in real frames. There each draw touches different objects with cold caches, the vertex block
 is copied whenever a vertex uniform changes (8 KB for mesh programs), and the renderer's own C# work counts too. The spike runs hot caches
 and one program, so its figures are lower bounds for both paths. **Estimate**: in real frames, step P costs ~0.3-0.6 µs per draw and the
 native model ~0.1-0.2 µs, against ~2-4 µs today: roughly 5-10× fewer CPU microseconds per draw for step P, and 15-30× for the native model.
@@ -3525,13 +3525,13 @@ transition is within the noise (`SuppressGCTransition` measured 0.087-0.114 agai
 
 ### 9.2 Per pass (estimates)
 
-- **Draw overhead.** The forest still camera drew 977 draws per frame after the TERRAIN-mode fix (docs/viewer.md). At ~4 µs that is ~3.9 ms
+- **Draw overhead.** The forest still camera drew 977 draws per frame after the TERRAIN-mode fix (docs/render-shadows.md). At ~4 µs that is ~3.9 ms
   of draw overhead per frame. At step P (~0.4 µs) it is ~0.4 ms, and with the native model (~0.15 µs) ~0.15 ms.
-- **Foliage** (owner's forest figure 8.7 ms CPU). The parts are per-instance culling (docs/viewer.md: ~1.2-1.4 ms per cascade with the
+- **Foliage** (owner's forest figure 8.7 ms CPU). The parts are per-instance culling (docs/render-shadows.md: ~1.2-1.4 ms per cascade with the
   candidate cache, and more in the main slices), the per-batch upload, and the draws. Step P removes most of the draw part. A2 removes the
   culling and the upload: the CPU keeps the zone and group walk (hundreds to a few thousand groups) and ~100-300 indirect draws per view.
   **Estimate**: under 1 ms for foliage across all views, from 8.7. The remaining zone walk could also move to the GPU if it shows up.
-- **Shadows** (owner's figure 6.1 ms CPU). The foliage casters' share goes as above. Terrain patches (~0.9 ms for cascade 3, docs/viewer.md)
+- **Shadows** (owner's figure 6.1 ms CPU). The foliage casters' share goes as above. Terrain patches (~0.9 ms for cascade 3, docs/render-shadows.md)
   become cheap native draws with a push constant per node instead of two uniform calls and a block copy.
 - **GPU cost of the culling (estimate).** 96 bytes per instance read once per dispatch, all views tested in one pass: 500,000 instances
   ≈ 48 MB, on the order of 0.1-0.2 ms at the 4070's bandwidth, plus the compaction writes (64 bytes per visible instance per view). It has

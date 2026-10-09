@@ -7,7 +7,7 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The Meitou water's FFT ocean (docs/viewer.md "Meitou water"): the spectrum on the CPU, and the GPU's evolve, inverse FFT and
+/// <summary>The Meitou water's FFT ocean (docs/render-water.md "Meitou water"): the spectrum on the CPU, and the GPU's evolve, inverse FFT and
 /// assembly against a single wave worked out by hand.</summary>
 public class OceanTests
 {

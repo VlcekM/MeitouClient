@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// The Meitou water's wave spectrum (<see cref="OceanWaves"/>, docs/viewer.md "Meitou water"): Tessendorf's statistical ocean, the initial
+/// The Meitou water's wave spectrum (<see cref="OceanWaves"/>, docs/render-water.md "Meitou water"): Tessendorf's statistical ocean, the initial
 /// amplitudes h0(k) of every wave on a grid of wave vectors, from a fetch-limited JONSWAP spectrum led by the wind and a cos^2s spreading round
 /// it. Three cascades of the same grid over different tile sizes, each keeping only its own band of wave numbers, so together they cover
 /// waves from about 100 m down to a few cm without counting any twice. Deterministic: the random phases come from a hash of the texel, so a

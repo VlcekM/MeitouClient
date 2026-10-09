@@ -208,7 +208,7 @@ The order of work in a zone:
 ## Mesh sizes
 
 Not a game concept: the game ranges a mesh by its layer only ("Distances"). The viewer's Meitou `range` switch draws meshes by size instead
-(docs/viewer.md, "Foliage"), so the sizes of the meshes the biomes place were measured (**Observed**, 2026-10-06, a scratch survey over the
+(docs/render-foliage.md), so the sizes of the meshes the biomes place were measured (**Observed**, 2026-10-06, a scratch survey over the
 install's load order: every FOLIAGE_MESH of a non-grass layer of a BIOMES record, children included, 643 meshes, all of them found and
 decoded). A mesh's **size** is its bounding radius (half the diagonal of the box around the mesh and its leaves mesh, at least 1; what the
 renderer measures after decoding) times the larger of its record's two scale limits (`MaxScale`; some records have them swapped, e.g.
@@ -515,4 +515,4 @@ are fragment-bound (**Observed**). Tolerances (4 px, 2 texels, 0.02) were tuned 
 
 ## How the viewer draws it
 
-See docs/viewer.md, "Foliage".
+See docs/render-foliage.md.
