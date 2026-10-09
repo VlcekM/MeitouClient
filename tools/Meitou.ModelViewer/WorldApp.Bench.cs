@@ -282,7 +282,9 @@ static partial class WorldApp
             (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = start;
             if (moved)
             {
-                // Back at the start: what was unloaded on the way comes back before the picture.
+                // Back at the start: what was unloaded on the way comes back before the picture. The settles upload, so they need an open frame
+                // (the timing loop ends with the frames finished).
+                context.EnsureFrame();
                 gpu.Streamer?.Settle(gpu.Anchor ?? camera.Eye);
                 gpu.Objects?.Settle(camera.Eye);
                 gpu.Foliage?.Settle(camera.Eye);
