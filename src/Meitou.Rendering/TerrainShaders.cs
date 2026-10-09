@@ -586,9 +586,9 @@ static class TerrainShaders
     public static string RockBakeVertexNative() => Native(MeshVertex, RockBakePushMembers);
 
     public static string PatchVertexNative() => Native(PatchVertex);
-    public static string FragmentNative() => Native(Fragment);
+    public static string FragmentNative() => Gi.GiResolveShaders.WithAlbedo(Native(Fragment));
     public static string MeshVertexNative() => Native(MeshVertex);
-    public static string MeshFragmentNative() => Native(MeshFragment);
+    public static string MeshFragmentNative() => Gi.GiResolveShaders.WithAlbedo(Native(MeshFragment));
     public static string MeshInstancedDepthVertexNative() => Native(MeshInstancedDepthVertex);
     /// <summary><see cref="ShadowShaders.DepthFragment"/> (the caster block at set 0, binding 2) with the terrain's push block, so both
     /// stages of a depth program declare the same one.</summary>

@@ -119,7 +119,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     {
         Gpu = gpu;
         nativeFrame = new NativeFrame(gpu, extraStorage: 4);
-        colourProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.Vertex(), CharacterShaders.Fragment(), "characters", CharacterShaders.InstanceLocation);
+        colourProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.Vertex(), Gi.GiResolveShaders.WithAlbedo(CharacterShaders.Fragment(), inShader: true), "characters", CharacterShaders.InstanceLocation);
         depthProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.DepthVertex(), CharacterShaders.DepthFragment(), "characters depth", CharacterShaders.InstanceLocation);
         motionProg = new ReflectedProgram(gpu, nativeFrame, CharacterShaders.MotionVertex(), CharacterShaders.MotionFragment(), "characters motion", CharacterShaders.InstanceLocation);
         content = new CharacterContent(gpu, install, db, assetLocator);

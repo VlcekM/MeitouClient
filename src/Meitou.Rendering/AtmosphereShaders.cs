@@ -37,7 +37,7 @@ static class AtmosphereShaders
         uniform vec4 uWeatherDust;    // xyz: dustAmount (current, inside, slope; docs/formats/weather.md "Dust")
         uniform sampler2D uWeatherDustNoise;   // the dust noise (Turbulent.dds), sampled at world.xz * 0.002
         uniform sampler2D uWeatherGround;      // the terrain's whole-world ground colour map: the dust colour (the BIOMES `ground colour` where the object is)
-        uniform vec4 uGiParams;       // Meitou probe GI (docs/render-gi.md): x 1 while the probes light the world, y their strength, w their hysteresis
+        uniform vec4 uGiParams;       // Meitou probe GI (docs/render-gi.md): x 1 while the probes light the world, y their strength, z 1 with the post resolve, w their hysteresis
         uniform vec4 uGiGrid[4];      // per cascade: the grid's place and spacing (Gi.GiShaders.ProbeSampling)
         uniform sampler2D uGiIrradiance, uGiDistance, uGiBase;
         {{Gi.GiShaders.ProbeSampling}}
@@ -154,6 +154,9 @@ static class AtmosphereShaders
             float a0 = t.x * min(t.y, exp2(-9.28 * nv)) + t.z;
             return clamp(a0 + 0.04 * (t.w - a0), 0.0, 1.0);
         }
+        // What a lit fragment writes to the GI resolve's surface target (GiResolveShaders.WithAlbedo; RGBA16UI, 0: no probes here), set by kenshiLight:
+        // x, y the shading normal's octahedral position (16 bits each), z sqrt(albedo) red | green << 8, w blue | 1 << 8.
+        uvec4 giAlbedoOut = uvec4(0u);
         // A dielectric surface lit as Kenshi's main lighting pass lights it: HDR colour. v: towards the eye.
         vec3 kenshiLight(vec3 albedo, vec3 n, vec3 v, float gloss, vec3 world)
         {
@@ -176,6 +179,16 @@ static class AtmosphereShaders
             // Meitou probe GI: the probes' irradiance (sky seen past the geometry, light bounced off it) in place of the sky's, and the sky's
             // reflection dimmed as much as the probes dim the sky (an occluded corner reflects no sky).
             float specularOcclusion = 1.0;
+            #ifndef GI_IN_SHADER
+            // The GI resolve (uGiParams.z, docs/render-gi.md "Resolve"): the sky's ambient here, the albedo out for the post pass that swaps in the probes.
+            if (uGiParams.x > 0.5 && uGiParams.z > 0.5)
+            {
+                uvec2 o = uvec2((giOct(n) * 0.5 + 0.5) * 65535.0 + 0.5);
+                uvec3 c = uvec3(sqrt(clamp(albedo, 0.0, 1.0)) * 255.0 + 0.5);
+                giAlbedoOut = uvec4(o, c.r | (c.g << 8), c.b | 256u);
+            }
+            else
+            #endif
             if (uGiParams.x > 0.5)
             {
                 vec4 gi = giIrradiance(world, n, v);

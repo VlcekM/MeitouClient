@@ -256,7 +256,43 @@ So keeping the structures up to date costs well under a tenth of a millisecond p
 - Low sun (`7.5`) in an alley: the shade is much darker and lit by warm bounce light (mean difference 21).
 - **Open:** the overall level may be a little dark (energy lost through the constant object albedo, and no foliage in the scene).
 
+## Resolve (`--gi-resolve <n>`, `Gi/GiResolveShaders.cs`, `PostProcess.RunGiResolve`)
+
+*From the code.* The terrain and the buildings no longer read the probes per fragment; the probes are read once per pixel of a target at
+1/n of the render size after the scene (default 2; 1 full size; 0 the old per-fragment reads).
+
+- **Surface target.** While the resolve runs, the scene's passes carry a second colour attachment (location 1, RGBA16UI, cleared to 0):
+  `kenshiLight` in the terrain and building fragments keeps the sky's ambient and writes the shading normal's octahedral position (16 bits
+  each), sqrt(albedo) (8 bits each) and a flag. The foliage, grass, characters and impostors keep reading the probes themselves and write
+  0 (`GI_IN_SHADER`), as does the water; the sky leaves the clear. Every lit fragment shader is wrapped (`WithAlbedo`): its `main` renamed
+  and a new one that writes the output after it. A pipeline writes the attachment only when its fragment shader declares location 1
+  (SPIR-V reflection), never blended. The GPU layer's `AttachmentFormats`, `RenderingDesc`, `PassTargets` and secondary inheritance take
+  the optional second attachment.
+- **Resolve.** Per low texel: the first pixel of its block with the flag, its position from the near or far slice's depth, the stored
+  normal, then `giIrradiance` there and the sky's ambient as the fragment had it. Stored: (probes − sky) × the GI share × the strength × the
+  haze's transmittance (the haze is linear in the colour, so `atmoApply(1) − atmoApply(0)`), and the view depth.
+- **Apply.** Per flagged pixel: the four nearest low texels, bilinear weights divided by the relative depth difference, times the albedo,
+  added to the scene colour (red, green and blue). It runs after the slices and before the fog volumes, SSAO and the upscaler.
+- **Lost against the per-fragment reads:** the probes' specular occlusion on these surfaces (the sky's reflection is not dimmed in
+  occluded corners), and the light of the probes under water in the Meitou water's refraction (the refraction copies the scene first).
+
+**Measured** (2026-10-09, RTX 4070, swamp, DLSS 0.67, 1920 × 1080, 512 paired frames):
+
+| | Frame | Terrain | Objects | Resolve + apply |
+| --- | --- | --- | --- | --- |
+| `--ab gi-resolve` (half against per-fragment) | −0.19 ms (163.6 / 158.5 fps) | −0.10 | −0.10 | 0.07 |
+| `--ab gi-scene` (whole GI, with the resolve) | +0.62 ms (168.5 / 188.3 fps; it was +0.94) | +0.03 | 0.00 | 0.06 |
+
+- **Pictures** against the per-fragment reads (the five views of "Terrain and object reads"): full size means 0.1–1.4, max 31; half size
+  means 0.3–1.7, max 65 (Mongrel; the block's one normal at edges). The first version took its normal from the depth: means up to 2.5 and
+  the terrain's and rocks' facets showed in the shade; hence the stored normal.
+- **Parity:** with GI off, and with `--gi --faithful gi`, mean 0.0000 against `7114e08` (Hub and swamp, 1280 × 720). Vulkan validation:
+  0 errors.
+
 ## Open
+
+- **Resolve:** specular occlusion for the resolved surfaces (a spare 7 bits of the surface target could carry the fragment's
+  environment specular); foliage in the resolve (its pixels' normals are noisy; it reads without the visibility test now).
 
 - **Terrain resolution.** The fine grid matches the drawn terrain only roughly (16 against the fine window's spacing). Building it from
   the streamed fine window directly would remove the culling workaround.

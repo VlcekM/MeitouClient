@@ -49,7 +49,9 @@ internal sealed unsafe class GiProbes : IDisposable
     public float Strength { get; set; } = 1;
 
     /// <summary>What the shaders read: x 1 while the probes are on and filled, y <see cref="Strength"/>, w the hysteresis.</summary>
-    Vector4 Params => new(Enabled && Active && Shade && !InReflection && updated ? 1 : 0, Strength, 0, Hysteresis);
+    Vector4 Params => new(Enabled && Active && Shade && !InReflection && updated ? 1 : 0, Strength, Resolve ? 1 : 0, Hysteresis);
+    /// <summary>True: the lit fragments write their albedo and the post pass adds the probes' light (<c>--gi-resolve</c>, docs/render-gi.md "Resolve").</summary>
+    public bool Resolve { get; set; }
     /// <summary>True while the water reflection draws: the mirrored scene keeps the flat ambient (the frame block is re-read per segment).</summary>
     public bool InReflection { get; set; }
     /// <summary>True: the water reflection reads the probes too (off by default; the bench's gi-reflection switch).</summary>

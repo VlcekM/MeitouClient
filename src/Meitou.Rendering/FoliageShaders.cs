@@ -250,7 +250,7 @@ static class FoliageShaders
 
     /// <summary><see cref="MeshVertex"/> in the native model (the shared mesh uniforms on <see cref="MeshPush"/> and <see cref="ViewConstants"/>).</summary>
     public static string MeshVertexNative() => NativeShaders.Port(MeshVertex());
-    public static string MeshFragmentNative() => NativeShaders.Port(MeshFragment());
+    public static string MeshFragmentNative() => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(MeshFragment()), inShader: true);
     /// <summary><see cref="ShadowShaders.MeshDepthFragment"/> in the native model, for <see cref="MeshVertexNative"/>.</summary>
     public static string MeshDepthNative() => NativeShaders.MeshDepthFragment();
 
@@ -279,7 +279,7 @@ static class FoliageShaders
     };
 
     public static string GrassVertexNative() => NativeShaders.Port(GrassVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
-    public static string GrassFragmentNative() => NativeShaders.Port(GrassFragment, NativeShaders.Map(GrassMap), GrassPushMembers);
+    public static string GrassFragmentNative() => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(GrassFragment, NativeShaders.Map(GrassMap), GrassPushMembers), inShader: true);
     public static string GrassMotionVertexNative() => NativeShaders.Port(GrassMotionVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
     public static string GrassMotionFragmentNative() => NativeShaders.Port(GrassMotionFragment, NativeShaders.Map(GrassMap), GrassPushMembers);
 

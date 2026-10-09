@@ -30,7 +30,9 @@ public sealed class VertexLayout : IEquatable<VertexLayout>
 }
 
 /// <summary>The formats a pipeline renders into: one colour attachment (Undefined = none), depth (Undefined = none), samples.</summary>
-public readonly record struct AttachmentFormats(Format Colour, Format Depth, int Samples = 1);
+/// <summary>A pass's attachment formats. <paramref name="Extra"/>: a second colour attachment (location 1; the GI resolve's albedo, docs/render-gi.md), written only by
+/// programs whose fragment shader declares that output.</summary>
+public readonly record struct AttachmentFormats(Format Colour, Format Depth, int Samples = 1, Format Extra = Format.Undefined);
 
 /// <summary>GL's blend: one factor pair for colour and alpha, add.</summary>
 public readonly record struct BlendState(bool Enable, BlendFactor Src = BlendFactor.One, BlendFactor Dst = BlendFactor.Zero)
@@ -86,7 +88,7 @@ public static unsafe class PipelineFactory
 
     public static Pipeline CreateGraphics(VulkanDevice device, ShaderModule vertex, ShaderModule fragment, PipelineLayout layout,
         ReadOnlySpan<VertexInput> inputs, PrimitiveTopology topology, AttachmentFormats targets, BlendState blendState,
-        ColorComponentFlags colourMask, bool polygonLine, bool alphaToCoverage, bool depthClamp)
+        ColorComponentFlags colourMask, bool polygonLine, bool alphaToCoverage, bool depthClamp, ColorComponentFlags extraMask = 0)
     {
         var entry = "main"u8;
         int n = inputs.Length;
@@ -125,27 +127,32 @@ public static unsafe class PipelineFactory
             AlphaToCoverageEnable = alphaToCoverage,
         };
         var depthStencil = new PipelineDepthStencilStateCreateInfo { SType = StructureType.PipelineDepthStencilStateCreateInfo };
-        var attachment = new PipelineColorBlendAttachmentState
+        var attachments = stackalloc PipelineColorBlendAttachmentState[2];
+        attachments[0] = new PipelineColorBlendAttachmentState
         {
             BlendEnable = blendState.Enable,
             SrcColorBlendFactor = blendState.Src, DstColorBlendFactor = blendState.Dst, ColorBlendOp = BlendOp.Add,
             SrcAlphaBlendFactor = blendState.Src, DstAlphaBlendFactor = blendState.Dst, AlphaBlendOp = BlendOp.Add,
             ColorWriteMask = colourMask,
         };
+        // The extra attachment (location 1) is never blended: written by the programs that declare it (extraMask), else left as it is.
+        attachments[1] = new PipelineColorBlendAttachmentState { BlendEnable = false, ColorWriteMask = extraMask };
+        uint colourCount = targets.Colour == Format.Undefined ? 0u : targets.Extra == Format.Undefined ? 1u : 2u;
+        if (colourCount == 2 && blendState.Enable && !device.IndependentBlend) attachments[1] = attachments[0] with { ColorWriteMask = extraMask };
         var blend = new PipelineColorBlendStateCreateInfo
         {
             SType = StructureType.PipelineColorBlendStateCreateInfo,
-            AttachmentCount = targets.Colour == Format.Undefined ? 0u : 1u, PAttachments = &attachment,
+            AttachmentCount = colourCount, PAttachments = attachments,
         };
         fixed (DynamicState* dynamics = Dynamic)
         {
             var dynamic = new PipelineDynamicStateCreateInfo { SType = StructureType.PipelineDynamicStateCreateInfo, DynamicStateCount = (uint)Dynamic.Length, PDynamicStates = dynamics };
-            var colourFormat = targets.Colour;
+            var colourFormats = stackalloc Format[2] { targets.Colour, targets.Extra };
             bool stencil = targets.Depth is Format.D24UnormS8Uint or Format.D32SfloatS8Uint;
             var rendering = new PipelineRenderingCreateInfo
             {
                 SType = StructureType.PipelineRenderingCreateInfo,
-                ColorAttachmentCount = colourFormat == Format.Undefined ? 0u : 1u, PColorAttachmentFormats = &colourFormat,
+                ColorAttachmentCount = colourCount, PColorAttachmentFormats = colourFormats,
                 DepthAttachmentFormat = targets.Depth, StencilAttachmentFormat = stencil ? targets.Depth : Format.Undefined,
             };
             fixed (byte* name = entry)
@@ -261,7 +268,8 @@ public sealed unsafe class PipelineLibrary : IDisposable
         var p = d.Program;
         if (p.VertexModule.Handle == 0 || p.FragmentModule.Handle == 0) throw new ArgumentException($"{p.Name}: not a graphics program");
         var handle = PipelineFactory.CreateGraphics(device, p.VertexModule, fragment.Handle != 0 ? fragment : p.FragmentModule, p.Layout, d.Vertex.Inputs, d.Topology, d.Targets, d.Blend,
-            d.ColourMask, d.Polygon == Silk.NET.Vulkan.PolygonMode.Line, d.AlphaToCoverage, d.DepthClamp);
+            d.ColourMask, d.Polygon == Silk.NET.Vulkan.PolygonMode.Line, d.AlphaToCoverage, d.DepthClamp,
+            p.FragmentReflection?.Outputs.Any(o => o.Location == 1) == true ? DrawState.Rgba : 0);
         if (d.Name.Length > 0) device.SetName(ObjectType.Pipeline, handle.Handle, d.Name);
         return new GraphicsPipeline(handle, d);
     }

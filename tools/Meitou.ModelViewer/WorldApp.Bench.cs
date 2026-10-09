@@ -49,6 +49,7 @@ static partial class WorldApp
             if (gpu.Probes is { } shadeProbes) AbToggles.Register("gi-shade", () => shadeProbes.Shade, v => shadeProbes.Shade = v, "the world's shading reading the probes (side B: probes updated, not read)");
             if (gpu.Probes is { } sleepProbes) AbToggles.Register("gi-sleep", () => sleepProbes.SleepPeriod > 0, v => sleepProbes.SleepPeriod = v ? 8 : 0, "probes with no surface near sleep (side B: every probe traced)");
             if (gpu.Probes is { } reflectProbes) AbToggles.Register("gi-reflection", () => !reflectProbes.Reflected, v => reflectProbes.Reflected = !v, "the water reflection without the probes (side B: it reads them)");
+            { int resolve = gpu.GiResolve > 0 ? gpu.GiResolve : 2; AbToggles.Register("gi-resolve", () => gpu.GiResolve > 0, v => gpu.GiResolve = v ? resolve : 0, "the probes read once per pixel after the scene (side B: in every lit fragment)"); }
             AbToggles.Register("gi-debug", () => gpu.GiDebug > 0, v => gpu.GiDebug = v ? giMode : 0, "the global illumination's debug view, the scene built on both sides (needs --gi-debug)");
         }
         {

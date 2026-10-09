@@ -66,6 +66,8 @@ sealed class WorldOptions
     public bool Gi, GiProbes = true;
     /// <summary><c>--gi-phases</c>: the probes are updated in this many shares, one a frame (1, 2, 4 or 8).</summary>
     public int GiPhases = 4;
+    /// <summary><c>--gi-resolve</c>: the probes read once per pixel after the scene, at 1/n of the render size (0: in every lit fragment).</summary>
+    public int GiResolve = 2;
     /// <summary><c>--gi-strength</c>: how much the probes replace the sky's light (1 fully).</summary>
     public float GiStrength = 1;
     /// <summary><c>--gi-foliage</c>: the smallest bounding radius of a plant or rock in the traced scene (0: no foliage).</summary>
@@ -346,6 +348,7 @@ sealed class WorldOptions
                 case "--gi-phases": o.GiPhases = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--gi-foliage": o.GiFoliage = F(); break;
                 case "--gi-strength": o.GiStrength = F(); break;
+                case "--gi-resolve": o.GiResolve = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--lights": o.Lights = Next() != "off"; break;
                 case "--simple-sky": o.SimpleSky = true; break;
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
@@ -446,7 +449,9 @@ sealed class SceneHost(GpuContext ctx)
         bool secondaries = Recording.Secondaries;
         var colour = clearColour is { } c ? targets.Colour with { Load = Vk.AttachmentLoadOp.Clear, Clear = new Vk.ClearValue(c) } : targets.Colour;
         var depth = clearDepth ? targets.Depth with { Load = Vk.AttachmentLoadOp.Clear, Clear = new Vk.ClearValue(depthStencil: new Vk.ClearDepthStencilValue(1f, 0)) } : targets.Depth;
-        list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height), secondaries);
+        // The extra target (the GI resolve's albedo) is cleared to 0 with the colour: no surface there takes the probes' light in post.
+        var extra = clearColour is not null && !targets.Extra.IsNull ? targets.Extra with { Load = Vk.AttachmentLoadOp.Clear, Clear = default } : targets.Extra;
+        list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height, Extra: extra), secondaries);
         this.targets = targets;
         ctx.BeginHostPass(list, targets, DrawState.Scene(targets.Formats, DrawState.Rgb));   // alpha: the characters only (the SSAO character mask)
         if (secondaries) ctx.Frame.Parallel.Begin(list, targets.Formats, stage);
@@ -640,6 +645,8 @@ static class WorldFrame
         public int GiDebug;
         /// <summary>Whether the traced scene is updated (and the debug view drawn) this frame: the bench's gi-scene switch.</summary>
         public bool GiActive = true;
+        /// <summary>The GI resolve's divisor (<c>--gi-resolve</c>: 0 the lit fragments read the probes, 1 full size, 2 half; docs/render-gi.md "Resolve").</summary>
+        public int GiResolve = 2;
         public PostProcess? Post;
         public WorldObjectRenderer? Objects;
         public FoliageRenderer? Foliage;
@@ -866,6 +873,7 @@ static class WorldFrame
                 if (o.Gi)
                 {
                     gpu.Probes = new Gi.GiProbes(context) { Enabled = o.GiProbes, Phases = o.GiPhases, Strength = o.GiStrength };
+                    gpu.GiResolve = o.GiResolve;
                     Console.WriteLine($"gi        {gpu.Probes.Describe()}");
                 }
             }
@@ -1045,6 +1053,10 @@ static class WorldFrame
     {
         if (gpu.Surfaces is { } surfaces) surfaces.GameTime = time;
         // Everything is drawn into the post-processing chain's HDR framebuffer (before the reflection pass, which restores whatever is bound).
+        // The GI resolve while the probes light the world: the scene targets carry the albedo target, the lit fragments write it.
+        bool giResolve = gpu.GiResolve > 0 && gpu.GiActive && gpu.Probes is { Enabled: true, Shade: true };
+        if (gpu.Post is { } giPost) giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
+        if (gpu.Probes is { } giProbes) giProbes.Resolve = giResolve;
         gpu.Post?.Begin(width, height);
         // The scene is drawn at the render size (smaller than the display with an upscaler), its projection jittered by the upscaler.
         int rw = gpu.Post?.RenderWidth ?? width, rh = gpu.Post?.RenderHeight ?? height;
@@ -1231,6 +1243,8 @@ static class WorldFrame
         }
         // Records the last slice's jobs and executes them: the render thread's share (the fork-join) counts as "water", the last stage of the host.
         if (host.IsOpen) { host.Close(); StageClock.Lap(9); }
+        gpu.Post!.RunGiResolve();
+        StageClock.Phase("gi resolve");
         if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneDepth, rw, rh);
         // The placed fog volumes over the finished scene (opaque, water, sky; the haze is in the shaders), one pass reading the depth, as the game's queue 82 does.
         gpu.Post!.RunFogVolumes(gpu.FogVolumes is { UsedData: > 0 });
