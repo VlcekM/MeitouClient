@@ -52,7 +52,7 @@ jobs:
           "version=$v" >> $env:GITHUB_OUTPUT
 
       - name: Quick tests
-        run: dotnet test --filter "Category!=Slow" -c Release
+        run: dotnet test --filter "Category!=Slow&Category!=Bench" -c Release
 
       - name: Package
         shell: pwsh
