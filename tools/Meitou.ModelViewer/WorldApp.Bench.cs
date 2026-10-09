@@ -34,6 +34,7 @@ static partial class WorldApp
             AbToggles.Register("fog-direction", () => fog.DirectionBound, v => fog.DirectionBound = v, "the fog cull's bound by ray direction (off: only the plain bound, which finds no distance at a 50000 far clip)");
         }
         if (gpu.Shadow is { } shadowPass) AbToggles.Register("shadow-pass", () => shadowPass.Enabled, v => shadowPass.Enabled = v, "the whole shadow pass (--no-shadows)");
+        if (gpu.Shadow is { } spreadPass) AbToggles.Register("shadow-spread", () => spreadPass.FarBudget > 0, v => spreadPass.FarBudget = v ? ShadowSchedule.DefaultBudget : 0, "at most one far shadow cascade redrawn per frame (B: all that are due at once)");
         if (gpu.Foliage is { } foliagePass) AbToggles.Register("foliage-draw", () => foliagePass.Enabled, v => foliagePass.Enabled = v, "trees, bushes, rocks and grass (--no-foliage)");
         if (gpu.Foliage is { } grassPass)
         {
