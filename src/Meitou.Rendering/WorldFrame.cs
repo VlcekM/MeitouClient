@@ -61,7 +61,15 @@ sealed class WorldOptions
     public bool NoShadows;
     public int ShadowQuality = 1, DebugShadows, ShadowFilter = 2;
     public float? ShadowRange;   // --shadow-range as given (null: the default of the shadows switch's mode, see ShadowRangeFor)
+    /// <summary><c>--shadow-range 0</c>: the shadow pass is made but starts off (the Tab slider's left end; it can be turned on there).</summary>
+    public bool ShadowsOff;
     public bool MeitouShadows = true;   // the shadows switch (Enhancements): Meitou by default, false the game's CSM
+    /// <summary><c>--no-vsync</c>: the interactive window starts uncapped (the Tab panel's VSync).</summary>
+    public bool VSync = true;
+    /// <summary><c>--object-lod x</c>: the Tab panel's "Object LOD distance x" (0.25 to 4; the object renderer's LOD bias is its inverse).</summary>
+    public float ObjectLod = 1;
+    /// <summary><c>--grass-density x</c>: the Tab panel's "Grass density x" (0.1 to 2; null: the renderer's default).</summary>
+    public float? GrassDensity;
 
     /// <summary>
     /// The shadow distance for the shadows switch's mode: <c>--shadow-range</c> when given, else the game's default (5000) in Faithful and
@@ -152,6 +160,28 @@ sealed class WorldOptions
     /// <summary>The longest <c>--shadow-range</c> the command line takes (the game stops at 9000; larger ranges cost VRAM and above this the driver has been seen to reset).</summary>
     public const float CommandLineMaxShadowRange = 15000;
 
+    /// <summary>
+    /// <c>--low-end</c>: the potato-PC settings, expanded in place into the options they stand for (as <c>--view</c>), so any option after it overrides
+    /// one of them. Short draw distances, no reflections or shadows, the game's FXAA turned off too, 0.83 render scale, quarter-size particles.
+    /// </summary>
+    public static readonly string[] LowEnd =
+    [
+        "--no-vsync",
+        "--object-distance", "5000", "--landmark-distance", "5000", "--object-lod", "0.25",
+        "--range-large", "5050", "--range-medium", "2050", "--range-small", "1050",
+        "--impostor-distance", "1150", "--large-impostor-distance", "1100",
+        "--grass-density", "0.1",
+        "--water-reflection", "0", "--reflection-range", "0.1",
+        "--shadow-range", "0", "--shadow-filter", "0",
+        "--faithful", "ao,aa,shadows,water", "--no-fxaa", "--render-scale", "0.83",
+        "--particles-low", "--particle-divisor", "4", "--particle-density", "0.1",
+        "--anisotropy", "1", "--texture-quality", "3", "--material-distance", "15000",
+    ];
+
+    /// <summary>The arguments with every <c>--low-end</c> replaced by <see cref="LowEnd"/>; the rest keep their places (so later options win).</summary>
+    public static string[] ExpandLowEnd(string[] args) =>
+        args.Contains("--low-end") ? [.. args.SelectMany(a => a == "--low-end" ? LowEnd : [a])] : args;
+
     public const string Usage = """
         meitou-viewer --world [where] [options]
           where (default: the world's centre):
@@ -189,6 +219,7 @@ sealed class WorldOptions
           --reflection-range <x>   the game's `reflection range`: the mirrored scene is drawn out to haze distance x this (default 0.6, with the default haze distance 30000)
           --texture-quality <0..4> the game's `texture resolution gimping`: 0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly; each step drops the top mip of compressed textures as they load (default 1; 0 restores full size)
           --no-shadows             no sun shadow map   --shadow-quality <0|1|2> map side 1024/2048/4096 (default 1)   --shadow-range <u> (1000..9000, default 5000; with the Meitou shadows 1000..15000, default 10000)
+          --shadow-range 0         shadows start off (the Tab slider turns them on)
           --shadow-filter <0|1|2>  Meitou shadow filter: 2 full (default), 1 the far cascades cheaper, 0 cheapest everywhere (low-end GPUs)
           --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture
           (the shadows switch, F5: Meitou by default, view-fitted cascades with soft contact-hardening penumbrae and the terrain's shadow out to the horizon; --faithful shadows the game's CSM)
@@ -204,6 +235,10 @@ sealed class WorldOptions
           --no-fog-volumes         leave out the placed fog volumes (fogfeatures.dat: the swamp's fog, the Fog Islands', the Vain's)
           --no-fog-cull            draw what the fog in front of the camera completely hides (comparison; the image is the same)
           --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-density <x> the effects' emission rate x (0.1-1, the Tab slider)   --anisotropy <n> the most anisotropic filtering any texture gets (1-16, the Tab slider; 16 default)   --particle-area <r> place weather effects within r units of the start point (test)   --particle-seed <n>   --particle-only <a,b> keep only the weather effects with these in their names (test)
+          --low-end                potato-PC settings: short draw distances, no shadows, reflections, AO or anti-aliasing, 0.83 render scale, sparse grass and particles (options after it override)
+          --no-vsync               start with vsync off (uncapped; Tab slider)
+          --object-lod <x>         objects switch to coarser levels sooner (<1) or later (>1): the Tab panel's "Object LOD distance x" (0.25-4, default 1)
+          --grass-density <x>      grass blades x this (0.1-2, default 1; Tab slider)
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,dust,reach>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
@@ -262,6 +297,7 @@ sealed class WorldOptions
         int viewAt = Array.LastIndexOf(args, "--view");
         if (viewAt >= 0 && viewAt + 1 < args.Length) o.View = args[viewAt + 1];
         args = NamedViews.Expand(args);   // --view <name> becomes its options, in place: the ones after it win
+        args = ExpandLowEnd(args);        // so does --low-end
         bool sizeGiven = args.Contains("--size");
         for (int i = 0; i < args.Length; i++)
         {
@@ -323,7 +359,13 @@ sealed class WorldOptions
                 case "--no-shadows": o.NoShadows = true; break;
                 case "--shadow-quality": o.ShadowQuality = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--shadow-filter": o.ShadowFilter = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, 2); break;
-                case "--shadow-range": o.ShadowRange = Math.Clamp(F(), KenshiShadows.MinRange, CommandLineMaxShadowRange); break;
+                case "--shadow-range":
+                {
+                    float range = F();
+                    o.ShadowsOff = range <= 0;
+                    if (!o.ShadowsOff) o.ShadowRange = Math.Clamp(range, KenshiShadows.MinRange, CommandLineMaxShadowRange);
+                    break;
+                }
                 case "--debug-shadows": o.DebugShadows = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--simple-sky": o.SimpleSky = true; break;
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
@@ -358,6 +400,9 @@ sealed class WorldOptions
                 case "--cloud-wind": { var (wx, wz) = Pair(); o.CloudWind = new Vector2((float)wx, (float)wz); break; }
                 case "--no-stream": o.NoStream = true; break;
                 case "--show-keys": o.ShowKeys = true; break;
+                case "--no-vsync": o.VSync = false; break;
+                case "--object-lod": o.ObjectLod = Math.Clamp(F(), 0.25f, 4); break;
+                case "--grass-density": o.GrassDensity = Math.Clamp(F(), 0.1f, 2); break;
                 case var post when o.Post.TryParse(post, Next): break;
                 case "--camera-at": (o.CameraX, o.CameraZ) = Pair(); break;
                 case "--fly-to": (o.FlyToX, o.FlyToZ) = Pair(); break;
@@ -789,7 +834,7 @@ static class WorldFrame
         {
             // Landmarks (huge objects, drawn to their own distance) are kept apart from the zones only when the viewer starts with them (Meitou reach, distance above 0).
             gpu.Objects = new WorldObjectRenderer(context, assets, scene.Objects, landmarks: o.LandmarkDistanceFor(o.MeitouReach) > 0)
-            { ObjectDistance = o.ObjectDistanceFor(o.MeitouReach), LandmarkDistance = o.LandmarkDistanceFor(o.MeitouReach), DistantRange = o.DistantZones * WorldLayout.ZoneSize, NoDistant = o.NoDistant, LoadBudget = interactive ? 8 : 0, SortNearestFirst = o.MeitouReach };
+            { ObjectDistance = o.ObjectDistanceFor(o.MeitouReach), LandmarkDistance = o.LandmarkDistanceFor(o.MeitouReach), DistantRange = o.DistantZones * WorldLayout.ZoneSize, NoDistant = o.NoDistant, LoadBudget = interactive ? 8 : 0, SortNearestFirst = o.MeitouReach, LodBias = 1 / o.ObjectLod };
             Console.WriteLine($"objects   GPU ready ({watch.ElapsedMilliseconds} ms)");
         }
         if (!o.NoFoliage && scene.Database is not null)
@@ -803,12 +848,13 @@ static class WorldFrame
             (f.Impostors, f.ImpostorDistance, f.ImpostorBudgetMb) = (o.Impostors, o.ImpostorDistance ?? f.ImpostorDistance, o.ImpostorBudgetMb ?? f.ImpostorBudgetMb);
             if (o.LargeImpostorDistance is { } largeImpostor) f.LargeImpostorDistance = largeImpostor;
             if (o.ImpostorCacheMb is { } cacheMb) f.ImpostorCacheMb = cacheMb;
+            if (o.GrassDensity is { } grassDensity) f.GrassDensitySetting = grassDensity;
             Console.WriteLine($"foliage   catalog and shaders ready ({gpu.Foliage.LoadMs:0} ms)");
         }
         if (!o.NoShadows)
         {
             // The game's CSM mode (docs/formats/shadows.md): four cascades in one atlas of the `shadow quality` side, out to `Shadow Range`.
-            gpu.Shadow = new ShadowPass(context, assets) { Settings = new ShadowSettings(KenshiShadows.MapSize(o.ShadowQuality), o.ShadowRangeFor(o.MeitouShadows)), Meitou = o.MeitouShadows, FilterQuality = o.ShadowFilter };
+            gpu.Shadow = new ShadowPass(context, assets) { Settings = new ShadowSettings(KenshiShadows.MapSize(o.ShadowQuality), o.ShadowRangeFor(o.MeitouShadows)), Meitou = o.MeitouShadows, FilterQuality = o.ShadowFilter, Enabled = !o.ShadowsOff };
             if (!gpu.Shadow.HasNoise) Console.WriteLine($"warning   shadows: {KenshiShadows.NoiseTexture} not found, the receiver's jitter is a hash");
             gpu.Shadow.SetTerrain(scene.Coarse, scene.CoarseSize);   // the Meitou shadows' terrain shadow beyond the range
             Console.WriteLine($"shadows   {gpu.Shadow.Settings.MapSize}² atlas, {gpu.Shadow.Settings.Cascades} cascades of {gpu.Shadow.Settings.TileSize}², range {gpu.Shadow.Settings.Range:0}");
@@ -835,6 +881,7 @@ static class WorldFrame
 
     /// <summary>The anti-aliasing slider's value for the options: 0 none, 1 FXAA, 2.. the upscaler kinds (TAA, FSR, DLSS).</summary>
     public const string FilteringSlider = "Anisotropic filtering (texture filtering)";
+    public const string TextureQualitySlider = "Texture quality 0-4 (game)";
     public static readonly string[] ParticleSliders = ["Weather particles: 0 off 1 quarter 2 half 3 auto 4 full", "Particle density x"];
     /// <summary>The weather particles slider's position for the renderer's state: 0 off, 1 quarter, 2 half, 3 by sprite size (auto), 4 full size.</summary>
     public static int WeatherParticlesSlider(bool weatherOn, PostOptions o) =>
@@ -981,7 +1028,17 @@ static class WorldFrame
                 Console.WriteLine($"impostors deleted {files} cached atlases ({bytes / 1048576.0:0} MB) from {cache.Root}");
                 return $"Deleted {files} atlases ({bytes / 1048576.0:0} MB); they are baked again when next needed.";
             }));
-        return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders, toggles, "Meitou improvements (unticked: as the game)", actions);
+        // The third column: textures. The game's `texture resolution gimping` (docs/formats/settings.md): the object, foliage and character textures
+        // are loaded again at the new level as the slider moves; the terrain's layer arrays keep the size they were made with (--texture-quality at start).
+        int terrainLevel = Meitou.Data.Textures.TextureQuality.Level;
+        var side = new List<Slider>
+        {
+            new(TextureQualitySlider, 0, Meitou.Data.Textures.TextureQuality.Maximum, () => Meitou.Data.Textures.TextureQuality.Level,
+                v => Meitou.Data.Textures.TextureQuality.Level = (int)MathF.Round(v), "0",
+                Text: v => (int)MathF.Round(v) is var level && level != terrainLevel
+                    ? $"{Meitou.Data.Textures.TextureQuality.Labels[level]} (terrain at start)" : Meitou.Data.Textures.TextureQuality.Labels[level]),
+        };
+        return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders, toggles, "Meitou improvements (unticked: as the game)", actions, side);
     }
 
     /// <summary>An hour as <c>HH:MM</c>.</summary>
