@@ -26,7 +26,8 @@ public sealed class UpscaleOptions
         [("native", 1f), ("quality", 1 / 1.5f), ("balanced", 1 / 1.7f), ("performance", 0.5f), ("ultra", 1 / 3f)];
 
     public bool Temporal => Kind != UpscalerKind.Off;
-    public float EffectiveScale => Kind == UpscalerKind.Off ? 1 : Scale ?? 1;
+    /// <summary>The render scale; with Off too (FXAA then runs on the plainly scaled-up picture: no jitter, no history).</summary>
+    public float EffectiveScale => Scale ?? 1;
 
     public static float ParseScale(string s)
     {
@@ -45,7 +46,7 @@ public sealed class UpscaleOptions
 
     public void CopyFrom(UpscaleOptions other) { Kind = other.Kind; Preferred = other.Preferred; Scale = other.Scale; Sharpness = other.Sharpness; }
 
-    public string Describe() => Kind == UpscalerKind.Off ? "off" : $"{Kind.ToString().ToLowerInvariant()} at {EffectiveScale:0.###}";
+    public string Describe() => Kind == UpscalerKind.Off && EffectiveScale >= 1 ? "off" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{Kind.ToString().ToLowerInvariant()} at {EffectiveScale:0.###}");
 }
 
 /// <summary>

@@ -122,11 +122,11 @@ public sealed unsafe class PostProcess : IDisposable
     sealed class CompositePass : FullscreenProgram
     {
         public readonly SamplerSlot Scene, Ao, Adapted, Mask;
-        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug, CharacterAo;
+        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug, CharacterAo, SceneSize;
         public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
         {
             (Scene, Ao, Adapted, Mask) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"), P.Sampler("uMask"));
-            CharacterAo = P.Uniform("uCharacterAo");
+            (CharacterAo, SceneSize) = (P.Uniform("uCharacterAo"), P.Uniform("uSceneSize"));
             (Auto, Exposure, UseAo, Dither, Debug) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"), P.Uniform("uDebug"));
         }
     }
@@ -636,6 +636,9 @@ public sealed unsafe class PostProcess : IDisposable
         Bind(c.P, c.Adapted, auto ? adaptB : null);
         Bind(c.P, c.Mask, mask ? sceneColour : null);
         c.P.Set(c.CharacterAo, mask ? Options.SsaoCharacterStrength : 1f);
+        // Without an upscaler the scene may still be smaller than the display (the render scale): the composite then resamples it (Catmull-Rom).
+        bool plainScaled = postColour.Width != displayWidth || postColour.Height != displayHeight;
+        c.P.Set(c.SceneSize, plainScaled ? postColour.Width : 0f, plainScaled ? postColour.Height : 0f);
         c.P.Set(c.Auto, auto ? 1 : 0);
         c.P.Set(c.Exposure, o.Exposure);
         c.P.Set(c.UseAo, ao ? 1 : 0);
