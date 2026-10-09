@@ -40,7 +40,7 @@ sealed partial class GameHost
         var overlay = DebugOverlay.TryCreate(display.Context);
         // The viewer's debug overlays (docs/engine.md): F10 the key list, F11 the frame statistics, F12 the profiler chart.
         var profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
-        // Shift+F1 upwards: the viewer's Faithful / Meitou switches (its F1 upwards; plain F2..F4 and F8 are the game's speed and screenshot keys).
+        // Shift+F1 upwards: the viewer's Faithful / Meitou switches in Enhancements order (plain F2..F4 and F8 are the game's speed and screenshot keys).
         var switches = WorldFrame.LiveSwitches(o, () => gpu, () => camera, () => render);
         var panel = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render, switches: switches);
         if (panel is not null)

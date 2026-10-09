@@ -36,7 +36,7 @@ public static class Enhancements
     public const float FaithfulObjectDistance = 12000;
 
     /// <summary>
-    /// The switches, in key order (F1 upwards in the viewer), over the post-processing options and the haze strength
+    /// The switches, in key order (Shift+F1 upwards in the game, the Tab panel's checkboxes in the viewer), over the post-processing options and the haze strength
     /// (docs/formats/post-processing.md and sky.md for what the game does).
     /// </summary>
     public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<float> hazeStrength, Action<float> setHazeStrength, Func<bool> meitouShadows, Action<bool> setMeitouShadows,
