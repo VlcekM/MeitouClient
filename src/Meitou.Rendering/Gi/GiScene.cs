@@ -222,7 +222,10 @@ internal sealed unsafe class GiScene : IDisposable
         public AccelerationStructure? Blas { get; private set; }
         public Vector3 Centre { get; private set; }
         public GeometryRecord Record { get; private set; }
-        bool hasCentre;
+        // The centre of the newest grid asked for (the one being sampled, or built): Centre moves only when its structure is built, so the
+        // instance never places the old grid at the new centre.
+        Vector3 requested;
+        bool hasRequested;
         float Side => cells * spacing;
 
         public void Update(CommandList cmd, Vector3 eye, HeightSnapshot heights)
@@ -234,11 +237,11 @@ internal sealed unsafe class GiScene : IDisposable
                 Build(cmd, centre, positions);
             }
             var wanted = new Vector3(MathF.Round(eye.X / spacing) * spacing, 0, MathF.Round(eye.Z / spacing) * spacing);
-            bool far = !hasCentre || MathF.Max(MathF.Abs(wanted.X - Centre.X), MathF.Abs(wanted.Z - Centre.Z)) > Side / 8;
+            bool far = !hasRequested || MathF.Max(MathF.Abs(wanted.X - requested.X), MathF.Abs(wanted.Z - requested.Z)) > Side / 8;
             if (far && job is null)
             {
-                hasCentre = true;
-                Centre = wanted;
+                hasRequested = true;
+                requested = wanted;
                 job = Task.Run(() => (wanted, Sample(wanted, heights)));
                 if (Blas is null) job.Wait();   // the first grid at once: the first frames see the terrain
                 if (Blas is null)
