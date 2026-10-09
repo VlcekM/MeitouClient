@@ -313,7 +313,7 @@ public sealed unsafe partial class PostProcess : IDisposable
     {
         var format = GlConventions.VkFormat(glFormat);
         var use = TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst | (GlConventions.IsDepthFormat(format) ? TextureUse.DepthTarget : TextureUse.ColourTarget);
-        if (format is Vk.Format.R16G16B16A16Sfloat or Vk.Format.R32Sfloat or Vk.Format.R16G16Sfloat && SupportsStorage(format)) use |= TextureUse.Storage;
+        if (format is Vk.Format.R16G16B16A16Sfloat or Vk.Format.R32Sfloat or Vk.Format.R16G16Sfloat or Vk.Format.R32G32Sfloat && SupportsStorage(format)) use |= TextureUse.Storage;
         var texture = batch.Create(new TextureDesc(format, w, h, levels, Use: use, Name: name));
         return new Target2D(texture, min, min == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear);
     }
@@ -826,7 +826,11 @@ public sealed unsafe partial class PostProcess : IDisposable
         bool reset = !historyValid || !previousValid || Vector3.Distance(eyeNow, previousEye) > 5000;
         float dt = (float)frameClock.Elapsed.TotalSeconds;
         frameClock.Restart();
-        Velocity(motion!, 0);
+        // post-merge: the motion, the upscalers' depth and the water's reactivity in one dispatch (the vendor upscalers take the last two; TAA only the motion target).
+        var external = ExternalFor(Options.Upscale.Kind);
+        bool merged = MergeVelocity && MergeSupported;
+        if (merged) VelocityMerged(motion!, external is null ? null : upscaleDepth!, external is null || WaterHeight is null ? null : reactive!);
+        else Velocity(motion!, 0);
         if (ObjectMotion is { } objectMotion)
         {
             // The guests' host (the grass's motion): the motion target loaded, red and green written, no depth, culling or blending.
@@ -844,10 +848,10 @@ public sealed unsafe partial class PostProcess : IDisposable
         (historyA, historyB) = (historyB, historyA);
         var output = historyB!;
         bool done = false;
-        if (ExternalFor(Options.Upscale.Kind) is { } external)
+        if (external is not null)
         {
-            Velocity(upscaleDepth!, 1);
-            if (WaterHeight is not null) Velocity(reactive!, 2);
+            if (!merged) Velocity(upscaleDepth!, 1);
+            if (!merged && WaterHeight is not null) Velocity(reactive!, 2);
             bool covered = Particles is { HasCoverage: true };
             if (covered) Stamp("velocity");
             if (covered) RunCoverage(reactive!, Vk.ColorComponentFlags.RBit, clear: WaterHeight is null);
@@ -1099,6 +1103,16 @@ public sealed unsafe partial class PostProcess : IDisposable
 
     void RunExposure()
     {
+        if (MergeExposure && MergeSupported)
+        {
+            float mdt = (float)adaptClock.Elapsed.TotalSeconds;
+            adaptClock.Restart();
+            float mblend = InstantAdaptation || !adaptedValid ? 1 : 1 - MathF.Exp(-mdt * AdaptationRate);
+            (adaptA, adaptB) = (adaptB, adaptA);
+            ExposureMerged(mblend, AutoExposure!.Value);
+            adaptedValid = true;
+            return;
+        }
         var lum = luminance!;
         var lp = luminancePass;
         Bind(lp.P, lp.Scene, postColour);
@@ -1125,6 +1139,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         External?.Dispose();
         Free();
         DisposeShadingRate();
+        DisposeMerged();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         flowTexture?.Dispose();

@@ -1202,7 +1202,7 @@ static class WorldFrame
             host.Stage(6);
             var fogCull = gpu.FogVolumes;
             gpu.Terrain.FogCull = fogCull;
-            gpu.Terrain.Draw(viewProjection, eye, frustum, render, light);
+            gpu.Terrain.Draw(viewProjection, eye, frustum, render, light, defer: TerrainLateColour.Enabled);   // the colour comes after the foliage (DrawDeferred) when on
             gpu.Terrain.FogCull = null;
             StageClock.Lap(6);
             host.Stage(7);
@@ -1217,6 +1217,9 @@ static class WorldFrame
             if (gpu.Foliage is { } fogFoliageDone) { fogFoliageDone.FogCull = null; fogFoliageDone.Occlusion = default; }
             foliageDrawn = true;
             StageClock.Lap(8);
+            host.Stage(6);
+            gpu.Terrain.DrawDeferred();   // the terrain colour where nothing nearer covers it (the depth is in from the draw above)
+            StageClock.Lap(6);
             // Characters after the opaque geometry: they alone write the scene's alpha (SSAO's character mask), so nothing drawn later may cover them but water.
             if (gpu.Characters is { } fogCharacters) fogCharacters.FogCull = fogCull;
             if (nearSlice && gpu.Characters is { } characters)

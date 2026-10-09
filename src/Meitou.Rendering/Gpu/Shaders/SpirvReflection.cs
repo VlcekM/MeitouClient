@@ -26,7 +26,7 @@ public static class SpirvReflection
     sealed record TFloat(int Width) : SType;
     sealed record TVector(uint Component, int Count) : SType;
     sealed record TMatrix(uint Column, int Columns) : SType;
-    sealed record TImage(uint Sampled, int Dim, int Depth, bool Arrayed, bool Ms) : SType;
+    sealed record TImage(uint Sampled, int Dim, int Depth, bool Arrayed, bool Ms, uint Usage = 0) : SType;   // Sampled: the sampled type; Usage: 1 sampled, 2 storage
     sealed record TSampler : SType;
     sealed record TSampledImage(uint Image) : SType;
     sealed record TArray(uint Element, uint LengthId) : SType;
@@ -82,7 +82,7 @@ public static class SpirvReflection
             case OpTypeFloat: m.Types[a[0]] = new TFloat((int)a[1]); break;
             case OpTypeVector: m.Types[a[0]] = new TVector(a[1], (int)a[2]); break;
             case OpTypeMatrix: m.Types[a[0]] = new TMatrix(a[1], (int)a[2]); break;
-            case OpTypeImage: m.Types[a[0]] = new TImage(a[1], (int)a[2], (int)a[3], a[4] != 0, a[5] != 0); break;
+            case OpTypeImage: m.Types[a[0]] = new TImage(a[1], (int)a[2], (int)a[3], a[4] != 0, a[5] != 0, a.Length > 6 ? a[6] : 0); break;
             case OpTypeSampler: m.Types[a[0]] = new TSampler(); break;
             case OpTypeSampledImage: m.Types[a[0]] = new TSampledImage(a[1]); break;
             case OpTypeArray: m.Types[a[0]] = new TArray(a[1], a[2]); break;
@@ -124,6 +124,7 @@ public static class SpirvReflection
     {
         var blocks = new List<UniformBlockInfo>();
         var samplers = new List<SamplerInfo>();
+        var storageImages = new List<StorageImageInfo>();
         var inputs = new List<InterfaceVariable>();
         var outputs = new List<InterfaceVariable>();
         var inactive = new List<string>();
@@ -168,6 +169,12 @@ public static class SpirvReflection
                     uint t = pointee;
                     if (m.Types.GetValueOrDefault(t) is TArray arr) { len = ArrayLength(m, arr); t = arr.Element; }
                     else if (m.Types.GetValueOrDefault(t) is TRuntimeArray rarr) { len = -1; t = rarr.Element; }   // a bindless array
+                    if (m.Types.GetValueOrDefault(t) is TImage { Usage: 2 } && len == 0)   // a storage image
+                    {
+                        if (m.Used.Contains(id)) storageImages.Add(new StorageImageInfo(name, (int)dec.GetValueOrDefault(DecDescriptorSet), (int)dec.GetValueOrDefault(DecBinding)));
+                        else inactive.Add(name);
+                        break;
+                    }
                     if (m.Types.GetValueOrDefault(t) is not TSampledImage si || m.Types[si.Image] is not TImage img) break;
                     if (!m.Used.Contains(id)) { inactive.Add(name); break; }
                     var dim = img.Dim switch { 0 => SamplerDimension.Dim1D, 1 => SamplerDimension.Dim2D, 2 => SamplerDimension.Dim3D, 3 => SamplerDimension.Cube, _ => SamplerDimension.Other };
@@ -190,7 +197,7 @@ public static class SpirvReflection
 
         inputs.Sort((a, b) => a.Location.CompareTo(b.Location));
         outputs.Sort((a, b) => a.Location.CompareTo(b.Location));
-        return new ShaderReflection { Blocks = blocks, Samplers = samplers, Inputs = inputs, Outputs = outputs, Inactive = inactive };
+        return new ShaderReflection { Blocks = blocks, Samplers = samplers, StorageImages = storageImages, Inputs = inputs, Outputs = outputs, Inactive = inactive };
     }
 
     static uint StripArrays(Module m, uint t)

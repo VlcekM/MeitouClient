@@ -597,6 +597,8 @@ static partial class TerrainShaders
 
     public static string PatchVertexNative() => Native(PatchVertex);
     public static string FragmentNative() => Native(Fragment);
+    /// <summary>The terrain colour pass's depth-only twin: the same vertex stage (so the depths are the same), a fragment stage that writes nothing (<see cref="TerrainLateColour"/>).</summary>
+    public static string PrepassFragmentNative() => Native("#version 330 core\nvoid main() { }\n");
     public static string MeshVertexNative() => Native(MeshVertex);
     public static string MeshFragmentNative() => Native(MeshFragment);
     public static string MeshFragmentSolidNative() => Native(MeshFragmentSolid);

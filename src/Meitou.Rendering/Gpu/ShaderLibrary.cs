@@ -201,6 +201,8 @@ public sealed unsafe class ShaderLibrary
         foreach (var b in r.Blocks)
             if (b.Kind != BlockKind.PushConstant && b.Set == 0)
                 bindings.Add(new DescriptorSetLayoutBinding((uint)b.Binding, b.Kind == BlockKind.StorageBuffer ? DescriptorType.StorageBuffer : DescriptorType.UniformBuffer, 1, ShaderStageFlags.ComputeBit));
+        foreach (var s in r.StorageImages)
+            if (s.Set == 0) bindings.Add(new DescriptorSetLayoutBinding((uint)s.Binding, DescriptorType.StorageImage, 1, ShaderStageFlags.ComputeBit));
         foreach (var s in r.Samplers)
             if (s.Set == 0 && s.ArrayLength < 0)
                 throw new InvalidOperationException($"{name}: runtime-sized sampler array '{s.Name}' in set 0; declare the bindless table at an extra set (BindlessTable.Declarations(1))");

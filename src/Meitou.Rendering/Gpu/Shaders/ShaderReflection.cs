@@ -39,6 +39,9 @@ public sealed class UniformBlockInfo
 /// runtime-sized array (the bindless arrays of the native model).</summary>
 public sealed record SamplerInfo(string Name, int Set, int Binding, SamplerDimension Dimension, bool Arrayed, bool Multisampled, bool Depth, ScalarKind SampledKind, int ArrayLength);
 
+/// <summary>A storage image of a compute program (set, binding).</summary>
+public sealed record StorageImageInfo(string Name, int Set, int Binding);
+
 /// <summary>A stage input or output variable (built-ins excluded).</summary>
 public sealed record InterfaceVariable(string Name, int Location, ScalarKind Kind, int Columns, int Rows, int ArrayLength)
 {
@@ -58,6 +61,8 @@ public sealed class ShaderReflection
 {
     public required IReadOnlyList<UniformBlockInfo> Blocks { get; init; }
     public required IReadOnlyList<SamplerInfo> Samplers { get; init; }
+    /// <summary>The storage images (compute programs): <c>image2D</c> and the like, declared with a format layout.</summary>
+    public IReadOnlyList<StorageImageInfo> StorageImages { get; init; } = [];
     public required IReadOnlyList<InterfaceVariable> Inputs { get; init; }
     public required IReadOnlyList<InterfaceVariable> Outputs { get; init; }
 
