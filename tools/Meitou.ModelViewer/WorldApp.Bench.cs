@@ -63,8 +63,9 @@ static partial class WorldApp
         }
         if (gpu.Objects is { } sortObjects) AbToggles.Register("object-sort", () => sortObjects.SortNearestFirst, v => sortObjects.SortNearestFirst = v, "objects' colour batches drawn nearest first (Meitou reach)");
         AbToggles.Register("early-depth", () => EarlyDepth.Enabled, v => EarlyDepth.Enabled = v, "objects, rocks and foliage meshes use programs without a discard where fully visible and uncut (early depth test); B: the single program with the discard");
+        AbToggles.Register("object-lod-gen", () => ObjectLodGen.Enabled, v => ObjectLodGen.Enabled = v, "objects and buildings: generated coarser mesh levels among the file's, picked by the size of their triangles on the screen (MEITOU_OBJECT_LOD_GEN=0 never makes them); B: the file's levels only");
         AbToggles.Register("solid-first", () => WorldObjectRenderer.SolidFirst, v => WorldObjectRenderer.SolidFirst = v, "objects: the draws without a discard (early depth test) ahead of the dithered and cut-out ones");
-        AbToggles.Register("terrain-probe", () => !TerrainProbe.On, v => TerrainProbe.On = !v, "terrain cost probe MEITOU_TERRAIN_PROBE=name (side B: the probe program; screenshots: MEITOU_TERRAIN_PROBE_ON=1)");
+        AbToggles.Register("terrain-probe", () => !TerrainProbe.On, v => TerrainProbe.On = !v, "terrain cost probe MEITOU_TERRAIN_PROBE=name (side B: the probe program)");
         RegisterTerrainAb();
         AbToggles.Register("normal-maps", () => render.NormalMaps, v => render.NormalMaps = v, "normal maps on terrain and objects (probe)");
         AbToggles.Register("water-draw", () => render.Water, v => render.Water = v, "the water pass (--no-water)");
@@ -215,8 +216,6 @@ static partial class WorldApp
             result.Configs[labels[s]].Counts = MeasureCounts(gpu, Frame);
         }
 
-        // ---- metadata ----
-        var meta = result.Meta;
         // The share of the screen's shading rate tiles at each rate (side A; serial frames after the timing, with the rate image read back).
         if (post.FogVrsSupported && (o.Ab == "fog-vrs" || post.FogVrs))
         {
@@ -229,6 +228,8 @@ static partial class WorldApp
             if (post.FogVrsShare is { Frames: > 0 } share) result.Meta["fogVrsShare"] = string.Create(CultureInfo.InvariantCulture, $"1x1 {share.One * 100:0.0} %, 2x2 {share.Two * 100:0.0} %, 4x4 {share.Four * 100:0.0} % of the tiles ({share.Frames} frames)");
         }
 
+        // ---- metadata ----
+        var meta = result.Meta;
         meta["view"] = o.View ?? "(custom)";
         meta["args"] = string.Join(' ', Environment.GetCommandLineArgs().Skip(1));
         meta["commit"] = GitDescribe();

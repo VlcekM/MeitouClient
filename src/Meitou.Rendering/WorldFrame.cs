@@ -1079,6 +1079,7 @@ static class WorldFrame
         gpu.Guard?.Tick();
         gpu.Streamer?.Update(gpu.Anchor ?? eye);
         StageClock.Lap(0);
+        if (gpu.Objects is { } lodObjects) lodObjects.LodPixelsPerRadian = render.TerrainPixelScale;   // the generated object levels are placed by the pixel size too
         gpu.Objects?.SetView(rw, rh, camera.FieldOfView);   // the object textures' mip streaming measures pixels at the render size
         gpu.Characters?.SetView(rw, rh, camera.FieldOfView);
         gpu.Objects?.Update(gpu.Anchor ?? eye);
@@ -1250,8 +1251,8 @@ static class WorldFrame
         if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneDepth, rw, rh);
         // The placed fog volumes over the finished scene (opaque, water, sky; the haze is in the shaders), one pass reading the depth, as the game's queue 82 does.
         gpu.Post!.RunFogVolumes(gpu.FogVolumes is { UsedData: > 0 });
-        StageClock.Phase("fog volumes");
         gpu.Post.BuildShadingRate(eye);   // the next frame's fog shading rate (fog-vrs), from this frame's depth
+        StageClock.Phase("fog volumes");
         // Then the particles, blended over it and tested against the near slice's depth (they are not fogged; docs/formats/fogfeatures.md).
         if (gpu.Particles is { } particleDraw && particleNear > 0)
         {

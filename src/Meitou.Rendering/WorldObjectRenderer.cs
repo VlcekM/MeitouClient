@@ -156,6 +156,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>Ogre's camera LOD bias as a distance factor: the LOD value is multiplied by it, so above 1 coarser levels come sooner, below 1 later.</summary>
     public float LodBias { get; set; } = 1;
 
+    /// <summary>The main camera's pixels per radian (set each frame by the world frame): what the generated levels' distances are worked out with (<see cref="ObjectLodGen"/>); 0: not known yet.</summary>
+    public float LodPixelsPerRadian { get; set; }
+
 
     /// <summary>Colour batches are drawn nearest first (Meitou, with the reach switch: early depth rejection of the shading of what a nearer batch covers); off: in the order they were first met.</summary>
     public bool SortNearestFirst { get; set; }
@@ -241,6 +244,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         var watch = Stopwatch.StartNew();
         eyeNow = eye;
         meshes.LodBias = LodBias;
+        if (LodPixelsPerRadian > 0) meshes.PixelsPerRadian = LodPixelsPerRadian;
         meshes.LookAhead = MeshMargin;
         bool unlimited = budgetMs > 1e8;
         float streamRange = (NoDistant ? RealRange : Math.Max(RealRange, DistantReach)) + WorldLayout.ZoneSize * 0.5f;
@@ -438,7 +442,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         if (!inst.Stand && gpu.MinLevel > 0)
         {
             float value = Math.Max(Vector3.Distance(eyeNow, centre) - radius - MeshMargin, 0);
-            if (ObjectMeshCache.LevelFor(gpu.Distances, value * LodBias) < gpu.MinLevel)
+            if (gpu.Curve.LevelFor(value * LodBias) < gpu.MinLevel)
             {
                 if (value < 3000) heldNear++;   // an instance that close waiting for its mesh to be remade would be seen (the benchmark counts it)
                 meshes.Retarget(inst.Mesh, value * 0.7f);
@@ -647,7 +651,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         if (inst.TerrainMode && options.Textures)
         {
             // The terrain shader's path: one draw each, no fading, the level the game would pick.
-            int level = MeshLod.Select(gpu.Distances, lodValue * LodBias);
+            int level = gpu.Curve.Select(lodValue * LodBias);
             var g = gpu.Manual[level] ?? gpu;
             int lv = gpu.Manual[level] is null ? level : 0;
             foreach (var gp in g.Parts)
@@ -700,7 +704,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary><paramref name="lodValue"/> picks the levels (at least <paramref name="value"/>, the distance, in a far shadow cascade).</summary>
     void Emit(ObjectStreamer.Instance inst, GpuObjectMesh gpu, float value, float weight, float lodValue)
     {
-        var blend = MeshLod.Blend(gpu.Distances, lodValue * LodBias);
+        var blend = gpu.Curve.Blend(lodValue * LodBias);
         // A mesh held without its finest levels (made for farther users, see ObjectMeshCache.Retarget) draws its finest instead, until it is remade.
         if (gpu.MinLevel > 0 && blend.Lower < gpu.MinLevel) coarseDraws++;
         if (gpu.MinLevel > 0) blend = new LodBlend(Math.Max(blend.Lower, gpu.MinLevel), Math.Max(blend.Upper, gpu.MinLevel), blend.T);
@@ -1149,6 +1153,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
     public void Dispose()
     {
+        if (ObjectLodGen.Built + ObjectLodGen.Cached > 0) Console.WriteLine($"object lods  {ObjectLodGen.Built} meshes generated ({System.Diagnostics.Stopwatch.GetElapsedTime(0, ObjectLodGen.BuildTicks).TotalSeconds:0.0} s of worker time), {ObjectLodGen.Cached} read from the cache, {ObjectLodGen.Skipped} too small or not eligible");
         ReportObjectTiming();
         colourProg.Dispose();
         solidProg.Dispose();

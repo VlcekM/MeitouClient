@@ -51,29 +51,38 @@ public static class FoliageLodBuilder
     public const float MinGain = 0.8f;
     const int MaxSamples = 1500;
 
+    /// <summary>The steps and limits of a build: the fractions of the triangles each level keeps (descending), the fewest triangles a part is reduced to, the limits on a level's deviation (share of the mesh radius, radians of shading), the least gain a level must have over the one before, and whether collapses must keep the texture coordinates (<see cref="MeshSimplifier.Chain"/>'s <c>uvPerWorld</c>).</summary>
+    public readonly record struct Settings(float[] Fractions, int Floor, float MaxRelativeError, float MaxNormalAngle, float MinGain, bool UvAware, bool TwoSided = false);
+
+    /// <summary>What the foliage meshes are built with.</summary>
+    public static readonly Settings Foliage = new(Fractions, Floor, MaxRelativeError, MaxNormalAngle, MinGain, false);
+
     /// <summary>Builds the levels of a model (the parts with indices, in order). Null when no level pays.</summary>
-    public static FoliageLodSet? Build(Model model, float radius)
+    public static FoliageLodSet? Build(Model model, float radius) => Build(model, radius, Foliage);
+
+    /// <summary>Builds the levels of a model with the given steps and limits (<see cref="Settings"/>); the foliage uses <see cref="Foliage"/>.</summary>
+    public static FoliageLodSet? Build(Model model, float radius, Settings settings)
     {
         var parts = model.Parts.Where(p => p.Indices.Length > 0).ToList();
-        int steps = Fractions.Length;
+        int steps = settings.Fractions.Length;
         var chains = new uint[parts.Count][][];
         var errors = new float[parts.Count][];
         var angles = new float[parts.Count][];
         for (int p = 0; p < parts.Count; p++)
         {
             var part = parts[p];
-            if (part.Indices.Length / 3 < 2 * Floor)
+            if (part.Indices.Length / 3 < 2 * settings.Floor)
             {
                 chains[p] = [.. Enumerable.Repeat(part.Indices, steps)];
                 errors[p] = new float[steps];
                 angles[p] = new float[steps];
                 continue;
             }
-            chains[p] = MeshSimplifier.Chain(part.Vertices, part.Indices, Fractions, Floor);
+            chains[p] = MeshSimplifier.Chain(part.Vertices, part.Indices, settings.Fractions, settings.Floor, settings.UvAware ? MeshSimplifier.UvPerWorld(part.Vertices, part.Indices) : 0);
             errors[p] = new float[steps];
             angles[p] = new float[steps];
             for (int k = 0; k < steps; k++)
-                if (chains[p][k].Length != part.Indices.Length) (errors[p][k], angles[p][k]) = Measure(part.Vertices, part.Indices, chains[p][k]);
+                if (chains[p][k].Length != part.Indices.Length) (errors[p][k], angles[p][k]) = Measure(part.Vertices, part.Indices, chains[p][k], settings.TwoSided);
         }
 
         // Which of the steps become levels.
@@ -84,8 +93,8 @@ public static class FoliageLodBuilder
             long triangles = 0;
             float error = 0, angle = 0;
             for (int p = 0; p < parts.Count; p++) { triangles += chains[p][k].Length / 3; error = Math.Max(error, errors[p][k]); angle = Math.Max(angle, angles[p][k]); }
-            if (error > MaxRelativeError * radius || angle > MaxNormalAngle) break;
-            if (triangles > previous * MinGain) continue;
+            if (error > settings.MaxRelativeError * radius || angle > settings.MaxNormalAngle) break;
+            if (triangles > previous * settings.MinGain) continue;
             kept.Add(k);
             previous = triangles;
         }
@@ -128,7 +137,7 @@ public static class FoliageLodBuilder
     /// second), and <c>Angle</c>, the angle in radians between the interpolated vertex normals at triangle centres of one surface and at the nearest point of the other, the 97th percentile
     /// (a collapse moves corners onto vertices that keep their own normals, so the shading of a flat-shaded or hard-edged mesh changes where the shape hardly does).
     /// </summary>
-    internal static (float Distance, float Angle) Measure(Vertex[] vertices, uint[] original, uint[] level)
+    internal static (float Distance, float Angle) Measure(Vertex[] vertices, uint[] original, uint[] level, bool twoSided = false)
     {
         var originalTriangles = Triangles(vertices, original);
         var levelTriangles = Triangles(vertices, level);
@@ -146,8 +155,8 @@ public static class FoliageLodBuilder
             fromLevel.Add(((t.C + t.A) / 2, Vector3.Zero));
         }
         var angles = new List<float>();
-        float a = Farthest(Subsample(fromOriginal), levelTriangles, angles);
-        float b = Farthest(Subsample(fromLevel), originalTriangles, angles);
+        float a = Farthest(Subsample(fromOriginal), levelTriangles, angles, twoSided);
+        float b = Farthest(Subsample(fromLevel), originalTriangles, angles, twoSided);
         angles.Sort();
         float angle = angles.Count == 0 ? 0 : angles[Math.Min(angles.Count - 1, (int)(angles.Count * 0.97))];
         return (Math.Max(a, b), angle);
@@ -180,7 +189,7 @@ public static class FoliageLodBuilder
     }
 
     /// <summary>The largest over <paramref name="points"/> of the distance to the nearest of <paramref name="triangles"/>; for a point with a normal, the angle to the nearest triangle's normal there is added to <paramref name="angles"/>.</summary>
-    static float Farthest(List<(Vector3 P, Vector3 N)> points, Tri[] triangles, List<float> angles)
+    static float Farthest(List<(Vector3 P, Vector3 N)> points, Tri[] triangles, List<float> angles, bool twoSided = false)
     {
         float worst = 0;
         foreach (var (p, n) in points)
@@ -201,7 +210,7 @@ public static class FoliageLodBuilder
                 ref readonly var t = ref triangles[bestTriangle];
                 var (u, v, w) = Barycentric(ClosestPoint(p, t.A, t.B, t.C), t.A, t.B, t.C);
                 var other = Normalized(t.NA * u + t.NB * v + t.NC * w);
-                if (other != Vector3.Zero) angles.Add(MathF.Acos(Math.Clamp(Vector3.Dot(n, other), -1f, 1f)));
+                if (other != Vector3.Zero) angles.Add(MathF.Acos(Math.Clamp(twoSided ? MathF.Abs(Vector3.Dot(n, other)) : Vector3.Dot(n, other), -1f, 1f)));
             }
         }
         return MathF.Sqrt(worst);
@@ -254,22 +263,22 @@ public static class FoliageLodCache
     public static string Root { get; set; } = Environment.GetEnvironmentVariable("MEITOU_LOD_CACHE")
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "lods");
 
-    public static string PathFor(string name, byte[] fileBytes)
+    public static string PathFor(string name, byte[] fileBytes, string? root = null, int version = FoliageLodBuilder.Version)
     {
         var hash = Convert.ToHexString(SHA256.HashData(fileBytes))[..24].ToLowerInvariant();
         var safe = new string(Path.GetFileNameWithoutExtension(name).Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '_').ToArray());
         if (safe.Length > 40) safe = safe[..40];
-        return Path.Combine(Root, $"{safe}_{hash}_v{FoliageLodBuilder.Version}.mlod");
+        return Path.Combine(root ?? Root, $"{safe}_{hash}_v{version}.mlod");
     }
 
     /// <summary>The cached levels (null in the result's <c>Set</c>: the mesh has none), or <c>Hit</c> false when there is no readable file.</summary>
-    public static (bool Hit, FoliageLodSet? Set) TryLoad(string path, int partCount)
+    public static (bool Hit, FoliageLodSet? Set) TryLoad(string path, int partCount, int version = FoliageLodBuilder.Version)
     {
         try
         {
             if (!File.Exists(path)) return (false, null);
             using var reader = new BinaryReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16));
-            if (reader.ReadUInt32() != Magic || reader.ReadInt32() != FoliageLodBuilder.Version) return (false, null);
+            if (reader.ReadUInt32() != Magic || reader.ReadInt32() != version) return (false, null);
             int levels = reader.ReadInt32(), parts = reader.ReadInt32();
             if (levels == 0) return (true, null);
             if (parts != partCount || levels < 2 || levels > 16) return (false, null);
@@ -296,7 +305,7 @@ public static class FoliageLodCache
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or EndOfStreamException or OverflowException or OutOfMemoryException) { return (false, null); }
     }
 
-    public static long Save(string path, FoliageLodSet? set, int partCount)
+    public static long Save(string path, FoliageLodSet? set, int partCount, int version = FoliageLodBuilder.Version)
     {
         try
         {
@@ -305,7 +314,7 @@ public static class FoliageLodCache
             using (var writer = new BinaryWriter(new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16)))
             {
                 writer.Write(Magic);
-                writer.Write(FoliageLodBuilder.Version);
+                writer.Write(version);
                 writer.Write(set?.Levels ?? 0);
                 writer.Write(partCount);
                 if (set is not null)
