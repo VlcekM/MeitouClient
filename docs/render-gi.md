@@ -150,7 +150,8 @@ So keeping the structures up to date costs well under a tenth of a millisecond p
   backface term and by Chebyshev visibility against the distance moments, the same way DDGI does.
   - Cascade 0 is used where it covers the point. Cascade 1 fills in where cascade 0 does not, and the sky's flat ambient fills in where
     neither does.
-  - The result replaces `envDiffuse`.
+  - The result replaces `envDiffuse`, by `--gi-strength` (default 1; `uGiParams.y` scales the probes' weight, so 0.75 keeps a quarter
+    of the sky's flat ambient).
   - The specular environment term is scaled by the ratio of the probes' luminance to the sky's, clamped to 0..1, as a cheap specular
     occlusion.
 - **Shader model.** A runtime branch on `uGiParams.x`, not a compile-time variant: the legacy and native world programs' SPIR-V changes,
@@ -176,6 +177,30 @@ So keeping the structures up to date costs well under a tenth of a millisecond p
   blend skips rays under cos 0.6 (their weight cos^50 is below 1e-11); the barriers between the probe passes and before the shading are
   compute-to-compute/shading ones instead of full ones. Measured: probe update 0.59 to 0.55 ms (DLSS 0.67, swamp). About 0.37 ms of the update
   does not scale with the probes updated (from the 1, 2 and 4 phase runs): the full barriers that start the scene and probe segments.
+
+**Cost breakdown** (2026-10-09, with foliage, object textures and lamps; RTX 4070, `--view swamp --gi --upscaler dlss --render-scale 0.67
+--size 1920x1080`). The frame clock has a `gi` stage (the scene and the probe passes, plus the lamps' binning), and the bench has a
+`gi-shade` switch: side B updates the probes but the shading does not read them, which isolates the reads.
+
+| Part | GPU ms | How measured |
+| --- | --- | --- |
+| Whole GI | +1.47 (±0.09) | `--ab gi-scene`, 512 paired frames; 138.6 against 173.6 fps |
+| Probe update (`gi` stage) | 0.71 | the same run |
+| of it, scene build (bottom and top levels) | ~0.20 | `MEITOU_PASS_STATS=1`, `--fly-benchmark 300 --fly-speed 0` (serialised) |
+| of it, trace | ~0.55 | the same; the trace and blend are separate native segments for this |
+| of it, blend | ~0.28 | the same |
+| Shading reads | +0.74 (±0.10) | `--ab gi-shade` |
+| of it, foliage | +0.27 to +0.32 | both runs |
+| of it, reflection pass | +0.16 to +0.21 | both runs |
+| of it, objects | +0.12 to +0.17 | both runs |
+| of it, terrain | +0.15 | both runs |
+| Render thread | +0.23 | `--ab gi-scene` |
+
+- The serialised pass meter's parts sum to about 1.0 ms, more than the 0.71 ms of the pipelined `gi` stage; read them as proportions
+  (scene ~20 %, trace ~53 %, blend ~27 %).
+- **Half the cost is reading the probes, not updating them.** Every shaded pixel blends 8 probes with the visibility test, in every pass
+  that runs `kenshiLight`. The foliage pays for its overdraw, and the water reflection pays for a second view of the scene.
+- The blend is large for what it does (64 rays into 8 × 8 and 16 × 16 tiles); the distance tile is most of it.
 
 **Observed**, in pictures:
 - Hub at midday: the change is subtle on open ground. On objects, the blue sky ambient turns into warmer bounce light (mean difference 1.8).

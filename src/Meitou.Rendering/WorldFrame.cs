@@ -66,6 +66,8 @@ sealed class WorldOptions
     public bool Gi, GiProbes = true;
     /// <summary><c>--gi-phases</c>: the probes are updated in this many shares, one a frame (1, 2, 4 or 8).</summary>
     public int GiPhases = 4;
+    /// <summary><c>--gi-strength</c>: how much the probes replace the sky's light (1 fully).</summary>
+    public float GiStrength = 1;
     /// <summary><c>--gi-foliage</c>: the smallest bounding radius of a plant or rock in the traced scene (0: no foliage).</summary>
     public float GiFoliage = 150;
     /// <summary><c>--lights off</c>: no lamps (the game's point and spot lights, docs/render-lights.md); the parity gates use it.</summary>
@@ -343,6 +345,7 @@ sealed class WorldOptions
                 case "--gi": o.Gi = true; break;
                 case "--gi-phases": o.GiPhases = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--gi-foliage": o.GiFoliage = F(); break;
+                case "--gi-strength": o.GiStrength = F(); break;
                 case "--lights": o.Lights = Next() != "off"; break;
                 case "--simple-sky": o.SimpleSky = true; break;
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
@@ -862,7 +865,7 @@ static class WorldFrame
                 }
                 if (o.Gi)
                 {
-                    gpu.Probes = new Gi.GiProbes(context) { Enabled = o.GiProbes, Phases = o.GiPhases };
+                    gpu.Probes = new Gi.GiProbes(context) { Enabled = o.GiProbes, Phases = o.GiPhases, Strength = o.GiStrength };
                     Console.WriteLine($"gi        {gpu.Probes.Describe()}");
                 }
             }
@@ -1109,8 +1112,9 @@ static class WorldFrame
             gi.Update(eye, heights, render.Objects ? gpu.Objects : null, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null);
             StageClock.Sub("gi scene");
             gpu.Probes?.Update(gi, eye, heights, gpu.Lamps);
-            StageClock.Sub("gi probes");
+            StageClock.Sub("gi blend");
         }
+        StageClock.Lap(14);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is { Level: > 0 };   // level 0: no pass, the water shows the sky colour
         if (gpu.Reflection is not null) { gpu.Reflection.MaxDistance = gpu.Sky.HazeDistance * gpu.Reflection.Range; gpu.Reflection.HideDistance = gpu.FogVolumes?.AtmosphereDistance; }

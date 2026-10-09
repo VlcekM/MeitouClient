@@ -46,6 +46,7 @@ static partial class WorldApp
         {
             int giMode = gpu.GiDebug;
             AbToggles.Register("gi-scene", () => gpu.GiActive, v => gpu.GiActive = v, "the global illumination's traced scene (acceleration structure builds) and its debug view (needs --gi-debug)");
+            if (gpu.Probes is { } shadeProbes) AbToggles.Register("gi-shade", () => shadeProbes.Shade, v => shadeProbes.Shade = v, "the world's shading reading the probes (side B: probes updated, not read)");
             AbToggles.Register("gi-debug", () => gpu.GiDebug > 0, v => gpu.GiDebug = v ? giMode : 0, "the global illumination's debug view, the scene built on both sides (needs --gi-debug)");
         }
         {
@@ -239,7 +240,7 @@ static partial class WorldApp
     }
 
     // The stages in the order a frame runs them (as the profiler lists them).
-    static readonly int[] StageOrder = [0, 1, 2, 3, 12, 4, 5, 6, 7, 8, 9, 13, 10, 11];
+    static readonly int[] StageOrder = [0, 1, 2, 3, 12, 14, 4, 5, 6, 7, 8, 9, 13, 10, 11];
 
     /// <summary>Print order of the metrics: the frame, the GPU total and stages in frame order, the post sections, the render thread's total and stages.</summary>
     static int MetricOrder(string key)

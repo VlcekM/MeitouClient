@@ -37,7 +37,7 @@ static class AtmosphereShaders
         uniform vec4 uWeatherDust;    // xyz: dustAmount (current, inside, slope; docs/formats/weather.md "Dust")
         uniform sampler2D uWeatherDustNoise;   // the dust noise (Turbulent.dds), sampled at world.xz * 0.002
         uniform sampler2D uWeatherGround;      // the terrain's whole-world ground colour map: the dust colour (the BIOMES `ground colour` where the object is)
-        uniform vec4 uGiParams;       // Meitou probe GI (docs/render-gi.md): x 1 while the probes light the world, w their hysteresis
+        uniform vec4 uGiParams;       // Meitou probe GI (docs/render-gi.md): x 1 while the probes light the world, y their strength, w their hysteresis
         uniform vec4 uGiGrid[4];      // per cascade: the grid's place and spacing (Gi.GiShaders.ProbeSampling)
         uniform sampler2D uGiIrradiance, uGiDistance, uGiBase;
         {{Gi.GiShaders.ProbeSampling}}
@@ -179,6 +179,7 @@ static class AtmosphereShaders
             if (uGiParams.x > 0.5)
             {
                 vec4 gi = giIrradiance(world, n, v);
+                gi.a *= uGiParams.y;
                 float sky = dot(envDiffuse, vec3(0.2126, 0.7152, 0.0722));
                 specularOcclusion = mix(1.0, clamp(dot(gi.rgb, vec3(0.2126, 0.7152, 0.0722)) / max(sky, 1e-4), 0.0, 1.0), gi.a);
                 envDiffuse = mix(envDiffuse, gi.rgb, gi.a);

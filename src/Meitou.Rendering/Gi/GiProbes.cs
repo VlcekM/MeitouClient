@@ -45,8 +45,13 @@ internal sealed unsafe class GiProbes : IDisposable
     public int Phases { get; set; } = 4;
     public long Updates { get; private set; }
 
-    /// <summary>What the shaders read: x 1 while the probes are on and filled, w the hysteresis.</summary>
-    Vector4 Params => new(Enabled && Active && updated ? 1 : 0, 0, 0, Hysteresis);
+    /// <summary>How much the probes replace the sky's light (1: fully, 0: not at all; <c>--gi-strength</c>).</summary>
+    public float Strength { get; set; } = 1;
+
+    /// <summary>What the shaders read: x 1 while the probes are on and filled, y <see cref="Strength"/>, w the hysteresis.</summary>
+    Vector4 Params => new(Enabled && Active && Shade && updated ? 1 : 0, Strength, 0, Hysteresis);
+    /// <summary>False: the probes are updated but the world's shading does not read them (the bench's gi-shade switch, the reads' cost).</summary>
+    public bool Shade { get; set; } = true;
     /// <summary>False while the frame does not update the probes (the bench's gi-scene switch): the shaders then do not read them.</summary>
     public bool Active { get; set; } = true;
 
@@ -224,6 +229,12 @@ internal sealed unsafe class GiProbes : IDisposable
             cmd.Dispatch((uint)(Probes / phases));
         }
         cmd.Barrier(ComputeAfterCompute);
+        // Two segments, so that the pass meter (StageClock.Sub) times the trace and the blend apart.
+        cmd.EndLabel();
+        ctx.EndNative(cmd);
+        StageClock.Sub("gi trace");
+        cmd = ctx.BeginNative("gi blend");
+        cmd.BeginLabel("gi blend");
         {
             var rayInfo = new DescriptorBufferInfo(rays.Handle, 0, rays.Size);
             var stateInfo = new DescriptorBufferInfo(state.Handle, 0, state.Size);
