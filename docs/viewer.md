@@ -834,6 +834,12 @@ only (no curve, no gamma, bloom off, SSAO disabled) plus FXAA. MSAA was removed:
   depth slice and has no normal buffer (curved surfaces show faint banding, thin objects can halo); the auto exposure measures a
   scene without shadows, so its mean runs higher and its exposure lower than the game's in sunlit views; colour LUTs and depth of field are not implemented (the game has neither).
 
+### JIT mode: `--tiered-jit`, `--pgo`
+
+The viewer and the game ship with tiered compilation and tiered PGO off (every method compiled once, fully optimised; DECISIONS 11, 19). `--tiered-jit` turns tiering on, `--pgo` tiering plus dynamic PGO (PGO needs tiering), `--no-tiered-jit` / `--no-pgo` force them off. The JIT mode is fixed when a process starts, so the switches start the same executable again with `DOTNET_TieredCompilation` / `DOTNET_TieredPGO` set (they override the runtimeconfig: **Observed** 2026-10-09 with a test program whose methods tier up only with the variables) and return its exit code; the log says `jit       tiered compilation on, PGO on (relaunched)` (`JitSwitches`).
+
+**Observed** 2026-10-09, `--view swamp --size 2560x1440 --upscaler dlss`, 3000 frames, RTX 4070: GPU-bound, so fps is the same in every mode (about 123). Render-thread CPU median: tiering off 2.22 ms, `--pgo` 1.82 ms (still) and 4.02 / 3.09 ms (flying), but plain tiered PGO had a 23 ms frame from a recompile while standing still. ReadyToRun (precompiled) code with tiering off is never replaced by the JIT and ran the render thread at 3.90 ms against 2.33 ms; it did not shorten the start either (40 s per run in every mode), so ReadyToRun only makes sense together with tiering.
+
 ### Start-up time and the load caches
 
 Where a start spends its time (2026-10-09, `--view swamp --screenshot`, RTX 4070, 12 cores; stage times are the viewer's own log lines):

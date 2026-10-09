@@ -8,6 +8,8 @@ static class Program
 {
     static int Main(string[] args)
     {
+        args = Meitou.Rendering.Display.JitSwitches.Apply(args, out int? relaunchedExit);
+        if (relaunchedExit is { } exit) return exit;
         RenderJobs.RaiseRenderThread();
         GameOptions game;
         WorldOptions? world;

@@ -5,6 +5,8 @@ using Silk.NET.Windowing;
 
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+args = Meitou.Rendering.Display.JitSwitches.Apply(args, out int? relaunchedExit);
+if (relaunchedExit is { } exit) return exit;
 args = SmokeTest.Strip(args);
 // Started without options (a double-click on the release's exe): the world at The Hub.
 if (args.Length == 0) args = ["--world", "--town", "The Hub"];
