@@ -206,9 +206,9 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
 
     /// <summary>
     /// Records the cull of one view into <see cref="GpuFrame.PreFrame"/>: <paramref name="planes"/> (at most 8), the eye along the ground, the
-    /// page size, the density as the prefix step and the fraction into it (<see cref="DensityStep"/>). The draws are read by this frame's draw.
+    /// page size, the density as the prefix step and the fraction into it (<see cref="DensityStep"/>); for the motion pass <paramref name="motionScale"/> (<see cref="GrassMotionReach"/>, 0: the patches' ranges only). The draws are read by this frame's draw.
     /// </summary>
-    public GrassResult Dispatch(ReadOnlySpan<Vector4> planes, Vector2 eye, float pageSize, int prefixIndex, float fraction, in GrassTables tables)
+    public GrassResult Dispatch(ReadOnlySpan<Vector4> planes, Vector2 eye, float pageSize, int prefixIndex, float fraction, in GrassTables tables, float motionScale = 0)
     {
         int n = SlotHigh;
         if (n == 0 || tables.PatchCount == 0) return default;
@@ -232,7 +232,7 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         ((float*)rest)[4] = pageSize;
         ((float*)rest)[5] = fraction;
         rest[6] = (uint)prefixIndex;
-        rest[7] = 0;
+        ((float*)rest)[7] = motionScale;
 
         Span<BufferBinding> b = stackalloc BufferBinding[8];
         b[0] = new BufferBinding(viewData.Handle, viewData.Offset, 160);

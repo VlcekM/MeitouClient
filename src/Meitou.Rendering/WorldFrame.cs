@@ -263,7 +263,7 @@ sealed class WorldOptions
           --bench-compare <a.json> <b.json>   print two bench results side by side and exit
           --crowd <n> [--crowd-seed <s>] [--crowd-time <s>]   place n generated characters of the start town round the start point (the character renderer's test; stills pose them at --crowd-time, default 0.35)
           --orbit-step <degrees>   with --screenshot: the camera orbits this much every frame (checks the upscaler's motion vectors)
-          --sway-step <seconds>    with --screenshot: the grass sway advances this much every frame (checks the grass motion)
+          --sway-step <seconds>    with --screenshot or a bench run: the grass sway advances this much every frame (checks the grass motion; 0.006 is about a frame at 165 fps)
           --sway-start <seconds>   with --screenshot: the grass sway's time at the start (default 0)
           --renderer vulkan        accepted and ignored (Vulkan is the only backend)
           --view-distance <u>      furthest terrain drawn (default 450000: the whole world)

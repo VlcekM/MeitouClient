@@ -45,6 +45,7 @@ static partial class WorldApp
             AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v, "foliage meshes and impostors, not the TERRAIN-mode rocks (MEITOU_FOLIAGE_DEBUG=nomeshes)");
             AbToggles.Register("card-trim", () => grassPass.CardTrim, v => grassPass.CardTrim = v, "alpha-tested foliage cards drawn cut to the opaque outline of their texture (MEITOU_CARD_TRIM=0 never makes them); B: the whole cards");
             AbToggles.Register("screen-lod", () => grassPass.ScreenLod, v => grassPass.ScreenLod = v, "foliage by the size of its triangles on the screen: generated levels sooner and billboards sooner where the triangles are under 1.5 px2 (MEITOU_SCREEN_LOD_TRI, _MULT); B: levels by deviation, billboards at the impostor distance");
+            AbToggles.Register("grass-velocity", () => grassPass.GrassVelocityCull, v => grassPass.GrassVelocityCull = v, "the grass's own motion vectors only for blades that move 0.5 px a frame or more (MEITOU_GRASS_VELOCITY_PX), the camera reprojection for the rest; B: every blade redrawn in the motion pass");
         }
         AbToggles.Register("anisotropy", () => gpu.Sky.Gpu.Samplers.MaxAnisotropy > 1, v => gpu.Sky.Gpu.Samplers.MaxAnisotropy = v ? 16 : 1, "anisotropic filtering as the textures ask (A) against none, 1x (B); the Tab slider's ends");
         AbToggles.Register("weather-particles", () => gpu.WeatherParticles, v => gpu.WeatherParticles = v, "the weather's particles, simulated and drawn (the Tab slider at 0)");
@@ -118,7 +119,7 @@ static partial class WorldApp
         float Clock() => clockRuns ? (float)(clockFrame / 60.0 / 600) : 0;
         double Frame(long tag, bool step = true)
         {
-            if (step) { if (motion.Moves) motion.Step(++motionStep); clockFrame++; }
+            if (step) { if (motion.Moves) motion.Step(++motionStep); clockFrame++; if (o.SwayStep > 0 && gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep; }
             context.EnsureFrame();
             profiler.Tag = post.CostTag = tag;
             profiler.BeginFrame();

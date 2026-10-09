@@ -211,7 +211,7 @@ command-line values win). Off draws the scene at the display size (the default) 
   pass, `FoliageRenderer.DrawGrassMotion` (through `PostProcess.ObjectMotion`) redraws the near slice's blades of layers with wind
   into the motion texture (red and green only), placing each now and with last frame's sway phase and camera, where its depth matches
   the depth buffer's (read in the shader, so the scene's depth is untouched). Only with an upscaler on; `MEITOU_GRASS_MOTION=0` turns it
-  off for comparisons. Checked (rock view, sway at real speed, `--sway-step 0.016667` against a still picture at the same sway time,
+  off for comparisons; only blades within the distance where their own motion is half a pixel a frame or more are drawn (`grass-velocity`, [render-foliage.md](render-foliage.md)). Checked (rock view, sway at real speed, `--sway-step 0.016667` against a still picture at the same sway time,
   `--sway-start`): mean difference without / with: TAA 0.173 / 0.129, FSR 0.589 / 0.519, DLSS 0.438 / 0.349.
 - **TAA** (`UpscaleShaders.Taa`, both backends): each display pixel takes a Gaussian of the 3 × 3 jittered render samples around
   it, the history reprojected with Catmull-Rom and clipped to the neighbourhood's colour spread (YCoCg variance clipping), blended

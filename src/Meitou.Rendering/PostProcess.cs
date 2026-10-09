@@ -467,8 +467,8 @@ public sealed unsafe partial class PostProcess : IDisposable
     /// <summary>The vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/>; without one (or on failure) TAA runs.</summary>
     public IUpscaler? External { get; set; }
 
-    /// <summary>What <see cref="ObjectMotion"/> gets: the near slice's depth texture (with the sampler the chain reads it with) and planes, and the jitter in NDC.</summary>
-    public readonly record struct MotionTargets(SampledTexture NearDepth, Vector2 NearPlanes, Vector2 JitterNdc);
+    /// <summary>What <see cref="ObjectMotion"/> gets: the near slice's depth texture (with the sampler the chain reads it with) and planes, the jitter in NDC, and the render height over twice the tangent of half the field of view (pixels per unit at distance 1; 0: unknown).</summary>
+    public readonly record struct MotionTargets(SampledTexture NearDepth, Vector2 NearPlanes, Vector2 JitterNdc, float FocalPixels = 0);
 
     /// <summary>
     /// Draws motion of moving geometry over the camera motion (the swaying grass), called after the velocity pass with the motion target bound,
@@ -836,7 +836,7 @@ public sealed unsafe partial class PostProcess : IDisposable
             cmd.BeginRendering(targets.Rendering);
             Gpu.BeginHostPass(cmd, targets, DrawState.For(targets.Formats, Gpu.Device.DepthClamp,
                 mask: Silk.NET.Vulkan.ColorComponentFlags.RBit | Silk.NET.Vulkan.ColorComponentFlags.GBit));
-            objectMotion(new MotionTargets(Sampled(sceneDepth!), nearPlanes, new Vector2(2 * JitterPixels.X / width, 2 * JitterPixels.Y / height)));
+            objectMotion(new MotionTargets(Sampled(sceneDepth!), nearPlanes, new Vector2(2 * JitterPixels.X / width, 2 * JitterPixels.Y / height), height / (2 * MathF.Tan(fovNow * 0.5f))));
             cmd.EndRendering();
             Gpu.EndHostPass(cmd);
             Gpu.EndNative(cmd);

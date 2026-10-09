@@ -302,7 +302,7 @@ public sealed unsafe partial class FoliageRenderer
         NewTextureSegment();
         var tables = BindRows(NearDepthIndex(targets.NearDepth));
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
-        var result = grassStore.Dispatch(motionFrustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
+        var result = grassStore.Dispatch(motionFrustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables, motionScale);
         if (GpuCullVerify && !result.IsEmpty) QueueGrassVerify("motion", result);
         grassFrame!.Bind(cmd, p.Layout, in view, [tables.Patches.Binding]);
         if (!result.IsEmpty)

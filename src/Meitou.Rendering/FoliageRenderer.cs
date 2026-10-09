@@ -113,6 +113,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public float RangeSetting { get; set; } = Env("MEITOU_FOLIAGE_RANGE", 4);
     public float GrassRangeSetting { get; set; } = Env("MEITOU_GRASS_RANGE", 4);
     public float GrassDensitySetting { get; set; } = Env("MEITOU_GRASS_DENSITY", 1);
+    /// <summary>The Meitou <c>grass-velocity</c> switch (docs/render-foliage.md "Grass motion vectors"): the motion pass redraws only the swaying blades near enough to move by <see cref="GrassVelocityPixels"/> a frame (<see cref="GrassMotionReach"/>); off redraws all of them (<c>MEITOU_GRASS_VELOCITY=0</c>).</summary>
+    public bool GrassVelocityCull { get; set; } = Environment.GetEnvironmentVariable("MEITOU_GRASS_VELOCITY") != "0";
+    /// <summary>Pixels of a blade's own motion a frame under which the camera reprojection stands for it (<c>MEITOU_GRASS_VELOCITY_PX</c>).</summary>
+    public float GrassVelocityPixels { get; set; } = Env("MEITOU_GRASS_VELOCITY_PX", GrassMotionReach.DefaultThresholdPixels);
     /// <summary>MEITOU_FOLIAGE_RANGE, MEITOU_GRASS_RANGE and MEITOU_GRASS_DENSITY start the three settings at other values (offscreen measurements).</summary>
     static float Env(string name, float fallback) => float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : fallback;
 
@@ -2637,6 +2641,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     Vector3 motionEye;
     Vector4[] motionFrustum = [];
     float? previousSwayPhase;
+    /// <summary>This frame's <see cref="GrassMotionReach.Scale"/> for the motion pass (0: every blade in range).</summary>
+    float motionScale;
     bool motionCamera, havePrevious;
     readonly List<MotionDraw> motionDraws = [];
 
@@ -2661,6 +2667,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         var previous = havePrevious ? previousUnjittered : motionUnjittered;
         (previousSwayPhase, previousUnjittered, havePrevious) = (time, motionUnjittered, true);
         var eye = motionEye;
+        // grass-velocity: blades whose own motion stays under the threshold are left to the camera reprojection; with no phase step nothing moves at all.
+        motionScale = 0;
+        if (GrassVelocityCull && targets.FocalPixels > 0)
+        {
+            float step = GrassMotionReach.PhaseStep(time, previousTime);
+            if (step == 0) return;
+            motionScale = GrassMotionReach.Scale(step, targets.FocalPixels, GrassVelocityPixels);
+        }
         if (GpuGrassActive)
         {
             DrawGrassMotionGpu(targets, eye, time, previousTime, previous);
@@ -2690,7 +2704,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     if (!patch.Layer.Wind || g.SwayLength == 0) continue;
                     var b = Patch(page.Buffers[i], patch);
                     float range = GrassRange(patch);
-                    if (b.Shown == 0 || d >= range) continue;
+                    if (b.Shown == 0 || d >= GrassMotionReach.Reach(range, g.SwayLength, motionScale)) continue;
                     if (b.Sprite is not { Key: not 0 } sprite) continue;
                     motionDraws.Add(new MotionDraw
                     {
