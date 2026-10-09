@@ -330,4 +330,31 @@ public sealed class FoliageLayoutCacheTests : IDisposable
         Assert.False(Directory.Exists(recentKey));
         Assert.True(File.Exists(mine.PathFor(new ZoneCoordinate(1, 1), false)));
     }
+
+    [Fact]
+    public void Layout_code_hash_is_the_normalised_hash_of_the_source_it_was_built_from()
+    {
+        // The build-time hash (LayoutCodeHash.targets) against the same recipe run here on the checked-out sources: Meitou.Data and Meitou.Core, every .cs and the two project
+        // files, relative path + length + content with CRLF as LF, sorted by path. A new directory or a different checkout line-ending setting must not change it.
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "src", "Meitou.Data"))) dir = dir.Parent;
+        Assert.SkipWhen(dir is null, "the source tree is not next to the test binaries");
+        string src = Path.Combine(dir!.FullName, "src");
+        bool Built(string f) => f.Split(Path.DirectorySeparatorChar).All(p => p is not ("obj" or "bin"));
+        var files = new[] { "Meitou.Data", "Meitou.Core" }
+            .SelectMany(p => Directory.EnumerateFiles(Path.Combine(src, p), "*.cs", SearchOption.AllDirectories).Where(f => Built(Path.GetRelativePath(Path.Combine(src, p), f))).Append(Path.Combine(src, p, p + ".csproj")))
+            .Select(f => (Rel: Path.GetRelativePath(src, f).Replace(Path.DirectorySeparatorChar, '/'), Full: f)).OrderBy(f => f.Rel, StringComparer.Ordinal).ToList();
+        using var sha = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
+        foreach (var (rel, full) in files)
+        {
+            var bytes = File.ReadAllBytes(full);
+            int start = bytes is [0xEF, 0xBB, 0xBF, ..] ? 3 : 0;
+            var normal = new MemoryStream();
+            for (int i = start; i < bytes.Length; i++) if (!(bytes[i] == '\r' && i + 1 < bytes.Length && bytes[i + 1] == '\n')) normal.WriteByte(bytes[i]);
+            sha.AppendData(System.Text.Encoding.UTF8.GetBytes(rel + "\n" + normal.Length + "\n"));
+            sha.AppendData(normal.ToArray());
+        }
+        Assert.Equal(LayoutCodeHash.Value, Convert.ToHexStringLower(sha.GetHashAndReset()));
+        Assert.Equal(LayoutCodeHash.Files, files.Count);
+    }
 }

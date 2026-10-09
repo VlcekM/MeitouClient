@@ -57,7 +57,7 @@ public sealed class BenchResult
     // Metric groups in print order: (prefix, heading).
     static readonly (string Prefix, string Heading)[] Groups =
     [
-        ("frame", "Frame (wall time of draw, submit and wait for the GPU), ms"), ("gpu:", "GPU ms per stage (timestamps)"),
+        ("frame", "Frame (interval between frames; frames in flight unless the run says serial), ms"), ("gpu:", "GPU ms per stage (timestamps)"),
         ("post:", "Post-processing GPU ms per section"), ("cpu:", "Render thread ms per stage (recording; job threads not included)"),
     ];
 
@@ -96,6 +96,7 @@ public sealed class BenchResult
                 }
                 w.WriteLine(line.ToString().TrimEnd());
             }
+            if (prefix == "frame") PrintFps(w, sides);
         }
         foreach (var s in sides)
         {
@@ -109,6 +110,16 @@ public sealed class BenchResult
             w.WriteLine();
             w.WriteLine($"picture   A vs B at {p.Width}x{p.Height}: {p.Over1:N0} pixels differ by at least 1/255, {p.Over4:N0} by at least 4, {p.Over12:N0} by at least 12; mean {p.MeanDiff:0.0000}, max {p.MaxDiff}  ({p.Diff})");
         }
+    }
+
+    void PrintFps(TextWriter w, List<string> sides)
+    {
+        var line = new StringBuilder(string.Format(CultureInfo.InvariantCulture, "{0,-16}", "fps"));
+        foreach (var s in sides)
+            if (Configs[s].Metrics.TryGetValue("frame", out var m) && m.Mean > 0 && m.Median > 0 && m.P99 > 0)
+                line.Append(string.Format(CultureInfo.InvariantCulture, "| {0} {1,6:0.0}{2,7:0.0}{3,7}{4,7:0.0}{5,8} ", s, 1000 / m.Mean, 1000 / m.Median, "", 1000 / m.P99, ""));
+        w.WriteLine(line.ToString().TrimEnd() + "   (1000 / mean, of the median frame, of the p99 frame)");
+        if (Meta.TryGetValue("frameMode", out var mode)) w.WriteLine("frame mode: " + mode);
     }
 
     /// <summary><c>--bench-compare a.json b.json</c>: the first side of each file next to each other, B - A with an unpaired 95% interval from the spreads.</summary>

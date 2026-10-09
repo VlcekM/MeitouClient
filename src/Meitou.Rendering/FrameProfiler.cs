@@ -45,6 +45,7 @@ public sealed class FrameProfiler : IDisposable
     readonly string?[] slotNotes = new string?[Slots], slotCpu = new string?[Slots];
     readonly double[] slotCpuTotal = new double[Slots];
     readonly (QuerySlot Begin, QuerySlot PreEnd)[] slotStamps = new (QuerySlot, QuerySlot)[Slots];
+    readonly (QuerySlot Begin, QuerySlot End)[] slotWhole = new (QuerySlot, QuerySlot)[Slots];   // each profiled frame's own first and last stamps (its GPU total)
     long frameCounter;
     readonly long[] slotTag = new long[Slots];
     readonly List<double> medianScratch = new(History);
@@ -88,6 +89,7 @@ public sealed class FrameProfiler : IDisposable
     {
         for (int s = 0; s < Slots; s++) Collect(s);
         slot = (slot + 1) % Slots;
+        slotWhole[slot] = default;
         pending[slot] = false;   // still not ready after a full round: dropped
         stampCount[slot] = 0;
         slotTag[slot] = Tag;
@@ -104,6 +106,7 @@ public sealed class FrameProfiler : IDisposable
         StageClock.Lap(11);
         StageClock.Active = false;
         pending[slot] = stampCount[slot] > 1;
+        slotWhole[slot] = native.CurrentFrameStamps;   // complete when the context has ended the frame already (else the total falls back to gpuFrameMs)
         double sum = 0;
         for (int s = 0; s < Stages; s++)
         {
@@ -226,7 +229,10 @@ public sealed class FrameProfiler : IDisposable
             sum += ms;
             previous = now;
         }
-        double total = gpuFrameMs?.Invoke() is > 0 and var t ? Math.Max(t, sum) : sum;
+        // The frame's own total (first to last stamp); the context's latest completed frame is only a stand-in and, with frames in flight, another frame.
+        var whole = slotWhole[s];
+        double own = native.Frame.Timestamps.TryRead(whole.Begin, out ulong wb) && native.Frame.Timestamps.TryRead(whole.End, out ulong we) && we >= wb ? (we - wb) / 1e6 : 0;
+        double total = own > 0 ? Math.Max(own, sum) : gpuFrameMs?.Invoke() is > 0 and var t ? Math.Max(t, sum) : sum;
         for (int k = 0; k < Stages; k++) gpu[k][gpuHead] = (float)gpuFrame[k];
         gpu[Other][gpuHead] = (float)(total - sum);
         gpu[Total][gpuHead] = (float)total;

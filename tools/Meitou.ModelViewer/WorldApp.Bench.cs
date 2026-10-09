@@ -71,8 +71,11 @@ static partial class WorldApp
         };
         post.OnCost = (tag, name, ms) => Set("post:" + name, tag, ms, add: true);
 
-        // One frame, as the viewer draws it; the wall time includes the wait for the GPU. clock: the frame clock the weather particles and surfaces run on.
-        var watch = new Stopwatch();
+        // One frame, as the viewer draws it. By default frames stay in flight (the next one is recorded while the GPU still draws this one; the stage times are read when the frame ring comes
+        // round, matched to their frame by the tag) and the returned wall time is the interval since the previous frame was submitted, so 1000 / mean is the viewer's fps.
+        // --bench-serial waits for every frame instead: the interval is then CPU + GPU added up. clock: the frame clock the weather particles and surfaces run on.
+        bool serial = o.BenchSerial;
+        long lastSubmit = Stopwatch.GetTimestamp();
         int clockFrame = 0;
         bool clockRuns = gpu.Particles is { Groups.Count: > 0 };
         float Clock() => clockRuns ? (float)(clockFrame / 60.0 / 600) : 0;
@@ -82,12 +85,14 @@ static partial class WorldApp
             context.EnsureFrame();
             profiler.Tag = post.CostTag = tag;
             profiler.BeginFrame();
-            watch.Restart();
             Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance);
             EndFrame(context);
-            context.Finish();
+            if (serial) context.Finish();
             profiler.EndFrame();
-            return watch.Elapsed.TotalMilliseconds;
+            long now = Stopwatch.GetTimestamp();
+            double interval = (now - lastSubmit) * 1000.0 / Stopwatch.Frequency;
+            lastSubmit = now;
+            return interval;
         }
 
         // ---- warm up: shaders, the temporal upscaler's history, streaming until nothing is pending (the screenshot path's Settle and FinishLoading came first) ----
@@ -110,6 +115,8 @@ static partial class WorldApp
         var wall = new double[frames];
         var cpuStages = StageClock.Names.Length;
         var measured = Stopwatch.StartNew();
+        if (!ab) for (int i = 0; i < 16; i++) Frame(-1);   // the pipeline full and the first interval a frame's, not the set-up's
+        lastSubmit = Stopwatch.GetTimestamp();
         if (ab)
         {
             // Both sides drawn once at least, in the pattern of the run, so the pipelines and caches of B exist before the numbers count.
@@ -137,9 +144,11 @@ static partial class WorldApp
             }
             Set("cpu:total", k, cpuSum);
         }
+        double measuredSeconds = measured.Elapsed.TotalSeconds;
+        // The last frames' timestamps arrive when their slots come round: two empty frames bring them in.
+        for (int i = 0; i < 3; i++) { context.EnsureFrame(); context.Finish(); }
         profiler.Flush();
         post.Flush();
-        double measuredSeconds = measured.Elapsed.TotalSeconds;
         gpuLock?.Dispose();
 
         // ---- the results ----
@@ -175,6 +184,7 @@ static partial class WorldApp
         meta["upscaler"] = o.Post.Upscale.Describe();
         meta["renderScale"] = o.Post.Upscale.EffectiveScale.ToString("0.###", CultureInfo.InvariantCulture);
         meta["motion"] = o.BenchMotion;
+        meta["frameMode"] = serial ? "serial (each frame waited for)" : "pipelined (frames in flight)";
         meta["frames"] = frames.ToString(CultureInfo.InvariantCulture);
         meta["date"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         meta["measuredSeconds"] = measuredSeconds.ToString("0.0", CultureInfo.InvariantCulture);

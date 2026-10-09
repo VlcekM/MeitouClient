@@ -28,6 +28,8 @@ public sealed unsafe partial class GpuContext
     /// <summary>The first and the pre-frame-end timestamps of the frame submitted last (--log-spikes or MEITOU_PASS_STATS=1 only; the profiler keeps them to read the pre-frame GPU time when the frame has completed).</summary>
     internal (QuerySlot Begin, QuerySlot PreEnd) LastFrameStamps { get; private set; }
     QuerySlot[]? preFrameEnd;
+    /// <summary>The current (or last submitted) frame's first and last timestamps: its own GPU time, readable once its slot has come round; End is set by <see cref="EndFrame"/>.</summary>
+    internal (QuerySlot Begin, QuerySlot End) CurrentFrameStamps => frameStamps is null ? default : frameStamps[Device.Frames.Slot];
     /// <summary>Stopwatch ticks spent waiting for a free frame slot and submitting, since the context was made.</summary>
     public long FenceWaitTicks { get; private set; }
     public long SubmitTicks { get; private set; }
