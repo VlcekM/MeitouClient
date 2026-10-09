@@ -129,6 +129,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public EffectWorld World { get; } = new();
     /// <summary>The viewer's <c>--no-particles</c>: nothing is simulated or drawn.</summary>
     public bool Enabled { get; set; } = true;
+    /// <summary>The Tab panel's weather particles slider at 0: the weather's groups are neither simulated nor drawn (the map's effect placers, fires and smoke, stay; so do the effects' fog volumes).</summary>
+    public bool WeatherParticles { get; set; } = true;
     /// <summary>Seconds simulated before the first picture, for the new groups: null (the default) is each system's longest particle life, capped at <see cref="MaxAutoPrewarm"/>; 0 starts empty.</summary>
     public float? PrewarmSeconds { get; set; }
     public const float MaxAutoPrewarm = 40;
@@ -292,6 +294,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
             foreach (var u in g.Units)
             {
                 if (!u.Active) continue;
+                if (!WeatherParticles && g.Entry is not null) { u.Pending = 0; continue; }   // weather off: nothing queues up for when it comes back
                 activeUnits++;
                 // Distant units step at a lower rate (the time queues up until a step is due): 20 Hz beyond 4000 units, 10 Hz beyond 9000
                 // (Observed choice for the cost; a particle moves about a pixel per step at that range).
@@ -407,6 +410,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         foreach (var g in groups.Concat(placerGroups))
             foreach (var u in g.Units)
             {
+                if (!WeatherParticles && g.Entry is not null) continue;
                 if (u.Radius != float.PositiveInfinity)
                 {
                     if (u.DistanceToCamera - u.Radius > DrawRange) continue;

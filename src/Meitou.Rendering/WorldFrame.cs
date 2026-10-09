@@ -102,6 +102,8 @@ sealed class WorldOptions
     /// <summary><c>--no-occlusion-cull</c>: foliage hidden behind the previous frame's depth is drawn anyway (comparison; docs/formats/foliage.md "Occlusion culling").</summary>
     public bool NoOcclusionCull;
     public float? ParticlePrewarm;
+    /// <summary><c>--particle-density x</c>: the Tab panel's "Particle density x" at start (0.1 to 1).</summary>
+    public float ParticleDensity = 1;
     /// <summary><c>--particle-area &lt;radius&gt;</c> (test): weather effects are placed in a disc of this radius round the start point instead of the weather region; <c>--particle-seed</c> seeds their random choices.</summary>
     public float? ParticleArea;
     public int ParticleSeed = 1;
@@ -199,7 +201,7 @@ sealed class WorldOptions
           --cloud-wind <x>,<z>     the clouds' drift velocity in world units per second (test; the drift is held still in --screenshot)
           --no-fog-volumes         leave out the placed fog volumes (fogfeatures.dat: the swamp's fog, the Fog Islands', the Vain's)
           --no-fog-cull            draw what the fog in front of the camera completely hides (comparison; the image is the same)
-          --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-area <r> place weather effects within r units of the start point (test)   --particle-seed <n>   --particle-only <a,b> keep only the weather effects with these in their names (test)
+          --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-density <x> the effects' emission rate x (0.1-1, the Tab slider)   --particle-area <r> place weather effects within r units of the start point (test)   --particle-seed <n>   --particle-only <a,b> keep only the weather effects with these in their names (test)
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,dust,reach>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
@@ -345,6 +347,7 @@ sealed class WorldOptions
                 case "--no-fog-cull": o.NoFogCull = true; break;
                 case "--no-occlusion-cull": o.NoOcclusionCull = true; break;
                 case "--particle-prewarm": o.ParticlePrewarm = Math.Max(F(), 0); break;
+                case "--particle-density": o.ParticleDensity = Math.Clamp(F(), 0.1f, 1); break;
                 case "--particle-area": o.ParticleArea = Math.Max(F(), 1); break;
                 case "--particle-seed": o.ParticleSeed = (int)F(); break;
                 case "--particle-only": o.ParticleOnly = Next().Split(','); break;
@@ -595,6 +598,9 @@ static class WorldFrame
         public readonly List<FogVolumes.EffectFog> EffectFogs = [];
         /// <summary>The weather's particle effects (null while there are none: a clear weather, or <c>--no-particles</c>); <see cref="EnsureParticles"/> makes it.</summary>
         public ParticleRenderer? Particles;
+        /// <summary>The Tab panel's weather particles at 0 and its particle density, given to <see cref="Particles"/> every frame (it is made only with the first weather).</summary>
+        public bool WeatherParticles = true;
+        public float ParticleDensity = 1;
         /// <summary>Makes the particle renderer on demand (null with <c>--no-particles</c>).</summary>
         public Func<ParticleRenderer>? MakeParticles;
         /// <summary>The weather regions' cells (null with <c>--particle-area</c>), the colour of the camera's cell the particle area was made for, and <c>--particle-only</c>'s words with its filtered list.</summary>
@@ -751,6 +757,7 @@ static class WorldFrame
             var particles = EnsureParticles(gpu, context, install);
             particles.PrewarmSeconds = o.ParticlePrewarm;
             particles.Seed = o.ParticleSeed;
+            gpu.ParticleDensity = o.ParticleDensity;
             particles.World.GroundHeight = terrain.HeightAt;   // main thread only: the height grid swaps as the terrain streams
             gpu.WeatherAreas = o.ParticleArea is null ? WeatherAreas.Load(install) : null;
             gpu.ParticleOnly = o.ParticleOnly;
@@ -823,6 +830,10 @@ static class WorldFrame
     public static readonly string[] UpscalerSliders = ["Anti-aliasing: 0 off 1 FXAA 2 TAA 3 FSR 4 DLSS", "Render scale (upscaler)", "Upscaler sharpness"];
 
     /// <summary>The anti-aliasing slider's value for the options: 0 none, 1 FXAA, 2.. the upscaler kinds (TAA, FSR, DLSS).</summary>
+    public static readonly string[] ParticleSliders = ["Weather particles: 0 off 1 quarter 2 half 3 auto 4 full", "Particle density x"];
+    /// <summary>The weather particles slider's position for the renderer's state: 0 off, 1 quarter, 2 half, 3 by sprite size (auto), 4 full size.</summary>
+    public static int WeatherParticlesSlider(bool weatherOn, PostOptions o) =>
+        !weatherOn ? 0 : !o.LowResParticles || o.ParticleDivisor == 1 ? 4 : o.ParticleDivisor switch { 4 => 1, 2 => 2, _ => 3 };
     public static int AntiAliasingSlider(PostOptions o) => o.Upscale.Kind != UpscalerKind.Off ? (int)o.Upscale.Kind + 1 : o.Fxaa ? 1 : 0;
 
     /// <summary>The upscaler a value of the anti-aliasing slider picks (<see cref="UpscalerKind.Off"/> for none and FXAA).</summary>
@@ -936,6 +947,14 @@ static class WorldFrame
             sliders.Add(new Slider(UpscalerSliders[1], 0.33f, 1, () => up.EffectiveScale, v => up.Scale = MathF.Round(v * 100) / 100, "0.00",
                 Text: v => up.Kind == UpscalerKind.Off && v < 1 ? v.ToString("0.00", CultureInfo.InvariantCulture) + " (no upscaler: plain scaling)" : v.ToString("0.00", CultureInfo.InvariantCulture)));
             sliders.Add(new Slider(UpscalerSliders[2], 0, 1, () => up.Sharpness, v => up.Sharpness = v, "0.00"));
+            // The weather's particles (docs/render-post.md "Particles"): off, forced to a quarter or half of the render size, by sprite size (the Meitou default), or all full size (as the game).
+            sliders.Add(new Slider(ParticleSliders[0], 0, 4, () => WeatherParticlesSlider(g.WeatherParticles, post.Options), v =>
+            {
+                int i = (int)MathF.Round(v);
+                g.WeatherParticles = i > 0;
+                if (i > 0) (post.Options.LowResParticles, post.Options.ParticleDivisor) = i switch { 1 => (true, 4), 2 => (true, 2), 3 => (true, 0), _ => (false, 0) };
+            }, "0"));
+            sliders.Add(new Slider(ParticleSliders[1], 0.1f, 1, () => g.ParticleDensity, v => g.ParticleDensity = MathF.Round(v * 20) / 20, "0.00"));
         }
         // The Faithful / Meitou switches as checkboxes (ticked: Meitou), the F-key toggles' state.
         var toggles = switches?.Select(e => new Toggle(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful)).ToList();
@@ -1024,7 +1043,11 @@ static class WorldFrame
         // The weather's camera particles step on the frame clock (the caller's time, 1/600 s units; constant, so still, in pictures).
         // They count as their own stage (the profiler's "particles", with their draw below).
         UpdateParticles(gpu, camera);
-        gpu.Particles?.Update(time * SecondsPerTimeUnit, camera);
+        if (gpu.Particles is { } updated)
+        {
+            (updated.WeatherParticles, updated.World.Density) = (gpu.WeatherParticles, gpu.ParticleDensity);
+            updated.Update(time * SecondsPerTimeUnit, camera);
+        }
         // The placed fog volumes in view and the effects' fog spheres (after the particles moved), for every world shader (FogVolumes).
         if (gpu.FogVolumes is { } fogVolumes)
         {
