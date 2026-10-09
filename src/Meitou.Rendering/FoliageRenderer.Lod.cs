@@ -21,7 +21,10 @@ public sealed unsafe partial class FoliageRenderer
     public float LodPixelsPerRadian { get; set; }
 
     /// <summary>How many pixels (of the render, before the upscaler) a generated level may deviate from the original surface; <c>MEITOU_LOD_PIXELS</c>.</summary>
-    public float LodTolerance { get; set; } = Env("MEITOU_LOD_PIXELS", 4f);
+    public float LodTolerance { get; set; } = Env("MEITOU_LOD_PIXELS", DefaultLodTolerance);
+
+    /// <summary>The default <see cref="LodTolerance"/>: the Tab slider "Foliage LOD distance x" shows this divided by the tolerance.</summary>
+    public const float DefaultLodTolerance = 4f;
 
     /// <summary>How many radii of the mesh one radian of shading deviation (<see cref="FoliageLodSet.NormalAngles"/>) counts as in a level's deviation; <c>MEITOU_LOD_NORMAL</c>.</summary>
     public float LodNormalWeight { get; set; } = Env("MEITOU_LOD_NORMAL", 0.02f);
@@ -139,7 +142,7 @@ public sealed unsafe partial class FoliageRenderer
         if (LodLog)
             Console.WriteLine(set is null
                 ? $"lod       {label} ({name}): no level ({model.Parts.Sum(p => p.Indices.Length / 3)} triangles, {(hit ? "cached" : $"built in {ms:0} ms")})"
-                : $"lod       {label} ({name}): {string.Join(" > ", set.Triangles.Select((t, i) => i == 0 ? $"{t}" : $"{t} (dev {set.Errors[i] / radius * 100:0.00}% of r {radius:0}, normals {set.NormalAngles[i] * 57.3f:0}°)"))} ({(hit ? "cached" : $"built in {ms:0} ms, {bytes / 1024} KB")})");
+                : $"lod       {label} ({name}): {string.Join(" > ", set.Triangles.Select((t, i) => i == 0 ? $"{t}" : $"{t} (dev {set.Errors[i] / radius * 100:0.00}% of r {radius:0}, normals {set.NormalAngles[i] * 57.3f:0}ï¿½)"))} ({(hit ? "cached" : $"built in {ms:0} ms, {bytes / 1024} KB")})");
         return new LodResult(set, hit, ms, bytes);
     }
 

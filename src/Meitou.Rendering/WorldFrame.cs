@@ -868,6 +868,10 @@ static class WorldFrame
         if (g.Foliage is { } foliage)
         {
             sliders.Add(new Slider("Foliage draw distance x", 0.25f, 80, () => foliage.RangeSetting, v => foliage.RangeSetting = v, "0.00", Logarithmic: true));
+            // The generated levels switch at a pixel tolerance; the distance where each level takes over scales with its inverse.
+            sliders.Add(new Slider("Foliage LOD distance x (lod Meitou)", 0.25f, 8, () => FoliageRenderer.DefaultLodTolerance / foliage.LodTolerance,
+                v => foliage.LodTolerance = FoliageRenderer.DefaultLodTolerance / v, Logarithmic: true,
+                Text: v => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{v:0.00} ({FoliageRenderer.DefaultLodTolerance / v:0.0} px)")));
             // The range switch's class ranges (Meitou; the slider above then only moves the FAR layers' large meshes).
             sliders.Add(new Slider("Large foliage range (F6 Meitou)", 1000, 120000, () => foliage.LargeRange, v => foliage.LargeRange = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
             sliders.Add(new Slider("Impostor distance (F7 Meitou)", 500, 40000, () => foliage.ImpostorDistance, v => foliage.ImpostorDistance = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
