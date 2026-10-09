@@ -44,7 +44,7 @@ public struct FoliageRockView
 /// <summary>What a view tells the cull about generated mesh levels (<see cref="FoliageCullChunk.Lod"/>): a level is used while its deviation shows less than
 /// <see cref="Tolerance"/>. A perspective view measures it in pixels, <see cref="Scale"/> the pixels per radian of the render and <see cref="EyeY"/> the eye's height
 /// (the cull has only its ground position); an orthographic one (a shadow cascade) in texels, <see cref="Scale"/> being 1 / the texel. Tolerance 0 uses the original everywhere.</summary>
-public readonly record struct FoliageLodView(float EyeY, float Scale, float Tolerance, bool Ortho);
+public readonly record struct FoliageLodView(float EyeY, float Scale, float Tolerance, bool Ortho, float FarDistance = 0);
 
 /// <summary>An indirect draw the scan fills (std430, 16 bytes): the part's index count (from <see cref="FirstIndex"/>, a generated level's place in the index buffer) and the chunks [ChunkStart, ChunkEnd) of its batch.</summary>
 [StructLayout(LayoutKind.Sequential)]
@@ -411,7 +411,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         for (int i = 0; i < FogVolumes.CullVectors; i++) fogData[i] = fogCull.Length == FogVolumes.CullVectors ? fogCull[i] : default;
         var hzData = fogData + FogVolumes.CullVectors;
         for (int i = 0; i < HizPyramid.ViewVectors; i++) hzData[i] = occlusion.IsEmpty ? default : occlusion.Vectors[i];
-        hzData[HizPyramid.ViewVectors] = new Vector4(lod.EyeY, lod.Scale, lod.Tolerance, lod.Ortho ? 1 : 0);
+        hzData[HizPyramid.ViewVectors] = new Vector4(lod.EyeY, lod.Scale, lod.Tolerance, lod.Ortho ? 1 : -lod.FarDistance);
 
         Span<BufferBinding> b = stackalloc BufferBinding[10];
         b[0] = new BufferBinding(viewData.Handle, viewData.Offset, ViewBytes);

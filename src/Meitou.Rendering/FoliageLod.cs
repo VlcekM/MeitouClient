@@ -35,7 +35,7 @@ public sealed class FoliageLodSet
 public static class FoliageLodBuilder
 {
     /// <summary>Bumped when the simplifier, the fractions or the error measure change: it is part of the disk cache's key.</summary>
-    public const int Version = 2;
+    public const int Version = 3;
     public static readonly float[] Fractions = [0.5f, 0.25f, 0.1f];
     /// <summary>The fewest triangles a level reduces a part to; a part with fewer than twice this is not reduced.</summary>
     public const int Floor = 48;
@@ -43,8 +43,10 @@ public static class FoliageLodBuilder
     public const int MinTriangles = 500;
     /// <summary>A level whose deviation is more than this share of the mesh's radius is not kept (it could only ever show far away, where the level before is cheap enough).</summary>
     public const float MaxRelativeError = 0.25f;
-    /// <summary>A level whose shading deviates more than this many radians (34 degrees) is not kept.</summary>
-    public const float MaxNormalAngle = 0.6f;
+    /// <summary>A level whose shading deviates more than this many radians (97 degrees; was 0.6 = 34 until 2026-10-09, which left the thin swamp plant without its 25 % level) is not kept. The cull weighs the angle by 0.02 radii a radian, so a rough level is only used far away.</summary>
+    public const float MaxNormalAngle = 1.7f;
+    /// <summary>The limit before 2026-10-09: the levels with a shading deviation above it are the ones the <c>lod-far</c> switch (off) leaves out again.</summary>
+    public const float LegacyMaxNormalAngle = 0.6f;
     /// <summary>A level must have at most this share of the triangles of the level before it.</summary>
     public const float MinGain = 0.8f;
     const int MaxSamples = 1500;

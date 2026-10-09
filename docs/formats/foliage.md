@@ -457,7 +457,7 @@ are made for **TERRAIN-mode meshes with at least 500 triangles** (`FoliageLodBui
 **Making them** (`FoliageLodBuilder`, `FoliageRenderer.Lod.cs`). When a mesh is resident, one job per mesh file on the streaming workers (`BackgroundWork`, at most 3 at a time, below normal
 priority) reads the file, decodes it again and either finds its levels in the disk cache or builds them. `MeshSimplifier.Chain` (the characters' quadric edge collapse; output unchanged
 for them) reduces each part to 50, 25 and 10 % of its triangles (floor 48 per part; parts under 96 triangles are left alone). A level is kept when it has at most 80 % of the triangles
-of the one before and a deviation (below) of at most 25 % of the mesh's radius and a shading angle of at most 0.6 rad. All levels index the part's own vertex buffer (the collapse only re-points corners at vertices the part
+of the one before and a deviation (below) of at most 25 % of the mesh's radius and a shading angle of at most 1.7 rad (0.6 until 2026-10-09; see "Rougher levels" below). All levels index the part's own vertex buffer (the collapse only re-points corners at vertices the part
 already has), so a part's levels 1 and up are one extra index buffer (`GpuPart` is untouched; `RockLod` holds them and is dropped with the mesh). Until the job is done and uploaded the
 mesh is drawn at full detail; the render thread only does the upload (one step of the foliage upload queue). TERRAIN-mode meshes are textured by biome projection from position and
 normal, so UV seams do not matter to them, and their normals are smooth (the probe above): a collapsed corner takes the vertex it lands on, normal included.
@@ -505,6 +505,20 @@ floor, mean 0.127, max 163 (**Observed**, Hub radius 2). Weak point: the angle i
 Shadow cascades save little: ordinary meshes are not levelled and their shadow draws are fragment-bound. The `lod` runs' frame-time percentiles are worse only because of the worker
 threads' build and a shared machine; compare the GPU stage times. Cold build: 46 meshes built in 4.0 s of worker time, 9 without a level; the cache holds 46 files, 377 KB. Warm: 34 files
 read in 82 ms. Faithful is byte-identical to the build without this work (swamp and Hub, radius 1).
+
+**Rougher levels and a tolerance that grows with distance (2026-10-09, the `lod-far` A/B switch, A = on).** Two changes that take the far swamp plants to coarser levels:
+- The shading-angle limit for keeping a level went from 0.6 to 1.7 rad (`FoliageLodBuilder.MaxNormalAngle`; `Version` 3, so the 46 meshes are rebuilt once, about 8 s of worker time). `FOLIAGE_Plant_Swamp-TwigLarger`
+  (r 396, 4996 triangles) had a 50 % level only; it now has 50 / 25 / 10 % (2498 / 1248 / 498 triangles, geometric deviation 0.49 / 2.0 / 7.5 % of r, shading angle 21 / 38 / 94 degrees) and `Foliage_GungeTree` gets a 25 % level
+  (**Observed**, `MEITOU_LOD_LOG=1`). A rough level is reached only far away: the cull weighs the angle by 0.02 radii a radian. With the switch off, levels above 0.6 rad are left out again (`RockLod.Capped`), so one A/B shows the whole change.
+- Past `MEITOU_LOD_FAR` units (default 2500, `FoliageRenderer.LodFarDistance`; 0 turns only the growth off) the pixel tolerance of a colour view grows in proportion to the distance from the sphere's near point (4 px at 2500, 8 at 5000,
+  16 at 10000; `LodSelected`; the view vector's w carries minus the distance, `FoliageLodView.FarDistance`; shadow cascades unchanged). `LevelNeeded` follows it with margins on the safe side, so no instance loses its level's draw.
+- `FOLIAGE_Plant_Swamp-TwigLarger` is nearly the whole case: 1099 k of the swamp view's 1641 k colour-view rock triangles. **Observed** (`MEITOU_FOLIAGE_TRIS=1 --fly-benchmark 200 --fly-speed 0 --view swamp`, 1920x1080): rock triangles
+  1641 k -> 1200 k (the new levels alone) -> 1068 k (with the growth). `Foliage_Metal_Tower_Melted-Piece01..05` (about 400 k triangles a frame) still get no level: their 50 % step moves the shading 2.2-2.6 rad although the geometric deviation is
+  only 3-21 % (hard-edged metal), so they stay at full detail (**Observed**; not tried with an even looser limit).
+- **Measured** (**Observed**, 2026-10-09, RTX 4070, 1920x1080 DLSS native, `--ab lod-far`, A - B, +-95 %): target view (`--view swamp`, 768 frames, period 16): GPU total -0.40 +-0.17 ms (7.52 against 7.92), foliage stage -0.26 +-0.05,
+  shadows -0.07 +-0.05; frame 7.93 against 8.20 ms. Clear weather, no fog volumes (`--weather Default --no-fog-volumes`, still): `--pitch 10 --distance 3000` foliage -0.31 +-0.02, `--pitch 14 --distance 6000 --yaw 40` foliage -0.53 +-0.36
+  (128 frames, period 8, a contested GPU: 13 ms totals). Picture (A against B, DLAA): target view 0 pixels over 12 (mean 0.086, the floor of two runs of one side: the swamp's fog hides the far plants); clear 3000 view mean 0.108, 527 pixels over 12;
+  clear 6000 view mean 0.27, 2608 pixels over 12, max 145 (the edges of thin twigs and branches, looked at by eye in the diff map; no holes). Popping while flying was not measured (**Unknown**).
 
 **Thin meshes.** No separate rule: a sheet or twig that a level would lose has a large deviation and keeps full detail (the nine meshes without a level, e.g. the sheet-like
 `Metal_Tower_Melted-Piece01`/`02`). No impostors for meshes (**Unknown** whether they would pay).

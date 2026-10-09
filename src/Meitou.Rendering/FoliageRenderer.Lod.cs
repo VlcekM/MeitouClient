@@ -23,6 +23,17 @@ public sealed unsafe partial class FoliageRenderer
     /// <summary>How many pixels (of the render, before the upscaler) a generated level may deviate from the original surface; <c>MEITOU_LOD_PIXELS</c>.</summary>
     public float LodTolerance { get; set; } = Env("MEITOU_LOD_PIXELS", DefaultLodTolerance);
 
+    /// <summary>
+    /// The Meitou <c>lod-far</c> switch: past <see cref="LodFarDistance"/> units from the eye the pixel tolerance of the generated levels grows in proportion to the distance (a plant
+    /// 10000 units away may deviate 4 x 10000 / <see cref="LodFarDistance"/> pixels), so the far rocks and plants take the coarse levels sooner. Off: the tolerance is the same everywhere.
+    /// </summary>
+    public bool LodFar { get; set; } = true;
+
+    /// <summary>Where the tolerance starts to grow with the distance (<see cref="LodFar"/>); <c>MEITOU_LOD_FAR</c>.</summary>
+    public float LodFarDistance { get; set; } = Env("MEITOU_LOD_FAR", DefaultLodFarDistance);
+
+    public const float DefaultLodFarDistance = 2500f;
+
     /// <summary>The default <see cref="LodTolerance"/>: the Tab slider "Foliage LOD distance x" shows this divided by the tolerance.</summary>
     public const float DefaultLodTolerance = 4f;
 
@@ -54,7 +65,12 @@ public sealed unsafe partial class FoliageRenderer
     /// <summary>A mesh's generated levels on the GPU: one index buffer per part holding its levels 1 and up, bound with the part's own vertex buffer.</summary>
     sealed class RockLod
     {
-        public required int Levels;
+        /// <summary>All the levels the builder made (counting 0), and those it made before 2026-10-09 (shading deviation up to 0.6 rad). <see cref="Levels"/> is the former, or the latter while
+        /// <see cref="Capped"/> (the lod-far switch off, so one A/B shows the whole change).</summary>
+        public required int AllLevels;
+        public int LegacyLevels;
+        public bool Capped;
+        public int Levels => Capped ? LegacyLevels : AllLevels;
         /// <summary>The deviation of each level over the mesh's radius (<c>[0]</c> is 0), never decreasing.</summary>
         public required float[] Relative;
         public required PartLod[] Parts;
@@ -174,7 +190,7 @@ public sealed unsafe partial class FoliageRenderer
                 bytes += (long)total * sizeof(uint);
                 parts[p] = new PartLod { Indices = indices, Bindings = MeshBindings.Of(VertexAttributes(main.Parts[p].Vertices), indices), First = first, Count = count };
             }
-            a.Lod = new RockLod { Levels = set.Levels, Relative = RelativeErrors(set, a.Radius), Parts = parts, Set = set, Bytes = bytes };
+            a.Lod = new RockLod { AllLevels = set.Levels, LegacyLevels = 1 + set.NormalAngles.Skip(1).TakeWhile(x => x <= FoliageLodBuilder.LegacyMaxNormalAngle).Count(),Relative = RelativeErrors(set, a.Radius), Parts = parts, Set = set, Bytes = bytes };
             a.Bytes += bytes;
             residentMeshBytes += bytes;
         });
@@ -203,7 +219,7 @@ public sealed unsafe partial class FoliageRenderer
         if (e.Group.Asset.WorkLod is not { } lod || !e.Group.Asset.Terrain || !IsRockBatch(e.Batch)) return true;
         if (!lodActive) return e.Level == 0;
         var g = e.Group;
-        float tolerance = lodView.Tolerance, scale = lodView.Scale;
+        float tolerance = lodView.Tolerance, scale = lodView.Scale, growFrom = lodView.FarDistance;
         // The size at which level k stops being allowed: the largest (radius over distance, or over texel) it takes.
         float far = float.MaxValue, near = 0;
         if (!lodView.Ortho)
@@ -216,12 +232,24 @@ public sealed unsafe partial class FoliageRenderer
         {
             if (level == 0) return true;
             float need = lod.Relative[level] * scale / tolerance;   // radii per radius of the mesh: allowed when distance >= r (1 + need), or in a cascade when r <= tolerance texel / error
-            return lodView.Ortho ? g.MinRadius * lod.Relative[level] * scale <= tolerance * 1.01f : far >= g.MinRadius * (1 + need) * 0.99f;
+            if (lodView.Ortho) return g.MinRadius * lod.Relative[level] * scale <= tolerance * 1.01f;
+            if (growFrom > 0)
+            {
+                // The tolerance grows with the distance past growFrom (the cull kernel): allowed when r * error <= tolerance * max(1, gap / growFrom) * gap at the farthest gap.
+                float gap = far * 1.01f - g.MinRadius;   // the farthest an instance can be: a larger gap only allows more, the safe side
+                return gap > 0 && g.MinRadius * lod.Relative[level] * scale <= tolerance * Math.Max(1, gap / growFrom) * gap;
+            }
+            return far >= g.MinRadius * (1 + need) * 0.99f;
         }
         bool Surpassed(int level)   // every instance picks a coarser level
         {
             if (level + 1 >= lod.Levels) return false;
             float need = lod.Relative[level + 1] * scale / tolerance;
+            if (!lodView.Ortho && growFrom > 0)
+            {
+                float gap = near * 0.99f - g.MaxRadius;   // the nearest an instance can be: the nearest is the hardest to satisfy, so a smaller gap is the safe side
+                return gap > 0 && g.MaxRadius * lod.Relative[level + 1] * scale <= tolerance * Math.Max(1, gap / growFrom) * gap;
+            }
             return lodView.Ortho ? g.MaxRadius * lod.Relative[level + 1] * scale <= tolerance * 0.99f : near >= g.MaxRadius * (1 + need) * 1.01f;
         }
         return Allowed(e.Level) && !Surpassed(e.Level);
@@ -245,6 +273,6 @@ public sealed unsafe partial class FoliageRenderer
         }
         if (!(LodPixelsPerRadian > 0) || !(LodTolerance > 0)) return default;
         lodActive = true;
-        return new FoliageLodView(eyeY, LodPixelsPerRadian, LodTolerance, false);
+        return new FoliageLodView(eyeY, LodPixelsPerRadian, LodTolerance, false, LodFar && LodFarDistance > 0 ? LodFarDistance : 0);
     }
 }
