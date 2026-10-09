@@ -130,6 +130,8 @@ sealed class WorldOptions
     public bool NoGpuLock;
     /// <summary>--bench-serial: the benchmark waits for every frame (CPU + GPU added up, the old behaviour) instead of keeping frames in flight.</summary>
     public bool BenchSerial;
+    /// <summary>--bench-tris: after the timing, the triangles drawn per pass (pipeline statistics queries) and the main view's triangle size histogram (docs/bench.md "Triangles per pass").</summary>
+    public bool BenchTris;
     public (string A, string B)? BenchCompare;
     /// <summary>Offscreen pictures: radians the camera orbits by every frame (tests the motion vectors under a temporal upscaler).</summary>
     public float OrbitStep;
@@ -214,6 +216,7 @@ sealed class WorldOptions
           --bench-motion <m>       still (default), orbit (--bench-orbit px a frame), fly (--fly-radius, --fly-speed) or turn in place (--bench-turn degrees a frame)
           --no-gpu-lock            do not queue on %TEMP%\meitou-gpu.lock while measuring
           --bench-serial           wait for every frame in the benchmark (frame row = CPU + GPU added up; default: frames in flight, as the viewer)
+          --bench-tris             with --bench-frames: after the timing count the triangles per pass (pipeline statistics queries) and histogram the main view's triangles by screen area, per category (debug device features; the timed frames are unchanged)
           --bench-compare <a.json> <b.json>   print two bench results side by side and exit
           --crowd <n> [--crowd-seed <s>] [--crowd-time <s>]   place n generated characters of the start town round the start point (the character renderer's test; stills pose them at --crowd-time, default 0.35)
           --orbit-step <degrees>   with --screenshot: the camera orbits this much every frame (checks the upscaler's motion vectors)
@@ -367,6 +370,7 @@ sealed class WorldOptions
                 case "--bench-orbit": o.BenchOrbit = F(); break;
                 case "--no-gpu-lock": o.NoGpuLock = true; break;
                 case "--bench-serial": o.BenchSerial = true; break;
+                case "--bench-tris": o.BenchTris = true; break;
                 case "--bench-compare": o.BenchCompare = (Next(), Next()); break;
                 case "--log-spikes": SpikeLog.Enabled = true; break;
                 case "--orbit-step": o.OrbitStep = F() * MathF.PI / 180; break;

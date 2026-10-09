@@ -32,6 +32,9 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// <summary>Streamline (DLSS), when <c>streamline</c> asked for it and it loaded; shut down before the device.</summary>
     public Streamline? Streamline { get; }
 
+    /// <summary>Set before creating the display: turns on the device features of the bench's triangle measurements (<see cref="VulkanDeviceOptions.TriangleMeasurements"/>; <c>--bench-tris</c>).</summary>
+    public static bool TriangleMeasurements { get; set; }
+
     /// <summary>A window created from <paramref name="options"/> (its Vulkan surface; shown), or headless when <paramref name="options"/> is null.</summary>
     public VulkanDisplay(WindowOptions? options, bool vsync, bool streamline = false)
     {
@@ -41,6 +44,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
         {
             Validation = validation == true, SyncValidation = sync, GpuValidation = gpu,
             PipelineCachePath = PipelineCacheFile(),
+            TriangleMeasurements = TriangleMeasurements,
         };
         if (streamline)
         {

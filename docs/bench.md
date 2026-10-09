@@ -1,6 +1,6 @@
 # Benchmarks, start-up time and JIT mode
 
-How to measure the world view of `meitou-viewer`: the benchmark harness, where start-up time goes and the load caches, and the JIT switches. Options are in [viewer.md](viewer.md).
+How to measure the world view of `meitou-viewer`: the benchmark harness, the triangle measurements (`--bench-tris`), where start-up time goes and the load caches, and the JIT switches. Options are in [viewer.md](viewer.md).
 
 ## Benchmark harness
 
@@ -61,6 +61,96 @@ meitou-viewer --bench-compare master.json perf.json
 - **Known gaps**: a GPU stage's time is the gap between its timestamps, so work the driver defers lands in the stage after it (full-size particles show up as `upscale` in the post sections; the totals are right);
   the picture diff is not exact with weather particles (above); the frame row is the submission-to-submission interval, so a frame that stalls the CPU shows in it but a hidden GPU stall does not (that is the real frame time); the interactive viewer's F11 number was not compared in this session (**Unknown**: its window size and present mode were not matched); one view and one resolution per run;
   `--ab` needs the switch to be flippable at run time without a reload (all listed ones are).
+- **Triangles per pass and triangle sizes** (`--bench-tris`, 2026-10-09): pipeline statistics per pass and a histogram of the main view's triangles by screen area, both after the timing; method, error and measurements in [the next section](#triangles-per-pass-and-triangle-sizes---bench-tris).
+
+## Triangles per pass and triangle sizes (`--bench-tris`)
+
+Two debug measurements of the main view that answer "is the rest of the frame tiny far triangles or shading" (2026-10-09; `PipelineStatsMeter`, `TriangleCounter`, `TriangleBins` in `src/Meitou.Rendering`, `WorldApp.MeasureTriangles` in `WorldApp.Bench.cs`, `TriangleBinsTests`). They run after the timing and the counts, in extra serial frames, and never in a timed frame:
+
+```
+meitou-viewer --view swamp --size 1920x1080 --upscaler dlss --render-scale native --bench-frames 600 --bench-tris
+```
+
+`--bench-tris` has to be given at the start because it turns on three device features that are otherwise off (`pipelineStatisticsQuery`, `VK_KHR_fragment_shader_barycentric`, buffer device address; `VulkanDeviceOptions.TriangleMeasurements`), which costs nothing by itself. A normal run creates the device as before; its hot paths gained one null check of a static field (`CommandList.BindPipeline`, `BeginRendering`, `EndRendering`). Both tables are printed per side (after the counts), kept in the `--bench-out` JSON (`Passes` and `Sizes` of each side, `renderPixels` and `passFrames` in the metadata) and summarised by `--bench-compare` (stage rows and category totals). A device without the queries or the barycentrics prints a note and leaves that table out.
+
+### Triangles per pass
+
+**Observed** method. Vulkan pipeline statistics queries (input assembly primitives, vertex shader invocations, clipping invocations and primitives, fragment shader invocations) around each stage of the frame and each part of it that the pass meter knows (`StageClock.OnClose`: the stage laps, each shadow cascade's terrain / objects / foliage meshes / rocks, the foliage pass's meshes / grass / rocks, the reflection's parts, the post sections). The table is the mean per frame over 8 serial frames, the camera still moving as in the counts. The frames run with `Recording.Mode` 0 (every segment recorded straight into the frame's list; restored afterwards): a query must begin and end in one command buffer and one rendering, which the secondaries of the default mode cannot give. `BeginRendering` / `EndRendering` close the open query and open the next, so no query crosses a rendering and the pieces of a part are summed; the draws and the picture are the same in mode 0. Rows are in frame order. A stage that repeats per depth slice is `terrain` for the first slice (the far one, beyond 20 000 units) and `terrain #2` for the second (the near slice, the picture you see); a part is `stage / part`. `fs/tri` is fragment invocations per primitive that left the clipper, `fs/px` per pixel of the render size.
+
+What the counters mean on this GPU (RTX 4070, driver 596.49, **Observed**): fragment invocations do **not** include the helper lanes of partly covered quads (one full-screen triangle gives exactly 2 073 600 at 1920x1080, and the terrain stage's invocations equal the histogram's shaded samples to the pixel, 2.10 M and 2.10 M on the swamp), but they do include the samples a shader goes on to discard. So they count the work as the program sees it, not the lanes the hardware ran; for small triangles the lanes are up to 4 times that. "Clip out" is what leaves the clipper: back faces and triangles wholly outside are gone (the swamp terrain's 406 k primitives become 259 k); the culling of sub-pixel triangles and the depth test come after it.
+
+### Triangle size histogram
+
+**Observed** method, error below. For each category of the main view (terrain; rocks = the TERRAIN-mode rocks that go through the terrain's mesh path; objects; foliage meshes; grass; impostors; rock impostors; characters) the triangles per frame by screen area (< 1, 1-4, 4-16, 16-64, > 64 px²) and the samples they shaded. The colour programs of those categories are picked by the name the renderer gave them (`TriangleBins.CategoryOf`; depth, shadow and motion programs and the water are not counted). While it counts, `CommandList.BindPipeline` swaps each such pipeline for a variant made from the same vertex module and layout with a fragment shader that is the original with a new `main` around it (`TriangleBins.Instrument`, from the program's final GLSL; `PipelineLibrary.GetWithFragment`; the normal pipelines and programs are not touched, so the legacy SPIR-V and module hashes do not move). The new `main` takes `gl_BaryCoordNoPerspEXT`, whose screen-space derivatives are constant over a triangle, so the triangle's area in pixels is 0.5 / |det d(b1, b2) / d(x, y)| (taken first, while the whole quad runs: after a `discard` in the original the derivatives were garbage and the grass came out 15 times too small), runs the original, and if that did not discard and this is not a helper invocation adds one to a counter `[category][quarter-octave area bin]` in a storage buffer reached by its device address, written into the text (so no renderer's sets or push constants change). A shader without `discard` or a depth write, and the objects' and rocks' (whose `discard` is the rare LOD cross-fade dither), also get `early_fragment_tests`, so samples that fail the depth test are not counted (their fade-discarded samples do write depth in these frames); the others (foliage meshes, grass, impostors) keep their late test, so their hidden samples are counted too (the log line `triangle sizes: counting programs ...` marks them). The reflection pass is off for these frames (it draws the same programs); the picture is otherwise normal.
+
+The estimate: a triangle of area A shades A samples on average over where it falls on the pixel grid, whatever A is, so a bin's samples divided by the mean area of the bin (spread evenly over the logarithm; the bins are 19 % wide) estimates the triangles of that size, **including the sub-pixel triangles that cover no sample centre** (a triangle of 0.1 px² is counted in 1 frame of 10 as a whole, in a sample-hit, or ten times as 0.1; on average right). The "< 1 px" column is therefore the triangles drawn and rasterised that small, not only those that hit a sample. Its error: it is an expectation, unbiased for triangles at random positions, so the statistical error is about 1 / sqrt(samples in the bin) (0.3 % at 100 k samples); it is biased for regular geometry that lines up with the pixel grid; it cannot see triangles that never reach the fragment stage (back faces, wholly off screen, hidden under the early test); a triangle clipped by the screen edge or cut by depth counts by what it shades (half off screen: half a triangle); and for alpha-tested shaders the samples are those the alpha test keeps, so a leaf card of 50 px² of which a fifth is opaque counts as 0.2 triangles. Read the foliage meshes' and grass's triangle numbers as visible area / triangle area, their samples as the colour work. The check available: the terrain has no discard and no overdraw in a slice, and its counted samples equal the pass statistics' invocations for the stage.
+
+### Measured
+
+**Observed**, 2026-10-09, RTX 4070, `--size 1920x1080 --upscaler dlss --render-scale native --bench-frames 600 --bench-tris`, `MEITOU_STREAMLINE_PATH` set (no `using TAA` in the logs), master 8f87180 plus this change; swamp = `--view swamp` (orbiting Shark), hub = `--view hub` (still), desert = `--world --town Heft --radius 2 --distance 3000 --pitch 10 --yaw 300 --time 12` (still, no weather). GPU ms per stage (mean of 600 frames):
+
+| view | frame ms (fps) | total | shadows | reflection | terrain | objects | foliage | water | particles | post | other |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| swamp | 6.82 (147) | 6.79 | 0.72 | 0.55 | 1.16 | 0.73 | 1.49 | 0.26 | 0.20 | 1.29 | 0.30 |
+| hub | 4.05 (247) | 4.04 | 0.11 | 0.05 | 0.96 | 0.46 | 0.41 | 0.29 | 0.26 | 1.26 | 0.18 |
+| desert | 3.87 (258) | 3.86 | 0.24 | 0.02 | 0.62 | 0.78 | 0.04 | 0.23 | 0.49 | 1.26 | 0.11 |
+
+Triangles per pass of the main view, per frame (prims = input assembly primitives, out = left the clipper, fs = fragment shader invocations, fs/px per render pixel; the far slice is listed where it matters):
+
+| view | pass | prims | out | fs | fs/px |
+|---|---|---|---|---|---|
+| swamp | terrain (near) | 406.5k | 258.9k | 2.10M | 1.01 |
+| swamp | objects (near) | 909.7k | 849.3k | 1.26M | 0.61 |
+| swamp | foliage meshes | 834.9k | 320.7k | 5.54M | 2.67 |
+| swamp | grass | 515.1k | 270.9k | 0.91M | 0.44 |
+| swamp | rocks | 581.8k | 316.8k | 115k | 0.06 |
+| swamp | water (near; the far slice draws the same 184.6k) | 184.6k | 11.0k | 79k | 0.04 |
+| swamp | near slice, all | 3.43M | 2.03M | 10.0M | 4.8 |
+| swamp | far slice, all | 215k | 1.8k | 5.7k | 0 |
+| swamp | shadow casters (4 cascades, mean over frames; cached cascades redraw in turn) | 2.31M | 1.79M | 6.49M | |
+| swamp | water reflection | 1.13M | 0.62M | 1.41M | |
+| swamp | grass motion vectors (post `velocity`, 0.19 ms) | 515k | 271k | 7.50M | 3.6 |
+| hub | terrain far / near | 440.3k / 508.9k | 375.9k / 339.7k | 332k / 1.37M | 0.16 / 0.66 |
+| hub | objects far / near | 217.7k / 304.8k | 189.9k / 295.1k | 7k / 367k | 0 / 0.18 |
+| hub | foliage meshes far / near | 10.5k / 160.2k | 10.5k / 125.7k | 460k / 1.10M | 0.22 / 0.53 |
+| hub | grass + rocks (near) | 136.6k | 108.4k | 143k | 0.07 |
+| desert | terrain far / near | 282.6k / 507.9k | 236.4k / 363.7k | 108k / 1.47M | 0.05 / 0.71 |
+| desert | objects (near) | 945.4k | 942.0k | 1.29M | 0.62 |
+| desert | foliage (all) | 16.2k | 15.7k | 29k | 0.01 |
+| desert | particles (0.49 ms) | 14.5k | 6.6k | 27.22M | 13.1 |
+
+Main view triangles by screen area, per frame (estimated triangles per bin; "< 1 px %" the share of the triangles; "px" the samples shaded; "px < 4 %" the share of those samples that come from triangles under 4 px², which the hardware shades as whole 2 x 2 quads, so up to 4 lanes for each):
+
+| view | category | triangles | < 1 px | 1-4 | 4-16 | 16-64 | > 64 | < 1 px % | px | px < 4 % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| swamp | terrain | 146.5k | 18.4k | 37.7k | 58.5k | 25.1k | 6.6k | 12.6 | 2.10M | 4.7 |
+| swamp | rocks | 15.6k | 12.7k | 0.8k | 1.3k | 0.8k | 77 | 81.2 | 47k | 5.9 |
+| swamp | objects | 221.3k | 170.7k | 33.7k | 12.5k | 3.7k | 0.6k | 77.2 | 371k | 27.1 |
+| swamp | foliage meshes (late test) | 142.2k | 62.4k | 37.7k | 29.1k | 9.8k | 3.2k | 43.9 | 1.54M | 6.6 |
+| swamp | grass (late test) | 35.1k | 1.4k | 15.1k | 15.7k | 2.9k | 23 | 3.9 | 234k | 16.2 |
+| swamp | impostors, rock impostors | 266 | 0 | 0 | 5 | 28 | 233 | 0 | 299k | 0 |
+| swamp | all | 560.9k | 265.6k | 125.1k | 117.2k | 42.2k | 10.8k | 47.4 | 4.59M | 7.4 |
+| hub | terrain | 189.9k | 36.4k | 52.4k | 71.5k | 27.5k | 2.0k | 19.2 | 1.71M | 8.0 |
+| hub | objects | 34.5k | 32.2k | 2.0k | 0.3k | 31 | 2 | 93.2 | 10k | 69.1 |
+| hub | foliage meshes (late test) | 61.0k | 42.5k | 11.7k | 5.9k | 0.8k | 111 | 69.6 | 109k | 30.1 |
+| hub | rocks, grass, impostors, rock impostors | 18.9k | 6.6k | 3.8k | 3.6k | 2.6k | 2.4k | 35 | 818k | 1.3 |
+| hub | all | 304.3k | 117.7k | 69.9k | 81.4k | 30.9k | 4.5k | 38.7 | 2.64M | 7.0 |
+| desert | terrain | 146.4k | 103.2k | 29.6k | 5.2k | 4.3k | 4.2k | 70.5 | 1.58M | 5.9 |
+| desert | objects | 32.7k | 21.3k | 4.7k | 4.1k | 2.1k | 0.5k | 65.1 | 171k | 8.2 |
+| desert | all | 186.9k | 127.7k | 36.7k | 11.0k | 6.7k | 4.7k | 68.4 | 1.78M | 6.4 |
+
+(The hub's 3.9 k rock impostors are large quads covering 544 k of those 818 k samples.)
+
+What the numbers say, **Observed** unless it says inferred:
+
+- **On the swamp most of what is submitted never makes a pixel, and the pixels are made by shading, not by tiny triangles.** The near slice submits 3.43 M primitives, 2.03 M leave the clipper, about 0.56 M have any coverage (47 % of those under one pixel, 53 % bigger); against that 10.0 M fragment invocations (4.8 per pixel) shade a picture of 2.07 M pixels. Samples from triangles under 4 px² are 7.4 % of the shaded samples overall (27 % for the objects, 16 % for grass, under 7 % for terrain and foliage meshes), so the quad overshading of small triangles (up to 4 lanes for those samples) adds at most a few tenths of a fragment per pixel; the 3.8 invocations per pixel beyond the first are overdraw and discarded alpha texels.
+- **Foliage meshes are the biggest shader cost**: 5.54 M invocations (2.67 per pixel) from 321 k clipped triangles, 17 per triangle, of which only 1.54 M (28 %) survive their alpha test; grass shades 0.91 M of which 26 % survive. The stage is 1.49 ms, of which the earlier A/B puts about 0.45 ms per million submitted triangles (1.93 M foliage primitives are submitted for the 0.91 M that leave the clipper: inferred, about 0.9 ms of vertex and setup work) and the rest is the alpha-tested shading. By size, 44 % of the meshes' estimated visible triangles are under a pixel (62 k) and 27 % more are 1-4 px²: the far trees are meshes of triangles smaller than the pixels they cover.
+- **The objects' fragment shader runs on hidden samples.** 1.26 M invocations on the swamp against 0.37 M samples that pass the depth test (the histogram, with the early test forced): two thirds of the objects' fragment work is for samples that are covered afterwards. The cause is the `discard` of the LOD cross-fade dither in `BuildingLodShaders.Fragment` (and the same in `TerrainShaders.PerInstanceBiome` for the rocks): a shader that can discard gets its depth test late here. **Probe, not kept** (`layout(early_fragment_tests) in;` added to the "objects" and "terrain meshes" programs only, one 600-frame run each, swamp): fragment invocations 1.26 M to 0.52 M (objects) and 115 k to 40 k (rocks), objects stage 0.73 to 0.59 ms, foliage 1.49 to 1.41 (rocks), reflection 0.55 to 0.50, GPU total 6.79 to 6.39 ms. That also explains why sorting the object batches nearest first (`object-sort`) gained next to nothing: the early test it relies on was not running. 77 % of the objects' visible triangles are under one pixel (171 k of 221 k; 849 k leave the clipper), so the mesh LOD is far too fine for the view; the earlier finding that the LOD does not help probably comes from the objects being limited by those hidden fragments, not by the triangle count (inferred).
+- **Terrain on the swamp is shading-bound**: 2.10 M samples = 1.01 per pixel, no overdraw, triangles of 14 px² on average (12.6 % under a pixel, 4.7 % of the samples from triangles under 4 px²), 1.16 ms is about 0.55 ns a pixel for the material and shadow receiving. In the hub and desert it is geometry-bound: the far slice's terrain makes 332 k fragments from 376 k (hub) and 108 k from 236 k (desert) clipped triangles, one or less per triangle, and 73 % (hub) of the terrain triangles that leave the clipper (716 k) are hidden behind nearer terrain or off screen (the histogram estimates 190 k that count, sub-pixel ones included); in the desert 70 % of those that count are under a pixel.
+- **Smaller items**: the grass motion-vector pass redraws all the grass for the upscaler (515 k primitives, 7.50 M invocations, 3.6 per pixel, 0.19 ms); the shadow casters submit 2.31 M primitives a frame on the swamp (the p99 shadow time of 3.2 ms is the cascades redrawing); in the desert the sandstorm-free particles still shade 27.2 M invocations (13 per pixel, 0.49 ms of the 3.86).
+
+Where the swamp's 1.6 to 1.8 ms over 5.0 most likely sits, in the order of the evidence: (1) the objects' and rocks' late depth test, 0.3 ms or more, shown by the probe; (2) the foliage meshes' discarded alpha texels (4.0 M of 5.5 M invocations) and the 1.0 M submitted-but-clipped foliage triangles, together most of the stage's 1.49 ms; (3) terrain shading, which the sub-pixel share does not touch; (4) the grass velocity pass, up to 0.19 ms. Tiny far triangles are a vertex and setup cost (objects, foliage meshes) rather than a shading cost, and only objects and grass have a noticeable share of their samples in them. Recommended next, cheapest first: put the objects' and rocks' fade dither in a separate program or batch so the main program has no `discard` and takes `early_fragment_tests` (the probe is the change, 0.3 to 0.4 ms); cut the foliage cards to the opaque outline in the generated mesh levels and impostors so far less of the 5.5 M invocations are discarded; choose the object and foliage mesh LOD by projected triangle size (aim for a mean of at least 4 px², today 44 % to 77 % of the visible triangles are under one pixel); cull terrain chunks against the depth pyramid or the horizon at low pitch (hub and desert); draw the grass motion vectors in the main grass pass. Each of these is a hypothesis until built and A/B'd with `--ab`.
+
 ## Start-up time and the load caches
 
 Where a start spends its time (2026-10-09, `--view swamp --screenshot`, RTX 4070, 12 cores; stage times are the viewer's own log lines):

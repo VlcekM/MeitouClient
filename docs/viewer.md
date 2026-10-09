@@ -199,7 +199,7 @@ How it works (status as in [README.md](README.md)), one doc per part:
 - [render-foliage.md](render-foliage.md): trees, bushes, rocks and grass: paging, GPU cull, impostors, reflections, measurements.
 - [render-shadows.md](render-shadows.md): the sun's shadow cascades (the game's CSM and Meitou shadows) and the shadow pass cost.
 - [render-post.md](render-post.md): the HDR framebuffer and the post chain (SSAO, fog, exposure, upscaler).
-- [bench.md](bench.md): the benchmark harness (`--view`, `--ab`, `--bench-frames`), start-up time and the load caches, `--tiered-jit` / `--pgo`.
+- [bench.md](bench.md): the benchmark harness (`--view`, `--ab`, `--bench-frames`, `--bench-tris`), start-up time and the load caches, `--tiered-jit` / `--pgo`.
 
 Approximations and gaps: no wetness, shadows, volumetric clouds, weather schedule, characters, interiors,
 construction states or lights; cliff normal-map channel flips are not reproduced; building part choice follows

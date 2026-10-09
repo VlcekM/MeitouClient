@@ -12,6 +12,10 @@ public sealed class BenchConfig
     public int Frames { get; set; }
     public Dictionary<string, MetricStats> Metrics { get; set; } = [];
     public Dictionary<string, double> Counts { get; set; } = [];
+    /// <summary>With <c>--bench-tris</c>: what the pipeline statistics queries counted per pass of a frame (mean per frame; key: the stage, or stage/part), in the order the frame runs them.</summary>
+    public Dictionary<string, PassStat> Passes { get; set; } = [];
+    /// <summary>With <c>--bench-tris</c>: the main view's triangles per frame by screen area, per category (<see cref="TriangleBins.Categories"/>).</summary>
+    public Dictionary<string, SizeHistogram> Sizes { get; set; } = [];
 }
 
 /// <summary>Differing pixels between the A and the B still (<c>--ab</c>): counts of pixels whose largest channel difference reaches each threshold (1, 4, 12 of 255).</summary>
@@ -104,12 +108,54 @@ public sealed class BenchResult
             w.WriteLine();
             w.WriteLine($"counts per frame, side {s} (main view; objects include the reflection pass): " +
                 string.Join(", ", Configs[s].Counts.Select(c => $"{c.Key} {(c.Value >= 1e5 ? (c.Value / 1e6).ToString("0.00", CultureInfo.InvariantCulture) + "M" : c.Value.ToString("N0", CultureInfo.InvariantCulture))}")));
+            PrintTriangles(w, s, Configs[s]);
         }
         if (Picture is { } p)
         {
             w.WriteLine();
             w.WriteLine($"picture   A vs B at {p.Width}x{p.Height}: {p.Over1:N0} pixels differ by at least 1/255, {p.Over4:N0} by at least 4, {p.Over12:N0} by at least 12; mean {p.MeanDiff:0.0000}, max {p.MaxDiff}  ({p.Diff})");
         }
+    }
+
+    static string Big(double v) => v >= 1e6 ? (v / 1e6).ToString("0.00", CultureInfo.InvariantCulture) + "M" : v >= 1e4 ? (v / 1e3).ToString("0.0", CultureInfo.InvariantCulture) + "k" : v.ToString("0", CultureInfo.InvariantCulture);
+
+    /// <summary>The tables of <c>--bench-tris</c> for one side: triangles and fragments per pass, and the main view's triangles by screen area per category.</summary>
+    void PrintTriangles(TextWriter w, string side, BenchConfig c)
+    {
+        if (c.Passes.Count > 0)
+        {
+            double pixels = Meta.TryGetValue("renderPixels", out var px) && double.TryParse(px, NumberStyles.Float, CultureInfo.InvariantCulture, out var pv) ? pv : 0;
+            w.WriteLine();
+            w.WriteLine($"triangles per pass, side {side} (pipeline statistics queries, mean per frame over {Meta.GetValueOrDefault("passFrames", "?")} serial frames; a part of a stage is indented under it; 'fs/tri' = fragment invocations per primitive out of the clipper, 'fs/px' = per render pixel)");
+            w.WriteLine($"{"pass",-30}{"prims",9}{"vs inv",9}{"clip in",9}{"clip out",9}{"fs inv",9}{"fs/tri",8}{"fs/px",7}");
+            foreach (var (key, s) in c.Passes)
+            {
+                if (s.Primitives < 1 && s.FragmentInvocations < 1 && s.VertexInvocations < 1) continue;
+                string name = key.Contains('/') ? "  " + key.Replace("/", " / ") : key;
+                w.WriteLine($"{name,-30}{Big(s.Primitives),9}{Big(s.VertexInvocations),9}{Big(s.ClipIn),9}{Big(s.ClipOut),9}{Big(s.FragmentInvocations),9}" +
+                    $"{(s.ClipOut > 0 ? s.FragmentsPerTriangle.ToString("0.0", CultureInfo.InvariantCulture) : "-"),8}{(pixels > 0 && s.FragmentInvocations > 0 ? (s.FragmentInvocations / pixels).ToString("0.00", CultureInfo.InvariantCulture) : "-"),7}");
+            }
+        }
+        if (c.Sizes.Count > 0)
+        {
+            w.WriteLine();
+            w.WriteLine($"main view triangles by screen area, side {side} (estimated per frame from the shaded samples; the 'sub-pixel' share includes triangles that hit no sample; pixels = samples shaded)");
+            w.WriteLine($"{"category",-16}{"triangles",10}" + string.Concat(TriangleBins.Coarse.Select(n => $"{n,10}")) + $"{"< 1 px %",10}{"pixels",9}{"px < 4 px %",12}");
+            SizeHistogram total = new();
+            foreach (var (name, h) in c.Sizes)
+            {
+                total.Add(h);
+                PrintSizeRow(w, name, h);
+            }
+            if (c.Sizes.Count > 1) PrintSizeRow(w, "all", total);
+        }
+    }
+
+    static void PrintSizeRow(TextWriter w, string name, SizeHistogram h)
+    {
+        double small = h.TotalPixels > 0 ? 100 * (h.Pixels[0] + h.Pixels[1]) / h.TotalPixels : 0;
+        w.WriteLine($"{name,-16}{Big(h.TotalTriangles),10}" + string.Concat(h.Triangles.Select(t => $"{Big(t),10}")) +
+            $"{(100 * h.SubPixelShare).ToString("0.0", CultureInfo.InvariantCulture),10}{Big(h.TotalPixels),9}{small.ToString("0.0", CultureInfo.InvariantCulture),12}");
     }
 
     void PrintFps(TextWriter w, List<string> sides)
@@ -152,6 +198,10 @@ public sealed class BenchResult
                     $"{Signed(delta),7} {F(ci),6} {pct,7}{(Math.Abs(delta) > ci && Math.Abs(delta) >= BenchStats.MinMeaningful ? " *" : "")}");
             }
         }
+        foreach (var key in ca.Passes.Keys.Where(cb.Passes.ContainsKey).Where(k => !k.Contains('/')))
+            w.WriteLine($"tris      {key}: primitives A {Big(ca.Passes[key].Primitives)}, B {Big(cb.Passes[key].Primitives)}; fragment invocations A {Big(ca.Passes[key].FragmentInvocations)}, B {Big(cb.Passes[key].FragmentInvocations)}");
+        foreach (var key in ca.Sizes.Keys.Where(cb.Sizes.ContainsKey))
+            w.WriteLine($"sizes     {key}: triangles A {Big(ca.Sizes[key].TotalTriangles)}, B {Big(cb.Sizes[key].TotalTriangles)}; under 1 px A {100 * ca.Sizes[key].SubPixelShare:0.0}%, B {100 * cb.Sizes[key].SubPixelShare:0.0}%");
         foreach (var key in ca.Counts.Keys.Where(cb.Counts.ContainsKey))
             w.WriteLine($"count     {key}: A {ca.Counts[key]:N0}, B {cb.Counts[key]:N0}");
     }

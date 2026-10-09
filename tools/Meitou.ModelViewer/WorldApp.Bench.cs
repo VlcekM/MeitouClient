@@ -213,6 +213,14 @@ static partial class WorldApp
             if (e.Key is string key && key.StartsWith("MEITOU_", StringComparison.Ordinal)) meta["env." + key] = e.Value?.ToString() ?? "";
         if (o.Post.Describe() is { } postText) meta["post"] = postText;
 
+        // ---- --bench-tris: triangles per pass and the triangle size histogram (separate, serial counting frames after the timing) ----
+        if (o.BenchTris)
+            for (int s = 0; s < labels.Length; s++)
+            {
+                Side(s);
+                MeasureTriangles(context, gpu, render, Frame, result, labels[s]);
+            }
+
         // ---- the still pictures of A and B ----
         string outFile = o.BenchOut ?? Path.Combine(Path.GetTempPath(), $"meitou-bench-{o.View ?? "custom"}-{o.Ab ?? "single"}-{DateTime.Now:yyyyMMdd-HHmmss}.json");
         if (ab) result.Picture = StillPictures(display, gpu, scene, camera, render, o, w, h, toggle!, snapshot, motion.Moves, Clock(), Path.ChangeExtension(outFile, null), Frame);
@@ -280,6 +288,90 @@ static partial class WorldApp
         if (gpu.Characters is not null) counts["character tris"] = characterTris / counted;
         FoliageGpuCull.CountTriangles = false;
         return counts;
+    }
+
+    /// <summary>
+    /// <c>--bench-tris</c> (docs/bench.md "Triangles per pass"): after the timing, (1) the pipeline statistics per pass over serial frames drawn with
+    /// <see cref="Recording.Mode"/> 0 (a query cannot span the secondaries), and (2) the main view's triangles by screen area per category, with
+    /// the colour programs swapped for counting variants and the reflection off (it draws the same programs). The camera keeps moving as in the
+    /// counting frames. Neither runs in a timed frame.
+    /// </summary>
+    static void MeasureTriangles(GpuContext context, Gpu gpu, WorldRenderOptions render, Func<long, bool, double> frame, BenchResult result, string side)
+    {
+        const int frames = 8, settle = 4;
+        var config = result.Configs[side];
+        var post = gpu.Post!;
+        result.Meta["renderPixels"] = ((double)post.RenderWidth * post.RenderHeight).ToString("0", CultureInfo.InvariantCulture);
+        result.Meta["passFrames"] = frames.ToString(CultureInfo.InvariantCulture);
+
+        if (PipelineStatsMeter.Supported(context))
+        {
+            int mode = Recording.Mode;
+            Recording.Mode = 0;
+            var previousStart = StageClock.OnStart;
+            var previousClose = StageClock.OnClose;
+            using var meter = new PipelineStatsMeter(context);
+            StageClock.OnStart = () => { previousStart?.Invoke(); meter.BeginFrame(); };
+            StageClock.OnClose = (label, sub) => { previousClose?.Invoke(label, sub); meter.OnClose(label, sub); };
+            try
+            {
+                for (int i = 0; i < settle; i++) { frame(-1, true); context.Finish(); }
+                var sum = new Dictionary<string, PassStat>();
+                var order = new List<string>();
+                var position = new Dictionary<string, (double Sum, int Seen)>();   // where in the frame a row came, to list them in frame order
+                for (int i = 0; i < frames; i++)
+                {
+                    frame(-1, true);
+                    context.Finish();
+                    var read = meter.Read();
+                    for (int k = 0; k < read.Count; k++)
+                    {
+                        var (key, stat) = read[k];
+                        if (!sum.TryGetValue(key, out var total)) { sum[key] = total = new PassStat(); order.Add(key); }
+                        var (psum, pseen) = position.GetValueOrDefault(key);
+                        position[key] = (psum + k / (double)read.Count, pseen + 1);
+                        total.Add(stat);
+                    }
+                }
+                foreach (var key in order.OrderBy(k => position[k].Sum / position[k].Seen))
+                {
+                    var mean = new PassStat();
+                    mean.Add(sum[key], 1.0 / frames);
+                    config.Passes[key] = mean;
+                }
+                if (meter.Lost > 0) Console.WriteLine($"bench     pipeline statistics: {meter.Lost} queries lost (pool full or closed in another command buffer); the pass numbers are incomplete");
+            }
+            finally
+            {
+                StageClock.OnStart = previousStart;
+                StageClock.OnClose = previousClose;
+                Recording.Mode = mode;
+            }
+        }
+        else Console.WriteLine("bench     the device has no pipeline statistics queries: only the counts per frame are given");
+
+        if (TriangleCounter.Supported(context))
+        {
+            bool reflections = render.Reflections;
+            render.Reflections = false;
+            using var counter = new TriangleCounter(context);
+            try
+            {
+                counter.Begin();
+                for (int i = 0; i < settle; i++) { frame(-1, true); context.Finish(); }   // the counting pipelines are made at the first draws
+                counter.Clear();
+                for (int i = 0; i < frames; i++) frame(-1, true);
+                foreach (var (name, h) in counter.Read()) config.Sizes[name] = h.Scaled(1.0 / frames);
+                Console.WriteLine($"bench     triangle sizes: counting programs {string.Join(", ", counter.Counted)}");
+                if (counter.Skipped.Count > 0) Console.WriteLine($"bench     triangle sizes: not counted (no single main in the text): {string.Join(", ", counter.Skipped)}");
+            }
+            finally
+            {
+                counter.End();
+                render.Reflections = reflections;
+            }
+        }
+        else Console.WriteLine("bench     the device has no fragment shader barycentrics: no triangle size histogram");
     }
 
     /// <summary>

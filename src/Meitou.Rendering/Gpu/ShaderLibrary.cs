@@ -108,7 +108,11 @@ public sealed unsafe class ShaderProgram : IDisposable
     public ShaderStageFlags PushConstantStages { get; }
     public ulong CodeHash { get; }
 
-    ShaderModule CreateModule(byte[] spirv)
+    /// <summary>The GLSL of the fragment stage as compiled, kept for the native model only (the bench's instrumented variant is made from it).</summary>
+    public string? FragmentSource { get; internal set; }
+
+    /// <summary>A shader module of this device from <paramref name="spirv"/>; the caller destroys it.</summary>
+    internal ShaderModule CreateModule(byte[] spirv)
     {
         fixed (byte* code = spirv)
         {
@@ -222,6 +226,7 @@ public sealed unsafe class ShaderLibrary
         var stages = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit;
         var layout = CreateLayout(setLayouts, pushConstantBytes, stages);
         var program = new ShaderProgram(device, name, ShaderModel.Native, v, f, null, null, setLayouts, [], layout, false, pushConstantBytes, pushConstantBytes > 0 ? stages : 0);
+        program.FragmentSource = fs;
         foreach (var block in program.VertexReflection!.Blocks.Concat(program.FragmentReflection!.Blocks))
             if (block.Kind == BlockKind.PushConstant && block.Size > pushConstantBytes)
             {

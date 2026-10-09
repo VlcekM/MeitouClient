@@ -56,6 +56,13 @@ public sealed class VulkanDeviceOptions
     /// <summary>Vulkan 1.2 features to enable when supported, by their C name (Streamline's list: <c>descriptorIndexing</c>, <c>bufferDeviceAddress</c>, <c>timelineSemaphore</c>).</summary>
     public string[]? Features12 { get; set; }
 
+    /// <summary>
+    /// Bench-only measurements (<c>--bench-tris</c>, docs/bench.md "Triangles per pass"): turns on the pipeline statistics queries and
+    /// the fragment shader barycentrics (VK_KHR_fragment_shader_barycentric) when the device has them, and buffer device address.
+    /// Off by default: a normal run creates the device exactly as before.
+    /// </summary>
+    public bool TriangleMeasurements { get; set; }
+
     /// <summary>Called right after the device is created (Streamline's <c>slSetVulkanInfo</c>).</summary>
     public Action<VulkanDevice>? DeviceCreated { get; set; }
 }

@@ -80,6 +80,7 @@ static partial class WorldApp
     // Vulkan headless (no window at all).
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
+        VulkanDisplay.TriangleMeasurements = o.BenchTris;
         using var display = new VulkanDisplay(null, vsync: false, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
         streamline = display.Streamline;
         using var watch = VramWatch.Start(display.Context.Device);

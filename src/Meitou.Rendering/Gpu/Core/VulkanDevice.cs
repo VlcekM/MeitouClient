@@ -100,6 +100,12 @@ public sealed unsafe class VulkanDevice : IDisposable
     public bool FillModeNonSolid { get; private set; }
     public bool DepthClamp { get; private set; }
     public bool SamplerAnisotropy { get; private set; }
+    /// <summary>Pipeline statistics queries are on (<see cref="VulkanDeviceOptions.TriangleMeasurements"/> and the device has them).</summary>
+    public bool HasPipelineStatistics { get; private set; }
+    /// <summary>VK_KHR_fragment_shader_barycentric is on (<see cref="VulkanDeviceOptions.TriangleMeasurements"/> and the device has it).</summary>
+    public bool HasFragmentBarycentric { get; private set; }
+    /// <summary>Buffer device address was asked for by <see cref="VulkanDeviceOptions.TriangleMeasurements"/> and the device has it.</summary>
+    public bool HasBufferDeviceAddress { get; private set; }
     public bool TextureCompressionBC { get; private set; }
     public bool IndependentBlend { get; private set; }
     public bool ImageCubeArray { get; private set; }
@@ -558,12 +564,14 @@ public sealed unsafe class VulkanDevice : IDisposable
         var eds3 = new PhysicalDeviceExtendedDynamicState3FeaturesEXT { SType = StructureType.PhysicalDeviceExtendedDynamicState3FeaturesExt };
         var clip = new PhysicalDeviceDepthClipControlFeaturesEXT { SType = StructureType.PhysicalDeviceDepthClipControlFeaturesExt };
         var vid = new PhysicalDeviceVertexInputDynamicStateFeaturesEXT { SType = StructureType.PhysicalDeviceVertexInputDynamicStateFeaturesExt };
+        var bary = new PhysicalDeviceFragmentShaderBarycentricFeaturesKHR { SType = StructureType.PhysicalDeviceFragmentShaderBarycentricFeaturesKhr };
 
         bool extEds2 = have.Contains("VK_EXT_extended_dynamic_state2");
         bool extEds3 = have.Contains("VK_EXT_extended_dynamic_state3");
         bool extClip = have.Contains("VK_EXT_depth_clip_control");
         bool extVid = have.Contains("VK_EXT_vertex_input_dynamic_state");
         bool extPush = have.Contains("VK_KHR_push_descriptor");
+        bool extBary = options.TriangleMeasurements && have.Contains("VK_KHR_fragment_shader_barycentric");
 
         void* chain = null;
         void Link<T>(ref T s, bool use) where T : unmanaged
@@ -587,6 +595,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         Link(ref eds3, extEds3);
         Link(ref clip, extClip);
         Link(ref vid, extVid);
+        Link(ref bary, extBary);
 
         var f2 = new PhysicalDeviceFeatures2 { SType = StructureType.PhysicalDeviceFeatures2, PNext = chain };
         Vk.GetPhysicalDeviceFeatures2(pd, &f2);
@@ -606,6 +615,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         IndependentBlend = core.IndependentBlend;
         ImageCubeArray = core.ImageCubeArray;
         HasPushDescriptor = extPush;
+        HasPipelineStatistics = options.TriangleMeasurements && core.PipelineStatisticsQuery;
+        HasFragmentBarycentric = extBary && bary.FragmentShaderBarycentric;
+        HasBufferDeviceAddress = options.TriangleMeasurements && v12.BufferDeviceAddress;
         HasDepthClipControl = extClip && clip.DepthClipControl;
         Eds3ColorBlendEnable = extEds3 && eds3.ExtendedDynamicState3ColorBlendEnable;
         Eds3ColorWriteMask = extEds3 && eds3.ExtendedDynamicState3ColorWriteMask;
@@ -653,7 +665,7 @@ public sealed unsafe class VulkanDevice : IDisposable
             DescriptorBindingUpdateUnusedWhilePending = HasBindless,
             ShaderSampledImageArrayNonUniformIndexing = HasBindless,
             DrawIndirectCount = DrawIndirectCount,
-            BufferDeviceAddress = v12.BufferDeviceAddress && Wants12("bufferDeviceAddress"),
+            BufferDeviceAddress = v12.BufferDeviceAddress && (Wants12("bufferDeviceAddress") || options.TriangleMeasurements),
         };
         v11 = new PhysicalDeviceVulkan11Features
         {
@@ -694,8 +706,15 @@ public sealed unsafe class VulkanDevice : IDisposable
             PNext = vid.PNext,
             VertexInputDynamicState = HasVertexInputDynamicState,
         };
+        bary = new PhysicalDeviceFragmentShaderBarycentricFeaturesKHR
+        {
+            SType = StructureType.PhysicalDeviceFragmentShaderBarycentricFeaturesKhr,
+            PNext = bary.PNext,
+            FragmentShaderBarycentric = HasFragmentBarycentric,
+        };
         f2.Features = new PhysicalDeviceFeatures
         {
+            PipelineStatisticsQuery = HasPipelineStatistics,
             FillModeNonSolid = FillModeNonSolid,
             DepthClamp = DepthClamp,
             SamplerAnisotropy = SamplerAnisotropy,
@@ -716,6 +735,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         if (extClip) names.Add("VK_EXT_depth_clip_control");
         if (extVid) names.Add("VK_EXT_vertex_input_dynamic_state");
         if (extPush) names.Add("VK_KHR_push_descriptor");
+        if (extBary) names.Add("VK_KHR_fragment_shader_barycentric");
         // Only read by VideoMemory (the viewer's statistics): the process's usage and budget per heap.
         HasMemoryBudget = have.Contains("VK_EXT_memory_budget");
         if (HasMemoryBudget) names.Add("VK_EXT_memory_budget");

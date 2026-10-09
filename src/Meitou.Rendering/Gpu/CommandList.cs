@@ -134,14 +134,23 @@ public sealed unsafe class CommandList
             ColorAttachmentCount = d.Colour.IsNull ? 0u : 1u, PColorAttachments = d.Colour.IsNull ? null : &colour,
             PDepthAttachment = d.Depth.IsNull ? null : &depth,
         };
+        var stats = PipelineStatsMeter.Current;   // the bench's counting frames only
+        stats?.Rendering(this, before: true);
         vk.CmdBeginRendering(Handle, &info);
+        stats?.Rendering(this, before: false);
         lastPipeline = default;
         lastIndex = default;
         vertexValid = 0;
         Log?.BeginRendering(in d);
     }
 
-    public void EndRendering() => vk.CmdEndRendering(Handle);
+    public void EndRendering()
+    {
+        var stats = PipelineStatsMeter.Current;
+        stats?.Rendering(this, before: true);
+        vk.CmdEndRendering(Handle);
+        stats?.Rendering(this, before: false);
+    }
 
     /// <summary>Executes secondary command buffers in order (inside a rendering begun with secondaries). Afterwards nothing is assumed bound.</summary>
     public void ExecuteCommands(ReadOnlySpan<CommandBuffer> buffers)
@@ -191,8 +200,12 @@ public sealed unsafe class CommandList
         vk.CmdClearAttachments(Handle, n, attachments, 1, &area);
     }
 
+    /// <summary>The bench's triangle size histogram (<c>--bench-tris</c>, <see cref="TriangleCounter"/>): while set, every pipeline bound is swapped for its counting variant. Null (a null check per bind) otherwise.</summary>
+    internal static Func<GraphicsPipeline, GraphicsPipeline>? PipelineSubstitute;
+
     public void BindPipeline(GraphicsPipeline pipeline)
     {
+        if (PipelineSubstitute is { } substitute) pipeline = substitute(pipeline);
         Log?.Pipeline(pipeline);
         if (pipeline.Handle.Handle == lastPipeline.Handle && lastPoint == PipelineBindPoint.Graphics) return;
         cmdBindPipeline(Handle, PipelineBindPoint.Graphics, pipeline.Handle);
