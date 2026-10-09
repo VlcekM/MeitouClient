@@ -70,6 +70,11 @@ static partial class NativeShaders
             vec4 fogVolumeEye;
             vec4 fogVolumeInfo;
             vec4 fogVolumeData[512];
+            vec4 giParams;
+            vec4 giGrid[4];
+            uint giIrradiance;
+            uint giDistance;
+            uint giBase;
         } frame;
 
         """;
@@ -159,6 +164,8 @@ static partial class NativeShaders
         ["uWeatherWet"] = "frame.weatherWet", ["uWeatherDust"] = "frame.weatherDust",
         ["uWeatherGround"] = "textures2D[frame.weatherGround]", ["uWeatherDustNoise"] = "textures2D[frame.weatherDustNoise]",
         ["uFogVolumeEye"] = "frame.fogVolumeEye", ["uFogVolumeInfo"] = "frame.fogVolumeInfo", ["uFogVolumeData"] = "frame.fogVolumeData",
+        ["uGiParams"] = "frame.giParams", ["uGiGrid"] = "frame.giGrid", ["uGiIrradiance"] = "textures2D[frame.giIrradiance]",
+        ["uGiDistance"] = "textures2D[frame.giDistance]", ["uGiBase"] = "textures2D[frame.giBase]",
     };
 
     /// <summary>The per-view uniforms the world shaders share: <see cref="ViewConstants"/> members.</summary>
@@ -265,7 +272,7 @@ static partial class NativeShaders
 }
 
 /// <summary>The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).</summary>
-[StructLayout(LayoutKind.Explicit, Size = 8512)]
+[StructLayout(LayoutKind.Explicit, Size = 8608)]
 unsafe struct FrameConstants
 {
     [FieldOffset(0)] public Vector4 AtmoSun;
@@ -297,6 +304,12 @@ unsafe struct FrameConstants
     [FieldOffset(304)] public Vector4 FogVolumeInfo;
     /// <summary>The placed fog volumes in view, packed (<see cref="FogVolumeShaders"/>): <see cref="FogVolumeShaders.MaxData"/> vec4s.</summary>
     [FieldOffset(320)] public fixed float FogVolumeData[FogVolumeShaders.MaxData * 4];
+    /// <summary>The probe GI (docs/render-gi.md): <c>uGiParams</c>, <c>uGiGrid[4]</c> and its three textures.</summary>
+    [FieldOffset(8512)] public Vector4 GiParams;
+    [FieldOffset(8528)] public fixed float GiGrid[16];
+    [FieldOffset(8592)] public uint GiIrradiance;
+    [FieldOffset(8596)] public uint GiDistance;
+    [FieldOffset(8600)] public uint GiBase;
 
     /// <summary>The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.</summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
@@ -305,6 +318,7 @@ unsafe struct FrameConstants
         ("uAtmoTint", 80, 12), ("uAtmoFog", 96, 16), ("uAtmoFogColour", 112, 12), ("uAtmoSimple", 128, 16), ("uAtmoHaze", 144, 16),
         ("uAtmoHazeCloud", 160, 16), ("uAtmoAltitude", 176, 16), ("uAtmoMaps", 192, 16), ("uWeatherWet", 240, 16), ("uWeatherDust", 256, 16),
         ("uFogVolumeEye", 288, 16), ("uFogVolumeInfo", 304, 16), ("uFogVolumeData", 320, FogVolumeShaders.MaxData * 16),
+        ("uGiParams", 8512, 16), ("uGiGrid", 8528, 64),
     ];
 
     /// <summary>The frame-global textures, the array each is registered in and the member that holds its index.</summary>
@@ -314,6 +328,7 @@ unsafe struct FrameConstants
         ("uShadowMap", BindlessKind.Shadow2D, 220), ("uShadowNoise", BindlessKind.Texture2D, 224), ("uShadowTerrain", BindlessKind.Texture2D, 228),
         ("uShadowBlocker", BindlessKind.Texture2D, 232), ("uShadowLandmark", BindlessKind.Shadow2D, 236),
         ("uWeatherGround", BindlessKind.Texture2D, 272), ("uWeatherDustNoise", BindlessKind.Texture2D, 276),
+        ("uGiIrradiance", BindlessKind.Texture2D, 8592), ("uGiDistance", BindlessKind.Texture2D, 8596), ("uGiBase", BindlessKind.Texture2D, 8600),
     ];
 }
 

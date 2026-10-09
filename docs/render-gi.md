@@ -1,7 +1,7 @@
 # Ray-traced global illumination (Meitou)
 
-Status: **milestone 1** (2026-10-09, branch `global-illumination`): the traced scene and a debug view. Nothing in the normal picture changes
-yet. This is a Meitou-only feature with no counterpart in the game. Kenshi's indirect light is one flat hemisphere ambient per biome
+Status: **milestone 2** (2026-10-09, branch `global-illumination`): the traced scene, a debug view and probe GI (`--gi`).
+This is a Meitou-only feature with no counterpart in the game. Kenshi's indirect light is one flat hemisphere ambient per biome
 (`ambient light`, `KenshiLighting` / `AmbientMap`, [formats/lighting.md](formats/lighting.md)) plus SSAO, which the game ships switched off.
 It is engine work, so the claims carry where they come from: *from the code*, *measured* (how), or *open*.
 
@@ -14,9 +14,9 @@ render scale.
 1. **Milestone 1 (done)**: device support, acceleration structures for the terrain and the objects, a debug view that traces from the
    depth buffer. The question it answers: can the acceleration structures for Kenshi's world be kept up to date cheaply? Yes (see
    "Measured").
-2. **Probe GI** (DDGI-like): a camera-centred grid of irradiance probes traced against the same structures, sampled by the material
+2. **Probe GI (done)** (DDGI-like, see "Probes"): a camera-centred grid of irradiance probes traced against the same structures, sampled by the material
    shaders in place of the hemisphere ambient (`mix(uAmbientGround, uAmbientSky, …)`, e.g. `TerrainShaders`). This fits the forward
-   renderer as it is: no new targets, and the change is a compile-time variant, so the Faithful SPIR-V stays byte-identical.
+   renderer as it is: no new targets. It became a runtime branch in `kenshiLight`, not a variant (see "Probes").
 3. **Per-pixel GI** (ReSTIR GI, DLSS Ray Reconstruction): needs normal and albedo targets and a composite pass. These are changes to every
    renderer's fragment outputs, so this step comes after the probes.
 4. **Fallback** for GPUs without ray queries (the integrated-GPU laptop): sky irradiance in spherical harmonics plus terrain horizon
@@ -24,7 +24,7 @@ render scale.
 
 ## Device (`VulkanDeviceOptions.RayTracing`)
 
-*From the code.* Asked for by `--gi-debug`, through `VulkanDisplay.RayTracing`. When the device has `VK_KHR_acceleration_structure`,
+*From the code.* Asked for by `--gi` or `--gi-debug`, through `VulkanDisplay.RayTracing`. When the device has `VK_KHR_acceleration_structure`,
 `VK_KHR_ray_query` and `VK_KHR_deferred_host_operations` with buffer device address, `VulkanDevice.HasRayQuery` is set and they are
 enabled. Without the option the device is created exactly as before. With it:
 
@@ -95,6 +95,66 @@ the run has `--gi-debug`.
 
 So keeping the structures up to date costs well under a tenth of a millisecond per frame, and the tracing cost scales with the rays.
 
+## Probes (`--gi`, `Gi/GiProbes.cs`, `GiShaders.ProbeTrace` / `ProbeBlend` / `ProbeSampling`)
+
+*From the code.* DDGI-style irradiance probes, traced against the scene above. `--gi` makes the scene and the probes. The `gi` switch
+(Tab panel and `--faithful gi`) chooses between them and the flat ambient: off, the shaders take the flat ambient exactly as before.
+
+- **Grids.** There are two cascades of 32 × 32 probe columns centred on the camera, each column 8 probes high:
+  - cascade 0: 128 units apart, 96 up, rays of 4000 units;
+  - cascade 1: 512 apart, 384 up, rays of 16000 units.
+  A column stands on the lowest ground under its cell (5 samples of `HeightSnapshot`, recomputed only when the grid scrolls or the fine
+  height window changes). The grids scroll in whole cells, and a column's tile is its world column modulo 32 (toroidal), so nothing is
+  copied. A probe whose position changed starts over: no hysteresis on its next update.
+- **Atlases.** The irradiance atlas holds 8 × 8 octahedral texels per probe, plus a 1-texel border (RGBA16F; alpha 1 marks a valid probe).
+  The distance atlas holds 16 × 16 per probe, plus the border (RG16F). It stores the mean hit distance and the mean of its square, over
+  twice the spacing. The borders copy the opposite edges, so bilinear filtering works across the octahedron's seams.
+- **Trace.** Each probe traces 64 rays, in spherical Fibonacci directions turned by a random rotation each update.
+  - A ray that misses sees the lighting function's ambient in its direction: the sky's irradiance × (1 − 0.04) × the ambient map × the
+    environment factor, the same units as `kenshiLight`'s `envDiffuse`.
+  - A front-face hit sees an albedo (the weather's ground colour map on the terrain, a constant 0.35 / 0.32 / 0.28 on objects) times the
+    sun through a shadow ray, as `kenshiLight` gives it, plus the probes' own irradiance at the hit. That last term is the multi-bounce
+    feedback.
+  - A back-face hit is dark, with a negative distance. A probe whose rays see more than 25 % back faces is inside geometry and is marked
+    invalid.
+- **Blend.** The rays are blended into the irradiance tile (cosine weights) and the distance tile (cosine to the 50th power), borders
+  included. The hysteresis is 0.97 per frame.
+- **Round robin.** Each frame updates a quarter of the probes, every fourth probe by index, from a phase that advances by one per frame
+  (`--gi-phases`, 1, 2, 4 or 8; default 4). The hysteresis per update is 0.97 raised to the number of phases, so a probe settles in about
+  as many frames as with every probe updated each frame. A column that scrolls in keeps the old tile's values until its first update:
+  one to three frames at the grid's edge.
+- **Sampling** (`giIrradiance` in `kenshiLight`). The 8 probes around the point are blended trilinearly, weighted by the wrap-around
+  backface term and by Chebyshev visibility against the distance moments, the same way DDGI does.
+  - Cascade 0 is used where it covers the point. Cascade 1 fills in where cascade 0 does not, and the sky's flat ambient fills in where
+    neither does.
+  - The result replaces `envDiffuse`.
+  - The specular environment term is scaled by the ratio of the probes' luminance to the sky's, clamped to 0..1, as a cheap specular
+    occlusion.
+- **Shader model.** A runtime branch on `uGiParams.x`, not a compile-time variant: the legacy and native world programs' SPIR-V changes,
+  but with the switch off the picture does not.
+  - **Measured**, `image-diff`, 1280 × 720, Hub and swamp: with GI off, and with `--gi --faithful gi`, mean 0.0000 against the commit
+    before.
+
+**Observed** (2026-10-09, RTX 4070, swamp, 1920 × 1080, `--gi --ab gi-scene --ab-period 16 --bench-frames 512`):
+
+| Setting | GPU with GI | GPU without | Difference | Of it, probe update | Of it, shading | fps with / without |
+| --- | --- | --- | --- | --- | --- | --- |
+| TAA, every probe each frame | 8.37 | 5.81 | +2.56 | +1.57 | +1.01 | |
+| TAA, `--gi-phases 2` | | | | +0.97 | | |
+| TAA, `--gi-phases 4` | 7.41 | 5.80 | +1.62 | +0.67 | +1.0 | 134 / 172 |
+| DLSS at 0.67, `--gi-phases 4` | 6.34 | 5.26 | +1.09 | +0.59 | +0.55 | 156 / 189 |
+
+- The shading cost is the 8 probes' visibility and irradiance fetches, in terrain, objects and foliage. It scales with the render
+  resolution.
+- The update does not scale linearly with the phases. About 0.3 ms is fixed: the full barriers between trace and blend, and the base
+  upload.
+- Render thread: +0.16 ms with the base heights cached; it was +0.42 ms recomputing them every frame.
+
+**Observed**, in pictures:
+- Hub at midday: the change is subtle on open ground. On objects, the blue sky ambient turns into warmer bounce light (mean difference 1.8).
+- Low sun (`7.5`) in an alley: the shade is much darker and lit by warm bounce light (mean difference 21).
+- **Open:** the overall level may be a little dark (energy lost through the constant object albedo, and no foliage in the scene).
+
 ## Open
 
 - **Foliage in the scene.** Trees and the TERRAIN-mode rocks are most of what shades the ground in the swamp. The foliage meshes are GPU-culled
@@ -104,3 +164,6 @@ So keeping the structures up to date costs well under a tenth of a millisecond p
 - **Albedo at hits.** The material's diffuse texture through the bindless table, needed for coloured bounce light (red sand lighting the
   walls).
 - **Compaction** of the object structures, if the memory grows with longer ranges.
+- **Probe update cost.** The fixed part (full barriers; the update could run on an async compute queue beside the shadow pass) and
+  a cheaper bounce lookup in the trace (no visibility test at hits).
+- **Probe relocation.** DDGI moves probes out of geometry instead of only marking them invalid. In towns many probes sit inside walls.

@@ -750,6 +750,7 @@ public sealed unsafe class VulkanDevice : IDisposable
             ImageCubeArray = ImageCubeArray,
             ShaderStorageImageReadWithoutFormat = core.ShaderStorageImageReadWithoutFormat,
             ShaderStorageImageWriteWithoutFormat = core.ShaderStorageImageWriteWithoutFormat,
+            ShaderStorageImageExtendedFormats = HasRayQuery && core.ShaderStorageImageExtendedFormats,   // the probe GI's rg16f distance atlas
             ShaderInt16 = core.ShaderInt16,
             MultiDrawIndirect = MultiDrawIndirect,
             DrawIndirectFirstInstance = DrawIndirectFirstInstance,

@@ -62,9 +62,13 @@ sealed class WorldOptions
     public int ShadowQuality = 1, DebugShadows, ShadowFilter = 2;
     /// <summary>The ray-traced global illumination's debug view (0 off), its bounce rays per pixel and object range (docs/render-gi.md).</summary>
     public int GiDebug, GiSamples = 4;
+    /// <summary><c>--gi</c>: the probe GI (needs ray queries); <see cref="GiProbes"/> is its Faithful / Meitou switch (<c>gi</c>).</summary>
+    public bool Gi, GiProbes = true;
+    /// <summary><c>--gi-phases</c>: the probes are updated in this many shares, one a frame (1, 2, 4 or 8).</summary>
+    public int GiPhases = 4;
     public float GiRange = 6000;
     /// <summary>Whether the device must be made with ray queries (<c>VulkanDisplay.RayTracing</c>).</summary>
-    public bool WantsRayTracing => GiDebug > 0;
+    public bool WantsRayTracing => Gi || GiDebug > 0;
     public float? ShadowRange;   // --shadow-range as given (null: the default of the shadows switch's mode, see ShadowRangeFor)
     public bool MeitouShadows = true;   // the shadows switch (Enhancements): Meitou by default, false the game's CSM
 
@@ -258,7 +262,7 @@ sealed class WorldOptions
     /// <summary>The Faithful / Meitou switches over the options (for <c>--meitou</c> / <c>--faithful</c>).</summary>
     internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
         () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v,
-        () => o.MeitouWater, v => o.MeitouWater = v, () => o.FoliageLod, v => o.FoliageLod = v);
+        () => o.MeitouWater, v => o.MeitouWater = v, () => o.FoliageLod, v => o.FoliageLod = v, () => o.GiProbes, v => o.GiProbes = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -332,6 +336,8 @@ sealed class WorldOptions
                 case "--gi-debug": o.GiDebug = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, 3); break;
                 case "--gi-samples": o.GiSamples = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 1, 64); break;
                 case "--gi-range": o.GiRange = F(); break;
+                case "--gi": o.Gi = true; break;
+                case "--gi-phases": o.GiPhases = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--simple-sky": o.SimpleSky = true; break;
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
                 case "--haze-distance": o.HazeDistance = F(); break;
@@ -620,6 +626,7 @@ static class WorldFrame
         /// <summary>The ray-traced global illumination's scene and debug view (null without <c>--gi-debug</c> or ray queries; docs/render-gi.md).</summary>
         internal Gi.GiScene? Gi;
         internal Gi.GiDebugPass? GiDebugPass;
+        internal Gi.GiProbes? Probes;
         public int GiDebug;
         /// <summary>Whether the traced scene is updated (and the debug view drawn) this frame: the bench's gi-scene switch.</summary>
         public bool GiActive = true;
@@ -650,6 +657,7 @@ static class WorldFrame
         public void Dispose()
         {
             GiDebugPass?.Dispose();
+            Probes?.Dispose();
             Gi?.Dispose();
             Streamer?.Dispose();
             Foliage?.Dispose();
@@ -823,15 +831,23 @@ static class WorldFrame
         }
         if (o.Crowd > 0 && scene.Database is not null) gpu.Characters = Characters.CrowdHarness.Create(context, install, scene, assets, o, interactive);
         gpu.DebugShadows = o.DebugShadows;
-        if (o.GiDebug > 0)
+        if (o.GiDebug > 0 || o.Gi)
         {
-            if (!context.Device.HasRayQuery) Console.WriteLine("warning   --gi-debug: the device has no ray queries (VK_KHR_ray_query), the view is off");
+            if (!context.Device.HasRayQuery) Console.WriteLine("warning   --gi / --gi-debug: the device has no ray queries (VK_KHR_ray_query), the global illumination is off");
             else
             {
                 gpu.Gi = new Gi.GiScene(context) { Range = o.GiRange };
-                gpu.GiDebugPass = new Gi.GiDebugPass(context) { Samples = o.GiSamples };
-                gpu.GiDebug = o.GiDebug;
-                Console.WriteLine($"gi        debug view {o.GiDebug}, objects within {o.GiRange:0}, {o.GiSamples} bounce rays per pixel");
+                if (o.GiDebug > 0)
+                {
+                    gpu.GiDebugPass = new Gi.GiDebugPass(context) { Samples = o.GiSamples };
+                    gpu.GiDebug = o.GiDebug;
+                    Console.WriteLine($"gi        debug view {o.GiDebug}, objects within {o.GiRange:0}, {o.GiSamples} bounce rays per pixel");
+                }
+                if (o.Gi)
+                {
+                    gpu.Probes = new Gi.GiProbes(context) { Enabled = o.GiProbes, Phases = o.GiPhases };
+                    Console.WriteLine($"gi        {gpu.Probes.Describe()}");
+                }
             }
         }
         // The memory-pressure guard (VramGuard): MEITOU_VRAM_GUARD=0 leaves it off.
@@ -894,7 +910,8 @@ static class WorldFrame
                 }
             },
             () => gpu()?.Water?.Meitou ?? o.MeitouWater, v => { o.MeitouWater = v; if (gpu()?.Water is { } w) w.Meitou = v; },
-            () => gpu()?.Foliage?.Lod ?? o.FoliageLod, v => { o.FoliageLod = v; if (gpu()?.Foliage is { } f) f.Lod = v; });
+            () => gpu()?.Foliage?.Lod ?? o.FoliageLod, v => { o.FoliageLod = v; if (gpu()?.Foliage is { } f) f.Lod = v; },
+            () => gpu()?.Probes?.Enabled ?? o.GiProbes, v => { o.GiProbes = v; if (gpu()?.Probes is { } p) p.Enabled = v; });
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null)
@@ -1066,10 +1083,14 @@ static class WorldFrame
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, sun.Y); }
         StageClock.Lap(12);
         // The traced scene of the global illumination: its acceleration structures for this eye (docs/render-gi.md).
+        if (gpu.Probes is { } probesActive) probesActive.Active = gpu.GiActive;
         if (gpu.Gi is { } gi && gpu.GiActive)
         {
-            gi.Update(eye, gpu.Terrain.Snapshot(), render.Objects ? gpu.Objects : null);
+            var heights = gpu.Terrain.Snapshot();
+            gi.Update(eye, heights, render.Objects ? gpu.Objects : null);
             StageClock.Sub("gi scene");
+            gpu.Probes?.Update(gi, eye, heights);
+            StageClock.Sub("gi probes");
         }
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is { Level: > 0 };   // level 0: no pass, the water shows the sky colour

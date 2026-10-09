@@ -14,6 +14,9 @@ internal readonly struct HeightSnapshot
     readonly HeightWindow fine;
     readonly float fineBand, fx0, fz0, fx1, fz1;
 
+    /// <summary>The fine window it was taken with: the same one means the same heights (they are never written after they are published).</summary>
+    public HeightWindow Fine => fine;
+
     public HeightSnapshot(ushort[] coarse, int coarseSize, HeightWindow fine, float fineBand)
     {
         this.coarse = coarse;

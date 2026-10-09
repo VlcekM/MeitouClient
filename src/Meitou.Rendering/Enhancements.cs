@@ -41,7 +41,7 @@ public static class Enhancements
     /// </summary>
     public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<float> hazeStrength, Action<float> setHazeStrength, Func<bool> meitouShadows, Action<bool> setMeitouShadows,
         Func<bool> meitouRange, Action<bool> setMeitouRange, Func<bool> impostors, Action<bool> setImpostors, Func<bool> meitouReach, Action<bool> setMeitouReach,
-        Func<bool> meitouWater, Action<bool> setMeitouWater, Func<bool> foliageLod, Action<bool> setFoliageLod) =>
+        Func<bool> meitouWater, Action<bool> setMeitouWater, Func<bool> foliageLod, Action<bool> setFoliageLod, Func<bool>? gi = null, Action<bool>? setGi = null) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -74,6 +74,9 @@ public static class Enhancements
         new("lod", "Foliage levels", "full detail", "generated levels",
             foliageLod, setFoliageLod,
             "the game draws every foliage mesh at full detail, and TERRAIN-mode rocks and plants (some thousands of triangles each) have no LOD levels; Meitou makes coarser levels at load (quadric edge collapse, kept in a disk cache) and picks one per instance by how many pixels (shadow texels) its deviation would show"),
+        new("gi", "Indirect light", "flat ambient", "ray-traced probes",
+            gi ?? (() => false), setGi ?? (_ => { }),
+            "the game lights every surface's shadow side with one flat sky ambient per biome; Meitou traces rays from a grid of probes around the camera (needs --gi and a GPU with ray tracing), so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (docs/render-gi.md)"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

@@ -37,6 +37,10 @@ static class AtmosphereShaders
         uniform vec4 uWeatherDust;    // xyz: dustAmount (current, inside, slope; docs/formats/weather.md "Dust")
         uniform sampler2D uWeatherDustNoise;   // the dust noise (Turbulent.dds), sampled at world.xz * 0.002
         uniform sampler2D uWeatherGround;      // the terrain's whole-world ground colour map: the dust colour (the BIOMES `ground colour` where the object is)
+        uniform vec4 uGiParams;       // Meitou probe GI (docs/render-gi.md): x 1 while the probes light the world, w their hysteresis
+        uniform vec4 uGiGrid[4];      // per cascade: the grid's place and spacing (Gi.GiShaders.ProbeSampling)
+        uniform sampler2D uGiIrradiance, uGiDistance, uGiBase;
+        {{Gi.GiShaders.ProbeSampling}}
 
         // ---- the weather's surfaces (docs/formats/weather.md "Rain and wetness", "Dust") ----
         // common/wet.hlsl makeWet: waterRel = the water's height minus the pixel's, edge the width of the water-line band (0.5 objects and foliage, 2 terrain).
@@ -166,13 +170,23 @@ static class AtmosphereShaders
             vec3 sunSpecular = sun * (nl * D * (0.04 * vis + 0.96 * fresnel * vis)) / ATMO_PI;
             float env = uAtmoLight.w;
             vec3 envDiffuse = atmoIrradiance(n) * {{F(1 - KenshiLighting.DielectricSpecular)}} * am.rgb * env;
+            // Meitou probe GI: the probes' irradiance (sky seen past the geometry, light bounced off it) in place of the sky's, and the sky's
+            // reflection dimmed as much as the probes dim the sky (an occluded corner reflects no sky).
+            float specularOcclusion = 1.0;
+            if (uGiParams.x > 0.5)
+            {
+                vec4 gi = giIrradiance(world, n, v);
+                float sky = dot(envDiffuse, vec3(0.2126, 0.7152, 0.0722));
+                specularOcclusion = mix(1.0, clamp(dot(gi.rgb, vec3(0.2126, 0.7152, 0.0722)) / max(sky, 1e-4), 0.0, 1.0), gi.a);
+                envDiffuse = mix(envDiffuse, gi.rgb, gi.a);
+            }
             vec3 envSpecular = vec3(0.0);
             if (uAtmoMaps.y > 0.5)
             {
                 float nv = clamp(dot(v, n), 0.0, 1.0);
                 vec3 dominant = mix(n, reflect(-v, n), gloss * (sqrt(gloss) + roughness));
                 vec4 r = textureLod(uAtmoSpecular, dominant, (1.0 - gloss) * 7.0);
-                envSpecular = kenshiEnvBrdf(gloss, nv) * r.rgb * r.a * 10.0 * am.rgb * env;
+                envSpecular = kenshiEnvBrdf(gloss, nv) * r.rgb * r.a * 10.0 * am.rgb * env * specularOcclusion;
             }
             return albedo * (diffuse + envDiffuse) + sunSpecular + envSpecular;
         }
