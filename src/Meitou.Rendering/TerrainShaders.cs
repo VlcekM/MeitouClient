@@ -422,9 +422,12 @@ static class TerrainShaders
         """;
 
     /// <summary><see cref="Fragment"/> for the instanced <see cref="MeshVertex"/>: the feature's biome per instance instead of the uniform.</summary>
-    public static readonly string MeshFragment = PerInstanceBiome(Fragment);
+    public static readonly string MeshFragment = PerInstanceBiome(Fragment, fade: true);
 
-    static string PerInstanceBiome(string fragment)
+    /// <summary><see cref="MeshFragment"/> without the cross-fade's <c>discard</c>, for the placements that are not mid-fade (no discard anywhere in the program, so the depth test runs before it; <see cref="EarlyDepth"/>).</summary>
+    public static readonly string MeshFragmentSolid = PerInstanceBiome(Fragment, fade: false);
+
+    static string PerInstanceBiome(string fragment, bool fade)
     {
         const string uniform = "uniform int uFeatureBiome;";
         if (!fragment.Contains(uniform)) throw new InvalidOperationException("TerrainShaders.Fragment no longer declares uFeatureBiome.");
@@ -434,7 +437,7 @@ static class TerrainShaders
         const string wireframe = "if (uWireframe) { fragColour = vec4(0.1, 0.1, 0.1, 1.0); return; }";
         int at = f.IndexOf(wireframe, StringComparison.Ordinal);
         if (at < 0) throw new InvalidOperationException("TerrainShaders.Fragment no longer starts with the wireframe line.");
-        return f.Insert(at, "if (vFade > 0.0 && vFade < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vFade) discard;\n            ");
+        return !fade ? f : f.Insert(at, "if (vFade > 0.0 && vFade < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vFade) discard;\n            ");
     }
 
     // ---- the native model (docs/renderer-native.md 3.3, step O): the texts above through NativeShaders.Port, bodies unchanged ----
@@ -589,6 +592,7 @@ static class TerrainShaders
     public static string FragmentNative() => Native(Fragment);
     public static string MeshVertexNative() => Native(MeshVertex);
     public static string MeshFragmentNative() => Native(MeshFragment);
+    public static string MeshFragmentSolidNative() => Native(MeshFragmentSolid);
     public static string MeshInstancedDepthVertexNative() => Native(MeshInstancedDepthVertex);
     /// <summary><see cref="ShadowShaders.DepthFragment"/> (the caster block at set 0, binding 2) with the terrain's push block, so both
     /// stages of a depth program declare the same one.</summary>

@@ -38,7 +38,8 @@ static class FoliageShaders
         return v;
     }
 
-    public static string MeshFragment()
+    /// <param name="solid">For fully visible instances of a material without a cut-out: no <c>discard</c> in the program (the depth test runs before it).</param>
+    public static string MeshFragment(bool solid = false)
     {
         string f = Shaders.MeshFragment;
         f = Replace(f, @"#version\s+330\s+core", """
@@ -47,13 +48,14 @@ static class FoliageShaders
             uniform bool uCoverage;      // alpha to coverage (multisampled target): the cut-out edge becomes the coverage
             float foliageDither() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); }
             """, required: true);
-        f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", """
+        if (!solid)
+            f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", """
             void main()
             {
                 if (vFade < 1.0 && foliageDither() >= vFade) discard;
             """, required: true);
-        // The cut-out: a hard test, or with alpha to coverage a one-pixel ramp around the threshold.
-        f = Replace(f, @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;", """
+        // The cut-out: a hard test, or with alpha to coverage a one-pixel ramp around the threshold. (The solid variant has none: its materials have no cut-out.)
+        f = Replace(f, @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;", solid ? "float foliageCoverage = 1.0;" : """
             float foliageCoverage = 1.0;
             if (uAlphaThreshold > 0.0)
             {
@@ -248,7 +250,7 @@ static class FoliageShaders
 
     /// <summary><see cref="MeshVertex"/> in the native model (the shared mesh uniforms on <see cref="MeshPush"/> and <see cref="ViewConstants"/>).</summary>
     public static string MeshVertexNative() => NativeShaders.Port(MeshVertex());
-    public static string MeshFragmentNative() => NativeShaders.Port(MeshFragment());
+    public static string MeshFragmentNative(bool solid = false) => NativeShaders.Port(MeshFragment(solid));
     /// <summary><see cref="ShadowShaders.MeshDepthFragment"/> in the native model, for <see cref="MeshVertexNative"/>.</summary>
     public static string MeshDepthNative() => NativeShaders.MeshDepthFragment();
 
@@ -331,7 +333,8 @@ static class FoliageShaders
         layout(local_size_x = 256) in;
         // 17 floats a record (FoliageInstanceRecord.Pack): rows 1 to 4 xyz at 0..11, the sphere at 12..15, a rock's bits at 16; std430 stride 68.
         struct Instance { float f[17]; };
-        struct Chunk { uint first; uint count; float range; float rangeSquared; float inverseBand; uint flags; float transition; float inverseTransitionBand; float lodError; float lodNextError; };
+        // batchStart and batchEnd: the chunk range of the chunk's batch (the split: a batch's visible instances are laid out solid first, then fading, see ScanCompute).
+        struct Chunk { uint first; uint count; float range; float rangeSquared; float inverseBand; uint flags; float transition; float inverseTransitionBand; float lodError; float lodNextError; uint batchStart; uint batchEnd; };
         // A TERRAIN-mode rock chunk (flags 1; with 2 its group's mirroring placements, else the others): ground.w is 1024 when the placement
         // mirrors, plus its biome map row + 1 (0: none). The view's biome rows switch (mode.x) and the resident biomes (a bit per row).
         // A mesh chunk of a group with an impostor (flags 4) keeps the instances before the transition, the group's impostor chunk (flags 8,
@@ -340,7 +343,13 @@ static class FoliageShaders
         // is there, fog[2] eye + hide distance squared, fog[3..9] the block's planes.
         // mode.z: the occlusion cull is on (main colour pass; HizPyramid.ViewFor): hz and hzOff as OcclusionView.Vectors says.
         struct ViewData { vec4 planes[8]; vec4 lengths[2]; uvec4 resident[2]; uvec4 mode; vec4 fog[10]; vec4 hz[6]; uvec4 hzOff[3]; vec4 lod; };
-        layout(push_constant) uniform Push { vec2 eye; uint planeCount; uint chunkCount; uint drawCount; float fullThreshold; } pc;
+        layout(push_constant) uniform Push { vec2 eye; uint planeCount; uint chunkCount; uint drawCount; float fullThreshold; uint split; } pc;
+        // The split (pc.split, the colour views with EarlyDepth): an instance whose mesh shader dithers it (a fade below 1; not an impostor, and a rock only with its impostor transition,
+        // the only one whose fade reaches the shader) is laid out after the batch's others, so the others can be drawn with the program that has no discard.
+        bool IsFading(uint flags, float packed)
+        {
+            return pc.split != 0u && packed > -1.5 && packed < 1.0 && (flags & 8u) == 0u && ((flags & 1u) == 0u || (flags & 4u) != 0u);
+        }
         uint ChunkIndex() { return gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x; }
         // FogVolumes.Covers: the box wholly inside the eye's fog block (its box and seven planes) and its nearest point at least the hide distance away.
         bool FogHidden(ViewData v, vec3 mn, vec3 mx)
@@ -438,13 +447,13 @@ static class FoliageShaders
             }
             return k.lodError * s <= tau && !(k.lodNextError * s <= tau);
         }
-        shared uint visibleCount, foggedCount, occludedCount;
+        shared uint visibleCount, foggedCount, occludedCount, fadingCount;
         void main()
         {
             uint c = ChunkIndex();
             if (c >= pc.chunkCount) return;
             uint i = gl_LocalInvocationID.x;
-            if (i == 0u) { visibleCount = 0u; foggedCount = 0u; occludedCount = 0u; }
+            if (i == 0u) { visibleCount = 0u; foggedCount = 0u; occludedCount = 0u; fadingCount = 0u; }
             barrier();
             Chunk k = chunks[c];
             float packed = -2.0;
@@ -487,31 +496,49 @@ static class FoliageShaders
             }
             fades[c * 256u + i] = packed;
             if (packed > -1.5) atomicAdd(visibleCount, 1u);
+            if (IsFading(k.flags, packed)) atomicAdd(fadingCount, 1u);
             if (fogged != 0u) atomicAdd(foggedCount, 1u);
             if (occluded != 0u) atomicAdd(occludedCount, 1u);
             barrier();
-            if (i == 0u) { counts[c] = visibleCount; counts[pc.chunkCount + c] = foggedCount; counts[2u * pc.chunkCount + c] = occludedCount; }
+            if (i == 0u) { counts[c] = visibleCount; counts[pc.chunkCount + c] = foggedCount; counts[2u * pc.chunkCount + c] = occludedCount; counts[3u * pc.chunkCount + c] = fadingCount; }
         }
         """;
 
-    /// <summary>Kernel 2: one workgroup. Each chunk's output offset (an exclusive prefix of the counts in chunk order; the chunks of a batch
-    /// are consecutive, so a batch's instances are too), the total at the end, and each draw's instance count and first instance.</summary>
+    /// <summary>
+    /// Kernel 2: one workgroup. Two exclusive prefixes over the chunks in chunk order: S of the solid counts and F of the fading counts
+    /// (<c>pc.split</c> 0: no instance is fading, F is 0 and S is the visible prefix of before). A batch's chunks are consecutive [cs, ce); its
+    /// instances are laid out solid first, then fading, from <c>S(cs) + F(cs)</c>: chunk c's solid ones at <c>S(c) + F(cs)</c>, its fading
+    /// ones at <c>S(ce) + F(c)</c>. Writes S at offsets[0, n], the fog and occlusion totals at n + 1 and n + 2, F at offsets[n + 3, 2n + 3] and
+    /// the visible total at 2n + 4; and per draw three argument sets: index d the batch whole (solid, then fading), index drawCount + d its solid
+    /// instances, index 2 drawCount + d its fading ones.
+    /// </summary>
     public static readonly string ScanCompute = CullCommon + """
         struct Draw { uint indexCount; uint chunkStart; uint chunkEnd; uint firstIndex; };
         struct Args { uint indexCount; uint instanceCount; uint firstIndex; int vertexOffset; uint firstInstance; };
-        layout(std430, set = 0, binding = 4) readonly buffer Counts { uint counts[]; };   // [0, n) the visible, [n, 2n) the fog cull's, [2n, 3n) the occlusion cull's
+        layout(std430, set = 0, binding = 4) readonly buffer Counts { uint counts[]; };   // [0, n) the visible, [n, 2n) the fog cull's, [2n, 3n) the occlusion cull's, [3n, 4n) the fading
         layout(std430, set = 0, binding = 5) writeonly buffer Offsets { uint offsets[]; };
         layout(std430, set = 0, binding = 6) readonly buffer Draws { Draw draws[]; };
         layout(std430, set = 0, binding = 7) writeonly buffer ArgsBuffer { Args args[]; };
-        shared uint partial[256];
+        shared uint partialS[256], partialF[256];
         shared uint foggedTotal, occludedTotal;
         uint per;
-        uint OffsetOf(uint c)
+        uint SolidCount(uint c) { return counts[c] - counts[3u * pc.chunkCount + c]; }
+        uint FadingCount(uint c) { return counts[3u * pc.chunkCount + c]; }
+        // S(c) and F(c): the exclusive prefixes at chunk c (c = chunkCount: the totals).
+        uint SolidOffsetOf(uint c)
         {
-            if (c >= pc.chunkCount) return partial[255];
+            if (c >= pc.chunkCount) return partialS[255];
             uint segment = c / per;
-            uint o = segment == 0u ? 0u : partial[segment - 1u];
-            for (uint j = segment * per; j < c; j++) o += counts[j];
+            uint o = segment == 0u ? 0u : partialS[segment - 1u];
+            for (uint j = segment * per; j < c; j++) o += SolidCount(j);
+            return o;
+        }
+        uint FadingOffsetOf(uint c)
+        {
+            if (c >= pc.chunkCount) return partialF[255];
+            uint segment = c / per;
+            uint o = segment == 0u ? 0u : partialF[segment - 1u];
+            for (uint j = segment * per; j < c; j++) o += FadingCount(j);
             return o;
         }
         void main()
@@ -521,35 +548,46 @@ static class FoliageShaders
             barrier();
             per = max((n + 255u) / 256u, 1u);
             uint begin = min(t * per, n), end = min(begin + per, n);
-            uint sum = 0u;
+            uint sum = 0u, fadingSum = 0u;
             uint fogSum = 0u, occSum = 0u;
-            for (uint c = begin; c < end; c++) { sum += counts[c]; fogSum += counts[n + c]; occSum += counts[2u * n + c]; }
+            for (uint c = begin; c < end; c++) { sum += SolidCount(c); fadingSum += FadingCount(c); fogSum += counts[n + c]; occSum += counts[2u * n + c]; }
             atomicAdd(foggedTotal, fogSum);
             atomicAdd(occludedTotal, occSum);
-            partial[t] = sum;
+            partialS[t] = sum;
+            partialF[t] = fadingSum;
             barrier();
             for (uint s = 1u; s < 256u; s <<= 1)
             {
-                uint v = t >= s ? partial[t - s] : 0u;
+                uint vS = t >= s ? partialS[t - s] : 0u;
+                uint vF = t >= s ? partialF[t - s] : 0u;
                 barrier();
-                partial[t] += v;
+                partialS[t] += vS;
+                partialF[t] += vF;
                 barrier();
             }
-            uint base = partial[t] - sum;
-            for (uint c = begin; c < end; c++) { offsets[c] = base; base += counts[c]; }
-            if (t == 255u) offsets[n] = partial[255];
+            uint baseS = partialS[t] - sum, baseF = partialF[t] - fadingSum;
+            for (uint c = begin; c < end; c++)
+            {
+                offsets[c] = baseS; baseS += SolidCount(c);
+                offsets[n + 3u + c] = baseF; baseF += FadingCount(c);
+            }
+            if (t == 255u) { offsets[n] = partialS[255]; offsets[2u * n + 3u] = partialF[255]; offsets[2u * n + 4u] = partialS[255] + partialF[255]; }
             if (t == 0u) offsets[n + 1u] = foggedTotal;   // the fog cull's total, after the barriers above
             if (t == 1u) offsets[n + 2u] = occludedTotal;
             for (uint d = t; d < pc.drawCount; d += 256u)
             {
                 Draw draw = draws[d];
-                uint first = OffsetOf(draw.chunkStart);
-                args[d] = Args(draw.indexCount, OffsetOf(draw.chunkEnd) - first, draw.firstIndex, 0, first);
+                uint s0 = SolidOffsetOf(draw.chunkStart), s1 = SolidOffsetOf(draw.chunkEnd);
+                uint f0 = FadingOffsetOf(draw.chunkStart), f1 = FadingOffsetOf(draw.chunkEnd);
+                args[d] = Args(draw.indexCount, (s1 - s0) + (f1 - f0), draw.firstIndex, 0, s0 + f0);
+                args[pc.drawCount + d] = Args(draw.indexCount, s1 - s0, draw.firstIndex, 0, s0 + f0);
+                args[2u * pc.drawCount + d] = Args(draw.indexCount, f1 - f0, draw.firstIndex, 0, s1 + f0);
             }
         }
         """;
 
-    /// <summary>Kernel 3: per chunk, the visible instances' matrices (row 0 w = the packed fade) at the chunk's offset plus their rank. A rock's
+    /// <summary>Kernel 3: per chunk, the visible instances' matrices (row 0 w = the packed fade) at the offsets <see cref="ScanCompute"/> describes
+    /// (the chunk's offset plus their rank among the solid ones, or among the fading ones). A rock's
     /// row 0 w is what <see cref="TerrainRenderer.DrawMeshes"/> writes there: with the view's biome rows its biome row when resident, else -1;
     /// without them 0.</summary>
     public static readonly string CompactCompute = CullCommon + """
@@ -559,36 +597,45 @@ static class FoliageShaders
         layout(std430, set = 0, binding = 3) readonly buffer Fades { float fades[]; };
         layout(std430, set = 0, binding = 5) readonly buffer Offsets { uint offsets[]; };
         layout(std430, set = 0, binding = 8) writeonly buffer Rows { vec4 rows[]; };
-        shared uint rank[256];
+        shared uint rank[256], rankFading[256];
         void main()
         {
             uint c = ChunkIndex();
             if (c >= pc.chunkCount) return;
             uint i = gl_LocalInvocationID.x;
             float f = fades[c * 256u + i];
+            uint flags = chunks[c].flags;
+            bool fading = IsFading(flags, f);
             uint visible = f > -1.5 ? 1u : 0u;
-            rank[i] = visible;
+            rank[i] = visible != 0u && !fading ? 1u : 0u;
+            rankFading[i] = fading ? 1u : 0u;
             barrier();
             for (uint s = 1u; s < 256u; s <<= 1)
             {
                 uint v = i >= s ? rank[i - s] : 0u;
+                uint vf = i >= s ? rankFading[i - s] : 0u;
                 barrier();
                 rank[i] += v;
+                rankFading[i] += vf;
                 barrier();
             }
             if (visible != 0u)
             {
-                uint o = (offsets[c] + rank[i] - 1u) * 4u;
+                uint n = pc.chunkCount;
+                // Solid: after the batch's earlier chunks' solid ones and every fading one before the batch (S(c) + F(cs)); fading: after all the batch's solid ones (S(ce) + F(c)).
+                uint position = fading ? offsets[chunks[c].batchEnd] + offsets[n + 3u + c] + rankFading[i] - 1u
+                                       : offsets[c] + offsets[n + 3u + chunks[c].batchStart] + rank[i] - 1u;
+                uint o = position * 4u;
                 uint at = chunks[c].first + i;
                 float w = f;
                 float lane = 0.0;
-                if ((chunks[c].flags & 1u) != 0u)
+                if ((flags & 1u) != 0u)
                 {
                     int row = int(uint(instances[at].f[16]) & 1023u) - 1;
                     bool resident = row >= 0 && ((view.resident[row >> 7][(row >> 5) & 3] >> uint(row & 31)) & 1u) != 0u;
                     w = view.mode.x != 0u ? (resident ? float(row) : -1.0) : 0.0;
                     // A rock with an impostor (flag 4) in its transition band: row 1's w, which the terrain's mesh vertex program passes on as the dither threshold.
-                    if ((chunks[c].flags & 4u) != 0u && f < 1.0) lane = f;
+                    if ((flags & 4u) != 0u && f < 1.0) lane = f;
                 }
                 // The fourth column is 0, 0, 0, 1 (FoliageInstanceRecord.Pack checks it); row 0's w is the fade.
                 rows[o] = vec4(instances[at].f[0], instances[at].f[1], instances[at].f[2], w);

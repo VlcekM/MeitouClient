@@ -55,6 +55,8 @@ static partial class WorldApp
             AbToggles.Register("material-distance", () => render.MaterialDistance >= materialDistance, v => render.MaterialDistance = v ? materialDistance : nearMaterial, $"terrain material distance as set (A) against {nearMaterial:0} (B)");
         }
         if (gpu.Objects is { } sortObjects) AbToggles.Register("object-sort", () => sortObjects.SortNearestFirst, v => sortObjects.SortNearestFirst = v, "objects' colour batches drawn nearest first (Meitou reach)");
+        AbToggles.Register("early-depth", () => EarlyDepth.Enabled, v => EarlyDepth.Enabled = v, "objects, rocks and foliage meshes use programs without a discard where fully visible and uncut (early depth test); B: the single program with the discard");
+        AbToggles.Register("solid-first", () => WorldObjectRenderer.SolidFirst, v => WorldObjectRenderer.SolidFirst = v, "objects: the draws without a discard (early depth test) ahead of the dithered and cut-out ones");
         AbToggles.Register("normal-maps", () => render.NormalMaps, v => render.NormalMaps = v, "normal maps on terrain and objects (probe)");
         AbToggles.Register("water-draw", () => render.Water, v => render.Water = v, "the water pass (--no-water)");
         AbToggles.Register("reflections", () => render.Reflections, v => render.Reflections = v, "the water reflection pass (--no-reflections)");

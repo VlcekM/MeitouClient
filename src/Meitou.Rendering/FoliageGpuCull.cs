@@ -20,8 +20,10 @@ public struct FoliageCullChunk
     public float Transition, InverseTransitionBand;
     /// <summary>With <see cref="Lod"/>: the deviation, in radii of the mesh, of the level this chunk holds and of the next coarser one (infinite for the last).</summary>
     public float LodError, LodNextError;
+    /// <summary>The chunk range [BatchStart, BatchEnd) of the batch this chunk belongs to (<see cref="FoliageShaders.ScanCompute"/> lays a batch's instances out solid first, then the fading ones).</summary>
+    public uint BatchStart, BatchEnd;
 
-    public const int Size = 40;
+    public const int Size = 48;
     /// <summary><see cref="ImpostorMesh"/>: the meshes of a group with an impostor (before its transition); <see cref="Impostor"/>: its impostors.</summary>
     public const uint Rock = 1, Mirrored = 2, ImpostorMesh = 4, Impostor = 8;
     /// <summary>A generated mesh level's chunk: its instances are those the view picks this level for (<see cref="FoliageLodView"/>).</summary>
@@ -62,6 +64,8 @@ struct FoliageCullPush
     public Vector2 Eye;
     public uint PlaneCount, ChunkCount, DrawCount;
     public float FullThreshold;
+    /// <summary>1: lay each batch out solid instances first, then the ones the mesh shader dithers (colour views with <see cref="EarlyDepth"/>).</summary>
+    public uint Split;
 }
 
 /// <summary>A view's work list in the frame's constants: the chunks in draw order and the draws, reused by the views that share it (the
@@ -75,7 +79,7 @@ public readonly record struct FoliageCullWork(Transient Chunks, int ChunkCount, 
 
 /// <summary>What one view's cull wrote: the compacted matrices (bind at locations 7 to 10), the indirect arguments (one per draw, 20 bytes
 /// each), and the chunks' output offsets (ChunkCount + 1, the last one the total).</summary>
-public readonly record struct FoliageCullResult(Buffer Rows, ulong RowsOffset, ulong RowsBytes, Buffer Args, ulong ArgsOffset, Buffer Offsets, ulong OffsetsOffset, int ChunkCount, int DrawCount)
+public readonly record struct FoliageCullResult(Buffer Rows, ulong RowsOffset, ulong RowsBytes, Buffer Args, ulong ArgsOffset, Buffer Offsets, ulong OffsetsOffset, int ChunkCount, int DrawCount, bool Split = false)
 {
     public bool IsEmpty => DrawCount == 0;
 }
@@ -378,7 +382,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         Dispatch(work, view, eye, default, fullThreshold);
 
     /// <summary><see cref="Dispatch(in FoliageCullWork, FoliageCullView, Vector2, float)"/> with what the view's rock chunks write (<see cref="FoliageRockView"/>).</summary>
-    public FoliageCullResult Dispatch(in FoliageCullWork work, FoliageCullView view, Vector2 eye, in FoliageRockView rock, float fullThreshold = 0.999f, ReadOnlySpan<Vector4> fogCull = default, in OcclusionView occlusion = default, FoliageLodView lod = default)
+    public FoliageCullResult Dispatch(in FoliageCullWork work, FoliageCullView view, Vector2 eye, in FoliageRockView rock, float fullThreshold = 0.999f, ReadOnlySpan<Vector4> fogCull = default, in OcclusionView occlusion = default, FoliageLodView lod = default, bool split = false)
     {
         if (work.ChunkCount == 0) return default;
         if (view.Planes.Length > 8) throw new ArgumentException("at most 8 planes", nameof(view));
@@ -388,9 +392,9 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         // The rows need a slot per instance that can be visible (the chunks' counts summed), not per chunk slot (a chunk of a small group is mostly empty).
         ulong rowsBytes = (ulong)(work.Instances >= 0 ? work.Instances : work.Candidates) * 64;
         if (!(scratch.TryAllocate((ulong)work.Candidates * 4, out var fadesBuffer, out var fadesOffset) &&
-              scratch.TryAllocate((ulong)n * 12, out var countsBuffer, out var countsOffset) &&
-              scratch.TryAllocate((ulong)(n + 3) * 4, out var offsetsBuffer, out var offsetsOffset) &&
-              scratch.TryAllocate((ulong)Math.Max(work.DrawCount, 1) * 20, out var argsBuffer, out var argsOffset) &&
+              scratch.TryAllocate((ulong)n * 16, out var countsBuffer, out var countsOffset) &&
+              scratch.TryAllocate((ulong)(2 * n + 5) * 4, out var offsetsBuffer, out var offsetsOffset) &&
+              scratch.TryAllocate((ulong)Math.Max(work.DrawCount, 1) * 60, out var argsBuffer, out var argsOffset) &&
               scratch.TryAllocate(rowsBytes, out var rowsBuffer, out var rowsOffset)))
             return default;   // over the cap: this view is left out of the frame (FrameScratch); the guard shortens the ranges
         var fades = (Buffer: fadesBuffer, Offset: fadesOffset);
@@ -418,13 +422,13 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         b[1] = new BufferBinding(arena.Buffer.Handle, 0, arena.Buffer.Size);
         b[2] = new BufferBinding(work.Chunks.Handle, work.Chunks.Offset, (ulong)n * FoliageCullChunk.Size);
         b[3] = new BufferBinding(fades.Buffer, fades.Offset, (ulong)work.Candidates * 4);
-        b[4] = new BufferBinding(counts.Buffer, counts.Offset, (ulong)n * 12);
-        b[5] = new BufferBinding(offsets.Buffer, offsets.Offset, (ulong)(n + 3) * 4);
+        b[4] = new BufferBinding(counts.Buffer, counts.Offset, (ulong)n * 16);
+        b[5] = new BufferBinding(offsets.Buffer, offsets.Offset, (ulong)(2 * n + 5) * 4);
         b[6] = new BufferBinding(work.Draws.Handle, work.Draws.Offset, (ulong)Math.Max(work.DrawCount, 1) * FoliageCullDraw.Size);
-        b[7] = new BufferBinding(args.Buffer, args.Offset, (ulong)Math.Max(work.DrawCount, 1) * 20);
+        b[7] = new BufferBinding(args.Buffer, args.Offset, (ulong)Math.Max(work.DrawCount, 1) * 60);
         b[8] = new BufferBinding(rows.Buffer, rows.Offset, rowsBytes);
         b[9] = occlusion.IsEmpty ? new BufferBinding(arena.Buffer.Handle, 0, arena.Buffer.Size) : occlusion.Buffer;   // the pyramid (a stand-in when the occlusion cull is off)
-        var push = new FoliageCullPush { Eye = eye, PlaneCount = (uint)view.Planes.Length, ChunkCount = (uint)n, DrawCount = (uint)work.DrawCount, FullThreshold = fullThreshold };
+        var push = new FoliageCullPush { Eye = eye, PlaneCount = (uint)view.Planes.Length, ChunkCount = (uint)n, DrawCount = (uint)work.DrawCount, FullThreshold = fullThreshold, Split = split ? 1u : 0u };
 
         var cmd = ctx.Frame.PreFrame;
         var stamps = (ctx.Frame.Timestamps.Allocate(), ctx.Frame.Timestamps.Allocate());
@@ -470,14 +474,14 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         if (viewIndex < MaxViews)
         {
             LateVisible = viewIndex < visibleWritten[scratchSlot] ? (int)MemoryMarshal.Read<uint>(counter.Read((ulong)viewIndex * 4, 4)) : 0;
-            cmd.CopyBuffer(offsets.Buffer, counter.Handle, new BufferCopy(offsets.Offset + (ulong)n * 4, (ulong)viewIndex * 4, 4));
+            cmd.CopyBuffer(offsets.Buffer, counter.Handle, new BufferCopy(offsets.Offset + (ulong)(2 * n + 4) * 4, (ulong)viewIndex * 4, 4));   // the visible total (solid and fading)
             viewIndex++;
         }
         if (DrawTally) CopyTally(cmd, args.Buffer, args.Offset, work.DrawCount);
         cmd.EndLabel();
         if (stamps.Item1.IsValid && stamps.Item2.IsValid) pendingTimes.Add((stamps.Item1, stamps.Item2, TimingClass));
         Dispatched++;
-        return new FoliageCullResult(rows.Buffer, rows.Offset, rowsBytes, args.Buffer, args.Offset, offsets.Buffer, offsets.Offset, n, work.DrawCount);
+        return new FoliageCullResult(rows.Buffer, rows.Offset, rowsBytes, args.Buffer, args.Offset, offsets.Buffer, offsets.Offset, n, work.DrawCount, split);
     }
 
     void Run(CommandList cmd, ShaderProgram p, ComputePipeline pipe, uint[] bindings, ReadOnlySpan<BufferBinding> b, in FoliageCullPush push, uint x, uint y)

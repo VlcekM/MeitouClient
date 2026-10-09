@@ -45,7 +45,9 @@ static class BuildingLodShaders
         return v;
     }
 
-    public static string Fragment()
+    /// <param name="solid">The variant for fully visible instances of a material without a cut-out: no <c>discard</c> anywhere, so the GPU
+    /// tests depth before the fragment shader runs (a shader that may discard gets its depth test late). The same maths otherwise.</param>
+    public static string Fragment(bool solid = false)
     {
         string f = Shaders.MeshFragment;
         f = Replace(f, @"#version\s+330\s+core", """
@@ -53,7 +55,9 @@ static class BuildingLodShaders
             in vec2 vRange;
             float ditherValue() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); }
             """);
-        f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", """
+        if (solid) f = Replace(f, @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;", "");
+        else
+            f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", """
             void main()
             {
                 if (vRange.y < 1.0 || vRange.x > 0.0)
@@ -135,7 +139,7 @@ static class BuildingLodShaders
     };
 
     public static string VertexNative() => NativeShaders.Port(Vertex(), NativeShaders.Map(Own), PushMembers);
-    public static string FragmentNative() => NativeShaders.Port(Fragment(), NativeShaders.Map(Own), PushMembers);
+    public static string FragmentNative(bool solid = false) => NativeShaders.Port(Fragment(solid), NativeShaders.Map(Own), PushMembers);
     /// <summary><see cref="ShadowShaders.MeshDepthFragment"/> for <see cref="VertexNative"/>.</summary>
     public static string DepthNative() => NativeShaders.Port(ShadowShaders.MeshDepthFragment, NativeShaders.Map(Own), PushMembers);
 

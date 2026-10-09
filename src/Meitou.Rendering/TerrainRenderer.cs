@@ -100,6 +100,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         patchColour = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(), "terrain");
         patchDepth = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.DepthFragmentNative(), "terrain depth");
         meshColour = new TerrainProgram(gpu, sets, TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentNative(), "terrain meshes");
+        meshSolid = new TerrainProgram(gpu, sets, TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentSolidNative(), "terrain meshes solid");
         meshDepth = new TerrainProgram(gpu, sets, TerrainShaders.MeshInstancedDepthVertexNative(), TerrainShaders.DepthFragmentNative(), "terrain mesh depth");
         // GL's stand-ins for an absent texture, in the array each sampler indexes (the bindless stand-in is the float 2D one only).
         standIn2D = gpu.Bindless.Register(BindlessKind.Texture2D, gpu.Dummy(StandInInfo(false, ScalarKind.Float)));
@@ -332,7 +333,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     readonly NativeFrame nativeFrame;
     readonly Silk.NET.Vulkan.DescriptorSetLayout constantsLayout;
-    readonly TerrainProgram patchColour, patchDepth, meshColour, meshDepth;
+    readonly TerrainProgram patchColour, patchDepth, meshColour, meshSolid, meshDepth;   // meshSolid: meshColour without the cross-fade discard (EarlyDepth)
     readonly ulong uniformAlign;
     readonly uint standIn2D, standInArray, standInUInt;
 
@@ -746,14 +747,15 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         if (!GroupMeshes(meshes, biomes: true)) return 0;
         StepTiming.Group(StepTiming.MeshColour, t0);
         PrepareConstants(material: true, patches: false);
-        int draws = DrawGroups(meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
+        // No placement of this path fades (row 1's w is 0): the program without the discard, so the depth test runs first (EarlyDepth).
+        int draws = EarlyDepth.Enabled ? DrawGroups(meshSolid, Solid, "terrain meshes solid", StepTiming.MeshColour) : DrawGroups(meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
         StepTiming.Add(StepTiming.MeshColour, t0, draws);
         return draws;
     }
 
     /// <summary>This call's placements (each group's contiguous, <see cref="MeshGroup.Offset"/> instances in), in the frame's constants.</summary>
     Transient placements;
-    const int Colour = 0, Depth = 1;
+    const int Colour = 0, Depth = 1, Solid = 2;
     readonly GpuContext gpu;
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
@@ -809,8 +811,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         public bool Mirrored;
         /// <summary>What a native draw of this mesh needs, per program.
         /// Inline (no object of its own), so a draw reads what grouping has just touched.</summary>
-        public NativeMesh ColourNative, DepthNative;
-        public ref NativeMesh Native(int kind) => ref kind == Colour ? ref ColourNative : ref DepthNative;
+        public NativeMesh ColourNative, DepthNative, SolidNative;
+        public ref NativeMesh Native(int kind) => ref kind == Colour ? ref ColourNative : ref (kind == Depth ? ref DepthNative : ref SolidNative);
     }
 
     /// <summary>The pipeline state a segment's draws share (everything of <see cref="GraphicsPipelineDesc"/> but the vertex layout).</summary>
@@ -837,8 +839,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     // Per program kind: the last segment state and its number; numbers are stable per state (a mesh compares one int per draw).
     readonly Dictionary<(int Kind, SegmentPipeline State), int> segmentByState = [];
-    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[2];
-    readonly int[] segmentIds = new int[2];
+    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[3];
+    readonly int[] segmentIds = new int[3];
     int segmentCount;
 
     int SegmentId(int kind, ShaderProgram p, PassTargets t, DrawState s)
@@ -1054,7 +1056,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// writes them) from <paramref name="rowsOffset"/>, with the argument's firstInstance. Same programs, state, and GL state left behind as
     /// <see cref="DrawMeshes"/>; the caller orders the meshes. Returns the number of draw calls.
     /// </summary>
-    public int DrawMeshesIndirect(ReadOnlySpan<IndirectMesh> meshes, Silk.NET.Vulkan.Buffer rows, ulong rowsOffset, Silk.NET.Vulkan.Buffer args, ulong argsOffset, bool depth = false)
+    public int DrawMeshesIndirect(ReadOnlySpan<IndirectMesh> meshes, Silk.NET.Vulkan.Buffer rows, ulong rowsOffset, Silk.NET.Vulkan.Buffer args, ulong argsOffset, bool depth = false, bool solid = false)
     {
         if (meshes.Length == 0) return 0;
         long t0 = MeshTiming > 0 ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
@@ -1070,7 +1072,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         else
         {
             PrepareConstants(material: true, patches: false);
-            draws = DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
+            // solid: none of these placements is mid cross-fade (the caller splits them), so the program without the discard draws them (EarlyDepth).
+            draws = solid && EarlyDepth.Enabled
+                ? DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, meshSolid, Solid, "terrain meshes solid", StepTiming.MeshColour)
+                : DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
             StepTiming.Add(StepTiming.MeshColour, timing, draws);
         }
         if (MeshTiming > 0)
@@ -1142,7 +1147,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         fineTexture.Dispose();
         foreach (var r in retired) r.Texture.Dispose();
         textures?.Dispose();
-        foreach (var p in new[] { patchColour, patchDepth, meshColour, meshDepth }) p.Dispose();
+        foreach (var p in new[] { patchColour, patchDepth, meshColour, meshSolid, meshDepth }) p.Dispose();
         rockBake?.Dispose();
         gpu.Bindless.Free(BindlessKind.Texture2D, standIn2D);
         gpu.Bindless.Free(BindlessKind.Texture2DArray, standInArray);

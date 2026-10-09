@@ -50,7 +50,7 @@ sealed class GpuObjectPart
     /// texture's top mips stop mattering (infinity: unknown, they always matter).</summary>
     public float UvScale = float.PositiveInfinity;
     /// <summary>What a native draw needs, per program (<see cref="WorldObjectRenderer"/>).</summary>
-    public ObjectNativeMesh ColourNative, DepthNative;
+    public ObjectNativeMesh ColourNative, DepthNative, ColourSolidNative;
 }
 
 /// <summary>A part's native state for one program: its vertex layout and own vertex buffers, its element buffer, and the pipelines for the

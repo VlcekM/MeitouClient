@@ -26,7 +26,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>The native GPU API (docs/renderer-native.md 7.1 step 8; since phase 8 stage 1 the only one this renderer uses).</summary>
     public GpuContext Gpu { get; }
     readonly NativeFrame nativeFrame;
-    readonly ObjProg colourProg, depthProg;   // the colour and the depth (shadow caster) programs, native
+    readonly ObjProg colourProg, solidProg, depthProg;   // the colour, the colour without a discard (EarlyDepth) and the depth (shadow caster) programs, native
     readonly WorldTextureCache textureCache;
     readonly MaterialResolver resolver;
     readonly UploadQueue uploads = new();
@@ -36,7 +36,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     readonly Dictionary<(string, string, string), ObjectMaterialSet> materialSets = [];
     readonly List<TownDraw> towns = [];
     readonly ObjectMaterialSet distantMaterial;
-    readonly Dictionary<(GpuObjectMesh, ObjectMaterialSet, int, bool), Batch> batchMap = [];
+    readonly Dictionary<(GpuObjectMesh, ObjectMaterialSet, int, int), Batch> batchMap = [];
     readonly List<Batch> active = [];
     readonly List<(MeshBindings, int, Matrix4x4)> terrainMeshes = [];   // the TERRAIN-mode instances of a draw (TerrainRenderer.DrawMeshes)
     /// <summary>MEITOU_LOD_DEBUG: 1 colours solid surfaces by LOD level, 2 draws wireframe only coloured by level (green 0, yellow 1, orange 2, red 3, magenta manual, blue distant stand-ins).</summary>
@@ -50,6 +50,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         public required int Level;
         public required bool Town;
         public bool Manual;
+        /// <summary>Some instance is mid cross-fade (or a town's per-vertex fade): its draws need the program with the dither <c>discard</c>.</summary>
+        public bool Fading;
         public Matrix4x4[] Data = new Matrix4x4[16];
         public int Count, Offset;
         /// <summary>The nearest instance's distance (to its bounds' edge) this frame: batches are drawn nearest first.</summary>
@@ -85,6 +87,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         // Both native programs are made here with every handle resolved, never inside a draw (the GL programs they replace are not made).
         nativeFrame = new NativeFrame(gpu);
         colourProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(), "objects");
+        solidProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(solid: true), "objects solid");
         depthProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), "objects depth");
         textureCache = new WorldTextureCache(gpu, assets, "object textures");
         var library = OgreMaterialLibrary.LoadConfigured(objects.Install, out _);
@@ -374,7 +377,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>Forgets the batches of an unloaded mesh (their key would keep the deleted buffers' wrapper alive).</summary>
     void RemoveBatches(GpuObjectMesh gpu)
     {
-        List<(GpuObjectMesh, ObjectMaterialSet, int, bool)>? keys = null;
+        List<(GpuObjectMesh, ObjectMaterialSet, int, int)>? keys = null;
         foreach (var key in batchMap.Keys)
             if (ReferenceEquals(key.Item1, gpu)) (keys ??= []).Add(key);
         if (keys is not null) foreach (var key in keys) batchMap.Remove(key);
@@ -564,7 +567,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 float value = Vector3.Distance(t.Centre, eye) - t.Radius;
                 if (value >= DistantReach || !SphereVisible(frustum, t.Centre, t.Radius) || MirrorCull?.Invoke(t.Centre, t.Radius) == false || FogCull?.Hidden(t.Centre, t.Radius, FogVolumes.CullKind.Objects) == true) continue;
                 t.Mesh.LastUsed = now;
-                var batch = BatchFor(gpu, distantMaterial, 0, town: true);
+                var batch = BatchFor(gpu, distantMaterial, 0, BatchKind.Town);
                 if (batch.Count == 0) { active.Add(batch); batch.Near = 0; }
                 batch.Add(Matrix4x4.CreateTranslation(t.Town.Position));
                 DrawnInstances++;
@@ -710,7 +713,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     void Add(GpuObjectMesh gpu, ObjectMaterialSet materials, int level, Matrix4x4 m, float lo, float hi, float near)
     {
         var manual = gpu.Manual[level];
-        var batch = BatchFor(manual ?? gpu, materials, manual is null ? level : 0, town: false);
+        // Fully visible: lo 0 and hi 2 (the shader keeps everything when hi >= 1 and lo is 0). With the early depth test off every batch is "fading": the old merging.
+        bool fading = !EarlyDepth.Enabled || lo > 0 || hi < 1;
+        var batch = BatchFor(manual ?? gpu, materials, manual is null ? level : 0, fading ? BatchKind.Fading : BatchKind.Solid);
         batch.Manual = manual is not null;
         if (batch.Count == 0) { active.Add(batch); batch.Near = near; } else if (near < batch.Near) batch.Near = near;
         m.M14 = lo;
@@ -718,11 +723,18 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         batch.Add(m);
     }
 
-    Batch BatchFor(GpuObjectMesh gpu, ObjectMaterialSet materials, int level, bool town)
+    /// <summary>What a batch's instances share besides mesh, materials and level: all fully visible (their draws can use the programs without a
+    /// <c>discard</c>, see <see cref="EarlyDepth"/>), some dithered by the LOD cross-fade, or a distant town (the fade comes per vertex).</summary>
+    static class BatchKind
     {
-        var key = (gpu, materials, level, town);
+        public const int Solid = 0, Fading = 1, Town = 2;
+    }
+
+    Batch BatchFor(GpuObjectMesh gpu, ObjectMaterialSet materials, int level, int kind)
+    {
+        var key = (gpu, materials, level, kind);
         if (!batchMap.TryGetValue(key, out var batch))
-            batchMap[key] = batch = new Batch { Mesh = gpu, Materials = materials, Level = level, Town = town };
+            batchMap[key] = batch = new Batch { Mesh = gpu, Materials = materials, Level = level, Town = kind == BatchKind.Town, Fading = kind != BatchKind.Solid };
         return batch;
     }
 
@@ -758,6 +770,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         public uint FirstInstance, Instances;
         public uint Diffuse, Normal, Diffuse2, Normal2;
         public ObjectPush Push;
+        /// <summary>Drawn with the program without a discard (<see cref="EarlyDepth"/>): a batch of fully visible instances, a material without a cut-out.</summary>
+        public bool Solid;
     }
 
     ObjDraw[] draws = new ObjDraw[256];
@@ -825,8 +839,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         Silk.NET.Vulkan.PolygonMode Polygon, bool AlphaToCoverage, bool DepthClamp);
 
     readonly Dictionary<(int Kind, SegmentPipeline State), int> segmentByState = [];
-    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[4];
-    readonly int[] segmentIds = new int[4];
+    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[5];
+    readonly int[] segmentIds = new int[5];
     int segmentCount;
 
     /// <summary>A stable number for a segment's pipeline state, so a part compares one int per draw.</summary>
@@ -906,12 +920,31 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                     Material(ref d, gp, pm, options);
                     // A part whose diffuse map is not resident yet is drawn plain grey (pop-in the benchmark counts).
                     if (!depthPass && options.Textures && d.Diffuse == 0 && pm.WantsDiffuse) untexturedDraws++;
+                    d.Solid = !depthPass && !b.Fading && d.Push.AlphaThreshold == 0f;
                 }
                 DrawCalls++;
                 DrawnTriangles += (long)gp.Count[b.Level] / 3 * b.Count;
             }
         }
+        if (SolidFirst && !depthPass && !wire) SolidDrawsFirst();
     }
+
+    /// <summary>The solid draws (early depth test) ahead of the dithered and cut-out ones, each group still nearest first: what they write to the depth
+    /// buffer is there for the coarse depth test of the others, whose fragments are shaded before the exact test.</summary>
+    void SolidDrawsFirst()
+    {
+        if (drawScratch.Length < drawCount) drawScratch = new ObjDraw[draws.Length];
+        int solid = 0;
+        for (int i = 0; i < drawCount; i++) if (draws[i].Solid) solid++;
+        if (solid == 0 || solid == drawCount) return;
+        int s = 0, o = solid;
+        for (int i = 0; i < drawCount; i++) drawScratch[draws[i].Solid ? s++ : o++] = draws[i];
+        Array.Copy(drawScratch, draws, drawCount);
+    }
+
+    ObjDraw[] drawScratch = [];
+    /// <summary><c>MEITOU_AB_SOLID_FIRST</c> (default on): see <see cref="SolidDrawsFirst"/>.</summary>
+    public static bool SolidFirst { get; set; } = Environment.GetEnvironmentVariable("MEITOU_AB_SOLID_FIRST") != "0";
 
     static void Material(ref ObjDraw d, GpuObjectPart gp, ObjectPartMaterial pm, WorldRenderOptions options)
     {
@@ -961,6 +994,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         var state = Gpu.CurrentState() with { Cull = Silk.NET.Vulkan.CullModeFlags.None };
         if (wire) state = state with { Polygon = Silk.NET.Vulkan.PolygonMode.Line, BiasEnable = true, BiasConstant = -1, BiasSlope = -1 };
         int segment = SegmentId(kind, prog.P, targets, state);
+        // The fully visible draws of a colour pass use the program without a discard (own segment, own pipelines per part).
+        int solidSegment = !depthPass && !wire ? SegmentId(4, solidProg.P, targets, state) : 0;
         var job = drawJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Layout, job.Count) = (this, targets, state, prog.P.Layout, 0);
         job.Frame = nativeFrame.Prepare(in view);
@@ -979,11 +1014,14 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             pc.Diffuse2 = Texture(d.Diffuse2);
             pc.Normal2 = Texture(d.Normal2);
             var part = d.Part;
-            ref var n = ref (depthPass ? ref part.DepthNative : ref part.ColourNative);
-            Current(ref n, part, prog);
+            bool solid = d.Solid && solidSegment != 0;
+            ref var n = ref (depthPass ? ref part.DepthNative : ref (solid ? ref part.ColourSolidNative : ref part.ColourNative));
+            var drawProg = solid ? solidProg : prog;
+            int drawSegment = solid ? solidSegment : segment;
+            Current(ref n, part, drawProg);
             job.Draws[i] = new DrawJob.Draw
             {
-                Pipeline = n.SegA == segment ? n.PipeA! : PipelineFor(ref n, prog, segment, state, targets.Formats, label),
+                Pipeline = n.SegA == drawSegment ? n.PipeA! : PipelineFor(ref n, drawProg, drawSegment, state, targets.Formats, label),
                 Vertices = n.Vertices, Elements = new BufferBinding(n.Elements.Buffer, n.Elements.Offset + (ulong)part.Offset[d.Level] * 4),
                 Push = pc, IndexCount = (uint)part.Count[d.Level], Instances = d.Instances, FirstInstance = d.FirstInstance,
             };
@@ -1104,6 +1142,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     {
         ReportObjectTiming();
         colourProg.Dispose();
+        solidProg.Dispose();
         depthProg.Dispose();
         nativeFrame.Dispose();
         streamer.Dispose();

@@ -41,7 +41,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly FoliageCatalog catalog;
     // The native programs (docs/renderer-native.md 3.3, step O: the native model, the same maths), made with the renderer so a draw never compiles.
     readonly NativeFrame nativeFrame;
-    readonly NativeProg colourMesh, depthMesh, grassProgram, grassMotionProgram;
+    readonly NativeProg colourMesh, colourSolidMesh, depthMesh, grassProgram, grassMotionProgram;   // colourSolidMesh: colourMesh without the discards (EarlyDepth)
     readonly WorldTextureCache textures;
     readonly ConcurrentBag<FoliageWorld> worlds = [];
     /// <summary>The zone layout cache (null with <c>--no-load-cache</c>); see <see cref="FoliageLayoutCache"/>.</summary>
@@ -80,6 +80,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
         nativeFrame = new NativeFrame(gpu);
         colourMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(), "foliage meshes");
+        colourSolidMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(solid: true), "foliage meshes solid");
         depthMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshDepthNative(), "foliage mesh depth");
         grassProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassVertexNative(), FoliageShaders.GrassFragmentNative(), "foliage grass");
         grassMotionProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(), "foliage grass motion");
@@ -839,7 +840,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public LegacyProgram.Attribute?[] Attributes = [];
         public MeshBindings? Plain;
         /// <summary>What a native draw needs, per program (<see cref="NativeMesh"/>).</summary>
-        public NativeMesh ColourNative, DepthNative;
+        public NativeMesh ColourNative, DepthNative, ColourSolidNative;
         public int Count;
         /// <summary>Blades after each 1/64 of the candidates (<see cref="FoliageGrassField.BladesWithPrefixes"/>): the density setting draws a prefix.</summary>
         public int[] Prefixes = [];
@@ -1232,7 +1233,17 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // only compared), or the CPU's placements.
         if (gpu)
         {
-            if (rockDraws.Count > 0)
+            if (rockDraws.Count > 0 && gpuResult.Split && !depthPass)
+            {
+                // The split: the rocks that are not mid-transition with their impostor use the program without the dither's discard; a rock fades only into its impostor.
+                var rocksNow = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(rockDraws);
+                DrawCalls += terrain.DrawMeshesIndirect(rocksNow, gpuResult.Rows, gpuResult.RowsOffset, gpuResult.Args,
+                    gpuResult.ArgsOffset + (ulong)(gpuResult.DrawCount + meshDraws.Count) * 20, false, solid: true);
+                if (RockImpostorsActive)
+                    DrawCalls += terrain.DrawMeshesIndirect(rocksNow, gpuResult.Rows, gpuResult.RowsOffset, gpuResult.Args,
+                        gpuResult.ArgsOffset + (ulong)(2 * gpuResult.DrawCount + meshDraws.Count) * 20, false, solid: false);
+            }
+            else if (rockDraws.Count > 0)
                 DrawCalls += terrain.DrawMeshesIndirect(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(rockDraws), gpuResult.Rows, gpuResult.RowsOffset,
                     gpuResult.Args, gpuResult.ArgsOffset + (ulong)meshDraws.Count * 20, depthPass);
         }
@@ -1693,6 +1704,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     };
             }
         }
+        for (int b = 0; b < batches; b++)
+            for (int c = gpuBatchStart[b]; c < gpuBatchStart[b + 1]; c++) (gpuChunks[c].BatchStart, gpuChunks[c].BatchEnd) = ((uint)gpuBatchStart[b], (uint)gpuBatchStart[b + 1]);   // the split lays a batch out whole
         gpuChunkCount = n;
         gpuInstances = 0;
         foreach (var e in gpuEntries) if (e.Level == 0) gpuInstances += e.Length;   // a generated level's entry repeats the instances; each is drawn at one level
@@ -1829,7 +1842,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         bool fogOn = !depthPass && FogCull is { } fogCull && fogCull.WriteCull(fog);
         bool occlusionOn = !depthPass && !Occlusion.IsEmpty && !GpuCullVerify;
         cull.TimingClass = depthPass || Gpu.CurrentTargets().Formats.Samples > 1 ? 0 : occlusionOn ? 2 : 1;
-        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock, 0.999f, fogOn ? fog : default, occlusionOn ? Occlusion : default, lodView);
+        // The split (EarlyDepth): in the colour views each batch's dithered instances come after its fully visible ones, drawn with the other program. Not while verifying (the CPU's order).
+        bool split = !depthPass && EarlyDepth.Enabled && !GpuCullVerify;
+        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock, 0.999f, fogOn ? fog : default, occlusionOn ? Occlusion : default, lodView, split);
         if (occlusionOn && cull.OccludedIsFresh) OccludedInstances = cull.LateOccluded;
         DrawnInstances += cull.LateVisible;
         if (fogOn && cull.LateFogCulled > 0) FogCull!.AddCulled(FogVolumes.CullKind.FoliageInstances, cull.LateFogCulled);
@@ -2089,7 +2104,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     // (BeginNativeInPass). Each draw method is split into Prepare (reads the textures and the zones' state, makes a draw list) and Record (the
     // list into one native segment: the sets and dynamic state once, per draw a push constant block and the mesh's own buffers).
 
-    const int ColourKind = 0, DepthKind = 1, GrassKind = 2, MotionKind = 3;
+    const int ColourKind = 0, DepthKind = 1, GrassKind = 2, MotionKind = 3, SolidKind = 4;
     /// <summary>The first location the per-instance rows (the batch matrices) take; the mesh's own inputs are below it.</summary>
     const int RowLocation = FoliageShaders.InstanceLocation;
 
@@ -2112,8 +2127,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         Silk.NET.Vulkan.PolygonMode Polygon, bool AlphaToCoverage, bool DepthClamp);
 
     readonly Dictionary<(int Kind, SegmentPipeline State), int> segmentByState = [];
-    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[4];
-    readonly int[] segmentIds = new int[4];
+    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[5];
+    readonly int[] segmentIds = new int[5];
     int segmentCount;
 
     /// <summary>A stable number for a segment's pipeline state, so a mesh compares one int per draw.</summary>
@@ -2280,6 +2295,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         };
         var sided = Silk.NET.Vulkan.CullModeFlags.None;
         Silk.NET.Vulkan.CullModeFlags? side = null;
+        // The split (EarlyDepth; GPU cull, colour views): the program without the discards draws the fully visible instances of the parts without a cut-out.
+        bool splitView = indirect && gpuResult.Split && !depth;
+        int solidSegment = splitView ? SegmentId(SolidKind, colourSolidMesh.P, targets, state) : 0;
         foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(meshDraws))
         {
             var k = d.Material;
@@ -2305,11 +2323,27 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             var part = d.Part;
             ref var n = ref (depth ? ref part.DepthNative : ref part.ColourNative);
             Current(ref n, part, mp);
+            // A part without a cut-out is drawn twice: its fully visible instances (the cull lays them out first) with the solid program, the dithered
+            // ones after them with the full one. A cut-out part keeps its one draw over both (it needs the discard anyway).
+            bool split = splitView && pc.AlphaThreshold == 0f;
+            if (split)
+            {
+                ref var sn = ref part.ColourSolidNative;
+                Current(ref sn, part, colourSolidMesh);
+                job.Add(new MeshJob.Draw
+                {
+                    SetRaster = raster, Cull = want, Pipeline = sn.SegA == solidSegment ? sn.PipeA! : PipelineFor(ref sn, colourSolidMesh, solidSegment, state, targets.Formats, "foliage meshes solid"),
+                    Vertices = sn.Vertices, Elements = sn.Elements, Push = pc,
+                    Args = gpuResult.Args, ArgsOffset = gpuResult.ArgsOffset + (ulong)(gpuResult.DrawCount + drawIndex) * 20,
+                    IndexCount = (uint)part.Count, Instances = d.Instances, FirstInstance = d.FirstInstance,
+                });
+                raster = false;
+            }
             job.Add(new MeshJob.Draw
             {
                 SetRaster = raster, Cull = want, Pipeline = n.SegA == segment ? n.PipeA! : PipelineFor(ref n, mp, segment, state, targets.Formats, label),
                 Vertices = n.Vertices, Elements = n.Elements, Push = pc,
-                Args = indirect ? gpuResult.Args : default, ArgsOffset = gpuResult.ArgsOffset + (ulong)drawIndex * 20,
+                Args = indirect ? gpuResult.Args : default, ArgsOffset = gpuResult.ArgsOffset + (ulong)((split ? 2 * gpuResult.DrawCount : 0) + drawIndex) * 20,
                 IndexCount = (uint)part.Count, Instances = d.Instances, FirstInstance = d.FirstInstance,
             });
             drawIndex++;
@@ -2754,6 +2788,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         lock (allWorlds) foreach (var w in allWorlds) w.Dispose();
         textures.Dispose();
         colourMesh.Dispose();
+        colourSolidMesh.Dispose();
         depthMesh.Dispose();
         grassProgram.Dispose();
         grassMotionProgram.Dispose();
