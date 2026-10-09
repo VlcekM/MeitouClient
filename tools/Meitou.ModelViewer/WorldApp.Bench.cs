@@ -364,6 +364,7 @@ static partial class WorldApp
                 foreach (var (name, h) in counter.Read()) config.Sizes[name] = h.Scaled(1.0 / frames);
                 Console.WriteLine($"bench     triangle sizes: counting programs {string.Join(", ", counter.Counted)}");
                 if (counter.Skipped.Count > 0) Console.WriteLine($"bench     triangle sizes: not counted (no single main in the text): {string.Join(", ", counter.Skipped)}");
+                if (PipelineStatsMeter.Supported(context)) CrossCheck(context, counter, frame, result.Meta);
             }
             finally
             {
@@ -373,6 +374,55 @@ static partial class WorldApp
         }
         else Console.WriteLine("bench     the device has no fragment shader barycentrics: no triangle size histogram");
     }
+
+    /// <summary>
+    /// The two <c>--bench-tris</c> measurements on the same frames: the shaded samples the counting variants saw per category against the fragment
+    /// invocations the pipeline statistics found for the stage that draws it (mean per frame). For a category whose variant has the early depth test
+    /// the samples are a subset of the invocations (the invocations also include samples a shader discards), so samples above invocations point at a
+    /// draw that one of the two measurements misses. Printed and kept in the metadata as <c>trisCheck</c>.
+    /// </summary>
+    static void CrossCheck(GpuContext context, TriangleCounter counter, Func<long, bool, double> frame, Dictionary<string, string> meta)
+    {
+        const int frames = 4;
+        int mode = Recording.Mode;
+        Recording.Mode = 0;
+        var previousStart = StageClock.OnStart;
+        var previousClose = StageClock.OnClose;
+        using var meter = new PipelineStatsMeter(context);
+        StageClock.OnStart = () => { previousStart?.Invoke(); meter.BeginFrame(); };
+        StageClock.OnClose = (label, sub) => { previousClose?.Invoke(label, sub); meter.OnClose(label, sub); };
+        var invocations = new Dictionary<string, double>();
+        try
+        {
+            counter.Clear();
+            for (int i = 0; i < frames; i++)
+            {
+                frame(-1, true);
+                context.Finish();
+                foreach (var (key, stat) in meter.Read())
+                {
+                    string category = key.StartsWith("shadow", StringComparison.Ordinal) || key.StartsWith("reflection", StringComparison.Ordinal) || key.StartsWith("post", StringComparison.Ordinal) ? "" :
+                        key.EndsWith("fol rocks", StringComparison.Ordinal) ? "rocks" : key.EndsWith("fol meshes", StringComparison.Ordinal) ? "foliage meshes" : key.EndsWith("fol grass", StringComparison.Ordinal) ? "grass" :
+                        key.StartsWith("terrain", StringComparison.Ordinal) ? "terrain" : key.StartsWith("objects", StringComparison.Ordinal) ? "objects" : "";
+                    if (category.Length > 0) invocations[category] = invocations.GetValueOrDefault(category) + stat.FragmentInvocations / frames;
+                }
+            }
+            var samples = counter.Read();
+            var parts = TriangleBins.Categories.Where(c => invocations.ContainsKey(c) || samples.ContainsKey(c)).Select(c =>
+                $"{c} {Big(samples.TryGetValue(c, out var h) ? h.TotalPixels / frames : 0)} / {Big(invocations.GetValueOrDefault(c))}");
+            string text = string.Join(", ", parts);
+            meta["trisCheck"] = text;
+            Console.WriteLine($"bench     check, shaded samples / fragment invocations per frame (same frames): {text}");
+        }
+        finally
+        {
+            StageClock.OnStart = previousStart;
+            StageClock.OnClose = previousClose;
+            Recording.Mode = mode;
+        }
+    }
+
+    static string Big(double v) => v >= 1e6 ? (v / 1e6).ToString("0.00", CultureInfo.InvariantCulture) + "M" : v >= 1e3 ? (v / 1e3).ToString("0.0", CultureInfo.InvariantCulture) + "k" : v.ToString("0", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// One still of each side from the start camera (no time advance: the frame clock stays where it was, the same number of frames is drawn for
