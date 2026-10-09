@@ -15,8 +15,9 @@ public readonly record struct RenderTarget(ImageView View, AttachmentLoadOp Load
     public bool IsNull => View.Handle == 0;
 }
 
-/// <summary>What <see cref="CommandList.BeginRendering"/> renders into: up to one colour and one depth attachment over an area.</summary>
-public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget Depth, int Width, int Height, int X = 0, int Y = 0);
+/// <summary>What <see cref="CommandList.BeginRendering"/> renders into: up to one colour and one depth attachment over an area, and optionally a fragment shading rate attachment
+/// (<c>ShadingRate</c>, an R8_UINT view in GENERAL layout whose texels are <c>ShadingRateTexel</c> pixels on a side; the pipelines must have been made for it, <see cref="AttachmentFormats.ShadingRate"/>).</summary>
+public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget Depth, int Width, int Height, int X = 0, int Y = 0, ImageView ShadingRate = default, int ShadingRateTexel = 0);
 
 /// <summary>
 /// A command buffer being recorded (docs/renderer-native.md 2.7). Thin: every method records what it says. It keeps only a redundancy
@@ -125,9 +126,15 @@ public sealed unsafe class CommandList
             SType = StructureType.RenderingAttachmentInfo, ImageView = d.Depth.View, ImageLayout = ImageLayout.General,
             LoadOp = d.Depth.Load, StoreOp = AttachmentStoreOp.Store, ClearValue = d.Depth.Clear,
         };
+        var rate = new RenderingFragmentShadingRateAttachmentInfoKHR
+        {
+            SType = StructureType.RenderingFragmentShadingRateAttachmentInfoKhr, ImageView = d.ShadingRate, ImageLayout = ImageLayout.General,
+            ShadingRateAttachmentTexelSize = new Extent2D((uint)d.ShadingRateTexel, (uint)d.ShadingRateTexel),
+        };
         var info = new RenderingInfo
         {
             SType = StructureType.RenderingInfo,
+            PNext = d.ShadingRate.Handle != 0 ? &rate : null,
             Flags = secondaries ? RenderingFlags.ContentsSecondaryCommandBuffersBit : 0,
             RenderArea = new Rect2D(new Offset2D(d.X, d.Y), new Extent2D((uint)d.Width, (uint)d.Height)),
             LayerCount = 1,

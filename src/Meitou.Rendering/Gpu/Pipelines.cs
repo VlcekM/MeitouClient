@@ -29,8 +29,8 @@ public sealed class VertexLayout : IEquatable<VertexLayout>
     public override string ToString() => string.Join(" ", Inputs.Select(i => $"{i.Location}:{i.Format}/{i.Stride}{(i.PerInstance ? "i" : "")}"));
 }
 
-/// <summary>The formats a pipeline renders into: one colour attachment (Undefined = none), depth (Undefined = none), samples.</summary>
-public readonly record struct AttachmentFormats(Format Colour, Format Depth, int Samples = 1);
+/// <summary>The formats a pipeline renders into: one colour attachment (Undefined = none), depth (Undefined = none), samples; <c>ShadingRate</c>: the rendering has a fragment shading rate attachment (the pipeline is made for it).</summary>
+public readonly record struct AttachmentFormats(Format Colour, Format Depth, int Samples = 1, bool ShadingRate = false);
 
 /// <summary>GL's blend: one factor pair for colour and alpha, add.</summary>
 public readonly record struct BlendState(bool Enable, BlendFactor Src = BlendFactor.One, BlendFactor Dst = BlendFactor.Zero)
@@ -148,6 +148,11 @@ public static unsafe class PipelineFactory
                 ColorAttachmentCount = colourFormat == Format.Undefined ? 0u : 1u, PColorAttachmentFormats = &colourFormat,
                 DepthAttachmentFormat = targets.Depth, StencilAttachmentFormat = stencil ? targets.Depth : Format.Undefined,
             };
+            // A rendering with a shading rate attachment (Formats.ShadingRate): the pipeline keeps its own rate (1x1) and takes the attachment's.
+            var rate = new PipelineFragmentShadingRateStateCreateInfoKHR { SType = StructureType.PipelineFragmentShadingRateStateCreateInfoKhr, FragmentSize = new Extent2D(1, 1) };
+            rate.CombinerOps[0] = FragmentShadingRateCombinerOpKHR.KeepKhr;
+            rate.CombinerOps[1] = FragmentShadingRateCombinerOpKHR.ReplaceKhr;
+            if (targets.ShadingRate) rendering.PNext = &rate;
             fixed (byte* name = entry)
             {
                 var stages = stackalloc PipelineShaderStageCreateInfo[2];
@@ -157,6 +162,7 @@ public static unsafe class PipelineFactory
                 {
                     SType = StructureType.GraphicsPipelineCreateInfo,
                     PNext = &rendering,
+                    Flags = targets.ShadingRate ? PipelineCreateFlags.CreateRenderingFragmentShadingRateAttachmentBitKhr : 0,
                     StageCount = 2, PStages = stages,
                     PVertexInputState = &vertexInput, PInputAssemblyState = &assembly, PViewportState = &viewportState,
                     PRasterizationState = &raster, PMultisampleState = &multisample, PDepthStencilState = &depthStencil,

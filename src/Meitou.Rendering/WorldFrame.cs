@@ -109,6 +109,8 @@ sealed class WorldOptions
     public bool NoFogCull;
     /// <summary><c>--no-occlusion-cull</c>: foliage hidden behind the previous frame's depth is drawn anyway (comparison; docs/formats/foliage.md "Occlusion culling").</summary>
     public bool NoOcclusionCull;
+    /// <summary><c>--fog-vrs</c>: the opaque scene passes shade 2 x 2 or 4 x 4 pixels with one fragment where the fog hides the surface (needs VK_KHR_fragment_shading_rate; docs/render-post.md "Fog shading rate").</summary>
+    public bool FogVrs;
     public float? ParticlePrewarm;
     /// <summary><c>--particle-density x</c>: the Tab panel's "Particle density x" at start (0.1 to 1).</summary>
     public float ParticleDensity = 1;
@@ -392,6 +394,7 @@ sealed class WorldOptions
                 case "--no-fog-volumes": o.NoFogVolumes = true; break;
                 case "--no-fog-cull": o.NoFogCull = true; break;
                 case "--no-occlusion-cull": o.NoOcclusionCull = true; break;
+                case "--fog-vrs": o.FogVrs = true; break;
                 case "--particle-prewarm": o.ParticlePrewarm = Math.Max(F(), 0); break;
                 case "--particle-density": o.ParticleDensity = Math.Clamp(F(), 0.1f, 1); break;
                 case "--anisotropy": o.Anisotropy = (int)F(); break;
@@ -473,7 +476,7 @@ sealed class SceneHost(GpuContext ctx)
         bool secondaries = Recording.Secondaries;
         var colour = clearColour is { } c ? targets.Colour with { Load = Vk.AttachmentLoadOp.Clear, Clear = new Vk.ClearValue(c) } : targets.Colour;
         var depth = clearDepth ? targets.Depth with { Load = Vk.AttachmentLoadOp.Clear, Clear = new Vk.ClearValue(depthStencil: new Vk.ClearDepthStencilValue(1f, 0)) } : targets.Depth;
-        list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height), secondaries);
+        list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height, 0, 0, targets.ShadingRate, targets.ShadingRateTexel), secondaries);
         this.targets = targets;
         ctx.BeginHostPass(list, targets, DrawState.Scene(targets.Formats, DrawState.Rgb));   // alpha: the characters only (the SSAO character mask)
         if (secondaries) ctx.Frame.Parallel.Begin(list, targets.Formats, stage);
@@ -782,6 +785,7 @@ static class WorldFrame
         // Always made: the weather's fog spheres go through it too, with or without a fogfeatures.dat.
         gpu.FogVolumes = new FogVolumes(context, FogFeatures.Load(install)) { Enabled = !o.NoFogVolumes, CullEnabled = !o.NoFogCull };
         gpu.Post.OcclusionCull = !o.NoOcclusionCull;
+        gpu.Post.FogVrs = o.FogVrs;
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
         if (scene.Database is { } skyDb)
@@ -1161,7 +1165,7 @@ static class WorldFrame
         // The scene starts cleared to the fog colour and depth 1 (the rendering's load ops).
         var post = gpu.Post ?? throw new InvalidOperationException("the world frame needs the post-processing chain");
         var host = gpu.Scene ??= new SceneHost(post.Gpu);
-        host.Open(5, post.SceneTargets, new Vk.ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 0), clearDepth: true);   // alpha 0: no character (the SSAO mask)
+        host.Open(5, post.WithShadingRate(post.SceneTargets), new Vk.ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 0), clearDepth: true);   // alpha 0: no character (the SSAO mask)
         float aspect = width / (float)Math.Max(height, 1);
         var view = camera.View;
         // Rotation only: with the eye's world position in the matrix, the directions rebuilt from it lose float
@@ -1182,7 +1186,7 @@ static class WorldFrame
             if (!first || nearSlice) post.BeginNearSlice(near, far); else post.BeginFarSlice(near, far);
             // A later slice starts on a cleared depth: in its place among the segments while the host stays open, else by the load op.
             if (!first && host.IsOpen) host.ClearDepth();
-            host.Open(6, post.SceneTargets, clearDepth: !first && !host.IsOpen);
+            host.Open(6, post.WithShadingRate(post.SceneTargets), clearDepth: !first && !host.IsOpen);
             first = false;
             if (nearSlice) gpu.Post?.SetNearSlice(near, far, camera.FieldOfView, aspect);
             var viewProjection = view * Jitter.Apply(camera.Projection(aspect, near, far), jitter, rw, rh);
@@ -1224,7 +1228,7 @@ static class WorldFrame
             {
                 host.Close();
                 refracting.CaptureRefraction(post.SceneColour);
-                host.Open(9, post.SceneTargets);
+                host.Open(9, post.WithShadingRate(post.SceneTargets));
             }
             host.Stage(9);
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
@@ -1242,6 +1246,7 @@ static class WorldFrame
         // The placed fog volumes over the finished scene (opaque, water, sky; the haze is in the shaders), one pass reading the depth, as the game's queue 82 does.
         gpu.Post!.RunFogVolumes(gpu.FogVolumes is { UsedData: > 0 });
         StageClock.Phase("fog volumes");
+        gpu.Post.BuildShadingRate(eye);   // the next frame's fog shading rate (fog-vrs), from this frame's depth
         // Then the particles, blended over it and tested against the near slice's depth (they are not fogged; docs/formats/fogfeatures.md).
         if (gpu.Particles is { } particleDraw && particleNear > 0)
         {

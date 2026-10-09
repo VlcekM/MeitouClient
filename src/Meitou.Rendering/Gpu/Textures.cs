@@ -5,7 +5,7 @@ using Sampler = Silk.NET.Vulkan.Sampler;
 namespace Meitou.Rendering.Gpu;
 
 [Flags]
-public enum TextureUse { Sampled = 1, Storage = 2, ColourTarget = 4, DepthTarget = 8, TransferSrc = 16, TransferDst = 32 }
+public enum TextureUse { Sampled = 1, Storage = 2, ColourTarget = 4, DepthTarget = 8, TransferSrc = 16, TransferDst = 32, ShadingRate = 64 }
 
 public enum TextureKind { Texture2D, Texture2DArray, Cube }
 
@@ -64,6 +64,7 @@ public sealed unsafe class Texture : IDisposable
         if (desc.Use.HasFlag(TextureUse.DepthTarget)) usage |= ImageUsageFlags.DepthStencilAttachmentBit;
         if (desc.Use.HasFlag(TextureUse.TransferSrc)) usage |= ImageUsageFlags.TransferSrcBit;
         if (desc.Use.HasFlag(TextureUse.TransferDst)) usage |= ImageUsageFlags.TransferDstBit;
+        if (desc.Use.HasFlag(TextureUse.ShadingRate)) usage |= ImageUsageFlags.FragmentShadingRateAttachmentBitKhr;
         int layers = desc.Kind == TextureKind.Cube ? 6 * Math.Max(desc.Layers, 1) : desc.Layers;
         var info = new ImageCreateInfo
         {

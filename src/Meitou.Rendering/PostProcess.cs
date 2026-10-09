@@ -19,7 +19,7 @@ namespace Meitou.Rendering;
 /// Native (docs/renderer-native.md 8, phase 8 stages 2 and 3): every target and texture is a native <see cref="Texture"/> ("post …"), every
 /// pass a rendering of its own in a native segment, the timings native timestamps; no GL names (stage 3).
 /// </remarks>
-public sealed unsafe class PostProcess : IDisposable
+public sealed unsafe partial class PostProcess : IDisposable
 {
     /// <summary>A native target with the GL sampler state its GL texture had (linear or nearest, clamped; the luminance's mipmapped
     /// minification).</summary>
@@ -282,13 +282,14 @@ public sealed unsafe class PostProcess : IDisposable
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[1].Accum, lowTargets[1].Depth }.OfType<Target2D>();
+        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[1].Accum, lowTargets[1].Depth, rateDistance, rateImage }.OfType<Target2D>();
 
     void Free()
     {
         Hiz?.Invalidate();
         foreach (var t in Targets()) t.Texture.Dispose();   // released after the frames in flight
-        sceneColour = sceneDepth = farDepth = motion = upscaleDepth = reactive = historyA = historyB = null;
+        sceneColour = sceneDepth = farDepth = motion = upscaleDepth = reactive = historyA = historyB = rateDistance = rateImage = null;
+        rateBuiltFrame = long.MinValue;
         aoA = aoB = ldr = ldrFxaa = luminance = adaptA = adaptB = null;
         foreach (var l in lowTargets) l.Accum = l.Depth = null;
         adaptedValid = historyValid = false;
@@ -1123,6 +1124,7 @@ public sealed unsafe class PostProcess : IDisposable
     {
         External?.Dispose();
         Free();
+        DisposeShadingRate();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         flowTexture?.Dispose();

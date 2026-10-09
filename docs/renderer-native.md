@@ -97,6 +97,7 @@ What the native path needs on top (the foundation turns them on and checks them 
 | `shaderDrawParameters` | `gl_DrawID` / `gl_BaseInstance` in multi-draw shaders (wave 3b) | Vulkan 1.1 feature |
 | `descriptorIndexing` with `runtimeDescriptorArray`, `descriptorBindingPartiallyBound`, `descriptorBindingVariableDescriptorCount`, `descriptorBindingSampledImageUpdateAfterBind`, `descriptorBindingUpdateUnusedWhilePending`, `shaderSampledImageArrayNonUniformIndexing` | bindless textures (section 2.6) | Vulkan 1.2 features |
 | `VK_EXT_debug_utils` whenever available, not only with validation | pass labels in RenderDoc and Nsight (today it is enabled only together with the validation layer: `debugExt = layer && ...`) | instance extension |
+| `VK_KHR_fragment_shading_rate` (optional: `attachmentFragmentShadingRate`, an R8_UINT image usable as the attachment) | the fog shading rate (`--fog-vrs`, [render-post.md](render-post.md)): the opaque scene passes shade 2 x 2 or 4 x 4 pixels with one fragment where the fog hides the surface. Turned on when present; `VulkanDevice.HasFragmentShadingRate` is false without it (or with `MEITOU_NO_VRS=1`) and nothing of it is built | device extension |
 
 `bufferDeviceAddress` is **not** needed: storage buffers bound as descriptors cover every use here. That keeps clear of the extension-versus-core
 issue DECISIONS 17 had to work around for Streamline.

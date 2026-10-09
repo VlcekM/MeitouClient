@@ -33,6 +33,7 @@ static partial class WorldApp
             AbToggles.Register("fog-volumes", () => fog.Enabled, v => fog.Enabled = v, "the placed fog volumes (--no-fog-volumes)");
             AbToggles.Register("fog-direction", () => fog.DirectionBound, v => fog.DirectionBound = v, "the fog cull's bound by ray direction (off: only the plain bound, which finds no distance at a 50000 far clip)");
         }
+        if (post.FogVrsSupported) AbToggles.Register("fog-vrs", () => post.FogVrs, v => post.FogVrs = v, "variable-rate shading where the fog hides the surface: the opaque scene passes shade 2x2 or 4x4 pixels with one fragment (MEITOU_FOG_VRS=a,b the opacities); B: every pixel shaded");
         if (gpu.Shadow is { } shadowPass) AbToggles.Register("shadow-pass", () => shadowPass.Enabled, v => shadowPass.Enabled = v, "the whole shadow pass (--no-shadows)");
         if (gpu.Shadow is { } spreadPass) AbToggles.Register("shadow-spread", () => spreadPass.FarBudget > 0, v => spreadPass.FarBudget = v ? ShadowSchedule.DefaultBudget : 0, "at most one far shadow cascade redrawn per frame (B: all that are due at once)");
         AbToggles.Register("shadow-coarse", () => ShadowLod.Enabled, v => ShadowLod.Enabled = v, "coarser casters in the far shadow cascades (1 to 3): objects, terrain nodes and generated foliage levels by the cascade's texel (B: as the main view's rule, cascade by cascade as before)");
@@ -211,6 +212,18 @@ static partial class WorldApp
 
         // ---- metadata ----
         var meta = result.Meta;
+        // The share of the screen's shading rate tiles at each rate (side A; serial frames after the timing, with the rate image read back).
+        if (post.FogVrsSupported && (o.Ab == "fog-vrs" || post.FogVrs))
+        {
+            Side(0);
+            post.FogVrsStats = true;
+            post.ResetFogVrsStats();
+            for (int i = 0; i < 24; i++) Frame(-1, true);
+            for (int i = 0; i < 3; i++) { context.EnsureFrame(); context.Finish(); }
+            post.FogVrsStats = false;
+            if (post.FogVrsShare is { Frames: > 0 } share) result.Meta["fogVrsShare"] = string.Create(CultureInfo.InvariantCulture, $"1x1 {share.One * 100:0.0} %, 2x2 {share.Two * 100:0.0} %, 4x4 {share.Four * 100:0.0} % of the tiles ({share.Frames} frames)");
+        }
+
         meta["view"] = o.View ?? "(custom)";
         meta["args"] = string.Join(' ', Environment.GetCommandLineArgs().Skip(1));
         meta["commit"] = GitDescribe();

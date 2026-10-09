@@ -341,6 +341,8 @@ place) would change the length of the ray's path through the volume. So it works
 the fog off (their fog is the placed volumes, the block cull above), so the Shark swamp benchmark is unchanged by it. The F11 / `--screenshot` `fog cull` line
 names it ("weather fog beyond 14850: ...").
 In Meitou shadows the cascades' far distance is clamped to D (`ShadowPass.RangeCap`, one line in `EffectiveRange`; nothing beyond D shows, so the receivers
+
+**Shading rate over the fog** (`--fog-vrs`, [render-post.md](../render-post.md), "Fog shading rate"): the post fog's own alpha is what sets it. A pass after each frame's scene evaluates `fogVolumesAccumulate` (the function above, unchanged) along the ray to the nearest surface of each 16 x 16 tile and a margin, together with the haze and the weather's fog, and the next frame's opaque scene passes shade 2 x 2 or 4 x 4 pixels with one fragment where at least 0.8 or 0.97 of the surface is hidden. **Observed** on the swamp: 28 % of the tiles coarse at the end of the orbit, GPU total -0.31 +-0.15 ms at 1920x1080 native DLAA.
 there are not needed): it moves the cascade splits, so shadows near the camera change slightly (finer texels); that makes it Meitou's `shadows` switch only
 (`--faithful shadows` keeps the game's cascades whole). Measured (**Observed**, 2026-10-08, RTX 4070 shared, 1280 x 720 with DLSS, `--world --town "The Hub"
 --radius 2 --distance 9000 --pitch 10 --yaw 300 --weather "shek desert storm" --time 12 --no-fog-volumes --faithful shadows`; fog distance 15000, so D = 14850): 20
