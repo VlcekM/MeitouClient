@@ -1098,6 +1098,7 @@ static class WorldFrame
             sliders.Add(new Slider("Grading (0 = game)", 0, 1, () => post.Options.Grade ? 1 : 0, v => post.Options.Grade = v >= 0.5f,
                 Text: v => v >= 0.5f ? $"saturation {post.Options.Saturation:0.00}, contrast {post.Options.Contrast:0.00}" : "off (as the game)"));
             sliders.Add(new Slider("Heat haze strength (1 = game)", 0, 3, () => post.Options.HeatHazeStrength, v => post.Options.HeatHazeStrength = MathF.Round(v * 20) / 20, "0.00"));
+            sliders.Add(new Slider("Light shafts strength", 0, 1, () => post.Options.ShaftStrength, v => post.Options.ShaftStrength = MathF.Round(v * 20) / 20, "0.00"));
         }
         // Anisotropic filtering (docs/render-post.md "Texture filtering"): the most any texture is sampled with; the world's textures ask 8x, so 8x and 16x look the same there.
         sliders.Add(new Slider(FilteringSlider, 0, 4, () => MathF.Log2(g.Sky.Gpu.Samplers.MaxAnisotropy), v => g.Sky.Gpu.Samplers.MaxAnisotropy = 1 << (int)MathF.Round(v), "0",
@@ -1352,6 +1353,8 @@ static class WorldFrame
         if (host.IsOpen) { host.Close(); StageClock.Lap(9); }
         gpu.Post!.RunGiResolve();
         StageClock.Phase("gi resolve");
+        // The Meitou light shafts (docs/render-shafts.md): the haze darkened where the sun is shadowed along the view, before the fog volumes blend over it.
+        if (gpu.Shadow is { Enabled: true }) { gpu.Post!.RunLightShafts(ShaftDarkening(post.Options, light, sun.Y), Math.Min(camera.ViewDistance, gpu.Sky.HazeCompleteDistance ?? gpu.Sky.HazeDistance)); StageClock.Phase("shafts"); }
         if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneDepth, rw, rh);
         // The placed fog volumes over the finished scene (opaque, water, sky; the haze is in the shaders), one pass reading the depth, as the game's queue 82 does.
         gpu.Post!.RunFogVolumes(gpu.FogVolumes is { UsedData: > 0 });
@@ -1396,6 +1399,17 @@ static class WorldFrame
             giDebug.Run(gpu.GiDebug, traced, post.SceneDepth, giTarget, post.RenderWidth, post.RenderHeight, inverse, eye, light);
         }
         StageClock.Lap(10);
+    }
+
+    /// <summary>How much of the haze in shadow the light shafts take off (docs/render-shafts.md): the strength times the sun's share of the light the
+    /// air scatters (the sun's colour against the sky's ambient, by luminance), faded out as the sun sets, when the sky's light is all there is.</summary>
+    internal static float ShaftDarkening(PostOptions o, WorldLighting light, float sunY)
+    {
+        static float Luminance(Vector3 c) => 0.2126f * c.X + 0.7152f * c.Y + 0.0722f * c.Z;
+        float sun = Luminance(light.SunColour), sky = Luminance(light.AmbientSky);
+        float share = sun / Math.Max(sun + sky, 1e-4f);
+        float t = Math.Clamp((sunY + 0.02f) / 0.07f, 0, 1);
+        return o.ShaftStrength * share * t * t * (3 - 2 * t);
     }
 
     /// <summary>

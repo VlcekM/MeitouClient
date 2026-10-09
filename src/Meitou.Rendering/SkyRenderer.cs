@@ -506,6 +506,21 @@ public sealed unsafe class SkyRenderer : IDisposable
         return distance;
     }
 
+    /// <summary>Where the haze's alpha stops growing (the light shafts' grid ends there; docs/render-shafts.md); null before the sky has a state.</summary>
+    public float? HazeCompleteDistance => state.Valid ? HazeCompleteOf(Uniforms()) : null;
+
+    /// <summary>
+    /// The distance at which <c>atmoKenshiHaze</c>'s alpha reaches 1: the ramp's end stretched by the haze strength, or sooner where a full-weight weather
+    /// fog completes (1 / density); the physical haze's complete distance; the simple sky's. At most the far clip (<c>Fog.W</c>).
+    /// </summary>
+    public static float HazeCompleteOf(in AtmosphereUniforms u)
+    {
+        if (u.Params.X < 0.5f) return u.Simple.W;
+        float d = u.Haze.X > 0.5f && u.Altitude.X < 1f ? u.Haze.Y + (u.Haze.Z - u.Haze.Y) / MathF.Max(u.Altitude.Y, 1e-3f) : u.Params.Y;
+        if (u.Fog.Z >= 0.999f && u.Haze.W > 0) d = MathF.Min(d, 1f / u.Haze.W);
+        return MathF.Min(d, u.Fog.W);
+    }
+
     /// <summary>The atmosphere uniforms for the current state (valid only while <c>state.Valid</c>).</summary>
     AtmosphereUniforms Uniforms()
     {

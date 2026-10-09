@@ -310,7 +310,7 @@ public sealed unsafe partial class PostProcess : IDisposable
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[1].Accum, lowTargets[1].Depth, rateDistance, rateImage, giAlbedo, giLow }.OfType<Target2D>();
+        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[1].Accum, lowTargets[1].Depth, rateDistance, rateImage, giAlbedo, giLow, shaftInjected, shaftLight }.OfType<Target2D>();
 
     void Free()
     {
@@ -320,7 +320,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         rateBuiltFrame = long.MinValue;
         aoA = aoB = ldr = ldrFxaa = luminance = adaptA = adaptB = null;
         foreach (var l in lowTargets) l.Accum = l.Depth = null;
-        giAlbedo = giLow = null;
+        giAlbedo = giLow = shaftInjected = shaftLight = null;
         adaptedValid = historyValid = false;
     }
 
@@ -1237,6 +1237,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         External?.Dispose();
         Free();
         DisposeShadingRate();
+        DisposeShafts();
         DisposeMerged();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();

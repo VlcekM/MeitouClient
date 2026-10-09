@@ -57,6 +57,7 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [render-shadows.md](render-shadows.md) | World view shadows: the game's CSM, Meitou shadows, the shadow pass cost |
 | [render-post.md](render-post.md) | World view post-processing: the HDR framebuffer, SSAO, fog, exposure, upscalers |
 | [render-gi.md](render-gi.md) | Ray-traced global illumination (Meitou, optional): device, acceleration structures, debug views, plan |
+| [render-shafts.md](render-shafts.md) | Light shafts (Meitou `shafts` switch): the haze and weather fog darkened where the sun is shadowed along the view; froxel grid, cost |
 | [render-lights.md](render-lights.md) | Lamps: the game's point and spot lights on the world (WorldLamps), their grid, shading, cost and parity |
 | [bench.md](bench.md) | The benchmark harness (`--view`, `--ab`, `--bench-frames`), start-up time and the load caches (`--no-load-cache`), `--tiered-jit` / `--pgo` |
 | [character-renderer.md](character-renderer.md) | The native character renderer: `--crowd` harness, per-instance bone and material buffers, instancing per mesh part, LOD and shadow choices, measurements, what is left |

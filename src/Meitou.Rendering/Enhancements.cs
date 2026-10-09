@@ -77,6 +77,9 @@ public static class Enhancements
         new("gi", "Indirect light", "flat ambient", "ray-traced probes",
             gi ?? (() => false), setGi ?? (_ => { }),
             "the game lights every surface's shadow side with one flat sky ambient per biome; Meitou traces rays from a grid of probes around the camera (needs --gi and a GPU with ray tracing), so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (docs/render-gi.md)"),
+        new("shafts", "Light shafts", "flat haze", "shadowed haze",
+            () => post.LightShafts, v => post.LightShafts = v,
+            "the game lights its haze and weather fog the same everywhere, so shadows end at the ground; Meitou darkens the air the sun does not reach (a froxel grid of shadow samples along the view), so mountains, rock stacks and buildings cast shafts through the haze and the fog (docs/render-shafts.md)"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

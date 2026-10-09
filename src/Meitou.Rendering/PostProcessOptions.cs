@@ -20,6 +20,18 @@ public sealed class PostOptions
     public bool Ssao = true, Dither = true;
     /// <summary>Meitou switch (<c>particles</c>): the weather's alpha and additive particles with big sprites are drawn at half or a quarter of the render size and composited over the scene; Faithful draws every one at full size.</summary>
     public bool LowResParticles = true;
+    /// <summary>Meitou switch (<c>shafts</c>; docs/render-shafts.md): the haze and the weather's fog darkened where the sun is shadowed along the view ray, so shadows
+    /// cast light shafts through the air; Faithful leaves the haze lit everywhere, as the game does.</summary>
+    public bool LightShafts = true;
+    /// <summary>How much of the haze in shadow goes, before the sun's share of the light (1: all of it; the sky's ambient light keeps the rest).</summary>
+    public float ShaftStrength = 0.8f;
+    /// <summary>How much the sky (which no haze covers) darkens behind shadowed air, relative to a surface at the grid's end.</summary>
+    public float ShaftSky = 0.5f;
+    /// <summary>The light shafts' grid: cells across the screen (down follows the aspect), depth slices, shadow samples per cell, where the first slice starts.</summary>
+    public int ShaftCells = 160, ShaftSlices = 64, ShaftSamples = 2;
+    public float ShaftNear = 50;
+    /// <summary><c>--shafts-debug</c>: the picture is the share of the haze the sun reaches (white lit, black shadowed).</summary>
+    public bool ShaftDebug;
     /// <summary>0: each draw's size follows its sprites' mean screen size; 1, 2 or 4: every alpha and additive draw at that divisor (for measuring).</summary>
     public int ParticleDivisor;
     /// <summary>The curve after the exposure: <see cref="ToneMapOperator.Clamp"/> is the game's (it has none, values over 1 clip).</summary>
@@ -44,9 +56,9 @@ public sealed class PostOptions
         switch (preset)
         {
             case "meitou": break;
-            case "off": o.Fxaa = o.HeatHaze = false; o.Ssao = o.Dither = o.LowResParticles = false; break;
+            case "off": o.Fxaa = o.HeatHaze = false; o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = false; break;
             case "kenshi":
-                o.Ssao = o.Dither = o.LowResParticles = false;
+                o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = false;
                 // Kenshi's chain with the shipped settings: exposure only (no curve, bloom magnitude 0, SSAO commented
                 // out), and FXAA then the heat haze on the final image.
                 break;
@@ -58,7 +70,7 @@ public sealed class PostOptions
     public void CopyFrom(PostOptions other)
     {
         Preset = other.Preset; Fxaa = other.Fxaa; HeatHaze = other.HeatHaze; Debug = other.Debug; Ssao = other.Ssao;
-        Dither = other.Dither; LowResParticles = other.LowResParticles; ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
+        Dither = other.Dither; LowResParticles = other.LowResParticles; LightShafts = other.LightShafts; ShaftStrength = other.ShaftStrength; ShaftSky = other.ShaftSky; ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
         SsaoStrength = other.SsaoStrength; SsaoCharacterStrength = other.SsaoCharacterStrength; ToneMap = other.ToneMap; Grade = other.Grade;
         Saturation = other.Saturation; Contrast = other.Contrast; HeatHazeStrength = other.HeatHazeStrength;
     }
@@ -68,6 +80,8 @@ public sealed class PostOptions
           --ssao / --no-ssao, --dither / --no-dither
           --particles-low / --no-particles-low   the weather's alpha and additive particles at a fraction of the render size (default on in Meitou; the `particles` switch)  --particle-divisor <0|1|2|4> (0, the default: by sprite size)
           --fxaa / --no-fxaa       the game's FXAA when no upscaler runs (default on)
+          --shafts / --no-shafts   light shafts: the haze darkened where the sun is shadowed along the view (default on in Meitou; the `shafts` switch)
+          --shafts-strength <0..1> (0.8)  --shafts-sky <0..1> (0.5)  --shafts-grid <cells across>,<slices>[,<samples>] (160,64,2)  --shafts-near <u> (50)  --shafts-debug (the sun's share of the haze as the picture)
           --heat-haze <x> / --no-heat-haze   the game's heat haze (default on; strength from the weather's `heat haze`); x replaces that field
           --heat-haze-strength <x>   scales the heat haze (default 1, the game's; 0 hides it)
           --heat-haze-view-distance <u>   the game's `view distance` setting for the haze's depth falloff (default 12000, the install's; amplitude is full from 1.67 x this units)
@@ -93,6 +107,20 @@ public sealed class PostOptions
             case "--particles-low": LowResParticles = true; return true;
             case "--no-particles-low": LowResParticles = false; return true;
             case "--particle-divisor": ParticleDivisor = Math.Clamp(int.Parse(next(), CultureInfo.InvariantCulture), 0, 4); return true;
+            case "--shafts": LightShafts = true; return true;
+            case "--no-shafts": LightShafts = false; return true;
+            case "--shafts-strength": ShaftStrength = Math.Clamp(F(), 0, 1); return true;
+            case "--shafts-sky": ShaftSky = Math.Clamp(F(), 0, 1); return true;
+            case "--shafts-near": ShaftNear = Math.Max(F(), 1); return true;
+            case "--shafts-debug": ShaftDebug = true; return true;
+            case "--shafts-grid":
+                {
+                    var parts = next().Split(',');
+                    ShaftCells = int.Parse(parts[0], CultureInfo.InvariantCulture);
+                    if (parts.Length > 1) ShaftSlices = int.Parse(parts[1], CultureInfo.InvariantCulture);
+                    if (parts.Length > 2) ShaftSamples = int.Parse(parts[2], CultureInfo.InvariantCulture);
+                    return true;
+                }
             case "--fxaa": Fxaa = true; return true;
             case "--no-fxaa": Fxaa = false; return true;
             case "--heat-haze": HeatHaze = true; HeatHazeOverride = Math.Max(F(), 0); return true;
@@ -124,7 +152,7 @@ public sealed class PostOptions
 
     public string Describe() =>
         $"{Preset}: fxaa {(Fxaa && !Upscale.Temporal ? "on" : "off")}, heat haze {(HeatHaze ? (HeatHazeOverride is { } h ? $"x{h:0.##}" : "weather") + (HeatHazeStrength != 1 ? $" strength {HeatHazeStrength:0.##}" : "") : "off")}, " +
-        $"ssao {(Ssao ? "on" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMap.ToString().ToLowerInvariant()}, " +
+        $"ssao {(Ssao ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMap.ToString().ToLowerInvariant()}, " +
         $"grade {(Grade ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off")}, " +
         $"upscaler {Upscale.Describe()}";
 }
