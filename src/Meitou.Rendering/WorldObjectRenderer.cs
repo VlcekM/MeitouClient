@@ -52,6 +52,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         public bool Manual;
         public Matrix4x4[] Data = new Matrix4x4[16];
         public int Count, Offset;
+        /// <summary>The nearest instance's distance (to its bounds' edge) this frame: batches are drawn nearest first.</summary>
+        public float Near;
 
         public void Add(in Matrix4x4 m)
         {
@@ -150,6 +152,11 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
     /// <summary>Ogre's camera LOD bias as a distance factor: the LOD value is multiplied by it, so above 1 coarser levels come sooner, below 1 later.</summary>
     public float LodBias { get; set; } = 1;
+
+
+    /// <summary>Colour batches are drawn nearest first (Meitou, with the reach switch: early depth rejection of the shading of what a nearer batch covers); off: in the order they were first met.</summary>
+    public bool SortNearestFirst { get; set; }
+
 
     /// <summary>Distant towns and buildings' distant meshes are drawn up to this distance (the game: its <c>distant town range</c> in zones).</summary>
     public float DistantRange { get; set; } = ObjectRanges.MaxDistantTownRangeZones * WorldLayout.ZoneSize;
@@ -555,13 +562,15 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 if (value >= DistantReach || !SphereVisible(frustum, t.Centre, t.Radius) || FogCull?.Hidden(t.Centre, t.Radius, FogVolumes.CullKind.Objects) == true) continue;
                 t.Mesh.LastUsed = now;
                 var batch = BatchFor(gpu, distantMaterial, 0, town: true);
-                if (batch.Count == 0) active.Add(batch);
+                if (batch.Count == 0) { active.Add(batch); batch.Near = 0; }
                 batch.Add(Matrix4x4.CreateTranslation(t.Town.Position));
                 DrawnInstances++;
             }
 
         double tCull = cpu.Elapsed.TotalMilliseconds;
 
+        // Nearest first: what a nearer batch covers fails the early depth test of the farther ones (the colour pass only; the depth passes have no shading to save).
+        if (SortNearestFirst && !depthPass) active.Sort(static (a, b) => a.Near.CompareTo(b.Near));
         // 2. The instances: each batch's matrices contiguous, in this frame's constants (one copy; the draws reach a batch by firstInstance).
         int total = 0;
         foreach (var b in active) { b.Offset = total; total += b.Count; }
@@ -688,19 +697,19 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         var m = inst.Transform;
         if (!blend.IsBlending)
         {
-            Add(gpu, inst.Materials!, blend.Lower, m, 0, weight >= 0.999f ? 2 : weight);
+            Add(gpu, inst.Materials!, blend.Lower, m, 0, weight >= 0.999f ? 2 : weight, value);
             return;
         }
-        Add(gpu, inst.Materials!, blend.Upper, m, 0, blend.T * weight);
-        Add(gpu, inst.Materials!, blend.Lower, m, blend.T * weight, weight);
+        Add(gpu, inst.Materials!, blend.Upper, m, 0, blend.T * weight, value);
+        Add(gpu, inst.Materials!, blend.Lower, m, blend.T * weight, weight, value);
     }
 
-    void Add(GpuObjectMesh gpu, ObjectMaterialSet materials, int level, Matrix4x4 m, float lo, float hi)
+    void Add(GpuObjectMesh gpu, ObjectMaterialSet materials, int level, Matrix4x4 m, float lo, float hi, float near)
     {
         var manual = gpu.Manual[level];
         var batch = BatchFor(manual ?? gpu, materials, manual is null ? level : 0, town: false);
         batch.Manual = manual is not null;
-        if (batch.Count == 0) active.Add(batch);
+        if (batch.Count == 0) { active.Add(batch); batch.Near = near; } else if (near < batch.Near) batch.Near = near;
         m.M14 = lo;
         m.M24 = hi;
         batch.Add(m);

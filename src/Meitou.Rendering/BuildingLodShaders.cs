@@ -62,6 +62,34 @@ static class BuildingLodShaders
                     if (dv < vRange.x || dv >= vRange.y) discard;
                 }
             """);
+        // The viewer's plain lighting is overwritten by the game sky's lighting: compute it only where it is used (the same values).
+        f = Literal(f, "if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, glossLit, vWorld);\n", "");
+        f = Literal(f, """
+            vec3 l = normalize(uLightDir);
+            vec3 v = normalize(uEye - vWorld);
+            float diff = max(dot(n, l), 0.0);
+            float hemi = 0.5 + 0.5 * n.y;
+            vec3 ambient = mix(vec3(0.22, 0.20, 0.18), vec3(0.42, 0.45, 0.50), hemi);
+            vec3 h = normalize(l + v);
+            float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * uSpecular * 0.5;
+            vec3 sunLight = vec3(1.0, 0.97, 0.92);
+            vec3 colour = albedo * (ambient + diff * sunLight) + spec * diff * sunLight;
+            """, """
+            vec3 v = normalize(uEye - vWorld);
+            vec3 colour;
+            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, glossLit, vWorld);
+            else
+            {
+                vec3 l = normalize(uLightDir);
+                float diff = max(dot(n, l), 0.0);
+                float hemi = 0.5 + 0.5 * n.y;
+                vec3 ambient = mix(vec3(0.22, 0.20, 0.18), vec3(0.42, 0.45, 0.50), hemi);
+                vec3 h = normalize(l + v);
+                float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * uSpecular * 0.5;
+                vec3 sunLight = vec3(1.0, 0.97, 0.92);
+                colour = albedo * (ambient + diff * sunLight) + spec * diff * sunLight;
+            }
+            """);
         return f;
     }
 
@@ -110,6 +138,25 @@ static class BuildingLodShaders
     public static string FragmentNative() => NativeShaders.Port(Fragment(), NativeShaders.Map(Own), PushMembers);
     /// <summary><see cref="ShadowShaders.MeshDepthFragment"/> for <see cref="VertexNative"/>.</summary>
     public static string DepthNative() => NativeShaders.Port(ShadowShaders.MeshDepthFragment, NativeShaders.Map(Own), PushMembers);
+
+    /// <summary>The first <paramref name="from"/> in <paramref name="source"/> (text, with the lines' indentation made equal) replaced by <paramref name="to"/>.</summary>
+    static string Literal(string source, string from, string to)
+    {
+        static string Flat(string s) => string.Join("\n", s.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()));
+        string[] sourceLines = source.Replace("\r\n", "\n").Split('\n'), fromLines = Flat(from).Split('\n');
+        if (fromLines[^1].Length == 0) fromLines = fromLines[..^1];
+        for (int i = 0; i + fromLines.Length <= sourceLines.Length; i++)
+        {
+            bool match = true;
+            for (int k = 0; k < fromLines.Length && match; k++) match = sourceLines[i + k].Trim() == fromLines[k];
+            if (!match) continue;
+            var result = new List<string>(sourceLines[..i]);
+            result.AddRange(to.Replace("\r\n", "\n").TrimEnd('\n').Split('\n'));
+            result.AddRange(sourceLines[(i + fromLines.Length)..]);
+            return string.Join("\n", result);
+        }
+        throw new InvalidOperationException($"BuildingLodShaders: '{fromLines[0]}...' not found in the shared mesh shader; update the patch.");
+    }
 
     static string Replace(string source, string pattern, string replacement)
     {
