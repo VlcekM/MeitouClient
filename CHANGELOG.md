@@ -3,6 +3,21 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.4.0
+
+- Meitou water: ocean waves, sets of breakers that roll in as whitewater and wear away into lace, refraction, depth tint, caustics and glitter
+- Rivers flow along their channels, with no waves or surf on them
+- Swamp fog: the game's fog volumes, including the twisters' dust balls, now appear in the world
+- Dense fog hides what is behind it, so foggy weather costs less to draw
+- Ambient occlusion fades in haze and fog
+- No white band at the horizon in overcast weather, such as the Vain's red rain
+- Faster: plants and trees get simpler models in the distance and are skipped when something blocks them, far shadows are cached, and weather particles are drawn at lower resolution
+- Second and later starts load the swamp's plants in about 1 s instead of 25 s
+- Tab panel: slider for how far the simpler plant models start
+- F11 shows frame time (mean and max) and triangles per frame
+- Fewer stutters when tree billboards are generated
+- --log-spikes logs slow frames, --tiered-jit and --pgo test .NET JIT settings, --bench runs benchmark views
+
 ## v0.3.0
 
 - Weather: the game's weather schedule per region and season drives the sky, clouds, fog and heat haze; Tab panel button rerolls the weather
