@@ -501,6 +501,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>The fog cull (set by the world frame around the main camera's draw only): instances wholly hidden by the fog the eye is in are skipped.</summary>
     internal FogVolumes? FogCull { get; set; }
 
+    /// <summary>The water reflection's cull (set around the reflection pass's own draw): an instance (bounding sphere centre and radius) it answers false for is skipped.</summary>
+    internal Func<Vector3, float, bool>? MirrorCull { get; set; }
+
     /// <summary>Draws the objects seen from <paramref name="eye"/> through <paramref name="frustum"/>.</summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain)
     {
@@ -533,7 +536,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 if (inst.Gpu is not { } gpu) continue;
                 if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); continue; }
                 float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
-                if (value >= DistantReach || !SphereVisible(frustum, inst.Centre, inst.Radius) || FogCull?.Hidden(inst.Centre, inst.Radius, FogVolumes.CullKind.Objects) == true) continue;
+                if (value >= DistantReach || !SphereVisible(frustum, inst.Centre, inst.Radius) || MirrorCull?.Invoke(inst.Centre, inst.Radius) == false || FogCull?.Hidden(inst.Centre, inst.Radius, FogVolumes.CullKind.Objects) == true) continue;
                 float w = ObjectRanges.RiseWeight(value, real - realBand, realBand) * ObjectRanges.EdgeWeight(value, DistantReach, distantBand);
                 if (w <= 0) continue;
                 inst.Mesh.LastUsed = now;
@@ -552,7 +555,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             {
                 if (t.Mesh.Gpu is not { } gpu) continue;
                 float value = Vector3.Distance(t.Centre, eye) - t.Radius;
-                if (value >= DistantReach || !SphereVisible(frustum, t.Centre, t.Radius) || FogCull?.Hidden(t.Centre, t.Radius, FogVolumes.CullKind.Objects) == true) continue;
+                if (value >= DistantReach || !SphereVisible(frustum, t.Centre, t.Radius) || MirrorCull?.Invoke(t.Centre, t.Radius) == false || FogCull?.Hidden(t.Centre, t.Radius, FogVolumes.CullKind.Objects) == true) continue;
                 t.Mesh.LastUsed = now;
                 var batch = BatchFor(gpu, distantMaterial, 0, town: true);
                 if (batch.Count == 0) active.Add(batch);
@@ -619,7 +622,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); return; }
         float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
         float limit = Math.Min(range, inst.Limit);
-        if (value >= limit || !SphereVisible(frustum, inst.Centre, inst.Radius) || FogCull?.Hidden(inst.Centre, inst.Radius, FogVolumes.CullKind.Objects) == true)
+        if (value >= limit || !SphereVisible(frustum, inst.Centre, inst.Radius) || MirrorCull?.Invoke(inst.Centre, inst.Radius) == false || FogCull?.Hidden(inst.Centre, inst.Radius, FogVolumes.CullKind.Objects) == true)
         {
             if (value >= inst.Limit && value < range) PartLimited++;   // stopped by the game's part distance, not the object distance (benchmark)
             return;

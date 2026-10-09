@@ -42,6 +42,12 @@ static partial class WorldApp
         AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
         AbToggles.Register("water-draw", () => render.Water, v => render.Water = v, "the water pass (--no-water)");
         AbToggles.Register("reflections", () => render.Reflections, v => render.Reflections = v, "the water reflection pass (--no-reflections)");
+        if (gpu.Reflection is { } rp)
+        {
+            AbToggles.Register("refl-cull", () => rp.CullToWater, v => rp.CullToWater = rp.CropToWater = v, "the cheaper reflection: only what the water shows (crop, footprint, size), objects to 2000 and foliage to 2200 units (B: 3000)");
+            AbToggles.Register("refl-foliage", () => rp.Level >= 4, v => rp.Level = v ? 4 : 3, "foliage in the water reflection (--water-reflection 4 against 3)");
+            AbToggles.Register("refl-objects", () => rp.Level >= 3, v => rp.Level = v ? 4 : 2, "objects and foliage in the water reflection (--water-reflection 4 against 2)");
+        }
         AbToggles.Toggle? toggle = null;
         if (ab && !AbToggles.TryGet(o.Ab!, out toggle))
         {
