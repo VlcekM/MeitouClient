@@ -43,8 +43,10 @@ static class TerrainShaders
         }
         float terrainHeight(vec2 p)
         {
-            float c = gridHeight(uHeightCoarse, p, uCoarseRect, uCoarseCells);
             float w = fineWeight(p);
+            // Inside the fine window (weight 1) the coarse grid is not read: mix(c, f, 1) is f, and the window covers nearly all the picture's terrain.
+            if (w >= 1.0) return gridHeight(uHeightFine, p, uFineRect, uFineCells);
+            float c = gridHeight(uHeightCoarse, p, uCoarseRect, uCoarseCells);
             return w <= 0.0 ? c : mix(c, gridHeight(uHeightFine, p, uFineRect, uFineCells), w);
         }
         float terrainSpacing(vec2 p)
@@ -387,13 +389,18 @@ static class TerrainShaders
 
             vec3 l = normalize(uLightDir);
             float diff = max(dot(shadingNormal, l), 0.0);
-            vec3 ambient = mix(uAmbientGround, uAmbientSky, 0.5 + 0.5 * shadingNormal.y);
             vec3 v = normalize(uEye - vWorld);
             float gloss = clamp(albedo.a, 0.0, 1.0);
-            float spec = pow(max(dot(shadingNormal, normalize(l + v)), 0.0), 8.0 + 40.0 * gloss) * gloss * 0.25;
-            vec3 colourOut = albedo.rgb * (ambient + diff * uSunColour) + spec * diff * uSunColour;
+            vec3 colourOut;
             // Game sky: the game's deferred lighting (docs/formats/lighting.md); terrainfp4.hlsl writes the biome albedo's alpha as the gloss.
             if (uAtmoParams.x > 0.5) colourOut = kenshiLight(albedo.rgb, shadingNormal, v, gloss, vWorld);
+            else
+            {
+                // The viewer's plain lighting (the simple sky); the game sky above does not need it.
+                vec3 ambient = mix(uAmbientGround, uAmbientSky, 0.5 + 0.5 * shadingNormal.y);
+                float spec = pow(max(dot(shadingNormal, normalize(l + v)), 0.0), 8.0 + 40.0 * gloss) * gloss * 0.25;
+                colourOut = albedo.rgb * (ambient + diff * uSunColour) + spec * diff * uSunColour;
+            }
             if (uDebug == 3) colourOut = vec3(0.5) * (0.3 + 0.7 * diff);
             colourOut = atmoApply(colourOut, uEye, vWorld);   // aerial perspective (AtmosphereShaders)
             if (uGrid && max(abs(vWorld.x), abs(vWorld.z)) <= 500.0)

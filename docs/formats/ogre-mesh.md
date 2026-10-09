@@ -111,6 +111,12 @@ poses of one mesh touch 5,772 (`Stick_person.mesh`) to 26,703 (`bone_male.mesh`)
 
 1,389 base-game meshes have LOD data.
 
+**Observed** (2026-10-09, swamp view at 1920x1080, RTX 4070, `--ab`): drawing every object at its coarsest level instead of by distance
+(the LOD distance multiplied by 100 in the main view) takes the main view's and the reflection's object triangles from 1.42 M to
+1.09 M and saves only 0.12 +-0.07 ms of the objects stage; multiplying the distance by 2 saves 0.08 +-0.11 ms. The rest of the
+triangles are in meshes without reduced levels or in instances nearer than their first LOD distance (**Unknown** which; the split was not measured; details in
+[../render-objects.md](../render-objects.md), "What the objects cost on the swamp view").
+
 ## Other base-game facts (Verified)
 
 - 3,748 submeshes, 22.7 M vertices, 23.0 M indices; 167 skinned (have a skeleton link).

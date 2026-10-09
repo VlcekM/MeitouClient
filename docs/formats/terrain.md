@@ -286,6 +286,12 @@ Terrain triangles (deterministic) against the old fixed rule (ranges 8 node size
   0.6 to 1.8 ms between runs. Best of 8 interleaved runs (contention only adds): Hub 0.97 → 0.75 ms, high view 0.82 → 0.57 ms
   (layer skip and LOD together). A run with the whole material off (`--material-distance 1`) showed the terrain about half
   shading and half geometry at the Hub before these changes.
+- **Resolution-aware error (Observed, 2026-10-09, native DLAA 1920 x 1080, `--ab`, not kept).** The metric counts rendered pixels, so the
+  same `T` is a smaller deviation on screen at render scale 1 than at 0.67. With `T` x 1.5 at native (24 px, as 16 rendered pixels are
+  at DLSS Quality) the terrain stage saves 0.06 +-0.07 ms on the swamp view and 0.08 +-0.01 ms on the Hub, but the Hub picture changes
+  on ridgelines and slopes (22,552 pixels by 12/255 or more, maximum 193). Doubling `T` at the swamp view saves 0.12 +-0.01 ms (about a
+  quarter of the 0.40 M triangles) and changes 111 pixels by 12 or more; the terrain stage is only 0.15 to 0.2 ms geometry at 1080p
+  native, the rest being shading ([../render-terrain.md](../render-terrain.md), "What the terrain costs at native 1080p").
 
 ## Water
 

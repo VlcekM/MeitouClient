@@ -1598,6 +1598,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     (a.RockStamp, a.RockPlainIndex, a.RockMirroredIndex) = (stamp, -1, -1);
                     // The levels this work list uses are fixed here: every view of the frame that shares it draws the batches it numbers.
                     a.WorkLod = wantLods && a.Lod is { } lod && a.Main is { } lodMain && lodMain.Parts.Count == lod.Parts.Length ? lod : null;
+                    if (a.WorkLod is { } work) work.Capped = !LodFar;
                 }
                 // The group's first placement's batch first (the order its runs are emitted in).
                 for (int pass = 0; pass < 2; pass++)

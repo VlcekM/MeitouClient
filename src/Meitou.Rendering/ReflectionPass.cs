@@ -71,17 +71,80 @@ public sealed class ReflectionPass : IDisposable
     /// <summary>Furthest distance reflected: mountains beyond it are not mirrored (the sea there is mostly haze anyway).</summary>
     public float MaxDistance { get; set; } = 150000;
     /// <summary>Objects (buildings, features) further than this from the eye are left out of the reflection.</summary>
-    public float ObjectDistance { get; set; } = 3000;
+    public float ObjectDistance { get; set; } = 2000;
     /// <summary>Beyond this distance the mirrored terrain takes the cheap ground colour instead of the biome textures.</summary>
     public float MaterialDistance { get; set; } = 6000;
     /// <summary>Foliage (trees, bushes, rocks; no grass) further than this is left out of the reflection (the game's layers reach 4 times as far in the picture).</summary>
-    public float FoliageDistance { get; set; } = 3000;
+    public float FoliageDistance { get; set; } = 2200;
     /// <summary>Multiplies the distance the objects' LOD level is chosen by (above 1: coarser levels sooner; the half-resolution, rippled image cannot show the detail).</summary>
     public float ObjectLodBias { get; set; } = 3;
     /// <summary>Frames a finished reflection may be reused when the camera has hardly moved (0 = draw every frame).</summary>
     public int MaxAge { get; set; } = 3;
     /// <summary>Multiplies the terrain LOD's pixel scale for the mirrored terrain (its target is half the picture's size, so 0.5 measures the error in its own pixels; below: coarser).</summary>
     public float TerrainLodScale { get; set; } = 0.5f;
+
+    /// <summary>
+    /// Meitou: the reflection leaves out what cannot be seen through any water (<see cref="MayShow"/>), what is under <see cref="MinTexels"/>,
+    /// and keeps the shorter <see cref="ObjectDistance"/> and <see cref="FoliageDistance"/>; with <see cref="CropToWater"/> it is the whole of
+    /// the cheaper reflection (<c>--ab refl-cull</c> flips it). Off: the reach the pass had before (3000 units).
+    /// </summary>
+    public bool CullToWater { get; set; } = true;
+    /// <summary>The object range in use: <see cref="ObjectDistance"/>, or with <see cref="CullToWater"/> off at least the old 3000.</summary>
+    public float ObjectReach => CullToWater ? ObjectDistance : Math.Max(ObjectDistance, 3000);
+    /// <summary>The foliage range in use, as <see cref="ObjectReach"/>.</summary>
+    public float FoliageReach => CullToWater ? FoliageDistance : Math.Max(FoliageDistance, 3000);
+    /// <summary>Meitou: draw only the part of the reflection the water on the screen looks up (<see cref="WaterRect"/>), and nothing with no water in view.</summary>
+    public bool CropToWater { get; set; } = true;
+    /// <summary>Extra ground (units) around a mirrored thing's footprint tested for water: the waves' ripples shift the lookup, and the terrain grid is coarse.</summary>
+    public float WaterPad { get; set; } = 60;
+    /// <summary>The distance from the eye beyond which the weather's fog hides every surface this frame (<see cref="FogVolumes.AtmosphereDistance"/>), set by the frame loop; null: none.</summary>
+    public float? HideDistance { get; set; }
+    /// <summary>Things whose bounding sphere is under this many texels of radius in the reflection are left out of it.</summary>
+    public float MinTexels { get; set; } = 1.5f;
+    HeightSnapshot heights;
+    Vector3 realEye;
+    float texelScale;
+
+    /// <summary>
+    /// Whether a thing (a bounding sphere in world space, above the water) can show in the water's reflection: the ray from the eye to
+    /// its mirror image crosses the water plane at ground that has to lie below the water level, else the picture there is land and the
+    /// mirror image is never looked at. Conservative: the footprint of the sphere's image on the plane (a stretched disc, padded by
+    /// <see cref="WaterPad"/>) is sampled, and one sample on or near water keeps the thing. Always true when culling is off.
+    /// </summary>
+    public bool MayShow(Vector3 centre, float radius)
+    {
+        if (!CullToWater) return true;
+        float plane = WorldWater.Height;
+        float he = realEye.Y - plane, hc = centre.Y - plane;
+        if (hc + radius <= -WaterPad) return false;   // wholly below the water: the oblique clip removes it
+        // Too small to leave a mark: under MinTexels texels of radius in the half-resolution image (seen from the mirrored eye).
+        float ddx = centre.X - realEye.X, ddz = centre.Z - realEye.Z, up = he + hc;
+        if (radius * radius * texelScale * texelScale < MinTexels * MinTexels * (ddx * ddx + ddz * ddz + up * up)) return false;
+        // Image points of the sphere's points P (height hp above the water) land at eye + t (P - eye) with t = he / (he + hp), so the
+        // footprint lies in discs of radius t * r along the segment between the highest and the lowest point's t.
+        float tMin = he / (he + hc + radius), tMax = he / (he + Math.Max(hc - radius, 0));
+        float ex = realEye.X, ez = realEye.Z, dx = centre.X - ex, dz = centre.Z - ez;
+        // Water further from the eye than the weather fog's distance is the fog colour whatever it reflects (WaterRenderer ends in atmoApply).
+        if (HideDistance is { } hide)
+        {
+            float horizontal = MathF.Sqrt(dx * dx + dz * dz), near = MathF.Max(tMin * (horizontal - radius) - WaterPad, 0);
+            if (near * near + he * he >= hide * hide) return false;
+        }
+        float level = plane + WaterRise;   // a metre or two of surf and shore slope
+        int steps = tMax - tMin > 0.02f ? 3 : 1;
+        for (int s = 0; s < steps; s++)
+        {
+            float t = steps == 1 ? 0.5f * (tMin + tMax) : tMin + (tMax - tMin) * s / (steps - 1);
+            float qx = ex + t * dx, qz = ez + t * dz, rr = t * radius + WaterPad;
+            if (heights.HeightAt(qx, qz) < level) return true;
+            // A grid over the footprint's square, a point every 100 units or so (at most 9 by 9), so a pond inside a big footprint is found.
+            int n = Math.Clamp((int)MathF.Ceiling(rr / 100), 1, 4);
+            for (int i = -n; i <= n; i++)
+                for (int j = -n; j <= n; j++)
+                    if (heights.HeightAt(qx + rr * i / n, qz + rr * j / n) < level) return true;
+        }
+        return false;
+    }
 
     /// <summary>Whether this frame has a reflection to sample (not when the eye is under the water).</summary>
     public bool Valid { get; private set; }
@@ -175,6 +238,12 @@ public sealed class ReflectionPass : IDisposable
         lastEye = eye;
         lastView = camera.View;
         lastFov = camera.FieldOfView;
+        heights = terrain.Snapshot();
+        realEye = eye;
+        // Where the water is on the screen, as a rectangle of the reflection's clip space: what is outside it is never looked up.
+        var rect = new Vector4(-1, -1, 1, 1);
+        if (CropToWater && WaterRect(camera, (float)fullWidth / fullHeight) is { } wet) rect = wet;
+        else if (CropToWater) { Valid = hasImage = false; return; }   // no water in view: nothing to reflect (the water pass is not drawn either, or shows the sky)
 
         Resize(Math.Max((int)(fullWidth * Scale), 64), Math.Max((int)(fullHeight * Scale), 64));
         timer.Begin();
@@ -219,6 +288,7 @@ public sealed class ReflectionPass : IDisposable
         options.MaterialDistance = Math.Min(render.MaterialDistance, MaterialDistance);
 
         terrain.BeginFrame();
+        texelScale = 0.5f * height / (MathF.Tan(camera.FieldOfView / 2) * Margin);   // texels of the half-resolution image per unit of (size / distance)
         bool first = true;
         Matrix4x4 mapped = default;
         foreach (var (near, far0) in camera.Slices())
@@ -230,7 +300,7 @@ public sealed class ReflectionPass : IDisposable
             var projection = Oblique(Perspective(camera.FieldOfView, aspect, near, far), view, clip);
             var viewProjection = view * projection;
             mapped = view * Perspective(camera.FieldOfView, aspect, near, far);
-            var frustum = Frustum(viewProjection);
+            var frustum = Frustum(viewProjection, rect);
             terrain.Draw(viewProjection, mirroredEye, frustum, options, light, plane - 1, secondary: true);
             Lap(1);
             if (near <= camera.Near && render.Objects) drawObjects?.Invoke(viewProjection, mirroredEye, frustum);
@@ -329,14 +399,50 @@ public sealed class ReflectionPass : IDisposable
     }
 
     /// <summary>The six planes (normals inwards) of an OpenGL-depth matrix; <see cref="WorldCamera.FrustumPlanes"/> assumes depth 0..1.</summary>
-    static Vector4[] Frustum(Matrix4x4 m)
+    static Vector4[] Frustum(Matrix4x4 m, Vector4 rect)
     {
         var c1 = new Vector4(m.M11, m.M21, m.M31, m.M41);
         var c2 = new Vector4(m.M12, m.M22, m.M32, m.M42);
         var c3 = new Vector4(m.M13, m.M23, m.M33, m.M43);
         var c4 = new Vector4(m.M14, m.M24, m.M34, m.M44);
-        return [c4 + c1, c4 - c1, c4 + c2, c4 - c2, c4 + c3, c4 - c3];
+        // The sides are those of the rectangle (x0, y0, x1, y1 in clip space) of the picture: x / w >= x0 is x - x0 w >= 0.
+        return [c1 - rect.X * c4, rect.Z * c4 - c1, c2 - rect.Y * c4, rect.W * c4 - c2, c4 + c3, c4 - c3];
     }
+
+    /// <summary>
+    /// The rectangle (x0, y0, x1, y1) of the reflection's clip space that the water on the screen looks up, or null with no water in view:
+    /// a grid of screen points (every 20 pixels or so) whose ray down to the water plane meets ground below the water, each projected
+    /// with the reflection's matrix (the water does the same with its own position); padded by the ripples' largest shift of the lookup
+    /// (0.04 of the texture, 0.08 in clip space) and a cell.
+    /// </summary>
+    Vector4? WaterRect(WorldCamera camera, float aspect)
+    {
+        float plane = WorldWater.Height, he = realEye.Y - plane;
+        if (!Matrix4x4.Invert(camera.View, out var inverse)) return new Vector4(-1, -1, 1, 1);
+        var view = new Matrix4x4(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 2 * plane, 0, 1) * camera.View;
+        var mapped = view * Perspective(camera.FieldOfView, aspect, 1, 1000);
+        float tan = MathF.Tan(camera.FieldOfView / 2), level = plane + WaterRise;
+        int nx = Math.Clamp((int)(aspect * 54), 8, 160), ny = 54;
+        float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
+        for (int j = 0; j < ny; j++)
+            for (int i = 0; i < nx; i++)
+            {
+                var dir = Vector3.TransformNormal(new Vector3(((i + 0.5f) / nx * 2 - 1) * tan * aspect, ((j + 0.5f) / ny * 2 - 1) * tan, -1), inverse);
+                if (dir.Y > -1e-4f) continue;
+                var p = realEye + dir * (he / -dir.Y);
+                if (dir.Length() * (he / -dir.Y) > MaxDistance || heights.HeightAt(p.X, p.Z) >= level) continue;
+                var c = Vector4.Transform(new Vector4(p, 1), mapped);
+                if (c.W <= 1e-3f) continue;
+                float x = c.X / c.W, y = c.Y / c.W;
+                (x0, y0, x1, y1) = (MathF.Min(x0, x), MathF.Min(y0, y), MathF.Max(x1, x), MathF.Max(y1, y));
+            }
+        if (x0 > x1) return null;
+        float padX = 0.08f + 2f / nx + 0.02f, padY = 0.08f + 2f / ny + 0.02f;
+        return new Vector4(Math.Max(x0 - padX, -1), Math.Max(y0 - padY, -1), Math.Min(x1 + padX, 1), Math.Min(y1 + padY, 1));
+    }
+
+    /// <summary>How far above the water level ground still holds water: the breakers' run-up on the beach, and the waves (units).</summary>
+    public float WaterRise { get; set; } = 25;
 
     public void Dispose()
     {

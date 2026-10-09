@@ -37,11 +37,26 @@ static partial class WorldApp
         if (gpu.Foliage is { } grassPass)
         {
             AbToggles.Register("grass", () => grassPass.DrawGrass, v => grassPass.DrawGrass = v, "the grass blades (MEITOU_FOLIAGE_DEBUG=nograss)");
+            AbToggles.Register("lod-far", () => grassPass.LodFar, v => grassPass.LodFar = v, "generated rock levels: the pixel tolerance growing with the distance (MEITOU_LOD_FAR, 0 off; needs lod on)");
             AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v, "foliage meshes and impostors, not the TERRAIN-mode rocks (MEITOU_FOLIAGE_DEBUG=nomeshes)");
         }
         AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
+        {
+            // Cost probes for the terrain (side B: error doubled, about a quarter of the triangles; ground colour only, no textured material).
+            float err = render.TerrainPixelError, farErr = render.TerrainFarPixelError, materialDistance = render.MaterialDistance;
+            AbToggles.Register("terrain-error", () => render.TerrainPixelError <= err * 1.01f, v => (render.TerrainPixelError, render.TerrainFarPixelError) = v ? (err, farErr) : (err * 2, farErr * 2), "terrain screen-space error doubled on side B (probe)");
+            AbToggles.Register("terrain-material", () => render.MaterialDistance >= materialDistance, v => render.MaterialDistance = v ? materialDistance : 1, "terrain textured material (side B: ground colour only; probe)");
+        }
+        if (gpu.Objects is { } sortObjects) AbToggles.Register("object-sort", () => sortObjects.SortNearestFirst, v => sortObjects.SortNearestFirst = v, "objects' colour batches drawn nearest first (Meitou reach)");
+        AbToggles.Register("normal-maps", () => render.NormalMaps, v => render.NormalMaps = v, "normal maps on terrain and objects (probe)");
         AbToggles.Register("water-draw", () => render.Water, v => render.Water = v, "the water pass (--no-water)");
         AbToggles.Register("reflections", () => render.Reflections, v => render.Reflections = v, "the water reflection pass (--no-reflections)");
+        if (gpu.Reflection is { } rp)
+        {
+            AbToggles.Register("refl-cull", () => rp.CullToWater, v => rp.CullToWater = rp.CropToWater = v, "the cheaper reflection: only what the water shows (crop, footprint, size), objects to 2000 and foliage to 2200 units (B: 3000)");
+            AbToggles.Register("refl-foliage", () => rp.Level >= 4, v => rp.Level = v ? 4 : 3, "foliage in the water reflection (--water-reflection 4 against 3)");
+            AbToggles.Register("refl-objects", () => rp.Level >= 3, v => rp.Level = v ? 4 : 2, "objects and foliage in the water reflection (--water-reflection 4 against 2)");
+        }
         AbToggles.Toggle? toggle = null;
         if (ab && !AbToggles.TryGet(o.Ab!, out toggle))
         {

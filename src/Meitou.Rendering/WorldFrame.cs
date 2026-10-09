@@ -774,7 +774,7 @@ static class WorldFrame
         {
             // Landmarks (huge objects, drawn to their own distance) are kept apart from the zones only when the viewer starts with them (Meitou reach, distance above 0).
             gpu.Objects = new WorldObjectRenderer(context, assets, scene.Objects, landmarks: o.LandmarkDistanceFor(o.MeitouReach) > 0)
-            { ObjectDistance = o.ObjectDistanceFor(o.MeitouReach), LandmarkDistance = o.LandmarkDistanceFor(o.MeitouReach), DistantRange = o.DistantZones * WorldLayout.ZoneSize, NoDistant = o.NoDistant, LoadBudget = interactive ? 8 : 0 };
+            { ObjectDistance = o.ObjectDistanceFor(o.MeitouReach), LandmarkDistance = o.LandmarkDistanceFor(o.MeitouReach), DistantRange = o.DistantZones * WorldLayout.ZoneSize, NoDistant = o.NoDistant, LoadBudget = interactive ? 8 : 0, SortNearestFirst = o.MeitouReach };
             Console.WriteLine($"objects   GPU ready ({watch.ElapsedMilliseconds} ms)");
         }
         if (!o.NoFoliage && scene.Database is not null)
@@ -852,6 +852,7 @@ static class WorldFrame
                     if (MathF.Abs(ob.LandmarkDistance - o.LandmarkDistanceFor(was)) < 1) ob.LandmarkDistance = o.LandmarkDistanceFor(v);
                     if (camera() is { } cam && MathF.Abs(cam.SplitDistance - Math.Max(20000, o.ObjectDistanceFor(was) * 1.1f)) < 1) cam.SplitDistance = Math.Max(20000, o.ObjectDistanceFor(v) * 1.1f);
                 }
+                if (gpu()?.Objects is { } sortObjects) sortObjects.SortNearestFirst = v;
                 if (render() is { } r && MathF.Abs(r.TerrainPixelError - o.TerrainErrorFor(was)) < 1e-3f)
                 {
                     float scale = r.TerrainFarPixelError / r.TerrainPixelError;
@@ -1031,7 +1032,7 @@ static class WorldFrame
         StageClock.Lap(12);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is { Level: > 0 };   // level 0: no pass, the water shows the sky colour
-        if (gpu.Reflection is not null) { gpu.Reflection.MaxDistance = gpu.Sky.HazeDistance * gpu.Reflection.Range; }
+        if (gpu.Reflection is not null) { gpu.Reflection.MaxDistance = gpu.Sky.HazeDistance * gpu.Reflection.Range; gpu.Reflection.HideDistance = gpu.FogVolumes?.AtmosphereDistance; }
         if (reflecting)
             gpu.Reflection!.Render(camera, rw, rh, gpu.Sky, colours, light, gpu.Terrain, render, gpu.Objects is null ? null : (vp, e, frustum) =>
             {
@@ -1043,16 +1044,18 @@ static class WorldFrame
                     float distance = objects.ObjectDistance, landmarks = objects.LandmarkDistance;
                     float bias = objects.LodBias;
                     objects.LodBias = bias * reflection.ObjectLodBias;
-                    objects.ObjectDistance = Math.Min(distance, gpu.Reflection.ObjectDistance);
-                    objects.LandmarkDistance = Math.Min(landmarks, gpu.Reflection.ObjectDistance);   // the mirrored scene has no landmarks beyond the reflection's own object range
+                    objects.ObjectDistance = Math.Min(distance, gpu.Reflection.ObjectReach);
+                    objects.LandmarkDistance = Math.Min(landmarks, gpu.Reflection.ObjectReach);   // the mirrored scene has no landmarks beyond the reflection's own object range
+                    objects.MirrorCull = reflection.CullToWater ? reflection.MayShow : null;
                     objects.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+                    objects.MirrorCull = null;
                     reflection.Lap(2);
                     StageClock.Sub("refl up to objects");
                     objects.ObjectDistance = distance;
                     objects.LandmarkDistance = landmarks;
                     objects.LodBias = bias;
                 }
-                if (reflection.Level >= 4) gpu.Foliage?.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, grass: false, maxRange: reflection.FoliageDistance);
+                if (reflection.Level >= 4) gpu.Foliage?.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, grass: false, maxRange: reflection.FoliageReach);
                 reflection.Lap(3);
                 StageClock.Sub("refl foliage");
                 reflection.SceneStats = reflection.Level < 3 ? "no objects (level < 3)" : $"{objects.DrawnInstances} objects ({objects.DrawnTriangles:N0} triangles, {objects.DrawCalls} calls), {(reflection.Level >= 4 ? gpu.Foliage?.DrawnInstances ?? 0 : 0)} foliage meshes ({(reflection.Level >= 4 ? gpu.Foliage?.DrawCalls ?? 0 : 0)} calls)";

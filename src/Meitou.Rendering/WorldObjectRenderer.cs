@@ -52,6 +52,8 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         public bool Manual;
         public Matrix4x4[] Data = new Matrix4x4[16];
         public int Count, Offset;
+        /// <summary>The nearest instance's distance (to its bounds' edge) this frame: batches are drawn nearest first.</summary>
+        public float Near;
 
         public void Add(in Matrix4x4 m)
         {
@@ -150,6 +152,11 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
 
     /// <summary>Ogre's camera LOD bias as a distance factor: the LOD value is multiplied by it, so above 1 coarser levels come sooner, below 1 later.</summary>
     public float LodBias { get; set; } = 1;
+
+
+    /// <summary>Colour batches are drawn nearest first (Meitou, with the reach switch: early depth rejection of the shading of what a nearer batch covers); off: in the order they were first met.</summary>
+    public bool SortNearestFirst { get; set; }
+
 
     /// <summary>Distant towns and buildings' distant meshes are drawn up to this distance (the game: its <c>distant town range</c> in zones).</summary>
     public float DistantRange { get; set; } = ObjectRanges.MaxDistantTownRangeZones * WorldLayout.ZoneSize;
@@ -501,6 +508,9 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>The fog cull (set by the world frame around the main camera's draw only): instances wholly hidden by the fog the eye is in are skipped.</summary>
     internal FogVolumes? FogCull { get; set; }
 
+    /// <summary>The water reflection's cull (set around the reflection pass's own draw): an instance (bounding sphere centre and radius) it answers false for is skipped.</summary>
+    internal Func<Vector3, float, bool>? MirrorCull { get; set; }
+
     /// <summary>Draws the objects seen from <paramref name="eye"/> through <paramref name="frustum"/>.</summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain)
     {
@@ -533,7 +543,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 if (inst.Gpu is not { } gpu) continue;
                 if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); continue; }
                 float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
-                if (value >= DistantReach || !SphereVisible(frustum, inst.Centre, inst.Radius) || FogCull?.Hidden(inst.Centre, inst.Radius, FogVolumes.CullKind.Objects) == true) continue;
+                if (value >= DistantReach || !SphereVisible(frustum, inst.Centre, inst.Radius) || MirrorCull?.Invoke(inst.Centre, inst.Radius) == false || FogCull?.Hidden(inst.Centre, inst.Radius, FogVolumes.CullKind.Objects) == true) continue;
                 float w = ObjectRanges.RiseWeight(value, real - realBand, realBand) * ObjectRanges.EdgeWeight(value, DistantReach, distantBand);
                 if (w <= 0) continue;
                 inst.Mesh.LastUsed = now;
@@ -552,16 +562,18 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
             {
                 if (t.Mesh.Gpu is not { } gpu) continue;
                 float value = Vector3.Distance(t.Centre, eye) - t.Radius;
-                if (value >= DistantReach || !SphereVisible(frustum, t.Centre, t.Radius) || FogCull?.Hidden(t.Centre, t.Radius, FogVolumes.CullKind.Objects) == true) continue;
+                if (value >= DistantReach || !SphereVisible(frustum, t.Centre, t.Radius) || MirrorCull?.Invoke(t.Centre, t.Radius) == false || FogCull?.Hidden(t.Centre, t.Radius, FogVolumes.CullKind.Objects) == true) continue;
                 t.Mesh.LastUsed = now;
                 var batch = BatchFor(gpu, distantMaterial, 0, town: true);
-                if (batch.Count == 0) active.Add(batch);
+                if (batch.Count == 0) { active.Add(batch); batch.Near = 0; }
                 batch.Add(Matrix4x4.CreateTranslation(t.Town.Position));
                 DrawnInstances++;
             }
 
         double tCull = cpu.Elapsed.TotalMilliseconds;
 
+        // Nearest first: what a nearer batch covers fails the early depth test of the farther ones (the colour pass only; the depth passes have no shading to save).
+        if (SortNearestFirst && !depthPass) active.Sort(static (a, b) => a.Near.CompareTo(b.Near));
         // 2. The instances: each batch's matrices contiguous, in this frame's constants (one copy; the draws reach a batch by firstInstance).
         int total = 0;
         foreach (var b in active) { b.Offset = total; total += b.Count; }
@@ -619,7 +631,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); return; }
         float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
         float limit = Math.Min(range, inst.Limit);
-        if (value >= limit || !SphereVisible(frustum, inst.Centre, inst.Radius) || FogCull?.Hidden(inst.Centre, inst.Radius, FogVolumes.CullKind.Objects) == true)
+        if (value >= limit || !SphereVisible(frustum, inst.Centre, inst.Radius) || MirrorCull?.Invoke(inst.Centre, inst.Radius) == false || FogCull?.Hidden(inst.Centre, inst.Radius, FogVolumes.CullKind.Objects) == true)
         {
             if (value >= inst.Limit && value < range) PartLimited++;   // stopped by the game's part distance, not the object distance (benchmark)
             return;
@@ -688,19 +700,19 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         var m = inst.Transform;
         if (!blend.IsBlending)
         {
-            Add(gpu, inst.Materials!, blend.Lower, m, 0, weight >= 0.999f ? 2 : weight);
+            Add(gpu, inst.Materials!, blend.Lower, m, 0, weight >= 0.999f ? 2 : weight, value);
             return;
         }
-        Add(gpu, inst.Materials!, blend.Upper, m, 0, blend.T * weight);
-        Add(gpu, inst.Materials!, blend.Lower, m, blend.T * weight, weight);
+        Add(gpu, inst.Materials!, blend.Upper, m, 0, blend.T * weight, value);
+        Add(gpu, inst.Materials!, blend.Lower, m, blend.T * weight, weight, value);
     }
 
-    void Add(GpuObjectMesh gpu, ObjectMaterialSet materials, int level, Matrix4x4 m, float lo, float hi)
+    void Add(GpuObjectMesh gpu, ObjectMaterialSet materials, int level, Matrix4x4 m, float lo, float hi, float near)
     {
         var manual = gpu.Manual[level];
         var batch = BatchFor(manual ?? gpu, materials, manual is null ? level : 0, town: false);
         batch.Manual = manual is not null;
-        if (batch.Count == 0) active.Add(batch);
+        if (batch.Count == 0) { active.Add(batch); batch.Near = near; } else if (near < batch.Near) batch.Near = near;
         m.M14 = lo;
         m.M24 = hi;
         batch.Add(m);
