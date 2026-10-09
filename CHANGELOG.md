@@ -3,6 +3,17 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.5.0
+
+- Global illumination: on GPUs with ray tracing, light bounces between surfaces, so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (on by default, --no-gi turns it off)
+- Lamps: the game's outdoor point and spot lights now light the world
+- F1 in the viewer (Shift+F1 in the game) turns all Meitou improvements off and back on, replacing the per-feature F keys
+- Tab panel: tone map (clamp, shoulder, ACES), grading and heat haze strength sliders
+- Tab panel: anisotropic filtering, texture quality, weather particles and particle density sliders; anti-aliasing can be turned off
+- --low-end preset for weak PCs; render scale also works without an upscaler
+- Various optimizations: simpler models for distant objects and buildings, cheaper shading where fog hides the scene, cheaper terrain, foliage, water reflections and far shadows
+- Fewer stutters: at most one far shadow cascade is redrawn per frame
+
 ## v0.4.0
 
 - Meitou water: ocean waves, sets of breakers that roll in as whitewater and wear away into lace, refraction, depth tint, caustics and glitter
