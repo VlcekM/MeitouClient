@@ -425,8 +425,14 @@ start reads it back instead of placing it again. In the Shark swamp view (`--vie
 - **Where**: `%LOCALAPPDATA%\Meitou\foliage\<key>\z<X>.<Y>.<w|f>.mfl` (`MEITOU_FOLIAGE_CACHE` overrides the folder; never in the repository). 89 MB for the 414 zones above (about 215 KB a zone).
   Capped at 2 GB (`MEITOU_FOLIAGE_CACHE_MB`, 0 = no cap): over it, the folders of other keys go whole, least recently used first, then this key's oldest files, down to 90%; keys unused
   for 30 days and temporary files an hour old are deleted. A pass runs once per start (in the background, on the first hit or write).
-- **Key** (SHA-256, 16 hex digits in the folder name, all 32 bytes echoed in each file): the format version; the module version id of Meitou.Data and of every Meitou assembly it references
-  (so any change to the layout code, the random numbers or the readers it uses makes a new key, with no constant to remember to bump); every field of every record reachable from the
+- **Key** (SHA-256, 16 hex digits in the folder name, all 32 bytes echoed in each file): the format version; a hash of the SOURCE of Meitou.Data and Meitou.Core (every `.cs` file and the two
+  project files, line endings normalised, sorted by path relative to `src`; `LayoutCodeHash.targets` computes it at every build into `obj/.../LayoutCodeHash.g.cs`, 126 files). Meitou.Data references only
+  Meitou.Core, so that is everything the layout runs on (**Verified**: `Meitou.Data.csproj` has the one project reference); any change to the layout code, the random numbers or the readers it uses makes a
+  new key, with no constant to remember to bump, and an edit anywhere else (the renderer, the viewer, the tests) does not. It replaced the assemblies' module version ids (2026-10-09), which differ
+  between worktree paths and with any rebuild of the assembly, so every new worktree started cold (**Observed**: 0 hits, 414 misses, 46 s for the swamp start). **Verified** (2026-10-09): the same commit built in a
+  second directory gives the same hash; an edit to a Meitou.Data file changes it; an edit in Meitou.Rendering, or a Meitou.Data file saved with CRLF line endings, does not; after a rebuild with a Rendering edit the
+  swamp start had 414 hits (`FoliageLayoutCacheTests`: the hash equals the same recipe run on the sources). Not covered, as before: the compiler, the .NET runtime and the StbImageSharp package version beyond what
+  `Meitou.Data.csproj` states (a runtime update that changed floating-point results would not change the key; **Unknown** whether one ever has); every field of every record reachable from the
   biomes' foliage lists (layers, meshes with children, grass types, building type ids); the towns (position and `no-foliage range`); size and write time of `fullmap.tif`, `blendinfo.dat`,
   `biomemap.png` and every `new_overlay.*.png`. The game files are keyed by size and write time, not content. Not in the key, because the layout does not read them (**Verified** by
   reading `FoliageLayout.Place`: its inputs are the zone, ground, overlay, biomes, biome map and towns): foliage range, grass range, grass density, the Faithful / Meitou switches. They
