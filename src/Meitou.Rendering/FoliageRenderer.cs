@@ -845,6 +845,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         /// <summary>Blades after each 1/64 of the candidates (<see cref="FoliageGrassField.BladesWithPrefixes"/>): the density setting draws a prefix.</summary>
         public int[] Prefixes = [];
         public bool HasTangents, HasColours;
+        /// <summary>The cards-trimmed index list after the original <see cref="Count"/> indices in <see cref="Indices"/> (0: none; card trimming).</summary>
+        public int TrimCount;
     }
 
     sealed record FoliageMaterial(WorldTexture? Diffuse, WorldTexture? Normal, WorldTexture? Diffuse2, WorldTexture? Normal2,
@@ -867,7 +869,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.LeavesMaterial = new FoliageMaterial(textures.Get(mesh.LeavesTexture, false, deferred: true), textures.Get(mesh.LeavesNormal, false, deferred: true), null, null,
                 mesh.LeavesAlphaThreshold / 255f, true, false, Vector2.One, false, 0, MeshSurface.Foliage);
         string main = mesh.MeshPath, leaves = mesh.LeavesMesh ?? "";
-        a.Job = BackgroundWork.Run(() => (Decode(main), leaves.Length > 0 ? Decode(leaves) : null));
+        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, mesh, false), leaves.Length > 0 ? DecodeTrimmed(leaves, mesh, true) : null));
         decoding.Add(a);
         return a;
     }
@@ -939,7 +941,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             if (part.Indices.Length == 0) continue;
             var p = part;
             GpuPart? gp = null;
-            int vertexBytes = p.Vertices.Length * Vertex.Size, indexBytes = p.Indices.Length * sizeof(uint);
+            // The trimmed list (card trimming) follows the original one in the same buffer: the draws pick a range (FoliageRenderer.Trim.cs).
+            var allIndices = p.TrimmedIndices is null ? p.Indices : [.. p.Indices, .. p.TrimmedIndices];
+            int vertexBytes = p.Vertices.Length * Vertex.Size, indexBytes = allIndices.Length * sizeof(uint);
             tally[0] += vertexBytes + indexBytes;
             uploads.Enqueue(() =>
             {
@@ -947,7 +951,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 {
                     Vertices = DeviceBuffer.Create(Gpu, (ulong)vertexBytes, BufferUse.Vertex, MeshAllocationName),
                     Indices = DeviceBuffer.Create(Gpu, (ulong)indexBytes, BufferUse.Index, MeshAllocationName),
-                    Count = p.Indices.Length, HasTangents = p.HasTangents, HasColours = p.HasColours,
+                    Count = p.Indices.Length, TrimCount = p.TrimmedIndices?.Length ?? 0, HasTangents = p.HasTangents, HasColours = p.HasColours,
                 };
                 gp.Attributes = VertexAttributes(gp.Vertices);
                 mesh.Parts.Add(gp);
@@ -967,7 +971,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 uploads.Enqueue(() =>
                 {
                     Gpu.EnsureFrame();
-                    Gpu.Uploads.Write(gp!.Indices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(p.Indices.AsSpan()).Slice(start, length));
+                    Gpu.Uploads.Write(gp!.Indices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(allIndices.AsSpan()).Slice(start, length));
                 });
             }
         }
@@ -1034,7 +1038,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (a.Resident || a.Failed || a.Job is not null || a.Uploading || guard is { Streaming: false }) return;
         string main = a.Mesh.MeshPath, leaves = a.Mesh.LeavesMesh ?? "";
         a.LastUsed = Environment.TickCount64;
-        a.Job = BackgroundWork.Run(() => (Decode(main), leaves.Length > 0 ? Decode(leaves) : null));
+        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, a.Mesh, false), leaves.Length > 0 ? DecodeTrimmed(leaves, a.Mesh, true) : null));
         decoding.Add(a);
         meshReloads++;
     }
@@ -1800,7 +1804,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         for (int i = 0; i < meshes; i++)
         {
             var d = meshDraws[i];
-            gpuDraws[i] = new FoliageCullDraw { IndexCount = (uint)d.Part.Count, ChunkStart = (uint)gpuBatchStart[d.Batch], ChunkEnd = (uint)gpuBatchStart[d.Batch + 1] };
+            gpuDraws[i] = new FoliageCullDraw { FirstIndex = DrawFirst(d.Part), IndexCount = DrawCount(d.Part), ChunkStart = (uint)gpuBatchStart[d.Batch], ChunkEnd = (uint)gpuBatchStart[d.Batch + 1] };
         }
         for (int k = 0; k < rockDraws.Count; k++)
         {
@@ -2335,7 +2339,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     SetRaster = raster, Cull = want, Pipeline = sn.SegA == solidSegment ? sn.PipeA! : PipelineFor(ref sn, colourSolidMesh, solidSegment, state, targets.Formats, "foliage meshes solid"),
                     Vertices = sn.Vertices, Elements = sn.Elements, Push = pc,
                     Args = gpuResult.Args, ArgsOffset = gpuResult.ArgsOffset + (ulong)(gpuResult.DrawCount + drawIndex) * 20,
-                    IndexCount = (uint)part.Count, Instances = d.Instances, FirstInstance = d.FirstInstance,
+                    FirstIndex = DrawFirst(part), IndexCount = DrawCount(part), Instances = d.Instances, FirstInstance = d.FirstInstance,
                 });
                 raster = false;
             }
@@ -2344,7 +2348,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 SetRaster = raster, Cull = want, Pipeline = n.SegA == segment ? n.PipeA! : PipelineFor(ref n, mp, segment, state, targets.Formats, label),
                 Vertices = n.Vertices, Elements = n.Elements, Push = pc,
                 Args = indirect ? gpuResult.Args : default, ArgsOffset = gpuResult.ArgsOffset + (ulong)((split ? 2 * gpuResult.DrawCount : 0) + drawIndex) * 20,
-                IndexCount = (uint)part.Count, Instances = d.Instances, FirstInstance = d.FirstInstance,
+                FirstIndex = DrawFirst(part), IndexCount = DrawCount(part), Instances = d.Instances, FirstInstance = d.FirstInstance,
             });
             drawIndex++;
         }
@@ -2368,7 +2372,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             /// <summary>Indirect: the arguments' buffer (else a plain indexed draw).</summary>
             public Silk.NET.Vulkan.Buffer Args;
             public ulong ArgsOffset;
-            public uint IndexCount, Instances, FirstInstance;
+            public uint IndexCount, FirstIndex, Instances, FirstInstance;
         }
 
         public FoliageRenderer Owner = null!;
@@ -2407,7 +2411,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 cmd.BindIndexBuffer(d.Elements, Silk.NET.Vulkan.IndexType.Uint32);
                 PushTo(cmd, layout, in d.Push, ref last, ref pushed);
                 if (d.Args.Handle != 0) cmd.DrawIndexedIndirect(d.Args, d.ArgsOffset, 1);
-                else cmd.DrawIndexed(d.IndexCount, d.Instances, 0, 0, d.FirstInstance);
+                else cmd.DrawIndexed(d.IndexCount, d.Instances, d.FirstIndex, 0, d.FirstInstance);
             }
         }
 

@@ -32,6 +32,8 @@ public sealed class ModelPart
     public bool HasTangents { get; init; }
     public bool HasColours { get; init; }
     public bool Skinned { get; init; }
+    /// <summary>The triangle list with the alpha-tested cards cut to their opaque outline (<see cref="FoliageCardTrimmer"/>), indexing <see cref="Vertices"/> (which then also hold the new corners after the originals); null: none.</summary>
+    public uint[]? TrimmedIndices { get; init; }
 }
 
 /// <summary>A mesh ready for upload: triangle lists per submesh, bounds, and skinning weights built from bone assignments.</summary>
