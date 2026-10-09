@@ -58,8 +58,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>Seconds that drive the grass sway; null uses a wall clock started with the renderer. Screenshots fix it (pictures repeat exactly) and the game sets its own clock.</summary>
     public double? SwaySeconds { get; set; }
     readonly int workers;
-    /// <summary>MEITOU_FOLIAGE_DEBUG: "nograss" or "nomeshes" leaves that part out (to measure the other).</summary>
-    readonly bool debugNoGrass = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_DEBUG") == "nograss", debugNoMeshes = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_DEBUG") == "nomeshes";
+    /// <summary>Draw the grass / the meshes and impostors (not the TERRAIN-mode rocks) (the bench's `grass` and `foliage-meshes` switches); MEITOU_FOLIAGE_DEBUG "nograss" or "nomeshes" starts with that part off.</summary>
+    public bool DrawGrass { get; set; } = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_DEBUG") != "nograss";
+    public bool DrawMeshes { get; set; } = Environment.GetEnvironmentVariable("MEITOU_FOLIAGE_DEBUG") != "nomeshes";
     /// <summary>Zone layouts in flight: whole ones and far-only ones, each limited to <see cref="workers"/> at a time.</summary>
     int runningWhole, runningFar;
 
@@ -1175,12 +1176,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
         // 3. Meshes: Prepare reads the textures (WorldTexture.Key) and makes the draw list, Record puts it into a native segment of VkGl's pass.
         double recMeshes = 0, recGrass = 0, dispatchMs = 0;
-        if (active.Count > 0 && !debugNoMeshes) PrepareMeshes(options, gpu);
+        if (active.Count > 0 && DrawMeshes) PrepareMeshes(options, gpu);
         else meshDraws.Clear();
         // The GPU path's TERRAIN-mode rocks: one draw per part of each rock batch in view, culled by the same dispatch (after the meshes' draws).
         if (gpu) PrepareRocks();
         else rockDraws.Clear();
-        if (!debugNoMeshes) PrepareImpostors(gpu);
+        if (DrawMeshes) PrepareImpostors(gpu);
         else impostorDraws.Clear();
         if (impostorDraws.Count == 0) WarmImpostorPipeline(depthPass, coverage);
         gpuResult = default;
@@ -1204,7 +1205,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         int callsMeshes = DrawCalls;
         StageClock.Sub(WorldFrame.OcclusionAlternate && !Occlusion.IsEmpty && !depthPass ? "fol meshes+occ" : "fol meshes");
         // 4. Grass.
-        if (grass && !debugNoGrass)
+        if (grass && DrawGrass)
         {
             if (GpuGrassActive)
             {
@@ -2595,7 +2596,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         if (!motionCamera) return;
         motionCamera = false;
-        if (!Enabled || debugNoGrass) { havePrevious = false; return; }
+        if (!Enabled || !DrawGrass) { havePrevious = false; return; }
         float time = SwayPhase(), previousTime = previousSwayPhase ?? time;
         var previous = havePrevious ? previousUnjittered : motionUnjittered;
         (previousSwayPhase, previousUnjittered, havePrevious) = (time, motionUnjittered, true);

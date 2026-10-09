@@ -184,6 +184,7 @@ Trees, bushes, rocks (the mineable Iron/Copper rocks too) and grass, placed as K
 - Verified with screenshots (2026-10-04, saved outside the repo): zone 14.30 (cypress grove with cut-out canopies,
   scattered rocks, grassland with four grass types), swamp zone 24.38 (swamp plants and ferns), an Iron Resource
   rock in zone 30.30 (`--at -8777,-9105`), each against `--no-foliage`.
+- **Cost of the parts** (**Observed**, 2026-10-09, RTX 4070, `--view swamp --ab <switch> --ab-period 16 --bench-frames 640`, 1280 x 720, TAA, master 271f21e): the grass (91 600 blades) costs 0.18 +-0.02 ms GPU a frame (3.51 against 3.33 ms total; 283 against 299 fps), the foliage meshes and impostors 0.52 +-0.02 ms (3.48 against 2.96), so at this size neither is what keeps the swamp slow by itself; the TERRAIN-mode rocks are not in either switch.
 - Not reproduced: the game's exact grass blades, DUST tint, translucency, wetness, shadows, sub grass, ambient
   sounds, collision; mesh LOD levels (pages use the full mesh, as PagedGeometry's batches do).
 

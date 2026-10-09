@@ -34,6 +34,11 @@ static partial class WorldApp
         }
         if (gpu.Shadow is { } shadowPass) AbToggles.Register("shadow-pass", () => shadowPass.Enabled, v => shadowPass.Enabled = v, "the whole shadow pass (--no-shadows)");
         if (gpu.Foliage is { } foliagePass) AbToggles.Register("foliage-draw", () => foliagePass.Enabled, v => foliagePass.Enabled = v, "trees, bushes, rocks and grass (--no-foliage)");
+        if (gpu.Foliage is { } grassPass)
+        {
+            AbToggles.Register("grass", () => grassPass.DrawGrass, v => grassPass.DrawGrass = v, "the grass blades (MEITOU_FOLIAGE_DEBUG=nograss)");
+            AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v, "foliage meshes and impostors, not the TERRAIN-mode rocks (MEITOU_FOLIAGE_DEBUG=nomeshes)");
+        }
         AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
         AbToggles.Register("water-draw", () => render.Water, v => render.Water = v, "the water pass (--no-water)");
         AbToggles.Register("reflections", () => render.Reflections, v => render.Reflections = v, "the water reflection pass (--no-reflections)");
