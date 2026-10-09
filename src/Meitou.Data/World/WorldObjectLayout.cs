@@ -22,6 +22,16 @@ public sealed record PlacedMesh(string MeshPath, Matrix4x4 Transform, GameRecord
     public GameRecord? Material { get; init; }
 }
 
+/// <summary>A LIGHT instance of a placed building (docs/formats/lights.md); <see cref="WorldLights"/> turns it into a <see cref="WorldLight"/>.</summary>
+/// <param name="Light">The LIGHT record.</param>
+/// <param name="Holder">The record listing the instance: a BUILDING_PART, or the BUILDING itself.</param>
+/// <param name="Owner">The placed BUILDING (a door's own BUILDING for lights on door parts).</param>
+/// <param name="Position">World position.</param>
+/// <param name="Direction">World direction a spot light points in (unit length); also set for point lights.</param>
+/// <param name="Power">The light's power: <c>brightness</c> plus the building's roll in ±<c>variance</c>/2.</param>
+public sealed record PlacedLight(GameRecord Light, GameRecord Holder, GameRecord Owner, string PlacementId, string InstanceId, Vector3 Position,
+    Vector3 Direction, float Power);
+
 /// <summary>State of a placed building that changes what is drawn (from its GAMESTATE_BUILDING and its town).</summary>
 /// <param name="Destroyed">The state's <c>destroyed</c> flag: parts switch to their <c>destroyed mesh</c>, upper floors and stairs without one go.</param>
 /// <param name="TownMaterial">The building's town's material (see <see cref="WorldObjectLayout.TownMaterial"/>), used when the building has none of its own.</param>
@@ -56,26 +66,34 @@ public static class WorldObjectLayout
     /// Z seed the part choice, as in the game.
     /// </summary>
     public static List<PlacedMesh> Building(GameDatabase db, GameRecord building, string placementId, Vector3 worldPosition, Quaternion rotation,
-        BuildingState? state = null)
+        BuildingState? state = null) => Building(db, building, placementId, worldPosition, rotation, state, lights: null);
+
+    /// <summary>
+    /// As <see cref="Building(GameDatabase, GameRecord, string, Vector3, Quaternion, BuildingState?)"/>, and adds the building's LIGHT
+    /// instances (and its doors') to <paramref name="lights"/> when given (docs/formats/lights.md, "Placement"). The meshes are the same either way.
+    /// </summary>
+    public static List<PlacedMesh> Building(GameDatabase db, GameRecord building, string placementId, Vector3 worldPosition, Quaternion rotation,
+        BuildingState? state, List<PlacedLight>? lights)
     {
         state ??= new BuildingState();
         var result = new List<PlacedMesh>();
-        AddBuilding(db, building, placementId, worldPosition, rotation, state, result, door: false);
+        AddBuilding(db, building, placementId, worldPosition, rotation, state, result, lights);
         // Doors: one building per "doors" entry at the parent's position and rotation, not for destroyed buildings (game: Building::createPhysical).
         if (!state.Destroyed && !building.GetBool("is node"))
             foreach (var r in building.GetReferences("doors"))
                 if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BUILDING } door)
-                    AddBuilding(db, door, placementId, worldPosition, rotation, state, result, door: true);
+                    AddBuilding(db, door, placementId, worldPosition, rotation, state, result, lights);
         return result;
     }
 
-    sealed class Assembly(GameDatabase db, GameRecord building, string placementId, BuildingState state, List<PlacedMesh> result)
+    sealed class Assembly(GameDatabase db, GameRecord building, string placementId, BuildingState state, List<PlacedMesh> result, List<PlacedLight>? lights)
     {
         public readonly GameDatabase Db = db;
         public readonly GameRecord Building = building;
         public readonly string PlacementId = placementId;
         public readonly BuildingState State = state;
         public readonly List<PlacedMesh> Result = result;
+        public readonly List<PlacedLight>? Lights = lights;
         public float Scale = 1;
         public GameRecord? BaseMaterial;
         public BuildingRandom Random = new(0);
@@ -83,11 +101,11 @@ public static class WorldObjectLayout
     }
 
     static void AddBuilding(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation, BuildingState state,
-        List<PlacedMesh> result, bool door)
+        List<PlacedMesh> result, List<PlacedLight>? lights)
     {
         if (building.GetBool("is node")) return;
         float scale = building.GetFloat("scale", 1);
-        var a = new Assembly(db, building, placementId, state, result)
+        var a = new Assembly(db, building, placementId, state, result, lights)
         {
             Scale = scale > 0 ? scale : 1,
             // Base material: the building's first "material" (a collection resolved), else its town's (fcs.def: "the local town material").
@@ -112,7 +130,7 @@ public static class WorldObjectLayout
             var node = AddPart(a, holder, part, parentNode);
             AddParts(a, part, node ?? a.Node, depth + 1);
         }
-        ConsumeInstanceRolls(a, holder);
+        AddInstances(a, holder, parentNode);
     }
 
     /// <summary>
@@ -160,14 +178,41 @@ public static class WorldObjectLayout
         return node;
     }
 
-    /// <summary>Rolls the game draws for a record's instances after its parts: one per LIGHT, one per node BUILDING (its handle); effects: Unknown, none.</summary>
-    static void ConsumeInstanceRolls(Assembly a, GameRecord holder)
+    /// <summary>
+    /// A record's instances after its parts, with the rolls the game draws for them: two per LIGHT (its brightness variance, then a
+    /// second draw of the same range kept by the light's owner; docs/formats/lights.md), one per node BUILDING (its handle); effects:
+    /// Unknown, none. LIGHT instances are added to <see cref="Assembly.Lights"/> when it is set; <paramref name="holderNode"/> is the
+    /// holder's scene node (its part's node, or the building's when the holder is the building or made no entity).
+    /// </summary>
+    static void AddInstances(Assembly a, GameRecord holder, Matrix4x4 holderNode)
     {
         // The game walks the instances in id order (a std::map).
         foreach (var instance in holder.Instances.Values.Where(i => !i.IsCleared).OrderBy(i => i.Id, StringComparer.Ordinal))
-            if (a.Db.Find(instance.Target) is { } target &&
-                (target.Type == FcsRecordType.LIGHT || target.Type == FcsRecordType.BUILDING && target.GetBool("is node")))
+        {
+            if (a.Db.Find(instance.Target) is not { } target) continue;
+            if (target.Type == FcsRecordType.LIGHT)
+            {
+                float halfVariance = target.GetFloat("variance") * 0.5f;
+                float power = target.GetFloat("brightness", 1) + a.Random.NextFloat(-halfVariance, halfVariance);
                 a.Random.Next();
+                a.Lights?.Add(PlaceLight(a, holder, holderNode, instance, target, power));
+            }
+            else if (target.Type == FcsRecordType.BUILDING && target.GetBool("is node"))
+                a.Random.Next();
+        }
+    }
+
+    /// <summary>
+    /// A LIGHT instance in world space: its node hangs under the holder's node at the instance position × the building <c>scale</c>,
+    /// and a spot light points along the instance rotation applied to −Y (docs/formats/lights.md, "Placement").
+    /// </summary>
+    static PlacedLight PlaceLight(Assembly a, GameRecord holder, Matrix4x4 holderNode, GameInstance instance, GameRecord light, float power)
+    {
+        var position = Vector3.Transform(instance.Position * a.Scale, holderNode);
+        var local = Vector3.Transform(-Vector3.UnitY, Normalized(instance.Rotation));
+        var direction = Vector3.TransformNormal(local, holderNode);
+        direction = direction.LengthSquared() > 1e-12f ? Vector3.Normalize(direction) : -Vector3.UnitY;
+        return new PlacedLight(light, holder, a.Building, a.PlacementId, instance.Id, position, direction, power);
     }
 
     /// <summary>A part's material (game: Building's part material lookup): its first <c>material</c>, else the building's base, else <see cref="FallbackPartMaterial"/>.</summary>
