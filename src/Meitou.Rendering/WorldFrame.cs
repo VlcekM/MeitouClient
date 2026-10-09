@@ -109,8 +109,8 @@ sealed class WorldOptions
     public bool NoFogCull;
     /// <summary><c>--no-occlusion-cull</c>: foliage hidden behind the previous frame's depth is drawn anyway (comparison; docs/formats/foliage.md "Occlusion culling").</summary>
     public bool NoOcclusionCull;
-    /// <summary><c>--fog-vrs</c>: the opaque scene passes shade 2 x 2 or 4 x 4 pixels with one fragment where the fog hides the surface (needs VK_KHR_fragment_shading_rate; docs/render-post.md "Fog shading rate").</summary>
-    public bool FogVrs;
+    /// <summary>On by default (Meitou; <c>--no-fog-vrs</c> turns it off): the opaque scene passes shade 2 x 2 or 4 x 4 pixels with one fragment where the fog hides the surface (needs VK_KHR_fragment_shading_rate, else nothing; docs/render-post.md "Fog shading rate").</summary>
+    public bool FogVrs = true;
     public float? ParticlePrewarm;
     /// <summary><c>--particle-density x</c>: the Tab panel's "Particle density x" at start (0.1 to 1).</summary>
     public float ParticleDensity = 1;
@@ -237,6 +237,7 @@ sealed class WorldOptions
           --cloud-wind <x>,<z>     the clouds' drift velocity in world units per second (test; the drift is held still in --screenshot)
           --no-fog-volumes         leave out the placed fog volumes (fogfeatures.dat: the swamp's fog, the Fog Islands', the Vain's)
           --no-fog-cull            draw what the fog in front of the camera completely hides (comparison; the image is the same)
+          --no-fog-vrs             shade every pixel at full rate where the fog hides the surface (the fog shading rate is on by default)
           --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-density <x> the effects' emission rate x (0.1-1, the Tab slider)   --anisotropy <n> the most anisotropic filtering any texture gets (1-16, the Tab slider; 16 default)   --particle-area <r> place weather effects within r units of the start point (test)   --particle-seed <n>   --particle-only <a,b> keep only the weather effects with these in their names (test)
           --low-end                potato-PC settings: short draw distances, no shadows, reflections, AO or anti-aliasing, 0.83 render scale, sparse grass and particles (options after it override)
           --no-vsync               start with vsync off (uncapped; Tab slider)
@@ -395,6 +396,7 @@ sealed class WorldOptions
                 case "--no-fog-cull": o.NoFogCull = true; break;
                 case "--no-occlusion-cull": o.NoOcclusionCull = true; break;
                 case "--fog-vrs": o.FogVrs = true; break;
+                case "--no-fog-vrs": o.FogVrs = false; break;
                 case "--particle-prewarm": o.ParticlePrewarm = Math.Max(F(), 0); break;
                 case "--particle-density": o.ParticleDensity = Math.Clamp(F(), 0.1f, 1); break;
                 case "--anisotropy": o.Anisotropy = (int)F(); break;
