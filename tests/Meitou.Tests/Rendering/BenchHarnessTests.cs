@@ -22,6 +22,23 @@ public class BenchHarnessTests
     }
 
     [Fact]
+    public void LowEndExpandsInPlaceAndLaterOptionsWin()
+    {
+        var o = WorldOptions.Parse(["--world", "--low-end", "--object-distance", "8000"])!;
+        Assert.Equal(8000f, o.ObjectDistance);
+        Assert.Equal(5000f, o.LandmarkDistance);
+        Assert.False(o.VSync);
+        Assert.True(o.ShadowsOff);
+        Assert.Equal(15000f, o.MaterialDistance);
+        Assert.Equal((0.25f, 0.1f, 0, 1, 3), (o.ObjectLod, o.GrassDensity, o.WaterReflection, o.Anisotropy, o.TextureQuality));
+        Assert.Equal((false, false, false), (o.Post.Ssao, o.Post.Fxaa, o.MeitouWater));
+        Assert.Equal((UpscalerKind.Off, 0.83f), (o.Post.Upscale.Kind, o.Post.Upscale.Scale));
+        Assert.Equal((true, 4), (o.Post.LowResParticles, o.Post.ParticleDivisor));
+        var plain = WorldOptions.Parse(["--world"])!;
+        Assert.Equal((true, false, 1f), (plain.VSync, plain.ShadowsOff, plain.ObjectLod));
+    }
+
+    [Fact]
     public void UnknownViewIsRejected() => Assert.Throws<ArgumentException>(() => WorldOptions.Parse(["--view", "nowhere"]));
 
     [Fact]

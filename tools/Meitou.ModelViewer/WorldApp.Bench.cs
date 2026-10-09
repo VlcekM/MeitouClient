@@ -50,6 +50,9 @@ static partial class WorldApp
             float err = render.TerrainPixelError, farErr = render.TerrainFarPixelError, materialDistance = render.MaterialDistance;
             AbToggles.Register("terrain-error", () => render.TerrainPixelError <= err * 1.01f, v => (render.TerrainPixelError, render.TerrainFarPixelError) = v ? (err, farErr) : (err * 2, farErr * 2), "terrain screen-space error doubled on side B (probe)");
             AbToggles.Register("terrain-material", () => render.MaterialDistance >= materialDistance, v => render.MaterialDistance = v ? materialDistance : 1, "terrain textured material (side B: ground colour only; probe)");
+            // Side B: the textured material ends nearer (MEITOU_AB_MATERIAL_DISTANCE units, default 6000), the ground colour beyond.
+            float nearMaterial = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_AB_MATERIAL_DISTANCE"), CultureInfo.InvariantCulture, out var md) ? md : 6000;
+            AbToggles.Register("material-distance", () => render.MaterialDistance >= materialDistance, v => render.MaterialDistance = v ? materialDistance : nearMaterial, $"terrain material distance as set (A) against {nearMaterial:0} (B)");
         }
         if (gpu.Objects is { } sortObjects) AbToggles.Register("object-sort", () => sortObjects.SortNearestFirst, v => sortObjects.SortNearestFirst = v, "objects' colour batches drawn nearest first (Meitou reach)");
         AbToggles.Register("normal-maps", () => render.NormalMaps, v => render.NormalMaps = v, "normal maps on terrain and objects (probe)");
