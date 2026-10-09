@@ -58,6 +58,7 @@ internal sealed unsafe class GiProbes : IDisposable
             (0, DescriptorType.AccelerationStructureKhr), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer), (3, DescriptorType.UniformBuffer),
             (4, DescriptorType.CombinedImageSampler), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.CombinedImageSampler),
             (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.CombinedImageSampler),
+            (10, DescriptorType.CombinedImageSampler), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.CombinedImageSampler),
         ], ctx.Bindless.Layout);
         blendProgram = ctx.Shaders.Compute(GiShaders.ProbeBlend, "gi probe blend",
         [
@@ -109,14 +110,14 @@ internal sealed unsafe class GiProbes : IDisposable
         public Vector4 Params;
         public Vector4 Grid0, Grid1, Grid2, Grid3;
         public Matrix4x4 Rotation;
-        public Vector4 Origin, SunLight, LightDir, Maps, Albedo, RayLength;
+        public Vector4 Origin, SunLight, LightDir, Maps, Albedo, RayLength, LightGrid;
     }
 
     /// <summary>
     /// Places the grids around <paramref name="eye"/> (bases from <paramref name="heights"/>) and records this frame's probe trace and blend against
     /// <paramref name="scene"/>'s structure, after its <see cref="GiScene.Update"/>.
     /// </summary>
-    public void Update(GiScene scene, Vector3 eye, HeightSnapshot heights)
+    public void Update(GiScene scene, Vector3 eye, HeightSnapshot heights, WorldLamps? lamps = null)
     {
         if (scene.Top is null) return;
         slot = ctx.Frame.Slot;
@@ -159,6 +160,7 @@ internal sealed unsafe class GiProbes : IDisposable
             LightDir = Read<Vector4>(g, "uAtmoLight"),
             Maps = Read<Vector4>(g, "uAtmoMaps"),
             RayLength = new Vector4(Grid[0].RayLength, Grid[1].RayLength, 0, 0),
+            LightGrid = lamps?.Grid ?? default,
         };
         var ground = g.Texture("uWeatherGround")?.Invoke() ?? default;
         constants.Albedo = new Vector4(ObjectAlbedo, ground.IsNull ? 0 : 1);
@@ -191,22 +193,31 @@ internal sealed unsafe class GiProbes : IDisposable
             var records = new DescriptorBufferInfo(scene.Records.Buffer, scene.Records.Offset, scene.Records.Size);
             var rayInfo = new DescriptorBufferInfo(rays.Handle, 0, rays.Size);
             var uniform = new DescriptorBufferInfo(block.Handle, block.Offset, (ulong)sizeof(Constants));
-            var images = stackalloc DescriptorImageInfo[6];
+            var images = stackalloc DescriptorImageInfo[9];
             images[0] = new DescriptorImageInfo(linear, irradiance.View(), ImageLayout.General);
             images[1] = new DescriptorImageInfo(linear, distance.View(), ImageLayout.General);
             images[2] = new DescriptorImageInfo(nearest, bases.View(), ImageLayout.General);
             images[3] = Image(g, "uAtmoIrradiance", cube: true);
             images[4] = Image(g, "uAtmoAmbientMap", cube: false);
             images[5] = ground.IsNull ? images[2] : new DescriptorImageInfo(ground.Sampler, ground.View, ImageLayout.General);
-            var writes = stackalloc WriteDescriptorSet[10];
+            // The lamps' textures (a stand-in while there are none: the shader reads them only when LightGrid.w is set).
+            if (lamps is not null)
+            {
+                var (lampCells, lampIndex, lampData) = lamps.Current;
+                images[6] = new DescriptorImageInfo(lamps.NearestSampler, lampCells.View(), ImageLayout.General);
+                images[7] = new DescriptorImageInfo(lamps.NearestSampler, lampIndex.View(), ImageLayout.General);
+                images[8] = new DescriptorImageInfo(lamps.NearestSampler, lampData.View(), ImageLayout.General);
+            }
+            else images[6] = images[7] = images[8] = images[2];
+            var writes = stackalloc WriteDescriptorSet[13];
             writes[0] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.AccelerationStructureKhr };
             writes[1] = Buffer(1, DescriptorType.StorageBuffer, &records);
             writes[2] = Buffer(2, DescriptorType.StorageBuffer, &rayInfo);
             writes[3] = Buffer(3, DescriptorType.UniformBuffer, &uniform);
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < 9; i++)
                 writes[4 + i] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = (uint)(4 + i), DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[i] };
             cmd.BindPipeline(tracePipeline);
-            cmd.PushDescriptors(traceProgram.Layout, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 10), PipelineBindPoint.Compute);
+            cmd.PushDescriptors(traceProgram.Layout, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 13), PipelineBindPoint.Compute);
             // Set 1: the bindless table, for the objects' diffuse maps at the hits.
             var table = ctx.Bindless.Set;
             cmd.BindSets(traceProgram.Layout, 1, new ReadOnlySpan<DescriptorSet>(&table, 1), default, PipelineBindPoint.Compute);

@@ -41,7 +41,7 @@ internal sealed unsafe class GiScene : IDisposable
     public float Range { get; set; } = 6000;
     /// <summary>Foliage (trees, bushes, rocks) whose bounding radius is at least <see cref="FoliageMinSize"/> (0: none) and whose bounds come within <see cref="FoliageRange"/> of the eye is in the scene.</summary>
     public float FoliageRange { get; set; } = 4000;
-    public float FoliageMinSize { get; set; } = 60;
+    public float FoliageMinSize { get; set; } = 150;
     public int FoliageInstances { get; private set; }
     readonly List<(FoliageRenderer.RayMesh Mesh, Matrix4x4 Transform, float Distance)> rayFoliage = [];
     /// <summary>A mesh's structure not used for this many frames is dropped.</summary>

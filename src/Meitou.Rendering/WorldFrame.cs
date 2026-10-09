@@ -67,7 +67,9 @@ sealed class WorldOptions
     /// <summary><c>--gi-phases</c>: the probes are updated in this many shares, one a frame (1, 2, 4 or 8).</summary>
     public int GiPhases = 4;
     /// <summary><c>--gi-foliage</c>: the smallest bounding radius of a plant or rock in the traced scene (0: no foliage).</summary>
-    public float GiFoliage = 60;
+    public float GiFoliage = 150;
+    /// <summary><c>--lights off</c>: no lamps (the game's point and spot lights, docs/render-lights.md); the parity gates use it.</summary>
+    public bool Lights = true;
     public float GiRange = 6000;
     /// <summary>Whether the device must be made with ray queries (<c>VulkanDisplay.RayTracing</c>).</summary>
     public bool WantsRayTracing => Gi || GiDebug > 0;
@@ -341,6 +343,7 @@ sealed class WorldOptions
                 case "--gi": o.Gi = true; break;
                 case "--gi-phases": o.GiPhases = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--gi-foliage": o.GiFoliage = F(); break;
+                case "--lights": o.Lights = Next() != "off"; break;
                 case "--simple-sky": o.SimpleSky = true; break;
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
                 case "--haze-distance": o.HazeDistance = F(); break;
@@ -630,6 +633,7 @@ static class WorldFrame
         internal Gi.GiScene? Gi;
         internal Gi.GiDebugPass? GiDebugPass;
         internal Gi.GiProbes? Probes;
+        internal WorldLamps? Lamps;
         public int GiDebug;
         /// <summary>Whether the traced scene is updated (and the debug view drawn) this frame: the bench's gi-scene switch.</summary>
         public bool GiActive = true;
@@ -661,6 +665,7 @@ static class WorldFrame
         {
             GiDebugPass?.Dispose();
             Probes?.Dispose();
+            Lamps?.Dispose();
             Gi?.Dispose();
             Streamer?.Dispose();
             Foliage?.Dispose();
@@ -790,6 +795,15 @@ static class WorldFrame
             particles.SetPlacers(placers);
             gpu.MakeParticles = () => particles;
             Console.WriteLine($"particles {particles.Library.Systems.Count} systems read; {placers.Count} map placers in {particles.PlacerGroups.Count} groups ({particleWatch.ElapsedMilliseconds} ms)");
+        }
+        if (scene.Database is { } lampDb && scene.Heightmap is { } lampMap)
+        {
+            // The lamps (docs/render-lights.md): the outdoor lights of every placed building, read on a worker.
+            gpu.Lamps = new WorldLamps(context, () =>
+            {
+                var levels = WorldLevelData.Load(install, includeInteriors: true);
+                return WorldLights.ForWorld(lampDb, levels, lampMap.HeightAt, new BuildingLayouts(lampDb, levels.Interiors), includeInteriors: false);
+            }) { Enabled = o.Lights };
         }
         if (scene.Heightmap is not null) gpu.Streamer = new TerrainStreamer(install, terrain, textures, scene.Window.Step) { MaterialDistance = o.MaterialDistance };
         if (o.NoStream) gpu.Anchor = scene.Focus;
@@ -1086,6 +1100,7 @@ static class WorldFrame
         if (gpu.Shadow is not null) gpu.Shadow.RangeCap = gpu.FogVolumes?.AtmosphereDistance;   // the cascades end where the weather fog hides everything
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, sun.Y); }
         StageClock.Lap(12);
+        gpu.Lamps?.Update(eye);
         // The traced scene of the global illumination: its acceleration structures for this eye (docs/render-gi.md).
         if (gpu.Probes is { } probesActive) probesActive.Active = gpu.GiActive;
         if (gpu.Gi is { } gi && gpu.GiActive)
@@ -1093,7 +1108,7 @@ static class WorldFrame
             var heights = gpu.Terrain.Snapshot();
             gi.Update(eye, heights, render.Objects ? gpu.Objects : null, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null);
             StageClock.Sub("gi scene");
-            gpu.Probes?.Update(gi, eye, heights);
+            gpu.Probes?.Update(gi, eye, heights, gpu.Lamps);
             StageClock.Sub("gi probes");
         }
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.

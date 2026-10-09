@@ -133,6 +133,7 @@ static class GiShaders
             vec4 maps;          // uAtmoMaps
             vec4 albedo;        // rgb: the objects' albedo, w: the terrain ground colour map present
             vec4 rayLength;     // x per cascade 0, y cascade 1
+            vec4 uLightGrid;    // the lamps (WorldLamps; w 0: none)
         };
         layout(set = 0, binding = 4) uniform sampler2D uGiIrradiance;
         layout(set = 0, binding = 5) uniform sampler2D uGiDistance;
@@ -140,6 +141,11 @@ static class GiShaders
         layout(set = 0, binding = 7) uniform samplerCube uAtmoIrradiance;
         layout(set = 0, binding = 8) uniform sampler2D uAtmoAmbientMap;
         layout(set = 0, binding = 9) uniform sampler2D uGround;
+        layout(set = 0, binding = 10) uniform sampler2D uLightCells;
+        layout(set = 0, binding = 11) uniform sampler2D uLightIndex;
+        layout(set = 0, binding = 12) uniform sampler2D uLightData;
+        #define LAMP_DIFFUSE_ONLY
+        {{LampShaders.Defines}}{{LampShaders.Lighting}}
         // The bounces read the probes without the visibility test: a quarter of the fetches, and the light seen in a bounce is blurred anyway.
         #define GI_NO_VISIBILITY
         {{ProbeSampling}}
@@ -247,7 +253,10 @@ static class GiShaders
             }
             vec4 bounce = giIrradiance(hit, n, -dir);
             vec3 ambient = mix(skyIrradiance(n) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * amHit.rgb * env, bounce.rgb, bounce.a);
-            rays[slot] = vec4(colour * (sun + ambient), t);
+            // The lamps around the hit (unshadowed, as the game lights them): their light bounces too.
+            vec3 lamps = vec3(0.0), lampSpecular = vec3(0.0);
+            if (uLightGrid.w > 0.5) lampLight(hit, n, -dir, 1.0, 1.0, lamps, lampSpecular);
+            rays[slot] = vec4(colour * (sun + ambient + lamps), t);
         }
         """;
 

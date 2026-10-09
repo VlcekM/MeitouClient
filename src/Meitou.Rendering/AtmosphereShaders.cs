@@ -41,6 +41,9 @@ static class AtmosphereShaders
         uniform vec4 uGiGrid[4];      // per cascade: the grid's place and spacing (Gi.GiShaders.ProbeSampling)
         uniform sampler2D uGiIrradiance, uGiDistance, uGiBase;
         {{Gi.GiShaders.ProbeSampling}}
+        uniform vec4 uLightGrid;      // the lamps (docs/render-lights.md): the grid's corner x, z, its cell size, cells per side (0: no lamps)
+        uniform sampler2D uLightCells, uLightIndex, uLightData;
+        {{LampShaders.Defines}}{{LampShaders.Lighting}}
 
         // ---- the weather's surfaces (docs/formats/weather.md "Rain and wetness", "Dust") ----
         // common/wet.hlsl makeWet: waterRel = the water's height minus the pixel's, edge the width of the water-line band (0.5 objects and foliage, 2 terrain).
@@ -188,7 +191,15 @@ static class AtmosphereShaders
                 vec4 r = textureLod(uAtmoSpecular, dominant, (1.0 - gloss) * 7.0);
                 envSpecular = kenshiEnvBrdf(gloss, nv) * r.rgb * r.a * 10.0 * am.rgb * env * specularOcclusion;
             }
-            return albedo * (diffuse + envDiffuse) + sunSpecular + envSpecular;
+            vec3 lit = albedo * (diffuse + envDiffuse) + sunSpecular + envSpecular;
+            // The game's point and spot lights, lit like the sun (docs/render-lights.md); none while uLightGrid.w is 0.
+            if (uLightGrid.w > 0.5)
+            {
+                vec3 lampDiffuse = vec3(0.0), lampSpecular = vec3(0.0);
+                lampLight(world, n, v, a, a2, lampDiffuse, lampSpecular);
+                lit += albedo * lampDiffuse + lampSpecular;
+            }
+            return lit;
         }
 
         // ---- haze ----

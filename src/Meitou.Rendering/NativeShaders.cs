@@ -75,6 +75,10 @@ static partial class NativeShaders
             uint giIrradiance;
             uint giDistance;
             uint giBase;
+            vec4 lightGrid;
+            uint lightCells;
+            uint lightIndex;
+            uint lightData;
         } frame;
 
         """;
@@ -166,6 +170,8 @@ static partial class NativeShaders
         ["uFogVolumeEye"] = "frame.fogVolumeEye", ["uFogVolumeInfo"] = "frame.fogVolumeInfo", ["uFogVolumeData"] = "frame.fogVolumeData",
         ["uGiParams"] = "frame.giParams", ["uGiGrid"] = "frame.giGrid", ["uGiIrradiance"] = "textures2D[frame.giIrradiance]",
         ["uGiDistance"] = "textures2D[frame.giDistance]", ["uGiBase"] = "textures2D[frame.giBase]",
+        ["uLightGrid"] = "frame.lightGrid", ["uLightCells"] = "textures2D[frame.lightCells]", ["uLightIndex"] = "textures2D[frame.lightIndex]",
+        ["uLightData"] = "textures2D[frame.lightData]",
     };
 
     /// <summary>The per-view uniforms the world shaders share: <see cref="ViewConstants"/> members.</summary>
@@ -272,7 +278,7 @@ static partial class NativeShaders
 }
 
 /// <summary>The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).</summary>
-[StructLayout(LayoutKind.Explicit, Size = 8608)]
+[StructLayout(LayoutKind.Explicit, Size = 8640)]
 unsafe struct FrameConstants
 {
     [FieldOffset(0)] public Vector4 AtmoSun;
@@ -310,6 +316,11 @@ unsafe struct FrameConstants
     [FieldOffset(8592)] public uint GiIrradiance;
     [FieldOffset(8596)] public uint GiDistance;
     [FieldOffset(8600)] public uint GiBase;
+    /// <summary>The lamps (docs/render-lights.md): <c>uLightGrid</c> and its three textures.</summary>
+    [FieldOffset(8608)] public Vector4 LightGrid;
+    [FieldOffset(8624)] public uint LightCells;
+    [FieldOffset(8628)] public uint LightIndex;
+    [FieldOffset(8632)] public uint LightData;
 
     /// <summary>The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.</summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
@@ -319,6 +330,7 @@ unsafe struct FrameConstants
         ("uAtmoHazeCloud", 160, 16), ("uAtmoAltitude", 176, 16), ("uAtmoMaps", 192, 16), ("uWeatherWet", 240, 16), ("uWeatherDust", 256, 16),
         ("uFogVolumeEye", 288, 16), ("uFogVolumeInfo", 304, 16), ("uFogVolumeData", 320, FogVolumeShaders.MaxData * 16),
         ("uGiParams", 8512, 16), ("uGiGrid", 8528, 64),
+        ("uLightGrid", 8608, 16),
     ];
 
     /// <summary>The frame-global textures, the array each is registered in and the member that holds its index.</summary>
@@ -329,6 +341,7 @@ unsafe struct FrameConstants
         ("uShadowBlocker", BindlessKind.Texture2D, 232), ("uShadowLandmark", BindlessKind.Shadow2D, 236),
         ("uWeatherGround", BindlessKind.Texture2D, 272), ("uWeatherDustNoise", BindlessKind.Texture2D, 276),
         ("uGiIrradiance", BindlessKind.Texture2D, 8592), ("uGiDistance", BindlessKind.Texture2D, 8596), ("uGiBase", BindlessKind.Texture2D, 8600),
+        ("uLightCells", BindlessKind.Texture2D, 8624), ("uLightIndex", BindlessKind.Texture2D, 8628), ("uLightData", BindlessKind.Texture2D, 8632),
     ];
 }
 

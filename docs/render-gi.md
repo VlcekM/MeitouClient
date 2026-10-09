@@ -69,7 +69,7 @@ reflection reads neither storage images nor acceleration structures, and pushes 
 - **Geometry records.** 32 bytes per geometry: vertex address, index address, stride, kind. A hit's record is the instance's custom index
   plus the geometry index. The shader fetches the triangle's indices and positions with `GL_EXT_buffer_reference` (`uvec2` addresses,
   because `shaderInt64` is not enabled).
-- **Foliage** (`FoliageRenderer.RayInstances`, `--gi-foliage <radius>`, default 60, 0 for none): trees, bushes and rocks whose bounding
+- **Foliage** (`FoliageRenderer.RayInstances`, `--gi-foliage <radius>`, default 150, 0 for none): trees, bushes and rocks whose bounding
   radius is at least the threshold and whose bounds come within 4000 units, nearest first, at most 14336 instances. One structure per resident
   mesh (main and leaves parts), keyed by its `GpuMesh` (a reload makes a new one; `RayGeneration` counts deletions). The instance list walks
   every zone, so it is cached: rebuilt every 120 frames, when the eye has moved 250 units, when a foliage mesh was deleted, or 2 frames
@@ -79,12 +79,15 @@ reflection reads neither storage images nor acceleration structures, and pushes 
     part's normal map (the draws' `AlphaSource` 2) at its threshold (leaves without one: 0.5), at mip 2.
   - Plants are double-sided, so a back-face hit on foliage is a surface, not "inside". TERRAIN-mode rocks take the ground colour map, as the
     terrain does.
-  - **Measured** (2026-10-09, swamp): 5374 foliage instances of 5821.
+  - **Measured** (2026-10-09, swamp, DLSS 0.67, `--ab gi-scene`):
+    - threshold 60: 5374 foliage instances of 5821, 142.8 fps with GI against 184 without (+1.57 ms GPU);
+    - threshold 150 (the default): 375 foliage instances, 146.5 fps (+1.44 ms).
 - **Textures at hits.** A geometry record (48 bytes) carries the bindless index of its diffuse map, written each frame per instance
   (`WorldObjectRenderer.RayTexture`, the foliage's `RefreshRayTextures`, at the draws' LOD bias so the entries are shared; 0 when not
   resident). It also carries the cut-out map and threshold. The trace reads the hit's texture coordinates (vertex byte 24) and samples
   mip 4, so a bounce takes the surface's colour. **Verified** by tinting textured hits red in a debug build: building interiors lit red.
 - **Not traced yet:** grass, characters, water.
+- **Lamps.** The probe trace adds the lamps' diffuse light at each hit ([render-lights.md](render-lights.md)), so lamp light bounces.
 
 ## Debug views (`--gi-debug <n>`, `Gi/GiDebugPass.cs`, `GiShaders.Debug`)
 
