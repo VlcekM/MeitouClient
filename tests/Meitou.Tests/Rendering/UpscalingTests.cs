@@ -50,8 +50,14 @@ public class UpscalingTests
     [Fact]
     public void Render_size_follows_the_scale()
     {
-        var o = new UpscaleOptions();
-        Assert.Equal((1600, 900), o.RenderSize(1600, 900));   // off: always full size
+        var o = new UpscaleOptions { Kind = UpscalerKind.Off };
+        Assert.Equal((1600, 900), o.RenderSize(1600, 900));   // off, no scale: full size
+        o.Scale = 0.5f;
+        Assert.Equal(0.5f, o.EffectiveScale);                  // off with a scale: the scene is drawn smaller and scaled up plainly (FXAA)
+        Assert.Equal((800, 450), o.RenderSize(1600, 900));
+        Assert.Equal("off at 0.5", o.Describe());
+        o.Scale = null;
+        Assert.Equal("off", o.Describe());
         o.Kind = UpscalerKind.Fsr;
         Assert.Equal((1600, 900), o.RenderSize(1600, 900));   // native by default
         o.Scale = UpscaleOptions.ParseScale("performance");

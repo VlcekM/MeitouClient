@@ -919,7 +919,8 @@ static class WorldFrame
                 up.Kind = (UpscalerKind)(int)MathF.Round(v);
                 if (up.Kind != UpscalerKind.Off) up.Preferred = up.Kind;   // what the Meitou anti-aliasing switch turns back on
             }, "0"));
-            sliders.Add(new Slider(UpscalerSliders[1], 0.33f, 1, () => up.EffectiveScale, v => up.Scale = MathF.Round(v * 100) / 100, "0.00"));
+            sliders.Add(new Slider(UpscalerSliders[1], 0.33f, 1, () => up.EffectiveScale, v => up.Scale = MathF.Round(v * 100) / 100, "0.00",
+                Text: v => up.Kind == UpscalerKind.Off && v < 1 ? v.ToString("0.00", CultureInfo.InvariantCulture) + " (FXAA: plain scaling)" : v.ToString("0.00", CultureInfo.InvariantCulture)));
             sliders.Add(new Slider(UpscalerSliders[2], 0, 1, () => up.Sharpness, v => up.Sharpness = v, "0.00"));
         }
         // The Faithful / Meitou switches as checkboxes (ticked: Meitou), the F-key toggles' state.

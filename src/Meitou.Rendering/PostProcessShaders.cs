@@ -305,13 +305,29 @@ static class PostProcessShaders
         uniform sampler2D uScene, uAo, uAdapted, uMask;   // uMask: the scene colour at the render size, whose alpha is 1 on characters (only they write it)
         uniform float uExposure, uCharacterAo;   // uCharacterAo: the share of the occlusion kept on the characters' own pixels
         uniform int uUseAo, uDither, uDebug, uAuto;
+        uniform vec2 uSceneSize;   // the scene's size when it is smaller than the picture (render scale without an upscaler), else 0: sampled with Catmull-Rom then
         const float EXPOSURE_KEY = 0.55;   // hdr.material's EXPOSURE_KEY
+
+        // Catmull-Rom through five bilinear taps (the corners of the 4 x 4 footprint are left out): a sharper plain upscale than bilinear.
+        vec3 sceneAt(vec2 uv)
+        {
+            if (uSceneSize.x <= 0.0) return texture(uScene, uv).rgb;
+            vec2 pos = uv * uSceneSize, centre = floor(pos - 0.5) + 0.5, f = pos - centre;
+            vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f)), w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+            vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f)), w3 = f * f * (-0.5 + 0.5 * f);
+            vec2 w12 = w1 + w2, t0 = (centre - 1.0) / uSceneSize, t3 = (centre + 2.0) / uSceneSize, t12 = (centre + w2 / w12) / uSceneSize;
+            vec3 sum = texture(uScene, vec2(t12.x, t0.y)).rgb * (w12.x * w0.y) + texture(uScene, vec2(t0.x, t12.y)).rgb * (w0.x * w12.y)
+                     + texture(uScene, t12).rgb * (w12.x * w12.y)
+                     + texture(uScene, vec2(t3.x, t12.y)).rgb * (w3.x * w12.y) + texture(uScene, vec2(t12.x, t3.y)).rgb * (w12.x * w3.y);
+            float weight = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
+            return sum / weight;
+        }
 
         void main()
         {
             float exposure = uExposure;
             if (uAuto != 0) exposure *= max(EXPOSURE_KEY / texture(uAdapted, vec2(0.5)).r, 0.001);   // Kenshi's exposure: key over the adapted luminance
-            vec3 c = max(texture(uScene, vUv).rgb, 0.0) * exposure;
+            vec3 c = max(sceneAt(vUv), 0.0) * exposure;
             float ao = texture(uAo, vUv).r;
             if (uCharacterAo < 1.0) ao = mix(ao, 1.0, texture(uMask, vUv).a * (1.0 - uCharacterAo));
             if (uUseAo != 0) c *= ao;
