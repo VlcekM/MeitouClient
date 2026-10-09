@@ -3,7 +3,15 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
-## v0.5.0
+## v0.6.0
+
+- Light shafts: hills, buildings and trees cast shadows into the haze and weather fog, and ridges cast dark wedges into the sky towards a low sun (on by default, --no-shafts turns it off)
+- Fog volumes such as the swamp's fog banks are darker where the sun is shadowed
+- Morning and evening mist: a thin layer of air near the ground that lights up towards the sun, strongest at sunrise and sunset and gone by midday (Tab sliders)
+- New default look: a tone map between the game's clip and ACES, so bright skies and sunlit sand roll off instead of clipping, plus a slight saturation and contrast grade (Faithful keeps the game's)
+- Viewer: --time-speed and a Tab slider make the clock run (game hours per real minute)
+- Viewer: --camera-code puts the camera at a code copied with Ctrl+C
+- Fixed blotches and bands in the Fog Islands' fog
 
 - Global illumination: on GPUs with ray tracing, light bounces between surfaces, so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (on by default, --no-gi turns it off)
 - Lamps: the game's outdoor point and spot lights now light the world

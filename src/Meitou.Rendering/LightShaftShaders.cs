@@ -61,7 +61,7 @@ static class LightShaftShaders
         """;
 
     /// <summary>
-    /// The first pass, into the atlas (RG16F): per cell, (alpha gained over the slice × the share of its samples the sun reaches, alpha gained). The
+    /// The first pass, into the atlas (RGBA16F): per cell, (alpha gained over the slice × the share of its samples the sun reaches, alpha gained, that share). The
     /// samples are stratified over the slice's depth and jittered within the cell, anew each frame (the temporal upscaler averages them). The shadow
     /// term of a point in the air: one compare in the first cascade that holds it (no filter, no surface to offset from), with the Meitou receiver's
     /// fade at the shadow range, its terrain term (mountains out to the horizon) and its landmark map; the Faithful receiver's cascades end at the last split.
@@ -118,7 +118,7 @@ static class LightShaftShaders
                 lit += shaftShadow(uShaftEye + shaftRay(uv) * dist, j);
             }
             float gained = max(a1 - a0, 0.0);
-            fragColour = vec4(gained * lit / float(uShaftSamples), gained, 0.0, 0.0);
+            fragColour = vec4(gained * lit / float(uShaftSamples), gained, lit / float(uShaftSamples), 0.0);
         }
         """;
 
@@ -145,6 +145,99 @@ static class LightShaftShaders
         }
         """;
 
+    /// <summary>The Meitou air layer's density and light (the scatter pass and the apply pass).</summary>
+    const string Air = """
+
+        uniform vec4 uShaftAir;     // x density at the base (per world unit; 0: no layer), y the base height, z the scale height, w the phase's anisotropy g
+
+        // The layer's density at a height: full up to the base (the ground under the eye), falling off exponentially above it.
+        float shaftAirDensity(float y) { return uShaftAir.x * exp(-max(y - uShaftAir.y, 0.0) / uShaftAir.z); }
+        """;
+
+    /// <summary>
+    /// The air layer (the <c>shafts</c> switch's second half, <c>--shafts-air</c>; docs/render-shafts.md "Air layer"), into a third atlas (RGBA16F): per cell,
+    /// the light the layer scatters towards the eye from the eye to the far end of its slice (rgb) and the layer's transmittance over that path (a).
+    /// Each nearer slice adds <c>T · S · (1 − e^(−σΔ))</c> with <c>T</c> the transmittance so far, σ the density at the slice's middle and Δ its length,
+    /// and <c>S</c> the in-scattered radiance: the sun (<c>π² · sunLight</c>, the irradiance a white Lambert surface lit by <c>kenshiLight</c> would get)
+    /// times the share of the slice the sun reaches (the first pass's third channel) times a Henyey-Greenstein phase (bright towards the sun), plus the
+    /// sky's ambient radiance from above (isotropic). What the game's haze covers at that distance is left out (times <c>1 − alpha</c>): the layer sits
+    /// in front of the haze, not over it.
+    /// </summary>
+    public static readonly string Scatter = "#version 330 core\n" + AtmosphereShaders.Functions + Common + Alpha + Air + """
+
+        out vec4 fragColour;
+        uniform sampler2D uShaftInjected;
+
+        float shaftPhase(float c)
+        {
+            float g = uShaftAir.w, g2 = g * g;
+            return (1.0 - g2) / (4.0 * ATMO_PI * pow(max(1.0 + g2 - 2.0 * g * c, 1e-4), 1.5));
+        }
+
+        void main()
+        {
+            ivec2 p = ivec2(gl_FragCoord.xy);
+            ivec2 grid = ivec2(uShaftGrid.xy);
+            int columns = int(uShaftGrid.w);
+            int column = p.x / grid.x, row = p.y / grid.y;
+            int k = row * columns + column;
+            if (k >= int(uShaftGrid.z)) { fragColour = vec4(0.0, 0.0, 0.0, 1.0); return; }
+            ivec2 cell = p - ivec2(column, row) * grid;
+            vec3 ray = shaftRay((vec2(cell) + 0.5) / uShaftGrid.xy);
+            vec3 sun = ATMO_PI * ATMO_PI * uAtmoSunLight * shaftPhase(dot(ray, uAtmoSun.xyz));
+            vec3 sky = atmoIrradiance(vec3(0.0, 1.0, 0.0)) * uAtmoLight.w;
+            vec3 scattered = vec3(0.0);
+            float trans = 1.0;
+            for (int i = 0; i <= k; i++)
+            {
+                float d0 = shaftDistance(float(i)), d1 = shaftDistance(float(i + 1)), mid = 0.5 * (d0 + d1);
+                float sigma = shaftAirDensity(uShaftEye.y + ray.y * mid);
+                float lit = texelFetch(uShaftInjected, ivec2(i % columns, i / columns) * grid + cell, 0).b;
+                float step = 1.0 - exp(-sigma * (d1 - d0));
+                scattered += trans * step * (sun * lit + sky) * (1.0 - shaftAlpha(mid));
+                trans *= 1.0 - step;
+            }
+            fragColour = vec4(scattered, trans);
+        }
+        """;
+
+    /// <summary>
+    /// The placed fog volumes' shadow (included by <see cref="PostProcessShaders.FogVolumes"/> before <see cref="FogVolumeShaders.Functions"/>, which
+    /// calls it under <c>FOG_VOLUME_SHADOW</c>): the share of a volume's path from <c>near</c> to <c>far</c> the sun reaches, four reads of the first
+    /// pass's third channel along it, and the colour scale that makes of it (<c>1 − darkening × (1 − share)</c>). 1 while the shafts are off.
+    /// </summary>
+    public static readonly string FogVolumeShadow = "\n#define FOG_VOLUME_SHADOW\n" + Common + """
+
+        uniform sampler2D uShaftInjected;
+        uniform vec4 uShaftFog;   // x darkening (0: no shadow), yz the atlas's size in texels
+
+        // The sun's share at a distance along the cell's ray: between the two nearest slices' middles (no bands at the slices' edges).
+        float fogVolumeShare(vec2 cell, float t)
+        {
+            if (t > uShaftRange.y) return 1.0;
+            int columns = int(uShaftGrid.w), last = int(uShaftGrid.z) - 1;
+            float s = clamp(shaftSlice(max(t, uShaftRange.x)) - 0.5, 0.0, float(last));
+            int k0 = int(floor(s)), k1 = min(k0 + 1, last);
+            vec2 t0 = vec2(float(k0 % columns), float(k0 / columns)) * uShaftGrid.xy, t1 = vec2(float(k1 % columns), float(k1 / columns)) * uShaftGrid.xy;
+            return mix(textureLod(uShaftInjected, (t0 + cell) / uShaftFog.yz, 0.0).b, textureLod(uShaftInjected, (t1 + cell) / uShaftFog.yz, 0.0).b, s - float(k0));
+        }
+
+        // Only the part of the path the eye sees into counts: a thick volume shows its front, about 1 / density deep (its curve is
+        // complete there), so shadow deep inside it or on the ground under it does not show through.
+        float fogVolumeLight(vec3 d, float near, float far, float density)
+        {
+            if (uShaftFog.x <= 0.0) return 1.0;
+            float z = -dot(d, uShaftBack);
+            if (z <= 1e-4) return 1.0;
+            vec2 uv = vec2(dot(d, uShaftRight) / (z * uShaftTan.x), dot(d, uShaftUp) / (z * uShaftTan.y)) * 0.5 + 0.5;
+            vec2 cell = clamp(uv * uShaftGrid.xy, vec2(0.5), uShaftGrid.xy - 0.5);
+            float seen = min(far, near + 0.7 / max(density, 1e-7));
+            float lit = 0.0;
+            for (int i = 0; i < 4; i++) lit += fogVolumeShare(cell, mix(near, seen, (float(i) + 0.5) * 0.25));
+            return 1.0 - uShaftFog.x * (1.0 - lit * 0.25);
+        }
+        """;
+
     /// <summary>
     /// The apply pass over the scene colour, blended as <c>scene * alpha + colour</c> (the fog volumes' state). The pixel's distance is rebuilt as the
     /// fog volumes pass rebuilds it (the near slice's depth, else the far slice's, the water plane where it lies in front); the sun's share there
@@ -152,11 +245,11 @@ static class LightShaftShaders
     /// <c>darkening × (1 − share)</c> of its haze colour (a negative colour); the sky, which no haze covers, is scaled by
     /// <c>1 − darkening × (1 − share) × sky weight × alpha at the grid's end</c>.
     /// </summary>
-    public static readonly string Apply = "#version 330 core\n" + AtmosphereShaders.Functions + Common + Alpha + """
+    public static readonly string Apply = "#version 330 core\n" + AtmosphereShaders.Functions + Common + Alpha + Air + """
 
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uNearDepth, uFarDepth, uShaftLight;
+        uniform sampler2D uNearDepth, uFarDepth, uShaftLight, uShaftScatter;
         uniform vec2 uNearPlanes, uFarPlanes;
         uniform float uWaterY;
         uniform int uHasFar;
@@ -165,12 +258,14 @@ static class LightShaftShaders
 
         float viewZ(float d, vec2 nf) { float zd = 2.0 * d - 1.0; return nf.x * nf.y / (nf.y - zd * (nf.y - nf.x)); }
 
-        float shaftShare(vec2 cell, int k)
+        vec2 shaftAt(vec2 cell, int k)
         {
             int columns = int(uShaftGrid.w);
             vec2 tile = vec2(float(k % columns), float(k / columns)) * uShaftGrid.xy;
-            return textureLod(uShaftLight, (tile + clamp(cell, vec2(0.5), uShaftGrid.xy - 0.5)) / uShaftAtlas, 0.0).r;
+            return (tile + clamp(cell, vec2(0.5), uShaftGrid.xy - 0.5)) / uShaftAtlas;
         }
+        float shaftShare(vec2 cell, int k) { return textureLod(uShaftLight, shaftAt(cell, k), 0.0).r; }
+        vec4 shaftScatter(vec2 cell, int k) { return textureLod(uShaftScatter, shaftAt(cell, k), 0.0); }
 
         void main()
         {
@@ -195,6 +290,7 @@ static class LightShaftShaders
             // The far ends of the slices: s - 1 is where this distance lies between them (-1 the eye, where the share is 1).
             float s = shaftSlice(min(dist, uShaftRange.y)) - 1.0;
             float share = 1.0;
+            vec4 air = vec4(0.0, 0.0, 0.0, 1.0);   // the air layer: light scattered towards the eye, transmittance
             if (s > -1.0)
             {
                 int last = int(uShaftGrid.z) - 1;
@@ -204,6 +300,11 @@ static class LightShaftShaders
                 float s0 = k0 < 0 ? 1.0 : shaftShare(cell, k0);
                 float s1 = shaftShare(cell, min(k0 + 1, last));
                 share = mix(s0, s1, f);
+                if (uShaftAir.x > 0.0)
+                {
+                    vec4 a0 = k0 < 0 ? vec4(0.0, 0.0, 0.0, 1.0) : shaftScatter(cell, k0);
+                    air = mix(a0, shaftScatter(cell, min(k0 + 1, last)), f);
+                }
             }
             float dark = uShaftParams.x * (1.0 - share);
             if (uShaftParams.z > 0.5)   // --shafts-debug: red the share, green the haze's alpha here, blue the haze colour's brightness, over everything
@@ -214,11 +315,12 @@ static class LightShaftShaders
             }
             if (sky)
             {
-                fragColour = vec4(0.0, 0.0, 0.0, 1.0 - dark * uShaftParams.y * shaftAlpha(uShaftRange.y));
+                fragColour = vec4(air.rgb, (1.0 - dark * uShaftParams.y * shaftAlpha(uShaftRange.y)) * air.a);
                 return;
             }
             vec3 haze = atmoApplyHaze(vec3(0.0), uShaftEye, uShaftEye + dir * dist);
-            fragColour = vec4(-dark * haze, 1.0);
+            // (scene − dark · haze) · T + S: the haze darkened where shadowed, then the air layer in front of it.
+            fragColour = vec4(air.rgb - dark * haze * air.a, air.a);
         }
         """;
 }

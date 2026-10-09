@@ -81,6 +81,9 @@ static class FogVolumeShaders
             edge *= 1.0 + abs(d.y) * 0.9;
             float alpha = fogVolumeCurve((far - near) * colourDensity.a * edge);
             vec4 fog = vec4(colourDensity.rgb * uFogVolumeEye.w, alpha);
+            #ifdef FOG_VOLUME_SHADOW
+            fog.rgb *= fogVolumeLight(d, near, far, colourDensity.a);   // Meitou light shafts: the sun shadowed along the visible path (LightShaftShaders.FogVolumeShadow)
+            #endif
             if (near == 0.0) return fog;
             // The eye outside: far volumes give way to the haze at their near side, then the weather's fog over it.
             float toHaze = uAtmoHaze.x > 0.5 ? clamp((near - 12000.0) * 0.0001, 0.0, 1.0) : 0.0;
@@ -118,7 +121,13 @@ static class FogVolumeShaders
                 t1 -= ss * far * 1000.0;
             }
             vec4 colourDensity = uFogVolumeData[o + 2];
+            #ifdef FOG_VOLUME_SHADOW
+            vec4 fog = vec4(colourDensity.rgb * uFogVolumeInfo.y, fogVolumeCurve((t1 - t0) * colourDensity.a) * shape.z);
+            if (shape.w < 0.5) fog.rgb *= fogVolumeLight(d, t0, t1, colourDensity.a);   // Meitou light shafts; additive spheres glow of their own
+            return fog;
+            #else
             return vec4(colourDensity.rgb * uFogVolumeInfo.y, fogVolumeCurve((t1 - t0) * colourDensity.a) * shape.z);
+            #endif
         }
 
         // A beam (fog_beam_fs): the path through a cylinder capped at its two ends, faded towards the ends.
@@ -145,7 +154,13 @@ static class FogVolumeShaders
             float edge = clamp((along - e0 * nd) * shape.y, 0.0, 1.0) * clamp((e1 * nd - along) * shape.y, 0.0, 1.0);
             edge = 1.0 - (1.0 - edge) * (1.0 - edge);
             vec4 colourDensity = uFogVolumeData[o + 3];
+            #ifdef FOG_VOLUME_SHADOW
+            vec4 fog = vec4(colourDensity.rgb * uFogVolumeInfo.y, fogVolumeCurve((t1 - t0) * colourDensity.a * edge) * shape.z);
+            if (shape.w < 0.5) fog.rgb *= fogVolumeLight(d, t0, t1, colourDensity.a);   // Meitou light shafts; additive beams glow of their own
+            return fog;
+            #else
             return vec4(colourDensity.rgb * uFogVolumeInfo.y, fogVolumeCurve((t1 - t0) * colourDensity.a * edge) * shape.z);
+            #endif
         }
 
         // Every volume in view along d to a point dist away, farthest first, as one affine map of the colour behind them: each blend (alpha,

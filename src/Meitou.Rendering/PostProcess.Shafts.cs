@@ -36,20 +36,33 @@ public sealed unsafe partial class PostProcess
 
     sealed class ShaftApplyPass : ShaftPass
     {
-        public readonly SamplerSlot NearDepth, FarDepth, Light;
-        public readonly UniformHandle NearPlanes, FarPlanes, WaterY, HasFar, Atlas, Params;
+        public readonly SamplerSlot NearDepth, FarDepth, Light, Scatter;
+        public readonly UniformHandle NearPlanes, FarPlanes, WaterY, HasFar, Atlas, Params, Air;
         public ShaftApplyPass(GpuContext gpu) : base(gpu, LightShaftShaders.Apply, "post shafts apply")
         {
-            (NearDepth, FarDepth, Light) = (P.Sampler("uNearDepth"), P.Sampler("uFarDepth"), P.Sampler("uShaftLight"));
+            (NearDepth, FarDepth, Light, Scatter) = (P.Sampler("uNearDepth"), P.Sampler("uFarDepth"), P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
+            Air = P.Uniform("uShaftAir");
             (NearPlanes, FarPlanes, WaterY, HasFar, Atlas, Params) = (P.Uniform("uNearPlanes"), P.Uniform("uFarPlanes"), P.Uniform("uWaterY"), P.Uniform("uHasFar"),
                 P.Uniform("uShaftAtlas"), P.Uniform("uShaftParams"));
         }
     }
 
+    /// <summary>The air layer (<see cref="LightShaftShaders.Scatter"/>).</summary>
+    sealed class ShaftScatterPass : ShaftPass
+    {
+        public readonly SamplerSlot Injected;
+        public readonly UniformHandle Air;
+        public ShaftScatterPass(GpuContext gpu) : base(gpu, LightShaftShaders.Scatter, "post shafts scatter") => (Injected, Air) = (P.Sampler("uShaftInjected"), P.Uniform("uShaftAir"));
+    }
+
     ShaftInjectPass? shaftInject;
     ShaftIntegratePass? shaftIntegrate;
+    ShaftScatterPass? shaftScatterPass;
     ShaftApplyPass? shaftApply;
-    Target2D? shaftInjected, shaftLight;
+    Target2D? shaftInjected, shaftLight, shaftScatter;
+
+    /// <summary>This frame's grid for the fog volumes pass (<see cref="LightShaftShaders.FogVolumeShadow"/>): its uniforms and the darkening (0: no shafts this frame).</summary>
+    (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) shaftFrame;
 
     /// <summary>What the light shafts did in the last frame (the stats line).</summary>
     public string ShaftsDescribe { get; private set; } = "off";
@@ -69,23 +82,29 @@ public sealed unsafe partial class PostProcess
     /// how much of the shadowed haze goes (the strength times the sun's share of the light; 0 skips the passes); <paramref name="far"/>: where the grid ends
     /// (beyond, the share stays the last slice's). Does nothing with the switch off.
     /// </summary>
-    public void RunLightShafts(float darkening, float far)
+    public void RunLightShafts(float darkening, float far, float groundY, float airByTime = 1)
     {
         var o = Options;
+        shaftFrame.Darkening = 0;
         ShaftsDescribe = !o.LightShafts ? "off" : $"darkening {darkening:0.###} (none: no passes)";
         if (!o.LightShafts || darkening <= 0 || sceneColour is null || !haveNearSlice) return;
         var (across, down, slices, aw, ah) = ShaftLayout();
-        ShaftsDescribe = $"darkening {darkening:0.###}, grid {across} x {down} x {slices} ({o.ShaftSamples} samples), {o.ShaftNear:0} to {far:0} units";
+        ShaftsDescribe = $"darkening {darkening:0.###}, grid {across} x {down} x {slices} ({o.ShaftSamples} samples), {o.ShaftNear:0} to {far:0} units, air {(o.ShaftAir > 0 ? $"x{o.ShaftAir:0.##} x{airByTime:0.##} by the hour from {groundY:0} (scale height {o.ShaftAirHeight:0}, g {o.ShaftAirPhase:0.##})" : "off")}";
         if (shaftInjected is null || shaftInjected.Width != aw || shaftInjected.Height != ah)
         {
-            foreach (var t in new[] { shaftInjected, shaftLight }.OfType<Target2D>()) t.Texture.Dispose();   // released after the frames in flight
+            foreach (var t in new[] { shaftInjected, shaftLight, shaftScatter }.OfType<Target2D>()) t.Texture.Dispose();   // released after the frames in flight
             using var batch = Gpu.Uploads.Begin();
-            shaftInjected = Make(batch, aw, ah, InternalFormat.RG16f, TextureMinFilter.Nearest, "post shafts injected");
+            // Linear: the fog volumes pass reads the sun's share (blue) between cells.
+            shaftInjected = Make(batch, aw, ah, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post shafts injected");
             shaftLight = Make(batch, aw, ah, InternalFormat.R32f, TextureMinFilter.Linear, "post shafts light");
+            shaftScatter = Make(batch, aw, ah, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post shafts scatter");
         }
         shaftInject ??= new ShaftInjectPass(Gpu);
         shaftIntegrate ??= new ShaftIntegratePass(Gpu);
         shaftApply ??= new ShaftApplyPass(Gpu);
+        shaftScatterPass ??= new ShaftScatterPass(Gpu);
+        // The air layer: density at the ground under the eye, its scale height, the phase's anisotropy (0 density: no layer, no pass).
+        var air = new Vector4(MathF.Max(o.ShaftAir, 0) * MathF.Max(airByTime, 0) * PostOptions.ShaftAirDensity, groundY, MathF.Max(o.ShaftAirHeight, 1), Math.Clamp(o.ShaftAirPhase, 0, 0.95f));
 
         float near = Math.Clamp(o.ShaftNear, 1, far * 0.5f);
         var grid = new Vector4(across, down, slices, LightShaftShaders.AtlasColumns);
@@ -115,11 +134,23 @@ public sealed unsafe partial class PostProcess
         Bind(g.P, g.Injected, shaftInjected);
         Draw(g.P, shaftLight!);
 
+        if (air.X > 0)
+        {
+            var sc = shaftScatterPass;
+            Common(sc);
+            Bind(sc.P, sc.Injected, shaftInjected);
+            sc.P.Set(sc.Air, air);
+            sc.P.ApplyGlobals();   // the sun and the sky's ambient
+            Draw(sc.P, shaftScatter!);
+        }
+
         var a = shaftApply;
         Common(a);
         Bind(a.P, a.NearDepth, sceneDepth);
         Bind(a.P, a.FarDepth, farSliceDrawn ? farDepth : null);
         Bind(a.P, a.Light, shaftLight);
+        Bind(a.P, a.Scatter, shaftScatter);
+        a.P.Set(a.Air, air);
         a.P.Set(a.NearPlanes, nearPlanes.X, nearPlanes.Y);
         a.P.Set(a.FarPlanes, farPlanes.X, farPlanes.Y);
         a.P.Set(a.WaterY, WaterHeight ?? float.MinValue);
@@ -130,6 +161,7 @@ public sealed unsafe partial class PostProcess
         Draw(a.P, sceneColour!.Attachment, sceneColour.Format, width, height, width, height, FogState);
         Stamp("shafts");
         CloseSegment();
+        shaftFrame = (grid, range, new Vector2(tanY * aspectNow, tanY), Math.Clamp(darkening, 0, 1));
     }
 
     void DisposeShafts()
@@ -137,5 +169,6 @@ public sealed unsafe partial class PostProcess
         shaftInject?.P.Dispose();
         shaftIntegrate?.P.Dispose();
         shaftApply?.P.Dispose();
+        shaftScatterPass?.P.Dispose();
     }
 }

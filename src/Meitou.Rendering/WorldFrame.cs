@@ -46,6 +46,8 @@ sealed class WorldOptions
     public bool NoDistant;
     public bool NoFoliage;
     public float Hour = 13;
+    /// <summary>The viewer's clock: game hours per real minute (0: the time stays where it is set).</summary>
+    public float TimeSpeed;
     public float ViewDistance = 450000, FogDistance = 250000, MaterialDistance = 30000;
     /// <summary>Terrain LOD (<see cref="TerrainLod"/>): the screen-space error in render pixels near the eye, far (null: in proportion to the defaults) and where the ramp between them starts.</summary>
     public float? TerrainError;
@@ -142,6 +144,8 @@ sealed class WorldOptions
     public Vector2 CloudWind;
     public PostOptions Post = PostOptions.Create("meitou");
     public double? CameraX, CameraZ, FlyToX, FlyToZ;
+    /// <summary><c>--camera-code</c>: the camera's target, yaw, pitch and distance from a viewer's Ctrl+C code (the world is loaded round it).</summary>
+    public WorldCameraCode.Pose? CameraPose;
     /// <summary>Frames of the offscreen benchmark flight (0: none), the circle's radius and the speed per frame.</summary>
     public int FlyBenchmark;
     public float FlyRadius = 12000, FlySpeed = 150;
@@ -228,6 +232,7 @@ sealed class WorldOptions
           --layer-size <n>         terrain layer texture size, a power of two up to 2048 (default 2048)
           --debug <n>              1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass)
           --time <hour>            time of day for the sun (default 13; sunrise and sunset from the CONSTANTS record)
+          --time-speed <h/min>     the viewer's clock runs on, game hours per real minute (default 0: stopped; Tab slider)
           --no-water               leave out the water
           --water-seconds <s>      start the Meitou water's clock at s game seconds (pictures of the waves at a moment; default 0)
           --water-grid <n>         the Meitou water grid's segments round the eye (default 256; 128 for integrated GPUs, 512 finer)
@@ -265,6 +270,7 @@ sealed class WorldOptions
           --object-lod <x>         objects switch to coarser levels sooner (<1) or later (>1): the Tab panel's "Object LOD distance x" (0.25-4, default 1)
           --grass-density <x>      grass blades x this (0.1-2, default 1; Tab slider)
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
+          --camera-code <hex>      start at a camera code (Ctrl+C in the viewer copies one), the world loaded round it
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,dust,reach>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
           --show-keys              start with the key list overlay open (toggle with F10)
@@ -371,6 +377,7 @@ sealed class WorldOptions
                 case "--wireframe": o.Wireframe = true; break;
                 case "--info": o.Info = true; break;
                 case "--time": o.Hour = F(); break;
+                case "--time-speed": o.TimeSpeed = F(); break;
                 case "--no-water": o.NoWater = true; break;
                 case "--water-seconds": o.WaterSeconds = double.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--water-grid": o.WaterGrid = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 64, 1024); break;
@@ -442,6 +449,13 @@ sealed class WorldOptions
                 case "--grass-density": o.GrassDensity = Math.Clamp(F(), 0.1f, 2); break;
                 case var post when o.Post.TryParse(post, Next): break;
                 case "--camera-at": (o.CameraX, o.CameraZ) = Pair(); break;
+                case "--camera-code":
+                {
+                    string code = Next();
+                    o.CameraPose = WorldCameraCode.Decode(code) ?? throw new ArgumentException($"--camera-code: '{code}' is not a camera code (the viewer's Ctrl+C)");
+                    (o.X, o.Z) = (o.CameraPose.Value.Target.X, o.CameraPose.Value.Target.Z);   // loaded round it
+                    break;
+                }
                 case "--fly-to": (o.FlyToX, o.FlyToZ) = Pair(); break;
                 case "--fly-benchmark": o.FlyBenchmark = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--renderer": IgnoreRenderer(Next()); break;
@@ -666,6 +680,7 @@ static class WorldFrame
             MinViewDistance = o.ViewDistance,
             SplitDistance = Math.Max(20000, o.ObjectDistanceFor(o.MeitouReach) * 1.1f),
         };
+        if (o.CameraPose is { } pose) WorldCameraCode.Apply(pose, camera);
         float terrainError = o.TerrainErrorFor(o.MeitouReach);
         var render = new WorldRenderOptions { Textures = !o.NoTextures, Objects = !o.NoObjects, Water = !o.NoWater, Reflections = !o.NoReflections, Wireframe = o.Wireframe ? 1 : 0, Debug = o.Debug, MaterialDistance = o.MaterialDistance,
             TerrainPixelError = terrainError, TerrainFarPixelError = o.TerrainFarError ?? WorldRenderOptions.DefaultTerrainFarPixelError * terrainError / WorldRenderOptions.DefaultTerrainPixelError, TerrainRampStart = o.TerrainRamp };
@@ -1015,12 +1030,16 @@ static class WorldFrame
             () => gpu() is { } giGpu ? giGpu.Probes?.Enabled ?? false : o.GiProbes, v => { o.GiProbes = v; if (gpu()?.Probes is { } p) p.Enabled = v; });
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
-        Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null)
+        Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null,
+        Func<float>? getTimeSpeed = null, Action<float>? setTimeSpeed = null)
     {
         var sliders = new List<Slider>();
         // The viewer's time of day (the `--time` option and the , / . keys), to the minute. The game passes none: its clock runs on its own.
         if (getHour is not null && setHour is not null)
             sliders.Add(new Slider("Time of day", 0, 24 - 1 / 60f, getHour, v => setHour(MathF.Round(v * 60) / 60), Text: TimeText));
+        // How fast the viewer's clock runs (`--time-speed`): game hours per real minute, 0 stopped.
+        if (getTimeSpeed is not null && setTimeSpeed is not null)
+            sliders.Add(new Slider("Time speed", 0, 24, getTimeSpeed, v => setTimeSpeed(MathF.Round(v * 10) / 10), Text: v => v <= 0 ? "stopped" : $"{v:0.#} game h / min"));
         // The window's vsync (off: MAILBOX, else IMMEDIATE; the frame rate is uncapped). The viewer passes it; the game keeps its own setting.
         if (getVSync is not null && setVSync is not null)
             sliders.Add(new Slider("VSync", 0, 1, () => getVSync() ? 1 : 0, v => setVSync(v >= 0.5f), Text: v => v >= 0.5f ? "on" : "off (uncapped)"));
@@ -1093,12 +1112,15 @@ static class WorldFrame
             }, "0"));
             sliders.Add(new Slider(ParticleSliders[1], 0.1f, 1, () => g.ParticleDensity, v => g.ParticleDensity = MathF.Round(v * 20) / 20, "0.00"));
             // Ours, not the game's (docs/render-post.md "Tone map and grading"): the tone curve, the saturation / contrast grade, and a scale on the heat haze.
-            sliders.Add(new Slider("Tone map (0 = game)", 0, 2, () => (int)post.Options.ToneMap, v => post.Options.ToneMap = (ToneMapOperator)(int)MathF.Round(v), "0",
-                Text: v => (ToneMapOperator)(int)MathF.Round(v) switch { ToneMapOperator.Shoulder => "shoulder", ToneMapOperator.Aces => "ACES", _ => "clamp (as the game)" }));
+            sliders.Add(new Slider("Tone map (0 = game)", 0, 3, () => (int)post.Options.ToneMap, v => post.Options.ToneMap = (ToneMapOperator)(int)MathF.Round(v), "0",
+                Text: v => (ToneMapOperator)(int)MathF.Round(v) switch { ToneMapOperator.Shoulder => "shoulder", ToneMapOperator.Aces => "ACES", ToneMapOperator.Hybrid => "hybrid (clamp + ACES)", _ => "clamp (as the game)" }));
+            sliders.Add(new Slider("Hybrid tone map: ACES share", 0, 1, () => post.Options.ToneMix, v => post.Options.ToneMix = MathF.Round(v * 20) / 20, "0.00"));
             sliders.Add(new Slider("Grading (0 = game)", 0, 1, () => post.Options.Grade ? 1 : 0, v => post.Options.Grade = v >= 0.5f,
                 Text: v => v >= 0.5f ? $"saturation {post.Options.Saturation:0.00}, contrast {post.Options.Contrast:0.00}" : "off (as the game)"));
             sliders.Add(new Slider("Heat haze strength (1 = game)", 0, 3, () => post.Options.HeatHazeStrength, v => post.Options.HeatHazeStrength = MathF.Round(v * 20) / 20, "0.00"));
             sliders.Add(new Slider("Light shafts strength", 0, 1, () => post.Options.ShaftStrength, v => post.Options.ShaftStrength = MathF.Round(v * 20) / 20, "0.00"));
+            sliders.Add(new Slider("Light shafts air (0 = none)", 0, 4, () => post.Options.ShaftAir, v => post.Options.ShaftAir = MathF.Round(v * 20) / 20, "0.00"));
+            sliders.Add(new Slider("Light shafts air at dawn and dusk (x)", 0, 6, () => post.Options.ShaftAirDawn, v => post.Options.ShaftAirDawn = MathF.Round(v * 10) / 10, "0.0"));
         }
         // Anisotropic filtering (docs/render-post.md "Texture filtering"): the most any texture is sampled with; the world's textures ask 8x, so 8x and 16x look the same there.
         sliders.Add(new Slider(FilteringSlider, 0, 4, () => MathF.Log2(g.Sky.Gpu.Samplers.MaxAnisotropy), v => g.Sky.Gpu.Samplers.MaxAnisotropy = 1 << (int)MathF.Round(v), "0",
@@ -1354,7 +1376,7 @@ static class WorldFrame
         gpu.Post!.RunGiResolve();
         StageClock.Phase("gi resolve");
         // The Meitou light shafts (docs/render-shafts.md): the haze darkened where the sun is shadowed along the view, before the fog volumes blend over it.
-        if (gpu.Shadow is { Enabled: true }) { gpu.Post!.RunLightShafts(ShaftDarkening(post.Options, light, sun.Y), Math.Min(camera.ViewDistance, gpu.Sky.HazeCompleteDistance ?? gpu.Sky.HazeDistance)); StageClock.Phase("shafts"); }
+        if (gpu.Shadow is { Enabled: true }) { gpu.Post!.RunLightShafts(ShaftDarkening(post.Options, light, sun.Y), Math.Min(camera.ViewDistance, gpu.Sky.HazeCompleteDistance ?? gpu.Sky.HazeDistance), floor, ShaftAirByTime(post.Options, scene.Clock, hour)); StageClock.Phase("shafts"); }
         if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneDepth, rw, rh);
         // The placed fog volumes over the finished scene (opaque, water, sky; the haze is in the shaders), one pass reading the depth, as the game's queue 82 does.
         gpu.Post!.RunFogVolumes(gpu.FogVolumes is { UsedData: > 0 });
@@ -1399,6 +1421,16 @@ static class WorldFrame
             giDebug.Run(gpu.GiDebug, traced, post.SceneDepth, giTarget, post.RenderWidth, post.RenderHeight, inverse, eye, light);
         }
         StageClock.Lap(10);
+    }
+
+    /// <summary>The air layer's density by the time of day (docs/render-shafts.md "Air layer"): <c>ShaftAirDawn</c> at sunrise and at sunset, easing (smoothstep) to
+    /// <c>ShaftAirDay</c> over <c>ShaftAirRamp</c> hours after sunrise and before sunset; at night the dawn value (the shafts need the sun anyway).</summary>
+    internal static float ShaftAirByTime(PostOptions o, Meitou.Data.World.SkyClock clock, float hour)
+    {
+        hour = ((hour % 24) + 24) % 24;
+        float fromEvent = hour < clock.Sunrise || hour > clock.Sunset ? 0 : Math.Min(hour - clock.Sunrise, clock.Sunset - hour);
+        float t = Math.Clamp(fromEvent / o.ShaftAirRamp, 0, 1);
+        return o.ShaftAirDay + (o.ShaftAirDawn - o.ShaftAirDay) * (1 - t * t * (3 - 2 * t));
     }
 
     /// <summary>How much of the haze in shadow the light shafts take off (docs/render-shafts.md): the strength times the sun's share of the light the

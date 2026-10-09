@@ -34,7 +34,10 @@ static partial class WorldApp
             AbToggles.Register("fog-direction", () => fog.DirectionBound, v => fog.DirectionBound = v, "the fog cull's bound by ray direction (off: only the plain bound, which finds no distance at a 50000 far clip)");
         }
         if (post.FogVrsSupported) AbToggles.Register("fog-vrs", () => post.FogVrs, v => post.FogVrs = v, "variable-rate shading where the fog hides the surface: the opaque scene passes shade 2x2 or 4x4 pixels with one fragment (MEITOU_FOG_VRS=a,b the opacities); B: every pixel shaded");
-        if (post.MergeSupported) AbToggles.Register("post-merge", () => post.MergePasses, v => post.MergePasses = v, "merged post passes: one compute dispatch for the motion, upscaler depth and reactivity, one for the exposure measure and adaptation (MEITOU_POST_MERGE=0); B: the separate full-screen passes");
+        float startScale = post.Options.Upscale.EffectiveScale;
+        AbToggles.Register("render-scale", () => post.Options.Upscale.EffectiveScale >= startScale, v => post.Options.Upscale.Scale = v ? startScale : MathF.Round(startScale * 0.67f * 100) / 100,
+            "the render scale as set (A) against two thirds of it (B), switched at run time like the Tab slider (targets and upscaler made again)");
+        if (post.MergeSupported) AbToggles.Register("post-merge",() => post.MergePasses, v => post.MergePasses = v, "merged post passes: one compute dispatch for the motion, upscaler depth and reactivity, one for the exposure measure and adaptation (MEITOU_POST_MERGE=0); B: the separate full-screen passes");
         if (post.MergeSupported) { AbToggles.Register("post-merge-velocity", () => post.MergeVelocity, v => post.MergeVelocity = v, "the velocity kernel alone (see post-merge)"); AbToggles.Register("post-merge-exposure", () => post.MergeExposure, v => post.MergeExposure = v, "the exposure kernel alone (see post-merge)"); }
         if (gpu.Shadow is { } shadowPass) AbToggles.Register("shadow-pass", () => shadowPass.Enabled, v => shadowPass.Enabled = v, "the whole shadow pass (--no-shadows)");
         if (gpu.Shadow is { } spreadPass) AbToggles.Register("shadow-spread", () => spreadPass.FarBudget > 0, v => spreadPass.FarBudget = v ? ShadowSchedule.DefaultBudget : 0, "at most one far shadow cascade redrawn per frame (B: all that are due at once)");

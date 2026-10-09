@@ -286,7 +286,8 @@ static partial class WorldApp
             if (overlay is null) Console.WriteLine("keys      no monospace system font found: the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
-            if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v, () => display.VSync, v => display.VSync = v, switches);
+            if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v, () => display.VSync, v => display.VSync = v, switches,
+                () => o.TimeSpeed, v => o.TimeSpeed = v);
             profiler = new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
             meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             var input = window.CreateInput();
@@ -471,7 +472,7 @@ static partial class WorldApp
                 gpuSamples = 0;
             }
         };
-        window.Render += _ =>
+        window.Render += renderDt =>
         {
             if (gpu is null) return;
             var size = window.FramebufferSize;
@@ -503,6 +504,12 @@ static partial class WorldApp
             }
             frameWatch.Restart();
             profiler?.BeginFrame();
+            if (o.TimeSpeed > 0)
+            {
+                // --time-speed: the clock runs on, game hours per real minute, into the next day past midnight.
+                hour += o.TimeSpeed * (float)Math.Min(renderDt, 0.25) / 60f;
+                while (hour >= 24) { hour -= 24; day++; }
+            }
             if (gpu.Weather is { } clockWeather) clockWeather.Day = day;   // game speed 1, never paused: the viewer's time is the day and the hour set here
             Draw(gpu, scene, camera, render, size.X, size.Y, hour, (float)clock.Elapsed.TotalSeconds / 600f, o.FogDistance);
             cpuMs += frameWatch.Elapsed.TotalMilliseconds;

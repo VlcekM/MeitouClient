@@ -98,7 +98,7 @@ public sealed unsafe partial class PostProcess
         {
             foreach (var t in new[] { rateDistance, rateImage }.OfType<Target2D>()) t.Texture.Dispose();   // released after the frames in flight
             using var batch = Gpu.Uploads.Begin();
-            rateDistance = Make(batch, dw, dh, InternalFormat.R32f, TextureMinFilter.Nearest, "post fog rate distance");
+            rateDistance = Make(batch, dw, dh, InternalFormat.RG32f, TextureMinFilter.Nearest, "post fog rate distance");
             var texture = batch.Create(new TextureDesc(Vk.Format.R8Uint, tw, th, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.ShadingRate | TextureUse.TransferSrc, Name: "post fog rate"));
             rateImage = new Target2D(texture, TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         }

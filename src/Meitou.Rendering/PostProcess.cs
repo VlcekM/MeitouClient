@@ -126,13 +126,13 @@ public sealed unsafe partial class PostProcess : IDisposable
     sealed class CompositePass : FullscreenProgram
     {
         public readonly SamplerSlot Scene, Ao, Adapted, Mask;
-        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug, CharacterAo, SceneSize, Tone, Grade, Saturation, Contrast;
+        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug, CharacterAo, SceneSize, Tone, ToneMix, Grade, Saturation, Contrast;
         public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
         {
             (Scene, Ao, Adapted, Mask) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"), P.Sampler("uMask"));
             (CharacterAo, SceneSize) = (P.Uniform("uCharacterAo"), P.Uniform("uSceneSize"));
             (Auto, Exposure, UseAo, Dither, Debug) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"), P.Uniform("uDebug"));
-            (Tone, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uGrade"), P.Uniform("uSaturation"), P.Uniform("uContrast"));
+            (Tone, ToneMix, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uToneMix"), P.Uniform("uGrade"), P.Uniform("uSaturation"), P.Uniform("uContrast"));
         }
     }
 
@@ -198,13 +198,18 @@ public sealed unsafe partial class PostProcess : IDisposable
     /// <summary>The placed fog volumes in one full-screen pass over the scene (<see cref="PostProcessShaders.FogVolumes"/>).</summary>
     sealed class FogPass : FullscreenProgram
     {
-        public readonly SamplerSlot NearDepth, FarDepth;
+        public readonly SamplerSlot NearDepth, FarDepth, ShaftInjected;
         public readonly UniformHandle NearPlanes, FarPlanes, Tan, Right, Up, Back, WaterY, HasFar;
+        // The light shafts' grid (LightShaftShaders.FogVolumeShadow): the volumes shadowed where the sun does not reach.
+        public readonly UniformHandle ShaftGrid, ShaftRange, ShaftTan, ShaftRight, ShaftUp, ShaftBack, ShaftFog;
         public FogPass(GpuContext gpu) : base(gpu, PostProcessShaders.FogVolumes, "post fog volumes")
         {
             (NearDepth, FarDepth) = (P.Sampler("uNearDepth"), P.Sampler("uFarDepth"));
             (NearPlanes, FarPlanes, Tan, Right, Up, Back, WaterY, HasFar) = (P.Uniform("uNearPlanes"), P.Uniform("uFarPlanes"), P.Uniform("uTan"),
                 P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uWaterY"), P.Uniform("uHasFar"));
+            ShaftInjected = P.Sampler("uShaftInjected");
+            (ShaftGrid, ShaftRange, ShaftTan, ShaftFog) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftTan"), P.Uniform("uShaftFog"));
+            (ShaftRight, ShaftUp, ShaftBack) = (P.Uniform("uShaftRight"), P.Uniform("uShaftUp"), P.Uniform("uShaftBack"));
         }
     }
 
@@ -676,6 +681,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         c.P.Set(c.Dither, o.Dither ? 1 : 0);
         c.P.Set(c.Debug, o.Debug);
         c.P.Set(c.Tone, (int)o.ToneMap);
+        c.P.Set(c.ToneMix, Math.Clamp(o.ToneMix, 0, 1));
         c.P.Set(c.Grade, o.Grade ? 1 : 0);
         c.P.Set(c.Saturation, o.Saturation);
         c.P.Set(c.Contrast, o.Contrast);
@@ -760,6 +766,17 @@ public sealed unsafe partial class PostProcess : IDisposable
         f.P.Set(f.Back, r.M13, r.M23, r.M33);
         f.P.Set(f.WaterY, WaterHeight ?? float.MinValue);
         f.P.Set(f.HasFar, farSliceDrawn ? 1 : 0);
+        // The light shafts' grid of this frame, if they ran (darkening 0: the volumes as the game draws them).
+        var shaft = shaftFrame;
+        Bind(f.P, f.ShaftInjected, shaft.Darkening > 0 ? shaftInjected : null);
+        f.P.Set(f.ShaftGrid, shaft.Grid);
+        f.P.Set(f.ShaftRange, shaft.Range);
+        f.P.Set(f.ShaftTan, shaft.Tan);
+        f.P.Set(f.ShaftRight, r.M11, r.M21, r.M31);
+        f.P.Set(f.ShaftUp, r.M12, r.M22, r.M32);
+        f.P.Set(f.ShaftBack, r.M13, r.M23, r.M33);
+        f.P.Set(f.ShaftFog, shaft.Darkening, shaftInjected?.Width ?? 1, shaftInjected?.Height ?? 1, 0);
+        shaftFrame.Darkening = 0;   // the next frame sets it again if the shafts run
         f.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
         Draw(f.P, sceneColour.Attachment, sceneColour.Format, width, height, width, height, FogState);
         Stamp("fog");

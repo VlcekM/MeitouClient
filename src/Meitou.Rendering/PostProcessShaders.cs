@@ -105,7 +105,7 @@ static class PostProcessShaders
     /// shader used to fog it there). The shader accumulates every volume, farthest first, into (colour, transmittance), which the hardware blends
     /// as <c>scene * transmittance + colour</c> (blend one, source alpha; alpha of the scene untouched).
     /// </summary>
-    public static readonly string FogVolumes = "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
+    public static readonly string FogVolumes = "#version 330 core\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow + FogVolumeShaders.Functions + """
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -147,7 +147,7 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// Fog shading rate, first pass (<c>fog-vrs</c>, docs/render-post.md "Fog shading rate"): at a quarter of the render size, the distance to the nearest surface of each 4 x 4 block of pixels,
+    /// Fog shading rate, first pass (<c>fog-vrs</c>, docs/render-post.md "Fog shading rate"): at a quarter of the render size, the distance to the nearest surface of each 4 x 4 block of pixels (red) and to the farthest (green: 1e9 where the block shows sky),
     /// rebuilt from the scene depth as the fog pass does (the near slice's depth, else the far slice's, else the sky at 1e9; where the water plane lies in front, the water's).
     /// </summary>
     public static readonly string FogRateDistance = "#version 330 core\n" + """
@@ -169,7 +169,7 @@ static class PostProcessShaders
         {
             ivec2 base = ivec2(gl_FragCoord.xy) * 4;
             ivec2 last = ivec2(uSize) - 1;
-            float best = 3.0e38;
+            float best = 3.0e38, farthest = 0.0;
             for (int y = 0; y < 4; y++)
                 for (int x = 0; x < 4; x++)
                 {
@@ -192,8 +192,9 @@ static class PostProcessShaders
                         if (tw > 0.0 && tw < dist) dist = tw;
                     }
                     best = min(best, dist);
+                    farthest = max(farthest, dist);
                 }
-            fragColour = vec4(best, 0.0, 0.0, 0.0);
+            fragColour = vec4(best, farthest, 0.0, 0.0);
         }
         """;
 
@@ -235,10 +236,14 @@ static class PostProcessShaders
             ivec2 tile = ivec2(gl_FragCoord.xy);
             int per = int(uRate.x) / 4, margin = int(uRate.y);
             ivec2 a0 = tile * per - margin, last = textureSize(uDistance, 0) - 1;
-            float dist = 3.0e38;
+            float dist = 3.0e38, farthest = 0.0;
             for (int y = 0; y < per + 2 * margin; y++)
                 for (int x = 0; x < per + 2 * margin; x++)
-                    dist = min(dist, texelFetch(uDistance, clamp(a0 + ivec2(x, y), ivec2(0), last), 0).r);
+                {
+                    vec2 block = texelFetch(uDistance, clamp(a0 + ivec2(x, y), ivec2(0), last), 0).rg;
+                    dist = min(dist, block.r);
+                    farthest = max(farthest, block.g);
+                }
             vec2 centre = min((vec2(tile) + 0.5) * uRate.x, uSize - 0.5);
             vec2 ndc = centre / uSize * 2.0 - 1.0;
             vec3 perZ = uRight * ndc.x * uTan.x + uUp * ndc.y * uTan.y - uBack;
@@ -250,6 +255,9 @@ static class PostProcessShaders
             uint code = 0u;
             if (opacity >= uThreshold.x) code = 5u;
             if (opacity >= uThreshold.y && uRate.z > 3.5) code = 10u;
+            // A surface's outline against the sky: the haze hides the surface's colour but not the step to the (unhazed) sky, which coarse fragments
+            // turn into blocks. Full rate there, unless the fog volumes in front hide the outline too.
+            if (dist < 1.0e8 && farthest > 1.0e8 && trans > 0.05) code = 0u;
             fragColour = uvec4(code, 0u, 0u, 0u);
         }
         """;
@@ -413,6 +421,7 @@ static class PostProcessShaders
         uniform sampler2D uScene, uAo, uAdapted, uMask;   // uMask: the scene colour at the render size, whose alpha is 1 on characters (only they write it)
         uniform float uExposure, uCharacterAo;   // uCharacterAo: the share of the occlusion kept on the characters' own pixels
         uniform int uUseAo, uDither, uDebug, uAuto, uTone, uGrade;
+        uniform float uToneMix;    // hybrid (uTone 3): 0 the clamp, 1 ACES
         uniform float uSaturation, uContrast;
         uniform vec2 uSceneSize;   // the scene's size when it is smaller than the picture (render scale without an upscaler), else 0: sampled with Catmull-Rom then
         const float EXPOSURE_KEY = 0.55;   // hdr.material's EXPOSURE_KEY
@@ -433,7 +442,7 @@ static class PostProcessShaders
         }
 
         // Ours, not the game's (docs/render-post.md "Tone map and grading"): identity up to K on the brightest channel, then an
-        // exponential roll-off towards 1 with the same slope at K, hue kept; and Narkowicz's ACES fit.
+        // exponential roll-off towards 1 with the same slope at K, hue kept; Narkowicz's ACES fit; and the hybrid, a mix of the clip and ACES.
         vec3 shoulder(vec3 c)
         {
             const float K = 0.8;
@@ -453,6 +462,8 @@ static class PostProcessShaders
             if (uUseAo != 0) c *= ao;
             if (uTone == 1) c = shoulder(c);
             else if (uTone == 2) c = aces(c);
+            // hybrid: between the game's clip and ACES, fed 0.7 of the exposure so its mid-tones stay the clip's (0.18 -> 0.17, 0.5 -> 0.49) and only the highlights roll off
+            else if (uTone == 3) c = mix(clamp(c, 0.0, 1.0), aces(c * 0.7), uToneMix);
             c = clamp(c, 0.0, 1.0);   // Kenshi has no tone curve: values over 1 clip (docs/formats/post-processing.md)
             if (uGrade != 0)
             {

@@ -27,6 +27,9 @@ public static class Enhancements
 {
     public const float MeitouHazeStrength = 0.93f;
 
+    /// <summary>The Meitou <c>heathaze</c> switch's scale on the heat haze (Faithful: 1, the game's): far objects shimmer but stay readable.</summary>
+    public const float MeitouHeatHazeStrength = 0.5f;
+
     /// <summary>The Meitou shadows' default shadow distance (the game's is 5000, its slider ends at 9000), and the most the <c>--shadow-range</c> option takes with them.</summary>
     public const float MeitouShadowRange = 10000, MeitouShadowRangeMax = 15000;
 
@@ -76,10 +79,16 @@ public static class Enhancements
             "the game draws every foliage mesh at full detail, and TERRAIN-mode rocks and plants (some thousands of triangles each) have no LOD levels; Meitou makes coarser levels at load (quadric edge collapse, kept in a disk cache) and picks one per instance by how many pixels (shadow texels) its deviation would show"),
         new("gi", "Indirect light", "flat ambient", "ray-traced probes",
             gi ?? (() => false), setGi ?? (_ => { }),
-            "the game lights every surface's shadow side with one flat sky ambient per biome; Meitou traces rays from a grid of probes around the camera (needs --gi and a GPU with ray tracing), so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (docs/render-gi.md)"),
+            "the game lights every surface's shadow side with one flat sky ambient per biome; Meitou traces rays from a grid of probes around the camera (needs a GPU with ray tracing; --no-gi leaves it out), so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (docs/render-gi.md)"),
+        new("tonemap", "Tone map and grade", "clip", "hybrid, graded",
+            () => post.ToneMap != ToneMapOperator.Clamp || post.Grade, v => { post.ToneMap = v ? ToneMapOperator.Hybrid : ToneMapOperator.Clamp; post.Grade = v; },
+            "the game has no tone curve (bright skies and sunlit sand clip flat at white) and no grading; Meitou blends the clip with ACES (the Tab slider sets the share, 0.75) so highlights roll off, then grades saturation 1.06 and contrast 1.05"),
         new("shafts", "Light shafts", "flat haze", "shadowed haze",
             () => post.LightShafts, v => post.LightShafts = v,
             "the game lights its haze and weather fog the same everywhere, so shadows end at the ground; Meitou darkens the air the sun does not reach (a froxel grid of shadow samples along the view), so mountains, rock stacks and buildings cast shafts through the haze and the fog (docs/render-shafts.md)"),
+        new("heathaze", "Heat haze", "strength 1", $"strength {MeitouHeatHazeStrength}",
+            () => MathF.Abs(post.HeatHazeStrength - 1) > 1e-3f, v => post.HeatHazeStrength = v ? MeitouHeatHazeStrength : 1,
+            "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; Meitou halves it (the Tab slider sets any strength)"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>
