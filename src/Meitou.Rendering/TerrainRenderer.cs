@@ -452,6 +452,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             c.HalfWorld = (float)WorldLayout.HalfWorldSize;
             c.Debug = options.Debug;
             c.Grid = options.Grid ? 1u : 0u;
+            if (patches && TerrainLayerSkip.Enabled) c.CliffEps = TerrainLayerSkip.CliffEps;
             c.FarStart = options.MaterialDistance * 0.8f;
             c.FarEnd = options.MaterialDistance;
             var t = textures;

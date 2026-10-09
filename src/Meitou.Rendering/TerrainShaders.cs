@@ -182,6 +182,7 @@ static partial class TerrainShaders
         uniform float uFarEnd;
         uniform bool uHasGround;       // whole-world ground colour map available
         uniform bool uHasWorldColour;  // whole-world colour map available
+        uniform float uCliffEps;       // the cliff weights up to this are dropped, the next as much ramp in (0: every nonzero weight counts)
 
         uniform sampler2DArray uDiffuse;
         uniform sampler2DArray uNormal;
@@ -208,6 +209,10 @@ static partial class TerrainShaders
         Coord coord(vec2 p) { Coord c; c.p = p; c.dx = dFdxCoarse(p); c.dy = dFdyCoarse(p); return c; }
         vec4 tex(sampler2DArray s, Coord c, float layer) { return textureGrad(s, vec3(c.p, layer), c.dx, c.dy); }
 
+        // A layer weight with its small values dropped: 0 up to eps, rising smoothly to the weight itself at twice eps (continuous, so no seam where a
+        // layer stops being sampled); eps 0 is the weight unchanged. docs/render-terrain.md, "Layer weight threshold".
+        float keepWeight(float x, float eps) { return eps > 0.0 ? x * smoothstep(eps, 2.0 * eps, x) : x; }
+
         // One biome's surface (the layer model of docs/formats/terrain.md).
         Surface biome(int b, vec3 n, float slope, vec4 map, vec4 colour, float distance)
         {
@@ -228,6 +233,7 @@ static partial class TerrainShaders
 
             vec4 w = smoothstep(smin - sblend, smin, vec4(slope)) * smoothstep(smax + sblend, smax, vec4(slope));
             vec4 white = vec4(1.0);
+            w.y = keepWeight(w.y, uCliffEps);
 
             // A layer whose weight is exactly 0 at this pixel is not sampled: mixing in a weight of 0 leaves the value as it was
             // (x + 0 * (y - x) and x * 1 + y * 0 are both x). On the swamp the dirt weight is exactly 0 on 57 % of the ground, but the slope and
@@ -491,6 +497,7 @@ static partial class TerrainShaders
             uint ground;
             uint worldColour;
             bool grid;
+            float cliffEps;
         } terrain;
 
         """;
@@ -515,7 +522,7 @@ static partial class TerrainShaders
         ["uTextured"] = "terrain.textured", ["uNormalMaps"] = "terrain.normalMaps", ["uHasMaps"] = "terrain.hasMaps",
         ["uMapState"] = "terrain.mapState", ["uDebug"] = "terrain.debug", ["uFeature"] = "terrain.feature",
         ["uFeatureBiome"] = "terrain.featureBiome", ["uFarStart"] = "terrain.farStart", ["uFarEnd"] = "terrain.farEnd",
-        ["uHasGround"] = "terrain.hasGround", ["uHasWorldColour"] = "terrain.hasWorldColour",
+        ["uCliffEps"] = "terrain.cliffEps", ["uHasGround"] = "terrain.hasGround", ["uHasWorldColour"] = "terrain.hasWorldColour",
         ["uDiffuse"] = "textures2DArray[terrain.diffuse]", ["uNormal"] = "textures2DArray[terrain.normal]",
         ["uParams"] = "textures2D[terrain.params]", ["uCells"] = "utextures2D[terrain.cells]", ["uBlendMap"] = "textures2D[terrain.blendMap]",
         ["uOverlay"] = "textures2D[terrain.overlay]", ["uColour"] = "textures2D[terrain.colour]", ["uGround"] = "textures2D[terrain.ground]",
@@ -601,7 +608,7 @@ static partial class TerrainShaders
 
 /// <summary>The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools
 /// are 32-bit (0 / 1).</summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 224)]
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 240)]
 struct TerrainConstants
 {
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 CoarseRect;
@@ -642,6 +649,7 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(212)] public uint Ground;
     [System.Runtime.InteropServices.FieldOffset(216)] public uint WorldColour;
     [System.Runtime.InteropServices.FieldOffset(220)] public uint Grid;
+    [System.Runtime.InteropServices.FieldOffset(224)] public float CliffEps;
 }
 
 /// <summary>The C# side of <see cref="TerrainShaders.PushMembers"/> (std430 push constants): a patch's <c>uNode</c> and <c>uMorph</c>.</summary>

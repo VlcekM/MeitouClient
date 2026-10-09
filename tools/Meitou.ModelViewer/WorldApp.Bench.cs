@@ -63,6 +63,7 @@ static partial class WorldApp
         AbToggles.Register("early-depth", () => EarlyDepth.Enabled, v => EarlyDepth.Enabled = v, "objects, rocks and foliage meshes use programs without a discard where fully visible and uncut (early depth test); B: the single program with the discard");
         AbToggles.Register("solid-first", () => WorldObjectRenderer.SolidFirst, v => WorldObjectRenderer.SolidFirst = v, "objects: the draws without a discard (early depth test) ahead of the dithered and cut-out ones");
         AbToggles.Register("terrain-probe", () => !TerrainProbe.On, v => TerrainProbe.On = !v, "terrain cost probe MEITOU_TERRAIN_PROBE=name (side B: the probe program; screenshots: MEITOU_TERRAIN_PROBE_ON=1)");
+        RegisterTerrainAb();
         AbToggles.Register("normal-maps", () => render.NormalMaps, v => render.NormalMaps = v, "normal maps on terrain and objects (probe)");
         AbToggles.Register("water-draw", () => render.Water, v => render.Water = v, "the water pass (--no-water)");
         AbToggles.Register("reflections", () => render.Reflections, v => render.Reflections = v, "the water reflection pass (--no-reflections)");
