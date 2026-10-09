@@ -55,6 +55,7 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [render-foliage.md](render-foliage.md) | World view foliage: paging, GPU cull, ranges, impostors, reflections, measurements |
 | [render-shadows.md](render-shadows.md) | World view shadows: the game's CSM, Meitou shadows, the shadow pass cost |
 | [render-post.md](render-post.md) | World view post-processing: the HDR framebuffer, SSAO, fog, exposure, upscalers |
+| [render-gi.md](render-gi.md) | Ray-traced global illumination (Meitou, optional): device, acceleration structures, debug views, plan |
 | [bench.md](bench.md) | The benchmark harness (`--view`, `--ab`, `--bench-frames`), start-up time and the load caches (`--no-load-cache`), `--tiered-jit` / `--pgo` |
 | [character-renderer.md](character-renderer.md) | The native character renderer: `--crowd` harness, per-instance bone and material buffers, instancing per mesh part, LOD and shadow choices, measurements, what is left |
 | [character-viewer.md](character-viewer.md) | The removed mesh and character viewer (DECISIONS 23, tag `model-viewer-last`): options, mesh and skeleton loading, skinning and the bone block, animation blending, body shape, character shading inputs, LOD, camera, lighting, verified findings, gaps; for the later native character renderer |

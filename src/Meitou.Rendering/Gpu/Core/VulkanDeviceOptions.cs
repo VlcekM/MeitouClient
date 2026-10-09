@@ -63,6 +63,13 @@ public sealed class VulkanDeviceOptions
     /// </summary>
     public bool TriangleMeasurements { get; set; }
 
+    /// <summary>
+    /// Ray queries for the ray-traced global illumination (<c>--gi</c>, docs/render-gi.md): enables VK_KHR_acceleration_structure, VK_KHR_ray_query
+    /// and buffer device address when the device has them (<see cref="VulkanDevice.HasRayQuery"/>). Off by default: a normal run creates the device
+    /// exactly as before.
+    /// </summary>
+    public bool RayTracing { get; set; }
+
     /// <summary>Called right after the device is created (Streamline's <c>slSetVulkanInfo</c>).</summary>
     public Action<VulkanDevice>? DeviceCreated { get; set; }
 }

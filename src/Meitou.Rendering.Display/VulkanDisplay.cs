@@ -35,6 +35,9 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// <summary>Set before creating the display: turns on the device features of the bench's triangle measurements (<see cref="VulkanDeviceOptions.TriangleMeasurements"/>; <c>--bench-tris</c>).</summary>
     public static bool TriangleMeasurements { get; set; }
 
+    /// <summary>Set before creating the display: ray queries for the global illumination (<see cref="VulkanDeviceOptions.RayTracing"/>; <c>--gi-debug</c>).</summary>
+    public static bool RayTracing { get; set; }
+
     /// <summary>A window created from <paramref name="options"/> (its Vulkan surface; shown), or headless when <paramref name="options"/> is null.</summary>
     public VulkanDisplay(WindowOptions? options, bool vsync, bool streamline = false)
     {
@@ -45,6 +48,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
             Validation = validation == true, SyncValidation = sync, GpuValidation = gpu,
             PipelineCachePath = PipelineCacheFile(),
             TriangleMeasurements = TriangleMeasurements,
+            RayTracing = RayTracing,
         };
         if (streamline)
         {

@@ -41,6 +41,12 @@ static partial class WorldApp
             AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v, "foliage meshes and impostors, not the TERRAIN-mode rocks (MEITOU_FOLIAGE_DEBUG=nomeshes)");
         }
         AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
+        if (gpu.Gi is not null)
+        {
+            int giMode = gpu.GiDebug;
+            AbToggles.Register("gi-scene", () => gpu.GiActive, v => gpu.GiActive = v, "the global illumination's traced scene (acceleration structure builds) and its debug view (needs --gi-debug)");
+            AbToggles.Register("gi-debug", () => gpu.GiDebug > 0, v => gpu.GiDebug = v ? giMode : 0, "the global illumination's debug view, the scene built on both sides (needs --gi-debug)");
+        }
         {
             // Cost probes for the terrain (side B: error doubled, about a quarter of the triangles; ground colour only, no textured material).
             float err = render.TerrainPixelError, farErr = render.TerrainFarPixelError, materialDistance = render.MaterialDistance;

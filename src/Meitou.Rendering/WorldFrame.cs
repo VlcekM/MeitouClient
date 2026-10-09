@@ -60,6 +60,11 @@ sealed class WorldOptions
     /// <summary>Sun shadows (docs/formats/shadows.md): off, the game's <c>shadow quality</c> index, <c>Shadow Range</c>, the debug view.</summary>
     public bool NoShadows;
     public int ShadowQuality = 1, DebugShadows, ShadowFilter = 2;
+    /// <summary>The ray-traced global illumination's debug view (0 off), its bounce rays per pixel and object range (docs/render-gi.md).</summary>
+    public int GiDebug, GiSamples = 4;
+    public float GiRange = 6000;
+    /// <summary>Whether the device must be made with ray queries (<c>VulkanDisplay.RayTracing</c>).</summary>
+    public bool WantsRayTracing => GiDebug > 0;
     public float? ShadowRange;   // --shadow-range as given (null: the default of the shadows switch's mode, see ShadowRangeFor)
     public bool MeitouShadows = true;   // the shadows switch (Enhancements): Meitou by default, false the game's CSM
 
@@ -187,6 +192,9 @@ sealed class WorldOptions
           --no-shadows             no sun shadow map   --shadow-quality <0|1|2> map side 1024/2048/4096 (default 1)   --shadow-range <u> (1000..9000, default 5000; with the Meitou shadows 1000..15000, default 10000)
           --shadow-filter <0|1|2>  Meitou shadow filter: 2 full (default), 1 the far cascades cheaper, 0 cheapest everywhere (low-end GPUs)
           --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture
+          --gi-debug <n>           ray-traced global illumination's debug views (needs ray queries; docs/render-gi.md): 1 a bounce ray's hit distance,
+                                   2 one-bounce lighting on grey surfaces, 3 the traced scene seen from the eye (normals)
+          --gi-samples <n>         bounce rays per pixel in --gi-debug 2 (default 4)   --gi-range <u> objects traced within this distance (default 6000)
           (the shadows switch, F5: Meitou by default, view-fitted cascades with soft contact-hardening penumbrae and the terrain's shadow out to the horizon; --faithful shadows the game's CSM)
           --simple-sky             the old colour-model sky and squared-distance fog instead of the atmosphere (B toggles)
           --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral
@@ -321,6 +329,9 @@ sealed class WorldOptions
                 case "--shadow-filter": o.ShadowFilter = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, 2); break;
                 case "--shadow-range": o.ShadowRange = Math.Clamp(F(), KenshiShadows.MinRange, CommandLineMaxShadowRange); break;
                 case "--debug-shadows": o.DebugShadows = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--gi-debug": o.GiDebug = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, 3); break;
+                case "--gi-samples": o.GiSamples = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 1, 64); break;
+                case "--gi-range": o.GiRange = F(); break;
                 case "--simple-sky": o.SimpleSky = true; break;
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
                 case "--haze-distance": o.HazeDistance = F(); break;
@@ -606,6 +617,12 @@ static class WorldFrame
         public ReflectionPass? Reflection;
         public ShadowPass? Shadow;
         public int DebugShadows;
+        /// <summary>The ray-traced global illumination's scene and debug view (null without <c>--gi-debug</c> or ray queries; docs/render-gi.md).</summary>
+        internal Gi.GiScene? Gi;
+        internal Gi.GiDebugPass? GiDebugPass;
+        public int GiDebug;
+        /// <summary>Whether the traced scene is updated (and the debug view drawn) this frame: the bench's gi-scene switch.</summary>
+        public bool GiActive = true;
         public PostProcess? Post;
         public WorldObjectRenderer? Objects;
         public FoliageRenderer? Foliage;
@@ -632,6 +649,8 @@ static class WorldFrame
         public double WaterClockHours;
         public void Dispose()
         {
+            GiDebugPass?.Dispose();
+            Gi?.Dispose();
             Streamer?.Dispose();
             Foliage?.Dispose();
             Characters?.Dispose();
@@ -804,6 +823,17 @@ static class WorldFrame
         }
         if (o.Crowd > 0 && scene.Database is not null) gpu.Characters = Characters.CrowdHarness.Create(context, install, scene, assets, o, interactive);
         gpu.DebugShadows = o.DebugShadows;
+        if (o.GiDebug > 0)
+        {
+            if (!context.Device.HasRayQuery) Console.WriteLine("warning   --gi-debug: the device has no ray queries (VK_KHR_ray_query), the view is off");
+            else
+            {
+                gpu.Gi = new Gi.GiScene(context) { Range = o.GiRange };
+                gpu.GiDebugPass = new Gi.GiDebugPass(context) { Samples = o.GiSamples };
+                gpu.GiDebug = o.GiDebug;
+                Console.WriteLine($"gi        debug view {o.GiDebug}, objects within {o.GiRange:0}, {o.GiSamples} bounce rays per pixel");
+            }
+        }
         // The memory-pressure guard (VramGuard): MEITOU_VRAM_GUARD=0 leaves it off.
         if (Environment.GetEnvironmentVariable("MEITOU_VRAM_GUARD") != "0")
         {
@@ -1035,6 +1065,12 @@ static class WorldFrame
         if (gpu.Shadow is not null) gpu.Shadow.RangeCap = gpu.FogVolumes?.AtmosphereDistance;   // the cascades end where the weather fog hides everything
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, sun.Y); }
         StageClock.Lap(12);
+        // The traced scene of the global illumination: its acceleration structures for this eye (docs/render-gi.md).
+        if (gpu.Gi is { } gi && gpu.GiActive)
+        {
+            gi.Update(eye, gpu.Terrain.Snapshot(), render.Objects ? gpu.Objects : null);
+            StageClock.Sub("gi scene");
+        }
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is { Level: > 0 };   // level 0: no pass, the water shows the sky colour
         if (gpu.Reflection is not null) { gpu.Reflection.MaxDistance = gpu.Sky.HazeDistance * gpu.Reflection.Range; gpu.Reflection.HideDistance = gpu.FogVolumes?.AtmosphereDistance; }
@@ -1182,6 +1218,13 @@ static class WorldFrame
         {
             var (nearestNear, nearestFar) = camera.Slices().Last();
             gpu.Shadow.DrawDebug(gpu.DebugShadows, gpu.Post!.Target!, width, height, view, camera.Projection(aspect, nearestNear, nearestFar), eye);
+        }
+        if (gpu.GiDebug > 0 && gpu.GiActive && gpu.Gi is { } traced && gpu.GiDebugPass is { } giDebug && gpu.Post?.Target is { } giTarget)
+        {
+            // The near slice's depth back to positions relative to the eye: the rotation-only view and that slice's projection, inverted.
+            var (nearestNear, nearestFar) = camera.Slices().Last();
+            Matrix4x4.Invert(rotation * camera.Projection(aspect, nearestNear, nearestFar), out var inverse);
+            giDebug.Run(gpu.GiDebug, traced, post.SceneDepth, giTarget, post.RenderWidth, post.RenderHeight, inverse, eye, light);
         }
         StageClock.Lap(10);
     }

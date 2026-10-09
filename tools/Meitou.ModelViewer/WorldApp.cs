@@ -81,6 +81,7 @@ static partial class WorldApp
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
         VulkanDisplay.TriangleMeasurements = o.BenchTris;
+        VulkanDisplay.RayTracing = o.WantsRayTracing;
         using var display = new VulkanDisplay(null, vsync: false, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
         streamline = display.Streamline;
         using var watch = VramWatch.Start(display.Context.Device);
@@ -123,7 +124,7 @@ static partial class WorldApp
         // Offscreen: the post-processing chain (HDR scene, resolve, effects) ends in a plain RGBA8 texture that is read back.
         int w = o.Width, h = o.Height;
         using var target = Meitou.Rendering.Gpu.Texture.Create(context, new TextureDesc(Silk.NET.Vulkan.Format.R8G8B8A8Unorm, w, h,
-            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "offscreen picture"));
+            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.TransferDst | TextureUse.Sampled, Name: "offscreen picture"));
         gpu.Post!.Target = target;
         gpu.Post.InstantAdaptation = true;   // a still picture: the exposure settles at once
         Console.WriteLine($"post      {o.Post.Describe()}");
@@ -217,6 +218,7 @@ static partial class WorldApp
         Console.WriteLine($"haze      {(gpu.Sky.KenshiHaze ? "kenshi" : "physical")}, eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {gpu.Sky.EyeClearance:0} above the ground within {KenshiCamera.MaxDistance:0}: altitude weight {gpu.Sky.AltitudeWeight:0.###}, strength {gpu.Sky.HazeStrength:0.##}");
         if (gpu.FogVolumes is { } fogVolumes) Console.WriteLine($"fog vols  {fogVolumes.Active.Count} in view ({fogVolumes.EffectVolumesDrawn} of {fogVolumes.EffectVolumes} weather effect volumes), {fogVolumes.UsedData} of {FogVolumeShaders.MaxData} vec4s{(fogVolumes.Dropped > 0 ? $", {fogVolumes.Dropped} left out" : "")}, farthest first: {(fogVolumes.Active.Count == 0 ? "none" : string.Join("; ", fogVolumes.Active))}{(fogVolumes.Enabled ? "" : " (off: --no-fog-volumes)")}");
         if (gpu.FogVolumes is { } fogCulled) Console.WriteLine($"fog cull  {(fogCulled.DescribeCull() ?? "off for this view")}{(fogCulled.CullEnabled ? "" : " (off: --no-fog-cull)")}");
+        if (gpu.Gi is { } gi) Console.WriteLine($"gi         {gi.Describe()}");
         if (gpu.Post is { } occlusionPost && gpu.Foliage is { } occlusionFoliage) Console.WriteLine($"occlusion  {(occlusionPost.OcclusionCull ? $"depth pyramid {occlusionPost.Hiz?.Describe ?? "none"}: {occlusionFoliage.OccludedInstances} foliage instances left out of the main view" : "off (--no-occlusion-cull)")}");
         if (o.ShowKeys && DebugOverlay.TryCreate(context) is { } keysOverlay)
         {
@@ -251,6 +253,7 @@ static partial class WorldApp
 
     static int Interactive(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
+        VulkanDisplay.RayTracing = o.WantsRayTracing;
         using var display = new VulkanDisplay(WindowFor(o), vsync: true, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
         streamline = display.Streamline;
         var window = display.Window!;
