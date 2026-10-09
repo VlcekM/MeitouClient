@@ -50,7 +50,7 @@ public static class Enhancements
         new("haze", "Haze", "strength 1", $"strength {MeitouHazeStrength}",
             () => MathF.Abs(hazeStrength() - 1) > 1e-3f, v => setHazeStrength(v ? MeitouHazeStrength : 1), "lighter haze keeps far mountains visible"),
         new("aa", "Anti-aliasing", "FXAA", "temporal",
-            () => post.Upscale.Kind != UpscalerKind.Off, v => post.Upscale.Kind = v ? post.Upscale.Preferred : UpscalerKind.Off,
+            () => post.Upscale.Kind != UpscalerKind.Off, v => { post.Upscale.Kind = v ? post.Upscale.Preferred : UpscalerKind.Off; if (!v) post.Fxaa = true; },
             "the game uses FXAA; Meitou uses a temporal method (TAA, FSR or DLSS: the Tab panel chooses, FSR and DLSS need their libraries)",
             () => post.Upscale.Preferred.ToString().ToUpperInvariant()),
         new("shadows", "Shadows", "CSM", "soft, far terrain",

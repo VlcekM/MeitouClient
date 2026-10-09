@@ -815,7 +815,14 @@ static class WorldFrame
     /// <summary>Draws a frame: the sky, then the far depth slice (terrain, water), then the near one (terrain, objects, water).</summary>
     // The Tab panel: draw distances and LOD.
     /// <summary>The upscaler sliders' labels (the game keeps command-line upscaler options over the saved ones).</summary>
-    public static readonly string[] UpscalerSliders = ["Anti-aliasing: 0 FXAA 1 TAA 2 FSR 3 DLSS", "Render scale (upscaler)", "Upscaler sharpness"];
+    // The anti-aliasing slider's label changed when "0 off" was added (2026-10-09), so a value saved under the old numbering is not misread.
+    public static readonly string[] UpscalerSliders = ["Anti-aliasing: 0 off 1 FXAA 2 TAA 3 FSR 4 DLSS", "Render scale (upscaler)", "Upscaler sharpness"];
+
+    /// <summary>The anti-aliasing slider's value for the options: 0 none, 1 FXAA, 2.. the upscaler kinds (TAA, FSR, DLSS).</summary>
+    public static int AntiAliasingSlider(PostOptions o) => o.Upscale.Kind != UpscalerKind.Off ? (int)o.Upscale.Kind + 1 : o.Fxaa ? 1 : 0;
+
+    /// <summary>The upscaler a value of the anti-aliasing slider picks (<see cref="UpscalerKind.Off"/> for none and FXAA).</summary>
+    public static UpscalerKind AntiAliasingKind(float v) => (int)MathF.Round(v) is var i && i >= 2 ? (UpscalerKind)Math.Min(i - 1, (int)UpscalerKind.Dlss) : UpscalerKind.Off;
 
     /// <summary>
     /// The Faithful / Meitou switches over the live renderer (the game's Shift+F keys, the viewer's F keys, the Tab checkboxes): they change the
@@ -915,9 +922,10 @@ static class WorldFrame
         {
             // Upscaling (docs/engine.md "Upscaling"): FSR and DLSS fall back to TAA where their library or backend is missing.
             var up = post.Options.Upscale;
-            sliders.Add(new Slider(UpscalerSliders[0], 0, 3, () => (int)up.Kind, v =>
+            sliders.Add(new Slider(UpscalerSliders[0], 0, 4, () => AntiAliasingSlider(post.Options), v =>
             {
-                up.Kind = (UpscalerKind)(int)MathF.Round(v);
+                up.Kind = AntiAliasingKind(v);
+                post.Options.Fxaa = MathF.Round(v) >= 1;   // 0: no anti-aliasing at all (FXAA off, no upscaler)
                 if (up.Kind != UpscalerKind.Off) up.Preferred = up.Kind;   // what the Meitou anti-aliasing switch turns back on
             }, "0"));
             sliders.Add(new Slider(UpscalerSliders[1], 0.33f, 1, () => up.EffectiveScale, v => up.Scale = MathF.Round(v * 100) / 100, "0.00"));

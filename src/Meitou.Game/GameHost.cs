@@ -147,7 +147,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     }
 
     /// <summary>DLSS asked for, on the command line or in the saved settings: Streamline must be loaded before the Vulkan device.</summary>
-    bool WantsDlss() => o.Post.Upscale.Kind == UpscalerKind.Dlss || !o.Post.Upscale.Explicit && config.Graphics.TryGetValue(WorldFrame.UpscalerSliders[0], out float k) && MathF.Round(k) == (int)UpscalerKind.Dlss;
+    bool WantsDlss() => o.Post.Upscale.Kind == UpscalerKind.Dlss || !o.Post.Upscale.Explicit && config.Graphics.TryGetValue(WorldFrame.UpscalerSliders[0], out float k) && WorldFrame.AntiAliasingKind(k) == UpscalerKind.Dlss;
 
     EngineKey FirstKey(InputAction action) => session.Bindings.Get(action).First(b => !b.IsMouse).Key;
 
