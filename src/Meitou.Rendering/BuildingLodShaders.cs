@@ -139,7 +139,7 @@ static class BuildingLodShaders
     };
 
     public static string VertexNative() => NativeShaders.Port(Vertex(), NativeShaders.Map(Own), PushMembers);
-    public static string FragmentNative(bool solid = false) => NativeShaders.Port(Fragment(solid), NativeShaders.Map(Own), PushMembers);
+    public static string FragmentNative(bool solid = false) => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(Fragment(solid), NativeShaders.Map(Own), PushMembers));
     /// <summary><see cref="ShadowShaders.MeshDepthFragment"/> for <see cref="VertexNative"/>.</summary>
     public static string DepthNative() => NativeShaders.Port(ShadowShaders.MeshDepthFragment, NativeShaders.Map(Own), PushMembers);
 

@@ -280,7 +280,7 @@ fcs.def default implies.
 | 84 | WORD_SWAPS | 317 | 9/10 | DIALOGUE 7 | |
 | 86 | NEST_ITEM | 20 | 26/26 | ITEM 20 | |
 | 87 | CHARACTER_PHYSICS_ATTACHMENT | 4 | 5/5 | MATERIAL_SPECS_COLLECTION 1 | |
-| 88 | LIGHT | 76 | 12/14 | EFFECT_FOG_VOLUME 2 | |
+| 88 | LIGHT | 76 | 12/14 | EFFECT_FOG_VOLUME 2 | 31 after merging; `specular` stored but not in fcs.def; see [lights.md](lights.md) |
 | 89 | HEAD | 41 | 4/4 | MATERIAL_SPECS_CLOTHING 2 | |
 | 92 | FOLIAGE_BUILDING | 2 | — | — | no fcs.def section; FOLIAGE_MESH fields plus a `building` reference |
 | 93 | FACTION_CAMPAIGN | 295 | 33/35 | WORD_SWAPS 2 | |

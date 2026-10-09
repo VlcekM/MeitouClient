@@ -862,8 +862,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         (this.seaA, this.seaB, this.seaColour) = (seaA, seaB, seaColour);
         Gpu = gpu;
         this.maps = maps;
-        faithful = new WaterProgram(gpu, Vertex, Fragment, "water", Silk.NET.Vulkan.PrimitiveTopology.TriangleStrip);
-        meitou = new WaterProgram(gpu, MeitouVertex, MeitouFragment, "water meitou", Silk.NET.Vulkan.PrimitiveTopology.TriangleList);
+        faithful = new WaterProgram(gpu, Vertex, Gi.GiResolveShaders.WithAlbedo(Fragment, none: true), "water", Silk.NET.Vulkan.PrimitiveTopology.TriangleStrip);
+        meitou = new WaterProgram(gpu, MeitouVertex, Gi.GiResolveShaders.WithAlbedo(MeitouFragment, none: true), "water meitou", Silk.NET.Vulkan.PrimitiveTopology.TriangleList);
         float[] corners = [-1, -1, -1, 1, 1, -1, 1, 1]; // triangle strip, counter-clockwise from above
         quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "water quad");
         using (var batch = gpu.Uploads.Begin()) batch.Write(quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(corners.AsSpan()));

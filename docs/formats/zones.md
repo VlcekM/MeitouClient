@@ -229,7 +229,9 @@ named; functions are named by entry address. The game's own name for the builder
     speed variation (×0.95..1.05 of `rotation speed max`) unless the function is ROTATION_WIND_SPEED, and one
     float roll for a **start angle** in [0, 2π) about `rotation axis` (0 X, 1 Y, 2 Z) when it has an entity
     (FUN_140556250, **Verified (decompiled)**). A part with function 0 under a rotating holder counts as 6.
-  - a LIGHT instance: one roll (brightness variance, FUN_140553be0, **Verified (decompiled)**).
+  - a LIGHT instance: **two** rolls, the power (brightness ± variance/2, inside the light builder FUN_140815420) and a second draw
+    of the same range kept by the wrapper FUN_140553be0 (**Verified (decompiled)** and by disassembly, 2026-10-09; one roll before).
+    Placement and shading of the lights: [lights.md](lights.md).
   - an instance targeting an `is node` BUILDING: the node object gets a handle with a random serial, one roll
     (FUN_14057c860 → FUN_1400d1c20; **Observed**: the branch depends on the node's handle type, assumed to be 11).
   - EFFECT instances: an effect can create lights (path FUN_14040a3a0 → … → FUN_140553be0); not modelled

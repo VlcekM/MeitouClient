@@ -62,6 +62,8 @@ public sealed unsafe partial class PostProcess : IDisposable
     Target2D? farDepth;
     Target2D? motion, upscaleDepth, reactive, historyA, historyB;
     bool historyValid, farSliceDrawn, warnedFallback;
+    Target2D? giAlbedo, giLow;   // the GI resolve (docs/render-gi.md "Resolve"): the lit fragments' albedo, the probes' light at 1/giDivisor of the render size
+    int giDivisor;
     long frameIndex;
     Target2D? aoA, aoB;
     Target2D? ldr, ldrFxaa;   // the composite's LDR picture that FXAA or the heat haze reads, and FXAA's when the heat haze follows it
@@ -82,6 +84,8 @@ public sealed unsafe partial class PostProcess : IDisposable
     readonly VelocityPass velocityPass;
     readonly TaaPass taaPass;
     readonly FogPass fogPass;
+    GiResolvePass? giResolvePass;   // made the first time the GI resolve runs
+    GiApplyPass? giApplyPass;
     readonly ParticleDepthPass particleDepthPass;
     readonly ParticleCompositePass particleCompositePass;
     readonly ParticleCoveragePass particleCoveragePass;
@@ -203,6 +207,29 @@ public sealed unsafe partial class PostProcess : IDisposable
         }
     }
 
+    /// <summary>The depth reconstruction both GI resolve passes share (<see cref="Gi.GiResolveShaders"/>).</summary>
+    abstract class GiPass : FullscreenProgram
+    {
+        public readonly SamplerSlot NearDepth, FarDepth, Albedo;
+        public readonly UniformHandle NearPlanes, FarPlanes, Tan, Right, Up, Back, Eye, HasFar, FullSize, Div;
+        protected GiPass(GpuContext gpu, string fragment, string name) : base(gpu, fragment, name)
+        {
+            (NearDepth, FarDepth, Albedo) = (P.Sampler("uNearDepth"), P.Sampler("uFarDepth"), P.Sampler("uAlbedo"));
+            (NearPlanes, FarPlanes, Tan, Right, Up, Back, Eye) = (P.Uniform("uNearPlanes"), P.Uniform("uFarPlanes"), P.Uniform("uTan"),
+                P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uGiEye"));
+            (HasFar, FullSize, Div) = (P.Uniform("uHasFar"), P.Uniform("uFullSize"), P.Uniform("uDiv"));
+        }
+    }
+
+    sealed class GiResolvePass(GpuContext gpu) : GiPass(gpu, Gi.GiResolveShaders.Resolve, "post gi resolve");
+
+    sealed class GiApplyPass : GiPass
+    {
+        public readonly SamplerSlot Low;
+        public readonly UniformHandle LowSize;
+        public GiApplyPass(GpuContext gpu) : base(gpu, Gi.GiResolveShaders.Apply, "post gi apply") => (Low, LowSize) = (P.Sampler("uLow"), P.Uniform("uLowSize"));
+    }
+
     /// <summary>The low-resolution particles' depth-only downsample of the scene depth (<see cref="PostProcessShaders.ParticleDepth"/>).</summary>
     sealed class ParticleDepthPass : FullscreenProgram
     {
@@ -282,7 +309,7 @@ public sealed unsafe partial class PostProcess : IDisposable
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[1].Accum, lowTargets[1].Depth, rateDistance, rateImage }.OfType<Target2D>();
+        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[1].Accum, lowTargets[1].Depth, rateDistance, rateImage, giAlbedo, giLow }.OfType<Target2D>();
 
     void Free()
     {
@@ -292,6 +319,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         rateBuiltFrame = long.MinValue;
         aoA = aoB = ldr = ldrFxaa = luminance = adaptA = adaptB = null;
         foreach (var l in lowTargets) l.Accum = l.Depth = null;
+        giAlbedo = giLow = null;
         adaptedValid = historyValid = false;
     }
 
@@ -437,6 +465,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         var up = Options.Upscale;
         if (w != displayWidth || h != displayHeight || up.Kind != allocatedKind || up.EffectiveScale != allocatedScale)
             Allocate(w, h);
+        EnsureGi();
         Collect();
         stamps = freeStamps.Count > 0 ? freeStamps.Pop() : new StampSet();
         stamps.Count = 0;
@@ -449,7 +478,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         JitterPixels = Temporal ? Jitter.Offset(frameIndex, JitterPhases) : Vector2.Zero;
         // Textures at the display size's detail: log2 of the scale, and further for the vendor upscalers as they recommend (DECISIONS 15).
         Gpu.LodBias = Temporal ? MathF.Log2(width / (float)displayWidth) - (allocatedKind == UpscalerKind.Taa ? 0.5f : 1f) : 0;
-        SceneTargets = PassTargets.Of(sceneColour!.Texture, sceneDepth!.Texture);
+        SceneTargets = PassTargets.Of(sceneColour!.Texture, sceneDepth!.Texture, GiAlbedoTarget);
     }
 
     // ---- temporal upscaling ----
@@ -532,7 +561,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         }, width, height));
         cmd.EndRendering();
         Gpu.EndNative(cmd);
-        SceneTargets = PassTargets.Of(sceneColour!.Texture, farDepth!.Texture);
+        SceneTargets = PassTargets.Of(sceneColour!.Texture, farDepth!.Texture, GiAlbedoTarget);
         if (Temporal) farToPrevious = ToPrevious(near, far);
         farPlanes = new Vector2(near, far);
         farSliceDrawn = true;
@@ -541,7 +570,7 @@ public sealed unsafe partial class PostProcess : IDisposable
     /// <summary>Before drawing the near depth slice (the caller clears the depth after this).</summary>
     public void BeginNearSlice(float near, float far)
     {
-        SceneTargets = PassTargets.Of(sceneColour!.Texture, sceneDepth!.Texture);
+        SceneTargets = PassTargets.Of(sceneColour!.Texture, sceneDepth!.Texture, GiAlbedoTarget);
         if (Temporal) nearToPrevious = ToPrevious(near, far);
         nearPlanes = new Vector2(near, far);
     }
@@ -731,6 +760,70 @@ public sealed unsafe partial class PostProcess : IDisposable
         Stamp("fog");
         CloseSegment();
     }
+
+    // ---- GI resolve (docs/render-gi.md "Resolve") ----
+
+    /// <summary>
+    /// The GI resolve's divisor of the render size (0: off, the lit fragments read the probes themselves; 1 full size; 2 half). Set before
+    /// <see cref="Begin"/>: while it is above 0 the scene targets carry the albedo target.
+    /// </summary>
+    public int GiResolve { get; set; }
+
+    Texture? GiAlbedoTarget => GiResolve > 0 ? giAlbedo?.Texture : null;
+
+    /// <summary>Makes the albedo and low targets for <see cref="GiResolve"/> (again when its divisor or the render size changed).</summary>
+    void EnsureGi()
+    {
+        if (GiResolve <= 0 || (giAlbedo is not null && giDivisor == GiResolve)) return;
+        giAlbedo?.Texture.Dispose();
+        giLow?.Texture.Dispose();
+        giDivisor = GiResolve;
+        using var batch = Gpu.Uploads.Begin();
+        // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the probes' light can be below the sky's) with the view depth in alpha.
+        giAlbedo = new Target2D(batch.Create(new TextureDesc(Vk.Format.R16G16B16A16Uint, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
+            TextureMinFilter.Nearest, TextureMagFilter.Nearest);
+        giLow = Make(batch, (width + giDivisor - 1) / giDivisor, (height + giDivisor - 1) / giDivisor, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post gi resolve");
+    }
+
+    /// <summary>
+    /// Swaps the sky's ambient for the probes' light on the surfaces that wrote their albedo: the resolve at 1/<see cref="GiResolve"/> of the render
+    /// size, then the depth-aware upsample added to the scene colour. After the scene's slices, before the fog volumes (they cover the light too).
+    /// </summary>
+    public void RunGiResolve()
+    {
+        if (GiResolve <= 0 || giAlbedo is null || giLow is null || sceneColour is null || !haveNearSlice) return;
+        MarkScene();
+        var r = giResolvePass ??= new GiResolvePass(Gpu);
+        var a = giApplyPass ??= new GiApplyPass(Gpu);
+        float tanY = MathF.Tan(fovNow * 0.5f);
+        var rot = viewRotation;
+        foreach (var g in (ReadOnlySpan<GiPass>)[r, a])
+        {
+            Bind(g.P, g.NearDepth, sceneDepth);
+            Bind(g.P, g.FarDepth, farSliceDrawn ? farDepth : null);
+            Bind(g.P, g.Albedo, giAlbedo);
+            g.P.Set(g.NearPlanes, nearPlanes.X, nearPlanes.Y);
+            g.P.Set(g.FarPlanes, farPlanes.X, farPlanes.Y);
+            g.P.Set(g.Tan, tanY * aspectNow, tanY);
+            g.P.Set(g.Right, rot.M11, rot.M21, rot.M31);
+            g.P.Set(g.Up, rot.M12, rot.M22, rot.M32);
+            g.P.Set(g.Back, rot.M13, rot.M23, rot.M33);
+            g.P.Set(g.Eye, eyeNow.X, eyeNow.Y, eyeNow.Z);
+            g.P.Set(g.HasFar, farSliceDrawn ? 1 : 0);
+            g.P.Set(g.FullSize, (float)width, (float)height);
+            g.P.Set(g.Div, (float)giDivisor);
+        }
+        r.P.ApplyGlobals();   // the atmosphere's and the probes' uniforms, through the frame globals
+        Draw(r.P, giLow);
+        Bind(a.P, a.Low, giLow);
+        a.P.Set(a.LowSize, (float)giLow.Width, (float)giLow.Height);
+        Draw(a.P, sceneColour.Attachment, sceneColour.Format, width, height, width, height, GiAddState);
+        Stamp("gi");
+        CloseSegment();
+    }
+
+    /// <summary>The resolve added to the scene: source one, destination one; red, green and blue only (the alpha is the characters' SSAO mask).</summary>
+    static readonly DrawState GiAddState = PassState with { Blend = new BlendState(true, Vk.BlendFactor.One, Vk.BlendFactor.One), ColourMask = DrawState.Rgb };
 
     // ---- low-resolution particles (Meitou) ----
 
@@ -1142,6 +1235,8 @@ public sealed unsafe partial class PostProcess : IDisposable
         DisposeMerged();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
+        giResolvePass?.P.Dispose();
+        giApplyPass?.P.Dispose();
         flowTexture?.Dispose();
         perturbationTexture?.Dispose();
     }

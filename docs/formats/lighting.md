@@ -12,7 +12,7 @@ update, its creation, the ambient map builder, the deferred shared-parameter upd
 ## The main lighting pass (Verified: `deferred.material` `Main_Lighting_RTW`, `deferred.hlsl` `main_fs`)
 
 One full-screen pass computes the sun and the ambient light for every G-buffer pixel; point and spot lights are added by
-separate passes (`DeferredLight`). Inputs per pixel: albedo (stored as YCoCg with the chroma checkerboarded over two pixels and
+separate passes (`DeferredLight`, see [lights.md](lights.md)). Inputs per pixel: albedo (stored as YCoCg with the chroma checkerboarded over two pixels and
 rebuilt with an edge filter: unscaled, 8 bits), metalness, gloss, normal, a translucency/emissive byte, the depth. Per frame:
 `sunDirection`, `sunColour`, `envColour`, `ambientParams`, `worldSize` / `worldOffset`, and the textures `ambientmap.png`, the
 cube maps `mp_irradiance.dds` (diffuse) and `mp_specularity.dds` (specular), and the shadow map.

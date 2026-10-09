@@ -450,7 +450,7 @@ start reads it back instead of placing it again. In the Shark swamp view (`--vie
 ## Generated mesh levels in the viewer (Meitou, 2026-10-08)
 
 The game ships no LOD levels for foliage meshes (**Observed**, the probe above for the TERRAIN-mode rocks; `FoliageMesh` has no LOD fields), so Meitou's own are a deviation from the
-game, behind the `lod` switch (`--faithful lod` draws every instance at full detail exactly as before; the Tab panel has its checkbox, there is no F key: F1 to F9 are taken). They
+game, behind the `lod` switch (`--faithful lod` draws every instance at full detail exactly as before; the Tab panel has its checkbox, there is no F key). They
 are made for **TERRAIN-mode meshes with at least 500 triangles** (`FoliageLodBuilder.MinTriangles`; below that, low-poly cliffs showed shading differences) (`MeshAsset.Terrain`, drawn through the terrain's mesh path). Ordinary foliage meshes are not touched
 (see "Not done" below).
 

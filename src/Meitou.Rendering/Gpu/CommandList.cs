@@ -15,9 +15,10 @@ public readonly record struct RenderTarget(ImageView View, AttachmentLoadOp Load
     public bool IsNull => View.Handle == 0;
 }
 
-/// <summary>What <see cref="CommandList.BeginRendering"/> renders into: up to one colour and one depth attachment over an area, and optionally a fragment shading rate attachment
-/// (<c>ShadingRate</c>, an R8_UINT view in GENERAL layout whose texels are <c>ShadingRateTexel</c> pixels on a side; the pipelines must have been made for it, <see cref="AttachmentFormats.ShadingRate"/>).</summary>
-public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget Depth, int Width, int Height, int X = 0, int Y = 0, ImageView ShadingRate = default, int ShadingRateTexel = 0);
+/// <summary>What <see cref="CommandList.BeginRendering"/> renders into: up to one colour and one depth attachment over an area, optionally a second colour attachment
+/// (<c>Extra</c>, location 1: the GI resolve's surface target, docs/render-gi.md) and a fragment shading rate attachment (<c>ShadingRate</c>, an R8_UINT view in GENERAL
+/// layout whose texels are <c>ShadingRateTexel</c> pixels on a side; the pipelines must have been made for it, <see cref="AttachmentFormats.ShadingRate"/>).</summary>
+public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget Depth, int Width, int Height, int X = 0, int Y = 0, ImageView ShadingRate = default, int ShadingRateTexel = 0, RenderTarget Extra = default);
 
 /// <summary>
 /// A command buffer being recorded (docs/renderer-native.md 2.7). Thin: every method records what it says. It keeps only a redundancy
@@ -116,11 +117,19 @@ public sealed unsafe class CommandList
     /// buffers (<see cref="ExecuteCommands"/>, docs/renderer-native.md 6.1); nothing else may then be recorded into this list until <see cref="EndRendering"/>.</summary>
     public void BeginRendering(in RenderingDesc d, bool secondaries = false)
     {
-        var colour = new RenderingAttachmentInfo
+        // The colour attachments: the main one, then the extra one (location 1) when there is one.
+        var colours = stackalloc RenderingAttachmentInfo[2];
+        colours[0] = new RenderingAttachmentInfo
         {
             SType = StructureType.RenderingAttachmentInfo, ImageView = d.Colour.View, ImageLayout = ImageLayout.General,
             LoadOp = d.Colour.Load, StoreOp = AttachmentStoreOp.Store, ClearValue = d.Colour.Clear,
         };
+        colours[1] = new RenderingAttachmentInfo
+        {
+            SType = StructureType.RenderingAttachmentInfo, ImageView = d.Extra.View, ImageLayout = ImageLayout.General,
+            LoadOp = d.Extra.Load, StoreOp = AttachmentStoreOp.Store, ClearValue = d.Extra.Clear,
+        };
+        uint colourCount = d.Colour.IsNull ? 0u : d.Extra.IsNull ? 1u : 2u;
         var depth = new RenderingAttachmentInfo
         {
             SType = StructureType.RenderingAttachmentInfo, ImageView = d.Depth.View, ImageLayout = ImageLayout.General,
@@ -138,7 +147,7 @@ public sealed unsafe class CommandList
             Flags = secondaries ? RenderingFlags.ContentsSecondaryCommandBuffersBit : 0,
             RenderArea = new Rect2D(new Offset2D(d.X, d.Y), new Extent2D((uint)d.Width, (uint)d.Height)),
             LayerCount = 1,
-            ColorAttachmentCount = d.Colour.IsNull ? 0u : 1u, PColorAttachments = d.Colour.IsNull ? null : &colour,
+            ColorAttachmentCount = colourCount, PColorAttachments = colourCount == 0 ? null : colours,
             PDepthAttachment = d.Depth.IsNull ? null : &depth,
         };
         var stats = PipelineStatsMeter.Current;   // the bench's counting frames only
@@ -170,11 +179,11 @@ public sealed unsafe class CommandList
     /// <summary>Begins this list's command buffer as a secondary that continues a rendering of <paramref name="formats"/> (the dynamic-rendering inheritance).</summary>
     internal void BeginSecondary(in AttachmentFormats formats)
     {
-        var colour = formats.Colour;
+        var colours = stackalloc Format[2] { formats.Colour, formats.Extra };
         var rendering = new CommandBufferInheritanceRenderingInfo
         {
             SType = StructureType.CommandBufferInheritanceRenderingInfo,
-            ColorAttachmentCount = colour == Format.Undefined ? 0u : 1u, PColorAttachmentFormats = &colour,
+            ColorAttachmentCount = formats.Colour == Format.Undefined ? 0u : formats.Extra == Format.Undefined ? 1u : 2u, PColorAttachmentFormats = colours,
             DepthAttachmentFormat = formats.Depth, StencilAttachmentFormat = Format.Undefined,
             RasterizationSamples = (SampleCountFlags)Math.Max(formats.Samples, 1),
         };

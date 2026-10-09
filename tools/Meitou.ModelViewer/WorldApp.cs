@@ -81,6 +81,7 @@ static partial class WorldApp
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
         VulkanDisplay.TriangleMeasurements = o.BenchTris;
+        VulkanDisplay.RayTracing = o.WantsRayTracing;
         using var display = new VulkanDisplay(null, vsync: false, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
         streamline = display.Streamline;
         using var watch = VramWatch.Start(display.Context.Device);
@@ -123,7 +124,7 @@ static partial class WorldApp
         // Offscreen: the post-processing chain (HDR scene, resolve, effects) ends in a plain RGBA8 texture that is read back.
         int w = o.Width, h = o.Height;
         using var target = Meitou.Rendering.Gpu.Texture.Create(context, new TextureDesc(Silk.NET.Vulkan.Format.R8G8B8A8Unorm, w, h,
-            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "offscreen picture"));
+            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.TransferDst | TextureUse.Sampled, Name: "offscreen picture"));
         gpu.Post!.Target = target;
         gpu.Post.InstantAdaptation = true;   // a still picture: the exposure settles at once
         Console.WriteLine($"post      {o.Post.Describe()}");
@@ -217,6 +218,7 @@ static partial class WorldApp
         Console.WriteLine($"haze      {(gpu.Sky.KenshiHaze ? "kenshi" : "physical")}, eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {gpu.Sky.EyeClearance:0} above the ground within {KenshiCamera.MaxDistance:0}: altitude weight {gpu.Sky.AltitudeWeight:0.###}, strength {gpu.Sky.HazeStrength:0.##}");
         if (gpu.FogVolumes is { } fogVolumes) Console.WriteLine($"fog vols  {fogVolumes.Active.Count} in view ({fogVolumes.EffectVolumesDrawn} of {fogVolumes.EffectVolumes} weather effect volumes), {fogVolumes.UsedData} of {FogVolumeShaders.MaxData} vec4s{(fogVolumes.Dropped > 0 ? $", {fogVolumes.Dropped} left out" : "")}, farthest first: {(fogVolumes.Active.Count == 0 ? "none" : string.Join("; ", fogVolumes.Active))}{(fogVolumes.Enabled ? "" : " (off: --no-fog-volumes)")}");
         if (gpu.FogVolumes is { } fogCulled) Console.WriteLine($"fog cull  {(fogCulled.DescribeCull() ?? "off for this view")}{(fogCulled.CullEnabled ? "" : " (off: --no-fog-cull)")}");
+        if (gpu.Gi is { } gi) Console.WriteLine($"gi         {gi.Describe()}");
         if (gpu.Post is { } occlusionPost && gpu.Foliage is { } occlusionFoliage) Console.WriteLine($"occlusion  {(occlusionPost.OcclusionCull ? $"depth pyramid {occlusionPost.Hiz?.Describe ?? "none"}: {occlusionFoliage.OccludedInstances} foliage instances left out of the main view" : "off (--no-occlusion-cull)")}");
         if (o.ShowKeys && DebugOverlay.TryCreate(context) is { } keysOverlay)
         {
@@ -251,6 +253,7 @@ static partial class WorldApp
 
     static int Interactive(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
+        VulkanDisplay.RayTracing = o.WantsRayTracing;
         using var display = new VulkanDisplay(WindowFor(o), vsync: o.VSync, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
         streamline = display.Streamline;
         var window = display.Window!;
@@ -271,8 +274,9 @@ static partial class WorldApp
         bool statsVisible = false;
         var stats = new List<string>();
         var keyItems = DebugOverlay.KeyItems(WorldOptions.Usage);
-        // F1 upwards: the Faithful / Meitou switches (Enhancements), in order.
+        // The Faithful / Meitou switches (Enhancements); F1 turns them all Faithful and back (the Tab panel sets them one by one).
         var switches = LiveSwitches(o, () => gpu, () => camera, () => render);
+        var meitou = new MeitouToggle(switches);
 
         {
             gpu = CreateGpu(display.Context, install, scene, assets, o, interactive: true);
@@ -314,13 +318,6 @@ static partial class WorldApp
             Console.WriteLine(WorldOptions.Usage[WorldOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
         }
 
-        void Toggle(int index)
-        {
-            if (index >= switches.Count) return;
-            var e = switches[index];
-            e.IsMeitou = !e.IsMeitou;
-            Console.WriteLine($"{e.Name,-18}{e.State}: {e.Note}");
-        }
         void PostStatus() => Console.WriteLine($"post      {o.Post.Describe()}");
 
         // The state a key controls, for the key list ("on", "off", a mode or a value); null for actions.
@@ -341,7 +338,7 @@ static partial class WorldApp
                 "," => TimeText(hour),
                 "[" => $"day {day}",
                 "\\" => gpu?.Weather is { } w ? (w.World.ForcedWeather is { } forced ? forced.Name : "auto") : null,
-                ['F', >= '1' and <= '9'] when key[1] - '1' < switches.Count => switches[key[1] - '1'].State,
+                "F1" => meitou.On ? "Meitou" : "Faithful",
                 "-" => $"{o.Post.Exposure:0.00}",
                 "F10" => "on",
                 "F11" => OnOff(statsVisible),
@@ -368,7 +365,7 @@ static partial class WorldApp
             switch (key)
             {
                 case Key.Escape: window.Close(); break;
-                case >= Key.F1 and <= Key.F9: Toggle(key - Key.F1); break;
+                case Key.F1: Console.WriteLine(meitou.Toggle()); break;
                 case Key.Minus: o.Post.Exposure = MathF.Max(o.Post.Exposure / 1.1f, 0.05f); PostStatus(); break;
                 case Key.Equal: o.Post.Exposure = MathF.Min(o.Post.Exposure * 1.1f, 20f); PostStatus(); break;
                 case Key.T: render.Textures = !render.Textures; break;

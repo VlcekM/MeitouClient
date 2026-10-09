@@ -137,3 +137,11 @@ Choices made while working unattended on the `engine` branch, with the reason. N
     does and how (mesh and skeleton loading, skinning, animation playback, the character appearance and shader inputs, its verified
     findings) into docs (a new `docs/character-viewer.md`, linked from docs/README.md), and the last commit that has it is tagged
     `model-viewer-last`. Readers and data code it uses (`Meitou.Data`, `Meitou.Core`, the character tests) stay.
+
+24. **Adopted 2026-10-09: ray-traced global illumination as an optional quality mode** (docs/render-gi.md; branch `global-illumination`).
+    It needs ray queries (`VK_KHR_ray_query`), is off unless asked for (the device is then created exactly as before), does not count against
+    the frame-time targets of the default picture (the owner: a performance hit is acceptable; about 144 fps at 1080p with DLSS at a 0.67
+    render scale is the aim with it on), and `--faithful` keeps the game's flat ambient. The acceleration structures are built from the
+    drawn meshes' own buffers (`BufferUse.RayInput`) and core-1.2 buffer device address, as with Streamline (17). Order: the traced scene and
+    debug views, then probe GI in the material shaders' ambient (a compile-time variant, so the Faithful SPIR-V stays identical), then
+    per-pixel GI (normal and albedo targets, ReSTIR GI, DLSS Ray Reconstruction); GPUs without ray queries get a sky / horizon fallback.

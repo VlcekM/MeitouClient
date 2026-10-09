@@ -215,6 +215,22 @@ public sealed unsafe class ShaderLibrary
         return new ShaderProgram(device, name, ShaderModel.Compute, null, null, code, null, sets, [set0], layout, push, pc, pc > 0 ? ShaderStageFlags.ComputeBit : 0);
     }
 
+    /// <summary>A compute program whose set 0 is given (<paramref name="set0"/>, always pushed: it needs push descriptors) instead of reflected:
+    /// for descriptor types the reflection does not read (storage images, acceleration structures). Push constants as the shader declares them.</summary>
+    public ShaderProgram Compute(string glsl, string name, ReadOnlySpan<(uint Binding, DescriptorType Type)> set0, params DescriptorSetLayout[] extraSets)
+    {
+        if (!device.HasPushDescriptor) throw new NotSupportedException($"{name}: needs push descriptors");
+        var code = Compiler.CompileCompute(glsl);
+        var r = SpirvReflection.Parse(code);
+        var bindings = new DescriptorSetLayoutBinding[set0.Length];
+        for (int i = 0; i < set0.Length; i++) bindings[i] = new DescriptorSetLayoutBinding(set0[i].Binding, set0[i].Type, 1, ShaderStageFlags.ComputeBit);
+        var layout0 = CreateSetLayout(bindings, DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr);
+        uint pc = (uint)(r.Blocks.FirstOrDefault(b => b.Kind == BlockKind.PushConstant)?.Size ?? 0);
+        DescriptorSetLayout[] sets = [layout0, .. extraSets];
+        var layout = CreateLayout(sets, pc, ShaderStageFlags.ComputeBit);
+        return new ShaderProgram(device, name, ShaderModel.Compute, null, null, code, null, sets, [layout0], layout, true, pc, pc > 0 ? ShaderStageFlags.ComputeBit : 0);
+    }
+
     /// <summary>A native-model program: strict GLSL 450, the layout given by the model (<paramref name="setLayouts"/>, not owned) and a
     /// push-constant block of <paramref name="pushConstantBytes"/> (at most 128) visible to both stages.</summary>
     public ShaderProgram Native(string vertexGlsl, string fragmentGlsl, string name, DescriptorSetLayout[] setLayouts, uint pushConstantBytes)

@@ -104,8 +104,16 @@ public sealed unsafe class VulkanDevice : IDisposable
     public bool HasPipelineStatistics { get; private set; }
     /// <summary>VK_KHR_fragment_shader_barycentric is on (<see cref="VulkanDeviceOptions.TriangleMeasurements"/> and the device has it).</summary>
     public bool HasFragmentBarycentric { get; private set; }
-    /// <summary>Buffer device address was asked for by <see cref="VulkanDeviceOptions.TriangleMeasurements"/> and the device has it.</summary>
+    /// <summary>Buffer device address was asked for by <see cref="VulkanDeviceOptions.TriangleMeasurements"/> or <see cref="VulkanDeviceOptions.RayTracing"/> and the device has it.</summary>
     public bool HasBufferDeviceAddress { get; private set; }
+    /// <summary>Ray queries against acceleration structures (VK_KHR_acceleration_structure, VK_KHR_ray_query, VK_KHR_deferred_host_operations):
+    /// <see cref="VulkanDeviceOptions.RayTracing"/> was asked for and the device has them with buffer device address. Device-local memory is then
+    /// allocated with the device address flag (<see cref="GpuAllocator"/>).</summary>
+    public bool HasRayQuery { get; private set; }
+    /// <summary>With <see cref="HasRayQuery"/>: the acceleration structure entry points.</summary>
+    public KhrAccelerationStructure? AccelerationStructures { get; private set; }
+    /// <summary>With <see cref="HasRayQuery"/>: the scratch buffer alignment of acceleration structure builds.</summary>
+    public uint ScratchAlignment { get; private set; } = 256;
     /// <summary>
     /// VK_KHR_fragment_shading_rate is on with the attachment rate (variable-rate shading from an image) and the device can use an R8_UINT image as that attachment.
     /// False without the extension (an integrated GPU may lack it): the fog shading rate (<c>fog-vrs</c>) then does nothing.
@@ -189,6 +197,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         sb.AppendLine($"fillModeNonSolid={FillModeNonSolid} depthClamp={DepthClamp} samplerAnisotropy={SamplerAnisotropy} textureCompressionBC={TextureCompressionBC} independentBlend={IndependentBlend} imageCubeArray={ImageCubeArray}");
         sb.AppendLine($"bindless={HasBindless} multiDrawIndirect={MultiDrawIndirect} drawIndirectFirstInstance={DrawIndirectFirstInstance} drawIndirectCount={DrawIndirectCount} shaderDrawParameters={ShaderDrawParameters}");
         sb.AppendLine($"pushDescriptor={HasPushDescriptor} (max {MaxPushDescriptors}) depthClipControl={HasDepthClipControl} vertexInputDynamicState={HasVertexInputDynamicState} swapchain={HasSwapchain}");
+        sb.AppendLine($"rayQuery={HasRayQuery} bufferDeviceAddress={HasBufferDeviceAddress}");
         sb.AppendLine($"fragmentShadingRate={HasFragmentShadingRate} (attachment texel {ShadingRateTexel}, largest square rate {MaxShadingRate}x{MaxShadingRate}, forced to 1x1 by depth writes {ShadingRateForcedByDepthWrite})");
         sb.AppendLine($"extendedDynamicState3={HasExtendedDynamicState3} (colorBlendEnable={Eds3ColorBlendEnable} colorWriteMask={Eds3ColorWriteMask} alphaToCoverage={Eds3AlphaToCoverageEnable} polygonMode={Eds3PolygonMode} depthClamp={Eds3DepthClampEnable})");
         sb.Append($"Limits: minUniformBufferOffsetAlignment={Limits.MinUniformBufferOffsetAlignment} timestampPeriod={Limits.TimestampPeriod}ns bufferImageGranularity={Limits.BufferImageGranularity}");
@@ -577,6 +586,8 @@ public sealed unsafe class VulkanDevice : IDisposable
         var clip = new PhysicalDeviceDepthClipControlFeaturesEXT { SType = StructureType.PhysicalDeviceDepthClipControlFeaturesExt };
         var vid = new PhysicalDeviceVertexInputDynamicStateFeaturesEXT { SType = StructureType.PhysicalDeviceVertexInputDynamicStateFeaturesExt };
         var bary = new PhysicalDeviceFragmentShaderBarycentricFeaturesKHR { SType = StructureType.PhysicalDeviceFragmentShaderBarycentricFeaturesKhr };
+        var accel = new PhysicalDeviceAccelerationStructureFeaturesKHR { SType = StructureType.PhysicalDeviceAccelerationStructureFeaturesKhr };
+        var rayQuery = new PhysicalDeviceRayQueryFeaturesKHR { SType = StructureType.PhysicalDeviceRayQueryFeaturesKhr };
         var vrs = new PhysicalDeviceFragmentShadingRateFeaturesKHR { SType = StructureType.PhysicalDeviceFragmentShadingRateFeaturesKhr };
 
         bool extEds2 = have.Contains("VK_EXT_extended_dynamic_state2");
@@ -585,6 +596,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         bool extVid = have.Contains("VK_EXT_vertex_input_dynamic_state");
         bool extPush = have.Contains("VK_KHR_push_descriptor");
         bool extBary = options.TriangleMeasurements && have.Contains("VK_KHR_fragment_shader_barycentric");
+        bool extRay = options.RayTracing && have.Contains("VK_KHR_acceleration_structure") && have.Contains("VK_KHR_ray_query") && have.Contains("VK_KHR_deferred_host_operations");
         bool extVrs = have.Contains("VK_KHR_fragment_shading_rate");
 
         void* chain = null;
@@ -610,6 +622,8 @@ public sealed unsafe class VulkanDevice : IDisposable
         Link(ref clip, extClip);
         Link(ref vid, extVid);
         Link(ref bary, extBary);
+        Link(ref accel, extRay);
+        Link(ref rayQuery, extRay);
         Link(ref vrs, extVrs);
 
         var f2 = new PhysicalDeviceFeatures2 { SType = StructureType.PhysicalDeviceFeatures2, PNext = chain };
@@ -632,7 +646,8 @@ public sealed unsafe class VulkanDevice : IDisposable
         HasPushDescriptor = extPush;
         HasPipelineStatistics = options.TriangleMeasurements && core.PipelineStatisticsQuery;
         HasFragmentBarycentric = extBary && bary.FragmentShaderBarycentric;
-        HasBufferDeviceAddress = options.TriangleMeasurements && v12.BufferDeviceAddress;
+        HasRayQuery = extRay && accel.AccelerationStructure && rayQuery.RayQuery && v12.BufferDeviceAddress;
+        HasBufferDeviceAddress = (options.TriangleMeasurements || HasRayQuery) && v12.BufferDeviceAddress;
         HasDepthClipControl = extClip && clip.DepthClipControl;
         Eds3ColorBlendEnable = extEds3 && eds3.ExtendedDynamicState3ColorBlendEnable;
         Eds3ColorWriteMask = extEds3 && eds3.ExtendedDynamicState3ColorWriteMask;
@@ -681,7 +696,7 @@ public sealed unsafe class VulkanDevice : IDisposable
             DescriptorBindingUpdateUnusedWhilePending = HasBindless,
             ShaderSampledImageArrayNonUniformIndexing = HasBindless,
             DrawIndirectCount = DrawIndirectCount,
-            BufferDeviceAddress = v12.BufferDeviceAddress && (Wants12("bufferDeviceAddress") || options.TriangleMeasurements),
+            BufferDeviceAddress = v12.BufferDeviceAddress && (Wants12("bufferDeviceAddress") || HasBufferDeviceAddress),
         };
         v11 = new PhysicalDeviceVulkan11Features
         {
@@ -728,6 +743,18 @@ public sealed unsafe class VulkanDevice : IDisposable
             PNext = bary.PNext,
             FragmentShaderBarycentric = HasFragmentBarycentric,
         };
+        accel = new PhysicalDeviceAccelerationStructureFeaturesKHR
+        {
+            SType = StructureType.PhysicalDeviceAccelerationStructureFeaturesKhr,
+            PNext = accel.PNext,
+            AccelerationStructure = HasRayQuery,
+        };
+        rayQuery = new PhysicalDeviceRayQueryFeaturesKHR
+        {
+            SType = StructureType.PhysicalDeviceRayQueryFeaturesKhr,
+            PNext = rayQuery.PNext,
+            RayQuery = HasRayQuery,
+        };
         vrs = new PhysicalDeviceFragmentShadingRateFeaturesKHR
         {
             SType = StructureType.PhysicalDeviceFragmentShadingRateFeaturesKhr,
@@ -745,6 +772,7 @@ public sealed unsafe class VulkanDevice : IDisposable
             ImageCubeArray = ImageCubeArray,
             ShaderStorageImageReadWithoutFormat = core.ShaderStorageImageReadWithoutFormat,
             ShaderStorageImageWriteWithoutFormat = core.ShaderStorageImageWriteWithoutFormat,
+            ShaderStorageImageExtendedFormats = HasRayQuery && core.ShaderStorageImageExtendedFormats,   // the probe GI's rg16f distance atlas
             ShaderInt16 = core.ShaderInt16,
             MultiDrawIndirect = MultiDrawIndirect,
             DrawIndirectFirstInstance = DrawIndirectFirstInstance,
@@ -758,6 +786,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         if (extVid) names.Add("VK_EXT_vertex_input_dynamic_state");
         if (extPush) names.Add("VK_KHR_push_descriptor");
         if (extBary) names.Add("VK_KHR_fragment_shader_barycentric");
+        if (HasRayQuery) names.AddRange(["VK_KHR_acceleration_structure", "VK_KHR_ray_query", "VK_KHR_deferred_host_operations"]);
         if (extVrs) names.Add("VK_KHR_fragment_shading_rate");
         // Only read by VideoMemory (the viewer's statistics): the process's usage and budget per heap.
         HasMemoryBudget = have.Contains("VK_EXT_memory_budget");
@@ -834,6 +863,16 @@ public sealed unsafe class VulkanDevice : IDisposable
             var p2 = new PhysicalDeviceProperties2 { SType = StructureType.PhysicalDeviceProperties2, PNext = &pushProps };
             Vk.GetPhysicalDeviceProperties2(pd, &p2);
             MaxPushDescriptors = pushProps.MaxPushDescriptors;
+        }
+        if (HasRayQuery)
+        {
+            if (!Vk.TryGetDeviceExtension(Instance, Device, out KhrAccelerationStructure accelerationStructures))
+                throw new VulkanException("VK_KHR_acceleration_structure was enabled but its entry points did not load");
+            AccelerationStructures = accelerationStructures;
+            var asProps = new PhysicalDeviceAccelerationStructurePropertiesKHR { SType = StructureType.PhysicalDeviceAccelerationStructurePropertiesKhr };
+            var p2 = new PhysicalDeviceProperties2 { SType = StructureType.PhysicalDeviceProperties2, PNext = &asProps };
+            Vk.GetPhysicalDeviceProperties2(pd, &p2);
+            ScratchAlignment = Math.Max(asProps.MinAccelerationStructureScratchOffsetAlignment, 1);
         }
         if (ValidationEnabled)
         {

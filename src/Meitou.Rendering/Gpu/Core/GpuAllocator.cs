@@ -336,7 +336,9 @@ public sealed unsafe class GpuAllocator : IDisposable
 
     MemoryBlock NewBlock(uint type, bool optimal, ulong size, bool dedicated)
     {
-        var info = new MemoryAllocateInfo { SType = StructureType.MemoryAllocateInfo, AllocationSize = size, MemoryTypeIndex = type };
+        // With ray queries every block may hold acceleration structures, their build inputs or scratch, which are reached by device address.
+        var addressFlags = new MemoryAllocateFlagsInfo { SType = StructureType.MemoryAllocateFlagsInfo, Flags = MemoryAllocateFlags.DeviceAddressBit };
+        var info = new MemoryAllocateInfo { SType = StructureType.MemoryAllocateInfo, AllocationSize = size, MemoryTypeIndex = type, PNext = dev.HasRayQuery && !optimal ? &addressFlags : null };
         var r = vk.AllocateMemory(dev.Device, in info, null, out var mem);
         if (r != Result.Success)
         {

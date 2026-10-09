@@ -53,7 +53,7 @@ sealed class GameOptions
           world options as meitou-viewer --world: --at, --zone, --town, --radius, --time, --screenshot, --size, --no-foliage, ...
         Keys: W/A/S/D move, Q/E or Left/Right rotate, Up/Down pitch, wheel or PageUp/PageDown zoom, middle drag orbit, left click or drag selects, right click moves (shift queues), 1..9 / ` select, R stops,
           ; free camera (R/F up/down), Space pause, F2/F3/F4 speed 1x/2x/5x (. / , step), Tab settings, F8 or PrintScreen screenshot,
-          F10 keys, F11 statistics, F12 profiler (gpu, cpu, off), Esc quit. Shift+F1.. the Faithful / Meitou switches (the viewer's F1..).
+          F10 keys, F11 statistics, F12 profiler (gpu, cpu, off), Esc quit. Shift+F1 Meitou on / off.
         Settings (frame limit, vsync, tick rate, the Tab sliders, key bindings) are kept in meitou.user.json.
         """;
 

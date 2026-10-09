@@ -7,9 +7,9 @@ namespace Meitou.Rendering.Gpu;
 /// What a pass draws into (<see cref="GpuContext.CurrentTargets"/>): its attachments, their formats and size, and the viewport and scissor its
 /// host set (the scissor clipped to the target). A guest drawing into the current pass sets these.
 /// </summary>
-public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, AttachmentFormats Formats, int Width, int Height, Viewport Viewport, Rect2D Scissor)
+public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, AttachmentFormats Formats, int Width, int Height, Viewport Viewport, Rect2D Scissor, RenderTarget Extra = default)
 {
-    public RenderingDesc Rendering => new(Colour, Depth, Width, Height, 0, 0, ShadingRate, ShadingRateTexel);
+    public RenderingDesc Rendering => new(Colour, Depth, Width, Height, 0, 0, ShadingRate, ShadingRateTexel, Extra);
 
     /// <summary>The fragment shading rate attachment of the rendering (an R8_UINT view; null for none) and its texel size in pixels. Set by <see cref="WithShadingRate"/>, which also marks <see cref="Formats"/>.</summary>
     public ImageView ShadingRate { get; init; }
@@ -19,13 +19,13 @@ public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, Attach
     public PassTargets WithShadingRate(ImageView view, int texel) => this with { ShadingRate = view, ShadingRateTexel = texel, Formats = Formats with { ShadingRate = true } };
 
     /// <summary>The targets of <paramref name="colour"/> and / or <paramref name="depth"/> (null: none), loaded, the whole area as viewport and scissor.</summary>
-    public static PassTargets Of(Texture? colour, Texture? depth)
+    public static PassTargets Of(Texture? colour, Texture? depth, Texture? extra = null)
     {
         var any = colour ?? depth ?? throw new ArgumentException("a pass needs an attachment");
         int w = any.Desc.Width, h = any.Desc.Height;
         static RenderTarget Target(Texture? t) => t is null ? default : new RenderTarget(t.Attachment(), AttachmentLoadOp.Load, default, t.Image);
-        var formats = new AttachmentFormats(colour?.Desc.Format ?? Format.Undefined, depth?.Desc.Format ?? Format.Undefined, any.Desc.Samples);
-        return new PassTargets(Target(colour), Target(depth), formats, w, h, new Viewport(0, 0, w, h, 0, 1), Whole(w, h));
+        var formats = new AttachmentFormats(colour?.Desc.Format ?? Format.Undefined, depth?.Desc.Format ?? Format.Undefined, any.Desc.Samples, Extra: extra?.Desc.Format ?? Format.Undefined);
+        return new PassTargets(Target(colour), Target(depth), formats, w, h, new Viewport(0, 0, w, h, 0, 1), Whole(w, h), Target(extra));
     }
 
     /// <summary>The same targets with the viewport <paramref name="viewport"/> and the scissor <paramref name="scissor"/> (clipped to the targets),

@@ -7,7 +7,12 @@ namespace Meitou.Rendering.Gpu;
 
 /// <summary>What a buffer is used for (docs/renderer-native.md 2.3).</summary>
 [Flags]
-public enum BufferUse { Vertex = 1, Index = 2, Uniform = 4, Storage = 8, Indirect = 16, TransferSrc = 32, TransferDst = 64 }
+public enum BufferUse
+{
+    Vertex = 1, Index = 2, Uniform = 4, Storage = 8, Indirect = 16, TransferSrc = 32, TransferDst = 64,
+    /// <summary>Read by acceleration structure builds and by shaders through its device address (needs <see cref="Core.VulkanDevice.HasRayQuery"/>).</summary>
+    RayInput = 128,
+}
 
 /// <summary>A range of a buffer as a draw or a descriptor reads it.</summary>
 public readonly record struct BufferBinding(Buffer Buffer, ulong Offset, ulong Size = Vk.WholeSize)
@@ -52,7 +57,18 @@ public sealed class DeviceBuffer : IDisposable
         if (use.HasFlag(BufferUse.Indirect)) f |= BufferUsageFlags.IndirectBufferBit;
         if (use.HasFlag(BufferUse.TransferSrc)) f |= BufferUsageFlags.TransferSrcBit;
         if (use.HasFlag(BufferUse.TransferDst)) f |= BufferUsageFlags.TransferDstBit;
+        if (use.HasFlag(BufferUse.RayInput)) f |= BufferUsageFlags.ShaderDeviceAddressBit | BufferUsageFlags.AccelerationStructureBuildInputReadOnlyBitKhr;
         return f;
+    }
+
+    /// <summary>The buffer's device address (it must have been made with <see cref="BufferUse.RayInput"/>).</summary>
+    public unsafe ulong Address
+    {
+        get
+        {
+            var info = new BufferDeviceAddressInfo { SType = StructureType.BufferDeviceAddressInfo, Buffer = Handle };
+            return device.Vk.GetBufferDeviceAddress(device.Device, in info);
+        }
     }
 
     public GpuBuffer Underlying { get; }

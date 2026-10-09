@@ -54,7 +54,7 @@
       <LayoutHashSource Include="$(MSBuildThisFileDirectory)**/*.cs;$(MSBuildThisFileDirectory)Meitou.Data.csproj;$(LayoutHashRoot)/Meitou.Core/**/*.cs;$(LayoutHashRoot)/Meitou.Core/Meitou.Core.csproj"
                          Exclude="$(MSBuildThisFileDirectory)obj/**;$(MSBuildThisFileDirectory)bin/**;$(LayoutHashRoot)/Meitou.Core/obj/**;$(LayoutHashRoot)/Meitou.Core/bin/**" />
     </ItemGroup>
-    <HashLayoutSources Files="@(LayoutHashSource)" Root="$(LayoutHashRoot)" OutputFile="$(MSBuildProjectDirectory)/$(LayoutHashFile)" />
+    <HashLayoutSources Files="@(LayoutHashSource)" Root="$(LayoutHashRoot)" OutputFile="$([System.IO.Path]::Combine($(MSBuildProjectDirectory), $(LayoutHashFile)))" />
     <ItemGroup>
       <Compile Remove="$(LayoutHashFile)" />
       <Compile Include="$(LayoutHashFile)" />

@@ -49,9 +49,20 @@ static partial class WorldApp
             AbToggles.Register("screen-lod", () => grassPass.ScreenLod, v => grassPass.ScreenLod = v, "foliage by the size of its triangles on the screen: generated levels sooner and billboards sooner where the triangles are under 1.5 px2 (MEITOU_SCREEN_LOD_TRI, _MULT); B: levels by deviation, billboards at the impostor distance");
             AbToggles.Register("grass-velocity", () => grassPass.GrassVelocityCull, v => grassPass.GrassVelocityCull = v, "the grass's own motion vectors only for blades that move 0.5 px a frame or more (MEITOU_GRASS_VELOCITY_PX), the camera reprojection for the rest; B: every blade redrawn in the motion pass");
         }
+        if (gpu.Lamps is { } lamps) AbToggles.Register("lights", () => lamps.Enabled, v => lamps.Enabled = v, "the lamps: the game's point and spot lights on the world (--lights off)");
         AbToggles.Register("anisotropy", () => gpu.Sky.Gpu.Samplers.MaxAnisotropy > 1, v => gpu.Sky.Gpu.Samplers.MaxAnisotropy = v ? 16 : 1, "anisotropic filtering as the textures ask (A) against none, 1x (B); the Tab slider's ends");
         AbToggles.Register("weather-particles", () => gpu.WeatherParticles, v => gpu.WeatherParticles = v, "the weather's particles, simulated and drawn (the Tab slider at 0)");
         AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
+        if (gpu.Gi is not null)
+        {
+            int giMode = gpu.GiDebug;
+            AbToggles.Register("gi-scene", () => gpu.GiActive, v => gpu.GiActive = v, "the global illumination's traced scene (acceleration structure builds) and its debug view (needs --gi-debug)");
+            if (gpu.Probes is { } shadeProbes) AbToggles.Register("gi-shade", () => shadeProbes.Shade, v => shadeProbes.Shade = v, "the world's shading reading the probes (side B: probes updated, not read)");
+            if (gpu.Probes is { } sleepProbes) AbToggles.Register("gi-sleep", () => sleepProbes.SleepPeriod > 0, v => sleepProbes.SleepPeriod = v ? 8 : 0, "probes with no surface near sleep (side B: every probe traced)");
+            if (gpu.Probes is { } reflectProbes) AbToggles.Register("gi-reflection", () => !reflectProbes.Reflected, v => reflectProbes.Reflected = !v, "the water reflection without the probes (side B: it reads them)");
+            { int resolve = gpu.GiResolve > 0 ? gpu.GiResolve : 2; AbToggles.Register("gi-resolve", () => gpu.GiResolve > 0, v => gpu.GiResolve = v ? resolve : 0, "the probes read once per pixel after the scene (side B: in every lit fragment)"); }
+            AbToggles.Register("gi-debug", () => gpu.GiDebug > 0, v => gpu.GiDebug = v ? giMode : 0, "the global illumination's debug view, the scene built on both sides (needs --gi-debug)");
+        }
         {
             // Cost probes for the terrain (side B: error doubled, about a quarter of the triangles; ground colour only, no textured material).
             float err = render.TerrainPixelError, farErr = render.TerrainFarPixelError, materialDistance = render.MaterialDistance;
@@ -266,7 +277,7 @@ static partial class WorldApp
     }
 
     // The stages in the order a frame runs them (as the profiler lists them).
-    static readonly int[] StageOrder = [0, 1, 2, 3, 12, 4, 5, 6, 7, 8, 9, 13, 10, 11];
+    static readonly int[] StageOrder = [0, 1, 2, 3, 12, 14, 4, 5, 6, 7, 8, 9, 13, 10, 11];
 
     /// <summary>Print order of the metrics: the frame, the GPU total and stages in frame order, the post sections, the render thread's total and stages.</summary>
     static int MetricOrder(string key)

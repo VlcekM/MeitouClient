@@ -186,6 +186,29 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     /// <summary>Draw nothing but the real objects (no distant meshes): the game with distant towns off.</summary>
     public bool NoDistant { get; set; }
 
+    /// <summary>The resolved real instances (zones and landmarks, not the distant stand-ins) whose bounds come within <paramref name="range"/> of
+    /// <paramref name="eye"/>: what the global illumination's acceleration structures hold (docs/render-gi.md).</summary>
+    /// <summary>The bindless index of a ray-traced part's diffuse map (0: none or not resident), at the draws' bias so the entry is shared.</summary>
+    internal uint RayTexture(ObjectMaterialSet materials, int part)
+    {
+        if (materials.Parts.Length == 0) return 0;
+        uint key = materials.Parts[Math.Min(part, materials.Parts.Length - 1)].Diffuse;
+        return key == 0 ? 0 : textureCache.Index(key, Gpu.LodBias, 0);
+    }
+
+    internal IEnumerable<ObjectStreamer.Instance> RayInstances(Vector3 eye, float range)
+    {
+        foreach (var zone in streamer.AllZones)
+        {
+            if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) > range) continue;
+            foreach (var inst in zone.Real)
+                if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range) yield return inst;
+        }
+        if (streamer.LandmarkZone is { } landmarks)
+            foreach (var inst in landmarks.Real)
+                if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range) yield return inst;
+    }
+
     /// <summary>Work in flight: zones being laid out, meshes decoding or uploading, textures decoding.</summary>
     public int Pending => streamer.Pending + meshes.Pending + uploads.Count + textureCache.PendingCount + unresolvedInRange + (landmarkTask is not null ? 1 : 0);
 

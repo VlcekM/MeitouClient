@@ -541,7 +541,7 @@ public static class ImpostorShaders
     public static string VertexNative() => NativeShaders.Port(Vertex, NativeShaders.Map(NativeMap), PushMembers);
 
     /// <summary><see cref="Fragment"/> in the native model.</summary>
-    public static string FragmentNative() => NativeShaders.Port(Fragment, NativeShaders.Map(NativeMap), PushMembers);
+    public static string FragmentNative() => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(Fragment, NativeShaders.Map(NativeMap), PushMembers), inShader: true);
 
     // ---- TERRAIN-mode rocks (docs/impostors.md section 13) ----
 
@@ -608,7 +608,7 @@ public static class ImpostorShaders
             """);
         // The terrain's wetness rule: 1 - gloss plus the layers' absorbance (a mean of the base game's biomes, Observed: the atlas holds no biome).
         f = Replace(f, @"float\s+absorbance\s*=\s*0\.9\s*;", "float absorbance = 1.0 - gloss + 0.4;");
-        return NativeShaders.Port(f, NativeShaders.Map(RockNativeMap), RockPushMembers);
+        return Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(f, NativeShaders.Map(RockNativeMap), RockPushMembers), inShader: true);
     }
 
     /// <summary>The rock program's vertex stage: the impostor quad (only <see cref="PushMembers"/> are read; the fragment stage's block is the larger one).</summary>

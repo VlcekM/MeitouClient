@@ -121,6 +121,8 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
     /// <summary>The buffers' allocation name (the F12 VRAM pie groups by it).</summary>
     const string AllocationName = "object meshes";
 
+    BufferUse RayInput => gpuContext.Device.HasRayQuery ? BufferUse.RayInput : 0;
+
     readonly Dictionary<string, ObjectMesh> meshes = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<ObjectMesh, float> wanted = [];
     readonly List<ObjectMesh> running = [];
@@ -437,8 +439,9 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
             gp = new GpuObjectPart
             {
                 SubMeshIndex = part.SubMeshIndex, MaterialName = part.MaterialName, HasTangents = part.HasTangents, HasColours = part.HasColours,
-                Vertices = DeviceBuffer.Create(gpuContext, (ulong)vertexBytes, BufferUse.Vertex, AllocationName),
-                Indices = DeviceBuffer.Create(gpuContext, (ulong)indexBytes, BufferUse.Index, AllocationName),
+                // With ray queries the global illumination's acceleration structures are built from these same buffers (docs/render-gi.md).
+                Vertices = DeviceBuffer.Create(gpuContext, (ulong)vertexBytes, BufferUse.Vertex | RayInput, AllocationName),
+                Indices = DeviceBuffer.Create(gpuContext, (ulong)indexBytes, BufferUse.Index | RayInput, AllocationName),
                 Offset = prepared.Offset, Count = prepared.Count, LevelIndices = prepared.Levels, UvScale = prepared.UvScale,
             };
         }, label + " (allocate)");
