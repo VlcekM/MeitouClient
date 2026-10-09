@@ -75,6 +75,8 @@ public sealed unsafe partial class FoliageRenderer
 
     /// <summary>The shadow cascade being drawn: its texel in world units (0: unknown, no levels in it).</summary>
     float lodTexel;
+    /// <summary>The cascade being drawn is a far one with coarser casters (<see cref="ShadowLod.RockTolerance"/>).</summary>
+    bool lodCoarse;
 
     /// <summary>The view being drawn uses generated levels (set by <see cref="Draw"/> before the work list is built).</summary>
     bool lodActive;
@@ -307,7 +309,7 @@ public sealed unsafe partial class FoliageRenderer
         {
             if (!(lodTexel > 0) || !(LodShadowTolerance > 0)) return default;
             lodActive = true;
-            return new FoliageLodView(0, 1 / lodTexel, LodShadowTolerance, true);
+            return new FoliageLodView(0, 1 / lodTexel, ShadowLod.RockTolerance(LodShadowTolerance, lodCoarse), true);
         }
         if (!(LodPixelsPerRadian > 0) || !(LodTolerance > 0)) return default;
         lodActive = true;

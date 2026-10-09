@@ -764,15 +764,17 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// <summary>
     /// Draws the terrain's depth for a shadow cascade (<see cref="ShadowShaders.DepthFragment"/>, the caster bias): the main tree's
     /// patches chosen by the camera's <paramref name="eye"/> (so the casters' detail matches what the picture shows), culled by
-    /// <paramref name="frustum"/>. Sets the frame's matrix for <see cref="DrawMeshes"/> with <c>depth</c>.
+    /// <paramref name="frustum"/>. Sets the frame's matrix for <see cref="DrawMeshes"/> with <c>depth</c>. <paramref name="coarseTexel"/>: the texel of a far cascade (world units; 0: not coarsened), which keeps the nodes from being split finer than <see cref="ShadowLod.TerrainFloorLevel"/>.
     /// </summary>
-    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options)
+    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, float coarseTexel = 0)
     {
         long timing = StepTiming.Now();
         depthReady = true;
         if (quadtree.SetRanges(options.TerrainLod) && LodLog) Console.WriteLine($"terrain   lod main {options.TerrainLod}: ranges {string.Join(" ", quadtree.Ranges.SkipLast(1).Select(r => r.ToString("0")))}");
         frame = new Frame(viewProjection, eye, options, frame.Light);
-        quadtree.Select(eye, bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), nodes);
+        quadtree.FloorLevel = ShadowLod.TerrainFloorLevel(coarseTexel, quadtree.Spacing(0), TerrainLod.Roughness, quadtree.LevelCount);
+        try { quadtree.Select(eye, bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), nodes); }
+        finally { quadtree.FloorLevel = 0; }
         PreparePatches(quadtree);
         if (nodes.Count > 0)
         {

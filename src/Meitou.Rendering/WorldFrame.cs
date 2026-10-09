@@ -1303,6 +1303,9 @@ static class WorldFrame
     /// with <c>MEITOU_PASS_STATS=1</c> compares both with the same load on the card.</summary>
     internal static readonly bool OcclusionAlternate = Environment.GetEnvironmentVariable("MEITOU_OCC_ALT") == "1";
 
+    /// <summary><c>MEITOU_SHADOW_LOG=1</c>: one line per cascade drawn (texel, depth range, extent).</summary>
+    static readonly bool ShadowLog = Environment.GetEnvironmentVariable("MEITOU_SHADOW_LOG") == "1";
+
     /// <summary>
     /// The sun's shadow cascades (ShadowPass, docs/formats/shadows.md): fitted to this camera, their casters drawn by the renderers'
     /// depth-only paths (terrain, objects, foliage meshes; detail chosen from the camera's eye), before the reflection and the main pass.
@@ -1320,15 +1323,17 @@ static class WorldFrame
         {
             long t0 = Stopwatch.GetTimestamp();
             long tri = gpu.Terrain.DepthTriangles;
-            gpu.Terrain.DrawDepth(worldToClip, lodEye, planes, render);
+            if (ShadowLog) Console.WriteLine($"shadowlog c{cascade.Index} texel {cascade.Texel:0.00} near {cascade.NearDepth:0} far {cascade.FarDepth:0} size {cascade.Extent.X:0}");
+            float coarse = shadow.Meitou && ShadowLod.Applies(cascade.Index) ? (float)cascade.Texel : 0;   // a far cascade: coarser casters (ShadowLod)
+            gpu.Terrain.DrawDepth(worldToClip, lodEye, planes, render, coarse);
             StageClock.Sub("terrain");
             long t1 = Stopwatch.GetTimestamp();
             int oi = 0, oc = 0, fi = 0, fc = 0;
-            if (render.Objects && gpu.Objects is { } o) { o.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain); objects += o.DrawnInstances; (oi, oc) = (o.DrawnInstances, o.DrawCalls); }
+            if (render.Objects && gpu.Objects is { } o) { o.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, coarse); objects += o.DrawnInstances; (oi, oc) = (o.DrawnInstances, o.DrawCalls); }
             StageClock.Sub("objects");
             gpu.Characters?.DrawDepth(worldToClip, lodEye, planes);
             long t2 = Stopwatch.GetTimestamp();
-            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.EffectiveRange * 1.2f, minSize: shadow.MinFoliageCaster(cascade), texel: (float)cascade.Texel); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
+            if (gpu.Foliage is { } f) { f.DrawDepth(worldToClip, lodEye, planes, render, gpu.Terrain, maxRange: shadow.EffectiveRange * 1.2f, minSize: shadow.MinFoliageCaster(cascade), texel: (float)cascade.Texel, coarse: coarse > 0); foliage += f.DrawnInstances; (fi, fc) = (f.DrawnInstances, f.DrawCalls); }
             StageClock.Phase(CascadeLabels[cascade.Index & 3]);
             long t3 = Stopwatch.GetTimestamp();
             double ms = 1000.0 / Stopwatch.Frequency;

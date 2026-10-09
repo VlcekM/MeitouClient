@@ -1155,7 +1155,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         bool gpu = GpuCull && gpuCull is not null;
         bool cachedDepth = depthPass && shadowCandidatesFrame == updates && shadowCandidatesEye == eye && shadowCandidatesRange == maxRange;
         cullView.Set(frustum);
-        bool reuseWork = gpu && depthPass && gpuWorkFrame == Gpu.Frame.Number && gpuWorkEye == eye && gpuWorkRange == maxRange;
+        bool reuseWork = gpu && depthPass && gpuWorkFrame == Gpu.Frame.Number && gpuWorkEye == eye && gpuWorkRange == maxRange && gpuWorkTexel == (lodCoarse ? lodTexel : 0);
         if (gpu && !GpuCullVerify)
         {
             if (!reuseWork)
@@ -1172,7 +1172,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             if (!gpu) active.RemoveAll(static b => b.Count == 0);
             else if (!reuseWork) BuildGpuWork(options, terrain);   // the verify mode: the GPU's work from the list the CPU just culled
         }
-        if (gpu && !reuseWork) (gpuWorkFrame, gpuWorkEye, gpuWorkRange) = depthPass ? (Gpu.Frame.Number, eye, maxRange) : (-1, default, 0);
+        if (gpu && !reuseWork) (gpuWorkFrame, gpuWorkEye, gpuWorkRange, gpuWorkTexel) = depthPass ? (Gpu.Frame.Number, eye, maxRange, lodCoarse ? lodTexel : 0) : (-1, default, 0, 0);
         lodView = gpu ? CurrentLodView(eye.Y) : default;
         if (gpu) ShowBatches(eye);
         double tCull = cpu.Elapsed.TotalMilliseconds;
@@ -1516,6 +1516,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     long gpuWorkFrame = -1;
     Vector3 gpuWorkEye;
     float gpuWorkRange;
+    /// <summary>The coarsened cascade's texel the work list was built for (0: not coarsened): its impostor transitions depend on it (<see cref="ShadowLod.ImpostorTransition"/>).</summary>
+    float gpuWorkTexel;
     int gpuWorkStamp;
     long gpuWorkBuilds, gpuWorkGroups, gpuWorkCandidates, gpuWorkRockCandidates;
     FoliageCullDraw[] gpuDraws = new FoliageCullDraw[64];
@@ -2111,14 +2113,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>
     /// Draws the foliage meshes' depth for a shadow cascade: <see cref="Draw"/>'s culling and ranges (measured from the camera's
-    /// <paramref name="eye"/>) with <see cref="ShadowShaders.MeshDepthFragment"/>, so the leaves' cut-out holds; no grass, no mesh smaller than <paramref name="minSize"/>. <paramref name="texel"/> is the cascade's texel (world units; 0: unknown) for the generated levels. Leaves the draw
+    /// <paramref name="eye"/>) with <see cref="ShadowShaders.MeshDepthFragment"/>, so the leaves' cut-out holds; no grass, no mesh smaller than <paramref name="minSize"/>. <paramref name="texel"/> is the cascade's texel (world units; 0: unknown) for the generated levels. <paramref name="coarse"/>: a far cascade drawn with coarser casters (<see cref="ShadowLod"/>: the generated levels allow more texels). Leaves the draw
     /// counters describing this call.
     /// </summary>
-    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float maxRange = float.PositiveInfinity, float minSize = 0, float texel = 0)
+    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float maxRange = float.PositiveInfinity, float minSize = 0, float texel = 0, bool coarse = false)
     {
-        (depthPass, depthMinSize, lodTexel) = (true, minSize, texel);
+        (depthPass, depthMinSize, lodTexel, lodCoarse) = (true, minSize, texel, coarse);
         try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain, grass: false, maxRange: maxRange); }
-        finally { (depthPass, depthMinSize, lodTexel) = (false, 0, 0); }
+        finally { (depthPass, depthMinSize, lodTexel, lodCoarse) = (false, 0, 0, false); }
     }
 
     // ------------------------------------------------------------------ native recording

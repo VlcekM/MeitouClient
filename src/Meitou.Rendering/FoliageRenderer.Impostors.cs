@@ -295,6 +295,8 @@ public sealed partial class FoliageRenderer
         if (!view) return (r, FoliageCull.MeshPart);
         if (a.Terrain && !RockImpostorsActive) return (r, FoliageCull.MeshPart);
         float t = TransitionOf(a, g);
+        if (depthPass && lodCoarse && !a.Terrain && a.Impostor is { Stage: ImpostorStage.Ready } ready)
+            t = Math.Min(t, ShadowLod.ImpostorTransition(ready.WorldRadius, lodTexel));   // a far cascade: the flat caster for what is small in texels
         if (!(t <= range - band)) return (r, FoliageCull.MeshPart);
         float b = t * ImpostorBand;
         const float Edge = 64;

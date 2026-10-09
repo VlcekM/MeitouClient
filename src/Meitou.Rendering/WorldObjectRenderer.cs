@@ -641,12 +641,13 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
         }
         float w = ObjectRanges.EdgeWeight(value, limit, Math.Clamp(limit * 0.1f, 50, 1500));
         if (w <= 0) return;
+        float lodValue = shadowLodFloor > 0 ? Math.Max(value, shadowLodFloor) : value;   // a far shadow cascade: no finer a level than ShadowLod.ObjectLodFloor
         inst.Mesh.LastUsed = now;
         DrawnInstances++;
         if (inst.TerrainMode && options.Textures)
         {
             // The terrain shader's path: one draw each, no fading, the level the game would pick.
-            int level = MeshLod.Select(gpu.Distances, value * LodBias);
+            int level = MeshLod.Select(gpu.Distances, lodValue * LodBias);
             var g = gpu.Manual[level] ?? gpu;
             int lv = gpu.Manual[level] is null ? level : 0;
             foreach (var gp in g.Parts)
@@ -657,7 +658,7 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
                 }
             return;
         }
-        Emit(inst, gpu, value, w);
+        Emit(inst, gpu, value, w, lodValue);
     }
 
     /// <summary><c>MEITOU_OBJECT_TIMING=1</c>: the CPU time of <see cref="Draw"/>'s steps summed over the run by kind (colour or depth), with the
@@ -694,9 +695,12 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>Adds an instance at its LOD level: two batches while blending levels, the upper level taking [0, t·w) of the dither range and the lower [t·w, w).</summary>
-    void Emit(ObjectStreamer.Instance inst, GpuObjectMesh gpu, float value, float weight)
+    void Emit(ObjectStreamer.Instance inst, GpuObjectMesh gpu, float value, float weight) => Emit(inst, gpu, value, weight, value);
+
+    /// <summary><paramref name="lodValue"/> picks the levels (at least <paramref name="value"/>, the distance, in a far shadow cascade).</summary>
+    void Emit(ObjectStreamer.Instance inst, GpuObjectMesh gpu, float value, float weight, float lodValue)
     {
-        var blend = MeshLod.Blend(gpu.Distances, value * LodBias);
+        var blend = MeshLod.Blend(gpu.Distances, lodValue * LodBias);
         // A mesh held without its finest levels (made for farther users, see ObjectMeshCache.Retarget) draws its finest instead, until it is remade.
         if (gpu.MinLevel > 0 && blend.Lower < gpu.MinLevel) coarseDraws++;
         if (gpu.MinLevel > 0) blend = new LodBlend(Math.Max(blend.Lower, gpu.MinLevel), Math.Max(blend.Upper, gpu.MinLevel), blend.T);
@@ -1095,16 +1099,21 @@ public sealed unsafe class WorldObjectRenderer : IDisposable
     // ---- depth only (the sun's shadow map, ShadowPass) ----
     bool depthPass;
 
+    /// <summary>The least LOD value a depth draw takes (<see cref="ShadowLod.ObjectLodFloor"/>): in a far cascade an object is drawn at the level the game picks that far away, never a finer one. 0: the distance rule alone.</summary>
+    float shadowLodFloor;
+
     /// <summary>
     /// Draws the objects' depth for a shadow cascade: <see cref="Draw"/>'s culling, levels and batches (chosen by the camera's
     /// <paramref name="eye"/>) with <see cref="ShadowShaders.MeshDepthFragment"/> (the materials' cut-outs and the caster bias), and the
-    /// TERRAIN-mode meshes through the terrain's depth path. Leaves the draw counters describing this call.
+    /// TERRAIN-mode meshes through the terrain's depth path. <paramref name="coarseTexel"/>: the texel of a far cascade (0: not coarsened), which sets the finest level an instance takes
+    /// (<see cref="ShadowLod"/>). Leaves the draw counters describing this call.
     /// </summary>
-    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain)
+    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float coarseTexel = 0)
     {
         depthPass = true;
+        shadowLodFloor = ShadowLod.ObjectLodFloor(coarseTexel, options.TerrainPixelScale);
         try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain); }
-        finally { depthPass = false; }
+        finally { depthPass = false; shadowLodFloor = 0; }
     }
 
     bool landmarksOnly;
