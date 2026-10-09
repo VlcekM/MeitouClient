@@ -9,7 +9,14 @@ namespace Meitou.Rendering.Gpu;
 /// </summary>
 public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, AttachmentFormats Formats, int Width, int Height, Viewport Viewport, Rect2D Scissor, RenderTarget Extra = default)
 {
-    public RenderingDesc Rendering => new(Colour, Depth, Width, Height, Extra: Extra);
+    public RenderingDesc Rendering => new(Colour, Depth, Width, Height, 0, 0, ShadingRate, ShadingRateTexel, Extra);
+
+    /// <summary>The fragment shading rate attachment of the rendering (an R8_UINT view; null for none) and its texel size in pixels. Set by <see cref="WithShadingRate"/>, which also marks <see cref="Formats"/>.</summary>
+    public ImageView ShadingRate { get; init; }
+    public int ShadingRateTexel { get; init; }
+
+    /// <summary>These targets drawn with the shading rate image <paramref name="view"/> (texels of <paramref name="texel"/> pixels): the pipelines made for them are the ones for a rendering with that attachment.</summary>
+    public PassTargets WithShadingRate(ImageView view, int texel) => this with { ShadingRate = view, ShadingRateTexel = texel, Formats = Formats with { ShadingRate = true } };
 
     /// <summary>The targets of <paramref name="colour"/> and / or <paramref name="depth"/> (null: none), loaded, the whole area as viewport and scissor.</summary>
     public static PassTargets Of(Texture? colour, Texture? depth, Texture? extra = null)
@@ -17,7 +24,7 @@ public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, Attach
         var any = colour ?? depth ?? throw new ArgumentException("a pass needs an attachment");
         int w = any.Desc.Width, h = any.Desc.Height;
         static RenderTarget Target(Texture? t) => t is null ? default : new RenderTarget(t.Attachment(), AttachmentLoadOp.Load, default, t.Image);
-        var formats = new AttachmentFormats(colour?.Desc.Format ?? Format.Undefined, depth?.Desc.Format ?? Format.Undefined, any.Desc.Samples, extra?.Desc.Format ?? Format.Undefined);
+        var formats = new AttachmentFormats(colour?.Desc.Format ?? Format.Undefined, depth?.Desc.Format ?? Format.Undefined, any.Desc.Samples, Extra: extra?.Desc.Format ?? Format.Undefined);
         return new PassTargets(Target(colour), Target(depth), formats, w, h, new Viewport(0, 0, w, h, 0, 1), Whole(w, h), Target(extra));
     }
 

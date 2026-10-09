@@ -147,6 +147,114 @@ static class PostProcessShaders
         """;
 
     /// <summary>
+    /// Fog shading rate, first pass (<c>fog-vrs</c>, docs/render-post.md "Fog shading rate"): at a quarter of the render size, the distance to the nearest surface of each 4 x 4 block of pixels,
+    /// rebuilt from the scene depth as the fog pass does (the near slice's depth, else the far slice's, else the sky at 1e9; where the water plane lies in front, the water's).
+    /// </summary>
+    public static readonly string FogRateDistance = "#version 330 core\n" + """
+
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uNearDepth, uFarDepth;
+        uniform vec2 uNearPlanes, uFarPlanes;   // near, far of each depth slice
+        uniform vec2 uTan;                      // tan(fov/2) * aspect, tan(fov/2)
+        uniform vec3 uRight, uUp, uBack;        // the camera's axes in the world
+        uniform vec3 uEye;
+        uniform vec2 uSize;                     // the render size in pixels
+        uniform float uWaterY;                  // the water plane's height (float min: no water)
+        uniform int uHasFar;
+
+        float viewZ(float d, vec2 nf) { float zd = 2.0 * d - 1.0; return nf.x * nf.y / (nf.y - zd * (nf.y - nf.x)); }
+
+        void main()
+        {
+            ivec2 base = ivec2(gl_FragCoord.xy) * 4;
+            ivec2 last = ivec2(uSize) - 1;
+            float best = 3.0e38;
+            for (int y = 0; y < 4; y++)
+                for (int x = 0; x < 4; x++)
+                {
+                    ivec2 p = min(base + ivec2(x, y), last);
+                    float d = texelFetch(uNearDepth, p, 0).r;
+                    vec2 planes = uNearPlanes;
+                    if (d >= 1.0 && uHasFar != 0)
+                    {
+                        d = texelFetch(uFarDepth, p, 0).r;
+                        planes = uFarPlanes;
+                    }
+                    vec2 ndc = (vec2(p) + 0.5) / uSize * 2.0 - 1.0;
+                    vec3 perZ = uRight * ndc.x * uTan.x + uUp * ndc.y * uTan.y - uBack;
+                    float len = length(perZ);
+                    float dist = d >= 1.0 ? 1e9 : viewZ(d, planes) * len;
+                    vec3 dir = perZ / len;
+                    if (uWaterY > -1e30 && abs(dir.y) > 1e-6)
+                    {
+                        float tw = (uWaterY - uEye.y) / dir.y;
+                        if (tw > 0.0 && tw < dist) dist = tw;
+                    }
+                    best = min(best, dist);
+                }
+            fragColour = vec4(best, 0.0, 0.0, 0.0);
+        }
+        """;
+
+    /// <summary>
+    /// Fog shading rate, second pass: one texel per shading rate tile, the code of the fragment size for the next frame's scene passes. The nearest distance over the tile and a margin of
+    /// <c>FogShadingRate.MarginTexels</c> blocks round it (the camera moves between this frame's depth and the frame it is used in) goes through the placed fog volumes
+    /// (<c>fogVolumesAccumulate</c>, along the tile centre's ray) and the Kenshi haze and weather fog the world shaders apply; where what is left of the surface
+    /// (1 - haze) * transmittance is under <c>uThreshold</c> the rate is 2 x 2 and 4 x 4 (the codes of <c>FogShadingRate.Encode</c>).
+    /// </summary>
+    public static readonly string FogRate = "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
+
+        in vec2 vUv;
+        out uvec4 fragColour;
+        uniform sampler2D uDistance;            // FogRateDistance: a quarter of the render size
+        uniform vec2 uTan;
+        uniform vec3 uRight, uUp, uBack;
+        uniform vec2 uSize;                     // the render size in pixels
+        uniform vec4 uRate;                     // x: the tile in pixels, y: the margin in blocks, z: the largest fragment size (2 or 4), w: unused
+        uniform vec2 uThreshold;                // opacity from which 2 x 2, from which 4 x 4
+
+        // The share of a surface dist away the world shaders' haze (atmoKenshiHaze) and the weather's fog hide; 0 where they do not apply (the physical haze, the simple sky).
+        float hazeHidden(float dist)
+        {
+            if (uAtmoParams.x < 0.5 || uAtmoHaze.x < 0.5 || uAtmoAltitude.x > 0.999 || dist > 1.0e8) return 0.0;
+            float level = clamp((dist - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
+            level = min(level * uAtmoAltitude.y, 1.0);
+            float alpha = level;
+            if (uAtmoFog.z > 0.0)
+            {
+                float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
+                float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
+                alpha = clamp(alpha + curve, 0.0, 1.0);
+            }
+            return alpha * (1.0 - clamp(uAtmoAltitude.x, 0.0, 1.0));
+        }
+
+        void main()
+        {
+            ivec2 tile = ivec2(gl_FragCoord.xy);
+            int per = int(uRate.x) / 4, margin = int(uRate.y);
+            ivec2 a0 = tile * per - margin, last = textureSize(uDistance, 0) - 1;
+            float dist = 3.0e38;
+            for (int y = 0; y < per + 2 * margin; y++)
+                for (int x = 0; x < per + 2 * margin; x++)
+                    dist = min(dist, texelFetch(uDistance, clamp(a0 + ivec2(x, y), ivec2(0), last), 0).r);
+            vec2 centre = min((vec2(tile) + 0.5) * uRate.x, uSize - 0.5);
+            vec2 ndc = centre / uSize * 2.0 - 1.0;
+            vec3 perZ = uRight * ndc.x * uTan.x + uUp * ndc.y * uTan.y - uBack;
+            vec3 dir = normalize(perZ);
+            vec3 add;
+            float trans;
+            fogVolumesAccumulate(uFogVolumeEye.xyz, dir, dist, add, trans);
+            float opacity = 1.0 - (1.0 - hazeHidden(dist)) * trans;
+            uint code = 0u;
+            if (opacity >= uThreshold.x) code = 5u;
+            if (opacity >= uThreshold.y && uRate.z > 3.5) code = 10u;
+            fragColour = uvec4(code, 0u, 0u, 0u);
+        }
+        """;
+
+    /// <summary>
     /// The low-resolution particles' depth (Meitou): each texel is the farthest of the <c>uDiv</c> x <c>uDiv</c> block of the scene's depth it covers, written as the
     /// depth of a depth-only rendering, so the hardware test of the particle draws still rejects the sprite area hidden behind the scene (early-Z) and a
     /// sprite is visible at a texel when it is in front of any pixel of its block (the upsample then picks, per pixel, the texel that fits its own depth).

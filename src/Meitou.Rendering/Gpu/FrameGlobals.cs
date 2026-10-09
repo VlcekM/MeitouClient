@@ -107,7 +107,24 @@ public sealed class FrameGlobals
         new(name, 0, 0, cube ? SamplerDimension.Cube : SamplerDimension.Dim2D, false, false, shadow, ScalarKind.Float, 0);
 
     public Func<SampledTexture>? Texture(string name) => textures.GetValueOrDefault(name);
-    public Func<BufferBinding>? Block(string name) => blocks.GetValueOrDefault(name);
+    public Func<BufferBinding>? Block(string name)
+    {
+        var published = blocks.GetValueOrDefault(name);
+        if (published is null) return null;
+        // An override (OverrideBlock) is looked up at each read, so it applies to the segments prepared while it is set.
+        return () => blockOverrides.Count > 0 && blockOverrides.TryGetValue(name, out var over) ? over() : published();
+    }
+
+    readonly Dictionary<string, Func<BufferBinding>> blockOverrides = [];
+
+    /// <summary>
+    /// Replaces a published block's value for the segments prepared until it is cleared (<c>null</c>): a pass that needs the frame's blocks
+    /// otherwise, as the water reflection's unshadowed receivers. Does not change <see cref="Version"/>; the name must be published.
+    /// </summary>
+    public void OverrideBlock(string name, Func<BufferBinding>? getter)
+    {
+        if (getter is null) blockOverrides.Remove(name); else blockOverrides[name] = getter;
+    }
     public Uniform? UniformValue(string name) => uniforms.GetValueOrDefault(name);
 
     public IEnumerable<string> TextureNames => textures.Keys;

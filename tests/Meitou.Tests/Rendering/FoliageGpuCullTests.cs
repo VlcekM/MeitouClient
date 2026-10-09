@@ -292,6 +292,113 @@ public class FoliageGpuCullTests
         ExpectClean(d!);
     }
 
+    /// <summary>
+    /// The split (<see cref="EarlyDepth"/>): with it on, each batch's visible instances come out solid first and then the ones with a fade below 1
+    /// (the order within each kept), the batch's argument sets say the whole range, the solid part and the fading part, and the visible total
+    /// stays at offsets[2n + 4]. The rows and the counts are those of the unsplit cull, only reordered.
+    /// </summary>
+    [Fact]
+    [Slow]
+    public unsafe void Gpu_cull_split_puts_the_fading_instances_after_the_solid_ones_of_each_batch()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        var random = new Random(61);
+        long solidTotal = 0, fadingTotal = 0;
+        using (var ctx = new GpuContext(d!))
+        {
+            using var cull = new FoliageGpuCull(ctx, arenaBytes: 1 << 20);
+            for (int viewNumber = 0; viewNumber < 5; viewNumber++)
+            {
+                var eye = new Vector3(random.Next(-200000, 200000), 300 + random.Next(0, 2000), random.Next(-200000, 200000));
+                var planes = Frustum(eye, (float)(random.NextDouble() * 6.28), (float)(random.NextDouble() * 0.8 - 0.6));
+                const int Batches = 4;
+                var groups = Synthetic(random, eye, planes, 40, Batches);
+                var view = new FoliageCullView().Set(planes);
+                var eyeXz = new Vector2(eye.X, eye.Z);
+                ctx.BeginFrame();
+                bool placed;
+                do
+                {
+                    placed = true;
+                    foreach (var g in groups)
+                        if (!cull.Place(ref g.Arena, ref g.Generation, g.Records)) { placed = false; break; }
+                } while (!placed);
+                var chunks = new List<FoliageCullChunk>();
+                var starts = new int[Batches + 1];
+                for (int b = 0; b < Batches; b++)
+                {
+                    starts[b] = chunks.Count;
+                    foreach (var g in groups.Where(g => g.Batch == b))
+                        for (int at = 0; at < g.Records.Length; at += FoliageShaders.CullChunk)
+                            chunks.Add(new FoliageCullChunk
+                            {
+                                First = FoliageGpuCull.FirstOf(g.Arena) + (uint)at, Count = (uint)Math.Min(FoliageShaders.CullChunk, g.Records.Length - at),
+                                Range = g.Range.Range, RangeSquared = g.Range.RangeSquared, InverseBand = g.Range.InverseBand,
+                            });
+                }
+                starts[Batches] = chunks.Count;
+                for (int b = 0; b < Batches; b++)
+                    for (int c = starts[b]; c < starts[b + 1]; c++) chunks[c] = chunks[c] with { BatchStart = (uint)starts[b], BatchEnd = (uint)starts[b + 1] };
+                var draws = new List<FoliageCullDraw>();
+                for (int b = 0; b < Batches; b++) draws.Add(new FoliageCullDraw { IndexCount = (uint)(100 * b + 3), ChunkStart = (uint)starts[b], ChunkEnd = (uint)starts[b + 1] });
+                var work = cull.Prepare(chunks.ToArray(), draws.ToArray());
+                var result = cull.Dispatch(work, view, eyeXz, default, 0.999f, default, default, default, split: true);
+                int n = chunks.Count, dn = draws.Count;
+                Assert.True(result.Split);
+                using var offsetsRead = ReadbackBuffer.Create(ctx, (ulong)(2 * n + 5) * 4, "split offsets");
+                using var argsRead = ReadbackBuffer.Create(ctx, (ulong)dn * 60, "split args");
+                using var rowsRead = ReadbackBuffer.Create(ctx, result.RowsBytes, "split rows");
+                ctx.Frame.PreFrame.CopyBuffer(result.Offsets, offsetsRead.Handle, new BufferCopy(result.OffsetsOffset, 0, (ulong)(2 * n + 5) * 4));
+                ctx.Frame.PreFrame.CopyBuffer(result.Args, argsRead.Handle, new BufferCopy(result.ArgsOffset, 0, (ulong)dn * 60));
+                ctx.Frame.PreFrame.CopyBuffer(result.Rows, rowsRead.Handle, new BufferCopy(result.RowsOffset, 0, result.RowsBytes));
+                ctx.EndFrame();
+                d!.Frames.WaitAll();
+
+                var expected = new List<Matrix4x4>[Batches];
+                var output = new FoliageCullOutput();
+                for (int b = 0; b < Batches; b++)
+                {
+                    expected[b] = [];
+                    foreach (var g in groups.Where(g => g.Batch == b))
+                    {
+                        FoliageCull.CullGroup(g.Records, g.Range, eyeXz, view, record: false, output);
+                        expected[b].AddRange(output.Visible.AsSpan(0, output.Count));
+                    }
+                }
+                var offsets = MemoryMarshal.Cast<byte, uint>(offsetsRead.Read(0, (ulong)(2 * n + 5) * 4)).ToArray();
+                var args = MemoryMarshal.Cast<byte, uint>(argsRead.Read(0, (ulong)dn * 60)).ToArray();
+                int visible = expected.Sum(e => e.Count);
+                Assert.Equal(visible, (int)offsets[2 * n + 4]);
+                var rows = MemoryMarshal.Cast<byte, Matrix4x4>(rowsRead.Read(0, (ulong)visible * 64)).ToArray();
+                uint next = 0;
+                for (int b = 0; b < Batches; b++)
+                {
+                    var solid = expected[b].Where(m => !(m.M14 < 1f)).ToList();
+                    var fading = expected[b].Where(m => m.M14 < 1f).ToList();
+                    uint first = next;
+                    next += (uint)expected[b].Count;
+                    uint idx = draws[b].IndexCount;
+                    Assert.Equal([idx, (uint)expected[b].Count, 0u, 0u, first], args[(b * 5)..(b * 5 + 5)]);
+                    Assert.Equal([idx, (uint)solid.Count, 0u, 0u, first], args[((dn + b) * 5)..((dn + b) * 5 + 5)]);
+                    Assert.Equal([idx, (uint)fading.Count, 0u, 0u, first + (uint)solid.Count], args[((2 * dn + b) * 5)..((2 * dn + b) * 5 + 5)]);
+                    var layout = solid.Concat(fading).ToList();
+                    for (int j = 0; j < layout.Count; j++)
+                    {
+                        var e = layout[j];
+                        var got = rows[first + j];
+                        Assert.True(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in e)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in got))),
+                            $"view {viewNumber}, batch {b}, slot {j} ({(j < solid.Count ? "solid" : "fading")}): GPU fade {got.M14:R}, CPU {e.M14:R}");
+                    }
+                    solidTotal += solid.Count;
+                    fadingTotal += fading.Count;
+                }
+            }
+        }
+        Assert.True(solidTotal > 500 && fadingTotal > 100, $"{solidTotal} solid and {fadingTotal} fading instances: the views should have both");
+        ExpectClean(d!);
+    }
+
     /// <summary>A wide low fog block (as FogCullTests): x and z within 50000, floor at -2000, ceiling at 3000; density distance 4500, edge 800.</summary>
     static Meitou.Data.World.FogFeature FogBlock() => new("wide", Meitou.Data.World.FogFeatureType.Block, new Vector3(0.6f, 0.55f, 0.5f), 1, 4500, 800, Vector3.Zero, Vector3.Zero, 0,
     [

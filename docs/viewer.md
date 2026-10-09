@@ -131,6 +131,11 @@ dotnet run --project tools/Meitou.ModelViewer -- --world --at -2304,62208 --radi
 dotnet run --project tools/Meitou.ModelViewer -- --world --radius 32 --no-objects --distance 260000 --pitch 60
 ```
 
+`--low-end` starts with the potato-PC settings (weak laptops, integrated GPUs): objects and landmarks to 5000 at a quarter of the LOD
+distance, short foliage ranges, a tenth of the grass and particles (quarter-size), no water reflection, shadows, AO or anti-aliasing,
+flat water, 0.83 render scale, 1x texture filtering, texture quality Low (3: terrain layers 256², other textures three mips down), the textured terrain material to 15000 instead of 30000 (beyond it the biomes' ground colour; about 1.3 ms of 5 at the Hub overview on Iris Xe at 6000, nothing at a close camera) and vsync off. It expands in place into those options (`WorldOptions.LowEnd`), so
+an option after it overrides one of them; the Tab panel moves them all.
+
 `--world --help` lists the options: where (`--at x,z`, `--zone i,j`, `--town <name>`, default the world's
 centre), `--radius` in zones (default 1.5), `--step` (heightmap sample step; by default the smallest power of
 two keeping at most 2048 cells per side, so `--radius 32`, the whole world, uses step 8), camera

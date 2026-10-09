@@ -292,6 +292,35 @@ larger area, would be larger. The Fog Islands, the Vain and Skinner's Roam inner
 allows, or the objects there are not wholly inside it), so no change. The sky is not culled: its rays go up through a ceiling a few thousand units
 over the eye, so their path is shorter than R except near the horizon.
 
+**Fog cull by direction** (Meitou's own, 2026-10-09; `FogVolumes.HideDistanceByDirection`; `--ab fog-direction` compares it with the plain bound alone).
+The plain bound above takes every plane at its worst (inside_i / 2) at once and every path out to the far clip. Meitou's far clip is 50000, and
+there the soft edges thin out (blur falls as 1 / L), so at Shark the plain bound finds no distance at all. Seen from the bench camera
+(`--view swamp`, eye 1121 high), the curve input it can promise at 50000 is about 0.83 against the 0.99 needed, so the whole cull was off.
+- **Why a tighter bound exists.** "Swamp[SOUTH]"'s seven planes are all tilted roof facets (normals 0.96 to 0.995 up). Along a unit ray d the
+  shader's path is L = min(fragment, exit T(d), far), and plane i's distance at the path's middle is exactly inside_i - L dn_i / 2 (dn_i = n_i . d).
+  That is at least inside_i / 2 only for the plane the ray leaves by, at least inside_i for the planes it moves away from, and in between for the
+  rest. Only near-horizontal rays run long, and they leave by one facet.
+- **The bound.** A branch and bound over ray directions (cube-map cells: centre c, chord radius delta from the corners, since the cell is the cone of
+  its corners) and path intervals [L0, L1]:
+  - dn_i is within |n_i| delta of n_i . c, and |d.y| is at least |c.y| - delta.
+  - So the curve input is at least L0 density (1 + 0.9 max(|c.y| - delta, 0)) prod clamp(blur(L1) lower_i), where lower_i is inside_i for dn_i <= 0
+    and max(inside_i - L1 dn_i,max / 2, inside_i / 2) otherwise.
+  - A cell is dropped when that reaches 0.9905 (0.99 plus room for the shader's float), or when no path of it ends inside the block (L0 dn_i > inside_i
+    across the cell).
+  - The rest are split, path or directions (whichever moves the middle point more), longest paths first. The first cell that is too small to split
+    (2 % of L1) and not proven bounds R by L1 + 1. Nothing is promised when that reaches the far clip.
+  - Each solve allows for the eye anywhere within 300 units (inside_i lowered by 300 for the fog, raised for the exits), so it is solved again only
+    after the eye has moved that far. That happens on a background task; until it lands only the plain bound applies.
+  - The frame uses the smaller of the two proven distances. The box test, the GPU kernel and what is asked are unchanged.
+- **Verified** by `FogCullDirectionTests`. Random eyes in the swamp block and the wide test block, then random eyes within the 300 margin of each
+  solve, random directions (half of them near the horizon) and fragments from R to the far clip: the shader's own formula gives at least 0.9998 on
+  every one. `FogCullTests`' box test now runs with both bounds. Sampling the formula along 400000 directions from the bench eye finds failing
+  paths up to 4453 to 4454 units; the bound proves 4492 (about 1 ms per solve, about 1500 cells).
+- **Measured** (**Observed**, RTX 4070, `--view swamp` orbiting Shark, 1920x1080 DLSS native, 600 frames, `--ab fog-direction`): 6.10 against
+  6.81 ms per frame, 164 against 147 fps. GPU: foliage 1.19 against 1.48, terrain 1.01 against 1.14, objects 0.68 against 0.71 ms.
+  - The same still (`--bench-motion still`): 3 pixels differ by 4 levels or more, max 5, mean 0.055, the TAA and exposure noise the cull always had.
+  - Not measured: other blocks (the Fog Islands, the Vain), where the plain bound already gave no cull.
+
 **Weather fog cull** (Meitou's own, 2026-10-08; the image does not change to within a few levels; `--no-fog-cull` turns it off with the block cull). The same
 `Hidden` / `Covers` also ask a second, simpler question: is the box's nearest point at least `D` from the eye, where `D` is the distance past which the
 *weather's* fog (`SkyRenderer.FogCullDistance`, from the uniforms `atmoApply` reads) makes the pixel its own colour. Terrain nodes, objects, characters, foliage
@@ -312,6 +341,8 @@ place) would change the length of the ray's path through the volume. So it works
 the fog off (their fog is the placed volumes, the block cull above), so the Shark swamp benchmark is unchanged by it. The F11 / `--screenshot` `fog cull` line
 names it ("weather fog beyond 14850: ...").
 In Meitou shadows the cascades' far distance is clamped to D (`ShadowPass.RangeCap`, one line in `EffectiveRange`; nothing beyond D shows, so the receivers
+
+**Shading rate over the fog** (`--fog-vrs`, [render-post.md](../render-post.md), "Fog shading rate"): the post fog's own alpha is what sets it. A pass after each frame's scene evaluates `fogVolumesAccumulate` (the function above, unchanged) along the ray to the nearest surface of each 16 x 16 tile and a margin, together with the haze and the weather's fog, and the next frame's opaque scene passes shade 2 x 2 or 4 x 4 pixels with one fragment where at least 0.8 or 0.97 of the surface is hidden. **Observed** on the swamp: 28 % of the tiles coarse at the end of the orbit, GPU total -0.31 +-0.15 ms at 1920x1080 native DLAA.
 there are not needed): it moves the cascade splits, so shadows near the camera change slightly (finer texels); that makes it Meitou's `shadows` switch only
 (`--faithful shadows` keeps the game's cascades whole). Measured (**Observed**, 2026-10-08, RTX 4070 shared, 1280 x 720 with DLSS, `--world --town "The Hub"
 --radius 2 --distance 9000 --pitch 10 --yaw 300 --weather "shek desert storm" --time 12 --no-fog-volumes --faithful shadows`; fog distance 15000, so D = 14850): 20

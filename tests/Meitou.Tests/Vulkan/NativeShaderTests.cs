@@ -44,6 +44,7 @@ public class NativeShaderTests
         // The terrain (step O): the patches, the TERRAIN-mode meshes, and their shadow depth.
         yield return ("terrain patch", TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(), typeof(TerrainPush));
         yield return ("terrain patch depth", TerrainShaders.PatchVertexNative(), TerrainShaders.DepthFragmentNative(), typeof(TerrainPush));
+        yield return ("terrain patch prepass", TerrainShaders.PatchVertexNative(), TerrainShaders.PrepassFragmentNative(), typeof(TerrainPush));
         yield return ("terrain mesh", TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentNative(), typeof(TerrainPush));
         yield return ("terrain mesh depth", TerrainShaders.MeshInstancedDepthVertexNative(), TerrainShaders.DepthFragmentNative(), typeof(TerrainPush));
     }

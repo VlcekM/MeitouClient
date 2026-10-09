@@ -97,6 +97,7 @@ What the native path needs on top (the foundation turns them on and checks them 
 | `shaderDrawParameters` | `gl_DrawID` / `gl_BaseInstance` in multi-draw shaders (wave 3b) | Vulkan 1.1 feature |
 | `descriptorIndexing` with `runtimeDescriptorArray`, `descriptorBindingPartiallyBound`, `descriptorBindingVariableDescriptorCount`, `descriptorBindingSampledImageUpdateAfterBind`, `descriptorBindingUpdateUnusedWhilePending`, `shaderSampledImageArrayNonUniformIndexing` | bindless textures (section 2.6) | Vulkan 1.2 features |
 | `VK_EXT_debug_utils` whenever available, not only with validation | pass labels in RenderDoc and Nsight (today it is enabled only together with the validation layer: `debugExt = layer && ...`) | instance extension |
+| `VK_KHR_fragment_shading_rate` (optional: `attachmentFragmentShadingRate`, an R8_UINT image usable as the attachment) | the fog shading rate (`--fog-vrs`, [render-post.md](render-post.md)): the opaque scene passes shade 2 x 2 or 4 x 4 pixels with one fragment where the fog hides the surface. Turned on when present; `VulkanDevice.HasFragmentShadingRate` is false without it (or with `MEITOU_NO_VRS=1`) and nothing of it is built | device extension |
 
 `bufferDeviceAddress` is **not** needed: storage buffers bound as descriptors cover every use here. That keeps clear of the extension-versus-core
 issue DECISIONS 17 had to work around for Streamline.
@@ -970,6 +971,7 @@ Where it differs from 5.2 to 5.5, and why:
   device memory of the frame's slot (32 MB chunks, bump-allocated, reused when the slot comes round): 4 bytes of fade and 64 bytes of rows per
   candidate, the counts, offsets and arguments. Barriers: transfer to compute before (the arena's uploads), compute to compute between the
   kernels, compute to indirect, vertex input and transfer after.
+- **The split (early depth test, 2026-10-09, **Observed**)**: in the colour views (`Push.split`) the kernels lay each batch out as its fully visible instances, then the ones the mesh shader dithers (fade below 1; a rock only in its impostor transition), so the first can be drawn by programs without a `discard`. *cull* also counts the fading ones per chunk (counts [3n, 4n)); *scan* makes two prefixes, S of the solid counts and F of the fading, and the chunk's solid instances go at S(c) + F(cs), its fading ones at S(ce) + F(c) (the chunk carries its batch's chunk range [cs, ce) as `BatchStart` / `BatchEnd`, 48 bytes now); offsets: S at [0, n], F at [n + 3, 2n + 3], the visible total at 2n + 4; arguments: three sets per draw (the whole batch, its solid instances, its fading ones). With `split` 0 F is 0 and the layout is the old one. See [render-foliage.md](render-foliage.md).
 - **Draws (5.4).** The rows are bound at locations 7 to 10 at the view's region, each mesh part is `DrawIndexedIndirect(args, 20 × i, 1)`;
   `FoliageShaders.MeshVertex` is unchanged. Every candidate batch has its arguments, an empty one 0 instances; but a batch whose groups'
   sphere bounds (a box round all its instances' spheres, one unit of slack, computed with the spheres) all lie outside the view is not drawn

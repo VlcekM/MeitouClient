@@ -98,8 +98,11 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
                 Silk.NET.Vulkan.ShaderStageFlags.VertexBit | Silk.NET.Vulkan.ShaderStageFlags.FragmentBit)], 0);
         Silk.NET.Vulkan.DescriptorSetLayout[] sets = [nativeFrame.SetLayout, gpu.Bindless.Layout, constantsLayout];
         patchColour = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(), "terrain");
+        if (TerrainProbe.Names is { } probeNames) { var (pv, pf) = TerrainShaders.ProbeNative(probeNames); patchProbe = new TerrainProgram(gpu, sets, pv, pf, "terrain probe"); }
         patchDepth = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.DepthFragmentNative(), "terrain depth");
+        patchPrepass = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.PrepassFragmentNative(), "terrain prepass");
         meshColour = new TerrainProgram(gpu, sets, TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentNative(), "terrain meshes");
+        meshSolid = new TerrainProgram(gpu, sets, TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentSolidNative(), "terrain meshes solid");
         meshDepth = new TerrainProgram(gpu, sets, TerrainShaders.MeshInstancedDepthVertexNative(), TerrainShaders.DepthFragmentNative(), "terrain mesh depth");
         // GL's stand-ins for an absent texture, in the array each sampler indexes (the bindless stand-in is the float 2D one only).
         standIn2D = gpu.Bindless.Register(BindlessKind.Texture2D, gpu.Dummy(StandInInfo(false, ScalarKind.Float)));
@@ -245,7 +248,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     internal FogVolumes? FogCull { get; set; }
 
     /// <summary>Draws the terrain; nodes whose highest point is under <paramref name="cullBelow"/> are skipped (the reflection pass clips everything below the water). <paramref name="secondary"/>: the reflection's call, with its own quadtree for its own LOD distance.</summary>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity, bool secondary = false)
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity, bool secondary = false, bool defer = false)
     {
         long timing = StepTiming.Now();
         current = secondary ? spare : quadtree;
@@ -264,7 +267,14 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             if (options.Wireframe != 2)
             {
                 PrepareConstants(material: true, patches: true);
-                RecordPatches(patchColour, "terrain", StepTiming.PatchColour, PatchMode.Solid);
+                if (defer && !secondary && options.Wireframe == 0 && !(TerrainProbe.On && TerrainProbe.NoDraw))
+                {
+                    // Depth only now, the colour after the objects and foliage (DrawDeferred): the colour program then runs only where the terrain is what is seen.
+                    RecordPatches(patchPrepass, "terrain prepass", StepTiming.PatchColour, PatchMode.Prepass);
+                    (latePending, lateFrame) = (true, frame);
+                }
+                else if (!(TerrainProbe.On && !secondary && TerrainProbe.NoDraw))
+                    RecordPatches(TerrainProbe.On && !secondary && patchProbe is not null ? patchProbe : patchColour, "terrain", StepTiming.PatchColour, PatchMode.Solid);
                 DrawnChunks += nodes.Count;
                 DrawnTriangles += patchTriangles;
             }
@@ -276,6 +286,25 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
                 RecordPatches(patchColour, "terrain wireframe", StepTiming.PatchColour, PatchMode.Wireframe);
             }
         }
+        StepTiming.Add(StepTiming.PatchColour, timing, nodes.Count);
+    }
+
+    bool latePending;
+    Frame lateFrame;
+
+    /// <summary>
+    /// The terrain colour of a <see cref="Draw"/> that was called with <c>defer</c> (its depth is in the buffer): the same patches and material with the depth
+    /// test on and no depth write, so only the fragments the objects and foliage left uncovered are shaded (docs/render-terrain.md, "Terrain colour after the occluders").
+    /// Nothing between the two calls may select other patches (the shadows and the reflection draw before the scene).
+    /// </summary>
+    public void DrawDeferred()
+    {
+        if (!latePending) return;
+        latePending = false;
+        long timing = StepTiming.Now();
+        frame = lateFrame;
+        PrepareConstants(material: true, patches: true);
+        RecordPatches(TerrainProbe.On && patchProbe is not null ? patchProbe : patchColour, "terrain", StepTiming.PatchColour, PatchMode.Late);
         StepTiming.Add(StepTiming.PatchColour, timing, nodes.Count);
     }
 
@@ -304,9 +333,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     }
 
     /// <summary>How <see cref="RecordPatches"/> draws: filled (colour or depth), or the debug outline.</summary>
-    enum PatchMode { Solid, Wireframe }
+    enum PatchMode { Solid, Wireframe, Prepass, Late }
 
-    DrawState? lastGlState, lastPatchState, lastWireState;
+    DrawState? lastGlState, lastPatchState, lastWireState, lastPrepassState, lastLateState;
 
     /// <summary>
     /// The state the patches draw with: the pass's (its targets' depth test, write and compare, blending, colour mask, depth clamp, bias, as GL
@@ -320,8 +349,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             lastGlState = pass;
             lastPatchState = pass with { Cull = Silk.NET.Vulkan.CullModeFlags.BackBit, Front = GlConventions.FrontFace(FrontFaceDirection.Ccw) };
             lastWireState = lastPatchState with { Polygon = Silk.NET.Vulkan.PolygonMode.Line, BiasEnable = true, BiasConstant = -1, BiasSlope = -1 };
+            lastPrepassState = lastPatchState with { ColourMask = 0 };   // depth only
+            lastLateState = lastPatchState with { DepthWrite = false };   // the prepass wrote it; equal depths pass (less-or-equal)
         }
-        return mode == PatchMode.Wireframe ? lastWireState! : lastPatchState!;
+        return mode switch { PatchMode.Wireframe => lastWireState!, PatchMode.Prepass => lastPrepassState!, PatchMode.Late => lastLateState!, _ => lastPatchState! };
     }
 
     // ---- the native model (docs/renderer-native.md 7.1, wave 3b agent B: step O) ----
@@ -332,7 +363,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     readonly NativeFrame nativeFrame;
     readonly Silk.NET.Vulkan.DescriptorSetLayout constantsLayout;
-    readonly TerrainProgram patchColour, patchDepth, meshColour, meshDepth;
+    readonly TerrainProgram? patchProbe;
+    readonly TerrainProgram patchColour, patchDepth, patchPrepass, meshColour, meshSolid, meshDepth;   // meshSolid: meshColour without the cross-fade discard (EarlyDepth)
     readonly ulong uniformAlign;
     readonly uint standIn2D, standInArray, standInUInt;
 
@@ -448,6 +480,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             c.HalfWorld = (float)WorldLayout.HalfWorldSize;
             c.Debug = options.Debug;
             c.Grid = options.Grid ? 1u : 0u;
+            if (patches && TerrainLayerSkip.Enabled) c.CliffEps = TerrainLayerSkip.CliffEps;
             c.FarStart = options.MaterialDistance * 0.8f;
             c.FarEnd = options.MaterialDistance;
             var t = textures;
@@ -746,14 +779,15 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         if (!GroupMeshes(meshes, biomes: true)) return 0;
         StepTiming.Group(StepTiming.MeshColour, t0);
         PrepareConstants(material: true, patches: false);
-        int draws = DrawGroups(meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
+        // No placement of this path fades (row 1's w is 0): the program without the discard, so the depth test runs first (EarlyDepth).
+        int draws = EarlyDepth.Enabled ? DrawGroups(meshSolid, Solid, "terrain meshes solid", StepTiming.MeshColour) : DrawGroups(meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
         StepTiming.Add(StepTiming.MeshColour, t0, draws);
         return draws;
     }
 
     /// <summary>This call's placements (each group's contiguous, <see cref="MeshGroup.Offset"/> instances in), in the frame's constants.</summary>
     Transient placements;
-    const int Colour = 0, Depth = 1;
+    const int Colour = 0, Depth = 1, Solid = 2;
     readonly GpuContext gpu;
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
@@ -762,15 +796,17 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// <summary>
     /// Draws the terrain's depth for a shadow cascade (<see cref="ShadowShaders.DepthFragment"/>, the caster bias): the main tree's
     /// patches chosen by the camera's <paramref name="eye"/> (so the casters' detail matches what the picture shows), culled by
-    /// <paramref name="frustum"/>. Sets the frame's matrix for <see cref="DrawMeshes"/> with <c>depth</c>.
+    /// <paramref name="frustum"/>. Sets the frame's matrix for <see cref="DrawMeshes"/> with <c>depth</c>. <paramref name="coarseTexel"/>: the texel of a far cascade (world units; 0: not coarsened), which keeps the nodes from being split finer than <see cref="ShadowLod.TerrainFloorLevel"/>.
     /// </summary>
-    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options)
+    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, float coarseTexel = 0)
     {
         long timing = StepTiming.Now();
         depthReady = true;
         if (quadtree.SetRanges(options.TerrainLod) && LodLog) Console.WriteLine($"terrain   lod main {options.TerrainLod}: ranges {string.Join(" ", quadtree.Ranges.SkipLast(1).Select(r => r.ToString("0")))}");
         frame = new Frame(viewProjection, eye, options, frame.Light);
-        quadtree.Select(eye, bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), nodes);
+        quadtree.FloorLevel = ShadowLod.TerrainFloorLevel(coarseTexel, quadtree.Spacing(0), TerrainLod.Roughness, quadtree.LevelCount);
+        try { quadtree.Select(eye, bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), nodes); }
+        finally { quadtree.FloorLevel = 0; }
         PreparePatches(quadtree);
         if (nodes.Count > 0)
         {
@@ -809,8 +845,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         public bool Mirrored;
         /// <summary>What a native draw of this mesh needs, per program.
         /// Inline (no object of its own), so a draw reads what grouping has just touched.</summary>
-        public NativeMesh ColourNative, DepthNative;
-        public ref NativeMesh Native(int kind) => ref kind == Colour ? ref ColourNative : ref DepthNative;
+        public NativeMesh ColourNative, DepthNative, SolidNative;
+        public ref NativeMesh Native(int kind) => ref kind == Colour ? ref ColourNative : ref (kind == Depth ? ref DepthNative : ref SolidNative);
     }
 
     /// <summary>The pipeline state a segment's draws share (everything of <see cref="GraphicsPipelineDesc"/> but the vertex layout).</summary>
@@ -837,8 +873,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     // Per program kind: the last segment state and its number; numbers are stable per state (a mesh compares one int per draw).
     readonly Dictionary<(int Kind, SegmentPipeline State), int> segmentByState = [];
-    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[2];
-    readonly int[] segmentIds = new int[2];
+    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[3];
+    readonly int[] segmentIds = new int[3];
     int segmentCount;
 
     int SegmentId(int kind, ShaderProgram p, PassTargets t, DrawState s)
@@ -1054,7 +1090,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// writes them) from <paramref name="rowsOffset"/>, with the argument's firstInstance. Same programs, state, and GL state left behind as
     /// <see cref="DrawMeshes"/>; the caller orders the meshes. Returns the number of draw calls.
     /// </summary>
-    public int DrawMeshesIndirect(ReadOnlySpan<IndirectMesh> meshes, Silk.NET.Vulkan.Buffer rows, ulong rowsOffset, Silk.NET.Vulkan.Buffer args, ulong argsOffset, bool depth = false)
+    public int DrawMeshesIndirect(ReadOnlySpan<IndirectMesh> meshes, Silk.NET.Vulkan.Buffer rows, ulong rowsOffset, Silk.NET.Vulkan.Buffer args, ulong argsOffset, bool depth = false, bool solid = false)
     {
         if (meshes.Length == 0) return 0;
         long t0 = MeshTiming > 0 ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
@@ -1070,7 +1106,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         else
         {
             PrepareConstants(material: true, patches: false);
-            draws = DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
+            // solid: none of these placements is mid cross-fade (the caller splits them), so the program without the discard draws them (EarlyDepth).
+            draws = solid && EarlyDepth.Enabled
+                ? DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, meshSolid, Solid, "terrain meshes solid", StepTiming.MeshColour)
+                : DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, meshColour, Colour, "terrain meshes", StepTiming.MeshColour);
             StepTiming.Add(StepTiming.MeshColour, timing, draws);
         }
         if (MeshTiming > 0)
@@ -1142,7 +1181,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         fineTexture.Dispose();
         foreach (var r in retired) r.Texture.Dispose();
         textures?.Dispose();
-        foreach (var p in new[] { patchColour, patchDepth, meshColour, meshDepth }) p.Dispose();
+        foreach (var p in new[] { patchColour, patchDepth, patchPrepass, meshColour, meshSolid, meshDepth }) p.Dispose();
+        patchProbe?.Dispose();
         rockBake?.Dispose();
         gpu.Bindless.Free(BindlessKind.Texture2D, standIn2D);
         gpu.Bindless.Free(BindlessKind.Texture2DArray, standInArray);

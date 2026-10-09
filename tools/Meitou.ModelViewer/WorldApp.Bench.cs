@@ -31,16 +31,27 @@ static partial class WorldApp
         {
             AbToggles.Register("fog-cull", () => fog.CullEnabled, v => fog.CullEnabled = v, "culling of what the fog hides (--no-fog-cull)");
             AbToggles.Register("fog-volumes", () => fog.Enabled, v => fog.Enabled = v, "the placed fog volumes (--no-fog-volumes)");
+            AbToggles.Register("fog-direction", () => fog.DirectionBound, v => fog.DirectionBound = v, "the fog cull's bound by ray direction (off: only the plain bound, which finds no distance at a 50000 far clip)");
         }
+        if (post.FogVrsSupported) AbToggles.Register("fog-vrs", () => post.FogVrs, v => post.FogVrs = v, "variable-rate shading where the fog hides the surface: the opaque scene passes shade 2x2 or 4x4 pixels with one fragment (MEITOU_FOG_VRS=a,b the opacities); B: every pixel shaded");
+        if (post.MergeSupported) AbToggles.Register("post-merge", () => post.MergePasses, v => post.MergePasses = v, "merged post passes: one compute dispatch for the motion, upscaler depth and reactivity, one for the exposure measure and adaptation (MEITOU_POST_MERGE=0); B: the separate full-screen passes");
+        if (post.MergeSupported) { AbToggles.Register("post-merge-velocity", () => post.MergeVelocity, v => post.MergeVelocity = v, "the velocity kernel alone (see post-merge)"); AbToggles.Register("post-merge-exposure", () => post.MergeExposure, v => post.MergeExposure = v, "the exposure kernel alone (see post-merge)"); }
         if (gpu.Shadow is { } shadowPass) AbToggles.Register("shadow-pass", () => shadowPass.Enabled, v => shadowPass.Enabled = v, "the whole shadow pass (--no-shadows)");
+        if (gpu.Shadow is { } spreadPass) AbToggles.Register("shadow-spread", () => spreadPass.FarBudget > 0, v => spreadPass.FarBudget = v ? ShadowSchedule.DefaultBudget : 0, "at most one far shadow cascade redrawn per frame (B: all that are due at once)");
+        AbToggles.Register("shadow-coarse", () => ShadowLod.Enabled, v => ShadowLod.Enabled = v, "coarser casters in the far shadow cascades (1 to 3): objects, terrain nodes and generated foliage levels by the cascade's texel (B: as the main view's rule, cascade by cascade as before)");
         if (gpu.Foliage is { } foliagePass) AbToggles.Register("foliage-draw", () => foliagePass.Enabled, v => foliagePass.Enabled = v, "trees, bushes, rocks and grass (--no-foliage)");
         if (gpu.Foliage is { } grassPass)
         {
             AbToggles.Register("grass", () => grassPass.DrawGrass, v => grassPass.DrawGrass = v, "the grass blades (MEITOU_FOLIAGE_DEBUG=nograss)");
             AbToggles.Register("lod-far", () => grassPass.LodFar, v => grassPass.LodFar = v, "generated rock levels: the pixel tolerance growing with the distance (MEITOU_LOD_FAR, 0 off; needs lod on)");
             AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v, "foliage meshes and impostors, not the TERRAIN-mode rocks (MEITOU_FOLIAGE_DEBUG=nomeshes)");
+            AbToggles.Register("card-trim", () => grassPass.CardTrim, v => grassPass.CardTrim = v, "alpha-tested foliage cards drawn cut to the opaque outline of their texture (MEITOU_CARD_TRIM=0 never makes them); B: the whole cards");
+            AbToggles.Register("screen-lod", () => grassPass.ScreenLod, v => grassPass.ScreenLod = v, "foliage by the size of its triangles on the screen: generated levels sooner and billboards sooner where the triangles are under 1.5 px2 (MEITOU_SCREEN_LOD_TRI, _MULT); B: levels by deviation, billboards at the impostor distance");
+            AbToggles.Register("grass-velocity", () => grassPass.GrassVelocityCull, v => grassPass.GrassVelocityCull = v, "the grass's own motion vectors only for blades that move 0.5 px a frame or more (MEITOU_GRASS_VELOCITY_PX), the camera reprojection for the rest; B: every blade redrawn in the motion pass");
         }
         if (gpu.Lamps is { } lamps) AbToggles.Register("lights", () => lamps.Enabled, v => lamps.Enabled = v, "the lamps: the game's point and spot lights on the world (--lights off)");
+        AbToggles.Register("anisotropy", () => gpu.Sky.Gpu.Samplers.MaxAnisotropy > 1, v => gpu.Sky.Gpu.Samplers.MaxAnisotropy = v ? 16 : 1, "anisotropic filtering as the textures ask (A) against none, 1x (B); the Tab slider's ends");
+        AbToggles.Register("weather-particles", () => gpu.WeatherParticles, v => gpu.WeatherParticles = v, "the weather's particles, simulated and drawn (the Tab slider at 0)");
         AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
         if (gpu.Gi is not null)
         {
@@ -57,14 +68,25 @@ static partial class WorldApp
             float err = render.TerrainPixelError, farErr = render.TerrainFarPixelError, materialDistance = render.MaterialDistance;
             AbToggles.Register("terrain-error", () => render.TerrainPixelError <= err * 1.01f, v => (render.TerrainPixelError, render.TerrainFarPixelError) = v ? (err, farErr) : (err * 2, farErr * 2), "terrain screen-space error doubled on side B (probe)");
             AbToggles.Register("terrain-material", () => render.MaterialDistance >= materialDistance, v => render.MaterialDistance = v ? materialDistance : 1, "terrain textured material (side B: ground colour only; probe)");
+            // Side B: the textured material ends nearer (MEITOU_AB_MATERIAL_DISTANCE units, default 6000), the ground colour beyond.
+            float nearMaterial = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_AB_MATERIAL_DISTANCE"), CultureInfo.InvariantCulture, out var md) ? md : 6000;
+            AbToggles.Register("material-distance", () => render.MaterialDistance >= materialDistance, v => render.MaterialDistance = v ? materialDistance : nearMaterial, $"terrain material distance as set (A) against {nearMaterial:0} (B)");
         }
         if (gpu.Objects is { } sortObjects) AbToggles.Register("object-sort", () => sortObjects.SortNearestFirst, v => sortObjects.SortNearestFirst = v, "objects' colour batches drawn nearest first (Meitou reach)");
+        AbToggles.Register("early-depth", () => EarlyDepth.Enabled, v => EarlyDepth.Enabled = v, "objects, rocks and foliage meshes use programs without a discard where fully visible and uncut (early depth test); B: the single program with the discard");
+        AbToggles.Register("object-lod-gen", () => ObjectLodGen.Enabled, v => ObjectLodGen.Enabled = v, "objects and buildings: generated coarser mesh levels among the file's, picked by the size of their triangles on the screen (MEITOU_OBJECT_LOD_GEN=0 never makes them); B: the file's levels only");
+        AbToggles.Register("solid-first", () => WorldObjectRenderer.SolidFirst, v => WorldObjectRenderer.SolidFirst = v, "objects: the draws without a discard (early depth test) ahead of the dithered and cut-out ones");
+        AbToggles.Register("terrain-probe", () => !TerrainProbe.On, v => TerrainProbe.On = !v, "terrain cost probe MEITOU_TERRAIN_PROBE=name (side B: the probe program)");
+        RegisterTerrainAb();
         AbToggles.Register("normal-maps", () => render.NormalMaps, v => render.NormalMaps = v, "normal maps on terrain and objects (probe)");
         AbToggles.Register("water-draw", () => render.Water, v => render.Water = v, "the water pass (--no-water)");
         AbToggles.Register("reflections", () => render.Reflections, v => render.Reflections = v, "the water reflection pass (--no-reflections)");
         if (gpu.Reflection is { } rp)
         {
             AbToggles.Register("refl-cull", () => rp.CullToWater, v => rp.CullToWater = rp.CropToWater = v, "the cheaper reflection: only what the water shows (crop, footprint, size), objects to 2000 and foliage to 2200 units (B: 3000)");
+            AbToggles.Register("refl-shadows", () => rp.NoShadows, v => rp.NoShadows = v, "the reflection without sun shadows (A, Meitou; B: the shadows on the mirrored scene; Faithful shadows keep them regardless)");
+            int msaaA = rp.Samples;
+            AbToggles.Register("refl-msaa", () => rp.Samples == msaaA, v => rp.Samples = v ? msaaA : rp.AbSamples, "the reflection's multisampling: --reflection-samples (A, default 4) against MEITOU_REFL_AB_SAMPLES samples (B, default 1)");
             AbToggles.Register("refl-foliage", () => rp.Level >= 4, v => rp.Level = v ? 4 : 3, "foliage in the water reflection (--water-reflection 4 against 3)");
             AbToggles.Register("refl-objects", () => rp.Level >= 3, v => rp.Level = v ? 4 : 2, "objects and foliage in the water reflection (--water-reflection 4 against 2)");
         }
@@ -112,7 +134,7 @@ static partial class WorldApp
         float Clock() => clockRuns ? (float)(clockFrame / 60.0 / 600) : 0;
         double Frame(long tag, bool step = true)
         {
-            if (step) { if (motion.Moves) motion.Step(++motionStep); clockFrame++; }
+            if (step) { if (motion.Moves) motion.Step(++motionStep); clockFrame++; if (o.SwayStep > 0 && gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep; }
             context.EnsureFrame();
             profiler.Tag = post.CostTag = tag;
             profiler.BeginFrame();
@@ -203,6 +225,18 @@ static partial class WorldApp
         {
             Side(s);
             result.Configs[labels[s]].Counts = MeasureCounts(gpu, Frame);
+        }
+
+        // The share of the screen's shading rate tiles at each rate (side A; serial frames after the timing, with the rate image read back).
+        if (post.FogVrsSupported && (o.Ab == "fog-vrs" || post.FogVrs))
+        {
+            Side(0);
+            post.FogVrsStats = true;
+            post.ResetFogVrsStats();
+            for (int i = 0; i < 24; i++) Frame(-1, true);
+            for (int i = 0; i < 3; i++) { context.EnsureFrame(); context.Finish(); }
+            post.FogVrsStats = false;
+            if (post.FogVrsShare is { Frames: > 0 } share) result.Meta["fogVrsShare"] = string.Create(CultureInfo.InvariantCulture, $"1x1 {share.One * 100:0.0} %, 2x2 {share.Two * 100:0.0} %, 4x4 {share.Four * 100:0.0} % of the tiles ({share.Frames} frames)");
         }
 
         // ---- metadata ----
@@ -375,6 +409,7 @@ static partial class WorldApp
                 foreach (var (name, h) in counter.Read()) config.Sizes[name] = h.Scaled(1.0 / frames);
                 Console.WriteLine($"bench     triangle sizes: counting programs {string.Join(", ", counter.Counted)}");
                 if (counter.Skipped.Count > 0) Console.WriteLine($"bench     triangle sizes: not counted (no single main in the text): {string.Join(", ", counter.Skipped)}");
+                if (PipelineStatsMeter.Supported(context)) CrossCheck(context, counter, frame, result.Meta);
             }
             finally
             {
@@ -384,6 +419,55 @@ static partial class WorldApp
         }
         else Console.WriteLine("bench     the device has no fragment shader barycentrics: no triangle size histogram");
     }
+
+    /// <summary>
+    /// The two <c>--bench-tris</c> measurements on the same frames: the shaded samples the counting variants saw per category against the fragment
+    /// invocations the pipeline statistics found for the stage that draws it (mean per frame). For a category whose variant has the early depth test
+    /// the samples are a subset of the invocations (the invocations also include samples a shader discards), so samples above invocations point at a
+    /// draw that one of the two measurements misses. Printed and kept in the metadata as <c>trisCheck</c>.
+    /// </summary>
+    static void CrossCheck(GpuContext context, TriangleCounter counter, Func<long, bool, double> frame, Dictionary<string, string> meta)
+    {
+        const int frames = 4;
+        int mode = Recording.Mode;
+        Recording.Mode = 0;
+        var previousStart = StageClock.OnStart;
+        var previousClose = StageClock.OnClose;
+        using var meter = new PipelineStatsMeter(context);
+        StageClock.OnStart = () => { previousStart?.Invoke(); meter.BeginFrame(); };
+        StageClock.OnClose = (label, sub) => { previousClose?.Invoke(label, sub); meter.OnClose(label, sub); };
+        var invocations = new Dictionary<string, double>();
+        try
+        {
+            counter.Clear();
+            for (int i = 0; i < frames; i++)
+            {
+                frame(-1, true);
+                context.Finish();
+                foreach (var (key, stat) in meter.Read())
+                {
+                    string category = key.StartsWith("shadow", StringComparison.Ordinal) || key.StartsWith("reflection", StringComparison.Ordinal) || key.StartsWith("post", StringComparison.Ordinal) ? "" :
+                        key.EndsWith("fol rocks", StringComparison.Ordinal) ? "rocks" : key.EndsWith("fol meshes", StringComparison.Ordinal) ? "foliage meshes" : key.EndsWith("fol grass", StringComparison.Ordinal) ? "grass" :
+                        key.StartsWith("terrain", StringComparison.Ordinal) ? "terrain" : key.StartsWith("objects", StringComparison.Ordinal) ? "objects" : "";
+                    if (category.Length > 0) invocations[category] = invocations.GetValueOrDefault(category) + stat.FragmentInvocations / frames;
+                }
+            }
+            var samples = counter.Read();
+            var parts = TriangleBins.Categories.Where(c => invocations.ContainsKey(c) || samples.ContainsKey(c)).Select(c =>
+                $"{c} {Big(samples.TryGetValue(c, out var h) ? h.TotalPixels / frames : 0)} / {Big(invocations.GetValueOrDefault(c))}");
+            string text = string.Join(", ", parts);
+            meta["trisCheck"] = text;
+            Console.WriteLine($"bench     check, shaded samples / fragment invocations per frame (same frames): {text}");
+        }
+        finally
+        {
+            StageClock.OnStart = previousStart;
+            StageClock.OnClose = previousClose;
+            Recording.Mode = mode;
+        }
+    }
+
+    static string Big(double v) => v >= 1e6 ? (v / 1e6).ToString("0.00", CultureInfo.InvariantCulture) + "M" : v >= 1e3 ? (v / 1e3).ToString("0.0", CultureInfo.InvariantCulture) + "k" : v.ToString("0", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// One still of each side from the start camera (no time advance: the frame clock stays where it was, the same number of frames is drawn for

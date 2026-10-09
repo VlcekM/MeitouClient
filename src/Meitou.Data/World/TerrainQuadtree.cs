@@ -241,6 +241,10 @@ public sealed class TerrainQuadtree
     public float[] MorphStart { get; }
     public float[] MorphEnd { get; }
 
+    /// <summary>Nodes of this level or finer are never split: a node at this level is drawn whole wherever the distance rule would have split it (the shadow cascades' coarser casters, ShadowLod). 0: the distance rule alone.</summary>
+    public int FloorLevel { get => floorLevel; set => floorLevel = Math.Max(value, 0); }
+    int floorLevel;
+
     /// <summary>The nodes to draw for an eye position, skipping those <paramref name="visible"/> rejects (box min, max).</summary>
     public void Select(Vector3 eye, TerrainHeightBounds bounds, Func<Vector3, Vector3, bool>? visible, List<TerrainNode> result)
     {
@@ -256,7 +260,7 @@ public sealed class TerrainQuadtree
         var bmax = new Vector3((float)(x0 + size), hi, (float)(z0 + size));
         if (!SphereTouchesBox(eye, Ranges[level], bmin, bmax)) return false;
         if (visible is not null && !visible(bmin, bmax)) return true; // in range but culled: nothing to draw
-        if (level == 0 || !SphereTouchesBox(eye, Ranges[level - 1], bmin, bmax))
+        if (level <= FloorLevel || !SphereTouchesBox(eye, Ranges[level - 1], bmin, bmax))   // level 0 is always a leaf (FloorLevel is at least 0)
         {
             result.Add(new TerrainNode(level, x0, z0, size, -1));
             return true;

@@ -13,9 +13,11 @@ internal static class MeshSimplifier
     /// <summary>
     /// The triangle lists after reducing to each of <paramref name="fractions"/> of the input triangles (descending), in one run: a list
     /// is a snapshot, so each is the previous one reduced further. Stops early at <paramref name="floor"/> triangles (the remaining
-    /// lists then repeat the last).
+    /// lists then repeat the last). With <paramref name="uvPerWorld"/> above 0 (texture-coordinate units per world unit of the part's surface, <see cref="UvPerWorld"/>) a collapse
+    /// is refused when a corner it moves has no vertex at the new point whose texture coordinate is about as far from its own as the move is long: that is a jump to
+    /// another UV island, which a texture would show as a smear.
     /// </summary>
-    public static uint[][] Chain(Vertex[] vertices, uint[] indices, float[] fractions, int floor)
+    public static uint[][] Chain(Vertex[] vertices, uint[] indices, float[] fractions, int floor, float uvPerWorld = 0)
     {
         int triCount = indices.Length / 3;
         var result = new uint[fractions.Length][];
@@ -120,6 +122,7 @@ internal static class MeshSimplifier
         // A collapse is refused when it would flip or crush a surviving triangle.
         bool CanCollapse(int from, int to)
         {
+            if (uvPerWorld > 0 && !UvConsistent(from, to)) return false;
             foreach (int t in incident[from])
             {
                 if (!alive[t]) continue;
@@ -136,13 +139,33 @@ internal static class MeshSimplifier
             return true;
         }
 
+        // The vertices whose corners sit on each point now (the point's own and those of the points collapsed into it), for the UV check.
+        List<int>[]? members = null;
+        bool UvConsistent(int from, int to)
+        {
+            members ??= [.. groupVertices.Select(g => new List<int>(g))];
+            float allow = uvPerWorld * (position[from] - position[to]).Length() * 1.5f + 0.004f;
+            float allowSquared = allow * allow;
+            var targets = groupVertices[to];
+            var list = members[from];
+            for (int i = 0; i < list.Count && i < 32; i++)
+            {
+                float best = float.MaxValue;
+                foreach (int c in targets) best = Math.Min(best, Vector2.DistanceSquared(vertices[c].Uv, vertices[list[i]].Uv));
+                if (best > allowSquared) return false;
+            }
+            return true;
+        }
+
+        // With the texture guard (buildings: front and back of a sheet sit on one point with the same UV and opposite normals) the normal counts as much as the UV.
+        float normalWeight = uvPerWorld > 0 ? 1f : 0.05f;
         int Nearest(in Vertex like, List<int> candidates)
         {
             int best = candidates[0];
             float bestScore = float.MaxValue;
             foreach (int c in candidates)
             {
-                float score = Vector2.DistanceSquared(vertices[c].Uv, like.Uv) + 0.05f * Vector3.DistanceSquared(vertices[c].Normal, like.Normal);
+                float score = Vector2.DistanceSquared(vertices[c].Uv, like.Uv) + normalWeight * Vector3.DistanceSquared(vertices[c].Normal, like.Normal);
                 if (score < bestScore) { bestScore = score; best = c; }
             }
             return best;
@@ -203,6 +226,7 @@ internal static class MeshSimplifier
             }
             incident[from] = [];
             valid[from] = false;
+            if (members is not null) { members[to].AddRange(members[from]); members[from] = []; }
             q[to].Add(q[from]);
             version[to]++;
             incident[to].RemoveAll(t => !alive[t]);
@@ -213,6 +237,23 @@ internal static class MeshSimplifier
         }
         while (next < fractions.Length) result[next++] = Snapshot();
         return result;
+    }
+
+    /// <summary>Texture-coordinate units per world unit over a triangle list: the square root of the summed texture-space area over the summed surface area; 0 for a list without either.</summary>
+    public static float UvPerWorld(Vertex[] vertices, uint[] indices)
+    {
+        double uv = 0, world = 0;
+        for (int t = 0; t + 2 < indices.Length; t += 3)
+        {
+            ref readonly var a = ref vertices[indices[t]];
+            ref readonly var b = ref vertices[indices[t + 1]];
+            ref readonly var c = ref vertices[indices[t + 2]];
+            world += Vector3.Cross(b.Position - a.Position, c.Position - a.Position).Length() * 0.5;
+            var u = b.Uv - a.Uv;
+            var v = c.Uv - a.Uv;
+            uv += Math.Abs(u.X * v.Y - u.Y * v.X) * 0.5;
+        }
+        return world > 1e-12 && uv > 0 ? (float)Math.Sqrt(uv / world) : 0;
     }
 
     /// <summary>How different two vertices' skinning is, 0 (same bones and weights) to 2.</summary>

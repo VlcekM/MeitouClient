@@ -54,6 +54,8 @@ public sealed class WorldTexture
     /// <summary>Top levels the loaded image lacks against its file (the quality setting's and the streaming's), the quality's own share, and
     /// the file's top size (before either).</summary>
     internal int Dropped, QualityDrop, FileWidth, FileHeight;
+    /// <summary>The <see cref="TextureQuality.Level"/> the image was asked at (-1: never loaded); <see cref="WorldTextureCache.Requalify"/> reloads it when the level moves.</summary>
+    internal int QualityLevel = -1;
     /// <summary>A replacement image (another number of top levels) is loading while this one is still drawn.</summary>
     internal bool Replacing;
     /// <summary>When the image started being finer than needed, <see cref="Environment.TickCount64"/> (0: it is not).</summary>
@@ -77,6 +79,8 @@ public sealed class WorldTexture
     internal ComponentMapping ViewSwizzle;
     /// <summary>The bindless entries for the last two LOD biases (the upscaler's, and 0 where a pass runs without it).</summary>
     internal float BiasA, BiasB;
+    /// <summary>The <see cref="SamplerCache.Generation"/> its entries were made under (the anisotropic filtering setting).</summary>
+    internal int SamplerGeneration;
     internal uint IndexA, IndexB;
     internal bool HasA, HasB;
 
@@ -224,6 +228,13 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (key == 0 || key > byNumber.Count) return standIn;
         var t = byNumber[(int)key - 1];
         if (t.Native is null) return standIn;
+        if (t.SamplerGeneration != gpu.Samplers.Generation)
+        {
+            // The anisotropic filtering changed: both entries go (after the frames in flight) and are made again with the new sampler.
+            if (t.HasA) gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexA);
+            if (t.HasB) gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexB);
+            (t.HasA, t.HasB, t.SamplerGeneration) = (false, false, gpu.Samplers.Generation);
+        }
         if (t.HasA && t.BiasA == bias) return t.IndexA;
         if (t.HasB && t.BiasB == bias)
         {
@@ -249,6 +260,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         // about how near the texture is used now.
         int quality = TextureQuality.LevelsToDrop(System.IO.Path.GetFileName(path), assets.Configured.GroupOfFile(path));
         t.QualityDrop = quality;
+        t.QualityLevel = TextureQuality.Level;
         float need = t.KeepAllMips ? float.PositiveInfinity : t.Need;
         bool enabled = Mips.Enabled;
         float perDistance = Mips.PixelsPerDistance, bias = Mips.Bias;
@@ -280,6 +292,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     {
         int started = 0;
         var watch = System.Diagnostics.Stopwatch.StartNew();
+        if (!wait) Requalify();
         while (true)
         {
             if (steps.Count > 0)
@@ -311,6 +324,36 @@ public sealed unsafe class WorldTextureCache : IDisposable
             Trim();
             if (StreamLog && trim.Elapsed.TotalMilliseconds > 3) Console.WriteLine($"slow texture trim: {trim.Elapsed.TotalMilliseconds:0.0} ms");
         }
+    }
+
+    /// <summary>The <see cref="TextureQuality.Level"/> every resident image has been brought to (-1: not checked yet).</summary>
+    int requalifiedLevel = -1;
+
+    /// <summary>
+    /// The texture quality moved (the Tab slider): resident images loaded at another level are loaded again at the new one, a few at a time
+    /// (<see cref="MaxRefines"/> replacements at once), the old image drawn until the new one is in. Unloaded ones read the level when they load again.
+    /// </summary>
+    internal void Requalify()
+    {
+        int level = TextureQuality.Level;
+        if (level == requalifiedLevel) return;
+        int replacing = 0;
+        foreach (var t in cache.Values) if (t.Replacing) replacing++;
+        bool done = true;
+        foreach (var t in cache.Values)
+        {
+            if (t.QualityLevel == level || t.State is WorldTexture.Residency.Missing or WorldTexture.Residency.Unloaded) continue;
+            if (t.State != WorldTexture.Residency.Resident || t.Native is null || t.Replacing || t.Pending is not null) { done = false; continue; }
+            if (TextureQuality.LevelsToDrop(System.IO.Path.GetFileName(t.Path!), assets.Configured.GroupOfFile(t.Path!), level) == t.QualityDrop || t.CannotDrop)
+            {
+                t.QualityLevel = level;   // this file drops as many levels at the new setting (an _HI or _LO name, an exempt group)
+                continue;
+            }
+            if (replacing >= MaxRefines || !MayStart(t)) { done = false; continue; }
+            Start(t, replacing: true);
+            replacing++;
+        }
+        if (done) requalifiedLevel = level;
     }
 
     /// <summary>Deletes textures that have been idle too long, or the least recently used ones while the cache is over its high-water mark. At most once a second.</summary>

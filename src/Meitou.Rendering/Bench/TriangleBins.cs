@@ -79,9 +79,9 @@ public static partial class TriangleBins
     public static int CategoryOf(string programName) => programName switch
     {
         "terrain" => 0,
-        "terrain meshes" => 1,   // the TERRAIN-mode rocks go through the terrain's mesh path
-        "objects" => 2,
-        "foliage meshes" => 3,
+        "terrain meshes" or "terrain meshes solid" => 1,   // the TERRAIN-mode rocks go through the terrain's mesh path
+        "objects" or "objects solid" => 2,
+        "foliage meshes" or "foliage meshes solid" => 3,
         "foliage grass" or "foliage grass gpu" => 4,
         "impostors" => 5,
         "impostors of rocks" => 6,

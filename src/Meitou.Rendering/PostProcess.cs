@@ -19,7 +19,7 @@ namespace Meitou.Rendering;
 /// Native (docs/renderer-native.md 8, phase 8 stages 2 and 3): every target and texture is a native <see cref="Texture"/> ("post …"), every
 /// pass a rendering of its own in a native segment, the timings native timestamps; no GL names (stage 3).
 /// </remarks>
-public sealed unsafe class PostProcess : IDisposable
+public sealed unsafe partial class PostProcess : IDisposable
 {
     /// <summary>A native target with the GL sampler state its GL texture had (linear or nearest, clamped; the luminance's mipmapped
     /// minification).</summary>
@@ -309,13 +309,14 @@ public sealed unsafe class PostProcess : IDisposable
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[1].Accum, lowTargets[1].Depth, giAlbedo, giLow }.OfType<Target2D>();
+        new[] { sceneColour, sceneDepth, farDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, ldr, ldrFxaa, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[1].Accum, lowTargets[1].Depth, rateDistance, rateImage, giAlbedo, giLow }.OfType<Target2D>();
 
     void Free()
     {
         Hiz?.Invalidate();
         foreach (var t in Targets()) t.Texture.Dispose();   // released after the frames in flight
-        sceneColour = sceneDepth = farDepth = motion = upscaleDepth = reactive = historyA = historyB = null;
+        sceneColour = sceneDepth = farDepth = motion = upscaleDepth = reactive = historyA = historyB = rateDistance = rateImage = null;
+        rateBuiltFrame = long.MinValue;
         aoA = aoB = ldr = ldrFxaa = luminance = adaptA = adaptB = null;
         foreach (var l in lowTargets) l.Accum = l.Depth = null;
         giAlbedo = giLow = null;
@@ -340,7 +341,7 @@ public sealed unsafe class PostProcess : IDisposable
     {
         var format = GlConventions.VkFormat(glFormat);
         var use = TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst | (GlConventions.IsDepthFormat(format) ? TextureUse.DepthTarget : TextureUse.ColourTarget);
-        if (format is Vk.Format.R16G16B16A16Sfloat or Vk.Format.R32Sfloat or Vk.Format.R16G16Sfloat && SupportsStorage(format)) use |= TextureUse.Storage;
+        if (format is Vk.Format.R16G16B16A16Sfloat or Vk.Format.R32Sfloat or Vk.Format.R16G16Sfloat or Vk.Format.R32G32Sfloat && SupportsStorage(format)) use |= TextureUse.Storage;
         var texture = batch.Create(new TextureDesc(format, w, h, levels, Use: use, Name: name));
         return new Target2D(texture, min, min == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear);
     }
@@ -495,8 +496,8 @@ public sealed unsafe class PostProcess : IDisposable
     /// <summary>The vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/>; without one (or on failure) TAA runs.</summary>
     public IUpscaler? External { get; set; }
 
-    /// <summary>What <see cref="ObjectMotion"/> gets: the near slice's depth texture (with the sampler the chain reads it with) and planes, and the jitter in NDC.</summary>
-    public readonly record struct MotionTargets(SampledTexture NearDepth, Vector2 NearPlanes, Vector2 JitterNdc);
+    /// <summary>What <see cref="ObjectMotion"/> gets: the near slice's depth texture (with the sampler the chain reads it with) and planes, the jitter in NDC, and the render height over twice the tangent of half the field of view (pixels per unit at distance 1; 0: unknown).</summary>
+    public readonly record struct MotionTargets(SampledTexture NearDepth, Vector2 NearPlanes, Vector2 JitterNdc, float FocalPixels = 0);
 
     /// <summary>
     /// Draws motion of moving geometry over the camera motion (the swaying grass), called after the velocity pass with the motion target bound,
@@ -918,7 +919,11 @@ public sealed unsafe class PostProcess : IDisposable
         bool reset = !historyValid || !previousValid || Vector3.Distance(eyeNow, previousEye) > 5000;
         float dt = (float)frameClock.Elapsed.TotalSeconds;
         frameClock.Restart();
-        Velocity(motion!, 0);
+        // post-merge: the motion, the upscalers' depth and the water's reactivity in one dispatch (the vendor upscalers take the last two; TAA only the motion target).
+        var external = ExternalFor(Options.Upscale.Kind);
+        bool merged = MergeVelocity && MergeSupported;
+        if (merged) VelocityMerged(motion!, external is null ? null : upscaleDepth!, external is null || WaterHeight is null ? null : reactive!);
+        else Velocity(motion!, 0);
         if (ObjectMotion is { } objectMotion)
         {
             // The guests' host (the grass's motion): the motion target loaded, red and green written, no depth, culling or blending.
@@ -928,7 +933,7 @@ public sealed unsafe class PostProcess : IDisposable
             cmd.BeginRendering(targets.Rendering);
             Gpu.BeginHostPass(cmd, targets, DrawState.For(targets.Formats, Gpu.Device.DepthClamp,
                 mask: Silk.NET.Vulkan.ColorComponentFlags.RBit | Silk.NET.Vulkan.ColorComponentFlags.GBit));
-            objectMotion(new MotionTargets(Sampled(sceneDepth!), nearPlanes, new Vector2(2 * JitterPixels.X / width, 2 * JitterPixels.Y / height)));
+            objectMotion(new MotionTargets(Sampled(sceneDepth!), nearPlanes, new Vector2(2 * JitterPixels.X / width, 2 * JitterPixels.Y / height), height / (2 * MathF.Tan(fovNow * 0.5f))));
             cmd.EndRendering();
             Gpu.EndHostPass(cmd);
             Gpu.EndNative(cmd);
@@ -936,10 +941,10 @@ public sealed unsafe class PostProcess : IDisposable
         (historyA, historyB) = (historyB, historyA);
         var output = historyB!;
         bool done = false;
-        if (ExternalFor(Options.Upscale.Kind) is { } external)
+        if (external is not null)
         {
-            Velocity(upscaleDepth!, 1);
-            if (WaterHeight is not null) Velocity(reactive!, 2);
+            if (!merged) Velocity(upscaleDepth!, 1);
+            if (!merged && WaterHeight is not null) Velocity(reactive!, 2);
             bool covered = Particles is { HasCoverage: true };
             if (covered) Stamp("velocity");
             if (covered) RunCoverage(reactive!, Vk.ColorComponentFlags.RBit, clear: WaterHeight is null);
@@ -1191,6 +1196,16 @@ public sealed unsafe class PostProcess : IDisposable
 
     void RunExposure()
     {
+        if (MergeExposure && MergeSupported)
+        {
+            float mdt = (float)adaptClock.Elapsed.TotalSeconds;
+            adaptClock.Restart();
+            float mblend = InstantAdaptation || !adaptedValid ? 1 : 1 - MathF.Exp(-mdt * AdaptationRate);
+            (adaptA, adaptB) = (adaptB, adaptA);
+            ExposureMerged(mblend, AutoExposure!.Value);
+            adaptedValid = true;
+            return;
+        }
         var lum = luminance!;
         var lp = luminancePass;
         Bind(lp.P, lp.Scene, postColour);
@@ -1216,6 +1231,8 @@ public sealed unsafe class PostProcess : IDisposable
     {
         External?.Dispose();
         Free();
+        DisposeShadingRate();
+        DisposeMerged();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         giResolvePass?.P.Dispose();

@@ -41,7 +41,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly FoliageCatalog catalog;
     // The native programs (docs/renderer-native.md 3.3, step O: the native model, the same maths), made with the renderer so a draw never compiles.
     readonly NativeFrame nativeFrame;
-    readonly NativeProg colourMesh, depthMesh, grassProgram, grassMotionProgram;
+    readonly NativeProg colourMesh, colourSolidMesh, depthMesh, grassProgram, grassMotionProgram;   // colourSolidMesh: colourMesh without the discards (EarlyDepth)
     readonly WorldTextureCache textures;
     readonly ConcurrentBag<FoliageWorld> worlds = [];
     /// <summary>The zone layout cache (null with <c>--no-load-cache</c>); see <see cref="FoliageLayoutCache"/>.</summary>
@@ -80,6 +80,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
         nativeFrame = new NativeFrame(gpu);
         colourMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(), "foliage meshes");
+        colourSolidMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(solid: true), "foliage meshes solid");
         depthMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshDepthNative(), "foliage mesh depth");
         grassProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassVertexNative(), FoliageShaders.GrassFragmentNative(), "foliage grass");
         grassMotionProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(), "foliage grass motion");
@@ -112,6 +113,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public float RangeSetting { get; set; } = Env("MEITOU_FOLIAGE_RANGE", 4);
     public float GrassRangeSetting { get; set; } = Env("MEITOU_GRASS_RANGE", 4);
     public float GrassDensitySetting { get; set; } = Env("MEITOU_GRASS_DENSITY", 1);
+    /// <summary>The Meitou <c>grass-velocity</c> switch (docs/render-foliage.md "Grass motion vectors"): the motion pass redraws only the swaying blades near enough to move by <see cref="GrassVelocityPixels"/> a frame (<see cref="GrassMotionReach"/>); off redraws all of them (<c>MEITOU_GRASS_VELOCITY=0</c>).</summary>
+    public bool GrassVelocityCull { get; set; } = Environment.GetEnvironmentVariable("MEITOU_GRASS_VELOCITY") != "0";
+    /// <summary>Pixels of a blade's own motion a frame under which the camera reprojection stands for it (<c>MEITOU_GRASS_VELOCITY_PX</c>).</summary>
+    public float GrassVelocityPixels { get; set; } = Env("MEITOU_GRASS_VELOCITY_PX", GrassMotionReach.DefaultThresholdPixels);
     /// <summary>MEITOU_FOLIAGE_RANGE, MEITOU_GRASS_RANGE and MEITOU_GRASS_DENSITY start the three settings at other values (offscreen measurements).</summary>
     static float Env(string name, float fallback) => float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : fallback;
 
@@ -802,6 +807,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public bool LargeBillboard;
         /// <summary>The triangles of the mesh and its leaves mesh (known with <see cref="HasBounds"/>): the small impostor class is for meshes with many.</summary>
         public int Triangles;
+        /// <summary>The mean triangle edge of the mesh and its leaves mesh in mesh units: the square root of the mean triangle area (known with <see cref="HasBounds"/>; <c>screen-lod</c>, <see cref="FoliageScreenLod.TriangleExtent(IEnumerable{float})"/>).</summary>
+        public float TriExtent;
+        /// <summary>The <c>screen-lod</c> transition terms of this mesh (ground distance per unit of instance radius, and the atlas frame floor) and what they were worked out for.</summary>
+        public float ScreenPerRadian, ScreenFloor;
+        public (float, float, int, int) ScreenKey;
         /// <summary>The impostor class estimated from the mesh's own bounds, once (<see cref="FoliageRenderer.EstimateClass"/>).</summary>
         public ImpostorClass? EstimatedClass;
         public bool ClassEstimated;
@@ -839,11 +849,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public LegacyProgram.Attribute?[] Attributes = [];
         public MeshBindings? Plain;
         /// <summary>What a native draw needs, per program (<see cref="NativeMesh"/>).</summary>
-        public NativeMesh ColourNative, DepthNative;
+        public NativeMesh ColourNative, DepthNative, ColourSolidNative;
         public int Count;
         /// <summary>Blades after each 1/64 of the candidates (<see cref="FoliageGrassField.BladesWithPrefixes"/>): the density setting draws a prefix.</summary>
         public int[] Prefixes = [];
         public bool HasTangents, HasColours;
+        /// <summary>The cards-trimmed index list after the original <see cref="Count"/> indices in <see cref="Indices"/> (0: none; card trimming).</summary>
+        public int TrimCount;
     }
 
     sealed record FoliageMaterial(WorldTexture? Diffuse, WorldTexture? Normal, WorldTexture? Diffuse2, WorldTexture? Normal2,
@@ -866,7 +878,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.LeavesMaterial = new FoliageMaterial(textures.Get(mesh.LeavesTexture, false, deferred: true), textures.Get(mesh.LeavesNormal, false, deferred: true), null, null,
                 mesh.LeavesAlphaThreshold / 255f, true, false, Vector2.One, false, 0, MeshSurface.Foliage);
         string main = mesh.MeshPath, leaves = mesh.LeavesMesh ?? "";
-        a.Job = BackgroundWork.Run(() => (Decode(main), leaves.Length > 0 ? Decode(leaves) : null));
+        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, mesh, false), leaves.Length > 0 ? DecodeTrimmed(leaves, mesh, true) : null));
         decoding.Add(a);
         return a;
     }
@@ -905,7 +917,20 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.LargeBillboard = FoliageSizes.LargeBillboard(a.Radius, a.Mesh);
             a.Triangles = main.Parts.Sum(p => p.Indices.Length / 3) + (leaves?.Parts.Sum(p => p.Indices.Length / 3) ?? 0);
             a.HasBounds = true;
+            a.TriExtent = FoliageScreenLod.TriangleExtent(Triangles(main).Concat(leaves is null ? [] : Triangles(leaves)));
             QueueMesh(a, main, leaves);
+        }
+    }
+
+    /// <summary>The areas of a model's triangles, in mesh units squared.</summary>
+    static IEnumerable<float> Triangles(Model model)
+    {
+        foreach (var part in model.Parts)
+        {
+            var v = part.Vertices;
+            var ix = part.Indices;
+            for (int i = 0; i + 2 < ix.Length; i += 3)
+                yield return 0.5f * Vector3.Cross(v[ix[i + 1]].Position - v[ix[i]].Position, v[ix[i + 2]].Position - v[ix[i]].Position).Length();
         }
     }
 
@@ -938,7 +963,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             if (part.Indices.Length == 0) continue;
             var p = part;
             GpuPart? gp = null;
-            int vertexBytes = p.Vertices.Length * Vertex.Size, indexBytes = p.Indices.Length * sizeof(uint);
+            // The trimmed list (card trimming) follows the original one in the same buffer: the draws pick a range (FoliageRenderer.Trim.cs).
+            var allIndices = p.TrimmedIndices is null ? p.Indices : [.. p.Indices, .. p.TrimmedIndices];
+            int vertexBytes = p.Vertices.Length * Vertex.Size, indexBytes = allIndices.Length * sizeof(uint);
             tally[0] += vertexBytes + indexBytes;
             uploads.Enqueue(() =>
             {
@@ -946,7 +973,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 {
                     Vertices = DeviceBuffer.Create(Gpu, (ulong)vertexBytes, BufferUse.Vertex | RayInput, MeshAllocationName),
                     Indices = DeviceBuffer.Create(Gpu, (ulong)indexBytes, BufferUse.Index | RayInput, MeshAllocationName),
-                    Count = p.Indices.Length, HasTangents = p.HasTangents, HasColours = p.HasColours,
+                    Count = p.Indices.Length, TrimCount = p.TrimmedIndices?.Length ?? 0, HasTangents = p.HasTangents, HasColours = p.HasColours,
                 };
                 gp.Attributes = VertexAttributes(gp.Vertices);
                 mesh.Parts.Add(gp);
@@ -966,7 +993,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 uploads.Enqueue(() =>
                 {
                     Gpu.EnsureFrame();
-                    Gpu.Uploads.Write(gp!.Indices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(p.Indices.AsSpan()).Slice(start, length));
+                    Gpu.Uploads.Write(gp!.Indices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(allIndices.AsSpan()).Slice(start, length));
                 });
             }
         }
@@ -1034,7 +1061,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (a.Resident || a.Failed || a.Job is not null || a.Uploading || guard is { Streaming: false }) return;
         string main = a.Mesh.MeshPath, leaves = a.Mesh.LeavesMesh ?? "";
         a.LastUsed = Environment.TickCount64;
-        a.Job = BackgroundWork.Run(() => (Decode(main), leaves.Length > 0 ? Decode(leaves) : null));
+        a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, a.Mesh, false), leaves.Length > 0 ? DecodeTrimmed(leaves, a.Mesh, true) : null));
         decoding.Add(a);
         meshReloads++;
     }
@@ -1133,7 +1160,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         bool gpu = GpuCull && gpuCull is not null;
         bool cachedDepth = depthPass && shadowCandidatesFrame == updates && shadowCandidatesEye == eye && shadowCandidatesRange == maxRange;
         cullView.Set(frustum);
-        bool reuseWork = gpu && depthPass && gpuWorkFrame == Gpu.Frame.Number && gpuWorkEye == eye && gpuWorkRange == maxRange;
+        bool reuseWork = gpu && depthPass && gpuWorkFrame == Gpu.Frame.Number && gpuWorkEye == eye && gpuWorkRange == maxRange && gpuWorkTexel == (lodCoarse ? lodTexel : 0);
         if (gpu && !GpuCullVerify)
         {
             if (!reuseWork)
@@ -1150,7 +1177,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             if (!gpu) active.RemoveAll(static b => b.Count == 0);
             else if (!reuseWork) BuildGpuWork(options, terrain);   // the verify mode: the GPU's work from the list the CPU just culled
         }
-        if (gpu && !reuseWork) (gpuWorkFrame, gpuWorkEye, gpuWorkRange) = depthPass ? (Gpu.Frame.Number, eye, maxRange) : (-1, default, 0);
+        if (gpu && !reuseWork) (gpuWorkFrame, gpuWorkEye, gpuWorkRange, gpuWorkTexel) = depthPass ? (Gpu.Frame.Number, eye, maxRange, lodCoarse ? lodTexel : 0) : (-1, default, 0, 0);
         lodView = gpu ? CurrentLodView(eye.Y) : default;
         if (gpu) ShowBatches(eye);
         double tCull = cpu.Elapsed.TotalMilliseconds;
@@ -1233,7 +1260,17 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // only compared), or the CPU's placements.
         if (gpu)
         {
-            if (rockDraws.Count > 0)
+            if (rockDraws.Count > 0 && gpuResult.Split && !depthPass)
+            {
+                // The split: the rocks that are not mid-transition with their impostor use the program without the dither's discard; a rock fades only into its impostor.
+                var rocksNow = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(rockDraws);
+                DrawCalls += terrain.DrawMeshesIndirect(rocksNow, gpuResult.Rows, gpuResult.RowsOffset, gpuResult.Args,
+                    gpuResult.ArgsOffset + (ulong)(gpuResult.DrawCount + meshDraws.Count) * 20, false, solid: true);
+                if (RockImpostorsActive)
+                    DrawCalls += terrain.DrawMeshesIndirect(rocksNow, gpuResult.Rows, gpuResult.RowsOffset, gpuResult.Args,
+                        gpuResult.ArgsOffset + (ulong)(2 * gpuResult.DrawCount + meshDraws.Count) * 20, false, solid: false);
+            }
+            else if (rockDraws.Count > 0)
                 DrawCalls += terrain.DrawMeshesIndirect(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(rockDraws), gpuResult.Rows, gpuResult.RowsOffset,
                     gpuResult.Args, gpuResult.ArgsOffset + (ulong)meshDraws.Count * 20, depthPass);
         }
@@ -1368,7 +1405,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     if (!g.Asset.Failed) NearestMissingMesh = Math.Min(NearestMissingMesh, zoneDistance);
                     continue;
                 }
-                var (withImpostor, parts) = WithImpostor(FoliageGroupRange.Of(range, band), g.Asset, range, band, state, eye, impostorView);
+                var (withImpostor, parts) = WithImpostor(FoliageGroupRange.Of(range, band), g, range, band, state, eye, impostorView);
                 cullWork.Add((g, withImpostor, parts));
             }
         }
@@ -1484,6 +1521,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     long gpuWorkFrame = -1;
     Vector3 gpuWorkEye;
     float gpuWorkRange;
+    /// <summary>The coarsened cascade's texel the work list was built for (0: not coarsened): its impostor transitions depend on it (<see cref="ShadowLod.ImpostorTransition"/>).</summary>
+    float gpuWorkTexel;
     int gpuWorkStamp;
     long gpuWorkBuilds, gpuWorkGroups, gpuWorkCandidates, gpuWorkRockCandidates;
     FoliageCullDraw[] gpuDraws = new FoliageCullDraw[64];
@@ -1680,8 +1719,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 if (b >= meshBatches && b < impostorFirst && gpuRockOrder[b - meshBatches].Asset.WorkLod is { } workLod)
                 {
                     flags |= FoliageCullChunk.Lod;
-                    lodError = workLod.Relative[e.Level];
-                    lodNext = e.Level + 1 < workLod.Levels ? workLod.Relative[e.Level + 1] : float.PositiveInfinity;
+                    var levelErrors = LevelErrors(workLod);
+                    lodError = levelErrors[e.Level];
+                    lodNext = e.Level + 1 < workLod.Levels ? levelErrors[e.Level + 1] : float.PositiveInfinity;
                 }
                 uint first = FoliageGpuCull.FirstOf(g.Arena) + (uint)e.Start;
                 for (int at = 0; at < length; at += Chunk)
@@ -1694,6 +1734,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     };
             }
         }
+        for (int b = 0; b < batches; b++)
+            for (int c = gpuBatchStart[b]; c < gpuBatchStart[b + 1]; c++) (gpuChunks[c].BatchStart, gpuChunks[c].BatchEnd) = ((uint)gpuBatchStart[b], (uint)gpuBatchStart[b + 1]);   // the split lays a batch out whole
         gpuChunkCount = n;
         gpuInstances = 0;
         foreach (var e in gpuEntries) if (e.Level == 0) gpuInstances += e.Length;   // a generated level's entry repeats the instances; each is drawn at one level
@@ -1788,7 +1830,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         for (int i = 0; i < meshes; i++)
         {
             var d = meshDraws[i];
-            gpuDraws[i] = new FoliageCullDraw { IndexCount = (uint)d.Part.Count, ChunkStart = (uint)gpuBatchStart[d.Batch], ChunkEnd = (uint)gpuBatchStart[d.Batch + 1] };
+            gpuDraws[i] = new FoliageCullDraw { FirstIndex = DrawFirst(d.Part), IndexCount = DrawCount(d.Part), ChunkStart = (uint)gpuBatchStart[d.Batch], ChunkEnd = (uint)gpuBatchStart[d.Batch + 1] };
         }
         for (int k = 0; k < rockDraws.Count; k++)
         {
@@ -1830,7 +1872,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         bool fogOn = !depthPass && FogCull is { } fogCull && fogCull.WriteCull(fog);
         bool occlusionOn = !depthPass && !Occlusion.IsEmpty && !GpuCullVerify;
         cull.TimingClass = depthPass || Gpu.CurrentTargets().Formats.Samples > 1 ? 0 : occlusionOn ? 2 : 1;
-        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock, 0.999f, fogOn ? fog : default, occlusionOn ? Occlusion : default, lodView);
+        // The split (EarlyDepth): in the colour views each batch's dithered instances come after its fully visible ones, drawn with the other program. Not while verifying (the CPU's order).
+        bool split = !depthPass && EarlyDepth.Enabled && !GpuCullVerify;
+        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock, 0.999f, fogOn ? fog : default, occlusionOn ? Occlusion : default, lodView, split);
         if (occlusionOn && cull.OccludedIsFresh) OccludedInstances = cull.LateOccluded;
         DrawnInstances += cull.LateVisible;
         if (fogOn && cull.LateFogCulled > 0) FogCull!.AddCulled(FogVolumes.CullKind.FoliageInstances, cull.LateFogCulled);
@@ -2074,14 +2118,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>
     /// Draws the foliage meshes' depth for a shadow cascade: <see cref="Draw"/>'s culling and ranges (measured from the camera's
-    /// <paramref name="eye"/>) with <see cref="ShadowShaders.MeshDepthFragment"/>, so the leaves' cut-out holds; no grass, no mesh smaller than <paramref name="minSize"/>. <paramref name="texel"/> is the cascade's texel (world units; 0: unknown) for the generated levels. Leaves the draw
+    /// <paramref name="eye"/>) with <see cref="ShadowShaders.MeshDepthFragment"/>, so the leaves' cut-out holds; no grass, no mesh smaller than <paramref name="minSize"/>. <paramref name="texel"/> is the cascade's texel (world units; 0: unknown) for the generated levels. <paramref name="coarse"/>: a far cascade drawn with coarser casters (<see cref="ShadowLod"/>: the generated levels allow more texels). Leaves the draw
     /// counters describing this call.
     /// </summary>
-    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float maxRange = float.PositiveInfinity, float minSize = 0, float texel = 0)
+    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float maxRange = float.PositiveInfinity, float minSize = 0, float texel = 0, bool coarse = false)
     {
-        (depthPass, depthMinSize, lodTexel) = (true, minSize, texel);
+        (depthPass, depthMinSize, lodTexel, lodCoarse) = (true, minSize, texel, coarse);
         try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain, grass: false, maxRange: maxRange); }
-        finally { (depthPass, depthMinSize, lodTexel) = (false, 0, 0); }
+        finally { (depthPass, depthMinSize, lodTexel, lodCoarse) = (false, 0, 0, false); }
     }
 
     // ------------------------------------------------------------------ native recording
@@ -2090,7 +2134,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     // (BeginNativeInPass). Each draw method is split into Prepare (reads the textures and the zones' state, makes a draw list) and Record (the
     // list into one native segment: the sets and dynamic state once, per draw a push constant block and the mesh's own buffers).
 
-    const int ColourKind = 0, DepthKind = 1, GrassKind = 2, MotionKind = 3;
+    const int ColourKind = 0, DepthKind = 1, GrassKind = 2, MotionKind = 3, SolidKind = 4;
     /// <summary>The first location the per-instance rows (the batch matrices) take; the mesh's own inputs are below it.</summary>
     const int RowLocation = FoliageShaders.InstanceLocation;
 
@@ -2113,8 +2157,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         Silk.NET.Vulkan.PolygonMode Polygon, bool AlphaToCoverage, bool DepthClamp);
 
     readonly Dictionary<(int Kind, SegmentPipeline State), int> segmentByState = [];
-    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[4];
-    readonly int[] segmentIds = new int[4];
+    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[5];
+    readonly int[] segmentIds = new int[5];
     int segmentCount;
 
     /// <summary>A stable number for a segment's pipeline state, so a mesh compares one int per draw.</summary>
@@ -2281,6 +2325,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         };
         var sided = Silk.NET.Vulkan.CullModeFlags.None;
         Silk.NET.Vulkan.CullModeFlags? side = null;
+        // The split (EarlyDepth; GPU cull, colour views): the program without the discards draws the fully visible instances of the parts without a cut-out.
+        bool splitView = indirect && gpuResult.Split && !depth;
+        int solidSegment = splitView ? SegmentId(SolidKind, colourSolidMesh.P, targets, state) : 0;
         foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(meshDraws))
         {
             var k = d.Material;
@@ -2306,12 +2353,28 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             var part = d.Part;
             ref var n = ref (depth ? ref part.DepthNative : ref part.ColourNative);
             Current(ref n, part, mp);
+            // A part without a cut-out is drawn twice: its fully visible instances (the cull lays them out first) with the solid program, the dithered
+            // ones after them with the full one. A cut-out part keeps its one draw over both (it needs the discard anyway).
+            bool split = splitView && pc.AlphaThreshold == 0f;
+            if (split)
+            {
+                ref var sn = ref part.ColourSolidNative;
+                Current(ref sn, part, colourSolidMesh);
+                job.Add(new MeshJob.Draw
+                {
+                    SetRaster = raster, Cull = want, Pipeline = sn.SegA == solidSegment ? sn.PipeA! : PipelineFor(ref sn, colourSolidMesh, solidSegment, state, targets.Formats, "foliage meshes solid"),
+                    Vertices = sn.Vertices, Elements = sn.Elements, Push = pc,
+                    Args = gpuResult.Args, ArgsOffset = gpuResult.ArgsOffset + (ulong)(gpuResult.DrawCount + drawIndex) * 20,
+                    FirstIndex = DrawFirst(part), IndexCount = DrawCount(part), Instances = d.Instances, FirstInstance = d.FirstInstance,
+                });
+                raster = false;
+            }
             job.Add(new MeshJob.Draw
             {
                 SetRaster = raster, Cull = want, Pipeline = n.SegA == segment ? n.PipeA! : PipelineFor(ref n, mp, segment, state, targets.Formats, label),
                 Vertices = n.Vertices, Elements = n.Elements, Push = pc,
-                Args = indirect ? gpuResult.Args : default, ArgsOffset = gpuResult.ArgsOffset + (ulong)drawIndex * 20,
-                IndexCount = (uint)part.Count, Instances = d.Instances, FirstInstance = d.FirstInstance,
+                Args = indirect ? gpuResult.Args : default, ArgsOffset = gpuResult.ArgsOffset + (ulong)((split ? 2 * gpuResult.DrawCount : 0) + drawIndex) * 20,
+                FirstIndex = DrawFirst(part), IndexCount = DrawCount(part), Instances = d.Instances, FirstInstance = d.FirstInstance,
             });
             drawIndex++;
         }
@@ -2335,7 +2398,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             /// <summary>Indirect: the arguments' buffer (else a plain indexed draw).</summary>
             public Silk.NET.Vulkan.Buffer Args;
             public ulong ArgsOffset;
-            public uint IndexCount, Instances, FirstInstance;
+            public uint IndexCount, FirstIndex, Instances, FirstInstance;
         }
 
         public FoliageRenderer Owner = null!;
@@ -2374,7 +2437,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 cmd.BindIndexBuffer(d.Elements, Silk.NET.Vulkan.IndexType.Uint32);
                 PushTo(cmd, layout, in d.Push, ref last, ref pushed);
                 if (d.Args.Handle != 0) cmd.DrawIndexedIndirect(d.Args, d.ArgsOffset, 1);
-                else cmd.DrawIndexed(d.IndexCount, d.Instances, 0, 0, d.FirstInstance);
+                else cmd.DrawIndexed(d.IndexCount, d.Instances, d.FirstIndex, 0, d.FirstInstance);
             }
         }
 
@@ -2579,6 +2642,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     Vector3 motionEye;
     Vector4[] motionFrustum = [];
     float? previousSwayPhase;
+    /// <summary>This frame's <see cref="GrassMotionReach.Scale"/> for the motion pass (0: every blade in range).</summary>
+    float motionScale;
     bool motionCamera, havePrevious;
     readonly List<MotionDraw> motionDraws = [];
 
@@ -2603,6 +2668,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         var previous = havePrevious ? previousUnjittered : motionUnjittered;
         (previousSwayPhase, previousUnjittered, havePrevious) = (time, motionUnjittered, true);
         var eye = motionEye;
+        // grass-velocity: blades whose own motion stays under the threshold are left to the camera reprojection; with no phase step nothing moves at all.
+        motionScale = 0;
+        if (GrassVelocityCull && targets.FocalPixels > 0)
+        {
+            float step = GrassMotionReach.PhaseStep(time, previousTime);
+            if (step == 0) return;
+            motionScale = GrassMotionReach.Scale(step, targets.FocalPixels, GrassVelocityPixels);
+        }
         if (GpuGrassActive)
         {
             DrawGrassMotionGpu(targets, eye, time, previousTime, previous);
@@ -2632,7 +2705,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     if (!patch.Layer.Wind || g.SwayLength == 0) continue;
                     var b = Patch(page.Buffers[i], patch);
                     float range = GrassRange(patch);
-                    if (b.Shown == 0 || d >= range) continue;
+                    if (b.Shown == 0 || d >= GrassMotionReach.Reach(range, g.SwayLength, motionScale)) continue;
                     if (b.Sprite is not { Key: not 0 } sprite) continue;
                     motionDraws.Add(new MotionDraw
                     {
@@ -2755,6 +2828,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         lock (allWorlds) foreach (var w in allWorlds) w.Dispose();
         textures.Dispose();
         colourMesh.Dispose();
+        colourSolidMesh.Dispose();
         depthMesh.Dispose();
         grassProgram.Dispose();
         grassMotionProgram.Dispose();

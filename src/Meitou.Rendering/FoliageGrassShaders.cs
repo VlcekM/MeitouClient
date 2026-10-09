@@ -28,7 +28,7 @@ public static partial class FoliageGrassShaders
         struct Zone { uint patchBase; uint patchCount; };
         struct Patch { vec4 size; vec4 colourBounds; float sway; float range; float frequency; uint flags; uint sprite; uint colourMap; uint nearDepth; uint vertexCount; };
         struct Draw { uint vertexCount; uint instanceCount; uint firstVertex; uint firstInstance; };
-        layout(std430, set = 0, binding = 0) readonly buffer View { vec4 planes[8]; vec2 eye; uint planeCount; uint slotCount; float pageSize; float fraction; uint prefixIndex; uint pad; } view;
+        layout(std430, set = 0, binding = 0) readonly buffer View { vec4 planes[8]; vec2 eye; uint planeCount; uint slotCount; float pageSize; float fraction; uint prefixIndex; float motionScale; } view;
         layout(std430, set = 0, binding = 1) readonly buffer Slots { Slot slots[]; };
         layout(std430, set = 0, binding = 3) readonly buffer Zones { Zone zones[]; };
         layout(std430, set = 0, binding = 4) readonly buffer Patches { Patch patches[]; };
@@ -60,7 +60,9 @@ public static partial class FoliageGrassShaders
             precise float dz = max(max(slot.z0 - view.eye.y, view.eye.y - (slot.z0 + view.pageSize)), 0.0);
             precise float d2 = dx * dx + dz * dz;
             float d = CrSqrt(d2);
-            if (d >= pt.range) return;
+            precise float reach = pt.range;
+            if (view.motionScale > 0.0) reach = min(reach, pt.sway * view.motionScale);   // the motion pass: only blades that move enough to show
+            if (d >= reach) return;
             precise float minY = slot.y - 2000.0;
             precise float maxY = slot.y + 2000.0;
             precise float maxX = slot.x0 + view.pageSize;

@@ -16,7 +16,7 @@ public class FogCullTests
 
     static FogVolumes Frame(Vector3 eye, float far = 50000, bool cull = true)
     {
-        var volumes = new FogVolumes([Block()]) { CullEnabled = cull };
+        var volumes = new FogVolumes([Block()]) { CullEnabled = cull, SolveInline = true };
         volumes.Update(eye, Vector3.UnitX, 50 * MathF.PI / 180, 16f / 9, far, 0.5f, on: true);
         return volumes;
     }
@@ -79,7 +79,7 @@ public class FogCullTests
         {
             var eye = B(rng.Next(-30000, 30000), rng.Next(-500, 2900), rng.Next(-30000, 30000));
             float far = rng.Next(8000, 60000);
-            var v = new FogVolumes([f]);
+            var v = new FogVolumes([f]) { SolveInline = true };
             v.Update(eye, Vector3.UnitX, 50 * MathF.PI / 180, 16f / 9, far, 0.5f, on: true);
             for (int k = 0; k < 30; k++)
             {

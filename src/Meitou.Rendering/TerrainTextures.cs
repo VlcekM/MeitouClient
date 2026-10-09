@@ -771,6 +771,7 @@ internal sealed class TerrainTexture : IDisposable
     readonly float anisotropy;
     readonly bool integer;
     float cachedBias = float.NaN;
+    int cachedGeneration;
     SampledTexture cached;
     BindlessHandle handle;
     SampledTexture registered;
@@ -790,10 +791,10 @@ internal sealed class TerrainTexture : IDisposable
     public SampledTexture Sampled()
     {
         float bias = ctx.LodBias;
-        if (!(bias == cachedBias))
+        if (!(bias == cachedBias) || cachedGeneration != ctx.Samplers.Generation)
         {
             var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, anisotropy, integer, bias));
-            (cached, cachedBias) = (new SampledTexture(sampler, Texture.View(), Texture.Image), bias);
+            (cached, cachedBias, cachedGeneration) = (new SampledTexture(sampler, Texture.View(), Texture.Image), bias, ctx.Samplers.Generation);
         }
         return cached;
     }

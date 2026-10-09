@@ -254,7 +254,7 @@ static partial class WorldApp
     static int Interactive(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
         VulkanDisplay.RayTracing = o.WantsRayTracing;
-        using var display = new VulkanDisplay(WindowFor(o), vsync: true, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
+        using var display = new VulkanDisplay(WindowFor(o), vsync: o.VSync, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
         streamline = display.Streamline;
         var window = display.Window!;
         Gpu? gpu = null;

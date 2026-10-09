@@ -114,6 +114,17 @@ public sealed unsafe class VulkanDevice : IDisposable
     public KhrAccelerationStructure? AccelerationStructures { get; private set; }
     /// <summary>With <see cref="HasRayQuery"/>: the scratch buffer alignment of acceleration structure builds.</summary>
     public uint ScratchAlignment { get; private set; } = 256;
+    /// <summary>
+    /// VK_KHR_fragment_shading_rate is on with the attachment rate (variable-rate shading from an image) and the device can use an R8_UINT image as that attachment.
+    /// False without the extension (an integrated GPU may lack it): the fog shading rate (<c>fog-vrs</c>) then does nothing.
+    /// </summary>
+    public bool HasFragmentShadingRate { get; private set; }
+    /// <summary>The shading rate attachment's texel size to use (one rate per this many pixels on a side; 16 where the device allows it, else its smallest).</summary>
+    public int ShadingRateTexel { get; private set; }
+    /// <summary>The largest square fragment size (pixels on a side) the device lists as a shading rate: 2 or 4.</summary>
+    public int MaxShadingRate { get; private set; } = 1;
+    /// <summary>Draws whose shader writes the fragment depth stay at one invocation per pixel on this device (the property is false).</summary>
+    public bool ShadingRateForcedByDepthWrite { get; private set; }
     public bool TextureCompressionBC { get; private set; }
     public bool IndependentBlend { get; private set; }
     public bool ImageCubeArray { get; private set; }
@@ -187,6 +198,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         sb.AppendLine($"bindless={HasBindless} multiDrawIndirect={MultiDrawIndirect} drawIndirectFirstInstance={DrawIndirectFirstInstance} drawIndirectCount={DrawIndirectCount} shaderDrawParameters={ShaderDrawParameters}");
         sb.AppendLine($"pushDescriptor={HasPushDescriptor} (max {MaxPushDescriptors}) depthClipControl={HasDepthClipControl} vertexInputDynamicState={HasVertexInputDynamicState} swapchain={HasSwapchain}");
         sb.AppendLine($"rayQuery={HasRayQuery} bufferDeviceAddress={HasBufferDeviceAddress}");
+        sb.AppendLine($"fragmentShadingRate={HasFragmentShadingRate} (attachment texel {ShadingRateTexel}, largest square rate {MaxShadingRate}x{MaxShadingRate}, forced to 1x1 by depth writes {ShadingRateForcedByDepthWrite})");
         sb.AppendLine($"extendedDynamicState3={HasExtendedDynamicState3} (colorBlendEnable={Eds3ColorBlendEnable} colorWriteMask={Eds3ColorWriteMask} alphaToCoverage={Eds3AlphaToCoverageEnable} polygonMode={Eds3PolygonMode} depthClamp={Eds3DepthClampEnable})");
         sb.Append($"Limits: minUniformBufferOffsetAlignment={Limits.MinUniformBufferOffsetAlignment} timestampPeriod={Limits.TimestampPeriod}ns bufferImageGranularity={Limits.BufferImageGranularity}");
         return sb.ToString();
@@ -576,6 +588,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         var bary = new PhysicalDeviceFragmentShaderBarycentricFeaturesKHR { SType = StructureType.PhysicalDeviceFragmentShaderBarycentricFeaturesKhr };
         var accel = new PhysicalDeviceAccelerationStructureFeaturesKHR { SType = StructureType.PhysicalDeviceAccelerationStructureFeaturesKhr };
         var rayQuery = new PhysicalDeviceRayQueryFeaturesKHR { SType = StructureType.PhysicalDeviceRayQueryFeaturesKhr };
+        var vrs = new PhysicalDeviceFragmentShadingRateFeaturesKHR { SType = StructureType.PhysicalDeviceFragmentShadingRateFeaturesKhr };
 
         bool extEds2 = have.Contains("VK_EXT_extended_dynamic_state2");
         bool extEds3 = have.Contains("VK_EXT_extended_dynamic_state3");
@@ -584,6 +597,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         bool extPush = have.Contains("VK_KHR_push_descriptor");
         bool extBary = options.TriangleMeasurements && have.Contains("VK_KHR_fragment_shader_barycentric");
         bool extRay = options.RayTracing && have.Contains("VK_KHR_acceleration_structure") && have.Contains("VK_KHR_ray_query") && have.Contains("VK_KHR_deferred_host_operations");
+        bool extVrs = have.Contains("VK_KHR_fragment_shading_rate");
 
         void* chain = null;
         void Link<T>(ref T s, bool use) where T : unmanaged
@@ -610,6 +624,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         Link(ref bary, extBary);
         Link(ref accel, extRay);
         Link(ref rayQuery, extRay);
+        Link(ref vrs, extVrs);
 
         var f2 = new PhysicalDeviceFeatures2 { SType = StructureType.PhysicalDeviceFeatures2, PNext = chain };
         Vk.GetPhysicalDeviceFeatures2(pd, &f2);
@@ -642,6 +657,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         HasExtendedDynamicState3 = Eds3ColorBlendEnable && Eds3ColorWriteMask && Eds3AlphaToCoverageEnable && Eds3PolygonMode && Eds3DepthClampEnable;
         HasVertexInputDynamicState = extVid && vid.VertexInputDynamicState;
         HasSwapchain = Surface.Handle != 0;
+        extVrs = extVrs && vrs.AttachmentFragmentShadingRate && ShadingRateAttachmentFormatOk(pd, Format.R8Uint);
         HasBindless = v12.DescriptorIndexing && v12.RuntimeDescriptorArray && v12.DescriptorBindingPartiallyBound && v12.DescriptorBindingVariableDescriptorCount &&
             v12.DescriptorBindingSampledImageUpdateAfterBind && v12.DescriptorBindingUpdateUnusedWhilePending && v12.ShaderSampledImageArrayNonUniformIndexing;
         MultiDrawIndirect = core.MultiDrawIndirect;
@@ -739,6 +755,12 @@ public sealed unsafe class VulkanDevice : IDisposable
             PNext = rayQuery.PNext,
             RayQuery = HasRayQuery,
         };
+        vrs = new PhysicalDeviceFragmentShadingRateFeaturesKHR
+        {
+            SType = StructureType.PhysicalDeviceFragmentShadingRateFeaturesKhr,
+            PNext = vrs.PNext,
+            AttachmentFragmentShadingRate = extVrs,
+        };
         f2.Features = new PhysicalDeviceFeatures
         {
             PipelineStatisticsQuery = HasPipelineStatistics,
@@ -765,6 +787,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         if (extPush) names.Add("VK_KHR_push_descriptor");
         if (extBary) names.Add("VK_KHR_fragment_shader_barycentric");
         if (HasRayQuery) names.AddRange(["VK_KHR_acceleration_structure", "VK_KHR_ray_query", "VK_KHR_deferred_host_operations"]);
+        if (extVrs) names.Add("VK_KHR_fragment_shading_rate");
         // Only read by VideoMemory (the viewer's statistics): the process's usage and budget per heap.
         HasMemoryBudget = have.Contains("VK_EXT_memory_budget");
         if (HasMemoryBudget) names.Add("VK_EXT_memory_budget");
@@ -832,6 +855,8 @@ public sealed unsafe class VulkanDevice : IDisposable
             TransferQueue = gq;
         }
 
+        // Unusable (no attachment feature, no R8_UINT attachment, no listed rate): the extension is not enabled and the feature stays off.
+        if (extVrs) QueryShadingRate(pd);
         if (HasPushDescriptor)
         {
             var pushProps = new PhysicalDevicePushDescriptorPropertiesKHR { SType = StructureType.PhysicalDevicePushDescriptorPropertiesKhr };
@@ -858,6 +883,51 @@ public sealed unsafe class VulkanDevice : IDisposable
                 SetName(ObjectType.Queue, (ulong)TransferQueue.Handle, "transfer queue");
             }
         }
+    }
+
+    // ---- fragment shading rate ----
+
+    bool ShadingRateAttachmentFormatOk(PhysicalDevice pd, Format format)
+    {
+        Vk.GetPhysicalDeviceFormatProperties(pd, format, out var props);
+        return (props.OptimalTilingFeatures & FormatFeatureFlags.FragmentShadingRateAttachmentBitKhr) != 0 &&
+            (props.OptimalTilingFeatures & FormatFeatureFlags.ColorAttachmentBit) != 0;
+    }
+
+    /// <summary>Reads the attachment texel size limits and the listed rates once the device exists; the feature stays off when no usable texel size or square rate comes out.</summary>
+    void QueryShadingRate(PhysicalDevice pd)
+    {
+        if (Environment.GetEnvironmentVariable("MEITOU_NO_VRS") == "1") return;   // test and safety switch: the device is used as one without the extension
+        var rateProps = new PhysicalDeviceFragmentShadingRatePropertiesKHR { SType = StructureType.PhysicalDeviceFragmentShadingRatePropertiesKhr };
+        var p2 = new PhysicalDeviceProperties2 { SType = StructureType.PhysicalDeviceProperties2, PNext = &rateProps };
+        Vk.GetPhysicalDeviceProperties2(pd, &p2);
+        var min = rateProps.MinFragmentShadingRateAttachmentTexelSize;
+        var max = rateProps.MaxFragmentShadingRateAttachmentTexelSize;
+        // Square texels only: 16 when the range allows it, else the smallest (8 on some GPUs).
+        int texel = (int)Math.Max(min.Width, min.Height);
+        if (texel < 16 && 16 <= Math.Min(max.Width, max.Height)) texel = 16;
+        if (texel > Math.Min(max.Width, max.Height) || texel > 32 || (texel & (texel - 1)) != 0) return;
+        ShadingRateForcedByDepthWrite = !rateProps.FragmentShadingRateWithShaderDepthStencilWrites;
+        int largest = 1;   // the largest square rate (1, 2 or 4 pixels a side) the device lists for one sample
+        var list = (delegate* unmanaged<PhysicalDevice, uint*, PhysicalDeviceFragmentShadingRateKHR*, Result>)Vk.GetInstanceProcAddr(Instance, "vkGetPhysicalDeviceFragmentShadingRatesKHR").Handle;
+        if (list != null)
+        {
+            uint n = 0;
+            list(pd, &n, null);
+            if (n > 0)
+            {
+                var rates = new PhysicalDeviceFragmentShadingRateKHR[n];
+                for (int i = 0; i < n; i++) rates[i].SType = StructureType.PhysicalDeviceFragmentShadingRateKhr;
+                fixed (PhysicalDeviceFragmentShadingRateKHR* r = rates) list(pd, &n, r);
+                for (int i = 0; i < n; i++)
+                {
+                    var size = rates[i].FragmentSize;
+                    if (size.Width == size.Height && (rates[i].SampleCounts & SampleCountFlags.Count1Bit) != 0 && size.Width <= 4) largest = Math.Max(largest, (int)size.Width);
+                }
+            }
+        }
+        if (largest < 2) return;
+        (ShadingRateTexel, MaxShadingRate, HasFragmentShadingRate) = (texel, largest, true);
     }
 
     // ---- pipeline cache ------------------------------------------------------------------------------------

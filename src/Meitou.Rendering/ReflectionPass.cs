@@ -26,7 +26,20 @@ public sealed class ReflectionPass : IDisposable
     /// <summary>The reflection covers this much more than the picture in each direction (as a factor of the field of view tangent).</summary>
     public const float Margin = 1.12f;
     /// <summary>Samples per texel of the reflection (1 = off). Resolved into the plain texture the water samples.</summary>
-    public const int Samples = 4;
+    public const int DefaultSamples = 4;
+    /// <summary>Samples per texel of the reflection in use (1 = off; a change rebuilds the targets). Default <see cref="DefaultSamples"/>; <c>--reflection-samples</c>, <c>--ab refl-msaa</c>.</summary>
+    public int Samples { get; set; } = DefaultSamples;
+    /// <summary>Side B of <c>--ab refl-msaa</c> (<c>MEITOU_REFL_AB_SAMPLES</c>, default 1).</summary>
+    public int AbSamples { get; set; } = 1;
+    /// <summary>
+    /// Meitou: the mirrored scene is drawn without the sun shadows (the receivers see a lit surface: the frame's shadow block is swapped for the
+    /// shadows-off one while the pass records; <c>--ab refl-shadows</c> flips it). A half-resolution, rippled mirror image hides the shadows' detail,
+    /// and the receiver is a good part of the pass's shading. <see cref="FaithfulShadows"/> keeps them.
+    /// </summary>
+    public bool NoShadows { get; set; } = true;
+    /// <summary>Set by the frame loop while the shadows switch is Faithful: the reflection then keeps the shadows as before (what the game does is Unknown).</summary>
+    public bool FaithfulShadows { get; set; }
+    FrameBlock? unshadowed;
 
     /// <summary>The native GPU API (all native since phase 8 stage 3: the pass is the guests' host, docs/renderer-native.md 8.9).</summary>
     public GpuContext Gpu { get; }
@@ -35,7 +48,7 @@ public sealed class ReflectionPass : IDisposable
     // The texture the water samples, and the depth beside it when the scene is drawn without multisampling; else the multisampled twins the
     // scene is drawn into, resolved into the colour.
     GpuTexture? colour, depth, msColour, msDepth;
-    int samples;
+    int samples, builtFor;   // builtFor: the Samples the targets were made for
     int width, height, skipped, age;
     bool hasImage;
     Vector3 lastEye;
@@ -53,6 +66,7 @@ public sealed class ReflectionPass : IDisposable
         FoliageDistance = Env("FOLIAGE", FoliageDistance);
         ObjectLodBias = Env("LOD", ObjectLodBias);
         MaxAge = (int)Env("AGE", MaxAge);
+        AbSamples = (int)Env("AB_SAMPLES", AbSamples);
         TerrainLodScale = Env("TLOD", TerrainLodScale);
         timer = new PassTimer(gpu);
     }
@@ -169,9 +183,9 @@ public sealed class ReflectionPass : IDisposable
 
     void Resize(int w, int h)
     {
-        if (w == width && h == height && colour is not null) return;
+        if (w == width && h == height && colour is not null && builtFor == Samples) return;
         Free();
-        (width, height) = (w, h);
+        (width, height, builtFor) = (w, h, Samples);
         colour = GpuTexture.Create(Gpu, new TextureDesc(Format.R16G16B16A16Sfloat, w, h, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferDst, Name: "reflection colour"));
 
         // The picture is drawn multisampled and resolved: the mirrored shoreline, fences and rooflines are hard edges, and
@@ -261,6 +275,8 @@ public sealed class ReflectionPass : IDisposable
         // and the sky, terrain, objects and foliage record into it through BeginNativeInPass, with the targets and state handed over here
         // (GpuContext.CurrentTargets, CurrentState).
         var cmd = Gpu.BeginNative("reflection");
+        bool unlit = NoShadows && !FaithfulShadows;
+        if (unlit) Gpu.Globals.OverrideBlock(ShadowShaders.ReceiverBlock, (unshadowed ??= new FrameBlock(Gpu, ShadowPass.ReceiverBytes)).Binding);   // zeros: shadows off
         var target = msColour is not null ? PassTargets.Of(msColour, msDepth) : PassTargets.Of(colour, depth);
         // Wave 4 (docs/renderer-native.md 6): the guests' segments are secondaries, recorded on the job threads when the pass ends.
         bool secondaries = Recording.Secondaries;
@@ -305,6 +321,7 @@ public sealed class ReflectionPass : IDisposable
             Lap(1);
             if (near <= camera.Near && render.Objects) drawObjects?.Invoke(viewProjection, mirroredEye, frustum);
         }
+        if (unlit) Gpu.Globals.OverrideBlock(ShadowShaders.ReceiverBlock, null);
         (DrawnChunks, DrawnTriangles) = (terrain.DrawnChunks, terrain.DrawnTriangles);
         ViewProjection = mapped;   // x and y do not depend on the near plane
         Valid = hasImage = !first;

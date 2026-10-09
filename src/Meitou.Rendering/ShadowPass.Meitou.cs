@@ -68,6 +68,15 @@ public sealed unsafe partial class ShadowPass
 
     /// <summary>How far (radians) the sun may turn before a cascade is redrawn: a caster 150 units tall shifts its shadow by half a texel; at most 2°, at least 0.25°.</summary>
     static float SunTolerance(ShadowCascade c) => (float)Math.Clamp(0.5 * c.Texel / 150, 0.25 * Math.PI / 180, 2 * Math.PI / 180);
+    /// <summary>
+    /// How many far cascades (1 and up, 1.1 to 1.8 ms each on the swamp) one frame may draw; the other redraws wait, the longest first, and are forced after
+    /// <see cref="MaxWait"/> frames. 0: no limit (the schedule before 2026-10-09, where up to three coincided in one frame). <c>MEITOU_SHADOW_BUDGET</c> sets the default.
+    /// </summary>
+    public int FarBudget { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_SHADOW_BUDGET"), out int b) ? b : ShadowSchedule.DefaultBudget;
+    /// <summary>The most frames a deferred redraw waits.</summary>
+    public int MaxWait { get; set; } = ShadowSchedule.DefaultMaxWait;
+    readonly bool[] owed = new bool[4];
+    readonly int[] waited = new int[4];
     float[]? storedSplits;
     /// <summary>How far the shadow range may drift (share of the drawn one) before every cascade is drawn again.</summary>
     const float RangeTolerance = 0.1f;
@@ -171,7 +180,7 @@ public sealed unsafe partial class ShadowPass
         if (meitouValid && all) { if (splitsChanged) AllReasons[0]++; if (sunJumped) AllReasons[1]++; }
         int frame = meitouFrame++;
         MeitouFrames++;
-        Span<bool> drawNow = stackalloc bool[4];
+        Span<bool> drawNow = stackalloc bool[4], want = stackalloc bool[4], mustDraw = stackalloc bool[4];
         int drawing = 0;
         for (int i = 0; i < count; i++)
         {
@@ -181,11 +190,18 @@ public sealed unsafe partial class ShadowPass
             bool stale = stored[i] is not null && !all && !due;
             bool uncovered = stored[i] is not null && !MeitouShadowFit.Covers(stored[i]!, view, splits, SearchRadius(stored[i]!) + 2 * stored[i]!.Texel);
             bool sunTurned = stored[i] is not null && Vector3.Dot(toSun, storedSunDir[i]) < MathF.Cos(SunTolerance(stored[i]!));
-            drawNow[i] = all || stored[i] is null || due || uncovered || sunTurned;
+            want[i] = all || stored[i] is null || due || uncovered || sunTurned || owed[i];
+            mustDraw[i] = stored[i] is null;
             if (stale && uncovered) RedrawReasons[i, 0]++;
             if (stale && !uncovered && sunTurned) RedrawReasons[i, 1]++;
             if (due && !all) RedrawReasons[i, 2]++;
             if (all) RedrawReasons[i, 3]++;
+        }
+        // At most FarBudget far cascades are drawn per frame; the others wait (longest first) and are owed, forced after MaxWait frames.
+        ShadowSchedule.Pick(want[..count], mustDraw[..count], waited, FarBudget, MaxWait, drawNow);
+        for (int i = 0; i < count; i++)
+        {
+            owed[i] = want[i] && !drawNow[i];
             if (drawNow[i]) drawing++;
         }
 

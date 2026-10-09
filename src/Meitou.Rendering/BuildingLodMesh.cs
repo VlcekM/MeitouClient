@@ -14,6 +14,8 @@ sealed class DecodedObjectMesh
     public required Dictionary<int, DecodedObjectMesh> Manual;
     public required Vector3 Centre;
     public required float Radius;
+    /// <summary>How the levels are picked (<see cref="LodCurve"/>); null: the distances as they are.</summary>
+    public LodCurve? Curve;
     /// <summary>The finest level held (0: all of them): see <see cref="ObjectMeshCache.LevelFor"/>.</summary>
     public int MinLevel;
     /// <summary>Index buffers with every level back to back, made on the worker.</summary>
@@ -50,7 +52,7 @@ sealed class GpuObjectPart
     /// texture's top mips stop mattering (infinity: unknown, they always matter).</summary>
     public float UvScale = float.PositiveInfinity;
     /// <summary>What a native draw needs, per program (<see cref="WorldObjectRenderer"/>).</summary>
-    public ObjectNativeMesh ColourNative, DepthNative;
+    public ObjectNativeMesh ColourNative, DepthNative, ColourSolidNative;
 }
 
 /// <summary>A part's native state for one program: its vertex layout and own vertex buffers, its element buffer, and the pipelines for the
@@ -68,6 +70,9 @@ sealed class GpuObjectMesh
 {
     public List<GpuObjectPart> Parts { get; } = [];
     public required float[] Distances;
+    /// <summary>How a draw picks among the levels (the merged list with the generated ones, or the file's only: <see cref="ObjectLodGen.Enabled"/>).</summary>
+    public LodCurve Curve { get => curve ??= LodCurve.Of(Distances); set => curve = value; }
+    LodCurve? curve;
     /// <summary>For each level: the mesh to draw instead (manual levels), else null.</summary>
     public required GpuObjectMesh?[] Manual;
     public required Vector3 Centre;
@@ -148,6 +153,8 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
     public int MaxReshapes { get; set; } = 2;
     /// <summary>The LOD bias the renderer draws with (the level a mesh is held at follows the LOD value times it).</summary>
     public float LodBias { get; set; } = 1;
+    /// <summary>The render's pixels per radian, which the generated levels' distances are worked out with when a mesh loads (<see cref="ObjectLodGen"/>); the 1080-line, 50 degree picture until the first frame.</summary>
+    public float PixelsPerRadian { get; set; } = 1080 / (2 * MathF.Tan(25 * MathF.PI / 180));
     /// <summary>How far ahead of the camera a mesh is kept ready for (the renderer's <c>MeshMargin</c>: the camera's speed over 1.5 s), taken off the distance a new mesh is made for.</summary>
     public float LookAhead { get; set; }
     /// <summary><c>MEITOU_MESH_STREAM=0</c> loads every level of every mesh, for comparisons.</summary>
@@ -164,7 +171,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
             if (gpu.MinLevel > 0 && Retarget(m, 0)) { Refined++; Upgrading++; m.Upgrade = true; }
             return;
         }
-        int need = LevelFor(gpu.Distances, near * LodBias);
+        int need = gpu.Curve.LevelFor(near * LodBias);
         if (need < gpu.MinLevel)
         {
             // One level more than needed, so a camera on its way in does not ask again at the next boundary.
@@ -184,7 +191,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
     public bool Retarget(ObjectMesh m, float near)
     {
         if (!FarForms || m.Status != ObjectMesh.State.Resident || m.Reshape is not null || m.Distant) return false;
-        if (reshaping.Count >= MaxReshapes || Guard is { Streaming: false } && m.Gpu!.MinLevel < LevelFor(m.Gpu.Distances, near * LodBias)) return false;
+        if (reshaping.Count >= MaxReshapes || Guard is { Streaming: false } && m.Gpu!.MinLevel < m.Gpu.Curve.LevelFor(near * LodBias)) return false;
         string key = m.Key;
         float bias = LodBias;
         bool keep = m.KeepLevelIndices;
@@ -289,15 +296,21 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
         float radius = model.Radius;
         if (mesh.Bounds is { } b && b.Max.X >= b.Min.X) { centre = (b.Min + b.Max) / 2; radius = Math.Max((b.Max - b.Min).Length() / 2, 1e-3f); }
         var levels = MeshLod.Levels(mesh);
+        // Generated levels among the file's (docs/render-objects.md, "Generated levels"): a mesh drawn through the normal path, not a distant one, without a skeleton.
+        LodCurve? curve = null;
+        if (depth == 0 && !distant && !keep && mesh.SkeletonName is null && ObjectLodGen.PlanFor(name, path, model, radius, levels, PixelsPerRadian) is { } plan)
+        {
+            levels = ObjectLodGen.Apply(plan, model, levels);
+            curve = plan.Curve;
+        }
+        curve ??= LodCurve.Of([.. levels.Select(l => l.Distance)]);
         // The finest level anything near enough can draw: the levels above it are not decoded or uploaded (the vertices only they use, and their
         // indices and manual meshes, stay out). Only a mesh drawn through the normal path (not the terrain shader's, which wants every level) and
         // not a distant one, and not an inner (manual) mesh, which is drawn at its level 0.
         int minLevel = 0;
         if (depth == 0 && !distant && !keep && float.IsFinite(near))
         {
-            var distances = new float[levels.Count];
-            for (int l = 0; l < levels.Count; l++) distances[l] = levels[l].Distance;
-            minLevel = LevelFor(distances, (nearIsPlacement ? near - 6 * radius : near) * lodBias);
+            minLevel = curve.LevelFor((nearIsPlacement ? near - 6 * radius : near) * lodBias);
         }
         var manual = new Dictionary<int, DecodedObjectMesh>();
         for (int l = 1; l < levels.Count; l++)
@@ -314,7 +327,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
             manual[l] = inner;
         }
         if (minLevel >= levels.Count) minLevel = levels.Count - 1;   // the chain ended earlier than the distances said
-        var result = new DecodedObjectMesh { Model = model, Levels = levels, Manual = manual, Centre = centre, Radius = radius, MinLevel = minLevel };
+        var result = new DecodedObjectMesh { Model = model, Levels = levels, Manual = manual, Centre = centre, Radius = radius, Curve = curve, MinLevel = minLevel };
         foreach (var part in model.Parts) result.Prepared.Add(PreparePart(result, part, keep));
         return result;
     }
@@ -350,6 +363,7 @@ sealed unsafe class ObjectMeshCache(GpuContext gpuContext, AssetLocator assets, 
     static GpuObjectMesh Prepare(DecodedObjectMesh d) => new()
     {
         Distances = d.Levels.Select(l => l.Distance).ToArray(),
+        Curve = d.Curve ?? LodCurve.Of([.. d.Levels.Select(l => l.Distance)]),
         Manual = Enumerable.Range(0, d.Levels.Count).Select(l => d.Manual.TryGetValue(l, out var m) ? Prepare(m) : null).ToArray(),
         Centre = d.Centre,
         Radius = d.Radius,

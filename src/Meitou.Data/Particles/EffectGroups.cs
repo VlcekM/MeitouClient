@@ -78,6 +78,8 @@ public sealed class EffectWorld
     public float FallbackRadius { get; set; } = 8000;
     /// <summary>The biome's ground colour at a place (for <c>ground colour</c> effects); null: not used.</summary>
     public Func<float, float, Vector3>? GroundColour { get; set; }
+    /// <summary>The Tab panel's "Particle density x" (Meitou setting, not in the game): multiplies every effect's emission rate, so fewer particles exist and are drawn (a storm gets thinner, not cheaper per particle).</summary>
+    public float Density { get; set; } = 1;
 
     /// <summary>The y of the terrain normal at a point, by finite differences of the height (the game's own terrain query returns the normal).</summary>
     public float NormalY(float x, float z)
@@ -298,7 +300,7 @@ public abstract class EffectGroup
     protected ParticleEnvironment Environment(WeatherEffectInput weather)
     {
         var e = Effect;
-        return new ParticleEnvironment(weather.Wind, e.WindSpeedMultiplier, WindSpanScale(e, weather.Wind.Length()), e.WindAffected, e.WindDirectionEmission);
+        return new ParticleEnvironment(weather.Wind, e.WindSpeedMultiplier, WindSpanScale(e, weather.Wind.Length()) * world.Density, e.WindAffected, e.WindDirectionEmission);
     }
 
     protected EffectUnit NewUnit(Vector3 position)

@@ -230,16 +230,46 @@ public sealed partial class FoliageRenderer
 
     /// <summary>The ground distance from which a mesh would be its impostor, for an atlas of class <paramref name="cls"/> (exact once loaded): the impostor
     /// distance for medium and large atlases, in proportion to the size for the small class.</summary>
-    float TransitionFor(MeshAsset a, in ImpostorClass cls, float worldRadius) => cls.Transition(worldRadius, DistanceFor(a));
+    float TransitionFor(MeshAsset a, in ImpostorClass cls, float worldRadius, Group? g = null)
+    {
+        float t = cls.Transition(worldRadius, DistanceFor(a));
+        return g is null || !ScreenLod ? t : ScreenTransition(a, cls, t, g);
+    }
 
-    /// <summary>The impostor distance of a mesh: <see cref="LargeImpostorDistance"/> for large meshes other than trees (rocks, rock stacks, hoodoos, ruins; <see cref="FoliageSizes.LargeBillboard"/>), else <see cref="ImpostorDistance"/>.</summary>
+    /// <summary>The nearest a <c>screen-lod</c> transition goes, whatever the sizes: ground units.</summary>
+    const float ScreenLodMinTransition = 600;
+
+    /// <summary>
+    /// The transition of a group under the <c>screen-lod</c> rule (<see cref="FoliageScreenLod.Transition"/>): the billboard replaces the mesh where the mesh's mean triangle (at the
+    /// coarsest level it can be drawn at) is under <see cref="ScreenLodTriPixels"/> square pixels for the group's largest instance, but not nearer than its atlas frame can be magnified
+    /// (the atlas was made for the largest instance at <paramref name="baseTransition"/>, so smaller instances of the group, and meshes with tiny triangles, switch nearer at the same size on the screen).
+    /// </summary>
+    float ScreenTransition(MeshAsset a, in ImpostorClass cls, float baseTransition, Group g)
+    {
+        if (!(ScreenLodTriPixels > 0) || !a.HasBounds) return baseTransition;
+        float ppr = ScreenLodPixelsPerRadian;
+        int triangles = a.Lod is { } lod ? lod.Set.Triangles[lod.Levels - 1] : a.Triangles;
+        var key = (ppr, ScreenLodTriPixels, triangles, cls.FramePixels);
+        if (a.ScreenKey != key)
+        {
+            float extent = FoliageScreenLod.LevelExtent(a.TriExtent, a.Triangles, triangles) / a.Radius;
+            a.ScreenPerRadian = extent > 0 ? FoliageScreenLod.TransitionPerRadius(extent, ppr, ScreenLodTriPixels) : 0;
+            a.ScreenFloor = FoliageScreenLod.FloorPerRadius(cls.FramePixels, ppr, ImpostorClass.Magnification);
+            a.ScreenKey = key;
+        }
+        if (!(a.ScreenPerRadian > 0)) return baseTransition;
+        float radius = g.BoundsReady && g.MaxRadius > 0 ? g.MaxRadius : a.Radius * a.Mesh.MaxScale;
+        return Math.Min(baseTransition, Math.Max(FoliageScreenLod.Transition(baseTransition, radius, a.ScreenPerRadian, a.ScreenFloor), ScreenLodMinTransition));
+    }
+
+    /// <summary>The impostor distance of a mesh:<see cref="LargeImpostorDistance"/> for large meshes other than trees (rocks, rock stacks, hoodoos, ruins; <see cref="FoliageSizes.LargeBillboard"/>), else <see cref="ImpostorDistance"/>.</summary>
     float DistanceFor(MeshAsset a) => a.HasBounds && a.LargeBillboard ? LargeImpostorDistance : ImpostorDistance;
 
     /// <summary>The transition of an atlas not made yet, from the class estimated from the mesh's bounds (infinite when it has none).</summary>
-    float EstimatedTransition(MeshAsset a) => EstimateClass(a) is { } c ? TransitionFor(a, c, a.Radius * a.Mesh.MaxScale) : float.PositiveInfinity;
+    float EstimatedTransition(MeshAsset a, Group? g = null) => EstimateClass(a) is { } c ? TransitionFor(a, c, a.Radius * a.Mesh.MaxScale, g) : float.PositiveInfinity;
 
     /// <summary>The ground distance from which a mesh is its impostor (infinite without a resident atlas or with the switch off).</summary>
-    float TransitionOf(MeshAsset a)
+    float TransitionOf(MeshAsset a, Group? g = null)
     {
         if (!Impostors) return float.PositiveInfinity;
         // A rock has atlases per biome, one class for all of them (it follows from the mesh): the transition of any that is resident.
@@ -247,10 +277,10 @@ public sealed partial class FoliageRenderer
         {
             if (!RockImpostorsActive || a.RockVariants is not { } variants) return float.PositiveInfinity;
             foreach (var v in variants.Values)
-                if (v.Impostor is { Stage: ImpostorStage.Ready } r) return TransitionFor(a, r.Class, r.WorldRadius);
+                if (v.Impostor is { Stage: ImpostorStage.Ready } r) return TransitionFor(a, r.Class, r.WorldRadius, g);
             return float.PositiveInfinity;
         }
-        return a.Impostor is { Stage: ImpostorStage.Ready } s ? TransitionFor(a, s.Class, s.WorldRadius) : float.PositiveInfinity;
+        return a.Impostor is { Stage: ImpostorStage.Ready } s ? TransitionFor(a, s.Class, s.WorldRadius, g) : float.PositiveInfinity;
     }
 
     /// <summary>
@@ -259,11 +289,14 @@ public sealed partial class FoliageRenderer
     /// or beyond the crossfade band (with a margin for instances on the zone's edge). No impostor when the transition is not before the range's
     /// own fade band (the two fades never overlap) or the view takes none.
     /// </summary>
-    (FoliageGroupRange Range, int Parts) WithImpostor(FoliageGroupRange r, MeshAsset a, float range, float band, ZoneState zone, Vector3 eye, bool view)
+    (FoliageGroupRange Range, int Parts) WithImpostor(FoliageGroupRange r, Group g, float range, float band, ZoneState zone, Vector3 eye, bool view)
     {
+        var a = g.Asset;
         if (!view) return (r, FoliageCull.MeshPart);
         if (a.Terrain && !RockImpostorsActive) return (r, FoliageCull.MeshPart);
-        float t = TransitionOf(a);
+        float t = TransitionOf(a, g);
+        if (depthPass && lodCoarse && !a.Terrain && a.Impostor is { Stage: ImpostorStage.Ready } ready)
+            t = Math.Min(t, ShadowLod.ImpostorTransition(ready.WorldRadius, lodTexel));   // a far cascade: the flat caster for what is small in texels
         if (!(t <= range - band)) return (r, FoliageCull.MeshPart);
         float b = t * ImpostorBand;
         const float Edge = 64;
@@ -603,6 +636,7 @@ public sealed partial class FoliageRenderer
             float shortest = Math.Min(ImpostorDistance, LargeImpostorDistance) * (ImpostorClass.SmallEnabled ? Math.Min(1, ImpostorClass.SmallMinimumRadius / ImpostorClass.MinimumRadius) : 1) * (1 - ImpostorBand);
             // Bakes wait in order of how soon their zones are close: from where the eye is now or will be in a few seconds of its motion.
             var lead = settling ? Vector2.Zero : velocity * ImpostorLookaheadSeconds;
+            if (ScreenLod) shortest = Math.Min(shortest, ScreenLodMinTransition * (1 - ImpostorBand));
             if (lead.Length() > MaxLookahead) lead = Vector2.Normalize(lead) * MaxLookahead;
             var soonEye = eye + new Vector3(lead.X, 0, lead.Y);
             impostorWanted.Clear();
@@ -623,7 +657,7 @@ public sealed partial class FoliageRenderer
                     {
                         // A TERRAIN-mode rock: one atlas per biome row its instances have here (docs/impostors.md section 13).
                         if (!RockImpostorsActive) continue;
-                        float rt = EstimatedTransition(a);
+                        float rt = EstimatedTransition(a, g);
                         if (range - band < rt || far < rt * (1 - ImpostorBand)) continue;
                         PrepareRock(g, rockTerrain!);   // returns at once when its records are already sorted and numbered for this terrain
                         foreach (var (row, _, _) in g.RockSegments)
@@ -639,7 +673,7 @@ public sealed partial class FoliageRenderer
                     if (a.Impostor is { Stage: ImpostorStage.None, RetryAt: 0 }) continue;
                     // Its own transition (the exact one once the atlas is loaded; before that estimated from the mesh's bounds, which also rules out
                     // a mesh that could never have an atlas: the load would only find that out).
-                    float t = a.Impostor is { FramePixels: > 0 } loaded ? TransitionFor(a, loaded.Class, loaded.WorldRadius) : EstimatedTransition(a);
+                    float t = a.Impostor is { FramePixels: > 0 } loaded ? TransitionFor(a, loaded.Class, loaded.WorldRadius, g) : EstimatedTransition(a, g);
                     if (range - band < t || far < t * (1 - ImpostorBand)) continue;
                     impostorWanted[a] = impostorWanted.TryGetValue(a, out float known) ? Math.Min(known, urgency) : urgency;
                 }

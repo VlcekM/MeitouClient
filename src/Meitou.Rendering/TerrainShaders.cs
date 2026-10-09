@@ -7,7 +7,7 @@ namespace Meitou.Rendering;
 /// weighted by the blend map. Far away (beyond the game's material distance) and outside the loaded region the
 /// terrain takes the biomes' blended ground colour, like the game's distant terrain.
 /// </summary>
-static class TerrainShaders
+static partial class TerrainShaders
 {
     /// <summary>Rows of the per-biome parameter texture (RGBA32F, one row per biome).</summary>
     public const int ParamTexels = 13;
@@ -182,6 +182,7 @@ static class TerrainShaders
         uniform float uFarEnd;
         uniform bool uHasGround;       // whole-world ground colour map available
         uniform bool uHasWorldColour;  // whole-world colour map available
+        uniform float uCliffEps;       // the cliff weights up to this are dropped, the next as much ramp in (0: every nonzero weight counts)
 
         uniform sampler2DArray uDiffuse;
         uniform sampler2DArray uNormal;
@@ -208,6 +209,10 @@ static class TerrainShaders
         Coord coord(vec2 p) { Coord c; c.p = p; c.dx = dFdxCoarse(p); c.dy = dFdyCoarse(p); return c; }
         vec4 tex(sampler2DArray s, Coord c, float layer) { return textureGrad(s, vec3(c.p, layer), c.dx, c.dy); }
 
+        // A layer weight with its small values dropped: 0 up to eps, rising smoothly to the weight itself at twice eps (continuous, so no seam where a
+        // layer stops being sampled); eps 0 is the weight unchanged. docs/render-terrain.md, "Layer weight threshold".
+        float keepWeight(float x, float eps) { return eps > 0.0 ? x * smoothstep(eps, 2.0 * eps, x) : x; }
+
         // One biome's surface (the layer model of docs/formats/terrain.md).
         Surface biome(int b, vec3 n, float slope, vec4 map, vec4 colour, float distance)
         {
@@ -228,10 +233,11 @@ static class TerrainShaders
 
             vec4 w = smoothstep(smin - sblend, smin, vec4(slope)) * smoothstep(smax + sblend, smax, vec4(slope));
             vec4 white = vec4(1.0);
+            w.y = keepWeight(w.y, uCliffEps);
 
             // A layer whose weight is exactly 0 at this pixel is not sampled: mixing in a weight of 0 leaves the value as it was
-            // (x + 0 * (y - x) and x * 1 + y * 0 are both x). Most ground has no road, dirt, slope or cliff, so this skips most of
-            // the 14 layer samples per biome (docs/formats/terrain.md, "In the viewer").
+            // (x + 0 * (y - x) and x * 1 + y * 0 are both x). On the swamp the dirt weight is exactly 0 on 57 % of the ground, but the slope and
+            // cliff weights almost never are, so this skips only some of the 14 layer samples per biome (docs/render-terrain.md, "Where the terrain's 0.99 ms goes").
             Coord base = coord(uv * sB.xy), grass = coord(uv * sB.zw), slopeUv = coord(uv * sA.xy), dirt = coord(uv * sC.xy), road = coord(uv * sC.zw);
             Coord cliffX = coord(vec2(uv.y, vert) * sA.zw), cliffZ = coord(vec2(uv.x, vert) * sA.zw);
             float far = clamp(distance * fade.a - 0.3, 0.0, 1.0);
@@ -422,9 +428,12 @@ static class TerrainShaders
         """;
 
     /// <summary><see cref="Fragment"/> for the instanced <see cref="MeshVertex"/>: the feature's biome per instance instead of the uniform.</summary>
-    public static readonly string MeshFragment = PerInstanceBiome(Fragment);
+    public static readonly string MeshFragment = PerInstanceBiome(Fragment, fade: true);
 
-    static string PerInstanceBiome(string fragment)
+    /// <summary><see cref="MeshFragment"/> without the cross-fade's <c>discard</c>, for the placements that are not mid-fade (no discard anywhere in the program, so the depth test runs before it; <see cref="EarlyDepth"/>).</summary>
+    public static readonly string MeshFragmentSolid = PerInstanceBiome(Fragment, fade: false);
+
+    static string PerInstanceBiome(string fragment, bool fade)
     {
         const string uniform = "uniform int uFeatureBiome;";
         if (!fragment.Contains(uniform)) throw new InvalidOperationException("TerrainShaders.Fragment no longer declares uFeatureBiome.");
@@ -434,7 +443,7 @@ static class TerrainShaders
         const string wireframe = "if (uWireframe) { fragColour = vec4(0.1, 0.1, 0.1, 1.0); return; }";
         int at = f.IndexOf(wireframe, StringComparison.Ordinal);
         if (at < 0) throw new InvalidOperationException("TerrainShaders.Fragment no longer starts with the wireframe line.");
-        return f.Insert(at, "if (vFade > 0.0 && vFade < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vFade) discard;\n            ");
+        return !fade ? f : f.Insert(at, "if (vFade > 0.0 && vFade < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vFade) discard;\n            ");
     }
 
     // ---- the native model (docs/renderer-native.md 3.3, step O): the texts above through NativeShaders.Port, bodies unchanged ----
@@ -488,6 +497,7 @@ static class TerrainShaders
             uint ground;
             uint worldColour;
             bool grid;
+            float cliffEps;
         } terrain;
 
         """;
@@ -512,7 +522,7 @@ static class TerrainShaders
         ["uTextured"] = "terrain.textured", ["uNormalMaps"] = "terrain.normalMaps", ["uHasMaps"] = "terrain.hasMaps",
         ["uMapState"] = "terrain.mapState", ["uDebug"] = "terrain.debug", ["uFeature"] = "terrain.feature",
         ["uFeatureBiome"] = "terrain.featureBiome", ["uFarStart"] = "terrain.farStart", ["uFarEnd"] = "terrain.farEnd",
-        ["uHasGround"] = "terrain.hasGround", ["uHasWorldColour"] = "terrain.hasWorldColour",
+        ["uCliffEps"] = "terrain.cliffEps", ["uHasGround"] = "terrain.hasGround", ["uHasWorldColour"] = "terrain.hasWorldColour",
         ["uDiffuse"] = "textures2DArray[terrain.diffuse]", ["uNormal"] = "textures2DArray[terrain.normal]",
         ["uParams"] = "textures2D[terrain.params]", ["uCells"] = "utextures2D[terrain.cells]", ["uBlendMap"] = "textures2D[terrain.blendMap]",
         ["uOverlay"] = "textures2D[terrain.overlay]", ["uColour"] = "textures2D[terrain.colour]", ["uGround"] = "textures2D[terrain.ground]",
@@ -587,8 +597,11 @@ static class TerrainShaders
 
     public static string PatchVertexNative() => Native(PatchVertex);
     public static string FragmentNative() => Gi.GiResolveShaders.WithAlbedo(Native(Fragment));
+    /// <summary>The terrain colour pass's depth-only twin: the same vertex stage (so the depths are the same), a fragment stage that writes nothing (<see cref="TerrainLateColour"/>).</summary>
+    public static string PrepassFragmentNative() => Native("#version 330 core\nvoid main() { }\n");
     public static string MeshVertexNative() => Native(MeshVertex);
     public static string MeshFragmentNative() => Gi.GiResolveShaders.WithAlbedo(Native(MeshFragment));
+    public static string MeshFragmentSolidNative() => Gi.GiResolveShaders.WithAlbedo(Native(MeshFragmentSolid));
     public static string MeshInstancedDepthVertexNative() => Native(MeshInstancedDepthVertex);
     /// <summary><see cref="ShadowShaders.DepthFragment"/> (the caster block at set 0, binding 2) with the terrain's push block, so both
     /// stages of a depth program declare the same one.</summary>
@@ -597,7 +610,7 @@ static class TerrainShaders
 
 /// <summary>The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools
 /// are 32-bit (0 / 1).</summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 224)]
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 240)]
 struct TerrainConstants
 {
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 CoarseRect;
@@ -638,6 +651,7 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(212)] public uint Ground;
     [System.Runtime.InteropServices.FieldOffset(216)] public uint WorldColour;
     [System.Runtime.InteropServices.FieldOffset(220)] public uint Grid;
+    [System.Runtime.InteropServices.FieldOffset(224)] public float CliffEps;
 }
 
 /// <summary>The C# side of <see cref="TerrainShaders.PushMembers"/> (std430 push constants): a patch's <c>uNode</c> and <c>uMorph</c>.</summary>
