@@ -7,7 +7,7 @@ namespace Meitou.Rendering;
 /// weighted by the blend map. Far away (beyond the game's material distance) and outside the loaded region the
 /// terrain takes the biomes' blended ground colour, like the game's distant terrain.
 /// </summary>
-static class TerrainShaders
+static partial class TerrainShaders
 {
     /// <summary>Rows of the per-biome parameter texture (RGBA32F, one row per biome).</summary>
     public const int ParamTexels = 13;
@@ -230,8 +230,8 @@ static class TerrainShaders
             vec4 white = vec4(1.0);
 
             // A layer whose weight is exactly 0 at this pixel is not sampled: mixing in a weight of 0 leaves the value as it was
-            // (x + 0 * (y - x) and x * 1 + y * 0 are both x). Most ground has no road, dirt, slope or cliff, so this skips most of
-            // the 14 layer samples per biome (docs/formats/terrain.md, "In the viewer").
+            // (x + 0 * (y - x) and x * 1 + y * 0 are both x). On the swamp the dirt weight is exactly 0 on 57 % of the ground, but the slope and
+            // cliff weights almost never are, so this skips only some of the 14 layer samples per biome (docs/render-terrain.md, "Where the terrain's 0.99 ms goes").
             Coord base = coord(uv * sB.xy), grass = coord(uv * sB.zw), slopeUv = coord(uv * sA.xy), dirt = coord(uv * sC.xy), road = coord(uv * sC.zw);
             Coord cliffX = coord(vec2(uv.y, vert) * sA.zw), cliffZ = coord(vec2(uv.x, vert) * sA.zw);
             float far = clamp(distance * fade.a - 0.3, 0.0, 1.0);

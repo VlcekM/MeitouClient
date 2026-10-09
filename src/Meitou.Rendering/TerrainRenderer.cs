@@ -98,6 +98,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
                 Silk.NET.Vulkan.ShaderStageFlags.VertexBit | Silk.NET.Vulkan.ShaderStageFlags.FragmentBit)], 0);
         Silk.NET.Vulkan.DescriptorSetLayout[] sets = [nativeFrame.SetLayout, gpu.Bindless.Layout, constantsLayout];
         patchColour = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(), "terrain");
+        if (TerrainProbe.Names is { } probeNames) { var (pv, pf) = TerrainShaders.ProbeNative(probeNames); patchProbe = new TerrainProgram(gpu, sets, pv, pf, "terrain probe"); }
         patchDepth = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.DepthFragmentNative(), "terrain depth");
         meshColour = new TerrainProgram(gpu, sets, TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentNative(), "terrain meshes");
         meshSolid = new TerrainProgram(gpu, sets, TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentSolidNative(), "terrain meshes solid");
@@ -265,7 +266,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             if (options.Wireframe != 2)
             {
                 PrepareConstants(material: true, patches: true);
-                RecordPatches(patchColour, "terrain", StepTiming.PatchColour, PatchMode.Solid);
+                if (!(TerrainProbe.On && !secondary && TerrainProbe.NoDraw))
+                    RecordPatches(TerrainProbe.On && !secondary && patchProbe is not null ? patchProbe : patchColour, "terrain", StepTiming.PatchColour, PatchMode.Solid);
                 DrawnChunks += nodes.Count;
                 DrawnTriangles += patchTriangles;
             }
@@ -333,6 +335,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     readonly NativeFrame nativeFrame;
     readonly Silk.NET.Vulkan.DescriptorSetLayout constantsLayout;
+    readonly TerrainProgram? patchProbe;
     readonly TerrainProgram patchColour, patchDepth, meshColour, meshSolid, meshDepth;   // meshSolid: meshColour without the cross-fade discard (EarlyDepth)
     readonly ulong uniformAlign;
     readonly uint standIn2D, standInArray, standInUInt;
@@ -1150,6 +1153,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         foreach (var r in retired) r.Texture.Dispose();
         textures?.Dispose();
         foreach (var p in new[] { patchColour, patchDepth, meshColour, meshSolid, meshDepth }) p.Dispose();
+        patchProbe?.Dispose();
         rockBake?.Dispose();
         gpu.Bindless.Free(BindlessKind.Texture2D, standIn2D);
         gpu.Bindless.Free(BindlessKind.Texture2DArray, standInArray);
