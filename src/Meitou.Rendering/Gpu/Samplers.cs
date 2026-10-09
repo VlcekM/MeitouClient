@@ -49,9 +49,18 @@ public sealed unsafe class SamplerCache : IDisposable
 
     public int Count => samplers.Count;
 
+    /// <summary>The Tab panel's anisotropic filtering: the most any sampler gets (1, 2, 4, 8 or 16; 16, the default, leaves every texture as asked). A change bumps <see cref="Generation"/>, which the caches of sampler bindings compare to make theirs again.</summary>
+    public int MaxAnisotropy
+    {
+        get => maxAnisotropy;
+        set { value = Math.Clamp(value, 1, 16); if (value != maxAnisotropy) (maxAnisotropy, Generation) = (value, Generation + 1); }
+    }
+    int maxAnisotropy = 16;
+    public int Generation { get; private set; }
+
     public Sampler Get(in SamplerDesc desc)
     {
-        var key = device.SamplerAnisotropy ? desc : desc with { Anisotropy = 1 };
+        var key = device.SamplerAnisotropy ? desc with { Anisotropy = Math.Min(desc.Anisotropy, maxAnisotropy) } : desc with { Anisotropy = 1 };
         if (samplers.TryGetValue(key, out var sampler)) return sampler;
         var info = new SamplerCreateInfo
         {

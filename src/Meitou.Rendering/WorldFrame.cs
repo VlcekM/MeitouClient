@@ -104,6 +104,8 @@ sealed class WorldOptions
     public float? ParticlePrewarm;
     /// <summary><c>--particle-density x</c>: the Tab panel's "Particle density x" at start (0.1 to 1).</summary>
     public float ParticleDensity = 1;
+    /// <summary><c>--anisotropy n</c>: the Tab panel's anisotropic filtering at start (1, 2, 4, 8 or 16; 16 leaves the textures as asked).</summary>
+    public int Anisotropy = 16;
     /// <summary><c>--particle-area &lt;radius&gt;</c> (test): weather effects are placed in a disc of this radius round the start point instead of the weather region; <c>--particle-seed</c> seeds their random choices.</summary>
     public float? ParticleArea;
     public int ParticleSeed = 1;
@@ -201,7 +203,7 @@ sealed class WorldOptions
           --cloud-wind <x>,<z>     the clouds' drift velocity in world units per second (test; the drift is held still in --screenshot)
           --no-fog-volumes         leave out the placed fog volumes (fogfeatures.dat: the swamp's fog, the Fog Islands', the Vain's)
           --no-fog-cull            draw what the fog in front of the camera completely hides (comparison; the image is the same)
-          --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-density <x> the effects' emission rate x (0.1-1, the Tab slider)   --particle-area <r> place weather effects within r units of the start point (test)   --particle-seed <n>   --particle-only <a,b> keep only the weather effects with these in their names (test)
+          --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-density <x> the effects' emission rate x (0.1-1, the Tab slider)   --anisotropy <n> the most anisotropic filtering any texture gets (1-16, the Tab slider; 16 default)   --particle-area <r> place weather effects within r units of the start point (test)   --particle-seed <n>   --particle-only <a,b> keep only the weather effects with these in their names (test)
           --camera-at <x>,<z>      start the camera here instead of at the loaded point (as if flown there)
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,dust,reach>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
@@ -348,6 +350,7 @@ sealed class WorldOptions
                 case "--no-occlusion-cull": o.NoOcclusionCull = true; break;
                 case "--particle-prewarm": o.ParticlePrewarm = Math.Max(F(), 0); break;
                 case "--particle-density": o.ParticleDensity = Math.Clamp(F(), 0.1f, 1); break;
+                case "--anisotropy": o.Anisotropy = (int)F(); break;
                 case "--particle-area": o.ParticleArea = Math.Max(F(), 1); break;
                 case "--particle-seed": o.ParticleSeed = (int)F(); break;
                 case "--particle-only": o.ParticleOnly = Next().Split(','); break;
@@ -710,6 +713,7 @@ static class WorldFrame
     public static Gpu CreateGpu(GpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive)
     {
         var watch = Stopwatch.StartNew();
+        context.Samplers.MaxAnisotropy = o.Anisotropy;
         // The game's texture quality, before any texture loads: the world's texture caches read it as they decode. The terrain's layer arrays
         // have one size, so the Landscape group's drop (the game's textures are 2048²) lowers it instead of dropping mips per file.
         Meitou.Data.Textures.TextureQuality.Level = o.TextureQuality;
@@ -830,6 +834,7 @@ static class WorldFrame
     public static readonly string[] UpscalerSliders = ["Anti-aliasing: 0 off 1 FXAA 2 TAA 3 FSR 4 DLSS", "Render scale (upscaler)", "Upscaler sharpness"];
 
     /// <summary>The anti-aliasing slider's value for the options: 0 none, 1 FXAA, 2.. the upscaler kinds (TAA, FSR, DLSS).</summary>
+    public const string FilteringSlider = "Anisotropic filtering (texture filtering)";
     public static readonly string[] ParticleSliders = ["Weather particles: 0 off 1 quarter 2 half 3 auto 4 full", "Particle density x"];
     /// <summary>The weather particles slider's position for the renderer's state: 0 off, 1 quarter, 2 half, 3 by sprite size (auto), 4 full size.</summary>
     public static int WeatherParticlesSlider(bool weatherOn, PostOptions o) =>
@@ -956,6 +961,9 @@ static class WorldFrame
             }, "0"));
             sliders.Add(new Slider(ParticleSliders[1], 0.1f, 1, () => g.ParticleDensity, v => g.ParticleDensity = MathF.Round(v * 20) / 20, "0.00"));
         }
+        // Anisotropic filtering (docs/render-post.md "Texture filtering"): the most any texture is sampled with; the world's textures ask 8x, so 8x and 16x look the same there.
+        sliders.Add(new Slider(FilteringSlider, 0, 4, () => MathF.Log2(g.Sky.Gpu.Samplers.MaxAnisotropy), v => g.Sky.Gpu.Samplers.MaxAnisotropy = 1 << (int)MathF.Round(v), "0",
+            Text: v => (1 << (int)MathF.Round(v)) + "x" + (MathF.Round(v) >= 3 ? " (as the game)" : "")));
         // The Faithful / Meitou switches as checkboxes (ticked: Meitou), the F-key toggles' state.
         var toggles = switches?.Select(e => new Toggle(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful)).ToList();
         // The billboard (impostor atlas) disk cache: deleted files are baked again when next needed; the resident atlases stay until evicted.

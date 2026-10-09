@@ -77,6 +77,8 @@ public sealed class WorldTexture
     internal ComponentMapping ViewSwizzle;
     /// <summary>The bindless entries for the last two LOD biases (the upscaler's, and 0 where a pass runs without it).</summary>
     internal float BiasA, BiasB;
+    /// <summary>The <see cref="SamplerCache.Generation"/> its entries were made under (the anisotropic filtering setting).</summary>
+    internal int SamplerGeneration;
     internal uint IndexA, IndexB;
     internal bool HasA, HasB;
 
@@ -224,6 +226,13 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (key == 0 || key > byNumber.Count) return standIn;
         var t = byNumber[(int)key - 1];
         if (t.Native is null) return standIn;
+        if (t.SamplerGeneration != gpu.Samplers.Generation)
+        {
+            // The anisotropic filtering changed: both entries go (after the frames in flight) and are made again with the new sampler.
+            if (t.HasA) gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexA);
+            if (t.HasB) gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexB);
+            (t.HasA, t.HasB, t.SamplerGeneration) = (false, false, gpu.Samplers.Generation);
+        }
         if (t.HasA && t.BiasA == bias) return t.IndexA;
         if (t.HasB && t.BiasB == bias)
         {

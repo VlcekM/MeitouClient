@@ -40,6 +40,7 @@ static partial class WorldApp
             AbToggles.Register("lod-far", () => grassPass.LodFar, v => grassPass.LodFar = v, "generated rock levels: the pixel tolerance growing with the distance (MEITOU_LOD_FAR, 0 off; needs lod on)");
             AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v, "foliage meshes and impostors, not the TERRAIN-mode rocks (MEITOU_FOLIAGE_DEBUG=nomeshes)");
         }
+        AbToggles.Register("anisotropy", () => gpu.Sky.Gpu.Samplers.MaxAnisotropy > 1, v => gpu.Sky.Gpu.Samplers.MaxAnisotropy = v ? 16 : 1, "anisotropic filtering as the textures ask (A) against none, 1x (B); the Tab slider's ends");
         AbToggles.Register("weather-particles", () => gpu.WeatherParticles, v => gpu.WeatherParticles = v, "the weather's particles, simulated and drawn (the Tab slider at 0)");
         AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
         {
