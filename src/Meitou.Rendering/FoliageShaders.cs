@@ -43,6 +43,8 @@ static class FoliageShaders
         string f = Shaders.MeshFragment;
         f = Replace(f, @"#version\s+330\s+core", """
             #version 330 core
+            // Foliage reads the probes without the visibility test (docs/render-gi.md "Cheaper reads"): half the fetches, over its overdraw.
+            #define GI_NO_VISIBILITY
             in float vFade;
             uniform bool uCoverage;      // alpha to coverage (multisampled target): the cut-out edge becomes the coverage
             float foliageDither() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); }
@@ -116,7 +118,7 @@ static class FoliageShaders
         }
         """;
 
-    public static readonly string GrassFragment = "#version 330 core\n" + AtmosphereShaders.Functions + """
+    public static readonly string GrassFragment = "#version 330 core\n#define GI_NO_VISIBILITY\n" + AtmosphereShaders.Functions + """
         in vec3 vWorld;
         in vec2 vUv;
         in float vFade;

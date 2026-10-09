@@ -202,6 +202,24 @@ So keeping the structures up to date costs well under a tenth of a millisecond p
   that runs `kenshiLight`. The foliage pays for its overdraw, and the water reflection pays for a second view of the scene.
 - The blend is large for what it does (64 rays into 8 × 8 and 16 × 16 tiles); the distance tile is most of it.
 
+**Cheaper reads and updates** (2026-10-09, *from the code*; costs still to be measured on an idle GPU):
+- **No probes in the water reflection.** The reflection's draws keep the sky's flat ambient: `GiProbes.InReflection` is set around the
+  reflection pass, and the frame block is re-read per native segment, so `uGiParams.x` is 0 there. The bench's `gi-reflection` switch
+  (side B) reads the probes in the reflection again.
+- **Foliage without the visibility test.** The foliage mesh and grass fragments define `GI_NO_VISIBILITY`: 8 fetches per cascade instead
+  of 16, over the foliage's overdraw. Leaking light through walls matters little on leaves.
+- **Sleeping probes.** The blend marks a probe whose rays found no surface within reach (the cell's diagonal plus the lookup's offset,
+  0.3 of the smaller spacing; back faces count as near) as asleep: state w 2 instead of 1. A sleeping probe at the same place is traced
+  and blended only every 8th of its updates (`SleepPeriod`; `rayLength.z` in the trace and blend parameters), with a new random rotation,
+  to find out whether something came near; on the other rounds its workgroup returns at once and its tiles keep their values. No pixel
+  and no bounce weights such a probe, by construction. The bench's `gi-sleep` switch (side B) traces every probe. **Open:** a thin
+  surface between the rays can be missed until the next check.
+- **Blend of the inner texels only.** The blend computes the 8 × 8 irradiance and 16 × 16 distance texels (one and four per invocation,
+  instead of two and six rounds over the bordered 10 × 10 and 18 × 18 tiles), keeps them in shared memory, and then writes every texel,
+  the borders copying their inner texel. cos^50 is five multiplications instead of `pow`.
+- **Picture** (Squin at 13:00, the canyon street, 1920 × 1080, against the shot before these changes): mean difference 0.08, max 9.
+  Vulkan validation: 0 errors.
+
 **Observed**, in pictures:
 - Hub at midday: the change is subtle on open ground. On objects, the blue sky ambient turns into warmer bounce light (mean difference 1.8).
 - Low sun (`7.5`) in an alley: the shade is much darker and lit by warm bounce light (mean difference 21).

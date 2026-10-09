@@ -103,6 +103,21 @@ static class GiShaders
         """;
 
     /// <summary>
+    /// Whether a probe sleeps this update (docs/render-gi.md "Sleeping probes"), the same answer in the trace and the blend: its state (w 2: no
+    /// surface within reach at its last blend, at the same place) and the round of its updates (<c>origin.w</c> the frame, <c>uGiParams.z</c>
+    /// the phases): it wakes every <c>rayLength.z</c>-th round (0: never sleeps). Needs <c>uGiParams</c>, <c>origin</c> and <c>rayLength</c>.
+    /// </summary>
+    const string Sleep = """
+        bool giAsleep(vec4 last, vec3 world, uint stateSlot)
+        {
+            if (rayLength.z < 0.5 || last.w < 1.5 || distance(last.xyz, world) > 0.5) return false;
+            uint round = uint(origin.w) / uint(uGiParams.z);
+            return (round + stateSlot) % uint(rayLength.z) != 0u;
+        }
+
+        """;
+
+    /// <summary>
     /// The probe trace (docs/render-gi.md "Probes"): one workgroup per probe, one ray per invocation (<see cref="GiProbes.Rays"/>, spherical
     /// Fibonacci directions turned by the frame's random rotation). A ray that hits sees the surface lit as the lighting pass lights it, without
     /// specular: a constant albedo (the terrain: the ground colour map) times the sun through a shadow ray and the probes' own irradiance of the
@@ -132,9 +147,11 @@ static class GiShaders
             vec4 lightDir;      // uAtmoLight (xyz the lighting direction, w the environment light's factor)
             vec4 maps;          // uAtmoMaps
             vec4 albedo;        // rgb: the objects' albedo, w: the terrain ground colour map present
-            vec4 rayLength;     // x per cascade 0, y cascade 1
+            vec4 rayLength;     // x per cascade 0, y cascade 1, z the sleepers' period
             vec4 uLightGrid;    // the lamps (WorldLamps; w 0: none)
         };
+        layout(set = 0, binding = 13, std430) readonly buffer ProbeState { vec4 positions[]; };
+        {{Sleep}}
         layout(set = 0, binding = 4) uniform sampler2D uGiIrradiance;
         layout(set = 0, binding = 5) uniform sampler2D uGiDistance;
         layout(set = 0, binding = 6) uniform sampler2D uGiBase;
@@ -203,6 +220,8 @@ static class GiShaders
             int colX = (int(g1.x) + wx) % GI_N, colZ = (int(g1.y) + wz) % GI_N;
             float base = texelFetch(uGiBase, ivec2(colX, c * GI_N + colZ), 0).r;
             vec3 world = vec3(g0.x + float(wx) * g0.z, base + (float(layer) + 0.5) * g0.w, g0.y + float(wz) * g0.z);
+            uint stateSlot = uint((c * GI_N + colZ) * GI_N + colX) * uint(GI_NY) + uint(layer);
+            if (giAsleep(positions[stateSlot], world, stateSlot)) return;   // the whole workgroup: the blend skips it too
             vec3 dir = normalize(mat3(rotation) * fibonacci(ray, gl_WorkGroupSize.x));
             float tMax = c == 0 ? rayLength.x : rayLength.y;
 
@@ -282,16 +301,19 @@ static class GiShaders
             vec4 lightDir;
             vec4 maps;
             vec4 albedo;
-            vec4 rayLength;
+            vec4 rayLength;     // z: the sleepers' period
         };
         layout(set = 0, binding = 3, rgba16f) uniform image2D uIrradiance;
         layout(set = 0, binding = 4, rg16f) uniform image2D uDistance;
         layout(set = 0, binding = 5) uniform sampler2D uGiBase;
-
+        {{Sleep}}
         shared vec4 sRays[{{GiProbes.Rays}}];
         shared vec3 sDirs[{{GiProbes.Rays}}];
-        shared uint sBack;
+        shared uint sBack, sNear;
         shared bool sMoved;
+        // The inner texels' new values: the borders copy them (only the inner texels are blended).
+        shared vec4 sIrradiance[GI_IRR * GI_IRR];
+        shared vec2 sDistance[GI_DIST * GI_DIST];
 
         vec3 fibonacci(uint i, uint n)
         {
@@ -330,29 +352,34 @@ static class GiShaders
             vec3 world = vec3(g0.x + float(wx) * g0.z, base + (float(layer) + 0.5) * g0.w, g0.y + float(wz) * g0.z);
             // The probe's state slot is its tile (where it lives in the atlas), so a scrolled window finds the old probe there.
             uint stateSlot = uint((c * GI_N + colZ) * GI_N + colX) * uint(GI_NY) + uint(layer);
+            vec4 last = positions[stateSlot];
+            if (giAsleep(last, world, stateSlot)) return;   // the trace wrote no rays for it: its tiles stay as they are
 
             sRays[id] = rays[gl_WorkGroupID.x * count + id];
             sDirs[id] = normalize(mat3(rotation) * fibonacci(id, count));
             if (id == 0u)
             {
                 sBack = 0u;
-                vec4 last = positions[stateSlot];
+                sNear = 0u;
                 sMoved = last.w < 0.5 || distance(last.xyz, world) > 0.5;
             }
             barrier();
+            // A surface within reach: a point some pixel's lookup (its cell, plus the lookup's normal and view offset) or a bounce weights this probe
+            // from. Back faces count (geometry around it). Nothing within reach: the probe sleeps until a later update finds something.
+            float reach = length(vec3(g0.z, g0.w, g0.z)) + 0.3 * min(g0.z, g0.w);
             if (sRays[id].w < 0.0) atomicAdd(sBack, 1u);
+            if (sRays[id].w < reach) atomicOr(sNear, 1u);
             barrier();
-            if (id == 0u) positions[stateSlot] = vec4(world, 1.0);
+            if (id == 0u) positions[stateSlot] = vec4(world, sNear != 0u ? 1.0 : 2.0);
             bool valid = float(sBack) < 0.25 * float(count);
             float hysteresis = sMoved ? 0.0 : uGiParams.w;
             ivec2 tileIndex = ivec2(colX, (c * GI_N + colZ) * GI_NY + layer);
             float maxDistance = g1.z;
 
             ivec2 irrOrigin = tileIndex * (GI_IRR + 2);
-            for (int t = int(id); t < (GI_IRR + 2) * (GI_IRR + 2); t += int(count))
+            for (int t = int(id); t < GI_IRR * GI_IRR; t += int(count))
             {
-                ivec2 texel = ivec2(t % (GI_IRR + 2), t / (GI_IRR + 2));
-                ivec2 src = inner(texel, GI_IRR);
+                ivec2 src = ivec2(t % GI_IRR, t / GI_IRR) + 1;
                 vec3 dir = octDir((vec2(src - 1) + 0.5) / float(GI_IRR) * 2.0 - 1.0);
                 vec3 sum = vec3(0.0);
                 float total = 0.0;
@@ -363,15 +390,14 @@ static class GiShaders
                     total += w;
                 }
                 vec3 value = total > 1e-4 ? sum / total : vec3(0.0);
-                vec3 old = imageLoad(uIrradiance, irrOrigin + texel).rgb;
-                imageStore(uIrradiance, irrOrigin + texel, vec4(mix(value, old, hysteresis), valid ? 1.0 : 0.0));
+                vec3 old = imageLoad(uIrradiance, irrOrigin + src).rgb;
+                sIrradiance[t] = vec4(mix(value, old, hysteresis), valid ? 1.0 : 0.0);
             }
 
             ivec2 distOrigin = tileIndex * (GI_DIST + 2);
-            for (int t = int(id); t < (GI_DIST + 2) * (GI_DIST + 2); t += int(count))
+            for (int t = int(id); t < GI_DIST * GI_DIST; t += int(count))
             {
-                ivec2 texel = ivec2(t % (GI_DIST + 2), t / (GI_DIST + 2));
-                ivec2 src = inner(texel, GI_DIST);
+                ivec2 src = ivec2(t % GI_DIST, t / GI_DIST) + 1;
                 vec3 dir = octDir((vec2(src - 1) + 0.5) / float(GI_DIST) * 2.0 - 1.0);
                 vec2 sum = vec2(0.0);
                 float total = 0.0;
@@ -380,14 +406,28 @@ static class GiShaders
                     // cos^50 is below 1e-11 under 0.6 (and 64 rays always have one above it): skip those rays.
                     float cosine = dot(dir, sDirs[r]);
                     if (cosine < 0.6) continue;
-                    float w = pow(cosine, 50.0);
+                    float c2 = cosine * cosine, c4 = c2 * c2, c8 = c4 * c4, c16 = c8 * c8, c32 = c16 * c16;
+                    float w = c32 * c16 * c2;   // cos^50
                     float d = min(abs(sRays[r].w), maxDistance) / maxDistance;
                     sum += vec2(d, d * d) * w;
                     total += w;
                 }
                 vec2 value = total > 1e-4 ? sum / total : vec2(1.0);
-                vec2 old = imageLoad(uDistance, distOrigin + texel).rg;
-                imageStore(uDistance, distOrigin + texel, vec4(mix(value, old, hysteresis), 0.0, 0.0));
+                vec2 old = imageLoad(uDistance, distOrigin + src).rg;
+                sDistance[t] = mix(value, old, hysteresis);
+            }
+            barrier();
+
+            // Every texel of the tiles, the borders from the inner texel they copy (bilinear filtering across the octahedron's seams).
+            for (int t = int(id); t < (GI_IRR + 2) * (GI_IRR + 2); t += int(count))
+            {
+                ivec2 texel = ivec2(t % (GI_IRR + 2), t / (GI_IRR + 2)), src = inner(texel, GI_IRR) - 1;
+                imageStore(uIrradiance, irrOrigin + texel, sIrradiance[src.y * GI_IRR + src.x]);
+            }
+            for (int t = int(id); t < (GI_DIST + 2) * (GI_DIST + 2); t += int(count))
+            {
+                ivec2 texel = ivec2(t % (GI_DIST + 2), t / (GI_DIST + 2)), src = inner(texel, GI_DIST) - 1;
+                imageStore(uDistance, distOrigin + texel, vec4(sDistance[src.y * GI_DIST + src.x], 0.0, 0.0));
             }
         }
         """;

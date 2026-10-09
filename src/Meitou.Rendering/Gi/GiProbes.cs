@@ -49,7 +49,16 @@ internal sealed unsafe class GiProbes : IDisposable
     public float Strength { get; set; } = 1;
 
     /// <summary>What the shaders read: x 1 while the probes are on and filled, y <see cref="Strength"/>, w the hysteresis.</summary>
-    Vector4 Params => new(Enabled && Active && Shade && updated ? 1 : 0, Strength, 0, Hysteresis);
+    Vector4 Params => new(Enabled && Active && Shade && !InReflection && updated ? 1 : 0, Strength, 0, Hysteresis);
+    /// <summary>True while the water reflection draws: the mirrored scene keeps the flat ambient (the frame block is re-read per segment).</summary>
+    public bool InReflection { get; set; }
+    /// <summary>True: the water reflection reads the probes too (off by default; the bench's gi-reflection switch).</summary>
+    public bool Reflected { get; set; }
+    /// <summary>
+    /// A probe with no surface within reach of its cell (no pixel and no bounce weights it) sleeps: it is traced and blended only every
+    /// <c>SleepPeriod</c>-th of its updates, to find out whether something came near (0: never sleeps; the bench's gi-sleep switch).
+    /// </summary>
+    public int SleepPeriod { get; set; } = 8;
     /// <summary>False: the probes are updated but the world's shading does not read them (the bench's gi-shade switch, the reads' cost).</summary>
     public bool Shade { get; set; } = true;
     /// <summary>False while the frame does not update the probes (the bench's gi-scene switch): the shaders then do not read them.</summary>
@@ -64,6 +73,7 @@ internal sealed unsafe class GiProbes : IDisposable
             (4, DescriptorType.CombinedImageSampler), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.CombinedImageSampler),
             (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.CombinedImageSampler),
             (10, DescriptorType.CombinedImageSampler), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.CombinedImageSampler),
+            (13, DescriptorType.StorageBuffer),
         ], ctx.Bindless.Layout);
         blendProgram = ctx.Shaders.Compute(GiShaders.ProbeBlend, "gi probe blend",
         [
@@ -164,7 +174,7 @@ internal sealed unsafe class GiProbes : IDisposable
             SunLight = new Vector4(Read<Vector3>(g, "uAtmoSunLight"), 0),
             LightDir = Read<Vector4>(g, "uAtmoLight"),
             Maps = Read<Vector4>(g, "uAtmoMaps"),
-            RayLength = new Vector4(Grid[0].RayLength, Grid[1].RayLength, 0, 0),
+            RayLength = new Vector4(Grid[0].RayLength, Grid[1].RayLength, SleepPeriod, 0),
             LightGrid = lamps?.Grid ?? default,
         };
         var ground = g.Texture("uWeatherGround")?.Invoke() ?? default;
@@ -214,15 +224,17 @@ internal sealed unsafe class GiProbes : IDisposable
                 images[8] = new DescriptorImageInfo(lamps.NearestSampler, lampData.View(), ImageLayout.General);
             }
             else images[6] = images[7] = images[8] = images[2];
-            var writes = stackalloc WriteDescriptorSet[13];
+            var stateInfo = new DescriptorBufferInfo(state.Handle, 0, state.Size);
+            var writes = stackalloc WriteDescriptorSet[14];
             writes[0] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.AccelerationStructureKhr };
             writes[1] = Buffer(1, DescriptorType.StorageBuffer, &records);
             writes[2] = Buffer(2, DescriptorType.StorageBuffer, &rayInfo);
             writes[3] = Buffer(3, DescriptorType.UniformBuffer, &uniform);
             for (int i = 0; i < 9; i++)
                 writes[4 + i] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = (uint)(4 + i), DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[i] };
+            writes[13] = Buffer(13, DescriptorType.StorageBuffer, &stateInfo);
             cmd.BindPipeline(tracePipeline);
-            cmd.PushDescriptors(traceProgram.Layout, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 13), PipelineBindPoint.Compute);
+            cmd.PushDescriptors(traceProgram.Layout, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 14), PipelineBindPoint.Compute);
             // Set 1: the bindless table, for the objects' diffuse maps at the hits.
             var table = ctx.Bindless.Set;
             cmd.BindSets(traceProgram.Layout, 1, new ReadOnlySpan<DescriptorSet>(&table, 1), default, PipelineBindPoint.Compute);
