@@ -31,6 +31,7 @@ static partial class WorldApp
         {
             AbToggles.Register("fog-cull", () => fog.CullEnabled, v => fog.CullEnabled = v, "culling of what the fog hides (--no-fog-cull)");
             AbToggles.Register("fog-volumes", () => fog.Enabled, v => fog.Enabled = v, "the placed fog volumes (--no-fog-volumes)");
+            AbToggles.Register("fog-direction", () => fog.DirectionBound, v => fog.DirectionBound = v, "the fog cull's bound by ray direction (off: only the plain bound, which finds no distance at a 50000 far clip)");
         }
         if (gpu.Shadow is { } shadowPass) AbToggles.Register("shadow-pass", () => shadowPass.Enabled, v => shadowPass.Enabled = v, "the whole shadow pass (--no-shadows)");
         if (gpu.Foliage is { } foliagePass) AbToggles.Register("foliage-draw", () => foliagePass.Enabled, v => foliagePass.Enabled = v, "trees, bushes, rocks and grass (--no-foliage)");
