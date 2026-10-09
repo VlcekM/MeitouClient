@@ -58,7 +58,7 @@ internal sealed unsafe class GiProbes : IDisposable
             (0, DescriptorType.AccelerationStructureKhr), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer), (3, DescriptorType.UniformBuffer),
             (4, DescriptorType.CombinedImageSampler), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.CombinedImageSampler),
             (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.CombinedImageSampler),
-        ]);
+        ], ctx.Bindless.Layout);
         blendProgram = ctx.Shaders.Compute(GiShaders.ProbeBlend, "gi probe blend",
         [
             (0, DescriptorType.StorageBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.UniformBuffer),
@@ -183,7 +183,7 @@ internal sealed unsafe class GiProbes : IDisposable
             cmd.BindPipeline(invalidatePipeline);
             cmd.PushDescriptors(invalidateProgram.Layout, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 4), PipelineBindPoint.Compute);
             cmd.Dispatch((uint)(Probes / 64));
-            cmd.Barrier(BarrierBatch.Full);
+            cmd.Barrier(ComputeAfterCompute);
         }
         {
             var top = scene.Top.Handle;
@@ -207,9 +207,12 @@ internal sealed unsafe class GiProbes : IDisposable
                 writes[4 + i] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = (uint)(4 + i), DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[i] };
             cmd.BindPipeline(tracePipeline);
             cmd.PushDescriptors(traceProgram.Layout, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 10), PipelineBindPoint.Compute);
+            // Set 1: the bindless table, for the objects' diffuse maps at the hits.
+            var table = ctx.Bindless.Set;
+            cmd.BindSets(traceProgram.Layout, 1, new ReadOnlySpan<DescriptorSet>(&table, 1), default, PipelineBindPoint.Compute);
             cmd.Dispatch((uint)(Probes / phases));
         }
-        cmd.Barrier(BarrierBatch.Full);
+        cmd.Barrier(ComputeAfterCompute);
         {
             var rayInfo = new DescriptorBufferInfo(rays.Handle, 0, rays.Size);
             var stateInfo = new DescriptorBufferInfo(state.Handle, 0, state.Size);
@@ -229,12 +232,23 @@ internal sealed unsafe class GiProbes : IDisposable
             cmd.PushDescriptors(blendProgram.Layout, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 6), PipelineBindPoint.Compute);
             cmd.Dispatch((uint)(Probes / phases));
         }
-        cmd.Barrier(BarrierBatch.Full);
+        cmd.Barrier(ComputeAfterCompute);
         cmd.EndLabel();
         ctx.EndNative(cmd);
         updated = true;
         Updates++;
     }
+
+    /// <summary>
+    /// The probe passes' writes (storage buffers and images) before the next pass's reads, in compute and in the world's shading: unlike a full
+    /// barrier, the work of other passes before it need not drain.
+    /// </summary>
+    static BarrierBatch ComputeAfterCompute => new()
+    {
+        SrcStages = PipelineStageFlags2.ComputeShaderBit, SrcAccess = AccessFlags2.ShaderStorageWriteBit,
+        DstStages = PipelineStageFlags2.ComputeShaderBit | PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit,
+        DstAccess = AccessFlags2.ShaderStorageReadBit | AccessFlags2.ShaderStorageWriteBit | AccessFlags2.ShaderSampledReadBit,
+    };
 
     static WriteDescriptorSet Buffer(uint binding, DescriptorType type, DescriptorBufferInfo* info) =>
         new() { SType = StructureType.WriteDescriptorSet, DstBinding = binding, DescriptorCount = 1, DescriptorType = type, PBufferInfo = info };

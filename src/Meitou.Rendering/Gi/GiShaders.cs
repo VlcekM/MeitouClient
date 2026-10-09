@@ -69,6 +69,7 @@ static class GiShaders
                     // Probes behind the surface count less (DDGI's smooth backface term).
                     float back = (dot(normalize(probe - p), n) + 1.0) * 0.5;
                     weight *= back * back + 0.2;
+                    #ifndef GI_NO_VISIBILITY
                     // Visibility: Chebyshev's bound on the probe's distance moments towards the point.
                     vec3 from = q - probe;
                     float d = length(from);
@@ -79,6 +80,7 @@ static class GiShaders
                         float cheb = variance / (variance + (d - m.x) * (d - m.x));
                         weight *= max(cheb * cheb * cheb, 0.0);
                     }
+                    #endif
                     vec4 irr = textureLod(uGiIrradiance, giUv(tile, n, GI_IRR, irrSize), 0.0);
                     weight *= irr.a;   // 0: a probe inside geometry
                     if (weight < 0.2) weight *= weight * weight * 25.0;
@@ -114,9 +116,10 @@ static class GiShaders
         #extension GL_EXT_buffer_reference_uvec2 : require
         #extension GL_EXT_scalar_block_layout : require
         layout(local_size_x = {{GiProbes.Rays}}) in;
+        {{Meitou.Rendering.Gpu.BindlessTable.Declarations(1)}}
 
         layout(set = 0, binding = 0) uniform accelerationStructureEXT uScene;
-        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint pad0; uint pad1; };
+        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint pad0; uint pad1; uint pad2; };
         layout(set = 0, binding = 1, std430) readonly buffer Geometries { Geometry geometries[]; };
         layout(set = 0, binding = 2, std430) writeonly buffer RayResults { vec4 rays[]; };
         layout(set = 0, binding = 3, std140) uniform Params
@@ -137,8 +140,11 @@ static class GiShaders
         layout(set = 0, binding = 7) uniform samplerCube uAtmoIrradiance;
         layout(set = 0, binding = 8) uniform sampler2D uAtmoAmbientMap;
         layout(set = 0, binding = 9) uniform sampler2D uGround;
+        // The bounces read the probes without the visibility test: a quarter of the fetches, and the light seen in a bounce is blurred anyway.
+        #define GI_NO_VISIBILITY
         {{ProbeSampling}}
         layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Position { vec3 v; };
+        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer TexCoord { vec2 v; };
         layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Triangle { uvec3 v; };
         uvec2 offsetBy(uvec2 a, uint bytes) { uint lo = a.x + bytes; return uvec2(lo, a.y + (lo < a.x ? 1u : 0u)); }
 
@@ -153,6 +159,24 @@ static class GiShaders
             vec4 t = textureLod(uAtmoIrradiance, n, {{F(Meitou.Data.World.KenshiLighting.IrradianceLevel)}});
             return t.rgb * t.a * 4.0;
         }
+        vec2 hitUv(Geometry g, uvec3 tri, vec2 bary)
+        {
+            // The vertex texture coordinates are at byte 24 (Vertex.Uv).
+            vec2 ua = TexCoord(offsetBy(g.vertices, tri.x * g.stride + 24u)).v;
+            vec2 ub = TexCoord(offsetBy(g.vertices, tri.y * g.stride + 24u)).v;
+            vec2 uc = TexCoord(offsetBy(g.vertices, tri.z * g.stride + 24u)).v;
+            return ua * (1.0 - bary.x - bary.y) + ub * bary.x + uc * bary.y;
+        }
+        // A candidate hit on a cut-out geometry (leaves): kept where its map's alpha reaches the threshold, as the draws cut it.
+        bool solid(int record, int primitive, vec2 bary)
+        {
+            Geometry g = geometries[record];
+            if (g.alphaThreshold <= 0.0 || g.alphaMap == 0u) return true;
+            uvec3 tri = Triangle(offsetBy(g.indices, uint(primitive) * 12u)).v;
+            return textureLod(textures2D[nonuniformEXT(g.alphaMap)], hitUv(g, tri, bary), 2.0).a >= g.alphaThreshold;
+        }
+        #define TRACE(q) while (rayQueryProceedEXT(q)) { if (solid(rayQueryGetIntersectionInstanceCustomIndexEXT(q, false) + rayQueryGetIntersectionGeometryIndexEXT(q, false), rayQueryGetIntersectionPrimitiveIndexEXT(q, false), rayQueryGetIntersectionBarycentricsEXT(q, false))) rayQueryConfirmIntersectionEXT(q); }
+
         vec3 fibonacci(uint i, uint n)
         {
             float k = float(i) + 0.5;
@@ -177,8 +201,8 @@ static class GiShaders
             float tMax = c == 0 ? rayLength.x : rayLength.y;
 
             rayQueryEXT rq;
-            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, world - origin.xyz, 0.0, dir, tMax);
-            while (rayQueryProceedEXT(rq)) { }
+            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, world - origin.xyz, 0.0, dir, tMax);
+            TRACE(rq)
             float env = lightDir.w;
             vec4 am = ambientMap(world);
             uint slot = gl_WorkGroupID.x * gl_WorkGroupSize.x + ray;
@@ -188,13 +212,14 @@ static class GiShaders
                 return;
             }
             float t = rayQueryGetIntersectionTEXT(rq, true);
-            if (!rayQueryGetIntersectionFrontFaceEXT(rq, true))
+            int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
+            Geometry g = geometries[record];
+            // The back of an object is inside it (dark; the blend counts these). Foliage is open and double-sided: its back is a surface.
+            if (!rayQueryGetIntersectionFrontFaceEXT(rq, true) && g.kind != {{GeometryRecord.Foliage}}u)
             {
                 rays[slot] = vec4(0.0, 0.0, 0.0, -0.2 * t);
                 return;
             }
-            int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
-            Geometry g = geometries[record];
             uvec3 tri = Triangle(offsetBy(g.indices, uint(rayQueryGetIntersectionPrimitiveIndexEXT(rq, true)) * 12u)).v;
             vec3 a = Position(offsetBy(g.vertices, tri.x * g.stride)).v;
             vec3 b = Position(offsetBy(g.vertices, tri.y * g.stride)).v;
@@ -204,6 +229,9 @@ static class GiShaders
             vec3 hit = world + dir * t;
             vec3 colour = albedo.rgb;
             if (g.kind == 0u && albedo.w > 0.5) colour = textureLod(uGround, (hit.xz + maps.w) / (2.0 * maps.w), 0.0).rgb;
+            else if (g.kind != 0u && g.diffuse != 0u)
+                // The object's or plant's own diffuse map at the hit, a coarse mip: the bounce takes its colour.
+                colour = textureLod(textures2D[nonuniformEXT(g.diffuse)], hitUv(g, tri, rayQueryGetIntersectionBarycentricsEXT(rq, true)), 4.0).rgb;
             vec4 amHit = ambientMap(hit);
             vec3 l = lightDir.xyz;
             float nl = max(dot(n, l), 0.0);
@@ -211,9 +239,9 @@ static class GiShaders
             if (nl > 0.0)
             {
                 rayQueryEXT shadow;
-                rayQueryInitializeEXT(shadow, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF,
+                rayQueryInitializeEXT(shadow, uScene, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF,
                     hit - origin.xyz + n * (0.5 + t * 0.001), 0.0, l, 1e5);
-                while (rayQueryProceedEXT(shadow)) { }
+                TRACE(shadow)
                 if (rayQueryGetIntersectionTypeEXT(shadow, true) == gl_RayQueryCommittedIntersectionNoneEXT)
                     sun = {{F(MathF.PI * (1 - Meitou.Data.World.KenshiLighting.DielectricSpecular))}} * nl * sunLight.rgb * amHit.a * 2.0;
             }
@@ -340,7 +368,10 @@ static class GiShaders
                 float total = 0.0;
                 for (uint r = 0u; r < count; r++)
                 {
-                    float w = pow(max(dot(dir, sDirs[r]), 0.0), 50.0);
+                    // cos^50 is below 1e-11 under 0.6 (and 64 rays always have one above it): skip those rays.
+                    float cosine = dot(dir, sDirs[r]);
+                    if (cosine < 0.6) continue;
+                    float w = pow(cosine, 50.0);
                     float d = min(abs(sRays[r].w), maxDistance) / maxDistance;
                     sum += vec2(d, d * d) * w;
                     total += w;
@@ -407,7 +438,7 @@ static class GiShaders
         layout(set = 0, binding = 0) uniform sampler2D uDepth;
         layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D uOut;
         layout(set = 0, binding = 2) uniform accelerationStructureEXT uScene;
-        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint pad0; uint pad1; };
+        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint pad0; uint pad1; uint pad2; };
         layout(set = 0, binding = 3, std430) readonly buffer Geometries { Geometry geometries[]; };
         layout(set = 0, binding = 4, std140) uniform Params
         {

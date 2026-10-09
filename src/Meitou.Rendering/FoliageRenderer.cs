@@ -944,8 +944,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             {
                 gp = new GpuPart
                 {
-                    Vertices = DeviceBuffer.Create(Gpu, (ulong)vertexBytes, BufferUse.Vertex, MeshAllocationName),
-                    Indices = DeviceBuffer.Create(Gpu, (ulong)indexBytes, BufferUse.Index, MeshAllocationName),
+                    Vertices = DeviceBuffer.Create(Gpu, (ulong)vertexBytes, BufferUse.Vertex | RayInput, MeshAllocationName),
+                    Indices = DeviceBuffer.Create(Gpu, (ulong)indexBytes, BufferUse.Index | RayInput, MeshAllocationName),
                     Count = p.Indices.Length, HasTangents = p.HasTangents, HasColours = p.HasColours,
                 };
                 gp.Attributes = VertexAttributes(gp.Vertices);
@@ -1020,6 +1020,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     void DeleteMesh(GpuMesh m)
     {
+        RayGeneration++;   // the traced scene drops what it built from these buffers
         foreach (var gp in m.Parts)
         {
             gp.Vertices.Dispose();   // freed after the frames in flight

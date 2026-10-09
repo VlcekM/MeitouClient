@@ -69,7 +69,22 @@ reflection reads neither storage images nor acceleration structures, and pushes 
 - **Geometry records.** 32 bytes per geometry: vertex address, index address, stride, kind. A hit's record is the instance's custom index
   plus the geometry index. The shader fetches the triangle's indices and positions with `GL_EXT_buffer_reference` (`uvec2` addresses,
   because `shaderInt64` is not enabled).
-- **Not traced yet:** foliage (trees, bushes, the TERRAIN-mode rocks drawn by `FoliageRenderer`), grass, characters, water.
+- **Foliage** (`FoliageRenderer.RayInstances`, `--gi-foliage <radius>`, default 60, 0 for none): trees, bushes and rocks whose bounding
+  radius is at least the threshold and whose bounds come within 4000 units, nearest first, at most 14336 instances. One structure per resident
+  mesh (main and leaves parts), keyed by its `GpuMesh` (a reload makes a new one; `RayGeneration` counts deletions). The instance list walks
+  every zone, so it is cached: rebuilt every 120 frames, when the eye has moved 250 units, when a foliage mesh was deleted, or 2 frames
+  after a rebuild that had structures left to build. Each frame only moves the cached instances to the frame's origin and refreshes the
+  records' texture indices.
+  - Leaves (and cut-out main meshes) are not opaque in their structures. The probe trace tests each candidate hit against the alpha of the
+    part's normal map (the draws' `AlphaSource` 2) at its threshold (leaves without one: 0.5), at mip 2.
+  - Plants are double-sided, so a back-face hit on foliage is a surface, not "inside". TERRAIN-mode rocks take the ground colour map, as the
+    terrain does.
+  - **Measured** (2026-10-09, swamp): 5374 foliage instances of 5821.
+- **Textures at hits.** A geometry record (48 bytes) carries the bindless index of its diffuse map, written each frame per instance
+  (`WorldObjectRenderer.RayTexture`, the foliage's `RefreshRayTextures`, at the draws' LOD bias so the entries are shared; 0 when not
+  resident). It also carries the cut-out map and threshold. The trace reads the hit's texture coordinates (vertex byte 24) and samples
+  mip 4, so a bounce takes the surface's colour. **Verified** by tinting textured hits red in a debug build: building interiors lit red.
+- **Not traced yet:** grass, characters, water.
 
 ## Debug views (`--gi-debug <n>`, `Gi/GiDebugPass.cs`, `GiShaders.Debug`)
 
@@ -154,6 +169,10 @@ So keeping the structures up to date costs well under a tenth of a millisecond p
 - The update does not scale linearly with the phases. About 0.3 ms is fixed: the full barriers between trace and blend, and the base
   upload.
 - Render thread: +0.16 ms with the base heights cached; it was +0.42 ms recomputing them every frame.
+- **Cheaper updates** (2026-10-09): bounce hits in the trace read the probes without the visibility test (`GI_NO_VISIBILITY`); the distance
+  blend skips rays under cos 0.6 (their weight cos^50 is below 1e-11); the barriers between the probe passes and before the shading are
+  compute-to-compute/shading ones instead of full ones. Measured: probe update 0.59 to 0.55 ms (DLSS 0.67, swamp). About 0.37 ms of the update
+  does not scale with the probes updated (from the 1, 2 and 4 phase runs): the full barriers that start the scene and probe segments.
 
 **Observed**, in pictures:
 - Hub at midday: the change is subtle on open ground. On objects, the blue sky ambient turns into warmer bounce light (mean difference 1.8).
@@ -162,12 +181,8 @@ So keeping the structures up to date costs well under a tenth of a millisecond p
 
 ## Open
 
-- **Foliage in the scene.** Trees and the TERRAIN-mode rocks are most of what shades the ground in the swamp. The foliage meshes are GPU-culled
-  instances in arenas, so their top-level instances would best be written by a compute pass from the same instance data.
 - **Terrain resolution.** The fine grid matches the drawn terrain only roughly (16 against the fine window's spacing). Building it from
   the streamed fine window directly would remove the culling workaround.
-- **Albedo at hits.** The material's diffuse texture through the bindless table, needed for coloured bounce light (red sand lighting the
-  walls).
 - **Compaction** of the object structures, if the memory grows with longer ranges.
 - **Probe update cost.** The fixed part (full barriers; the update could run on an async compute queue beside the shadow pass) and
   a cheaper bounce lookup in the trace (no visibility test at hits).

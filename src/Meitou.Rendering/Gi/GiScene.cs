@@ -6,16 +6,22 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Rendering.Gi;
 
-/// <summary>What a traced hit reads of its geometry (32 bytes, <c>GiShaders.Geometry</c>): the vertex positions (three floats at the start of each
+/// <summary>What a traced hit reads of its geometry (48 bytes, <c>GiShaders.Geometry</c>): the vertex positions (three floats at the start of each
 /// vertex, <see cref="Stride"/> apart) and the triangle's three 32-bit indices, by device address.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct GeometryRecord
 {
     public ulong Vertices, Indices;
-    public uint Stride, Kind, Pad0, Pad1;
-    public const int Size = 32;
-    /// <summary><see cref="Kind"/>: what the geometry is (the debug views colour by it).</summary>
-    public const uint Terrain = 0, Object = 1;
+    public uint Stride, Kind;
+    /// <summary>The surface's diffuse map in the bindless table (0: none, the probes take a constant albedo), written each frame per instance.</summary>
+    public uint Texture;
+    /// <summary>For a cut-out geometry (not opaque in its structure: leaves): the map whose alpha cuts it and the threshold (a hit below it is passed through).</summary>
+    public uint AlphaTexture;
+    public float AlphaThreshold;
+    public uint Pad0, Pad1, Pad2;
+    public const int Size = 48;
+    /// <summary><see cref="Kind"/>: what the geometry is (the debug views colour by it; a terrain hit takes the ground colour map).</summary>
+    public const uint Terrain = 0, Object = 1, Foliage = 2;
 }
 
 /// <summary>
@@ -33,6 +39,11 @@ internal sealed unsafe class GiScene : IDisposable
     public int MaxBuildsPerFrame { get; set; } = 32;
     /// <summary>Objects whose bounds come this close to the eye are in the scene.</summary>
     public float Range { get; set; } = 6000;
+    /// <summary>Foliage (trees, bushes, rocks) whose bounding radius is at least <see cref="FoliageMinSize"/> (0: none) and whose bounds come within <see cref="FoliageRange"/> of the eye is in the scene.</summary>
+    public float FoliageRange { get; set; } = 4000;
+    public float FoliageMinSize { get; set; } = 60;
+    public int FoliageInstances { get; private set; }
+    readonly List<(FoliageRenderer.RayMesh Mesh, Matrix4x4 Transform, float Distance)> rayFoliage = [];
     /// <summary>A mesh's structure not used for this many frames is dropped.</summary>
     const int KeepFrames = 600;
 
@@ -64,6 +75,8 @@ internal sealed unsafe class GiScene : IDisposable
     {
         public required AccelerationStructure Blas;
         public required GeometryRecord[] Records;
+        /// <summary>Per record, the part of the mesh it is (its material in the instance's set).</summary>
+        public required int[] Parts;
         // The buffers it was built from: a reshape (BuildingLodMesh) puts new parts into the same GpuObjectMesh and frees these, so the records
         // would point at freed memory (a hit reads its triangle: device lost).
         public required object[] Sources;
@@ -99,7 +112,7 @@ internal sealed unsafe class GiScene : IDisposable
     /// top-level structure over the terrain and the objects of <paramref name="objects"/> near <paramref name="eye"/>. Ends with a barrier to the
     /// tracing shaders.
     /// </summary>
-    public void Update(Vector3 eye, HeightSnapshot heights, WorldObjectRenderer? objects)
+    public void Update(Vector3 eye, HeightSnapshot heights, WorldObjectRenderer? objects, FoliageRenderer? foliage = null)
     {
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
         frame++;
@@ -135,8 +148,41 @@ internal sealed unsafe class GiScene : IDisposable
                 var world = inst.Transform;
                 world.Translation -= Origin;
                 instances.Add(InstanceRecord.Of(world, (uint)records.Count, 0x02, entry.Blas.Address));
-                records.AddRange(entry.Records);
+                for (int k = 0; k < entry.Records.Length; k++)
+                {
+                    var record = entry.Records[k];
+                    record.Texture = objects.RayTexture(inst.Materials!, entry.Parts[k]);
+                    records.Add(record);
+                }
             }
+
+        if (foliage is not null && FoliageMinSize > 0)
+        {
+            if (FoliageStale(eye, foliage)) RebuildFoliage(cmd, eye, foliage);
+            // The cached block, moved to this frame's origin, its records with this frame's texture indices (a texture can be unloaded or move
+            // in the table between rebuilds; the structures cannot, FoliageRenderer.RayGeneration rebuilds the block when a mesh goes).
+            int firstRecord = records.Count;
+            if (firstRecord + foliageRecords.Count <= MaxRecords)
+            {
+                var shift = foliageOrigin - Origin;
+                int count = Math.Min(foliageBlock.Count, MaxInstances - instances.Count);
+                for (int i = 0; i < count; i++)
+                {
+                    var r = foliageBlock[i];
+                    r.Transform[3] += shift.X; r.Transform[7] += shift.Y; r.Transform[11] += shift.Z;
+                    r.CustomIndexAndMask += (uint)firstRecord;
+                    instances.Add(r);
+                }
+                for (int k = 0; k < foliageRecords.Count; k++)
+                {
+                    var record = foliageRecords[k];
+                    var (mesh, part) = foliageSources[k];
+                    foliage.RefreshRayTextures(mesh);
+                    (record.Texture, record.AlphaTexture) = mesh.Textures[part];
+                    records.Add(record);
+                }
+            }
+        }
         Evict();
 
         // The new bottom levels must be complete before the top level reads them.
@@ -171,22 +217,97 @@ internal sealed unsafe class GiScene : IDisposable
         var sources = source.Parts.Select(p => (object)p.Vertices).Prepend(source).ToArray();
         var geometries = new List<TriangleGeometry>();
         var recs = new List<GeometryRecord>();
-        foreach (var part in source.Parts)
+        var partOf = new List<int>();
+        for (int p = 0; p < source.Parts.Count; p++)
         {
+            var part = source.Parts[p];
             if (part.Count.Length <= sourceLevel) continue;
             int count = part.Count[sourceLevel];
             if (count < 3) continue;
             ulong vertices = part.Vertices.Address, indices = part.Indices.Address + (ulong)part.Offset[sourceLevel] * 4;
             geometries.Add(new TriangleGeometry(vertices, (uint)Vertex.Size, (uint)(part.Vertices.Size / (ulong)Vertex.Size), indices, (uint)(count / 3)));
             recs.Add(new GeometryRecord { Vertices = vertices, Indices = indices, Stride = (uint)Vertex.Size, Kind = GeometryRecord.Object });
+            partOf.Add(p);
         }
+        return Build(cmd, gpu, sources, geometries, recs, partOf, "gi object");
+    }
+
+    /// <summary>A foliage mesh's structure (FoliageRenderer.RayMesh: its key is the resident GpuMesh, which a reload replaces, so it never changes under it).</summary>
+    MeshEntry? FoliageEntryFor(CommandList cmd, FoliageRenderer.RayMesh mesh)
+    {
+        if (meshes.TryGetValue(mesh.Key, out var entry)) return entry;
+        if (BuiltThisFrame >= MaxBuildsPerFrame) return null;
+        var geometries = new List<TriangleGeometry>();
+        var recs = new List<GeometryRecord>();
+        var partOf = new List<int>();
+        for (int p = 0; p < mesh.Parts.Length; p++)
+        {
+            var part = mesh.Parts[p];
+            if (part.IndexCount < 3) continue;
+            ulong vertices = part.Vertices.Address, indices = part.Indices.Address;
+            // Cut-out parts (leaves) are not opaque: the trace tests their alpha at each candidate hit.
+            geometries.Add(new TriangleGeometry(vertices, (uint)Vertex.Size, (uint)(part.Vertices.Size / (ulong)Vertex.Size), indices, (uint)(part.IndexCount / 3), part.AlphaThreshold <= 0));
+            recs.Add(new GeometryRecord
+            {
+                Vertices = vertices, Indices = indices, Stride = (uint)Vertex.Size, AlphaThreshold = part.AlphaThreshold,
+                Kind = mesh.Rock ? GeometryRecord.Terrain : GeometryRecord.Foliage,
+            });
+            partOf.Add(p);
+        }
+        return Build(cmd, mesh.Key, [mesh.Key], geometries, recs, partOf, "gi foliage");
+    }
+
+    // The foliage block: rebuilt now and then (the foliage does not move), not every frame (FoliageRenderer.RayInstances walks every zone).
+    readonly List<InstanceRecord> foliageBlock = [];
+    readonly List<GeometryRecord> foliageRecords = [];
+    readonly List<(FoliageRenderer.RayMesh Mesh, int Part)> foliageSources = [];
+    Vector3 foliageOrigin, foliageEye;
+    long foliageFrame = long.MinValue / 2;
+    int foliageGeneration = -1;
+    bool foliageComplete;
+
+    bool FoliageStale(Vector3 eye, FoliageRenderer foliage) =>
+        frame - foliageFrame >= 120 || Vector3.DistanceSquared(eye, foliageEye) > 250f * 250f || foliage.RayGeneration != foliageGeneration
+        || !foliageComplete && frame - foliageFrame >= 2;
+
+    /// <summary>Trees, bushes and rocks big enough to matter for the probes (FoliageRenderer.RayInstances), nearest first while the budget lasts.</summary>
+    void RebuildFoliage(CommandList cmd, Vector3 eye, FoliageRenderer foliage)
+    {
+        foliageBlock.Clear();
+        foliageRecords.Clear();
+        foliageSources.Clear();
+        rayFoliage.Clear();
+        foliage.RayInstances(eye, FoliageRange, FoliageMinSize, rayFoliage);
+        rayFoliage.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+        (foliageOrigin, foliageEye, foliageFrame, foliageGeneration, foliageComplete) = (Origin, eye, frame, foliage.RayGeneration, true);
+        foreach (var (mesh, transform, _) in rayFoliage)
+        {
+            if (foliageBlock.Count >= MaxInstances - 2048) break;   // room for the terrain and the objects
+            var entry = FoliageEntryFor(cmd, mesh);
+            if (entry is null) { foliageComplete = false; continue; }
+            entry.LastUsed = frame;
+            var world = transform;
+            world.M14 = 0;
+            world.Translation -= foliageOrigin;
+            foliageBlock.Add(InstanceRecord.Of(world, (uint)foliageRecords.Count, 0x04, entry.Blas.Address));
+            for (int k = 0; k < entry.Records.Length; k++)
+            {
+                foliageRecords.Add(entry.Records[k]);
+                foliageSources.Add((mesh, entry.Parts[k]));
+            }
+        }
+        FoliageInstances = foliageBlock.Count;
+    }
+
+    MeshEntry? Build(CommandList cmd, object key, object[] sources, List<TriangleGeometry> geometries, List<GeometryRecord> recs, List<int> partOf, string name)
+    {
         if (geometries.Count == 0) return null;
-        var blas = AccelerationStructure.BuildBottom(device, cmd, CollectionsMarshal.AsSpan(geometries), "gi object");
+        var blas = AccelerationStructure.BuildBottom(device, cmd, CollectionsMarshal.AsSpan(geometries), name);
         blas.ReleaseScratch();
         BuiltThisFrame++;
         MeshBytes += (long)blas.Bytes;
-        entry = new MeshEntry { Blas = blas, Records = [.. recs], Sources = sources, LastUsed = frame };
-        meshes[gpu] = entry;
+        var entry = new MeshEntry { Blas = blas, Records = [.. recs], Parts = [.. partOf], Sources = sources, LastUsed = frame };
+        meshes[key] = entry;
         return entry;
     }
 
@@ -215,7 +336,7 @@ internal sealed unsafe class GiScene : IDisposable
     }
 
     public string Describe() =>
-        $"{UpdateMs:0.00} ms, {InstanceCount} instances, {meshes.Count} object structures ({MeshBytes / (1024 * 1024)} MB), {BuiltThisFrame} built this frame, terrain {string.Join(" + ", terrain.Select(t => t.Describe()))}";
+        $"{UpdateMs:0.00} ms, {InstanceCount} instances ({FoliageInstances} foliage), {meshes.Count} object structures ({MeshBytes / (1024 * 1024)} MB), {BuiltThisFrame} built this frame, terrain {string.Join(" + ", terrain.Select(t => t.Describe()))}";
 
     public void Dispose()
     {

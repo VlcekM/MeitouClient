@@ -66,6 +66,8 @@ sealed class WorldOptions
     public bool Gi, GiProbes = true;
     /// <summary><c>--gi-phases</c>: the probes are updated in this many shares, one a frame (1, 2, 4 or 8).</summary>
     public int GiPhases = 4;
+    /// <summary><c>--gi-foliage</c>: the smallest bounding radius of a plant or rock in the traced scene (0: no foliage).</summary>
+    public float GiFoliage = 60;
     public float GiRange = 6000;
     /// <summary>Whether the device must be made with ray queries (<c>VulkanDisplay.RayTracing</c>).</summary>
     public bool WantsRayTracing => Gi || GiDebug > 0;
@@ -338,6 +340,7 @@ sealed class WorldOptions
                 case "--gi-range": o.GiRange = F(); break;
                 case "--gi": o.Gi = true; break;
                 case "--gi-phases": o.GiPhases = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--gi-foliage": o.GiFoliage = F(); break;
                 case "--simple-sky": o.SimpleSky = true; break;
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
                 case "--haze-distance": o.HazeDistance = F(); break;
@@ -836,7 +839,7 @@ static class WorldFrame
             if (!context.Device.HasRayQuery) Console.WriteLine("warning   --gi / --gi-debug: the device has no ray queries (VK_KHR_ray_query), the global illumination is off");
             else
             {
-                gpu.Gi = new Gi.GiScene(context) { Range = o.GiRange };
+                gpu.Gi = new Gi.GiScene(context) { Range = o.GiRange, FoliageMinSize = o.GiFoliage };
                 if (o.GiDebug > 0)
                 {
                     gpu.GiDebugPass = new Gi.GiDebugPass(context) { Samples = o.GiSamples };
@@ -1088,7 +1091,7 @@ static class WorldFrame
         if (gpu.Gi is { } gi && gpu.GiActive)
         {
             var heights = gpu.Terrain.Snapshot();
-            gi.Update(eye, heights, render.Objects ? gpu.Objects : null);
+            gi.Update(eye, heights, render.Objects ? gpu.Objects : null, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null);
             StageClock.Sub("gi scene");
             gpu.Probes?.Update(gi, eye, heights);
             StageClock.Sub("gi probes");
