@@ -40,8 +40,9 @@ sealed partial class GameHost
         var overlay = DebugOverlay.TryCreate(display.Context);
         // The viewer's debug overlays (docs/engine.md): F10 the key list, F11 the frame statistics, F12 the profiler chart.
         var profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
-        // Shift+F1 upwards: the viewer's Faithful / Meitou switches in Enhancements order (plain F2..F4 and F8 are the game's speed and screenshot keys).
+        // The Faithful / Meitou switches; Shift+F1 turns Meitou off and back on (plain F2..F4 and F8 are the game's speed and screenshot keys), the Tab panel sets them one by one.
         var switches = WorldFrame.LiveSwitches(o, () => gpu, () => camera, () => render);
+        var meitou = new MeitouToggle(switches);
         var panel = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render, switches: switches);
         if (panel is not null)
             foreach (var slider in panel.Sliders)
@@ -52,8 +53,6 @@ sealed partial class GameHost
             foreach (var toggle in panel.Toggles)
                 if (config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
         var keyItems = DebugOverlay.KeyItems(GameOptions.Usage);
-        keyItems.RemoveAll(i => i.StartsWith("Shift+F1..", StringComparison.Ordinal));   // listed one by one instead
-        keyItems.AddRange(switches.Select((e, i) => $"Shift+F{i + 1} {e.Name.ToLowerInvariant()}"));
         var stats = new List<string>();
         bool statsVisible = false;
 
@@ -68,13 +67,7 @@ sealed partial class GameHost
                 if (k is SilkKey.ShiftLeft or SilkKey.ShiftRight) shiftDown = true;
                 if (KeyMap.Map(k) is { } key)
                 {
-                    if (shiftDown && key - EngineKey.F1 is >= 0 and < 9 && key - EngineKey.F1 < switches.Count)
-                    {
-                        var e = switches[key - EngineKey.F1];
-                        e.IsMeitou = !e.IsMeitou;
-                        Console.WriteLine($"{e.Name,-18}{e.State}: {e.Note}");
-                        return;
-                    }
+                    if (shiftDown && key == EngineKey.F1) { Console.WriteLine(meitou.Toggle()); return; }
                     session.Input.SetKey(key, true);
                     player.Key(key, shiftDown);
                     SandboxKey(key);
@@ -244,7 +237,7 @@ sealed partial class GameHost
                 "F2/F3/F4" => $"x{session.TimeScale:0}",
                 "Tab" => OnOff(panel?.Visible == true),
                 "F12" => profiler?.Showing.ToString().ToLowerInvariant(),
-                ['S', 'h', 'i', 'f', 't', '+', 'F', >= '1' and <= '9'] when key[^1] - '1' < switches.Count => switches[key[^1] - '1'].State,
+                "Shift+F1" => meitou.On ? "Meitou" : "Faithful",
                 _ => null,
             };
         }

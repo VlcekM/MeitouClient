@@ -276,7 +276,7 @@ static partial class WorldApp
         var keyItems = DebugOverlay.KeyItems(WorldOptions.Usage);
         // The Faithful / Meitou switches (Enhancements); F1 turns them all Faithful and back (the Tab panel sets them one by one).
         var switches = LiveSwitches(o, () => gpu, () => camera, () => render);
-        bool[]? meitouBefore = null;   // F1: the Meitou switches as they were before it turned them all Faithful
+        var meitou = new MeitouToggle(switches);
 
         {
             gpu = CreateGpu(display.Context, install, scene, assets, o, interactive: true);
@@ -318,21 +318,6 @@ static partial class WorldApp
             Console.WriteLine(WorldOptions.Usage[WorldOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
         }
 
-        // F1: every switch Faithful, then back to the Meitou ones as they were (all Meitou when they started Faithful).
-        bool AnyMeitou() => switches.Any(e => e.IsMeitou);
-        void ToggleMeitou()
-        {
-            if (AnyMeitou())
-            {
-                meitouBefore = [.. switches.Select(e => e.IsMeitou)];
-                foreach (var e in switches) e.IsMeitou = false;
-            }
-            else
-            {
-                for (int i = 0; i < switches.Count; i++) switches[i].IsMeitou = meitouBefore?[i] ?? true;
-            }
-            Console.WriteLine($"meitou    {(AnyMeitou() ? "on: " + string.Join(", ", switches.Where(e => e.IsMeitou).Select(e => e.Id)) : "off, every switch Faithful (the game as it ships)")}");
-        }
         void PostStatus() => Console.WriteLine($"post      {o.Post.Describe()}");
 
         // The state a key controls, for the key list ("on", "off", a mode or a value); null for actions.
@@ -353,7 +338,7 @@ static partial class WorldApp
                 "," => TimeText(hour),
                 "[" => $"day {day}",
                 "\\" => gpu?.Weather is { } w ? (w.World.ForcedWeather is { } forced ? forced.Name : "auto") : null,
-                "F1" => AnyMeitou() ? "Meitou" : "Faithful",
+                "F1" => meitou.On ? "Meitou" : "Faithful",
                 "-" => $"{o.Post.Exposure:0.00}",
                 "F10" => "on",
                 "F11" => OnOff(statsVisible),
@@ -380,7 +365,7 @@ static partial class WorldApp
             switch (key)
             {
                 case Key.Escape: window.Close(); break;
-                case Key.F1: ToggleMeitou(); break;
+                case Key.F1: Console.WriteLine(meitou.Toggle()); break;
                 case Key.Minus: o.Post.Exposure = MathF.Max(o.Post.Exposure / 1.1f, 0.05f); PostStatus(); break;
                 case Key.Equal: o.Post.Exposure = MathF.Min(o.Post.Exposure * 1.1f, 20f); PostStatus(); break;
                 case Key.T: render.Textures = !render.Textures; break;

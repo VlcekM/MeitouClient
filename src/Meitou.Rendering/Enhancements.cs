@@ -91,3 +91,28 @@ public static class Enhancements
         }
     }
 }
+
+/// <summary>The one key that turns Meitou off and on (F1 in the viewer, Shift+F1 in the game): every switch Faithful, then back to the
+/// ones that were Meitou before (all of them when they started Faithful). The Tab panel's checkboxes set them one by one.</summary>
+public sealed class MeitouToggle(IReadOnlyList<Enhancement> switches)
+{
+    bool[]? before;
+
+    /// <summary>Any switch is Meitou.</summary>
+    public bool On => switches.Any(e => e.IsMeitou);
+
+    /// <summary>Flips Meitou off or back on; returns the console line saying which.</summary>
+    public string Toggle()
+    {
+        if (On)
+        {
+            before = [.. switches.Select(e => e.IsMeitou)];
+            foreach (var e in switches) e.IsMeitou = false;
+        }
+        else
+        {
+            for (int i = 0; i < switches.Count; i++) switches[i].IsMeitou = before?[i] ?? true;
+        }
+        return On ? $"meitou    on: {string.Join(", ", switches.Where(e => e.IsMeitou).Select(e => e.Id))}" : "meitou    off, every switch Faithful (the game as it ships)";
+    }
+}
