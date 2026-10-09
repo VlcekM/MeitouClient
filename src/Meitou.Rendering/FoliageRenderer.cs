@@ -220,6 +220,15 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     public void ResetDrawTally() => gpuCull?.ResetTally();
 
+    /// <summary>The indirect draws per frame by instance count (0, 1-2, 3-15, 16+) for the colour views, the shadow cascades (all cascades summed) and the reflection, from the tally.</summary>
+    public IEnumerable<(string Name, double Value)>? DrawHistogram()
+    {
+        if (gpuCull is not { TallyFrames: > 0 } g) return null;
+        double n = g.TallyFrames;
+        string[] kinds = ["colour", "shadow", "reflection"], buckets = ["0", "1-2", "3-15", "16+"];
+        return Enumerable.Range(0, 3).SelectMany(k => Enumerable.Range(0, 4).Select(b => ($"hist {kinds[k]} draws {buckets[b]} inst", g.TallyHistogram[k, b] / n)));
+    }
+
     /// <summary>The main colour views' foliage triangles per frame since <see cref="ResetDrawTally"/> (meshes, TERRAIN-mode rocks, impostor quads as two),
     /// from the GPU cull's indirect arguments (<see cref="FoliageGpuCull.DrawTally"/>); null before a tallied frame has been read back.</summary>
     public double? ColourTrianglesPerFrame => gpuCull is { TallyFrames: > 0 } g ? (g.Tally[0, 0] + g.Tally[0, 2] + 2.0 * g.Tally[0, 4]) / g.TallyFrames : null;

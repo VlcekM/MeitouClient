@@ -245,6 +245,7 @@ static partial class WorldApp
             counts["foliage draws"] = foliageCalls / counted;
             counts["foliage meshes"] = meshes / counted;
             counts["grass blades"] = blades / counted;
+            if (foliage.DrawHistogram() is { } hist) foreach (var (k, v) in hist) counts[k] = v;
         }
         if (gpu.Characters is not null) counts["character tris"] = characterTris / counted;
         FoliageGpuCull.CountTriangles = false;

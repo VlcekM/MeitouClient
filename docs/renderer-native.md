@@ -3587,3 +3587,24 @@ refers to them as "owner decision N".
     (`GpuFrame.Staging`, `upload staging N`) instead of the frame constants; its reset frees the regular chunks beyond 4 (32 MB) and
     beyond those the slot's last cycle used, which is safe because no descriptor set refers to staging. The frame constants keep their
     chunks (descriptor sets are made for them).
+
+## Foliage draw batching: measured and not built (2026-10-09)
+
+Question: would one shared vertex / index buffer, a per-draw record read by `gl_DrawID` and one `vkCmdDrawIndexedIndirectCount` per state bucket
+(instead of one indirect draw per mesh part and LOD level, each with its own pipeline, vertex / index binds and push constants) pay? Measured first
+(RTX 4070, `--view swamp` and `--view hub`, 2560x1440, TAA, `--no-particles`, 600 frames, GPU-bound: render thread 2.05 ms against GPU 6.50 ms).
+The bench counts now carry `hist <view> draws <n> inst`: the cull's indirect draws per frame by instance count (0 / 1-2 / 3-15 / 16+).
+
+- **Draws (Observed)**, per frame. Swamp colour 160 / 44 / 119 / 40 (363 in the cull's tally, 543 submitted); shadow cascades summed 68 / 103 / 43 / 10; reflection 7 / 3 / 20 / 1.
+  Hub colour 82 / 35 / 90 / 50; shadows 41 / 31 / 20 / 10. So 44% of the swamp's colour draws are empty and 12% have 1-2 instances.
+- **Price of a draw (Observed)**: experiment, not kept: the mesh job's draw loop repeated 20 times with every draw's arguments zeroed (same pipeline binds,
+  vertex / index binds and push constants, 0 instances). Foliage GPU 1.99 to 2.30 ms, shadows 0.33 to 0.51: **about 0.016 ms per sweep of 543 empty draws
+  (0.03 microseconds a draw)** in the colour view, 0.009 ms in the cascades. State changes between draws cost the GPU almost nothing.
+- **Where the foliage stage goes (Observed)**, swamp, GPU ms: stage 1.99; with the mesh draws skipped 1.14 (grass, impostors, the rest: **57%**); with the mesh
+  draws scissored to 32x32 pixels (vertex, setup and draw cost remain, no fragment work) 1.39. So the meshes are 0.85 ms, of which 0.60 is fragment work (alpha-tested leaves)
+  and **0.25 ms vertex, setup and draw overhead at most**. Shadow cascades: meshes 0.17 ms of 0.33, 0.10 of it without fragments. Reflection: 0.05. Hub: foliage 0.53 ms all told.
+- **CPU (Observed)**: recording one sweep of 543 draws is about 0.12 ms (20 sweeps added 2.45 ms to the frame), roughly 6 sweeps per frame in the swamp (colour, up to 4 cascades,
+  reflection), on the job threads; the render thread's foliage is 0.69 ms colour + shadows 0.60. The frame is GPU-bound, so this does not move the frame time.
+- **Verdict**: the ceiling for batching is the 0.25 + 0.10 + 0.05 ms above, and the state-change part of it is about 0.05 ms across all views. Below the 0.1 ms bar; **not built**.
+  Better targets, if the foliage stage is to shrink: the grass / impostor part (1.14 ms, 57% of the stage) and the mesh fragment work (0.6 ms: overdraw of cut-out leaves).
+  **Unknown**: whether many small draws cost more on another GPU (an integrated one, a different driver) than on this one.

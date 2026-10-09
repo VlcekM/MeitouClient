@@ -281,9 +281,11 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     /// <summary>Per view kind (0 colour, 1 shadow, 2 reflection): mesh triangles, mesh instance-draws (one per part), rock triangles, rock
     /// instance-draws, impostor quads, views; summed since the start (or <see cref="ResetTally"/>).</summary>
     public readonly long[,] Tally = new long[3, 6];
+    /// <summary>Per view kind: the indirect draws by instance count, 0 / 1-2 / 3-15 / 16+, summed since <see cref="ResetTally"/>.</summary>
+    public readonly long[,] TallyHistogram = new long[3, 4];
     public long TallyFrames { get; private set; }
 
-    public void ResetTally() { Array.Clear(Tally); TallyByName.Clear(); TallyShadowByName.Clear(); TallyFrames = 0; }
+    public void ResetTally() { Array.Clear(Tally); Array.Clear(TallyHistogram); TallyByName.Clear(); TallyShadowByName.Clear(); TallyFrames = 0; }
 
     const ulong TallyBytes = 4ul << 20;
     ReadbackBuffer?[]? tallyBuffers;
@@ -308,6 +310,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
                 for (int i = 0; i < count; i++)
                 {
                     long indices = args[i * 5], instances = args[i * 5 + 1];
+                    TallyHistogram[kind, instances == 0 ? 0 : instances <= 2 ? 1 : instances <= 15 ? 2 : 3]++;
                     if (kind <= 1 && names is not null && i < names.Length && instances > 0)
                     {
                         var byName = kind == 0 ? TallyByName : TallyShadowByName;
