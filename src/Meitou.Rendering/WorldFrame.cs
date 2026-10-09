@@ -55,7 +55,7 @@ sealed class WorldOptions
     /// <summary>The game's <c>texture resolution gimping</c> (0..4; missing key: 1) and <c>water reflection</c> (0..4; missing: 2) / <c>reflection range</c> (missing: 0.6) settings (docs/formats/settings.md).</summary>
     // The viewer starts at full quality (the old look); the game's missing-key defaults are TextureQuality.Default (1),
     // ReflectionPass.DefaultLevel (2) and DefaultRange (0.6): --texture-quality 1 --water-reflection 2 --reflection-range 0.6.
-    public int TextureQuality = 0, WaterReflection = 4;
+    public int TextureQuality = 0, WaterReflection = 4, ReflectionSamples = ReflectionPass.DefaultSamples;
     public float ReflectionRange = 3;
     /// <summary>Sun shadows (docs/formats/shadows.md): off, the game's <c>shadow quality</c> index, <c>Shadow Range</c>, the debug view.</summary>
     public bool NoShadows;
@@ -186,6 +186,7 @@ sealed class WorldOptions
           --no-water-refraction    the Meitou water blends over the scene instead of refracting it (saves a copy of the scene per depth slice)
           --no-reflections         the water reflects only the sky colour, not the mirrored scene (R toggles; the same as --water-reflection 0)
           --water-reflection <0..4> the game's `water reflection`: what the water mirrors: 0 nothing (sky colour), 1 sky and terrain, 2 the same (the characters' level; none yet), 3 + buildings and features, 4 + trees, bushes and rocks (default 2; Tab slider)
+          --reflection-samples <n>  samples per texel of the water reflection (1..8, default 4; 1 is off; the device may allow fewer)
           --reflection-range <x>   the game's `reflection range`: the mirrored scene is drawn out to haze distance x this (default 0.6, with the default haze distance 30000)
           --texture-quality <0..4> the game's `texture resolution gimping`: 0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly; each step drops the top mip of compressed textures as they load (default 1; 0 restores full size)
           --no-shadows             no sun shadow map   --shadow-quality <0|1|2> map side 1024/2048/4096 (default 1)   --shadow-range <u> (1000..9000, default 5000; with the Meitou shadows 1000..15000, default 10000)
@@ -317,6 +318,7 @@ sealed class WorldOptions
                 case "--no-water-refraction": o.WaterRefraction = false; break;
                 case "--water-ocean": o.WaterOcean = int.Parse(Next(), CultureInfo.InvariantCulture) switch { <= 64 => 64, <= 128 => 128, _ => 256 }; break;
                 case "--no-reflections": o.NoReflections = true; break;
+                case "--reflection-samples": o.ReflectionSamples = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 1, 8); break;
                 case "--water-reflection": o.WaterReflection = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, 4); break;
                 case "--reflection-range": o.ReflectionRange = F(); break;
                 case "--texture-quality": o.TextureQuality = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 0, Meitou.Data.Textures.TextureQuality.Maximum); break;
@@ -781,7 +783,7 @@ static class WorldFrame
             gpu.Water.Refraction = o.WaterRefraction;
             gpu.Water.Meitou = o.MeitouWater;
             gpu.WaterClockHours = o.WaterSeconds / WaveSet.SecondsPerGameHour;
-            gpu.Reflection = new ReflectionPass(context) { Level = o.WaterReflection, Range = o.ReflectionRange };
+            gpu.Reflection = new ReflectionPass(context) { Level = o.WaterReflection, Range = o.ReflectionRange, Samples = o.ReflectionSamples };
             foreach (var m in messages) Console.WriteLine($"warning   {m}");
             Console.WriteLine($"water     at height {WorldWater.Height} ({watch.ElapsedMilliseconds} ms)");
         }
@@ -1068,7 +1070,7 @@ static class WorldFrame
         StageClock.Lap(12);
         // Water reflection: the mirrored scene into its own framebuffer (restores the bound one), before the main pass.
         bool reflecting = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is { Level: > 0 };   // level 0: no pass, the water shows the sky colour
-        if (gpu.Reflection is not null) { gpu.Reflection.MaxDistance = gpu.Sky.HazeDistance * gpu.Reflection.Range; gpu.Reflection.HideDistance = gpu.FogVolumes?.AtmosphereDistance; }
+        if (gpu.Reflection is not null) { gpu.Reflection.FaithfulShadows = gpu.Shadow is { Meitou: false }; gpu.Reflection.MaxDistance = gpu.Sky.HazeDistance * gpu.Reflection.Range; gpu.Reflection.HideDistance = gpu.FogVolumes?.AtmosphereDistance; }
         if (reflecting)
             gpu.Reflection!.Render(camera, rw, rh, gpu.Sky, colours, light, gpu.Terrain, render, gpu.Objects is null ? null : (vp, e, frustum) =>
             {
