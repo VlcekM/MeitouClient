@@ -21,8 +21,8 @@ internal sealed unsafe class GiProbes : IDisposable
     static readonly (float Spacing, float SpacingY, float RayLength)[] Grid = [(128, 96, 4000), (512, 384, 16000)];
 
     readonly GpuContext ctx;
-    readonly ShaderProgram traceProgram, blendProgram;
-    readonly ComputePipeline tracePipeline, blendPipeline;
+    readonly ShaderProgram traceProgram, blendProgram, invalidateProgram;
+    readonly ComputePipeline tracePipeline, blendPipeline, invalidatePipeline;
     readonly Texture irradiance, distance;
     readonly Texture[] bases;
     readonly DeviceBuffer rays, state;
@@ -64,6 +64,11 @@ internal sealed unsafe class GiProbes : IDisposable
             (0, DescriptorType.StorageBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.UniformBuffer),
             (3, DescriptorType.StorageImage), (4, DescriptorType.StorageImage), (5, DescriptorType.CombinedImageSampler),
         ]);
+        invalidateProgram = ctx.Shaders.Compute(GiShaders.ProbeInvalidate, "gi probe invalidate",
+        [
+            (0, DescriptorType.StorageBuffer), (1, DescriptorType.UniformBuffer), (2, DescriptorType.StorageImage), (3, DescriptorType.CombinedImageSampler),
+        ]);
+        invalidatePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(invalidateProgram, "gi probe invalidate"));
         tracePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(traceProgram, "gi probe trace"));
         blendPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(blendProgram, "gi probe blend"));
         int rows = Cascades * Columns * Layers;
@@ -116,6 +121,7 @@ internal sealed unsafe class GiProbes : IDisposable
         if (scene.Top is null) return;
         slot = ctx.Frame.Slot;
         int phases = Phases is 1 or 2 or 4 or 8 ? Phases : 4, phase = (int)(Updates % phases);
+        bool moved = false;
         for (int c = 0; c < Cascades; c++)
         {
             var (s, sy, _) = Grid[c];
@@ -125,6 +131,7 @@ internal sealed unsafe class GiProbes : IDisposable
             // The bases only change when the grid scrolls or the terrain's fine window is swapped.
             if (placed[c] == (ox, oz) && ReferenceEquals(placedHeights, heights.Fine)) continue;
             placed[c] = (ox, oz);
+            moved = true;
             for (int k = 0; k < Columns; k++)
                 for (int i = 0; i < Columns; i++)
                 {
@@ -160,6 +167,24 @@ internal sealed unsafe class GiProbes : IDisposable
         var cmd = ctx.BeginNative("gi probes");
         cmd.BeginLabel("gi probes");
         cmd.Barrier(BarrierBatch.Full);
+        if (moved)
+        {
+            // The tiles whose probe moved hold another place's light until their update: hide them (GiShaders.ProbeInvalidate).
+            var stateInfo = new DescriptorBufferInfo(state.Handle, 0, state.Size);
+            var uniform = new DescriptorBufferInfo(block.Handle, block.Offset, (ulong)sizeof(Constants));
+            var images = stackalloc DescriptorImageInfo[2];
+            images[0] = new DescriptorImageInfo(default, irradiance.View(), ImageLayout.General);
+            images[1] = new DescriptorImageInfo(nearest, bases.View(), ImageLayout.General);
+            var writes = stackalloc WriteDescriptorSet[4];
+            writes[0] = Buffer(0, DescriptorType.StorageBuffer, &stateInfo);
+            writes[1] = Buffer(1, DescriptorType.UniformBuffer, &uniform);
+            writes[2] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &images[0] };
+            writes[3] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 3, DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[1] };
+            cmd.BindPipeline(invalidatePipeline);
+            cmd.PushDescriptors(invalidateProgram.Layout, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 4), PipelineBindPoint.Compute);
+            cmd.Dispatch((uint)(Probes / 64));
+            cmd.Barrier(BarrierBatch.Full);
+        }
         {
             var top = scene.Top.Handle;
             var asWrite = new WriteDescriptorSetAccelerationStructureKHR { SType = StructureType.WriteDescriptorSetAccelerationStructureKhr, AccelerationStructureCount = 1, PAccelerationStructures = &top };
@@ -249,5 +274,6 @@ internal sealed unsafe class GiProbes : IDisposable
         state.Dispose();
         traceProgram.Dispose();
         blendProgram.Dispose();
+        invalidateProgram.Dispose();
     }
 }

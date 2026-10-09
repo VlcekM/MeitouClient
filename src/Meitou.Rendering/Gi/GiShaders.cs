@@ -353,6 +353,43 @@ static class GiShaders
         """;
 
     /// <summary>
+    /// The probe invalidation, run before the trace on a frame whose grids scrolled (or whose bases changed): one invocation per probe. A probe
+    /// whose tile still holds another position (the column that left the grid on the far side) gets alpha 0 over its irradiance tile, so neither
+    /// the surfaces nor the bounces read the old values until its own update starts it over (with the round robin, up to Phases − 1 frames later).
+    /// </summary>
+    public static readonly string ProbeInvalidate = $$"""
+        #version 460
+        layout(local_size_x = 64) in;
+        const int GI_N = {{GiProbes.Columns}}, GI_NY = {{GiProbes.Layers}}, GI_IRR = {{GiProbes.IrradianceTexels}};
+        layout(set = 0, binding = 0, std430) readonly buffer ProbeState { vec4 positions[]; };
+        layout(set = 0, binding = 1, std140) uniform Params { vec4 uGiParams; vec4 uGiGrid[4]; };
+        layout(set = 0, binding = 2, rgba16f) uniform image2D uIrradiance;
+        layout(set = 0, binding = 3) uniform sampler2D uGiBase;
+
+        void main()
+        {
+            uint probe = gl_GlobalInvocationID.x;
+            int layer = int(probe % uint(GI_NY)), rest = int(probe / uint(GI_NY));
+            int wx = rest % GI_N, wz = (rest / GI_N) % GI_N, c = rest / (GI_N * GI_N);
+            if (c >= {{GiProbes.Cascades}}) return;
+            vec4 g0 = uGiGrid[c * 2], g1 = uGiGrid[c * 2 + 1];
+            int colX = (int(g1.x) + wx) % GI_N, colZ = (int(g1.y) + wz) % GI_N;
+            float base = texelFetch(uGiBase, ivec2(colX, c * GI_N + colZ), 0).r;
+            vec3 world = vec3(g0.x + float(wx) * g0.z, base + (float(layer) + 0.5) * g0.w, g0.y + float(wz) * g0.z);
+            uint stateSlot = uint((c * GI_N + colZ) * GI_N + colX) * uint(GI_NY) + uint(layer);
+            vec4 last = positions[stateSlot];
+            if (last.w < 0.5 || distance(last.xyz, world) <= 0.5) return;
+            ivec2 origin = ivec2(colX, (c * GI_N + colZ) * GI_NY + layer) * (GI_IRR + 2);
+            for (int y = 0; y < GI_IRR + 2; y++)
+                for (int x = 0; x < GI_IRR + 2; x++)
+                {
+                    ivec2 t = origin + ivec2(x, y);
+                    imageStore(uIrradiance, t, vec4(imageLoad(uIrradiance, t).rgb, 0.0));
+                }
+        }
+        """;
+
+    /// <summary>
     /// The debug view (<c>--gi-debug</c>): per pixel of the near slice's depth, the surface's position (the depth back through the projection) and a
     /// normal from the depth's own slope, then rays into <see cref="GiScene"/>'s structure. Mode 1: one cosine-weighted ray, coloured by its hit
     /// distance (blue: it reached the sky). Mode 2: a grey "clay" picture lit by the sun (a shadow ray) and by what the bounce rays find: sunlit,

@@ -64,6 +64,9 @@ internal sealed unsafe class GiScene : IDisposable
     {
         public required AccelerationStructure Blas;
         public required GeometryRecord[] Records;
+        // The buffers it was built from: a reshape (BuildingLodMesh) puts new parts into the same GpuObjectMesh and frees these, so the records
+        // would point at freed memory (a hit reads its triangle: device lost).
+        public required object[] Sources;
         public long LastUsed;
     }
 
@@ -154,12 +157,18 @@ internal sealed unsafe class GiScene : IDisposable
     /// <summary>The mesh's structure, built now when there is budget left this frame (null: not yet, or nothing to trace).</summary>
     MeshEntry? EntryFor(CommandList cmd, GpuObjectMesh gpu)
     {
-        if (meshes.TryGetValue(gpu, out var entry)) return entry;
-        if (BuiltThisFrame >= MaxBuildsPerFrame) return null;
+        if (BuiltThisFrame >= MaxBuildsPerFrame && !meshes.ContainsKey(gpu)) return null;
         // The finest level the mesh holds: its own parts at that level, or the manual mesh standing in for it.
         int level = Math.Clamp(gpu.MinLevel, 0, Math.Max(gpu.LevelCount - 1, 0));
         var source = gpu.Manual.Length > level && gpu.Manual[level] is { } manual ? manual : gpu;
         int sourceLevel = ReferenceEquals(source, gpu) ? level : 0;
+        if (meshes.TryGetValue(gpu, out var entry))
+        {
+            if (BuiltFrom(entry, source)) return entry;
+            Drop(gpu, entry);
+            if (BuiltThisFrame >= MaxBuildsPerFrame) return null;
+        }
+        var sources = source.Parts.Select(p => (object)p.Vertices).Prepend(source).ToArray();
         var geometries = new List<TriangleGeometry>();
         var recs = new List<GeometryRecord>();
         foreach (var part in source.Parts)
@@ -176,7 +185,7 @@ internal sealed unsafe class GiScene : IDisposable
         blas.ReleaseScratch();
         BuiltThisFrame++;
         MeshBytes += (long)blas.Bytes;
-        entry = new MeshEntry { Blas = blas, Records = [.. recs], LastUsed = frame };
+        entry = new MeshEntry { Blas = blas, Records = [.. recs], Sources = sources, LastUsed = frame };
         meshes[gpu] = entry;
         return entry;
     }
@@ -186,13 +195,23 @@ internal sealed unsafe class GiScene : IDisposable
         stale.Clear();
         foreach (var (key, entry) in meshes)
             if (frame - entry.LastUsed > KeepFrames) stale.Add(key);
-        foreach (var key in stale)
-        {
-            var entry = meshes[key];
-            MeshBytes -= (long)entry.Blas.Bytes;
-            entry.Blas.Dispose();
-            meshes.Remove(key);
-        }
+        foreach (var key in stale) Drop(key, meshes[key]);
+    }
+
+    static bool BuiltFrom(MeshEntry entry, GpuObjectMesh source)
+    {
+        var s = entry.Sources;
+        if (s.Length != source.Parts.Count + 1 || !ReferenceEquals(s[0], source)) return false;
+        for (int i = 0; i < source.Parts.Count; i++)
+            if (!ReferenceEquals(s[i + 1], source.Parts[i].Vertices)) return false;
+        return true;
+    }
+
+    void Drop(object key, MeshEntry entry)
+    {
+        MeshBytes -= (long)entry.Blas.Bytes;
+        entry.Blas.Dispose();
+        meshes.Remove(key);
     }
 
     public string Describe() =>

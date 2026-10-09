@@ -54,6 +54,10 @@ reflection reads neither storage images nor acceleration structures, and pushes 
   - **Verified** (`RayQueryTests`): a triangle counter-clockwise seen from the ray is front-facing (Vulkan's default, no `FLIP_FACING`).
     The grid's triangles are counter-clockwise from above.
   - Objects set `TRIANGLE_FACING_CULL_DISABLE`, because their meshes are not closed.
+- **Reshaped meshes.** `BuildingLodMesh` can remake a resident mesh with another finest level and put the new parts into the same
+  `GpuObjectMesh`, freeing the old buffers. An object structure therefore remembers the source and the vertex buffers it was built from,
+  and is rebuilt when they differ. Before this fix, the geometry records pointed at freed memory: hits read it and the device was lost.
+  **Verified**: `--bench-motion fly` with validation in the Hub (it crashed before the fix) and the swamp.
 - **Objects.** `WorldObjectRenderer.RayInstances`: the resolved real instances (zones and landmarks, not distant stand-ins) whose bounds
   come within `--gi-range` (default 6000) of the eye.
   - Each mesh has one bottom level, built the first time an instance of it is in range, at most 32 per frame. It is built from the finest
@@ -121,8 +125,9 @@ So keeping the structures up to date costs well under a tenth of a millisecond p
   included. The hysteresis is 0.97 per frame.
 - **Round robin.** Each frame updates a quarter of the probes, every fourth probe by index, from a phase that advances by one per frame
   (`--gi-phases`, 1, 2, 4 or 8; default 4). The hysteresis per update is 0.97 raised to the number of phases, so a probe settles in about
-  as many frames as with every probe updated each frame. A column that scrolls in keeps the old tile's values until its first update:
-  one to three frames at the grid's edge.
+  as many frames as with every probe updated each frame. When a grid scrolls (or its bases change), `GiShaders.ProbeInvalidate` first sets alpha 0 on every tile
+  whose stored position is not its probe's current one (the column that wrapped round from the far side), so its old light is not read
+  until its own update starts it over.
 - **Sampling** (`giIrradiance` in `kenshiLight`). The 8 probes around the point are blended trilinearly, weighted by the wrap-around
   backface term and by Chebyshev visibility against the distance moments, the same way DDGI does.
   - Cascade 0 is used where it covers the point. Cascade 1 fills in where cascade 0 does not, and the sky's flat ambient fills in where
