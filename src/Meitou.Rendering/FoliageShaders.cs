@@ -423,13 +423,19 @@ static class FoliageShaders
         }
         // Generated mesh levels (flag 16, FoliageLod): a chunk holds the instances of one level, whose deviation from the original (lodError, in radii of the mesh) is
         // below view.lod.z pixels (shadow cascades: texels) while the next level's (lodNextError, infinite for the last) is not. view.lod: the eye's height, the
-        // pixels per radian (ortho views: 1 / the texel), the tolerance, 1 for an ortho view. The distance is to the nearest point of the sphere.
+        // pixels per radian (ortho views: 1 / the texel), the tolerance, 1 for an ortho view (a perspective view: minus the distance from which the tolerance grows with the distance, 0 for none). The distance is to the nearest point of the sphere.
         bool LodSelected(Chunk k, vec4 sphere)
         {
             float s;
-            if (view.lod.w > 0.5) s = sphere.w * view.lod.y;
-            else s = sphere.w * view.lod.y / max(length(sphere.xyz - vec3(pc.eye.x, view.lod.x, pc.eye.y)) - sphere.w, 1.0);
             float tau = view.lod.z;
+            if (view.lod.w > 0.5) s = sphere.w * view.lod.y;
+            else
+            {
+                float dd = max(length(sphere.xyz - vec3(pc.eye.x, view.lod.x, pc.eye.y)) - sphere.w, 1.0);
+                s = sphere.w * view.lod.y / dd;
+                // Meitou: past -view.lod.w units the tolerance grows in proportion to the distance (0: constant).
+                if (view.lod.w < -0.5) tau *= max(1.0, dd / -view.lod.w);
+            }
             return k.lodError * s <= tau && !(k.lodNextError * s <= tau);
         }
         shared uint visibleCount, foggedCount, occludedCount;

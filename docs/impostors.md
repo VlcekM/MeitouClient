@@ -688,7 +688,10 @@ more than the usual 1.4 by switching to its impostor further out: `transition = 
 Small rocks use the small class.
 
 **Filter** (`MEITOU_IMPOSTOR_ROCK_MIN_SURFACE`, 0.06): a mesh whose triangle area over the area of its bounding sphere is under 0.06 gets none (thin sticks make poor billboards). **Observed**: `FOLIAGE_Plant_Swamp-TwigLarger`
-0.029, the other TERRAIN meshes 0.107 or more.
+0.029, the other TERRAIN meshes 0.107 or more. **Observed negatives (2026-10-09, RTX 4070, 1920x1080 DLAA, `--ab`, a temporary switch since removed)**: a separate rock transition of 7000 instead of 12000 saved
+only 0.06 +-0.06 ms foliage on the swamp view (0.06 clear; 40 pixels over 12) because the visible TERRAIN rocks are mostly inside 7000 and the swamp's `FOLIAGE_Plant_Swamp-TwigLarger` has no atlas (so impostors for it stay **Unknown**: its
+radius, 3169 at most, puts the knee-rule transition beyond the range anyway; the generated levels are what helps it, formats/foliage.md "Rougher levels"); a large impostor distance of 7000 for every large mesh saved 0.27 +-0.16 ms foliage on the foggy
+swamp view but changed 190 000 pixels by 12 or more (mean 3.0) in a clear forest view: the giant trees turn into flat blobs, as the owner saw at 4000, so 12000 stays.
 
 **Measured** (**Observed**, RTX 4070, 1600 x 900, `--world --town "The Hub" --radius 2 --range-large 50000 --range-medium 12000 --object-distance 20000 --fly-benchmark 3600 --fly-pipelined`, `MEITOU_FOLIAGE_TRIS=1`, GPU idle before; base `87c7857`, cache warm for both):
 
