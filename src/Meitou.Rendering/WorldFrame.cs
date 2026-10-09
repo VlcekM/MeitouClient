@@ -62,8 +62,8 @@ sealed class WorldOptions
     public int ShadowQuality = 1, DebugShadows, ShadowFilter = 2;
     /// <summary>The ray-traced global illumination's debug view (0 off), its bounce rays per pixel and object range (docs/render-gi.md).</summary>
     public int GiDebug, GiSamples = 4;
-    /// <summary><c>--gi</c>: the probe GI (needs ray queries); <see cref="GiProbes"/> is its Faithful / Meitou switch (<c>gi</c>).</summary>
-    public bool Gi, GiProbes = true;
+    /// <summary>The probe GI, on unless <c>--no-gi</c> (it needs ray queries: without them it is off, with a note); <see cref="GiProbes"/> is its Faithful / Meitou switch (<c>gi</c>).</summary>
+    public bool Gi = true, GiProbes = true;
     /// <summary><c>--gi-phases</c>: the probes are updated in this many shares, one a frame (1, 2, 4 or 8).</summary>
     public int GiPhases = 4;
     /// <summary><c>--gi-resolve</c>: the probes read once per pixel after the scene, at 1/n of the render size (0: in every lit fragment).</summary>
@@ -242,6 +242,7 @@ sealed class WorldOptions
           --shadow-range 0         shadows start off (the Tab slider turns them on)
           --shadow-filter <0|1|2>  Meitou shadow filter: 2 full (default), 1 the far cascades cheaper, 0 cheapest everywhere (low-end GPUs)
           --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture
+          --no-gi                  no ray-traced probe GI (default on where the GPU has ray queries; the device is then made without them)
           --gi-debug <n>           ray-traced global illumination's debug views (needs ray queries; docs/render-gi.md): 1 a bounce ray's hit distance,
                                    2 one-bounce lighting on grey surfaces, 3 the traced scene seen from the eye (normals)
           --gi-samples <n>         bounce rays per pixel in --gi-debug 2 (default 4)   --gi-range <u> objects traced within this distance (default 6000)
@@ -395,6 +396,7 @@ sealed class WorldOptions
                 case "--gi-samples": o.GiSamples = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 1, 64); break;
                 case "--gi-range": o.GiRange = F(); break;
                 case "--gi": o.Gi = true; break;
+                case "--no-gi": o.Gi = false; break;
                 case "--gi-phases": o.GiPhases = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--gi-foliage": o.GiFoliage = F(); break;
                 case "--gi-strength": o.GiStrength = F(); break;
@@ -924,7 +926,7 @@ static class WorldFrame
         gpu.DebugShadows = o.DebugShadows;
         if (o.GiDebug > 0 || o.Gi)
         {
-            if (!context.Device.HasRayQuery) Console.WriteLine("warning   --gi / --gi-debug: the device has no ray queries (VK_KHR_ray_query), the global illumination is off");
+            if (!context.Device.HasRayQuery) Console.WriteLine("gi        off: the device has no ray queries (VK_KHR_ray_query)");
             else
             {
                 gpu.Gi = new Gi.GiScene(context) { Range = o.GiRange, FoliageMinSize = o.GiFoliage };
@@ -1090,6 +1092,12 @@ static class WorldFrame
                 if (i > 0) (post.Options.LowResParticles, post.Options.ParticleDivisor) = i switch { 1 => (true, 4), 2 => (true, 2), 3 => (true, 0), _ => (false, 0) };
             }, "0"));
             sliders.Add(new Slider(ParticleSliders[1], 0.1f, 1, () => g.ParticleDensity, v => g.ParticleDensity = MathF.Round(v * 20) / 20, "0.00"));
+            // Ours, not the game's (docs/render-post.md "Tone map and grading"): the tone curve, the saturation / contrast grade, and a scale on the heat haze.
+            sliders.Add(new Slider("Tone map (0 = game)", 0, 2, () => (int)post.Options.ToneMap, v => post.Options.ToneMap = (ToneMapOperator)(int)MathF.Round(v), "0",
+                Text: v => (ToneMapOperator)(int)MathF.Round(v) switch { ToneMapOperator.Shoulder => "shoulder", ToneMapOperator.Aces => "ACES", _ => "clamp (as the game)" }));
+            sliders.Add(new Slider("Grading (0 = game)", 0, 1, () => post.Options.Grade ? 1 : 0, v => post.Options.Grade = v >= 0.5f,
+                Text: v => v >= 0.5f ? $"saturation {post.Options.Saturation:0.00}, contrast {post.Options.Contrast:0.00}" : "off (as the game)"));
+            sliders.Add(new Slider("Heat haze strength (1 = game)", 0, 3, () => post.Options.HeatHazeStrength, v => post.Options.HeatHazeStrength = MathF.Round(v * 20) / 20, "0.00"));
         }
         // Anisotropic filtering (docs/render-post.md "Texture filtering"): the most any texture is sampled with; the world's textures ask 8x, so 8x and 16x look the same there.
         sliders.Add(new Slider(FilteringSlider, 0, 4, () => MathF.Log2(g.Sky.Gpu.Samplers.MaxAnisotropy), v => g.Sky.Gpu.Samplers.MaxAnisotropy = 1 << (int)MathF.Round(v), "0",

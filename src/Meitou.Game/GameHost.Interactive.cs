@@ -26,6 +26,7 @@ sealed partial class GameHost
     {
         bool vsync = g.VSync ?? config.VSync;
         int fpsLimit = g.FpsLimit ?? config.FpsLimit;
+        VulkanDisplay.RayTracing = o.WantsRayTracing;
         using var display = new VulkanDisplay(WindowOptions.Default with
         {
             Size = new Vector2D<int>(o.Width, o.Height),

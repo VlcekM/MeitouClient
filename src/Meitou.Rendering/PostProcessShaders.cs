@@ -412,7 +412,8 @@ static class PostProcessShaders
         out vec4 fragColour;
         uniform sampler2D uScene, uAo, uAdapted, uMask;   // uMask: the scene colour at the render size, whose alpha is 1 on characters (only they write it)
         uniform float uExposure, uCharacterAo;   // uCharacterAo: the share of the occlusion kept on the characters' own pixels
-        uniform int uUseAo, uDither, uDebug, uAuto;
+        uniform int uUseAo, uDither, uDebug, uAuto, uTone, uGrade;
+        uniform float uSaturation, uContrast;
         uniform vec2 uSceneSize;   // the scene's size when it is smaller than the picture (render scale without an upscaler), else 0: sampled with Catmull-Rom then
         const float EXPOSURE_KEY = 0.55;   // hdr.material's EXPOSURE_KEY
 
@@ -431,6 +432,17 @@ static class PostProcessShaders
             return sum / weight;
         }
 
+        // Ours, not the game's (docs/render-post.md "Tone map and grading"): identity up to K on the brightest channel, then an
+        // exponential roll-off towards 1 with the same slope at K, hue kept; and Narkowicz's ACES fit.
+        vec3 shoulder(vec3 c)
+        {
+            const float K = 0.8;
+            float m = max(c.r, max(c.g, c.b));
+            if (m <= K) return c;
+            return c * ((K + (1.0 - K) * (1.0 - exp(-(m - K) / (1.0 - K)))) / m);
+        }
+        vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+
         void main()
         {
             float exposure = uExposure;
@@ -439,7 +451,14 @@ static class PostProcessShaders
             float ao = texture(uAo, vUv).r;
             if (uCharacterAo < 1.0) ao = mix(ao, 1.0, texture(uMask, vUv).a * (1.0 - uCharacterAo));
             if (uUseAo != 0) c *= ao;
+            if (uTone == 1) c = shoulder(c);
+            else if (uTone == 2) c = aces(c);
             c = clamp(c, 0.0, 1.0);   // Kenshi has no tone curve: values over 1 clip (docs/formats/post-processing.md)
+            if (uGrade != 0)
+            {
+                c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, uSaturation);
+                c = clamp((c - 0.5) * uContrast + 0.5, 0.0, 1.0);
+            }
             if (uDebug == 1) c = vec3(ao);
             if (uDither != 0) c += (ign(gl_FragCoord.xy) + ign(gl_FragCoord.xy + 17.0) - 1.0) / 255.0;
             fragColour = vec4(c, 1.0);

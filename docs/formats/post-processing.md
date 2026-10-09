@@ -221,11 +221,11 @@ Details, options and costs: [render-post.md](../render-post.md).
 | --- | --- | --- | --- |
 | Scene buffer | RGBA16F, single-sample | none | Kenshi: R11G11B10F, no FSAA |
 | Exposure | Kenshi's auto exposure (game sky); x1 with `--simple-sky` | `--exposure` multiplier | Kenshi: 0.55 / adapted, band from CONSTANTS |
-| Curve | clamp at 1 | none (removed) | Kenshi: none (clip) |
+| Curve | clamp at 1 | clamp at 1; `--tonemap shoulder` or `aces` (or the Tab slider) as options (not a switch) | Kenshi: none (clip) |
 | SSAO | off | on (12 taps, half resolution, from depth) | Kenshi: shipped, disabled |
 | SSAO on characters | n/a (no SSAO) | the occlusion is scaled to 0.25 on the characters' own pixels (`--ssao-character-strength`; Meitou feature, no game counterpart; **Observed** on a `--crowd` view, no game reference) | Kenshi: none |
 | Bloom | off | none (removed) | Kenshi: magnitude 0 |
-| Grading, vignette | none | none (removed) | Kenshi: none |
+| Grading, vignette | none | grading optional (`--grade`, Tab slider: saturation 1.12, contrast 1.06; off by default); no vignette | Kenshi: none |
 | FXAA | FXAA 3.11 quality, green as luma, subpix 0.75, thresholds 0.166 / 0.0833, preset-12 search steps, on the LDR composite (Faithful anti-aliasing; `--no-fxaa`) | TAA, FSR or DLSS instead (Meitou anti-aliasing) | Kenshi: FXAA 3.11, 0.75 |
 | Dither | off | on | not in Kenshi |
 | Heat haze | the game's, after FXAA (`--no-heat-haze`; `--heat-haze <x>` replaces the weather's field) | the same, after the composite when a temporal upscaler runs | Kenshi: `HeatHaze` node, on by default |

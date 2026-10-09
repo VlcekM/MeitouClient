@@ -126,12 +126,13 @@ public sealed unsafe partial class PostProcess : IDisposable
     sealed class CompositePass : FullscreenProgram
     {
         public readonly SamplerSlot Scene, Ao, Adapted, Mask;
-        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug, CharacterAo, SceneSize;
+        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug, CharacterAo, SceneSize, Tone, Grade, Saturation, Contrast;
         public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
         {
             (Scene, Ao, Adapted, Mask) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"), P.Sampler("uMask"));
             (CharacterAo, SceneSize) = (P.Uniform("uCharacterAo"), P.Uniform("uSceneSize"));
             (Auto, Exposure, UseAo, Dither, Debug) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"), P.Uniform("uDebug"));
+            (Tone, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uGrade"), P.Uniform("uSaturation"), P.Uniform("uContrast"));
         }
     }
 
@@ -674,6 +675,10 @@ public sealed unsafe partial class PostProcess : IDisposable
         c.P.Set(c.UseAo, ao ? 1 : 0);
         c.P.Set(c.Dither, o.Dither ? 1 : 0);
         c.P.Set(c.Debug, o.Debug);
+        c.P.Set(c.Tone, (int)o.ToneMap);
+        c.P.Set(c.Grade, o.Grade ? 1 : 0);
+        c.P.Set(c.Saturation, o.Saturation);
+        c.P.Set(c.Contrast, o.Contrast);
         if (fxaa || haze) Draw(c.P, ldr!); else DrawFinal(c.P, final);
         Stamp("composite");
         var picture = ldr;
@@ -1099,7 +1104,7 @@ public sealed unsafe partial class PostProcess : IDisposable
     /// <summary>Whether the heat-haze textures were found (else the pass never runs).</summary>
     public bool HasHeatHaze => flowTexture is not null && perturbationTexture is not null;
     /// <summary>Whether this frame ends with the heat haze: it is on, has its textures and an amount.</summary>
-    public bool HeatHazeRuns => Options.HeatHaze && HasHeatHaze && HeatHazeAmount > 0 && ldr is not null;
+    public bool HeatHazeRuns => Options.HeatHaze && HasHeatHaze && HeatHazeAmount * Options.HeatHazeStrength > 0 && ldr is not null;
 
     /// <summary>
     /// Loads the heat haze's two textures from the install (<c>materials/FlowHAZE.dds</c> and <c>Perturber.dds</c>, BC1 2048² with
@@ -1161,7 +1166,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         // The phase in double first: game hours × 100 loses its fraction in float after long sessions.
         double phase = HeatHazeHours * 100;
         h.P.Set(h.Phase, (float)(phase - Math.Floor(phase)));
-        h.P.Set(h.Amount, HeatHazeAmount);
+        h.P.Set(h.Amount, HeatHazeAmount * Options.HeatHazeStrength);
         float tanY = MathF.Tan(fovY * 0.5f);
         h.P.Set(h.Tan, tanY * aspect, tanY);
         h.P.Set(h.NearFar, nearPlane, farPlane);

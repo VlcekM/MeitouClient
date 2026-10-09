@@ -24,6 +24,7 @@ sealed partial class GameHost
 {
     unsafe int Screenshot()
     {
+        VulkanDisplay.RayTracing = o.WantsRayTracing;
         using var display = new VulkanDisplay(null, vsync: false, streamline: WantsDlss());
         streamline = display.Streamline;
         Boot(display, interactive: false);

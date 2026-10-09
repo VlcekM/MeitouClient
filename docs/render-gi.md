@@ -24,7 +24,7 @@ render scale.
 
 ## Device (`VulkanDeviceOptions.RayTracing`)
 
-*From the code.* Asked for by `--gi` or `--gi-debug`, through `VulkanDisplay.RayTracing`. When the device has `VK_KHR_acceleration_structure`,
+*From the code.* Asked for unless `--no-gi` (GI is on by default since 2026-10-09; `--gi` still parses), or by `--gi-debug`, through `VulkanDisplay.RayTracing`, in the viewer and the game alike. A device without ray queries runs with GI off and prints `gi off`. When the device has `VK_KHR_acceleration_structure`,
 `VK_KHR_ray_query` and `VK_KHR_deferred_host_operations` with buffer device address, `VulkanDevice.HasRayQuery` is set and they are
 enabled. Without the option the device is created exactly as before. With it:
 
@@ -119,7 +119,7 @@ So keeping the structures up to date costs well under a tenth of a millisecond p
 
 ## Probes (`--gi`, `Gi/GiProbes.cs`, `GiShaders.ProbeTrace` / `ProbeBlend` / `ProbeSampling`)
 
-*From the code.* DDGI-style irradiance probes, traced against the scene above. `--gi` makes the scene and the probes. The `gi` switch
+*From the code.* DDGI-style irradiance probes, traced against the scene above. The scene and the probes are made by default (`--no-gi` leaves them out). The `gi` switch
 (Tab panel and `--faithful gi`) chooses between them and the flat ambient: off, the shaders take the flat ambient exactly as before.
 
 - **Grids.** There are two cascades of 32 × 32 probe columns centred on the camera, each column 8 probes high:
