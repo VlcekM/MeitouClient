@@ -41,6 +41,14 @@ static partial class WorldApp
             AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v, "foliage meshes and impostors, not the TERRAIN-mode rocks (MEITOU_FOLIAGE_DEBUG=nomeshes)");
         }
         AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
+        {
+            // Cost probes for the terrain (side B: error doubled, about a quarter of the triangles; ground colour only, no textured material).
+            float err = render.TerrainPixelError, farErr = render.TerrainFarPixelError, materialDistance = render.MaterialDistance;
+            AbToggles.Register("terrain-error", () => render.TerrainPixelError <= err * 1.01f, v => (render.TerrainPixelError, render.TerrainFarPixelError) = v ? (err, farErr) : (err * 2, farErr * 2), "terrain screen-space error doubled on side B (probe)");
+            AbToggles.Register("terrain-material", () => render.MaterialDistance >= materialDistance, v => render.MaterialDistance = v ? materialDistance : 1, "terrain textured material (side B: ground colour only; probe)");
+        }
+        if (gpu.Objects is { } sortObjects) AbToggles.Register("object-sort", () => sortObjects.SortNearestFirst, v => sortObjects.SortNearestFirst = v, "objects' colour batches drawn nearest first (Meitou reach)");
+        AbToggles.Register("normal-maps", () => render.NormalMaps, v => render.NormalMaps = v, "normal maps on terrain and objects (probe)");
         AbToggles.Register("water-draw", () => render.Water, v => render.Water = v, "the water pass (--no-water)");
         AbToggles.Register("reflections", () => render.Reflections, v => render.Reflections = v, "the water reflection pass (--no-reflections)");
         if (gpu.Reflection is { } rp)

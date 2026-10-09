@@ -19,6 +19,13 @@ static class MeitouShadowShaders
     /// <summary>Taps of the filter and of the blocker search.</summary>
     public const int FilterTaps = 16, BlockerTaps = 8;
 
+    /// <summary>The sunflower disk of <paramref name="n"/> points as GLSL vec2 constants (radius sqrt((k + 0.5) / n), angle k times the golden angle).</summary>
+    static string Disk(int n) => string.Join(", ", Enumerable.Range(0, n).Select(k =>
+    {
+        double r = Math.Sqrt((k + 0.5) / n), a = k * 2.3999632;
+        return $"vec2({F((float)(r * Math.Cos(a)))}, {F((float)(r * Math.Sin(a)))})";
+    }));
+
     static string F(float v) => v.ToString("0.#########", CultureInfo.InvariantCulture) + (v == MathF.Floor(v) ? ".0" : "");
 
     /// <summary>
@@ -57,6 +64,11 @@ static class MeitouShadowShaders
             return mix(1.0, lit, w);
         }
 
+        // The filter's sunflower disks (point k at radius sqrt((k + 0.5) / n), angle k times the golden angle) as constants: each tap used to
+        // take a sqrt, a sine and a cosine, per pixel. The blocker search uses the 8-point disk too.
+        const vec2 msDisk8[8] = vec2[]({{Disk(8)}});
+        const vec2 msDisk16[16] = vec2[]({{Disk(16)}});
+
         // A program may define MS_NO_BLOCKER_SEARCH before including this: its receivers then filter at the minimum radius without the
         // blocker search (the impostors: far, a few pixels per crown, and the search was 30 % of their cost; docs/impostors.md section 14).
         #ifdef MEITOU_FRAGMENT
@@ -92,9 +104,8 @@ static class MeitouShadowShaders
                 float search = uMsBox[c].z, sum = 0.0, found = 0.0;
                 for (int k = 0; k < {{BlockerTaps}}; k++)
                 {
-                    float r = sqrt((float(k) + 0.5) / {{F(BlockerTaps)}});
-                    float a = float(k) * 2.3999632;
-                    vec2 o = r * vec2(rot.x * cos(a) - rot.y * sin(a), rot.y * cos(a) + rot.x * sin(a)) * search;
+                    vec2 d = msDisk8[k];
+                    vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * search;
                     vec2 uv = clamp(t.xy + o, vec2(0.0), vec2(1.0));
                     float z = textureLod(uShadowBlocker, rect.xy + uv * rect.zw, 0.0).r;
                     float limit = t.z + dot(o, slope) - 0.0005;
@@ -106,15 +117,25 @@ static class MeitouShadowShaders
             }
             #endif
             float lit = 0.0;
-            for (int k = 0; k < taps; k++)
+            if (full)
             {
-                float r = sqrt((float(k) + 0.5) / float(taps));
-                float a = float(k) * 2.3999632;
-                vec2 o = r * vec2(rot.x * cos(a) - rot.y * sin(a), rot.y * cos(a) + rot.x * sin(a)) * radius;
+                for (int k = 0; k < {{FilterTaps}}; k++)
+                {
+                    vec2 d = msDisk16[k];
+                    vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * radius;
+                    vec2 uv = t.xy + o;
+                    lit += textureLod(uShadowMap, vec3(rect.xy + uv * rect.zw, t.z + dot(o, slope)), 0.0);
+                }
+                return lit / {{F(FilterTaps)}};
+            }
+            for (int k = 0; k < {{FilterTaps / 2}}; k++)
+            {
+                vec2 d = msDisk8[k];
+                vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * radius;
                 vec2 uv = t.xy + o;
                 lit += textureLod(uShadowMap, vec3(rect.xy + uv * rect.zw, t.z + dot(o, slope)), 0.0);
             }
-            return lit / float(taps);
+            return lit / {{F(FilterTaps / 2)}};
         }
 
         // The landmarks' shadow beyond the cascades (they draw the near ones): one map along the sun around every landmark drawn, read with
