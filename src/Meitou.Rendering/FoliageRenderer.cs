@@ -803,6 +803,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public bool LargeBillboard;
         /// <summary>The triangles of the mesh and its leaves mesh (known with <see cref="HasBounds"/>): the small impostor class is for meshes with many.</summary>
         public int Triangles;
+        /// <summary>The mean triangle edge of the mesh and its leaves mesh in mesh units: the square root of the mean triangle area (known with <see cref="HasBounds"/>; <c>screen-lod</c>, <see cref="FoliageScreenLod.TriangleExtent(IEnumerable{float})"/>).</summary>
+        public float TriExtent;
+        /// <summary>The <c>screen-lod</c> transition terms of this mesh (ground distance per unit of instance radius, and the atlas frame floor) and what they were worked out for.</summary>
+        public float ScreenPerRadian, ScreenFloor;
+        public (float, float, int, int) ScreenKey;
         /// <summary>The impostor class estimated from the mesh's own bounds, once (<see cref="FoliageRenderer.EstimateClass"/>).</summary>
         public ImpostorClass? EstimatedClass;
         public bool ClassEstimated;
@@ -908,7 +913,20 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.LargeBillboard = FoliageSizes.LargeBillboard(a.Radius, a.Mesh);
             a.Triangles = main.Parts.Sum(p => p.Indices.Length / 3) + (leaves?.Parts.Sum(p => p.Indices.Length / 3) ?? 0);
             a.HasBounds = true;
+            a.TriExtent = FoliageScreenLod.TriangleExtent(Triangles(main).Concat(leaves is null ? [] : Triangles(leaves)));
             QueueMesh(a, main, leaves);
+        }
+    }
+
+    /// <summary>The areas of a model's triangles, in mesh units squared.</summary>
+    static IEnumerable<float> Triangles(Model model)
+    {
+        foreach (var part in model.Parts)
+        {
+            var v = part.Vertices;
+            var ix = part.Indices;
+            for (int i = 0; i + 2 < ix.Length; i += 3)
+                yield return 0.5f * Vector3.Cross(v[ix[i + 1]].Position - v[ix[i]].Position, v[ix[i + 2]].Position - v[ix[i]].Position).Length();
         }
     }
 
@@ -1382,7 +1400,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     if (!g.Asset.Failed) NearestMissingMesh = Math.Min(NearestMissingMesh, zoneDistance);
                     continue;
                 }
-                var (withImpostor, parts) = WithImpostor(FoliageGroupRange.Of(range, band), g.Asset, range, band, state, eye, impostorView);
+                var (withImpostor, parts) = WithImpostor(FoliageGroupRange.Of(range, band), g, range, band, state, eye, impostorView);
                 cullWork.Add((g, withImpostor, parts));
             }
         }
@@ -1694,8 +1712,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 if (b >= meshBatches && b < impostorFirst && gpuRockOrder[b - meshBatches].Asset.WorkLod is { } workLod)
                 {
                     flags |= FoliageCullChunk.Lod;
-                    lodError = workLod.Relative[e.Level];
-                    lodNext = e.Level + 1 < workLod.Levels ? workLod.Relative[e.Level + 1] : float.PositiveInfinity;
+                    var levelErrors = LevelErrors(workLod);
+                    lodError = levelErrors[e.Level];
+                    lodNext = e.Level + 1 < workLod.Levels ? levelErrors[e.Level + 1] : float.PositiveInfinity;
                 }
                 uint first = FoliageGpuCull.FirstOf(g.Arena) + (uint)e.Start;
                 for (int at = 0; at < length; at += Chunk)
