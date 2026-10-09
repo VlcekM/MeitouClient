@@ -16,6 +16,7 @@ static class GiShaders
     public static readonly string ProbeSampling = $$"""
 
         const int GI_N = {{GiProbes.Columns}}, GI_NY = {{GiProbes.Layers}}, GI_IRR = {{GiProbes.IrradianceTexels}}, GI_DIST = {{GiProbes.DistanceTexels}}, GI_CASCADES = {{GiProbes.Cascades}};
+        const float GI_MIN_WEIGHT = 0.02;   // the smallest trilinear weight a probe is read at
         // Octahedral mapping about y: the upper hemisphere in the inner diamond.
         vec2 giOct(vec3 d)
         {
@@ -31,9 +32,10 @@ static class GiShaders
             return normalize(d);
         }
         // A probe's tile: x its toroidal column, y (cascade · N + toroidal row) · layers + layer; inner texels plus a border of one.
-        vec2 giUv(ivec2 tile, vec3 dir, int inner, vec2 size)
+        // oct: the direction's octahedral position in 0..1 (giOct · 0.5 + 0.5); invSize: 1 / the atlas's size.
+        vec2 giUv(ivec2 tile, vec2 oct, int inner, vec2 invSize)
         {
-            return (vec2(tile) * float(inner + 2) + 1.0 + (giOct(dir) * 0.5 + 0.5) * float(inner)) / size;
+            return (vec2(tile) * float(inner + 2) + 1.0 + oct * float(inner)) * invSize;
         }
         // One cascade: rgb the irradiance (the lighting pass's envDiffuse), a how much of it to take (0 outside, 1 a cell inside its edge).
         vec4 giCascade(int c, vec3 p, vec3 n, vec3 v)
@@ -46,15 +48,18 @@ static class GiShaders
             if (edge <= 0.0) return vec4(0.0);
             ivec2 i0 = ivec2(floor(cell));
             vec2 f = cell - vec2(i0);
-            vec2 irrSize = vec2(float(GI_N * (GI_IRR + 2)), float(GI_CASCADES * GI_N * GI_NY * (GI_IRR + 2)));
-            vec2 distSize = vec2(float(GI_N * (GI_DIST + 2)), float(GI_CASCADES * GI_N * GI_NY * (GI_DIST + 2)));
+            const vec2 irrInv = 1.0 / vec2(float(GI_N * (GI_IRR + 2)), float(GI_CASCADES * GI_N * GI_NY * (GI_IRR + 2)));
+            const vec2 distInv = 1.0 / vec2(float(GI_N * (GI_DIST + 2)), float(GI_CASCADES * GI_N * GI_NY * (GI_DIST + 2)));
+            // The normal's octahedral position is the same in every probe's tile: once per point, not per probe.
+            vec2 octN = giOct(n) * 0.5 + 0.5;
+            uvec2 offset = uvec2(g1.xy);
             vec3 sum = vec3(0.0);
             float total = 0.0;
             for (int k = 0; k < 4; k++)
             {
                 ivec2 o = ivec2(k & 1, k >> 1);
                 ivec2 w = min(i0 + o, ivec2(GI_N - 1));
-                int colX = (int(g1.x) + w.x) % GI_N, colZ = (int(g1.y) + w.y) % GI_N;
+                int colX = int((offset.x + uint(w.x)) % uint(GI_N)), colZ = int((offset.y + uint(w.y)) % uint(GI_N));
                 float base = texelFetch(uGiBase, ivec2(colX, c * GI_N + colZ), 0).r;
                 float ly = clamp((q.y - base) / sy - 0.5, 0.0, float(GI_NY - 1));
                 int l0 = min(int(ly), GI_NY - 2);
@@ -63,17 +68,20 @@ static class GiShaders
                 for (int j = 0; j < 2; j++)
                 {
                     int layer = l0 + j;
+                    float weight = wxz * (j == 1 ? fy : 1.0 - fy);
+                    // A corner the point is nearly opposite of adds next to nothing: skip its fetches.
+                    if (weight < GI_MIN_WEIGHT) continue;
                     vec3 probe = vec3(g0.x + float(w.x) * s, base + (float(layer) + 0.5) * sy, g0.y + float(w.y) * s);
                     ivec2 tile = ivec2(colX, (c * GI_N + colZ) * GI_NY + layer);
-                    float weight = wxz * (j == 1 ? fy : 1.0 - fy);
                     // Probes behind the surface count less (DDGI's smooth backface term).
-                    float back = (dot(normalize(probe - p), n) + 1.0) * 0.5;
+                    vec3 toProbe = probe - p;
+                    float back = (dot(toProbe, n) * inversesqrt(max(dot(toProbe, toProbe), 1e-8)) + 1.0) * 0.5;
                     weight *= back * back + 0.2;
                     #ifndef GI_NO_VISIBILITY
                     // Visibility: Chebyshev's bound on the probe's distance moments towards the point.
                     vec3 from = q - probe;
                     float d = length(from);
-                    vec2 m = textureLod(uGiDistance, giUv(tile, from / max(d, 1e-4), GI_DIST, distSize), 0.0).rg * vec2(g1.z, g1.z * g1.z);
+                    vec2 m = textureLod(uGiDistance, giUv(tile, giOct(from) * 0.5 + 0.5, GI_DIST, distInv), 0.0).rg * vec2(g1.z, g1.z * g1.z);
                     if (d > m.x)
                     {
                         float variance = abs(m.x * m.x - m.y);
@@ -81,7 +89,7 @@ static class GiShaders
                         weight *= max(cheb * cheb * cheb, 0.0);
                     }
                     #endif
-                    vec4 irr = textureLod(uGiIrradiance, giUv(tile, n, GI_IRR, irrSize), 0.0);
+                    vec4 irr = textureLod(uGiIrradiance, giUv(tile, octN, GI_IRR, irrInv), 0.0);
                     weight *= irr.a;   // 0: a probe inside geometry
                     if (weight < 0.2) weight *= weight * weight * 25.0;
                     sum += irr.rgb * weight;

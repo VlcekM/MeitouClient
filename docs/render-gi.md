@@ -217,6 +217,22 @@ So keeping the structures up to date costs well under a tenth of a millisecond p
 - The rest of the update's saving (about 0.08 ms) is the inner-texel blend.
 - With GI the p99 frame is still worse than without (104 against 127 fps in the `gi-scene` run).
 
+**Terrain and object reads** (2026-10-09, `--ab gi-shade`, same command; pictures against the commit before at the swamp, the Hub at
+7.5, Squin, Mongrel at 16 and Heft at 8):
+
+| Change | Terrain | Objects | Picture |
+| --- | --- | --- | --- |
+| Before | +0.15 | +0.17 | |
+| No visibility test at all (tried, not kept) | +0.08 | +0.05 | Mongrel mean 1.19, 3.5 % of pixels over 12, max 58: light leaks onto the shaded street between buildings |
+| Probes under trilinear weight 0.02 skipped (`GI_MIN_WEIGHT`) | +0.14 | +0.12 | max 14, means ≤ 0.006 |
+| and the normal's octahedral position once per point, not per probe | +0.14 | +0.11 | the same |
+
+- **Observed:** the reads are bound by the fetches, not the arithmetic. Hoisting the per-probe encode changed nothing measurable, and the
+  skipped corners save little because neighbouring pixels in a wave still take the others. Each probe's fetches wait on its column's base
+  height (`uGiBase`), a dependent chain.
+- **Open:** one `textureGather` for the four base heights (a bases texture per cascade, repeating); or the probes resolved once per pixel
+  at a lower resolution in a pass of their own, which the shading then reads with one fetch.
+
 *From the code:*
 - **No probes in the water reflection.** The reflection's draws keep the sky's flat ambient: `GiProbes.InReflection` is set around the
   reflection pass, and the frame block is re-read per native segment, so `uGiParams.x` is 0 there. The bench's `gi-reflection` switch

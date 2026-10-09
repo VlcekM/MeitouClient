@@ -181,19 +181,19 @@ public class GpuApiTests
     static readonly Dictionary<string, string> LegacyModules = new()
     {
         ["sky simple"] = "4C48F27F2EFC495E4B81B6421F095B12",
-        ["sky"] = "A1961E3A2EB10AA21CA6FAE09F6A418A",
+        ["sky"] = "6740512AAC9C50C2F76A82FE29A3DB59",
         ["water"] = "815EB74140844C2B7F8549B4A13D2230",
         ["water meitou"] = "13FC72EB383404C53772F93ACB9F2ECC",
         ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",
-        ["terrain patch"] = "9104E758D1117BE7BD047ADB19AED53C",
-        ["terrain mesh"] = "46C2AF6F2B3452ED193905494658B900",
+        ["terrain patch"] = "719F05F068460CE6EEDF492DEB3DDF62",
+        ["terrain mesh"] = "02A36D87ECD7FBE90E101342B50D499D",
         ["terrain patch depth"] = "824EFC3C10ECB608BF9A18D97831652B",
         ["terrain mesh depth"] = "FD249B5F918DBB257C412C7394FD4ABC",
-        ["foliage mesh"] = "FA7A289505AA2CE8D268D103C6D83CF3",
-        ["foliage grass"] = "BBF0A503C29DB1B17779B722AB9A292C",
+        ["foliage mesh"] = "D707385630F139D546D57B1D4A1FA62A",
+        ["foliage grass"] = "682B609F21FADE0A9AAD92F776B65BF8",
         ["foliage grass motion"] = "A836A4928C20E6352E07004C224C6A92",
         ["foliage depth"] = "099C2868B7FA91B71BE2ACE3ED5DD997",
-        ["buildings"] = "D4D6A546C579566FF4558F18729C854F",
+        ["buildings"] = "692774CA6562F845BC359B6395F9A3C0",
         ["buildings depth"] = "24B964B69B81036B6258A57BAA9486A8",
         ["shadow debug"] = "AFF23DFE04A66C7FF2E32E4B701EDB4E",
         ["shadow atlas"] = "7A8BC32D82FC65DBE0B7F1BEE4AFB43A",
@@ -208,7 +208,7 @@ public class GpuApiTests
         ["adapt"] = "E1201F9895006424E7FE9C1983191734",
         ["velocity"] = "DD61543F9F99ECD7D4C32252F6CB8473",
         ["taa"] = "0BF03F6B50AA2B4DC5B30C22868ECC00",
-        ["fog volumes"] = "3B9958713CCE931A162CA4533F6FE815",
+        ["fog volumes"] = "E317BE7846C257A80E9A93AE60981E03",
     };
 
     [Fact]
