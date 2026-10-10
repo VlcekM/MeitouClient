@@ -2932,7 +2932,7 @@ sections 4, 5, 6 and 8.*
   filter arrays. Now 20 MB (2.2-2.7 GB), gen2 GCs 7-8 to 1-2, GC pauses 35-146 to 4-9 ms; cold p99 / max (flight at 600 units a frame, four
   interleaved runs) base 18.6-29.4 / 20.6-35.3 ms against 15.9-20.4 / 19.7-37.0 ms now, p95 15.1-17.3 against 12.5-14.9 (impostors.md section 8
   has every run; the shared machine's noise is as large as the difference in max).
-- **Cache.** `ImpostorCache.Maintain`: 512 MB default cap (`--impostor-cache-mb`), LRU by last write time, older format / baker versions
+- **Cache.** `ImpostorCache.Maintain`: 4096 MB default cap (512 until 2026-10-10) (`--impostor-cache-mb`), LRU by last write time, older format / baker versions
   and junk and abandoned temporaries removed.
 - **Gate** (Release, RTX 4070, against `C:\Temp\base-87c7857`): `--faithful all` ten views max 0 (**Verified**); `--faithful impostors` ten
   views 0 px against the base viewer rendered with the same option (**Verified**); Meitou default views differ only where billboards are

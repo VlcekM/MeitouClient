@@ -157,8 +157,10 @@ moved. Bump `ImpostorAtlas.BakerVersion` when the baker's output changes.
 2. deletes temporary files (`*.mimp.<pid>.tmp`) an hour old (a crashed writer's);
 3. when the remaining `.mimp` files total more than the cap, deletes the least recently used until the total is under 90% of it.
 
-Other files in the folder are not touched. The cap is `MaxBytes`: default 512 MB (`MEITOU_IMPOSTOR_CACHE_MB`, `--impostor-cache-mb`, 0 = no cap);
-the 267 base-game atlases are 376 MB on disk (**Observed**), so the base game fits with room for mods and re-bakes. **Verified**
+Other files in the folder are not touched. The cap is `MaxBytes`: default 4096 MB since 2026-10-10, 512 MB before (`MEITOU_IMPOSTOR_CACHE_MB`,
+`--impostor-cache-mb`, 0 = no cap); the 267 base-game atlases were 376 MB on disk (**Observed**), but rocks are now baked per biome, and at 512 MB
+the cache stood full (546 MB, 139 files) and a fast flight over a route flown a dozen times that day still baked 401 atlases against 305 read
+from the cache (**Observed** 2026-10-10, docs/viewer.md "What makes travelling stutter"): the cap evicted what the next trip needed. **Verified**
 (`ImpostorTests`, a temporary folder, never the user's cache): eviction order and the 90% target, no cap, the stale rules above (older baker,
 older format, junk, short file, old temporary go; current, newer, fresh temporary and foreign files stay), and that loads and saves set the last use.
 **Unknown**: two viewers evicting at once (each deletion tolerates a failure; the worst case is a rebake).

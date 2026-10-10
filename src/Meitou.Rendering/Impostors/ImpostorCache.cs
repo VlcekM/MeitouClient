@@ -16,8 +16,9 @@ public readonly record struct ImpostorCacheMaintenance(int Files, long Bytes, in
 /// </summary>
 public sealed class ImpostorCache
 {
-    /// <summary>The default cap, 512 MB: all 267 base-game atlases are 376 MB on disk (docs/impostors.md section 3), so the base game fits with room for mods and re-bakes.</summary>
-    public const long DefaultMaxBytes = 512L << 20;
+    /// <summary>The default cap, 4096 MB: the 267 base-game atlases were 376 MB, but rocks are baked per biome and a long flight wanted more than 512 MB, so the old cap
+    /// evicted and re-baked atlases on every trip (docs/impostors.md section 3).</summary>
+    public const long DefaultMaxBytes = 4096L << 20;
     /// <summary>A temporary file older than this was left by a crashed process.</summary>
     static readonly TimeSpan AbandonedTemporary = TimeSpan.FromHours(1);
     /// <summary>Eviction goes down to this share of the cap, so it does not run again after every save.</summary>
