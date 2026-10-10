@@ -265,8 +265,10 @@ the console prints an ffmpeg line that makes an MP4 of the frames.
 
 **Full screen.** Alt+Enter, the "Full screen" button in the F2 editor and the Tab panel's "Full screen" switch toggle borderless full screen
 (`BorderlessFullScreen`, added 2026-10-10): the window loses its border and covers the monitor it is on, with no exclusive mode change, so
-switching away is instant; toggling again gives the bordered, maximized window back. "Reset to defaults" on the Tab panel puts it back to
-the window.
+switching away is instant; toggling again gives the bordered, maximized window back. The viewer starts in it since 2026-10-10 (`--windowed`
+starts with the bordered window instead); "Reset to defaults" on the Tab panel puts back the mode it started in. The size is the monitor's
+video mode, not GLFW's monitor bounds, which are the work area: a window of the work area's size (1920 x 1032 over a 48 px taskbar) left
+the taskbar on top (**Observed** 2026-10-10, window rectangle read with `GetWindowRect`).
 
 **Starting a flight.** `--play-shots` starts the viewer flying its saved keys on a loop (added 2026-10-10). Screenshot mode prints the
 camera's code (`camera    <hex> (...)`) so a still made with `--at`, `--yaw`, `--pitch` and `--distance` can be turned into a key.

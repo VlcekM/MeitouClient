@@ -259,6 +259,7 @@ static partial class WorldApp
         using var display = new VulkanDisplay(WindowFor(o), vsync: o.VSync, streamline: o.Post.Upscale.Kind == UpscalerKind.Dlss);
         streamline = display.Streamline;
         var window = display.Window!;
+        if (!o.Windowed) BorderlessFullScreen.Toggle(window);
         Gpu? gpu = null;
         WorldCamera camera = null!;
         WorldRenderOptions render = null!;

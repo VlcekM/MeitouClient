@@ -176,6 +176,8 @@ sealed class WorldOptions
     public float OrbitStep;
     /// <summary>Interactive window: the monitor it opens on (1-based; <c>--monitor</c>).</summary>
     public int? Monitor;
+    /// <summary>Interactive window: a bordered, maximized window instead of borderless full screen (<c>--windowed</c>).</summary>
+    public bool Windowed;
     /// <summary>Offscreen pictures: seconds the grass sway advances every frame (tests the grass motion under a temporal upscaler; 0 holds it still).</summary>
     public float SwayStep;
     /// <summary>Offscreen pictures: the grass sway's starting time in seconds (0 by default).</summary>
@@ -220,6 +222,7 @@ sealed class WorldOptions
           --yaw <deg> --pitch <deg> --distance <units>   camera around the point (defaults 30, 35, radius)
           --screenshot <out.png> --size <W>x<H>          render offscreen to a PNG and exit
           --monitor <n>                                  open the window on monitor n (1-based)
+          --windowed                                     a bordered, maximized window (default: borderless full screen; Alt+Enter toggles)
           --no-textures            height-tinted terrain without biome textures (faster start)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
@@ -485,6 +488,7 @@ sealed class WorldOptions
                 case "--log-spikes": SpikeLog.Enabled = true; break;
                 case "--orbit-step": o.OrbitStep = F() * MathF.PI / 180; break;
                 case "--monitor": o.Monitor = int.Parse(Next(), CultureInfo.InvariantCulture); break;
+                case "--windowed": o.Windowed = true; break;
                 case "--sway-step": o.SwayStep = F(); break;
                 case "--sway-start": o.SwayStart = F(); break;
                 case "--crowd": o.Crowd = int.Parse(Next(), CultureInfo.InvariantCulture); break;
@@ -1087,6 +1091,13 @@ static class WorldFrame
             sliders.Add(new Slider("Water reflection 0-4 (game)", 0, 4, () => reflection.Level, v => reflection.Level = (int)MathF.Round(v), "0",
                 Text: v => (int)MathF.Round(v) switch { 0 => "0 off", 1 => "1 landscape", 2 => "2 characters", 3 => "3 buildings", _ => "4 everything" }));   // the label is the user config key: keep it
             sliders.Add(new Slider("Reflection range x (game 0.6)", 0.1f, 50, () => reflection.Range, v => reflection.Range = v, "0.00", Logarithmic: true));
+        }
+        // How far the Meitou water lets the floor show through (docs/render-water.md "Clarity"); the Faithful water keeps the game's alpha.
+        if (g.Water is { } water)
+        {
+            sliders.Add(new Slider("Water clarity x (Meitou)", 0.25f, 8, () => water.Clarity, v => water.Clarity = v, "0.00", Logarithmic: true));
+            sliders.Add(new Slider("Far water clarity (Meitou)", 0, 1, () => water.FarClarity, v => water.FarClarity = v, "0.00",
+                Text: v => v <= 0 ? "0 (true slant)" : v.ToString("0.00", CultureInfo.InvariantCulture)));
         }
         sliders.Add(new Slider("Terrain detail: error px (less = finer)", 1, 32, () => r.TerrainPixelError, v => (r.TerrainPixelError, r.TerrainFarPixelError) = (v, v * r.TerrainFarPixelError / r.TerrainPixelError), "0.0", Logarithmic: true));
         // The game's `Shadow Range` slider goes 1000 to 9000; the viewer allows more (the cascades stretch over it), and its left end (0) turns the
