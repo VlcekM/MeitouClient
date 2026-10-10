@@ -17,12 +17,13 @@ $stage = Join-Path $Output $name
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage, $Cache | Out-Null
 
-# The game (meitou.exe) and the world viewer (meitou-viewer.exe), each self-contained and single-file (no .NET install needed;
-# only the native glfw3 and shaderc libraries beside them, shared). A numeric version goes into the assembly version too.
+# The game (meitou.exe) and the world viewer (meitou-viewer.exe), self-contained (no .NET install needed) and not single-file: the
+# runtime and our Meitou.*.dll lie beside the exes, shared by both (same build, same runtime), so code mods can reference and load
+# them. A numeric version goes into the assembly version too.
 $numeric = if ($Version -match '^\d+(\.\d+){1,3}') { $Matches[0] } else { "0.0.0" }
 foreach ($project in @("src\Meitou.Game\Meitou.Game.csproj", "tools\Meitou.ModelViewer\Meitou.ModelViewer.csproj")) {
     dotnet publish (Join-Path $root $project) -c Release -r win-x64 --self-contained true `
-        -p:PublishSingleFile=true -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -o $stage
+        -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -o $stage
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish $project failed" }
 }
 # The viewer loads Streamline only when started with DLSS chosen (the game keeps the choice in meitou.user.json instead).
