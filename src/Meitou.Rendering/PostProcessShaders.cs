@@ -409,7 +409,9 @@ static class PostProcessShaders
             float mean = textureLod(uLuminance, vec2(0.5), uLevel).r;
             float last = texture(uLast, vec2(0.5)).r;
             float adapted = mix(last, mean, uBlend);
-            fragColour = vec4(clamp(adapted, uBand.x, max(uBand.x, uBand.y)), mean, 0.0, 1.0);
+            // G: the same smoothing of the mean without the band (Meitou's night grading reads it; equal to the mean when the blend is 1)
+            float smoothMean = mix(texture(uLast, vec2(0.5)).g, mean, uBlend);
+            fragColour = vec4(clamp(adapted, uBand.x, max(uBand.x, uBand.y)), smoothMean, 0.0, 1.0);
         }
         """;
 
@@ -423,6 +425,7 @@ static class PostProcessShaders
         uniform int uUseAo, uDither, uDebug, uAuto, uTone, uGrade;
         uniform float uToneMix;    // hybrid (uTone 3): 0 the clamp, 1 ACES
         uniform float uSaturation, uContrast;
+        uniform float uNight;      // Meitou night grading strength (the `nightgrade` switch): 0 off; needs the auto exposure's mean (uAuto)
         uniform vec2 uSceneSize;   // the scene's size when it is smaller than the picture (render scale without an upscaler), else 0: sampled with Catmull-Rom then
         const float EXPOSURE_KEY = 0.55;   // hdr.material's EXPOSURE_KEY
 
@@ -452,14 +455,32 @@ static class PostProcessShaders
         }
         vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 
+        // Ours, not the game's (docs/render-post.md "Night grading"; the C# mirror is Meitou.Data.World.NightGrade, a test pins the constants): the scene
+        // blended towards its rod luminance times a blue tint, by the adaptation (the mean luminance, log smoothstep 0.06..0.3) and less for pixels far
+        // brighter than the mean (log smoothstep of the ratio 1.25..3.2: lamps and the moon keep their colour).
+        const vec3 ROD = vec3(0.033, 0.765, 0.202), LUM601 = vec3(0.299, 0.587, 0.114);
+        const vec3 NIGHT_TINT = vec3(0.6, 0.75, 1.0) / dot(vec3(0.6, 0.75, 1.0), LUM601);
+        const float PURKINJE = 0.5;
+        vec3 nightGrade(vec3 c, float sceneLum, float mean)
+        {
+            float adaptation = 1.0 - smoothstep(log(0.06), log(0.3), log(max(mean, 1e-6)));
+            float pixel = 1.0 - smoothstep(log(1.25), log(3.2), log(max(sceneLum, 1e-6) / max(mean, 1e-6)));
+            float w = uNight * adaptation * pixel;
+            float grey = mix(dot(c, LUM601), dot(c, ROD), PURKINJE);
+            return mix(c, grey * NIGHT_TINT, w);
+        }
+
         void main()
         {
             float exposure = uExposure;
-            if (uAuto != 0) exposure *= max(EXPOSURE_KEY / texture(uAdapted, vec2(0.5)).r, 0.001);   // Kenshi's exposure: key over the adapted luminance
-            vec3 c = max(sceneAt(vUv), 0.0) * exposure;
+            vec2 adapted = uAuto != 0 ? texture(uAdapted, vec2(0.5)).rg : vec2(1.0);   // the clamped adapted luminance, the smoothed mean
+            if (uAuto != 0) exposure *= max(EXPOSURE_KEY / adapted.r, 0.001);   // Kenshi's exposure: key over the adapted luminance
+            vec3 raw = max(sceneAt(vUv), 0.0);
+            vec3 c = raw * exposure;
             float ao = texture(uAo, vUv).r;
             if (uCharacterAo < 1.0) ao = mix(ao, 1.0, texture(uMask, vUv).a * (1.0 - uCharacterAo));
             if (uUseAo != 0) c *= ao;
+            if (uNight > 0.0 && uAuto != 0) c = nightGrade(c, dot(raw, LUM601), adapted.g);
             if (uTone == 1) c = shoulder(c);
             else if (uTone == 2) c = aces(c);
             // hybrid: between the game's clip and ACES, fed 0.7 of the exposure so its mid-tones stay the clip's (0.18 -> 0.17, 0.5 -> 0.49) and only the highlights roll off

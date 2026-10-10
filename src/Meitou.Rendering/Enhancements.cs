@@ -89,6 +89,9 @@ public static class Enhancements
         new("heathaze", "Heat haze", "strength 1", $"strength {MeitouHeatHazeStrength}",
             () => MathF.Abs(post.HeatHazeStrength - 1) > 1e-3f, v => post.HeatHazeStrength = v ? MeitouHeatHazeStrength : 1,
             "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; Meitou halves it (the Tab slider sets any strength)"),
+        new("nightgrade", "Night grading", "none", "scotopic blue",
+            () => post.NightGradeStrength > 0, v => post.NightGradeStrength = v ? Meitou.Data.World.NightGrade.MeitouStrength : 0,
+            "the game has no grading, so night is the day's saturated browns and oranges, darkened; Meitou shifts dim colour towards the rods' blue-grey as the scene's adapted luminance falls (the Purkinje shift), keeping lamps, fires and the moon in colour (the Tab slider sets the strength)"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

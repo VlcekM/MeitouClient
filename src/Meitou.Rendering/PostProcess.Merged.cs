@@ -268,7 +268,8 @@ static class MergedShaders
                 st.counter = 0u;
                 float last = imageLoad(uLast, ivec2(0)).r;
                 float adapted = mix(last, total, pc.blend);
-                imageStore(uAdapted, ivec2(0), vec4(clamp(adapted, pc.bandMin, max(pc.bandMin, pc.bandMax)), total, 0.0, 1.0));
+                float smoothMean = mix(imageLoad(uLast, ivec2(0)).g, total, pc.blend);   // the mean smoothed without the band (the night grading reads it)
+                imageStore(uAdapted, ivec2(0), vec4(clamp(adapted, pc.bandMin, max(pc.bandMin, pc.bandMax)), smoothMean, 0.0, 1.0));
             }
         }
         """;

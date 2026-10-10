@@ -126,13 +126,14 @@ public sealed unsafe partial class PostProcess : IDisposable
     sealed class CompositePass : FullscreenProgram
     {
         public readonly SamplerSlot Scene, Ao, Adapted, Mask;
-        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug, CharacterAo, SceneSize, Tone, ToneMix, Grade, Saturation, Contrast;
+        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug, CharacterAo, SceneSize, Tone, ToneMix, Grade, Saturation, Contrast, Night;
         public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
         {
             (Scene, Ao, Adapted, Mask) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"), P.Sampler("uMask"));
             (CharacterAo, SceneSize) = (P.Uniform("uCharacterAo"), P.Uniform("uSceneSize"));
             (Auto, Exposure, UseAo, Dither, Debug) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"), P.Uniform("uDebug"));
             (Tone, ToneMix, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uToneMix"), P.Uniform("uGrade"), P.Uniform("uSaturation"), P.Uniform("uContrast"));
+            Night = P.Uniform("uNight");
         }
     }
 
@@ -685,6 +686,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         c.P.Set(c.Grade, o.Grade ? 1 : 0);
         c.P.Set(c.Saturation, o.Saturation);
         c.P.Set(c.Contrast, o.Contrast);
+        c.P.Set(c.Night, auto ? Math.Clamp(o.NightGradeStrength, 0, 1) : 0f);
         if (fxaa || haze) Draw(c.P, ldr!); else DrawFinal(c.P, final);
         Stamp("composite");
         var picture = ldr;
@@ -1207,7 +1209,7 @@ public sealed unsafe partial class PostProcess : IDisposable
     /// <summary>Skip the smoothing: the exposure settles at once (screenshots, benchmarks).</summary>
     public bool InstantAdaptation { get; set; }
 
-    /// <summary>The last frame's adapted luminance and measured mean (the composite's scale is 0.55 / adapted); waits for the GPU and reads it
+    /// <summary>The last frame's adapted luminance and measured mean (the composite's scale is 0.55 / adapted; the mean is smoothed at the same rate, without the band, and is the raw mean when adaptation is instant); waits for the GPU and reads it
     /// back (<see cref="GpuContext.ReadBack"/>), so for reports only, outside a frame.</summary>
     public (float Adapted, float Mean) ReadExposure()
     {

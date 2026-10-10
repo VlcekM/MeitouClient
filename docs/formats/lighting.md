@@ -117,6 +117,8 @@ The exe sets both: `MAX_LUMINANCE` = CONSTANTS `exposure max` (1.2 in GLOBAL CON
 ×1.96, which is what keeps the night readable. So **`night darkness` is the night's exposure floor** (resolves an Unknown in
 [sky.md](sky.md)).
 
+**Observed** (the viewer's mean luminance in the game's units at `--at -51468,-14324 --distance 3000 --pitch 8 --yaw 95 --weather Default`): 0.66 at 13:00, 0.33 at 22:30, 0.16 at 23:00, 0.042 from 0:00 to 3:00, 0.21 at 5:30, 0.32 at 6:00, 0.45 at 7:00. The mean falls well under the band's floor at night (0.28), so the auto exposure's clamped value hides it; the viewer's `nightgrade` switch reads the unclamped mean ([render-post.md](../render-post.md) "Night grading"). The land has no moon light: the night's light is the irradiance cube times 0.2, lifted by the floor.
+
 ## What the viewer does
 
 See [render-sky.md](../render-sky.md): the world view lights in these units (sun, irradiance cube, ambient map, the same

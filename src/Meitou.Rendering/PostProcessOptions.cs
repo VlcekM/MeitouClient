@@ -49,6 +49,9 @@ public sealed class PostOptions
     /// <summary>Our saturation / contrast grade after the tone map, on in Meitou (the <c>tonemap</c> switch; the game has no grading); 1 / 1 change nothing.</summary>
     public bool Grade = true;
     public float Saturation = 1.06f, Contrast = 1.05f;
+    /// <summary>Meitou night grading (the <c>nightgrade</c> switch; docs/render-post.md "Night grading"): how far the picture moves towards the rods' blue-grey at night, 0 (Faithful, the game's: no grading) to 1;
+    /// the adaptation (the auto exposure's mean luminance) decides how much of it applies, so by day it does nothing. Default <see cref="Meitou.Data.World.NightGrade.MeitouStrength"/>.</summary>
+    public float NightGradeStrength = Meitou.Data.World.NightGrade.MeitouStrength;
     /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness.</summary>
     public float Exposure = 1;
     /// <summary>World units: how far from a point occluders count.</summary>
@@ -66,9 +69,9 @@ public sealed class PostOptions
         switch (preset)
         {
             case "meitou": break;
-            case "off": o.Fxaa = o.HeatHaze = false; o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = false; o.HeatHazeStrength = 1; o.ToneMap = ToneMapOperator.Clamp; o.Grade = false; break;
+            case "off": o.Fxaa = o.HeatHaze = false; o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = false; o.HeatHazeStrength = 1; o.ToneMap = ToneMapOperator.Clamp; o.Grade = false; o.NightGradeStrength = 0; break;
             case "kenshi":
-                o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = false; o.HeatHazeStrength = 1; o.ToneMap = ToneMapOperator.Clamp; o.Grade = false;
+                o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = false; o.HeatHazeStrength = 1; o.ToneMap = ToneMapOperator.Clamp; o.Grade = false; o.NightGradeStrength = 0;
                 // Kenshi's chain with the shipped settings: exposure only (no curve, bloom magnitude 0, SSAO commented
                 // out), and FXAA then the heat haze on the final image.
                 break;
@@ -82,7 +85,7 @@ public sealed class PostOptions
         Preset = other.Preset; Fxaa = other.Fxaa; HeatHaze = other.HeatHaze; Debug = other.Debug; Ssao = other.Ssao;
         Dither = other.Dither; LowResParticles = other.LowResParticles; LightShafts = other.LightShafts; ShaftStrength = other.ShaftStrength; ShaftSky = other.ShaftSky; ShaftAir = other.ShaftAir; ShaftAirDawn = other.ShaftAirDawn; ShaftAirDay = other.ShaftAirDay; ShaftAirRamp = other.ShaftAirRamp; ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
         SsaoStrength = other.SsaoStrength; SsaoCharacterStrength = other.SsaoCharacterStrength; ToneMap = other.ToneMap; ToneMix = other.ToneMix; Grade = other.Grade;
-        Saturation = other.Saturation; Contrast = other.Contrast; HeatHazeStrength = other.HeatHazeStrength;
+        Saturation = other.Saturation; Contrast = other.Contrast; HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength;
     }
 
     public const string Usage = """
@@ -101,6 +104,7 @@ public sealed class PostOptions
           --render-scale <0.25..1|native|quality|balanced|performance|ultra>   render size per axis with an upscaler (default 1)  --sharpness <0..1>
           --tonemap <clamp|shoulder|aces|hybrid>   (default hybrid in Meitou, the `tonemap` switch) clamp: the game's (no curve); shoulder: identity to 0.8, then rolls off to 1; aces: Narkowicz's ACES fit; hybrid: clamp and ACES mixed by --tonemap-mix <0..1> (0.75)
           --grade / --no-grade   saturation / contrast grade (default on in Meitou, the `tonemap` switch; the game has none)  --saturation <x> (1.06)  --contrast <x> (1.05)
+          --night-grade <0..1> / --no-night-grade   scotopic night grading: at night the picture shifts to a blue-grey, lamps and the moon keep their colour (default 0.7 in Meitou, the `nightgrade` switch; 0 is the game's, no grading)
           --exposure <x>   --ssao-radius <units>   --ssao-strength <x>
           --ssao-character-strength <0..1>   occlusion kept on characters' own pixels (default 0.25; 1 = as the rest)
         """;
@@ -152,6 +156,8 @@ public sealed class PostOptions
             case "--no-grade": Grade = false; return true;
             case "--saturation": Saturation = Math.Max(F(), 0); return true;
             case "--contrast": Contrast = Math.Max(F(), 0); return true;
+            case "--night-grade": NightGradeStrength = Math.Clamp(F(), 0, 1); return true;
+            case "--no-night-grade": NightGradeStrength = 0; return true;
             case "--heat-haze-view-distance": HeatHazeViewDistance = Math.Max(F(), 1); return true;
             case "--post-debug": Debug = next() switch { "ao" => 1, _ => 0 }; return true;
             case "--upscaler":
@@ -172,7 +178,7 @@ public sealed class PostOptions
     public string Describe() =>
         $"{Preset}: fxaa {(Fxaa && !Upscale.Temporal ? "on" : "off")}, heat haze {(HeatHaze ? (HeatHazeOverride is { } h ? $"x{h:0.##}" : "weather") + (HeatHazeStrength != 1 ? $" strength {HeatHazeStrength:0.##}" : "") : "off")}, " +
         $"ssao {(Ssao ? "on" : "off")}, shafts {(LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off")}, exposure x{Exposure:0.##}, tonemap {ToneMap.ToString().ToLowerInvariant()}{(ToneMap == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "")}, " +
-        $"grade {(Grade ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off")}, " +
+        $"grade {(Grade ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off")}, night grade {(NightGradeStrength > 0 ? NightGradeStrength.ToString("0.##", CultureInfo.InvariantCulture) : "off")}, " +
         $"upscaler {Upscale.Describe()}";
 }
 
