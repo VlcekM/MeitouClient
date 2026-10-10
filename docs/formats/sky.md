@@ -482,11 +482,34 @@ with tests in `MeitouNightSkyTests`). Nothing here is read from the game except 
   at luminance 1 (a table of 32 that a hash indexes). **Verified**: about 4800 stars brighter than magnitude 6 after the faint layers' enrichment (thousands,
   not tens of thousands), 30 to 250 brighter than magnitude 1.
 - **Milky Way** (`MilkyWay`). A band round a great circle inclined 62° to the celestial equator (so at latitude 54° it comes within 8° of the zenith), a
-  flattened bulge at declination +15°, and nothing taken from Earth's sky. A 3D noise of the direction (no cube seams): a haze of unresolved stars with
-  structure at several scales, mostly small ones down to the cube map's texel (the broad swells are weak, so it reads as grain, not clouds), thin dark rifts that
-  run along the plane (noise stretched across the band, warped; ridged), a thin rift through the bulge, a few tiny dark clouds; bluish white, warm cream towards the bulge,
-  the dust taking the blue first. Baked once on the CPU at the first use (about 1 s on all cores for 512² × 6, RGBA16F, box-filtered mip levels, 17 MB)
-  into a cube map in celestial coordinates, so it turns with the stars. Brightness is a faint glow, well under the starfield texture's nebula
+  flattened bulge at declination +15°, and nothing taken from Earth's sky. It is made in two parts (2026-10-10; the first version baked everything into the
+  cube map, whose texel is 3 to 6 pixels on the screen, so the "grain of unresolved stars" read as blurry blotches at 1080p):
+  - **Baked, coarse** (`MilkyWay.SmoothLight`): a 3D noise of the direction (no cube seams): the band and bulge, mottling down to about 7 texels (the broad
+    swells are weak, so it is not cloud), and the dust's optical depth tau, thin dark rifts that run along the plane (noise stretched across the band, warped;
+    ridged), a thin rift through the bulge, a few tiny dark clouds. Baked once on the CPU at the first use (about 0.9 s on all cores for 512² × 6, RGBA16F,
+    box-filtered mip levels, **16.8 MB of video memory**) into a cube map in celestial coordinates, so it turns with the stars: **rgb is the glow before the dust,
+    alpha is tau** (not the product, so the shader can sharpen the dust per pixel).
+  - **Per pixel, fine** (`milkyWayGrain`, `MilkyWay.PixelTau`): half of the glow (`GrainShare` 0.5) is replaced by a dense layer of faint stars, N cells a cube
+    face edge, each present with chance 0.85, a Gaussian of 0.85 px (sigma, the point stars' pixel machinery: the derivatives of the direction, the nearest cells
+    searched) in the band's own colour (the sampled glow), brightness spread ±60% round the mean, with the energy `glow · share / chance · (pixels a cell)²`, so
+    the mean over a cell is the baked glow's share. N is picked from the view (`MilkyWay.GrainCellsFor`: the power of two that makes a cell about 2 pixels at
+    the face's centre; the viewer's vertical field of about 53° gives 512 at 640 × 360, 1024 at 720p and 1080p (1.5 and 2.1 px), 2048 at 1440p and 4K (1.5 and 2.3 px); the water reflection's half-size target (960 × 540) picks 512, 2 px, and each pass gets its own count: `MEITOU_GRAIN_LOG=1` prints them), so the grain is as fine as the screen at any resolution and
+    changes only when a zoom crosses a power of two. It stays put on the sky (hashed cell ids) and is gated on the baked glow being above 0.0008, so most of the sky skips it.
+    The dust is made crisp the same way: tau is divided by `DustScale`, a per-pixel noise (the cell's hash, ±`DustRagged`/2) is added and the sum steepened between
+    0.3 and 0.7 (thin haze keeps 35% of its depth, a lane's core is 2.4 times as deep), so the lanes' edges are ragged at pixel scale and their cores dark instead
+    of the bake's soft ramp. **Observed** (1080p, 720p, 1440p and 4K screenshots, 1:1 crops): the grain is crisp at 1080p and 720p; at 4K it is finer and lower in
+    contrast and the broad mottling (the 512² bake magnified six times) is soft, the lanes' edges a little less so. **Verified** (`MeitouNightSkyTests`): the
+    grain's energy lies inside its reach, the cell count is as described, `PixelTau` is monotone, thins haze and deepens lanes, is steep at the rim and does not
+    flicker in the core.
+  - **Colour** (reworked after "brown, olive" in the first version, which had the dust take the blue first, `exp(−0.9τ, −τ, −1.2τ)` = 0.41 : 0.37 : 0.30 at τ = 1,
+    and warm cream spread wide): the dust is neutral (`MilkyWay.Transmit`, a hair less blue, 4% a unit of tau), so a lane is dark, not brown (transmission 0.06
+    at the core's depth); the glow is cool white (0.90, 0.95, 1.0) with a faint cream (1.0, 0.97, 0.91, weight 0.6 · Gauss of the bulge's core) only in the bulge's core; and
+    the air reddens the glow only 35% as much as the stars (`MilkyWay.BandTransmission`: the green channel's dimming for all three, plus a third of the
+    colour shift; the stars keep it all), because a low band turned golden-brown. **Observed**, mean pixel colours of 160 × 100 to 250 × 120 pixel patches at 1080p:
+    with the night grading off (`--faithful nightgrade`) R/G 0.93 to 0.95, B/G 1.02 to 1.06 (a hair cool); with it on (the default, the grade cools dim
+    colour) R/G 0.82 to 0.92, B/G 1.1 to 1.27 (bluer; at the horizon R/G 0.88, B/G 1.19). **Verified**: blue is never under red away from the bulge, red over blue at the
+    warmest place is at most 1.15, green never over red there (no olive).
+  Brightness is a faint glow, well under the starfield texture's nebula
   (`MilkyWay.Scale`, `SkyRenderer.MilkyWayGain`; peak lumps about 0.1 in the texture's units, the nebula runs 0.1 to 0.3 over most of its area), the sky between the band and the stars stays black.
 - **Horizon** (`NightAtmosphere`). Extinction by the air mass (Kasten and Young) with e^−k per air mass of (0.08, 0.13, 0.22) for red, green, blue: low stars
   dim and redden; a ramp takes everything to 0 between 3.5° and 0.5° altitude. Stars twinkle only where the air mass is above 1.8 (below about 33°): two slow
@@ -498,8 +521,8 @@ with tests in `MeitouNightSkyTests`). Nothing here is read from the game except 
   first, brighter version read as overcast cloud). Both stay under the exposure band's floor (0.28, the night's adapted exposure ×1.964 in either), so
   switching does not move the exposure. Sampled outside the Meitou branch the sky pass is unchanged (Faithful's picture is byte-identical to
   the one before the switch existed). While the sun is above 0.3 the stars are skipped altogether (SkyX's night factor is 0 then).
-- **Cost** (sky pass, 1920 × 1080, RTX 4070): Faithful 0.12 ms, Meitou 0.31 ms (the Milky Way 0.04, the layers 0.05 / 0.07 / 0.09 each), 0.24 ms with the
-  faint layer left out; 0.11 ms by day (skipped). Per pixel the work is bounded: three layers, each looking at one to four cells (a layer's cells that
+- **Cost** (sky pass, 1920 × 1080, RTX 4070, minimum of five runs, 2026-10-10): Faithful 0.12 ms, Meitou 0.34 ms (0.31 before the per-pixel grain and crisp dust: the
+  grain and the dust edges cost 0.03), 0.26 ms with the faint layer left out (grain still on); 4K 1.11 ms (the same per pixel); 0.11 ms by day (skipped). Per pixel the work is bounded: three layers, each looking at one to four cells (a layer's cells that
   can reach the pixel at all), an early test against the largest chance before the exact one, the three-word hash only for cells that hold a star. An
   integrated GPU draws the first two layers (`StarField.IntegratedLayers`; `MEITOU_FORCE_INTEGRATED=1` shows it elsewhere, `MEITOU_STAR_LAYERS=0..3` sets the layers).
 - **Water**: the reflection pass draws the sky with the same program and the reflected view, so the reflected sky has the same stars (the derivatives give the

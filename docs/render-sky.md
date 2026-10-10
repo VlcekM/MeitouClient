@@ -29,4 +29,4 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
   Cost: not re-measured after the 2026-10-05 rewrite (the sky's integral now runs per pixel, about 4 × 5 exponentials, instead of
   a table lookup; the haze runs the same 4-sample integral per pixel). Earlier figures (2026-10-04, table version): the sky pass
   0.06 to 0.09 ms GPU at 1280 × 720 (`MEITOU_SKY_BENCH=1` with `--screenshot` times 100 passes).
-  With the Meitou `stars` switch at night (2026-10-10, 1920 × 1080, RTX 4070, minimum of five runs): the sky pass 0.31 ms against 0.12 ms for the game's starfield texture (0.24 ms without the faint star layer, which an integrated GPU skips); by day the stars are skipped (0.11 ms).
+  With the Meitou `stars` switch at night (2026-10-10, 1920 × 1080, RTX 4070, minimum of five runs): the sky pass 0.34 ms against 0.12 ms for the game's starfield texture (0.26 ms without the faint star layer, which an integrated GPU skips; the Milky Way's grain is drawn per pixel, see formats/sky.md); by day the stars are skipped (0.11 ms).

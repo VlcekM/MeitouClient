@@ -298,6 +298,100 @@ public class MeitouNightSkyTests
     }
 
     [Fact]
+    public void Dust_darkens_without_browning_and_the_glow_is_neutral_to_cool()
+    {
+        // Neutral extinction: the three channels differ by under 12% even through a dense lane (the old one made 0.41 : 0.37 : 0.30 at a depth of 1, brown).
+        foreach (float tau in new[] { 0.3f, 1f, 2.5f })
+        {
+            var t = MilkyWay.Transmit(tau);
+            Assert.InRange(t.X / t.Z, 0.99f, 1.12f);
+            Assert.Equal(t.X, t.Y, 5);
+        }
+        // The glow's own colour: blue never under red away from the bulge, and cream (red over blue by under 15%) at its warmest.
+        var cool = MilkyWay.SmoothLight(Vector3.Normalize(MilkyWay.Centre * -1 + MilkyWay.Pole * 0.05f)).Light;
+        Assert.True(cool.Z >= cool.X);
+        var warmest = Vector3.Zero;
+        for (int i = 0; i < 400; i++)
+        {
+            float l = (-6 + i * 0.03f) * MathF.PI / 180, b = ((i * 37 % 100) / 100f - 0.5f) * 4 * MathF.PI / 180;
+            var d = MilkyWay.Centre * (MathF.Cos(b) * MathF.Cos(l)) + MilkyWay.East * (MathF.Cos(b) * MathF.Sin(l)) + MilkyWay.Pole * MathF.Sin(b);
+            var v = MilkyWay.SmoothLight(Vector3.Normalize(d)).Light;
+            if (v.X / v.Z > warmest.X / MathF.Max(warmest.Z, 1e-9f)) warmest = v;
+        }
+        Assert.InRange(warmest.X / warmest.Z, 0.95f, 1.15f);
+        Assert.True(warmest.Y <= warmest.X * 1.01f);   // never green-yellow (olive)
+    }
+
+    [Fact]
+    public void The_air_reddens_the_glow_less_than_the_stars_but_dims_it_the_same()
+    {
+        foreach (float altitude in new[] { 5f, 10f, 20f, 40f })
+        {
+            var stars = NightAtmosphere.Transmission(altitude);
+            var band = MilkyWay.BandTransmission(stars);
+            Assert.Equal(stars.Y, band.Y, 5);                                       // the green channel is the same
+            Assert.True(band.X / band.Z <= stars.X / stars.Z + 1e-6f);               // less red over blue than the stars'
+            Assert.True(band.X / band.Z < 1 + 0.4f * (stars.X / stars.Z - 1) + 0.2f); // and only a share of the shift
+        }
+    }
+
+    [Fact]
+    public void Pixel_dust_is_crisp_dense_in_a_lane_and_thin_in_haze()
+    {
+        // Monotone in the baked depth for a fixed noise; haze (a thin baked depth) is thinned, a lane's core deepened; the noise only matters at the rim.
+        foreach (float h in new[] { 0f, 0.5f, 1f })
+        {
+            float prev = -1;
+            for (float tau = 0; tau <= 3; tau += 0.05f)
+            {
+                float p = MilkyWay.PixelTau(tau, h);
+                Assert.True(p >= prev - 1e-6f, $"tau {tau} h {h}");
+                prev = p;
+            }
+        }
+        Assert.True(MilkyWay.PixelTau(0.1f, 0.5f) < 0.1f * 0.5f);
+        Assert.True(MilkyWay.PixelTau(1.5f, 0.5f) > 1.5f * 2f);
+        Assert.True(MilkyWay.Transmit(MilkyWay.PixelTau(1.2f, 0.5f)).Y < 0.1f);          // a lane is dark
+        Assert.Equal(MilkyWay.PixelTau(2f, 0.1f), MilkyWay.PixelTau(2f, 0.9f), 3);        // the core does not flicker with the noise
+        Assert.NotEqual(MilkyWay.PixelTau(0.5f, 0.1f), MilkyWay.PixelTau(0.5f, 0.9f), 2);  // the rim does
+        // The edge is steep: the factor goes from the haze's to the core's between baked depths 0.3 and 0.9 (the bake alone ramps over the whole lane).
+        Assert.True(MilkyWay.PixelTau(0.3f, 0.5f) / 0.3f < 1.5f * MilkyWay.DustHaze);
+        Assert.True(MilkyWay.PixelTau(0.9f, 0.5f) / 0.9f > 0.95f * MilkyWay.DustCore);
+    }
+
+    [Fact]
+    public void The_grain_keeps_the_stars_energy_inside_its_reach()
+    {
+        // A grain star is a Gaussian of GrainSigma pixels cut at the core reach: nearly all of its energy lands inside, so the share of the band's light is kept.
+        float inside = 1 - MathF.Exp(-SkyRenderer.StarCoreReach * SkyRenderer.StarCoreReach / (2 * MilkyWay.GrainSigma * MilkyWay.GrainSigma));
+        Assert.True(inside > 0.95f);
+        Assert.InRange(MilkyWay.GrainShare, 0.3f, 0.8f);
+        Assert.InRange(MilkyWay.GrainChance, 0.3f, 1f);
+        Assert.InRange(MilkyWay.GrainSpread, 0f, 1f);   // the brightness spread keeps every star positive
+    }
+
+    [Fact]
+    public void The_grain_is_as_fine_as_the_screen_at_any_resolution()
+    {
+        // Pixels per radian of a 60 degree vertical view: height / 2 / tan(30 degrees).
+        float Ppr(float height) => height / 2 / MathF.Tan(30 * MathF.PI / 180);
+        Assert.Equal(1024, MilkyWay.GrainCells);
+        Assert.Equal(MilkyWay.GrainCells, MilkyWay.GrainCellsFor(Ppr(1080)));
+        Assert.Equal(512, MilkyWay.GrainCellsFor(Ppr(720)));
+        Assert.Equal(1024, MilkyWay.GrainCellsFor(Ppr(1440)));
+        Assert.Equal(2048, MilkyWay.GrainCellsFor(Ppr(2160)));
+        // Whatever the view, a cell is between 1.4 and 2.9 pixels at the face's centre, and the count is a power of two in its range.
+        for (float ppr = 200; ppr < 6000; ppr += 37)
+        {
+            int cells = MilkyWay.GrainCellsFor(ppr);
+            Assert.Equal(0, cells & (cells - 1));
+            Assert.InRange(cells, MilkyWay.GrainCellsMin, MilkyWay.GrainCellsMax);
+            float pixels = 2f / cells * ppr;
+            if (cells > MilkyWay.GrainCellsMin && cells < MilkyWay.GrainCellsMax) Assert.InRange(pixels, 1.4f, 2.9f);
+        }
+    }
+
+    [Fact]
     public void Radiance_is_finite_and_not_negative_everywhere_and_has_dust_lanes()
     {
         var rng = new Random(5);
@@ -392,10 +486,12 @@ public class MeitouNightSkyTests
                 Assert.True(face.All(h => float.IsFinite((float)h)));
             }
         }
-        // Alpha 1, and the mean of a level stays the base level's mean (box filtering).
-        Assert.Equal(1f, (float)levels[0][0][3]);
-        double Mean(Half[][] faces) => faces.SelectMany(f => f.Where((_, i) => i % 4 == 1)).Average(h => (double)(float)h);
-        Assert.Equal(Mean(levels[0]), Mean(levels[2]), 3);
+        // Alpha is the dust's optical depth (not negative, not absurd), and the mean of a level stays the base level's mean (box filtering), for the light and the depth.
+        Assert.True(levels[0].All(face => face.Where((_, i) => i % 4 == 3).All(h => (float)h >= 0 && (float)h < 4)));
+        double Mean(Half[][] faces, int channel) => faces.SelectMany(f => f.Where((_, i) => i % 4 == channel)).Average(h => (double)(float)h);
+        Assert.Equal(Mean(levels[0], 1), Mean(levels[2], 1), 3);
+        Assert.Equal(Mean(levels[0], 3), Mean(levels[2], 3), 2);
+        Assert.True(Mean(levels[0], 3) > 0);        // some dust
         // Deterministic.
         Assert.Equal(levels[1][3], MilkyWay.Bake(16)[1][3]);
     }

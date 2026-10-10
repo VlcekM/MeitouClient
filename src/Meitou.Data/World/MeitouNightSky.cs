@@ -372,8 +372,48 @@ public static class MilkyWay
     /// <summary>Stretches a direction along the galactic pole by <paramref name="k"/>, so noise sampled on it has features thinner across the band than along it (dust lanes run along the plane).</summary>
     static Vector3 Stretch(Vector3 c, float k) => c + Pole * (Vector3.Dot(c, Pole) * (k - 1));
 
-    /// <summary>The Milky Way's light (linear RGB, the starfield texture's units) in the celestial direction <paramref name="c"/> (unit).</summary>
-    public static Vector3 Radiance(Vector3 c)
+    /// <summary>The share of the band's light that the per-pixel grain carries (the viewer adds it as a dense layer of faint stars, one per cell of <see cref="GrainCells"/> per cube face, present with chance <see cref="GrainChance"/>); the baked cube map keeps the rest as a smooth glow.</summary>
+    public const float GrainShare = 0.5f, GrainChance = 0.85f, GrainSigma = 0.85f, GrainSpread = 0.6f;
+
+    /// <summary>Cells per cube face edge of the grain's star layer when the screen is 1080p at 60 degrees vertical (0.088 degrees a cell at a face's centre, about 1.8 px at 60 degrees vertical); <see cref="GrainCellsFor"/> picks it for other views.</summary>
+    public const int GrainCells = 1024;
+
+    /// <summary>The grain cell's size in pixels the view aims for (at a face's centre, within a factor of 1.4 as the count is a power of two), and the range of the count (4K at 60 degrees takes 2048).</summary>
+    public const float GrainCellPixels = 2.0f;
+    public const int GrainCellsMin = 512, GrainCellsMax = 4096;
+
+    /// <summary>The grain's cells per cube face edge for a view with <paramref name="pixelsPerRadian"/> (at the screen's centre): the power of two that makes a cell about <see cref="GrainCellPixels"/> pixels,
+    /// so the grain is as fine as the screen (a fixed count would make 4K's grain a lattice of dots, 720p's a noise of single pixels). It changes only when a zoom crosses a power of two.</summary>
+    public static int GrainCellsFor(float pixelsPerRadian)
+    {
+        float cells = 2 * MathF.Max(pixelsPerRadian, 1) / GrainCellPixels;   // a face's edge, 2 units, is 2 radians at its centre
+        return Math.Clamp(1 << (int)MathF.Round(MathF.Log2(cells)), GrainCellsMin, GrainCellsMax);
+    }
+
+    /// <summary>How the per-pixel noise <c>h</c> (0..1) breaks up the baked dust's optical depth (<see cref="PixelTau"/>): the depth over <see cref="DustScale"/> gets a noise of amplitude
+    /// <see cref="DustRagged"/> added and is steepened between <see cref="DustEdgeFrom"/> and <see cref="DustEdgeTo"/>; thin haze (below the rim) keeps <see cref="DustHaze"/> of its depth,
+    /// a lane's core is <see cref="DustCore"/> times as dense.</summary>
+    public const float DustScale = 1.2f, DustRagged = 0.3f, DustEdgeFrom = 0.3f, DustEdgeTo = 0.7f, DustHaze = 0.35f, DustCore = 2.4f;
+
+    /// <summary>The dust's optical depth at a pixel from the baked (smooth) depth <paramref name="tau"/> and a per-pixel noise <paramref name="h"/> (0..1): crisp, ragged lane edges where the bake only has a soft ramp.</summary>
+    public static float PixelTau(float tau, float h)
+    {
+        float s = tau / DustScale + DustRagged * (h - 0.5f);
+        return tau * float.Lerp(DustHaze, DustCore, Smooth(DustEdgeFrom, DustEdgeTo, s));
+    }
+
+    /// <summary>How much of the air's reddening (<see cref="NightAtmosphere.Transmission"/>) the glow takes: the air dims the band as much as it dims the stars, but a faint cool-white
+    /// glow turned fully orange-brown low in the sky, so only this share of the colour shift applies (<see cref="BandTransmission"/>).</summary>
+    public const float ExtinctionColourShare = 0.35f;
+
+    /// <summary>The air's transmission of the band's glow: the green channel's dimming for all three, plus <see cref="ExtinctionColourShare"/> of the stars' colour shift.</summary>
+    public static Vector3 BandTransmission(Vector3 starTransmission) => Vector3.Lerp(new Vector3(starTransmission.Y), starTransmission, ExtinctionColourShare);
+
+    /// <summary>The dust's transmission of the three channels for the optical depth <paramref name="tau"/>: neutral (a lane is dark, not brown), a hair less blue.</summary>
+    public static Vector3 Transmit(float tau) => new(MathF.Exp(-tau), MathF.Exp(-tau), MathF.Exp(-tau * 1.04f));
+
+    /// <summary>The Milky Way's glow (linear RGB, the starfield texture's units) before the dust, and the dust's optical depth, in the celestial direction <paramref name="c"/> (unit). This is what the cube map holds (the dust depth in its alpha).</summary>
+    public static (Vector3 Light, float Tau) SmoothLight(Vector3 c)
     {
         var (b, l) = Galactic(c);
         float ellipse = MathF.Sqrt(l * l + b * b / 0.30f);   // the bulge is a flattened ellipse, twice as wide as it is high
@@ -385,16 +425,16 @@ public static class MilkyWay
         float disc = Gauss(bw, 0.16f), core = Gauss(bw, 0.05f);
         float bulge = Gauss(ellipse, 0.42f), halo = Gauss(ellipse, 0.9f);
 
-        // A haze of unresolved stars: structure at several scales, mostly small ones (down to the cube map's texel, about 0.2°), a little flattened along the band;
-        // the broad swells are weak, so it reads as grain, not as clouds.
+        // Structure of the haze down to what the cube map resolves (about 0.2 degrees a texel; the finest octave kept is 7 texels), a little flattened along
+        // the band; the broad swells are weak, so it reads as mottling, not as clouds. The finer grain is the viewer's, per pixel (GrainShare).
         var sc = Stretch(c, 1.4f);
         float swell = Smooth(0.32f, 0.68f, Fbm(sc * 4f, 3, 4));
-        float c2 = Fbm(sc * 16f, 3, 5), c3 = Fbm(sc * 45f, 3, 10), c4 = Fbm(sc * 120f, 3, 11), c5 = Fbm(sc * 260f, 2, 16);
-        float grain = (0.55f + 0.9f * c2) * (0.45f + 1.1f * c3) * (0.55f + 1.0f * c4) * (0.65f + 0.7f * c5);
+        float c2 = Fbm(sc * 16f, 3, 5), c3 = Fbm(sc * 45f, 2, 10);
+        float grain = (0.55f + 0.9f * c2) * (0.45f + 1.1f * c3);
         float light = ((0.30f * disc + 0.55f * core) * along * (0.45f + 0.8f * swell) + 0.5f * bulge * (0.6f + 0.6f * swell) + 0.12f * halo * disc) * grain;
 
         // Dust: thin, dark rifts running along the plane a little off its middle (noise stretched across the band, so its features are long and thin along it,
-        // warped), a thin rift through the bulge, a few tiny dark clouds. Partly see-through.
+        // warped), a thin rift through the bulge, a few tiny dark clouds. The optical depth is the smooth one; PixelTau sharpens it per pixel.
         var warp = new Vector3(Fbm(c * 3f, 3, 12) - 0.5f, Fbm(c * 3f, 3, 13) - 0.5f, Fbm(c * 3f, 3, 14) - 0.5f);
         var dc = Stretch(c, 5f);
         float ridge1 = 1 - MathF.Abs(2 * Fbm(dc * 7f + warp * 1.2f, 4, 6) - 1);
@@ -405,13 +445,19 @@ public static class MilkyWay
         tau += 0.9f * Gauss(b - 0.008f + 0.015f * wiggle, 0.02f) * Gauss(l, 1.0f) * Smooth(0.25f, 0.75f, Fbm(dc * 8f, 3, 9));
         tau += 0.4f * Smooth(0.72f, 0.86f, Fbm(Stretch(c, 2f) * 30f, 3, 8)) * Gauss(b, 0.12f);
 
-        // Colour, low in saturation: bluish white, warm cream towards the bulge; the dust takes the blue first.
-        float warm = Math.Clamp(0.9f * bulge + 0.2f * halo, 0, 1);
-        var tint = Vector3.Lerp(new Vector3(0.86f, 0.92f, 1.0f), new Vector3(1.0f, 0.93f, 0.80f), warm);
-        var transmit = new Vector3(MathF.Exp(-tau * 0.9f), MathF.Exp(-tau), MathF.Exp(-tau * 1.2f));
+        // Colour, low in saturation: cool white, a faint warm cream only in the bulge's core.
+        float warm = Math.Clamp(0.6f * Gauss(ellipse, 0.32f), 0, 1);
+        var tint = Vector3.Lerp(new Vector3(0.90f, 0.95f, 1.0f), new Vector3(1.0f, 0.97f, 0.91f), warm);
         light = MathF.Max(light, 0);
         light /= 1 + light / 2.2f;   // soft clip: the crowded peaks stay under 2.2
-        return tint * transmit * (light * Scale);
+        return (tint * (light * Scale), tau);
+    }
+
+    /// <summary>The Milky Way's light (linear RGB, the starfield texture's units) in the celestial direction <paramref name="c"/> (unit): the smooth glow through the dust as baked (the viewer adds the grain and the dust's crisp edges per pixel).</summary>
+    public static Vector3 Radiance(Vector3 c)
+    {
+        var (light, tau) = SmoothLight(c);
+        return light * Transmit(tau);
     }
 
     // ---- the cube map ----
@@ -436,7 +482,7 @@ public static class MilkyWay
     public const int DefaultFaceSize = 512;
 
     /// <summary>
-    /// Bakes the cube map: <c>[level][face]</c> of RGBA half floats (alpha 1), levels down to 1×1 by box filtering. Takes about 0.1 s of a few cores at 512².
+    /// Bakes the cube map: <c>[level][face]</c> of RGBA half floats (the glow before the dust, and the dust's optical depth in alpha), levels down to 1×1 by box filtering. Takes about 0.1 s of a few cores at 512².
     /// </summary>
     public static Half[][][] Bake(int size = DefaultFaceSize)
     {
@@ -449,9 +495,9 @@ public static class MilkyWay
             var data = current[face];
             for (int x = 0; x < size; x++)
             {
-                var v = Radiance(TexelDirection(face, x, y, size));
+                var (v, tau) = SmoothLight(TexelDirection(face, x, y, size));
                 int o = (y * size + x) * 4;
-                data[o] = v.X; data[o + 1] = v.Y; data[o + 2] = v.Z; data[o + 3] = 1;
+                data[o] = v.X; data[o + 1] = v.Y; data[o + 2] = v.Z; data[o + 3] = tau;
             }
         });
         var result = new Half[levels][][];
