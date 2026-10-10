@@ -162,7 +162,7 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
     the clock running, one run each, so noisy): the ocean's compute pass 0.21-0.37 ms GPU (256², timestamps round it; `--water-ocean 128`
     is a quarter of the transform), the water pass 0.30 ms GPU with refraction (the copies included), 0.12 ms without, against 0.03 ms for
     the Faithful water; the shore bake 40-95 ms on a worker thread. Memory: about 21 MB (spectrum 6, work buffers 9,
-    textures 4) plus the 8 MB shore field. The reflection pass is unchanged (the mirror stays the plane at Y = 100).
+    textures 4) plus the 8 MB shore field (up to about 32 MB since 2026-10-10: two recycled textures kept for the next bake, one being written, and the shown one). The reflection pass is unchanged (the mirror stays the plane at Y = 100).
   - *Shore distance field* (`ShoreField`, `ShoreBake`; read by the water shader since 2026-10-08). A 1024² grid of 10-unit texels (±5120 units round the eye) holding (signed distance to the waterline, exposure). The
     waterline is where 100 − height changes sign between neighbouring texels, placed by linear interpolation of that difference, so it is
     sub-texel; the distance is to those points (8SSEDT: two sweeps carrying the nearest crossing point, O(N²)), positive over water and
@@ -182,13 +182,28 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
     the terrain's coarse grid, fine window and band, taken on the render thread by `TerrainRenderer.Snapshot()`; `HeightAt` is defined
     through it); `ShoreField.Update(eye, snapshot)` starts a bake when nothing is baked yet or the eye is more than 2560 units (a quarter of
     the width) from the centre in X or Z, the centre snapped to whole texels so the field does not swim, and uploads the finished grid
-    as an RG32F texture (8 MB, linear, clamped) on the render thread; the old texture is released four frames later. **Verified** (unit tests
+    as an RG32F texture (8 MB, linear, clamped); the old texture is released four frames later (since 2026-10-10 kept for the next
+    bake, see "Upload cost" below). **Verified** (unit tests
     on synthetic terrain, `ShoreFieldTests`): on a straight beach at three angles and on a circular island the distance is within 3 units
     (0.3 texel) of the true one with the right sign; a 150-unit pond and the inside of a 300-unit-wide channel have exposure under 0.05,
     open sea more than 0.95; the gradient direction turns less than 30 degrees between neighbouring water texels near a straight shore.
     **Observed** (2026-10-08, desktop CPU with 12 logical cores, Release, 1024², a height function of two sines and a plane): the bake
     took about 63 ms per grid (mean of 5; the height sampling alone about 10 ms; the sweeps ran 35 ms with managed arrays, before they were
     made pointer-based on one packed array). The rebake rule means one bake per 2560 units flown. The GPU upload was not measured (no GPU test).
+  - *Upload cost* (2026-10-10; the numbers and the command are in [renderer-native.md](renderer-native.md) 8.21). **Cause** of the many
+    8 MB uploads: not a bug but the rule above at speed: at 150 units a frame (9000 units a second) the eye leaves the quarter-width box every
+    17 frames, so the 3600-frame fast flight rebaked and re-uploaded 180 times (**Observed**, `upload shore field` row of the spikes table:
+    180 uploads, 1440 MB, 8 MB in one frame, 4 to 6 ms of staging copy on the render thread), and **131 of 184 bakes (71 %) came out with no
+    waterline in the field at all** (inland, or open sea), which is one value everywhere. **Fixed**: `ShoreGrid.IsUniform` finds those on the
+    worker and the field is then a 1 x 1 R32G32 texture (the shader clamps to the edge and takes `Rect` as before, so every texel reads the
+    same: pictures identical, `ShoreFieldTests`); a field with a coast is laid out (interleaved) on the worker into one of two reused arrays
+    and written to a recycled 1024² texture (up to two retired ones are kept) 256 rows (2 MB) a frame, the new texture replacing the shown
+    one, with `Rect`, once whole (the very first field, and a screenshot's, is written at once); no new result is taken while an upload is in
+    progress. `ShoreBake.Scratch` keeps the bake's arrays between bakes (the bake allocated about 44 MB each, `ShoreFieldTests` checks
+    59 KB instead of 2.3 MB per bake after the first). **Observed** after: 53 uploads of 2 MB a frame (424 MB in the run) and 131 one-texel
+    fields; the field on the render thread costs 1.0 to 1.3 ms in a frame that writes rows and nothing worth a log line otherwise, except the first
+    one or two fields of a run (2 to 3 ms: the first, whole, write) (`water     shore field ...` lines of `MEITOU_STREAM_LOG=1`). Pictures
+    at Port South (coast) and at the flight's start: `image-diff` against the same-commit baseline, mean 0, max 0.
 
 Verified with screenshots (2026-10-04, saved outside the repo): Shark (houses on stilts and walkways over swamp water), Port North (coast with sun glitter), the whole world (sea around the land), and The Hub towards the horizon (terrain to the edge of the map, fading into the haze); the sky part is in [render-sky.md](render-sky.md).
 
