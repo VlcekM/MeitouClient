@@ -19,12 +19,16 @@ static class BorderlessFullScreen
             Console.WriteLine("window    bordered");
             return;
         }
-        // The monitor the window is on; its bounds are in desktop coordinates, which is what Position takes.
-        var bounds = (window.Monitor ?? Silk.NET.Windowing.Monitor.GetMainMonitor(window)).Bounds;
+        // The monitor the window is on: its origin in desktop coordinates, which is what Position takes. The size is the monitor's video
+        // mode: GLFW's Bounds is the work area (1920 x 1032 over a 48 px taskbar, Observed 2026-10-10), and Windows keeps the taskbar on
+        // top of a window that does not cover the whole monitor.
+        var monitor = window.Monitor ?? Silk.NET.Windowing.Monitor.GetMainMonitor(window);
+        var origin = monitor.Bounds.Origin;
+        var size = monitor.VideoMode.Resolution ?? monitor.Bounds.Size;
         window.WindowState = WindowState.Normal;
         window.WindowBorder = WindowBorder.Hidden;
-        window.Position = bounds.Origin;
-        window.Size = bounds.Size;
-        Console.WriteLine($"window    borderless full screen {bounds.Size.X} x {bounds.Size.Y}");
+        window.Position = origin;
+        window.Size = size;
+        Console.WriteLine($"window    borderless full screen {size.X} x {size.Y} (monitor bounds {monitor.Bounds.Size.X} x {monitor.Bounds.Size.Y})");
     }
 }
