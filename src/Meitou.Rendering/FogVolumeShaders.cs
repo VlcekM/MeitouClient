@@ -5,7 +5,7 @@ namespace Meitou.Rendering;
 /// and <c>fog_beam_fs</c> (post/fog.hlsl). The game draws each volume's hull once after the opaque scene, the water and the haze, reading the
 /// G-buffer depth; Meitou does the same in one full-screen pass (<see cref="PostProcessShaders.FogVolumes"/>, run by <c>PostProcess.RunFogVolumes</c>)
 /// that rebuilds each pixel's distance from the depth (the haze's far distance D for the sky, the water plane where it covers the pixel), and in
-/// SSAO's air visibility. Not in the world shaders. This text uses <c>hazeColour</c> and the atmosphere's uniforms (so follows
+/// SSAO's air visibility. Not in the world shaders. This text uses <c>hazeTarget</c> (the haze colour plus the night air) and the atmosphere's uniforms (so follows
 /// <see cref="AtmosphereShaders.Functions"/>). The data come from <see cref="FogVolumes"/>: every volume in view, packed into <c>uFogVolumeData</c>
 /// farthest first, each starting with a vec4 whose w is its type.
 /// </summary>

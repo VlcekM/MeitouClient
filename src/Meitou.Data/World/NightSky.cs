@@ -131,12 +131,13 @@ public static class Planetshine
         sunLight * strength * albedo * IrradianceRatio(1, SolidAngle(planet.AngularRadius), PhaseAngle(sun, planet.Towards));
 
     /// <summary>
-    /// The radiance of the planet's disc at its centre as the sky pass draws it (<c>planet()</c>: <c>albedo · saturate(n · sun)</c>, with the sphere's normal at the
-    /// centre facing the eye, so <c>cos α</c>), without any strength: what a mirror shows of it, and what the water's glint should be (the strength-scaled light is
-    /// an irradiance boosted 60 times, a hot spot where the planet itself is dim).
+    /// The radiance of the planet's disc, without any strength: what a mirror shows of it, and what the water's glint should be (the strength-scaled light is an
+    /// irradiance boosted 60 times, a hot spot where the planet itself is dim). The sky pass draws <c>albedo · saturate(n · sun)</c>, brightest at the disc's centre
+    /// (<c>cos α</c>), but that centre reaches the terminator at a quarter phase and is dark from there while a lit crescent remains; the glint stands for the whole disc, so
+    /// it takes the Lambert phase function instead (<c>albedo · Φ(α)</c>, the same Φ the land's light uses): 1 for a full disc, 0.32 at a quarter, 0 for a new planet.
     /// </summary>
     public static Vector3 DiscRadiance(Vector3 sun, SkyPlanet planet, Vector3 albedo) =>
-        albedo * MathF.Max(MathF.Cos(PhaseAngle(sun, planet.Towards)), 0);
+        albedo * MathF.Max(LambertPhase(PhaseAngle(sun, planet.Towards)), 0);   // the phase function is a hair negative (1e-8) at a new planet
 
     /// <summary>
     /// How much of the planet's light the lighting takes at the sun's height <paramref name="sunY"/>: 1 up to <see cref="FullBelow"/>, 0 from

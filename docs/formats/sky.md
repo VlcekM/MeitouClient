@@ -396,10 +396,11 @@ Everything is in `Planetshine` (`NightSky.cs`, tests `PlanetshineTests`) and `Sk
   (`GlintDirection`, `GlintColour`; `Glint` gives the sun's own when none is set) to both water shaders (`uGlintDir`, `uGlintColour`, used for the specular lobe, its
   half vector and the wet sand's sheen, not for the diffuse light or the crests). While the planet is in the light (`Planetshine.Weight` above 0) it is
   `Planetshine.Combine` of the real sun's radiance (`sunLight · π · 0.96`, what `SunColour` is) and the planet disc's radiance `Planetshine.DiscRadiance`
-  (`albedo · cos α`, what the sky pass draws at the disc's centre, times the weight), the direction weighted by their luminances' square roots as the land's light is. Above
+  (`albedo · Φ(α)`, times the weight; the sky pass draws `albedo · cos α` at the disc's centre, which is dark from a quarter phase on while a lit crescent remains, so the glint
+  takes the Lambert phase function instead: 1 full, 0.32 at a quarter, 0 new), the direction weighted by their luminances' square roots as the land's light is. Above
   the weight's window (day) it is left unset, so the glint takes `SunDirection` and `SunColour` unchanged: **Verified** day pictures (`--time 13`) identical to before
-  the change (1 pixel of 921 600 differs by one level, the foliage's noise). **Observed**: the patch is now about 60 of 255 (the lit disc in the sky 85 to 165 over its face),
-  grey like the planet; it is still a point-source glint for a disc 18° wide (a hot spot where the real reflection would be a broad smear, and with no Fresnel term,
+  the change (1 pixel of 921 600 differs by one level, the foliage's noise). **Observed**: the patch is now 62 to 77 of 255 at 23:30 (the lit disc in the sky 85 to 165 over its face),
+  27 to 41 at 0:30, 27 at 1:00 and 9 at 2:00, following the phase down, grey like the planet, and absent with `--faithful planetshine`; it is still a point-source glint for a disc 18° wide (a hot spot where the real reflection would be a broad smear, and with no Fresnel term,
   which would lower it further at this grazing angle: **Unknown** whether the owner wants either).
 - **Not exercised**: the probes' light with `--gi` (they read the same published light: a run at 23:30 gave no error and the mean luminance 0.055 →
   0.065 against Faithful, but the picture was not inspected for the bounce), the simple sky (`--simple-sky` keeps its own light), and weather other than
@@ -422,7 +423,9 @@ Reference math in `NightAir` (`NightSky.cs`, tests `NightAirTests`), shader side
   Φ 0.65), 0.42 at midnight, 0.10 at 2:00 and 0.02 at 4:00 (a thin crescent), so the air is darker in the small hours (game clock: latitude 54, sunrise 5, sunset 23; **Verified** by `NightAirTests`). The blue tint stands for Rayleigh scattering. **Unknown**: any physical basis for the
   gain (0.25) and the airglow level; both **chosen by eye** on screenshots (a first pair, a seventh of the ambient-lit land, drew nothing visible: the horizon came out
   at 1 to 3 of 255; the present pair gives a horizon of about (10, 16, 27) of 255 on screen after exposure ×1.96, tone map and night grade, against
-  (40, 40, 55) for lit land near the camera and (0, 0, 1) at the zenith).
+  (20 to 35, 24 to 36, 35 to 50) for the planet-lit ground at mid-distance (rows 300 to 400) and (0, 0, 1) at the zenith). **Verified** that the exposure did not move: the near ground (rows 450 to
+  700 of the same view, under 3000 units, where the haze has not begun) is the same before and after to within a level (e.g. (21, 24, 35) and (20, 24, 36)), so the frame's mean stays under the
+  exposure's night floor and the scale stays ×1.96.
 - **In the haze** (`atmoKenshiHaze`, also the fog volumes' haze colour): the colour the far land fades into is `hazeColour(ray) + atmoNightAir(direction)`;
   `hazeColour` is the game's (black at night), the weather's fog and the horizon-cloud pull still apply over it (`mix(hazeTarget, cloud, pull)` then the fog), so a foggy
   or overcast night stays the game's. The alpha ramp is the game's (0.06 D to 0.6 D) times the haze strength (0.93), untouched: the far land fades **into** the

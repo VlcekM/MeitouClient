@@ -127,14 +127,14 @@ public class NightAirTests
     }
 
     [Fact]
-    public void The_disc_radiance_is_the_albedo_times_the_cosine_of_the_phase_angle()
+    public void The_disc_radiance_is_the_albedo_times_the_lambert_phase_function()
     {
         var p = Moon.Towards;
         Assert.Equal(Albedo, Planetshine.DiscRadiance(-p, Moon, Albedo));          // the sun behind the observer: a full disc
         Assert.Equal(Vector3.Zero, Planetshine.DiscRadiance(p, Moon, Albedo));      // behind the planet: new
         var side = Vector3.Normalize(Vector3.Cross(p, Vector3.UnitY));
-        Assert.Equal(Vector3.Zero, Planetshine.DiscRadiance(side, Moon, Albedo));   // a quarter: the centre of the disc is at the terminator
-        Assert.Equal(Albedo.X * MathF.Cos(MathF.PI / 4), Planetshine.DiscRadiance(Vector3.Normalize(side - p), Moon, Albedo).X, 4);
+        Assert.Equal(Albedo.Y / MathF.PI, Planetshine.DiscRadiance(side, Moon, Albedo).Y, 5);   // a quarter: a third of a full disc, not dark
+        Assert.Equal(Albedo.X * Planetshine.LambertPhase(MathF.PI / 4), Planetshine.DiscRadiance(Vector3.Normalize(side - p), Moon, Albedo).X, 4);
     }
 
     [Fact]
