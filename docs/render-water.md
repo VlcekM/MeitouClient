@@ -226,6 +226,29 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
 
 Verified with screenshots (2026-10-04, saved outside the repo): Shark (houses on stilts and walkways over swamp water), Port North (coast with sun glitter), the whole world (sea around the land), and The Hub towards the horizon (terrain to the edge of the map, fading into the haze); the sky part is in [render-sky.md](render-sky.md).
 
+## Fog in the reflection (Meitou, 2026-10-10)
+
+*Observed* 2026-10-10: low over Shark's pond in `swamp rain no wind` the water showed a blue-grey sky that the swamp's fog hides from the eye.
+The swamp's fog is the placed fog volumes ([formats/fogfeatures.md](formats/fogfeatures.md)), drawn by one full-screen pass that fogs the water at
+the water's own distance; the reflection camera draws no volumes (as the game's queue-60 reflection), so the mirror held the open sky. How much
+water reflects is the Fresnel term, a matter of angle and not of light, so a low eye over dim water still sees a near-mirror: a mirror of the fog.
+
+*From the code.* `ReflectionPass.RunFog`, after the reflection is drawn and resolved, when `FogVolumes` is set (the frame loop sets it while the
+Meitou water draws and volumes are in view; the Faithful water keeps the game's mirror). One full-screen draw over the half-resolution colour with
+the main fog pass's blend (`colour × transmittance + fog`, colour channels only), shader `ReflectionPass.FogFragment`: each texel's depth (the
+multisampled target's first sample, `sampler2DMS`, or the plain depth at `--reflection-samples 1`; both now made sampleable) is unprojected
+through the inverse of the near slice's mirrored, *oblique* view-projection (the depth mapping is not the plain perspective one), which gives
+the world point the texel shows. The ray from the mirrored eye to it crosses the water plane at distance `tw`; from there on it is the real
+reflected ray, so `fogVolumesAccumulate` runs from that crossing along the same direction for `total − tw` (the sky, depth 1: to the far clip).
+The eye-to-water part is left to the main pass, which fogs the water pixel. Not fogged: what lies only in the far slice (from 20000 units on;
+its depth is cleared before the near slice) is treated as sky, and the water's sky-colour fallback (with reflections off, or outside the
+reflection's rectangle) stays unfogged.
+
+*Observed* (same view, 1280 × 720, `--pitch 5 --yaw 0 --distance 900` at Shark, 16:00): the near water went from (44, 43, 42) to (42, 40, 37),
+the hue of the fog above the horizon (120, 115, 103); about a tenth of the pixels change by more than 4/255, at most 31; the 4x and 1x
+reflections agree. A debug colouring showed the fog on the reflected sky (strong) and on the reflected land (by its distance). Cost: one
+full-screen pass at the reflection's half resolution, not measured.
+
 ## Reflection cost: shadows and multisampling (2026-10-09)
 
 - **No sun shadows in the reflection** (Meitou; `ReflectionPass.NoShadows`, default on, `--ab refl-shadows`; Faithful shadows keep them). While the pass records, `GpuContext.Globals.OverrideBlock` swaps the frame's `KenshiShadowReceiver` block for an all-zero one (the shadows-off block), so every receiver (terrain, objects, foliage, the atmosphere's sun term) sees a lit surface and `kenshiShadow` returns 1 before touching the map; no new pipelines, no shader change. What the game does for its reflection target is **Unknown**, so Faithful (`ShadowPass.Meitou` false) keeps them as before. **Observed** (swamp target view, `--upscaler dlss --render-scale native`, 600 frames, `--ab refl-shadows`, period 1 and 16): the `reflection` GPU stage 0.53 to 0.46 ms (-0.06 +-0.01 and -0.06 +-0.02, median -0.05/-0.06); less than the 0.15 to 0.27 ms the receiver was estimated to cost in the pass (shadows.md), because the half-resolution mirror pass is mostly vertex, draw and fill bound. The frame total moved -0.33 and -0.17 ms in those runs but that includes shadow-scheduling noise from other work and is not attributable. Picture (`--upscaler off --no-particles --bench-motion still`, `MEITOU_REFL_AGE=0` so each side draws its own reflection): 1,692 pixels differ by 1/255 or more, none by 4, max 3 (the swamp's shadows are faint in the mirror; views with long tree shadows on the shore were not compared: **Unknown**).

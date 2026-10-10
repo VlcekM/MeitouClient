@@ -212,7 +212,9 @@ formulas as GLSL, and `fogVolumesAccumulate`, which runs the list farthest first
 **One full-screen pass, as the game** (changed 2026-10-08; before, `atmoApply` in every world shader evaluated the list per fragment, so
 overdrawn foliage paid it several times and the water reflection paid it again). The volumes are no longer in the world shaders: `atmoApply`
 is the haze and the weather's fog alone, the sky shader has no volume line, and the reflection pass draws none (the game's `Water_Reflection`
-draws render queues up to 60 and the volumes are queue 82, [post-processing.md](post-processing.md)). `PostProcess.RunFogVolumes` runs
+draws render queues up to 60 and the volumes are queue 82, [post-processing.md](post-processing.md)); with the Meitou water a pass of its own
+lays them over the finished reflection along the reflected rays (2026-10-10, [../render-water.md](../render-water.md) "Fog in the reflection"),
+and the Faithful water keeps the game's unfogged mirror. `PostProcess.RunFogVolumes` runs
 `PostProcessShaders.FogVolumes` once, after the opaque scene, the water and the sky (the haze is still in the shaders, so the volumes go over
 the hazed colour, the game's order) and before the particles (which `WorldFrame` now draws after it, in their own scene rendering, still
 depth-tested against the near slice). Each pixel's offset is rebuilt from the depth as SSAO does (view depth from the near slice's depth,
