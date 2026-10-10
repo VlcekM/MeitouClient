@@ -8,8 +8,8 @@ using Silk.NET.Input;
 namespace Meitou.ModelViewer;
 
 /// <summary>
-/// The viewer's cinematic camera (docs/viewer.md "Cinematic camera"), for trailers: numpad 1-9 save the camera (with its lens and the time of
-/// day) as a shot, Ctrl+numpad 1-9 cut to one, numpad Enter flies through them in order (<see cref="CameraPath"/>), Shift+numpad Enter records
+/// The viewer's cinematic camera (docs/viewer.md "Cinematic camera"), for trailers: Ctrl+numpad 1-9 save the camera (with its lens and the time of
+/// day) as a shot, numpad 1-9 cut to one, numpad Enter flies through them in order (<see cref="CameraPath"/>), Shift+numpad Enter records
 /// the flight to PNG frames at a fixed frame rate. The shots are kept in <c>%LOCALAPPDATA%\Meitou\viewer-shots.json</c> across starts.
 /// </summary>
 sealed class Cinema
@@ -43,10 +43,10 @@ sealed class Cinema
         if (key is >= Key.Keypad1 and <= Key.Keypad9)
         {
             int slot = key - Key.Keypad1;
-            if (ctrl)
+            if (!ctrl)
             {
                 if (shots[slot] is { } s) { Stop(); s.Apply(camera); if (followTime) setHour(s.Hour); Say($"cut to shot {slot + 1}"); }
-                else Say($"shot {slot + 1} is empty (numpad {slot + 1} saves the camera there)");
+                else Say($"shot {slot + 1} is empty (Ctrl+numpad {slot + 1} saves the camera there)");
             }
             else
             {
@@ -60,7 +60,7 @@ sealed class Cinema
         {
             case Key.KeypadEnter:
                 if (Playing) { Stop(); Say("stopped"); }
-                else if (Flight.Count < 2) Say("save two shots or more first (numpad 1-9)");
+                else if (Flight.Count < 2) Say("save two shots or more first (Ctrl+numpad 1-9)");
                 else
                 {
                     (Playing, time) = (true, 0);

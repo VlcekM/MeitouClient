@@ -226,8 +226,8 @@ Interactive mode was smoke-tested only
 ### Cinematic camera
 
 *From the code* (added 2026-10-10, for trailers; `Cinema` in the viewer, `CameraPath` in `Meitou.Rendering`, tests in `CameraPathTests`).
-Numpad 1 to 9 save the camera as a shot: the eye, the view direction, the orbit distance, the lens (field of view) and the time of day.
-Ctrl+numpad 1 to 9 cuts to a shot. The shots are kept in `%LOCALAPPDATA%\Meitou\viewer-shots.json`, so they survive a restart; numpad `.`
+Ctrl+numpad 1 to 9 save the camera as a shot: the eye, the view direction, the orbit distance, the lens (field of view) and the time of day.
+Numpad 1 to 9 cuts to a shot (changed 2026-10-10: at first the plain keys saved). The shots are kept in `%LOCALAPPDATA%\Meitou\viewer-shots.json`, so they survive a restart; numpad `.`
 lists them, Ctrl+numpad `.` deletes them all. Numpad Enter flies through the saved shots in slot order (empty slots are skipped) and
 stops at the last; Enter again stops. Numpad 0 loops the flight back to the first shot; numpad + and - make each shot-to-shot leg 1.25
 times longer or shorter (default 6 s, every leg takes the same time); numpad / switches whether the time of day follows the shots
