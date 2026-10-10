@@ -51,8 +51,9 @@ public sealed class ImpostorCache
         return Path.Combine(Root, $"{name}_{source.Key[..24]}.mimp");
     }
 
-    /// <summary>The cached atlas, or null when there is none or it is unreadable (it is then baked and written again). A hit counts as a use.</summary>
-    public ImpostorAtlas? TryLoad(ImpostorSource source)
+    /// <summary>The cached atlas, or null when there is none or it is unreadable (it is then baked and written again). A hit counts as a use.
+    /// <paramref name="firstLevel"/>: the levels above it are not loaded (<see cref="ImpostorAtlas.Read"/>).</summary>
+    public ImpostorAtlas? TryLoad(ImpostorSource source, int firstLevel = 0)
     {
         var path = PathFor(source);
         if (!File.Exists(path)) return null;
@@ -60,7 +61,7 @@ public sealed class ImpostorCache
         {
             ImpostorAtlas? atlas;
             using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16))
-                atlas = ImpostorAtlas.Read(stream);
+                atlas = ImpostorAtlas.Read(stream, firstLevel);
             if (atlas is not null) Touch(path);
             return atlas;
         }

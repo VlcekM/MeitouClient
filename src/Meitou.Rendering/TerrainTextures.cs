@@ -511,16 +511,18 @@ public sealed unsafe class TerrainTextures : IDisposable
             else
                 try
                 {
-                    var bytes = File.ReadAllBytes(path);
-                    if (bytes.Length >= 4 && BitConverter.ToUInt32(bytes, 0) == DdsReader.Magic)
+                    using var file = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.SequentialScan);
+                    Span<byte> magic = stackalloc byte[4];
+                    if (RandomAccess.Read(file, magic, 0) == 4 && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(magic) == DdsReader.Magic)
                     {
-                        var dds = DdsReader.Read(bytes);
+                        // A DDS that is taken as stored is read from the level the layer starts at (the levels above are three quarters or more of the file).
+                        var dds = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, StoredShift(w, size, levelCount)), out _);
                         if (AsStored(dds, size, levelCount, diffuse) is { } stored) return stored;
                         int level = 0;
                         while (level + 1 < dds.MipCount && Math.Max(dds.Width >> (level + 1), 1) >= size) level++;
                         image = DdsDecoder.Decode(dds, 0, level);
                     }
-                    else image = TextureLoader.LoadImage(bytes);
+                    else image = TextureLoader.LoadImage(File.ReadAllBytes(path));
                 }
                 catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException)
                 {
@@ -566,6 +568,15 @@ public sealed unsafe class TerrainTextures : IDisposable
             encoded[l] = diffuse ? BlockCompression.EncodeBc3(mips[l], s, s) : BlockCompression.EncodeBc1(mips[l], s, s);
         }
         return encoded;
+    }
+
+    /// <summary>The top levels <see cref="AsStored"/> would not use of a DDS (the same conditions): how many to drop on reading, 0 when it is not taken as stored.</summary>
+    static int StoredShift(DdsFile dds, int size, int levelCount)
+    {
+        if (dds.Format is not (DdsFormat.Bc1 or DdsFormat.Bc3) || dds.IsCubemap || dds.IsVolume || dds.ImageCount != 1) return 0;
+        if (dds.Width != dds.Height || dds.Width < size || !int.IsPow2(dds.Width)) return 0;
+        int shift = (int)Math.Log2(dds.Width / size);
+        return shift + levelCount > dds.MipCount || dds.Surfaces.Count < dds.MipCount ? 0 : shift;
     }
 
     /// <summary>The levels of a DDS that can go into the array as stored (see <see cref="LoadLayer"/>), or null.</summary>

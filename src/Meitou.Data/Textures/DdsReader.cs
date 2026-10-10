@@ -29,9 +29,51 @@ public static class DdsReader
     public static DdsFile ReadFile(string path) => Read(File.ReadAllBytes(path));
 
     /// <summary>Parses the headers and lays out every surface. Throws <see cref="DdsFormatException"/> on bad or unsupported data.</summary>
-    public static DdsFile Read(byte[] data)
+    public static DdsFile Read(byte[] data) => Parse(data.AsSpan(), data.Length, data);
+
+    /// <summary>
+    /// Reads a DDS file from an open handle keeping only what <paramref name="keep"/> chooses. The headers are read first (<paramref name="whole"/>: every surface laid out, no
+    /// data), <paramref name="keep"/> returns the file as it is to be held (its top mips dropped by <see cref="TextureQuality.DropTopMips"/>, the surfaces re-sliced), and only the
+    /// bytes from its first surface on are read. A dropped top level is three quarters of a mip chain's bytes, which were read, held and thrown away with the file.
+    /// The result's <see cref="DdsFile.Data"/> starts at its first surface (the offsets are rebased); when <paramref name="keep"/> returns <paramref name="whole"/> itself (nothing dropped)
+    /// the result is the whole file, as <see cref="Read"/> returns it, and <paramref name="whole"/> is that file.
+    /// </summary>
+    public static DdsFile ReadKept(Microsoft.Win32.SafeHandles.SafeFileHandle file, Func<DdsFile, DdsFile> keep, out DdsFile whole)
     {
-        var span = data.AsSpan();
+        long length = RandomAccess.GetLength(file);
+        if (length > int.MaxValue) throw new DdsFormatException($"File of {length} bytes is too large.");
+        Span<byte> head = stackalloc byte[4 + HeaderSize + Dx10HeaderSize];
+        head = head[..ReadFully(file, head, 0)];
+        var headers = Parse(head, length, []);
+        var kept = keep(headers);
+        if (ReferenceEquals(kept, headers) || kept.Surfaces.Count == 0)
+        {
+            var all = new byte[length];
+            if (ReadFully(file, all, 0) != length) throw new DdsFormatException("File ended early.");
+            return whole = Parse(all, length, all);
+        }
+        whole = headers;
+        int first = kept.Surfaces[0].Offset;
+        var tail = new byte[length - first];
+        if (ReadFully(file, tail, first) != tail.Length) throw new DdsFormatException("File ended early.");
+        return kept.WithData(tail, kept.Surfaces.Select(s => s with { Offset = s.Offset - first }).ToList());
+    }
+
+    static int ReadFully(Microsoft.Win32.SafeHandles.SafeFileHandle file, Span<byte> buffer, long offset)
+    {
+        int read = 0;
+        while (read < buffer.Length)
+        {
+            int n = RandomAccess.Read(file, buffer[read..], offset + read);
+            if (n == 0) break;
+            read += n;
+        }
+        return read;
+    }
+
+    /// <summary>The headers in <paramref name="span"/> (at least the headers) of a file of <paramref name="fileLength"/> bytes, whose bytes are <paramref name="data"/> (empty when only the headers were read).</summary>
+    static DdsFile Parse(ReadOnlySpan<byte> span, long fileLength, byte[] data)
+    {
         if (span.Length < 4 + HeaderSize) throw new DdsFormatException($"File too short for a DDS header ({span.Length} bytes).");
         if (U32(span, 0) != Magic) throw new DdsFormatException("Missing 'DDS ' magic.");
         if (U32(span, 4) != HeaderSize) throw new DdsFormatException($"Header size {U32(span, 4)}, expected {HeaderSize}.");
@@ -108,8 +150,8 @@ public static class DdsReader
             {
                 int w = Math.Max(1, width >> level), h = Math.Max(1, height >> level), d = Math.Max(1, depth >> level);
                 long length = SurfaceSize(format, masks, w, h) * d;
-                if (offset + length > data.Length)
-                    throw new DdsFormatException($"Surface {image}/{level} ({w}x{h}) ends at {offset + length}, past the end of the file ({data.Length}).");
+                if (offset + length > fileLength)
+                    throw new DdsFormatException($"Surface {image}/{level} ({w}x{h}) ends at {offset + length}, past the end of the file ({fileLength}).");
                 surfaces.Add(new DdsSurface(image, level, w, h, d, (int)offset, (int)length));
                 offset += length;
             }

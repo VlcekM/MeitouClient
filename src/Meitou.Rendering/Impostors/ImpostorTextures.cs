@@ -54,7 +54,7 @@ public sealed class ImpostorTextures : IDisposable
         ImpostorMap[] order = [ImpostorMap.Albedo, ImpostorMap.Normal];
         for (int i = 0; i < 2; i++)
         {
-            skips[i] = Math.Clamp(i == 0 ? skip : surfaceSkip, 0, atlas.Levels - 1);
+            skips[i] = Math.Clamp(i == 0 ? skip : surfaceSkip, atlas.FirstLevel, atlas.Levels - 1);   // a level the atlas was read without would upload as nothing
             var texture = atlas[order[i]] ?? throw new InvalidDataException($"impostor atlas {atlas.Name} has no {order[i]} map");
             sources[i] = texture;
             var format = texture.Encoding switch
@@ -76,7 +76,7 @@ public sealed class ImpostorTextures : IDisposable
         long bytes = 0;
         foreach (var t in atlas.Textures)
         {
-            int s = Math.Clamp(t.Map == ImpostorMap.Albedo ? skip : surfaceSkip, 0, atlas.Levels - 1);
+            int s = Math.Clamp(t.Map == ImpostorMap.Albedo ? skip : surfaceSkip, atlas.FirstLevel, atlas.Levels - 1);
             for (int l = s; l < t.Levels.Length; l++) bytes += t.Levels[l].Length;
         }
         return bytes;

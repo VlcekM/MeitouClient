@@ -37,7 +37,7 @@ public sealed unsafe class Texture : IDisposable
     readonly VulkanDevice device;
     readonly GpuImage? owned;
     readonly Func<int, int, int, int, ImageView>? attachmentViews;   // borrowed: VkGl's attachment views (level, 1, layer, 1)
-    readonly Dictionary<(int, int, int, int, ImageViewType, ComponentMapping), ImageView> views = [];
+    readonly Dictionary<(int, int, int, int, ImageViewType, int), ImageView> views = [];   // the last: the swizzle, packed (a ComponentMapping key was boxed twice per lookup, 130 MB in a minute of flight)
 
     Texture(VulkanDevice device, TextureDesc desc, Image image, GpuImage? owned, Func<int, int, int, int, ImageView>? attachmentViews)
     {
@@ -121,7 +121,7 @@ public sealed unsafe class Texture : IDisposable
 
     ImageView View(int baseLevel, int levels, int baseLayer, int layers, ImageViewType type, ComponentMapping swizzle)
     {
-        var key = (baseLevel, levels, baseLayer, layers, type, swizzle);
+        var key = (baseLevel, levels, baseLayer, layers, type, (int)swizzle.R | (int)swizzle.G << 4 | (int)swizzle.B << 8 | (int)swizzle.A << 12);
         if (views.TryGetValue(key, out var view)) return view;
         var info = new ImageViewCreateInfo
         {

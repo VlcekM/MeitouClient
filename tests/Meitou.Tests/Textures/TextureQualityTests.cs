@@ -95,6 +95,58 @@ public class TextureQualityTests
         Assert.Equal((4, 4, 3), (small.Width, small.Height, small.MipCount));
     }
 
+    /// <summary>A DXT file's bytes (as <see cref="Dxt"/> makes them) on disk.</summary>
+    static string DxtFile(int width, int height, int mips, string fourCC = "DXT1")
+    {
+        var dds = Dxt(width, height, mips, fourCC);
+        var path = Path.Combine(Path.GetTempPath(), "meitou-dds-" + Guid.NewGuid().ToString("N") + ".dds");
+        File.WriteAllBytes(path, dds.Data);
+        return path;
+    }
+
+    [Fact]
+    public void ReadKeptReadsOnlyTheMipsThatAreKept()
+    {
+        var path = DxtFile(64, 64, 7, "DXT5");
+        try
+        {
+            var expected = TextureQuality.DropTopMips(Dxt(64, 64, 7, "DXT5"), 2);
+            using var file = File.OpenHandle(path);
+            var kept = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, 2), out var whole);
+            Assert.Equal((64, 64, 7), (whole.Width, whole.Height, whole.MipCount));   // the headers as the whole file lays them out
+            Assert.Equal((expected.Width, expected.Height, expected.MipCount, expected.Format), (kept.Width, kept.Height, kept.MipCount, kept.Format));
+            Assert.Equal(expected.Surfaces.Count, kept.Surfaces.Count);
+            Assert.True(kept.Data.Length < new FileInfo(path).Length / 8, "the top two levels (15/16 of the file) are not read");
+            Assert.Equal(0, kept.Surfaces[0].Offset);   // rebased
+            for (int i = 0; i < expected.Surfaces.Count; i++)
+            {
+                var (a, b) = (expected.Surfaces[i], kept.Surfaces[i]);
+                Assert.Equal((a.Level, a.Width, a.Height, a.Length), (b.Level, b.Width, b.Height, b.Length));
+                Assert.True(expected.SurfaceData(a).SequenceEqual(kept.SurfaceData(b)), $"level {i} differs");
+            }
+            Assert.Equal(0, kept.TrailingBytes);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void ReadKeptWithNothingDroppedReadsTheWholeFile()
+    {
+        var path = DxtFile(16, 16, 5);
+        try
+        {
+            using var file = File.OpenHandle(path);
+            var kept = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, 0), out var whole);
+            Assert.Same(kept, whole);
+            Assert.Equal(File.ReadAllBytes(path), kept.Data);
+            Assert.Equal(5, kept.MipCount);
+            // One level dropped from the same file.
+            var refused = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, 1), out _);
+            Assert.Equal(4, refused.MipCount);
+        }
+        finally { File.Delete(path); }
+    }
+
     [Fact]
     public void DropTopMipsLeavesOtherFilesAlone()
     {

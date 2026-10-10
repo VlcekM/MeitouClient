@@ -471,13 +471,13 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     static TextureData Load(string path, int dropMips, float need, bool streaming, float perDistance, float bias, int extra)
     {
-        var bytes = File.ReadAllBytes(path);
-        if (bytes.Length >= 4 && BitConverter.ToUInt32(bytes, 0) == DdsReader.Magic)
+        using var file = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.SequentialScan);
+        Span<byte> magic = stackalloc byte[4];
+        if (RandomAccess.Read(file, magic, 0) == 4 && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(magic) == DdsReader.Magic)
         {
-            var whole = DdsReader.Read(bytes);
             // Texture quality: the game drops top mips as it loads (docs/formats/settings.md); mip streaming drops more where nothing near uses them.
-            int streamed = MipStreaming.Drop(whole.Width, whole.Height, need, streaming, perDistance, bias, extra);
-            var dds = TextureQuality.DropTopMips(whole, Math.Max(dropMips, streamed));
+            // Only the mips that are kept are read: a dropped top level is three quarters of the file, and was read, held and thrown away (docs/renderer-native.md 8.14).
+            var dds = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, Math.Max(dropMips, MipStreaming.Drop(w.Width, w.Height, need, streaming, perDistance, bias, extra))), out var whole);
             int dropped = whole.MipCount - dds.MipCount;
             bool droppable = TextureQuality.DropTopMips(whole, 1).MipCount < whole.MipCount;
             if (!Uncompressed && CanUploadCompressed(dds))
@@ -488,7 +488,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             }
             return new TextureData(TextureLoader.FromDds(dds), null, dropped, whole.Width, whole.Height, droppable);
         }
-        return new TextureData(new LoadedTexture([TextureLoader.LoadImage(bytes)], null), null);
+        return new TextureData(new LoadedTexture([TextureLoader.LoadImage(File.ReadAllBytes(path))], null), null);
     }
 
     static bool CanUploadCompressed(DdsFile dds) =>

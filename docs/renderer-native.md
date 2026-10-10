@@ -3546,6 +3546,86 @@ that long (a first-use pipeline or descriptor is a guess). (3) Terrain height wi
 and foliage textures reach 12 to 13.5 MB in one frame; they run under a time budget and were not split further. (4) Settling and loading
 still pay `FrameBegin` (11 to 26 ms) in the first step; it is a one-off per load, not a flight stall. (5) The timing test
 `ShoreFieldTests.Full_size_bake_time` ([Bench]) fails at 112 to 132 ms against 100 on this shared machine; the bake itself is unchanged.
+### 8.22 Allocations while travelling: fewer and cheaper collections (2026-10-10)
+
+The travel stutter notes (docs/viewer.md, "What makes travelling stutter") had GC as one of three causes: at `--fly-speed 150` the workers allocated 24 GB a minute, nine
+generation-2 collections ran, and single blocking pauses were 14 to 25 ms. This round cut the allocations; the numbers below are the check.
+
+**Method.** `MEITOU_JOB_STATS=1 MEITOU_BENCH_SKIP=60 meitou-viewer.exe --world --at -60564,-45142 --distance 1400 --pitch 25 --size 1600x900 --fly-benchmark 3600 --fly-speed 150
+--fly-radius 60000 --particle-prewarm 0`, Release, RTX 4070, Ryzen 5 5600X (12 threads), 4-heap server GC, warm caches; `--particle-prewarm 0` keeps the particle stall of the other fix out of it.
+`MEITOU_ALLOC_STATS=1` (new, `tools/Meitou.ModelViewer/AllocationLog.cs`, from the runtime's own event stream) prints every collection (generation, blocking or background, reason, time
+suspended, the frame it fell in, the heap sizes after it and what each generation promoted) and the sampled allocation by thread and type, with the large-object heap (LOH) and pinned object
+heap (POH) marked. `MEITOU_JOB_STATS` sees only `BackgroundWork` jobs: pool threads (the shore bake's `Parallel.For`) and the render thread are in the second tool only. **A run counts only
+when the VRAM guard had the whole 11,451 MB budget and never entered pressure** (another viewer on the card cuts the budget, the streaming then loads and reloads far more, and the
+numbers double: the same baseline gave 27 to 30 GB and 11 to 14 generation-2 collections that way); the rest of the table is runs that passed this test, base and new interleaved.
+
+**What the collections were** (**Observed**, baseline profile). About 80% of the bytes were large-object-heap arrays (21.2 of 24.9 GB). Each time the LOH's allocation budget ran out
+the runtime started a background generation-2 collection (reason "large"; 9 of them in the flight), whose two short suspensions cost 0.5 to 8 ms. The blocking pauses were the other
+kind: a generation-0 or -1 collection that copied 47 to 80 MB of survivors, 13 to 20 ms each (four in the flight). The survivors were not in-flight work but what the streaming keeps
+*resident*: a foliage zone's 66 KB ground heights, its 16 KB density maps and the record arrays of its instance groups are all under the 85 KB large-object threshold, so each was
+allocated in generation 0, copied to 1 and again to 2, and died tens of seconds later.
+
+**What was done** (all in `Meitou.Data` / `Meitou.Rendering`, commits on this branch):
+
+| Allocator (baseline, MB a flight) | What it was | Now |
+|---|---|---|
+| shore bake `ShoreBake.cs` (about 7,400 incl. 1,470 on the render thread; invisible to `MEITOU_JOB_STATS`) | six full-size scratch arrays and a fresh interleaved field every bake | scratch arrays kept between bakes (`Scratch`, `Take`/`Give`), the field made interleaved on the worker and returned after upload (`ShoreGrid.Rent`/`Release`): 12 MB, render thread 13 MB LOH |
+| zone layouts `FoliageRenderer.cs` job (3,357) | the cache read built a 56-byte `FoliageInstance[]` per zone, a `GroupBy` and then 96-byte `FoliageInstanceRecord`s, from a file read into a new array | `FoliageLayoutCache.TryLoadGrouped` + `FoliageWorld.LoadGrouped`: file in a pooled buffer, two passes straight to exact-size record arrays; 930-980 MB |
+| texture, terrain-layer and impostor-atlas reads (`WorldTextureCache.cs`, `TerrainTextures.cs`, `ImpostorCache`, 1,790 and 615 MB; the atlas load and refine jobs, 1,770 and 1,830 MB) | the whole DDS / atlas read, then the top mips thrown away (the top mip is 75% of a chain) | `DdsReader.ReadKept`: file read from the first kept level; `ImpostorAtlas.Read(stream, firstLevel)`: the skipped levels inflated into one scratch buffer (still checksummed); 930-1,080 and 560-620 MB; the atlas jobs only 17% less per refine (8.1 to 6.7 MB), none per load |
+| `Textures.cs` view cache | a boxed `ComponentMapping` key per lookup, 130 MB a minute on the render thread | swizzle packed into the key tuple: 0 |
+| resident zone data (heights, density maps, record groups) | small arrays promoted by every blocking collection | `ZoneArrays.Uninitialized`: pinned object heap, never copied |
+
+**Result** (**Observed**, 3,600 frames, whole process, runs that passed the test above; "pauses" is the sum the runtime reports; the collection counts are cumulative as
+`GC.CollectionCount` gives them, so gen0 counts every collection: `6 / 5` with 4 of generation 2 is two blocking collections of generation 0 or 1; (A) = with `MEITOU_ALLOC_STATS=1`):
+
+| Run | gen2 | gen0 / gen1 | pauses | allocated | render thread | frames over 20 / 33 ms |
+|---|---|---|---|---|---|---|
+| baseline `0834d0d` a | 8 | 12 / 9 | 122 ms | 23.7 GB | 1.90 GB | 89 / 13 |
+| baseline b | 9 | 13 / 10 | 104 ms | 24.2 GB | 2.02 GB | 134 / 2 |
+| baseline c (A) | 9 | 13 / 10 | 96 ms | 24.9 GB | 2.03 GB | 108 / 5 |
+| baseline d (A) | 10 | 15 / 11 | 103 ms | 25.3 GB | 2.03 GB | 122 / 0 |
+| baseline e (A) | 9 | 13 / 10 | 110 ms | 23.8 GB | 1.90 GB | 81 / 4 |
+| new, before the pinned heap, a | 3 | 6 / 4 | 88 ms | 12.8 GB | 0.55 GB | 108 / 23 |
+| new, before the pinned heap, b | 3 | 6 / 4 | 110 ms | 12.4 GB | 0.29 GB | 124 / 11 |
+| **new** a | 4 | 6 / 5 | 51 ms | 13.3 GB | 0.55 GB | 61 / 1 |
+| **new** b | 4 | 6 / 4 | 47 ms | 12.7 GB | 0.42 GB | 63 / 1 |
+| **new** c | 4 | 6 / 5 | 43 ms | 13.6 GB | 0.42 GB | 88 / 0 |
+| **new** d | 4 | 6 / 5 | 49 ms | 13.8 GB | 0.42 GB | 78 / 2 |
+| **new** e (A) | 4 | 6 / 5 | 46 ms | 12.9 GB | 0.42 GB | 127 / 24 |
+| **new** f (A) | 4 | 6 / 5 | 54 ms | 12.3 GB | 0.29 GB | 46 / 0 |
+| **new** g (A) | 4 | 6 / 5 | 59 ms | 13.7 GB | 0.42 GB | 131 / 1 |
+
+Allocation is down 48-50%, the render thread's from about 2.0 GB to 0.3-0.55 GB, generation-2 collections from 8-10 to 3-4 a flight (about 2.7 a minute of the flight itself,
+not the 2 aimed at), the blocking collections of generation 0 or 1 from 4-5 to 2 (the baseline's were 10 to 27 ms, the new build's 8 to 21 ms), the sum of pauses from 96-122 ms to 43-59 ms
+(the pinned heap is the half of that: 88 and 110 ms before it). The `worst` lines of the new runs are particles, water and `gpu-wait` (the other fixes' causes) and the collections' own
+frames (`GC pause 20.5`, `6.0`). No pause under 5 ms: the background collections' two suspensions are 0.5 to 6.6 ms, the blocking ones 8 to 21 ms, and those are not proportional to the
+promoted bytes (28 MB took 20.8 ms, 78 MB took 19.5 ms in the baseline), nor to the time to stop the threads (0.0 to 4.0 ms in the instrumented runs).
+
+**Outliers, not explained.** Two more runs of the final build, both with `ALLOC_STATS`, are left out of the table because of one long pause each: a blocking generation-0 collection of
+66.9 ms (106 ms of pauses all told), and a background one whose second suspension took 124.2 ms, 69.5 ms of it waiting for the threads to stop (140 ms all told; that frame also waited
+118 ms for the GPU). The second ran while `dotnet build` / `dotnet run` of mine were going on the same machine, the first while other agents' work may have been; the seven runs in the table
+(new a to g, four of them, c, d, f and g, after these two and with nothing of mine running) had none, and none of the five baseline runs had. A pause that is mostly threads taking 70 ms to reach a safe point looks like starvation of a
+below-normal worker (the thread that triggers a collection suspends the others) on a busy CPU rather than anything the changes do, but it was **not isolated**: if it shows up on a
+quiet machine, `ALLOC_STATS` now prints the stop time of every pause to start from.
+
+**Picture check** (**Observed**, `--world --town "The Hub" --radius 2 --distance 3000 --pitch 20 --size 1600x900 --screenshot x.png`, and the same with `--radius 3 --distance 9000 --pitch 15`,
+base `0834d0d` against the final build with its own re-keyed layout cache, `meitou-tools image-diff`): the two base pictures of a view differ from each other by mean 0.0062 and max 9
+(near) and mean 0.0118 and max 3 (far) out of 255, no pixel over 12 (the viewer is not bit-reproducible run to run: streaming order and temporal history); base against new gives mean 0.0067 / max
+10 and mean 0.0110-0.0120 / max 3-4, so the same noise, with the same zones, meshes and grass pages in the start-up lines. Not checked: a flight's frame-by-frame pictures.
+
+**Not reached.** Generation 2 is still about 4 a flight (target 2 a minute): the LOH is still 9.6 of 12.3 GB, and what is left is the impostor atlases (`FoliageRenderer.Impostors.cs`
+refine and load jobs, 3.2 GB in about 680 jobs of 3-7 MB, a refine is a whole reload at another mip level), the DDS reads (1.0 GB), the terrain height windows (0.95 GB) and layer
+decodes (0.6 GB + 0.4 GB), `BuildingLodMesh` (0.7 GB) and the grass pages (1.4 GB in 10,000 jobs, small arrays awaiting upload). They all end in an upload step, which is the other
+agent's code (`UploadQueue`, `Uploader`, the atlas upload): pooling them means returning the buffer after the last upload step has run, and the level arrays would be power-of-two sized,
+which `ImpostorTextures.BytesFor` and the upload read as `Length`. The impostor refines are also the most behaviour-bound churn (450-700 jobs a flight as the plan changes with the
+camera): fewer would need hysteresis in the plan, which changes pictures. What the blocking collections of 8 to 21 ms spend their time on is **Unknown** (not the copied bytes, not the thread stop).
+
+**GC settings tried** (**Observed**, not clean runs: a second viewer shared the card, VRAM budget 6.3-7.4 GB, so only the same build under the same conditions is comparable):
+`DOTNET_GCgen0MaxBudget=0x6000000` (96 MB a heap, 384 MB over the four) gave, in three runs, 4-6 generation-2 collections, 10-14 collections in all and 108-203 ms of pauses; the
+same build without it, same conditions, had 3-6, 7-16 and 104-231 ms. No difference worth a setting, which fits the survivors being the resident set, not work in flight (a smaller
+budget only moves the same copying to more collections). Not adopted. `System.GC.Gen0MaxBudget` is honoured from `runtimeconfig.json` (**Verified** with a test app that prints the
+collection counts), `System.GC.Gen0Size` is not. The 32 MB budget and 8 heaps (`DOTNET_GCHeapCount=8`) were queued but never got a quiet card.
+
 ## 9. Expected CPU cost, and how the profiler keeps working
 
 *In short: a throwaway measurement on the RTX 4070 recorded the same draws through VkGl and directly. A typical foliage mesh draw costs about

@@ -38,6 +38,7 @@ static partial class WorldApp
         long gc2 = GC.CollectionCount(2), gcPrev = gc2, gc0 = GC.CollectionCount(0), gc1 = GC.CollectionCount(1), allocated = GC.GetTotalAllocatedBytes(), renderAllocated = GC.GetAllocatedBytesForCurrentThread();
         TimeSpan pause0 = GC.GetTotalPauseDuration(), pausePrev = pause0;
         BackgroundWork.Measure = BackgroundWork.ReportJobs;
+        var allocLog = AllocationLog.Start();   // MEITOU_ALLOC_STATS=1: every collection and the allocation by thread and type
         var resident = new List<string>();
         // Pop-in: per frame, how near the nearest foliage zone without its whole layout (within the near reach) and without any layout (within
         // the far reach) are, and the nearest group in range whose mesh is not resident.
@@ -62,6 +63,7 @@ static partial class WorldApp
         for (int i = 1; i <= o.FlyBenchmark; i++)
         {
             motion.Step(i);
+            allocLog?.FrameStart();
             if (spikeProfiler is not null) { context.EnsureFrame(); spikeProfiler.BeginFrame(); } else StageClock.Start();
             frameWatch.Restart();
             // With weather particles the frame clock runs (1/60 s a frame, in the draw's time units of 600 s) so they simulate; without, it stays 0 as before.
@@ -115,6 +117,7 @@ static partial class WorldApp
         Console.WriteLine($"jobs      record mode {Meitou.Rendering.Gpu.Recording.Mode} ({RenderJobs.Threads} threads); summed cpu mean ms: " +
             string.Join(", ", StageClock.Names.Select((n, k) => (n, k)).Where(x => jobSums[x.k] > 0).Select(x => $"{x.n} {jobSums[x.k] / o.FlyBenchmark:0.00}")));
         if (BackgroundWork.ReportJobs) { BackgroundWork.Measure = false; BackgroundWork.Report(); }
+        if (allocLog is not null) { Thread.Sleep(500); allocLog.Print(); allocLog.Dispose(); }
         if (gpu.Particles is { } fx)
             Console.WriteLine($"particles per frame over the flight: simulation {fx.MeanMilliseconds.Simulation:0.00} ms (background threads), main thread waited {fx.MeanMilliseconds.Wait:0.00} ms; update {fx.MeanMainThreadMilliseconds.Update:0.00} ms, draw {fx.MeanMainThreadMilliseconds.Draw:0.00} ms (waiting included, of which filling instance buffers {fx.CollectMilliseconds:0.00} ms); {fx.ActiveUnits} units simulated, {fx.DrawnUnits} drawn");
         Console.WriteLine($"cpu only  p50 {C(0.5):0.0} ms, p95 {C(0.95):0.0} ms, p99 {C(0.99):0.0} ms, max {cpuSorted[^1]:0.0} ms (commands recorded, GPU not waited for)");

@@ -235,6 +235,37 @@ public class ImpostorTests
     }
 
     [Fact]
+    public void An_atlas_read_from_a_level_has_the_levels_it_keeps_exactly_and_still_checks_the_whole_file()
+    {
+        var atlas = Synthetic();
+        Assert.True(atlas.Levels >= 2, "the synthetic atlas needs a level to leave out");
+        using var stream = new MemoryStream();
+        atlas.Write(stream);
+        var bytes = stream.ToArray();
+        for (int first = 0; first < atlas.Levels; first++)
+        {
+            var read = ImpostorAtlas.Read(new MemoryStream(bytes), first);
+            Assert.NotNull(read);
+            Assert.Equal(first, read.FirstLevel);
+            Assert.Equal(atlas.Levels, read.Levels);
+            for (int m = 0; m < 2; m++)
+                for (int l = 0; l < atlas.Levels; l++)
+                    Assert.Equal(l < first ? Array.Empty<byte>() : atlas.Textures[m].Levels[l], read.Textures[m].Levels[l]);
+            // The bytes the textures keep are the same; a skip below the first level read is clamped to it (never an empty level uploaded as a level).
+            Assert.Equal(ImpostorTextures.BytesFor(atlas, first, first + 1), ImpostorTextures.BytesFor(read, first, first + 1));
+            Assert.Equal(ImpostorTextures.BytesFor(atlas, first, first), ImpostorTextures.BytesFor(read, 0, 0));   // asking for a level the read lacks is clamped to the first it has
+        }
+        // Past the last level asks for the last: one level is always read.
+        Assert.Equal(atlas.Levels - 1, ImpostorAtlas.Read(new MemoryStream(bytes), 99)!.FirstLevel);
+        // The skipped levels are in the checksum: damage in one is still found.
+        var damaged = (byte[])bytes.Clone();
+        damaged[^3] ^= 0x01;
+        Assert.Null(ImpostorAtlas.Read(new MemoryStream(damaged), 1));
+        // An atlas without its top levels is not a whole one: it cannot be written.
+        Assert.Throws<InvalidOperationException>(() => ImpostorAtlas.Read(new MemoryStream(bytes), 1)!.Write(new MemoryStream()));
+    }
+
+    [Fact]
     public void Damaged_or_foreign_files_read_as_null()
     {
         var atlas = Synthetic();

@@ -52,6 +52,13 @@ public sealed class DdsFile
 
     public DdsSurface Surface(int image, int level) => Surfaces[image * MipCount + level];
 
+    /// <summary>The same file over other bytes, with surfaces laid out in them (<see cref="DdsReader.ReadKept"/>).</summary>
+    internal DdsFile WithData(byte[] data, IReadOnlyList<DdsSurface> surfaces) => new()
+    {
+        Data = data, Width = Width, Height = Height, Depth = Depth, MipCount = MipCount, ImageCount = ImageCount, IsCubemap = IsCubemap, IsVolume = IsVolume,
+        Format = Format, FourCC = FourCC, DxgiFormat = DxgiFormat, Masks = Masks, HeaderFlags = HeaderFlags, HeaderSize = HeaderSize, Surfaces = surfaces,
+    };
+
     public ReadOnlySpan<byte> SurfaceData(DdsSurface surface) => Data.AsSpan(surface.Offset, surface.Length);
 
     public override string ToString() =>

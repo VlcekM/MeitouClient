@@ -96,6 +96,26 @@ public sealed class FoliageWorld : IDisposable
     {
         if (!zone.IsInsideGrid) return (new FoliageZone { Zone = zone }, null);
         if (cache?.TryLoad(zone, farOnly) is { } hit) return (hit.Zone, hit.Ground);
+        return Place(zone, farOnly);
+    }
+
+    /// <summary>
+    /// <see cref="Load"/> with the instances grouped for the renderer (<see cref="GroupedFoliageZone"/>, whose zone has no instance list): a layout read back
+    /// from the cache is grouped straight from the file's records, a placed one from its list (which is then emptied).
+    /// </summary>
+    public GroupedFoliageZone LoadGrouped(ZoneCoordinate zone, bool farOnly = false)
+    {
+        if (!zone.IsInsideGrid) return FoliageGrouping.Group(new FoliageZone { Zone = zone }, null);
+        if (cache?.TryLoadGrouped(zone, farOnly) is { } hit) return hit;
+        var (laid, ground) = Place(zone, farOnly);
+        var grouped = FoliageGrouping.Group(laid, ground);
+        laid.Instances.Clear();
+        laid.Instances.TrimExcess();
+        return grouped;
+    }
+
+    (FoliageZone Zone, FoliageGround? Ground) Place(ZoneCoordinate zone, bool farOnly)
+    {
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         Open();
         int zonesPerTile = WorldLayout.ZoneCount / TerrainMaps.OverlayTiles;

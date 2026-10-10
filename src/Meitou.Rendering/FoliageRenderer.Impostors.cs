@@ -483,13 +483,13 @@ public sealed partial class FoliageRenderer
             }
             if (s is null)
             {
-                RequestImpostor(a, now);
+                RequestImpostor(a, now, Math.Max(it.BaseSkip + it.Extra - 1, 0));
                 s = a.Impostor;
             }
             else if (s is { Stage: ImpostorStage.None, RetryAt: > 0 } refused && now >= refused.RetryAt)
             {
                 a.Impostor = null;   // the plan says it fits now
-                RequestImpostor(a, now);
+                RequestImpostor(a, now, Math.Max(it.BaseSkip + it.Extra - 1, 0));
                 s = a.Impostor;
             }
             if (s is null) continue;
@@ -549,7 +549,7 @@ public sealed partial class FoliageRenderer
         s.RefineSkip = skip;
         s.RefineLoad = BackgroundWork.Run<ImpostorAtlas?>(() =>
         {
-            var atlas = cache.TryLoad(source);
+            var atlas = cache.TryLoad(source, skip);   // only the levels the new textures keep are read (the albedo's from skip, the normal map's from skip + 1)
             return atlas is not null && atlas.FramePixels == frame && atlas.Grid == grid ? atlas : null;
         });
         impostorRefining.Add(a);
@@ -738,7 +738,10 @@ public sealed partial class FoliageRenderer
         if (StreamLog) { double tEnd = impWatch.Elapsed.TotalMilliseconds; if (tEnd > 3) Console.WriteLine($"slow impostors {tEnd:0.0}: uploads {tUp - 0:0.0}, refines {tBake0 - tUp:0.0}, bake {tEnd - tBake0:0.0}, {uploaded / 1048576.0:0.0} MB [{Meitou.Rendering.Gpu.UploadProfile.Take()}]"); }
     }
 
-    void RequestImpostor(MeshAsset a, long now)
+    /// <param name="firstLevel">The finest level worth reading from the cache: the albedo level the plan wants now, one finer for a nearer approach before the atlas arrives. An atlas
+    /// read from it has nothing above (<see cref="ImpostorAtlas.FirstLevel"/>): the top level alone is three quarters of the bytes, and most far atlases never upload it.
+    /// If the camera got closer than that meanwhile, the textures are made from the first level there is (<see cref="UploadImpostor"/>) and the plan refines them.</param>
+    void RequestImpostor(MeshAsset a, long now, int firstLevel)
     {
         if (a.Impostor is not null) return;
         // A TERRAIN-mode rock's atlas (a holder of one biome: MeshAsset.RockOf) is baked with that biome's terrain material; the mesh itself is never asked.
@@ -769,7 +772,7 @@ public sealed partial class FoliageRenderer
                 if (share < RockMinSurface) cls = null;   // sticks and the like: parts a billboard cannot hold, they stay meshes
             }
             if (cls is not { } c) return (source, meshes, null, null);
-            var atlas = cache.TryLoad(source);
+            var atlas = cache.TryLoad(source, firstLevel);
             if (atlas is not null && (atlas.FramePixels != c.FramePixels || atlas.Grid != c.Grid)) atlas = null;
             return (source, meshes, c, atlas);
         });
@@ -804,7 +807,7 @@ public sealed partial class FoliageRenderer
             }
             using var first = Gpu.Uploads.Begin();
             s.Textures = new ImpostorTextures(Gpu, s.Atlas!, first, levels, levels + 1);
-            s.Skip = levels;
+            s.Skip = s.Textures.SkipOf(0);   // levels, or the atlas's first level when it was read without the finer ones (the plan then refines)
             impostorBytes += s.Textures.Bytes;
         }
         using var batch = Gpu.Uploads.Begin();

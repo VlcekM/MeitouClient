@@ -271,7 +271,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         public required ZoneCoordinate Zone;
         public float X0, Z0;
-        public Task<(FoliageZone Zone, FoliageGround? Ground, PreparedZone Prepared)>? Job;
+        public Task<GroupedFoliageZone>? Job;
         /// <summary>Laid out (at least the far layers); <see cref="Complete"/>: every layer, grass included, nothing left out. <see cref="MeshLayers"/>: every
         /// mesh layer was laid out (<see cref="Complete"/> implies it). <see cref="Filtered"/>: the groups that cannot be drawn at this zone's distance
         /// (a mesh that is not large) were left out. <see cref="JobTier"/>: what the job in flight lays out.</summary>
@@ -295,24 +295,6 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public float MinY, MaxY;
     }
 
-    /// <summary>A zone's instances grouped per (mesh, layer) with their arrays built, made on a worker.</summary>
-    sealed record PreparedGroup(FoliageMesh Mesh, FoliageLayer Layer, FoliageInstanceRecord[] Instances, float MaxScale);
-    sealed record PreparedZone(List<PreparedGroup> Groups, float MinY, float MaxY);
-
-    static PreparedZone Prepare(FoliageZone zone)
-    {
-        var groups = new List<PreparedGroup>();
-        foreach (var g in zone.Instances.GroupBy(i => (i.Mesh, i.Layer)))
-        {
-            var list = g.ToList();
-            int index = groups.Count;
-            var records = new FoliageInstanceRecord[list.Count];
-            for (int i = 0; i < records.Length; i++)
-                records[i] = new FoliageInstanceRecord { Transform = list[i].Transform, Ground = new Vector4(list[i].Position.X, list[i].Position.Z, list[i].Scale, index) };
-            groups.Add(new PreparedGroup(g.Key.Mesh, g.Key.Layer, records, list.Max(i => i.Scale)));
-        }
-        return new PreparedZone(groups, zone.Instances.Count == 0 ? 0 : zone.Instances.Min(i => i.Position.Y), zone.Instances.Count == 0 ? 0 : zone.Instances.Max(i => i.Position.Y));
-    }
 
     /// <summary>The instances of one mesh in one zone, with the range of the layer that placed them.</summary>
     sealed class Group
@@ -476,7 +458,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             state.JobTier = tier;
             started++;
             bool farOnly = !whole;
-            Func<(FoliageZone, FoliageGround?, PreparedZone)> job = () =>
+            Func<GroupedFoliageZone> job = () =>
             {
                 if (!worlds.TryTake(out var world))
                 {
@@ -485,8 +467,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 }
                 try
                 {
-                    var (laid, ground) = world.Load(zone, farOnly);
-                    return (laid, ground, Prepare(laid));   // grouped on the worker: thousands of instances cost 15 to 20 ms on the render thread
+                    // Grouped on the worker (thousands of instances cost 15 to 20 ms on the render thread), straight from the cache file's records when it has the zone.
+                    return world.LoadGrouped(zone, farOnly);
                 }
                 finally { worlds.Add(world); }
             };
@@ -583,9 +565,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
 
     /// <summary>A finished layout: its groups replace the zone's (a whole layout after a far one brings the same far instances back with the rest).</summary>
-    void Accept(ZoneState state, (FoliageZone Zone, FoliageGround? Ground, PreparedZone Prepared) result, Tier tier)
+    void Accept(ZoneState state, GroupedFoliageZone prepared, Tier tier)
     {
-        var (zone, ground, prepared) = result;
+        var (zone, ground) = (prepared.Zone, prepared.Ground);
         // With the Meitou range switch a zone beyond the whole reach can only show large meshes (the small and medium ranges and the grass end
         // before it): the other groups would be instances, meshes and textures held for nothing. A group whose mesh is not decoded yet has no
         // size class; it is kept and the prune pass (TrimResident) drops it when the size is known.
@@ -610,7 +592,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
         FreeArena(state.Groups);
         state.Groups = groups;
-        state.Instances = zone.Instances.Count;
+        state.Instances = prepared.InstanceCount;
         state.MinY = prepared.MinY;
         state.MaxY = prepared.MaxY;
         state.Ground = ground;

@@ -159,33 +159,53 @@ public sealed class FoliageLayoutCache
     // ------------------------------------------------------------------ read
 
     /// <summary>The cached zone, or null (a miss: absent, or unusable, which is also counted in <see cref="FoliageLayoutCacheStats.Rejected"/>).</summary>
-    public (FoliageZone Zone, FoliageGround Ground)? TryLoad(ZoneCoordinate zone, bool farOnly)
+    public (FoliageZone Zone, FoliageGround Ground)? TryLoad(ZoneCoordinate zone, bool farOnly) =>
+        Fetch(zone, farOnly, grouped: false) is { } f ? (f.Zone, f.Ground) : null;
+
+    /// <summary>
+    /// Like <see cref="TryLoad"/>, with the instances already grouped for the renderer (<see cref="GroupedFoliageZone"/>; its zone's instance list is empty): the
+    /// records are built straight from the file's, so the zone's 56-byte-per-instance list and the copies grouping it made are never allocated.
+    /// </summary>
+    public GroupedFoliageZone? TryLoadGrouped(ZoneCoordinate zone, bool farOnly) => Fetch(zone, farOnly, grouped: true)?.Grouped;
+
+    readonly record struct Decoded(FoliageZone Zone, FoliageGround Ground, float ComputeMs, GroupedFoliageZone? Grouped);
+
+    Decoded? Fetch(ZoneCoordinate zone, bool farOnly, bool grouped)
     {
         if (LoadCaches.Disabled) return null;
         var path = PathFor(zone, farOnly);
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-        byte[] bytes;
+        byte[]? bytes = null;
         try
         {
-            if (!System.IO.File.Exists(path)) return Miss(false);
-            bytes = System.IO.File.ReadAllBytes(path);
+            int length;
+            try
+            {
+                if (!System.IO.File.Exists(path)) return Miss(false);
+                (bytes, length) = ReadPooled(path);
+            }
+            catch (IOException) { return Miss(true); }
+            catch (UnauthorizedAccessException) { return Miss(true); }
+            Decoded? result;
+            try { result = Decode(bytes, length, zone, farOnly, grouped); }
+            catch (Exception e) when (e is ArgumentException or IndexOutOfRangeException or InvalidDataException or KeyNotFoundException or OverflowException or EndOfStreamException) { result = null; }
+            if (result is null) return Miss(true);
+            Interlocked.Increment(ref hits);
+            TouchOnce();
+            Interlocked.Add(ref bytesRead, length);
+            Interlocked.Add(ref savedMicros, (long)(result.Value.ComputeMs * 1000));
+            long took = System.Diagnostics.Stopwatch.GetTimestamp() - t0;
+            Interlocked.Add(ref loadTicks, took);
+            Interlocked.Add(ref savedMicros, -(long)(took * 1e6 / System.Diagnostics.Stopwatch.Frequency));
+            return result;
         }
-        catch (IOException) { return Miss(true); }
-        catch (UnauthorizedAccessException) { return Miss(true); }
-        (FoliageZone, FoliageGround, float)? result;
-        try { result = Decode(bytes, zone, farOnly); }
-        catch (Exception e) when (e is ArgumentException or IndexOutOfRangeException or InvalidDataException or KeyNotFoundException or OverflowException or EndOfStreamException) { result = null; }
-        if (result is null) return Miss(true);
-        Interlocked.Increment(ref hits);
-        TouchOnce();
-        Interlocked.Add(ref bytesRead, bytes.Length);
-        Interlocked.Add(ref savedMicros, (long)(result.Value.Item3 * 1000));
-        long took = System.Diagnostics.Stopwatch.GetTimestamp() - t0;
-        Interlocked.Add(ref loadTicks, took);
-        Interlocked.Add(ref savedMicros, -(long)(took * 1e6 / System.Diagnostics.Stopwatch.Frequency));
-        return (result.Value.Item1, result.Value.Item2);
+        finally
+        {
+            // Nothing decoded refers to the file's bytes (strings, heights, densities and records are copies).
+            if (bytes is not null) System.Buffers.ArrayPool<byte>.Shared.Return(bytes);
+        }
 
-        (FoliageZone, FoliageGround)? Miss(bool bad)
+        Decoded? Miss(bool bad)
         {
             Interlocked.Increment(ref misses);
             if (bad) Interlocked.Increment(ref rejected);
@@ -193,14 +213,42 @@ public sealed class FoliageLayoutCache
         }
     }
 
+    /// <summary>The whole file in a pooled buffer (a file is 300 KB on average, a large object the size of a zone's records; files over 1 MB are not pooled by the shared pool).</summary>
+    static (byte[] Buffer, int Length) ReadPooled(string path)
+    {
+        using var file = System.IO.File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, FileOptions.SequentialScan);
+        long size = RandomAccess.GetLength(file);
+        if (size > int.MaxValue) throw new IOException("cache file too large");
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent((int)size);
+        try
+        {
+            int read = 0;
+            while (read < size)
+            {
+                int n = RandomAccess.Read(file, buffer.AsSpan(read, (int)size - read), read);
+                if (n == 0) break;
+                read += n;
+            }
+            return (buffer, read);   // a file that shrank meanwhile fails its checksum
+        }
+        catch
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+            throw;
+        }
+    }
+
     /// <summary>Parses and verifies one file's bytes; null when it is not a valid entry for this key, zone and kind.</summary>
-    public (FoliageZone Zone, FoliageGround Ground, float ComputeMs)? Decode(byte[] bytes, ZoneCoordinate zone, bool farOnly)
+    public (FoliageZone Zone, FoliageGround Ground, float ComputeMs)? Decode(byte[] bytes, ZoneCoordinate zone, bool farOnly) =>
+        Decode(bytes, bytes.Length, zone, farOnly, grouped: false) is { } d ? (d.Zone, d.Ground, d.ComputeMs) : null;
+
+    Decoded? Decode(byte[] bytes, int fileLength, ZoneCoordinate zone, bool farOnly, bool grouped)
     {
         const int Header = 4 + 4 + 32 + 4 + 4 + 1 + 1 + 4 + 4;
-        if (bytes.Length < Header + 8) return null;
-        int end = bytes.Length - 8;
+        if (fileLength < Header + 8) return null;
+        int end = fileLength - 8;
         var data = bytes.AsSpan(0, end);
-        if (BinaryPrimitives.ReadUInt64LittleEndian(bytes.AsSpan(bytes.Length - 8)) != Checksum(data)) return null;
+        if (BinaryPrimitives.ReadUInt64LittleEndian(bytes.AsSpan(fileLength - 8)) != Checksum(data)) return null;
         int at = 0;
         if (ReadU32() != Magic || ReadI32() != FormatVersion) return null;
         if (!bytes.AsSpan(at, 32).SequenceEqual(key)) return null;
@@ -219,7 +267,7 @@ public sealed class FoliageLayoutCache
 
         // The ground.
         float gx = ReadF32(), gz = ReadF32();
-        var heights = new float[FoliageGround.Size * FoliageGround.Size];
+        var heights = ZoneArrays.Uninitialized<float>(FoliageGround.Size * FoliageGround.Size);
         Need(heights.Length * 4);
         MemoryMarshal.Cast<byte, float>(data.Slice(at, heights.Length * 4)).CopyTo(heights);
         at += heights.Length * 4;
@@ -232,7 +280,8 @@ public sealed class FoliageLayoutCache
         {
             int length = ReadCount();
             Need(length);
-            densities[i] = data.Slice(at, length).ToArray();
+            densities[i] = ZoneArrays.Uninitialized<byte>(length);
+            data.Slice(at, length).CopyTo(densities[i]);
             at += length;
         }
         var result = new FoliageZone { Zone = zone, Resources = resources, Complete = complete };
@@ -251,11 +300,12 @@ public sealed class FoliageLayoutCache
         var disk = MemoryMarshal.Cast<byte, InstanceOnDisk>(data.Slice(at, count * size));
         at += count * size;
         if (at != end) return null;
+        if (grouped) return new Decoded(result, ground, computeMs, GroupDisk(result, ground, disk, meshes, layers));
         var list = result.Instances;
         list.Capacity = count;
         foreach (ref readonly var d in disk)
             list.Add(new FoliageInstance(meshes[d.Mesh], layers[d.Layer], new Vector3(d.X, d.Y, d.Z), d.Scale, d.Yaw, new Quaternion(d.Qx, d.Qy, d.Qz, d.Qw)));
-        return (result, ground, computeMs);
+        return new Decoded(result, ground, computeMs, null);
 
         void Need(int n) { if (n < 0 || at + n > end) throw new InvalidDataException("truncated"); }
         uint ReadU32() { Need(4); var v = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(at, 4)); at += 4; return v; }
@@ -277,6 +327,60 @@ public sealed class FoliageLayoutCache
             }
             return s;
         }
+    }
+
+    /// <summary>
+    /// The file's records grouped as <see cref="FoliageGrouping.Group"/> groups the instances read from them (same groups in the same order, bit-identical records),
+    /// in two passes over the file's span: count the instances of each (mesh, layer), then fill exact-size arrays.
+    /// </summary>
+    static GroupedFoliageZone GroupDisk(FoliageZone zone, FoliageGround ground, ReadOnlySpan<InstanceOnDisk> disk, FoliageMesh[] meshes, FoliageLayer[] layers)
+    {
+        var slotOf = new Dictionary<int, int>();
+        var keys = new List<int>();
+        var counts = new List<int>();
+        int lastKey = -1, lastSlot = 0;
+        foreach (ref readonly var d in disk)
+        {
+            int key = d.Mesh << 16 | d.Layer;
+            if (key == lastKey) { counts[lastSlot]++; continue; }
+            if (!slotOf.TryGetValue(key, out lastSlot))
+            {
+                _ = (meshes[d.Mesh], layers[d.Layer]);   // an index the file's own list lacks throws, as decoding the instances does
+                lastSlot = keys.Count;
+                slotOf[key] = lastSlot;
+                keys.Add(key);
+                counts.Add(0);
+            }
+            lastKey = key;
+            counts[lastSlot]++;
+        }
+        var records = new FoliageInstanceRecord[keys.Count][];
+        var maxScale = new float[keys.Count];
+        var filled = new int[keys.Count];
+        for (int g = 0; g < records.Length; g++) records[g] = ZoneArrays.Uninitialized<FoliageInstanceRecord>(counts[g]);
+        float minY = float.PositiveInfinity, maxY = float.NegativeInfinity;
+        lastKey = -1;
+        foreach (ref readonly var d in disk)
+        {
+            int key = d.Mesh << 16 | d.Layer;
+            if (key != lastKey) { lastSlot = slotOf[key]; lastKey = key; }
+            int at = filled[lastSlot]++;
+            records[lastSlot][at] = new FoliageInstanceRecord
+            {
+                Transform = FoliageInstance.TransformOf(d.Scale, new Quaternion(d.Qx, d.Qy, d.Qz, d.Qw), new Vector3(d.X, d.Y, d.Z)),
+                Ground = new Vector4(d.X, d.Z, d.Scale, lastSlot),
+            };
+            maxScale[lastSlot] = at == 0 ? d.Scale : Math.Max(maxScale[lastSlot], d.Scale);
+            minY = Math.Min(minY, d.Y);
+            maxY = Math.Max(maxY, d.Y);
+        }
+        var groups = new List<FoliageInstanceGroup>(keys.Count);
+        for (int g = 0; g < keys.Count; g++) groups.Add(new FoliageInstanceGroup(meshes[(int)((uint)keys[g] >> 16)], layers[keys[g] & 0xFFFF], records[g], maxScale[g]));
+        return new GroupedFoliageZone
+        {
+            Zone = zone, Ground = ground, Groups = groups, InstanceCount = disk.Length,
+            MinY = disk.Length == 0 ? 0 : minY, MaxY = disk.Length == 0 ? 0 : maxY,
+        };
     }
 
     // ------------------------------------------------------------------ write
