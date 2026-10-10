@@ -292,8 +292,9 @@ and the checkerboard of small regions at a coast (Vain and Dreg) flipped the wea
   density are copied) and the groups go back to the live world (`EffectGroup.Rebind`) before they are swapped in. The schedule costs at most 0.3 ms (the table; the first
   group of each kind is slower for the compiling, which `EffectGroups.PrimeJit` does on a worker at start-up, as the viewer runs with tiered compilation off).
   The simulation touches only the units and runs on any thread.
-- **A change is made on the side** (`WeatherGroups`, `EffectSet`, `EffectWarmer`): once wanted, the new groups are created on the render thread (0.6 to 0.75 ms in the
-  logged build starts: 0.5 to 0.6 of it the world's `Frozen` copy, 0.06 to 0.08 the groups, 0.04 to 0.06 the queuing; **Observed**, `MEITOU_PARTICLE_LOG=1`), queued for the warm-up thread, which runs their schedules and simulates their queued time
+- **A change is made on the side** (`WeatherGroups`, `EffectSet`, `EffectWarmer`): once wanted, the new groups are created on the render thread (**Observed**, `MEITOU_PARTICLE_LOG=1`, which prints only changes over 1 ms, so the three
+  build starts it shows are the first of their flights: 1.2 to 1.4 ms in all, of which 0.5 to 0.6 the world's `Frozen` copy, probably the compiling of its first call, 0.06 to 0.08 the groups
+  and 0.04 to 0.06 the queuing; later starts were under 1 ms and are not itemised), queued for the warm-up thread, which runs their schedules and simulates their queued time
   (one unit after the other, at below-normal priority: the frame keeps its cores and the pool its workers), and
   when it is done the next `Update` swaps them for the old groups (with the frame's own simulation finished, so nothing runs on either). The old weather's
   particles are drawn until then; the new ones appear fully formed (the same particle counts as the old on-thread pre-warm: same seeds, same steps, `WeatherGroupsTests`; a

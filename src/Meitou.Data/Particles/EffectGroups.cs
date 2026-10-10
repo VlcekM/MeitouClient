@@ -72,7 +72,7 @@ public sealed class EffectWorld
     /// function over the heights as they are now that any thread may call (the viewer: a snapshot of the terrain's height grids).
     /// </summary>
     public Func<Func<float, float, float>>? FreezeGroundHeight { get; set; }
-    /// <summary>A copy for a worker thread (a group being warmed in the background, <see cref="EffectSet"/>): the ground height frozen as it is now (<see cref="FreezeGroundHeight"/>), the rest as it is. Call it on the render thread.</summary>
+    /// <summary>A copy for a worker thread (a group being warmed in the background, <see cref="EffectSet"/>): the ground height frozen as it is now (<see cref="FreezeGroundHeight"/>), the rest as it is (<see cref="GroundColour"/> too, so it must be callable from any thread when set; the viewer leaves it unset). Call it on the render thread.</summary>
     public EffectWorld Frozen() => new()
     {
         GroundHeight = FreezeGroundHeight?.Invoke() ?? GroundHeight, Area = Area, ActiveRadius = ActiveRadius, FallbackRadius = FallbackRadius, GroundColour = GroundColour, Density = Density,

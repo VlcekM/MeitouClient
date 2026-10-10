@@ -8,7 +8,9 @@ namespace Meitou.Data.Particles;
 /// units (<see cref="EffectGroup.BeginWarm"/>), and the simulation of the time that queued up, up to 40 s of every unit (<see cref="EffectGroup.SimulateSerial"/>).
 /// <see cref="Begin"/> makes the groups on the calling thread and leaves both to the caller (<see cref="SimulateNow"/>: the first groups of a view);
 /// <see cref="BeginInBackground"/> makes the groups there, which is a few microseconds, and does both halves on a thread of its own, with the ground height of
-/// a snapshot (<see cref="EffectWorld.Frozen"/>). Until <see cref="Ready"/> nobody else may touch the groups.
+/// a snapshot (<see cref="EffectWorld.Frozen"/>). Until <see cref="Ready"/> nobody else may touch the groups' state (units, particles, world): the list
+/// <see cref="Groups"/> itself is made before the worker starts and never changes, so the render thread may read it, <see cref="Source"/> and each group's
+/// immutable <see cref="EffectGroup.System"/> (the renderer preloads the textures from them), and nothing else.
 /// </summary>
 public sealed class EffectSet
 {
