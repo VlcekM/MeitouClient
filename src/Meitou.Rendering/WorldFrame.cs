@@ -114,6 +114,8 @@ sealed class WorldOptions
     public float? HazeDistance;
     public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze switch (default); 1 = the game's haze
     public bool ThinNightHaze = true; // the Meitou night switch (default): the haze thinned at night (SkyRenderer.ThinNightHaze)
+    public bool Planetshine = true; // the Meitou planetshine switch (default): the big planet lights the night (SkyRenderer.Planetshine)
+    public float PlanetshineStrength = Enhancements.MeitouPlanetshineStrength; // x the physical value (--planetshine-strength, a Tab slider)
     /// <summary><c>--weather</c>: a WEATHER record's name forces that weather at the camera; null or "auto" lets the scheduler (docs/formats/weather.md) run.</summary>
     public string? Weather;
     /// <summary>Test overrides of the weather's surface values (<c>--wetness</c>, <c>--dust</c>, <c>--rain</c>); null: the forced weather's.</summary>
@@ -264,6 +266,7 @@ sealed class WorldOptions
           --haze <kenshi|physical>  aerial perspective: the game's own haze (default) or the physical integral
           --haze-distance <u>      the game's far distance D (view distance x 10) for its haze, which ramps in from 0.06 D to 0.6 D (default 50000: view distance 5000)
           --haze-strength <x>      the viewer's haze strength: scales how far the haze is blended in (default 0.93: far mountains stay visible; 1 is the game's; also a Tab slider)
+          --planetshine-strength <x>  the Meitou planetshine's light as a multiple of the physical value (default 60, see docs/formats/sky.md "Planetshine"; the planetshine switch, `--faithful planetshine`; also a Tab slider)
           --wetness <0..1> / --rain <0..100> / --dust <x[,inside,slope]>   the weather's wet surfaces, rain ripples on water and dust on objects; the forced weather's settled values by default, these replace them (testing)
           --weather <name|auto>    auto (default): the weather scheduler (regions, seasons, wind) at the camera, from --day and --time; a WEATHER record's name forces that one (sky colour, fog, clouds, wind, heat haze, particles; "Default" is clear)
           --day <n>                the game day the weather schedule starts at (default 0)   --weather-seed <n> the scheduler's random seed (default 1, as meitou-tools weather)
@@ -330,7 +333,7 @@ sealed class WorldOptions
     internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
         () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v,
         () => o.MeitouWater, v => o.MeitouWater = v, () => o.FoliageLod, v => o.FoliageLod = v, () => o.GiProbes, v => o.GiProbes = v,
-        () => o.ThinNightHaze, v => o.ThinNightHaze = v);
+        () => o.ThinNightHaze, v => o.ThinNightHaze = v, () => o.Planetshine, v => o.Planetshine = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -424,6 +427,7 @@ sealed class WorldOptions
                 case "--haze": o.PhysicalHaze = Next() switch { "kenshi" => false, "physical" => true, var h => throw new ArgumentException($"--haze: kenshi or physical, not {h}") }; break;
                 case "--haze-distance": o.HazeDistance = F(); break;
                 case "--haze-strength": o.HazeStrength = F(); break;
+                case "--planetshine-strength": o.PlanetshineStrength = F(); break;
                 case "--meitou": Enhancements.Apply(Switches(o), Next(), meitou: true); break;
                 case "--faithful": Enhancements.Apply(Switches(o), Next(), meitou: false); break;
                 case "--weather": o.Weather = Next(); break;
@@ -878,6 +882,8 @@ static class WorldFrame
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
         gpu.Sky.ThinNightHaze = o.ThinNightHaze;
+        gpu.Sky.Planetshine = o.Planetshine;
+        gpu.Sky.PlanetshineStrength = o.PlanetshineStrength;
         if (scene.Database is { } skyDb)
         {
             gpu.Sky.LoadWorld(install, skyDb);   // the ambient map and the CONSTANTS exposure band (docs/formats/lighting.md)
@@ -1057,7 +1063,8 @@ static class WorldFrame
             () => gpu()?.Foliage?.Lod ?? o.FoliageLod, v => { o.FoliageLod = v; if (gpu()?.Foliage is { } f) f.Lod = v; },
             // Without probes (no --gi, no ray queries) the switch reads off: the picture has the flat ambient whatever it is set to.
             () => gpu() is { } giGpu ? giGpu.Probes?.Enabled ?? false : o.GiProbes, v => { o.GiProbes = v; if (gpu()?.Probes is { } p) p.Enabled = v; },
-            () => gpu()?.Sky.ThinNightHaze ?? o.ThinNightHaze, v => { o.ThinNightHaze = v; if (gpu() is { } g) g.Sky.ThinNightHaze = v; });
+            () => gpu()?.Sky.ThinNightHaze ?? o.ThinNightHaze, v => { o.ThinNightHaze = v; if (gpu() is { } g) g.Sky.ThinNightHaze = v; },
+            () => gpu()?.Sky.Planetshine ?? o.Planetshine, v => { o.Planetshine = v; if (gpu() is { } g) g.Sky.Planetshine = v; });
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null,
@@ -1132,6 +1139,8 @@ static class WorldFrame
         }
         // A viewer option, not the game's: 1 is the game's haze (docs/formats/sky.md).
         sliders.Add(new Slider("Haze strength (1 = game)", 0, 3, () => g.Sky.HazeStrength, v => g.Sky.HazeStrength = v, "0.00"));
+        // Ours (docs/formats/sky.md "Planetshine"): the planet's light at night, a multiple of the physical value.
+        sliders.Add(new Slider("Planetshine strength (x physical)", 0, 200, () => g.Sky.PlanetshineStrength, v => g.Sky.PlanetshineStrength = MathF.Round(v), "0"));
         if (g.Post is { } post)
         {
             // Upscaling (docs/engine.md "Upscaling"): FSR and DLSS fall back to TAA where their library or backend is missing.
@@ -1286,7 +1295,7 @@ static class WorldFrame
         }
         StageClock.Lap(13);
         if (gpu.Shadow is not null) gpu.Shadow.RangeCap = gpu.FogVolumes?.AtmosphereDistance;   // the cascades end where the weather fog hides everything
-        if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, sun.Y); }
+        if (gpu.Shadow is not null) { gpu.Shadow.Temporal = gpu.Post?.Temporal == true; DrawShadows(gpu, camera, render, light, rw, rh, gpu.Sky.ShadowSunHeight); }
         StageClock.Lap(12);
         gpu.Lamps?.Update(eye);
         // The traced scene of the global illumination: its acceleration structures for this eye (docs/render-gi.md).

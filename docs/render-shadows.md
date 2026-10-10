@@ -3,6 +3,8 @@
 Part of the world view of `meitou-viewer` (and the game, which shares `src/Meitou.Rendering`); options, keys and the rest of the world mode are in [viewer.md](viewer.md#world-mode).
 
 
+At night, with the Meitou `planetshine` switch (default), the map is drawn along the big planet's light instead of the sun's: the direction handed to the pass is the published light's, and the sun-height cut-off is lifted while the planet lights the land ([formats/shadows.md](formats/shadows.md), "Low sun").
+
 The sun's shadow map as the game's CSM mode draws it ([formats/shadows.md](formats/shadows.md)): four cascades in one atlas
 (`--shadow-quality <0|1|2>`, 1024² / 2048² / 4096², default 2048²; `--shadow-range <u>`, default 5000 in Faithful and 10000 in Meitou (1000-9000 and 1000-15000; the F5 toggle swaps the default if the range was not touched); `--no-shadows`), drawn
 before the reflection and the main pass from the terrain, objects and foliage meshes. `--debug-shadows 1|2|3` shows the cascade

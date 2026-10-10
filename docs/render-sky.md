@@ -16,6 +16,10 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
   exposure from the measured mean luminance, so the screen brightness follows the game's `0.55 / adapted` with the CONSTANTS band.
   At night the game's haze is black and hides everything past a few thousand units; the `night` switch (Meitou, default) thins it to a quarter
   once the sun is down so the far land stays visible ([formats/sky.md](formats/sky.md), "Night haze"; `--faithful night` for the game's).
+  The game's night land has only that flat ambient; the `planetshine` switch (Meitou, default; `--faithful planetshine` for the game's) makes the big planet the light
+  once the sun is down: `Planetshine` in `NightSky.cs` gives its irradiance from its phase, size and mean albedo (times a strength, default 60), and
+  `SkyRenderer.Prepare` publishes it in place of the sun's light (`uAtmoLight`, `uAtmoSunLight`, the `WorldLighting`, the shadows' direction), blended
+  through twilight ([formats/sky.md](formats/sky.md), "Planetshine"); the ambient, the sky and the exposure stay the game's.
   New shaders include `AtmosphereShaders.Functions` (sky.md, "Using the atmosphere in a new shader"). `--simple-sky` / `B` give
   the old colour model, light and fog, with a fixed exposure.
   Cost: not re-measured after the 2026-10-05 rewrite (the sky's integral now runs per pixel, about 4 × 5 exponentials, instead of

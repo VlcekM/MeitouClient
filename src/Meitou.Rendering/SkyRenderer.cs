@@ -265,6 +265,28 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// </summary>
     public bool ThinNightHaze { get; set; } = true;
 
+    /// <summary>
+    /// The Meitou <c>planetshine</c> switch (viewer, not the game's; docs/formats/sky.md "Planetshine"): the big planet lights the land at night. The
+    /// published light (direction, colour: <c>uAtmoLight</c>, <c>uAtmoSunLight</c>, the <see cref="WorldLighting"/>, the shadows' direction) becomes the sun's
+    /// and the planet's together, the planet's alone once the sun is down; the ambient and the sky stay the game's. False: the game's.
+    /// </summary>
+    public bool Planetshine { get; set; } = true;
+
+    /// <summary>The planetshine's strength: a multiple of the physical value (<see cref="Meitou.Data.World.Planetshine"/>).</summary>
+    public float PlanetshineStrength { get; set; } = Enhancements.MeitouPlanetshineStrength;
+
+    /// <summary>The planet's mean colour (<see cref="Meitou.Data.World.Planetshine.MeanAlbedo(Meitou.Data.Textures.DdsFile)"/>), read when the texture loads.</summary>
+    public Vector3 PlanetAlbedo { get; private set; } = new(Meitou.Data.World.Planetshine.FallbackAlbedo);
+
+    /// <summary>The planet's light counts as light for the shadows when its luminance is above this share of the reference sun light (a new planet casts nothing worth drawing).</summary>
+    const float PlanetLitFloor = 1e-4f;
+
+    /// <summary>
+    /// The sun height the shadow pass tests against its cut-off (<see cref="ShadowPass.MinSunHeight"/>): the real sun's, but while the planet
+    /// is lighting the land (planetshine on, some light of it) never under the horizon, so the shadows go on all night along the published direction.
+    /// </summary>
+    public float ShadowSunHeight => state.PlanetLit ? MathF.Max(state.Sun.Y, 0) : state.Sun.Y;
+
     /// <summary>The night switch's scale on the haze strength at the sun's height <paramref name="sunY"/>: 1 above 0.05, the floor below −0.15, smooth between.</summary>
     public static float NightHazeFactor(float sunY)
     {
@@ -372,10 +394,11 @@ public sealed unsafe class SkyRenderer : IDisposable
         public float Environment, MinLuminance, FogDistance;
         public SkyColours Colours;
         public WorldLighting Light;
-        public bool Valid;
+        public bool Valid, PlanetLit;   // PlanetLit: planetshine adds light of the planet in this state (ShadowSunHeight)
     }
     State state;
     Vector3 builtSun = new(float.NaN);
+    (bool On, float Strength, Vector3 Albedo) builtPlanetshine;
     SkyWeather? builtWeather;
     Vector3 builtTint;
     bool builtPhysical;
@@ -405,7 +428,11 @@ public sealed unsafe class SkyRenderer : IDisposable
             if (assets.Find("SkyX_Starfield.dds") is { } stars) starsTexture = SampledImage.FromDds(Gpu, DdsReader.ReadFile(stars), repeat: true, "sky stars");
             for (int i = 0; i < SkyPlanet.All.Length; i++)
                 if (assets.Find(SkyPlanet.All[i].Texture) is { } planet)
-                    planetTextures[i] = SampledImage.FromDds(Gpu, DdsReader.ReadFile(planet), repeat: true, $"sky planet {SkyPlanet.All[i].Material}");
+                {
+                    var dds = DdsReader.ReadFile(planet);
+                    planetTextures[i] = SampledImage.FromDds(Gpu, dds, repeat: true, $"sky planet {SkyPlanet.All[i].Material}");
+                    if (i == 0) PlanetAlbedo = Meitou.Data.World.Planetshine.MeanAlbedo(dds);   // the planetshine's colour, from a low level of the map
+                }
             if (assets.Find("Clouds.dds") is { } clouds)
             {
                 var img = TextureLoader.LoadFile(clouds, allMips: false).Levels[0];
@@ -471,15 +498,28 @@ public sealed unsafe class SkyRenderer : IDisposable
             return (simple, light);
         }
         // SkyX's sky does not depend on the eye's height (its camera is fixed); the light only changes with the sun and the weather.
-        if (!builtPhysical || !ReferenceEquals(builtWeather, Weather) || builtTint != SkyColourMultiplier || (sun - builtSun).LengthSquared() > 1e-10f)
+        var planetshine = (Planetshine, PlanetshineStrength, PlanetAlbedo);
+        if (!builtPhysical || !ReferenceEquals(builtWeather, Weather) || builtTint != SkyColourMultiplier || (sun - builtSun).LengthSquared() > 1e-10f || builtPlanetshine != planetshine)
         {
             builtSun = sun;
             builtWeather = Weather;
             builtTint = SkyColourMultiplier;
+            builtPlanetshine = planetshine;
             builtPhysical = true;
             var sunLight = KenshiLighting.SunLight(sun);
             var lightDir = KenshiLighting.LightDirection(sun);
+            // The ambient stays the game's: its factor comes from the sun's own (clamped) direction, never the planet's, whose height of 12 degrees would
+            // raise the night ambient fivefold.
             float env = KenshiLighting.EnvironmentFactor(lightDir);
+            // Meitou planetshine: from the end of the sun's light the planet is the light (docs/formats/sky.md "Planetshine"): its colour in the sun light's own
+            // unit (the sun at the zenith, undimmed by the air in between, is the reference), added to the sun's, the direction weighted by their brightness.
+            bool planetLit = false;
+            if (Planetshine && Meitou.Data.World.Planetshine.Weight(sun.Y) is var weight and > 0)
+            {
+                float reference = Meitou.Data.World.Planetshine.Luminance(KenshiLighting.SunLight(Vector3.UnitY));
+                var planetLight = Meitou.Data.World.Planetshine.Light(sun, SkyPlanet.All[0], PlanetAlbedo, reference, PlanetshineStrength) * weight;
+                (lightDir, sunLight) = Meitou.Data.World.Planetshine.Combine(lightDir, sunLight, SkyPlanet.All[0].Towards, planetLight);
+                planetLit = Meitou.Data.World.Planetshine.Luminance(planetLight) > PlanetLitFloor * reference;            }
             var tint = Vector3.One;   // the game tints only the cloud light (zenithLight, below), never the skydome (docs/formats/sky.md)
             var zenith = SkyXModel.Colour(Vector3.UnitY, sun) * tint;
             var flat = new Vector2(sun.X, sun.Z);
@@ -495,7 +535,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             {
                 Sun = sun, SunLight = sunLight, LightDirection = lightDir, Environment = env, FogDistance = fogDistance,
                 CloudSun = KenshiLighting.SunColour(sun), CloudZenith = CloudLayer.ZenithLight(sun, SkyColourMultiplier),
-                MinLuminance = KenshiLighting.MinLuminance(sun.Y, Exposure.Min, Exposure.NightDarkness),
+                MinLuminance = KenshiLighting.MinLuminance(sun.Y, Exposure.Min, Exposure.NightDarkness), PlanetLit = planetLit,
                 Colours = new SkyColours(sun, zenith, horizon, sunRadiance, twilight),
                 Light = new WorldLighting(lightDir, sunRadiance, ambientSky, ambientGround, horizon, fogDistance), Valid = true,
             };

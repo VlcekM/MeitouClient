@@ -30,6 +30,13 @@ public static class Enhancements
     /// <summary>The Meitou <c>night</c> switch's share of the haze left at night (<see cref="SkyRenderer.NightHazeFactor"/>): the far land stays visible, a little darker.</summary>
     public const float MeitouNightHazeFloor = 0.25f;
 
+    /// <summary>
+    /// The Meitou <c>planetshine</c> switch's strength: a multiple of the physical value (<see cref="Meitou.Data.World.Planetshine"/>; the Tab slider moves it).
+    /// The physical light is a hundredth of a percent to a fifth of a percent of the game's noon sun, against a game night ambient that is a quarter of
+    /// the noon sun's: 60 brings the planet's light on a face turned to it to about the ambient's level at the brightest part of the night (docs/formats/sky.md).
+    /// </summary>
+    public const float MeitouPlanetshineStrength = 60f;
+
     /// <summary>The Meitou <c>heathaze</c> switch's scale on the heat haze (Faithful: 1, the game's): far objects shimmer but stay readable.</summary>
     public const float MeitouHeatHazeStrength = 0.5f;
 
@@ -48,7 +55,7 @@ public static class Enhancements
     public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<float> hazeStrength, Action<float> setHazeStrength, Func<bool> meitouShadows, Action<bool> setMeitouShadows,
         Func<bool> meitouRange, Action<bool> setMeitouRange, Func<bool> impostors, Action<bool> setImpostors, Func<bool> meitouReach, Action<bool> setMeitouReach,
         Func<bool> meitouWater, Action<bool> setMeitouWater, Func<bool> foliageLod, Action<bool> setFoliageLod, Func<bool>? gi = null, Action<bool>? setGi = null,
-        Func<bool>? nightHaze = null, Action<bool>? setNightHaze = null) =>
+        Func<bool>? nightHaze = null, Action<bool>? setNightHaze = null, Func<bool>? planetshine = null, Action<bool>? setPlanetshine = null) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -96,6 +103,9 @@ public static class Enhancements
         new("night", "Night haze", "black", "thinned",
             nightHaze ?? (() => false), setNightHaze ?? (_ => { }),
             $"the game's haze takes the sky's sunlit colour, which is black at night, so everything a few thousand units away fades to black and only the land round the camera stays lit; Meitou thins the haze to {MeitouNightHazeFloor:0.##} of its strength once the sun is down, so the far land stays visible, a little darker"),
+        new("planetshine", "Planetshine", "flat night", "planet light",
+            planetshine ?? (() => false), setPlanetshine ?? (_ => { }),
+            "the game lights the night land with a flat, directionless ambient; Meitou lets the big planet light it, as a sunlit sphere would (its phase, colour and size decide how much; the Tab slider scales it), from its fixed direction, with the shadows, the water's glint and the probes' light following (docs/formats/sky.md \"Planetshine\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

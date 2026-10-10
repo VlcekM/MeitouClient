@@ -325,11 +325,68 @@ and sky-view tables, the 0.36° sun disc) is gone, with `AtmosphereModel.cs`.
   --yaw 90 --pitch 6 --distance 1800 --time 13 --weather Kenshi_red_rain`). Clear weathers skip the cloud pass and are unchanged.
 - **Light**: the deferred lighting pass's model ([lighting.md](lighting.md)): `kenshiLight` in the mesh, terrain and grass shaders.
   The water still takes a sun colour and an ambient (`WorldLighting`): `π · 0.96 · sunColour.rgb · w` and the irradiance cube's up
-  and down faces times the environment factor.
+  and down faces times the environment factor. At night the Meitou `planetshine` switch changes which light this is (the planet's, below).
 - **Exposure**: in game-sky mode the post-processing measures the frame's mean luminance and scales by `0.55 / clamp(mean,
   MIN_LUMINANCE, MAX_LUMINANCE)` with the game's band ([post-processing.md](post-processing.md)).
 - `--simple-sky` (key `B`) switches back to the old colour model, the old light and squared-distance fog, with a fixed exposure,
   for comparison.
+
+### Planetshine (Meitou)
+
+**The game has nothing like it** (**Verified**, [lighting.md](lighting.md): the night land is lit by the flat irradiance ambient alone, the
+sun's light is zero from a sun height of −0.093, and the planets are only drawn, never lights). Meitou lets the big planet (Moon,
+`SkyPlanet.All[0]`) light the land at night; `--faithful planetshine` (or the Tab panel's checkbox) is the game's flat night.
+Everything is in `Planetshine` (`NightSky.cs`, tests `PlanetshineTests`) and `SkyRenderer.Prepare`.
+
+- **Physics** (textbook, **Verified** by the unit tests): the planet is a Lambert sphere lit by the sun, so a surface facing it receives
+  `E / E_sun = A · (Ω / π) · Φ(α)`. `A` is the planet's mean albedo; `Ω = 2π (1 − cos r)` its solid angle (`r` = 9.09°, so 0.0790 sr; Moon2's
+  2.59° gives an eighth of that and is **left out**); `Φ(α) = (sin α + (π − α) cos α) / π` the Lambert phase function; `α` the phase angle
+  at the planet between the sun and the observer. Sun and observer are far from the planet, so `cos α = −sun · towardsPlanet` (sun = the real sun's
+  direction from the eye): α = 0 with the sun behind the eye (a full planet), π with the sun behind the planet. It is the same phase the sky pass
+  draws (`saturate(n · sun)` at the disc's centre), so the land is brightest when the disc is.
+- **Phase through the night** (latitude 54, sunrise 5, sunset 23, the planet at +X, 12° up; **Observed**, screenshots below): the sun sets at −X,
+  opposite the planet, so it is gibbous at dusk and a crescent by dawn: α = 46° at sunset, 56° at 23:30, 68° at midnight, 116° at 2:00,
+  145° at 4:00, 134° at sunrise; Φ = 0.75, 0.65, 0.53, 0.13, 0.02, 0.05.
+- **Colour**: the planet texture's mean, computed once at load (`Planetshine.MeanAlbedo`): the first mip at most 128 wide of `moon_HI.dds`
+  (128 × 64), the raw texel values the sky shader uses as albedo (BC1 is sampled unorm, no sRGB step), each row weighted by `sin(v π)` (the
+  sphere's area in it). **Observed**: (0.284, 0.293, 0.259), nearly grey. A missing texture falls back to a 0.3 grey (**Unknown**).
+- **Strength**: the light is `E_ref · A · (Ω / π) · Φ(α) · strength` in the unit of `uAtmoSunLight`, with `E_ref` the luminance of
+  `KenshiLighting.SunLight` for the sun at the zenith (**Observed**: 0.3185; the planet sees the sun without our air, so a fixed reference, not
+  the sun's own light, which is zero at night). The physical value (strength 1) is small *against the game's night*: a full planet of this albedo sends
+  0.0071 of the sun (0.0023 in light units), and the real phase 0.0015 at 23:30 and 0.0003 at 2:00 (light units), while the game's night ambient on an up-facing white
+  surface is `0.96 · 1.2 · 0.2 = 0.23`, about a quarter of what the noon sun gives one facing it (`π · 0.96 · 0.3185 ≈ 0.96`). So the default
+  `Enhancements.MeitouPlanetshineStrength` is **60** (`--planetshine-strength <x>`, the Tab slider "Planetshine strength (x physical)", 0 to 200):
+  at the brightest part of the night (23:30) a face turned to the planet gets about the ambient's level again, so the relief reads (rock faces
+  towards the planet lit, the others and the ground at slope in the ambient's flat grey), and by 4:00 the crescent adds almost nothing, as it
+  should. Chosen by eye on the screenshots below, not measured against anything: **Unknown** what the game's artists would have wanted.
+  The auto exposure does not undo it: the night's mean luminance stays under the floor (`exposure min × night darkness` = 0.28, scale ×1.96):
+  at `--at -51468,-14324 --distance 3000 --pitch 8 --yaw 135` 0.092 → 0.111 at 23:12, 0.047 → 0.055 at 0:00, 0.047 → 0.049 at 2:00, 0.047 at 4:00.
+- **Twilight blend**: `Planetshine.Weight(sunY)` is 1 up to a sun height of −0.09 (where the game's sun light has just ended), 0 from +0.06,
+  smoothstep between: the planet's light is added to the sun's while the sun's fades. One directional light stands for both
+  (`Planetshine.Combine`): the colours add, the direction is the sun's (clamped, as the game) and the planet's weighted by the square root of
+  their luminances, so it follows the brighter one and turns from the setting sun's horizontal light to the planet's (12° up) over about 4° of sun
+  movement (a quarter of an hour of game time; the greatest step in the unit test, 1.46° of direction per 0.05° of sun, no jump in brightness over 10 %).
+  Without the planet's light (switch off, or `Weight` 0 by day) the sun's direction and colour come back bit for bit.
+- **What follows it** (everything reads the one published light, so nothing needed a shader change): `uAtmoLight.xyz` and `uAtmoSunLight`
+  (`kenshiLight` in the terrain, object, foliage, grass and character shaders, the water's shore shading, the GI probes' sun term and their
+  traced shadows), the `WorldLighting` handed to the terrain, objects, foliage, characters and the water, and the shadow cascades' direction.
+  **Left as the sun's**: `uAtmoSun` (the sky's scattering, the stars' night term and the planet's own phase), the ambient (`uAtmoLight.w` is
+  computed from the *sun's* clamped direction: with the planet's, 12° up, the factor `clamp(5 L.y + 0.2, 0.1, 1)` would rise from 0.2 to 1
+  and quintuple the night ambient), the exposure floor, the cloud light, the weather fog's `sunColour.w`, and the light shafts (their
+  strength is already zero from a sun height of −0.02, [render-shafts.md](../render-shafts.md)).
+- **Shadows**: the cascades are fitted and drawn for the published direction, so at night they follow the planet; the pass's cut-off on the real
+  sun height (−0.2) is lifted while the planet lights the land (`SkyRenderer.ShadowSunHeight`: the sun's height, but at least 0 once the planet's
+  luminance is over 1e−4 of the reference). A planet at 12° throws long shadows (3 to 5 times an object's height); the cascade fit already handles the
+  sun at the horizon (the game draws the dusk map along a horizontal light), so nothing was changed in it. **Observed** (`--no-shadows`
+  against the default, midnight, same view): 11 % of the pixels differ by more than 6/255 (sum over the channels), mean 2.4. When the planet is
+  new (luminance under the floor) no map is drawn.
+- **Water**: both water shaders take the published direction and colour as their sun, so the sun glint becomes a planet glint (**Observed**,
+  Shark swamp at 23:30 facing the planet: a bright streak where the sun's would be). It is a point-source glint for a disc 18° wide, a hot spot
+  where the real reflection would be a broad smear: **Unknown** how much that matters, left as is.
+- **Not done**: Moon2's light (an eighth of the solid angle, 11° from the large one); the cloud layer lit by the planet; fog volumes and particles
+  keep the sun's `Daylight`; the planet's light passing through the atmosphere (reddening near the horizon); a planet eclipsed by the land.
+- Screenshots (`C:\Temp\meitou-planetshine\` while the work was done; `--at -51468,-14324 --radius 2 --distance 3000 --pitch 8 --yaw 135
+  --weather Default --size 1280x720`, time 23.2, 0, 2 and 4; `--faithful planetshine` beside the default; yaw 315 faces the planet).
 
 ### Using the atmosphere in a new shader
 

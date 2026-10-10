@@ -125,6 +125,13 @@ the measured mean luminance. The sun term (diffuse and specular, not the ambient
 shadow term of the game's CSM mode ([shadows.md](shadows.md)), on by default (`--no-shadows`). Not reproduced: the temporal
 adaptation (screenshots use the steady state), point lights, translucency, and dust on objects.
 
+**Planetshine** (Meitou's `planetshine` switch, a viewer feature the game does not have; [sky.md](sky.md#planetshine-meitou)). The `L` and `sunColour` above are what
+the game feeds the pass; with the switch on the viewer feeds the same pass the sun's light and the big planet's together: `sunColour · w` becomes the
+sum of the sun's and the planet's light (the planet's from its phase, size and mean albedo, scaled by a strength), and `L` the two directions
+weighted by the square root of their luminances, so after dusk the surfaces are lit from the planet (12° up) instead of from the horizon.
+The ambient factor `clamp(5 L.y + 0.2, 0.1, 1)` is still taken from the **sun's** clamped direction (the planet's height would raise the night ambient
+fivefold), and the exposure floor is unchanged.
+
 **Eye height.** Nothing in the lighting pass depends on the eye's height (only on the direction towards it), and the sky and
 `sunColour` come from SkyX's fixed camera, which suits the game's camera (at most 1840 above its pivot, [camera.md](camera.md)).
 The viewer keeps both as they are at any height (from high up the sky looks as it does from the ground: a viewer choice, the
