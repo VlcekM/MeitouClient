@@ -57,7 +57,7 @@ sealed class AllocationLog : EventListener
             case "GCHeapStats_V2" or "GCHeapStats_V1":
                 {
                     long G(string name) => Convert.ToInt64(Get(e, name) ?? 0L) / 1048576;
-                    collections.Enqueue((e.TimeStamp, $"   heap after: gen0 {G("GenerationSize0")} MB (promoted {G("TotalPromotedSize0")}), gen1 {G("GenerationSize1")} ({G("TotalPromotedSize1")}), gen2 {G("GenerationSize2")} ({G("TotalPromotedSize2")}), LOH {G("GenerationSize3")} ({G("TotalPromotedSize3")}) MB; pinned {Get(e, "PinnedObjectCount")}, handles {Get(e, "GCHandleCount")}"));
+                    collections.Enqueue((e.TimeStamp, $"   heap after: gen0 {G("GenerationSize0")} MB (promoted {G("TotalPromotedSize0")}), gen1 {G("GenerationSize1")} ({G("TotalPromotedSize1")}), gen2 {G("GenerationSize2")} ({G("TotalPromotedSize2")}), LOH {G("GenerationSize3")} ({G("TotalPromotedSize3")}), pinned heap {G("GenerationSize4")} ({G("TotalPromotedSize4")}) MB; pinned objects {Get(e, "PinnedObjectCount")}, handles {Get(e, "GCHandleCount")}"));
                     break;
                 }
             case "GCRestartEEEnd_V1":

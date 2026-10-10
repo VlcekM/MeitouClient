@@ -45,7 +45,7 @@ public static class FoliageGrouping
         var records = new FoliageInstanceRecord[keys.Count][];
         var maxScale = new float[keys.Count];
         var filled = new int[keys.Count];
-        for (int g = 0; g < records.Length; g++) records[g] = new FoliageInstanceRecord[counts[g]];
+        for (int g = 0; g < records.Length; g++) records[g] = ZoneArrays.Uninitialized<FoliageInstanceRecord>(counts[g]);
         float minY = float.PositiveInfinity, maxY = float.NegativeInfinity;
         for (int i = 0; i < slots.Length; i++)
         {

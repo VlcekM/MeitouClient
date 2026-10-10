@@ -267,7 +267,7 @@ public sealed class FoliageLayoutCache
 
         // The ground.
         float gx = ReadF32(), gz = ReadF32();
-        var heights = new float[FoliageGround.Size * FoliageGround.Size];
+        var heights = ZoneArrays.Uninitialized<float>(FoliageGround.Size * FoliageGround.Size);
         Need(heights.Length * 4);
         MemoryMarshal.Cast<byte, float>(data.Slice(at, heights.Length * 4)).CopyTo(heights);
         at += heights.Length * 4;
@@ -280,7 +280,8 @@ public sealed class FoliageLayoutCache
         {
             int length = ReadCount();
             Need(length);
-            densities[i] = data.Slice(at, length).ToArray();
+            densities[i] = ZoneArrays.Uninitialized<byte>(length);
+            data.Slice(at, length).CopyTo(densities[i]);
             at += length;
         }
         var result = new FoliageZone { Zone = zone, Resources = resources, Complete = complete };
@@ -356,7 +357,7 @@ public sealed class FoliageLayoutCache
         var records = new FoliageInstanceRecord[keys.Count][];
         var maxScale = new float[keys.Count];
         var filled = new int[keys.Count];
-        for (int g = 0; g < records.Length; g++) records[g] = new FoliageInstanceRecord[counts[g]];
+        for (int g = 0; g < records.Length; g++) records[g] = ZoneArrays.Uninitialized<FoliageInstanceRecord>(counts[g]);
         float minY = float.PositiveInfinity, maxY = float.NegativeInfinity;
         lastKey = -1;
         foreach (ref readonly var d in disk)
