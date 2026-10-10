@@ -1074,7 +1074,9 @@ static class WorldFrame
             () => gpu() is { } giGpu ? giGpu.Probes?.Enabled ?? false : o.GiProbes, v => { o.GiProbes = v; if (gpu()?.Probes is { } p) p.Enabled = v; },
             () => gpu()?.Sky.NightAir ?? o.NightAir, v => { o.NightAir = v; if (gpu() is { } g) g.Sky.NightAir = v; },
             () => gpu()?.Sky.Planetshine ?? o.Planetshine, v => { o.Planetshine = v; if (gpu() is { } g) g.Sky.Planetshine = v; },
-            () => gpu()?.Sky.MeitouStars ?? o.MeitouStars, v => { o.MeitouStars = v; if (gpu() is { } stars) stars.Sky.MeitouStars = v; });
+            () => gpu()?.Sky.MeitouStars ?? o.MeitouStars, v => { o.MeitouStars = v; if (gpu() is { } stars) stars.Sky.MeitouStars = v; },
+            () => gpu()?.Sky.LitClouds ?? o.MeitouClouds, v => { o.MeitouClouds = v; if (gpu() is { } g) g.Sky.LitClouds = v; },
+            () => gpu()?.Sky.CloudShadows ?? o.CloudShadows, v => { o.CloudShadows = v; if (gpu() is { } g) g.Sky.CloudShadows = v; });
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null,

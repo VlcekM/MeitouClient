@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.World;
+using Meitou.Rendering;
 
 namespace Meitou.Tests.World;
 
@@ -133,5 +134,31 @@ public class MeitouCloudsTests
         Assert.Equal(Planetshine.Luminance(warm), Planetshine.Luminance(noon), 4);   // the brightness stays
         Assert.True(noon.X - noon.Z < warm.X - warm.Z);
         Assert.Equal((warm.X - warm.Z) * MeitouClouds.DayKeySaturation, noon.X - noon.Z, 4);
+    }
+
+    /// <summary>
+    /// Every switch is wired in both lists: the options' (<c>--meitou</c> / <c>--faithful</c>, which must read back what is set) and the live one the viewer's Tab panel
+    /// and F1 use. A switch left out of a list falls back to <see cref="Enhancements.Create"/>'s stand-in, which always reads Faithful and ignores a set
+    /// (the clouds and cloud shadows were missing from the live list on 2026-10-11: their checkboxes could not be turned on).
+    /// </summary>
+    [Fact]
+    public void Every_switch_is_wired_in_the_options_and_the_live_list()
+    {
+        var o = new WorldOptions();
+        var options = WorldOptions.Switches(o);
+        var live = WorldFrame.LiveSwitches(o, () => null, () => null, () => null);   // no GPU: some live setters act only on the renderer
+        Assert.Equal(options.Select(e => e.Id), live.Select(e => e.Id));
+        foreach (var e in options)
+        {
+            e.IsMeitou = false;
+            Assert.False(e.IsMeitou, e.Id);
+            e.IsMeitou = true;
+            Assert.True(e.IsMeitou, e.Id);
+        }
+        // On fresh options every switch is Meitou; a live switch left on the stand-in reads Faithful.
+        foreach (var e in live)
+            if (e.Id != "gi") Assert.True(e.IsMeitou, e.Id);   // gi reads off without probes (no GPU here), by design
+        Assert.Contains(live, e => e.Id == "clouds");
+        Assert.Contains(live, e => e.Id == "cloudshadows");
     }
 }
