@@ -254,6 +254,8 @@ static partial class WorldApp
         meta["motion"] = o.BenchMotion;
         meta["frameMode"] = serial ? "serial (each frame waited for)" : "pipelined (frames in flight)";
         meta["frames"] = frames.ToString(CultureInfo.InvariantCulture);
+        if (gpu.FogVolumes?.DescribeCull() is { } fogText) meta["fogCull"] = fogText;   // what the weather fog hides in this view, and from how far
+        if (gpu.Shadow is { Cascades: { } casc } shadowNow) meta["shadowRange"] = string.Create(CultureInfo.InvariantCulture, $"range {shadowNow.EffectiveRange:0} (setting {shadowNow.Settings.Range:0}), cascade view depths {string.Join(", ", casc.Select(c => $"{c.NearDepth:0}-{c.FarDepth:0}"))}");
         meta["profilerStamps"] = profiler.StampsLastFrame.ToString(CultureInfo.InvariantCulture);   // timestamps a frame, the profiler's cost
         meta["date"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         meta["measuredSeconds"] = measuredSeconds.ToString("0.0", CultureInfo.InvariantCulture);
