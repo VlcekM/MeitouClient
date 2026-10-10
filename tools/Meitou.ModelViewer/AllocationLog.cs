@@ -15,12 +15,12 @@ sealed class AllocationLog : EventListener
     public static AllocationLog? Start() => Environment.GetEnvironmentVariable("MEITOU_ALLOC_STATS") == "1" ? new AllocationLog() : null;
 
     EventSource? runtime;   // set from the base constructor: no initialiser, or it would be reset
-    readonly ConcurrentDictionary<(string Thread, string Type, bool Large), long> bytes = new();
+    readonly ConcurrentDictionary<(string Thread, string Type, int Kind), long> bytes = new();
     readonly ConcurrentDictionary<uint, string> threadNames = new();
     readonly ConcurrentQueue<(DateTime At, string Text)> collections = new();
     readonly List<DateTime> frameStarts = [];
     readonly uint renderThread = (uint)GetCurrentThreadId();
-    DateTime suspendedAt, startedAt;
+    DateTime suspendedAt, startedAt, stoppedAt;
     int gen = -1, reason = -1, kind = -1;
 
     /// <summary>Marks the start of a frame (events arrive late, so a collection is placed in a frame by its own time stamp).</summary>
@@ -40,13 +40,16 @@ sealed class AllocationLog : EventListener
             case "GCAllocationTick_V4" or "GCAllocationTick_V3":
                 {
                     long amount = Convert.ToInt64(Get(e, "AllocationAmount64") ?? Get(e, "AllocationAmount") ?? 0L);
-                    bool large = Convert.ToInt32(Get(e, "AllocationKind") ?? 0) == 1;
+                    int allocKind = Convert.ToInt32(Get(e, "AllocationKind") ?? 0);   // 0 small, 1 large object heap, 2 pinned object heap
                     string type = (Get(e, "TypeName") as string) ?? "?";
-                    bytes.AddOrUpdate((ThreadName((uint)e.OSThreadId), type, large), amount, (_, v) => v + amount);
+                    bytes.AddOrUpdate((ThreadName((uint)e.OSThreadId), type, allocKind), amount, (_, v) => v + amount);
                     break;
                 }
             case "GCSuspendEEBegin_V1":
                 suspendedAt = e.TimeStamp;
+                break;
+            case "GCSuspendEEEnd_V1":
+                stoppedAt = e.TimeStamp;
                 break;
             case "GCStart_V2" or "GCStart_V1":
                 gen = Convert.ToInt32(Get(e, "Depth") ?? -1);
@@ -66,7 +69,7 @@ sealed class AllocationLog : EventListener
                     double pauseMs = (e.TimeStamp - suspendedAt).TotalMilliseconds;
                     string[] kinds = ["blocking", "background", "foreground"];
                     string[] reasons = ["small", "induced", "low memory", "empty", "large", "oos small", "oos large", "induced not forced", "internal", "induced low memory", "induced compacting", "low memory host", "pm full gc", "low memory host blocking", "bgc tuning soh", "bgc tuning loh", "bgc stepping"];
-                    collections.Enqueue((startedAt, $"gen{gen} {(kind >= 0 && kind < kinds.Length ? kinds[kind] : kind.ToString())}, reason {(reason >= 0 && reason < reasons.Length ? reasons[reason] : reason.ToString())}, suspended {pauseMs:0.0} ms"));
+                    collections.Enqueue((startedAt, $"gen{gen} {(kind >= 0 && kind < kinds.Length ? kinds[kind] : kind.ToString())}, reason {(reason >= 0 && reason < reasons.Length ? reasons[reason] : reason.ToString())}, suspended {pauseMs:0.0} ms (threads stopped after {(stoppedAt - suspendedAt).TotalMilliseconds:0.0})"));
                     suspendedAt = default;
                 }
                 break;
@@ -108,11 +111,11 @@ sealed class AllocationLog : EventListener
             Console.WriteLine(text.StartsWith("   heap") ? $"gc        {text}" : $"gc        #{++n} frame {frame}: {text}");
         }
         long total = bytes.Values.Sum();
-        Console.WriteLine($"alloc     sampled {total / 1048576} MB in allocation ticks; by thread and type (MB, large-object-heap allocations marked LOH):");
+        Console.WriteLine($"alloc     sampled {total / 1048576} MB in allocation ticks; by thread and type (MB; LOH = large object heap, POH = pinned object heap):");
         foreach (var g in bytes.GroupBy(p => p.Key.Thread).OrderByDescending(g => g.Sum(p => p.Value)))
-            Console.WriteLine($"alloc       thread {g.Key}: {g.Sum(p => p.Value) / 1048576} MB, of which LOH {g.Where(p => p.Key.Large).Sum(p => p.Value) / 1048576} MB");
-        foreach (var ((thread, type, large), size) in bytes.OrderByDescending(p => p.Value).Take(top))
-            Console.WriteLine($"alloc       {size / 1048576,6} MB  {(large ? "LOH" : "   ")}  {thread,-14} {type}");
+            Console.WriteLine($"alloc       thread {g.Key}: {g.Sum(p => p.Value) / 1048576} MB, of which LOH {g.Where(p => p.Key.Kind == 1).Sum(p => p.Value) / 1048576} MB, POH {g.Where(p => p.Key.Kind == 2).Sum(p => p.Value) / 1048576} MB");
+        foreach (var ((thread, type, kind), size) in bytes.OrderByDescending(p => p.Value).Take(top))
+            Console.WriteLine($"alloc       {size / 1048576,6} MB  {(kind == 1 ? "LOH" : kind == 2 ? "POH" : "   ")}  {thread,-14} {type}");
     }
 
     [DllImport("kernel32.dll")] static extern nint OpenThread(uint access, bool inherit, uint id);
