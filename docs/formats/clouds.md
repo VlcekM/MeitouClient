@@ -184,6 +184,43 @@ coverage table is recomputed from the shipped textures and must match the one ab
   from `SkyX_Clouds.hlsl`; `horizonClouds` is the same form with the texture's part of `D` taken as 0.2, so the band now meets the haze in one colour.
   The weather system now drives the layer (`--weather auto`): see [weather.md](weather.md#in-the-viewer-and-the-game-step-3).
 
+## Meitou clouds
+
+The `clouds` switch (Meitou by default, `--faithful clouds` for the layer above; viewer design, not the game's; `Meitou.Data.World.MeitouClouds`,
+pinned by `MeitouCloudsTests`, the shader branch in `SkyRenderer`). Added 2026-10-10 on branch `clouds`.
+
+The game's layer has no directional light (above): flat white by day, one orange at sunset, black at night. Meitou keeps everything that
+decides **where** cloud is (the plane, the textures and lookups, the fake volume, the coverage, the alpha, the horizon band, the drift, the
+weather's density) and only changes the **colour** of each cloud pixel:
+
+- **Key light**: the sun (`sunColour.rgb`, the game's layer's own unit), and at night, with the `planetshine` switch, the big planet's light at
+  half the share the land gets (`PlanetShare` 0.5; the land's is boosted ×60), joined into one light by `Planetshine.Combine`.
+- **Depth towards the light**: the lesser of two paths, up through the layer (the pixel's unsaturated density `D` over the light's height, the
+  slant at most 6; a light below the plane, just after sunset, shines on the underside the eye sees: `0.25 D`) and sideways across it (four
+  density taps `saturate((Clouds.r + o) · 3)` along the light's xz direction, 0.015 texture units apart, summed, plus half the pixel's own,
+  × 0.6). `CloudsNormal.dds` is not used: it is nearly flat (above).
+- **Transmittance** `0.5 · exp(−0.6 depth) + 0.5 · exp(−0.09 depth)`: one single-scattered and one multiple-scattered octave, so thick
+  cores go grey, not black.
+- **Phase**: two Henyey-Greenstein lobes on the cosine between the view and the light, 0.55 of g = 0.6 (the silver lining towards the sun)
+  and 0.45 of g = −0.25, normalised so the sphere's mean is 1.
+- **Ambient**: the sky's mean light (SkyX's colour at the zenith and four directions 20° up, × the weather's sky multiplier, plus the night
+  air) mixed with 0.2 of the sky colour right behind the pixel (the gradient across a sunset sky), greyed (0.45 grey in a clear sky, rising to
+  fully grey at `c` = 1: under an overcast the light comes from cloud, not blue sky; the blue alone made the clouds cyan), × (1 − 0.4 ·
+  saturate(D / 2)) for darker thick bases.
+- **Colour** `key · transmittance · phase · 1.6 + ambient`, then the game's `Darkness` at half strength (the depth already darkens; the full
+  darkness on top made overcast skies near black), clamped to 8 instead of 1 (bright edges near the sun reach the tone map), × √exposure.
+  Below `d.y` 0.05 the colour fades to the game's plain horizon colour as in the Faithful layer, so the haze still meets the band.
+
+**Seen** (2026-10-10, `--world --town "The Hub" --distance 20000 --pitch 1 --weather Default --clouds 0.45`, against `--faithful clouds`):
+13:00 the white wisps gain shaded volume with grey cores; 19:00 towards the sun the clouds glow round it, away from it they are grey-white
+with darker cores; 22:24 (sun 3.5° up) warm lit undersides with the sky's gradient; 1:00 the clouds near the planet catch its light (the
+game's are black against the stars); `--clouds 0.9` at 11:00 a neutral grey overcast with visible structure (the game's is a flat
+blue-grey). **Verified** Faithful is unchanged: `--faithful clouds` against the commit before the switch, 0 px at 22:24 and 4 px of 1/255 at
+13:00 (two runs of the old build differ by 35 px of 1/255).
+
+Not done (options for later): the texture still moves with the camera (no parallax, as the game's); no cloud shadows on the ground; the
+horizon band below 8.6° keeps the game's flat colour.
+
 ## Unknowns
 
 - The dome mesh's texcoord layout (taken as the unit direction from the shader's use) and the dome's lower half (below the

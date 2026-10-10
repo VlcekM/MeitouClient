@@ -241,6 +241,10 @@ public sealed unsafe class SkyRenderer : IDisposable
         uniform vec4 uCloudLight;      // rgb: zenithLight, a: Darkness
         uniform vec4 uCloudSun;        // rgb: sunColour.rgb, a: DensityOffset
         uniform vec4 uCloudWind;       // xy: the wind offset x 0.00005 (wrapped to 0..1)
+        uniform vec4 uCloudMeitou;     // x: 1 the Meitou clouds (lit; docs/formats/clouds.md "Meitou clouds"), 0 the game's layer
+        uniform vec4 uCloudKey;        // Meitou clouds: rgb the key light (sun, and the planet at night) in sunColour's unit
+        uniform vec4 uCloudKeyDir;     // Meitou clouds: xyz towards the key light
+        uniform vec4 uCloudAmbient;    // Meitou clouds: rgb the sky's mean light on the clouds (before the exposure's square root)
         uniform sampler2D uStars, uPlanet0, uPlanet1, uClouds, uCloudsNormal, uCloudsTile;
         uniform vec4 uHas;             // stars, planet 0, cloud textures (all three), planet 1 present
         // moon.hlsl: planet01.mesh's texture lit by the real sun direction, plus the skydome's Rayleigh colour towards it (no Mie, no night glow), opaque.
@@ -275,6 +279,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             vec3 dir = normalize(b.xyz / b.w - a.xyz / a.w);
             float night;
             vec3 col = atmoSky(dir, night);
+            vec3 skyBehind = col;   // the Meitou clouds' share of ambient from the sky right behind them
             float aboveHorizon = smoothstep(-0.02, 0.06, dir.y);
 
             // Stars: SkyX_Starfield.dds (SkyX's HDR form: nightmult · texture · (0.35 + saturate(−sunY · 0.45)) · 2) on the dome's own texture coordinates
@@ -339,6 +344,7 @@ public sealed unsafe class SkyRenderer : IDisposable
                 float o = uCloudSun.w;
                 const float MULT = {{F(CloudLayer.DensityMultiplier)}}, SCALE = {{F(CloudLayer.Scale)}}, HEIGHT = {{F(CloudLayer.Height)}};
                 vec2 wind = uCloudWind.xy;
+                const vec2 SHIFT = vec2({{F(CloudLayer.SecondLookupShift.X)}}, {{F(CloudLayer.SecondLookupShift.Y)}});
                 // The plane hit: the cloud point is d · height / d.y, the texture coordinate its xz · scale.
                 vec2 uv = d.xz * (HEIGHT / d.y) * SCALE;
                 float density = texture(uClouds, uv + wind).r;
@@ -349,14 +355,43 @@ public sealed unsafe class SkyRenderer : IDisposable
                 vec3 nd = normalize(d + {{F(CloudLayer.VolumetricDisplacement)}} * d.y * vec3(normal.x, 0.0, normal.z));
                 float vh = (HEIGHT + HEIGHT * (1.0 - density) * {{F(CloudLayer.HeightVolume)}} * d.y) / nd.y;
                 uv = nd.xz * vh * SCALE;
-                density = (texture(uClouds, uv + wind + vec2({{F(CloudLayer.SecondLookupShift.X)}}, {{F(CloudLayer.SecondLookupShift.Y)}})).r + o) * MULT;
+                density = (texture(uClouds, uv + wind + SHIFT).r + o) * MULT;
                 float tile = texture(uCloudsTile, uv - wind).r;
                 density += tile * {{F(CloudLayer.TileWeight)}};
                 vec3 pixel = uCloudLight.rgb + uCloudSun.rgb * (1.0 - density * 0.1);
+                float top = 1.0, dark = 1.0;   // the colour's ceiling (the game's 1, saturate; the Meitou clouds' brighter edges towards the sun) and the share of Darkness
+                if (uCloudMeitou.x > 0.5)
+                {
+                    // Meitou clouds (MeitouClouds in Meitou.Data, docs/formats/clouds.md "Meitou clouds"): the same layer lit by the key light through the cloud's
+                    // depth towards it, the lesser of the path up through the layer (the pixel's density over the light's height) and the path sideways across it
+                    // (density taps along the light's direction on the plane), with a two-lobed phase, plus the sky's light as the ambient.
+                    vec3 L = uCloudKeyDir.xyz;
+                    vec2 lxz = dot(L.xz, L.xz) > 1e-8 ? normalize(L.xz) : vec2(0.0);
+                    vec2 at = uv + wind + SHIFT;
+                    float side = 0.0;
+                    for (int k = 1; k <= {{MeitouClouds.LightSteps}}; k++)
+                        side += clamp((texture(uClouds, at + lxz * ({{F(MeitouClouds.LightStep)}} * float(k))).r + o) * MULT, 0.0, 1.0);
+                    float thick = max(density, 0.0);
+                    // A light below the layer (the sun just set, the cloud still sees it) shines on the underside the eye sees: a short path.
+                    float up = L.y > 0.0 ? thick * min(1.0 / L.y, {{F(MeitouClouds.MaxSlant)}}) : thick * 0.25;
+                    float across = (side + 0.5 * clamp(thick, 0.0, 1.0)) * {{F(MeitouClouds.SidePath)}};
+                    float depth = min(up, across);
+                    float through = {{F(1 - MeitouClouds.MultipleShare)}} * exp(-{{F(MeitouClouds.Extinction)}} * depth)
+                                  + {{F(MeitouClouds.MultipleShare)}} * exp(-{{F(MeitouClouds.Extinction * MeitouClouds.MultipleExtinction)}} * depth);
+                    float c = dot(d, L);
+                    float phase = {{F(MeitouClouds.ForwardShare)}} * {{F(1 - MeitouClouds.ForwardG * MeitouClouds.ForwardG)}} / pow(max({{F(1 + MeitouClouds.ForwardG * MeitouClouds.ForwardG)}} - {{F(2 * MeitouClouds.ForwardG)}} * c, 1e-6), 1.5)
+                                + {{F(1 - MeitouClouds.ForwardShare)}} * {{F(1 - MeitouClouds.BackwardG * MeitouClouds.BackwardG)}} / pow(max({{F(1 + MeitouClouds.BackwardG * MeitouClouds.BackwardG)}} - {{F(2 * MeitouClouds.BackwardG)}} * c, 1e-6), 1.5);
+                    vec3 ambient = mix(uCloudAmbient.rgb, skyBehind / sqrt(SKYX_EXPOSURE), {{F(MeitouClouds.AmbientFromSky)}});
+                    ambient = mix(ambient, vec3(dot(ambient, vec3(0.2126, 0.7152, 0.0722))), uCloudAmbient.a)
+                                 * (1.0 - {{F(MeitouClouds.BaseDarkening)}} * clamp(0.5 * thick, 0.0, 1.0));
+                    pixel = uCloudKey.rgb * (through * phase * {{F(MeitouClouds.KeyGain)}}) + ambient * {{F(MeitouClouds.AmbientGain)}};
+                    top = 8.0;
+                    dark = {{F(MeitouClouds.DarknessShare)}};
+                }
                 // The horizon band: from 0.05 to 0.15 of d.y the layer gives way to the uniform alpha o + 0.5 (horizonClouds.a).
                 float band = clamp(10.0 * clamp(d.y - {{F(CloudLayer.DistanceAttenuation)}}, 0.0, 1.0), 0.0, 1.0);
                 density += band;
-                pixel *= 1.0 - clamp(density, 0.0, 1.0) * uCloudLight.a;
+                pixel *= 1.0 - clamp(density, 0.0, 1.0) * uCloudLight.a * dark;
                 // Below d.y = 0.05 the alpha is the uniform horizon value, but the colour above still followed the texture lookups, whose uv runs to hundreds of units
                 // there (height / d.y): minified to a few texels they sparkle (a row of white ticks along the horizon). The colour gives way to the plain
                 // horizonClouds colour below d.y = 0.05 (from 0.01 up; above 0.05 the layer is untouched): the game's own horizon cloud colour, darkened
@@ -365,7 +400,7 @@ public sealed unsafe class SkyRenderer : IDisposable
                 pixel = mix(plain, pixel, clamp((d.y - 0.01) / 0.04, 0.0, 1.0));
                 float alpha = density * clamp(1.0 - tile + o, 0.0, 1.0);
                 alpha = mix(o + 0.5, alpha, band);
-                col = mix(col, clamp(pixel, 0.0, 1.0) * sqrt(SKYX_EXPOSURE), clamp(alpha, 0.0, 1.0));
+                col = mix(col, clamp(pixel, 0.0, top) * sqrt(SKYX_EXPOSURE), clamp(alpha, 0.0, 1.0));
             }
             // The game's fog pass runs over the sky too (post/fog.hlsl atmosphere_fog_fs): a pixel with no geometry has distance = farClip, its atmosphere term is
             // dropped and the weather's term alone remains, alpha = ease-in-out(saturate(farClip / fog distance)) x fogColour.a, colour = fog colour x sunColour.w
@@ -495,6 +530,12 @@ public sealed unsafe class SkyRenderer : IDisposable
     }
     bool meitouStars = true;
 
+    /// <summary>
+    /// The Meitou <c>clouds</c> switch (viewer design, not the game's; docs/formats/clouds.md "Meitou clouds"): the game's cloud layer lit by the sun (the planet at
+    /// night) through its depth, with a forward-scattering phase and the sky's light as ambient (<see cref="Meitou.Data.World.MeitouClouds"/>). False: the game's flat colour.
+    /// </summary>
+    public bool LitClouds { get; set; } = true;
+
     /// <summary>The gain on the Meitou point stars' light, in the starfield texture's units.</summary>
     public float StarGain { get; set; } = DefaultStarGain;
     public const float DefaultStarGain = 20;
@@ -560,6 +601,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     struct State
     {
         public Vector3 Sun, SunLight, LightDirection, CloudSun, CloudZenith;   // the last two: sunColour.rgb and zenithLight of the cloud pass
+        public Vector3 CloudKey, CloudKeyDirection, CloudAmbient;   // the Meitou clouds' key light (colour, direction) and ambient (MeitouClouds)
         public float Environment, MinLuminance, FogDistance;
         public SkyColours Colours;
         public WorldLighting Light;
@@ -665,7 +707,8 @@ public sealed unsafe class SkyRenderer : IDisposable
             var simple = SkyColours.For(sun);
             var light = simple.Lighting(fogDistance);
             state = new State { Sun = sun, Colours = simple, Light = light, FogDistance = fogDistance, Valid = true, MinLuminance = Exposure.Min,
-                CloudSun = KenshiLighting.SunColour(sun), CloudZenith = CloudLayer.ZenithLight(sun, SkyColourMultiplier) };
+                CloudSun = KenshiLighting.SunColour(sun), CloudZenith = CloudLayer.ZenithLight(sun, SkyColourMultiplier),
+                CloudKey = KenshiLighting.SunColour(sun), CloudKeyDirection = sun, CloudAmbient = MeitouClouds.Ambient(sun, SkyColourMultiplier, Vector4.Zero) };
             builtPhysical = false;
             PrepareMs = watch.Elapsed.TotalMilliseconds;
             return (simple, light);
@@ -687,6 +730,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             // Meitou planetshine: from the end of the sun's light the planet is the light (docs/formats/sky.md "Planetshine"): its colour in the sun light's own
             // unit (the sun at the zenith, undimmed by the air in between, is the reference), added to the sun's, the direction weighted by their brightness.
             bool planetLit = false;
+            var cloudPlanet = Vector3.Zero;   // the planet's light the Meitou clouds take (MeitouClouds.Key), with the planetshine
             float reference = Meitou.Data.World.Planetshine.Luminance(KenshiLighting.SunLight(Vector3.UnitY));
             // What the water's glint is lit by (WorldLighting.GlintDirection / GlintColour): the sun's own radiance and the planet disc's radiance as the sky pass draws it
             // (unboosted: the strength-scaled light below is an irradiance made 60 times brighter than the disc, which blew the glint out). Left default (the sun's) by day.
@@ -694,6 +738,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             if (Planetshine && Meitou.Data.World.Planetshine.Weight(sun.Y) is var weight and > 0)
             {
                 var planetLight = Meitou.Data.World.Planetshine.Light(sun, SkyPlanet.All[0], PlanetAlbedo, reference, PlanetshineStrength) * weight;
+                cloudPlanet = planetLight;
                 var disc = Meitou.Data.World.Planetshine.DiscRadiance(sun, SkyPlanet.All[0], PlanetAlbedo) * weight;
                 (glintDirection, glintColour) = Meitou.Data.World.Planetshine.Combine(lightDir, sunLight * (MathF.PI * (1 - KenshiLighting.DielectricSpecular)),
                     SkyPlanet.All[0].Towards, disc);
@@ -708,6 +753,7 @@ public sealed unsafe class SkyRenderer : IDisposable
                 var air = Meitou.Data.World.NightAir.Colour(Meitou.Data.World.Planetshine.Light(sun, SkyPlanet.All[0], PlanetAlbedo, reference, PlanetshineStrength));
                 night = new Vector4(air, airWeight);
             }
+            var (cloudKeyDirection, cloudKey) = MeitouClouds.Key(sun, SkyPlanet.All[0].Towards, cloudPlanet);
             var tint = Vector3.One;   // the game tints only the cloud light (zenithLight, below), never the skydome (docs/formats/sky.md)
             var zenith = SkyXModel.Colour(Vector3.UnitY, sun) * tint;
             var flat = new Vector2(sun.X, sun.Z);
@@ -723,6 +769,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             {
                 Sun = sun, SunLight = sunLight, LightDirection = lightDir, Environment = env, FogDistance = fogDistance,
                 CloudSun = KenshiLighting.SunColour(sun), CloudZenith = CloudLayer.ZenithLight(sun, SkyColourMultiplier),
+                CloudKey = cloudKey, CloudKeyDirection = cloudKeyDirection, CloudAmbient = MeitouClouds.Ambient(sun, SkyColourMultiplier, night),
                 MinLuminance = KenshiLighting.MinLuminance(sun.Y, Exposure.Min, Exposure.NightDarkness), PlanetLit = planetLit,
                 Colours = new SkyColours(sun, zenith, horizon, sunRadiance, twilight),
                 Light = new WorldLighting(lightDir, sunRadiance, ambientSky, ambientGround, horizon, fogDistance, glintDirection, glintColour), Valid = true, Night = night,
@@ -953,6 +1000,11 @@ public sealed unsafe class SkyRenderer : IDisposable
         p.Set(program.CloudSun, s.CloudSun.X, s.CloudSun.Y, s.CloudSun.Z, CloudLayer.DensityOffset(coverage));
         var shift = CloudLayer.TextureShift(cloudOffset);
         p.Set(program.CloudWind, shift.X, shift.Y, 0, 0);
+        var key = s.CloudKey; var keyDir = s.CloudKeyDirection; var ambient = s.CloudAmbient;
+        p.Set(program.CloudMeitou, LitClouds ? 1 : 0, 0, 0, 0);
+        p.Set(program.CloudKey, key.X, key.Y, key.Z, 0);
+        p.Set(program.CloudKeyDir, keyDir.X, keyDir.Y, keyDir.Z, 0);
+        p.Set(program.CloudAmbient, ambient.X, ambient.Y, ambient.Z, MeitouClouds.AmbientGreyAt(coverage));
         bool clouds = cloudsTexture is not null && cloudsNormalTexture is not null && cloudsTileTexture is not null;
         p.Set(program.Has, starsTexture is not null ? 1f : 0f, planetTextures[0] is not null ? 1f : 0f, clouds ? 1f : 0f, planetTextures[1] is not null ? 1f : 0f);
         // A missing texture reads GL's stand-in, which an unbound sampler does too.
@@ -1059,7 +1111,7 @@ sealed class SkyProg : IDisposable
 {
     public readonly LegacyProgram P;
     public readonly NativeSegment Segment;
-    public readonly UniformHandle InverseViewProjection, Extra, PlanetSpin, CloudLight, CloudSun, CloudWind, Has, StarsMeitou, CelX, CelY, CelZ;
+    public readonly UniformHandle InverseViewProjection, Extra, PlanetSpin, CloudLight, CloudSun, CloudWind, CloudMeitou, CloudKey, CloudKeyDir, CloudAmbient, Has, StarsMeitou, CelX, CelY, CelZ;
     public readonly UniformHandle[] Planet;
     public readonly SkyColourHandles Colours;
     public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile;
@@ -1077,6 +1129,10 @@ sealed class SkyProg : IDisposable
         CloudLight = P.Uniform("uCloudLight");
         CloudSun = P.Uniform("uCloudSun");
         CloudWind = P.Uniform("uCloudWind");
+        CloudMeitou = P.Uniform("uCloudMeitou");
+        CloudKey = P.Uniform("uCloudKey");
+        CloudKeyDir = P.Uniform("uCloudKeyDir");
+        CloudAmbient = P.Uniform("uCloudAmbient");
         Has = P.Uniform("uHas");
         StarsMeitou = P.Uniform("uStarsMeitou");
         CelX = P.Uniform("uCelX");
