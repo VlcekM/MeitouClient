@@ -1039,8 +1039,8 @@ public sealed unsafe class WaterRenderer : IDisposable
     public bool Refraction { get; set; } = true;
 
     /// <summary>The Tab panel's "Water clarity x" (Meitou water; not in the game): the biome's absorption per unit of depth is divided by it, so
-    /// above 1 the floor shows through deeper water. 1 is the game's opacity.</summary>
-    public float Clarity { get; set; } = 1;
+    /// above 1 the floor shows through deeper water. 1 is the game's opacity; the default 0.5 is murkier.</summary>
+    public float Clarity { get; set; } = 0.5f;
 
     /// <summary>The Tab panel's "Far water clarity" (Meitou water; not in the game): 0 absorbs along the true slant path through the water (it is
     /// up to 20 times the depth at grazing angles, so distant shallows read opaque), 1 only along the depth, as if looked at from straight above. Default 0.25.</summary>
