@@ -226,22 +226,35 @@ Interactive mode was smoke-tested only
 ### Cinematic camera
 
 *From the code* (added 2026-10-10, for trailers; `Cinema` in the viewer, `CameraPath` in `Meitou.Rendering`, tests in `CameraPathTests`).
-Ctrl+numpad 1 to 9 save the camera as a shot: the eye, the view direction, the orbit distance, the lens (field of view) and the time of day.
-Numpad 1 to 9 cuts to a shot (changed 2026-10-10: at first the plain keys saved). The shots are kept in `%LOCALAPPDATA%\Meitou\viewer-shots.json`, so they survive a restart; numpad `.`
-lists them, Ctrl+numpad `.` deletes them all. Numpad Enter flies through the saved shots in slot order (empty slots are skipped) and
-stops at the last; Enter again stops. Numpad 0 loops the flight back to the first shot; numpad + and - make each shot-to-shot leg 1.25
-times longer or shorter (default 6 s, every leg takes the same time); numpad / switches whether the time of day follows the shots
-(on by default: a flight from a 05:30 shot to a 07:00 shot runs the sunrise). PageUp and PageDown zoom the lens 2.5 degrees at a time
-(10 to 100), Home puts it back to 50; the lens is part of a shot, so two shots with different lenses make a dolly zoom.
+A flight is a list of **keys** on a timeline: each is a shot (the eye, the view direction, the orbit distance, the lens (field of view)
+and the time of day) reached at a time in seconds, optionally **easing** (the camera slows to a stop on it). They are kept in
+`%LOCALAPPDATA%\Meitou\viewer-shots.json` across starts (a file from before the timeline gets its shots 6 s apart in slot order).
 
-**The path.** A centripetal Catmull-Rom spline (knots spaced by the square root of the eye's distance between shots) through every
-shot's eye, yaw, pitch, log of the orbit distance, lens and hour, so the camera passes each shot exactly, does not swing out past two
-shots close together, and changes speed smoothly. The yaw and the hour are unwrapped so they go the short way round (350 to 10 degrees
-through 0, 23:00 to 01:00 through midnight). An open flight ramps its speed up over the first half leg and down over the last half leg
-and keeps an even pace between; a loop runs at an even pace.
+**Keys.** Ctrl+numpad 1 to 9 saves the camera as key 1 to 9 (a new key goes one spacing, default 6 s, after the last; saving over a key
+keeps its time); numpad 1 to 9 cuts to a key (changed 2026-10-10: at first the plain keys saved). Numpad Enter flies from the first key
+to the last, Enter again stops. Numpad 0 loops, taking one spacing from the last key back to the first. Numpad + and - stretch or squeeze
+all the timing by 1.25. Numpad / switches whether the time of day follows the keys (on by default: a flight from a 05:30 key to a
+07:00 key runs the sunrise). Numpad `.` lists the keys, Ctrl+numpad `.` deletes them all. PageUp and PageDown zoom the lens 2.5 degrees
+at a time (10 to 100), Home puts it back to 50; the lens is part of a key, so two keys with different lenses make a dolly zoom.
 
-**Clean picture and recording.** Numpad `*` hides every panel and draws black 2.39:1 letterbox bars; a small status line at the bottom
-shows the shots and the flight otherwise. Shift+numpad Enter records the flight (one lap of a loop) into `C:\Temp\meitou-take-<time>\`
-as numbered PNGs at a fixed 60 frames per second of film time: each frame advances the camera, the clock, the clouds, particles and water
-by exactly 1/60 s however long it took to draw, so a heavy setting still gives a smooth video. The letterbox is in the frames when it is on.
-When it ends, the console prints an ffmpeg line that makes an MP4 of the frames.
+**The timeline editor (F2).** A panel along the bottom of the window, drawn over the other panels: a row of buttons (Play / Stop, Loop,
+Add key at playhead, Set key to camera, Go to key, Ease, Delete key, Time follows, Slower, Faster, Record, Letterbox), the selected key's
+details, and a ruler in seconds with the keys as markers (numbered; blue when easing, white when selected), the flight's span, a loop's
+way back, and the red playhead. Click a key to select it and drag it to retime it (to 0.05 s, never past its neighbours, so the order
+stays). Click or drag the ruler to scrub: the camera follows the flight to the playhead. Space plays from the playhead, Delete deletes the
+selected key. "Add key at playhead" saves the camera as a new key (the lowest free number, up to 99; only 1 to 9 have numpad keys) at
+the playhead's time, so a camera move is built by scrubbing to a time, flying the camera to the view and adding a key there.
+
+**The path** (`CameraPath.Sample`). A cubic Hermite spline in time through every key's eye, yaw, pitch, log of the orbit distance, lens and
+hour. The slope at a key is its neighbours' difference over their time apart (a Catmull-Rom spline in time), so the speed changes smoothly
+however unevenly the keys are spaced (a short leg after a long one does not jerk); it is zero at an easing key and at both ends of an open
+flight, so the camera starts and ends at rest; a loop runs through the seam. The yaw and the hour are unwrapped so they go the short way
+round (350 to 10 degrees through 0, 23:00 to 01:00 through midnight). Hermite curves can overshoot a little where a slow leg meets a fast
+one; an easing key there holds the camera instead.
+
+**Clean picture and recording.** Numpad `*` (or Letterbox in the editor) hides the statistics, key list and settings panels and draws black
+2.39:1 letterbox bars; the F2 editor stays usable over them. Shift+numpad Enter (or Record) records the flight (one lap of a loop is not
+recorded: a recording is always the open flight) into `C:\Temp\meitou-take-<time>\` as numbered PNGs at a fixed 60 frames per second of film
+time: each frame advances the camera, the clock, the clouds, particles and water by exactly 1/60 s however long it took to draw, so a heavy
+setting still gives a smooth video. Recorded frames have no panels and no editor, but keep the letterbox when it is on. When it ends,
+the console prints an ffmpeg line that makes an MP4 of the frames.

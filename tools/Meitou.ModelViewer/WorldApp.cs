@@ -267,7 +267,8 @@ static partial class WorldApp
         int day = o.Day ?? 0;
         // The animation clock (clouds, particles, water): real seconds, or exact frame steps while the cinema records.
         double animSeconds = 0;
-        var cinema = new Cinema();
+        var cinema = new Cinema(() => camera, () => hour, v => hour = v);
+        cinema.Load();
         Vector2? lastMouse = null;
         MouseButton? dragging = null;
         DebugOverlay? overlay = null;
@@ -302,13 +303,16 @@ static partial class WorldApp
                 mouse.MouseDown += (m, b) =>
                 {
                     if (b == MouseButton.Left && panel?.MouseDown(Pixels(m.Position)) == true) return;
+                    if (b == MouseButton.Left && cinema.MouseDown(Pixels(m.Position))) return;
+                    if (cinema.Contains(Pixels(m.Position))) return;
                     if (panel?.Contains(Pixels(m.Position)) == true) return;
                     dragging = b; lastMouse = null;
                 };
-                mouse.MouseUp += (_, _) => { panel?.MouseUp(); dragging = null; };
+                mouse.MouseUp += (_, _) => { panel?.MouseUp(); cinema.MouseUp(); dragging = null; };
                 mouse.MouseMove += (_, p) =>
                 {
                     if (panel?.MouseMove(Pixels(p)) == true) return;
+                    if (cinema.MouseMove(Pixels(p))) return;
                     if (dragging is { } b && lastMouse is { } last)
                     {
                         var d = p - last;
@@ -368,7 +372,7 @@ static partial class WorldApp
             }
             bool ctrl = keyboard is not null && (keyboard.IsKeyPressed(Key.ControlLeft) || keyboard.IsKeyPressed(Key.ControlRight));
             bool shift = keyboard is not null && (keyboard.IsKeyPressed(Key.ShiftLeft) || keyboard.IsKeyPressed(Key.ShiftRight));
-            if (cinema.OnKey(key, ctrl, shift, camera, () => hour, v => hour = v)) return;
+            if (cinema.OnKey(key, ctrl, shift)) return;
             switch (key)
             {
                 case Key.Escape: window.Close(); break;
@@ -517,7 +521,7 @@ static partial class WorldApp
                 hour += o.TimeSpeed * (float)frameDt / 60f;
                 while (hour >= 24) { hour -= 24; day++; }
             }
-            cinema.Advance(frameDt, camera, v => hour = v);   // a flight through the saved shots moves the camera (and the hour)
+            cinema.Advance(frameDt);   // a flight through the saved shots moves the camera (and the hour)
             string? takeFile = cinema.TakeFrame();
             if (gpu.Weather is { } clockWeather) clockWeather.Day = day;   // game speed 1, never paused: the viewer's time is the day and the hour set here
             Draw(gpu, scene, camera, render, size.X, size.Y, hour, (float)animSeconds / 600f, o.FogDistance);
@@ -538,11 +542,10 @@ static partial class WorldApp
             frameClock.Restart();
             // The picture is read after the present (framebuffer 0 stays intact until the next frame); the frame that is saved is drawn
             // without the overlay and the panel, so saved pictures never show them.
-            // A recorded frame is drawn like a screenshot; the cinema's clean picture hides the panels too (its letterbox stays in saved frames).
+            // A recorded frame is drawn like a screenshot; the cinema's clean picture hides the panels too (its letterbox stays in saved frames, the F2 editor stays open).
             bool shot = screenshotRequested || takeFile is not null;
             screenshotRequested = false;
             bool panels = !shot && !cinema.Clean;
-            if (overlay is not null) cinema.Draw(overlay, size.X, size.Y, showStatus: panels);
             // The statistics at the top left, the key list below them.
             float panelsBottom = panels && statsVisible && overlay is not null && stats.Count > 0
                 ? overlay.Panel(size.X, size.Y, $"Meitou world ({RendererName(o)})   (F11 hides this)", stats) : 0;
@@ -556,6 +559,8 @@ static partial class WorldApp
             if (panels && overlay is not null) profiler?.Draw(overlay, size.X, size.Y);
             // Last, over the statistics and the profiler: the settings sit at the top left.
             if (panels) panel?.Draw(size.X, size.Y);
+            // Over everything: the letterbox, and the timeline editor (F2) or the cinema status line.
+            if (overlay is not null) cinema.Draw(overlay, size.X, size.Y, shot);
             StageClock.Phase("overlays");
             display.Present();
             profiler?.EndFrame();
