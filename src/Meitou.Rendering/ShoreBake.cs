@@ -36,10 +36,27 @@ internal sealed class ShoreGrid
     public const float IsletAreaLow = MathF.PI * 250f * 250f, IsletAreaHigh = MathF.PI * 450f * 450f;
     public const string IsletRule = "x smoothstep(pi 250^2, pi 450^2, area of the nearest shore's land mass)";
 
-    public ShoreGrid(int size, float texel, float x0, float z0, float maxDistance, float[] distance, float[] exposure)
+    /// <param name="interleaved">The texels as (distance, exposure) pairs, row-major, made on the worker (<see cref="Rent"/>): the field is kept in this one
+    /// array, so the render thread allocates nothing to upload it (it was a 8 MB copy per bake) and a bake allocates 8 MB instead of 44.</param>
+    public ShoreGrid(int size, float texel, float x0, float z0, float maxDistance, float[] interleaved)
     {
-        (Size, Texel, X0, Z0, MaxDistance, Distance, Exposure) = (size, texel, x0, z0, maxDistance, distance, exposure);
+        (Size, Texel, X0, Z0, MaxDistance, rg) = (size, texel, x0, z0, maxDistance, interleaved);
     }
+
+    readonly float[] rg;
+    float[]? distance, exposure;
+    static float[]? spare;
+
+    /// <summary>An array for a grid of <paramref name="size"/>² texels: the one <see cref="Release"/> gave back, else a new one.</summary>
+    internal static float[] Rent(int size)
+    {
+        var a = Interlocked.Exchange(ref spare, null);
+        return a is not null && a.Length == size * size * 2 ? a : new float[size * size * 2];
+    }
+
+    /// <summary>Gives the array back for the next bake. The grid (and what <see cref="Interleaved"/> returned) must not be used afterwards; a grid that is not
+    /// released is just collected.</summary>
+    public void Release() => Interlocked.Exchange(ref spare, rg);
 
     public int Size { get; }
     public float Texel { get; }
@@ -47,19 +64,21 @@ internal sealed class ShoreGrid
     public float X0 { get; }
     public float Z0 { get; }
     public float MaxDistance { get; }
-    /// <summary>Signed distance, row-major (row = Z).</summary>
-    public float[] Distance { get; }
-    public float[] Exposure { get; }
+    /// <summary>Signed distance, row-major (row = Z). A copy made on first use (the renderer reads <see cref="Interleaved"/>; tests read these).</summary>
+    public float[] Distance => distance ??= Plane(0);
+    public float[] Exposure => exposure ??= Plane(1);
     public float X1 => X0 + Size * Texel;
     public float Z1 => Z0 + Size * Texel;
 
-    /// <summary>The grid as the texture's texels: (distance, exposure) pairs, row-major.</summary>
-    public float[] Interleaved()
+    float[] Plane(int channel)
     {
-        var rg = new float[Size * Size * 2];
-        for (int k = 0; k < Size * Size; k++) (rg[2 * k], rg[2 * k + 1]) = (Distance[k], Exposure[k]);
-        return rg;
+        var plane = new float[Size * Size];
+        for (int k = 0; k < plane.Length; k++) plane[k] = rg[2 * k + channel];
+        return plane;
     }
+
+    /// <summary>The grid as the texture's texels: (distance, exposure) pairs, row-major (not a copy).</summary>
+    public float[] Interleaved() => rg;
 
     /// <summary>Signed distance and exposure at a world point (bilinear, clamped at the grid's edge), as the GPU texture reads them.</summary>
     public Vector2 Sample(float x, float z)
@@ -67,7 +86,7 @@ internal sealed class ShoreGrid
         float fx = Math.Clamp((x - X0) / Texel - 0.5f, 0, Size - 1), fz = Math.Clamp((z - Z0) / Texel - 0.5f, 0, Size - 1);
         int i = Math.Min((int)fx, Size - 2), j = Math.Min((int)fz, Size - 2);
         float tx = fx - i, tz = fz - j;
-        Vector2 At(int a, int b) => new(Distance[b * Size + a], Exposure[b * Size + a]);
+        Vector2 At(int a, int b) => new(rg[2 * (b * Size + a)], rg[2 * (b * Size + a) + 1]);
         return Vector2.Lerp(Vector2.Lerp(At(i, j), At(i + 1, j), tx), Vector2.Lerp(At(i, j + 1), At(i + 1, j + 1), tx), tz);
     }
 }
@@ -92,9 +111,31 @@ internal static class ShoreBake
         (cx, cz) = SnapCentre(cx, cz, texel);
         float x0 = cx - size * 0.5f * texel, z0 = cz - size * 0.5f * texel;
         int n = size;
+        var scratch = Take(n);
+        try { return Bake(scratch, height, x0, z0, n, texel, maxDistance); }
+        finally { Give(scratch); }
+    }
 
+    /// <summary>The working arrays of a bake (all of them written whole before they are read, but <see cref="Scratch.Label"/>, which is cleared), kept between bakes:
+    /// a bake took 36 MB of them from the large object heap every time, about 180 times a minute while flying (docs/renderer-native.md 8.14).</summary>
+    sealed class Scratch(int n)
+    {
+        public readonly int N = n;
+        public readonly float[] S = new float[n * n], Dist = new float[n * n], Tmp = new float[n * n], Exposure = new float[n * n];
+        public readonly Seed[] Seeds = new Seed[n * n];
+        public readonly int[] Label = new int[n * n], Stack = new int[n * n];
+    }
+
+    static Scratch? spare;
+
+    static Scratch Take(int n) => Interlocked.Exchange(ref spare, null) is { } s && s.N == n ? s : new Scratch(n);
+
+    static void Give(Scratch s) => Interlocked.Exchange(ref spare, s);
+
+    static ShoreGrid Bake(Scratch sc, Func<float, float, float> height, float x0, float z0, int n, float texel, float maxDistance)
+    {
         // s > 0: water.
-        var s = new float[n * n];
+        var s = sc.S;
         Parallel.For(0, n, j =>
         {
             float z = z0 + (j + 0.5f) * texel;
@@ -102,7 +143,7 @@ internal static class ShoreBake
         });
 
         // Seeds: each texel takes the nearest waterline crossing on its four edges, as a point in texel units.
-        var seeds = new Seed[n * n];
+        var seeds = sc.Seeds;
         Parallel.For(0, n, j =>
         {
             for (int i = 0; i < n; i++)
@@ -127,7 +168,7 @@ internal static class ShoreBake
 
         Sweeps(seeds, n);
 
-        var dist = new float[n * n];
+        var dist = sc.Dist;
         Parallel.For(0, n, j =>
         {
             for (int i = 0; i < n; i++)
@@ -138,10 +179,16 @@ internal static class ShoreBake
             }
         });
 
-        var tmp = new float[n * n];
-        Smooth(dist, tmp, n);
-        var exposure = Exposure(dist, n, texel, maxDistance, IsletBlocks(s, seeds, n, texel));
-        return new ShoreGrid(n, texel, x0, z0, maxDistance, dist, exposure);
+        Smooth(dist, sc.Tmp, n);
+        var exposure = sc.Exposure;
+        Exposure(dist, n, texel, maxDistance, IsletBlocks(s, seeds, n, texel, sc.Label, sc.Stack), exposure);
+        // The field in the texture's layout (distance, exposure pairs), made here on the worker.
+        var rg = ShoreGrid.Rent(n);
+        Parallel.For(0, n, j =>
+        {
+            for (int k = j * n, end = k + n; k < end; k++) (rg[2 * k], rg[2 * k + 1]) = (dist[k], exposure[k]);
+        });
+        return new ShoreGrid(n, texel, x0, z0, maxDistance, rg);
     }
 
     /// <summary>
@@ -150,11 +197,10 @@ internal static class ShoreBake
     /// then over its 3×3 neighbours, so the surf fades over a few hundred units where the nearest shore switches from an islet to the coast
     /// behind it instead of cutting off.
     /// </summary>
-    static float[] IsletBlocks(float[] s, Seed[] seeds, int n, float texel)
+    static float[] IsletBlocks(float[] s, Seed[] seeds, int n, float texel, int[] label, int[] stack)
     {
-        var label = new int[n * n];
+        Array.Clear(label, 0, n * n);
         var area = new List<float> { 0 };
-        var stack = new int[n * n];
         for (int k0 = 0; k0 < n * n; k0++)
         {
             if (s[k0] > 0 || label[k0] != 0) continue;
@@ -273,7 +319,7 @@ internal static class ShoreBake
     }
 
     /// <summary>The <see cref="ShoreGrid.ExposureRule"/>: block maxima of the water's distance, a disc dilation over them, the ramp, a bilinear upsample.</summary>
-    static float[] Exposure(float[] dist, int n, float texel, float maxDistance, float[] islets)
+    static void Exposure(float[] dist, int n, float texel, float maxDistance, float[] islets, float[] e)
     {
         int nb = (n + Block - 1) / Block;
         var reachBlock = new float[nb * nb];
@@ -320,7 +366,6 @@ internal static class ShoreBake
             }
         });
 
-        var e = new float[n * n];
         Parallel.For(0, n, j =>
         {
             float fz = Math.Clamp((j + 0.5f) / Block - 0.5f, 0, nb - 1);
@@ -336,6 +381,5 @@ internal static class ShoreBake
                 e[j * n + i] = a * (1 - tz) + b * tz;
             }
         });
-        return e;
     }
 }

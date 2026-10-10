@@ -87,7 +87,7 @@ internal sealed class ShoreField : IDisposable
     void Upload(ShoreGrid grid)
     {
         LastBakeMs = bakeTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-        var rg = grid.Interleaved();
+        var rg = grid.Interleaved();   // made on the worker
         TerrainTexture next;
         using (var batch = gpu.Uploads.Begin())
         {
@@ -99,6 +99,7 @@ internal sealed class ShoreField : IDisposable
         if (texture is not null) retired.Add((texture, frame));
         texture = next;
         Rect = new Vector4(grid.X0, grid.Z0, grid.X1, grid.Z1);
+        grid.Release();   // the write above copied the texels into the frame's staging: the array is the next bake's
     }
 
     public void Dispose()
