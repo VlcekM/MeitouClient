@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Numerics;
 using Meitou.Data.World;
 
@@ -337,7 +337,7 @@ public sealed class ReflectionPass : IDisposable
         }
         Gpu.EndHostPass(cmd);
         // What lies beyond the near slice (20000 units on) is fogged as the sky, to the far clip.
-        if (FogVolumes && hasImage) RunFog(cmd, nearest, mirroredEye);
+        if (FogVolumes && hasImage && !NoFog) RunFog(cmd, nearest, mapped, mirroredEye);
         Gpu.EndNative(cmd);
         timer.End();
         CpuMs = watch.Elapsed.TotalMilliseconds;
@@ -471,44 +471,51 @@ public sealed class ReflectionPass : IDisposable
     /// shows; the volumes along that part are laid over the texel (the main fog pass already fogs the part from the eye to the water).
     /// </summary>
     public bool FogVolumes { get; set; }
+    /// <summary><c>MEITOU_REFL_FOG=0</c>: no fog pass over the reflection (for A/B measurements).</summary>
+    public bool NoFog { get; set; } = Environment.GetEnvironmentVariable("MEITOU_REFL_FOG") == "0";
     LegacyProgram? fogProgram;
     int fogProgramSamples = -1;
     GraphicsPipeline? fogPipeline;
 
     /// <summary>The fog pass over the reflection: the fog volume functions with the texel's distance rebuilt from the reflection's depth
-    /// (<paramref name="multisampled"/>: its first sample) through the inverse of the near slice's mirrored, oblique view-projection.</summary>
+    /// (<paramref name="multisampled"/>: its first sample) through the inverse of the near slice's mirrored, oblique view-projection, and the ray's
+    /// direction through the plain one's.</summary>
     internal static string FogFragment(bool multisampled) => "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + $$"""
 
         in vec2 vUv;
         out vec4 fragColour;
         uniform {{(multisampled ? "sampler2DMS" : "sampler2D")}} uDepth;
         uniform mat4 uInverse;        // clip (GL depth -1..1) to world: the near slice's mirrored, oblique view-projection inverted
+        uniform mat4 uRayInverse;     // the same without the oblique near plane: its depth is no surface's, but its rays all point forwards
         uniform vec3 uMirroredEye;
         uniform float uWaterY;
 
         void main()
         {
+            vec2 ndc = vUv * 2.0 - 1.0;
             float d = texelFetch(uDepth, ivec2(gl_FragCoord.xy), 0).r;
             bool sky = d >= 1.0;
-            // A point of the texel's ray (the world point it shows, or for the sky any point: only the direction counts).
-            vec4 h = uInverse * vec4(vUv * 2.0 - 1.0, (sky ? 0.5 : d) * 2.0 - 1.0, 1.0);
-            vec3 p = h.xyz / h.w, toP = p - uMirroredEye;
-            float total = length(toP);
-            vec3 dir = toP / max(total, 1e-6);
+            // The texel's ray from the plain projection: the oblique one's skewed far plane puts the mid-depth point of grazing rays (the mirrored
+            // horizon, where the water reflects most) behind the eye.
+            vec4 r = uRayInverse * vec4(ndc, 0.0, 1.0);
+            vec3 dir = normalize(r.xyz / r.w - uMirroredEye);
             // From under the water the ray climbs to the plane, where it is the real reflected ray from then on.
             if (dir.y < 1e-5) { fragColour = vec4(0.0, 0.0, 0.0, 1.0); return; }
             float tw = (uWaterY - uMirroredEye.y) / dir.y;
+            // The surface the texel shows, by the depth the oblique projection wrote (the sky: the far clip).
+            vec4 h = uInverse * vec4(ndc, d * 2.0 - 1.0, 1.0);
+            float total = sky ? 1e9 : length(h.xyz / h.w - uMirroredEye);
             vec3 add;
             float trans;
-            fogVolumesAccumulate(uMirroredEye + dir * tw, dir, sky ? 1e9 : max(total - tw, 0.0), add, trans);
+            fogVolumesAccumulate(uMirroredEye + dir * tw, dir, max(total - tw, 0.0), add, trans);
             fragColour = vec4(add, trans);
         }
         """;
 
-    void RunFog(CommandList cmd, Matrix4x4 nearViewProjection, Vector3 mirroredEye)
+    void RunFog(CommandList cmd, Matrix4x4 nearViewProjection, Matrix4x4 nearRays, Vector3 mirroredEye)
     {
         var depthTexture = msDepth ?? depth;
-        if (depthTexture is null || colour is null || !Matrix4x4.Invert(nearViewProjection, out var inverse)) return;
+        if (depthTexture is null || colour is null || !Matrix4x4.Invert(nearViewProjection, out var inverse) || !Matrix4x4.Invert(nearRays, out var rayInverse)) return;
         if (fogProgram is null || fogProgramSamples != samples)
         {
             fogProgram?.Dispose();
@@ -524,6 +531,7 @@ public sealed class ReflectionPass : IDisposable
         p.Bind(p.Sampler("uDepth"), new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), depthTexture.View(), depthTexture.Image));
         p.Set(p.Uniform("uInverse"), in inverse);
+        p.Set(p.Uniform("uRayInverse"), in rayInverse);
         p.Set(p.Uniform("uMirroredEye"), mirroredEye.X, mirroredEye.Y, mirroredEye.Z);
         p.Set(p.Uniform("uWaterY"), WorldWater.Height);
         p.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals

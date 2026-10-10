@@ -238,16 +238,20 @@ Meitou water draws and volumes are in view; the Faithful water keeps the game's 
 the main fog pass's blend (`colour × transmittance + fog`, colour channels only), shader `ReflectionPass.FogFragment`: each texel's depth (the
 multisampled target's first sample, `sampler2DMS`, or the plain depth at `--reflection-samples 1`; both now made sampleable) is unprojected
 through the inverse of the near slice's mirrored, *oblique* view-projection (the depth mapping is not the plain perspective one), which gives
-the world point the texel shows. The ray from the mirrored eye to it crosses the water plane at distance `tw`; from there on it is the real
-reflected ray, so `fogVolumesAccumulate` runs from that crossing along the same direction for `total − tw` (the sky, depth 1: to the far clip).
-The eye-to-water part is left to the main pass, which fogs the water pixel. Not fogged: what lies only in the far slice (from 20000 units on;
-its depth is cleared before the near slice) is treated as sky, and the water's sky-colour fallback (with reflections off, or outside the
-reflection's rectangle) stays unfogged.
+the distance to the world point the texel shows. The ray's direction comes from the same slice's plain (non-oblique) matrix: the oblique
+one's far plane is skewed, and for the grazing rays of the mirrored horizon (where Fresnel makes the water reflect most) its mid-depth point
+lies behind the eye, so the first version left a band of sky there unfogged (**Observed** with a debug colouring, then gone). The ray from the
+mirrored eye crosses the water plane at distance `tw`; from there on it is the real reflected ray, so `fogVolumesAccumulate` runs from that
+crossing along the same direction for `total − tw` (the sky, depth 1: to the far clip). The eye-to-water part is left to the main pass, which
+fogs the water pixel. Not fogged: what lies only in the far slice (from 20000 units on; its depth is cleared before the near slice) is treated
+as sky, and the water's sky-colour fallback (with reflections off, or outside the reflection's rectangle) stays unfogged.
+`MEITOU_REFL_FOG=0` turns the pass off (`ReflectionPass.NoFog`, for A/B runs).
 
-*Observed* (same view, 1280 × 720, `--pitch 5 --yaw 0 --distance 900` at Shark, 16:00): the near water went from (44, 43, 42) to (42, 40, 37),
-the hue of the fog above the horizon (120, 115, 103); about a tenth of the pixels change by more than 4/255, at most 31; the 4x and 1x
-reflections agree. A debug colouring showed the fog on the reflected sky (strong) and on the reflected land (by its distance). Cost: one
-full-screen pass at the reflection's half resolution, not measured.
+*Observed* (same view, 1280 × 720, `--pitch 5 --yaw 0 --distance 900` at Shark, 16:00, `MEITOU_REFL_FOG=0` against on): the band of water
+reflecting the mirrored horizon went from a cyan grey (37, 41, 39) to a fog brown (35, 34, 28), the near water from (44, 43, 42) to
+(42, 40, 37), the hue of the fog above the horizon (120, 115, 103); the 4x and 1x reflections agree. **Measured** (`--view swamp-rain --size
+1920x1080 --upscaler dlss --render-scale native --bench-frames 600`, two pairs, RTX 4070): the `reflection` stage 0.37 → 0.43 ms mean in both
+pairs (+0.06 ms); the GPU total moved by less than the run-to-run noise (6.27 / 6.24 off, 6.26 / 6.21 on).
 
 ## Reflection cost: shadows and multisampling (2026-10-09)
 
