@@ -153,6 +153,9 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
     "Water see-through distance" D (default 10000, the game 4000; 1000–100000) replaces the fixed 4000–4400 cutoff: the floor fades out
     over D to 1.5 D (smoothstep) when refracted, the blended path goes opaque over 0.9 D to 1.25 D. From high above the game's 4000 left
     only a clear disc under the camera, darker water all round it.
+    **Glint occlusion** (2026-10-10): the sun's specular is multiplied by how much the mirror shows sky there (its luminance over the
+    analytic sky's in the same direction, smoothstep 0.5–0.85), as the game multiplies its specular by the reflection's brightness; before,
+    the low sun's streak ran straight through the dark reflection of the hills in front of it.
     **Caustics**: on the floor seen through shallow water, two
     drifting copies of the foam lace (cell rims) multiplied and read a mip or three down, the blur growing with the depth (0.15 mips a unit),
     at a quarter of the strength they had until 2026-10-08 (they covered a whole beach); gone in the shallows (zero under 1.5 units, full from 7),
