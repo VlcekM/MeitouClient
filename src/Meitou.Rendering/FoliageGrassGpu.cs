@@ -246,6 +246,7 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
 
         var cmd = ctx.Frame.PreFrame;
         var stamps = (ctx.Frame.Timestamps.Allocate(), ctx.Frame.Timestamps.Allocate());
+        FrameProfiler.PreStamp(cmd, StageClock.Uploads);
         cmd.BeginLabel("foliage grass");
         cmd.FillBuffer(counters.Buffer, counters.Offset, 16, 0);
         Barrier(cmd, PipelineStageFlags2.AllTransferBit, AccessFlags2.TransferWriteBit, PipelineStageFlags2.ComputeShaderBit, AccessFlags2.ShaderStorageReadBit | AccessFlags2.ShaderStorageWriteBit);
@@ -271,6 +272,7 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
             viewIndex++;
         }
         cmd.EndLabel();
+        FrameProfiler.PreStamp(cmd, StageClock.Cull);
         if (stamps.Item1.IsValid && stamps.Item2.IsValid) pendingTimes.Add(stamps);
         Dispatched++;
         return new GrassResult(draws.Buffer, draws.Offset, counters.Buffer, counters.Offset, n, tables.Patches);

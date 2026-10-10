@@ -22,7 +22,9 @@ public sealed unsafe partial class GpuContext
     /// <summary><c>MEITOU_PASS_STATS=1</c> only (else 0): the last completed frame's pre-frame GPU time, from the start of its uploads to the end of
     /// the pre-frame command buffer (uploads, compute culls, grass kernels, impostor bakes), a frame ring late.</summary>
     public double PreFrameGpuMs { get; private set; }
-    static bool PreFrameStamps => PassStats || SpikeLog.Enabled;
+    /// <summary>Set by the first <see cref="FrameProfiler"/>: the pre-frame buffer gets its end stamp, which the profiler needs to time what the buffer holds.</summary>
+    internal static bool ProfilePreFrame;
+    static bool PreFrameStamps => PassStats || SpikeLog.Enabled || ProfilePreFrame;
     static readonly bool PassStats = Environment.GetEnvironmentVariable("MEITOU_PASS_STATS") == "1";
 
     /// <summary>The first and the pre-frame-end timestamps of the frame submitted last (--log-spikes or MEITOU_PASS_STATS=1 only; the profiler keeps them to read the pre-frame GPU time when the frame has completed).</summary>

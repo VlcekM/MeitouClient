@@ -1440,14 +1440,14 @@ static class WorldFrame
         // Records the last slice's jobs and executes them: the render thread's share (the fork-join) counts as "water", the last stage of the host.
         if (host.IsOpen) { host.Close(); StageClock.Lap(9); }
         gpu.Post!.RunGiResolve();
-        StageClock.Phase("gi resolve");
+        StageClock.Lap(14, "gi resolve");   // the resolve is the gi stage's (its time was the particles stage's before, with the shafts and the fog volumes)
         // The Meitou light shafts (docs/render-shafts.md): the haze darkened where the sun is shadowed along the view, before the fog volumes blend over it.
-        if (gpu.Shadow is { Enabled: true }) { gpu.Post!.RunLightShafts(ShaftDarkening(post.Options, light, sun.Y) * ShaftCloudFade(post.Options, Overcast(gpu)), Math.Min(camera.ViewDistance, gpu.Sky.HazeCompleteDistance ?? gpu.Sky.HazeDistance), floor, ShaftAirByTime(post.Options, scene.Clock, hour)); StageClock.Phase("shafts"); }
+        if (gpu.Shadow is { Enabled: true }) { gpu.Post!.RunLightShafts(ShaftDarkening(post.Options, light, sun.Y) * ShaftCloudFade(post.Options, Overcast(gpu)), Math.Min(camera.ViewDistance, gpu.Sky.HazeCompleteDistance ?? gpu.Sky.HazeDistance), floor, ShaftAirByTime(post.Options, scene.Clock, hour)); StageClock.Lap(StageClock.Shafts); }
         if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneDepth, rw, rh);
         // The placed fog volumes over the finished scene (opaque, water, sky; the haze is in the shaders), one pass reading the depth, as the game's queue 82 does.
         gpu.Post!.RunFogVolumes(gpu.FogVolumes is { UsedData: > 0 });
         gpu.Post.BuildShadingRate(eye);   // the next frame's fog shading rate (fog-vrs), from this frame's depth
-        StageClock.Phase("fog volumes");
+        StageClock.Lap(StageClock.Fog, "fog volumes");
         // Then the particles, blended over it and tested against the near slice's depth (they are not fogged; docs/formats/fogfeatures.md).
         if (gpu.Particles is { } particleDraw && particleNear > 0)
         {

@@ -16,18 +16,20 @@ public sealed class FrameProfiler : IDisposable
     public enum Mode { Off, Gpu, Cpu }
 
     public const int History = 300;
-    const int Slots = 4, MaxStamps = 128, Stages = 15;
+    const int Slots = 4, MaxStamps = 128, MaxPre = 96, Stages = 20;
     // Series: the stages by StageClock index, then the GPU time outside the stamped stages (uploads, overlay), then the total.
     const int Other = Stages, Total = Stages + 1, Series = Stages + 2;
-    // The stages in the order a frame runs them; 11 is the overlay, submit and present after the scene.
-    static readonly int[] Order = [0, 1, 2, 3, 12, 14, 4, 5, 6, 7, 8, 9, 13, 10, 11, Other, Total];
+    // The stages in the order a frame runs them; 11 is the overlay and the copy to the window after the scene (on the GPU), the submit and present (on the render thread).
+    static readonly int[] Order = [0, 1, 2, 3, StageClock.Uploads, StageClock.Cull, StageClock.Bake, 12, 14, 4, 5, 6, 7, 8, 9, StageClock.Shafts, StageClock.Fog, 13, 10, 11, Other, Total];
 
     static readonly Vector4[] Colours =
     [
         new(0.55f, 0.75f, 1.00f, 1), new(0.35f, 0.55f, 0.95f, 1), new(0.60f, 0.45f, 0.95f, 1), new(0.95f, 0.85f, 0.35f, 1),
         new(0.25f, 0.80f, 0.85f, 1), new(0.95f, 0.55f, 0.85f, 1), new(0.65f, 0.65f, 0.65f, 1), new(0.95f, 0.55f, 0.25f, 1),
         new(0.40f, 0.85f, 0.40f, 1), new(0.30f, 0.60f, 1.00f, 1), new(0.95f, 0.35f, 0.35f, 1), new(0.55f, 0.55f, 0.75f, 1),
-        new(0.45f, 0.35f, 0.25f, 1), new(1.00f, 0.75f, 0.20f, 1), new(0.85f, 0.95f, 0.45f, 1), new(0.50f, 0.50f, 0.50f, 1), new(1.00f, 1.00f, 1.00f, 1),
+        new(0.45f, 0.35f, 0.25f, 1), new(1.00f, 0.75f, 0.20f, 1), new(0.85f, 0.95f, 0.45f, 1),
+        new(0.70f, 0.55f, 0.40f, 1), new(0.80f, 0.30f, 0.55f, 1), new(0.55f, 0.90f, 0.70f, 1), new(0.85f, 0.70f, 0.95f, 1), new(0.95f, 0.75f, 0.60f, 1),
+        new(0.50f, 0.50f, 0.50f, 1), new(1.00f, 1.00f, 1.00f, 1),
     ];
 
     readonly Func<double>? gpuFrameMs;
@@ -35,6 +37,14 @@ public sealed class FrameProfiler : IDisposable
     readonly int[] stampCount = new int[Slots];
     readonly bool[] pending = new bool[Slots];
     int slot;
+
+    // The pre-frame command buffer's own chain of stamps (uploads, culls, bakes; PreStamp): per slot the stamp and the stage that owns the time since the one before.
+    readonly QuerySlot[,] preSlots = new QuerySlot[Slots, MaxPre];
+    readonly int[,] preStage = new int[Slots, MaxPre];
+    readonly int[] preCount = new int[Slots];
+    readonly QuerySlot[] slotPreEnd = new QuerySlot[Slots];
+    /// <summary>MEITOU_PROFILER_PRE=0: no stamps inside the pre-frame command buffer (its time is then the "uploads" stage whole); to measure what they cost.</summary>
+    static readonly bool PreStamps = Environment.GetEnvironmentVariable("MEITOU_PROFILER_PRE") != "0";
 
     readonly float[][] cpu = NewHistory(), gpu = NewHistory();
     int cpuHead, cpuCount, gpuHead, gpuCount;
@@ -50,10 +60,14 @@ public sealed class FrameProfiler : IDisposable
     readonly long[] slotTag = new long[Slots];
     readonly List<double> medianScratch = new(History);
 
+    /// <summary>What the chart shows; F12 cycles it. <c>MEITOU_PROFILER=gpu|cpu</c> starts it on.</summary>
     public Mode Showing { get; set; }
 
     /// <summary>The benchmark harness's frame number: copied at <see cref="BeginFrame"/> and handed back with the frame's GPU times by <see cref="OnGpuFrame"/>, which arrive a few frames later.</summary>
     public long Tag { get; set; }
+
+    /// <summary>The timestamps the newest frame took for the profiler (the stage laps and the pre-frame buffer's), to say what the profiler costs.</summary>
+    public int StampsLastFrame { get; private set; }
 
     /// <summary>Called when a frame's GPU times have been read: its <see cref="Tag"/>, the ms per <see cref="StageClock"/> stage (do not keep the array), and the whole frame's GPU ms.</summary>
     public Action<long, double[], double>? OnGpuFrame { get; set; }
@@ -72,6 +86,8 @@ public sealed class FrameProfiler : IDisposable
     {
         this.gpuFrameMs = gpuFrameMs;
         native = gpu;
+        GpuContext.ProfilePreFrame = true;
+        Showing = Environment.GetEnvironmentVariable("MEITOU_PROFILER")?.ToLowerInvariant() switch { "gpu" => Mode.Gpu, "cpu" => Mode.Cpu, _ => Mode.Off };
         recordStamp = cmd => cmd.Timestamp(native.Frame.Timestamps, pendingStamp);
     }
 
@@ -92,6 +108,7 @@ public sealed class FrameProfiler : IDisposable
         slotWhole[slot] = default;
         pending[slot] = false;   // still not ready after a full round: dropped
         stampCount[slot] = 0;
+        preCount[slot] = 0;
         slotTag[slot] = Tag;
         StageClock.Start();
         StageClock.Profiler = this;
@@ -106,7 +123,9 @@ public sealed class FrameProfiler : IDisposable
         StageClock.Lap(11);
         StageClock.Active = false;
         pending[slot] = stampCount[slot] > 1;
+        StampsLastFrame = stampCount[slot] + preCount[slot];
         slotWhole[slot] = native.CurrentFrameStamps;   // complete when the context has ended the frame already (else the total falls back to gpuFrameMs)
+        slotPreEnd[slot] = native.LastFrameStamps.PreEnd;
         double sum = 0;
         for (int s = 0; s < Stages; s++)
         {
@@ -126,6 +145,25 @@ public sealed class FrameProfiler : IDisposable
         }
         cpuHead = (cpuHead + 1) % History;
         cpuCount = Math.Min(cpuCount + 1, History);
+    }
+
+    /// <summary>
+    /// A stamp in the pre-frame command buffer <paramref name="cmd"/>, called at the edges of the work that buffer holds: the time since the buffer's previous stamp (the first
+    /// is the frame's start) goes to <paramref name="stage"/>. So a span is closed by <c>PreStamp(cmd, StageClock.Uploads)</c> just before it (whatever was recorded since the last stamp is uploads)
+    /// and <c>PreStamp(cmd, stage)</c> after it. Nothing outside a profiled frame; the time after the last stamp, up to the buffer's end, is uploads too.
+    /// </summary>
+    internal static void PreStamp(CommandList cmd, int stage) => StageClock.Profiler?.RecordPre(cmd, stage);
+
+    void RecordPre(CommandList cmd, int stage)
+    {
+        int n = preCount[slot];
+        if (!PreStamps || n >= MaxPre) return;
+        var q = native.Frame.Timestamps.Allocate();
+        if (!q.IsValid) return;
+        cmd.Timestamp(native.Frame.Timestamps, q);
+        preSlots[slot, n] = q;
+        preStage[slot, n] = stage;
+        preCount[slot] = n + 1;
     }
 
     internal void Stamp(int stage)
@@ -219,8 +257,28 @@ public sealed class FrameProfiler : IDisposable
         int n = stampCount[s];
         if (!TryStamp(s, n - 1, out _)) return;
         Array.Clear(gpuFrame);
-        TryStamp(s, 0, out ulong previous);
+        var arena = native.Frame.Timestamps;
+        var whole = slotWhole[s];
         double sum = 0;
+        // The pre-frame command buffer, from the frame's first stamp: its spans (cull, bakes, the ocean) and what is left up to its end (uploads).
+        if (arena.TryRead(whole.Begin, out ulong cursor))
+        {
+            for (int i = 0; i < preCount[s]; i++)
+            {
+                if (!arena.TryRead(preSlots[s, i], out ulong at)) continue;
+                double span = at >= cursor ? (at - cursor) / 1e6 : 0;
+                gpuFrame[preStage[s, i]] += span;
+                sum += span;
+                cursor = Math.Max(cursor, at);
+            }
+            if (arena.TryRead(slotPreEnd[s], out ulong preEnd) && preEnd >= cursor)
+            {
+                gpuFrame[StageClock.Uploads] += (preEnd - cursor) / 1e6;
+                sum += (preEnd - cursor) / 1e6;
+            }
+        }
+        // The stamped stages of the frame's own commands (the first stamp is the frame's start there: after the pre-frame buffer, so a gap between the two stays in "other").
+        TryStamp(s, 0, out ulong previous);
         for (int i = 1; i < n; i++)
         {
             TryStamp(s, i, out ulong now);
@@ -229,9 +287,14 @@ public sealed class FrameProfiler : IDisposable
             sum += ms;
             previous = now;
         }
+        // The tail after the last stage (the overlay, the profiler's own chart, the copy to the window): "present".
+        if (arena.TryRead(whole.End, out ulong tailEnd) && tailEnd >= previous)
+        {
+            gpuFrame[11] += (tailEnd - previous) / 1e6;
+            sum += (tailEnd - previous) / 1e6;
+        }
         // The frame's own total (first to last stamp); the context's latest completed frame is only a stand-in and, with frames in flight, another frame.
-        var whole = slotWhole[s];
-        double own = native.Frame.Timestamps.TryRead(whole.Begin, out ulong wb) && native.Frame.Timestamps.TryRead(whole.End, out ulong we) && we >= wb ? (we - wb) / 1e6 : 0;
+        double own = arena.TryRead(whole.Begin, out ulong wb) && arena.TryRead(whole.End, out ulong we) && we >= wb ? (we - wb) / 1e6 : 0;
         double total = own > 0 ? Math.Max(own, sum) : gpuFrameMs?.Invoke() is > 0 and var t ? Math.Max(t, sum) : sum;
         for (int k = 0; k < Stages; k++) gpu[k][gpuHead] = (float)gpuFrame[k];
         gpu[Other][gpuHead] = (float)(total - sum);
@@ -337,7 +400,7 @@ public sealed class FrameProfiler : IDisposable
             int s = Order[i];
             float top = ly + (i + 1) * lh;
             overlay.Rect(lx, top + 4, lx + swatch, top + 4 + swatch, Colours[s]);
-            string c = s == Other ? "-" : Mean(cpu[s], cpuHead, cpuCount, meanFrames).ToString("0.00", CultureInfo.InvariantCulture);
+            string c = s == Other || StageClock.GpuOnly(s) ? "-" : Mean(cpu[s], cpuHead, cpuCount, meanFrames).ToString("0.00", CultureInfo.InvariantCulture);
             string g = gpuCount == 0 ? "-" : Mean(gpu[s], gpuHead, gpuCount, meanFrames).ToString("0.00", CultureInfo.InvariantCulture);
             overlay.Text($"{Label(s),-12}{c,10}{g,10}", lx + swatch + 6, top, DebugOverlay.TextColour);
         }
@@ -348,7 +411,7 @@ public sealed class FrameProfiler : IDisposable
         float max = 0;
         foreach (int s in Order)
         {
-            if (!showGpu && s == Other) continue;
+            if (!showGpu && (s == Other || StageClock.GpuOnly(s))) continue;
             for (int i = 0; i < count; i++) max = Math.Max(max, hist[s][i]);
         }
         float scale = NiceCeiling(max * 1.05f);
@@ -368,7 +431,7 @@ public sealed class FrameProfiler : IDisposable
             // Oldest at the left; the newest frame at the right edge.
             foreach (int s in Order)
             {
-                if (!showGpu && s == Other) continue;
+                if (!showGpu && (s == Other || StageClock.GpuOnly(s))) continue;
                 var series = hist[s];
                 float thickness = s == Total ? 2f : 1.5f;
                 float? lastX = null, lastY = null;

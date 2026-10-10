@@ -174,6 +174,7 @@ public sealed unsafe class OceanWaves : IDisposable
             new(spectrum.Handle, 0, spectrum.Size), new(fieldsA.Handle, 0, fieldsA.Size), new(fieldsB.Handle, 0, fieldsB.Size), new(output.Handle, 0, output.Size),
             new(foam.Handle, 0, foam.Size),
         ];
+        FrameProfiler.PreStamp(cmd, StageClock.Uploads);
         cmd.BeginLabel("ocean");
         // The last frame's draws sampled the textures, its passes used the buffers, and the spectrum may just have been written.
         if (!foamCleared) { cmd.FillBuffer(foam.Handle, 0, foam.Size, 0); foamCleared = true; }
@@ -201,6 +202,7 @@ public sealed unsafe class OceanWaves : IDisposable
         cmd.Timestamp(ctx.Frame.Timestamps, stamps.Item2, PipelineStageFlags2.AllTransferBit);
         if (stamps.Item1.IsValid && stamps.Item2.IsValid) pendingTimes.Add(stamps);
         cmd.EndLabel();
+        FrameProfiler.PreStamp(cmd, 9);   // the water stage: the ocean's FFT is the water's
         Dispatched++;
     }
 

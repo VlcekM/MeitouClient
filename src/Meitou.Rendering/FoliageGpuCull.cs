@@ -433,6 +433,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
 
         var cmd = ctx.Frame.PreFrame;
         var stamps = (ctx.Frame.Timestamps.Allocate(), ctx.Frame.Timestamps.Allocate());
+        FrameProfiler.PreStamp(cmd, StageClock.Uploads);
         cmd.BeginLabel("foliage cull");
         // The arena's uploads (and anything else uploaded so far) before the reads.
         Barrier(cmd, PipelineStageFlags2.AllTransferBit, AccessFlags2.TransferWriteBit, PipelineStageFlags2.ComputeShaderBit, AccessFlags2.ShaderStorageReadBit);
@@ -480,6 +481,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         }
         if (DrawTally) CopyTally(cmd, args.Buffer, args.Offset, work.DrawCount);
         cmd.EndLabel();
+        FrameProfiler.PreStamp(cmd, StageClock.Cull);
         if (stamps.Item1.IsValid && stamps.Item2.IsValid) pendingTimes.Add((stamps.Item1, stamps.Item2, TimingClass));
         Dispatched++;
         return new FoliageCullResult(rows.Buffer, rows.Offset, rowsBytes, args.Buffer, args.Offset, offsets.Buffer, offsets.Offset, n, work.DrawCount, split);

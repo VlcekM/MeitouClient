@@ -552,6 +552,7 @@ public sealed class ImpostorBakeJob : IDisposable
             var t0 = watch.Elapsed.TotalMilliseconds;
             if (UploadProfile.On) UploadProfile.Take();
             var cmd = gpu.Frame.PreFrame;
+            FrameProfiler.PreStamp(cmd, StageClock.Uploads);
             cmd.BeginLabel("impostor bake");
             for (int k = 0; k < RowsPerStep && recorded < size.Grid; k++, recorded++)
             {
@@ -561,6 +562,7 @@ public sealed class ImpostorBakeJob : IDisposable
                 rows.Add((recorded, gpu.Frame.Number, buffer));
             }
             cmd.EndLabel();
+            FrameProfiler.PreStamp(cmd, StageClock.Bake);
             cmd.Invalidate();   // the baker bound its own pipelines and sets
             render += watch.Elapsed.TotalMilliseconds - t0;
             SlowNote("record", $"rows up to {recorded} of {size.Grid}", watch.Elapsed.TotalMilliseconds - t0);
