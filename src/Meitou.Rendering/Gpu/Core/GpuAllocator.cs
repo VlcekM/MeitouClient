@@ -97,6 +97,17 @@ public sealed unsafe class GpuAllocator : IDisposable
     int allocationCount;
     bool disposed;
 
+    // A pool that keeps needing new blocks gets one made ahead on a worker (a spare), and blocks that empty out are given back to the driver
+    // on a worker: vkAllocateMemory of 64 MB takes 0.3 to 1 ms and sometimes 10 to 50, vkFreeMemory 0.5 to 5 and sometimes 30, and neither
+    // belongs on the render thread (2026-10-10, docs/renderer-native.md "Upload steps").
+    readonly Dictionary<(uint Type, bool Optimal), MemoryBlock> spares = new();
+    readonly HashSet<(uint Type, bool Optimal)> sparing = new();
+    readonly Dictionary<(uint Type, bool Optimal), int> misses = new();
+    /// <summary>Spares being made and blocks being given back on workers.</summary>
+    int workersBusy;
+    /// <summary>A pool makes spares once it has needed this many new blocks (a pool that never grows keeps none).</summary>
+    const int SpareAfterMisses = 2;
+
     internal GpuAllocator(VulkanDevice dev, ulong blockSize = DefaultBlockSize)
     {
         this.dev = dev;
@@ -112,6 +123,8 @@ public sealed unsafe class GpuAllocator : IDisposable
     public ulong TotalUsedBytes { get { lock (gate) return totalUsed; } }
     public int BlockCount { get { lock (gate) return blockCount; } }
     public int AllocationCount { get { lock (gate) return allocationCount; } }
+    /// <summary>Blocks made ahead on a worker for pools that keep growing (counted in <see cref="BlockCount"/> and <see cref="TotalAllocatedBytes"/>, not in <see cref="GetBlocks"/>).</summary>
+    public int SpareBlocks { get { lock (gate) return spares.Count; } }
     /// <summary>Buffers and images still alive (destroyed on dispose).</summary>
     public int LiveResourceCount { get { lock (gate) return liveBuffers.Count + liveImages.Count; } }
 
@@ -215,7 +228,7 @@ public sealed unsafe class GpuAllocator : IDisposable
             throw new VulkanException($"No memory type for {kind} (bits {req.MemoryTypeBits:X})");
         }
         VulkanException? last = null;
-        lock (gate)
+        for (int attempt = 0; attempt < 2; attempt++)
         {
             foreach (var type in candidates)
             {
@@ -228,6 +241,8 @@ public sealed unsafe class GpuAllocator : IDisposable
                     last = e;
                 }
             }
+            // Out of memory: the spares are only a convenience, give them up and try once more.
+            if (!ReleaseSpares()) break;
         }
         throw last ?? new VulkanException("Allocation failed");
     }
@@ -257,16 +272,52 @@ public sealed unsafe class GpuAllocator : IDisposable
 
     Allocation AllocateFrom(uint type, ulong size, ulong alignment, bool optimal)
     {
-        if (!pools.TryGetValue((type, optimal), out var blocks))
+        var key = (type, optimal);
+        bool dedicated = size > blockSize / 2;
+        MemoryBlock? fresh = null;
+        while (true)
         {
-            pools[(type, optimal)] = blocks = new List<MemoryBlock>();
+            lock (gate)
+            {
+                if (!pools.TryGetValue(key, out var blocks))
+                {
+                    pools[key] = blocks = new List<MemoryBlock>();
+                }
+                if (fresh is not null)
+                {
+                    // The block made outside the lock (a dedicated one holds just this allocation).
+                    blocks.Add(fresh);
+                    totalAllocated += fresh.Size;
+                    blockCount++;
+                    var made = Carve(fresh, 0, 0, size);
+                    if (!dedicated && misses.GetValueOrDefault(key) >= SpareAfterMisses) MaybeStartSpare(key);
+                    return made;
+                }
+                if (!dedicated)
+                {
+                    if (Fit(blocks, size, alignment) is { } f)
+                    {
+                        return Carve(f.Block, f.Index, AlignUp(f.Block.Free[f.Index].Offset, alignment), size);
+                    }
+                    // A spare made ahead is the next block (its bytes were counted when it was made).
+                    if (spares.Remove(key, out var spare))
+                    {
+                        blocks.Add(spare);
+                        var made = Carve(spare, 0, 0, size);
+                        MaybeStartSpare(key);
+                        return made;
+                    }
+                    misses[key] = misses.GetValueOrDefault(key) + 1;
+                }
+            }
+            // No room: a new block, made outside the lock so a slow vkAllocateMemory does not hold up the other threads' allocations.
+            fresh = CreateBlock(type, optimal, dedicated ? size : blockSize, dedicated);
         }
-        if (size > blockSize / 2)
-        {
-            var block = NewBlock(type, optimal, size, true);
-            blocks.Add(block);
-            return Carve(block, 0, 0, size);
-        }
+    }
+
+    /// <summary>The best fit (smallest waste) among the pool's regular blocks; null when none has room.</summary>
+    static (MemoryBlock Block, int Index)? Fit(List<MemoryBlock> blocks, ulong size, ulong alignment)
+    {
         MemoryBlock? bestBlock = null;
         int bestIndex = -1;
         ulong bestWaste = ulong.MaxValue;
@@ -292,13 +343,49 @@ public sealed unsafe class GpuAllocator : IDisposable
                 }
             }
         }
-        if (bestBlock == null)
+        return bestBlock is null ? null : (bestBlock, bestIndex);
+    }
+
+    /// <summary>Under the lock: makes the pool's next block on a worker unless there is one or it is being made.</summary>
+    void MaybeStartSpare((uint Type, bool Optimal) key)
+    {
+        if (disposed || spares.ContainsKey(key) || !sparing.Add(key)) return;
+        Interlocked.Increment(ref workersBusy);
+        ThreadPool.UnsafeQueueUserWorkItem(_ =>
         {
-            bestBlock = NewBlock(type, optimal, blockSize, false);
-            blocks.Add(bestBlock);
-            bestIndex = 0;
+            MemoryBlock? block = null;
+            try { block = CreateBlock(key.Type, key.Optimal, blockSize, false); }
+            catch (VulkanException) { }   // out of memory: no spare, the pool asks again at its next miss
+            bool keep = false;
+            lock (gate)
+            {
+                sparing.Remove(key);
+                if (block is not null && !disposed)
+                {
+                    spares[key] = block;
+                    totalAllocated += block.Size;
+                    blockCount++;
+                    keep = true;
+                }
+            }
+            if (!keep && block is not null) vk.FreeMemory(dev.Device, block.Memory, null);
+            Interlocked.Decrement(ref workersBusy);
+        }, null);
+    }
+
+    /// <summary>Gives the spares back (out of memory). False when there were none.</summary>
+    bool ReleaseSpares()
+    {
+        List<MemoryBlock> mine;
+        lock (gate)
+        {
+            if (spares.Count == 0) return false;
+            mine = [.. spares.Values];
+            spares.Clear();
+            foreach (var b in mine) { totalAllocated -= b.Size; blockCount--; }
         }
-        return Carve(bestBlock, bestIndex, AlignUp(bestBlock.Dedicated ? 0 : bestBlock.Free[bestIndex].Offset, alignment), size);
+        foreach (var b in mine) vk.FreeMemory(dev.Device, b.Memory, null);
+        return true;
     }
 
     Allocation Carve(MemoryBlock block, int freeIndex, ulong offset, ulong size)
@@ -334,8 +421,10 @@ public sealed unsafe class GpuAllocator : IDisposable
         };
     }
 
-    MemoryBlock NewBlock(uint type, bool optimal, ulong size, bool dedicated)
+    /// <summary>Allocates and maps a block (no bookkeeping, no lock: the caller counts it once it is in a pool). Any thread.</summary>
+    MemoryBlock CreateBlock(uint type, bool optimal, ulong size, bool dedicated)
     {
+        long profileStart = UploadProfile.Begin();
         // With ray queries every block may hold acceleration structures, their build inputs or scratch, which are reached by device address.
         var addressFlags = new MemoryAllocateFlagsInfo { SType = StructureType.MemoryAllocateFlagsInfo, Flags = MemoryAllocateFlags.DeviceAddressBit };
         var info = new MemoryAllocateInfo { SType = StructureType.MemoryAllocateInfo, AllocationSize = size, MemoryTypeIndex = type, PNext = dev.HasRayQuery && !optimal ? &addressFlags : null };
@@ -369,8 +458,7 @@ public sealed unsafe class GpuAllocator : IDisposable
         {
             block.Free.Add((0, size));
         }
-        totalAllocated += size;
-        blockCount++;
+        UploadProfile.EndBlock(true, profileStart, size, type, optimal, dedicated);
         return block;
     }
 
@@ -381,6 +469,7 @@ public sealed unsafe class GpuAllocator : IDisposable
         {
             return;
         }
+        MemoryBlock? release = null;
         lock (gate)
         {
             if (a.Freed)
@@ -396,26 +485,53 @@ public sealed unsafe class GpuAllocator : IDisposable
             if (b.Dedicated)
             {
                 ReleaseBlock(blocks, b);
-                return;
+                release = b;
             }
-            InsertFree(b, a.Offset, a.Size);
-            if (b.Used == 0)
+            else
             {
-                bool otherEmpty = false;
-                foreach (var o in blocks)
+                InsertFree(b, a.Offset, a.Size);
+                if (b.Used == 0)
                 {
-                    if (o != b && !o.Dedicated && o.Used == 0)
+                    // Another empty block in the pool, or a spare made ahead, is the room to grow into: this one goes back.
+                    bool otherEmpty = spares.ContainsKey((b.MemoryTypeIndex, b.Optimal));
+                    foreach (var o in blocks)
                     {
-                        otherEmpty = true;
-                        break;
+                        if (o != b && !o.Dedicated && o.Used == 0)
+                        {
+                            otherEmpty = true;
+                            break;
+                        }
                     }
-                }
-                if (otherEmpty)
-                {
-                    ReleaseBlock(blocks, b);
+                    if (otherEmpty)
+                    {
+                        ReleaseBlock(blocks, b);
+                        release = b;
+                    }
                 }
             }
         }
+        if (release is not null) GiveBack(release);
+    }
+
+    /// <summary>
+    /// A block that left its pool goes back to the driver on a worker (vkFreeMemory takes 0.5 to 5 ms and sometimes 30; the render thread
+    /// frees most blocks, when a frame's deletions run). Inline once the allocator is being disposed.
+    /// </summary>
+    void GiveBack(MemoryBlock b)
+    {
+        if (disposed)
+        {
+            vk.FreeMemory(dev.Device, b.Memory, null);
+            return;
+        }
+        Interlocked.Increment(ref workersBusy);
+        ThreadPool.UnsafeQueueUserWorkItem(_ =>
+        {
+            long start = UploadProfile.Begin();
+            vk.FreeMemory(dev.Device, b.Memory, null);   // unmapping is implicit
+            UploadProfile.EndBlock(false, start, b.Size, b.MemoryTypeIndex, b.Optimal, b.Dedicated);
+            Interlocked.Decrement(ref workersBusy);
+        }, null);
     }
 
     static void InsertFree(MemoryBlock b, ulong offset, ulong size)
@@ -439,11 +555,10 @@ public sealed unsafe class GpuAllocator : IDisposable
         }
     }
 
+    /// <summary>Under the lock: takes the block out of its pool and the totals; the caller gives it back to the driver (<see cref="GiveBack"/>) outside the lock.</summary>
     void ReleaseBlock(List<MemoryBlock> blocks, MemoryBlock b)
     {
         blocks.Remove(b);
-        // Unmapping is implicit in vkFreeMemory.
-        vk.FreeMemory(dev.Device, b.Memory, null);
         totalAllocated -= b.Size;
         blockCount--;
     }
@@ -488,6 +603,13 @@ public sealed unsafe class GpuAllocator : IDisposable
 
     public GpuBuffer CreateBuffer(ulong size, BufferUsageFlags usage, MemoryKind kind, string? name = null)
     {
+        long profileStart = UploadProfile.Begin();
+        try { return CreateBufferCore(size, usage, kind, name); }
+        finally { UploadProfile.End(UploadProfile.Part.CreateBuffer, profileStart); }
+    }
+
+    GpuBuffer CreateBufferCore(ulong size, BufferUsageFlags usage, MemoryKind kind, string? name)
+    {
         var info = new BufferCreateInfo
         {
             SType = StructureType.BufferCreateInfo,
@@ -527,6 +649,13 @@ public sealed unsafe class GpuAllocator : IDisposable
     }
 
     public GpuImage CreateImage(in ImageCreateInfo info, MemoryKind kind = MemoryKind.DeviceLocal, string? name = null)
+    {
+        long profileStart = UploadProfile.Begin();
+        try { return CreateImageCore(in info, kind, name); }
+        finally { UploadProfile.End(UploadProfile.Part.CreateImage, profileStart); }
+    }
+
+    GpuImage CreateImageCore(in ImageCreateInfo info, MemoryKind kind, string? name)
     {
         VulkanException.Check(vk.CreateImage(dev.Device, in info, null, out var image), "vkCreateImage");
         vk.GetImageMemoryRequirements(dev.Device, image, out var req);
@@ -587,8 +716,10 @@ public sealed unsafe class GpuAllocator : IDisposable
             b.Freed = true;
             liveBuffers.Remove(b);
         }
+        long profileStart = UploadProfile.Begin();
         vk.DestroyBuffer(dev.Device, b.Buffer, null);
         Free(b.Allocation);
+        UploadProfile.End(UploadProfile.Part.FreeBuffer, profileStart);
     }
 
     public void Free(GpuImage? i)
@@ -606,8 +737,10 @@ public sealed unsafe class GpuAllocator : IDisposable
             i.Freed = true;
             liveImages.Remove(i);
         }
+        long profileStart = UploadProfile.Begin();
         vk.DestroyImage(dev.Device, i.Image, null);
         Free(i.Allocation);
+        UploadProfile.End(UploadProfile.Part.FreeImage, profileStart);
     }
 
     /// <summary>Destroys what is still alive and releases all blocks (the device must be idle).</summary>
@@ -627,6 +760,9 @@ public sealed unsafe class GpuAllocator : IDisposable
         }
         foreach (var b in bs) Free(b);
         foreach (var i in ims) Free(i);
+        // Workers making spares or giving blocks back finish before the rest goes (a spare made after disposed was set frees itself).
+        var wait = new SpinWait();
+        while (Volatile.Read(ref workersBusy) > 0) wait.SpinOnce();
         lock (gate)
         {
             foreach (var blocks in pools.Values)
@@ -636,6 +772,8 @@ public sealed unsafe class GpuAllocator : IDisposable
                     vk.FreeMemory(dev.Device, b.Memory, null);
                 }
             }
+            foreach (var b in spares.Values) vk.FreeMemory(dev.Device, b.Memory, null);
+            spares.Clear();
             pools.Clear();
             totalAllocated = 0;
             totalUsed = 0;

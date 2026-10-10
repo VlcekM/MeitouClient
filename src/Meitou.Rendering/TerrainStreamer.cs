@@ -7,34 +7,52 @@ namespace Meitou.Rendering;
 
 /// <summary>
 /// GL work cut into steps (a slab of a texture, a swap) that run a few at a time on the render thread, so streaming
-/// data in never costs a frame more than the budget (a step is at most about 2 MB of upload).
+/// data in never costs a frame more than the budget (a step is at most about 2 MB of upload). The first step of a
+/// <see cref="Run"/> always runs; after it, a step starts only if the budget has not passed and what steps of its label have cost lately
+/// (<see cref="StepCosts"/>) still fits in what is left, so a step known to be heavy waits for a frame of its own instead of
+/// running on top of others.
 /// </summary>
 public sealed class UploadQueue
 {
     readonly Queue<(Action Step, string Label)> steps = new();
+    readonly StepCosts costs = new();
+    readonly Func<double> clock;
 
     /// <summary>Set MEITOU_STREAM_LOG=1 to print every step that takes more than 3 ms.</summary>
     static readonly bool Log = Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1";
+
+    /// <param name="clockMs">Milliseconds on any scale that only moves forward (tests pass their own); the real time by default.</param>
+    public UploadQueue(Func<double>? clockMs = null) => clock = clockMs ?? (() => Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency);
 
     public int Count => steps.Count;
 
     /// <summary>Labels of the steps the last <see cref="Run"/> executed (for diagnosing slow frames).</summary>
     public string LastRun { get; private set; } = "";
 
+    /// <summary>What steps with <paramref name="label"/> have cost lately, in milliseconds (0 before the first).</summary>
+    public double ExpectedMs(string label) => costs.Expected(label);
+
     public void Add(Action step, string label = "step") => steps.Enqueue((step, label));
 
-    /// <summary>Runs queued steps until <paramref name="budgetMs"/> has passed (always at least one, if any).</summary>
+    /// <summary>Runs queued steps until <paramref name="budgetMs"/> has passed or the next one is expected to end more than <see cref="StepCosts.Slack"/> past it (always at least one, if any).</summary>
     public void Run(double budgetMs)
     {
         LastRun = "";
-        var watch = Stopwatch.StartNew();
-        while (steps.TryDequeue(out var item))
+        double start = clock();
+        int ran = 0;
+        while (steps.TryPeek(out var next))
         {
-            var one = Stopwatch.StartNew();
+            double elapsed = clock() - start;
+            if (ran > 0 && (elapsed >= budgetMs || !costs.Fits(next.Label, elapsed, budgetMs))) break;
+            var item = steps.Dequeue();
+            double began = clock();
+            if (Log) Gpu.UploadProfile.Take();
             item.Step();
+            double ms = clock() - began;
+            costs.Learn(item.Label, ms);
+            ran++;
             LastRun += item.Label + ", ";
-            if (Log && one.Elapsed.TotalMilliseconds > 3) Console.WriteLine($"slow step {item.Label}: {one.Elapsed.TotalMilliseconds:0.0} ms");
-            if (watch.Elapsed.TotalMilliseconds >= budgetMs) break;
+            if (Log) { string parts = Gpu.UploadProfile.Take(); if (ms > 3) Console.WriteLine($"slow step {item.Label}: {ms:0.0} ms [{parts}]"); }
         }
     }
 }

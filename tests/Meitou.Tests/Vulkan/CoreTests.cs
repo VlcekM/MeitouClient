@@ -118,6 +118,41 @@ public unsafe class CoreTests(ITestOutputHelper output)
 
     [Fact]
     [Slow]
+    public void A_pool_that_keeps_growing_gets_its_next_block_made_ahead_and_blocks_go_back_off_the_calling_thread()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        var a = d!.Allocator;
+        const BufferUsageFlags usage = BufferUsageFlags.TransferSrcBit | BufferUsageFlags.TransferDstBit | BufferUsageFlags.StorageBufferBit;
+        ulong each = a.BlockSize * 3 / 8;   // two to a block: a new block for every second buffer
+        var buffers = new List<GpuBuffer>();
+        Assert.Equal(0, a.SpareBlocks);
+        for (int i = 0; i < 8; i++) buffers.Add(a.CreateBuffer(each, usage, MemoryKind.DeviceLocal, "grow " + i));
+        // The pool has needed four blocks: from the second on a worker makes the next one while the render thread carries on.
+        var wait = System.Diagnostics.Stopwatch.StartNew();
+        while (a.SpareBlocks == 0 && wait.ElapsedMilliseconds < 5000) Thread.Sleep(5);
+        Assert.Equal(1, a.SpareBlocks);
+        Assert.Equal(4, a.GetBlocks().Count(b => !b.Dedicated && b.Used > 0));
+        output.WriteLine($"{a.BlockCount} blocks counted, {a.GetBlocks().Count} in pools, {a.SpareBlocks} spare");
+        Assert.Equal(a.GetBlocks().Count + 1, a.BlockCount);
+
+        // The next block comes from the spare (no new one on this thread) and another is made behind it.
+        buffers.Add(a.CreateBuffer(each, usage, MemoryKind.DeviceLocal, "from the spare"));
+        buffers.Add(a.CreateBuffer(each, usage, MemoryKind.DeviceLocal, "from the spare"));
+        buffers.Add(a.CreateBuffer(each, usage, MemoryKind.DeviceLocal, "from the spare"));
+        wait.Restart();
+        while (a.SpareBlocks == 0 && wait.ElapsedMilliseconds < 5000) Thread.Sleep(5);
+        Assert.Equal(1, a.SpareBlocks);
+
+        // Freed down to nothing: the emptied blocks go (the spare is the room to grow into), the counts follow at once, the driver call on a worker.
+        foreach (var b in buffers) a.Free(b);
+        Assert.Equal(0, a.AllocationCount);
+        Assert.Equal(0UL, a.TotalUsedBytes);
+        Assert.True(a.GetBlocks().Count(b => b.Used == 0) <= 1, string.Join("\n", a.GetBlocks()));
+        ExpectClean(d);
+    }
+    [Fact]
+    [Slow]
     public void Clear_image_and_read_back()
     {
         using var d = TryCreate();

@@ -3465,6 +3465,87 @@ no water); the fragment writes `clamp(30 · alpha, 0, max)` (max 2 for the TAA, 
 blends. **Observed**: the streaks are clearly stronger than without it but still a little softer than with no temporal pass. Hidden particles also
 mark their pixels (no depth test): those pixels are a little less stable. The same pass in `--faithful` (no upscaler) does not run.
 
+### 8.21 Upload steps and the driver's memory calls (2026-10-10)
+
+*In short: in the fast flight the render thread's "upload" stalls were mostly not the uploads. They were the .NET collector pausing the thread
+inside a copy, the driver's memory calls (`vkAllocateMemory`, `vkFreeMemory`, `vkCreateImage`) made inline under the allocator's lock, an
+8 MB shore field written in one frame up to four times a second, and atlas levels written in one piece. The memory calls now run off the
+render thread, the big writes are cut into slabs, and every queue defers a step whose kind has been costing more than what is left of its budget.*
+
+**How it was found.** `MEITOU_STREAM_LOG=1` now also prints, for every slow step and slow foliage update, where the thread's time went
+(`UploadProfile`, `src/Meitou.Rendering/Gpu/UploadProfile.cs`: per-thread ticks of the frame begin, the fence wait, a new or freed memory block,
+a staging chunk, the copy into staging, image and buffer creation and the collector's pauses since the previous step; a line
+`alloc new|freed block ... on a worker|main thread` for any block call of 1 ms or more). **Observed** (instrumented master e814965, fast flight,
+command below, 2026-10-10):
+
+- *Collector pauses land in whatever step runs.* A grass page step that copied 0 bytes took 22.5 ms, 22.4 of them a GC pause; another 15.2 ms
+  with 15.0 of pause. In the new build 12 of the 25 slow foliage updates in six runs are pauses of 8 to 80 ms. The process allocated 25 to
+  31 GB in a 3600-frame run (2.0 GB of it on the render thread); `ShoreBake` alone made about 44 MB per bake in the large object heap, about
+  a third of everything.
+- *Driver memory calls.* A 64 MB `vkAllocateMemory` took 0.1 to 1 ms in the usual case with outliers of 4 to 52 ms; `vkFreeMemory` of an
+  emptied block 0.5 to 5 ms (one of 33 ms; 50 ms on a worker in the new build). `Free` released emptied blocks and `Allocate` created them
+  while holding the allocator's lock, so a slow call also held up every other thread's allocation. Each impostor bake created three render
+  target images (`impostor bake target`); in the new build's profile a bake start that still has to (a class not among the kept three) shows
+  `CreateImage` of 0.4 to 10 ms.
+- *Whole levels in one step.* An impostor atlas level was one step: up to 9 MB (a 3072² BC1 albedo), 2 to 3 ms of copying into staging alone.
+  A foliage update's `uploads` column (the queue plus the impostor atlas uploads and the bake step) reached 20 to 34 ms against its 2 ms budget.
+- *The shore field.* One 8 MB RG32F image per rebake, written in a single step (4 to 6 ms), 180 times in the 3600-frame flight.
+- *Frame begin.* Not in the flight: while loading or settling, the first step of a texture queue pays `BeginFrame` (the slot fence, deferred
+  deletions, the bindless apply): 11 to 26 ms, in `FrameBegin`.
+
+**What changed** (all in the streaming and upload code; the job bodies on the workers are untouched):
+
+- `GpuAllocator`: a block is created *outside* the lock; once a pool has missed twice, its next 64 MB block is made ahead on a thread-pool
+  worker (`SpareBlocks`), so a pool that keeps growing no longer calls `vkAllocateMemory` on the render thread; an emptied block is released from
+  the bookkeeping at once and `vkFreeMemory` runs on a worker; out of memory first gives the spares back and retries.
+- `StepCosts` (`src/Meitou.Rendering/StepCosts.cs`): an exponential average (rate 0.25) of what steps of a kind have cost. `UploadQueue.Run`,
+  the foliage update's upload loop and `WorldTextureCache.Pump` always run the first step of a call (so a queue never starves) and start a
+  later one only while the budget has not passed *and* it is expected to end within the budget plus 1 ms. A heavy kind therefore goes first in a
+  call of its own instead of on top of other work, and one stall (a collection) is forgotten after about six steps. The 1 ms slack is
+  deliberate: a first version without it deferred steps of a typical size half a step early, which cuts the throughput of a saturated queue;
+  its runs showed grass pages missing near the camera more often (below), though the spread between runs is as large, so that is a guess.
+- `ImpostorTextures`: a level is written in slabs of whole block rows of about 1 MB (`SlabBytes`, `StepsOfLevel`), and the foliage's atlas
+  loops stop after 2 ms (`UploadMsPerFrame`) besides the 6 MB byte budget. `ImpostorBaker` keeps the render targets of its last three
+  (grid, frame size) classes (`RentTargets`/`ReturnTargets`) instead of creating and freeing three images per bake.
+- `ShoreField`: see [render-water.md](render-water.md) "Shore distance field": the cause of the 180 uploads and the fix (a field with no
+  waterline in it is one texel; the rest is laid out on the worker and written 256 rows a frame into a recycled texture).
+  `ShoreBake.Scratch` pools the bake's arrays.
+
+**Result.** **Observed**, 2026-10-10, Release, 1600 x 900, RTX 4070 shared with other agents' viewers (so noisy; judged on counts and
+maxima, base and new runs alternated, the baseline built from the same commit e814965; seven base runs, eight new):
+`MEITOU_STREAM_LOG=1 MEITOU_BENCH_SKIP=60 meitou-viewer.exe --world --at -60564,-45142 --distance 1400 --pitch 25 --size 1600x900 --fly-benchmark 3600 --fly-speed 150 --fly-radius 60000 --log-spikes --particle-prewarm 0`
+The first five new runs were made before the 1 ms slack (above), the last three with the committed build.
+
+| 3600-frame flight | base (7 runs) | new (8 runs) |
+|---|---|---|
+| allocated, whole process / render thread | 25.7 to 31.3 GB / 2.03 to 2.06 GB | 17.6 to 22.6 GB / 0.55 to 0.67 GB |
+| gen2 collections; pauses in total | 9 to 15; 100 to 711 ms | 5 to 9; 83 to 322 ms |
+| `slow ... step` lines (a step over 3 ms) | 3 (a 21 ms texture step, two 6 ms `map slab` steps) | 3 (7.5 and 15.7 ms, both a collector pause; a `map slab` of 4.1 ms, 2 MB copied slowly) |
+| slow foliage updates (over 8 ms), all runs | 26; 24 blamed on uploads (the `uploads` column, which includes the impostor stage), three of 34 ms | 32: 17 inside a collector pause, 12 in the impostor bake step, 3 other (grass layout, meshes); the queue's `steps` column never over 0.6 ms outside a pause |
+| largest slow update per run, runs without outside load | 15.4 to 34.4 ms (5 runs) | 9.5 to 24.2 ms (6 runs; the 24.2 and 16.8 are pauses) |
+| shore field | 180 uploads of 8 MB, 8 MB in one frame | 53 uploads (2 MB a frame over 4 frames) and 131 one-texel fields |
+| frame time, runs without outside load (p99 / max / frames over 33 ms) | 22.9 to 24.3 / 34.0 to 52.6 ms / 1 to 7 | 22.7 to 27.2 / 31.8 to 52.6 ms / 0 to 12 |
+
+The slow updates did not go away; their kind changed. In the base build the long ones were the `uploads` stage (the pause cannot be told
+from the upload there, the base has no attribution; the instrumented base showed pauses of 15 to 22 ms inside steps that copied nothing). In the
+new build the upload steps are short and what is left is a collection landing in some step (17 of 32) and the impostor bake's CPU. The frame
+time does not change visibly: the flight is bound by the GPU (p50 about 11 to 13 ms, CPU about 5 ms). A run is spoiled when another viewer
+takes the card: one new run had the driver's budget fall to 5.1 GB (`vram guard ... paused`, 94 frames over 33 ms) and two base runs had
+maxima of 190 and 301 ms; those are not in the frame-time rows. The pop-in lines are not comparable to better than noise: grass pages missing
+within 1500 units in 0 to 93 frames in the base runs (0 in five of seven), and in the new ones 0 to 262 (154 in the spoiled run, then 262, 0, 95
+and 53 before the slack; 12, 0 and 0 with it); the workers are below normal priority and starve when the machine is busy.
+Pictures: `image-diff` of `--screenshot` (Port South `--at 89750,-93430 --distance 1500 --pitch 15 --size 1280x720 --upscaler off --no-particles`,
+and the flight's start view `--at -60564,-45142 --distance 1400 --pitch 25`) against the same-commit baseline, final build: mean 0, max 0 for both.
+
+**Not changed, still open.** (1) The collector's pauses (10 to 80 ms) are the biggest single source of long steps left; they belong to the
+allocation work (the remaining render-thread allocation is 0.55 to 0.67 GB a run). (2) The impostor bake: a step costs 3 to 4 ms of CPU per
+frame by design (rows recorded per step), `vkCreateImage` shows 8 to 10 ms when a new (grid, frame size) class appears, and recording a row
+took 13 ms once without any memory call or pause in the profile (`slow bake record ...` lines; the mesh upload at the bake's start and the
+read-back were not slow in the two runs that have those lines) and 25 to 45 ms twice in one loaded run before those lines existed. **Unknown**: what in `RecordRow` takes
+that long (a first-use pipeline or descriptor is a guess). (3) Terrain height windows are 4.5 MB per swap (about 200 in the flight) and object
+and foliage textures reach 12 to 13.5 MB in one frame; they run under a time budget and were not split further. (4) Settling and loading
+still pay `FrameBegin` (11 to 26 ms) in the first step; it is a one-off per load, not a flight stall. (5) The timing test
+`ShoreFieldTests.Full_size_bake_time` ([Bench]) fails at 112 to 132 ms against 100 on this shared machine; the bake itself is unchanged.
 ## 9. Expected CPU cost, and how the profiler keeps working
 
 *In short: a throwaway measurement on the RTX 4070 recorded the same draws through VkGl and directly. A typical foliage mesh draw costs about

@@ -138,6 +138,10 @@ public sealed partial class FoliageRenderer
     ImpostorBakeJob? impostorBake;
     /// <summary>Atlas bytes uploaded per frame while settling; <see cref="impostorUploadsWaiting"/>: more wait for the next frame.</summary>
     const long SettleUploadBytes = 64L << 20, UploadBytesPerFrame = 6L << 20;
+    /// <summary>Milliseconds of a frame's update the atlas uploads may run for (besides the byte budget: the copy into staging runs from 1 to 9 GB/s, so 6 MB took 0.7 to 5 ms); the first step always runs.</summary>
+    const double UploadMsPerFrame = 2;
+    readonly System.Diagnostics.Stopwatch impostorWatch = new();
+    bool UploadTimeLeft(bool settling) => settling || impostorWatch.Elapsed.TotalMilliseconds < UploadMsPerFrame;
     bool impostorUploadsWaiting;
     MeshAsset? impostorBakeAsset;
     ImpostorDraw? impostorDraw;
@@ -577,14 +581,14 @@ public sealed partial class FoliageRenderer
                 impostorBytes += s.Next.Bytes;
             }
             long budget = settling ? SettleUploadBytes : UploadBytesPerFrame;
-            if (uploaded >= budget) { impostorUploadsWaiting = settling; continue; }
+            if (uploaded >= budget || !UploadTimeLeft(settling)) { impostorUploadsWaiting = settling; continue; }
             using (var batch = Gpu.Uploads.Begin())
             {
                 do
                 {
                     uploaded += s.Next.NextStepBytes;
                     s.Next.UploadStep(batch);
-                } while (!s.Next.Complete && uploaded + s.Next.NextStepBytes <= budget);
+                } while (!s.Next.Complete && uploaded + s.Next.NextStepBytes <= budget && UploadTimeLeft(settling));
             }
             if (!s.Next.Complete) { impostorUploadsWaiting = settling; continue; }
             var old = s.Textures!;
@@ -694,6 +698,9 @@ public sealed partial class FoliageRenderer
         if (impostorWork.Count == 0 && impostorBakes.Count == 0 && impostorBake is null && impostorRefining.Count == 0) return;
         Gpu.EnsureFrame();
         long uploaded = 0;
+        var impWatch = impostorWatch;
+        impWatch.Restart();
+        Meitou.Rendering.Gpu.UploadProfile.Take();
         impostorUploadsWaiting = false;
         for (int i = 0; i < impostorWork.Count; i++)
         {
@@ -718,11 +725,17 @@ public sealed partial class FoliageRenderer
             // reaches a new biome asks for dozens at once), and while settling, when no frames end, the staging lives in the frame's
             // constant chunks, which are kept for good.
             long budget = settling ? SettleUploadBytes : UploadBytesPerFrame;
-            if (uploaded >= budget) { impostorUploadsWaiting = settling; continue; }
-            if (UploadImpostor(a, budget, ref uploaded)) impostorWork.RemoveAt(i--);
+            if (uploaded >= budget || !UploadTimeLeft(settling)) { impostorUploadsWaiting = settling; continue; }
+            double tOne = impWatch.Elapsed.TotalMilliseconds;
+            bool done = UploadImpostor(a, budget, ref uploaded);
+            if (StreamLog && impWatch.Elapsed.TotalMilliseconds - tOne > 3) Console.WriteLine($"slow impostor upload {Label(a)}: {impWatch.Elapsed.TotalMilliseconds - tOne:0.0} ms, {a.Impostor!.Textures?.Bytes / 1048576.0:0.0} MB atlas, {uploaded / 1048576.0:0.0} MB so far [{Meitou.Rendering.Gpu.UploadProfile.Take()}]");
+            if (done) impostorWork.RemoveAt(i--);
         }
+        double tUp = impWatch.Elapsed.TotalMilliseconds;
         StepImpostorRefines(settling, ref uploaded);
+        double tBake0 = impWatch.Elapsed.TotalMilliseconds;
         StepBake(settling);
+        if (StreamLog) { double tEnd = impWatch.Elapsed.TotalMilliseconds; if (tEnd > 3) Console.WriteLine($"slow impostors {tEnd:0.0}: uploads {tUp - 0:0.0}, refines {tBake0 - tUp:0.0}, bake {tEnd - tBake0:0.0}, {uploaded / 1048576.0:0.0} MB [{Meitou.Rendering.Gpu.UploadProfile.Take()}]"); }
     }
 
     void RequestImpostor(MeshAsset a, long now)
@@ -800,7 +813,7 @@ public sealed partial class FoliageRenderer
         {
             uploaded += s.Textures.NextStepBytes;
             s.Textures.UploadStep(batch);
-        } while (!s.Textures.Complete && uploaded + s.Textures.NextStepBytes <= budget);
+        } while (!s.Textures.Complete && uploaded + s.Textures.NextStepBytes <= budget && UploadTimeLeft(budget >= SettleUploadBytes));
         if (!s.Textures.Complete) return false;
         s.Stage = ImpostorStage.Ready;
         if (SpikeLog.Enabled) SpikeLog.Note($"impostor ready {Label(a)} skip {s.Skip}");

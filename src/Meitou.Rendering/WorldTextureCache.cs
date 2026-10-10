@@ -290,19 +290,24 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// <summary>Uploads finished decodes (all of them, waiting, when <paramref name="wait"/>; else steps until <paramref name="budgetMs"/> passes, at most <paramref name="max"/> textures started).</summary>
     public void Pump(bool wait, int max = 16, double budgetMs = 1.5)
     {
-        int started = 0;
+        int started = 0, ranSteps = 0;
         var watch = System.Diagnostics.Stopwatch.StartNew();
         if (!wait) Requalify();
         while (true)
         {
             if (steps.Count > 0)
             {
-                if (!wait && watch.Elapsed.TotalMilliseconds >= budgetMs) break;
+                // The first step always runs; a later one waits for the next call when steps of its kind have cost more than what is left plus StepCosts.Slack.
+                if (!wait && (watch.Elapsed.TotalMilliseconds >= budgetMs || ranSteps > 0 && !stepCosts.Fits(steps.Peek().Method, watch.Elapsed.TotalMilliseconds, budgetMs))) break;
                 var step = steps.Dequeue();
                 var one = System.Diagnostics.Stopwatch.StartNew();
+                if (StreamLog) Gpu.UploadProfile.Take();
                 gpu.EnsureFrame();
                 step();
-                if (StreamLog && one.Elapsed.TotalMilliseconds > 3) Console.WriteLine($"slow texture step {step.Method.Name}: {one.Elapsed.TotalMilliseconds:0.0} ms");
+                double stepMs = one.Elapsed.TotalMilliseconds;
+                stepCosts.Learn(step.Method, stepMs);
+                ranSteps++;
+                if (StreamLog) { string parts = Gpu.UploadProfile.Take(); if (stepMs > 3) Console.WriteLine($"slow texture step {step.Method.Name}: {stepMs:0.0} ms [{parts}]"); }
                 continue;
             }
             int found = -1;
@@ -455,6 +460,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     }
 
     readonly Queue<Action> steps = new();
+    readonly StepCosts stepCosts = new();
     const int SlabBytes = 512 << 10;
 
     /// <summary>

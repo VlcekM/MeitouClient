@@ -56,10 +56,12 @@ public sealed unsafe partial class GpuContext
     public void BeginFrame()
     {
         if (Frame.Open) return;
+        long profileBegin = UploadProfile.Begin();
         EnsureUploadBuffers();
         long t0 = Stopwatch.GetTimestamp();
         var cmd = Device.Frames.BeginFrame();
         FenceWaitTicks += Stopwatch.GetTimestamp() - t0;
+        UploadProfile.End(UploadProfile.Part.FrameWait, t0);
         int slot = Device.Frames.Slot;
         VulkanException.Check(Device.Vk.ResetCommandPool(Device.Device, uploadPools![slot], 0), "vkResetCommandPool");
         var upload = uploadBuffers![slot];
@@ -74,6 +76,7 @@ public sealed unsafe partial class GpuContext
         if (PreFrameStamps && preFrameEnd is not null && Frame.Timestamps.TryRead(stamps.Begin, out ulong pb) && Frame.Timestamps.TryRead(preFrameEnd[slot], out ulong pe) && pe >= pb) PreFrameGpuMs = (pe - pb) / 1e6;
         stamps = (Frame.Timestamps.Allocate(), default);
         if (stamps.Begin.IsValid) Frame.PreFrame.Timestamp(Frame.Timestamps, stamps.Begin, PipelineStageFlags2.TopOfPipeBit);
+        UploadProfile.End(UploadProfile.Part.FrameBegin, profileBegin);
     }
 
     /// <summary>Opens a frame where something must record and none is open (loading, uploads before the host began one, offscreen tools).</summary>

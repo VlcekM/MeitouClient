@@ -61,6 +61,10 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
     and slabs of 512 KB; foliage meshes and grass pages uploaded in 512 KB slabs (a page dropped meanwhile deletes what its steps made);
     `ObjectStreamer.FillZones` makes instances 1 ms a frame; every decode and layout job runs on `BackgroundWork`, a few dedicated
     below-normal-priority threads (`ProcessorCount - 3`); a replaced terrain height texture is deleted four frames after the swap.
+  - *Later (2026-10-10, fast flight at 150 units a frame; [renderer-native.md](renderer-native.md) 8.21)*: the long steps left were collector
+    pauses inside a copy, the driver's memory calls under the allocator's lock, the 8 MB shore field and whole atlas levels. `UploadQueue`,
+    the texture pump and the foliage loop now learn what each kind of step costs and defer one that would end more than 1 ms past the budget
+    (the first step of a call always runs); the allocator makes its next block ahead and frees blocks on a worker.
   - *Compressed textures*: BC1, BC2, BC3, BC4 and BC5 DDS textures with a full mip chain are uploaded as stored (`CompressedTexImage2D`, S3TC; BC4/BC5 as RGTC (core since GL 3.0), BC4 with a swizzle so it still reads as grey with alpha 1 like the decoder's output; **Unverified on a real file**: the base game has no BC4/BC5, the path is only reviewed and compiles); in slabs
     of whole block rows) instead of decoded to RGBA8: 4 to 8 times less GPU memory and no CPU decode of the mips (only the level the swizzle
     test reads). Other formats, and files without a full chain (the viewer generates mips for those), take the RGBA8 path. The picture does not

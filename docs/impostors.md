@@ -298,7 +298,7 @@ split), `Impostors/ImpostorDraw.cs`. Tests: `FoliageCullTests.Impostor_split_is_
 - An atlas's resident size is known before it is made (`ImpostorTextures.BytesFor`). `UploadImpostor` checks the budget first. If it
   does not fit, `MakeImpostorRoom` evicts atlases that were not used for more than 1 s, least recently used first; if that is not enough
   the atlas is refused: its state goes to `None` with a retry in 8 s, and its meshes keep drawing as meshes.
-- Uploads are limited to 6 MB per frame (64 MB while settling), through `GpuFrame.Staging`.
+- Uploads are limited to 6 MB per frame (64 MB while settling), through `GpuFrame.Staging`, and since 2026-10-10 to 2 ms of a frame as well (the first step always runs); a level is written in slabs of whole block rows of about 1 MB (`ImpostorTextures.SlabBytes`), not in one piece, and the bake keeps the render targets of its last three classes instead of creating three images per bake ([renderer-native.md](renderer-native.md) 8.21).
 - **Observed** (RTX 4070, Meitou defaults, still camera, forest close view): 49 atlases, 119 MB (albedo 76.7 + normal 42.2). In a flight over
   the forest (300 frames, `--fly-benchmark`) 46 to 47 atlases, 200 to 206 MB at the end; the budget (192 MB) holds the refused and evicted
   ones back. The extra for all of it is under the 500 MB target by a factor of 2.5 to 4.

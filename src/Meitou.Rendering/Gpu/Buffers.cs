@@ -222,8 +222,10 @@ public sealed unsafe class LinearAllocator : IDisposable
             while (++current < chunks.Count)
                 if (size <= chunks[current].Size) { offset = size; return Slice(chunks[current], 0, size); }
         }
+        long profileStart = UploadProfile.Begin();
         var chunk = device.Allocator.CreateBuffer(Math.Max(ChunkSize, size), Usage, MemoryKind.Upload, name);
         registry?.Register(chunk.Buffer, chunk.Mapped, chunk.Size);
+        UploadProfile.End(UploadProfile.Part.StagingChunk, profileStart);
         chunks.Add(chunk);
         current = chunks.Count - 1;
         offset = size;
@@ -235,7 +237,9 @@ public sealed unsafe class LinearAllocator : IDisposable
     {
         ulong bytes = (ulong)(data.Length * sizeof(T));
         var t = Allocate(bytes, alignment);
+        long profileStart = UploadProfile.Begin();
         fixed (T* p = data) System.Buffer.MemoryCopy(p, t.Pointer, bytes, bytes);
+        UploadProfile.End(UploadProfile.Part.StagingCopy, profileStart, (long)bytes);
         return t;
     }
 

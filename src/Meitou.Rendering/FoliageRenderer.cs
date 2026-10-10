@@ -51,6 +51,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly Dictionary<FoliageMesh, MeshAsset> assetsByMesh = [];
     readonly List<MeshAsset> decoding = [];
     readonly Queue<Action> uploads = new();
+    readonly StepCosts stepCosts = new();
     readonly Dictionary<MeshAsset, Batch> batches = [];
     readonly List<Batch> active = [];
     readonly List<(MeshBindings, int, Matrix4x4)> terrainDraws = [];
@@ -398,6 +399,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         updates++;
         var watch = Stopwatch.StartNew();
+        var gcPause0 = StreamLog ? GC.GetTotalPauseDuration() : default;
         // Uploads get 2 ms a frame (texture decodes are never waited for) except while settling for a screenshot.
         double budget = settling ? 1e9 : 2.0;
         // Two tiers (docs/render-foliage.md): within the near reach (the MEDIUM layers and the grass) a zone is laid out whole; beyond it, out
@@ -504,12 +506,19 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         double t2 = watch.Elapsed.TotalMilliseconds;
         textures.Pump(wait: settling, max: settling ? 64 : 1);
         double t3 = watch.Elapsed.TotalMilliseconds;
+        int ranSteps = 0;
         while (uploads.Count > 0 && watch.Elapsed.TotalMilliseconds < budget)
         {
+            // The first step always runs; a later one waits for the next frame when steps of its kind have cost more than what is left plus StepCosts.Slack.
+            if (ranSteps > 0 && !stepCosts.Fits(uploads.Peek().Method, watch.Elapsed.TotalMilliseconds, budget)) break;
             var step = uploads.Dequeue();
             var one = Stopwatch.StartNew();
+            if (StreamLog) Meitou.Rendering.Gpu.UploadProfile.Take();
             step();
-            if (StreamLog && one.Elapsed.TotalMilliseconds > 3) Console.WriteLine($"slow foliage step {step.Method.Name}: {one.Elapsed.TotalMilliseconds:0.0} ms");
+            double stepMs = one.Elapsed.TotalMilliseconds;
+            stepCosts.Learn(step.Method, stepMs);
+            ranSteps++;
+            if (StreamLog) { string parts = Meitou.Rendering.Gpu.UploadProfile.Take(); if (stepMs > 3) Console.WriteLine($"slow foliage step {step.Method.Name}: {stepMs:0.0} ms [{parts}]"); }
         }
         lock (textures.Messages)
         {
@@ -517,10 +526,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             Messages.Clear();
             textures.Messages.Clear();
         }
+        double t35 = watch.Elapsed.TotalMilliseconds;
         UpdateImpostors(eye, settling);
         double t4 = watch.Elapsed.TotalMilliseconds;
         PollTimers(wait: false);
-        if (!settling && watch.Elapsed.TotalMilliseconds > 8 && Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1") Console.WriteLine($"slow foliage update {watch.Elapsed.TotalMilliseconds:0.0}: zones {t0:0.0}, grass {t1 - t0:0.0}, meshes {t2 - t1:0.0}, textures {t3 - t2:0.0}, uploads {t4 - t3:0.0}");
+        if (!settling && watch.Elapsed.TotalMilliseconds > 8 && Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1") Console.WriteLine($"slow foliage update {watch.Elapsed.TotalMilliseconds:0.0}: zones {t0:0.0}, grass {t1 - t0:0.0}, meshes {t2 - t1:0.0}, textures {t3 - t2:0.0}, steps {t35 - t3:0.0}, impostors {t4 - t35:0.0}{(GC.GetTotalPauseDuration() - gcPause0 is { TotalMilliseconds: >= 1 } gc ? $", GC pause {gc.TotalMilliseconds:0.0}" : "")}");
         LastUpdateMs = watch.Elapsed.TotalMilliseconds;
     }
 

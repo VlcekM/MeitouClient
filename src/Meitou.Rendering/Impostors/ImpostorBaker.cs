@@ -351,15 +351,72 @@ public sealed unsafe class ImpostorBaker : IDisposable
     /// <summary>Hands a buffer whose picture has been read back to the pool (any thread: the GPU is done with it).</summary>
     internal void ReturnReadback(ReadbackBuffer buffer) => readbacks.GetOrAdd(buffer.Size, _ => new()).Add(buffer);
 
-    /// <summary>Frees the pooled readback buffers (render thread, when no bake is running); the next bake makes new ones.</summary>
+    // ---- bake targets, kept from bake to bake: a bake takes a set of the atlas's size and gives it back (render thread) ----
+    // Making and freeing the three images of every bake (367 bakes in a minute's fast flight) cost 0.5 to 3 ms of the render thread in a bake's first
+    // step and, with the driver busy, 11 to 50 ms (2026-10-10, docs/renderer-native.md "Upload steps"). Every row clears them, so a set from an earlier bake is as good as a new one.
+
+    /// <summary>Sets kept idle at most (the largest, 6144 x 512, is 28 MB); the oldest goes when another comes back.</summary>
+    const int KeptTargetSets = 3;
+
+    readonly List<((int Grid, int Frame) Key, Texture Large, Texture Depth, Texture Small)> targets = [];
+
+    /// <summary>A colour target at twice the frame size, its depth and the half-size picture for the atlas size; made when none is kept.</summary>
+    internal (Texture Large, Texture Depth, Texture Small) RentTargets(ImpostorClass size, CommandBuffer pre)
+    {
+        var key = (size.Grid, size.FramePixels);
+        int at = targets.FindIndex(t => t.Key == key);
+        if (at >= 0)
+        {
+            var kept = targets[at];
+            targets.RemoveAt(at);
+            return (kept.Large, kept.Depth, kept.Small);
+        }
+        int f = size.FramePixels, samples = 2 * f, width = size.Grid * samples;
+        return (Texture.Create(gpu, new TextureDesc(Format.R8G8B8A8Unorm, width, samples, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "impostor bake target"), pre),
+            Texture.Create(gpu, new TextureDesc(Format.D32Sfloat, width, samples, Use: TextureUse.DepthTarget, Name: "impostor bake target"), pre),
+            Texture.Create(gpu, new TextureDesc(Format.R8G8B8A8Unorm, size.Grid * f, f, Use: TextureUse.TransferDst | TextureUse.TransferSrc, Name: "impostor bake target"), pre));
+    }
+
+    /// <summary>Takes a bake's set back (the rows recorded into it are ahead of any later use in the queue).</summary>
+    internal void ReturnTargets(ImpostorClass size, Texture large, Texture depth, Texture small)
+    {
+        if (targetsClosed)
+        {
+            large.Dispose();
+            depth.Dispose();
+            small.Dispose();
+            return;
+        }
+        targets.Add(((size.Grid, size.FramePixels), large, depth, small));
+        while (targets.Count > KeptTargetSets)
+        {
+            var oldest = targets[0];
+            targets.RemoveAt(0);
+            oldest.Large.Dispose();
+            oldest.Depth.Dispose();
+            oldest.Small.Dispose();
+        }
+    }
+
+    /// <summary>Frees the pooled readback buffers and the kept bake targets (render thread, when no bake is running); the next bake makes new ones.</summary>
     public void Trim()
     {
         foreach (var bag in readbacks.Values)
             while (bag.TryTake(out var buffer)) buffer.Dispose();
+        foreach (var t in targets)
+        {
+            t.Large.Dispose();
+            t.Depth.Dispose();
+            t.Small.Dispose();
+        }
+        targets.Clear();
     }
+
+    bool targetsClosed;
 
     public void Dispose()
     {
+        targetsClosed = true;
         Trim();
         if (standIn != 0) gpu.Bindless.Free(BindlessKind.Texture2D, standIn);
         program.Dispose();
@@ -453,17 +510,18 @@ public sealed class ImpostorBakeJob : IDisposable
         {
             if (!TexturesReady()) return false;
             var t0 = watch.Elapsed.TotalMilliseconds;
+            if (UploadProfile.On) UploadProfile.Take();
             mainParts = baker.Upload(meshes.Main, source.IsRock);
             leavesParts = leaves is not null ? baker.Upload(meshes.Leaves!) : [];
-            int f = size.FramePixels, samples = 2 * f, width = size.Grid * samples;
-            var pre = gpu.Frame.PreFrame.Handle;
-            large = Texture.Create(gpu, new TextureDesc(Format.R8G8B8A8Unorm, width, samples, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "impostor bake target"), pre);
-            depth = Texture.Create(gpu, new TextureDesc(Format.D32Sfloat, width, samples, Use: TextureUse.DepthTarget, Name: "impostor bake target"), pre);
-            small = Texture.Create(gpu, new TextureDesc(Format.R8G8B8A8Unorm, size.Grid * f, f, Use: TextureUse.TransferDst | TextureUse.TransferSrc, Name: "impostor bake target"), pre);
+            double t1 = watch.Elapsed.TotalMilliseconds;
+            (large, depth, small) = baker.RentTargets(size, gpu.Frame.PreFrame.Handle);
             started = true;
             upload += watch.Elapsed.TotalMilliseconds - t0;
+            SlowNote("start", $"meshes {t1 - t0:0.0} ms, targets {watch.Elapsed.TotalMilliseconds - t1:0.0} ms", watch.Elapsed.TotalMilliseconds - t0);
         }
         // Rows whose frame has completed go to the assembler, in order, one after the other on a worker.
+        double tRead = watch.Elapsed.TotalMilliseconds;
+        if (UploadProfile.On) UploadProfile.Take();
         while (rows.Count > 0 && ReadbackBuffer.Completed(gpu, rows[0].Frame))
         {
             var (row, _, buffer) = rows[0];
@@ -488,9 +546,11 @@ public sealed class ImpostorBakeJob : IDisposable
             });
             assembled++;
         }
+        SlowNote("read back", $"rows handed to the assembler {assembled}", watch.Elapsed.TotalMilliseconds - tRead);
         if (recorded < size.Grid)
         {
             var t0 = watch.Elapsed.TotalMilliseconds;
+            if (UploadProfile.On) UploadProfile.Take();
             var cmd = gpu.Frame.PreFrame;
             cmd.BeginLabel("impostor bake");
             for (int k = 0; k < RowsPerStep && recorded < size.Grid; k++, recorded++)
@@ -503,11 +563,13 @@ public sealed class ImpostorBakeJob : IDisposable
             cmd.EndLabel();
             cmd.Invalidate();   // the baker bound its own pipelines and sets
             render += watch.Elapsed.TotalMilliseconds - t0;
+            SlowNote("record", $"rows up to {recorded} of {size.Grid}", watch.Elapsed.TotalMilliseconds - t0);
             return false;
         }
         if (assembled < size.Grid) return false;
         if (finish is null)
         {
+            double tFin = watch.Elapsed.TotalMilliseconds;
             ReleaseGpu();
             var previous = chain;
             bool compress = baker.Compress;
@@ -520,6 +582,7 @@ public sealed class ImpostorBakeJob : IDisposable
                 lock (this) encode += Stopwatch.GetElapsedTime(t).TotalMilliseconds;
                 return atlas;
             });
+            SlowNote("finish", "targets given back, encode started", watch.Elapsed.TotalMilliseconds - tFin);
         }
         if (!finish.IsCompleted) return false;
         if (finish.IsCompletedSuccessfully) Result = finish.Result;
@@ -528,14 +591,20 @@ public sealed class ImpostorBakeJob : IDisposable
         return true;
     }
 
+    /// <summary>MEITOU_STREAM_LOG=1: a line for a part of a bake step that took 3 ms or more, with what the profile saw meanwhile (the driver calls, the collector).</summary>
+    void SlowNote(string part, string what, double ms)
+    {
+        if (!UploadProfile.On) return;
+        string parts = UploadProfile.Take();
+        if (ms >= 3) Console.WriteLine($"slow bake {part} {source.Name}: {ms:0.0} ms, {what} [{parts}]");
+    }
+
     /// <summary>Waits for the workers (offline: <see cref="ImpostorBaker.Bake"/> steps until done instead).</summary>
     void ReleaseGpu()
     {
         foreach (var p in mainParts.Concat(leavesParts)) { p.Vertices.Dispose(); p.Indices.Dispose(); }
         (mainParts, leavesParts) = ([], []);
-        large?.Dispose();
-        depth?.Dispose();
-        small?.Dispose();
+        if (large is not null && depth is not null && small is not null) baker.ReturnTargets(size, large, depth, small);
         (large, depth, small) = (null, null, null);
     }
 
