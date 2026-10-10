@@ -1039,7 +1039,7 @@ static class WorldFrame
             sliders.Add(new Slider("Time of day", 0, 24 - 1 / 60f, getHour, v => setHour(MathF.Round(v * 60) / 60), Text: TimeText));
         // How fast the viewer's clock runs (`--time-speed`): game hours per real minute, 0 stopped.
         if (getTimeSpeed is not null && setTimeSpeed is not null)
-            sliders.Add(new Slider("Time speed", 0, 24, getTimeSpeed, v => setTimeSpeed(MathF.Round(v * 10) / 10), Text: v => v <= 0 ? "stopped" : $"{v:0.#} game h / min"));
+            sliders.Add(new Slider("Time speed", 0, 240, getTimeSpeed, v => setTimeSpeed(v < 10 ? MathF.Round(v * 10) / 10 : MathF.Round(v)), Text: v => v <= 0 ? "stopped" : $"{v:0.#} game h / min"));
         // The window's vsync (off: MAILBOX, else IMMEDIATE; the frame rate is uncapped). The viewer passes it; the game keeps its own setting.
         if (getVSync is not null && setVSync is not null)
             sliders.Add(new Slider("VSync", 0, 1, () => getVSync() ? 1 : 0, v => setVSync(v >= 0.5f), Text: v => v >= 0.5f ? "on" : "off (uncapped)"));
