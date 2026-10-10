@@ -218,7 +218,53 @@ game's are black against the stars); `--clouds 0.9` at 11:00 a neutral grey over
 blue-grey). **Verified** Faithful is unchanged: `--faithful clouds` against the commit before the switch, 0 px at 22:24 and 4 px of 1/255 at
 13:00 (two runs of the old build differ by 35 px of 1/255).
 
-Not done (options for later): the texture still moves with the camera (no parallax, as the game's); no cloud shadows on the ground; below 2.9°
+### Smoothed textures and the day key (2026-10-11)
+
+The user saw the lit clouds go "pixelated and oily" overhead. Two causes, told apart by experiment (Observed, The Hub at 13:00, "light rain",
+looking 25° up away from the sun):
+
+- **The textures**: `Clouds.dds` and `CloudsTile.dds` are **DXT1 (BC1), 1024², no mips** (**Verified**, the DDS headers), and `Clouds.dds`
+  is not grey: red differs from green or blue by more than 2 on 96 % of texels (up to 91), so only red is the density the game uses. BC1
+  keeps four values per 4 × 4 block between two 5-bit endpoints; the game's flat white hides the steps, the lit clouds turned them into
+  grain and contour lines. Reading the lookups one and a half mip levels coarser softened the grain but not the lines (the alpha still read
+  the full texture). Meitou now makes **smoothed copies** at load (`MeitouClouds.SmoothRed`: the red blurred by a wrapping Gaussian of sigma
+  1.2 texels, in all three channels, mipmapped) and reads them for the whole Meitou layer (both lookups, the tile, the light taps) and the
+  cloud shadows; the Faithful layer still reads the game's textures. Coverage is unchanged: the table above recomputed from the copies
+  differs by at most 0.2 points (c 0.2 to 0.6).
+- **The colours**: with the key light made neutral the warm-and-cyan rim along thin edges went away. SkyX's sun colour is a warm cream at
+  noon, against the greyed blue ambient of the cores. The day key now keeps **0.4 of its saturation** (to its luminance) from a sun height
+  of 0.35 up, full colour below 0.1 (sunsets stay orange) (`MeitouClouds.DayKey`).
+
+Overhead, where a texel spans many pixels, the copies read soft rather than blocky; finer detail there would need a procedural detail layer.
+
+## Meitou cloud shadows
+
+The `cloudshadows` switch (Meitou by default, `--faithful cloudshadows` for none, as in the game; viewer design; `MeitouClouds.PlaneHeight`,
+`ShadowAt`, `Parallax`, pinned by `MeitouCloudsTests`; added 2026-10-11 on branch `clouds`).
+
+- **A world-anchored plane.** The game's layer follows the eye (its plane is always "100 units" above it), so it cannot shade a place. Meitou
+  puts the plane at **12000 world units** (a unit is about a decimetre, [terrain.md](terrain.md); above the highest terrain, `WorldLayout.MaxHeight`
+  9800) and keeps the game's texture scale there: `uv = 0.1 · xz / 12000`, so the pattern repeats every 12 km. The wind shift (5e-5 × speed per
+  second) then sweeps the shadows at 5e-4 × 12000 = **6 × the weather's wind speed** (wind 30 units/s, about 3 m/s at the ground: 18 m/s, a wind aloft).
+- **Parallax.** With the `clouds` switch Meitou the sky pass reads the same plane: `uv = 0.1 · (eye.xz + d.xz / d.y · (12000 − eye.y)) / 12000`
+  (as the game's `0.1 · d.xz / d.y`, times `(12000 − eye.y) / 12000`, at least 0.25, plus `0.1 · eye.xz / 12000` wrapped in doubles), so the cloud
+  overhead is the one whose shadow falls there, and clouds drift past as the camera moves (100 m of travel moves the layer 1/120 of a texture).
+  With `clouds` Faithful the sky keeps the game's eye-locked layer (and the shadows no longer match it exactly).
+- **The shadow.** For a lit point, the sun's ray (its real direction, `uAtmoSun`) is followed to the plane, where the sky pass's overhead alpha is
+  read (the second lookup with its (0.2, 0.6) shift, the tile, the band at 1, no fake volume), at mip 0.5 (a texel is 12 m there, the sun's
+  penumbra from 1.2 km about 10 m). The sun light is × `1 − strength · alpha`, strength **0.7**, faded in by a smoothstep from sun height 0.03 to
+  0.12 (the hit point runs off far away at a low sun). Applied in `kenshiLight` (terrain, objects, foliage, grass, characters, everything lit as the
+  land), the Meitou water's foam and its sun glint. The uniforms are frame globals (`uAtmoCloud`: strength, DensityOffset, height; `uAtmoCloudWind`;
+  textures `uAtmoClouds`, `uAtmoCloudsTile`); off (strength 0) in a clear sky, the simple sky or with the switch Faithful.
+- **Seen** (2026-10-11, The Hub, `--clouds 0.45`, 13:00 and 20:00, from 9000 and 30000 away): soft km-wide patches over the land, the sky's
+  clouds drift with the camera. At `--clouds 0.9` the alpha is near 1 everywhere, so the whole land loses about 0.7 of its sun: an overcast look,
+  but much darker than the game's overcast (whose ground is fully sunlit). **Verified** Faithful: `--faithful clouds,cloudshadows` against the
+  commit before (f4b867e), 12 px differ by 1/255 (two runs of the old build: 0 px); the sky's uv now goes through a multiply by 1 and an add of 0.
+- **Not done**: the GI probes bounce the unshadowed sun; the light shafts don't see the clouds (shafts through cloud gaps would be the next step,
+  the same lookup in the froxel grid); the sun shadow cascades don't fade under overcast. GPU cost not measured yet (two `textureLod` per lit
+  pixel; the bench aborted on the VRAM budget while another viewer ran).
+
+Not done (options for later) for the lit clouds: below 2.9°
 (`d.y` 0.05) the colour fades to the game's flat horizon colour, and the haze is still pulled to the game's `horizonClouds` colour, so between
 2.9° and 8.6° a lit cloud meets game-coloured haze (no seam seen in the shots above, but not checked in every weather).
 

@@ -456,7 +456,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         vec3 foamLight(vec3 albedo, vec3 n, vec3 world, float shadow)
         {
             vec4 am = uAtmoMaps.z < 0.5 ? vec4(1.0, 1.0, 1.0, 0.5) : textureLod(uAtmoAmbientMap, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w), 0.0);
-            vec3 sun = uAtmoSunLight * am.a * 2.0 * shadow;
+            vec3 sun = uAtmoSunLight * am.a * 2.0 * atmoCloudShadow(world) * shadow;
             vec3 diffuse = ATMO_PI * clamp(dot(n, uAtmoLight.xyz), 0.0, 1.0) * sun * 0.96;
             return albedo * (diffuse + atmoIrradiance(n) * 0.96 * am.rgb * uAtmoLight.w);
         }
@@ -674,7 +674,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 colour = mix(under * transmit + body * (1.0 - transmit), reflected, schlick * gloss);
             }
             else colour = mix(body, reflected, schlick * gloss);
-            colour += min(spec, 4.0) * uGlintColour * 0.25 + pb.y * waterColour;
+            colour += min(spec, 4.0) * uGlintColour * 0.25 * atmoCloudShadow(vWorld) + pb.y * waterColour;
 
             // A breaker's face: light comes through its thin lip, so it is brighter than the water (in its colour), and less see-through.
             float lip = smoothstep(0.22, 0.45, s.g) * (1.0 - smoothstep(0.46, 0.51, s.g)) * clamp(breaker / max(uShore.w, 0.1), 0.0, 1.0) * smoothstep(4.0, 24.0, s.depth);

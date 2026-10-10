@@ -34,6 +34,24 @@ static class AtmosphereShaders
         uniform vec4 uAtmoNight;      // Meitou night air (docs/formats/sky.md "Night air"): rgb its colour at full night at the horizon, a its weight (0: Faithful, or by day)
         uniform samplerCube uAtmoIrradiance, uAtmoSpecular;
         uniform sampler2D uAtmoAmbientMap;
+        uniform vec4 uAtmoCloud;      // Meitou cloud shadows (docs/formats/clouds.md "Meitou cloud shadows"): x strength (0: none), y the layer's DensityOffset, z the plane's height
+        uniform vec4 uAtmoCloudWind;  // xy: the layer's wind shift (the sky pass's uCloudWind)
+        uniform sampler2D uAtmoClouds, uAtmoCloudsTile;
+        // The sun light that gets past the cloud layer to a world point: the sun's ray from the point hits the world-anchored plane, where the sky pass's
+        // overhead alpha (the game's second lookup and tile, the horizon band at 1, no fake volume) is read. textureLod only: the grass's vertex stage includes this.
+        float atmoCloudShadow(vec3 world)
+        {
+            if (uAtmoCloud.x <= 0.0) return 1.0;
+            vec3 l = uAtmoSun.xyz;
+            float h = uAtmoCloud.z;
+            vec2 uv = (world.xz + l.xz * (max(h - world.y, 0.0) / max(l.y, 1e-3))) * (0.1 / h);
+            float o = uAtmoCloud.y;
+            float cloud = textureLod(uAtmoClouds, uv + uAtmoCloudWind.xy + vec2({{F(CloudLayer.SecondLookupShift.X)}}, {{F(CloudLayer.SecondLookupShift.Y)}}), {{F(MeitouClouds.ShadowLod)}}).r;
+            float tile = textureLod(uAtmoCloudsTile, uv - uAtmoCloudWind.xy, {{F(MeitouClouds.ShadowLod)}}).r;
+            float density = (cloud + o) * {{F(CloudLayer.DensityMultiplier)}} + tile * {{F(CloudLayer.TileWeight)}} + 1.0;
+            float alpha = clamp(density * clamp(1.0 - tile + o, 0.0, 1.0), 0.0, 1.0);
+            return 1.0 - uAtmoCloud.x * alpha;
+        }
         uniform vec4 uWeatherWet;     // the weather's shared surface values (WeatherSurfaces): x wetness, y rainAmount = saturate(rain / 50), z gameTime (hours)
         uniform vec4 uWeatherDust;    // xyz: dustAmount (current, inside, slope; docs/formats/weather.md "Dust")
         uniform sampler2D uWeatherDustNoise;   // the dust noise (Turbulent.dds), sampled at world.xz * 0.002
@@ -171,7 +189,7 @@ static class AtmosphereShaders
         {
             vec4 am = atmoAmbientMapAt(world);
             vec3 l = uAtmoLight.xyz;
-            vec3 sun = uAtmoSunLight * am.a * 2.0 * kenshiShadow(world, n);   // the sun shadow term (deferred.hlsl: lightColor * shadow)
+            vec3 sun = uAtmoSunLight * am.a * 2.0 * atmoCloudShadow(world) * kenshiShadow(world, n);   // the sun shadow term (deferred.hlsl: lightColor * shadow)
             gloss = clamp(gloss, 0.0, 1.0);
             float roughness = 1.0 - gloss * 0.99, a = roughness * roughness, a2 = a * a;
             float nl = clamp(dot(n, l), 0.0, 1.0);
