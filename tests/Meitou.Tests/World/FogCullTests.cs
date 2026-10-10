@@ -124,7 +124,7 @@ public class FogCullTests
     /// <summary>The uniforms the distance reads: sky mode, weather fog (weight, start, end), the far clip D, the Kenshi haze on, the altitude weight.</summary>
     static SkyRenderer.AtmosphereUniforms Atmosphere(float weight = 1, float fogStart = 0, float fogEnd = 3000, float far = 50000, bool game = true, bool kenshi = true, float altitude = 0) =>
         new(default, new Vector4(game ? 1 : 0, 50000, 1, 0), default, default, default, Vector3.One, new Vector4(fogStart, fogEnd, weight, far), Vector3.One, new Vector4(0, 0, 0, 5000),
-            new Vector4(kenshi ? 1 : 0, 3000, 30000, weight > 0 && fogEnd > 1 ? 1f / fogEnd : 0), default, new Vector4(kenshi ? altitude : 1, 0.93f, altitude, 0), default);
+            new Vector4(kenshi ? 1 : 0, 3000, 30000, weight > 0 && fogEnd > 1 ? 1f / fogEnd : 0), default, new Vector4(kenshi ? altitude : 1, 0.93f, altitude, 0), default, default);
 
     /// <summary>The shader's weather term: ease-in-out of dist / fog distance, times the weight (atmoKenshiHaze).</summary>
     static float FogCurve(float dist, float fogDistance, float weight)

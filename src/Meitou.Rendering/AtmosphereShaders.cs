@@ -31,6 +31,7 @@ static class AtmosphereShaders
         uniform vec4 uAtmoHazeCloud;  // Kenshi haze: horizonClouds, rgb the cloud colour (a stand-in), a how far the haze is pulled to it
         uniform vec4 uAtmoAltitude;   // viewer: x the physical haze's share (0 the game's haze, 1 the physical), y haze strength (1 the game's), z how far the eye is above the game's camera heights (0 within them, 1 high above)
         uniform vec4 uAtmoMaps;       // x irradiance cube, y specular cube, z ambient map present; w half the world's width
+        uniform vec4 uAtmoNight;      // Meitou night air (docs/formats/sky.md "Night air"): rgb its colour at full night at the horizon, a its weight (0: Faithful, or by day)
         uniform samplerCube uAtmoIrradiance, uAtmoSpecular;
         uniform sampler2D uAtmoAmbientMap;
         uniform vec4 uWeatherWet;     // the weather's shared surface values (WeatherSurfaces): x wetness, y rainAmount = saturate(rain / 50), z gameTime (hours)
@@ -117,6 +118,13 @@ static class AtmosphereShaders
             const float g2 = SKYX_G * SKYX_G;
             return 1.5 * ((1.0 - g2) / (2.0 + g2)) * (1.0 + c * c) / pow(1.0 + g2 - 2.0 * SKYX_G * c, 1.5);
         }
+        // Meitou's night air (NightAir in Meitou.Data): the glow of the air towards a unit direction, its colour times the twilight weight and the falloff with the
+        // direction's height (exp(-y / height), 1 at and below the horizon). The sky adds it to its colour and the haze to the colour it fades the land into, the
+        // same function of the direction, so fully hazed land and the sky above it meet. Zero (Faithful, or by day) adds exactly nothing.
+        vec3 atmoNightAir(vec3 dir)
+        {
+            return uAtmoNight.rgb * (uAtmoNight.a * exp(-max(dir.y, 0.0) * {{F(1 / NightAir.FalloffHeight)}}));
+        }
         // The skydome's HDR colour (SkyX_Skydome.hlsl, HDR branch); night: SkyX's night factor (where the glow and the stars show).
         vec3 atmoSky(vec3 dir, out float night)
         {
@@ -129,7 +137,8 @@ static class AtmosphereShaders
             float c = -dot(uAtmoSun.xyz, ray);   // SkyX: the cosine towards the eye
             vec3 colour = SKYX_EXPOSURE * (skyxRayleighPhase(c) * SKYX_RAYLEIGH * sum + skyxMiePhase(c) * SKYX_MIE * sum);
             night = clamp(1.0 - max(colour.r, max(colour.g, colour.b)) * 10.0, 0.0, 1.0) * (1.0 - clamp(thickness * SKYX_KR4PI, 0.0, 1.0));
-            colour += night * pow(vec3(0.05, 0.05, 0.1) * (2.0 - 0.75 * clamp(-uAtmoSun.y, 0.0, 1.0)) * pow(1.0 - d.y, 3.0), vec3(2.2));
+            // SkyX's night glow gives way to the night air as it comes in (uAtmoNight.a 1: the night air alone; 0: the game's glow, exactly).
+            colour += night * pow(vec3(0.05, 0.05, 0.1) * (2.0 - 0.75 * clamp(-uAtmoSun.y, 0.0, 1.0)) * pow(1.0 - d.y, 3.0), vec3(2.2)) * (1.0 - uAtmoNight.a) + atmoNightAir(d);
             return colour * uAtmoTint;
         }
         vec3 atmoSky(vec3 dir) { float n; return atmoSky(dir, n); }
@@ -242,6 +251,13 @@ static class AtmosphereShaders
             return SKYX_EXPOSURE * phase * SKYX_RAYLEIGH * skyxInScatter(r, min(len, 1.0), uAtmoSun.xyz, thickness);
         }
 
+        // What the haze fades a point into: the game's in-scattered colour plus the Meitou night air towards the point's direction (zero in Faithful and by day,
+        // so exactly the game's). `offset` is the point minus the eye, any length.
+        vec3 hazeTarget(vec3 offset)
+        {
+            return hazeColour(offset) + atmoNightAir(offset * inversesqrt(max(dot(offset, offset), 1e-12)));
+        }
+
         // The game's haze: AtmosphereFogMaterial (post/fog.hlsl), the in-scattered colour blended in by a linear ramp between 0.06 D
         // and 0.6 D; the weather's fog (colour, density) by an ease-in-out curve over it. uAtmoAltitude.y (the viewer's haze strength,
         // 1 = the game's) scales the ramp.
@@ -249,7 +265,7 @@ static class AtmosphereShaders
         {
             float level = clamp((dist - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
             level = min(level * uAtmoAltitude.y, 1.0);
-            vec3 rgb = mix(hazeColour(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
+            vec3 rgb = mix(hazeTarget(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
             float alpha = level;
             if (uAtmoFog.z > 0.0)
             {

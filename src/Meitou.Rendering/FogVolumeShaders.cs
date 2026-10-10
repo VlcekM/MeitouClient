@@ -92,7 +92,7 @@ static class FogVolumeShaders
             {
                 float level = clamp((near - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
                 level = min(level * uAtmoAltitude.y, 1.0);
-                vec4 haze = vec4(mix(hazeColour(d * near), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a), level * alpha);
+                vec4 haze = vec4(mix(hazeTarget(d * near), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a), level * alpha);
                 r = mix(fog, clamp(haze, 0.0, 4.0), toHaze);
             }
             float global = uAtmoFog.z > 0.0 ? fogVolumeCurve(near * uAtmoHaze.w) * uAtmoFog.z : 0.0;

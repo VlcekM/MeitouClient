@@ -420,11 +420,13 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// </summary>
     public float HazeStrength { get; set; } = Enhancements.MeitouHazeStrength;
     /// <summary>
-    /// The Meitou <c>night</c> switch (viewer, not the game's): the game's haze colour is SkyX's sunlit in-scattering, which is black once the sun is down,
-    /// so its ramp turns everything past 0.6 D black at night and only the land round the camera stays lit. With this on, the haze strength is scaled
-    /// by <see cref="NightHazeFactor"/>: the game's by day, down to <see cref="Enhancements.MeitouNightHazeFloor"/> at night. False: the game's.
+    /// The Meitou <c>night</c> switch, "night air" (viewer, not the game's; docs/formats/sky.md "Night air"): the game's haze colour is SkyX's sunlit
+    /// in-scattering, which is black once the sun is down, so its ramp turns everything past 0.6 D black against a black sky. With this on the air has a
+    /// faint radiance of its own at night (<see cref="Meitou.Data.World.NightAir"/>: airglow and the planet's light scattered by the air): the haze
+    /// (its ramp the game's) fades the far land into it and the sky adds the same colour above the horizon, falling off with the height, in place of
+    /// SkyX's own night glow. False: the game's black haze and glow.
     /// </summary>
-    public bool ThinNightHaze { get; set; } = true;
+    public bool NightAir { get; set; } = true;
 
     /// <summary>
     /// The Meitou <c>planetshine</c> switch (viewer, not the game's; docs/formats/sky.md "Planetshine"): the big planet lights the land at night. The
@@ -448,12 +450,6 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// </summary>
     public float ShadowSunHeight => state.PlanetLit ? MathF.Max(state.Sun.Y, 0) : state.Sun.Y;
 
-    /// <summary>The night switch's scale on the haze strength at the sun's height <paramref name="sunY"/>: 1 above 0.05, the floor below −0.15, smooth between.</summary>
-    public static float NightHazeFactor(float sunY)
-    {
-        float t = Math.Clamp((sunY + 0.15f) / 0.2f, 0, 1);
-        return Enhancements.MeitouNightHazeFloor + (1 - Enhancements.MeitouNightHazeFloor) * t * t * (3 - 2 * t);
-    }
     /// <summary>
     /// The eye's height above the highest ground or water within the game's longest camera boom (<see cref="KenshiCamera.MaxDistance"/>) around it,
     /// set each frame by <see cref="SetEye"/>. The game's camera never gets more than <see cref="KenshiCamera.MaxHeightAbovePivot"/> above its
@@ -591,11 +587,12 @@ public sealed unsafe class SkyRenderer : IDisposable
         public float Environment, MinLuminance, FogDistance;
         public SkyColours Colours;
         public WorldLighting Light;
+        public Vector4 Night;           // the night air (Meitou.Data NightAir): rgb its colour at full night, w its weight (0: none)
         public bool Valid, PlanetLit;   // PlanetLit: planetshine adds light of the planet in this state (ShadowSunHeight)
     }
     State state;
     Vector3 builtSun = new(float.NaN);
-    (bool On, float Strength, Vector3 Albedo) builtPlanetshine;
+    (bool On, float Strength, Vector3 Albedo, bool Air) builtPlanetshine;
     SkyWeather? builtWeather;
     Vector3 builtTint;
     bool builtPhysical;
@@ -698,7 +695,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             return (simple, light);
         }
         // SkyX's sky does not depend on the eye's height (its camera is fixed); the light only changes with the sun and the weather.
-        var planetshine = (Planetshine, PlanetshineStrength, PlanetAlbedo);
+        var planetshine = (Planetshine, PlanetshineStrength, PlanetAlbedo, NightAir);
         if (!builtPhysical || !ReferenceEquals(builtWeather, Weather) || builtTint != SkyColourMultiplier || (sun - builtSun).LengthSquared() > 1e-10f || builtPlanetshine != planetshine)
         {
             builtSun = sun;
@@ -714,12 +711,27 @@ public sealed unsafe class SkyRenderer : IDisposable
             // Meitou planetshine: from the end of the sun's light the planet is the light (docs/formats/sky.md "Planetshine"): its colour in the sun light's own
             // unit (the sun at the zenith, undimmed by the air in between, is the reference), added to the sun's, the direction weighted by their brightness.
             bool planetLit = false;
+            float reference = Meitou.Data.World.Planetshine.Luminance(KenshiLighting.SunLight(Vector3.UnitY));
+            // What the water's glint is lit by (WorldLighting.GlintDirection / GlintColour): the sun's own radiance and the planet disc's radiance as the sky pass draws it
+            // (unboosted: the strength-scaled light below is an irradiance made 60 times brighter than the disc, which blew the glint out). Left default (the sun's) by day.
+            Vector3 glintDirection = default, glintColour = default;
             if (Planetshine && Meitou.Data.World.Planetshine.Weight(sun.Y) is var weight and > 0)
             {
-                float reference = Meitou.Data.World.Planetshine.Luminance(KenshiLighting.SunLight(Vector3.UnitY));
                 var planetLight = Meitou.Data.World.Planetshine.Light(sun, SkyPlanet.All[0], PlanetAlbedo, reference, PlanetshineStrength) * weight;
+                var disc = Meitou.Data.World.Planetshine.DiscRadiance(sun, SkyPlanet.All[0], PlanetAlbedo) * weight;
+                (glintDirection, glintColour) = Meitou.Data.World.Planetshine.Combine(lightDir, sunLight * (MathF.PI * (1 - KenshiLighting.DielectricSpecular)),
+                    SkyPlanet.All[0].Towards, disc);
                 (lightDir, sunLight) = Meitou.Data.World.Planetshine.Combine(lightDir, sunLight, SkyPlanet.All[0].Towards, planetLight);
-                planetLit = Meitou.Data.World.Planetshine.Luminance(planetLight) > PlanetLitFloor * reference;            }
+                planetLit = Meitou.Data.World.Planetshine.Luminance(planetLight) > PlanetLitFloor * reference;
+            }
+            // Meitou night air (docs/formats/sky.md "Night air"): the colour at full night from the airglow and the planet's light (the strength-scaled one, whatever the
+            // planetshine switch says), and its weight by the sun's height; the shaders add it to the haze's colour and to the sky's.
+            var night = Vector4.Zero;
+            if (NightAir && Meitou.Data.World.NightAir.Weight(sun.Y) is var airWeight and > 0)
+            {
+                var air = Meitou.Data.World.NightAir.Colour(Meitou.Data.World.Planetshine.Light(sun, SkyPlanet.All[0], PlanetAlbedo, reference, PlanetshineStrength));
+                night = new Vector4(air, airWeight);
+            }
             var tint = Vector3.One;   // the game tints only the cloud light (zenithLight, below), never the skydome (docs/formats/sky.md)
             var zenith = SkyXModel.Colour(Vector3.UnitY, sun) * tint;
             var flat = new Vector2(sun.X, sun.Z);
@@ -737,7 +749,7 @@ public sealed unsafe class SkyRenderer : IDisposable
                 CloudSun = KenshiLighting.SunColour(sun), CloudZenith = CloudLayer.ZenithLight(sun, SkyColourMultiplier),
                 MinLuminance = KenshiLighting.MinLuminance(sun.Y, Exposure.Min, Exposure.NightDarkness), PlanetLit = planetLit,
                 Colours = new SkyColours(sun, zenith, horizon, sunRadiance, twilight),
-                Light = new WorldLighting(lightDir, sunRadiance, ambientSky, ambientGround, horizon, fogDistance), Valid = true,
+                Light = new WorldLighting(lightDir, sunRadiance, ambientSky, ambientGround, horizon, fogDistance, glintDirection, glintColour), Valid = true, Night = night,
             };
         }
         else
@@ -751,7 +763,7 @@ public sealed unsafe class SkyRenderer : IDisposable
 
     /// <summary>The values of <see cref="AtmosphereShaders.Functions"/>' loose uniforms (what <see cref="Apply"/> sets), by GLSL name minus <c>uAtmo</c>.</summary>
     public readonly record struct AtmosphereUniforms(Vector4 Tau, Vector4 Params, Vector4 Sun, Vector4 Light, Vector3 SunLight, Vector3 Tint, Vector4 Fog,
-        Vector3 FogColour, Vector4 Simple, Vector4 Haze, Vector4 HazeCloud, Vector4 Altitude, Vector4 Maps);
+        Vector3 FogColour, Vector4 Simple, Vector4 Haze, Vector4 HazeCloud, Vector4 Altitude, Vector4 Maps, Vector4 Night);
 
     /// <summary>The weather fog's own ease-in-out term (<c>1 - 2 (1 - a)^2</c>) counts as complete from 0.9998, as <see cref="FogVolumes.CullAlpha"/> does.</summary>
     const float FogComplete = 0.9998f;
@@ -834,8 +846,9 @@ public sealed unsafe class SkyRenderer : IDisposable
             // The weather fog is complete at a distance between `fog distance min` and `max` by the wind; the viewer has no wind and takes max.
             new Vector4(KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, fogWeight > 0 && fogDistance > 1 ? 1f / fogDistance : 0f),
             new Vector4(cloud.X, cloud.Y, cloud.Z, pull),
-            new Vector4(KenshiHaze ? AltitudeWeight : 1f, MathF.Max(HazeStrength, 0) * (ThinNightHaze ? NightHazeFactor(s.Sun.Y) : 1f), AltitudeWeight, 0),
-            new Vector4(irradianceCube is not null ? 1f : 0f, specularCube is not null ? 1f : 0f, ambientMap is not null ? 1f : 0f, AmbientMap.HalfWorld));
+            new Vector4(KenshiHaze ? AltitudeWeight : 1f, MathF.Max(HazeStrength, 0), AltitudeWeight, 0),
+            new Vector4(irradianceCube is not null ? 1f : 0f, specularCube is not null ? 1f : 0f, ambientMap is not null ? 1f : 0f, AmbientMap.HalfWorld),
+            s.Night);
     }
 
     /// <summary>
@@ -864,6 +877,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         g.PublishUniform("uAtmoHazeCloud", () => Published().HazeCloud, Valid);
         g.PublishUniform("uAtmoAltitude", () => Published().Altitude, Valid);
         g.PublishUniform("uAtmoMaps", () => Published().Maps, Valid);
+        g.PublishUniform("uAtmoNight", () => Published().Night, Valid);
     }
 
     // The values the getters above share, computed once per ApplyGlobals call (FrameGlobals.ApplyCount) instead of once per name.

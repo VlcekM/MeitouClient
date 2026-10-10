@@ -131,6 +131,14 @@ public static class Planetshine
         sunLight * strength * albedo * IrradianceRatio(1, SolidAngle(planet.AngularRadius), PhaseAngle(sun, planet.Towards));
 
     /// <summary>
+    /// The radiance of the planet's disc at its centre as the sky pass draws it (<c>planet()</c>: <c>albedo · saturate(n · sun)</c>, with the sphere's normal at the
+    /// centre facing the eye, so <c>cos α</c>), without any strength: what a mirror shows of it, and what the water's glint should be (the strength-scaled light is
+    /// an irradiance boosted 60 times, a hot spot where the planet itself is dim).
+    /// </summary>
+    public static Vector3 DiscRadiance(Vector3 sun, SkyPlanet planet, Vector3 albedo) =>
+        albedo * MathF.Max(MathF.Cos(PhaseAngle(sun, planet.Towards)), 0);
+
+    /// <summary>
     /// How much of the planet's light the lighting takes at the sun's height <paramref name="sunY"/>: 1 up to <see cref="FullBelow"/>, 0 from
     /// <see cref="NoneAbove"/>, smoothstep between.
     /// </summary>
@@ -184,4 +192,45 @@ public static class Planetshine
         while (level < dds.MipCount - 1 && (dds.Width >> level) > AlbedoWidth) level++;
         return MeanAlbedo(DdsDecoder.Decode(dds, 0, level));
     }
+}
+
+/// <summary>
+/// Meitou's <c>night</c> switch, "night air" (docs/formats/sky.md "Night air"; the viewer's own feature, the game has nothing like it). The game's haze
+/// colour is SkyX's sunlit in-scattering, which is black once the sun is down, so everything past 0.6 D fades to black against a black sky. Meitou gives
+/// the air a faint radiance of its own at night: airglow, plus the big planet's light scattered by the air. The haze fades the far land into it and the
+/// sky adds the same colour above the horizon, falling off with the height, so the two meet without a seam. This class is the reference for the numbers
+/// the shaders get; the arithmetic is in <c>AtmosphereShaders</c> (<c>atmoNightAir</c>).
+/// </summary>
+public static class NightAir
+{
+    /// <summary>The air's own faint glow (HDR, in the units of the haze colour; cool, a little green): luminance 0.043, under the 0.069 an up-facing surface of albedo 0.3 gets from the night's flat ambient (and it shows darker still after the night grade).</summary>
+    public static readonly Vector3 Airglow = new(0.030f, 0.045f, 0.068f);
+
+    /// <summary>
+    /// The share of the planet's light (in the light units of <see cref="Planetshine.Light"/>, luminance) the air sends back towards the eye, and its colour
+    /// (the air is blue: Rayleigh). Unknown physically; chosen by eye so that a gibbous planet adds about half the airglow and a thin crescent next to nothing.
+    /// </summary>
+    public const float PlanetGain = 0.25f;
+    public static readonly Vector3 PlanetTint = new(0.8f, 1.0f, 1.4f);
+
+    /// <summary>The height (the sine of the elevation) over which the glow falls to 1/e above the horizon: 11.5° is 0.2, so 10° keeps 0.4 of it and 30° a twentieth.</summary>
+    public const float FalloffHeight = 0.2f;
+
+    /// <summary>
+    /// The night air's colour at the horizon at full night: <see cref="Airglow"/> plus <see cref="PlanetGain"/> times the planet's light (its luminance, as
+    /// <paramref name="planetLight"/> in the unit <see cref="Planetshine.Light"/> gives) in <see cref="PlanetTint"/>. A thin crescent (light near 0) leaves the airglow.
+    /// </summary>
+    public static Vector3 Colour(Vector3 planetLight) => Airglow + PlanetGain * Planetshine.Luminance(planetLight) * PlanetTint;
+
+    /// <summary>
+    /// How much night air there is at the sun's height <paramref name="sunY"/>: the planetshine's deep-twilight window (1 up to −0.093, 0 from −0.04, smoothstep
+    /// between), so the sunlit haze fades out as the sun's last light does and the night air comes in while it does, never over the daylight.
+    /// </summary>
+    public static float Weight(float sunY) => Planetshine.Weight(sunY);
+
+    /// <summary>The glow's share at the direction's height <paramref name="y"/> (its sine of elevation): 1 at and below the horizon, <c>exp(−y / FalloffHeight)</c> above it.</summary>
+    public static float HorizonFalloff(float y) => MathF.Exp(-MathF.Max(y, 0) / FalloffHeight);
+
+    /// <summary>The night air's radiance towards a direction of height <paramref name="y"/> at the sun's height <paramref name="sunY"/>: what the haze adds to its colour and the sky to its own.</summary>
+    public static Vector3 Radiance(Vector3 planetLight, float sunY, float y) => Colour(planetLight) * (Weight(sunY) * HorizonFalloff(y));
 }

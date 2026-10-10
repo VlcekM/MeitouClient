@@ -79,6 +79,7 @@ static partial class NativeShaders
             uint lightCells;
             uint lightIndex;
             uint lightData;
+            vec4 atmoNight;
         } frame;
 
         """;
@@ -159,7 +160,7 @@ static partial class NativeShaders
         ["uAtmoSun"] = "frame.atmoSun", ["uAtmoLight"] = "frame.atmoLight", ["uAtmoSunLight"] = "frame.atmoSunLight", ["uAtmoParams"] = "frame.atmoParams",
         ["uAtmoTau"] = "frame.atmoTau", ["uAtmoTint"] = "frame.atmoTint", ["uAtmoFog"] = "frame.atmoFog", ["uAtmoFogColour"] = "frame.atmoFogColour",
         ["uAtmoSimple"] = "frame.atmoSimple", ["uAtmoHaze"] = "frame.atmoHaze", ["uAtmoHazeCloud"] = "frame.atmoHazeCloud",
-        ["uAtmoAltitude"] = "frame.atmoAltitude", ["uAtmoMaps"] = "frame.atmoMaps",
+        ["uAtmoAltitude"] = "frame.atmoAltitude", ["uAtmoMaps"] = "frame.atmoMaps", ["uAtmoNight"] = "frame.atmoNight",
         ["uAtmoIrradiance"] = "texturesCube[frame.atmoIrradiance]", ["uAtmoSpecular"] = "texturesCube[frame.atmoSpecular]",
         ["uAtmoAmbientMap"] = "textures2D[frame.atmoAmbientMap]",
         ["uShadowMap"] = "shadowTextures[frame.shadowMap]", ["uShadowNoise"] = "textures2D[frame.shadowNoise]",
@@ -278,7 +279,7 @@ static partial class NativeShaders
 }
 
 /// <summary>The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).</summary>
-[StructLayout(LayoutKind.Explicit, Size = 8640)]
+[StructLayout(LayoutKind.Explicit, Size = 8656)]
 unsafe struct FrameConstants
 {
     [FieldOffset(0)] public Vector4 AtmoSun;
@@ -321,6 +322,8 @@ unsafe struct FrameConstants
     [FieldOffset(8624)] public uint LightCells;
     [FieldOffset(8628)] public uint LightIndex;
     [FieldOffset(8632)] public uint LightData;
+    /// <summary>Meitou night air (<c>uAtmoNight</c>, docs/formats/sky.md "Night air"): rgb the colour at full night, w its weight.</summary>
+    [FieldOffset(8640)] public Vector4 AtmoNight;
 
     /// <summary>The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.</summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
@@ -330,7 +333,7 @@ unsafe struct FrameConstants
         ("uAtmoHazeCloud", 160, 16), ("uAtmoAltitude", 176, 16), ("uAtmoMaps", 192, 16), ("uWeatherWet", 240, 16), ("uWeatherDust", 256, 16),
         ("uFogVolumeEye", 288, 16), ("uFogVolumeInfo", 304, 16), ("uFogVolumeData", 320, FogVolumeShaders.MaxData * 16),
         ("uGiParams", 8512, 16), ("uGiGrid", 8528, 64),
-        ("uLightGrid", 8608, 16),
+        ("uLightGrid", 8608, 16), ("uAtmoNight", 8640, 16),
     ];
 
     /// <summary>The frame-global textures, the array each is registered in and the member that holds its index.</summary>

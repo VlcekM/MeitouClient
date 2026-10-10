@@ -113,7 +113,7 @@ sealed class WorldOptions
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
     public float? HazeDistance;
     public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze switch (default); 1 = the game's haze
-    public bool ThinNightHaze = true; // the Meitou night switch (default): the haze thinned at night (SkyRenderer.ThinNightHaze)
+    public bool NightAir = true; // the Meitou night switch (default): the night air, a faint glow the haze fades into and the sky shows above the horizon (SkyRenderer.NightAir)
     public bool Planetshine = true; // the Meitou planetshine switch (default): the big planet lights the night (SkyRenderer.Planetshine)
     public float PlanetshineStrength = Enhancements.MeitouPlanetshineStrength; // x the physical value (--planetshine-strength, a Tab slider)
     public bool MeitouStars = true;   // the Meitou stars switch (default): the procedural night sky (SkyRenderer.MeitouStars); false: the game's starfield texture
@@ -334,7 +334,7 @@ sealed class WorldOptions
     internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
         () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v,
         () => o.MeitouWater, v => o.MeitouWater = v, () => o.FoliageLod, v => o.FoliageLod = v, () => o.GiProbes, v => o.GiProbes = v,
-        () => o.ThinNightHaze, v => o.ThinNightHaze = v, () => o.Planetshine, v => o.Planetshine = v,
+        () => o.NightAir, v => o.NightAir = v, () => o.Planetshine, v => o.Planetshine = v,
         () => o.MeitouStars, v => o.MeitouStars = v);
 
     public static WorldOptions? Parse(string[] args)
@@ -883,7 +883,7 @@ static class WorldFrame
         gpu.Post.FogVrs = o.FogVrs;
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
-        gpu.Sky.ThinNightHaze = o.ThinNightHaze;
+        gpu.Sky.NightAir = o.NightAir;
         gpu.Sky.Planetshine = o.Planetshine;
         gpu.Sky.PlanetshineStrength = o.PlanetshineStrength;
         gpu.Sky.MeitouStars = o.MeitouStars;
@@ -1066,7 +1066,7 @@ static class WorldFrame
             () => gpu()?.Foliage?.Lod ?? o.FoliageLod, v => { o.FoliageLod = v; if (gpu()?.Foliage is { } f) f.Lod = v; },
             // Without probes (no --gi, no ray queries) the switch reads off: the picture has the flat ambient whatever it is set to.
             () => gpu() is { } giGpu ? giGpu.Probes?.Enabled ?? false : o.GiProbes, v => { o.GiProbes = v; if (gpu()?.Probes is { } p) p.Enabled = v; },
-            () => gpu()?.Sky.ThinNightHaze ?? o.ThinNightHaze, v => { o.ThinNightHaze = v; if (gpu() is { } g) g.Sky.ThinNightHaze = v; },
+            () => gpu()?.Sky.NightAir ?? o.NightAir, v => { o.NightAir = v; if (gpu() is { } g) g.Sky.NightAir = v; },
             () => gpu()?.Sky.Planetshine ?? o.Planetshine, v => { o.Planetshine = v; if (gpu() is { } g) g.Sky.Planetshine = v; },
             () => gpu()?.Sky.MeitouStars ?? o.MeitouStars, v => { o.MeitouStars = v; if (gpu() is { } stars) stars.Sky.MeitouStars = v; });
 

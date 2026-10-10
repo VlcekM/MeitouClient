@@ -43,6 +43,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform float uTime;
         uniform vec3 uSunDir;
         uniform vec3 uSunColour;
+        uniform vec3 uGlintDir;         // the specular glint's light: the sun's direction and colour, or by night the planet's own radiance (WorldLighting.Glint)
+        uniform vec3 uGlintColour;
         uniform vec3 uFogColour;
         uniform float uFogDistance;
         uniform sampler2D uColourMap;   // watercolourmap.png: the biomes' water colour, whole world
@@ -122,13 +124,14 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Lighting: sun specular, sky reflection, a little diffuse for the water colour.
             float gloss = clamp(pb.x, 0.0, 1.0);
             vec3 l = normalize(uSunDir);
-            vec3 h = normalize(l + view);
+            vec3 glintL = normalize(uGlintDir);
+            vec3 h = normalize(glintL + view);
             // The ripples are finer than a pixel far away, so the glint widens and dims with distance instead of staying a hot point.
             float power = max(exp2(gloss * 11.0 + 1.0) / (1.0 + dist / 6000.0), 12.0);
             float spec = pow(max(dot(n, h), 0.0), power) * (power + 8.0) / 25.0 * gloss;
             // Above the game's camera heights (uAtmoAltitude.z, a viewer choice) every water pixel is far away and its widened glint covers
             // a large patch of sea: weigh it by the Fresnel term the game's own sun specular has (F0 0.04), so it stays a soft sheen.
-            float lh = clamp(dot(l, h), 0.0, 1.0);
+            float lh = clamp(dot(glintL, h), 0.0, 1.0);
             spec *= mix(1.0, 0.04 + 0.96 * exp2((-5.55473 * lh - 6.98316) * lh), uAtmoAltitude.z);
             float cosv = max(dot(view, n), 0.0);
             float schlick = 0.02 + 0.98 * pow(1.0 - cosv, 5.0);
@@ -145,7 +148,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 reflected = mix(reflected, min(texture(uReflection, uv).rgb, vec3(3.0)), inside.x * inside.y);
             }
             vec3 diffuse = waterColour * (max(dot(n, l), 0.0) * uSunColour * 0.6 + uSkyZenith * 0.5 + 0.03);
-            vec3 colour = mix(diffuse, reflected, schlick * gloss) + min(spec, 4.0) * uSunColour * 0.25 + pb.y * waterColour;
+            vec3 colour = mix(diffuse, reflected, schlick * gloss) + min(spec, 4.0) * uGlintColour * 0.25 + pb.y * waterColour;
 
             // Alpha as the game's water: see-through near the camera where shallow, opaque beyond 4000 units.
             float depth = max(0.0, uWaterHeight - terrainHeight(vWorld.xz)) / max(view.y, 0.05);
@@ -369,6 +372,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform float uTime;
         uniform vec3 uSunDir;
         uniform vec3 uSunColour;
+        uniform vec3 uGlintDir;         // the specular glint's light: the sun's direction and colour, or by night the planet's own radiance (WorldLighting.Glint)
+        uniform vec3 uGlintColour;
         uniform sampler2D uColourMap;
         uniform sampler2D uFlowMap;
         uniform sampler2D uFoamMap;     // WaterFoam: a lace of bubble rims in R
@@ -585,7 +590,8 @@ public sealed unsafe class WaterRenderer : IDisposable
 
             float gloss = clamp(pb.x, 0.0, 1.0);
             vec3 l = normalize(uSunDir);
-            vec3 h = normalize(l + view);
+            vec3 glintL = normalize(uGlintDir);
+            vec3 h = normalize(glintL + view);
             float power = max(exp2(gloss * 11.0 + 1.0) / (1.0 + dist / 6000.0), 12.0);
             float nh = max(dot(n, h), 0.0);
             float spec = pow(nh, power) * (power + 8.0) / 25.0 * gloss;
@@ -594,7 +600,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             float far = smoothstep(800.0, 4000.0, dist);
             float sparkle = smoothstep(0.55, 0.95, textureLod(uFoamMap, p * 0.0023 + n.xz * 0.35 + vec2(uTime * 1.7, uTime * 1.1), 0.0).r);
             spec += pow(nh, power * 0.12) * (power * 0.12 + 8.0) / 25.0 * gloss * sparkle * far * 2.5;
-            float lh = clamp(dot(l, h), 0.0, 1.0);
+            float lh = clamp(dot(glintL, h), 0.0, 1.0);
             spec *= mix(1.0, 0.04 + 0.96 * exp2((-5.55473 * lh - 6.98316) * lh), uAtmoAltitude.z);
             float cosv = max(dot(view, n), 0.0);
             float schlick = 0.02 + 0.98 * pow(1.0 - cosv, 5.0);
@@ -666,7 +672,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 colour = mix(under * transmit + body * (1.0 - transmit), reflected, schlick * gloss);
             }
             else colour = mix(body, reflected, schlick * gloss);
-            colour += min(spec, 4.0) * uSunColour * 0.25 + pb.y * waterColour;
+            colour += min(spec, 4.0) * uGlintColour * 0.25 + pb.y * waterColour;
 
             // A breaker's face: light comes through its thin lip, so it is brighter than the water (in its colour), and less see-through.
             float lip = smoothstep(0.22, 0.45, s.g) * (1.0 - smoothstep(0.46, 0.51, s.g)) * clamp(breaker / max(uShore.w, 0.1), 0.0, 1.0) * smoothstep(4.0, 24.0, s.depth);
@@ -773,7 +779,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 if (swash && sheet <= 0.0)
                 {
                     float wet = (1.0 - sinceCrest) * 0.6;
-                    colour = under * (1.0 - 0.35 * wet) + (reflected * schlick * gloss + min(spec, 4.0) * uSunColour * 0.15) * wet;
+                    colour = under * (1.0 - 0.35 * wet) + (reflected * schlick * gloss + min(spec, 4.0) * uGlintColour * 0.15) * wet;
                 }
             }
             else
@@ -792,7 +798,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 {
                     // Wet sand: darker and glossy, drying out until the next wave.
                     float wet = (1.0 - sinceCrest) * 0.6;
-                    colour = reflected * schlick * gloss + min(spec, 4.0) * uSunColour * 0.15;
+                    colour = reflected * schlick * gloss + min(spec, 4.0) * uGlintColour * 0.15;
                     a = wet * 0.45;
                 }
                 a = mix(1.0, a, 1.0 - smoothstep(uClarity.z * 0.9, uClarity.z * 1.25, dist));
@@ -833,7 +839,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         public static readonly string[] MapNames = ["uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB", "uRainMap", "uFoamMap", "uRiverMap"];
         public readonly LegacyProgram P;
         public readonly NativeSegment Segment;
-        public readonly UniformHandle ViewProjection, WaterHeight, Centre, Extent, Eye, HalfWorld, SeaA, SeaB, SeaColour, Time, SunDir, SunColour,
+        public readonly UniformHandle ViewProjection, WaterHeight, Centre, Extent, Eye, HalfWorld, SeaA, SeaB, SeaColour, Time, SunDir, SunColour, GlintDir, GlintColour,
             FogColour, FogDistance, Reflect, ReflectionViewProjection, Ocean, ShoreRect, GridStep, Shore, WaveFade, Debug, Refract, Screen, Clarity;
         public readonly SkyColourHandles Sky;
         public readonly SamplerSlot[] Maps;
@@ -845,6 +851,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             Segment = new NativeSegment(gpu, P, topology, name);
             (ViewProjection, WaterHeight, Centre, Extent, Eye, HalfWorld) = (P.Uniform("uViewProjection"), P.Uniform("uWaterHeight"), P.Uniform("uCentre"),
                 P.Uniform("uExtent"), P.Uniform("uEye"), P.Uniform("uHalfWorld"));
+            (GlintDir, GlintColour) = (P.Uniform("uGlintDir"), P.Uniform("uGlintColour"));
             (SeaA, SeaB, SeaColour, Time, SunDir, SunColour) = (P.Uniform("uSeaA"), P.Uniform("uSeaB"), P.Uniform("uSeaColour"), P.Uniform("uTime"),
                 P.Uniform("uSunDir"), P.Uniform("uSunColour"));
             (FogColour, FogDistance, Reflect, ReflectionViewProjection) = (P.Uniform("uFogColour"), P.Uniform("uFogDistance"), P.Uniform("uReflect"),
@@ -1098,6 +1105,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         p.Set(h.Time, time);
         p.Set(h.SunDir, light.SunDirection.X, light.SunDirection.Y, light.SunDirection.Z);
         p.Set(h.SunColour, light.SunColour.X, light.SunColour.Y, light.SunColour.Z);
+        var (glintDirection, glintColour) = light.Glint;
+        p.Set(h.GlintDir, glintDirection.X, glintDirection.Y, glintDirection.Z);
+        p.Set(h.GlintColour, glintColour.X, glintColour.Y, glintColour.Z);
         p.Set(h.FogColour, light.FogColour.X, light.FogColour.Y, light.FogColour.Z);
         p.Set(h.FogDistance, light.FogDistance);
         if (h == meitou)

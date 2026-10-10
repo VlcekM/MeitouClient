@@ -7,7 +7,7 @@ using Meitou.Rendering;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The night sky (docs/formats/sky.md "Stars" and "Planets"): the starfield's dome mapping and shift, the two planets, the Meitou night haze.</summary>
+/// <summary>The night sky (docs/formats/sky.md "Stars" and "Planets"): the starfield's dome mapping and shift, the two planets (the Meitou night air is in NightAirTests).</summary>
 public class NightSkyTests
 {
     [Fact]
@@ -50,16 +50,6 @@ public class NightSkyTests
         Assert.Equal(moon.Spin(0, 6.5f), moon.Spin(0, 6.508f));   // whole minutes only
         Assert.Equal(4.731f, SkyPlanet.All[1].Spin(1, 0), 3);
         Assert.InRange(SkyPlanet.All[1].Spin(5, 0), 0, 2 * MathF.PI);
-    }
-
-    [Fact]
-    public void Night_haze_switch_thins_the_haze_only_at_night()
-    {
-        Assert.Equal(1, SkyRenderer.NightHazeFactor(0.3f));
-        Assert.Equal(1, SkyRenderer.NightHazeFactor(0.05f));
-        Assert.Equal(Enhancements.MeitouNightHazeFloor, SkyRenderer.NightHazeFactor(-0.15f));
-        Assert.Equal(Enhancements.MeitouNightHazeFloor, SkyRenderer.NightHazeFactor(-1));
-        Assert.InRange(SkyRenderer.NightHazeFactor(0), 0.8f, 0.9f);
     }
 
     [Fact]

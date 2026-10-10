@@ -42,8 +42,16 @@ public sealed class WorldRenderOptions
 }
 
 /// <summary>Sun and sky light for the world shaders (from <see cref="WorldSky"/>).</summary>
-public readonly record struct WorldLighting(Vector3 SunDirection, Vector3 SunColour, Vector3 AmbientSky, Vector3 AmbientGround, Vector3 FogColour, float FogDistance)
+public readonly record struct WorldLighting(Vector3 SunDirection, Vector3 SunColour, Vector3 AmbientSky, Vector3 AmbientGround, Vector3 FogColour, float FogDistance,
+    Vector3 GlintDirection = default, Vector3 GlintColour = default)
 {
+    /// <summary>
+    /// What the water's specular glint is lit by: the light's own direction and colour (<see cref="SunDirection"/>, <see cref="SunColour"/>) unless a
+    /// separate glint light was given (<see cref="GlintDirection"/> not zero): at night under planetshine, the sun's radiance plus the planet's own
+    /// (unboosted) disc radiance, where <see cref="SunColour"/> is the strength-scaled light that lights the land.
+    /// </summary>
+    public (Vector3 Direction, Vector3 Colour) Glint => GlintDirection == default ? (SunDirection, SunColour) : (GlintDirection, GlintColour);
+
     public static readonly WorldLighting Default = new(Vector3.Normalize(new Vector3(0.45f, 0.75f, 0.3f)), new(1, 0.96f, 0.88f),
         new(0.36f, 0.40f, 0.46f), new(0.20f, 0.19f, 0.17f), new(0.62f, 0.68f, 0.74f), 60000);
 }

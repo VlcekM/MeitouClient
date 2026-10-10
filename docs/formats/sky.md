@@ -268,13 +268,10 @@ checked 2026-10-04):
 - **Haze strength** (viewer option, not the game's: `--haze-strength <x>`, the Tab panel's "Haze strength (1 = game)", 0 to 3,
   default 0.93, the Meitou haze switch, so far mountains stay visible; 1 = the game's, the Faithful side, F3 in the viewer): multiplies how far the atmosphere haze is blended in (the game's ramp, or the physical haze's amount,
   capped at 1), before the weather's fog, which it leaves alone.
-- **Night haze** (the `night` switch, since 2026-10-10; Meitou thinned, the default, Faithful black, the game's): the game's haze colour is
-  SkyX's sunlit in-scattering, which goes to black once the sun is down, so at night its ramp turns everything past 0.06 D darker and
-  everything past 0.6 D (30000) black: only the land round the camera stays lit, the rest is a black band under the stars (the game's rule, see
-  above; screenshots `--at -51468,-14324 --distance 3000 --pitch 8 --yaw 95 --time 1 --weather Default` with haze strength 0.93 and 0 show
-  the far terrain and a lit town only without the haze). Meitou multiplies the haze strength by `SkyRenderer.NightHazeFactor(sunY)`: 1 from
-  sunY 0.05 up, `Enhancements.MeitouNightHazeFloor` (0.25) from −0.15 down, smoothstep between, so by night the far land fades a quarter of
-  the way to black and stays visible. The colour stays the game's; the weather's fog is untouched.
+- **At night** (**Verified**: `KenshiHaze.Colour` is exactly 0 at 3000, 10000, 30000 and 50000 units for a sun 60° under the horizon): the haze colour is SkyX's
+  sunlit in-scattering, which is black once the sun is down, so the ramp turns everything past 0.06 D darker and everything past 0.6 D (30000) black against a
+  black sky: only the land round the camera stays lit (the game's rule; `--faithful night` keeps it, pixel for pixel). The Meitou `night` switch ("Night air")
+  fills it in: [Night air (Meitou)](#night-air-meitou) below.
 - **physical** (`--haze physical`, all heights; a viewer alternative, not the game's): the closed-form optical depth of SkyX's own air (its Rayleigh and Mie depths
   straight up, without the earlier turbidity factor) along the ray, with one density scale height = 40000 world units (a viewer
   choice; the game's world unit is Unknown), in-scattering of the sky's colour in the ray's direction, closing at `--fog`
@@ -392,12 +389,18 @@ Everything is in `Planetshine` (`NightSky.cs`, tests `PlanetshineTests`) and `Sk
   sun at the horizon (the game draws the dusk map along a horizontal light), so nothing was changed in it. **Observed** (`--no-shadows`
   against the default, midnight, same view): 11 % of the pixels differ by more than 6/255 (sum over the channels), mean 2.4. When the planet is
   new (luminance under the floor) no map is drawn.
-- **Water**: both water shaders take the published direction and colour as their sun, so the sun glint becomes a planet glint (**Observed**,
-  `--town Shark --distance 2000 --pitch 10 --yaw 315 --time 23.5`, `--faithful planetshine` beside the default: a blown-out white patch in the water
-  between the huts, the brightest thing in the frame bar the lamps, absent in Faithful). It is a point-source glint for a disc 18° wide, a hot spot where
-  the real reflection would be a broad smear, and it is brighter than the planet it stands for: the glint takes the strength-scaled light (×60 on the
-  physical value), while the planet in the sky pass is not scaled. No cheap fix inside the shared `WorldLighting` (a separate glint colour would have to be
-  carried to both water shaders); left as is, for the owner to judge.
+- **Water**: both water shaders take the published direction and colour as their sun for the lit water (diffuse, crests), so by night the sun glint was a planet glint
+  (**Observed**, `--town Shark --distance 2000 --pitch 10 --yaw 315 --time 23.5`, `--faithful planetshine` beside the default: a blown-out white patch in the water
+  between the huts, about 100 of 255 on the glint, the brightest thing in the frame bar the lamps, absent in Faithful). Its cause: the glint took the strength-scaled
+  light (×60 on the physical value) while the planet in the sky pass is not scaled. **Fixed 2026-10-10**: `WorldLighting` carries a separate glint light
+  (`GlintDirection`, `GlintColour`; `Glint` gives the sun's own when none is set) to both water shaders (`uGlintDir`, `uGlintColour`, used for the specular lobe, its
+  half vector and the wet sand's sheen, not for the diffuse light or the crests). While the planet is in the light (`Planetshine.Weight` above 0) it is
+  `Planetshine.Combine` of the real sun's radiance (`sunLight · π · 0.96`, what `SunColour` is) and the planet disc's radiance `Planetshine.DiscRadiance`
+  (`albedo · cos α`, what the sky pass draws at the disc's centre, times the weight), the direction weighted by their luminances' square roots as the land's light is. Above
+  the weight's window (day) it is left unset, so the glint takes `SunDirection` and `SunColour` unchanged: **Verified** day pictures (`--time 13`) identical to before
+  the change (1 pixel of 921 600 differs by one level, the foliage's noise). **Observed**: the patch is now about 60 of 255 (the lit disc in the sky 85 to 165 over its face),
+  grey like the planet; it is still a point-source glint for a disc 18° wide (a hot spot where the real reflection would be a broad smear, and with no Fresnel term,
+  which would lower it further at this grazing angle: **Unknown** whether the owner wants either).
 - **Not exercised**: the probes' light with `--gi` (they read the same published light: a run at 23:30 gave no error and the mean luminance 0.055 →
   0.065 against Faithful, but the picture was not inspected for the bounce), the simple sky (`--simple-sky` keeps its own light), and weather other than
   `Default` at night.
@@ -405,6 +408,48 @@ Everything is in `Planetshine` (`NightSky.cs`, tests `PlanetshineTests`) and `Sk
   keep the sun's `Daylight`; the planet's light passing through the atmosphere (reddening near the horizon); a planet eclipsed by the land.
 - Screenshots (`C:\Temp\meitou-planetshine\` while the work was done; `--at -51468,-14324 --radius 2 --distance 3000 --pitch 8 --yaw 135
   --weather Default --size 1280x720`, time 23.2, 0, 2 and 4; `--faithful planetshine` beside the default; yaw 315 faces the planet).
+### Night air (Meitou)
+
+The `night` switch (label "Night air"; since 2026-10-10 it replaced a thinning of the haze to a quarter of its strength, which kept the far land visible but
+lit as brightly as the near land by the flat night ambient against a pitch-black sky: ridges looked pasted on and snowy peaks glowed on black). **The game has
+nothing like it**: Faithful (`--faithful night`) is the game's black haze and SkyX's own night glow, byte for byte (**Verified** 2026-10-10: the open-land and
+high views at 1:00 are identical pixel for pixel before and after the change; day and dusk differ by one pixel of one level, the foliage's run-to-run noise).
+Reference math in `NightAir` (`NightSky.cs`, tests `NightAirTests`), shader side in `AtmosphereShaders` (`atmoNightAir`, `hazeTarget`).
+
+- **Colour** (HDR, in the units of the haze colour): `NightAir.Colour(planetLight) = Airglow + 0.25 · luminance(planetLight) · (0.8, 1.0, 1.4)`. `Airglow` is
+  (0.030, 0.045, 0.068), luminance 0.043: a cool, slightly green glow. The planet's light is the strength-scaled `Planetshine.Light` (the Tab slider moves it),
+  worked out whatever the `planetshine` switch says, so the air follows the planet's phase: the planet adds 0.51 of the airglow's luminance at 23:30 (gibbous,
+  Φ 0.65), 0.42 at midnight, 0.10 at 2:00 and 0.02 at 4:00 (a thin crescent), so the air is darker in the small hours (game clock: latitude 54, sunrise 5, sunset 23; **Verified** by `NightAirTests`). The blue tint stands for Rayleigh scattering. **Unknown**: any physical basis for the
+  gain (0.25) and the airglow level; both **chosen by eye** on screenshots (a first pair, a seventh of the ambient-lit land, drew nothing visible: the horizon came out
+  at 1 to 3 of 255; the present pair gives a horizon of about (10, 16, 27) of 255 on screen after exposure ×1.96, tone map and night grade, against
+  (40, 40, 55) for lit land near the camera and (0, 0, 1) at the zenith).
+- **In the haze** (`atmoKenshiHaze`, also the fog volumes' haze colour): the colour the far land fades into is `hazeColour(ray) + atmoNightAir(direction)`;
+  `hazeColour` is the game's (black at night), the weather's fog and the horizon-cloud pull still apply over it (`mix(hazeTarget, cloud, pull)` then the fog), so a foggy
+  or overcast night stays the game's. The alpha ramp is the game's (0.06 D to 0.6 D) times the haze strength (0.93), untouched: the far land fades **into** the
+  air's colour instead of black, near land stays lit, far land progressively the air's colour. Where the air is brighter than the land (shadowed ridges)
+  they read dark-on-glow.
+- **In the sky** (`atmoSky`, so the sky pass, the water's reflection of the sky and the physical haze all see it; drawn under the stars and planets, so it
+  works with both `stars` settings): `+ atmoNightAir(d)` where `d` is the direction with its height clamped at 0 (below the horizon the horizon's colour), and SkyX's own
+  night glow (`night · ((0.05, 0.05, 0.1) (1 − y)³)^2.2`, **Verified** nonzero at the horizon, (0.0025, 0.0025, 0.0115) for a sun 64° under it, 0.0013 at y 0.1)
+  is scaled by `1 − weight` so the two never add: the game's glow gives way to the night air as it comes in.
+- **Horizon falloff**: `atmoNightAir(d) = colour · weight · exp(−max(d.y, 0) / 0.2)` (`NightAir.HorizonFalloff`): 1 at and below the horizon, 0.43 at 10° (y
+  0.17), 0.18 at 20°, 0.08 at 30°, 0.007 at the zenith. A real airglow band peaks about 10° up; a plain exponential from the horizon is the simple choice (**Observed**:
+  the stars keep their contrast above 40°). The haze evaluates the same function of the direction **from the eye to the surface**, so a fully hazed ridge at
+  1° and the sky right above it are the same colour, and hazed ground, which is below the horizon, gets the horizon's colour. **Observed**: a vertical line through the horizon
+  of `--at -51468,-14324 --distance 3000 --pitch 8 --yaw 95 --time 1`, in 8-pixel steps, goes (0, 1, 5), (1, 4, 10), (4, 9, 17), (5, 10, 20), (8, 15, 26), (10, 16, 27) of 255 up to
+  the first land, with no step where the hazed far terrain takes over.
+- **Twilight**: the weight is `Planetshine.Weight(sunY)`, the deep-twilight window (1 up to a sun height of −0.093, where the game's sun light ends, 0 from −0.04, smoothstep
+  between), so the sunlit haze fades out as the sun's last light does and the air comes in while it does, never over daylight; added to the haze's own colour, not mixed with it,
+  so nothing dips. **Verified** (`NightAirTests`, 0.02° steps from 10° up to 40° down, dusk and dawn, looking towards and away from the sun at 0.6 D): the haze
+  target's luminance never exceeds its value with the sun on the horizon and never steps by more than 10 %. **Observed**: the mean luminance of the horizon band (rows 150 to 260 of
+  the land view, 1280 x 720, screenshot values 0..255) at 22:54, 23:00, 23:06, 23:09, 23:12, 23:15, 23:18 and 23:24 (`--time 22.9` to `23.4`) is 85, 85, 70, 62, 57, 56, 53 and 37 against
+  85, 85, 70, 61, 53, 46, 38 and 22 for Faithful: no rise, no pop where the air comes in (it is 0 up to 23:06); the blue channel of the mean rises a little (43 at 23:12 to 49 at 23:18)
+  as the red of the sunset fades and the air takes over.
+- **Not done**: the planet's direction in the glow (it is the same all round the horizon, not brighter towards the planet); the planet's colour (the tint is blue whatever
+  the albedo); the air for the simple sky (`--simple-sky` has none); `--haze physical` far above the ground gets the glow only through `atmoSky`.
+- **Left open** (**Unknown**, not exercised): weather with a fog colour at night (the weather fog's colour is black at night, `fog · Daylight(sunY)`, and mixes over everything
+  including this glow, as it does in the game), dust storms and rain.
+
 ### Meitou night sky (the `stars` switch; the viewer's own design, not the game's)
 
 Faithful (`--faithful stars`) is the game's starfield texture as above, pixel for pixel. Meitou (the default) replaces the texture with a procedural

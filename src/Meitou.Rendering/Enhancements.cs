@@ -27,9 +27,6 @@ public static class Enhancements
 {
     public const float MeitouHazeStrength = 0.93f;
 
-    /// <summary>The Meitou <c>night</c> switch's share of the haze left at night (<see cref="SkyRenderer.NightHazeFactor"/>): the far land stays visible, a little darker.</summary>
-    public const float MeitouNightHazeFloor = 0.25f;
-
     /// <summary>
     /// The Meitou <c>planetshine</c> switch's strength: a multiple of the physical value (<see cref="Meitou.Data.World.Planetshine"/>; the Tab slider moves it).
     /// The physical light is a hundredth of a percent to a fifth of a percent of the game's noon sun, against a game night ambient that is a quarter of
@@ -101,9 +98,9 @@ public static class Enhancements
         new("heathaze", "Heat haze", "strength 1", $"strength {MeitouHeatHazeStrength}",
             () => MathF.Abs(post.HeatHazeStrength - 1) > 1e-3f, v => post.HeatHazeStrength = v ? MeitouHeatHazeStrength : 1,
             "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; Meitou halves it (the Tab slider sets any strength)"),
-        new("night", "Night haze", "black", "thinned",
+        new("night", "Night air", "black haze", "airglow",
             nightHaze ?? (() => false), setNightHaze ?? (_ => { }),
-            $"the game's haze takes the sky's sunlit colour, which is black at night, so everything a few thousand units away fades to black and only the land round the camera stays lit; Meitou thins the haze to {MeitouNightHazeFloor:0.##} of its strength once the sun is down, so the far land stays visible, a little darker"),
+            "the game's haze takes the sky's sunlit colour, which is black at night, so everything a few thousand units away fades to black against a black sky and only the land round the camera stays lit; Meitou gives the air a faint glow of its own (airglow, and the planet's light scattered by the air, darker when the planet is a crescent): the far land fades into it, and the sky shows the same glow above the horizon, falling off with height, so ridges stand against it and the stars keep their contrast (docs/formats/sky.md, \"Night air\")"),
         new("planetshine", "Planetshine", "flat night", "planet light",
             planetshine ?? (() => false), setPlanetshine ?? (_ => { }),
             "the game lights the night land with a flat, directionless ambient; Meitou lets the big planet light it, as a sunlit sphere would (its phase, colour and size decide how much; the Tab slider scales it), from its fixed direction, with the shadows, the water's glint and the probes' light following (docs/formats/sky.md \"Planetshine\")"),
