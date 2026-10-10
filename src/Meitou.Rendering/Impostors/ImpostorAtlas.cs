@@ -74,6 +74,7 @@ public sealed class ImpostorAtlas
 
     public void Write(Stream stream)
     {
+        if (FirstLevel != 0) throw new InvalidOperationException("an atlas read without its top levels cannot be written");
         using var w = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
         w.Write(Magic);
         w.Write(FormatVersion);
@@ -102,8 +103,18 @@ public sealed class ImpostorAtlas
             foreach (var level in t.Levels) z.Write(level);
     }
 
-    /// <summary>The atlas in <paramref name="stream"/>, or null when it is not a valid atlas of this format and baker version.</summary>
-    public static ImpostorAtlas? Read(Stream stream)
+    /// <summary>
+    /// The first level that has data: the levels below it are empty arrays (an atlas read with <c>firstLevel</c>, <see cref="Read"/>), because nothing built from it asked for them.
+    /// 0 for a baked atlas or one read whole.
+    /// </summary>
+    public int FirstLevel { get; init; }
+
+    /// <summary>
+    /// The atlas in <paramref name="stream"/>, or null when it is not a valid atlas of this format and baker version. Levels below <paramref name="firstLevel"/> are inflated
+    /// into one scratch buffer (they are part of the checksum) and left empty: the textures leave their top levels out (<see cref="ImpostorTextures"/>' skip), and the top level
+    /// is three quarters of a map's bytes, a refine of a far atlas read 3 to 20 MB to use a few hundred KB.
+    /// </summary>
+    public static ImpostorAtlas? Read(Stream stream, int firstLevel = 0)
     {
         try
         {
@@ -135,19 +146,36 @@ public sealed class ImpostorAtlas
             using var z = new ZLibStream(stream, CompressionMode.Decompress, leaveOpen: true);
             var textures = new ImpostorTexture[count];
             ulong hash = Fnv.Offset;
-            for (int i = 0; i < count; i++)
+            firstLevel = Math.Clamp(firstLevel, 0, levels - 1);
+            byte[]? scratch = null;
+            try
             {
-                var data = new byte[levels][];
-                for (int l = 0; l < levels; l++)
+                for (int i = 0; i < count; i++)
                 {
-                    data[l] = new byte[specs[i].Sizes[l]];
-                    z.ReadExactly(data[l]);
-                    hash = Fnv.Hash(hash, data[l]);
+                    var data = new byte[levels][];
+                    for (int l = 0; l < levels; l++)
+                    {
+                        if (l < firstLevel)
+                        {
+                            scratch ??= System.Buffers.ArrayPool<byte>.Shared.Rent(specs.Max(s => s.Sizes[0]));
+                            z.ReadExactly(scratch.AsSpan(0, specs[i].Sizes[l]));
+                            hash = Fnv.Hash(hash, scratch.AsSpan(0, specs[i].Sizes[l]));
+                            data[l] = [];
+                            continue;
+                        }
+                        data[l] = new byte[specs[i].Sizes[l]];
+                        z.ReadExactly(data[l]);
+                        hash = Fnv.Hash(hash, data[l]);
+                    }
+                    textures[i] = new ImpostorTexture { Map = specs[i].Map, Encoding = specs[i].Encoding, Levels = data };
                 }
-                textures[i] = new ImpostorTexture { Map = specs[i].Map, Encoding = specs[i].Encoding, Levels = data };
+            }
+            finally
+            {
+                if (scratch is not null) System.Buffers.ArrayPool<byte>.Shared.Return(scratch);
             }
             if (hash != expected) return null;
-            return new ImpostorAtlas { Grid = grid, FramePixels = frame, Centre = centre, Radius = radius, Gloss = gloss, Name = name, Textures = textures };
+            return new ImpostorAtlas { Grid = grid, FramePixels = frame, Centre = centre, Radius = radius, Gloss = gloss, Name = name, Textures = textures, FirstLevel = firstLevel };
         }
         catch (Exception e) when (e is EndOfStreamException or InvalidDataException or IOException or ArgumentException or OverflowException)
         {
