@@ -261,6 +261,23 @@ runtime's own events (`AllocationLog`, allocation sampled every 100 KB; docs/ren
 A draw through `VkGl` cost 1.5-2.3 µs of CPU in Release and 3.9-5.3 µs in Debug (measured before the native port, "Frame cost breakdown" below; VkGl is gone since phase 8), so draw counts matter more than triangles: meshes that repeat are drawn instanced (the
 TERRAIN-mode rocks were one draw each and cost ~23 ms of shadow pass in a forest; docs/render-shadows.md, "Shadow pass cost").
 
+**Satori GC: tried, not adopted** (2026-10-10). Satori is an experimental low-pause collector (github.com/VSadov/Satori); it was tried on a
+branch through the `PublishWithSatoriGC` MSBuild SDK (`<Sdk Name="PublishWithSatoriGC" Version="10.0.13-satori.37965325580.1" />` in the viewer's
+csproj), which swaps `coreclr`, `clrjit` and `System.Private.CoreLib` for Satori's on a self-contained publish only (`-p:UseSatoriGC=false`
+publishes the stock runtime from the same commit). Not adopted: shorter pauses, but the same frames (below), and a modified runtime to ship.
+The branch is deleted; the SDK line above brings it back. What stayed: the startup `gc` line names the collector and the latency mode (`GcName`:
+`satori` when `GC.GetConfigurationVariables()` has `SatoriGC`, else server or workstation), and `MEITOU_GC_LATENCY=low|interactive|batch`
+replaces SustainedLowLatency. Satori reports `LowLatency` whatever is asked for, so its two modes were not told apart.
+**Observed** (RTX 4070 idle, Release `4a8463e` published twice, stock .NET 10.0.12 against Satori 10.0.13, three interleaved pairs of the fast flight
+`--world --at -60564,-45142 --distance 1400 --pitch 25 --size 1600x900 --fly-benchmark 3600 --fly-speed 150 --fly-radius 60000`,
+`MEITOU_BENCH_SKIP=60 MEITOU_ALLOC_STATS=1`, the memory guard never in pressure; stock / Satori): GC pause total 47, 52, 47 / 31, 11, 9 ms;
+longest pause 15, 21, 19 / 18, 4.5, 1.2 ms; pauses over 5 ms 4, 3, 2 / 3, 0, 0; gen2 4 / 2 each; working set 7.1-7.6 / 6.7-6.9 GB;
+render-thread CPU median 4.7-5.1 / 4.8-5.0 ms. The frames did not change: p99 18.5-19.4 ms and 14-24 frames over 20 ms in both, worst frame
+28-36 / 25-38 ms. Since the 2026-10-10 allocation work the long frames are no longer GC: they are slow foliage updates and the like
+(docs/viewer.md, "What makes travelling stutter"). Satori's event stream logged fewer collections (18-20) than its gen0 count (11-48), so its
+per-pause numbers may miss some. A first try with an interactive viewer open on the same card (VRAM budget halved, the guard evicting) was
+unusable for both collectors, and two runs, one of each, ended mid-flight.
+
 ## Frame cost breakdown (2026-10-06)
 
 Phase 1 of the native-Vulkan migration: where the render thread's CPU time goes today (measurement only, no optimisation; no pixel

@@ -792,8 +792,20 @@ static class WorldFrame
         System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
         GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
         GC.WaitForPendingFinalizers();
-        System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency;
+        // MEITOU_GC_LATENCY=low|interactive|batch replaces SustainedLowLatency (Satori GC's LowLatency mode is GCLatencyMode.LowLatency).
+        System.Runtime.GCSettings.LatencyMode = Environment.GetEnvironmentVariable("MEITOU_GC_LATENCY") switch
+        {
+            "low" => System.Runtime.GCLatencyMode.LowLatency,
+            "interactive" => System.Runtime.GCLatencyMode.Interactive,
+            "batch" => System.Runtime.GCLatencyMode.Batch,
+            _ => System.Runtime.GCLatencyMode.SustainedLowLatency,
+        };
+        Console.WriteLine($"gc        {GcName()}, latency mode {System.Runtime.GCSettings.LatencyMode}");
     }
+
+    /// <summary>Which collector runs: Satori (a replaced runtime, docs/engine.md), else the runtime's server or workstation GC.</summary>
+    public static string GcName() =>
+        GC.GetConfigurationVariables().ContainsKey("SatoriGC") ? "satori" : System.Runtime.GCSettings.IsServerGC ? "server" : "workstation";
 
     /// <summary>
     /// Feeds the particle renderer the weather state's effect list, strength and wind (the renderer is made the first time a weather has effects; a weather
