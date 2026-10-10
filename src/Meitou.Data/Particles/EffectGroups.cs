@@ -67,6 +67,16 @@ public sealed class RegionArea : IEffectArea
 public sealed class EffectWorld
 {
     public Func<float, float, float> GroundHeight { get; set; } = static (_, _) => 100;
+    /// <summary>
+    /// Null: <see cref="GroundHeight"/> may be called from any thread. Otherwise it is for the render thread only and this, called there, returns a
+    /// function over the heights as they are now that any thread may call (the viewer: a snapshot of the terrain's height grids).
+    /// </summary>
+    public Func<Func<float, float, float>>? FreezeGroundHeight { get; set; }
+    /// <summary>A copy for a worker thread (a group being warmed in the background, <see cref="EffectSet"/>): the ground height frozen as it is now (<see cref="FreezeGroundHeight"/>), the rest as it is. Call it on the render thread.</summary>
+    public EffectWorld Frozen() => new()
+    {
+        GroundHeight = FreezeGroundHeight?.Invoke() ?? GroundHeight, Area = Area, ActiveRadius = ActiveRadius, FallbackRadius = FallbackRadius, GroundColour = GroundColour, Density = Density,
+    };
     /// <summary>Null: a disc round the camera of <see cref="FallbackRadius"/>.</summary>
     public IEffectArea? Area { get; set; }
     /// <summary>
@@ -243,7 +253,7 @@ public abstract class EffectGroup
 {
     protected readonly List<EffectUnit> units = [];
     protected readonly Random random;
-    protected readonly EffectWorld world;
+    protected EffectWorld world;
     readonly int seed;
     int made;
 
@@ -257,6 +267,9 @@ public abstract class EffectGroup
         random = new Random(seed * 7919 + 17);
         Tint = TintOf(effect);
     }
+
+    /// <summary>Hands the group to another world (the live one, after a worker warmed it with a <see cref="EffectWorld.Frozen"/> copy); while nobody else touches the group.</summary>
+    internal void Rebind(EffectWorld to) => world = to;
 
     public EffectRecord Effect { get; }
     public WeatherEffectEntry? Entry { get; }
@@ -275,7 +288,19 @@ public abstract class EffectGroup
     /// Starts the group as if it had been running for <paramref name="seconds"/> (the viewer's start-up choice, Observed; the game has only
     /// <c>fast_forward</c>): the schedule runs in steps, the first unit of every respawning group exists at once, and the simulations are run.
     /// </summary>
-    public abstract void Prewarm(float seconds, in EffectCamera camera, WeatherEffectInput weather);
+    public void Prewarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
+    {
+        BeginWarm(seconds, camera, weather);
+        Simulate();
+    }
+
+    /// <summary>
+    /// The first half of <see cref="Prewarm"/>, which is cheap: the schedule runs in steps (places the units, which asks the world for the ground height: on a
+    /// worker thread the group must have a world whose functions any thread may call, <see cref="EffectWorld.Frozen"/>) and every unit that is near enough is woken with the
+    /// time it has to run queued in <see cref="EffectUnit.Pending"/>. Nothing is simulated yet: <see cref="Simulate"/> or
+    /// <see cref="SimulateSerial"/> does that, on any thread, while nothing else touches the group.
+    /// </summary>
+    public abstract void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather);
 
     /// <summary>Runs every unit's queued time (the units are independent: in parallel when there are several).</summary>
     public void Simulate()
@@ -287,6 +312,21 @@ public abstract class EffectGroup
             if (active.Length > 1) Parallel.ForEach(active, u => u.Advance());
             else foreach (var u in active) u.Advance();   // a backlog is run in full here (start-up), unlike the per-frame path
         }
+    }
+
+    /// <summary>
+    /// <see cref="Simulate"/> on the calling thread alone, one unit after the other, checking <paramref name="cancel"/> between the steps: for a group that is
+    /// being made in the background, where the thread pool is not to be taken from the frame's own work. Returns false when it was cancelled.
+    /// </summary>
+    public bool SimulateSerial(CancellationToken cancel)
+    {
+        foreach (var u in units)
+            while (u.Active && u.Pending > 0)
+            {
+                if (cancel.IsCancellationRequested) return false;
+                u.Advance();
+            }
+        return true;
     }
 
     /// <summary>The emission multiplier from the wind: <c>min wind span rate</c> is the wind speed needed for any particles, <c>max wind span rate</c> for all of them.</summary>
@@ -399,12 +439,11 @@ public sealed class CameraEffectGroup : EffectGroup
         }
     }
 
-    public override void Prewarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
+    public override void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
     {
         Follow(camera);
         unit.Environment = Environment(weather);
         unit.Pending += seconds;
-        Simulate();
     }
 
     public override void Update(float dt, in EffectCamera camera, WeatherEffectInput weather)
@@ -514,12 +553,11 @@ public sealed class RespawningEffectGroup : EffectGroup
         RemoveDone();
     }
 
-    public override void Prewarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
+    public override void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
     {
         timer = seconds > 0 ? 0 : Entry!.RespawnMin;
         const float step = 0.5f;
         for (float t = 0; t < seconds; t += step) Update(Math.Min(step, seconds - t), camera, weather);
-        Simulate();
     }
 }
 
@@ -572,11 +610,10 @@ public sealed class GlobalEffectGroup : EffectGroup
         RemoveDone();
     }
 
-    public override void Prewarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
+    public override void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
     {
         Update(0, camera, weather);
         foreach (var u in units) u.Pending += seconds;
-        Simulate();
     }
 }
 
@@ -636,11 +673,10 @@ public sealed class GlobalPointEffectGroup : EffectGroup
         RemoveDone();
     }
 
-    public override void Prewarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
+    public override void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
     {
         const float step = 0.5f;
         for (float t = 0; t < seconds; t += step) Update(Math.Min(step, seconds - t), camera, weather);
-        Simulate();
     }
 }
 
@@ -667,16 +703,66 @@ public sealed class PlacerEffectGroup : EffectGroup
         foreach (var u in units) Tick(u, dt, camera, env);
     }
 
-    public override void Prewarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
+    public override void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
     {
         Update(0, camera, weather);
         foreach (var u in units.Where(u => u.Active)) u.Pending += seconds;
-        Simulate();
     }
 }
 
 public static class EffectGroups
 {
+    const string PrimeScript = """
+        system prime
+        {
+            technique t
+            {
+                visual_particle_quota 50
+                emitter Box
+                {
+                    emission_rate 100
+                    time_to_live 1
+                    velocity 5
+                    direction 0 -1 0
+                    box_width 10
+                    box_height 10
+                }
+                affector Colour
+                {
+                    time_colour 0 1 1 1 1
+                    time_colour 1 0 0 0 0
+                }
+            }
+        }
+        """;
+
+    /// <summary>
+    /// Makes, warms and updates one small group of every kind once, so the methods are compiled before a weather change needs them: the viewer runs
+    /// without tiered compilation, and the first group of a kind made in the middle of a flight took 2 to 4 ms of compiling on the render thread (Observed,
+    /// 2026-10-10). Meant for a worker at start-up; harmless anywhere.
+    /// </summary>
+    public static void PrimeJit()
+    {
+        try
+        {
+            var library = new ParticleLibrary();
+            library.AddScript(PrimeScript, "prime.pu");
+            var world = new EffectWorld { GroundHeight = static (_, _) => 0, Area = new DiscArea(0, 0, 100) };
+            var camera = new EffectCamera(new Vector3(0, 100, 0), Vector3.UnitZ);
+            var input = new WeatherEffectInput();
+            foreach (var type in (ReadOnlySpan<EffectType>)[EffectType.CameraRain, EffectType.Point, EffectType.Wandering, EffectType.PointLighting, EffectType.Global, EffectType.GlobalPoint])
+            {
+                var record = new EffectRecord("prime", type, "prime", true, false, 1, 0, 0, Vector3.One, 1, false, 100, 0, 0, 5, 10) { MinAltitude = 0, MaxAltitude = 0 };
+                if (Create(new WeatherEffectEntry(record, 1, 0, 0), library, 1, world) is not { } group) continue;
+                group.BeginWarm(1, camera, input);
+                group.SimulateSerial(CancellationToken.None);
+                group.Update(1f / 60, camera, input);
+                foreach (var unit in group.Units.Where(u => u.Active)) unit.Advance();
+            }
+        }
+        catch (Exception) { }   // only a head start
+    }
+
     /// <summary>The group for an entry, or null when its particle system is unknown.</summary>
     public static EffectGroup? Create(WeatherEffectEntry entry, ParticleLibrary library, int seed, EffectWorld? world = null)
     {

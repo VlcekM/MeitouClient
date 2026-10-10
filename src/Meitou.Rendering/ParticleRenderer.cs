@@ -110,16 +110,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
     readonly SamplerSlot textureSlot;
     readonly SampledImage white;
     readonly Dictionary<string, SampledImage?> textures = new(StringComparer.OrdinalIgnoreCase);
-    readonly List<EffectGroup> groups = [];
+    readonly WeatherGroups weatherGroups;
+    readonly EffectSimulator simulator = new();
     readonly List<EffectGroup> placerGroups = [];
     readonly List<EffectGroup> toWarm = [];
     readonly List<DrawItem> draws = [];
-    WeatherEffectInput input = WeatherEffectInput.None;
-    object? inputIdentity;
-    int inputVersion = -1;
     double lastSeconds = double.NaN;
     int drawnParticles, drawnUnits, activeUnits;
-    Task? simulation;
+    EffectSimulator.Job? simulation;
     long simulationTicks, waitTicks, simulationTotal, waitTotal, simulationFrames;
     /// <summary>Mean simulation and main-thread wait per simulated frame since the start (for the benchmarks).</summary>
     public (double Simulation, double Wait) MeanMilliseconds => simulationFrames == 0 ? (0, 0) : (simulationTotal * 1000.0 / Stopwatch.Frequency / simulationFrames, waitTotal * 1000.0 / Stopwatch.Frequency / simulationFrames);
@@ -132,10 +130,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>The Tab panel's weather particles slider at 0: the weather's groups are neither simulated nor drawn (the map's effect placers, fires and smoke, stay; so do the effects' fog volumes).</summary>
     public bool WeatherParticles { get; set; } = true;
     /// <summary>Seconds simulated before the first picture, for the new groups: null (the default) is each system's longest particle life, capped at <see cref="MaxAutoPrewarm"/>; 0 starts empty.</summary>
-    public float? PrewarmSeconds { get; set; }
-    public const float MaxAutoPrewarm = 40;
+    public float? PrewarmSeconds { get => weatherGroups.PrewarmSeconds; set => weatherGroups.PrewarmSeconds = value; }
+    public const float MaxAutoPrewarm = WeatherGroups.MaxAutoPrewarm;
     /// <summary>The seed of the groups' random numbers (a group takes the seed plus its place in the list).</summary>
-    public int Seed { get; set; } = 1;
+    public int Seed { get => weatherGroups.Seed; set => weatherGroups.Seed = value; }
+    /// <summary>Seconds the camera must stay in another weather region before the groups are rebuilt for it (<see cref="WeatherGroups.RegionDwell"/>); 0 rebuilds at once.</summary>
+    public float RegionDwell { get => weatherGroups.RegionDwell; set => weatherGroups.RegionDwell = value; }
+    /// <summary>Whether a changed weather is warmed on a worker while the old groups run on (the default); false makes and warms it at once on the render thread (<see cref="WeatherGroups.Background"/>).</summary>
+    public bool BackgroundWeather { get => weatherGroups.Background; set => weatherGroups.Background = value; }
     /// <summary>Particles drawn in the last frame, for the statistics.</summary>
     public int DrawnParticles => drawnParticles;
     public int DrawnUnits => drawnUnits;
@@ -143,13 +145,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>The last frame's simulation time (summed over its threads' work: the wall time of the background task) and how long the main thread waited for it, in milliseconds.</summary>
     public double SimulationMilliseconds => simulationTicks * 1000.0 / Stopwatch.Frequency;
     public double WaitMilliseconds => waitTicks * 1000.0 / Stopwatch.Frequency;
-    public int ParticleCount { get { Sync(); return groups.Concat(placerGroups).Sum(g => g.ParticleCount); } }
+    public int ParticleCount { get { Sync(); return weatherGroups.Groups.Concat(placerGroups).Sum(g => g.ParticleCount); } }
     /// <summary>The weather's groups (not the map placers').</summary>
-    public IReadOnlyList<EffectGroup> Groups => groups;
+    public IReadOnlyList<EffectGroup> Groups => weatherGroups.Groups;
     public IReadOnlyList<EffectGroup> PlacerGroups => placerGroups;
     /// <summary>The entries of the weather's effect list that have no group (a type that is not a weather effect, or an unknown particle system).</summary>
-    public IReadOnlyList<WeatherEffectEntry> Skipped => skipped;
-    readonly List<WeatherEffectEntry> skipped = [];
+    public IReadOnlyList<WeatherEffectEntry> Skipped => weatherGroups.Skipped;
 
     struct DrawItem
     {
@@ -169,6 +170,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         this.gpu = gpu;
         this.texturesDirectory = texturesDirectory;
         Library = library;
+        weatherGroups = new WeatherGroups(library, World);
         program = LegacyProgram.Create(gpu, Vertex, Fragment, "particles");
         segment = new NativeSegment(gpu, program, Silk.NET.Vulkan.PrimitiveTopology.TriangleStrip, "particles");
         viewProjection = program.Uniform("uViewProjection");
@@ -193,29 +195,22 @@ public sealed unsafe class ParticleRenderer : IDisposable
         white = SampledImage.Rgba8(gpu, 1, 1, [255, 255, 255, 255], repeat: false, mipmaps: false, "particle white");
     }
 
-    public static ParticleRenderer Create(GpuContext gpu, GameInstall install, ParticleLibrary? library = null) =>
-        new(gpu, Path.Combine(install.DataDirectory, "particles", "textures"), library ?? ParticleLibrary.Load(install));
+    public static ParticleRenderer Create(GpuContext gpu, GameInstall install, ParticleLibrary? library = null)
+    {
+        BackgroundWork.Run(EffectGroups.PrimeJit);   // the group kinds' code is compiled off the render thread, before the first weather change needs it
+        return new(gpu, Path.Combine(install.DataDirectory, "particles", "textures"), library ?? ParticleLibrary.Load(install));
+    }
 
     /// <summary>
-    /// Sets the weather's effect list, strength and wind. Groups are rebuilt when the list object (<c>Effects</c>, so a caller may pass a fresh input every
-    /// frame for the strength and wind) or its <see cref="WeatherEffectInput.Version"/> changed; an entry whose type is not a weather effect (NONE) or
-    /// whose particle system is unknown is skipped.
+    /// Sets the weather's effect list, strength and wind, every frame. The groups are rebuilt when the list object (<c>Effects</c>, so a caller may pass a fresh input
+    /// every frame for the strength and wind) or its <see cref="WeatherEffectInput.Version"/> changed, but not here and not at once (<see cref="WeatherGroups"/>):
+    /// the camera crossing into another weather region waits <see cref="RegionDwell"/> seconds, and the new groups are warmed on a worker and swapped in when they are
+    /// ready, the old weather's particles being drawn until then; the very first groups are made at the next <see cref="Update"/>. An entry whose type is not a
+    /// weather effect (NONE) or whose particle system is unknown is skipped.
     /// </summary>
-    public void SetWeather(WeatherEffectInput weather)
-    {
-        if (ReferenceEquals(weather.Effects, inputIdentity) && weather.Version == inputVersion) { input = weather; return; }
-        Sync();
-        (input, inputIdentity, inputVersion) = (weather, weather.Effects, weather.Version);
-        toWarm.RemoveAll(groups.Contains);
-        groups.Clear();
-        skipped.Clear();
-        int i = 0;
-        foreach (var entry in weather.Effects)
-        {
-            if (EffectGroups.Create(entry, Library, Seed + i++, World) is { } group) { groups.Add(group); toWarm.Add(group); }
-            else skipped.Add(entry);
-        }
-    }
+    public void SetWeather(WeatherEffectInput weather) => weatherGroups.Want(weather, Now());
+
+    static double Now() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
     /// <summary>
     /// The map's effect placers (docs/formats/weather.md "Effect placers on the map"): always on, whatever the weather. Replaces the previous list.
@@ -243,7 +238,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     {
         into.Clear();
         if (!Enabled) return;
-        foreach (var g in groups.Concat(placerGroups))
+        foreach (var g in weatherGroups.Groups.Concat(placerGroups))
             foreach (var u in g.Units)
             {
                 if (u.Effect.FogVolumes.Count == 0) continue;
@@ -259,38 +254,78 @@ public sealed unsafe class ParticleRenderer : IDisposable
     {
         long start = Stopwatch.GetTimestamp();
         UpdateInner(seconds, camera);
-        updateTotal += Stopwatch.GetTimestamp() - start;
+        phaseUpdate = Stopwatch.GetTimestamp() - start;
+        updateTotal += phaseUpdate;
         updateFrames++;
+    }
+
+    // MEITOU_PARTICLE_LOG=1: one line for every frame whose particle work (Update + Prepare) takes over 2 ms on the render thread, with where the time went.
+    static readonly bool PhaseLog = Environment.GetEnvironmentVariable("MEITOU_PARTICLE_LOG") == "1";
+    long phaseQueue, phaseRun, phaseUpdate, phaseSync, phaseWarm, phaseAdvance, phasePreload, phaseGroups, phaseStart, phaseCollect, phaseTexture;
+    int phaseTextureLoads;
+
+    static double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
+
+    void LogPhases(long prepareTicks)
+    {
+        double total = Ms(phaseUpdate + prepareTicks);
+        if (total >= 2)
+            Console.WriteLine($"particles frame {updateFrames}: {total:0.0} ms (update {Ms(phaseUpdate):0.0}, prepare {Ms(prepareTicks):0.0}): sync wait {Ms(phaseSync):0.0} (task queued {Ms(phaseQueue):0.0}, ran {Ms(phaseRun):0.0}), prewarm {Ms(phaseWarm):0.0} (weather change {Ms(phaseAdvance):0.0}, texture preload {Ms(phasePreload):0.0}), groups {Ms(phaseGroups):0.0}, start {Ms(phaseStart):0.0}, collect {Ms(phaseCollect):0.0}, texture {Ms(phaseTexture):0.0} ({phaseTextureLoads} loads); {weatherGroups.Groups.Count} groups, {activeUnits} units");
+        phaseSync = phaseWarm = phaseGroups = phaseStart = phaseCollect = phaseTexture = 0;
+        phaseTextureLoads = 0;
     }
 
     void UpdateInner(double seconds, WorldCamera camera)
     {
         Sync();
         coveragePending = false;   // the last frame's quads live in its constants: only a Draw in this frame makes coverage
-        if (!Enabled || (groups.Count == 0 && placerGroups.Count == 0)) { lastSeconds = seconds; return; }
+        if (!Enabled) { lastSeconds = seconds; return; }
+        var view = new EffectCamera(camera.Eye, camera.Forward);
+        // A weather change: the groups made on the side are swapped in once warmed (with the frame's simulation finished, so nothing runs on the old ones).
+        long t0 = Stopwatch.GetTimestamp();
+        bool changed = weatherGroups.Advance(view, Now());
+        long tAdvance = Stopwatch.GetTimestamp();
+        phaseAdvance = tAdvance - t0;
+        if (PhaseLog && Ms(phaseAdvance) >= 1)
+        {
+            var (freeze, make, queue) = weatherGroups.LastStartTicks;
+            Console.WriteLine($"particles frame {updateFrames}: weather change took {Ms(phaseAdvance):0.0} ms (last start: freeze {Ms(freeze):0.00}, make {Ms(make):0.00}, queue {Ms(queue):0.00}; last swap {Ms(weatherGroups.LastSwapTicks):0.00})");
+        }
+        if (changed && PhaseLog)
+            Console.WriteLine($"particles frame {updateFrames}: weather groups swapped in: {weatherGroups.Groups.Count} groups for {weatherGroups.Input.Region} {weatherGroups.SwapLatency * 1000:0} ms after the change (dwell and warm-up)");
+        if (changed || (weatherGroups.Building && !ReferenceEquals(weatherGroups.BuildingGroups, preloaded)))
+        {
+            preloaded = weatherGroups.Building ? weatherGroups.BuildingGroups : weatherGroups.Groups;
+            PreloadTextures(preloaded);   // decoded on a worker while the groups are warmed
+        }
+        phasePreload = Stopwatch.GetTimestamp() - tAdvance;
+        if (weatherGroups.Groups.Count == 0 && placerGroups.Count == 0) { lastSeconds = seconds; phaseWarm = Stopwatch.GetTimestamp() - t0; return; }
         float dt = double.IsNaN(lastSeconds) ? 0 : (float)Math.Clamp(seconds - lastSeconds, 0, 0.25);
         lastSeconds = seconds;
-        var view = new EffectCamera(camera.Eye, camera.Forward);
+        var input = weatherGroups.Input;
         if (toWarm.Count > 0)
         {
             foreach (var g in toWarm.ToArray())
-            {
-                float warm = PrewarmSeconds ?? Math.Min(ParticleSimulation.LongestLife(g.System), MaxAutoPrewarm);
-                if (g is CameraEffectGroup || warm > 0 || g.Entry is not null) g.Prewarm(warm, view, input);
-                else g.Prewarm(0, view, input);
-            }
+                g.Prewarm(PrewarmSeconds ?? Math.Min(ParticleSimulation.LongestLife(g.System), MaxAutoPrewarm), view, input);
             toWarm.Clear();
         }
-        foreach (var g in groups) g.Update(dt, view, input);
+        long t1 = Stopwatch.GetTimestamp();
+        phaseWarm = t1 - t0;
+        foreach (var g in weatherGroups.Groups) g.Update(dt, view, input);
         foreach (var g in placerGroups) g.Update(dt, view, input);
+        long t2 = Stopwatch.GetTimestamp();
+        phaseGroups = t2 - t1;
         StartSimulation();
+        phaseStart = Stopwatch.GetTimestamp() - t2;
     }
+
+    IReadOnlyList<EffectGroup>? preloaded;
 
     void StartSimulation()
     {
         var work = new List<EffectUnit>();
         activeUnits = 0;
-        foreach (var g in groups.Concat(placerGroups))
+        foreach (var g in weatherGroups.Groups.Concat(placerGroups))
             foreach (var u in g.Units)
             {
                 if (!u.Active) continue;
@@ -302,18 +337,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 if (u.Pending > 0 && u.Pending >= due) work.Add(u);
             }
         if (work.Count == 0) { simulationTicks = 0; return; }
-        // Heavier units first, so the pool's last task is a short one.
+        // Heavier units first, so the last one run is a short one.
         work.Sort((a, b) => b.Pending.CompareTo(a.Pending));
-        var array = work.ToArray();
-        simulation = Task.Run(() =>
-        {
-            long start = Stopwatch.GetTimestamp();
-            if (array.Length == 1) array[0].Advance();
-            else Parallel.ForEach(array, u => u.Advance());
-            simulationTicks = Stopwatch.GetTimestamp() - start;
-            Interlocked.Add(ref simulationTotal, simulationTicks);
-            Interlocked.Increment(ref simulationFrames);
-        });
+        simulation = simulator.Start(work.ToArray());
     }
 
     /// <summary>One line per effect unit with its place relative to the eye (for the viewer's log): which effects exist, how far and in which direction, whether simulated.</summary>
@@ -321,7 +347,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     {
         Sync();
         int n = 0;
-        foreach (var g in groups.Concat(placerGroups))
+        foreach (var g in weatherGroups.Groups.Concat(placerGroups))
             foreach (var u in g.Units)
             {
                 if (g is CameraEffectGroup) continue;
@@ -336,10 +362,15 @@ public sealed unsafe class ParticleRenderer : IDisposable
     {
         if (simulation is null) return;
         long start = Stopwatch.GetTimestamp();
-        simulation.Wait();
+        var job = simulation;
+        simulation = null;
+        job.Wait();
         waitTicks = Stopwatch.GetTimestamp() - start;
         waitTotal += waitTicks;
-        simulation = null;
+        phaseSync += waitTicks;
+        (phaseQueue, phaseRun, simulationTicks) = (job.QueueTicks, job.RunTicks, job.RunTicks);
+        simulationTotal += job.RunTicks;
+        simulationFrames++;
     }
 
     /// <summary>
@@ -355,8 +386,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
     {
         long start = Stopwatch.GetTimestamp();
         PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, screenPixels, forcedDivisor);
-        drawTotal += Stopwatch.GetTimestamp() - start;
+        long ticks = Stopwatch.GetTimestamp() - start;
+        drawTotal += ticks;
         drawFrames++;
+        if (PhaseLog) LogPhases(ticks);
     }
 
     /// <summary>Draws prepared this frame for the scene target (full size) and for the low-resolution target.</summary>
@@ -401,13 +434,13 @@ public sealed unsafe class ParticleRenderer : IDisposable
         drawnParticles = 0;
         drawnUnits = 0;
         coveragePending = false;
-        if (!Enabled || (groups.Count == 0 && placerGroups.Count == 0)) return;
+        if (!Enabled || (weatherGroups.Groups.Count == 0 && placerGroups.Count == 0)) return;
         draws.Clear();
         var constants = gpu.Frame.Constants;
         var forward = -new Vector3(view.M13, view.M23, view.M33);   // the view's -Z axis in the world
         var planes = WorldCamera.FrustumPlanes(viewProjectionMatrix);
         var units = new List<EffectUnit>();
-        foreach (var g in groups.Concat(placerGroups))
+        foreach (var g in weatherGroups.Groups.Concat(placerGroups))
             foreach (var u in g.Units)
             {
                 if (!WeatherParticles && g.Entry is not null) continue;
@@ -430,7 +463,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 var def = sim.Techniques[t];
                 if (n == 0 || !def.Enabled || !def.Renderer.IsBillboard) continue;
                 var material = Library.FindMaterial(def.Material);
-                if (material is null) continue;
+                if (material is null || TextureFor(material) is not { } texture) continue;   // a texture still decoding: left out of this frame
                 long collectStart = Stopwatch.GetTimestamp();
                 // Built in ordinary memory and copied over in one go: the frame constants are write-combined upload memory, where per-field
                 // writes and the partition's reads are slow (this was 5 ms for 18000 particles).
@@ -440,12 +473,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 int close = PartitionByDepth(scratch.AsSpan(0, written), forward, nearPlane);
                 var instances = constants.Allocate((ulong)(written * InstanceBytes), 16);
                 scratch.AsSpan(0, written).CopyTo(new Span<ParticleInstance>(instances.Pointer, written));
-                collectTotal += Stopwatch.GetTimestamp() - collectStart;
+                long collected = Stopwatch.GetTimestamp() - collectStart;
+                collectTotal += collected;
+                phaseCollect += collected;
                 int divisor = 1;
                 float fill = 0;
                 if (pixelsPerUnit > 0 && (material.Blend == ParticleBlend.Alpha || material.Blend == ParticleBlend.Add))
                     (divisor, fill) = DivisorFor(scratch.AsSpan(0, written), forward, nearPlane, pixelsPerUnit, screenPixels, forcedDivisor);
-                draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material, Texture = TextureFor(material), Divisor = divisor, Fill = fill });
+                draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material, Texture = texture, Divisor = divisor, Fill = fill });
                 drawnParticles += written;
             }
         }
@@ -620,31 +655,66 @@ public sealed unsafe class ParticleRenderer : IDisposable
         _ => Vector2.Zero,
     };
 
-    SampledImage TextureFor(ParticleMaterial material)
+    /// <summary>The decodes of the particle textures in flight (<see cref="BackgroundWork"/>): a file is read and decoded off the render thread; the upload is quick.</summary>
+    readonly Dictionary<string, Task<RgbaImage?>> decoding = new(StringComparer.OrdinalIgnoreCase);
+
+    Task<RgbaImage?> StartDecode(string name)
     {
-        if (material.Texture is not { } name) return white;
-        if (textures.TryGetValue(name, out var cached)) return cached ?? white;
-        SampledImage? image = null;
         string path = Path.Combine(texturesDirectory, name);
-        if (File.Exists(path))
+        return decoding[name] = BackgroundWork.Run<RgbaImage?>(() =>
         {
-            try
-            {
-                var loaded = TextureLoader.LoadFile(path, allMips: false);
-                image = SampledImage.Rgba8(gpu, loaded.Levels[0], repeat: !material.Clamp, mipmaps: true, "particle " + name);
-            }
+            if (!File.Exists(path)) return null;
+            try { return TextureLoader.LoadFile(path, allMips: false).Levels[0]; }
             catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
             {
                 Console.WriteLine($"warning   particle texture {name}: {e.Message}");
+                return null;
             }
+        });
+    }
+
+    /// <summary>Starts decoding the textures the groups' techniques will draw with (the ones not yet loaded), so they are there when the groups are shown.</summary>
+    void PreloadTextures(IEnumerable<EffectGroup> groups)
+    {
+        foreach (var g in groups)
+            foreach (var t in g.System.Techniques)
+                if (Library.FindMaterial(t.Material)?.Texture is { } name && !textures.ContainsKey(name) && !decoding.ContainsKey(name)) StartDecode(name);
+    }
+
+    /// <summary>The first frames of a view wait for the texture decodes they start (a screenshot has no frames to spare).</summary>
+    const int FramesThatWaitForTextures = 3;
+
+    /// <summary>
+    /// The material's texture, or null while it is still being read and decoded on a worker (the technique is then left out of the frame: a first
+    /// sight of a fire or of rain shows a frame or two late instead of stalling the render thread for the 3 to 5 ms of a PNG decode, Observed). The first
+    /// frames wait for it, so a still picture has its particles.
+    /// </summary>
+    SampledImage? TextureFor(ParticleMaterial material)
+    {
+        if (material.Texture is not { } name) return white;
+        if (textures.TryGetValue(name, out var cached)) return cached ?? white;
+        long loadStart = Stopwatch.GetTimestamp();
+        if (!decoding.TryGetValue(name, out var task)) task = StartDecode(name);
+        if (!task.IsCompleted)
+        {
+            if (drawFrames > FramesThatWaitForTextures) return null;
+            task.Wait();
         }
+        decoding.Remove(name);
+        SampledImage? image = null;
+        if (task.IsFaulted) Console.WriteLine($"warning   particle texture {name}: {task.Exception?.GetBaseException().Message}");
+        else if (task.Result is { } decoded) image = SampledImage.Rgba8(gpu, decoded, repeat: !material.Clamp, mipmaps: true, "particle " + name);
         textures[name] = image;
+        phaseTexture += Stopwatch.GetTimestamp() - loadStart;
+        phaseTextureLoads++;
         return image ?? white;
     }
 
     public void Dispose()
     {
         Sync();
+        weatherGroups.Dispose();
+        simulator.Dispose();
         foreach (var t in textures.Values) t?.Dispose();
         white.Dispose();
         quad.Dispose();

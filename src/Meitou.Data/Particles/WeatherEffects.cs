@@ -73,6 +73,14 @@ public sealed class WeatherEffectInput
     public Vector2 Wind { get; init; }
     /// <summary>Bumped by whoever fills the input when <see cref="Effects"/> changed (a new weather), so the groups are rebuilt.</summary>
     public int Version { get; init; }
+    /// <summary>
+    /// The weather region the camera is in (empty: a forced weather, or unknown). The camera crossing into another region is the one change that
+    /// <see cref="WeatherGroups"/> holds back for a moment (<see cref="WeatherGroups.RegionDwell"/>) before it rebuilds the groups.
+    /// </summary>
+    public string Region { get; init; } = "";
+
+    /// <summary>Whether both lists are the same effect list (the object the scheduler keeps per weather) in the same version: the groups made for one serve the other.</summary>
+    public bool SameEffects(WeatherEffectInput other) => ReferenceEquals(Effects, other.Effects) && Version == other.Version;
 
     public static readonly WeatherEffectInput None = new();
 }

@@ -34,8 +34,11 @@ public readonly record struct ParticleEnvironment(Vector2 Wind, float WindSpeedM
 /// </summary>
 public sealed class ParticleSimulation
 {
-    /// <summary>Particles above which an affector pass splits over the thread pool.</summary>
-    const int ParallelThreshold = 4096;
+    /// <summary>
+    /// Particles above which an affector pass splits over the thread pool. Observed (2026-10-10): at 4000 particles (Heavy_Rain) the split gains nothing
+    /// (0.47 ms a frame serial, 0.51 parallel) and, with the pool busy, makes the simulation wait for a helper that has not been scheduled; it pays from some 16000.
+    /// </summary>
+    const int ParallelThreshold = 16384;
     /// <summary>Slots a technique's pool starts with.</summary>
     const int InitialPool = 128;
     /// <summary>The longest step a single <see cref="Advance"/> takes; a longer interval is split.</summary>

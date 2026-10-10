@@ -133,6 +133,8 @@ sealed class WorldOptions
     /// <summary>On by default (Meitou; <c>--no-fog-vrs</c> turns it off): the opaque scene passes shade 2 x 2 or 4 x 4 pixels with one fragment where the fog hides the surface (needs VK_KHR_fragment_shading_rate, else nothing; docs/render-post.md "Fog shading rate").</summary>
     public bool FogVrs = true;
     public float? ParticlePrewarm;
+    /// <summary><c>--particle-dwell s</c>: seconds the camera must stay in another weather region before the weather particles are rebuilt for it (default 2; 0: at once).</summary>
+    public float? ParticleDwell;
     /// <summary><c>--particle-density x</c>: the Tab panel's "Particle density x" at start (0.1 to 1).</summary>
     public float ParticleDensity = 1;
     /// <summary><c>--anisotropy n</c>: the Tab panel's anisotropic filtering at start (1, 2, 4, 8 or 16; 16 leaves the textures as asked).</summary>
@@ -266,7 +268,7 @@ sealed class WorldOptions
           --no-fog-volumes         leave out the placed fog volumes (fogfeatures.dat: the swamp's fog, the Fog Islands', the Vain's)
           --no-fog-cull            draw what the fog in front of the camera completely hides (comparison; the image is the same)
           --no-fog-vrs             shade every pixel at full rate where the fog hides the surface (the fog shading rate is on by default)
-          --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-density <x> the effects' emission rate x (0.1-1, the Tab slider)   --anisotropy <n> the most anisotropic filtering any texture gets (1-16, the Tab slider; 16 default)   --particle-area <r> place weather effects within r units of the start point (test)   --particle-seed <n>   --particle-only <a,b> keep only the weather effects with these in their names (test)
+          --no-particles           no weather particles   --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-dwell <s> seconds the camera must stay in another weather region before its particles are rebuilt (default 2)   --particle-density <x> the effects' emission rate x (0.1-1, the Tab slider)   --anisotropy <n> the most anisotropic filtering any texture gets (1-16, the Tab slider; 16 default)   --particle-area <r> place weather effects within r units of the start point (test)   --particle-seed <n>   --particle-only <a,b> keep only the weather effects with these in their names (test)
           --low-end                potato-PC settings: short draw distances, no shadows, reflections, AO or anti-aliasing, 0.83 render scale, sparse grass and particles (options after it override)
           --no-vsync               start with vsync off (uncapped; Tab slider)
           --object-lod <x>         objects switch to coarser levels sooner (<1) or later (>1): the Tab panel's "Object LOD distance x" (0.25-4, default 1)
@@ -439,6 +441,7 @@ sealed class WorldOptions
                 case "--fog-vrs": o.FogVrs = true; break;
                 case "--no-fog-vrs": o.FogVrs = false; break;
                 case "--particle-prewarm": o.ParticlePrewarm = Math.Max(F(), 0); break;
+                case "--particle-dwell": o.ParticleDwell = Math.Max(F(), 0); break;
                 case "--particle-density": o.ParticleDensity = Math.Clamp(F(), 0.1f, 1); break;
                 case "--anisotropy": o.Anisotropy = (int)F(); break;
                 case "--particle-area": o.ParticleArea = Math.Max(F(), 1); break;
@@ -804,7 +807,7 @@ static class WorldFrame
                 gpu.FilteredFor = input.Effects;
                 gpu.Filtered = [.. input.Effects.Where(e => only.Any(n => e.Effect.Name.Contains(n, StringComparison.OrdinalIgnoreCase)))];
             }
-            input = new WeatherEffectInput { Effects = gpu.Filtered!, Strength = input.Strength, Wind = input.Wind, Version = input.Version };
+            input = new WeatherEffectInput { Effects = gpu.Filtered!, Strength = input.Strength, Wind = input.Wind, Version = input.Version, Region = input.Region };
         }
         if (input.Effects.Count == 0 && gpu.Particles is null) return;
         var particles = gpu.Particles ??= gpu.MakeParticles();
@@ -879,9 +882,11 @@ static class WorldFrame
             var particleWatch = Stopwatch.StartNew();
             var particles = EnsureParticles(gpu, context, install);
             particles.PrewarmSeconds = o.ParticlePrewarm;
+            if (o.ParticleDwell is { } dwell) particles.RegionDwell = dwell;
             particles.Seed = o.ParticleSeed;
             gpu.ParticleDensity = o.ParticleDensity;
             particles.World.GroundHeight = terrain.HeightAt;   // main thread only: the height grid swaps as the terrain streams
+            particles.World.FreezeGroundHeight = () => terrain.Snapshot().HeightAt;   // for a weather warmed on a worker: the grid as it is when it starts
             gpu.WeatherAreas = o.ParticleArea is null ? WeatherAreas.Load(install) : null;
             gpu.ParticleOnly = o.ParticleOnly;
             float startX = o.CameraX is { } px ? (float)px : scene.Focus.X, startZ = o.CameraZ is { } pz ? (float)pz : scene.Focus.Z;

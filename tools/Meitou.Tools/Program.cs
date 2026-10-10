@@ -16,6 +16,7 @@ return args switch
     ["particles"] => WithInstall(i => ParticleSurvey.Run(i, effects: false)),
     ["particles", "effects"] => WithInstall(i => ParticleSurvey.Run(i, effects: true)),
     ["particles", "weathers"] => WithInstall(i => ParticleSurvey.Run(i, effects: false, weathers: true)),
+    ["particles", "warmup", .. var warmupNames] => WithInstall(i => ParticleWarmup.Run(i, warmupNames)),
     ["navmesh", .. var navArgs] => WithInstall(i => NavmeshTool.Run(i, navArgs)),
     ["weather", .. var weatherArgs] => WithInstall(i => WeatherTool.Run(i, weatherArgs)),
     ["image-diff", var a, var b] =>ImageDiff.Run(a, b, null),
@@ -43,6 +44,7 @@ static int Usage()
                            [--cell u] [--tile cells] [--watershed] [--threads n] [--repeat n] [--fingerprint]
                            gather and build a zone's navmesh, write debug files; --fingerprint prints SHA-256 of the cache files of The Hub (or --zone) and the Hub path points
         meitou-tools particles [effects]  read every ParticleUniverse script and particle material and count what they use; "effects" lists the EFFECT records with their systems
+        meitou-tools particles warmup [weather...]  what changing to a weather costs: the schedule, the simulation of the warm-up on one thread and in parallel, and a frame
         meitou-tools world         read the heightmap, zone/level files and features.dat and cross-check them
         meitou-tools weather [--region name | --at x,z] [--days d0 d1] [--seed n] [--list] [--cells]  print a region's season and weather timeline (--list: the regions and their calendars)
         meitou-tools image-diff <a.png> <b.png> [diff.png]  compare two screenshots: mean difference, share of pixels over 12/255

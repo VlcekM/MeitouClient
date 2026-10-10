@@ -118,7 +118,7 @@ public sealed class WorldWeather
             effectLists[s.Weather] = list = entries;
         }
         // TODO(effects): the game gives each group the weather's effect strength (WeatherDef.EffectStrength); the groups take the strength s, as the forced adapter did.
-        return new Meitou.Data.Particles.WeatherEffectInput { Effects = list, Strength = s.Strength, Wind = s.WindDirection * s.WindSpeed };
+        return new Meitou.Data.Particles.WeatherEffectInput { Effects = list, Strength = s.Strength, Wind = s.WindDirection * s.WindSpeed, Region = s.RegionName };
     }
 
     void LogChange(WeatherState s)
