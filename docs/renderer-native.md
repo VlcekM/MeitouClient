@@ -3112,6 +3112,15 @@ medium 10000 / small 4000, object distance 40000, distant 30, shadow 15000; `all
    at once. It logs once (`vram      guard: ...`) and the F11 statistics show the state (`guard: ...`). At the default settings and at `max` on the
    11.4 GB card the use stays under 60%, so it never leaves idle (**Observed**; its scale is exactly 1, so it cannot change a picture then).
    `MEITOU_VRAM_GUARD=0` switches it off.
+   **The budget is the driver's, not ours** (**Observed** 2026-10-10): VK_EXT_memory_budget reports what Windows grants this process, the
+   card less what other processes hold, and it moves. With other GPU programs running (another viewer, a benchmark) the 12 GB card's budget
+   was 7226 MB; with them gone, 11450 MB. At 7.2 GB the guard clamped the ranges and the owner saw no buildings at all.
+   **Lean allocator under pressure** (2026-10-10, **Verified** with `CoreTests.A_lean_allocator_gives_back_its_empty_and_spare_blocks_and_keeps_none`):
+   entering pressure sets `GpuAllocator.Lean` (the guard's `Allocator`): every empty block and spare goes back to the driver at once, a block
+   that empties goes back instead of being kept, and no spares are made; leaving pressure turns it off. The F11 line `room in our blocks`
+   splits the gap between `our blocks` and `used` into empty, spare and scattered (free ranges inside part-used 64 MB blocks). **Observed**
+   (owner, F11, 2026-10-10): 6.72 GB in blocks, 4.65 GB used; the allocator already gave back all but one empty block per pool, so most of
+   that 2 GB is expected to be scattered, which only moving resources out of part-used blocks (defragmentation) would give back.
 5. **Headless watchdog** (`VramWatch`, `--screenshot` and the benchmark): a thread that polls the budget every 100 ms and exits the process with
    code 9 when the use passes `MEITOU_VRAM_KILL` (default 0.95, 0 = off), so a test never takes the driver down.
 

@@ -52,6 +52,12 @@ public sealed class VramGuard
         this.log = log ?? Console.WriteLine;
     }
 
+    /// <summary>
+    /// The allocator made lean while under pressure (<see cref="Gpu.Core.GpuAllocator.Lean"/>): its empty blocks and spares, room kept to grow
+    /// into, go back to the driver first, before anything drawn is evicted. Null: none (tests).
+    /// </summary>
+    public Gpu.Core.GpuAllocator? Allocator { get; init; }
+
     /// <summary>The factor every draw and streaming range is multiplied by (1: no clamp).</summary>
     public float RangeScale => scale;
     /// <summary>The memory use is high: the caches evict what they can, and nothing new is started.</summary>
@@ -172,6 +178,7 @@ public sealed class VramGuard
     {
         pressure = true;
         Activations++;
+        if (Allocator is { } a) a.Lean = true;
         lastStep = now - StepDownSeconds;   // the first step at once
         if (logged) return;
         logged = true;
@@ -188,6 +195,7 @@ public sealed class VramGuard
         else if (pressure && f < Low)
         {
             pressure = false;
+            if (Allocator is { } a) a.Lean = false;
             calmSince = now;
             lastStep = now;
         }

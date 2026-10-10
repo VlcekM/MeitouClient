@@ -988,7 +988,7 @@ static class WorldFrame
         // The memory-pressure guard (VramGuard): MEITOU_VRAM_GUARD=0 leaves it off.
         if (Environment.GetEnvironmentVariable("MEITOU_VRAM_GUARD") != "0")
         {
-            var guard = gpu.Guard = new VramGuard(context.Device.VideoMemory);
+            var guard = gpu.Guard = new VramGuard(context.Device.VideoMemory) { Allocator = context.Device.Allocator };
             if (gpu.Objects is not null) gpu.Objects.Guard = guard;
             if (gpu.Foliage is not null) gpu.Foliage.Guard = guard;
             if (gpu.Shadow is not null) gpu.Shadow.Guard = guard;

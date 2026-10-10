@@ -151,6 +151,42 @@ public unsafe class CoreTests(ITestOutputHelper output)
         Assert.True(a.GetBlocks().Count(b => b.Used == 0) <= 1, string.Join("\n", a.GetBlocks()));
         ExpectClean(d);
     }
+
+    [Fact]
+    [Slow]
+    public void A_lean_allocator_gives_back_its_empty_and_spare_blocks_and_keeps_none()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        var a = d!.Allocator;
+        const BufferUsageFlags usage = BufferUsageFlags.TransferSrcBit | BufferUsageFlags.TransferDstBit | BufferUsageFlags.StorageBufferBit;
+        ulong each = a.BlockSize * 3 / 8;   // two to a block
+        var buffers = new List<GpuBuffer>();
+        for (int i = 0; i < 8; i++) buffers.Add(a.CreateBuffer(each, usage, MemoryKind.DeviceLocal, "grow " + i));
+        var wait = System.Diagnostics.Stopwatch.StartNew();
+        while (a.SpareBlocks == 0 && wait.ElapsedMilliseconds < 5000) Thread.Sleep(5);
+        // Free one block's pair: with the spare there it goes back at once; the spare is the room kept to grow into.
+        a.Free(buffers[0]); a.Free(buffers[1]);
+        var before = a.Slack();
+        output.WriteLine($"before: {before}, {a.BlockCount} blocks");
+        Assert.Equal(a.BlockSize, before.Spare);
+
+        a.Lean = true;
+        var after = a.Slack();
+        Assert.Equal(0UL, after.Empty);
+        Assert.Equal(0UL, after.Spare);
+        Assert.Equal(a.TotalUsedBytes + after.Scattered, a.TotalAllocatedBytes);
+        // While lean, a block that empties goes at once and no spare is made however the pool grows.
+        a.Free(buffers[2]); a.Free(buffers[3]);
+        for (int i = 0; i < 4; i++) buffers.Add(a.CreateBuffer(each, usage, MemoryKind.DeviceLocal, "lean " + i));
+        Thread.Sleep(50);
+        Assert.Equal(0, a.SpareBlocks);
+        Assert.Equal(0UL, a.Slack().Empty);
+
+        a.Lean = false;
+        foreach (var b in buffers.Skip(4)) a.Free(b);
+        ExpectClean(d);
+    }
     [Fact]
     [Slow]
     public void Clear_image_and_read_back()

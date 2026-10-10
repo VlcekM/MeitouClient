@@ -151,6 +151,69 @@ public sealed unsafe class GpuAllocator : IDisposable
         return groups.Select(g => (g.Key, g.Value.Count, g.Value.Bytes, g.Value.DeviceLocal)).OrderByDescending(g => g.Bytes).ToList();
     }
 
+    /// <summary>
+    /// Where the room in our blocks is (device-local blocks only): empty blocks kept to grow into, spares made ahead, and free ranges inside
+    /// blocks that also hold allocations (fragmentation: only moving what is in them would give those back), with the count of such blocks.
+    /// </summary>
+    public (ulong Empty, ulong Spare, ulong Scattered, int PartBlocks) Slack()
+    {
+        ulong empty = 0, spare = 0, scattered = 0;
+        int parts = 0;
+        lock (gate)
+        {
+            foreach (var ((type, _), blocks) in pools)
+            {
+                if ((memProps.MemoryTypes[(int)type].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) == 0) continue;
+                foreach (var b in blocks)
+                {
+                    if (b.Dedicated) continue;
+                    if (b.Used == 0) empty += b.Size;
+                    else if (b.Used < b.Size) { scattered += b.Size - b.Used; parts++; }
+                }
+            }
+            foreach (var ((type, _), b) in spares)
+                if ((memProps.MemoryTypes[(int)type].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) != 0) spare += b.Size;
+        }
+        return (empty, spare, scattered, parts);
+    }
+
+    /// <summary>
+    /// Gives every empty block and every spare back to the driver (the VRAM guard under pressure: the room kept to grow into is the first
+    /// thing to shed, before anything drawn is evicted). The bytes given back.
+    /// </summary>
+    public ulong Trim()
+    {
+        var release = new List<MemoryBlock>();
+        lock (gate)
+        {
+            if (disposed) return 0;
+            foreach (var blocks in pools.Values)
+                for (int i = blocks.Count - 1; i >= 0; i--)
+                    if (!blocks[i].Dedicated && blocks[i].Used == 0) { release.Add(blocks[i]); ReleaseBlock(blocks, blocks[i]); }
+            foreach (var b in spares.Values) { release.Add(b); totalAllocated -= b.Size; blockCount--; }
+            spares.Clear();
+        }
+        ulong bytes = 0;
+        foreach (var b in release) { bytes += b.Size; GiveBack(b); }
+        return bytes;
+    }
+
+    /// <summary>
+    /// Lean (the VRAM guard under pressure): no spares are made, a block that empties goes back at once instead of being kept to grow into, and
+    /// turning it on gives back what is kept now (<see cref="Trim"/>). Allocation is slower while it lasts (a new block for every growth).
+    /// </summary>
+    public bool Lean
+    {
+        get => lean;
+        set
+        {
+            if (lean == value) return;
+            lean = value;
+            if (value) Trim();
+        }
+    }
+    volatile bool lean;
+
     public List<BlockInfo> GetBlocks()
     {
         lock (gate)
@@ -349,7 +412,7 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// <summary>Under the lock: makes the pool's next block on a worker unless there is one or it is being made.</summary>
     void MaybeStartSpare((uint Type, bool Optimal) key)
     {
-        if (disposed || spares.ContainsKey(key) || !sparing.Add(key)) return;
+        if (disposed || lean || spares.ContainsKey(key) || !sparing.Add(key)) return;
         Interlocked.Increment(ref workersBusy);
         ThreadPool.UnsafeQueueUserWorkItem(_ =>
         {
@@ -502,7 +565,7 @@ public sealed unsafe class GpuAllocator : IDisposable
                             break;
                         }
                     }
-                    if (otherEmpty)
+                    if (otherEmpty || lean)
                     {
                         ReleaseBlock(blocks, b);
                         release = b;
