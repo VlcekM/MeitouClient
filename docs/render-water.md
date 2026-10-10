@@ -146,7 +146,11 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
     opacity (its parameter map's alpha, the game's alpha per unit of depth) × (4.5, 1.6, 1.1), L the path through the water to the terrain
     (so in clear water red goes first: turquoise shallows over sand, dark deep water; a strongly coloured biome water, by the saturation
     of its colour map, filters towards its own colour instead: olive swamps, red lakes), and the water's own colour scatters in for what is absorbed; the
-    floor fades out by 4400 units, as the game's water turns opaque at 4000. **Caustics**: on the floor seen through shallow water, two
+    floor fades out by 4400 units, as the game's water turns opaque at 4000. **Clarity** (2026-10-10, Tab panel, Meitou only): L is the depth
+    over view.y (floored at 0.05), so at grazing angles it is up to 20 times the depth and distant shallows read as opaque body colour, which
+    is why the water looked see-through only near the eye. "Water clarity x" divides σ (also the alpha of the `--no-water-refraction`
+    path; default 1, 0.25–8); "Far water clarity" k makes L = depth / view.y^(1−k) (0, the default, the true slant path; 1 the plain depth).
+    **Caustics**: on the floor seen through shallow water, two
     drifting copies of the foam lace (cell rims) multiplied and read a mip or three down, the blur growing with the depth (0.15 mips a unit),
     at a quarter of the strength they had until 2026-10-08 (they covered a whole beach); gone in the shallows (zero under 1.5 units, full from 7),
     fading over 18 units of depth, out between 500 and 2500 units from the eye, and in rain (to a fifth at the heaviest). **Crest light**: where

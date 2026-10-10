@@ -385,6 +385,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform sampler2D uRefraction;  // the scene under the water, copied at half size before it (CaptureRefraction)
         uniform float uRefract;         // 1: refract it and composite here; 0: blend over the scene as the game's water
         uniform vec2 uScreen;           // 1 / the target's size: gl_FragCoord to the copy's coordinates
+        uniform vec2 uClarity;          // x: the absorption per unit of depth times this (1 / the Tab panel's clarity); y: the far water's clarity (0 the true slant path, 1 none)
 
         vec3 sampleNormal(vec2 coord, vec2 direction, float speed, float time)
         {
@@ -626,9 +627,10 @@ public sealed unsafe class WaterRenderer : IDisposable
             float back = pow(clamp(dot(looking, towardsSun), 0.0, 1.0), 3.0) * smoothstep(-0.05, 0.2, l.y);
             body += (waterColour * 1.2 + vec3(0.02, 0.1, 0.09) * clean) * uSunColour * crest * deepWater * overcast * (back * 0.7 + 0.04) * (1.0 - 0.6 * view.y) * (1.0 - far);
 
-            // The water's depth along the view (the swash: its own thin sheet).
+            // The water's depth along the view (the swash: its own thin sheet). The slant path grows to 20 times the depth at grazing angles, so
+            // far water reads opaque; the far clarity (uClarity.y) shortens it towards the plain depth.
             float floorDepth = max(0.0, vWorld.y - terrainHeight(p));
-            float depth = (swash ? max(sheet, 0.0) : floorDepth) / max(view.y, 0.05);
+            float depth = (swash ? max(sheet, 0.0) : floorDepth) / pow(max(view.y, 0.05), 1.0 - uClarity.y);
             if (outside > 0.0) depth = 1e4;
             bool refract = uRefract > 0.5;
             vec3 under = vec3(0.0);
@@ -654,7 +656,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // strongly coloured biome water (a swamp's olive, a red lake) filters towards its own colour instead. The biome's opacity (the
                 // game's alpha per unit of depth) sets how fast. Beyond 4000 units the floor is gone, as in the game.
                 vec3 sigma = mix(vec3(4.5, 1.6, 1.1), 1.0 + 3.0 * (1.0 - hue), smoothstep(0.15, 0.5, saturation));
-                vec3 transmit = exp(-depth * max(pa.w, 0.002) * sigma) * clamp((4400.0 - dist) / 400.0, 0.0, 1.0);
+                vec3 transmit = exp(-depth * max(pa.w, 0.002) * uClarity.x * sigma) * clamp((4400.0 - dist) / 400.0, 0.0, 1.0);
                 colour = mix(under * transmit + body * (1.0 - transmit), reflected, schlick * gloss);
             }
             else colour = mix(body, reflected, schlick * gloss);
@@ -773,7 +775,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // Alpha as the game's water from its depth (the swash: its own thin sheet), then the foam over it.
                 float fresnel = 1.0 - pow(1.0 - cosv, 2.0);
                 a = clamp(1.0 - (dist - 4000.0) / 1000.0, 0.0, 1.0);
-                a *= mix(1.0, clamp(depth * pa.w, 0.0, 1.0), fresnel);
+                a *= mix(1.0, clamp(depth * pa.w * uClarity.x, 0.0, 1.0), fresnel);
                 a *= clamp(depth / 2.0, 0.0, 1.0);
                 // The lip (only where the water is deep enough for it, else an opaque stroke) is less see-through.
                 a = max(a, lip * 0.6 * near);
@@ -826,7 +828,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         public readonly LegacyProgram P;
         public readonly NativeSegment Segment;
         public readonly UniformHandle ViewProjection, WaterHeight, Centre, Extent, Eye, HalfWorld, SeaA, SeaB, SeaColour, Time, SunDir, SunColour,
-            FogColour, FogDistance, Reflect, ReflectionViewProjection, Ocean, ShoreRect, GridStep, Shore, WaveFade, Debug, Refract, Screen;
+            FogColour, FogDistance, Reflect, ReflectionViewProjection, Ocean, ShoreRect, GridStep, Shore, WaveFade, Debug, Refract, Screen, Clarity;
         public readonly SkyColourHandles Sky;
         public readonly SamplerSlot[] Maps;
         public readonly SamplerSlot Reflection, OceanDisp, OceanSlope, ShoreField, Refraction;
@@ -846,6 +848,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             (OceanDisp, OceanSlope, ShoreField) = (P.Sampler("uOceanDisp"), P.Sampler("uOceanSlope"), P.Sampler("uShoreField"));
             (Refract, Screen, Refraction) = (P.Uniform("uRefract"), P.Uniform("uScreen"), P.Sampler("uRefraction"));
             Debug = P.Uniform("uWaterDebug");
+            Clarity = P.Uniform("uClarity");
             Sky = SkyColourHandles.Resolve(P);
             Maps = MapNames.Select(P.Sampler).ToArray();
             Reflection = P.Sampler("uReflection");
@@ -1022,6 +1025,14 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// the game's water does (`--no-water-refraction`, for integrated GPUs).</summary>
     public bool Refraction { get; set; } = true;
 
+    /// <summary>The Tab panel's "Water clarity x" (Meitou water; not in the game): the biome's absorption per unit of depth is divided by it, so
+    /// above 1 the floor shows through deeper water. 1 is the game's opacity.</summary>
+    public float Clarity { get; set; } = 1;
+
+    /// <summary>The Tab panel's "Far water clarity" (Meitou water; not in the game): 0 absorbs along the true slant path through the water (it is
+    /// up to 20 times the depth at grazing angles, so distant shallows read opaque), 1 only along the depth, as if looked at from straight above.</summary>
+    public float FarClarity { get; set; }
+
     /// <summary>
     /// Copies the scene drawn so far (the slice's opaque geometry, with no pass open) at half the size into the texture the Meitou water refracts:
     /// the floor and whatever stands in the water, seen through the waves. One native segment (a full barrier on each side) and one blit.
@@ -1086,6 +1097,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             p.Set(h.Shore, waves.Shore);
             p.Set(h.WaveFade, WaveFadeStart, WaveFadeEnd, ShoreFadeStart, ShoreFadeEnd);
             p.Set(h.Debug, DebugView);
+            p.Set(h.Clarity, 1f / Math.Max(Clarity, 0.01f), Math.Clamp(FarClarity, 0f, 1f));
             if (ocean.Ready) { p.Bind(h.OceanDisp, ocean.Displacement); p.Bind(h.OceanSlope, ocean.Slopes); }
             if (shore.Ready) p.Bind(h.ShoreField, shore.Sampled());
             bool refract = Refraction && refraction is not null && refractionFrame == Gpu.Frame.Number;
