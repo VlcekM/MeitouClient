@@ -218,8 +218,9 @@ game's are black against the stars); `--clouds 0.9` at 11:00 a neutral grey over
 blue-grey). **Verified** Faithful is unchanged: `--faithful clouds` against the commit before the switch, 0 px at 22:24 and 4 px of 1/255 at
 13:00 (two runs of the old build differ by 35 px of 1/255).
 
-Not done (options for later): the texture still moves with the camera (no parallax, as the game's); no cloud shadows on the ground; the
-horizon band below 8.6° keeps the game's flat colour.
+Not done (options for later): the texture still moves with the camera (no parallax, as the game's); no cloud shadows on the ground; below 2.9°
+(`d.y` 0.05) the colour fades to the game's flat horizon colour, and the haze is still pulled to the game's `horizonClouds` colour, so between
+2.9° and 8.6° a lit cloud meets game-coloured haze (no seam seen in the shots above, but not checked in every weather).
 
 ## Unknowns
 
