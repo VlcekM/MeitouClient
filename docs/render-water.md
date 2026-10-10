@@ -168,6 +168,7 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
     **Glint under clouds** (2026-10-10): the game's specular ignores the weather, so in Shark's heavy rain (`Heavy_Rain`, clouds density 1) the
     swamp water still mirrored a bright sun. The Meitou water scales the glint's colour by `1 − 0.95 · smoothstep(0.3, 1, c)` (`WaterRenderer.
     GlintCloudFade`, `GlintCloudShade`), `c` the sky's cloud density after the weather's transition (`--clouds` wins); the Faithful water keeps it.
+    *Observed* the same day at Shark in `Heavy_Rain` at 16:00: the owner judged it good.
   - *Clock.* Everything runs on the game clock (`GameHours`; the viewer's heat-haze hours, still for a picture): paused water stands
     still, game speed speeds it up. `--water-seconds <s>` starts it at s game seconds, for pictures of a moment. `MEITOU_WATER_DEBUG=1`
     shows the shore fields (red distance / 400, green breaker phase, blue exposure).

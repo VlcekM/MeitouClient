@@ -69,8 +69,8 @@ rain haze, which reads wrong under a full overcast. The game's weather never tou
 clouds"), so the sun colour alone cannot tell. *From the code.* `WorldFrame.ShaftCloudFade` scales the darkening `k` by
 `1 − shade · smoothstep(from, 1, c)`, with `c` the sky's cloud density after the weather's 30 s transition (`SkyRenderer.CloudDensity`, so `--clouds`
 wins), `shade` 0.85 (`--shafts-clouds`) and `from` 0.3 (`--shafts-clouds-from`). Clear weathers (c 0) keep the shafts as they were; a full overcast
-keeps 15 % of them. The ground shadows are not touched (that would be a separate switch). Whether 0.85 is right is **open** until it has been looked at
-in the swamp rain.
+keeps 15 % of them. The ground shadows are not touched (that would be a separate switch). *Observed* 2026-10-10: at Shark in
+`Heavy_Rain` at 16:00 the owner judged the result good.
 
 ## Air layer
 
