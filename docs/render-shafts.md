@@ -64,13 +64,14 @@ that is too strong under the swamp's rain clouds is **open**: the darkening comp
 
 ## Cloud cover
 
-*Observed* 2026-10-10: in the swamp's rain (`Kenshi_Wet_Forest`, clouds density 1) the trees cast crisp, dark shafts across the whole sky through the
-rain haze, which reads wrong under a full overcast. The game's weather never touches the sun ([formats/weather.md](formats/weather.md) "Sky and
-clouds"), so the sun colour alone cannot tell. *From the code.* `WorldFrame.ShaftCloudFade` scales the darkening `k` by
-`1 − shade · smoothstep(from, 1, c)`, with `c` the sky's cloud density after the weather's 30 s transition (`SkyRenderer.CloudDensity`, so `--clouds`
-wins), `shade` 0.85 (`--shafts-clouds`) and `from` 0.3 (`--shafts-clouds-from`). Clear weathers (c 0) keep the shafts as they were; a full overcast
-keeps 15 % of them. The ground shadows are not touched (that would be a separate switch). *Observed* 2026-10-10: at Shark in
-`Heavy_Rain` at 16:00 the owner judged the result good.
+*Observed* 2026-10-10: in the swamp's heavy rain the trees cast crisp, dark shafts across the whole sky through the rain haze, which reads wrong
+under a full overcast. The game's weather never touches the sun ([formats/weather.md](formats/weather.md) "Sky and clouds"), so the sun colour
+alone cannot tell. *From the code.* `WorldFrame.ShaftCloudFade` scales the darkening `k` by `1 − shade · smoothstep(from, 1, o)`, with `shade` 0.85
+(`--shafts-clouds`), `from` 0.3 (`--shafts-clouds-from`) and `o` how overcast the sky is (`WorldFrame.Overcast`): the sky's cloud density after the
+weather's 30 s transition (`SkyRenderer.CloudDensity`, so `--clouds` wins), or the game's `rainAmount` = saturate(rain / 50) where that is more,
+since rain falls from a covered sky whatever density the weather lists. So `Heavy_Rain` (c 1, rain 100) keeps 15 % of the shafts, `swamp rain no
+wind` (c 0.5, rain 40, so o 0.8) about 32 %, and clear weathers (c 0 to 0.3, no rain) all of them. The ground shadows are not touched (that would be
+a separate switch). *Observed* 2026-10-10: at Shark in `Heavy_Rain` at 16:00 the owner judged the result good (before rain counted; the same there).
 
 ## Air layer
 

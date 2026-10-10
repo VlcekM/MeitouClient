@@ -1051,9 +1051,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// only a disc of clear water under the camera. Default 10000.</summary>
     public float ClearDistance { get; set; } = 10000;
 
-    /// <summary>The sky's cloud density c this frame (<see cref="SkyRenderer.CloudDensity"/>), which the Meitou water's sun glint fades under
-    /// (<see cref="GlintCloudFade"/>).</summary>
-    public float CloudDensity { get; set; }
+    /// <summary>How overcast the sky is this frame (<c>WorldFrame.Overcast</c>: the cloud density, or the rain's amount where that is more), which the
+    /// Meitou water's sun glint fades under (<see cref="GlintCloudFade"/>).</summary>
+    public float Overcast { get; set; }
 
     /// <summary>How much of the Meitou water's sun glint a full overcast takes away (docs/render-water.md "Glint under clouds"; not in the game, whose
     /// specular ignores the weather). Default 0.95.</summary>
@@ -1121,7 +1121,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         p.Set(h.SunDir, light.SunDirection.X, light.SunDirection.Y, light.SunDirection.Z);
         p.Set(h.SunColour, light.SunColour.X, light.SunColour.Y, light.SunColour.Z);
         var (glintDirection, glintColour) = light.Glint;
-        if (h == meitou) glintColour *= GlintCloudFade(GlintCloudShade, CloudDensity);
+        if (h == meitou) glintColour *= GlintCloudFade(GlintCloudShade, Overcast);
         p.Set(h.GlintDir, glintDirection.X, glintDirection.Y, glintDirection.Z);
         p.Set(h.GlintColour, glintColour.X, glintColour.Y, glintColour.Z);
         p.Set(h.FogColour, light.FogColour.X, light.FogColour.Y, light.FogColour.Z);

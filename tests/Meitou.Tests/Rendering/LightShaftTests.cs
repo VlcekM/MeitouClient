@@ -36,4 +36,13 @@ public class LightShaftTests
         Assert.Equal(1 - o.ShaftCloudShade / 2, At((o.ShaftCloudFrom + 1) / 2), 4);
         Assert.True(At(0.5f) > At(0.7f) && At(0.7f) > At(0.9f));
     }
+
+    [Fact]
+    public void Rain_counts_as_cover_where_it_is_more_than_the_clouds()
+    {
+        Assert.Equal(0.5f, WorldFrame.Overcast(0.5f, 0), 4);     // clouds alone
+        Assert.Equal(0.8f, WorldFrame.Overcast(0.5f, 40), 4);    // swamp rain no wind: rainAmount 40 / 50
+        Assert.Equal(1f, WorldFrame.Overcast(1f, 100), 4);       // Heavy_Rain
+        Assert.Equal(1f, WorldFrame.Overcast(0.2f, 100), 4);     // Heavy_Rain sonorous: c 0.2 but pouring
+    }
 }
