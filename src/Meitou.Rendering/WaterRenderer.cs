@@ -1154,7 +1154,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     {
         if (ocean.Dispatched > 0)
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                $"water     ocean: {ocean.Dispatched} passes ({ocean.Size}²), gpu us per pass {(ocean.GpuTimed > 0 ? ocean.GpuMicroseconds / ocean.GpuTimed : 0):F1} ({ocean.GpuTimed} timed); shore bake {shore.LastBakeMs:F0} ms"));
+                $"water     ocean: {ocean.Dispatched} passes ({ocean.Size}²), gpu us per pass {(ocean.GpuTimed > 0 ? ocean.GpuMicroseconds / ocean.GpuTimed : 0):F1} ({ocean.GpuTimed} timed); shore bake {shore.LastBakeMs:F0} ms, {shore.UploadedFields} fields uploaded and {shore.UniformFields} uniform (one texel)"));
         quad.Dispose();
         grid.Dispose();
         gridIndices.Dispose();

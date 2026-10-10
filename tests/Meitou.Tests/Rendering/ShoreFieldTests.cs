@@ -181,6 +181,69 @@ public class ShoreFieldTests(Xunit.ITestOutputHelper output)
         Assert.True(ms < 100, $"{ms} ms");
     }
 
+    // ------------------------------------------------------------------ the arrays of a bake, the uniform field, the texels' layout
+
+    static float Coast(float x, float z) => 100f + 0.05f * (x + 0.3f * z) + 40f * MathF.Sin(x * 0.0021f) * MathF.Cos(z * 0.0017f);
+
+    [Fact]
+    public void A_bake_with_a_scratch_is_the_same_field_and_the_next_one_reuses_the_arrays()
+    {
+        var scratch = new ShoreBake.Scratch();
+        var fresh = ShoreBake.Bake(Coast, 0, 0, 128, Texel);
+        var first = ShoreBake.Bake(Coast, 0, 0, 128, Texel, scratch: scratch);
+        Assert.Equal(fresh.Distance, first.Distance);
+        Assert.Equal(fresh.Exposure, first.Exposure);
+
+        // Another place: the arrays are overwritten, nothing of the first bake is left in them.
+        var freshElsewhere = ShoreBake.Bake(Coast, 900, -300, 128, Texel);
+        var second = ShoreBake.Bake(Coast, 900, -300, 128, Texel, scratch: scratch);
+        Assert.Same(first.Distance, second.Distance);
+        Assert.Same(first.Exposure, second.Exposure);
+        Assert.Equal(freshElsewhere.Distance, second.Distance);
+        Assert.Equal(freshElsewhere.Exposure, second.Exposure);
+    }
+
+    [Fact]
+    public void A_bake_with_a_scratch_allocates_a_fraction_of_one_without()
+    {
+        const int size = 256;
+        var scratch = new ShoreBake.Scratch();
+        ShoreBake.Bake(Coast, 0, 0, size, Texel, scratch: scratch);   // the first one makes the arrays
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        ShoreBake.Bake(Coast, 50, 0, size, Texel, scratch: scratch);
+        long with = GC.GetAllocatedBytesForCurrentThread() - before;
+        before = GC.GetAllocatedBytesForCurrentThread();
+        ShoreBake.Bake(Coast, 50, 0, size, Texel);
+        long without = GC.GetAllocatedBytesForCurrentThread() - before;
+        output.WriteLine($"allocated on the calling thread: {with / 1024} KB with a scratch, {without / 1024} KB without");
+        // Seven arrays of size² (3 floats for a seed) are 2.3 MB at 256²; what is left is the blocks of the exposure and a few closures.
+        Assert.True(without > 2_000_000, $"{without}");
+        Assert.True(with < without / 4, $"{with} against {without}");
+    }
+
+    [Fact]
+    public void A_field_with_no_waterline_in_it_is_uniform_and_one_with_a_coast_is_not()
+    {
+        var land = ShoreBake.Bake((x, z) => 500f, 0, 0, 128, Texel);
+        Assert.True(land.IsUniform(out var value));
+        Assert.Equal(-ShoreGrid.DefaultMaxDistance, value.X);
+        Assert.Equal(0f, value.Y);
+        // The shader reads the same at any point of a uniform field as the one texel would give.
+        Assert.Equal(value, land.Sample(land.X0 + 17, land.Z0 + 400));
+
+        Assert.False(ShoreBake.Bake(Coast, 0, 0, 128, Texel).IsUniform(out _));
+    }
+
+    [Fact]
+    public void Interleaving_into_a_kept_array_gives_the_same_texels_as_interleaving_into_a_new_one()
+    {
+        var g = ShoreBake.Bake(Coast, 0, 0, 64, Texel);
+        var kept = new float[64 * 64 * 2];
+        Array.Fill(kept, float.NaN);
+        g.InterleaveInto(kept);
+        Assert.Equal(g.Interleaved(), kept);
+        Assert.Throws<ArgumentException>(() => g.InterleaveInto(new float[10]));
+    }
     // ------------------------------------------------------------------ HeightSnapshot
 
     [Fact]
