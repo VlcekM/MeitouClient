@@ -245,7 +245,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         uniform vec4 uCloudKey;        // Meitou clouds: rgb the key light (sun, and the planet at night) in sunColour's unit
         uniform vec4 uCloudKeyDir;     // Meitou clouds: xyz towards the key light
         uniform vec4 uCloudAmbient;    // Meitou clouds: rgb the sky's mean light on the clouds (before the exposure's square root)
-        uniform sampler2D uStars, uPlanet0, uPlanet1, uClouds, uCloudsNormal, uCloudsTile;
+        uniform sampler2D uStars, uPlanet0, uPlanet1, uClouds, uCloudsNormal, uCloudsTile, uCloudsSmooth, uCloudsTileSmooth;   // the last two: the Meitou clouds' smoothed copies (MeitouClouds.SmoothRed)
         uniform vec4 uHas;             // stars, planet 0, cloud textures (all three), planet 1 present
         // moon.hlsl: planet01.mesh's texture lit by the real sun direction, plus the skydome's Rayleigh colour towards it (no Mie, no night glow), opaque.
         // The sphere is hit analytically; its object normal (the mesh turns about y) gives the mesh's UV sphere coordinate. rgba: colour and coverage.
@@ -272,6 +272,10 @@ public sealed unsafe class SkyRenderer : IDisposable
             vec3 scatter = SKYX_EXPOSURE * skyxRayleighPhase(dot(uAtmoSun.xyz, ray)) * SKYX_RAYLEIGH * skyxInScatter(ray, far, uAtmoSun.xyz, thickness);
             return vec4(albedo * clamp(dot(n, uAtmoSun.xyz), 0.0, 1.0) + scatter, cover);
         }
+        // The cloud layer's density and tile: the game's textures, or with the Meitou clouds their smoothed copies (MeitouClouds.SmoothRed: the BC1 blocks' steps
+        // showed as grain and contour bands once the clouds were lit). The condition is on a uniform, so the derivatives stay defined.
+        float cloudsRed(vec2 uv) { if (uCloudMeitou.x > 0.5) return texture(uCloudsSmooth, uv).r; return texture(uClouds, uv).r; }
+        float cloudsTileRed(vec2 uv) { if (uCloudMeitou.x > 0.5) return texture(uCloudsTileSmooth, uv).r; return texture(uCloudsTile, uv).r; }
         void main()
         {
             vec4 a = uInverseViewProjection * vec4(vNdc, 0.0, 1.0);
@@ -347,7 +351,7 @@ public sealed unsafe class SkyRenderer : IDisposable
                 const vec2 SHIFT = vec2({{F(CloudLayer.SecondLookupShift.X)}}, {{F(CloudLayer.SecondLookupShift.Y)}});
                 // The plane hit: the cloud point is d · height / d.y, the texture coordinate its xz · scale.
                 vec2 uv = d.xz * (HEIGHT / d.y) * SCALE * uCloudMeitou.y + uCloudMeitou.zw;
-                float density = texture(uClouds, uv + wind).r;
+                float density = cloudsRed(uv + wind);
                 vec3 normal = -(2.0 * texture(uCloudsNormal, uv + wind).rgb - 1.0);
                 normal = vec3(normal.x, normal.z, normal.y);   // the shader swaps y and z
                 density = clamp((density + o) * MULT, 0.0, 1.0);
@@ -355,8 +359,8 @@ public sealed unsafe class SkyRenderer : IDisposable
                 vec3 nd = normalize(d + {{F(CloudLayer.VolumetricDisplacement)}} * d.y * vec3(normal.x, 0.0, normal.z));
                 float vh = (HEIGHT + HEIGHT * (1.0 - density) * {{F(CloudLayer.HeightVolume)}} * d.y) / nd.y;
                 uv = nd.xz * vh * SCALE * uCloudMeitou.y + uCloudMeitou.zw;
-                density = (texture(uClouds, uv + wind + SHIFT).r + o) * MULT;
-                float tile = texture(uCloudsTile, uv - wind).r;
+                density = (cloudsRed(uv + wind + SHIFT) + o) * MULT;
+                float tile = cloudsTileRed(uv - wind);
                 density += tile * {{F(CloudLayer.TileWeight)}};
                 vec3 pixel = uCloudLight.rgb + uCloudSun.rgb * (1.0 - density * 0.1);
                 float top = 1.0, dark = 1.0;   // the colour's ceiling (the game's 1, saturate; the Meitou clouds' brighter edges towards the sun) and the share of Darkness
@@ -370,7 +374,7 @@ public sealed unsafe class SkyRenderer : IDisposable
                     vec2 at = uv + wind + SHIFT;
                     float side = 0.0;
                     for (int k = 1; k <= {{MeitouClouds.LightSteps}}; k++)
-                        side += clamp((texture(uClouds, at + lxz * ({{F(MeitouClouds.LightStep)}} * float(k))).r + o) * MULT, 0.0, 1.0);
+                        side += clamp((texture(uCloudsSmooth, at + lxz * ({{F(MeitouClouds.LightStep)}} * float(k))).r + o) * MULT, 0.0, 1.0);
                     float thick = max(density, 0.0);
                     // A light below the layer (the sun just set, the cloud still sees it) shines on the underside the eye sees: a short path.
                     float up = L.y > 0.0 ? thick * min(1.0 / L.y, {{F(MeitouClouds.MaxSlant)}}) : thick * 0.25;
@@ -420,7 +424,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     // Native programs (docs/renderer-native.md 7.1, wave 3 agent D): the same SPIR-V as the GL programs they replace.
     readonly SkyProg simple, sky;
     // Native textures with the GL sampler state their GL versions had (phase 8 stage 2); null when the file was not found.
-    SampledImage? starsTexture, cloudsTexture, cloudsNormalTexture, cloudsTileTexture, irradianceCube, specularCube, ambientMap;
+    SampledImage? starsTexture, cloudsTexture, cloudsNormalTexture, cloudsTileTexture, cloudsSmooth, cloudsTileSmooth, irradianceCube, specularCube, ambientMap;
     // The game's two planets' textures (SkyPlanet.All order); null when the file was not found.
     readonly SampledImage?[] planetTextures = new SampledImage?[SkyPlanet.All.Length];
     readonly PassTimer skyTimer;
@@ -548,7 +552,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// <summary>The cloud shadows' <c>uAtmoCloud</c>: x the strength (0 with the switch Faithful, a clear sky, missing textures or the sun low), y DensityOffset, z the plane's height.</summary>
     Vector4 CloudShadowUniform()
     {
-        bool on = CloudShadows && Physical && cloudsTexture is not null && cloudsTileTexture is not null && CloudDensity > 0;
+        bool on = CloudShadows && Physical && cloudsSmooth is not null && cloudsTileSmooth is not null && CloudDensity > 0;
         float strength = on ? MeitouClouds.ShadowAt(state.Sun.Y) : 0;
         return new Vector4(strength, CloudLayer.DensityOffset(CloudDensity), MeitouClouds.PlaneHeight, 0);
     }
@@ -669,6 +673,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             {
                 var img = TextureLoader.LoadFile(clouds, allMips: false).Levels[0];
                 cloudsTexture = SampledImage.Rgba8(Gpu, img, repeat: true, mipmaps: true, "sky clouds");
+                cloudsSmooth = SampledImage.Rgba8(Gpu, new RgbaImage(img.Width, img.Height, MeitouClouds.SmoothRed(img.Pixels, img.Width, img.Height)), repeat: true, mipmaps: true, "sky clouds smooth");
             }
             if (assets.Find("CloudsNormal.dds") is { } cloudsNormal)
             {
@@ -679,6 +684,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             {
                 var img = TextureLoader.LoadFile(cloudsTile, allMips: false).Levels[0];
                 cloudsTileTexture = SampledImage.Rgba8(Gpu, img, repeat: true, mipmaps: true, "sky clouds tile");
+                cloudsTileSmooth = SampledImage.Rgba8(Gpu, new RgbaImage(img.Width, img.Height, MeitouClouds.SmoothRed(img.Pixels, img.Width, img.Height)), repeat: true, mipmaps: true, "sky clouds tile smooth");
             }
             if (assets.Find("mp_irradiance.dds") is { } irradiance) irradianceCube = SampledImage.Cube(Gpu, DdsReader.ReadFile(irradiance), "sky irradiance");
             if (assets.Find("mp_specularity.dds") is { } specularity) specularCube = SampledImage.Cube(Gpu, DdsReader.ReadFile(specularity), "sky specularity");
@@ -920,8 +926,8 @@ public sealed unsafe class SkyRenderer : IDisposable
         g.PublishUniform("uAtmoNight", () => Published().Night, Valid);
         g.PublishUniform("uAtmoCloud", CloudShadowUniform, Valid);
         g.PublishUniform("uAtmoCloudWind", () => { var w = CloudLayer.TextureShift(cloudOffset); return new Vector4(w.X, w.Y, 0, 0); }, Valid);
-        g.Publish("uAtmoClouds", () => state.Valid && cloudsTexture is { } t ? t.Sampled() : default);
-        g.Publish("uAtmoCloudsTile", () => state.Valid && cloudsTileTexture is { } t ? t.Sampled() : default);
+        g.Publish("uAtmoClouds", () => state.Valid && cloudsSmooth is { } t ? t.Sampled() : default);
+        g.Publish("uAtmoCloudsTile", () => state.Valid && cloudsTileSmooth is { } t ? t.Sampled() : default);
     }
 
     // The values the getters above share, computed once per ApplyGlobals call (FrameGlobals.ApplyCount) instead of once per name.
@@ -1037,6 +1043,8 @@ public sealed unsafe class SkyRenderer : IDisposable
         if (cloudsTexture is not null) p.Bind(program.Clouds, cloudsTexture.Sampled());
         if (cloudsNormalTexture is not null) p.Bind(program.CloudsNormal, cloudsNormalTexture.Sampled());
         if (cloudsTileTexture is not null) p.Bind(program.CloudsTile, cloudsTileTexture.Sampled());
+        if (cloudsSmooth is not null) p.Bind(program.CloudsSmooth, cloudsSmooth.Sampled());
+        if (cloudsTileSmooth is not null) p.Bind(program.CloudsTileSmooth, cloudsTileSmooth.Sampled());
     }
 
     /// <summary>
@@ -1078,7 +1086,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     public void Dispose()
     {
         if (Active == this) Active = null;
-        foreach (var t in new[] { starsTexture, cloudsTexture, cloudsNormalTexture, cloudsTileTexture, irradianceCube, specularCube, ambientMap }) t?.Dispose();
+        foreach (var t in new[] { starsTexture, cloudsTexture, cloudsNormalTexture, cloudsTileTexture, cloudsSmooth, cloudsTileSmooth, irradianceCube, specularCube, ambientMap }) t?.Dispose();
         foreach (var t in planetTextures) t?.Dispose();
         simple.Dispose();
         sky.Dispose();
@@ -1137,7 +1145,7 @@ sealed class SkyProg : IDisposable
     public readonly UniformHandle InverseViewProjection, Extra, PlanetSpin, CloudLight, CloudSun, CloudWind, CloudMeitou, CloudKey, CloudKeyDir, CloudAmbient, Has, StarsMeitou, CelX, CelY, CelZ;
     public readonly UniformHandle[] Planet;
     public readonly SkyColourHandles Colours;
-    public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile;
+    public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile, CloudsSmooth, CloudsTileSmooth;
     public readonly Meitou.Rendering.Gpu.Shaders.SamplerInfo? StarsInfo, CloudsInfo;
 
     public SkyProg(GpuContext gpu, string vertex, string fragment, string name)
@@ -1167,6 +1175,8 @@ sealed class SkyProg : IDisposable
         Clouds = P.Sampler("uClouds");
         CloudsNormal = P.Sampler("uCloudsNormal");
         CloudsTile = P.Sampler("uCloudsTile");
+        CloudsSmooth = P.Sampler("uCloudsSmooth");
+        CloudsTileSmooth = P.Sampler("uCloudsTileSmooth");
         if (Stars.IsValid) StarsInfo = P.SamplerInfo(Stars);
         if (Clouds.IsValid) CloudsInfo = P.SamplerInfo(Clouds);
     }

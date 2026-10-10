@@ -218,6 +218,25 @@ game's are black against the stars); `--clouds 0.9` at 11:00 a neutral grey over
 blue-grey). **Verified** Faithful is unchanged: `--faithful clouds` against the commit before the switch, 0 px at 22:24 and 4 px of 1/255 at
 13:00 (two runs of the old build differ by 35 px of 1/255).
 
+### Smoothed textures and the day key (2026-10-11)
+
+The user saw the lit clouds go "pixelated and oily" overhead. Two causes, told apart by experiment (Observed, The Hub at 13:00, "light rain",
+looking 25° up away from the sun):
+
+- **The textures**: `Clouds.dds` and `CloudsTile.dds` are **DXT1 (BC1), 1024², no mips** (**Verified**, the DDS headers), and `Clouds.dds`
+  is not grey: red differs from green or blue by more than 2 on 96 % of texels (up to 91), so only red is the density the game uses. BC1
+  keeps four values per 4 × 4 block between two 5-bit endpoints; the game's flat white hides the steps, the lit clouds turned them into
+  grain and contour lines. Reading the lookups one and a half mip levels coarser softened the grain but not the lines (the alpha still read
+  the full texture). Meitou now makes **smoothed copies** at load (`MeitouClouds.SmoothRed`: the red blurred by a wrapping Gaussian of sigma
+  1.2 texels, in all three channels, mipmapped) and reads them for the whole Meitou layer (both lookups, the tile, the light taps) and the
+  cloud shadows; the Faithful layer still reads the game's textures. Coverage is unchanged: the table above recomputed from the copies
+  differs by at most 0.2 points (c 0.2 to 0.6).
+- **The colours**: with the key light made neutral the warm-and-cyan rim along thin edges went away. SkyX's sun colour is a warm cream at
+  noon, against the greyed blue ambient of the cores. The day key now keeps **0.4 of its saturation** (to its luminance) from a sun height
+  of 0.35 up, full colour below 0.1 (sunsets stay orange) (`MeitouClouds.DayKey`).
+
+Overhead, where a texel spans many pixels, the copies read soft rather than blocky; finer detail there would need a procedural detail layer.
+
 ## Meitou cloud shadows
 
 The `cloudshadows` switch (Meitou by default, `--faithful cloudshadows` for none, as in the game; viewer design; `MeitouClouds.PlaneHeight`,

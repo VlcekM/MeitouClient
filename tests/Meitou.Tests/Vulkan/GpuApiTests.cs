@@ -181,7 +181,7 @@ public class GpuApiTests
     static readonly Dictionary<string, string> LegacyModules = new()
     {
         ["sky simple"] = "4C48F27F2EFC495E4B81B6421F095B12",
-        ["sky"] = "51DBA255E8A61F0E71598896252FD5BF",
+        ["sky"] = "862E5F5779AE2D2FEADE408BF6C50710",
         ["water"] = "8AD06469B9CA4D8ED1DDCEA8DFF07308",
         ["water meitou"] = "6A0DC5BBD26A2D07EFE3BD878B620CFF",
         ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",

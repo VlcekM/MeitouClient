@@ -36,7 +36,7 @@ public class MeitouCloudsTests
         var sun = Vector3.Normalize(new Vector3(0.3f, 0.6f, 0.7f));
         var (direction, colour) = MeitouClouds.Key(sun, SkyPlanet.All[0].Towards, Vector3.Zero);
         Assert.Equal(sun, direction);
-        Assert.Equal(KenshiLighting.SunColour(sun), colour);
+        Assert.Equal(MeitouClouds.DayKey(KenshiLighting.SunColour(sun), sun.Y), colour);
     }
 
     [Fact]
@@ -103,5 +103,35 @@ public class MeitouCloudsTests
         Assert.Equal(Wrap(pz), Wrap(sky.Y), 4);
         // Above the plane the layer keeps a quarter of its distance rather than flipping.
         Assert.Equal(0.25f, MeitouClouds.Parallax(0, 2 * MeitouClouds.PlaneHeight, 0).Scale);
+    }
+
+    [Fact]
+    public void Smoothing_keeps_a_flat_field_wraps_at_the_edges_and_softens_a_step()
+    {
+        const int n = 16;
+        var flat = new byte[n * n * 4];
+        for (int i = 0; i < flat.Length; i += 4) (flat[i], flat[i + 1], flat[i + 2], flat[i + 3]) = (100, 7, 200, 0);
+        var smooth = MeitouClouds.SmoothRed(flat, n, n);
+        for (int i = 0; i < smooth.Length; i += 4) Assert.Equal((100, 100, 100, 255), (smooth[i], smooth[i + 1], smooth[i + 2], smooth[i + 3]));   // red only, to all three
+        // A bright column at x = 0 spreads to both sides, the left one wrapping round to x = n − 1 (the texture tiles).
+        var column = new byte[n * n * 4];
+        for (int y = 0; y < n; y++) column[y * n * 4] = 255;
+        var spread = MeitouClouds.SmoothRed(column, n, n);
+        int At(int x) => spread[(5 * n + x) * 4];
+        Assert.True(At(0) < 255 && At(0) > At(1));
+        Assert.Equal(At(1), At(n - 1));
+        Assert.Equal(0, At(n / 2));
+    }
+
+    [Fact]
+    public void The_key_light_is_greyer_by_day_and_keeps_its_colour_at_sunset()
+    {
+        var warm = new Vector3(1.4f, 1.2f, 0.9f);
+        var noon = MeitouClouds.DayKey(warm, 0.8f);
+        var sunset = MeitouClouds.DayKey(warm, 0.05f);
+        Assert.Equal(warm, sunset);
+        Assert.Equal(Planetshine.Luminance(warm), Planetshine.Luminance(noon), 4);   // the brightness stays
+        Assert.True(noon.X - noon.Z < warm.X - warm.Z);
+        Assert.Equal((warm.X - warm.Z) * MeitouClouds.DayKeySaturation, noon.X - noon.Z, 4);
     }
 }
