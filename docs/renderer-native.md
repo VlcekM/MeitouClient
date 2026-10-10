@@ -3494,24 +3494,38 @@ allocated in generation 0, copied to 1 and again to 2, and died tens of seconds 
 | `Textures.cs` view cache | a boxed `ComponentMapping` key per lookup, 130 MB a minute on the render thread | swizzle packed into the key tuple: 0 |
 | resident zone data (heights, density maps, record groups) | small arrays promoted by every blocking collection | `ZoneArrays.Uninitialized`: pinned object heap, never copied |
 
-**Result** (**Observed**, clean runs, 3,600 frames, whole process; "pauses" is the sum the runtime reports; the collection counts are cumulative as `GC.CollectionCount` gives
-them, so gen0 counts every collection: `6 / 4` with 4 of generation 2 is two blocking collections of generation 0 or 1):
+**Result** (**Observed**, 3,600 frames, whole process, runs that passed the test above; "pauses" is the sum the runtime reports; the collection counts are cumulative as
+`GC.CollectionCount` gives them, so gen0 counts every collection: `6 / 5` with 4 of generation 2 is two blocking collections of generation 0 or 1; (A) = with `MEITOU_ALLOC_STATS=1`):
 
 | Run | gen2 | gen0 / gen1 | pauses | allocated | render thread | frames over 20 / 33 ms |
 |---|---|---|---|---|---|---|
 | baseline `0834d0d` a | 8 | 12 / 9 | 122 ms | 23.7 GB | 1.90 GB | 89 / 13 |
-| baseline c | 9 | 13 / 10 | 104 ms | 24.2 GB | 2.02 GB | 134 / 2 |
-| baseline, `ALLOC_STATS` | 9 | 13 / 10 | 96 ms | 24.9 GB | 2.03 GB | 108 / 5 |
-| new without the pinned heap, a | 3 | 6 / 4 | 88 ms | 12.8 GB | 0.55 GB | 108 / 23 |
-| new without the pinned heap, b | 3 | 6 / 4 | 110 ms | 12.4 GB | 0.29 GB | 124 / 11 |
-| **new, a** | 4 | 6 / 5 | 51 ms | 13.3 GB | 0.55 GB | 61 / 1 |
-| **new, b** | 4 | 6 / 4 | 47 ms | 12.7 GB | 0.42 GB | 63 / 1 |
-| new, `ALLOC_STATS` | 4 | 6 / 5 | 46 ms | 12.9 GB | 0.42 GB | 127 / 24 |
-| new, `ALLOC_STATS`, second | 4 | 6 / 4 | 106 ms (one pause of 66.9 ms) | 12.3 GB | 0.29 GB | 68 / 2 |
+| baseline b | 9 | 13 / 10 | 104 ms | 24.2 GB | 2.02 GB | 134 / 2 |
+| baseline c (A) | 9 | 13 / 10 | 96 ms | 24.9 GB | 2.03 GB | 108 / 5 |
+| baseline d (A) | 10 | 15 / 11 | 103 ms | 25.3 GB | 2.03 GB | 122 / 0 |
+| baseline e (A) | 9 | 13 / 10 | 110 ms | 23.8 GB | 1.90 GB | 81 / 4 |
+| new, before the pinned heap, a | 3 | 6 / 4 | 88 ms | 12.8 GB | 0.55 GB | 108 / 23 |
+| new, before the pinned heap, b | 3 | 6 / 4 | 110 ms | 12.4 GB | 0.29 GB | 124 / 11 |
+| **new** a | 4 | 6 / 5 | 51 ms | 13.3 GB | 0.55 GB | 61 / 1 |
+| **new** b | 4 | 6 / 4 | 47 ms | 12.7 GB | 0.42 GB | 63 / 1 |
+| **new** c | 4 | 6 / 5 | 43 ms | 13.6 GB | 0.42 GB | 88 / 0 |
+| **new** d | 4 | 6 / 5 | 49 ms | 13.8 GB | 0.42 GB | 78 / 2 |
+| **new** e (A) | 4 | 6 / 5 | 46 ms | 12.9 GB | 0.42 GB | 127 / 24 |
+| **new** f (A) | 4 | 6 / 5 | 54 ms | 12.3 GB | 0.29 GB | 46 / 0 |
+| **new** g (A) | 4 | 6 / 5 | 59 ms | 13.7 GB | 0.42 GB | 131 / 1 |
 
-Allocation is down 48-50%, the render thread's from about 2.0 GB to 0.3-0.55 GB, the blocking collections from 4 to 2 a flight (10 to 21 ms, the one 67 ms pause is the run
-with the sum of 106), generation-2 collections from 8-9 to 4. The worst frames of the clean new runs were particles, water and `gpu-wait`, except the frames of the collections
-themselves (`GC pause 20.5`, `66.1`, `6.0` in the `worst` lines).
+Allocation is down 48-50%, the render thread's from about 2.0 GB to 0.3-0.55 GB, generation-2 collections from 8-10 to 3-4 a flight (about 2.7 a minute of the flight itself,
+not the 2 aimed at), the blocking collections of generation 0 or 1 from 4-5 to 2 (the baseline's were 10 to 27 ms, the new build's 8 to 21 ms), the sum of pauses from 96-122 ms to 43-59 ms
+(the pinned heap is the half of that: 88 and 110 ms before it). The `worst` lines of the new runs are particles, water and `gpu-wait` (the other fixes' causes) and the collections' own
+frames (`GC pause 20.5`, `6.0`). No pause under 5 ms: the background collections' two suspensions are 0.5 to 6.6 ms, the blocking ones 8 to 21 ms, and those are not proportional to the
+promoted bytes (28 MB took 20.8 ms, 78 MB took 19.5 ms in the baseline), nor to the time to stop the threads (0.0 to 4.0 ms in the instrumented runs).
+
+**Outliers, not explained.** Two more runs of the final build, both with `ALLOC_STATS`, are left out of the table because of one long pause each: a blocking generation-0 collection of
+66.9 ms (106 ms of pauses all told), and a background one whose second suspension took 124.2 ms, 69.5 ms of it waiting for the threads to stop (140 ms all told; that frame also waited
+118 ms for the GPU). The second ran while `dotnet build` / `dotnet run` of mine were going on the same machine, the first while other agents' work may have been; the seven runs in the table
+(new a to g, four of them, c, d, f and g, after these two and with nothing of mine running) had none, and none of the five baseline runs had. A pause that is mostly threads taking 70 ms to reach a safe point looks like starvation of a
+below-normal worker (the thread that triggers a collection suspends the others) on a busy CPU rather than anything the changes do, but it was **not isolated**: if it shows up on a
+quiet machine, `ALLOC_STATS` now prints the stop time of every pause to start from.
 
 **Picture check** (**Observed**, `--world --town "The Hub" --radius 2 --distance 3000 --pitch 20 --size 1600x900 --screenshot x.png`, and the same with `--radius 3 --distance 9000 --pitch 15`,
 base `0834d0d` against the final build with its own re-keyed layout cache, `meitou-tools image-diff`): the two base pictures of a view differ from each other by mean 0.0062 and max 9
@@ -3522,8 +3536,8 @@ base `0834d0d` against the final build with its own re-keyed layout cache, `meit
 refine and load jobs, 3.2 GB in about 680 jobs of 3-7 MB, a refine is a whole reload at another mip level), the DDS reads (1.0 GB), the terrain height windows (0.95 GB) and layer
 decodes (0.6 GB + 0.4 GB), `BuildingLodMesh` (0.7 GB) and the grass pages (1.4 GB in 10,000 jobs, small arrays awaiting upload). They all end in an upload step, which is the other
 agent's code (`UploadQueue`, `Uploader`, the atlas upload): pooling them means returning the buffer after the last upload step has run, and the level arrays would be power-of-two sized,
-which `ImpostorTextures.BytesFor` and the upload read as `Length`. Blocking pauses of 10 to 21 ms (and no pause under 5 ms) remain: not proportional to the promoted bytes (28 MB took
-20.8 ms, 78 MB took 19.5 ms in the baseline).
+which `ImpostorTextures.BytesFor` and the upload read as `Length`. The impostor refines are also the most behaviour-bound churn (450-700 jobs a flight as the plan changes with the
+camera): fewer would need hysteresis in the plan, which changes pictures. What the blocking collections of 8 to 21 ms spend their time on is **Unknown** (not the copied bytes, not the thread stop).
 
 **GC settings tried** (**Observed**, not clean runs: a second viewer shared the card, VRAM budget 6.3-7.4 GB, so only the same build under the same conditions is comparable):
 `DOTNET_GCgen0MaxBudget=0x6000000` (96 MB a heap, 384 MB over the four) gave, in three runs, 4-6 generation-2 collections, 10-14 collections in all and 108-203 ms of pauses; the
