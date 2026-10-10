@@ -35,7 +35,8 @@ no object uses that material, and the exe never names it. The Earth-moon disc of
 ### Stars (Verified (decompiled): `SkyX_x64.dll` `MeshManager::updateGeometry`, `SkyX::update`, `SkyX_Skydome.hlsl`, the sky update FUN_14066f190)
 
 - **Mapping.** The dome's texture coordinate (`TEXCOORD1`) per vertex is `4 (1 + t · (cos az, sin az))` with `t` = the zenith angle / 90°
-  (the vertex's ring index over the rings above the horizon) and `(cos az, sin az)` the direction's xz normalised: u follows +x, v +z.
+  (the vertex's ring index over the rings above the horizon) and `(cos az, sin az)` the direction's xz normalised. That u follows +x and v +z
+  is **Observed** (the decompiled stores lost their offsets; a swap would mirror the star pattern and needs a side-by-side with the game).
   So the dome is an **azimuthal-equidistant** map round the zenith. The vertex shader scales it by 0.1, so the zenith samples (0.4, 0.4) and
   the horizon is a circle of radius 0.4 round it: the visible sky covers 0.8 of the 4096² texture, about 18 texels per degree.
 - **Filtering.** `filtering linear linear none` (no mip filter): the top level only, 4096², wrap addressing.
