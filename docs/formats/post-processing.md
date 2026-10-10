@@ -228,4 +228,5 @@ Details, options and costs: [render-post.md](../render-post.md).
 | Grading, vignette | none | grading optional (`--grade`, Tab slider: saturation 1.12, contrast 1.06; off by default); no vignette | Kenshi: none |
 | FXAA | FXAA 3.11 quality, green as luma, subpix 0.75, thresholds 0.166 / 0.0833, preset-12 search steps, on the LDR composite (Faithful anti-aliasing; `--no-fxaa`) | TAA, FSR or DLSS instead (Meitou anti-aliasing) | Kenshi: FXAA 3.11, 0.75 |
 | Dither | off | on | not in Kenshi |
+| Night grading | none (the game has no grading; night is the day's colours at the exposure's night floor, see [render-post.md](../render-post.md) "Night grading" for why the ground reads orange) | scotopic blue shift by the scene's mean luminance (`nightgrade` switch, `--night-grade`); the viewer's own | Kenshi: none (**Verified**: the composite is exposure only) |
 | Heat haze | the game's, after FXAA (`--no-heat-haze`; `--heat-haze <x>` replaces the weather's field) | at half strength (`heathaze` switch, `--heat-haze-strength`), after the composite when a temporal upscaler runs | Kenshi: `HeatHaze` node, on by default |

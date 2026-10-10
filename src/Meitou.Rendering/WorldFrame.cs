@@ -1173,6 +1173,7 @@ static class WorldFrame
             sliders.Add(new Slider("Grading (0 = game)", 0, 1, () => post.Options.Grade ? 1 : 0, v => post.Options.Grade = v >= 0.5f,
                 Text: v => v >= 0.5f ? $"saturation {post.Options.Saturation:0.00}, contrast {post.Options.Contrast:0.00}" : "off (as the game)"));
             sliders.Add(new Slider("Heat haze strength (1 = game)", 0, 3, () => post.Options.HeatHazeStrength, v => post.Options.HeatHazeStrength = MathF.Round(v * 20) / 20, "0.00"));
+            sliders.Add(new Slider("Night grading strength (0 = game)", 0, 1, () => post.Options.NightGradeStrength, v => post.Options.NightGradeStrength = MathF.Round(v * 20) / 20, "0.00"));
             sliders.Add(new Slider("Light shafts strength", 0, 1, () => post.Options.ShaftStrength, v => post.Options.ShaftStrength = MathF.Round(v * 20) / 20, "0.00"));
             sliders.Add(new Slider("Light shafts air (0 = none)", 0, 4, () => post.Options.ShaftAir, v => post.Options.ShaftAir = MathF.Round(v * 20) / 20, "0.00"));
             sliders.Add(new Slider("Light shafts air at dawn and dusk (x)", 0, 6, () => post.Options.ShaftAirDawn, v => post.Options.ShaftAirDawn = MathF.Round(v * 10) / 10, "0.0"));
