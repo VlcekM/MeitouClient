@@ -667,7 +667,9 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // Absorption: in clear water red goes first, then green, so the shallows over sand are turquoise and the deep water dark; a
                 // strongly coloured biome water (a swamp's olive, a red lake) filters towards its own colour instead. The biome's opacity (the
                 // game's alpha per unit of depth) sets how fast. The floor fades out from the see-through distance (the game: opaque at 4000) to 1.5 times it.
-                vec3 sigma = mix(vec3(4.5, 1.6, 1.1), 1.0 + 3.0 * (1.0 - hue), smoothstep(0.15, 0.5, saturation));
+                // The clear-water spectrum only for bright water: dark grey water (Shark's ForestLand, 20 20 20) is a murky film in the game, and
+                // red going first turned the mud under it teal; it filters by its own hue instead.
+                vec3 sigma = mix(1.0 + 3.0 * (1.0 - hue), vec3(4.5, 1.6, 1.1), (1.0 - smoothstep(0.15, 0.5, saturation)) * smoothstep(0.06, 0.3, wLuma));
                 vec3 transmit = exp(-depth * max(pa.w, 0.002) * uClarity.x * sigma) * (1.0 - smoothstep(uClarity.z, uClarity.z * 1.5, dist));
                 colour = mix(under * transmit + body * (1.0 - transmit), reflected, schlick * gloss);
             }

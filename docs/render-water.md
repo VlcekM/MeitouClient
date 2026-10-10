@@ -145,7 +145,10 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
     blending (the game's alpha from depth). **Absorption**: what is under the water is dimmed per channel by exp(−σ L), σ = the biome's
     opacity (its parameter map's alpha, the game's alpha per unit of depth) × (4.5, 1.6, 1.1), L the path through the water to the terrain
     (so in clear water red goes first: turquoise shallows over sand, dark deep water; a strongly coloured biome water, by the saturation
-    of its colour map, filters towards its own colour instead: olive swamps, red lakes), and the water's own colour scatters in for what is absorbed; the
+    of its colour map, filters towards its own colour instead: olive swamps, red lakes; since 2026-10-10 so does *dark* grey water, the clear
+    spectrum fading in with the colour's luma from 0.06 to 0.3: Shark's ForestLand water is 20, 20, 20 with visibility 10 (a thin colourless film
+    over the mud in the game and in Faithful), and red going first had turned the mud under it teal, **Observed** against a base-game screenshot;
+    the bright clean waters (Ashlands, Kenshi Bowl, White Inlet, Blister Sands) are unchanged, Port South's sea still teal), and the water's own colour scatters in for what is absorbed; the
     floor fades out by 4400 units, as the game's water turns opaque at 4000. **Clarity** (2026-10-10, Tab panel, Meitou only): L is the depth
     over view.y (floored at 0.05), so at grazing angles it is up to 20 times the depth and distant shallows read as opaque body colour, which
     is why the water looked see-through only near the eye. "Water clarity x" divides σ (also the alpha of the `--no-water-refraction`
