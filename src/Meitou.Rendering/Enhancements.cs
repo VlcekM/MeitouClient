@@ -55,7 +55,8 @@ public static class Enhancements
     public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<float> hazeStrength, Action<float> setHazeStrength, Func<bool> meitouShadows, Action<bool> setMeitouShadows,
         Func<bool> meitouRange, Action<bool> setMeitouRange, Func<bool> impostors, Action<bool> setImpostors, Func<bool> meitouReach, Action<bool> setMeitouReach,
         Func<bool> meitouWater, Action<bool> setMeitouWater, Func<bool> foliageLod, Action<bool> setFoliageLod, Func<bool>? gi = null, Action<bool>? setGi = null,
-        Func<bool>? nightHaze = null, Action<bool>? setNightHaze = null, Func<bool>? planetshine = null, Action<bool>? setPlanetshine = null) =>
+        Func<bool>? nightHaze = null, Action<bool>? setNightHaze = null, Func<bool>? planetshine = null, Action<bool>? setPlanetshine = null,
+        Func<bool>? stars = null, Action<bool>? setStars = null) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -106,6 +107,9 @@ public static class Enhancements
         new("planetshine", "Planetshine", "flat night", "planet light",
             planetshine ?? (() => false), setPlanetshine ?? (_ => { }),
             "the game lights the night land with a flat, directionless ambient; Meitou lets the big planet light it, as a sunlit sphere would (its phase, colour and size decide how much; the Tab slider scales it), from its fixed direction, with the shadows, the water's glint and the probes' light following (docs/formats/sky.md \"Planetshine\")"),
+        new("stars", "Night sky", "starfield texture", "procedural",
+            stars ?? (() => false), setStars ?? (_ => { }),
+            "the game lays one 4096 pixel starfield texture over the dome (blobby purple stars, a smeared brown nebula, blurred when it is magnified); Meitou draws point stars (a few thousand naked-eye ones and a faint background, colours from blackbody temperatures, one or two pixels wide at any resolution) and a Milky Way with dust lanes, turning about the sun's axis once a game day, dimming and reddening towards the horizon, the low ones twinkling (docs/formats/sky.md, \"Meitou night sky\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

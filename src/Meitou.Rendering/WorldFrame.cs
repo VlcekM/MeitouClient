@@ -116,6 +116,7 @@ sealed class WorldOptions
     public bool ThinNightHaze = true; // the Meitou night switch (default): the haze thinned at night (SkyRenderer.ThinNightHaze)
     public bool Planetshine = true; // the Meitou planetshine switch (default): the big planet lights the night (SkyRenderer.Planetshine)
     public float PlanetshineStrength = Enhancements.MeitouPlanetshineStrength; // x the physical value (--planetshine-strength, a Tab slider)
+    public bool MeitouStars = true;   // the Meitou stars switch (default): the procedural night sky (SkyRenderer.MeitouStars); false: the game's starfield texture
     /// <summary><c>--weather</c>: a WEATHER record's name forces that weather at the camera; null or "auto" lets the scheduler (docs/formats/weather.md) run.</summary>
     public string? Weather;
     /// <summary>Test overrides of the weather's surface values (<c>--wetness</c>, <c>--dust</c>, <c>--rain</c>); null: the forced weather's.</summary>
@@ -333,7 +334,8 @@ sealed class WorldOptions
     internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
         () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v,
         () => o.MeitouWater, v => o.MeitouWater = v, () => o.FoliageLod, v => o.FoliageLod = v, () => o.GiProbes, v => o.GiProbes = v,
-        () => o.ThinNightHaze, v => o.ThinNightHaze = v, () => o.Planetshine, v => o.Planetshine = v);
+        () => o.ThinNightHaze, v => o.ThinNightHaze = v, () => o.Planetshine, v => o.Planetshine = v,
+        () => o.MeitouStars, v => o.MeitouStars = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -884,6 +886,7 @@ static class WorldFrame
         gpu.Sky.ThinNightHaze = o.ThinNightHaze;
         gpu.Sky.Planetshine = o.Planetshine;
         gpu.Sky.PlanetshineStrength = o.PlanetshineStrength;
+        gpu.Sky.MeitouStars = o.MeitouStars;
         if (scene.Database is { } skyDb)
         {
             gpu.Sky.LoadWorld(install, skyDb);   // the ambient map and the CONSTANTS exposure band (docs/formats/lighting.md)
@@ -1064,7 +1067,8 @@ static class WorldFrame
             // Without probes (no --gi, no ray queries) the switch reads off: the picture has the flat ambient whatever it is set to.
             () => gpu() is { } giGpu ? giGpu.Probes?.Enabled ?? false : o.GiProbes, v => { o.GiProbes = v; if (gpu()?.Probes is { } p) p.Enabled = v; },
             () => gpu()?.Sky.ThinNightHaze ?? o.ThinNightHaze, v => { o.ThinNightHaze = v; if (gpu() is { } g) g.Sky.ThinNightHaze = v; },
-            () => gpu()?.Sky.Planetshine ?? o.Planetshine, v => { o.Planetshine = v; if (gpu() is { } g) g.Sky.Planetshine = v; });
+            () => gpu()?.Sky.Planetshine ?? o.Planetshine, v => { o.Planetshine = v; if (gpu() is { } g) g.Sky.Planetshine = v; },
+            () => gpu()?.Sky.MeitouStars ?? o.MeitouStars, v => { o.MeitouStars = v; if (gpu() is { } stars) stars.Sky.MeitouStars = v; });
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null,
@@ -1265,6 +1269,8 @@ static class WorldFrame
         gpu.Sky.StarHours = gpu.GameHours ?? gpu.HeatHazeHours;
         gpu.Sky.Day = gpu.Weather?.Day ?? 0;
         gpu.Sky.Hour = hour;
+        gpu.Sky.Clock = scene.Clock;
+        gpu.Sky.StarSeconds = (float)(gpu.HeatHazeHours / HeatHaze.HoursPerSecond % 3600);   // the twinkle's clock: still for a picture
         var (colours, light) = gpu.Sky.Prepare(sun, eye.Y, fogDistance + 3 * Math.Max(eye.Y, 0));
         // The game's exposure (0.55 over the mean luminance, clamped to its band) goes with the game's sky and light; the simple sky keeps a plain scale.
         if (gpu.Post is { } exposed) exposed.AutoExposure = gpu.Sky.Physical ? (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance) : null;

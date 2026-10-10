@@ -405,6 +405,57 @@ Everything is in `Planetshine` (`NightSky.cs`, tests `PlanetshineTests`) and `Sk
   keep the sun's `Daylight`; the planet's light passing through the atmosphere (reddening near the horizon); a planet eclipsed by the land.
 - Screenshots (`C:\Temp\meitou-planetshine\` while the work was done; `--at -51468,-14324 --radius 2 --distance 3000 --pitch 8 --yaw 135
   --weather Default --size 1280x720`, time 23.2, 0, 2 and 4; `--faithful planetshine` beside the default; yaw 315 faces the planet).
+### Meitou night sky (the `stars` switch; the viewer's own design, not the game's)
+
+Faithful (`--faithful stars`) is the game's starfield texture as above, pixel for pixel. Meitou (the default) replaces the texture with a procedural
+sky in the same sky pass (`SkyRenderer`, GLSL `starPoints` and the Milky Way lookup; the reference math is `MeitouNightSky.cs` in `Meitou.Data.World`
+with tests in `MeitouNightSkyTests`). Nothing here is read from the game except the latitude and the sun's path. Status of every claim: **Observed**
+(screenshots in the viewer, cost measured on an RTX 4070 shared with other programs, so the minimum of five runs) unless it says **Verified** (a unit test).
+
+- **Rotation** (`CelestialSphere`). `SkyClock.SunDirection` puts the sun on the plane spanned by (1, 0, 0) and (0, cos lat, sin lat), so it turns about
+  their cross product, (0, −sin lat, cos lat); the celestial pole is the end of that axis above the horizon, (0, sin lat, −cos lat), 54° up towards −z
+  (the side opposite the noon sun, +z). The stars turn about it the way the sun does (up from +x, over +z, down to −x) once per game day, driven by the
+  game's day and hour (`SkyRenderer.Day`, `Hour`), with a fixed turn at hour 0 (`PhaseOffset`, −60°, a viewer choice that has the Milky Way high in the
+  south and west during the game's night, 23 to 5). **Verified**: the axis is perpendicular to the sun's direction at any hour, the pole is at the latitude,
+  a star on the equator rises east, culminates due south at 36° and turns the sun's way, a day later everything is back. The sun's own clock is not
+  uniform (18 h of day and 6 h of night for each half turn) while the stars' is, so they share the axis but not the rate. The planets stay where the
+  game puts them (they are drawn after the stars and cover them). There is no yearly drift: the same stars cross at the same hour every night
+  (**Unknown** whether to add one).
+- **Point stars** (`StarField`). A direction in celestial coordinates → a cube face → a grid of cells, in three layers: bright (28 cells a side, 1800 stars
+  of magnitude −2 to 4.5, a flatter slope so a few bright ones show on any screen), main (64 a side, 8100 stars, 4.5 to 6.5) and faint (160 a side, 45000,
+  6.5 to 8.2), each a power law of about 3.16 times more stars per magnitude. A cell's chance of a star is the layer's density times the cell's solid angle
+  (a cube face cell shrinks towards the corners; **Verified**: no denser at the face centres). The faint layers gather towards the Milky Way. A one-word
+  hash of the cell decides presence, three more words give the position in the cell, the magnitude, a colour and a twinkle phase. A star is a Gaussian of
+  0.7 pixels (sigma) with its energy kept, peak `brightness / 2πσ²`, the brightest with a wider halo; the distance is taken in pixels through the
+  derivatives of the direction, so the stars are the same 1 to 2 pixel points at 720p and at 4K and never squares (a star's spot is never cut at a cell
+  edge: the nearest neighbouring cells are searched, and none sits within a quarter cell of a face edge). Brightness is `10^(−0.4 · 0.7 · m)`: the real
+  sky's range compressed so faint stars show beside bright ones (**Verified**: 25 times between magnitudes 1 and 6, not 100). Colours: B−V index from a
+  mixture of blue, white, yellow and red stars → temperature (Ballesteros) → a blackbody's tint (Kim's fit of the Planckian locus), kept 30% saturated,
+  at luminance 1 (a table of 32 that a hash indexes). **Verified**: about 4800 stars brighter than magnitude 6 after the faint layers' enrichment (thousands,
+  not tens of thousands), 30 to 250 brighter than magnitude 1.
+- **Milky Way** (`MilkyWay`). A band round a great circle inclined 62° to the celestial equator (so at latitude 54° it comes within 8° of the zenith), a
+  flattened bulge at declination +15°, and nothing taken from Earth's sky. A 3D noise of the direction (no cube seams): a haze of unresolved stars with
+  structure at several scales, mostly small ones down to the cube map's texel (the broad swells are weak, so it reads as grain, not clouds), thin dark rifts that
+  run along the plane (noise stretched across the band, warped; ridged), a thin rift through the bulge, a few tiny dark clouds; bluish white, warm cream towards the bulge,
+  the dust taking the blue first. Baked once on the CPU at the first use (about 1 s on all cores for 512² × 6, RGBA16F, box-filtered mip levels, 17 MB)
+  into a cube map in celestial coordinates, so it turns with the stars. Brightness is a faint glow, well under the starfield texture's nebula
+  (`MilkyWay.Scale`, `SkyRenderer.MilkyWayGain`; peak lumps about 0.1 in the texture's units, the nebula runs 0.1 to 0.3 over most of its area), the sky between the band and the stars stays black.
+- **Horizon** (`NightAtmosphere`). Extinction by the air mass (Kasten and Young) with e^−k per air mass of (0.08, 0.13, 0.22) for red, green, blue: low stars
+  dim and redden; a ramp takes everything to 0 between 3.5° and 0.5° altitude. Stars twinkle only where the air mass is above 1.8 (below about 33°): two slow
+  sines per star, up to ±50% at the horizon, none overhead; the clock is the viewer's (still for a screenshot).
+- **Brightness and the fade**. The same term as the game's: SkyX's night factor × `(0.35 + saturate(−sunY · 0.45)) · 2`, so the stars come out as the
+  sky darkens exactly as the texture's did, and the units are the starfield texture's (peak stars at about the texture's own values, the Milky Way far
+  under its nebula). Mean luminance of the same view, Meitou against Faithful: 0.011 against 0.048 looking straight up, 0.029 against 0.043 at the band
+  (the point stars match the texture's bright stars; the Milky Way is deliberately much fainter than its nebula, which was the first thing to go: a
+  first, brighter version read as overcast cloud). Both stay under the exposure band's floor (0.28, the night's adapted exposure ×1.964 in either), so
+  switching does not move the exposure. Sampled outside the Meitou branch the sky pass is unchanged (Faithful's picture is byte-identical to
+  the one before the switch existed). While the sun is above 0.3 the stars are skipped altogether (SkyX's night factor is 0 then).
+- **Cost** (sky pass, 1920 × 1080, RTX 4070): Faithful 0.12 ms, Meitou 0.31 ms (the Milky Way 0.04, the layers 0.05 / 0.07 / 0.09 each), 0.24 ms with the
+  faint layer left out; 0.11 ms by day (skipped). Per pixel the work is bounded: three layers, each looking at one to four cells (a layer's cells that
+  can reach the pixel at all), an early test against the largest chance before the exact one, the three-word hash only for cells that hold a star. An
+  integrated GPU draws the first two layers (`StarField.IntegratedLayers`; `MEITOU_FORCE_INTEGRATED=1` shows it elsewhere, `MEITOU_STAR_LAYERS=0..3` sets the layers).
+- **Water**: the reflection pass draws the sky with the same program and the reflected view, so the reflected sky has the same stars (the derivatives give the
+  pixel scale of the reflection target).
 
 ### Using the atmosphere in a new shader
 
