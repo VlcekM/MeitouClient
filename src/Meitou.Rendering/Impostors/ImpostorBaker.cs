@@ -510,13 +510,18 @@ public sealed class ImpostorBakeJob : IDisposable
         {
             if (!TexturesReady()) return false;
             var t0 = watch.Elapsed.TotalMilliseconds;
+            if (UploadProfile.On) UploadProfile.Take();
             mainParts = baker.Upload(meshes.Main, source.IsRock);
             leavesParts = leaves is not null ? baker.Upload(meshes.Leaves!) : [];
+            double t1 = watch.Elapsed.TotalMilliseconds;
             (large, depth, small) = baker.RentTargets(size, gpu.Frame.PreFrame.Handle);
             started = true;
             upload += watch.Elapsed.TotalMilliseconds - t0;
+            SlowNote("start", $"meshes {t1 - t0:0.0} ms, targets {watch.Elapsed.TotalMilliseconds - t1:0.0} ms", watch.Elapsed.TotalMilliseconds - t0);
         }
         // Rows whose frame has completed go to the assembler, in order, one after the other on a worker.
+        double tRead = watch.Elapsed.TotalMilliseconds;
+        if (UploadProfile.On) UploadProfile.Take();
         while (rows.Count > 0 && ReadbackBuffer.Completed(gpu, rows[0].Frame))
         {
             var (row, _, buffer) = rows[0];
@@ -541,9 +546,11 @@ public sealed class ImpostorBakeJob : IDisposable
             });
             assembled++;
         }
+        SlowNote("read back", $"rows handed to the assembler {assembled}", watch.Elapsed.TotalMilliseconds - tRead);
         if (recorded < size.Grid)
         {
             var t0 = watch.Elapsed.TotalMilliseconds;
+            if (UploadProfile.On) UploadProfile.Take();
             var cmd = gpu.Frame.PreFrame;
             cmd.BeginLabel("impostor bake");
             for (int k = 0; k < RowsPerStep && recorded < size.Grid; k++, recorded++)
@@ -556,11 +563,13 @@ public sealed class ImpostorBakeJob : IDisposable
             cmd.EndLabel();
             cmd.Invalidate();   // the baker bound its own pipelines and sets
             render += watch.Elapsed.TotalMilliseconds - t0;
+            SlowNote("record", $"rows up to {recorded} of {size.Grid}", watch.Elapsed.TotalMilliseconds - t0);
             return false;
         }
         if (assembled < size.Grid) return false;
         if (finish is null)
         {
+            double tFin = watch.Elapsed.TotalMilliseconds;
             ReleaseGpu();
             var previous = chain;
             bool compress = baker.Compress;
@@ -573,12 +582,21 @@ public sealed class ImpostorBakeJob : IDisposable
                 lock (this) encode += Stopwatch.GetElapsedTime(t).TotalMilliseconds;
                 return atlas;
             });
+            SlowNote("finish", "targets given back, encode started", watch.Elapsed.TotalMilliseconds - tFin);
         }
         if (!finish.IsCompleted) return false;
         if (finish.IsCompletedSuccessfully) Result = finish.Result;
         else Error = finish.Exception?.InnerException ?? new InvalidOperationException("impostor bake failed");
         lock (this) baker.LastTimes = new ImpostorBakeTimes(upload, render, filter, encode);
         return true;
+    }
+
+    /// <summary>MEITOU_STREAM_LOG=1: a line for a part of a bake step that took 3 ms or more, with what the profile saw meanwhile (the driver calls, the collector).</summary>
+    void SlowNote(string part, string what, double ms)
+    {
+        if (!UploadProfile.On) return;
+        string parts = UploadProfile.Take();
+        if (ms >= 3) Console.WriteLine($"slow bake {part} {source.Name}: {ms:0.0} ms, {what} [{parts}]");
     }
 
     /// <summary>Waits for the workers (offline: <see cref="ImpostorBaker.Bake"/> steps until done instead).</summary>
