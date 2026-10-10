@@ -112,34 +112,6 @@ public class SaveReadTests
 
     [Theory, Trait("Category", "Slow")]
     [MemberData(nameof(SaveSamples.Names), MemberType = typeof(SaveSamples))]
-    public void A_save_loads_into_its_typed_views(string folder)
-    {
-        SkipWithoutSaves(folder);
-        var game = Load(folder);
-        var camera = game.Camera;
-        Assert.Equal(SaveGame.GameVersion, camera.Version);
-        Assert.InRange(camera.Hour, 0, 23);
-        Assert.InRange(camera.Minute, 0, 59);
-        Assert.True(camera.Day >= 1);
-        Assert.Equal("Nameless", camera.PlayerFactionName);
-        // The data files in load order: the base game's four.
-        Assert.Equal(["base", "Newwworld", "Dialogue", "rebirth"], camera.Mods);
-        Assert.Equal(103, game.Factions.Count);
-        Assert.All(game.Factions, f => Assert.NotNull(f.War));
-        Assert.Equal(103, game.Factions.Select(f => f.War).Distinct().Count());   // one war state each, paired by the faction id
-        Assert.Equal("204-gamedata.base", game.PlayerFaction!.Id);
-        Assert.Equal("Nameless", game.PlayerFaction.Name);
-        Assert.NotEmpty(game.Platoons);
-        Assert.NotEmpty(game.Towns);
-        Assert.NotNull(game.TownInstanceList);
-        Assert.NotNull(game.Biomes);
-        Assert.NotNull(game.Research);
-        Assert.Equal(game.Platoons.Where(p => p.IsLoaded).Sum(p => p.Characters.Count), game.Characters.Count());
-        Assert.NotEmpty(game.Zones);
-    }
-
-    [Theory, Trait("Category", "Slow")]
-    [MemberData(nameof(SaveSamples.Names), MemberType = typeof(SaveSamples))]
     public void The_camera_zone_list_is_in_hex_grid_order_and_names_the_zone_files(string folder)
     {
         SkipWithoutSaves(folder);

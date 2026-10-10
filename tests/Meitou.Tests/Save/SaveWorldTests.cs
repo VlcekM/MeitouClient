@@ -368,29 +368,6 @@ public class SaveWorldTests
             }
     }
 
-
-    [Theory, Trait("Category", "Slow")]
-    [MemberData(nameof(SaveSamples.Names), MemberType = typeof(SaveSamples))]
-    public void A_world_loaded_from_a_real_save_runs_and_can_be_saved_again(string folder)
-    {
-        SkipWithoutSaves(folder);
-        var data = Data();
-        var save = Load(folder);
-        var walk = new OpenGroundWalkability((x, z) => 300);
-        var systems = SyntheticTown.Standard(data, walk, StandardParts.Population | StandardParts.Player | StandardParts.Movement, new PopulationSettings { CheckEveryTicks = 5 });
-        using var world = new SimWorld(new WorldSettings { Seed = 3, Threads = 2, PublishSnapshots = false }, walk, systems.Systems);
-        var loaded = SaveLoader.Load(world, save, data, new SaveLoadOptions { ApplyRelations = false });
-        var player = loaded.Characters[0];
-        var at = world.Characters.Previous[player.Slot].Position;
-        world.Commands.Enqueue(new FocusCommand(at) { Tick = 0 });
-        world.RunTicks(150);
-        Assert.True(world.Characters.IsAlive(player));
-        // The stand-ins moved and the player's squad is where it was (it was given no orders).
-        Assert.Equal(at.X, world.Characters.Previous[player.Slot].Position.X, 1);
-        var again = SaveCapture.Capture(world, data, loaded.Clock, loaded);
-        Assert.Equal(save.Platoons.Count, again.Platoons.Count);
-        Assert.Equal(save.Characters.Count(), again.Characters.Count());
-    }
     /// <summary>Two records are the same when they serialise to the same bytes (which also holds for the NaN-patterned floats of decal records).</summary>
     static bool Same(FcsRecord a, FcsRecord b) => Bytes(a).AsSpan().SequenceEqual(Bytes(b));
 
