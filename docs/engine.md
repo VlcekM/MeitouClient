@@ -254,7 +254,10 @@ command-line values win). Off draws the scene at the display size (the default) 
 The render thread is above normal priority, the streaming threads below normal (`BackgroundWork`), and its parallel loops (foliage culling)
 run on a few above-normal job threads (`RenderJobs`). The game and the viewer run server GC on four heaps without tiered compilation
 (DECISIONS 19). The flight benchmark (`--fly-benchmark`) prints the stage means, the shadow casters' means, GC totals and the worst frames
-with their stages and GC pauses; `MEITOU_JOB_STATS=1` adds what each streaming call site allocated and cost.
+with their stages and GC pauses; `MEITOU_JOB_STATS=1` adds what each streaming call site allocated and cost (only the `BackgroundWork` jobs: pool threads such as
+the shore bake's are not in it), and `MEITOU_ALLOC_STATS=1` lists every GC (generation, blocking or background, reason, time suspended, frame, heap sizes after) and the allocation by thread
+(render / other) and type, large-object-heap (LOH) and pinned-heap (POH) allocations marked, how long the threads took to stop for each pause, and the generation sizes after it, from the
+runtime's own events (`AllocationLog`, allocation sampled every 100 KB; docs/renderer-native.md 8.21).
 A draw through `VkGl` cost 1.5-2.3 µs of CPU in Release and 3.9-5.3 µs in Debug (measured before the native port, "Frame cost breakdown" below; VkGl is gone since phase 8), so draw counts matter more than triangles: meshes that repeat are drawn instanced (the
 TERRAIN-mode rocks were one draw each and cost ~23 ms of shadow pass in a forest; docs/render-shadows.md, "Shadow pass cost").
 

@@ -445,6 +445,17 @@ start reads it back instead of placing it again. In the Shark swamp view (`--vie
   impostors) was last still going during the foliage settle.
 - **Pictures**: **Verified** (2026-10-09): `--view swamp --screenshot` is byte-identical (`cmp`) before the change, on the cold start that fills the cache, and on the warm start that reads it.
   The layout is independent of the order zones are placed in (three workers place them in a different order every start): **Observed**, same comparison.
+- **Grouped read (2026-10-10)**: the viewer's zone job used to read a zone back whole (a `FoliageInstance[]` of 56-byte structs, then a `GroupBy` and the renderer's 96-byte
+  `FoliageInstanceRecord`s: 3.4 GB a minute of large-object garbage while travelling, `FoliageRenderer.cs:492` in `MEITOU_JOB_STATS`). `FoliageLayoutCache.TryLoadGrouped` reads the file into a
+  pooled buffer (`ArrayPool<byte>.Shared`, returned when the read ends: nothing decoded refers to it) and `GroupDisk` goes over the 40-byte disk records twice, counting each (mesh, layer) and
+  then writing the records straight into exact-size arrays; `FoliageWorld.LoadGrouped` is the entry the renderer calls (a miss places the zone and writes the entry as before, then
+  groups it with `FoliageGrouping.Group`). Groups come in the order each pair first appears, instances in the order placed, the same as before. **Verified**:
+  `FoliageLayoutCacheTests.A_zone_read_back_grouped_equals_the_zone_grouped_after_reading_it_whole` (same groups, bit-identical records, flags and grass for a zone read whole and one
+  read grouped). The disk format is unchanged but Meitou.Data's sources changed, so the key did: a cache written before is a cold start once.
+  What a resident zone keeps (the 129² heights, 66 KB; the density maps, 16 KB each; the groups' record arrays, mostly under 85 KB) is allocated on the **pinned object heap**
+  (`ZoneArrays.Uninitialized`, `GC.AllocateUninitializedArray(..., pinned: true)`): these small arrays lived for tens of seconds, so on the ordinary heap every blocking collection copied
+  the ones allocated since the last, 40 to 70 MB, 14 to 30 ms. The pinned heap is swept with generation 2 and never copied (docs/renderer-native.md 8.21 for the numbers). The heights and
+  density maps of a zone that was placed (a cache miss) are ordinary allocations: the placement is not on the travel path once the cache is warm.
 - Tests: `FoliageLayoutCacheTests` (round trip, key changes, truncated and damaged files, other key / zone / kind, `--no-load-cache`, upkeep; one `[Slow]` test with real zones of the game).
 
 ## Generated mesh levels in the viewer (Meitou, 2026-10-08)
