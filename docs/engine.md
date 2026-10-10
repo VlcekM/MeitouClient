@@ -268,7 +268,7 @@ publishes the stock runtime from the same commit). Not adopted: shorter pauses, 
 The branch is deleted; the SDK line above brings it back. What stayed: the startup `gc` line names the collector and the latency mode (`GcName`:
 `satori` when `GC.GetConfigurationVariables()` has `SatoriGC`, else server or workstation), and `MEITOU_GC_LATENCY=low|interactive|batch`
 replaces SustainedLowLatency. Satori reports `LowLatency` whatever is asked for, so its two modes were not told apart.
-**Observed** (RTX 4070 idle, Release `4a8463e` published twice, stock .NET 10.0.12 against Satori 10.0.13, three interleaved pairs of the fast flight
+**Observed** (RTX 4070 idle, Release published twice from the branch (master `99ee299` + the GC switch and the SDK line), stock .NET 10.0.12 against Satori 10.0.13, three interleaved pairs of the fast flight
 `--world --at -60564,-45142 --distance 1400 --pitch 25 --size 1600x900 --fly-benchmark 3600 --fly-speed 150 --fly-radius 60000`,
 `MEITOU_BENCH_SKIP=60 MEITOU_ALLOC_STATS=1`, the memory guard never in pressure; stock / Satori): GC pause total 47, 52, 47 / 31, 11, 9 ms;
 longest pause 15, 21, 19 / 18, 4.5, 1.2 ms; pauses over 5 ms 4, 3, 2 / 3, 0, 0; gen2 4 / 2 each; working set 7.1-7.6 / 6.7-6.9 GB;
