@@ -358,15 +358,27 @@ Everything is in `Planetshine` (`NightSky.cs`, tests `PlanetshineTests`) and `Sk
   `Enhancements.MeitouPlanetshineStrength` is **60** (`--planetshine-strength <x>`, the Tab slider "Planetshine strength (x physical)", 0 to 200):
   at the brightest part of the night (23:30) a face turned to the planet gets about the ambient's level again, so the relief reads (rock faces
   towards the planet lit, the others and the ground at slope in the ambient's flat grey), and by 4:00 the crescent adds almost nothing, as it
-  should. Chosen by eye on the screenshots below, not measured against anything: **Unknown** what the game's artists would have wanted.
+  should. Against real moonlight the physical value is strong (about 3000 ×: the planet covers 0.079 sr, the Moon 7e-5, at a larger albedo), but
+  the game's night is nothing like a physical one. Where it reads (**Observed**, `--yaw 135`, 1280 × 720): faces towards the planet (rock towers, walls)
+  come up clearly, flat ground, which the planet 12° up meets at `N·L` 0.2, gets about a fifth of what such a face does, so on open land it is
+  subtle and the relief and the long shadows carry it. Chosen by eye on the screenshots, not measured against anything: **Unknown** what the
+  game's artists would have wanted; the slider is there for that.
   The auto exposure does not undo it: the night's mean luminance stays under the floor (`exposure min × night darkness` = 0.28, scale ×1.96):
-  at `--at -51468,-14324 --distance 3000 --pitch 8 --yaw 135` 0.092 → 0.111 at 23:12, 0.047 → 0.055 at 0:00, 0.047 → 0.049 at 2:00, 0.047 at 4:00.
-- **Twilight blend**: `Planetshine.Weight(sunY)` is 1 up to a sun height of −0.09 (where the game's sun light has just ended), 0 from +0.06,
-  smoothstep between: the planet's light is added to the sun's while the sun's fades. One directional light stands for both
+  at `--at -51468,-14324 --distance 3000 --pitch 8 --yaw 135` 0.092 → 0.103 at 23:12, 0.047 → 0.055 at 0:00, 0.047 → 0.049 at 2:00, 0.047 at 4:00.
+- **Twilight blend**: `Planetshine.Weight(sunY)` is 1 up to a sun height of −0.093 (where the game's sun light ends) and 0 from −0.04
+  (2.3° down, the sun's light still a quarter of its horizon value), smoothstep between: the planet's light is added to the sun's only while the sun's
+  last light fades. (A first version blended from +0.06; the planet then took the shadows' direction round while the sunset still lit the land at
+  half the noon sun's brightness, and it overlapped the light shafts, which run to −0.02. Narrowed 2026-10-10.) One directional light stands for both
   (`Planetshine.Combine`): the colours add, the direction is the sun's (clamped, as the game) and the planet's weighted by the square root of
-  their luminances, so it follows the brighter one and turns from the setting sun's horizontal light to the planet's (12° up) over about 4° of sun
-  movement (a quarter of an hour of game time; the greatest step in the unit test, 1.46° of direction per 0.05° of sun, no jump in brightness over 10 %).
-  Without the planet's light (switch off, or `Weight` 0 by day) the sun's direction and colour come back bit for bit.
+  their luminances, so it follows the brighter one and turns from the setting sun's horizontal light to the planet's (12° up). **Observed**
+  (`SkyClock` 54°, sunrise 5, sunset 23, strength 60, light as a share of the noon reference): at dusk the sun's own light is 0.47 at 23:03, 0.30 at
+  23:06, 0.17 at 23:09 (planet 0.01), 0.08 at 23:12 (planet 0.11, the direction already 74° round) and 0.0007 at 23:18, when the planet's 0.30 is all
+  there is and the direction 125° round. So the turn comes in about ten game minutes while the total light is 0.18 to 0.19 of the noon sun's, deep
+  twilight with the sun 3° down, **not** near zero: the planet's light at this strength is itself 0.28 to 0.30 of the noon sun's, so no moment
+  has both near zero. The unit test asserts the quickest turn comes under 0.2 of the reference, the greatest step under 5° per 0.05° of sun and no
+  brightness jump over 10 %, for dusk and dawn. At dawn the crescent is faint (0.013 to 0.017) and the direction turns back to the sun's by
+  sunY −0.04 with the planet's light under 0.01 beside the sun's 0.08.
+  Without the planet's light (switch off, or `Weight` 0 above −0.04) the sun's direction and colour come back bit for bit.
 - **What follows it** (everything reads the one published light, so nothing needed a shader change): `uAtmoLight.xyz` and `uAtmoSunLight`
   (`kenshiLight` in the terrain, object, foliage, grass and character shaders, the water's shore shading, the GI probes' sun term and their
   traced shadows), the `WorldLighting` handed to the terrain, objects, foliage, characters and the water, and the shadow cascades' direction.
@@ -381,8 +393,14 @@ Everything is in `Planetshine` (`NightSky.cs`, tests `PlanetshineTests`) and `Sk
   against the default, midnight, same view): 11 % of the pixels differ by more than 6/255 (sum over the channels), mean 2.4. When the planet is
   new (luminance under the floor) no map is drawn.
 - **Water**: both water shaders take the published direction and colour as their sun, so the sun glint becomes a planet glint (**Observed**,
-  Shark swamp at 23:30 facing the planet: a bright streak where the sun's would be). It is a point-source glint for a disc 18° wide, a hot spot
-  where the real reflection would be a broad smear: **Unknown** how much that matters, left as is.
+  `--town Shark --distance 2000 --pitch 10 --yaw 315 --time 23.5`, `--faithful planetshine` beside the default: a blown-out white patch in the water
+  between the huts, the brightest thing in the frame bar the lamps, absent in Faithful). It is a point-source glint for a disc 18° wide, a hot spot where
+  the real reflection would be a broad smear, and it is brighter than the planet it stands for: the glint takes the strength-scaled light (×60 on the
+  physical value), while the planet in the sky pass is not scaled. No cheap fix inside the shared `WorldLighting` (a separate glint colour would have to be
+  carried to both water shaders); left as is, for the owner to judge.
+- **Not exercised**: the probes' light with `--gi` (they read the same published light: a run at 23:30 gave no error and the mean luminance 0.055 →
+  0.065 against Faithful, but the picture was not inspected for the bounce), the simple sky (`--simple-sky` keeps its own light), and weather other than
+  `Default` at night.
 - **Not done**: Moon2's light (an eighth of the solid angle, 11° from the large one); the cloud layer lit by the planet; fog volumes and particles
   keep the sun's `Daylight`; the planet's light passing through the atmosphere (reddening near the horizon); a planet eclipsed by the land.
 - Screenshots (`C:\Temp\meitou-planetshine\` while the work was done; `--at -51468,-14324 --radius 2 --distance 3000 --pitch 8 --yaw 135

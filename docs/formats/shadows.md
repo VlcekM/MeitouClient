@@ -224,7 +224,7 @@ the table, default 1 = 2048², `--shadow-range <u>`). It follows the facts above
   while the **real sun** is at or above −0.2 (`ShadowPass.MinSunHeight` = `KenshiLighting.SunColourCutoff`), as the game; the
   light view keeps world +Y as its up for a horizontal light. (The simple sky, not the game's, keeps its own light at y ≥ 0.02.)
   **Meitou planetshine** (the `planetshine` switch, [sky.md](sky.md#planetshine-meitou)):
-  the direction passed to the pass is the published light's (the sun's and the big planet's, turning from one to the other through dusk over about 4° of sun
+  the direction passed to the pass is the published light's (the sun's and the big planet's, turning from one to the other in about ten game minutes of deep twilight, sun 2° to 5° down
   movement), and the cut-off is lifted while the planet lights the land (`SkyRenderer.ShadowSunHeight`), so the shadows go on all night along the planet's
   fixed direction, 12° up. Low light needs nothing special from the fit (it already runs at a horizontal light); the Meitou shadows' stale test
   redraws the cascades and the terrain map as the direction turns, as it does for the moving sun.

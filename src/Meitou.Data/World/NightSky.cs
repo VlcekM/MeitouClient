@@ -94,10 +94,11 @@ public sealed record SkyPlanet(string Material, string Texture, Vector3 Directio
 public static class Planetshine
 {
     /// <summary>
-    /// Below this sun height the planet is the only light (the game's sun light is zero from −0.093: <see cref="KenshiLighting.Daylight"/>); above
-    /// <see cref="NoneAbove"/> it adds nothing; smoothstep between, so the planet comes in as the sun's light fades.
+    /// Below <see cref="FullBelow"/> the planet is the only light (the game's sun light is zero from −0.093: <see cref="KenshiLighting.Daylight"/>); above
+    /// <see cref="NoneAbove"/> (2.3° under the horizon, the sun still a quarter as bright as at the horizon) it adds nothing; smoothstep between, so the
+    /// planet comes in only as the sun's last light fades, in deep twilight, and never overlaps the light shafts (which end at −0.02).
     /// </summary>
-    public const float FullBelow = -0.09f, NoneAbove = 0.06f;
+    public const float FullBelow = -0.093f, NoneAbove = -0.04f;
 
     /// <summary>The mean albedo (grey) assumed when the planet's texture is missing: Unknown, a plausible rocky world.</summary>
     public const float FallbackAlbedo = 0.3f;
