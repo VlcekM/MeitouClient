@@ -1424,6 +1424,7 @@ static class WorldFrame
                 host.Open(9, post.WithShadingRate(post.SceneTargets));
             }
             host.Stage(9);
+            if (render.Water && gpu.Water is not null) gpu.Water.CloudDensity = gpu.Sky.CloudDensity;
             if (render.Water) gpu.Water?.Draw(viewProjection, eye, light, colours, time, camera.ViewDistance * 1.5f, reflecting ? gpu.Reflection : null);
             StageClock.Lap(9);
             if (nearSlice)   // the weather particles come last, after the fog volumes (below): the game draws them in queue 84, the volumes in 82

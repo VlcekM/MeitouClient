@@ -7,6 +7,15 @@ namespace Meitou.Tests.Rendering;
 public class MeitouWaterTests
 {
     [Fact]
+    public void Glint_fades_under_clouds_and_is_almost_gone_at_full_overcast()
+    {
+        Assert.Equal(1, WaterRenderer.GlintCloudFade(0.95f, 0), 4);
+        Assert.Equal(1, WaterRenderer.GlintCloudFade(0.95f, 0.3f), 4);
+        Assert.Equal(0.05f, WaterRenderer.GlintCloudFade(0.95f, 1), 4);
+        Assert.True(WaterRenderer.GlintCloudFade(0.95f, 0.5f) > WaterRenderer.GlintCloudFade(0.95f, 0.8f));
+    }
+
+    [Fact]
     public void Waves_stand_still_while_the_game_clock_does()
     {
         var w = new WaveSet();

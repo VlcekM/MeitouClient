@@ -1051,6 +1051,21 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// only a disc of clear water under the camera. Default 10000.</summary>
     public float ClearDistance { get; set; } = 10000;
 
+    /// <summary>The sky's cloud density c this frame (<see cref="SkyRenderer.CloudDensity"/>), which the Meitou water's sun glint fades under
+    /// (<see cref="GlintCloudFade"/>).</summary>
+    public float CloudDensity { get; set; }
+
+    /// <summary>How much of the Meitou water's sun glint a full overcast takes away (docs/render-water.md "Glint under clouds"; not in the game, whose
+    /// specular ignores the weather). Default 0.95.</summary>
+    public float GlintCloudShade { get; set; } = 0.95f;
+
+    /// <summary>What is left of the glint at cloud density <paramref name="c"/>: 1 up to c 0.3, easing (smoothstep) to 1 − shade at full cover.</summary>
+    internal static float GlintCloudFade(float shade, float c)
+    {
+        float t = Math.Clamp((c - 0.3f) / 0.7f, 0, 1);
+        return 1 - Math.Clamp(shade, 0, 1) * t * t * (3 - 2 * t);
+    }
+
     /// <summary>
     /// Copies the scene drawn so far (the slice's opaque geometry, with no pass open) at half the size into the texture the Meitou water refracts:
     /// the floor and whatever stands in the water, seen through the waves. One native segment (a full barrier on each side) and one blit.
@@ -1106,6 +1121,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         p.Set(h.SunDir, light.SunDirection.X, light.SunDirection.Y, light.SunDirection.Z);
         p.Set(h.SunColour, light.SunColour.X, light.SunColour.Y, light.SunColour.Z);
         var (glintDirection, glintColour) = light.Glint;
+        if (h == meitou) glintColour *= GlintCloudFade(GlintCloudShade, CloudDensity);
         p.Set(h.GlintDir, glintDirection.X, glintDirection.Y, glintDirection.Z);
         p.Set(h.GlintColour, glintColour.X, glintColour.Y, glintColour.Z);
         p.Set(h.FogColour, light.FogColour.X, light.FogColour.Y, light.FogColour.Z);
