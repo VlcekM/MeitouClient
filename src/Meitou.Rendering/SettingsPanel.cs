@@ -32,8 +32,8 @@ public sealed record Toggle(string Label, Func<bool> Get, Action<bool> Set, Func
 public sealed record PanelAction(string Label, Func<string> Question, Func<string> Run);
 
 /// <summary>
-/// A panel of sliders drawn with the <see cref="DebugOverlay"/> in two columns in the top-left corner (and a third when <c>sideSliders</c> are given: they
-/// run down it on their own), over the other panels. Drag a slider with the left mouse
+/// A panel of sliders drawn with the <see cref="DebugOverlay"/> in three columns in the top-left corner (the main sliders, then <c>sideSliders</c> at the end,
+/// down the first column, then the next), over the other panels. Drag a slider with the left mouse
 /// button; while the pointer is on the panel, the camera ignores the mouse. The button at the bottom puts every slider back to
 /// the value it had when the panel was made (before a saved config or a drag changed it). Below the sliders, optional checkboxes under their own
 /// heading (the Faithful / Meitou switches), toggled with a click and reset with the sliders. Beside the reset button, optional
@@ -43,12 +43,10 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     IReadOnlyList<PanelAction>? actions = null, IReadOnlyList<Slider>? sideSliders = null)
 {
     const float Margin = 16, Pad = 12, TrackHeight = 6, RowGap = 10, ColumnGap = 28, MinTrackWidth = 220;
-    /// <summary>The main sliders' and the checkboxes' columns; the side sliders add one to the panel's width.</summary>
-    const int Columns = 2;
-    /// <summary>The main sliders, then the side ones (indices from <see cref="mainCount"/> are in the third column).</summary>
+    /// <summary>The sliders' and the checkboxes' columns.</summary>
+    const int Columns = 3;
+    /// <summary>The main sliders, then the side ones.</summary>
     readonly IReadOnlyList<Slider> sliders = [.. mainSliders, .. sideSliders ?? []];
-    readonly int mainCount = mainSliders.Count;
-    int PanelColumns => sliders.Count > mainCount ? Columns + 1 : Columns;
     /// <summary>Nearly opaque: the panel is drawn over the statistics and the profiler.</summary>
     static readonly Vector4 Background = new(0.05f, 0.05f, 0.06f, 0.95f);
     const string ResetLabel = "Reset to defaults";
@@ -82,8 +80,8 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
         for (int i = 0; i < toggles.Count; i++) if (toggles[i].Get() != toggleDefaults[i]) toggles[i].Set(toggleDefaults[i]);
     }
 
-    float TogglesTop => panelY0 + Pad + overlay.LineHeight * 1.5f + Math.Max(Rows, sliders.Count - mainCount) * rowHeight;
-    /// <summary>The checkboxes' heading, then their rows (down the first column, then the second, as the sliders).</summary>
+    float TogglesTop => panelY0 + Pad + overlay.LineHeight * 1.5f + Rows * rowHeight;
+    /// <summary>The checkboxes' heading, then their rows (down the first column, then the next, as the sliders).</summary>
     int ToggleRows => (toggles.Count + Columns - 1) / Columns;
     float ToggleHeight => overlay.LineHeight + 8;
     float TogglesHeight => toggles.Count == 0 ? 0 : overlay.LineHeight * 1.5f + ToggleRows * ToggleHeight + RowGap;
@@ -110,22 +108,22 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
 
     float LabelWidth => Math.Max(sliders.Max(s => s.Label.Length + 9), toggles.Count == 0 ? 0 : toggles.Max(t => t.Label.Length + 4 + (t.Text?.Invoke().Length ?? 0) + 2)) * overlay.CharWidth;
 
-    /// <summary>The main sliders run down the first column, then the second.</summary>
-    int Rows => (mainCount + Columns - 1) / Columns;
+    /// <summary>The sliders run down the first column, then the second and the third.</summary>
+    int Rows => (sliders.Count + Columns - 1) / Columns;
 
     void Layout(int width)
     {
         columnWidth = Math.Max(LabelWidth, MinTrackWidth);
         panelX0 = Margin;
-        panelX1 = panelX0 + 2 * Pad + PanelColumns * columnWidth + (PanelColumns - 1) * ColumnGap;
+        panelX1 = panelX0 + 2 * Pad + Columns * columnWidth + (Columns - 1) * ColumnGap;
         panelY0 = Margin;
         panelY1 = NoticeBottom + Pad;
         // A long question or result widens the panel.
         if (Notice is { } notice) panelX1 = Math.Max(panelX1, (confirming >= 0 ? NoX + BoxWidth(No) : panelX0 + Pad + notice.Length * overlay.CharWidth) + Pad);
     }
 
-    float TrackX(int i) => panelX0 + Pad + (i < mainCount ? i / Rows : Columns) * (columnWidth + ColumnGap);
-    float TrackTop(int i) => panelY0 + Pad + overlay.LineHeight * 1.5f + (i < mainCount ? i % Rows : i - mainCount) * rowHeight + overlay.LineHeight + 2;
+    float TrackX(int i) => panelX0 + Pad + i / Rows * (columnWidth + ColumnGap);
+    float TrackTop(int i) => panelY0 + Pad + overlay.LineHeight * 1.5f + i % Rows * rowHeight + overlay.LineHeight + 2;
 
     /// <summary>Whether a point (window pixels) is on the panel.</summary>
     public bool Contains(Vector2 p) => Visible && p.X >= panelX0 && p.X <= panelX1 && p.Y >= panelY0 && p.Y <= panelY1;
