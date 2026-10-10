@@ -385,7 +385,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform sampler2D uRefraction;  // the scene under the water, copied at half size before it (CaptureRefraction)
         uniform float uRefract;         // 1: refract it and composite here; 0: blend over the scene as the game's water
         uniform vec2 uScreen;           // 1 / the target's size: gl_FragCoord to the copy's coordinates
-        uniform vec2 uClarity;          // x: the absorption per unit of depth times this (1 / the Tab panel's clarity); y: the far water's clarity (0 the true slant path, 1 none)
+        uniform vec3 uClarity;          // x: the absorption per unit of depth times this (1 / the Tab panel's clarity); y: the far water's clarity (0 the true slant path, 1 none); z: the see-through distance (the game: 4000)
 
         vec3 sampleNormal(vec2 coord, vec2 direction, float speed, float time)
         {
@@ -654,9 +654,9 @@ public sealed unsafe class WaterRenderer : IDisposable
                 under *= 1.0 + caustic * uSunColour;
                 // Absorption: in clear water red goes first, then green, so the shallows over sand are turquoise and the deep water dark; a
                 // strongly coloured biome water (a swamp's olive, a red lake) filters towards its own colour instead. The biome's opacity (the
-                // game's alpha per unit of depth) sets how fast. Beyond 4000 units the floor is gone, as in the game.
+                // game's alpha per unit of depth) sets how fast. The floor fades out from the see-through distance (the game: opaque at 4000) to 1.5 times it.
                 vec3 sigma = mix(vec3(4.5, 1.6, 1.1), 1.0 + 3.0 * (1.0 - hue), smoothstep(0.15, 0.5, saturation));
-                vec3 transmit = exp(-depth * max(pa.w, 0.002) * uClarity.x * sigma) * clamp((4400.0 - dist) / 400.0, 0.0, 1.0);
+                vec3 transmit = exp(-depth * max(pa.w, 0.002) * uClarity.x * sigma) * (1.0 - smoothstep(uClarity.z, uClarity.z * 1.5, dist));
                 colour = mix(under * transmit + body * (1.0 - transmit), reflected, schlick * gloss);
             }
             else colour = mix(body, reflected, schlick * gloss);
@@ -774,7 +774,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             {
                 // Alpha as the game's water from its depth (the swash: its own thin sheet), then the foam over it.
                 float fresnel = 1.0 - pow(1.0 - cosv, 2.0);
-                a = clamp(1.0 - (dist - 4000.0) / 1000.0, 0.0, 1.0);
+                a = clamp(1.0 - (dist - uClarity.z) / (uClarity.z * 0.25), 0.0, 1.0);
                 a *= mix(1.0, clamp(depth * pa.w * uClarity.x, 0.0, 1.0), fresnel);
                 a *= clamp(depth / 2.0, 0.0, 1.0);
                 // The lip (only where the water is deep enough for it, else an opaque stroke) is less see-through.
@@ -789,7 +789,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                     colour = reflected * schlick * gloss + min(spec, 4.0) * uSunColour * 0.15;
                     a = wet * 0.45;
                 }
-                a = mix(1.0, a, clamp((4000.0 - dist) / 400.0, 0.0, 1.0));
+                a = mix(1.0, a, 1.0 - smoothstep(uClarity.z * 0.9, uClarity.z * 1.25, dist));
             }
 
             if (uWaterDebug > 1.5) { fragColour = vec4(s.river * fade, s.flow * 0.5 + 0.5, 1.0); return; }   // MEITOU_WATER_DEBUG=2: the river weight and flow direction
@@ -1033,6 +1033,11 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// up to 20 times the depth at grazing angles, so distant shallows read opaque), 1 only along the depth, as if looked at from straight above.</summary>
     public float FarClarity { get; set; }
 
+    /// <summary>The Tab panel's "Water see-through distance" (Meitou water): the eye distance where the floor starts to fade out under the water,
+    /// gone by 1.5 times it (refracted; by 1.25 times when blended). The game's water turns opaque at 4000 units, which from high above leaves
+    /// only a disc of clear water under the camera.</summary>
+    public float ClearDistance { get; set; } = 4000;
+
     /// <summary>
     /// Copies the scene drawn so far (the slice's opaque geometry, with no pass open) at half the size into the texture the Meitou water refracts:
     /// the floor and whatever stands in the water, seen through the waves. One native segment (a full barrier on each side) and one blit.
@@ -1097,7 +1102,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             p.Set(h.Shore, waves.Shore);
             p.Set(h.WaveFade, WaveFadeStart, WaveFadeEnd, ShoreFadeStart, ShoreFadeEnd);
             p.Set(h.Debug, DebugView);
-            p.Set(h.Clarity, 1f / Math.Max(Clarity, 0.01f), Math.Clamp(FarClarity, 0f, 1f));
+            p.Set(h.Clarity, 1f / Math.Max(Clarity, 0.01f), Math.Clamp(FarClarity, 0f, 1f), Math.Max(ClearDistance, 100f));
             if (ocean.Ready) { p.Bind(h.OceanDisp, ocean.Displacement); p.Bind(h.OceanSlope, ocean.Slopes); }
             if (shore.Ready) p.Bind(h.ShoreField, shore.Sampled());
             bool refract = Refraction && refraction is not null && refractionFrame == Gpu.Frame.Number;

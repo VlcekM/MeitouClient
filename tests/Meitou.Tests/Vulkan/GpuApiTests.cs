@@ -183,7 +183,7 @@ public class GpuApiTests
         ["sky simple"] = "4C48F27F2EFC495E4B81B6421F095B12",
         ["sky"] = "2F799CCC84AEF70F8ACA54EB5737185E",
         ["water"] = "7EF7EC496AD468C4CB56BA2C3BE241B6",
-        ["water meitou"] = "2BEA9161C10FB8CA1BD54E1DA6D2EB36",
+        ["water meitou"] = "6FABCD88EECFE0FAC6E771CA51BE605B",
         ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",
         ["terrain patch"] = "D8381FAF08CDA026E544447EC0ADEA0F",
         ["terrain mesh"] = "CE84A38FA08AD7B378B512A60B521F5D",

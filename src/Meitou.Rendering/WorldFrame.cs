@@ -1098,6 +1098,8 @@ static class WorldFrame
             sliders.Add(new Slider("Water clarity x (Meitou)", 0.25f, 8, () => water.Clarity, v => water.Clarity = v, "0.00", Logarithmic: true));
             sliders.Add(new Slider("Far water clarity (Meitou)", 0, 1, () => water.FarClarity, v => water.FarClarity = v, "0.00",
                 Text: v => v <= 0 ? "0 (true slant)" : v.ToString("0.00", CultureInfo.InvariantCulture)));
+            sliders.Add(new Slider("Water see-through distance (Meitou, game 4000)", 1000, 100000, () => water.ClearDistance,
+                v => water.ClearDistance = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
         }
         sliders.Add(new Slider("Terrain detail: error px (less = finer)", 1, 32, () => r.TerrainPixelError, v => (r.TerrainPixelError, r.TerrainFarPixelError) = (v, v * r.TerrainFarPixelError / r.TerrainPixelError), "0.0", Logarithmic: true));
         // The game's `Shadow Range` slider goes 1000 to 9000; the viewer allows more (the cascades stretch over it), and its left end (0) turns the
