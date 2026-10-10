@@ -91,4 +91,44 @@ public static class MeitouClouds
              + SkyXModel.Colour(new Vector3(0, y, r), sun, skydome: false) + SkyXModel.Colour(new Vector3(0, y, -r), sun, skydome: false);
         return sum / 5 * skyMultiplier + new Vector3(nightAir.X, nightAir.Y, nightAir.Z) * (nightAir.W * NightAir.HorizonFalloff(y));
     }
+
+    // ---- cloud shadows and parallax (the `cloudshadows` switch; docs/formats/clouds.md "Meitou cloud shadows") ----
+
+    /// <summary>
+    /// The height of the world-anchored cloud plane, in world units (a unit is about a decimetre): above the terrain's highest point
+    /// (<see cref="WorldLayout.MaxHeight"/>, 9800). With the layer's texture scale (<c>uv = 0.1 · xz / height</c>) the pattern repeats every
+    /// 10 × height (12 km) and the wind's texture shift (<see cref="CloudLayer.WindScale"/> × speed per second) sweeps the shadows over the ground
+    /// at 5e-4 × height = 6 times the weather's wind speed (a 30 units/s wind: 18 m/s, a plausible wind aloft).
+    /// </summary>
+    public const float PlaneHeight = 12000;
+
+    /// <summary>How much of the sun a full cloud takes away (its alpha × this; the rest is light through and round it).</summary>
+    public const float ShadowStrength = 0.7f;
+
+    /// <summary>The mip level the shadow reads <c>Clouds.dds</c> at: a texel is 12 m at the plane, the sun's penumbra from 1.2 km about 10 m, so about one texel of blur.</summary>
+    public const float ShadowLod = 0.5f;
+
+    /// <summary>The sun's height (its direction's y) over which the shadows fade in: none at <see cref="ShadowFadeLow"/> (the hit point runs off far
+    /// away), full from <see cref="ShadowFadeHigh"/>.</summary>
+    public const float ShadowFadeLow = 0.03f, ShadowFadeHigh = 0.12f;
+
+    /// <summary>How strong the shadows are at the sun's height <paramref name="sunY"/>: <see cref="ShadowStrength"/> × a smoothstep from <see cref="ShadowFadeLow"/> to <see cref="ShadowFadeHigh"/>.</summary>
+    public static float ShadowAt(float sunY)
+    {
+        float t = Math.Clamp((sunY - ShadowFadeLow) / (ShadowFadeHigh - ShadowFadeLow), 0, 1);
+        return ShadowStrength * t * t * (3 - 2 * t);
+    }
+
+    /// <summary>
+    /// The sky's view of the world-anchored plane from the eye: the game's lookup is <c>uv = 0.1 · d.xz / d.y</c> (the plane at "height 1", always
+    /// the same distance above the eye); anchored, it is <c>0.1 · (eye.xz + d.xz / d.y · (height − eye.y)) / height</c>. Returns the factor on the
+    /// game's uv (<c>(height − eye.y) / height</c>, at least a quarter, so an eye above the plane still sees the layer above it) and the offset
+    /// <c>0.1 · eye.xz / height</c> wrapped to 0..1 in doubles (the textures repeat with period 1).
+    /// </summary>
+    public static (float Scale, Vector2 Offset) Parallax(double eyeX, double eyeY, double eyeZ)
+    {
+        static float Wrap(double v) => (float)(v - Math.Floor(v));
+        float scale = (float)Math.Max((PlaneHeight - eyeY) / PlaneHeight, 0.25);
+        return (scale, new Vector2(Wrap(0.1 * eyeX / PlaneHeight), Wrap(0.1 * eyeZ / PlaneHeight)));
+    }
 }

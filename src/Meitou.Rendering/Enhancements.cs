@@ -53,7 +53,7 @@ public static class Enhancements
         Func<bool> meitouRange, Action<bool> setMeitouRange, Func<bool> impostors, Action<bool> setImpostors, Func<bool> meitouReach, Action<bool> setMeitouReach,
         Func<bool> meitouWater, Action<bool> setMeitouWater, Func<bool> foliageLod, Action<bool> setFoliageLod, Func<bool>? gi = null, Action<bool>? setGi = null,
         Func<bool>? nightHaze = null, Action<bool>? setNightHaze = null, Func<bool>? planetshine = null, Action<bool>? setPlanetshine = null,
-        Func<bool>? stars = null, Action<bool>? setStars = null, Func<bool>? clouds = null, Action<bool>? setClouds = null) =>
+        Func<bool>? stars = null, Action<bool>? setStars = null, Func<bool>? clouds = null, Action<bool>? setClouds = null, Func<bool>? cloudShadows = null, Action<bool>? setCloudShadows = null) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -113,6 +113,9 @@ public static class Enhancements
         new("clouds", "Clouds", "flat", "lit",
             clouds ?? (() => false), setClouds ?? (_ => { }),
             "the game gives every cloud one colour (the sun's plus the sky's, dimmed only by density), so its clouds are flat, all one orange at sunset and black at night; Meitou keeps their shapes and coverage but lights them by the sun (the planet at night) through their depth: bright silvered edges towards the sun, grey undersides away from it, thick cores darker, the sky's own colour as their ambient (docs/formats/clouds.md, \"Meitou clouds\")"),
+        new("cloudshadows", "Cloud shadows", "none", "on the land",
+            cloudShadows ?? (() => false), setCloudShadows ?? (_ => { }),
+            "the game's clouds cast no shadows; Meitou anchors the cloud layer to the world (1.2 km up, so the clouds also drift past as the camera moves) and dims the sun on the land and the water under it, the shadows sweeping over the ground with the wind (docs/formats/clouds.md, \"Meitou cloud shadows\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

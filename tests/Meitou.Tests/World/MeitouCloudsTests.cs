@@ -67,4 +67,41 @@ public class MeitouCloudsTests
         var glow = MeitouClouds.Ambient(night, Vector3.One, new Vector4(NightAir.Airglow, 1));
         Assert.True(glow.Y > dark.Y);
     }
+
+    [Fact]
+    public void The_shadow_plane_is_above_every_mountain_and_sweeps_at_a_wind_aloft()
+    {
+        Assert.True(MeitouClouds.PlaneHeight > WorldLayout.MaxHeight);
+        // The wind's texture shift (CloudLayer.WindScale per unit of wind per second) over the plane's texture scale (0.1 / height) is the ground speed.
+        float sweep = CloudLayer.WindScale / (0.1f / MeitouClouds.PlaneHeight);
+        Assert.InRange(sweep, 3f, 8f);   // a few times the surface wind, as clouds aloft move
+    }
+
+    [Fact]
+    public void The_shadows_fade_out_with_a_low_sun()
+    {
+        Assert.Equal(0, MeitouClouds.ShadowAt(MeitouClouds.ShadowFadeLow));
+        Assert.Equal(0, MeitouClouds.ShadowAt(-0.3f));
+        Assert.Equal(MeitouClouds.ShadowStrength, MeitouClouds.ShadowAt(MeitouClouds.ShadowFadeHigh), 5);
+        Assert.Equal(MeitouClouds.ShadowStrength, MeitouClouds.ShadowAt(1), 5);
+        float mid = MeitouClouds.ShadowAt((MeitouClouds.ShadowFadeLow + MeitouClouds.ShadowFadeHigh) / 2);
+        Assert.Equal(MeitouClouds.ShadowStrength / 2, mid, 4);
+    }
+
+    [Fact]
+    public void The_sky_sees_the_same_plane_point_the_shadow_reads()
+    {
+        // An eye at (x, y, z) looking along d sees the plane point eye + d · (height − y) / d.y; the shadow pass reads 0.1 · point.xz / height.
+        double ex = 51234.5, ey = 1800, ez = -73210.25;
+        var d = Vector3.Normalize(new Vector3(0.3f, 0.5f, -0.2f));
+        var (scale, offset) = MeitouClouds.Parallax(ex, ey, ez);
+        var sky = new Vector2(d.X, d.Z) / d.Y * 0.1f * scale + offset;
+        double t = (MeitouClouds.PlaneHeight - ey) / d.Y;
+        double px = 0.1 * (ex + d.X * t) / MeitouClouds.PlaneHeight, pz = 0.1 * (ez + d.Z * t) / MeitouClouds.PlaneHeight;
+        static double Wrap(double v) => v - Math.Floor(v);
+        Assert.Equal(Wrap(px), Wrap(sky.X), 4);
+        Assert.Equal(Wrap(pz), Wrap(sky.Y), 4);
+        // Above the plane the layer keeps a quarter of its distance rather than flipping.
+        Assert.Equal(0.25f, MeitouClouds.Parallax(0, 2 * MeitouClouds.PlaneHeight, 0).Scale);
+    }
 }

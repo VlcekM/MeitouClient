@@ -80,6 +80,10 @@ static partial class NativeShaders
             uint lightIndex;
             uint lightData;
             vec4 atmoNight;
+            vec4 atmoCloud;
+            vec4 atmoCloudWind;
+            uint atmoClouds;
+            uint atmoCloudsTile;
         } frame;
 
         """;
@@ -161,6 +165,8 @@ static partial class NativeShaders
         ["uAtmoTau"] = "frame.atmoTau", ["uAtmoTint"] = "frame.atmoTint", ["uAtmoFog"] = "frame.atmoFog", ["uAtmoFogColour"] = "frame.atmoFogColour",
         ["uAtmoSimple"] = "frame.atmoSimple", ["uAtmoHaze"] = "frame.atmoHaze", ["uAtmoHazeCloud"] = "frame.atmoHazeCloud",
         ["uAtmoAltitude"] = "frame.atmoAltitude", ["uAtmoMaps"] = "frame.atmoMaps", ["uAtmoNight"] = "frame.atmoNight",
+        ["uAtmoCloud"] = "frame.atmoCloud", ["uAtmoCloudWind"] = "frame.atmoCloudWind",
+        ["uAtmoClouds"] = "textures2D[frame.atmoClouds]", ["uAtmoCloudsTile"] = "textures2D[frame.atmoCloudsTile]",
         ["uAtmoIrradiance"] = "texturesCube[frame.atmoIrradiance]", ["uAtmoSpecular"] = "texturesCube[frame.atmoSpecular]",
         ["uAtmoAmbientMap"] = "textures2D[frame.atmoAmbientMap]",
         ["uShadowMap"] = "shadowTextures[frame.shadowMap]", ["uShadowNoise"] = "textures2D[frame.shadowNoise]",
@@ -279,7 +285,7 @@ static partial class NativeShaders
 }
 
 /// <summary>The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).</summary>
-[StructLayout(LayoutKind.Explicit, Size = 8656)]
+[StructLayout(LayoutKind.Explicit, Size = 8704)]
 unsafe struct FrameConstants
 {
     [FieldOffset(0)] public Vector4 AtmoSun;
@@ -324,6 +330,11 @@ unsafe struct FrameConstants
     [FieldOffset(8632)] public uint LightData;
     /// <summary>Meitou night air (<c>uAtmoNight</c>, docs/formats/sky.md "Night air"): rgb the colour at full night, w its weight.</summary>
     [FieldOffset(8640)] public Vector4 AtmoNight;
+    /// <summary>Meitou cloud shadows (<c>uAtmoCloud</c>, <c>uAtmoCloudWind</c>, docs/formats/clouds.md "Meitou cloud shadows"): the layer's numbers, the wind shift, and its two textures.</summary>
+    [FieldOffset(8656)] public Vector4 AtmoCloud;
+    [FieldOffset(8672)] public Vector4 AtmoCloudWind;
+    [FieldOffset(8688)] public uint AtmoClouds;
+    [FieldOffset(8692)] public uint AtmoCloudsTile;
 
     /// <summary>The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.</summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
@@ -333,7 +344,7 @@ unsafe struct FrameConstants
         ("uAtmoHazeCloud", 160, 16), ("uAtmoAltitude", 176, 16), ("uAtmoMaps", 192, 16), ("uWeatherWet", 240, 16), ("uWeatherDust", 256, 16),
         ("uFogVolumeEye", 288, 16), ("uFogVolumeInfo", 304, 16), ("uFogVolumeData", 320, FogVolumeShaders.MaxData * 16),
         ("uGiParams", 8512, 16), ("uGiGrid", 8528, 64),
-        ("uLightGrid", 8608, 16), ("uAtmoNight", 8640, 16),
+        ("uLightGrid", 8608, 16), ("uAtmoNight", 8640, 16), ("uAtmoCloud", 8656, 16), ("uAtmoCloudWind", 8672, 16),
     ];
 
     /// <summary>The frame-global textures, the array each is registered in and the member that holds its index.</summary>
@@ -345,6 +356,7 @@ unsafe struct FrameConstants
         ("uWeatherGround", BindlessKind.Texture2D, 272), ("uWeatherDustNoise", BindlessKind.Texture2D, 276),
         ("uGiIrradiance", BindlessKind.Texture2D, 8592), ("uGiDistance", BindlessKind.Texture2D, 8596), ("uGiBase", BindlessKind.Texture2D, 8600),
         ("uLightCells", BindlessKind.Texture2D, 8624), ("uLightIndex", BindlessKind.Texture2D, 8628), ("uLightData", BindlessKind.Texture2D, 8632),
+        ("uAtmoClouds", BindlessKind.Texture2D, 8688), ("uAtmoCloudsTile", BindlessKind.Texture2D, 8692),
     ];
 }
 

@@ -241,7 +241,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         uniform vec4 uCloudLight;      // rgb: zenithLight, a: Darkness
         uniform vec4 uCloudSun;        // rgb: sunColour.rgb, a: DensityOffset
         uniform vec4 uCloudWind;       // xy: the wind offset x 0.00005 (wrapped to 0..1)
-        uniform vec4 uCloudMeitou;     // x: 1 the Meitou clouds (lit; docs/formats/clouds.md "Meitou clouds"), 0 the game's layer
+        uniform vec4 uCloudMeitou;     // x: 1 the Meitou clouds (lit; docs/formats/clouds.md "Meitou clouds"), 0 the game's layer; y the parallax scale on the uv, zw its offset (1, 0, 0 for the game's)
         uniform vec4 uCloudKey;        // Meitou clouds: rgb the key light (sun, and the planet at night) in sunColour's unit
         uniform vec4 uCloudKeyDir;     // Meitou clouds: xyz towards the key light
         uniform vec4 uCloudAmbient;    // Meitou clouds: rgb the sky's mean light on the clouds (before the exposure's square root)
@@ -346,7 +346,7 @@ public sealed unsafe class SkyRenderer : IDisposable
                 vec2 wind = uCloudWind.xy;
                 const vec2 SHIFT = vec2({{F(CloudLayer.SecondLookupShift.X)}}, {{F(CloudLayer.SecondLookupShift.Y)}});
                 // The plane hit: the cloud point is d · height / d.y, the texture coordinate its xz · scale.
-                vec2 uv = d.xz * (HEIGHT / d.y) * SCALE;
+                vec2 uv = d.xz * (HEIGHT / d.y) * SCALE * uCloudMeitou.y + uCloudMeitou.zw;
                 float density = texture(uClouds, uv + wind).r;
                 vec3 normal = -(2.0 * texture(uCloudsNormal, uv + wind).rgb - 1.0);
                 normal = vec3(normal.x, normal.z, normal.y);   // the shader swaps y and z
@@ -354,7 +354,7 @@ public sealed unsafe class SkyRenderer : IDisposable
                 // The fake volume: the direction bent along the normal map, the plane raised where the cloud is thin.
                 vec3 nd = normalize(d + {{F(CloudLayer.VolumetricDisplacement)}} * d.y * vec3(normal.x, 0.0, normal.z));
                 float vh = (HEIGHT + HEIGHT * (1.0 - density) * {{F(CloudLayer.HeightVolume)}} * d.y) / nd.y;
-                uv = nd.xz * vh * SCALE;
+                uv = nd.xz * vh * SCALE * uCloudMeitou.y + uCloudMeitou.zw;
                 density = (texture(uClouds, uv + wind + SHIFT).r + o) * MULT;
                 float tile = texture(uCloudsTile, uv - wind).r;
                 density += tile * {{F(CloudLayer.TileWeight)}};
@@ -535,6 +535,23 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// night) through its depth, with a forward-scattering phase and the sky's light as ambient (<see cref="Meitou.Data.World.MeitouClouds"/>). False: the game's flat colour.
     /// </summary>
     public bool LitClouds { get; set; } = true;
+
+    /// <summary>
+    /// The Meitou <c>cloudshadows</c> switch (viewer design; the game has no cloud shadows, docs/formats/clouds.md "Meitou cloud shadows"): the cloud layer, anchored
+    /// to the world at <see cref="Meitou.Data.World.MeitouClouds.PlaneHeight"/>, shades the sun light on the land and the water. False: none.
+    /// </summary>
+    public bool CloudShadows { get; set; } = true;
+
+    /// <summary>The eye in world units, for the Meitou clouds' parallax (the sky pass's matrix is a rotation only); the frame sets it.</summary>
+    public Vector3 Eye { get; set; }
+
+    /// <summary>The cloud shadows' <c>uAtmoCloud</c>: x the strength (0 with the switch Faithful, a clear sky, missing textures or the sun low), y DensityOffset, z the plane's height.</summary>
+    Vector4 CloudShadowUniform()
+    {
+        bool on = CloudShadows && Physical && cloudsTexture is not null && cloudsTileTexture is not null && CloudDensity > 0;
+        float strength = on ? MeitouClouds.ShadowAt(state.Sun.Y) : 0;
+        return new Vector4(strength, CloudLayer.DensityOffset(CloudDensity), MeitouClouds.PlaneHeight, 0);
+    }
 
     /// <summary>The gain on the Meitou point stars' light, in the starfield texture's units.</summary>
     public float StarGain { get; set; } = DefaultStarGain;
@@ -901,6 +918,10 @@ public sealed unsafe class SkyRenderer : IDisposable
         g.PublishUniform("uAtmoAltitude", () => Published().Altitude, Valid);
         g.PublishUniform("uAtmoMaps", () => Published().Maps, Valid);
         g.PublishUniform("uAtmoNight", () => Published().Night, Valid);
+        g.PublishUniform("uAtmoCloud", CloudShadowUniform, Valid);
+        g.PublishUniform("uAtmoCloudWind", () => { var w = CloudLayer.TextureShift(cloudOffset); return new Vector4(w.X, w.Y, 0, 0); }, Valid);
+        g.Publish("uAtmoClouds", () => state.Valid && cloudsTexture is { } t ? t.Sampled() : default);
+        g.Publish("uAtmoCloudsTile", () => state.Valid && cloudsTileTexture is { } t ? t.Sampled() : default);
     }
 
     // The values the getters above share, computed once per ApplyGlobals call (FrameGlobals.ApplyCount) instead of once per name.
@@ -1001,7 +1022,9 @@ public sealed unsafe class SkyRenderer : IDisposable
         var shift = CloudLayer.TextureShift(cloudOffset);
         p.Set(program.CloudWind, shift.X, shift.Y, 0, 0);
         var key = s.CloudKey; var keyDir = s.CloudKeyDirection; var ambient = s.CloudAmbient;
-        p.Set(program.CloudMeitou, LitClouds ? 1 : 0, 0, 0, 0);
+        // The Meitou clouds are anchored to the world (the eye's parallax, MeitouClouds.Parallax), so the cloud overhead is the one whose shadow falls here; the game's follow the eye.
+        var (parallaxScale, parallaxOffset) = LitClouds ? MeitouClouds.Parallax(Eye.X, Eye.Y, Eye.Z) : (1f, Vector2.Zero);
+        p.Set(program.CloudMeitou, LitClouds ? 1 : 0, parallaxScale, parallaxOffset.X, parallaxOffset.Y);
         p.Set(program.CloudKey, key.X, key.Y, key.Z, 0);
         p.Set(program.CloudKeyDir, keyDir.X, keyDir.Y, keyDir.Z, 0);
         p.Set(program.CloudAmbient, ambient.X, ambient.Y, ambient.Z, MeitouClouds.AmbientGreyAt(coverage));
