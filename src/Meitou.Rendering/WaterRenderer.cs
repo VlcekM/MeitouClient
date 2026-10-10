@@ -606,7 +606,13 @@ public sealed unsafe class WaterRenderer : IDisposable
                 offset *= min(1.0, 0.04 / max(length(offset), 1e-5));
                 vec2 uv = rc.xy / rc.w * 0.5 + 0.5 + offset;
                 vec2 inside = smoothstep(vec2(0.0), vec2(0.04), uv) * smoothstep(vec2(0.0), vec2(0.04), 1.0 - uv);
-                reflected = mix(reflected, min(texture(uReflection, uv).rgb, vec3(3.0)), inside.x * inside.y);
+                vec3 mirrored = min(texture(uReflection, uv).rgb, vec3(3.0));
+                // The sun's glint only where the mirror shows sky: where it shows land (darker than the sky the same way), the land hides the
+                // sun, else its streak runs through the hills' reflection. The game multiplies its specular by the reflection's brightness.
+                const vec3 lum = vec3(0.2126, 0.7152, 0.0722);
+                float open = smoothstep(0.5, 0.85, dot(mirrored, lum) / max(dot(reflected, lum), 1e-4));
+                spec *= mix(1.0, open, inside.x * inside.y);
+                reflected = mix(reflected, mirrored, inside.x * inside.y);
             }
             vec3 light = max(dot(n, l), 0.0) * uSunColour * 0.6 + uSkyZenith * 0.5 + 0.03;
             // What the biome's water colour says: its brightness, hue (the strongest channel 1), how coloured it is, and `clean`: bright,
