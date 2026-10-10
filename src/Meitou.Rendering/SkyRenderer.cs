@@ -118,11 +118,8 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// <summary>The procedural stars' look, in pixels (the Meitou <c>stars</c> switch): the core's Gaussian sigma, and for stars brighter than <see cref="StarHaloFrom"/> a wider halo (sigma <see cref="StarHaloSigma"/> + <see cref="StarHaloGrow"/> × brightness, a share <see cref="StarHaloShare"/> of the brightness above the threshold, at most <see cref="StarHaloMax"/>).</summary>
     public const float StarSigma = 0.7f, StarCoreReach = 2.2f, StarHaloFrom = 0.4f, StarHaloSigma = 1.8f, StarHaloGrow = 1.6f, StarHaloShare = 0.25f, StarHaloMax = 0.5f;
 
-    /// <summary>The baked glow (texture units) below which a pixel gets no Milky Way grain (the band's far tails; the grain's light is proportional to the glow, so nothing pops).</summary>
-    public const float MilkyWayGrainFloor = 0.0008f;
-
-    // The Meitou night sky (the `stars` switch; docs/formats/sky.md "Meitou night sky"): procedural point stars on the celestial sphere, evaluated per pixel,
-    // and the baked Milky Way cube map. StarField / MilkyWay / NightAtmosphere (Meitou.Data) are the reference for every number here.
+    // The Meitou night sky (the `stars` switch; docs/formats/sky.md "Meitou night sky"): procedural point stars on the celestial sphere, evaluated per pixel.
+    // StarField / NightAtmosphere (Meitou.Data) are the reference for every number here.
     static string Vec3(Vector3 v) => $"vec3({F(v.X)}, {F(v.Y)}, {F(v.Z)})";
     static string Vec4(float a, float b, float c, float d) => $"vec4({F(a)}, {F(b)}, {F(c)}, {F(d)})";
 
@@ -130,14 +127,11 @@ public sealed unsafe class SkyRenderer : IDisposable
 
         uniform vec4 uStarsMeitou;     // x: 1 stars computed, -1 Meitou but the sun is up (none), 0 the game's texture; y: layers drawn; z: seconds (twinkle); w: star gain
         uniform vec4 uCelX, uCelY, uCelZ;   // the celestial axes in world coordinates (the rows of the world -> celestial turn)
-        uniform samplerCube uMilkyWay;
         const float STAR_SIGMA = {{F(StarSigma)}};
         const float STAR_GAMMA = {{F(StarField.BrightnessGamma)}};
-        const vec3 MW_POLE = {{Vec3(MilkyWay.Pole)}};
-        const vec3 MW_CENTRE = {{Vec3(MilkyWay.Centre)}};
         const vec3 EXTINCTION = {{Vec3(NightAtmosphere.ExtinctionPerAirMass)}};
         const vec4 STAR_A[3] = vec4[3]({{string.Join(", ", StarField.Layers.Select(l => Vec4(l.Cells, l.Count / (4 * MathF.PI), l.BrightestMagnitude, MathF.Pow(10, l.Slope * (l.FaintestMagnitude - l.BrightestMagnitude)))))}});
-        const vec4 STAR_B[3] = vec4[3]({{string.Join(", ", StarField.Layers.Select(l => Vec4(1 / (l.Slope * MathF.Log(10)), l.Enrichment, l.ReachPixels, 0)))}});
+        const vec4 STAR_B[3] = vec4[3]({{string.Join(", ", StarField.Layers.Select(l => Vec4(1 / (l.Slope * MathF.Log(10)), 0, l.ReachPixels, 0)))}});
         const vec3 STAR_COLOUR[{{StarColours.TableSize}}] = vec3[{{StarColours.TableSize}}]({{string.Join(", ", StarColours.Table().Select(Vec3))}});
 
         // pcg3d, as StarField.Pcg3d.
@@ -199,20 +193,11 @@ public sealed unsafe class SkyRenderer : IDisposable
                     ivec2 ic = base + ivec2((k & 1) != 0 ? nb.x : 0, (k & 2) != 0 ? nb.y : 0);
                     if (ic.x < 0 || ic.y < 0 || ic.x >= ni || ic.y >= ni) continue;
                     vec2 centre = (vec2(ic) + 0.5) * (2.0 / n) - 1.0;
-                    // The cell's chance of a star (StarField.CellChance, times the Milky Way's enrichment of a faint layer), against a one-word hash of the cell
-                    // (StarField.Pcg1). Most cells fail the cheap test against the largest the enrichment can make it, so the exact one (exponentials) is worked
-                    // out only for the few that pass, and the full three-word hash only for the stars.
+                    // The cell's chance of a star (StarField.CellChance) against a one-word hash of the cell (StarField.Pcg1); the full three-word hash only for the stars.
                     float w3 = 1.0 + dot(centre, centre);
                     float chance = A.y * (4.0 / (n * n)) * inversesqrt(w3) / w3;
                     float draw = float(starHash1(((uint(L * 6 + face) * 256u + uint(ic.y)) * 256u + uint(ic.x))) >> 16u) * (1.0 / 65536.0);
-                    if (draw >= chance * (1.0 + B.y * {{F(StarField.EnrichmentMax)}})) continue;
-                    if (B.y > 0.0)
-                    {
-                        vec3 dc = normalize(starFaceDir(face, centre));
-                        float gs = dot(dc, MW_POLE), gc = dot(dc, MW_CENTRE);
-                        chance *= 1.0 + B.y * (exp(-gs * gs / {{F(StarField.EnrichmentBand * StarField.EnrichmentBand)}}) + {{F(StarField.EnrichmentBulge)}} * exp(-(1.0 - gc) * {{F(StarField.EnrichmentBulgeSharpness)}}));
-                        if (draw >= chance) continue;
-                    }
+                    if (draw >= chance) continue;
                     uvec3 h = starHash(uvec3(uint(ic.x), uint(ic.y), uint(face + 8 * L)));
                     vec2 j =vec2(float(h.y & 0xFFFFu), float(h.y >> 16u)) * (1.0 / 65536.0);
                     vec2 lo = vec2(ic.x == 0 ? {{F(StarField.FaceEdgeMargin)}} : {{F(StarField.CellMargin)}}, ic.y == 0 ? {{F(StarField.FaceEdgeMargin)}} : {{F(StarField.CellMargin)}});
@@ -243,40 +228,6 @@ public sealed unsafe class SkyRenderer : IDisposable
             return sum;
         }
 
-        // The Milky Way's grain (MilkyWay.GrainShare): a dense layer of faint stars, N cells along a cube face edge (uSkyExtra.w, MilkyWay.GrainCellsFor: about 2 px a cell), each present with a chance and a
-        // Gaussian of STAR_SIGMA pixels, drawn in the band's own colour (glow, the baked glow) with the energy that makes the share of the band's light the
-        // cells' average: so the grain is as fine as the screen, whatever its resolution, and stays put on the sky. lane is a per-pixel noise (the own cell's) for the dust's edges.
-        vec3 milkyWayGrain(int face, vec2 uv, mat2 toPixels, vec3 glow, float N, out float lane)
-        {
-            int NI = int(N);
-            float pixelUv = inversesqrt(abs(toPixels[0].x * toPixels[1].y - toPixels[1].x * toPixels[0].y));
-            vec2 g = (uv * 0.5 + 0.5) * N;
-            vec2 cell = floor(g);
-            vec2 fr = g - cell;
-            ivec2 base = ivec2(cell);
-            lane = float(starHash1((uint(face) * 8192u + uint(clamp(base.y, 0, NI - 1))) * 8192u + uint(clamp(base.x, 0, NI - 1)) + 7919u) >> 16u) * (1.0 / 65536.0);
-            float perCell = 2.0 / (N * pixelUv);          // pixels along a cell
-            vec3 energy = glow * ({{F(MilkyWay.GrainShare / MilkyWay.GrainChance)}} * perCell * perCell);   // a star's light: its cell's share of the band, the chance made up
-            float reach = min(0.5, {{F(StarCoreReach)}} / perCell);
-            ivec2 nb = ivec2(fr.x < reach ? -1 : (fr.x > 1.0 - reach ? 1 : 0), fr.y < reach ? -1 : (fr.y > 1.0 - reach ? 1 : 0));
-            float sigma2 = {{F(MilkyWay.GrainSigma * MilkyWay.GrainSigma)}};
-            float sum = 0.0;
-            for (int k = 0; k < 4; k++)
-            {
-                if (((k & 1) != 0 && nb.x == 0) || ((k & 2) != 0 && nb.y == 0)) continue;
-                ivec2 ic = base + ivec2((k & 1) != 0 ? nb.x : 0, (k & 2) != 0 ? nb.y : 0);
-                if (ic.x < 0 || ic.y < 0 || ic.x >= NI || ic.y >= NI) continue;
-                uvec3 h = starHash(uvec3(uint(ic.x), uint(ic.y), uint(face + 64)));
-                if (float(h.x & 0xFFFFu) * (1.0 / 65536.0) >= {{F(MilkyWay.GrainChance)}}) continue;
-                vec2 j = vec2(float(h.y & 0xFFFFu), float(h.y >> 16u)) * (1.0 / 65536.0);
-                vec2 px = toPixels * ((vec2(ic) + 0.1 + 0.8 * j) * (2.0 / N) - 1.0 - uv);
-                float r2 = dot(px, px);
-                if (r2 > {{F(StarCoreReach * StarCoreReach)}}) continue;
-                float u = float(h.x >> 16u) * (1.0 / 65536.0);
-                sum += (1.0 + {{F(MilkyWay.GrainSpread)}} * (2.0 * u - 1.0)) * exp(-r2 / (2.0 * sigma2)) / (6.2831853 * sigma2);
-            }
-            return energy * sum;
-        }
         """;
 
     static readonly string SkyFragment = "#version 330 core\n" + AtmosphereShaders.Functions + StarShader + $$"""
@@ -284,7 +235,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         in vec2 vNdc;
         out vec4 fragColour;
         uniform mat4 uInverseViewProjection;
-        uniform vec4 uSkyExtra;        // x: the Milky Way gain (Meitou stars), y: cloud density c (0 skips the cloud pass), z: the starfield's shift (texture units, wrapped), w: the Milky Way grain's cells along a cube face edge
+        uniform vec4 uSkyExtra;        // y: cloud density c (0 skips the cloud pass), z: the starfield's shift (texture units, wrapped); x, w unused
         uniform vec4 uPlanetBody0, uPlanetBody1;   // the game's two planets (docs/formats/sky.md "Planets"): xyz towards the centre, w the sine of the angular radius
         uniform vec4 uPlanetSpin;      // cos and sin of each planet's turn about y: (cos 0, sin 0, cos 1, sin 1)
         uniform vec4 uCloudLight;      // rgb: zenithLight, a: Darkness
@@ -331,9 +282,8 @@ public sealed unsafe class SkyRenderer : IDisposable
             // game hours. Sampled outside the branch below so the gradients are defined (t · normalize(xz) is continuous, also at the zenith).
             // The Meitou stars (uStarsMeitou.x: 1) replace that texture with the procedural sky of the celestial sphere (docs/formats/sky.md "Meitou night sky"): the
             // direction turned into celestial coordinates, its cube face position and the map from face units to pixels (all with derivatives, so outside the
-            // non-uniform branches; these conditions are on uniforms), then the Milky Way cube map and the point stars, dimmed and reddened by the air.
+            // non-uniform branches; these conditions are on uniforms), then the point stars, dimmed and reddened by the air.
             vec3 stars = vec3(0.0);
-            vec4 milkyWay = vec4(0.0);   // the baked glow before the dust, and the dust's optical depth
             bool computeStars = uStarsMeitou.x > 0.5;
             int starFaceIndex = 0;
             vec2 starUv = vec2(0.0);
@@ -342,7 +292,6 @@ public sealed unsafe class SkyRenderer : IDisposable
             {
                 vec3 cdir = vec3(dot(uCelX.xyz, dir), dot(uCelY.xyz, dir), dot(uCelZ.xyz, dir));
                 vec3 dcx = dFdx(cdir), dcy = dFdy(cdir);
-                milkyWay = textureGrad(uMilkyWay, cdir, dcx, dcy);
                 float starMajor;
                 starFaceIndex = starFace(cdir, starUv, starMajor);
                 int sk = starFaceIndex >> 1;
@@ -366,18 +315,7 @@ public sealed unsafe class SkyRenderer : IDisposable
                     float airMass = 1.0 / (dir.y + 0.50572 * pow(altitude + 6.07995, -1.6364));
                     vec3 transmission = exp(-EXTINCTION * (airMass - 1.0)) * smoothstep({{F(NightAtmosphere.HorizonLow)}}, {{F(NightAtmosphere.HorizonHigh)}}, altitude);
                     float twinkle = clamp((airMass - {{F(NightAtmosphere.ScintillationFreeAirMass)}}) / {{F(NightAtmosphere.ScintillationRange)}}, 0.0, 1.0) * {{F(NightAtmosphere.ScintillationMax)}};
-                    // The Milky Way: the baked glow, a share of it replaced by the per-pixel grain where there is any glow, then the dust (its depth made crisp per pixel).
-                    vec3 glow = milkyWay.rgb, band = glow;
-                    float lane = 0.5;
-                    if (max(glow.r, max(glow.g, glow.b)) > {{F(MilkyWayGrainFloor)}} && int(uStarsMeitou.y) >= 2)
-                        band = glow * {{F(1 - MilkyWay.GrainShare)}} + milkyWayGrain(starFaceIndex, starUv, starToPixels, glow, uSkyExtra.w, lane);
-                    float dust = milkyWay.a;
-                    float dustS = dust / {{F(MilkyWay.DustScale)}} + {{F(MilkyWay.DustRagged)}} * (lane - 0.5);
-                    dust *= mix({{F(MilkyWay.DustHaze)}}, {{F(MilkyWay.DustCore)}}, smoothstep({{F(MilkyWay.DustEdgeFrom)}}, {{F(MilkyWay.DustEdgeTo)}}, dustS));
-                    band *= exp(-dust * vec3(1.0, 1.0, 1.04));
-                    // The air dims the glow as much as the stars but reddens it less (MilkyWay.BandTransmission): a low band stays whitish, not golden.
-                    vec3 bandTransmission = mix(vec3(transmission.g), transmission, {{F(MilkyWay.ExtinctionColourShare)}});
-                    stars = band * uSkyExtra.x * bandTransmission + starPoints(starFaceIndex, starUv, starToPixels, int(uStarsMeitou.y), uStarsMeitou.z, twinkle) * uStarsMeitou.w * transmission;
+                    stars = starPoints(starFaceIndex, starUv, starToPixels, int(uStarsMeitou.y), uStarsMeitou.z, twinkle) * uStarsMeitou.w * transmission;
                 }
                 col += night * aboveHorizon * stars * (0.35 + clamp(-uAtmoSun.y * 0.45, 0.0, 1.0)) * 2.0;
             }
@@ -547,37 +485,25 @@ public sealed unsafe class SkyRenderer : IDisposable
     public SkyClock Clock { get; set; } = new(54, 5, 23);
 
     /// <summary>
-    /// The Meitou <c>stars</c> switch (viewer design, not the game's; docs/formats/sky.md "Meitou night sky"): a procedural night sky, point stars and a
-    /// Milky Way turning about the sun's axis, in place of the game's starfield texture. False: the game's texture on its own mapping.
+    /// The Meitou <c>stars</c> switch (viewer design, not the game's; docs/formats/sky.md "Meitou night sky"): a procedural night sky, point stars
+    /// turning about the sun's axis, in place of the game's starfield texture. False: the game's texture on its own mapping.
     /// </summary>
     public bool MeitouStars
     {
         get => meitouStars;
-        set { meitouStars = value; if (value) EnsureMilkyWay(); }
+        set => meitouStars = value;
     }
     bool meitouStars = true;
 
-    /// <summary>Gains on the Meitou stars' light, in the starfield texture's units: the point stars, and the Milky Way (<see cref="MilkyWay.Radiance"/> is already in them).</summary>
+    /// <summary>The gain on the Meitou point stars' light, in the starfield texture's units.</summary>
     public float StarGain { get; set; } = DefaultStarGain;
-    public float MilkyWayGain { get; set; } = DefaultMilkyWayGain;
-    public const float DefaultStarGain = 20, DefaultMilkyWayGain = 2.6f;
+    public const float DefaultStarGain = 20;
 
     /// <summary>Seconds on the viewer's clock for the stars' twinkle (set by the frame; 0 holds them still for a picture).</summary>
     public float StarSeconds { get; set; }
 
     /// <summary>How many of <see cref="StarField.Layers"/> the sky draws: all on a discrete GPU, the brighter ones on an integrated one (the faint background is sub-pixel).</summary>
     public int StarLayers { get; set; } = StarField.Layers.Length;
-
-    SampledImage? milkyWayTexture;
-
-    void EnsureMilkyWay()
-    {
-        if (milkyWayTexture is not null) return;
-        var watch = Stopwatch.StartNew();
-        var levels = MilkyWay.Bake(MilkyWay.DefaultFaceSize);
-        milkyWayTexture = SampledImage.CubeHalf(Gpu, MilkyWay.DefaultFaceSize, levels, "sky milky way");
-        Console.WriteLine($"sky       Meitou night sky: Milky Way cube {MilkyWay.DefaultFaceSize}² × 6 baked in {watch.Elapsed.TotalMilliseconds:0} ms");
-    }
 
     /// <summary>The physical haze only: world units in one density scale height of SkyX's air (the game's world unit is Unknown; a viewer choice).</summary>
     public float ScaleHeightUnits { get; set; } = 40000;
@@ -975,7 +901,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         var p = program.P;
         p.Set(program.InverseViewProjection, in inverse);
         program.Colours.Set(p, colours);
-        if (program == sky) SetSkyUniforms(program, GrainCellsFor(inverse));
+        if (program == sky) SetSkyUniforms(program);
         p.ApplyGlobals();   // the atmosphere's uniforms and textures, through the frame globals
     }
 
@@ -996,40 +922,20 @@ public sealed unsafe class SkyRenderer : IDisposable
         Gpu.EndGuest(cmd);
     }
 
-    /// <summary>The Milky Way grain's cells along a cube face edge for the pass in progress: the pixels per radian at the centre of the view (the angle between two neighbouring pixels' rays there, from the open pass's viewport).</summary>
-    float GrainCellsFor(in Matrix4x4 inverse)
-    {
-        var viewport = Gpu.CurrentTargets().Viewport;
-        static Vector3 Ray(in Matrix4x4 m, float x)
-        {
-            var a = Vector4.Transform(new Vector4(x, 0, 0, 1), m);
-            var b = Vector4.Transform(new Vector4(x, 0, 1, 1), m);
-            return Vector3.Normalize(new Vector3(b.X, b.Y, b.Z) / b.W - new Vector3(a.X, a.Y, a.Z) / a.W);
-        }
-        float dx = 2f / MathF.Max(viewport.Width, 1);
-        var (r0, r1) = (Ray(inverse, 0), Ray(inverse, dx));
-        float angle = MathF.Atan2(Vector3.Cross(r0, r1).Length(), Vector3.Dot(r0, r1));   // not Acos: for two pixels' rays the dot product is 1 to within float precision
-        int cells = MilkyWay.GrainCellsFor(angle > 1e-7f ? 1 / angle : 1e7f);
-        if (Environment.GetEnvironmentVariable("MEITOU_GRAIN_LOG") == "1") Console.WriteLine($"sky       Milky Way grain: {cells} cells a face edge ({viewport.Width:0} x {viewport.Height:0} px, {(angle > 0 ? 1 / angle : 0):0} px/rad)");
-        return cells;
-    }
-
-    void SetSkyUniforms(SkyProg program, float grainCells)
+    void SetSkyUniforms(SkyProg program)
     {
         var s = state;
         var p = program.P;
         float coverage = CloudDensity;
         // The Meitou stars: nothing to draw once the sun is high (SkyX's night factor is 0 by day; the game's texture is not drawn then either), so the pass skips them.
         bool meitou = MeitouStars;
-        if (meitou) EnsureMilkyWay();
         bool night = meitou && s.Sun.Y < 0.3f;
         p.Set(program.StarsMeitou, meitou ? (night ? 1 : -1) : 0, StarLayers, StarSeconds, StarGain);
         var frame = CelestialSphere.Frame(Clock, Day, Hour);
         p.Set(program.CelX, frame.X.X, frame.X.Y, frame.X.Z, 0);
         p.Set(program.CelY, frame.Y.X, frame.Y.Y, frame.Y.Z, 0);
         p.Set(program.CelZ, frame.Z.X, frame.Z.Y, frame.Z.Z, 0);
-        if (milkyWayTexture is not null) p.Bind(program.MilkyWay, milkyWayTexture.Sampled());
-        p.Set(program.Extra, MilkyWayGain, coverage, Starfield.Shift(StarHours), grainCells);
+        p.Set(program.Extra, 0, coverage, Starfield.Shift(StarHours), 0);
         // The planets: fixed directions and sizes, each turned by the game's day and hour.
         Span<float> spin = stackalloc float[4];
         for (int i = 0; i < 2; i++)
@@ -1097,7 +1003,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     public void Dispose()
     {
         if (Active == this) Active = null;
-        foreach (var t in new[] { starsTexture, milkyWayTexture, cloudsTexture, cloudsNormalTexture, cloudsTileTexture, irradianceCube, specularCube, ambientMap }) t?.Dispose();
+        foreach (var t in new[] { starsTexture, cloudsTexture, cloudsNormalTexture, cloudsTileTexture, irradianceCube, specularCube, ambientMap }) t?.Dispose();
         foreach (var t in planetTextures) t?.Dispose();
         simple.Dispose();
         sky.Dispose();
@@ -1156,7 +1062,7 @@ sealed class SkyProg : IDisposable
     public readonly UniformHandle InverseViewProjection, Extra, PlanetSpin, CloudLight, CloudSun, CloudWind, Has, StarsMeitou, CelX, CelY, CelZ;
     public readonly UniformHandle[] Planet;
     public readonly SkyColourHandles Colours;
-    public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile, MilkyWay;
+    public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile;
     public readonly Meitou.Rendering.Gpu.Shaders.SamplerInfo? StarsInfo, CloudsInfo;
 
     public SkyProg(GpuContext gpu, string vertex, string fragment, string name)
@@ -1176,7 +1082,6 @@ sealed class SkyProg : IDisposable
         CelX = P.Uniform("uCelX");
         CelY = P.Uniform("uCelY");
         CelZ = P.Uniform("uCelZ");
-        MilkyWay = P.Sampler("uMilkyWay");
         Stars = P.Sampler("uStars");
         Planet0 = P.Sampler("uPlanet0");
         Planet1 = P.Sampler("uPlanet1");
@@ -1305,22 +1210,6 @@ internal sealed class SampledImage : IDisposable
         return new SampledImage(ctx, t, TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge);
     }
 
-    /// <summary>
-    /// A cube map of RGBA16F texels with every level given (<c>levels[level][face]</c>, Vulkan's face order, rows top first), trilinear, clamped to the
-    /// edge: the Milky Way the Meitou <c>stars</c> switch bakes on the CPU (<see cref="MilkyWay.Bake"/>).
-    /// </summary>
-    public static SampledImage CubeHalf(GpuContext ctx, int size, Half[][][] levels, string name)
-    {
-        using var batch = ctx.Uploads.Begin();
-        var t = batch.Create(new TextureDesc(Silk.NET.Vulkan.Format.R16G16B16A16Sfloat, size, size, levels.Length, Kind: TextureKind.Cube, Name: name));
-        for (int level = 0; level < levels.Length; level++)
-        {
-            int s = Math.Max(size >> level, 1);
-            for (int face = 0; face < 6; face++)
-                batch.Write(t, level, face, Rect(s, s), System.Runtime.InteropServices.MemoryMarshal.AsBytes(levels[level][face].AsSpan()));
-        }
-        return new SampledImage(ctx, t, TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge);
-    }
 
     public void Dispose() => Texture.Dispose();
 }

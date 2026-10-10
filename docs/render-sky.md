@@ -6,7 +6,7 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
   `AmbientMap`; facts in [formats/sky.md](formats/sky.md) and [formats/lighting.md](formats/lighting.md)): the sun follows the
   game's formula for the hour (latitude 54, sunrise 5, sunset 23). In game-sky mode (default) everything is in the game's own HDR
   units and numbers. The sky is SkyX's skydome evaluated per pixel with the game's options (wavelengths 0.57 / 0.48 / 0.44,
-  exposure 1.4, 4 samples, HDR mode), the night glow, the game's starfield on its own dome mapping (or, with the Meitou `stars` switch, a procedural night sky: point stars and a Milky Way turning about the sun's axis, [formats/sky.md](formats/sky.md) "Meitou night sky") and the game's two planets (Moon, Moon2: fixed low over +x −z, lit by the sun); no sun disc (the game has none in
+  exposure 1.4, 4 samples, HDR mode), the night glow, the game's starfield on its own dome mapping (or, with the Meitou `stars` switch, a procedural night sky: point stars turning about the sun's axis, [formats/sky.md](formats/sky.md) "Meitou night sky") and the game's two planets (Moon, Moon2: fixed low over +x −z, lit by the sun); no sun disc (the game has none in
   the dome; its sun is the Mie glow), with `--clouds` or a cloudy weather a cloud layer (a stand-in). Terrain, objects and grass
   are lit by `kenshiLight`, the game's deferred lighting model: the sun colour taken from SkyX towards the sun the way the game's
   sky controller takes it, times the daylight factor and the per-biome ambient map's sun brightness; the image-based ambient
@@ -29,4 +29,4 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
   Cost: not re-measured after the 2026-10-05 rewrite (the sky's integral now runs per pixel, about 4 × 5 exponentials, instead of
   a table lookup; the haze runs the same 4-sample integral per pixel). Earlier figures (2026-10-04, table version): the sky pass
   0.06 to 0.09 ms GPU at 1280 × 720 (`MEITOU_SKY_BENCH=1` with `--screenshot` times 100 passes).
-  With the Meitou `stars` switch at night (2026-10-10, 1920 × 1080, RTX 4070, minimum of five runs): the sky pass 0.34 ms against 0.12 ms for the game's starfield texture (0.26 ms without the faint star layer, which an integrated GPU skips; the Milky Way's grain is drawn per pixel, see formats/sky.md); by day the stars are skipped (0.11 ms).
+  With the Meitou `stars` switch at night (2026-10-10, 1920 × 1080, RTX 4070, minimum of five runs): the sky pass 0.34 ms (measured with the Milky Way, since removed) against 0.12 ms for the game's starfield texture (0.26 ms without the faint star layer, which an integrated GPU skips); by day the stars are skipped (0.11 ms).

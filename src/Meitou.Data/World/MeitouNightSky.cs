@@ -21,7 +21,7 @@ public readonly record struct CelestialFrame(Vector3 X, Vector3 Y, Vector3 Z)
 /// </summary>
 public static class CelestialSphere
 {
-    /// <summary>The turn of the sky at game hour 0 of any day, in radians (a viewer choice: puts the Milky Way's bright side over the south in the first half of the night).</summary>
+    /// <summary>The turn of the sky at game hour 0 of any day, in radians (a viewer choice).</summary>
     public const double PhaseOffset = -Math.PI / 3;
 
     /// <summary>The axis the sun's path turns about (unit): the sun turns right-handed about it. For the game's latitude (0, −sin lat, cos lat).</summary>
@@ -103,7 +103,7 @@ public static class NightAtmosphere
 }
 
 /// <summary>One density layer of the procedural starfield: <see cref="Cells"/> cells a side on each cube face, <see cref="Count"/> stars over the sphere between the magnitudes.</summary>
-public readonly record struct StarLayer(int Cells, float Count, float BrightestMagnitude, float FaintestMagnitude, float Enrichment, float Slope = StarField.MagnitudeSlope, float ReachPixels = 2.2f);
+public readonly record struct StarLayer(int Cells, float Count, float BrightestMagnitude, float FaintestMagnitude, float Slope = StarField.MagnitudeSlope, float ReachPixels = 2.2f);
 
 /// <summary>A star the cell of a layer holds (see <see cref="StarField.Candidate"/>): where on its cube face, how bright, which colour.</summary>
 public readonly record struct StarCandidate(bool Present, Vector2 FaceUv, float Magnitude, float Brightness, int Colour, float Phase);
@@ -127,19 +127,14 @@ public static class StarField
     /// <summary>
     /// The layers, brightest first. Counts follow the real sky past magnitude 4.5 (about 900 stars brighter than 4.5, 9000 brighter than 6.5); the bright
     /// layer has a flatter slope and twice as many stars, so a few of the brightest show on any screen (about 100 brighter than magnitude 1 over the whole sphere,
-    /// the real sky has 15). The two faint layers gather towards the Milky Way.
+    /// the real sky has 15). The stars are spread evenly over the sphere.
     /// </summary>
     public static readonly StarLayer[] Layers =
     [
-        new(28, 1800, -2f, 4.5f, 0, 0.35f, 20),
-        new(64, 8100, 4.5f, 6.5f, 2.5f),
-        new(160, 45000, 6.5f, 8.2f, 5f),
+        new(28, 1800, -2f, 4.5f, 0.35f, 20),
+        new(64, 8100, 4.5f, 6.5f),
+        new(160, 45000, 6.5f, 8.2f),
     ];
-
-    /// <summary>The Milky Way's pull on the faint layers' density: a Gaussian of the sine of the galactic latitude of width <see cref="EnrichmentBand"/> plus <see cref="EnrichmentBulge"/> times a bump round the bulge (sharpness: e^−(1−cos)·s).</summary>
-    public const float EnrichmentBand = 0.22f, EnrichmentBulge = 0.8f, EnrichmentBulgeSharpness = 8;
-    /// <summary>The most the band and bulge terms add together (at the bulge's centre).</summary>
-    public const float EnrichmentMax = 1 + EnrichmentBulge;
 
     /// <summary>How many of <see cref="Layers"/> an integrated GPU draws (the first two: the faint background is sub-pixel anyway).</summary>
     public const int IntegratedLayers = 2;
@@ -149,14 +144,6 @@ public static class StarField
     {
         float omega = 4f / (layer.Cells * layer.Cells) * MathF.Pow(1 + centre.X * centre.X + centre.Y * centre.Y, -1.5f);
         return layer.Count / (4 * MathF.PI) * omega;
-    }
-
-    /// <summary>The Milky Way's pull on a faint layer's star density: <c>1 + layer weight · (band + bulge)</c>, from the direction's celestial coordinates.</summary>
-    public static float EnrichmentAt(StarLayer layer, Vector3 celestial)
-    {
-        if (layer.Enrichment <= 0) return 1;
-        float gs = Vector3.Dot(celestial, MilkyWay.Pole), gc = Vector3.Dot(celestial, MilkyWay.Centre);
-        return 1 + layer.Enrichment * (MathF.Exp(-gs * gs / (EnrichmentBand * EnrichmentBand)) + EnrichmentBulge * MathF.Exp(-(1 - gc) * EnrichmentBulgeSharpness));
     }
 
     /// <summary>Unnormalised direction of a point of a cube face: the face's axis ±1 and the other two components (in x, y, z order) from <paramref name="uv"/>.</summary>
@@ -222,7 +209,7 @@ public static class StarField
         var l = Layers[layer];
         int n = l.Cells;
         var centre = new Vector2(2f * (ix + 0.5f) / n - 1, 2f * (iy + 0.5f) / n - 1);
-        float chance = CellChance(l, centre) * EnrichmentAt(l, Vector3.Normalize(FaceDirection(face, centre)));
+        float chance = CellChance(l, centre);
         if ((Pcg1(CellId(layer, face, ix, iy)) >> 16) * (1f / 65536) >= chance) return default;
         var (hx, hy, hz) = Pcg3d((uint)ix, (uint)iy, (uint)(face + 8 * layer));
         var j = new Vector2((hy & 0xFFFFu) * (1f / 65536), (hy >> 16) * (1f / 65536));
@@ -291,239 +278,3 @@ public static class StarColours
     }
 }
 
-/// <summary>
-/// The Milky Way of the <c>stars</c> switch (viewer design, an alien sky: not Earth's): a band round a great circle tilted against the celestial
-/// equator, brightest in a bulge, lumpy with star clouds, cut by dust lanes that redden what they cover, warm in the core and cool at the edges.
-/// <see cref="Radiance"/> evaluates it for a celestial direction (a 3D noise of the direction, so seamless); <see cref="Bake"/> draws it into
-/// a cube map once, with mip levels. Values are in the starfield texture's units (the vanilla nebula runs about 0.1 to 0.3).
-/// </summary>
-public static class MilkyWay
-{
-    /// <summary>The band's plane is inclined by this to the celestial equator (so it reaches this declination, a little off the zenith at latitude 54°).</summary>
-    public const float TiltDegrees = 62, CentreDeclinationDegrees = 15, NodeDegrees = 110;
-
-    /// <summary>The galactic north pole, the bulge's centre and the direction of rising longitude, in celestial coordinates (x: RA 0, y: the pole).</summary>
-    public static readonly Vector3 Pole, Centre, East;
-
-    static MilkyWay()
-    {
-        float ra = NodeDegrees * MathF.PI / 180, tilt = TiltDegrees * MathF.PI / 180;
-        var node = new Vector3(MathF.Cos(ra), 0, MathF.Sin(ra));
-        var up = Vector3.UnitY;
-        var q = MathF.Cos(tilt) * Vector3.Cross(up, node) + MathF.Sin(tilt) * up;
-        Pole = Vector3.Normalize(Vector3.Cross(node, q));
-        float lambda = MathF.Asin(MathF.Sin(CentreDeclinationDegrees * MathF.PI / 180) / MathF.Sin(tilt));
-        Centre = Vector3.Normalize(MathF.Cos(lambda) * node + MathF.Sin(lambda) * q);
-        East = Vector3.Normalize(Vector3.Cross(Pole, Centre));
-    }
-
-    /// <summary>Galactic latitude and longitude (radians, longitude 0 at the bulge) of a celestial direction.</summary>
-    public static (float Latitude, float Longitude) Galactic(Vector3 c) =>
-        (MathF.Asin(Math.Clamp(Vector3.Dot(c, Pole), -1f, 1f)), MathF.Atan2(Vector3.Dot(c, East), Vector3.Dot(c, Centre)));
-
-    static float Smooth(float a, float b, float x) { float t = Math.Clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
-    static float Gauss(float x, float width) => MathF.Exp(-x * x / (width * width));
-
-    // ---- noise (Perlin gradient noise on the direction, in 3D so the cube's edges show no seam) ----
-
-    static uint Hash(int x, int y, int z)
-    {
-        var (a, _, _) = StarField.Pcg3d((uint)x, (uint)y, (uint)z);
-        return a;
-    }
-
-    static readonly Vector3[] Gradients =
-    [
-        new(1, 1, 0), new(-1, 1, 0), new(1, -1, 0), new(-1, -1, 0), new(1, 0, 1), new(-1, 0, 1),
-        new(1, 0, -1), new(-1, 0, -1), new(0, 1, 1), new(0, -1, 1), new(0, 1, -1), new(0, -1, -1),
-    ];
-
-    static float Perlin(Vector3 p)
-    {
-        var f = new Vector3(MathF.Floor(p.X), MathF.Floor(p.Y), MathF.Floor(p.Z));
-        var r = p - f;
-        int x = (int)f.X, y = (int)f.Y, z = (int)f.Z;
-        static float Fade(float t) => t * t * t * (t * (t * 6 - 15) + 10);
-        float u = Fade(r.X), v = Fade(r.Y), w = Fade(r.Z);
-        float G(int dx, int dy, int dz) => Vector3.Dot(Gradients[Hash(x + dx, y + dy, z + dz) % 12], r - new Vector3(dx, dy, dz));
-        float x00 = float.Lerp(G(0, 0, 0), G(1, 0, 0), u), x10 = float.Lerp(G(0, 1, 0), G(1, 1, 0), u);
-        float x01 = float.Lerp(G(0, 0, 1), G(1, 0, 1), u), x11 = float.Lerp(G(0, 1, 1), G(1, 1, 1), u);
-        return float.Lerp(float.Lerp(x00, x10, v), float.Lerp(x01, x11, v), w);
-    }
-
-    /// <summary>Fractal noise, about 0..1 centred on 0.5.</summary>
-    static float Fbm(Vector3 p, int octaves, int seed)
-    {
-        p += new Vector3(seed * 17.31f, seed * 5.77f, seed * 11.13f);
-        float sum = 0, amp = 0.5f, norm = 0;
-        for (int i = 0; i < octaves; i++)
-        {
-            sum += amp * Perlin(p);
-            norm += amp;
-            p = p * 2.03f + new Vector3(3.1f, 1.7f, 5.3f);
-            amp *= 0.5f;
-        }
-        return 0.5f + 0.9f * sum / norm;
-    }
-
-    /// <summary>The overall scale of <see cref="Radiance"/> (the band's brightest places reach about this × 2 in the starfield texture's units).</summary>
-    public const float Scale = 0.07f;
-
-    /// <summary>Stretches a direction along the galactic pole by <paramref name="k"/>, so noise sampled on it has features thinner across the band than along it (dust lanes run along the plane).</summary>
-    static Vector3 Stretch(Vector3 c, float k) => c + Pole * (Vector3.Dot(c, Pole) * (k - 1));
-
-    /// <summary>The share of the band's light that the per-pixel grain carries (the viewer adds it as a dense layer of faint stars, one per cell of <see cref="GrainCells"/> per cube face, present with chance <see cref="GrainChance"/>); the baked cube map keeps the rest as a smooth glow.</summary>
-    public const float GrainShare = 0.5f, GrainChance = 0.85f, GrainSigma = 0.85f, GrainSpread = 0.6f;
-
-    /// <summary>Cells per cube face edge of the grain's star layer when the screen is 1080p at 60 degrees vertical (0.088 degrees a cell at a face's centre, about 1.8 px at 60 degrees vertical); <see cref="GrainCellsFor"/> picks it for other views.</summary>
-    public const int GrainCells = 1024;
-
-    /// <summary>The grain cell's size in pixels the view aims for (at a face's centre, within a factor of 1.4 as the count is a power of two), and the range of the count (4K at 60 degrees takes 2048).</summary>
-    public const float GrainCellPixels = 2.0f;
-    public const int GrainCellsMin = 512, GrainCellsMax = 4096;
-
-    /// <summary>The grain's cells per cube face edge for a view with <paramref name="pixelsPerRadian"/> (at the screen's centre): the power of two that makes a cell about <see cref="GrainCellPixels"/> pixels,
-    /// so the grain is as fine as the screen (a fixed count would make 4K's grain a lattice of dots, 720p's a noise of single pixels). It changes only when a zoom crosses a power of two.</summary>
-    public static int GrainCellsFor(float pixelsPerRadian)
-    {
-        float cells = 2 * MathF.Max(pixelsPerRadian, 1) / GrainCellPixels;   // a face's edge, 2 units, is 2 radians at its centre
-        return Math.Clamp(1 << (int)MathF.Round(MathF.Log2(cells)), GrainCellsMin, GrainCellsMax);
-    }
-
-    /// <summary>How the per-pixel noise <c>h</c> (0..1) breaks up the baked dust's optical depth (<see cref="PixelTau"/>): the depth over <see cref="DustScale"/> gets a noise of amplitude
-    /// <see cref="DustRagged"/> added and is steepened between <see cref="DustEdgeFrom"/> and <see cref="DustEdgeTo"/>; thin haze (below the rim) keeps <see cref="DustHaze"/> of its depth,
-    /// a lane's core is <see cref="DustCore"/> times as dense.</summary>
-    public const float DustScale = 1.2f, DustRagged = 0.3f, DustEdgeFrom = 0.3f, DustEdgeTo = 0.7f, DustHaze = 0.35f, DustCore = 2.4f;
-
-    /// <summary>The dust's optical depth at a pixel from the baked (smooth) depth <paramref name="tau"/> and a per-pixel noise <paramref name="h"/> (0..1): crisp, ragged lane edges where the bake only has a soft ramp.</summary>
-    public static float PixelTau(float tau, float h)
-    {
-        float s = tau / DustScale + DustRagged * (h - 0.5f);
-        return tau * float.Lerp(DustHaze, DustCore, Smooth(DustEdgeFrom, DustEdgeTo, s));
-    }
-
-    /// <summary>How much of the air's reddening (<see cref="NightAtmosphere.Transmission"/>) the glow takes: the air dims the band as much as it dims the stars, but a faint cool-white
-    /// glow turned fully orange-brown low in the sky, so only this share of the colour shift applies (<see cref="BandTransmission"/>).</summary>
-    public const float ExtinctionColourShare = 0.35f;
-
-    /// <summary>The air's transmission of the band's glow: the green channel's dimming for all three, plus <see cref="ExtinctionColourShare"/> of the stars' colour shift.</summary>
-    public static Vector3 BandTransmission(Vector3 starTransmission) => Vector3.Lerp(new Vector3(starTransmission.Y), starTransmission, ExtinctionColourShare);
-
-    /// <summary>The dust's transmission of the three channels for the optical depth <paramref name="tau"/>: neutral (a lane is dark, not brown), a hair less blue.</summary>
-    public static Vector3 Transmit(float tau) => new(MathF.Exp(-tau), MathF.Exp(-tau), MathF.Exp(-tau * 1.04f));
-
-    /// <summary>The Milky Way's glow (linear RGB, the starfield texture's units) before the dust, and the dust's optical depth, in the celestial direction <paramref name="c"/> (unit). This is what the cube map holds (the dust depth in its alpha).</summary>
-    public static (Vector3 Light, float Tau) SmoothLight(Vector3 c)
-    {
-        var (b, l) = Galactic(c);
-        float ellipse = MathF.Sqrt(l * l + b * b / 0.30f);   // the bulge is a flattened ellipse, twice as wide as it is high
-
-        // The band wanders a little; its brightness varies along it.
-        float wander = Fbm(c * 1.4f, 3, 1) - 0.5f, wiggle = Fbm(Stretch(c, 2f) * 4f, 4, 2) - 0.5f;
-        float bw = b + 0.08f * wander + 0.03f * wiggle;
-        float along = 0.30f + 0.70f * Gauss(l, 1.5f) + 0.25f * (Fbm(c * 2f, 3, 3) - 0.5f);
-        float disc = Gauss(bw, 0.16f), core = Gauss(bw, 0.05f);
-        float bulge = Gauss(ellipse, 0.42f), halo = Gauss(ellipse, 0.9f);
-
-        // Structure of the haze down to what the cube map resolves (about 0.2 degrees a texel; the finest octave kept is 7 texels), a little flattened along
-        // the band; the broad swells are weak, so it reads as mottling, not as clouds. The finer grain is the viewer's, per pixel (GrainShare).
-        var sc = Stretch(c, 1.4f);
-        float swell = Smooth(0.32f, 0.68f, Fbm(sc * 4f, 3, 4));
-        float c2 = Fbm(sc * 16f, 3, 5), c3 = Fbm(sc * 45f, 2, 10);
-        float grain = (0.55f + 0.9f * c2) * (0.45f + 1.1f * c3);
-        float light = ((0.30f * disc + 0.55f * core) * along * (0.45f + 0.8f * swell) + 0.5f * bulge * (0.6f + 0.6f * swell) + 0.12f * halo * disc) * grain;
-
-        // Dust: thin, dark rifts running along the plane a little off its middle (noise stretched across the band, so its features are long and thin along it,
-        // warped), a thin rift through the bulge, a few tiny dark clouds. The optical depth is the smooth one; PixelTau sharpens it per pixel.
-        var warp = new Vector3(Fbm(c * 3f, 3, 12) - 0.5f, Fbm(c * 3f, 3, 13) - 0.5f, Fbm(c * 3f, 3, 14) - 0.5f);
-        var dc = Stretch(c, 5f);
-        float ridge1 = 1 - MathF.Abs(2 * Fbm(dc * 7f + warp * 1.2f, 4, 6) - 1);
-        float ridge2 = 1 - MathF.Abs(2 * Fbm(dc * 22f + warp * 2f, 3, 15) - 1);
-        float lane = Smooth(0.68f, 1.0f, ridge1) * (0.6f + 0.6f * Smooth(0.4f, 0.95f, ridge2));
-        float mask = Gauss(b - 0.012f - 0.03f * wander, 0.055f) * (0.5f + 0.9f * Gauss(l, 1.8f));
-        float tau = 1.0f * lane * mask;
-        tau += 0.9f * Gauss(b - 0.008f + 0.015f * wiggle, 0.02f) * Gauss(l, 1.0f) * Smooth(0.25f, 0.75f, Fbm(dc * 8f, 3, 9));
-        tau += 0.4f * Smooth(0.72f, 0.86f, Fbm(Stretch(c, 2f) * 30f, 3, 8)) * Gauss(b, 0.12f);
-
-        // Colour, low in saturation: cool white, a faint warm cream only in the bulge's core.
-        float warm = Math.Clamp(0.6f * Gauss(ellipse, 0.32f), 0, 1);
-        var tint = Vector3.Lerp(new Vector3(0.90f, 0.95f, 1.0f), new Vector3(1.0f, 0.97f, 0.91f), warm);
-        light = MathF.Max(light, 0);
-        light /= 1 + light / 2.2f;   // soft clip: the crowded peaks stay under 2.2
-        return (tint * (light * Scale), tau);
-    }
-
-    /// <summary>The Milky Way's light (linear RGB, the starfield texture's units) in the celestial direction <paramref name="c"/> (unit): the smooth glow through the dust as baked (the viewer adds the grain and the dust's crisp edges per pixel).</summary>
-    public static Vector3 Radiance(Vector3 c)
-    {
-        var (light, tau) = SmoothLight(c);
-        return light * Transmit(tau);
-    }
-
-    // ---- the cube map ----
-
-    /// <summary>The direction (unit) through the centre of texel (<paramref name="x"/>, <paramref name="y"/>) of <paramref name="face"/> (Vulkan's order +X −X +Y −Y +Z −Z; rows top first) of a cube map of <paramref name="size"/>².</summary>
-    public static Vector3 TexelDirection(int face, int x, int y, int size)
-    {
-        float sc = 2 * (x + 0.5f) / size - 1, tc = 2 * (y + 0.5f) / size - 1;
-        var d = face switch
-        {
-            0 => new Vector3(1, -tc, -sc),
-            1 => new Vector3(-1, -tc, sc),
-            2 => new Vector3(sc, 1, tc),
-            3 => new Vector3(sc, -1, -tc),
-            4 => new Vector3(sc, -tc, 1),
-            _ => new Vector3(-sc, -tc, -1),
-        };
-        return Vector3.Normalize(d);
-    }
-
-    /// <summary>The cube map's default face size (0.18° a texel at a face's centre).</summary>
-    public const int DefaultFaceSize = 512;
-
-    /// <summary>
-    /// Bakes the cube map: <c>[level][face]</c> of RGBA half floats (the glow before the dust, and the dust's optical depth in alpha), levels down to 1×1 by box filtering. Takes about 0.1 s of a few cores at 512².
-    /// </summary>
-    public static Half[][][] Bake(int size = DefaultFaceSize)
-    {
-        int levels = 1 + (int)Math.Floor(Math.Log2(size));
-        var current = new float[6][];
-        for (int f = 0; f < 6; f++) current[f] = new float[size * size * 4];
-        Parallel.For(0, 6 * size, i =>
-        {
-            int face = i / size, y = i % size;
-            var data = current[face];
-            for (int x = 0; x < size; x++)
-            {
-                var (v, tau) = SmoothLight(TexelDirection(face, x, y, size));
-                int o = (y * size + x) * 4;
-                data[o] = v.X; data[o + 1] = v.Y; data[o + 2] = v.Z; data[o + 3] = tau;
-            }
-        });
-        var result = new Half[levels][][];
-        for (int level = 0; level < levels; level++)
-        {
-            int s = Math.Max(size >> level, 1);
-            result[level] = new Half[6][];
-            for (int face = 0; face < 6; face++)
-            {
-                var src = current[face];
-                var half = new Half[s * s * 4];
-                for (int i = 0; i < half.Length; i++) half[i] = (Half)src[i];
-                result[level][face] = half;
-                if (s > 1)
-                {
-                    int n = s / 2;
-                    var next = new float[n * n * 4];
-                    for (int y = 0; y < n; y++)
-                        for (int x = 0; x < n; x++)
-                            for (int ch = 0; ch < 4; ch++)
-                                next[(y * n + x) * 4 + ch] = 0.25f * (src[((2 * y) * s + 2 * x) * 4 + ch] + src[((2 * y) * s + 2 * x + 1) * 4 + ch]
-                                    + src[((2 * y + 1) * s + 2 * x) * 4 + ch] + src[((2 * y + 1) * s + 2 * x + 1) * 4 + ch]);
-                    current[face] = next;
-                }
-            }
-        }
-        return result;
-    }
-}
