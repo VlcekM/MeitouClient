@@ -3,6 +3,11 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.6.1
+
+- Tab panel: sliders and checkboxes spread over three columns, so the panel no longer runs off the bottom of the screen
+- Viewer: the time speed slider goes up to 240 game hours per real minute
+
 ## v0.6.0
 
 - Light shafts: hills, buildings and trees cast shadows into the haze and weather fog, and ridges cast dark wedges into the sky towards a low sun (on by default, --no-shafts turns it off)
