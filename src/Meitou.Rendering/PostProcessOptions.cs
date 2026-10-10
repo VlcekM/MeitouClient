@@ -38,6 +38,9 @@ public sealed class PostOptions
     /// <summary>The air layer by the time of day (morning mist, evening haze): <see cref="ShaftAirDawn"/> times the density at sunrise and at sunset, easing down to
     /// <see cref="ShaftAirDay"/> times it over <see cref="ShaftAirRamp"/> hours after sunrise and before sunset (smoothstep).</summary>
     public float ShaftAirDawn = 1, ShaftAirDay = 0, ShaftAirRamp = 5.5f;
+    /// <summary>The shafts under clouds (docs/render-shafts.md "Cloud cover"): the darkening loses <see cref="ShaftCloudShade"/> of itself as the cloud density goes
+    /// from <see cref="ShaftCloudFrom"/> to 1 (smoothstep).</summary>
+    public float ShaftCloudShade = 0.85f, ShaftCloudFrom = 0.3f;
     /// <summary><c>--shafts-debug</c>: the picture is the share of the haze the sun reaches (white lit, black shadowed).</summary>
     public bool ShaftDebug;
     /// <summary>0: each draw's size follows its sprites' mean screen size; 1, 2 or 4: every alpha and additive draw at that divisor (for measuring).</summary>
@@ -83,7 +86,7 @@ public sealed class PostOptions
     public void CopyFrom(PostOptions other)
     {
         Preset = other.Preset; Fxaa = other.Fxaa; HeatHaze = other.HeatHaze; Debug = other.Debug; Ssao = other.Ssao;
-        Dither = other.Dither; LowResParticles = other.LowResParticles; LightShafts = other.LightShafts; ShaftStrength = other.ShaftStrength; ShaftSky = other.ShaftSky; ShaftAir = other.ShaftAir; ShaftAirDawn = other.ShaftAirDawn; ShaftAirDay = other.ShaftAirDay; ShaftAirRamp = other.ShaftAirRamp; ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
+        Dither = other.Dither; LowResParticles = other.LowResParticles; LightShafts = other.LightShafts; ShaftStrength = other.ShaftStrength; ShaftSky = other.ShaftSky; ShaftAir = other.ShaftAir; ShaftAirDawn = other.ShaftAirDawn; ShaftAirDay = other.ShaftAirDay; ShaftAirRamp = other.ShaftAirRamp; ShaftCloudShade = other.ShaftCloudShade; ShaftCloudFrom = other.ShaftCloudFrom; ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; SsaoRadius = other.SsaoRadius;
         SsaoStrength = other.SsaoStrength; SsaoCharacterStrength = other.SsaoCharacterStrength; ToneMap = other.ToneMap; ToneMix = other.ToneMix; Grade = other.Grade;
         Saturation = other.Saturation; Contrast = other.Contrast; HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength;
     }
@@ -96,6 +99,7 @@ public sealed class PostOptions
           --shafts / --no-shafts   light shafts: the haze darkened where the sun is shadowed along the view (default on in Meitou; the `shafts` switch)
           --shafts-strength <0..1> (0.8)  --shafts-sky <0..1> (0.5)  --shafts-grid <cells across>,<slices>[,<samples>] (160,64,2)  --shafts-near <u> (50)  --shafts-debug (the sun's share of the haze as the picture)
           --shafts-air <x>   the lit air layer near the ground, x its density (default 1; 0 none)  --shafts-air-height <u> (800)  --shafts-air-phase <0..0.95> (0.6, how much it glows towards the sun)
+          --shafts-clouds <0..1> (0.85)  --shafts-clouds-from <c> (0.3)   how much of the shafts a full cloud cover takes away, fading in from cloud density c
           --shafts-air-dawn <x> (1)  --shafts-air-day <x> (0)  --shafts-air-ramp <h> (5.5)   the air by the time of day: x dawn at sunrise and sunset, easing to x day over h hours after sunrise and before sunset
           --heat-haze <x> / --no-heat-haze   the game's heat haze (default on; strength from the weather's `heat haze`); x replaces that field
           --heat-haze-strength <x>   scales the heat haze (default 0.5, the Meitou `heathaze` switch; 1 is the game's, 0 hides it)
@@ -134,6 +138,8 @@ public sealed class PostOptions
             case "--shafts-air-phase": ShaftAirPhase = Math.Clamp(F(), 0, 0.95f); return true;
             case "--shafts-air-dawn": ShaftAirDawn = Math.Max(F(), 0); return true;
             case "--shafts-air-day": ShaftAirDay = Math.Max(F(), 0); return true;
+            case "--shafts-clouds": ShaftCloudShade = Math.Clamp(F(), 0, 1); return true;
+            case "--shafts-clouds-from": ShaftCloudFrom = Math.Clamp(F(), 0, 0.99f); return true;
             case "--shafts-air-ramp": ShaftAirRamp = Math.Max(F(), 0.1f); return true;
             case "--shafts-grid":
                 {

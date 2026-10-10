@@ -24,4 +24,16 @@ public class LightShaftTests
         Assert.True(At(6) > At(7) && At(7) > At(9));
         Assert.True(At(22) > At(21) && At(21) > At(19));
     }
+
+    [Fact]
+    public void Clouds_fade_the_shafts_from_the_threshold_to_full_cover()
+    {
+        var o = new PostOptions();
+        float At(float c) => WorldFrame.ShaftCloudFade(o, c);
+        Assert.Equal(1, At(0), 4);
+        Assert.Equal(1, At(o.ShaftCloudFrom), 4);
+        Assert.Equal(1 - o.ShaftCloudShade, At(1), 4);
+        Assert.Equal(1 - o.ShaftCloudShade / 2, At((o.ShaftCloudFrom + 1) / 2), 4);
+        Assert.True(At(0.5f) > At(0.7f) && At(0.7f) > At(0.9f));
+    }
 }

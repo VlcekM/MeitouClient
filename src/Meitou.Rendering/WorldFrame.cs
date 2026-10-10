@@ -1438,7 +1438,7 @@ static class WorldFrame
         gpu.Post!.RunGiResolve();
         StageClock.Phase("gi resolve");
         // The Meitou light shafts (docs/render-shafts.md): the haze darkened where the sun is shadowed along the view, before the fog volumes blend over it.
-        if (gpu.Shadow is { Enabled: true }) { gpu.Post!.RunLightShafts(ShaftDarkening(post.Options, light, sun.Y), Math.Min(camera.ViewDistance, gpu.Sky.HazeCompleteDistance ?? gpu.Sky.HazeDistance), floor, ShaftAirByTime(post.Options, scene.Clock, hour)); StageClock.Phase("shafts"); }
+        if (gpu.Shadow is { Enabled: true }) { gpu.Post!.RunLightShafts(ShaftDarkening(post.Options, light, sun.Y) * ShaftCloudFade(post.Options, gpu.Sky.CloudDensity),Math.Min(camera.ViewDistance, gpu.Sky.HazeCompleteDistance ?? gpu.Sky.HazeDistance), floor, ShaftAirByTime(post.Options, scene.Clock, hour)); StageClock.Phase("shafts"); }
         if (gpu.DebugShadows >= 2 && gpu.Shadow is not null && gpu.Post is not null) gpu.Shadow.CaptureDepth(gpu.Post.SceneDepth, rw, rh);
         // The placed fog volumes over the finished scene (opaque, water, sky; the haze is in the shaders), one pass reading the depth, as the game's queue 82 does.
         gpu.Post!.RunFogVolumes(gpu.FogVolumes is { UsedData: > 0 });
@@ -1504,6 +1504,15 @@ static class WorldFrame
         float share = sun / Math.Max(sun + sky, 1e-4f);
         float t = Math.Clamp((sunY + 0.02f) / 0.07f, 0, 1);
         return o.ShaftStrength * share * t * t * (3 - 2 * t);
+    }
+
+    /// <summary>What is left of the light shafts under the cloud layer (docs/render-shafts.md "Cloud cover"): the game's sun shines through any weather, but
+    /// crisp shafts under a full overcast in the rain read wrong, so the darkening loses <c>ShaftCloudShade</c> of itself as the cloud density c goes from
+    /// <c>ShaftCloudFrom</c> to 1 (smoothstep).</summary>
+    internal static float ShaftCloudFade(PostOptions o, float cloudDensity)
+    {
+        float t = Math.Clamp((cloudDensity - o.ShaftCloudFrom) / Math.Max(1 - o.ShaftCloudFrom, 1e-3f), 0, 1);
+        return 1 - Math.Clamp(o.ShaftCloudShade, 0, 1) * t * t * (3 - 2 * t);
     }
 
     /// <summary>

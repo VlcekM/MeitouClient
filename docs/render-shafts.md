@@ -59,7 +59,18 @@ air visibility, the fog shading rate) do not define it, so their SPIR-V is uncha
 is 0 and the scale is exactly 1.
 
 *Observed* 2026-10-10: in the swamp at sunset, the fog walls under the canopy go much darker and the forest behind them shows through. Whether
-that is too strong under the swamp's rain clouds is **open**: the darkening compares the sun's colour with the sky's and does not know about cloud cover.
+that is too strong under the swamp's rain clouds is **open**: the darkening compares the sun's colour with the sky's and does not know about cloud cover
+(see "Cloud cover" below for the fade added later that day).
+
+## Cloud cover
+
+*Observed* 2026-10-10: in the swamp's rain (`Kenshi_Wet_Forest`, clouds density 1) the trees cast crisp, dark shafts across the whole sky through the
+rain haze, which reads wrong under a full overcast. The game's weather never touches the sun ([formats/weather.md](formats/weather.md) "Sky and
+clouds"), so the sun colour alone cannot tell. *From the code.* `WorldFrame.ShaftCloudFade` scales the darkening `k` by
+`1 − shade · smoothstep(from, 1, c)`, with `c` the sky's cloud density after the weather's 30 s transition (`SkyRenderer.CloudDensity`, so `--clouds`
+wins), `shade` 0.85 (`--shafts-clouds`) and `from` 0.3 (`--shafts-clouds-from`). Clear weathers (c 0) keep the shafts as they were; a full overcast
+keeps 15 % of them. The ground shadows are not touched (that would be a separate switch). Whether 0.85 is right is **open** until it has been looked at
+in the swamp rain.
 
 ## Air layer
 
