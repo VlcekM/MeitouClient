@@ -285,7 +285,13 @@ bank `SFX_Amb_Weather_Bank.bnk`. Effects carry their own AMBIENT_SOUND (`sound`,
 ### Spawning (Verified (decompiled), FUN_1409dcaf0, FUN_140103210; behaviour from fcs.def where marked)
 
 When a region's weather changes, its old effect groups are removed and one group is made per entry of the weather's `effects`
-list, with the entry's count and respawn times and the weather's effect strength. The group class depends on the EFFECT `type`:
+list, with the entry's count and respawn times and the weather's effect strength. The group class depends on the EFFECT `type`.
+**Viewer choice (Observed, 2026-10-10; the game is immediate and per region, the viewer shows only the camera's region)**: the groups of
+the camera's region are changed on the side, not at the moment the weather changes: the new groups are warmed on a worker and swapped in when
+ready (the old weather's particles are drawn meanwhile), and a change of *region* (the camera crossing a border, which at a coast with small
+regions of alternating colours flipped Vain and Dreg back and forth several times in a flight) waits 2 s before anything is made and is dropped if
+the weather returns to the shown one in that time; a change inside the region (the scheduler's next weather, a forced or rerolled one) waits for
+nothing. Details and measurements: [particle-universe.md](particle-universe.md#weather-changes-weathergroups-observed-a-viewer-choice).
 
 | `type` | Group | Behaviour (fcs.def, **Observed**) |
 |---|---|---|

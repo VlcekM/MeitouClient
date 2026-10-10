@@ -246,7 +246,8 @@ For an EFFECT of type CAMERA, CAMERA_RAIN or CAMERA_ACID_RAIN ([weather.md](weat
   the camera is 1500 away) so single precision does not stutter the flakes.
 - **Start-up** (**Observed**, a viewer choice): a new group is stepped for the longest particle life of its system (at most 40 s;
   `--particle-prewarm <s>` replaces it, 0 starts empty) so particles are present at the first picture; the screenshots rely on it. The game
-  has only `fast_forward`.
+  has only `fast_forward`. The first groups of a view are warmed at once on the render thread; the groups of a later weather change are not
+  (next section).
 - EFFECT fields used: `colour multiplier` (rgb tint of the particles), `wind affected` (the particles drift with the wind × `wind speed
   mult` units per second), `wind direction emission` (the emitted horizontal direction follows the wind), `min/max wind span rate` (the
   emission rate scale: 0 at the minimum wind speed, 1 at the maximum; with only a minimum, 0 below it). **Not used yet**: `sky colour
@@ -257,6 +258,89 @@ For an EFFECT of type CAMERA, CAMERA_RAIN or CAMERA_ACID_RAIN ([weather.md](weat
   replaced by the scheduler's wind). The other group types, the placers, fog volumes and lightning are built since part two
   ([weather.md](weather.md#the-groups-in-detail-verified-decompiled-where-marked-the-rest-observed)).
 
+## Weather changes (`WeatherGroups`, Observed: a viewer choice)
+
+The game removes a region's effect groups and makes the new weather's the moment its weather changes ([weather.md](weather.md#spawning-verified-decompiled-fun_1409dcaf0-fun_140103210-behaviour-from-fcsdef-where-marked), **Verified (decompiled)**),
+and every region's groups exist all the time, so nothing starts cold. The viewer shows the camera's region only and a new group has no
+particles, so a change costs a **warm-up**: the group's schedule (units placed in 0.5 s steps over the group's longest particle life, at most 40 s)
+and then the simulation of the time that queued up, unit by unit. What it costs, with the shipped weathers
+(`meitou-tools particles warmup`, Release, 2026-10-10, second pass of each effect so that the compiling is out, on a PC that was running other viewers: good
+to a factor of 1.5 at best, read the ratios; "a frame" is one 1/60 s frame of the warmed group):
+
+| Weather → effect (type) | units | particles | warm-up | schedule | simulation, one thread | simulation, parallel | a frame, serial / parallel |
+|---|---|---|---|---|---|---|---|
+| `Heavy_Rain` → `Kenshi_Heavy_Rain` (CAMERA_RAIN) | 1 | 4125 | 1 s | 0.0 ms | 5.4 ms | 5.4 ms | 0.19 / 0.20 ms |
+| `Kenshi_red_rain` → `Kenshi_red_Rain` (CAMERA_RAIN) | 1 | 4125 | 1 s | 0.0 ms | 6.9 ms | 7.7 ms | 0.27 / 0.25 ms |
+| `Sand stream ambient` → `Sand-Stream ambient` (GLOBAL) | 5 | 3730 | 10 s | 0.2 ms | 62 ms | 31 ms | 0.47 / 1.03 ms |
+| `shek desert storm` → `shek desert` (GLOBAL) | 1 | 1997 | 10 s | 0.1 ms | 44 ms | 47 ms | 0.18 / 0.17 ms |
+| `purple desert ambience` → `purple desert` (GLOBAL) | 1 | 2998 | 20 s | 0.1 ms | 151 ms | 144 ms | 0.37 / 0.41 ms |
+| `Kenshi_Ash-Flakes` → `Kenshi_Ash-Flakes_Light` (CAMERA) | 1 | 1544 | 20 s | 0.0 ms | 25 ms | 10 ms | 0.03 / 0.03 ms |
+| `Kenshi_Ash-Flakes` → `poison gas [White]` (WANDERING_GAS) | 70 | 10477 | 5 s | 0.3 ms | 62 ms | 35 ms | 0.68 / 1.63 ms |
+| `Twister Storm` → `Twister-Chuff` (WANDERING) | 1 | 1219 | 4 s | 0.0 ms | 14 ms | 14 ms | 0.13 / 0.12 ms |
+
+The schedule is cheap (at most 0.3 ms; the first group of a kind in a process is 2 to 4 ms slower for the compiling: **Observed** in the flights, before `EffectGroups.PrimeJit`),
+the simulation is the cost (5 to 150 ms of one thread), and for the single-unit groups, which are most of them, a parallel loop gains nothing; for the
+many-unit ones it halves the simulation and more than doubles the cost of every later frame (the last column), which is why a frame's units do not go to a parallel loop (`EffectSimulator`).
+
+Until 2026-10-10 the viewer did all of it on the render thread in the frame after the change (`ParticleRenderer.SetWeather` rebuilt, the next `Update`
+pre-warmed), and rebuilt again at every flip of the camera's region: `particles` frames of 74 ms (flight at 2100 units/s) and 244, 87, 85 ms (9000 units/s),
+and the checkerboard of small regions at a coast (Vain and Dreg) flipped the weather several times within a few hundred frames. Now:
+
+- **The two halves of a pre-warm** (`EffectGroup.BeginWarm`, `EffectGroup.Simulate` / `SimulateSerial`; `Prewarm` is both). The schedule places units with the world's
+  ground height, which only the render thread may ask (the terrain's height grid swaps as it streams), so a worker is given a frozen copy of the world
+  (`EffectWorld.Frozen`: the terrain's immutable `HeightSnapshot`, taken on the render thread by `FreezeGroundHeight`, which any thread may read; the area, radii and
+  density are copied) and the groups go back to the live world (`EffectGroup.Rebind`) before they are swapped in. The schedule costs at most 0.3 ms (the table; the first
+  group of each kind is slower for the compiling, which `EffectGroups.PrimeJit` does on a worker at start-up, as the viewer runs with tiered compilation off).
+  The simulation touches only the units and runs on any thread.
+- **A change is made on the side** (`WeatherGroups`, `EffectSet`, `EffectWarmer`): once wanted, the new groups are created on the render thread (0.6 to 0.75 ms in the
+  logged build starts: 0.5 to 0.6 of it the world's `Frozen` copy, 0.06 to 0.08 the groups, 0.04 to 0.06 the queuing; **Observed**, `MEITOU_PARTICLE_LOG=1`), queued for the warm-up thread, which runs their schedules and simulates their queued time
+  (one unit after the other, at below-normal priority: the frame keeps its cores and the pool its workers), and
+  when it is done the next `Update` swaps them for the old groups (with the frame's own simulation finished, so nothing runs on either). The old weather's
+  particles are drawn until then; the new ones appear fully formed (the same particle counts as the old on-thread pre-warm: same seeds, same steps, `WeatherGroupsTests`; a
+  frame three after a swap shows the new rain over the whole picture, one before it still the old weather's dust). The very first groups
+  of a view (and every change with `BackgroundWeather` false) are still made and warmed at once on the calling thread, so a still picture has its particles: that is
+  the 40 to 60 ms `particles` frame 1 of a view. **The warm-up thread is made once, at start-up** (`WeatherGroups` constructor): the first version started a thread for every change
+  and the render thread paid 3.4, 4.2, 5.6, 9.6, 17.6, 24.6 and 72.8 ms of `weather change` in the frames that started one (**Observed**, three flights of 2026-10-10 with the log
+  split into the change, the texture preload and the rest); with a persistent thread that only has to be signalled, three flights had no such frame over 1.4 ms. The
+  cause is probably that `Thread.Start` does not return before the new thread has run, and a below-normal thread waits for a core when other programs keep them
+  busy (**Unknown**, not isolated: the stalls went when the start did).
+- **Hysteresis on the region** (`WeatherEffectInput.Region`, the scheduler's `WeatherState.RegionName`): the game already switches the camera's region only
+  once the camera is 500 units outside its current cell ([weather.md](weather.md#region-at-the-camera-verified-decompiled-fun_1409e8f70)), so
+  the flips seen in a flight are genuine border cells of alternating colour, not a failure of that rule. The viewer adds a **dwell**: a change to the groups of
+  another *region* is only started when the weather has stayed what it is for `--particle-dwell` seconds (default 2), and forgotten if the weather returns to the shown one
+  before (or while the new groups are being warmed: that warm-up is cancelled). A change *inside* the camera's region (the scheduler's next weather, the Tab panel's reroll, a
+  forced weather, which names no region) waits for nothing. A weather shared by two regions (`clear nothing`, `Default`) is one list object, so crossing between
+  such regions changes nothing at all. A camera that stays in a region gets its weather's particles about 2 s plus the warm-up after crossing in, a viewer
+  choice against the game's immediate change; the sky, fog, rain level and wetness are not delayed.
+- **Textures**: a particle's texture is read and decoded on a worker (`BackgroundWork`) when its group is created, uploaded when first drawn; a technique whose
+  texture is still being decoded is left out of the frame (the first frames of a view wait for it). Before, the first draw of a texture decoded its PNG on the render thread: 3.3 to 5.4 ms.
+
+**Numbers** (**Observed**, 2026-10-10, Release, `MEITOU_STREAM_LOG=1 MEITOU_BENCH_SKIP=60 meitou-viewer.exe --world --at -60564,-45142 --distance 1400 --pitch 25 --size 1600x900
+--fly-benchmark 3600 --fly-speed 150 --fly-radius 60000 --log-spikes`; slow flight `--fly-speed 35`; the new builds with `MEITOU_PARTICLE_LOG=1`, which prints a line for every frame
+whose particle work takes over 2 ms on the render thread and one at every swap). The runs alternate between the baseline (master 0834d0d) and the new code, one viewer at a time, on a PC
+that other programs were using, so the frame-time percentiles differ from run to run (p99 21 to 36 ms for both): read the `particles` stage of the worst frames and the counts over 33 ms.
+The runs A to D were builds on the way (A, B: the frame's simulation on its own thread, `BeginWarm` still on the render thread; C, D: `BeginWarm` on a worker, a thread
+started for each change); E and F are the code described above.
+
+| Fast flight | `particles` stage, worst frames | max frame | frames over 33 ms |
+|---|---|---|---|
+| baseline A | 218.9, 97.0, 73.5 ms | 228 ms | 8 |
+| new A | 4 frames over 2 ms, worst 9.8 | 37.6 ms | 2 |
+| baseline B | 207.1, 133.2, 81.1, 55.1, 20.9 ms | 222 ms | 28 |
+| new B | 4 frames over 2 ms, worst 8.7 | 55.7 ms | 3 |
+| baseline C | 365.8, 145.0, 110.0, 80.5 ms | 379 ms | 26 |
+| new C | 3 frames over 2 ms, worst 72.9 (the thread start) | 116 ms | 32 |
+| new D | 3 frames over 2 ms, worst 17.8 (the thread start) | 67 ms | 18 |
+| baseline E | 296.6, 122.4, 109.6, 86.0 ms | 308 ms | 47 |
+| **new E** | 1 frame over 2 ms (2.0) | 35.3 ms | 1 |
+| **new F** | none (a 22.0 ms stage in a frame with a 21.3 ms GC pause) | 39.4 ms | 3 |
+
+Slow flight: the baseline's `particles` stage in its worst frames was 74.3 and 17.8 ms (max frame 85 ms, 3 over 33 ms) and 73.8 and 27.0 ms (81 ms, 6); new E had no frame with
+particle work over 2 ms (max frame 30.0 ms, none over 33 ms). The baseline code with the same log (the earlier instrumented run, fast flight) had 76 frames with particle work over 2 ms, 26 of
+them over 10 ms and 10 over 30 ms (max 287.5 ms); E, F and the slow E together have one such frame, apart from the
+first frame of a view (40 to 60 ms: the first groups are made and warmed on the spot). What is left in the worst frames of the new runs is not particles: foliage layout (`upd-foliage` 25 to 55 ms),
+GC pauses (up to 21 ms), shadows, reflection and the GPU wait.
+
 ## Pools, threads and cost (Observed: measured 2026-10-08, Release, `--fly-benchmark 150`)
 
 - **Lazy pools**: a technique's arrays start at 128 particles and double up to its quota (`ParticleSimulation.InitialPool`), so the 43 placers
@@ -264,8 +348,17 @@ For an EFFECT of type CAMERA, CAMERA_RAIN or CAMERA_ACID_RAIN ([weather.md](weat
 - **Units**: one `EffectUnit` per handler, each with its own simulation; `Advance()` runs a unit's queued time in steps of 1/30 s (1/10 s while a
   backlog of more than 3 s is caught up, at most 40 steps a frame; a unit with more than 1 s left is not drawn). Units farther than 4000 units
   step at 20 Hz, beyond 9000 at 10 Hz (the time queues up). **Background**: after the light phase (schedule, place, move, queue time) the main
-  thread starts `Parallel.ForEach` over the units on the pool and goes on recording; `Draw` waits (`Sync`). The wait is what the render
-  thread pays: 0.15 ms for Heavy_Rain (one unit), about 0.9 ms for the Great Desert streamers (19 units, 2 ms of simulation on the pool).
+  thread hands the units to `EffectSimulator` and goes on recording; `Draw` waits (`Sync`). The wait is what the render
+  thread pays: 0.15 ms for Heavy_Rain (one unit), about 0.9 ms for the Great Desert streamers (19 units, 2 ms of simulation on the pool;
+  2026-10-08, when it ran on the pool).
+- **Threads** (**Observed**, 2026-10-10): the frame's simulation used to be `Task.Run` plus `Parallel.ForEach` on the shared thread pool. A task queued
+  behind a burst of the other systems' `Parallel.For` (shore bake, texture and impostor encodes, ...) started 10 to 70 ms late: in an instrumented fast flight
+  (`MEITOU_PARTICLE_LOG=1`, the baseline code with the same log: 76 frames with particle work over 2 ms, 65 of them the render thread waiting in `Sync`, up to 61.9 ms
+  for a simulation of one unit that ran in 0.2 to 1 ms but had been queued 10 to 60 ms before it started). Now `EffectSimulator` has a thread of its own (above normal priority) and the
+  units of a frame are claimed one at a time by it and by whoever waits for the job, so a worker the CPU has not given a core yet costs nothing: the waiter runs the
+  units itself. A frame's units cost only 0.5 to 1.2 ms in all (the "a frame" columns above), so a parallel loop gained nothing and lost frames whenever one of its helpers was not
+  scheduled; and the affector passes' own `Parallel.For` (`ParticleSimulation.ForRange`) now starts at 16384 particles instead of 4096 (Heavy_Rain with 4125 particles: 0.47 ms serial,
+  0.51 ms parallel).
 - **Instances are built in ordinary memory** (`ParticleSimulation.Collect` into a reused array, depth partition there) and copied once into
   the frame's write-combined constants: filling them field by field and partitioning in place cost 5.5 ms for 18000 particles, 0.3 ms now.
 - **Measured main-thread cost** per frame (update + draw, wait included): Heavy_Rain 0.5 ms, great desert streamers about 2 ms (1.2 ms
