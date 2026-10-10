@@ -118,6 +118,9 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// <summary>The procedural stars' look, in pixels (the Meitou <c>stars</c> switch): the core's Gaussian sigma, and for stars brighter than <see cref="StarHaloFrom"/> a wider halo (sigma <see cref="StarHaloSigma"/> + <see cref="StarHaloGrow"/> × brightness, a share <see cref="StarHaloShare"/> of the brightness above the threshold, at most <see cref="StarHaloMax"/>).</summary>
     public const float StarSigma = 0.7f, StarCoreReach = 2.2f, StarHaloFrom = 0.4f, StarHaloSigma = 1.8f, StarHaloGrow = 1.6f, StarHaloShare = 0.25f, StarHaloMax = 0.5f;
 
+    /// <summary>The baked glow (texture units) below which a pixel gets no Milky Way grain (the band's far tails; the grain's light is proportional to the glow, so nothing pops).</summary>
+    public const float MilkyWayGrainFloor = 0.0008f;
+
     // The Meitou night sky (the `stars` switch; docs/formats/sky.md "Meitou night sky"): procedural point stars on the celestial sphere, evaluated per pixel,
     // and the baked Milky Way cube map. StarField / MilkyWay / NightAtmosphere (Meitou.Data) are the reference for every number here.
     static string Vec3(Vector3 v) => $"vec3({F(v.X)}, {F(v.Y)}, {F(v.Z)})";
@@ -239,6 +242,41 @@ public sealed unsafe class SkyRenderer : IDisposable
             }
             return sum;
         }
+
+        // The Milky Way's grain (MilkyWay.GrainShare): a dense layer of faint stars, N cells along a cube face edge (uSkyExtra.w, MilkyWay.GrainCellsFor: about 2 px a cell), each present with a chance and a
+        // Gaussian of STAR_SIGMA pixels, drawn in the band's own colour (glow, the baked glow) with the energy that makes the share of the band's light the
+        // cells' average: so the grain is as fine as the screen, whatever its resolution, and stays put on the sky. lane is a per-pixel noise (the own cell's) for the dust's edges.
+        vec3 milkyWayGrain(int face, vec2 uv, mat2 toPixels, vec3 glow, float N, out float lane)
+        {
+            int NI = int(N);
+            float pixelUv = inversesqrt(abs(toPixels[0].x * toPixels[1].y - toPixels[1].x * toPixels[0].y));
+            vec2 g = (uv * 0.5 + 0.5) * N;
+            vec2 cell = floor(g);
+            vec2 fr = g - cell;
+            ivec2 base = ivec2(cell);
+            lane = float(starHash1((uint(face) * 8192u + uint(clamp(base.y, 0, NI - 1))) * 8192u + uint(clamp(base.x, 0, NI - 1)) + 7919u) >> 16u) * (1.0 / 65536.0);
+            float perCell = 2.0 / (N * pixelUv);          // pixels along a cell
+            vec3 energy = glow * ({{F(MilkyWay.GrainShare / MilkyWay.GrainChance)}} * perCell * perCell);   // a star's light: its cell's share of the band, the chance made up
+            float reach = min(0.5, {{F(StarCoreReach)}} / perCell);
+            ivec2 nb = ivec2(fr.x < reach ? -1 : (fr.x > 1.0 - reach ? 1 : 0), fr.y < reach ? -1 : (fr.y > 1.0 - reach ? 1 : 0));
+            float sigma2 = {{F(MilkyWay.GrainSigma * MilkyWay.GrainSigma)}};
+            float sum = 0.0;
+            for (int k = 0; k < 4; k++)
+            {
+                if (((k & 1) != 0 && nb.x == 0) || ((k & 2) != 0 && nb.y == 0)) continue;
+                ivec2 ic = base + ivec2((k & 1) != 0 ? nb.x : 0, (k & 2) != 0 ? nb.y : 0);
+                if (ic.x < 0 || ic.y < 0 || ic.x >= NI || ic.y >= NI) continue;
+                uvec3 h = starHash(uvec3(uint(ic.x), uint(ic.y), uint(face + 64)));
+                if (float(h.x & 0xFFFFu) * (1.0 / 65536.0) >= {{F(MilkyWay.GrainChance)}}) continue;
+                vec2 j = vec2(float(h.y & 0xFFFFu), float(h.y >> 16u)) * (1.0 / 65536.0);
+                vec2 px = toPixels * ((vec2(ic) + 0.1 + 0.8 * j) * (2.0 / N) - 1.0 - uv);
+                float r2 = dot(px, px);
+                if (r2 > {{F(StarCoreReach * StarCoreReach)}}) continue;
+                float u = float(h.x >> 16u) * (1.0 / 65536.0);
+                sum += (1.0 + {{F(MilkyWay.GrainSpread)}} * (2.0 * u - 1.0)) * exp(-r2 / (2.0 * sigma2)) / (6.2831853 * sigma2);
+            }
+            return energy * sum;
+        }
         """;
 
     static readonly string SkyFragment = "#version 330 core\n" + AtmosphereShaders.Functions + StarShader + $$"""
@@ -246,7 +284,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         in vec2 vNdc;
         out vec4 fragColour;
         uniform mat4 uInverseViewProjection;
-        uniform vec4 uSkyExtra;        // x: the Milky Way gain (Meitou stars), y: cloud density c (0 skips the cloud pass), z: the starfield's shift (texture units, wrapped), w: unused
+        uniform vec4 uSkyExtra;        // x: the Milky Way gain (Meitou stars), y: cloud density c (0 skips the cloud pass), z: the starfield's shift (texture units, wrapped), w: the Milky Way grain's cells along a cube face edge
         uniform vec4 uPlanetBody0, uPlanetBody1;   // the game's two planets (docs/formats/sky.md "Planets"): xyz towards the centre, w the sine of the angular radius
         uniform vec4 uPlanetSpin;      // cos and sin of each planet's turn about y: (cos 0, sin 0, cos 1, sin 1)
         uniform vec4 uCloudLight;      // rgb: zenithLight, a: Darkness
@@ -294,7 +332,8 @@ public sealed unsafe class SkyRenderer : IDisposable
             // The Meitou stars (uStarsMeitou.x: 1) replace that texture with the procedural sky of the celestial sphere (docs/formats/sky.md "Meitou night sky"): the
             // direction turned into celestial coordinates, its cube face position and the map from face units to pixels (all with derivatives, so outside the
             // non-uniform branches; these conditions are on uniforms), then the Milky Way cube map and the point stars, dimmed and reddened by the air.
-            vec3 stars = vec3(0.0), milkyWay = vec3(0.0);
+            vec3 stars = vec3(0.0);
+            vec4 milkyWay = vec4(0.0);   // the baked glow before the dust, and the dust's optical depth
             bool computeStars = uStarsMeitou.x > 0.5;
             int starFaceIndex = 0;
             vec2 starUv = vec2(0.0);
@@ -303,7 +342,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             {
                 vec3 cdir = vec3(dot(uCelX.xyz, dir), dot(uCelY.xyz, dir), dot(uCelZ.xyz, dir));
                 vec3 dcx = dFdx(cdir), dcy = dFdy(cdir);
-                milkyWay = textureGrad(uMilkyWay, cdir, dcx, dcy).rgb;
+                milkyWay = textureGrad(uMilkyWay, cdir, dcx, dcy);
                 float starMajor;
                 starFaceIndex = starFace(cdir, starUv, starMajor);
                 int sk = starFaceIndex >> 1;
@@ -327,7 +366,18 @@ public sealed unsafe class SkyRenderer : IDisposable
                     float airMass = 1.0 / (dir.y + 0.50572 * pow(altitude + 6.07995, -1.6364));
                     vec3 transmission = exp(-EXTINCTION * (airMass - 1.0)) * smoothstep({{F(NightAtmosphere.HorizonLow)}}, {{F(NightAtmosphere.HorizonHigh)}}, altitude);
                     float twinkle = clamp((airMass - {{F(NightAtmosphere.ScintillationFreeAirMass)}}) / {{F(NightAtmosphere.ScintillationRange)}}, 0.0, 1.0) * {{F(NightAtmosphere.ScintillationMax)}};
-                    stars = (milkyWay * uSkyExtra.x + starPoints(starFaceIndex, starUv, starToPixels, int(uStarsMeitou.y), uStarsMeitou.z, twinkle) * uStarsMeitou.w) * transmission;
+                    // The Milky Way: the baked glow, a share of it replaced by the per-pixel grain where there is any glow, then the dust (its depth made crisp per pixel).
+                    vec3 glow = milkyWay.rgb, band = glow;
+                    float lane = 0.5;
+                    if (max(glow.r, max(glow.g, glow.b)) > {{F(MilkyWayGrainFloor)}} && int(uStarsMeitou.y) >= 2)
+                        band = glow * {{F(1 - MilkyWay.GrainShare)}} + milkyWayGrain(starFaceIndex, starUv, starToPixels, glow, uSkyExtra.w, lane);
+                    float dust = milkyWay.a;
+                    float dustS = dust / {{F(MilkyWay.DustScale)}} + {{F(MilkyWay.DustRagged)}} * (lane - 0.5);
+                    dust *= mix({{F(MilkyWay.DustHaze)}}, {{F(MilkyWay.DustCore)}}, smoothstep({{F(MilkyWay.DustEdgeFrom)}}, {{F(MilkyWay.DustEdgeTo)}}, dustS));
+                    band *= exp(-dust * vec3(1.0, 1.0, 1.04));
+                    // The air dims the glow as much as the stars but reddens it less (MilkyWay.BandTransmission): a low band stays whitish, not golden.
+                    vec3 bandTransmission = mix(vec3(transmission.g), transmission, {{F(MilkyWay.ExtinctionColourShare)}});
+                    stars = band * uSkyExtra.x * bandTransmission + starPoints(starFaceIndex, starUv, starToPixels, int(uStarsMeitou.y), uStarsMeitou.z, twinkle) * uStarsMeitou.w * transmission;
                 }
                 col += night * aboveHorizon * stars * (0.35 + clamp(-uAtmoSun.y * 0.45, 0.0, 1.0)) * 2.0;
             }
@@ -911,7 +961,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         var p = program.P;
         p.Set(program.InverseViewProjection, in inverse);
         program.Colours.Set(p, colours);
-        if (program == sky) SetSkyUniforms(program);
+        if (program == sky) SetSkyUniforms(program, GrainCellsFor(inverse));
         p.ApplyGlobals();   // the atmosphere's uniforms and textures, through the frame globals
     }
 
@@ -932,7 +982,25 @@ public sealed unsafe class SkyRenderer : IDisposable
         Gpu.EndGuest(cmd);
     }
 
-    void SetSkyUniforms(SkyProg program)
+    /// <summary>The Milky Way grain's cells along a cube face edge for the pass in progress: the pixels per radian at the centre of the view (the angle between two neighbouring pixels' rays there, from the open pass's viewport).</summary>
+    float GrainCellsFor(in Matrix4x4 inverse)
+    {
+        var viewport = Gpu.CurrentTargets().Viewport;
+        static Vector3 Ray(in Matrix4x4 m, float x)
+        {
+            var a = Vector4.Transform(new Vector4(x, 0, 0, 1), m);
+            var b = Vector4.Transform(new Vector4(x, 0, 1, 1), m);
+            return Vector3.Normalize(new Vector3(b.X, b.Y, b.Z) / b.W - new Vector3(a.X, a.Y, a.Z) / a.W);
+        }
+        float dx = 2f / MathF.Max(viewport.Width, 1);
+        var (r0, r1) = (Ray(inverse, 0), Ray(inverse, dx));
+        float angle = MathF.Atan2(Vector3.Cross(r0, r1).Length(), Vector3.Dot(r0, r1));   // not Acos: for two pixels' rays the dot product is 1 to within float precision
+        int cells = MilkyWay.GrainCellsFor(angle > 1e-7f ? 1 / angle : 1e7f);
+        if (Environment.GetEnvironmentVariable("MEITOU_GRAIN_LOG") == "1") Console.WriteLine($"sky       Milky Way grain: {cells} cells a face edge ({viewport.Width:0} x {viewport.Height:0} px, {(angle > 0 ? 1 / angle : 0):0} px/rad)");
+        return cells;
+    }
+
+    void SetSkyUniforms(SkyProg program, float grainCells)
     {
         var s = state;
         var p = program.P;
@@ -947,7 +1015,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         p.Set(program.CelY, frame.Y.X, frame.Y.Y, frame.Y.Z, 0);
         p.Set(program.CelZ, frame.Z.X, frame.Z.Y, frame.Z.Z, 0);
         if (milkyWayTexture is not null) p.Bind(program.MilkyWay, milkyWayTexture.Sampled());
-        p.Set(program.Extra, MilkyWayGain, coverage, Starfield.Shift(StarHours), 0);
+        p.Set(program.Extra, MilkyWayGain, coverage, Starfield.Shift(StarHours), grainCells);
         // The planets: fixed directions and sizes, each turned by the game's day and hour.
         Span<float> spin = stackalloc float[4];
         for (int i = 0; i < 2; i++)
