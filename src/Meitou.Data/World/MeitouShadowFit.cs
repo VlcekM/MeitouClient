@@ -6,8 +6,9 @@ namespace Meitou.Data.World;
 /// The cascade fitting of the Meitou shadows (not the game's; docs/formats/shadows.md, "Meitou shadows"): the splits run from the
 /// camera's near plane (quantised, so they do not move every frame while zooming) to the shadow range, so all four cascades cover
 /// something visible (the game's halved splits leave the first two in front of the near plane in most views); each cascade is a
-/// light-space square around the bounding sphere of its own slice (rotation-invariant size, centre snapped to whole texels, as the
-/// game's), slightly enlarged so that a cascade drawn a few frames ago still covers the view; the box reaches further towards the sun
+/// light-space square around the bounding sphere of its own slice (rotation-invariant size, centre snapped to whole texels as the
+/// game's, but on a grid through an anchor near the camera rather than through the world origin, so a turning sun does not slide it),
+/// slightly enlarged so that a cascade drawn a few frames ago still covers the view; the box reaches further towards the sun
 /// so casters there keep their depth (for the penumbra width).
 /// </summary>
 public static class MeitouShadowFit
@@ -68,10 +69,19 @@ public static class MeitouShadowFit
                 rotation.M13 * px + rotation.M23 * py + rotation.M33 * pz);
     }
 
-    /// <summary>Fits cascade <paramref name="i"/> of <paramref name="splits"/> to this view and sun (<paramref name="toSun"/> normalised).</summary>
-    public static ShadowCascade Fit(ShadowView view, Vector3 toSun, ShadowSettings settings, float[] splits, int i)
+    /// <summary>
+    /// Fits cascade <paramref name="i"/> of <paramref name="splits"/> to this view and sun (<paramref name="toSun"/> normalised). The box
+    /// is snapped to whole texels on a grid through <paramref name="anchor"/> (world units): the light rotation turns about the world
+    /// origin, so a grid through the origin slides past a point by its distance from the origin times the angle the sun turned (at
+    /// The Hub, 51000 units out, a time-lapse frame's 0.006 degrees slid it 5.6 units, three texels of the first cascade, and every
+    /// shadow edge flickered); through a point near the camera the slide is that distance from the anchor instead.
+    /// </summary>
+    public static ShadowCascade Fit(ShadowView view, Vector3 toSun, ShadowSettings settings, float[] splits, int i, (double X, double Y, double Z) anchor = default)
     {
         var rotation = ShadowCascades.LightRotation(toSun);
+        double ox = rotation.M11 * anchor.X + rotation.M21 * anchor.Y + rotation.M31 * anchor.Z,
+            oy = rotation.M12 * anchor.X + rotation.M22 * anchor.Y + rotation.M32 * anchor.Z,
+            oz = rotation.M13 * anchor.X + rotation.M23 * anchor.Y + rotation.M33 * anchor.Z;
         var (near, far) = Slice(splits, i);
         var (along, radius) = Sphere(near, far, view.FieldOfViewY, view.Aspect);
         var (cx, cy, cz) = LightCentre(view, rotation, along);
@@ -81,7 +91,8 @@ public static class MeitouShadowFit
         double depth = size + SunwardReach * radius, step = depth / KenshiShadows.DepthSteps;
         // Light space: z grows away from the sun, so the box's centre sits sunward of the sphere's by half the extra reach.
         double zCentre = cz - SunwardReach * radius * 0.5;
-        var translation = (Math.Floor(-cx / texel) * texel, Math.Floor(-cy / texel) * texel, Math.Floor(-zCentre / step) * step);
+        // Snapped on the grid through the anchor's light-space position (o): light space minus o is a whole number of texels at every texel corner.
+        var translation = (Math.Floor((-cx + ox) / texel) * texel - ox, Math.Floor((-cy + oy) / texel) * texel - oy, Math.Floor((-zCentre + oz) / step) * step - oz);
         return new ShadowCascade
         {
             Index = i,

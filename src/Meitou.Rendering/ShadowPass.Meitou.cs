@@ -51,6 +51,33 @@ public sealed unsafe partial class ShadowPass
     readonly Vector3[] storedSunDir = new Vector3[4];
 
     /// <summary>
+    /// Where the cascades' texel grids are anchored (<see cref="MeitouShadowFit.Fit"/>): near the eye, so a turning sun slides a grid only by the
+    /// distance from here times the angle. It moves to the eye only while the sun turns and the eye is more than <see cref="AnchorReach"/> away
+    /// (a move shifts the grids by a fraction of a texel, once); with the sun still the grids do not slide at all, so it stays.
+    /// </summary>
+    (double X, double Y, double Z)? anchor;
+    Vector3 lastFrameSun;
+    /// <summary>The eye's distance from the anchor before a turning sun moves it: a first-cascade grid then slides at most about (this + its radius) × the turn per frame.</summary>
+    public const double AnchorReach = 1000;
+    /// <summary>How often the grid anchor moved (Meitou), for the log.</summary>
+    public int AnchorMoves { get; private set; }
+
+    (double X, double Y, double Z) Anchor(Vector3 eye, Vector3 toSun)
+    {
+        bool turning = toSun != lastFrameSun;
+        lastFrameSun = toSun;
+        if (anchor is not { } a)
+            return (anchor = (Math.Round(eye.X), Math.Round(eye.Y), Math.Round(eye.Z))).Value;
+        double dx = eye.X - a.X, dy = eye.Y - a.Y, dz = eye.Z - a.Z;
+        if (turning && dx * dx + dy * dy + dz * dz > AnchorReach * AnchorReach)
+        {
+            anchor = (Math.Round(eye.X), Math.Round(eye.Y), Math.Round(eye.Z));
+            AnchorMoves++;
+        }
+        return anchor.Value;
+    }
+
+    /// <summary>
     /// Frames between the redraws of each cascade when nothing makes it stale (Meitou): the nearest every frame, the others less often the
     /// farther they are, since a far cascade's casters hardly move and its texels are big. <c>MEITOU_SHADOW_CADENCE=1,2,4,4</c> sets them (A/B tests;
     /// 1,2,4,4 was the schedule before 2026-10-08). The phases below put the default redraws on different frames (the override may collide).
@@ -178,6 +205,7 @@ public sealed unsafe partial class ShadowPass
         bool sunJumped = Vector3.Dot(toSun, storedSun) < MathF.Cos(SunJump);
         bool all = !meitouValid || splitsChanged || storedMapSize != Settings.MapSize || sunJumped;
         if (meitouValid && all) { if (splitsChanged) AllReasons[0]++; if (sunJumped) AllReasons[1]++; }
+        var gridAnchor = Anchor(view.Eye, toSun);
         int frame = meitouFrame++;
         MeitouFrames++;
         Span<bool> drawNow = stackalloc bool[4], want = stackalloc bool[4], mustDraw = stackalloc bool[4];
@@ -211,7 +239,7 @@ public sealed unsafe partial class ShadowPass
         for (int i = 0; i < count; i++)
         {
             if (!drawNow[i]) continue;
-            var c = MeitouShadowFit.Fit(view, toSun, Effective, splits, i);
+            var c = MeitouShadowFit.Fit(view, toSun, Effective, splits, i, gridAnchor);
             int x = (int)MathF.Round(c.Tile.X * atlasSize), y = (int)MathF.Round(c.Tile.Y * atlasSize), s = Settings.TileSize;
             SetTile(x, y, s);
             if (drawing != count)   // only this tile: the others keep what they hold
