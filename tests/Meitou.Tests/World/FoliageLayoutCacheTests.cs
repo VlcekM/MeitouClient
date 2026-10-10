@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
@@ -164,6 +165,55 @@ public sealed class FoliageLayoutCacheTests : IDisposable
         Assert.False(far.Zone.Complete);
         AssertSame(farZone, farGround, far.Zone, far.Ground);
         Assert.Empty(Directory.GetFiles(writer.Directory, "*.tmp"));
+    }
+
+    static void AssertSameGroups(GroupedFoliageZone a, GroupedFoliageZone b)
+    {
+        Assert.Equal(a.InstanceCount, b.InstanceCount);
+        Assert.Equal((a.MinY, a.MaxY), (b.MinY, b.MaxY));
+        Assert.Equal(a.Groups.Count, b.Groups.Count);
+        for (int g = 0; g < a.Groups.Count; g++)
+        {
+            var (x, y) = (a.Groups[g], b.Groups[g]);
+            Assert.Equal(x.Mesh.StringId, y.Mesh.StringId);
+            Assert.Equal(x.Layer.StringId, y.Layer.StringId);
+            Assert.Equal(x.MaxScale, y.MaxScale);
+            Assert.Equal(x.Instances.Length, y.Instances.Length);
+            Assert.True(MemoryMarshal.AsBytes(x.Instances.AsSpan()).SequenceEqual(MemoryMarshal.AsBytes(y.Instances.AsSpan())), $"group {g} records differ");   // bit for bit
+        }
+    }
+
+    [Fact]
+    public void A_zone_read_back_grouped_equals_the_zone_grouped_after_reading_it_whole()
+    {
+        var catalog = Catalog();
+        var coordinate = new ZoneCoordinate(21, 29);
+        var (zone, ground) = Zone(catalog, coordinate);
+        Open(catalog, "g").Save(coordinate, false, zone, ground, 60000);
+        var reader = Open(Catalog(), "g");
+        var whole = reader.TryLoad(coordinate, false)!.Value;
+        var expected = FoliageGrouping.Group(whole.Zone, whole.Ground);
+        var grouped = reader.TryLoadGrouped(coordinate, false);
+        Assert.NotNull(grouped);
+        Assert.Empty(grouped.Zone.Instances);   // the instances are in the groups
+        Assert.Equal(whole.Zone.Grass.Count, grouped.Zone.Grass.Count);
+        Assert.Equal((whole.Zone.Resources, whole.Zone.Complete), (grouped.Zone.Resources, grouped.Zone.Complete));
+        AssertSameGroups(expected, grouped);
+        // The groups follow the order the pairs first appear in, and the records carry the group's number, the position, the scale and the transform of the instance.
+        Assert.Equal(2, expected.Groups.Count);
+        Assert.Equal("2-t.mod", expected.Groups[0].Mesh.StringId);   // the first instance (i = 0) is a leaf
+        Assert.Equal(500, expected.Groups.Sum(g => g.Instances.Length));
+        var first = zone.Instances[0];
+        Assert.Equal(first.Transform, expected.Groups[0].Instances[0].Transform);
+        Assert.Equal(new Vector4(first.Position.X, first.Position.Z, first.Scale, 0), expected.Groups[0].Instances[0].Ground);
+        Assert.Equal(zone.Instances.Max(i => i.Scale), expected.Groups.Max(g => g.MaxScale));
+        Assert.Equal(zone.Instances.Min(i => i.Position.Y), expected.MinY);
+        Assert.Equal(zone.Instances.Max(i => i.Position.Y), expected.MaxY);
+        Assert.Equal(2, reader.Stats.Hits);
+        // An empty zone groups to nothing, with the heights the renderer used (0 and 0).
+        var empty = FoliageGrouping.Group(new FoliageZone { Zone = coordinate }, ground);
+        Assert.Empty(empty.Groups);
+        Assert.Equal((0, 0f, 0f), (empty.InstanceCount, empty.MinY, empty.MaxY));
     }
 
     [Fact]

@@ -5,7 +5,11 @@ namespace Meitou.Data.World;
 /// <summary>One placed foliage mesh: where, how big and turned, from which layer (docs/formats/foliage.md, "Placing").</summary>
 public readonly record struct FoliageInstance(FoliageMesh Mesh, FoliageLayer Layer, Vector3 Position, float Scale, float YawDegrees, Quaternion Orientation)
 {
-    public Matrix4x4 Transform => Matrix4x4.CreateScale(Scale) * Matrix4x4.CreateFromQuaternion(Orientation) * Matrix4x4.CreateTranslation(Position);
+    public Matrix4x4 Transform => TransformOf(Scale, Orientation, Position);
+
+    /// <summary>The transform of an instance of this scale, orientation and position (<see cref="Transform"/>; also for records read straight from the layout cache).</summary>
+    public static Matrix4x4 TransformOf(float scale, Quaternion orientation, Vector3 position) =>
+        Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(position);
 }
 
 /// <summary>A grass layer of a zone: its grass types and the zone's 129² coverage map (0..255, row = +Z) they grow by.</summary>
