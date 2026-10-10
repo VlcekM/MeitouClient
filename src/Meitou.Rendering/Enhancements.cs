@@ -27,6 +27,9 @@ public static class Enhancements
 {
     public const float MeitouHazeStrength = 0.93f;
 
+    /// <summary>The Meitou <c>night</c> switch's share of the haze left at night (<see cref="SkyRenderer.NightHazeFactor"/>): the far land stays visible, a little darker.</summary>
+    public const float MeitouNightHazeFloor = 0.25f;
+
     /// <summary>The Meitou <c>heathaze</c> switch's scale on the heat haze (Faithful: 1, the game's): far objects shimmer but stay readable.</summary>
     public const float MeitouHeatHazeStrength = 0.5f;
 
@@ -44,7 +47,8 @@ public static class Enhancements
     /// </summary>
     public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<float> hazeStrength, Action<float> setHazeStrength, Func<bool> meitouShadows, Action<bool> setMeitouShadows,
         Func<bool> meitouRange, Action<bool> setMeitouRange, Func<bool> impostors, Action<bool> setImpostors, Func<bool> meitouReach, Action<bool> setMeitouReach,
-        Func<bool> meitouWater, Action<bool> setMeitouWater, Func<bool> foliageLod, Action<bool> setFoliageLod, Func<bool>? gi = null, Action<bool>? setGi = null) =>
+        Func<bool> meitouWater, Action<bool> setMeitouWater, Func<bool> foliageLod, Action<bool> setFoliageLod, Func<bool>? gi = null, Action<bool>? setGi = null,
+        Func<bool>? nightHaze = null, Action<bool>? setNightHaze = null) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -89,6 +93,9 @@ public static class Enhancements
         new("heathaze", "Heat haze", "strength 1", $"strength {MeitouHeatHazeStrength}",
             () => MathF.Abs(post.HeatHazeStrength - 1) > 1e-3f, v => post.HeatHazeStrength = v ? MeitouHeatHazeStrength : 1,
             "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; Meitou halves it (the Tab slider sets any strength)"),
+        new("night", "Night haze", "black", "thinned",
+            nightHaze ?? (() => false), setNightHaze ?? (_ => { }),
+            $"the game's haze takes the sky's sunlit colour, which is black at night, so everything a few thousand units away fades to black and only the land round the camera stays lit; Meitou thins the haze to {MeitouNightHazeFloor:0.##} of its strength once the sun is down, so the far land stays visible, a little darker"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

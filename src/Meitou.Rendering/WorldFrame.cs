@@ -113,6 +113,7 @@ sealed class WorldOptions
     public bool PhysicalHaze; // the game's own haze by default (docs/formats/sky.md "Haze")
     public float? HazeDistance;
     public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze switch (default); 1 = the game's haze
+    public bool ThinNightHaze = true; // the Meitou night switch (default): the haze thinned at night (SkyRenderer.ThinNightHaze)
     /// <summary><c>--weather</c>: a WEATHER record's name forces that weather at the camera; null or "auto" lets the scheduler (docs/formats/weather.md) run.</summary>
     public string? Weather;
     /// <summary>Test overrides of the weather's surface values (<c>--wetness</c>, <c>--dust</c>, <c>--rain</c>); null: the forced weather's.</summary>
@@ -328,7 +329,8 @@ sealed class WorldOptions
     /// <summary>The Faithful / Meitou switches over the options (for <c>--meitou</c> / <c>--faithful</c>).</summary>
     internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
         () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v,
-        () => o.MeitouWater, v => o.MeitouWater = v, () => o.FoliageLod, v => o.FoliageLod = v, () => o.GiProbes, v => o.GiProbes = v);
+        () => o.MeitouWater, v => o.MeitouWater = v, () => o.FoliageLod, v => o.FoliageLod = v, () => o.GiProbes, v => o.GiProbes = v,
+        () => o.ThinNightHaze, v => o.ThinNightHaze = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -875,6 +877,7 @@ static class WorldFrame
         gpu.Post.FogVrs = o.FogVrs;
         if (o.HazeDistance is { } hazeDistance) gpu.Sky.HazeDistance = hazeDistance;
         gpu.Sky.HazeStrength = o.HazeStrength;
+        gpu.Sky.ThinNightHaze = o.ThinNightHaze;
         if (scene.Database is { } skyDb)
         {
             gpu.Sky.LoadWorld(install, skyDb);   // the ambient map and the CONSTANTS exposure band (docs/formats/lighting.md)
@@ -1053,7 +1056,8 @@ static class WorldFrame
             () => gpu()?.Water?.Meitou ?? o.MeitouWater, v => { o.MeitouWater = v; if (gpu()?.Water is { } w) w.Meitou = v; },
             () => gpu()?.Foliage?.Lod ?? o.FoliageLod, v => { o.FoliageLod = v; if (gpu()?.Foliage is { } f) f.Lod = v; },
             // Without probes (no --gi, no ray queries) the switch reads off: the picture has the flat ambient whatever it is set to.
-            () => gpu() is { } giGpu ? giGpu.Probes?.Enabled ?? false : o.GiProbes, v => { o.GiProbes = v; if (gpu()?.Probes is { } p) p.Enabled = v; });
+            () => gpu() is { } giGpu ? giGpu.Probes?.Enabled ?? false : o.GiProbes, v => { o.GiProbes = v; if (gpu()?.Probes is { } p) p.Enabled = v; },
+            () => gpu()?.Sky.ThinNightHaze ?? o.ThinNightHaze, v => { o.ThinNightHaze = v; if (gpu() is { } g) g.Sky.ThinNightHaze = v; });
 
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null, Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null,
@@ -1248,6 +1252,10 @@ static class WorldFrame
         bool held = gpu.Post?.InstantAdaptation ?? true;
         if (gpu.Weather is { } weather) { weather.Update(eye, hour, sun.Y, held); weather.Apply(gpu.Sky); }
         gpu.Surfaces?.Apply(gpu.WeatherState);
+        // The night sky's clocks: the starfield shifts with the game hours since the load, the planets turn with the day and hour.
+        gpu.Sky.StarHours = gpu.GameHours ?? gpu.HeatHazeHours;
+        gpu.Sky.Day = gpu.Weather?.Day ?? 0;
+        gpu.Sky.Hour = hour;
         var (colours, light) = gpu.Sky.Prepare(sun, eye.Y, fogDistance + 3 * Math.Max(eye.Y, 0));
         // The game's exposure (0.55 over the mean luminance, clamped to its band) goes with the game's sky and light; the simple sky keeps a plain scale.
         if (gpu.Post is { } exposed) exposed.AutoExposure = gpu.Sky.Physical ? (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance) : null;

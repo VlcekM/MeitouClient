@@ -2718,11 +2718,11 @@ for that handoff. 0 px everywhere.*
 **What moved.**
 - *Sky textures* (`SampledImage`, in `SkyRenderer.cs`): a native `Texture` with the sampler its GL texture had (`SamplerDesc.FromGl`, the
   upscaler's LOD bias on mipmapped filters, as VkGl's `SamplerFor`). Uploads go through `Uploader.Begin()`.
-  - The starfield, moon and clouds are RGBA8 with the full chain from `CommandList.GenerateMips` (`WorldGl.Texture2D`'s `GenerateMipmap`).
+  - The clouds are RGBA8 with the full chain from `CommandList.GenerateMips` (`WorldGl.Texture2D`'s `GenerateMipmap`). The starfield and the two planet maps (since 2026-10-10) are `SampledImage.FromDds`: the file's BC1 levels as they are, trilinear, repeating.
   - The irradiance and specular cubes are RGBA8 cubes with exactly the file's levels (the GL `MAX_LEVEL`), clamped on S, T and R. Vulkan's
     cube sampling is always seamless, as GL's was with `TEXTURE_CUBE_MAP_SEAMLESS`.
   - The ambient map is one level, linear.
-  - Names: "sky stars", "sky moon", "sky clouds", "sky irradiance", "sky specularity", "sky ambient map".
+  - Names: "sky stars", "sky planet Moon", "sky planet Moon2", "sky clouds", "sky irradiance", "sky specularity", "sky ambient map".
 - *Atmosphere globals*: `uAtmoIrradiance`, `uAtmoSpecular` and `uAtmoAmbientMap` are published as these textures once the sky has a state.
   Before, they were the GL units `BindUnits` bound. That is why the sky needed a linked GL program (`AssignSamplerUnits` set the units).
   `BindUnits` is empty now; it stays for its callers in the terrain, objects and foliage files. `Apply(program)` had no caller and is gone.

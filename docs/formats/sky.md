@@ -16,18 +16,62 @@ HLSL and a GLSL file:
 |---|---|---|
 | Skydome | `SkyX_Skydome.hlsl` | O'Neil's scattering evaluated per vertex (see below), phase functions per pixel, night glow, starfield |
 | Fog | `SkyX_Fog.hlsl`, `SkyX_Fog2.hlsl` | `skyXFog2`: the same integral per pixel for scene fog (see below) |
-| Moon | `SkyX_Moon.hlsl`, `SkyX_Moon.png`, `SkyX_MoonHalo.png` | a textured quad with a phase mask and a halo |
+| Moon | `SkyX_Moon.hlsl`, `SkyX_Moon.png`, `SkyX_MoonHalo.png` | a textured quad with a phase mask and a halo; **never drawn by Kenshi** (below) |
 | Clouds | `SkyX_Clouds.hlsl`, `Clouds.dds`, `CloudsNormal.dds`, `CloudsTile.dds` | a planar layer: the view ray hits a plane, the texture's red channel is the density; all of it in [clouds.md](clouds.md) |
 | Volumetric clouds, lightning, ground | `SkyX_VolClouds*.hlsl`, `SkyX_Lightning.hlsl`, `SkyX_Ground.hlsl`, `Noise.dds` | not used by the game (**Verified**: the exe imports nothing of SkyX's `VCloudsManager`, [clouds.md](clouds.md)) nor by the viewer |
 
 The textures: `SkyX_Starfield.dds` is 4096² DXT1 with 13 mips (the Milky Way and stars on a black field; the shader scrolls it
 with time), `Clouds.dds` / `CloudsNormal.dds` / `CloudsTile.dds` / `Noise.dds` are 1024² DXT1 without mips, `SkyX_Moon.png`
 512² RGBA (a full moon disc on transparent), `SkyX_MoonHalo.png` 512 × 256 grey-alpha. `data/materials` also has `moon_HI.dds`
-(4096 × 2048) and `moon2_HI.dds`: despite the name an equirectangular **planet** map (brown deserts, dark seas, polar caps),
-with `planet01.mesh` and `moon_NML.dds`. So the game's sky has a large planet or moon as a mesh (**Observed**; its placement
-and phase are **Unknown**, the viewer does not draw it; lead: the sky creation FUN_14066e380 builds two objects from
-`planet01.mesh`, one named "Moon2", with constant vectors, not decoded). `data/materials/caelum` is the older Caelum sky add-on's folder
-(**Unknown** whether anything still uses it).
+(4096 × 2048 BC1 with mips) and `moon2_HI.dds` (2048 × 1024 BC1): despite the names equirectangular **planet** maps (brown deserts,
+dark seas, polar caps), with `planet01.mesh` and `moon_NML.dds` (not referenced by the planet material). These are the game's two
+moons ("Planets" below). `data/materials/caelum` is the older Caelum sky add-on's folder (**Unknown** whether anything still uses it).
+
+**SkyX's own moon is never drawn** (**Verified (decompiled)**, 2026-10-10): Kenshi's `SkyX_x64.dll` has no `MoonManager` class at all
+(its exports and RTTI list `AtmosphereManager`, `BasicController`, `CloudLayer`, `CloudsManager`, `ColorGradient`, `GPUManager`,
+`MeshManager` and `SkyX`); `GPUManager::_updateFP` still assigns `SkyX_Moon.png` / `SkyX_MoonHalo.png` to the `SkyX_Moon` material, but
+no object uses that material, and the exe never names it. The Earth-moon disc of `SkyX_Moon.png` is a leftover of SkyX's samples.
+
+### Stars (Verified (decompiled): `SkyX_x64.dll` `MeshManager::updateGeometry`, `SkyX::update`, `SkyX_Skydome.hlsl`, the sky update FUN_14066f190)
+
+- **Mapping.** The dome's texture coordinate (`TEXCOORD1`) per vertex is `4 (1 + t · (cos az, sin az))` with `t` = the zenith angle / 90°
+  (the vertex's ring index over the rings above the horizon) and `(cos az, sin az)` the direction's xz normalised: u follows +x, v +z.
+  So the dome is an **azimuthal-equidistant** map round the zenith. The vertex shader scales it by 0.1, so the zenith samples (0.4, 0.4) and
+  the horizon is a circle of radius 0.4 round it: the visible sky covers 0.8 of the 4096² texture, about 18 texels per degree.
+- **Filtering.** `filtering linear linear none` (no mip filter): the top level only, 4096², wrap addressing.
+- **Movement.** The fragment shader samples at `uv + uTime · 0.1` (HDR branch): the same shift on **both** axes, a diagonal
+  translation that wraps, not a rotation. `uTime` = SkyX's time × 0.5, set in `SkyX::update`, where the time grows by `timeMultiplier ×
+  frame seconds`. Kenshi's sky update sets the time multiplier each frame to `game speed value × 0.009166666` (0 while a flag, presumably
+  the pause, is set). 0.0091667 is the game's hours per real second at speed 1 (1 game hour = 109 real seconds, [game-loop.md](../game/game-loop.md)), so the
+  time is **game hours since the sky was created** (the load), and the starfield moves 0.05 texture units along u and v per game hour
+  (1.2 a game day). That the multiplied global is the game speed is **Observed** (the factor's match; its writers were not read). The planets
+  (below) do not move with it.
+
+### Planets (Verified (decompiled): the sky creation FUN_14066e380, the planet constructor FUN_14066c920, the update FUN_140670ed0; `materials/forward/moon.material` and `moon.hlsl`)
+
+The sky creation makes two objects of `planet01.mesh` (a UV sphere, every vertex at radius 25.8721, `u = 0.2685 − atan2(z, x) / 2π`,
+`v = acos(y) / π`, **Verified** against every vertex, test `NightSkyTests`) with these arguments:
+
+| Material (texture) | Direction (normalised) | Scale | Spin (rad / game day) | Angular radius | Elevation |
+|---|---|---|---|---|---|
+| `Moon` (`moon_HI.dds`) | (1, 0.3, −1) | 35 | 1 | 9.09° (18.2° across) | 12.0° |
+| `Moon2` (`moon2_HI.dds`) | (1, 0.14, −0.7) | 10 | 4.731 | 2.59° (5.2° across) | 6.5° |
+
+- **Placement.** Each frame (both from the sky controller's update FUN_14066ff60, which also fills the day / hour / minute struct) the
+  planet's node goes to the camera's position plus the fixed direction × `½ (a + b) (1 − tan 0.01°)`, with `a` and `b` two camera getters
+  (vtable 0x100 and 0x110: by Ogre's layout the near and far clip; not matched to the RTTI), and is scaled by `Scale × that distance ×
+  tan 0.01°`. The angular radius is therefore `asin(25.8721 · Scale · tan 0.01°)` whatever the clip planes. The directions are fixed in
+  the world: **the planets never move across the sky** (they hang over +x, −z, low above the horizon, day and night); only the sun moves.
+- **Spin.** The node's orientation is a turn about world y by `(((day · 24 + hour) · 60 + minute) · Spin / 1440)` radians (whole game minutes).
+- **Draw.** No shadows; render queue 6 with the priority of a counter that starts at 0 (`setRenderQueueGroupAndPriority`, vtable slot 11,
+  **Verified** against `OgreMain`'s RTTI), so priorities 1 and 2: Moon first, Moon2 over it where the discs overlap (11.2° apart, the radii sum to
+  11.7°). The SkyX dome is in queue 5 and its cloud entity in queue 6 at Ogre's default priority 100 (**Observed**: the queue bytes 5–8 from SkyX's struct
+  order, [clouds.md](clouds.md#geometry-and-pass-verified-decompiled-skyx_x64dll)), so the **clouds pass in front of the planets**.
+- **Shading** (`moon.material`: `depth_write off`; `moon.hlsl`): the vertex shader forces z to the far plane (so the planet shows only where
+  nothing else was drawn, behind all geometry) and computes SkyX's Rayleigh in-scattering towards the vertex (the skydome's integral, 4
+  samples, the Rayleigh phase, `× uExposure`; no Mie, no night glow). The fragment shader: `texture × saturate(dot(normal, sunDirectionReal))
+  + that colour`, alpha 1. So the planet is lit by the **real sun direction**: by day it is pale (the sky's colour is added on top), at night
+  only its sunlit side shows, and as the sun goes round under the horizon the lit crescent turns. The night side is black, covering the stars.
 
 ### The scattering model (Verified: SkyX shader source and the recorded exe constants)
 
@@ -223,6 +267,13 @@ checked 2026-10-04):
 - **Haze strength** (viewer option, not the game's: `--haze-strength <x>`, the Tab panel's "Haze strength (1 = game)", 0 to 3,
   default 0.93, the Meitou haze switch, so far mountains stay visible; 1 = the game's, the Faithful side, F3 in the viewer): multiplies how far the atmosphere haze is blended in (the game's ramp, or the physical haze's amount,
   capped at 1), before the weather's fog, which it leaves alone.
+- **Night haze** (the `night` switch, since 2026-10-10; Meitou thinned, the default, Faithful black, the game's): the game's haze colour is
+  SkyX's sunlit in-scattering, which goes to black once the sun is down, so at night its ramp turns everything past 0.06 D darker and
+  everything past 0.6 D (30000) black: only the land round the camera stays lit, the rest is a black band under the stars (the game's rule, see
+  above; screenshots `--at -51468,-14324 --distance 3000 --pitch 8 --yaw 95 --time 1 --weather Default` with haze strength 0.93 and 0 show
+  the far terrain and a lit town only without the haze). Meitou multiplies the haze strength by `SkyRenderer.NightHazeFactor(sunY)`: 1 from
+  sunY 0.05 up, `Enhancements.MeitouNightHazeFloor` (0.25) from −0.15 down, smoothstep between, so by night the far land fades a quarter of
+  the way to black and stays visible. The colour stays the game's; the weather's fog is untouched.
 - **physical** (`--haze physical`, all heights; a viewer alternative, not the game's): the closed-form optical depth of SkyX's own air (its Rayleigh and Mie depths
   straight up, without the earlier turbidity factor) along the ray, with one density scale height = 40000 world units (a viewer
   choice; the game's world unit is Unknown), in-scattering of the sky's colour in the ray's direction, closing at `--fog`
@@ -244,11 +295,16 @@ and sky-view tables, the 0.36° sun disc) is gone, with `AtmosphereModel.cs`.
   HDR; the post-processing's exposure brings them to the screen. Predicted at noon in clear weather (`SkyXModel`, scratch
   computation) with the exposure of ×0.69 that a typical day scene gets, a sky about (61, 105, 131) at 20° and (130, 176,
   184) at the horizon on screen (sRGB 0..255 without a gamma step, like the game), the teal blue of the game's screenshots.
-- **Stars**: `SkyX_Starfield.dds` (a 1024² level) times SkyX's night factor, `(0.35 + saturate(−sunY · 0.45))` and the HDR ×2, laid
-  over the upper hemisphere stereographically and turning with the sun's half-turn. SkyX's own mapping is the dome's UV layout,
-  which the viewer does not reproduce (a **stand-in** placement; the brightness formula is the shader's).
-- **Moon**: `SkyX_Moon.png`, always full, opposite the sun, saturated and alpha-blended as `SkyX_Moon.hlsl` does; its size (0.016
-  rad) and placement are **stand-ins** (the game's moon position is Unknown).
+- **Stars** (since 2026-10-10): `SkyX_Starfield.dds` whole (4096², BC1, all 13 levels, repeating) on the game's mapping and shift
+  (`Starfield.Uv` in `NightSky.cs`: azimuthal-equidistant round the zenith, `+ 0.05 ×` game hours on both axes), times SkyX's night factor,
+  `(0.35 + saturate(−sunY · 0.45))` and the HDR ×2. The hours are the game's since the load (`Gpu.GameHours`), else the viewer's clock at
+  game speed 1 (the heat haze's). Trilinear where the game takes the top level only: at the game's screen sizes that is the top level too.
+  Until then the viewer took a 1024² level and laid it stereographically over the hemisphere, about 3× coarser than the game: blurred, blocky stars.
+- **Planets** (since 2026-10-10; replaced the `SkyX_Moon.png` disc opposite the sun, which the game never draws): both, as above, hit
+  analytically in the sky pass (ray against a sphere of the angular radius in the fixed direction), the object normal turned back by the spin
+  gives the mesh's UV, `textureGrad` with the gradients of whichever of u and u + ½ is continuous (no seam), coverage antialiased over a pixel.
+  Colour `texture × saturate(n · sun) + SkyX's Rayleigh colour towards the pixel` (`SkyRenderer.planet`). Drawn after the stars and before the
+  clouds; the weather's fog over the sky covers them as it covers the dome. The day is the weather's (`WorldWeather.Day`), the hour the clock's.
 - **Clouds** (the weather's density, or `--clouds <0..1>` as a test override; `--cloud-wind <x>,<z>` for the drift): the game's
   planar layer, drawn in the sky pass after the stars and before the moon, alpha-blended in HDR ([clouds.md](clouds.md#in-the-viewer)).
   `SkyRenderer` takes the density (`CloudDensityInput`), the sky colour multiplier (`SkyColourMultiplierInput`) and the wind velocity
@@ -286,5 +342,6 @@ HDR in the game's units; the post-processing's exposure brings them to the scree
 
 ### Not reproduced
 
-Volumetric clouds, lightning, cloud lighting from the sun's direction (the game has none), the moon's phase and halo, the planet mesh,
-SkyX's ground fog, the weather schedule, the starfield's dome mapping, and SkyX's per-vertex evaluation (the viewer's is per pixel).
+Volumetric clouds, lightning, cloud lighting from the sun's direction (the game has none), SkyX's ground fog, and SkyX's per-vertex
+evaluation (the viewer's is per pixel; the planets' sky colour is per pixel too, the game's per vertex of the planet mesh). SkyX's moon
+billboard is not drawn because the game does not draw it.

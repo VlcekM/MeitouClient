@@ -120,13 +120,39 @@ public sealed unsafe class SkyRenderer : IDisposable
         in vec2 vNdc;
         out vec4 fragColour;
         uniform mat4 uInverseViewProjection;
-        uniform vec4 uSkyExtra;        // x: unused, y: cloud density c (0 skips the cloud pass), z: stars' turn (radians), w: moon radius (radians)
-        uniform vec3 uMoonDir, uMoonRight, uMoonUp;
+        uniform vec4 uSkyExtra;        // x: unused, y: cloud density c (0 skips the cloud pass), z: the starfield's shift (texture units, wrapped), w: unused
+        uniform vec4 uPlanetBody0, uPlanetBody1;   // the game's two planets (docs/formats/sky.md "Planets"): xyz towards the centre, w the sine of the angular radius
+        uniform vec4 uPlanetSpin;      // cos and sin of each planet's turn about y: (cos 0, sin 0, cos 1, sin 1)
         uniform vec4 uCloudLight;      // rgb: zenithLight, a: Darkness
         uniform vec4 uCloudSun;        // rgb: sunColour.rgb, a: DensityOffset
         uniform vec4 uCloudWind;       // xy: the wind offset x 0.00005 (wrapped to 0..1)
-        uniform sampler2D uStars, uMoon, uClouds, uCloudsNormal, uCloudsTile;
-        uniform vec3 uHas;             // stars, moon, cloud textures (all three) present
+        uniform sampler2D uStars, uPlanet0, uPlanet1, uClouds, uCloudsNormal, uCloudsTile;
+        uniform vec4 uHas;             // stars, planet 0, cloud textures (all three), planet 1 present
+        // moon.hlsl: planet01.mesh's texture lit by the real sun direction, plus the skydome's Rayleigh colour towards it (no Mie, no night glow), opaque.
+        // The sphere is hit analytically; its object normal (the mesh turns about y) gives the mesh's UV sphere coordinate. rgba: colour and coverage.
+        vec4 planet(vec3 dir, vec4 body, float cs, float sn, sampler2D tex)
+        {
+            float b = dot(dir, body.xyz), sr = body.w;
+            float s = sqrt(max(1.0 - b * b, 0.0));   // the sine of the angle from the centre
+            float t = b - sqrt(max(sr * sr - s * s, 0.0));
+            vec3 n = (dir * t - body.xyz) / sr;
+            n = normalize(n);
+            vec3 o = vec3(n.x * cs - n.z * sn, n.y, n.x * sn + n.z * cs);
+            vec2 uv = vec2({{F(SkyPlanet.UOffset)}} - atan(o.z, o.x) / (2.0 * ATMO_PI), acos(clamp(o.y, -1.0, 1.0)) / ATMO_PI);
+            // The u seam: the gradients of whichever of u and u shifted by a half turn does not jump here (else the seam's pixels take the smallest mip).
+            float u2 = fract(uv.x + 0.5) - 0.5;
+            vec2 gx = vec2(abs(dFdx(uv.x)) < abs(dFdx(u2)) ? dFdx(uv.x) : dFdx(u2), dFdx(uv.y));
+            vec2 gy = vec2(abs(dFdy(uv.x)) < abs(dFdy(u2)) ? dFdy(uv.x) : dFdy(u2), dFdy(uv.y));
+            float cover = clamp((sr - s) / max(fwidth(s), 1e-6) + 0.5, 0.0, 1.0) * step(0.0, b);
+            if (cover <= 0.0) return vec4(0.0);
+            vec3 albedo = textureGrad(tex, uv, gx, gy).rgb;
+            vec3 d = normalize(vec3(dir.x, max(dir.y, 0.0), dir.z));
+            vec3 ray = d + vec3(0.0, SKYX_INNER - SKYX_CAMERA_Y, 0.0);
+            float far = length(ray), thickness;
+            ray /= far;
+            vec3 scatter = SKYX_EXPOSURE * skyxRayleighPhase(dot(uAtmoSun.xyz, ray)) * SKYX_RAYLEIGH * skyxInScatter(ray, far, uAtmoSun.xyz, thickness);
+            return vec4(albedo * clamp(dot(n, uAtmoSun.xyz), 0.0, 1.0) + scatter, cover);
+        }
         void main()
         {
             vec4 a = uInverseViewProjection * vec4(vNdc, 0.0, 1.0);
@@ -136,16 +162,27 @@ public sealed unsafe class SkyRenderer : IDisposable
             vec3 col = atmoSky(dir, night);
             float aboveHorizon = smoothstep(-0.02, 0.06, dir.y);
 
-            // Stars: SkyX_Starfield.dds (SkyX's HDR form: nightmult · texture · (0.35 + saturate(−sunY · 0.45)) · 2), laid over the upper
-            // hemisphere stereographically and turning with the night (the dome's own UV layout is not reproduced).
+            // Stars: SkyX_Starfield.dds (SkyX's HDR form: nightmult · texture · (0.35 + saturate(−sunY · 0.45)) · 2) on the dome's own texture coordinates
+            // (Starfield.Uv: azimuthal-equidistant round the zenith, the horizon a circle of radius 0.4 round (0.4, 0.4)), shifted along both axes with the
+            // game hours. Sampled outside the branch below so the gradients are defined (t · normalize(xz) is continuous, also at the zenith).
+            float zenith = acos(clamp(dir.y, 0.0, 1.0)) / (0.5 * ATMO_PI);
+            vec2 around = dot(dir.xz, dir.xz) > 1e-12 ? normalize(dir.xz) : vec2(0.0);
+            vec3 stars = texture(uStars, vec2({{F(Starfield.Centre)}}) + {{F(Starfield.Radius)}} * zenith * around + uSkyExtra.z).rgb;
             if (uHas.x > 0.5 && night > 0.0 && dir.y > 0.0)
-            {
-                float cs = cos(uSkyExtra.z), sn = sin(uSkyExtra.z);
-                vec2 r = vec2(cs * dir.x - sn * dir.z, sn * dir.x + cs * dir.z);
-                vec3 stars = texture(uStars, r / (1.0 + dir.y) * 0.5 + 0.5).rgb;
                 col += night * aboveHorizon * stars * (0.35 + clamp(-uAtmoSun.y * 0.45, 0.0, 1.0)) * 2.0;
+            // The planets: render queue 6 with the priorities 1 and 2, after the skydome (queue 5) and before the cloud entity (queue 6, priority 100), so the
+            // clouds pass in front of them. The large one first, then the small one, which covers the large one's edge where the discs overlap (about half a degree).
+            if (uHas.y > 0.5)
+            {
+                vec4 p = planet(dir, uPlanetBody0, uPlanetSpin.x, uPlanetSpin.y, uPlanet0);
+                col = mix(col, p.rgb, p.a);
             }
-            // Clouds: SkyX's cloud layer on the dome (SkyX_Clouds.hlsl, docs/formats/clouds.md), after the sky and the stars, before the moon;
+            if (uHas.w > 0.5)
+            {
+                vec4 p = planet(dir, uPlanetBody1, uPlanetSpin.z, uPlanetSpin.w, uPlanet1);
+                col = mix(col, p.rgb, p.a);
+            }
+            // Clouds: SkyX's cloud layer on the dome (SkyX_Clouds.hlsl, docs/formats/clouds.md), after the sky, the stars and the planets;
             // alpha-blended over them in HDR. The dome direction below the horizon is evaluated at a hair above it (alpha is then the horizon value).
             if (uHas.z > 0.5 && uSkyExtra.y > 0.0)
             {
@@ -181,15 +218,6 @@ public sealed unsafe class SkyRenderer : IDisposable
                 alpha = mix(o + 0.5, alpha, band);
                 col = mix(col, clamp(pixel, 0.0, 1.0) * sqrt(SKYX_EXPOSURE), clamp(alpha, 0.0, 1.0));
             }
-            // Moon: SkyX_Moon.png on a disc opposite the sun (always full; SkyX_Moon.hlsl saturates its colour and blends by alpha).
-            float md = dot(dir, uMoonDir);
-            if (uHas.y > 0.5 && md > 0.0)
-            {
-                vec2 p = vec2(dot(dir, uMoonRight), dot(dir, uMoonUp)) / md / uSkyExtra.w;
-                vec4 m = texture(uMoon, vec2(p.x, -p.y) * 0.195 + 0.5);
-                if (abs(p.x) < 2.6 && abs(p.y) < 2.6)
-                    col = mix(col, clamp(m.rgb, 0.0, 1.0), m.a * night * aboveHorizon * smoothstep(0.0, 0.1, uMoonDir.y));
-            }
             // The game's fog pass runs over the sky too (post/fog.hlsl atmosphere_fog_fs): a pixel with no geometry has distance = farClip, its atmosphere term is
             // dropped and the weather's term alone remains, alpha = ease-in-out(saturate(farClip / fog distance)) x fogColour.a, colour = fog colour x sunColour.w
             // (uAtmoFogColour). So a weather whose fog completes before the far clip (dust storms 25000, Ashlands 35000, farClip 50000) replaces the whole sky with a flat fog colour.
@@ -208,7 +236,9 @@ public sealed unsafe class SkyRenderer : IDisposable
     // Native programs (docs/renderer-native.md 7.1, wave 3 agent D): the same SPIR-V as the GL programs they replace.
     readonly SkyProg simple, sky;
     // Native textures with the GL sampler state their GL versions had (phase 8 stage 2); null when the file was not found.
-    SampledImage? starsTexture, moonTexture, cloudsTexture, cloudsNormalTexture, cloudsTileTexture, irradianceCube, specularCube, ambientMap;
+    SampledImage? starsTexture, cloudsTexture, cloudsNormalTexture, cloudsTileTexture, irradianceCube, specularCube, ambientMap;
+    // The game's two planets' textures (SkyPlanet.All order); null when the file was not found.
+    readonly SampledImage?[] planetTextures = new SampledImage?[SkyPlanet.All.Length];
     readonly PassTimer skyTimer;
     readonly List<double> gpuSamples = [];
     double gpuTotal;
@@ -228,6 +258,19 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// or the physical haze's amount), not the weather's fog.
     /// </summary>
     public float HazeStrength { get; set; } = Enhancements.MeitouHazeStrength;
+    /// <summary>
+    /// The Meitou <c>night</c> switch (viewer, not the game's): the game's haze colour is SkyX's sunlit in-scattering, which is black once the sun is down,
+    /// so its ramp turns everything past 0.6 D black at night and only the land round the camera stays lit. With this on, the haze strength is scaled
+    /// by <see cref="NightHazeFactor"/>: the game's by day, down to <see cref="Enhancements.MeitouNightHazeFloor"/> at night. False: the game's.
+    /// </summary>
+    public bool ThinNightHaze { get; set; } = true;
+
+    /// <summary>The night switch's scale on the haze strength at the sun's height <paramref name="sunY"/>: 1 above 0.05, the floor below −0.15, smooth between.</summary>
+    public static float NightHazeFactor(float sunY)
+    {
+        float t = Math.Clamp((sunY + 0.15f) / 0.2f, 0, 1);
+        return Enhancements.MeitouNightHazeFloor + (1 - Enhancements.MeitouNightHazeFloor) * t * t * (3 - 2 * t);
+    }
     /// <summary>
     /// The eye's height above the highest ground or water within the game's longest camera boom (<see cref="KenshiCamera.MaxDistance"/>) around it,
     /// set each frame by <see cref="SetEye"/>. The game's camera never gets more than <see cref="KenshiCamera.MaxHeightAbovePivot"/> above its
@@ -264,6 +307,12 @@ public sealed unsafe class SkyRenderer : IDisposable
             }
         EyeClearance = eye.Y - top;
     }
+
+    /// <summary>Game hours since the load (the starfield's shift: SkyX's time runs at game speed, from the sky's creation, docs/formats/sky.md "Stars").</summary>
+    public double StarHours { get; set; }
+    /// <summary>The game's day and hour, which turn the planets (<see cref="SkyPlanet.Spin"/>).</summary>
+    public int Day { get; set; }
+    public float Hour { get; set; } = 13;
 
     /// <summary>The physical haze only: world units in one density scale height of SkyX's air (the game's world unit is Unknown; a viewer choice).</summary>
     public float ScaleHeightUnits { get; set; } = 40000;
@@ -340,7 +389,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         if (assets is not null)
         {
             LoadTextures(assets);
-            Console.WriteLine($"sky       textures: starfield {(starsTexture is not null ? "yes" : "no")}, moon {(moonTexture is not null ? "yes" : "no")}, clouds {(cloudsTexture is not null ? "yes" : "no")}");
+            Console.WriteLine($"sky       textures: starfield {(starsTexture is not null ? "yes" : "no")}, planets {string.Join(" ", SkyPlanet.All.Select((p, i) => $"{p.Material} {(planetTextures[i] is not null ? "yes" : "no")}"))}, clouds {(cloudsTexture is not null ? "yes" : "no")}");
         }
         Active = this;
         PublishGlobals();
@@ -351,17 +400,12 @@ public sealed unsafe class SkyRenderer : IDisposable
     {
         try
         {
-            if (assets.Find("SkyX_Starfield.dds") is { } stars)
-            {
-                var dds = DdsReader.ReadFile(stars);
-                var img = DdsDecoder.Decode(dds, 0, Math.Min(2, dds.MipCount - 1));   // 1024²: one level of the 4096² file
-                starsTexture = SampledImage.Rgba8(Gpu, img, repeat: false, mipmaps: true, "sky stars");
-            }
-            if (assets.Find("SkyX_Moon.png") is { } moon)
-            {
-                var img = TextureLoader.LoadFile(moon, allMips: false).Levels[0];
-                moonTexture = SampledImage.Rgba8(Gpu, img, repeat: false, mipmaps: true, "sky moon");
-            }
+            // The whole 4096² file (BC1, 13 levels), repeating: the dome's coordinates wrap as the starfield shifts. The game samples its top level only
+            // (`filtering linear linear none`); the viewer filters trilinearly, which takes the top level at the game's screen sizes and keeps a smaller view from sparkling.
+            if (assets.Find("SkyX_Starfield.dds") is { } stars) starsTexture = SampledImage.FromDds(Gpu, DdsReader.ReadFile(stars), repeat: true, "sky stars");
+            for (int i = 0; i < SkyPlanet.All.Length; i++)
+                if (assets.Find(SkyPlanet.All[i].Texture) is { } planet)
+                    planetTextures[i] = SampledImage.FromDds(Gpu, DdsReader.ReadFile(planet), repeat: true, $"sky planet {SkyPlanet.All[i].Material}");
             if (assets.Find("Clouds.dds") is { } clouds)
             {
                 var img = TextureLoader.LoadFile(clouds, allMips: false).Levels[0];
@@ -550,7 +594,7 @@ public sealed unsafe class SkyRenderer : IDisposable
             // The weather fog is complete at a distance between `fog distance min` and `max` by the wind; the viewer has no wind and takes max.
             new Vector4(KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, fogWeight > 0 && fogDistance > 1 ? 1f / fogDistance : 0f),
             new Vector4(cloud.X, cloud.Y, cloud.Z, pull),
-            new Vector4(KenshiHaze ? AltitudeWeight : 1f, MathF.Max(HazeStrength, 0), AltitudeWeight, 0),
+            new Vector4(KenshiHaze ? AltitudeWeight : 1f, MathF.Max(HazeStrength, 0) * (ThinNightHaze ? NightHazeFactor(s.Sun.Y) : 1f), AltitudeWeight, 0),
             new Vector4(irradianceCube is not null ? 1f : 0f, specularCube is not null ? 1f : 0f, ambientMap is not null ? 1f : 0f, AmbientMap.HalfWorld));
     }
 
@@ -653,16 +697,18 @@ public sealed unsafe class SkyRenderer : IDisposable
         var s = state;
         var p = program.P;
         float coverage = CloudDensity;
-        // The stars turn with the sun's half-turn (a = phase · π); the moon stands opposite the sun.
-        float turn = MathF.Atan2(s.Sun.Z, s.Sun.X);
-        var moon = Vector3.Normalize(-s.Sun);
-        var right = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, moon));
-        var up = Vector3.Cross(moon, right);
-        const float moonRadius = 0.016f;
-        p.Set(program.Extra, 0, coverage, turn, moonRadius);
-        p.Set(program.MoonDir, moon.X, moon.Y, moon.Z);
-        p.Set(program.MoonRight, right.X, right.Y, right.Z);
-        p.Set(program.MoonUp, up.X, up.Y, up.Z);
+        p.Set(program.Extra, 0, coverage, Starfield.Shift(StarHours), 0);
+        // The planets: fixed directions and sizes, each turned by the game's day and hour.
+        Span<float> spin = stackalloc float[4];
+        for (int i = 0; i < 2; i++)
+        {
+            var planet = SkyPlanet.All[i];
+            var towards = planet.Towards;
+            p.Set(program.Planet[i], towards.X, towards.Y, towards.Z, planet.SinRadius);
+            float a = planet.Spin(Day, Hour);
+            (spin[2 * i], spin[2 * i + 1]) = (MathF.Cos(a), MathF.Sin(a));
+        }
+        p.Set(program.PlanetSpin, spin[0], spin[1], spin[2], spin[3]);
         // The cloud pass: zenithLight and Darkness, sunColour.rgb and DensityOffset, the wind offset's texture shift.
         var zenith = s.CloudZenith;
         p.Set(program.CloudLight, zenith.X, zenith.Y, zenith.Z, CloudLayer.Darkness(coverage));
@@ -670,10 +716,11 @@ public sealed unsafe class SkyRenderer : IDisposable
         var shift = CloudLayer.TextureShift(cloudOffset);
         p.Set(program.CloudWind, shift.X, shift.Y, 0, 0);
         bool clouds = cloudsTexture is not null && cloudsNormalTexture is not null && cloudsTileTexture is not null;
-        p.Set(program.Has, starsTexture is not null ? 1f : 0f, moonTexture is not null ? 1f : 0f, clouds ? 1f : 0f);
+        p.Set(program.Has, starsTexture is not null ? 1f : 0f, planetTextures[0] is not null ? 1f : 0f, clouds ? 1f : 0f, planetTextures[1] is not null ? 1f : 0f);
         // A missing texture reads GL's stand-in, which an unbound sampler does too.
         if (starsTexture is not null) p.Bind(program.Stars, starsTexture.Sampled());
-        if (moonTexture is not null) p.Bind(program.Moon, moonTexture.Sampled());
+        if (planetTextures[0] is { } planet0) p.Bind(program.Planet0, planet0.Sampled());
+        if (planetTextures[1] is { } planet1) p.Bind(program.Planet1, planet1.Sampled());
         if (cloudsTexture is not null) p.Bind(program.Clouds, cloudsTexture.Sampled());
         if (cloudsNormalTexture is not null) p.Bind(program.CloudsNormal, cloudsNormalTexture.Sampled());
         if (cloudsTileTexture is not null) p.Bind(program.CloudsTile, cloudsTileTexture.Sampled());
@@ -718,7 +765,8 @@ public sealed unsafe class SkyRenderer : IDisposable
     public void Dispose()
     {
         if (Active == this) Active = null;
-        foreach (var t in new[] { starsTexture, moonTexture, cloudsTexture, cloudsNormalTexture, cloudsTileTexture, irradianceCube, specularCube, ambientMap }) t?.Dispose();
+        foreach (var t in new[] { starsTexture, cloudsTexture, cloudsNormalTexture, cloudsTileTexture, irradianceCube, specularCube, ambientMap }) t?.Dispose();
+        foreach (var t in planetTextures) t?.Dispose();
         simple.Dispose();
         sky.Dispose();
     }
@@ -773,10 +821,11 @@ sealed class SkyProg : IDisposable
 {
     public readonly LegacyProgram P;
     public readonly NativeSegment Segment;
-    public readonly UniformHandle InverseViewProjection, Extra, MoonDir, MoonRight, MoonUp, CloudLight, CloudSun, CloudWind, Has;
+    public readonly UniformHandle InverseViewProjection, Extra, PlanetSpin, CloudLight, CloudSun, CloudWind, Has;
+    public readonly UniformHandle[] Planet;
     public readonly SkyColourHandles Colours;
-    public readonly SamplerSlot Stars, Moon, Clouds, CloudsNormal, CloudsTile;
-    public readonly Meitou.Rendering.Gpu.Shaders.SamplerInfo? StarsInfo, MoonInfo, CloudsInfo;
+    public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile;
+    public readonly Meitou.Rendering.Gpu.Shaders.SamplerInfo? StarsInfo, CloudsInfo;
 
     public SkyProg(GpuContext gpu, string vertex, string fragment, string name)
     {
@@ -785,20 +834,19 @@ sealed class SkyProg : IDisposable
         InverseViewProjection = P.Uniform("uInverseViewProjection");
         Colours = SkyColourHandles.Resolve(P);
         Extra = P.Uniform("uSkyExtra");
-        MoonDir = P.Uniform("uMoonDir");
-        MoonRight = P.Uniform("uMoonRight");
-        MoonUp = P.Uniform("uMoonUp");
+        Planet = [P.Uniform("uPlanetBody0"), P.Uniform("uPlanetBody1")];
+        PlanetSpin = P.Uniform("uPlanetSpin");
         CloudLight = P.Uniform("uCloudLight");
         CloudSun = P.Uniform("uCloudSun");
         CloudWind = P.Uniform("uCloudWind");
         Has = P.Uniform("uHas");
         Stars = P.Sampler("uStars");
-        Moon = P.Sampler("uMoon");
+        Planet0 = P.Sampler("uPlanet0");
+        Planet1 = P.Sampler("uPlanet1");
         Clouds = P.Sampler("uClouds");
         CloudsNormal = P.Sampler("uCloudsNormal");
         CloudsTile = P.Sampler("uCloudsTile");
         if (Stars.IsValid) StarsInfo = P.SamplerInfo(Stars);
-        if (Moon.IsValid) MoonInfo = P.SamplerInfo(Moon);
         if (Clouds.IsValid) CloudsInfo = P.SamplerInfo(Clouds);
     }
 
@@ -862,6 +910,33 @@ internal sealed class SampledImage : IDisposable
         if (mipmaps) batch.Commands.GenerateMips(t);
         return new SampledImage(ctx, t, mipmaps ? TextureMinFilter.LinearMipmapLinear : TextureMinFilter.Linear, TextureMagFilter.Linear,
             repeat ? TextureWrapMode.Repeat : TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat);
+    }
+
+    /// <summary>
+    /// A 2D DDS file with every level it has: BC1 blocks as they are (half a byte a texel), any other format decoded to RGBA8; trilinear,
+    /// repeating or clamped to the edge. The sky's starfield and planet maps (4096² and 4096 × 2048 BC1: 11 and 6 MB instead of 85 and 43 MB as RGBA8).
+    /// </summary>
+    public static SampledImage FromDds(GpuContext ctx, Meitou.Data.Textures.DdsFile dds, bool repeat, string name)
+    {
+        bool bc1 = dds.Format == Meitou.Data.Textures.DdsFormat.Bc1;
+        var format = bc1 ? Silk.NET.Vulkan.Format.BC1RgbaUnormBlock : Silk.NET.Vulkan.Format.R8G8B8A8Unorm;
+        using var batch = ctx.Uploads.Begin();
+        var t = batch.Create(new TextureDesc(format, dds.Width, dds.Height, dds.MipCount, Name: name));
+        for (int level = 0; level < dds.MipCount; level++)
+        {
+            if (bc1)
+            {
+                var s = dds.Surface(0, level);
+                batch.Write(t, level, 0, Rect(s.Width, s.Height), dds.Data.AsSpan(s.Offset, s.Length));
+            }
+            else
+            {
+                var img = Meitou.Data.Textures.DdsDecoder.Decode(dds, 0, level);
+                batch.Write(t, level, 0, Rect(img.Width, img.Height), img.Pixels);
+            }
+        }
+        var filter = dds.MipCount > 1 ? TextureMinFilter.LinearMipmapLinear : TextureMinFilter.Linear;
+        return new SampledImage(ctx, t, filter, TextureMagFilter.Linear, repeat ? TextureWrapMode.Repeat : TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat);
     }
 
     /// <summary>RGBA32F, one level, linear, clamped to the edge: the GL texture <c>WaterRenderer</c> made for its biome parameter maps.</summary>

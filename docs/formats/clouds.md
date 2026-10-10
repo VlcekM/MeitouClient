@@ -144,7 +144,7 @@ pass above per pixel (the dome direction is the view ray), `Meitou.Data.World.Cl
 `Darkness`, `zenithLight`, the `horizonClouds` colour, the coverage computation, the drift offset), pinned by `CloudLayerTests` (the
 coverage table is recomputed from the shipped textures and must match the one above).
 
-- **Order**: sky, stars, **clouds**, moon, all in the one sky pass; the clouds are alpha-blended in HDR (`mix(sky, cloud, alpha)`).
+- **Order**: sky, stars, the planets, **clouds**, all in the one sky pass; the clouds are alpha-blended in HDR (`mix(sky, cloud, alpha)`).
 - **Inputs on `SkyRenderer`**: cloud density c (`CloudDensityInput`, else the forced `--weather` record's; `--clouds <0..1>` overrides
   both, a test flag), sky colour multiplier (`SkyColourMultiplierInput`, else the record's), cloud wind velocity xz (`CloudWind`,
   `--cloud-wind <x>,<z>`). c is clamped to 0..1. The same c gives `horizonClouds` (colour and pull), so the band and the haze meet.
@@ -166,8 +166,8 @@ coverage table is recomputed from the shipped textures and must match the one ab
     Above the 8.6 degree band the pattern is the game's; below 15 degrees it is smoother than the game's.
   - *Weather fog* (corrected 2026-10-08): the game's fog pass covers the sky too (`sky.md`, "Haze"), so a weather whose fog is complete
     before the far clip hides the clouds entirely; the viewer's earlier elevation-based fade of the sky and clouds (a stand-in) is gone.
-  - *The moon over the clouds*: the moon is drawn after the layer, as the task order says; whether SkyX's moon queue is above the
-    cloud queue (6) stays Unknown, so a moon behind a full overcast shows as in a clear sky (a c = 1 night shows the moon through it).
+  - *The planets behind the clouds* (2026-10-10): the game never draws SkyX's moon ([sky.md](sky.md#the-games-sky)); its two planets are in queue 6 at the
+    priorities 1 and 2, before the cloud entity (queue 6, default priority 100), so the viewer draws them before the layer and clouds cover them.
   - *Sky colour multiplier*: it multiplies the whole sky in the viewer already (a stand-in, see [sky.md](sky.md)); the clouds take
     it only through `zenithLight`, as in the game.
 - **Seen** (`--world --town "The Hub" --pitch 15 --time 13 --size 1600x900`): "Clear Times SHORT hot 0.5" (c 0.1) one wisp;
@@ -188,7 +188,7 @@ coverage table is recomputed from the shipped textures and must match the one ab
 
 - The dome mesh's texcoord layout (taken as the unit direction from the shader's use) and the dome's lower half (below the
   horizon the shader gives `alpha = o + 0.5`, hidden by terrain in practice).
-- The exact render queue (6 from SkyX's struct order) and where the cloud pass lands in the compositor relative to the moon
-  and the planet meshes (the viewer draws the clouds before the moon).
+- The exact render queue (6 from SkyX's struct order), which decides that the clouds cover the planets (queue 6, priorities 1 and 2;
+  [sky.md](sky.md), "Planets"): the viewer draws the planets first.
 - Whether the game's mip-less sampling looks noticeably different from the viewer's mipmapped one near the horizon (needs a game
   screenshot in a cloudy weather at a low pitch).
