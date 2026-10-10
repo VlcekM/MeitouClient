@@ -149,8 +149,8 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
     floor fades out by 4400 units, as the game's water turns opaque at 4000. **Clarity** (2026-10-10, Tab panel, Meitou only): L is the depth
     over view.y (floored at 0.05), so at grazing angles it is up to 20 times the depth and distant shallows read as opaque body colour, which
     is why the water looked see-through only near the eye. "Water clarity x" divides σ (also the alpha of the `--no-water-refraction`
-    path; default 1, 0.25–8); "Far water clarity" k makes L = depth / view.y^(1−k) (0, the default, the true slant path; 1 the plain depth).
-    "Water see-through distance" D (default 4000, as the game; 1000–100000) replaces the fixed 4000–4400 cutoff: the floor fades out
+    path; default 1, 0.25–8); "Far water clarity" k makes L = depth / view.y^(1−k) (0 the true slant path; 1 the plain depth; default 0.25).
+    "Water see-through distance" D (default 10000, the game 4000; 1000–100000) replaces the fixed 4000–4400 cutoff: the floor fades out
     over D to 1.5 D (smoothstep) when refracted, the blended path goes opaque over 0.9 D to 1.25 D. From high above the game's 4000 left
     only a clear disc under the camera, darker water all round it.
     **Caustics**: on the floor seen through shallow water, two

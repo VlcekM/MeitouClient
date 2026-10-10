@@ -1030,13 +1030,13 @@ public sealed unsafe class WaterRenderer : IDisposable
     public float Clarity { get; set; } = 1;
 
     /// <summary>The Tab panel's "Far water clarity" (Meitou water; not in the game): 0 absorbs along the true slant path through the water (it is
-    /// up to 20 times the depth at grazing angles, so distant shallows read opaque), 1 only along the depth, as if looked at from straight above.</summary>
-    public float FarClarity { get; set; }
+    /// up to 20 times the depth at grazing angles, so distant shallows read opaque), 1 only along the depth, as if looked at from straight above. Default 0.25.</summary>
+    public float FarClarity { get; set; } = 0.25f;
 
     /// <summary>The Tab panel's "Water see-through distance" (Meitou water): the eye distance where the floor starts to fade out under the water,
     /// gone by 1.5 times it (refracted; by 1.25 times when blended). The game's water turns opaque at 4000 units, which from high above leaves
-    /// only a disc of clear water under the camera.</summary>
-    public float ClearDistance { get; set; } = 4000;
+    /// only a disc of clear water under the camera. Default 10000.</summary>
+    public float ClearDistance { get; set; } = 10000;
 
     /// <summary>
     /// Copies the scene drawn so far (the slice's opaque geometry, with no pass open) at half the size into the texture the Meitou water refracts:
