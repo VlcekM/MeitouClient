@@ -133,6 +133,13 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Say($"playing from {time:0.00} s, {Summary()} (numpad Enter{(EditorVisible ? " or Space" : "")} stops)");
     }
 
+    /// <summary>Flies the keys on a loop from the first (<c>--play-shots</c>).</summary>
+    public void PlayLoop()
+    {
+        loop = true;
+        if (!Playing) TogglePlay(fromPlayhead: false);
+    }
+
     void StartRecording()
     {
         if (keys.Count < 2) { Say("save two keys or more first"); return; }

@@ -54,6 +54,8 @@ sealed class WorldOptions
     public float TerrainRamp = WorldRenderOptions.DefaultTerrainRampStart;
     public float? TerrainFarError;
     public bool NoWater, NoStream, NoReflections, SimpleSky, ShowKeys;
+    /// <summary>`--play-shots`: the viewer starts flying its saved camera keys (the F2 timeline) on a loop.</summary>
+    public bool PlayShots;
     /// <summary>The game's <c>texture resolution gimping</c> (0..4; missing key: 1) and <c>water reflection</c> (0..4; missing: 2) / <c>reflection range</c> (missing: 0.6) settings (docs/formats/settings.md).</summary>
     // The viewer starts at full quality (the old look); the game's missing-key defaults are TextureQuality.Default (1),
     // ReflectionPass.DefaultLevel (2) and DefaultRange (0.6): --texture-quality 1 --water-reflection 2 --reflection-range 0.6.
@@ -274,6 +276,7 @@ sealed class WorldOptions
           --no-stream              keep the terrain detail around the start point instead of following the camera
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,dust,reach>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on)
           --show-keys              start with the key list overlay open (toggle with F10)
+          --play-shots             start flying the saved camera keys (the F2 timeline) on a loop
           --log-spikes             print a line for every frame whose GPU time is over 1.5 x the median: stage times (GPU, render thread) and what it uploaded or rebuilt (MEITOU_LOG_SPIKES=1)
           --fly-to <x>,<z>         with --screenshot: fly there first (streaming test, reports frame times), then take the picture
           --fly-benchmark <frames> offscreen, no window: fly the camera round a circle at 60 frames per second of wall time, print frame-time
@@ -445,6 +448,7 @@ sealed class WorldOptions
                 case "--cloud-wind": { var (wx, wz) = Pair(); o.CloudWind = new Vector2((float)wx, (float)wz); break; }
                 case "--no-stream": o.NoStream = true; break;
                 case "--show-keys": o.ShowKeys = true; break;
+                case "--play-shots": o.PlayShots = true; break;
                 case "--no-vsync": o.VSync = false; break;
                 case "--object-lod": o.ObjectLod = Math.Clamp(F(), 0.25f, 4); break;
                 case "--grass-density": o.GrassDensity = Math.Clamp(F(), 0.1f, 2); break;

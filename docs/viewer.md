@@ -263,3 +263,6 @@ the console prints an ffmpeg line that makes an MP4 of the frames.
 (`BorderlessFullScreen`, added 2026-10-10): the window loses its border and covers the monitor it is on, with no exclusive mode change, so
 switching away is instant; toggling again gives the bordered, maximized window back. "Reset to defaults" on the Tab panel puts it back to
 the window.
+
+**Starting a flight.** `--play-shots` starts the viewer flying its saved keys on a loop (added 2026-10-10). Screenshot mode prints the
+camera's code (`camera    <hex> (...)`) so a still made with `--at`, `--yaw`, `--pitch` and `--distance` can be turned into a key.

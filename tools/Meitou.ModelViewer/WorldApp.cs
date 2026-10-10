@@ -98,6 +98,7 @@ static partial class WorldApp
         using var gpu = CreateGpu(context, install, scene, assets, o, interactive: false);
         if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, streamline);
         var (camera, render) = Setup(scene, o);
+        Console.WriteLine($"camera    {CameraCode.Encode(camera)} ({CameraCode.Describe(camera)}; --camera-code puts a viewer here)");
         { var up = o.Post.Upscale; gpu.Objects?.SetView(o.Width, o.Height, camera.FieldOfView, up.Temporal ? (up.Kind == UpscalerKind.Taa ? -0.5f : -1f) : 0f); }   // before the first settle, so the textures load knowing the picture (the display size, the bias without the render scale: the same level)
         if (gpu.Streamer is { } streamer)
         {
@@ -269,6 +270,7 @@ static partial class WorldApp
         double animSeconds = 0;
         var cinema = new Cinema(() => camera, () => hour, v => hour = v, () => BorderlessFullScreen.IsOn(window), () => BorderlessFullScreen.Toggle(window));
         cinema.Load();
+        if (o.PlayShots) cinema.PlayLoop();
         Vector2? lastMouse = null;
         MouseButton? dragging = null;
         DebugOverlay? overlay = null;
