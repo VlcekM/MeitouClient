@@ -222,3 +222,26 @@ view are in the game's own `biomemap.png`, not a viewer fault
 ([formats/terrain.md](formats/terrain.md#why-some-sea-areas-in-the-north-east-have-other-tones-observed)).
 Interactive mode was smoke-tested only
 (starts, loads, renders; the controls were not exercised by hand).
+
+### Cinematic camera
+
+*From the code* (added 2026-10-10, for trailers; `Cinema` in the viewer, `CameraPath` in `Meitou.Rendering`, tests in `CameraPathTests`).
+Numpad 1 to 9 save the camera as a shot: the eye, the view direction, the orbit distance, the lens (field of view) and the time of day.
+Ctrl+numpad 1 to 9 cuts to a shot. The shots are kept in `%LOCALAPPDATA%\Meitou\viewer-shots.json`, so they survive a restart; numpad `.`
+lists them, Ctrl+numpad `.` deletes them all. Numpad Enter flies through the saved shots in slot order (empty slots are skipped) and
+stops at the last; Enter again stops. Numpad 0 loops the flight back to the first shot; numpad + and - make each shot-to-shot leg 1.25
+times longer or shorter (default 6 s, every leg takes the same time); numpad / switches whether the time of day follows the shots
+(on by default: a flight from a 05:30 shot to a 07:00 shot runs the sunrise). PageUp and PageDown zoom the lens 2.5 degrees at a time
+(10 to 100), Home puts it back to 50; the lens is part of a shot, so two shots with different lenses make a dolly zoom.
+
+**The path.** A centripetal Catmull-Rom spline (knots spaced by the square root of the eye's distance between shots) through every
+shot's eye, yaw, pitch, log of the orbit distance, lens and hour, so the camera passes each shot exactly, does not swing out past two
+shots close together, and changes speed smoothly. The yaw and the hour are unwrapped so they go the short way round (350 to 10 degrees
+through 0, 23:00 to 01:00 through midnight). An open flight ramps its speed up over the first half leg and down over the last half leg
+and keeps an even pace between; a loop runs at an even pace.
+
+**Clean picture and recording.** Numpad `*` hides every panel and draws black 2.39:1 letterbox bars; a small status line at the bottom
+shows the shots and the flight otherwise. Shift+numpad Enter records the flight (one lap of a loop) into `C:\Temp\meitou-take-<time>\`
+as numbered PNGs at a fixed 60 frames per second of film time: each frame advances the camera, the clock, the clouds, particles and water
+by exactly 1/60 s however long it took to draw, so a heavy setting still gives a smooth video. The letterbox is in the frames when it is on.
+When it ends, the console prints an ffmpeg line that makes an MP4 of the frames.

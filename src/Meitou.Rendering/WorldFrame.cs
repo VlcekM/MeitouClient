@@ -308,6 +308,7 @@ sealed class WorldOptions
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
           G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour (the day follows midnight), [ / ] game day -/+ 1 (the weather catches up), \ cycle the forced weather (auto, then each WEATHER record), H print camera, Ctrl+C copy camera code, Ctrl+V go to camera code, P save screenshot, Tab settings sliders, Esc quit.
           F1 Meitou on / off (every switch Faithful, then back as they were; the Tab panel sets them one by one); - / = exposure; F10 key list, F11 frame statistics, F12 profiler (gpu, cpu, off).
+          Num1-9 save the camera as a shot, Ctrl+Num1-9 cut to a shot, NumEnter fly through the shots (Shift: record PNG frames), Num0 loop, Num+ / Num- slower / faster, Num* clean picture (letterbox), Num/ time of day follows the shots, Num. list shots (Ctrl: delete all), PageUp / PageDown zoom lens, Home lens back to 50 deg.
         """;
 
     /// <summary><c>--renderer</c> is kept so old command lines work: <c>vulkan</c> is accepted, anything else says OpenGL is gone; either way it changes nothing.</summary>

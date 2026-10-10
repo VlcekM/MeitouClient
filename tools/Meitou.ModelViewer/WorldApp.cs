@@ -265,7 +265,9 @@ static partial class WorldApp
         bool screenshotRequested = false;
         float hour = o.Hour;
         int day = o.Day ?? 0;
-        var clock = Stopwatch.StartNew();
+        // The animation clock (clouds, particles, water): real seconds, or exact frame steps while the cinema records.
+        double animSeconds = 0;
+        var cinema = new Cinema();
         Vector2? lastMouse = null;
         MouseButton? dragging = null;
         DebugOverlay? overlay = null;
@@ -364,6 +366,9 @@ static partial class WorldApp
                 else Console.WriteLine("camera    the clipboard holds no camera code (Ctrl+C in a viewer copies one)");
                 return;
             }
+            bool ctrl = keyboard is not null && (keyboard.IsKeyPressed(Key.ControlLeft) || keyboard.IsKeyPressed(Key.ControlRight));
+            bool shift = keyboard is not null && (keyboard.IsKeyPressed(Key.ShiftLeft) || keyboard.IsKeyPressed(Key.ShiftRight));
+            if (cinema.OnKey(key, ctrl, shift, camera, () => hour, v => hour = v)) return;
             switch (key)
             {
                 case Key.Escape: window.Close(); break;
@@ -504,14 +509,18 @@ static partial class WorldApp
             }
             frameWatch.Restart();
             profiler?.BeginFrame();
+            double frameDt = cinema.FrameTime(renderDt);
+            animSeconds += frameDt;
             if (o.TimeSpeed > 0)
             {
                 // --time-speed: the clock runs on, game hours per real minute, into the next day past midnight.
-                hour += o.TimeSpeed * (float)Math.Min(renderDt, 0.25) / 60f;
+                hour += o.TimeSpeed * (float)frameDt / 60f;
                 while (hour >= 24) { hour -= 24; day++; }
             }
+            cinema.Advance(frameDt, camera, v => hour = v);   // a flight through the saved shots moves the camera (and the hour)
+            string? takeFile = cinema.TakeFrame();
             if (gpu.Weather is { } clockWeather) clockWeather.Day = day;   // game speed 1, never paused: the viewer's time is the day and the hour set here
-            Draw(gpu, scene, camera, render, size.X, size.Y, hour, (float)clock.Elapsed.TotalSeconds / 600f, o.FogDistance);
+            Draw(gpu, scene, camera, render, size.X, size.Y, hour, (float)animSeconds / 600f, o.FogDistance);
             cpuMs += frameWatch.Elapsed.TotalMilliseconds;
             if (timing)
             {
@@ -529,26 +538,34 @@ static partial class WorldApp
             frameClock.Restart();
             // The picture is read after the present (framebuffer 0 stays intact until the next frame); the frame that is saved is drawn
             // without the overlay and the panel, so saved pictures never show them.
-            bool shot = screenshotRequested;
+            // A recorded frame is drawn like a screenshot; the cinema's clean picture hides the panels too (its letterbox stays in saved frames).
+            bool shot = screenshotRequested || takeFile is not null;
             screenshotRequested = false;
+            bool panels = !shot && !cinema.Clean;
+            if (overlay is not null) cinema.Draw(overlay, size.X, size.Y, showStatus: panels);
             // The statistics at the top left, the key list below them.
-            float panelsBottom = !shot && statsVisible && overlay is not null && stats.Count > 0
+            float panelsBottom = panels && statsVisible && overlay is not null && stats.Count > 0
                 ? overlay.Panel(size.X, size.Y, $"Meitou world ({RendererName(o)})   (F11 hides this)", stats) : 0;
-            if (!shot && overlay is { Visible: true })
+            if (panels && overlay is { Visible: true })
             {
                 // Each item with its current state, aligned in a column.
                 int width = keyItems.Max(i => i.Length) + 2;
                 var lines = keyItems.Select(item => KeyState(item.Split(' ')[0]) is { } state ? item.PadRight(width) + state : item).ToList();
                 overlay.Draw(size.X, size.Y, "Keys   (F10 hides this)", lines, panelsBottom);
             }
-            if (!shot && overlay is not null) profiler?.Draw(overlay, size.X, size.Y);
+            if (panels && overlay is not null) profiler?.Draw(overlay, size.X, size.Y);
             // Last, over the statistics and the profiler: the settings sit at the top left.
-            if (!shot) panel?.Draw(size.X, size.Y);
+            if (panels) panel?.Draw(size.X, size.Y);
             StageClock.Phase("overlays");
             display.Present();
             profiler?.EndFrame();
             SmokeTest.Frame();
-            if (shot)
+            if (takeFile is not null)
+            {
+                FramebufferCapture.SavePng(display.Context, backbuffer, takeFile, size.X, size.Y);
+                cinema.FrameDone();
+            }
+            else if (shot)
             {
                 // Into C:\Temp (the user's screenshot folder), never the working directory (which may be the repo).
                 var file = Path.Combine(Directory.CreateDirectory(@"C:\Temp").FullName, $"meitou-world-{DateTime.Now:yyyyMMdd-HHmmss}.png");
