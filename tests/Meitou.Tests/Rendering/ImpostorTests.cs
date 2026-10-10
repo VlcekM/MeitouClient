@@ -516,7 +516,7 @@ public class ImpostorTests
     {
         Assert.Equal(7L << 20, new ImpostorCache("x", 7L << 20).MaxBytes);
         if (Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_CACHE_MB") is null) Assert.Equal(ImpostorCache.DefaultMaxBytes, new ImpostorCache("x").MaxBytes);
-        Assert.Equal(512L << 20, ImpostorCache.DefaultMaxBytes);
+        Assert.Equal(4096L << 20, ImpostorCache.DefaultMaxBytes);
     }
 
     [Fact]
