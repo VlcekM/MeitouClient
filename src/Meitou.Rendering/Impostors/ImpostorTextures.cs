@@ -32,7 +32,11 @@ public sealed class ImpostorTextures : IDisposable
     public Texture Normal => maps[1];
     /// <summary>Every level written (<see cref="UploadStep"/> ran <see cref="StepCount"/> times).</summary>
     public bool Complete => map >= 2;
-    int map, level;
+    int map, level, row;
+
+    /// <summary>The most one <see cref="UploadStep"/> writes: a level is cut into slabs of whole rows (of blocks, for the compressed maps) of about this size.
+    /// A level was one step before, up to 9 MB (a 3072² BC1 albedo): the copy into staging alone took 2 to 3 ms of the render thread.</summary>
+    public const int SlabBytes = 1 << 20;
 
     public static string AllocationName(ImpostorMap map) => map switch
     {
@@ -78,20 +82,59 @@ public sealed class ImpostorTextures : IDisposable
         return bytes;
     }
 
-    /// <summary>The levels to write: one step per (map, level kept).</summary>
+    /// <summary>The (map, level) pairs to write; a level takes <see cref="StepsOfLevel"/> steps.</summary>
     public int StepCount => LevelsOf(0) + LevelsOf(1);
 
-    /// <summary>The bytes the next <see cref="UploadStep"/> writes (0 when complete).</summary>
-    public long NextStepBytes => Complete ? 0 : sources[map].Levels[skips[map] + level].Length;
+    /// <summary>The rows (of texels, or of 4 x 4 blocks when compressed) of a level of <paramref name="size"/> pixels, and the bytes of one.</summary>
+    static (int Rows, int RowBytes) RowsOf(ImpostorEncoding encoding, int size)
+    {
+        int bytes = ImpostorTexture.LevelBytes(encoding, size);
+        int rows = encoding == ImpostorEncoding.Rgba8 ? size : size / 4;
+        return rows > 0 && bytes % rows == 0 ? (rows, bytes / rows) : (1, bytes);
+    }
 
-    /// <summary>Writes the next (map, level) through <paramref name="batch"/>; false when everything is written.</summary>
+    /// <summary>The steps one level of <paramref name="size"/> pixels is written in.</summary>
+    public static int StepsOfLevel(ImpostorEncoding encoding, int size)
+    {
+        var (rows, rowBytes) = RowsOf(encoding, size);
+        int perSlab = Math.Max(1, SlabBytes / rowBytes);
+        return (rows + perSlab - 1) / perSlab;
+    }
+
+    /// <summary>The bytes the next <see cref="UploadStep"/> writes (0 when complete).</summary>
+    public long NextStepBytes
+    {
+        get
+        {
+            if (Complete) return 0;
+            int source = skips[map] + level;
+            var (rows, rowBytes) = RowsOf(sources[map].Encoding, Atlas.AtlasPixels >> source);
+            int perSlab = Math.Max(1, SlabBytes / rowBytes);
+            return (long)Math.Min(perSlab, rows - row) * rowBytes;
+        }
+    }
+
+    /// <summary>Writes the next slab of the next (map, level) through <paramref name="batch"/>; false when everything is written.</summary>
     public bool UploadStep(UploadBatch batch)
     {
         if (Complete) return false;
         int source = skips[map] + level;
-        uint size = (uint)(Atlas.AtlasPixels >> source);
-        batch.Write(maps[map], level, 0, new Rect2D(default, new Extent2D(size, size)), sources[map].Levels[source]);
-        if (++level == LevelsOf(map)) (map, level) = (map + 1, 0);
+        int pixels = Atlas.AtlasPixels >> source;
+        var encoding = sources[map].Encoding;
+        var (rows, rowBytes) = RowsOf(encoding, pixels);
+        int perSlab = Math.Max(1, SlabBytes / rowBytes);
+        int n = Math.Min(perSlab, rows - row);
+        int unit = encoding == ImpostorEncoding.Rgba8 ? 1 : 4;   // pixel rows per row
+        // A slab of whole block rows; the last one ends at the level's edge.
+        int y = row * unit, height = Math.Min(n * unit, pixels - y);
+        batch.Write(maps[map], level, 0, new Rect2D(new Offset2D(0, y), new Extent2D((uint)pixels, (uint)height)),
+            sources[map].Levels[source].AsSpan(row * rowBytes, n * rowBytes));
+        row += n;
+        if (row >= rows)
+        {
+            row = 0;
+            if (++level == LevelsOf(map)) (map, level) = (map + 1, 0);
+        }
         return true;
     }
 
