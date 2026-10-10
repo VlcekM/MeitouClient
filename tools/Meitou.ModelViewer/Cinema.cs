@@ -14,7 +14,7 @@ namespace Meitou.ModelViewer;
 /// the bottom of the window (<see cref="Draw"/>): drag keys to retime them, drag the ruler to scrub, buttons to add, replace, delete and ease keys.
 /// The keys are kept in <c>%LOCALAPPDATA%\Meitou\viewer-shots.json</c> across starts.
 /// </summary>
-sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float> setHour)
+sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float> setHour, Func<bool> fullScreenOn, Action toggleFullScreen)
 {
     const int MaxKeys = 99, RecordFps = 60;
     const float DefaultFov = 50 * MathF.PI / 180, MinFov = 10 * MathF.PI / 180, MaxFov = 100 * MathF.PI / 180, MinGap = 0.05f;
@@ -252,6 +252,7 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Button("Faster", () => Scale(1 / 1.25f));
         Button("Record", () => { if (!Playing) StartRecording(); });
         Button(Clean ? "Letterbox: on" : "Letterbox: off", () => Clean = !Clean);
+        Button(fullScreenOn() ? "Full screen: on" : "Full screen: off", toggleFullScreen);
     }
 
     /// <summary>Whether a point (window pixels) is on the editor.</summary>

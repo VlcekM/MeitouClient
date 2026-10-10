@@ -238,7 +238,7 @@ all the timing by 1.25. Numpad / switches whether the time of day follows the ke
 at a time (10 to 100), Home puts it back to 50; the lens is part of a key, so two keys with different lenses make a dolly zoom.
 
 **The timeline editor (F2).** A panel along the bottom of the window, drawn over the other panels: a row of buttons (Play / Stop, Loop,
-Add key at playhead, Set key to camera, Go to key, Ease, Delete key, Time follows, Slower, Faster, Record, Letterbox), the selected key's
+Add key at playhead, Set key to camera, Go to key, Ease, Delete key, Time follows, Slower, Faster, Record, Letterbox, Full screen), the selected key's
 details, and a ruler in seconds with the keys as markers (numbered; blue when easing, white when selected), the flight's span, a loop's
 way back, and the red playhead. Click a key to select it and drag it to retime it (to 0.05 s, never past its neighbours, so the order
 stays). Click or drag the ruler to scrub: the camera follows the flight to the playhead. Space plays from the playhead, Delete deletes the
@@ -258,3 +258,8 @@ recorded: a recording is always the open flight) into `C:\Temp\meitou-take-<time
 time: each frame advances the camera, the clock, the clouds, particles and water by exactly 1/60 s however long it took to draw, so a heavy
 setting still gives a smooth video. Recorded frames have no panels and no editor, but keep the letterbox when it is on. When it ends,
 the console prints an ffmpeg line that makes an MP4 of the frames.
+
+**Full screen.** Alt+Enter, the "Full screen" button in the F2 editor and the Tab panel's "Full screen" switch toggle borderless full screen
+(`BorderlessFullScreen`, added 2026-10-10): the window loses its border and covers the monitor it is on, with no exclusive mode change, so
+switching away is instant; toggling again gives the bordered, maximized window back. "Reset to defaults" on the Tab panel puts it back to
+the window.

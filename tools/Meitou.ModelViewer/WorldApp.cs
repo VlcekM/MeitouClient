@@ -267,7 +267,7 @@ static partial class WorldApp
         int day = o.Day ?? 0;
         // The animation clock (clouds, particles, water): real seconds, or exact frame steps while the cinema records.
         double animSeconds = 0;
-        var cinema = new Cinema(() => camera, () => hour, v => hour = v);
+        var cinema = new Cinema(() => camera, () => hour, v => hour = v, () => BorderlessFullScreen.IsOn(window), () => BorderlessFullScreen.Toggle(window));
         cinema.Load();
         Vector2? lastMouse = null;
         MouseButton? dragging = null;
@@ -290,7 +290,7 @@ static partial class WorldApp
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
             if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v, () => display.VSync, v => display.VSync = v, switches,
-                () => o.TimeSpeed, v => o.TimeSpeed = v);
+                () => o.TimeSpeed, v => o.TimeSpeed = v, () => BorderlessFullScreen.IsOn(window), _ => BorderlessFullScreen.Toggle(window));
             profiler = new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
             meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             var input = window.CreateInput();
@@ -372,6 +372,7 @@ static partial class WorldApp
             }
             bool ctrl = keyboard is not null && (keyboard.IsKeyPressed(Key.ControlLeft) || keyboard.IsKeyPressed(Key.ControlRight));
             bool shift = keyboard is not null && (keyboard.IsKeyPressed(Key.ShiftLeft) || keyboard.IsKeyPressed(Key.ShiftRight));
+            if (key == Key.Enter && keyboard is not null && (keyboard.IsKeyPressed(Key.AltLeft) || keyboard.IsKeyPressed(Key.AltRight))) { BorderlessFullScreen.Toggle(window); return; }
             if (cinema.OnKey(key, ctrl, shift)) return;
             switch (key)
             {
