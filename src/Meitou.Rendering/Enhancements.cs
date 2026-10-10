@@ -53,7 +53,7 @@ public static class Enhancements
         Func<bool> meitouRange, Action<bool> setMeitouRange, Func<bool> impostors, Action<bool> setImpostors, Func<bool> meitouReach, Action<bool> setMeitouReach,
         Func<bool> meitouWater, Action<bool> setMeitouWater, Func<bool> foliageLod, Action<bool> setFoliageLod, Func<bool>? gi = null, Action<bool>? setGi = null,
         Func<bool>? nightHaze = null, Action<bool>? setNightHaze = null, Func<bool>? planetshine = null, Action<bool>? setPlanetshine = null,
-        Func<bool>? stars = null, Action<bool>? setStars = null) =>
+        Func<bool>? stars = null, Action<bool>? setStars = null, Func<bool>? clouds = null, Action<bool>? setClouds = null) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -110,6 +110,9 @@ public static class Enhancements
         new("nightgrade", "Night grading", "none", "scotopic blue",
             () => post.NightGradeStrength > 0, v => post.NightGradeStrength = v ? Meitou.Data.World.NightGrade.MeitouStrength : 0,
             "the game has no grading, so night is the day's saturated browns and oranges, darkened; Meitou shifts dim colour towards the rods' blue-grey as the scene's adapted luminance falls (the Purkinje shift), keeping lamps, fires and the moon in colour (the Tab slider sets the strength)"),
+        new("clouds", "Clouds", "flat", "lit",
+            clouds ?? (() => false), setClouds ?? (_ => { }),
+            "the game gives every cloud one colour (the sun's plus the sky's, dimmed only by density), so its clouds are flat, all one orange at sunset and black at night; Meitou keeps their shapes and coverage but lights them by the sun (the planet at night) through their depth: bright silvered edges towards the sun, grey undersides away from it, thick cores darker, the sky's own colour as their ambient (docs/formats/clouds.md, \"Meitou clouds\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

@@ -117,6 +117,7 @@ sealed class WorldOptions
     public bool Planetshine = true; // the Meitou planetshine switch (default): the big planet lights the night (SkyRenderer.Planetshine)
     public float PlanetshineStrength = Enhancements.MeitouPlanetshineStrength; // x the physical value (--planetshine-strength, a Tab slider)
     public bool MeitouStars = true;   // the Meitou stars switch (default): the procedural night sky (SkyRenderer.MeitouStars); false: the game's starfield texture
+    public bool MeitouClouds = true;  // the Meitou clouds switch (default): the cloud layer lit by the sun through its depth (SkyRenderer.LitClouds); false: the game's flat colour
     /// <summary><c>--weather</c>: a WEATHER record's name forces that weather at the camera; null or "auto" lets the scheduler (docs/formats/weather.md) run.</summary>
     public string? Weather;
     /// <summary>Test overrides of the weather's surface values (<c>--wetness</c>, <c>--dust</c>, <c>--rain</c>); null: the forced weather's.</summary>
@@ -335,7 +336,8 @@ sealed class WorldOptions
         () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v,
         () => o.MeitouWater, v => o.MeitouWater = v, () => o.FoliageLod, v => o.FoliageLod = v, () => o.GiProbes, v => o.GiProbes = v,
         () => o.NightAir, v => o.NightAir = v, () => o.Planetshine, v => o.Planetshine = v,
-        () => o.MeitouStars, v => o.MeitouStars = v);
+        () => o.MeitouStars, v => o.MeitouStars = v,
+        () => o.MeitouClouds, v => o.MeitouClouds = v);
 
     public static WorldOptions? Parse(string[] args)
     {
@@ -887,6 +889,7 @@ static class WorldFrame
         gpu.Sky.Planetshine = o.Planetshine;
         gpu.Sky.PlanetshineStrength = o.PlanetshineStrength;
         gpu.Sky.MeitouStars = o.MeitouStars;
+        gpu.Sky.LitClouds = o.MeitouClouds;
         if (scene.Database is { } skyDb)
         {
             gpu.Sky.LoadWorld(install, skyDb);   // the ambient map and the CONSTANTS exposure band (docs/formats/lighting.md)
