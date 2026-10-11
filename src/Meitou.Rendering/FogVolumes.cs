@@ -67,10 +67,77 @@ internal sealed class FogVolumes
     {
         if (CullBlock is null && AtmosphereDistance is null) return null;
         var reasons = new List<string>();
-        if (CullBlock is not null) reasons.Add($"{CullBlock} beyond {CullRadius:0}");
+        if (CullBlock is not null) reasons.Add($"{CullBlock} beyond {CullRadius:0} (sky {(SkyHidden ? "hidden" : "shows")}: the view leaves the block after {SkyExitDistance:0})");
         if (AtmosphereDistance is { } weather) reasons.Add($"weather fog beyond {weather:0}");
         return $"{string.Join(", ", reasons)}: {Culled[0]} terrain nodes, {Culled[1]} objects, {Culled[2]} foliage zones, {Culled[4]} foliage instances, {Culled[3]} characters left out";
     }
+    /// <summary>
+    /// True when the cull's block hides the sky in every direction of the view (<see cref="HidesSky"/>): the main view's sky and cloud passes are
+    /// then left out (<see cref="SkyRenderer.SkyFogSkip"/>), since the volume pass covers each of their pixels with the block's fog colour.
+    /// </summary>
+    public bool SkyHidden { get; private set; }
+
+    /// <summary>
+    /// Whether every ray from <paramref name="eye"/> within the view's frustum stays inside <paramref name="block"/>'s seven planes for at least
+    /// <paramref name="radius"/>, the cull's hide distance: a sky pixel's path through the block then reaches the radius, so the block's alpha there is
+    /// at least 0.9998 (<see cref="HideDistance"/>, the far clip being at least the radius) and the sky under it does not show. The early-out box does
+    /// not clip the path: the cull already has the eye inside it, so every ray enters it at 0.
+    /// <para>Exact for the frustum widened 2 % (the upscaler's jitter): for each plane the frustum's ray nearest its outward direction is taken
+    /// (the largest rate n · d at which the distance inside it shrinks), found among the corners, the edges' arcs and the inside.</para>
+    /// </summary>
+    internal static bool HidesSky(Volume block, Vector3 eye, Vector3 forward, float fieldOfView, float aspect, float radius) =>
+        radius > 0 && SkyExit(block, eye, forward, fieldOfView, aspect) >= radius;
+
+    /// <summary>
+    /// A lower bound of how far any ray of the view's cone (see <see cref="HidesSky"/>) runs inside <paramref name="block"/> before it leaves through
+    /// one of its faces (infinity when none of them faces the view); 0 for no view direction.
+    /// </summary>
+    internal static float SkyExit(Volume block, Vector3 eye, Vector3 forward, float fieldOfView, float aspect)
+    {
+        if (forward.LengthSquared() == 0) return 0;
+        forward = Vector3.Normalize(forward);
+        var sideways = Vector3.Cross(forward, Vector3.UnitY);
+        if (sideways.LengthSquared() < 1e-6f) return 0;   // straight up or down: no roll-free frame (the sky test simply fails)
+        sideways = Vector3.Normalize(sideways);
+        var up = Vector3.Cross(sideways, forward);
+        // The frustum's corner rays, widened 2 % for the upscaler's jitter, in order round the frustum.
+        float tanY = MathF.Tan(fieldOfView * 0.5f) * 1.02f, tanX = tanY * aspect;
+        Span<Vector3> corner = stackalloc Vector3[4];
+        corner[0] = Vector3.Normalize(forward - sideways * tanX - up * tanY);
+        corner[1] = Vector3.Normalize(forward + sideways * tanX - up * tanY);
+        corner[2] = Vector3.Normalize(forward + sideways * tanX + up * tanY);
+        corner[3] = Vector3.Normalize(forward - sideways * tanX + up * tanY);
+        float nearest = float.PositiveInfinity;
+        // The distance inside a face shrinks at n · d along a unit ray d. Its largest over the frustum's rays (a convex cone): |n| when n points into
+        // the cone, else on its boundary, a corner or the great-circle arc between two corners where n's projection onto the arc's plane falls.
+        static float Fastest(Vector3 n, ReadOnlySpan<Vector3> c)
+        {
+            bool within = true;
+            float best = float.NegativeInfinity;
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 a = c[i], b = c[(i + 1) & 3];
+                var m = Vector3.Normalize(Vector3.Cross(a, b));   // the edge plane's normal, pointing out of the cone (corners in this order)
+                if (Vector3.Dot(n, m) > 0) within = false;
+                best = MathF.Max(best, Vector3.Dot(n, a));
+                var p = n - Vector3.Dot(n, m) * m;
+                if (Vector3.Dot(Vector3.Cross(a, p), m) >= 0 && Vector3.Dot(Vector3.Cross(p, b), m) >= 0) best = MathF.Max(best, p.Length());
+            }
+            return within ? n.Length() : best;
+        }
+        static float Exit(float inside, float rate) => rate > 0 ? MathF.Max(inside, 0) / rate : float.PositiveInfinity;
+        for (int k = 0; k < 7; k++)
+        {
+            var p = block.Data[3 + k];
+            var n = new Vector3(p.X, p.Y, p.Z);
+            nearest = MathF.Min(nearest, Exit(p.W - Vector3.Dot(n, eye), Fastest(n, corner)));
+        }
+        return nearest;
+    }
+
+    /// <summary>The last <see cref="Update"/>'s <see cref="SkyExit"/> through the cull's block (statistics; null without a block).</summary>
+    public float? SkyExitDistance { get; private set; }
+
     /// <summary>The volumes drawn in the last <see cref="Update"/>, farthest first (statistics, tests).</summary>
     public List<string> Active { get; } = [];
     /// <summary>The volumes in view that did not fit <c>uFogVolumeData</c> in the last <see cref="Update"/> (the farthest ones; none in the base game).</summary>
@@ -253,6 +320,8 @@ internal sealed class FogVolumes
             }
         }
         if (on && Enabled && CullEnabled && used > 0 && picked.Count > 0) PrepareCull(picked[0].V, eye, far);
+        SkyExitDistance = occluder is null ? null : SkyExit(occluder, eye, forward, fieldOfView, aspect);
+        SkyHidden = SkyExitDistance >= MathF.Sqrt(hideRadiusSquared) && hideRadiusSquared > 0;
         // A placed volume that reaches past the distance reads the scene's depth along rays that end there: a left-out surface (the sky at the far clip in its place) would change
         // the length of its path. One wholly inside the distance is behind nothing that is left out.
         if (CullEnabled && atmosphereCull is { } atmosphere && atmosphere > 0 && VolumesWithin(atmosphere * atmosphere, eye)) atmosphereRadiusSquared = atmosphere * atmosphere;

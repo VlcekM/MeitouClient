@@ -86,6 +86,9 @@ public sealed class VolumetricCloudRenderer : IDisposable
 
     public void Invalidate() { main.Frame = mirror.Frame = -10; }
 
+    /// <summary>The main view's history only (its sky left out this frame; the reflection keeps marching).</summary>
+    public void InvalidateMain() => main.Frame = -10;
+
     /// <summary>Texels (half-size) round a texel's centre whose rays must all be hidden for the fog early-out to leave it out.</summary>
     public const float FogSkipReach = 1.5f;
 

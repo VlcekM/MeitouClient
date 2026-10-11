@@ -171,3 +171,34 @@ meitou-viewer --view dust --ab cloud-fog-skip --ab-period 16                    
 `--view swamp` cannot show it: it looks down 30 degrees with a 50-degree field of view, so no ray of it goes up and the march does no work
 there with or without the switch. The cost per texel of the check is one to five walks of the volume list (a box test per volume that the
 ray misses), against up to 96 march steps.
+
+### The whole sky under a fog block (2026-10-11)
+
+The per-texel rule still dispatches the march and the sky pass still shades every pixel of the screen (it is a full-screen triangle drawn
+before the scene, without a depth test, so most of it is drawn over). When the fog cull's block hides the sky in **every** direction of the
+view, `WorldFrame` leaves out both: no cloud march (only the main view's history is reset, `VolumetricCloudRenderer.InvalidateMain`; the
+reflection keeps its own) and no sky draw. The scene's clear colour (the fog colour) stands in, and the fog volume pass covers it.
+`SkyRenderer.SkyFogSkip` (on by default; `MEITOU_SKY_FOG_SKIP=0` starts with it off; `--ab sky-fog-skip`); the bench's `sky` metadata and
+the F11 sky line say "sky and clouds not drawn" when it applies, and the fog cull line gives the exit distance below.
+
+The test (`FogVolumes.SkyHidden`, `SkyExit`): the cull's bound (`HideDistance`, docs/formats/fogfeatures.md "In Meitou") says a ray from the
+eye inside the block whose path through it is at least the hide radius R is covered to alpha 0.9998. A sky pixel's path ends where the ray
+leaves one of the block's seven planes or at the far clip (at least R by construction), so the sky is hidden when every ray of the frustum
+stays inside every plane for R. For each plane the fastest the distance inside it shrinks over the frustum's rays is found exactly (the
+largest n · d over a convex cone of directions: |n| when n points into the cone, else on a corner or on the great-circle arc of an edge), with
+the frustum widened 2 % for the upscaler's jitter. The block's early-out box is not a face: the cull has the eye inside it, so every ray enters
+it at 0 and the shader clips the path by the planes alone (`fogVolumeBlock`). The scene writes RGB only (`DrawState.Rgb`), so leaving the sky
+out does not touch the characters' SSAO mask in alpha. A first version that bounded the frustum by a circular cone failed at Shark: the
+cone reached about 37 degrees up where the frustum's top corners reach about 11, and met the block's ceiling at 1607.
+
+**Verified (tests)**, `FogSkyTests` against the CPU port of the block's alpha (`FogCullTests.Alpha`): over 600 random eyes, view directions
+(pitch -60 to 30) and far clips on the stand-in block, every view the test calls hidden has alpha at least 0.9998 at the far clip on a 25 x 25
+grid of rays over its frustum; the exit bound is never above a 65 x 65 brute-force sampling of the frustum and is within 10 % of it.
+
+**Observed** (2026-10-11, RTX 4070, Shark in the swamp rain, `--world --camera-code 018C6C25C7309B75C4723B5747D78075406DF4113E00A00C46
+--size 1920x1080 --upscaler dlss --render-scale native --ab sky-fog-skip --ab-period 16 --bench-frames 1024`, a still camera 8 degrees down):
+Swamp[SOUTH] hides beyond 4455, the view stays in it for 7401, so the sky is left out. `sky-draw` 0.25 to 0.01 ms (-0.24 +-0.00), GPU total
+6.92 to 6.58 (-0.34 +-0.01; about 0.07 of that is the shadows' cache phase, the period being shorter than the 32-frame cascade cadence, so
+take -0.25 to -0.27 as the switch's), render thread -0.04 in `sky-draw`. Picture: 690 pixels differ by 4/255 or more and 10 by 12, the
+same counts as an A/B of an unrelated switch at this view (the rain and the upscaler's jitter), with no structure in the heat map. The weather
+fog is not complete here ("never complete"), so the weather rule above does not apply at Shark.

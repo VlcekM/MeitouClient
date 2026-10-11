@@ -1372,9 +1372,12 @@ static class WorldFrame
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
         var skyProjection = rotation * Jitter.Apply(camera.Projection(aspect, 1, 1000), jitter, rw, rh);
         // The fog volume pass runs over this view's sky exactly when volumes are in view (RunFogVolumes below), so the march may leave out what they hide.
-        gpu.Sky.PrepareClouds(skyProjection, rw, rh, gpu.Sky.Eye, fogVolumes: gpu.FogVolumes is { UsedData: > 0 });
+        // With the placed fog block hiding the sky in every direction of the view, neither the sky nor its clouds can show: the clear colour stands in.
+        bool skyHidden = gpu.Sky.SkyFogSkip && gpu.FogVolumes is { SkyHidden: true };
+        if (skyHidden) gpu.Sky.SkipMainSky();
+        else gpu.Sky.PrepareClouds(skyProjection, rw, rh, gpu.Sky.Eye, fogVolumes: gpu.FogVolumes is { UsedData: > 0 });
         host.Open(5, post.WithShadingRate(post.SceneTargets), new Vk.ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 0), clearDepth: true);   // alpha 0: no character (the SSAO mask)
-        gpu.Sky.Draw(skyProjection, colours);
+        if (!skyHidden) gpu.Sky.Draw(skyProjection, colours);
         StageClock.Lap(5);
         gpu.Post?.SetCamera(eye, view, camera.FieldOfView, aspect);
         gpu.Terrain.BeginFrame();

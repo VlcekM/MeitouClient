@@ -1094,7 +1094,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     }
 
     public string DescribeCost() =>
-        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {GpuMs:0.00} ms/frame (SkyX per pixel)" + (volume is null || !VolumeEnabled ? "" : CloudsFogged ? $"; clouds not marched (the weather fog covers the sky), shadow map {volume.ShadowGpuMs:0.00} ms" : $"; GPU clouds {volume.MainGpuMs:0.00}, reflection {volume.ReflectionGpuMs:0.00}, shadow map {volume.ShadowGpuMs:0.00} ms")
+        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {GpuMs:0.00} ms/frame (SkyX per pixel)" + (SkySkipped ? "; sky and clouds not drawn (a fog block hides the sky)" : volume is null || !VolumeEnabled ? "" : CloudsFogged ? $"; clouds not marched (the weather fog covers the sky), shadow map {volume.ShadowGpuMs:0.00} ms" : $"; GPU clouds {volume.MainGpuMs:0.00}, reflection {volume.ReflectionGpuMs:0.00}, shadow map {volume.ShadowGpuMs:0.00} ms")
                  : $"simple sky: GPU {GpuMs:0.00} ms/frame";
 
     /// <summary>Mean GPU time of a sky pass over the last hundred or so (a running mean, halved now and then).</summary>

@@ -53,6 +53,7 @@ static partial class WorldApp
             AbToggles.Register("grass-velocity", () => grassPass.GrassVelocityCull, v => grassPass.GrassVelocityCull = v, "the grass's own motion vectors only for blades that move 0.5 px a frame or more (MEITOU_GRASS_VELOCITY_PX), the camera reprojection for the rest; B: every blade redrawn in the motion pass");
         }
         AbToggles.Register("cloud-fog-skip", () => gpu.Sky.CloudFogSkip, v => gpu.Sky.CloudFogSkip = v, "volumetric clouds not marched where the fog hides the sky: the whole pass under complete weather fog, and in the main view each texel the placed fog volumes hide (MEITOU_CLOUD_FOG_SKIP=0); B: every upward ray marched");
+        AbToggles.Register("sky-fog-skip", () => gpu.Sky.SkyFogSkip, v => gpu.Sky.SkyFogSkip = v, "the main view's sky pass and cloud march left out where the placed fog block hides the sky in every direction of the view (MEITOU_SKY_FOG_SKIP=0); B: drawn");
         if (gpu.Lamps is { } lamps) AbToggles.Register("lights", () => lamps.Enabled, v => lamps.Enabled = v, "the lamps: the game's point and spot lights on the world (--lights off)");
         AbToggles.Register("anisotropy", () => gpu.Sky.Gpu.Samplers.MaxAnisotropy > 1, v => gpu.Sky.Gpu.Samplers.MaxAnisotropy = v ? 16 : 1, "anisotropic filtering as the textures ask (A) against none, 1x (B); the Tab slider's ends");
         AbToggles.Register("weather-particles", () => gpu.WeatherParticles, v => gpu.WeatherParticles = v, "the weather's particles, simulated and drawn (the Tab slider at 0)");
@@ -265,6 +266,7 @@ static partial class WorldApp
         foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
             if (e.Key is string key && key.StartsWith("MEITOU_", StringComparison.Ordinal)) meta["env." + key] = e.Value?.ToString() ?? "";
         if (o.Post.Describe() is { } postText) meta["post"] = postText;
+        meta["sky"] = gpu.Sky.DescribeCost() + (gpu.Sky.FogCullDistance is { } skyFog ? string.Create(CultureInfo.InvariantCulture, $"; weather fog complete from {skyFog:0}") : "; weather fog never complete");
 
         // ---- --bench-tris: triangles per pass and the triangle size histogram (separate, serial counting frames after the timing) ----
         if (o.BenchTris)
@@ -281,7 +283,21 @@ static partial class WorldApp
         result.Print(Console.Out);
         result.Save(outFile);
         Console.WriteLine($"saved     {outFile}");
+        string csvFile = Path.ChangeExtension(outFile, null) + "-frames.csv";
+        SaveFrames(csvFile, series, sideOf, keep);
+        Console.WriteLine($"saved     {csvFile} (every metric per measured frame)");
         return 0;
+    }
+
+    /// <summary>The per-frame series as CSV (frame, side, kept, then each metric in print order; empty where a value never arrived), for patterns the summaries hide.</summary>
+    static void SaveFrames(string path, Dictionary<string, double[]> series, int[] sideOf, bool[] keep)
+    {
+        var metrics = series.Keys.OrderBy(MetricOrder).ThenBy(k => k, StringComparer.Ordinal).ToArray();
+        using var csv = new StreamWriter(path);
+        csv.WriteLine("frame,side,kept," + string.Join(',', metrics));
+        for (int k = 0; k < sideOf.Length; k++)
+            csv.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{k},{(sideOf[k] == 0 ? 'A' : 'B')},{(keep[k] ? 1 : 0)},")
+                + string.Join(',', metrics.Select(m => double.IsNaN(series[m][k]) ? "" : series[m][k].ToString("0.####", CultureInfo.InvariantCulture))));
     }
 
     // The stages in the order a frame runs them (as the profiler lists them).

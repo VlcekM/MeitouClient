@@ -29,6 +29,24 @@ public sealed unsafe partial class SkyRenderer
     /// </summary>
     public bool CloudFogSkip { get; set; } = Environment.GetEnvironmentVariable("MEITOU_CLOUD_FOG_SKIP") != "0";
 
+    /// <summary>
+    /// The sky's fog-volume early-out (Meitou, docs/render-clouds.md "Fog early-out"; <c>MEITOU_SKY_FOG_SKIP=0</c> starts with it off, <c>--ab sky-fog-skip</c>):
+    /// the frame loop leaves the main view's sky pass and cloud march out when the placed fog block hides the sky in every direction of the view
+    /// (<see cref="FogVolumes.SkyHidden"/>); the scene's clear colour stands in, and the volume pass covers it.
+    /// </summary>
+    public bool SkyFogSkip { get; set; } = Environment.GetEnvironmentVariable("MEITOU_SKY_FOG_SKIP") != "0";
+
+    /// <summary>Whether the main view's sky pass was left out in the last frame (<see cref="SkyFogSkip"/>; for the stats line).</summary>
+    public bool SkySkipped { get; private set; }
+
+    /// <summary>The main view's sky and clouds left out this frame (<see cref="SkyFogSkip"/>): no march, the history starts again when the sky shows.</summary>
+    public void SkipMainSky()
+    {
+        SkySkipped = true;
+        volumeImage = default;
+        volume?.InvalidateMain();
+    }
+
     /// <summary>Whether the last <see cref="PrepareClouds"/> left the march out because the weather fog covers the sky (for the stats line).</summary>
     public bool CloudsFogged { get; private set; }
 
@@ -52,7 +70,7 @@ public sealed unsafe partial class SkyRenderer
     public void PrepareClouds(Matrix4x4 viewProjection, int width, int height, Vector3 eye, bool reflection = false, bool fogVolumes = false)
     {
         volumeImage = default;
-        if (!reflection) CloudsFogged = false;
+        if (!reflection) CloudsFogged = SkySkipped = false;
         if (!VolumeEnabled) { volume?.Invalidate(); return; }
         if (CloudFogSkip && WeatherFogHidesSky(Uniforms()))
         {
