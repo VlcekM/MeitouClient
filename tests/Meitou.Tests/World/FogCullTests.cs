@@ -8,7 +8,7 @@ namespace Meitou.Tests.World;
 public class FogCullTests
 {
     /// <summary>A wide low block: x and z within 50000, floor at -2000, ceiling at 3000; density distance 4500, edge 800.</summary>
-    static FogFeature Block() => new("wide", FogFeatureType.Block, new Vector3(0.6f, 0.55f, 0.5f), 1, 4500, 800, Vector3.Zero, Vector3.Zero, 0,
+    internal static FogFeature Block() => new("wide", FogFeatureType.Block, new Vector3(0.6f, 0.55f, 0.5f), 1, 4500, 800, Vector3.Zero, Vector3.Zero, 0,
     [
         new Vector4(0, 1, 0, 3000), new Vector4(1, 0, 0, 50000), new Vector4(-1, 0, 0, 50000), new Vector4(0, 0, 1, 50000), new Vector4(0, 0, -1, 50000),
         new Vector4(0.0f, 0.1f, 0.995f, 60000), new Vector4(0, -1, 0, 2000),
@@ -50,7 +50,7 @@ public class FogCullTests
     }
 
     /// <summary>The shader's <c>fogVolumeBlock</c> alpha for an eye inside (near = 0), along unit ray <paramref name="d"/> to a fragment <paramref name="dist"/> away.</summary>
-    static float Alpha(FogFeature f, Vector3 eye, Vector3 d, float dist)
+    internal static float Alpha(FogFeature f, Vector3 eye, Vector3 d, float dist)
     {
         float far = dist;
         foreach (var p in f.Planes)
@@ -122,7 +122,7 @@ public class FogCullTests
     // ---- the weather fog's cull (SkyRenderer.FogCullDistance, FogVolumes.AtmosphereDistance) ----
 
     /// <summary>The uniforms the distance reads: sky mode, weather fog (weight, start, end), the far clip D, the Kenshi haze on, the altitude weight.</summary>
-    static SkyRenderer.AtmosphereUniforms Atmosphere(float weight = 1, float fogStart = 0, float fogEnd = 3000, float far = 50000, bool game = true, bool kenshi = true, float altitude = 0) =>
+    internal static SkyRenderer.AtmosphereUniforms Atmosphere(float weight = 1, float fogStart = 0, float fogEnd = 3000, float far = 50000, bool game = true, bool kenshi = true, float altitude = 0) =>
         new(default, new Vector4(game ? 1 : 0, 50000, 1, 0), default, default, default, Vector3.One, new Vector4(fogStart, fogEnd, weight, far), Vector3.One, new Vector4(0, 0, 0, 5000),
             new Vector4(kenshi ? 1 : 0, 3000, 30000, weight > 0 && fogEnd > 1 ? 1f / fogEnd : 0), default, new Vector4(kenshi ? altitude : 1, 0.93f, altitude, 0), default, default);
 

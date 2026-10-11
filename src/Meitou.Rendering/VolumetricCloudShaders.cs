@@ -61,13 +61,30 @@ public static class VolumetricCloudShaders
         }
         """;
 
-    public static readonly string March = "#version 330 core\n" + AtmosphereShaders.Functions + Common + """
+    public static readonly string March = "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + Common + """
         in vec2 vUv;
         layout(location = 0) out vec4 fragColour;
         layout(location = 1) out float fragDistance;
         uniform mat4 uInverse;
         uniform vec3 uKey, uLight, uAmbient;
         uniform int uSteps;
+        uniform vec4 uFogSkip;   // x: 1 to leave out what the placed fog volumes hide (the main view); yz: the reach in NDC checked round a texel
+        // The fog volume pass (PostProcessShaders.FogVolumes) later blends every sky pixel as colour * trans + add, the sky at the far clip.
+        // Its curve clamps, so deep in a block trans is exactly 0 and the sky's colour, clouds included, cannot show (docs/render-clouds.md
+        // "Fog early-out"). The texel is left out only when trans is 0 along its own ray and along the four rays at the corners of the
+        // footprint the composite's bilinear lookup and the projection's jitter can reach, so no full-size pixel that still sees the sky reads it.
+        bool fogHidesSky(vec2 ndc)
+        {
+            if (uFogSkip.x < 0.5 || uFogVolumeInfo.x < 0.5) return false;
+            for (int k = 0; k < 5; k++)
+            {
+                vec2 o = k == 0 ? vec2(0.0) : vec2((k & 1) == 1 ? 1.0 : -1.0, k < 3 ? -1.0 : 1.0) * uFogSkip.yz;
+                vec4 a = uInverse * vec4(ndc + o, 0.0, 1.0), b = uInverse * vec4(ndc + o, 1.0, 1.0);
+                vec3 d = normalize(b.xyz / b.w - a.xyz / a.w);
+                if (fogVolumesTransmittance(uFogVolumeEye.xyz, d, 1e9) > 0.0) return false;
+            }
+            return true;
+        }
         float hg(float cosine, float g)
         {
             return (1.0 - g*g) / pow(max(1.0 + g*g - 2.0*g*cosine, 0.001), 1.5);
@@ -80,6 +97,7 @@ public static class VolumetricCloudShaders
             vec2 span;
             fragColour = vec4(0.0); fragDistance = 0.0;
             if (!cloudInterval(uEye, ray, span)) return;
+            if (fogHidesSky(ndc)) return;
             float ds = min((span.y - span.x) / float(uSteps), 500.0);
             float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + uVolume.w);
             float t = span.x + ds * jitter, trans = 1.0, depthMoment = 0.0;

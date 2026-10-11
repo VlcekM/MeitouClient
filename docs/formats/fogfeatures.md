@@ -227,6 +227,8 @@ pulls the pixel in to the water plane when the ray crosses it before the scene p
 off), which is where the water shader fogged its own surface; so a pixel is fogged once, at the water's distance, the seabed behind
 translucent shallow water included (before, the water layer was fogged at the plane and the seabed behind it at its own distance and the two blended
 by the water's alpha; the two agree except in shallow water where the distances differ). The pass sees no edge of the water quad (it reaches past the far clip).
+**Volumetric clouds**: the main view's cloud march reads the same list before the scene and leaves out the texels whose sky the pass will
+cover with transmittance exactly 0 ([../render-clouds.md](../render-clouds.md) "Fog early-out").
 **SSAO** still fades with the volumes: `airVisibility` is the haze's transmittance (`atmoApply(1) - atmoApply(0)`) times `fogVolumesTransmittance`.
 **Upscalers**: the pass runs on the render-size scene before TAA / FSR / DLSS, so the volumes are in the colour they resolve; it ignores the
 projection's sub-pixel jitter (its ray is the pixel's centre; the fog is smooth, the depth edges are what the upscaler's history handles), and

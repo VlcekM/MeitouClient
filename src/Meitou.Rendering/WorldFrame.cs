@@ -1371,7 +1371,8 @@ static class WorldFrame
         // precision far from the origin and the sky blurs.
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
         var skyProjection = rotation * Jitter.Apply(camera.Projection(aspect, 1, 1000), jitter, rw, rh);
-        gpu.Sky.PrepareClouds(skyProjection, rw, rh, gpu.Sky.Eye);
+        // The fog volume pass runs over this view's sky exactly when volumes are in view (RunFogVolumes below), so the march may leave out what they hide.
+        gpu.Sky.PrepareClouds(skyProjection, rw, rh, gpu.Sky.Eye, fogVolumes: gpu.FogVolumes is { UsedData: > 0 });
         host.Open(5, post.WithShadingRate(post.SceneTargets), new Vk.ClearColorValue(light.FogColour.X, light.FogColour.Y, light.FogColour.Z, 0), clearDepth: true);   // alpha 0: no character (the SSAO mask)
         gpu.Sky.Draw(skyProjection, colours);
         StageClock.Lap(5);

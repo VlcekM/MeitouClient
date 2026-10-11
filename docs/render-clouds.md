@@ -124,3 +124,50 @@ the additional dense-fog comparison also passed independently.
   and 0.93. Clear weather, density overrides, the terrain-haze match and dense weather fog remain covered.
 - **Observed**: the before/after rainy screenshots at the supplied camera show the strip removed; Vulkan
   rendering validation reports zero errors. The Release build and 1,012-check validation run pass.
+## Fog early-out (2026-10-11)
+
+Meitou's own optimisation; the picture is meant not to change. `SkyRenderer.CloudFogSkip` (on by default; `MEITOU_CLOUD_FOG_SKIP=0` starts
+with it off, `--ab cloud-fog-skip` compares it with every upward ray marched). The march runs before the scene, and two later steps can hide
+its result completely:
+
+- **Weather fog over the sky.** The sky shader blends the game's fog term over every pixel with no geometry after the clouds: the
+  ease-in-out curve of the far clip over the fog distance, times the weather's weight ([formats/fogfeatures.md](formats/fogfeatures.md),
+  the sky pass's last step). When that reaches 0.9998 (`SkyRenderer.WeatherFogHidesSky`, the same tolerance as the fog cull), the sky is the
+  fog colour whatever is behind it, so neither view marches; the sky shader falls back to the flat layer, which the same fog covers, and the
+  histories start again when the fog thins. This is the dust storms and the Ashlands (fog complete at 25000 and 35000, far clip 50000). The
+  swamp's weathers have their fog off ([formats/weather.md](formats/weather.md)), so it does nothing there. The sky line of `--screenshot`
+  says "clouds not marched" when it applies.
+- **Placed fog volumes over the main view.** The fog volume pass blends `colour * trans + add` over each sky pixel at the far clip. A
+  block's alpha is the ease-in-out curve of a clamped amount, so once the path through the block is long enough `trans` is exactly 0 in
+  float, and the sky's colour, clouds included, adds nothing. Each half-size texel of the main view's march first runs
+  `fogVolumesTransmittance` (the pass's own function, the volume list of the frame block) along its ray and, only when that is 0, along
+  four more rays at the corners of a square 1.5 texels each way (`VolumetricCloudRenderer.FogSkipReach`). It is left out (alpha 0, so the
+  history resolve keeps nothing for it) only when all five are 0. The square covers what can read the texel: the composite's bilinear
+  lookup reaches one texel, and the fog pass's ray is the unjittered pixel centre, a quarter texel at most from the jittered one. The rule
+  needs the fog pass to run over this frame's sky, which `WorldFrame` does exactly when volumes are in view (`UsedData > 0`); the
+  reflection always marches in full (its fog is laid along the reflected rays from the water, not from this eye).
+
+**Verified (tests)**, `CloudFogSkipTests` against the CPU port of the block's alpha that `FogCullTests` uses: on a swamp-like block
+(ceiling 3000, density distance 4500) at 1920x1080, for every sampled texel the rule leaves out, a 9 x 9 grid of rays over everything that
+can read it (1.25 texels each way) has transmittance exactly 0, at eye heights 1121 and 2600 and pitches 3 to 20 degrees up. With the centre
+ray alone the same test fails (transmittance 6e-8 and 2e-7 at the edge), so the corner rays are needed for the exact claim. The weather
+rule agrees with the sky shader's formula over weights 0.5 to 1 and fog distances 1000 to 120000. The march compiles
+(`ShaderCompilerTests`).
+
+**Observed (CPU tests on a stand-in block, not the install's Swamp[SOUTH] and not pictures)**: a block of the swamp's size class is thick
+upward too. From 1121 units inside it every ray up to about 28 degrees above the horizon is fully hidden, and straight up keeps only about
+a tenth of the sky. If Shark's block behaves the same (**Unknown** until measured), at play pitches the whole upward part of the march is
+left out, and the clouds cost little more than the empty full-screen pass and the resolve.
+
+**Unknown**: the GPU saving and the picture check. No GPU was available where this was written. To measure (the main view's march is in
+the `sky-draw` stage, the reflection's in `reflection`):
+
+```
+meitou-viewer --view swamp-low --size 1920x1080 --upscaler dlss --render-scale native --ab cloud-fog-skip --ab-period 16 --bench-frames 768
+meitou-viewer --view swamp-low --upscaler off --bench-motion still --no-particles --ab cloud-fog-skip --bench-frames 120   # the picture
+meitou-viewer --view dust --ab cloud-fog-skip --ab-period 16                                                             # the weather rule
+```
+
+`--view swamp` cannot show it: it looks down 30 degrees with a 50-degree field of view, so no ray of it goes up and the march does no work
+there with or without the switch. The cost per texel of the check is one to five walks of the volume list (a box test per volume that the
+ray misses), against up to 96 march steps.

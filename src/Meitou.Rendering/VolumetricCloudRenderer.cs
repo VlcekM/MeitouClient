@@ -86,9 +86,15 @@ public sealed class VolumetricCloudRenderer : IDisposable
 
     public void Invalidate() { main.Frame = mirror.Frame = -10; }
 
-    /// <summary>Before opening the scene host. The reflection has its own size, eye and history.</summary>
+    /// <summary>Texels (half-size) round a texel's centre whose rays must all be hidden for the fog early-out to leave it out.</summary>
+    public const float FogSkipReach = 1.5f;
+
+    /// <summary>
+    /// Before opening the scene host. The reflection has its own size, eye and history. <paramref name="fogSkip"/>: texels whose sky the placed
+    /// fog volumes hide completely are not marched (the main view only, and only when the fog volume pass runs over this frame's sky).
+    /// </summary>
     public SampledTexture Render(Matrix4x4 viewProjection, Vector3 eye, int width, int height, float coverage, Vector2 wind,
-        Vector3 key, Vector3 light, Vector3 ambient, bool reflection)
+        Vector3 key, Vector3 light, Vector3 ambient, bool reflection, bool fogSkip = false)
     {
         if (gpu.PassOpen) throw new InvalidOperationException("Prepare clouds before opening the scene pass");
         if (!Matrix4x4.Invert(viewProjection, out var inverse)) return default;
@@ -111,6 +117,9 @@ public sealed class VolumetricCloudRenderer : IDisposable
         march.Set(march.Uniform("uKey"), key); march.Set(march.Uniform("uLight"), light); march.Set(march.Uniform("uAmbient"), ambient);
         march.ApplyGlobals();
         march.Set(march.Uniform("uSteps"), gpu.Device.IsIntegrated ? 64 : 96);
+        // The reach round a texel's centre: the bilinear lookup of the full-size sky reads a texel from up to one texel away, and the fog pass's
+        // ray is the unjittered pixel centre (half a full-size pixel, a quarter texel, off); 1.5 texels with room to spare.
+        march.Set(march.Uniform("uFogSkip"), fogSkip ? 1 : 0, FogSkipReach * 2f / w, FogSkipReach * 2f / ht, 0);
         Draw(march, marchSegment, h.Current, h.Distance);
 
         Vector2 windDelta = wind - h.Wind;

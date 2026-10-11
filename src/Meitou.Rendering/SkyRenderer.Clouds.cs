@@ -22,17 +22,51 @@ public sealed unsafe partial class SkyRenderer
         volumeShadowsReady = true;
     }
 
-    /// <summary>Ray marches and filters this view's clouds before opening its scene host.</summary>
-    public void PrepareClouds(Matrix4x4 viewProjection, int width, int height, Vector3 eye, bool reflection = false)
+    /// <summary>
+    /// The fog early-out of the volumetric clouds (Meitou, docs/render-clouds.md "Fog early-out"; <c>MEITOU_CLOUD_FOG_SKIP=0</c> starts with it off,
+    /// <c>--ab cloud-fog-skip</c>): no march where the fog hides the sky anyway. The whole pass when the weather fog covers the sky (both views),
+    /// and in the main view each texel the placed fog volumes hide completely.
+    /// </summary>
+    public bool CloudFogSkip { get; set; } = Environment.GetEnvironmentVariable("MEITOU_CLOUD_FOG_SKIP") != "0";
+
+    /// <summary>Whether the last <see cref="PrepareClouds"/> left the march out because the weather fog covers the sky (for the stats line).</summary>
+    public bool CloudsFogged { get; private set; }
+
+    /// <summary>
+    /// True when the sky pass's weather fog (the game's fog over pixels with no geometry: the ease-in-out curve of the far clip over the fog distance,
+    /// times the weather's weight) is at least <see cref="FogComplete"/>, as in <see cref="FogCullDistanceOf"/>: the sky then shows the fog colour to
+    /// 0.0002 whatever is drawn under it, clouds included. The sky shader applies that term after the clouds in either view, so it holds for both.
+    /// </summary>
+    public static bool WeatherFogHidesSky(in AtmosphereUniforms u)
+    {
+        if (!(u.Fog.Z > 0) || !(u.Haze.W > 0)) return false;
+        float amount = Math.Clamp(u.Fog.W * u.Haze.W, 0f, 1f);
+        float curve = (amount < 0.5f ? 2f * amount * amount : 1f - 2f * (amount - 1f) * (amount - 1f)) * u.Fog.Z;
+        return curve >= FogComplete;
+    }
+
+    /// <summary>
+    /// Ray marches and filters this view's clouds before opening its scene host. <paramref name="fogVolumes"/>: the fog volume pass will run over
+    /// this view's finished sky (the main view with volumes in view), so texels it hides completely need no march.
+    /// </summary>
+    public void PrepareClouds(Matrix4x4 viewProjection, int width, int height, Vector3 eye, bool reflection = false, bool fogVolumes = false)
     {
         volumeImage = default;
+        if (!reflection) CloudsFogged = false;
         if (!VolumeEnabled) { volume?.Invalidate(); return; }
+        if (CloudFogSkip && WeatherFogHidesSky(Uniforms()))
+        {
+            // The sky shader falls back to the flat layer, which the same fog covers; the history starts again when the fog thins.
+            if (!reflection) CloudsFogged = true;
+            volume?.Invalidate();
+            return;
+        }
         volume ??= new VolumetricCloudRenderer(Gpu);
         var ambient = state.CloudAmbient;
         float grey = MeitouClouds.AmbientGreyAt(CloudDensity);
         float luma = Vector3.Dot(ambient, new Vector3(0.2126f, 0.7152f, 0.0722f));
         ambient = Vector3.Lerp(ambient, new Vector3(luma), grey);
         volumeImage = volume.Render(viewProjection, eye, width, height, CloudDensity, CloudLayer.TextureShift(cloudOffset),
-            state.CloudKey, state.CloudKeyDirection, ambient, reflection);
+            state.CloudKey, state.CloudKeyDirection, ambient, reflection, CloudFogSkip && fogVolumes && !reflection);
     }
 }
