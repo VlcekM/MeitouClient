@@ -244,13 +244,18 @@ public sealed class ParticleSimulation
             var w = Vector2.Normalize(env.Wind) * horizontal;
             direction = new Vector3(w.X, direction.Y, w.Y);
         }
-        float speed = e.Velocity.Evaluate(0, random) * Definition.ScaleVelocity;
-        float life = Math.Max(e.Life.Evaluate(0, random), 1e-3f);
-        float width = (e.Width ?? e.AllDimensions)?.Evaluate(0, random) ?? t.Def.DefaultWidth;
-        float height = (e.Height ?? e.AllDimensions)?.Evaluate(0, random) ?? t.Def.DefaultHeight;
-        float depth = (e.Depth ?? e.AllDimensions)?.Evaluate(0, random) ?? t.Def.DefaultDepth;
-        // A single scalar dimension (all_particle_dimensions) is one draw for the three; a per-axis one draws its own.
-        if (e.AllDimensions is not null && e.Width is null && e.Height is null) height = depth = width;
+        // The emitter's attributes are read at the system's age (Verified, the plugin's _initParticleVelocity / TimeToLive / Dimensions).
+        float speed = e.Velocity.Evaluate(Time, random) * Definition.ScaleVelocity;
+        float life = Math.Max(e.Life.Evaluate(Time, random), 1e-3f);
+        // all_particle_dimensions is one draw for the three and wins over the per-axis sizes; each per-axis one draws its own.
+        float width, height, depth;
+        if (e.AllDimensions is not null) width = height = depth = e.AllDimensions.Evaluate(Time, random);
+        else if (e.Width is null && e.Height is null && e.Depth is null) (width, height, depth) = (t.Def.DefaultWidth, t.Def.DefaultHeight, t.Def.DefaultDepth);
+        else (width, height, depth) = (e.Width?.Evaluate(Time, random) ?? 0, e.Height?.Evaluate(Time, random) ?? 0, e.Depth?.Evaluate(Time, random) ?? 0);
+        // A size of 0 is not set (the plugin's setOwnDimensions); the game's pooled particle then keeps its last one, here the technique's default.
+        if (width == 0) width = t.Def.DefaultWidth;
+        if (height == 0) height = t.Def.DefaultHeight;
+        if (depth == 0) depth = t.Def.DefaultDepth;
         var colour = e.Colour;
         if (e.ColourStart is not null || e.ColourEnd is not null)
         {
@@ -350,13 +355,18 @@ public sealed class ParticleSimulation
                         for (int i = lo; i < hi; i++)
                         {
                             if (excluded?[t.Emitter[i]] == true) continue;
-                            // The scale is a rate: units per second added to the size (Observed: read as a factor the poison-gas puffs would
-                            // reach thousands of units; as a rate they grow by a few hundred over their 3..5 s).
-                            float f = t.Age[i] / t.Life[i];
-                            float all = a.ScaleXyz?.Evaluate(f) ?? 0;
-                            t.Width[i] = Math.Max(t.Width[i] + ((a.ScaleX?.Evaluate(f) ?? 0) + all) * dt, 0);
-                            t.Height[i] = Math.Max(t.Height[i] + ((a.ScaleY?.Evaluate(f) ?? 0) + all) * dt, 0);
-                            t.Depth[i] = Math.Max(t.Depth[i] + ((a.ScaleZ?.Evaluate(f) ?? 0) + all) * dt, 0);
+                            // The scale is a rate: units per second, times the system scale, added to the size; xyz_scale alone when it is
+                            // given, else x / y / z; read at the life fraction or the system's age. A size that would not stay above 0 is
+                            // left as it was (Verified, the plugin's ScaleAffector::_affect and setOwnDimensions).
+                            float f = a.SinceStartSystem ? Time : t.Age[i] / t.Life[i];
+                            var s = Definition.Scale * dt;
+                            float rx, ry, rz;
+                            if (a.ScaleXyz is not null) rx = ry = rz = a.ScaleXyz.Evaluate(f);
+                            else (rx, ry, rz) = (a.ScaleX?.Evaluate(f) ?? 0, a.ScaleY?.Evaluate(f) ?? 0, a.ScaleZ?.Evaluate(f) ?? 0);
+                            float w = t.Width[i] + rx * s.X, h = t.Height[i] + ry * s.Y, d = t.Depth[i] + rz * s.Z;
+                            if (w > 0) t.Width[i] = w;
+                            if (h > 0) t.Height[i] = h;
+                            if (d > 0) t.Depth[i] = d;
                         }
                     });
                     break;

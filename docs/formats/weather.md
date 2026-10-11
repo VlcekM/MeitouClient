@@ -332,6 +332,16 @@ bounds, deactivated beyond 1.15 × that).
 - **GLOBAL** (**Verified (decompiled)**, FUN_140102040, FUN_140103f50, FUN_140101dc0): `count` units, all at once whatever the respawn times
   (`count` 0 makes none: `fog islands` never appears in the base game), immortal; each sits at the camera's x, z, ground + 100 (limited to
   `min/max altitude` when either is non-zero); its particles are kept within `d` of the node (a sphere wrap, not the camera cube).
+  The wrap in detail (**Verified (decompiled)**, `EffectHandlerGlobal::vfunc_1` makes it, its `ParticleWrapExtern` slot 15 runs per
+  particle): `d` is the EFFECT's size (0.75 × the largest box extent × scale, or a circle emitter's radius × 1.5); a unit restored from a
+  save uses a fixed 1000 instead. A particle farther than `d` from the node is first moved `1.5 d` along the camera's movement
+  direction of the frame (FUN_1401014f0: the normalised change of the camera position, zero when it stands still); only if it is then
+  still `√1.5 d` or more from the node is it put back at a random x and z within ±`d` of the node at the node's height. So a moving
+  camera finds the dust waiting ahead of it, and particles between `d` and `√1.5 d` stay where they are. Then y is limited to `max
+  altitude` when that is above 0. The viewer re-places every particle beyond `d` at once (**deviation**, not yet changed).
+  Example: "Clear Times SHORT hot 0.5" (The Eye, Grey Desert, Okran's lands, Skinner's Roam) has `Sand-Stream any altitude` × 12, so
+  twelve such units sit on the camera: a dust of about 6,700 sprites of 220 units, alpha at most 0.13, within 1050 of the node, thinned
+  by the wind rule below (at the forced wind 30 the emission is 0.75 of the script's rate).
 - **GLOBAL_POINT** (**Verified (decompiled)**, FUN_140103160, FUN_1401048b0, FUN_140104610): `R` = `maximum view distance` (1000 when 0); `count` units
   within R of the camera and `count` between R and 2R (3 × `count` at most), each at a sqrt-uniform distance in its ring on the ground; units
   beyond 4R stop. Respawn times unused. **Observed (deviation)**: distances are horizontal (the unit is on the ground and the eye may be
@@ -340,9 +350,13 @@ bounds, deactivated beyond 1.15 × that).
 - **Camera effects**: one unit whatever `count` ([particle-universe.md](particle-universe.md#the-camera-effects-cameraeffectgroup)).
 - **Map-feature placers**: static immortal POINT units at the placements ([below](#effect-placers-on-the-map-verified-records-and-featuresdat));
   `MapEffectPlacers.Find` / `Groups`. Observed: the game's handler lives min..max time to live and is made again; the viewer keeps one.
-- **Wind** (**Observed**, the decompile of the wind use is not traced): `wind affected` adds wind × `wind speed mult` to the particles' motion; `wind
-  direction emission` turns the emitted horizontal direction to the wind; `min/max wind span rate` scales the emission rate 0..1 over that wind
-  range (with only a minimum: 0 below it).
+- **Wind**: `wind affected` adds wind × `wind speed mult` to the particles' motion; `wind direction emission` turns the emitted
+  horizontal direction to the wind (both **Observed**). The emission rule is **Verified (decompiled)** (`Weather_LoadEffectRecord`
+  FUN_1400fa0c0 keeps each emitter's own `emission_rate`; FUN_1404077c0, called with the region's wind record, speed at +0x18 and
+  direction at +0x1c, the same record FUN_1409dc0e0 updates): each frame every emitter's rate is its script rate × `clamp((wind speed −
+  min wind span rate) / (max − min), 0, 1)`, a `dyn_random` rate having both ends scaled; when `max wind span rate` is not above `min`,
+  the loader sets both to 0 and the rate is not touched (factor 1). The wind speed is the weather's own units (`wind speed min/max`).
+  (The viewer still applies "0 below the minimum" to a lone minimum; no base effect has one.)
 - **Fade times** (`particle fade out delay`, `fog fade in/out`): the fog volume's alpha is faded by them (see Fog volumes); the particles' own
   fade is the scripts' colour affectors (Observed).
 
@@ -353,7 +367,10 @@ entry's `count` (**Verified (decompiled)**, FUN_140102ff0), the system scale is 
 (**Unknown**), and prewarm fills the cube within a few seconds. `Kenshi_Heavy_Rain` the same: 5000 quota in a 120 × 120 box, 6400/s × life
 0.3..1 s, about 4000 streaks alive. Every number the data gives is in use, so denser flakes in the game would come from something not read:
 candidates are the plugin's per-technique default quota where a script sets none (taken 500, **Unknown**), `sky colour multiplier` and the
-strength. The flakes are 0.4 to 0.7 units, so only the nearest few are big on screen (**Observed**).
+strength. The flakes are 0.4 to 0.7 units, so only the nearest few are big on screen (**Observed**). (2026-10-11: the particle sizes were
+re-derived from the plugin ([particle-universe.md](particle-universe.md), "Curves" and the Size and Scale lines):
+`all_particle_dimensions` wins over `particle_width`, splines are parametric, `xyz_scale` excludes the per-axis rates; the ash scripts are
+among those affected, so these numbers need measuring again.)
 
 **Lights** (Observed): `EFFECT.light` references (`Lightning_Bolt` has one) exist in the records (`EffectRecord.Lights`); the renderer has no point
 light path, so they are read and not used.

@@ -121,12 +121,73 @@ public class ParticleTests
         Assert.Equal(20, t.Emitters[0].Rate.Evaluate(0), 4);
         Assert.Equal(30, t.Emitters[0].Rate.Evaluate(0.5f), 3);   // a quarter of a period at 0.5 Hz: sin(π/2)
         var linear = t.Affectors[0].ScaleXyz!;
-        Assert.Equal(2, linear.Evaluate(-1), 4);
+        Assert.Equal(-2, linear.Evaluate(-1), 4);                  // below the first point the first segment goes on
         Assert.Equal(4, linear.Evaluate(0.5f), 4);
-        Assert.Equal(6, linear.Evaluate(2), 4);
+        Assert.Equal(6, linear.Evaluate(2), 4);                    // above the last it holds
         var spline = t.Affectors[1].ScaleX!;
         Assert.Equal(4, spline.Evaluate(0.5f), 4);                 // passes through its control points
         Assert.Equal(0, spline.Evaluate(1), 4);
+    }
+
+    [Fact]
+    public void Splines_are_parametric_over_the_x_range()
+    {
+        // Sand-Stream's all_particle_dimensions: points evenly spaced in the spline's parameter, read at x / (last x - first x), at most 1.
+        var dims = PuDynamic.Curve([new(0, 0.221606f), new(0.359779f, 2.96953f), new(0.464945f, 15.7784f)], spline: true);
+        Assert.Equal(0.221606f, dims.Evaluate(0), 4);
+        Assert.Equal(2.96953f, dims.Evaluate(0.464945f / 2), 4);   // the middle point at half the range, not at its own x
+        Assert.Equal(15.7784f, dims.Evaluate(0.464945f), 4);
+        Assert.Equal(15.7784f, dims.Evaluate(30), 4);              // held after the range
+        // The x range is not shifted by the first x: points from 2 to 4 are read at x / 2.
+        var shifted = PuDynamic.Curve([new(2, 10), new(4, 20)], spline: true);
+        Assert.Equal(10, shifted.Evaluate(0), 4);
+        Assert.Equal(20, shifted.Evaluate(2), 4);
+    }
+
+    [Fact]
+    public void Emitter_sizes_and_the_scale_affector_follow_the_plugin()
+    {
+        // all_particle_dimensions wins over particle_width and is read at the system's age; xyz_scale alone drives the growth, times the scale.
+        var s = System("""
+            system z
+            {
+                scale 2 2 2
+                technique
+                {
+                    visual_particle_quota 100
+                    emitter Point
+                    {
+                        emission_rate 10
+                        time_to_live 100
+                        velocity 0
+                        all_particle_dimensions dyn_curved_linear
+                        {
+                            control_point 0 1
+                            control_point 1 5
+                        }
+                        particle_width 40
+                    }
+                    affector Scale
+                    {
+                        xyz_scale 3
+                        x_scale 1000
+                    }
+                }
+            }
+            """);
+        var sim = new ParticleSimulation(s, 1);
+        sim.Advance(2, ParticleEnvironment.None);
+        var buffer = new ParticleInstance[sim.TechniqueParticleCount(0)];
+        int n = sim.Collect(0, buffer, Vector3.One, 1);
+        Assert.True(n > 5);
+        // Emitted at age a (0..2 s) with (1 + 4 min(a, 1)) x scale 2, then grown by 3 x 2 = 6 units a second for 2 - a s: 10..16 units.
+        // Read as particle_width (80) or with x_scale (+2000 a second) it would be far larger.
+        foreach (var p in buffer.AsSpan(0, n))
+        {
+            Assert.InRange(p.Width, 9, 17);
+            Assert.Equal(p.Width, p.Height, 3);
+        }
+        Assert.True(buffer.AsSpan(0, n).ToArray().Max(p => p.Width) > 10);
     }
 
     [Fact]

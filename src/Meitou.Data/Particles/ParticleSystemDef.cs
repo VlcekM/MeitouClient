@@ -33,7 +33,7 @@ public sealed class PuEmitterDef
     /// <summary>How long the emitter works after it starts (null: for ever); then it rests for <see cref="RepeatDelay"/> and starts again (null: never).</summary>
     public PuDynamic? Duration { get; init; }
     public PuDynamic? RepeatDelay { get; init; }
-    /// <summary>The particle's size when the emitter sets it: <c>particle_width</c> / <c>particle_height</c> / <c>particle_depth</c>, or <c>all_particle_dimensions</c> for the three.</summary>
+    /// <summary>The particle's size when the emitter sets it: <c>all_particle_dimensions</c> for the three (it wins when both are given), else <c>particle_width</c> / <c>particle_height</c> / <c>particle_depth</c>.</summary>
     public PuDynamic? Width { get; init; }
     public PuDynamic? Height { get; init; }
     public PuDynamic? Depth { get; init; }
@@ -74,11 +74,13 @@ public sealed class PuAffectorDef
     // Colour
     public IReadOnlyList<(float Time, Vector4 Colour)> TimeColours { get; init; } = [];
     public bool MultiplyColour { get; init; }
-    // Scale (units per second added to the size, x / y / z; xyz drives all three)
+    // Scale (units per second added to the size, times the system scale; xyz drives all three and then x / y / z are not read)
     public PuDynamic? ScaleX { get; init; }
     public PuDynamic? ScaleY { get; init; }
     public PuDynamic? ScaleZ { get; init; }
     public PuDynamic? ScaleXyz { get; init; }
+    /// <summary>Scale: the rates are read at the system's age instead of the particle's life fraction.</summary>
+    public bool SinceStartSystem { get; init; }
     // TextureRotator
     public PuDynamic? Rotation { get; init; }
     public PuDynamic? RotationSpeed { get; init; }
@@ -195,7 +197,7 @@ public sealed class PuSystemDef
                 if (!t.Enabled) continue;
                 float growth = 0;
                 foreach (var a in t.Affectors.Where(a => a.Type == PuAffectorType.Scale))
-                    growth += new[] { a.ScaleX, a.ScaleY, a.ScaleZ, a.ScaleXyz }.Where(d => d is not null).Select(d => Math.Max(Math.Abs(d!.Range.Min), Math.Abs(d.Range.Max))).DefaultIfEmpty(0).Max();
+                    growth += (a.ScaleXyz is not null ? [a.ScaleXyz] : new[] { a.ScaleX, a.ScaleY, a.ScaleZ }).Where(d => d is not null).Select(d => Math.Max(Math.Abs(d!.Range.Min), Math.Abs(d.Range.Max))).DefaultIfEmpty(0).Max() * scale;
                 float force = t.Affectors.Where(a => a.Type == PuAffectorType.LinearForce).Select(a => a.Force.Length()).DefaultIfEmpty(0).Sum();
                 foreach (var e in t.Emitters)
                 {
@@ -208,7 +210,7 @@ public sealed class PuSystemDef
                         _ => 0,
                     };
                     float speed = Math.Max(Math.Abs(e.Velocity.Range.Min), Math.Abs(e.Velocity.Range.Max)) * ScaleVelocity;
-                    float size = new[] { e.Width, e.Height, e.AllDimensions }.Where(d => d is not null).Select(d => d!.Range.Max).DefaultIfEmpty(Math.Max(t.DefaultWidth, t.DefaultHeight)).Max() * scale;
+                    float size = (e.AllDimensions is not null ? [e.AllDimensions] : new[] { e.Width, e.Height }).Where(d => d is not null).Select(d => d!.Range.Max).DefaultIfEmpty(Math.Max(t.DefaultWidth, t.DefaultHeight)).Max() * scale;
                     float reach = (t.Position + e.Position * Scale).Length() + extent + speed * life + 0.5f * force * life * life + size + growth * life;
                     radius = Math.Max(radius, reach);
                 }
@@ -337,6 +339,7 @@ public sealed class PuSystemDef
             TimeColours = colours,
             MultiplyColour = a.Word("colour_operation") == "multiply",
             ScaleX = a.Dynamic("x_scale"), ScaleY = a.Dynamic("y_scale"), ScaleZ = a.Dynamic("z_scale"), ScaleXyz = a.Dynamic("xyz_scale"),
+            SinceStartSystem = a.Bool("since_start_system"),
             Rotation = a.Dynamic("rotation"), RotationSpeed = a.Dynamic("rotation_speed"), UseOwnRotation = a.Bool("use_own_rotation"),
             Force = a.Vec3("force_vector") ?? (a.Vec3("acceleration") ?? Vector3.Zero),
             AverageForce = a.Word("force_application") == "average",

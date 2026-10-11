@@ -60,18 +60,32 @@ public sealed class PuDynamic
                 float wave = Square ? (turns - MathF.Floor(turns) < 0.5f ? 1 : -1) : MathF.Sin(MathF.Tau * turns);
                 return A + B * wave;
             }
-            default:
+            case PuDynamicKind.CurvedLinear:
             {
+                // The segment whose end is the first point beyond x; below the first point the first segment is extended, above the last
+                // the last value holds (docs/formats/particle-universe.md "Curves").
                 var p = Points;
                 if (p.Count == 0) return 0;
-                if (p.Count == 1 || x <= p[0].X) return p[0].Y;
-                if (x >= p[^1].X) return p[^1].Y;
+                if (p.Count == 1 || x >= p[^1].X) return p[^1].Y;
                 int i = 0;
-                while (p[i + 1].X < x) i++;
+                while (i < p.Count - 2 && p[i + 1].X <= x) i++;
                 float span = p[i + 1].X - p[i].X;
-                float t = span <= 1e-9f ? 0 : (x - p[i].X) / span;
-                if (Kind == PuDynamicKind.CurvedLinear) return p[i].Y + (p[i + 1].Y - p[i].Y) * t;
-                // Catmull-Rom through the control points (Observed: the format says "spline"; the exact basis is not known).
+                return span <= 1e-9f ? p[i + 1].Y : p[i].Y + (p[i + 1].Y - p[i].Y) * (x - p[i].X) / span;
+            }
+            default:
+            {
+                // An Ogre spline through the points, evenly spaced in its parameter whatever their x, read at x over the points' x range
+                // (not less the first x), at most 1; the value is the curve's y (docs/formats/particle-universe.md "Curves").
+                var p = Points;
+                if (p.Count == 0) return 0;
+                float range = p[^1].X - p[0].X;
+                float u = range > 0 ? Math.Min(x / range, 1) : 1;
+                float segment = u * (p.Count - 1);
+                if (segment < 0) segment = 0;
+                int i = (int)segment;
+                if (i >= p.Count - 1) return p[^1].Y;
+                float t = segment - i;
+                // Hermite with tangents half the difference of the neighbours (the end ones of their own segment): Catmull-Rom.
                 float y0 = p[Math.Max(i - 1, 0)].Y, y1 = p[i].Y, y2 = p[i + 1].Y, y3 = p[Math.Min(i + 2, p.Count - 1)].Y;
                 float t2 = t * t, t3 = t2 * t;
                 return 0.5f * (2 * y1 + (y2 - y0) * t + (2 * y0 - 5 * y1 + 4 * y2 - y3) * t2 + (3 * y1 - y0 - 3 * y2 + y3) * t3);

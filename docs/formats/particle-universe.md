@@ -53,11 +53,25 @@ attribute's parameters:
 | `dyn_curved_spline` | `control_point x y` (repeated) | 73 |
 | `dyn_oscillate` | `oscillate_type` (`sine`, `square`), `oscillate_frequency`, `oscillate_phase`, `oscillate_base`, `oscillate_amplitude` | 29 |
 
-Reading (**Observed**, from the scripts' numbers): `dyn_random` is drawn uniformly when the value is used (per particle for emitted
-properties); a curve is read at the particle's **life fraction** (0..1) in an affector and at the emitter's age in seconds in an emitter
-attribute (the `emission_rate` curves); a spline is a smooth curve through its control points (Catmull-Rom is used); an oscillation is
-`base + amplitude · wave(frequency · t + phase)` with `t` in turns (sine of 2π(frequency·t + phase); square: ±1 by the half period). The
-exact plugin formulas are **Unknown**.
+Reading: `dyn_random` is drawn uniformly when the value is used (per particle for emitted properties; **Observed**). What x a curve is
+read at depends on the user: the particle's **life fraction** (0..1) in the Scale affector (the system's age with `since_start_system`),
+and the **system's age in seconds** for the emitter's per-particle attributes (velocity, time to live, the dimensions: **Verified**, the
+plugin's `ParticleEmitter::_initParticleVelocity` / `_initParticleTimeToLive` / `_initParticleDimensions` read the parent system's
+time since start, which `ParticleSystem::_update` adds `dt × scale_time` to). An oscillation is `base + amplitude · wave(frequency · t +
+phase)` with `t` in turns (sine of 2π(frequency·t + phase); square: ±1 by the half period; **Observed**, the plugin's formula not read).
+
+### Curves (Verified: Plugin_ParticleUniverse_x64.dll `DynamicAttributeCurved::getValue` / `processControlPoints`, disassembly; OgreMain `SimpleSpline::interpolate`, `recalcTangents`)
+
+The control points are sorted by x when the block is read, and the curve keeps `range = last x − first x`.
+
+- **`dyn_curved_linear`**: the first point whose x is greater than the input ends the segment used; below the first point the first
+  segment is extended (so values can go past the first y), at or above the last point the last y holds.
+- **`dyn_curved_spline`**: an Ogre `SimpleSpline` through the points with z = 0, read at the parameter `u = min(x / range, 1)` (x is
+  **not** shifted by the first point's x), and the value is the spline's y. The spline's parameter spaces the points **evenly** whatever
+  their x: `u · (n − 1)` picks the segment and the fraction within it, so with points at x = 0, 0.36 and 0.46 the middle one is reached
+  at u = 0.5 (x = 0.23), not at x = 0.36. Within a segment it is Hermite with tangents half the difference of the neighbouring points
+  (the end points use their own segment), i.e. Catmull-Rom on the y values. Past the range the last y holds.
+  Example: Sand-Stream's `all_particle_dimensions` (read at the system's age) is 0.22 at the start and 15.78 from 0.46 s on.
 
 ## Survey of the 93 scripts (Verified: `meitou-tools particles`)
 
@@ -134,15 +148,21 @@ What follows is what the scripts require and what we chose; unless a line says *
   `position`..`end`. Slave and the other `emits` kinds: not simulated.
 - **Direction**: `direction` (default up) within a cone of `angle` degrees half-angle (uniform over the cap); `auto_direction`: outward
   from the emitter's centre. Speed `velocity · scale_velocity`; `time_to_live` seconds of life.
-- **Size**: `particle_width`/`height`/`depth` or `all_particle_dimensions` if the emitter gives them, else the technique's defaults (100
-  when missing), times the system scale. A particle's colour is the emitter's `colour`, or random between `start_colour_range` and
+- **Size** (**Verified**, the plugin's `_initParticleDimensions` and `VisualParticle::setOwnDimensions`): `all_particle_dimensions`, one
+  value for the three, **wins** when the emitter also gives `particle_width` / `height` / `depth` (ten base scripts have both, Sand-Stream
+  among them: 40 is ignored for 15.78); else the per-axis ones; with none, the technique's defaults (100 when missing). Times the
+  system scale (`_notifyRescaled` stores the system scale in the emitter). A size of 0 means "not set": the particle keeps the size it
+  had (the game's pooled particle keeps its last one; the viewer takes the technique's default). A particle's colour is the emitter's `colour`, or random between `start_colour_range` and
   `end_colour_range` (**Observed**: `kenshi_weather_ash1` gives the smoke a 0.11..0.47 alpha range).
 - **Colour affector**: a piecewise linear ramp over the life fraction. `colour_operation multiply`: emitted colour × ramp; otherwise
   the ramp **replaces** the colour (**Observed**: `Poison_Gas_White` emits colour `0 0 0 0` and relies on a white ramp without an
   operation).
-- **Scale affector**: its value (read at the life fraction) is a **rate, units per second added** to the size, per axis, plus `xyz_scale`
-  for all three (**Observed**: `Poison_Gas_White` puffs of 80..150 units with `xyz_scale` rising from 0.56 to 61: as a factor they would
-  grow to thousands of units, as a rate by about 200 over their 3..5 seconds).
+- **Scale affector** (**Verified**, the plugin's `ScaleAffector::_affect`, `_calculateScale`, `ParticleAffector::_notifyRescaled`): its
+  value is a **rate**: `size += value · dt · system scale` per axis. With `xyz_scale` given it drives all three and `x_scale` / `y_scale` /
+  `z_scale` are **not read** (21 base scripts have both; Sand-Stream's per-axis rates of up to 31 a second do nothing). The value is read
+  at the particle's life fraction, or at the system's age with `since_start_system`. A new size that is not above 0 is not applied (the
+  axis keeps its size), and an axis without its own rate keeps its size. (The `xyz_scale` path also multiplies by the affect
+  specialisation factor, 1 by default; no base script sets one.)
 - **TextureRotator**: `rotation` degrees at the start and `rotation_speed` degrees per second, both drawn once per particle (**Observed**
   units); drawn as a rotation of the quad (the `texcoord` and `vertex` rotation types look alike here).
 - **LinearForce**: adds `force_vector · dt` to the velocity (`average`: the velocity moves half way to the vector). **Vortex**: turns the
@@ -389,8 +409,8 @@ alpha ramp 0 → 1 → 1 → 0 on the life.
 
 ## Unknown
 
-- The plugin's defaults where a script is silent (taken: quota 500, size 100, box 100, velocity 100, rate 10, life 3); the exact curves
-  (spline basis, oscillation phase unit), Circle (ring or disc), Scale as a rate, the Randomiser, Vortex, Gravity, SineForce rules, the unit
+- The plugin's defaults where a script is silent (taken: quota 500, size 100, box 100, velocity 100, rate 10, life 3); the oscillation
+  formula and phase unit, Circle (ring or disc), the Randomiser, Vortex, Gravity, SineForce rules, the unit
   of the rotation values; `oriented_shape`; mass.
 - How `sky colour multiplier` tints the particles; the group's fade-in and -out times; how often a camera group is renewed.
 - Whether the system node is nudged by the small term in `FUN_140101800` (a distance squared along the pivot-to-camera direction; not
