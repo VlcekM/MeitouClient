@@ -56,6 +56,7 @@ static partial class WorldApp
         if (gpu.Lamps is { } lamps) AbToggles.Register("lights", () => lamps.Enabled, v => lamps.Enabled = v, "the lamps: the game's point and spot lights on the world (--lights off)");
         AbToggles.Register("anisotropy", () => gpu.Sky.Gpu.Samplers.MaxAnisotropy > 1, v => gpu.Sky.Gpu.Samplers.MaxAnisotropy = v ? 16 : 1, "anisotropic filtering as the textures ask (A) against none, 1x (B); the Tab slider's ends");
         AbToggles.Register("weather-particles", () => gpu.WeatherParticles, v => gpu.WeatherParticles = v, "the weather's particles, simulated and drawn (the Tab slider at 0)");
+        { int threaded = Recording.Mode > 0 ? Recording.Mode : 2; AbToggles.Register("record-threads", () => Recording.Mode == threaded, v => Recording.Mode = v ? threaded : 0, "the native hosts' secondary command buffers recorded on the job threads (MEITOU_RECORD_THREADS, A: as set, default 2); B: mode 0, every segment inline on the render thread"); }
         AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
         if (gpu.Gi is not null)
         {
