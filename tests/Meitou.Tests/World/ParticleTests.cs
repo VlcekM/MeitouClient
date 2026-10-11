@@ -275,6 +275,47 @@ public class ParticleTests
     }
 
     [Fact]
+    public void Sphere_wrap_moves_particles_ahead_of_a_moving_camera_first()
+    {
+        // Particles fly along +x from the centre; the sphere has radius 30 (√1.5 · 30 ≈ 36.7).
+        var s = System("""
+            system w
+            {
+                technique
+                {
+                    visual_particle_quota 100
+                    emitter Point
+                    {
+                        emission_rate 20
+                        time_to_live 50
+                        velocity 40
+                        direction 1 0 0
+                    }
+                }
+            }
+            """);
+        ParticleSimulation Run(Vector3 ahead)
+        {
+            var sim = new ParticleSimulation(s, 1);
+            for (int i = 0; i < 40; i++)
+            {
+                sim.Advance(0.25f, ParticleEnvironment.None);
+                sim.WrapSphere(Vector3.Zero, 30, float.PositiveInfinity, ahead, i);
+            }
+            return sim;
+        }
+        // Moving towards -x: a particle past 30 is moved 45 back along -x, lands inside, and stays on its line (never re-placed at random).
+        var (x, _, z) = Run(-Vector3.UnitX).Positions(0);
+        Assert.All(z, v => Assert.Equal(0, v, 4));
+        Assert.Contains(x, v => v < -10);
+        // Standing still: nothing is moved until a particle is √1.5 radius out, then it is put back at random in x and z.
+        (x, _, z) = Run(Vector3.Zero).Positions(0);
+        Assert.Contains(z, v => MathF.Abs(v) > 1);
+        Assert.Contains(x, v => v > 31);                            // between the radius and √1.5 radius it stays where it is
+        Assert.All(x.Zip(z), p => Assert.True(MathF.Sqrt(p.First * p.First + p.Second * p.Second) < 36.7f + 10));
+    }
+
+    [Fact]
     public void Colour_ramp_and_scale_rate_follow_the_particles_life()
     {
         var s = System("""

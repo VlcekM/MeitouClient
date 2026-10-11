@@ -170,6 +170,8 @@ public sealed class EffectUnit
     public Vector3 WrapCentre { get; set; }
     public float WrapSize { get; set; }
     public float WrapMaxHeight { get; set; } = float.PositiveInfinity;
+    /// <summary>Sphere wrap: the camera's direction of movement this frame (unit length, zero when it stands still); a particle that leaves the sphere is first moved along it.</summary>
+    public Vector3 WrapAhead { get; set; }
     /// <summary>Seconds of simulation to run on the next <see cref="Advance"/>.</summary>
     public float Pending { get; set; }
     int wrapSalt;
@@ -239,7 +241,7 @@ public sealed class EffectUnit
         switch (Wrap)
         {
             case UnitWrap.Cube: sim.Wrap(WrapCentre - Anchor, WrapSize / 2); break;
-            case UnitWrap.Sphere: sim.WrapSphere(WrapCentre - Anchor, WrapSize, WrapMaxHeight - Anchor.Y, wrapSalt++); break;
+            case UnitWrap.Sphere: sim.WrapSphere(WrapCentre - Anchor, WrapSize, WrapMaxHeight - Anchor.Y, WrapAhead, wrapSalt++); break;
         }
     }
 }
@@ -565,11 +567,12 @@ public sealed class RespawningEffectGroup : EffectGroup
 /// GLOBAL (4): one handler per unit of <c>count</c>, all made at once (Verified (decompiled), FUN_140102040: while fewer than <c>count</c> exist
 /// they are made, whatever the respawn times; <c>count</c> 0 makes none, so <c>fog islands</c> never appears in the base game). Each follows the
 /// camera: its node is at the camera's x and z, the ground there + 100 limited to <c>min/max altitude</c> when either is non-zero (FUN_140101dc0);
-/// its particles are kept within <c>d</c> of the node (<see cref="ParticleSimulation.WrapSphere"/>).
+/// its particles are kept within <c>d</c> of the node, moved ahead of a moving camera first (<see cref="ParticleSimulation.WrapSphere"/>).
 /// </summary>
 public sealed class GlobalEffectGroup : EffectGroup
 {
     readonly float size;
+    Vector3? lastEye;
 
     public GlobalEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world) : base(entry.Effect, entry, system, seed, world)
     {
@@ -599,11 +602,16 @@ public sealed class GlobalEffectGroup : EffectGroup
             u.WrapSize = size;
             u.Radius = size;
         }
+        // The camera's direction of movement since the last frame (the game's FUN_1401014f0), for the wrap.
+        var moved = lastEye is { } last ? camera.Eye - last : Vector3.Zero;
+        lastEye = camera.Eye;
+        var ahead = moved.LengthSquared() > 1e-8f ? Vector3.Normalize(moved) : Vector3.Zero;
         var env = Environment(weather);
         foreach (var u in units)
         {
             u.Position = node;
             u.WrapCentre = node;
+            u.WrapAhead = ahead;
             u.WrapMaxHeight = Effect.MaxAltitude > 0 ? Effect.MaxAltitude : float.PositiveInfinity;
             Tick(u, dt, camera, env, alwaysActive: true);
         }

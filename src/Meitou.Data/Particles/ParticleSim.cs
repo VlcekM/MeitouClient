@@ -581,14 +581,16 @@ public sealed class ParticleSimulation
     }
 
     /// <summary>
-    /// The global effect's wrap (docs/formats/weather.md "Global"; Verified (decompiled), FUN_140101be0, in part): a particle farther than
-    /// <paramref name="radius"/> from <paramref name="centre"/> is put at a random place within ±<paramref name="radius"/> of the centre in x and z, at
-    /// the centre's height; no particle stays above <paramref name="maxHeight"/> (infinity: no limit). The game also first pushes the particle back by
-    /// 1.5 radius along a direction it keeps in a global (Unknown: not modelled).
+    /// The global effect's wrap (docs/formats/weather.md "GLOBAL"; Verified (decompiled), the game's ParticleWrapExtern): a particle farther than
+    /// <paramref name="radius"/> from <paramref name="centre"/> is first moved 1.5 radius along <paramref name="ahead"/> (the camera's direction of
+    /// movement, zero when it stands still), so a moving camera meets it again ahead; if it is then still √1.5 radius or more from the centre it is put
+    /// at a random place within ±<paramref name="radius"/> of the centre in x and z, at the centre's height. No particle stays above
+    /// <paramref name="maxHeight"/> (infinity: no limit).
     /// </summary>
-    public void WrapSphere(Vector3 centre, float radius, float maxHeight, int salt)
+    public void WrapSphere(Vector3 centre, float radius, float maxHeight, Vector3 ahead, int salt)
     {
-        float r2 = radius * radius;
+        float r2 = radius * radius, far2 = r2 * 1.5f;
+        var shift = ahead * (radius * 1.5f);
         foreach (var t in techniques)
         {
             if (t.Def.KeepLocal) continue;
@@ -597,10 +599,15 @@ public sealed class ParticleSimulation
                 float dx = t.X[i] - centre.X, dy = t.Y[i] - centre.Y, dz = t.Z[i] - centre.Z;
                 if (dx * dx + dy * dy + dz * dz > r2)
                 {
-                    uint s = t.Seed[i] ^ (uint)salt * 2246822519u ^ t.Step * 3266489917u;
-                    t.X[i] = centre.X + (Hash01(s * 3 + 1) * 2 - 1) * radius;
-                    t.Y[i] = centre.Y;
-                    t.Z[i] = centre.Z + (Hash01(s * 3 + 2) * 2 - 1) * radius;
+                    t.X[i] += shift.X; t.Y[i] += shift.Y; t.Z[i] += shift.Z;
+                    dx += shift.X; dy += shift.Y; dz += shift.Z;
+                    if (dx * dx + dy * dy + dz * dz >= far2)
+                    {
+                        uint s = t.Seed[i] ^ (uint)salt * 2246822519u ^ t.Step * 3266489917u;
+                        t.X[i] = centre.X + (Hash01(s * 3 + 1) * 2 - 1) * radius;
+                        t.Y[i] = centre.Y;
+                        t.Z[i] = centre.Z + (Hash01(s * 3 + 2) * 2 - 1) * radius;
+                    }
                 }
                 if (t.Y[i] > maxHeight) t.Y[i] = maxHeight;
             }

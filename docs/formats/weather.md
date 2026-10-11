@@ -338,7 +338,8 @@ bounds, deactivated beyond 1.15 × that).
   direction of the frame (FUN_1401014f0: the normalised change of the camera position, zero when it stands still); only if it is then
   still `√1.5 d` or more from the node is it put back at a random x and z within ±`d` of the node at the node's height. So a moving
   camera finds the dust waiting ahead of it, and particles between `d` and `√1.5 d` stay where they are. Then y is limited to `max
-  altitude` when that is above 0. The viewer re-places every particle beyond `d` at once (**deviation**, not yet changed).
+  altitude` when that is above 0. The viewer does the same (`ParticleSimulation.WrapSphere`, the direction from the camera's movement
+  between two group updates, a test covers both branches).
   Example: "Clear Times SHORT hot 0.5" (The Eye, Grey Desert, Okran's lands, Skinner's Roam) has `Sand-Stream any altitude` × 12, so
   twelve such units sit on the camera: a dust of about 6,700 sprites of 220 units, alpha at most 0.13, within 1050 of the node, thinned
   by the wind rule below (at the forced wind 30 the emission is 0.75 of the script's rate).
@@ -369,8 +370,9 @@ entry's `count` (**Verified (decompiled)**, FUN_140102ff0), the system scale is 
 candidates are the plugin's per-technique default quota where a script sets none (taken 500, **Unknown**), `sky colour multiplier` and the
 strength. The flakes are 0.4 to 0.7 units, so only the nearest few are big on screen (**Observed**). (2026-10-11: the particle sizes were
 re-derived from the plugin ([particle-universe.md](particle-universe.md), "Curves" and the Size and Scale lines):
-`all_particle_dimensions` wins over `particle_width`, splines are parametric, `xyz_scale` excludes the per-axis rates; the ash scripts are
-among those affected, so these numbers need measuring again.)
+`all_particle_dimensions` wins over `particle_width`, splines are parametric, `xyz_scale` excludes the per-axis rates. The ash is not
+changed by it: its flakes use the techniques' default sizes, and a picture of `--weather Kenshi_Ash-Flakes` at (94464, 85248) is the same
+before and after. The plugin's default `visual_particle_quota` is 500, **Verified** (the `ParticleTechnique` constructor), so 1550 holds.)
 
 **Lights** (Observed): `EFFECT.light` references (`Lightning_Bolt` has one) exist in the records (`EffectRecord.Lights`); the renderer has no point
 light path, so they are read and not used.
