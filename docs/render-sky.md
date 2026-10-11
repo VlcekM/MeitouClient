@@ -7,7 +7,7 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
   game's formula for the hour (latitude 54, sunrise 5, sunset 23). In game-sky mode (default) everything is in the game's own HDR
   units and numbers. The sky is SkyX's skydome evaluated per pixel with the game's options (wavelengths 0.57 / 0.48 / 0.44,
   exposure 1.4, 4 samples, HDR mode), the night glow, the game's starfield on its own dome mapping (or, with the Meitou `stars` switch, a procedural night sky: point stars turning about the sun's axis, [formats/sky.md](formats/sky.md) "Meitou night sky") and the game's two planets (Moon, Moon2: fixed low over +x −z, lit by the sun); no sun disc (the game has none in
-  the dome; its sun is the Mie glow), with `--clouds` or a cloudy weather the game's SkyX cloud layer (with the Meitou `clouds` switch lit by the sun or the planet through its depth, [formats/clouds.md](formats/clouds.md#meitou-clouds)). Terrain, objects and grass
+  the dome; its sun is the Mie glow), with `--clouds` or a cloudy weather the game's SkyX cloud layer (with the Meitou `clouds` switch a procedural volumetric layer, lit by the sun or planet, with temporal filtering and reflected clouds, [render-clouds.md](render-clouds.md)). Terrain, objects and grass
   are lit by `kenshiLight`, the game's deferred lighting model: the sun colour taken from SkyX towards the sun the way the game's
   sky controller takes it, times the daylight factor and the per-biome ambient map's sun brightness; the image-based ambient
   from `mp_irradiance.dds` times the ambient map's colour; GGX sun specular and the `mp_specularity.dds` environment specular with

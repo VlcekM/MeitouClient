@@ -178,22 +178,23 @@ public class GpuApiTests
     /// to set 1): recorded on 2026-10-07 from the build in which <c>LegacyProgram</c> was last checked byte for byte against VkGl's modules
     /// (phase 8 stage 3, before VkGl was deleted), so the legacy programs still get exactly the SPIR-V VkGl gave them.
     /// </summary>
+    // Cloud and cloud-shadow consumers refreshed 2026-10-11 for the volumetric pass and transmission map.
     static readonly Dictionary<string, string> LegacyModules = new()
     {
         ["sky simple"] = "4C48F27F2EFC495E4B81B6421F095B12",
-        ["sky"] = "862E5F5779AE2D2FEADE408BF6C50710",
+        ["sky"] = "0972A032C1C30EEF65513C87C81CBCCA",
         ["water"] = "8AD06469B9CA4D8ED1DDCEA8DFF07308",
-        ["water meitou"] = "6A0DC5BBD26A2D07EFE3BD878B620CFF",
+        ["water meitou"] = "A47F5E3490100D950F0AF4DB9843479E",
         ["debug overlay"] = "AE37E44A4CF61D8AE0E36CD0364EE1A2",
-        ["terrain patch"] = "51B777198C651A1EBD1F458ED7A55F51",
-        ["terrain mesh"] = "ACB0799F4353483AC5CF7C87782EDEB4",
+        ["terrain patch"] = "5A7D7246C3197B774046DCB4474F5F35",
+        ["terrain mesh"] = "60B60AF6E8913A2269623E476D97C248",
         ["terrain patch depth"] = "824EFC3C10ECB608BF9A18D97831652B",
         ["terrain mesh depth"] = "FD249B5F918DBB257C412C7394FD4ABC",
-        ["foliage mesh"] = "2A43E351DEDB4003B8F736643FE3B96D",
-        ["foliage grass"] = "30C0BE7A5AE7ABE532A3EAE936941F6D",
+        ["foliage mesh"] = "542F0BEA4515D68A0BF761898B87F03C",
+        ["foliage grass"] = "FA69F80BF6DFEBB57AB93FE092AE5A64",
         ["foliage grass motion"] = "A836A4928C20E6352E07004C224C6A92",
         ["foliage depth"] = "099C2868B7FA91B71BE2ACE3ED5DD997",
-        ["buildings"] = "732365090E49984989B3E3F8D34756D5",
+        ["buildings"] = "387581F12FFD1919E7153E869A551C65",
         ["buildings depth"] = "24B964B69B81036B6258A57BAA9486A8",
         ["shadow debug"] = "AFF23DFE04A66C7FF2E32E4B701EDB4E",
         ["shadow atlas"] = "7A8BC32D82FC65DBE0B7F1BEE4AFB43A",

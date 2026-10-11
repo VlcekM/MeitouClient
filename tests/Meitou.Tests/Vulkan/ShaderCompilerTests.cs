@@ -26,6 +26,9 @@ public class ShaderCompilerTests
         foreach (var f in new[] { nameof(PostProcessShaders.Ssao), nameof(PostProcessShaders.SsaoBlur), nameof(PostProcessShaders.Composite),
                      nameof(PostProcessShaders.Luminance), nameof(PostProcessShaders.Adapt), nameof(PostProcessShaders.Fxaa), nameof(PostProcessShaders.HeatHaze) })
             yield return ("post " + f, PostProcessShaders.Vertex, Private(typeof(PostProcessShaders), f));
+        yield return ("cloud march", PostProcessShaders.Vertex, VolumetricCloudShaders.March);
+        yield return ("cloud history", PostProcessShaders.Vertex, VolumetricCloudShaders.Resolve);
+        yield return ("cloud shadow map", PostProcessShaders.Vertex, VolumetricCloudShaders.Shadow);
         yield return ("sky simple", Private(typeof(SkyRenderer), "Vertex"), Private(typeof(SkyRenderer), "SimpleFragment"));
         yield return ("sky", Private(typeof(SkyRenderer), "Vertex"), Private(typeof(SkyRenderer), "SkyFragment"));
         yield return ("water", Private(typeof(WaterRenderer), "Vertex"), Private(typeof(WaterRenderer), "Fragment"));

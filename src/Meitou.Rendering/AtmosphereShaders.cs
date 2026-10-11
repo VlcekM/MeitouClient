@@ -34,14 +34,27 @@ static class AtmosphereShaders
         uniform vec4 uAtmoNight;      // Meitou night air (docs/formats/sky.md "Night air"): rgb its colour at full night at the horizon, a its weight (0: Faithful, or by day)
         uniform samplerCube uAtmoIrradiance, uAtmoSpecular;
         uniform sampler2D uAtmoAmbientMap;
-        uniform vec4 uAtmoCloud;      // Meitou cloud shadows (docs/formats/clouds.md "Meitou cloud shadows"): x strength (0: none), y the layer's DensityOffset, z the plane's height
-        uniform vec4 uAtmoCloudWind;  // xy: the layer's wind shift (the sky pass's uCloudWind)
+        uniform vec4 uAtmoCloud;      // x strength, y legacy density offset or volume coverage, z base height, w 1 volume transmission map
+        uniform vec4 uAtmoCloudWind;  // legacy: xy wind shift; volume: xy map origin, z map span
         uniform sampler2D uAtmoClouds, uAtmoCloudsTile;
         // The sun light that gets past the cloud layer to a world point: the sun's ray from the point hits the world-anchored plane, where the sky pass's
         // overhead alpha (the game's second lookup and tile, the horizon band at 1, no fake volume) is read. textureLod only: the grass's vertex stage includes this.
         float atmoCloudShadow(vec3 world)
         {
             if (uAtmoCloud.x <= 0.0) return 1.0;
+            if (uAtmoCloud.w > 0.5)
+            {
+                vec2 hit = world.xz + uAtmoSun.xz * (uAtmoCloud.z - world.y) / max(uAtmoSun.y, 0.03);
+                vec2 uv = (hit - uAtmoCloudWind.xy) / uAtmoCloudWind.z;
+                float transmission = 1.0;
+                if (world.y < uAtmoCloud.z)
+                {
+                    transmission = 1.0 - uAtmoCloud.y;
+                    if (all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0))))
+                        transmission = textureLod(uAtmoClouds, uv, 0.0).r;
+                }
+                return 1.0 - uAtmoCloud.x * (1.0 - transmission);
+            }
             vec3 l = uAtmoSun.xyz;
             float h = uAtmoCloud.z;
             vec2 uv = (world.xz + l.xz * (max(h - world.y, 0.0) / max(l.y, 1e-3))) * (0.1 / h);
