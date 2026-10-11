@@ -89,7 +89,7 @@ public sealed unsafe partial class PostProcess : IDisposable
     readonly ParticleDepthPass particleDepthPass;
     readonly ParticleCompositePass particleCompositePass;
     readonly ParticleCoveragePass particleCoveragePass;
-
+    AoApplyPass? aoApplyPass;   // made the first time the occlusion goes onto the scene before the particles (ApplySsao)
 
     /// <summary>One native full-screen program: the shared vertex shader with a fragment shader, and its resolved handles.</summary>
     abstract class FullscreenProgram
@@ -100,9 +100,17 @@ public sealed unsafe partial class PostProcess : IDisposable
 
     sealed class BlurPass : FullscreenProgram
     {
+        public readonly SamplerSlot Ao, Mask;
+        public readonly UniformHandle Step, CharacterAo;
+        public BlurPass(GpuContext gpu) : base(gpu, PostProcessShaders.SsaoBlur, "post ssao blur") =>
+            (Ao, Mask, Step, CharacterAo) = (P.Sampler("uAo"), P.Sampler("uMask"), P.Uniform("uStep"), P.Uniform("uCharacterAo"));
+    }
+
+    /// <summary>The finished occlusion multiplied into the scene colour (<see cref="PostProcessShaders.SsaoApply"/>).</summary>
+    sealed class AoApplyPass : FullscreenProgram
+    {
         public readonly SamplerSlot Ao;
-        public readonly UniformHandle Step;
-        public BlurPass(GpuContext gpu) : base(gpu, PostProcessShaders.SsaoBlur, "post ssao blur") => (Ao, Step) = (P.Sampler("uAo"), P.Uniform("uStep"));
+        public AoApplyPass(GpuContext gpu) : base(gpu, PostProcessShaders.SsaoApply, "post ssao apply") => Ao = P.Sampler("uAo");
     }
 
     sealed class LuminancePass : FullscreenProgram
@@ -125,12 +133,12 @@ public sealed unsafe partial class PostProcess : IDisposable
 
     sealed class CompositePass : FullscreenProgram
     {
-        public readonly SamplerSlot Scene, Ao, Adapted, Mask;
-        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug, CharacterAo, SceneSize, Tone, ToneMix, Grade, Saturation, Contrast, Night;
+        public readonly SamplerSlot Scene, Ao, Adapted;
+        public readonly UniformHandle Auto, Exposure, UseAo, Dither, Debug, SceneSize, Tone, ToneMix, Grade, Saturation, Contrast, Night;
         public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
         {
-            (Scene, Ao, Adapted, Mask) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"), P.Sampler("uMask"));
-            (CharacterAo, SceneSize) = (P.Uniform("uCharacterAo"), P.Uniform("uSceneSize"));
+            (Scene, Ao, Adapted) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"));
+            SceneSize = P.Uniform("uSceneSize");
             (Auto, Exposure, UseAo, Dither, Debug) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"), P.Uniform("uDebug"));
             (Tone, ToneMix, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uToneMix"), P.Uniform("uGrade"), P.Uniform("uSaturation"), P.Uniform("uContrast"));
             Night = P.Uniform("uNight");
@@ -479,7 +487,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         stamps.Tag = CostTag;
         haveNearSlice = farSliceDrawn = false;
         foreach (var l in lowTargets) l.Drawn = false;
-        sceneMarked = false;
+        sceneMarked = aoApplied = false;
         Stamp("start");
         frameIndex++;
         JitterPixels = Temporal ? Jitter.Offset(frameIndex, JitterPhases) : Vector2.Zero;
@@ -653,9 +661,8 @@ public sealed unsafe partial class PostProcess : IDisposable
         bool needDepth = o.Ssao && haveNearSlice;
 
         bool ao = needDepth;
-        if (ao) RunSsao();
-        if (ao) Stamp("ssao");
-        bool mask = ao && Options.SsaoCharacterStrength < 1;   // the characters' pixels: the scene colour's alpha (only they write it)
+        if (ao && !aoApplied) RunSsao();
+        if (ao && !aoApplied) Stamp("ssao");
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
         postColour = sceneColour!;
         if (Temporal) { postColour = RunUpscale(); Stamp("upscale"); }
@@ -671,14 +678,12 @@ public sealed unsafe partial class PostProcess : IDisposable
         Bind(c.P, c.Scene, postColour);
         Bind(c.P, c.Ao, aoB);
         Bind(c.P, c.Adapted, auto ? adaptB : null);
-        Bind(c.P, c.Mask, mask ? sceneColour : null);
-        c.P.Set(c.CharacterAo, mask ? Options.SsaoCharacterStrength : 1f);
         // Without an upscaler the scene may still be smaller than the display (the render scale): the composite then resamples it (Catmull-Rom).
         bool plainScaled = postColour.Width != displayWidth || postColour.Height != displayHeight;
         c.P.Set(c.SceneSize, plainScaled ? postColour.Width : 0f, plainScaled ? postColour.Height : 0f);
         c.P.Set(c.Auto, auto ? 1 : 0);
         c.P.Set(c.Exposure, o.Exposure);
-        c.P.Set(c.UseAo, ao ? 1 : 0);
+        c.P.Set(c.UseAo, ao && !aoApplied ? 1 : 0);   // applied before the particles: only the debug view still reads it
         c.P.Set(c.Dither, o.Dither ? 1 : 0);
         c.P.Set(c.Debug, o.Debug);
         c.P.Set(c.Tone, (int)o.ToneMap);
@@ -783,6 +788,31 @@ public sealed unsafe partial class PostProcess : IDisposable
         Draw(f.P, sceneColour.Attachment, sceneColour.Format, width, height, width, height, FogState);
         Stamp("fog");
         CloseSegment();
+    }
+
+    // ---- occlusion before the particles ----
+
+    bool aoApplied;
+
+    /// <summary>The occlusion multiplied in: the scene colour kept by the factor; red, green and blue only (the alpha is the characters' mask).</summary>
+    static readonly DrawState AoMultiplyState = PassState with { Blend = new BlendState(true, Vk.BlendFactor.Zero, Vk.BlendFactor.SrcColor), ColourMask = DrawState.Rgb };
+
+    /// <summary>
+    /// Runs the SSAO and multiplies it into the scene colour now, so what is drawn after (the weather's particles) is not darkened by the occlusion
+    /// of the surfaces behind it; <see cref="End"/> then leaves it out of the composite. Call after <see cref="RunFogVolumes"/>, before the particles.
+    /// Does nothing when the SSAO is off (End then does nothing either).
+    /// </summary>
+    public void ApplySsao()
+    {
+        MarkScene();
+        if (!Options.Ssao || !haveNearSlice || sceneColour is null || aoA is null) return;
+        RunSsao();
+        var p = aoApplyPass ??= new AoApplyPass(Gpu);
+        Bind(p.P, p.Ao, aoB);
+        Draw(p.P, sceneColour.Attachment, sceneColour.Format, width, height, width, height, AoMultiplyState);
+        Stamp("ssao");
+        CloseSegment();
+        aoApplied = true;
     }
 
     // ---- GI resolve (docs/render-gi.md "Resolve") ----
@@ -1103,10 +1133,16 @@ public sealed unsafe partial class PostProcess : IDisposable
 
         var bl = blur;
         Bind(bl.P, bl.Ao, a);
+        Bind(bl.P, bl.Mask, null);
         bl.P.Set(bl.Step, 1f / a.Width, 0f);
+        bl.P.Set(bl.CharacterAo, 1f);
         Draw(bl.P, b);
+        // The second pass also takes the occlusion off the characters' pixels (the scene colour's alpha; only they write it), by SsaoCharacterStrength.
+        bool mask = Options.SsaoCharacterStrength < 1 && sceneColour is not null;
         Bind(bl.P, bl.Ao, b);
+        Bind(bl.P, bl.Mask, mask ? sceneColour : null);
         bl.P.Set(bl.Step, 0f, 1f / a.Height);
+        bl.P.Set(bl.CharacterAo, mask ? Options.SsaoCharacterStrength : 1f);
         Draw(bl.P, a);
         // The composite reads aoB: swap so the finished result is there.
         (aoA, aoB) = (aoB, aoA);
@@ -1262,6 +1298,7 @@ public sealed unsafe partial class PostProcess : IDisposable
         foreach (var p in new FullscreenProgram[] { ssao, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         giResolvePass?.P.Dispose();
         giApplyPass?.P.Dispose();
+        aoApplyPass?.P.Dispose();
         flowTexture?.Dispose();
         perturbationTexture?.Dispose();
     }

@@ -24,6 +24,7 @@ public unsafe class PostProcessNativeTests
         {
             var options = PostOptions.Create("meitou");
             options.Upscale.Kind = upscaler;
+            options.Upscale.Scale = 1;   // render at the display size (the Meitou default with an upscaler is 0.83)
             (options.ToneMap, options.Grade) = (ToneMapOperator.Clamp, false);   // the plain clip, so the grey below is exact
             using var post = new PostProcess(ctx, options) { AutoExposure = (0.01f, 10f), InstantAdaptation = true };
             foreach (var (w, h) in new[] { (64, 36), (80, 48) })

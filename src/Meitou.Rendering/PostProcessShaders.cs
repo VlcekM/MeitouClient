@@ -353,8 +353,9 @@ static class PostProcessShaders
         #version 330 core
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uAo;
+        uniform sampler2D uAo, uMask;   // uMask: the scene colour at the render size, whose alpha is 1 on characters (only they write it)
         uniform vec2 uStep;
+        uniform float uCharacterAo;     // the share of the occlusion kept on the characters' own pixels (1: no mask)
         void main()
         {
             vec2 c = texture(uAo, vUv).rg;
@@ -368,7 +369,21 @@ static class PostProcessShaders
                 sum += t.r * w[i - 1] * dw;
                 weights += w[i - 1] * dw;
             }
-            fragColour = vec4(sum / weights, c.g, 0.0, 1.0);
+            float ao = sum / weights;
+            if (uCharacterAo < 1.0) ao = mix(ao, 1.0, texture(uMask, vUv).a * (1.0 - uCharacterAo));
+            fragColour = vec4(ao, c.g, 0.0, 1.0);
+        }
+        """;
+
+    /// <summary>The finished occlusion as a factor the scene colour is multiplied by (blend zero, source colour; red, green and blue only).</summary>
+    public const string SsaoApply = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uAo;
+        void main()
+        {
+            fragColour = vec4(vec3(texture(uAo, vUv).r), 1.0);
         }
         """;
 
@@ -420,8 +435,8 @@ static class PostProcessShaders
 
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uScene, uAo, uAdapted, uMask;   // uMask: the scene colour at the render size, whose alpha is 1 on characters (only they write it)
-        uniform float uExposure, uCharacterAo;   // uCharacterAo: the share of the occlusion kept on the characters' own pixels
+        uniform sampler2D uScene, uAo, uAdapted;   // uAo: the occlusion, the characters' share taken off already (SsaoBlur)
+        uniform float uExposure;
         uniform int uUseAo, uDither, uDebug, uAuto, uTone, uGrade;
         uniform float uToneMix;    // hybrid (uTone 3): 0 the clamp, 1 ACES
         uniform float uSaturation, uContrast;
@@ -478,7 +493,6 @@ static class PostProcessShaders
             vec3 raw = max(sceneAt(vUv), 0.0);
             vec3 c = raw * exposure;
             float ao = texture(uAo, vUv).r;
-            if (uCharacterAo < 1.0) ao = mix(ao, 1.0, texture(uMask, vUv).a * (1.0 - uCharacterAo));
             if (uUseAo != 0) c *= ao;
             if (uNight > 0.0 && uAuto != 0) c = nightGrade(c, dot(raw, LUM601), adapted.g);
             if (uTone == 1) c = shoulder(c);

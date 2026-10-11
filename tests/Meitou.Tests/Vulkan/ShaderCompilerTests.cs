@@ -23,7 +23,7 @@ public class ShaderCompilerTests
         yield return ("terrain mesh depth", TerrainShaders.MeshInstancedDepthVertex, ShadowShaders.DepthFragment);
         yield return ("mesh", Shaders.MeshVertex, Shaders.MeshFragment);
         yield return ("line", Shaders.LineVertex, Shaders.LineFragment);
-        foreach (var f in new[] { nameof(PostProcessShaders.Ssao), nameof(PostProcessShaders.SsaoBlur), nameof(PostProcessShaders.Composite),
+        foreach (var f in new[] { nameof(PostProcessShaders.Ssao), nameof(PostProcessShaders.SsaoBlur), nameof(PostProcessShaders.SsaoApply), nameof(PostProcessShaders.Composite),
                      nameof(PostProcessShaders.Luminance), nameof(PostProcessShaders.Adapt), nameof(PostProcessShaders.Fxaa), nameof(PostProcessShaders.HeatHaze) })
             yield return ("post " + f, PostProcessShaders.Vertex, Private(typeof(PostProcessShaders), f));
         yield return ("cloud march", PostProcessShaders.Vertex, VolumetricCloudShaders.March);

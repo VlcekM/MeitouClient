@@ -1457,6 +1457,8 @@ static class WorldFrame
         gpu.Post!.RunFogVolumes(gpu.FogVolumes is { UsedData: > 0 });
         gpu.Post.BuildShadingRate(eye);   // the next frame's fog shading rate (fog-vrs), from this frame's depth
         StageClock.Lap(StageClock.Fog, "fog volumes");
+        // The SSAO onto the scene before the particles: they are not occluded by the surfaces behind them (the post chain leaves it out of its composite).
+        gpu.Post.ApplySsao();
         // Then the particles, blended over it and tested against the near slice's depth (they are not fogged; docs/formats/fogfeatures.md).
         if (gpu.Particles is { } particleDraw && particleNear > 0)
         {
