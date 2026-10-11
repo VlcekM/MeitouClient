@@ -48,7 +48,7 @@ public readonly record struct SkyColours(Vector3 Sun, Vector3 Zenith, Vector3 Ho
 /// exposure band of the game's HDR composite (<see cref="MinLuminance"/>, <see cref="MaxLuminance"/>). Simple mode is the old colour
 /// model. A shader that wants any of it includes <see cref="AtmosphereShaders.Functions"/> and gets its uniforms from <see cref="Apply"/>.
 /// </summary>
-public sealed unsafe class SkyRenderer : IDisposable
+public sealed unsafe partial class SkyRenderer : IDisposable
 {
     /// <summary>The renderer whose uniforms <see cref="Apply"/> sets (there is one per world view).</summary>
     public static SkyRenderer? Active { get; private set; }
@@ -241,11 +241,12 @@ public sealed unsafe class SkyRenderer : IDisposable
         uniform vec4 uCloudLight;      // rgb: zenithLight, a: Darkness
         uniform vec4 uCloudSun;        // rgb: sunColour.rgb, a: DensityOffset
         uniform vec4 uCloudWind;       // xy: the wind offset x 0.00005 (wrapped to 0..1)
-        uniform vec4 uCloudMeitou;     // x: 1 the Meitou clouds (lit; docs/formats/clouds.md "Meitou clouds"), 0 the game's layer; y the parallax scale on the uv, zw its offset (1, 0, 0 for the game's)
+        uniform vec4 uCloudMeitou;     // x: 2 prepared volume, 1 legacy lit layer, 0 Faithful; yzw legacy parallax
         uniform vec4 uCloudKey;        // Meitou clouds: rgb the key light (sun, and the planet at night) in sunColour's unit
         uniform vec4 uCloudKeyDir;     // Meitou clouds: xyz towards the key light
         uniform vec4 uCloudAmbient;    // Meitou clouds: rgb the sky's mean light on the clouds (before the exposure's square root)
         uniform sampler2D uStars, uPlanet0, uPlanet1, uClouds, uCloudsNormal, uCloudsTile, uCloudsSmooth, uCloudsTileSmooth;   // the last two: the Meitou clouds' smoothed copies (MeitouClouds.SmoothRed)
+        uniform sampler2D uVolumeImage;
         uniform vec4 uHas;             // stars, planet 0, cloud textures (all three), planet 1 present
         // moon.hlsl: planet01.mesh's texture lit by the real sun direction, plus the skydome's Rayleigh colour towards it (no Mie, no night glow), opaque.
         // The sphere is hit analytically; its object normal (the mesh turns about y) gives the mesh's UV sphere coordinate. rgba: colour and coverage.
@@ -342,7 +343,20 @@ public sealed unsafe class SkyRenderer : IDisposable
             }
             // Clouds: SkyX's cloud layer on the dome (SkyX_Clouds.hlsl, docs/formats/clouds.md), after the sky, the stars and the planets;
             // alpha-blended over them in HDR. The dome direction below the horizon is evaluated at a hair above it (alpha is then the horizon value).
-            if (uHas.z > 0.5 && uSkyExtra.y > 0.0)
+            if (uCloudMeitou.x > 1.5)
+            {
+                vec4 cloud = texture(uVolumeImage, vNdc * 0.5 + 0.5);
+                col = col * (1.0 - cloud.a) + cloud.rgb;
+                // Match the far land's Kenshi haze target. The planar layer supplied this horizon band;
+                // a finite volume misses shallow rays, which otherwise exposes a crisp seam at hazed mountains.
+                vec3 haze = mix(hazeTarget(dir * max(uAtmoFog.w, uAtmoHaze.z)), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
+                // Full cloud cover is opaque at the horizon even with Meitou surface haze at 0.93.
+                float closure = max(min(uAtmoAltitude.y, 1.0), uAtmoHazeCloud.a);
+                float horizon = (1.0 - smoothstep(0.05, 0.15, dir.y)) * (1.0 - uAtmoAltitude.x)
+                              * closure * smoothstep(0.0, 0.05, uSkyExtra.y);
+                col = mix(col, haze, horizon);
+            }
+            else if (uHas.z > 0.5 && uSkyExtra.y > 0.0)
             {
                 vec3 d = normalize(vec3(dir.x, max(dir.y, 0.0005), dir.z));
                 float o = uCloudSun.w;
@@ -535,8 +549,8 @@ public sealed unsafe class SkyRenderer : IDisposable
     bool meitouStars = true;
 
     /// <summary>
-    /// The Meitou <c>clouds</c> switch (viewer design, not the game's; docs/formats/clouds.md "Meitou clouds"): the game's cloud layer lit by the sun (the planet at
-    /// night) through its depth, with a forward-scattering phase and the sky's light as ambient (<see cref="Meitou.Data.World.MeitouClouds"/>). False: the game's flat colour.
+    /// The Meitou <c>clouds</c> switch: a world-anchored procedural volume lit by the sun and planet (docs/render-clouds.md).
+    /// False: the game's flat cloud layer. Call PrepareClouds before opening each scene host.
     /// </summary>
     public bool LitClouds { get; set; } = true;
 
@@ -549,9 +563,11 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// <summary>The eye in world units, for the Meitou clouds' parallax (the sky pass's matrix is a rotation only); the frame sets it.</summary>
     public Vector3 Eye { get; set; }
 
-    /// <summary>The cloud shadows' <c>uAtmoCloud</c>: x the strength (0 with the switch Faithful, a clear sky, missing textures or the sun low), y DensityOffset, z the plane's height.</summary>
+    /// <summary>Cloud shadows: strength, density offset (legacy) or coverage (volume), base height, and mode (0 legacy / 1 volume).</summary>
     Vector4 CloudShadowUniform()
     {
+        if (VolumeShadows)
+            return new Vector4(MeitouClouds.ShadowAt(state.Sun.Y), CloudDensity, VolumetricClouds.Bottom, 1);
         bool on = CloudShadows && Physical && cloudsSmooth is not null && cloudsTileSmooth is not null && CloudDensity > 0;
         float strength = on ? MeitouClouds.ShadowAt(state.Sun.Y) : 0;
         return new Vector4(strength, CloudLayer.DensityOffset(CloudDensity), MeitouClouds.PlaneHeight, 0);
@@ -925,8 +941,8 @@ public sealed unsafe class SkyRenderer : IDisposable
         g.PublishUniform("uAtmoMaps", () => Published().Maps, Valid);
         g.PublishUniform("uAtmoNight", () => Published().Night, Valid);
         g.PublishUniform("uAtmoCloud", CloudShadowUniform, Valid);
-        g.PublishUniform("uAtmoCloudWind", () => { var w = CloudLayer.TextureShift(cloudOffset); return new Vector4(w.X, w.Y, 0, 0); }, Valid);
-        g.Publish("uAtmoClouds", () => state.Valid && cloudsSmooth is { } t ? t.Sampled() : default);
+        g.PublishUniform("uAtmoCloudWind", () => { var w = CloudLayer.TextureShift(cloudOffset); return VolumeShadows ? new Vector4(volume!.ShadowOrigin.X, volume.ShadowOrigin.Y, VolumetricClouds.ShadowSpan, 0) : new Vector4(w.X, w.Y, 0, 0); }, Valid);
+        g.Publish("uAtmoClouds", () => VolumeShadows ? volume!.ShadowMap : state.Valid && cloudsSmooth is { } t ? t.Sampled() : default);
         g.Publish("uAtmoCloudsTile", () => state.Valid && cloudsTileSmooth is { } t ? t.Sampled() : default);
     }
 
@@ -1030,7 +1046,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         var key = s.CloudKey; var keyDir = s.CloudKeyDirection; var ambient = s.CloudAmbient;
         // The Meitou clouds are anchored to the world (the eye's parallax, MeitouClouds.Parallax), so the cloud overhead is the one whose shadow falls here; the game's follow the eye.
         var (parallaxScale, parallaxOffset) = LitClouds ? MeitouClouds.Parallax(Eye.X, Eye.Y, Eye.Z) : (1f, Vector2.Zero);
-        p.Set(program.CloudMeitou, LitClouds ? 1 : 0, parallaxScale, parallaxOffset.X, parallaxOffset.Y);
+        p.Set(program.CloudMeitou, LitClouds ? (volumeImage.IsNull ? 1 : 2) : 0, parallaxScale, parallaxOffset.X, parallaxOffset.Y);
         p.Set(program.CloudKey, key.X, key.Y, key.Z, 0);
         p.Set(program.CloudKeyDir, keyDir.X, keyDir.Y, keyDir.Z, 0);
         p.Set(program.CloudAmbient, ambient.X, ambient.Y, ambient.Z, MeitouClouds.AmbientGreyAt(coverage));
@@ -1045,6 +1061,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         if (cloudsTileTexture is not null) p.Bind(program.CloudsTile, cloudsTileTexture.Sampled());
         if (cloudsSmooth is not null) p.Bind(program.CloudsSmooth, cloudsSmooth.Sampled());
         if (cloudsTileSmooth is not null) p.Bind(program.CloudsTileSmooth, cloudsTileSmooth.Sampled());
+        if (!volumeImage.IsNull) p.Bind(program.VolumeImage, volumeImage);
     }
 
     /// <summary>
@@ -1077,7 +1094,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     }
 
     public string DescribeCost() =>
-        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {GpuMs:0.00} ms/frame (SkyX per pixel)"
+        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {GpuMs:0.00} ms/frame (SkyX per pixel)" + (volume is null || !VolumeEnabled ? "" : $"; GPU clouds {volume.MainGpuMs:0.00}, reflection {volume.ReflectionGpuMs:0.00}, shadow map {volume.ShadowGpuMs:0.00} ms")
                  : $"simple sky: GPU {GpuMs:0.00} ms/frame";
 
     /// <summary>Mean GPU time of a sky pass over the last hundred or so (a running mean, halved now and then).</summary>
@@ -1088,6 +1105,9 @@ public sealed unsafe class SkyRenderer : IDisposable
         if (Active == this) Active = null;
         foreach (var t in new[] { starsTexture, cloudsTexture, cloudsNormalTexture, cloudsTileTexture, cloudsSmooth, cloudsTileSmooth, irradianceCube, specularCube, ambientMap }) t?.Dispose();
         foreach (var t in planetTextures) t?.Dispose();
+        volumeShadowsReady = false;
+        volume?.Dispose();
+        volume = null;
         simple.Dispose();
         sky.Dispose();
     }
@@ -1145,7 +1165,7 @@ sealed class SkyProg : IDisposable
     public readonly UniformHandle InverseViewProjection, Extra, PlanetSpin, CloudLight, CloudSun, CloudWind, CloudMeitou, CloudKey, CloudKeyDir, CloudAmbient, Has, StarsMeitou, CelX, CelY, CelZ;
     public readonly UniformHandle[] Planet;
     public readonly SkyColourHandles Colours;
-    public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile, CloudsSmooth, CloudsTileSmooth;
+    public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile, CloudsSmooth, CloudsTileSmooth, VolumeImage;
     public readonly Meitou.Rendering.Gpu.Shaders.SamplerInfo? StarsInfo, CloudsInfo;
 
     public SkyProg(GpuContext gpu, string vertex, string fragment, string name)
@@ -1177,6 +1197,7 @@ sealed class SkyProg : IDisposable
         CloudsTile = P.Sampler("uCloudsTile");
         CloudsSmooth = P.Sampler("uCloudsSmooth");
         CloudsTileSmooth = P.Sampler("uCloudsTileSmooth");
+        VolumeImage = P.Sampler("uVolumeImage");
         if (Stars.IsValid) StarsInfo = P.SamplerInfo(Stars);
         if (Clouds.IsValid) CloudsInfo = P.SamplerInfo(Clouds);
     }

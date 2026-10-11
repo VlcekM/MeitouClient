@@ -276,3 +276,10 @@ Not done (options for later) for the lit clouds: below 2.9°
   [sky.md](sky.md), "Planets"): the viewer draws the planets first.
 - Whether the game's mip-less sampling looks noticeably different from the viewer's mipmapped one near the horizon (needs a game
   screenshot in a cloudy weather at a low pitch).
+
+## Meitou volumetric replacement
+
+The Meitou clouds switch now selects a procedural volume in the world renderer instead of the lit planar layer
+above. This is an **engine choice**, not new original-game behaviour. Density, lighting, wind, temporal filtering,
+reflection and the new cloud-shadow map are documented in [../render-clouds.md](../render-clouds.md).
+The planar shading and shadow descriptions above describe the retained legacy fallback and Faithful-cloud shadow mode.

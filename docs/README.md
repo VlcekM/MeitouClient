@@ -51,6 +51,7 @@ game content (dialogue text, large dumps) here; identifiers, counts and byte lay
 | [viewer.md](viewer.md) | `meitou-viewer`: usage and options, how textures are resolved from FCS records, the world mode's keys, profiler and spike log, known gaps; links the render docs below |
 | [render-terrain.md](render-terrain.md) | World view terrain: CDLOD, texturing, streaming of heights, textures and meshes, upload and unloading, frame times |
 | [render-water.md](render-water.md) | World view water: the game's flat water and Meitou water (FFT ocean, shore distance field, breakers, foam, river map) |
+| [render-clouds.md](render-clouds.md) | Volumetric Meitou clouds: procedural density, weather, lighting, temporal filtering, reflections and cloud shadows |
 | [render-sky.md](render-sky.md) | World view sky, sun, light and atmosphere |
 | [render-objects.md](render-objects.md) | World view buildings and map features: assembly, object streaming, LOD, draw distance (`reach`), distant towns |
 | [render-foliage.md](render-foliage.md) | World view foliage: paging, GPU cull, ranges, impostors, reflections, measurements |

@@ -274,6 +274,9 @@ public sealed class ReflectionPass : IDisposable
         // The native host (docs/renderer-native.md 4.5): the multisampled target's rendering instance is opened here, cleared by its load ops,
         // and the sky, terrain, objects and foliage record into it through BeginNativeInPass, with the targets and state handed over here
         // (GpuContext.CurrentTargets, CurrentState).
+        var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
+        var skyProjection = rotation * Perspective(camera.FieldOfView, aspect, 1, 1000);
+        sky.PrepareClouds(skyProjection, width, height, mirroredEye, reflection: true);
         var cmd = Gpu.BeginNative("reflection");
         bool unlit = NoShadows && !FaithfulShadows;
         if (unlit) Gpu.Globals.OverrideBlock(ShadowShaders.ReceiverBlock, (unshadowed ??= new FrameBlock(Gpu, ShadowPass.ReceiverBytes)).Binding);   // zeros: shadows off
@@ -289,8 +292,7 @@ public sealed class ReflectionPass : IDisposable
         Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
         if (secondaries) Gpu.Frame.Parallel.Begin(cmd, target.Formats, ReflectionStage);
         Lap(4);
-        var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
-        sky.Draw(rotation * Perspective(camera.FieldOfView, aspect, 1, 1000), colours);
+        sky.Draw(skyProjection, colours);
         Lap(0);
 
         options.Textures = render.Textures;

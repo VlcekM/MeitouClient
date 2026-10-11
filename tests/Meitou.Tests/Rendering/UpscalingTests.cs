@@ -59,11 +59,15 @@ public class UpscalingTests
         o.Scale = null;
         Assert.Equal("off", o.Describe());
         o.Kind = UpscalerKind.Fsr;
-        Assert.Equal((1600, 900), o.RenderSize(1600, 900));   // native by default
+        Assert.Equal((1328, 747), o.RenderSize(1600, 900));   // Meitou Ultra Quality by default
         o.Scale = UpscaleOptions.ParseScale("performance");
         Assert.Equal((1280, 720), o.RenderSize(2560, 1440));
         o.Kind = UpscalerKind.Taa;
         o.Scale = null;
+        Assert.Equal((2125, 1195), o.RenderSize(2560, 1440));
+        Assert.Equal(0.83f, o.EffectiveScale);
+        Assert.Equal(0.83f, UpscaleOptions.ParseScale("ultra-quality"));
+        o.Scale = UpscaleOptions.ParseScale("native");
         Assert.Equal((2560, 1440), o.RenderSize(2560, 1440));
         Assert.Throws<ArgumentException>(() => UpscaleOptions.ParseScale("2"));
     }

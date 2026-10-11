@@ -105,7 +105,7 @@ public sealed class PostOptions
           --heat-haze-strength <x>   scales the heat haze (default 0.5, the Meitou `heathaze` switch; 1 is the game's, 0 hides it)
           --heat-haze-view-distance <u>   the game's `view distance` setting for the haze's depth falloff (default 12000, the install's; amplitude is full from 1.67 x this units)
           --upscaler <off|taa|fsr|dlss>   temporal upscaling (off: full size with FXAA; FSR and DLSS need the vendor library, else TAA)
-          --render-scale <0.25..1|native|quality|balanced|performance|ultra>   render size per axis with an upscaler (default 1)  --sharpness <0..1>
+          --render-scale <0.25..1|native|ultra-quality|quality|balanced|performance|ultra>   render size per axis (Meitou default 0.83, off default 1)  --sharpness <0..1>
           --tonemap <clamp|shoulder|aces|hybrid>   (default hybrid in Meitou, the `tonemap` switch) clamp: the game's (no curve); shoulder: identity to 0.8, then rolls off to 1; aces: Narkowicz's ACES fit; hybrid: clamp and ACES mixed by --tonemap-mix <0..1> (0.75)
           --grade / --no-grade   saturation / contrast grade (default on in Meitou, the `tonemap` switch; the game has none)  --saturation <x> (1.06)  --contrast <x> (1.05)
           --night-grade <0..1> / --no-night-grade   scotopic night grading: at night the picture shifts to a blue-grey, lamps and the moon keep their colour (default 0.7 in Meitou, the `nightgrade` switch; 0 is the game's, no grading)

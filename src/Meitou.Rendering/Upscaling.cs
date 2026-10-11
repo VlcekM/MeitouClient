@@ -14,8 +14,9 @@ public sealed class UpscaleOptions
     public UpscalerKind Kind = UpscalerKind.Taa;
     /// <summary>The temporal method the Meitou anti-aliasing switch turns on (the last one chosen; TAA until then).</summary>
     public UpscalerKind Preferred = UpscalerKind.Taa;
-    /// <summary>Render size over display size per axis; null is 1 (native: DLAA for DLSS, FSR native AA).</summary>
+    /// <summary>Render size over display size per axis; null selects Ultra Quality for temporal Meitou rendering, native when off.</summary>
     public float? Scale;
+    public const float MeitouDefaultScale = 0.83f;
     /// <summary>0..1: the external upscalers' sharpening (FSR's RCAS, DLSS's own); TAA ignores it.</summary>
     public float Sharpness = 0.3f;
     /// <summary>Set on the command line: the saved settings don't override it.</summary>
@@ -23,17 +24,17 @@ public sealed class UpscaleOptions
 
     /// <summary>The quality modes' scales, FSR's and DLSS's shared ratios (1.5, 1.7, 2, 3 per axis).</summary>
     public static readonly (string Name, float Scale)[] Modes =
-        [("native", 1f), ("quality", 1 / 1.5f), ("balanced", 1 / 1.7f), ("performance", 0.5f), ("ultra", 1 / 3f)];
+        [("native", 1f), ("ultra-quality", MeitouDefaultScale), ("quality", 1 / 1.5f), ("balanced", 1 / 1.7f), ("performance", 0.5f), ("ultra", 1 / 3f)];
 
     public bool Temporal => Kind != UpscalerKind.Off;
     /// <summary>The render scale; with Off too (FXAA then runs on the plainly scaled-up picture: no jitter, no history).</summary>
-    public float EffectiveScale => Scale ?? 1;
+    public float EffectiveScale => Scale ?? (Temporal ? MeitouDefaultScale : 1);
 
     public static float ParseScale(string s)
     {
         foreach (var (name, scale) in Modes) if (string.Equals(name, s, StringComparison.OrdinalIgnoreCase)) return scale;
         float v = float.Parse(s, CultureInfo.InvariantCulture);
-        if (v is < 0.25f or > 1) throw new ArgumentException("--render-scale must be 0.25..1 or native, quality, balanced, performance, ultra");
+        if (v is < 0.25f or > 1) throw new ArgumentException("--render-scale must be 0.25..1 or native, ultra-quality, quality, balanced, performance, ultra");
         return v;
     }
 

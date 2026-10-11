@@ -196,8 +196,8 @@ elsewhere, `=0` off).
 
 ## Upscaling
 
-`--upscaler off|taa|fsr|dlss`, `--render-scale <0.25..1|native|quality|balanced|performance|ultra>` (1, 1/1.5, 1/1.7, 1/2, 1/3 per
-axis; default 1 for all three, i.e. DLAA / FSR native AA; quality was the FSR/DLSS default until 2026-10-05), `--sharpness <0..1>`; in the game also the Tab panel (kept in `meitou.user.json`,
+`--upscaler off|taa|fsr|dlss`, `--render-scale <0.25..1|native|ultra-quality|quality|balanced|performance|ultra>` (1, 0.83, 1/1.5, 1/1.7, 1/2, 1/3 per
+axis; Meitou temporal default 0.83, Ultra Quality; off defaults to 1, native; explicit native gives DLAA / FSR native AA), `--sharpness <0..1>`; in the game also the Tab panel (kept in `meitou.user.json`,
 command-line values win). Off draws the scene at the display size (the default) and smooths the edges with the game's FXAA (the Faithful anti-aliasing; the scene is never multisampled). Off also honours the render scale (2026-10-09): below 1 the scene, SSAO and Hi-Z run at the render size and the composite scales the picture up to the display size (Catmull-Rom, five bilinear taps) before FXAA and the heat haze, which run at the display size; no jitter, motion vectors or history (`Temporal` stays false), texture LOD bias 0. Scale 1 is the same picture as before (**Verified**: byte-identical PNGs against the previous build). The Tab slider keeps its label "Render scale (upscaler)" (it is the key in `meitou.user.json`) and adds "(FXAA: plain scaling)" below 1; a scale saved while using an upscaler now also applies after switching to FXAA. With an upscaler (`PostProcess`, DECISIONS 14):
 
 - **Render size and jitter.** The scene is drawn at the display size × scale, single-sampled, its projection moved each frame by a
