@@ -55,7 +55,10 @@ sealed partial class GameHost
                 if (config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
         var keyItems = DebugOverlay.KeyItems(GameOptions.Usage);
         var stats = new List<string>();
-        bool statsVisible = false;
+        bool statsVisible = false, fpsVisible = false;
+        string fpsText = "";
+        double fpsWindow = 0;
+        int fpsWindowFrames = 0;
 
         var silkInput = Silk.NET.Input.InputWindowExtensions.CreateInput(window);
         Vector2? lastMouse = null;
@@ -123,6 +126,7 @@ sealed partial class GameHost
             if (actions.Pressed(InputAction.Screenshot)) screenshotRequested = true;
             if (actions.Pressed(InputAction.ToggleKeys) && overlay is not null) overlay.Visible = !overlay.Visible;
             if (actions.Pressed(InputAction.ToggleStats)) statsVisible = !statsVisible;
+            if (actions.Pressed(InputAction.ToggleFps)) fpsVisible = !fpsVisible;
             if (actions.Pressed(InputAction.CycleProfiler) && profiler is not null) profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3);
         };
         long windowRan = 0, windowDropped = 0;
@@ -135,6 +139,15 @@ sealed partial class GameHost
             if (window.IsClosing) break;
             double now = frame.Elapsed.TotalSeconds, dt = now - last;
             last = now;
+            // The counter: the mean over the last tenth of a second, so a single late frame doesn't read as a drop.
+            fpsWindow += dt;
+            fpsWindowFrames++;
+            if (fpsWindow >= 0.1)
+            {
+                fpsText = $"{fpsWindowFrames / fpsWindow:0} fps";
+                fpsWindow = 0;
+                fpsWindowFrames = 0;
+            }
             long a0 = Stopwatch.GetTimestamp();
             session.Advance(dt);
             advanceTotal += Stopwatch.GetElapsedTime(a0).TotalMilliseconds;
@@ -163,7 +176,16 @@ sealed partial class GameHost
                 // The debug overlays are left out of saved pictures: the statistics at the top left, the key list below them, the profiler.
                 if (overlay is not null && !shot)
                 {
-                    float panelsBottom = statsVisible && stats.Count > 0 ? overlay.Panel(size.X, size.Y, "Meitou   (F11 hides this)", stats) : 0;
+                    float panelsBottom = 0;
+                    if (fpsVisible && fpsText.Length > 0)
+                    {
+                        float w = fpsText.Length * overlay.CharWidth + 12, h = overlay.LineHeight + 8;
+                        overlay.Rect(8, 8, 8 + w, 8 + h, DebugOverlay.PanelColour);
+                        overlay.Text(fpsText, 14, 12, DebugOverlay.TextColour);
+                        overlay.Flush(size.X, size.Y);
+                        panelsBottom = 8 + h - 8;   // the panels add their own 16 px margin
+                    }
+                    if (statsVisible && stats.Count > 0) panelsBottom = overlay.Panel(size.X, size.Y, "Meitou   (F11 hides this)", stats, panelsBottom);
                     if (overlay.Visible)
                     {
                         int width = keyItems.Max(i => i.Length) + 2;

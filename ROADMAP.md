@@ -105,5 +105,6 @@ at most +0.5 ms GPU in the F12 `water` stage on the same views; a quality settin
 
 ## Open questions
 
-- How far to support script-extender mods (RE_Kenshi / KenshiLib plugins hook native code and
-  can't work as-is in a managed engine).
+- How far to support script-extender mods: [RE_Kenshi / KenshiLib feasibility](docs/formats/rekenshi.md).
+  Existing DLLs require native object and hook compatibility; extension-data support and source
+  ports are more practical candidates. No runtime compatibility layer is implemented yet.

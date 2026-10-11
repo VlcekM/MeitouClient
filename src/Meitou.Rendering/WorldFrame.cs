@@ -322,7 +322,7 @@ sealed class WorldOptions
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
           T textures, N normal maps, O objects, F foliage, X wireframe, V debug view,
           G water, R water reflections, B simple sky, , / . time of day -/+ 1 hour (the day follows midnight), [ / ] game day -/+ 1 (the weather catches up), \ cycle the forced weather (auto, then each WEATHER record), H print camera, Ctrl+C copy camera code, Ctrl+V go to camera code, P save screenshot, Tab settings sliders, Alt+Enter borderless full screen, Esc quit.
-          F1 Meitou on / off (every switch Faithful, then back as they were; the Tab panel sets them one by one); - / = exposure; F10 key list, F11 frame statistics, F12 profiler (gpu, cpu, off).
+          F1 Meitou on / off (every switch Faithful, then back as they were; the Tab panel sets them one by one); - / = exposure; F9 fps counter, F10 key list, F11 frame statistics, F12 profiler (gpu, cpu, off).
           Num1-9 cut to a camera key, Ctrl+Num1-9 save the camera as key 1-9, NumEnter fly through the keys (Shift: record PNG frames), Num0 loop, Num+ / Num- slower / faster, Num* clean picture (letterbox), Num/ time of day follows the keys, Num. list keys (Ctrl: delete all), PageUp / PageDown zoom lens, Home lens back to 50 deg, F2 camera timeline editor (Space play, Del delete key).
         """;
 

@@ -99,6 +99,19 @@ Not part of the DDS format, but needed to use the files (details in [../viewer.m
 - Character body normal maps are **swizzled**: R = G = B hold Y, alpha holds X (`human_male_body_normal.dds`:
   mean R, G, B all ≈ 126; Kenshi's `character.hlsl` reads `.wy`). Observed on the human body maps.
 
+## Compressed Textures Project (replacement mod)
+
+- **Observed 2026-10-11 (published description, not an asset comparison)**:
+  [Compressed Textures Project](https://www.nexusmods.com/kenshi/mods/715) distributes replacement
+  textures described as DXT5, with landscape textures reduced from 2048 to 1024 and some other
+  textures from 4096 to 2048. This is preprocessing of replacement assets; the description does
+  not describe a runtime encoder. The author claims reduced loading time, stuttering and VRAM use;
+  those performance claims have not been measured here.
+- **Unknown**: exact file coverage, original-to-replacement format changes, mip generation and
+  resampling filters. The base-game DDS survey above already contains mostly BC1/BC3 textures,
+  so the name alone does not establish additional compression at unchanged resolution.
+
 ## Open questions
 
 - Whether Kenshi's Ogre build loads textures with gamma correction (sRGB) or treats diffuse as linear.
+

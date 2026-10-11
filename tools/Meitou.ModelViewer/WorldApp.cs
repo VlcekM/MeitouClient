@@ -278,7 +278,10 @@ static partial class WorldApp
         SettingsPanel? panel = null;
         FrameProfiler? profiler = null;
         PassMeter? meter = null;
-        bool statsVisible = false;
+        bool statsVisible = false, fpsVisible = false;
+        string fpsText = "";
+        double fpsWindowMs = 0;
+        int fpsWindowFrames = 0;
         var stats = new List<string>();
         var keyItems = DebugOverlay.KeyItems(WorldOptions.Usage);
         // The Faithful / Meitou switches (Enhancements); F1 turns them all Faithful and back (the Tab panel sets them one by one).
@@ -405,6 +408,7 @@ static partial class WorldApp
                     break;
                 case Key.P: screenshotRequested = true; break;
                 case Key.Tab when panel is not null: panel.Visible = !panel.Visible; break;
+                case Key.F9: fpsVisible = !fpsVisible; break;
                 case Key.F10 when overlay is not null: overlay.Visible = !overlay.Visible; break;
                 case Key.F11 when overlay is not null: statsVisible = !statsVisible; FoliageGpuCull.CountTriangles = statsVisible; break;
                 case Key.F12 when profiler is not null && overlay is not null: profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3); break;
@@ -543,6 +547,15 @@ static partial class WorldApp
             queryIndex = (queryIndex + 1) % timers.Length;
             frames++;
             frameMaxMs = Math.Max(frameMaxMs, frameClock.Elapsed.TotalMilliseconds);
+            // The counter: the mean over the last tenth of a second, so a single late frame doesn't read as a drop.
+            fpsWindowMs += frameClock.Elapsed.TotalMilliseconds;
+            fpsWindowFrames++;
+            if (fpsWindowMs >= 100)
+            {
+                fpsText = $"{fpsWindowFrames * 1000 / fpsWindowMs:0} fps";
+                fpsWindowMs = 0;
+                fpsWindowFrames = 0;
+            }
             frameClock.Restart();
             // The picture is read after the present (framebuffer 0 stays intact until the next frame); the frame that is saved is drawn
             // without the overlay and the panel, so saved pictures never show them.
@@ -551,8 +564,17 @@ static partial class WorldApp
             screenshotRequested = false;
             bool panels = !shot && !cinema.Clean;
             // The statistics at the top left, the key list below them.
-            float panelsBottom = panels && statsVisible && overlay is not null && stats.Count > 0
-                ? overlay.Panel(size.X, size.Y, $"Meitou world ({RendererName(o)})   (F11 hides this)", stats) : 0;
+            float panelsBottom = 0;
+            if (panels && fpsVisible && overlay is not null && fpsText.Length > 0)
+            {
+                float w = fpsText.Length * overlay.CharWidth + 12, h = overlay.LineHeight + 8;
+                overlay.Rect(8, 8, 8 + w, 8 + h, DebugOverlay.PanelColour);
+                overlay.Text(fpsText, 14, 12, DebugOverlay.TextColour);
+                overlay.Flush(size.X, size.Y);
+                panelsBottom = h;   // the panels add their own 16 px margin
+            }
+            if (panels && statsVisible && overlay is not null && stats.Count > 0)
+                panelsBottom = overlay.Panel(size.X, size.Y, $"Meitou world ({RendererName(o)})   (F11 hides this)", stats, panelsBottom);
             if (panels && overlay is { Visible: true })
             {
                 // Each item with its current state, aligned in a column.

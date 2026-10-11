@@ -19,6 +19,8 @@ public enum InputAction
     Screenshot, ToggleSettings,
     /// <summary>The debug overlays: the key list, the frame statistics, the profiler chart (gpu, cpu, off).</summary>
     ToggleKeys, ToggleStats, CycleProfiler,
+    /// <summary>The small frame-rate counter at the top left.</summary>
+    ToggleFps,
     Quit,
 }
 
@@ -93,6 +95,7 @@ public sealed class InputBindings
         Set(InputAction.Speed3, Key.F4);
         Set(InputAction.Screenshot, Key.F8, Key.PrintScreen);   // the game's own screenshot keys (docs/game/ui-input.md)
         Set(InputAction.ToggleSettings, Key.Tab);
+        Set(InputAction.ToggleFps, Key.F9);
         Set(InputAction.ToggleKeys, Key.F10);
         Set(InputAction.ToggleStats, Key.F11);
         Set(InputAction.CycleProfiler, Key.F12);

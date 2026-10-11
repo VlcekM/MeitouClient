@@ -110,9 +110,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     static readonly bool GpuCullVerify = Environment.GetEnvironmentVariable("MEITOU_GPU_CULL_VERIFY") == "1";
     readonly FoliageGpuCull? gpuCull;
     /// <summary>settings.cfg <c>foliage range</c>, <c>grass range</c> and <c>grass density</c> (the game's defaults are 1; the viewer draws
-    /// foliage and grass 4x as far by default).</summary>
+    /// foliage 4x and grass 8x as far by default).</summary>
     public float RangeSetting { get; set; } = Env("MEITOU_FOLIAGE_RANGE", 4);
-    public float GrassRangeSetting { get; set; } = Env("MEITOU_GRASS_RANGE", 4);
+    public float GrassRangeSetting { get; set; } = Env("MEITOU_GRASS_RANGE", 8);
     public float GrassDensitySetting { get; set; } = Env("MEITOU_GRASS_DENSITY", 1);
     /// <summary>The Meitou <c>grass-velocity</c> switch (docs/render-foliage.md "Grass motion vectors"): the motion pass redraws only the swaying blades near enough to move by <see cref="GrassVelocityPixels"/> a frame (<see cref="GrassMotionReach"/>); off redraws all of them (<c>MEITOU_GRASS_VELOCITY=0</c>).</summary>
     public bool GrassVelocityCull { get; set; } = Environment.GetEnvironmentVariable("MEITOU_GRASS_VELOCITY") != "0";
