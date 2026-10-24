@@ -36,6 +36,13 @@ pixel size. Preserve silhouette and alpha coverage; impostor casters have their 
 receiver. Shadow-map rendering and shadow receiving are distinct costs; omit receiver work only
 where lighting cannot contribute. Minimum-radius impostor filter omits blocker search.
 
+Receiver cost (`kenshiShadowMeitou`, **Observed** play bench, user settings, RTX 4090): the cascade
+term is about 0.45 ms of the terrain's 2.3 ms. The blocker search pays for itself: it returns lit
+when nothing is nearer the sun, and without it the terrain took 0.2 ms more. The cascade blend band,
+terrain term and landmark term each cost under 0.05 ms. The full-tier filter takes the disk's even
+points first and returns when all 8 agree, adding the odd 8 only in a penumbra (same sum there):
+terrain -0.1 ms, screenshots within 7 levels.
+
 ## Validation and limits
 
 Check low sun, cutout trees, interiors, cascade boundaries, camera/clock cuts, reflection and

@@ -37,7 +37,9 @@ and 23.1 after (bias -1, display-pixel kernel, sharpen), DLSS 26.6.
 ## SSAO, fog and layers
 
 SSAO reads near depth; character mask controls character occlusion (default strength0.25).
-`ssao-mask-skip` may omit a mask read only when no character was drawn. Sky/far-depth edges and
+`ssao-mask-skip` may omit a mask read only when no character was drawn. The taps read the mask from a half-size R8 copy of the scene colour's
+alpha (`SsaoMask`), not the scene colour: **Observed** (Nsight, 2560x1440) SSAO 0.35 ms, L2-bound, 0.2 ms of it the scattered scene-colour reads;
+GPU frame -0.15 ms, the picture within 4 levels. Sky/far-depth edges and
 transparent water/particles require explicit exclusion/compositing rules.
 `layer-merge`, `fog-half`, `shafts-half`, `layers-lean` combine shafts apply, placed fog and SSAO,
 using reduced targets plus depth-aware reconstruction/mask fallback. A texel that does not fit

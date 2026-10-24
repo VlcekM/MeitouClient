@@ -11,6 +11,12 @@ public sealed record LayoutItem(string InstanceId, GameRecord Building, Vector3 
 {
     /// <summary>The floor the object stands on: its state's <c>floornum</c> (0 when it has none); in the interior view an object above the viewed floor is hidden.</summary>
     public int Floor { get; init; }
+
+    /// <summary>
+    /// Its state's outside flag (<c>flags</c> bit 0, else the older bool <c>is outside</c>; docs/formats/zones.md): an interior layout's object without it is hidden while
+    /// the building shows its outside, one with it (a yard's tents, torches, benches) stays.
+    /// </summary>
+    public bool Outside { get; init; }
 }
 
 /// <summary>
@@ -82,10 +88,14 @@ public sealed class BuildingLayouts
     {
         foreach (var i in layout.Instances.Values.Where(i => !i.IsCleared).OrderBy(i => i.Id, StringComparer.Ordinal))
             if (db.Find(i.Target) is { } b && b.Type == type)
+            {
+                var state = i.States.Count > 0 ? interiors?.Find(i.States[0]) : null;
                 yield return new LayoutItem(i.Id, b, i.Position, i.Rotation)
                 {
-                    Floor = i.States.Count > 0 && interiors?.Find(i.States[0]) is { } state ? Math.Clamp(state.GetInt("floornum"), 0, 3) : 0,
+                    Floor = state is not null ? Math.Clamp(state.GetInt("floornum"), 0, 3) : 0,
+                    Outside = state is not null && IsOutside(state),
                 };
+            }
     }
 
     /// <summary>
@@ -98,6 +108,9 @@ public sealed class BuildingLayouts
         var world = Matrix4x4.CreateFromQuaternion(Normalized(item.Rotation)) * Matrix4x4.CreateTranslation(item.Position) * node;
         return (world.Translation, Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(world)));
     }
+
+    /// <summary>A building state's outside flag: <c>flags</c> bit 0, or the older bool <c>is outside</c> without it (docs/formats/zones.md).</summary>
+    public static bool IsOutside(GameRecord state) => state.Ints.TryGetValue("flags", out int flags) ? (flags & 1) != 0 : state.GetBool("is outside");
 
     static Quaternion Normalized(Quaternion q) => q.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(q);
 }

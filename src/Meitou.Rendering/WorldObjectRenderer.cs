@@ -324,12 +324,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         {
             if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) > range) continue;
             foreach (var inst in zone.Real)
-                if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range && !InteriorHidden(inst.Placed) && !UnderConstruction(inst))
+                if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range && !InteriorHidden(inst.Placed) && !ClosedAround(inst) && !UnderConstruction(inst))
                     yield return inst;
         }
         if (streamer.LandmarkZone is { } landmarks)
             foreach (var inst in landmarks.Real)
-                if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range && !InteriorHidden(inst.Placed)) yield return inst;
+                if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range && !InteriorHidden(inst.Placed) && !ClosedAround(inst)) yield return inst;
     }
 
     bool UnderConstruction(ObjectStreamer.Instance inst) =>
@@ -690,7 +690,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     internal Func<Vector3, float, bool>? MirrorCull { get; set; }
 
     /// <summary>
-    /// The buildings shown in the interior view (docs/formats/zones.md, "Interior view"): placement id to the viewed floor. Their parts above that floor
+    /// The buildings shown in the interior view (docs/render-objects.md, "Closed interiors"): placement id to the viewed floor. Their parts above that floor
     /// are hidden and their <c>interior</c> parts shown; every other building shows its outside (its interior parts hidden). Set by the game each frame.
     /// </summary>
     public IReadOnlyDictionary<string, int> InteriorView { get; set; } = new Dictionary<string, int>();
@@ -763,6 +763,16 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         if (InteriorView.Count == 0 || AllFloors || p.Kind != PlacedKind.BuildingPart || p.ParentPlacementId is not null || InteriorView.ContainsKey(p.PlacementId)) return false;
         var answer = InteriorOf(inst);
         return answer.Building is { } building && InteriorView.TryGetValue(building, out int floor) && answer.Floor > floor;
+    }
+
+    /// <summary>
+    /// Whether a building placed inside another (<see cref="PlacedMesh.Contained"/>) is hidden: the building whose hull holds it shows its outside (not in the interior
+    /// view; a construction site is open). Game: closing an interior hides its contained objects, in every view (docs/render-objects.md "Closed interiors").
+    /// </summary>
+    bool ClosedAround(ObjectStreamer.Instance inst)
+    {
+        if (!inst.Placed.Contained) return false;
+        return InteriorOf(inst).Building is { } holder && holder != inst.Placed.PlacementId && !InteriorView.ContainsKey(holder) && construction?.ContainsKey(holder) != true;
     }
 
     /// <summary>The indoor volume of a loaded building that contains <paramref name="p"/> (widened by <paramref name="margin"/>), or null.</summary>
@@ -1020,7 +1030,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         if (inst.Gpu is not { } gpu) return;
         if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); return; }
-        if (InteriorHidden(inst.Placed) || StandsAbove(inst)) return;
+        if (InteriorHidden(inst.Placed) || StandsAbove(inst) || ClosedAround(inst)) return;
         if (inst.Placed.DoorIndex >= 0) PoseDoor(inst, gpu);
         if (inst.Placed.Joints is not null) PoseTurret(inst, gpu);
         float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;

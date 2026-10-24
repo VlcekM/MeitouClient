@@ -93,6 +93,20 @@ compact `Relief`) (segments grow with distance, each
 ring adds about the same); refinement +0.38 ms at error 16, +0.24 at 32 (crests as smooth as error 4, which costs +0.48), so error
 32 with it costs less than error 16 without. Drawing the tessellated patches' colour at once instead of prepass then late colour
 cost more (the bumps overdraw themselves).
+**Registers** (**Observed**, Nsight GPU Trace, 2560x1440 at render scale 1): with the march in the fragment stage the colour pass held about 220
+registers a thread and a tenth of the pixel warps (SM throughput 20%, texture 22%: latency-bound), whether the parallax ran or not (a uniform branch
+does not lower the allocation). With the parallax off the colour programs are built without the march (`TerrainShaders.FragmentNative(march: false)`,
+`TerrainRenderer.UseColour`; a toggle builds the other set once): the terrain stage 3.37 -> 2.42 ms and the frame 7.0 -> 6.1 ms at a save's view,
+the picture unchanged. The interior-cut patches' late colour took 1.4 ms for 19 draws with 8 wait-for-idles (the SMs idle a third of it): its `discard` turned the early
+depth test off. Their prepass already discards the cut, so the late colour draws them with the plain program and an equal depth test (both passes
+run the same vertex and tessellation stages, invariant positions): GPU frame 6.14 -> 5.80 ms, the picture unchanged (one pixel over 8 levels at a town view).
+With the parallax on (60 m, displacement 60 m), nearly all the visible terrain is relief patches. The march held their pixel warps to 12% (21% without it) at the
+same register file use, with the SM throughput at 20% (39%). The march's sampling hardly counts: no self-shadow, or the base layer alone, changed nothing.
+Every biome's march now runs before any is shaded (`biomeRelief`, then `biome` with its result), so the march's state no longer sits on the shading's:
+terrain 4.4 -> 4.0 ms, the picture unchanged. Without the march (`NO_MARCH`) that loop and its results' array are left out; kept with constants, they
+cost 0.28 ms. Drawing patches beyond the parallax's end with the march-free program saved nothing there.
+The displacement costs 0.42 ms at a save's view (60 m; GPU frame 5.80 vs 5.38 with it off), mostly the tessellated prepass, bound by the primitive
+engine (30%). Culling patches off the view in the control stage (corners padded 40 units, sides by 10%) saved 0.03 ms, within the noise: not kept.
 
 **Texture field** (the game's and the viewer's `--terrain-sandbox [cliffs] [x,z]`, `GroundRelief.FieldCentre`): the empty world
 (no population, foliage or objects) round a spot, default (38376, -8280), the flattest 2000-unit square of the heightmap found

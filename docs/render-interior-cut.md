@@ -17,6 +17,10 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
   and so do foliage leaves (FUN_1406d1380 copies the `leaves *` fields and calls FUN_140843920 with mode 4, FOLIAGE).
   Building parts and items do not. **Observed**: the foliage meshes' own materials also come from FUN_140843920
   (FUN_1406cf140 / FUN_1406cf640 read `material type` and call it; not traced further), so Meitou cuts them too.
+- **Verified (decompiled)**: the mask entity exists only while the building's interior is open. It is made in the open path
+  (render queue 0x10, visibility 0x800, no shadows; skipped with `skip stencil tricks`) and destroyed on close, so a closed
+  building cuts nothing ([closed interiors](render-objects.md#closed-interiors)). Meitou cuts with every loaded mask (engine
+  difference).
 - **Observed**: the queue-16 geometry is the `interior mask` parts' `phs or mesh` (`Storm_House_01_Interior_MASK.mesh` etc.;
   [settings](formats/settings.md) `skip stencil tricks`), placed with the building node. **Verified** (probe, merged
   records): 31 mask parts have such a mesh (gate triggers have none), none has an offset; the meshes are not the

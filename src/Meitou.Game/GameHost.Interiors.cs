@@ -3,7 +3,7 @@ using Meitou.Simulation;
 
 namespace Meitou.Game;
 
-/// <summary>The interior view (docs/formats/zones.md, "Interior view"): buildings with a player character inside show their interior and hide their upper floors.</summary>
+/// <summary>The interior view (docs/render-objects.md, "Closed interiors"): buildings with a player character inside show their interior and hide their upper floors.</summary>
 sealed partial class GameHost
 {
     /// <summary>
@@ -19,6 +19,12 @@ sealed partial class GameHost
     int viewedFloor;
     readonly Dictionary<string, int> interiorView = new(StringComparer.Ordinal);
     readonly List<InteriorVolume> viewed = [];
+    // Buildings a player character was in lately and the game time (seconds) they stay open until: left, a building shows every floor until then, then closes
+    // (game: the interior's keep-open timer, 10 s of game time set each frame while occupied, FUN_1407f7230 / FUN_14054a790; left buildings get floor 4, all).
+    readonly Dictionary<string, (InteriorVolume Room, double Until)> keepOpen = new(StringComparer.Ordinal);
+    readonly List<InteriorVolume> held = [];
+    readonly List<string> expired = [];
+    const double KeepOpenSeconds = 10;
     /// <summary>
     /// The characters not drawn: those above the viewed floor of a building in the view (game: FUN_1409fb540 hides objects above their building's floor), and
     /// those inside a building seen from outside, whose interior is not drawn (a construction site is open, so its builders stay).
@@ -33,8 +39,9 @@ sealed partial class GameHost
 
     /// <summary>
     /// Every frame: each non-destroyed building that holds a player character (its indoor hull contains the character) is put in the interior view at the viewed
-    /// floor; every other building shows its outside. Game: the player interface's per-frame interior driver over the player's characters. Then the characters
-    /// in those buildings above the viewed floor, and those inside the other buildings, are marked to be left out of the draw list.
+    /// floor; one left within the last 10 s of game time stays in it with every floor shown; every other building shows its outside. Game: the player interface's
+    /// per-frame interior driver over the player's characters. Then the characters in those buildings above their shown floor, and those inside the other
+    /// buildings, are marked to be left out of the draw list.
     /// </summary>
     void UpdateInteriorView()
     {
@@ -47,6 +54,7 @@ sealed partial class GameHost
         foreach (var c in characters)
             if (c.IsPlayer && objects.InteriorAt(DrawnPosition(c), InsideMargin) is { } building && interiorView.TryAdd(building.PlacementId, viewedFloor))
                 viewed.Add(building);
+        HoldLeftOpen();
         objects.InteriorView = interiorView;
         session.Camera.Floors ??= CameraFloor;
         foreach (var c in characters)
@@ -54,7 +62,8 @@ sealed partial class GameHost
             var at = DrawnPosition(c);
             if (ViewedAt(at) is { } inView)
             {
-                if (viewedFloor < 3 && inView.FloorAt(at) > viewedFloor) hiddenIndoors.Add(c.Id);
+                int shown = interiorView[inView.PlacementId];
+                if (shown < 3 && inView.FloorAt(at) > shown) hiddenIndoors.Add(c.Id);
             }
             // Strictly inside (no margin): one on the doorstep stays drawn.
             else if (objects.InteriorAt(at, ref InteriorMemo(c.Id.Slot)) is { } closed && objects.Construction?.ContainsKey(closed.PlacementId) != true) hiddenIndoors.Add(c.Id);
@@ -70,11 +79,32 @@ sealed partial class GameHost
         return ref interiorMemos[slot];
     }
 
-    /// <summary>The viewed building <paramref name="at"/> is in (a loop: a lambda here made a closure and a delegate per character per frame).</summary>
+    /// <summary>The viewed or held-open building <paramref name="at"/> is in (a loop: a lambda here made a closure and a delegate per character per frame).</summary>
     InteriorVolume? ViewedAt(System.Numerics.Vector3 at)
     {
         foreach (var b in viewed) if (b.Contains(at, InsideMargin)) return b;
+        foreach (var b in held) if (b.Contains(at, InsideMargin)) return b;
         return null;
+    }
+
+    /// <summary>
+    /// The keep-open time: the occupied buildings' is set to 10 s of game time from now; a building left within it is put in the interior view with every floor shown
+    /// (<see cref="held"/>), and one past it closes. Game time is the simulation's (it stops while paused and runs faster at higher speeds); a time far ahead
+    /// (a loaded save's clock went back) closes at once.
+    /// </summary>
+    void HoldLeftOpen()
+    {
+        held.Clear();
+        expired.Clear();
+        var world = session.World;
+        double now = world.Tick * (double)world.TickSeconds;
+        foreach (var b in viewed) keepOpen[b.PlacementId] = (b, now + KeepOpenSeconds);
+        foreach (var (id, open) in keepOpen)
+        {
+            if (open.Until < now || open.Until - now > KeepOpenSeconds) expired.Add(id);
+            else if (interiorView.TryAdd(id, 3)) held.Add(open.Room);
+        }
+        foreach (var id in expired) keepOpen.Remove(id);
     }
 
     /// <summary>

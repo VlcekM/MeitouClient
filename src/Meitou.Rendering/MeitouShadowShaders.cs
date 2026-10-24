@@ -68,7 +68,7 @@ static class MeitouShadowShaders
         }
 
         // The filter's sunflower disks (point k at radius sqrt((k + 0.5) / n), angle k times the golden angle) as constants: each tap used to
-        // take a sqrt, a sine and a cosine, per pixel. The blocker search uses the 8-point disk too.
+        // take a sqrt, a sine and a cosine, per pixel. The blocker search and the landmark filter use the 8-point disk too.
         const vec2 msDisk8[8] = vec2[]({{Disk(8)}});
         const vec2 msDisk16[16] = vec2[]({{Disk(16)}});
 
@@ -121,7 +121,16 @@ static class MeitouShadowShaders
             float lit = 0.0;
             if (full)
             {
-                for (int k = 0; k < {{FilterTaps}}; k++)
+                // Every other point of the disk first (each half spans the whole radius): where they all agree, the pixel wholly lit or wholly in
+                // shadow, the other half is skipped. In a penumbra the sum is that of all the points.
+                for (int k = 0; k < {{FilterTaps}}; k += 2)
+                {
+                    vec2 d = msDisk16[k];
+                    vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * radius;
+                    lit += shadowLayer(t.xy + o, c, t.z + dot(o, slope));
+                }
+                if (lit == 0.0 || lit == {{F(FilterTaps / 2)}}) return lit / {{F(FilterTaps / 2)}};
+                for (int k = 1; k < {{FilterTaps}}; k += 2)
                 {
                     vec2 d = msDisk16[k];
                     vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * radius;
@@ -152,9 +161,8 @@ static class MeitouShadowShaders
             float lit = 0.0;
             for (int k = 0; k < 8; k++)
             {
-                float r = sqrt((float(k) + 0.5) / 8.0);
-                float a = float(k) * 2.3999632;
-                vec2 o = r * vec2(rot.x * cos(a) - rot.y * sin(a), rot.y * cos(a) + rot.x * sin(a)) * uMsLandmark.x;
+                vec2 d = msDisk8[k];
+                vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * uMsLandmark.x;
                 lit += textureLod(uShadowLandmark, vec3(t.xy + o, min(t.z, 1.0)), 0.0);
             }
             return mix(1.0, lit / 8.0, w);

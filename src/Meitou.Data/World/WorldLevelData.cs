@@ -188,6 +188,8 @@ public sealed record BuildingPlacement(ZoneCoordinate Zone, string InstanceId, s
     public string Key { get => key ?? BuildingKey.Of(Zone, InstanceId); init => key = value; }
     /// <summary>True when <see cref="BuildingId"/> names a record of the zone file itself rather than a building.</summary>
     public bool TargetsZoneRecord { get; init; }
+    /// <summary>Placed inside another building and not outside (<see cref="PlacedMesh.Contained"/>); a zone's own buildings take it from their state instead.</summary>
+    public bool Contained { get; init; }
 }
 
 /// <param name="TownId">String id of the placed <see cref="FcsRecordType.TOWN"/> record.</param>

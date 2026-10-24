@@ -38,6 +38,12 @@ public sealed record PlacedMesh(string MeshPath, Matrix4x4 Transform, GameRecord
 
     /// <summary>For an object of a building layout (sign, furniture): the placement id of the building it belongs to, whose interior view it follows.</summary>
     public string? ParentPlacementId { get; init; }
+
+    /// <summary>
+    /// A building of its own placed inside another (furniture or a station the player built there, a town's piece with <c>is inside building</c>) and not flagged
+    /// outside: hidden while the building whose hull holds it shows its outside (game: an interior's contained objects; docs/render-objects.md "Closed interiors").
+    /// </summary>
+    public bool Contained { get; init; }
 }
 
 /// <summary>

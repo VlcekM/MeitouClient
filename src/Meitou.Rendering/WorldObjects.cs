@@ -263,10 +263,14 @@ sealed class WorldObjects : IDisposable
                 // Resource buildings ("is foliage", no parts) are drawn by the foliage system as a FOLIAGE_MESH naming them as "building type".
                 if (parts.Count == 0 && record.GetBool("is foliage")) Interlocked.Increment(ref foliage);
                 else if (parts.Count == 0) Interlocked.Increment(ref empty);
+                // Inside another building and not outside: hidden while that one is closed (a player's own building says so; a zone's by its state).
+                if (b.Contained || state is not null && state.GetBool("is inside building") && !BuildingLayouts.IsOutside(state))
+                    for (int k = 0; k < parts.Count; k++) parts[k] = parts[k] with { Contained = true };
                 result.Items.AddRange(parts);
                 Interlocked.Increment(ref buildings);
                 // The state's exterior layout (signs and banners) and interior layout (furniture), placed relative to the building, each object on its
-                // layout floor. Interior furniture that is not also "is exterior furniture" shows only in the interior view. Skipped for a destroyed building (Unknown).
+                // layout floor. An interior layout's object shows only in the interior view unless its state is flagged outside (game: the closed interior hides
+                // its contained objects but those; "is exterior furniture" plays no part). Skipped for a destroyed building (Unknown).
                 foreach (bool exterior in (ReadOnlySpan<bool>)[true, false])
                 {
                     if (isDestroyed || state?.GetString(exterior ? "exterior layout name" : "interior layout name") is not { Length: > 0 } layoutName) continue;
@@ -277,7 +281,7 @@ sealed class WorldObjects : IDisposable
                         var (at, rotation) = BuildingLayouts.Place(position, b.Rotation, item);
                         var placed = WorldObjectLayout.Building(db, item.Building, $"{b.InstanceId}/{item.InstanceId}", at, rotation,
                             new BuildingState(false, townMaterial) { Identity = $"{b.Key}/{item.InstanceId}" });
-                        bool insideOnly = !exterior && !item.Building.GetBool("is exterior furniture");
+                        bool insideOnly = !exterior && !item.Outside;
                         foreach (var p in placed)
                             result.Items.Add(p with { Floor = item.Floor, Interior = insideOnly, ParentPlacementId = b.Key });
                         if (placed.Count > 0) Interlocked.Increment(ref layoutObjects);

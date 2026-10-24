@@ -119,12 +119,13 @@ post 0.9, objects 0.7, particles 0.5, shadows 0.45); render thread ~3 ms; world 
 | hitch | cause | change |
 |---|---|---|
 | gen0/gen1 GCs 20-190 ms | ~1 GB gen0 budget | `System.GC.Gen0MaxBudget` 16 MB ([engine](engine.md) "GC") |
-| first moving ragdoll 200-250 ms, then 10-60 ms ticks | JIT of Bepu's generic solver and collision code | `RagdollPhysics.WarmUpOnce` |
+| first moving ragdoll 200-250 ms, then 10-60 ms ticks | JIT of Bepu's generic solver and collision code (single-threaded and, with a thread dispatcher, multithreaded paths) | `RagdollPhysics.WarmUpOnce` steps both: the first moving tick 21 ms |
 | overview panel 440 ms | world map (8192², BC1) decoded to RGBA8 and uploaded in the frame | read ahead, uploaded as BC1 (`UiPainter.Prefetch`) |
 | 150 ms as a town fills | up to four new character appearances built in one frame | `CharacterRenderer.BuildBudgetMs` |
 | ~35 ms on the first cloudy weather | volumetric cloud renderer made on demand | made with the first frame |
+| fps: terrain 3.4 of 7 ms with the parallax off | the march's registers allocated anyway (a tenth of the warps) | colour programs without the march when it is off ([terrain](render-terrain.md) "Registers"): 2.4 ms, frame -0.9 ms |
 | 0.7-3.8 s in the reflection stage, once per session | pipelines first made in play (the reflection's scene when water first comes into view; the clouds; a camera cut drew without the fog shading rate attachment, a second pipeline of everything); seconds each with a cold driver cache (the first run after a shader or driver change), 0.16 ms median with a warm one | `ReflectionPass.Warm` and `SkyRenderer.Warm` during the loading warm-up; a cut draws with a neutral rate image |
-| 20-80 ms on first use (AI, dialogue, screens) | JIT: each method compiled on its first call (no tiering) | `JitWarmup`: the Meitou assemblies compiled ahead on a background thread (~38000 methods, 7 s, during loading; `--no-precompile`) |
+| 20-80 ms on first use (AI, dialogue, screens) | JIT: each method compiled on its first call (no tiering) | `JitWarmup`: the Meitou assemblies compiled ahead on three background threads, simulation then rendering first (~38000 methods, about 3 s; `--no-precompile`): the game thread's JIT 4.5 -> 2.3 s, none left in play |
 
 Largest remaining allocation (shares of the ~160 MB/s before the fixes): the UI rebuilds its controls and their property dictionaries every frame (`MyGuiPresentation.Arrange`, ~6%),
 snapshot records per character (~2%), particle affector delegates (~1%).
@@ -133,6 +134,12 @@ decals', a portrait's, the hover outline's and the build menu's icon pipelines (
 ReadyToRun does not compile Bepu's generic instantiations ahead, so it does not replace `RagdollPhysics.WarmUpOnce`; what the game thread still compiles is
 framework generics over the game's types (sorts, LINQ).
 Commands are given on wall time, so two runs' simulations part after a few minutes (from "paths" the squad stands elsewhere): compare segments before that.
+Precompiled code is slower and, without tiering, never replaced (**Observed**, self-contained publishes, render thread per frame): JIT 3.05 ms,
+ReadyToRun 5.17, composite ReadyToRun 3.96; launch to play 21.7, 25.5, 20.0 s. The release stays JIT with `JitWarmup`.
+Tried, not kept (**Observed**, Nsight GPU Trace and the bench at a save's view, 2560x1440, render scale 1): the SMs idle 29% of the frame over ~350
+wait-for-idles, but leaving out the native segments' seam barriers saved only 0.13 ms (the passes mostly read what the previous wrote). The GPU
+"objects" stage is stage-switch timestamps: the object draws themselves take ~0.06 ms. Terrain's remaining 2.4 ms is its materials: GI, haze or the
+shadow filter off change it by 0.1 ms at most, anisotropy off by 0.12.
 
 Detailed logs/screenshots belong outside the repository. Evidence for original-game claims
 belongs with the corresponding research and its Verified/Observed/Unknown label.

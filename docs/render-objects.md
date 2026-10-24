@@ -104,6 +104,29 @@ angle. **Verified** by a probe over every turret building of the install (random
 simulation's `TurretRig.Derived` (30 of 30 parts). **Unknown**: the pose has not been looked at in a rendered frame. Only simulated turrets (the combat system) turn; the
 viewer never does. Parts that are not joints (the six-barrel add-on, the lamp) ride on their joint.
 
+## Closed interiors
+
+**Original** (**Verified** by code, Ghidra, unless marked):
+- A building with an `interior` list owns an interior object, open or closed.
+- **Opening.** `FUN_1407f7230` runs every frame. Each player character whose location is a non-destroyed building sets that interior's keep-open timer to 10. The timer falls by the game-time step (`FUN_14054a790`), and the interior closes below 0 (`FUN_14054b690`). A building just left shows every floor (floor 4) until then.
+- **Closing** (`FUN_14054b130`) hides the interior's contained objects in every pass, except those flagged outside (`RootObject+0x240`). Their entities are destroyed and the lights go off.
+- **Contained objects** are registered by `FUN_14054f3d0`. They are interior-layout furniture and buildings with a parent building: a saved `isInsideBuilding`, or player ghosts placed inside.
+- **The outside flag:**
+  - Loaded from a state's `flags` bit 0, or the older `is outside` (`FUN_140552b70`).
+  - Exterior-layout objects get it from their layout (`+0xa0`, `FUN_1405765c0`).
+  - Interior-layout objects spawn without it (`FUN_140583400`). Runtime setters exist (`FUN_1404ec160`, `FUN_14047d830`), but their triggers are **Unknown**.
+- `is interior furniture` / `is exterior furniture` only pick collision groups and the build label (`FUN_14055f6e0`, `FUN_1404df450`).
+- Ground items and characters have no closed-interior rule, only the floor sweep `FUN_1409fb540` (**Observed**).
+- **Unknown:** what makes the doorway black. There is no occluder object; the mask is destroyed on close.
+
+**Meitou:**
+- Opening is `GameHost.UpdateInteriorView`, which holds a left building open with all floors for 10 s of simulation time.
+- An interior layout's object is hidden while its building is closed unless its `interiors.level` state has the outside flag (`LayoutItem.Outside`). The flag set at the editor is taken as the runtime setters' result (**Observed**).
+  - In the install's interior layouts, 10 170 objects without the flag are `is exterior furniture` (barrels, cages, camp beds, Stack's rooftop awnings); these are now hidden while closed.
+  - 1 820 objects with the flag (yard tents, torches) stay.
+- A building inside another (`PlacedMesh.Contained`) is hidden while the building whose hull holds it is closed (`ClosedAround`). These are player sites with a parent (saved with `flags` 0), and zone states with `is inside building` and no outside flag.
+- **Not done:** interior lamps still light a closed interior.
+
 ## Validation
 
 Main, reflection and shadow stages repeat object work; inspect all three. **Observed** swamp

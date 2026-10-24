@@ -138,7 +138,7 @@ sealed partial class GameHost
     /// building's id is unique in the world (the simulation's registry reserves every saved id), and the overlays remove it by that id.
     /// </summary>
     static BuildingPlacement Placement(BuildingSnapshot site) =>
-        new(WorldLayout.ZoneOf(site.Position.X, site.Position.Z), site.Id, site.Record, site.Position, site.Rotation, null, site.Position.Y) { Key = site.Id };
+        new(WorldLayout.ZoneOf(site.Position.X, site.Position.Z), site.Id, site.Record, site.Position, site.Rotation, null, site.Position.Y) { Key = site.Id, Contained = site.Parent is not null };
 
     /// <summary>Navmesh membership (engine reading of the Observed rebuild on placing): <c>path mode</c> not 0 and the building complete or without a <c>build threshold</c>.</summary>
     void AddToNavmesh(BuildingSnapshot site, BuildingPlacement placement)

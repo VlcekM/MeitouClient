@@ -696,8 +696,8 @@ static partial class TerrainShaders
         // displacement fades out). Set per pixel in biome().
         float reliefSegment = 0.0, reliefWhole = 1.0;
 
-        // The march's steps (view ray, sun), fewer with distance (set in biome(): 16 and 12 near, 6 and 4 at the parallax's end), and the share of
-        // the pixel the biome being shaded has (main sets it before biome(): a biome showing little is not marched).
+        // The march's steps (view ray, sun), fewer with distance (set in biomeRelief(): 16 and 8 near, 6 and 3 at the parallax's end), and the share of
+        // the pixel the biome being marched has (main sets it before biomeRelief(): a biome showing little is not marched).
         int reliefSteps = 16, reliefShadowSteps = 12;
         float biomeShare = 1.0;
 
@@ -767,47 +767,59 @@ static partial class TerrainShaders
             return 1.0 - uSelfShadow * clamp(occlusion * 4.0, 0.0, 1.0) * strength;
         }
 
-        // One biome's surface (the layer model of docs/formats/terrain.md).
-        Surface biome(int b, vec3 n, float slope, vec4 map, vec4 colour, float distance)
+        // The cliff projections' vertical coordinate of biome b (its distortion).
+        float cliffVert(int b)
         {
-            vec4 layersA = P(b, 0), layersB = P(b, 1);
-            vec4 sA = P(b, 2), sB = P(b, 3), sC = P(b, 4);
-            vec4 smin = P(b, 5), smax = P(b, 6), sblend = P(b, 7);
-            vec4 omult = P(b, 8), fade = P(b, 9), distort = P(b, 10);
+            vec4 distort = P(b, 10);
+            return 1.0 - texWorld.y / 5000.0 + (cos(texWorld.x * distort.x) + cos(texWorld.z * distort.x)) * distort.y;
+        }
 
-            vec2 uv = texWorld.xz / 5000.0;
-            float vert = 1.0 - texWorld.y / 5000.0
-                + (cos(texWorld.x * distort.x) + cos(texWorld.z * distort.x)) * distort.y;
-            // Cliff: two vertical projections, weighted by how much the surface faces X or Z (meshes: per vertex).
+        // Cliff: two vertical projections, weighted by how much the surface faces X or Z (meshes: per vertex).
+        vec2 cliffBlend(vec3 n)
+        {
             vec2 cb = max(abs(normalize(n.xz + vec2(1e-5))) - 0.2, vec2(0.0)) * 7.0;
             cb *= cb;
             cb /= max(cb.x + cb.y, 1e-5);
             if (n.y > 0.995) cb = vec2(0.5);
             if (uFeature) cb = vCliffBlend;
+            return cb;
+        }
 
+        // The slope-chosen layers' weights of biome b (x slope, y cliff), the texture field's mask applied (it may change map).
+        vec4 layerWeights(int b, float slope, inout vec4 map)
+        {
+            vec4 smin = P(b, 5), smax = P(b, 6), sblend = P(b, 7);
             vec4 w = smoothstep(smin - sblend, smin, vec4(slope)) * smoothstep(smax + sblend, smax, vec4(slope));
-            vec4 white = vec4(1.0);
             w.y = keepWeight(w.y, uCliffEps);
             if (fieldLayer >= 0) fieldMask(fieldLayer, map, w);
+            return w;
+        }
 
-            // A layer whose weight is exactly 0 at this pixel is not sampled: mixing in a weight of 0 leaves the value as it was
-            // (x + 0 * (y - x) and x * 1 + y * 0 are both x). On the swamp the dirt weight is exactly 0 on 57 % of the ground, but the slope and
-            // cliff weights almost never are, so this skips only some of the 14 layer samples per biome (docs/render-terrain.md, "Where the terrain's 0.99 ms goes").
-            GradCoord base = gradCoord(uv * sB.xy), grass = gradCoord(uv * sB.zw), slopeUv = gradCoord(uv * sA.xy), dirt = gradCoord(uv * sC.xy), road = gradCoord(uv * sC.zw);
-            GradCoord cliffX = gradCoord(vec2(uv.y, vert) * sA.zw), cliffZ = gradCoord(vec2(uv.x, vert) * sA.zw);
-            // The relief march's unscaled coordinates (Relief), taken here for the same reason.
+        // What the relief march gives a biome: the moves of the ground layers' and of the cliff projections' unscaled coordinates, and the shadow on the sun.
+        struct ReliefOut { vec2 ground; vec2 cliffX; vec2 cliffZ; float shade; };
+
+        // Biome b's relief march, run for every biome before any is shaded (main): inside biome() the march's registers stacked on the shading's, which
+        // halved the pixels in flight (docs/render-terrain.md "Registers"). Without it (NO_MARCH, Marched) no move and no shadow.
+        ReliefOut biomeRelief(int b, vec3 n, float slope, vec4 map, float distance)
+        {
+            ReliefOut res = ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0);
+            #ifndef NO_MARCH
+            vec4 layersA = P(b, 0), layersB = P(b, 1);
+            vec4 sA = P(b, 2), sB = P(b, 3), sC = P(b, 4);
+            vec2 uv = texWorld.xz / 5000.0;
+            float vert = cliffVert(b);
+            vec2 cb = cliffBlend(n);
+            vec4 w = layerWeights(b, slope, map);
+            // The march's unscaled coordinates (Relief), taken outside the branch for their derivatives.
             GradCoord groundBase = gradCoord(uv), cliffBaseX = gradCoord(vec2(uv.y, vert)), cliffBaseZ = gradCoord(vec2(uv.x, vert));
-            float far = clamp(distance * fade.a - 0.3, 0.0, 1.0);
-
             // Ground parallax (GroundRelief, docs/render-terrain.md): the ground layers' relief, uParallax world units deep (times each layer's own factor and
             // how much of the pixel it shows), and the cliff layer's on its two projections, each into the surface along the projection's axis (the cliff's on
             // map features too: the rocks).
-            float shade = 1.0;
             if (uParallax > 0.0 && distance < uParallaxEnd && biomeShare > 0.1)
             {
                 // A biome showing under 10% of the pixel is not marched, fading in to 30% (the march runs once per biome blended).
                 float strength = (1.0 - smoothstep(0.5 * uParallaxEnd, uParallaxEnd, distance)) * smoothstep(0.1, 0.3, biomeShare);
-                float far = clamp(distance / uParallaxEnd, 0.0, 1.0);
+                float far = clamp(distance / uParallaxEnd, 0.0, 1.0), shade = 1.0;
                 reliefSteps = int(round(mix(16.0, 6.0, far)));
                 reliefShadowSteps = int(round(mix(8.0, 3.0, far)));
                 vec3 v = normalize(uEye - vWorld);
@@ -839,7 +851,7 @@ static partial class TerrainShaders
                     float depth = uParallax * ground.total * strength / 5000.0;   // the full depth in world units, in the unscaled coordinate (uv)
                     vec2 o;
                     shade = reliefMarch(ground, o, -v.xz / max(v.y, 0.25) * depth, sun.xz / max(sun.y, 0.15) * depth, sun.y > 0.0, strength, true);
-                    base.p += o * sB.xy; grass.p += o * sB.zw; slopeUv.p += o * sA.xy; dirt.p += o * sC.xy; road.p += o * sC.zw;
+                    res.ground = o;
                 }
                 float cliffDepth = w.y > 0.0 ? uParallax * reliefDepth(layersA.z, sA.zw) * uCliffScale * strength : 0.0;
                 if (cliffDepth > 0.0)
@@ -859,18 +871,47 @@ static partial class TerrainShaders
                         Relief r = noRelief(cliffBaseX);
                         addRelief(r, sA.zw, layersA.z, 1.0);
                         shadeX = reliefMarch(r, o, vec2(tv.z, -tv.y) / vn * depth, vec2(ts.z, -ts.y) / sn * depth, lit, strength, true);
-                        cliffX.p += o * sA.zw;
+                        res.cliffX = o;
                     }
                     if (cb.y > 0.1)
                     {
                         Relief r = noRelief(cliffBaseZ);
                         addRelief(r, sA.zw, layersA.z, 1.0);
                         shadeZ = reliefMarch(r, o, vec2(tv.x, -tv.y) / vn * depth, vec2(ts.x, -ts.y) / sn * depth, lit, strength, true);
-                        cliffZ.p += o * sA.zw;
+                        res.cliffZ = o;
                     }
                     shade = mix(shade, shadeX * cb.x + shadeZ * cb.y, w.y);
                 }
+                res.shade = shade;
             }
+
+            #endif
+            return res;
+        }
+
+        // One biome's surface (the layer model of docs/formats/terrain.md), its coordinates moved by the march's result (biomeRelief).
+        Surface biome(int b, vec3 n, float slope, vec4 map, vec4 colour, float distance, ReliefOut relief)
+        {
+            vec4 layersA = P(b, 0), layersB = P(b, 1);
+            vec4 sA = P(b, 2), sB = P(b, 3), sC = P(b, 4);
+            vec4 omult = P(b, 8), fade = P(b, 9);
+
+            vec2 uv = texWorld.xz / 5000.0;
+            float vert = cliffVert(b);
+            vec2 cb = cliffBlend(n);
+            vec4 w = layerWeights(b, slope, map);
+            vec4 white = vec4(1.0);
+
+            // A layer whose weight is exactly 0 at this pixel is not sampled: mixing in a weight of 0 leaves the value as it was
+            // (x + 0 * (y - x) and x * 1 + y * 0 are both x). On the swamp the dirt weight is exactly 0 on 57 % of the ground, but the slope and
+            // cliff weights almost never are, so this skips only some of the 14 layer samples per biome (docs/render-terrain.md, "Where the terrain's 0.99 ms goes").
+            GradCoord base = gradCoord(uv * sB.xy), grass = gradCoord(uv * sB.zw), slopeUv = gradCoord(uv * sA.xy), dirt = gradCoord(uv * sC.xy), road = gradCoord(uv * sC.zw);
+            GradCoord cliffX = gradCoord(vec2(uv.y, vert) * sA.zw), cliffZ = gradCoord(vec2(uv.x, vert) * sA.zw);
+            float far = clamp(distance * fade.a - 0.3, 0.0, 1.0);
+
+            // The march's moves (biomeRelief; none without it, and adding 0 leaves a coordinate as it was).
+            base.p += relief.ground * sB.xy; grass.p += relief.ground * sB.zw; slopeUv.p += relief.ground * sA.xy; dirt.p += relief.ground * sC.xy; road.p += relief.ground * sC.zw;
+            cliffX.p += relief.cliffX * sA.zw; cliffZ.p += relief.cliffZ * sA.zw;
 
             Surface s;
             s.albedo = (uParallax > 0.0 ? tex(uDiffuse, base, layersA.x) : tex(uDiffuse, base.p, layersA.x)) * colour;
@@ -885,7 +926,7 @@ static partial class TerrainShaders
                 s.albedo = mix(s.albedo, cCliff, w.y);
             }
             s.albedo.rgb *= layersB.z;
-            s.shade = shade;
+            s.shade = relief.shade;
 
             if (uNormalMaps)
             {
@@ -979,28 +1020,47 @@ static partial class TerrainShaders
                     if (single >= 0)
                     {
                         // A map feature has one biome for its whole surface (the game builds its material for the biome at its origin).
-                        Surface s = biome(single, n, slope, map, colour, distance);
+                        Surface s = biome(single, n, slope, map, colour, distance, biomeRelief(single, n, slope, map, distance));
                         sumA = s.albedo; sumN = s.normal; sumAbsorb = s.absorb; sumShade = s.shade; total = 1.0;
                     }
-                    else for (int k = 0; k < 5; k++)
+                    else
                     {
-                        uint b = k < 4 ? slots[k] : slot4;
-                        float wk = k < 4 ? weights[k] : rest;
-                        if (b == 254u && wk >= 0.004) pending += wk;   // biome still loading: its share shows the ground colour
-                        if (b >= 254u || wk < 0.004) continue;
-                        biomeShare = wk;
-                        Surface s = biome(int(b), n, slope, map, colour, distance);
-                        sumA += s.albedo * wk;
-                        sumN += s.normal * wk;
-                        sumAbsorb += s.absorb * wk;
-                        sumShade += s.shade * wk;
-                        total += wk;
+                        // Every biome's march first, then the shading (biomeRelief). Without the march (NO_MARCH) the results' array is left out: kept with
+                        // constants, it still cost the pass 0.28 ms.
+                        #ifndef NO_MARCH
+                        ReliefOut reliefs[5];
+                        for (int k = 0; k < 5; k++)
+                        {
+                            uint b = k < 4 ? slots[k] : slot4;
+                            float wk = k < 4 ? weights[k] : rest;
+                            reliefs[k] = ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0);
+                            if (b >= 254u || wk < 0.004) continue;
+                            biomeShare = wk;
+                            reliefs[k] = biomeRelief(int(b), n, slope, map, distance);
+                        }
+                        #define RELIEF_OF(k) reliefs[k]
+                        #else
+                        #define RELIEF_OF(k) ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0)
+                        #endif
+                        for (int k = 0; k < 5; k++)
+                        {
+                            uint b = k < 4 ? slots[k] : slot4;
+                            float wk = k < 4 ? weights[k] : rest;
+                            if (b == 254u && wk >= 0.004) pending += wk;   // biome still loading: its share shows the ground colour
+                            if (b >= 254u || wk < 0.004) continue;
+                            Surface s = biome(int(b), n, slope, map, colour, distance, RELIEF_OF(k));
+                            sumA += s.albedo * wk;
+                            sumN += s.normal * wk;
+                            sumAbsorb += s.absorb * wk;
+                            sumShade += s.shade * wk;
+                            total += wk;
+                        }
                     }
                     uint fallback = slot4 < 254u ? slot4 : slots.x;
                     if (total <= 0.0 && pending <= 0.0 && fallback < 254u)
                     {
                         biomeShare = 1.0;
-                        Surface s = biome(int(fallback), n, slope, map, colour, distance);
+                        Surface s = biome(int(fallback), n, slope, map, colour, distance, biomeRelief(int(fallback), n, slope, map, distance));
                         sumA = s.albedo; sumN = s.normal; sumAbsorb = s.absorb; sumShade = s.shade; total = 1.0;
                     }
                     if (total > 0.0) { albedo = sumA / total; sumN /= total; absorbance = sumAbsorb / total; reliefShade = mix(1.0, sumShade / total, nearWeight); }
@@ -1294,7 +1354,15 @@ static partial class TerrainShaders
     public static string PatchVertexTessNative() => Native(PatchVertexTess);
     public static string PatchControlNative() => Native(PatchControl);
     public static string PatchEvaluationNative() => Native(PatchEvaluation);
-    public static string FragmentNative(bool interiorCut = false) => Gi.GiResolveShaders.WithAlbedo(Native(interiorCut ? InteriorMaskRenderer.WithCut(Fragment) : Fragment));
+    public static string FragmentNative(bool interiorCut = false, bool march = true) =>
+        Gi.GiResolveShaders.WithAlbedo(Native(interiorCut ? InteriorMaskRenderer.WithCut(Marched(Fragment, march)) : Marched(Fragment, march)));
+
+    /// <summary>
+    /// <paramref name="fragment"/> with the ground parallax's march (march false: left out, by defining NO_MARCH). Off it never runs (uParallax 0), but its registers were the
+    /// shader's: about 220 a thread, which held the terrain colour pass to a tenth of the warps; without it the pass took 2.4 ms instead of 3.4
+    /// (docs/render-terrain.md "Cost"). TerrainRenderer keeps a set of each and draws with the one the setting asks for.
+    /// </summary>
+    static string Marched(string fragment, bool march) => march ? fragment : fragment.Insert(fragment.IndexOf('\n') + 1, "#define NO_MARCH\n");
     /// <summary>The terrain colour pass's depth-only twin: the same vertex stage (so the depths are the same), a fragment stage that writes nothing (<see cref="TerrainLateColour"/>).</summary>
     public static string PrepassFragmentNative(bool interiorCut = false)
     {
@@ -1303,8 +1371,8 @@ static partial class TerrainShaders
     }
     public static string MeshVertexNative() => Native(MeshVertex);
     /// <summary>The TERRAIN-mode meshes' colour program, with the interior cut (on per draw: <see cref="TerrainConstants.InteriorCut"/>; the cross-fade already discards).</summary>
-    public static string MeshFragmentNative() => Gi.GiResolveShaders.WithAlbedo(Native(InteriorMaskRenderer.WithCut(MeshFragment)));
-    public static string MeshFragmentSolidNative() => Gi.GiResolveShaders.WithAlbedo(Native(MeshFragmentSolid));
+    public static string MeshFragmentNative(bool march = true) => Gi.GiResolveShaders.WithAlbedo(Native(InteriorMaskRenderer.WithCut(Marched(MeshFragment, march))));
+    public static string MeshFragmentSolidNative(bool march = true) => Gi.GiResolveShaders.WithAlbedo(Native(Marched(MeshFragmentSolid, march)));
     public static string MeshInstancedDepthVertexNative() => Native(MeshInstancedDepthVertex);
     /// <summary>The rocks' smoothing (RockSmoothing): <see cref="MeshVertexTess"/>, <see cref="MeshControl"/>, <see cref="MeshEvaluation"/> and its casters' twin.</summary>
     public static string MeshVertexTessNative() => Native(MeshVertexTess);
