@@ -546,19 +546,20 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The name of a site's building, for the menu's title.</summary>
-    string SiteName(BuildingSnapshot site) => buildHost?.Menu.Catalog.FirstOrDefault(b => b.Id == site.Record)?.Name ?? site.Record;
+    string SiteName(BuildingSnapshot site) => site.LevelPlacement is not null ? site.Name : buildHost?.Menu.Catalog.FirstOrDefault(b => b.Id == site.Record)?.Name ?? site.Record;
 
     /// <summary>
     /// The verbs the selection has for a site (the original's building branch, docs/game/ui-input.md "Context menu verbs"): Build (2) for an unfinished one (the quick order); finished, a
     /// machine's Use (87), a storage's Auto-Haul (124, the "Hauling to" job) and Inventory (26), a furnace's Inventory, a turret's Man Turret (146); Dismantle (96); Meitou's Cancel for a
-    /// site nothing has been delivered to and the building panel's door buttons. Not built: Repair (95; Meitou buildings take no damage) and Auto-Haul (152) of automatic machines.
+    /// site nothing has been delivered to and the building panel's door buttons. Repair (95) shares construction work; town ruins start rebuilding only on an explicit order. Not built: Auto-Haul (152) of automatic machines.
     /// </summary>
     List<(string Caption, Action Give)> SiteVerbs(BuildingSnapshot site)
     {
         var verbs = new List<(string, Action)>();
         var selection = SelectedIds();
-        if (selection.Count == 0) return verbs;
-        if (!site.Complete) verbs.Add(("Build", () => Say(new BuildOrder(selection, site.Id) { Tick = session.World.Tick })));
+        if (selection.Count == 0 || site.Owner != session.World.Player.Faction) return verbs;
+        if (site.Destroyed || site.Complete && site.NeedsWork) verbs.Add(("Repair", () => OrderConstruction(site, selection)));
+        else if (!site.Complete) verbs.Add(("Build", () => OrderConstruction(site, selection)));
         AddMachineVerb(verbs, site, selection);
         if (site.Complete && Machine(site.Id) is { } machine)
         {
@@ -568,8 +569,8 @@ sealed partial class PlayerInterface
             if (machine.Function == Meitou.Data.World.ObjectRanges.TurretFunction)
                 verbs.Add(("Man Turret", () => Say(new Meitou.Simulation.Production.UseTurretOrder(selection, site.Id) { Tick = session.World.Tick })));
         }
-        verbs.Add(("Dismantle", () => Say(new DismantleOrder(selection, site.Id) { Tick = session.World.Tick })));
-        if (!site.Complete && site.Progress <= 0 && site.Materials.All(m => m.Delivered <= 0))
+        if (site.LevelPlacement is null) verbs.Add(("Dismantle", () => Say(new DismantleOrder(selection, site.Id) { Tick = session.World.Tick })));
+        if (site.LevelPlacement is null && !site.Complete && site.Progress <= 0 && site.Materials.All(m => m.Delivered <= 0))
             verbs.Add(("Cancel Construction", () => Say(new CancelSite(site.Id) { Tick = session.World.Tick })));
         // A finished building's doors: the door panel's open/close and lock buttons, for all its doors at once (docs/simulation.md "Cages, beds and locks").
         var doors = session.CurrentSnapshot.Doors.Where(d => d.Key.Building == site.Id).Select(d => d.Value).ToList();
@@ -586,6 +587,14 @@ sealed partial class PlayerInterface
             }));
         }
         return verbs;
+    }
+
+    void OrderConstruction(BuildingSnapshot site, IReadOnlyList<CharacterId> selection)
+    {
+        Say(new BuildOrder(selection, site.Id) { Tick = session.World.Tick });
+        if (SlowModifier) Say(new Meitou.Simulation.Production.AddJob(selection,
+            site.Destroyed || site.Complete ? Meitou.Data.Gameplay.Ai.TaskType.REPAIR : Meitou.Data.Gameplay.Ai.TaskType.BUILD,
+            site.Id) { Tick = session.World.Tick });
     }
 
     /// <summary>A right press on a site with characters selected: a click released within the hold time orders the build, held longer it opens the menu (true: taken).</summary>
@@ -618,9 +627,7 @@ sealed partial class PlayerInterface
             return;
         }
         // With Shift the Build order becomes the Engineer job (125), which builds any unfinished site.
-        if (SlowModifier && !pending.Site.Complete)
-            Say(new Meitou.Simulation.Production.AddJob(SelectedIds(), Meitou.Data.Gameplay.Ai.TaskType.BUILD, pending.Site.Id) { Tick = session.World.Tick });
-        else if (!pending.Site.Complete) Say(new BuildOrder(SelectedIds(), pending.Site.Id) { Tick = session.World.Tick });
+        if (pending.Site.NeedsWork) OrderConstruction(pending.Site, SelectedIds());
         else if (Machine(pending.Site.Id) is { Operable: true } or { Function: MachineData.TrainingFunction }) Say(new Meitou.Simulation.Production.OperateOrder(SelectedIds(), pending.Site.Id) { Tick = session.World.Tick });
         else if (Machine(pending.Site.Id) is { Function: Meitou.Data.World.ObjectRanges.TurretFunction })
             Say(new Meitou.Simulation.Production.UseTurretOrder(SelectedIds(), pending.Site.Id) { Tick = session.World.Tick });   // the original's order 146 USE_TURRET
@@ -696,7 +703,7 @@ sealed partial class PlayerInterface
     /// only for an unfinished building; a finished plain building is the arrow, and its quick order is a move (docs/game/ui-input.md "Building hover and click").
     /// </summary>
     bool SiteIsObject(BuildingSnapshot site) =>
-        !site.Complete || Machine(site.Id) is { Operable: true } or { IsStorage: true } or { Function: MachineData.ItemFurnaceFunction or MachineData.TrainingFunction or Meitou.Data.World.ObjectRanges.TurretFunction };
+        site.NeedsWork || Machine(site.Id) is { Operable: true } or { IsStorage: true } or { Function: MachineData.ItemFurnaceFunction or MachineData.TrainingFunction or Meitou.Data.World.ObjectRanges.TurretFunction };
 
     /// <summary>
     /// The pointer over a site with characters selected: <c>build</c> while unfinished (the original's pointer mode 0xb), <c>search</c> over a storage, else the class's slot 130 pointer
@@ -705,7 +712,7 @@ sealed partial class PlayerInterface
     string? SitePointer(Vector2 p)
     {
         if (SelectedIds().Count == 0 || PickSite(p) is not { } site) return null;
-        if (!site.Complete) return "build";
+        if (site.NeedsWork) return "build";
         if (Machine(site.Id) is not { } m || !SiteIsObject(site)) return null;
         if (m.IsStorage) return "search";   // a finished storage: the original's pointer for opening it
         return m.Function is MachineData.MineFunction or MachineData.NaturalMineFunction ? "mine" : "use";

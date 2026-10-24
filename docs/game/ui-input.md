@@ -430,11 +430,11 @@ Unprovoked, Stealth KO, Follow (`FollowOrder`, [simulation](../simulation.md)), 
 selection's, as the loot window), Pick Up and Kidnap (the same pick-up order; Kidnap when the target is not an ally or is a trader, shown with 100%; the kidnapping is a crime only when witnessed,
 [carry-loot](carry-loot.md)), First Aid, Splint Injuries, Unlock Shackles / Use Tools / Use Strength (shackles), Pick Lock / Escape / Pick Up / Set Free on a caged
 character, Inventory / Loot / Pick Lock / Use Tools / Use Strength on containers (Loot uses the Alt path: another faction's shop stock is stolen from at once, [locks](locks.md#containers-meitou)),
-Open / Close / Lock / Unlock (all the building's doors) / Pick Lock / Use Tools / Use Strength / Smash on doors ([locks](locks.md#player-orders-on-locks)), Build, Use, Auto-Haul (storage, as the job),
+Open / Close / Lock / Unlock (all the building's doors) / Pick Lock / Use Tools / Use Strength / Smash on doors ([locks](locks.md#player-orders-on-locks)), Build, Repair (owned ruined/damaged houses; Shift adds Engineer), Use, Auto-Haul (storage, as the job),
 Inventory (storage, furnace), Man Turret, Dismantle. **Bodyguard** (45, `FollowOrder.Guard`): follows like 31 and fights whoever attacks the target (engine reading; with Shift the perma-job, [jobs](ai-tasks.md#perma-jobs)). **Attack All** (16, **engine reading**): every standing hostile within 800 of the clicked one is a target and each selected character attacks the nearest. **Shoot At** (235): replaces the
 attack verbs when the lead mans a turret; `ShootAtOrder` makes every selected gunner fire at the target until it is gone ([combat](combat.md#turrets)). **Cages** are published
 (`WorldSnapshot.Cages`) and picked like beds: Pick Lock / Use Tools / Use Strength while locked, Put in (108, the carried captive to that cage) or Get in (107) while free, Set Free (110) while occupied.
-Engine additions: Trade with a trader, Put in Cage, Put on Shackles, Cancel Construction, the door buttons, Mine. Training (97) sets the training job on a dummy. Not built: Stand Up, Throw out of home / town (the jobs 223 / 273 run), Repair / Repairs,
+Engine additions: Trade with a trader, Put in Cage, Put on Shackles, Cancel Construction, the door buttons, Mine. Training (97) sets the training job on a dummy. Not built: Stand Up, Throw out of home / town (the jobs 223 / 273 run), Repairs (60),
 Corpse Disposal (the jobs 137 / 138 run), Auto-Haul 152, Lock / Unlock of a cage (Pick Lock stands in), item menus beyond a ground item's Pick Up / Steal, the occupant's second menu and the unconscious message.
 
 ### Edit boxes and keyboard focus

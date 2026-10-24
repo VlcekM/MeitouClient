@@ -182,6 +182,8 @@ public sealed class WorldLevelLayer(string name, string directory)
 /// <param name="WorldY">The state's <c>world Y pos</c>: absolute height (terrain height + <c>Position.Y</c> for most).</param>
 public sealed record BuildingPlacement(ZoneCoordinate Zone, string InstanceId, string BuildingId, Vector3 Position, Quaternion Rotation, string? StateId, float? WorldY)
 {
+    /// <summary>Runtime repair state; null leaves the level/save flag in control.</summary>
+    public bool? DestroyedOverride { get; init; }
     readonly string? key;
 
     /// <summary>The run-time name of the building (<see cref="BuildingKey.Of"/>); a player-placed building, whose id is unique already, is given its own.</summary>

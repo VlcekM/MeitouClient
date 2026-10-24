@@ -26,7 +26,7 @@ public static class BuildingSave
     const string StateSuffix = "-S23";   // the hex of GAMESTATE_BUILDING (35)
 
     static bool IsPlayerBuilt(string instanceId, FcsRecord? state, string playerFactionId) =>
-        BuildingRegistry.TryParseId(instanceId, out _, out _) && state is not null && state.Strings.GetValueOrDefault("owner faction ID") == playerFactionId;
+        BuildingRegistry.TryParseId(instanceId, out _, out _) && state is not null && !state.Bools.GetValueOrDefault("meitou town construction") && state.Strings.GetValueOrDefault("owner faction ID") == playerFactionId;
 
     // ------------------------------------------------------------------ reading
 
@@ -153,11 +153,11 @@ public static class BuildingSave
         }
         var townHands = WriteTowns(game, world, playerFactionId, seed);
         if (reg.Count == 0) return townHands;
-        foreach (var site in reg.All) WriteSite(game, site, playerFactionId, seed, townHands.GetValueOrDefault(site.Town, Hand.Null), world.Fixtures);
+        foreach (var site in reg.All.Where(s => s.LevelPlacement is null)) WriteSite(game, site, playerFactionId, seed, townHands.GetValueOrDefault(site.Town, Hand.Null), world.Fixtures);
 
         // Parents last: they may be sites written above.
         var states = HeldSave.BuildingStates(game);
-        foreach (var site in reg.All)
+        foreach (var site in reg.All.Where(s => s.LevelPlacement is null))
         {
             if (!states.TryGetValue(BuildingKey.Of(site.Zone, site.Id), out var state)) continue;
             if (site.Parent is { } parent)

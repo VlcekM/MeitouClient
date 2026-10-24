@@ -412,7 +412,8 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     82, `General_Click`). `For sale:` with a button `c.{1,num}` (both Good) when slot 88 (`FUN_14029c500`) is true: a building of class 0xb with no
     parent whose town (+0x1f0) has its +0x2c byte clear and type 1, 2 or 3 (**Unknown** which these are), owned by a faction neither the player's nor
     allied, and its state's bool `sell home` set (true without a state). Price (`FUN_1407ad300`): int(f × target × the owner FACTION's float
-    `building cost mult` × 400), f = 0.375 when slot 102 (+0x330) answers true, else 1 (**Unknown** what that slot is). The button (slot 80
+    `building cost mult` × 400), f = 0.375 when slot 102 (+0x330) answers true, else 1. That slot reads the destroyed byte +0x1a1
+    ([construction state](buildings-production.md#construction-state), **Verified** there against `FUN_1405595a0`). The button (slot 80
     `FUN_1407ad410`) asks "Do you want to buy this building for c.{1,num}?".
   - 4 is the medical panel's section (**Observed**: `MedicalDatapanel`'s constructor `FUN_140726a70` passes 4 to `FUN_1406fd7d0`; it finds the
     `LifeBarN` widgets and their `Value`, `Yellow`, `Green`, `White`, `Datapanel`, `Tooltip`, `Robot` and `Crushed` children (and one more whose name string was not read), and `HealthText`). The
@@ -441,8 +442,7 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   buildings. A building of the player's (its site, or a town building whose fixtures the player's faction owns, `BuildingDetail.Owned`) gets the
   buttons: the door lines as full-row buttons, `[UPGRADE]` / `[DOWNGRADE]` on a site (`UpgradeSite` / `DowngradeSite`, same scope as the
   simulation's), and in a town the Open to public toggle (`SetBuildingPublic`: a site's `BuildSite.Public`, a town building's flag in the fixtures,
-  both saved as `is public day`; a town building set Private drops out of the town AI's wander and bar places). Not built: For sale (no purchase
-  of a town building), Dismantle of a town building the player owns, the original's other consumers of +0xc8 (**Unknown**).
+  both saved as `is public day`; a town building set Private drops out of the town AI's wander and bar places). **Observed** (owner's original-game Longhouse screenshot): clicking its price opens a confirmation titled with the building name, asking `Do you want to buy this building for c.{1,num}?`, with Yes / No buttons. For sale and its confirmation use the [house purchase contract](../simulation.md#town-house-purchases). Not built: Dismantle of a town building the player owns, the original's other consumers of +0xc8 (**Unknown**).
 - **Door** (DoorStuff slot 40 `FUN_140304120`), then the house's own lines of the same section: 4 `Door Condition`, the number int(progress) of the
   door's own construction state, tooltip "The door is in good condition." while that number is not negative, else "The door is damaged." (Title);
   6 `Open/Close:` with "The door is open / closed / broken" and `Security:` `Locked` / `Unlocked` and ` (lvl {1,num})`, with tooltips ([Tooltips](#tooltips)).

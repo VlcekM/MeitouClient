@@ -162,15 +162,23 @@ public sealed class ConstructionSystem : ITickSystem
                 case BuildOrder order:
                 {
                     // Build and Repair are both Task_Build: an unfinished site is built, a damaged one (progress below its target) repaired; a whole building has nothing to do.
-                    if (Root(reg, reg.Find(order.Site)) is not { NeedsWork: true } site) break;
+                    if (Root(reg, reg.Find(order.Site)) is not { NeedsWork: true } site || site.Owner != world.Player.Faction) break;
                     foreach (var id in Who(world, order.Characters))
                         if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true } cold && Able(cold))
+                        {
+                            if (site.LevelPlacement is not null && site.Destroyed)
+                            {
+                                Ruin(world, site);
+                                site.Destroyed = false;
+                                world.Fixtures.RestoreTownShell(world, site);
+                            }
                             Begin(world, slot, site, CharacterTask.Build, CharacterTask.Idle);
+                        }
                     break;
                 }
                 case DismantleOrder order:
                 {
-                    if (Root(reg, reg.Find(order.Site)) is not { } site) break;
+                    if (Root(reg, reg.Find(order.Site)) is not { LevelPlacement: null } site) break;
                     if (Blocker(reg, site) is { } text)
                     {
                         world.Post(text);
@@ -182,7 +190,7 @@ public sealed class ConstructionSystem : ITickSystem
                     break;
                 }
                 case CancelSite cancel:
-                    if (Root(reg, reg.Find(cancel.Site)) is not { Complete: false } cancelled) break;
+                    if (Root(reg, reg.Find(cancel.Site)) is not { Complete: false, LevelPlacement: null } cancelled) break;
                     if (cancelled.Deliverable > 0) world.Post("Dismantle it to get the materials back.");
                     else Remove(world, cancelled);
                     break;
@@ -194,10 +202,10 @@ public sealed class ConstructionSystem : ITickSystem
                     }
                     break;
                 case UpgradeSite up:
-                    if (reg.Find(up.Site) is { } upgraded && CanUpgrade(world, upgraded) is { } higher) Swap(world, upgraded, higher, UpgradeProgressCap, upgrade: true);
+                    if (reg.Find(up.Site) is { LevelPlacement: null } upgraded && CanUpgrade(world, upgraded) is { } higher) Swap(world, upgraded, higher, UpgradeProgressCap, upgrade: true);
                     break;
                 case DowngradeSite down:
-                    if (reg.Find(down.Site) is { } downgraded && CanDowngrade(world, downgraded) is { } lower) Swap(world, downgraded, lower, DowngradeProgressCap, upgrade: false);
+                    if (reg.Find(down.Site) is { LevelPlacement: null } downgraded && CanDowngrade(world, downgraded) is { } lower) Swap(world, downgraded, lower, DowngradeProgressCap, upgrade: false);
                     break;
                 case SetBuildingPublic open:
                     if (reg.Find(open.Building) is { } shown && shown.Owner == world.Player.Faction && shown.Public != open.Public)
@@ -676,7 +684,7 @@ public sealed class ConstructionSystem : ITickSystem
                 s.Dismantling = false;
                 reg.Touch();
             }
-            if (s is { Destroyed: true, Ruined: false })
+            if (s is { Destroyed: true, Ruined: false, LevelPlacement: null })
             {
                 Ruin(world, s);
                 if (s.WallParent is null) SyncChildren(world, s);

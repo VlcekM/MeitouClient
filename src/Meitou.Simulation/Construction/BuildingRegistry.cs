@@ -16,12 +16,15 @@ public sealed class MaterialSlot(string item, float required)
 }
 
 /// <summary>
-/// A player-built building or construction site (docs/simulation.md "Buildings"; the state is the original's Building+0x160 block, docs/game/buildings-production.md
+/// A player-built building, owned town-house repair or construction site (docs/simulation.md "Buildings"; the state is the original's Building+0x160 block, docs/game/buildings-production.md
 /// "Construction state"). Serial phases only. <see cref="Progress"/> and <see cref="Target"/> are in material units.
 /// </summary>
 public sealed class BuildSite
 {
     public required string Id { get; init; }
+    /// <summary>Existing town placement, replaced in place during repairs; never a new save instance.</summary>
+    public BuildingPlacement? LevelPlacement { get; init; }
+    public string? LevelTownName { get; init; }
     /// <summary>The BUILDING record; an upgrade or downgrade swaps it in place (<see cref="ConstructionSystem"/> "Upgrades").</summary>
     public required string Record { get; set; }
     /// <summary>The BUILDING's name (messages only; not hashed).</summary>
@@ -51,7 +54,7 @@ public sealed class BuildSite
     public bool Public { get; set; } = true;
     /// <summary>Being built up to a new record by an upgrade or downgrade: its doors stay meanwhile (the original keeps the door objects). Engine state, not saved; hashed while set.</summary>
     public bool Upgrading { get; set; }
-    /// <summary>The save's <c>destroyed</c> flag; the first tick on it turns the building back into a half-built site (<see cref="ConstructionSystem"/>).</summary>
+    /// <summary>The save's <c>destroyed</c> flag; the first tick on a player-built site, or explicit Repair on a town house, turns it back into a half-built site (<see cref="ConstructionSystem"/>).</summary>
     public bool Destroyed { get; set; }
     /// <summary>The destroyed flag has been acted on (the building is a ruin being rebuilt).</summary>
     public bool Ruined { get; set; }
@@ -76,11 +79,12 @@ public sealed class BuildSite
     /// <summary>A site that is not complete and has built all it was given: the builder waits for more materials (<c>sum(min(delivered, required)) &lt;= progress</c>).</summary>
     public bool Stalled => !Complete && Deliverable <= Progress;
     /// <summary>Unfinished, or complete with progress below the target (damaged: Building slot 101 <c>FUN_1400f6b70</c>, <b>Verified</b>); building work (orders 2 and 95) applies.</summary>
-    public bool NeedsWork => !Complete || Progress < Target;
+    public bool NeedsWork => Destroyed || !Complete || Progress < Target;
 
     internal void Hash(ref StateHasher h)
     {
         h.Add(Rng.StableHash(Id));
+        if (LevelPlacement is not null) h.Add(0x4c657665);
         h.Add(Rng.StableHash(Record));
         h.Add(Position);
         h.Add(Rotation.X); h.Add(Rotation.Y); h.Add(Rotation.Z); h.Add(Rotation.W);
@@ -269,7 +273,7 @@ public sealed partial class BuildingRegistry
         {
             var materials = new MaterialView[s.Materials.Length];
             for (int i = 0; i < materials.Length; i++) materials[i] = new MaterialView(s.Materials[i].Item, s.Materials[i].Required, s.Materials[i].Delivered);
-            list.Add(new BuildingSnapshot(s.Id, s.Record, s.Position, s.Rotation, s.Floor, s.Parent, s.Owner, s.Progress, s.Target, materials, s.Complete, s.Paused) { Dismantling = s.Dismantling, WallParent = s.WallParent, Public = s.Public, TownName = FindTown(s.Town)?.Name });
+            list.Add(new BuildingSnapshot(s.Id, s.Record, s.Position, s.Rotation, s.Floor, s.Parent, s.Owner, s.Progress, s.Target, materials, s.Complete, s.Paused) { Dismantling = s.Dismantling, WallParent = s.WallParent, Public = s.Public, TownName = s.LevelTownName ?? FindTown(s.Town)?.Name, LevelPlacement = s.LevelPlacement, Destroyed = s.Destroyed, Name = s.Name });
         }
         publishedVersion = Version;
         return published = list;

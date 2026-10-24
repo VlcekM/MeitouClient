@@ -36,6 +36,9 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
         {
             switch (command)
             {
+                case BuyBuilding buy:
+                    world.Fixtures.Buy(world, buy);
+                    break;
                 case PickLockOrder pick:
                 {
                     Fixture? cage;

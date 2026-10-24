@@ -19,12 +19,12 @@ public sealed class NavRuntimeBuildings
 
     public bool IsEmpty => byZone.Count == 0;
 
-    /// <summary>Adds or replaces a placement (by instance id).</summary>
+    /// <summary>Adds or replaces a placement (by global placement key).</summary>
     public void Add(BuildingPlacement placement)
     {
         lock (gate)
         {
-            all[placement.InstanceId] = placement;
+            all[placement.Key] = placement;
             byZone = all.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
         }
     }

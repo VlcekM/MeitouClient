@@ -20,13 +20,12 @@ internal sealed partial class ZoneGeometryGatherer
             for (int dx = -1; dx <= 1; dx++)
             {
                 var z = new ZoneCoordinate(zone.X + dx, zone.Y + dz);
-                // The buildings of the level data, then the ones the player placed (an empty overlay adds nothing, the cache keys stay).
-                foreach (var list in (IReadOnlyList<BuildingPlacement>[])[buildingsByZone.GetValueOrDefault(z) ?? [], runtime?.In(z) ?? []])
-                    foreach (var b in list)
-                    {
-                        if (b.Position.X < lo.X || b.Position.X > hi.X || b.Position.Z < lo.Y || b.Position.Z > hi.Y) continue;
-                        if (BuildingPlacements.Resolve(b, db, levels, terrain) is { } resolved) yield return resolved;
-                    }
+                // Runtime placements replace town houses by global key, or append newly placed buildings.
+                foreach (var b in BuildingPlacements.Overlay(buildingsByZone.GetValueOrDefault(z) ?? [], runtime?.In(z) ?? []))
+                {
+                    if (b.Position.X < lo.X || b.Position.X > hi.X || b.Position.Z < lo.Y || b.Position.Z > hi.Y) continue;
+                    if (BuildingPlacements.Resolve(b, db, levels, terrain) is { } resolved) yield return resolved;
+                }
             }
     }
 

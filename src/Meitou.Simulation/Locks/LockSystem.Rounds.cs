@@ -231,7 +231,7 @@ public sealed partial class LockSystem : IStateHashed
                 if (HasGoal(world, s, c, TaskType.LOCK_ALL_THE_CAGES, hour)) { cages = true; if (free && warden < 0) warden = s; }
             }
             if (cages && warden >= 0 && board.Town >= 0) LockCages(world, squad, board, warden, ref started);
-            if (board.OwnHome is not { } home || world.Fixtures.DoorOwner(home.Key) < 0 || Targeted(home.Key)) continue;
+            if (board.OwnHome is not { } home || world.Fixtures.DoorOwner(home.Key) < 0 || world.Fixtures.OwnsBuilding(home.Key, world.Player.Faction) || Targeted(home.Key)) continue;
             string building = home.Key;
             if (inside155 || from197)
             {
@@ -363,6 +363,7 @@ public sealed partial class LockSystem : IStateHashed
             if (r.Age > ReleaseTimeout) return End(world, r, fallback: true);
         }
         if (r.Index >= r.Targets.Length || world.Fixtures.Find(r.Targets[r.Index]) is not { } f) return End(world, r, fallback: true);
+        if (r.Faction != world.Player.Faction && world.Fixtures.OwnsBuilding(f.Building, world.Player.Faction)) return End(world, r, fallback: false);
         ref var n = ref table.Next[w];
         switch (r.Phase)
         {

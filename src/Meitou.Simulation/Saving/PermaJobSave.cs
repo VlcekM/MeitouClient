@@ -27,7 +27,7 @@ public static class PermaJobSave
             var hand = !job.Character.IsNone && handleOf?.Invoke(job.Character) is { IsNull: false } target ? target : job.Saved;
             if (job.Site is { } id)
             {
-                hand = sites.Find(id) is { } site && buildings.TryGetValue(BuildingKey.Of(site.Zone, id), out var state) && Hand.IsComplete(state, "handle") ? Hand.Read(state, "handle") : Hand.Null;
+                hand = sites.Find(id) is { } site && buildings.TryGetValue(site.LevelPlacement is null ? BuildingKey.Of(site.Zone, id) : id, out var state) && Hand.IsComplete(state, "handle") ? Hand.Read(state, "handle") : Hand.Null;
                 ai.Strings[MeitouSite + i] = id;
             }
             ai.Ints[Type + i] = (int)job.Type;
@@ -46,7 +46,7 @@ public static class PermaJobSave
         {
             var hand = Hand.Read(ai, Target + i);
             // A rock's natural id is kept as it is: its site is made from the id (ProductionSystem.Natural).
-            string? site = ai.Strings.TryGetValue(MeitouSite + i, out var id) && (sites.Find(id) is not null || ProductionSystem.IsNatural(id)) ? id
+            string? site = ai.Strings.TryGetValue(MeitouSite + i, out var id) && (sites.Find(id) is not null || instanceOf.Values.Contains(id) || ProductionSystem.IsNatural(id)) ? id
                 : handles.Building(hand) is { } b && instanceOf.TryGetValue(b, out var key) && key.IndexOf(':') is var colon and >= 0 && sites.Find(key[(colon + 1)..]) is not null ? key[(colon + 1)..]
                 : null;
             PermaJobs.Add(cold, (TaskType)type, new PermaJob((TaskType)type, site, site is null ? hand : Hand.Null));

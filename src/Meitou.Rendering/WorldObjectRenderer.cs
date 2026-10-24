@@ -200,7 +200,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public void AddRuntime(BuildingPlacement placement)
     {
         objects.AddRuntime(placement);
-        streamer.AddRuntime(placement);
+        if (placement.DestroyedOverride is not null) streamer.Reload([placement.Zone]);
+        else streamer.AddRuntime(placement);
     }
 
     /// <summary>A placed building is gone: its parts leave the zone.</summary>

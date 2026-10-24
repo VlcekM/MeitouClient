@@ -107,7 +107,7 @@ internal sealed class WorldLamps : IDisposable
     }
 
     /// <summary>The power factor of lamp <paramref name="i"/>: 1 for the world's, the building's factor for a placed building's (its placement id is the building id).</summary>
-    float PowerFactor(int i) => i < world!.Length || i >= lamps!.Length ? 1 : runtimePower.GetValueOrDefault(lamps[i].PlacementId, 1);
+    float PowerFactor(int i) => i >= lamps!.Length ? 1 : runtimePower.GetValueOrDefault(lamps[i].PlacementId, 1);
 
     /// <summary>Lamp <paramref name="i"/> of this frame: the world's and placed buildings', then <see cref="Moving"/>.</summary>
     WorldLight Lamp(int i) => i < lamps!.Length ? lamps[i] : Moving[i - lamps.Length];
@@ -137,7 +137,8 @@ internal sealed class WorldLamps : IDisposable
         }
         if (runtimeChanged || lamps is null)
         {
-            lamps = runtime.Count == 0 ? world : [.. world, .. runtime.Values.SelectMany(r => r)];
+            lamps = runtime.Count == 0 ? world : [.. world.Where(l => !runtime.ContainsKey(l.PlacementId)
+                && !runtime.Keys.Any(id => l.PlacementId.StartsWith(id + "/", StringComparison.Ordinal))), .. runtime.Values.SelectMany(r => r)];
             runtimeChanged = false;
         }
         int count = lamps.Length + Moving.Count;

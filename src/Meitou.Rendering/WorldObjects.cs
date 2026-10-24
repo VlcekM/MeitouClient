@@ -103,12 +103,12 @@ sealed class WorldObjects : IDisposable
     // Replaced whole on every change, so worker threads in BuildZone read a stable snapshot without the lock.
     volatile Dictionary<ZoneCoordinate, BuildingPlacement[]> runtimeByZone = [];
 
-    /// <summary>Adds (or replaces, by <see cref="BuildingPlacement.InstanceId"/>) a placement that is not in the level data; zones laid out from now on include it.</summary>
+    /// <summary>Adds (or replaces, by <see cref="BuildingPlacement.Key"/>) a runtime placement or town-house override; zones laid out from now on include it.</summary>
     public void AddRuntime(BuildingPlacement placement)
     {
         lock (runtimeLock)
         {
-            runtime[placement.InstanceId] = placement;
+            runtime[placement.Key] = placement;
             Reindex();
         }
     }
@@ -145,7 +145,7 @@ sealed class WorldObjects : IDisposable
         placementVersion++;
     }
 
-    IEnumerable<BuildingPlacement> RuntimeIn(ZoneCoordinate zone) => runtimeByZone.TryGetValue(zone, out var list) ? list : [];
+    IReadOnlyList<BuildingPlacement> RuntimeIn(ZoneCoordinate zone) => runtimeByZone.TryGetValue(zone, out var list) ? list : [];
 
     volatile int placementVersion;
     BuildingFloors? floors;
@@ -165,7 +165,7 @@ sealed class WorldObjects : IDisposable
     {
         if (staged is not null || heights?.Value is not { } map || interiorCollisions is not { } collisions) return [];
         var result = new List<BuildingFloor>();
-        foreach (var placement in (buildingsByZone.GetValueOrDefault(zone) ?? []).Concat(RuntimeIn(zone)))
+        foreach (var placement in BuildingPlacements.Overlay(buildingsByZone.GetValueOrDefault(zone) ?? [], RuntimeIn(zone)))
         {
             if (BuildingPlacements.Resolve(placement, Database, Levels, map.HeightAt) is not { Destroyed: false } resolved || resolved.Record.Type != Meitou.Data.Fcs.FcsRecordType.BUILDING) continue;
             var (b, record, position) = (placement, resolved.Record, resolved.Position);
@@ -224,7 +224,7 @@ sealed class WorldObjects : IDisposable
     {
         if (staged is not null) return staged.GetValueOrDefault(zone) ?? new() { Zone = zone };
         var fixedPlacements = buildingsByZone.GetValueOrDefault(zone);
-        return Lay(zone, fixedPlacements is null ? RuntimeIn(zone) : fixedPlacements.Concat(RuntimeIn(zone)), withFeatures: true);
+        return Lay(zone, BuildingPlacements.Overlay(fixedPlacements ?? [], RuntimeIn(zone)), withFeatures: true);
     }
 
     /// <summary>Lays out one runtime placement alone (a building the player placed), for a zone that is already laid out (worker threads).</summary>
@@ -251,7 +251,7 @@ sealed class WorldObjects : IDisposable
                 float y = b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y;
                 if (b.WorldY is not null) Interlocked.Increment(ref fromState);
                 var state = b.StateId is not null && Levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
-                bool isDestroyed = state?.GetBool("destroyed") ?? false;
+                bool isDestroyed = b.DestroyedOverride ?? state?.GetBool("destroyed") ?? false;
                 if (isDestroyed) Interlocked.Increment(ref destroyed);
                 var town = Towns.TownOf(state, b.Position);
                 GameRecord? townMaterial;

@@ -269,6 +269,8 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     public IReadOnlyDictionary<(string Building, int Door), Locks.DoorView> Doors { get; init; } = NoDoors;
 
     /// <summary>The doors of the building the HUD shows (<see cref="InspectBuildingCommand"/>); null when none is shown or it has no fixtures.</summary>
+    /// <summary>Registered town houses owned by the player, including those without doors; used by indoor placement.</summary>
+    public IReadOnlySet<string> OwnedTownBuildings { get; init; } = new HashSet<string>();
     public Locks.BuildingDetail? InspectedBuilding { get; init; }
     /// <summary>The resource richness of the building the HUD shows (a mine or rock); null for others.</summary>
     public Production.RichnessView? InspectedRichness { get; init; }

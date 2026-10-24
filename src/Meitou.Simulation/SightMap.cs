@@ -66,7 +66,7 @@ public sealed class SightMap
     /// <summary>Adds a town building's room and lamps once (when its town registers, <see cref="Locks.FixtureRegistry.RegisterSite"/>).</summary>
     public void Add(ISightSource source, TownBuilding building)
     {
-        if (!added.Add(building.Key)) return;
+        if (building.Destroyed || !added.Add(building.Key)) return;
         int room = -1;
         if (!building.Destroyed && source.Room(building) is { } volume)
         {

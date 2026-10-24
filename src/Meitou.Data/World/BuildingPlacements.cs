@@ -12,6 +12,14 @@ public readonly record struct ResolvedBuilding(BuildingPlacement Placement, Game
 /// </summary>
 public static class BuildingPlacements
 {
+    /// <summary>Overlay existing placements by world key, without duplicating buildings whose zone-local ids repeat.</summary>
+    public static IEnumerable<BuildingPlacement> Overlay(IEnumerable<BuildingPlacement> original, IReadOnlyList<BuildingPlacement> changes)
+    {
+        var replacements = changes.ToDictionary(p => p.Key, StringComparer.Ordinal);
+        foreach (var p in original) yield return replacements.Remove(p.Key, out var replacement) ? replacement : p;
+        foreach (var p in changes) if (replacements.ContainsKey(p.Key)) yield return p;
+    }
+
     /// <summary>The resolved placement; null for an unplaced one (position 0) or one whose building record does not exist.</summary>
     public static ResolvedBuilding? Resolve(BuildingPlacement b, GameDatabase db, WorldLevelData levels, Func<double, double, float> terrainHeight)
     {
@@ -19,6 +27,6 @@ public static class BuildingPlacements
         if (db.Find(b.BuildingId) is not { } record) return null;
         float y = b.WorldY ?? terrainHeight(b.Position.X, b.Position.Z) + b.Position.Y;
         var state = b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
-        return new ResolvedBuilding(b, record, new Vector3(b.Position.X, y, b.Position.Z), state?.GetBool("destroyed") ?? false);
+        return new ResolvedBuilding(b, record, new Vector3(b.Position.X, y, b.Position.Z), b.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
     }
 }

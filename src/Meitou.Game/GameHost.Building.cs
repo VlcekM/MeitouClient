@@ -51,7 +51,7 @@ sealed partial class GameHost
         if (gpu.Objects is not { } objects) return;
         constructionLook.Clear();
         foreach (var site in snapshot.Buildings)
-            if (!site.Complete) constructionLook[site.Id] = ConstructionLook(site);
+            if (!site.Complete && !site.Destroyed) constructionLook[site.Id] = ConstructionLook(site);
         objects.Construction = constructionLook.Count == 0 ? null : constructionLook;
     }
 
@@ -69,7 +69,8 @@ sealed partial class GameHost
     void DiffBuildings(WorldSnapshot snapshot)
     {
         var current = new Dictionary<string, BuildingSnapshot>(StringComparer.Ordinal);
-        foreach (var site in snapshot.Buildings) current[site.Id] = site;
+        foreach (var site in snapshot.Buildings)
+            if (site.LevelPlacement is null || !site.Destroyed) current[site.Id] = site;
         foreach (string id in shownBuildings.Keys.Where(id => !current.ContainsKey(id)).ToArray())
         {
             gpu.Objects?.RemoveRuntime(id);
@@ -81,7 +82,7 @@ sealed partial class GameHost
         foreach (var site in current.Values)
         {
             var placement = Placement(site);
-            if (shownBuildings.TryGetValue(site.Id, out var shown) && shown.Record == site.Record && shown.Position == site.Position && shown.Rotation == site.Rotation)
+            if (shownBuildings.TryGetValue(site.Id, out var shown) && shown.Record == site.Record && shown.Position == site.Position && shown.Rotation == site.Rotation && shown.Destroyed == site.Destroyed)
             {
                 if (site.Complete && !shown.Complete) AddToNavmesh(site, placement);   // newly complete
                 UpdateLamps(site);
@@ -109,10 +110,16 @@ sealed partial class GameHost
         if (gpu.Lamps is not { } lamps) return;
         if (!site.Complete)
         {
-            if (litBuildings.Remove(site.Id)) lamps.RemoveRuntime(site.Id);
+            if (site.LevelPlacement is not null) { litBuildings.Remove(site.Id); lamps.SetRuntime(site.Id, []); }
+            else if (litBuildings.Remove(site.Id)) lamps.RemoveRuntime(site.Id);
             return;
         }
         if (!litBuildings.Add(site.Id) || scene.Database is not { } db || db.Find(site.Record) is not { } record) return;
+        if (site.LevelPlacement is not null && scene.Objects is { } objects)
+        {
+            lamps.SetRuntime(site.Id, WorldLights.ForBuilding(db, objects.Levels, new(Placement(site), record, site.Position, site.Destroyed), objects.Layouts));
+            return;
+        }
         var placed = new List<PlacedLight>();
         WorldObjectLayout.Building(db, record, site.Id, site.Position, site.Rotation, new BuildingState { Identity = site.Id }, placed);
         lamps.SetRuntime(site.Id, placed.Select(p => WorldLights.FromPlaced(p, interior: false)));
@@ -138,13 +145,15 @@ sealed partial class GameHost
     /// building's id is unique in the world (the simulation's registry reserves every saved id), and the overlays remove it by that id.
     /// </summary>
     static BuildingPlacement Placement(BuildingSnapshot site) =>
-        new(WorldLayout.ZoneOf(site.Position.X, site.Position.Z), site.Id, site.Record, site.Position, site.Rotation, null, site.Position.Y) { Key = site.Id };
+        site.LevelPlacement is { } level
+            ? level with { Key = site.Id, WorldY = site.Position.Y, DestroyedOverride = site.Destroyed }
+            : new(WorldLayout.ZoneOf(site.Position.X, site.Position.Z), site.Id, site.Record, site.Position, site.Rotation, null, site.Position.Y) { Key = site.Id };
 
     /// <summary>Navmesh membership (engine reading of the Observed rebuild on placing): <c>path mode</c> not 0 and the building complete or without a <c>build threshold</c>.</summary>
     void AddToNavmesh(BuildingSnapshot site, BuildingPlacement placement)
     {
         if (nav is null || navBuildings.Contains(site.Id) || !BuildData().TryGetValue(site.Record, out var data)) return;
-        if (data.PathMode == 0 || !site.Complete && data.BuildThreshold != 0) return;
+        if (data.PathMode == 0 || site.LevelPlacement is null && !site.Complete && data.BuildThreshold != 0) return;
         navBuildings.Add(site.Id);
         nav.AddRuntimeBuilding(placement);   // the zones loaded are built again; UpdateNav sends the RepathCommand when one is ready
     }
@@ -260,7 +269,7 @@ sealed partial class GameHost
         }
         string player = popData is { } p && p.PlayerFaction is >= 0 and var mine && mine < p.Factions.Count ? p.Factions[mine].Id : "";
         return levelOwners?.TryGetValue(room.PlacementId, out var level) == true
-            ? new(room.PlacementId, room.Footprint, floor, level.Instance, player.Length > 0 && level.Owner == player)
+            ? new(room.PlacementId, room.Footprint, floor, level.Instance, session.CurrentSnapshot.OwnedTownBuildings.Contains(room.PlacementId) || player.Length > 0 && level.Owner == player)
             : new(room.PlacementId, room.Footprint, floor, room.PlacementId);
     }
 }

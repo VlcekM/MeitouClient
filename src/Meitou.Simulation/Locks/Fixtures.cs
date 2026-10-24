@@ -151,7 +151,10 @@ public readonly record struct DoorView(float Open, DoorMotion Motion, bool Locke
 /// The doors of the building the HUD shows (<see cref="InspectBuildingCommand"/>), in the building's door order: what the panel's door lines say; whether a fixture of it is the player's
 /// (<paramref name="Owned"/>: a town building the player owns gets the panel's buttons) and its Open to public flag as the player set it (null: never set).
 /// </summary>
-public sealed record BuildingDetail(string Instance, IReadOnlyList<DoorDetail> Doors, bool Owned = false, bool? Public = null);
+public sealed record BuildingDetail(string Instance, IReadOnlyList<DoorDetail> Doors, bool Owned = false, bool? Public = null)
+{
+    public long? SalePrice { get; init; }
+}
 
 /// <summary>
 /// One door for the panel: open (open or opening: where it is heading), effectively locked, whether it wants its lock, its lock's level (0..100), whether the door is broken, and its

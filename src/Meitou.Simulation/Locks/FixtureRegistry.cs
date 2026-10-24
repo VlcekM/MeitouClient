@@ -22,7 +22,7 @@ namespace Meitou.Simulation.Locks;
 /// trips: <see cref="BedSystem"/>).</item>
 /// </list>
 /// </summary>
-public sealed class FixtureRegistry
+public sealed partial class FixtureRegistry
 {
     /// <summary>The cage finder's distance scale: weight clamp(1 - d^2 / 4608^2, 1e-5, 1), x100 for the carrier's faction, x100 in its home (economy.md 11.7, <b>Observed</b>).</summary>
     public const float CageSearchScale = 4608;
@@ -106,7 +106,8 @@ public sealed class FixtureRegistry
         foreach (var b in data.Sites[site].Buildings)
         {
             RegisterBuilding(world, data, site, b, townFaction);
-            if (data.Sight is { } sight) world.Sight.Add(sight, b);
+            if (data.Sight is { } sight) world.Sight.Add(sight, SightBuilding(b,
+                Saved?.GetValueOrDefault(b.Key)?.Bools.GetValueOrDefault("destroyed", b.Destroyed) ?? b.Destroyed));
         }
         Bind(world);
     }
@@ -116,11 +117,14 @@ public sealed class FixtureRegistry
         if (byBuilding.ContainsKey(b.Key)) return;
         var db = data.Db;
         int owner = b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction;
+        if (Saved?.GetValueOrDefault(b.Key)?.Strings.GetValueOrDefault("owner faction ID") is { Length: > 0 } savedOwner && data.FactionIndex(savedOwner) is >= 0 and var savedFaction)
+            owner = savedFaction;
+        RegisterProperty(world, data, site, b, owner);
         var faction = owner >= 0 && owner < data.Factions.Count ? data.Factions[owner] : null;
         var list = new List<Fixture>();
         var record = db.Find(b.BuildingId);
         // A destroyed building has no doors and no lock of its own (docs/game/locks.md "Doors"); its interior's fixtures stay.
-        if (record is not null && !b.Destroyed)
+        if (record is not null && !(Saved?.GetValueOrDefault(b.Key)?.Bools.GetValueOrDefault("destroyed", b.Destroyed) ?? b.Destroyed))
         {
             AddDoors(world, db, record, b.Key, site, owner, faction, b.Position, b.Yaw, list);
             if (Lockable(db, record) is { } own) list.Add(Make(world, db, own, b.Key, b.Key, record, site, owner, faction, b.Position, b.Yaw));
@@ -140,7 +144,7 @@ public sealed class FixtureRegistry
             });
             bed++;
         }
-        if (list.Count == 0) return;
+        if (list.Count == 0 && !properties.ContainsKey(b.Key)) return;
         byBuilding[b.Key] = list;
         buildings.Add(b.Key);
         foreach (var f in list) { all.Add(f); byId[f.Id] = f; }
@@ -880,6 +884,7 @@ public sealed class FixtureRegistry
     public bool WriteBuilding(string buildingInstance, FcsRecord state)
     {
         if (!byBuilding.TryGetValue(buildingInstance, out var list)) return false;
+        WriteProperty(buildingInstance, state);
         if (publicFlags.TryGetValue(buildingInstance, out bool open)) state.Bools["is public day"] = open;
         foreach (var f in list)
         {
@@ -948,7 +953,7 @@ public sealed class FixtureRegistry
         if (instance is null || !byBuilding.TryGetValue(instance, out var list)) return null;
         var doorList = list.Where(f => f.Kind == FixtureKind.Door).OrderBy(f => f.DoorIndex)
             .Select(f => new DoorDetail(f.Motion is DoorMotion.Open or DoorMotion.Opening, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0, f.DoorBroken, f.RecordId, f.WantsLock)).ToArray();
-        return new BuildingDetail(instance, doorList, faction >= 0 && list.Exists(f => f.Owner == faction), PublicOf(instance));
+        return new BuildingDetail(instance, doorList, OwnsBuilding(instance, faction), PublicOf(instance)) { SalePrice = SalePrice(instance, faction) };
     }
 
     /// <summary>
@@ -976,13 +981,18 @@ public sealed class FixtureRegistry
     public bool? PublicOf(string building) => publicFlags.TryGetValue(building, out bool open) ? open : null;
 
     /// <summary>Sets a registered building's Open to public flag (the panel's toggle on a town building the player owns).</summary>
-    public void SetPublic(string building, bool open) => publicFlags[building] = open;
+    public void SetPublic(string building, bool open)
+    {
+        publicFlags[building] = open;
+        if (properties.TryGetValue(building, out var p) && p.Construction is { } site) site.Public = open;
+    }
 
     /// <summary>The registered buildings, in registration order.</summary>
     public IReadOnlyList<string> Buildings => buildings;
 
     internal void Hash(ref StateHasher h)
     {
+        HashProperties(ref h);
         h.Add(0x4C6F636B);
         h.Add(all.Count);
         foreach (var f in all) f.Hash(ref h);

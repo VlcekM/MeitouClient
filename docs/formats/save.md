@@ -55,6 +55,12 @@ GAMESTATE_BUILDING `<id>-S23` carrying `name`, `owner faction ID`, `floornum`, `
 sample save holds a player-built building, so a real file was not compared). A finished one with doors also gets the door keys of [locks](../game/locks.md#save-keys)
 (the original saves doors the same way for every building, **Observed** by code). Meitou-only `meitou parent` (instance id) names a parent the handle cannot.
 
+**Town-house repair** (Meitou): the original zone instance's GAMESTATE_BUILDING stores `destroyed`, `is complete`,
+`pause`, `construction progress`, `<i>construction mats` and ownership. Bool `meitou town construction` keeps it distinct
+from a new player-built instance, including after completion; the loader registers its construction state when the town activates.
+No extra instance or outpost is created. **Verified** by `HouseRepairTests` against The Hub's original ruined Storm House
+and a save/read round trip. Persistent job targets use its zone-qualified identity; transient work orders are not saved.
+
 Save runtime state, derive definitions/race/gear/material/terrain from merged base/mod data,
 regenerate unsaved foliage/weather particles. Reused declared type IDs do not imply declared
 field schema: ITEM, ITEM_PLACEMENT_GROUP, STATS, RESEARCH and BIOMES have saved-state keys.

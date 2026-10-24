@@ -147,7 +147,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         EnsurePopulated(zone);
         if (!zones.ContainsKey(zone) && !jobs.ContainsKey(zone)) return;
         if (jobs.ContainsKey(zone) || fills.Any(f => f.Zone.Coordinate == zone)) { Invalidate(zone); return; }
-        runtimeJobs.Add((zone, placement.InstanceId, BackgroundWork.Run(() => objects.BuildRuntime(placement))));
+        runtimeJobs.Add((zone, placement.Key, BackgroundWork.Run(() => objects.BuildRuntime(placement))));
     }
 
     /// <summary>A runtime placement was removed from <see cref="WorldObjects"/>: its instances and indoor volume leave the zone.</summary>

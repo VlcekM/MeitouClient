@@ -789,14 +789,23 @@ that damages a complete building. Production, power and research: [Production](#
   required, delivered), `Complete`, `Paused`, `Dismantling`, `Public`, `TownName`), `BuildingsRevision`, `UnlockedBuildings`.
 
 **Simulation state.** `World.Buildings` (`Construction.BuildingRegistry`, sites as `BuildSite`): player-built sites in
-creation order, by id, holding the snapshot's fields plus rate, builder counter and the destroyed flags. Base-game
-placements are not in it. Ids `<n>-zone<X>.<Y>-INGAME`, n from a per-zone counter (hashed) that starts above every such id
+creation order, by id, holding the snapshot's fields plus rate, builder counter and the destroyed flags. Owned town houses needing repair also register, with `LevelPlacement` and a zone-qualified id; completed restored houses stay registered for their scene overlay. Ids `<n>-zone<X>.<Y>-INGAME`, n from a per-zone counter (hashed) that starts above every such id
 in the loaded save (generated interiors share the pattern; `Reserve(id)`). The 106 `-zoneX.Y-INGAME` ids of the level data
 are not reserved by the simulation (**engine gap**, the host may call `World.Buildings.Reserve`); a collision with a base
 placement is the host's to avoid. `World.Research` (`Construction.ResearchState`): completed RESEARCH ids and the
 `Unlocked` set (replaced, never changed in place). A new game completes the default start research
 (`ResearchGate.DefaultStartId`, [build menu](game/buildings-production.md#build-menu)) and the start-off's `research`
 (`PopulationSystem.StartPlayer`); a load takes the save's. Research benches change it ([Production](#production), which says when it is hashed).
+
+**Town-house repairs.** `FixtureRegistry` registers an owned damaged/incomplete house on purchase or town activation.
+Buying a ruin leaves it destroyed; an explicit Repair order from an able selected player character starts rebuilding,
+applying the [ruin transition](game/buildings-production.md#construction-tick) once and restoring doors and indoor sight.
+Build, DeliverMaterials and FetchMaterials use the same work and resource rules as new construction. Shift also adds
+Engineer (125), which resumes available work after supplies arrive; a direct order stops when no source exists.
+Jobs retain their queue priority and switch. Transient orders are not saved; persistent jobs and the house's progress,
+delivered materials and ownership are ([save](formats/save.md#zone-files)). Normal damage to a complete house needs no materials.
+Town houses cannot be dismantled, cancelled or upgraded through this seam. The original town and instance remain unchanged.
+**Verified** implementation coverage: `HouseRepairTests` and `HouseRepairUiTests` (both UI modes, original Storm House data).
 
 **Outposts.** `World.Buildings.Towns` (`PlayerTown`: `Number` 1.., `Name`, `Position`, `Owner`; never removed) and
 `BuildSite.Town` (a number, 0 none). `PlaceBuildings` gives each new site its town by the
@@ -851,7 +860,7 @@ Combat; all of it is serial. `ConstructionSettings`: `BuildingSpeed` (the option
   `Rng.Float(Rng.Hash(seed, StableHash(id), RngPurpose.Build, i))`, m = CONSTANTS `min dismantle materials percentage` /
   100; each unit is its own ground item (`GroundItems.Drop`, yaw 0) at x, z = position + (2u - 1) r, u from streams
   `2000 + (i << 16) + 2k` and `+1`, r = the footprint radius, at least `Reach` (engine: the original's bounding box is
-  not in the sim). A destroyed flag (a save's; nothing sets it in play) turns a building into a ruin on the next tick
+  not in the sim). A destroyed flag (a save's; nothing sets it in play) turns a player-built building into a ruin on the next tick; a town house waits for Repair
   (**Verified** rule: progress 0.4 x target, delivered floor(delivered x U[0.3, 0.5) + 0.5)).
 - Engineer job (125, run by the [job lists](#production)): `EngineerSite` scores the faction's sites that `NeedsWork`,
   not paused, destroyed, attached or being dismantled, `max(2 (1 - d^2/9000^2), 0.0001) / (n + 1)` (d 3D, n others
@@ -873,7 +882,10 @@ newly complete → navmesh and lamps (lamps leave when it is no longer complete)
 ticks and loads; the diff does not. Navmesh membership (engine reading of the Observed rebuild on placing):
 `PathMode != 0` and (`Complete` or `BuildThreshold == 0`). Rebuilt zones that publish go into the host's next
 `RepathCommand` (with its zones, [long routes](game/pathfinding.md)).
-- Overlay type: the existing `BuildingPlacement` (`StateId` null, `WorldY` = absolute Y, zone of the position).
+- Overlay type: `BuildingPlacement` (`StateId` null for new buildings, `WorldY` = absolute Y). Town repairs retain the
+  original state and instance ids, overriding only `Destroyed`; render and nav replace by global `Key`, never append a second house.
+  A repaired town zone reloads its objects, interior and floors; its nav overlay applies from repair start even below build threshold.
+  House lamps and layout lamps replace the old lights, with none during reconstruction.
 - Rendering: `WorldObjects.AddRuntime/RemoveRuntime(BuildingPlacement)` merged into `BuildZone`. Engine choice: a loaded
   zone takes the placement incrementally (no reload); the scaffold is an approximation ([render-objects](render-objects.md#player-buildings-and-the-placement-ghost)).
 - Navigation: one thread-safe overlay store shared by every `ZoneGeometryGatherer` (`NearBuildings` and `BuildingHash`
@@ -1363,3 +1375,18 @@ Smuggling and stealing: [trade](#trade). UI: [faithful-ui-parity](faithful-ui-pa
 - `CharacterHot.Animation`/`AnimationTime` (the old movement layers) and the name length are still hashed; removing them moves every hash.
 - `HoursPerTick` is a constant of its own, not derived from `WorldSettings.TickSeconds`.
 - Navmesh: the cache key does not see a changed collision file; a running build is not stopped on unload (it finishes into the cache).
+
+
+## Town house purchases
+
+`BuyBuilding` rechecks the registered shell house's sale flag, town kind, owner/alliance, quoted
+price and funds before deducting money once. The HUD shows the localized `For sale:` price and
+original confirmation text in both UI modes; the [original rules](game/ui-screens.md#selected-building)
+are recorded separately. Destroyed houses register even without fixtures. Purchased ownership
+is independent of doors, reaches fixtures, loose-item slots and the indoor build permission,
+stops former NPC lock rounds, and is saved in `owner faction ID` with `sell home` false. Loaded ownership is applied before fixtures
+are created. **Engine choice:** purchase makes the house private; the original callback's remaining
+side effects are unresolved. Eligibility recognizes function 19 or no-function buildings with interior meshes, excludes walls/gates and rejects
+`is inside building`; the original's class and parent-pointer tests are not fully decoded.
+`HousePurchaseTests` covers pricing, revalidation, ownership and saved-state reload;
+`HousePurchaseUiTests` covers the price, confirmation/cancel and ownership panel in both modes.

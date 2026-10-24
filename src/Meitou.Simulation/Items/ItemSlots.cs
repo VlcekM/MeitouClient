@@ -60,6 +60,7 @@ public sealed class ItemSlots
         {
             if (b.ItemSlots.Count == 0) continue;
             int owner = b.OwnerFactionId is { } o && data.FactionIndex(o) is var fi and >= 0 ? fi : townFaction;
+            owner = world.Fixtures.PropertyOwner(b.Key) ?? owner;
             foreach (var s in b.ItemSlots)
             {
                 if (Group(data.Db, s.GroupId) is not { } group) continue;
@@ -75,6 +76,18 @@ public sealed class ItemSlots
                 }
                 all.Add(slot);
             }
+        }
+    }
+
+    /// <summary>Loose furnishings follow the purchased house, including subsequent slot refills.</summary>
+    public void TransferBuilding(World world, TownBuilding building, int owner)
+    {
+        var ids = building.ItemSlots.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var slot in all)
+        {
+            if (!ids.Contains(slot.Id)) continue;
+            slot.Owner = owner;
+            if (slot.Item >= 0) world.GroundItems.Claim(slot.Item, slot.Id, owner);
         }
     }
 
