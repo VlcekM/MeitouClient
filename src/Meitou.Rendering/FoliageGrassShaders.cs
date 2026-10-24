@@ -167,7 +167,8 @@ public static partial class FoliageGrassShaders
     }
 
     public static string GrassVertexGpu() => Vertex(FoliageShaders.GrassVertex);
-    public static string GrassFragmentGpu() => Fragment(InteriorMaskRenderer.WithCut(FoliageShaders.GrassFragment));
+    /// <summary>The blades' colour program, with the interior cut and the GI resolve's surface output, as <see cref="FoliageShaders.GrassFragmentNative"/>.</summary>
+    public static string GrassFragmentGpu() => Gi.GiResolveShaders.WithAlbedo(Fragment(InteriorMaskRenderer.WithCut(FoliageShaders.GrassFragment)), inShader: true);
     public static string GrassMotionVertexGpu() => Vertex(FoliageShaders.GrassMotionVertex);
     public static string GrassMotionFragmentGpu() => Fragment(FoliageShaders.GrassMotionFragment);
 

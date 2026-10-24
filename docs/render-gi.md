@@ -82,7 +82,10 @@ saturated yellow on unlit walls; a linear GI-share mix nearly matches GI off.
 geometry or blindly shortening rays. Visible indirect light may depend on hidden surfaces.
 Resolve divisor2: scene writes flagged normal/albedo into an extra RGBA16UI target; low-res
 resolve reconstructs position from near/far depth; full-res apply depth-weights four neighbours.
-Unflagged/background surfaces must remain unchanged. Resolved surfaces currently lose the
+Unflagged/background surfaces must remain unchanged. Every program drawing into the scene pass
+must write that target (`WithAlbedo`, `none` for unlit ones), including the GPU-indirect variants:
+an unwritten output is undefined (in practice the surface behind, whose GI then lands on the
+front fragment). Resolved surfaces currently lose the
 per-fragment specular-occlusion term. Strong depth/normal discontinuities need rejection.
 Surface bit9 marks interiors; signed low-resolution depth preserves that class (0 empty, negative
 interior). Upsampling rejects the other class so the gain cannot bleed onto outdoor surfaces.
