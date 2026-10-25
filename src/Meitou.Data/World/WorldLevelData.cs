@@ -141,7 +141,8 @@ public sealed class WorldLevelData
         {
             var instance = town.GetString("instance");
             if (instance.Length == 0) continue;
-            var zones = Enumerable.Range(0, town.GetInt("zones_count"))
+            var zones = Enumerable.Range(0, Math.Max(0, town.GetInt("zones_count")))
+                .Where(i => town.Ints.ContainsKey($"zone_x_{i}") && town.Ints.ContainsKey($"zone_y_{i}"))
                 .Select(i => new ZoneCoordinate(town.GetInt($"zone_x_{i}"), town.GetInt($"zone_y_{i}")));
             if (!result.TryGetValue(instance, out var list)) result[instance] = list = [];
             list.AddRange(zones.Where(z => !list.Contains(z)));

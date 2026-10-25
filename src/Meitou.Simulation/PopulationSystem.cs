@@ -167,10 +167,13 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     /// <summary>Where each wild nest stood when it last loaded (null before), for the map.</summary>
     Vector2?[] wildCentres = [];
+    /// <summary>The player characters of a <see cref="Discover"/> check, with their zones.</summary>
+    readonly List<(Vector2 At, ZoneCoordinate Zone)> viewers = [];
 
     /// <summary>
     /// Towns and camps a player character comes within <see cref="ExploreRange"/> of become discovered and explored; ones not yet discovered within
-    /// <see cref="DiscoverRangeOf"/> become discovered, with a "Discovered" message for a town (none for nests and camps).
+    /// <see cref="DiscoverRangeOf"/> become discovered, with a "Discovered" message for a town (none for nests and camps). A character counts only for
+    /// places within one zone of it: a place's own zone or, for a town, one of its <see cref="TownSite.Coverage"/> zones (docs/game/ui-screens.md "Map").
     /// </summary>
     void Discover(World world)
     {
@@ -178,32 +181,51 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (!world.Player.Exists || world.Player.InCreation) return;
         var prev = world.Characters.Previous;
         var player = world.Player;
+        viewers.Clear();
         for (int i = 0; i < prev.Length; i++)
+            if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true }) viewers.Add(Viewer(prev[i].Position));
+        foreach (var site in data.Sites)
         {
-            if (!prev[i].Alive || world.Characters.Cold(i) is not { IsPlayer: true }) continue;
-            var at = new Vector2(prev[i].Position.X, prev[i].Position.Z);
-            foreach (var site in data.Sites)
-            {
-                if (site.Town.Type is TownType.NestMarker or TownType.Null) continue;   // never on the map
-                float d2 = Vector2.DistanceSquared(at, new(site.Position.X, site.Position.Z)), far = DiscoverRangeOf(site.Town.Type);
-                if (d2 <= ExploreRange * ExploreRange) player.Know(site.Index, TownKnowledge.Discovered | TownKnowledge.Explored);
-                else if (d2 <= far * far && player.Know(site.Index, TownKnowledge.Discovered) && site.Town.Type != TownType.Nest) world.Post(Loc.Tr("Discovered {1}", site.Town.Name));
-            }
-            var wild = WildSites;
-            for (int w = 0; w < wild.Count && w < wildCentres.Length; w++)
-            {
-                if (wild[w] is not { Kind: WildKind.Nest, Nest: { } nest } site || wildCentres[w] is not { } centre) continue;
-                float d2 = Vector2.DistanceSquared(at, centre), far = DiscoverRangeOf(TownType.Nest);
-                var flags = d2 <= ExploreRange * ExploreRange ? TownKnowledge.Discovered | TownKnowledge.Explored : d2 <= far * far ? TownKnowledge.Discovered : TownKnowledge.None;
-                if (flags == TownKnowledge.None) continue;
-                var faction = site.Faction >= 0 && site.Faction < data.Factions.Count ? data.Factions[site.Faction] : null;
-                player.KnowCamp(new CampView(w, nest.Id, nest.Name, faction?.Id ?? nest.Faction ?? "", faction?.NotReal ?? false, new Vector3(centre.X, 0, centre.Y), flags), flags);
-            }
+            if (site.Town.Type is TownType.NestMarker) continue;   // the original skips only type 8
+            float d2 = NearestViewer(new(site.Position.X, site.Position.Z), site.Zone, site.Coverage), far = DiscoverRangeOf(site.Town.Type);
+            if (d2 < ExploreRange * ExploreRange) player.Know(site.Index, TownKnowledge.Discovered | TownKnowledge.Explored);
+            else if (d2 < far * far && player.Know(site.Index, TownKnowledge.Discovered) && site.Town.Type != TownType.Nest)
+                world.Post(Loc.Tr("Discovered {1}", site.Town.UnexploredName is { Length: > 0 } unexplored ? unexplored : site.Town.Name));
+        }
+        var wild = WildSites;
+        for (int w = 0; w < wild.Count && w < wildCentres.Length; w++)
+        {
+            if (wild[w] is not { Kind: WildKind.Nest, Nest: { } nest } site || wildCentres[w] is not { } centre) continue;
+            float d2 = NearestViewer(centre, WorldLayout.ZoneOf(centre.X, centre.Y), []), far = DiscoverRangeOf(TownType.Nest);
+            var flags = d2 < ExploreRange * ExploreRange ? TownKnowledge.Discovered | TownKnowledge.Explored : d2 < far * far ? TownKnowledge.Discovered : TownKnowledge.None;
+            if (flags == TownKnowledge.None) continue;
+            var faction = site.Faction >= 0 && site.Faction < data.Factions.Count ? data.Factions[site.Faction] : null;
+            player.KnowCamp(new CampView(w, nest.Id, nest.Name, faction?.Id ?? nest.Faction ?? "", faction?.NotReal ?? false, new Vector3(centre.X, 0, centre.Y), flags), flags);
         }
         // A camp known from a save gets its place once its nest has loaded (never when the wild layout gives that site another nest).
         foreach (var camp in player.Camps)
             if (camp.Position is null && camp.Site >= 0 && camp.Site < wildCentres.Length && WildSites[camp.Site].Nest?.Id == camp.TownId && wildCentres[camp.Site] is { } c)
                 player.KnowCamp(camp with { Position = new Vector3(c.X, 0, c.Y) }, TownKnowledge.None);
+    }
+
+    static (Vector2 At, ZoneCoordinate Zone) Viewer(Vector3 at) => (new(at.X, at.Z), WorldLayout.ZoneOf(at.X, at.Z));
+
+    /// <summary>
+    /// The squared XZ distance from a place to the nearest viewer in or next to its <paramref name="zone"/> or one of its <paramref name="coverage"/> zones
+    /// (infinity when none).
+    /// </summary>
+    float NearestViewer(Vector2 place, ZoneCoordinate zone, IReadOnlyList<ZoneCoordinate> coverage)
+    {
+        float best = float.PositiveInfinity;
+        foreach (var (at, z) in viewers)
+        {
+            bool near = Near(z, zone);
+            for (int i = 0; i < coverage.Count && !near; i++) near = Near(z, coverage[i]);
+            if (near) best = Math.Min(best, Vector2.DistanceSquared(place, at));
+        }
+        return best;
+
+        static bool Near(ZoneCoordinate a, ZoneCoordinate b) => Math.Abs(a.X - b.X) <= 1 && Math.Abs(a.Y - b.Y) <= 1;
     }
 
     void RefreshZones(World world)

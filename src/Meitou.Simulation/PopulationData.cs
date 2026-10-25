@@ -75,6 +75,8 @@ public sealed record TownSite(int Index, TownData Town, Vector3 Position, ZoneCo
     public string InstanceId { get; init; } = "";
     /// <summary>The town's placed buildings with their beds and nodes (<see cref="TownBuildings"/>), the AI's homes; empty when the host gave none.</summary>
     public IReadOnlyList<TownBuilding> Buildings { get; init; } = [];
+    /// <summary>The zones the town's level state lists, as the original files them at load, which discovery counts as well as <see cref="Zone"/> (docs/game/ui-screens.md "Map"); empty for a Nest and when the host gave none.</summary>
+    public IReadOnlyList<ZoneCoordinate> Coverage { get; init; } = [];
 }
 
 /// <summary>What the population needs to know about the game: its data, the placed towns, the factions.</summary>
@@ -233,17 +235,21 @@ public sealed class PopulationData
     public Meitou.Data.Gameplay.Dialogue.DialogueDatabase Dialogue => LazyInitializer.EnsureInitialized(ref dialogue, () => new Meitou.Data.Gameplay.Dialogue.DialogueDatabase(Db));
 
     /// <param name="buildings">The towns' buildings by placement id (<see cref="TownBuildings.Build"/>), for the AI's homes; null: none.</param>
+    /// <param name="townZones">The zones each town's level state lists, by placement id (<see cref="WorldLevelData.TownZones"/>), for discovery; null: none.</param>
     public static PopulationData Create(GameDatabase db, IEnumerable<TownPlacement> placements, IAppearanceSource? appearances = null, BodyOptions? bodyOptions = null, BiomeMap? biomes = null,
-        IReadOnlyDictionary<string, List<TownBuilding>>? buildings = null, IEnumerable<RoadPath>? roads = null)
+        IReadOnlyDictionary<string, List<TownBuilding>>? buildings = null, IEnumerable<RoadPath>? roads = null, IReadOnlyDictionary<string, List<ZoneCoordinate>>? townZones = null)
     {
         var sites = new List<TownSite>();
         foreach (var p in placements)
         {
             if (db.Find(p.TownId) is not { Type: FcsRecordType.TOWN } record) continue;
-            sites.Add(new TownSite(sites.Count, TownData.From(record), p.Position, WorldLayout.ZoneOf(p.Position.X, p.Position.Z))
+            var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Z);
+            var town = TownData.From(record);
+            sites.Add(new TownSite(sites.Count, town, p.Position, zone)
             {
                 Buildings = buildings is not null && buildings.TryGetValue(p.InstanceId, out var list) ? list : [],
                 InstanceId = p.InstanceId,
+                Coverage = town.Type != TownType.Nest && townZones is not null && townZones.TryGetValue(p.InstanceId, out var listed) ? CoverageOf(zone, listed) : [],
             });
         }
         var factions = FactionData.LoadAll(db);
@@ -257,6 +263,20 @@ public sealed class PopulationData
             Relations = relations,
             SiteFactions = [.. sites.Select(s => s.Town.Faction is { } fid ? byId.GetValueOrDefault(fid, -1) : -1)],
         };
+    }
+
+    /// <summary>The listed zones a town keeps: the first 6 inside the grid, none when one is more than 2 zones from its own (docs/game/ui-screens.md "Map").</summary>
+    static IReadOnlyList<ZoneCoordinate> CoverageOf(ZoneCoordinate own, List<ZoneCoordinate> listed)
+    {
+        var kept = new List<ZoneCoordinate>();
+        foreach (var z in listed)
+        {
+            if (!z.IsInsideGrid) continue;
+            if (Math.Abs(z.X - own.X) > 2 || Math.Abs(z.Y - own.Y) > 2) return [];
+            kept.Add(z);
+            if (kept.Count == 6) break;
+        }
+        return kept;
     }
 }
 

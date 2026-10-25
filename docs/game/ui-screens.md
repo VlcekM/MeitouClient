@@ -614,10 +614,18 @@ decompile unless marked; Meitou's adapter is `PlayerInterface.Map.cs`.
   × 0.85 (× 0.5 at level 0), no label, faction colour when explored. The marker goes when the nest does (Meitou keeps it: its nests are not destroyed).
   Saved as GAMESTATE_TOWN with `is nest` (`1403709d0`); the original's town loaders skip those. Meitou writes its own with `instance`
   `meitou-nest:<wild site>:<TOWN id>` and reads them back; the place is filled in when the nest next loads.
-- **Discovery** (`14092f6b0`): a character within 400 units (XZ) sets `discovered` and `explored` (that it is a player character's is **Observed**);
-  else, not yet discovered, within 8500 (17000 for type Town, halved for Nest and Ruins) sets `discovered` with the message "Discovered {1}", none for
+- **Discovery** (`FUN_14092f6b0`): once a second of real time, not while paused (`FUN_140787940`), and only with player characters. Viewers: the
+  player's characters and the camera focus, the camera only inside the zone grid (kept within 2250 of the nearest character, `FUN_1406ae990`; Meitou:
+  characters only, its camera having no such limit). A viewer counts only for towns filed under its [zone](../formats/terrain.md#world-coordinates)
+  (`FUN_1409b2d90`) or the eight round it. Filing: a town's own zone when it joins the town list (`FUN_14092d690` → `FUN_140929d40`); on a new game,
+  load or import also the zones its level GAMESTATE_TOWN records list ([keys](../formats/zones.md#placement-keys); `FUN_14036efd0`), inside the grid
+  and with both keys (a count below 1 lists none), a record stopping once the town has 6, none from a record with one more than 2 zones from the
+  town's own; nests (placed TOWN type 0 too) only their own. Meitou (`TownSite.Coverage`): the first 6 of a town's records merged, none when one is
+  too far; no base-game town differs (**Observed**). Each town not yet explored except type 8 (NestMarker): a viewer closer than 400 units (XZ) sets
+  `discovered` and `explored`; else, not yet discovered, one closer than 8500 (17000 for type Town, halved for Nest and Ruins) sets `discovered` with
+  the message "Discovered {1}" (its `unexplored name`), none for
   nests. The new game's messages show after the character editor's CONFIRM (**Observed**, vanilla play); Meitou checks nothing while `PlayerState.InCreation`.
-  Meitou skips types 8 and 10 (whether the original does is **Unknown**) and checks with the population's zone refresh (every 15 ticks), a camp only after its nest has loaded; flags per placed town
+  Meitou checks with the population's zone refresh (every 15 ticks), a camp only after its nest has loaded; flags per placed town
   (`PlayerState.Towns`) and per camp (`PlayerState.Camps`), read and written as the GAMESTATE_TOWN bools.
 - **Map items** (MAP_ITEM: `towns` with v0 = how many of that TOWN, 0 all, v1 = weight; `unlock count`, 0 all): only by right-clicking the item in a
   player character's inventory (`140714a20` → `14075f550`). Candidates per link: the placed towns of that record (not types 0, 8, 10) not yet
