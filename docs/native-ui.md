@@ -14,20 +14,34 @@ read-only binding copies, never mutable world. [MyGUI](formats/mygui.md), [parit
 Meitou uses the [UI kit](meitou-ui.md)'s rounded rust plates and paper Save action. Tab or Options
 opens it; Esc/the original Kenshi X/Save saves preferences and returns. Changes apply live, with the active
 upscaler shown separately from the requested one. Terrain texture quality needs a restart.
-Every Graphics sub-page starts with two rows (`SettingsMenu.Presets.cs`):
-- **Quality preset** Low / Medium / High / Ultra sets the distance, foliage, grass, reflection, shadow, particle density,
-  filtering, texture, ground-relief quality and light-shaft quality sliders; High is the start default (texture quality: full
-  size). Distances that follow a switch's side (object distance, terrain error: Draw distances; shadow distance: Shadows) are
-  multiples of that side's mark, so High reads High in either look. Low is `--low-end` (`WorldOptions.LowEnd*`, the same values):
-  its distances, grass and particle density, texture quality, 1x filtering, shadows off, AO / anti-aliasing / light shafts / water /
-  shadows Faithful, ground relief and its tessellation effects off, quarter-size particles, no anti-aliasing (not even FXAA) at 0.83
-  render scale; what `--low-end` leaves alone stays at High. Its VSync off and material distance are not Tab panel settings and are
-  not set. No preset turns a Meitou effect on; the others leave anti-aliasing and render scale alone. The shown preset is
-  derived (sliders and the fifth cascade only; Custom otherwise); its name is saved (`graphicsPreset`) for the launcher, and a saved one the settings do not sit at is applied at start ([launcher](launcher.md#graphics)).
-- **All graphics features** sets every Faithful / Meitou graphics switch to one side (gameplay switches and sliders
-  untouched); mixed switches show neither side. A switch that does not take (indirect light without ray queries) is ignored.
-  Advanced (**All gameplay changes**) and Fixes (**All fixes**) start with the same switch over their own page's
-  switches and sliders with both marks (attackers per target); luckyren Mode is left out.
+Graphics (`SettingsMenu.Looks.cs`, `SettingsMenu.Presets.cs`; `--settings-showcase` captures it) has two rows above its tabs:
+- **Look**: Faithful | Meitou (saved, `faithfulLook`; unknown, all switches on the game's side read Faithful). Faithful sets the game
+  exactly as it ships (every Faithful / Meitou graphics switch off, look sliders at the game's value: the Faithful mark, else the one
+  the label names, "(0 = game)") and stays a starting point: every option stays free, and what differs from the game is marked and
+  counted ("N changes from the game", Revert). Meitou shows the active **preset**: Meitou (built in), two examples (Hot and dry, Vanilla colours), the player's. A preset is Meitou plus the look settings it sets, keyed as `meitou.user.json` saves them, everything else following
+  Meitou; files `presets/<name>.json` beside `meitou.user.json` (`format`, `name`, `meitou` version, `values`), the active one in
+  `lookPreset`. Rows that differ from it count as unsaved changes (Revert, Save for the player's own). Save as
+  names a new one; Share copies a code (`MT1:` and the deflated JSON in base64) to the clipboard, Paste adds one; Delete (own presets).
+- **Quality**: Low / Medium / High / Ultra / Custom (derived from the values) sets the distance, foliage, grass, reflection,
+  shadow, particle density, filtering, texture, ground relief and light-shaft quality sliders, the fifth cascade and the terrain relief
+  switches (parallax and rock smoothing from Medium, displacement and outline refinement from High; Meitou only). High is the start
+  default (texture quality: full size); distances that follow a switch's side (object and landmark distance, terrain error: Draw
+  distances; shadow distance: Shadows) are multiples of that side's mark, so High reads High in either look. Low is `--low-end`
+  (`WorldOptions.LowEnd*`, the same values): its distances, grass and particle density, texture quality, 1x filtering, shadows off,
+  ground relief off, quarter-size particles, no anti-aliasing (not even FXAA) at 0.83 render scale; what `--low-end` leaves alone
+  stays at High, and its VSync off and material distance are not Tab panel settings. Its Meitou switches (AO, light shafts, water,
+  Meitou shadows; anti-aliasing) are held off without changing the preset: their rows say so, and turning one on keeps it on at Low
+  (`keepAtLow`); leaving Low gives them back. The other tiers leave anti-aliasing and render scale alone. The tier last chosen is
+  saved (`qualityTier`), and the derived name (`graphicsPreset`) for the launcher; a saved name the settings do not sit at is
+  applied at start ([launcher](launcher.md#graphics)).
+Tabs: the look tabs Light, Sky, Colour, Water, Skin, then the quality tabs Distances, Detail. A tab lists features
+(`SettingsMenu.Groups.cs`): each is one row headed by its switch (or a title: Ambient light, Shadow quality, Terrain relief) with
+its own settings folded under it (a darker band with a brass edge), closed until its arrow or text is clicked. A setting that
+differs from the preset has its name in brass and a Reset link back to the preset's value; a feature's header shows it for anything inside. Interior lamps is on Advanced: the
+stealth sight counts its light, so no look or Faithful sets it. Every Graphics row names its **performance impact** (No, Low, Medium,
+High, or Speeds up), ranked from the measured costs (`SettingsMenu.ImpactOf`; RTX 4090 at 1440p: High about 1 ms or more, Medium
+a few tenths), not milliseconds, which differ by card. Advanced (**All gameplay changes**) and Fixes (**All fixes**) start with an
+all-Faithful / all-Meitou switch over their own page's switches and sliders with both marks (attackers per target); luckyren Mode is left out.
 The modal pauses simulation and captures world input; wheel/PageUp/PageDown scroll, Tab/arrows
 focus/adjust, Enter activates. Binding capture rejects conflicting/reserved controls; Esc cancels,
 Delete unbinds. Defaults and cache deletion ask first. The viewer retains its debug panel.

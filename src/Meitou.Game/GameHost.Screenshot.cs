@@ -221,6 +221,7 @@ sealed partial class GameHost
             FramebufferCapture.SavePng(context, target, output, w, h);
             Console.WriteLine($"saved     {Path.GetFullPath(output)}");
         }
+        if (g.SettingsShowcase && overlay is not null) SettingsShowcase(overlay, display, target, w, h);
         player.DisposeUi();
         var s = session.Camera.Current;
         Console.WriteLine($"camera    {(session.Camera.IsFree ? "free" : "strategy")}: pivot {s.Target.X:0}, {s.Target.Y:0}, {s.Target.Z:0}, eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, " +

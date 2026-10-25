@@ -159,7 +159,7 @@ because the game ships none as a file ([ui-screens](game/ui-screens.md#title-art
 No title actor enters gameplay or save data; the normal camera lens and character source
 are restored when leaving the title.
 Title character preparation starts ahead of ordinary streaming during boot; the complete scene uses the readiness contract above.
-`--title-preview --screenshot <path>` captures it for visual QA; `--ticks` advances the fight. Save arrival still uses the
+`--title-preview --screenshot <path>` captures it for visual QA (`--settings-showcase` the settings menu's Graphics page in its states); `--ticks` advances the fight. Save arrival still uses the
 loader's leader-focused camera contract; saved camera pose restoration remains unimplemented.
 
 ## Rendering and upscaling

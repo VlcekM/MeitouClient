@@ -1024,6 +1024,7 @@ static class WorldFrame
         ToneMixSlider = "Hybrid tone map: ACES share",
         GradingSlider = "Grading (0 = game)",
         HeatHazeStrengthSlider = "Heat haze strength (1 = game)",
+        BloomStrengthSlider = "Bloom strength (0 = game)",
         NightGradeStrengthSlider = "Night grading strength (0 = game)",
         ShaftStrengthSlider = "Light shafts strength",
         ShaftAirSlider = "Light shafts air (0 = none)",
@@ -1115,7 +1116,8 @@ static class WorldFrame
             sliders.Add(new Slider(ObjectDistanceSlider, 1000, 400000, () => objects.ObjectDistance, v => objects.ObjectDistance = v, "0", Logarithmic: true,
                 Faithful: Enhancements.FaithfulObjectDistance, Meitou: Enhancements.MeitouObjectDistance));
             if (objects.HasLandmarks)
-                sliders.Add(new Slider(LandmarkDistanceSlider, 1000, 400000, () => objects.LandmarkDistance, v => objects.LandmarkDistance = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
+                sliders.Add(new Slider(LandmarkDistanceSlider, 1000, 400000, () => objects.LandmarkDistance, v => objects.LandmarkDistance = MathF.Round(v / 100) * 100, "0", Logarithmic: true,
+                    Faithful: 0, Meitou: Enhancements.MeitouLandmarkDistance));
             sliders.Add(new Slider(DistantTownsSlider, 0, ObjectRanges.MaxDistantTownRangeZones * 10,
                 () => objects.DistantRange / WorldLayout.ZoneSize, v => objects.DistantRange = MathF.Round(v) * WorldLayout.ZoneSize, "0"));
             sliders.Add(new Slider(ObjectLodSlider, 0.25f, 4, () => 1 / objects.LodBias, v => objects.LodBias = 1 / v, "0.00", Logarithmic: true));
@@ -1218,6 +1220,7 @@ static class WorldFrame
                 Text: v => v >= 0.5f ? $"saturation {PostOptions.Saturation:0.00}, contrast {PostOptions.Contrast:0.00}" : "off (as the game)"));
             sliders.Add(new Slider(HeatHazeStrengthSlider, 0, 3, () => post.Options.HeatHazeStrength, v => post.Options.HeatHazeStrength = MathF.Round(v * 20) / 20, "0.00",
                 Faithful: 1, Meitou: Enhancements.MeitouHeatHazeStrength));
+            sliders.Add(new Slider(BloomStrengthSlider, 0, 0.25f, () => post.Options.BloomStrength, v => post.Options.BloomStrength = MathF.Round(v * 200) / 200, "0.000", Faithful: 0));
             sliders.Add(new Slider(NightGradeStrengthSlider, 0, 1, () => post.Options.NightGradeStrength, v => post.Options.NightGradeStrength = MathF.Round(v * 20) / 20, "0.00"));
             sliders.Add(new Slider(ShaftStrengthSlider, 0, 1, () => post.Options.ShaftStrength, v => post.Options.ShaftStrength = MathF.Round(v * 20) / 20, "0.00"));
             sliders.Add(new Slider(ShaftAirSlider, 0, 4, () => post.Options.ShaftAir, v => post.Options.ShaftAir = MathF.Round(v * 20) / 20, "0.00"));
@@ -1236,8 +1239,8 @@ static class WorldFrame
         toggles ??= [];
         if (g.Sky.Gpu.HasTessellation)
         {
-            toggles.Add(new Toggle(RockSmoothingSwitch, () => RockSmoothing.TessellateActive, v => RockSmoothing.TessellateActive = v, OnOff: true));
-            toggles.Add(new Toggle(OutlineRefineSwitch, () => GroundRelief.RefinePixels > 0, v => GroundRelief.RefinePixels = v ? GroundRelief.DefaultRefinePixels : 0, OnOff: true));
+            toggles.Add(new Toggle(RockSmoothingSwitch, () => RockSmoothing.TessellateActive, v => RockSmoothing.TessellateActive = v, Remaster: true, OnOff: true));
+            toggles.Add(new Toggle(OutlineRefineSwitch, () => GroundRelief.RefinePixels > 0, v => GroundRelief.RefinePixels = v ? GroundRelief.DefaultRefinePixels : 0, Remaster: true, OnOff: true));
         }
         // The billboard (impostor atlas) disk cache: deleted files are baked again when next needed; the resident atlases stay until evicted.
         var actions = new List<PanelAction>();

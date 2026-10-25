@@ -54,6 +54,7 @@ sealed partial class SettingsMenu
         "Hybrid tone map: ACES share" => "Blend more ACES into the hybrid tone mapping curve.",
         "Heat haze strength" => "Scale the distortion caused by hot air.",
         "Night grading strength" => "Adjust the blue shift of colours in low light.",
+        "Bloom strength" => "How much of each pixel's light glows into its surroundings.",
         _ => $"Adjust {Label(label).ToLowerInvariant()}.",
     };
 
@@ -84,6 +85,14 @@ sealed partial class SettingsMenu
         "Cloud shadows in fog" => "Fade cloud shadows near and inside fog. Without it, places like the swamp or the Deadlands get too dark.",
         "Blood on surfaces" => "Splash blood on walls, buildings and rocks as well as the ground; pools stay on floors.",
         "Skin" => "Let sunlight soften and warm under bare skin instead of ending at a hard edge.",
+        "Ground parallax" => "Give the ground texture depth: stones and ruts stand out and shade as the view moves.",
+        "Ground displacement (tessellation)" => "Raise the nearby ground into real bumps and ridges that cast shadows.",
+        "Rock smoothing (tessellation)" => "Round off the flat facets of rocks and cliffs up close.",
+        "Terrain outline refinement (tessellation)" => "Smooth the outline of hills and crests against the sky.",
+        "Character levels" => "Use generated simpler meshes for distant characters.",
+        "Item icons" => "Draw inventory item icons supersampled, without jagged edges.",
+        "Blood cells" => "Draw blood on every terrain cell within decal range, not only the 8 nearest.",
+        "Interior lamps" => "Keep the lamps of building interiors lit by day too. Stealth counts their light.",
         "Shadow cascade 5 (Meitou)" => "Add a fifth shadow cascade for distant scenery.",
         _ => $"Enable {Label(label).ToLowerInvariant()}.",
     };
