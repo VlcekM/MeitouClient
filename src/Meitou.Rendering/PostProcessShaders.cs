@@ -671,6 +671,80 @@ static class PostProcessShaders
         }
         """;
 
+    /// <summary>
+    /// Meitou bloom (docs/render-post.md "Bloom"), the scene to half size: a 4 × 4 box of texels, each decoded from the scene's gamma to linear before
+    /// it is averaged (a bilinear tap would average encoded values and lose over half the light of a lone bright texel), so every texel lands in four
+    /// destination pixels at 1/16. The firefly ceiling F compresses a texel's colour so its luminance L tends to F: c (1 + (L/F)^4)^-1/4.
+    /// </summary>
+    public const string BloomPrefilter = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uScene;
+        uniform vec2 uDestSize;
+        uniform float uFirefly;   // the ceiling in linear scene units, 0 off
+        void main()
+        {
+            ivec2 p = ivec2(vUv * uDestSize), last = textureSize(uScene, 0) - 1;
+            vec3 sum = vec3(0.0);
+            for (int j = 0; j < 4; j++)
+                for (int i = 0; i < 4; i++)
+                {
+                    vec3 c = pow(max(texelFetch(uScene, clamp(2 * p - 1 + ivec2(i, j), ivec2(0), last), 0).rgb, 0.0), vec3(2.2));
+                    if (uFirefly > 0.0)
+                    {
+                        float r = dot(c, vec3(0.2126, 0.7152, 0.0722)) / uFirefly, r2 = r * r;
+                        c *= inversesqrt(sqrt(1.0 + r2 * r2));
+                    }
+                    sum += c;
+                }
+            fragColour = vec4(sum / 16.0, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// Meitou bloom, one level down: Jimenez's 13-tap filter (Call of Duty: Advanced Warfare, 2014), five overlapping 2 × 2 boxes of bilinear taps
+    /// with the centre one at half the weight; the 6 × 6 texel footprint never skips a source texel. <c>uTexel</c> is the source's texel.
+    /// </summary>
+    public const string BloomDown = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uSource;
+        uniform vec2 uTexel;
+        vec3 tap(float x, float y) { return texture(uSource, vUv + vec2(x, y) * uTexel).rgb; }
+        void main()
+        {
+            vec3 a = tap(-2.0, -2.0), b = tap(0.0, -2.0), c = tap(2.0, -2.0);
+            vec3 d = tap(-1.0, -1.0), e = tap(1.0, -1.0);
+            vec3 f = tap(-2.0, 0.0), g = tap(0.0, 0.0), h = tap(2.0, 0.0);
+            vec3 i = tap(-1.0, 1.0), j = tap(1.0, 1.0);
+            vec3 k = tap(-2.0, 2.0), l = tap(0.0, 2.0), m = tap(2.0, 2.0);
+            vec3 corners = (a + b + g + f) + (b + c + h + g) + (f + g + l + k) + (g + h + m + l);
+            fragColour = vec4((d + e + i + j) * 0.125 + corners * 0.03125, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// Meitou bloom, one level up: this level times its weight plus the coarser sum through a 3 × 3 tent (1 2 1 per axis, a coarse texel apart) times
+    /// its scale: 1, or the coarsest level's weight where the coarser image is that level itself.
+    /// </summary>
+    public const string BloomUp = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uLevel, uCoarse;
+        uniform vec4 uParams;   // own weight, coarse scale, the coarse texel
+        void main()
+        {
+            vec3 coarse = vec3(0.0);
+            for (int j = -1; j <= 1; j++)
+                for (int i = -1; i <= 1; i++)
+                    coarse += texture(uCoarse, vUv + vec2(i, j) * uParams.zw).rgb * float((2 - abs(i)) * (2 - abs(j)));
+            fragColour = vec4(texture(uLevel, vUv).rgb * uParams.x + coarse * (uParams.y / 16.0), 1.0);
+        }
+        """;
+
     /// <summary>Exposure, occlusion, the game's clip at 1 (no tone curve) and dither: HDR scene in, display colour out.</summary>
     public const string Composite = "#version 330 core\n" + Noise + """
 
@@ -685,7 +759,23 @@ static class PostProcessShaders
         uniform float uNight;      // Meitou night grading strength (the `nightgrade` switch): 0 off; needs the auto exposure's mean (uAuto)
         uniform vec2 uSceneSize;   // the scene's size when it is smaller than the picture (render scale without an upscaler), else 0: sampled with Catmull-Rom then
         uniform float uSharpen;    // after TAA or DLSS (neither sharpens): the upscaler sharpness, 0 off
+        uniform sampler2D uBloom;  // Meitou bloom: the linear scene convolved with the point spread function, at a quarter of its size
+        uniform float uBloomStrength;   // its strength, 0 off
         const float EXPOSURE_KEY = 0.55;   // hdr.material's EXPOSURE_KEY
+
+        // The bloom through a cubic B-spline in four bilinear taps (Sigg and Hadwiger, GPU Gems 2 ch. 20): one bilinear tap magnifies each quarter-size
+        // texel into a square around a small light. Positive weights summing to one, so it neither rings nor adds light; the taps are held half a texel
+        // inside the edge.
+        vec3 bloomAt(vec2 uv)
+        {
+            vec2 size = vec2(textureSize(uBloom, 0)), coord = uv * size - 0.5, f = fract(coord), i = coord - f, f2 = f * f, f3 = f2 * f;
+            vec2 w0 = (-f3 + 3.0 * f2 - 3.0 * f + 1.0) / 6.0, w1 = (3.0 * f3 - 6.0 * f2 + 4.0) / 6.0;
+            vec2 w2 = (-3.0 * f3 + 3.0 * f2 + 3.0 * f + 1.0) / 6.0, w3 = f3 / 6.0;
+            vec2 g0 = w0 + w1, g1 = w2 + w3, lo = 0.5 / size, hi = 1.0 - lo;
+            vec2 p0 = clamp((i - 1.0 + w1 / g0 + 0.5) / size, lo, hi), p1 = clamp((i + 1.0 + w3 / g1 + 0.5) / size, lo, hi);
+            return g0.y * (g0.x * texture(uBloom, p0).rgb + g1.x * texture(uBloom, vec2(p1.x, p0.y)).rgb)
+                 + g1.y * (g0.x * texture(uBloom, vec2(p0.x, p1.y)).rgb + g1.x * texture(uBloom, p1).rgb);
+        }
 
         // Catmull-Rom through five bilinear taps (the corners of the 4 x 4 footprint are left out): a sharper plain upscale than bilinear.
         vec3 sceneAt(vec2 uv)
@@ -747,6 +837,9 @@ static class PostProcessShaders
             vec2 adapted = uAuto != 0 ? texture(uAdapted, vec2(0.5)).rg : vec2(1.0);   // the clamped adapted luminance, the smoothed mean
             if (uAuto != 0) exposure *= max(EXPOSURE_KEY / adapted.r, 0.001);   // Kenshi's exposure: key over the adapted luminance
             vec3 raw = max(uSharpen > 0.0 && uSceneSize.x <= 0.0 ? sharpened(vUv) : sceneAt(vUv), 0.0);
+            // The bloom mixed in, not added: that share of every pixel's light moves into its neighbourhood, so a uniform image stays itself. In linear
+            // light, before the exposure (a scale, which commutes with the gamma), then back to the scene's gamma.
+            if (uBloomStrength > 0.0) raw = pow(mix(pow(raw, vec3(2.2)), max(bloomAt(vUv), 0.0), uBloomStrength), vec3(1.0 / 2.2));
             vec3 c = raw * exposure * uBalance;
             float ao = texture(uAo, vUv).r;
             if (uUseAo != 0) c *= ao;

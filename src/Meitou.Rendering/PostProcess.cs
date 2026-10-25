@@ -150,8 +150,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     sealed class CompositePass : FullscreenProgram
     {
-        public readonly SamplerSlot Scene, Ao, Adapted;
-        public readonly UniformHandle Auto, Exposure, UseAo, Dither, SceneSize, Sharpen, Tone, ToneMix, Grade, Saturation, Contrast, Night, Balance;
+        public readonly SamplerSlot Scene, Ao, Adapted, Bloom;
+        public readonly UniformHandle Auto, Exposure, UseAo, Dither, SceneSize, Sharpen, Tone, ToneMix, Grade, Saturation, Contrast, Night, Balance, BloomStrength;
         public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
         {
             (Scene, Ao, Adapted) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"));
@@ -159,6 +159,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             (Auto, Exposure, UseAo, Dither) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"));
             (Tone, ToneMix, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uToneMix"), P.Uniform("uGrade"), P.Uniform("uSaturation"), P.Uniform("uContrast"));
             (Night, Balance) = (P.Uniform("uNight"), P.Uniform("uBalance"));
+            (Bloom, BloomStrength) = (P.Sampler("uBloom"), P.Uniform("uBloomStrength"));
         }
     }
 
@@ -381,6 +382,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         aoA = aoB = aoMask = ldr = ldrFxaa = smaaEdges = smaaWeights = luminance = adaptA = adaptB = null;
         foreach (var l in lowTargets) l.Accum = l.Depth = null;
         giAlbedo = giLow = shaftInjected = shaftLight = null;
+        FreeBloom();
         adaptedValid = historyValid = false;
         adaptedFrames = 0;
     }
@@ -732,6 +734,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         bool auto = AutoExposure is not null && luminance is not null;
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
+        var bloom = RunBloom(postColour);
 
         // Composite: to the target, or to the LDR picture FXAA (or SMAA) and / or the heat haze then read (the game's order: FXAA, HeatHaze).
         bool smaa = o.Smaa && !Temporal && smaaWeights is not null;
@@ -756,6 +759,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.Contrast, PostOptions.Contrast);
         c.P.Set(c.Night, auto ? Math.Clamp(o.NightGradeStrength, 0, 1) : 0f);
         c.P.Set(c.Balance, o.Balance);
+        Bind(c.P, c.Bloom, bloom);
+        c.P.Set(c.BloomStrength, bloom is null ? 0f : Math.Clamp(o.BloomStrength, 0, 1));
         if (fxaa || smaa || haze) Draw(c.P, ldr!); else DrawFinal(c.P, final);
         Stamp("composite");
         var picture = ldr;
@@ -1459,6 +1464,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeShafts();
         DisposeSceneLayers();
         DisposeMerged();
+        DisposeBloom();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         smaaPasses.Dispose();

@@ -58,7 +58,7 @@ surveyed post/compositor files. Absence is scoped to those sources, not all poss
 | Curve | clamp at 1 | clamp at 1; shoulder or aces (the Tab slider; the `--tonemap` options were removed) as options (not a switch) | Kenshi: none (clip) |
 | SSAO | off | on (12 taps, half resolution, from depth) | Kenshi: shipped, disabled |
 | SSAO on characters | n/a (no SSAO) | the occlusion is scaled to 0.25 on the characters' own pixels (`PostOptions.SsaoCharacterStrength`, a constant; Meitou feature, no game counterpart; **Observed** on a `--crowd` view, no game reference) | Kenshi: none |
-| Bloom | off | none (removed) | Kenshi: magnitude 0 |
+| Bloom | off | off; an option a look preset or the slider sets (point spread function, [render-post.md](../render-post.md#bloom)) | Kenshi: magnitude 0 |
 | Grading, vignette | none | grading (Tab slider; saturation 1.06, contrast 1.05 as constants; the `--grade`, `--saturation` and `--contrast` options were removed); no vignette | Kenshi: none |
 | FXAA | FXAA 3.11 quality, green as luma, subpix 0.75, thresholds 0.166 / 0.0833, preset-12 search steps, on the LDR composite (Faithful anti-aliasing; `--no-fxaa`) | TAA, FSR or DLSS instead (Meitou anti-aliasing) | Kenshi: FXAA 3.11, 0.75 |
 | Dither | off | on | not in Kenshi |
