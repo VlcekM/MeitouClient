@@ -7,6 +7,18 @@
   <Application.Resources>
     <ResourceDictionary>
       <!-- Tokens -->
+      <!-- Scroll bars (Fluent's keys): a brass thumb on a dark track, slimmer than Fluent's. -->
+      <Color x:Key="ScrollBarThumbBackgroundColor">#816635</Color>
+      <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="#c4a062" />
+      <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="#c4a062" />
+      <SolidColorBrush x:Key="ScrollBarThumbFillDisabled" Color="Transparent" />
+      <SolidColorBrush x:Key="ScrollBarBackground" Color="#0b0a09" />
+      <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver" Color="#0b0a09" />
+      <SolidColorBrush x:Key="ScrollBarTrackFill" Color="#0b0a09" />
+      <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver" Color="#0b0a09" />
+      <SolidColorBrush x:Key="ScrollBarTrackStroke" Color="#1fafa68b" />
+      <SolidColorBrush x:Key="ScrollBarTrackStrokePointerOver" Color="#1fafa68b" />
+      <x:Double x:Key="ScrollBarSize">10</x:Double>
       <Color x:Key="SystemAccentColor">#816635</Color>
       <Color x:Key="SystemAccentColorLight1">#9a7c45</Color>
       <Color x:Key="SystemAccentColorLight2">#b08f55</Color>
@@ -75,6 +87,17 @@
     <!-- Scroll bars always full size, never the thin auto-hiding strip. -->
     <Style Selector="ScrollViewer">
       <Setter Property="AllowAutoHide" Value="False" />
+    </Style>
+    <!-- A page's scroll bar keeps its column even when there is nothing to scroll, so the rows do not shift when it appears. -->
+    <Style Selector="ScrollViewer.page">
+      <Setter Property="VerticalScrollBarVisibility" Value="Visible" />
+    </Style>
+    <!-- No arrow buttons: the thumb runs the bar's length, rounded. -->
+    <Style Selector="ScrollBar /template/ RepeatButton#PART_LineUpButton, ScrollBar /template/ RepeatButton#PART_LineDownButton">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="ScrollBar /template/ Thumb">
+      <Setter Property="CornerRadius" Value="5" />
     </Style>
     <Style Selector="TextBlock">
       <Setter Property="Foreground" Value="{StaticResource Main}" />

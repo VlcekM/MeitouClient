@@ -10,6 +10,8 @@ Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.
   Advanced for Interior lamps. Each feature is one row, with its own settings folded under it behind an arrow.
 - Shows with game releases from the next one on.
 - The window can be **resized** from its edges and corners on Windows.
+- Scroll bars match the launcher: a brass thumb on a dark track, no arrows. A page keeps its scroll bar's room, so
+  its rows no longer shift when the bar appears.
 
 ## v1.4.0
 
