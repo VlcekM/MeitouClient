@@ -7,10 +7,48 @@
   <Application.Resources>
     <ResourceDictionary>
       <!-- Tokens -->
-      <!-- The drop-downs' chevron in brass, as the Graphics features' fold arrows (Fluent's keys; its shape is the theme's). -->
-      <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="#c4a062" />
-      <SolidColorBrush x:Key="ComboBoxDropDownGlyphForegroundFocused" Color="#c4a062" />
-      <SolidColorBrush x:Key="ComboBoxDropDownGlyphForegroundFocusedPressed" Color="#c4a062" />
+      <!--
+        Drop-downs: our own template, so the chevron is the Graphics features' fold arrow (the same brass path, turned down). The parts keep
+        Fluent's names (Background, PopupBorder) for the styles below; the items keep Fluent's ComboBoxItem.
+      -->
+      <ControlTheme x:Key="{x:Type ComboBox}" TargetType="ComboBox">
+        <Setter Property="Padding" Value="12,5,4,5" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="MaxDropDownHeight" Value="504" />
+        <Setter Property="PlaceholderForeground" Value="#8a8270" />
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Grid ColumnDefinitions="*,32">
+              <Border Name="Background" Grid.ColumnSpan="2" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                      BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" />
+              <TextBlock Name="PlaceholderTextBlock" Margin="{TemplateBinding Padding}" Text="{TemplateBinding PlaceholderText}"
+                         Foreground="{TemplateBinding PlaceholderForeground}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                         VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                         IsVisible="{TemplateBinding SelectionBoxItem, Converter={x:Static ObjectConverters.IsNull}}" />
+              <ContentControl Name="ContentPresenter" Margin="{TemplateBinding Padding}" Content="{TemplateBinding SelectionBoxItem}"
+                              ContentTemplate="{TemplateBinding ItemTemplate}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+              <Path Name="DropDownGlyph" Grid.Column="1" Data="M 1,1 L 5,5 L 9,1" Stroke="#c4a062" StrokeThickness="1.8" Width="10" Height="7"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
+              <Popup Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}" PlacementTarget="Background" IsLightDismissEnabled="True"
+                     MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                <Border Name="PopupBorder" BorderThickness="1" Padding="0,4" HorizontalAlignment="Stretch">
+                  <ScrollViewer HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                                VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}">
+                    <ItemsPresenter Name="PART_ItemsPresenter" Margin="2" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                  </ScrollViewer>
+                </Border>
+              </Popup>
+            </Grid>
+          </ControlTemplate>
+        </Setter>
+        <Style Selector="^:disabled">
+          <Setter Property="Opacity" Value="0.5" />
+        </Style>
+      </ControlTheme>
       <!-- Scroll bars: a rounded brass thumb on a dark track, always the same (Fluent's collapses to a thin line while auto-hidden). -->
       <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
         <Setter Property="Cursor" Value="Arrow" />
