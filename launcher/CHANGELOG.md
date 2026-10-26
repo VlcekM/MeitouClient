@@ -11,8 +11,8 @@ Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.
   always go right for more (terrain detail is no longer backwards). A look setting you changed shows its name in brass with
   a **Reset** link back to the look, instead of a Default button on every slider. Reset graphics stays at the bottom of the page.
 - **Bloom** is an effect you switch on, with its strength under it.
-- The Graphics tabs follow the game's new pages: Light, Sky, Colour, Water, Skin, then Distances and Detail, and
-  Advanced for Interior lamps. Each feature is one row, with its own settings folded under it behind an arrow.
+- The Graphics tabs follow the game's new pages: Light, Sky, Colour, Water, Skin, then Distances and Detail.
+  Each feature is one row, with its own settings folded under it behind an arrow.
 - Shows with game releases from the next one on.
 - The window can be **resized** from its edges and corners on Windows.
 - Scroll bars match the launcher: a brass thumb on a dark track, no arrows. A page keeps its scroll bar's room, so

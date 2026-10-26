@@ -131,8 +131,8 @@ static class LauncherSchema
             Sections =
             [
                 display,
-                // Advanced: the one graphics switch the game keeps there (Interior lamps: the stealth sight counts its light).
-                .. SettingsMenu.GraphicsPages.Append("Advanced").Select(page => new SettingsSection
+                // Interior lamps is left out: the stealth sight counts its light, so the game keeps it with the gameplay changes (Advanced).
+                .. SettingsMenu.GraphicsPages.Select(page => new SettingsSection
                 {
                     Name = page,
                     Settings = [.. switches.Where(s => SettingsMenu.ToggleSection(s.Key[SettingsMenu.SwitchKeyPrefix.Length..]) == page),
