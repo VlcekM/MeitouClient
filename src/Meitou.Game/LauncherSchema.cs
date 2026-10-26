@@ -175,6 +175,8 @@ static class LauncherSchema
             Meitou = keys.Where(k => !tier.Contains(k)).ToDictionary(k => k, k => shown[k]),
             Presets = [.. SettingsMenu.BuiltInLooks.Select(l => new SettingsLook { Name = l.Name, Values = new(l.Values) })],
             Folder = SettingsMenu.LookFolder,
+            Keys = [.. keys.Where(k => IsSwitch(k) ? SettingsMenu.IsLook(k[SettingsMenu.SwitchKeyPrefix.Length..], true) : SettingsMenu.IsLook(k, false))],
+            Made = SettingsMenu.MeitouVersion,
         };
     }
 

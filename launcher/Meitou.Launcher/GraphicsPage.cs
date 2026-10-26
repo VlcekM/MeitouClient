@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Threading;
 using Meitou.Localisation;
@@ -24,6 +25,10 @@ public sealed partial class MainWindow
     string graphicsTab = "";
     SettingsPresets? presets;
     SettingsLooks? looks;
+    /// <summary>Every setting the schema describes, by key (the look row counts and saves through them).</summary>
+    Dictionary<string, SettingDescription> settingByKey = [];
+    /// <summary>The name a preset is being saved under (Save as), null when not naming.</summary>
+    string? namingLook;
     ComboBox? presetBox;
     /// <summary>The features the player opened (by title), kept while the page is shown again.</summary>
     readonly HashSet<string> openGroups = [];
@@ -83,6 +88,7 @@ public sealed partial class MainWindow
         presets = schema.Presets is { Names.Count: > 0, Key.Length: > 0 } p ? p : null;
         presetBox = null;
         looks = schema.Looks is { Presets.Count: > 0, FaithfulKey.Length: > 0, PresetKey.Length: > 0 } l ? l : null;
+        settingByKey = schema.Sections.SelectMany(x => x.Settings).GroupBy(x => x.Key).ToDictionary(g => g.Key, g => g.First());
         if (looks is not null) rows.Children.Add(LookRow(looks));
         if (presets is not null) rows.Children.Add(PresetRow(presets));
         // One tab per section (the game's pages); the chosen one stays while the page is shown again.
@@ -241,32 +247,166 @@ public sealed partial class MainWindow
         return new Border { Classes = { "row" }, Child = grid };
     }
 
+    /// <summary>A look the row offers: the schema's (Meitou first, then the examples) or one of the player's (its file).</summary>
+    sealed record LookChoice(SettingsLook Look, string? File, string Source);
+
     /// <summary>
-    /// The look: Faithful, or a Meitou look preset (the schema's, then the player's files). Choosing one writes its values, as the game's menu sets them;
-    /// the game counts no change from the look it reads.
+    /// The look, as the game's settings menu shows it (docs/native-ui.md "Settings"): Faithful | Meitou, the Meitou preset, its changes from the look
+    /// (Revert; Save for the player's own), Save as, Share (a code on the clipboard), Paste, Delete. The presets are the game's files
+    /// (<see cref="LookPresetFile"/>); choosing a look writes its values, which the game reads as that look with no change.
     /// </summary>
     Border LookRow(SettingsLooks l)
     {
         var all = AllLooks(l);
-        var box = new ComboBox
+        bool faithful = IsFaithful(l);
+        var active = all.FirstOrDefault(x => x.Look.Name == (game.GetString(l.PresetKey) ?? l.Presets[0].Name)) ?? all[0];
+        int changes = l.Keys.Count(key => settingByKey.TryGetValue(key, out var s) && Changed(s));
+        string folder = Path.Combine(LauncherConfig.DataDirectory, l.Folder);
+
+        var controls = new WrapPanel { Margin = new(0, 6, 0, 0), ItemSpacing = 6, LineSpacing = 6 };
+        foreach (var (text, side) in new[] { ("Faithful", true), ("Meitou", false) })
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemsSource = all.Select(look => look.Name == l.Presets[0].Name ? Tr(look.Name) : $"{Tr(l.Presets[0].Name)}: {look.Name}").Prepend(Tr("Faithful")).ToList(),
-            SelectedIndex = IsFaithful(l) ? 0 : 1 + Math.Max(0, all.FindIndex(look => look.Name == (game.GetString(l.PresetKey) ?? l.Presets[0].Name))),
-        };
-        box.SelectionChanged += (_, _) =>
+            var button = new ToggleButton { Content = Tr(text), IsChecked = faithful == side, MinWidth = 90 };
+            button.Click += (_, _) => ApplyLook(l, side, active);
+            controls.Children.Add(button);
+        }
+        if (!faithful)
         {
-            if (box.SelectedIndex < 0) return;
-            bool faithful = box.SelectedIndex == 0;
-            game.Set(l.FaithfulKey, faithful);
-            // Faithful keeps the preset the game goes back to.
-            if (box.SelectedIndex == 1) game.Remove(l.PresetKey);
-            else if (box.SelectedIndex > 1) game.Set(l.PresetKey, all[box.SelectedIndex - 1].Name);
-            foreach (var (key, value) in faithful ? l.Faithful : LookValues(l, all[box.SelectedIndex - 1])) game.SetGraphics(key, value);
-            SaveGame();
-            Dispatcher.UIThread.Post(ShowGraphics);
+            var box = new ComboBox
+            {
+                MinWidth = 220, ItemsSource = all.Select(x => x.Source == "built in" ? Tr(x.Look.Name) : x.Look.Name).ToList(), SelectedIndex = all.IndexOf(active),
+            };
+            box.SelectionChanged += (_, _) => { if (box.SelectedIndex >= 0 && all[box.SelectedIndex] != active) ApplyLook(l, false, all[box.SelectedIndex]); };
+            controls.Children.Add(box);
+        }
+        string status = faithful ? changes == 0 ? "As the game ships" : changes == 1 ? "1 change from the game" : $"{changes} changes from the game"
+            : changes > 0 ? changes == 1 ? "1 unsaved change" : $"{changes} unsaved changes"
+            : active.Source == "mine" ? $"Mine · Meitou {MadeOf(active)}" : active.Source == "built in" ? "Built in" : "Example";
+        var statusText = new TextBlock { Classes = { "desc" }, Text = Tr(status), VerticalAlignment = VerticalAlignment.Center, Margin = new(6, 0, 6, 0) };
+        if (changes > 0 && Avalonia.Application.Current?.FindResource("BrassLight") is Avalonia.Media.IBrush brass) statusText.Foreground = brass;
+        controls.Children.Add(statusText);
+        Button Action(string text, Action run)
+        {
+            var button = new Button { Content = Tr(text) };
+            button.Click += (_, _) => run();
+            controls.Children.Add(button);
+            return button;
+        }
+        if (changes > 0) Action("Revert", () => ApplyLook(l, faithful, active));
+        if (!faithful)
+        {
+            if (active.Source == "mine" && changes > 0) Action("Save", () => SaveLook(l, active.Look.Name, folder));
+            else if (active.Source == "mine")
+            {
+                var delete = Action("Delete", () => { });
+                delete.Click += (_, _) =>
+                {
+                    // Two clicks: a preset file is not removed by a stray one.
+                    if (delete.Tag is null) { delete.Tag = true; delete.Content = Tr("Click again"); return; }
+                    try { if (active.File is { } file) File.Delete(file); }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status($"Could not delete the preset: {e.Message}"); }
+                    ApplyLook(l, false, all[0]);
+                    Status(Loc.Format(Tr("{1} deleted; the look is Meitou."), active.Look.Name));
+                };
+            }
+            Action("Save as", () => { namingLook = LookPresetFile.FreeName("My look", all.Select(x => x.Look.Name)); ShowGraphics(); });
+            Action("Share", async () =>
+            {
+                if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
+                await clipboard.SetValueAsync(Avalonia.Input.DataFormat.Text, LookPresetFile.ShareCode(new(active.Look.Name, MadeOf(active), active.Look.Values)));
+                Status(Loc.Format(Tr("{1}'s code is on the clipboard: paste it on Discord, or with Paste."), active.Look.Name));
+            });
+            Action("Paste", async () =>
+            {
+                string? code = TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard ? await clipboard.TryGetTextAsync() : null;
+                if (LookPresetFile.FromShareCode(code) is not { } pasted)
+                {
+                    Status("The clipboard holds no preset code (MT1:...). Copy one with Share first.");
+                    return;
+                }
+                var saved = pasted with { Name = LookPresetFile.FreeName(pasted.Name, all.Select(x => x.Look.Name)) };
+                try { LookPresetFile.Save(folder, saved); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status($"Could not write the preset: {e.Message}"); return; }
+                ApplyLook(l, false, new LookChoice(new SettingsLook { Name = saved.Name, Values = saved.Values }, null, "mine"));
+                Status(Loc.Format(Tr("{1} pasted and loaded (made on Meitou {2})."), saved.Name, saved.Made));
+            });
+        }
+        var panel = new StackPanel
+        {
+            Children =
+            {
+                new TextBlock { Classes = { "name" }, Text = Tr(l.Name) },
+                new TextBlock { Classes = { "desc" }, Text = Tr(l.Description) },
+                controls,
+            },
         };
-        return Row(l.Name, l.Description, box, 330);
+        if (namingLook is { } naming)
+        {
+            // Save as: the name, then Save or Cancel (Enter / Esc).
+            var name = new TextBox { Text = naming, Width = 260 };
+            var save = new Button { Content = Tr("Save") };
+            var cancel = new Button { Content = Tr("Cancel") };
+            void Done(bool keep)
+            {
+                string chosen = (name.Text ?? "").Trim();
+                namingLook = null;
+                if (keep && chosen.Length > 0) SaveLook(l, chosen, folder);
+                else ShowGraphics();
+            }
+            save.Click += (_, _) => Done(true);
+            cancel.Click += (_, _) => Done(false);
+            name.KeyDown += (_, e) =>
+            {
+                if (e.Key == Key.Enter) { Done(true); e.Handled = true; }
+                else if (e.Key == Key.Escape) { Done(false); e.Handled = true; }
+            };
+            panel.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 6, Margin = new(0, 6, 0, 0),
+                Children = { new TextBlock { Classes = { "desc" }, Text = Tr("Preset name"), VerticalAlignment = VerticalAlignment.Center }, name, save, cancel },
+            });
+            Dispatcher.UIThread.Post(() => { name.Focus(); name.SelectAll(); });
+        }
+        return new Border { Classes = { "row" }, Child = panel };
+    }
+
+    /// <summary>The Meitou version a look was made on: its file's, else this release's.</summary>
+    string MadeOf(LookChoice look) => look.File is { } file && File.Exists(file) && LookPresetFile.Read(File.ReadAllText(file)) is { } read ? read.Made : looks?.Made ?? "";
+
+    /// <summary>Makes a look the active one and writes its values: Faithful's, or Meitou's with the preset's own over them (Faithful keeps the preset to go back to).</summary>
+    void ApplyLook(SettingsLooks l, bool faithful, LookChoice look)
+    {
+        game.Set(l.FaithfulKey, faithful);
+        if (!faithful)
+        {
+            if (look.Source == "built in") game.Remove(l.PresetKey);
+            else game.Set(l.PresetKey, look.Look.Name);
+        }
+        foreach (var (key, value) in faithful ? l.Faithful : LookValues(l, look.Look)) game.SetGraphics(key, value);
+        SaveGame();
+        Dispatcher.UIThread.Post(ShowGraphics);
+    }
+
+    /// <summary>
+    /// Saves the look settings as the player's preset <paramref name="name"/> (what differs from Meitou's, as the game saves it) and makes it the active look.
+    /// </summary>
+    void SaveLook(SettingsLooks l, string name, string folder)
+    {
+        var values = new Dictionary<string, float>();
+        foreach (var key in l.Keys)
+            if (settingByKey.TryGetValue(key, out var s) && l.Meitou.TryGetValue(key, out float meitou))
+            {
+                float value = CurrentValue(s);
+                bool toggle = s.Kind == SettingKind.Toggle;
+                if (MathF.Abs(value - meitou) > (toggle ? 0.5f : MathF.Max(s.Step, 1e-4f) / 2)) values[key] = toggle ? value >= 0.5f ? 1 : 0 : MathF.Round(value, 3);
+            }
+        try { LookPresetFile.Save(folder, new(name, l.Made, values)); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status($"Could not write the preset: {e.Message}"); return; }
+        game.Set(l.FaithfulKey, false);
+        game.Set(l.PresetKey, name);
+        SaveGame();
+        Status(Loc.Format(Tr("{1} saved."), name));
+        Dispatcher.UIThread.Post(ShowGraphics);
     }
 
     /// <summary>Whether the look is Faithful: saved, else when every switch Faithful turns off is saved off (as the game reads it).</summary>
@@ -287,28 +427,17 @@ public sealed partial class MainWindow
         if (looks is not { } l) return null;
         if (IsFaithful(l)) return l.Faithful.TryGetValue(key, out float faithful) ? faithful : null;
         string name = game.GetString(l.PresetKey) ?? l.Presets[0].Name;
-        var look = AllLooks(l).FirstOrDefault(x => x.Name == name) ?? l.Presets[0];
+        var look = AllLooks(l).FirstOrDefault(x => x.Look.Name == name)?.Look ?? l.Presets[0];
         return look.Values.TryGetValue(key, out float own) ? own : l.Meitou.TryGetValue(key, out float meitou) ? meitou : null;
     }
 
-    /// <summary>The schema's looks, then the player's: JSON files in the look folder beside the game's settings file, each with a <c>name</c> and <c>values</c>.</summary>
-    static List<SettingsLook> AllLooks(SettingsLooks l)
+    /// <summary>The schema's looks (Meitou built in, then the examples), then the player's files in the look folder beside the game's settings file.</summary>
+    static List<LookChoice> AllLooks(SettingsLooks l)
     {
-        var all = new List<SettingsLook>(l.Presets);
-        string dir = Path.Combine(LauncherConfig.DataDirectory, l.Folder);
-        if (l.Folder.Length == 0 || !Directory.Exists(dir)) return all;
-        foreach (var file in Directory.GetFiles(dir, "*.json").Order(StringComparer.OrdinalIgnoreCase))
-            try
-            {
-                if (JsonNode.Parse(File.ReadAllText(file)) is not JsonObject json || json["name"] is not JsonValue n || !n.TryGetValue(out string? name) || name.Length == 0
-                    || all.Any(x => x.Name == name)) continue;
-                var look = new SettingsLook { Name = name };
-                if (json["values"] is JsonObject values)
-                    foreach (var (key, value) in values)
-                        if (value is JsonValue v && v.TryGetValue(out double d)) look.Values[key] = (float)d;
-                all.Add(look);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { }
+        var all = l.Presets.Select((look, i) => new LookChoice(look, null, i == 0 ? "built in" : "example")).ToList();
+        if (l.Folder.Length == 0) return all;
+        foreach (var (file, read) in LookPresetFile.ReadFolder(Path.Combine(LauncherConfig.DataDirectory, l.Folder)))
+            if (!all.Any(x => x.Look.Name == read.Name)) all.Add(new(new SettingsLook { Name = read.Name, Values = read.Values }, file, "mine"));
         return all;
     }
 
@@ -427,7 +556,7 @@ public sealed partial class MainWindow
         ?? (s.Graphics ? s.Shown : s.Default ?? s.Shown);
 
     /// <summary>Whether a look setting differs from the look's value; a quality or display setting is never marked (the Quality row reads Custom).</summary>
-    bool Changed(SettingDescription s) => s.Graphics && LookValue(s.Key) is { } look
+    bool Changed(SettingDescription s) => s.Graphics && looks?.Keys.Contains(s.Key) == true && LookValue(s.Key) is { } look
         && MathF.Abs(CurrentValue(s) - look) > (s.Kind == SettingKind.Toggle ? 0.5f : MathF.Max(s.Step, 1e-4f) / 2);
 
     /// <summary>Puts a look setting back to the look's value.</summary>

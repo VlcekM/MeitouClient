@@ -98,6 +98,10 @@ public sealed class SettingsLooks
     public Dictionary<string, float> Meitou { get; set; } = [];
     public List<SettingsLook> Presets { get; set; } = [];
     public string Folder { get; set; } = "";
+    /// <summary>The look's own settings (the look tabs): what a preset saves, and what differs from the look counts as a change.</summary>
+    public List<string> Keys { get; set; } = [];
+    /// <summary>The Meitou version a preset saved now is marked with (<c>meitou</c> in its file).</summary>
+    public string Made { get; set; } = "";
 }
 
 /// <summary>A look preset: its name and the <c>graphics</c> values it sets over <see cref="SettingsLooks.Meitou"/>.</summary>

@@ -25,6 +25,7 @@ Graphics (`SettingsMenu.Looks.cs`, `SettingsMenu.Presets.cs`; `--settings-showca
   Meitou; files `presets/<name>.json` beside `meitou.user.json` (`format`, `name`, `meitou` version, `values`), the active one in
   `lookPreset`. Rows that differ from it count as unsaved changes (Revert, Save for the player's own). Save as
   names a new one; Share copies a code (`MT1:` and the deflated JSON in base64) to the clipboard, Paste adds one; Delete (own presets).
+  Files and codes are read and written by `LookPresetFile` (Meitou.Core), the launcher's Look row too.
   The launcher writes a chosen look's values itself ([launcher](launcher.md#graphics)); at start the game only holds Low's look switches off.
   A quality tier's slider on a look tab (light shafts quality) is not part of the look. Every effect is a switch with its own state
   (off: the game's; on: Meitou's), its strength a slider under it that keeps its value while off (haze, heat haze, tone map and

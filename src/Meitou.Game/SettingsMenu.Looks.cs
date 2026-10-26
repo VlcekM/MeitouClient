@@ -17,7 +17,7 @@ sealed partial class SettingsMenu
 {
     static readonly string[] LookPages = ["Light", "Sky", "Colour", "Water", "Skin"];
     static readonly string[] QualityPages = ["Distances", "Detail"];
-    const string MeitouVersion = "0.14";
+    internal const string MeitouVersion = "0.14";
 
     /// <summary>A look preset: what it sets, by the keys the settings are saved under (a slider's label, "Meitou: " and a switch's label); everything else is Meitou's.</summary>
     sealed record LookPreset(string Name, string Source, string Made, Dictionary<string, float> Values, string? File = null);
@@ -86,43 +86,15 @@ sealed partial class SettingsMenu
 
     LookPreset ActiveLook => activeLook ??= Looks().FirstOrDefault(l => l.Name == config.LookPreset) ?? MeitouLook;
 
-    static LookPreset? ReadLook(string json, string source)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            var values = new Dictionary<string, float>();
-            foreach (var p in root.GetProperty("values").EnumerateObject()) values[p.Name] = p.Value.GetSingle();
-            return new(root.GetProperty("name").GetString() ?? "Unnamed", source, root.TryGetProperty("meitou", out var m) ? m.GetString() ?? "?" : "?", values);
-        }
-        catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException) { return null; }
-    }
+    // The preset files and share codes are LookPresetFile's (Meitou.Core), the launcher's too.
+    static LookPreset? ReadLook(string json, string source) =>
+        global::Meitou.Settings.LookPresetFile.Read(json) is { } read ? new(read.Name, source, read.Made, read.Values) : null;
 
-    static string WriteLook(LookPreset look) => JsonSerializer.Serialize(new Dictionary<string, object>
-    {
-        ["format"] = 1, ["name"] = look.Name, ["meitou"] = look.Made, ["values"] = look.Values,
-    }, new JsonSerializerOptions { WriteIndented = true });
+    static global::Meitou.Settings.LookPresetData Data(LookPreset look) => new(look.Name, look.Made, look.Values);
 
-    static string ShareCode(LookPreset look)
-    {
-        using var buffer = new MemoryStream();
-        using (var deflate = new DeflateStream(buffer, CompressionLevel.SmallestSize)) deflate.Write(Encoding.UTF8.GetBytes(WriteLook(look)));
-        return "MT1:" + Convert.ToBase64String(buffer.ToArray());
-    }
+    static string WriteLook(LookPreset look) => global::Meitou.Settings.LookPresetFile.Write(Data(look));
 
-    static string? FromShareCode(string? code)
-    {
-        string text = string.Concat((code ?? "").Where(c => !char.IsWhiteSpace(c)));
-        if (!text.StartsWith("MT1:", StringComparison.Ordinal)) return null;
-        try
-        {
-            using var deflate = new DeflateStream(new MemoryStream(Convert.FromBase64String(text[4..])), CompressionMode.Decompress);
-            using var reader = new StreamReader(deflate, Encoding.UTF8);
-            return reader.ReadToEnd();
-        }
-        catch (Exception e) when (e is FormatException or InvalidDataException) { return null; }
-    }
+    static string ShareCode(LookPreset look) => global::Meitou.Settings.LookPresetFile.ShareCode(Data(look));
 
     /// <summary>The Graphics tab a setting sits on (Display and Advanced settings are sorted out before this); Interior lamps is on Advanced.</summary>
     static string GraphicsSection(string label, bool toggle)
@@ -152,7 +124,7 @@ sealed partial class SettingsMenu
     }
 
     /// <summary>Whether a switch or slider is part of the look (presets set it); a quality tier's slider on a look tab (light shafts quality) is not.</summary>
-    static bool IsLook(string label, bool toggle) => LookPages.Contains(GraphicsSection(label, toggle)) && (toggle || !PresetSliders.Any(p => p.Label == label));
+    internal static bool IsLook(string label, bool toggle) => LookPages.Contains(GraphicsSection(label, toggle)) && (toggle || !PresetSliders.Any(p => p.Label == label));
 
     /// <summary>A Faithful / Meitou switch of the Graphics page (the gameplay one, Interior lamps, is not).</summary>
     static bool IsGraphicsSwitch(Toggle t) => t.Remaster && GraphicsPages.Contains(GraphicsSection(t.Label, true));
@@ -311,18 +283,13 @@ sealed partial class SettingsMenu
         ApplyLook(MeitouLook);
     }
 
-    static string MakeFileName(string name) => string.Concat(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)) + ".json";
+    static string MakeFileName(string name) => global::Meitou.Settings.LookPresetFile.FileName(name);
 
-    string FreeName(string stem)
-    {
-        var names = Looks().Select(l => l.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (!names.Contains(stem)) return stem;
-        for (int i = 2; ; i++) if (!names.Contains($"{stem} {i}")) return $"{stem} {i}";
-    }
+    string FreeName(string stem) => global::Meitou.Settings.LookPresetFile.FreeName(stem, Looks().Select(l => l.Name));
 
     void PasteLook()
     {
-        if (FromShareCode(player.ClipboardRead?.Invoke()) is not { } json || ReadLook(json, "pasted") is not { } pasted)
+        if (global::Meitou.Settings.LookPresetFile.FromShareCode(player.ClipboardRead?.Invoke()) is not { } read || new LookPreset(read.Name, "pasted", read.Made, read.Values) is not { } pasted)
         {
             notice = "The clipboard holds no preset code (MT1:…). Copy one with Share first.";
             return;
