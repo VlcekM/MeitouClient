@@ -119,6 +119,23 @@ sealed partial class SettingsMenu
         return CustomPreset;
     }
 
+    /// <summary>The quality tier the settings follow: the one last chosen.</summary>
+    int Tier => config.QualityTier is >= 0 and < CustomPreset ? config.QualityTier : HighPreset;
+
+    /// <summary>What the tier sets a switch to (a tier switch, the fifth cascade); another is its start state, off in the Faithful look.</summary>
+    bool TierToggle(Toggle t, int index) =>
+        t.Label == FifthCascade ? CascadeFor(Tier)   // in either look (ApplyPreset)
+        : PresetToggles.FirstOrDefault(p => p.Label == t.Label) is { } p ? !FaithfulLook && SwitchTarget(p, toggleDefaults[index], Tier)
+        : !(t.Remaster && FaithfulLook && IsGraphicsSwitch(t)) && toggleDefaults[index];
+
+    /// <summary>What the tier sets a slider to (Low also: quarter-size particles, no anti-aliasing at its render scale); another is its start value.</summary>
+    float TierSlider(Slider s, int index) =>
+        PresetSliders.FirstOrDefault(p => p.Label == s.Label) is { } p ? PresetTarget(p, s, Tier)
+        : Tier == LowPreset && s.Label == WorldFrame.ParticleSliders[0] ? 1
+        : Tier == LowPreset && s.Label == WorldFrame.UpscalerSliders[0] ? 0
+        : Tier == LowPreset && s.Label == WorldFrame.UpscalerSliders[1] ? WorldOptions.LowEndRenderScale
+        : defaults[index];
+
     /// <summary>The prefix of a switch's key in <c>meitou.user.json</c>'s <c>graphics</c> (the Faithful / Meitou ones and the plain on/off ones alike).</summary>
     internal const string SwitchKeyPrefix = "Meitou: ";
 

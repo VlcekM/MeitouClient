@@ -42,7 +42,10 @@ Graphics (`SettingsMenu.Looks.cs`, `SettingsMenu.Presets.cs`; `--settings-showca
 Tabs: the look tabs Light, Sky, Colour, Water, Skin, then the quality tabs Distances, Detail. A tab lists features
 (`SettingsMenu.Groups.cs`): each is one row headed by its switch (or a title: Ambient light, Shadow quality, Terrain relief) with
 its own settings folded under it (a darker band with a brass edge), closed until its arrow or text is clicked. A setting that
-differs from the preset has its name in brass and a Reset link back to the preset's value; a feature's header shows it for anything inside. Interior lamps is on Advanced: the
+differs from the preset has its name in brass and a Reset link back to the preset's value; a feature's header shows it for anything inside.
+A row outside the look (the quality tabs, Display) does the same against what the quality tier last chosen sets (Low: also quarter-size
+particles, no anti-aliasing, 0.83 render scale), else its start value (`SettingsMenu.QualityRow`). A plain on / off setting is drawn as
+Off | On, like a switch. Interior lamps is on Advanced: the
 stealth sight counts its light, so no look or Faithful sets it. Each setting has one control: an effect a Faithful | Meitou switch,
 named values a drop-down (the anti-aliasing method on Display, weather particles' size), amounts a slider running right = more
 (terrain detail's error in pixels is drawn mirrored, `Slider.Reversed`). The `aa` and `particles` switches are not shown and their

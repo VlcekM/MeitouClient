@@ -279,8 +279,12 @@ sealed partial class SettingsMenu
         }
         else if (entry is { Segmented: true, Choice: { } sides })
             Segmented(R(860, y + (row - 22) / 2, 240, 22), sides.Current(), sides.Choose, "All Faithful", "All Meitou");
+        // A switch with its own words (Hear from: Character / Camera): one button showing the current side.
+        else if (entry.Toggle is { Text: { } words } worded)
+            Button(words(), R(976, buttonY, 124, 26), () => worded.Set(!worded.Get()), worded.Get(), clip: viewport);
+        // A plain on / off setting: both sides as buttons, as a Faithful / Meitou switch shows them.
         else if (entry.Toggle is { } toggle)
-            Button(toggle.Text?.Invoke() ?? (toggle.Get() ? "On" : "Off"), R(976, buttonY, 124, 26), () => toggle.Set(!toggle.Get()), toggle.Get(), clip: viewport);
+            Segmented(R(920, y + (row - 22) / 2, 180, 22), toggle.Get() ? 1 : 0, i => toggle.Set(i == 1), "Off", "On");
         else if (entry.Choice is { } choice)
         {
             var options = choice.Options();
