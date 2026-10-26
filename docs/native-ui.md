@@ -52,7 +52,7 @@ stealth sight counts its light, so no look or Faithful sets it. Each setting has
 named values a drop-down (the anti-aliasing method on Display, weather particles' size), amounts a slider running right = more
 (terrain detail's error in pixels is drawn mirrored, `Slider.Reversed`). The `aa` and `particles` switches are not shown and their
 saved state is not read (`SettingsMenu.HiddenSwitch`): the drop-downs cover them, and Faithful leaves both alone. Every Graphics row names its **performance impact** (No, Low, Medium,
-High, or Speeds up), ranked from the measured costs (`SettingsMenu.ImpactOf`; RTX 4090 at 1440p: High about 1 ms or more, Medium
+High, or Faster with Meitou: a switch whose Meitou side saves work), ranked from the measured costs (`SettingsMenu.ImpactOf`; RTX 4090 at 1440p: High about 1 ms or more, Medium
 a few tenths), not milliseconds, which differ by card. Advanced (**All gameplay changes**) and Fixes (**All fixes**) start with an
 all-Faithful / all-Meitou switch over their own page's switches and sliders with both marks (attackers per target); luckyren Mode is left out.
 The modal pauses simulation and captures world input; wheel/PageUp/PageDown scroll, Tab/arrows

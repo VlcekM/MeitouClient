@@ -159,7 +159,7 @@ sealed partial class SettingsMenu
 
     /// <summary>
     /// How much a setting costs, as a level a player can use on any machine: ranked from the measured costs in the docs (RTX 4090, 1440p; docs/render-*.md),
-    /// High about 1 ms or more or a large share of the scene, Medium a few tenths, Low under a tenth or only in some views. "Speeds up": a switch that saves work.
+    /// High about 1 ms or more or a large share of the scene, Medium a few tenths, Low under a tenth or only in some views. "Faster with Meitou": a switch whose Meitou side saves work.
     /// </summary>
     internal static string? ImpactOf(string label) => label switch
     {
@@ -173,7 +173,7 @@ sealed partial class SettingsMenu
         "Cloud shadows" or "Indoor GI" or "Planetshine" or "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)" or "Cloud shadows in fog"
             or "Terrain outline refinement (tessellation)" or "Small foliage range" or "Bloom strength (0 = game)" or WorldFrame.BloomSwitch or "Heat haze" or "Blood cells" or "Item icons"
             or "Light shafts air (0 = none)" => "Low impact",
-        "Far impostors" or "Foliage levels" or "Character levels" or "Weather particles" => "Speeds up",
+        "Far impostors" or "Foliage levels" or "Character levels" or "Weather particles" => "Faster with Meitou",
         _ when label == WorldFrame.ParticleSliders[0] || label == WorldFrame.ParticleSliders[1] => "Medium impact",
         _ when IsLook(label, false) || IsLook(label, true) => "No impact",
         _ => null,
