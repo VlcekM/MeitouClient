@@ -200,6 +200,7 @@ sealed partial class GameHost
         bool lockOrbit = OperatingSystem.IsLinux();
         Vector2? orbitAnchor = null;
         var windowCursor = Silk.NET.Input.CursorMode.Normal;
+        var cursorBeforeOrbit = windowCursor;
         bool panelDrag = false, shiftDown = false, profilerClick = false;
         Vector2 Pixels(Vector2 p) => p * new Vector2(window.FramebufferSize.X / (float)Math.Max(window.Size.X, 1), window.FramebufferSize.Y / (float)Math.Max(window.Size.Y, 1));
         // The settings panel takes the mouse only while it is drawn (F7 and the cinema's clean picture hide it).
@@ -376,8 +377,8 @@ sealed partial class GameHost
             {
                 if (orbitAnchor is not null)
                 {
-                    // Locked: p is GLFW's virtual position, only its movement counts.
-                    if (lastMouse is { } prev) session.Input.AddMouseDelta(p.X - prev.X, p.Y - prev.Y);
+                    // Locked: p is GLFW's virtual position, only its movement counts, and not under a loading screen or the interface (as below).
+                    if (lastMouse is { } prev && !Covered && !player.UiCapturesPointer && !player.ModalOpen) session.Input.AddMouseDelta(p.X - prev.X, p.Y - prev.Y);
                     lastMouse = p;
                     return;
                 }
@@ -389,7 +390,17 @@ sealed partial class GameHost
                 player.MouseMove(Pixels(hold ? lastMouse!.Value : p));
                 if (player.UiCapturesPointer || player.ModalOpen) { lastMouse = p; return; }
                 if (lastMouse is { } last) session.Input.AddMouseDelta(p.X - last.X, p.Y - last.Y);
-                if (hold && lockOrbit) { orbitAnchor = lastMouse; session.Input.SetMousePosition(lastMouse!.Value.X, lastMouse.Value.Y); lastMouse = p; return; }
+                if (hold && lockOrbit)
+                {
+                    // Locked here, not with the cursor mode at the end of the frame: until then the pointer moves on, and GLFW counts that movement
+                    // twice (X11) or drops it (Wayland) when the lock starts. Movement is then measured from where GLFW's virtual position starts.
+                    orbitAnchor = lastMouse;
+                    session.Input.SetMousePosition(lastMouse!.Value.X, lastMouse.Value.Y);
+                    cursorBeforeOrbit = windowCursor;
+                    m.Cursor.CursorMode = windowCursor = Silk.NET.Input.CursorMode.Disabled;
+                    lastMouse = m.Position;
+                    return;
+                }
                 if (hold) { HoldPointer(m, lastMouse!.Value); return; }
                 lastMouse = p;
             };
@@ -397,7 +408,8 @@ sealed partial class GameHost
             {
                 if (Covered || PanelLive() && panel?.Scroll(wheel.Y) == true) return;
                 if (PanelLive() && sandboxPicker?.Scroll(wheel.Y) == true) return;
-                if (!cinema.Contains(Pixels(m.Position)) && !player.UiScroll(Pixels(m.Position), wheel.Y) && !(PanelLive() && player.ContainsUi(Pixels(m.Position)))) session.Input.AddWheel(wheel.Y);
+                var at = Pixels(orbitAnchor ?? m.Position);
+                if (!cinema.Contains(at) && !player.UiScroll(at, wheel.Y) && !(PanelLive() && player.ContainsUi(at))) session.Input.AddWheel(wheel.Y);
             };
         }
         Console.WriteLine(GameOptions.Usage[GameOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
@@ -565,13 +577,13 @@ sealed partial class GameHost
             UpdateView(size.X, size.Y);
             // What the mouse is over, decided once before the world is drawn: the pointer (drawn last) and the hover outline (drawn with the world) agree.
             var pointerMouse = silkInput.Mice.FirstOrDefault();
-            // Rotation over on Linux: the pointer is let go where it was locked, before its position is read (still locked, GLFW reports its
-            // virtual position, and the pointer was drawn there for a frame); the cursor mode below then shows it as usual. The next move starts afresh.
+            // Rotation over on Linux: the pointer is let go where it was locked, in the cursor mode it had before, and before its position is read
+            // (still locked, GLFW reports its virtual position, and the pointer was drawn there for a frame). The next move starts afresh.
             if (orbitAnchor is not null && !OrbitHeld())
             {
                 orbitAnchor = null;
                 lastMouse = null;
-                if (pointerMouse is not null) pointerMouse.Cursor.CursorMode = windowCursor = Silk.NET.Input.CursorMode.Hidden;
+                if (pointerMouse is not null) pointerMouse.Cursor.CursorMode = windowCursor = cursorBeforeOrbit;
             }
             var pointerAt = pointerMouse is null ? Vector2.Zero : Pixels(orbitAnchor ?? pointerMouse.Position);
             bool Held(SilkKey a, SilkKey b) => silkInput.Keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
