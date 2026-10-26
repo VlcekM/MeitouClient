@@ -43,6 +43,9 @@ sealed partial class GameHost
         }, vsync, streamline: true);   // Load before the device so the settings panel can switch to DLSS without restarting.
         streamline = display.Streamline;
         var window = display.Window!;
+        // X11 opens it where Silk.NET asks (50,50), the desktop's corner, which can be another monitor (Observed 2026-10-26, XWayland): on the primary
+        // monitor instead, the one full screen uses; leaving full screen puts it back where it was when full screen began.
+        if (window.Native?.X11 is not null) BorderlessFullScreen.MoveToPrimaryMonitor(window);
         // Borderless full screen as the viewer starts (Alt+Enter and the Tab panel switch it); --windowed keeps a window for
         // this run: the size asked by --size, else maximised. Sized while still hidden: resizing after it shows (maximised,
         // then borderless) flashed white and black before the first frame.
