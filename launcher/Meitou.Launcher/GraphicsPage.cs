@@ -416,24 +416,20 @@ public sealed partial class MainWindow
         (s.Graphics ? game.GetGraphics(s.Key) : s.Kind == SettingKind.Toggle ? game.GetBool(s.Key) is { } on ? on ? 1 : 0 : null : game.GetNumber(s.Key))
         ?? (s.Graphics ? s.Shown : s.Default ?? s.Shown);
 
-    /// <summary>What a setting goes back to: the look's value for a look setting, else the game's start value (a top-level one: the schema's default).</summary>
-    float DefaultValue(SettingDescription s) => s.Graphics ? LookValue(s.Key) ?? s.Shown : s.Default ?? s.Shown;
+    /// <summary>Whether a look setting differs from the look's value; a quality or display setting is never marked (the Quality row reads Custom).</summary>
+    bool Changed(SettingDescription s) => s.Graphics && LookValue(s.Key) is { } look
+        && MathF.Abs(CurrentValue(s) - look) > (s.Kind == SettingKind.Toggle ? 0.5f : MathF.Max(s.Step, 1e-4f) / 2);
 
-    bool Changed(SettingDescription s) => MathF.Abs(CurrentValue(s) - DefaultValue(s)) > (s.Kind == SettingKind.Toggle ? 0.5f : MathF.Max(s.Step, 1e-4f) / 2);
-
-    /// <summary>Puts a setting back: a look setting to the look's value, another graphics one to the game's default (its key removed), a top-level one to the schema's default.</summary>
+    /// <summary>Puts a look setting back to the look's value.</summary>
     void ResetSetting(SettingDescription s)
     {
-        if (s.Graphics) game.SetGraphics(s.Key, LookValue(s.Key));
-        else if (s.Default is not { } d) game.Remove(s.Key);
-        else if (s.Kind == SettingKind.Toggle) game.Set(s.Key, d >= 0.5f);
-        else game.Set(s.Key, d);
+        game.SetGraphics(s.Key, LookValue(s.Key));
         PresetBroken(s.Key);
         SaveGame();
     }
 
     /// <summary>
-    /// A setting's row, the same for every control: its name, and while its value differs from its default (<see cref="DefaultValue"/>) the name in brass
+    /// A setting's row, the same for every control: its name, and while a look setting differs from the look (<see cref="Changed"/>) the name in brass
     /// with a Reset link beside it, as in the game's menu. Returns the row and what to call after the value changes; <paramref name="show"/> puts the
     /// control back after a reset.
     /// </summary>

@@ -177,7 +177,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     Entry LookRow(Entry entry, string key, string label, bool toggle, HashSet<string> changes)
     {
         entry = entry with { Impact = ImpactOf(label), Raw = label };
-        if (!IsLook(label, toggle)) return QualityRow(entry, label, toggle);
+        if (!IsLook(label, toggle)) return entry;
         if (toggle && entry.Toggle is { } cut && CutAtLow(label) && !cut.Get())
             return entry with
             {
@@ -201,27 +201,6 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             WorldFrame.GroundDisplaceDistanceSlider => displace,
             _ => true,
         };
-    }
-
-    /// <summary>
-    /// A row outside the look (the quality tabs, Display): marked, as the launcher marks it, when it differs from what the quality tier sets (else from its start
-    /// value), and Reset puts that back.
-    /// </summary>
-    Entry QualityRow(Entry entry, string label, bool toggle)
-    {
-        if (toggle)
-        {
-            int i = values.Toggles.ToList().FindIndex(t => t.Label == label);
-            if (i < 0) return entry;
-            var t = values.Toggles[i];
-            bool target = TierToggle(t, i);
-            return entry with { Changed = t.Get() != target, Reset = () => { if (t.Get() != target) t.Set(target); } };
-        }
-        int j = values.Sliders.ToList().FindIndex(s => s.Label == label);
-        if (j < 0) return entry;
-        var slider = values.Sliders[j];
-        float value = TierSlider(slider, j);
-        return entry with { Changed = MathF.Abs(slider.Get() - value) > 0.002f * (slider.Max - slider.Min), Reset = () => slider.Set(value) };
     }
 
     Entry SliderEntry(Slider slider)
@@ -255,7 +234,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     {
         string section = page == 1 ? GraphicsPages[graphicsPage] : Pages[page];
         var result = values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))
-            .Select(s => page == 0 ? QualityRow(SliderEntry(s), s.Label, false) : SliderEntry(s)).ToList();
+            .Select(SliderEntry).ToList();
         if (page == 1)
         {
             var changes = LookPages.Contains(section) ? LookChanges() : [];
