@@ -148,9 +148,10 @@ public sealed partial class MainWindow
         var done = new HashSet<SettingsGroup>();
         foreach (var s in section.Settings.Where(Shown))
         {
-            // A feature shows where its first setting is: its header, then its members folded under it. With features, every row keeps the arrow's gutter.
+            // A feature shows where its first setting is: its header, then its members folded under it. Every row of every tab keeps the arrow's gutter,
+            // so the names line up from tab to tab.
             if (groups.FirstOrDefault(g => g.Header == s.Key || g.Members.Contains(s.Key)) is not { } group)
-                content.Children.Add(groups.Count > 0 ? new DockPanel { Children = { Gutter(null), SettingRow(s) } } : SettingRow(s));
+                content.Children.Add(new DockPanel { Children = { Gutter(null), SettingRow(s) } });
             else if (done.Add(group)) content.Children.Add(GroupRows(group, section));
         }
         LauncherText.TranslateTree(content, originalUiText);
