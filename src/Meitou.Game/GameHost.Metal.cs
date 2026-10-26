@@ -674,7 +674,7 @@ sealed partial class GameHost
             }
             sliders.Add(new Slider("Terrain detail: error px (less = finer)", 1, 32, () => render.TerrainPixelError,
                 v => render.TerrainPixelError = v, "0.0", Logarithmic: true,
-                Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError, Reversed: true));
+                Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError));
 
             // Lighting: the same shadow controls the Vulkan settings expose, and the sky switches the Metal sky reads.
             const float shadowsOff = Meitou.Data.World.KenshiShadows.MinRange * 0.9f;

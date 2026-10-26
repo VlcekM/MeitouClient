@@ -1161,7 +1161,7 @@ static class WorldFrame
                 v => water.ClearDistance = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
         }
         sliders.Add(new Slider(TerrainErrorSlider, 4, 32, () => r.TerrainPixelError, v => r.TerrainPixelError = v, "0.0", Logarithmic: true,
-            Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError, Reversed: true));
+            Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError));
         // Ours (docs/render-terrain.md "Ground relief"): the march's quality, the depth (parallax and displacement; 0 off) and where each ends.
         sliders.Add(new Slider(GroundReliefQualitySlider, 0, 2, () => GroundRelief.Quality,
             v => GroundRelief.Quality = Math.Clamp((int)MathF.Round(v), 0, 2), "0", Text: v => GroundRelief.QualityName((int)MathF.Round(v))));

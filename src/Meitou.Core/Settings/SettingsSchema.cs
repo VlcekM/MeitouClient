@@ -118,6 +118,8 @@ public sealed record SettingDescription
     public SettingKind Kind { get; set; }
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
+    /// <summary>How much the setting costs (No / Low / Medium / High impact, Speeds up), shown beside its name; null when not ranked.</summary>
+    public string? Impact { get; set; }
     /// <summary>The value when the key is missing (a toggle: 1 on, 0 off); null when it depends on the mode or the computer, and the slider then sits at
     /// <see cref="Shown"/> (a graphics toggle offers the game's default as a choice of its own).</summary>
     public float? Default { get; set; }

@@ -447,7 +447,7 @@ public sealed partial class MainWindow
     /// A row, the same for every control: its name, and while one of <paramref name="settings"/> (a look setting) differs from the look
     /// (<see cref="Changed"/>) the name in brass with a Reset link beside it that puts them all back, as in the game's menu.
     /// </summary>
-    Border Frame(string text, string description, IReadOnlyList<SettingDescription> settings, Control control, int width)
+    Border Frame(string text, string description, IReadOnlyList<SettingDescription> settings, Control control, int width, string? impact = null)
     {
         var name = new TextBlock { Classes = { "name" }, Text = text };
         var reset = new TextBlock { Classes = { "reset" }, Text = Tr("Reset"), Margin = new(10, 0, 0, 2), VerticalAlignment = VerticalAlignment.Bottom, Cursor = new Cursor(StandardCursorType.Hand) };
@@ -473,7 +473,7 @@ public sealed partial class MainWindow
             VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                new StackPanel { Orientation = Orientation.Horizontal, Children = { name, reset } },
+                NameLine(new StackPanel { Orientation = Orientation.Horizontal, Children = { name, reset } }, impact),
                 new TextBlock { Classes = { "desc" }, Text = description },
             },
         });
@@ -485,11 +485,26 @@ public sealed partial class MainWindow
         return new Border { Classes = { "row" }, Child = grid };
     }
 
+    /// <summary>The name line of a row, with the setting's performance impact at its right as the game shows it (High in brass).</summary>
+    static DockPanel NameLine(Control name, string? impact)
+    {
+        var line = new DockPanel();
+        if (impact is { Length: > 0 })
+        {
+            var text = new TextBlock { Classes = { "desc" }, Text = Tr(impact), Margin = new(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+            if (impact.StartsWith("High", StringComparison.Ordinal) && Avalonia.Application.Current?.FindResource("BrassLight") is Avalonia.Media.IBrush brass) text.Foreground = brass;
+            DockPanel.SetDock(text, Dock.Right);
+            line.Children.Add(text);
+        }
+        line.Children.Add(name);
+        return line;
+    }
+
     /// <summary>A setting's row (<see cref="Frame"/>); a feature's header stands for the settings under it too. <paramref name="show"/> puts the control back after a Reset.</summary>
     Border SettingFrame(SettingDescription s, Control control, int width, Action show)
     {
         rowShows.Add(show);
-        return Frame(s.Name, s.Description, [s, .. featureMembers.GetValueOrDefault(s.Key) ?? []], control, width);
+        return Frame(s.Name, s.Description, [s, .. featureMembers.GetValueOrDefault(s.Key) ?? []], control, width, s.Impact);
     }
 
     /// <summary>A drop-down over a setting's values (<paramref name="options"/>, the first one at <paramref name="first"/>), framed as every row is.</summary>

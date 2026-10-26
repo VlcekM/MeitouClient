@@ -165,7 +165,9 @@ every Tab panel slider and switch under `graphics` (a slider by label, `WorldFra
 setting reaches the launcher with its release; the launcher knows none of them. A version without a schema (older), or with a newer
 `format`, gets no page. Rows a computer lacks (tessellation, the Meitou shadows' filter) are listed anyway; the game ignores their keys.
 
-- Each schema section is a tab: Display, then the game's Graphics sub-pages (Light, Sky, Colour, Water, Skin, Distances, Detail)
+- The schema is also the catalogue the game's own Display and Graphics pages are drawn from ([native-ui](native-ui.md)), so the launcher's
+  rows and the game's are the same: names, ranges, value text, choices, impact (`impact`, beside the name) and order.
+- Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Light, Sky, Colour, Water, Skin, Distances, Detail)
   as `SettingsMenu.Section` / `ToggleSection` place them, switches first. Interior lamps is not listed: it changes the stealth sight, so it
   is on the game's Advanced page only.
 - A section's `groups` (null in older schemas: flat rows) are the menu's features (`SettingsMenu.FeatureGroups`): one row headed by

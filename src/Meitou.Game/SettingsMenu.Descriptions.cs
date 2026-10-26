@@ -10,6 +10,7 @@ sealed partial class SettingsMenu
     internal static string SliderHint(string label) => Label(label) switch
     {
         "VSync" => "Match the display refresh rate to prevent tearing.",
+        "Frame limit" => "Frames per second while vertical sync is off.",
         "Full screen" => "Fill the monitor with a borderless game window.",
         "Grading" => "Apply the scene's colour and contrast adjustments.",
         "Texture quality" => "Texture resolution; terrain changes need a restart.",

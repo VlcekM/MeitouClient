@@ -203,45 +203,52 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         };
     }
 
+    internal const string TickAheadHint = "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn "
+        + "whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters, up to 33 ms more input delay.";
+    internal static readonly string[] TickAheadChoices = ["Faithful (in series)", "Meitou (when busy)", "Always on"];
+
+    /// <summary>A Tab panel slider's key in the catalogue (<see cref="LauncherSchema.Find"/>): its label, or the top-level key of the display switches.</summary>
+    static string CatalogueKey(string label) => label switch { "Full screen" => "fullScreen", "VSync" => "vSync", _ => label };
+
+    /// <summary>
+    /// A Tab panel slider's row, as the launcher shows it: name, range, scale direction, value text and choices come from the catalogue
+    /// (<see cref="LauncherSchema.Find"/>); the panel's slider only reads and writes the value (and marks the Faithful / Meitou values).
+    /// </summary>
     Entry SliderEntry(Slider slider)
     {
         string key = slider.Label;
-        if (key is "VSync" or "Full screen" || key.StartsWith("Grading (", StringComparison.Ordinal))
-            return new(key == "Full screen" ? "Borderless full screen" : key == "VSync" ? "Vertical sync" : "Colour grading",
-                SliderHint(slider), Toggle: new(key, () => slider.Get() >= 0.5f, v => slider.Set(v ? 1 : 0)));
+        var d = LauncherSchema.Find(CatalogueKey(key));
+        if (d is { Kind: global::Meitou.Settings.SettingKind.Slider, Labels: null })
+            slider = slider with { Min = d.Min, Max = d.Max, Logarithmic = d.Logarithmic && d.Min > 0, Reversed = d.Reversed, Text = d.Text };
+        // An on / off setting in the catalogue (full screen, VSync; colour grading's two choices) is a switch, whatever the panel's slider.
+        if (d is { Kind: global::Meitou.Settings.SettingKind.Toggle } or { Labels.Length: 2 })
+            return new(d?.Name ?? Label(key), SliderHint(slider), Toggle: new(key, () => slider.Get() >= 0.5f, v => slider.Set(v ? 1 : 0)), Raw: CatalogueKey(key));
         string[]? options = key == MetalPresetSlider
             ? ["Native 1.00", "MetalFX Super Quality 0.77", "MetalFX Quality 0.67", "MetalFX Balanced 0.59", "MetalFX Performance 0.50", "MetalFX Temporal 0.40", "MetalFX Spatial 0.50 (alternative)", "MetalFX Spatial 0.40 (alternative)", "TAA 0.50 (experimental)", "Custom"]
-            : key == WorldFrame.UpscalerSliders[0] ? ["Off", "FXAA", "SMAA", "TAA", "FSR", "DLSS"]
-            : key == WorldFrame.TextureQualitySlider ? global::Meitou.Data.Textures.TextureQuality.Labels
-            : key == WorldFrame.ParticleSliders[0] ? ["Off", "Quarter resolution", "Half resolution", "Automatic", "Full resolution"]
-            : key.StartsWith("Tone map", StringComparison.Ordinal) ? ["Shoulder", "ACES", "Hybrid"]
-            : key.StartsWith("Shadow map", StringComparison.Ordinal) ? ["Low · 1024", "Medium · 2048", "High · 4096"]
-            : key == WorldFrame.GroundReliefQualitySlider ? ["Low", "Medium", "High"]
-            : key == WorldFrame.ShaftQualitySlider ? ["Low", "Medium", "High"]
-            : key.StartsWith("Water reflection", StringComparison.Ordinal) ? ["Off", "Landscape", "Characters", "Buildings", "Everything"]
-            : key == WorldFrame.FilteringSlider ? ["1x", "2x", "4x", "8x", "16x"] : null;
-        string label = key == WorldFrame.UpscalerSliders[0] ? "Anti-aliasing/upscaling" : key == WorldFrame.ParticleSliders[0] ? "Weather particles"
-            : key == WorldFrame.TextureQualitySlider ? "Texture quality" : key == WorldFrame.FilteringSlider ? "Texture filtering" : Label(key);
+            : d?.Labels;
+        string label = d?.Name ?? Label(key);
         string hint = key == MetalPresetSlider
             ? "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, so the separate scale slider is disabled."
             : key == WorldFrame.UpscalerSliders[0] ? "Smooths edges and upscales the render. Active: " + (UpscalerStatus?.Invoke() ?? "unavailable") : SliderHint(slider);
         // The options are the slider's whole values from its left end.
-        return options is { } items ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get() - slider.Min), i => slider.Set(i + slider.Min)))
-            : new(label, hint, Slider: slider);
+        float first = d?.Min ?? slider.Min;
+        return options is { } items ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get() - first), i => slider.Set(i + first)), Raw: key)
+            : new(label, hint, Slider: slider, Raw: key);
     }
 
     List<Entry> Entries()
     {
         string section = page == 1 ? GraphicsPages[graphicsPage] : Pages[page];
+        // In the catalogue's order, the launcher's (LauncherSchema.Order).
         var result = values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))
-            .Select(SliderEntry).ToList();
+            .OrderBy(s => LauncherSchema.Order(CatalogueKey(s.Label))).Select(SliderEntry).ToList();
         if (page == 1)
         {
             var changes = LookPages.Contains(section) ? LookChanges() : [];
-            result = values.Toggles.Where(toggle => ToggleSection(toggle.Label) == section)
+            result = values.Toggles.Where(toggle => ToggleSection(toggle.Label) == section).OrderBy(toggle => LauncherSchema.Order(SwitchKey(toggle.Label)))
                 .Select(toggle => LookRow(new Entry(Label(toggle.Label), ToggleHint(toggle.Label), Toggle: toggle), SwitchKey(toggle.Label), toggle.Label, true, changes))
                 .Concat(values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))
-                    .Select(s => LookRow(SliderEntry(s), s.Label, s.Label, false, changes)))
+                    .OrderBy(s => LauncherSchema.Order(s.Label)).Select(s => LookRow(SliderEntry(s), s.Label, s.Label, false, changes)))
                 .ToList();
         }
         // Graphics > Skin: after the switch, one row per person race of the loaded data (mods too), on or off against its default.
@@ -254,16 +261,20 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                         SkinRacesChanged?.Invoke();
                     }, OnOff: true), Raw: "race:" + id));
         if (page == 1) result = Grouped(result);
-        if (page == 0) result.Insert(2, new("Frame limit", "Used while vertical sync is off; 0 is unlimited.", Slider: frameLimit));
-        if (page == 0 && !OperatingSystem.IsMacOS())
-            result.Insert(3, new("Frame generation (FSR 3)", "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. "
-                + "Takes effect after a restart. Now: " + (FrameGenerationStatus?.Invoke() ?? "off"),
-                Toggle: new("Frame generation (FSR 3)", () => config.FrameGeneration, v => config.FrameGeneration = v, OnOff: true)));
         if (page == 0)
-            result.Insert(OperatingSystem.IsMacOS() ? 3 : 4, new("World tick alongside drawing", "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn "
-                + "whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters. "
-                + "Running alongside can add up to 33 ms of input delay (one world tick).",
-                Choice: new(() => ["Faithful (in series)", "Meitou (when busy)", "Always on"], () => (int)config.TickAhead, i => config.TickAhead = (TickAheadMode)i)));
+        {
+            // The Display page in the catalogue's order, as the launcher's: full screen, VSync, frame limit, frame generation, world tick, then the display sliders.
+            var fps = LauncherSchema.Find("fpsLimit");
+            result.Add(new(fps?.Name ?? "Frame limit", fps?.Description ?? "", Slider: fps is null ? frameLimit
+                : frameLimit with { Min = fps.Min, Max = fps.Max, Text = fps.Text }, Raw: "fpsLimit"));
+            result.Add(new("World tick alongside drawing", TickAheadHint, Choice: new(() => TickAheadChoices, () => (int)config.TickAhead, i => config.TickAhead = (TickAheadMode)i),
+                Raw: "tickAhead"));
+            if (!OperatingSystem.IsMacOS())
+                result.Add(new("Frame generation (FSR 3)", "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. "
+                    + "Takes effect after a restart. Now: " + (FrameGenerationStatus?.Invoke() ?? "off"),
+                    Toggle: new("Frame generation (FSR 3)", () => config.FrameGeneration, v => config.FrameGeneration = v, OnOff: true), Raw: "frameGeneration"));
+            result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
+        }
         if (page == 2)
             result.Add(new("UI style", "Choose original Kenshi skins or Meitou materials.", Choice: new(() => ["Faithful", "Meitou"],
                 () => (int)player.UiMode, i => player.SetUiMode((UiMode)i))));

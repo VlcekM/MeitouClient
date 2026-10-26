@@ -14,6 +14,9 @@ read-only binding copies, never mutable world. [MyGUI](formats/mygui.md), [parit
 Meitou uses the [UI kit](meitou-ui.md)'s rounded rust plates and paper Save action. Tab or Options
 opens it; Esc/the original Kenshi X/Save saves preferences and returns. Changes apply live, with the active
 upscaler shown separately from the requested one. Terrain texture quality needs a restart.
+The Display and Graphics rows are drawn from the launcher's catalogue (`LauncherSchema.Find` / `Order`): name, range, scale direction,
+value text, choices (two choices: an Off | On switch), impact and order come from it, the Tab panel slider only reads and writes the value,
+so the game and the launcher ([launcher](launcher.md#graphics)) show the same settings the same way. A slider missing from it keeps the panel's own.
 Graphics (`SettingsMenu.Looks.cs`, `SettingsMenu.Presets.cs`; `--settings-showcase` captures it) has two rows above its tabs:
 - **Look**: Faithful | Meitou (saved, `faithfulLook`; unknown, all switches on the game's side read Faithful). Faithful sets the game
   exactly as it ships (every Faithful / Meitou graphics switch off, look sliders at the game's value: the one the label names,

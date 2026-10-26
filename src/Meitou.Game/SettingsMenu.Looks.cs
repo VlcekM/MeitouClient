@@ -161,7 +161,7 @@ sealed partial class SettingsMenu
     /// How much a setting costs, as a level a player can use on any machine: ranked from the measured costs in the docs (RTX 4090, 1440p; docs/render-*.md),
     /// High about 1 ms or more or a large share of the scene, Medium a few tenths, Low under a tenth or only in some views. "Speeds up": a switch that saves work.
     /// </summary>
-    static string? ImpactOf(string label) => label switch
+    internal static string? ImpactOf(string label) => label switch
     {
         "Indirect light" or "Clouds" or "Shadows" or WorldFrame.ObjectDistanceSlider or "Foliage draw distance x" or "Grass draw distance x"
             or WorldFrame.ShadowDistanceSlider or "Large foliage range (F6 Meitou)" or WorldFrame.WaterReflectionSlider => "High impact",
