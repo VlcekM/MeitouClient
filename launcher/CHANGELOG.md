@@ -9,6 +9,7 @@ Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.
 - The Graphics tabs follow the game's new pages: Light, Sky, Colour, Water, Skin, then Distances and Detail, and
   Advanced for Interior lamps. Each feature is one row, with its own settings folded under it behind an arrow.
 - Shows with game releases from the next one on.
+- The window can be **resized** from its edges and corners on Windows.
 
 ## v1.4.0
 

@@ -418,14 +418,22 @@
 
     <!-- Resize grips over the plate's visible edge: 4 px outside it, 6 px inside (hidden while maximised) -->
     <Panel x:Name="Grips">
-      <Border Tag="North" Height="10" VerticalAlignment="Top" Margin="18,4,18,0" Background="Transparent" Cursor="SizeNorthSouth" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="South" Height="10" VerticalAlignment="Bottom" Margin="18,0,18,4" Background="Transparent" Cursor="SizeNorthSouth" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="West" Width="10" HorizontalAlignment="Left" Margin="4,18,0,18" Background="Transparent" Cursor="SizeWestEast" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="East" Width="10" HorizontalAlignment="Right" Margin="0,18,4,18" Background="Transparent" Cursor="SizeWestEast" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="NorthWest" Width="18" Height="18" Margin="4,4,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent" Cursor="TopLeftCorner" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="NorthEast" Width="18" Height="18" Margin="0,4,4,0" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent" Cursor="TopRightCorner" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="SouthWest" Width="18" Height="18" Margin="4,0,0,4" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent" Cursor="BottomLeftCorner" PointerPressed="Grip_PointerPressed" />
-      <Border Tag="SouthEast" Width="18" Height="18" Margin="0,0,4,4" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent" Cursor="BottomRightCorner" PointerPressed="Grip_PointerPressed" />
+      <Border Tag="North" Height="10" VerticalAlignment="Top" Margin="18,4,18,0" Background="Transparent" Cursor="SizeNorthSouth" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="South" Height="10" VerticalAlignment="Bottom" Margin="18,0,18,4" Background="Transparent" Cursor="SizeNorthSouth" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="West" Width="10" HorizontalAlignment="Left" Margin="4,18,0,18" Background="Transparent" Cursor="SizeWestEast" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="East" Width="10" HorizontalAlignment="Right" Margin="0,18,4,18" Background="Transparent" Cursor="SizeWestEast" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="NorthWest" Width="18" Height="18" Margin="4,4,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent" Cursor="TopLeftCorner" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="NorthEast" Width="18" Height="18" Margin="0,4,4,0" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent" Cursor="TopRightCorner" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="SouthWest" Width="18" Height="18" Margin="4,0,0,4" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent" Cursor="BottomLeftCorner" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
+      <Border Tag="SouthEast" Width="18" Height="18" Margin="0,0,4,4" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent" Cursor="BottomRightCorner" PointerPressed="Grip_PointerPressed" PointerMoved="Grip_PointerMoved"
+              PointerReleased="Grip_PointerReleased" PointerCaptureLost="Grip_PointerCaptureLost" />
     </Panel>
   </Panel>
 </Window>
