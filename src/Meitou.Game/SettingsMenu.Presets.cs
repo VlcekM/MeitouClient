@@ -74,9 +74,7 @@ sealed partial class SettingsMenu
     /// <summary>The Faithful / Meitou switches whose reading stays put when set (Indirect light without ray queries); the all switch ignores them.</summary>
     readonly HashSet<string> stuckSwitches = [];
 
-    internal const string PresetHint = "Sets draw distances, foliage, shadow, water, particle, texture, relief and light-shaft quality settings together; High is the default. "
-        + "Low is the --low-end option: it renders at 83% without anti-aliasing and turns ambient occlusion, light shafts, Meitou shadows, water and ground relief off "
-        + "until you go back up or keep them on. The other presets leave anti-aliasing and render scale as they are.";
+    internal const string PresetHint = "Distances, shadows and detail together. Low is the same as --low-end.";
 
     Entry PresetEntry => new("Quality preset", PresetHint, Choice: new(() => PresetNames, CurrentPreset, ApplyPreset));
 

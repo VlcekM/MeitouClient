@@ -321,7 +321,7 @@ public sealed partial class MainWindow
         DockPanel.SetDock(detect, Dock.Right);
         dock.Children.Add(detect);
         dock.Children.Add(box);
-        string description = p.Description + " A preset chosen here is applied when the game next starts.";
+        string description = p.Description;
         return Row(p.Name, detected is { } line ? description + "\n" + line : description, dock, 330);
     }
 

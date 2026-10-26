@@ -43,8 +43,7 @@ sealed partial class SettingsMenu
 
     /// <summary>The folder of the player's look presets, beside <c>meitou.user.json</c>.</summary>
     internal const string LookFolder = "presets";
-    internal const string LookHint = "Faithful sets every graphics feature as the game ships it, a starting point you can still change. "
-        + "Meitou uses a look preset: Meitou's own, an example, or one you saved.";
+    internal const string LookHint = "The game as it ships, or Meitou with a look preset.";
     /// <summary>The built-in looks, Meitou first (saved as no <see cref="UserConfig.LookPreset"/>), with what each sets; the player's are in <see cref="LookFolder"/>.</summary>
     internal static IReadOnlyList<(string Name, IReadOnlyDictionary<string, float> Values)> BuiltInLooks =>
         [.. new[] { MeitouLook }.Concat(ExampleLooks).Select(l => (l.Name, (IReadOnlyDictionary<string, float>)l.Values))];
