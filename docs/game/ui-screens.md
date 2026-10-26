@@ -129,7 +129,8 @@ against French 1440-line screenshots. Every caption the code sets is the catalog
   without case and dates by time (`FUN_14047cdb0`). Nothing is selected on opening and the info box (a DatapanelGUI, not a picture) is empty; a
   selection shows Date, File version ("Ancient" when empty), Faction name, Funds ("c."), Members size, Location, Day, at the DatapanelGUI's default
   row count 55 (`FUN_1406fce20`; the start window sets 40, the advanced options 30). The Load button is always live (Meitou's
-  Fixes page "Load button", on by default, keeps it off until a readable save is selected).
+  Fixes page "Load button", on by default, keeps it off until a readable save is selected). Delete with a save selected asks "DELETE SAVE" / "Are you sure
+  you want to delete this save game?" (Yes, No; **Observed** in 1.0.68); Yes removes the save's folder, the list refreshes with nothing selected and the info box empty; Meitou does the same.
 - **Import** (`FUN_14047bad0`, `FUN_140378a30`): ticks reset squad positions (off), buildings, research, dead NPCs, relations (on), flags 0x1, 0x4,
   0x8, 0x10, 0x20 (0x2 always added); Import is live once a save is selected; Advanced options opens its own options window, filled from the save's
   difficulty block. Importing resets the world as a new game does (no start), restores the clock, money, faction name, town discovery and the player's

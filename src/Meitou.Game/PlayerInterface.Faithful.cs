@@ -50,6 +50,7 @@ sealed partial class PlayerInterface
                 Meitou.Engine.Input.Key.PageDown => UiListKey.PageDown, Meitou.Engine.Input.Key.Home => UiListKey.Home, Meitou.Engine.Input.Key.End => UiListKey.End,
                 Meitou.Engine.Input.Key.Enter => UiListKey.Accept, _ => (UiListKey?)null,
             } is { } listKey && faithfulScreens.ListKey(listKey)) return true;
+        if (key == Meitou.Engine.Input.Key.Delete && DeleteSelectedSlot()) return true;
         if (DialogueKey(key)) return true;
         if (faithfulScreens.HasModal) return true;
         // change_squad (Tab by default): the squad bar shows the next squad with members (docs/game/ui-input.md section 6).

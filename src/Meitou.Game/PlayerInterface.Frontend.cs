@@ -71,6 +71,18 @@ sealed partial class PlayerInterface
         try { slots = saveSlots(); selectedSlot = slots.FirstOrDefault(); ReadSlotDetails(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { slots = []; selectedSlot = null; slotDetails = e.Message; }
     }
+    /// <summary>The Load game window's Delete key (the original's): a Yes/No box, then the selected save's folder is removed and the list shows nothing selected.</summary>
+    bool DeleteSelectedSlot()
+    {
+        if (faithfulScreens.OpenScreens.LastOrDefault() != "load" || selectedSlot is not { } slot || !VisibleSlots("load").Contains(slot)) return false;
+        Confirm("Delete save", "Are you sure you want to delete this save game?", () =>
+        {
+            if (SaveCatalog.Delete(slot) is { } error) Notice($"Could not delete the save: {error}", true);
+            RefreshSlots();
+            selectedSlot = null; slotInfo = null; slotDetails = "";
+        }, "Yes", cancel: "No");
+        return true;
+    }
     void ReadSlotDetails()
     {
         slotReadable = false;

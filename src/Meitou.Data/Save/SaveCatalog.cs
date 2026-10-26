@@ -31,6 +31,22 @@ public static class SaveCatalog
         }
         return found.Values.OrderByDescending(s => s.ModifiedUtc).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToArray();
     }
+    /// <summary>
+    /// Deletes a listed save: its whole folder. Only a real folder named like the slot that holds a <c>quick.save</c> goes (never a link, so nothing outside the save folder is touched);
+    /// a failure comes back as the message, null when the save is gone.
+    /// </summary>
+    public static string? Delete(SaveSlot slot)
+    {
+        try
+        {
+            var info = new DirectoryInfo(Path.GetFullPath(slot.Folder));
+            if (info.Parent is null || info.Name != slot.Name || info.LinkTarget is not null || !File.Exists(Path.Combine(info.FullName, SaveFolder.QuickSaveName)))
+                return $"'{slot.Name}' is not a save folder.";
+            info.Delete(recursive: true);
+            return null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return e.Message; }
+    }
     public static SaveSlotInfo ReadInfo(SaveSlot slot)
     {
         var game = new SaveGame(SaveFile.Read(File.ReadAllBytes(Path.Combine(slot.Folder, SaveFolder.QuickSaveName))));
