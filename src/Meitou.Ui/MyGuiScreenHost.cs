@@ -101,6 +101,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
             var b = bind(id);
             foreach (var t in s.Tabs) b.SelectedTabs[t.Key] = t.Value;
             foreach (var t in s.Text) b.Text[t.Key] = t.Value;
+            // A list the screen binds as having no selection (-1) drops the row kept from the last click or key press; any other binding yields to it until the next one.
+            foreach (var key in s.Selected.Keys.ToArray())
+                if (b.SelectedItems.TryGetValue(key, out int bound) && bound < 0) s.Selected.Remove(key);
             foreach (var t in s.Selected) b.SelectedItems[t.Key] = t.Value;
             foreach (var t in s.Scroll) b.ScrollOffsets[t.Key] = t.Value;
             PushWidgetState(id, s, b);
