@@ -22,6 +22,8 @@ public sealed class SettingsSchema
     public List<SettingsSection> Sections { get; set; } = [];
     /// <summary>The graphics quality presets; null in an older schema (no preset row).</summary>
     public SettingsPresets? Presets { get; set; }
+    /// <summary>The graphics look; null in an older schema (no look row).</summary>
+    public SettingsLooks? Looks { get; set; }
 
     public string ToJson() => JsonSerializer.Serialize(this, SettingsSchemaJson.Default.SettingsSchema);
 
@@ -64,6 +66,23 @@ public sealed class SettingsPresets
     /// <see cref="Names"/> and whose <c>summary</c> is a line to show. Null in an older schema (no detection).
     /// </summary>
     public string? Detect { get; set; }
+}
+
+/// <summary>
+/// The graphics look: Faithful (<see cref="FaithfulKey"/>, a top-level <c>meitou.user.json</c> key, true) or a Meitou look preset (false), named by
+/// <see cref="PresetKey"/>: one of <see cref="Names"/> (the first, Meitou's own, is saved as no key) or one of the player's, the <c>name</c> of a JSON file
+/// in <see cref="Folder"/> beside <c>meitou.user.json</c>. A launcher that changes the look removes <see cref="Keys"/> (the <c>graphics</c> keys a look
+/// sets); at start the game sets a look key that is not saved from the look.
+/// </summary>
+public sealed class SettingsLooks
+{
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string FaithfulKey { get; set; } = "";
+    public string PresetKey { get; set; } = "";
+    public List<string> Names { get; set; } = [];
+    public string Folder { get; set; } = "";
+    public List<string> Keys { get; set; } = [];
 }
 
 public enum SettingKind { Toggle, Slider }

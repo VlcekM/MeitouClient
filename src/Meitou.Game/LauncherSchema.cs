@@ -77,6 +77,7 @@ static class LauncherSchema
         Graphics(WorldFrame.GradingSlider, 0, 1, 1, 1) with { Name = "Colour grading", Labels = ["Off", "On"] },
         Graphics(WorldFrame.HeatHazeStrengthSlider, 0, 3, 0.05f, Enhancements.MeitouHeatHazeStrength) with { Format = "0.00" },
         Graphics(WorldFrame.NightGradeStrengthSlider, 0, 1, 0.05f, NightGrade.MeitouStrength) with { Format = "0.00" },
+        Graphics(WorldFrame.BloomStrengthSlider, 0, 0.25f, 0.005f, 0) with { Format = "0.000" },
     ];
 
     static SettingDescription Multiplier(string label, float min, float max, float shown) =>
@@ -124,11 +125,12 @@ static class LauncherSchema
         {
             SettingsVersion = UserConfig.CurrentVersion,
             Renderers = OperatingSystem.IsMacOS() ? ["vulkan", "metal"] : ["vulkan"],
-            // The game's Graphics sub-pages, each with its switches first, as in the settings menu.
+            // The game's Graphics sub-pages (the look tabs, then the quality tabs), each with its switches first, as in the settings menu.
             Sections =
             [
                 display,
-                .. SettingsMenu.GraphicsPages.Select(page => new SettingsSection
+                // Advanced: the one graphics switch the game keeps there (Interior lamps: the stealth sight counts its light).
+                .. SettingsMenu.GraphicsPages.Append("Advanced").Select(page => new SettingsSection
                 {
                     Name = page,
                     Settings = [.. switches.Where(s => SettingsMenu.ToggleSection(s.Key[SettingsMenu.SwitchKeyPrefix.Length..]) == page),
@@ -141,6 +143,13 @@ static class LauncherSchema
                 Names = [.. SettingsMenu.PresetChoices], Custom = SettingsMenu.PresetChoices[^1], Default = SettingsMenu.DefaultPreset,
                 Keys = [.. SettingsMenu.PresetKeys()],
                 Detect = Program.HardwareProbeFlag,
+            },
+            Looks = new SettingsLooks
+            {
+                Name = "Look", Description = SettingsMenu.LookHint,
+                FaithfulKey = Key(nameof(UserConfig.FaithfulLook)), PresetKey = Key(nameof(UserConfig.LookPreset)),
+                Names = [.. SettingsMenu.LookNames], Folder = SettingsMenu.LookFolder,
+                Keys = [.. SettingsMenu.LookKeys(switches.Select(s => s.Key[SettingsMenu.SwitchKeyPrefix.Length..]), sliders.Select(s => s.Key))],
             },
         };
     }

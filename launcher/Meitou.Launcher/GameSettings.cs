@@ -64,11 +64,15 @@ sealed class GameSettings
         else g.Remove(label);
     }
 
-    /// <summary>Removes every saved slider and switch, and the saved preset (<paramref name="presetKey"/>).</summary>
-    public void ResetGraphics(string? presetKey)
+    /// <summary>Removes a top-level key, so the game takes its default.</summary>
+    public void Remove(string key) => root.Remove(key);
+
+    /// <summary>Removes every saved slider and switch, and the saved preset and look (<paramref name="keys"/>).</summary>
+    public void ResetGraphics(params string?[] keys)
     {
         root.Remove("graphics");
-        if (presetKey is not null) root.Remove(presetKey);
+        foreach (var key in keys)
+            if (key is not null) root.Remove(key);
     }
 
     /// <summary>Writes the file; a new one gets <paramref name="version"/>, the layout the keys were written in.</summary>

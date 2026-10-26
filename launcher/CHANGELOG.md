@@ -2,6 +2,14 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.5.0
+
+- **Look** row on the Graphics page: Faithful, Meitou, its example looks or a look you saved in the game. The game applies
+  it when it next starts.
+- The Graphics tabs follow the game's new pages: Light, Sky, Colour, Water, Skin, then Distances and Detail, and
+  Advanced for Interior lamps.
+- Shows with game releases from the next one on.
+
 ## v1.4.0
 
 - The Graphics page has **every graphics setting** of the game's Tab panel, sliders and Faithful / Meitou switches,

@@ -15,6 +15,10 @@ sealed partial class GameHost
         var values = WorldFrame.CreateSettingsPanel(overlay, gpu, render, switches: WorldFrame.LiveSwitches(o, () => gpu, () => camera, () => render));
         var menu = new SettingsMenu(player, values, session.Bindings, () => { }, new Slider("Frame limit", 0, 360, () => 150, _ => { }, "0"),
             new UserConfig()) { NoDiskWrites = true };
+        // Menus started as after the launcher chose a look (docs/launcher.md "Graphics"): its keys unsaved, set from the look; made while the values are the start ones.
+        var launcherLooks = new[] { ("launcher-faithful", new UserConfig { FaithfulLook = true }), ("launcher-vanilla", new UserConfig { FaithfulLook = false, LookPreset = "Vanilla colours" }) }
+            .Select(x => (x.Item1, Menu: new SettingsMenu(player, values, session.Bindings, () => { }, new Slider("Frame limit", 0, 360, () => 150, _ => { }, "0"), x.Item2) { NoDiskWrites = true }))
+            .ToList();
         player.SetUiMode(Meitou.Data.Ui.UiMode.Meitou);
         int n = 0;
         void Shot(string name, int tab, Action? setup = null)
@@ -64,6 +68,13 @@ sealed partial class GameHost
             string output = Path.Combine(Path.GetDirectoryName(o.Screenshot!) ?? "", $"{Path.GetFileNameWithoutExtension(o.Screenshot!)}-look-{i}-{name.Replace(' ', '-').ToLowerInvariant()}.png");
             FramebufferCapture.SavePng(display.Context, target, output, w, h);
             Console.WriteLine($"saved     {Path.GetFullPath(output)}");
+        }
+        menu.Visible = false;
+        foreach (var (name, started) in launcherLooks)
+        {
+            started.ApplySavedLook();
+            menu = started;
+            Shot(name, 2);
         }
     }
 }

@@ -28,8 +28,13 @@ sealed partial class SettingsMenu
     /// <summary>Example looks, each far from the others (docs/native-ui.md "Settings"); everything they do not set is Meitou's.</summary>
     static readonly LookPreset[] ExampleLooks =
     [
-        new("Hot and dry", "example", MeitouVersion, new() { ["Bloom strength (0 = game)"] = 0.13f, ["Heat haze strength (1 = game)"] = 0.8f }),
-        new("Vanilla colours", "example", MeitouVersion, new() { [SwitchKey("Tone map and grade")] = 0, [SwitchKey("Night grading")] = 0, [SwitchKey("Dithering")] = 0 }),
+        new("Hot and dry", "example", MeitouVersion, new() { [WorldFrame.BloomStrengthSlider] = 0.13f, [WorldFrame.HeatHazeStrengthSlider] = 0.8f }),
+        // The tone map and night grading switches read their sliders, so those are set too (as a saved preset has them).
+        new("Vanilla colours", "example", MeitouVersion, new()
+        {
+            [SwitchKey("Tone map and grade")] = 0, [SwitchKey("Night grading")] = 0, [SwitchKey("Dithering")] = 0,
+            [WorldFrame.ToneMapSlider] = 0, [WorldFrame.GradingSlider] = 0, [WorldFrame.NightGradeStrengthSlider] = 0,
+        }),
     ];
 
     List<LookPreset>? looks;
@@ -39,7 +44,43 @@ sealed partial class SettingsMenu
         () => Looks().IndexOf(ActiveLook), i => { var look = Looks()[i]; ApplyLook(look); notice = $"{look.Name} loaded."; });
     Choice QualityChoice => qualityChoice ??= PresetEntry.Choice!;
 
-    string PresetFolder => Path.Combine(Path.GetDirectoryName(config.Path) is { Length: > 0 } dir ? dir : ".", "presets");
+    string PresetFolder => Path.Combine(Path.GetDirectoryName(config.Path) is { Length: > 0 } dir ? dir : ".", LookFolder);
+
+    /// <summary>The folder of the player's look presets, beside <c>meitou.user.json</c>.</summary>
+    internal const string LookFolder = "presets";
+    internal const string LookHint = "Faithful sets every graphics feature as the game ships it, a starting point you can still change. "
+        + "Meitou uses a look preset: Meitou's own, an example, or one you saved.";
+    /// <summary>The built-in look presets' names, Meitou first (saved as no <see cref="UserConfig.LookPreset"/>); the player's are in <see cref="LookFolder"/>.</summary>
+    internal static IReadOnlyList<string> LookNames => [MeitouLook.Name, .. ExampleLooks.Select(l => l.Name)];
+
+    /// <summary>
+    /// The <c>graphics</c> keys a look sets: every Faithful / Meitou graphics switch (Faithful turns them all off; the fifth cascade is a quality switch) and
+    /// the look tabs' sliders. A launcher that changes the look removes them, and <see cref="ApplySavedLook"/> sets them from the look.
+    /// </summary>
+    internal static IEnumerable<string> LookKeys(IEnumerable<string> switchLabels, IEnumerable<string> sliderLabels) =>
+        switchLabels.Where(label => label != WorldFrame.FifthCascadeSwitch && GraphicsSection(label, true) != "Advanced").Select(SwitchKey)
+            .Concat(sliderLabels.Where(label => Section(label) is not ("Display" or "Advanced") && IsLook(label, false)));
+
+    /// <summary>
+    /// At start, after the saved sliders and switches: a look setting with no saved value takes the look's (Faithful: off and the game's value; Meitou: the
+    /// active preset's, a switch Low holds off staying off), so a look the launcher chose (docs/launcher.md "Graphics") takes effect.
+    /// </summary>
+    internal void ApplySavedLook()
+    {
+        bool faithful = FaithfulLook;
+        bool Saved(string key) => config.Graphics.ContainsKey(key);
+        foreach (var toggle in values.Toggles.Where(t => faithful && IsGraphicsSwitch(t) && t.Get() && !Saved(SwitchKey(t.Label)))) toggle.Set(false);
+        if (!faithful)
+            foreach (var (key, toggle, meitou) in LookToggles().Where(x => !Saved(x.Key)))
+            {
+                bool on = BaseToggle(key, meitou) && !CutAtLow(toggle.Label);
+                if (toggle.Get() != on) toggle.Set(on);
+            }
+        foreach (var (key, slider, meitou) in LookSliders().Where(x => !Saved(x.Key))) slider.Set(BaseSlider(key, slider, meitou));
+        // A saved switch that reads its slider (tone map and grade) stays as saved when the look set that slider.
+        foreach (var (key, toggle, _) in LookToggles())
+            if (config.Graphics.TryGetValue(key, out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
+    }
 
     List<LookPreset> Looks()
     {
@@ -121,8 +162,8 @@ sealed partial class SettingsMenu
         return "Detail";
     }
 
-    /// <summary>Whether a switch or slider is part of the look (presets set it).</summary>
-    static bool IsLook(string label, bool toggle) => LookPages.Contains(GraphicsSection(label, toggle));
+    /// <summary>Whether a switch or slider is part of the look (presets set it); a quality tier's slider on a look tab (light shafts quality) is not.</summary>
+    static bool IsLook(string label, bool toggle) => LookPages.Contains(GraphicsSection(label, toggle)) && (toggle || !PresetSliders.Any(p => p.Label == label));
 
     /// <summary>A Faithful / Meitou switch of the Graphics page (the gameplay one, Interior lamps, is not).</summary>
     static bool IsGraphicsSwitch(Toggle t) => t.Remaster && GraphicsSection(t.Label, true) != "Advanced";
@@ -139,7 +180,7 @@ sealed partial class SettingsMenu
             or "Ground parallax distance (m)" or WorldFrame.ShadowMapSlider or "Shadow filter 0-2 (Meitou; 0 low-end)" or "Shadow cascade 5 (Meitou)"
             or "Landmark distance (Meitou)" or "Distant towns (zones)" or "Object LOD distance x" or "Foliage LOD distance x (lod Meitou)" or "Medium foliage range"
             or "Terrain detail: error px (less = finer)" or WorldFrame.GrassDensitySlider or "Impostor distance (F7 Meitou)" or "Large impostor distance (F7 Meitou)"
-            or "Reflection range x (game 0.6)" or "Anti-aliasing" => "Medium impact",
+            or "Reflection range x (game 0.6)" or "Anti-aliasing" or WorldFrame.ShaftQualitySlider => "Medium impact",
         "Cloud shadows" or "Indoor GI" or "Planetshine" or "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)" or "Cloud shadows in fog"
             or "Terrain outline refinement (tessellation)" or "Small foliage range" or "Bloom strength (0 = game)" or "Heat haze" or "Blood cells" or "Item icons"
             or "Light shafts air (0 = none)" => "Low impact",

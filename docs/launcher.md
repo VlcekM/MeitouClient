@@ -165,8 +165,13 @@ every Tab panel slider and switch under `graphics` (a slider by label, `WorldFra
 setting reaches the launcher with its release; the launcher knows none of them. A version without a schema (older), or with a newer
 `format`, gets no page. Rows a computer lacks (tessellation, the Meitou shadows' filter) are listed anyway; the game ignores their keys.
 
-- Each schema section is a tab: Display, then the game's Graphics sub-pages (World, Lighting, Water, Effects, Skin) as
-  `SettingsMenu.Section` / `ToggleSection` place them, switches first.
+- Each schema section is a tab: Display, then the game's Graphics sub-pages (Light, Sky, Colour, Water, Skin, Distances, Detail)
+  as `SettingsMenu.Section` / `ToggleSection` place them, switches first, then Advanced (Interior lamps, on the game's Advanced page).
+- `looks` (null in older schemas: no row) is the Look row: Faithful (`faithfulLook` true) or a Meitou look preset (`lookPreset`: one of
+  `looks.names`, the first saved as no key, or the `name` of a player's JSON file in `looks.folder` beside `meitou.user.json`).
+  Choosing one also removes `looks.keys` (every Faithful / Meitou graphics switch and the look tabs' sliders) from `graphics`; at start
+  the game sets each look key that is not saved from the look (`SettingsMenu.ApplySavedLook`, before the quality preset), and those
+  rows read "From the look" until then. No `faithfulLook` reads Faithful when every look switch is saved off, as the game does.
 - `presets` (null in older schemas: no row) is the Quality preset row over the top-level `graphicsPreset`. The game saves the preset its
   settings sit at (Custom when none) and at start applies a saved one they do not sit at (not under `--low-end`, `--meitou` or `--faithful`), so a preset chosen in
   the launcher takes effect on the next start; the rows show the old values until then. Changing a row the preset sets (`presets.keys`)
@@ -181,7 +186,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   graphics settings or preset saved yet, so the first start (or first install) of a fresh setup gets a preset; saved settings are kept.
   A failed detection is tried again at the next start.
 - A missing `graphics` key is the game's default for the mode ("Game default"; a switch offers it as a third choice beside off and
-  on); Default removes it, Reset graphics removes `graphics` and `graphicsPreset`. A top-level Default writes the schema's `default`.
+  on); Default removes it, Reset graphics removes `graphics`, `graphicsPreset`, `faithfulLook` and `lookPreset`. A top-level Default writes the schema's `default`.
   Whole values are written as integers.
 - A slider without `labels` takes a typed value (Enter or leaving the box; Esc restores): the suffix may stay, a comma is a decimal
   point, the value is divided by `scale`, snapped to `step` and clamped; `offText` (Unlimited, Off) means the left end.
