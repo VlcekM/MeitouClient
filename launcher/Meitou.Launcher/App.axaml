@@ -137,6 +137,21 @@
       <Setter Property="Padding" Value="0,6,0,8" />
     </Style>
 
+    <!-- A Graphics feature's settings, folded under its row: a darker band with a brass edge, smaller names, no dividers. -->
+    <Style Selector="Border.features">
+      <Setter Property="Background" Value="{StaticResource Field}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Brass}" />
+      <Setter Property="BorderThickness" Value="2,0,0,0" />
+      <Setter Property="Padding" Value="14,2,0,4" />
+    </Style>
+    <Style Selector="Border.features Border.row">
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0,4,0,4" />
+    </Style>
+    <Style Selector="Border.features TextBlock.name">
+      <Setter Property="FontSize" Value="14" />
+    </Style>
+
     <!-- Text -->
     <Style Selector="TextBlock.title">
       <Setter Property="FontSize" Value="20" />

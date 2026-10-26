@@ -167,6 +167,9 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 
 - Each schema section is a tab: Display, then the game's Graphics sub-pages (Light, Sky, Colour, Water, Skin, Distances, Detail)
   as `SettingsMenu.Section` / `ToggleSection` place them, switches first, then Advanced (Interior lamps, on the game's Advanced page).
+- A section's `groups` (null in older schemas: flat rows) are the menu's features (`SettingsMenu.FeatureGroups`): one row headed by
+  a setting (`header`) or a `title` and `description`, with an arrow folding its `members` under it (closed until opened; open ones stay
+  open while the launcher runs), named without the feature's name they repeat, as in the game.
 - `looks` (null in older schemas: no row) is the Look row: Faithful (`faithfulLook` true) or a Meitou look preset (`lookPreset`: one of
   `looks.names`, the first saved as no key, or the `name` of a player's JSON file in `looks.folder` beside `meitou.user.json`).
   Choosing one also removes `looks.keys` (every Faithful / Meitou graphics switch and the look tabs' sliders) from `graphics`; at start

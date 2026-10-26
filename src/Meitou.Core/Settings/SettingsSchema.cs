@@ -44,6 +44,20 @@ public sealed class SettingsSection
 {
     public string Name { get; set; } = "";
     public List<SettingDescription> Settings { get; set; } = [];
+    /// <summary>The section's features, as the game's menu folds them; null in an older schema (every setting a row of its own).</summary>
+    public List<SettingsGroup>? Groups { get; set; }
+}
+
+/// <summary>
+/// A feature: one row headed by the setting <see cref="Header"/> (a key of the section), or by <see cref="Title"/> and <see cref="Description"/> when
+/// nothing heads it, with <see cref="Members"/> (keys, in order) folded under it. It shows where its first setting is.
+/// </summary>
+public sealed class SettingsGroup
+{
+    public string? Header { get; set; }
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+    public List<string> Members { get; set; } = [];
 }
 
 /// <summary>

@@ -47,6 +47,18 @@ sealed partial class SettingsMenu
             "Terrain relief", "Depth on the ground and smoother rocks and hills, from tessellation and parallax."),
     ];
 
+    /// <summary>The features among a launcher section's <paramref name="keys"/> (docs/launcher.md "Graphics"), by the keys their settings are saved under.</summary>
+    internal static List<global::Meitou.Settings.SettingsGroup> LauncherGroups(IReadOnlyCollection<string> keys)
+    {
+        string? Key(string label) => keys.Contains(label) ? label : keys.Contains(SwitchKeyPrefix + label) ? SwitchKeyPrefix + label : null;
+        return [.. FeatureGroups.Select(g => new global::Meitou.Settings.SettingsGroup
+            {
+                Header = g.Header is { } header ? Key(header) : null, Title = g.Title ?? g.Id, Description = g.Hint,
+                Members = [.. g.Members.Select(Key).OfType<string>()],
+            })
+            .Where(g => g.Members.Count > 0)];
+    }
+
     /// <summary>The groups the player opened (this session).</summary>
     readonly HashSet<string> openGroups = [];
 

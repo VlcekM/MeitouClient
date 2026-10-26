@@ -70,7 +70,7 @@ static class LauncherSchema
         Multiplier(WorldFrame.ShaftAirDawnSlider, 0, 6, 1) with { Step = 0.1f, Format = "0.0" },
         Graphics(WorldFrame.ShaftQualitySlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
         // Effects
-        Graphics(WorldFrame.ParticleSliders[0], 0, 4, 1, 3) with { Name = "Weather particles", Labels = ["Off", "Quarter size", "Half size", "Auto", "Full size"] },
+        Graphics(WorldFrame.ParticleSliders[0], 0, 4, 1, 3) with { Name = "Particle size", Labels = ["Off", "Quarter size", "Half size", "Auto", "Full size"] },
         Graphics(WorldFrame.ParticleSliders[1], 0.1f, 1, 0.05f, 1) with { Format = "0.00", Suffix = "x" },
         Graphics(WorldFrame.ToneMapSlider, 0, 3, 1, 3) with { Labels = ["Original", "Shoulder", "ACES", "Hybrid"] },
         Graphics(WorldFrame.ToneMixSlider, 0, 1, 0.05f, 0.75f) with { Format = "0.00" },
@@ -135,7 +135,8 @@ static class LauncherSchema
                     Name = page,
                     Settings = [.. switches.Where(s => SettingsMenu.ToggleSection(s.Key[SettingsMenu.SwitchKeyPrefix.Length..]) == page),
                         .. sliders.Where(s => SettingsMenu.Section(s.Key) == page)],
-                }).Where(section => section.Settings.Count > 0),
+                }).Where(section => section.Settings.Count > 0)
+                .Select(section => { section.Groups = SettingsMenu.LauncherGroups([.. section.Settings.Select(s => s.Key)]); return section; }),
             ],
             Presets = new SettingsPresets
             {

@@ -25,6 +25,8 @@ public sealed partial class MainWindow
     SettingsPresets? presets;
     SettingsLooks? looks;
     ComboBox? presetBox;
+    /// <summary>The features the player opened (by title), kept while the page is shown again.</summary>
+    readonly HashSet<string> openGroups = [];
     /// <summary>The last hardware detection's result line, and whether one is running.</summary>
     string? detected;
     bool detecting;
@@ -127,10 +129,83 @@ public sealed partial class MainWindow
     void FillSection(StackPanel content, SettingsSection section)
     {
         content.Children.Clear();
+        var groups = section.Groups ?? [];
+        var done = new HashSet<SettingsGroup>();
         foreach (var s in section.Settings.Where(Shown))
-            content.Children.Add(s.Kind == SettingKind.Toggle ? s.Graphics ? SwitchRow(s) : ToggleRow(s) : SliderRow(s));
+        {
+            // A feature shows where its first setting is: its header, then its members folded under it. With features, every row keeps the arrow's gutter.
+            if (groups.FirstOrDefault(g => g.Header == s.Key || g.Members.Contains(s.Key)) is not { } group)
+                content.Children.Add(groups.Count > 0 ? new DockPanel { Children = { Gutter(null), SettingRow(s) } } : SettingRow(s));
+            else if (done.Add(group)) content.Children.Add(GroupRows(group, section));
+        }
         LauncherText.TranslateTree(content, originalUiText);
     }
+
+    Border SettingRow(SettingDescription s) => s.Kind == SettingKind.Toggle ? s.Graphics ? SwitchRow(s) : ToggleRow(s) : SliderRow(s);
+
+    const double GutterWidth = 22;
+
+    /// <summary>The column left of a row: a feature's fold arrow (a chevron, turned down while open), else empty.</summary>
+    static Border Gutter(Avalonia.Controls.Shapes.Path? chevron)
+    {
+        var gutter = new Border { Width = GutterWidth, Background = Avalonia.Media.Brushes.Transparent, Child = chevron };
+        DockPanel.SetDock(gutter, Dock.Left);
+        return gutter;
+    }
+
+    /// <summary>A feature, as the game's menu shows it: one row (its switch, or its title) with a fold arrow, and its settings in a band under it
+    /// while open, named without the feature's name they repeat ("Light shafts strength" is "Strength"). The arrow or the name opens it.</summary>
+    StackPanel GroupRows(SettingsGroup group, SettingsSection section)
+    {
+        var header = section.Settings.FirstOrDefault(x => x.Key == group.Header && Shown(x));
+        string name = header?.Name ?? group.Title;
+        var members = group.Members.Select(key => section.Settings.FirstOrDefault(x => x.Key == key)).OfType<SettingDescription>().Where(Shown)
+            .Select(m => m with { Name = WithinGroup(m.Name, name) }).ToList();
+        var headerRow = header is not null ? SettingRow(header) : Row(group.Title, group.Description, new Panel(), 150);
+        var panel = new StackPanel();
+        if (members.Count == 0)
+        {
+            panel.Children.Add(new DockPanel { Children = { Gutter(null), headerRow } });
+            return panel;
+        }
+        bool open = openGroups.Contains(group.Title);
+        var brass = Avalonia.Application.Current?.FindResource("BrassLight") as Avalonia.Media.IBrush;
+        var chevron = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Avalonia.Media.Geometry.Parse("M 1,1 L 5,5 L 1,9"), Stroke = brass, StrokeThickness = 1.8, Width = 7, Height = 10,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            RenderTransform = new Avalonia.Media.RotateTransform(open ? 90 : 0),
+        };
+        var under = new Border { Classes = { "features" }, IsVisible = open, Margin = new(GutterWidth, 0, 0, 0) };
+        var rows = new StackPanel();
+        rows.Children.AddRange(members.Select(SettingRow));
+        under.Child = rows;
+        void Fold()
+        {
+            bool nowOpen = !under.IsVisible;
+            under.IsVisible = nowOpen;
+            chevron.RenderTransform = new Avalonia.Media.RotateTransform(nowOpen ? 90 : 0);
+            if (nowOpen) openGroups.Add(group.Title);
+            else openGroups.Remove(group.Title);
+        }
+        var gutter = Gutter(chevron);
+        // The row's name and description (left of its control) open it too.
+        var targets = new List<Control> { gutter };
+        if (headerRow.Child is Grid { Children: [StackPanel text, ..] }) { text.Background = Avalonia.Media.Brushes.Transparent; targets.Add(text); }
+        foreach (var target in targets)
+        {
+            target.Cursor = new Cursor(StandardCursorType.Hand);
+            ToolTip.SetTip(target, Loc.Format(Tr("{1}: {2} settings"), name, members.Count));
+            target.PointerPressed += (_, e) => { if (e.GetCurrentPoint(target).Properties.IsLeftButtonPressed) { Fold(); e.Handled = true; } };
+        }
+        panel.Children.Add(new DockPanel { Children = { gutter, headerRow } });
+        panel.Children.Add(under);
+        return panel;
+    }
+
+    static string WithinGroup(string label, string group) =>
+        label.Length > group.Length + 1 && label.StartsWith(group + " ", StringComparison.OrdinalIgnoreCase)
+            ? char.ToUpperInvariant(label[group.Length + 1]) + label[(group.Length + 2)..] : label;
 
     TextBlock Section(string text) => new() { Classes = { "caps" }, Text = Tr(text).ToUpperInvariant(), Margin = new(0, 14, 0, 2) };
 
