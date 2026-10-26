@@ -70,7 +70,7 @@ namespace Meitou.Simulation
                 if (item.OwnedBy >= 0 && item.OwnedBy != c.Faction) item.Item.StolenFrom = item.OwnedBy;
                 // What does not fit stays on the ground (Inventory.Add leaves it in the item); gear that does not fit is worn when its slot is free.
                 bool wear = false;
-                if (inventory.Add(item.Item) || item.Item.Quantity == before && (wear = Items.InventoryCommands.TryEquip(inventory, item.Item, c.Race?.StringId)))
+                if (inventory.Add(item.Item) || item.Item.Quantity == before && (wear = Items.InventoryCommands.TryEquip(inventory, item.Item, c.Race)))
                 {
                     world.GroundItems.Take(id);
                     // Task_Pickup: another faction's item taken inside a building is a Theft.

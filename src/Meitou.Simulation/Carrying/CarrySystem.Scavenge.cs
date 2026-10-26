@@ -160,7 +160,7 @@ public sealed partial class CarrySystem
         {
             if (item.LockedOn || !InventoryCommands.IsMovableSection(item.Section)) continue;
             bool gear = InventoryCommands.IsEquipmentSection(item.Section);
-            if (InventoryCommands.MoveInto(from, item, 1, into, bagFirst: false, out bool equipped, looter.Race?.StringId) == 0) break;
+            if (InventoryCommands.MoveInto(from, item, 1, into, bagFirst: false, out bool equipped, looter.Race) == 0) break;
             moved++;
             worn |= gear;
             wear |= equipped;
@@ -204,7 +204,7 @@ public sealed partial class CarrySystem
             var owner = from.Items.Contains(item) ? from : from.Backpack?.Contents;
             if (owner is null || !owner.Items.Contains(item)) continue;
             bool gear = InventoryCommands.IsEquipmentSection(item.Section);
-            int units = InventoryCommands.MoveInto(owner, item, 0, into, bagFirst: false, out bool equipped, looter.Race?.StringId);
+            int units = InventoryCommands.MoveInto(owner, item, 0, into, bagFirst: false, out bool equipped, looter.Race);
             if (owner.Items.Contains(item)) units += InventoryCommands.MoveInto(owner, item, 0, into, bagFirst: true, out _);
             if (units == 0) continue;
             moved++;

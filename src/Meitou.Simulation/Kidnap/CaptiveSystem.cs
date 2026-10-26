@@ -828,7 +828,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             }
             if (data.Factions is { } factions && (uint)wc.Faction < (uint)factions.Count && data.Db.Find(factions[wc.Faction].Id) is { } faction)
                 foreach (var link in faction.GetReferences("slave clothing"))
-                    if (data.Items.Create(link.TargetStringId, 1) is { } clothing) Items.InventoryCommands.TryEquip(inv, clothing, cc.Race?.StringId);
+                    if (data.Items.Create(link.TargetStringId, 1) is { } clothing) Items.InventoryCommands.TryEquip(inv, clothing, cc.Race);
             assembly.RefreshEquipment(cc);
         }
         assembly.RefreshEquipment(wc);

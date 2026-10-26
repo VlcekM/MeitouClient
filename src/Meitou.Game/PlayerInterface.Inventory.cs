@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
@@ -274,11 +275,11 @@ sealed partial class PlayerInterface
         if ((faithfulScreens.HitTest(p) ?? faithfulScreens.HitTest(centre)) is not { } over) return none;
         if (WindowOf(over.Screen) is not { } window) return none with { Kind = DropKind.Window };
         var controls = faithfulScreens.LastFrame.FirstOrDefault(f => f.Id == over.Screen)?.Controls ?? [];
-        // A disabled slot (a limb that takes no prosthetic) has no mouse focus in the original: the drop finds no section there.
+        // A disabled slot (a limb that takes no prosthetic) has no mouse focus in the original: the drop finds no section there. A blocked equipment slot (race flag) is drawn disabled but still found, so the drop is refused.
         foreach (var point in new[] { p, centre })
             foreach (var (name, section) in SectionsOf(over.Screen))
                 if (controls.LastOrDefault(c => c.Name == name && c.Bounds.Contains(point.X, point.Y) && (c.Clip?.Contains(point.X, point.Y) ?? true)
-                        && c.Properties.GetValueOrDefault("State") != "disabled") is { } slot)
+                        && (c.Properties.GetValueOrDefault("State") != "disabled" || c.Properties.GetValueOrDefault("Blocked") == "1")) is { } slot)
                     // A furnace's in1 grid is its storage, the sim's "main".
                     return Spot(window, name == "in1" && window.Holder == ItemHolder.Site && FurnaceGrid(Machine(window.Site)) is not null ? "main" : section, slot, topLeft, h);
         return none with { Kind = DropKind.Window, Window = window };
@@ -289,7 +290,7 @@ sealed partial class PlayerInterface
         var b = slot.Bounds;
         var (columns, rows) = GridOf(window, section);
         var look = window.Holder == ItemHolder.Character ? session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == window.Character)?.Appearance : null;
-        bool takes = InventoryCommands.SlotRefusal(section, h.Type, h.EquipmentSection, h.BagItems, h.WearableBy(look?.Race.StringId, look?.Animal is not null)) is null;
+        bool takes = InventoryCommands.SlotRefusal(section, h.Type, h.EquipmentSection, h.BagItems, h.WearableBy(look?.Race.StringId, look?.Animal is not null) && (look is null || !RaceData.BlocksSection(look.Race, section))) is null;
         if (section is "in1" or "in2" or "out")
             takes = section != "out" && Machine(window.Site) is { } m && int.Parse(section.AsSpan(2), CultureInfo.InvariantCulture) - 1 is var k && k < m.Inputs.Count && m.Inputs[k].Item == h.Record;
         if (columns == 0) return new(DropKind.Section, window, section, 0, 0, b, slot.Clip, takes);

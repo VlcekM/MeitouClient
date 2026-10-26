@@ -64,6 +64,16 @@ public sealed class RaceData
     public bool NoHats { get; init; }
     public bool NoShirts { get; init; }
     public bool NoShoes { get; init; }
+    /// <summary>
+    /// Whether the race may wear nothing in the equipment section <paramref name="section"/> (<c>head</c> for <c>no hats</c>, <c>shirt</c> for <c>no shirts</c>, <c>boots</c> for <c>no shoes</c>;
+    /// <b>Observed</b> in the original 1.0.68: such a slot is drawn blocked, hivers' head and boots, skeletons' shirt, head and boots).
+    /// </summary>
+    public bool BlocksSection(string section) => section switch { "head" => NoHats, "shirt" => NoShirts, "boots" => NoShoes, _ => false };
+    /// <summary><see cref="BlocksSection(string)"/> read from a RACE record (for the interface, which holds the record, not the body data).</summary>
+    public static bool BlocksSection(GameRecord race, string section) => section switch
+    {
+        "head" => RecordReading.Bool(race, "no hats", false), "shirt" => RecordReading.Bool(race, "no shirts", false), "boots" => RecordReading.Bool(race, "no shoes", false), _ => false,
+    };
     /// <summary>The inverse of the data's <c>cant enter buildings</c>.</summary>
     public bool CanEnterBuildings { get; init; } = true;
     /// <summary><c>self healing</c>: untreated damage turns slowly into treated damage (animals and a few robots).</summary>

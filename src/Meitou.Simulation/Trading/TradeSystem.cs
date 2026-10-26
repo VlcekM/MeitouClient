@@ -442,13 +442,13 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (item.Contents is not null)
         {
             // An empty bag moves itself (a copy would have no contents inventory); its receipt is replaced (none: this undid a sale).
-            placed = TransferContainer(shop.Stock, buy.Item, cold.Inventory!, buy.Section, buy.X, buy.Y, buy.Equip, cold.Race?.StringId);
+            placed = TransferContainer(shop.Stock, buy.Item, cold.Inventory!, buy.Section, buy.X, buy.Y, buy.Equip, cold.Race);
             if (placed > 0) item.Buyback = receipt;
             if (placed > 0 && InventoryCommands.IsEquipmentSection(item.Section)) assembly.RefreshEquipment(cold);
         }
         else if (buy.Section == "backpack_attach") placed = 0;
         else if (buy.Section is { } section) placed = PlaceAt(cold.Inventory!, bought, units, section, buy.X, buy.Y);
-        else if (buy.Equip && InventoryCommands.TryEquip(cold.Inventory!, bought.WithQuantity(1), cold.Race?.StringId))
+        else if (buy.Equip && InventoryCommands.TryEquip(cold.Inventory!, bought.WithQuantity(1), cold.Race))
         {
             // One unit is worn; the rest of a stack goes where it fits.
             assembly.RefreshEquipment(cold);
@@ -570,7 +570,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     // Containers move whole: stack copies intentionally omit Contents. Transfer validates the destination before changing either inventory.
-    static int TransferContainer(Inventory from, InventoryItemToken token, Inventory into, string? section, int x, int y, bool equip, string? wearer)
+    static int TransferContainer(Inventory from, InventoryItemToken token, Inventory into, string? section, int x, int y, bool equip, Meitou.Data.Gameplay.Bodies.RaceData? wearer)
     {
         if (section is not (null or "main" or "backpack_attach")) return 0;
         if (section == "backpack_attach") return InventoryCommands.Transfer(from, token, into, section, 0, 0, wearer: wearer) ? 1 : 0;

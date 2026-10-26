@@ -247,7 +247,7 @@ public sealed partial class PlayerSystem
     }
 
     /// <summary>
-    /// Places the held item (<c>FUN_140715560</c>, <b>Observed</b>): the section must take it (<see cref="InventoryCommands.SlotRefusal(string, FcsRecordType, string, Inventory?, bool)"/>, a worn slot only what the owner's race may wear, a limited storage its items, a prosthetic slot a
+    /// Places the held item (<c>FUN_140715560</c>, <b>Observed</b>): the section must take it (<see cref="InventoryCommands.SlotRefusal(string, FcsRecordType, string, Inventory?, bool)"/>, a worn slot only what the owner's race may wear and none its race flags blocked, a limited storage its items, a prosthetic slot a
     /// stump of its side); the cell is the drop's, moved inside the section (a footprint larger than the section is refused); two or more items under it refuse it; one locked on refuses it
     /// ("Item is locked in place."); one of the same kind takes what its stack has room for (the rest stays on the mouse; a full stack takes nothing); any other is swapped. Between the stock
     /// and the customer the units are capped to what the payer can afford and paid; a stolen item put on a stock that is no fence may get the seller caught. A refusal puts the item back.
@@ -269,7 +269,7 @@ public sealed partial class PlayerSystem
             ReturnHeldItem(world);
             return;
         }
-        string? refusal = InventoryCommands.SlotRefusal(target.Section, item.Type, item.EquipmentSection, item.Contents, item.WearableBy(target.Owner?.Race?.StringId, target.Owner is { } wearer && SquadRegistry.IsAnimal(wearer)));
+        string? refusal = InventoryCommands.SlotRefusal(target.Section, item.Type, item.EquipmentSection, item.Contents, item.WearableBy(target.Owner?.Race?.StringId, target.Owner is { } wearer && SquadRegistry.IsAnimal(wearer)) && target.Owner?.Race?.BlocksSection(target.Section) != true);
         if (refusal is null && target.Machine is { Data.IsStorage: true } storage && !storage.Data.Accepts(item.Record, item.Type)) refusal = "Invalid container type.";
         if (refusal is null && InventoryCommands.LimbSlotOf(target.Section) is >= 0 and var limbSlot
             && (data?.Items.Limb(item.Record)?.LimbSlot != limbSlot || target.Owner?.Medical?.LimbPart(limbSlot) is not { Limb: Bodies.LimbState.Stump or Bodies.LimbState.Replaced }))
@@ -616,7 +616,7 @@ public sealed partial class PlayerSystem
         bool Step(ItemInstance unit)
         {
             if (worn) return root.AddTo("main", unit) || (bag?.AddTo("backpack_content", unit) ?? false);
-            if (InventoryCommands.TryEquip(root, unit, cold.Race?.StringId)) return true;
+            if (InventoryCommands.TryEquip(root, unit, cold.Race)) return true;
             if (unit.Type == FcsRecordType.CONTAINER && unit.Contents is not null && from == "main" && !root.Items.Exists(i => i.Section == "backpack_attach"))
             {
                 (unit.Section, unit.X, unit.Y) = ("backpack_attach", 0, 0);

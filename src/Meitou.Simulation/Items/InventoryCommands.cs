@@ -1,4 +1,5 @@
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay.Bodies;
 
 namespace Meitou.Simulation.Items;
 
@@ -28,15 +29,16 @@ public static class InventoryCommands
     /// Puts one unit into the equipment slot that takes it when that is free (the trade window's right click, <c>FUN_140713d20</c>: sections that accept the item's slot type are tried before
     /// the general grids): weapons the first free cell of <c>back</c>, then <c>hip</c>; armour its <see cref="ItemInstance.EquipmentSection"/> when nothing is worn there. The order of two
     /// matching sections is <b>Unknown</b>. Bags are not equipped here: the trade moves them whole, into a free <c>backpack_attach</c> first (engine choice, docs/simulation.md). False: no slot, the caller places it in a grid. Nothing is worn
-    /// that the wearer's race (<paramref name="wearer"/>, a RACE id; null: no check) may not wear (<see cref="ItemInstance.WearableBy"/>).
+    /// that the wearer's race (<paramref name="wearer"/>; null: no check) may not wear (<see cref="ItemInstance.WearableBy"/>) and no section it has flagged (<c>no hats</c>, <c>no shirts</c>, <c>no shoes</c>: <see cref="RaceData.BlocksSection(string)"/>).
     /// </summary>
-    public static bool TryEquip(Inventory root, ItemInstance item, string? wearer = null)
+    public static bool TryEquip(Inventory root, ItemInstance item, RaceData? wearer = null)
     {
-        if (!item.WearableBy(wearer) || item.Quantity != 1 || item.Width <= 0 || item.Height <= 0) return false;
+        if (!item.WearableBy(wearer?.StringId) || item.Quantity != 1 || item.Width <= 0 || item.Height <= 0) return false;
         string[] sections = item.Type is Meitou.Data.Fcs.FcsRecordType.WEAPON or Meitou.Data.Fcs.FcsRecordType.CROSSBOW ? ["back", "hip"]
             : item.Type is Meitou.Data.Fcs.FcsRecordType.ARMOUR or Meitou.Data.Fcs.FcsRecordType.ITEM && IsEquipmentSection(item.EquipmentSection) && item.EquipmentSection is not ("back" or "hip" or "backpack_attach") ? [item.EquipmentSection] : [];
         foreach (string section in sections)
         {
+            if (wearer?.BlocksSection(section) == true) continue;
             int x = 0, y = 0;
             if (section is "back" or "hip")
             {
@@ -57,7 +59,7 @@ public static class InventoryCommands
         return false;
     }
 
-    public static bool Move(Inventory root, InventoryItemToken token, string section, int x, int y, string? wearer = null) => Transfer(root, token, root, section, x, y, limbs: true, wearer);
+    public static bool Move(Inventory root, InventoryItemToken token, string section, int x, int y, RaceData? wearer = null) => Transfer(root, token, root, section, x, y, limbs: true, wearer);
 
     /// <summary>
     /// Moves at most <paramref name="count"/> units (0: all) of <paramref name="item"/>, held directly by <paramref name="owner"/>, into <paramref name="into"/> where they first fit
@@ -88,9 +90,9 @@ public static class InventoryCommands
     /// <summary>
     /// Moves the item <paramref name="token"/> names in <paramref name="from"/> to <paramref name="section"/> at (<paramref name="x"/>, <paramref name="y"/>) of <paramref name="into"/>: the same
     /// inventory (<see cref="Move"/>) or another character's (the loot window), by the same rules. Prosthetic sections only with <paramref name="limbs"/>. False, nothing moved: the token is
-    /// stale or the place does not take the item (an equipment or prosthetic section also one the race <paramref name="wearer"/> may not wear; null: no check).
+    /// stale or the place does not take the item (an equipment or prosthetic section also one the race <paramref name="wearer"/> may not wear, or one it has flagged blocked; null: no check).
     /// </summary>
-    public static bool Transfer(Inventory from, InventoryItemToken token, Inventory into, string section, int x, int y, bool limbs = false, string? wearer = null)
+    public static bool Transfer(Inventory from, InventoryItemToken token, Inventory into, string section, int x, int y, bool limbs = false, RaceData? wearer = null)
     {
         var item = from.All().ElementAtOrDefault(token.Index);
         bool Movable(string s) => IsMovableSection(s) || limbs && IsLimbSection(s);
@@ -104,7 +106,8 @@ public static class InventoryCommands
         var size = section is "back" or "hip" ? SectionSize(section) : IsEquipmentSection(section) || IsLimbSection(section) ? (item.Width, item.Height) : (target?.Width ?? 0, target?.Height ?? 0);
         if (owner is null || target is null || !owner.Items.Contains(item) || x < 0 || y < 0 || item.Width <= 0 || item.Height <= 0 ||
             x > size.Item1 - item.Width || y > size.Item2 - item.Height || item.Quantity > target.LimitOf(item)) return false;
-        if ((IsEquipmentSection(section) || IsLimbSection(section)) && !item.WearableBy(wearer)) return false;
+        if ((IsEquipmentSection(section) || IsLimbSection(section)) && !item.WearableBy(wearer?.StringId)) return false;
+        if (wearer?.BlocksSection(section) == true) return false;
         if (IsEquipmentSection(section))
         {
             bool allowed = section switch
@@ -220,7 +223,7 @@ public static class InventoryCommands
     /// into the target's open bag window first (<paramref name="bagFirst"/>), then its character window: the slots of the item's type (<see cref="TryEquip"/>), then the main grid, stacks of it
     /// first (<see cref="Inventory.AddTo"/>). Leaving its owner a unit is no longer a death item. Returns the units moved; <paramref name="equipped"/>: one was worn.
     /// </summary>
-    public static int MoveInto(Inventory owner, ItemInstance item, int count, Inventory into, bool bagFirst, out bool equipped, string? wearer = null)
+    public static int MoveInto(Inventory owner, ItemInstance item, int count, Inventory into, bool bagFirst, out bool equipped, RaceData? wearer = null)
     {
         equipped = false;
         int want = count <= 0 ? item.Quantity : Math.Min(count, item.Quantity), moved = 0;

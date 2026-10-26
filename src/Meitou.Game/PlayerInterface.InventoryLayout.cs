@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
@@ -143,7 +144,7 @@ sealed partial class PlayerInterface
         faithfulScreens.SetOffset(id, faithfulScreens.GetOffset(id) + new Vector2(x - other.X, own.Y - other.Y));
     }
 
-    void ArrangeEquipmentGrid(List<UiControl> controls, InventoryView grid)
+    void ArrangeEquipmentGrid(List<UiControl> controls, InventoryView grid, Meitou.Data.GameRecord? race)
     {
         foreach (string section in new[] { "main", "backpack_attach", "back", "hip", "shirt", "head", "legs", "boots", "armour", "belt" })
         {
@@ -154,13 +155,16 @@ sealed partial class PlayerInterface
             int columns = section == "main" ? grid.Width : size.Width;
             int rows = section == "main" ? grid.Height : size.Height;
             var bounds = slot.Bounds with { Width = columns * InventoryCell, Height = rows * InventoryCell };
+            bool blocked = race is not null && RaceData.BlocksSection(race, section);
             controls[index] = slot with
             {
                 Bounds = bounds,
                 Properties = new Dictionary<string, string>(slot.Properties)
                 {
                     ["TileSize"] = FormattableString.Invariant($"{InventoryCell} {InventoryCell}"),
-                    ["State"] = "normal",
+                    // A section the race's no hats / no shirts / no shoes flag blocks is drawn with the skin's disabled tile (as a prosthetic slot without a stump) but a drop still finds it and is refused.
+                    ["State"] = blocked ? "disabled" : "normal",
+                    ["Blocked"] = blocked ? "1" : "0",
                 },
             };
         }
