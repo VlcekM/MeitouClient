@@ -7,18 +7,51 @@
   <Application.Resources>
     <ResourceDictionary>
       <!-- Tokens -->
-      <!-- Scroll bars (Fluent's keys): a brass thumb on a dark track, slimmer than Fluent's. -->
-      <Color x:Key="ScrollBarThumbBackgroundColor">#816635</Color>
-      <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="#c4a062" />
-      <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="#c4a062" />
-      <SolidColorBrush x:Key="ScrollBarThumbFillDisabled" Color="Transparent" />
-      <SolidColorBrush x:Key="ScrollBarBackground" Color="#0b0a09" />
-      <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver" Color="#0b0a09" />
-      <SolidColorBrush x:Key="ScrollBarTrackFill" Color="#0b0a09" />
-      <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver" Color="#0b0a09" />
-      <SolidColorBrush x:Key="ScrollBarTrackStroke" Color="#1fafa68b" />
-      <SolidColorBrush x:Key="ScrollBarTrackStrokePointerOver" Color="#1fafa68b" />
-      <x:Double x:Key="ScrollBarSize">10</x:Double>
+      <!-- Scroll bars: a rounded brass thumb on a dark track, always the same (Fluent's collapses to a thin line while auto-hidden). -->
+      <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
+        <Setter Property="Cursor" Value="Arrow" />
+        <Style Selector="^:vertical">
+          <Setter Property="Width" Value="10" />
+          <Setter Property="Template">
+            <ControlTemplate>
+              <Border Background="#0b0a09" CornerRadius="5">
+                <Track Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                       Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}">
+                  <Thumb Name="thumb" MinHeight="24" />
+                </Track>
+              </Border>
+            </ControlTemplate>
+          </Setter>
+        </Style>
+        <Style Selector="^:horizontal">
+          <Setter Property="Height" Value="10" />
+          <Setter Property="Template">
+            <ControlTemplate>
+              <Border Background="#0b0a09" CornerRadius="5">
+                <Track Name="PART_Track" Orientation="Horizontal" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                       Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}">
+                  <Thumb Name="thumb" MinWidth="24" />
+                </Track>
+              </Border>
+            </ControlTemplate>
+          </Setter>
+        </Style>
+        <Style Selector="^ /template/ Thumb#thumb">
+          <Setter Property="Background" Value="#816635" />
+          <Setter Property="Template">
+            <ControlTemplate>
+              <Border Background="{TemplateBinding Background}" CornerRadius="5" />
+            </ControlTemplate>
+          </Setter>
+        </Style>
+        <Style Selector="^ /template/ Thumb#thumb:pointerover, ^ /template/ Thumb#thumb:pressed">
+          <Setter Property="Background" Value="#c4a062" />
+        </Style>
+        <!-- Nothing to scroll: no thumb, the track keeps its column. -->
+        <Style Selector="^:disabled /template/ Thumb#thumb">
+          <Setter Property="IsVisible" Value="False" />
+        </Style>
+      </ControlTheme>
       <Color x:Key="SystemAccentColor">#816635</Color>
       <Color x:Key="SystemAccentColorLight1">#9a7c45</Color>
       <Color x:Key="SystemAccentColorLight2">#b08f55</Color>
@@ -91,13 +124,6 @@
     <!-- A page's scroll bar keeps its column even when there is nothing to scroll, so the rows do not shift when it appears. -->
     <Style Selector="ScrollViewer.page">
       <Setter Property="VerticalScrollBarVisibility" Value="Visible" />
-    </Style>
-    <!-- No arrow buttons: the thumb runs the bar's length, rounded. -->
-    <Style Selector="ScrollBar /template/ RepeatButton#PART_LineUpButton, ScrollBar /template/ RepeatButton#PART_LineDownButton">
-      <Setter Property="IsVisible" Value="False" />
-    </Style>
-    <Style Selector="ScrollBar /template/ Thumb">
-      <Setter Property="CornerRadius" Value="5" />
     </Style>
     <Style Selector="TextBlock">
       <Setter Property="Foreground" Value="{StaticResource Main}" />
