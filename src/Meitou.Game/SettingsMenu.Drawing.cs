@@ -274,7 +274,9 @@ sealed partial class SettingsMenu
         {
             // A Faithful / Meitou switch: both sides as buttons, the active one marked.
             bool meitou = remaster.Get();
-            if (remaster.OnOff) Segmented(R(860, y + (row - 22) / 2, 240, 22), meitou ? 1 : 0, i => remaster.Set(i == 1), "Faithful (off)", "Meitou (on)");
+            // An optional effect (bloom) is in neither look: plain Off / On.
+            if (remaster.Optional) Segmented(R(920, y + (row - 22) / 2, 180, 22), meitou ? 1 : 0, i => remaster.Set(i == 1), "Off", "On");
+            else if (remaster.OnOff) Segmented(R(860, y + (row - 22) / 2, 240, 22), meitou ? 1 : 0, i => remaster.Set(i == 1), "Faithful (off)", "Meitou (on)");
             else Segmented(R(920, y + (row - 22) / 2, 180, 22), meitou ? 1 : 0, i => remaster.Set(i == 1));
         }
         else if (entry is { Segmented: true, Choice: { } sides })

@@ -1244,8 +1244,9 @@ static class WorldFrame
         var toggles = switches?.Where(e => e.Id != "displace" || g.Sky.Gpu.HasTessellation).Select(e => new Toggle(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful, Remaster: true, OnOff: e.Faithful is "off" or "none")).ToList();
         if (fifthCascade is not null) (toggles ??= []).Add(fifthCascade);
         toggles ??= [];
-        // Bloom: a Meitou effect off by default, even in the Meitou look (docs/render-post.md "Bloom"); its strength is a slider.
-        if (g.Post is { } bloomPost) toggles.Add(new Toggle(BloomSwitch, () => bloomPost.Options.Bloom, v => bloomPost.Options.Bloom = v, Remaster: true, OnOff: true));
+        // Bloom: an optional effect, off in both looks (docs/render-post.md "Bloom"); a look preset may turn it on, its strength is a slider.
+        if (g.Post is { } bloomPost)
+            toggles.Add(new Toggle(BloomSwitch, () => bloomPost.Options.Bloom, v => bloomPost.Options.Bloom = v, Remaster: true, OnOff: true, Optional: true));
         if (g.Sky.Gpu.HasTessellation)
         {
             toggles.Add(new Toggle(RockSmoothingSwitch, () => RockSmoothing.TessellateActive, v => RockSmoothing.TessellateActive = v, Remaster: true, OnOff: true));

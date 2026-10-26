@@ -29,7 +29,8 @@ Graphics (`SettingsMenu.Looks.cs`, `SettingsMenu.Presets.cs`; `--settings-showca
   A quality tier's slider on a look tab (light shafts quality) is not part of the look. Every effect is a switch with its own state
   (off: the game's; on: Meitou's), its strength a slider under it that keeps its value while off (haze, heat haze, tone map and
   grade, night grading, bloom; `PostOptions.MeitouHeatHaze`, `ToneMapping`, `NightGrade`, `Bloom`, `SkyRenderer.MeitouHaze`).
-  Bloom is off in the Meitou look; Hot and dry turns it on at 0.13.
+  Bloom is an optional effect (`Toggle.Optional`), in neither the game nor the Meitou look: it reads Off | On, both looks have it off,
+  and a look preset may turn it on (Hot and dry, at 0.13).
 - **Quality**: Low / Medium / High / Ultra / Custom (derived from the values) sets the distance, foliage, grass, reflection,
   shadow, particle density, filtering, texture, ground relief and light-shaft quality sliders, the fifth cascade and the terrain relief
   switches (parallax and rock smoothing from Medium, displacement and outline refinement from High; Meitou only). High is the start

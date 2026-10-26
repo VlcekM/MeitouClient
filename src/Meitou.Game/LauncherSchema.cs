@@ -97,7 +97,8 @@ static class LauncherSchema
         foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).Where(e => !SettingsMenu.HiddenSwitch(e.Name)))
             yield return Switch(e.Name, e.Faithful is "off" or "none" ? "Off" : $"Faithful: {e.Faithful}", $"Meitou: {e.Meitou}", e.IsMeitou);
         yield return Switch(WorldFrame.FifthCascadeSwitch, "Off", "On", true);
-        yield return Switch(WorldFrame.BloomSwitch, "Off", "Meitou: on", false);
+        // An optional effect, in neither look: plain Off / On (Toggle.Optional).
+        yield return Switch(WorldFrame.BloomSwitch, "Off", "On", false);
         foreach (var label in new[] { WorldFrame.RockSmoothingSwitch, WorldFrame.OutlineRefineSwitch })
             yield return Switch(label, "Off", "On", true);
     }
