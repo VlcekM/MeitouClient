@@ -7,6 +7,10 @@
   <Application.Resources>
     <ResourceDictionary>
       <!-- Tokens -->
+      <!-- The drop-downs' chevron in brass, as the Graphics features' fold arrows (Fluent's keys; its shape is the theme's). -->
+      <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="#c4a062" />
+      <SolidColorBrush x:Key="ComboBoxDropDownGlyphForegroundFocused" Color="#c4a062" />
+      <SolidColorBrush x:Key="ComboBoxDropDownGlyphForegroundFocusedPressed" Color="#c4a062" />
       <!-- Scroll bars: a rounded brass thumb on a dark track, always the same (Fluent's collapses to a thin line while auto-hidden). -->
       <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
         <Setter Property="Cursor" Value="Arrow" />
