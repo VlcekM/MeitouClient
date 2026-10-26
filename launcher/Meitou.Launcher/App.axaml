@@ -444,6 +444,8 @@
     <!-- Lists: rows separated by hairlines, the selected one lifted -->
     <Style Selector="ListBox">
       <Setter Property="Background" Value="Transparent" />
+      <!-- The rows end 14 px before the scroll bar, as the pages' do. -->
+      <Setter Property="Padding" Value="0,0,14,0" />
     </Style>
     <Style Selector="ListBoxItem">
       <Setter Property="Padding" Value="10,6" />
