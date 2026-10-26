@@ -188,11 +188,11 @@
     </Style>
     <Style Selector="TextBlock.reset">
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="{StaticResource Brass}" />
+      <Setter Property="Foreground" Value="{StaticResource BrassLight}" />
       <Setter Property="TextDecorations" Value="Underline" />
     </Style>
     <Style Selector="TextBlock.reset:pointerover">
-      <Setter Property="Foreground" Value="{StaticResource BrassLight}" />
+      <Setter Property="Foreground" Value="{StaticResource PaperLight}" />
     </Style>
     <Style Selector="TextBlock.desc">
       <Setter Property="FontSize" Value="12" />

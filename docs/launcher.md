@@ -192,7 +192,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   A failed detection is tried again at the next start.
 - Each setting has one control: a switch a Faithful (0) / Meitou (1) drop-down, a slider with `labels` a drop-down of them, any other
   slider a slider with a typed value; unsaved, a row shows the game's start value (`shown`). A look setting that differs from the look's
-  value has its name in brass and a Reset link that writes it; quality and display settings are never marked (the Quality row reads Custom),
+  value has its name in brass and a Reset link that writes it, and so does its feature's header (for all of them, as in the game); quality and display settings are never marked (the Quality row reads Custom),
   as in the game's menu. Reset graphics, in a footer
   under the scrolling rows, removes `graphics`, `graphicsPreset`, `faithfulLook` and `lookPreset`. A top-level Default writes the schema's `default`.
   Whole values are written as integers.

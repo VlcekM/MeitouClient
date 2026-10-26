@@ -27,6 +27,10 @@ public sealed partial class MainWindow
     ComboBox? presetBox;
     /// <summary>The features the player opened (by title), kept while the page is shown again.</summary>
     readonly HashSet<string> openGroups = [];
+    /// <summary>The shown tab's rows: what marks each one changed, and what puts each control back to the saved value (after a feature's Reset).</summary>
+    readonly List<Action> rowMarks = [], rowShows = [];
+    /// <summary>A feature header's key to the settings folded under it: its row is marked, and resets, for them too.</summary>
+    readonly Dictionary<string, List<SettingDescription>> featureMembers = [];
     /// <summary>The last hardware detection's result line, and whether one is running.</summary>
     string? detected;
     bool detecting;
@@ -135,7 +139,12 @@ public sealed partial class MainWindow
     void FillSection(StackPanel content, SettingsSection section)
     {
         content.Children.Clear();
+        rowMarks.Clear();
+        rowShows.Clear();
+        featureMembers.Clear();
         var groups = section.Groups ?? [];
+        foreach (var g in groups.Where(g => g.Header is not null))
+            featureMembers[g.Header!] = [.. g.Members.Select(key => section.Settings.FirstOrDefault(x => x.Key == key)).OfType<SettingDescription>().Where(Shown)];
         var done = new HashSet<SettingsGroup>();
         foreach (var s in section.Settings.Where(Shown))
         {
@@ -169,7 +178,7 @@ public sealed partial class MainWindow
         string name = header?.Name ?? group.Title;
         var members = group.Members.Select(key => section.Settings.FirstOrDefault(x => x.Key == key)).OfType<SettingDescription>().Where(Shown)
             .Select(m => m with { Name = WithinGroup(m.Name, name) }).ToList();
-        var headerRow = header is not null ? SettingRow(header) : Row(group.Title, group.Description, new Panel(), 150);
+        var headerRow = header is not null ? SettingRow(header) : Frame(group.Title, group.Description, members, new Panel(), 150);
         var panel = new StackPanel();
         if (members.Count == 0)
         {
@@ -425,31 +434,36 @@ public sealed partial class MainWindow
     {
         game.SetGraphics(s.Key, LookValue(s.Key));
         PresetBroken(s.Key);
-        SaveGame();
+    }
+
+    /// <summary>After a value changed: every row of the tab marked again (a feature header stands for its settings too).</summary>
+    void RefreshMarks()
+    {
+        foreach (var mark in rowMarks) mark();
     }
 
     /// <summary>
-    /// A setting's row, the same for every control: its name, and while a look setting differs from the look (<see cref="Changed"/>) the name in brass
-    /// with a Reset link beside it, as in the game's menu. Returns the row and what to call after the value changes; <paramref name="show"/> puts the
-    /// control back after a reset.
+    /// A row, the same for every control: its name, and while one of <paramref name="settings"/> (a look setting) differs from the look
+    /// (<see cref="Changed"/>) the name in brass with a Reset link beside it that puts them all back, as in the game's menu.
     /// </summary>
-    (Border Row, Action Update) SettingFrame(SettingDescription s, Control control, int width, Action show)
+    Border Frame(string text, string description, IReadOnlyList<SettingDescription> settings, Control control, int width)
     {
-        var name = new TextBlock { Classes = { "name" }, Text = s.Name };
+        var name = new TextBlock { Classes = { "name" }, Text = text };
         var reset = new TextBlock { Classes = { "reset" }, Text = Tr("Reset"), Margin = new(10, 0, 0, 2), VerticalAlignment = VerticalAlignment.Bottom, Cursor = new Cursor(StandardCursorType.Hand) };
-        ToolTip.SetTip(reset, Tr("Back to the look's or the game's value"));
-        void Update()
+        ToolTip.SetTip(reset, Tr("Back to the look's value"));
+        void Mark()
         {
-            bool changed = Changed(s);
+            bool changed = settings.Any(Changed);
             name.Classes.Set("changed", changed);
             reset.IsVisible = changed;
         }
         reset.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(reset).Properties.IsLeftButtonPressed) return;
-            ResetSetting(s);
-            show();
-            Update();
+            foreach (var s in settings.Where(Changed).ToList()) ResetSetting(s);
+            SaveGame();
+            foreach (var show in rowShows) show();
+            RefreshMarks();
             e.Handled = true;
         };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"*,{width}") };
@@ -459,14 +473,22 @@ public sealed partial class MainWindow
             Children =
             {
                 new StackPanel { Orientation = Orientation.Horizontal, Children = { name, reset } },
-                new TextBlock { Classes = { "desc" }, Text = s.Description },
+                new TextBlock { Classes = { "desc" }, Text = description },
             },
         });
         Grid.SetColumn(control, 1);
         control.VerticalAlignment = VerticalAlignment.Center;
         grid.Children.Add(control);
-        Update();
-        return (new Border { Classes = { "row" }, Child = grid }, Update);
+        rowMarks.Add(Mark);
+        Mark();
+        return new Border { Classes = { "row" }, Child = grid };
+    }
+
+    /// <summary>A setting's row (<see cref="Frame"/>); a feature's header stands for the settings under it too. <paramref name="show"/> puts the control back after a Reset.</summary>
+    Border SettingFrame(SettingDescription s, Control control, int width, Action show)
+    {
+        rowShows.Add(show);
+        return Frame(s.Name, s.Description, [s, .. featureMembers.GetValueOrDefault(s.Key) ?? []], control, width);
     }
 
     /// <summary>A drop-down over a setting's values (<paramref name="options"/>, the first one at <paramref name="first"/>), framed as every row is.</summary>
@@ -481,14 +503,14 @@ public sealed partial class MainWindow
             loading = false;
         }
         Show();
-        var (row, update) = SettingFrame(s, box, 260, Show);
+        var row = SettingFrame(s, box, 260, Show);
         box.SelectionChanged += (_, _) =>
         {
             if (loading || box.SelectedIndex < 0) return;
             write(first + box.SelectedIndex);
             PresetBroken(s.Key);
             SaveGame();
-            update();
+            RefreshMarks();
         };
         return row;
     }
@@ -529,13 +551,13 @@ public sealed partial class MainWindow
         DockPanel.SetDock(text, Dock.Right);
         dock.Children.Add(text);
         dock.Children.Add(slider);
-        var (row, update) = SettingFrame(s, dock, 380, Show);
+        var row = SettingFrame(s, dock, 380, Show);
         void Write(float v)
         {
             if (s.Graphics) game.SetGraphics(s.Key, v);
             else game.Set(s.Key, v);
             PresetBroken(s.Key);
-            update();
+            RefreshMarks();
         }
         slider.ValueChanged += (_, e) =>
         {
