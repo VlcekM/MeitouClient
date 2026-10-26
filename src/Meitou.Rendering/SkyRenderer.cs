@@ -472,6 +472,8 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// The viewer's haze strength (not the game's; 1 = the game's haze): scales how far the atmosphere haze is blended in (the game's ramp,
     /// or the physical haze's amount), not the weather's fog.
     /// </summary>
+    /// <summary>The Meitou haze switch: the haze at <see cref="HazeStrength"/>; Faithful is the game's (1).</summary>
+    public bool MeitouHaze { get; set; } = true;
     public float HazeStrength { get; set; } = Enhancements.MeitouHazeStrength;
     /// <summary>
     /// The Meitou <c>night</c> switch, "night air" (viewer, not the game's; docs/formats/sky.md "Night air"): the game's haze colour is SkyX's sunlit
@@ -952,7 +954,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
             // The weather fog is complete at a distance between `fog distance min` and `max` by the wind; the viewer has no wind and takes max.
             new Vector4(KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, fogWeight > 0 && fogDistance > 1 ? 1f / fogDistance : 0f),
             new Vector4(cloud.X, cloud.Y, cloud.Z, pull),
-            new Vector4(KenshiHaze ? AltitudeWeight : 1f, MathF.Max(HazeStrength, 0), AltitudeWeight, 0),
+            new Vector4(KenshiHaze ? AltitudeWeight : 1f, MathF.Max(MeitouHaze ? HazeStrength : 1, 0), AltitudeWeight, 0),
             new Vector4(irradianceCube is not null ? 1f : 0f, specularCube is not null ? 1f : 0f,
                 ambientMap is not null ? 1f + (Planetshine ? NightAmbientFloor * (1 - Math.Clamp(s.Sun.Y * 5, 0, 1)) : 0f) : 0f, AmbientMap.HalfWorld),
             s.Night);

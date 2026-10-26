@@ -552,7 +552,7 @@ sealed partial class GameHost
                     config.Graphics.TryGetValue(slider.Label, out float value))
                     slider.Set(Math.Clamp(value, slider.Min, slider.Max));
             foreach (var toggle in settingsValues.Toggles)
-                if (config.Graphics.TryGetValue(SettingsMenu.SwitchKeyPrefix + toggle.Label, out float value) && (value >= 0.5f) != toggle.Get())
+                if (!SettingsMenu.HiddenSwitch(toggle.Label) && config.Graphics.TryGetValue(SettingsMenu.SwitchKeyPrefix + toggle.Label, out float value) && (value >= 0.5f) != toggle.Get())
                     toggle.Set(value >= 0.5f);
             settings.ApplySavedPreset();
             // The impostor atlas path is re-enabled after the frame-slot fence. Keep the diagnostic off switch as a
@@ -674,7 +674,7 @@ sealed partial class GameHost
             }
             sliders.Add(new Slider("Terrain detail: error px (less = finer)", 1, 32, () => render.TerrainPixelError,
                 v => render.TerrainPixelError = v, "0.0", Logarithmic: true,
-                Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError));
+                Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError, Reversed: true));
 
             // Lighting: the same shadow controls the Vulkan settings expose, and the sky switches the Metal sky reads.
             const float shadowsOff = Meitou.Data.World.KenshiShadows.MinRange * 0.9f;
@@ -756,7 +756,7 @@ sealed partial class GameHost
 
             // Effects: the composite already supports the game's exposure/tone-map/grading path, even before the rest of
             // the Vulkan post chain is ported.
-            sliders.Add(new Slider("Tone map (0 = game)", 0, 3, () => (int)o.Post.ToneMap,
+            sliders.Add(new Slider("Tone map (0 = game)", 1, 3, () => (int)o.Post.ToneMap,
                 v => o.Post.ToneMap = (ToneMapOperator)(int)MathF.Round(v), "0",
                 Text: v => (ToneMapOperator)(int)MathF.Round(v) switch
                 {

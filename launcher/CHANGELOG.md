@@ -7,6 +7,10 @@ Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.
 - **Look** row on the Graphics page: Faithful, Meitou, its example looks or a look you saved in the game. Choosing one
   sets its effects and values at once.
 - Each effect is **Faithful or Meitou**, nothing in between: the "Game default" choice is gone from the switches.
+- **Harmonized settings**: choices are drop-downs (anti-aliasing, texture quality, water reflection...), amounts are sliders that
+  always go right for more (terrain detail is no longer backwards). A setting you changed shows its name in brass with a
+  **Reset** link, instead of a Default button on every slider. Reset graphics stays at the bottom of the page.
+- **Bloom** is an effect you switch on, with its strength under it.
 - The Graphics tabs follow the game's new pages: Light, Sky, Colour, Water, Skin, then Distances and Detail, and
   Advanced for Interior lamps. Each feature is one row, with its own settings folded under it behind an arrow.
 - Shows with game releases from the next one on.

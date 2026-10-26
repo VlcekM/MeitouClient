@@ -48,6 +48,8 @@ public sealed partial class MainWindow
         if (graphicsSave?.IsEnabled == true) SaveGame();
         game = GameSettings.Load();
         GraphicsPanel.Children.Clear();
+        GraphicsFooter.Child = null;
+        GraphicsFooter.IsVisible = false;
         bool found = game.Version is not null;
         GraphicsFileText.Text = found ? GameSettings.FileName : Loc.Format(Tr("No {1} found"), GameSettings.FileName);
         ToolTip.SetTip(GraphicsFileText, GameSettings.FilePath);
@@ -110,10 +112,14 @@ public sealed partial class MainWindow
             SaveGame();
             ShowGraphics();
         };
-        rows.Children.Add(Section("Reset"));
-        rows.Children.Add(Row("Reset graphics", "Every graphics setting back to the game's defaults, also those only in the game's Tab panel.", reset, 150));
+        var footer = Row("Reset graphics", "Every graphics setting back to the game's defaults, also those only in the game's Tab panel.", reset, 150);
+        footer.BorderThickness = new(0);
+        GraphicsFooter.Child = footer;
+        GraphicsFooter.IsEnabled = locked is null;
+        GraphicsFooter.IsVisible = true;
         GraphicsPanel.Children.Add(rows);
         LauncherText.TranslateTree(GraphicsPanel, originalUiText);
+        LauncherText.TranslateTree(GraphicsFooter, originalUiText);
     }
 
     // Why the file may not be changed for this schema (null: it may).
@@ -141,7 +147,9 @@ public sealed partial class MainWindow
         LauncherText.TranslateTree(content, originalUiText);
     }
 
-    Border SettingRow(SettingDescription s) => s.Kind == SettingKind.Toggle ? s.Graphics ? SwitchRow(s) : ToggleRow(s) : SliderRow(s);
+    Border SettingRow(SettingDescription s) => s.Kind == SettingKind.Toggle ? s.Graphics ? SwitchRow(s) : ToggleRow(s)
+        : s.Labels is { Length: > 0 } ? ChoiceRow(s) : SliderRow(s);
+
 
     const double GutterWidth = 22;
 
@@ -403,78 +411,141 @@ public sealed partial class MainWindow
         }
     }
 
-    Border ToggleRow(SettingDescription s)
+    /// <summary>A setting's value: saved, else the game's start value (a top-level one: the schema's default).</summary>
+    float CurrentValue(SettingDescription s) =>
+        (s.Graphics ? game.GetGraphics(s.Key) : s.Kind == SettingKind.Toggle ? game.GetBool(s.Key) is { } on ? on ? 1 : 0 : null : game.GetNumber(s.Key))
+        ?? (s.Graphics ? s.Shown : s.Default ?? s.Shown);
+
+    /// <summary>What a setting goes back to: the look's value for a look setting, else the game's start value (a top-level one: the schema's default).</summary>
+    float DefaultValue(SettingDescription s) => s.Graphics ? LookValue(s.Key) ?? s.Shown : s.Default ?? s.Shown;
+
+    bool Changed(SettingDescription s) => MathF.Abs(CurrentValue(s) - DefaultValue(s)) > (s.Kind == SettingKind.Toggle ? 0.5f : MathF.Max(s.Step, 1e-4f) / 2);
+
+    /// <summary>Puts a setting back: a look setting to the look's value, another graphics one to the game's default (its key removed), a top-level one to the schema's default.</summary>
+    void ResetSetting(SettingDescription s)
     {
-        bool value = game.GetBool(s.Key) ?? s.Default >= 0.5f;
-        var toggle = new ToggleButton { IsChecked = value, Content = Tr(value ? s.On : s.Off), HorizontalAlignment = HorizontalAlignment.Stretch };
-        toggle.Click += (_, _) =>
-        {
-            bool v = toggle.IsChecked == true;
-            toggle.Content = Tr(v ? s.On : s.Off);
-            game.Set(s.Key, v);
-            SaveGame();
-        };
-        return Row(s.Name, s.Description, toggle, 150);
+        if (s.Graphics) game.SetGraphics(s.Key, LookValue(s.Key));
+        else if (s.Default is not { } d) game.Remove(s.Key);
+        else if (s.Kind == SettingKind.Toggle) game.Set(s.Key, d >= 0.5f);
+        else game.Set(s.Key, d);
+        PresetBroken(s.Key);
+        SaveGame();
     }
 
-    /// <summary>A Tab panel switch: Faithful (off, saved 0) or Meitou (on, saved 1); unsaved, it shows the game's start state.</summary>
-    Border SwitchRow(SettingDescription s)
+    /// <summary>
+    /// A setting's row, the same for every control: its name, and while its value differs from its default (<see cref="DefaultValue"/>) the name in brass
+    /// with a Reset link beside it, as in the game's menu. Returns the row and what to call after the value changes; <paramref name="show"/> puts the
+    /// control back after a reset.
+    /// </summary>
+    (Border Row, Action Update) SettingFrame(SettingDescription s, Control control, int width, Action show)
     {
-        var box = new ComboBox
+        var name = new TextBlock { Classes = { "name" }, Text = s.Name };
+        var reset = new TextBlock { Classes = { "reset" }, Text = Tr("Reset"), Margin = new(10, 0, 0, 2), VerticalAlignment = VerticalAlignment.Bottom, Cursor = new Cursor(StandardCursorType.Hand) };
+        ToolTip.SetTip(reset, Tr("Back to the look's or the game's value"));
+        void Update()
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemsSource = new[] { Tr(s.Off), Tr(s.On) },
-            SelectedIndex = (game.GetGraphics(s.Key) ?? s.Shown) >= 0.5f ? 1 : 0,
+            bool changed = Changed(s);
+            name.Classes.Set("changed", changed);
+            reset.IsVisible = changed;
+        }
+        reset.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(reset).Properties.IsLeftButtonPressed) return;
+            ResetSetting(s);
+            show();
+            Update();
+            e.Handled = true;
         };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"*,{width}") };
+        grid.Children.Add(new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new StackPanel { Orientation = Orientation.Horizontal, Children = { name, reset } },
+                new TextBlock { Classes = { "desc" }, Text = s.Description },
+            },
+        });
+        Grid.SetColumn(control, 1);
+        control.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(control);
+        Update();
+        return (new Border { Classes = { "row" }, Child = grid }, Update);
+    }
+
+    /// <summary>A drop-down over a setting's values (<paramref name="options"/>, the first one at <paramref name="first"/>), framed as every row is.</summary>
+    Border DropDownRow(SettingDescription s, IReadOnlyList<string> options, float first, Action<float> write)
+    {
+        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = options.Select(Tr).ToList() };
+        bool loading = false;
+        void Show()
+        {
+            loading = true;
+            box.SelectedIndex = Math.Clamp((int)MathF.Round(CurrentValue(s) - first), 0, options.Count - 1);
+            loading = false;
+        }
+        Show();
+        var (row, update) = SettingFrame(s, box, 260, Show);
         box.SelectionChanged += (_, _) =>
         {
-            if (box.SelectedIndex < 0) return;
-            game.SetGraphics(s.Key, box.SelectedIndex);
+            if (loading || box.SelectedIndex < 0) return;
+            write(first + box.SelectedIndex);
             PresetBroken(s.Key);
             SaveGame();
+            update();
         };
-        return Row(s.Name, s.Description, box, 260);
+        return row;
     }
 
-    /// <summary>A slider with its value and a Default button: a graphics slider's key is removed (the game's default for the mode),
-    /// a top-level one gets the schema's default. A slider without labels also takes a typed value (Enter or leaving the box).</summary>
+    /// <summary>A top-level on / off setting (full screen, VSync).</summary>
+    Border ToggleRow(SettingDescription s) => DropDownRow(s, [s.Off, s.On], 0, v => game.Set(s.Key, v >= 0.5f));
+
+    /// <summary>A Tab panel switch: Faithful (off, saved 0) or Meitou (on, saved 1).</summary>
+    Border SwitchRow(SettingDescription s) => DropDownRow(s, [s.Off, s.On], 0, v => game.SetGraphics(s.Key, v));
+
+    /// <summary>A setting with named values (anti-aliasing, texture quality, water reflection), in the slider's order from its left end.</summary>
+    Border ChoiceRow(SettingDescription s) => DropDownRow(s, s.Labels!, s.Min, v => { if (s.Graphics) game.SetGraphics(s.Key, v); else game.Set(s.Key, v); });
+
+    /// <summary>A continuous setting: a slider and its value, which can be typed (Enter or leaving the box; Esc puts it back).</summary>
     Border SliderRow(SettingDescription s)
     {
         bool log = s.Logarithmic && s.Min > 0;
         float step = s.Step > 0 ? s.Step : 1;
-        // A reversed setting's value is mirrored onto the slider (Min + Max - value), so right is always the better end.
-        float Mirror(float v) => s.Reversed ? s.Min + s.Max - v : v;
+        // A reversed setting's value is mirrored onto the slider (Min + Max - value; on a logarithmic one Min x Max / value), so right is always the better end.
+        float Mirror(float v) => !s.Reversed ? v : log ? s.Min * s.Max / v : s.Min + s.Max - v;
         float ToSlider(float v) => log ? MathF.Log(Mirror(v)) : Mirror(v);
         float Snap(float v) => Math.Clamp(MathF.Round(v / step) * step, s.Min, s.Max);
         float FromSlider(double x) => Snap(Mirror(log ? MathF.Exp((float)x) : (float)x));
-        float? Get() => s.Graphics ? game.GetGraphics(s.Key) : game.GetNumber(s.Key) ?? s.Default;
         // The range itself is not mirrored: Min..Max either way.
         var slider = new Slider { Minimum = log ? MathF.Log(s.Min) : s.Min, Maximum = log ? MathF.Log(s.Max) : s.Max, Margin = new(0, 0, 10, 0) };
-        bool typed = s.Labels is not { Length: > 0 };
-        var text = new TextBox { Width = 120, IsVisible = typed, VerticalAlignment = VerticalAlignment.Center, TextWrapping = Avalonia.Media.TextWrapping.NoWrap };
-        var value = new TextBlock { Classes = { "desc" }, Width = 120, IsVisible = !typed, VerticalAlignment = VerticalAlignment.Center, TextWrapping = Avalonia.Media.TextWrapping.NoWrap };
-        var reset = new Button { Content = Tr("Default"), Margin = new(6, 0, 0, 0), IsEnabled = s.Graphics || s.Default is not null };
+        var text = new TextBox { Width = 120, VerticalAlignment = VerticalAlignment.Center, TextWrapping = Avalonia.Media.TextWrapping.NoWrap };
         bool loading = false;
-        void ShowValue(float? v) => text.Text = value.Text = Tr(v is { } x ? s.Text(x) : "Game default");
         void Show()
         {
             loading = true;
-            var v = Get();
-            slider.Value = ToSlider(Math.Clamp(v ?? s.Shown, s.Min, s.Max));
-            ShowValue(v);
+            float v = CurrentValue(s);
+            slider.Value = ToSlider(Math.Clamp(v, s.Min, s.Max));
+            text.Text = Tr(s.Text(v));
             loading = false;
         }
+        Show();
+        var dock = new DockPanel();
+        DockPanel.SetDock(text, Dock.Right);
+        dock.Children.Add(text);
+        dock.Children.Add(slider);
+        var (row, update) = SettingFrame(s, dock, 380, Show);
         void Write(float v)
         {
             if (s.Graphics) game.SetGraphics(s.Key, v);
             else game.Set(s.Key, v);
             PresetBroken(s.Key);
+            update();
         }
         slider.ValueChanged += (_, e) =>
         {
             if (loading) return;
             float v = FromSlider(e.NewValue);
-            ShowValue(v);
+            text.Text = Tr(s.Text(v));
             Write(v);
             SaveGameSoon();
         };
@@ -490,7 +561,7 @@ public sealed partial class MainWindow
         void Commit()
         {
             // Anything unreadable, or the shown text left as it was, puts the row back.
-            if (Parse((text.Text ?? "").Trim()) is { } v && v != Get())
+            if (Parse((text.Text ?? "").Trim()) is { } v && MathF.Abs(v - CurrentValue(s)) > step / 2)
             {
                 Write(v);
                 SaveGame();
@@ -503,25 +574,7 @@ public sealed partial class MainWindow
             else if (e.Key == Key.Escape) { Show(); e.Handled = true; }
         };
         text.LostFocus += (_, _) => Commit();
-        reset.Click += (_, _) =>
-        {
-            // A look's setting goes back to the look's value, as the game's Reset does; another graphics one to the game's default.
-            if (s.Graphics) game.SetGraphics(s.Key, LookValue(s.Key));
-            else if (s.Default is { } d) game.Set(s.Key, d);
-            PresetBroken(s.Key);
-            SaveGame();
-            Show();
-        };
-        Show();
-        var dock = new DockPanel();
-        DockPanel.SetDock(reset, Dock.Right);
-        DockPanel.SetDock(text, Dock.Right);
-        DockPanel.SetDock(value, Dock.Right);
-        dock.Children.Add(reset);
-        dock.Children.Add(text);
-        dock.Children.Add(value);
-        dock.Children.Add(slider);
-        return Row(s.Name, s.Description, dock, 460);
+        return row;
     }
 
     // Dragging a slider writes the file once it rests, not on every step.

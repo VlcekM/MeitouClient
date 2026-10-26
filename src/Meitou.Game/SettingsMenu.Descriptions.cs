@@ -30,7 +30,7 @@ sealed partial class SettingsMenu
         "Small foliage range" => "Maximum visibility range for small foliage.",
         "Grass draw distance multiplier" => "Scale the distance at which grass disappears.",
         "Grass density multiplier" => "Scale the number of grass instances drawn.",
-        "Terrain detail" => "Lower values keep the terrain mesh more detailed.",
+        "Terrain detail" => "How finely the terrain mesh follows the ground: further right is finer (the value is the error allowed, in pixels).",
         "Ground relief quality" => "How many layers and march steps the ground relief uses; lower is cheaper.",
         "Water reflection" => "Choose which parts of the scene appear in reflections.",
         "Reflection range multiplier" => "Scale how far away reflected objects are drawn.",
@@ -55,6 +55,7 @@ sealed partial class SettingsMenu
         "Heat haze strength" => "Scale the distortion caused by hot air.",
         "Night grading strength" => "Adjust the blue shift of colours in low light.",
         "Bloom strength" => "How much of each pixel's light glows into its surroundings.",
+        _ when label == WorldFrame.UpscalerSliders[0] => "How edges are smoothed: FXAA and SMAA soften them in one frame; TAA, FSR and DLSS rebuild them over several frames.",
         _ => $"Adjust {Label(label).ToLowerInvariant()}.",
     };
 
@@ -80,6 +81,7 @@ sealed partial class SettingsMenu
         "Planetshine" => "Light the night scene from the planet and moon.",
         "Night sky" => "Draw individual stars instead of a starfield texture.",
         "Night grading" => "Shift dark scenes toward the blue of night vision.",
+        "Bloom" => "Let bright light glow softly into its surroundings, as in the eye.",
         "Clouds" => "Render clouds with volume and depth.",
         "Cloud shadows" => "Let clouds cast shadows across land and water.",
         "Cloud shadows in fog" => "Fade cloud shadows near and inside fog. Without it, places like the swamp or the Deadlands get too dark.",

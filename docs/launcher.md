@@ -190,13 +190,16 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - The launcher detects once by itself (`PresetDetected` in `launcher.json`): when the version Play starts can detect and the game has no
   graphics settings or preset saved yet, so the first start (or first install) of a fresh setup gets a preset; saved settings are kept.
   A failed detection is tried again at the next start.
-- A switch is Faithful (0) or Meitou (1); unsaved, it shows the game's start state. A missing slider key is the game's default for the
-  mode ("Game default"); Default removes it (a look slider: the look's value), Reset graphics removes `graphics`, `graphicsPreset`, `faithfulLook` and `lookPreset`. A top-level Default writes the schema's `default`.
+- Each setting has one control: a switch a Faithful (0) / Meitou (1) drop-down, a slider with `labels` a drop-down of them, any other
+  slider a slider with a typed value; unsaved, a row shows the game's start value (`shown`). A row whose value differs from its default
+  (a look setting: the look's value; another graphics one: `shown`; a top-level one: `default`) has its name in brass and a Reset link,
+  which writes the look's value, removes another graphics key (the game's default) or writes `default`. Reset graphics, in a footer
+  under the scrolling rows, removes `graphics`, `graphicsPreset`, `faithfulLook` and `lookPreset`. A top-level Default writes the schema's `default`.
   Whole values are written as integers.
 - A slider without `labels` takes a typed value (Enter or leaving the box; Esc restores): the suffix may stay, a comma is a decimal
   point, the value is divided by `scale`, snapped to `step` and clamped; `offText` (Unlimited, Off) means the left end.
-- A slider marked `reversed` (texture quality, whose level 0 is Maximum) is drawn mirrored, so right is always the better end; the
-  value written is unchanged. Older schemas lack the flag and show it unmirrored.
+- A slider marked `reversed` (terrain detail's error in pixels) is drawn mirrored (`min + max - value`; logarithmic: `min x max / value`),
+  so right is always the better end; the value written is unchanged. Texture quality, also reversed, is a drop-down, best first.
 - Read-only when the file is unreadable, or its `version` differs from the schema's `settingsVersion` (another layout: the keys may
   mean something else). Warnings: the game is running (it writes the file on exit), `--low-end` (the game ignores `graphics`).
 

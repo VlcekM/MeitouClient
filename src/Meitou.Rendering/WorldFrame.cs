@@ -110,7 +110,8 @@ sealed class WorldOptions
     public bool MeitouBloodSurfaces = true;
     public float? ImpostorDistance, LargeImpostorDistance;
     public double? ImpostorBudgetMb;
-    public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze switch (default); 1 = the game's haze
+    public bool MeitouHaze = true; // the Meitou haze switch (default): the haze at HazeStrength; Faithful: the game's (1)
+    public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze's strength (a Tab slider), kept while the switch is Faithful
     public bool NightAir = true; // the Meitou night switch (default): the night air, a faint glow the haze fades into and the sky shows above the horizon (SkyRenderer.NightAir)
     public bool Planetshine = true; // the Meitou planetshine switch (default): the big planet lights the night (SkyRenderer.Planetshine)
     public float PlanetshineStrength = Enhancements.MeitouPlanetshineStrength; // x the physical value (a Tab slider)
@@ -291,7 +292,7 @@ sealed class WorldOptions
         """;
 
     /// <summary>The Faithful / Meitou switches over the options (for <c>--meitou</c> / <c>--faithful</c>).</summary>
-    internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.HazeStrength, v => o.HazeStrength = v,
+    internal static IReadOnlyList<Enhancement> Switches(WorldOptions o) => Enhancements.Create(o.Post, () => o.MeitouHaze, v => o.MeitouHaze = v,
         () => o.MeitouShadows, v => o.MeitouShadows = v, () => o.MeitouRange, v => o.MeitouRange = v, () => o.Impostors, v => o.Impostors = v, () => o.MeitouReach, v => o.MeitouReach = v,
         () => o.MeitouWater, v => o.MeitouWater = v, () => o.FoliageLod, v => o.FoliageLod = v, () => o.GiProbes, v => o.GiProbes = v,
         () => o.NightAir, v => o.NightAir = v, () => o.Planetshine, v => o.Planetshine = v,
@@ -825,6 +826,7 @@ static class WorldFrame
         gpu.FogVolumes = new FogVolumes(context, o.NoFogFeatures ? [] : FogFeatures.Load(install));
         if (post is not null) post.FogVrs = true;   // takes effect where the device supports fragment shading rates
         gpu.Sky.HazeStrength = o.HazeStrength;
+        gpu.Sky.MeitouHaze = o.MeitouHaze;
         gpu.Sky.NightAir = o.NightAir;
         gpu.Sky.Planetshine = o.Planetshine;
         gpu.Sky.PlanetshineStrength = o.PlanetshineStrength;
@@ -1032,6 +1034,10 @@ static class WorldFrame
     /// <summary>The Tab panel switches that are not Faithful / Meitou ones (saved as <c>Meitou: &lt;label&gt;</c> like those).</summary>
     public const string
         FifthCascadeSwitch = "Shadow cascade 5 (Meitou)",
+        BloomSwitch = "Bloom",
+        // The ground relief's Faithful / Meitou switches (Enhancements "parallax", "displace"), by name.
+        GroundParallaxSwitch = "Ground parallax",
+        GroundDisplaceSwitch = "Ground displacement (tessellation)",
         RockSmoothingSwitch = "Rock smoothing (tessellation)",
         OutlineRefineSwitch = "Terrain outline refinement (tessellation)";
     /// <summary>The weather particles slider's position for the renderer's state: 0 off, 1 quarter, 2 half, 3 by sprite size (auto), 4 full size.</summary>
@@ -1047,7 +1053,7 @@ static class WorldFrame
     /// options and, once made, the renderer's parts; the distances follow the mode's defaults unless a Tab slider moved them.
     /// </summary>
     internal static IReadOnlyList<Enhancement> LiveSwitches(WorldOptions o, Func<Gpu?> gpu, Func<WorldCamera?> camera, Func<WorldRenderOptions?> render) =>
-        Enhancements.Create(o.Post, () => gpu()?.Sky.HazeStrength ?? o.HazeStrength, v => { if (gpu() is { } g) g.Sky.HazeStrength = v; },
+        Enhancements.Create(o.Post, () => gpu()?.Sky.MeitouHaze ?? o.MeitouHaze, v => { o.MeitouHaze = v; if (gpu() is { } g) g.Sky.MeitouHaze = v; },
             () => gpu()?.Shadow?.Meitou ?? o.MeitouShadows, v =>
             {
                 // The shadow distance follows the mode's default unless the Tab slider moved it.
@@ -1155,7 +1161,7 @@ static class WorldFrame
                 v => water.ClearDistance = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
         }
         sliders.Add(new Slider(TerrainErrorSlider, 4, 32, () => r.TerrainPixelError, v => r.TerrainPixelError = v, "0.0", Logarithmic: true,
-            Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError));
+            Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError, Reversed: true));
         // Ours (docs/render-terrain.md "Ground relief"): the march's quality, the depth (parallax and displacement; 0 off) and where each ends.
         sliders.Add(new Slider(GroundReliefQualitySlider, 0, 2, () => GroundRelief.Quality,
             v => GroundRelief.Quality = Math.Clamp((int)MathF.Round(v), 0, 2), "0", Text: v => GroundRelief.QualityName((int)MathF.Round(v))));
@@ -1213,7 +1219,8 @@ static class WorldFrame
             }, "0"));
             sliders.Add(new Slider(ParticleSliders[1], 0.1f, 1, () => g.ParticleDensity, v => g.ParticleDensity = MathF.Round(v * 20) / 20, "0.00"));
             // Ours, not the game's (docs/render-post.md "Tone map and grading"): the tone curve, the saturation / contrast grade, and a scale on the heat haze.
-            sliders.Add(new Slider(ToneMapSlider, 0, 3, () => (int)post.Options.ToneMap, v => post.Options.ToneMap = (ToneMapOperator)(int)MathF.Round(v), "0",
+            // The Meitou curve; the tone map switch's Faithful side is the game's clamp.
+            sliders.Add(new Slider(ToneMapSlider, 1, 3, () => (int)post.Options.ToneMap, v => post.Options.ToneMap = (ToneMapOperator)(int)MathF.Round(v), "0",
                 Text: v => (ToneMapOperator)(int)MathF.Round(v) switch { ToneMapOperator.Shoulder => "shoulder", ToneMapOperator.Aces => "ACES", ToneMapOperator.Hybrid => "hybrid (clamp + ACES)", _ => "clamp (as the game)" }));
             sliders.Add(new Slider(ToneMixSlider, 0, 1, () => post.Options.ToneMix, v => post.Options.ToneMix = MathF.Round(v * 20) / 20, "0.00"));
             sliders.Add(new Slider(GradingSlider, 0, 1, () => post.Options.Grade ? 1 : 0, v => post.Options.Grade = v >= 0.5f,
@@ -1237,6 +1244,8 @@ static class WorldFrame
         var toggles = switches?.Where(e => e.Id != "displace" || g.Sky.Gpu.HasTessellation).Select(e => new Toggle(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful, Remaster: true, OnOff: e.Faithful is "off" or "none")).ToList();
         if (fifthCascade is not null) (toggles ??= []).Add(fifthCascade);
         toggles ??= [];
+        // Bloom: a Meitou effect off by default, even in the Meitou look (docs/render-post.md "Bloom"); its strength is a slider.
+        if (g.Post is { } bloomPost) toggles.Add(new Toggle(BloomSwitch, () => bloomPost.Options.Bloom, v => bloomPost.Options.Bloom = v, Remaster: true, OnOff: true));
         if (g.Sky.Gpu.HasTessellation)
         {
             toggles.Add(new Toggle(RockSmoothingSwitch, () => RockSmoothing.TessellateActive, v => RockSmoothing.TessellateActive = v, Remaster: true, OnOff: true));

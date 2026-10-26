@@ -271,17 +271,22 @@
         </DockPanel>
 
         <!-- Graphics: the game's display settings and main sliders (GraphicsPage.cs), rows built in code -->
-        <ScrollViewer x:Name="GraphicsPage" Classes="page" IsVisible="False">
-          <StackPanel Margin="0,0,14,0">
-            <Border Classes="header" Margin="0,0,0,10">
-              <DockPanel>
-                <TextBlock x:Name="GraphicsFileText" DockPanel.Dock="Right" Classes="aside" />
-                <TextBlock Text="Graphics" />
-              </DockPanel>
-            </Border>
-            <StackPanel x:Name="GraphicsPanel" />
-          </StackPanel>
-        </ScrollViewer>
+        <DockPanel x:Name="GraphicsPage" IsVisible="False">
+          <!-- Footer: Reset graphics stays at the bottom of the panel while the rows scroll -->
+          <Border x:Name="GraphicsFooter" DockPanel.Dock="Bottom" BorderBrush="{StaticResource PlateRim}" BorderThickness="0,1,0,0"
+                  Margin="0,6,0,0" Padding="0,4,24,0" IsVisible="False" />
+          <ScrollViewer Classes="page">
+            <StackPanel Margin="0,0,14,0">
+              <Border Classes="header" Margin="0,0,0,10">
+                <DockPanel>
+                  <TextBlock x:Name="GraphicsFileText" DockPanel.Dock="Right" Classes="aside" />
+                  <TextBlock Text="Graphics" />
+                </DockPanel>
+              </Border>
+              <StackPanel x:Name="GraphicsPanel" />
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
 
         <!-- Settings: one row per option, name and description left, control right -->
         <ScrollViewer x:Name="SettingsPage" Classes="page" IsVisible="False">

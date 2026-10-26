@@ -214,7 +214,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             : key == WorldFrame.UpscalerSliders[0] ? ["Off", "FXAA", "SMAA", "TAA", "FSR", "DLSS"]
             : key == WorldFrame.TextureQualitySlider ? global::Meitou.Data.Textures.TextureQuality.Labels
             : key == WorldFrame.ParticleSliders[0] ? ["Off", "Quarter resolution", "Half resolution", "Automatic", "Full resolution"]
-            : key.StartsWith("Tone map", StringComparison.Ordinal) ? ["Original", "Shoulder", "ACES", "Hybrid"]
+            : key.StartsWith("Tone map", StringComparison.Ordinal) ? ["Shoulder", "ACES", "Hybrid"]
             : key.StartsWith("Shadow map", StringComparison.Ordinal) ? ["Low · 1024", "Medium · 2048", "High · 4096"]
             : key == WorldFrame.GroundReliefQualitySlider ? ["Low", "Medium", "High"]
             : key == WorldFrame.ShaftQualitySlider ? ["Low", "Medium", "High"]
@@ -225,7 +225,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         string hint = key == MetalPresetSlider
             ? "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, so the separate scale slider is disabled."
             : key == WorldFrame.UpscalerSliders[0] ? "Smooths edges and upscales the render. Active: " + (UpscalerStatus?.Invoke() ?? "unavailable") : SliderHint(slider);
-        return options is { } items ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get()), i => slider.Set(i)))
+        // The options are the slider's whole values from its left end.
+        return options is { } items ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get() - slider.Min), i => slider.Set(i + slider.Min)))
             : new(label, hint, Slider: slider);
     }
 

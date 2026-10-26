@@ -161,7 +161,7 @@ sealed partial class GameHost
         if (panel is not null && !lowEnd && !Environment.GetCommandLineArgs().Any(a => a is "--meitou" or "--faithful"))
         {
             foreach (var toggle in panel.Toggles)
-                if (config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
+                if (!SettingsMenu.HiddenSwitch(toggle.Label) && config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
             panel.ApplySavedPreset();
         }
         var stats = new List<string>();

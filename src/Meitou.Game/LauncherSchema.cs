@@ -36,7 +36,8 @@ static class LauncherSchema
         Graphics(WorldFrame.LandmarkDistanceSlider, 1000, 400000, 100, Enhancements.MeitouLandmarkDistance) with { Logarithmic = true },
         Graphics(WorldFrame.DistantTownsSlider, 0, ObjectRanges.MaxDistantTownRangeZones * 10, 1, ObjectRanges.MaxDistantTownRangeZones) with { Suffix = " zones" },
         Multiplier(WorldFrame.ObjectLodSlider, 0.25f, 4, 1),
-        Graphics(WorldFrame.TerrainErrorSlider, 4, 32, 0.1f, Enhancements.MeitouTerrainPixelError) with { Logarithmic = true, Format = "0.0", Suffix = " px" },
+        // Fewer pixels of error are finer: drawn mirrored, so right is more detail.
+        Graphics(WorldFrame.TerrainErrorSlider, 4, 32, 0.1f, Enhancements.MeitouTerrainPixelError) with { Logarithmic = true, Format = "0.0", Suffix = " px", Reversed = true },
         Multiplier(WorldFrame.FoliageDistanceSlider, 0.25f, 80, 1),
         Multiplier(WorldFrame.FoliageLodSlider, 0.25f, 8, 1),
         Graphics(WorldFrame.LargeFoliageRangeSlider, 1000, 120000, 50, 20000) with { Logarithmic = true },
@@ -70,14 +71,14 @@ static class LauncherSchema
         Multiplier(WorldFrame.ShaftAirDawnSlider, 0, 6, 1) with { Step = 0.1f, Format = "0.0" },
         Graphics(WorldFrame.ShaftQualitySlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
         // Effects
-        Graphics(WorldFrame.ParticleSliders[0], 0, 4, 1, 3) with { Name = "Particle size", Labels = ["Off", "Quarter size", "Half size", "Auto", "Full size"] },
+        Graphics(WorldFrame.ParticleSliders[0], 0, 4, 1, 3) with { Name = "Weather particles", Labels = ["Off", "Quarter size", "Half size", "Auto", "Full size"] },
         Graphics(WorldFrame.ParticleSliders[1], 0.1f, 1, 0.05f, 1) with { Format = "0.00", Suffix = "x" },
-        Graphics(WorldFrame.ToneMapSlider, 0, 3, 1, 3) with { Labels = ["Original", "Shoulder", "ACES", "Hybrid"] },
+        Graphics(WorldFrame.ToneMapSlider, 1, 3, 1, 3) with { Labels = ["Shoulder", "ACES", "Hybrid"] },
         Graphics(WorldFrame.ToneMixSlider, 0, 1, 0.05f, 0.75f) with { Format = "0.00" },
         Graphics(WorldFrame.GradingSlider, 0, 1, 1, 1) with { Name = "Colour grading", Labels = ["Off", "On"] },
         Graphics(WorldFrame.HeatHazeStrengthSlider, 0, 3, 0.05f, Enhancements.MeitouHeatHazeStrength) with { Format = "0.00" },
         Graphics(WorldFrame.NightGradeStrengthSlider, 0, 1, 0.05f, NightGrade.MeitouStrength) with { Format = "0.00" },
-        Graphics(WorldFrame.BloomStrengthSlider, 0, 0.25f, 0.005f, 0) with { Format = "0.000" },
+        Graphics(WorldFrame.BloomStrengthSlider, 0, 0.25f, 0.005f, new PostOptions().BloomStrength) with { Format = "0.000" },
     ];
 
     static SettingDescription Multiplier(string label, float min, float max, float shown) =>
@@ -91,9 +92,10 @@ static class LauncherSchema
             Key = SettingsMenu.SwitchKeyPrefix + label, Graphics = true, Kind = SettingKind.Toggle, Name = SettingsMenu.Label(label),
             Description = SettingsMenu.ToggleHint(label), Off = off, On = on, Shown = shown ? 1 : 0,
         };
-        foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null))
+        foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).Where(e => !SettingsMenu.HiddenSwitch(e.Name)))
             yield return Switch(e.Name, e.Faithful is "off" or "none" ? "Off" : $"Faithful: {e.Faithful}", $"Meitou: {e.Meitou}", e.IsMeitou);
         yield return Switch(WorldFrame.FifthCascadeSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.BloomSwitch, "Off", "Meitou: on", false);
         foreach (var label in new[] { WorldFrame.RockSmoothingSwitch, WorldFrame.OutlineRefineSwitch })
             yield return Switch(label, "Off", "On", true);
     }
@@ -149,15 +151,10 @@ static class LauncherSchema
         };
     }
 
-    /// <summary>The Faithful marks of the look sliders that have one (WorldFrame.CreateSettingsPanel); the others take the value their label names, else stay.</summary>
-    static readonly Dictionary<string, float> FaithfulMarks = new()
-    {
-        [WorldFrame.HazeStrengthSlider] = 1, [WorldFrame.HeatHazeStrengthSlider] = 1, [WorldFrame.BloomStrengthSlider] = 0,
-    };
-
     /// <summary>
     /// The looks as <c>graphics</c> values, as the settings menu applies them (SettingsMenu.SetFaithful, ApplyLook): Faithful turns every look switch
-    /// off and puts the look sliders at the game's value; Meitou leaves them at their start value, the tier's switches to the quality preset.
+    /// off and puts the look sliders at the game's value (the one their label names; a strength under a switch stays); Meitou leaves them at their
+    /// start value, the tier's switches to the quality preset.
     /// </summary>
     static SettingsLooks Looks(List<SettingDescription> switches, List<SettingDescription> sliders)
     {
@@ -169,7 +166,7 @@ static class LauncherSchema
         {
             Name = "Look", Description = SettingsMenu.LookHint,
             FaithfulKey = Key(nameof(UserConfig.FaithfulLook)), PresetKey = Key(nameof(UserConfig.LookPreset)),
-            Faithful = keys.ToDictionary(k => k, k => IsSwitch(k) ? 0 : FaithfulMarks.TryGetValue(k, out float mark) ? mark : SettingsMenu.LabelGameValue(k) ?? shown[k]),
+            Faithful = keys.ToDictionary(k => k, k => IsSwitch(k) ? 0 : SettingsMenu.UnderSwitch(k) ? shown[k] : SettingsMenu.LabelGameValue(k) ?? shown[k]),
             Meitou = keys.Where(k => !tier.Contains(k)).ToDictionary(k => k, k => shown[k]),
             Presets = [.. SettingsMenu.BuiltInLooks.Select(l => new SettingsLook { Name = l.Name, Values = new(l.Values) })],
             Folder = SettingsMenu.LookFolder,

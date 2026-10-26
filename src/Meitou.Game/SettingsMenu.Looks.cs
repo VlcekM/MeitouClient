@@ -28,13 +28,8 @@ sealed partial class SettingsMenu
     /// <summary>Example looks, each far from the others (docs/native-ui.md "Settings"); everything they do not set is Meitou's.</summary>
     static readonly LookPreset[] ExampleLooks =
     [
-        new("Hot and dry", "example", MeitouVersion, new() { [WorldFrame.BloomStrengthSlider] = 0.13f, [WorldFrame.HeatHazeStrengthSlider] = 0.8f }),
-        // The tone map and night grading switches read their sliders, so those are set too (as a saved preset has them).
-        new("Vanilla colours", "example", MeitouVersion, new()
-        {
-            [SwitchKey("Tone map and grade")] = 0, [SwitchKey("Night grading")] = 0, [SwitchKey("Dithering")] = 0,
-            [WorldFrame.ToneMapSlider] = 0, [WorldFrame.GradingSlider] = 0, [WorldFrame.NightGradeStrengthSlider] = 0,
-        }),
+        new("Hot and dry", "example", MeitouVersion, new() { [SwitchKey(WorldFrame.BloomSwitch)] = 1, [WorldFrame.BloomStrengthSlider] = 0.13f, [WorldFrame.HeatHazeStrengthSlider] = 0.8f }),
+        new("Vanilla colours", "example", MeitouVersion, new() { [SwitchKey("Tone map and grade")] = 0, [SwitchKey("Night grading")] = 0, [SwitchKey("Dithering")] = 0 }),
     ];
 
     List<LookPreset>? looks;
@@ -56,11 +51,20 @@ sealed partial class SettingsMenu
 
     /// <summary>The <c>graphics</c> keys a look sets: every Faithful / Meitou graphics switch (Faithful turns them all off; the fifth cascade is a quality switch) and the look tabs' sliders.</summary>
     internal static IEnumerable<string> LookKeys(IEnumerable<string> switchLabels, IEnumerable<string> sliderLabels) =>
-        switchLabels.Where(label => label != WorldFrame.FifthCascadeSwitch && GraphicsSection(label, true) != "Advanced").Select(SwitchKey)
+        switchLabels.Where(label => label != WorldFrame.FifthCascadeSwitch && GraphicsPages.Contains(GraphicsSection(label, true))).Select(SwitchKey)
             .Concat(sliderLabels.Where(label => Section(label) is not ("Display" or "Advanced") && IsLook(label, false)));
 
     /// <summary>The quality tiers' switches (their keys): the tier sets them under a Meitou look, so a look leaves them alone (Faithful turns them off).</summary>
     internal static IEnumerable<string> TierSwitchKeys => PresetToggles.Select(p => SwitchKey(p.Label));
+
+    /// <summary>
+    /// A switch the menus leave out, which another setting already covers: anti-aliasing (the Display page's method) and weather particles (their size).
+    /// Its saved state is not read back, so it cannot undo that setting.
+    /// </summary>
+    internal static bool HiddenSwitch(string label) => GraphicsSection(label, true) == "Hidden";
+
+    /// <summary>A slider under a feature's switch (a strength): the switch is its Faithful side, so Faithful leaves the slider as it is.</summary>
+    internal static bool UnderSwitch(string label) => FeatureGroups.Any(g => g.Header is not null && g.Members.Contains(label));
 
     /// <summary>The game's value a slider's label names ("Tone map (0 = game)"), if any.</summary>
     internal static float? LabelGameValue(string label) =>
@@ -129,9 +133,10 @@ sealed partial class SettingsMenu
             return label switch
             {
                 "Interior lamps" => "Advanced",
+                "Anti-aliasing" or "Weather particles" => "Hidden",
                 "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" => "Light",
                 "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" => "Sky",
-                "Tone map and grade" or "Night grading" or "Dithering" => "Colour",
+                "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch => "Colour",
                 "Water" => "Water",
                 "Skin" => "Skin",
                 "Draw distances" or "Foliage ranges" or "Far impostors" => "Distances",
@@ -151,7 +156,7 @@ sealed partial class SettingsMenu
     static bool IsLook(string label, bool toggle) => LookPages.Contains(GraphicsSection(label, toggle)) && (toggle || !PresetSliders.Any(p => p.Label == label));
 
     /// <summary>A Faithful / Meitou switch of the Graphics page (the gameplay one, Interior lamps, is not).</summary>
-    static bool IsGraphicsSwitch(Toggle t) => t.Remaster && GraphicsSection(t.Label, true) != "Advanced";
+    static bool IsGraphicsSwitch(Toggle t) => t.Remaster && GraphicsPages.Contains(GraphicsSection(t.Label, true));
 
     /// <summary>
     /// How much a setting costs, as a level a player can use on any machine: ranked from the measured costs in the docs (RTX 4090, 1440p; docs/render-*.md),
@@ -167,7 +172,7 @@ sealed partial class SettingsMenu
             or "Terrain detail: error px (less = finer)" or WorldFrame.GrassDensitySlider or "Impostor distance (F7 Meitou)" or "Large impostor distance (F7 Meitou)"
             or "Reflection range x (game 0.6)" or "Anti-aliasing" or WorldFrame.ShaftQualitySlider => "Medium impact",
         "Cloud shadows" or "Indoor GI" or "Planetshine" or "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)" or "Cloud shadows in fog"
-            or "Terrain outline refinement (tessellation)" or "Small foliage range" or "Bloom strength (0 = game)" or "Heat haze" or "Blood cells" or "Item icons"
+            or "Terrain outline refinement (tessellation)" or "Small foliage range" or "Bloom strength (0 = game)" or WorldFrame.BloomSwitch or "Heat haze" or "Blood cells" or "Item icons"
             or "Light shafts air (0 = none)" => "Low impact",
         "Far impostors" or "Foliage levels" or "Character levels" or "Weather particles" => "Speeds up",
         _ when label == WorldFrame.ParticleSliders[0] || label == WorldFrame.ParticleSliders[1] => "Medium impact",
@@ -207,7 +212,7 @@ sealed partial class SettingsMenu
     float BaseSlider(string key, Slider slider, float meitou) => FaithfulLook ? GameValue(slider, meitou) : LookValue(ActiveLook, key, meitou);
 
     /// <summary>A slider's game value: its Faithful mark, else the one its label names ("Tone map (0 = game)"), else its default (a Meitou-only setting).</summary>
-    static float GameValue(Slider slider, float meitou) => slider.Faithful ?? LabelGameValue(slider.Label) ?? meitou;
+    static float GameValue(Slider slider, float meitou) => UnderSwitch(slider.Label) ? meitou : slider.Faithful ?? LabelGameValue(slider.Label) ?? meitou;
 
     /// <summary>The look settings that differ from the game's (Faithful) or the active preset's (by key); a switch Low holds off is not a change.</summary>
     HashSet<string> LookChanges()

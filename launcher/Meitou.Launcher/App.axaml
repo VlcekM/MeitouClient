@@ -182,6 +182,18 @@
     <Style Selector="TextBlock.name">
       <Setter Property="FontSize" Value="16" />
     </Style>
+    <!-- A setting that differs from its default (the look's value or the game's): its name in brass, with a Reset link beside it -->
+    <Style Selector="TextBlock.name.changed">
+      <Setter Property="Foreground" Value="{StaticResource BrassLight}" />
+    </Style>
+    <Style Selector="TextBlock.reset">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource Brass}" />
+      <Setter Property="TextDecorations" Value="Underline" />
+    </Style>
+    <Style Selector="TextBlock.reset:pointerover">
+      <Setter Property="Foreground" Value="{StaticResource BrassLight}" />
+    </Style>
     <Style Selector="TextBlock.desc">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="FontWeight" Value="Medium" />

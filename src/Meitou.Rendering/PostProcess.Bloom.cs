@@ -104,7 +104,7 @@ public sealed unsafe partial class PostProcess
     /// <summary>The bloom of <paramref name="scene"/> at a quarter of its size, or null when it is off (strength 0) or the scene too small.</summary>
     Target2D? RunBloom(Target2D scene)
     {
-        if (Options.BloomStrength <= 0) return null;
+        if (Options.BloomAmount <= 0) return null;
         int levels = BloomPlan.LevelCount(scene.Width, scene.Height);
         if (levels == 0) return null;
         EnsureBloom(scene.Width, scene.Height, levels);

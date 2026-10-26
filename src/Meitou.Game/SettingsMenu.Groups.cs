@@ -28,6 +28,7 @@ sealed partial class SettingsMenu
         // Colour
         new("Tone map and grade", "Tone map and grade", ["Tone map (0 = game)", "Hybrid tone map: ACES share", "Grading (0 = game)"]),
         new("Night grading", "Night grading", ["Night grading strength (0 = game)"]),
+        new(WorldFrame.BloomSwitch, WorldFrame.BloomSwitch, [WorldFrame.BloomStrengthSlider]),
         // Water
         new("Water", "Water", ["Water clarity x (Meitou)", "Far water clarity (Meitou)", "Water see-through distance (Meitou, game 4000)"]),
         // Skin: the switch, then one row per race (added by Entries)
@@ -39,7 +40,6 @@ sealed partial class SettingsMenu
             "Medium foliage range", "Small foliage range", "Grass draw distance x"]),
         new("Far impostors", "Far impostors", ["Impostor distance (F7 Meitou)", "Large impostor distance (F7 Meitou)"]),
         // Detail
-        new("Weather particles", "Weather particles", [WorldFrame.ParticleSliders[0], WorldFrame.ParticleSliders[1]]),
         new("Shadow quality", null, [WorldFrame.ShadowMapSlider, "Shadow filter 0-2 (Meitou; 0 low-end)", "Shadow cascade 5 (Meitou)"],
             "Shadow quality", "Sharpness and softness of the sun's shadows."),
         new("Terrain relief", null, ["Ground parallax", "Ground parallax distance (m)", "Ground displacement (tessellation)", "Ground displacement distance (m)",

@@ -133,8 +133,8 @@ without its gain rain's streaks fade; a distant torch a few pixels high flickers
 
 ## Bloom
 
-An option, not a switch: 0 (off) in the Meitou look as in the game (magnitude 0); a look preset or the Tab slider sets 0..0.25
-(KenshiNative's default 0.04; the example preset "Hot and dry" 0.13), `--bloom <s>` for one run.
+A switch (`PostOptions.Bloom`), off in the Meitou look as in the game (magnitude 0), with its strength under it, 0..0.25 (0.13 by
+default; KenshiNative's 0.04); the example look "Hot and dry" turns it on. `--bloom <s>` sets the strength and turns it on for one run.
 Port of KenshiNative's `docs/features/bloom-rewrite.md`, which has the derivation and its checks.
 `PostProcess.Bloom.cs` runs after the upscaler on the picture the composite reads; no history.
 The composite mixes, `lerp(scene, psf ⊗ scene, strength)`, in linear light before exposure, so a
