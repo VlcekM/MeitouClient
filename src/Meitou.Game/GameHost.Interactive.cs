@@ -192,6 +192,13 @@ sealed partial class GameHost
         player.ClipboardRead = () => silkInput.Keyboards.Count > 0 ? silkInput.Keyboards[0].ClipboardText : null;
         player.ClipboardWrite = text => { if (silkInput.Keyboards.Count > 0) silkInput.Keyboards[0].ClipboardText = text; };
         Vector2? lastMouse = null;
+        // Rotating pins the pointer. Windows and macOS put it back after every move (HoldPointer); Linux locks it (GLFW's disabled cursor),
+        // because putting it back over-counts the movement there:
+        // - Wayland: the pointer is never put back (glfwSetCursorPos is unavailable), so each move counts the whole distance from the start.
+        // - X11 (native and XWayland): moves are counted more than once and the pointer jitters (Observed 2026-10-25).
+        // While locked, the game treats the pointer as at orbitAnchor.
+        bool lockOrbit = OperatingSystem.IsLinux();
+        Vector2? orbitAnchor = null;
         var windowCursor = Silk.NET.Input.CursorMode.Normal;
         bool panelDrag = false, shiftDown = false, profilerClick = false;
         Vector2 Pixels(Vector2 p) => p * new Vector2(window.FramebufferSize.X / (float)Math.Max(window.Size.X, 1), window.FramebufferSize.Y / (float)Math.Max(window.Size.Y, 1));
@@ -340,7 +347,7 @@ sealed partial class GameHost
             {
                 if (Covered) { loading?.SkipSplash(); return; }
                 player.UiVisible = PanelLive() && !g.NoPopulation;
-                var at = Pixels(m.Position);
+                var at = Pixels(orbitAnchor ?? m.Position);
                 if (PanelLive() && KeyMap.Map(b) is { } settingsButton && panel?.MouseDown(at, settingsButton) == true) { panelDrag = true; return; }
                 if (PanelLive() && panel?.Contains(at) == true) return;
                 if (b == SilkButton.Left && PanelLive() && sandboxPicker?.MouseDown(at) == true) return;
@@ -359,7 +366,7 @@ sealed partial class GameHost
             mouse.MouseUp += (m, b) =>
             {
                 bool cinemaDrag = cinema.MouseUp();
-                if (!Covered && !cinemaDrag && !panelDrag && !profilerClick && panel?.Visible != true && KeyMap.Map(b) is { } released) player.MouseUp(released, Pixels(m.Position), shiftDown);
+                if (!Covered && !cinemaDrag && !panelDrag && !profilerClick && panel?.Visible != true && KeyMap.Map(b) is { } released) player.MouseUp(released, Pixels(orbitAnchor ?? m.Position), shiftDown);
                 profilerClick = false;
                 panel?.MouseUp();
                 panelDrag = false;
@@ -367,6 +374,13 @@ sealed partial class GameHost
             };
             mouse.MouseMove += (m, p) =>
             {
+                if (orbitAnchor is not null)
+                {
+                    // Locked: p is GLFW's virtual position, only its movement counts.
+                    if (lastMouse is { } prev) session.Input.AddMouseDelta(p.X - prev.X, p.Y - prev.Y);
+                    lastMouse = p;
+                    return;
+                }
                 session.Input.SetMousePosition(p.X, p.Y);
                 if (Covered) { lastMouse = p; return; }
                 if (PanelLive() && panel?.MouseMove(Pixels(p)) == true || panelDrag) { lastMouse = p; return; }
@@ -375,6 +389,7 @@ sealed partial class GameHost
                 player.MouseMove(Pixels(hold ? lastMouse!.Value : p));
                 if (player.UiCapturesPointer || player.ModalOpen) { lastMouse = p; return; }
                 if (lastMouse is { } last) session.Input.AddMouseDelta(p.X - last.X, p.Y - last.Y);
+                if (hold && lockOrbit) { orbitAnchor = lastMouse; session.Input.SetMousePosition(lastMouse!.Value.X, lastMouse.Value.Y); lastMouse = p; return; }
                 if (hold) { HoldPointer(m, lastMouse!.Value); return; }
                 lastMouse = p;
             };
@@ -550,7 +565,15 @@ sealed partial class GameHost
             UpdateView(size.X, size.Y);
             // What the mouse is over, decided once before the world is drawn: the pointer (drawn last) and the hover outline (drawn with the world) agree.
             var pointerMouse = silkInput.Mice.FirstOrDefault();
-            var pointerAt = pointerMouse is null ? Vector2.Zero : Pixels(pointerMouse.Position);
+            // Rotation over on Linux: the pointer is let go where it was locked, before its position is read (still locked, GLFW reports its
+            // virtual position, and the pointer was drawn there for a frame); the cursor mode below then shows it as usual. The next move starts afresh.
+            if (orbitAnchor is not null && !OrbitHeld())
+            {
+                orbitAnchor = null;
+                lastMouse = null;
+                if (pointerMouse is not null) pointerMouse.Cursor.CursorMode = windowCursor = Silk.NET.Input.CursorMode.Hidden;
+            }
+            var pointerAt = pointerMouse is null ? Vector2.Zero : Pixels(orbitAnchor ?? pointerMouse.Position);
             bool Held(SilkKey a, SilkKey b) => silkInput.Keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
             player.CtrlHeld = Held(SilkKey.ControlLeft, SilkKey.ControlRight);
             player.AltHeld = Held(SilkKey.AltLeft, SilkKey.AltRight);
@@ -654,7 +677,8 @@ sealed partial class GameHost
                 // Hardware mouse shows Windows' cursor instead.
                 if (!shot && !take && overlay is not null && pointerMouse is not null)
                 {
-                    var cursorMode = config.HardwareMouse && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
+                    var cursorMode = orbitAnchor is not null ? Silk.NET.Input.CursorMode.Disabled
+                        : config.HardwareMouse && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
                     if (cursorMode != windowCursor) pointerMouse.Cursor.CursorMode = windowCursor = cursorMode;
                     if (!config.HardwareMouse && !freeLook) player.DrawPointer(pointerWorld ? player.PointerName : "arrow", pointerAt, size.X, size.Y);
                 }
