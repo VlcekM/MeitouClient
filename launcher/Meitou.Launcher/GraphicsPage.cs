@@ -467,17 +467,22 @@ public sealed partial class MainWindow
             RefreshMarks();
             e.Handled = true;
         };
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"*,{width}") };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"*,Auto,{width}") };
         grid.Children.Add(new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                NameLine(new StackPanel { Orientation = Orientation.Horizontal, Children = { name, reset } }, impact),
+                new StackPanel { Orientation = Orientation.Horizontal, Children = { name, reset } },
                 new TextBlock { Classes = { "desc" }, Text = description },
             },
         });
-        Grid.SetColumn(control, 1);
+        if (ImpactText(impact) is { } impactText)
+        {
+            Grid.SetColumn(impactText, 1);
+            grid.Children.Add(impactText);
+        }
+        Grid.SetColumn(control, 2);
         control.VerticalAlignment = VerticalAlignment.Center;
         grid.Children.Add(control);
         rowMarks.Add(Mark);
@@ -485,19 +490,13 @@ public sealed partial class MainWindow
         return new Border { Classes = { "row" }, Child = grid };
     }
 
-    /// <summary>The name line of a row, with the setting's performance impact at its right as the game shows it (High in brass).</summary>
-    static DockPanel NameLine(Control name, string? impact)
+    /// <summary>A setting's performance impact, as the game shows it (High in brass), in its own column centred on the row; null when not ranked.</summary>
+    static TextBlock? ImpactText(string? impact)
     {
-        var line = new DockPanel();
-        if (impact is { Length: > 0 })
-        {
-            var text = new TextBlock { Classes = { "desc" }, Text = Tr(impact), Margin = new(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
-            if (impact.StartsWith("High", StringComparison.Ordinal) && Avalonia.Application.Current?.FindResource("BrassLight") is Avalonia.Media.IBrush brass) text.Foreground = brass;
-            DockPanel.SetDock(text, Dock.Right);
-            line.Children.Add(text);
-        }
-        line.Children.Add(name);
-        return line;
+        if (impact is not { Length: > 0 }) return null;
+        var text = new TextBlock { Classes = { "desc" }, Text = Tr(impact), Margin = new(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+        if (impact.StartsWith("High", StringComparison.Ordinal) && Avalonia.Application.Current?.FindResource("BrassLight") is Avalonia.Media.IBrush brass) text.Foreground = brass;
+        return text;
     }
 
     /// <summary>A setting's row (<see cref="Frame"/>); a feature's header stands for the settings under it too. <paramref name="show"/> puts the control back after a Reset.</summary>
