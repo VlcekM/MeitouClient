@@ -22,7 +22,7 @@ Graphics (`SettingsMenu.Looks.cs`, `SettingsMenu.Presets.cs`; `--settings-showca
   Meitou; files `presets/<name>.json` beside `meitou.user.json` (`format`, `name`, `meitou` version, `values`), the active one in
   `lookPreset`. Rows that differ from it count as unsaved changes (Revert, Save for the player's own). Save as
   names a new one; Share copies a code (`MT1:` and the deflated JSON in base64) to the clipboard, Paste adds one; Delete (own presets).
-  At start a look key with no saved value takes the look's value, so a look the launcher chose takes effect ([launcher](launcher.md#graphics)).
+  The launcher writes a chosen look's values itself ([launcher](launcher.md#graphics)); at start the game only holds Low's look switches off.
   A quality tier's slider on a look tab (light shafts quality) is not part of the look. A switch that reads its slider (tone map and
   grade, night grading) needs that slider in a preset too, or applying the slider turns it back on.
 - **Quality**: Low / Medium / High / Ultra / Custom (derived from the values) sets the distance, foliage, grass, reflection,

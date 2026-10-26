@@ -50,37 +50,22 @@ sealed partial class SettingsMenu
     internal const string LookFolder = "presets";
     internal const string LookHint = "Faithful sets every graphics feature as the game ships it, a starting point you can still change. "
         + "Meitou uses a look preset: Meitou's own, an example, or one you saved.";
-    /// <summary>The built-in look presets' names, Meitou first (saved as no <see cref="UserConfig.LookPreset"/>); the player's are in <see cref="LookFolder"/>.</summary>
-    internal static IReadOnlyList<string> LookNames => [MeitouLook.Name, .. ExampleLooks.Select(l => l.Name)];
+    /// <summary>The built-in looks, Meitou first (saved as no <see cref="UserConfig.LookPreset"/>), with what each sets; the player's are in <see cref="LookFolder"/>.</summary>
+    internal static IReadOnlyList<(string Name, IReadOnlyDictionary<string, float> Values)> BuiltInLooks =>
+        [.. new[] { MeitouLook }.Concat(ExampleLooks).Select(l => (l.Name, (IReadOnlyDictionary<string, float>)l.Values))];
 
-    /// <summary>
-    /// The <c>graphics</c> keys a look sets: every Faithful / Meitou graphics switch (Faithful turns them all off; the fifth cascade is a quality switch) and
-    /// the look tabs' sliders. A launcher that changes the look removes them, and <see cref="ApplySavedLook"/> sets them from the look.
-    /// </summary>
+    /// <summary>The <c>graphics</c> keys a look sets: every Faithful / Meitou graphics switch (Faithful turns them all off; the fifth cascade is a quality switch) and the look tabs' sliders.</summary>
     internal static IEnumerable<string> LookKeys(IEnumerable<string> switchLabels, IEnumerable<string> sliderLabels) =>
         switchLabels.Where(label => label != WorldFrame.FifthCascadeSwitch && GraphicsSection(label, true) != "Advanced").Select(SwitchKey)
             .Concat(sliderLabels.Where(label => Section(label) is not ("Display" or "Advanced") && IsLook(label, false)));
 
-    /// <summary>
-    /// At start, after the saved sliders and switches: a look setting with no saved value takes the look's (Faithful: off and the game's value; Meitou: the
-    /// active preset's, a switch Low holds off staying off), so a look the launcher chose (docs/launcher.md "Graphics") takes effect.
-    /// </summary>
-    internal void ApplySavedLook()
-    {
-        bool faithful = FaithfulLook;
-        bool Saved(string key) => config.Graphics.ContainsKey(key);
-        foreach (var toggle in values.Toggles.Where(t => faithful && IsGraphicsSwitch(t) && t.Get() && !Saved(SwitchKey(t.Label)))) toggle.Set(false);
-        if (!faithful)
-            foreach (var (key, toggle, meitou) in LookToggles().Where(x => !Saved(x.Key)))
-            {
-                bool on = BaseToggle(key, meitou) && !CutAtLow(toggle.Label);
-                if (toggle.Get() != on) toggle.Set(on);
-            }
-        foreach (var (key, slider, meitou) in LookSliders().Where(x => !Saved(x.Key))) slider.Set(BaseSlider(key, slider, meitou));
-        // A saved switch that reads its slider (tone map and grade) stays as saved when the look set that slider.
-        foreach (var (key, toggle, _) in LookToggles())
-            if (config.Graphics.TryGetValue(key, out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
-    }
+    /// <summary>The quality tiers' switches (their keys): the tier sets them under a Meitou look, so a look leaves them alone (Faithful turns them off).</summary>
+    internal static IEnumerable<string> TierSwitchKeys => PresetToggles.Select(p => SwitchKey(p.Label));
+
+    /// <summary>The game's value a slider's label names ("Tone map (0 = game)"), if any.</summary>
+    internal static float? LabelGameValue(string label) =>
+        System.Text.RegularExpressions.Regex.Match(label, @"\((-?\d+(?:\.\d+)?) = game") is { Success: true } m
+            ? float.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : null;
 
     List<LookPreset> Looks()
     {
@@ -222,9 +207,7 @@ sealed partial class SettingsMenu
     float BaseSlider(string key, Slider slider, float meitou) => FaithfulLook ? GameValue(slider, meitou) : LookValue(ActiveLook, key, meitou);
 
     /// <summary>A slider's game value: its Faithful mark, else the one its label names ("Tone map (0 = game)"), else its default (a Meitou-only setting).</summary>
-    static float GameValue(Slider slider, float meitou) =>
-        slider.Faithful ?? (System.Text.RegularExpressions.Regex.Match(slider.Label, @"\((-?\d+(?:\.\d+)?) = game") is { Success: true } m
-            ? float.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : meitou);
+    static float GameValue(Slider slider, float meitou) => slider.Faithful ?? LabelGameValue(slider.Label) ?? meitou;
 
     /// <summary>The look settings that differ from the game's (Faithful) or the active preset's (by key); a switch Low holds off is not a change.</summary>
     HashSet<string> LookChanges()

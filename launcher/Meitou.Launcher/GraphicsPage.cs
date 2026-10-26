@@ -76,8 +76,8 @@ public sealed partial class MainWindow
         var rows = new StackPanel { IsEnabled = locked is null };
         presets = schema.Presets is { Names.Count: > 0, Key.Length: > 0 } p ? p : null;
         presetBox = null;
-        looks = schema.Looks is { Names.Count: > 0, FaithfulKey.Length: > 0, PresetKey.Length: > 0 } l ? l : null;
-        if (looks is not null) rows.Children.Add(LookRow(looks, schema));
+        looks = schema.Looks is { Presets.Count: > 0, FaithfulKey.Length: > 0, PresetKey.Length: > 0 } l ? l : null;
+        if (looks is not null) rows.Children.Add(LookRow(looks));
         if (presets is not null) rows.Children.Add(PresetRow(presets));
         // One tab per section (the game's pages); the chosen one stays while the page is shown again.
         var sections = schema.Sections.Where(section => section.Settings.Any(Shown)).ToList();
@@ -224,54 +224,75 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// The look: Faithful, or a Meitou look preset (the schema's, then the player's files). Choosing one removes the settings a look sets, which the
-    /// game sets from the look when it next starts; until then the rows read "From the look".
+    /// The look: Faithful, or a Meitou look preset (the schema's, then the player's files). Choosing one writes its values, as the game's menu sets them;
+    /// the game counts no change from the look it reads.
     /// </summary>
-    Border LookRow(SettingsLooks l, SettingsSchema schema)
+    Border LookRow(SettingsLooks l)
     {
-        var names = l.Names.Concat(PlayerLooks(l.Folder)).Distinct().ToList();
-        string preset = game.GetString(l.PresetKey) ?? l.Names[0];
-        if (!names.Contains(preset)) names.Add(preset);
-        // No saved choice: Faithful when every look switch is saved off, as the game reads it.
-        var switches = schema.Sections.SelectMany(x => x.Settings).Where(x => x.Graphics && x.Kind == SettingKind.Toggle && l.Keys.Contains(x.Key)).Select(x => x.Key).ToList();
-        bool faithful = game.GetBool(l.FaithfulKey) ?? (switches.Count > 0 && switches.All(key => game.GetGraphics(key) is { } v && v < 0.5f));
+        var all = AllLooks(l);
         var box = new ComboBox
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemsSource = names.Select(name => name == l.Names[0] ? Tr(name) : $"{Tr(l.Names[0])}: {name}").Prepend(Tr("Faithful")).ToList(),
-            SelectedIndex = faithful ? 0 : 1 + names.IndexOf(preset),
+            ItemsSource = all.Select(look => look.Name == l.Presets[0].Name ? Tr(look.Name) : $"{Tr(l.Presets[0].Name)}: {look.Name}").Prepend(Tr("Faithful")).ToList(),
+            SelectedIndex = IsFaithful(l) ? 0 : 1 + Math.Max(0, all.FindIndex(look => look.Name == (game.GetString(l.PresetKey) ?? l.Presets[0].Name))),
         };
         box.SelectionChanged += (_, _) =>
         {
             if (box.SelectedIndex < 0) return;
-            game.Set(l.FaithfulKey, box.SelectedIndex == 0);
+            bool faithful = box.SelectedIndex == 0;
+            game.Set(l.FaithfulKey, faithful);
             // Faithful keeps the preset the game goes back to.
             if (box.SelectedIndex == 1) game.Remove(l.PresetKey);
-            else if (box.SelectedIndex > 1) game.Set(l.PresetKey, names[box.SelectedIndex - 1]);
-            foreach (var key in l.Keys) game.SetGraphics(key, null);
+            else if (box.SelectedIndex > 1) game.Set(l.PresetKey, all[box.SelectedIndex - 1].Name);
+            foreach (var (key, value) in faithful ? l.Faithful : LookValues(l, all[box.SelectedIndex - 1])) game.SetGraphics(key, value);
             SaveGame();
             Dispatcher.UIThread.Post(ShowGraphics);
         };
-        return Row(l.Name, l.Description + " A look chosen here is applied when the game next starts: the settings it sets take its values.", box, 330);
+        return Row(l.Name, l.Description, box, 330);
     }
 
-    /// <summary>The names of the player's look presets: JSON files in <paramref name="folder"/> beside the game's settings file.</summary>
-    static List<string> PlayerLooks(string folder)
+    /// <summary>Whether the look is Faithful: saved, else when every switch Faithful turns off is saved off (as the game reads it).</summary>
+    bool IsFaithful(SettingsLooks l) => game.GetBool(l.FaithfulKey)
+        ?? l.Faithful.Keys.Where(key => key.StartsWith("Meitou: ", StringComparison.Ordinal)).All(key => game.GetGraphics(key) is { } v && v < 0.5f);
+
+    /// <summary>A Meitou look's values: Meitou's, with the preset's own over them.</summary>
+    static Dictionary<string, float> LookValues(SettingsLooks l, SettingsLook look)
     {
-        var names = new List<string>();
-        string dir = Path.Combine(LauncherConfig.DataDirectory, folder);
-        if (folder.Length == 0 || !Directory.Exists(dir)) return names;
+        var values = new Dictionary<string, float>(l.Meitou);
+        foreach (var (key, value) in look.Values) values[key] = value;
+        return values;
+    }
+
+    /// <summary>The value the current look gives a setting (Reset goes back to it); null when the look does not set it.</summary>
+    float? LookValue(string key)
+    {
+        if (looks is not { } l) return null;
+        if (IsFaithful(l)) return l.Faithful.TryGetValue(key, out float faithful) ? faithful : null;
+        string name = game.GetString(l.PresetKey) ?? l.Presets[0].Name;
+        var look = AllLooks(l).FirstOrDefault(x => x.Name == name) ?? l.Presets[0];
+        return look.Values.TryGetValue(key, out float own) ? own : l.Meitou.TryGetValue(key, out float meitou) ? meitou : null;
+    }
+
+    /// <summary>The schema's looks, then the player's: JSON files in the look folder beside the game's settings file, each with a <c>name</c> and <c>values</c>.</summary>
+    static List<SettingsLook> AllLooks(SettingsLooks l)
+    {
+        var all = new List<SettingsLook>(l.Presets);
+        string dir = Path.Combine(LauncherConfig.DataDirectory, l.Folder);
+        if (l.Folder.Length == 0 || !Directory.Exists(dir)) return all;
         foreach (var file in Directory.GetFiles(dir, "*.json").Order(StringComparer.OrdinalIgnoreCase))
             try
             {
-                if (JsonNode.Parse(File.ReadAllText(file))?["name"] is JsonValue v && v.TryGetValue(out string? name) && name.Length > 0) names.Add(name);
+                if (JsonNode.Parse(File.ReadAllText(file)) is not JsonObject json || json["name"] is not JsonValue n || !n.TryGetValue(out string? name) || name.Length == 0
+                    || all.Any(x => x.Name == name)) continue;
+                var look = new SettingsLook { Name = name };
+                if (json["values"] is JsonObject values)
+                    foreach (var (key, value) in values)
+                        if (value is JsonValue v && v.TryGetValue(out double d)) look.Values[key] = (float)d;
+                all.Add(look);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { }
-        return names;
+        return all;
     }
-
-    /// <summary>Whether the look sets this setting: with no saved value it takes the look's, not the game's default.</summary>
-    bool FromLook(SettingDescription s) => looks?.Keys.Contains(s.Key) == true;
 
     /// <summary>The quality preset: the one the game saved its settings at, or one chosen here, which the game applies when it next starts.</summary>
     Border PresetRow(SettingsPresets p)
@@ -396,19 +417,19 @@ public sealed partial class MainWindow
         return Row(s.Name, s.Description, toggle, 150);
     }
 
-    /// <summary>A Tab panel switch: the game's default (no key: the mode and the computer decide; a look switch: the look), or saved off (0) or on (1).</summary>
+    /// <summary>A Tab panel switch: Faithful (off, saved 0) or Meitou (on, saved 1); unsaved, it shows the game's start state.</summary>
     Border SwitchRow(SettingDescription s)
     {
         var box = new ComboBox
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemsSource = new[] { FromLook(s) ? Tr("From the look") : Loc.Format(Tr("Game default ({1})"), Tr(s.Shown >= 0.5f ? s.On : s.Off)), Tr(s.Off), Tr(s.On) },
-            SelectedIndex = game.GetGraphics(s.Key) is { } v ? v >= 0.5f ? 2 : 1 : 0,
+            ItemsSource = new[] { Tr(s.Off), Tr(s.On) },
+            SelectedIndex = (game.GetGraphics(s.Key) ?? s.Shown) >= 0.5f ? 1 : 0,
         };
         box.SelectionChanged += (_, _) =>
         {
             if (box.SelectedIndex < 0) return;
-            game.SetGraphics(s.Key, box.SelectedIndex switch { 1 => 0, 2 => 1, _ => null });
+            game.SetGraphics(s.Key, box.SelectedIndex);
             PresetBroken(s.Key);
             SaveGame();
         };
@@ -434,7 +455,7 @@ public sealed partial class MainWindow
         var value = new TextBlock { Classes = { "desc" }, Width = 120, IsVisible = !typed, VerticalAlignment = VerticalAlignment.Center, TextWrapping = Avalonia.Media.TextWrapping.NoWrap };
         var reset = new Button { Content = Tr("Default"), Margin = new(6, 0, 0, 0), IsEnabled = s.Graphics || s.Default is not null };
         bool loading = false;
-        void ShowValue(float? v) => text.Text = value.Text = Tr(v is { } x ? s.Text(x) : FromLook(s) ? "From the look" : "Game default");
+        void ShowValue(float? v) => text.Text = value.Text = Tr(v is { } x ? s.Text(x) : "Game default");
         void Show()
         {
             loading = true;
@@ -484,7 +505,8 @@ public sealed partial class MainWindow
         text.LostFocus += (_, _) => Commit();
         reset.Click += (_, _) =>
         {
-            if (s.Graphics) game.SetGraphics(s.Key, null);
+            // A look's setting goes back to the look's value, as the game's Reset does; another graphics one to the game's default.
+            if (s.Graphics) game.SetGraphics(s.Key, LookValue(s.Key));
             else if (s.Default is { } d) game.Set(s.Key, d);
             PresetBroken(s.Key);
             SaveGame();

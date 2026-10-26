@@ -171,10 +171,12 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   a setting (`header`) or a `title` and `description`, with an arrow folding its `members` under it (closed until opened; open ones stay
   open while the launcher runs), named without the feature's name they repeat, as in the game.
 - `looks` (null in older schemas: no row) is the Look row: Faithful (`faithfulLook` true) or a Meitou look preset (`lookPreset`: one of
-  `looks.names`, the first saved as no key, or the `name` of a player's JSON file in `looks.folder` beside `meitou.user.json`).
-  Choosing one also removes `looks.keys` (every Faithful / Meitou graphics switch and the look tabs' sliders) from `graphics`; at start
-  the game sets each look key that is not saved from the look (`SettingsMenu.ApplySavedLook`, before the quality preset), and those
-  rows read "From the look" until then. No `faithfulLook` reads Faithful when every look switch is saved off, as the game does.
+  `looks.presets`, the first saved as no key, or a player's JSON file in `looks.folder` beside `meitou.user.json`, its `name` and
+  `values`). A look is a set of `graphics` values, as the game's menu applies it: `looks.faithful` (every Faithful / Meitou graphics
+  switch off, the look sliders at the game's value) or `looks.meitou` with the preset's own values over them (the quality tier's
+  switches are left to the tier). Choosing one writes them, so the rows show it at once and the game counts no change from it; at Low
+  the game still holds the tier's look switches off at start unless kept on (`SettingsMenu.ApplySavedPreset`). No `faithfulLook`
+  reads Faithful when every switch Faithful turns off is saved off, as the game does. A look slider's Default writes the look's value.
 - `presets` (null in older schemas: no row) is the Quality preset row over the top-level `graphicsPreset`. The game saves the preset its
   settings sit at (Custom when none) and at start applies a saved one they do not sit at (not under `--low-end`, `--meitou` or `--faithful`), so a preset chosen in
   the launcher takes effect on the next start; the rows show the old values until then. Changing a row the preset sets (`presets.keys`)
@@ -188,8 +190,8 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - The launcher detects once by itself (`PresetDetected` in `launcher.json`): when the version Play starts can detect and the game has no
   graphics settings or preset saved yet, so the first start (or first install) of a fresh setup gets a preset; saved settings are kept.
   A failed detection is tried again at the next start.
-- A missing `graphics` key is the game's default for the mode ("Game default"; a switch offers it as a third choice beside off and
-  on); Default removes it, Reset graphics removes `graphics`, `graphicsPreset`, `faithfulLook` and `lookPreset`. A top-level Default writes the schema's `default`.
+- A switch is Faithful (0) or Meitou (1); unsaved, it shows the game's start state. A missing slider key is the game's default for the
+  mode ("Game default"); Default removes it (a look slider: the look's value), Reset graphics removes `graphics`, `graphicsPreset`, `faithfulLook` and `lookPreset`. A top-level Default writes the schema's `default`.
   Whole values are written as integers.
 - A slider without `labels` takes a typed value (Enter or leaving the box; Esc restores): the suffix may stay, a comma is a decimal
   point, the value is divided by `scale`, snapped to `step` and clamped; `offText` (Unlimited, Off) means the left end.

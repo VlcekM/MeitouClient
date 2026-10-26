@@ -65,7 +65,7 @@ static class LauncherSchema
         Graphics(WorldFrame.PlanetshineStrengthSlider, 0, 200, 1, Enhancements.MeitouPlanetshineStrength),
         Graphics(WorldFrame.AmbientStrengthSlider, 0, 3, 0.05f, 1) with { Format = "0.00" },
         Graphics(WorldFrame.NightAmbientStrengthSlider, 0, 5, 0.05f, 1) with { Format = "0.00" },
-        Graphics(WorldFrame.ShaftStrengthSlider, 0, 1, 0.05f, 1) with { Format = "0.00" },
+        Graphics(WorldFrame.ShaftStrengthSlider, 0, 1, 0.05f, new PostOptions().ShaftStrength) with { Format = "0.00" },
         Graphics(WorldFrame.ShaftAirSlider, 0, 4, 0.05f, 1) with { Format = "0.00" },
         Multiplier(WorldFrame.ShaftAirDawnSlider, 0, 6, 1) with { Step = 0.1f, Format = "0.0" },
         Graphics(WorldFrame.ShaftQualitySlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
@@ -145,13 +145,34 @@ static class LauncherSchema
                 Keys = [.. SettingsMenu.PresetKeys()],
                 Detect = Program.HardwareProbeFlag,
             },
-            Looks = new SettingsLooks
-            {
-                Name = "Look", Description = SettingsMenu.LookHint,
-                FaithfulKey = Key(nameof(UserConfig.FaithfulLook)), PresetKey = Key(nameof(UserConfig.LookPreset)),
-                Names = [.. SettingsMenu.LookNames], Folder = SettingsMenu.LookFolder,
-                Keys = [.. SettingsMenu.LookKeys(switches.Select(s => s.Key[SettingsMenu.SwitchKeyPrefix.Length..]), sliders.Select(s => s.Key))],
-            },
+            Looks = Looks(switches, sliders),
+        };
+    }
+
+    /// <summary>The Faithful marks of the look sliders that have one (WorldFrame.CreateSettingsPanel); the others take the value their label names, else stay.</summary>
+    static readonly Dictionary<string, float> FaithfulMarks = new()
+    {
+        [WorldFrame.HazeStrengthSlider] = 1, [WorldFrame.HeatHazeStrengthSlider] = 1, [WorldFrame.BloomStrengthSlider] = 0,
+    };
+
+    /// <summary>
+    /// The looks as <c>graphics</c> values, as the settings menu applies them (SettingsMenu.SetFaithful, ApplyLook): Faithful turns every look switch
+    /// off and puts the look sliders at the game's value; Meitou leaves them at their start value, the tier's switches to the quality preset.
+    /// </summary>
+    static SettingsLooks Looks(List<SettingDescription> switches, List<SettingDescription> sliders)
+    {
+        var shown = switches.Concat(sliders).ToDictionary(s => s.Key, s => s.Shown);
+        var keys = SettingsMenu.LookKeys(switches.Select(s => s.Key[SettingsMenu.SwitchKeyPrefix.Length..]), sliders.Select(s => s.Key)).ToList();
+        var tier = SettingsMenu.TierSwitchKeys.ToHashSet();
+        bool IsSwitch(string key) => key.StartsWith(SettingsMenu.SwitchKeyPrefix, StringComparison.Ordinal);
+        return new SettingsLooks
+        {
+            Name = "Look", Description = SettingsMenu.LookHint,
+            FaithfulKey = Key(nameof(UserConfig.FaithfulLook)), PresetKey = Key(nameof(UserConfig.LookPreset)),
+            Faithful = keys.ToDictionary(k => k, k => IsSwitch(k) ? 0 : FaithfulMarks.TryGetValue(k, out float mark) ? mark : SettingsMenu.LabelGameValue(k) ?? shown[k]),
+            Meitou = keys.Where(k => !tier.Contains(k)).ToDictionary(k => k, k => shown[k]),
+            Presets = [.. SettingsMenu.BuiltInLooks.Select(l => new SettingsLook { Name = l.Name, Values = new(l.Values) })],
+            Folder = SettingsMenu.LookFolder,
         };
     }
 

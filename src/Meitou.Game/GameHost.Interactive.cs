@@ -156,13 +156,12 @@ sealed partial class GameHost
                     slider.Set(Math.Clamp(v, slider.Min, slider.Max));
         // The look as the command line chose it is read from the switches again.
         if (Environment.GetCommandLineArgs().Any(arg => arg is "--meitou" or "--faithful")) config.FaithfulLook = null;
-        // The switches as saved, then the saved look and preset (ones the launcher chose), unless the command line chose them (--meitou / --faithful):
+        // The switches as saved, then the saved preset (one the launcher chose), unless the command line chose them (--meitou / --faithful):
         // switches it moved would read as another preset.
         if (panel is not null && !lowEnd && !Environment.GetCommandLineArgs().Any(a => a is "--meitou" or "--faithful"))
         {
             foreach (var toggle in panel.Toggles)
                 if (config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
-            panel.ApplySavedLook();
             panel.ApplySavedPreset();
         }
         var stats = new List<string>();

@@ -554,7 +554,6 @@ sealed partial class GameHost
             foreach (var toggle in settingsValues.Toggles)
                 if (config.Graphics.TryGetValue(SettingsMenu.SwitchKeyPrefix + toggle.Label, out float value) && (value >= 0.5f) != toggle.Get())
                     toggle.Set(value >= 0.5f);
-            settings.ApplySavedLook();
             settings.ApplySavedPreset();
             // The impostor atlas path is re-enabled after the frame-slot fence. Keep the diagnostic off switch as a
             // fallback; the saved "Far impostors" toggle is otherwise allowed through.

@@ -139,9 +139,14 @@ sealed partial class SettingsMenu
     internal void ApplySavedPreset()
     {
         int preset = Array.IndexOf(PresetNames, config.GraphicsPreset);
-        if (preset is < 0 or >= CustomPreset || preset == CurrentPreset()) return;
-        ApplyPreset(preset);
-        notice = "";
+        if (preset is >= 0 and < CustomPreset && preset != CurrentPreset())
+        {
+            ApplyPreset(preset);
+            notice = "";
+        }
+        // At Low the look switches it holds off stay off, also where the launcher's look turned them on (unless kept on).
+        foreach (var label in LowCut())
+            if (values.Toggles.FirstOrDefault(t => t.Label == label && t.Get()) is { } toggle) toggle.Set(false);
     }
 
     /// <summary>Saves the preset the settings sit at (Custom when none), for the launcher to show.</summary>
