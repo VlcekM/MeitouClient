@@ -205,11 +205,12 @@ public sealed partial class CarrySystem
             if (owner is null || !owner.Items.Contains(item)) continue;
             bool gear = InventoryCommands.IsEquipmentSection(item.Section);
             int units = InventoryCommands.MoveInto(owner, item, 0, into, bagFirst: false, out bool equipped, looter.Race);
-            if (owner.Items.Contains(item)) units += InventoryCommands.MoveInto(owner, item, 0, into, bagFirst: true, out _);
+            bool alsoWorn = false;
+            if (owner.Items.Contains(item)) units += InventoryCommands.MoveInto(owner, item, 0, into, bagFirst: true, out alsoWorn, looter.Race);
             if (units == 0) continue;
             moved++;
             worn |= gear;
-            wear |= equipped;
+            wear |= equipped || alsoWorn;
         }
         if (worn) Assembly?.RefreshEquipment(victim);
         if (wear) Assembly?.RefreshEquipment(looter);
