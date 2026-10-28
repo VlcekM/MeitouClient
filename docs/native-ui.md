@@ -44,8 +44,11 @@ Graphics (`SettingsMenu.Looks.cs`, `SettingsMenu.Presets.cs`; `--settings-showca
   (`keepAtLow`); leaving Low gives them back. The other tiers leave anti-aliasing and render scale alone. The tier last chosen is
   saved (`qualityTier`), and the derived name (`graphicsPreset`) for the launcher; a saved name the settings do not sit at is
   applied at start ([launcher](launcher.md#graphics)).
-Tabs: the look tabs Light, Sky, Colour, Water, Skin, then the quality tabs Distances, Detail. A tab lists features
-(`SettingsMenu.Groups.cs`): each is one row headed by its switch (or a title: Ambient light, Shadow quality, Terrain relief) with
+Tabs by subject: Lighting, Sky & weather, Colour, World, Characters (`SettingsMenu.GraphicsSection`). A tab lists features in their
+`FeatureGroups` order (`GroupRank`, the launcher's too), each with all its settings, whether the look or the quality tier sets them
+(`SettingsMenu.Role` keeps which: the effects and strengths the look, distances and detail the tier); e.g. Shadows holds the game's shadow
+mode, distance, map size, filter and fifth cascade. A tab lists features
+(`SettingsMenu.Groups.cs`): each is one row headed by its switch (or a title: Ambient light, Terrain relief) with
 its own settings folded under it (a darker band with a brass edge), closed until its arrow or text is clicked. A setting that
 differs from the preset has its name in brass and a Reset link back to the preset's value; a feature's header shows it for anything inside.
 Only look rows are marked: a quality or display setting moved by hand shows as Custom on the Quality row, and choosing a tier puts it

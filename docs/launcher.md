@@ -167,7 +167,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 
 - The schema is also the catalogue the game's own Display and Graphics pages are drawn from ([native-ui](native-ui.md)), so the launcher's
   rows and the game's are the same: names, ranges, value text, choices, impact (`impact`, beside the name) and order.
-- Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Light, Sky, Colour, Water, Skin, Distances, Detail)
+- Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Lighting, Sky & weather, Colour, World, Characters)
   as `SettingsMenu.Section` / `ToggleSection` place them, switches first. Interior lamps is not listed: it changes the stealth sight, so it
   is on the game's Advanced page only.
 - A section's `groups` (null in older schemas: flat rows) are the menu's features (`SettingsMenu.FeatureGroups`): one row headed by

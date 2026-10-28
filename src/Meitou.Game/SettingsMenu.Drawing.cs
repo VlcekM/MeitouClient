@@ -111,16 +111,15 @@ sealed partial class SettingsMenu
         float top = 98;
         if (page == 1)
         {
-            // The Look and Quality rows (SettingsMenu.Looks.cs), then the look tabs and, after a gap, the quality tabs.
+            // The Look and Quality rows (SettingsMenu.Looks.cs), then the tabs, one per subject, across the page.
             DrawLookBar();
-            const float tabWidth = 120, tabGap = 6, groupGap = 12;
+            const float tabGap = 6;
+            float tabWidth = (888 - tabGap * (GraphicsPages.Length - 1)) / GraphicsPages.Length;
             for (int i = 0; i < GraphicsPages.Length; i++)
             {
                 int index = i;
-                float x = 212 + i * (tabWidth + tabGap) + (i >= LookPages.Length ? groupGap : 0);
-                Button(GraphicsPages[i], R(x, 174, tabWidth, 30), () => { graphicsPage = index; scroll = scrollTarget = 0; contentProgress = 0; focus = -1; }, graphicsPage == i);
+                Button(GraphicsPages[i], R(212 + i * (tabWidth + tabGap), 174, tabWidth, 30), () => { graphicsPage = index; scroll = scrollTarget = 0; contentProgress = 0; focus = -1; }, graphicsPage == i);
             }
-            Rect(R(212 + LookPages.Length * (tabWidth + tabGap) + (groupGap - tabGap) / 2 - 1, 176, 1, 26), MainInk with { W = 0.3f });
             top = 212;
         }
         viewport = R(212, top, 888, 666 - top);

@@ -13,7 +13,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
 {
     static readonly string[] Pages = ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes"];
     /// <summary>The Graphics tabs: the look tabs, then the quality tabs (SettingsMenu.Looks.cs).</summary>
-    internal static readonly string[] GraphicsPages = ["Light", "Sky", "Colour", "Water", "Skin", "Distances", "Detail"];
+    internal static readonly string[] GraphicsPages = ["Lighting", "Sky & weather", "Colour", "World", "Characters"];
     /// <summary>The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.</summary>
     internal const string MetalPresetSlider = "Metal upscaling";
     readonly float[] defaults = values.Sliders.Select(s => s.Get()).ToArray();
@@ -244,15 +244,15 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             .OrderBy(s => LauncherSchema.Order(CatalogueKey(s.Label))).Select(SliderEntry).ToList();
         if (page == 1)
         {
-            var changes = LookPages.Contains(section) ? LookChanges() : [];
+            var changes = LookChanges();
             result = values.Toggles.Where(toggle => ToggleSection(toggle.Label) == section).OrderBy(toggle => LauncherSchema.Order(SwitchKey(toggle.Label)))
                 .Select(toggle => LookRow(new Entry(Label(toggle.Label), ToggleHint(toggle.Label), Toggle: toggle), SwitchKey(toggle.Label), toggle.Label, true, changes))
                 .Concat(values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))
                     .OrderBy(s => LauncherSchema.Order(s.Label)).Select(s => LookRow(SliderEntry(s), s.Label, s.Label, false, changes)))
                 .ToList();
         }
-        // Graphics > Skin: after the switch, one row per person race of the loaded data (mods too), on or off against its default.
-        if (page == 1 && section == "Skin")
+        // Graphics > Characters, in the Skin feature: after the switch, one row per person race of the loaded data (mods too), on or off against its default.
+        if (page == 1 && section == "Characters")
             foreach (var (id, name, byDefault) in SkinRaceList)
                 result.Add(new(name, byDefault ? "Skin scatters light on this race (the default)." : "A robot race: no skin scattering unless turned on.",
                     Toggle: new(name, () => config.SkinRaces.TryGetValue(id, out bool on) ? on : byDefault, v =>
@@ -260,7 +260,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                         if (v == byDefault) config.SkinRaces.Remove(id); else config.SkinRaces[id] = v;
                         SkinRacesChanged?.Invoke();
                     }, OnOff: true), Raw: "race:" + id));
-        if (page == 1) result = Grouped(result);
+        if (page == 1) result = Grouped([.. result.OrderBy(e => e.Raw is { } raw ? GroupRank(raw) : FeatureGroups.Length)]);
         if (page == 0)
         {
             // The Display page in the catalogue's order, as the launcher's: full screen, VSync, frame limit, frame generation, world tick, then the display sliders.

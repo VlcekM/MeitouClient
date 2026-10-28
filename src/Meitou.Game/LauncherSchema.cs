@@ -140,8 +140,10 @@ static class LauncherSchema
                 .. SettingsMenu.GraphicsPages.Select(page => new SettingsSection
                 {
                     Name = page,
-                    Settings = [.. switches.Where(s => SettingsMenu.ToggleSection(s.Key[SettingsMenu.SwitchKeyPrefix.Length..]) == page),
-                        .. sliders.Where(s => SettingsMenu.Section(s.Key) == page)],
+                    // Feature by feature, as the menu's tab (SettingsMenu.GroupRank); within, switches first, in the catalogue's order.
+                    Settings = [.. switches.Where(s => SettingsMenu.ToggleSection(s.Key[SettingsMenu.SwitchKeyPrefix.Length..]) == page)
+                        .Concat(sliders.Where(s => SettingsMenu.Section(s.Key) == page))
+                        .OrderBy(s => SettingsMenu.GroupRank(s.Key.StartsWith(SettingsMenu.SwitchKeyPrefix, StringComparison.Ordinal) ? s.Key[SettingsMenu.SwitchKeyPrefix.Length..] : s.Key))],
                 }).Where(section => section.Settings.Count > 0)
                 .Select(section => { section.Groups = SettingsMenu.LauncherGroups([.. section.Settings.Select(s => s.Key)]); return section; }),
             ],

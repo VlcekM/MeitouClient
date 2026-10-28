@@ -12,7 +12,8 @@ Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.
   always go right for more (terrain detail is no longer backwards). A look setting you changed shows its name in brass with
   a **Reset** link back to the look, instead of a Default button on every slider. Reset graphics stays at the bottom of the page.
 - **Bloom** is an effect you switch on, with its strength under it.
-- The Graphics tabs follow the game's new pages: Light, Sky, Colour, Water, Skin, then Distances and Detail.
+- The Graphics tabs follow the game's pages, one per subject: Lighting, Sky & weather, Colour, World, Characters. Each feature
+  holds all its settings: Shadows has its distance, map size and filter; Water its reflection; Light shafts and the terrain relief their quality.
   Each feature is one row, with its own settings folded under it behind an arrow.
 - Shows with game releases from the next one on.
 - The window can be **resized** from its edges and corners on Windows.

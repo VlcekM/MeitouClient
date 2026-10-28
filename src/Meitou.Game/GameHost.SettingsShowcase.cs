@@ -36,13 +36,12 @@ sealed partial class GameHost
             FramebufferCapture.SavePng(display.Context, target, output, w, h);
             Console.WriteLine($"saved     {Path.GetFullPath(output)}");
         }
-        string[] tabs = ["light", "sky", "colour", "water", "skin", "distances", "detail"];
+        string[] tabs = ["lighting", "sky", "colour", "world", "characters"];
         for (int i = 0; i < tabs.Length; i++) Shot(tabs[i], i);
-        menu.ShowcaseOpen("Light shafts", "Ambient light", "Tone map and grade", "Draw distances", "Terrain relief");
-        Shot("light-open", 0);
+        menu.ShowcaseOpen("Shadows", "Light shafts", "Ambient light", "Tone map and grade", "Draw distances", "Terrain relief", "Water");
+        Shot("lighting-open", 0);
         Shot("colour-open", 2);
-        Shot("distances-open", 5);
-        Shot("detail-open", 6);
+        Shot("world-open", 3);
         Shot("sky-changed", 1, () => { menu.ShowcaseOpen("Heat haze", "Clouds"); menu.ShowcaseSet("Heat haze strength (1 = game)", 0.8f); });
         menu.ShowcaseSet("Heat haze strength (1 = game)", 0.5f);
         Shot("preset-changed", 2, () => { menu.ShowcaseLook(1); menu.ShowcaseSet("Night grading strength (0 = game)", 0.8f); });
@@ -50,7 +49,7 @@ sealed partial class GameHost
         Shot("save-as", 2, menu.ShowcaseNaming);
         Shot("low-quality", 0, () => menu.ShowcaseTier(0));
         Shot("faithful", 0, () => { menu.ShowcaseTier(2); menu.ShowcaseFaithful(true); });
-        Shot("faithful-detail", 6);
+        Shot("faithful-world", 3);
         Shot("faithful-changed", 0, () => menu.ShowcaseSwitch("Ambient occlusion", true));
         menu.ShowcaseFaithful(false);
         // The world in every look, without the menu (the temporal upscaler's history settles first).

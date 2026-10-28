@@ -15,8 +15,8 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class SettingsMenu
 {
-    static readonly string[] LookPages = ["Light", "Sky", "Colour", "Water", "Skin"];
-    static readonly string[] QualityPages = ["Distances", "Detail"];
+    /// <summary>The roles <see cref="Role"/> gives the look's settings (the rest are quality settings, which the tier sets).</summary>
+    static readonly string[] LookRoles = ["Light", "Sky", "Colour", "Water", "Skin"];
     internal const string MeitouVersion = "0.14";
 
     /// <summary>A look preset: what it sets, by the keys the settings are saved under (a slider's label, "Meitou: " and a switch's label); everything else is Meitou's.</summary>
@@ -96,8 +96,35 @@ sealed partial class SettingsMenu
 
     static string ShareCode(LookPreset look) => global::Meitou.Settings.LookPresetFile.ShareCode(Data(look));
 
-    /// <summary>The Graphics tab a setting sits on (Display and Advanced settings are sorted out before this); Interior lamps is on Advanced.</summary>
+    /// <summary>
+    /// The Graphics tab a setting sits on, by feature (Display and Advanced settings are sorted out before this): a feature's switch, look settings, quality
+    /// settings and distances on one tab, in its group (<see cref="FeatureGroups"/>). Interior lamps is on Advanced; the anti-aliasing and weather particles switches are hidden.
+    /// </summary>
     static string GraphicsSection(string label, bool toggle)
+    {
+        bool S(string prefix) => label.StartsWith(prefix, StringComparison.Ordinal);
+        if (toggle)
+            return label switch
+            {
+                "Interior lamps" => "Advanced",
+                "Anti-aliasing" or "Weather particles" => "Hidden",
+                "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" or WorldFrame.FifthCascadeSwitch => "Lighting",
+                "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" => "Sky & weather",
+                "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch => "Colour",
+                "Skin" or "Character levels" or "Item icons" or "Blood cells" => "Characters",
+                _ => "World",
+            };
+        if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine") || S("Shadow")) return "Lighting";
+        if (S("Haze") || S("Heat haze") || WorldFrame.ParticleSliders.Contains(label)) return "Sky & weather";
+        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom")) return "Colour";
+        return "World";
+    }
+
+    /// <summary>
+    /// Whether a setting is part of the look or of the quality: the look's (<see cref="LookRoles"/>) are the effects and their strengths, the quality's the
+    /// distances and the detail. As the Graphics tabs were split before they were grouped by feature, so the looks and the tiers set what they set before.
+    /// </summary>
+    static string Role(string label, bool toggle)
     {
         bool S(string prefix) => label.StartsWith(prefix, StringComparison.Ordinal);
         if (toggle)
@@ -124,7 +151,8 @@ sealed partial class SettingsMenu
     }
 
     /// <summary>Whether a switch or slider is part of the look (presets set it); a quality tier's slider on a look tab (light shafts quality) is not.</summary>
-    internal static bool IsLook(string label, bool toggle) => LookPages.Contains(GraphicsSection(label, toggle)) && (toggle || !PresetSliders.Any(p => p.Label == label));
+    internal static bool IsLook(string label, bool toggle) => GraphicsSection(label, toggle) != "Hidden" && LookRoles.Contains(Role(label, toggle))
+        && (toggle || !PresetSliders.Any(p => p.Label == label));
 
     /// <summary>A Faithful / Meitou switch of the Graphics page (the gameplay one, Interior lamps, is not).</summary>
     static bool IsGraphicsSwitch(Toggle t) => t.Remaster && GraphicsPages.Contains(GraphicsSection(t.Label, true));
