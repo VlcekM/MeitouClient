@@ -270,23 +270,21 @@ sealed partial class SettingsMenu
             float hintHeight = TextHeight(Loc.Tr(entry.Hint), HintWidth(entry), 11);
             Text(entry.Hint, R(212 + indent, y + 2 + labelHeight + 1, HintWidth(entry), hintHeight + 1), 11, entry.Warn ? Brass : MutedInk, "Left Top", viewport, wrap: true);
         }
-        if (entry.Toggle is { Remaster: true } remaster)
+        if (entry.Toggle is { Remaster: true, Optional: false } remaster)
         {
             // A Faithful / Meitou switch: both sides as buttons, the active one marked.
             bool meitou = remaster.Get();
-            // An optional effect (bloom) is in neither look: plain Off / On.
-            if (remaster.Optional) Segmented(R(920, y + (row - 22) / 2, 180, 22), meitou ? 1 : 0, i => remaster.Set(i == 1), "Off", "On");
-            else if (remaster.OnOff) Segmented(R(860, y + (row - 22) / 2, 240, 22), meitou ? 1 : 0, i => remaster.Set(i == 1), "Faithful (off)", "Meitou (on)");
+            if (remaster.OnOff) Segmented(R(860, y + (row - 22) / 2, 240, 22), meitou ? 1 : 0, i => remaster.Set(i == 1), "Faithful (off)", "Meitou (on)");
             else Segmented(R(920, y + (row - 22) / 2, 180, 22), meitou ? 1 : 0, i => remaster.Set(i == 1));
         }
-        else if (entry is { Segmented: true, Choice: { } sides })
-            Segmented(R(860, y + (row - 22) / 2, 240, 22), sides.Current(), sides.Choose, "All Faithful", "All Meitou");
         // A switch with its own words (Hear from: Character / Camera): one button showing the current side.
         else if (entry.Toggle is { Text: { } words } worded)
             Button(words(), R(976, buttonY, 124, 26), () => worded.Set(!worded.Get()), worded.Get(), clip: viewport);
-        // A plain on / off setting: both sides as buttons, as a Faithful / Meitou switch shows them.
+        // An optional effect (bloom, in neither look) or a plain setting: Off | On in the same control.
         else if (entry.Toggle is { } toggle)
             Segmented(R(920, y + (row - 22) / 2, 180, 22), toggle.Get() ? 1 : 0, i => toggle.Set(i == 1), "Off", "On");
+        else if (entry is { Segmented: true, Choice: { } sides })
+            Segmented(R(860, y + (row - 22) / 2, 240, 22), sides.Current(), sides.Choose, "All Faithful", "All Meitou");
         else if (entry.Choice is { } choice)
         {
             var options = choice.Options();

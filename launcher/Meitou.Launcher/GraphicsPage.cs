@@ -164,6 +164,7 @@ public sealed partial class MainWindow
     }
 
     Border SettingRow(SettingDescription s) => s.Kind == SettingKind.Toggle ? s.Graphics ? SwitchRow(s) : ToggleRow(s)
+        : s.Labels is { Length: 2 } ? CheckRow(s, s.Labels[0], s.Labels[1], v => { if (s.Graphics) game.SetGraphics(s.Key, s.Min + v); else game.Set(s.Key, s.Min + v); })
         : s.Labels is { Length: > 0 } ? ChoiceRow(s) : SliderRow(s);
 
 
@@ -659,11 +660,59 @@ public sealed partial class MainWindow
         return row;
     }
 
+    /// <summary>
+    /// An on / off setting, as the game shows it: two halves, the active one lit. A Faithful / Meitou effect reads Faithful | Meitou ("Faithful (off) |
+    /// Meitou (on)" where the game's side is off), what each side does in its tooltip; an optional effect or a plain setting reads Off | On.
+    /// <paramref name="write"/> takes 1 for on (Meitou), 0 for off.
+    /// </summary>
+    Border CheckRow(SettingDescription s, string off, string on, Action<float> write)
+    {
+        bool effect = s.Graphics && off.StartsWith("Faithful", StringComparison.Ordinal) || on.StartsWith("Meitou", StringComparison.Ordinal);
+        bool offSide = off == "Off";
+        string left = !effect ? off : offSide ? "Faithful (off)" : "Faithful", right = !effect ? on : offSide ? "Meitou (on)" : "Meitou";
+        var halves = new[]
+        {
+            new ToggleButton { Content = Tr(left), CornerRadius = new(7, 0, 0, 7), Classes = { "half", "faithful" } },
+            new ToggleButton { Content = Tr(right), CornerRadius = new(0, 7, 7, 0), Classes = { "half" } },
+        };
+        foreach (var half in halves) half.MinWidth = effect && offSide ? 120 : 90;
+        if (effect)
+        {
+            ToolTip.SetTip(halves[0], Tr(off));
+            ToolTip.SetTip(halves[1], Tr(on));
+        }
+        bool loading = false;
+        void Show()
+        {
+            loading = true;
+            bool lit = CurrentValue(s) - (s.Kind == SettingKind.Toggle ? 0 : s.Min) >= 0.5f;
+            halves[0].IsChecked = !lit;
+            halves[1].IsChecked = lit;
+            loading = false;
+        }
+        Show();
+        for (int i = 0; i < 2; i++)
+        {
+            int side = i;
+            halves[i].Click += (_, _) =>
+            {
+                if (loading) return;
+                write(side);
+                PresetBroken(s.Key);
+                SaveGame();
+                Show();
+                RefreshMarks();
+            };
+        }
+        var pair = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Children = { halves[0], halves[1] } };
+        return SettingFrame(s, pair, 260, Show);
+    }
+
     /// <summary>A top-level on / off setting (full screen, VSync).</summary>
-    Border ToggleRow(SettingDescription s) => DropDownRow(s, [s.Off, s.On], 0, v => game.Set(s.Key, v >= 0.5f));
+    Border ToggleRow(SettingDescription s) => CheckRow(s, s.Off, s.On, v => game.Set(s.Key, v >= 0.5f));
 
     /// <summary>A Tab panel switch: Faithful (off, saved 0) or Meitou (on, saved 1).</summary>
-    Border SwitchRow(SettingDescription s) => DropDownRow(s, [s.Off, s.On], 0, v => game.SetGraphics(s.Key, v));
+    Border SwitchRow(SettingDescription s) => CheckRow(s, s.Off, s.On, v => game.SetGraphics(s.Key, v));
 
     /// <summary>A setting with named values (anti-aliasing, texture quality, water reflection), in the slider's order from its left end.</summary>
     Border ChoiceRow(SettingDescription s) => DropDownRow(s, s.Labels!, s.Min, v => { if (s.Graphics) game.SetGraphics(s.Key, v); else game.Set(s.Key, v); });

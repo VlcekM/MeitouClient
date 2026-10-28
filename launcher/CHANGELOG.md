@@ -6,7 +6,8 @@ Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.
 
 - **Look** row on the Graphics page, as in the game: Faithful or Meitou, its example looks or your own, with **Save**,
   **Save as**, **Share** (a code to paste on Discord), **Paste** and **Delete**. The presets are the same files as the game's.
-- Each effect is **Faithful or Meitou**, nothing in between: the "Game default" choice is gone from the switches.
+- Each effect is a **Faithful | Meitou** switch, as in the game, with what each side does in its tooltip; other on / off
+  settings read **Off | On** the same way. The "Game default" choice is gone.
 - **Harmonized settings**: choices are drop-downs (anti-aliasing, texture quality, water reflection...), amounts are sliders that
   always go right for more (terrain detail is no longer backwards). A look setting you changed shows its name in brass with
   a **Reset** link back to the look, instead of a Default button on every slider. Reset graphics stays at the bottom of the page.

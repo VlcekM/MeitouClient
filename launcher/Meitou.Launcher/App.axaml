@@ -49,6 +49,22 @@
           <Setter Property="Opacity" Value="0.5" />
         </Style>
       </ControlTheme>
+      <!-- Switches (Fluent's keys): a brass track while on, a dark framed one while off, as the game's. -->
+      <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#816635" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#9a7c45" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#9a7c45" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#110f0d" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOffPointerOver" Color="#1a1715" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOffPressed" Color="#1a1715" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#5e5849" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="#afa68b" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOffPressed" Color="#afa68b" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOff" Color="#8a8270" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPointerOver" Color="#afa68b" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPressed" Color="#afa68b" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#d9ceb8" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#ffffff" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#ffffff" />
       <!-- Scroll bars: a rounded brass thumb on a dark track, always the same (Fluent's collapses to a thin line while auto-hidden). -->
       <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
         <Setter Property="Cursor" Value="Arrow" />
@@ -627,5 +643,21 @@
       <Setter Property="BorderBrush" Value="#D9D9D9" />
       <Setter Property="BoxShadow" Value="none" />
     </Style>
+    <!-- An on / off setting's two halves (Faithful | Meitou, Off | On), as the game's: the active half lit in its colour and underlined,
+         brass for Meitou / On, the slider notches' grey-blue for Faithful / Off. -->
+    <Style Selector="ToggleButton.half:checked /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.half:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#47816635" />
+      <Setter Property="BorderBrush" Value="#c4a062" />
+      <Setter Property="BorderThickness" Value="0,0,0,2" />
+      <Setter Property="Foreground" Value="#d9ceb8" />
+    </Style>
+    <Style Selector="ToggleButton.half.faithful:checked /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.half.faithful:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#479ea8b3" />
+      <Setter Property="BorderBrush" Value="#9ea8b3" />
+    </Style>
+    <Style Selector="ToggleButton.half:not(:checked) /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Foreground" Value="#8a8270" />
+    </Style>
+
   </Application.Styles>
 </Application>

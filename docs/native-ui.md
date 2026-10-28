@@ -49,7 +49,8 @@ Tabs: the look tabs Light, Sky, Colour, Water, Skin, then the quality tabs Dista
 its own settings folded under it (a darker band with a brass edge), closed until its arrow or text is clicked. A setting that
 differs from the preset has its name in brass and a Reset link back to the preset's value; a feature's header shows it for anything inside.
 Only look rows are marked: a quality or display setting moved by hand shows as Custom on the Quality row, and choosing a tier puts it
-back. A plain on / off setting is drawn as Off | On, like a switch. Interior lamps is on Advanced: the
+back. Every on / off setting is a two-halves switch, the active half lit: a Faithful / Meitou effect reads Faithful | Meitou ("Faithful (off) |
+Meitou (on)" where the game's side is off), an optional effect or a plain setting Off | On; the launcher's are the same, what each side does in their tooltips. Interior lamps is on Advanced: the
 stealth sight counts its light, so no look or Faithful sets it. Each setting has one control: an effect a Faithful | Meitou switch,
 named values a drop-down (the anti-aliasing method on Display, weather particles' size), amounts a slider running right = more
 (terrain detail's error in pixels is drawn mirrored, `Slider.Reversed`). The `aa` and `particles` switches are not shown and their

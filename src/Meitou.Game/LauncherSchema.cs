@@ -100,7 +100,7 @@ static class LauncherSchema
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).
         yield return Switch(WorldFrame.BloomSwitch, "Off", "On", false);
         foreach (var label in new[] { WorldFrame.RockSmoothingSwitch, WorldFrame.OutlineRefineSwitch })
-            yield return Switch(label, "Off", "On", true);
+            yield return Switch(label, "Off", "Meitou: on", true);   // Faithful / Meitou switches whose game side is off
     }
 
     public static SettingsSchema Create()
