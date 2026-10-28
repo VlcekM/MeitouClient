@@ -111,7 +111,7 @@ sealed partial class SettingsMenu
                 "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" or WorldFrame.FifthCascadeSwitch => "Lighting",
                 "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" => "Sky & weather",
                 "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch => "Colour",
-                "Skin" or "Character levels" or "Item icons" or "Blood cells" => "Characters",
+                "Skin" or "Character levels" or "Item icons" => "Characters",
                 _ => "World",
             };
         if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine") || S("Shadow")) return "Lighting";
