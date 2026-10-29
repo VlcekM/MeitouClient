@@ -1,9 +1,10 @@
 # Builds a release of the game (src/Meitou.Game) and the world viewer (meitou-viewer) for one runtime into a zip that runs as is:
 # self-contained .NET under the single top folder Meitou-<version>-<rid>. The Windows zip also carries NVIDIA's DLSS runtime and Streamline
-# plugins and AMD's FidelityFX library next to the exes, and the Linux zip NVIDIA's DLSS model and NGX client library, their licences in licenses/; they come from
-# NVIDIA's and AMD's official GitHub repositories (cached in -Cache) and none of them is in the repository. Linux and macOS zips are made on a Unix machine with zip(1), which stores the execute
-# bits: the Linux zip on Linux (build-ngx-shim.sh links with GNU ld), macOS zips on a Mac, which ad-hoc signs the binaries (Apple Silicon
-# refuses unsigned code).
+# plugins and AMD's FidelityFX library next to the exes, and the Linux zip NVIDIA's DLSS model and NGX client library and that FidelityFX library
+# built from AMD's source (build-ffx-linux.sh), their licences in licenses/; they come from NVIDIA's and AMD's official GitHub repositories (cached
+# in -Cache) and none of them is in the repository. Linux and macOS zips are made on a Unix machine with zip(1), which stores the execute
+# bits: the Linux zip on Linux (build-ngx-shim.sh links with GNU ld, build-ffx-linux.sh builds an ELF library), macOS zips on a Mac, which
+# ad-hoc signs the binaries (Apple Silicon refuses unsigned code).
 #   pwsh -File tools/scripts/package-release.ps1 -Version 0.1.0 [-Rid win-x64|linux-x64|osx-x64|osx-arm64] [-Output out] [-Cache C:\Temp\release-cache]
 # (PowerShell 7: Windows PowerShell 5.1 writes the zip with backslashes in its paths, which some unzippers reject.)
 param(
@@ -21,7 +22,7 @@ $mac = $Rid -like "osx-*"
 $linux = $Rid -like "linux-*"
 if (-not $windows -and $IsWindows) { throw "make the $Rid zip on Linux or macOS: a zip made on Windows has no execute bits" }
 if ($mac -and -not $IsMacOS) { throw "make the $Rid zip on macOS: its binaries need an ad-hoc signature" }
-if ($linux -and -not $IsLinux) { throw "make the $Rid zip on Linux: build-ngx-shim.sh links an ELF library with GNU ld" }
+if ($linux -and -not $IsLinux) { throw "make the $Rid zip on Linux: build-ngx-shim.sh and build-ffx-linux.sh build ELF libraries" }
 $exe = if ($windows) { ".exe" } else { "" }
 # The game executable's name: Meitou.Game's AssemblyName.
 $game = ([xml](Get-Content (Join-Path $root "src/Meitou.Game/Meitou.Game.csproj"))).Project.PropertyGroup.AssemblyName | Where-Object { $_ } | Select-Object -First 1
@@ -97,6 +98,12 @@ if ($linux) {
     if ($LASTEXITCODE -ne 0) { throw "build-ngx-shim.sh failed" }
     New-Item -ItemType Directory -Force (Join-Path $stage "licenses/NVIDIA") | Out-Null
     Copy-Item (Get-Archive "$dlss/LICENSE.txt" "dlss-310.9.16-LICENSE.txt") (Join-Path $stage "licenses/NVIDIA/dlss-LICENSE.txt")
+
+    # AMD FidelityFX SDK 1.1.4, built from the source in the same release zip (AMD ships no Linux library). Loaded next to the exe (FsrUpscaler.cs).
+    $ffx = Get-Archive "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/releases/download/v1.1.4/FidelityFX-SDK-v1.1.4.zip"
+    bash (Join-Path $root "tools/scripts/build-ffx-linux.sh") $stage $Cache
+    if ($LASTEXITCODE -ne 0) { throw "build-ffx-linux.sh failed" }
+    Copy-Entries $ffx @("sdk/LICENSE.txt") (Join-Path $stage "licenses/AMD") "fidelityfx-"
 }
 
 # Our licence, the GPL exception for the NVIDIA libraries, the notices, and how to start.
@@ -145,7 +152,7 @@ The NVIDIA files (nvngx_dlss.dll, sl.*.dll, NvLowLatencyVk.dll) are NVIDIA's, un
 amd_fidelityfx_vk.dll is AMD's, under the MIT licence in licenses\AMD. Other components: THIRD_PARTY_NOTICES.md.
 "@
 } else {
-    $antiAliasing = if ($linux) { "FXAA, TAA or DLSS" } else { "FXAA or TAA" }
+    $antiAliasing = if ($linux) { "FXAA, TAA, FSR or DLSS" } else { "FXAA or TAA" }
     $dlssNote = if ($linux) {
         "`n   DLSS needs an NVIDIA RTX card on NVIDIA's own driver (not Nouveau or NVK), glibc 2.35 or newer, and libffi, which desktop systems have." +
         "`n   If the game closes at startup on an NVIDIA card, start it with MEITOU_DLSS=0 (MEITOU_DLSS=0 ./$game): it then runs without DLSS."
@@ -154,6 +161,8 @@ amd_fidelityfx_vk.dll is AMD's, under the MIT licence in licenses\AMD. Other com
         "`nThe GPL has an additional permission for the NVIDIA DLSS runtime (LICENSE-EXCEPTION.md): libnvidia-ngx-dlss.so and libmeitou_ngx.so are NVIDIA's,`n" +
         "under the licence in licenses/NVIDIA, not the GPL."
     } else { "" }
+    $upscalers = if ($linux) { "" } else { " DLSS is not available on macOS, and FSR's library is not included." }
+    $amdLicence = if ($linux) { "`nlibamd_fidelityfx_vk.so is AMD's, under the MIT licence in licenses/AMD." } else { "" }
     $readme = @"
 $title
 $('=' * $title.Length)
@@ -173,13 +182,13 @@ Start
 2. Run ./$game or ./meitou-viewer from a terminal (both start at The Hub).
    - Give it your Kenshi folder (the one with kenshi_x64.exe and the data folder): the KENSHI_PATH environment variable, or the
      console asks once and keeps it in meitou.local.json next to the program.
-3. Tab opens the settings (draw distances, anti-aliasing: $antiAliasing). F10 lists the keys.$dlssNote
+3. Tab opens the settings (draw distances, anti-aliasing: $antiAliasing). F10 lists the keys.$upscalers$dlssNote
 
 $requirements
 
 Licences
 --------
-Meitou is GPL-3.0-or-later (LICENSE). Other components: THIRD_PARTY_NOTICES.md.$nvidiaLicence
+Meitou is GPL-3.0-or-later (LICENSE). Other components: THIRD_PARTY_NOTICES.md.$nvidiaLicence$amdLicence
 "@
 }
 Set-Content -Path (Join-Path $stage "README.txt") -Value $readme -Encoding UTF8

@@ -27,6 +27,13 @@ Game/viewer builds and publishes copy the Streamline/DLSS DLLs and FSR's `amd_fi
 are present in `MEITOU_DLSS_PATH` (else the older `MEITOU_STREAMLINE_PATH`) or the git-ignored root `dlss-runtime/`;
 `-p:StreamlineRuntimePath=` overrides the source. Without them a dev build logs
 "not found" and runs TAA (a release folder's DLLs can be copied there). Release packaging fetches its own.
+Linux: AMD ships no FSR library, so `tools/scripts/build-ffx-linux.sh` builds `libamd_fidelityfx_vk.so` into the same folder, from
+the SDK 1.1.4 source with `tools/scripts/ffx-linux.patch` (the [fsr3-native-macos](https://github.com/SpaceCowboyServer/fsr3-native-macos) port plus our fixes);
+builds copy it, publishes don't (the Linux release zip builds its own). `ffx_vk.cpp` must align `pEffectContexts` to its
+`alignas(32)`, else GCC's `movaps` faults in `CreateBackendContextVK`. FFX's `wchar_t` messages are UTF-32 off Windows.
+**Verified** (game `--screenshot --upscaler fsr` with `MEITOU_UPSCALER_LOG=1`, which turns on FFX's debug checks; an out-of-range
+jitter prints FFX's warning; RTX 4080 SUPER, driver 615.78): renders with no debug-check messages, also from a linux-x64 zip
+packaged on CI's ubuntu-22.04 runner (its library needs glibc 2.29).
 
 TAA: 3x3 Gaussian exp(-2.29 d^2) with d in display pixels (upscaling doesn't widen it), Catmull-Rom history,
 YCoCg variance clip, blend 0.1. Upscaler sharpness: FSR's RCAS; after TAA and DLSS (DLSS ignores it) the
@@ -38,7 +45,7 @@ Linux runs DLSS through NGX (`Upscalers/Ngx.cs`): NVIDIA's NGX client library (t
 built into `libmeitou_ngx.so` by `tools/scripts/build-ngx-shim.sh`) over the driver's `libnvidia-ngx.so.1`, with the DLSS
 model `libnvidia-ngx-dlss.so.<version>`; each file is looked for in `MEITOU_DLSS_PATH`, then beside the executable, and
 NGX gets the same two folders to find the model. The client library is linked on Ubuntu 22.04 for releases, so it
-loads on glibc 2.35 and newer; on an older glibc the game logs the loader's error and runs without DLSS. FSR stays Windows-only. `MEITOU_NGX_LOG=1` prints NGX's whole log (its verbose level).
+loads on glibc 2.35 and newer; on an older glibc the game logs the loader's error and runs without DLSS. `MEITOU_NGX_LOG=1` prints NGX's whole log (its verbose level).
 NGX is loaded only when the model and the client library are in one of those folders and `MEITOU_DLSS` is not `0`, and
 handed only a device on NVIDIA's own driver (not NVK); without DLSS (other GPU, no NVIDIA driver, no libffi) it is shut
 down at once and the game runs on. Builds copy both to the output folder, never into a publish; the Linux release zip

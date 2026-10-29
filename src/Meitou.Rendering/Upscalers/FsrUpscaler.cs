@@ -7,8 +7,9 @@ using Silk.NET.Vulkan;
 namespace Meitou.Rendering.Upscalers;
 
 /// <summary>
-/// AMD FSR 3.1 upscaling through the FidelityFX API (<c>amd_fidelityfx_vk.dll</c>, MIT, from the FidelityFX SDK 1.1.x; never in the
-/// repository): loaded at run time from <c>MEITOU_FFX_PATH</c> (the DLL or its folder) or next to the executable. The context is
+/// AMD FSR 3.1 upscaling through the FidelityFX API (<c>amd_fidelityfx_vk.dll</c>; on Linux <c>libamd_fidelityfx_vk.so</c>, built by
+/// tools/scripts/build-ffx-linux.sh; MIT, from the FidelityFX SDK 1.1.x; never in the repository): loaded at run time from <c>MEITOU_FFX_PATH</c> (the
+/// library or its folder) or next to the executable. The context is
 /// created for the render and display size of the first dispatch and again when they change; the dispatch is recorded into
 /// the <see cref="GpuContext"/>'s frame. Inputs follow <see cref="UpscaleInputs"/>: images stay in GENERAL (declared as COMMON, which the
 /// backend reads as GENERAL and returns them to), motion is turned into FSR's convention (render pixels towards the previous
@@ -16,7 +17,8 @@ namespace Meitou.Rendering.Upscalers;
 /// </summary>
 public sealed unsafe class FsrUpscaler : IUpscaler
 {
-    public static readonly string LibraryName = OperatingSystem.IsMacOS() ? "libamd_fidelityfx_vk.dylib" : "amd_fidelityfx_vk.dll";
+    public static readonly string LibraryName = OperatingSystem.IsWindows() ? "amd_fidelityfx_vk.dll"
+        : OperatingSystem.IsMacOS() ? "libamd_fidelityfx_vk.dylib" : "libamd_fidelityfx_vk.so";
 
     // ffx_api: type constants, flags, states (FidelityFX SDK headers, MIT).
     const ulong CreateUpscaleType = 0x00010000, DispatchUpscaleType = 0x00010001, BackendVkType = 0x00000003;
@@ -95,8 +97,20 @@ public sealed unsafe class FsrUpscaler : IUpscaler
         yield return Path.Combine(AppContext.BaseDirectory, LibraryName);
     }
 
+    // The message is a wchar_t string: UTF-16 on Windows, UTF-32 elsewhere.
     [UnmanagedCallersOnly]
-    static void OnMessage(uint type, char* message) => Console.WriteLine($"fsr       {(type == 0 ? "error" : "warning")}: {new string(message)}");
+    static void OnMessage(uint type, void* message)
+    {
+        string text;
+        if (OperatingSystem.IsWindows()) text = new string((char*)message);
+        else
+        {
+            int n = 0;
+            while (((int*)message)[n] != 0) n++;
+            text = System.Text.Encoding.UTF32.GetString((byte*)message, n * 4);
+        }
+        Console.WriteLine($"fsr       {(type == 0 ? "error" : "warning")}: {text}");
+    }
 
     bool EnsureContext(UpscaleInputs i)
     {
@@ -109,7 +123,7 @@ public sealed unsafe class FsrUpscaler : IUpscaler
             Device = device.Device.Handle,
             PhysicalDevice = device.PhysicalDevice.Handle,
             // FFX calls vkGetDeviceProcAddr through the loader the process is already bound to.
-            DeviceProcAddr = NativeLibrary.GetExport(NativeLibrary.Load(OperatingSystem.IsMacOS() ? "libvulkan.1.dylib" : "vulkan-1.dll"), "vkGetDeviceProcAddr"),
+            DeviceProcAddr = NativeLibrary.GetExport(NativeLibrary.Load(OperatingSystem.IsWindows() ? "vulkan-1.dll" : OperatingSystem.IsMacOS() ? "libvulkan.1.dylib" : "libvulkan.so.1"), "vkGetDeviceProcAddr"),
         };
         *createDesc = new CreateUpscaleDesc
         {
@@ -118,7 +132,7 @@ public sealed unsafe class FsrUpscaler : IUpscaler
             Flags = EnableHdr | EnableAutoExposure | (debug ? EnableDebugChecking : 0),
             MaxRenderSize = new Dimensions { Width = (uint)i.RenderWidth, Height = (uint)i.RenderHeight },
             MaxUpscaleSize = new Dimensions { Width = (uint)i.DisplayWidth, Height = (uint)i.DisplayHeight },
-            Message = debug ? (nint)(delegate* unmanaged<uint, char*, void>)&OnMessage : 0,
+            Message = debug ? (nint)(delegate* unmanaged<uint, void*, void>)&OnMessage : 0,
         };
         nint created = 0;
         uint rc = createContext(&created, createDesc, null);

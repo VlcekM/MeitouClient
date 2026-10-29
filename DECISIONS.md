@@ -21,7 +21,7 @@ Current choices; implementation details belong in the linked references.
   [docs/engine.md](docs/engine.md), [docs/bench.md](docs/bench.md).
 - **Upscaling:** single-sample jittered HDR scene; shadow maps/reused reflections unjittered.
   LOD bias `log2(scale)-1` for TAA, FSR and DLSS. [docs/render-post.md](docs/render-post.md).
-- **Vendors:** Vulkan FidelityFX API DLL from SDK 1.1.4 (Windows). DLSS on Windows: Streamline 2.14.16 manual
+- **Vendors:** Vulkan FidelityFX API library from SDK 1.1.4 (Windows: AMD's DLL; Linux: built from its source). DLSS on Windows: Streamline 2.14.16 manual
   hooking, initialized before Vulkan, applying requested features/extensions and proxying presentation. DLSS on
   Linux: NGX through NVIDIA's client library (the DLSS SDK's static library, linked into `libmeitou_ngx.so` at build time; no
   Streamline there), loaded only with the DLSS model present.

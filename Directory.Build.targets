@@ -19,4 +19,10 @@
     <None Include="$(StreamlineRuntimePath)/libnvidia-ngx-dlss.so.*;$(StreamlineRuntimePath)/libmeitou_ngx*.so" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
+  <!-- Linux: FSR's libamd_fidelityfx_vk.so, built by tools/scripts/build-ffx-linux.sh (AMD ships none); release zips build their own. -->
+  <ItemGroup Condition="('$(MSBuildProjectName)' == 'Meitou.Game' or '$(MSBuildProjectName)' == 'Meitou.ModelViewer') and $([MSBuild]::IsOSPlatform('Linux')) and ('$(RuntimeIdentifier)' == '' or '$(RuntimeIdentifier)' == 'linux-x64')">
+    <None Include="$(StreamlineRuntimePath)/libamd_fidelityfx_vk*.so"
+          Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
 </Project>
