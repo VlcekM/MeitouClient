@@ -182,7 +182,7 @@ internal sealed partial class ZoneGeometryGatherer
 
     /// <summary>
     /// Places a prepared shape. <paramref name="walkableSlope"/> 0: a cutting obstacle (all its triangles are <see cref="NavArea.Null"/>);
-    /// otherwise a triangle is walkable up to that slope.
+    /// otherwise a triangle is walkable up to that slope. <paramref name="carve"/>: a convex obstacle also removes the floor inside its volume (<see cref="NavSolid"/>).
     /// </summary>
     /// <summary>A door painter reaches this far below its hull and is grown by <see cref="DoorPainterGrow"/> on each side (engine choice).</summary>
     const float DoorPainterDrop = 10, DoorPainterGrow = 3;
@@ -207,15 +207,12 @@ internal sealed partial class ZoneGeometryGatherer
         }
         if (hi.X < g.ZoneMin.X - g.Margin || lo.X > g.ZoneMax.X + g.Margin || hi.Z < g.ZoneMin.Y - g.Margin || lo.Z > g.ZoneMax.Y + g.Margin) return;
         EmitTriangles(g, pts, shape.Indices, walkableSlope);
-        if (walkableSlope > 0 && shape.IsConvex && Solid(pts, shape.Indices, lo, hi) is { } solid)
+        // A convex obstacle is a solid too, not a prism over its footprint: a prism cut the ground under a leaning shape whose volume is in the air
+        // (docs/game/pathfinding.md, "Solids"; Observed: Shark's Giant_BigWood, a tilted 2,000-unit box over a hemp farm, issue #155).
+        if ((walkableSlope > 0 || carve) && shape.IsConvex && Solid(pts, shape.Indices, lo, hi) is { } solid)
         {
             g.Solids.Add(solid);
             g.Stats.Solids++;
-        }
-        if (carve && shape.IsConvex)
-        {
-            g.Carvers.Add(NavGeometry.Footprint(pts, lo.Y, hi.Y, 0));
-            g.Stats.Carvers++;
         }
     }
 

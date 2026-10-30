@@ -60,7 +60,7 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
     /// <summary>Whether foliage collision is gathered (it needs the biome data and costs a foliage placement per zone).</summary>
     public bool IncludeFoliage { get; set; } = true;
 
-    /// <summary>Add a prism carver around every convex obstacle, so the ground inside a closed building volume is removed too (the original's cutting materials).</summary>
+    /// <summary>Every convex obstacle is a <see cref="NavSolid"/> too, so the ground inside a closed building volume is removed (the original's cutting materials).</summary>
     public bool CarveConvexObstacles { get; set; } = true;
 
     public void Dispose()

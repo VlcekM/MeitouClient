@@ -258,9 +258,12 @@ elsewhere; before, none. Whether the original joins ruins the same way is **Unkn
 collision floor with agent-height headroom. **Observed** (Defensive Gate IV `2934-Walls2.mod`, zone 24.27, "this gate is fucked" save): its walkable
 convex foundation spans Y 65..157 over ground at 138; seeds at the terrain height matched the ground inside the foundation (19 headroom) and kept it,
 and walkers stepped down onto it at the slab's edge. `tile24.27.hkt` has only the slab and its ramps there.
-**Solids** (engine choice): Recast rasterises surfaces, so ground inside a closed solid survives as floor. Every convex shape (box, capsule, hull) of a
-walkable part becomes a `NavSolid`; a walkable span whose floor, at its cell's middle, is inside every face plane (1 below the upward ones) is removed
-(obstacles keep the prism carver). The height surfaces (`NavSurfaces`) drop the same insides: **Observed** (that gate) its stair is a tilted box
+**Solids** (engine choice): Recast rasterises surfaces, so ground inside a closed solid survives as floor. Every convex shape (box, capsule, hull), walkable
+or obstacle, becomes a `NavSolid`; a walkable span whose floor, at its cell's middle, is inside every face plane (1 below the upward ones) is removed.
+Obstacles were a prism over their footprint before, which cut the ground under a leaning shape whose volume is in the air: **Observed** Shark's
+`Giant_BigWood`, one tilted box 2,000 units tall, cut a 1,500-unit hexagon over a hemp farm that `tile21.42.hkt` covers (issue #155); as solids,
+21.42's points the original covers and we do not fell 6.9 → 1.8 %, ours-only rose 3.0 → 3.6 % (18.35: 5.1 → 6.1 %, a hillside by its Wind Generator II that
+was pruned and now joins the town; the original has no mesh there). The height surfaces (`NavSurfaces`) drop the same insides: **Observed** (that gate) its stair is a tilted box
 whose top face runs on inside the foundation, from 151 down to ~124 under the slab, and a walker's height followed it under the floor. **Observed** (`meitou-tools navmesh`, zones 24.27, 20.32, 21.32, 18.35, 19.29, 21.42, 21.31, 10.31, 18.39, 20.29, 23.22):
 unpruned polygons drop 1..24 %, kept area sampled against the original tiles changes under 0.3 %; the gate's under-floor layer is gone; interior area
 drops only in ruins (Hub Stationhouse `4-`, Bughouse `4937-`: floor strips inside the thick walls and fallen slabs). The door and stair paths listed
