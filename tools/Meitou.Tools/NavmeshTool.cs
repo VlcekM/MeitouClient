@@ -13,6 +13,7 @@ using Meitou.Navigation;
 static class NavmeshTool
 {
     // --verbose: painters, seeds, interiors, door joins and path points are listed, and --near lists every field of the building records.
+    // --near also lists the carvers and solids reaching within the radius.
     static bool verbose;
 
     public static int Run(GameInstall install, string[] args)
@@ -107,7 +108,11 @@ static class NavmeshTool
             $"{s.MissingFiles} missing files, building hash {g.BuildingHash:x8}");
 
         if (verbose) { foreach (var p in g.Painters) Console.WriteLine($"  painter x {p.Polygon.Min(v => v.X):0}..{p.Polygon.Max(v => v.X):0} z {p.Polygon.Min(v => v.Y):0}..{p.Polygon.Max(v => v.Y):0} y {p.YMin:0}..{p.YMax:0}"); foreach (var sd in g.Seeds) Console.WriteLine($"  seed {sd.X:0},{sd.Y:0},{sd.Z:0}"); }
-        if (near is not null) foreach (var line in DescribeNear(gatherer, db, collision, zone.Value, near[0], near[1], near[2])) Console.WriteLine("  " + line);
+        if (near is not null)
+        {
+            foreach (var line in DescribeNear(gatherer, db, collision, zone.Value, near[0], near[1], near[2])) Console.WriteLine("  " + line);
+            foreach (var line in DescribeVolumesNear(g, near[0], near[1], near[2])) Console.WriteLine("  " + line);
+        }
         if (interiorKey is not null) return DescribeOneInterior(gatherer, zone.Value, interiorKey, settings, obj, ownOnly);
         if (geometryOnly)
         {
@@ -223,6 +228,28 @@ static class NavmeshTool
     }
 
     /// <summary>The buildings within a radius of a point, with how many of their parts have collision (<c>--near x,z,radius</c>).</summary>
+    /// <summary>The carvers and solids that reach within a radius of a point (<c>--near</c>): what cuts the mesh there when no building near the point explains it.</summary>
+    static IEnumerable<string> DescribeVolumesNear(ZoneGeometry g, float x, float z, float radius)
+    {
+        var p = new Vector2(x, z);
+        foreach (var c in g.Carvers)
+        {
+            if (!c.Polygon.Any(v => Vector2.Distance(v, p) <= radius) && !Inside(c.Polygon, p)) continue;
+            yield return $"carver {c.Polygon.Length} vertices x {c.Polygon.Min(v => v.X):0}..{c.Polygon.Max(v => v.X):0} z {c.Polygon.Min(v => v.Y):0}..{c.Polygon.Max(v => v.Y):0} y {c.YMin:0}..{c.YMax:0}{(c.Owner is null ? "" : " owner " + c.Owner)}";
+        }
+        foreach (var s in g.Solids)
+            if (s.Min.X - radius <= x && x <= s.Max.X + radius && s.Min.Y - radius <= z && z <= s.Max.Y + radius)
+                yield return $"solid x {s.Min.X:0}..{s.Max.X:0} z {s.Min.Y:0}..{s.Max.Y:0} ({s.Planes.Length} planes)";
+
+        static bool Inside(Vector2[] poly, Vector2 q)
+        {
+            bool inside = false;
+            for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
+                if (poly[i].Y > q.Y != poly[j].Y > q.Y && q.X < (poly[j].X - poly[i].X) * (q.Y - poly[i].Y) / (poly[j].Y - poly[i].Y) + poly[i].X) inside = !inside;
+            return inside;
+        }
+    }
+
     static IEnumerable<string> DescribeNear(ZoneGeometryGatherer gatherer, GameDatabase db, CollisionCache collision, ZoneCoordinate zone, float x, float z, float radius)
     {
         var (ox, oz) = WorldLayout.ZoneOrigin(zone);
