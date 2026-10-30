@@ -116,11 +116,11 @@ static class NavmeshTool
                 }
                 built.Add((geometry, mesh!));
                 if (dx == 0 && dz == 0 && verbose) foreach (var p in g.Painters) { int n = 0; for (int q = 0; q < mesh!.PolygonCount; q++) { if (mesh.Areas[q] != NavArea.Door) continue; var vv = mesh.Vertices[mesh.Polygons[q][0]]; if (vv.X >= p.Polygon.Min(a => a.X) - 4 && vv.X <= p.Polygon.Max(a => a.X) + 4 && vv.Z >= p.Polygon.Min(a => a.Y) - 4 && vv.Z <= p.Polygon.Max(a => a.Y) + 4) n++; } Console.WriteLine($"  door polygons near painter {p.Polygon.Min(a => a.X):0},{p.Polygon.Min(a => a.Y):0}: {n}"); }
-                // Kept regions are joined across zone borders as the game does (NavMeshService), whatever the order.
                 full[c] = mesh!;
-                foreach (var other in ZoneKeptClosure.Spread(full, c, settings)) if (other != c && world.Find(other) is not null) world = world.With(full[other].WithoutPruned());
-                world = world.With(mesh!.WithoutPruned());
             }
+        // The kept regions are resolved over the built zones as the game does for the loaded ones (NavMeshService): own seeds, the border rule toward
+        // zones not built here, and the neighbours' kept border edges.
+        foreach (var (c, keep) in ZoneKeptClosure.Resolve(full, settings)) world = world.With(full[c].WithKept(keep).WithoutPruned());
 
         List<Vector3>? path = null;
         if (pathArg is not null)
@@ -223,6 +223,13 @@ static class NavmeshTool
         return 0;
     }
 
+    /// <summary>The kept polygons of a zone built alone, as the game publishes it with no neighbour loaded (its own seeds and the border rule on every side).</summary>
+    static ZoneNavMesh ResolvedAlone(ZoneNavMesh mesh, NavBuildSettings settings)
+    {
+        var zone = new ZoneCoordinate(mesh.ZoneX, mesh.ZoneZ);
+        return mesh.WithKept(ZoneKeptClosure.Resolve(new Dictionary<ZoneCoordinate, ZoneNavMesh> { [zone] = mesh }, settings)[zone]).WithoutPruned();
+    }
+
     /// <summary>Sample spacing of <c>--compare</c> (units).</summary>
     const float CompareStep = 8;
 
@@ -245,7 +252,7 @@ static class NavmeshTool
             var original = OriginalNavTiles.LoadExterior(install, zone);
             if (original is null) { Console.WriteLine($"{zone,-7} no original tile"); continue; }
             var g = gatherer.Gather(zone);
-            var mesh = NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: true);
+            var mesh = ResolvedAlone(NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: true), settings);
             var footprints = g.Solids.Select(s => (s.Min, s.Max)).Concat(g.Carvers.Where(c => c.Polygon.Length > 0).Select(c => (Min: c.Polygon.Aggregate(Vector2.Min), Max: c.Polygon.Aggregate(Vector2.Max))))
                 .Where(b => b.Max.X - b.Min.X < 1000 && b.Max.Y - b.Min.Y < 1000).ToList();
             var originalIndex = new OriginalIndex(original);

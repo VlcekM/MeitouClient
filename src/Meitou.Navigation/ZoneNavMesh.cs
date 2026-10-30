@@ -85,6 +85,13 @@ public sealed class ZoneNavMesh
     /// <summary><see cref="Heights"/> from a list with one entry per polygon (null when every entry is).</summary>
     internal static HeightGrid?[]? HeightsOf(List<HeightGrid?> list) => list.Any(h => h is not null) ? [.. list] : null;
 
+    /// <summary>This mesh with another kept set over the same polygons (the arrays are shared).</summary>
+    internal ZoneNavMesh WithKept(bool[] kept) => new()
+    {
+        ZoneX = ZoneX, ZoneZ = ZoneZ, Vertices = Vertices, Polygons = Polygons, Neighbours = Neighbours, Areas = Areas, Links = Links, Kept = kept,
+        BoundsMin = BoundsMin, BoundsMax = BoundsMax, DoorIds = DoorIds, DoorOf = DoorOf, Surfaces = Surfaces, Terrain = Terrain, Heights = Heights,
+    };
+
     /// <summary>A copy without the pruned polygons (and the vertices only they used), neighbours renumbered; what the game keeps and caches.</summary>
     public ZoneNavMesh WithoutPruned()
     {
@@ -343,13 +350,16 @@ public sealed class ZoneNavMesh
     /// The edges of kept polygons that lie on the border line of this zone facing the direction (<paramref name="dx"/>, <paramref name="dz"/>) and lead nowhere
     /// inside the mesh (edges that have a link are left out when <paramref name="skipLinked"/>).
     /// </summary>
-    internal List<(int Polygon, int Edge)> BorderEdges(int dx, int dz, bool skipLinked)
+    /// <param name="keep">The kept set to read instead of <see cref="Kept"/>; null with <paramref name="all"/> false reads <see cref="Kept"/>.</param>
+    /// <param name="all">Every polygon, kept or not.</param>
+    internal List<(int Polygon, int Edge)> BorderEdges(int dx, int dz, bool skipLinked, bool[]? keep = null, bool all = false)
     {
         var result = new List<(int, int)>();
         float line = dx > 0 ? BoundsMax.X : dx < 0 ? BoundsMin.X : dz > 0 ? BoundsMax.Y : BoundsMin.Y;
+        var kept = keep ?? Kept;
         for (int p = 0; p < PolygonCount; p++)
         {
-            if (!Kept[p]) continue;
+            if (!all && !kept[p]) continue;
             var poly = Polygons[p];
             for (int k = 0; k < poly.Length; k++)
             {
