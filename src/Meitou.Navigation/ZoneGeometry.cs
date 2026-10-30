@@ -100,6 +100,10 @@ internal sealed class ZoneGeometry
     /// For an interior clipped at a zone border: no seed keeps nothing (instead of the largest region); the part is kept from the neighbour's border
     /// (<see cref="ZoneKeptClosure"/>).
     /// </summary>
+    /// <summary>Debug (the navmesh tool): when set, every part's triangle range is recorded in <see cref="PartRanges"/>.</summary>
+    public bool TrackParts { get; init; }
+    /// <summary>Debug: per part with collision, its owner and part names, collision path and the triangles [First, Last) it emitted.</summary>
+    public List<(string Owner, string Part, string Path, int First, int Last)> PartRanges { get; } = [];
     public bool ClippedAtBorder { get; init; }
     /// <summary>
     /// For the interior of a destroyed building: no seed keeps its ground floor (instead of the largest region, <see cref="SeedPruner.DestroyedFloorBand"/>). It has

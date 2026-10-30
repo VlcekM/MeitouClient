@@ -210,6 +210,24 @@ and spikes; at 36 the outline matches `tile20.32.hkt`, terrain triangles drop 13
 
 **Furniture** comes from building layouts (`BuildingLayouts`), none when destroyed. **Verified**
 (Hub, `meitou-tools navmesh`): parts with collision 189→309.
+**Stairs under floors** (engine choice): Recast connects two neighbouring cells only when the free space they share (over the higher floor, under the lower
+ceiling) is the agent height, so a ramp climbing out from under a floor slab, a roof edge or a leaning wall lost a line of cells where its rise per cell ate
+the margin, although each cell had the headroom on its own; the builder asks the shared space the agent height less the climb (13), the per-cell headroom
+18 as before, as the original connects faces by step height and asks the clearance per face. **Observed** (`meitou-tools navmesh --interior`): Sho-Battai's
+Longhouse `43.11:5565-Newwworld-INGAME` ramp under its upper floor, Black Scratch's bar `50.33:324-`, Squin's Watchtower `18.35:29-rebirth-INGAME` (placed
+rolled 12°, as the original's tile `18.35` has it too, its walls leaning over the spiral ramp) kept their upper storeys with it, not before (issues #139,
+#142, #147). **Interiors are one tile** (engine choice): a stair across a tile line inside a building came out cut (Stack's Longhouse `19.29:6-`; the two
+tiles' contours put their vertices at different heights along the ramp). `meitou-tools navmesh --compare-interiors` counts the original tile's interior
+faces covered by a kept polygon within 12 units: **Observed** 18.35 68→86 %, 19.29 62→68 %, 50.33 69→71 %, 47.16 77→81 %, 20.32 88→90 % with the two rules.
+**Shells and open structures**: a building is a shell with an interior (the original's class 12; its mask carves the exterior, its inside is an interior
+job) when it has an interior mask part with collision and is not `is gateway`, `is wall gate`, `cavernous` or `interior terrain`
+(`ZoneGeometryGatherer.IsShellWithInterior`; the record field the class comes from is **Unknown**). **Observed** against the original tiles: the Ancient Lab
+(47.16), Ancient Citadel (26.13, both `cavernous`) and Ancient Factory (34.28, `interior terrain`) have no interior group and their floors are in the
+exterior tile; Hive Commune Huts (7.30, no doors) have interior groups; Heft's Ancient Lab Ramp is an `is wall gate` whose mask is the gate's trigger box,
+and as a shell it carved its own ramp out of the exterior and cut the lab off (#140). Every other building is an open structure: all its WALKABLE shapes are
+walkable, not only its floor-0 parts, and its upper-floor contents (groups 17, 18, 20..22) are gathered, the original's rule for the flag the shell class
+clears (below, building shapes). **Observed**: Heft's Shield Bridge, an `is stairs` part, was an obstacle (#141); its walkboard collision comes out 120..145
+above where the original's tile has the deck (`y` 1160..1180 by its origin), which is **Unknown** (a pose or baked-scale question of that file).
 **Interior parts**: the `interior` list (laid out like `parts` after the same position-seeded reseed, as drawn) is collision too,
 none when destroyed; it holds interior stairs and upper floors. **Verified** (tile20.32 interior `600815`, the Hub Storm House
 `4933-Newwworld-INGAME`): the original mesh ramps +4→+68 over (+30..+65, −45..−5) from the origin to the roof storey at +69..+72,
@@ -403,7 +421,7 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
     with flags 0, i.e. without CARVER_ERODE_EDGES, the only flag). A carver removes the navmesh inside it, so the exterior navmesh has a hole where a house's interior is; the interior is built separately.
     **Observed** (original tiles 23.22, 24.22, point-in-polygon on a 5-unit grid within 40 of the origin): no exterior polygon under Old Storm
     House `407-`, Stephouse `560-`, Storm House `403-`/`671-`, Bughouse `433-` (0 of 289 points each), although their terrain lies 14..26 below
-    the hull's floor. Meitou: an interior mask carver reaches `CarverDrop` (60) below its hull (engine choice); from the hull's bottom only, the
+    the hull's floor. Meitou: a shell is a building `IsShellWithInterior` ("Own builder", shells); its interior mask carver reaches `CarverDrop` (60) below its hull (engine choice); from the hull's bottom only, the
     ground under raised floors stayed as a crawlspace joined to the street and Blister Hill's residents walked under its houses.
   - **Door painters** (FUN_1403c4520): door shapes (group 5) of door buildings, searched in the AABB grown by 20 units on
     every side (the 20 is a search margin, not a painter size); the door shape's hull, its pose shifted by 5 units along
@@ -445,8 +463,9 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
     1 for WALKABLE and 0 otherwise; IGNORE ones are skipped. Vertices closer than 0.05 (squared, Havok) are merged. A
     destroyed building adds the triangle meshes of its `destroyed boundary` XML to the geometry (fcs.def calls it the
     "Navmesh cutter for destroyed interior"; the material it gets was not traced). 23 of the 68 buildings with `interior` parts have collision on them; `interior terrain` is set on 3
-    (**Verified** counts); what `interior terrain` ("building interior includes terrain for generating navmesh") changes
-    in the interior pass was not traced (**Unknown**).
+    (**Verified** counts; Metal Warehouse, Ancient Factory, Ash Dome Ruin). **Observed** (tile 34.28): the Ancient Factory has no interior group and its
+    platforms are in the exterior tile, so `interior terrain` ("building interior includes terrain for generating navmesh") buildings are built as exterior
+    ("Own builder", shells); what the flag does in the generator's code was not traced.
   - BUILDING `path mode` counts 92/84/304/123 for 0/1/2/3 (**Verified**, 603 records). Enum names (FCS `PathMode`, the
     editor's enum): 0 NAVMESH_IGNORE, 1 NAVMESH_PROJECTED, 2 NAVMESH_OBSTACLE (default), 3 NAVMESH_WALKABLE (**Verified**).
     Other fields: `destroyed navmesh` (6 buildings, walls; read by `Building::setDestroyed` `FUN_140557280`, which rebuilds the navmesh in the building's bounds when set,
