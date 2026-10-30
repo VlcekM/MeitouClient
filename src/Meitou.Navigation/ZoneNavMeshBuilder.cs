@@ -163,7 +163,11 @@ internal static partial class ZoneNavMeshBuilder
         RcFilters.FilterLowHangingWalkableObstacles(ctx, walkableClimb, hf);
         RcFilters.FilterWalkableLowHeightSpans(ctx, walkableHeight, hf);
         long t1 = Stopwatch.GetTimestamp();
-        var chf = RcCompacts.BuildCompactHeightfield(ctx, walkableHeight, walkableClimb, hf);
+        // Recast connects two neighbouring spans only when the free space they share (above the higher floor, below the lower ceiling) is the agent height, so a
+        // ramp climbing out from under a floor slab, a leaning wall or a roof edge loses a line of cells where its rise per cell eats the margin, although every
+        // cell has the headroom on its own (the filter above). The original connects faces by step height alone and asks the clearance per face, so the
+        // shared space is asked the agent height less the climb (docs/game/pathfinding.md, "Own builder", stairs under floors).
+        var chf = RcCompacts.BuildCompactHeightfield(ctx, Math.Max(1, walkableHeight - walkableClimb), walkableClimb, hf);
 
         foreach (int c in carvers) Mark(ctx, g.Carvers[c], NavArea.Null, chf);
         foreach (int c in solids) RemoveInside(g.Solids[c], chf);

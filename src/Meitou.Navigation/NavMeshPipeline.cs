@@ -18,12 +18,13 @@ internal static class NavMeshPipeline
         exterior.Terrain ??= geometry.Ground;
         if (!interiors) return exterior;
         var watch = Stopwatch.StartNew();
-        float tileWorld = settings.TileCells * settings.CellSize;
-        var geometries = gatherer.InteriorSites(geometry.Zone).Select(s => gatherer.GatherInterior(s, tileWorld, agentHeight: settings.AgentHeight)).Where(g => g is not null).Select(g => g!).ToList();
-        var single = settings with { Threads = 1 };
+        // An interior is one tile: a stair across a tile line inside a building came out cut (the two tiles' contours put their vertices at different heights
+        // along a steep ramp, docs/game/pathfinding.md "Interiors"), and the boxes are small.
+        var geometries = gatherer.InteriorSites(geometry.Zone).Select(s => gatherer.GatherInterior(s, InteriorTileStep * settings.CellSize, agentHeight: settings.AgentHeight)).Where(g => g is not null).Select(g => g!).ToList();
         var built = new ZoneNavMesh[geometries.Count];
         Parallel.For(0, geometries.Count, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) }, i =>
         {
+            var single = settings with { Threads = 1, TileCells = (int)MathF.Round((geometries[i].ZoneMax.X - geometries[i].ZoneMin.X) / settings.CellSize) };
             built[i] = ZoneNavMeshBuilder.Build(geometries[i], single, out _);
             built[i].Surfaces = new NavSurfaces(NavSurfaces.From(geometries[i], geometries[i].ZoneMin, geometries[i].ZoneMax));
         });
@@ -42,15 +43,30 @@ internal static class NavMeshPipeline
         return combined;
     }
 
-    static void DescribeInterior(ZoneGeometry g, ZoneNavMesh m, Action<string> log)
+    /// <summary>An interior's box is rounded up to a multiple of this many cells (its one tile's side).</summary>
+    public const int InteriorTileStep = 8;
+
+    internal static void DescribeInterior(ZoneGeometry g, ZoneNavMesh m, Action<string> log)
     {
         log($"  interior {g.InteriorOf}: {m.PolygonCount} polygons, {m.KeptCount} kept, {g.Seeds.Count} seeds ({string.Join(" ", g.Seeds.Select(s => $"{s.X:0},{s.Y:0},{s.Z:0}"))}), {m.Areas.Count(a => a == NavArea.Door)} door polygons, {g.Painters.Count} painters, hull y {g.InteriorHull!.YMin:0}..{g.InteriorHull!.YMax:0}");
-        if (m.DoorIds is null) return;
+        // Its connected components (neighbours only, not links), largest first: a stair or upper floor the seed did not reach shows up as an unkept one.
+        var component = new int[m.PolygonCount];
+        Array.Fill(component, -1);
+        int next = 0;
+        var stack = new Stack<int>();
         for (int p = 0; p < m.PolygonCount; p++)
-            if (m.Kept[p])
-            {
-                var c = m.Centre(p);
-                log($"    kept {p}: {c.X:0},{c.Y:0},{c.Z:0} area {m.Areas[p]} door {m.DoorOf?[p]}");
-            }
+        {
+            if (component[p] >= 0) continue;
+            component[p] = next;
+            stack.Push(p);
+            while (stack.Count > 0)
+                foreach (int q in m.NeighboursOf(stack.Pop())) if (component[q] < 0) { component[q] = next; stack.Push(q); }
+            next++;
+        }
+        foreach (var group in Enumerable.Range(0, m.PolygonCount).GroupBy(p => component[p]).OrderByDescending(c => c.Count()).Take(12))
+        {
+            var c = group.Select(p => m.Centre(p)).ToList();
+            log($"    component {group.Key}: {group.Count()} polygons, {(m.Kept[group.First()] ? "kept" : "pruned")}, x {c.Min(v => v.X):0}..{c.Max(v => v.X):0} y {c.Min(v => v.Y):0}..{c.Max(v => v.Y):0} z {c.Min(v => v.Z):0}..{c.Max(v => v.Z):0}, {group.Count(p => m.Areas[p] == NavArea.Door)} door");
+        }
     }
 }
