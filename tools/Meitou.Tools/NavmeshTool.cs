@@ -27,7 +27,10 @@ static class NavmeshTool
         bool doorsClosed = false, noInteriors = false; float? toY = null, fromY = null; float[]? near = null;
         int around = 0;
         bool fingerprint = false;
+        string? interiorKey = null;
+        bool ownOnly = false;
         var compare = new List<ZoneCoordinate>();
+        var compareInteriors = new List<ZoneCoordinate>();
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -54,7 +57,22 @@ static class NavmeshTool
                         compare.Add(new(int.Parse(p[0], CultureInfo.InvariantCulture), int.Parse(p[1], CultureInfo.InvariantCulture)));
                     }
                     break;
+                case "--compare-interiors":
+                    while (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                    {
+                        var p = args[++i].Split(',');
+                        compareInteriors.Add(new(int.Parse(p[0], CultureInfo.InvariantCulture), int.Parse(p[1], CultureInfo.InvariantCulture)));
+                    }
+                    break;
                 case "--verbose": verbose = true; break;
+                case "--interior": interiorKey = args[++i]; break;
+                case "--climb": settings = settings with { MaxClimb = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                case "--cell": settings = settings with { CellSize = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                case "--own-only": ownOnly = true; break;
+                case "--tile": settings = settings with { TileCells = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                case "--min-region": settings = settings with { MinRegionArea = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                case "--merge-region": settings = settings with { MergeRegionArea = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                case "--simplify": settings = settings with { MaxSimplificationError = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--box": box = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
                 default: Console.Error.WriteLine($"Unknown option {args[i]}"); return 2;
             }
@@ -65,6 +83,7 @@ static class NavmeshTool
         var levels = WorldLevelData.Load(install, includeInteriors: true);
         Console.WriteLine($"game data and levels loaded ({watch.ElapsedMilliseconds} ms)");
         if (compare.Count > 0) return Compare(install, db, levels, compare, settings);
+        if (compareInteriors.Count > 0) return CompareInteriors(install, db, levels, compareInteriors, settings);
         if (fingerprint) return Fingerprint(install, db, levels, zone is { } only ? [only] : [new ZoneCoordinate(20, 32), new ZoneCoordinate(21, 32)], settings);
         if (zone is null)
         {
@@ -89,6 +108,7 @@ static class NavmeshTool
 
         if (verbose) { foreach (var p in g.Painters) Console.WriteLine($"  painter x {p.Polygon.Min(v => v.X):0}..{p.Polygon.Max(v => v.X):0} z {p.Polygon.Min(v => v.Y):0}..{p.Polygon.Max(v => v.Y):0} y {p.YMin:0}..{p.YMax:0}"); foreach (var sd in g.Seeds) Console.WriteLine($"  seed {sd.X:0},{sd.Y:0},{sd.Z:0}"); }
         if (near is not null) foreach (var line in DescribeNear(gatherer, db, collision, zone.Value, near[0], near[1], near[2])) Console.WriteLine("  " + line);
+        if (interiorKey is not null) return DescribeOneInterior(gatherer, zone.Value, interiorKey, settings, obj, ownOnly);
         if (geometryOnly)
         {
             if (obj is not null) WriteGeometryObj(g, obj);
@@ -168,6 +188,40 @@ static class NavmeshTool
         return 0;
     }
 
+    /// <summary>
+    /// <c>--interior key</c>: gathers and builds one building's interior alone, lists its seeds and connected components, and with <c>--obj path</c> writes its
+    /// gathered triangles (<c>path.geometry.obj</c>) and its polygons (<c>path</c>) for a 3D viewer or a script.
+    /// </summary>
+    static int DescribeOneInterior(ZoneGeometryGatherer gatherer, ZoneCoordinate zone, string key, NavBuildSettings settings, string? obj, bool ownOnly)
+    {
+        var site = gatherer.InteriorSites(zone).FirstOrDefault(s => s.Placement.Key == key);
+        if (site is null) { Console.Error.WriteLine($"No interior {key} in zone {zone}; keys: {string.Join(", ", gatherer.InteriorSites(zone).Select(s => s.Placement.Key))}"); return 1; }
+        var g = gatherer.GatherInterior(site, NavMeshPipeline.InteriorTileStep * settings.CellSize, agentHeight: settings.AgentHeight, ownOnly: ownOnly, trackParts: true);
+        if (g is null) { Console.Error.WriteLine("No usable hull."); return 1; }
+        settings = settings with { TileCells = (int)MathF.Round((g.ZoneMax.X - g.ZoneMin.X) / settings.CellSize) };
+        foreach (var (owner, part, path, first, last) in g.PartRanges)
+        {
+            float lo = float.MaxValue, hi = float.MinValue;
+            int walkable = 0;
+            for (int t = first; t < last; t++)
+            {
+                if (g.Areas[t] != NavArea.Null) walkable++;
+                for (int k = 0; k < 3; k++) { float y = g.Vertices[g.Indices[t * 3 + k] * 3 + 1]; lo = Math.Min(lo, y); hi = Math.Max(hi, y); }
+            }
+            Console.WriteLine($"  part {owner} / {part}: triangles {first}..{last - 1} ({walkable} walkable), y {lo:0}..{hi:0}, {Path.GetFileName(path)}");
+        }
+        Console.WriteLine($"  hull y {g.InteriorHull!.YMin:0}..{g.InteriorHull.YMax:0}: {string.Join(" ", g.InteriorHull.Polygon.Select(p => $"({p.X:0},{p.Y:0})"))}");
+        Console.WriteLine($"interior {key} ({site.Record.Name}): box {g.ZoneMin.X:0},{g.ZoneMin.Y:0}..{g.ZoneMax.X:0},{g.ZoneMax.Y:0}, {g.TriangleCount} triangles ({g.Stats.WalkableTriangles} walkable, {g.Stats.CuttingTriangles} cutting), {g.Stats.Shapes} shapes, {g.Carvers.Count} carvers, {g.Painters.Count} painters, {g.Seeds.Count} seeds, {g.NodeSeeds.Count} node seeds");
+        var mesh = ZoneNavMeshBuilder.Build(g, settings with { Threads = 1 }, out _);
+        NavMeshPipeline.DescribeInterior(g, mesh, Console.WriteLine);
+        if (obj is not null)
+        {
+            WriteGeometryObj(g, Path.ChangeExtension(obj, ".geometry.obj"));
+            WriteMeshObj(mesh, obj);
+        }
+        return 0;
+    }
+
     /// <summary>The buildings within a radius of a point, with how many of their parts have collision (<c>--near x,z,radius</c>).</summary>
     static IEnumerable<string> DescribeNear(ZoneGeometryGatherer gatherer, GameDatabase db, CollisionCache collision, ZoneCoordinate zone, float x, float z, float radius)
     {
@@ -176,13 +230,13 @@ static class NavmeshTool
         foreach (var (b, record, position, destroyed) in gatherer.NearBuildings(zone, min, min + new Vector2(WorldLayout.ZoneSize), ZoneGeometryGatherer.DefaultMargin))
         {
             if (Vector2.Distance(new(position.X, position.Z), new(x, z)) > radius) continue;
-            var parts = WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(destroyed));
+            var parts = WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(destroyed) { WithInterior = !destroyed });
             int withCollision = parts.Count(p => p.Source.GetPath("xml collision").Length > 0 && collision.Get(p.Source.GetPath("xml collision")) is not null);
             if (verbose) yield return "    fields " + string.Join(", ", record.Ints.Select(kv => $"{kv.Key}={kv.Value}").Concat(record.Floats.Select(kv => $"{kv.Key}={kv.Value}")).Concat(record.Bools.Where(kv => kv.Value).Select(kv => kv.Key)));
-            yield return $"{record.Name} [{record.StringId}] at {position.X:0},{position.Y:0},{position.Z:0} mode {record.GetInt("path mode", (int)PathMode.Obstacle)} gateway {record.GetBool("is gateway")} parts {parts.Count} with collision {withCollision} interior masks {record.GetReferences("interior mask").Count()} destroyed {destroyed}";
+            yield return $"{record.Name} [{record.StringId}] key {b.Key} at {position.X:0},{position.Y:0},{position.Z:0} rotation {b.Rotation.X:0.###},{b.Rotation.Y:0.###},{b.Rotation.Z:0.###},{b.Rotation.W:0.###} mode {record.GetInt("path mode", (int)PathMode.Obstacle)} gateway {record.GetBool("is gateway")} parts {parts.Count} with collision {withCollision} interior masks {record.GetReferences("interior mask").Count()} destroyed {destroyed}";
             if (verbose)
                 foreach (var p in parts)
-                    yield return $"    part {p.Source.Name} [{p.Source.StringId}] mesh {p.MeshPath} collision {p.Source.GetPath("xml collision")} at {p.Transform.Translation.X:0},{p.Transform.Translation.Y:0},{p.Transform.Translation.Z:0}";
+                    yield return $"    part {p.Source.Name} [{p.Source.StringId}] floor {p.Source.GetInt("building floor")}{(p.Source.GetBool("is stairs") ? " stairs" : "")}{(p.Source.GetBool("passable") ? " passable" : "")}{(p.Source.GetBool("is unwalkable roof") ? " unwalkable-roof" : "")} mesh {p.MeshPath} collision {p.Source.GetPath("xml collision")} at {p.Transform.Translation.X:0},{p.Transform.Translation.Y:0},{p.Transform.Translation.Z:0}";
         }
     }
 
@@ -290,6 +344,52 @@ static class NavmeshTool
         return 0;
     }
 
+    /// <summary>How far (units) above or below an original interior face's centre one of our kept polygons may lie and still cover it (<c>--compare-interiors</c>).</summary>
+    const float InteriorCoverHeight = 12;
+
+    /// <summary>
+    /// <c>--compare-interiors</c>: builds each zone (interiors joined) and, for every interior group of the original's tile, counts its faces whose centre has
+    /// one of our kept polygons within <see cref="InteriorCoverHeight"/>: a stair or storey we lose shows as uncovered faces. Lists the groups under 90 % with
+    /// their position and the uncovered faces' height range.
+    /// </summary>
+    static int CompareInteriors(GameInstall install, GameDatabase db, WorldLevelData levels, List<ZoneCoordinate> zones, NavBuildSettings settings)
+    {
+        using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
+        foreach (var zone in zones)
+        {
+            var groups = OriginalNavTiles.LoadInteriors(install, zone);
+            var g = gatherer.Gather(zone);
+            var mesh = ResolvedAlone(NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: true), settings);
+            int faces = 0, covered = 0;
+            var heights = new List<float>();
+            var lines = new List<string>();
+            foreach (var group in groups)
+            {
+                int n = 0, hit = 0;
+                float lo = float.MaxValue, hi = float.MinValue;
+                foreach (var poly in group.Polygons)
+                {
+                    if (poly.Length < 3) continue;
+                    var c = Vector3.Zero;
+                    foreach (int i in poly) c += group.Vertices[i];
+                    c /= poly.Length;
+                    if (c.X < g.ZoneMin.X || c.X >= g.ZoneMax.X || c.Z < g.ZoneMin.Y || c.Z >= g.ZoneMax.Y) continue;
+                    n++;
+                    heights.Clear();
+                    mesh.HeightsAt(c.X, c.Z, heights);
+                    if (heights.Any(y => MathF.Abs(y - c.Y) <= InteriorCoverHeight)) hit++;
+                    else { lo = MathF.Min(lo, c.Y); hi = MathF.Max(hi, c.Y); }
+                }
+                faces += n; covered += hit;
+                if (n > 0 && hit < 0.9 * n)
+                    lines.Add($"    {group.Uid} at {group.Origin.X:0},{group.Origin.Z:0}: {hit}/{n} faces covered, missing y {lo:0}..{hi:0}");
+            }
+            Console.WriteLine($"{zone}: {groups.Count} interior groups, {covered}/{faces} faces covered ({(faces > 0 ? 100.0 * covered / faces : 100):0.0} %)");
+            foreach (var line in lines) Console.WriteLine(line);
+        }
+        return 0;
+    }
+
     /// <summary>The original tile's polygons on a 64-unit grid, for point queries.</summary>
     sealed class OriginalIndex
     {
@@ -362,13 +462,31 @@ static class NavmeshTool
         using var w = new StreamWriter(path);
         for (int i = 0; i < g.Vertices.Count; i += 3)
             w.WriteLine(string.Create(CultureInfo.InvariantCulture, $"v {g.Vertices[i]:0.##} {g.Vertices[i + 1]:0.##} {g.Vertices[i + 2]:0.##}"));
-        foreach (var (name, area) in new[] { ("null", NavArea.Null), ("ground", NavArea.Ground), ("water", NavArea.Water), ("water-waist", NavArea.WaterWaist), ("water-deep", NavArea.WaterDeep) })
+        if (g.PartRanges.Count > 0)
         {
-            w.WriteLine($"g {name}");
+            // One object per part (its name has no spaces), faces in triangle order, the material naming the area.
+            int next = 0;
+            byte? area = null;
             for (int t = 0; t < g.TriangleCount; t++)
-                if (g.Areas[t] == area)
-                    w.WriteLine($"f {g.Indices[t * 3] + 1} {g.Indices[t * 3 + 1] + 1} {g.Indices[t * 3 + 2] + 1}");
+            {
+                while (next < g.PartRanges.Count && g.PartRanges[next].First <= t)
+                {
+                    var r = g.PartRanges[next++];
+                    w.WriteLine($"o {next - 1}:{r.Part.Replace(' ', '_')}");
+                    area = null;
+                }
+                if (area != g.Areas[t]) { area = g.Areas[t]; w.WriteLine($"usemtl {(area == NavArea.Null ? "null" : area == NavArea.Ground ? "ground" : "water")}"); }
+                w.WriteLine($"f {g.Indices[t * 3] + 1} {g.Indices[t * 3 + 1] + 1} {g.Indices[t * 3 + 2] + 1}");
+            }
         }
+        else
+            foreach (var (name, area) in new[] { ("null", NavArea.Null), ("ground", NavArea.Ground), ("water", NavArea.Water), ("water-waist", NavArea.WaterWaist), ("water-deep", NavArea.WaterDeep) })
+            {
+                w.WriteLine($"g {name}");
+                for (int t = 0; t < g.TriangleCount; t++)
+                    if (g.Areas[t] == area)
+                        w.WriteLine($"f {g.Indices[t * 3] + 1} {g.Indices[t * 3 + 1] + 1} {g.Indices[t * 3 + 2] + 1}");
+            }
         Console.WriteLine($"wrote {path}");
     }
 
