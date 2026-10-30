@@ -14,6 +14,13 @@ internal static class ZoneKeptClosure
 {
     static readonly (int Dx, int Dz)[] Sides = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 
+    /// <summary>The kept polygons of a zone built alone, as the game publishes it with no neighbour loaded (its own seeds and the border rule on every side).</summary>
+    public static ZoneNavMesh ResolveAlone(ZoneNavMesh mesh, NavBuildSettings s)
+    {
+        var zone = new ZoneCoordinate(mesh.ZoneX, mesh.ZoneZ);
+        return mesh.WithKept(Resolve(new Dictionary<ZoneCoordinate, ZoneNavMesh> { [zone] = mesh }, s)[zone]).WithoutPruned();
+    }
+
     /// <summary>The kept set of every zone in <paramref name="full"/> (meshes with their pruned polygons); <paramref name="standing"/>: points whose region is kept too.</summary>
     public static Dictionary<ZoneCoordinate, bool[]> Resolve(IReadOnlyDictionary<ZoneCoordinate, ZoneNavMesh> full, NavBuildSettings s, IReadOnlyDictionary<ZoneCoordinate, List<Vector3>>? standing = null)
     {

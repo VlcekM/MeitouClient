@@ -102,6 +102,39 @@ public static class OriginalNavTiles
         return result;
     }
 
+    /// <summary>How far (units) above or below an original interior face's centre one of our kept polygons may lie and still cover it.</summary>
+    public const float InteriorCoverHeight = 12;
+
+    /// <summary>
+    /// How much of each original interior group a built zone covers: of the group's faces whose centre lies in the zone's box, those with a kept polygon of
+    /// <paramref name="mesh"/> within <see cref="InteriorCoverHeight"/> of the centre's height. A stair or storey we lose shows as uncovered faces
+    /// (<c>meitou-tools navmesh --compare-interiors</c>, <c>InteriorCoverageTests</c>).
+    /// </summary>
+    public static List<InteriorCoverage> CoverInteriors(IReadOnlyList<OriginalInterior> groups, ZoneNavMesh mesh, Vector2 zoneMin, Vector2 zoneMax)
+    {
+        var result = new List<InteriorCoverage>(groups.Count);
+        var heights = new List<float>();
+        foreach (var group in groups)
+        {
+            int n = 0, hit = 0;
+            float lo = float.MaxValue, hi = float.MinValue;
+            foreach (var poly in group.Polygons)
+            {
+                if (poly.Length < 3) continue;
+                var c = Vector3.Zero;
+                foreach (int i in poly) c += group.Vertices[i];
+                c /= poly.Length;
+                if (c.X < zoneMin.X || c.X >= zoneMax.X || c.Z < zoneMin.Y || c.Z >= zoneMax.Y) continue;
+                n++;
+                mesh.HeightsAt(c.X, c.Z, heights);
+                if (heights.Any(y => MathF.Abs(y - c.Y) <= InteriorCoverHeight)) hit++;
+                else { lo = MathF.Min(lo, c.Y); hi = MathF.Max(hi, c.Y); }
+            }
+            result.Add(new InteriorCoverage(group, n, hit, lo, hi));
+        }
+        return result;
+    }
+
     static float Float(string s) => float.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float f) ? f : 0;
 
     static long Int(object? v) => v is long l ? l : 0;
@@ -109,3 +142,6 @@ public static class OriginalNavTiles
 
 /// <summary>One interior group of an original tile: the uid from its Info string, the Info point and its mesh in world coordinates.</summary>
 public sealed record OriginalInterior(string Uid, Vector3 Origin, Vector3[] Vertices, int[][] Polygons);
+
+/// <summary>One original interior group against a built zone: its faces in the zone, how many are covered, and the uncovered faces' height range.</summary>
+public sealed record InteriorCoverage(OriginalInterior Group, int Faces, int Covered, float MissingLow, float MissingHigh);

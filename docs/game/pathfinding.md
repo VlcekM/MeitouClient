@@ -218,7 +218,9 @@ Longhouse `43.11:5565-Newwworld-INGAME` ramp under its upper floor, Black Scratc
 rolled 12°, as the original's tile `18.35` has it too, its walls leaning over the spiral ramp) kept their upper storeys with it, not before (issues #139,
 #142, #147). **Interiors are one tile** (engine choice): a stair across a tile line inside a building came out cut (Stack's Longhouse `19.29:6-`; the two
 tiles' contours put their vertices at different heights along the ramp). `meitou-tools navmesh --compare-interiors` counts the original tile's interior
-faces covered by a kept polygon within 12 units: **Observed** 18.35 68→86 %, 19.29 62→68 %, 50.33 69→71 %, 47.16 77→81 %, 20.32 88→90 % with the two rules.
+faces covered by a kept polygon within 12 units (`OriginalNavTiles.CoverInteriors`): **Observed** 18.35 68→86 %, 19.29 62→68 %, 50.33 69→71 %, 47.16 77→81 %,
+20.32 88→90 % with the two rules; 43.11 77 %, 26.13 81 %, 48.45 91 %. `InteriorCoverageTests` holds each of those zones at a point under its measure. The
+rest is mostly upper storeys: of 105 groups in those zones 59 still have uncovered faces, usually a 70..120-unit band (cause per building **Unknown**).
 **Shells and open structures**: a building is a shell with an interior (the original's class 12; its mask carves the exterior, its inside is an interior
 job) when it has an interior mask part with collision and is not `is gateway`, `is wall gate`, `cavernous` or `interior terrain`
 (`ZoneGeometryGatherer.IsShellWithInterior`; the record field the class comes from is **Unknown**). **Observed** against the original tiles: the Ancient Lab

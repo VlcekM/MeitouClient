@@ -277,13 +277,6 @@ static class NavmeshTool
         return 0;
     }
 
-    /// <summary>The kept polygons of a zone built alone, as the game publishes it with no neighbour loaded (its own seeds and the border rule on every side).</summary>
-    static ZoneNavMesh ResolvedAlone(ZoneNavMesh mesh, NavBuildSettings settings)
-    {
-        var zone = new ZoneCoordinate(mesh.ZoneX, mesh.ZoneZ);
-        return mesh.WithKept(ZoneKeptClosure.Resolve(new Dictionary<ZoneCoordinate, ZoneNavMesh> { [zone] = mesh }, settings)[zone]).WithoutPruned();
-    }
-
     /// <summary>Sample spacing of <c>--compare</c> (units).</summary>
     const float CompareStep = 8;
 
@@ -306,7 +299,7 @@ static class NavmeshTool
             var original = OriginalNavTiles.LoadExterior(install, zone);
             if (original is null) { Console.WriteLine($"{zone,-7} no original tile"); continue; }
             var g = gatherer.Gather(zone);
-            var mesh = ResolvedAlone(NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: true), settings);
+            var mesh = ZoneKeptClosure.ResolveAlone(NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: true), settings);
             var footprints = g.Solids.Select(s => (s.Min, s.Max)).Concat(g.Carvers.Where(c => c.Polygon.Length > 0).Select(c => (Min: c.Polygon.Aggregate(Vector2.Min), Max: c.Polygon.Aggregate(Vector2.Max))))
                 .Where(b => b.Max.X - b.Min.X < 1000 && b.Max.Y - b.Min.Y < 1000).ToList();
             var originalIndex = new OriginalIndex(original);
@@ -344,13 +337,9 @@ static class NavmeshTool
         return 0;
     }
 
-    /// <summary>How far (units) above or below an original interior face's centre one of our kept polygons may lie and still cover it (<c>--compare-interiors</c>).</summary>
-    const float InteriorCoverHeight = 12;
-
     /// <summary>
-    /// <c>--compare-interiors</c>: builds each zone (interiors joined) and, for every interior group of the original's tile, counts its faces whose centre has
-    /// one of our kept polygons within <see cref="InteriorCoverHeight"/>: a stair or storey we lose shows as uncovered faces. Lists the groups under 90 % with
-    /// their position and the uncovered faces' height range.
+    /// <c>--compare-interiors</c>: builds each zone (interiors joined) and scores the original tile's interior groups against it
+    /// (<see cref="OriginalNavTiles.CoverInteriors"/>). Lists the groups under 90 % with their position and the uncovered faces' height range.
     /// </summary>
     static int CompareInteriors(GameInstall install, GameDatabase db, WorldLevelData levels, List<ZoneCoordinate> zones, NavBuildSettings settings)
     {
@@ -359,33 +348,13 @@ static class NavmeshTool
         {
             var groups = OriginalNavTiles.LoadInteriors(install, zone);
             var g = gatherer.Gather(zone);
-            var mesh = ResolvedAlone(NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: true), settings);
-            int faces = 0, covered = 0;
-            var heights = new List<float>();
-            var lines = new List<string>();
-            foreach (var group in groups)
-            {
-                int n = 0, hit = 0;
-                float lo = float.MaxValue, hi = float.MinValue;
-                foreach (var poly in group.Polygons)
-                {
-                    if (poly.Length < 3) continue;
-                    var c = Vector3.Zero;
-                    foreach (int i in poly) c += group.Vertices[i];
-                    c /= poly.Length;
-                    if (c.X < g.ZoneMin.X || c.X >= g.ZoneMax.X || c.Z < g.ZoneMin.Y || c.Z >= g.ZoneMax.Y) continue;
-                    n++;
-                    heights.Clear();
-                    mesh.HeightsAt(c.X, c.Z, heights);
-                    if (heights.Any(y => MathF.Abs(y - c.Y) <= InteriorCoverHeight)) hit++;
-                    else { lo = MathF.Min(lo, c.Y); hi = MathF.Max(hi, c.Y); }
-                }
-                faces += n; covered += hit;
-                if (n > 0 && hit < 0.9 * n)
-                    lines.Add($"    {group.Uid} at {group.Origin.X:0},{group.Origin.Z:0}: {hit}/{n} faces covered, missing y {lo:0}..{hi:0}");
-            }
+            var mesh = ZoneKeptClosure.ResolveAlone(NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: true), settings);
+            var coverage = OriginalNavTiles.CoverInteriors(groups, mesh, g.ZoneMin, g.ZoneMax);
+            int faces = coverage.Sum(c => c.Faces), covered = coverage.Sum(c => c.Covered);
             Console.WriteLine($"{zone}: {groups.Count} interior groups, {covered}/{faces} faces covered ({(faces > 0 ? 100.0 * covered / faces : 100):0.0} %)");
-            foreach (var line in lines) Console.WriteLine(line);
+            foreach (var c in coverage)
+                if (c.Faces > 0 && c.Covered < 0.9 * c.Faces)
+                    Console.WriteLine($"    {c.Group.Uid} at {c.Group.Origin.X:0},{c.Group.Origin.Z:0}: {c.Covered}/{c.Faces} faces covered, missing y {c.MissingLow:0}..{c.MissingHigh:0}");
         }
         return 0;
     }
