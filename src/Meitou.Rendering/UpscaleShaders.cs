@@ -87,10 +87,26 @@ static class UpscaleShaders
         {
             vec2 depthUv = uFlipDepthY != 0 ? vec2(vUv.x, 1.0 - vUv.y) : vUv;
             if (textureLod(uNearDepth, depthUv, 0.0).r < 1.0 || (uHasFar != 0 && textureLod(uFarDepth, depthUv, 0.0).r < 1.0)) discard;
-            float opacity = textureLod(uClouds, depthUv, 0.0).a;
-            float weight = clamp(opacity * 2.5, 0.0, 1.0);
-            float distance = textureLod(uCloudDistance, depthUv, 0.0).r;
-            if (weight <= 0.0 || distance <= 0.0) discard;
+            // The cloud's motion wherever a cloud is near, not by this pixel's opacity: a pixel a cloud has just left (or its thin edge) kept the sky's
+            // motion, so DLSS fetched last frame's cloud in place and trailed it (rows of streaks behind drifting edges, camera still). The sky behind a
+            // cloud is a smooth gradient, so moving it with the cloud costs nothing visible. 3 x 3 taps two texels apart (about 4 render pixels round):
+            // the strongest opacity sets the weight, the opacity-weighted distance the depth.
+            vec2 texel = 1.0 / vec2(textureSize(uClouds, 0));
+            float strongest = 0.0, opacitySum = 0.0, distanceSum = 0.0;
+            for (int y = -1; y <= 1; y++)
+                for (int x = -1; x <= 1; x++)
+                {
+                    vec2 uv = depthUv + vec2(x, y) * 2.0 * texel;
+                    float a = textureLod(uClouds, uv, 0.0).a;
+                    float d = textureLod(uCloudDistance, uv, 0.0).r;
+                    if (d <= 0.0) continue;
+                    strongest = max(strongest, a);
+                    opacitySum += a;
+                    distanceSum += a * d;
+                }
+            float weight = smoothstep(0.0, 0.03, strongest);
+            if (weight <= 0.0 || opacitySum <= 0.0) discard;
+            float distance = distanceSum / opacitySum;
             vec2 ndc = vUv * 2.0 - 1.0;
             vec3 ray = normalize(uRight * ndc.x * uTan.x + uUp * ndc.y * uTan.y - uBack);
             vec3 point = ray * distance;

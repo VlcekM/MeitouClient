@@ -23,10 +23,14 @@ over atmosphere/stars/planets before weather fog, with geometry drawn over the s
 Independent main/reflection histories reproject opacity-weighted distance and wind;3x3 clips
 history. Reset on coverage/camera/light/ambient/size/continuity changes. Mirrored-eye preparation
 is required for reflection. Reprojection approximates a volume, not motion at every depth.
-Upscaler motion: the velocity pass gives sky pixels the far plane's motion (the turn alone); a cloud pixel (`UpscaleShaders.CloudMotion`)
-takes its opacity-weighted point's parallax through the slice's reprojection plus the wind's shift, blended by opacity (x2.5) into the
-motion target after the history resolve (Vulkan chain only). Whether this ends the DLSS streaks on clouds in play is **Unknown** (offscreen
-orbits move the camera too little to show either); the pass is **Observed** to write (a forced motion moves the sky).
+Upscaler motion: the velocity pass gives sky pixels the far plane's motion (the turn alone); a sky pixel with a cloud within about 4
+render pixels (`UpscaleShaders.CloudMotion`, 3x3 taps two cloud texels apart) takes the cloud's motion: the opacity-weighted point's parallax
+through the slice's reprojection plus the wind's shift, weighted by the strongest opacity (full from 0.03), after the history resolve (Vulkan
+chain only). Weighting by the pixel's own opacity left thin edges and pixels a cloud had just left with the sky's motion, so DLSS fetched
+last frame's cloud in place: rows of streaks behind drifting edges with the camera still (DLSS only; TAA clamps its history). The sky
+behind a cloud is a smooth gradient, so moving it with the cloud costs nothing visible. **Observed** (the live title scene, 2560x1440, DLSS,
+five F8 captures each, 16x16 sky blocks whose row-to-row second difference beats the column one by 1): 319 without cloud motion, 202 by
+the pixel's opacity, 186 with the neighbourhood, 185 under TAA.
 Fog-hidden rays can skip marching; full-sky skip requires every direction conservatively hidden.
 Clock rewind/weather changes must refresh sky/fog histories and not retain stale colour.
 
