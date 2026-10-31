@@ -27,7 +27,7 @@ static class NavmeshTool
         float[]? box = null, pathArg = null;
         bool doorsClosed = false, noInteriors = false; float? toY = null, fromY = null; float[]? near = null, probe = null, route = null; string? probeArg = null;
         int around = 0;
-        bool fingerprint = false, featureTops = false;
+        bool fingerprint = false, featureTops = false, ragdoll = false;
         string? interiorKey = null;
         bool ownOnly = false;
         var compare = new List<ZoneCoordinate>();
@@ -53,6 +53,7 @@ static class NavmeshTool
                 case "--repeat": repeat = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--fingerprint": fingerprint = true; break;
                 case "--feature-tops": featureTops = true; break;
+                case "--ragdoll": ragdoll = true; break;
                 case "--route": route = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
                 case "--compare":
                     while (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
@@ -103,6 +104,18 @@ static class NavmeshTool
         var collision = new CollisionCache(install);
         using var gatherer = new ZoneGeometryGatherer(install, db, levels, collision);
         watch.Restart();
+        if (ragdoll)
+        {
+            // What ragdolls land on in the zone (RagdollGeometry): building and map feature triangles.
+            var all = new List<Vector3>();
+            var sw = Stopwatch.StartNew();
+            gatherer.RagdollTriangles(zone.Value, all);
+            long ms = sw.ElapsedMilliseconds;
+            var features = new List<Vector3>();
+            gatherer.AddRagdollFeatures(zone.Value, features);
+            Console.WriteLine($"ragdoll triangles in {zone}: {all.Count / 3} ({features.Count / 3} of them map features), gathered in {ms} ms");
+            return 0;
+        }
         var g = gatherer.Gather(zone.Value);
         if (verbose) for (int i = 1; i <= 3; i++) { var sw2 = Stopwatch.StartNew(); gatherer.Gather(new ZoneCoordinate(zone.Value.X + i, zone.Value.Y)); Console.WriteLine($"  warm gather {sw2.ElapsedMilliseconds} ms (terrain {gatherer.Phases.Terrain:0}, buildings {gatherer.Phases.Buildings:0}, foliage {gatherer.Phases.Foliage:0})"); }
         var s = g.Stats;
@@ -256,7 +269,7 @@ static class NavmeshTool
     {
         using var map = TerrainHeightmap.Open(install);
         Func<float, float, float> terrain = (x, z) => (float)map.HeightAt(x, z);
-        Func<double, double, float> placement = (x, z) => { lock (map) return (float)map.HeightAt(x, z); };
+        Func<double, double, float> placement = (x, z) => (float)map.HeightAt(x, z);
         var raw = map.Downsample(2, out int size);
         var grid = new HeightWindow(0, 0, 2, size, size, raw);
         Func<float, float, float> slope = (x, z) => grid.TryHeightAt(x, z, out float h) ? h : terrain(x, z);

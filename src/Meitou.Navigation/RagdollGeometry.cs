@@ -8,7 +8,7 @@ using Meitou.Simulation.Ragdolls;
 namespace Meitou.Navigation;
 
 /// <summary>
-/// What ragdolls fall onto in the world: the terrain heightmap, and the collision of the buildings (<see cref="ZoneGeometryGatherer.RagdollTriangles"/>), gathered per zone on a
+/// What ragdolls fall onto in the world: the terrain heightmap, and the collision of the buildings and map features (<see cref="ZoneGeometryGatherer.RagdollTriangles"/>), gathered per zone on a
 /// worker the first time a ragdoll moves near it and kept in 32-unit cells (<see cref="RagdollPhysics"/>' tiles). Until a zone is gathered its buildings are reported not ready, and
 /// the tile asks again.
 /// </summary>

@@ -18,7 +18,7 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     void AddMapFeatures(ZoneGeometry g)
     {
-        features ??= File.Exists(Path.Combine(install.DataDirectory, MapFeatureFile.RelativePath)) ? MapFeatureFile.Open(install) : new MapFeatureFile();
+        var features = Features();
         foreach (var zone in FoliageRing(g.Zone))
         {
             int index = zone.Y * WorldLayout.ZoneCount + zone.X;
@@ -34,6 +34,38 @@ internal sealed partial class ZoneGeometryGatherer
                 if (g.Solids.Count > solids || g.MeshSolids.Count > meshSolids) g.Stats.MapFeatures++;
                 for (int k = solids; k < g.Solids.Count; k++) { g.Solids[k].Owner = $"feature {record.Name} [{f.StringId}]"; g.Solids[k].Feature = true; }
                 for (int k = meshSolids; k < g.MeshSolids.Count; k++) g.MeshSolids[k].Owner = $"feature {record.Name} [{f.StringId}]";
+            }
+        }
+    }
+
+    MapFeatureFile Features() =>
+        features ??= File.Exists(Path.Combine(install.DataDirectory, MapFeatureFile.RelativePath)) ? MapFeatureFile.Open(install) : new MapFeatureFile();
+
+    /// <summary>
+    /// The collision triangles of the map features that ragdolls land on (docs/game/ragdolls.md "Collision groups": an outdoor body, group 3, hits group 14, the group taken for
+    /// features), from the placements in the zone and its neighbours: each triangle once, in the zone its centre lies in (a feature can be thousands of units across, more
+    /// than a building's reach). Three points per triangle, world space.
+    /// </summary>
+    internal void AddRagdollFeatures(ZoneCoordinate zone, List<Vector3> output)
+    {
+        var features = Features();
+        foreach (var near in FoliageRing(zone))
+        {
+            int index = near.Y * WorldLayout.ZoneCount + near.X;
+            if (index >= features.Zones.Count) continue;
+            foreach (var f in features.Zones[index])
+            {
+                if (db.Find(f.StringId) is not { Type: FcsRecordType.MAP_FEATURES } record || record.GetPath("collision") is not { Length: > 0 } path) continue;
+                if (collision.Get(path) is not { } prepared) continue;
+                var node = WorldObjectLayout.InstanceTransform(f.Position, f.Rotation, f.Scale);
+                foreach (var shape in prepared.Shapes)
+                    for (int t = 0; t + 2 < shape.Indices.Length; t += 3)
+                    {
+                        Vector3 a = Vector3.Transform(shape.Vertices[shape.Indices[t]], node), b = Vector3.Transform(shape.Vertices[shape.Indices[t + 1]], node), c = Vector3.Transform(shape.Vertices[shape.Indices[t + 2]], node);
+                        var centre = (a + b + c) / 3;
+                        if (WorldLayout.ZoneOf(centre.X, centre.Z) != zone) continue;
+                        output.Add(a); output.Add(b); output.Add(c);
+                    }
             }
         }
     }

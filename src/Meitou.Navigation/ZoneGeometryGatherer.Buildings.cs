@@ -286,7 +286,7 @@ internal sealed partial class ZoneGeometryGatherer
 internal sealed partial class ZoneGeometryGatherer
 {
     /// <summary>
-    /// The collision triangles of the buildings placed in <paramref name="zone"/> (each placement once, in its own zone; its triangles may reach past the zone) that ragdolls land
+    /// The collision triangles of the buildings placed in <paramref name="zone"/> and of the map features whose triangles lie in it (<see cref="AddRagdollFeatures"/>) (each placement once, in its own zone; its triangles may reach past the zone) that ragdolls land
     /// on and hit (docs/game/ragdolls.md "Collision groups"): walls and floors, stairs, furniture and roofs; not doors, interior masks or passable parts. Three points per
     /// triangle, world space.
     /// </summary>
@@ -301,6 +301,7 @@ internal sealed partial class ZoneGeometryGatherer
             foreach (var (item, at, rotation) in LayoutObjects(b, record, position, destroyed))
                 AddRagdollBuilding(item.Building, $"{b.Key}/{item.InstanceId}", at, rotation, false, output);
         }
+        AddRagdollFeatures(zone, output);
     }
 
     void AddRagdollBuilding(GameRecord building, string placementId, Vector3 position, Quaternion rotation, bool destroyed, List<Vector3> output)

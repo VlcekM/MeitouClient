@@ -301,8 +301,8 @@ its 1,278 of 42,908 all lie where the defensive walls' walkway (y ~1,049, kept i
 z 66,200..66,500 reached where the tube's 24° top rises out of the wall walkway (`Defensive Wall IV 34.46:20-`). Why the original does not join them is
 **Unknown** (both walkable; Havok joins faces by edge matching, not by voxel steps). Engine choice: where a feature's upward surface runs inside a building's
 solid, its surface within 2 cells (`FeatureSeamCells`) is removed, so the walkway and the feature are not neighbours; the tube then keeps 1,328 samples,
-34.46's floors under floors 5,183 → 544 (510 before features), other zones within 0.1 %. Features are obstacles of the long routes too (below); ragdoll
-collision does not take them yet.
+34.46's floors under floors 5,183 → 544 (510 before features), other zones within 0.1 %. Features are obstacles of the long routes too (below) and ragdolls land
+on them ([simulation](../simulation.md)).
 **Foliage meshes**: the same inside test applies to the triangle meshes of walkable foliage (FOLIAGE_MESH `walkable`), not to obstacle foliage (engine choice
 from the tiles). **Observed** (`--compare`): in 18.39 (Swamp Village; 371 of 383 foliage shapes are meshes, open below) the water and ground under walkable
 foliage domes (e.g. -60348,34444: water 100 under a face at 205) are ours only; with the test ours-only falls 6.6 → 5.0 %, floors under floors 395 → 286,
