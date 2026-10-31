@@ -163,7 +163,7 @@ Authority: `src/Meitou.Rendering/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.
 | `--range-large <u>` | units | 50000 | Foliage draw range of the large size class. |
 | `--distant-range <zones>` | zones | 10 | How far distant towns are drawn; 0 for none. |
 | `--impostor-budget <MB>` | MB | 8% of video memory (5% integrated), 48 to 1024 | Video memory for resident impostor atlases. |
-| `--no-load-cache` | | off | Do not read or write the load caches (foliage layout, character LOD and world colour map caches). |
+| `--no-load-cache` | | off | Do not read or write the load caches (foliage layout, character LOD, world colour map and terrain colour tile caches). |
 | `--low-end` | | off | Potato-PC preset: short draw distances, no shadows, reflections, AO, relief, light shafts or AA, 0.83 render scale, sparse grass and particles. Options after it override it. |
 
 ### Post-processing and upscaling (`PostProcessOptions.cs`)

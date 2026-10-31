@@ -217,7 +217,7 @@ sealed class WorldOptions
           --windowed                                     a bordered window: the --size asked, else maximized (default: borderless full screen; Alt+Enter toggles)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
-          --no-load-cache          do not read or write the load caches (the foliage layout and character LOD caches)
+          --no-load-cache          do not read or write the load caches (foliage layout, character LOD and terrain colour caches)
           --range-large <u>        foliage draw range of the large size class (the range switch, F6; default 50000; the medium and small ranges follow at 12000 : 3500 of it; Tab sliders)
           --impostor-budget <MB>   fixes the most video memory the resident impostor atlases may use (default: 8% of the card's budget, 5% on an integrated GPU, 48-1024 MB; docs/impostors.md section 10; atlases that do not fit are held at coarser mips, then stay meshes)
           --object-distance <u>    draw placed objects at full detail up to this distance (the reach switch, F8: default 20000 in Meitou, 12000 in Faithful); Meitou draws huge placed objects (world radius 2000 and up: the giant wrecks, skeletons, towers) 7.5 times as far
@@ -803,6 +803,9 @@ static class WorldFrame
         Meitou.Data.Textures.TextureQuality.Level = o.TextureQuality;
         int layerSize = Math.Max(2048 >> Meitou.Data.Textures.TextureQuality.LevelsToDrop("terrain.dds", "Landscape"), 16);
         if (layerSize != 2048) Console.WriteLine($"textures  quality {o.TextureQuality} ({Meitou.Data.Textures.TextureQuality.Labels[o.TextureQuality]}): terrain layers {layerSize}² instead of 2048²");
+        // The terrain colour tiles BC3-encoded for the colour window, once (TerrainColourCache): a first start, or one after a tile changed, encodes them on workers.
+        var colourEncode = !o.NoTextures && terrainTextures && TerrainColourCache.Missing(install)
+            ? Task.Run(() => { var w = Stopwatch.StartNew(); int n = TerrainColourCache.EncodeMissing(install); return (n, w.ElapsedMilliseconds); }) : null;
         // The files the terrain textures and the water read and bake (seconds of CPU work) are read on workers while the steps before them run.
         var terrainSource = !o.NoTextures && terrainTextures && scene.Database is { } textureDb ? Task.Run(() => TerrainTextures.Prepare(install, textureDb)) : null;
         var waterSource = !o.NoWater && scene.Database is { } waterDb ? Task.Run(() => WaterRenderer.Prepare(install, waterDb, assets, scene.Coarse)) : null;
@@ -811,6 +814,12 @@ static class WorldFrame
         var terrain = new TerrainRenderer(context, scene.Coarse, scene.CoarseSize, scene.Window);
         Console.WriteLine($"uploaded  terrain heights: {terrain.LevelCount} LOD levels, finest {terrain.FinestSpacing:0.#} units ({watch.ElapsedMilliseconds} ms)");
         TerrainTextures? textures = null;
+        if (colourEncode is not null)
+        {
+            if (!colourEncode.IsCompleted) step?.Invoke("colourmap");
+            var (tiles, ms) = Ready(colourEncode);
+            Console.WriteLine($"colour    {tiles} terrain colour tiles encoded to BC3 and cached in {ms} ms");
+        }
         if (!o.NoTextures && terrainTextures && scene.Database is not null)
         {
             step?.Invoke("biomes");
