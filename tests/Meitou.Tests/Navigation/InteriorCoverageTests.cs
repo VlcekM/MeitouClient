@@ -13,8 +13,6 @@ namespace Meitou.Tests.Navigation;
 [Slow]
 public class InteriorCoverageTests
 {
-    static readonly Lazy<WorldLevelData?> levels = new(() => InstallData.Install is { } i ? WorldLevelData.Load(i, includeInteriors: true) : null);
-
     [Theory]
     [InlineData(18, 35, 84, "Squin")]
     [InlineData(43, 11, 75, "Sho-Battai")]
@@ -31,7 +29,7 @@ public class InteriorCoverageTests
         var zone = new ZoneCoordinate(x, z);
         var groups = OriginalNavTiles.LoadInteriors(install!, zone);
         Assert.NotEmpty(groups);
-        using var gatherer = new ZoneGeometryGatherer(install!, InstallData.FullLoadOrder!, levels.Value!, new CollisionCache(install!));
+        using var gatherer = new ZoneGeometryGatherer(install!, InstallData.FullLoadOrder!, InstallData.LevelsWithInteriors!, new CollisionCache(install!));
         var settings = new NavBuildSettings();
         var g = gatherer.Gather(zone);
         var mesh = ZoneKeptClosure.ResolveAlone(NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: true), settings);
