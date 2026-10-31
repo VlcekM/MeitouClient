@@ -25,13 +25,17 @@ sealed partial class PlayerInterface
         (SquadAi.Share, "Share Food", "Characters in a squad will automatically share any of their food that is in a backpack (if in range)."),
         (SquadAi.Feed, "Feed Animals", "If food is running low, you can elect not to feed your animals."),
         (SquadAi.ShootFirst, "Shoot first, ask later", "Your turret gunners will shoot at any potentially dangerous but neutral targets, such as wild animals or bandits, without waiting for them to attack the base first."),
+        // Meitou-only lines (not in the original's tab).
+        (SquadAi.HealNeutrals, "Heal Neutrals", "Characters with the medic job will also heal downed characters of factions that are not hostile"),
+        (SquadAi.HealAll, "Heal All", "Characters with the medic job will heal any downed character, enemies included"),
     ];
 
     void AddAiContent(List<UiControl> controls)
     {
         if (faithfulScreens.GetTab("overview", "TabsMain") != AiTab || controls.FirstOrDefault(c => c.Name == "AIOptions") is not { } panel) return;
         var on = session.CurrentSnapshot.SquadAi;
-        float line = MathF.Max(22, 30 * InventoryScale);
+        // The original's panel is sized for its nine lines and the formation; lines shrink when the Meitou-only ones do not fit.
+        float line = MathF.Min(MathF.Max(22, 30 * InventoryScale), panel.Bounds.Height / (AiOptionRows.Length + 1));
         for (int i = 0; i < AiOptionRows.Length; i++)
         {
             bool ticked = (on & AiOptionRows[i].Option) != 0;
