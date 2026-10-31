@@ -299,7 +299,8 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   Storm House with interior layout `Bar` (parts, furniture, lamps; a runtime placement keyed `meitou:editor-bar` whose state and layouts are read from
   the source's zone, `BuildingPlacement.StateZone`) 3000 above the highest ground round the edited character, in the interior view with every floor, at
   23:00 under a clear sky without weather particles. The shown character stands at a fixed spot of the building's frame facing the counter; up to 5 other
-  characters of the editor's list sit on the seats nearest a point behind it (the source's chair spots and sitting clips). The camera is the stage's
+  characters of the editor's list sit on the seats nearest the far tables behind it, each over 41 across from it (beyond the orbit's reach; the source's chair spots and sitting clips). Night shows
+  in the dark windows; the room itself looks the same at noon (lamps and indoor GI; **Observed**, headless pictures). The camera is the stage's
   orbit, moved across instead of shifting the projection. The stage covers the bar until its parts, the streaming and the characters are in. The faithful
   UI and Metal keep the stage.
 - **Keys**: `in editor` true while open; a mode 0 character without a body file is randomised on open (Meitou's start characters are already

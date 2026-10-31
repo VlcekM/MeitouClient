@@ -23,8 +23,10 @@ sealed class EditorBar
     /// between the counter and the tables, facing the counter, so the camera in front of it looks back across the room at the seated ones.
     /// </summary>
     static readonly Vector3 StandLocal = new(12, 4.4f, -14), FacingLocal = Vector3.UnitX;
-    /// <summary>The seats taken are those nearest this point of the building's frame: the tables behind the edited character as the camera first sees it.</summary>
-    static readonly Vector3 SeatFocusLocal = new(-12, 4.4f, -8);
+    /// <summary>The seats taken are those nearest this point of the building's frame: the far tables behind the edited character as the camera first sees it.</summary>
+    static readonly Vector3 SeatFocusLocal = new(-53, 4.4f, -1);
+    /// <summary>Seats nearer the edited character than this (across) are left empty: the orbit's eye (<see cref="EditorOrbit.BodyFar"/> out at most) never enters a sitter.</summary>
+    const float SeatClearance = EditorOrbit.BodyFar + 4;
 
     public BuildingPlacement Placement { get; }
     /// <summary>The copy's origin (absolute height) and turn, as the source's.</summary>
@@ -41,7 +43,7 @@ sealed class EditorBar
         var level = resolved.Placement;
         Origin = origin;
         Rotation = level.Rotation;
-        Placement = level with { Zone = WorldLayout.ZoneOf(origin.X, origin.Z), Position = origin with { Y = 0 }, WorldY = origin.Y, StateZone = level.Zone, Key = Key, DestroyedOverride = false };
+        Placement = level with { Zone = WorldLayout.ZoneOf(origin.X, origin.Z), Position = origin with { Y = 0 }, WorldY = origin.Y, StateZone = level.Zone, Key = Key, DestroyedOverride = null };
         Stand = origin + Vector3.Transform(StandLocal, Rotation);
         var facing = Vector3.Transform(FacingLocal, Rotation);
         StandYaw = MathF.Atan2(facing.X, facing.Z);
@@ -49,6 +51,7 @@ sealed class EditorBar
         var focus = origin + Vector3.Transform(SeatFocusLocal, Rotation);
         Seats = [.. source.Spots.Where(s => s.Kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat && s.SitClip is not null)
             .Select(s => (Position: s.Position - resolved.Position + origin, s.Yaw, Clip: s.SitClip!))
+            .Where(s => new Vector2(s.Position.X - Stand.X, s.Position.Z - Stand.Z).Length() > SeatClearance)
             .OrderBy(s => Vector3.DistanceSquared(s.Position, focus))];
     }
 
