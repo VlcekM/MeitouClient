@@ -131,12 +131,12 @@ internal sealed class NavMeshService : IDisposable
         lock (publishLock)
         {
             var world = Walkability.World.Without(zone);
-            full.Remove(zone);
+            bool published = full.Remove(zone);
             live.Remove(zone);
             standing.Remove(zone);
             pending.TryRemove(zone, out tcs);
-            // Its neighbours' border regions toward it are kept again.
-            Walkability.SetWorld(full.Count > 0 ? Publish(world) : world);
+            // Its neighbours' border regions toward it are kept again (a zone never published changed nothing).
+            Walkability.SetWorld(published && full.Count > 0 ? Publish(world) : world);
         }
         tcs?.TrySetCanceled();
     }
