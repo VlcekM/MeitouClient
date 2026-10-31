@@ -183,6 +183,8 @@ public sealed class CharacterCold
     /// (<see cref="Ragdolls.RagdollSystem"/> takes it and clears it). The original starts a ragdoll at rest. Not saved.
     /// </summary>
     public System.Numerics.Vector3? Blow { get; set; }
+    /// <summary>The last <see cref="Blow"/> it was given, kept for the drawing (a cut-off head is thrown with it, <see cref="CharacterSnapshot.Knockdown"/>). Not hashed, not saved.</summary>
+    public System.Numerics.Vector3 Knockdown { get; set; }
     /// <summary>What it carries (null for anything without a race; an animal's grid is its <c>inventory w</c> x <c>inventory h</c>, its luggage on the backpack slot):<see cref="Meitou.Simulation.Items.FeedSystem"/> eats from it, <see cref="BodySystem"/> weighs it.</summary>
     public Meitou.Simulation.Items.Inventory? Inventory { get; set; }
     /// <summary>The tick it died at (-1: alive); the corpse decays 12 game hours later (<see cref="BodySystem.SlowWorld"/>, which holds the clock back while it is carried or held).</summary>

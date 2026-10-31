@@ -227,7 +227,7 @@ hit impulse exists. `FUN_1407d2d10` (per-limb speed caps) and `FUN_1407d2290` ha
 
 Meitou (no switch): a new whole-body (not carried) ragdoll starts with every new body at one speed, capped at half `RagdollPhysics.MaxSpeed`: the
 `CharacterCold.Blow` that a downing melee hit or bolt left (`CombatSystem.Knockdown`: the victim's last-tick velocity plus a push along the blow of
-0.4 x (cut + blunt + pierce) units/s, 10 to 50, with 0.2 of it upward), else the character's last-tick velocity (a bleed-out while running). Bodies kept from a
+0.4 x (cut + blunt + pierce) units/s, 10 to 50, with 0.2 of it upward; executions set it too; also kept as `CharacterCold.Knockdown` for a cut-off head), else the character's last-tick velocity (a bleed-out while running). Bodies kept from a
 partial ragdoll keep their own speed; a ragdoll restored from a save starts as saved.
 
 ## Per frame
