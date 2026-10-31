@@ -510,6 +510,11 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
       `Storm_House_01_Interior-stairs` (`is stairs`, `interior` list); 53 of 82 intact placements (45 zones) have interior faces 30+
       over the floor, the other 29 (all but one from rebirth.mod, e.g. 48.13 `6-`, 9 faces) floor only. Meitou reaches it
       (48.13 `6-`: street to y 1066).
+      Stationhouse (issue #156): its one stair, `Storm_House_08_Interior-stairs` (`is stairs`), leads to the upper storey, which is the
+      open roof terrace (`Storm_House_08_UPSTAIRS+ROOF_COL`, no collision over it, `--probe`); round it only the parapet ring, 8..16
+      higher. The original's groups in the 4 intact placements with a tile (12.35, 20.28, 23.22, 24.22) have faces at the floor and
+      +75..95 (the terrace) only. Meitou keeps the terrace (23.22 `854782-`: street to y 860) and prunes the ring there; in 24.22
+      `409471-` the ring joins the terrace by a slope too narrow for a radius-4 path.
     - **Interior object and class** (**Verified**, `FUN_140551b20`, run by the Building constructor `FUN_14055ca90`): a BUILDING
       whose `interior` reference list is not empty gets the interior object (+0x1f0, 0x168 bytes, filled by `FUN_140551660`),
       and its class (+0x198, read by virtual slot 0x358) becomes 12 BCTYPE_SHELL_WITH_INTERIOR when it is still 0. The base
