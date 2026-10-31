@@ -34,7 +34,7 @@ set KENSHI_PATH, or create git-ignored meitou.local.json in the repo/working/exe
 
 ## Credits
 
--- todo --
+[![Contributors](assets/branding/contributors.png)](https://github.com/VlcekM/MeitouClient/graphs/contributors)
 
 ## Build and run
 
