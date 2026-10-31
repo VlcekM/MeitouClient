@@ -474,7 +474,10 @@ internal sealed class CharacterContent : IDisposable
         return urgent ? BackgroundWork.RunUrgent(Fetch) : BackgroundWork.Run(Fetch);
     }
 
-    /// <summary>Which bone handle belongs to which limb slot (-1: none) and the bind-pose heights below which a limb's vertices are its hideable part.</summary>
+    /// <summary>The head's entry in <see cref="LimbHide.LimbOfBone"/> (the limb slots are 0 to 3) and its body-vertex hide bit (between the part-map bits 4 to 13 and the part index from 16).</summary>
+    internal const int HeadLimb = 4, HeadBit = 1 << 14;
+
+    /// <summary>Which bone handle belongs to which limb slot (-1: none; <see cref="HeadLimb"/> the head) and the bind-pose heights below which a limb's vertices are its hideable part.</summary>
     internal sealed record LimbHide(int[] LimbOfBone, float ArmBelow, float LegBelow, int[] PartOfBone);
 
     /// <summary>
@@ -493,7 +496,7 @@ internal sealed class CharacterContent : IDisposable
         {
             var part = anatomy[partIndex];
             bool right = (part.GetInt("collapse part") & 0x12) != 0;
-            int limb = part.GetInt("body part type") switch { 2 => right ? 1 : 0, 1 => right ? 3 : 2, _ => -1 };
+            int limb = part.GetInt("body part type") switch { 2 => right ? 1 : 0, 1 => right ? 3 : 2, 3 => HeadLimb, _ => -1 };
             foreach (var key in new[] { "bone name", "bone name 2", "bone name 3" })
                 if (part.GetString(key) is { Length: > 0 } bone) { claimed.TryAdd(bone, limb); claimedPart.TryAdd(bone, rank[partIndex]); }
         }
@@ -532,7 +535,8 @@ internal sealed class CharacterContent : IDisposable
     }
 
     /// <summary>
-    /// Writes each body vertex's hide bits into its colour's Y (<c>FUN_140071f90</c>): bits 0 to 3 the limb of its heaviest bone, when the vertex lies below that limb's height;
+    /// Writes each body vertex's hide bits into its colour's Y (<c>FUN_140071f90</c>): bits 0 to 3 the limb of its heaviest bone, when the vertex lies below that limb's height
+    /// (bit 14 for a head bone's vertex, Meitou's: <see cref="HeadBit"/>);
     /// from bit 4 the part-map bit of the texel under its UV (texel floor(size × uv), clamped; an exact colour of the table, alpha above 0; any other colour marks nothing).
     /// </summary>
     static void MarkBody(Model model, LimbHide? hide, RgbaImage? partMap)
@@ -552,7 +556,9 @@ internal sealed class CharacterContent : IDisposable
                         if (w > best) { best = w; bone = (int)((v.Bones >> (8 * k)) & 0xFF); }
                     }
                     int limb = (uint)bone < (uint)hide.LimbOfBone.Length ? hide.LimbOfBone[bone] : -1;
-                    if (limb >= 0 && v.Position.Y < (limb < 2 ? hide.ArmBelow : hide.LegBelow)) bits = 1 << limb;
+                    // The head (Meitou decapitation): every vertex of its bones, bit 14; the neck is the chest's.
+                    if (limb == HeadLimb) bits = HeadBit;
+                    else if (limb >= 0 && v.Position.Y < (limb < 2 ? hide.ArmBelow : hide.LegBelow)) bits = 1 << limb;
                     // The part of the heaviest bone (the blood amounts are the first 8 parts', FUN_140530b30): bits 16 to 19, its index + 1.
                     int owner = (uint)bone < (uint)hide.PartOfBone.Length ? hide.PartOfBone[bone] : -1;
                     if ((uint)owner < 8) bits |= (owner + 1) << 16;

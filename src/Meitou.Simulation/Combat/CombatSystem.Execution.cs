@@ -45,6 +45,7 @@ public sealed partial class CombatSystem
             switch (ev.Kind)
             {
                 case MedicalEventKind.Died: death = true; break;
+                case MedicalEventKind.Decapitated: table.LimbsChanged.Enqueue((d, -1)); break;   // the look loses its head (nothing drops)
                 case MedicalEventKind.PartSevered:
                     xp.ToughnessFromLimbLoss(dc.Stats!, race);
                     table.LimbsChanged.Enqueue((d, medical.Parts[ev.Part].Template.LimbSlot));

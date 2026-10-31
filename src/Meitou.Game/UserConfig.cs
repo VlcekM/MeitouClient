@@ -99,6 +99,8 @@ sealed class UserConfig
     public bool UnloadedProduction { get; set; } = true;
     /// <summary>Doors a walker opened close behind it after 5 s (Advanced settings; Faithful off: they stay open, as in the game; docs/simulation.md "Cages, beds and locks").</summary>
     public bool DoorsCloseBehind { get; set; } = true;
+    /// <summary>A blow that destroys the head cuts it off, under the limbs' rule (Advanced settings; Faithful off: the game never does; docs/game/character-stats.md "Decapitation").</summary>
+    public bool Decapitation { get; set; } = true;
     /// <summary>A loaded or imported save starts paused (Advanced settings, a plain on/off switch outside the Faithful / Meitou sides; off by default: it runs at once, as in the game). <c>--load</c> is not paused.</summary>
     public bool PauseOnLoad { get; set; }
     /// <summary>Fixes of the game's own bugs (Fixes settings; on: fixed, off: as the game does; docs/audio.md): doors and gates sound when they break,

@@ -115,6 +115,7 @@ public sealed partial class CombatSystem
             {
                 case MedicalEventKind.KnockedOut: knockout = true; xp.ToughnessFromKnockOut(dc.Stats, dc.Race); break;
                 case MedicalEventKind.Died: death = true; break;
+                case MedicalEventKind.Decapitated: table.LimbsChanged.Enqueue((d, -1)); break;   // the look loses its head (nothing drops)
                 case MedicalEventKind.PartSevered: xp.ToughnessFromLimbLoss(dc.Stats, dc.Race); table.LimbsChanged.Enqueue((d, dc.Medical.Parts[ev.Part].Template.LimbSlot));
                     world.Defer(new Dialogue.DialogueEvent(table.IdOf(d), CharacterId.None, dc.Medical.Parts[ev.Part].Template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });   // LOST_LEG / LOST_ARM
                     break;

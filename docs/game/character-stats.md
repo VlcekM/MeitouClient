@@ -189,6 +189,16 @@ Death: vital h-s<-M, blood<=-capacity or hunger<=0. Preserve KO/coma/death disti
   `FUN_14064f300` (a blow is taken to sever under the setting rule).
 - Meitou: `MedicalState.ApplyHit`, `CheckPart`, `Sever(part, ctx, standing)`, `LegLossKo`, `Standing` (read before the blow, and before the tick's part loop).
 
+### Decapitation (Meitou)
+
+Engine feature, not the original's: a vital part kills before the cut-off rule is read, so the game never cuts a head off, although the Head record has
+`severance` (table below). Meitou's switch "Decapitation" (Advanced settings, on; Faithful off; `BodyOptions.Decapitation`): when a **blow** destroys the
+Head (`body part type` 3) and the blow's rule above holds (Dismemberment >= Rare, a stats object, head original or crushed, `severance`), the character dies
+as before and `MedicalState.Decapitated` is set (event `Decapitated`, after `Died`). Ranged hits and executions take the same path; ticks and being eaten do not.
+No blood loss, XP, dialogue or item: the look loses the head's body vertices (its `bone name` `Bip01 Head`; the neck is the chest's), hair, beard and hat
+(the hat stays in the inventory), and the body is drawn two-sided with its inside in the blood colour ([characters](../characters.md#hidden-body-parts-verified--140075600--140071f90--140531cc0-hlsl-skinhlsl)).
+Saved as `meitou decapitated` ([save](../formats/save.md#limbs-medical_state-limbs)).
+
 ## Aid, limbs and load
 
 First aid fills bandage; healing consumes it. Medkits, robot repair and beds apply separate

@@ -132,13 +132,14 @@ public static class SavedKit
         return saved;
     }
 
-    /// <summary>Puts the non-natural limbs of <paramref name="medical"/> (stumps, prosthetics, crushed) into <paramref name="loadout"/>.</summary>
+    /// <summary>Puts the non-natural limbs of <paramref name="medical"/> (stumps, prosthetics, crushed) and a cut-off head into <paramref name="loadout"/>.</summary>
     public static void SetLimbs(Loadout loadout, Bodies.MedicalState? medical, GameDatabase db)
     {
         for (int k = 0; k < loadout.Limbs.Length; k++)
             loadout.Limbs[k] = medical?.LimbPart(k) is { Limb: not Bodies.LimbState.Original } p
                 ? new LoadoutLimb((int)p.Limb, p.Limb == Bodies.LimbState.Replaced && p.Replacement is { } r ? db.Find(r.StringId) : null)
                 : null;
+        loadout.Decapitated = medical?.Decapitated == true;
     }
 
     /// <summary>A copy of <paramref name="loadout"/> (to give it limbs without touching a look another character may share).</summary>
@@ -152,6 +153,7 @@ public static class SavedKit
         copy.Clothing.AddRange(loadout.Clothing);
         copy.Weapons.AddRange(loadout.Weapons);
         loadout.Limbs.CopyTo(copy.Limbs, 0);
+        copy.Decapitated = loadout.Decapitated;
         return copy;
     }
 

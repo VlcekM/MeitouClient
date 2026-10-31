@@ -80,7 +80,7 @@ sealed partial class GameHost
     void ApplyGameplay()
     {
         var gameplay = Gameplay;
-        if (popData is { } data) data.BodyOptions.Dismemberment = gameplay.Dismemberment;
+        if (popData is { } data) (data.BodyOptions.Dismemberment, data.BodyOptions.Decapitation) = (gameplay.Dismemberment, config.Decapitation);
         foreach (var population in session.World.Systems.OfType<Meitou.Simulation.PopulationSystem>())
             (population.Settings.SquadSizeMultiplier, population.Settings.PopulationMultiplier, population.Settings.RaidSizeMult, population.Settings.RaidFrequencyMult) =
                 (gameplay.SquadSize, gameplay.Population, gameplay.RaidSize, gameplay.RaidFrequency);

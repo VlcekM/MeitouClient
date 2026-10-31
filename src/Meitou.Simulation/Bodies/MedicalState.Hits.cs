@@ -119,14 +119,30 @@ public sealed partial class MedicalState
         p.WasDown = down;
         bool destroyed = inHitPath ? p.IsDestroyed : p.Flesh - p.Stun < -p.MaxHp;
         if (!destroyed) return;
-        if (p.IsVital) { Die(DeathCause.VitalPart, events); return; }
         // The cut-off rule (FUN_14064f300 for a blow, FUN_14064f5c0 for a tick, <b>Verified</b>): a blow needs the setting at Rare or more, a stats object and an original or
         // crushed limb; the tick (a wound worsening) needs Frequent and an original limb. A prosthetic is never cut off (FUN_14064edc0 returns for a replaced slot).
         var setting = ctx.Options.Dismemberment;
-        bool severs = inHitPath
-            ? (setting >= Dismemberment.Rare && ctx.HasStats && HasStatsObject && (p.Limb is LimbState.Original or LimbState.Crushed))
-            : (setting >= Dismemberment.Frequent && p.Limb == LimbState.Original);
-        if (severs && p.Template.Severance) Sever(index, ctx, standing, events);
+        bool blowSevers = setting >= Dismemberment.Rare && ctx.HasStats && HasStatsObject && (p.Limb is LimbState.Original or LimbState.Crushed) && p.Template.Severance;
+        if (p.IsVital)
+        {
+            Die(DeathCause.VitalPart, events);
+            // Meitou (Decapitation): the blow's rule cuts the head off too; the original returns here for every vital part (the head's record has severance set).
+            if (inHitPath && ctx.Options.Decapitation && blowSevers && p.Template.Type == BodyPartType.Head) Decapitate(events);
+            return;
+        }
+        bool severs = inHitPath ? blowSevers : setting >= Dismemberment.Frequent && p.Limb == LimbState.Original && p.Template.Severance;
+        if (severs) Sever(index, ctx, standing, events);
+    }
+
+    /// <summary>The head was cut off by the blow that killed the character (Meitou, <see cref="BodyOptions.Decapitation"/>); saved as <c>meitou decapitated</c>.</summary>
+    public bool Decapitated { get; private set; }
+
+    /// <summary>Cuts the head off a character the blow has just killed (<see cref="BodyOptions.Decapitation"/>): only the look changes, nothing drops.</summary>
+    public void Decapitate(List<MedicalEvent>? events = null)
+    {
+        if (Decapitated) return;
+        Decapitated = true;
+        events?.Add(new MedicalEvent(MedicalEventKind.Decapitated, -1));
     }
 
     /// <summary>

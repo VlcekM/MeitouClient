@@ -139,6 +139,7 @@ an unnamed root-chain bone (pelvis) is no limb (the original's fallback part ind
 image loaded by name through Ogre's resources; a DXT1-5 file is refused (logged "Convert this to png instead"), so no bits. Each body vertex samples the
 texel (clamp(int(W x u)), clamp(int(H x v))) at its UV; with alpha > 0 an exact table colour sets its bit, any other colour is logged as invalid and sets
 none. Meitou: `CharacterContent.MarkBody` (vertex colour Y: limb bits 0-3, part bits from 4), `CharacterAppearance.HiddenParts` in instance flags bits 18-27.
+Meitou's decapitation (not the original's): vertex bit 14 marks every vertex of the Head part's bones, hidden by instance flag 28 (`CharacterAppearance.Headless`).
 Which region each colour marks is the race's own choice (data, not engine). **Observed** (scratch survey of `human_male`/`human_female` with
 `MaleMask_Default.png`/`FemaleMask_Default.png`): white the chest (Y 14-15), red shoulders and upper arms (13-15), green a hip band (11-13); robots' `robot_mask.png`
 is all red. 19 base ARMOURs use `hide parts` (coats 0x3, robes 0x5, plate jackets and skin suits 0x7, ninja rags 0x4).

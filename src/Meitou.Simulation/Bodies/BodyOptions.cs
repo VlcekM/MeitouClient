@@ -28,4 +28,9 @@ public sealed record BodyOptions
     public float GlobalDamageMultiplier { get; init; } = 1;
     /// <summary>Settable: the original reads its global when a part is damaged, so a change on the Gameplay page reaches the running world at once.</summary>
     public Dismemberment Dismemberment { get; set; } = Dismemberment.Rare;
+    /// <summary>
+    /// Meitou (on; Faithful off, the original never cuts a head off): a blow that destroys the head also cuts it off, under the rule a limb is cut off by
+    /// (<see cref="MedicalState.Decapitated"/>). Settable, as <see cref="Dismemberment"/>.
+    /// </summary>
+    public bool Decapitation { get; set; } = true;
 }

@@ -662,6 +662,7 @@ public sealed partial class CombatSystem : IProjectileSource
             {
                 case MedicalEventKind.KnockedOut: knockout = true; if (dc.Stats is { } ko) xp.ToughnessFromKnockOut(ko, dc.Race); break;
                 case MedicalEventKind.Died: death = true; break;
+                case MedicalEventKind.Decapitated: table.LimbsChanged.Enqueue((v, -1)); break;   // the look loses its head (nothing drops)
                 case MedicalEventKind.PartSevered: if (dc.Stats is { } st) xp.ToughnessFromLimbLoss(st, dc.Race); table.LimbsChanged.Enqueue((v, dc.Medical.Parts[ev.Part].Template.LimbSlot));
                     world.Defer(new Dialogue.DialogueEvent(table.IdOf(v), CharacterId.None, dc.Medical.Parts[ev.Part].Template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });
                     break;

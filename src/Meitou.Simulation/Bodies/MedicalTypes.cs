@@ -11,6 +11,8 @@ public enum MedicalEventKind
     PartDown,
     PartSevered,
     Died,
+    /// <summary>The blow that killed the character cut its head off (<see cref="MedicalState.Decapitated"/>; after <see cref="Died"/>).</summary>
+    Decapitated,
 }
 
 public enum DeathCause

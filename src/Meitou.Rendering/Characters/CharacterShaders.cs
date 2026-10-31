@@ -35,6 +35,9 @@ static class CharacterShaders
         Bloody = 1 << 20,
         // With Bloody: the whole mesh at the full amount (a stump) instead of its parts' damage (the instance carries them).
         BloodFull = 1 << 21;
+    // Instance flag (CharInstance.Flags; bit 0 interior, 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou decapitation), its head
+    // vertices (CharacterContent.HeadBit) hidden and its back faces drawn as the wound.
+    public const uint Headless = 1u << 28;
     // Shading modes.
     public const uint ShadeItem = 0, ShadeBody = 1, ShadeHair = 2;
     // Texture slots (CharacterMaterialRecord.Tex).
@@ -133,11 +136,11 @@ static class CharacterShaders
             float turn = atan(aNormal.x, aNormal.z) / 3.14159265359 * 0.5;
             vBlood = vec4(aPosition.y, turn, turn > 0.0 ? turn - 0.5 : turn + 0.5, aNormal.z);
             vMaterial = aInstanceData.y;
-            vInterior = aInstanceData.z & 1u;
+            vInterior = aInstanceData.z & {{Headless}}u | (aInstanceData.z & 1u);   // bit 0 interior, the Headless bit kept for the fragments
             // Hidden limbs and parts (docs/characters.md "Hidden body parts"): the body's vertices of a limb whose bit 12 + k the instance carries, or of a part-map part whose
             // bit 18 + p it carries (the vertex's limb bits 0-3, part bits from 4: CharacterContent.MarkBody); the fragments discard where it is above 0.
             uint marks = uint(aColour.y + 0.5);
-            vHidden = ((marks & (aInstanceData.z >> 12) & 15u) | ((marks >> 4) & (aInstanceData.z >> 18) & 1023u)) != 0u ? 1.0 : 0.0;
+            vHidden = ((marks & (aInstanceData.z >> 12) & 15u) | ((marks >> 4) & (aInstanceData.z >> 18) & 1023u) | ((marks >> 14) & (aInstanceData.z >> 28) & 1u)) != 0u ? 1.0 : 0.0;
             // The part of the vertex (bits 16-19: its index + 1, CharacterContent.MarkBody) and its blood amount (the instance: part k in byte k & 1 of the w of row k / 2).
             uint bloodPart = (marks >> 16) & 15u;
             vBloodAmount = 0.0;
@@ -347,6 +350,14 @@ static class CharacterShaders
                 float amount = flag(f, 2097152u) ? 1.0 : vBloodAmount;
                 albedo = mix(albedo, blood.rgb, clamp(blood.a - 1.0 + clamp(amount, 0.0, 1.0), 0.0, 1.0));
             }
+            // A headless body's inside seen through the neck (Meitou decapitation, drawn two-sided): the wound, wet, in the race's blood colour (else a dark red).
+            if (!gl_FrontFacing && (vInterior & {{Headless}}u) != 0u)
+            {
+                albedo = flag(f, 1048576u) ? m.colour1.rgb * 0.6 : vec3(0.3, 0.04, 0.03);
+                gloss = 0.5;
+                skin = 0.0;
+                nm = vec4(0.5, 0.5, 1.0, 0.5);
+            }
             if (cut) discard;
             // The game writes character albedo darkened: 0.7 for bodies, heads and hair (character.hlsl DARKEN), 0.8 for worn items (skin.hlsl); not its icons (rtticons.hlsl,
             // a fog distance of -1).
@@ -370,7 +381,7 @@ static class CharacterShaders
             vec3 v = normalize(view.eye - vWorld);
             gloss = clamp(gloss, 0.0, 1.0);
             vec3 colour;
-            giInterior = vInterior != 0u;
+            giInterior = (vInterior & 1u) != 0u;
             skinGeometric = smoothNormal; skinCurvature = curvature; skinShare = skin; skinAlbedo = albedo;
             atmoMetalness = metal;
             if (view.fogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, gloss, vWorld, skinDiffuse(n, smoothNormal, uAtmoLight.xyz, curvature, skin, albedo));

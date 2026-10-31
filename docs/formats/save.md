@@ -288,6 +288,7 @@ one changed in the character editor (its keys replaced by the edited copy's, so 
 the same file (`section` `left_arm_replace` / `right_arm_replace` / `left_leg_replace` / `right_leg_replace`, `base data sid` the
 LIMB_REPLACEMENT, `level`, `quality`, `dam`, `wear`, `stun`). These items are in no INVENTORY_STATE. Reader: state 1, or 2 without a resolvable
 item, becomes a stump; 2 with an item fits it; 3 is kept. Meitou: `SaveLimbs` (data), `Saving/SavedLimbs` (medical state both ways).
+Meitou-only bool `meitou decapitated` on MEDICAL_STATE, written only when true ([decapitation](../game/character-stats.md#decapitation-meitou)); the original ignores it.
 A removed prosthetic in an inventory keeps its `dam`, `wear`, `stun` floats (`SaveItem.Damage`/`Wear`/`Stun`; written when non-zero or
 already in the record, an engine choice: whether vanilla writes them for every item is **Unknown**).
 

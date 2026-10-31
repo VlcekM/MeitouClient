@@ -201,7 +201,7 @@ internal static class SavedCharacters
         if (savedItems.Count == 0 && appearances is { } again && look?.Loadout is { } rolled)
         {
             var worn = SavedKit.Wear(rolled, sc.Appearance, data.Db);
-            if (worn is null && medical is { LimbBits: not 0 }) worn = SavedKit.Copy(rolled);
+            if (worn is null && medical is { LimbBits: not 0 } or { Decapitated: true }) worn = SavedKit.Copy(rolled);
             if (worn is not null)
             {
                 SavedKit.SetLimbs(worn, medical, data.Db);

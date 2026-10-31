@@ -7,6 +7,8 @@ public sealed partial class MedicalState
 {
     // ------------------------------------------------------------------ save keys
 
+    const string DecapitatedKey = "meitou decapitated";
+
     /// <summary>Writes the MEDICAL_STATE fields (docs/formats/save.md): the bools <c>coma dead unconcious incapacitated</c>, the floats <c>blood bleeding hung fed KO</c> and per part <c>k</c> <c>flesh hit bandage rig stun wear hitmult</c> and the string <c>sid</c>. Wounds are not part of these keys; the limbs (<see cref="LimbBits"/>) are written by the save code with their items.</summary>
     public void WriteSave(IDictionary<string, float> floats, IDictionary<string, bool> bools, IDictionary<string, string> strings)
     {
@@ -14,6 +16,8 @@ public sealed partial class MedicalState
         bools["dead"] = Dead;
         bools["unconcious"] = Unconscious;
         bools["incapacitated"] = Incapacitated;
+        // Meitou-only (docs/formats/save.md "Limbs"): the original reads its keys by name, so it ignores this one.
+        if (Decapitated) bools[DecapitatedKey] = true;
         floats["blood"] = Blood;
         floats["bleeding"] = Bleeding;
         floats["hung"] = Hunger;
@@ -132,6 +136,7 @@ public sealed partial class MedicalState
             Coma = bools.GetValueOrDefault("coma"),
             Dead = bools.GetValueOrDefault("dead"),
             Bleeding = floats.GetValueOrDefault("bleeding"),
+            Decapitated = bools.GetValueOrDefault(DecapitatedKey),
         };
         foreach (var p in state.Parts) p.WasDown = p.IsDown;
         return state;

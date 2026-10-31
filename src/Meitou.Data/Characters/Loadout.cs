@@ -64,6 +64,8 @@ public sealed class Loadout
     public List<LoadoutWeapon> Weapons { get; } = [];
     /// <summary>The limbs by slot (0 left arm, 1 right arm, 2 left leg, 3 right leg); null for a natural one.</summary>
     public LoadoutLimb?[] Limbs { get; } = new LoadoutLimb?[4];
+    /// <summary>The head was cut off (Meitou, <c>MedicalState.Decapitated</c>): the look has no head, hair, beard or hat.</summary>
+    public bool Decapitated { get; set; }
     public List<string> Notes { get; } = [];
 
     /// <summary>One line per choice, for logs and the viewer.</summary>

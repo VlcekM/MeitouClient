@@ -101,6 +101,7 @@ static class DebugCheats
                     {
                         if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut) { TaskStart.Stand(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
                         else if (e.Kind == MedicalEventKind.PartSevered) table.LimbsChanged.Enqueue((slot, medical.Parts[e.Part].Template.LimbSlot));
+                        else if (e.Kind == MedicalEventKind.Decapitated) table.LimbsChanged.Enqueue((slot, -1));
                     }
                 }
                 break;
