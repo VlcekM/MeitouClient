@@ -13,7 +13,7 @@ using Meitou.Navigation;
 static class NavmeshTool
 {
     // --verbose: painters, seeds, interiors, door joins and path points are listed, and --near lists every field of the building records.
-    // --near also lists the carvers and solids reaching within the radius.
+    // --near also lists the map features, carvers and solids reaching within the radius; --probe shows one point's column or a map of ground against the original.
     static bool verbose;
 
     public static int Run(GameInstall install, string[] args)
@@ -25,7 +25,7 @@ static class NavmeshTool
         var settings = new NavBuildSettings();
         int repeat = 1;
         float[]? box = null, pathArg = null;
-        bool doorsClosed = false, noInteriors = false; float? toY = null, fromY = null; float[]? near = null;
+        bool doorsClosed = false, noInteriors = false; float? toY = null, fromY = null; float[]? near = null, probe = null;
         int around = 0;
         bool fingerprint = false;
         string? interiorKey = null;
@@ -44,6 +44,7 @@ static class NavmeshTool
                 case "--geometry": geometryOnly = true; break;
                 case "--near": near = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
                 case "--no-interiors": noInteriors = true; break;
+                case "--probe": probe = args[++i].Split(',').Select(t => float.Parse(t, CultureInfo.InvariantCulture)).ToArray(); break;
                 case "--to-y": toY = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--from-y": fromY = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
                 case "--closed": doorsClosed = true; break;
@@ -111,6 +112,7 @@ static class NavmeshTool
         if (near is not null)
         {
             foreach (var line in DescribeNear(gatherer, db, collision, zone.Value, near[0], near[1], near[2])) Console.WriteLine("  " + line);
+            foreach (var line in DescribeFeaturesNear(install, db, collision, zone.Value, near[0], near[1], near[2])) Console.WriteLine("  " + line);
             foreach (var line in DescribeVolumesNear(g, near[0], near[1], near[2])) Console.WriteLine("  " + line);
         }
         if (interiorKey is not null) return DescribeOneInterior(gatherer, zone.Value, interiorKey, settings, obj, ownOnly);
@@ -146,6 +148,8 @@ static class NavmeshTool
         // The kept regions are resolved over the built zones as the game does for the loaded ones (NavMeshService): own seeds, the border rule toward
         // zones not built here, and the neighbours' kept border edges.
         foreach (var (c, keep) in ZoneKeptClosure.Resolve(full, settings)) world = world.With(full[c].WithKept(keep).WithoutPruned());
+        if (probe is { Length: 2 }) foreach (var line in Probe(install, gatherer, g, full[zone.Value], world, probe[0], probe[1])) Console.WriteLine("  " + line);
+        if (probe is { Length: >= 4 }) foreach (var line in ProbeGrid(install, gatherer, g, full[zone.Value], world, probe[0], probe[1], probe[2], probe[3])) Console.WriteLine(line);
 
         List<Vector3>? path = null;
         if (pathArg is not null)
@@ -166,17 +170,24 @@ static class NavmeshTool
                 if (okGoal) { var gm = world.Mesh(gref.Zone); var gc = gm.Centre(gref.Polygon); Console.WriteLine($"  goal polygon at {gc.X:0},{gc.Y:0},{gc.Z:0} area {gm.Areas[gref.Polygon]}, mesh has {gm.PolygonCount} polygons, goal point {to.X:0},{to.Y:0},{to.Z:0}"); }
                 if (okStart)
                 {
-                    var seen = new HashSet<long> { sref.Key };
+                    var seen = new Dictionary<long, NavRef?> { [sref.Key] = null };
                     var queue2 = new Queue<NavRef>();
                     queue2.Enqueue(sref);
                     while (queue2.Count > 0)
                     {
                         var c = queue2.Dequeue();
                         var m = world.Mesh(c.Zone);
-                        foreach (int q in m.NeighboursOf(c.Polygon)) if (seen.Add(new NavRef(c.Zone, q).Key)) queue2.Enqueue(new NavRef(c.Zone, q));
-                        foreach (var l in world.LinksOf(c)) if (seen.Add(l.To.Key)) queue2.Enqueue(l.To);
+                        foreach (int q in m.NeighboursOf(c.Polygon)) if (seen.TryAdd(new NavRef(c.Zone, q).Key, c)) queue2.Enqueue(new NavRef(c.Zone, q));
+                        foreach (var l in world.LinksOf(c)) if (seen.TryAdd(l.To.Key, c)) queue2.Enqueue(l.To);
                     }
-                    Console.WriteLine($"  {seen.Count} polygons reachable from the start without clearance; goal reachable: {okGoal && seen.Contains(gref.Key)}");
+                    Console.WriteLine($"  {seen.Count} polygons reachable from the start without clearance; goal reachable: {okGoal && seen.ContainsKey(gref.Key)}");
+                    // --verbose: the chain of polygon centres the clearance-free search took to the goal.
+                    if (verbose && okGoal && seen.ContainsKey(gref.Key))
+                        for (NavRef? c = gref; c is { } r; c = seen[r.Key])
+                        {
+                            var cc = world.Mesh(r.Zone).Centre(r.Polygon);
+                            Console.WriteLine($"    chain polygon {r.Polygon} at {cc.X:0},{cc.Y:0},{cc.Z:0}");
+                        }
                 }
             }
             else
@@ -231,6 +242,133 @@ static class NavmeshTool
         return 0;
     }
 
+    /// <summary>
+    /// <c>--probe x,z</c>: what the zone has in the column at a point: the terrain, the gathered triangles over it, the carvers and solids holding it (with the
+    /// heights the solid spans there), our polygons (unpruned, and whether the kept set holds them) and the original tile's polygons.
+    /// </summary>
+    static IEnumerable<string> Probe(GameInstall install, ZoneGeometryGatherer gatherer, ZoneGeometry g, ZoneNavMesh mesh, NavWorld world, float x, float z)
+    {
+        yield return $"probe {x:0},{z:0}: terrain {gatherer.TerrainHeight(x, z):0.0}";
+        for (int t = 0; t < g.TriangleCount; t++)
+        {
+            if (t < g.BuildingFirstTriangle) continue;
+            Vector3 V(int k) { int i = g.Indices[t * 3 + k]; return new(g.Vertices[i * 3], g.Vertices[i * 3 + 1], g.Vertices[i * 3 + 2]); }
+            var a = V(0); var b = V(1); var c = V(2);
+            if (!InTriangle(x, z, a, b, c, out float y)) continue;
+            var n = Vector3.Normalize(Vector3.Cross(b - a, c - a));
+            yield return $"triangle {t} y {y:0.0} area {g.Areas[t]} normal.y {n.Y:0.00}{(t < g.BuildingLastTriangle ? " building" : " feature or foliage")}";
+        }
+        foreach (var cv in g.Carvers)
+            if (Inside(cv.Polygon, new(x, z))) yield return $"carver y {cv.YMin:0}..{cv.YMax:0}{(cv.Owner is null ? "" : " " + cv.Owner)}";
+        foreach (var s in g.Solids)
+        {
+            if (x < s.Min.X || x > s.Max.X || z < s.Min.Y || z > s.Max.Y) continue;
+            float lo = float.MinValue, hi = float.MaxValue;
+            foreach (var pl in s.Planes)
+            {
+                float k = pl.X * x + pl.Z * z + pl.W; // inside: pl.Y * y + k < 0
+                if (MathF.Abs(pl.Y) < 1e-6f) { if (k >= 0) { lo = 1; hi = 0; } continue; }
+                float y = -k / pl.Y;
+                if (pl.Y > 0) hi = MathF.Min(hi, y); else lo = MathF.Max(lo, y);
+            }
+            yield return lo < hi ? $"solid inside y {lo:0.0}..{hi:0.0} {s.Owner}" : $"solid (box only) {s.Owner}";
+        }
+        foreach (var s in g.MeshSolids)
+            if (x >= s.Min.X && x <= s.Max.X && z >= s.Min.Y && z <= s.Max.Y) yield return $"mesh solid (box) {s.Owner}";
+        var polys = new List<int>();
+        mesh.PolygonsAt(x, z, polys);
+        var kept = world.Find(g.Zone)!;
+        var keptPolys = new List<int>();
+        kept.PolygonsAt(x, z, keptPolys);
+        foreach (int p in polys)
+        {
+            float h = mesh.HeightAt(p, x, z);
+            bool inKept = keptPolys.Any(q => MathF.Abs(kept.HeightAt(q, x, z) - h) < 0.5f);
+            yield return $"ours polygon {p} y {h:0.0} area {mesh.Areas[p]}, own seeds keep it {mesh.Kept[p]}, kept after the closure {inKept}";
+        }
+        if (OriginalNavTiles.LoadExterior(install, g.Zone) is { } original)
+            for (int p = 0; p < original.Polygons.Length; p++)
+            {
+                var poly = original.Polygons[p];
+                for (int k = 1; k + 1 < poly.Length; k++)
+                    if (InTriangle(x, z, original.Vertices[poly[0]], original.Vertices[poly[k]], original.Vertices[poly[k + 1]], out float y))
+                    {
+                        yield return $"original polygon {p} y {y:0.0}";
+                        break;
+                    }
+            }
+        else yield return "no original tile";
+
+        static bool InTriangle(float x, float z, Vector3 a, Vector3 b, Vector3 c, out float y)
+        {
+            y = 0;
+            if (!NavGeometry.Barycentric(x, z, a, b, c, out float u, out float v, out float w) || u < 0 || v < 0 || w < 0) return false;
+            y = u * a.Y + v * b.Y + w * c.Y;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// <c>--probe x,z,radius,step</c>: a map of the square round a point, one character per sample: <c>B</c> both meshes have a kept polygon within 12 of the
+    /// terrain (ground), <c>o</c> only the original has ground there, <c>m</c> only ours, <c>p</c> the original has ground and ours has an unkept polygon there,
+    /// <c>.</c> neither; upper case <c>X</c> marks the centre. Then the counts.
+    /// </summary>
+    static IEnumerable<string> ProbeGrid(GameInstall install, ZoneGeometryGatherer gatherer, ZoneGeometry g, ZoneNavMesh mesh, NavWorld world, float cx, float cz, float radius, float step)
+    {
+        var original = OriginalNavTiles.LoadExterior(install, g.Zone);
+        if (original is null) { yield return "no original tile"; yield break; }
+        var kept = world.Find(g.Zone)!;
+        var buckets = new Dictionary<(int, int), List<int>>();
+        for (int p = 0; p < original.Polygons.Length; p++)
+        {
+            float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
+            foreach (int v in original.Polygons[p]) { x0 = MathF.Min(x0, original.Vertices[v].X); x1 = MathF.Max(x1, original.Vertices[v].X); z0 = MathF.Min(z0, original.Vertices[v].Z); z1 = MathF.Max(z1, original.Vertices[v].Z); }
+            for (int i = (int)MathF.Floor(x0 / 64); i <= (int)MathF.Floor(x1 / 64); i++)
+                for (int j = (int)MathF.Floor(z0 / 64); j <= (int)MathF.Floor(z1 / 64); j++)
+                {
+                    if (!buckets.TryGetValue((i, j), out var l)) buckets[(i, j)] = l = [];
+                    l.Add(p);
+                }
+        }
+        int both = 0, onlyOriginal = 0, onlyOurs = 0, pruned = 0;
+        var list = new List<int>();
+        for (float z = cz - radius; z <= cz + radius; z += step)
+        {
+            var row = new System.Text.StringBuilder();
+            for (float x = cx - radius; x <= cx + radius; x += step)
+            {
+                float ground = gatherer.TerrainHeight(x, z);
+                bool o = false;
+                foreach (int p in buckets.GetValueOrDefault(((int)MathF.Floor(x / 64), (int)MathF.Floor(z / 64))) ?? [])
+                {
+                    var poly = original.Polygons[p];
+                    for (int k = 1; k + 1 < poly.Length; k++)
+                        if (NavGeometry.Barycentric(x, z, original.Vertices[poly[0]], original.Vertices[poly[k]], original.Vertices[poly[k + 1]], out float u, out float v, out float w) && u >= 0 && v >= 0 && w >= 0
+                            && MathF.Abs(u * original.Vertices[poly[0]].Y + v * original.Vertices[poly[k]].Y + w * original.Vertices[poly[k + 1]].Y - ground) < 12) { o = true; break; }
+                    if (o) break;
+                }
+                list.Clear(); kept.PolygonsAt(x, z, list);
+                bool m = list.Any(q => MathF.Abs(kept.HeightAt(q, x, z) - ground) < 12);
+                list.Clear(); mesh.PolygonsAt(x, z, list);
+                bool any = list.Any(q => MathF.Abs(mesh.HeightAt(q, x, z) - ground) < 12);
+                char c = o && m ? 'B' : o ? (any ? 'p' : 'o') : m ? 'm' : '.';
+                if (o && m) both++; else if (o && any) pruned++; else if (o) onlyOriginal++; else if (m) onlyOurs++;
+                if (MathF.Abs(x - cx) < step / 2 && MathF.Abs(z - cz) < step / 2) c = char.ToUpperInvariant(c) == c ? 'X' : char.ToUpperInvariant(c);
+                row.Append(c);
+            }
+            yield return row.ToString();
+        }
+        yield return $"ground samples (within 12 of the terrain): both {both}, original only {onlyOriginal}, original and ours unkept {pruned}, ours only {onlyOurs}";
+    }
+
+    static bool Inside(Vector2[] poly, Vector2 q)
+    {
+        bool inside = false;
+        for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
+            if (poly[i].Y > q.Y != poly[j].Y > q.Y && q.X < (poly[j].X - poly[i].X) * (q.Y - poly[i].Y) / (poly[j].Y - poly[i].Y) + poly[i].X) inside = !inside;
+        return inside;
+    }
+
     /// <summary>The carvers and solids that reach within a radius of a point (<c>--near</c>): what cuts the mesh there when no building near the point explains it.</summary>
     static IEnumerable<string> DescribeVolumesNear(ZoneGeometry g, float x, float z, float radius)
     {
@@ -242,15 +380,44 @@ static class NavmeshTool
         }
         foreach (var s in g.Solids)
             if (s.Min.X - radius <= x && x <= s.Max.X + radius && s.Min.Y - radius <= z && z <= s.Max.Y + radius)
-                yield return $"solid x {s.Min.X:0}..{s.Max.X:0} z {s.Min.Y:0}..{s.Max.Y:0} ({s.Planes.Length} planes)";
+                yield return $"solid x {s.Min.X:0}..{s.Max.X:0} z {s.Min.Y:0}..{s.Max.Y:0} ({s.Planes.Length} planes){(s.Owner is null ? "" : " " + s.Owner)}";
+    }
 
-        static bool Inside(Vector2[] poly, Vector2 q)
-        {
-            bool inside = false;
-            for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
-                if (poly[i].Y > q.Y != poly[j].Y > q.Y && q.X < (poly[j].X - poly[i].X) * (q.Y - poly[i].Y) / (poly[j].Y - poly[i].Y) + poly[i].X) inside = !inside;
-            return inside;
-        }
+    /// <summary>The map features (<c>features.dat</c>) of the zone and its neighbours within a radius of a point (<c>--near</c>), with their collision.</summary>
+    static IEnumerable<string> DescribeFeaturesNear(GameInstall install, GameDatabase db, CollisionCache collision, ZoneCoordinate zone, float x, float z, float radius)
+    {
+        var file = MapFeatureFile.Open(install);
+        for (int dz = -1; dz <= 1; dz++)
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                int index = (zone.Y + dz) * WorldLayout.ZoneCount + zone.X + dx;
+                if (index < 0 || index >= file.Zones.Count) continue;
+                foreach (var f in file.Zones[index])
+                {
+                    if (Vector2.Distance(new(f.Position.X, f.Position.Z), new(x, z)) > radius) continue;
+                    var record = db.Find(f.StringId);
+                    string path = record?.GetPath("collision") ?? "";
+                    var prepared = path.Length > 0 ? collision.Get(path) : null;
+                    yield return $"feature {record?.Name} [{f.StringId}] at {f.Position.X:0},{f.Position.Y:0},{f.Position.Z:0} scale {f.Scale.X:0.##},{f.Scale.Y:0.##},{f.Scale.Z:0.##} collision {(path.Length == 0 ? "none" : path)}" +
+                        (prepared is null ? "" : $" ({prepared.Shapes.Length} shapes, {prepared.Shapes.Count(s => s.IsConvex)} convex; " + string.Join("; ", prepared.Shapes.Select(s => $"{s.Indices.Length / 3} triangles, {OpenEdges(s)} open edges, local y {s.Vertices.Min(v => v.Y):0}..{s.Vertices.Max(v => v.Y):0}")) + ")");
+                }
+            }
+    }
+
+    /// <summary>Edges of a shape's triangles (vertices welded within 0.01) that only one triangle uses: 0 for a closed mesh.</summary>
+    static int OpenEdges(PreparedShape s)
+    {
+        var id = new Dictionary<(int, int, int), int>();
+        int Weld(Vector3 v) { var k = ((int)MathF.Round(v.X * 100), (int)MathF.Round(v.Y * 100), (int)MathF.Round(v.Z * 100)); if (!id.TryGetValue(k, out int i)) id[k] = i = id.Count; return i; }
+        var edges = new Dictionary<(int, int), int>();
+        for (int t = 0; t < s.Indices.Length; t += 3)
+            for (int k = 0; k < 3; k++)
+            {
+                int a = Weld(s.Vertices[s.Indices[t + k]]), b = Weld(s.Vertices[s.Indices[t + (k + 1) % 3]]);
+                var e = a < b ? (a, b) : (b, a);
+                edges[e] = edges.GetValueOrDefault(e) + 1;
+            }
+        return edges.Values.Count(c => c == 1);
     }
 
     /// <summary>The buildings within a radius of a point, with how many of their parts have collision (<c>--near x,z,radius</c>).</summary>
