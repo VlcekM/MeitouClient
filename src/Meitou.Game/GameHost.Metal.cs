@@ -852,6 +852,12 @@ sealed partial class GameHost
                     }
                     return;
                 }
+                // The sandbox animation list, while open, takes every key too.
+                if (sandboxPicker is { Open: true })
+                {
+                    if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } pickerKey) sandboxPicker.KeyDown(pickerKey);
+                    return;
+                }
                 if (hud is not null && DebugToggle(key)) { debugMenuOpen = !debugMenuOpen; return; }
                 if (debugMenuOpen)
                 {
@@ -925,6 +931,7 @@ sealed partial class GameHost
             {
                 if (Covered) return;
                 if (settings?.Visible == true) settings.TextInput(value);
+                else if (sandboxPicker is { Open: true }) sandboxPicker.TextInput(value);
                 else if (debugMenuOpen) DebugMenuText(value);
                 else hud?.UiText(value);
             };
@@ -949,7 +956,9 @@ sealed partial class GameHost
                 if (KeyMap.Map(button) is not { } mapped) return;
                 var at = Pixels(mouse.Position);
                 if (settings?.Visible == true) { settings.MouseDown(at, mapped); return; }
-                if (hud is { UiVisible: true } && PlayerButton(mapped) == Meitou.Engine.Input.MouseButton.Left && SandboxToggleClick(at)) return;
+                bool select = PlayerButton(mapped) == Meitou.Engine.Input.MouseButton.Left;
+                if (hud is { UiVisible: true } && select && !config.SandboxPanelCollapsed && sandboxPicker?.MouseDown(at) == true) return;
+                if (hud is { UiVisible: true } && select && SandboxToggleClick(at)) return;
                 // PlayerInterface sees every click: it takes the HUD's controls, selects, starts a drag box or gives a move order.
                 if (hud is not null && hud.MouseDown(PlayerButton(mapped), at, shiftDown, Ctrl(), Alt())) return;
                 session.Input.SetMouseButton(mapped, true);
@@ -967,6 +976,7 @@ sealed partial class GameHost
                 if (Covered) return;
                 if (settings?.Visible == true) { settings.Scroll(wheel.Y); return; }
                 var at = Pixels(mouse.Position);
+                if (hud is { UiVisible: true } && !config.SandboxPanelCollapsed && sandboxPicker?.Scroll(wheel.Y) == true) return;
                 // A panel's own scroll wins; over any HUD rectangle the wheel does not zoom the camera, as in the Vulkan host.
                 if (hud is not null && (hud.UiScroll(at, wheel.Y) || hud.ContainsUi(at))) return;
                 session.Input.AddWheel(wheel.Y);
