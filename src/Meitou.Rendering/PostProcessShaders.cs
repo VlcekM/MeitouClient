@@ -499,8 +499,17 @@ static class PostProcessShaders
                     }
             ivec2 t = ivec2(gl_FragCoord.xy);
             gl_FragDepth = ((t.x + t.y) & 1) == 0 ? near : far;
-            fragColour = vec4(0.0);
+            fragColour = vec4(gl_FragDepth);   // the same depth as a colour, for the Meitou fog's soft fade (the depth attachment cannot be read while tested)
         }
+        """;
+
+    /// <summary>The scene's depth copied into a colour target at the render size, for the full-size particles' soft fade (the Meitou <c>fog</c> switch).</summary>
+    public const string ParticleSoftDepth = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uDepth;
+        void main() { fragColour = vec4(texelFetch(uDepth, ivec2(gl_FragCoord.xy), 0).r); }
         """;
 
     /// <summary>
@@ -533,17 +542,47 @@ static class PostProcessShaders
             }
             if (total <= 0.0) return vec4(0.0);
             float z0 = linearZ(texelFetch(uDepth, ivec2(fc), 0).r);
-            vec4 sum = vec4(0.0);
-            float weights = 0.0;
+            float z[4];
+            float zMin = 1e30, zMax = 0.0;
             for (int i = 0; i < 4; i++)
             {
-                float bw = ((i & 1) == 0 ? 1.0 - f.x : f.x) * ((i >> 1) == 0 ? 1.0 - f.y : f.y);
-                float e = 0.02 + abs(linearZ(texelFetch(uLowDepth, q[i], 0).r) - z0) / z0;
-                float w = (bw + 0.05) / (e * e);
-                sum += a[i] * w;
-                weights += w;
+                z[i] = linearZ(texelFetch(uLowDepth, q[i], 0).r);
+                zMin = min(zMin, z[i]);
+                zMax = max(zMax, z[i]);
             }
-            return sum / weights;
+            if (zMax - zMin <= 0.04 * zMin)
+            {
+                // One surface under the footprint: the bilinear weights (with the same depth term, which is near 1 for all four).
+                vec4 sum = vec4(0.0);
+                float weights = 0.0;
+                for (int i = 0; i < 4; i++)
+                {
+                    float bw = ((i & 1) == 0 ? 1.0 - f.x : f.x) * ((i >> 1) == 0 ? 1.0 - f.y : f.y);
+                    float e = 0.02 + abs(z[i] - z0) / z0;
+                    float w = (bw + 0.05) / (e * e);
+                    sum += a[i] * w;
+                    weights += w;
+                }
+                return sum / weights;
+            }
+            // A depth edge: a joint bilateral filter over the 4 x 4 texels round the pixel (a smooth radial kernel times the depth match), so the texels tested
+            // against this pixel's surface (ParticleDepth's checkerboard holds both of a block's depths) blend among themselves. The four nearest alone gave one
+            // or two matching texels in turn along the edge: a row of beads two texels apart.
+            vec4 sum = vec4(0.0);
+            float weights = 0.0;
+            for (int y = -1; y <= 2; y++)
+                for (int x = -1; x <= 2; x++)
+                {
+                    ivec2 t = i0 + ivec2(x, y);
+                    float k = max(0.0, 1.0 - length(vec2(t) - lp) / 2.0);
+                    if (k <= 0.0) continue;
+                    ivec2 c = clamp(t, ivec2(0), hi);
+                    float e = 0.02 + abs(linearZ(texelFetch(uLowDepth, c, 0).r) - z0) / z0;
+                    float w = k * k / (e * e);
+                    sum += texelFetch(uAccum, c, 0) * w;
+                    weights += w;
+                }
+            return weights > 0.0 ? sum / weights : vec4(0.0);
         }
         """;
 

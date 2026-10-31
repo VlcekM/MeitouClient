@@ -152,6 +152,9 @@ public static class Enhancements
         new("displace", "Ground displacement (tessellation)", "off", "tessellated",
             () => GroundRelief.DisplaceActive, v => GroundRelief.DisplaceActive = v,
             "the game's ground is its height map's mesh; Meitou tessellates the ground near the eye and raises it by the same relief (needs tessellation shaders; visual only: characters walk on the undisplaced ground)"),
+        new("fog", "Fog", "hard-edged", "soft",
+            () => post.MeitouFog, v => post.MeitouFog = v,
+            "the game's dust, smoke and fog sprites cut straight into the ground and walls they cross, and its fog volumes are drawn at full size; Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly, and computes the fog volumes at half size (docs/render-post.md \"Fog\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

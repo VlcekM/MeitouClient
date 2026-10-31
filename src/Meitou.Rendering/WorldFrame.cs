@@ -1675,8 +1675,9 @@ static class WorldFrame
             particleDraw.Prepare(particleViewProjection, particleNearProjection, particleNear, view, eye, sun, post.ParticlePixelsPerUnit(camera.Projection(aspect, 1, 10).M22), (float)post.RenderWidth * post.RenderHeight, post.Options.ParticleDivisor);
             if (particleDraw.FullCount > 0)
             {
+                post.PrepareSoftParticleDepth();
                 host.Open(13, post.SceneTargetsForParticles);
-                particleDraw.Record(1);
+                particleDraw.Record(1, post.SoftParticleDepth(1));
                 host.Close();
             }
             // Meitou: the alpha and additive sprites that are big on screen into low-resolution targets (half, then quarter size), each over the scene with a depth-aware upsample.
@@ -1686,7 +1687,7 @@ static class WorldFrame
                     if (particleDraw.CountFor(divisor) == 0) continue;
                     post.BeginParticlesLow(divisor);
                     host.Open(13, post.ParticleTargets(divisor));
-                    particleDraw.Record(divisor);
+                    particleDraw.Record(divisor, post.SoftParticleDepth(divisor));
                     host.Close();
                     post.MarkParticleDraws();
                     post.CompositeParticlesLow(divisor);

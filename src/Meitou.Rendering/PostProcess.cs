@@ -98,6 +98,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     GiResolvePass? giResolvePass;   // made the first time the GI resolve runs
     GiApplyPass? giApplyPass;
     readonly ParticleDepthPass particleDepthPass;
+    readonly ParticleSoftDepthPass particleSoftDepthPass;
     readonly ParticleCompositePass particleCompositePass;
     readonly ParticleCoveragePass particleCoveragePass;
     AoApplyPass? aoApplyPass;   // made the first time the occlusion goes onto the scene before the particles (ApplySsao)
@@ -292,6 +293,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             (Depth, FullSize, Div) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"));
     }
 
+    /// <summary>The scene's depth copied to a colour target for the soft fade (<see cref="PostProcessShaders.ParticleSoftDepth"/>).</summary>
+    sealed class ParticleSoftDepthPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Depth;
+        public ParticleSoftDepthPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleSoftDepth, "post particle soft depth") => Depth = P.Sampler("uDepth");
+    }
+
     /// <summary>The low-resolution particles over the scene (<see cref="PostProcessShaders.ParticleComposite"/>).</summary>
     sealed class ParticleCompositePass : FullscreenProgram
     {
@@ -358,6 +366,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         smaaPasses = new SmaaPasses(gpu);
         (velocityPass, taaPass, fogPass) = (new VelocityPass(gpu), new TaaPass(gpu), new FogPass(gpu));
         (particleDepthPass, particleCompositePass, particleCoveragePass) = (new ParticleDepthPass(gpu), new ParticleCompositePass(gpu), new ParticleCoveragePass(gpu));
+        particleSoftDepthPass = new ParticleSoftDepthPass(gpu);
     }
 
     /// <summary>The near depth slice's planes and the projection: what the depth buffer at the end of the frame holds (the far slice's depth is cleared).</summary>
@@ -537,6 +546,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         stamps.Tag = CostTag;
         haveNearSlice = farSliceDrawn = false;
         foreach (var l in lowTargets) l.Drawn = false;
+        softDepthReady = false;
         sceneMarked = aoApplied = false;
         Stamp("start");
         frameIndex++;
@@ -982,6 +992,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         public readonly int Divisor = divisor;
         public Target2D? Accum, Depth;
+        /// <summary>The depth the draws are tested against, as a colour (R32F): what the Meitou fog's soft fade reads.</summary>
+        public Target2D? Soft;
         public bool Drawn;
         public PassTargets Targets = null!;
     }
@@ -1014,21 +1026,54 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         {
             low.Accum?.Texture.Dispose();
             low.Depth?.Texture.Dispose();
+            low.Soft?.Texture.Dispose();
             using var batch = Gpu.Uploads.Begin();
             low.Accum = Make(batch, lw, lh, InternalFormat.Rgba16f, TextureMinFilter.Linear, $"post particle accumulation 1/{div}");
             low.Depth = Make(batch, lw, lh, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, $"post particle depth 1/{div}");
+            low.Soft = Make(batch, lw, lh, InternalFormat.R32f, TextureMinFilter.Nearest, $"post particle soft depth 1/{div}");
         }
         CloseSegment();
         var d = particleDepthPass;
         Bind(d.P, d.Depth, sceneDepth);
         d.P.Set(d.FullSize, (float)width, (float)height);
         d.P.Set(d.Div, (float)div);
-        DrawPass(d.P, default, InternalFormat.None, low.Depth!.Attachment with { Load = LoadOp.Clear, DepthClear = 1f },
+        DrawPass(d.P, low.Soft!.Attachment with { Load = LoadOp.DontCare }, low.Soft.Format, low.Depth!.Attachment with { Load = LoadOp.Clear, DepthClear = 1f },
             low.Depth.Format, lw, lh, lw, lh, PassState with { DepthTest = true, DepthWrite = true, Compare = DepthFunction.Always });
         CloseSegment();
         Stamp("particle depth");
         var targets = PassTargets.Of(low.Accum.Texture, low.Depth.Texture);
         low.Targets = targets with { Colour = targets.Colour with { Load = LoadOp.Clear, Clear = default } };
+    }
+
+    Target2D? softDepth;
+    bool softDepthReady;
+
+    /// <summary>
+    /// With the Meitou <c>fog</c> switch, copies the scene's depth into a colour target for the full-size particles' soft fade (they test against the depth
+    /// itself, which a draw cannot read while it is attached). Call after <see cref="RunFogVolumes"/> and before the full-size particles.
+    /// </summary>
+    public void PrepareSoftParticleDepth()
+    {
+        if (!Options.MeitouFog || !haveNearSlice) return;
+        if (softDepth is null || softDepth.Width != width || softDepth.Height != height)
+        {
+            softDepth?.Texture.Dispose();
+            using var batch = Gpu.Uploads.Begin();
+            softDepth = Make(batch, width, height, InternalFormat.R32f, TextureMinFilter.Nearest, "post particle soft depth");
+        }
+        CloseSegment();
+        Bind(particleSoftDepthPass.P, particleSoftDepthPass.Depth, sceneDepth);
+        Draw(particleSoftDepthPass.P, softDepth.Attachment with { Load = LoadOp.DontCare }, softDepth.Format, width, height, width, height);
+        CloseSegment();
+        softDepthReady = true;
+    }
+
+    /// <summary>The scene's depth for the particles of one size's soft fade (the Meitou <c>fog</c> switch), or null: Faithful, or not prepared this frame.</summary>
+    public ParticleRenderer.SoftDepth? SoftParticleDepth(int divisor)
+    {
+        if (!Options.MeitouFog) return null;
+        var t = divisor <= 1 ? (softDepthReady ? softDepth : null) : LowFor(divisor).Soft;
+        return t is null ? null : new ParticleRenderer.SoftDepth(Sampled(t), nearPlanes.X, nearPlanes.Y, Gpu.ClipDepthZeroToOne);
     }
 
     /// <summary>The accumulation of one size over the scene colour (<see cref="PostProcessShaders.ParticleComposite"/>), after the host drew into <see cref="ParticleTargets"/>.</summary>
@@ -1215,7 +1260,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var cmd = Gpu.BeginNative("particle coverage");
         cmd.BeginRendering(targets.Rendering);
         Gpu.BeginHostPass((CommandList)cmd, targets, DrawState.For(targets.Formats, Gpu.Device.DepthClamp, depthTest: true, depthWrite: false, compare: DepthFunction.Lequal, mask: mask));
-        Particles!.DrawCoverage(mask, depthTest: true);
+        Particles!.DrawCoverage(mask, depthTest: true, SoftParticleDepth(1));
         cmd.EndRendering();
         Gpu.EndHostPass(cmd);
         Gpu.EndNative(cmd);
@@ -1460,7 +1505,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeSceneLayers();
         DisposeMerged();
         Hiz?.Dispose();
-        foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
+        foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleSoftDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         smaaPasses.Dispose();
         giResolvePass?.P.Dispose();
         giApplyPass?.P.Dispose();

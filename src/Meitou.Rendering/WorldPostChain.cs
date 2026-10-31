@@ -116,6 +116,10 @@ interface IWorldPostChain
     PassTargets ParticleTargets(int divisor);
     void BeginParticlesLow(int divisor);
     void CompositeParticlesLow(int divisor);
+    /// <summary>The Meitou fog's soft fade: the scene's depth copied for the full-size particles (nothing where the chain has no copy).</summary>
+    void PrepareSoftParticleDepth() { }
+    /// <summary>The scene's depth for one particle size's soft fade, or null (Faithful, or a chain without it: the sprites stay hard-edged).</summary>
+    ParticleRenderer.SoftDepth? SoftParticleDepth(int divisor) => null;
     void MarkParticleDraws();
     void MarkParticles();
 
