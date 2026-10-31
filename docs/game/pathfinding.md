@@ -361,7 +361,9 @@ storeys; `48.13:12-`'s group matches our floor at 993, hence no join there); Old
 above our hull's top 773; our door at 696); Outpost s-I `24.18:8-` (placed rotated ~174° about a near-horizontal axis, origin y -56 under the
 water at 100; its door paints at -84..-62 inside the hull, the original's groups lie at 90..140 like our pruned floors and connect along the hull at
 100); Outpost s-II `24.18:15-` (the original's exterior has the door landing at ~121 outside the hull, our exterior only a pruned sliver at
-121..123 beside deep water) and `43.49:2-` (the original's exterior polygon at 52305,82100 lies ~23 inside our hull).
+121..123 beside deep water) and `43.49:2-` (the original's exterior polygon at 52305,82100 lies ~23 inside our hull). The original's stitch joins
+edges within 10 in height (Generator, stitch), less than our `NavInteriors.JoinHeight` 12, so a 12..17 step is not what joins these in its tiles; as
+`48.13:12-` (step 12..15, unconnected in the original) shows, it leaves such steps open.
 After (with the seed and seam rules below, the 15 zones re-swept): 31 sealed (24 ruins), 7 reached in ours only; interior coverage rises in 11 zones (Ash Domes 54.59 51→98 %, Ancient Labs 28.43 0→48 %, 37.35 35→77 %), none falls.
 **Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept, and
 every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`); exterior polygons stay limited to kept ones, else a door joined to a pruned
@@ -585,6 +587,11 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
     (**Verified** counts; Metal Warehouse, Ancient Factory, Ash Dome Ruin). The generator never reads `interior terrain` ("building interior includes
     terrain for generating navmesh", **Verified**: its only reader `FUN_14029e0c0` stores it at Building +0xc1, whose readers are character and ray code);
     the three are built as exterior because their first `interior` part is blank (above, building shapes; **Observed** tile 34.28: no interior group).
+  - **Stitch** (FUN_1403c5830, **Verified**; every stitch goes through it: FUN_1403cb280 "Stitching with completed task / existing zone / unloaded
+    zone", interiors' FUN_1403cbbf0 for each zone their box overlaps): edges of two meshes are matched with their own `EdgeMatchingParameters`, not the
+    generation settings': maxStepHeight **1.0** (10 units), maxSeparation **0.2** (2 units), maxOverhang 0.05, cosPlanarAlignmentAngle 0.9,
+    minEdgeOverlap 0.02, up (0, 1, 0) (member offsets 0, 4, 8, 0x10, 0x18 from the reflection table); the stitch input's +0x38 is 3.0 (Havok default
+    0.01; member not named).
   - BUILDING `path mode` counts 92/84/304/123 for 0/1/2/3 (**Verified**, 603 records). Enum names (FCS `PathMode`, the
     editor's enum): 0 NAVMESH_IGNORE, 1 NAVMESH_PROJECTED, 2 NAVMESH_OBSTACLE (default), 3 NAVMESH_WALKABLE (**Verified**).
     Other fields: `destroyed navmesh` (6 buildings, walls; read by `Building::setDestroyed` `FUN_140557280`, which rebuilds the navmesh in the building's bounds when set,
@@ -691,7 +698,8 @@ Current Recast parameters are authoritative in `NavBuildSettings`, `ZoneGeometry
 [simulation.md](../simulation.md). They are Meitou choices, not original-game constants.
 **Unknown** original linked-wall seed fractions (Meitou uses 0.15/0.5/0.85).
 **Observed** original start snap500 Havok units and goal snap about30 Kenshi units;
-Meitou uses60/30 Kenshi units. Original height/climb1.8/0.5 Havok correspond to18/5 Kenshi.
+Meitou uses60/30 Kenshi units. Original height/climb1.8/0.5 Havok correspond to18/5 Kenshi, width 0.9 to 9 (Meitou radius 4); its stitch
+step/separation 1.0/0.2 to 10/2 (**Verified**, Generator); Meitou's interior joins use height 12 and gaps 6 (doors), 2.5 (doorless hulls).
 ## Expression reference
 
 - Tile files: `h ^= v + 0x9e3779b9 + (h<<6) + (h>>2)`
