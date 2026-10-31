@@ -1,0 +1,12 @@
+{
+  "id": "r5600x-rtx4070-windows",
+  "github": "VlcekM",
+  "cpu": "AMD Ryzen 5 5600X",
+  "gpu": "NVIDIA GeForce RTX 4070",
+  "ram_gb": 32,
+  "os": "Windows 11 Pro",
+  "resolution": "1280x960",
+  "notes": "Desktop. Windows build (win-x64), the game's default 1280x960 window on a 1920x1080 screen (not maximised). Clean Steam copy of Kenshi.",
+  "added": "2026-10-31",
+  "os_family": "windows"
+}

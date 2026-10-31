@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "site/**"
+      - "bench/**"
       - ".github/workflows/site-check.yml"
 
 permissions:
@@ -23,6 +24,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+      - run: python3 ../bench/tools/generate.py --out public/bench/bench.json
       - run: npm ci
       - run: node scripts/history.mjs
       - run: npm run build

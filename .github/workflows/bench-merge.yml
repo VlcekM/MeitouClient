@@ -1,0 +1,83 @@
+# Benchmark auto-merge: merges a pull request that only adds benchmark results, when its author has contributed before.
+# Conditions (otherwise the PR is left for review, no failure): author association CONTRIBUTOR or above; every changed file is an
+# added or appended-to regular file under bench/data/machines/ or bench/data/results/; every machine touched has the author as
+# "github"; the data validates with master's bench/tools/generate.py. Runs from master (pull_request_target) and never executes
+# the PR's files; they are only read as data. A GITHUB_TOKEN merge triggers no push workflows, so the site image is started here.
+name: Benchmark auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [master]
+    paths:
+      - "bench/data/**"
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: bench-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  merge:
+    if: >-
+      !github.event.pull_request.draft &&
+      contains(fromJSON('["CONTRIBUTOR","COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5   # master, not the PR
+        with:
+          fetch-depth: 0
+
+      - name: Only the author's benchmark data
+        id: scope
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          git fetch -q origin "refs/pull/$PR/head"
+          [ "$(git rev-parse FETCH_HEAD)" = "$HEAD" ] || { echo "PR head moved; a newer run handles it"; exit 0; }
+          base=$(git merge-base origin/master "$HEAD")
+          skip() { echo "::notice::Not auto-merged: $1"; exit 0; }
+          machines=""
+          while IFS=$'\t' read -r status path; do
+            case "$status" in A|M) ;; *) skip "$path is $status (only added or appended files)";; esac
+            [[ "$path" =~ ^bench/data/(machines/([a-z0-9-]+)\.json|results/([a-z0-9-]+)/[^/]+)$ ]] || skip "$path is not benchmark data"
+            machines+="${BASH_REMATCH[2]}${BASH_REMATCH[3]}"$'\n'
+            [ "$(git ls-tree "$HEAD" -- "$path" | cut -d' ' -f1)" = 100644 ] || skip "$path is not a regular file"
+            if [ "$status" = M ]; then
+              [[ "$path" == bench/data/results/* ]] || skip "$path changes an existing machine file"
+              [ "$(git diff --numstat "$base" "$HEAD" -- "$path" | cut -f2)" = 0 ] || skip "$path removes or changes lines"
+            fi
+          done < <(git diff --no-renames --name-status "$base" "$HEAD")
+          for id in $(sort -u <<< "$machines"); do
+            owner=$(git show "$HEAD:bench/data/machines/$id.json" 2>/dev/null | jq -r '.github // empty' 2>/dev/null || true)
+            [ "${owner,,}" = "${AUTHOR,,}" ] || skip "machine $id belongs to '${owner:-nobody}', not $AUTHOR"
+          done
+          echo "ok=1" >> "$GITHUB_OUTPUT"
+
+      # The PR's bench/data, extracted as files and validated by master's generator.
+      - name: Validate data
+        if: steps.scope.outputs.ok
+        env:
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir "$RUNNER_TEMP/pr"
+          git archive "$HEAD" bench/data | tar -x -C "$RUNNER_TEMP/pr"
+          python3 bench/tools/generate.py --check --ref origin/master --data "$RUNNER_TEMP/pr/bench/data"
+
+      - name: Merge and rebuild the site
+        if: steps.scope.outputs.ok
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          gh pr merge "$PR" --merge --match-head-commit "$HEAD" --subject "Merge PR #$PR from $AUTHOR: $TITLE" --body ""
+          gh workflow run site-image.yml --ref master

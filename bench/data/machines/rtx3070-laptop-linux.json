@@ -1,0 +1,12 @@
+{
+  "id": "rtx3070-laptop-linux",
+  "github": "Demitrix2k",
+  "cpu": "AMD Ryzen 7 6800HS",
+  "gpu": "NVIDIA GeForce RTX 3070 Laptop GPU",
+  "ram_gb": 16,
+  "os": "CachyOS",
+  "screen": "2560x1440",
+  "resolution": "2560x1406",
+  "notes": "Native Linux build. Renders at 2560x1406 in a maximised window on a 2560x1440 screen.",
+  "added": "2026-10-27"
+}

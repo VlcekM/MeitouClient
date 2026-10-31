@@ -1,0 +1,35 @@
+# Benchmark data check: on pull requests that touch bench/data/, the data must validate (bench/tools/generate.py --check),
+# and files outside bench/data/ are flagged for review. Other pull requests are not affected.
+name: Benchmark data check
+
+on:
+  pull_request:
+    paths:
+      - "bench/data/**"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # commit order and "is this commit on master" come from git
+
+      # A results submission should only add or change files under bench/data/machines/ and bench/data/results/.
+      # Anything else is flagged for the reviewer (a warning, not a failure: code changes are reviewed as usual).
+      - name: Files outside benchmark data
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          other=$(git diff --name-only "$BASE"..."$HEAD" | grep -vE '^bench/data/(machines|results)/' || true)
+          if [ -n "$other" ]; then
+            echo "::warning::This pull request also changes files outside bench/data/machines/ and bench/data/results/; review them as code."
+            echo "$other"
+          fi
+
+      - name: Validate data
+        run: python3 bench/tools/generate.py --check --ref origin/master
