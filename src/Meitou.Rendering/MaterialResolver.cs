@@ -91,7 +91,7 @@ public sealed class MaterialResolver
 
     /// <summary>FCS records whose filename fields name <paramref name="meshFile"/> (bare name, case-insensitive).</summary>
     public IReadOnlyList<(GameRecord Record, string Field)> RecordsUsing(string meshFile) =>
-        meshUsers.TryGetValue(Path.GetFileName(meshFile), out var list) ? list : [];
+        meshUsers.TryGetValue(Path.GetFileName(meshFile.Replace('\\', '/')), out var list) ? list : [];
 
     /// <summary>
     /// Candidate materials for a submesh, best first. FCS-derived candidates apply to the whole mesh (a record gives one
