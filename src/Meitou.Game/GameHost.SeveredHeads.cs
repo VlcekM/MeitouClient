@@ -64,13 +64,15 @@ sealed partial class GameHost
         };
         heads.Add(head);
         characters.Prefetch(head.Look);
+        Spurt(from, look, start);
         while (heads.Count > Math.Max(config.GroundItemLimit, 1)) heads.RemoveAt(0);
     }
 
     /// <summary>The heads, each placed where its fall has it now: the head bone along the drop, the whole head turned about it until it lands.</summary>
     void AddHeads(CharacterDrawList list)
     {
-        if (headsEpoch != worldEpoch) { heads.Clear(); headsSeen.Clear(); headsEpoch = worldEpoch; }
+        if (headsEpoch != worldEpoch) { heads.Clear(); headsSeen.Clear(); spurts.Clear(); headsEpoch = worldEpoch; }
+        UpdateSpurts();
         if (heads.Count == 0 || gpu.Characters is not { } characters) return;
         double clock = session.ShownTick + session.SimulationAlpha;
         float tick = session.World.TickSeconds;

@@ -178,6 +178,9 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         for (int i = 0; i < next.Length; i++)
         {
             if (!next[i].Alive || table.Cold(i) is not { } cold) continue;
+            // Meitou: a new whole-body ragdoll goes on as the character moved, pushed by the blow that put it down (CombatSystem.Knockdown), else as it moved last tick.
+            var launch = cold.Blow ?? table.Previous[i].Velocity;
+            cold.Blow = null;
             cold.CarryAttach = cold.CarriedBy.IsNone ? null : AttachOf(table, cold);
             var id = table.IdOf(i);
             ragdolls.TryGetValue(id, out var r);
@@ -214,7 +217,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                     StartGetUp(world, r, ref next[i]);
                 animated = Animated(r, cold, placement);
                 bool restored = restore is not null && Fits(r, restore, next[i].Position);
-                Rebuild(r, wanted, restored ? restore!.Pose : animated);
+                Rebuild(r, wanted, restored ? restore!.Pose : animated, restored ? Vector3.Zero : launch);
                 if (restored)
                 {
                     r.Age = restore!.Age;
@@ -364,10 +367,13 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
     /// <summary>
     /// Replaces the bodies for <paramref name="mask"/>: simulated bodies, and pinned (kinematic) ones joined to them. A body that was in the scene keeps its pose and velocity, a
-    /// new one starts at the animated pose at rest (the game starts from the animated pose with no velocity and no hit impulse).
+    /// new one starts at the animated pose at rest (the game starts from the animated pose with no velocity and no hit impulse). Meitou: a new body of a whole (not carried)
+    /// ragdoll starts at <paramref name="launch"/> (world units/s, at most half <see cref="RagdollPhysics.MaxSpeed"/>).
     /// </summary>
-    void Rebuild(Ragdoll r, RagdollPart mask, RigidTransform[] animated)
+    void Rebuild(Ragdoll r, RagdollPart mask, RigidTransform[] animated, Vector3 launch)
     {
+        if ((mask & RagdollPart.Whole) == 0 || (mask & RagdollPart.CarryMode) != 0) launch = Vector3.Zero;
+        else if (launch.Length() > RagdollPhysics.MaxSpeed / 2) launch = Vector3.Normalize(launch) * (RagdollPhysics.MaxSpeed / 2);
         var bodies = r.Definition.Bodies;
         var velocities = new BodyVelocity[bodies.Length];
         var had = new bool[bodies.Length];
@@ -404,7 +410,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             // and so does everything when the body is lifted onto a shoulder.
             bool keep = had[b] && dynamic[b] && (mask & RagdollPart.CarryMode) == 0;
             var pose = keep ? r.Pose[b] : lift > 0 ? animated[b] with { Position = animated[b].Position + new Vector3(0, lift, 0) } : animated[b];
-            var velocity = keep ? velocities[b] : default;
+            var velocity = keep ? velocities[b] : new BodyVelocity(launch);
             if (!needed[b]) { r.Pose[b] = pose; continue; }
             r.Pose[b] = pose;
             var rigid = new RigidPose(pose.Position, pose.Rotation);
