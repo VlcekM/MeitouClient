@@ -10,6 +10,10 @@ mods and saves unchanged. **No game assets are shipped; an installed legal copy 
 Architecture/research: [docs index](docs/README.md)
 Website: [meitou.kenshi.wiki](https://meitou.kenshi.wiki/).
 
+## Credits
+
+[![Contributors](assets/branding/contributors.png)](https://github.com/VlcekM/MeitouClient/graphs/contributors)
+
 ## Download and requirements
 
 The easiest way to get the game is the [Meitou Launcher](https://github.com/VlcekM/MeitouClient/releases/latest): it installs and
@@ -31,10 +35,6 @@ set KENSHI_PATH, or create git-ignored meitou.local.json in the repo/working/exe
 ```json
 { "kenshiPath": "<your Kenshi install directory>" }
 ```
-
-## Credits
-
-[![Contributors](assets/branding/contributors.png)](https://github.com/VlcekM/MeitouClient/graphs/contributors)
 
 ## Build and run
 
