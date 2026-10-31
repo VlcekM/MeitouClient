@@ -858,7 +858,7 @@ sealed partial class GameHost
                     if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } pickerKey) sandboxPicker.KeyDown(pickerKey);
                     return;
                 }
-                if (hud is not null && DebugToggle(key)) { debugMenuOpen = !debugMenuOpen; return; }
+                if (hud is not null && DebugToggle(key)) { debugMenuOpen = !debugMenuOpen; debugParts = null; return; }
                 if (debugMenuOpen)
                 {
                     if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } menuKey) DebugMenuKey(menuKey);

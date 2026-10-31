@@ -23,14 +23,36 @@ sealed partial class GameHost
     bool debugMenuOpen;
     int debugRow;
     string debugStatus = "";
+    /// <summary>The Damage row's body part list (Enter or Right opens it, Esc or Left closes it): "Random", then the first target's parts as (template id, name).</summary>
+    (string? Id, string Name)[]? debugParts;
+    int debugPart;
 
     static bool DebugHasField(int row) => (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.MaxSkills or DebugRow.UnlockResearch);
 
     void DebugMenuKey(EngineKey key)
     {
         string field = debugFields[debugRow];
+        if (debugParts is { } parts)
+        {
+            switch (key)
+            {
+                case EngineKey.Escape or EngineKey.Left: debugParts = null; break;
+                case EngineKey.Up: debugPart = (debugPart + parts.Length - 1) % parts.Length; break;
+                case EngineKey.Down: debugPart = (debugPart + 1) % parts.Length; break;
+                case EngineKey.Backspace when field.Length > 0: debugFields[debugRow] = field[..^1]; break;
+                case EngineKey.Enter: debugStatus = DebugApply(DebugRow.Damage, field.Trim(), parts[debugPart]); break;
+            }
+            return;
+        }
         switch (key)
         {
+            case EngineKey.Enter or EngineKey.Right when (DebugRow)debugRow == DebugRow.Damage:
+                if (DebugTargets() is not [var first, ..]) { debugStatus = "select or inspect a character first"; break; }
+                var table = session.World.Characters;
+                var body = table.TryResolveNext(first, out int slot) ? table.Cold(slot)?.Medical?.Parts : null;
+                debugParts = [(null, "Random (as a blow)"), .. (body ?? []).Select(p => ((string?)p.Template.StringId, p.Template.Name.Length > 0 ? p.Template.Name : p.Template.StringId))];
+                debugPart = Math.Min(debugPart, debugParts.Length - 1);
+                break;
             case EngineKey.Escape: debugMenuOpen = false; break;
             case EngineKey.Up: debugRow = (debugRow + DebugLabels.Length - 1) % DebugLabels.Length; break;
             case EngineKey.Down: debugRow = (debugRow + 1) % DebugLabels.Length; break;
@@ -44,12 +66,20 @@ sealed partial class GameHost
         if (DebugHasField(debugRow) && !char.IsControl(c)) debugFields[debugRow] += c;
     }
 
-    string DebugApply(DebugRow row, string field)
+    /// <summary>Heal, max skills and damage: the selected characters, else the inspected one.</summary>
+    CharacterId[] DebugTargets()
+    {
+        var player = session.World.Player;
+        var selected = player.Selection.ToArray();
+        return selected.Length > 0 ? selected : player.Inspected.IsNone ? [] : [player.Inspected];
+    }
+
+    string DebugApply(DebugRow row, string field, (string? Id, string Name) part = default)
     {
         var world = session.World;
         long tick = world.Tick;
         var selected = world.Player.Selection.ToArray();
-        CharacterId[] targets = selected.Length > 0 ? selected : world.Player.Inspected.IsNone ? [] : [world.Player.Inspected];
+        var targets = DebugTargets();
         var here = session.Camera.Current.Target;
         switch (row)
         {
@@ -84,8 +114,8 @@ sealed partial class GameHost
             case DebugRow.Damage:
                 if (targets.Length == 0) return "select or inspect a character first";
                 if (!float.TryParse(field, NumberStyles.Float, CultureInfo.InvariantCulture, out float cut) || !(cut > 0)) return "damage: a positive number";
-                world.Commands.Enqueue(new DebugDamage(targets, cut) { Tick = tick });
-                return $"{cut:0.#} cut damage to {targets.Length}";
+                world.Commands.Enqueue(new DebugDamage(targets, cut, part.Id) { Tick = tick });
+                return $"{cut:0.#} cut damage to {targets.Length}{(part.Id is null ? "" : $" on {part.Name}")}";
             case DebugRow.UnlockResearch:
                 world.Commands.Enqueue(new DebugUnlockResearch { Tick = tick });
                 return "every research finished";
@@ -129,9 +159,11 @@ sealed partial class GameHost
         var world = session.World;
         var here = session.Camera.Current.Target;
         var lines = new List<string>();
+        int highlight = 0;
         for (int i = 0; i < DebugLabels.Length; i++)
         {
-            string line = (i == debugRow ? "> " : "  ") + DebugLabels[i];
+            if (i == debugRow) highlight = lines.Count;
+            string line = (i == debugRow && debugParts is null ? "> " : "  ") + DebugLabels[i];
             if (DebugHasField(i))
             {
                 string field = debugFields[i];
@@ -139,10 +171,17 @@ sealed partial class GameHost
                 if ((DebugRow)i is DebugRow.SpawnNpc or DebugRow.GiveItem && field.Trim().Length > 0)
                     line += DebugRecord((DebugRow)i == DebugRow.GiveItem ? DebugItemField(field.Trim()).Name : field, (DebugRow)i == DebugRow.SpawnNpc) is { } r ? $"   -> {r.Name}" : "   -> no match";
             }
+            if ((DebugRow)i == DebugRow.Damage && i == debugRow && debugParts is null) line += "   Enter/Right: pick the body part";
             lines.Add(line);
+            if ((DebugRow)i == DebugRow.Damage && i == debugRow && debugParts is { } parts)
+                for (int k = 0; k < parts.Length; k++)
+                {
+                    if (k == debugPart) highlight = lines.Count;
+                    lines.Add((k == debugPart ? "    > " : "      ") + parts[k].Name);
+                }
         }
         string info = $"{world.Player.Selection.Count} selected   here {here.X:0}, {here.Z:0}   money c.{world.Player.Money.ToString("N0", CultureInfo.InvariantCulture)}";
-        string hint = $"Up/Down pick   type to edit   Enter apply   Esc/{close} close";
+        string hint = debugParts is null ? $"Up/Down pick   type to edit   Enter apply   Esc/{close} close" : $"Up/Down pick a part   type the damage   Enter apply   Esc/Left back";
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
         float pad = 10, x0 = 16, y0 = top + 16;
         int chars = Math.Max(lines.Max(l => l.Length), Math.Max(info.Length, Math.Max(hint.Length, debugStatus.Length)));
@@ -153,7 +192,7 @@ sealed partial class GameHost
         y += 1.5f * o.LineHeight;
         for (int i = 0; i < lines.Count; i++, y += o.LineHeight)
         {
-            if (i == debugRow) o.Rect(x0 + 4, y, x0 + w - 4, y + o.LineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
+            if (i == highlight) o.Rect(x0 + 4, y, x0 + w - 4, y + o.LineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
             o.Text(lines[i], x0 + pad, y, DebugOverlay.TextColour);
         }
         y += 0.5f * o.LineHeight;
