@@ -1051,7 +1051,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             GpuPart? gp = null;
             // The trimmed list (card trimming) follows the original one in the same buffer: the draws pick a range (FoliageRenderer.Trim.cs).
             var allIndices = p.TrimmedIndices is null ? p.Indices : [.. p.Indices, .. p.TrimmedIndices];
-            int vertexBytes = p.Vertices.Length * Vertex.Size, indexBytes = allIndices.Length * sizeof(uint);
+            var packed = GpuVertex.PackObject(p.Vertices);
+            int vertexBytes = packed.Length, indexBytes = allIndices.Length * sizeof(uint);
             tally[0] += vertexBytes + indexBytes;
             uploads.Enqueue(() =>
             {
@@ -1072,7 +1073,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     Gpu.EnsureFrame();
                 {
                     using var batch = Gpu.Uploads.Begin();
-                    batch.Write(gp!.Vertices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(p.Vertices.AsSpan()).Slice(start, length));
+                    batch.Write(gp!.Vertices, (ulong)start, packed.AsSpan(start, length));
                 }
                 });
             }
@@ -1157,18 +1158,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         meshReloads++;
     }
 
-    /// <summary>The mesh layout: position, normal, texture coordinates, tangent, colour of <see cref="Vertex"/> (locations 0 to 4).</summary>
-    internal static readonly MeshAttribute[] MeshLayout = [new(0, 3, 0), new(1, 3, 12), new(2, 2, 24), new(3, 4, 32), new(4, 4, 48)];
-
-    /// <summary>The attributes at locations 0 to 4 as VkGl exported the GL vertex array (one binding per attribute, at its offset).</summary>
-    internal static LegacyProgram.Attribute?[] VertexAttributes(DeviceBuffer vertices)
-    {
-        var result = new LegacyProgram.Attribute?[MeshLayout.Length];
-        foreach (var a in MeshLayout)
-            result[a.Location] = new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, (ulong)a.Offset),
-                GlConventions.VertexFormat(GLEnum.Float, a.Size, false, false), (uint)Vertex.Size, false);
-        return result;
-    }
+    /// <summary>The attributes at locations 0 to 4 (position, normal, texture coordinates, tangent, colour) of the object layout (<see cref="GpuVertex"/>).</summary>
+    internal static LegacyProgram.Attribute?[] VertexAttributes(DeviceBuffer vertices) => GpuVertex.ObjectAttributes(vertices);
 
     /// <summary>The part for the terrain's mesh path (the attributes at 0 to 4 and the index buffer); made on first use.</summary>
     static MeshBindings PlainMesh(GpuPart gp) => gp.Plain ??= MeshBindings.Of(VertexAttributes(gp.Vertices), gp.Indices);

@@ -12,6 +12,11 @@ Workers prepare resident mesh/texture content; render thread publishes GPU objec
 and per-instance state have separate lifetimes. A resident mesh can change finest LOD: refresh
 all draw/ray-geometry references before retiring replaced buffers.
 
+Mesh vertex buffers use `GpuVertex` layouts, packed at upload from the CPU's 84-byte `Vertex`: objects, foliage, debris and impostor
+bakes 44 bytes (normal and tangent snorm16, colour half), characters 64 (colour stays float: its X carries the morph slot bits).
+**Verified** (viewer, The Hub, two cameras): renders differ from the float layout less than two float-layout runs differ from each
+other; resident object meshes 174 → 98 MB.
+
 Faithful uses researched object/part distances; Meitou `reach` extends size-aware ranges and
 distant landmarks/towns. Distant town stand-ins fade separately from real parts. Source/manual
 and generated levels use projected demand with stable transitions. Do not treat a shorter part
