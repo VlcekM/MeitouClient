@@ -28,10 +28,15 @@ public static class VolumetricCloudShaders
             float weather = cloudNoise(vec3(p.x / {{F(Meitou.Data.World.VolumetricClouds.PatternPeriod)}}, 0.37, p.z / {{F(Meitou.Data.World.VolumetricClouds.PatternPeriod)}})).b;
             float cover = smoothstep(0.85 - 0.75 * uVolume.x, 1.05 - 0.75 * uVolume.x, weather);
             cover = mix(cover, 1.0, smoothstep(0.75, 1.0, uVolume.x));
-            if (cover < 0.01) return 0.0;
+            // Where the weather leaves no cover the sky is clear and the shape is not read. A high shape value made a body at almost no cover
+            // too, and cutting it off at a small cover put a straight edge across the cloud: the weather's contour, which is almost straight
+            // over a cloud's width. Over the last 0.08 of cover the shape must rise up to 0.2 higher instead (0.83 at none, above 99.9 % of it),
+            // so such a cloud thins out along its own shape (docs/render-clouds.md).
+            if (cover <= 0.0) return 0.0;
             vec3 n = cloudNoise(p / {{F(Meitou.Data.World.VolumetricClouds.ShapePeriod)}});
             float profile = smoothstep(0.0, 0.12, h) * (1.0 - smoothstep(0.45, 1.0, h));
-            float body = clamp((n.r * profile - (1.0 - cover) * 0.55 - 0.08) / 0.45, 0.0, 1.0);
+            float threshold = (1.0 - cover) * 0.55 + 0.08 + 0.2 * (1.0 - smoothstep(0.0, 0.08, cover));
+            float body = clamp((n.r * profile - threshold) / 0.45, 0.0, 1.0);
             float erosion = detail ? cloudNoise(p / {{F(Meitou.Data.World.VolumetricClouds.DetailPeriod)}}).g : 0.5;
             return clamp(body - (1.0 - erosion) * 0.16, 0.0, 1.0);
         }

@@ -11,6 +11,9 @@ periodic64³ noise packed8x8 padded66² slices, negative coordinates and borders
 B weather noise; two atlas reads interpolate slices. Weather density/sky colour/wind/transitions
 are original inputs; engine coverage differs (overcast above0.75). Wind shift period120000,
 frequencies divide it; wrapping cannot jump density, pause freezes motion.
+No cover skips the shape; over the last 0.08 of cover the shape's threshold rises by up to 0.2 (0.83 at none, above 99.9 % of
+the shape). A cutoff at cover 0.01 let high shape values make a body just above it and cut it there, a straight edge along the
+weather's slowly varying contour (**Observed**, the title scene; reproduced by a CPU port of the march).
 
 Half resolution;96 samples (integrated64), step<=500, transmission early-out<1%, slab-distance
 cap500000. Shallow rays only integrate first48000/32000 units. Beer-Lambert extinction,
