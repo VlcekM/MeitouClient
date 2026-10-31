@@ -58,6 +58,9 @@ separate layout, not current fullmap indexing.
 
 **Verified** water rootY100; biome material/scum/normal/turbulence/scale rules in tables. Original
 water is flat and reflection/opacity/glitter/shader depth rules are separate from Meitou FFT/surf.
+**Verified** (shipped `forward/water.hlsl`, `water.material`): the alpha's depth is the G-buffer distance at the pixel
+(`depthMap` = compositor `global_gbuffer` 2, `length(world - camera) / farClip`) minus the fragment's own distance: the
+distance through the water to whatever is behind it, objects included; then `a *= saturate(depth * invOpacity)` (by Fresnel) and `saturate(depth / 2)`.
 **Observed** flowmap RG fails channel directions; B is scum input. RiverFlowBake is an engine
 height-derived alternative, not a decoded meaning of the source RG. Shore/rain/wetness unknowns
 stay explicit. Sun trajectory derives latitude/sunrise/sunset and sky controller; [sky](sky.md),

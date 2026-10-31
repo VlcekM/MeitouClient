@@ -37,6 +37,19 @@ target uses 4x MSAA by default on both backends (`--reflection-samples 1` disabl
 characters, level 3 placed objects and level 4 foliage. Fog in reflection must evaluate reflected world geometry
 against the appropriate air/water bounds; ordinary camera fog cannot be applied indiscriminately.
 
+## Edges
+
+Both waters measure their depth as the game does ([terrain](formats/terrain.md) "LOD, water and sun"): the distance
+along the view ray from the surface to what is behind it, from the near slice's depth copied before the water
+(`CaptureScene`, Vulkan only; Metal and the far slice keep the slant path to the terrain's height). Faithful uses it
+exactly. Meitou absorbs along it and fades the last 2 units into the scene behind (0.5 for the swash), so ground relief,
+rocks and legs meet the water without a line. The swash keeps its sheet's thickness: its surface is raised over the
+beach and cut back to the run-up. Beside it, the raise above this moment's run-up is subtracted, else the water stood a
+few units deep at a dry waterline (the stepped line along the heightmap contour). Wet sand blends over the full-size
+scene, not the half-size copy.
+**Observed** (2560x1440, DLSS, RTX 4090, Shark): the copy costs about 0.03 ms with Meitou water (its pass restart was
+there), 0.05 ms with Faithful.
+
 ## Safe work skips
 
 Surf branches only for surf/swash contribution. Zero ocean strength skips displacement/slope
