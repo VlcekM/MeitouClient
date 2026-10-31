@@ -18,6 +18,8 @@ sealed partial class GameHost
     {
         public required long From;
         public required uint Colour;
+        /// <summary>The spray's colour for a race whose blood is not red (<see cref="BloodRecolour"/>).</summary>
+        public Vector3? Recolour;
         /// <summary>Where the neck was when it was cut (used while the body is not drawn).</summary>
         public required Vector3 Neck;
         /// <summary>The shown tick of the next pulse, and how many are left.</summary>
@@ -37,8 +39,9 @@ sealed partial class GameHost
         if (decalStore is null || scene.Database is not { } db) return;
         if (!bloodRaces.TryGetValue(look.Race.StringId, out var race)) bloodRaces[look.Race.StringId] = race = RaceData.From(look.Race, db);
         if (race.BleedRate <= 0) return;
-        spurts.Add(new NeckSpurt { From = from, Colour = 0xFF000000 | Abgr(race.BloodColour), Neck = gpu.Characters?.BonePosition(from, "Bip01 Neck") ?? head });
-        gpu.Particles?.Burst(BurstSplash, head, Quaternion.Identity, 0.2f, 1.2f, 1.5f);
+        var recolour = BloodRecolour(race.BloodColour);
+        spurts.Add(new NeckSpurt { From = from, Colour = 0xFF000000 | Abgr(race.BloodColour), Recolour = recolour, Neck = gpu.Characters?.BonePosition(from, "Bip01 Neck") ?? head });
+        gpu.Particles?.Burst(BurstSplash, head, Quaternion.Identity, 0.2f, 1.2f, 1.5f, recolour);
     }
 
     /// <summary>Fires the pulses that are due.</summary>
@@ -67,7 +70,7 @@ sealed partial class GameHost
         // Thrown out of the neck, a little off the spine's line, and upward enough to arc.
         var jitter = new Vector3(bloodRandom.NextSingle() - 0.5f, bloodRandom.NextSingle() * 0.5f, bloodRandom.NextSingle() - 0.5f) * 0.6f;
         var dir = Vector3.Normalize(along + jitter + new Vector3(0, 0.3f, 0));
-        gpu.Particles?.Burst(BurstSpray, neck, Turn(Vector3.UnitZ, dir), 0.15f + 0.25f * strength, 0.8f + 0.6f * strength, 1.5f);
+        gpu.Particles?.Burst(BurstSpray, neck, Turn(Vector3.UnitZ, dir), 0.15f + 0.25f * strength, 0.8f + 0.6f * strength, 1.5f, s.Recolour);
         if (decalStore is not { } store) return;
         var flat = new Vector2(dir.X, dir.Z);
         flat = flat.LengthSquared() > 1e-6f ? Vector2.Normalize(flat) : RandomDirection();
