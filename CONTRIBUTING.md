@@ -24,6 +24,7 @@ the foreseeable future.
 
 Always welcome, no need to ask first:
 
+- Benchmark results from your machine, see [bench/CONTRIBUTING.md](bench/CONTRIBUTING.md)
 - Bug fixes, parity fixes against the original game, crash reports with repros
 - Tests, tooling, docs, translations
 - Platform specific bugs or features - stuff like making Vulkan-only features available on the Metal renderer
