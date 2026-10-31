@@ -205,7 +205,7 @@ internal sealed class CharacterContent : IDisposable
 
     /// <param name="FirstMaterialName">The first submesh's material (script) name, which is all the material resolver takes of a submesh; null: no submesh.</param>
     sealed record LoadedMesh(GpuObjectMesh Gpu, string? FirstMaterialName, Vector3 Centre, float Radius, MeshMorphs? Morphs = null, float[]? ShadowDistances = null, int ShadowFirst = 0, PickBox[]? PickBoxes = null,
-        float[]? FileDistances = null, int FileFirst = 0, float FileRadius = 0);
+        float[]? FileDistances = null, int FileFirst = 0, float FileRadius = 0, PreparedMesh? NeckCap = null, PreparedMesh? HeadCap = null);
 
     public CharacterContent(IGpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, CharacterRigs? rigs = null)
     {
@@ -261,7 +261,7 @@ internal sealed class CharacterContent : IDisposable
 
     /// <summary>What a worker makes of a mesh file (<see cref="PrepareMesh"/>): everything but the GPU buffers.</summary>
     sealed record PreparedMesh(PreparedPart[] Parts, float[] Distances, string? FirstMaterialName, Vector3 Centre, float Radius, MeshMorphs? Morphs, float[]? ShadowDistances, int ShadowFirst, PickBox[] PickBoxes,
-        float[]? FileDistances, int FileFirst, float FileRadius);
+        float[]? FileDistances, int FileFirst, float FileRadius, PreparedMesh? NeckCap = null, PreparedMesh? HeadCap = null);
     /// <summary>A prepared mesh (null: it could not be read) and the messages its reading left.</summary>
     sealed record Prepared(PreparedMesh? Mesh, List<string> Messages);
     static readonly Prepared Uploaded = new(null, []);
@@ -319,7 +319,8 @@ internal sealed class CharacterContent : IDisposable
             var decoded = new DecodedObjectMesh { Model = model, Levels = levels, Manual = [], Centre = centre, Radius = radius };
             var parts = model.Parts.Select(part => ObjectMeshCache.PreparePart(decoded, part, keepLevels: false)).ToArray();
             return new(new PreparedMesh(parts, [.. levels.Select(l => l.Distance)], mesh.SubMeshes.FirstOrDefault()?.MaterialName, centre, radius, morphs, shadowDistances, shadowFirst,
-                PickBox.From(model), fileDistances, fileFirst, fileRadius), messages);
+                PickBox.From(model), fileDistances, fileFirst, fileRadius,
+                limbs is not null && !close && !icon ? CapMesh(model, head: false) : null, limbs is not null && !close && !icon ? CapMesh(model, head: true) : null), messages);
         }
         catch (Exception e) when (e is OgreFormatException or IOException or EndOfStreamException or InvalidDataException)
         {
@@ -363,7 +364,7 @@ internal sealed class CharacterContent : IDisposable
         }
         MeshBytes += gpuMesh.Bytes;
         return new LoadedMesh(gpuMesh, ready.FirstMaterialName, ready.Centre, ready.Radius, ready.Morphs, ready.ShadowDistances, ready.ShadowFirst, ready.PickBoxes,
-            ready.FileDistances, ready.FileFirst, ready.FileRadius);
+            ready.FileDistances, ready.FileFirst, ready.FileRadius, ready.NeckCap, ready.HeadCap);
     }
 
     /// <summary>
@@ -408,6 +409,8 @@ internal sealed class CharacterContent : IDisposable
     {
         if (fetching.TryGetValue(c, out var task)) return task.IsCompleted;
         if (!urgent && Volatile.Read(ref fetchesRunning) >= FetchLimit) return false;
+        // Every mesh prepared already (a look that only lost a limb or its head, or changed what it carries): built at once, so the character is not left undrawn a frame.
+        if (AllPrepared(c, closeUp.Contains(c))) return true;
         if (Start(c, urgent, closeUp.Contains(c)) is not { } started) return true;   // no body mesh: Build reports it
         fetching[c] = started;
         return false;
@@ -419,9 +422,12 @@ internal sealed class CharacterContent : IDisposable
     /// </summary>
     public void Warm(CharacterAppearance c, bool urgent, bool close)
     {
-        if (FindMesh(c.BodyMesh) is { } body && IsPrepared(body, close) && c.Parts.All(p => FindMesh(p.Mesh) is not { } path || IsPrepared(path, close))) return;
-        Start(c, urgent, close);
+        if (!AllPrepared(c, close)) Start(c, urgent, close);
     }
+
+    /// <summary>Whether <paramref name="c"/>'s body and part meshes are all prepared (or uploaded) already.</summary>
+    bool AllPrepared(CharacterAppearance c, bool close) =>
+        FindMesh(c.BodyMesh) is { } body && IsPrepared(body, close) && c.Parts.All(p => FindMesh(p.Mesh) is not { } path || IsPrepared(path, close));
 
     /// <summary>Looks to build as close-ups (<see cref="PrepareMesh"/>: their meshes without generated levels), from <see cref="Prefetch"/> until <see cref="Build"/>.</summary>
     readonly HashSet<CharacterAppearance> closeUp = [];
@@ -734,7 +740,7 @@ internal sealed class CharacterContent : IDisposable
             FileDistances = body.FileDistances, FileFirst = body.FileFirst, FileRadius = body.FileRadius,
         });
         // A headless body's neck, and a cut-off head's, is closed by a cap made from the body (NeckCap), in the race's wound look.
-        if ((c.Headless || c.HeadOnly) && NeckCapMesh(bodyPath, rig, LimbHideOf(c, rig), c.HeadOnly) is { } cap)
+        if ((c.Headless || c.HeadOnly) && NeckCapMesh(bodyPath, body, rig.BoneCount, c.HeadOnly) is { } cap)
             asset.Parts.Add(new AssetPart
             {
                 Label = $"neck cap {Path.GetFileName(bodyPath)}", Mesh = cap.Gpu, Shared = true, Material = WoundMaterial(c),
@@ -819,32 +825,27 @@ internal sealed class CharacterContent : IDisposable
         return m;
     }
 
-    /// <summary>The neck cap of a body mesh (<see cref="NeckCap"/>; <paramref name="head"/>: the cut-off head's), made once per body file and skeleton; null when the body has no head vertices.</summary>
-    LoadedMesh? NeckCapMesh(string bodyPath, SkeletonRig rig, LimbHide? hide, bool head)
+    /// <summary>
+    /// The neck cap of a body mesh (<see cref="NeckCap"/>; <paramref name="head"/>: the cut-off head's), prepared on the worker with the body (<see cref="PrepareMesh"/>) and uploaded
+    /// the first time a look needs it; null when the body has no head vertices.
+    /// </summary>
+    LoadedMesh? NeckCapMesh(string bodyPath, LoadedMesh body, int bones, bool head)
     {
-        if (hide is null) return null;
-        var key = (bodyPath.ToLowerInvariant() + (head ? "#head cap" : "#neck cap"), rig.BoneCount, false, (string?)null);
+        var key = (bodyPath.ToLowerInvariant() + (head ? "#head cap" : "#neck cap"), bones, false, (string?)null);
         if (meshes.TryGetValue(key, out var cached)) return cached;
-        LoadedMesh? loaded = null;
-        try
-        {
-            var mesh = OgreMeshReader.ReadFile(bodyPath);
-            var model = Model.Build(mesh, rig.BoneCount, gameBinormals: true);
-            // The body's face-morph slots (as PrepareMesh), so the rim moves with the neck it was cut from.
-            _ = MeshMorphs.From(mesh, model, Messages, Path.GetFileName(bodyPath));
-            MarkBody(model, hide, null);
-            if (NeckCap.Build(model, head) is { } part)
-            {
-                var min = part.Vertices.Aggregate(new Vector3(float.MaxValue), (a, v) => Vector3.Min(a, v.Position));
-                var max = part.Vertices.Aggregate(new Vector3(float.MinValue), (a, v) => Vector3.Max(a, v.Position));
-                var capModel = new Model();
-                capModel.Parts.Add(part);
-                var decoded = new DecodedObjectMesh { Model = capModel, Levels = [new MeshLodLevel(0, [part.Indices])], Manual = [], Centre = (min + max) / 2, Radius = Math.Max((max - min).Length() / 2, 0.5f) };
-                loaded = Upload(new PreparedMesh([ObjectMeshCache.PreparePart(decoded, part, keepLevels: false)], [0], "neck cap", decoded.Centre, decoded.Radius, null, null, 0, [], null, 0, decoded.Radius));
-            }
-        }
-        catch (Exception e) when (e is OgreFormatException or IOException or EndOfStreamException or InvalidDataException) { Messages.Add($"{Path.GetFileName(bodyPath)} neck cap: {e.Message}"); }
-        return meshes[key] = loaded;
+        return meshes[key] = (head ? body.HeadCap : body.NeckCap) is { } ready ? Upload(ready) : null;
+    }
+
+    /// <summary>A body's cap (<see cref="NeckCap"/>) ready for upload, from the body's model as <see cref="PrepareMesh"/> marked it (its face-morph slots and head bits); null: none.</summary>
+    static PreparedMesh? CapMesh(Model body, bool head)
+    {
+        if (NeckCap.Build(body, head) is not { } part) return null;
+        var min = part.Vertices.Aggregate(new Vector3(float.MaxValue), (a, v) => Vector3.Min(a, v.Position));
+        var max = part.Vertices.Aggregate(new Vector3(float.MinValue), (a, v) => Vector3.Max(a, v.Position));
+        var model = new Model();
+        model.Parts.Add(part);
+        var decoded = new DecodedObjectMesh { Model = model, Levels = [new MeshLodLevel(0, [part.Indices])], Manual = [], Centre = (min + max) / 2, Radius = Math.Max((max - min).Length() / 2, 0.5f) };
+        return new PreparedMesh([ObjectMeshCache.PreparePart(decoded, part, keepLevels: false)], [0], "neck cap", decoded.Centre, decoded.Radius, null, null, 0, [], null, 0, decoded.Radius);
     }
 
     PartMaterial BodyMaterial(CharacterAppearance c)

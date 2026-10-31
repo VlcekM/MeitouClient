@@ -231,19 +231,25 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     }
 
     /// <summary>
-    /// Gives the character <paramref name="key"/> the bones of <paramref name="from"/> as last posed, once (<see cref="CharacterInstance.FreezeFrom"/>); false while there are none to
-    /// take (<paramref name="from"/> not posed yet, or another skeleton), and the character is not drawn.
+    /// Gives the character <paramref name="key"/> the bones of <paramref name="from"/> as last posed, held from now on and never posed (a cut-off head keeps the pose of the
+    /// moment it was cut, taken before its own look is ready). False when <paramref name="from"/> has no posed bones. Render thread, between updates.
+    /// </summary>
+    public bool HoldPose(long key, long from)
+    {
+        if (!states.TryGetValue(from, out var source) || source.Posed < 0 || source.Bones.Length == 0) return false;
+        states[key] = new CharState { Bones = [.. source.Bones], Previous = [.. source.Bones], Posed = updateStamp, Seen = updateStamp, Frozen = true };
+        return true;
+    }
+
+    /// <summary>
+    /// <see cref="CharacterInstance.FreezeFrom"/>: the held bones (<see cref="HoldPose"/>, taken now if they were not), sized for <paramref name="asset"/>; false while there are none
+    /// for its skeleton, and the character is not drawn.
     /// </summary>
     bool Freeze(long key, long from, CharacterAsset asset)
     {
-        if (states.TryGetValue(key, out var own) && own.Frozen) return true;
-        int bones = asset.Rig.BoneCount;
-        if (!states.TryGetValue(from, out var source) || source.Posed < 0 || source.Bones.Length != bones) return false;
-        states[key] = new CharState
-        {
-            Bones = [.. source.Bones], Previous = [.. source.Bones], Attach = new Matrix4x4[asset.AttachCount], PreviousAttach = new Matrix4x4[asset.AttachCount],
-            Posed = updateStamp, Frozen = true, Asset = asset,
-        };
+        if ((!states.TryGetValue(key, out var own) || !own.Frozen) && (!HoldPose(key, from) || !states.TryGetValue(key, out own))) return false;
+        if (own.Bones.Length != asset.Rig.BoneCount) return false;
+        if (own.Attach.Length != asset.AttachCount) (own.Attach, own.PreviousAttach) = (new Matrix4x4[asset.AttachCount], new Matrix4x4[asset.AttachCount]);
         return true;
     }
 
@@ -650,7 +656,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     {
         staleKeys.Clear();
         foreach (var (key, state) in states)
-            if (updateStamp - state.Seen > 60) staleKeys.Add(key);
+            if (updateStamp - state.Seen > (state.Frozen ? 600 : 60)) staleKeys.Add(key);   // a held pose waits longer for its look to be ready
         foreach (var key in staleKeys) states.Remove(key);
     }
 

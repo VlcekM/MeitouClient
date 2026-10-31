@@ -203,9 +203,11 @@ else flesh with a bone at the centre. **Observed** (headless probe of the base b
 neck height, `robot.mesh` a 5 triangle one; Skeleton MkII and Log Head none (their head is a separate shell, the body stays closed). A race without a Head part (No-Head MkII) is never decapitated.
 
 The head falls (`GameHost.SeveredHeads`, drawing only): when the renderer last drew the character with its head and it is now listed headless, the old look's
-`SeveredHead` (the body's head vertices only, instance flag 29, with hair, beard, hat and its own cap over the rim of its all-head triangles) keeps that frame's bones
-(`CharacterInstance.FreezeFrom`), turns about the head bone and drops (gravity 98.1, as the limbs) to 1.3 above the corpse's feet, 3 to 7 units aside. It is no item
-and not saved: a load or new game clears the heads (a corpse loaded headless drops none); past the dropped-items limit the oldest goes.
+`SeveredHead` (the body's head vertices only, instance flag 29, with hair, beard, hat and its own cap over the rim of its all-head triangles) keeps that frame's bones,
+taken at the cut (`CharacterRenderer.HoldPose`), turns about the head bone and drops (gravity 98.1, as the limbs) 3 to 7 units aside, its clock starting once its look
+is drawn. It lands 1.3 above the walkable ground (sandbox floor, terrain, building floor) or a body lying there (spheres round its bones, as last drawn; not its own
+neck and head, nothing above where it fell from). It is no item and not saved: a load or new game clears the heads (a corpse loaded headless drops none); past the
+dropped-items limit the oldest goes. Both caps are made with each person's body mesh on the loading worker (`CharacterContent.CapMesh`) and uploaded on first use.
 Saved as `meitou decapitated` ([save](../formats/save.md#limbs-medical_state-limbs)).
 
 ## Aid, limbs and load
