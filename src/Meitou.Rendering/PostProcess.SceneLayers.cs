@@ -18,7 +18,8 @@ public sealed unsafe partial class PostProcess
 {
     /// <summary>Meitou: one pass for the shafts, the fog volumes and the occlusion (default on; <c>--ab layer-merge</c>).</summary>
     public bool MergeLayers { get; set; } = true;
-    /// <summary>Meitou: with <see cref="MergeLayers"/>, the fog volumes at half the render size (<c>--ab fog-half</c>).</summary>
+    /// <summary>Meitou: with <see cref="MergeLayers"/> and the Meitou <c>fog</c> switch, the fog volumes at half the render size (<c>--ab fog-half</c>); the Faithful
+    /// switch computes them at full size, as the game draws them.</summary>
     public bool FogHalf { get; set; } = true;
     /// <summary>Meitou: with <see cref="MergeLayers"/> and fog volumes in view, the light shafts' apply at half the render size too, in the fog volumes' texture
     /// (<c>--ab shafts-half</c>). Not for the shafts alone: a half-size pass and its upsample cost more than the apply they replace.</summary>
@@ -101,7 +102,7 @@ public sealed unsafe partial class PostProcess
     {
         fogShadow = shaftFrame;
         fogPending = true;
-        PrepareHalfLayers(FogHalf, ShaftsHalf && shaftsPending, fogShadow);
+        PrepareHalfLayers(FogHalf && Options.MeitouFog, ShaftsHalf && shaftsPending, fogShadow);
     }
 
     /// <summary>The half-size pass for the layers asked for (which the merged pass then upsamples), when there is any.</summary>

@@ -22,6 +22,9 @@ public sealed class PostOptions
     /// <summary>Meitou switch (<c>shafts</c>; docs/render-shafts.md): the haze and the weather's fog darkened where the sun is shadowed along the view ray, so shadows
     /// cast light shafts through the air; Faithful leaves the haze lit everywhere, as the game does.</summary>
     public bool LightShafts = true;
+    /// <summary>Meitou switch (<c>fog</c>; docs/render-post.md "Fog"): the weather's sprites fade out where they meet a surface instead of cutting into it, and the fog
+    /// volumes may be computed at half size (<see cref="PostProcess.FogHalf"/>); Faithful is the game's fog exactly: hard-edged sprites, the volumes at full size.</summary>
+    public bool MeitouFog = true;
     /// <summary>How much of the haze in shadow goes, before the sun's share of the light (1: all of it; the sky's ambient light keeps the rest).</summary>
     public float ShaftStrength = 0.8f;
     /// <summary>How much the sky (which no haze covers) darkens behind shadowed air, relative to a surface at the grid's end.</summary>
@@ -79,9 +82,9 @@ public sealed class PostOptions
         switch (preset)
         {
             case "meitou": break;
-            case "off": o.Fxaa = o.HeatHaze = false; o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = false; o.HeatHazeStrength = 1; o.ToneMap = ToneMapOperator.Clamp; o.Grade = false; o.NightGradeStrength = 0; break;
+            case "off": o.Fxaa = o.HeatHaze = false; o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false; o.HeatHazeStrength = 1; o.ToneMap = ToneMapOperator.Clamp; o.Grade = false; o.NightGradeStrength = 0; break;
             case "kenshi":
-                o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = false; o.HeatHazeStrength = 1; o.ToneMap = ToneMapOperator.Clamp; o.Grade = false; o.NightGradeStrength = 0;
+                o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false; o.HeatHazeStrength = 1; o.ToneMap = ToneMapOperator.Clamp; o.Grade = false; o.NightGradeStrength = 0;
                 // Kenshi's chain with the shipped settings: exposure only (no curve, bloom magnitude 0, SSAO commented
                 // out), and FXAA then the heat haze on the final image.
                 break;
@@ -93,7 +96,7 @@ public sealed class PostOptions
     public void CopyFrom(PostOptions other)
     {
         Preset = other.Preset; Fxaa = other.Fxaa; Smaa = other.Smaa; HeatHaze = other.HeatHaze; Ssao = other.Ssao;
-        Dither = other.Dither; LowResParticles = other.LowResParticles; LightShafts = other.LightShafts; ShaftQuality = other.ShaftQuality;
+        Dither = other.Dither; LowResParticles = other.LowResParticles; LightShafts = other.LightShafts; MeitouFog = other.MeitouFog; ShaftQuality = other.ShaftQuality;
         ShaftStrength = other.ShaftStrength; ShaftAir = other.ShaftAir; ShaftAirDawn = other.ShaftAirDawn;
         ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; ToneMap = other.ToneMap; ToneMix = other.ToneMix; Grade = other.Grade;
         HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength;

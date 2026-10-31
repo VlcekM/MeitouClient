@@ -34,11 +34,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
         uniform vec4 uColourScale;                  // the fragment program's `colour` parameter, with the ambient factor in rgb
         out vec2 vUv;
         out vec4 vColour;
+        out float vDepth;                           // the view depth (clip w), for the soft fade
+        out float vSoft;                            // the soft fade's distance: a quarter of the sprite's size, 2 to 300 units
         void main()
         {
             vec3 position = aPositionRotation.xyz;
             float width = aDirectionWidth.w;
             float height = aHeight.x;
+            vSoft = clamp(0.25 * max(width, height), 2.0, 300.0);
             vec2 q = (aCorner - uAnchor) * vec2(width, height);
             vec3 right, up;
             if (uMode == 0)
@@ -69,6 +72,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
             }
             vec3 world = position + right * q.x + up * q.y;
             gl_Position = uViewProjection * vec4(world, 1.0);
+            vDepth = gl_Position.w;
             vUv = vec2(aCorner.x + 0.5, 0.5 - aCorner.y);
             vColour = vec4(aColour.rgb * uColourScale.rgb, aColour.a * uColourScale.a);
         }
@@ -78,14 +82,29 @@ public sealed unsafe class ParticleRenderer : IDisposable
         #version 330 core
         in vec2 vUv;
         in vec4 vColour;
+        in float vDepth;
+        in float vSoft;
         out vec4 fragColour;
         uniform sampler2D uTexture;
+        uniform sampler2D uSoftDepth;               // the scene's depth at this target's size (the Meitou fog switch), as a colour
+        uniform vec4 uSoft;                         // x: 0 hard (the game's), 1 fade the alpha, 2 the colour and alpha (additive), 3 towards white (modulate); y, z: the depth slice's near, far; w: 1 when depth is 0..1
         uniform float uCoverageMax, uCoverageGain;
         uniform int uCoverage;                      // 0: colour; 1: the particle's alpha, 2: its brightest channel (the upscalers' reactive mask); 3 / 4: the low-resolution target's premultiplied alpha / additive
         void main()
         {
             // basic.hlsl: texture * colour * vertex colour
             vec4 c = texture(uTexture, vUv) * vColour;
+            // Meitou fog: the sprite fades out over its last vSoft units before the surface behind it, instead of cutting into it.
+            if (uSoft.x > 0.0)
+            {
+                float d = texelFetch(uSoftDepth, ivec2(gl_FragCoord.xy), 0).r;
+                float zd = uSoft.w != 0.0 ? d : 2.0 * d - 1.0;
+                float scene = uSoft.y * uSoft.z / (uSoft.z - zd * (uSoft.z - uSoft.y));
+                float fade = clamp((scene - vDepth) / vSoft, 0.0, 1.0);
+                if (uSoft.x == 1.0) c.a *= fade;
+                else if (uSoft.x == 2.0) c *= fade;
+                else c.rgb = mix(vec3(1.0), c.rgb, fade);
+            }
             // Alpha for alpha-blended sprites (rgb where alpha is 0 shows nothing), brightness times alpha for additive ones, times uCoverageGain (RecordDraws).
             if (uCoverage == 1) c = vec4(clamp(c.a * uCoverageGain, 0.0, uCoverageMax));
             else if (uCoverage == 2) c = vec4(clamp(max(c.r, max(c.g, c.b)) * c.a * uCoverageGain, 0.0, uCoverageMax));
@@ -106,8 +125,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
     readonly DeviceBuffer quad;
     readonly VertexArrayBindings vertexSource;
     readonly GpuBufferBinding[] bindings = new GpuBufferBinding[5];
-    readonly UniformHandle viewProjection, cameraRight, cameraUp, mode, anchor, commonDirection, commonUp, colourScale, coverageMode, coverageLimit, coverageGain;
-    readonly SamplerSlot textureSlot;
+    readonly UniformHandle viewProjection, cameraRight, cameraUp, mode, anchor, commonDirection, commonUp, colourScale, coverageMode, coverageLimit, coverageGain, soft;
+    readonly SamplerSlot textureSlot, softDepthSlot;
     readonly SampledImage white;
     readonly Dictionary<string, SampledImage?> textures = new(StringComparer.OrdinalIgnoreCase);
     readonly WeatherGroups weatherGroups;
@@ -188,6 +207,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
         coverageLimit = program.Uniform("uCoverageMax");
         coverageGain = program.Uniform("uCoverageGain");
         textureSlot = program.Sampler("uTexture");
+        softDepthSlot = program.Sampler("uSoftDepth");
+        soft = program.Uniform("uSoft");
         float[] corners = [-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, -0.5f, 0.5f, 0.5f];   // triangle strip
         quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "particle quad");
         using (var batch = gpu.Uploads.Begin()) batch.Write(quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(corners.AsSpan()));
@@ -432,10 +453,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// </summary>
     /// <param name="pixelsPerUnit">Meitou: the render size in pixels of one world unit at distance 1 (0: everything full size). Alpha and additive draws whose sprites are big on screen go to a low-resolution target, the biggest to a quarter-size one (<see cref="QuarterPixels"/>, <see cref="HalfPixels"/>); small ones (rain) stay full size.</param>
     /// <param name="forcedDivisor">0: by sprite size; 1, 2 or 4: every eligible draw there but rain and fire (for measuring, and the Half and Quarter settings).</param>
-    public void Prepare(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor = 0)
+    public void Prepare(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor = 0,
+        Matrix4x4? lowViewProjection = null, Matrix4x4? lowCloseViewProjection = null)
     {
         long start = Stopwatch.GetTimestamp();
         PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, screenPixels, forcedDivisor);
+        // The low-resolution draws' own matrices: unjittered when they are blended after the upscaler (PostProcess.ParticlesAfterUpscale), whose output is.
+        frameLowVp = lowViewProjection is { } lowVp ? Matrix4x4.CreateTranslation(eye) * lowVp : frameVp;
+        frameLowCloseVp = lowCloseViewProjection is { } lowClose ? Matrix4x4.CreateTranslation(eye) * lowClose : frameCloseVp;
         long ticks = Stopwatch.GetTimestamp() - start;
         drawTotal += ticks;
         drawFrames++;
@@ -453,7 +478,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public int LowCount => divisorCounts[2] + divisorCounts[4];
 
     /// <summary>Records the draws of the last <see cref="Prepare"/> into the open pass: the full-size ones (colour into the scene) or the low-resolution ones (premultiplied into the accumulation target, whose pass the caller opened).</summary>
-    public void Record(int divisor)
+    public void Record(int divisor, SoftDepth? softDepth = null)
     {
         if (divisorCounts[divisor] == 0) return;
         bool low = divisor > 1;
@@ -465,7 +490,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         cmd.SetScissor(targets.Scissor);
         // The alpha channel of the scene target carries the characters' mask: particles write colour only (the low-resolution target uses all four).
         const ColorMask rgb = ColorMask.R | ColorMask.G | ColorMask.B;
-        RecordDraws(cmd, in baseState, in targets, hasDepth, hasColour, low ? rgb | ColorMask.A : rgb, low ? Kind.Low : Kind.Colour, divisor);
+        RecordDraws(cmd, in baseState, in targets, hasDepth, hasColour, low ? rgb | ColorMask.A : rgb, low ? Kind.Low : Kind.Colour, softDepth, divisor);
         gpu.EndGuest(cmd);
     }
 
@@ -559,7 +584,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         coveragePending = true;
     }
 
-    Matrix4x4 frameVp, frameCloseVp;
+    Matrix4x4 frameVp, frameCloseVp, frameLowVp, frameLowCloseVp;
     Vector3 frameRight, frameUp;
     float frameAmbient;
     bool coveragePending;
@@ -574,7 +599,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// so a particle hidden behind terrain does not make its pixels less stable.
     /// Called by the post chain with the target bound (cleared or loaded as it wants), once per frame after <c>Draw</c>.
     /// </summary>
-    public void DrawCoverage(ColorMask mask, bool depthTest = false)
+    public void DrawCoverage(ColorMask mask, bool depthTest = false, SoftDepth? softDepth = null)
     {
         if (!HasCoverage || FullCount == 0) return;
         var cmd = gpu.BeginGuest("particle coverage");
@@ -582,12 +607,18 @@ public sealed unsafe class ParticleRenderer : IDisposable
         var baseState = gpu.CurrentState();
         cmd.SetViewport(targets.Viewport);
         cmd.SetScissor(targets.Scissor);
-        RecordDraws(cmd, in baseState, in targets, depthTest, true, mask, Kind.Coverage);
+        RecordDraws(cmd, in baseState, in targets, depthTest, true, mask, Kind.Coverage, softDepth);
         gpu.EndGuest(cmd);
     }
 
     /// <summary>What a draw records: colour into the scene, coverage for the upscalers' reactive mask, or into the low-resolution accumulation target.</summary>
     enum Kind { Colour, Coverage, Low }
+
+    /// <summary>
+    /// The scene's depth for the Meitou <c>fog</c> switch's soft fade (docs/render-post.md "Fog"): a colour copy at the pass's size (the depth attachment itself
+    /// cannot be read while it is tested), with the depth slice's near and far planes and whether the depth is 0..1.
+    /// </summary>
+    public readonly record struct SoftDepth(SampledTexture Texture, float Near, float Far, bool ZeroToOne);
 
     /// <summary>Whether the last <see cref="Prepare"/> has low-resolution draws, whose coverage the post chain derives from the accumulation target (<see cref="PostProcess"/>).</summary>
     public bool HasLowCoverage => coveragePending && LowCount > 0;
@@ -608,10 +639,11 @@ public sealed unsafe class ParticleRenderer : IDisposable
     }
 
     void RecordDraws(IGpuCommandList cmd, in DrawState baseState, in PassTargets targets, bool hasDepth, bool hasColour,
-        ColorMask rgb, Kind kind, int divisor = 1)
+        ColorMask rgb, Kind kind, SoftDepth? softDepth, int divisor = 1)
     {
         int coverage = kind == Kind.Coverage ? 1 : 0;
         var (vp, closeVp, right, up, ambient) = (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient);
+        if (kind == Kind.Low) (vp, closeVp) = (frameLowVp, frameLowCloseVp);
         foreach (var d in draws)
         {
             if (d.Divisor != divisor) continue;
@@ -653,6 +685,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 float lit = m.Ambient ? ambient : 1;
                 program.Set(colourScale, m.ColourScale.X * lit, m.ColourScale.Y * lit, m.ColourScale.Z * lit, m.ColourScale.W);
                 program.Bind(textureSlot, d.Texture.Sampled());
+                // The soft fade by blend: an alpha sprite fades its alpha, an additive or colour-blended one its colour, a modulating one towards white.
+                int fade = softDepth is null ? 0 : m.Blend switch
+                {
+                    ParticleBlend.Alpha => 1, ParticleBlend.Add or ParticleBlend.ColourBlend => 2, ParticleBlend.Modulate => 3, _ => 0,
+                };
+                var sd = softDepth.GetValueOrDefault();
+                program.Set(soft, fade, sd.Near, sd.Far, sd.ZeroToOne ? 1f : 0f);
+                program.Bind(softDepthSlot, softDepth is { } bound ? bound.Texture : white.Sampled());
                 cmd.SetRaster(state.Cull, state.Front);
                 cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
                 cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
