@@ -342,6 +342,12 @@ painter (it spans 981..1028) or a centre-to-centre test. **Verified** (`tile48.1
 has the same two edges there (interior 992..995, exterior 1004..1010, 2..6 apart) and no connection: its group `150371` has no streaming set, while every
 other interior in 18.35, 19.29, 20.32, 26.13, 43.11, 47.16, 48.45, 50.33 has one (paired edges mostly within 2 in height). **Observed**: the
 original leaves Small Shack `48.13:8-` (`110371`) unconnected too; Meitou joins it.
+**Join sweep**: `meitou-tools navmesh --compare-interiors x,z ... | towns` (`towns`: every zone holding a town placement) reports per original
+interior group whether the original connects it (mesh connections in its streaming set) and whether ours, the interior whose hull holds most of its
+faces, is reached from the street (over kept polygons and joins from the exterior's own kept set, in its zone or a neighbour's); SEALED marks connected
+in the original but not reached in ours. **Observed** (225 zones, 1090 groups, 1066 connected): 42 sealed, 7 reached in ours only. 24 of the sealed are ruins (`destroyed`), whose original groups mostly hold the intact
+interior (14.5 Outposts: our ruins cover 13 % of their faces), so those tiles were built with the building standing (**Unknown** how the original
+handles them).
 **Doorless interiors** (engine choice): an intact building with an interior mask and no `doors` (an open doorway) links its interior's open edges
 to the exterior's that run along them within `NavInteriors.HullJoinDistance` (2.5; both are cut on the hull's line); so do destroyed ones with a
 `destroyed boundary` (above); those without stay islands.

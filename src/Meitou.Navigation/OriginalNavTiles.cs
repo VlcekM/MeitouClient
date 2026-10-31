@@ -97,7 +97,9 @@ public static class OriginalNavTiles
             var vertices = new Vector3[raw.Length];
             for (int i = 0; i < raw.Length; i++)
                 if (raw[i] is float[] f) vertices[i] = origin + Scale * new Vector3(f[0], f[1], f[2]);
-            result.Add(new OriginalInterior(parts[0], origin, vertices, Polygons(faces, edges)));
+            // Its door connections to the exterior: a streaming set's mesh connections (docs/formats/havok-tagfile.md, "Interior joins").
+            int connections = (mesh["streamingSets"] as HkObject[] ?? []).Sum(set => (set["meshConnections"] as HkObject[])?.Length ?? 0);
+            result.Add(new OriginalInterior(parts[0], origin, vertices, Polygons(faces, edges), connections));
             mesh = null;
         }
         return result;
@@ -156,8 +158,8 @@ public static class OriginalNavTiles
     static long Int(object? v) => v is long l ? l : 0;
 }
 
-/// <summary>One interior group of an original tile: the uid from its Info string, the Info point and its mesh in world coordinates.</summary>
-public sealed record OriginalInterior(string Uid, Vector3 Origin, Vector3[] Vertices, int[][] Polygons);
+/// <summary>One interior group of an original tile: the uid from its Info string, the Info point, its mesh in world coordinates and its mesh connections to the exterior.</summary>
+public sealed record OriginalInterior(string Uid, Vector3 Origin, Vector3[] Vertices, int[][] Polygons, int Connections = 0);
 
 /// <summary>One original interior group against a built zone: its faces in the zone, how many are covered, and the uncovered faces' height range.</summary>
 public sealed record InteriorCoverage(OriginalInterior Group, int Faces, int Covered, float MissingLow, float MissingHigh);

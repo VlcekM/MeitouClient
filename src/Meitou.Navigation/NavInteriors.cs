@@ -19,9 +19,9 @@ internal static class NavInteriors
 
     /// <summary>
     /// The zone's exterior mesh with the interior meshes appended and joined; both kept and pruned polygons are carried over. <paramref name="doorless"/> marks
-    /// (per interior) the intact buildings without doors, joined along their hull instead.
+    /// (per interior) the intact buildings without doors, joined along their hull instead; <paramref name="names"/> (per interior, its building key) labels the join log.
     /// </summary>
-    public static ZoneNavMesh Combine(ZoneNavMesh exterior, IReadOnlyList<ZoneNavMesh> interiors, Action<string>? log = null, IReadOnlyList<bool>? doorless = null)
+    public static ZoneNavMesh Combine(ZoneNavMesh exterior, IReadOnlyList<ZoneNavMesh> interiors, Action<string>? log = null, IReadOnlyList<bool>? doorless = null, IReadOnlyList<string?>? names = null)
     {
         if (interiors.Count == 0) return exterior;
         var vertices = new List<Vector3>(exterior.Vertices);
@@ -64,7 +64,10 @@ internal static class NavInteriors
 
         int exteriorCount = exterior.PolygonCount;
         for (int k = 0; k < interiors.Count; k++)
-            Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].PolygonCount, doorless?[k] ?? false, log);
+            Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].PolygonCount, doorless?[k] ?? false, names?[k] ?? $"interior {k}", log);
+        var street = log is null ? null : Enumerable.Range(0, exteriorCount).Where(p => kept[p]).ToList();
+
+        if (log is not null) LogReached(street!, neighbours, links, kept, offsets, interiors.Select(m => m.PolygonCount).ToList(), names, log);
 
         var heights = new List<HeightGrid?>();
         foreach (var m in interiors.Prepend(exterior))
@@ -80,9 +83,35 @@ internal static class NavInteriors
         };
     }
 
+    /// <summary>
+    /// The join log's reach lines: each interior with a kept polygon reached over kept polygons (neighbours and links) from the exterior's own kept set,
+    /// that is from the street (<c>meitou-tools navmesh --compare-interiors</c> counts these as joined).
+    /// </summary>
+    static void LogReached(List<int> street, List<int[]> neighbours, List<List<int>?> links, List<bool> kept, List<int> offsets, List<int> counts, IReadOnlyList<string?>? names, Action<string> log)
+    {
+        var reached = new bool[kept.Count];
+        var queue = new Queue<int>();
+        foreach (int p in street) { reached[p] = true; queue.Enqueue(p); }
+        while (queue.Count > 0)
+        {
+            int p = queue.Dequeue();
+            foreach (int n in neighbours[p]) Visit(n);
+            if (links[p] is { } l) for (int i = 1; i < l.Count; i += 2) Visit(l[i]);
+        }
+        for (int k = 0; k < offsets.Count; k++)
+            if (Enumerable.Range(offsets[k], counts[k]).Any(p => reached[p])) log($"    interior {names?[k] ?? $"interior {k}"} reached from the exterior");
+
+        void Visit(int n)
+        {
+            if (n < 0 || reached[n] || !kept[n]) return;
+            reached[n] = true;
+            queue.Enqueue(n);
+        }
+    }
+
     /// <summary>Links the door polygons of one interior (polygons [first, first + count)) to the exterior's door polygons of the same door, or a doorless one along its hull.</summary>
     static void Join(List<Vector3> v, List<int[]> polygons, List<int[]> neighbours, List<byte> areas, List<bool> kept, List<List<int>?> links, List<int> doorOf, List<string> doorIds,
-        int exteriorCount, int first, int count, bool doorless, Action<string>? log)
+        int exteriorCount, int first, int count, bool doorless, string name, Action<string>? log)
     {
         bool Free(int p, int e) => neighbours[p][e] < 0 && !NavGeometry.HasLink(CollectionsMarshal.AsSpan(links[p]), e);
         for (int door = 0; door < doorIds.Count; door++)
@@ -127,7 +156,7 @@ internal static class NavInteriors
             lo -= new Vector2(JoinDistance); hi += new Vector2(JoinDistance);
             var near = Enumerable.Range(0, exteriorCount).Where(q => kept[q] && areas[q] != NavArea.Null && polygons[q].Any(i => v[i].X >= lo.X && v[i].X <= hi.X && v[i].Z >= lo.Y && v[i].Z <= hi.Y)).ToList();
             var openInside = inside.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
-            Link(openInside, OpenEdges(near), "doorless hull edge", HullJoinDistance);
+            Link(openInside, OpenEdges(near), $"{name} (doorless hull edge)", HullJoinDistance);
         }
 
         List<(int, int)> OpenEdges(IEnumerable<int> outside) => [.. outside.SelectMany(q => Enumerable.Range(0, polygons[q].Length).Where(f => Free(q, f)).Select(f => (q, f)))];
