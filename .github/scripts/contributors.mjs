@@ -17,8 +17,8 @@ const roles = { spacecowboyserver: 'macOS port' };
 const out = new URL('../../assets/branding/contributors.png', import.meta.url);
 
 const W = 1200, P = 4;
-// Transparent: text outside the cards is a mid tone that reads on both GitHub themes.
-const muted = '#8b7355';
+// Transparent: the text is a mid tone that reads on both GitHub themes.
+const muted = '#9a8263';
 const font = "Segoe UI, DejaVu Sans, Liberation Sans, sans-serif";
 const amber = '#e0a030';
 const esc = s => s.replace(/[&<>"]/g, c => `&${{ '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot' }[c]};`);
@@ -78,30 +78,30 @@ const text = (x, y, size, fill, s, weight = 400) =>
 let y = 4;
 
 // Core team: one cell each, centred, the creator's marked as such.
-const gap = 16, cardW = 190, cardH = 152, x0 = (W - team.length * cardW - (team.length - 1) * gap) / 2;
+const coreW = 280, coreH = 220, x0 = (W - team.length * coreW) / 2;
 for (const [i, u] of team.entries()) {
-  const x = x0 + i * (cardW + gap), cx = x + cardW / 2;
-  await face(u, cx, y + 54, 40, amber);
-  body += text(cx, y + 118, 17, muted, u.login, 700);
-  body += text(cx, y + 138, 12, amber, u.login === creator ? 'Creator · Project lead' : 'Core team', 600);
+  const cx = x0 + i * coreW + coreW / 2;
+  await face(u, cx, y + 60, 56, amber);
+  body += text(cx, y + 160, 28, muted, u.login, 700);
+  body += text(cx, y + 190, 20, amber, u.login === creator ? 'Creator · Project lead' : 'Core team', 600);
 }
-y += cardH + 20;
+y += coreH + 16;
 
-// Everyone else, in rows of equal cells, the last row centred, their areas under the name; those with a role first, larger, in amber.
+// Everyone else in balanced rows of at most five, their areas under the name; those with a role first, larger, in amber.
 if (others.length) {
   const role = u => roles[key(u)];
   others.sort((a, b) => !!role(b) - !!role(a));
-  const cell = 150, perRow = Math.floor((W - 2 * P) / cell), r = 36, rr = 40;
+  const cell = 270, perRow = Math.ceil(others.length / Math.ceil(others.length / 5)), r = 46, rr = 52;
   for (let i = 0; i < others.length; i += perRow) {
     const row = others.slice(i, i + perRow), x0 = (W - row.length * cell) / 2;
     const R = row.some(role) ? rr : r;
     for (const [j, u] of row.entries()) {
       const cx = x0 + j * cell + cell / 2, name = u.login.length > 18 ? `${u.login.slice(0, 17)}…` : u.login;
       await face(u, cx, y + R + 8, role(u) ? rr : r, role(u) ? amber : muted);
-      body += role(u) ? text(cx, y + 2 * R + 36, 16, muted, name, 700) : text(cx, y + 2 * R + 36, 15, muted, name);
-      if (areas(u)) body += role(u) ? text(cx, y + 2 * R + 56, 14, amber, role(u), 600) : text(cx, y + 2 * R + 55, 12, muted, areas(u));
+      body += text(cx, y + 2 * R + 44, 24, muted, name, role(u) ? 700 : 600);
+      if (areas(u)) body += text(cx, y + 2 * R + 72, 19, role(u) ? amber : muted, areas(u), role(u) ? 600 : 400);
     }
-    y += 2 * R + (row.some(areas) ? 76 : 60);
+    y += 2 * R + (row.some(areas) ? 104 : 76);
   }
 }
 const H = y - 16;
