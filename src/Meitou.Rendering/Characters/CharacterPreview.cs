@@ -14,8 +14,8 @@ public readonly record struct PreviewLook(bool Enhanced, int Supersample, ToneMa
     public static PreviewLook Of(PostOptions o)
     {
         bool aa = o.Upscale.Kind != UpscalerKind.Off;
-        bool enhanced = aa || o.Grade || o.ToneMap != ToneMapOperator.Clamp;
-        return enhanced ? new PreviewLook(true, aa ? 2 : 1, o.ToneMap, Math.Clamp(o.ToneMix, 0, 1), o.Grade, o.Dither) : default;
+        bool enhanced = aa || o.GradeUsed || o.ToneMapUsed != ToneMapOperator.Clamp;
+        return enhanced ? new PreviewLook(true, aa ? 2 : 1, o.ToneMapUsed, Math.Clamp(o.ToneMix, 0, 1), o.GradeUsed, o.Dither) : default;
     }
 }
 

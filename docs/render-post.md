@@ -131,6 +131,23 @@ as it is, capped at 0.9 (AMD's guidance); the rest as it is. Rain and fire stay 
 **Observed** (FSR and TAA at 1080p): 30x on every sprite leaves the scene behind dust grainy under TAA and blurred under FSR;
 without its gain rain's streaks fade; a distant torch a few pixels high flickers at 30x.
 
+## Bloom
+
+An optional effect (`PostOptions.Bloom`, Off | On), off in the Meitou look as in the game (magnitude 0), with its strength under it, 0..0.25 (0.13 by
+default; KenshiNative's 0.04); the example look "Hot and dry" turns it on. `--bloom <s>` sets the strength and turns it on for one run.
+Port of KenshiNative's `docs/features/bloom-rewrite.md`, which has the derivation and its checks.
+`PostProcess.Bloom.cs` runs after the upscaler on the picture the composite reads; no history.
+The composite mixes, `lerp(scene, psf ⊗ scene, strength)`, in linear light before exposure, so a
+uniform image is unchanged. The scene is gamma-encoded (no sRGB step), so the prefilter decodes
+each texel (power 2.2) before a 4x4 box to 1/2, with a firefly ceiling of 64 linear units
+(`c (1 + (L/F)^4)^-1/4`). Then Jimenez 13-tap downs to 1/128 (stops before a side drops under 4)
+and 3x3 tent ups `U_i = w_i L_i + tent(U_i+1)` into the 1/4 level. Weights for levels 2..7:
+0.41405, 0.21190, 0.10986, 0.10064, 0.04074, 0.12281 (sum 1; a missing level's weight goes to the
+coarsest). They are KenshiNative's fit to the eye's photopic PSF (Spencer et al. 1995) at a 45°
+fovY. The composite reads the 1/4 level through a 4-tap cubic B-spline (no square around small lights).
+R11G11B10 targets. **Observed** (Hub, 02:00, 1600x900, DLSS): a round halo centred on the lamp
+at 0.25, frame mean linear luminance within 2.5% of off; GPU 0.07 ms on the run's average.
+
 ## SMAA
 
 Meitou's non-temporal alternative to FXAA (`--smaa`, or anti-aliasing "SMAA" in settings). It runs on the

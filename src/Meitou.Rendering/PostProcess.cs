@@ -150,8 +150,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     sealed class CompositePass : FullscreenProgram
     {
-        public readonly SamplerSlot Scene, Ao, Adapted;
-        public readonly UniformHandle Auto, Exposure, UseAo, Dither, SceneSize, Sharpen, Tone, ToneMix, Grade, Saturation, Contrast, Night, Balance;
+        public readonly SamplerSlot Scene, Ao, Adapted, Bloom;
+        public readonly UniformHandle Auto, Exposure, UseAo, Dither, SceneSize, Sharpen, Tone, ToneMix, Grade, Saturation, Contrast, Night, Balance, BloomStrength;
         public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
         {
             (Scene, Ao, Adapted) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"));
@@ -159,6 +159,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             (Auto, Exposure, UseAo, Dither) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"));
             (Tone, ToneMix, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uToneMix"), P.Uniform("uGrade"), P.Uniform("uSaturation"), P.Uniform("uContrast"));
             (Night, Balance) = (P.Uniform("uNight"), P.Uniform("uBalance"));
+            (Bloom, BloomStrength) = (P.Sampler("uBloom"), P.Uniform("uBloomStrength"));
         }
     }
 
@@ -381,6 +382,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         aoA = aoB = aoMask = ldr = ldrFxaa = smaaEdges = smaaWeights = luminance = adaptA = adaptB = null;
         foreach (var l in lowTargets) l.Accum = l.Depth = null;
         giAlbedo = giLow = shaftInjected = shaftLight = null;
+        FreeBloom();
         adaptedValid = historyValid = false;
         adaptedFrames = 0;
     }
@@ -732,6 +734,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         bool auto = AutoExposure is not null && luminance is not null;
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
+        var bloom = RunBloom(postColour);
 
         // Composite: to the target, or to the LDR picture FXAA (or SMAA) and / or the heat haze then read (the game's order: FXAA, HeatHaze).
         bool smaa = o.Smaa && !Temporal && smaaWeights is not null;
@@ -749,13 +752,15 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.Exposure, o.Exposure);
         c.P.Set(c.UseAo, ao && !aoApplied ? 1 : 0);   // applied before the particles: only the debug view still reads it
         c.P.Set(c.Dither, o.Dither ? 1 : 0);
-        c.P.Set(c.Tone, (int)o.ToneMap);
+        c.P.Set(c.Tone, (int)o.ToneMapUsed);
         c.P.Set(c.ToneMix, Math.Clamp(o.ToneMix, 0, 1));
-        c.P.Set(c.Grade, o.Grade ? 1 : 0);
+        c.P.Set(c.Grade, o.GradeUsed ? 1 : 0);
         c.P.Set(c.Saturation, PostOptions.Saturation);
         c.P.Set(c.Contrast, PostOptions.Contrast);
-        c.P.Set(c.Night, auto ? Math.Clamp(o.NightGradeStrength, 0, 1) : 0f);
+        c.P.Set(c.Night, auto ? Math.Clamp(o.NightGradeAmount, 0, 1) : 0f);
         c.P.Set(c.Balance, o.Balance);
+        Bind(c.P, c.Bloom, bloom);
+        c.P.Set(c.BloomStrength, bloom is null ? 0f : Math.Clamp(o.BloomAmount, 0, 1));
         if (fxaa || smaa || haze) Draw(c.P, ldr!); else DrawFinal(c.P, final);
         Stamp("composite");
         var picture = ldr;
@@ -1318,7 +1323,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>Whether the heat-haze textures were found (else the pass never runs).</summary>
     public bool HasHeatHaze => flowTexture is not null && perturbationTexture is not null;
     /// <summary>Whether this frame ends with the heat haze: it is on, has its textures and an amount.</summary>
-    public bool HeatHazeRuns => Options.HeatHaze && HasHeatHaze && HeatHazeAmount * Options.HeatHazeStrength > 0 && ldr is not null;
+    public bool HeatHazeRuns => Options.HeatHaze && HasHeatHaze && HeatHazeAmount * Options.HeatHazeScale > 0 && ldr is not null;
 
     /// <summary>
     /// Loads the heat haze's two textures from the install (<c>materials/FlowHAZE.dds</c> and <c>Perturber.dds</c>, BC1 2048² with
@@ -1380,7 +1385,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         // The phase in double first: game hours × 100 loses its fraction in float after long sessions.
         double phase = HeatHazeHours * 100;
         h.P.Set(h.Phase, (float)(phase - Math.Floor(phase)));
-        h.P.Set(h.Amount, HeatHazeAmount * Options.HeatHazeStrength);
+        h.P.Set(h.Amount, HeatHazeAmount * Options.HeatHazeScale);
         float tanY = MathF.Tan(fovY * 0.5f);
         h.P.Set(h.Tan, tanY * aspect, tanY);
         h.P.Set(h.NearFar, nearPlane, farPlane);
@@ -1459,6 +1464,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeShafts();
         DisposeSceneLayers();
         DisposeMerged();
+        DisposeBloom();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         smaaPasses.Dispose();

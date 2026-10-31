@@ -1074,11 +1074,50 @@ public sealed partial class MainWindow : Window
 
     void ToggleMaximize() => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
+    // Windows does not start a resize drag (BeginResizeDrag) on a window without its frame, so there the grips size the window themselves:
+    // the pixel rectangle at the press, its dragged edges following the pointer they capture (Avalonia's Width / Height on this frameless
+    // window add a title bar's height). Elsewhere the platform does it (Wayland lets no window place itself).
+    WindowEdge? resizeEdge;
+    PixelPoint resizeStart;
+    Win32Window.Rect resizeRect;
+
     void Grip_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is Control { Tag: string edge } && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-            BeginResizeDrag(Enum.Parse<WindowEdge>(edge), e);
+        if (sender is not Control { Tag: string tag } grip || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        var edge = Enum.Parse<WindowEdge>(tag);
+        if (!OperatingSystem.IsWindows() || TryGetPlatformHandle()?.Handle is not { } hwnd || !Win32Window.GetWindowRect(hwnd, out resizeRect))
+        {
+            BeginResizeDrag(edge, e);
+            return;
+        }
+        resizeEdge = edge;
+        resizeStart = this.PointToScreen(e.GetPosition(this));
+        e.Pointer.Capture(grip);
+        e.Handled = true;
     }
+
+    void Grip_PointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (resizeEdge is not { } edge || TryGetPlatformHandle()?.Handle is not { } hwnd) return;
+        var now = this.PointToScreen(e.GetPosition(this));
+        int dx = now.X - resizeStart.X, dy = now.Y - resizeStart.Y;
+        int minWidth = (int)Math.Ceiling(MinWidth * DesktopScaling), minHeight = (int)Math.Ceiling(MinHeight * DesktopScaling);
+        var (left, top, right, bottom) = (resizeRect.Left, resizeRect.Top, resizeRect.Right, resizeRect.Bottom);
+        if (edge is WindowEdge.West or WindowEdge.NorthWest or WindowEdge.SouthWest) left = Math.Min(left + dx, right - minWidth);
+        if (edge is WindowEdge.East or WindowEdge.NorthEast or WindowEdge.SouthEast) right = Math.Max(right + dx, left + minWidth);
+        if (edge is WindowEdge.North or WindowEdge.NorthWest or WindowEdge.NorthEast) top = Math.Min(top + dy, bottom - minHeight);
+        if (edge is WindowEdge.South or WindowEdge.SouthWest or WindowEdge.SouthEast) bottom = Math.Max(bottom + dy, top + minHeight);
+        Win32Window.SetWindowPos(hwnd, IntPtr.Zero, left, top, right - left, bottom - top, Win32Window.NoZOrder | Win32Window.NoActivate);
+    }
+
+    void Grip_PointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (resizeEdge is null) return;
+        resizeEdge = null;
+        e.Pointer.Capture(null);
+    }
+
+    void Grip_PointerCaptureLost(object? sender, PointerCaptureLostEventArgs e) => resizeEdge = null;
 
     // Maximised, the plate fills the screen: no shadow margin, square corners, no grips.
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -1296,4 +1335,21 @@ public sealed partial class MainWindow : Window
         }
         if (any) yield return current.ToString();
     }
+}
+
+/// <summary>The Win32 calls the resize grips use on Windows (MainWindow.Grip_PointerPressed).</summary>
+static partial class Win32Window
+{
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    internal struct Rect { public int Left, Top, Right, Bottom; }
+
+    internal const uint NoZOrder = 0x0004, NoActivate = 0x0010;
+
+    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    internal static partial bool GetWindowRect(IntPtr window, out Rect rect);
+
+    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    internal static partial bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
 }

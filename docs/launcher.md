@@ -165,8 +165,25 @@ every Tab panel slider and switch under `graphics` (a slider by label, `WorldFra
 setting reaches the launcher with its release; the launcher knows none of them. A version without a schema (older), or with a newer
 `format`, gets no page. Rows a computer lacks (tessellation, the Meitou shadows' filter) are listed anyway; the game ignores their keys.
 
-- Each schema section is a tab: Display, then the game's Graphics sub-pages (World, Lighting, Water, Effects, Skin) as
-  `SettingsMenu.Section` / `ToggleSection` place them, switches first.
+- The schema is also the catalogue the game's own Display and Graphics pages are drawn from ([native-ui](native-ui.md)), so the launcher's
+  rows and the game's are the same: names, ranges, value text, choices, impact (`impact`, beside the name) and order.
+- Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Lighting, Sky & weather, Colour, World, Characters)
+  as `SettingsMenu.Section` / `ToggleSection` place them, switches first. Interior lamps is not listed: it changes the stealth sight, so it
+  is on the game's Advanced page only.
+- A section's `groups` (null in older schemas: flat rows) are the menu's features (`SettingsMenu.FeatureGroups`): one row headed by
+  a setting (`header`) or a `title` and `description`, with an arrow folding its `members` under it (closed until opened; open ones stay
+  open while the launcher runs), named without the feature's name they repeat, as in the game.
+- The Look row is the game's look bar: Faithful | Meitou, the preset (`looks.presets`, then the player's files), the changes from it
+  (`looks.keys`, the look tabs' settings: Revert; Save for the player's own), Save as (a name), Share (an `MT1:` code on the clipboard),
+  Paste, Delete (two clicks). Files and codes are the game's (`LookPresetFile`, Meitou.Core); a saved preset holds what differs from
+  `looks.meitou`, marked `looks.made`.
+- `looks` (null in older schemas: no row) is the Look row: Faithful (`faithfulLook` true) or a Meitou look preset (`lookPreset`: one of
+  `looks.presets`, the first saved as no key, or a player's JSON file in `looks.folder` beside `meitou.user.json`, its `name` and
+  `values`). A look is a set of `graphics` values, as the game's menu applies it: `looks.faithful` (every Faithful / Meitou graphics
+  switch off, the look sliders at the game's value) or `looks.meitou` with the preset's own values over them (the quality tier's
+  switches are left to the tier). Choosing one writes them, so the rows show it at once and the game counts no change from it; at Low
+  the game still holds the tier's look switches off at start unless kept on (`SettingsMenu.ApplySavedPreset`). No `faithfulLook`
+  reads Faithful when every switch Faithful turns off is saved off, as the game does. A look slider's Default writes the look's value.
 - `presets` (null in older schemas: no row) is the Quality preset row over the top-level `graphicsPreset`. The game saves the preset its
   settings sit at (Custom when none) and at start applies a saved one they do not sit at (not under `--low-end`, `--meitou` or `--faithful`), so a preset chosen in
   the launcher takes effect on the next start; the rows show the old values until then. Changing a row the preset sets (`presets.keys`)
@@ -180,13 +197,16 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - The launcher detects once by itself (`PresetDetected` in `launcher.json`): when the version Play starts can detect and the game has no
   graphics settings or preset saved yet, so the first start (or first install) of a fresh setup gets a preset; saved settings are kept.
   A failed detection is tried again at the next start.
-- A missing `graphics` key is the game's default for the mode ("Game default"; a switch offers it as a third choice beside off and
-  on); Default removes it, Reset graphics removes `graphics` and `graphicsPreset`. A top-level Default writes the schema's `default`.
+- Each setting has one control: a switch a Faithful (0) / Meitou (1) drop-down, a slider with `labels` a drop-down of them, any other
+  slider a slider with a typed value; unsaved, a row shows the game's start value (`shown`). A look setting that differs from the look's
+  value has its name in brass and a Reset link that writes it, and so does its feature's header (for all of them, as in the game); quality and display settings are never marked (the Quality row reads Custom),
+  as in the game's menu. Reset graphics, in a footer
+  under the scrolling rows, removes `graphics`, `graphicsPreset`, `faithfulLook` and `lookPreset`. A top-level Default writes the schema's `default`.
   Whole values are written as integers.
 - A slider without `labels` takes a typed value (Enter or leaving the box; Esc restores): the suffix may stay, a comma is a decimal
   point, the value is divided by `scale`, snapped to `step` and clamped; `offText` (Unlimited, Off) means the left end.
-- A slider marked `reversed` (texture quality, whose level 0 is Maximum) is drawn mirrored, so right is always the better end; the
-  value written is unchanged. Older schemas lack the flag and show it unmirrored.
+- A slider marked `reversed` (terrain detail's error in pixels) is drawn mirrored (`min + max - value`; logarithmic: `min x max / value`),
+  so right is always the better end; the value written is unchanged. Texture quality, also reversed, is a drop-down, best first.
 - Read-only when the file is unreadable, or its `version` differs from the schema's `settingsVersion` (another layout: the keys may
   mean something else). Warnings: the game is running (it writes the file on exit), `--low-end` (the game ignores `graphics`).
 

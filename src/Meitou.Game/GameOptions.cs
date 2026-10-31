@@ -15,6 +15,8 @@ sealed class GameOptions
     public bool UiShowcase;
     /// <summary>With <c>--screenshot</c>: one HUD/panel to open for the picture (null: the HUD only).</summary>
     public string? UiPanel;
+    /// <summary>With <c>--screenshot</c>: the settings menu's Graphics page in a set of states (docs/native-ui.md "Settings"), one picture each.</summary>
+    public bool SettingsShowcase;
     /// <summary>With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.</summary>
     public int Ticks;
     public bool NoPopulation, NewGame, ListStarts;
@@ -80,6 +82,7 @@ sealed class GameOptions
           --ui <faithful|meitou>      UI mode, independent of graphics; also available in the settings (default meitou)
           --ui-showcase              with --screenshot: capture HUD, inventory, stats, map, menus, a trade with the nearest trader and a conversation in either UI mode
           --ui-panel <name>          with --screenshot: open one HUD/panel for the picture (hud, hud-expanded, inventory, stats, overview, menu, title, ...)
+          --settings-showcase        with --screenshot: capture the settings menu's Graphics page (every tab, a preset with changes, the preset list, Save as, Low quality, Faithful)
           --title-preview            with --screenshot: capture the staged Meitou title scene
           --no-population            no town residents or movement (an empty world)
           --new-game [start]         a new game as the NEW_GAME_STARTOFF start (default Wanderer): the player squad at its town, camera on it
@@ -137,6 +140,7 @@ sealed class GameOptions
             {
                 case "--ui-showcase": g.UiShowcase = true; break;
                 case "--ui-panel": g.UiPanel = Next(); break;
+                case "--settings-showcase": g.SettingsShowcase = true; break;
                 case "--fps-limit": g.FpsLimit = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--seed": g.Seed = ulong.Parse(Next(), CultureInfo.InvariantCulture); g.SeedGiven = true; break;
                 case "--ui":

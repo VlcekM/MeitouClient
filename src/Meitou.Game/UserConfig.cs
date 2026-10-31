@@ -149,6 +149,15 @@ sealed class UserConfig
     /// <summary>The Graphics quality preset (Low, Medium, High, Ultra, Custom): the game saves the one its settings sit at; one the launcher chose is applied at start
     /// unless the settings already sit at it (<c>SettingsMenu.ApplySavedPreset</c>). Null: nothing saved yet.</summary>
     public string? GraphicsPreset { get; set; }
+    /// <summary>The active look preset's name (Graphics; null: Meitou); the presets are files in the <c>presets</c> folder beside this file (docs/native-ui.md "Settings").</summary>
+    public string? LookPreset { get; set; }
+    /// <summary>Whether the look is Faithful (the game as it ships, a starting point the player may change) rather than a Meitou preset (Graphics); null: decided
+    /// from the switches (all on the game's side: Faithful).</summary>
+    public bool? FaithfulLook { get; set; }
+    /// <summary>The quality tier last chosen (0 Low to 3 Ultra; Graphics); at Low the costliest look switches are held off unless in <see cref="KeepAtLow"/>.</summary>
+    public int QualityTier { get; set; } = 2;
+    /// <summary>The costly look switches kept on at Low quality (their labels).</summary>
+    public List<string> KeepAtLow { get; set; } = [];
     public Dictionary<string, string> Bindings { get; set; } = [];
     /// <summary>The Meitou skin per race, where chosen against the default (RACE string id to on or off; Graphics > Skin): <c>CharacterRenderer.SkinRaces</c>.</summary>
     public Dictionary<string, bool> SkinRaces { get; set; } = [];

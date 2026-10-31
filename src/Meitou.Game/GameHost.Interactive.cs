@@ -154,12 +154,14 @@ sealed partial class GameHost
                 if (!SessionSliders.Contains(slider.Label) && config.Graphics.TryGetValue(slider.Label, out float v) && !(o.Post.Upscale.Explicit && WorldFrame.UpscalerSliders.Contains(slider.Label))
                     && !(slider.Label == WorldFrame.TextureQualitySlider && Environment.GetCommandLineArgs().Contains("--texture-quality")))   // the saved one was applied before the boot (Program)
                     slider.Set(Math.Clamp(v, slider.Min, slider.Max));
+        // The look as the command line chose it is read from the switches again.
+        if (Environment.GetCommandLineArgs().Any(arg => arg is "--meitou" or "--faithful")) config.FaithfulLook = null;
         // The switches as saved, then the saved preset (one the launcher chose), unless the command line chose them (--meitou / --faithful):
         // switches it moved would read as another preset.
         if (panel is not null && !lowEnd && !Environment.GetCommandLineArgs().Any(a => a is "--meitou" or "--faithful"))
         {
             foreach (var toggle in panel.Toggles)
-                if (config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
+                if (!SettingsMenu.HiddenSwitch(toggle.Label) && config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
             panel.ApplySavedPreset();
         }
         var stats = new List<string>();
@@ -349,7 +351,7 @@ sealed partial class GameHost
             if (k == SilkKey.F9 && ctrl) { fpsVisible = !fpsVisible; return; }
             if (KeyMap.Map(k) is { } key)
             {
-                if (shiftDown && key == EngineKey.F1) { Console.WriteLine(meitou.Toggle()); return; }
+                if (shiftDown && key == EngineKey.F1) { Console.WriteLine(meitou.Toggle()); config.FaithfulLook = !meitou.On; return; }
                 if (shiftDown && key == EngineKey.F2 && switches.FirstOrDefault(e => e.Id == "skin") is { } skin)   // the skin switch alone, to compare faces
                 { skin.IsMeitou = !skin.IsMeitou; Console.WriteLine($"skin      {skin.State}"); return; }
                 if (shiftDown && key == EngineKey.F11) { ToggleNavOverlay(); return; }

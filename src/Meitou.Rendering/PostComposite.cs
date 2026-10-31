@@ -181,7 +181,7 @@ sealed class PostComposite : IDisposable
         // The composite: auto exposure (0.55 / adapted), the game's tone map, grade and dither.
         bool smaaOn = o.Smaa && !temporal && ldr is not null;
         bool fxaaOn = o.Fxaa && !smaaOn && !temporal && ldr is not null;
-        bool hazeOn = o.HeatHaze && HasHeatHaze && HeatHazeAmount * o.HeatHazeStrength > 0 && ldr is not null;
+        bool hazeOn = o.HeatHaze && HasHeatHaze && HeatHazeAmount * o.HeatHazeScale > 0 && ldr is not null;
         var compositeTarget = fxaaOn || smaaOn || hazeOn ? ldr! : target;
         var p = composite;
         p.Bind(sceneSlot, sceneSampler with { View = scene.View() });
@@ -191,12 +191,12 @@ sealed class PostComposite : IDisposable
         p.Set(useAo, 0);
         p.Set(dither, o.Dither ? 1 : 0);
         p.Set(auto, 1);
-        p.Set(tone, (int)o.ToneMap);
+        p.Set(tone, (int)o.ToneMapUsed);
         p.Set(toneMix, Math.Clamp(o.ToneMix, 0, 1));
-        p.Set(grade, o.Grade ? 1 : 0);
+        p.Set(grade, o.GradeUsed ? 1 : 0);
         p.Set(saturation, PostOptions.Saturation);
         p.Set(contrast, PostOptions.Contrast);
-        p.Set(night, Math.Clamp(o.NightGradeStrength, 0, 1));
+        p.Set(night, Math.Clamp(o.NightGradeAmount, 0, 1));
         p.Set(balance, o.Balance);
         p.Set(sceneSize, 0f, 0f);
         Fullscreen(cmd, composite, compositeTarget, compositeTarget.Desc.Width, compositeTarget.Desc.Height);
@@ -225,7 +225,7 @@ sealed class PostComposite : IDisposable
             h.P.Bind(h.Image, plainSampler with { View = picture.View() });
             double phase = HeatHazeHours * 100;
             h.P.Set(h.Phase, (float)(phase - Math.Floor(phase)));
-            h.P.Set(h.Amount, HeatHazeAmount * o.HeatHazeStrength);
+            h.P.Set(h.Amount, HeatHazeAmount * o.HeatHazeScale);
             float tanY = MathF.Tan(inputs.FieldOfView * 0.5f);
             h.P.Set(h.Tan, tanY * inputs.Aspect, tanY);
             h.P.Set(h.NearFar, inputs.Near, inputs.Far);

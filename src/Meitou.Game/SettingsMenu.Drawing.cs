@@ -50,7 +50,7 @@ sealed partial class SettingsMenu
                 kind == "window" ? new(0.12f, 0.11f, 0.09f, 1) : Vector4.Zero, Clip: clip, Pickable: false));
     }
 
-    void Button(string label, UiRect at, Action action, bool selected = false, bool primary = false, UiRect? clip = null)
+    void Button(string label, UiRect at, Action action, bool selected = false, bool primary = false, UiRect? clip = null, float textInset = 0)
     {
         bool hovered = at.Contains(pointer.X, pointer.Y) && (clip is null || clip.Value.Contains(pointer.X, pointer.Y));
         float hover = Hover(label, hovered);
@@ -64,7 +64,7 @@ sealed partial class SettingsMenu
             Opacity(first, hover);
         }
         var ink = primary && Meitou ? new Vector4(20 / 255f, 8 / 255f, 6 / 255f, 1) : System.Numerics.Vector4.Lerp(MainInk, LightInk, selected ? 1 : hover);
-        Text(label, new(drawn.X + 10 * scale, drawn.Y, drawn.Width - 20 * scale, drawn.Height), primary ? 15 : 13, ink, "Center", clip);
+        Text(label, new(drawn.X + 10 * scale, drawn.Y, drawn.Width - (20 + textInset) * scale, drawn.Height), primary ? 15 : 13, ink, "Center", clip);
         if (clip is null || at.Intersect(clip.Value).Height >= at.Height - 1)
             hits.Add(new(at, action));
     }
@@ -111,12 +111,16 @@ sealed partial class SettingsMenu
         float top = 98;
         if (page == 1)
         {
+            // The Look and Quality rows (SettingsMenu.Looks.cs), then the tabs, one per subject, across the page.
+            DrawLookBar();
+            const float tabGap = 6;
+            float tabWidth = (888 - tabGap * (GraphicsPages.Length - 1)) / GraphicsPages.Length;
             for (int i = 0; i < GraphicsPages.Length; i++)
             {
                 int index = i;
-                Button(GraphicsPages[i], R(212 + i * 896f / GraphicsPages.Length, 98, 896f / GraphicsPages.Length - 8, 30), () => { graphicsPage = index; scroll = scrollTarget = 0; contentProgress = 0; focus = -1; }, graphicsPage == i);
+                Button(GraphicsPages[i], R(212 + i * (tabWidth + tabGap), 174, tabWidth, 30), () => { graphicsPage = index; scroll = scrollTarget = 0; contentProgress = 0; focus = -1; }, graphicsPage == i);
             }
-            top = 134;
+            top = 212;
         }
         viewport = R(212, top, 888, 666 - top);
         var entries = Entries();
@@ -144,9 +148,10 @@ sealed partial class SettingsMenu
         Button("Save", R(960, 684, 140, 32), () => Visible = false, primary: true);
         if (openChoice is { } choice) DrawChoice(choice);
         else animatedChoice = null;
+        if (naming) DrawNameDialog();
         if (rebinding is { } binding) DrawMessage("Assign a control", notice.Length > 0 ? notice : $"{ActionLabel(binding)}: press a key or mouse button.\nDelete clears the binding. Esc cancels.", () => rebinding = null);
         if (resetPending || pendingAction is not null)
-            DrawMessage(resetPending ? "Restore defaults?" : "Clear cached files?", resetPending ? "Restore all preferences and controls to their defaults?" : confirmation,
+            DrawMessage(resetPending ? "Restore defaults?" : confirmTitle, resetPending ? "Restore all preferences, controls and the look to their defaults?" : confirmation,
                 () => { resetPending = false; pendingAction = null; }, () =>
                 {
                     if (resetPending) Reset();
@@ -178,14 +183,39 @@ sealed partial class SettingsMenu
         return Math.Max(1, (int)MathF.Ceiling(wrapped / Math.Max(1, line)));
     }
 
+    /// <summary>The hint's width: the column less the indent, and less the Reset link's room on a changed row.</summary>
+    static float HintWidth(Entry entry) => 456 - Indent(entry) - (entry is { Changed: true, Reset: not null } ? 56 : 0);
+
+    /// <summary>
+    /// The game's own arrow (the floor selector's: a grey chevron on a dark plate, gold when highlighted, <c>Kenshi_FloorArrowUpSkin</c> / <c>DownSkin</c>), 21 × 14 units
+    /// centred on (<paramref name="x"/>, <paramref name="y"/>) in pixels: down opens (a closed group, a list), up closes (an open group).
+    /// </summary>
+    void Arrow(float x, float y, bool down, bool lit, UiRect? clip = null)
+    {
+        float w = MathF.Round(21 * scale), h = MathF.Round(14 * scale);
+        controls.Add(new("settings-arrow", "Widget", new(MathF.Round(x - w / 2), MathF.Round(y - h / 2), w, h), "", "", down ? "Kenshi_FloorArrowDownSkin" : "Kenshi_FloorArrowUpSkin", true,
+            new Dictionary<string, string> { ["State"] = lit ? "highlighted" : "normal" }, Vector4.Zero, Clip: clip, Pickable: false));
+    }
+
+    /// <summary>A button that opens a list: its text, and the list's arrow against its right edge.</summary>
+    void DropDown(string label, UiRect at, Action open, UiRect? clip = null)
+    {
+        Button(label, at, open, clip: clip, textInset: 26);
+        Arrow(at.X + at.Width - 18 * scale, at.Y + at.Height / 2, true, at.Contains(pointer.X, pointer.Y), clip);
+    }
+
+    /// <summary>How far a Graphics row's text sits right of the column: the group chevron's room, and one step more inside a group.</summary>
+    static float Indent(Entry entry) => entry.Raw is not null || entry.GroupId is not null ? 28 + entry.Depth * 24 : 0;
+
     /// <summary>A picture under an entry's row: 560 units wide, the luckyren Mode image's proportions, with 8 units above it.</summary>
     const float PictureWidth = 560, PictureHeight = 72, PictureGap = 8;
 
     float RowHeight(Entry entry)
     {
-        float label = TextHeight(Loc.Tr(entry.Label), 456, 14);
+        float indent = Indent(entry);
+        float label = TextHeight(Loc.Tr(entry.Label), 456 - indent, entry.Depth > 0 ? 13 : 14);
         if (entry.Hint.Length == 0) return Math.Max(36, label + 4);
-        return Math.Max(36, 2 + label + 1 + TextHeight(Loc.Tr(entry.Hint), 456, 11) + 2);
+        return Math.Max(36, 2 + label + 1 + TextHeight(Loc.Tr(entry.Hint), HintWidth(entry), 11) + 2);
     }
 
     float EntryHeight(Entry entry) => RowHeight(entry) + (entry.Picture is null ? 0 : PictureGap + PictureHeight);
@@ -201,40 +231,70 @@ sealed partial class SettingsMenu
                 controls.Add(new("settings-picture", "ImageBox", R(212, y + row - 4, PictureWidth, PictureHeight), "", "", "", true,
                     new Dictionary<string, string> { ["ImageTexture"] = picture }, Vector4.Zero, Clip: viewport, Pickable: false));
         }
+        float indent = Indent(entry), labelSize = entry.Depth > 0 ? 13 : 14;
         string translatedLabel = Loc.Tr(entry.Label);
-        float labelHeight = TextHeight(translatedLabel, 456, 14);
-        float labelBoxHeight = entry.Hint.Length > 0 ? labelHeight + 1 : row - 4;
-        bool labelWrap = TextLines(translatedLabel, 456, 14) > 1;
-        Text(entry.Label, R(212, y + 2, 456, labelBoxHeight), 14, clip: viewport, wrap: labelWrap);
+        float labelHeight = TextHeight(translatedLabel, 456 - indent, labelSize);
+        bool labelWrap = TextLines(translatedLabel, 456 - indent, labelSize) > 1;
+        // A feature's settings sit in a darker band with a brass edge under its header; an open header is lightly lit.
+        if (entry.Depth > 0)
+        {
+            Rect(R(212, y, 888, EntryHeight(entry)), new(0, 0, 0, 0.28f), viewport);
+            Rect(R(214, y, 2, EntryHeight(entry)), Brass with { W = 0.55f }, viewport);
+        }
+        else if (entry.Open == true) Rect(R(212, y, 888, row), MainInk with { W = 0.06f }, viewport);
+        if (entry is { Open: { } open, GroupId: { } group })
+        {
+            // A feature's header: the arrow, and a click anywhere on its text opens or closes its settings.
+            var header = R(212, y, 456, row);
+            if (header.Intersect(viewport).Height >= header.Height - 1) hits.Add(new(header, () => ToggleGroup(group)));
+            var mark = R(212, y + 2, 22, entry.Hint.Length > 0 ? 20 : 32);
+            Arrow(mark.X + mark.Width / 2, mark.Y + mark.Height / 2, !open, header.Contains(pointer.X, pointer.Y), viewport);
+        }
+        // A setting that differs from the preset: its name in brass and a Reset link back to the preset's value (a header's resets the feature).
+        var nameInk = entry.Changed ? Brass : MainInk;
+        Text(entry.Label, R(212 + indent, y + 2, 456 - indent, entry.Hint.Length > 0 ? labelHeight + 1 : row - 4), labelSize, nameInk, clip: viewport, wrap: labelWrap);
+        if (entry.Impact is { } impact)
+            Text(impact, R(212, y + 2, 456, 20), 11, impact.StartsWith("High", StringComparison.Ordinal) ? Brass : impact.StartsWith("Medium", StringComparison.Ordinal) ? MainInk : MutedInk,
+                "Right VCenter", viewport);
+        if (entry is { Changed: true, Reset: { } reset })
+        {
+            var link = R(612, y + 18, 56, 16);
+            bool over = link.Contains(pointer.X, pointer.Y) && viewport.Contains(pointer.X, pointer.Y);
+            Text("Reset", link, 11, over ? LightInk : Brass, "Right VCenter", viewport);
+            Rect(new(link.X + link.Width - 30 * scale, link.Y + link.Height - scale, 30 * scale, scale), (over ? LightInk : Brass) with { W = 0.6f }, viewport);
+            if (link.Intersect(viewport).Height >= link.Height - 1) hits.Add(new(link, reset));
+        }
         if (entry.Hint.Length > 0)
         {
-            string hint = Loc.Tr(entry.Hint);
-            float hintHeight = TextHeight(hint, 456, 11);
-            float hintY = y + 2 + labelHeight + 1;
-            Text(entry.Hint, R(212, hintY, 456, hintHeight + 1), 11, MutedInk, "Left Top", viewport, wrap: true);
+            float hintHeight = TextHeight(Loc.Tr(entry.Hint), HintWidth(entry), 11);
+            Text(entry.Hint, R(212 + indent, y + 2 + labelHeight + 1, HintWidth(entry), hintHeight + 1), 11, entry.Warn ? Brass : MutedInk, "Left Top", viewport, wrap: true);
         }
-        if (entry.Toggle is { Remaster: true } remaster)
+        if (entry.Toggle is { Remaster: true, Optional: false } remaster)
         {
             // A Faithful / Meitou switch: both sides as buttons, the active one marked.
             bool meitou = remaster.Get();
             if (remaster.OnOff) Segmented(R(860, y + (row - 22) / 2, 240, 22), meitou ? 1 : 0, i => remaster.Set(i == 1), "Faithful (off)", "Meitou (on)");
             else Segmented(R(920, y + (row - 22) / 2, 180, 22), meitou ? 1 : 0, i => remaster.Set(i == 1));
         }
+        // A switch with its own words (Hear from: Character / Camera): one button showing the current side.
+        else if (entry.Toggle is { Text: { } words } worded)
+            Button(words(), R(976, buttonY, 124, 26), () => worded.Set(!worded.Get()), worded.Get(), clip: viewport);
+        // An optional effect (bloom, in neither look) or a plain setting: Off | On in the same control.
+        else if (entry.Toggle is { } toggle)
+            Segmented(R(920, y + (row - 22) / 2, 180, 22), toggle.Get() ? 1 : 0, i => toggle.Set(i == 1), "Off", "On");
         else if (entry is { Segmented: true, Choice: { } sides })
             Segmented(R(860, y + (row - 22) / 2, 240, 22), sides.Current(), sides.Choose, "All Faithful", "All Meitou");
-        else if (entry.Toggle is { } toggle)
-            Button(toggle.Text?.Invoke() ?? (toggle.Get() ? "On" : "Off"), R(976, buttonY, 124, 26), () => toggle.Set(!toggle.Get()), toggle.Get(), clip: viewport);
         else if (entry.Choice is { } choice)
         {
             var options = choice.Options();
             int index = choice.Current();
             string current = Loc.Tr(index >= 0 && index < options.Count ? options[index] : "Unavailable");
             var at = R(688, buttonY, 412, 26);
-            Button(current + "   v", at, () =>
+            DropDown(current, at, () =>
             {
                 openChoice = choice; choiceSelection = Math.Clamp(choice.Current(), 0, Math.Max(0, options.Count - 1));
                 choiceScroll = Math.Max(0, choiceSelection - 3); choiceAnchor = at; focus = -1;
-            }, clip: viewport);
+            }, viewport);
         }
         else if (entry.Slider is { } slider)
         {
@@ -269,7 +329,7 @@ sealed partial class SettingsMenu
             Rect(track with { Width = track.Width * slider.Fraction }, Brass with { W = 0.75f }, viewport);
             if (slider.Faithful is { } faithful) RemasterMark(slider, faithful, track, FaithfulInk);
             if (slider.Meitou is { } meitou) RemasterMark(slider, meitou, track, Brass);
-            if (slider.Faithful is { } f && slider.Meitou is { } m)
+            if (slider.Faithful is { } f && slider.Meitou is { } m && entry.Depth == 0)   // inside a feature its header has the switch
             {
                 // The quick switch: jump to the game's value or Meitou's; the one the slider is at is marked.
                 float now = slider.Get(), near = 0.002f * (slider.Max - slider.Min);
