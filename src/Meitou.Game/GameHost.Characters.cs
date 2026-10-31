@@ -111,8 +111,11 @@ sealed partial class GameHost
             if (previousById.TryGetValue(c.Id, out var found))
             {
                 before = found;
-                position = Vector3.Lerp(found.Position, c.Position, alpha);
-                yaw = Meitou.Engine.Time.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
+                if (!Reanchored(found, c))
+                {
+                    position = Vector3.Lerp(found.Position, c.Position, alpha);
+                    yaw = Meitou.Engine.Time.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
+                }
             }
             Quaternion? rotation = null;
             if (c.Carry is { } carry)
@@ -138,7 +141,7 @@ sealed partial class GameHost
             list.Add(new CharacterInstance(DrawKey(c.Id), c.Appearance, position, yaw, poses)
             {
                 WeaponDrawn = c.WeaponDrawn, Scale = c.Scale, Hidden = hiddenIndoors.Contains(c.Id), FullRateAnimation = c.IsPlayer, Rotation = rotation,
-                Bones = Blend(before?.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
+                Bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
             });
         }
     }
@@ -230,8 +233,11 @@ sealed partial class GameHost
             if (previousById.TryGetValue(c.Id, out var found))
             {
                 before = found;
-                position = Vector3.Lerp(found.Position, c.Position, alpha);
-                yaw = Meitou.Engine.Time.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
+                if (!Reanchored(found, c))
+                {
+                    position = Vector3.Lerp(found.Position, c.Position, alpha);
+                    yaw = Meitou.Engine.Time.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
+                }
             }
             Quaternion? rotation = null;
             if (c.Carry is { } carry)
@@ -265,7 +271,7 @@ sealed partial class GameHost
             list.Add(new CharacterInstance(DrawKey(c.Id), look, position, yaw, poses)
             {
                 WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Scale = c.Scale, Hidden = hiddenIndoors.Contains(c.Id), FullRateAnimation = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null,
-                Bones = Blend(before?.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
+                Bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
                 BlendFrom = glide?.From, Blend = glide?.Blend ?? 0, Build = c.Build, Rotation = rotation, Blood = c.BloodAmounts,
             });
             // The editor's next preview look, listed hidden so the renderer prepares it while the last one is still shown.
@@ -293,6 +299,14 @@ sealed partial class GameHost
         pending = held;
         return look;
     }
+
+    /// <summary>
+    /// Whether the character's place changed meaning between the two ticks: a whole ragdoll moves it to its root body the tick it starts and back onto the ground the tick
+    /// it gets up (docs/game/ragdolls.md "Per frame"), and its pose is placed there. Such a tick is drawn where it ends, not between: from the last place, the body sank by its
+    /// hip height into the ground for a frame (or hopped up as it rose).
+    /// </summary>
+    static bool Reanchored(CharacterSnapshot before, CharacterSnapshot now) =>
+        (before.Ragdoll is null) != (now.Ragdoll is null) || before.Ragdoll is { Weight: >= 1 } && now.Ragdoll is { Weight: < 1 };
 
     /// <summary>
     /// A ragdoll's bones between the last two ticks: rotations by nlerp, root positions and the get-up weight linearly; a bone only in the newer one as it is. Written into
