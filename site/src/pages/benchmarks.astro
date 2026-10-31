@@ -1,0 +1,362 @@
+---
+// Benchmarks: Meitou's daily performance numbers in the site's header and footer. bench/tools/generate.py builds
+// public/bench/bench.json when the site is built (see .github/workflows/site-image.yml); src/scripts/bench.js fetches it
+// and draws everything. The ?v= on the fetch is the file's hash, so a cached copy can never meet a newer page.
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import '@fontsource/exo-2/700.css';
+import Base from '../layouts/Base.astro';
+
+const file = join(process.cwd(), 'public', 'bench', 'bench.json');
+if (!existsSync(file)) throw new Error('public/bench/bench.json is missing: run `python3 bench/tools/generate.py --out site/public/bench/bench.json` from the repository root (needs the full git history).');
+const version = createHash('sha1').update(readFileSync(file)).digest('hex').slice(0, 10);
+const backgrounds = [1, 2, 3, 4].map((i) => `/roadmap-bg/bg-${i}.jpg`);
+---
+<Base title="Benchmarks - Meitou" description="Daily performance benchmarks of Meitou on several machines, with what changed between benchmarked commits." kofiTop>
+  <span slot="center">Benchmark page by <a href="https://github.com/Demitrix2k">@DemitriX</a></span>
+  <div class="backdrop" aria-hidden="true" data-bgs={JSON.stringify(backgrounds)}><div></div><div></div></div>
+  <div class="bn" id="bench-root" data-v={version}>
+    <header>
+      <h1>Meitou daily benchmarks</h1>
+      <p>Benchmarks of Meitou, run after each upstream master update. Lower is better, except fps.</p>
+    </header>
+
+    <section id="headline-sec">
+      <h2>Latest master</h2>
+      <div id="headline"></div>
+    </section>
+
+    <section id="charts-sec">
+      <h2>Over time</h2>
+      <div id="controls" class="controls"></div>
+      <div id="samecommit" hidden></div>
+      <div id="scenarios"></div>
+    </section>
+
+    <details class="plain" id="breakdown-sec">
+      <summary>Where the frame time goes <span class="q" tabindex="0" title="CPU and GPU lines run in parallel and don't add up.">(?)</span></summary>
+      <div id="breakdown"></div>
+    </details>
+
+    <section id="timeline-sec">
+      <h2>Changes between benchmarks <span class="q" id="tlq" tabindex="0" title="From upstream commit messages, unreviewed">(?)</span></h2>
+      <div id="timeline"></div>
+    </section>
+
+    <section id="compare-sec" hidden>
+      <h2>Compare two commits</h2>
+      <p class="muted small">Pick A (before) and B (after).</p>
+      <div id="compare"></div>
+    </section>
+
+    <details class="plain method" id="method">
+      <summary>How this is measured</summary>
+      <h3>Setup</h3>
+      <p class="muted">Fixed for every run, so numbers from different days are comparable.</p>
+      <dl class="setup">
+        <div><dt>Build</dt><dd>Native Linux build of upstream <code>master</code></dd></div>
+        <div><dt>Game data</dt><dd>Clean, unmodded game data (GOG copy)</dd></div>
+        <div><dt>Save</dt><dd>The same frozen save every run: two player bases; never played or saved over</dd></div>
+        <div><dt>Graphics</dt><dd>Full settings</dd></div>
+        <div><dt>Measurement</dt><dd>MangoHud frame-time logging; frame metrics come from the game's bench frames</dd></div>
+        <div><dt>Machines</dt><dd>See "Machines" below</dd></div>
+        <div><dt>Run by</dt><dd>Anyone with the dev kit in <code>bench/kit/</code>, after each upstream master update</dd></div>
+      </dl>
+      <h3>Scenarios</h3>
+      <p>Two scenarios are run: the <strong>play benchmark</strong> is upstream's own <code>--play-bench</code>
+      (camera segments idle, orbit, zoom, pan); the <strong>base switch</strong> jumps the camera four times between the two bases.
+      "Slow-world tick" is the game's own timing of its slowest simulation ticks.</p>
+      <h3 id="method-runs">Runs and series</h3>
+      <p>Each benchmark is run twice back-to-back: run 1 may be cache-cold (disk and shader cache) and often looks worse, so the page shows run 2 (warm) by default and never averages runs.
+      A series is a stretch of data taken with one procedure, and a jump across a series break on the charts may come from the procedure rather than the code.</p>
+      <ul id="series-list"></ul>
+      <h3>Off-target commits</h3>
+      <p>A benchmark target is a commit everyone is asked to run; an off-target commit is any other (for example an older one run later to fill in history).
+      It is drawn faded and unconnected in the charts and left out of comparisons between machines.</p>
+    </details>
+
+    <section class="minor" id="machines-sec">
+      <h2>Machines</h2>
+      <div id="machines"></div>
+      <details class="plain" id="coverage-det">
+        <summary>Coverage: which machine ran which commit</summary>
+        <div id="coverage"></div>
+      </details>
+    </section>
+
+    <section class="minor" id="contribute-sec">
+      <h2>Contribute</h2>
+      <p class="muted small">Add your machine by pull request: <a href="https://github.com/VlcekM/MeitouClient/blob/master/bench/CONTRIBUTING.md">how</a>.</p>
+      <div id="standard"></div>
+    </section>
+
+    <p class="muted small">Raw data: <a href={`/bench/bench.json?v=${version}`}>bench.json</a></p>
+    <div id="tip" role="tooltip" hidden></div>
+    <noscript><p>This page needs JavaScript to draw the charts; the numbers are in <a href="/bench/bench.json">bench.json</a>.</p></noscript>
+  </div>
+</Base>
+
+<script>
+  import '../scripts/bench.js';
+</script>
+
+<script is:inline>
+  // Backdrop: a random screenshot at load, then a different one every 20 s, cross-faded (not while the tab is hidden).
+  (() => {
+    const box = document.querySelector('.backdrop'), bgs = JSON.parse(box.dataset.bgs), layers = box.children;
+    let cur = Math.floor(Math.random() * bgs.length), front = 0;
+    layers[0].style.backgroundImage = `url(${bgs[cur]})`;
+    layers[0].classList.add('on');
+    setInterval(() => {
+      if (document.hidden) return;
+      let next = Math.floor(Math.random() * (bgs.length - 1)); if (next >= cur) next++;
+      const img = new Image();
+      img.onload = () => {
+        const back = layers[1 - front];
+        back.style.backgroundImage = `url(${bgs[next]})`;
+        back.classList.add('on'); layers[front].classList.remove('on');
+        front = 1 - front; cur = next;
+      };
+      img.src = bgs[next];
+    }, 20000);
+  })();
+</script>
+
+<style is:global>
+  /* The body and the site frame are transparent on this page so the backdrop shows behind them (html keeps the ground colour). */
+  body:has(.bn), .mt-scene:has(.bn) { background: transparent; }
+  .mt-scene:has(.bn) .top { padding-top: 16px; padding-bottom: 32px; }
+
+  .backdrop, .bn {
+    --bg: #1c1613; --panel: #2a201b; --text: #eadfcb; --muted: #a8977f; --line: #3d312a; --grid: #33281f; --accent: #e07b45;
+    --m0: #6ea0ff; --m1: #f0a53c; --m2: #4ade80; --m3: #c084fc; --m4: #f472b6; --m5: #22d3ee; --m6: #a3e635; --m7: #a8a29e;
+    --bs: 70%; --bl: 65%;
+    --run1: #6ea0ff; --run2: #f0a53c; --brk: #7d6d5a; --good: #7fd09c; --bad: #f08b82; --panel-a: 94%;
+  }
+  .backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: var(--bg); }
+  .backdrop div { position: absolute; inset: -32px; background-size: cover; background-position: center; filter: blur(3px) saturate(.9); opacity: 0; }
+  .backdrop div.on { opacity: 1; }
+  .backdrop::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--bg) 92%, transparent); }
+  @media (prefers-reduced-motion: no-preference) { .backdrop div { transition: opacity 1.5s ease; } }
+
+  /* Everything the script draws sits under .bn (nested rules), so nothing leaks to other pages. */
+  .bn { max-width: 1080px; margin: 0 auto; padding: 8px 0 64px; color: var(--text); font: 15px/1.5 var(--font-exo); min-width: 0; }
+  .bn h1 { margin: 0 0 .5rem; font-size: 2.3rem; font-weight: 700; line-height: 1.1; letter-spacing: .01em; color: var(--text); }
+  .bn > header p { margin: 0; color: var(--text); font-size: 1.05rem; }
+  .bn :is(h2, h3) { color: var(--text); }
+  .bn {
+  h2{font-size:1.45rem;font-weight:600;margin:1.6rem 0 .5rem;letter-spacing:.01em}
+  h3{font-size:1.1rem;font-weight:600;margin:0}
+  a{color:var(--accent)}
+  code{font:.9em ui-monospace,Menlo,Consolas,monospace;background:var(--grid);padding:.05em .3em;border-radius:4px}
+  .muted{color:var(--muted)}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:14px 18px;margin:16px 0}
+  & > section > h2{margin-top:2rem}
+  .box h2{margin-top:.2rem}
+  .setup{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 24px;margin:.6rem 0}
+  .setup dt{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .setup dd{margin:0}
+  summary{cursor:pointer;font-weight:600}
+  .toolbar{margin:8px 0}
+  select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.9rem;color:var(--muted);margin:.3rem 0 .6rem}
+  .legend svg{vertical-align:-3px}
+  .charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  @media (max-width:700px){.charts{grid-template-columns:1fr}}
+  .chart{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:10px 10px 4px;min-width:0}
+  .chart h3{font-size:.95rem;padding:0 4px}
+  .chart svg{display:block;overflow:visible}
+  .chart text{fill:var(--muted);font-size:12.5px;font-family:inherit}
+  .chart .grid{stroke:var(--grid);stroke-width:1}
+  .chart .brk{stroke:var(--brk);stroke-dasharray:4 3;stroke-width:1}
+  .chart .hit{fill:transparent;cursor:pointer}
+  .chart .brklabel{fill:var(--muted);font-size:12px}
+  table{border-collapse:collapse;width:100%;font-size:.92rem}
+  th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left;white-space:normal}
+  th{color:var(--muted);font-weight:600;font-size:.8rem}
+  .tablewrap{overflow-x:auto}
+  .good{color:var(--good)} .bad{color:var(--bad)}
+  .scen{margin:20px 0}
+  .scen-h{margin:0 0 .5rem;font-size:1.1rem}
+  .scen-h .muted{font-weight:400;font-size:.92rem}
+  .tl{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:12px 16px;margin:12px 0}
+  .tl{padding:8px 14px;margin:8px 0}
+  .tl[hidden]{display:none}
+  .tl-sum{cursor:pointer;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;font-size:.92rem}
+  .tl-sum .when,.tl-n{color:var(--muted);font-size:.85rem}
+  .tl-m{white-space:nowrap}
+  .tl-d{font-size:.82rem;font-weight:600}
+  .tl-flat{color:var(--muted)}
+  .tl-body{margin-top:8px}
+  .tl-body table{font-size:.82rem}
+  .tl-body th,.tl-body td{padding:3px 6px}
+  .tl-more{display:block;margin:8px auto;font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 16px;cursor:pointer}
+  .tl-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
+  .tl-head .when{color:var(--muted);font-size:.9rem}
+  .chip{display:inline-block;font-size:.8rem;border:1px solid var(--line);border-radius:999px;padding:1px 9px;margin:2px 4px 2px 0;background:var(--bg)}
+  .chip b{font-weight:600}
+  .chip.plat{background:var(--panel)}
+  .tl details{margin:6px 0}
+  .tl ul{margin:.3rem 0 .5rem;padding-left:1.2rem}
+  .tl li{margin:2px 0;font-size:.92rem}
+  .tl .sha{font:.82rem ui-monospace,Menlo,Consolas,monospace}
+  #tip{position:fixed;z-index:10;pointer-events:none;background:var(--panel);color:var(--text);border:1px solid var(--line);
+    border-radius:8px;padding:6px 10px;font-size:.85rem;box-shadow:0 4px 14px rgba(0,0,0,.2);max-width:260px}
+  .dot{display:inline-block;width:.7em;height:.7em;border-radius:50%;margin-right:.35em;vertical-align:baseline}
+  #machines{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px}
+  .mcard{display:flex;gap:10px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:10px 14px;cursor:default}
+  .mcard input{margin-top:.35rem}
+  .mbody{min-width:0;font-size:.92rem;overflow-wrap:anywhere}
+  .mtitle{font-size:1rem}
+  .controls{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}
+  .ctl{flex:1 1 320px;border:1px solid var(--line);border-radius:20px;background:var(--panel);padding:8px 14px;margin:0}
+  .ctl legend{font-weight:600;padding:0 6px}
+  .ctl label{display:block;margin:2px 0}
+  .small{font-size:.9rem;margin:.4rem 0 .2rem}
+  .reflab{margin-left:1.5rem}
+  .caveat{border:1px solid var(--bad);border-radius:20px;padding:8px 14px;background:var(--panel);margin:8px 0}
+  #samecommit h3{margin:.8rem 0 .3rem}
+  #samecommit .sha{font:.9rem ui-monospace,Menlo,Consolas,monospace}
+  .tl-head .who{font-size:.9rem}
+  .chart .ml{fill:none;stroke-width:1.6}
+  .chart .ml.dashed{stroke-dasharray:5 3}
+  .chart .ref100{stroke:var(--muted);stroke-dasharray:2 3;stroke-width:1}
+  .chart .p1{stroke:var(--panel);stroke-width:1.5}
+  .chart .p2{fill:var(--panel);stroke-width:2}
+  .chip.off{border-color:var(--bad);color:var(--bad)}
+  .chart .off{opacity:.3}
+  .cov th{text-align:center;vertical-align:bottom;white-space:nowrap}
+  .cov th.rel{color:var(--text);font-weight:700}
+  .cov td.yes{text-align:center;color:var(--good);font-weight:700}
+  .cov td.no{text-align:center;color:var(--muted)}
+  .cov th:first-child{text-align:left}
+  .cmp-bar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:8px 0}
+  .cmp-pick select{max-width:100%}
+  .cmp-quick{display:flex;flex-wrap:wrap;gap:6px}
+  .cmp-quick button{font:inherit;font-size:.88rem;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:3px 10px;cursor:pointer}
+  .cmp-h{margin:1rem 0 .3rem}
+
+  .bd{margin-top:18px}
+  .bd .radio{margin-right:12px;font-size:.92rem}
+  .bdlegend{display:block}
+  .bdgrp{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;margin:4px 0}
+  .bdchip{font:inherit;font-size:.82rem;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:0 9px 0 6px;cursor:pointer;display:inline-flex;gap:5px;align-items:center}
+  .bdchip.off{opacity:.45;text-decoration:line-through}
+  .bdchip svg{overflow:visible}
+  .chart .bl{fill:none;stroke-width:1.6}
+  .chart .bl.tot{stroke-width:2.6;stroke-dasharray:6 3}
+  .chart .bl.dashed{stroke-dasharray:4 3}
+  .chart .bp.off{opacity:.35}
+  .cov th.offcol,.cov td.offcol{opacity:.45}
+
+  .hl{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:12px}
+  .hl .box{margin:0}
+  .hlcard h3{margin-bottom:.5rem}
+  .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  @media (max-width:560px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .tile .l{font-size:.82rem;color:var(--muted)}
+  .tile .v{font-size:1.5rem;font-weight:700;line-height:1.2}
+  .tile .v small{font-size:.8rem;font-weight:400;color:var(--muted);margin-left:2px}
+  .tile .d{font-size:.9rem;min-height:1.4em}
+  #headline details.box{margin:12px 0 0}
+  #headline details .box{border:0;padding:6px 0;margin:6px 0}
+  .method h3{margin:1.2rem 0 .3rem}
+  .method > summary,#coverage-det > summary{font-size:1.05rem}
+  .method > summary{padding:2px 0}
+  .howto{margin:.4rem 0}
+  pre{margin:.5rem 0;padding:8px 12px;overflow-x:auto;background:var(--grid);border-radius:8px}
+  pre code{background:none;padding:0}
+  .mcard.compact{display:block}
+  .mcard.compact .mbody > div{display:inline}
+  .mcard.compact .mbody > div + div::before{content:" \00b7  ";color:var(--muted)}
+  #machines:has(.compact){display:block}
+  .legend{margin:.5rem 0}
+  @media (max-width:700px){.box{padding:12px 14px}}
+  .chart svg{max-width:100%;height:auto}
+
+  /* Panels are semi-opaque while a backdrop shows. */
+  .box,.chart,.tl,.mcard,.ctl,.caveat,.bdchip,.cmp-quick button,select,#tip{background:color-mix(in srgb,var(--panel) var(--panel-a),transparent)}
+  .box{backdrop-filter:blur(2px)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* Headline tiles: rounded plates with a coloured accent bar, as the roadmap's status tiles. */
+  .tile{position:relative;overflow:hidden;padding:4px 4px 4px 14px;--c:var(--m0)}
+  .tile::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;border-radius:2px;background:var(--c)}
+  .tile:nth-child(2){--c:var(--m1)}.tile:nth-child(3){--c:var(--m2)}.tile:nth-child(4){--c:var(--m3)}
+  .tile .v{font-weight:700;color:var(--c)}
+
+  .ctl-wide{flex-basis:100%}
+  .mpick-row{display:flex;flex-wrap:wrap;gap:4px 18px}
+  .mpick-item{display:inline-flex!important;align-items:center;gap:4px;margin:2px 0}
+  .linkbtn{background:none;border:0;padding:0;color:var(--accent,#e9a15b);text-decoration:underline;cursor:pointer;font:inherit}
+  #samecommit td:first-child{min-width:13rem}
+
+  /* Quieter page: cards only for the headline and the changes timeline; later sections are plain. */
+  .chart .brk{opacity:.45}
+  .q{font-weight:400;color:var(--muted);font-size:.8em;cursor:help}
+  .hl-sub{margin:.2rem 0 .6rem;font-size:1.15rem}
+  .hl-sub .muted{font-size:.8rem}
+  .verdict{margin:0 0 .6rem;font-weight:600}
+  .verdict.good{color:var(--good)} .verdict.bad{color:var(--bad)}
+  .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .tile .d{font-size:1.7rem;font-weight:700;line-height:1.15;color:var(--muted)}
+  .tile .d.good{color:var(--good)} .tile .d.bad{color:var(--bad)}
+  .tile .v{font-size:.85rem;font-weight:400;color:var(--muted)}
+  .tile .l{font-size:.8rem}
+  .hl-note{margin:.5rem 0}
+  details.allm{margin:10px 0 0}
+  details.allm .cmp-h{font-size:.95rem}
+  .plain{margin:18px 0;padding:8px 0 0;border-top:1px solid var(--line)}
+  .plain > summary{font-size:1.05rem;font-weight:600;color:var(--muted)}
+  .minor{margin:18px 0}
+  .minor h2{font-size:1.05rem;color:var(--muted);margin:.4rem 0 .4rem}
+  #breakdown-sec #breakdown{margin-top:6px}
+  .ctlrow{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .seg button,.seg-btn{font:inherit;font-size:.88rem;color:var(--muted);background:transparent;border:0;padding:3px 14px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:var(--bg);font-weight:600}
+  .seg-btn{border:1px solid var(--line);border-radius:999px}
+  .seg-btn[aria-pressed="true"]{border-color:var(--accent);color:var(--text)}
+  .mcard.compact{background:transparent;border:0;padding:0}
+  .tl-body details.runs{margin:2px 0}
+  .tl-body .small{margin:.2rem 0}
+  @media (max-width:560px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.tile .d{font-size:1.25rem}.tile{padding-left:10px}.tiles{gap:6px}}
+
+  /* Hover / focus feedback (visual only). Hover styles only where a real hover exists; focus-visible everywhere. */
+  .chart .guide{stroke:var(--accent);stroke-width:1;stroke-dasharray:3 3;opacity:0;pointer-events:none}
+  .chart .guide.on{opacity:.7}
+  .chart .hit:focus-visible{outline:none;fill:color-mix(in srgb,var(--accent) 25%,transparent);stroke:var(--accent);stroke-width:2.5}
+  .tile:focus-within,.tl-sum:focus-visible,summary:focus-visible{border-radius:8px}
+  tbody tr:focus-within{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+  @media (hover:hover){
+    tbody tr:hover>*{background:color-mix(in srgb,var(--accent) 20%,transparent)}
+    /* faux bold via text-shadow: real bold widens the text and reflows the columns */
+    tbody tr:hover>td:first-child{color:var(--text);text-shadow:.4px 0 0 currentColor;box-shadow:inset 3px 0 0 var(--accent)}
+    .tile{transition:none;border-radius:10px}
+    .tile:hover{background:color-mix(in srgb,var(--c) 12%,transparent);box-shadow:0 0 0 1px var(--c);transform:translateY(-2px)}
+    summary:hover{background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:8px}
+    .tl:hover{border-color:var(--accent)}
+    .chart .hit:hover{fill:color-mix(in srgb,var(--accent) 25%,transparent);stroke:var(--accent);stroke-width:2.5}
+    .mcard:hover{border-color:var(--accent)}
+    .bdchip:hover,.cmp-quick button:hover,.tl-more:hover{border-color:var(--accent)}
+  }
+  .tile:focus-within{box-shadow:0 0 0 1px var(--c)}
+  summary:focus-visible{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+  @media (prefers-reduced-motion:no-preference){
+    tbody tr>*,summary,.tile,.tl{transition:background-color .12s ease,box-shadow .12s ease,transform .12s ease,border-color .12s ease}
+    .chart .guide{transition:opacity .1s ease}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+  .mpick{display:inline-flex;flex-wrap:wrap;gap:4px 6px}
+  .mchip{display:inline-flex;align-items:center;gap:2px;margin:0;cursor:pointer;font-size:.88rem}
+  .mchip input{margin:0 2px 0 0}
+  .mchip:hover{border-color:var(--accent)}
+
+  #tip{background:var(--panel)!important}
+
+  }
+  @media (max-width: 700px) { .bn h1 { font-size: 1.8rem; } }
+</style>
