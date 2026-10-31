@@ -64,11 +64,13 @@ public sealed class PostOptions
     public float Exposure = 1;
     /// <summary>Presentation-only white balance: the scene's linear colour is multiplied by it before the tone map (the Meitou title warms its light with it); 1, 1, 1 in play.</summary>
     public System.Numerics.Vector3 Balance = System.Numerics.Vector3.One;
-    /// <summary>World units: how far from a point occluders count.</summary>
-    public const float SsaoRadius = 12, SsaoStrength = 4;
+    /// <summary>World units: how far from a point occluders count (at least 3 % of its distance).</summary>
+    public const float SsaoRadius = 6, SsaoStrength = 4;
+    /// <summary>World units: the eye distances over which the occlusion fades out (a detail effect; far geometry is hazy and has little depth precision).</summary>
+    public const float SsaoFadeStart = 1600, SsaoFadeEnd = 6600;
     /// <summary>How much of the occlusion stays on the characters' own pixels (Meitou): 0 none, 1 the same as everywhere else. They still darken the ground round them.</summary>
     public const float SsaoCharacterStrength = 0.25f;
-    /// <summary>How much a character counts as an occluder of the ground and things round it (Meitou): 1 as anything else. At 1 a character lying down left a dark halo as wide as itself (radius 12, strength 4) with a light seam where the half-size mask met it.</summary>
+    /// <summary>How much a character counts as an occluder of the ground and things round it (Meitou): 1 as anything else. At 1 a character lying down left a dark halo as wide as itself (radius 6, strength 4) with a light seam where the half-size mask met it.</summary>
     public const float SsaoCharacterOccluder = 0.3f;
     /// <summary>The upscaler (render scale, TAA / FSR / DLSS); not part of the presets.</summary>
     public readonly UpscaleOptions Upscale = new();

@@ -70,7 +70,7 @@ surveyed post/compositor files. Absence is scoped to those sources, not all poss
 - Exposure and tone mapping: `adapted = last + (current - last) * (1 - exp(-frameTime * rate))`; `scale = max(EXPOSURE_KEY / adapted, 0.001)`; `hdr_to_gamma = false`; `hdr_disable = false`; `sRGB Gamma Conversion=No`
 - FXAA: `FXAA=1`; `FSAA=1`
 - SSAO: `ao = 1 - (1 - ao) * visibility`
-- Heat haze: `<node name>=<bool>`; `HeatHaze=1`; `direction = flow(uv · 3.341).rg · 2 − 1`; `t = frac(gameTime · 100 + {0, 0.33, 0.66})`; `depth == 0 → 1`
+- Heat haze: `<node name>=<bool>`; `HeatHaze=1`; `direction = flow(uv · 3.341).rg · 2 − 1`; `t = frac(gameTime · 100 + {0, 0.33, 0.66})`; `depth == 0 → 1`; offset `· saturate(depth · 6) · 0.002 · heatHaze`, depth = G-buffer distance / far clip (**Verified**, shipped `post/heathaze.hlsl`)
 - What the viewer does: `=`
 
 ## Evidence index

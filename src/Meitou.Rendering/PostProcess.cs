@@ -189,9 +189,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     sealed class HeatHazePass : FullscreenProgram
     {
         public readonly SamplerSlot Flow, Perturbation, Depth, Image;
-        public readonly UniformHandle Phase, Amount, Tan, NearFar, FarClip, HasDepth;
+        public readonly UniformHandle Phase, Amount, Tan, NearFar, FarClip, HasDepth, ClipDepthZeroToOne;
         public HeatHazePass(GpuContext gpu) : base(gpu, PostProcessShaders.HeatHaze, "post heat haze")
         {
+            ClipDepthZeroToOne = P.Uniform("uClipDepthZeroToOne");
             (Flow, Perturbation, Depth, Image) = (P.Sampler("uFlow"), P.Sampler("uPerturbation"), P.Sampler("uDepth"), P.Sampler("uImage"));
             (Phase, Amount, Tan, NearFar, FarClip, HasDepth) = (P.Uniform("uPhase"), P.Uniform("uAmount"), P.Uniform("uTan"), P.Uniform("uNearFar"),
                 P.Uniform("uFarClip"), P.Uniform("uHasDepth"));
@@ -1277,8 +1278,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         s.P.Set(s.Radius, PostOptions.SsaoRadius);
         s.P.Set(s.Strength, PostOptions.SsaoStrength);
         // Fade out with distance: the occlusion is a detail effect, and far geometry is hazy and has little depth precision.
-        s.P.Set(s.FadeStart, 3000f);
-        s.P.Set(s.FadeEnd, 10000f);
+        s.P.Set(s.FadeStart, PostOptions.SsaoFadeStart);
+        s.P.Set(s.FadeEnd, PostOptions.SsaoFadeEnd);
         // The air in front of each surface (haze, weather fog, fog volumes) hides its occlusion: the shader evaluates it at the world position rebuilt from depth.
         var r = viewRotation;
         s.P.Set(s.Right, r.M11, r.M21, r.M31);
@@ -1389,6 +1390,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         h.P.Set(h.NearFar, nearPlane, farPlane);
         h.P.Set(h.FarClip, HeatHazeFarClip);
         h.P.Set(h.HasDepth, haveNearSlice ? 1 : 0);
+        h.P.Set(h.ClipDepthZeroToOne, Gpu.ClipDepthZeroToOne ? 1 : 0);
         DrawFinal(h.P, final);
         Stamp("heathaze");
     }

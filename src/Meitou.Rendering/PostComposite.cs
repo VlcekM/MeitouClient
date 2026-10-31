@@ -231,6 +231,7 @@ sealed class PostComposite : IDisposable
             h.P.Set(h.NearFar, inputs.Near, inputs.Far);
             h.P.Set(h.FarClip, HeatHazeFarClip);
             h.P.Set(h.HasDepth, 1f);
+            h.P.Set(h.ClipDepthZeroToOne, ctx.ClipDepthZeroToOne ? 1 : 0);
             Fullscreen(cmd, h.P, target, target.Desc.Width, target.Desc.Height);
         }
     }
@@ -425,8 +426,8 @@ sealed class PostComposite : IDisposable
         s.P.Set(s.Size, (float)scene.Desc.Width, (float)scene.Desc.Height);
         s.P.Set(s.Radius, PostOptions.SsaoRadius);
         s.P.Set(s.Strength, PostOptions.SsaoStrength);
-        s.P.Set(s.FadeStart, 3000f);
-        s.P.Set(s.FadeEnd, 10000f);
+        s.P.Set(s.FadeStart, PostOptions.SsaoFadeStart);
+        s.P.Set(s.FadeEnd, PostOptions.SsaoFadeEnd);
         var r = i.View with { M41 = 0, M42 = 0, M43 = 0 };
         s.P.Set(s.Right, r.M11, r.M21, r.M31);
         s.P.Set(s.Up, r.M12, r.M22, r.M32);
@@ -774,9 +775,10 @@ sealed class PostComposite : IDisposable
     sealed class HeatHazePass : Pass
     {
         public readonly SamplerSlot Flow, Perturbation, Depth, Image;
-        public readonly UniformHandle Phase, Amount, Tan, NearFar, FarClip, HasDepth;
+        public readonly UniformHandle Phase, Amount, Tan, NearFar, FarClip, HasDepth, ClipDepthZeroToOne;
         public HeatHazePass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.HeatHaze, "post heat haze")
         {
+            ClipDepthZeroToOne = P.Uniform("uClipDepthZeroToOne");
             (Flow, Perturbation, Depth, Image) = (P.Sampler("uFlow"), P.Sampler("uPerturbation"), P.Sampler("uDepth"), P.Sampler("uImage"));
             (Phase, Amount, Tan, NearFar, FarClip, HasDepth) = (P.Uniform("uPhase"), P.Uniform("uAmount"), P.Uniform("uTan"), P.Uniform("uNearFar"),
                 P.Uniform("uFarClip"), P.Uniform("uHasDepth"));

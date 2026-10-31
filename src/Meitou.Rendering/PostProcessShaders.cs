@@ -45,8 +45,6 @@ static class PostProcessShaders
 
         // The share of a surface's occlusion the water in front of it leaves. The water writes no depth, so the floor's occlusion fell on the
         // water's own surface; it fades in over the water's last two units along the ray, as the water's edge does (docs/render-water.md "Edges").
-        // offset: the surface's world offset from the eye, scaled to its true view depth (viewZ's is not on Vulkan, whose clip depth runs 0 to 1
-        // as the projection's does; the occlusion's look was tuned with it as it is).
         float waterVisibility(vec3 offset)
         {
             float below = uWaterY - (uSsaoEye.y + offset.y);
@@ -65,10 +63,12 @@ static class PostProcessShaders
             return dist < 1.0 ? visible : visible * fogVolumesTransmittance(uSsaoEye, offset / dist, dist);
         }
 
+        // The view depth of a stored depth. The projection's clip depth runs 0 to 1 (System.Numerics); Vulkan stores half of it plus a half, Metal
+        // the clip depth itself. GL's formula (clip depth -1 to 1) put every point about twice too far on Vulkan.
         float viewZ(float d)
         {
-            float n = 2.0 * d - 1.0;
-            return 2.0 * uNearFar.x * uNearFar.y / (uNearFar.y + uNearFar.x - n * (uNearFar.y - uNearFar.x));
+            float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0;
+            return uNearFar.x * uNearFar.y / (uNearFar.y - zd * (uNearFar.y - uNearFar.x));
         }
         // A depth texel's own position: its depth with the screen position of its centre. The occlusion runs at half size, so its pixels' centres fall on
         // the corners between depth texels; reading the depth there and placing it at the unsnapped position let rounding pick the texel row by row,
@@ -125,9 +125,7 @@ static class PostProcessShaders
             if (ao < 0.999)
             {
                 vec3 offset = p.x * uRight + p.y * uUp + p.z * uBack;
-                float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0;
-                float trueZ = uNearFar.x * uNearFar.y / (uNearFar.y - zd * (uNearFar.y - uNearFar.x));
-                ao = mix(1.0, ao, airVisibility(offset) * waterVisibility(offset * (trueZ / z)));   // 1 - (1 - ao) * visibility
+                ao = mix(1.0, ao, airVisibility(offset) * waterVisibility(offset));   // 1 - (1 - ao) * visibility
             }
             fragColour = vec4(ao, z, 0.0, 1.0);
         }
@@ -1047,6 +1045,7 @@ static class PostProcessShaders
         uniform vec2 uNearFar;    // of the near depth slice
         uniform float uFarClip;   // the game's far clip D: its G-buffer depth is distance / D
         uniform int uHasDepth;    // 0: no near slice was drawn, everything counts as far
+        uniform int uClipDepthZeroToOne;   // the depth's convention (Metal 1: the clip depth itself; Vulkan 0: half of it plus a half)
 
         vec2 layer(vec2 uv, vec2 direction, float phase)
         {
@@ -1070,8 +1069,9 @@ static class PostProcessShaders
             float amplitude = 1.0;
             if (uHasDepth != 0 && d < 0.99999)
             {
-                float n = 2.0 * d - 1.0;
-                float z = 2.0 * uNearFar.x * uNearFar.y / (uNearFar.y + uNearFar.x - n * (uNearFar.y - uNearFar.x));
+                // The view depth (the projection's clip depth runs 0 to 1; GL's -1 to 1 formula made it about twice too far on Vulkan).
+                float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0;
+                float z = uNearFar.x * uNearFar.y / (uNearFar.y - zd * (uNearFar.y - uNearFar.x));
                 float distance = z * length(vec3((vUv * 2.0 - 1.0) * uTan, 1.0));
                 amplitude = clamp(6.0 * distance / uFarClip, 0.0, 1.0);
             }
