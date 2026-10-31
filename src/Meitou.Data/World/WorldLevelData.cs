@@ -195,6 +195,8 @@ public sealed record BuildingPlacement(ZoneCoordinate Zone, string InstanceId, s
     public bool Contained { get; init; }
     /// <summary>The building it was placed in (<see cref="PlacedMesh.ContainerId"/>), when known.</summary>
     public string? ContainerId { get; init; }
+    /// <summary>The zone file holding <see cref="StateId"/> when it is not <see cref="Zone"/>: a copy of a level building placed elsewhere (the Meitou editor's bar) keeps its state and layouts.</summary>
+    public ZoneCoordinate? StateZone { get; init; }
 }
 
 /// <param name="TownId">String id of the placed <see cref="FcsRecordType.TOWN"/> record.</param>

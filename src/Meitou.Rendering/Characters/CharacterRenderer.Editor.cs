@@ -157,6 +157,17 @@ internal sealed unsafe partial class CharacterRenderer
         return (pivot + Vector3.TransformNormal(local, l.World) / scale, pivot);
     }
 
+    /// <summary>
+    /// The stage's eye and pivot (<see cref="StageCamera"/>) for the character listed under <paramref name="key"/> wherever it stands, from its last pose: the Meitou editor's
+    /// camera in the world (<paramref name="request"/>'s key, size and shift are not used). Null when it is not listed.
+    /// </summary>
+    public (Vector3 Eye, Vector3 Pivot)? EditorCamera(long key, in EditorStageRequest request)
+    {
+        for (int i = 0; i < liveCount; i++)
+            if (live[i].Key == key) return StageCamera(in live[i], in request);
+        return null;
+    }
+
     /// <summary>Where the character stands: its root raised back by the body shape's lift (the renderer lowers the root so a short body's feet stay on the ground).</summary>
     static Vector3 Ground(in Live l) => l.World.Translation + new Vector3(0, l.Asset.GroundOffset, 0);
 

@@ -101,7 +101,7 @@ public static class WorldLights
         var result = new List<WorldLight>();
         if (building.Destroyed) return result;
         var b = building.Placement;
-        var state = b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
+        var state = b.StateId is not null && levels.Zones.TryGetValue(b.StateZone ?? b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
         bool? powerOn = state is not null && state.Bools.TryGetValue("power on", out var on) ? on : null;
         var placed = new List<PlacedLight>();
         WorldObjectLayout.Building(db, building.Record, b.InstanceId, building.Position, b.Rotation, new BuildingState { Identity = b.Key }, placed);
