@@ -7,12 +7,10 @@
 C#/.NET10 reimplementation of [Kenshi](https://lofigames.com/), aiming to run original content,
 mods and saves unchanged. **No game assets are shipped; an installed legal copy is required.**
 
+[![Contributors](assets/branding/contributors.png)](https://github.com/VlcekM/MeitouClient/graphs/contributors)
+
 Architecture/research: [docs index](docs/README.md)
 Website: [meitou.kenshi.wiki](https://meitou.kenshi.wiki/).
-
-## Credits
-
-[![Contributors](assets/branding/contributors.png)](https://github.com/VlcekM/MeitouClient/graphs/contributors)
 
 ## Download and requirements
 
