@@ -11,8 +11,9 @@ namespace Meitou.Rendering.Characters;
 /// </summary>
 internal static class NeckCap
 {
-    /// <summary>The cap of <paramref name="body"/> (its vertices marked by <c>CharacterContent.MarkBody</c>), one skinned part; null when the body has no head vertices.</summary>
-    public static ModelPart? Build(Model body)
+    /// <summary>The cap of <paramref name="body"/> (its vertices marked by <c>CharacterContent.MarkBody</c>), one skinned part; null when the body has no head vertices.
+    /// <paramref name="head"/>: the cut-off head's cap instead, over the rim of its triangles that have only head vertices (the triangles across the cut are drawn by neither side).</summary>
+    public static ModelPart? Build(Model body, bool head = false)
     {
         var all = new List<Vertex>();
         var visibleEdges = new List<(int A, int B)>();
@@ -26,7 +27,7 @@ internal static class NeckCap
             for (int t = 0; t + 2 < idx.Length; t += 3)
             {
                 int a = first + (int)idx[t], b = first + (int)idx[t + 1], c = first + (int)idx[t + 2];
-                bool hidden = IsHead(all[a]) || IsHead(all[b]) || IsHead(all[c]);
+                bool hidden = head ? !(IsHead(all[a]) && IsHead(all[b]) && IsHead(all[c])) : IsHead(all[a]) || IsHead(all[b]) || IsHead(all[c]);
                 foreach (var (p, q) in new[] { (a, b), (b, c), (c, a) })
                     if (hidden) hiddenEdges.Add(Key(all[p].Position, all[q].Position));
                     else visibleEdges.Add((p, q));

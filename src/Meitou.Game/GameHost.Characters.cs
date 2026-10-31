@@ -259,6 +259,7 @@ sealed partial class GameHost
             if (c.Id == sandboxHero && sandboxPicker?.Pose() is { } forced) poses = forced;   // the sandbox drop-down loops a picked clip on the hero
             var held = HeldLook(c.Appearance, c.HeldTool, out var heldPending);
             var look = player.EditorPreview(c.Id, c.Appearance) ?? held;
+            if (editing is null) CutHead(c, look);
             var glide = player.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             list.Add(new CharacterInstance(DrawKey(c.Id), look, position, yaw, poses)
             {
@@ -272,6 +273,7 @@ sealed partial class GameHost
             else if (heldPending is not null)
                 list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, position, yaw, poses) { Hidden = true });
         }
+        if (editing is null) AddHeads(list);
     }
 
     readonly System.Runtime.CompilerServices.ConditionalWeakTable<Meitou.Data.Characters.CharacterAppearance, Dictionary<string, Meitou.Data.Characters.CharacterAppearance>> heldLooks = new();

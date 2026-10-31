@@ -41,6 +41,13 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
     public Meitou.Data.Characters.BodyBuild? Build { get; init; }
     /// <summary>The blood each of the first 8 body parts shows, a byte each (<c>CharacterSnapshot.BloodAmounts</c>).</summary>
     public ulong Blood { get; init; }
+    /// <summary>The whole placement, in place of <see cref="Position"/>, <see cref="Yaw"/> and <see cref="Rotation"/> (a falling head's); <see cref="Position"/> still places it for culling.</summary>
+    public Matrix4x4? World { get; init; }
+    /// <summary>
+    /// Holds the bones of the character with this key as it was last posed, taken the first time this one is drawn and never posed again (a cut-off head keeps the pose of the
+    /// moment it was cut); <see cref="Poses"/> are then ignored.
+    /// </summary>
+    public long? FreezeFrom { get; init; }
 }
 
 /// <summary>

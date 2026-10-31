@@ -40,6 +40,8 @@ static class CharacterShaders
     // Instance flag (CharInstance.Flags; bit 0 interior, 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou decapitation): its head
     // vertices (CharacterContent.HeadBit) are hidden.
     public const uint Headless = 1u << 28;
+    // A cut-off head (CharacterAppearance.HeadOnly): only the head vertices are drawn.
+    public const uint HeadOnly = 1u << 29;
     // Shading modes.
     public const uint ShadeItem = 0, ShadeBody = 1, ShadeHair = 2;
     // Texture slots (CharacterMaterialRecord.Tex).
@@ -143,6 +145,7 @@ static class CharacterShaders
             // bit 18 + p it carries (the vertex's limb bits 0-3, part bits from 4: CharacterContent.MarkBody); the fragments discard where it is above 0.
             uint marks = uint(aColour.y + 0.5);
             vHidden = ((marks & (aInstanceData.z >> 12) & 15u) | ((marks >> 4) & (aInstanceData.z >> 18) & 1023u) | ((marks >> 14) & (aInstanceData.z >> 28) & 1u)) != 0u ? 1.0 : 0.0;
+            if ((aInstanceData.z & {{HeadOnly}}u) != 0u) vHidden = (marks & {{CharacterContent.HeadBit}}u) == 0u ? 1.0 : 0.0;   // a cut-off head: its vertices only
             // The part of the vertex (bits 16-19: its index + 1, CharacterContent.MarkBody) and its blood amount (the instance: part k in byte k & 1 of the w of row k / 2).
             uint bloodPart = (marks >> 16) & 15u;
             vBloodAmount = 0.0;

@@ -202,6 +202,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         public bool PortraitOnly;
         /// <summary>In a loaded building's interior (<see cref="WorldObjectRenderer.InteriorAt"/>), found once a frame for every view.</summary>
         public bool Interior;
+        /// <summary>Holds bones taken from another character (<see cref="CharacterInstance.FreezeFrom"/>): never posed.</summary>
+        public bool Frozen;
     }
 
     /// <summary>What the renderer keeps of a character between frames (by <see cref="CharacterInstance.Key"/>): its last posed palette and the one before.</summary>
@@ -222,6 +224,25 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         public float Radius;
         /// <summary>Its last indoors answer (<see cref="Live.Interior"/>), asked again once it has moved.</summary>
         public WorldObjectRenderer.InteriorMemo Interior;
+        /// <summary>Its bones were taken from another character (<see cref="Freeze"/>) and are never posed.</summary>
+        public bool Frozen;
+    }
+
+    /// <summary>
+    /// Gives the character <paramref name="key"/> the bones of <paramref name="from"/> as last posed, once (<see cref="CharacterInstance.FreezeFrom"/>); false while there are none to
+    /// take (<paramref name="from"/> not posed yet, or another skeleton), and the character is not drawn.
+    /// </summary>
+    bool Freeze(long key, long from, CharacterAsset asset)
+    {
+        if (states.TryGetValue(key, out var own) && own.Frozen) return true;
+        int bones = asset.Rig.BoneCount;
+        if (!states.TryGetValue(from, out var source) || source.Posed < 0 || source.Bones.Length != bones) return false;
+        states[key] = new CharState
+        {
+            Bones = [.. source.Bones], Previous = [.. source.Bones], Attach = new Matrix4x4[asset.AttachCount], PreviousAttach = new Matrix4x4[asset.AttachCount],
+            Posed = updateStamp, Frozen = true, Asset = asset,
+        };
+        return true;
     }
 
     readonly Dictionary<long, CharState> states = [];
@@ -427,6 +448,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
                 built++;
             }
             if (asset is null) continue;
+            if (inst.FreezeFrom is { } freezeFrom && !Freeze(inst.Key, freezeFrom, asset)) continue;
             if (inst.Build is { } build) ApplyBuild(asset, build);
             if (inst.BlendFrom is { } blendFrom && inst.Blend < 1 && assets.TryGetValue(blendFrom, out var fromAsset) && fromAsset is not null) ApplyBlend(asset, fromAsset, inst.Blend);
             else RestoreBlend(asset);
@@ -440,10 +462,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             (l.Key, l.PortraitOnly) = (inst.Key, far);
             // Lowered by the body shape's lift, so a short body's feet stay on the ground (CharacterAsset.GroundOffset); an animal scaled by its size (its node's scale).
             // A carried body's whole rotation lowers it in its own frame (CharacterRigs.Placement, as the simulation poses its ragdoll).
-            l.World = inst.Rotation is { } rotation
+            l.World = inst.World ?? (inst.Rotation is { } rotation
                 ? Matrix4x4.CreateTranslation(0, -asset.GroundOffset, 0) * Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateTranslation(inst.Position)
-                : Matrix4x4.CreateRotationY(inst.Yaw) * Matrix4x4.CreateTranslation(inst.Position - new Vector3(0, asset.GroundOffset, 0));
-            if (scale != 1) l.World = Matrix4x4.CreateScale(scale) * l.World;
+                : Matrix4x4.CreateRotationY(inst.Yaw) * Matrix4x4.CreateTranslation(inst.Position - new Vector3(0, asset.GroundOffset, 0)));
+            if (scale != 1 && inst.World is null) l.World = Matrix4x4.CreateScale(scale) * l.World;
             (l.WeaponDrawn, l.RangedDrawn, l.BackDrawn, l.Shots, l.Bolts) = (inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn, inst.Shots, inst.Bolts);
             l.Centre = centre;
             l.Radius = asset.Radius * scale;
@@ -465,7 +487,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             l.Blood = inst.Blood;
             // A ragdoll is posed every frame: its bones move by physics, not by a clip the thinning could thin out. A new asset (other gear, another rig) is posed at
             // once: its parts' attach matrices and its arrays' sizes come from it. The rest are thinned by their size on screen after the gather (below).
-            l.MustPose = inst.FullRateAnimation || inst.Bones is not null || state.Posed < 0 || newAsset;
+            l.Frozen = state.Frozen;
+            l.MustPose = !l.Frozen && (inst.FullRateAnimation || inst.Bones is not null || state.Posed < 0 || newAsset);
             l.Pixels = 2 * l.Radius * viewPixelsPerRadian / MathF.Max(1, Vector3.Distance(eye, centre));
             l.LayerStart = layerCount;
             var rig = asset.Rig;
@@ -478,7 +501,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         int inWorld = 0;
         for (int i = 0; i < liveCount; i++) if (!live[i].PortraitOnly) inWorld++;
         if (inWorld < ThinFromCharacters)
-            for (int i = 0; i < liveCount; i++) live[i].Repose = true;
+            for (int i = 0; i < liveCount; i++) live[i].Repose = !live[i].Frozen;
         else
         {
             // The largest on screen first: they keep the full rate up to the budget, the rest at least the second rate.
@@ -495,7 +518,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
                 if (interval == 1 && full++ >= FullRateBudget) interval = 2;
                 // In time, not frames (a slow frame rate must not thin the poses out further): a new pose each time the character's own clock enters a new period.
                 long bucket = interval == 1 ? updateStamp : (long)Math.Floor(poseSeconds * PoseRateHz / interval + unchecked((ulong)l.Key * 0x9E3779B97F4A7C15UL) / 18446744073709551616.0);
-                l.Repose = l.MustPose || bucket != l.State.PoseBucket;
+                l.Repose = !l.Frozen && (l.MustPose || bucket != l.State.PoseBucket);
                 l.State.PoseBucket = bucket;
             }
         }

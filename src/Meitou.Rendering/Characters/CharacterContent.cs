@@ -733,8 +733,8 @@ internal sealed class CharacterContent : IDisposable
             Morphed = asset.MorphBase != 0, ShadowDistances = body.ShadowDistances, ShadowFirst = body.ShadowFirst, IsBody = true,
             FileDistances = body.FileDistances, FileFirst = body.FileFirst, FileRadius = body.FileRadius,
         });
-        // A headless body's neck is closed by a cap made from the body (NeckCap), in the race's wound look.
-        if (c.Headless && NeckCapMesh(bodyPath, rig, LimbHideOf(c, rig)) is { } cap)
+        // A headless body's neck, and a cut-off head's, is closed by a cap made from the body (NeckCap), in the race's wound look.
+        if ((c.Headless || c.HeadOnly) && NeckCapMesh(bodyPath, rig, LimbHideOf(c, rig), c.HeadOnly) is { } cap)
             asset.Parts.Add(new AssetPart
             {
                 Label = $"neck cap {Path.GetFileName(bodyPath)}", Mesh = cap.Gpu, Shared = true, Material = WoundMaterial(c),
@@ -819,18 +819,21 @@ internal sealed class CharacterContent : IDisposable
         return m;
     }
 
-    /// <summary>The neck cap of a body mesh (<see cref="NeckCap"/>), made once per body file and skeleton; null when the body has no head vertices.</summary>
-    LoadedMesh? NeckCapMesh(string bodyPath, SkeletonRig rig, LimbHide? hide)
+    /// <summary>The neck cap of a body mesh (<see cref="NeckCap"/>; <paramref name="head"/>: the cut-off head's), made once per body file and skeleton; null when the body has no head vertices.</summary>
+    LoadedMesh? NeckCapMesh(string bodyPath, SkeletonRig rig, LimbHide? hide, bool head)
     {
         if (hide is null) return null;
-        var key = (bodyPath.ToLowerInvariant() + "#neck cap", rig.BoneCount, false, (string?)null);
+        var key = (bodyPath.ToLowerInvariant() + (head ? "#head cap" : "#neck cap"), rig.BoneCount, false, (string?)null);
         if (meshes.TryGetValue(key, out var cached)) return cached;
         LoadedMesh? loaded = null;
         try
         {
-            var model = Model.Build(OgreMeshReader.ReadFile(bodyPath), rig.BoneCount, gameBinormals: true);
+            var mesh = OgreMeshReader.ReadFile(bodyPath);
+            var model = Model.Build(mesh, rig.BoneCount, gameBinormals: true);
+            // The body's face-morph slots (as PrepareMesh), so the rim moves with the neck it was cut from.
+            _ = MeshMorphs.From(mesh, model, Messages, Path.GetFileName(bodyPath));
             MarkBody(model, hide, null);
-            if (NeckCap.Build(model) is { } part)
+            if (NeckCap.Build(model, head) is { } part)
             {
                 var min = part.Vertices.Aggregate(new Vector3(float.MaxValue), (a, v) => Vector3.Min(a, v.Position));
                 var max = part.Vertices.Aggregate(new Vector3(float.MinValue), (a, v) => Vector3.Max(a, v.Position));

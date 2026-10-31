@@ -59,6 +59,16 @@ internal sealed partial class CharacterRenderer
         return Vector3.Transform(asset.Rig.BindPosition[h], s.Bones[h] * s.World);
     }
 
+    /// <summary>
+    /// How the character <paramref name="key"/> was last drawn in the world: its placement, the look and where its <paramref name="bone"/> was; null when it was not drawn in the
+    /// world in the last update. Render thread, between updates (a cut-off head starts from it, <see cref="CharacterInstance.FreezeFrom"/>).
+    /// </summary>
+    public (Matrix4x4 World, Meitou.Data.Characters.CharacterAppearance Look, Vector3 Bone)? LastDrawn(long key, string bone)
+    {
+        if (!states.TryGetValue(key, out var s) || s.Seen != updateStamp || !s.InWorld || s.Asset is not { IsIcon: false, Appearance: { } look } || BonePosition(key, bone) is not { } at) return null;
+        return (s.World, look, at);
+    }
+
     public float? RayHit(long key, Vector3 origin, Vector3 direction)
     {
         if (!states.TryGetValue(key, out var s) || s.Seen != updateStamp || !s.InWorld || s.Asset is not { IsIcon: false } asset || s.Posed < 0) return null;
