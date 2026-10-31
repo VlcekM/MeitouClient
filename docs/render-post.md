@@ -138,7 +138,13 @@ upsample by depth match; a farthest-only reduction let dust behind thin characte
 their silhouettes, flickering under jitter. Where the four nearest texels span more than 4% in depth, the upsample is a joint
 bilateral filter over the 4x4 texels round the pixel (radial kernel to 2 texels, times the depth match): the four alone gave
 one or two matching texels in turn along an edge, a row of beads two texels apart (**Observed**, the Eye's storm at quarter
-size: the beads gone, a smooth band; elsewhere the picture within 12/255). Texture anisotropy caps mipmapped samplers, distinct from texture
+size: the beads gone, a smooth band; elsewhere the picture within 12/255). With a vendor upscaler (DLSS, FSR) the low-resolution particles are
+blended over its output instead of the scene it upscales (`PostProcess.ParticlesAfterUpscale`, half then quarter size, the composite reading
+the render-size depth at `uScale` render pixels per output pixel), drawn with the unjittered projection, and left out of the reactive mask:
+DLSS took drifting see-through dust as standing still (its default preset ignores the reactive mask) and trailed it in rows of streaks; dust
+motion vectors had only halved them. A vendor upscaler that fails that frame gets them in the scene before the TAA. **Observed** (a Hub
+storm, DLSS): the dust the same as blended in the scene (mean difference 1.2/255, the dust's shapes only). TAA keeps them in the scene: its
+output is its next history. Texture anisotropy caps mipmapped samplers, distinct from texture
 resolution/LOD bias. [Particle simulation](formats/particle-universe.md).
 
 Particle coverage (FSR's reactive mask, DLSS's bias hint, TAA's motion alpha): alpha, or brightness times alpha for additive

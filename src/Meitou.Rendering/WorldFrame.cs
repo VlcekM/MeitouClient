@@ -1550,7 +1550,7 @@ static class WorldFrame
         post.SetCamera(eye, view, camera.FieldOfView, aspect);
         gpu.Terrain.BeginFrame();
         bool first = true, foliageDrawn = false;
-        Matrix4x4 particleViewProjection = default, particleNearProjection = default;
+        Matrix4x4 particleViewProjection = default, particleNearProjection = default, particleLowProjection = default, particleLowNearProjection = default;
         float particleNear = 0;
         foreach (var (near, far) in SceneSlices(post, camera))
         {
@@ -1653,6 +1653,9 @@ static class WorldFrame
             {
                 particleViewProjection = viewProjection;
                 particleNearProjection = view * Jitter.Apply(camera.Projection(aspect, Math.Min(0.5f, near * 0.5f), near), jitter, rw, rh);
+                // Unjittered, for low-resolution particles blended after the upscaler (its output is unjittered).
+                particleLowProjection = view * camera.Projection(aspect, near, far);
+                particleLowNearProjection = view * camera.Projection(aspect, Math.Min(0.5f, near * 0.5f), near);
                 particleNear = near;
             }
         }
@@ -1672,7 +1675,8 @@ static class WorldFrame
         // Then the particles, blended over it and tested against the near slice's depth (they are not fogged; docs/formats/fogfeatures.md).
         if (gpu.Particles is { } particleDraw && particleNear > 0)
         {
-            particleDraw.Prepare(particleViewProjection, particleNearProjection, particleNear, view, eye, sun, post.ParticlePixelsPerUnit(camera.Projection(aspect, 1, 10).M22), (float)post.RenderWidth * post.RenderHeight, post.Options.ParticleDivisor);
+            particleDraw.Prepare(particleViewProjection, particleNearProjection, particleNear, view, eye, sun, post.ParticlePixelsPerUnit(camera.Projection(aspect, 1, 10).M22), (float)post.RenderWidth * post.RenderHeight, post.Options.ParticleDivisor,
+                lowViewProjection: post.ParticlesAfterUpscale ? particleLowProjection : null, lowCloseViewProjection: post.ParticlesAfterUpscale ? particleLowNearProjection : null);
             if (particleDraw.FullCount > 0)
             {
                 post.PrepareSoftParticleDepth();

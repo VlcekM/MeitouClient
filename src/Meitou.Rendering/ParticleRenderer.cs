@@ -453,10 +453,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// </summary>
     /// <param name="pixelsPerUnit">Meitou: the render size in pixels of one world unit at distance 1 (0: everything full size). Alpha and additive draws whose sprites are big on screen go to a low-resolution target, the biggest to a quarter-size one (<see cref="QuarterPixels"/>, <see cref="HalfPixels"/>); small ones (rain) stay full size.</param>
     /// <param name="forcedDivisor">0: by sprite size; 1, 2 or 4: every eligible draw there but rain and fire (for measuring, and the Half and Quarter settings).</param>
-    public void Prepare(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor = 0)
+    public void Prepare(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye, Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor = 0,
+        Matrix4x4? lowViewProjection = null, Matrix4x4? lowCloseViewProjection = null)
     {
         long start = Stopwatch.GetTimestamp();
         PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, screenPixels, forcedDivisor);
+        // The low-resolution draws' own matrices: unjittered when they are blended after the upscaler (PostProcess.ParticlesAfterUpscale), whose output is.
+        frameLowVp = lowViewProjection is { } lowVp ? Matrix4x4.CreateTranslation(eye) * lowVp : frameVp;
+        frameLowCloseVp = lowCloseViewProjection is { } lowClose ? Matrix4x4.CreateTranslation(eye) * lowClose : frameCloseVp;
         long ticks = Stopwatch.GetTimestamp() - start;
         drawTotal += ticks;
         drawFrames++;
@@ -580,7 +584,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         coveragePending = true;
     }
 
-    Matrix4x4 frameVp, frameCloseVp;
+    Matrix4x4 frameVp, frameCloseVp, frameLowVp, frameLowCloseVp;
     Vector3 frameRight, frameUp;
     float frameAmbient;
     bool coveragePending;
@@ -639,6 +643,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     {
         int coverage = kind == Kind.Coverage ? 1 : 0;
         var (vp, closeVp, right, up, ambient) = (frameVp, frameCloseVp, frameRight, frameUp, frameAmbient);
+        if (kind == Kind.Low) (vp, closeVp) = (frameLowVp, frameLowCloseVp);
         foreach (var d in draws)
         {
             if (d.Divisor != divisor) continue;

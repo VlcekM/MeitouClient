@@ -594,8 +594,9 @@ static class PostProcessShaders
         #version 330 core
         in vec2 vUv;
         out vec4 fragColour;
+        uniform float uScale;   // render pixels per target pixel: 1 over the scene, render / display over the upscaler's output
         """ + "\n" + ParticleUpsample + "\n" + """
-        void main() { fragColour = particlesAt(gl_FragCoord.xy); }
+        void main() { fragColour = particlesAt((floor(gl_FragCoord.xy) + 0.5) * uScale); }
         """;
 
     /// <summary>

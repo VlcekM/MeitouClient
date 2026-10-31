@@ -319,12 +319,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     sealed class ParticleCompositePass : FullscreenProgram
     {
         public readonly SamplerSlot Accum, LowDepth, Depth;
-        public readonly UniformHandle LowSize, NearPlanes, Div, ClipDepthZeroToOne;
+        public readonly UniformHandle LowSize, NearPlanes, Div, ClipDepthZeroToOne, Scale;
         public ParticleCompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleComposite, "post particle composite")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
             (LowSize, NearPlanes, Div) = (P.Uniform("uLowSize"), P.Uniform("uNearPlanes"), P.Uniform("uDiv"));
-            ClipDepthZeroToOne = P.Uniform("uClipDepthZeroToOne");
+            (ClipDepthZeroToOne, Scale) = (P.Uniform("uClipDepthZeroToOne"), P.Uniform("uScale"));
         }
     }
 
@@ -561,7 +561,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         stamps.Count = 0;
         stamps.Tag = CostTag;
         haveNearSlice = farSliceDrawn = false;
-        foreach (var l in lowTargets) l.Drawn = false;
+        foreach (var l in lowTargets) l.Drawn = l.Late = false;
         softDepthReady = false;
         sceneMarked = aoApplied = false;
         Stamp("start");
@@ -1044,6 +1044,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         /// <summary>The depth the draws are tested against, as a colour (R32F): what the Meitou fog's soft fade reads.</summary>
         public Target2D? Soft;
         public bool Drawn;
+        /// <summary>Drawn this frame but blended after the upscaler (<see cref="ParticlesAfterUpscale"/>), not yet.</summary>
+        public bool Late;
         public PassTargets Targets = null!;
     }
 
@@ -1125,10 +1127,32 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         return t is null ? null : new ParticleRenderer.SoftDepth(Sampled(t), nearPlanes.X, nearPlanes.Y, Gpu.ClipDepthZeroToOne);
     }
 
-    /// <summary>The accumulation of one size over the scene colour (<see cref="PostProcessShaders.ParticleComposite"/>), after the host drew into <see cref="ParticleTargets"/>.</summary>
+    /// <summary>
+    /// Whether the low-resolution particles are blended over the vendor upscaler's output instead of the scene it upscales (docs/render-post.md "Colour,
+    /// night and particles"): DLSS took drifting see-through dust as standing still (its default preset ignores the reactive mask) and trailed it in rows
+    /// of streaks. Their draws then use the unjittered projection (<see cref="ParticleRenderer"/>), the output being unjittered.
+    /// </summary>
+    public bool ParticlesAfterUpscale => LowResParticles && ExternalFor(Options.Upscale.Kind) is not null;
+
+    /// <summary>The accumulation of one size over the scene colour (<see cref="PostProcessShaders.ParticleComposite"/>), after the host drew into <see cref="ParticleTargets"/>;
+    /// with <see cref="ParticlesAfterUpscale"/> kept for <see cref="CompositeLateParticles"/>.</summary>
     public void CompositeParticlesLow(int divisor)
     {
         var low = LowFor(divisor);
+        if (ParticlesAfterUpscale) { low.Drawn = low.Late = true; return; }
+        CompositeLow(low, sceneColour!, width, height);
+        low.Drawn = true;
+    }
+
+    /// <summary>The low-resolution particles kept for after the upscaler, half size then quarter (the order the scene gets them in), over <paramref name="target"/>.</summary>
+    void CompositeLateParticles(Target2D target, int targetWidth, int targetHeight)
+    {
+        foreach (var low in lowTargets)
+            if (low.Late) { CompositeLow(low, target, targetWidth, targetHeight); low.Late = false; }
+    }
+
+    void CompositeLow(LowTarget low, Target2D target, int targetWidth, int targetHeight)
+    {
         var c = particleCompositePass;
         Bind(c.P, c.Accum, low.Accum);
         Bind(c.P, c.LowDepth, low.Depth);
@@ -1137,9 +1161,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.NearPlanes, nearPlanes.X, nearPlanes.Y);
         c.P.Set(c.Div, (float)low.Divisor);
         c.P.Set(c.ClipDepthZeroToOne, Gpu.ClipDepthZeroToOne ? 1 : 0);
-        Draw(c.P, sceneColour!.Attachment, sceneColour.Format, width, height, width, height, ParticleLowState);
+        c.P.Set(c.Scale, (float)width / targetWidth);
+        Draw(c.P, target.Attachment, target.Format, targetWidth, targetHeight, targetWidth, targetHeight, ParticleLowState);
         CloseSegment();
-        low.Drawn = true;
     }
 
     /// <summary>Premultiplied "over": the accumulation's colour added, the scene kept by one minus its opacity; red, green and blue only (the alpha is the characters' mask).</summary>
@@ -1230,6 +1254,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
                 Console.WriteLine($"upscaler  {Options.Upscale.Kind.ToString().ToUpperInvariant()} is not available here; using TAA");
                 warnedFallback = true;
             }
+            // A vendor upscaler that failed this frame left its late particles undrawn: into the scene before the TAA (its output is its next history).
+            CompositeLateParticles(sceneColour!, width, height);
             // The particles' coverage into the motion target's alpha (the TAA's reactive channel; the water's analytic value is there already).
             if (Particles is { HasCoverage: true }) RunCoverage(motion!, ColorMask.A, clear: false);
             var t = taaPass;
@@ -1244,6 +1270,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Draw(t.P, output);
             ActiveUpscaler = width == displayWidth && height == displayHeight ? "taa" : $"taa {width}x{height}";
         }
+        // The vendor upscaler's output (not a history Meitou keeps): the low-resolution particles over it.
+        CompositeLateParticles(output, displayWidth, displayHeight);
         historyValid = true;
         // Frame generation takes the depth and the motion this frame made, whatever upscaled (TAA, FSR); the vendor segment is closed above or no segment is open.
         if (FrameGen is { Wanted: true } frameGen && upscaleDepth is not null && motion is not null)
@@ -1316,7 +1344,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         Gpu.EndNative(cmd);
         foreach (var low in lowTargets)
         {
-            if (!low.Drawn) continue;
+            if (!low.Drawn || low.Late) continue;   // blended after the upscaler: not in what it sees
             // The low-resolution particles' share: from their accumulation, added to what is there (the full-size ones drew theirs above).
             var c = particleCoveragePass;
             Bind(c.P, c.Accum, low.Accum);
