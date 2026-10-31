@@ -2283,7 +2283,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             cmd.SetScissor(targets.Scissor);
             cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
             cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
-            NativeFrame.Record(cmd, Program, in Frame);
+            // Metal packs bindless arguments for each program's active resources.
+            GpuProgram boundProgram = default;
+            bool frameBound = false;
             cmd.BindVertexBuffers(RowLocation, Rows);
             MeshPush last = default;
             bool pushed = false;
@@ -2292,6 +2294,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 ref readonly var d = ref Draws[i];
                 if (d.SetRaster) cmd.SetRaster(d.Cull, state.Front);
                 cmd.BindPipeline(d.Pipeline);
+                var drawProgram = d.Pipeline.Desc.Program;
+                if (!frameBound || drawProgram.Index != boundProgram.Index)
+                {
+                    NativeFrame.Record(cmd, drawProgram, in Frame);
+                    boundProgram = drawProgram;
+                    frameBound = true;
+                }
                 if (d.Vertices.Length > 0) cmd.BindVertexBuffers(0, d.Vertices);
                 cmd.BindIndexBuffer(d.Elements, IndexKind.U32);
                 PushTo(cmd, Program, in d.Push, ref last, ref pushed);
