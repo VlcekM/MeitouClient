@@ -694,7 +694,7 @@ public sealed class GlobalPointEffectGroup : EffectGroup
 }
 
 /// <summary>
-/// The map-feature placers (docs/formats/weather.md "Effect placers on the map"): effects that belong to a hidden MAP_FEATURES record and are
+/// The map-feature placers (docs/formats/zones.md): effects that belong to a MAP_FEATURES record (hidden or not) and are
 /// always on, at fixed places. Not a weather group: they are made once from <c>features.dat</c> (<see cref="MapEffectPlacers"/>) and live as
 /// static POINT effects (Observed: the game's handler lives <c>min..max time to live</c> and is made again; the viewer keeps it).
 /// A unit is simulated while the camera is within <see cref="EffectWorld.ActiveRadius"/> plus the effect's <c>maximum view distance</c> of it.

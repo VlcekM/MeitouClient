@@ -4,12 +4,13 @@ using Meitou.Data.World;
 
 namespace Meitou.Data.Particles;
 
-/// <summary>One effect placed on the map by a hidden MAP_FEATURES placer: the effect and its place in the world.</summary>
+/// <summary>One effect placed on the map by a MAP_FEATURES placer: the effect and its place in the world.</summary>
 public sealed record MapEffectPlacement(EffectRecord Effect, Vector3 Position, string Feature);
 
 /// <summary>
-/// The map-feature effect placers (docs/formats/weather.md "Effect placers on the map"): MAP_FEATURES records with <c>hidden</c> true draw no mesh and
-/// carry an EFFECT as an instance of the feature record ("Volk-Cloud Placer", "Volc-small-steamers Placer", "Permanent-dust-storm Placer"); each
+/// The map-feature effect placers (docs/formats/zones.md): MAP_FEATURES records that carry an EFFECT as an instance ("Volk-Cloud Placer",
+/// "Volc-small-steamers Placer", "Permanent-dust-storm Placer", all <c>hidden</c> in the base game, so they draw no mesh). The game makes the effect
+/// whatever <c>hidden</c> says (a mod that shows the placer's box keeps its effect; Verified (decompiled), FUN_14039c7e0); each
 /// placement of such a feature in <c>features.dat</c> makes the effect at the placement's position plus the instance's offset (rotated by the
 /// placement's rotation: Observed, the offsets of the base game are all 0).
 /// </summary>
@@ -21,7 +22,7 @@ public static class MapEffectPlacers
         var result = new List<MapEffectPlacement>();
         foreach (var (_, feature) in features.All())
         {
-            if (db.Find(feature.StringId) is not { Type: FcsRecordType.MAP_FEATURES } record || !record.GetBool("hidden")) continue;
+            if (db.Find(feature.StringId) is not { Type: FcsRecordType.MAP_FEATURES } record) continue;
             foreach (var instance in record.Instances.Values)
             {
                 if (instance.IsCleared || db.Find(instance.Target) is not { Type: FcsRecordType.EFFECT } effect) continue;
