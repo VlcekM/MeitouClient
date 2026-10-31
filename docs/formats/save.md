@@ -330,6 +330,10 @@ PLATOON keys (**Verified**):
   town platoons are persistent, why **Unknown**; an occupation sets it, [ai.md](../game/ai.md#package-classes)). Meitou writes true with `sqt` 1 and false
   with 2 but while the platoon's package is an occupation; written false, the original would delete a resident squad when it leaves the loaded area.
 - `is resident` is set exactly on the platoons with a `homebuilding` (census of saves 1, 2, 3, wade: 0 exceptions); Meitou writes both for a squad with a home.
+  **Observed** on one save only (a new game saved at once, unmodded; not a rule of fresh saves in general): `sqt` 1, `persistent` platoons with a `homebuilding`,
+  `is resident` false, `never been activated` true and no platoon file. The two of them with a `char count` in the camera block's zones next to the player's
+  appeared 4 to 6 simulated s after load (5 of 5 runs), one in the player's zone at once; their sizes varied by run (made by template, not `char count`).
+  Meitou makes such platoons from their template when they activate (`SaveLoader.Unmade`, `PopulationSystem.ActivatesAtLoad`).
 - `hometown` (handle) puts the platoon into that town's or nest's pool at load (`FUN_1407ec8d0`; the platoon's faction and player status must match the town's);
   the pool counts living characters, `char count` while the platoon is not active (`FUN_1408f6a40`). `basetown` is only kept as a TOWN record pointer.
 - `homebuilding` (handle) is bound through the game's per-frame system-message queue (`FUN_1407b65b0`): only if the building resolves that frame, else the message is

@@ -638,6 +638,13 @@ public sealed partial class PopulationSystem
         {
             p.Regenerate = false;
             if (Regenerate(world, p) is not null) return;   // else (the template plans no one now) it comes back as it is
+            // A save's never-made squad has nothing to come back as: it is dropped (its record stays in the save, which will try again at the next load).
+            if (p.Unmade)
+            {
+                if (p.Saved is { } none) none.PlatoonId = -1;
+                world.Platoons.Remove(p.Id);
+                return;
+            }
         }
         if (OffscreenHealing) Recover(world, p);
         // A stored squad: its own characters, at once (nothing to build).

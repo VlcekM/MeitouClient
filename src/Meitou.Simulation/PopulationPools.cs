@@ -262,7 +262,7 @@ public sealed partial class PopulationSystem
         if (built is null) return null;
         var fresh = new Platoon
         {
-            Id = world.Platoons.NextId(), Origin = p.Origin, TemplateId = p.TemplateId, Faction = p.Faction, Key = key, Size = built.Plan.TotalMembers,
+            Id = p.Unmade ? world.Platoons.NextReservedId() : world.Platoons.NextId(), Origin = p.Origin, TemplateId = p.TemplateId, Faction = p.Faction, Key = key, Size = built.Plan.TotalMembers,
             Position = p.Position, Money = p.Money, Package = p.Package, Stored = new StoredSquad { Name = data.Db.Find(p.TemplateId)?.Name ?? p.TemplateId, HomeBuilding = home },
             State = PlatoonState.Loaded,
         };

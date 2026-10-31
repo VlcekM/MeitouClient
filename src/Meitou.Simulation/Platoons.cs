@@ -66,6 +66,11 @@ public sealed class Platoon
     /// <summary>A town's own squad that lost so many that its town makes it afresh when it next comes into the world (<see cref="PopulationSystem"/> regeneration).</summary>
     public bool Regenerate { get; set; }
     /// <summary>
+    /// A save's town squad the game never made (<see cref="Saving.SaveLoader"/> "unmade": no file, <c>never been activated</c>, a <c>char count</c> and a home building):
+    /// a stand-in with <see cref="Regenerate"/> set, made from its template when it activates. Not saved.
+    /// </summary>
+    public bool Unmade { get; init; }
+    /// <summary>
     /// The faction campaign it marches in (null: none; <c>PopulationCampaigns.cs</c>): kept (never despawned) until the campaign is removed, moved by the campaign off
     /// screen and led to <see cref="CampaignGoal"/> while loaded, out of the roaming pools.
     /// </summary>
@@ -131,11 +136,15 @@ public sealed class PlatoonRegistry
 {
     readonly SortedDictionary<int, Platoon> platoons = [];
     int nextId;
+    // The ids of a save's never-made town squads (Platoon.Unmade) and of what they are made into, counted down from the top so that they leave every other
+    // platoon's id (and what is rolled from it) as it would be without them, and come last in id order.
+    int nextReserved = int.MaxValue;
 
     public int Count => platoons.Count;
     public IEnumerable<Platoon> All => platoons.Values;
     public Platoon? Find(int id) => platoons.GetValueOrDefault(id);
     public int NextId() => nextId++;
+    public int NextReservedId() => nextReserved--;
     public void Add(Platoon p) => platoons[p.Id] = p;
     public bool Remove(int id) => platoons.Remove(id);
 
@@ -143,6 +152,7 @@ public sealed class PlatoonRegistry
     {
         h.Add(platoons.Count);
         h.Add(nextId);
+        if (nextReserved != int.MaxValue) h.Add(nextReserved);   // only once used: a world without unmade squads hashes as before
         foreach (var p in platoons.Values)
         {
             h.Add(p.Id);
