@@ -173,7 +173,7 @@ sealed class TitleComposition
     static GameRecord? RidgeRecord(GameDatabase database) => FeatureRecord(database, RidgeLook);
 
     /// <summary>The map feature, else the foliage mesh, drawing the mesh file named <paramref name="mesh"/>; null when the data has none.</summary>
-    static GameRecord? FeatureRecord(GameDatabase database, string mesh)
+    internal static GameRecord? FeatureRecord(GameDatabase database, string mesh)
     {
         GameRecord? Of(Meitou.Data.Fcs.FcsRecordType type) => database.Records.Values.FirstOrDefault(r => r.Type == type &&
             string.Equals(Path.GetFileName(r.GetPath("mesh").Replace('\\', '/')), mesh, StringComparison.OrdinalIgnoreCase));
