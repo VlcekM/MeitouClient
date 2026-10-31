@@ -34,6 +34,11 @@ public sealed record BodyOptions
     /// </summary>
     public bool Decapitation { get; set; } = true;
     /// <summary>
+    /// Meitou (on; Faithful off, the original starts a ragdoll at rest): a new whole-body ragdoll goes on with the character's motion and the downing blow's push, and a cut-off
+    /// head is thrown with it (<see cref="Ragdolls.RagdollSystem"/>, <c>CombatSystem.Knockdown</c>). Settable, as <see cref="Dismemberment"/>.
+    /// </summary>
+    public bool AdvancedRagdolls { get; set; } = true;
+    /// <summary>
     /// Debug (F10 "Force hits to", <see cref="DebugForceHits"/>): every blow lands on the part of this template string id, else of this name, when the victim has it and a blow
     /// could pick it; else as usual. Null: off. Not saved.
     /// </summary>

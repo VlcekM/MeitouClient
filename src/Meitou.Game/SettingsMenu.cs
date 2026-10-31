@@ -371,6 +371,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             result.Add(new(HealingGoodwillSlider.Label, "Relation points a faction gains for each of its downed people your medics treat (Healing goodwill; -30 or less is hostile, above 50 allied).", Slider: HealingGoodwillSlider));
             result.Add(new("Decapitation", "A blow that destroys a character's head cuts it off, by the same rule the Dismemberment setting cuts off limbs. In the game a destroyed head only kills.",
                 Toggle: new("Decapitation", () => config.Decapitation, v => { config.Decapitation = v; GameplayChanged?.Invoke(); }, Remaster: true, OnOff: true)));
+            result.Add(new("Advanced ragdolls", "A character knocked down or killed by a blow falls with its own momentum and is pushed away from the hit, harder the heavier the blow, and a cut-off head flies the same way. In the game a body drops where it stood.",
+                Toggle: new("Advanced ragdolls", () => config.AdvancedRagdolls, v => { config.AdvancedRagdolls = v; GameplayChanged?.Invoke(); }, Remaster: true, OnOff: true)));
             result.Add(new("Pause after loading", "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once.",
                 Toggle: new("Pause after loading", () => config.PauseOnLoad, v => config.PauseOnLoad = v, OnOff: true)));
             result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
@@ -636,6 +638,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         config.HealingGoodwill = true;
         config.HealingGoodwillAmount = UserConfig.DefaultHealingGoodwill;
         config.Decapitation = true;
+        config.AdvancedRagdolls = true;
         DoorsCloseChanged?.Invoke(true);
         config.PauseOnLoad = false;
         config.FixDoorBreak = config.FixAmbienceSuffix = config.FixWindStop = true;

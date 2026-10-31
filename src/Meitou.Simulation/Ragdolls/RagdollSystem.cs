@@ -55,6 +55,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
     readonly CharacterRigs rigs;
     IRagdollEnvironment? environment;
+    readonly Bodies.BodyOptions? options;
     readonly RagdollPhysics physics = new();
     readonly Dictionary<CharacterId, Ragdoll> ragdolls = [];
     readonly List<CharacterId> order = [];
@@ -65,10 +66,12 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     int nextTag = 1;
 
     /// <param name="environment">Ground and buildings; null: the world's walkable ground (<see cref="WalkabilityEnvironment"/>).</param>
-    public RagdollSystem(CharacterRigs rigs, IRagdollEnvironment? environment = null)
+    /// <param name="options">The body options whose <see cref="Bodies.BodyOptions.AdvancedRagdolls"/> gives a new ragdoll its start speed; null: at rest, as the original.</param>
+    public RagdollSystem(CharacterRigs rigs, IRagdollEnvironment? environment = null, Bodies.BodyOptions? options = null)
     {
         this.rigs = rigs;
         this.environment = environment;
+        this.options = options;
         RagdollPhysics.WarmUpOnce();
     }
 
@@ -178,8 +181,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         for (int i = 0; i < next.Length; i++)
         {
             if (!next[i].Alive || table.Cold(i) is not { } cold) continue;
-            // Meitou: a new whole-body ragdoll goes on as the character moved, pushed by the blow that put it down (CombatSystem.Knockdown), else as it moved last tick.
-            var launch = cold.Blow ?? table.Previous[i].Velocity;
+            // Meitou (BodyOptions.AdvancedRagdolls): a new whole-body ragdoll goes on as the character moved, pushed by the blow that put it down (CombatSystem.Knockdown), else as it moved last tick.
+            var launch = options is { AdvancedRagdolls: true } ? cold.Blow ?? table.Previous[i].Velocity : Vector3.Zero;
             cold.Blow = null;
             cold.CarryAttach = cold.CarriedBy.IsNone ? null : AttachOf(table, cold);
             var id = table.IdOf(i);
