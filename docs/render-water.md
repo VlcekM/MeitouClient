@@ -46,7 +46,7 @@ exactly. Meitou absorbs along it and fades the last 2 units into the scene behin
 rocks and legs meet the water without a line. The swash keeps its sheet's thickness: its surface is raised over the
 beach and cut back to the run-up. Beside it, the raise above this moment's run-up is subtracted, else the water stood a
 few units deep at a dry waterline (the stepped line along the heightmap contour). Wet sand blends over the full-size
-scene, not the half-size copy.
+scene, not the half-size copy. SSAO fades under the water plane the same way ([post](render-post.md) "SSAO").
 **Observed** (2560x1440, DLSS, RTX 4090, Shark): the copy costs about 0.03 ms with Meitou water (its pass restart was
 there), 0.05 ms with Faithful.
 

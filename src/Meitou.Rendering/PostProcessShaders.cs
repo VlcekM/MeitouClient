@@ -25,7 +25,7 @@ static class PostProcessShaders
     /// each of 12 spiral taps adds the cosine of the sample direction against the normal over its distance, ignoring
     /// samples further than twice the radius. Writes R = occlusion factor (1 = open), G = view depth for the blur.  The occlusion is scaled by how much of the
     /// surface is still visible through the air in front of it (haze, weather fog, fog volumes: the world position is rebuilt from depth and the
-    /// frame globals' own <c>atmoApply</c> evaluated), <c>ao = 1 - (1 - ao) * visibility</c>.
+    /// frame globals' own <c>atmoApply</c> evaluated), <c>ao = 1 - (1 - ao) * visibility</c>, and by the water in front of it (<c>uWaterY</c>).
     /// </summary>
     public static readonly string Ssao = "#version 330 core\n" + Noise + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
 
@@ -40,6 +40,19 @@ static class PostProcessShaders
         uniform float uRadius, uStrength, uFadeStart, uFadeEnd;
         uniform vec3 uRight, uUp, uBack;   // the camera's axes in the world (view space to world offsets)
         uniform vec3 uSsaoEye;
+        uniform float uWaterY;               // the water plane's height (float min: no water)
+        uniform int uClipDepthZeroToOne;     // the depth's convention (Metal 1: the clip depth itself; Vulkan 0: half of it plus a half)
+
+        // The share of a surface's occlusion the water in front of it leaves. The water writes no depth, so the floor's occlusion fell on the
+        // water's own surface; it fades in over the water's last two units along the ray, as the water's edge does (docs/render-water.md "Edges").
+        // offset: the surface's world offset from the eye, scaled to its true view depth (viewZ's is not on Vulkan, whose clip depth runs 0 to 1
+        // as the projection's does; the occlusion's look was tuned with it as it is).
+        float waterVisibility(vec3 offset)
+        {
+            float below = uWaterY - (uSsaoEye.y + offset.y);
+            if (uWaterY < -1e30 || below <= 0.0 || uSsaoEye.y <= uWaterY) return 1.0;
+            return 1.0 - clamp(length(offset) * below / max(-offset.y, 1e-6) / 2.0, 0.0, 1.0);
+        }
 
         // The share of a surface's own light that reaches the eye through the air. atmoApply (the haze) is linear in the colour it is given, so
         // apply(1) - apply(0) is its transmittance, as the grass uses it; the fog volumes (drawn by the fog pass, not atmoApply) add theirs.
@@ -109,7 +122,13 @@ static class PostProcessShaders
             }
             float ao = 1.0 - clamp(uStrength * sum / float(N), 0.0, 1.0);
             ao = mix(ao, 1.0, smoothstep(uFadeStart, uFadeEnd, z));
-            if (ao < 0.999) ao = mix(1.0, ao, airVisibility(p.x * uRight + p.y * uUp + p.z * uBack));   // 1 - (1 - ao) * visibility
+            if (ao < 0.999)
+            {
+                vec3 offset = p.x * uRight + p.y * uUp + p.z * uBack;
+                float zd = uClipDepthZeroToOne != 0 ? d : 2.0 * d - 1.0;
+                float trueZ = uNearFar.x * uNearFar.y / (uNearFar.y - zd * (uNearFar.y - uNearFar.x));
+                ao = mix(1.0, ao, airVisibility(offset) * waterVisibility(offset * (trueZ / z)));   // 1 - (1 - ao) * visibility
+            }
             fragColour = vec4(ao, z, 0.0, 1.0);
         }
         """;

@@ -432,6 +432,8 @@ sealed class PostComposite : IDisposable
         s.P.Set(s.Up, r.M12, r.M22, r.M32);
         s.P.Set(s.Back, r.M13, r.M23, r.M33);
         s.P.Set(s.Eye, i.Eye);
+        s.P.Set(s.WaterY, i.WaterHeight ?? float.MinValue);
+        s.P.Set(s.ClipDepthZeroToOne, ctx.ClipDepthZeroToOne ? 1 : 0);
         s.P.ApplyGlobals();
         Fullscreen(cmd, s.P, aoA, w, h);
 
@@ -658,10 +660,11 @@ sealed class PostComposite : IDisposable
     sealed class SsaoPass : Pass
     {
         public readonly SamplerSlot Depth, Mask;
-        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder;
+        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY, ClipDepthZeroToOne;
         public SsaoPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.Ssao, "post ssao")
         {
-            (Depth, Mask, CharacterOccluder) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"));
+            ClipDepthZeroToOne = P.Uniform("uClipDepthZeroToOne");
+            (Depth, Mask, CharacterOccluder, WaterY) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"), P.Uniform("uWaterY"));
             (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
                 P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
