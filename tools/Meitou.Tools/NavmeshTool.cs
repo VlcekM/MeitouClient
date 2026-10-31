@@ -227,7 +227,6 @@ static class NavmeshTool
         return 0;
     }
 
-    /// <summary>The buildings within a radius of a point, with how many of their parts have collision (<c>--near x,z,radius</c>).</summary>
     /// <summary>The carvers and solids that reach within a radius of a point (<c>--near</c>): what cuts the mesh there when no building near the point explains it.</summary>
     static IEnumerable<string> DescribeVolumesNear(ZoneGeometry g, float x, float z, float radius)
     {
@@ -250,6 +249,7 @@ static class NavmeshTool
         }
     }
 
+    /// <summary>The buildings within a radius of a point, with how many of their parts have collision (<c>--near x,z,radius</c>).</summary>
     static IEnumerable<string> DescribeNear(ZoneGeometryGatherer gatherer, GameDatabase db, CollisionCache collision, ZoneCoordinate zone, float x, float z, float radius)
     {
         var (ox, oz) = WorldLayout.ZoneOrigin(zone);

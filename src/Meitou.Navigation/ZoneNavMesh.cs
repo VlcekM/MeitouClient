@@ -347,7 +347,7 @@ public sealed class ZoneNavMesh
     }
 
     /// <summary>
-    /// The edges of kept polygons that lie on the border line of this zone facing the direction (<paramref name="dx"/>, <paramref name="dz"/>) and lead nowhere
+    /// The edges of kept polygons (of every polygon when <paramref name="all"/>) that lie on the border line of this zone facing the direction (<paramref name="dx"/>, <paramref name="dz"/>) and lead nowhere
     /// inside the mesh (edges that have a link are left out when <paramref name="skipLinked"/>).
     /// </summary>
     /// <param name="keep">The kept set to read instead of <see cref="Kept"/>; null with <paramref name="all"/> false reads <see cref="Kept"/>.</param>
