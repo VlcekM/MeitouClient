@@ -373,7 +373,8 @@ sealed partial class GameHost
                 bool select = physical is { } pressed && PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
                 if (PanelLive() && physical is { } settingsButton && panel?.MouseDown(at, settingsButton) == true) { panelDrag = true; return; }
                 if (PanelLive() && panel?.Contains(at) == true) return;
-                if (select && PanelLive() && sandboxPicker?.MouseDown(at) == true) return;
+                if (select && PanelLive() && !config.SandboxPanelCollapsed && sandboxPicker?.MouseDown(at) == true) return;
+                if (select && PanelLive() && SandboxToggleClick(at)) return;
                 if (select && profiler?.Click(at) == true) { profilerClick = true; return; }   // F12's legend opens and closes rows
                 // The cinema's editor: its clicks never select or move characters.
                 if (select && cinema.MouseDown(at)) return;
@@ -429,7 +430,7 @@ sealed partial class GameHost
             mouse.Scroll += (m, wheel) =>
             {
                 if (Covered || PanelLive() && panel?.Scroll(wheel.Y) == true) return;
-                if (PanelLive() && sandboxPicker?.Scroll(wheel.Y) == true) return;
+                if (PanelLive() && !config.SandboxPanelCollapsed && sandboxPicker?.Scroll(wheel.Y) == true) return;
                 var at = Pixels(orbitAnchor ?? m.Position);
                 if (!cinema.Contains(at) && !player.UiScroll(at, wheel.Y) && !(PanelLive() && player.ContainsUi(at))) session.Input.AddWheel(wheel.Y);
             };

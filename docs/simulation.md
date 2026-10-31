@@ -1750,6 +1750,7 @@ The panel's **animation** drop-down (top right) forces a clip on the hero: the l
 name, typed letters filter it, the wheel, Up / Down and PageUp / PageDown scroll it, a click or Enter picks, Esc closes. The pick loops by the wall clock
 from the moment it was picked (a technique keeps only its root height, as in the game), drawn by the host in place of the simulation's layers;
 "simulation" gives the hero back. Nothing is sent to the simulation.
+The panel's corner button (^) folds it to a lone down-arrow button that opens it again; the state is `sandboxPanelCollapsed` in `meitou.user.json`.
 
 ## Duel
 

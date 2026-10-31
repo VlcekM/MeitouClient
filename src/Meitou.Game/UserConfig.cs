@@ -135,6 +135,8 @@ sealed class UserConfig
     public bool LuckyrenMode { get; set; }
     /// <summary>How many items dropped in play stay on the ground before the oldest goes (Advanced settings; <see cref="Meitou.Simulation.Items.GroundItems.Limit"/>).</summary>
     public int GroundItemLimit { get; set; } = Meitou.Simulation.Items.GroundItems.DefaultLimit;
+    /// <summary>The <c>--sandbox</c> debug panel at the top right is folded to its button (a down arrow); a click on the button toggles it.</summary>
+    public bool SandboxPanelCollapsed { get; set; }
     /// <summary>The audio sliders (Audio settings): the original's six volumes and the music frequency; null until first used, then taken from the install's settings.cfg.</summary>
     public Meitou.Audio.AudioSettings? Audio { get; set; }
     /// <summary>The original's Gameplay options (Gameplay settings); null until first used, then taken from the install's settings.cfg.</summary>
