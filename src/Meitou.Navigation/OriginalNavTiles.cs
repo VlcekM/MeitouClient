@@ -107,8 +107,15 @@ public static class OriginalNavTiles
     public const float InteriorCoverHeight = 12;
 
     /// <summary>
+    /// How far (units, X/Z) from an original interior face's centre a kept polygon at its height may end and still cover it: the original's small faces
+    /// along a mesh end have their centres a unit or two past ours, which is not a lost floor.
+    /// </summary>
+    public const float InteriorCoverReach = 3;
+
+    /// <summary>
     /// How much of each original interior group a built zone covers: of the group's faces whose centre lies in the zone's box, those with a kept polygon of
-    /// <paramref name="mesh"/> within <see cref="InteriorCoverHeight"/> of the centre's height. A stair or storey we lose shows as uncovered faces
+    /// <paramref name="mesh"/> within <see cref="InteriorCoverHeight"/> of the centre's height over the centre or within <see cref="InteriorCoverReach"/> of
+    /// it. A stair or storey we lose shows as uncovered faces
     /// (<c>meitou-tools navmesh --compare-interiors</c>, <c>InteriorCoverageTests</c>).
     /// </summary>
     public static List<InteriorCoverage> CoverInteriors(IReadOnlyList<OriginalInterior> groups, ZoneNavMesh mesh, Vector2 zoneMin, Vector2 zoneMax)
@@ -127,13 +134,21 @@ public static class OriginalNavTiles
                 c /= poly.Length;
                 if (c.X < zoneMin.X || c.X >= zoneMax.X || c.Z < zoneMin.Y || c.Z >= zoneMax.Y) continue;
                 n++;
-                mesh.HeightsAt(c.X, c.Z, heights);
-                if (heights.Any(y => MathF.Abs(y - c.Y) <= InteriorCoverHeight)) hit++;
+                if (Covers(mesh, c, heights)) hit++;
                 else { lo = MathF.Min(lo, c.Y); hi = MathF.Max(hi, c.Y); }
             }
             result.Add(new InteriorCoverage(group, n, hit, lo, hi));
         }
         return result;
+    }
+
+    /// <summary>Whether a kept polygon of <paramref name="mesh"/> covers an original face centre (<see cref="CoverInteriors"/>); <paramref name="heights"/> is scratch.</summary>
+    public static bool Covers(ZoneNavMesh mesh, Vector3 c, List<float> heights)
+    {
+        heights.Clear();
+        mesh.HeightsAt(c.X, c.Z, heights);
+        return heights.Any(y => MathF.Abs(y - c.Y) <= InteriorCoverHeight)
+            || mesh.Nearest(c.X, c.Y, c.Z, InteriorCoverReach, out _, p => MathF.Abs(mesh.HeightAt(p, c.X, c.Z) - c.Y) > InteriorCoverHeight) >= 0;
     }
 
     static float Float(string s) => float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out float f) ? f : 0;
