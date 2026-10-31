@@ -58,7 +58,7 @@ public static class Enhancements
         Func<bool>? interiorGi = null, Action<bool>? setInteriorGi = null, Func<bool>? characterLod = null, Action<bool>? setCharacterLod = null,
         Func<bool>? skin = null, Action<bool>? setSkin = null, Func<bool>? interiorLamps = null, Action<bool>? setInteriorLamps = null,
         Func<bool>? icons = null, Action<bool>? setIcons = null, Func<bool>? blood = null, Action<bool>? setBlood = null,
-        Func<bool>? bloodSurfaces = null, Action<bool>? setBloodSurfaces = null) =>
+        Func<bool>? bloodSurfaces = null, Action<bool>? setBloodSurfaces = null, Func<bool>? tracers = null, Action<bool>? setTracers = null) =>
     [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
@@ -152,6 +152,9 @@ public static class Enhancements
         new("displace", "Ground displacement (tessellation)", "off", "tessellated",
             () => GroundRelief.DisplaceActive, v => GroundRelief.DisplaceActive = v,
             "the game's ground is its height map's mesh; Meitou tessellates the ground near the eye and raises it by the same relief (needs tessellation shaders; visual only: characters walk on the undisplaced ground)"),
+        new("tracers", "Bolt tracers", "none", "streaks",
+            tracers ?? (() => false), setTracers ?? (_ => { }),
+            "the game draws a bolt in flight as its mesh alone, stretched a little with its speed, which is hard to follow at a distance; Meitou draws a faint streak behind it that grows out of the crossbow and shrinks into where the bolt stops (docs/game/combat.md \"Bolt visuals\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>
