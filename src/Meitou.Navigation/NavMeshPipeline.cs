@@ -9,8 +9,8 @@ internal static class NavMeshPipeline
     public static ZoneNavMesh BuildZone(ZoneGeometryGatherer gatherer, ZoneGeometry geometry, NavBuildSettings settings, out NavBuildTimes times, bool interiors = true, Action<string>? log = null)
         => BuildZone(gatherer, geometry, settings, out times, out _, interiors, log);
 
-    /// <summary>As above, also returning the separately built interior meshes (for the debug images). <paramref name="log"/> receives the debug listing of the interiors and door joins.</summary>
-    public static ZoneNavMesh BuildZone(ZoneGeometryGatherer gatherer, ZoneGeometry geometry, NavBuildSettings settings, out NavBuildTimes times, out IReadOnlyList<ZoneNavMesh> interiorMeshes, bool interiors = true, Action<string>? log = null)
+    /// <summary>As above, also returning the separately built interior meshes with their building keys (for the debug images and the join sweep). <paramref name="log"/> receives the debug listing of the interiors and door joins.</summary>
+    public static ZoneNavMesh BuildZone(ZoneGeometryGatherer gatherer, ZoneGeometry geometry, NavBuildSettings settings, out NavBuildTimes times, out IReadOnlyList<InteriorMesh> interiorMeshes, bool interiors = true, Action<string>? log = null)
     {
         interiorMeshes = [];
         var exterior = ZoneNavMeshBuilder.Build(geometry, settings, out times);
@@ -30,12 +30,11 @@ internal static class NavMeshPipeline
         });
         if (log is not null)
             for (int i = 0; i < built.Length; i++) DescribeInterior(geometries[i], built[i], log);
-        var nonEmpty = built.Where(m => m.PolygonCount > 0).ToList();
-        var doorless = geometries.Where((_, i) => built[i].PolygonCount > 0).Select(g => g.InteriorDoorless).ToList();
+        var nonEmpty = new List<InteriorMesh>();
+        for (int i = 0; i < built.Length; i++)
+            if (built[i].PolygonCount > 0) nonEmpty.Add(new InteriorMesh(built[i], geometries[i].InteriorOf, geometries[i].InteriorDoorless, geometries[i].InteriorDestroyed));
         interiorMeshes = nonEmpty;
-        var names = geometries.Where((_, i) => built[i].PolygonCount > 0).Select(g => g.InteriorOf).ToList();
-        var ruins = geometries.Where((_, i) => built[i].PolygonCount > 0).Select(g => g.InteriorDestroyed).ToList();
-        var combined = NavInteriors.Combine(exterior, nonEmpty, log, doorless, names, ruins);
+        var combined = NavInteriors.Combine(exterior, nonEmpty, log);
         times.Interiors = watch.Elapsed.TotalMilliseconds;
         times.InteriorCount = built.Length;
         times.Total += times.Interiors;

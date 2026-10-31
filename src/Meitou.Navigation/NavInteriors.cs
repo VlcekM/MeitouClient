@@ -23,12 +23,10 @@ internal static class NavInteriors
     public const float RuinHullJoinDistance = 5f;
 
     /// <summary>
-    /// The zone's exterior mesh with the interior meshes appended and joined; both kept and pruned polygons are carried over. <paramref name="doorless"/> marks
-    /// (per interior) the intact buildings without doors, joined along their hull instead, <paramref name="ruins"/> those of them that are ruins (joined within
-    /// <see cref="RuinHullJoinDistance"/>); <paramref name="names"/> (per interior, its building key) labels the join log.
+    /// The zone's exterior mesh with the interior meshes appended and joined; both kept and pruned polygons are carried over. A doorless interior (an intact
+    /// building without doors, or a ruin) is joined along its hull instead of at its doors, a ruin within <see cref="RuinHullJoinDistance"/>.
     /// </summary>
-    public static ZoneNavMesh Combine(ZoneNavMesh exterior, IReadOnlyList<ZoneNavMesh> interiors, Action<string>? log = null, IReadOnlyList<bool>? doorless = null, IReadOnlyList<string?>? names = null,
-        IReadOnlyList<bool>? ruins = null)
+    public static ZoneNavMesh Combine(ZoneNavMesh exterior, IReadOnlyList<InteriorMesh> interiors, Action<string>? log = null)
     {
         if (interiors.Count == 0) return exterior;
         var vertices = new List<Vector3>(exterior.Vertices);
@@ -45,7 +43,7 @@ internal static class NavInteriors
         var hi = exterior.BoundsMax;
         var offsets = new List<int>();
 
-        foreach (var m in interiors)
+        foreach (var m in interiors.Select(i => i.Mesh))
         {
             int vo = vertices.Count, po = polygons.Count;
             offsets.Add(po);
@@ -71,20 +69,20 @@ internal static class NavInteriors
 
         int exteriorCount = exterior.PolygonCount;
         for (int k = 0; k < interiors.Count; k++)
-            Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].PolygonCount, doorless?[k] ?? false, names?[k] ?? $"interior {k}", log,
-                ruins?[k] ?? false ? RuinHullJoinDistance : HullJoinDistance);
+            Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].Mesh.PolygonCount, interiors[k].Doorless,
+                interiors[k].Key ?? $"interior {k}", log, interiors[k].Ruin ? RuinHullJoinDistance : HullJoinDistance);
 
         CarryKeep(polygons.Count, neighbours, links, areas, kept);
 
         var heights = new List<HeightGrid?>();
-        foreach (var m in interiors.Prepend(exterior))
+        foreach (var m in interiors.Select(i => i.Mesh).Prepend(exterior))
             for (int p = 0; p < m.PolygonCount; p++) heights.Add(m.Heights?[p]);
         return new ZoneNavMesh
         {
             ZoneX = exterior.ZoneX, ZoneZ = exterior.ZoneZ, Vertices = [.. vertices], Polygons = [.. polygons], Neighbours = [.. neighbours], Areas = [.. areas],
             Links = links.Select(l => l is { Count: > 0 } ? l.ToArray() : null).ToArray(), Kept = [.. kept], BoundsMin = lo, BoundsMax = hi,
             DoorIds = doorIds.Count > 0 ? [.. doorIds] : null, DoorOf = doorIds.Count > 0 ? [.. doorOf] : null,
-            Surfaces = new NavSurfaces([.. (exterior.Surfaces?.Corners ?? []).Concat(interiors.SelectMany(m => m.Surfaces?.Corners ?? []))]),
+            Surfaces = new NavSurfaces([.. (exterior.Surfaces?.Corners ?? []).Concat(interiors.SelectMany(i => i.Mesh.Surfaces?.Corners ?? []))]),
             Terrain = exterior.Terrain,
             Heights = ZoneNavMesh.HeightsOf(heights),
         };
@@ -201,3 +199,8 @@ internal static class NavInteriors
     }
 }
 
+/// <summary>
+/// One built interior for <see cref="NavInteriors.Combine"/>: its mesh, its building's placement key (labels the join log and names it in the tool), whether it is
+/// joined along its hull (an intact building without doors, or a ruin) and whether it is a ruin (joined within <see cref="NavInteriors.RuinHullJoinDistance"/>).
+/// </summary>
+internal sealed record InteriorMesh(ZoneNavMesh Mesh, string? Key = null, bool Doorless = false, bool Ruin = false);

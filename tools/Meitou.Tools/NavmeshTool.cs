@@ -156,7 +156,7 @@ static class NavmeshTool
                 ZoneNavMesh? mesh = null;
                 for (int i = 0; i < (dx == 0 && dz == 0 ? repeat : 1); i++)
                 {
-                    mesh = NavMeshPipeline.BuildZone(gatherer, geometry, settings, out var t, out var inner, interiors: !noInteriors, log: verbose ? line => Console.WriteLine(line) : null); interiorMeshes.AddRange(inner);
+                    mesh = NavMeshPipeline.BuildZone(gatherer, geometry, settings, out var t, out var inner, interiors: !noInteriors, log: verbose ? line => Console.WriteLine(line) : null); interiorMeshes.AddRange(inner.Select(i => i.Mesh));
                     Console.WriteLine($"built {c}: {t.TileCount} tiles in {t.Tiles:0} ms, stitch {t.Stitch:0} ms, prune {t.Prune:0} ms, interiors {t.Interiors:0} ms ({t.InteriorCount}), total {t.Total:0} ms; {t.Polygons} polygons ({t.KeptPolygons} kept), {t.Vertices} vertices");
                     if (dx == 0 && dz == 0)
                         Console.WriteLine($"  cpu ms summed over tiles: raster {t.CpuRaster:0}, compact+areas {t.CpuCompact:0}, regions {t.CpuRegions:0}, contours {t.CpuContours:0}, polygons {t.CpuMesh:0}, detail {t.CpuDetail:0}");
@@ -384,18 +384,7 @@ static class NavmeshTool
         var original = OriginalNavTiles.LoadExterior(install, g.Zone);
         if (original is null) { yield return "no original tile"; yield break; }
         var kept = world.Find(g.Zone)!;
-        var buckets = new Dictionary<(int, int), List<int>>();
-        for (int p = 0; p < original.Polygons.Length; p++)
-        {
-            float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
-            foreach (int v in original.Polygons[p]) { x0 = MathF.Min(x0, original.Vertices[v].X); x1 = MathF.Max(x1, original.Vertices[v].X); z0 = MathF.Min(z0, original.Vertices[v].Z); z1 = MathF.Max(z1, original.Vertices[v].Z); }
-            for (int i = (int)MathF.Floor(x0 / 64); i <= (int)MathF.Floor(x1 / 64); i++)
-                for (int j = (int)MathF.Floor(z0 / 64); j <= (int)MathF.Floor(z1 / 64); j++)
-                {
-                    if (!buckets.TryGetValue((i, j), out var l)) buckets[(i, j)] = l = [];
-                    l.Add(p);
-                }
-        }
+        var buckets = Buckets(original);
         int both = 0, onlyOriginal = 0, onlyOurs = 0, pruned = 0;
         var list = new List<int>();
         for (float z = cz - radius; z <= cz + radius; z += step)
@@ -404,15 +393,7 @@ static class NavmeshTool
             for (float x = cx - radius; x <= cx + radius; x += step)
             {
                 float ground = gatherer.TerrainHeight(x, z);
-                bool o = false;
-                foreach (int p in buckets.GetValueOrDefault(((int)MathF.Floor(x / 64), (int)MathF.Floor(z / 64))) ?? [])
-                {
-                    var poly = original.Polygons[p];
-                    for (int k = 1; k + 1 < poly.Length; k++)
-                        if (NavGeometry.Barycentric(x, z, original.Vertices[poly[0]], original.Vertices[poly[k]], original.Vertices[poly[k + 1]], out float u, out float v, out float w) && u >= 0 && v >= 0 && w >= 0
-                            && MathF.Abs(u * original.Vertices[poly[0]].Y + v * original.Vertices[poly[k]].Y + w * original.Vertices[poly[k + 1]].Y - ground) < 12) { o = true; break; }
-                    if (o) break;
-                }
+                bool o = OriginalAt(original, buckets, x, z, ground, 12);
                 list.Clear(); kept.PolygonsAt(x, z, list);
                 bool m = list.Any(q => MathF.Abs(kept.HeightAt(q, x, z) - ground) < 12);
                 list.Clear(); mesh.PolygonsAt(x, z, list);
@@ -435,29 +416,7 @@ static class NavmeshTool
     {
         var original = OriginalNavTiles.LoadExterior(install, g.Zone);
         if (original is null) { yield return "no original tile"; yield break; }
-        var buckets = new Dictionary<(int, int), List<int>>();
-        for (int p = 0; p < original.Polygons.Length; p++)
-        {
-            float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
-            foreach (int v in original.Polygons[p]) { x0 = MathF.Min(x0, original.Vertices[v].X); x1 = MathF.Max(x1, original.Vertices[v].X); z0 = MathF.Min(z0, original.Vertices[v].Z); z1 = MathF.Max(z1, original.Vertices[v].Z); }
-            for (int i = (int)MathF.Floor(x0 / 64); i <= (int)MathF.Floor(x1 / 64); i++)
-                for (int j = (int)MathF.Floor(z0 / 64); j <= (int)MathF.Floor(z1 / 64); j++)
-                {
-                    if (!buckets.TryGetValue((i, j), out var l)) buckets[(i, j)] = l = [];
-                    l.Add(p);
-                }
-        }
-        bool OriginalAt(float x, float z, float y)
-        {
-            foreach (int p in buckets.GetValueOrDefault(((int)MathF.Floor(x / 64), (int)MathF.Floor(z / 64))) ?? [])
-            {
-                var poly = original.Polygons[p];
-                for (int k = 1; k + 1 < poly.Length; k++)
-                    if (NavGeometry.Barycentric(x, z, original.Vertices[poly[0]], original.Vertices[poly[k]], original.Vertices[poly[k + 1]], out float u, out float v, out float w) && u >= 0 && v >= 0 && w >= 0
-                        && MathF.Abs(u * original.Vertices[poly[0]].Y + v * original.Vertices[poly[k]].Y + w * original.Vertices[poly[k + 1]].Y - y) < 8) return true;
-            }
-            return false;
-        }
+        var buckets = Buckets(original);
         var kept = world.Find(g.Zone)!;
         var list = new List<int>();
         var file = MapFeatureFile.Open(install);
@@ -488,7 +447,7 @@ static class NavmeshTool
                     }
                     if (!walk || top < gatherer.TerrainHeight(x, z) + 12) continue;
                     samples++;
-                    bool o = OriginalAt(x, z, top);
+                    bool o = OriginalAt(original, buckets, x, z, top, 8);
                     if (o) orig++;
                     list.Clear(); mesh.PolygonsAt(x, z, list);
                     bool any = list.Any(q => MathF.Abs(mesh.HeightAt(q, x, z) - top) < 8);
@@ -500,6 +459,37 @@ static class NavmeshTool
             if (samples > 0)
                 yield return $"feature {record.Name} at {f.Position.X:0},{f.Position.Y:0},{f.Position.Z:0} x {bx0:0}..{bx1:0} z {bz0:0}..{bz1:0} y {by0:0}..{by1:0}: {samples} walkable top samples above ground, original {orig}, ours {ours}, ours kept {ourKept}";
         }
+    }
+
+    /// <summary>An original tile's polygons by the 64-unit cell of their box on (X, Z), for point lookups.</summary>
+    static Dictionary<(int, int), List<int>> Buckets(OriginalNavMesh original)
+    {
+        var buckets = new Dictionary<(int, int), List<int>>();
+        for (int p = 0; p < original.Polygons.Length; p++)
+        {
+            float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
+            foreach (int v in original.Polygons[p]) { x0 = MathF.Min(x0, original.Vertices[v].X); x1 = MathF.Max(x1, original.Vertices[v].X); z0 = MathF.Min(z0, original.Vertices[v].Z); z1 = MathF.Max(z1, original.Vertices[v].Z); }
+            for (int i = (int)MathF.Floor(x0 / 64); i <= (int)MathF.Floor(x1 / 64); i++)
+                for (int j = (int)MathF.Floor(z0 / 64); j <= (int)MathF.Floor(z1 / 64); j++)
+                {
+                    if (!buckets.TryGetValue((i, j), out var l)) buckets[(i, j)] = l = [];
+                    l.Add(p);
+                }
+        }
+        return buckets;
+    }
+
+    /// <summary>Whether the original tile has a polygon over (x, z) (<see cref="Buckets"/>) whose height there is within <paramref name="within"/> of y.</summary>
+    static bool OriginalAt(OriginalNavMesh original, Dictionary<(int, int), List<int>> buckets, float x, float z, float y, float within)
+    {
+        foreach (int p in buckets.GetValueOrDefault(((int)MathF.Floor(x / 64), (int)MathF.Floor(z / 64))) ?? [])
+        {
+            var poly = original.Polygons[p];
+            for (int k = 1; k + 1 < poly.Length; k++)
+                if (NavGeometry.Barycentric(x, z, original.Vertices[poly[0]], original.Vertices[poly[k]], original.Vertices[poly[k + 1]], out float u, out float v, out float w) && u >= 0 && v >= 0 && w >= 0
+                    && MathF.Abs(u * original.Vertices[poly[0]].Y + v * original.Vertices[poly[k]].Y + w * original.Vertices[poly[k + 1]].Y - y) < within) return true;
+        }
+        return false;
     }
 
     static bool Inside(Vector2[] poly, Vector2 q)
@@ -688,8 +678,7 @@ static class NavmeshTool
             var groups = OriginalNavTiles.LoadInteriors(install, zone);
             if (groups.Count == 0) { Console.WriteLine($"{zone}: no interior groups"); continue; }
             var g = gatherer.Gather(zone);
-            var joinLog = new List<string>();
-            var full = NavMeshPipeline.BuildZone(gatherer, g, settings, out _, out var inner, interiors: true, log: joinLog.Add);
+            var full = NavMeshPipeline.BuildZone(gatherer, g, settings, out _, out var inner, interiors: true);
             ZoneNavMesh mesh;
             bool[]? resolved = null;
             if (around == 0) mesh = ZoneKeptClosure.ResolveAlone(full, settings);
@@ -715,7 +704,7 @@ static class NavmeshTool
             if (verbose) FurnitureOverOriginal(gatherer, zone, groups, settings);
             int faces = coverage.Sum(c => c.Faces), covered = coverage.Sum(c => c.Covered);
             Console.WriteLine($"{zone}: {groups.Count} interior groups, {covered}/{faces} faces covered ({(faces > 0 ? 100.0 * covered / faces : 100):0.0} %)");
-            CompareJoins(gatherer, zone, groups, hulls, Reached(zone, full, inner, joinLog, settings, resolved), settings);
+            CompareJoins(gatherer, zone, groups, hulls, Reached(zone, full, inner, settings, resolved), settings);
             foreach (var c in coverage)
                 if (c.Faces > 0 && c.Covered < 0.9 * c.Faces)
                 {
@@ -734,19 +723,13 @@ static class NavmeshTool
     /// <summary>
     /// The interiors of a zone's build reached from the street: the zone's kept set resolved alone (its seeds and the border rule, as with no neighbour
     /// loaded) or with its neighbours (<paramref name="resolved"/>, <c>--around n</c>), walked over kept polygons, joins and links from its exterior's kept polygons; an interior counts when a polygon its own pruning kept is
-    /// reached (any of it when that kept nothing: a doorway strip kept only through a join is not the room). <paramref name="log"/> is the build's listing,
-    /// whose interior lines name the non-empty interiors in the order they were appended.
+    /// reached (any of it when that kept nothing: a doorway strip kept only through a join is not the room). Keys are the interiors' building keys
+    /// (<see cref="InteriorMesh.Key"/>), in the order the build appended them.
     /// </summary>
-    static HashSet<string> Reached(ZoneCoordinate zone, ZoneNavMesh full, IReadOnlyList<ZoneNavMesh> inner, List<string> log, NavBuildSettings settings, bool[]? resolved = null)
+    static HashSet<string> Reached(ZoneCoordinate zone, ZoneNavMesh full, IReadOnlyList<InteriorMesh> inner, NavBuildSettings settings, bool[]? resolved = null)
     {
-        var names = new List<string>();
-        foreach (var line in log)
-        {
-            var m = System.Text.RegularExpressions.Regex.Match(line, @"^  interior (\S+): (\d+) polygons,");
-            if (m.Success && int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture) > 0) names.Add(m.Groups[1].Value);
-        }
         var keep = resolved ?? ZoneKeptClosure.Resolve(new Dictionary<ZoneCoordinate, ZoneNavMesh> { [zone] = full }, settings)[zone];
-        int exterior = full.PolygonCount - inner.Sum(m => m.PolygonCount);
+        int exterior = full.PolygonCount - inner.Sum(m => m.Mesh.PolygonCount);
         var reached = new bool[full.PolygonCount];
         var queue = new Queue<int>();
         for (int p = 0; p < exterior; p++) if (keep[p]) { reached[p] = true; queue.Enqueue(p); }
@@ -755,12 +738,12 @@ static class NavmeshTool
                 if (keep[n] && !reached[n]) { reached[n] = true; queue.Enqueue(n); }
         var result = new HashSet<string>();
         int offset = exterior;
-        for (int k = 0; k < inner.Count && k < names.Count; k++)
+        for (int k = 0; k < inner.Count; k++)
         {
-            var own = inner[k].Kept;
+            var own = inner[k].Mesh.Kept;
             bool any = own.Any(x => x);
             for (int i = 0; i < own.Length; i++)
-                if (reached[offset + i] && (!any || own[i])) { result.Add(names[k]); break; }
+                if (reached[offset + i] && (!any || own[i]) && inner[k].Key is { } key) { result.Add(key); break; }
             offset += own.Length;
         }
         return result;
@@ -788,9 +771,8 @@ static class NavmeshTool
                     {
                         if (dx == 0 && dz == 0) continue;
                         var n = new ZoneCoordinate(zone.X + dx, zone.Y + dz);
-                        var log = new List<string>();
-                        var built = NavMeshPipeline.BuildZone(gatherer, gatherer.Gather(n), settings, out _, out var nInner, interiors: true, log: log.Add);
-                        neighbours.UnionWith(Reached(n, built, nInner, log, settings));
+                        var built = NavMeshPipeline.BuildZone(gatherer, gatherer.Gather(n), settings, out _, out var nInner, interiors: true);
+                        neighbours.UnionWith(Reached(n, built, nInner, settings));
                     }
             }
             return neighbours.Contains(key);
