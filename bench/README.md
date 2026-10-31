@@ -45,4 +45,6 @@ python3 bench/tools/generate.py --out site/public/bench/bench.json  # what the s
 
 ## Maintainer
 
-After an upstream update and a benchmark run, copy the maintainer CSV to `data/results/rtx3070-laptop-linux/daily-bench.csv` and run `python3 bench/tools/generate.py --append-targets` (adds the newly benchmarked commit to `targets.json` as a daily target unless it is code-identical to the latest target; release targets are added by hand).
+After a benchmark run, copy the maintainer CSV to `data/results/rtx3070-laptop-linux/daily-bench.csv`.
+
+`targets.json` is kept by CI (`.github/workflows/bench-target.yml`, `generate.py --add-target <tag>`): every release (`vX.Y.Z`) becomes a release target, and the day's first nightly (`v*-nightly.YYYYMMDD`) a daily target, unless that day has one or it is code-identical to the latest target. A release of the latest daily target's commit turns that target into the release.

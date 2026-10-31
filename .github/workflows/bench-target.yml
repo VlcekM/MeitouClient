@@ -1,0 +1,43 @@
+# Benchmark target: after nightly.yml or release.yml tags a build, adds it to bench/targets.json (bench/tools/generate.py --add-target:
+# every release, and the first nightly of each day unless code-identical to the latest target), commits that to master and rebuilds the
+# site (a GITHUB_TOKEN push starts no workflows).
+name: Benchmark target
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Add and commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          python3 bench/tools/generate.py --add-target "$TAG"
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Bench: $TAG is a benchmark target"
+          for i in 1 2 3; do
+            if git pull --rebase origin master && git push origin HEAD:master; then
+              gh workflow run site-image.yml --ref master
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1

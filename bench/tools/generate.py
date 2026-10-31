@@ -243,6 +243,57 @@ def load_targets(path, repo, position, errors, warnings):
     return out
 
 
+def add_target(tag, repo, ref, path):
+    """Append a tag's commit to targets.json (nightly.yml and release.yml call this after tagging). A release (vX.Y.Z) is always
+    added, labelled with its tag. A nightly (vX.Y.Z-nightly.YYYYMMDD[.N]) becomes "daily YYYY-MM-DD" only if no daily target has
+    that date yet and its commit is not code-identical to the latest target. Commits not newer than the latest target are skipped."""
+    rel = re.match(r"^v\d+\.\d+\.\d+$", tag)
+    nightly = re.match(r"^v\d+\.\d+\.\d+-nightly\.(\d{4})(\d\d)(\d\d)(\.\d+)?$", tag)
+    if not rel and not nightly:
+        print("%s is neither a release (vX.Y.Z) nor a nightly tag; not added" % tag)
+        return 0
+    order = git(repo, "rev-list", "--topo-order", ref)
+    h = git(repo, "rev-parse", "--verify", "--quiet", "refs/tags/" + tag + "^{commit}")
+    if order is None or not h:
+        print("error: cannot read %s or tag %s in %s" % (ref, tag, repo), file=sys.stderr)
+        return 2
+    h = h.strip()
+    position = {c: i for i, c in enumerate(reversed(order.split()))}
+    errors = []
+    targets = load_targets(path, repo, position, errors, [])
+    if errors or not targets:
+        print("\n".join(["error: targets.json is invalid"] + errors), file=sys.stderr)
+        return 1
+    if h not in position:
+        print("error: tag %s is not on %s" % (tag, ref), file=sys.stderr)
+        return 1
+    latest = targets[-1]
+    if rel and h == latest["commit_full"] and latest["kind"] == "daily":   # released at the day's target: that target becomes the release
+        latest.update(kind="release", label=tag, note=(latest["note"] + "; " if latest["note"] else "") + "was " + latest["label"])
+        t = latest
+    elif position[h] <= position[latest["commit_full"]]:
+        print("%s: %s is not newer than the latest target %s; not added" % (tag, h[:8], latest["commit"]))
+        return 0
+    elif rel:
+        date = (git(repo, "show", "-s", "--format=%cs", h) or "").strip()
+        t = {"commit": h[:8], "date": date, "label": tag, "kind": "release", "note": ""}
+    else:
+        date = "%s-%s-%s" % nightly.groups()[:3]
+        if any(x["kind"] == "daily" and x["date"] == date for x in targets):
+            print("%s: there is a daily target for %s already; not added" % (tag, date))
+            return 0
+        if code_identical(repo, latest["commit_full"], h):
+            print("%s: code-identical to the latest target %s; not added" % (tag, latest["commit"]))
+            return 0
+        t = {"commit": h[:8], "date": date, "label": "daily " + date, "kind": "daily", "note": tag}
+    if t is not latest:
+        targets.append(t)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("[\n" + ",\n".join("  " + json.dumps({k: x[k] for k in ("commit", "date", "label", "kind", "note")}, ensure_ascii=False) for x in targets) + "\n]\n")
+    print("targets.json: added %s %s (%s)" % (t["commit"], t["label"], tag))
+    return 0
+
+
 def load_machines(data_dir, errors):
     machines = {}
     mdir = os.path.join(data_dir, "machines")
@@ -399,8 +450,8 @@ def main():
     ap.add_argument("--repo", default=None, help="git repository to read history from (default: the one this file is in)")
     ap.add_argument("--ref", default="origin/master", help="upstream branch that defines commit order")
     ap.add_argument("--check", action="store_true", help="validate only, write nothing")
-    ap.add_argument("--append-targets", action="store_true",
-                    help="maintainer: add the maintainer's newer benchmarked commits to targets.json as daily targets (skips commits code-identical to the latest target)")
+    ap.add_argument("--add-target", metavar="TAG",
+                    help="add a release tag (vX.Y.Z) or the day's first nightly tag (vX.Y.Z-nightly.YYYYMMDD[.N]) to targets.json, then exit; see add_target")
     ap.add_argument("--data", default=os.path.join(ROOT, "data"))
     ap.add_argument("--targets", default=os.path.join(ROOT, "targets.json"))
     ap.add_argument("--config", default=os.path.join(ROOT, "series.json"))
@@ -415,6 +466,9 @@ def main():
     cfg = json.load(open(a.config, encoding="utf-8"))
     SEGMENTS.update(cfg["scenarios"])
     errors, warnings = [], []
+
+    if a.add_target:
+        sys.exit(add_target(a.add_target, a.repo, a.ref, a.targets))
 
     machines = load_machines(a.data, errors)
     rows_raw = read_results(a.data, machines, errors)
@@ -497,25 +551,6 @@ def main():
             warnings.append("machine %s has no results yet; it is not shown on the page" % mid)
     if maint not in machines:
         errors.append("maintainer machine %s (series.json) has no data/machines/%s.json" % (maint, maint))
-
-    if a.append_targets and not a.check and targets:
-        added = []
-        last_pos = max(position[t["commit_full"]] for t in targets)
-        mine = sorted({r["commit_full"] for r in rows if r["machine"] == maint}, key=lambda h: position[h])
-        for h in mine:
-            if position[h] <= last_pos or code_identical(a.repo, (targets + added)[-1]["commit_full"], h):
-                continue
-            first = min((r for r in rows if r["commit_full"] == h and r["machine"] == maint), key=lambda r: (r["date"], r["time"]))
-            label = "daily " + first["date"]
-            n = sum(1 for t in targets + added if t["label"].startswith(label))
-            if n:
-                label += " (%d)" % (n + 1)
-            added.append({"commit": short[h], "commit_full": h, "date": first["date"], "label": label, "kind": "daily", "note": ""})
-        if added:
-            targets.extend(added)
-            with open(a.targets, "w", encoding="utf-8") as f:
-                f.write("[\n" + ",\n".join("  " + json.dumps({k: t[k] for k in ("commit", "date", "label", "kind", "note")}, ensure_ascii=False) for t in targets) + "\n]\n")
-            print("targets.json: added %s" % ", ".join(t["commit"] for t in added))
 
     # which target does each benchmarked commit count for? (itself, or a code-identical target)
     target_of = {}

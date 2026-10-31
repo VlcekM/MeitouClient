@@ -132,3 +132,13 @@ jobs:
           if ($previous) { $flags += @('--notes-start-tag', $previous) }
           gh release create "v$env:VERSION" @zips --target $env:GITHUB_SHA `
             --title "Meitou $env:VERSION" --notes $notes @flags
+
+  # Every release becomes a benchmark target (bench/README.md).
+  bench-target:
+    needs: [version, release]
+    permissions:
+      contents: write
+      actions: write
+    uses: ./.github/workflows/bench-target.yml
+    with:
+      tag: v${{ needs.version.outputs.version }}

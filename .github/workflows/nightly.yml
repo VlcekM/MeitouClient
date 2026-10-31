@@ -174,6 +174,16 @@ jobs:
             Invoke-RestMethod -Uri $env:WEBHOOK -Method Post -ContentType 'application/json; charset=utf-8' -Body $bytes
           }
 
+  # The day's first nightly becomes a benchmark target (bench/README.md).
+  bench-target:
+    needs: [version, release]
+    permissions:
+      contents: write
+      actions: write
+    uses: ./.github/workflows/bench-target.yml
+    with:
+      tag: v${{ needs.version.outputs.version }}
+
   # Redraws the README's contributors panel (.github/scripts/contributors.mjs) after each release, Claude Haiku naming new contributors' areas;
   # committed only when it changed.
   contributors:
