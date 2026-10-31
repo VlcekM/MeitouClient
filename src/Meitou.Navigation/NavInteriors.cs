@@ -113,7 +113,8 @@ internal static class NavInteriors
                     if (n >= 0 && kept[n] && areas[n] != NavArea.Null && InBox(n) && approach.Add(n)) queue.Enqueue(n);
             var openApproach = approach.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
             near = [.. Enumerable.Range(0, exteriorCount).Where(q => kept[q] && areas[q] != NavArea.Null && polygons[q].Any(i => v[i].X >= lo.X && v[i].X <= hi.X && v[i].Z >= lo.Y && v[i].Z <= hi.Y))];
-            Link(openApproach, OpenEdges(near), $"{doorIds[door]} (approach)");
+            if (Link(openApproach, OpenEdges(near), $"{doorIds[door]} (approach)") == 0)
+                log?.Invoke($"    door {doorIds[door]} joins nothing: {inside.Count} interior door polygons ({openInside.Count} open edges), {outside.Count} exterior door polygons, {near.Count} kept exterior polygons in the approach box");
         }
 
         // A doorless interior (an open doorway): the hull cuts the exterior and the interior along the same line, so their edges meet there.

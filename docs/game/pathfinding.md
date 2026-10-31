@@ -302,6 +302,15 @@ When neither joins, the interior polygons connected to the door polygons within 
 edges face: a raised sill reached by steps (~47..52°) that cross the hull, whose lower part is the exterior's (cut at the hull: Y351 for
 `29-rebirth-INGAME`, door Y365..380; Y418 for `27-`, door Y430..441) and upper part the interior's, meeting on the hull's edge.
 **Observed** (zone 18.35, scratch probe): both rooms reached from the street; no other door in 18.35, 19.29, 20.29, 20.32, 21.32, 21.42 needs it.
+**Door painters** (engine choice): in an interior a door painter that does not reach `DoorHullDepth` (4) into the hull is swept toward the door's inner
+marker, at most `DoorHullReach` (12), until it does (`ZoneGeometryGatherer.ReachIntoHull`; the original shifts its painters 5 along one local axis,
+which way is **Unknown**, Generator below). **Observed** (`meitou-tools navmesh`): Heft's bar, the Outpost s-III `47.16:241-Newwworld-INGAME`, has its
+leaf 2..3 outside the hull; its interior had no door polygons and no join, an island (issue #130), and now paths from the street reach its ramp and
+upper floor. Polygon winding (`NavGeometry.SignedArea`) is summed in double from the first vertex: in float at world coordinates the products round by
+more than a painter's area, so a painter's winding came out at random and its own door polygons fell 16..19 "outside" it, without a door, hence no join
+(Sho-Battai Longhouses `43.11:12-`, `5563-`, `5565-`; Storm House Lagoon `48.45:9-`). Left unjoined in 18.35, 19.29, 20.32, 23.22, 26.13, 43.11,
+47.16, 48.13, 48.45, 50.33 (`door ... joins nothing` in `--verbose`): the tilted Small Shack `48.13:12-rebirth-INGAME`, whose door polygons meet the
+exterior's 13..17 apart in height (over `JoinHeight` 12); interiors over a zone border join in the zone holding the door.
 **Doorless interiors** (engine choice): an intact building with an interior mask and no `doors` (an open doorway) links its interior's open edges
 to the exterior's that run along them within `NavInteriors.HullJoinDistance` (2.5; both are cut on the hull's line); so do destroyed ones with a
 `destroyed boundary` (above); those without stay islands.

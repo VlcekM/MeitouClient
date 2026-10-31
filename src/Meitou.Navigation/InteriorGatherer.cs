@@ -238,7 +238,11 @@ internal sealed partial class ZoneGeometryGatherer
             if (!ctx.Own) return;
             int before = g.Painters.Count;
             AddVolume(g.Painters, shape, node, g.Stats, carver: false);
-            if (g.Painters.Count > before) g.Painters[^1].Owner = instanceId;
+            if (g.Painters.Count > before)
+            {
+                g.Painters[^1] = ReachIntoHull(g, g.Painters[^1], owner, shape, node);
+                g.Painters[^1].Owner = instanceId;
+            }
             AddInnerDoorSeed(g, owner, shape, node);
             return;
         }
@@ -246,6 +250,37 @@ internal sealed partial class ZoneGeometryGatherer
         g.Stats.Shapes++;
         bool walkable = group != 27 && (ctx.Own || mode == PathMode.Walkable);
         AddShape(g, shape, node, walkable ? BuildingSlopeDegrees : 0, carve: false);
+    }
+
+    /// <summary>How deep (units) a door painter must reach into the interior hull to paint the interior's cells by the door (engine choice: two cells).</summary>
+    public const float DoorHullDepth = 4;
+
+    /// <summary>How far (units) a door painter is swept toward the inside at most to reach <see cref="DoorHullDepth"/> into the hull (engine choice).</summary>
+    public const float DoorHullReach = 12;
+
+    /// <summary>
+    /// A door painter whose leaf stands outside the interior hull, swept toward the door's inner marker until it reaches <see cref="DoorHullDepth"/> into the
+    /// hull (at most <see cref="DoorHullReach"/>). Unswept, such a door paints no cell of the interior, so the interior has no door polygons and no door join
+    /// (docs/game/pathfinding.md, "Door painters"; Heft's bar, the Outpost s-III `47.16:241-Newwworld-INGAME`, leaf 2..3 outside its hull). Unchanged when it
+    /// reaches that deep already or the door has no markers.
+    /// </summary>
+    NavVolume ReachIntoHull(ZoneGeometry g, NavVolume painter, GameRecord door, PreparedShape shape, Matrix4x4 node)
+    {
+        var hull = g.InteriorHull!.Polygon;
+        if (painter.Polygon.Any(p => NavGeometry.InsideConvex(hull, p, -DoorHullDepth)) || !DoorMarkers(door, shape, node, out var behind, out var ahead)) return painter;
+        var centre = hull.Aggregate(Vector2.Zero, (a, p) => a + p) / hull.Length;
+        Vector2 b = new(behind.X, behind.Z), a = new(ahead.X, ahead.Z);
+        var inward = Vector2.Distance(a, centre) < Vector2.Distance(b, centre) ? a - b : b - a;
+        if (inward.LengthSquared() < 1e-6f) return painter;
+        inward = Vector2.Normalize(inward);
+        for (float d = 1; d <= DoorHullReach; d++)
+        {
+            var moved = painter.Polygon.Select(p => p + inward * d).ToArray();
+            if (!moved.Any(p => NavGeometry.InsideConvex(hull, p, -DoorHullDepth))) continue;
+            var points = painter.Polygon.Concat(moved).Select(p => new Vector3(p.X, 0, p.Y)).ToList();
+            return NavGeometry.Footprint(points, painter.YMin, painter.YMax, 0);
+        }
+        return painter;
     }
 
     /// <summary>The door's inner marker: the one of the two points either side of the door that lies inside the interior hull (height resolved later).</summary>
