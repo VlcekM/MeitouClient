@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data.Havok;
@@ -13,8 +14,8 @@ public sealed record OriginalNavMesh(ZoneCoordinate Zone, Vector3[] Vertices, in
 
 /// <summary>
 /// The original game's cached navmesh tiles (<c>data/newland/land/navtiles/tileX.Y.hkt</c>, Havok tagfiles; docs/game/pathfinding.md "Original tiles"): its
-/// <c>hkaiNavMesh</c> faces, edges and vertices, the vertices zone-local at 0.1 scale. Only the exterior mesh (the tile's first) is read; the interior groups that follow
-/// it are in a frame of their own (not decoded).
+/// <c>hkaiNavMesh</c> faces, edges and vertices. The exterior mesh (the tile's first) has its vertices zone-local at 0.1 scale; the interior groups that follow it
+/// (<see cref="LoadInteriors"/>) have theirs relative to their <c>Info</c> point (docs/formats/havok-tagfile.md).
 /// </summary>
 public static class OriginalNavTiles
 {
@@ -45,23 +46,31 @@ public static class OriginalNavTiles
             foreach (var set in sets)
                 if (set["meshConnections"] is HkObject[] connections)
                     foreach (var c in connections) joined.Add((Int(c["faceIndex"]), Int(c["edgeIndex"])));
-        var polygons = new int[faces.Length][];
+        var polygons = Polygons(faces, edges);
         var kinds = new OriginalEdge[faces.Length][];
+        for (int f = 0; f < faces.Length; f++)
+        {
+            long start = Int(faces[f]["startEdgeIndex"]);
+            var kind = new OriginalEdge[polygons[f].Length];
+            for (int k = 0; k < kind.Length; k++)
+                kind[k] = Int(edges[start + k]["oppositeFace"]) >= 0 ? OriginalEdge.Inner : joined.Contains((f, start + k)) ? OriginalEdge.TileBorder : OriginalEdge.End;
+            kinds[f] = kind;
+        }
+        return new OriginalNavMesh(zone, vertices, polygons, kinds);
+    }
+
+    /// <summary>Each face's vertex indices: the <c>a</c> end of each of its edges, in order.</summary>
+    static int[][] Polygons(HkObject[] faces, HkObject[] edges)
+    {
+        var polygons = new int[faces.Length][];
         for (int f = 0; f < faces.Length; f++)
         {
             long start = Int(faces[f]["startEdgeIndex"]), count = Int(faces[f]["numEdges"]);
             var poly = new int[count];
-            var kind = new OriginalEdge[count];
-            for (int k = 0; k < count; k++)
-            {
-                var e = edges[start + k];
-                poly[k] = (int)Int(e["a"]);
-                kind[k] = Int(e["oppositeFace"]) >= 0 ? OriginalEdge.Inner : joined.Contains((f, start + k)) ? OriginalEdge.TileBorder : OriginalEdge.End;
-            }
+            for (int k = 0; k < count; k++) poly[k] = (int)Int(edges[start + k]["a"]);
             polygons[f] = poly;
-            kinds[f] = kind;
         }
-        return new OriginalNavMesh(zone, vertices, polygons, kinds);
+        return polygons;
     }
 
     /// <summary>
@@ -88,15 +97,7 @@ public static class OriginalNavTiles
             var vertices = new Vector3[raw.Length];
             for (int i = 0; i < raw.Length; i++)
                 if (raw[i] is float[] f) vertices[i] = origin + Scale * new Vector3(f[0], f[1], f[2]);
-            var polygons = new int[faces.Length][];
-            for (int f = 0; f < faces.Length; f++)
-            {
-                long start = Int(faces[f]["startEdgeIndex"]), count = Int(faces[f]["numEdges"]);
-                var poly = new int[count];
-                for (int k = 0; k < count; k++) poly[k] = (int)Int(edges[start + k]["a"]);
-                polygons[f] = poly;
-            }
-            result.Add(new OriginalInterior(parts[0], origin, vertices, polygons));
+            result.Add(new OriginalInterior(parts[0], origin, vertices, Polygons(faces, edges)));
             mesh = null;
         }
         return result;
@@ -135,7 +136,7 @@ public static class OriginalNavTiles
         return result;
     }
 
-    static float Float(string s) => float.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float f) ? f : 0;
+    static float Float(string s) => float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out float f) ? f : 0;
 
     static long Int(object? v) => v is long l ? l : 0;
 }
