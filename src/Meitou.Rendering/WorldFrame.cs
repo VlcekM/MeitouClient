@@ -1696,6 +1696,7 @@ static class WorldFrame
         }
         post.MarkParticles();
         post.Particles = gpu.Particles;
+        post.SetCloudMotion(gpu.Sky.CloudMotion);
         post.End(); // SSAO, upscaler, exposure, tone map, FXAA into the chain's target
         var slices = SceneSlices(post, camera).ToList();
         // The movement marker and stealth arrows over the finished picture, in their materials' colours, sorted against the near slice's depth like the game's debug_marker.

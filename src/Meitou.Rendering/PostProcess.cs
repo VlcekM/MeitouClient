@@ -93,6 +93,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     readonly SmaaPasses smaaPasses;
     readonly HeatHazePass hazePass;
     readonly VelocityPass velocityPass;
+    readonly CloudMotionPass cloudMotionPass;
     readonly TaaPass taaPass;
     readonly FogPass fogPass;
     GiResolvePass? giResolvePass;   // made the first time the GI resolve runs
@@ -196,6 +197,20 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             (Flow, Perturbation, Depth, Image) = (P.Sampler("uFlow"), P.Sampler("uPerturbation"), P.Sampler("uDepth"), P.Sampler("uImage"));
             (Phase, Amount, Tan, NearFar, FarClip, HasDepth) = (P.Uniform("uPhase"), P.Uniform("uAmount"), P.Uniform("uTan"), P.Uniform("uNearFar"),
                 P.Uniform("uFarClip"), P.Uniform("uHasDepth"));
+        }
+    }
+
+    /// <summary>The volumetric clouds' motion over the sky's (<see cref="UpscaleShaders.CloudMotion"/>).</summary>
+    sealed class CloudMotionPass : FullscreenProgram
+    {
+        public readonly SamplerSlot NearDepth, FarDepth, Clouds, Distance;
+        public readonly UniformHandle ToPrev, Planes, JitterNdc, HasFar, ClipDepthZeroToOne, FlipDepthY, Tan, Right, Up, Back, Wind;
+        public CloudMotionPass(GpuContext gpu) : base(gpu, UpscaleShaders.CloudMotion, "post cloud motion")
+        {
+            (NearDepth, FarDepth, Clouds, Distance) = (P.Sampler("uNearDepth"), P.Sampler("uFarDepth"), P.Sampler("uClouds"), P.Sampler("uCloudDistance"));
+            (ToPrev, Planes, JitterNdc, HasFar) = (P.Uniform("uToPrev"), P.Uniform("uPlanes"), P.Uniform("uJitterNdc"), P.Uniform("uHasFar"));
+            (ClipDepthZeroToOne, FlipDepthY, Tan) = (P.Uniform("uClipDepthZeroToOne"), P.Uniform("uFlipDepthY"), P.Uniform("uTan"));
+            (Right, Up, Back, Wind) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uWind"));
         }
     }
 
@@ -365,6 +380,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         (compositePass, fxaaPass, hazePass) = (new CompositePass(gpu), new FxaaPass(gpu), new HeatHazePass(gpu));
         smaaPasses = new SmaaPasses(gpu);
         (velocityPass, taaPass, fogPass) = (new VelocityPass(gpu), new TaaPass(gpu), new FogPass(gpu));
+        cloudMotionPass = new CloudMotionPass(gpu);
         (particleDepthPass, particleCompositePass, particleCoveragePass) = (new ParticleDepthPass(gpu), new ParticleCompositePass(gpu), new ParticleCoveragePass(gpu));
         particleSoftDepthPass = new ParticleSoftDepthPass(gpu);
     }
@@ -576,6 +592,39 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// only red and green written (B and A, depth and reactivity, stay), no depth test, culling or blending.
     /// </summary>
     public Action<MotionTargets>? ObjectMotion { get; set; }
+
+    /// <summary>This frame's volumetric clouds, whose sky pixels get the clouds' motion (<see cref="UpscaleShaders.CloudMotion"/>); null: the sky's.</summary>
+    public CloudMotion? CloudMotion { get; set; }
+
+    void IWorldPostChain.SetCloudMotion(CloudMotion? clouds) => CloudMotion = clouds;
+
+    /// <summary>The volumetric clouds' motion over the sky's in the motion target (red and green), by the clouds' opacity.</summary>
+    void RunCloudMotion(CloudMotion clouds)
+    {
+        var c = cloudMotionPass;
+        Bind(c.P, c.NearDepth, sceneDepth);
+        Bind(c.P, c.FarDepth, farDepth);
+        if (c.Clouds.IsValid) c.P.Bind(c.Clouds, clouds.Clouds);
+        if (c.Distance.IsValid) c.P.Bind(c.Distance, clouds.Distance);
+        bool far = farSliceDrawn;
+        c.P.Set(c.ToPrev, far ? farToPrevious : nearToPrevious);
+        var planes = far ? farPlanes : nearPlanes;
+        c.P.Set(c.Planes, planes.X, planes.Y);
+        c.P.Set(c.JitterNdc, 2 * JitterPixels.X / width, 2 * JitterPixels.Y / height);
+        c.P.Set(c.HasFar, far ? 1 : 0);
+        c.P.Set(c.ClipDepthZeroToOne, Gpu.ClipDepthZeroToOne ? 1 : 0);
+        c.P.Set(c.FlipDepthY, Gpu.RenderTargetsBottomUp ? 0 : 1);
+        float tanY = MathF.Tan(fovNow * 0.5f);
+        c.P.Set(c.Tan, tanY * aspectNow, tanY);
+        var r = viewRotation;
+        c.P.Set(c.Right, r.M11, r.M21, r.M31);
+        c.P.Set(c.Up, r.M12, r.M22, r.M32);
+        c.P.Set(c.Back, r.M13, r.M23, r.M33);
+        c.P.Set(c.Wind, clouds.Wind.X, clouds.Wind.Y);
+        Draw(c.P, motion!.Attachment, motion.Format, width, height, width, height,
+            PassState with { Blend = new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha), ColourMask = ColorMask.R | ColorMask.G });
+        CloseSegment();
+    }
     /// <summary>Makes the vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/> when it is first asked for (null: not available).</summary>
     public Func<UpscalerKind, IUpscaler?>? UpscalerFactory { get; set; }
     readonly HashSet<UpscalerKind> unavailable = [];
@@ -1140,6 +1189,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Gpu.EndHostPass(cmd);
             Gpu.EndNative(cmd);
         }
+        if (CloudMotion is { } clouds && !reset) RunCloudMotion(clouds);
         (historyA, historyB) = (historyB, historyA);
         var output = historyB!;
         bool done = false;
@@ -1505,7 +1555,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeSceneLayers();
         DisposeMerged();
         Hiz?.Dispose();
-        foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, taaPass, fogPass, particleDepthPass, particleSoftDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
+        foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, cloudMotionPass, taaPass, fogPass, particleDepthPass, particleSoftDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
         smaaPasses.Dispose();
         giResolvePass?.P.Dispose();
         giApplyPass?.P.Dispose();

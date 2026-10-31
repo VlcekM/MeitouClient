@@ -116,6 +116,8 @@ interface IWorldPostChain
     PassTargets ParticleTargets(int divisor);
     void BeginParticlesLow(int divisor);
     void CompositeParticlesLow(int divisor);
+    /// <summary>This frame's volumetric clouds for the motion vectors (null: none; a chain without the pass keeps the sky's motion).</summary>
+    void SetCloudMotion(CloudMotion? clouds) { }
     /// <summary>The Meitou fog's soft fade: the scene's depth copied for the full-size particles (nothing where the chain has no copy).</summary>
     void PrepareSoftParticleDepth() { }
     /// <summary>The scene's depth for one particle size's soft fade, or null (Faithful, or a chain without it: the sprites stay hard-edged).</summary>

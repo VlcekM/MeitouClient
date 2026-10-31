@@ -7,6 +7,9 @@ namespace Meitou.Rendering;
 public sealed unsafe partial class SkyRenderer
 {
     VolumetricCloudRenderer? volume;
+
+    /// <summary>This frame's main-view volumetric clouds for the motion vectors, or null (no volume, or not marched this frame).</summary>
+    public CloudMotion? CloudMotion => volume?.MainMotion is { } m && m.Frame == Gpu.Frame.Number ? m : null;
     SampledTexture volumeImage;
     bool volumeShadowsReady;
     bool VolumeEnabled => LitClouds && Physical && state.Valid && (CloudDensity > 0 || Warm);

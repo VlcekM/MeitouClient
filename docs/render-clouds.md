@@ -23,6 +23,10 @@ over atmosphere/stars/planets before weather fog, with geometry drawn over the s
 Independent main/reflection histories reproject opacity-weighted distance and wind;3x3 clips
 history. Reset on coverage/camera/light/ambient/size/continuity changes. Mirrored-eye preparation
 is required for reflection. Reprojection approximates a volume, not motion at every depth.
+Upscaler motion: the velocity pass gives sky pixels the far plane's motion (the turn alone); a cloud pixel (`UpscaleShaders.CloudMotion`)
+takes its opacity-weighted point's parallax through the slice's reprojection plus the wind's shift, blended by opacity (x2.5) into the
+motion target after the history resolve (Vulkan chain only). Whether this ends the DLSS streaks on clouds in play is **Unknown** (offscreen
+orbits move the camera too little to show either); the pass is **Observed** to write (a forced motion moves the sky).
 Fog-hidden rays can skip marching; full-sky skip requires every direction conservatively hidden.
 Clock rewind/weather changes must refresh sky/fog histories and not retain stale colour.
 
