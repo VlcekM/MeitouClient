@@ -1,5 +1,5 @@
 # Website image: builds site/ (Astro, served by nginx), pushes it to GHCR as ghcr.io/vlcekm/meitou-site, then calls the redeploy webhook.
-# Runs on pushes to master that touch site/ or this file, and on demand.
+# Runs on pushes to master that touch site/, bench/ (benchmark data) or this file, and on demand.
 name: Site image
 
 on:
@@ -7,6 +7,7 @@ on:
     branches: [master]
     paths:
       - "site/**"
+      - "bench/**"
       - ".github/workflows/site-image.yml"
   workflow_dispatch:
 
@@ -23,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0   # the roadmap history is read from git
+          fetch-depth: 0   # the roadmap history and the benchmark commit order are read from git
 
       - uses: actions/setup-node@v5
         with:
@@ -32,6 +33,10 @@ jobs:
       # site/src/data/history.json: the roadmap's status counts and changes over time, for /roadmap and its feeds.
       - name: Roadmap history
         run: node site/scripts/history.mjs
+
+      # site/public/bench/bench.json: the benchmark page's data, built from bench/data and the commit order on master; fails on invalid data.
+      - name: Benchmark data
+        run: python3 bench/tools/generate.py --out site/public/bench/bench.json
 
       - uses: docker/setup-buildx-action@v3
 

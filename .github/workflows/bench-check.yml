@@ -1,0 +1,38 @@
+# Benchmark data check: pull requests that touch bench/data/ must only add or change benchmark data (the repository owner may change anything),
+# and the data must validate (bench/tools/generate.py --check). Other pull requests are not affected.
+name: Benchmark data check
+
+on:
+  pull_request:
+    paths:
+      - "bench/data/**"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # commit order and "is this commit on master" come from git
+
+      # Contributors may only add or change files under bench/data/machines/ and bench/data/results/. The repository owner may change anything.
+      - name: Only benchmark data changed
+        env:
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          OWNER: ${{ github.repository_owner }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$AUTHOR" = "$OWNER" ]; then echo "author is the repository owner: no path restriction"; exit 0; fi
+          bad=$(git diff --name-only "$BASE" "$HEAD" | grep -vE '^bench/data/(machines|results)/' || true)
+          if [ -n "$bad" ]; then
+            echo "This pull request touches files outside bench/data/machines/ and bench/data/results/:"
+            echo "$bad"
+            exit 1
+          fi
+
+      - name: Validate data
+        run: python3 bench/tools/generate.py --check --ref origin/master
