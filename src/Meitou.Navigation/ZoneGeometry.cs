@@ -108,8 +108,8 @@ internal sealed class ZoneGeometry
     /// <summary>Seed points: regions of the mesh near one stay, the rest is pruned (docs/game/pathfinding.md, "Region pruning by seeds").</summary>
     public List<Vector3> Seeds { get; } = [];
     /// <summary>
-    /// For an interior mesh: its building's first shopkeeper or general node, the seed when <see cref="Seeds"/> (the inner door markers) find nothing
-    /// (docs/game/pathfinding.md, "Interior seeds").
+    /// For an interior mesh: its building's first shopkeeper or general node, else (no door either) the original's ray seed on its floor, the seed when
+    /// <see cref="Seeds"/> (the inner door markers) find nothing (docs/game/pathfinding.md, "Interior seeds").
     /// </summary>
     public List<Vector3> NodeSeeds { get; } = [];
 
@@ -127,9 +127,8 @@ internal sealed class ZoneGeometry
     /// <summary>Debug: per part with collision, its owner and part names, collision path and the triangles [First, Last) it emitted.</summary>
     public List<(string Owner, string Part, string Path, int First, int Last)> PartRanges { get; } = [];
     /// <summary>
-    /// For the interior of a destroyed building: no seed keeps its ground floor (instead of the largest region, <see cref="SeedPruner.DestroyedFloorBand"/>). It has
-    /// no door, hence no seed, and its largest region can be an upper floor or wall tops under a roof whose intact collision stays (docs/game/pathfinding.md,
-    /// "Destroyed interiors").
+    /// For the interior of a destroyed building: its ground floor is kept besides what its seed reaches (<see cref="SeedPruner.DestroyedFloorBand"/>), and it is
+    /// joined to the exterior along its hull (docs/game/pathfinding.md, "Destroyed interiors").
     /// </summary>
     public bool InteriorDestroyed { get; init; }
     /// <summary>
@@ -138,7 +137,7 @@ internal sealed class ZoneGeometry
     /// </summary>
     public List<(Vector2 A, Vector2 B)>? DestroyedOutline { get; init; }
     /// <summary>
-    /// For the interior of an intact building without doors (an open doorway, e.g. the Hive Commune Hut), or of a ruin with a <see cref="DestroyedOutline"/>: joined to the exterior wherever their edges meet
+    /// For the interior of an intact building without doors (an open doorway, e.g. the Hive Commune Hut), or of a ruin: joined to the exterior wherever their edges meet
     /// on the hull's line (docs/game/pathfinding.md, "Door joins").
     /// </summary>
     public bool InteriorDoorless { get; init; }
@@ -147,7 +146,7 @@ internal sealed class ZoneGeometry
 
     /// <summary>The range of triangles (in triangle numbers) that came from buildings; for the seed rays.</summary>
     public int BuildingFirstTriangle, BuildingLastTriangle;
-    /// <summary>The triangle ranges of the exterior's floor-0 and floor-1 building parts (groups 9 and 10): what the seed ray rule tests.</summary>
+    /// <summary>The triangle ranges of the exterior's floor-0 and floor-1 building parts (groups 9 and 10), what the seed ray rule tests; in an interior, its floor-0 parts (group 9), what the origin ray seed tests.</summary>
     public List<(int First, int Last)> FloorRanges { get; } = [];
     /// <summary>Hash of the zone's buildings (placement, rotation, record), the cache key of the built mesh (<see cref="ZoneGeometryGatherer.BuildingHash"/>); 0 for an interior mesh.</summary>
     public uint BuildingHash { get; set; }

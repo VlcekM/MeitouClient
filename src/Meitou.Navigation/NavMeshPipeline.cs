@@ -34,7 +34,8 @@ internal static class NavMeshPipeline
         var doorless = geometries.Where((_, i) => built[i].PolygonCount > 0).Select(g => g.InteriorDoorless).ToList();
         interiorMeshes = nonEmpty;
         var names = geometries.Where((_, i) => built[i].PolygonCount > 0).Select(g => g.InteriorOf).ToList();
-        var combined = NavInteriors.Combine(exterior, nonEmpty, log, doorless, names);
+        var ruins = geometries.Where((_, i) => built[i].PolygonCount > 0).Select(g => g.InteriorDestroyed).ToList();
+        var combined = NavInteriors.Combine(exterior, nonEmpty, log, doorless, names, ruins);
         times.Interiors = watch.Elapsed.TotalMilliseconds;
         times.InteriorCount = built.Length;
         times.Total += times.Interiors;

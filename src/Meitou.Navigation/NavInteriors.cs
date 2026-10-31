@@ -16,12 +16,19 @@ internal static class NavInteriors
     public const float ApproachReach = 32;
     /// <summary>How close (units) a doorless interior's open edges and the exterior's have to be to be joined: both are cut on the hull's line, a cell or so apart (engine choice).</summary>
     public const float HullJoinDistance = 2.5f;
+    /// <summary>
+    /// The same for a ruin (a destroyed interior): the original stitches edges up to 2 apart (FUN_1403c5830, maxSeparation 0.2 Havok), both cut exactly on
+    /// the hull; ours come out off that line by up to a cell and the contour error (1.3 cells) each (engine choice; docs/game/pathfinding.md "Destroyed interiors").
+    /// </summary>
+    public const float RuinHullJoinDistance = 5f;
 
     /// <summary>
     /// The zone's exterior mesh with the interior meshes appended and joined; both kept and pruned polygons are carried over. <paramref name="doorless"/> marks
-    /// (per interior) the intact buildings without doors, joined along their hull instead; <paramref name="names"/> (per interior, its building key) labels the join log.
+    /// (per interior) the intact buildings without doors, joined along their hull instead, <paramref name="ruins"/> those of them that are ruins (joined within
+    /// <see cref="RuinHullJoinDistance"/>); <paramref name="names"/> (per interior, its building key) labels the join log.
     /// </summary>
-    public static ZoneNavMesh Combine(ZoneNavMesh exterior, IReadOnlyList<ZoneNavMesh> interiors, Action<string>? log = null, IReadOnlyList<bool>? doorless = null, IReadOnlyList<string?>? names = null)
+    public static ZoneNavMesh Combine(ZoneNavMesh exterior, IReadOnlyList<ZoneNavMesh> interiors, Action<string>? log = null, IReadOnlyList<bool>? doorless = null, IReadOnlyList<string?>? names = null,
+        IReadOnlyList<bool>? ruins = null)
     {
         if (interiors.Count == 0) return exterior;
         var vertices = new List<Vector3>(exterior.Vertices);
@@ -64,7 +71,8 @@ internal static class NavInteriors
 
         int exteriorCount = exterior.PolygonCount;
         for (int k = 0; k < interiors.Count; k++)
-            Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].PolygonCount, doorless?[k] ?? false, names?[k] ?? $"interior {k}", log);
+            Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].PolygonCount, doorless?[k] ?? false, names?[k] ?? $"interior {k}", log,
+                ruins?[k] ?? false ? RuinHullJoinDistance : HullJoinDistance);
 
         CarryKeep(polygons.Count, neighbours, links, areas, kept);
 
@@ -108,7 +116,7 @@ internal static class NavInteriors
 
     /// <summary>Links the door polygons of one interior (polygons [first, first + count)) to the exterior's door polygons of the same door, or a doorless one along its hull.</summary>
     static void Join(List<Vector3> v, List<int[]> polygons, List<int[]> neighbours, List<byte> areas, List<bool> kept, List<List<int>?> links, List<int> doorOf, List<string> doorIds,
-        int exteriorCount, int first, int count, bool doorless, string name, Action<string>? log)
+        int exteriorCount, int first, int count, bool doorless, string name, Action<string>? log, float hullDistance)
     {
         bool Free(int p, int e) => neighbours[p][e] < 0 && !NavGeometry.HasLink(CollectionsMarshal.AsSpan(links[p]), e);
         for (int door = 0; door < doorIds.Count; door++)
@@ -153,7 +161,7 @@ internal static class NavInteriors
             lo -= new Vector2(JoinDistance); hi += new Vector2(JoinDistance);
             var near = Enumerable.Range(0, exteriorCount).Where(q => kept[q] && areas[q] != NavArea.Null && polygons[q].Any(i => v[i].X >= lo.X && v[i].X <= hi.X && v[i].Z >= lo.Y && v[i].Z <= hi.Y)).ToList();
             var openInside = inside.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
-            Link(openInside, OpenEdges(near), $"{name} (doorless hull edge)", HullJoinDistance);
+            Link(openInside, OpenEdges(near), $"{name} (doorless hull edge)", hullDistance);
         }
 
         List<(int, int)> OpenEdges(IEnumerable<int> outside) => [.. outside.SelectMany(q => Enumerable.Range(0, polygons[q].Length).Where(f => Free(q, f)).Select(f => (q, f)))];

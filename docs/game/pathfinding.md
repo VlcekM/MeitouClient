@@ -250,21 +250,27 @@ none when destroyed; it holds interior stairs and upper floors. **Verified** (ti
 inside the bounds of `Storm_House_01_Interior-stairs` (`is stairs`, only in `interior`). **Observed** (scratch NavSystem probe):
 without the list that storey and the Watchtower `2-Newwworld-INGAME` floors +130/+190/+290 were unkept; with it paths from the door seed reach them.
 **Destroyed interiors**: a part with a `destroyed mesh` but no `destroyed collision` keeps its intact `xml collision` (**Verified**,
-`FUN_14055f6e0`; with no `phs or mesh` its `xml collision` is cleared instead). A destroyed building has no doors, so its interior has no seed.
-**Observed** (original tiles 20.32, 18.35, 19.29, 20.29, interior groups decoded as Info + 10 × vertex, matched to Meitou's interiors by box):
-the original keeps a mesh in each destroyed seedless interior, on its ground floor only (e.g. Storm House `32-Newwworld-INGAME` 6 faces at
-Y1571..1578, Bughouse `4937-` 32 faces at Y1608..1619). Meitou's largest region there can be wall tops (Bughouse: 149 polygons at Y1710..1757
-under the ruined roof) or an upper floor (Stationhouse `4-`, Y1703). Engine choice: keep every region whose lowest point is within
-`SeedPruner.DestroyedFloorBand` (40) of the interior's lowest polygon; upper storeys there are 60+ higher. Without it, squatters housed in
-these nodeless ruins stood on the terrain under their floors.
+`FUN_14055f6e0`; with no `phs or mesh` its `xml collision` is cleared instead). The original rebuilds a ruin's interior at load or when it is destroyed
+and stitches it to the tile's exterior (**Verified**, Generator, "Destroyed at run time"); Meitou builds it the same way. A ruin has no doors, so its seed
+is a node, else the original's ray from above its origin onto its floor-0 part (`ZoneGeometryGatherer.OriginRaySeed`). **Observed** (original tiles
+20.32, 18.35, 19.29, 20.29, built with these buildings destroyed; interior groups matched to ours by box): the original keeps a mesh on the ground floor
+only (e.g. Storm House `32-Newwworld-INGAME` 6 faces at Y1571..1578, Bughouse `4937-` 32 faces at Y1608..1619). Engine choice: also keep every region
+whose lowest point is within `SeedPruner.DestroyedFloorBand` (40) of the interior's lowest polygon (upper storeys are 60+ higher): our mesh can split a
+floor the original keeps whole (Hub L-House `4645-`: the seed's region covers 20 of the tile's 24 faces, with the band 24).
 **Destroyed boundary** (**Observed**, data): a ruin's walls (`Exterior_UPPER_Destroyed`) have no collision and its roof part, which holds the
-walls' collision, is not laid out; its `destroyed boundary` is a closed ring of vertical faces (L-House `Storm_House_04_interior_destroyed_COL`: 40 faces,
-local Y −47..86) round the floor, the doorway and the steps outside it. Rasterised as faces it only drew thin cuts, so the floor under the walls stayed
-meshed and walkers crossed the walls. Engine choice: the ring cut halfway up outlines the floor; polygons whose centre is outside it are dropped from the
-interior (so neither the border closure nor a join keeps them), and the rest joins the exterior as a doorless interior, which happens only at the
-doorway, where the ring reaches the hull. **Observed** (scratch probe, zones 19..21 × 31..33): all 19 Hub ruins have a boundary; floor points inside
-each outline reached from the street 39/39 for the L-House `4645-Newwworld-INGAME` (−51987, 4605), 23 of 34 in the six Small Shacks, all or all but 2
-elsewhere; before, none. Whether the original joins ruins the same way is **Unknown**; in the original, walkers enter that L-House (user report).
+walls' collision, is not laid out; its `destroyed boundary` is a ring of vertical faces (L-House `Storm_House_04_interior_destroyed_COL`: 40 faces,
+local Y −47..86) round the floor, the doorway and the steps outside it; the original adds it as cutting triangles (Generator, interiors). Rasterised as
+faces it only drew thin cuts, so the floor under the walls stayed meshed and walkers crossed the walls. Engine choice: the ring cut halfway up outlines
+the floor; polygons whose centre is outside it are dropped from the interior (so neither the border closure nor a join keeps them).
+**Ruin joins** (engine choice after the original's stitch, which joins open edges within 2 apart and 10 in height, Generator): every ruin's open edges
+link to the exterior's along its hull within `NavInteriors.RuinHullJoinDistance` (5; both are cut on the hull, ours each up to a cell and the 1.3-cell
+contour error off it). **Observed** (`--compare-interiors`, 24 ruins whose tiles were built intact, before: none reached): reached now 6 (Old Storm
+House `9.56:12-`, Outpost s-I `14.5:6-`, Ancient Lab `18.15:130-`, Longhouse `18.35:23-`, Old Storm House `29.28:52-`, Outpost s-III `50.24:66-`:
+their floor meets the exterior on the hull, our edges 2.6..4.3 apart, height 0.1..1); the other 18 stay unjoined: within 10 in height their nearest
+exterior edge is 9.0..135 away or none (Outposts s-II/s-IV and Watchtowers: the boundary ring stands 9..11 inside the hull and the exterior ends ~4
+outside it, `14.5:2-` probe: neither mesh at 2 outside the hull, both at 4), so the original's stitch cannot join them either (**Observed**: our build of
+the original's inputs; its run-time mesh is not in the tiles). Hub: all 19 ruins have a boundary; floor points inside each outline are reached from the
+street (L-House `4645-Newwworld-INGAME` 39/39), as walkers enter it in the original (user report).
 **Doors**: every part of a `doors`-list building is group 5. **Observed** (35 door records): only
 `Defensive Gate level 4/5 Door` lack `is door`, yet open in game; without the rule Squin was sealed.
 **Entrance seeds** (engine choice): cross the door's width axis. An exterior seed stands on the highest walkable surface at its marker at most
@@ -347,8 +353,8 @@ interior group whether the original connects it (mesh connections in its streami
 faces, is reached from the street (over kept polygons, joins and links from the exterior's kept polygons once the zone's kept set is resolved alone or,
 with `--around n`, with its neighbours; a polygon its own pruning kept must be reached; in its zone or a neighbour's); SEALED marks connected
 in the original but not reached in ours. **Observed** (225 zones, 1090 groups, 1066 connected): 42 sealed, 7 reached in ours only. 24 of the sealed are ruins (`destroyed`), whose original groups mostly hold the intact
-interior (14.5 Outposts: our ruins cover 13 % of their faces), so those tiles were built with the building standing (**Unknown** how the original
-handles them). Of the 18 intact ones, by cause (**Observed**, `--interior`, `--probe`, the original's connection edges): unseeded doorless
+interior (14.5 Outposts: our ruins covered 13 % of their faces), so those tiles were built with the building standing; the original rebuilds them as
+ruins at load ("Ruin joins" above). Of the 18 intact ones, by cause (**Observed**, `--interior`, `--probe`, the original's connection edges): unseeded doorless
 interiors (Ancient Labs `28.43:2-`, `37.35:2-`, Ash Domes `54.59:2-`, `4-`: no door, no node, so nothing of theirs was kept and a join took only kept
 polygons) are now joined by the rule below; Hive Commune Huts `39.54:44..54-` stood in a village whose ground was pruned: 6 of its 9 `seeds.def`
 points were dropped by the seed ray rule, which tested every building triangle, though their hits were roofs and domes 17..68 above them (the slope
@@ -365,12 +371,13 @@ water at 100; its door paints at -84..-62 inside the hull, the original's groups
 edges within 10 in height (Generator, stitch), less than our `NavInteriors.JoinHeight` 12, so a 12..17 step is not what joins these in its tiles; as
 `48.13:12-` (step 12..15, unconnected in the original) shows, it leaves such steps open.
 After (with the seed and seam rules below, the 15 zones re-swept): 31 sealed (24 ruins), 7 reached in ours only; interior coverage rises in 11 zones (Ash Domes 54.59 51→98 %, Ancient Labs 28.43 0→48 %, 37.35 35→77 %), none falls.
+With the ruin rules ("Ruin joins", all 225 zones): 25 sealed (18 ruins), 6 reached in ours only (the Ancient Citadel `7.45:2-` now agrees); coverage
+rises in 14.5 13→40 %, 16.3 8→23 %, 18.45 0→89 %, 19.41 74→78 %, 53.26 62→74 %, none falls; `--compare` 20.32, 18.35, 21.42 unchanged.
 **Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept, and
 every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`); exterior polygons stay limited to kept ones, else a door joined to a pruned
 landing satisfied the door and skipped the doorway's kept ground (Storm House Lagoon `40.41:10-`, Metal Wallhouse `51.43:1281-Dialogue-INGAME`).
 **Doorless interiors** (engine choice): an intact building with an interior mask and no `doors` (an open doorway) links its interior's open edges
-to the exterior's that run along them within `NavInteriors.HullJoinDistance` (2.5; both are cut on the hull's line); so do destroyed ones with a
-`destroyed boundary` (above); those without stay islands.
+to the exterior's that run along them within `NavInteriors.HullJoinDistance` (2.5; both are cut on the hull's line); ruins likewise ("Ruin joins").
 **Observed** (zone 7.30, Hive Village, `meitou-tools navmesh`, issue #71): the Hive Commune Huts had no door join, so no path from the street
 reached their floors; with it all five in 7.30 (and `48-` with 7.31 loaded) are reached and left through the hut's doorway; no join in 20.32, 21.32,
 18.35, 19.29, 24.27, 9 in 10.31 (Hive Commune Huts). How the original joins them is **Unknown** (its interior jobs end in a stitch, below).
@@ -574,24 +581,37 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
     - ground seeds (FUN_1403d8ac0): terrain height at (x, z), raised to the water level, then a ray down against
       groups 2, 6, 9, 14, 19 (mask 0x84244); the seed is added only when the ray finds nothing (or a hit of one
       particular kind, **Unknown**).
-    - interior jobs: the door's inner marker point, else the first node of the building with type 0 or 1; otherwise the
-      log says "Warning: building interior has no seed point".
+    - interior jobs (**Verified**, FUN_1403cbfa0 from 0x1403cc57c): the door's inner marker point, else the first node of the building
+      with type 0 or 1, else a PhysX ray from 1000 units above the building's origin along its own down axis (orientation ×
+      NEGATIVE_UNIT_Y), unlimited length, against group 9 only (mask 0x200): the nearest hit, raised to the water level, is the seed;
+      only a miss logs "Warning: building interior has no seed point".
   - **Interiors** (FUN_1403c79b0, job type 3): shapes in the building's AABB with mask 0x87fbe00 (groups 9..13, 15..22,
     27) or 0x82600 (groups 9, 10, 13, 19) when the building is destroyed. The building's own shapes: the points of
     its group-13 shapes (the `interior mask` hull) become one convex volume with `isInverted` set (hkaiConvexVolume
     +0x50, **Verified** against the reflection table), added as a carver, so everything **outside** the hull is
     removed; its other shapes give material 1, or 0 for group 27. Shapes of other buildings that belong to it (furniture: its children or buildings inside it) give material
     1 for WALKABLE and 0 otherwise; IGNORE ones are skipped. Vertices closer than 0.05 (squared, Havok) are merged. A
-    destroyed building adds the triangle meshes of its `destroyed boundary` XML to the geometry (fcs.def calls it the
-    "Navmesh cutter for destroyed interior"; the material it gets was not traced). 23 of the 68 buildings with `interior` parts have collision on them; `interior terrain` is set on 3
+    destroyed building (virtual slot 0x330, below) adds the triangle meshes of its `destroyed boundary` XML to the geometry (fcs.def calls it the
+    "Navmesh cutter for destroyed interior") with material 0, cutting (**Verified**: the triangle adder FUN_1403c0e80 writes its fifth argument
+    as each triangle's material; the boundary call at 0x1403c84a8 passes 0). 23 of the 68 buildings with `interior` parts have collision on them; `interior terrain` is set on 3
     (**Verified** counts; Metal Warehouse, Ancient Factory, Ash Dome Ruin). The generator never reads `interior terrain` ("building interior includes
     terrain for generating navmesh", **Verified**: its only reader `FUN_14029e0c0` stores it at Building +0xc1, whose readers are character and ray code);
     the three are built as exterior because their first `interior` part is blank (above, building shapes; **Observed** tile 34.28: no interior group).
+  - **Destroyed at run time** (**Verified**). Virtual slot 0x330 of `Building` (vtable 0x1416ea4a8) returns +0x1a1, the flag `Building::setDestroyed`
+    (FUN_140557280) writes. Destroying removes the doors ("door in setDestroyed"; rebuilding makes them again from `doors`); with `destroyed navmesh`
+    it also rebuilds the navmesh in the building's box, its max corner raised by 5 (FUN_1403a66c0); then a building with an interior object that is no gateway or door
+    gets an Interior job (FUN_1403abf20 → 1403c6fd0) when its zone's navmesh is present (FUN_1403ac950). The interior hash (FUN_1403ab140) is the
+    building's hash (FUN_1403a1a80: position, rotation, and the destroyed flag only for doors and gateways), its contents' and +0x100 when destroyed; the
+    zone hash (FUN_1403a1cb0) uses FUN_1403a1a80, so destroying a plain building leaves the exterior tile valid. At zone load FUN_1403ad940 looks up each
+    building's interior hash among the tile's interior groups (`Hash`) and queues an Interior job ("No valid interior navmesh for ...") when none matches:
+    a ruin whose tile was built intact gets its interior rebuilt as a ruin (the job above: groups 9, 10, 13, 19, the inverted hull, the boundary cutting,
+    the seed rules) and stitched to the tile's exterior, still carved by its hull (the carver tests class and +0x2c; setDestroyed's interior calls
+    FUN_14054f4d0 and FUN_140548580 do not write +0x2c).
   - **Stitch** (FUN_1403c5830, **Verified**; every stitch goes through it: FUN_1403cb280 "Stitching with completed task / existing zone / unloaded
     zone", interiors' FUN_1403cbbf0 for each zone their box overlaps): edges of two meshes are matched with their own `EdgeMatchingParameters`, not the
     generation settings': maxStepHeight **1.0** (10 units), maxSeparation **0.2** (2 units), maxOverhang 0.05, cosPlanarAlignmentAngle 0.9,
     minEdgeOverlap 0.02, up (0, 1, 0) (member offsets 0, 4, 8, 0x10, 0x18 from the reflection table); the stitch input's +0x38 is 3.0 (Havok default
-    0.01; member not named).
+    0.01; member not named). Doors play no part: an interior joins wherever its open edges meet the exterior's within these.
   - BUILDING `path mode` counts 92/84/304/123 for 0/1/2/3 (**Verified**, 603 records). Enum names (FCS `PathMode`, the
     editor's enum): 0 NAVMESH_IGNORE, 1 NAVMESH_PROJECTED, 2 NAVMESH_OBSTACLE (default), 3 NAVMESH_WALKABLE (**Verified**).
     Other fields: `destroyed navmesh` (6 buildings, walls; read by `Building::setDestroyed` `FUN_140557280`, which rebuilds the navmesh in the building's bounds when set,
@@ -679,7 +699,7 @@ own (gateway inside), which get codes of their own.
   composition of interior instance uids.
 - Which numeric job types the five job adders create (the settings each type uses are now known: 0 whole zone, 1 box
   patch, 3 interior).
-- The terrain grid resolution of the generator (FUN_140a08a20); the material of `destroyed boundary` triangles; the
+- The terrain grid resolution of the generator (FUN_140a08a20); the
   building flag at +0x1f0 → +0x2c that gates carvers and part of the WALKABLE rule; the global seed list DAT_14212f470;
   the ray-hit kind that still allows a ground seed; whether OverrideSettings material −1 means "any material".
 - Whether the path request converts the footprint radius to Havok units.
@@ -699,7 +719,7 @@ Current Recast parameters are authoritative in `NavBuildSettings`, `ZoneGeometry
 **Unknown** original linked-wall seed fractions (Meitou uses 0.15/0.5/0.85).
 **Observed** original start snap500 Havok units and goal snap about30 Kenshi units;
 Meitou uses60/30 Kenshi units. Original height/climb1.8/0.5 Havok correspond to18/5 Kenshi, width 0.9 to 9 (Meitou radius 4); its stitch
-step/separation 1.0/0.2 to 10/2 (**Verified**, Generator); Meitou's interior joins use height 12 and gaps 6 (doors), 2.5 (doorless hulls).
+step/separation 1.0/0.2 to 10/2 (**Verified**, Generator); Meitou's interior joins use height 12 and gaps 6 (doors), 2.5 (doorless hulls), 5 (ruins).
 ## Expression reference
 
 - Tile files: `h ^= v + 0x9e3779b9 + (h<<6) + (h>>2)`
