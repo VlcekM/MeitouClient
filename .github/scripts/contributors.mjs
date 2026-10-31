@@ -1,5 +1,6 @@
 // Renders assets/branding/contributors.png for the README: the core team on top (the creator first), then everyone else by commit count.
 // Run by the nightly workflow; locally: node .github/scripts/contributors.mjs (GITHUB_TOKEN optional, ANTHROPIC_API_KEY for new areas).
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
@@ -110,4 +111,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   + `<defs>${defs}</defs>${body}</svg>`;
 const png = new Resvg(svg, { font: { loadSystemFonts: true, defaultFontFamily: 'DejaVu Sans' } }).render().asPng();
 await writeFile(out, png);
+// The README links the image with ?v=<its hash>: browsers and GitHub cache it by URL, so a redrawn one needs a new URL to show.
+const readme = new URL('../../README.md', import.meta.url), v = createHash('sha256').update(png).digest('hex').slice(0, 8);
+await writeFile(readme, readFileSync(readme, 'utf8').replace(/(assets\/branding\/contributors\.png)(\?v=\w+)?/,`$1?v=${v}`));
 console.log(`${team.length} core, ${others.length} others -> ${out.pathname}`);

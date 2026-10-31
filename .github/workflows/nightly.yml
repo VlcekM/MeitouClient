@@ -37,7 +37,7 @@ jobs:
           # Skipped when nothing the game zips are built from changed since the newest game tag, nightly or full.
           $last = git tag -l "v[0-9]*" --sort=-creatordate | Select-Object -First 1
           if ($last) {
-            git diff --quiet $last HEAD -- . ':!news' ':!site' ':!launcher' ':!docs' ':!.github/workflows' ':!assets/branding/contributors.*'
+            git diff --quiet $last HEAD -- . ':!news' ':!site' ':!launcher' ':!docs' ':!.github/workflows' ':!assets/branding/contributors.*' ':!README.md'
             if ($LASTEXITCODE -eq 0) { "No game changes since $last; no nightly." >> $env:GITHUB_STEP_SUMMARY; "skip=true" >> $env:GITHUB_OUTPUT; exit 0 }
           }
           # <next patch of the newest full release>-nightly.<UTC date>[.<n>]: after that release, before the next one (semver). A second
