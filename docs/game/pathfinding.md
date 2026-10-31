@@ -335,8 +335,13 @@ leaf 2..3 outside the hull; its interior had no door polygons and no join, an is
 upper floor. Polygon winding (`NavGeometry.SignedArea`) is summed in double from the first vertex: in float at world coordinates the products round by
 more than a painter's area, so a painter's winding came out at random and its own door polygons fell 16..19 "outside" it, without a door, hence no join
 (Sho-Battai Longhouses `43.11:12-`, `5563-`, `5565-`; Storm House Lagoon `48.45:9-`). Left unjoined in 18.35, 19.29, 20.32, 23.22, 26.13, 43.11,
-47.16, 48.13, 48.45, 50.33 (`door ... joins nothing` in `--verbose`): the tilted Small Shack `48.13:12-rebirth-INGAME`, whose door polygons meet the
-exterior's 13..17 apart in height (over `JoinHeight` 12); interiors over a zone border join in the zone holding the door.
+47.16, 48.13, 48.45, 50.33 (`door ... joins nothing` in `--verbose`): the pitched Small Shack `48.13:12-rebirth-INGAME`, as in the original;
+interiors over a zone border join in the zone holding the door. That shack stands sunk into the slope: at its door the floor is at 992..995 and the
+terrain outside at 1004..1010 (`--probe`: terrain 1007, the base's outer face 989 under it), so the door line itself steps 12..15, not a misplaced
+painter (it spans 981..1028) or a centre-to-centre test. **Verified** (`tile48.13.hkt`, the interior groups' `streamingSets`, format doc): the original
+has the same two edges there (interior 992..995, exterior 1004..1010, 2..6 apart) and no connection: its group `150371` has no streaming set, while every
+other interior in 18.35, 19.29, 20.32, 26.13, 43.11, 47.16, 48.45, 50.33 has one (paired edges mostly within 2 in height). **Observed**: the
+original leaves Small Shack `48.13:8-` (`110371`) unconnected too; Meitou joins it.
 **Doorless interiors** (engine choice): an intact building with an interior mask and no `doors` (an open doorway) links its interior's open edges
 to the exterior's that run along them within `NavInteriors.HullJoinDistance` (2.5; both are cut on the hull's line); so do destroyed ones with a
 `destroyed boundary` (above); those without stay islands.
