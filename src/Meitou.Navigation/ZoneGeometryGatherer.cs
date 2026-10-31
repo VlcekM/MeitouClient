@@ -91,7 +91,6 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
             ZoneMin = new((float)ox, (float)oz),
             ZoneMax = new((float)ox + WorldLayout.ZoneSize, (float)oz + WorldLayout.ZoneSize),
             Margin = margin,
-            TerrainHeight = (x, z) => (float)map.HeightAt(x, z),
             Ground = ZoneHeights(zone),
         };
         var sw = Stopwatch.StartNew();
