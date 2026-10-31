@@ -231,8 +231,10 @@ building, and for 47.16 / 26.13 / 34.28 the exterior polygons inside its hull): 
 Cannibal Shack, Swamp Platform Round; walls and gates only where a neighbour's group overlaps, under 4 %); the original's exterior has 0 polygons inside the Ancient Lab's hull at 47.16 and 499 inside the
 Ancient Factory's at 34.28. `cavernous` (Building +0xc2, read only outside the generator), `interior terrain` and `is gateway` play no part. Heft's Ancient
 Lab Ramp is an `is wall gate` (class 7) whose mask is the gate's trigger box; as a shell would carve its own ramp out of the exterior and cut the lab off (#140). The Ancient Lab sites (28.60, 42.22, 47.16, 41.35; reports #117, #129, #153) path from the street to every storey under this rule (**Observed**, `--path`).
-**Observed**: Heft's Shield Bridge, an `is stairs` part, is walkable only by this rule (#141); its walkboard collision comes out 120..145
-above where the original's tile has the deck (`y` 1160..1180 by its origin), which is **Unknown** (a pose or baked-scale question of that file).
+**Observed**: Heft's Shield Bridge (47.16 `2134-Newwworld-INGAME`, WALKABLE, one `is stairs` part) is walkable only by this rule (#141). Its deck is where the
+original's is (**Verified**, probe: of the original exterior's 211 polygons over the walkboard's footprint, 30 have their centre at local `y` 145.9, the
+walkboard mesh's deck height, to 0.1; 142 lie on the terrain under the bridge, 1040..1180, the rest on the end ramps), and paths run along it at
+`y` 1292..1305 as the original's deck polygons do.
 **Interior parts**: the `interior` list (laid out like `parts` after the same position-seeded reseed, as drawn) is collision too,
 none when destroyed; it holds interior stairs and upper floors. **Verified** (tile20.32 interior `600815`, the Hub Storm House
 `4933-Newwworld-INGAME`): the original mesh ramps +4→+68 over (+30..+65, −45..−5) from the origin to the roof storey at +69..+72,
