@@ -46,8 +46,8 @@ Graphics (`SettingsMenu.Looks.cs`, `SettingsMenu.Presets.cs`; `--settings-showca
   applied at start ([launcher](launcher.md#graphics)).
 Tabs by subject: Lighting, Sky & weather, Colour, World, Characters (`SettingsMenu.GraphicsSection`). A tab lists features in their
 `FeatureGroups` order (`GroupRank`, the launcher's too), each with all its settings, whether the look or the quality tier sets them
-(`SettingsMenu.Role` keeps which: the effects and strengths the look, distances and detail the tier); e.g. Shadows holds the game's shadow
-mode, distance, map size, filter and fifth cascade. A tab lists features
+(`SettingsMenu.Role` keeps which: the effects and strengths the look, distances and detail the tier); e.g. Shadows holds its
+distance, map size, filter and fifth cascade. A tab lists features
 (`SettingsMenu.Groups.cs`): each is one row headed by its switch (or a title: Ambient light, Terrain relief) with
 its own settings folded under it (a darker band with a brass edge), closed until its arrow or text is clicked. A setting that
 differs from the preset has its name in brass and a Reset link back to the preset's value; a feature's header shows it for anything inside.
