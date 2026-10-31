@@ -96,6 +96,8 @@ unassigned and uses only the head bone, so they move with the head. Implemented 
 (2.96 per triangle), no shared vertex data, near-unindexed. Byte-identical vertices: 19.2M (2.50/tri). The tangents are per face:
 ignoring them leaves 9.0M (1.18/tri); quantising them to 8 bits still leaves 15.6M. FIFO-16 ACMR as stored 2.97 (no reuse); after
 exact dedup and a cache-order pass (Tipsify) 2.52. `newland/` (terrain-scale objects) has the most duplication (3.00 → 2.25/tri).
+Averaging the tangents of vertices equal in all else (same handedness) moves them 4.1° on average: 56% under 1°, 6.5% by 15° or more
+(`newland/`, `items/`, `character/` most). CPU renders of six normal-mapped building meshes: mean pixel change 0.0–0.3/255.
 
 ## Open questions
 
