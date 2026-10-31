@@ -353,11 +353,16 @@ interiors (Ancient Labs `28.43:2-`, `37.35:2-`, Ash Domes `54.59:2-`, `4-`: no d
 polygons) are now joined by the rule below; Hive Commune Huts `39.54:44..54-` stood in a village whose ground was pruned: 6 of its 9 `seeds.def`
 points were dropped by the seed ray rule, which tested every building triangle, though their hits were roofs and domes 17..68 above them (the slope
 outside the huts is 22..40° in the original's polygons and ours, not too steep); the rule now tests floor-0/1 parts (groups 9 and 10) only, as the
-original (Generator, seeds), 4 are dropped, the zone keeps 6609 of 8122 polygons (778 before) and all six huts are reached; Storm House `27.22:1821-`'s door landing (520..525) is cut off from its steps by a 5..6 step, a region of its own;
-Stephouse `18.9:29-` and its neighbours `13-`, `27-` stand sunk 12 below the terrain at the door, where the original's interior edge meets the
-terrain's height (1630 against our floor 1611); Outpost s-I `24.18:8-` has its door shape 170 below its floor (painter y -84..-62, the original's
-edges at 100); `22.11:2-`, `24.18:15-` and `43.49:2-` (the original's exterior reaches 25 inside our hull there) are not examined further.
-After: 38 sealed (24 ruins), 7 reached in ours only; interior coverage rises in 11 zones (Ash Domes 54.59 51→98 %, Ancient Labs 28.43 0→48 %, 37.35 35→77 %), none falls.
+original (Generator, seeds), 4 are dropped, the zone keeps 6609 of 8122 polygons (778 before) and all six huts are reached; Storm House `27.22:1821-`'s steps (a 43.7° ramp to 524, continuous as in the original's faces 511..525) met its door landing on an edge
+whose west end took the height of the raised cheek block beside the steps (525 against the ramp's 519), so the seam was not joined (rule below,
+now reached). Not fixed, **Unknown** (the original's tile shows a different building there, not something our build loses): Stephouse `18.9:29-`,
+Old Storm House `13-`, Small Shack `27-` (the original's groups are small patches at 1620, ~20 above our floors at 1600 and without our upper
+storeys; `48.13:12-`'s group matches our floor at 993, hence no join there); Old Storm House `22.11:2-` (the original's connected edge at 783,
+above our hull's top 773; our door at 696); Outpost s-I `24.18:8-` (placed rotated ~174° about a near-horizontal axis, origin y -56 under the
+water at 100; its door paints at -84..-62 inside the hull, the original's groups lie at 90..140 like our pruned floors and connect along the hull at
+100); Outpost s-II `24.18:15-` (the original's exterior has the door landing at ~121 outside the hull, our exterior only a pruned sliver at
+121..123 beside deep water) and `43.49:2-` (the original's exterior polygon at 52305,82100 lies ~23 inside our hull).
+After (with the seed and seam rules below, the 15 zones re-swept): 31 sealed (24 ruins), 7 reached in ours only; interior coverage rises in 11 zones (Ash Domes 54.59 51→98 %, Ancient Labs 28.43 0→48 %, 37.35 35→77 %), none falls.
 **Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept, and
 every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`); exterior polygons stay limited to kept ones, else a door joined to a pruned
 landing satisfied the door and skipped the doorway's kept ground (Storm House Lagoon `40.41:10-`, Metal Wallhouse `51.43:1281-Dialogue-INGAME`).
@@ -376,7 +381,8 @@ joins open edges of one tile that coincide reversed and are within the climb at 
 Swamp House `48-Newwworld-INGAME`'s stair foot met the ground at Y124 vs 127 and kept only a 4-unit tile-border link, so radius-4
 agents had no way up; with the seam, ground (-47000,125,48100) reaches the room (-47229,178,47969) (the dome `805-rebirth-INGAME`,
 `6-` and `4-` were already reachable). Its deck (Y~178) was never pruned: the red there in `--png` is roofs, beams under the deck and interior fragments.
-Contour simplification also leaves near-miss T seams (one edge against two whose middle vertex is off its line). Open edges of one tile left
+An edge pair also joins when the stretch of it within the climb is at least `SeamClimbCells` (2 cells) long, the other end being higher (a corner takes
+its highest neighbouring cell's height; engine choice; Storm House `27.22:1821-`, above). Contour simplification also leaves near-miss T seams (one edge against two whose middle vertex is off its line). Open edges of one tile left
 unjoined are linked (`Links`, not `Neighbours`) when they run opposite, share one end in X/Z (so floors either side of a thin wall stay apart),
 lie within 1.5 of each other's line at both ends of the overlap, and are within climb + 0.5 there; A* portals for such links take the overlap
 with the door joins' 6 gap when no facing edge is within 0.2. **Observed** (zone 18.39, `meitou-tools navmesh`): the Swamp Village stair foot's edge
