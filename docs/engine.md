@@ -94,10 +94,10 @@ from the main menu and returning to it; `inGameTransitions` covers save loads/ne
 Each has a persisted speed slider (`mainMenuTransitionSpeed` / `inGameTransitionSpeed`, 0.25–4x, default 1.5x).
 Disabling either uses the regular loading screen and warm-up. Enabled scene loads in Meitou use `SkyArrival`, the load starting at once:
 the hour runs forward to the destination's (title: its morning; save: CAMERA `time hour`/`minute`, handed over by
-the reading worker as soon as `quick.save` is parsed), 0.8 s + 1 s per 6 h, accelerating over its first half and braking over the second, while
-the title's wanderer blends from standing into `sitting idle` over 1.8 s (the data has no sit-down clip); a 0.5 s wall-clock hold; a 3.4 s ascent about
+the reading worker as soon as `quick.save` is parsed), 0.8 s + 1 s per 6 h, accelerating over its first half and braking over the second;
+a 0.5 s wall-clock hold; a 3.4 s ascent about
 the fixed eye to the sky. In play, and from the title when the run is at most 3 h (known once the save's hour is), the view climbs at once, without
-the sitting or hold, the hour running forward meanwhile. The sky is at the destination hour (a day save shows day sky, not stars); a wait there for the load; a 0.3 s fade to black once its stages are done, under
+the hold, the hour running forward meanwhile. The sky is at the destination hour (a day save shows day sky, not stars); a wait there for the load; a 0.3 s fade to black once its stages are done, under
 which the destination warms up from the landing view; then a 3 s descent that fades in from black over its first 1.4 s, starting 300 units above the view and
 orbiting 1.2 rad round its target onto the view's heading. All but the hold are divided by the selected speed. Ascent ramps speed over its
 first/last 40%; descent ramps up over 30% and brakes over 20%. Integrated smoothstep velocity brings
