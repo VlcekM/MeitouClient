@@ -15,10 +15,10 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
-    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, MaxSkills, Damage, UnlockResearch }
+    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, MaxSkills, Damage, ForceHits, UnlockResearch }
 
-    static readonly string[] DebugLabels = ["Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Max out skills", "Damage (cut)", "Unlock all research"];
-    readonly string[] debugFields = ["", "", "", "1000", "", "", "20", ""];
+    static readonly string[] DebugLabels = ["Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Max out skills", "Damage (cut)", "Force hits to", "Unlock all research"];
+    readonly string[] debugFields = ["", "", "", "1000", "", "", "20", "", ""];
     readonly Dictionary<(bool Character, string Text), (string Id, string Name)?> debugMatches = [];
     bool debugMenuOpen;
     int debugRow;
@@ -27,7 +27,11 @@ sealed partial class GameHost
     (string? Id, string Name)[]? debugParts;
     int debugPart;
 
-    static bool DebugHasField(int row) => (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.MaxSkills or DebugRow.UnlockResearch);
+    static bool DebugHasField(int row) => (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch);
+
+    /// <summary>The rows that open the body part list.</summary>
+    static bool DebugPicksPart(int row) => (DebugRow)row is DebugRow.Damage or DebugRow.ForceHits;
+
 
     void DebugMenuKey(EngineKey key)
     {
@@ -40,17 +44,17 @@ sealed partial class GameHost
                 case EngineKey.Up: debugPart = (debugPart + parts.Length - 1) % parts.Length; break;
                 case EngineKey.Down: debugPart = (debugPart + 1) % parts.Length; break;
                 case EngineKey.Backspace when field.Length > 0: debugFields[debugRow] = field[..^1]; break;
-                case EngineKey.Enter: debugStatus = DebugApply(DebugRow.Damage, field.Trim(), parts[debugPart]); break;
+                case EngineKey.Enter: debugStatus = DebugApply((DebugRow)debugRow, field.Trim(), parts[debugPart]); break;
             }
             return;
         }
         switch (key)
         {
-            case EngineKey.Enter or EngineKey.Right when (DebugRow)debugRow == DebugRow.Damage:
+            case EngineKey.Enter or EngineKey.Right when DebugPicksPart(debugRow):
                 if (DebugTargets() is not [var first, ..]) { debugStatus = "select or inspect a character first"; break; }
                 var table = session.World.Characters;
                 var body = table.TryResolveNext(first, out int slot) ? table.Cold(slot)?.Medical?.Parts : null;
-                debugParts = [(null, "Random (as a blow)"), .. (body ?? []).Select(p => ((string?)p.Template.StringId, p.Template.Name.Length > 0 ? p.Template.Name : p.Template.StringId))];
+                debugParts = [(null, (DebugRow)debugRow == DebugRow.Damage ? "Random (as a blow)" : "Off (as a blow)"), .. (body ?? []).Select(p => ((string?)p.Template.StringId, p.Template.Name.Length > 0 ? p.Template.Name : p.Template.StringId))];
                 debugPart = Math.Min(debugPart, debugParts.Length - 1);
                 break;
             case EngineKey.Escape: debugMenuOpen = false; break;
@@ -116,6 +120,9 @@ sealed partial class GameHost
                 if (!float.TryParse(field, NumberStyles.Float, CultureInfo.InvariantCulture, out float cut) || !(cut > 0)) return "damage: a positive number";
                 world.Commands.Enqueue(new DebugDamage(targets, cut, part.Id) { Tick = tick });
                 return $"{cut:0.#} cut damage to {targets.Length}{(part.Id is null ? "" : $" on {part.Name}")}";
+            case DebugRow.ForceHits:
+                world.Commands.Enqueue(new DebugForceHits(part.Id is { } forced ? (forced, part.Name ?? forced) : null) { Tick = tick });
+                return part.Id is null ? "blows land as usual" : $"every blow lands on {part.Name} (by name on other bodies)";
             case DebugRow.UnlockResearch:
                 world.Commands.Enqueue(new DebugUnlockResearch { Tick = tick });
                 return "every research finished";
@@ -171,9 +178,10 @@ sealed partial class GameHost
                 if ((DebugRow)i is DebugRow.SpawnNpc or DebugRow.GiveItem && field.Trim().Length > 0)
                     line += DebugRecord((DebugRow)i == DebugRow.GiveItem ? DebugItemField(field.Trim()).Name : field, (DebugRow)i == DebugRow.SpawnNpc) is { } r ? $"   -> {r.Name}" : "   -> no match";
             }
-            if ((DebugRow)i == DebugRow.Damage && i == debugRow && debugParts is null) line += "   Enter/Right: pick the body part";
+            if ((DebugRow)i == DebugRow.ForceHits) line = $"{line,-26} {popData?.BodyOptions.ForcedHitPart?.Name ?? "off"}";
+            if (DebugPicksPart(i) && i == debugRow && debugParts is null) line += "   Enter/Right: pick the body part";
             lines.Add(line);
-            if ((DebugRow)i == DebugRow.Damage && i == debugRow && debugParts is { } parts)
+            if (DebugPicksPart(i) && i == debugRow && debugParts is { } parts)
                 for (int k = 0; k < parts.Length; k++)
                 {
                     if (k == debugPart) highlight = lines.Count;
@@ -181,7 +189,8 @@ sealed partial class GameHost
                 }
         }
         string info = $"{world.Player.Selection.Count} selected   here {here.X:0}, {here.Z:0}   money c.{world.Player.Money.ToString("N0", CultureInfo.InvariantCulture)}";
-        string hint = debugParts is null ? $"Up/Down pick   type to edit   Enter apply   Esc/{close} close" : $"Up/Down pick a part   type the damage   Enter apply   Esc/Left back";
+        string hint = debugParts is null ? $"Up/Down pick   type to edit   Enter apply   Esc/{close} close"
+            : $"Up/Down pick a part   {((DebugRow)debugRow == DebugRow.Damage ? "type the damage   " : "")}Enter apply   Esc/Left back";
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
         float pad = 10, x0 = 16, y0 = top + 16;
         int chars = Math.Max(lines.Max(l => l.Length), Math.Max(info.Length, Math.Max(hint.Length, debugStatus.Length)));

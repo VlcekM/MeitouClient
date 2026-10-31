@@ -39,24 +39,8 @@ public sealed partial class MedicalState
     public int ChoosePart(in MedicalContext ctx, bool lowStrike = false, bool directionSix = false)
     {
         if (Parts.Count == 0) return -1;
-        float total = 0;
-        for (int i = 0; i < Parts.Count; i++) total += Weight(Parts[i], lowStrike, directionSix);
-        int chosen = Parts.Count - 1;
-        if (total > 0)
-        {
-            float target = NextRoll(ctx) * total;
-            int last = -1;
-            chosen = -1;
-            for (int i = 0; i < Parts.Count; i++)
-            {
-                float w = Weight(Parts[i], lowStrike, directionSix);
-                if (w <= 0) continue;
-                last = i;
-                if (target < w) { chosen = i; break; }
-                target -= w;
-            }
-            if (chosen < 0) chosen = last;
-        }
+        int chosen = Forced(ctx.Options.ForcedHitPart);
+        if (chosen < 0) chosen = Rolled(ctx, lowStrike, directionSix);
         var p = Parts[chosen];
         float cap = float.NegativeInfinity;
         if (!Alive(p)) p.HitMult = 0;
@@ -68,6 +52,42 @@ public sealed partial class MedicalState
         else cap = 4;
         if (p.HitMult < cap) p.HitMult += 1;
         return chosen;
+    }
+
+    int Rolled(in MedicalContext ctx, bool lowStrike, bool directionSix)
+    {
+        float total = 0;
+        for (int i = 0; i < Parts.Count; i++) total += Weight(Parts[i], lowStrike, directionSix);
+        if (total <= 0) return Parts.Count - 1;
+        float target = NextRoll(ctx) * total;
+        int last = -1;
+        for (int i = 0; i < Parts.Count; i++)
+        {
+            float w = Weight(Parts[i], lowStrike, directionSix);
+            if (w <= 0) continue;
+            last = i;
+            if (target < w) return i;
+            target -= w;
+        }
+        return last;
+    }
+
+    /// <summary>
+    /// The debug menu's forced part (<see cref="BodyOptions.ForcedHitPart"/>): the part of that template string id, else of that name (another race's body), when a blow could pick it
+    /// (whatever the strike's height); -1 without one, and no roll is drawn.
+    /// </summary>
+    int Forced((string Id, string Name)? forced)
+    {
+        if (forced is not ({ } id, { } name)) return -1;
+        int named = -1;
+        for (int i = 0; i < Parts.Count; i++)
+        {
+            var p = Parts[i];
+            if (Weight(p, false, true) <= 0) continue;
+            if (p.Template.StringId == id) return i;
+            if (named < 0 && string.Equals(p.Template.Name, name, StringComparison.OrdinalIgnoreCase)) named = i;
+        }
+        return named;
     }
 
     /// <summary>A part a blow can still pick: its flesh is above -M, and it is not the stump of a limb.</summary>
