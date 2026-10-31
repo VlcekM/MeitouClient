@@ -151,7 +151,7 @@ internal sealed partial class ZoneGeometryGatherer
         else if (owner.GetBool("is exterior furniture") || owner.GetBool("is interior furniture")) group = 19 + floor;
         else group = 9 + floor;
 
-        int firstTriangle = g.TriangleCount;
+        int firstTriangle = g.TriangleCount, firstSolid = g.Solids.Count;
         foreach (var shape in prepared.Shapes)
         {
             if (interior is not null)
@@ -179,6 +179,7 @@ internal sealed partial class ZoneGeometryGatherer
             AddShape(g, shape, node, walkable ? BuildingSlopeDegrees : 0, carve: CarveConvexObstacles && !walkable);
         }
         if (g.TrackParts && g.TriangleCount > firstTriangle) g.PartRanges.Add((owner.Name, part.Name, path, firstTriangle, g.TriangleCount));
+        for (int i = firstSolid; i < g.Solids.Count; i++) g.Solids[i].Owner = $"{instanceId} {owner.Name} / {part.Name} (group {group}, mode {(int)mode})";
     }
     // ---- shape placement ----
 
@@ -196,7 +197,8 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     const float CarverDrop = 60;
 
-    void AddShape(ZoneGeometry g, PreparedShape shape, Matrix4x4 node, float walkableSlope, bool carve)
+    /// <param name="meshSolid">A triangle mesh that encloses a volume (a map feature's rock) also removes the floor inside it (<see cref="NavMeshSolid"/>).</param>
+    void AddShape(ZoneGeometry g, PreparedShape shape, Matrix4x4 node, float walkableSlope, bool carve, bool meshSolid = false)
     {
         var pts = new Vector3[shape.Vertices.Length];
         var lo = new Vector3(float.MaxValue);
@@ -214,6 +216,11 @@ internal sealed partial class ZoneGeometryGatherer
         if ((walkableSlope > 0 || carve) && shape.IsConvex && Solid(pts, shape.Indices, lo, hi) is { } solid)
         {
             g.Solids.Add(solid);
+            g.Stats.Solids++;
+        }
+        if (meshSolid && !shape.IsConvex && MeshSolid(pts, shape.Indices, lo, hi) is { } mesh)
+        {
+            g.MeshSolids.Add(mesh);
             g.Stats.Solids++;
         }
     }

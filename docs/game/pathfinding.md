@@ -242,6 +242,8 @@ Lab Ramp is an `is wall gate` (class 7) whose mask is the gate's trigger box; as
 original's is (**Verified**, probe: of the original exterior's 211 polygons over the walkboard's footprint, 30 have their centre at local `y` 145.9, the
 walkboard mesh's deck height, to 0.1; 142 lie on the terrain under the bridge, 1040..1180, the rest on the end ramps), and paths run along it at
 `y` 1292..1305 as the original's deck polygons do.
+**Observed** (zone 13.12, `--probe`): the Metal Warehouse `14-rebirth-INGAME` has a blank interior, so it is open; the ground of its aisle under the
+roof is kept and the original's tile has it too (issue #157, filed before the shell rule).
 **Interior parts**: the `interior` list (laid out like `parts` after the same position-seeded reseed, as drawn) is collision too,
 none when destroyed; it holds interior stairs and upper floors. **Verified** (tile20.32 interior `600815`, the Hub Storm House
 `4933-Newwworld-INGAME`): the original mesh ramps +4→+68 over (+30..+65, −45..−5) from the origin to the roof storey at +69..+72,
@@ -279,9 +281,22 @@ town as a solid; the original has no mesh there). The height surfaces (`NavSurfa
 whose top face runs on inside the foundation, from 151 down to ~124 under the slab, and a walker's height followed it under the floor. **Observed** (`meitou-tools navmesh`, zones 24.27, 20.32, 21.32, 18.35, 19.29, 21.42, 21.31, 10.31, 18.39, 20.29, 23.22):
 unpruned polygons drop 1..24 %, kept area sampled against the original tiles changes under 0.3 %; the gate's under-floor layer is gone; interior area
 drops only in ruins (Hub Stationhouse `4-`, Bughouse `4937-`: floor strips inside the thick walls and fallen slabs). The door and stair paths listed
-in this section still resolve.
+in this section still resolve. **Observed** (zone 34.46, `--probe`): Mourn's Swamp Platforms (Large `1251-`, Round `115588-`, Small `8882-`) have a
+solid body box from the deck down into the ground, and the original's tile has no ground under them, only the deck (issue #154: as the original).
 **Underground** (engine choice): the terrain is solid below its surface, so an exterior walkable span more than the agent height (18) under the
 heightmap at its cell's middle is removed. **Observed** (zone 24.27 by the Bad Teeth gate): a buried part's top face at 120 under ground at 159.
+**Map features** (`features.dat`, MAP_FEATURES `collision`: rocks, cliff blocks, Rebirth's statue, gravel piles, trestle bridges) are gathered from the zone
+and its eight neighbours, placed by their position, rotation and scale, walkable up to the terrain's 40° (an owner-less collision object: material −1, as
+walkable foliage, below; which group their collision gets is **Unknown**, not traced). **Observed** (`meitou-tools navmesh --probe`, zone 21.19): the
+original's tile walks the top of `Huge_Stone_Emperor_Statue`'s foundation (y 755.8, terrain 735) and has no ground inside the gravel piles, also those placed
+scaled (1.41/1.88); without features Meitou walked the terrain through both (issue #161). Their collision is a triangle mesh, mostly open at the bottom
+(gravel piles: 24 open edges; Hub cliff blocks closed). Engine choice: a feature's triangle mesh is a `NavMeshSolid`; a walkable span is removed when the
+nearest of its triangles above the span's floor (more than 1 over it, at the cell's middle) faces up, so the span sees its back; an overhang's underside faces
+down and keeps the ground under it. Whether the original drops `hidden` features' collision is **Unknown** (Meitou keeps it). **Observed** (`--compare`,
+before → after): ours-only area 21.19 19.1 → 10.7 %, 23.22 10.6 → 6.6 %, 34.46 3.7 → 2.6 %, 13.12 3.6 → 1.9 %, 21.32 5.8 → 4.8 %, 20.32 3.8 → 3.4 %;
+original-only 20.32 1.6 → 0.6 %, 18.35 1.1 → 0.3 %, 21.19 1.4 → 0.3 %; 19.29, 21.42, 21.31, 10.31, 20.29 unchanged. Floors under floors rose in 34.46
+(510 → 5,183 points): Mourn's `Vast_Land Tube 01` is walkable on top and joins the defensive wall's walkway, which the original prunes there; the
+original has no polygon on the tube. The coarse route's footprints and ragdoll collision do not take features yet.
 **Compare** (`meitou-tools navmesh --compare x,z ...`): samples each zone every 8 units against `tileX.Y.hkt`: points on both, only ours, only the
 original's, ours-only points in a building footprint, and points where ours has more layers than the original with one 10+ under our top (floors under
 floors). Interiors are not read from the tiles, so our interior floors count as ours-only; the original's big polygons float up to ~20 over hollows, so
@@ -602,6 +617,7 @@ own (gateway inside), which get codes of their own.
   building flag at +0x1f0 → +0x2c that gates carvers and part of the WALKABLE rule; the global seed list DAT_14212f470;
   the ray-hit kind that still allows a ground seed; whether OverrideSettings material −1 means "any material".
 - Whether the path request converts the footprint radius to Havok units.
+- Which collision group map features get (FUN_140399ac0 not traced) and whether hidden ones have collision.
 - The full avoidance parameters (the repulsion's absolute magnitude); how movement caps a follower's desired speed by its speed mode.
 - Whether face data values other than 3, 4, 5 and the gate nibble exist; how building construction and destruction
   update faces (path mode switches at runtime).

@@ -99,6 +99,7 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
         AddTerrain(g);
         double terrain = sw.Elapsed.TotalMilliseconds; sw.Restart();
         AddBuildings(g, buildingHash);
+        AddMapFeatures(g);
         double buildings = sw.Elapsed.TotalMilliseconds; sw.Restart();
         if (foliageTask is not null) AddFoliage(g, foliageTask.GetAwaiter().GetResult());
         Phases = (terrain, buildings, sw.Elapsed.TotalMilliseconds); sw.Restart();

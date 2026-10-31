@@ -42,7 +42,24 @@ internal sealed class NavVolume(Vector2[] polygon, float yMin, float yMax)
 internal sealed class NavSolid(Vector4[] planes, Vector2 min, Vector2 max)
 {
     public Vector4[] Planes { get; } = planes;
+    /// <summary>Debug (the navmesh tool): the placement, owner and part the shape came from.</summary>
+    public string? Owner { get; set; }
     /// <summary>The shape's box on (X, Z).</summary>
+    public Vector2 Min { get; } = min;
+    public Vector2 Max { get; } = max;
+}
+
+/// <summary>
+/// A placed collision triangle mesh (a map feature's rock), as its triangles (three points each, outward-facing). The span of a column is inside when the nearest
+/// triangle above it faces up, i.e. the span sees its back: a rock sunk into the terrain is open at the bottom, so a parity count would not do; the underside of
+/// an overhang faces down and leaves the ground under it (docs/game/pathfinding.md, "Map features").
+/// </summary>
+internal sealed class NavMeshSolid(Vector3[] triangles, Vector2 min, Vector2 max)
+{
+    public Vector3[] Triangles { get; } = triangles;
+    /// <summary>Debug (the navmesh tool): what the mesh came from.</summary>
+    public string? Owner { get; set; }
+    /// <summary>The mesh's box on (X, Z).</summary>
     public Vector2 Min { get; } = min;
     public Vector2 Max { get; } = max;
 }
@@ -52,7 +69,7 @@ internal sealed class GatherStats
 {
     public int Buildings, PartsWithCollision, Shapes, FoliageInstances, FoliageShapes, FoliageCutters, MissingFiles;
     public int WalkableTriangles, CuttingTriangles, TerrainTriangles, WaterTriangles;
-    public int Carvers, Painters, DoorSeeds, SeedsDropped, WallSeeds, Solids;
+    public int Carvers, Painters, DoorSeeds, SeedsDropped, WallSeeds, Solids, MapFeatures;
 }
 
 /// <summary>
@@ -80,6 +97,8 @@ internal sealed class ZoneGeometry
     public List<NavVolume> Carvers { get; } = [];
     /// <summary>Closed convex shapes of walkable parts: the walkable spans inside them are removed.</summary>
     public List<NavSolid> Solids { get; } = [];
+    /// <summary>Placed triangle meshes of map features: the walkable spans inside them are removed (<see cref="NavMeshSolid"/>).</summary>
+    public List<NavMeshSolid> MeshSolids { get; } = [];
     /// <summary>Door hulls: walkable cells inside become <see cref="NavArea.Door"/>.</summary>
     public List<NavVolume> Painters { get; } = [];
     /// <summary>Exterior doors' outer markers with the height of the door's base, until every surface is gathered (then they become <see cref="Seeds"/>).</summary>
