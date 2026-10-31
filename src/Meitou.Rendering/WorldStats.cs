@@ -5,23 +5,11 @@ using Meitou.Rendering.Gpu;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// The renderer's sections of the game's F11 statistics panel (what is drawn, memory, the camera and the weather; the host's performance
-/// lines come before them); the viewer's panel takes the weather lines.
+/// The renderer's sections of the F11 statistics panel in the game and the viewer (what is drawn, memory, the camera and the weather;
+/// each host's performance lines come before them).
 /// </summary>
 static class WorldStats
 {
-    /// <summary>The weather's name for the heat-haze line: the camera's weather (the scheduler's or the forced one).</summary>
-    public static string WeatherName(WorldFrame.Gpu gpu) => gpu.Weather is { } w ? w.State.Weather.Name : gpu.Sky.Weather.Name;
-
-    /// <summary>The weather lines: camera region, season, the weather with strength, wind and the time left; then the sky, fog and rain values it feeds.</summary>
-    public static void AddWeather(List<string> stats, WorldFrame.Gpu gpu)
-    {
-        if (gpu.Weather is not { } w) return;
-        var s = w.State;
-        stats.Add($"weather     zone {(w.CameraZone is { } z ? $"{z.X},{z.Y}" : "-")}; {w.Describe()}");
-        stats.Add($"  sky x {s.SkyColourMultiplier.X:0.00} {s.SkyColourMultiplier.Y:0.00} {s.SkyColourMultiplier.Z:0.00}, clouds {s.CloudDensity:0.00}, fog {(s.FogEnabled > 0 ? $"{s.FogEnabled:0.00} to {s.FogDistance:0}" : "off")}, rain {s.Rain:0}, wet {s.Wetness:0.00}");
-    }
-
     /// <summary>
     /// A frame's triangles in the main colour view, averaged over the panel's second as the bench counts them (<c>WorldApp.MeasureCounts</c>):
     /// the objects' include the water reflection's, the foliage's are null until its GPU cull's tally has been read back
