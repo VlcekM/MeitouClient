@@ -34,7 +34,8 @@ public sealed record BodyOptions
     /// </summary>
     public bool Decapitation { get; set; } = true;
     /// <summary>
-    /// Meitou (on; Faithful off, the original starts a ragdoll at rest): a new whole-body ragdoll goes on with the character's motion and the downing blow's push, and a cut-off
+    /// Meitou (on; Faithful off, the original starts a ragdoll at rest with hard joint limits): a new whole-body ragdoll goes on with the character's motion and the downing blow's push
+    /// (its arms and legs spun by it), its joints get soft limits and a limp body a relaxed pull (docs/game/ragdolls.md "Advanced ragdolls (Meitou)"), and a cut-off
     /// head is thrown with it (<see cref="Ragdolls.RagdollSystem"/>, <c>CombatSystem.Knockdown</c>). Settable, as <see cref="Dismemberment"/>.
     /// </summary>
     public bool AdvancedRagdolls { get; set; } = true;
