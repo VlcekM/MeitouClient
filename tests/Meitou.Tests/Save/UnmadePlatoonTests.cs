@@ -1,9 +1,13 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay;
 using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Saving;
+using Meitou.Tests.Simulation;
+using static Meitou.Tests.Save.SaveSamples;
+using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Save;
 
@@ -49,5 +53,111 @@ public class UnmadePlatoonTests
         Assert.False(PopulationSystem.ActivatesAtLoad(outside, box));
         Assert.True(PopulationSystem.ActivatesAtLoad(ordinary, box));
         Assert.Equal(5, outside.DwellLeft);   // it waits its dwell from 5 s
+    }
+
+    // ------------------------------------------------------------------ through a save of the synthetic town
+
+    const string UnmadeName = "Testfolk_77";
+
+    static SimWorld NewWorld(PopulationData data)
+    {
+        var walk = new OpenGroundWalkability(SyntheticTown.Ground);
+        var systems = SyntheticTown.Standard(data, walk, StandardParts.Population | StandardParts.Player | StandardParts.Movement | StandardParts.Body,
+            new PopulationSettings { CheckEveryTicks = 1 });
+        return new SimWorld(new WorldSettings { Seed = 11, Threads = 1, PublishSnapshots = false }, walk, systems.Systems);
+    }
+
+    static void Dispose(SimWorld world)
+    {
+        world.Dispose();
+        foreach (var s in world.Systems) (s as IDisposable)?.Dispose();
+    }
+
+    static SaveGame RoundTrip(SaveGame save, string root)
+    {
+        string folder = Path.Combine(root, Guid.NewGuid().ToString("N")[..8], QuickSave.Name);
+        save.Write(folder);
+        return SaveGame.Load(folder);
+    }
+
+    static Dictionary<string, SavePlatoon> NpcPlatoons(SaveGame save) =>
+        save.Platoons.Where(p => p.FactionId == "20-t").ToDictionary(p => p.Name, StringComparer.Ordinal);
+
+    [Fact]
+    public void An_unmade_platoon_saved_before_it_is_made_keeps_its_record_and_once_made_is_saved_once_as_its_fresh_squad()
+    {
+        var data = SyntheticTown.Data(SyntheticTown.Database(anatomy: true));
+        string root = Temp("unmade");
+        var a = NewWorld(data);
+        var b = NewWorld(data);
+        var c = NewWorld(data);
+        try
+        {
+            // The synthetic town saved, then a never-made resident Patrol (10-t) of its own added at the player's place, as the original writes one.
+            var squad = a.Systems.OfType<PopulationSystem>().Single().StartPlayer(a, NewGameStart.From(data.Db.Find("40-t")!));
+            a.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = 0 });
+            a.RunTicks(40);
+            Assert.True(a.Characters.TryResolveNext(squad.Leader, out int lead));
+            var at = a.Characters.Previous[lead].Position;
+            var base0 = SaveCapture.Capture(a, data, new SaveClock(3, 7, 45), null,
+                new SaveCaptureOptions { Placements = [new TownPlacement("inst", "30-t", SyntheticTown.Centre, null)] });
+            var unmade = new SaveBuilder(base0).AddPlatoon(UnmadeName, "Testfolk", "20-t", "10-t", at);
+            unmade.File = null;
+            unmade.ContentFile = "platoon/";
+            unmade.CharCount = 4;
+            unmade.Record.Bools["never been activated"] = true;
+            unmade.Record.Bools["is resident"] = true;
+            unmade.Record.Strings["basetown"] = "30-t";
+            var home = new Hand((int)FcsRecordType.BUILDING, 2133, 11111, 5, 750000000);
+            home.Write(unmade.Record, "homebuilding");
+            var save0 = RoundTrip(base0, root);
+            var handle = save0.Platoons.Single(p => p.Name == UnmadeName).Handle;
+            var others0 = NpcPlatoons(save0).Keys.Where(n => n != UnmadeName).ToHashSet();
+
+            void IsStandIn(SimWorld w, LoadedSave loaded)
+            {
+                var p = w.Platoons.All.Single(x => x.Unmade);
+                Assert.Equal((PlatoonState.Unloaded, true, "10-t", new Vector2(at.X, at.Z)), (p.State, p.Regenerate, p.TemplateId, p.Position));
+                Assert.Equal(UnmadeName, p.Saved!.Name);
+                Assert.Empty(p.Saved.Members);
+                Assert.True(p.Id > int.MaxValue - 4);   // a reserved id
+                Assert.Contains($"{UnmadeName}: never made by the game; made from its template when it activates.", loaded.Notes);
+            }
+
+            // (1) Loaded and saved before it is made: its record once, as it was, and no squad for it.
+            var loadedB = SaveLoader.Load(b, save0, data);
+            IsStandIn(b, loadedB);
+            var save1 = RoundTrip(SaveCapture.Capture(b, data, loadedB.Clock, loadedB), root);
+            var kept = Assert.Single(save1.Platoons, p => p.Name == UnmadeName);
+            Assert.Equal((handle, 4, true, home, "platoon/", "10-t", "30-t", false), (kept.Handle, kept.CharCount, kept.Record.Bools["never been activated"],
+                Hand.Read(kept.Record, "homebuilding"), kept.ContentFile, kept.SquadTemplate, kept.Record.Strings["basetown"], kept.IsLoaded));
+            Assert.Equal(others0, NpcPlatoons(save1).Keys.Where(n => n != UnmadeName).ToHashSet());
+
+            // (2) That save loads as the same stand-in.
+            var loadedC = SaveLoader.Load(c, save1, data);
+            IsStandIn(c, loadedC);
+
+            // (3) In the player's box it is made at load, last; the save then holds its fresh squad once and not its record.
+            var stand = c.Platoons.All.Single(x => x.Unmade);
+            var standIn = stand.Saved!;
+            for (int i = 0; i < 20 && !c.PreparePopulation(SyntheticTown.Centre); i++) { }
+            Assert.Null(c.Platoons.Find(stand.Id));
+            Assert.True(standIn.Despawned);
+            var made = Assert.Single(c.Platoons.All, x => x.Id > int.MaxValue - 4);
+            Assert.Equal((PlatoonState.Loaded, "10-t", stand.Faction, false), (made.State, made.TemplateId, made.Faction, made.Unmade));
+            int members = c.Squads.Find(made.SquadId)!.Members.Count;
+            Assert.True(members > 0);
+            var save2 = RoundTrip(SaveCapture.Capture(c, data, loadedC.Clock, loadedC), root);
+            var after = NpcPlatoons(save2);
+            Assert.DoesNotContain(UnmadeName, after.Keys);
+            var fresh = Assert.Single(after.Values, p => !others0.Contains(p.Name));
+            Assert.Equal(("10-t", "30-t", members, members), (fresh.SquadTemplate, fresh.Record.Strings["basetown"], fresh.CharCount, fresh.Characters.Count));
+            Assert.False(fresh.Record.Bools.GetValueOrDefault("never been activated"));
+        }
+        finally
+        {
+            foreach (var w in new[] { a, b, c }) Dispose(w);
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
     }
 }

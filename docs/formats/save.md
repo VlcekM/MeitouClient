@@ -336,6 +336,7 @@ PLATOON keys (**Verified**):
   Meitou makes such platoons from their template when they activate (`SaveLoader.Unmade`, `PopulationSystem.ActivatesAtLoad`).
 - `hometown` (handle) puts the platoon into that town's or nest's pool at load (`FUN_1407ec8d0`; the platoon's faction and player status must match the town's);
   the pool counts living characters, `char count` while the platoon is not active (`FUN_1408f6a40`). `basetown` is only kept as a TOWN record pointer.
+  Meitou rewrites `char count` from the platoon file when it saves, and keeps the save's value for a platoon with no file.
 - `homebuilding` (handle) is bound through the game's per-frame system-message queue (`FUN_1407b65b0`): only if the building resolves that frame, else the message is
   dropped (**Unknown** whether something rebinds it later). Meitou writes the handle of the building's state in the save's zone file (a Meitou save writes a file for
   every visited zone, [Zone files](#zone-files)), else its level-data handle ([handles](#object-handles-and-slot-lists)).
