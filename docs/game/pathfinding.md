@@ -347,7 +347,17 @@ interior group whether the original connects it (mesh connections in its streami
 faces, is reached from the street (over kept polygons and joins from the exterior's own kept set, in its zone or a neighbour's); SEALED marks connected
 in the original but not reached in ours. **Observed** (225 zones, 1090 groups, 1066 connected): 42 sealed, 7 reached in ours only. 24 of the sealed are ruins (`destroyed`), whose original groups mostly hold the intact
 interior (14.5 Outposts: our ruins cover 13 % of their faces), so those tiles were built with the building standing (**Unknown** how the original
-handles them).
+handles them). Of the 18 intact ones, by cause (**Observed**, `--interior`, `--probe`, the original's connection edges): unseeded doorless
+interiors (Ancient Labs `28.43:2-`, `37.35:2-`, Ash Domes `54.59:2-`, `4-`: no door, no node, so nothing of theirs was kept and a join took only kept
+polygons) are now joined by the rule below; Hive Commune Huts `39.54:44..54-` open onto a slope where the original has ground (34420,103262: its
+polygon at 1586) and ours none; Storm House `27.22:1821-`'s door landing (520..525) is cut off from its steps by a 5..6 step, a region of its own;
+Stephouse `18.9:29-` and its neighbours `13-`, `27-` stand sunk 12 below the terrain at the door, where the original's interior edge meets the
+terrain's height (1630 against our floor 1611); Outpost s-I `24.18:8-` has its door shape 170 below its floor (painter y -84..-62, the original's
+edges at 100); `22.11:2-`, `24.18:15-` and `43.49:2-` (the original's exterior reaches 25 inside our hull there) are not examined further.
+After: 38 sealed (24 ruins), 7 reached in ours only; interior coverage rises in 11 zones (Ash Domes 54.59 51→98 %, Ancient Labs 28.43 0→48 %, 37.35 35→77 %), none falls.
+**Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept, and
+every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`); exterior polygons stay limited to kept ones, else a door joined to a pruned
+landing satisfied the door and skipped the doorway's kept ground (Storm House Lagoon `40.41:10-`, Metal Wallhouse `51.43:1281-Dialogue-INGAME`).
 **Doorless interiors** (engine choice): an intact building with an interior mask and no `doors` (an open doorway) links its interior's open edges
 to the exterior's that run along them within `NavInteriors.HullJoinDistance` (2.5; both are cut on the hull's line); so do destroyed ones with a
 `destroyed boundary` (above); those without stay islands.

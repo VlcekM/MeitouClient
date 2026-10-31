@@ -66,8 +66,11 @@ internal static class NavInteriors
         for (int k = 0; k < interiors.Count; k++)
             Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].PolygonCount, doorless?[k] ?? false, names?[k] ?? $"interior {k}", log);
         var street = log is null ? null : Enumerable.Range(0, exteriorCount).Where(p => kept[p]).ToList();
+        var ownKept = log is null ? null : kept.ToArray();
 
-        if (log is not null) LogReached(street!, neighbours, links, kept, offsets, interiors.Select(m => m.PolygonCount).ToList(), names, log);
+        CarryKeep(polygons.Count, neighbours, links, areas, kept);
+
+        if (log is not null) LogReached(street!, neighbours, links, kept, ownKept!, offsets, interiors.Select(m => m.PolygonCount).ToList(), names, log);
 
         var heights = new List<HeightGrid?>();
         foreach (var m in interiors.Prepend(exterior))
@@ -84,10 +87,34 @@ internal static class NavInteriors
     }
 
     /// <summary>
-    /// The join log's reach lines: each interior with a kept polygon reached over kept polygons (neighbours and links) from the exterior's own kept set,
-    /// that is from the street (<c>meitou-tools navmesh --compare-interiors</c> counts these as joined).
+    /// An interior is joined whatever its own pruning kept (it may have no seed: an Ancient Lab or Ash Dome without doors or nodes), to exterior polygons
+    /// the exterior's pruning kept, and the regions joined to a kept polygon are kept too (engine choice; the original connects these interiors,
+    /// docs/game/pathfinding.md "Door joins").
     /// </summary>
-    static void LogReached(List<int> street, List<int[]> neighbours, List<List<int>?> links, List<bool> kept, List<int> offsets, List<int> counts, IReadOnlyList<string?>? names, Action<string> log)
+    static void CarryKeep(int count, List<int[]> neighbours, List<List<int>?> links, List<byte> areas, List<bool> kept)
+    {
+        var queue = new Queue<int>();
+        for (int p = 0; p < count; p++) if (kept[p]) queue.Enqueue(p);
+        while (queue.Count > 0)
+        {
+            int p = queue.Dequeue();
+            foreach (int n in neighbours[p]) Keep(n);
+            if (links[p] is { } l) for (int i = 1; i < l.Count; i += 2) Keep(l[i]);
+        }
+
+        void Keep(int n)
+        {
+            if (n < 0 || kept[n] || areas[n] == NavArea.Null) return;
+            kept[n] = true;
+            queue.Enqueue(n);
+        }
+    }
+
+    /// <summary>
+    /// The join log's reach lines: each interior whose own kept part (any of it when its pruning kept nothing) is reached over kept polygons (neighbours
+    /// and links) from the exterior's own kept set, that is from the street (<c>meitou-tools navmesh --compare-interiors</c> counts these as joined).
+    /// </summary>
+    static void LogReached(List<int> street, List<int[]> neighbours, List<List<int>?> links, List<bool> kept, bool[] ownKept, List<int> offsets, List<int> counts, IReadOnlyList<string?>? names, Action<string> log)
     {
         var reached = new bool[kept.Count];
         var queue = new Queue<int>();
@@ -99,7 +126,12 @@ internal static class NavInteriors
             if (links[p] is { } l) for (int i = 1; i < l.Count; i += 2) Visit(l[i]);
         }
         for (int k = 0; k < offsets.Count; k++)
-            if (Enumerable.Range(offsets[k], counts[k]).Any(p => reached[p])) log($"    interior {names?[k] ?? $"interior {k}"} reached from the exterior");
+        {
+            // The interior's own kept part when it has one (a doorway strip kept only through the join is not the room), else any of it.
+            var range = Enumerable.Range(offsets[k], counts[k]);
+            bool own = range.Any(p => ownKept[p]);
+            if (range.Any(p => reached[p] && (!own || ownKept[p]))) log($"    interior {names?[k] ?? $"interior {k}"} reached from the exterior");
+        }
 
         void Visit(int n)
         {
@@ -116,7 +148,7 @@ internal static class NavInteriors
         bool Free(int p, int e) => neighbours[p][e] < 0 && !NavGeometry.HasLink(CollectionsMarshal.AsSpan(links[p]), e);
         for (int door = 0; door < doorIds.Count; door++)
         {
-            var inside = Enumerable.Range(first, count).Where(p => kept[p] && areas[p] == NavArea.Door && doorOf[p] == door).ToList();
+            var inside = Enumerable.Range(first, count).Where(p => areas[p] == NavArea.Door && doorOf[p] == door).ToList();
             if (inside.Count == 0) continue;
             var outside = Enumerable.Range(0, exteriorCount).Where(p => kept[p] && areas[p] == NavArea.Door && doorOf[p] == door).ToList();
             // An edge that faces several polygons links to all of them, so which edges are open is decided before any link is added.
@@ -139,7 +171,7 @@ internal static class NavInteriors
             var queue = new Queue<int>(inside);
             while (queue.Count > 0)
                 foreach (int n in neighbours[queue.Dequeue()])
-                    if (n >= 0 && kept[n] && areas[n] != NavArea.Null && InBox(n) && approach.Add(n)) queue.Enqueue(n);
+                    if (n >= 0 && areas[n] != NavArea.Null && InBox(n) && approach.Add(n)) queue.Enqueue(n);
             var openApproach = approach.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
             near = [.. Enumerable.Range(0, exteriorCount).Where(q => kept[q] && areas[q] != NavArea.Null && polygons[q].Any(i => v[i].X >= lo.X && v[i].X <= hi.X && v[i].Z >= lo.Y && v[i].Z <= hi.Y))];
             if (Link(openApproach, OpenEdges(near), $"{doorIds[door]} (approach)") == 0)
@@ -150,7 +182,7 @@ internal static class NavInteriors
         if (doorless)
         {
             var lo = new Vector2(float.MaxValue); var hi = new Vector2(float.MinValue);
-            var inside = Enumerable.Range(first, count).Where(p => kept[p] && areas[p] != NavArea.Null).ToList();
+            var inside = Enumerable.Range(first, count).Where(p => areas[p] != NavArea.Null).ToList();
             foreach (int p in inside)
                 foreach (int i in polygons[p]) { lo = Vector2.Min(lo, new(v[i].X, v[i].Z)); hi = Vector2.Max(hi, new(v[i].X, v[i].Z)); }
             lo -= new Vector2(JoinDistance); hi += new Vector2(JoinDistance);
