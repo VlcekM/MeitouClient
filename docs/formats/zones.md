@@ -33,7 +33,9 @@ Buildings resolve part lists with seeded variants and count/slot rules. Compose 
 in correct axis/scale/order; random/state-driven parts, doors, interiors, destroyed/ruined state,
 layout furniture/lights and town material replacements are independent. Preserve exterior/interior
 visibility and floor checks. Single-mesh/no-part buildings and MAP_FEATURES follow their own
-paths; hidden effect placers draw particles rather than geometry. Nest debris is population state.
+paths. A MAP_FEATURES record draws its mesh only while `hidden` is false (the editor shows it anyway), and makes every EFFECT
+instance at its node whatever `hidden` says; an empty texture map is `white.dds`, an empty normal map `flat.dds` (**Verified**
+(decompiled), FUN_14039c7e0, FUN_14039b130, FUN_140843920). Nest debris is population state.
 Materials select local town/biome/climate inputs; do not substitute a material solely by mesh name.
 
 Original part view distances differ from whole-object reach. Distant towns use stand-ins/LOD and
