@@ -502,6 +502,14 @@ Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short r
       interior is blank (+0x2c set) and the building is neither a wall nor a gateway or door, its upper-floor contents are
       added too: shapes in groups 17, 18, 20, 21, 22 (mask 0x760000) through the interior collector below. Without an
       interior object every WALKABLE shape is material 1 and no upper-floor contents are added (**Verified**, FUN_1403c8660).
+    - **Roofs** (**Observed**, records and `tileX.Y.hkt`, scratch scan of every placement with a tile: interior groups within 60 of its
+      origin, exterior polygons within 60; issue #143): Small Shack has no stair part and its roof collision (`Storm_Shack_Exterior`,
+      `Storm_Shack_INTERIOR_ROOF_COL`) is `is unwalkable roof`, so material 0. In all 139 intact placements (61 zones) the original's
+      interior group spans at most 25 units (the floor) and no exterior polygon lies on the roof, so the roof is never walked; Meitou
+      neither (48.13 `8-`: `--path` from the street ends on the floor, y 969, roof 1024). Old Storm House reaches its roof storey by
+      `Storm_House_01_Interior-stairs` (`is stairs`, `interior` list); 53 of 82 intact placements (45 zones) have interior faces 30+
+      over the floor, the other 29 (all but one from rebirth.mod, e.g. 48.13 `6-`, 9 faces) floor only. Meitou reaches it
+      (48.13 `6-`: street to y 1066).
     - **Interior object and class** (**Verified**, `FUN_140551b20`, run by the Building constructor `FUN_14055ca90`): a BUILDING
       whose `interior` reference list is not empty gets the interior object (+0x1f0, 0x168 bytes, filled by `FUN_140551660`),
       and its class (+0x198, read by virtual slot 0x358) becomes 12 BCTYPE_SHELL_WITH_INTERIOR when it is still 0. The base
