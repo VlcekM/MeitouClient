@@ -494,7 +494,7 @@
 
   // Headline: the newest benchmarked commit against the one before it (upstream order), for the primary selected machine.
   // Tiles show the change first; every number uses the same basis as Compare (see val()).
-  var TILES = [["p99_ms", "p99 frame time", " ms"], ["over33_pct", "Frames over 33 ms", "%"], ["slow_world_p99_ms", "Slow-world tick p99", " ms"], ["avg_fps", "Average fps", " fps", true]];
+  var TILES = [["p99_ms", "p99 frame time", " ms"], ["over33_pct", "Frames over 33 ms", "%"], ["slow_world_p99_ms", "Slow-world tick p99", " ms"], ["avg_fps", "Average fps", " fps", true], ["vram_peak_mb", "Peak video memory", " MB"]];
   function renderHeadline() {
     var host = document.getElementById("headline");
     host.innerHTML = "";
@@ -524,7 +524,7 @@
         verdict.textContent = (dl.cls === "" ? "No clear change" : dl.d < 0 ? "Faster" : "Slower") + ": p99 " + (dl.pct == null ? dFmt(dl.d) : pctFmt(dl.pct));
       }
       card.appendChild(verdict);
-      TILES.filter(function (t) { return t[0] !== "avg_fps" || hasMetric(mc, "avg_fps"); }).forEach(function (t) {
+      TILES.filter(function (t) { return (t[0] !== "avg_fps" && t[0] !== "vram_peak_mb") || hasMetric(mc, t[0]); }).forEach(function (t) {
         var v = val(mc, cur.commit, sid, t[0]), pv = prev ? val(mc, prev.commit, sid, t[0]) : null, big = "", cls = "", small = "";
         if (v != null && pv != null) {
           var d2 = delta(pv, v, t[3]);
