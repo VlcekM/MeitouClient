@@ -210,14 +210,14 @@ and spikes; at 36 the outline matches `tile20.32.hkt`, terrain triangles drop 13
 
 **Furniture** comes from building layouts (`BuildingLayouts`), none when destroyed. **Verified**
 (Hub, `meitou-tools navmesh`): parts with collision 189→309.
-**Stairs under floors** (engine choice): Recast connects two neighbouring cells only when the free space they share (over the higher floor, under the lower
-ceiling) is the agent height, so a ramp climbing out from under a floor slab, a roof edge or a leaning wall lost a line of cells where its rise per cell ate
-the margin, although each cell had the headroom on its own; the builder asks the shared space the agent height less the climb (13), the per-cell headroom
-18 as before, as the original connects faces by step height and asks the clearance per face. **Observed** (`meitou-tools navmesh --interior`): Sho-Battai's
-Longhouse `43.11:5565-Newwworld-INGAME` ramp under its upper floor, Black Scratch's bar `50.33:324-`, Squin's Watchtower `18.35:29-rebirth-INGAME` (placed
-rolled 12°, as the original's tile `18.35` has it too, its walls leaning over the spiral ramp) kept their upper storeys with it, not before (issues #139,
-#142, #147). **Interiors are one tile** (engine choice): a stair across a tile line inside a building came out cut (Stack's Longhouse `19.29:6-`; the two
-tiles' contours put their vertices at different heights along the ramp). `meitou-tools navmesh --compare-interiors` counts the original tile's interior
+**Stairs under floors** (engine choice): the builder connects two neighbouring cells over a shared free space (over the higher floor, under the lower
+ceiling) of the agent height less the climb (13), with the per-cell headroom 18, as the original connects faces by step height and asks the clearance per
+face. Recast's default, the full agent height for the shared space, drops a line of cells where a ramp climbing out from under a floor slab, a roof edge or a
+leaning wall rises per cell by more than the margin, although each cell has the headroom on its own. **Observed** (`meitou-tools navmesh --interior`):
+Sho-Battai's Longhouse `43.11:5565-Newwworld-INGAME` ramp under its upper floor, Black Scratch's bar `50.33:324-` and Squin's Watchtower
+`18.35:29-rebirth-INGAME` (placed rolled 12°, as the original's tile `18.35` has it too, its walls leaning over the spiral ramp) keep their upper storeys
+with the rule and lose them with Recast's default (issues #139, #142, #147). **Interiors are one tile** (engine choice): in the zone's 48-cell tiles a stair across a tile line inside a building comes out cut (Stack's Longhouse
+`19.29:6-`; the two tiles' contours put their vertices at different heights along the ramp). `meitou-tools navmesh --compare-interiors` counts the original tile's interior
 faces covered by a kept polygon within 12 units (`OriginalNavTiles.CoverInteriors`): **Observed** 18.35 68→86 %, 19.29 62→68 %, 50.33 69→71 %, 47.16 77→81 %,
 20.32 88→90 % with the two rules; 43.11 77 %, 26.13 81 %, 48.45 91 %. `InteriorCoverageTests` holds each of those zones at a point under its measure. The
 rest is mostly upper storeys: of 105 groups in those zones 59 still have uncovered faces, usually a 70..120-unit band (cause per building **Unknown**).
@@ -226,9 +226,9 @@ job) when it has an interior mask part with collision and is not `is gateway`, `
 (`ZoneGeometryGatherer.IsShellWithInterior`; the record field the class comes from is **Unknown**). **Observed** against the original tiles: the Ancient Lab
 (47.16), Ancient Citadel (26.13, both `cavernous`) and Ancient Factory (34.28, `interior terrain`) have no interior group and their floors are in the
 exterior tile; Hive Commune Huts (7.30, no doors) have interior groups; Heft's Ancient Lab Ramp is an `is wall gate` whose mask is the gate's trigger box,
-and as a shell it carved its own ramp out of the exterior and cut the lab off (#140). Every other building is an open structure: all its WALKABLE shapes are
+and as a shell would carve its own ramp out of the exterior and cut the lab off (#140). Every other building is an open structure: all its WALKABLE shapes are
 walkable, not only its floor-0 parts, and its upper-floor contents (groups 17, 18, 20..22) are gathered, the original's rule for the flag the shell class
-clears (below, building shapes). **Observed**: Heft's Shield Bridge, an `is stairs` part, was an obstacle (#141); its walkboard collision comes out 120..145
+clears (below, building shapes). **Observed**: Heft's Shield Bridge, an `is stairs` part, is walkable only by this rule (#141); its walkboard collision comes out 120..145
 above where the original's tile has the deck (`y` 1160..1180 by its origin), which is **Unknown** (a pose or baked-scale question of that file).
 **Interior parts**: the `interior` list (laid out like `parts` after the same position-seeded reseed, as drawn) is collision too,
 none when destroyed; it holds interior stairs and upper floors. **Verified** (tile20.32 interior `600815`, the Hub Storm House
@@ -260,10 +260,10 @@ convex foundation spans Y 65..157 over ground at 138; seeds at the terrain heigh
 and walkers stepped down onto it at the slab's edge. `tile24.27.hkt` has only the slab and its ramps there.
 **Solids** (engine choice): Recast rasterises surfaces, so ground inside a closed solid survives as floor. Every convex shape (box, capsule, hull), walkable
 or obstacle, becomes a `NavSolid`; a walkable span whose floor, at its cell's middle, is inside every face plane (1 below the upward ones) is removed.
-Obstacles were a prism over their footprint before, which cut the ground under a leaning shape whose volume is in the air: **Observed** Shark's
-`Giant_BigWood`, one tilted box 2,000 units tall, cut a 1,500-unit hexagon over a hemp farm that `tile21.42.hkt` covers (issue #155); as solids,
-21.42's points the original covers and we do not fell 6.9 → 1.8 %, ours-only rose 3.0 → 3.6 % (18.35: 5.1 → 6.1 %, a hillside by its Wind Generator II that
-was pruned and now joins the town; the original has no mesh there). The height surfaces (`NavSurfaces`) drop the same insides: **Observed** (that gate) its stair is a tilted box
+A prism over an obstacle's footprint would cut the ground under a leaning shape whose volume is in the air: **Observed** Shark's `Giant_BigWood`, one
+tilted box 2,000 units tall, as a prism cuts a 1,500-unit hexagon over a hemp farm that `tile21.42.hkt` covers (issue #155), as a solid leaves it; 21.42's
+points the original covers and we do not fall 6.9 → 1.8 %, ours-only 3.0 → 3.6 % (18.35: 5.1 → 6.1 %, a hillside by its Wind Generator II that joins the
+town as a solid; the original has no mesh there). The height surfaces (`NavSurfaces`) drop the same insides: **Observed** (that gate) its stair is a tilted box
 whose top face runs on inside the foundation, from 151 down to ~124 under the slab, and a walker's height followed it under the floor. **Observed** (`meitou-tools navmesh`, zones 24.27, 20.32, 21.32, 18.35, 19.29, 21.42, 21.31, 10.31, 18.39, 20.29, 23.22):
 unpruned polygons drop 1..24 %, kept area sampled against the original tiles changes under 0.3 %; the gate's under-floor layer is gone; interior area
 drops only in ruins (Hub Stationhouse `4-`, Bughouse `4937-`: floor strips inside the thick walls and fallen slabs). The door and stair paths listed
