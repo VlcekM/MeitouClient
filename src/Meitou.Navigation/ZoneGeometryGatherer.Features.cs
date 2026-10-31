@@ -12,8 +12,8 @@ internal sealed partial class ZoneGeometryGatherer
 
     /// <summary>
     /// The collision of the map features (<c>features.dat</c>: rocks, cliffs, the Rebirth statue, gravel piles, trestle bridges) placed in the zone and its eight
-    /// neighbours, walkable up to the terrain's slope like walkable foliage (docs/game/pathfinding.md, "Map features"): an owner-less collision object, which the
-    /// original's generator takes as material −1 (group 14), cutting and walkable. A closed convex shape is a <see cref="NavSolid"/>; a triangle mesh a
+    /// neighbours, walkable up to the terrain's slope like walkable foliage (docs/game/pathfinding.md, "Map features"): an owner-less collision object, material −1 to the
+    /// original's generator, cutting and walkable (which collision group it gets is Unknown). A closed convex shape is a <see cref="NavSolid"/>; a triangle mesh a
     /// <see cref="NavMeshSolid"/>, so the ground inside the rock is removed (Observed: Rebirth, zone 21.19, the statue's foundation and the gravel piles).
     /// </summary>
     void AddMapFeatures(ZoneGeometry g)
@@ -42,8 +42,8 @@ internal sealed partial class ZoneGeometryGatherer
         features ??= File.Exists(Path.Combine(install.DataDirectory, MapFeatureFile.RelativePath)) ? MapFeatureFile.Open(install) : new MapFeatureFile();
 
     /// <summary>
-    /// The collision triangles of the map features that ragdolls land on (docs/game/ragdolls.md "Collision groups": an outdoor body, group 3, hits group 14, the group taken for
-    /// features), from the placements in the zone and its neighbours: each triangle once, in the zone its centre lies in (a feature can be thousands of units across, more
+    /// The collision triangles of the map features that ragdolls land on (docs/game/ragdolls.md "Collision groups": an outdoor body, group 3, hits group 14, the group assumed for
+    /// features, Unknown), from the placements in the zone and its neighbours: each triangle once, in the zone its centre lies in (a feature can be thousands of units across, more
     /// than a building's reach). Three points per triangle, world space.
     /// </summary>
     internal void AddRagdollFeatures(ZoneCoordinate zone, List<Vector3> output)

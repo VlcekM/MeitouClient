@@ -6,7 +6,7 @@ namespace Meitou.Navigation;
 /// <summary>
 /// The original generator keeps only the regions within 4 units of a seed point (regionPruningSettings, minRegionArea 1e8 makes every region "too small" otherwise),
 /// and the largest region when none qualifies. This is that pass over the polygon graph: roofs, closed yards and cliff tops without a seed are dropped
-/// (docs/game/pathfinding.md, "Region pruning by seeds").
+/// (docs/game/pathfinding.md, Generator "Seeds" and `regionPruningSettings`).
 /// </summary>
 internal static class SeedPruner
 {

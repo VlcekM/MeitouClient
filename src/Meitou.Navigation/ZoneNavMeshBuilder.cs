@@ -10,7 +10,7 @@ namespace Meitou.Navigation;
 /// <summary>
 /// Builds a zone's navmesh from its gathered geometry with Recast (DotRecast): per tile rasterise the triangles with their areas, cut carvers,
 /// paint doors, partition, contour and triangulate; then stitch the tiles, and keep only the regions near a seed
-/// (docs/game/pathfinding.md, "Region pruning by seeds"). Radius 0: clearance is a query-time check.
+/// (docs/game/pathfinding.md, Generator "Seeds" and `regionPruningSettings`). Radius 0: clearance is a query-time check.
 /// </summary>
 internal static partial class ZoneNavMeshBuilder
 {
@@ -339,10 +339,6 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// Removes the walkable spans inside a closed or bottom-open triangle mesh (<see cref="NavMeshSolid"/>): the nearest of its triangles above the span's floor, at
-    /// the middle of the cell and more than <see cref="SolidTopInset"/> over it, faces up (docs/game/pathfinding.md, "Map features").
-    /// </summary>
-    /// <summary>
     /// How far (cells) from where a map feature's surface runs inside a building's solid that surface is removed (engine choice: two cells, so the building's
     /// walkway and the feature's surface are not neighbours; docs/game/pathfinding.md, "Map features").
     /// </summary>
@@ -351,6 +347,10 @@ internal static partial class ZoneNavMeshBuilder
     /// <summary>How far (units) a span's floor may be over a feature triangle's height at the cell's middle and still stand on it (engine choice).</summary>
     const float FeatureSurfaceReach = 2;
 
+    /// <summary>
+    /// Removes the walkable spans inside a closed or bottom-open triangle mesh (<see cref="NavMeshSolid"/>): the nearest of its triangles above the span's floor, at
+    /// the middle of the cell and more than <see cref="SolidTopInset"/> over it, faces up (docs/game/pathfinding.md, "Map features").
+    /// </summary>
     static void RemoveInside(NavMeshSolid solid, RcCompactHeightfield chf, List<NavSolid> allSolids, List<int> tileSolids)
     {
         float cs = chf.cs, ch = chf.ch;

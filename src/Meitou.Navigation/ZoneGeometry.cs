@@ -105,7 +105,7 @@ internal sealed class ZoneGeometry
     public List<NavVolume> Painters { get; } = [];
     /// <summary>Exterior doors' outer markers with the height of the door's base, until every surface is gathered (then they become <see cref="Seeds"/>).</summary>
     public List<(Vector2 At, float Base)> DoorMarkers { get; } = [];
-    /// <summary>Seed points: regions of the mesh near one stay, the rest is pruned (docs/game/pathfinding.md, "Region pruning by seeds").</summary>
+    /// <summary>Seed points: regions of the mesh near one stay, the rest is pruned (docs/game/pathfinding.md, Generator "Seeds" and `regionPruningSettings`).</summary>
     public List<Vector3> Seeds { get; } = [];
     /// <summary>
     /// For an interior mesh: its building's first shopkeeper or general node, else (no door either) the original's ray seed on its floor, the seed when

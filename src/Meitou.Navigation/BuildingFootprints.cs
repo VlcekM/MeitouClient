@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
+using Meitou.Data.Fcs;
 using Meitou.Data.World;
 
 namespace Meitou.Navigation;
@@ -148,7 +149,7 @@ public sealed class BuildingFootprints
         var terrainGate = new object();
         Parallel.ForEach(features, f =>
         {
-            if (db.Find(f.StringId) is not { Type: Meitou.Data.Fcs.FcsRecordType.MAP_FEATURES } record || record.GetPath("collision") is not { Length: > 0 } file
+            if (db.Find(f.StringId) is not { Type: FcsRecordType.MAP_FEATURES } record || record.GetPath("collision") is not { Length: > 0 } file
                 || collision.Get(file) is not { } prepared) return;
             var node = WorldObjectLayout.InstanceTransform(f.Position, f.Rotation, f.Scale);
             var tris = new List<Vector3>();

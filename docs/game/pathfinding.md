@@ -352,16 +352,16 @@ original leaves Small Shack `48.13:8-` (`110371`) unconnected too; Meitou joins 
 interior group whether the original connects it (mesh connections in its streaming set) and whether ours, the interior whose hull holds most of its
 faces, is reached from the street (over kept polygons, joins and links from the exterior's kept polygons once the zone's kept set is resolved alone or,
 with `--around n`, with its neighbours; a polygon its own pruning kept must be reached; in its zone or a neighbour's); SEALED marks connected
-in the original but not reached in ours. **Observed** (225 zones, 1090 groups, 1066 connected): 42 sealed, 7 reached in ours only. 24 of the sealed are ruins (`destroyed`), whose original groups mostly hold the intact
-interior (14.5 Outposts: our ruins covered 13 % of their faces), so those tiles were built with the building standing; the original rebuilds them as
-ruins at load ("Ruin joins" above). Of the 18 intact ones, by cause (**Observed**, `--interior`, `--probe`, the original's connection edges): unseeded doorless
+in the original but not reached in ours. **Observed** (225 zones, 1090 groups, 1066 connected): 25 sealed (18 ruins, 7 intact), 6 reached in ours only;
+`--compare` 20.32, 18.35, 21.42 unchanged by the rules below. The ruins' original groups mostly hold the intact interior (14.5 Outposts: our ruins covered
+13 % of their faces), so those tiles were built with the building standing; the original rebuilds them as ruins at load ("Ruin joins" above; coverage
+rises in 14.5 13→40 %, 16.3 8→23 %, 18.45 0→89 %, 19.41 74→78 %, 53.26 62→74 %). The intact ones, by cause (**Observed**, `--interior`, `--probe`, the original's connection edges): unseeded doorless
 interiors (Ancient Labs `28.43:2-`, `37.35:2-`, Ash Domes `54.59:2-`, `4-`: no door, no node, so nothing of theirs was kept and a join took only kept
-polygons) are now joined by the rule below; Hive Commune Huts `39.54:44..54-` stood in a village whose ground was pruned: 6 of its 9 `seeds.def`
+polygons) are joined by the rule below (coverage 54.59 51→98 %, 28.43 0→48 %, 37.35 35→77 %); Hive Commune Huts `39.54:44..54-` stood in a village whose ground was pruned: 6 of its 9 `seeds.def`
 points were dropped by the seed ray rule, which tested every building triangle, though their hits were roofs and domes 17..68 above them (the slope
 outside the huts is 22..40° in the original's polygons and ours, not too steep); the rule now tests floor-0/1 parts (groups 9 and 10) only, as the
 original (Generator, seeds), 4 are dropped, the zone keeps 6609 of 8122 polygons (778 before) and all six huts are reached; Storm House `27.22:1821-`'s steps (a 43.7° ramp to 524, continuous as in the original's faces 511..525) met its door landing on an edge
-whose west end took the height of the raised cheek block beside the steps (525 against the ramp's 519), so the seam was not joined (rule below,
-now reached). Not fixed: seven whose tile interior differs from our build. **Verified** (interior hash, Generator; ours computed from our
+whose west end took the height of the raised cheek block beside the steps (525 against the ramp's 519), so the seam was not joined (rule below). Not fixed: seven whose tile interior differs from our build. **Verified** (interior hash, Generator; ours computed from our
 placement equals the tile group's `Hash`): Old Storm House `18.9:13-`, Small Shack `27-`, Stephouse `29-`, Outpost s-I `24.18:8-`, Outpost s-II
 `43.49:2-` match, so the original uses the shipped interior and its connections unchanged at run time (no rebuild, the stitch does not apply).
 Why their tile meshes differ from ours stays **Unknown** (the hash has no height, record or real rotation, so it cannot tell): `18.9`'s groups are
@@ -375,9 +375,6 @@ i.e. its connected edge at 783 above our hull's top 773, our door at 696: a diff
 original's exterior has the door landing at ~121 outside the hull, ours only a pruned sliver at 121..123 beside deep water. Were either rebuilt, the
 original's stitch (10 in height, 2 apart, Generator) could not join our geometry either: their door steps are 12..17, as in `48.13:12-` (step 12..15),
 which the original leaves unconnected.
-After (with the seed and seam rules below, the 15 zones re-swept): 31 sealed (24 ruins), 7 reached in ours only; interior coverage rises in 11 zones (Ash Domes 54.59 51→98 %, Ancient Labs 28.43 0→48 %, 37.35 35→77 %), none falls.
-With the ruin rules ("Ruin joins", all 225 zones): 25 sealed (18 ruins), 6 reached in ours only (the Ancient Citadel `7.45:2-` now agrees); coverage
-rises in 14.5 13→40 %, 16.3 8→23 %, 18.45 0→89 %, 19.41 74→78 %, 53.26 62→74 %, none falls; `--compare` 20.32, 18.35, 21.42 unchanged.
 **Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept, and
 every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`); exterior polygons stay limited to kept ones, else a door joined to a pruned
 landing satisfied the door and skipped the doorway's kept ground (Storm House Lagoon `40.41:10-`, Metal Wallhouse `51.43:1281-Dialogue-INGAME`).
