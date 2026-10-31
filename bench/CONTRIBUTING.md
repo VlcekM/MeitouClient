@@ -71,6 +71,8 @@ On every pull request that touches `bench/data/`, the check (`bench/tools/genera
 
 Off-target commits do not fail the check; they are only flagged. Files changed outside `bench/data/machines/` and `bench/data/results/` are flagged for the reviewer too: keep a results PR to those two folders.
 
+**Automatic merge** (`.github/workflows/bench-merge.yml`): if you have contributed to the repository before, a PR that passes the check and only adds files, or appends rows to your own CSVs, for machines whose `github` is you merges on its own. Anything else (a first PR, a changed machine file, changed or removed rows, other files) waits for review.
+
 ## Rules
 
 - Your GitHub handle is shown on the site, linked to your profile, with your hardware and resolution. Do not submit if you do not want that.
