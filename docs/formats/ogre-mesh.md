@@ -90,6 +90,13 @@ index map listing the bones its assignments use, ascending by handle. A vertex w
 other slots), so it follows the lowest used bone fully. Hair is the common case: `FemaleHaircutsSamuraiPony.mesh` leaves 1161 of 2015 vertices
 unassigned and uses only the head bone, so they move with the head. Implemented in `Model.Build`.
 
+### Vertex sharing
+
+**Verified** (all 3277 base-game `.mesh` files decoded through `Model.Build`, 2026-10-31): 22.7M vertices for 7.68M triangles
+(2.96 per triangle), no shared vertex data, near-unindexed. Byte-identical vertices: 19.2M (2.50/tri). The tangents are per face:
+ignoring them leaves 9.0M (1.18/tri); quantising them to 8 bits still leaves 15.6M. FIFO-16 ACMR as stored 2.97 (no reuse); after
+exact dedup and a cache-order pass (Tipsify) 2.52. `newland/` (terrain-scale objects) has the most duplication (3.00 → 2.25/tri).
+
 ## Open questions
 
 - How pose weights are derived from appearance values. Observed: body files store values under the pose
