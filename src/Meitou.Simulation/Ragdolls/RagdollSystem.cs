@@ -97,7 +97,9 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         public float Age;
         /// <summary>Seconds of the get-up blend left (0: none), and the bones it blends from, in world space.</summary>
         public float BlendLeft;
+        /// <summary>The published bones and the placement they were made in: a frozen ragdoll still in it hands over the same object (the renderer poses it again only for new bones).</summary>
         public BonePose? Published;
+        public Matrix4x4 PublishedIn;
         public bool InScene => Bodies.Any(b => b is not null);
     }
 
@@ -264,7 +266,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             }
             if (r.BlendLeft > 0) r.BlendLeft = MathF.Max(0, r.BlendLeft - dt);
             if (r.Mask == RagdollPart.None && r.BlendLeft <= 0) { Destroy(r); continue; }
-            r.Published = Build(r, Placement(r, cold, hot));
+            var placement = Placement(r, cold, hot);
+            if (!r.Frozen || r.BlendLeft > 0 || r.Published is null || placement != r.PublishedIn) (r.Published, r.PublishedIn) = (Build(r, placement), placement);
         }
         order.RemoveAll(id => !ragdolls.ContainsKey(id));
         world.Profile.Part("rag back");

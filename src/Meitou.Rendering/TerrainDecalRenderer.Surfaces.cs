@@ -191,6 +191,8 @@ public sealed unsafe partial class TerrainDecalRenderer
         public uint Colour;
         public bool Floor;
         public Vector2 At;
+        /// <summary>The bleeder whose growing pool it is (<see cref="BleedSurface"/>), else null.</summary>
+        public long? Who;
     }
 
     readonly List<SurfaceDecal> surfaces = [];
@@ -309,6 +311,7 @@ public sealed unsafe partial class TerrainDecalRenderer
             return;
         }
         pool = Make(TerrainDecalType.Pool, at, random.Next(variants), random.NextSingle() * MathF.Tau, grow, abgr);
+        pool.Who = who;
         Keep(pool);
         surfacePools[who] = pool;
     }
@@ -338,7 +341,8 @@ public sealed unsafe partial class TerrainDecalRenderer
         if (surfaces.Count >= MaxSurfaces)
         {
             var oldest = surfaces[0];
-            foreach (var key in surfacePools.Where(p => p.Value == oldest).Select(p => p.Key).ToList()) surfacePools.Remove(key);
+            // Its bleeder's pool by the key it keeps: a scan of the pools per new decal took most of a frame with thousands bleeding at the cap.
+            if (oldest.Who is long who && surfacePools.TryGetValue(who, out var pool) && pool == oldest) surfacePools.Remove(who);
             surfaces.RemoveAt(0);
         }
         surfaces.Add(decal);

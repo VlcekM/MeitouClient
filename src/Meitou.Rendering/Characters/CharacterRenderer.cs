@@ -226,6 +226,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         public WorldObjectRenderer.InteriorMemo Interior;
         /// <summary>Its bones were taken from another character (<see cref="Freeze"/>) and are never posed.</summary>
         public bool Frozen;
+        /// <summary>The ragdoll bones it was last posed with: the same object again (a frozen ragdoll) needs no pose every frame.</summary>
+        public BonePose? PosedRagdoll;
     }
 
     /// <summary>
@@ -485,10 +487,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             (state.World, state.HasWorld) = (l.World, true);
             l.Bones = inst.Bones;
             l.Blood = inst.Blood;
-            // A ragdoll is posed every frame: its bones move by physics, not by a clip the thinning could thin out. A new asset (other gear, another rig) is posed at
+            // A moving ragdoll is posed every frame: its bones move by physics, not by a clip the thinning could thin out (a frozen one hands over the same bones). A new asset (other gear, another rig) is posed at
             // once: its parts' attach matrices and its arrays' sizes come from it. The rest are thinned by their size on screen after the gather (below).
             l.Frozen = state.Frozen;
-            l.MustPose = !l.Frozen && (inst.FullRateAnimation || inst.Bones is not null || state.Posed < 0 || newAsset);
+            l.MustPose = !l.Frozen && (inst.FullRateAnimation || inst.Bones is not null && !ReferenceEquals(inst.Bones, state.PosedRagdoll) || state.Posed < 0 || newAsset);
             l.Pixels = 2 * l.Radius * viewPixelsPerRadian / MathF.Max(1, Vector3.Distance(eye, centre));
             l.LayerStart = layerCount;
             var rig = asset.Rig;
@@ -563,6 +565,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
                     rig.Return(scratch);
                     if (state.Posed < 0) { state.Bones.CopyTo(state.Previous, 0); state.Attach.CopyTo(state.PreviousAttach, 0); }
                     state.Posed = stamp;
+                    state.PosedRagdoll = l.Bones;
                 }
                 state.Bones.CopyTo(new Span<Matrix4x4>((byte*)bonePointer + (long)l.BoneBase * 64, rig.BoneCount));
                 state.Attach.CopyTo(attachArray, l.AttachBase);

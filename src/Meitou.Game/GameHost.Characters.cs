@@ -138,7 +138,7 @@ sealed partial class GameHost
             list.Add(new CharacterInstance(DrawKey(c.Id), c.Appearance, position, yaw, poses)
             {
                 WeaponDrawn = c.WeaponDrawn, Scale = c.Scale, Hidden = hiddenIndoors.Contains(c.Id), FullRateAnimation = c.IsPlayer, Rotation = rotation,
-                Bones = Blend(before?.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot)),
+                Bones = Blend(before?.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
             });
         }
     }
@@ -203,7 +203,8 @@ sealed partial class GameHost
     // the poses, the stuck bolts and the ragdoll between ticks.
     CharacterPose[]?[] posesBySlot = [];
     StuckBoltMesh[]?[] boltsBySlot = [];
-    Meitou.Data.Characters.BonePose?[] ragdollsBySlot = [];
+    // The ragdoll's two alternate, so a blended one is a new object to the renderer each frame (it poses a ragdoll again only for other bones).
+    Meitou.Data.Characters.BonePose?[] ragdollsBySlot = [], spareRagdollsBySlot = [];
 
     /// <summary><paramref name="slots"/>[<paramref name="slot"/>], the array grown to hold it.</summary>
     static ref T? Slot<T>(ref T?[] slots, int slot) where T : class
@@ -264,7 +265,7 @@ sealed partial class GameHost
             list.Add(new CharacterInstance(DrawKey(c.Id), look, position, yaw, poses)
             {
                 WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Scale = c.Scale, Hidden = hiddenIndoors.Contains(c.Id), FullRateAnimation = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null,
-                Bones = Blend(before?.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot)),
+                Bones = Blend(before?.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot)),
                 BlendFrom = glide?.From, Blend = glide?.Blend ?? 0, Build = c.Build, Rotation = rotation, Blood = c.BloodAmounts,
             });
             // The editor's next preview look, listed hidden so the renderer prepares it while the last one is still shown.
@@ -295,11 +296,13 @@ sealed partial class GameHost
 
     /// <summary>
     /// A ragdoll's bones between the last two ticks: rotations by nlerp, root positions and the get-up weight linearly; a bone only in the newer one as it is. Written into
-    /// <paramref name="kept"/> (made when missing or of another size).
+    /// <paramref name="kept"/> or <paramref name="spare"/>, the other than last time (made when missing or of another size). A frozen ragdoll's (the same bones in both) as it is.
     /// </summary>
-    static Meitou.Data.Characters.BonePose? Blend(Meitou.Data.Characters.BonePose? from, Meitou.Data.Characters.BonePose? to, float alpha, ref Meitou.Data.Characters.BonePose? kept)
+    static Meitou.Data.Characters.BonePose? Blend(Meitou.Data.Characters.BonePose? from, Meitou.Data.Characters.BonePose? to, float alpha, ref Meitou.Data.Characters.BonePose? kept,
+        ref Meitou.Data.Characters.BonePose? spare)
     {
-        if (to is null || from is null || from.Set.Length != to.Set.Length) return to;
+        if (to is null || from is null || ReferenceEquals(from, to) || from.Set.Length != to.Set.Length) return to;
+        (kept, spare) = (spare, kept);
         if (kept is null || kept.Set.Length != to.Set.Length) kept = new Meitou.Data.Characters.BonePose(to.Set.Length);
         var pose = kept;
         pose.Weight = from.Weight + (to.Weight - from.Weight) * alpha;
