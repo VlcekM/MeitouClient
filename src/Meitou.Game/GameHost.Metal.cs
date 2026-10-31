@@ -949,6 +949,7 @@ sealed partial class GameHost
                 if (KeyMap.Map(button) is not { } mapped) return;
                 var at = Pixels(mouse.Position);
                 if (settings?.Visible == true) { settings.MouseDown(at, mapped); return; }
+                if (hud is { UiVisible: true } && PlayerButton(mapped) == Meitou.Engine.Input.MouseButton.Left && SandboxToggleClick(at)) return;
                 // PlayerInterface sees every click: it takes the HUD's controls, selects, starts a drag box or gives a move order.
                 if (hud is not null && hud.MouseDown(PlayerButton(mapped), at, shiftDown, Ctrl(), Alt())) return;
                 session.Input.SetMouseButton(mapped, true);
