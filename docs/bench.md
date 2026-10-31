@@ -90,6 +90,9 @@ The game/viewer disable tiered compilation and tiered PGO. Experiments can use
 affect code generation and loading. Compilation/GC stalls matter to tail latency.
 
 The flight benchmark (`--fly-benchmark <frames>`) prints a `gc` line: gen0/gen1 counts, pause total and bytes allocated during the flight.
+`--fly-csv <file>` writes a row per frame: frame number, frame and CPU ms (as the `flight` and `cpu only` lines), this process's video memory and budget (VK_EXT_memory_budget, driver allocations
+included), our allocator's blocks and their used bytes. `<file>.owners.csv` holds `GpuAllocator.Breakdown` every 30 frames (long format:
+frame, owner, MB, device-local MB, count); that walk runs after the frame's time is taken but can lengthen the next frame's interval when pipelined.
 Allocated bytes vary about 20% between identical runs (what streams in depends on timing) and a single blocking gen2 dominates the pause total,
 so compare several alternating runs of two builds (copy each build's output folder). To rank allocation sites, run the viewer under
 `dotnet-trace collect --providers Microsoft-Windows-DotNETRuntime:0x1:5 -- <viewer> ...` (GC events with `AllocationTick` stacks, one sample per

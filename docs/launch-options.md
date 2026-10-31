@@ -205,6 +205,7 @@ Ids (`Enhancements.cs`): `ao`, `dither`, `haze`, `aa`, `shadows`, `range`, `impo
 | `--fly-radius <u>` | units | 12000 | Radius of the fly benchmark circle. |
 | `--fly-speed <u/frame>` | units per frame | 150 | Speed of the fly benchmark. |
 | `--fly-pipelined` | | off | No GPU wait per frame; two frames in flight. |
+| `--fly-csv <file>` | file | off | Per-frame CSV of frame times and video memory; allocator owners every 30 frames in `<file>.owners.csv`. |
 
 ## Meitou.Tools (`meitou-tools`)
 
