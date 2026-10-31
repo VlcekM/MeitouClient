@@ -262,8 +262,6 @@ internal sealed unsafe partial class CharacterRenderer
                 }
                 bool twoSided = part.Material.DoubleSided;
                 bool headless = part.IsBody && l.Asset.Appearance is { Headless: true };
-                // A headless body (Meitou decapitation) hides its head and is drawn two-sided: the inside seen through the neck shows as the wound (CharacterShaders.Headless).
-                twoSided |= headless;
                 uint hidden = (part.IsBody && l.Asset.Appearance is { } look ? (uint)look.HiddenLimbs << 12 | (uint)(look.HiddenParts & 0x3FF) << 18 : 0u) | (uint)part.HideSide << 16 | (headless ? CharacterShaders.Headless : 0u);
                 var instance = new CharInstance { Model = part.IsBody ? WithBlood(model, l.Blood) : model, BoneBase = (uint)l.BoneBase, Material = (uint)part.Material.Slot, Flags = (interior ? 1u : 0u) | hidden, MorphBase = part.Morphed ? l.Asset.MorphBase : 0 };
                 if (motionPass)
@@ -404,8 +402,6 @@ internal sealed unsafe partial class CharacterRenderer
                 var mesh = part.Mesh;
                 bool twoSided = part.Material.DoubleSided;
                 bool headless = part.IsBody && l.Asset.Appearance is { Headless: true };
-                // A headless body (Meitou decapitation) hides its head and is drawn two-sided: the inside seen through the neck shows as the wound (CharacterShaders.Headless).
-                twoSided |= headless;
                 uint hidden = (part.IsBody && l.Asset.Appearance is { } look ? (uint)look.HiddenLimbs << 12 | (uint)(look.HiddenParts & 0x3FF) << 18 : 0u) | (uint)part.HideSide << 16 | (headless ? CharacterShaders.Headless : 0u);
                 var instance = new CharInstance
                 {

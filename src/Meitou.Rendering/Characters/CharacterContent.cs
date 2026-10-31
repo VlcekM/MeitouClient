@@ -120,6 +120,8 @@ internal sealed class PartMaterial
     public bool VertexColoured;
     /// <summary>Takes blood (<see cref="CharacterShaders.Bloody"/>; <see cref="BloodFull"/>: the whole mesh at the full amount, a stump): <see cref="Colour1"/> holds the blood colour, <see cref="Colour2"/> x and y the race's <c>blood horizontal</c> and <c>blood vertical</c>.</summary>
     public bool Bloody, BloodFull;
+    /// <summary>A headless body's neck cap (<see cref="CharacterShaders.Wound"/>): <see cref="Colour1"/> the race's blood colour, the diffuse slot the splatter map; <see cref="Mechanical"/> a robot race's.</summary>
+    public bool Wound, Mechanical;
     /// <summary>The body's normal blend weight towards <see cref="CharacterShaders.SlotBlendNormal"/> (the original's <c>muscleBlend</c>).</summary>
     public float MuscleBlend;
     /// <summary>The record last written for it and the renderer's material epoch it holds for (<see cref="CharacterRenderer"/>); 0 after a field above changed: written again.</summary>
@@ -731,6 +733,13 @@ internal sealed class CharacterContent : IDisposable
             Morphed = asset.MorphBase != 0, ShadowDistances = body.ShadowDistances, ShadowFirst = body.ShadowFirst, IsBody = true,
             FileDistances = body.FileDistances, FileFirst = body.FileFirst, FileRadius = body.FileRadius,
         });
+        // A headless body's neck is closed by a cap made from the body (NeckCap), in the race's wound look.
+        if (c.Headless && NeckCapMesh(bodyPath, rig, LimbHideOf(c, rig)) is { } cap)
+            asset.Parts.Add(new AssetPart
+            {
+                Label = $"neck cap {Path.GetFileName(bodyPath)}", Mesh = cap.Gpu, Shared = true, Material = WoundMaterial(c),
+                BoundsCentre = cap.Centre, BoundsRadius = cap.Radius, Morphed = asset.MorphBase != 0,
+            });
         foreach (var part in c.Parts)
         {
             var path = FindMesh(part.Mesh);
@@ -793,6 +802,46 @@ internal sealed class CharacterContent : IDisposable
         m.Colour1 = new Vector4(CharacterAppearance.Rgb(c.Race.GetInt("blood colour", 0x800000) & 0xFFFFFF), 1);
         m.Colour2 = new Vector4(c.Race.GetFloat("blood horizontal", 1), c.Race.GetFloat("blood vertical", 0.15f), 0, 0);
         m.Tex[CharacterShaders.SlotBlood] = Texture("bloody.png", false);
+    }
+
+    /// <summary>
+    /// The neck cap's look (Meitou decapitation): a wound in the race's <c>blood colour</c> splattered by <c>bloody.png</c> over its planar coordinates, flesh with a bone at
+    /// the centre, or for a race with <c>is robot</c> (skeletons; a mod's mechanical race the same way) a metal socket with the fluid over it (<see cref="CharacterShaders.Wound"/>).
+    /// </summary>
+    PartMaterial WoundMaterial(CharacterAppearance c)
+    {
+        var m = new PartMaterial
+        {
+            Shading = CharacterShaders.ShadeItem, Description = $"RACE '{c.Race.Name}' neck wound", Wound = true, Mechanical = c.Race.GetBool("is robot"),
+            Colour1 = new Vector4(CharacterAppearance.Rgb(c.Race.GetInt("blood colour", 0x800000) & 0xFFFFFF), 1),
+        };
+        m.Tex[CharacterShaders.SlotDiffuse] = Texture("bloody.png", false);
+        return m;
+    }
+
+    /// <summary>The neck cap of a body mesh (<see cref="NeckCap"/>), made once per body file and skeleton; null when the body has no head vertices.</summary>
+    LoadedMesh? NeckCapMesh(string bodyPath, SkeletonRig rig, LimbHide? hide)
+    {
+        if (hide is null) return null;
+        var key = (bodyPath.ToLowerInvariant() + "#neck cap", rig.BoneCount, false, (string?)null);
+        if (meshes.TryGetValue(key, out var cached)) return cached;
+        LoadedMesh? loaded = null;
+        try
+        {
+            var model = Model.Build(OgreMeshReader.ReadFile(bodyPath), rig.BoneCount, gameBinormals: true);
+            MarkBody(model, hide, null);
+            if (NeckCap.Build(model) is { } part)
+            {
+                var min = part.Vertices.Aggregate(new Vector3(float.MaxValue), (a, v) => Vector3.Min(a, v.Position));
+                var max = part.Vertices.Aggregate(new Vector3(float.MinValue), (a, v) => Vector3.Max(a, v.Position));
+                var capModel = new Model();
+                capModel.Parts.Add(part);
+                var decoded = new DecodedObjectMesh { Model = capModel, Levels = [new MeshLodLevel(0, [part.Indices])], Manual = [], Centre = (min + max) / 2, Radius = Math.Max((max - min).Length() / 2, 0.5f) };
+                loaded = Upload(new PreparedMesh([ObjectMeshCache.PreparePart(decoded, part, keepLevels: false)], [0], "neck cap", decoded.Centre, decoded.Radius, null, null, 0, [], null, 0, decoded.Radius));
+            }
+        }
+        catch (Exception e) when (e is OgreFormatException or IOException or EndOfStreamException or InvalidDataException) { Messages.Add($"{Path.GetFileName(bodyPath)} neck cap: {e.Message}"); }
+        return meshes[key] = loaded;
     }
 
     PartMaterial BodyMaterial(CharacterAppearance c)

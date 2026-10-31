@@ -196,7 +196,11 @@ Engine feature, not the original's: a vital part kills before the cut-off rule i
 Head (`body part type` 3) and the blow's rule above holds (Dismemberment >= Rare, a stats object, head original or crushed, `severance`), the character dies
 as before and `MedicalState.Decapitated` is set (event `Decapitated`, after `Died`). Ranged hits and executions take the same path; ticks and being eaten do not.
 No blood loss, XP, dialogue or item: the look loses the head's body vertices (its `bone name` `Bip01 Head`; the neck is the chest's), hair, beard and hat
-(the hat stays in the inventory), and the body is drawn two-sided with its inside in the blood colour ([characters](../characters.md#hidden-body-parts-verified--140075600--140071f90--140531cc0-hlsl-skinhlsl)).
+(the hat stays in the inventory) ([characters](../characters.md#hidden-body-parts-verified--140075600--140071f90--140531cc0-hlsl-skinhlsl)). No race has a
+neck stump, so the hole is closed by a cap made from the body (`NeckCap`: the rim between visible and head triangles, fanned to its centre, skinned as the rim).
+Its look comes from race data, so a mod's race works the same: `blood colour` tints it; `is robot` (skeletons, robots) makes it a metal socket under that fluid,
+else flesh with a bone at the centre. **Observed** (headless probe of the base bodies): `human_male`, `human_female`, `bone_male` and hive `Stick_person` get one 18 to 22 triangle cap at
+neck height, `robot.mesh` a 5 triangle one; Skeleton MkII and Log Head none (their head is a separate shell, the body stays closed). A race without a Head part (No-Head MkII) is never decapitated.
 Saved as `meitou decapitated` ([save](../formats/save.md#limbs-medical_state-limbs)).
 
 ## Aid, limbs and load

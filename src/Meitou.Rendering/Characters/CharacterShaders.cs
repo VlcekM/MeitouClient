@@ -34,9 +34,11 @@ static class CharacterShaders
         // Blood on the surface (character.hlsl "Bloodyness"): the part is covered at full amount (a severed limb's stump), docs/game/blood-decals.md "On the body".
         Bloody = 1 << 20,
         // With Bloody: the whole mesh at the full amount (a stump) instead of its parts' damage (the instance carries them).
-        BloodFull = 1 << 21;
-    // Instance flag (CharInstance.Flags; bit 0 interior, 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou decapitation), its head
-    // vertices (CharacterContent.HeadBit) hidden and its back faces drawn as the wound.
+        BloodFull = 1 << 21,
+        // A headless body's neck cap (NeckCap, Meitou decapitation): the wound; with Mechanical, a robot race's metal socket.
+        Wound = 1 << 22, Mechanical = 1 << 23;
+    // Instance flag (CharInstance.Flags; bit 0 interior, 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou decapitation): its head
+    // vertices (CharacterContent.HeadBit) are hidden.
     public const uint Headless = 1u << 28;
     // Shading modes.
     public const uint ShadeItem = 0, ShadeBody = 1, ShadeHair = 2;
@@ -136,7 +138,7 @@ static class CharacterShaders
             float turn = atan(aNormal.x, aNormal.z) / 3.14159265359 * 0.5;
             vBlood = vec4(aPosition.y, turn, turn > 0.0 ? turn - 0.5 : turn + 0.5, aNormal.z);
             vMaterial = aInstanceData.y;
-            vInterior = aInstanceData.z & {{Headless}}u | (aInstanceData.z & 1u);   // bit 0 interior, the Headless bit kept for the fragments
+            vInterior = aInstanceData.z & 1u;
             // Hidden limbs and parts (docs/characters.md "Hidden body parts"): the body's vertices of a limb whose bit 12 + k the instance carries, or of a part-map part whose
             // bit 18 + p it carries (the vertex's limb bits 0-3, part bits from 4: CharacterContent.MarkBody); the fragments discard where it is above 0.
             uint marks = uint(aColour.y + 0.5);
@@ -350,11 +352,26 @@ static class CharacterShaders
                 float amount = flag(f, 2097152u) ? 1.0 : vBloodAmount;
                 albedo = mix(albedo, blood.rgb, clamp(blood.a - 1.0 + clamp(amount, 0.0, 1.0), 0.0, 1.0));
             }
-            // A headless body's inside seen through the neck (Meitou decapitation, drawn two-sided): the wound, wet, in the race's blood colour (else a dark red).
-            if (!gl_FrontFacing && (vInterior & {{Headless}}u) != 0u)
+            // A headless body's neck cap (NeckCap): uv is (0, 0) at its centre and 1 at the rim; colour1 the race's blood colour, the diffuse slot the splatter map.
+            // Flesh: the fluid darkening into the cut, a bone at the centre. Mechanical (a robot race): a dark metal socket, its core darker, the fluid over it.
+            if (flag(f, {{Wound}}u))
             {
-                albedo = flag(f, 1048576u) ? m.colour1.rgb * 0.6 : vec3(0.3, 0.04, 0.03);
-                gloss = 0.5;
+                float r = length(uv);
+                float splat = flag(f, 1u) ? tex(m.tex[0], uv * 0.5 + 0.5).a : 0.5;
+                vec3 fluid = m.colour1.rgb;
+                if (flag(f, {{Mechanical}}u))
+                {
+                    albedo = mix(vec3(0.17, 0.16, 0.15), vec3(0.05), 1.0 - smoothstep(0.25, 0.45, r));
+                    albedo = mix(albedo, fluid, splat * 0.6 * smoothstep(0.3, 0.9, r));
+                    gloss = 0.6;
+                    metal = 0.85;
+                }
+                else
+                {
+                    albedo = mix(fluid * 0.35, fluid, splat * smoothstep(0.0, 1.0, r));
+                    albedo = mix(vec3(0.75, 0.70, 0.60), albedo, smoothstep(0.12, 0.18, r));
+                    gloss = 0.7;
+                }
                 skin = 0.0;
                 nm = vec4(0.5, 0.5, 1.0, 0.5);
             }
@@ -381,7 +398,7 @@ static class CharacterShaders
             vec3 v = normalize(view.eye - vWorld);
             gloss = clamp(gloss, 0.0, 1.0);
             vec3 colour;
-            giInterior = (vInterior & 1u) != 0u;
+            giInterior = vInterior != 0u;
             skinGeometric = smoothNormal; skinCurvature = curvature; skinShare = skin; skinAlbedo = albedo;
             atmoMetalness = metal;
             if (view.fogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, gloss, vWorld, skinDiffuse(n, smoothNormal, uAtmoLight.xyz, curvature, skin, albedo));
