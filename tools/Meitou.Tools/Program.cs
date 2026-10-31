@@ -41,10 +41,13 @@ static int Usage()
         meitou-tools fcs-types     match record type numbers to fcs.def type names
         meitou-tools fcs-records N show the fields of the first records of type N in the base game
         meitou-tools navmesh [--zone x,z | --town name] [--around n] [--geometry] [--obj f.obj] [--png f.png] [--scale u] [--box x0,z0,x1,z1]
-                           [--path x0,z0,x1,z1 [--from-y y] [--to-y y] [--closed]] [--near x,z,radius] [--no-interiors]
-                           [--repeat n] [--fingerprint] [--compare x,z ...] [--verbose]
+                           [--path x0,z0,x1,z1 [--from-y y] [--to-y y] [--closed]] [--near x,z,radius] [--no-interiors] [--interior key [--own-only]]
+                           [--repeat n] [--fingerprint] [--compare x,z ...] [--compare-interiors x,z ...]
+                           [--cell u] [--climb u] [--tile n] [--min-region n] [--merge-region n] [--simplify e] [--verbose]
                            gather and build a zone's navmesh, write debug files; --fingerprint prints SHA-256 of the cache files of The Hub (or --zone) and the Hub path points;
-                           --compare samples each zone against the original's navmesh tiles
+                           --compare samples each zone against the original's navmesh tiles, --compare-interiors scores the original tiles' interior meshes against ours;
+                           --interior builds one building's interior alone (parts, components, --obj); --cell, --climb, --tile, --min-region, --merge-region and
+                           --simplify override the build settings
         meitou-tools particles [effects]  read every ParticleUniverse script and particle material and count what they use; "effects" lists the EFFECT records with their systems
         meitou-tools particles weathers  every fog volume, and every WEATHER with its effects: type, how many at once, respawn times, fog volumes and lights
         meitou-tools particles warmup [weather...]  what changing to a weather costs: the schedule, the simulation of the warm-up on one thread and in parallel, and a frame
