@@ -24,8 +24,8 @@ public sealed record BodyOptions
     public float HungerTime { get; init; } = 1;
     /// <summary><b>Chance of death</b> (0.5 to 4): multiplies the bleed rate and the wound degeneration. Not starvation.</summary>
     public float ChanceOfDeath { get; init; } = 1;
-    /// <summary><b>Global damage multiplier</b> (0.5 to 4): scales combat XP (and damage, combat.md).</summary>
-    public float GlobalDamageMultiplier { get; init; } = 1;
+    /// <summary><b>Global damage multiplier</b> (0.5 to 4): scales combat XP (and damage, combat.md). Settable: the debug menu changes it in a running world (<see cref="DebugDamageMultiplier"/>).</summary>
+    public float GlobalDamageMultiplier { get; set; } = 1;
     /// <summary>Settable: the original reads its global when a part is damaged, so a change on the Gameplay page reaches the running world at once.</summary>
     public Dismemberment Dismemberment { get; set; } = Dismemberment.Rare;
     /// <summary>

@@ -23,11 +23,16 @@ sealed partial class GameHost
     static readonly Dictionary<string, int> EditorBarView = new(StringComparer.Ordinal) { [EditorBar.Key] = 3 };
     /// <summary>The hour the bar is drawn at: night, its lamps lit.</summary>
     const float EditorBarHour = 23;
+    /// <summary>
+    /// How far the bar's frame reaches (<see cref="WorldFrame.Gpu.ViewCap"/>): the bar and its staged ground, short of the world under it (<see cref="EditorBar"/> stands it 3000
+    /// above the ground), so the terrain, foliage, objects and shadow cascades of the world below are culled; the water and its reflection are off.
+    /// </summary>
+    const float EditorBarViewCap = 2500;
 
     bool EditorBarWanted => player.EditorOpen && player.UiMode == UiMode.Meitou && popData is not null;
 
     /// <summary>What <see cref="BeginEditorBar"/> changed for the world's draw: the camera and the weather, which <see cref="EndEditorBar"/> puts back.</summary>
-    readonly record struct EditorBarFrame(Vector3 Target, float Yaw, float Pitch, float Distance, SkyWeather Sky, WorldWeather? Weather, bool WeatherParticles, Vector3 Fill);
+    readonly record struct EditorBarFrame(Vector3 Target, float Yaw, float Pitch, float Distance, SkyWeather Sky, WorldWeather? Weather, bool WeatherParticles, Vector3 Fill, bool Water, bool Reflections);
     /// <summary>The neutral fill the characters take in the bar (<see cref="CharacterRenderer.Fill"/>): a little grey light all round, so faces read in the lamplight.</summary>
     static readonly Vector3 EditorBarCharacterFill = new(0.04f);
     /// <summary>The bar's own people for this opening of the editor (<see cref="EditorBar.Crowd"/>): their rolled looks, places, yaws and clips.</summary>
@@ -56,9 +61,10 @@ sealed partial class GameHost
         if (!editorBarReady && EditorBarLoaded(bar)) editorBarReady = true;
         player.EditorInWorld = editorBarReady;
         var sky = gpu.Sky;
-        var frame = new EditorBarFrame(camera.Target, camera.Yaw, camera.Pitch, camera.Distance, sky.Weather, gpu.Weather, gpu.WeatherParticles, gpu.Characters?.Fill ?? default);
+        var frame = new EditorBarFrame(camera.Target, camera.Yaw, camera.Pitch, camera.Distance, sky.Weather, gpu.Weather, gpu.WeatherParticles, gpu.Characters?.Fill ?? default, render.Water, render.Reflections);
         PlaceEditorCamera(bar, width, height);
         if (gpu.Characters is { } lit) lit.Fill = EditorBarCharacterFill;
+        if (Environment.GetEnvironmentVariable("TMPNOCAP") is null) (gpu.ViewCap, render.Water, render.Reflections) = (EditorBarViewCap, false, false);
         if (ActiveObjects is { } objects) objects.InteriorView = EditorBarView;
         sky.Weather = SkyWeather.Default;
         gpu.Weather = null;
@@ -74,6 +80,7 @@ sealed partial class GameHost
         (gpu.Sky.Weather, gpu.Weather, gpu.WeatherParticles) = (frame.Sky, frame.Weather, frame.WeatherParticles);
         if (gpu.FogVolumes is { } placedFog) placedFog.HidePlaced = false;
         if (gpu.Characters is { } lit) lit.Fill = frame.Fill;
+        (gpu.ViewCap, render.Water, render.Reflections) = (null, frame.Water, frame.Reflections);
         if (editorBarReady) { if (gpu.Characters is { } characters) characters.StageRequest = null; }
         else DrawEditorStage(width, height, posed: true);
     }

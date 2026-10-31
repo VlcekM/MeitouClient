@@ -15,10 +15,10 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
-    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, MaxSkills, Damage, ForceHits, UnlockResearch }
+    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch }
 
-    static readonly string[] DebugLabels = ["Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Max out skills", "Damage (cut)", "Force hits to", "Unlock all research"];
-    readonly string[] debugFields = ["", "", "", "1000", "", "", "20", "", ""];
+    static readonly string[] DebugLabels = ["Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Max out skills", "Damage (cut)", "Force hits to", "Damage multiplier", "Unlock all research"];
+    readonly string[] debugFields = ["", "", "", "1000", "", "", "20", "", "1", ""];
     readonly Dictionary<(bool Character, string Text), (string Id, string Name)?> debugMatches = [];
     bool debugMenuOpen;
     int debugRow;
@@ -123,6 +123,10 @@ sealed partial class GameHost
             case DebugRow.ForceHits:
                 world.Commands.Enqueue(new DebugForceHits(part.Id is { } forced ? (forced, part.Name ?? forced) : null) { Tick = tick });
                 return part.Id is null ? "blows land as usual" : $"every blow lands on {part.Name} (by name on other bodies)";
+            case DebugRow.DamageMultiplier:
+                if (!float.TryParse(field, NumberStyles.Float, CultureInfo.InvariantCulture, out float multiplier) || !(multiplier >= 0) || multiplier > 100) return "damage multiplier: a number from 0 to 100 (new game: 0.5 to 4)";
+                world.Commands.Enqueue(new DebugDamageMultiplier(multiplier) { Tick = tick });
+                return $"damage x{multiplier:0.##} (crossbows when next equipped)";
             case DebugRow.UnlockResearch:
                 world.Commands.Enqueue(new DebugUnlockResearch { Tick = tick });
                 return "every research finished";
@@ -178,6 +182,7 @@ sealed partial class GameHost
                 if ((DebugRow)i is DebugRow.SpawnNpc or DebugRow.GiveItem && field.Trim().Length > 0)
                     line += DebugRecord((DebugRow)i == DebugRow.GiveItem ? DebugItemField(field.Trim()).Name : field, (DebugRow)i == DebugRow.SpawnNpc) is { } r ? $"   -> {r.Name}" : "   -> no match";
             }
+            if ((DebugRow)i == DebugRow.DamageMultiplier) line += $"   now x{popData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}";
             if ((DebugRow)i == DebugRow.ForceHits) line = $"{line,-26} {popData?.BodyOptions.ForcedHitPart?.Name ?? "off"}";
             if (DebugPicksPart(i) && i == debugRow && debugParts is null) line += "   Enter/Right: pick the body part";
             lines.Add(line);

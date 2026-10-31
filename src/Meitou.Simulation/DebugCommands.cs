@@ -31,6 +31,9 @@ public sealed record DebugDamage(IReadOnlyList<CharacterId> Characters, float Cu
 /// <summary>Makes every blow land on <see cref="Part"/> (template string id, name) from now on, or as usual when null (<see cref="BodyOptions.ForcedHitPart"/>).</summary>
 public sealed record DebugForceHits((string Id, string Name)? Part) : DebugCommand;
 
+/// <summary>Sets the <b>Global damage multiplier</b> (<see cref="BodyOptions.GlobalDamageMultiplier"/>) of the running world: blows and XP read it at once, a crossbow when it is next equipped.</summary>
+public sealed record DebugDamageMultiplier(float Multiplier) : DebugCommand;
+
 /// <summary>
 /// Puts <see cref="Quantity"/> of item record <see cref="Record"/> on the character, at <see cref="Quality"/> (0 to 100) for the types that have one: one unit into its free
 /// equipment slot (<see cref="Items.InventoryCommands.TryEquip"/>), the rest into the inventory; what does not fit is dropped at the character's feet.
@@ -113,6 +116,9 @@ static class DebugCheats
                 break;
             case DebugForceHits force when data is not null:
                 data.BodyOptions.ForcedHitPart = force.Part;
+                break;
+            case DebugDamageMultiplier multiplier when data is not null:
+                data.BodyOptions.GlobalDamageMultiplier = multiplier.Multiplier;
                 break;
             case DebugUnlockResearch when data is not null:
                 world.Post($"Research unlocked: {world.Research.CompleteAll(data.Db)} finished.");

@@ -657,6 +657,11 @@ static class WorldFrame
         /// <summary>The hover outline the game draws round the character under the mouse, and with Alt those near (null in the viewer); <see cref="HoverKeys"/> picks the characters by their draw-list keys, each with its colour (empty: none).</summary>
         public HoverOutlineRenderer? HoverOutline;
         public IReadOnlyList<(long Key, Vector4 Colour)> HoverKeys = [];
+        /// <summary>
+        /// A presentation cap on how far the frame reaches (the Meitou editor's bar, high above the world): the far plane and the shadow cascades end there, so the world below
+        /// leaves the view; null in play.
+        /// </summary>
+        public float? ViewCap;
         /// <summary>The Tab panel's weather particles at 0 and its particle density, given to <see cref="Particles"/> every frame (it is made only with the first weather).</summary>
         public bool WeatherParticles = true;
         public float ParticleDensity = 1;
@@ -1405,7 +1410,7 @@ static class WorldFrame
         gpu.Sky.PrepareCloudShadows();
         // Far enough that the haze is complete before the far plane and the water quad (1.5 × view distance wide) end,
         // so a high eye sees the sea fade into the sky instead of a cut-off edge.
-        camera.ViewDistance = Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f);
+        camera.ViewDistance = Math.Min(Math.Max(camera.MinViewDistance, light.FogDistance / 0.7f), gpu.ViewCap ?? float.MaxValue);
         StageClock.Lap(3);
         // The weather's camera particles step on the caller's time (1/600 s units; the game's clock, so still while paused; constant, so still, in pictures).
         // They count as their own stage (the profiler's "particles", with their draw below).
@@ -1434,7 +1439,7 @@ static class WorldFrame
             gpu.Sky.CloudShadowScale = fogVolumes.CloudShadowScale;
         }
         StageClock.Lap(13);
-        if (gpu.Shadow is not null) gpu.Shadow.RangeCap = gpu.FogVolumes?.AtmosphereDistance;   // the cascades end where the weather fog hides everything
+        if (gpu.Shadow is not null) gpu.Shadow.RangeCap = gpu.ViewCap is { } cap ? Math.Min(cap, gpu.FogVolumes?.AtmosphereDistance ?? cap) : gpu.FogVolumes?.AtmosphereDistance;   // the cascades end where the weather fog hides everything (or at the cap)
         gpu.Shadow?.SetFogHide(gpu.FogVolumes?.ShadowHideDistance, gpu.FogVolumes?.ShadowHidePending == true);   // or where the placed fog block the eye is in hides the whole view
         if (gpu.Shadow is not null) { gpu.Shadow.Temporal = post.Temporal; DrawShadows(gpu, camera, render, light, rw, rh, gpu.Sky.ShadowSunHeight); }
 
